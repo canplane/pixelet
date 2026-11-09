@@ -112,11 +112,11 @@ fn main() {
         "fn fill_side(k: u32) -> f32 {{ switch k {{ {sides}default: {{ return 1.0; }} }} }}\n"
     );
     // A coarse cell's ray carries the cell's four palette indices in its third word, packed as
-    // pxl-spec ground.rs `palette_idxs` packs them.
+    // pxl-spec ground.rs `asset_ids` packs them.
     let b = PALETTE_BITS;
     let m = (1u32 << b) - 1;
-    let palette_idxs = format!(
-        "fn ray_palette_idxs(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
+    let asset_ids = format!(
+        "fn ray_asset_ids(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
         2 * b,
         3 * b
     );
@@ -127,7 +127,7 @@ fn main() {
         field("fill", FILL_SHIFT, FILL_BITS),
         fill,
         faces,
-        palette_idxs,
+        asset_ids,
     ];
     std::fs::write(out.join("ray.wgsl"), ray.concat()).expect("the ray's shader");
     // The corners of a box's vertices, first as pxl-engine raster.rs `corner` winds them and
@@ -190,9 +190,7 @@ fn main() {
     );
     std::fs::write(out.join("light_word.wgsl"), light).expect("the light word's shader");
     std::fs::write(out.join("tile_word.wgsl"), tile_word()).expect("the tile word's shader");
-    // The hash is the one the CPU's cumulus uses (pxl-content cloud.rs `lattice_hash`), written
-    // from the same multipliers, rounds and output bits, so the clouds the GPU draws agree with
-    // the CPU's.
+    // The sheets' noise hash, from pxl-content cloud.rs's multipliers, rounds and output bits.
     use pxl_content::cloud::{HASH_IN, HASH_LAST, HASH_ROUNDS, HASH_SHARE_BITS};
     use pxl_content::param::cloud::LATTICE_SHAMT;
     let [hx, hy, hs] = HASH_IN;
@@ -287,6 +285,17 @@ const _: () = assert!(
     "light_item reads a workgroup as SAMPLE_SIDE x SAMPLE_SIDE lanes: a light tile and \
      SQUARE_SIDE are each that side"
 );
+// A queue's number is its run's tag, but for the light's holes (ask_run.wgsl `walk_pass`).
+const _: () = {
+    use pxl_engine::{node_cache, ray};
+    assert!(
+        ray::QUEUE_EYE_CORNERS == node_cache::BEAM_PASS
+            && ray::QUEUE_EYE_SAMPLES == node_cache::SAMPLES_PASS
+            && ray::QUEUE_EYE_HOLES == node_cache::MISSED_PASS
+            && ray::QUEUE_LIGHT_CORNERS == node_cache::LIGHT_BEAM_PASS
+            && ray::QUEUE_LIGHT_SAMPLES == node_cache::LIGHT_SAMPLES_PASS
+    );
+};
 
 /// The constants the walks read (walk.wgsl), each written from the pxl-engine layout or rule
 /// that defines it.
@@ -564,6 +573,10 @@ fn walk_word() -> String {
             ray::queue_records_at(ray::QUEUE_LIGHT_HOLES),
         ),
         ("QUEUE_RECORD_WORDS", ray::QUEUE_RECORD_WORDS),
+        ("QUEUE_WORDS", ray::QUEUE_WORDS),
+        ("QUEUE_HEADER_STRIDE", ray::QUEUE_HEADER_STRIDE),
+        ("QUEUE_LIGHT_CORNERS", ray::QUEUE_LIGHT_CORNERS),
+        ("QUEUE_LIGHT_HOLES", ray::QUEUE_LIGHT_HOLES),
         ("QUEUE_RECORDS_CAP", ray::QUEUE_RECORDS_CAP),
         ("STATE_WORDS", ray::STATE_WORDS),
         ("PARKED", ray::PARKED),
@@ -1076,7 +1089,7 @@ fn words() -> String {
         .map(|(name, (w, h))| format!("const {name}: vec2f = vec2f({w}.0, {h}.0);\n"))
         .concat(),
         format!("const ATLAS_FILL: u32 = {ATLAS_FILL}u;\nconst ATLAS_STROKE: u32 = {ATLAS_STROKE}u;\nconst ATLAS_TRIANGLE: u32 = {ATLAS_TRIANGLE}u;\nconst ATLAS_TEXT: u32 = {ATLAS_TEXT}u;\nconst ATLAS_HALO: u32 = {ATLAS_HALO}u;\n"),
-        format!("const BOX_XY_STEPS: u32 = {BOX_XY_STEPS}u;\nconst BOX_VERTICES: u32 = {BOX_VERTICES}u;\n"),
+        format!("const BOX_VERTICES: u32 = {BOX_VERTICES}u;\n"),
         format!("const MOON_TEXELS: u32 = {MOON_TEXELS}u;\nconst NO_LAYER: f32 = {NO_LAYER}.0;\nconst HALF_STEP: f32 = {HALF_STEP:?};\n"),
         format!("const MOON_ANGULAR_RADIUS: f32 = {MOON_ANGULAR_RADIUS:?};\nconst MOON_ALBEDO: f32 = {MOON_ALBEDO:?};\nconst MOON_MAP_MEAN: f32 = {MOON_MAP_MEAN:?};\n"),
         format!("const SLOT_BITS: u32 = {SLOT_BITS}u;\nconst NO_SLOT: u32 = {NO_SLOT}u;\n"),
@@ -1636,7 +1649,7 @@ fn assemble(out: &Path) {
         "clipmap",
         "seed",
         "clip",
-        "palette",
+        "fold",
         "brick",
         "bound_mip",
         "answer",

@@ -1,7 +1,7 @@
 // pxl-render/ray/ground.rs
 
 //! The GPU's copy of the terrain bricks the core fills for the clip levels.
-//! A brick is its words, a word of four palette indices for each cell, and
+//! A brick is its words, a word of four asset ids for each cell, and
 //! its kept spans, a run in a pool every brick shares. The runtime reads each
 //! brick from the core's own memory when it runs the turn.
 
@@ -33,7 +33,7 @@ pub struct BrickWrite<'a> {
     pub cell_zoom: Zoom,
     pub brick: [i32; 2],
     pub words: &'a [u32],
-    pub palette_idxs: &'a [u32],
+    pub folds: &'a [u32],
     pub run: &'a [(u32, &'a [u32])],
 }
 
@@ -66,8 +66,8 @@ fn pool_buf(g: &Gpu, words: u32) -> u32 {
 pub(super) struct GroundBuffer {
     /// Every slot's brick words (`GROUND_BYTES`).
     pub(super) ground: u32,
-    /// Every slot's palette indices (`PALETTE_BYTES`).
-    pub(super) palette_idxs: u32,
+    /// Every slot's folds (`FOLDS_BYTES`).
+    pub(super) folds: u32,
     /// The ways' pool, and the words it has room for.
     pub(super) pool: u32,
     word_cnt: u32,
@@ -114,16 +114,16 @@ const _: () = assert!(
     "GROUND_BYTES: the clip levels' bricks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
-/// A brick's palette indices: a word for each cell, which packs its four.
-const PALETTE_BRICK_BYTES: u32 = BRICK_CELLS * 4;
+/// A brick's folds: a word for each cell, which packs its four.
+const FOLDS_BRICK_BYTES: u32 = BRICK_CELLS * 4;
 
-/// Every slot's palette indices in slot order, which the cast reads at a hit
-/// (palette.wgsl). They take a buffer of their own, as the bricks' buffer
+/// Every slot's folds in slot order, which the cast reads at a hit
+/// (fold.wgsl). They take a buffer of their own, as the bricks' buffer
 /// would bind past WebGPU's floor with them.
-const PALETTE_BYTES: u64 = SLOTS as u64 * PALETTE_BRICK_BYTES as u64;
+const FOLDS_BYTES: u64 = SLOTS as u64 * FOLDS_BRICK_BYTES as u64;
 const _: () = assert!(
-    floor::fits(PALETTE_BYTES, true),
-    "PALETTE_BYTES: the bricks' palette indices bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
+    floor::fits(FOLDS_BYTES, true),
+    "FOLDS_BYTES: the bricks' folds bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
 impl RayPass {
@@ -138,7 +138,7 @@ impl RayPass {
             let word_cnt = ground.pool.next_power_of_two().min(WAYS_POOL_WORDS);
             GroundBuffer {
                 ground: g.buf(GROUND_BYTES as u32, storage),
-                palette_idxs: g.buf(PALETTE_BYTES as u32, storage),
+                folds: g.buf(FOLDS_BYTES as u32, storage),
                 pool: pool_buf(g, word_cnt),
                 word_cnt,
                 bricks: List::new(),
@@ -153,11 +153,7 @@ impl RayPass {
                 return false;
             }
             g.upload_buf(gb.ground, q.slot * BRICK_BYTES, bytes(q.words));
-            g.upload_buf(
-                gb.palette_idxs,
-                q.slot * PALETTE_BRICK_BYTES,
-                bytes(q.palette_idxs),
-            );
+            g.upload_buf(gb.folds, q.slot * FOLDS_BRICK_BYTES, bytes(q.folds));
             for &(first, words) in q.run {
                 g.upload_buf(gb.pool, pool_bytes(first), bytes(words));
             }

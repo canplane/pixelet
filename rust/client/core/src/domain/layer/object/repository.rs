@@ -3,7 +3,7 @@
 //! The object layer's repository: where placed objects are kept and where
 //! they come from. It is the one way the layer's records are read and
 //! written. What the view asks for arrives here, and each edit leaves from
-//! here, every write as `<key, id, ext>`. The objects are kept by their
+//! here, every write as `<key, asset_id, ext>`. The objects are kept by their
 //! source, a mock or a server (ts/client/src/service/sys/fs/object.ts), below OBJECT
 //! (file.json `root`); this file reads what the source serves and sends it
 //! the edits.
@@ -289,33 +289,33 @@ pub fn on_emptied(id: u64) -> bool {
 }
 
 // A shard's file and an edit batch share one layout: the format byte
-// (file.json `format`), then rows of writes `<key, id, ext>` as file.json
+// (file.json `format`), then rows of writes `<key, asset_id, ext>` as file.json
 // `write` lays them out. A shard's file holds each of its leaves as the
 // write that made it; a batch holds its writes in the order they were made.
 // A file of any other format is never read.
 
 fn encode_writes(format: u8, writes: &[Write]) -> Result<Vec<u8>, MarshalError> {
-    let (mut keys, mut id) = (Vec::new(), Vec::new());
+    let (mut keys, mut asset_ids) = (Vec::new(), Vec::new());
     let (mut text_rows, mut texts) = (Vec::new(), Vec::new());
     for w in writes {
         match &w.ext {
             Some(Ext::MarkerText(t)) => {
-                text_rows.push(id.len() as u32);
+                text_rows.push(asset_ids.len() as u32);
                 texts.push(t.as_str());
             }
             None => {}
         }
         keys.push(name::<3>(w.at));
-        id.push(w.id);
+        asset_ids.push(w.asset_id);
     }
     let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
     let mut tree = TreeView::new();
     tree.branch(Some(&mut |b| {
         const _: () = assert!(
-            column::KEY == 0 && column::ID == 1 && column::TEXT_ROW == 2 && column::TEXT == 3
+            column::KEY == 0 && column::ASSET_ID == 1 && column::TEXT_ROW == 2 && column::TEXT == 3
         );
         b.strs(Some(&keys))
-            .u32_array(Some(&id))
+            .u32_array(Some(&asset_ids))
             .u32_array(Some(&text_rows))
             .strs(Some(&texts));
     }));
@@ -348,23 +348,23 @@ fn pkt(format: u8, bytes: &[u8]) -> Result<Vec<u8>, MarshalError> {
 fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
     let pkt = pkt(format, bytes)?;
     let root = TreeReader::new(&pkt)?.read_branch()?;
-    let (keys, id) = (
+    let (keys, asset_ids) = (
         root.at(column::KEY)?.get_strs()?,
-        root.at(column::ID)?.get_array::<u32>()?,
+        root.at(column::ASSET_ID)?.get_array::<u32>()?,
     );
     let (text_rows, texts) = (
         root.at(column::TEXT_ROW)?.get_array::<u32>()?,
         root.at(column::TEXT)?.get_strs()?,
     );
-    if keys.len() as usize != id.len() || text_rows.len() != texts.len() as usize {
+    if keys.len() as usize != asset_ids.len() || text_rows.len() != texts.len() as usize {
         return Err(MarshalError::new(Errno::EINVAL));
     }
-    let mut ext: Vec<Option<Ext>> = vec![None; id.len()];
+    let mut ext: Vec<Option<Ext>> = vec![None; asset_ids.len()];
     for (r, t) in text_rows.iter().zip(texts.iter()) {
         let r = *r as usize;
         // A record of a class other than its leaf's means the file is not in
         // this layout.
-        if id.get(r).and_then(|&v| class_of(v)) != Some(Class::marker_text) {
+        if asset_ids.get(r).and_then(|&v| class_of(v)) != Some(Class::marker_text) {
             return Err(MarshalError::new(Errno::EINVAL));
         }
         ext[r] = Some(Ext::MarkerText(t.to_string()));
@@ -374,7 +374,7 @@ fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
         .map(|(r, key)| {
             Ok(Write {
                 at: key_of_name::<3>(key).ok_or(MarshalError::new(Errno::EINVAL))?,
-                id: id[r],
+                asset_id: asset_ids[r],
                 ext: ext[r].take(),
             })
         })
@@ -388,7 +388,7 @@ fn decode_shard(shard: Quadrant, bytes: &[u8]) -> Result<Vec<Write>, MarshalErro
     let fits = |w: &Write| {
         (CUBE_ZOOM..=OBJECT_FINEST).contains(&node_of::<3>(w.at).0)
             && shard_of(w.at) == shard
-            && u16::try_from(w.id).is_ok()
+            && u16::try_from(w.asset_id).is_ok()
     };
     if !writes.iter().all(fits) {
         return Err(MarshalError::new(Errno::EINVAL));

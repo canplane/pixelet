@@ -17,7 +17,7 @@ fn flag_cut_way_ends() {
 }
 
 /// An area of the source whose whole is `way_area`, clipped to `at`.
-fn area(at: [f64; 4], way_area: f64, palette_idx: GroundId, layer: Layer, id: &str) -> Feature {
+fn area(at: [f64; 4], way_area: f64, asset_id: GroundId, layer: Layer, id: &str) -> Feature {
     let [x0, y0, x1, y1] = at;
     Feature {
         points: vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
@@ -25,19 +25,19 @@ fn area(at: [f64; 4], way_area: f64, palette_idx: GroundId, layer: Layer, id: &s
         closed: true,
         width: 0.0,
         cut: [false; 2],
-        cell: palette_idx,
+        cell: asset_id,
         rank: Rank::by_area(layer, way_area, "", id),
     }
 }
 
-fn way(y: f64, width: f64, palette_idx: GroundId, id: &str) -> Feature {
+fn way(y: f64, width: f64, asset_id: GroundId, id: &str) -> Feature {
     Feature {
         points: vec![[10.0, y], [90.0, y]],
         holes: Vec::new(),
         closed: false,
         width,
         cut: [false; 2],
-        cell: palette_idx,
+        cell: asset_id,
         rank: Rank::new(Layer::Road, 100, "", id),
     }
 }

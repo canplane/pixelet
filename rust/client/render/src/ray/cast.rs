@@ -41,23 +41,19 @@ use crate::frame::shader::group::{
     LIGHT_PROPAGATE_GROUP, LIGHT_RASTER_ARGS, LIGHT_RECEIVER_TILES, LIGHT_SAMPLES_ASK_BINDS,
     LIGHT_SAMPLES_WALK_BINDS, LIGHT_SAMPLE_BOX_BINDS, LIGHT_SLIDE_BINDS, LIGHT_SLIDE_GROUP,
     LIGHT_SLOTS_BINDS, LIGHT_WALK_ASK_BINDS, LIGHT_WALK_BINDS, LIGHT_WORLD_BINDS, MARKS,
-    NODE_CACHE, PIXELS_BINDS, QUEUES, QUEUE_ASK_GROUP, QUEUE_GROUP, QUEUE_LAST_GROUP,
-    SAMPLES_ASK_BINDS, SAMPLES_WALK_BINDS, WALK_ASK_BINDS, WALK_BINDS, WORLD_BINDS, WORLD_GROUP,
+    NODE_CACHE, PIXELS_BINDS, QUEUES, QUEUE_GROUP, QUEUE_LAST_GROUP, SAMPLES_ASK_BINDS,
+    SAMPLES_WALK_BINDS, WALK_ASK_BINDS, WALK_BINDS, WORLD_BINDS, WORLD_GROUP,
 };
 use crate::frame::shader::record::{
     COMPUTE_CAST, COMPUTE_CAST_TILES, COMPUTE_CELL, COMPUTE_FORGET, COMPUTE_LIGHT,
     COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_DAMAGE, COMPUTE_LIGHT_MARK_DRAWS,
     COMPUTE_LIGHT_MARK_DRAWS_OPEN, COMPUTE_LIGHT_MARK_WALKED, COMPUTE_LIGHT_PROPAGATE,
-    COMPUTE_LIGHT_SLIDE, COMPUTE_QUEUE, COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_CORNERS,
-    COMPUTE_QUEUE_ASK_CORNERS_PARKED, COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
-    COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED, COMPUTE_QUEUE_ASK_LIGHT_SAMPLES,
-    COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED, COMPUTE_QUEUE_ASK_PARKED, COMPUTE_QUEUE_ASK_SAMPLES,
-    COMPUTE_QUEUE_ASK_SAMPLES_PARKED, COMPUTE_QUEUE_CORNERS, COMPUTE_QUEUE_CORNERS_PARKED,
-    COMPUTE_QUEUE_LAST, COMPUTE_QUEUE_LAST_CORNERS, COMPUTE_QUEUE_LAST_LIGHT_CORNERS,
-    COMPUTE_QUEUE_LAST_LIGHT_SAMPLES, COMPUTE_QUEUE_LAST_SAMPLES, COMPUTE_QUEUE_LIGHT_CORNERS,
-    COMPUTE_QUEUE_LIGHT_CORNERS_PARKED, COMPUTE_QUEUE_LIGHT_SAMPLES,
-    COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED, COMPUTE_QUEUE_PARKED, COMPUTE_QUEUE_SAMPLES,
-    COMPUTE_QUEUE_SAMPLES_PARKED,
+    COMPUTE_LIGHT_SLIDE, COMPUTE_QUEUE, COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_PARKED,
+    COMPUTE_QUEUE_CORNERS, COMPUTE_QUEUE_CORNERS_PARKED, COMPUTE_QUEUE_LAST,
+    COMPUTE_QUEUE_LAST_CORNERS, COMPUTE_QUEUE_LAST_LIGHT_CORNERS, COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
+    COMPUTE_QUEUE_LAST_SAMPLES, COMPUTE_QUEUE_LIGHT_CORNERS, COMPUTE_QUEUE_LIGHT_CORNERS_PARKED,
+    COMPUTE_QUEUE_LIGHT_SAMPLES, COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED, COMPUTE_QUEUE_PARKED,
+    COMPUTE_QUEUE_SAMPLES, COMPUTE_QUEUE_SAMPLES_PARKED,
 };
 use crate::frame::shader::word::SHADOW_SIZE;
 use crate::frame::shader::word::{screen, CELL_SIDE, ROW_LANES, SQUARE_SIDE};
@@ -450,9 +446,9 @@ impl RayPass {
         let samples = run(
             [
                 COMPUTE_QUEUE_SAMPLES,
-                COMPUTE_QUEUE_ASK_SAMPLES,
+                COMPUTE_QUEUE_ASK,
                 COMPUTE_QUEUE_SAMPLES_PARKED,
-                COMPUTE_QUEUE_ASK_SAMPLES_PARKED,
+                COMPUTE_QUEUE_ASK_PARKED,
                 COMPUTE_QUEUE_LAST_SAMPLES,
             ],
             [&LATTICE_WALK_GROUP, &LATTICE_ASK_GROUP, &LATTICE_LAST_GROUP],
@@ -460,9 +456,9 @@ impl RayPass {
         let light_samples = run(
             [
                 COMPUTE_QUEUE_LIGHT_SAMPLES,
-                COMPUTE_QUEUE_ASK_LIGHT_SAMPLES,
+                COMPUTE_QUEUE_ASK,
                 COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED,
-                COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED,
+                COMPUTE_QUEUE_ASK_PARKED,
                 COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
             ],
             [
@@ -474,9 +470,9 @@ impl RayPass {
         let corners = run(
             [
                 COMPUTE_QUEUE_CORNERS,
-                COMPUTE_QUEUE_ASK_CORNERS,
+                COMPUTE_QUEUE_ASK,
                 COMPUTE_QUEUE_CORNERS_PARKED,
-                COMPUTE_QUEUE_ASK_CORNERS_PARKED,
+                COMPUTE_QUEUE_ASK_PARKED,
                 COMPUTE_QUEUE_LAST_CORNERS,
             ],
             [&LATTICE_WALK_GROUP, &LATTICE_ASK_GROUP, &LATTICE_LAST_GROUP],
@@ -484,9 +480,9 @@ impl RayPass {
         let light_corners = run(
             [
                 COMPUTE_QUEUE_LIGHT_CORNERS,
-                COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
+                COMPUTE_QUEUE_ASK,
                 COMPUTE_QUEUE_LIGHT_CORNERS_PARKED,
-                COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED,
+                COMPUTE_QUEUE_ASK_PARKED,
                 COMPUTE_QUEUE_LAST_LIGHT_CORNERS,
             ],
             [
@@ -498,9 +494,9 @@ impl RayPass {
         let light_cell = pipelines.build_compute(g, COMPUTE_LIGHT_CELL, group);
         let queue_pipeline = pipelines.build_compute(g, COMPUTE_QUEUE, &QUEUE_GROUP);
         let queue_parked = pipelines.build_compute(g, COMPUTE_QUEUE_PARKED, &QUEUE_GROUP);
-        let queue_ask = pipelines.build_compute(g, COMPUTE_QUEUE_ASK, &QUEUE_ASK_GROUP);
+        let queue_ask = pipelines.build_compute(g, COMPUTE_QUEUE_ASK, &LATTICE_ASK_GROUP);
         let queue_ask_parked =
-            pipelines.build_compute(g, COMPUTE_QUEUE_ASK_PARKED, &QUEUE_ASK_GROUP);
+            pipelines.build_compute(g, COMPUTE_QUEUE_ASK_PARKED, &LATTICE_ASK_GROUP);
         let queue_last = pipelines.build_compute(g, COMPUTE_QUEUE_LAST, &QUEUE_LAST_GROUP);
         let forget_pipeline = pipelines.build_compute(g, COMPUTE_FORGET, group);
         let light = pipelines.build_compute(g, COMPUTE_LIGHT, &LIGHT_GROUP);
@@ -662,11 +658,11 @@ impl RayPass {
     ) {
         // Without a cast, or before the terrain's buffers are made, there is no world: no ray is
         // cast or drawn, and no decor is generated.
-        let (Some(cast), Some((ground, palette_idxs, pool))) = (
+        let (Some(cast), Some((ground, folds, pool))) = (
             cast,
             self.ground
                 .as_ref()
-                .map(|gb| (gb.ground, gb.palette_idxs, gb.pool)),
+                .map(|gb| (gb.ground, gb.folds, gb.pool)),
         ) else {
             if let Some(c) = self.cast.as_mut() {
                 c.generator.off();
@@ -1268,7 +1264,7 @@ impl RayPass {
             c.clipmap,
             ground,
             rays.0,
-            palette_idxs,
+            folds,
             c.shards,
             c.objects,
             pool,
@@ -1285,15 +1281,7 @@ impl RayPass {
             for group in c.queue_groups {
                 release(group);
             }
-            let world = [
-                eye,
-                clipmap,
-                ground,
-                palette_idxs,
-                c.shards,
-                c.objects,
-                pool,
-            ];
+            let world = [eye, clipmap, ground, folds, c.shards, c.objects, pool];
             let run = (world, bindings[3], header);
             let queue_groups_of = queue_groups(
                 g,
@@ -1391,7 +1379,7 @@ impl RayPass {
             c.eye,
             c.clipmap,
             ground,
-            palette_idxs,
+            folds,
             c.shards,
             c.objects,
             pool,
@@ -2112,7 +2100,7 @@ fn light_groups(
     bindings: [u32; 13],
     [header, visibility]: [u32; 2],
 ) -> [u32; LIGHT_GROUPS] {
-    let [eye, clipmap, ground, palette_idxs, shards, objects, pool, light, rays, drawing, regions, instances, _] =
+    let [eye, clipmap, ground, folds, shards, objects, pool, light, rays, drawing, regions, instances, _] =
         bindings;
     let rest = [
         buf_entry(0, eye),
@@ -2124,7 +2112,7 @@ fn light_groups(
         buf_entry(19, regions),
         buf_entry(20, instances),
     ];
-    let worlds = [eye, clipmap, ground, palette_idxs, shards, objects, pool];
+    let worlds = [eye, clipmap, ground, folds, shards, objects, pool];
     let run = (worlds, light, header);
     let [queue_walk, ask, last] = queue_groups(
         g,
@@ -2188,13 +2176,13 @@ fn queue_groups(
     buf: impl Fn(u32) -> u32 + Copy,
     (world, out, header): ([u32; 7], u32, u32),
 ) -> [u32; 3] {
-    let [eye, clipmap, ground, palette_idxs, shards, objects, pool] = world;
+    let [eye, clipmap, ground, folds, shards, objects, pool] = world;
     let rest = [
         buf_entry(0, eye),
         buf_entry(1, clipmap),
         buf_entry(2, ground),
         view_entry(3, out),
-        buf_entry(4, palette_idxs),
+        buf_entry(4, folds),
         buf_entry(5, shards),
         buf_entry(6, objects),
         buf_entry(7, pool),

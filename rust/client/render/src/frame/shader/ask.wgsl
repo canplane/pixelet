@@ -7,7 +7,7 @@
 // word of the node cache is atomic, as a walk claims a slot by exchanging its key. No walk
 // uses compare-and-swap: Safari's WGSL compiler writes Metal for `atomicCompareExchangeWeak`
 // that Metal's compiler refuses. The pass that includes this part names the tag its walks keep
-// under (`WALK_PASS`) and where its asks are counted (`asked_at`).
+// under (`walk_pass`) and where its asks are counted (`asked_at`).
 
 @group(0) @binding(9) var<storage, read_write> node_cache: array<atomic<u32>>;
 
@@ -28,7 +28,7 @@ fn may_ask() -> bool {
 }
 
 fn walk_tag() -> u32 {
-  return PASSES * node_cache_word(FRAME) + WALK_PASS;
+  return PASSES * node_cache_word(FRAME) + walk_pass();
 }
 
 /// Whether slot `slot`'s entry is the node. The zoom is compared first, and the corner's three

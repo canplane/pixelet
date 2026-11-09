@@ -17,7 +17,7 @@ use pxl_spec::value::TRANSPORTS;
 use pxl_spec::way::BRIDGE;
 
 /// A tile as `hold` takes it: for each cell, row by row from the first, its
-/// own palette index and its height; then the tile's lines.
+/// own palette index and its elevation; then the tile's lines.
 pub(crate) type TileData = (Quadrant, Vec<GroundId>, Vec<i16>, Separation);
 
 /// What `hold` leaves held: the bricks' words up to the last nonzero one,
@@ -37,13 +37,13 @@ type Over = ([f64; 2], Vec<TileData>);
 static BUILT: std::sync::Mutex<Vec<(Over, Snapshot)>> = std::sync::Mutex::new(Vec::new());
 
 const CELLS_WORDS: usize = (SLOTS * CELLS_ARR_BYTES / 4) as usize;
-const PALETTE_WORDS: usize = (SLOTS * PALETTE_ARR_BYTES / 4) as usize;
+const FOLDS_WORDS: usize = (SLOTS * FOLDS_ARR_BYTES / 4) as usize;
 
-/// A test's own planes, with `cells` as the cells and a zeroed palette.
+/// A test's own planes, with `cells` as the cells and zeroed folds.
 fn planes_of(cells: &'static mut [u32]) -> BrickMemory {
     BrickMemory {
         cells,
-        palette: vec![0; PALETTE_WORDS].leak(),
+        folds: vec![0; FOLDS_WORDS].leak(),
     }
 }
 
@@ -143,7 +143,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             continue;
         }
         let (t, place) = tile_of(cell_zoom, brick);
-        let Some((_, palette_of, heights, separation)) = tiles.iter().find(|(p, _, _, _)| *p == t)
+        let Some((_, palette_of, ele, separation)) = tiles.iter().find(|(p, _, _, _)| *p == t)
         else {
             continue;
         };
@@ -164,10 +164,10 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             place,
             first: terrain::first_cell(t, cell_zoom, place),
             lines: &lines,
-            palette_idxs: |k: u32| word([u32::from(palette_of[at(k)]); 4]),
-            height: |c: [i32; 2]| {
+            fold_at: |k: u32| word([u32::from(palette_of[at(k)]); 4]),
+            ele_at: |c: [i32; 2]| {
                 i32::from(
-                    heights[at(brick::idx_of([
+                    ele[at(brick::idx_of([
                         c[0].clamp(0, BRICK as i32 - 1) as u32,
                         c[1].clamp(0, BRICK as i32 - 1) as u32,
                     ]))],
@@ -178,12 +178,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             vec![0u32; BRICK_WORDS as usize],
             vec![0u32; SPANS_WORDS as usize],
         );
-        fill_columns(
-            &laid,
-            |k| i32::from(heights[at(k)]),
-            &mut back,
-            &mut scratch,
-        );
+        fill_columns(&laid, |k| i32::from(ele[at(k)]), &mut back, &mut scratch);
         let n = clipmap::OWN_CELLS;
         for k in 0..clipmap::OWN_WORDS {
             back[(clipmap::OWN_AT + k) as usize] = (0..n)
@@ -392,7 +387,7 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
             "its run, sized by its spans"
         );
         assert_eq!(got[ROOT_AT as usize], slot.run[0]);
-        assert!((0..BRICK_CELLS).all(|i| palette(b)[i as usize] == four(i)));
+        assert!((0..BRICK_CELLS).all(|i| folds(b)[i as usize] == four(i)));
         ways += u32::from(slot.run[1] != 0);
         filled.push((b, slot.cell_zoom, slot.brick, spans));
     }
@@ -406,7 +401,7 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
     handed.sort_unstable();
     assert_eq!(handed, wanted, "each handed once");
     assert!(wanted.iter().all(|&b| w.slots[b as usize].present));
-    // The cells as the query reads them from the brick's lines, its ring's heights included, are
+    // The cells as the query reads them from the brick's lines, its ring's elevations included, are
     // what the rule answers over the spans the fill kept: the tree's leaves, had one been built.
     for (b, cell_zoom, q, spans) in filled {
         let column_spans = fill::Scratch {

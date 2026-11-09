@@ -26,12 +26,12 @@ pub(crate) struct Surface {
 /// (pxl-spec bake/way.rs `lay`), then its lines cut to those it draws (pxl-spec
 /// bake/tile/terrain.rs `drawn`).
 pub(crate) fn assemble(tile: [i32; 2], surface: Surface, separation: Separation) -> TerrainTile {
-    let mut palette_idxs = surface.cells.into_owned();
+    let mut asset_ids = surface.cells.into_owned();
     let tile = Quadrant::new(LEAF_ZOOM, tile);
-    lay(&separation, Frame::of(tile), &mut palette_idxs);
+    lay(&separation, Frame::of(tile), &mut asset_ids);
     terrain::drawn(
         tile,
-        TerrainTile::leaf(surface.ele, palette_idxs.into(), separation),
+        TerrainTile::leaf(surface.ele, asset_ids.into(), separation),
     )
 }
 

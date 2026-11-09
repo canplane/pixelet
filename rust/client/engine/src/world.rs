@@ -133,7 +133,7 @@ pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Pool + ?Sized>(
     // drawn by its value. It is read once, here, for both uses below.
     let laid = if over.answer == CELL {
         let four = if fills(over.asset) {
-            object::palette_idxs(columns, put, hide, zoom, c, over.asset)
+            object::asset_ids(columns, put, hide, zoom, c, over.asset)
         } else {
             [0; 4]
         };

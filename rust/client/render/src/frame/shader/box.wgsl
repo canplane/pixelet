@@ -1,5 +1,5 @@
-// Draws the ghost's boxes. Each box is unfolded into a cube's six faces, and
-// every edge of a box is outlined as its silhouette.
+// Draws the ghost's box, unfolded from its draw's uniform into a cube's six
+// faces, every edge outlined as its silhouette.
 
 // The draws' uniforms by slot (word.rs `ghost_box`), read as whole vec4s. Two
 // backends lay out a vec3f followed by scalars in a storage array differently,
@@ -9,32 +9,6 @@
 var<private> draw_slot: u32;
 
 fn ghost_box_word(k: u32) -> vec4f { return draws[draw_slot * DRAW_VEC4S + k]; }
-
-struct BoxInput {
-  @location(0) first: vec4<u32>,
-  @location(1) layer: u32,
-};
-
-// A box's x and y are in steps of its own cell, and its floor and height in
-// steps of the mesh's.
-struct Box {
-  min_xy: vec2f,
-  size_xy: vec2f,
-  z: vec2f,
-  rgb: u32,
-  layer: u32,
-};
-
-const XY_STEPS: f32 = f32(BOX_XY_STEPS);
-
-fn box_pair(word: u32, step: f32) -> vec2f {
-  return vec2f(f32(word & 0xffffu), f32(word >> 16u)) * step;
-}
-
-fn box_of(words: BoxInput) -> Box {
-  let step = ghost_box_unit() / XY_STEPS;
-  return Box(box_pair(words.first[0], step), box_pair(words.first[1], step), box_pair(words.first[2], ghost_box_z_step()), words.first[3], words.layer);
-}
 
 // Each face's four corners, wound counter-clockwise seen from outside, with the
 // faces in the order of paint.wgsl's `FACE_NORMAL`.
@@ -72,30 +46,33 @@ struct Corner {
   world: vec3f,
 };
 
-fn box_corner(k: u32, b: Box, place: vec3f) -> Corner {
+fn box_corner(k: u32, side: f32, place: vec3f) -> Corner {
   let face = k / 6u;
   let local = FACE_CORNER[face * 4u + FACE_TRIANGLES[k % 6u]];
-  let size = vec3f(b.size_xy, b.z.y);
-  let pos = vec3f(b.min_xy, b.z.x) + size * 0.5 + local * size;
-  return Corner(face, local, size, pos + place);
+  let size = vec3f(side);
+  return Corner(face, local, size, place + size * (local + 0.5));
 }
 
+// The fraction of a unit past the whole unit under the box's corner, in the
+// world's units. A unit is `1 << FRAC_W` Q3 steps, so a word's low bits are that
+// fraction whichever lap the corner lies on.
+fn box_fraction() -> vec3f {
+  return vec3f(vec3u(ghost_box_q()) & vec3u((1u << FRAC_W) - 1u)) * Q3_STEP + ghost_box_r();
+}
 
-// The draw record's index rides on `vertex_index`: a draw's first vertex is
-// its record's index times the cube's vertices. The draw's first instance is
-// its first box.
+// The draw's uniform slot rides on `vertex_index`: a draw's first vertex is
+// its slot times the cube's vertices.
 @vertex
-fn vs(@builtin(vertex_index) v: u32, words: BoxInput) -> VertexOut {
+fn vs(@builtin(vertex_index) v: u32) -> VertexOut {
   draw_slot = v / BOX_VERTICES;
-  let b = box_of(words);
-  let c = box_corner(v % BOX_VERTICES, b, from_eye(ghost_box_q(), ghost_box_r()));
+  let c = box_corner(v % BOX_VERTICES, ghost_box_side(), from_eye(ghost_box_q(), ghost_box_r()));
   var o: VertexOut;
   o.clip = jittered(frame_view_proj() * vec4f(c.world, 1.0));
   let local = c.local;
   let size = c.size;
   let normal = FACE_NORMAL[c.face];
-  o.rgb = srgb_to_linear(unpack4x8unorm(b.rgb).xyz);
-  o.layer = f32(b.layer);
+  o.rgb = srgb_to_linear(unpack4x8unorm(ghost_box_rgb()).xyz);
+  o.layer = f32(ghost_box_layer());
   o.local_pos = local;
   o.box_scale = size;
   o.normal = normal;
@@ -109,11 +86,9 @@ fn vs(@builtin(vertex_index) v: u32, words: BoxInput) -> VertexOut {
   o.other = l.other;
   o.fill = l.fill;
   // The tile's UV is at real size, one repeat a unit, and is read from where
-  // the face stands, not from its box, so a leaf cut into several boxes still
-  // wears one tile. The mesh's corner and floor stand on whole units (ghost.rs
-  // `on_whole_units`), so the mesh's own coordinates are the world's modulo
-  // the repeat. On a side, v runs down.
-  o.box_uv = face_uv(vec3f(b.min_xy, b.z.x) + size * (local + 0.5), normal);
+  // the face stands in the world: the corner's fraction past a whole unit,
+  // plus the face's way across the box. On a side, v runs down.
+  o.box_uv = face_uv(box_fraction() + size * (local + 0.5), normal);
   return o;
 }
 

@@ -30,10 +30,10 @@ Z    ┌─────────────┬──────────
 ```
 
 X goes once round the world in 2^24 units, Y spans the square Mercator plane,
-and Z the ±2^15 units of height the terrain's `i16` heights reach. X fills its
-`i32` exactly, so X goes round as the type wraps: the short way between two
-positions is X's difference taken wrapping (`world::between`). Y does not go
-round, and a Y difference is taken wider. A position enters the world only
+and Z the ±2^15 units of height the terrain's `i16` elevations reach. X fills its `i32` exactly, so X goes round as the type wraps: the short
+way between two positions is X's difference taken wrapping (`world::between`).
+Y does not go round, and a Y difference is taken wider. A position enters the
+world only
 through `world::at` or `point`, which hold Y and Z inside it.
 
 All of it is integer, so a position is the same bits on every machine; doubles

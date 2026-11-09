@@ -12,7 +12,7 @@ use pxl_engine::eye;
 use pxl_engine::light::TILE as LIGHT_TILE;
 use pxl_engine::ray;
 use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
-use pxl_spec::space::coord::mat4::{self, Mat4};
+use pxl_spec::space::coord::mat4::Mat4;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
@@ -261,65 +261,11 @@ fn beside_changed(update: &DrawUpdate, touched: &[u32]) -> bool {
     changed || (!touched.is_empty() && read_changed())
 }
 
-/// Whether a drawn frame has seen what the lists changed so far. It is a pure
-/// state that each turn steps (`frame`, `dropped`, `put_off`), and
-/// renderer.test.rs explores it whole. A dropped frame leaves the lists'
-/// changes unseen. A turn put off leaves unseen the changes of the draws
-/// whose moves draw the frame whole (`beside`). The next frame reads what is
-/// unseen as moved.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Seen {
-    lists: bool,
-    beside: bool,
-}
-
-impl Seen {
-    const NONE: Seen = Seen {
-        lists: false,
-        beside: false,
-    };
-
-    /// Steps the state for a frame drawn. `changed` says the lists changed: a
-    /// draw changed, the draws are drawn in another order, or their uniforms
-    /// were written whole. `uploads_changed` says uploads moved, and `drifted`
-    /// says the drift moved under a draw that drifts. `beside_changed` says
-    /// the turn moved a draw whose moves draw the frame whole. It returns
-    /// whether the listed draws are drawn as the last frame drew them, and
-    /// whether such a draw moved since a frame last saw them.
-    fn frame(
-        &mut self,
-        changed: bool,
-        uploads_changed: bool,
-        drifted: bool,
-        beside_changed: bool,
-    ) -> (bool, bool) {
-        let same = self.lists && !changed && !uploads_changed && !drifted;
-        let beside = !self.beside || beside_changed;
-        *self = Seen {
-            lists: true,
-            beside: true,
-        };
-        (same, beside)
-    }
-
-    /// Steps the state for a frame whose commands were dropped: no frame drew
-    /// what it saw.
-    fn dropped(&mut self) {
-        *self = Seen::NONE;
-    }
-
-    /// Steps the state for lists taken with no frame drawn: the draws they
-    /// moved are unseen.
-    fn put_off(&mut self) {
-        self.beside = false;
-    }
-}
-
 /// What a frame read that decides what it draws (`FramePlan`). `partial` says
 /// that nothing but the listed draws that mark moved before its cast.
 /// `still` says that all it reads read as last time except its lists and its
 /// jitter, over rays cast again at most at their own pixels. `lists_same`
-/// says that the listed draws are drawn as the last frame drew them (`Seen`).
+/// says that nothing in the lists changed this turn.
 /// `clouds_damage` says that the cloud sheets in view moved. The rest are the
 /// rays' own: whether the light's receivers are marked afresh, which casts
 /// every pixel (`unmasked`, `RayPass::unmasked`), whether the rays cast pixels
@@ -550,15 +496,13 @@ pub struct Renderer {
     /// frame words except the jitter, the sky's, the stars', the occlusion's
     /// and the air's words, the world surface's targets, the skins and the
     /// character surfaces. It also marks what landed or was drawn again
-    /// without words, such as an image or the impostors' bake. The lists and
-    /// the cloud sheets are read apart (`seen`, `clouds_read`).
+    /// without words, such as an image or the impostors' bake. The cloud
+    /// sheets are read apart (`clouds_read`).
     frame_read: Read,
     /// The jitter and the drift in the frame words as the GPU's copy holds
     /// them (`JITTER`, `DRIFT_Q`).
     jitter_written: [f32; 2],
     drift_written: [u32; 4],
-    /// Whether a drawn frame has seen the lists' changes so far (`Seen`).
-    seen: Seen,
     /// The cloud sheets' words as last written (`CloudPass::words`).
     clouds_read: Read,
     /// The gate that a frame not drawn whole is drawn through, and its group
@@ -583,9 +527,6 @@ pub struct Renderer {
     /// the draw was drawn at (pass/mark.rs).
     last_frame_words: Frame,
     last_frame_buf: u32,
-    /// The eye's view-projection as `prepare` took it. The cloud sheets are
-    /// seen through it (`sheets_damage`), and the propagation reads it.
-    view_proj: Mat4,
     /// What the occlusion was last found from: the frame words, the
     /// occlusion's own words, the surface's size, whether decor is generated,
     /// and the world's depth that the static opaque draws lay. The frame is
@@ -655,7 +596,6 @@ impl Renderer {
             frame_read: Read::default(),
             jitter_written: [f32::NAN; 2],
             drift_written: [u32::MAX; 4],
-            seen: Seen::NONE,
             clouds_read: Read::default(),
             mask: pipelines.build_mask(g, PIPELINE_SCREEN_MASK),
             mask_group: Group::default(),
@@ -674,7 +614,6 @@ impl Renderer {
                 word_bytes(FRAME_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            view_proj: mat4::new(),
             ao_read: Read::default(),
             pipelines,
             frame_buf,
@@ -788,7 +727,7 @@ impl Renderer {
         }
     }
 
-    /// Makes the ghost boxes' group 0 over what a cell's face is painted by
+    /// Makes the ghost box's group 0 over what a cell's face is painted by
     /// and the draws' uniforms. It also hands the draws' buffer to the skinned
     /// and the location passes, and the lit entries to the screen pass.
     fn box_groups(&mut self, g: &Gpu) {
@@ -818,7 +757,6 @@ impl Renderer {
         let u = &mut self.frame;
         let m = input.view_proj;
         put_mat(u, VIEW_PROJ, &m);
-        self.view_proj = m;
         // Everything is drawn in the eye's frame. On the GPU a draw's
         // position is taken against the eye's Q3 (gpu/draw.rs `Position`),
         // which is the Q3 the rays leave from (`eye::ORIGIN`). What is
@@ -908,26 +846,14 @@ impl Renderer {
         self.atmosphere.prepare(g, env, eye_far);
     }
 
-    /// Draws the ghost boxes. A box is one instance of `BOX_VERTICES`
-    /// vertices, and a draw's first box is its first instance. Both vertex
-    /// slots bind the same buffer and read a box's record at two offsets. The
-    /// draw's uniform slot rides on the first vertex, `uniform * BOX_VERTICES`,
-    /// and box.wgsl divides the vertex index by `BOX_VERTICES` to find it.
-    fn draw_boxes(&self, pass: &mut TrackedRenderPass, draws: &DrawTable) {
-        let b = uploads();
+    /// Draws the ghost box, the cube box.wgsl unfolds from its draw's uniform. The draw's
+    /// uniform slot rides on the first vertex, `uniform * BOX_VERTICES`, and box.wgsl divides
+    /// the vertex index by `BOX_VERTICES` to find it.
+    fn draw_ghost_box(&self, pass: &mut TrackedRenderPass, draws: &DrawTable) {
         for d in draws.of(PIPELINE_GHOST_BOX) {
-            let (handle, box_cnt, first_box, uniform) = (d[0], d[1], d[2], d[3]);
-            let buf = b.get(handle).map(|(buf, ..)| buf);
-            // A missing buffer is a fault in the list. Skipped, it would draw
-            // nothing while every gauge read normal, so it is a bug.
-            let Some(buf) = buf else {
-                xpute_kit::bug!(ENOTRECOVERABLE, handle)
-            };
             pass.set_pipeline(self.ghost.id);
             pass.set_bind_group(0, self.bind_group, &[]);
-            pass.set_vertex_buf(0, buf, 0, 0);
-            pass.set_vertex_buf(1, buf, 0, 0);
-            pass.draw(BOX_VERTICES, box_cnt, uniform * BOX_VERTICES, first_box);
+            pass.draw(BOX_VERTICES, d[1], d[3] * BOX_VERTICES, 0);
         }
     }
 
@@ -935,7 +861,13 @@ impl Renderer {
     /// or none where no sheet is seen. Each sheet is laid as cloud.wgsl `vs`
     /// lays it: a square at its height over the eye, as wide as the eye draws
     /// clouds, cut at the eye's plane.
-    fn sheets_damage(&self, env: &[f32], width: u32, height: u32) -> Option<Damage> {
+    fn sheets_damage(
+        &self,
+        view_proj: &Mat4,
+        env: &[f32],
+        width: u32,
+        height: u32,
+    ) -> Option<Damage> {
         let w = self.cloud.words();
         if w[clouds::SHOWN] <= 0.0 {
             return None;
@@ -959,7 +891,7 @@ impl Renderer {
                 [half, half, z],
                 [-half, half, z],
             ];
-            if let Some(b) = plane_clip(&self.view_proj, &quad) {
+            if let Some(b) = plane_clip(view_proj, &quad) {
                 clip = Some(clip.map_or(b, |c| {
                     [
                         c[0].min(b[0]),
@@ -992,7 +924,6 @@ impl Renderer {
     /// is copied again (`CopyCache::forget`).
     fn put_off(&mut self) {
         self.frame_read.forget();
-        self.seen.put_off();
         self.uniforms_mirror.forget();
         self.last_frame_uploads.forget();
     }
@@ -1128,7 +1059,14 @@ impl Renderer {
             !r.end()
         };
         let sheets = clouds_changed
-            .then(|| self.sheets_damage(input.environment, world.width, world.height))
+            .then(|| {
+                self.sheets_damage(
+                    &input.view_proj,
+                    input.environment,
+                    world.width,
+                    world.height,
+                )
+            })
             .flatten();
         // Sheets seen moving draw a frame, however still the rest is.
         let clouds_damage = sheets.is_some();
@@ -1152,13 +1090,9 @@ impl Renderer {
             self.jitter_written = jitter;
             self.drift_written = drift_now;
         }
-        // Whether the listed draws are drawn as the last frame drew them, and
-        // whether one whose moves draw the frame whole moved (`Seen`).
+        // Whether nothing in the lists changed this turn.
         let drifted = draws.drifting() && drift_now != drift_bits(&self.last_frame_words);
-        let beside = beside_changed(update, &touched);
-        let (lists_same, beside_changed) =
-            self.seen
-                .frame(lists_changed, uploads_changed, drifted, beside);
+        let lists_same = !lists_changed && !uploads_changed && !drifted;
         if words_changed || drift_changed {
             // The light's frame words are made of the same words, so they are
             // written again too.
@@ -1173,7 +1107,9 @@ impl Renderer {
         if self.screen_ao && read.read(self.ao.words()) {
             self.ao.write(g);
         }
-        read.read(self.atmosphere.words());
+        if read.read(self.atmosphere.words()) {
+            self.atmosphere.write(g);
+        }
         read.read(&[world.depth, world.rays, u32::from(self.screen_ao)]);
         let b = uploads();
         self.decor.prepare(g, &draws, uniforms, lists_changed, b);
@@ -1190,7 +1126,7 @@ impl Renderer {
         // draws that mark moved so far. What moved marks its tiles, and the
         // tiles still gathering since they last changed stay claimed. The
         // cast takes the claimed tiles and casts its pixels there alone.
-        let partial = read.same() && !beside_changed;
+        let partial = read.same() && !beside_changed(update, &touched);
         // The tiles are sized before anything binds them. The pixels' cast
         // casts the claimed tiles, its samples' raster draws them, and the
         // rays' screen pass draws them. The depth's bounds are sized with
@@ -1330,7 +1266,7 @@ impl Renderer {
             let spread = propagate::spread(SHADOW_MARGIN as f32);
             let light = &self.shadow.light_view_proj;
             self.propagate
-                .prepare(g, &self.view_proj, light, spread, SHADOW_SIZE);
+                .prepare(g, &input.view_proj, light, spread, SHADOW_SIZE);
         }
         // Where only the listed draws that mark moved, the claimed tiles are
         // those that what moved marked, however much of the screen they and
@@ -1353,7 +1289,7 @@ impl Renderer {
         let encoder = g.encoder();
         let mut ctx = RenderContext::new(g, encoder, &mut stamps);
         // The screen's tiles' words come first, then its marks, then the
-        // light's words and marks, each before anything reads them. A dropped
+        // light's marks, each before anything reads them. A dropped
         // frame leaves them as they were, and the next frame is drawn whole.
         // A span times from its first pass to its last (gpu/api.rs
         // `TimestampWrites`), so the passes of the screen's damage (`damage`),
@@ -1398,9 +1334,6 @@ impl Renderer {
         } else {
             self.screen.generated()
         };
-        if draws_map {
-            self.light_tiles.dispatch_damage(&mut ctx);
-        }
         // The same from the light, where the map is drawn through its gate.
         // The casters draw themselves to set the words of the map's tiles
         // their shadows change, and the propagation reads those words.
@@ -1576,7 +1509,7 @@ impl Renderer {
         self.cloud.draw(&mut pass);
         self.location.draw_beacon(&mut pass, &draws, frame_group);
         self.location.draw_zone(&mut pass, &draws, b);
-        self.draw_boxes(&mut pass, &draws);
+        self.draw_ghost_box(&mut pass, &draws);
         self.decor
             .draw_ghosts(&mut pass, &draws, b, self.model_group.frame);
         pass.end();
@@ -1654,7 +1587,6 @@ impl Renderer {
                 pass.read.forget();
             }
             read.forget();
-            self.seen.dropped();
             self.ao_read.forget();
             // The stencil holds what the last drawn frame left, so the next
             // gated frame clears it.

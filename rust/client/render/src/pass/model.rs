@@ -11,14 +11,13 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::frame::shader::record::PIPELINE_SKINNED;
-use crate::frame::shader::word::{instance, DRAW_FLOATS};
+use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, release, sampler_entry, view_entry,
     word_bytes, Entry, Gpu, Image, Layout, TrackedRenderPass,
 };
 use crate::gpu::draw::{Block, DRAW_WORDS, MODEL_VERTEX_WORDS};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::gpu::put::put_u32;
 use crate::pass::atmosphere::AIR_ENTRIES;
 
 fn frame_group(
@@ -237,17 +236,13 @@ impl UniformBuffer {
 /// `DRAW_FLOATS`).
 pub const DRAW_BYTES: u32 = word_bytes(DRAW_FLOATS);
 
+/// Puts a draw's uniform `u` into `buf` whole, as its shader reads it.
+pub fn put_uniform(buf: &mut [u8], u: &[f32]) {
+    buf[..DRAW_BYTES as usize].copy_from_slice(bytes(u));
+}
+
 /// A model's extent along glTF's axes: across (X), up (Y) and deep (Z).
 pub type Extent = [f32; 3];
-
-/// Puts a decor draw's uniform into `buf` as instance.wgsl reads it, for the
-/// model tier and the impostors alike. It is the list's words `u`, with
-/// `layer` written over the `LAYER` word. For an impostor `layer` is its atlas
-/// layer; the model tier passes 0, and its shader reads no layer.
-pub fn put_instances(buf: &mut [u8], u: &[f32], layer: u32) {
-    buf[..DRAW_BYTES as usize].copy_from_slice(bytes(u));
-    put_u32(buf, 4 * instance::LAYER, layer);
-}
 
 pub struct ModelDraw {
     pub groups: [u32; 2],

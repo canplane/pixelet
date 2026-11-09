@@ -538,30 +538,6 @@ pub const TOUCHES: &[Touch] = {
         // The asks and the last walks of the samples' and the beam rays' runs, the eye's and the
         // light's, count the frame's asks as the holes' do (queue_ask.wgsl, queue_last.wgsl).
         Touch {
-            compute: COMPUTE_QUEUE_ASK_SAMPLES,
-            binding: 9,
-            writes: &[ASKED],
-            reads: &[ASKED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_SAMPLES_PARKED,
-            binding: 9,
-            writes: &[ASKED],
-            reads: &[ASKED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_LIGHT_SAMPLES,
-            binding: 9,
-            writes: &[ASKED],
-            reads: &[ASKED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_LIGHT_SAMPLES_PARKED,
-            binding: 9,
-            writes: &[ASKED],
-            reads: &[ASKED],
-        },
-        Touch {
             compute: COMPUTE_QUEUE_LAST_SAMPLES,
             binding: 9,
             writes: &[ASKED],
@@ -569,30 +545,6 @@ pub const TOUCHES: &[Touch] = {
         },
         Touch {
             compute: COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
-            binding: 9,
-            writes: &[ASKED],
-            reads: &[ASKED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_CORNERS,
-            binding: 9,
-            writes: &[ASKED],
-            reads: &[ASKED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_CORNERS_PARKED,
-            binding: 9,
-            writes: &[ASKED],
-            reads: &[ASKED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_LIGHT_CORNERS,
-            binding: 9,
-            writes: &[ASKED],
-            reads: &[ASKED],
-        },
-        Touch {
-            compute: COMPUTE_QUEUE_ASK_LIGHT_CORNERS_PARKED,
             binding: 9,
             writes: &[ASKED],
             reads: &[ASKED],

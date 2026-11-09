@@ -1,6 +1,5 @@
-// Value noise over the cloud field's hash, `lattice_hash`. build.rs writes the
-// hash from pxl-content cloud.rs, where the CPU's cumulus draws its cells from
-// it, so the clouds the GPU draws agree with the CPU's.
+// Value noise over the cloud field's hash, `lattice_hash`, which build.rs writes from
+// pxl-content cloud.rs.
 
 // The lattice wraps at `mask + 1`, its count of cells across the world, so the
 // noise wraps with the map.

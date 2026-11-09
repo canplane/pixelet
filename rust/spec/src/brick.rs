@@ -90,7 +90,7 @@ pub const fn lines_words(entries: u32, segments: u32) -> u32 {
 /// there; what is known of the area at it (`area::Shard`), by which its columns are asked
 /// whether they are the wall (`area::is_wall`); word `k` of its lines (`LINES_ENTRIES_AT`);
 /// cell `i`'s own palette index as `columns` laid it (pxl-engine clipmap.rs `OWN_WORDS`); and
-/// column `c`'s height from its tile's samples, with `c` counted from its first cell and the
+/// column `c`'s elevation from its tile's samples, with `c` counted from its first cell and the
 /// ring of columns around it included. Its columns are its cells and that ring. A ring column
 /// is read from the edge bin it borders, whose lines hold every line that reaches it
 /// (`way::footprint`); a column past the ring has no segment.
@@ -102,7 +102,7 @@ pub trait Brick {
     fn line(&self, k: u32) -> u32;
     /// Cell `i`'s own palette index as its fill laid it (pxl-engine clipmap.rs `OWN_WORDS`).
     fn own(&self, i: u32) -> u32;
-    fn height(&self, c: [i32; 2]) -> i32;
+    fn ele_at(&self, c: [i32; 2]) -> i32;
 }
 
 /// Whether column `c` is the brick's or its ring's.
@@ -195,7 +195,7 @@ impl<Q: Brick> ColumnGrid for Q {
     }
     /// Its own palette index as its fill laid it (pxl-engine clipmap.rs `OWN_WORDS`), the wall
     /// apart (`is_walled`).
-    fn palette_idx(&self, c: [i32; 2]) -> u32 {
+    fn asset_id(&self, c: [i32; 2]) -> u32 {
         let i = cell_idx(c);
         if i == BRICK_CELLS {
             VOID
@@ -208,7 +208,7 @@ impl<Q: Brick> ColumnGrid for Q {
             return 0;
         }
         let cell_zoom = Brick::cell_zoom(self);
-        ground::face_height(cell_zoom, ground::cells(cell_zoom, self.height(c) as f32))
+        ground::face_ele(cell_zoom, ground::cells(cell_zoom, self.ele_at(c) as f32))
     }
     /// Whether the entry is the one after the one before it, and its segment continues the one
     /// stored before it.

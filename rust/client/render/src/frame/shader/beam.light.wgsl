@@ -7,10 +7,6 @@
 // lies on the near plane, at its tile's band (`Light::band`), and keeps its line in the light's
 // list.
 
-fn beam_lattice() -> vec2<u32> {
-  return vec2<u32>(beam_across());
-}
-
 /// How many beam rays a run takes: those listed for the tiles the cast claimed, one a place in
 /// the list (light_list.wgsl `light_item_at`).
 fn corner_cnt() -> u32 {

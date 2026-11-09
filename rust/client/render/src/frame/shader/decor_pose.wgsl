@@ -52,10 +52,10 @@ fn surface(zoom: u32, g: vec2<i32>) -> Surface {
     // A column at `zoom` is `1 << (HEIGHT_BITS - s)` cells tall from its floor up, so a walk
     // from a cell in it reaches the floor within that many cells. A longer walk would start
     // outside the world, and it is cut there, as a walk past its end is.
-    let end = max(select(floor, r.b.z >> s, col.palette_idx == VAL_VOID), z - ((1i << (HEIGHT_BITS - s)) - 1i));
+    let end = max(select(floor, r.b.z >> s, col.asset_id == VAL_VOID), z - ((1i << (HEIGHT_BITS - s)) - 1i));
     return Surface(SURFACE_WALK, z, 0u, end);
   }
-  if (col.palette_idx == VAL_VOID) {
+  if (col.asset_id == VAL_VOID) {
     return Surface(SURFACE_NONE, 0i, 0u, 0i);
   }
   return Surface(SURFACE_MET, col.top - 1i, eighths(col.part), 0i);

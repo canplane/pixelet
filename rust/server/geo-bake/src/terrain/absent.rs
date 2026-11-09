@@ -24,10 +24,10 @@ pub struct Absence {
 }
 
 /// A tile of one look at sea level: no lines, and no child under it.
-fn uniform(palette_idx: u8) -> TerrainTile {
+fn uniform(asset_id: u8) -> TerrainTile {
     let mut t = TerrainTile::leaf(
         vec![0; ELE_COLUMN],
-        vec![palette_idx; (TILE_CELLS * TILE_CELLS) as usize].into(),
+        vec![asset_id; (TILE_CELLS * TILE_CELLS) as usize].into(),
         Default::default(),
     );
     t.occupancy = Occupancy::ZERO;

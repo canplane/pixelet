@@ -2,7 +2,7 @@
 
 // Draws the eye's rays, one a drawn pixel (pxl-engine `ray`); screen_shade.wgsl is the
 // fragment stage. Each pixel shows the face its ray entered, painted by paint.wgsl `paint` as
-// the ghost's boxes are, and a pixel whose ray met nothing is left to the sky. What lies across
+// the ghost's box is, and a pixel whose ray met nothing is left to the sky. What lies across
 // each edge and corner of the face (the air, the next cell of a flat run, or a cell rising in
 // front of it) is the world's own answer, asked once where the cast stopped (pxl-engine
 // `face`) and handed in the pixel's own ray words. A line is drawn along an edge that meets the
@@ -106,7 +106,7 @@ fn appearance(c: vec3u) -> Appearance {
   if (ray_zoom(c.x) >= GROUND_CELL_ZOOM) {
     return Appearance(swatch(l), f32(l.y >> 16u));
   }
-  let fold = ray_palette_idxs(c.z);
+  let fold = ray_asset_ids(c.z);
   if (any(fold == vec4u(val))) {
     // The face's own look is read once, and serves each of the four indices that name it.
     var sum = vec3f(0.0);

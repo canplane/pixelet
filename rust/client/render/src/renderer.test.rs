@@ -93,6 +93,10 @@ struct Rebuilt {
     drift: Position,
 }
 
+const BOX_SIDE: f32 = 1.0;
+const BOX_RGB: u32 = 0x00ffffff;
+const BOX_LAYER: u32 = 3;
+
 fn rebuilt(t: &Turn) -> Rebuilt {
     let off = t.drift as f64 / 256.0;
     let mut r = Rebuilt {
@@ -107,15 +111,23 @@ fn rebuilt(t: &Turn) -> Rebuilt {
         let drifts = if s.cloud { 1.0 } else { 0.0 };
         r.records
             .push([w0, w1, w2, r.uniforms.len() as u32, s.pipeline]);
-        let opacity = match s.pipeline {
-            PIPELINE_DECOR | PIPELINE_GHOST_DECOR | PIPELINE_IMPOSTOR => instance::OPACITY,
-            _ => ghost_box::OPACITY,
-        };
         let mut u = [0.0; DRAW_FLOATS];
         u[draw::Q..draw::Q + 3].copy_from_slice(&q);
         u[draw::R..draw::R + 3].copy_from_slice(&p.r);
         u[draw::DRIFTS] = drifts;
-        u[opacity] = s.opacity;
+        match s.pipeline {
+            PIPELINE_DECOR | PIPELINE_GHOST_DECOR | PIPELINE_IMPOSTOR => {
+                u[instance::OPACITY] = s.opacity;
+                u[instance::LAYER] = f32::from_bits(w1);
+            }
+            PIPELINE_GHOST_BOX => {
+                u[ghost_box::OPACITY] = s.opacity;
+                u[ghost_box::SIDE] = BOX_SIDE;
+                u[ghost_box::RGB] = f32::from_bits(BOX_RGB);
+                u[ghost_box::LAYER] = f32::from_bits(BOX_LAYER);
+            }
+            _ => {}
+        }
         r.uniforms.push(u);
     }
     r
@@ -201,7 +213,7 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
     // `scene_step`): the ghost first, then the characters, the location, the
     // gizmos, the clouds and the markers.
     let base = vec![
-        spec(4, PIPELINE_GHOST_BOX, [40, 1, 0], [6.0, 6.0, 6.0]),
+        spec(4, PIPELINE_GHOST_BOX, [0, 1, 0], [6.0, 6.0, 6.0]),
         spec(0, PIPELINE_SKINNED, [10, 11, 1], [1.0, 2.0, 3.0]),
         spec(1, PIPELINE_LOCATION_ZONE, [20, 4, 0], [4.0, 4.0, 0.0]),
         spec(2, PIPELINE_LOCATION_BEACON, [0, 0, 0], [5.0, 5.0, 5.0]),
@@ -256,7 +268,7 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
         s[3].words[1] = 4;
     };
     let turns = [
-        turn(base.clone(), &[10, 11, 20, 30, 40, 50, 51, 60], 0),
+        turn(base.clone(), &[10, 11, 20, 30, 50, 51, 60], 0),
         turn(base.clone(), &[], 0),
         turn(with(&character_moved), &[11], 0),
         turn(with(&character_moved), &[50], 0),
@@ -286,9 +298,10 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
                 PIPELINE_DECOR | PIPELINE_GHOST_DECOR | PIPELINE_IMPOSTOR => list.draw_instances(
                     &ids[s.id], s.pipeline, w0, w1, w2, [0; 3], at, s.opacity, s.cloud, stand,
                 ),
-                _ => list.draw_in(
-                    &ids[s.id], s.pipeline, w0, w1, w2, at, s.opacity, 0.0, 0.0, stand,
+                PIPELINE_GHOST_BOX => list.draw_box(
+                    &ids[s.id], at, s.opacity, BOX_SIDE, BOX_RGB, BOX_LAYER, stand,
                 ),
+                _ => list.draw_as(&ids[s.id], s.pipeline, w0, w1, w2, at, stand),
             }
         }
         let lists = list.take();
@@ -356,80 +369,6 @@ fn a_cloud_draws_no_frame_whole() {
         assert!(beside(&d, &u), "{p}");
     }
     assert!(!beside(&[1, 0, 1, 0, PIPELINE_SKINNED], &u));
-}
-
-/// A turn as `Seen` steps it.
-#[derive(Clone, Copy, Debug)]
-enum Event {
-    /// A frame drawn, with four flags: its lists moved, its uploads moved, the
-    /// drift moved under a draw that drifts, and a draw whose moves draw the
-    /// frame whole changed.
-    Frame([bool; 4]),
-    Dropped,
-    PutOff,
-}
-
-fn events() -> Vec<Event> {
-    let mut e: Vec<Event> = (0..16)
-        .map(|b| Event::Frame([0, 1, 2, 3].map(|k| b >> k & 1 != 0)))
-        .collect();
-    e.extend([Event::Dropped, Event::PutOff]);
-    e
-}
-
-/// From a renderer made anew, through any order of turns, every state `Seen`
-/// reaches answers as two reads would (gpu/read.rs `Read`): one over the
-/// lists, and one over the draws whose moves draw the frame whole. A dropped
-/// frame forgets both reads, and a turn put off forgets the second. The
-/// listed draws read the same where the lists, their uploads and the drift
-/// under them stood and the frame before saw them. A draw whose moves draw
-/// the frame whole moved where the turn moved one or the frame before did
-/// not see them.
-#[test]
-fn seen_answers_as_the_reads_did_in_every_state() {
-    // The two reads, each as whether it holds what the last frame drew.
-    let read = |fresh: [bool; 2], e: Event| -> ([bool; 2], Option<(bool, bool)>) {
-        match e {
-            Event::Frame([changed, uploads, drifted, beside]) => (
-                [true; 2],
-                Some((
-                    fresh[0] && !changed && !uploads && !drifted,
-                    !fresh[1] || beside,
-                )),
-            ),
-            Event::Dropped => ([false; 2], None),
-            Event::PutOff => ([fresh[0], false], None),
-        }
-    };
-    let mut reached = vec![(Seen::NONE, [false; 2])];
-    let mut k = 0;
-    while k < reached.len() {
-        let (s, fresh) = reached[k];
-        for e in events() {
-            let mut next = s;
-            let got = match e {
-                Event::Frame([m, u, d, b]) => Some(next.frame(m, u, d, b)),
-                Event::Dropped => {
-                    next.dropped();
-                    None
-                }
-                Event::PutOff => {
-                    next.put_off();
-                    None
-                }
-            };
-            let (fresh_next, want) = read(fresh, e);
-            assert_eq!(got, want, "{s:?} {e:?}");
-            assert_eq!([next.lists, next.beside], fresh_next, "{s:?} {e:?}");
-            if !reached.iter().any(|&(r, _)| r == next) {
-                reached.push((next, fresh_next));
-            }
-        }
-        k += 1;
-    }
-    // Every state is reached but one, the lists unseen while their beside
-    // draws are seen: a dropped frame leaves both unseen.
-    assert_eq!(reached.len(), 3);
 }
 
 /// Over every combination of the reads, `FramePlan::of` decides quiet, masked

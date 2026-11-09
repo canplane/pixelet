@@ -35,10 +35,10 @@ fn vs(@builtin(vertex_index) v: u32, @builtin(instance_index) i: u32) -> StarOut
 
   var o: StarOut;
   let flux = at.w;
-  let height = dot(dir, frame_up());
+  let mu = dot(dir, frame_up());
   // The optical depth of the air straight up from the eye; from orbit there is none.
   let depth = depth_to_top(camera_r(), 1.0);
-  let light = color * flux * SKY_STAR_GAIN * exp(-depth * airmass(height)) * stars_intensity();
+  let light = color * flux * SKY_STAR_GAIN * exp(-depth * airmass(mu)) * stars_intensity();
   var clip = stars_view_proj() * vec4f(dir, 0.0);
   let behind_moon = length(cross(dir, atmos_moon_dir())) < MOON_ANGULAR_RADIUS * SKY_DISC_SCALE && dot(dir, atmos_moon_dir()) > 0.0;
   if (falls_to_land(dir) || behind_moon || clip.w <= 0.0 || max(light.r, max(light.g, light.b)) < SKY_STAR_FLOOR) {

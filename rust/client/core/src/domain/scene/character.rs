@@ -393,7 +393,6 @@ impl Character {
             self.model,
             Position::of(t.at),
             t.rot,
-            1.0,
             t.scale * m.scale(),
             Some(ReceiverBox::ball(t.at)),
         );
@@ -416,7 +415,6 @@ impl Character {
             self.model,
             Position::of(at),
             rot,
-            1.0,
             m.scale() / self.height_u() as f32,
         ))
     }

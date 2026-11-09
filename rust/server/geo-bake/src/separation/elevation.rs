@@ -1,6 +1,6 @@
 // pxl-geo-bake/separation/elevation.rs
 
-//! The ground's height at points: the height the client draws the cell a
+//! The ground's elevation at points: the elevation the client draws the cell a
 //! point lies in, so bridge ends and tunnel floors meet the drawn surface. A
 //! look's shift is no part of it, so a line stands on the elevation whatever
 //! is painted under it.
@@ -13,9 +13,9 @@ use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg3857::u_from_merc;
 use pxl_spec::space::coord::zoom::{idx_of, LEAF_ZOOM};
 
-/// Heights at points from the tiles' elevations, in cells, as the client
-/// draws the elevation: the height of the cell a point lies in (pxl-spec
-/// ground.rs `height`); a point's tile must be held.
+/// Elevations at points from the tiles' elevations, in cells, as the client
+/// draws the elevation: the elevation of the cell a point lies in (pxl-spec
+/// ground.rs `ele_at`); a point's tile must be held.
 pub fn sample_cells(
     eles: &FnvHashMap<[i32; 2], Vec<i16>>,
     points: &[[f64; 2]],
@@ -33,7 +33,7 @@ pub fn sample_cells(
                 u_from_merc(y - min[1]) / CELL_U,
             );
             let cell = [tx, ty].map(|v| v.floor() as i32);
-            Ok(ground::height(|i| i32::from(ele[i]), cell))
+            Ok(ground::ele_at(|i| i32::from(ele[i]), cell))
         })
         .collect()
 }

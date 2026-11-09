@@ -21,7 +21,7 @@ use crate::space::layer::quadrant::Quadrant;
 /// A tile's column lengths: one a cell, four palette indices a cell, and its padded samples.
 /// A tile is these sizes and no other.
 pub const GROUND_COLUMN: usize = (TILE_CELLS * TILE_CELLS) as usize;
-pub const PALETTE_COLUMN: usize = 4 * GROUND_COLUMN;
+pub const FOLD_COLUMN: usize = 4 * GROUND_COLUMN;
 pub const ELE_COLUMN: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 use crate::asset::cube::sentinel;
 use crate::brick::{
@@ -61,7 +61,7 @@ pub type GroundCells = Cow<'static, [GroundId]>;
 #[derive(Clone, Debug, PartialEq)]
 pub struct TerrainTile {
     pub cells: GroundCells, // One class a cell, rasterized from the source or folded; a client holds it only for a void tile.
-    pub separation: Separation, // The ways off the ground: the source's lines, with tops solved offline.
+    pub separation: Separation, // The ways off the ground: the source's lines, with heights solved offline.
     pub ele: Cow<'static, [i16]>, // The padded samples, a leaf's from the source or folded; a client holds its own in its room.
     pub occupancy: Occupancy, // Which children are tiles; a child that is not one is never asked for.
 }
@@ -140,15 +140,15 @@ pub fn brick_lines(
 
 /// A clip level's brick as its fill reads it (`brick::Brick`): its cells' zoom,
 /// its place in its tile and its first cell (`first_cell`), inside the area; its lines as
-/// `brick_lines` lays them; cell `i`'s own palette index from its four (`palette_idxs`);
-/// and column `c`'s height, counted from its first cell, its ring included (`height`).
+/// `brick_lines` lays them; cell `i`'s own palette index from its four (`fold_at`);
+/// and column `c`'s elevation, counted from its first cell, its ring included (`ele_at`).
 pub struct TileBrick<'a, L, H> {
     pub cell_zoom: Zoom,
     pub place: [u32; 2],
     pub first: [i32; 2],
     pub lines: &'a [u32],
-    pub palette_idxs: L,
-    pub height: H,
+    pub fold_at: L,
+    pub ele_at: H,
 }
 
 impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> Brick for TileBrick<'_, L, H> {
@@ -170,10 +170,10 @@ impl<L: Fn(u32) -> u32, H: Fn([i32; 2]) -> i32> Brick for TileBrick<'_, L, H> {
         self.lines.get(k as usize).copied().unwrap_or(0)
     }
     fn own(&self, i: u32) -> u32 {
-        ground::own((self.palette_idxs)(i), self.cell_zoom)
+        ground::own((self.fold_at)(i), self.cell_zoom)
     }
-    fn height(&self, c: [i32; 2]) -> i32 {
-        (self.height)(c)
+    fn ele_at(&self, c: [i32; 2]) -> i32 {
+        (self.ele_at)(c)
     }
 }
 
@@ -185,7 +185,7 @@ fn brick_cell(place: [u32; 2], i: u32) -> [u32; 2] {
 
 /// The clip level's brick at `place` (in bricks) of `tile` as its fill reads it, with its
 /// lines `lines` (`brick_lines`): its palette indices, four a cell, as a client cuts them
-/// (`palette_cells`), and its heights from the tile's samples `ele` (`ground::height`), ring
+/// (`palette_cells`), and its elevations from the tile's samples `ele` (`ground::ele_at`), ring
 /// included.
 fn laid<'a>(
     tile: Quadrant,
@@ -194,14 +194,14 @@ fn laid<'a>(
     place: [u32; 2],
     lines: &'a [u32],
 ) -> TileBrick<'a, impl Fn(u32) -> u32 + 'a, impl Fn([i32; 2]) -> i32 + 'a> {
-    let palette_idxs = move |i: u32| {
+    let fold_at = move |i: u32| {
         let at = brick_cell(place, i);
         let c = (at[1] * TILE_CELLS + at[0]) as usize;
-        ground::word(four_palette_idxs(cells, c).map(u32::from))
+        ground::word(four_asset_ids(cells, c).map(u32::from))
     };
-    let height = move |c: [i32; 2]| {
+    let ele_at = move |c: [i32; 2]| {
         let at = [0, 1].map(|a| (place[a] * BRICK) as i32 + c[a]);
-        ground::height(|j| i32::from(ele[j]), at)
+        ground::ele_at(|j| i32::from(ele[j]), at)
     };
     let cell_zoom = GROUND.cell_zoom(tile.zoom);
     TileBrick {
@@ -209,8 +209,8 @@ fn laid<'a>(
         place,
         first: first_cell(tile, cell_zoom, place),
         lines,
-        palette_idxs,
-        height,
+        fold_at,
+        ele_at,
     }
 }
 
@@ -233,11 +233,11 @@ pub fn drawn(tile: Quadrant, terrain: TerrainTile) -> TerrainTile {
     for line in lines.iter() {
         let mut one = separation::Builder::default();
         one.push(
-            (0..line.points.len()).map(|i| (line.point(i), line.tops[i], line.first_zooms[i])),
+            (0..line.points.len()).map(|i| (line.point(i), line.heights[i], line.first_zooms[i])),
             line.width,
-            line.kind,
+            line.asset_id,
             line.form,
-            line.clear,
+            line.clearance,
         );
         let one = one.finish();
         let [lo, hi] = line.bounds();
@@ -266,11 +266,12 @@ pub fn drawn(tile: Quadrant, terrain: TerrainTile) -> TerrainTile {
         });
         if seen {
             separation.push(
-                (0..line.points.len()).map(|i| (line.point(i), line.tops[i], line.first_zooms[i])),
+                (0..line.points.len())
+                    .map(|i| (line.point(i), line.heights[i], line.first_zooms[i])),
                 line.width,
-                line.kind,
+                line.asset_id,
                 line.form,
-                line.clear,
+                line.clearance,
             );
         }
     }
@@ -332,10 +333,10 @@ impl TerrainTile {
 }
 
 /// Cell `c`'s four palette indices, however a tile holds them: four a cell
-/// (`PALETTE_COLUMN`), one a cell, each its own four, or one for the whole tile.
-fn four_palette_idxs(cells: &[GroundId], c: usize) -> [GroundId; 4] {
+/// (`FOLD_COLUMN`), one a cell, each its own four, or one for the whole tile.
+fn four_asset_ids(cells: &[GroundId], c: usize) -> [GroundId; 4] {
     match cells.len() {
-        PALETTE_COLUMN => [
+        FOLD_COLUMN => [
             cells[4 * c],
             cells[4 * c + 1],
             cells[4 * c + 2],
@@ -346,10 +347,10 @@ fn four_palette_idxs(cells: &[GroundId], c: usize) -> [GroundId; 4] {
     }
 }
 
-/// The tile's four palette indices a cell, however it holds them (`four_palette_idxs`).
+/// The tile's four palette indices a cell, however it holds them (`four_asset_ids`).
 fn expand(cells: &[GroundId]) -> Vec<GroundId> {
     (0..GROUND_COLUMN)
-        .flat_map(|c| four_palette_idxs(cells, c))
+        .flat_map(|c| four_asset_ids(cells, c))
         .collect()
 }
 
@@ -361,11 +362,11 @@ pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
         .chunks(4)
         .all(|q| q.iter().all(|&l| l == q[0]))
         .then(|| four.chunks(4).map(|q| q[0]).collect());
-    let palette_idxs: &[GroundId] = one.as_deref().unwrap_or(four);
+    let asset_ids: &[GroundId] = one.as_deref().unwrap_or(four);
     shape::encode::<Packet>(
         (
             &tile.ele,
-            palette_idxs,
+            asset_ids,
             tile.occupancy.bits(),
             tile.separation.pkt(),
         ),
@@ -385,7 +386,7 @@ fn read_tile(pkt: &[u8]) -> Result<Table<'_>, MarshalError> {
     let (ele, cells, occupancy, separation) = shape::get_deep::<Packet>(pkt)?;
     let occupancy = occupancy_of(occupancy)?;
     let separation = separation::Table::of(separation)?;
-    if ele.len() != ELE_COLUMN || (cells.len() != GROUND_COLUMN && cells.len() != PALETTE_COLUMN) {
+    if ele.len() != ELE_COLUMN || (cells.len() != GROUND_COLUMN && cells.len() != FOLD_COLUMN) {
         return Err(malformed());
     }
     Ok(Table {
@@ -396,7 +397,7 @@ fn read_tile(pkt: &[u8]) -> Result<Table<'_>, MarshalError> {
     })
 }
 
-/// A packet's palette indices as it holds them, four a cell (`PALETTE_COLUMN`), one a
+/// A packet's palette indices as it holds them, four a cell (`FOLD_COLUMN`), one a
 /// cell, each its own four, or one for the whole tile: which a client's clip levels cut
 /// their bricks' from.
 pub fn palette_cells(pkt: &[u8]) -> Result<&[GroundId], MarshalError> {

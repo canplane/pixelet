@@ -4,7 +4,7 @@
 //! every held brick lies in, and where each slot's bytes are. The room is
 //! a sequence of planes. A plane is one array with an element for every tile
 //! slot, or for every brick slot, end to end. The planes, in order: a tile's
-//! samples; a brick's cells and its palette of four indices per cell; and,
+//! samples; a brick's cells and its folds, four asset ids per cell; and,
 //! once, the room a fill works in. The ways live on the heap, in one pool
 //! sized by what is resident (pool.rs).
 
@@ -44,18 +44,18 @@ const CELLS_BYTES: u32 = BRICK_WORDS * 4;
 pub(super) const CELLS_ARR_BYTES: u32 = arr_bytes(CELLS_BYTES as usize, 1);
 const CELLS_AT: u32 = ELE_AT + TILE_SLOTS * ELE_BYTES;
 
-/// The bytes of one brick's palette: four palette indices per cell, packed
+/// The bytes of one brick's folds: four asset ids per cell, packed
 /// in one word, cut from its tile's packet (clipmap.rs `cut`). The brick's
 /// fill lays its own cells from them, and the GPU colors a hit by them.
-pub(super) const PALETTE_ARR_BYTES: u32 = arr_bytes(BRICK_CELLS as usize, 4);
-const PALETTE_AT: u32 = CELLS_AT + SLOTS * CELLS_ARR_BYTES;
+pub(super) const FOLDS_ARR_BYTES: u32 = arr_bytes(BRICK_CELLS as usize, 4);
+const FOLDS_AT: u32 = CELLS_AT + SLOTS * CELLS_ARR_BYTES;
 
 /// The room a fill works in (clipmap.rs `FillScratch`), one array each, in
 /// order: a brick's samples and its spans.
 const FILL_ARRAY_BYTES: [u32; 2] = [ELE_BYTES, arr_bytes(SPANS_WORDS as usize, 4)];
 
 /// Where the fill's room starts, on a cache line.
-const FILL_AT: u32 = arr_bytes(palette_off(SLOTS) as usize, 1);
+const FILL_AT: u32 = arr_bytes(folds_off(SLOTS) as usize, 1);
 
 pub const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_ARRAY_BYTES);
 
@@ -70,8 +70,8 @@ pub(super) const fn cells_off(slot: u32) -> u32 {
     CELLS_AT + slot * CELLS_ARR_BYTES
 }
 
-pub(super) const fn palette_off(slot: u32) -> u32 {
-    PALETTE_AT + slot * PALETTE_ARR_BYTES
+pub(super) const fn folds_off(slot: u32) -> u32 {
+    FOLDS_AT + slot * FOLDS_ARR_BYTES
 }
 
 pub(super) const fn fill_off(idx: usize) -> u32 {

@@ -17,7 +17,7 @@ use crate::ground::Cell;
 use crate::ground::Extent;
 use crate::way;
 use pxl_spec::brick::{bricks_zoom, idx_of, of_idx, BRICK, BRICK_CELLS, BRICK_SHIFT};
-use pxl_spec::ground::{palette_idxs, top, UNKNOWN};
+use pxl_spec::ground::{asset_ids, top, UNKNOWN};
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{idx_at, Zoom, LEAF_CELL_ZOOM, MIN_ZOOM};
@@ -311,8 +311,8 @@ pub trait BrickSource {
     /// The brick the clip level read at `cell_zoom` wants in `entry`, and whether it is present;
     /// the inverse of `present`.
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool);
-    /// The four palette indices of cell `i` of the brick in `slot` (`palette_idxs`).
-    fn palette_word(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
+    /// The four palette indices of cell `i` of the brick in `slot` (`asset_ids`).
+    fn fold_at(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
     /// Column word `i` of the brick in `slot` (`COLUMN_WORDS`), `i` to
     /// `BRICK_CELLS`.
     fn column(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
@@ -456,7 +456,7 @@ pub const fn clip_zoom(cell_zoom: Zoom) -> Zoom {
 }
 
 /// The ground's cell `g` at `cell_zoom`, read from the finest clip level holding it present,
-/// stepped from `place` (`step`): its four palette indices, its column's word (its height),
+/// stepped from `place` (`step`): its four palette indices, its column's word (its elevation),
 /// its own palette index as laid, and where it is held; void at sea level where none holds
 /// it.
 pub fn cell(
@@ -471,7 +471,7 @@ pub fn cell(
     }
     let (from, slot, i) = (f.from(), f.slot(), idx_of(at));
     (
-        w.palette_word(from, slot, i),
+        w.fold_at(from, slot, i),
         w.column(from, slot, i),
         w.own(from, slot, i),
         f,
@@ -492,17 +492,17 @@ pub fn ground(
 ) -> (Cell, Lookup) {
     let read = clip_zoom(zoom);
     let (word, column, own, f) = cell(w, place, read, cell_at(zoom, read, b));
-    let palette_idx = if area::is_wall(shard.at(w, (zoom, b)), zoom, b) {
+    let asset_id = if area::is_wall(shard.at(w, (zoom, b)), zoom, b) {
         UNKNOWN
     } else {
         own
     };
     let (top, part) = top(zoom, column_top(column) as f32);
     let cell = Cell {
-        palette_idx,
+        asset_id,
         top,
         part,
-        fold: palette_idxs(word),
+        fold: asset_ids(word),
     };
     (cell, f)
 }

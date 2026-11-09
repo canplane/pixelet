@@ -42,7 +42,7 @@ Bridges and tunnels are solved from the tile and as much of its neighbours as
 their structures reach, never further, so two neighbours solve the same height
 where they meet (`separation/`). The elevation is sampled at the leaf's
 resolution with a pad of samples past each edge, which the client's interpolant
-needs, and a bridge's footing is the height of the cell it stands in as the
+needs, and a bridge's footing is the elevation of the cell it stands in as the
 client draws it, so a bridge's end meets the ground on screen. The tile is
 written in the form the client reads (pxl-spec `bake/tile/terrain.rs`). Place
 and division leaves are baked from their own tables the same way.

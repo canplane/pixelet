@@ -110,13 +110,12 @@ uniform! {
 }
 
 uniform! {
-    /// A character's uniform (skinned_place.wgsl): its turn about Z, its
-    /// opacity and its scale.
+    /// A character's uniform (skinned_place.wgsl): its turn about Z and its
+    /// scale.
     skinned {
         Q: Vec3i = super::draw::Q,
         ROT: F32 = 3,
-        OPACITY: F32 = 4,
-        SCALE: F32 = 5,
+        SCALE: F32 = 4,
         R: Vec3 = super::draw::R,
     }
 }
@@ -135,13 +134,15 @@ uniform! {
 }
 
 uniform! {
-    /// The uniform of the hover ghost's boxes (box.wgsl): their opacity, the
-    /// side of a box's cell in units, and its height step.
+    /// The uniform of the hover ghost's box (box.wgsl): its corner as the
+    /// draw's position, its opacity, its side in units, its sRGB color and
+    /// its texture layer.
     ghost_box {
         Q: Vec3i = super::draw::Q,
         OPACITY: F32 = 4,
-        UNIT: F32 = 5,
-        Z_STEP: F32 = 6,
+        SIDE: F32 = 5,
+        RGB: U32 = 6,
+        LAYER: U32 = 7,
         R: Vec3 = super::draw::R,
     }
 }
@@ -345,15 +346,13 @@ uniform! {
 pub const AO_FLOATS: usize = floats(ao::FIELDS);
 
 uniform! {
-    /// A marker set's uniform (marker.wgsl, pass/marker.rs): the view,
-    /// the projection, the pixels a unit covers, and how many markers come
-    /// before the set's first. Where each marker stands is in its instance
-    /// (`MARKER_INSTANCE_WORDS`).
+    /// The markers' uniform (marker.wgsl, pass/marker.rs): the view,
+    /// the projection and the pixels a unit covers. Where each marker stands
+    /// is in its instance (`MARKER_INSTANCE_WORDS`).
     marker {
         VIEW: Mat4 = 0,
         PROJ: Mat4 = 16,
         PX_PER_UNIT: F32 = 32,
-        BEFORE: F32 = 33,
     }
 }
 pub const MARKER_FLOATS: usize = floats(marker::FIELDS);
@@ -474,10 +473,6 @@ pub const ATLAS_STROKE: u32 = 1;
 pub const ATLAS_TRIANGLE: u32 = 2;
 pub const ATLAS_TEXT: u32 = 3;
 pub const ATLAS_HALO: u32 = 4;
-
-/// The steps across a cell that a box's x and y are held in (mesh/ghost.rs,
-/// box.wgsl). Its z is held in steps of its mesh's own.
-pub const BOX_XY_STEPS: u32 = 256;
 
 /// The vertices of a box: two triangles on each of its six faces
 /// (pxl-engine raster.rs `corner`, box.wgsl).

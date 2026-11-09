@@ -28,7 +28,7 @@
 //!
 //! - the ground: by its one rule (pxl-engine `ground::slab`, which a cell's
 //!   asset applies to one cell as `Cell::opens`) over the lowest and highest
-//!   heights the clip levels hold under the node (`TileCache::relief`, off
+//!   elevations the clip levels hold under the node (`TileCache::relief`, off
 //!   the finest clip level holding its cells). Every cell under the node at
 //!   each zoom is asked against the ground, or against the ground a cave may
 //!   take where a cave runs through all of the node;

@@ -7,9 +7,3 @@
 fn light_resumed(aim: Aim, texel: vec2<u32>) -> Start {
   return resumed(aim, light_cell_at(texel / LIGHT_BEAM), LIGHT_LINE_WORDS, LIGHT_LINE_ORIGIN);
 }
-
-/// The ray `aim` of box texel `texel` at `t`, at or past the start of the cell it lies in
-/// (resume.wgsl `resumed_at`).
-fn light_resumed_at(aim: Aim, texel: vec2<u32>, t: f32) -> Start {
-  return resumed_at(aim, light_cell_at(texel / LIGHT_BEAM), t, LIGHT_LINE_WORDS, LIGHT_LINE_ORIGIN);
-}

@@ -4,7 +4,7 @@
 // one reads there (atmos_eye.wgsl). When the ground's slope is to be measured
 // again, the first thread measures it too (`ground`). The next two threads are
 // the sun's and the moon's. Each measures how far its light reaches the air at
-// this exposure, and how fast that changes with the light's height (`reach`).
+// this exposure, and how fast that changes with the light's mu (`reach`).
 // Everything measured goes into the views' words (atmos_skyview.wgsl
 // `slopes`). This is a compute pass, a texel a thread, so its timestamps span
 // its own work: a render pass's begin is stamped before the passes it waits on
@@ -36,7 +36,7 @@ fn land_shown(r: f32, s: Lighting) -> vec3f {
   return surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(r, up, s, true), s) * exp2(eye_stops_at(r, s));
 }
 
-// Measures the exposure's slope in the height of the ground under the eye, as
+// Measures the exposure's slope in the elevation of the ground under the eye, as
 // the lights' views measure theirs (atmos_skyview.wgsl `slopes`). The slope is
 // the most display levels per km that the land's lit face moves, at albedos
 // an octave apart from 1 down to 1/256, with the exposure moving along. It is
@@ -60,7 +60,7 @@ fn ground() {
   }
 }
 
-// How far light `k` at height `mu` reaches the air, with the eye at `stops`:
+// How far light `k` at `mu` reaches the air, with the eye at `stops`:
 // the most display levels its sky shows along the light's own vertical,
 // toward its azimuth, where the sky about a light is brightest. It reads
 // `ATMOS_REACH_ROWS` of the rows of the light's view as laid
@@ -80,7 +80,7 @@ fn shows(k: u32, mu: f32, stops: f32) -> f32 {
 }
 
 // Measures how far light `k` reaches the air now, and the slope of that reach
-// in the light's height, as the views measure theirs (atmos_skyview.wgsl
+// in the light's mu, as the views measure theirs (atmos_skyview.wgsl
 // `slopes`). The slope is the levels moved as the light rises by its sample,
 // one step of the transmittance table's own sampling where the light stands,
 // with the eye's stops moving along. A move over the sample counts as one
@@ -89,7 +89,7 @@ fn shows(k: u32, mu: f32, stops: f32) -> f32 {
 fn reach(k: u32) {
   let now = lights_now();
   let mu = dot(light_dir(k), frame_up());
-  let h = height_step(camera_r(), mu);
+  let h = mu_step(camera_r(), mu);
   let shown0 = shows(k, mu, eye_stops(now));
   let shown1 = shows(k, mu + h, eye_stops(lights_raised(now, k == 1u, h)));
   slopes[LIGHT_SLOPES * k + 3u] = bitcast<u32>(shown0);

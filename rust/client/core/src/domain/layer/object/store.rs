@@ -4,7 +4,7 @@
 //! leaf holds its catalog value at its node and the handle of the record it
 //! carries beyond that value (ext.rs). The leaves live in one sparse tree
 //! over the world (sparse_tree.rs), whose root is
-//! the world, a node of zoom 0. A write arrives as `<key, id, ext>`, keyed by
+//! the world, a node of zoom 0. A write arrives as `<key, asset_id, ext>`, keyed by
 //! its node's Morton key (pxl-spec `morton::key_of`).
 //!
 //! Each branch's slot holds its children folded into one word
@@ -54,7 +54,7 @@ use pxl_spec::object::ext::class_of;
 pub struct Entry {
     pub zoom: Zoom,
     pub at: [i32; 3],
-    pub state: AssetId,
+    pub asset_id: AssetId,
     pub ext: u16,
 }
 
@@ -76,7 +76,7 @@ impl Entry {
     }
 
     pub fn asset(&self) -> Asset {
-        Asset::of(self.state)
+        Asset::of(self.asset_id)
     }
 }
 
@@ -156,25 +156,25 @@ pub fn objects() -> ObjectTable<'static> {
 /// What a leaf of the tree holds: its catalog value and its record's handle.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(in crate::domain::layer) struct Leaf {
-    pub id: u16,
+    pub asset_id: u16,
     pub ext: u16,
 }
 
 pub(super) const EMPTY: Leaf = Leaf {
-    id: value::VOID as u16,
+    asset_id: value::VOID as u16,
     ext: NONE,
 };
 
 impl Leaf {
     pub(super) fn of(word: u32) -> Leaf {
         Leaf {
-            id: object::low(word) as u16,
+            asset_id: object::low(word) as u16,
             ext: object::high(word) as u16,
         }
     }
 
     pub(super) const fn word(self) -> u32 {
-        object::leaf_word(self.id as u32, self.ext as u32)
+        object::leaf_word(self.asset_id as u32, self.ext as u32)
     }
 }
 
@@ -197,12 +197,12 @@ impl object::Table for Table<'_> {
     }
 }
 
-/// One leaf written, as `<key, id, ext>`: its node's key, its catalog value
+/// One leaf written, as `<key, asset_id, ext>`: its node's key, its catalog value
 /// and the record it carries. An id of `VOID` erases the leaf.
 #[derive(Clone, Debug)]
 pub struct Write {
     pub at: u128,
-    pub id: AssetId,
+    pub asset_id: AssetId,
     pub ext: Option<Ext>,
 }
 
@@ -211,7 +211,7 @@ impl Write {
     pub fn at(at: Octant, id: AssetId) -> Write {
         Write {
             at: at.id(),
-            id,
+            asset_id: id,
             ext: None,
         }
     }
@@ -338,19 +338,24 @@ impl Store {
     /// word as it was.
     pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> Vec<Aabb> {
         let mut changed = Vec::new();
-        for Write { at: k, id, ext } in writes {
+        for Write {
+            at: k,
+            asset_id,
+            ext,
+        } in writes
+        {
             let (zoom, at) = node_of::<3>(k);
             xpute_kit::ensure!(
                 (CUBE_ZOOM..=OBJECT_FINEST).contains(&zoom),
                 ENOTRECOVERABLE,
                 zoom
             );
-            let id16 = u16::try_from(id).or_bug(Errno::EOVERFLOW);
+            let id16 = u16::try_from(asset_id).or_bug(Errno::EOVERFLOW);
             // A record must be of the class its id names, or absent.
             xpute_kit::ensure!(
-                ext.as_ref().map(Ext::class) == ext.as_ref().and(class_of(id)),
+                ext.as_ref().map(Ext::class) == ext.as_ref().and(class_of(asset_id)),
                 EINVAL,
-                id
+                asset_id
             );
             self.release(zoom, at);
             let handle = match ext {
@@ -361,7 +366,7 @@ impl Store {
                 None => NONE,
             };
             let val = Leaf {
-                id: id16,
+                asset_id: id16,
                 ext: handle,
             }
             .word();
@@ -394,7 +399,7 @@ impl Store {
         }
         self.each_in(zoom, at, slot, &mut |e| {
             if e.ext != NONE {
-                freed.push((e.state, e.ext));
+                freed.push((e.asset_id, e.ext));
             }
         });
         for (id, h) in freed {
@@ -471,7 +476,7 @@ impl Entry {
         Entry {
             zoom,
             at,
-            state: u32::from(leaf.id),
+            asset_id: u32::from(leaf.asset_id),
             ext: leaf.ext,
         }
     }
@@ -560,7 +565,7 @@ impl Store {
 
     /// What a leaf carries beyond its id, if anything.
     pub(in crate::domain::layer) fn ext(&self, e: &Entry) -> Option<&Ext> {
-        self.ext.get(class_of(e.state)?, e.ext)
+        self.ext.get(class_of(e.asset_id)?, e.ext)
     }
 
     /// A marker's text as it was placed; none for anything else.

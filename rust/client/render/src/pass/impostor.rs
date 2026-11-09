@@ -10,7 +10,7 @@
 use crate::frame::shader::record::PIPELINE_IMPOSTOR;
 use crate::frame::shader::record::{PIPELINE_IMPOSTOR_BAKE, PIPELINE_IMPOSTOR_MARK};
 use crate::gpu::draw::DRAW_WORDS;
-use crate::gpu::draw::{uniform_of, Draw, DrawStat, DrawTable};
+use crate::gpu::draw::{uniform_of, DrawStat, DrawTable};
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::sequence;
@@ -23,9 +23,9 @@ use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::upload::UploadTable;
 use crate::pass::decor::DecorPass;
-use crate::pass::mark::MarkPass;
+use crate::pass::mark::{put_whole, MarkPass};
 use crate::pass::model::{
-    draw_model, draw_models, put_instances, Extent, ModelDraw, UniformBuffer, DRAW_BYTES,
+    draw_model, draw_models, put_uniform, Extent, ModelDraw, UniformBuffer, DRAW_BYTES,
 };
 
 /// The side of an atlas layer, in texels. An impostor is drawn only smaller
@@ -54,12 +54,6 @@ pub struct ImpostorPass {
     baked: [Option<BakeKey>; DECOR_GROUPS],
     wanted: [Option<BakeKey>; DECOR_GROUPS],
     pub mark: MarkPass,
-}
-
-/// Writes a mark's uniform as the draw's own (`put_instances`), with the
-/// atlas layer of the draw's group.
-fn put_mark(buf: &mut [u8], (d, u): &Draw) {
-    put_instances(buf, u, d[1]);
 }
 
 /// The fit in its layer of a model of size `extent` (`ImpostorPass::fit`).
@@ -130,7 +124,7 @@ impl ImpostorPass {
                 pipelines,
                 (PIPELINE_IMPOSTOR_MARK, PIPELINE_IMPOSTOR),
                 align,
-                (|d| d[0], put_mark, |_| true),
+                (|d| d[0], put_whole, |_| true),
             ),
         }
     }
@@ -248,7 +242,7 @@ impl ImpostorPass {
             draws.clone(),
             changed,
             |buf, d| {
-                put_instances(buf, uniform_of(uniforms, d), d[1]);
+                put_uniform(buf, uniform_of(uniforms, d));
             },
         );
         for d in draws {

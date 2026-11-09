@@ -53,12 +53,12 @@ const { EDITS, TOP } = object;
  * marker beside it at a finer zoom. */
 const CUBE: Leaf = {
   key: "000000000",
-  id: 3,
+  asset_id: 3,
   text: null,
 };
 const MARKER: Leaf = {
   key: "0000000010",
-  id: 2048,
+  asset_id: 2048,
   text: "here",
 };
 
@@ -72,7 +72,7 @@ async function errno(f: () => unknown): Promise<number | undefined> {
 }
 
 test("encode_writes - a batch reads back as written, in order, texts and all", async () => {
-  const writes = [CUBE, MARKER, { ...CUBE, id: 0 }];
+  const writes = [CUBE, MARKER, { ...CUBE, asset_id: 0 }];
   const file = encode_writes(format.OBJECT_EDITS, writes);
   assert.deepStrictEqual(file[0], format.OBJECT_EDITS);
   assert.deepStrictEqual(decode_writes(format.OBJECT_EDITS, file), writes);
@@ -108,7 +108,10 @@ test("object_backend - a shard emptied by its edits has no file, nor a row", asy
   const db = database();
   const b = object_backend(db);
   b.commit(EDITS, encode_writes(format.OBJECT_EDITS, [CUBE]));
-  b.commit(EDITS, encode_writes(format.OBJECT_EDITS, [{ ...CUBE, id: 0 }]));
+  b.commit(
+    EDITS,
+    encode_writes(format.OBJECT_EDITS, [{ ...CUBE, asset_id: 0 }]),
+  );
   assert.deepStrictEqual(await errno(() => b.open(SHARD)), Errno.ENOENT);
   assert.deepStrictEqual(await errno(() => b.open(TOP)), Errno.ENOENT);
   assert.deepStrictEqual(db.map.size, 0);

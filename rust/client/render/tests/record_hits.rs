@@ -77,7 +77,7 @@ fn world_bufs(gpu: &Gpu, built: &Built) -> WorldBuffer {
     WorldBuffer {
         clip: gpu.buf(&clip, store_of()),
         ground: gpu.buf(&built.ground, store_of()),
-        palette: gpu.buf(&built.palette, store_of()),
+        folds: gpu.buf(&built.folds, store_of()),
         shards: gpu.buf(&flat_u(&built.shards), store_of()),
         placed: gpu.buf(&built.objects, store_of()),
         pool: gpu.buf(&built.pool, store_of()),
@@ -94,7 +94,7 @@ fn world_binds<'a>(
         (0, eye.as_entire_binding()),
         (1, b.clip.as_entire_binding()),
         (2, b.ground.as_entire_binding()),
-        (4, b.palette.as_entire_binding()),
+        (4, b.folds.as_entire_binding()),
         (5, b.shards.as_entire_binding()),
         (6, b.placed.as_entire_binding()),
         (7, b.pool.as_entire_binding()),
@@ -842,7 +842,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
     let mut binds = world_binds(b, &run.eye_buf, &run.words_buf, &run.node_cache_buf);
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
     binds.push((11, run.header_buf.as_entire_binding()));
-    gpu.holes(&binds, &run.node_cache_buf);
+    gpu.holes(ray::QUEUE_EYE_HOLES, &binds, &run.node_cache_buf);
     drop(binds);
 
     let origin = c.origin;
@@ -972,7 +972,7 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
     let mut binds = world_binds(b, &run.eye_buf, &run.words_buf, &run.node_cache_buf);
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
     binds.push((11, run.header_buf.as_entire_binding()));
-    gpu.holes(&binds, &run.node_cache_buf);
+    gpu.holes(ray::QUEUE_LIGHT_HOLES, &binds, &run.node_cache_buf);
     drop(binds);
 
     // A hit's node is held from where its slot's ray starts, and the hit is whole where the

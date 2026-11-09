@@ -4,7 +4,7 @@
 written. How one fault in wgpu was patched for the iPhone alone, how nothing
 written anywhere said the Android phone had been left out, and what it took to
 find the same fault there a day later. Times are Korean. The figures are in
-`doc/experiment/20261110-one-command-buffer-an-encoder.md`; this is the account of
+`doc/experiment/20261110-one-command-buffer-an-encoder/README.md`; this is the account of
 who did what and on what ground.
 
 ## A phone that died at boot
@@ -141,6 +141,56 @@ The user's position, stated more than once over those two days: a difference bet
 the platforms is not a thing to be explained afterwards. Where the fault is common,
 the fix is common. And what is known from outside is to be looked for before an hour
 is spent on the inside.
+
+## What stayed of the S23's GPU memory
+
+The same evening the question went from command buffers to the pipelines, and to whether the last walk's modules should be merged as the asks' were.
+
+### How the question came up
+
+On the S23 each of 17 compute pipelines holds a block of 12 MiB, its shader private
+memory, 204 MiB in all. They are the entry points of the modules that include
+`world.wgsl`. Ten were `queue_ask`, five modules times two entry points. Those five
+modules differed by one part, and that part gave only three values: the tag a run's
+claims carry, where its asks' records lie, and the lane its asks are counted in. All
+three follow from which queue is bound, and the shader can read that from the length
+of the view. So the five became one, with no new state and no new branch of logic,
+and `GL mtrack` fell by 109 MiB with the GPU's p50 unchanged.
+
+That leaves seven blocks, 84 MiB: `queue_last` five times, `decor_cs` and `face_cs`.
+The agent was asked what the first of these would cost.
+
+### What `queue_last` is
+
+Its five modules share 21 parts and differ in four to eight. The holes' takes `grid`,
+`hit`, `miss_word`, `walked`, `light_resume` and `queue`; the samples' `sample` and
+`sample_put`; the beam rays' `corner`. What differs is what the walk does where a ray
+stops, so it is logic, where the asks' difference was three values.
+
+### For merging
+
+- Up to four blocks, 48 MiB, by calculation and not measured.
+- Fewer modules and pipelines to compile.
+
+### Against merging
+
+- The three kinds of ending would sit in one shader, chosen at run time. That adds
+  runtime branches to the walk that takes the most work in a frame.
+- It would make the shader larger. The inlining experiment of the same evening made
+  four `queue_last` modules and `decor` larger by another route and the GPU's p50 went
+  from 63 ms to 71.5 ms and frames drawn from about 290 to 236. That is not this merge,
+  which was not built, and it shows only that this path is sensitive to code size.
+- It is not a reduction. The asks' merge removed something that depended on one fact.
+  This one would move a real difference from the module list into a branch.
+- 48 MiB is about 4% of the S23's GPU memory, and no phone is dying for it.
+
+### Decision
+
+Rejected. The user's ground: a merge that increases runtime branching is refused.
+Modules that differ in logic stay separate modules; modules that differ in values
+that follow from one fact are merged.
+
+`decor_cs` and `face_cs` have nothing to merge with and are left as they are.
 
 ## Left as it is
 

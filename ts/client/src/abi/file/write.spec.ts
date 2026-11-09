@@ -6,7 +6,7 @@
 export const KEY = 0 as number;
 
 /** A `u32[]` column holding each row's catalog value. */
-export const ID = 1 as number;
+export const ASSET_ID = 1 as number;
 
 /** A `u32[]` column holding, for each marker with a text, the row that text is for. */
 export const TEXT_ROW = 2 as number;

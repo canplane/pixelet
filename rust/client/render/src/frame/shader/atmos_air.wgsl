@@ -118,7 +118,7 @@ fn city_shown(lights: f32, up: vec3f) -> vec3f {
 
 // What the eye sees along `dir` where nothing was drawn. A direction that
 // rises sees the sky. A direction that falls meets the land, the plane under
-// the eye at the height of its ground, seen through the air and lit as the
+// the eye at the elevation of its ground, seen through the air and lit as the
 // terrain is lit, so the edge of what is drawn shows no seam. The land fades
 // in over the octave that ends where the rays end (`atmos_drawn`). Nearer,
 // the voxels draw the ground, and where they draw none, only the air shows.

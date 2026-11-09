@@ -42,7 +42,7 @@ export const object = {
 export const SHARD_ZOOM: u32 = 8 as number;
 
 /** The children of the tree packet a shard's file and an edit batch hold after their
- * format byte, by index: each row a write `<key, id, ext>`, a leaf as the write that made
+ * format byte, by index: each row a write `<key, asset_id, ext>`, a leaf as the write that made
  * it in a shard's file, in the order made in a batch, where VOID erases (pxl-core
  * domain/layer/object/store.rs `Write`). A record a class's (pxl-spec object/ext.rs),
  * its row and its fields as columns. */

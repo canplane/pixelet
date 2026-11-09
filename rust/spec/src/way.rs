@@ -19,9 +19,9 @@
 //! pier, one leaf cell across, stands only in columns no more than two leaf cells wide.
 //!
 //! The code uses index loops and no `Option` (a missing crossing is `Crossing::NONE`), and
-//! words for tags. Where a column is crossed, its road's tops and its pier (`on_way`,
+//! words for tags. Where a column is crossed, its road's heights and its pier (`on_way`,
 //! `crossing`, `pier_covers`) are exact, in integers over the wire's own (points in eighths of
-//! a cell, tops and stations in leaf cells), so the CPU and a GPU decide them alike whatever
+//! a cell, heights and stations in leaf cells), so the CPU and a GPU decide them alike whatever
 //! they fuse or reorder. There is no division but a rational's
 //! floor, and the one root, a segment's direction, is rounded once by the CPU and handed to a
 //! GPU in a word (`Segment::dir`).
@@ -127,7 +127,7 @@ pub(crate) fn slab_depth(per_m: f32) -> i32 {
 }
 
 /// One segment of a line, in eighths of its tile's cell (`POINT_SCALE`):
-/// from `a` to `b`, its road surface `tops` there in leaf cells, its width,
+/// from `a` to `b`, its road surface `heights` there in leaf cells, its width,
 /// the palette index it shows, its form, its tunnel's clear height in leaf
 /// cells, whether it is its line's first or last, where the line ends
 /// square, and whether the one stored before it is its line's one before
@@ -136,20 +136,20 @@ pub(crate) fn slab_depth(per_m: f32) -> i32 {
 pub struct Segment {
     pub a: [i32; 2],
     pub b: [i32; 2],
-    pub tops: [i32; 2],
+    pub heights: [i32; 2],
     pub width: u32,
-    pub kind: u32,
+    pub asset_id: u32,
     pub form: u32,
-    pub clear: u32,
+    pub clearance: u32,
     pub first: u32,
     pub last: u32,
     pub continues: u32,
     pub dir: [i32; 2],
 }
 
-/// A segment's words: `a` and `b` each two `i16` eighths of a cell, the tops
-/// two `i16`, then width (eighths), kind, form with first, last and
-/// continues over it, and clear, a byte each; then its direction, two `i16`,
+/// A segment's words: `a` and `b` each two `i16` eighths of a cell, the heights
+/// two `i16`, then width (eighths), asset_id, form with first, last and
+/// continues over it, and clearance, a byte each; then its direction, two `i16`,
 /// at `SEGMENT_DIR`.
 pub const SEGMENT_WORDS: usize = SEGMENT_DIR + 1;
 pub const SEGMENT_DIR: usize = 4;
@@ -205,34 +205,34 @@ impl Segment {
         Segment {
             a: i16_pair(w[0]),
             b: i16_pair(w[1]),
-            tops: i16_pair(w[2]),
+            heights: i16_pair(w[2]),
             width: byte(0),
-            kind: byte(1),
+            asset_id: byte(1),
             form: byte(2) & 3,
             first: (byte(2) >> 2) & 1,
             last: (byte(2) >> 3) & 1,
             continues: (byte(2) >> 4) & 1,
-            clear: byte(3),
+            clearance: byte(3),
             dir: i16_pair(w[SEGMENT_DIR]),
         }
     }
 
-    /// Its words, from the wire's integers: its two points in eighths, its tops in leaf cells,
-    /// and its bytes (width in eighths, kind, `flags`, clear); then its run's direction (`dir`).
+    /// Its words, from the wire's integers: its two points in eighths, its heights in leaf cells,
+    /// and its bytes (width in eighths, asset_id, `flags`, clearance); then its run's direction (`dir`).
     pub fn words(
         [a, b]: [[i16; 2]; 2],
-        tops: [i16; 2],
-        [width, kind, flags, clear]: [u8; 4],
+        heights: [i16; 2],
+        [width, asset_id, flags, clearance]: [u8; 4],
     ) -> [u32; SEGMENT_WORDS] {
         let d = dir([0, 1].map(|k| i32::from(b[k]) - i32::from(a[k])));
         [
             pair_word(a[0], a[1]),
             pair_word(b[0], b[1]),
-            pair_word(tops[0], tops[1]),
+            pair_word(heights[0], heights[1]),
             u32::from(width)
-                | u32::from(kind) << 8
+                | u32::from(asset_id) << 8
                 | u32::from(flags) << 16
-                | u32::from(clear) << 24,
+                | u32::from(clearance) << 24,
             pair_word(d[0] as i16, d[1] as i16),
         ]
     }
@@ -388,35 +388,35 @@ pub(crate) fn pier_covers(
 pub struct Crossing {
     pub low: i32,
     pub top: i32,
-    pub kind: u32,
+    pub asset_id: u32,
     pub form: u32,
     pub pier: u32,
-    pub clear: u32,
+    pub clearance: u32,
 }
 
 impl Crossing {
-    /// No crossing: one of kind `NOTHING`.
+    /// No crossing: one of asset_id `NOTHING`.
     pub const NONE: Crossing = Crossing {
         low: 0,
         top: 0,
-        kind: NOTHING,
+        asset_id: NOTHING,
         form: 0,
         pier: 0,
-        clear: 0,
+        clearance: 0,
     };
 
     /// Whether it is one (`NONE` is not).
     pub fn is(&self) -> bool {
-        self.kind != NOTHING
+        self.asset_id != NOTHING
     }
 }
 
 /// The road surface of `s` at the share `n / len2` of it, clamped to its ends, in leaf cells
-/// rounded half to even: `tops[0] + Δ · n / len2`, whose numerator is under 2^51 and whose
-/// quotient lies within the rise `Δ`, under 2^17, the tops each an `i16` (`nearest`).
+/// rounded half to even: `heights[0] + Δ · n / len2`, whose numerator is under 2^51 and whose
+/// quotient lies within the rise `Δ`, under 2^17, the heights each an `i16` (`nearest`).
 fn surface(s: &Segment, n: i64, len2: i64) -> i32 {
-    let rise = i64::from(s.tops[1] - s.tops[0]);
-    nearest(rise * n.clamp(0, len2), len2, s.tops[0])
+    let rise = i64::from(s.heights[1] - s.heights[0]);
+    nearest(rise * n.clamp(0, len2), len2, s.heights[0])
 }
 
 /// Where `at` lies along the segment from `a` to `b` of a way `width` eighths wide, all in
@@ -481,10 +481,10 @@ pub fn crossing(s: &Segment, at: [i32; 2], st: &StationGrid) -> Crossing {
     Crossing {
         low: z0.min(z1),
         top: z0.max(z1),
-        kind: s.kind,
+        asset_id: s.asset_id,
         form: s.form,
         pier: u32::from(s.form != TUNNEL && pier_covers(st, s, [n, len2], at)),
-        clear: s.clear,
+        clearance: s.clearance,
     }
 }
 
@@ -530,7 +530,7 @@ pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupancy {
         }
         TUNNEL => Occupancy {
             what: Occupy::Under,
-            span: [low, top + c.clear as i32],
+            span: [low, top + c.clearance as i32],
             pier: none,
         },
         // A way on the ground moves the ground with it: the ground is filled up to it or cut down to
@@ -567,7 +567,7 @@ pub trait ColumnGrid {
     /// The column's center in eighths of its tile's cells, a cell a side.
     fn center(&self, c: [i32; 2]) -> [i32; 2];
     fn stations(&self) -> StationGrid;
-    fn palette_idx(&self, c: [i32; 2]) -> u32;
+    fn asset_id(&self, c: [i32; 2]) -> u32;
     /// Whether the column is the service area's wall (`area::is_wall`), where no way writes, as
     /// none does past it.
     fn is_walled(&self, c: [i32; 2]) -> bool;
@@ -666,8 +666,8 @@ fn pier_stands<C: ColumnGrid>(
     ground: i32,
     per_m: f32,
 ) -> [i32; 2] {
-    let (none, palette_idx) = ([0, 0], cols.palette_idx(c));
-    if !value::grounds(palette_idx) || value::transports(palette_idx) {
+    let (none, asset_id) = ([0, 0], cols.asset_id(c));
+    if !value::grounds(asset_id) || value::transports(asset_id) {
         return none;
     }
     let surface = pier[1] + slab_depth(per_m);
@@ -716,19 +716,19 @@ impl Write {
 /// `face`, where `per_m` is the leaf cells a meter, and its pier where one stands.
 fn writes<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) -> (Write, u32) {
     let (x, next) = visit(cols, c, k);
-    if !x.is() || !value::grounds(x.kind) {
+    if !x.is() || !value::grounds(x.asset_id) {
         return (Write::NONE, next);
     }
     let o = occupies(&x, face, per_m);
     let w = match o.what {
         Occupy::Under => Write {
             run: o.span,
-            val: AIR_OF | x.kind,
+            val: AIR_OF | x.asset_id,
             pier: [0, 0],
         },
         Occupy::Over => Write {
             run: o.span,
-            val: x.kind,
+            val: x.asset_id,
             pier: if empty(o.pier) {
                 o.pier
             } else {
@@ -791,7 +791,7 @@ impl SpanList {
 /// no spans and no face, because bedrock wins over a way as it does over the ground's face.
 pub fn column<C: ColumnGrid>(cols: &C, c: [i32; 2]) -> SpanList {
     let mut spans = SpanList::NONE;
-    if cols.palette_idx(c) == ground::UNKNOWN || cols.is_walled(c) {
+    if cols.asset_id(c) == ground::UNKNOWN || cols.is_walled(c) {
         return spans;
     }
     // The column's face and the tile's scale, read once for all its visits.

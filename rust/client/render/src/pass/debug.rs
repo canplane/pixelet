@@ -8,13 +8,13 @@ use crate::frame::shader::record::{
     DEBUG_FACE_VERTEX_BYTES, DEBUG_VERTEX_BYTES, PIPELINE_DEBUG_FACE,
 };
 use crate::frame::shader::record::{PIPELINE_CAMERA_GRID, PIPELINE_DEBUG};
-use crate::gpu::api::{buf_entry, bytes, pass_desc, Gpu, Load, RenderContext};
+use crate::gpu::api::{buf_entry, pass_desc, Gpu, Load, RenderContext};
 use crate::gpu::draw::uniform_of;
 use crate::gpu::draw::{DrawStat, DrawTable};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::upload::UploadTable;
-use crate::pass::model::{UniformBuffer, DRAW_BYTES};
+use crate::pass::model::{put_uniform, UniformBuffer, DRAW_BYTES};
 
 /// The gizmos draw their faces into the world's depth at the canvas's size,
 /// cleared once everything drawn over the world is done with it. Their lines
@@ -63,7 +63,7 @@ impl DebugPass {
             sets,
             changed,
             |buf, d| {
-                buf[..DRAW_BYTES as usize].copy_from_slice(bytes(uniform_of(uniforms, d)));
+                put_uniform(buf, uniform_of(uniforms, d));
             },
         );
     }

@@ -86,7 +86,7 @@ impl TileCache<TerrainTile> {
         self.bound(&self.walk_line(path, node, cell_zoom), node, cell_zoom)
     }
 
-    /// The lowest and highest heights, in leaf cells, of the ground over
+    /// The lowest and highest elevations, in leaf cells, of the ground over
     /// column `node`'s own cells, with the ways' heights kept apart
     /// (pxl-engine `ground::Extent`). They are the bounds over the cells of
     /// `line`'s tile, taken from the finest clip level of each center that

@@ -47,18 +47,18 @@ fn only_time_moving_moves_no_draw() {
         key[1] as f64 * PATCH + 300.0,
         20.0,
     ];
-    let (e, heights) = (900.0, [5000.0, 6200.0]);
+    let (e, alts) = (900.0, [5000.0, 6200.0]);
     let (mut list, id) = (DrawList::default(), DrawId::default());
     let mut turn = |time: f64| {
         let off = drift(time);
-        let receiver = patch_box(box_corner(key, off, eye), PATCH, e, heights);
+        let receiver = patch_box(box_corner(key, off, eye), PATCH, e, alts);
         let corner = [
             key[0] as f64 * PATCH - off[0],
             key[1] as f64 * PATCH - off[1],
         ];
         let drawn = ReceiverBox::of(
-            [corner[0] - e, corner[1] - e, heights[0] - e],
-            [corner[0] + PATCH + e, corner[1] + PATCH + e, heights[1] + e],
+            [corner[0] - e, corner[1] - e, alts[0] - e],
+            [corner[0] + PATCH + e, corner[1] + PATCH + e, alts[1] + e],
         );
         for k in 0..3 {
             assert!(

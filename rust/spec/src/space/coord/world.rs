@@ -14,14 +14,15 @@ use super::zoom::{cube, units, Zoom, UNIT_ZOOM};
 /// - X, 24: a unit is a z24 cell's side, so a lap is 2^24 units (`zoom.rs` `UNIT_ZOOM`), and
 ///   a web map's z16 pixel is a z24 cell;
 /// - Y, 24: the Mercator plane is a square;
-/// - Z, 16: ±2^15 units of height, as the terrain stores a height, an `i16` in ground cells,
-///   a ground cell being a unit (`bake/constant.rs`).
+/// - Z, 16: ±2^15 units of height, as a tile's elevation samples and the cells' elevations
+///   worked out from them are each an `i16` in ground cells, a ground cell being a unit
+///   (`bake/constant.rs`, `ground.rs` `ele_at`).
 pub const EXTENT: [u32; 3] = [UNIT_ZOOM, UNIT_ZOOM, HEIGHT_BITS];
 
 /// The world's height in units, as bits: Z spans 2^16 of them about sea level.
 pub const HEIGHT_BITS: u32 = 16;
 
-/// Sea level, in leaf cells: the height heights are counted from, where the water stands and
+/// Sea level, in leaf cells: the elevation elevations are counted from, where the water stands and
 /// under which the Earth past the service area is rock.
 pub const SEA_LEVEL: i32 = 0;
 

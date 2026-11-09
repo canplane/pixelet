@@ -1,20 +1,18 @@
 // pxl-core/domain/scene/indicator/ghost.rs
 
 //! The hover ghost, drawn half transparent: either a box, which the box
-//! shader unfolds (pxl-render `mesh::ghost`), or one decor instance, which
-//! decor's shader draws. The tool decides what the ghost shows
+//! shader unfolds from its draw's uniform (pxl-render box.wgsl), or one decor
+//! instance, which decor's shader draws. The tool decides what the ghost shows
 //! (domain/control/edit/ghost.rs) and hands it over as an instance in the
 //! pointer's frame (`Ghost`). This module decides how each kind is drawn: a
 //! box's color and texture, and the box that stands in for a decor until the
 //! decor can be drawn as itself.
 
-use pxl_render::frame::shader::record::BOX_WORDS;
-use pxl_render::frame::shader::record::{PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR};
+use pxl_render::frame::shader::record::PIPELINE_GHOST_DECOR;
 use pxl_render::frame::shader::word::NO_LAYER;
 use pxl_render::gpu::api::bytes;
 use pxl_render::gpu::draw::{DrawId, DrawList, MirroredBlock, Position, ReceiverBox};
 use pxl_render::look::color::indicator;
-use pxl_render::mesh::ghost::{on_whole_units, write_lone_box};
 use pxl_render::mesh::paint::object::PAINTER;
 use pxl_spec::asset::cube::cube_rgb;
 use pxl_spec::asset::decor::Decor;
@@ -32,8 +30,7 @@ use xpute_core::global::Global;
 #[derive(Clone, Copy, PartialEq)]
 enum Shape {
     Box {
-        size_bits: u64,
-        off_bits: [u64; 3],
+        side_bits: u64,
         rgb: [u8; 3],
         layer: u8,
     },
@@ -46,12 +43,10 @@ enum Shape {
 
 #[derive(Default)]
 pub struct GhostDraw {
-    /// What `block` holds, or None when nothing is drawn.
+    /// What is drawn, or None when nothing is.
     shape: Option<Shape>,
+    /// A decor's one instance; a box has no block.
     block: MirroredBlock,
-    /// The z step `write_lone_box` returned for a box. The box's draw needs
-    /// it.
-    z_step: f64,
     /// A box's min corner, or a decor instance's base.
     at: V3,
     id: DrawId,
@@ -112,7 +107,7 @@ impl GhostDraw {
             erase,
         }: GhostBox,
     ) -> bool {
-        let size = units(zoom);
+        let side = units(zoom);
         let state = cube.filter(|_| settings().textures).unwrap_or(0);
         let rgb = cube.and_then(cube_rgb).unwrap_or(if erase {
             indicator::ERASE
@@ -123,10 +118,8 @@ impl GhostDraw {
             [(rgb >> 16) as u8, (rgb >> 8) as u8, rgb as u8],
             NO_LAYER as u8,
         ));
-        let off = on_whole_units(at).1;
         let shape = Shape::Box {
-            size_bits: size.to_bits(),
-            off_bits: off.map(f64::to_bits),
+            side_bits: side.to_bits(),
             rgb,
             layer,
         };
@@ -134,9 +127,8 @@ impl GhostDraw {
         if self.shape == Some(shape) {
             return moved;
         }
-        let mut m = [0; BOX_WORDS as usize];
-        self.z_step = write_lone_box(&mut m, off, size, rgb, layer);
-        self.write(draw, shape, bytes(&m));
+        self.block.free(draw);
+        self.shape = Some(shape);
         true
     }
 
@@ -192,31 +184,30 @@ impl GhostDraw {
         self.shape = self.block.write(draw, instance).then_some(shape);
     }
 
-    /// Lists the ghost's draw at a Q3 position: a box's is taken on whole
-    /// units, and a decor's is its stored Q3 position. Either may lie on any
-    /// lap of X, since the renderer draws it the short way round from the eye
-    /// (pxl-render gpu/draw.rs `Position`).
+    /// Lists the ghost's draw at a Q3 position: a box's min corner or a decor's stored
+    /// position. Either may lie on any lap of X, since the renderer draws it the short way
+    /// round from the eye (pxl-render gpu/draw.rs `Position`).
     pub fn draw(&self, draw: &mut DrawList) {
         let Some(shape) = self.shape else { return };
         match shape {
-            Shape::Box { size_bits, .. } => {
-                let whole = on_whole_units(self.at).0;
-                // `write_lone_box` wrote the box in a cell of its own size.
-                let size = f64::from_bits(size_bits);
+            Shape::Box {
+                side_bits,
+                rgb,
+                layer,
+            } => {
+                let side = f64::from_bits(side_bits);
                 // The box reads the sun's map, so it declares the box it stands
                 // within: its cell, grown by a unit, since its corner lies less
                 // than a unit off the whole unit.
-                let stand = ReceiverBox::of(whole, whole.map(|v| v + 1.0 + size));
-                draw.draw_in(
+                let whole = self.at.map(f64::floor);
+                let stand = ReceiverBox::of(whole, whole.map(|v| v + 1.0 + side));
+                draw.draw_box(
                     &self.id,
-                    PIPELINE_GHOST_BOX,
-                    self.block.handle,
-                    1,
-                    0,
-                    Position::of(whole),
+                    Position::of(self.at),
                     GHOST_OPACITY,
-                    size as f32,
-                    self.z_step as f32,
+                    side as f32,
+                    u32::from_le_bytes([rgb[0], rgb[1], rgb[2], 0]),
+                    u32::from(layer),
                     Some(stand),
                 );
             }

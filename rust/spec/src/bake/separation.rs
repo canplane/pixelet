@@ -67,11 +67,11 @@ impl Form {
 pub struct Separation {
     pub starts: Vec<u32>,      // Line d holds the points starts[d]..starts[d + 1].
     pub points: Vec<[i16; 2]>, // Each point of the centreline, in 1/POINT_SCALE of a tile cell, as the source gives it.
-    pub tops: Vec<i16>, // The road surface at each point, in leaf cells, solved over many tiles.
+    pub heights: Vec<i16>, // The road surface at each point, in leaf cells, solved over many tiles.
     pub widths: Vec<u8>, // Each line's width, in 1/POINT_SCALE of a tile cell, as the source gives it.
-    pub kinds: Vec<u8>, // Each line's transport type: the source's class, which is the slab's material.
-    pub forms: Vec<u8>, // Each line's `Form`, from the source's flags.
-    pub clears: Vec<u8>, // A bore's clear space over its surface, in leaf cells, as the solve set it.
+    pub asset_ids: Vec<u8>, // Each line's transport type: the source's class, which is the slab's material.
+    pub forms: Vec<u8>,     // Each line's `Form`, from the source's flags.
+    pub clearances: Vec<u8>, // A bore's clear space over its surface, in leaf cells, as the solve set it.
     /// The coarsest zoom at which each point is held (`way::coarsest`): what a fold
     /// keeps of a line. Only the bake reads it, since no client path folds, so a client holds
     /// none (`Table::to_client`).
@@ -87,12 +87,12 @@ impl Default for Separation {
 #[derive(Clone, Copy, Debug)]
 pub struct Line<'a> {
     pub points: &'a [[i16; 2]],
-    pub tops: &'a [i16],
+    pub heights: &'a [i16],
     pub first_zooms: &'a [u8],
     pub width: u8,
-    pub kind: u8,
+    pub asset_id: u8,
     pub form: Form,
-    pub clear: u8,
+    pub clearance: u8,
 }
 
 impl Separation {
@@ -109,12 +109,12 @@ impl Separation {
         let (a, b) = (self.starts[d] as usize, self.starts[d + 1] as usize);
         Line {
             points: &self.points[a..b],
-            tops: &self.tops[a..b],
+            heights: &self.heights[a..b],
             first_zooms: self.first_zooms.get(a..b).unwrap_or_default(),
             width: self.widths[d],
-            kind: self.kinds[d],
+            asset_id: self.asset_ids[d],
             form: Form::of(self.forms[d]),
-            clear: self.clears[d],
+            clearance: self.clearances[d],
         }
     }
 
@@ -174,8 +174,8 @@ impl Separation {
         let flags = way::flags(u32::from(self.forms[d]), first, last, continues);
         Segment::words(
             [self.points[p], self.points[p + 1]],
-            [self.tops[p], self.tops[p + 1]],
-            [self.widths[d], self.kinds[d], flags, self.clears[d]],
+            [self.heights[p], self.heights[p + 1]],
+            [self.widths[d], self.asset_ids[d], flags, self.clearances[d]],
         )
     }
 
@@ -336,7 +336,7 @@ pub fn fold_separation(around: [Option<&Separation>; 16], zoom: Zoom) -> Separat
                     [0, 1].map(|a| {
                         round(f64::from(i32::from(line.points[i][a]) + q[a]) / 2.0) as i32
                     }),
-                    line.tops[i],
+                    line.heights[i],
                     line.first_zooms[i],
                 )
             };
@@ -350,9 +350,9 @@ pub fn fold_separation(around: [Option<&Separation>; 16], zoom: Zoom) -> Separat
                     a,
                     b,
                     width,
-                    kind: line.kind,
+                    asset_id: line.asset_id,
                     form: line.form.byte(),
-                    clear: line.clear,
+                    clearance: line.clearance,
                 });
                 if let Some(p) = before.filter(|&p: &usize| folded.segments[p].b == a) {
                     folded.join(p, s);
@@ -366,15 +366,15 @@ pub fn fold_separation(around: [Option<&Separation>; 16], zoom: Zoom) -> Separat
 
 /// A folded segment: its ends in the parent's eighths of a cell with their
 /// surface and the coarsest zoom each is held at, and its line's width,
-/// kind, form and clear.
+/// asset_id, form and clearance.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct FoldSegment {
     a: ([i32; 2], i16, u8),
     b: ([i32; 2], i16, u8),
     width: u8,
-    kind: u8,
+    asset_id: u8,
     form: u8,
-    clear: u8,
+    clearance: u8,
 }
 
 /// Marks that no single segment is known to come after (or before) one: none, or more than
@@ -404,7 +404,7 @@ impl Fold {
     /// Records that `s` comes after `p` in a copy, where both are of the same line.
     fn join(&mut self, p: usize, s: usize) {
         let same = |a: FoldSegment, b: FoldSegment| {
-            (a.width, a.kind, a.form, a.clear) == (b.width, b.kind, b.form, b.clear)
+            (a.width, a.asset_id, a.form, a.clearance) == (b.width, b.asset_id, b.form, b.clearance)
         };
         if !same(self.segments[p], self.segments[s]) {
             return;
@@ -458,9 +458,9 @@ impl Fold {
                 out.push(
                     (a..=b).map(|i| (at[i], chain[i].1, chain[i].2)),
                     f.width,
-                    f.kind,
+                    f.asset_id,
                     Form::of(f.form),
-                    f.clear,
+                    f.clearance,
                 );
             }
         }
@@ -472,12 +472,12 @@ impl Fold {
 pub struct Builder {
     starts: Vec<u32>,
     points: Vec<[i16; 2]>,
-    tops: Vec<i16>,
+    heights: Vec<i16>,
     first_zooms: Vec<u8>,
     widths: Vec<u8>,
-    kinds: Vec<u8>,
+    asset_ids: Vec<u8>,
     forms: Vec<u8>,
-    clears: Vec<u8>,
+    clearances: Vec<u8>,
 }
 
 impl Builder {
@@ -487,30 +487,30 @@ impl Builder {
         &mut self,
         points: impl IntoIterator<Item = ([f64; 2], i16, u8)>,
         width: u8,
-        kind: u8,
+        asset_id: u8,
         form: Form,
-        clear: u8,
+        clearance: u8,
     ) {
         let at = self.points.len();
-        for ([x, y], top, first_zoom) in points {
+        for ([x, y], height, first_zoom) in points {
             let q = |v: f64| {
                 round(v * POINT_SCALE).clamp(f64::from(i16::MIN), f64::from(i16::MAX)) as i16
             };
             self.points.push([q(x), q(y)]);
-            self.tops.push(top);
+            self.heights.push(height);
             self.first_zooms.push(first_zoom);
         }
         if self.points.len() - at < 2 || width == 0 {
             self.points.truncate(at);
-            self.tops.truncate(at);
+            self.heights.truncate(at);
             self.first_zooms.truncate(at);
             return;
         }
         self.starts.push(at as u32);
         self.widths.push(width);
-        self.kinds.push(kind);
+        self.asset_ids.push(asset_id);
         self.forms.push(form.byte());
-        self.clears.push(clear);
+        self.clearances.push(clearance);
     }
 
     pub fn finish(mut self) -> Separation {
@@ -518,17 +518,17 @@ impl Builder {
         Separation {
             starts: self.starts,
             points: self.points,
-            tops: self.tops,
+            heights: self.heights,
             first_zooms: self.first_zooms,
             widths: self.widths,
-            kinds: self.kinds,
+            asset_ids: self.asset_ids,
             forms: self.forms,
-            clears: self.clears,
+            clearances: self.clearances,
         }
     }
 }
 
-/// The packet's lanes: starts, points (flattened), tops, widths, kinds, forms, clears, first_zooms.
+/// The packet's lanes: starts, points (flattened), heights, widths, asset_ids, forms, clearances, first_zooms.
 pub(crate) type Packet = (
     Vec<u32>,
     Vec<i16>,
@@ -545,11 +545,11 @@ impl Separation {
         (
             &self.starts,
             self.points.as_flattened(),
-            &self.tops,
+            &self.heights,
             &self.widths,
-            &self.kinds,
+            &self.asset_ids,
             &self.forms,
-            &self.clears,
+            &self.clearances,
             &self.first_zooms,
         )
     }
@@ -558,18 +558,18 @@ impl Separation {
 pub struct Table<'a> {
     starts: &'a [u32],
     points: &'a [[i16; 2]],
-    tops: &'a [i16],
+    heights: &'a [i16],
     widths: &'a [u8],
-    kinds: &'a [u8],
+    asset_ids: &'a [u8],
     forms: &'a [u8],
-    clears: &'a [u8],
+    clearances: &'a [u8],
     first_zooms: &'a [u8],
 }
 
 impl<'a> Table<'a> {
     /// Refused unless the columns are one tile's separation, consistently sized.
     pub fn of(
-        (starts, points, tops, widths, kinds, forms, clears, first_zooms): <Packet as Shape>::Read<
+        (starts, points, heights, widths, asset_ids, forms, clearances, first_zooms): <Packet as Shape>::Read<
             'a,
         >,
     ) -> Result<Table<'a>, MarshalError> {
@@ -577,11 +577,11 @@ impl<'a> Table<'a> {
             return Err(malformed());
         };
         let n = widths.len();
-        let shaped = kinds.len() == n
+        let shaped = asset_ids.len() == n
             && forms.len() == n
-            && clears.len() == n
+            && clearances.len() == n
             && starts.len() == n + 1
-            && tops.len() == points.len()
+            && heights.len() == points.len()
             && first_zooms.len() == points.len()
             && starts.first() == Some(&0)
             && starts.last() == Some(&(points.len() as u32))
@@ -591,11 +591,11 @@ impl<'a> Table<'a> {
             .then_some(Table {
                 starts,
                 points,
-                tops,
+                heights,
                 widths,
-                kinds,
+                asset_ids,
                 forms,
-                clears,
+                clearances,
                 first_zooms,
             })
             .ok_or_else(malformed)
@@ -605,12 +605,12 @@ impl<'a> Table<'a> {
         Separation {
             starts: self.starts.to_vec(),
             points: self.points.to_vec(),
-            tops: self.tops.to_vec(),
+            heights: self.heights.to_vec(),
             first_zooms: self.first_zooms.to_vec(),
             widths: self.widths.to_vec(),
-            kinds: self.kinds.to_vec(),
+            asset_ids: self.asset_ids.to_vec(),
             forms: self.forms.to_vec(),
-            clears: self.clears.to_vec(),
+            clearances: self.clearances.to_vec(),
         }
     }
 
@@ -627,12 +627,12 @@ impl<'a> Table<'a> {
         Ok(Separation {
             starts: column(self.starts)?,
             points: column(self.points)?,
-            tops: column(self.tops)?,
+            heights: column(self.heights)?,
             first_zooms: Vec::new(),
             widths: column(self.widths)?,
-            kinds: column(self.kinds)?,
+            asset_ids: column(self.asset_ids)?,
             forms: column(self.forms)?,
-            clears: column(self.clears)?,
+            clearances: column(self.clearances)?,
         })
     }
 }

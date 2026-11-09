@@ -9,7 +9,7 @@
 mod real_world;
 
 use pxl_spec::brick;
-use pxl_spec::ground::palette_idxs;
+use pxl_spec::ground::asset_ids;
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::world::{wrap_idx, SEA_LEVEL};
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, MIN_ZOOM, SHARD_ZOOM};
@@ -356,7 +356,7 @@ fn tell(
     t.add(
         "cell, four differ",
         is_cell && {
-            let [a, b, c, d] = palette_idxs(got.asset[1]);
+            let [a, b, c, d] = asset_ids(got.asset[1]);
             a != b || b != c || c != d
         },
     );
@@ -442,18 +442,18 @@ fn module_of(device: &wgpu::Device, label: &str, source: &str) -> wgpu::ShaderMo
 fn hand_world_answers_as_the_rust() {
     let built = real_world::build(EYE);
     let w = built.world();
-    let (clipmap, ground_words, palette_words, shards, objects, pool) = (
+    let (clipmap, ground_words, folds, shards, objects, pool) = (
         &built.clipmap,
         &built.ground,
-        &built.palette,
+        &built.folds,
         &built.shards,
         &built.objects,
         &built.pool,
     );
-    let (way_points, placed, folds, lone, over_bridges, groundless) = (
+    let (way_points, placed, folded, lone, over_bridges, groundless) = (
         built.way_points.clone(),
         built.placed.clone(),
-        built.folds.clone(),
+        built.folded.clone(),
         built.lone.clone(),
         built.over_bridges.clone(),
         built.groundless.clone(),
@@ -575,7 +575,7 @@ fn hand_world_answers_as_the_rust() {
     for &p in &groundless {
         asked_at.push((p, [LEAF_CELL_ZOOM - 1, LEAF_CELL_ZOOM]));
     }
-    for &p in &folds {
+    for &p in &folded {
         asked_at.push((p, [LEAF_CELL_ZOOM - 1, LEAF_CELL_ZOOM]));
     }
     // Points about the ways and what is placed, far over and under them.
@@ -956,10 +956,10 @@ fn hand_world_answers_as_the_rust() {
     let flat = |rows: &[[u32; 4]]| rows.iter().flatten().copied().collect::<Vec<u32>>();
     let clip_flat: Vec<u32> = clipmap.iter().flatten().map(|&v| v as u32).collect();
     let store = wgpu::BufferUsages::STORAGE;
-    let (clip_buf, ground_buf, palette_buf, shard_buf, placed_buf, pool_buf) = (
+    let (clip_buf, ground_buf, folds_buf, shard_buf, placed_buf, pool_buf) = (
         buf(&clip_flat, store),
         buf(ground_words, store),
-        buf(palette_words, store),
+        buf(folds, store),
         buf(&flat(shards), store),
         buf(objects, store),
         buf(pool, store),
@@ -988,7 +988,7 @@ fn hand_world_answers_as_the_rust() {
         let entries = [
             (1, &clip_buf),
             (2, &ground_buf),
-            (4, &palette_buf),
+            (4, &folds_buf),
             (5, &shard_buf),
             (6, &placed_buf),
             (7, &pool_buf),
@@ -1067,7 +1067,7 @@ fn hand_world_answers_as_the_rust() {
         ("cell, placed", 22888),
         ("cell, placed air", 15209),
         ("cell, placed, the first ground's", 9),
-        ("cell, placed, the first object's", 3),
+        ("cell, placed, the first object's", 1),
         ("cell, sandstone", 56),
         ("cell, soil", 351),
         ("cell, some of it cave", 1602),

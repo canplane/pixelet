@@ -330,7 +330,7 @@ fn world_binds<'a>(
         (0, eye.as_entire_binding()),
         (1, b.clip.as_entire_binding()),
         (2, b.ground.as_entire_binding()),
-        (4, b.palette.as_entire_binding()),
+        (4, b.folds.as_entire_binding()),
         (5, b.shards.as_entire_binding()),
         (6, b.placed.as_entire_binding()),
         (7, b.pool.as_entire_binding()),
@@ -756,7 +756,7 @@ fn world_bufs(gpu: &Gpu, built: &Built) -> WorldBuffer {
     WorldBuffer {
         clip: gpu.buf(&clip, store),
         ground: gpu.buf(&built.ground, store),
-        palette: gpu.buf(&built.palette, store),
+        folds: gpu.buf(&built.folds, store),
         shards: gpu.buf(&flat_u(&built.shards), store),
         placed: gpu.buf(&built.objects, store),
         pool: gpu.buf(&built.pool, store),
@@ -1539,7 +1539,7 @@ fn holes_answer(
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
     binds.push((11, header.as_entire_binding()));
     gpu.asks_spent.set(spent);
-    gpu.holes(&binds, &node_cache_buf);
+    gpu.holes(ray::QUEUE_EYE_HOLES, &binds, &node_cache_buf);
     gpu.asks_spent.set(false);
     let out = read_texture(&gpu.device, &gpu.queue, &rays);
     if spent {

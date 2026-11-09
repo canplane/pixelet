@@ -285,7 +285,7 @@ impl LocationIndicator {
     /// every height it read was exact.
     fn ground(&mut self, world: World, draw: &mut DrawList, key: Key) -> (Option<V3>, bool) {
         let (device, pos) = (key.device, key.pos);
-        // The fix names a place but not its height, so the height is the
+        // The fix names a place but not its altitude, so the elevation is the
         // ground's under it, and the last one found stands until a new one is.
         let center = world.surface_support(&device);
         let mut exact = center.exact().is_some();
@@ -305,9 +305,9 @@ impl LocationIndicator {
         lay_zone(
             center_pos,
             |at| {
-                let height = world.surface_support(at);
-                exact &= height.exact().is_some();
-                height.val().flatten()
+                let support = world.surface_support(at);
+                exact &= support.exact().is_some();
+                support.val().flatten()
             },
             &mut rise,
             &mut instances,

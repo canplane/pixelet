@@ -43,12 +43,12 @@ fn top() -> Quadrant {
 }
 
 /// A leaf as a client holds it: its tile with its lines, and each cell's
-/// palette index and height as the clip levels hold them.
+/// palette index and elevation as the clip levels hold them.
 #[derive(Clone)]
 struct Leaf {
     tile: TerrainTile,
-    palette_idxs: Vec<GroundId>,
-    heights: Vec<i16>,
+    asset_ids: Vec<GroundId>,
+    ele: Vec<i16>,
 }
 
 /// Makes the world's tile cache one holding `tiles` and, over each tile, its
@@ -65,8 +65,8 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) {
         p,
         Leaf {
             tile,
-            palette_idxs,
-            heights,
+            asset_ids,
+            ele,
         },
     ) in tiles
     {
@@ -76,12 +76,7 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) {
                 continue;
             }
             admitted.push(q);
-            cells.push((
-                q,
-                palette_idxs.clone(),
-                heights.clone(),
-                tile.separation.clone(),
-            ));
+            cells.push((q, asset_ids.clone(), ele.clone(), tile.separation.clone()));
             let picture = match k {
                 0 => tile.clone(),
                 _ => TerrainTile {
@@ -103,12 +98,12 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) {
 }
 
 /// A leaf as a client holds it once its cells are back, with each cell's
-/// height and palette index given.
-fn drawn(heights: Vec<i16>, ground: GroundCells, separation: Separation) -> Leaf {
+/// elevation and palette index given.
+fn drawn(ele: Vec<i16>, ground: GroundCells, separation: Separation) -> Leaf {
     Leaf {
         tile: TerrainTile::of(Vec::new(), Vec::new().into(), separation, Occupancy::LEAF),
-        palette_idxs: ground.into_owned(),
-        heights,
+        asset_ids: ground.into_owned(),
+        ele,
     }
 }
 
@@ -135,7 +130,7 @@ pub(crate) fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
     let at = world::point(corner[0], corner[1], corner[2]);
     store.write([Write {
         at: morton::key_of::<3>(side, idx_of(side, &at)),
-        id: state,
+        asset_id: state,
         ext: None,
     }]);
 }
@@ -339,11 +334,15 @@ fn ray_from_above_meets_ground() {
 /// dug lower half.
 #[test]
 fn dig_met_as_folded() {
+    use pxl_content::cave::hollow;
     use pxl_engine::answer::side;
     use pxl_spec::share::EIGHTHS;
     use pxl_spec::value::AIR;
     let _g = serial();
     let [x, y] = flat_at_five();
+    // A column with no cave under the dig, so the ground under it is met.
+    let clear = |x: f64| hollow((LEAF_CELL_ZOOM, [x, y, 3.0].map(|v| libm::floor(v) as i32))) == 0;
+    let x = (0..).map(|i| x + f64::from(i)).find(|&x| clear(x)).unwrap();
     let half = units(OBJECT_COARSEST + 1);
     let dug = |n: usize| {
         let mut store = Store::default();
@@ -650,7 +649,7 @@ fn box_placed_matches_store() {
     };
     store.entries_in(&space, &mut |e| {
         if e.zoom == unit {
-            in_store.push((e.at, e.state));
+            in_store.push((e.at, e.asset_id));
         }
     });
     asked.sort_unstable();
@@ -676,10 +675,10 @@ fn late_brick_spike() {
     use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
     let _g = serial();
     let leaf = top().children()[0];
-    let mut heights = vec![5; CELLS];
-    heights[200 * SPAN + 300] = 400;
+    let mut ele = vec![5; CELLS];
+    ele[200 * SPAN + 300] = 400;
     let spiked = drawn(
-        heights,
+        ele,
         vec![ground::land; SPAN * SPAN].into(),
         Default::default(),
     );
@@ -1030,7 +1029,7 @@ fn stored_decor_past_the_catalog_is_unknown() {
     write(&mut store, [x, y, 5.0], OBJECT_COARSEST, past);
     let at = Octant::holding(OBJECT_COARSEST, &world::point(x, y, 5.0));
     let entry = placed(store).entry_at(at).unwrap();
-    assert_eq!(entry.state, past);
+    assert_eq!(entry.asset_id, past);
     assert_eq!(entry.asset(), Asset::Unknown);
     assert!(decor_instance(&entry).is_none());
 }

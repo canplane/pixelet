@@ -45,9 +45,7 @@ fn lines(rng: &mut Rng) -> Separation {
 fn tile(seed: u64) -> TerrainTile {
     let mut rng = Rng(SplitMix64::new(seed));
     let ele: Vec<i16> = (0..ELE_COLUMN).map(|_| rng.next() as i16).collect();
-    let cells: Vec<GroundId> = (0..PALETTE_COLUMN)
-        .map(|_| rng.next() as GroundId)
-        .collect();
+    let cells: Vec<GroundId> = (0..FOLD_COLUMN).map(|_| rng.next() as GroundId).collect();
     TerrainTile::of(
         ele,
         cells.into(),

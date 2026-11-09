@@ -25,7 +25,7 @@
 //! slot in a run held to be given back. After a refusal, the next slot given
 //! back asks for a turn, in which the want is asked again.
 
-use pxl_spec::bake::tile::terrain::{ELE_COLUMN, PALETTE_COLUMN};
+use pxl_spec::bake::tile::terrain::{ELE_COLUMN, FOLD_COLUMN};
 use xpute_core::global::Global;
 use xpute_core::mem;
 use xpute_core::mem::heap::{alloc, free, Block};
@@ -95,7 +95,7 @@ const _: () = {
         "an Earth tile fits a slot"
     );
     assert!(
-        (PALETTE_COLUMN + 2 * ELE_COLUMN) as u32 <= SLOT_BYTES,
+        (FOLD_COLUMN + 2 * ELE_COLUMN) as u32 <= SLOT_BYTES,
         "a terrain tile's columns fit a slot"
     );
 };

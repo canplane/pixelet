@@ -134,3 +134,7 @@ fn runs(slots: &[u32]) -> impl Iterator<Item = (u32, u32)> + '_ {
         Some((first, end))
     })
 }
+
+#[cfg(test)]
+#[path = "read.test.rs"]
+mod test;

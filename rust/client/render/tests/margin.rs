@@ -169,7 +169,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBuffer, eye: &[u32], header: &[u32]) -> Vec<u32>
             (0, eye.as_entire_binding()),
             (1, b.clip.as_entire_binding()),
             (2, b.ground.as_entire_binding()),
-            (4, b.palette.as_entire_binding()),
+            (4, b.folds.as_entire_binding()),
             (5, b.shards.as_entire_binding()),
             (6, b.placed.as_entire_binding()),
             (7, b.pool.as_entire_binding()),
@@ -206,7 +206,7 @@ fn light_cells_start_short_by_the_margin() {
     let b = WorldBuffer {
         clip: gpu.buf(&clip, store),
         ground: gpu.buf(&built.ground, store),
-        palette: gpu.buf(&built.palette, store),
+        folds: gpu.buf(&built.folds, store),
         shards: gpu.buf(&flat_u(&built.shards), store),
         placed: gpu.buf(&built.objects, store),
         pool: gpu.buf(&built.pool, store),

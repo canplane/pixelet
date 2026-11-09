@@ -233,10 +233,6 @@ fn uniform(at: Position, words: &[(usize, f32)]) -> [f32; DRAW_FLOATS] {
 /// The draw that `DrawList::draw_scaled` lists, made here for a reader outside any list. Its
 /// record names uniform slot 0, as a reader that binds the uniform alone reads it
 /// (pass/character.rs).
-#[expect(
-    clippy::too_many_arguments,
-    reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
-)]
 pub fn scaled_draw(
     pipeline: u32,
     handle: u32,
@@ -244,14 +240,9 @@ pub fn scaled_draw(
     b: u32,
     at: Position,
     rot: f32,
-    opacity: f32,
     scale: f32,
 ) -> Draw {
-    let words = [
-        (skinned::ROT, rot),
-        (skinned::OPACITY, opacity),
-        (skinned::SCALE, scale),
-    ];
+    let words = [(skinned::ROT, rot), (skinned::SCALE, scale)];
     ([handle, a, b, 0, pipeline], uniform(at, &words))
 }
 
@@ -723,11 +714,10 @@ impl DrawList {
         b: u32,
         at: Position,
         rot: f32,
-        opacity: f32,
         scale: f32,
         receiver: Option<ReceiverBox>,
     ) {
-        let (d, u) = scaled_draw(pipeline, handle, a, b, at, rot, opacity, scale);
+        let (d, u) = scaled_draw(pipeline, handle, a, b, at, rot, scale);
         self.stand(pipeline, receiver);
         self.set(id, pipeline, [d[0], d[1], d[2]], u);
     }
@@ -774,28 +764,25 @@ impl DrawList {
 
     #[expect(
         clippy::too_many_arguments,
-        reason = "each argument is a word of the draw record it writes, as WebGPU's draw takes its counts"
+        reason = "each argument is a word of the ghost box's uniform (word.rs `ghost_box`)"
     )]
-    pub fn draw_in(
+    pub fn draw_box(
         &mut self,
         id: &DrawId,
-        pipeline: u32,
-        handle: u32,
-        vertex_cnt: u32,
-        idx_cnt: u32,
         at: Position,
         opacity: f32,
-        unit: f32,
-        z_step: f32,
+        side: f32,
+        rgb: u32,
+        layer: u32,
         receiver: Option<ReceiverBox>,
     ) {
         let words = [
             (ghost_box::OPACITY, opacity),
-            (ghost_box::UNIT, unit),
-            (ghost_box::Z_STEP, z_step),
+            (ghost_box::SIDE, side),
+            (ghost_box::RGB, f32::from_bits(rgb)),
+            (ghost_box::LAYER, f32::from_bits(layer)),
         ];
-        let record = [handle, vertex_cnt, idx_cnt];
-        self.put(id, pipeline, record, at, &words, receiver);
+        self.put(id, PIPELINE_GHOST_BOX, [0, 1, 0], at, &words, receiver);
     }
 
     /// A draw that `drifts` is a cloud's. Its `at` is its place on the cloud field's map,
@@ -825,6 +812,7 @@ impl DrawList {
             (instance::STRIDE, f32::from_bits(stride)),
             (instance::OPACITY, opacity),
             (instance::IDX, f32::from_bits(idx)),
+            (instance::LAYER, f32::from_bits(group)),
             (instance::DRIFTS, if drifts { 1.0 } else { 0.0 }),
         ];
         self.put(id, pipeline, [handle, group, cnt], at, &words, receiver);

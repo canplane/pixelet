@@ -87,12 +87,12 @@ pub(super) fn bores(
             })
             .collect();
         for (stretch, bore) in split_by(&bore) {
-            let (form, clear) = match bore {
+            let (form, clearance) = match bore {
                 Bore::Covered => (Form::Tunnel, ceiling),
                 Bore::Open => (Form::Tunnel, u8::MAX),
                 Bore::Raised => (Form::Approach, 0),
             };
-            lines.push(line_of(r, &ys, stretch, form, clear));
+            lines.push(line_of(r, &ys, stretch, form, clearance));
         }
     }
     for q in (0..stretches.len())

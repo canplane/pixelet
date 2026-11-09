@@ -391,7 +391,7 @@ pub fn fill_share(columns: &impl Table, slot: NodeSlot) -> u32 {
 /// own value. A leaf over the node gives its value four times, as a ground leaf's cell does.
 /// Each child is read at its own index under `hide`, as `v` was, so a leaf a preview leaves
 /// out shows in no quarter.
-pub fn palette_idxs(
+pub fn asset_ids(
     columns: &impl Table,
     slot: NodeSlot,
     hide: Cut,

@@ -33,8 +33,6 @@ use crate::look::marker::{
 };
 use crate::pass::model::UniformBuffer;
 
-const SETS: usize = 32;
-
 fn anchor_dot(p: &mut DisplayList, logical_w: f32) {
     p.circle(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, DOT_FILL);
     p.ring(
@@ -132,11 +130,11 @@ fn bubble(p: &mut DisplayList, lines: &[String], box_w: f32) {
     }
 }
 
-/// A marker set's upload, bound in two groups. The regions' group binds it
+/// The markers' upload, bound in two groups. The regions' group binds it
 /// with the world's depth, and the markers' group binds it with the regions'
 /// numbers. The other fields name what the groups were made over.
 #[derive(Clone, Copy, Default)]
-struct Set {
+struct Groups {
     group: u32,
     region_group: u32,
     upload: u32,
@@ -161,9 +159,9 @@ pub struct MarkerPass {
     atlas_group: u32,
     levels: u32,
     generation: u32,
-    sets: [Set; SETS],
+    groups: Groups,
     dirty: SlotSet,
-    /// One uniform slot a set, as marker.wgsl reads `marker_words`.
+    /// The markers' uniform, as marker.wgsl reads `marker_words`.
     uniforms: UniformBuffer,
     frame_group: u32,
     pub view: [f32; 16],
@@ -199,7 +197,7 @@ impl MarkerPass {
             atlas_group: 0,
             levels: 1,
             generation: u32::MAX,
-            sets: [Set::default(); SETS],
+            groups: Groups::default(),
             dirty: SlotSet::default(),
             uniforms: UniformBuffer::new(word_bytes(MARKER_FLOATS), align),
             view: [0.0; 16],
@@ -314,7 +312,7 @@ impl MarkerPass {
         flush.whole || drawn
     }
 
-    /// Makes the regions' targets at the canvas's size, and each set's groups
+    /// Makes the regions' targets at the canvas's size, and the markers' groups
     /// and uniform, so that drawing makes none: a group made inside a frame
     /// that is dropped would be gone.
     pub fn prepare(
@@ -357,54 +355,36 @@ impl MarkerPass {
             self.regions_view = g.view(self.regions, false, 0, 1, 0, 1);
             self.regions_size = size;
         }
-        let placed = draws
+        let Some(upload) = draws
             .of(PIPELINE_MARKER)
+            .next()
             .filter(|d| d[1] > 0)
-            .filter_map(|d| uploads.get(d[0]));
-        for (set, (upload, _, _)) in self.sets.iter_mut().zip(placed) {
-            if set.upload != upload
-                || set.depth != depth
-                || set.numbers != self.numbers_view
-                || set.group == 0
-            {
-                let bound = |layout: Layout, before: u32| {
-                    g.bind_group(layout, &[buf_entry(0, upload), view_entry(1, before)])
-                };
-                release(set.group);
-                release(set.region_group);
-                set.group = bound(self.pipeline.layouts[2], self.numbers_view);
-                set.region_group = bound(self.region_pipeline.layouts[2], depth);
-                (set.upload, set.depth, set.numbers) = (upload, depth, self.numbers_view);
-            }
-        }
-        // Each set's uniform has a slot and is written every frame, because the
-        // eye's view moves every set. A set numbers its markers on from the
-        // sets before it (`marker::BEFORE`), so no two markers share a number.
-        let placed = || {
-            draws
-                .of(PIPELINE_MARKER)
-                .filter(|d| d[1] > 0)
-                .filter(|d| uploads.get(d[0]).is_some())
+            .and_then(|d| uploads.get(d[0]))
+            .map(|(upload, ..)| upload)
+        else {
+            return;
         };
-        let (view, proj, px_per_unit) = (self.view, self.proj, self.px_per_unit);
-        let cnt = placed().take(SETS).count() as u32;
-        let mut before = 0;
-        self.uniforms.write(
-            g,
-            self.pipeline.layouts[1],
-            cnt,
-            placed(),
-            true,
-            |buf, d| {
-                let mut s = [0.0f32; MARKER_FLOATS];
-                s[marker::VIEW..marker::VIEW + 16].copy_from_slice(&view);
-                s[marker::PROJ..marker::PROJ + 16].copy_from_slice(&proj);
-                s[marker::PX_PER_UNIT] = px_per_unit;
-                s[marker::BEFORE] = before as f32;
+        let m = &mut self.groups;
+        if m.upload != upload || m.depth != depth || m.numbers != self.numbers_view || m.group == 0
+        {
+            let bound = |layout: Layout, view: u32| {
+                g.bind_group(layout, &[buf_entry(0, upload), view_entry(1, view)])
+            };
+            release(m.group);
+            release(m.region_group);
+            m.group = bound(self.pipeline.layouts[2], self.numbers_view);
+            m.region_group = bound(self.region_pipeline.layouts[2], depth);
+            (m.upload, m.depth, m.numbers) = (upload, depth, self.numbers_view);
+        }
+        // The uniform is written every frame, because the eye's view moves the markers.
+        let mut s = [0.0f32; MARKER_FLOATS];
+        s[marker::VIEW..marker::VIEW + 16].copy_from_slice(&self.view);
+        s[marker::PROJ..marker::PROJ + 16].copy_from_slice(&self.proj);
+        s[marker::PX_PER_UNIT] = self.px_per_unit;
+        self.uniforms
+            .write(g, self.pipeline.layouts[1], 1, 0..1, true, |buf, _| {
                 buf[..word_bytes(MARKER_FLOATS) as usize].copy_from_slice(bytes(&s));
-                before += d[1];
-            },
-        );
+            });
     }
 
     /// Adds the pass's draws to `stat`, two triangles a marker.
@@ -425,15 +405,13 @@ impl MarkerPass {
         if self.atlas_group == 0 {
             return;
         }
-        let placed = || {
-            draws
-                .of(PIPELINE_MARKER)
-                .filter(|d| d[1] > 0)
-                .filter(|d| uploads.get(d[0]).is_some())
-        };
-        if placed().next().is_none() {
+        let Some(d) = draws
+            .of(PIPELINE_MARKER)
+            .next()
+            .filter(|d| d[1] > 0 && uploads.get(d[0]).is_some())
+        else {
             return;
-        }
+        };
         let Some(slots) = self.uniforms.slots() else {
             return;
         };
@@ -452,12 +430,10 @@ impl MarkerPass {
         );
         g.set_pipeline(pass, self.region_pipeline.id);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
-        for (k, (set, d)) in self.sets.iter().zip(placed()).enumerate() {
-            let (group, off) = slots.at(k as u32);
-            g.set_bind_group(pass, 1, group, &[off]);
-            g.set_bind_group(pass, 2, set.region_group, &[]);
-            g.draw(pass, 4, d[1], 0, 0);
-        }
+        let (group, off) = slots.at(0);
+        g.set_bind_group(pass, 1, group, &[off]);
+        g.set_bind_group(pass, 2, self.groups.region_group, &[]);
+        g.draw(pass, 4, d[1], 0, 0);
         g.end(pass);
         let pass = g.pass(
             encoder,
@@ -466,12 +442,9 @@ impl MarkerPass {
         g.set_pipeline(pass, self.pipeline.id);
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         g.set_bind_group(pass, 3, self.atlas_group, &[]);
-        for (k, (set, d)) in self.sets.iter().zip(placed()).enumerate() {
-            let (group, off) = slots.at(k as u32);
-            g.set_bind_group(pass, 1, group, &[off]);
-            g.set_bind_group(pass, 2, set.group, &[]);
-            g.draw(pass, 4, d[1], 0, 0);
-        }
+        g.set_bind_group(pass, 1, group, &[off]);
+        g.set_bind_group(pass, 2, self.groups.group, &[]);
+        g.draw(pass, 4, d[1], 0, 0);
         g.end(pass);
     }
 }

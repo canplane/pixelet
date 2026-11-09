@@ -800,7 +800,7 @@ fn ground_palette() -> Result<Vec<(String, u32)>, String> {
 /// slot among `slots`, the catalog's numbering.
 fn decor_table(
     spec: &Node,
-    palette_idxs: &[(String, u32)],
+    asset_ids: &[(String, u32)],
     slots: &[String],
 ) -> Result<(Vec<String>, Vec<String>), String> {
     const SLOT: &str = "crate::asset::catalog::Slot";
@@ -843,10 +843,10 @@ fn decor_table(
         for l in k.get("on").and_then(Node::arr).ok_or(at("on"))? {
             let v = l
                 .str()
-                .and_then(|l| palette_idxs.iter().find(|(g, _)| g == l))
+                .and_then(|l| asset_ids.iter().find(|(g, _)| g == l))
                 .map(|(_, v)| *v)
                 .filter(|v| *v < 256)
-                .ok_or(format!("{}: {l:?} is no ground palette_idx", at("on")))?;
+                .ok_or(format!("{}: {l:?} is no ground asset_id", at("on")))?;
             on[(v >> 5) as usize] |= 1 << (v & 31);
         }
         let (mut sizes, mut models) = (Vec::new(), Vec::new());

@@ -4,7 +4,7 @@
 //! irradiance are drawn once when the renderer starts. The sun and the moon each have a sky
 //! view and a share of the air's volume, both laid out about the light's azimuth and the
 //! world's up, so a turn of the eye keeps them. A light's two are drawn together where the
-//! light's height or the eye's altitude has moved half its step, and only while the light
+//! light's mu or the eye's altitude has moved half its step, and only while the light
 //! reaches the air. The exposure is drawn where the words it reads moved or the ground under
 //! the eye has moved half its step. A step is how far a quantity moves before what a table
 //! shows moves a display level. The GPU measures each step while it draws the table, and
@@ -159,9 +159,9 @@ const STEP_SHARE: f32 = 0.5;
 const REACH: f32 = 0.5;
 
 /// What the views and the exposure measure, in words (atmos_skyview.wgsl `slopes`). Each
-/// light has `LIGHT_SLOPES` words, the sun's first: the slope in its height, the slope in the
-/// eye's altitude, the height's sample, the most display levels its sky shows, which says how
-/// far it reaches, and that reach's slope in its height. The ground's slope and sample
+/// light has `LIGHT_SLOPES` words, the sun's first: the slope in its mu, the slope in the
+/// eye's altitude, the mu's sample, the most display levels its sky shows, which says how
+/// far it reaches, and that reach's slope in its mu. The ground's slope and sample
 /// follow.
 const SLOPES: usize = SLOPE_WORDS as usize;
 const SLOPES_BYTES: u32 = 4 * SLOPE_WORDS;
@@ -172,7 +172,7 @@ const GROUND_WORDS: usize = GROUND_SLOPES as usize;
 /// of those on their way (`bit`).
 #[derive(Clone, Copy)]
 enum Measure {
-    Height(usize),
+    Mu(usize),
     Alt(usize),
     Reach(usize),
     Ground,
@@ -181,7 +181,7 @@ enum Measure {
 impl Measure {
     const fn bit(self) -> u32 {
         match self {
-            Measure::Height(k) => 1 << (3 * k),
+            Measure::Mu(k) => 1 << (3 * k),
             Measure::Alt(k) => 1 << (3 * k + 1),
             Measure::Reach(k) => 1 << (3 * k + 2),
             Measure::Ground => 1 << 6,
@@ -202,7 +202,7 @@ const LAYOUTS: [usize; 2] = [SUN_LAYOUT, MOON_LAYOUT];
 const REACHES: [usize; 2] = [SUN_REACHES, MOON_REACHES];
 
 /// A quantity at which a table is held until it moves a share of its measured step: a
-/// light's height, the eye's altitude, or the ground's height under the eye.
+/// light's mu, the eye's altitude, or the ground's elevation under the eye.
 #[derive(Clone, Copy, Default)]
 struct TableInput {
     /// The value the table was last held at.
@@ -234,15 +234,15 @@ impl TableInput {
     }
 }
 
-/// What is kept of a light's sky view and its half of the air's volume: the light's height
+/// What is kept of a light's sky view and its half of the air's volume: the light's mu
 /// and the eye's altitude they are held at, whether the light reaches the air, and whether
 /// they were drawn where they were last held.
 #[derive(Clone, Copy, Default)]
 struct LightMemo {
-    height: TableInput,
+    mu: TableInput,
     alt: TableInput,
     /// Whether the light reaches the air by `REACH`, as the exposure last measured; none
-    /// before. While it does not, `to_reach` is how far its height moves before it does, at
+    /// before. While it does not, `to_reach` is how far its mu moves before it does, at
     /// the slope its reach last moved at (atmos_exposure.wgsl `reach`).
     reach: Option<bool>,
     to_reach: f32,
@@ -252,13 +252,13 @@ struct LightMemo {
 }
 
 impl LightMemo {
-    /// How far the light's height moves before what its tables show moves a display level.
-    /// In reach, that is its sky's step; out of reach, it is how far the height moves before
+    /// How far the light's mu moves before what its tables show moves a display level.
+    /// In reach, that is its sky's step; out of reach, it is how far the mu moves before
     /// the light comes into reach. It is none before either has landed.
     fn step(&self) -> Option<f32> {
         match self.reach {
             Some(false) => Some(self.to_reach),
-            _ => self.height.step,
+            _ => self.mu.step,
         }
     }
 }
@@ -283,7 +283,7 @@ pub struct Atmosphere {
     groups: [u32; TABLES],
     baked: bool,
     /// Each light's own words, the sun's first (atmos_skyview.wgsl `light`): which light it
-    /// is, and whether its drawing measures the slopes in its height and in the eye's
+    /// is, and whether its drawing measures the slopes in its mu and in the eye's
     /// altitude. `exposure_words` are the exposure's own words, which say whether it measures
     /// the ground's slope (atmos_exposure.wgsl `own`).
     lights: [u32; 2],
@@ -310,9 +310,6 @@ pub struct Atmosphere {
     plan: Plan,
     sun_mu: f32,
     moon_mu: f32,
-    /// The words as the uniform last took them, so the uniform is written only when they
-    /// change.
-    read: Read,
     /// The words the exposure texel was last drawn from (`EXPOSURE_READS`).
     exposure_read: Read,
     /// This month's picture of the Earth, zero until its image has come (`ImageMap::step`).
@@ -461,7 +458,6 @@ impl Atmosphere {
             ticket: 0,
             mapped: false,
             plan: Plan::default(),
-            read: Read::default(),
             exposure_read: Read::default(),
             sun_mu: 1.0,
             moon_mu: 1.0,
@@ -497,7 +493,7 @@ impl Atmosphere {
             (TRANSMITTANCE, vec![]),
             (MULTISCATTER, vec![]),
             (IRRADIANCE, vec![multiscatter]),
-            // The views write their measures too, and the slope in a light's height counts the
+            // The views write their measures too, and the slope in a light's mu counts the
             // land's lit face under the eye.
             (
                 SKY_VIEW,
@@ -622,9 +618,9 @@ impl Atmosphere {
         &self.words
     }
 
-    /// Lays out the words from the environment `env` and the rays' far end `far`, plans what
-    /// this frame draws, and writes the uniform where the words changed. Every light's and
-    /// ray's height is measured up the world's z, which is straight up where the eye stands.
+    /// Lays out the words from the environment `env` and the rays' far end `far` and plans
+    /// what this frame draws. Every light's and ray's mu is measured up the world's z,
+    /// which is straight up where the eye stands.
     pub fn prepare(&mut self, g: &Gpu, env: &[f32], far: f32) {
         let (sun, moon) = (
             &env[environment::SUN..environment::SUN + 3],
@@ -642,17 +638,17 @@ impl Atmosphere {
         self.words[DRAWN] = far;
         (self.sun_mu, self.moon_mu) = (sun[2], moon[2]);
         self.plan(g);
-        let r = &mut self.read;
-        r.begin();
-        r.read(&self.words);
-        if !r.end() {
-            g.write_buf(self.uniform, 0, bytes(&self.words));
-        }
+    }
+
+    /// Writes `words` to the device. The frame calls it only when its read found them
+    /// changed.
+    pub fn write(&self, g: &Gpu) {
+        g.write_buf(self.uniform, 0, bytes(&self.words));
     }
 
     /// Decides what this frame draws of the tables and what each drawing measures. It runs
     /// before the uniform is written, so the uniform holds each light's words as laid out. A
-    /// light's view and air are drawn where its height or the eye's altitude has moved half
+    /// light's view and air are drawn where its mu or the eye's altitude has moved half
     /// its step (`TableInput::changed`), or where the light has come to reach the air since
     /// they were last held. They are drawn only while the light reaches the air by `REACH`,
     /// and a reader reads them only then (atmos_medium.wgsl `reach`). The exposure is drawn
@@ -673,30 +669,30 @@ impl Atmosphere {
         for k in 0..2 {
             let mu = [self.sun_mu, self.moon_mu][k];
             let l = &mut self.light_memos[k];
-            let height = TableInput {
+            let input = TableInput {
                 step: l.step(),
-                ..l.height
+                ..l.mu
             };
-            let changed = height.changed(mu) || l.alt.changed(alt);
+            let changed = input.changed(mu) || l.alt.changed(alt);
             let reach = l.reach.unwrap_or(true);
             let draw = reach && (changed || !l.drawn);
             due |= changed;
             self.words[REACHES[k]] = f32::from(u8::from(reach));
             self.plan.lights[k] = draw;
             if changed || draw {
-                (l.height.at, l.alt.at, l.drawn) = (Some(mu), Some(alt), draw);
+                (l.mu.at, l.alt.at, l.drawn) = (Some(mu), Some(alt), draw);
             }
             if !draw {
                 continue;
             }
-            let height = l.height.left(mu) && busy & Measure::Height(k).bit() == 0;
+            let light = l.mu.left(mu) && busy & Measure::Mu(k).bit() == 0;
             let eye = l.alt.left(alt) && busy & Measure::Alt(k).bit() == 0;
             let base = (4 * LIGHT_WORDS * k) as u32;
-            if height {
-                l.height.measured = Some(mu);
+            if light {
+                l.mu.measured = Some(mu);
                 g.write_buf(self.slopes.0, base, bytes(&[0u32]));
                 g.write_buf(self.slopes.0, base + 8, bytes(&[0u32]));
-                self.pending |= Measure::Height(k).bit();
+                self.pending |= Measure::Mu(k).bit();
             }
             if eye {
                 (l.alt.measured, l.alt.sample) = (Some(alt), alt_sample(alt));
@@ -707,7 +703,7 @@ impl Atmosphere {
             g.write_buf(
                 self.lights[k],
                 0,
-                bytes(&[k as f32, flag(height), flag(eye), 0.0]),
+                bytes(&[k as f32, flag(light), flag(eye), 0.0]),
             );
             self.words[LAYOUTS[k]..LAYOUTS[k] + 3].copy_from_slice(&view_layout(alt));
         }
@@ -814,8 +810,8 @@ impl Atmosphere {
         let has = |m: Measure| flying & m.bit() != 0;
         for k in 0..2 {
             let (base, l) = (LIGHT_WORDS * k, &mut self.light_memos[k]);
-            if has(Measure::Height(k)) {
-                (l.height.step, l.height.sample) = (Some(1.0 / word(base)), word(base + 2));
+            if has(Measure::Mu(k)) {
+                (l.mu.step, l.mu.sample) = (Some(1.0 / word(base)), word(base + 2));
             }
             if has(Measure::Alt(k)) {
                 l.alt.step = Some(1.0 / word(base + 1));
@@ -833,8 +829,8 @@ impl Atmosphere {
         self.flying = 0;
     }
 
-    /// Each light's step (`LightMemo::step`), the sun's first. In reach, it is the height over
-    /// which the light's sky moves a display level; out of reach, it is how far the height
+    /// Each light's step (`LightMemo::step`), the sun's first. In reach, it is the mu over
+    /// which the light's sky moves a display level; out of reach, it is how far the mu
     /// moves before the light comes into reach. It is 0, the least, before either has landed.
     pub fn steps(&self) -> [f32; 2] {
         self.light_memos.map(|l| l.step().unwrap_or(0.0))

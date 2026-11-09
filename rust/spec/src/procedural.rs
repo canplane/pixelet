@@ -28,7 +28,7 @@ impl Frame {
 
     /// Leaf cells a ground meter over the tile, for height as for breadth: the scale where its
     /// south-west corner lies, one value a tile (3857.rs `per_m`). A leaf tile's is the
-    /// scale by which the bake makes the ground's heights, and so a height's meters
+    /// scale by which the bake makes the ground's elevations, and so an elevation's meters
     /// (3857.rs `height_u_per_m`).
     pub fn per_m(self) -> f32 {
         per_m(self.corner[1])
