@@ -31,6 +31,10 @@
   the folder you made there.
 - Cargo builds into `<root>/rust/target/session/<id>`, written absolute, `<id>`
   the session's (`$CLAUDE_CODE_SESSION_ID`).
+- A check covers what the change reaches: the crates and packages it changed and
+  what depends on them. `make check` and `make test` whole only where a change
+  reaches every part or the user asks; a check passed is not run again over code
+  that did not change; a long run shows its progress.
 
 ## Instructions
 
