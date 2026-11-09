@@ -374,7 +374,7 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                 continue;
             }
             for (j, decor) in ROWS.iter().enumerate() {
-                if !scatter::any_stands_at(decor, cell_zoom) {
+                if cell_zoom < scatter::first_cell_zoom(decor) {
                     continue;
                 }
                 let [x0, y0, _, _] = generation::brick_rect(cell_zoom, [row[0], row[1]]);
@@ -3138,7 +3138,7 @@ fn hand_frames_answer_as_the_rust() {
         let mut shown = [0u32; ROWS.len()];
         for (k, d) in ROWS.iter().enumerate() {
             for cell_zoom in FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM {
-                if scatter::any_stands_at(d, cell_zoom) {
+                if cell_zoom >= scatter::first_cell_zoom(d) {
                     shown[k] |= 1 << (cell_zoom - FIRST_CELL_ZOOM);
                 }
             }

@@ -461,8 +461,8 @@ fn hand_down(zoom: u32, c: vec3<i32>, enter: vec3<i32>, leave: vec3<i32>, side_i
   for (var i = 0u; i < n && i <= at; i += 1u) {
     let cnt = cells[i];
     rest -= cnt;
-    let weight = min((cnt << 16u) / max(cnt + rest, 1u), 0xffffu);
-    let got = halve(left, cnt * CELL_BLOCKS, rest * CELL_BLOCKS, (weight << 16u) | (rotl(wh, 7u * i + 3u) & 0xffffu));
+    let share = min((cnt << 16u) / max(cnt + rest, 1u), 0xffffu);
+    let got = halve(left, cnt * CELL_BLOCKS, rest * CELL_BLOCKS, weight(share, rotl(wh, 7u * i + 3u)));
     if (i == at) {
       want_blocks = got;
     }
@@ -485,8 +485,7 @@ fn tunnels_down(zoom: u32, c: vec3<i32>, k: u32, tunnels: u32, on: u32, want: u3
   var keep = 0xffu & ~on;
   for (var axis = 0u; axis < 3u && n > 0u; axis += 1u) {
     let upper = select(select(0xf0u, 0xccu, axis == 1u), 0xaau, axis == 0u);
-    let weight = 0x4000u + ((h >> (8u * axis)) & 0xffu) * 0x80u;
-    let w = (weight << 16u) | (rotl(h, 11u * axis + 5u) & 0xffffu);
+    let w = weight(0x4000u + ((h >> (8u * axis)) & 0xffu) * 0x80u, rotl(h, 11u * axis + 5u));
     let lo = halve(n, countOneBits(keep & ~upper) * cap, countOneBits(keep & upper) * cap, w);
     let up = ((want >> axis) & 1u) == 1u;
     n = select(lo, n - lo, up);

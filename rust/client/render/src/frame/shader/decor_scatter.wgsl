@@ -15,7 +15,7 @@ fn share_quarter(n: u32, cap: u32, across: u32, along: u32, q: u32) -> u32 {
 
 /// This is the port of pxl-content `scatter::near_half`.
 fn near_half(w: u32) -> u32 {
-  return 0x70000000u + (w & 0x1fffffffu);
+  return weight(0x7000u + ((w >> 16u) & 0x1fffu), w);
 }
 
 /// `scatter::cnt`: how many of decor `k` the column `b` at `zoom` holds.

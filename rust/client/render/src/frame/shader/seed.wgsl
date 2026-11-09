@@ -36,6 +36,11 @@ fn rotl(v: u32, s: u32) -> u32 {
   return (v << (s & 31u)) | (v >> ((32u - s) & 31u));
 }
 
+/// The port of pxl-content `halve::weight`.
+fn weight(share: u32, draw: u32) -> u32 {
+  return (share << 16u) | (draw & 0xffffu);
+}
+
 /// The port of pxl-content `halve::halve`, with its two caps passed apart.
 fn halve(n: u32, cap_0: u32, cap_1: u32, w: u32) -> u32 {
   let scaled = n * (w >> 16u);

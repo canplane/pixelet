@@ -74,7 +74,7 @@ fn every_root_alike() {
 #[test]
 #[ignore]
 fn picture() {
-    use super::{block_hollow, holds, PIPE};
+    use super::{holds, hollow_from, PIPE};
     let Ok(path) = std::env::var("CAVE_PICTURE") else {
         return;
     };
@@ -89,7 +89,7 @@ fn picture() {
                 }
                 let h = node_seed(super::BLOCKS, (PIPE, [cx, cy, cz]));
                 for b in 0..64u32 {
-                    if block_hollow(h, &p, b) {
+                    if hollow_from(h, &p, [b, 0, 0], 0) == 1 {
                         let (x, y, z) = (
                             cx as usize * 4 + (b & 3) as usize,
                             cy as usize * 4 + (b >> 2 & 3) as usize,

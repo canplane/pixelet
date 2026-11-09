@@ -74,7 +74,7 @@ pub fn holds_cloud(cell: [i32; 2], mean: u32) -> bool {
         n = halve::quarter(
             n,
             cap,
-            [w(0) << 16 | (h >> 16), w(8) << 16 | (h & 0xffff)],
+            [halve::weight(w(0), h >> 16), halve::weight(w(8), h)],
             quarter as u32,
         );
         z += 1;

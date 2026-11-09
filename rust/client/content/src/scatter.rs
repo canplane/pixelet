@@ -18,7 +18,7 @@ use pxl_spec::share::EIGHTHS;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, UNIT_ZOOM};
 use xpute_kit::math::rng::SplitMix32;
 
-use crate::halve;
+use crate::halve::{self, weight};
 use pxl_spec::asset::decor::{Row, ROWS};
 
 /// A cell's candidate: the leaf cell it stands at, at every zoom; its first draw, which is
@@ -31,18 +31,10 @@ pub struct Candidate {
     pub seed: u32,
 }
 
-impl Candidate {
-    pub const NONE: Candidate = Candidate {
-        cell: [0; 2],
-        draw: u32::MAX,
-        seed: 0,
-    };
-}
-
 /// Leaf cell `cell`'s candidate of the `k`-th decor, with its own draws, and whether the cell
 /// holds one (`cnt`).
 pub fn candidate_at(k: usize, cell: [i32; 2]) -> (Candidate, bool) {
-    let mut draws = SplitMix32::new(node_seed(SEEDS[k], (LEAF_CELL_ZOOM, cell)));
+    let mut draws = SplitMix32::new(node_seed(ROWS[k].seed, (LEAF_CELL_ZOOM, cell)));
     (
         Candidate {
             cell,
@@ -53,27 +45,6 @@ pub fn candidate_at(k: usize, cell: [i32; 2]) -> (Candidate, bool) {
     )
 }
 
-/// The words of each decor that the hashes read, its seed and its chance, kept in a small
-/// table of their own so that a GPU lane reading one by a decor's place copies no row of the
-/// catalog.
-const SEEDS: [u32; ROWS.len()] = {
-    let mut t = [0; ROWS.len()];
-    let mut k = 0;
-    while k < ROWS.len() {
-        t[k] = ROWS[k].seed;
-        k += 1;
-    }
-    t
-};
-const CHANCES: [u32; ROWS.len()] = {
-    let mut t = [0; ROWS.len()];
-    let mut k = 0;
-    while k < ROWS.len() {
-        t[k] = ROWS[k].chance;
-        k += 1;
-    }
-    t
-};
 /// The tags of a column's count and of its split among its four, beside a
 /// decor's seed (`node_seed`).
 pub const CNT: u32 = 0xc047_dec0;
@@ -85,14 +56,14 @@ pub const SPLIT: u32 = 0x5b17_dec0;
 /// is then halved across and along, exactly, by weights its hash draws (`near_half`), with
 /// none past what its leaf cells hold. Coarser than the root, it is none. Every word is read by value.
 pub fn cnt(k: usize, zoom: Zoom, b: [i32; 2]) -> u32 {
-    cnt_of([SEEDS[k], CHANCES[k], ROOTS[k]], zoom, b)
+    cnt_of([ROWS[k].seed, ROWS[k].chance, ROOTS[k]], zoom, b)
 }
 
 /// A hash's weight held within a sixteenth of a half, its low bits still the draw that rounds
 /// (`halve`). Weights over the whole range would heap a brick's decor in a few cells and leave
 /// the rest bare.
 const fn near_half(w: u32) -> u32 {
-    0x7000_0000 + (w & 0x1fff_ffff)
+    weight(0x7000 + (w >> 16 & 0x1fff), w)
 }
 
 /// The mean a column at `root` holds, in 16.16 fixed point: the chance's top half for each
@@ -234,14 +205,16 @@ pub const fn coarsest_stand(decor: &Row, variant: u32) -> Zoom {
     cell_zoom
 }
 
-/// The coarsest clip level zoom any variant of `decor` stands at
-/// (`any_stands_at`).
+/// The coarsest clip level zoom any variant of `decor` stands at (`coarsest_stand`): it stands
+/// at this zoom and every finer one.
 pub const fn first_cell_zoom(decor: &Row) -> Zoom {
-    let mut cell_zoom = LEAF_CELL_ZOOM;
-    while cell_zoom > 0 && any_stands_at(decor, cell_zoom - 1) {
-        cell_zoom -= 1;
+    let (mut first, mut v) = (LEAF_CELL_ZOOM, 0);
+    while v < decor.variants {
+        let z = coarsest_stand(decor, v);
+        first = if z < first { z } else { first };
+        v += 1;
     }
-    cell_zoom
+    first
 }
 
 /// The zoom a decor's counts start at: that of a brick at the coarsest clip level it stands
@@ -284,7 +257,7 @@ const _: () = {
             shift < u32::BITS,
             "a decor's root column's leaf cells, a shift, fit a u32 (`cnt`)"
         );
-        let mean = ((CHANCES[k] >> 16) as u64) << shift;
+        let mean = ((ROWS[k].chance >> 16) as u64) << shift;
         assert!(
             mean + 0xffff <= u32::MAX as u64,
             "a decor's mean a root column, in 16.16, fits a u32 (`cnt`)"
@@ -292,18 +265,6 @@ const _: () = {
         k += 1;
     }
 };
-
-/// Whether any variant of `decor` stands at `cell_zoom` (`stands_at`).
-pub const fn any_stands_at(decor: &Row, cell_zoom: Zoom) -> bool {
-    let mut v = 0;
-    while v < decor.variants {
-        if stands_at(decor, v, cell_zoom) {
-            return true;
-        }
-        v += 1;
-    }
-    false
-}
 
 #[cfg(test)]
 #[path = "scatter.test.rs"]
