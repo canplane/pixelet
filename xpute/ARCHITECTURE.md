@@ -147,15 +147,14 @@ the page's main thread and reaches the worker through a message port, so a turn
 never holds up the UI's events.
 
 On a device, a process holds one core, and the core runs on a thread of its own,
-because its global state is sound on one thread only. That thread runs while it
-has work and sleeps until it is kicked. The runtime runs on the UI's JavaScript
-thread. It writes the submission ring and kicks the core's thread, and when a
-turn ends, the core's thread tells the runtime, which reads the completion ring
-dry. The core's thread chooses no moment: the same scheduler times its turns,
-kicking it with the display frame the policy gives for the wake the core asked
-for. The thread waits for that frame itself, so how late the JavaScript thread
-is does not move the turn. Four
-rules hold that loop together: no kick is lost, every wait has someone to answer
+because its global state is sound on one thread only. That thread sleeps until
+a display frame finds a turn wanted, and the platform's display link tells it of
+each frame, so how late the JavaScript thread is does not move the turn. It paces
+the turns itself, by the same policy a page's scheduler follows, with the numbers
+the core gives it. The runtime runs on the UI's JavaScript thread. It writes the
+submission ring and asks for a turn, and when a turn ends, the core's thread tells
+the runtime, which reads the completion ring dry. Four
+rules hold that loop together: no turn asked for is lost, every wait has someone to answer
 it, a turn begins only when the completion ring has room for everything one turn
 may post, and every turn takes the submission ring first.
 

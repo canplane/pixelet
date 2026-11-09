@@ -296,6 +296,7 @@ fn serve(vcpu: Vcpu) {
                 RUNTIME_CV.notify_all();
             }
             Next::Turn { deadline_ms, frame } => {
+                let framed = frame.is_some();
                 if let Some(grant) = frame {
                     xpute_core::sched::frame::give(frame_of(grant));
                 }
@@ -306,7 +307,9 @@ fn serve(vcpu: Vcpu) {
                 g.wake_at = (wake > 0.0).then(|| Instant::now() + duration_of(wake));
                 g.wake_ms = wake;
                 g.want |= wake == 0.0;
-                g.pacing.asked_next(wake == 0.0);
+                if framed {
+                    g.pacing.asked_next(wake == 0.0);
+                }
                 RUNTIME_CV.notify_all();
                 let tell = g.ringer_cnt == 0 && !core::mem::replace(&mut g.told, true);
                 drop(g);

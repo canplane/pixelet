@@ -358,16 +358,17 @@ export class Doorbell implements PacketRoom {
     } finally {
       this._reading = false;
     }
-    // A task of the core may be waiting for the room this read gave back,
-    // without having asked for a turn (xpute-core sched/edge.rs
-    // `runtime_turn`), so a turn is asked for it.
-    if (read > 0) this.on_wake?.(0);
     const later = this._later;
     this._later = [];
     for (const [tag, cmd, flags, result, encode] of later) {
       const errnum = this._submit(tag, cmd, encode, flags, result);
       if (errnum !== Errno.OK) throw new InvariantError(errnum);
     }
+    // A task of the core may be waiting for the room this read gave back,
+    // without having asked for a turn (xpute-core sched/edge.rs
+    // `runtime_turn`), so a turn is asked for it, once all it must take is on
+    // the ring: a core on its own thread may begin that turn at once.
+    if (read > 0 || later.length > 0) this.on_wake?.(0);
   }
 
   /** Never called from a listener, which could not wait for room, since
