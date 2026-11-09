@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # Compares two builds by assembling a vendor's measurement: runs it on the base
 # and the change by turns, keeping each run under tmp/perf/, and fails where
-# the change's median runs past the base's: its load's longest frame by more
-# than `LOAD_SLACK_MS`, its GPU's or its tick's p50 or p95 by more than
+# the change's median runs past the base's: its longest frame by more
+# than `LONGEST_SLACK_MS`, its GPU's or its tick's p50 or p95 by more than
 # `P50_SHARE` or `P95_SHARE`, its tick also by more than `TICK_SLACK_MS`. A dev
 # build is never compared with a release build.
 #
@@ -19,8 +19,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RUNS = os.path.join(os.path.dirname(os.path.dirname(HERE)), "tmp", "perf")
-# How much longer the change's first load may block the page than the base's.
-LOAD_SLACK_MS = 3000
+# How much longer the change's longest frame may be than the base's.
+LONGEST_SLACK_MS = 3000
 # How much more the change's GPU time may take than the base's.
 P50_SHARE = 1.15
 P95_SHARE = 1.3
@@ -63,10 +63,10 @@ def main():
         sys.exit(f"not compared: the runs' builds are {sorted(builds)}")
     print(f"{vendor}, {builds.pop()} build; runs in {os.path.join(RUNS, vendor)}")
     fails = []
-    load = [median([r["load"] for r in runs[who]]) for who in ("base", "change")]
-    print(f"first load, longest frame ms: {load[0]:.0f} -> {load[1]:.0f}")
-    if not load[1] <= load[0] + LOAD_SLACK_MS:
-        fails.append(f"the first load blocks {load[1]:.0f} ms")
+    longest = [median([r["longest"] for r in runs[who]]) for who in ("base", "change")]
+    print(f"longest frame ms: {longest[0]:.0f} -> {longest[1]:.0f}")
+    if not longest[1] <= longest[0] + LONGEST_SLACK_MS:
+        fails.append(f"the longest frame blocks {longest[1]:.0f} ms")
     b, c = (
         [median([r["gpu"][k] for r in runs[who]]) for k in range(4)]
         for who in ("base", "change")

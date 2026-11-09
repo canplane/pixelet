@@ -32,7 +32,7 @@ Make the program faster while keeping every condition the design met.
   installs over what is there, which keeps it; `android-chrome` clears the
   site's data and turns the cache off in its own tab.
 - Every run writes the same three files into `<dir>`, and all three are read:
-  `values.json` (`build`, `load`, `gpu`, `tick`) for the comparison, `report.txt`
+  `values.json` (`build`, `longest`, `gpu`, `tick`) for the comparison, `report.txt`
   for where the time went, `trace.json` at ui.perfetto.dev for a frame on the
   timeline.
 - What the app's three files cannot see is a device's system trace, taken beside
