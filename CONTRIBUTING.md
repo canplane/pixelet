@@ -110,14 +110,9 @@ adds `check-build`, the bundle a deploy builds; xpute's own `check-xpute` and
 encoder or runtime also takes `make -C xpute test-gpu`, which needs a GPU and
 Chrome. `make fmt` formats.
 
-`make check` also lints Android, which needs the NDK's compiler at the app's
-minSdk:
-
-```bash
-ndk=~/Library/Android/sdk/ndk/<version>/toolchains/llvm/prebuilt/darwin-x86_64/bin
-export CC_aarch64_linux_android=$ndk/aarch64-linux-android29-clang \
-  AR_aarch64_linux_android=$ndk/llvm-ar
-```
+`make check` also lints Android, with the newest NDK installed
+(`script/env.sh`); `CC_aarch64_linux_android` and `AR_aarch64_linux_android` name
+another.
 
 Code generated from the JSON under `spec/` is never edited by hand: change the
 JSON and run `make spec`.
