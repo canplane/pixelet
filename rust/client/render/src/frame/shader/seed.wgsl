@@ -41,13 +41,13 @@ fn weight(share: u32, draw: u32) -> u32 {
   return (share << 16u) | (draw & 0xffffu);
 }
 
-/// The port of pxl-content `halve::halve`, with its two caps passed apart.
-fn halve(n: u32, cap_0: u32, cap_1: u32, w: u32) -> u32 {
+/// The port of pxl-content `halve::halve`.
+fn halve(n: u32, caps: vec2<u32>, w: u32) -> u32 {
   let scaled = n * (w >> 16u);
   let part = (scaled >> 16u) + u32((scaled & 0xffffu) > (w & 0xffffu));
-  let least = select(0u, n - cap_1, n > cap_1);
+  let least = select(0u, n - caps.y, n > caps.y);
   if (part < least) {
     return least;
   }
-  return min(part, cap_0);
+  return min(part, caps.x);
 }

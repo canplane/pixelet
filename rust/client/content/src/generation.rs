@@ -22,7 +22,7 @@ use pxl_spec::value;
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::param::scatter::ALIGN_NEIGHBOR_RADIUS;
-use crate::scatter::{brick_cap, stands_at, variant_of, Candidate};
+use crate::scatter::{brick_cap, draw_variant, stands_at, Candidate};
 use pxl_spec::asset::decor::{Decor, Orientation, Row, ROWS};
 
 /// The lanes of a decor pass's workgroup.
@@ -473,7 +473,7 @@ fn asks<Q: DecorQuery>(
 ) -> (Prop, bool) {
     let s = LEAF_CELL_ZOOM - zoom;
     let mut draws = SplitMix32::new(seed);
-    prop.variant = variant_of(decor, &mut draws);
+    prop.variant = draw_variant(decor, &mut draws);
     let [x0, y0, _] = prop.at;
     let foot = [x0 >> s, y0 >> s];
     if decor.orient == Orientation::along_transport {
@@ -576,7 +576,7 @@ pub const PLACED_TAG: u32 = 0x91ac_ed5e;
 /// placement gets.
 pub fn placed_pose(decor: &Row, corner: [i32; 3]) -> (u32, u32) {
     let mut draws = SplitMix32::new(node_seed(PLACED_TAG, (UNIT_ZOOM, corner)));
-    let variant = variant_of(decor, &mut draws);
+    let variant = draw_variant(decor, &mut draws);
     (variant, draws.next_u32() >> (u32::BITS - TURN_BITS))
 }
 

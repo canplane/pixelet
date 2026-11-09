@@ -133,18 +133,18 @@ pub(crate) const fn mul_hi(a: u32, b: u32) -> u32 {
 
 /// The variant a candidate draws, its seed's first draw: uniform over the
 /// decor's.
-pub(crate) fn variant_of(decor: &Row, draws: &mut SplitMix32) -> u32 {
+pub(crate) fn draw_variant(decor: &Row, draws: &mut SplitMix32) -> u32 {
     mul_hi(draws.next_u32(), decor.variants)
 }
 
-/// The variant candidate `c` draws (`variant_of`), the first of its seed's.
-pub fn variant(decor: &Row, c: &Candidate) -> u32 {
-    variant_of(decor, &mut SplitMix32::new(c.seed))
+/// The variant a candidate of `seed` draws (`draw_variant`), the first of its draws.
+pub fn variant_of(decor: &Row, seed: u32) -> u32 {
+    draw_variant(decor, &mut SplitMix32::new(seed))
 }
 
 /// The brick a candidate claims, which holds its box however it turns.
-pub fn side_of(decor: &Row, c: &Candidate) -> i32 {
-    let [x, y, _] = decor.sizes[variant(decor, c) as usize];
+pub fn side_of(decor: &Row, seed: u32) -> i32 {
+    let [x, y, _] = decor.sizes[variant_of(decor, seed) as usize];
     x.max(y) as i32
 }
 
@@ -154,14 +154,14 @@ pub fn side_of(decor: &Row, c: &Candidate) -> i32 {
 /// meeting `c`'s may start, as wide as the decor's widest.
 pub fn retained(k: usize, c: &Candidate) -> bool {
     let decor = &ROWS[k];
-    let (side, extent) = (side_of(decor, c), decor.widest() as i32 - 1);
+    let (side, extent) = (side_of(decor, c.seed), decor.widest() as i32 - 1);
     let mut y = c.cell[1] - extent;
     while y < c.cell[1] + side {
         let mut x = c.cell[0] - extent;
         while x < c.cell[0] + side {
             if x != c.cell[0] || y != c.cell[1] {
                 let (d, here) = candidate_at(k, [x, y]);
-                if here && before(&d, c) && meet(&d, side_of(decor, &d), c, side) {
+                if here && before(&d, c) && meet(&d, side_of(decor, d.seed), c, side) {
                     return false;
                 }
             }

@@ -37,7 +37,7 @@ fn standing_ones_never_meet() {
         for y in 0..96 {
             for x in 0..96 {
                 if let Some(c) = scatter_at(k, [x + 4000, y - 900]) {
-                    standing.push((c, side_of(decor, &c)));
+                    standing.push((c, side_of(decor, c.seed)));
                 }
             }
         }

@@ -6,10 +6,10 @@
 // alone.
 
 /// This is the port of pxl-content `halve::quarter`.
-fn quarter(n: u32, cap: u32, across: u32, along: u32, q: u32) -> u32 {
-  let a = halve(n, 2u * cap, 2u * cap, across);
+fn quarter(n: u32, cap: u32, w: vec2<u32>, q: u32) -> u32 {
+  let a = halve(n, vec2<u32>(2u * cap), w.x);
   let half = select(n - a, a, (q & 1u) == 0u);
-  let b = halve(half, cap, cap, along);
+  let b = halve(half, vec2<u32>(cap), w.y);
   return select(half - b, b, (q & 2u) == 0u);
 }
 
@@ -29,28 +29,34 @@ fn scatter_cnt_of(seed: u32, chance: u32, root: u32, zoom: u32, b: vec2<i32>) ->
     return 0u;
   }
   let mean = (chance >> 16u) << (2u * (LEAF_CELL_ZOOM - root));
-  let first = quad_seed(seed ^ CNT_TAG, root, b >> vec2<u32>(zoom - root));
+  let first = quad_seed(seed ^ SCATTER_CNT_TAG, root, b >> vec2<u32>(zoom - root));
   var n = (mean + (first & 0xffffu)) >> 16u;
   var z = root;
   while (z < zoom && n > 0u) {
-    let h = quad_seed(seed ^ SPLIT_TAG, z, b >> vec2<u32>(zoom - z));
+    let h = quad_seed(seed ^ SCATTER_SPLIT_TAG, z, b >> vec2<u32>(zoom - z));
     let c = vec2<u32>(b >> vec2<u32>(zoom - z - 1u)) & vec2<u32>(1u);
     let cap = min(1u << (2u * (LEAF_CELL_ZOOM - z - 1u)), 0xffffu);
     let along = select(draw(h, 1u), draw(h, 2u), c.x == 1u);
-    n = quarter(n, cap, near_half(draw(h, 0u)), near_half(along), c.x | (c.y << 1u));
+    n = quarter(n, cap, vec2<u32>(near_half(draw(h, 0u)), near_half(along)), c.x | (c.y << 1u));
     z += 1u;
   }
   return n;
 }
 
-/// The first draw of leaf cell `leaf`'s candidate of decor `k`, and the seed of its own draws
-/// after it, as `scatter::candidate_at` draws them (`Candidate`).
-fn candidate_draws(k: u32, leaf: vec2<i32>) -> vec2<u32> {
-  let h = quad_seed(row_word(k, ROW_SEED), LEAF_CELL_ZOOM, leaf);
-  return vec2<u32>(draw(h, 0u), draw(h, 1u));
+/// The port of pxl-content `scatter::Candidate`.
+struct Candidate {
+  cell: vec2<i32>,
+  draw: u32,
+  seed: u32,
 }
 
-/// This is the port of pxl-content `scatter::variant`.
+/// Leaf cell `cell`'s candidate of decor `k`, as `scatter::candidate_at` draws it.
+fn candidate_at(k: u32, cell: vec2<i32>) -> Candidate {
+  let h = quad_seed(row_word(k, ROW_SEED), LEAF_CELL_ZOOM, cell);
+  return Candidate(cell, draw(h, 0u), draw(h, 1u));
+}
+
+/// This is the port of pxl-content `scatter::variant_of`.
 fn variant_of(k: u32, seed: u32) -> u32 {
   return mul_hi(draw(seed, 0u), row_word(k, ROW_VARIANTS));
 }
@@ -71,17 +77,17 @@ fn stands_at(k: u32, variant: u32, cell_zoom: u32) -> bool {
 
 /// `scatter::retained`: whether no candidate before it (`before`) claims a brick that meets its
 /// own (`meet`). It asks every cell at which a brick meeting its own may start.
-fn retained(k: u32, leaf: vec2<i32>, first: u32, seed: u32) -> bool {
-  let side = side_of(k, seed);
+fn retained(k: u32, c: Candidate) -> bool {
+  let side = side_of(k, c.seed);
   let extent = decor_widest(k) - 1i;
-  for (var y = leaf.y - extent; y < leaf.y + side; y += 1i) {
-    for (var x = leaf.x - extent; x < leaf.x + side; x += 1i) {
-      if ((x != leaf.x || y != leaf.y) && scatter_cnt(k, LEAF_CELL_ZOOM, vec2<i32>(x, y)) > 0u) {
-        let d = candidate_draws(k, vec2<i32>(x, y));
-        let before = d.x < first || (d.x == first && (y < leaf.y || (y == leaf.y && x < leaf.x)));
+  for (var y = c.cell.y - extent; y < c.cell.y + side; y += 1i) {
+    for (var x = c.cell.x - extent; x < c.cell.x + side; x += 1i) {
+      if ((x != c.cell.x || y != c.cell.y) && scatter_cnt(k, LEAF_CELL_ZOOM, vec2<i32>(x, y)) > 0u) {
+        let d = candidate_at(k, vec2<i32>(x, y));
+        let before = d.draw < c.draw || (d.draw == c.draw && (y < c.cell.y || (y == c.cell.y && x < c.cell.x)));
         if (before) {
-          let other = side_of(k, d.y);
-          if (x < leaf.x + side && leaf.x < x + other && y < leaf.y + side && leaf.y < y + other) {
+          let other = side_of(k, d.seed);
+          if (x < c.cell.x + side && c.cell.x < x + other && y < c.cell.y + side && c.cell.y < y + other) {
             return false;
           }
         }

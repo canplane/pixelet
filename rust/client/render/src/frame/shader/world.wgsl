@@ -406,10 +406,10 @@ fn manhattan(a: vec3<i32>, b: vec3<i32>) -> u32 {
 
 /// Child `want`'s part of the node's piece, and the children the piece's walk passes
 /// (pxl-content `cave::hand_down`).
-fn hand_down(zoom: u32, c: vec3<i32>, enter: vec3<i32>, leave: vec3<i32>, side_in: u32, side_out: u32, blocks: u32, want: u32) -> Piece {
+fn hand_down(zoom: u32, c: vec3<i32>, p: Piece, want: u32) -> Piece {
   let mid = (c << vec3<u32>(CAVE_PIPE - zoom)) + (1i << (CAVE_PIPE - zoom)) / 2i;
-  let u = u32(enter.x >= mid.x) | (u32(enter.y >= mid.y) << 1u) | (u32(enter.z >= mid.z) << 2u);
-  let v = u32(leave.x >= mid.x) | (u32(leave.y >= mid.y) << 1u) | (u32(leave.z >= mid.z) << 2u);
+  let u = u32(p.enter.x >= mid.x) | (u32(p.enter.y >= mid.y) << 1u) | (u32(p.enter.z >= mid.z) << 2u);
+  let v = u32(p.leave.x >= mid.x) | (u32(p.leave.y >= mid.y) << 1u) | (u32(p.leave.z >= mid.z) << 2u);
   let wh = node_seed(CAVE_WALK_TAG, zoom, c);
   let d = u ^ v;
   let n = select(countOneBits(d) + 1u, 4u, is_aside(d, wh));
@@ -420,15 +420,15 @@ fn hand_down(zoom: u32, c: vec3<i32>, enter: vec3<i32>, leave: vec3<i32>, side_i
   var want_out = 6u;
   var at = 8u;
   var cells = vec4<u32>(0u);
-  var cur = enter;
-  var side = side_in;
+  var cur = p.enter;
+  var side = p.side_in;
   for (var i = 0u; i < n; i += 1u) {
     let k = walk_at(u, v, wh, i);
     on |= 1u << k;
     let part_enter = cur;
     let part_in = side;
-    var part_leave = leave;
-    var part_out = side_out;
+    var part_leave = p.leave;
+    var part_out = p.side_out;
     if (i + 1u < n) {
       let half = (1i << (CAVE_PIPE - zoom)) / 2i;
       let co = (c << vec3<u32>(CAVE_PIPE - zoom)) + half * vec3<i32>(i32(k & 1u), i32((k >> 1u) & 1u), i32(k >> 2u));
@@ -437,7 +437,7 @@ fn hand_down(zoom: u32, c: vec3<i32>, enter: vec3<i32>, leave: vec3<i32>, side_i
       let up = ((next >> axis) & 1u) == 1u;
       let h = seed_mix32(node_seed(CAVE_CROSS_TAG, zoom, c), i);
       let rand = vec3<i32>(vec3<u32>(h, h >> 10u, h >> 20u) & vec3<u32>(0x3ffu));
-      let was = (cur + leave) / 2i + (rand * (half / 2i + 1i)) / 1024i - half / 4i;
+      let was = (cur + p.leave) / 2i + (rand * (half / 2i + 1i)) / 1024i - half / 4i;
       part_leave = clamp(was, co, co + half - 1i);
       part_leave[axis] = select(co[axis], co[axis] + half - 1i, up);
       part_out = 2u * axis + u32(up);
@@ -454,15 +454,15 @@ fn hand_down(zoom: u32, c: vec3<i32>, enter: vec3<i32>, leave: vec3<i32>, side_i
       at = i;
     }
   }
-  // The piece's blocks are handed along the walk, each part taking its share of what is left.
+  // The piece's p.blocks are handed along the walk, each part taking its share of what is left.
   var want_blocks = 0u;
   var rest = cells.x + cells.y + cells.z + cells.w;
-  var left = blocks;
+  var left = p.blocks;
   for (var i = 0u; i < n && i <= at; i += 1u) {
     let cnt = cells[i];
     rest -= cnt;
     let share = min((cnt << 16u) / max(cnt + rest, 1u), 0xffffu);
-    let got = halve(left, cnt * CELL_BLOCKS, rest * CELL_BLOCKS, weight(share, rotl(wh, 7u * i + 3u)));
+    let got = halve(left, vec2<u32>(cnt * CELL_BLOCKS, rest * CELL_BLOCKS), weight(share, rotl(wh, 7u * i + 3u)));
     if (i == at) {
       want_blocks = got;
     }
@@ -486,7 +486,7 @@ fn tunnels_down(zoom: u32, c: vec3<i32>, k: u32, tunnels: u32, on: u32, want: u3
   for (var axis = 0u; axis < 3u && n > 0u; axis += 1u) {
     let upper = select(select(0xf0u, 0xccu, axis == 1u), 0xaau, axis == 0u);
     let w = weight(0x4000u + ((h >> (8u * axis)) & 0xffu) * 0x80u, rotl(h, 11u * axis + 5u));
-    let lo = halve(n, countOneBits(keep & ~upper) * cap, countOneBits(keep & upper) * cap, w);
+    let lo = halve(n, vec2<u32>(countOneBits(keep & ~upper), countOneBits(keep & upper)) * cap, w);
     let up = ((want >> axis) & 1u) == 1u;
     n = select(lo, n - lo, up);
     keep &= select(~upper, upper, up);
@@ -538,7 +538,7 @@ fn cave_holds(zoom: u32, c: vec3<i32>) -> CaveNode {
     let i = child_idx(c >> vec3<u32>(zoom - (z + 1u)));
     var on = 0u;
     if (blocks != 0u) {
-      let p = hand_down(z, here, enter, leave, side_in, side_out, blocks, i);
+      let p = hand_down(z, here, Piece(enter, leave, side_in, side_out, blocks, 0u), i);
       enter = p.enter;
       leave = p.leave;
       side_in = p.side_in;

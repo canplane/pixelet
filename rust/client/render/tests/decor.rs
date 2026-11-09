@@ -393,7 +393,11 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                         let leaf = [corner[0] + (n % side) as i32, corner[1] + (n / side) as i32];
                         let (c, here) = scatter::candidate_at(j, leaf);
                         if here
-                            && scatter::stands_at(decor, scatter::variant(decor, &c), cell_zoom)
+                            && scatter::stands_at(
+                                decor,
+                                scatter::variant_of(decor, c.seed),
+                                cell_zoom,
+                            )
                             && scatter::retained(j, &c)
                         {
                             leaves.push(leaf);
@@ -422,8 +426,11 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                     if row[2] != 0 && [row[0], row[1]] == q {
                         for (j, decor) in ROWS.iter().enumerate() {
                             let c = scatter::candidate_at(j, leaf).0;
-                            let stands =
-                                scatter::stands_at(decor, scatter::variant(decor, &c), cell_zoom);
+                            let stands = scatter::stands_at(
+                                decor,
+                                scatter::variant_of(decor, c.seed),
+                                cell_zoom,
+                            );
                             if let Some(p) = pairs.get_mut(&(s, j as u32)) {
                                 if stands
                                     && (p.leaves.len() as u32) < generation::cap(decor)
@@ -1477,7 +1484,7 @@ fn thin_leaves(j: usize, cell_zoom: Zoom, q: [i32; 2]) -> Vec<[i32; 2]> {
             let leaf = [corner[0] + (n % side) as i32, corner[1] + (n / side) as i32];
             let (c, here) = scatter::candidate_at(j, leaf);
             if here
-                && scatter::stands_at(decor, scatter::variant(decor, &c), cell_zoom)
+                && scatter::stands_at(decor, scatter::variant_of(decor, c.seed), cell_zoom)
                 && scatter::retained(j, &c)
             {
                 leaves.push(leaf);
@@ -3480,7 +3487,7 @@ fn hand_halve_as_the_rust() {
 fn halve_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x < arrayLength(&asked)) {
     let a = asked[id.x];
-    told[id.x] = halve(a.x, a.y, a.z, a.w);
+    told[id.x] = halve(a.x, a.yz, a.w);
   }
 }
 ",
