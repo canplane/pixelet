@@ -56,7 +56,6 @@ use pxl_spec::space::coord::zoom::{Zoom, MIN_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::space::layer::octant::Octant;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use super::world::World;
@@ -81,6 +80,17 @@ pub(super) struct At {
     pub(super) inheritance: world::Inheritance,
 }
 
+impl At {
+    /// `node` as the base holds it, for a descent's root: what the world is
+    /// without what is placed.
+    pub(super) const fn base(node: Node<3>) -> At {
+        At {
+            node,
+            inheritance: world::Inheritance::BASE,
+        }
+    }
+}
+
 impl World<'_> {
     /// The object store's revision, which every write moves
     /// (domain/layer/object/store.rs). Equal revisions mean the same things
@@ -101,11 +111,7 @@ impl World<'_> {
     pub(super) fn start(&self, node: Node<3>) -> At {
         At {
             node,
-            inheritance: if self.unplaced {
-                world::Inheritance::UNPLACED
-            } else {
-                world::Inheritance::of(&self.object.columns(), node)
-            },
+            inheritance: world::Inheritance::of(&self.object.columns(), node),
         }
     }
 
@@ -122,14 +128,6 @@ impl World<'_> {
             } else {
                 VOID
             }
-        })
-    }
-
-    /// A preview's entry in the form pxl-engine `object` takes.
-    fn cut(&self, entry: Option<Octant>) -> Cut {
-        entry.map_or(Cut::NONE, |e| Cut {
-            zoom: e.zoom(),
-            at: e.at(),
         })
     }
 
@@ -163,10 +161,7 @@ impl World<'_> {
         zooms: [Zoom; 2],
         path: &mut Path,
     ) -> Answer<In<[u32; 2]>> {
-        let (lanes, cuts) = (
-            self.object.columns(),
-            [self.cut(self.carve), self.cut(self.hide)],
-        );
+        let lanes = self.object.columns();
         let mut reading = GroundRead::new(self, path);
         let i = world::node(
             &mut reading,
@@ -176,7 +171,7 @@ impl World<'_> {
             &mut at.inheritance,
             at.node,
             zooms,
-            cuts,
+            [Cut::NONE; 2],
         );
         reading.answer(i.kind != Kind::Lacks, || i)
     }

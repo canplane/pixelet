@@ -56,7 +56,7 @@ impl Tally {
 }
 
 /// The world as decor's generation walks it, with nothing placed handed down from the root
-/// (`Inheritance::UNPLACED`). It is the test's reference.
+/// (`Inheritance::BASE`). It is the test's reference.
 struct Ground<'w> {
     w: World<'w>,
     cuts: [Cut; 2],
@@ -66,7 +66,7 @@ impl Query for Ground<'_> {
     type At = Inheritance;
 
     fn root(&mut self, _: [i32; 3]) -> Inheritance {
-        Inheritance::UNPLACED
+        Inheritance::BASE
     }
 
     fn child(&mut self, at: &Inheritance, zoom: Zoom, node: [i32; 3]) -> Inheritance {

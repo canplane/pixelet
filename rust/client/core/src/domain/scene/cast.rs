@@ -45,10 +45,9 @@ pub fn shards() -> &'static [[i32; 4]] {
 }
 
 /// The eye's words for the GPU's cast (`lens::gpu_cast`), with the pointer's
-/// preview `edit` added so that the GPU's world answers as the CPU's does
-/// while previewing (domain/query/world.rs `previewing`). The preview's carve
-/// is cut to air and its hidden object is left out; each is written as X, Y,
-/// Z and the zoom (pxl-engine `eye`). `steps` is the `ray_steps` setting,
+/// preview `edit` added: the GPU's world cuts the preview's carve to air and
+/// leaves its hidden object out; each is written as X, Y, Z and the zoom
+/// (pxl-engine `eye`). `steps` is the `ray_steps` setting,
 /// written as the ray steps view's word (`eye::STEPS`). None without a screen.
 pub fn eye(o: &Observation, edit: &RenderEdit, steps: bool) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];

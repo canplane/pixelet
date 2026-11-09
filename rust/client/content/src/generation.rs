@@ -355,8 +355,8 @@ pub mod drawn {
     }
 }
 
-/// What generating decor asks of the world, as either side holds it: of the world unplaced
-/// (`world::Inheritance::UNPLACED`), the ground's alone, its columns' surfaces and the assets
+/// What generating decor asks of the world, as either side holds it: of the base
+/// (`world::Inheritance::BASE`), the ground's alone, its columns' surfaces and the assets
 /// around them; of the world as edited, whether an edit holds a cell and what is placed in a
 /// box; and the catalog's rows, where it reads them.
 pub trait DecorQuery {
@@ -365,7 +365,7 @@ pub trait DecorQuery {
     /// The catalog's rows (pxl-spec `decor::ROWS`), as this side holds them: a GPU
     /// reads them from a buffer.
     fn rows(&self) -> &[Row];
-    /// The column surface down column `g` at `cell_zoom` of the world unplaced, with what is
+    /// The column surface down column `g` at `cell_zoom` of the base, with what is
     /// placed left out: the query's support (`support::column_surface`) as this side asks it, and
     /// its top (`cast::top`); false where nothing fills there or the world lacks the column.
     fn column_surface(
@@ -377,7 +377,7 @@ pub trait DecorQuery {
     /// `g`: where a candidate there is asked whether it stands and which way it faces
     /// (`placement`), the same whatever clip level asks.
     fn finest(&mut self, cell_zoom: Zoom, g: [i32; 2]) -> Zoom;
-    /// What is in the cell `c` of `zoom`: the unplaced world's answer near the column surface `f`
+    /// What is in the cell `c` of `zoom`: the base's answer near the column surface `f`
     /// (`support::asset`), void or the ground's value; or, where `edited`, the edited world's
     /// answer down the cell's own line, which tells an edit there, something placed or air
     /// (`answer::is_placed`). One ask serves both, so a GPU's walk to the cell is written once.
@@ -409,7 +409,7 @@ impl Prop {
 }
 
 /// Where candidate `c` of `decor` stands at `cell_zoom`. It stands on its column's surface in
-/// the world unplaced, the ground's alone, so no edit moves it or takes the ground from under
+/// the base, the ground's alone, so no edit moves it or takes the ground from under
 /// it, and it faces as the cells beside it vote (`asks`). Then, where `boxed`, it says whether
 /// the candidate generates there: every cell of its box is void and every cell under its base
 /// is a palette entry it generates on, as the ground holds them; no edit lies in its box, air
@@ -542,7 +542,7 @@ fn asks<Q: DecorQuery>(
     // The box, laid out once the vote is in: its cells, from the one under
     // its base up, a column at a time.
     let (mut lo, mut n) = ([0; 3], [0; 3]);
-    // Whether the box's cell asked last, void in the world unplaced, is asked again of the world
+    // Whether the box's cell asked last, void in the base, is asked again of the world
     // as edited, so that each cell's two asks go through the one ask.
     let mut edited = false;
     let mut ask = 0;
@@ -587,7 +587,7 @@ fn asks<Q: DecorQuery>(
         };
         let v = q.asset(about, zoom, b, edited);
         if edited {
-            // Void unplaced: it holds where no edit does.
+            // Void in the base: it holds where no edit does.
             if answer::is_placed(v) {
                 return (prop, false);
             }

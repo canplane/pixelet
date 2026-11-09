@@ -802,7 +802,7 @@ fn device_loss_drops_bounds() {
 
 /// What the ground generates stands where it was generated, whatever is put
 /// over it or in place of the cell under it, air or a cube, since it
-/// generates on the world unplaced (pxl-content `generation::placement`).
+/// generates on the base (pxl-content `generation::placement`).
 #[test]
 fn generated_decor_stays() {
     use crate::domain::layer::object::store::AIR;
@@ -883,7 +883,7 @@ fn generated_decor_edit_removes() {
 /// at the leaves' clip level. Where the frame generates none, as with the
 /// decor setting off (domain/view/lens.rs `decor_zooms`), the pointer's ray
 /// goes through where a decor would stand and reaches the ground under it
-/// (`World::striking_decor`).
+/// (`World::first_seen`).
 #[test]
 fn generated_decor_struck_where_generated() {
     use pxl_engine::clipmap::FIRST_CELL_ZOOM;
@@ -920,8 +920,7 @@ fn generated_decor_struck_where_generated() {
     };
     let met = |zooms: [u32; DECORS.len()]| {
         world
-            .striking_decor(&zooms)
-            .first_hit(&ray, finest())
+            .first_seen(&ray, finest(), &zooms)
             .exact()
             .flatten()
             .expect("the ground under it")

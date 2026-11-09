@@ -42,7 +42,7 @@ use crate::domain::control::camera::state::Intent;
 use crate::domain::control::param::{CLIMB_PASSES, COLLISION_STEP_SAMPLES};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST, NEAREST_DIST};
 use crate::domain::query::change::Memo;
-use crate::domain::query::{finest, Hit, HitKind, Ray, World};
+use crate::domain::query::{finest, Hit, Ray, World};
 use crate::domain::setting::store::{settings, OrbitObstacleMode};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::param::NEAR;
@@ -290,7 +290,7 @@ fn line_clear(a: V3, b: V3, access: &Ground<'_>) -> bool {
         .first_hit(&ray, finest())
         .val()
         .flatten()
-        .is_none_or(|hit| matches!(hit.kind, HitKind::Decor(_)))
+        .is_none()
 }
 
 /// The first thing met on the ray from the pivot of `at` toward its eye,

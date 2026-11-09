@@ -62,7 +62,7 @@ impl Inheritance {
     /// `of` with nothing placed, for any node: the node as the world holds it with nothing
     /// placed, the ground's alone, on which a content's decor generates. Nothing placed stays
     /// nothing down a descent (`object::child`).
-    pub const UNPLACED: Inheritance = Inheritance {
+    pub const BASE: Inheritance = Inheritance {
         object: object::NodeSlot::NOTHING,
         shard: Shard::UNKNOWN,
         ground: Lookup::NONE,

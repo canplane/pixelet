@@ -168,7 +168,7 @@ pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
 
 /// The first thing the ray from the eye at `origin` along `dir` strikes
 /// within `PICK_DIST_U`, in the root frame. Decor is struck as the frame
-/// draws it (`World::striking_decor`). The world asked is the stored one
+/// draws it (`World::first_seen`). The world asked is the stored one
 /// (`World::now`), not the one the eraser's preview draws, because what is
 /// erased is what is stored.
 pub fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
@@ -180,8 +180,7 @@ pub fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
     // Only an exact answer counts. A coarser tile's answer is a summary, not
     // what is held.
     World::now()
-        .striking_decor(&decor_zooms(settings().decor))
-        .first_hit(&ray, finest())
+        .first_seen(&ray, finest(), &decor_zooms(settings().decor))
         .exact()
         .flatten()
 }

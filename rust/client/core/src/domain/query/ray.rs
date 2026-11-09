@@ -18,6 +18,7 @@ use pxl_engine::cast::{self, Detail, End, Keep, Over, Query, Spacing, Trace, DEP
 use pxl_engine::object;
 use pxl_engine::support;
 use pxl_engine::support::{ColumnSurface, Line};
+use pxl_spec::asset::decor::DECORS;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::camera::grid;
@@ -120,6 +121,8 @@ pub struct Hit {
 /// answered.
 pub(super) struct Walker<'w, 'a> {
     world: &'w World<'a>,
+    /// Whether the descent reads the base alone.
+    base: bool,
     lack: Option<Quadrant>,
     answered: bool,
     /// The decor struck along the ray, when the walk strikes decor at all.
@@ -169,7 +172,10 @@ impl<'a> Query for Walker<'_, 'a> {
     type At = At;
 
     fn root(&mut self, node: [i32; 3]) -> At {
-        self.world.start((0, node))
+        match self.base {
+            true => At::base((0, node)),
+            false => self.world.start((0, node)),
+        }
     }
 
     /// The child is the one named by its place in the tree's cut
@@ -265,19 +271,31 @@ fn decor_hit(ray: &Ray, t: f64, axis: usize, i: Instance) -> Hit {
 
 impl<'a> World<'a> {
     /// The first filled cell `ray` meets within its `t_max`, at the zoom
-    /// `detail` asks where it meets it, or the decor struck nearer. What the
-    /// ray starts inside is not met, so an eye under the ground is not
-    /// stopped where it stands. A cell met coarser than it is held comes with
-    /// the tile lacked. A cell not held at all is lacked too, and past it the
-    /// ray tells nothing. Decor, which fills no cell, is struck at the leaf
-    /// cells the ray passes.
+    /// `detail` asks where it meets it. What the ray starts inside is not met,
+    /// so an eye under the ground is not stopped where it stands. A cell met
+    /// coarser than it is held comes with the tile lacked. A cell not held at
+    /// all is lacked too, and past it the ray tells nothing.
     pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
+        let mut path = Path::default();
+        self.along(ray, detail, Until::Opaque, None, &mut path, &mut None)
+            .0
+    }
+
+    /// The first thing a viewer sees along `ray`: the first cell, or the
+    /// decor struck nearer, as the frame draws it (`DecorRay::new`). Decor
+    /// is struck at the leaf cells the ray passes.
+    pub fn first_seen(
+        &self,
+        ray: &Ray,
+        detail: Detail,
+        zooms: &[u32; DECORS.len()],
+    ) -> Answer<Option<Hit>> {
         let mut path = Path::default();
         let (met, decor_ray) = self.along(
             ray,
             detail,
             Until::Opaque,
-            self.decor_ray(ray),
+            DecorRay::new(ray, zooms),
             &mut path,
             &mut None,
         );
@@ -312,6 +330,7 @@ impl<'a> World<'a> {
     ) -> (Answer<Option<Hit>>, Option<DecorRay>) {
         let mut walker = Walker {
             world: self,
+            base: false,
             lack: None,
             answered: false,
             decor_ray: decor_ray.map(|s| (ray, s)),
@@ -351,16 +370,34 @@ impl<'a> World<'a> {
     }
 
     /// The column surface down column `g` at `cell_zoom` (pxl-engine
-    /// `support::column_surface`). The first value is the top of the cell
+    /// `support::column_surface`). It is the top of the cell
     /// met, as drawn, with what the world lacked on the way, or None where
-    /// the column meets nothing opaque. The second is the column surface
-    /// itself, off whose line the cells around it are asked (`asset_about`).
+    /// the column meets nothing opaque.
     pub(super) fn column_surface(
         &self,
         cell_zoom: Zoom,
         g: [i32; 2],
+    ) -> Answer<Option<(i32, f32)>> {
+        self.surface_of_column(self.walker(), cell_zoom, g).0
+    }
+
+    /// `column_surface` of the base, what the world is without what is
+    /// placed, with the column surface itself, off whose line the cells
+    /// around it are asked (`base_about`). Decor is generated on it.
+    pub(super) fn base_surface(
+        &self,
+        cell_zoom: Zoom,
+        g: [i32; 2],
     ) -> (Answer<Option<(i32, f32)>>, ColumnSurface<At>) {
-        let mut walker = self.walker();
+        self.surface_of_column(self.base_walker(), cell_zoom, g)
+    }
+
+    fn surface_of_column(
+        &self,
+        mut walker: Walker<'_, 'a>,
+        cell_zoom: Zoom,
+        g: [i32; 2],
+    ) -> (Answer<Option<(i32, f32)>>, ColumnSurface<At>) {
         let side = units(cell_zoom);
         let middle = g.map(|v| (f64::from(v) + 0.5) * side);
         self.read(middle, middle, cell_zoom);
@@ -375,12 +412,12 @@ impl<'a> World<'a> {
         (answer, f)
     }
 
-    /// What is in the cell `c` at `zoom`, asked off the line `l` (pxl-engine
-    /// `support::asset`). The descent starts from the deepest node on the
-    /// line that holds the cell, never again from the top. Where the world
-    /// lacks the cell, the answer is nothing with the missing tile.
-    pub(super) fn asset_about(&self, l: &Line<At>, zoom: Zoom, c: [i32; 3]) -> Answer<u32> {
-        let mut walker = self.walker();
+    /// What the base has in the cell `c` at `zoom`, asked off the line `l`
+    /// (pxl-engine `support::asset`). The descent starts from the deepest node
+    /// on the line that holds the cell, never again from the top. Where the
+    /// world lacks the cell, the answer is nothing with the missing tile.
+    pub(super) fn base_about(&self, l: &Line<At>, zoom: Zoom, c: [i32; 3]) -> Answer<u32> {
+        let mut walker = self.base_walker();
         let val = support::asset(&mut walker, l, zoom, c);
         match walker.lack {
             None => Answer::Exact(val),
@@ -388,9 +425,17 @@ impl<'a> World<'a> {
         }
     }
 
+    fn base_walker(&self) -> Walker<'_, 'a> {
+        Walker {
+            base: true,
+            ..self.walker()
+        }
+    }
+
     fn walker(&self) -> Walker<'_, 'a> {
         Walker {
             world: self,
+            base: false,
             lack: None,
             answered: false,
             decor_ray: None,

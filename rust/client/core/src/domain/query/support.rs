@@ -19,11 +19,13 @@ use pxl_spec::space::coord::q3::{self, FRAC_W, Q3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::{BOUNDS, ROUND};
 use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_ZOOM};
+use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use xpute_kit::math::scalar::wrap;
 
 use pxl_spec::space::coord::aabb::Aabb;
 
+use super::node::At;
 use super::ray::{at_zoom, finest, Descent, Ray, Until};
 use super::world::World;
 use crate::domain::layer::tile_cache::Path;
@@ -248,7 +250,7 @@ impl<'w, 'a> SplitCell<'w, 'a> {
                 middle(k / self.across, self.corner[1]),
             ]
             .map(|v| libm::floor(v / unit) as i32);
-            let (answer, _) = self.world.column_surface(cell_zoom, g);
+            let answer = self.world.column_surface(cell_zoom, g);
             if let Some(l) = answer.lack() {
                 self.lack.get_or_insert(l);
             }
@@ -284,16 +286,27 @@ impl<'w, 'a> SplitCell<'w, 'a> {
     }
 }
 
+/// The leaf cell at `at`.
+fn leaf_cell(at: &Q3) -> Node<3> {
+    let side = units(GROUND.leaf_cell_zoom());
+    let p = [i64::from(at[0]), i64::from(at[1]), i64::from(at[2])].map(q3::to_real);
+    (
+        GROUND.leaf_cell_zoom(),
+        p.map(|v| (v / side).floor() as i32),
+    )
+}
+
 impl<'a> World<'a> {
     /// What is in the leaf cell at `at`, as the cast draws it (pxl-engine
     /// `world::node`), or void where nothing is.
     pub fn asset_of(&self, at: &Q3) -> Answer<u32> {
-        let side = units(GROUND.leaf_cell_zoom());
-        let p = [i64::from(at[0]), i64::from(at[1]), i64::from(at[2])].map(q3::to_real);
-        self.asset((
-            GROUND.leaf_cell_zoom(),
-            p.map(|v| (v / side).floor() as i32),
-        ))
+        self.asset(leaf_cell(at))
+    }
+
+    /// What the base has in the leaf cell at `at`: what the world is there
+    /// without what is placed, or void where nothing is.
+    pub fn base_at(&self, at: &Q3) -> Answer<u32> {
+        self.asset_at(&mut At::base(leaf_cell(at)), &mut Path::default())
     }
 
     /// Where the point `at` stands: on the surface where its height is not
