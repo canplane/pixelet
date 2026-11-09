@@ -266,7 +266,7 @@ pub fn decode(pkt: &[u8]) -> Result<DivisionTile, MarshalError> {
     let v = read_tile(pkt)?;
     Ok(DivisionTile {
         cells: v.cells.to_vec().into(),
-        ..tile_of(&v)?
+        ..tile_of(&v)
     })
 }
 
@@ -277,7 +277,7 @@ pub fn decode_into(pkt: &[u8], room: &'static mut [u32]) -> Result<DivisionTile,
     if room.len() != CELLS {
         return Err(malformed());
     }
-    let tile = tile_of(&v)?;
+    let tile = tile_of(&v);
     room.copy_from_slice(v.cells);
     Ok(DivisionTile {
         cells: Cow::Borrowed(room),
@@ -286,22 +286,23 @@ pub fn decode_into(pkt: &[u8], room: &'static mut [u32]) -> Result<DivisionTile,
 }
 
 /// The divisions and the occupancy, the cells left empty.
-fn tile_of(v: &Table<'_>) -> Result<DivisionTile, MarshalError> {
-    let divisions = (0..v.kinds.len())
-        .map(|k| {
-            let i = k as u32;
-            Some(Division {
-                id: v.ids.get(i)?,
-                kind: Subtype::of(v.kinds[k])?,
-                name: v.names.get(i)?,
+fn tile_of(v: &Table<'_>) -> DivisionTile {
+    let kinds = v.kinds.iter().filter_map(|&k| Subtype::of(k));
+    let divisions =
+        v.ids
+            .iter()
+            .zip(kinds)
+            .zip(v.names.iter())
+            .enumerate()
+            .map(|(k, ((id, kind), name))| Division {
+                id,
+                kind,
+                name,
                 parent: v.parents[k],
                 prominence: v.prominences[k],
                 area: v.areas[k] != 0,
-            })
-        })
-        .collect::<Option<Vec<_>>>()
-        .ok_or_else(malformed)?;
-    Ok(DivisionTile::of(Cow::Borrowed(&[]), divisions, v.occupancy))
+            });
+    DivisionTile::of(Cow::Borrowed(&[]), divisions, v.occupancy)
 }
 
 /// One zoom coarser, at `zoom`: each cell the majority of the 2×2 under it,

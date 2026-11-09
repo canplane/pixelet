@@ -319,18 +319,17 @@ pub fn decode(pkt: &[u8]) -> Result<PlaceTile, MarshalError> {
     {
         return Err(malformed());
     }
-    let places = (0..n)
-        .map(|i| {
-            Some(Place {
-                name: names.get(i as u32)?,
-                kind: kinds[i],
-                id: ids.get(i as u32)?,
-                first_zoom: Zoom::from(first_zooms[i]),
-                off: [u32::from(offs[2 * i]), u32::from(offs[2 * i + 1])],
-            })
-        })
-        .collect::<Option<Vec<_>>>()
-        .ok_or_else(malformed)?;
+    let places = names
+        .iter()
+        .zip(ids.iter())
+        .enumerate()
+        .map(|(i, (name, id))| Place {
+            name,
+            kind: kinds[i],
+            id,
+            first_zoom: Zoom::from(first_zooms[i]),
+            off: [u32::from(offs[2 * i]), u32::from(offs[2 * i + 1])],
+        });
     let tile = PlaceTile::of(places, occupancy);
     validate(&tile)?;
     Ok(tile)
