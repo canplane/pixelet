@@ -145,7 +145,7 @@ def cargo(target: str) -> None:
 fmt_rust = [arg for name in sorted(touched & members) for arg in ("-p", name)]
 # ts/client imports xpute's TypeScript, and every app and the Worker the client.
 # What `make check` and `make test` leave to a deploy (the bundle, xpute's own
-# checks and tests, the GPU's) is not selected here either.
+# checks and tests) is not selected here either.
 ts = under("ts/") or under("xpute/ts/")
 
 if ts:
@@ -168,6 +168,11 @@ task("check-rules")
 if under("ts/client/") or under("ts/tool/shader/") or under("xpute/ts/") or under("rust/client/render/src/frame/shader/"):
     task("test-ts")
 cargo("test-rust")
+# The GPU's tests hold the shaders written by hand to the Rust they translate,
+# so a change to either side is checked against the other.
+translated = [d for name, d in crate_dirs if name in ("pxl-engine", "pxl-content")]
+if any(map(under, [*translated, "rust/client/render/src/frame/shader/", "rust/client/render/tests/"])):
+    task("test-gpu")
 
 print(f"diff-check: {len(changed)} changed file(s); crates {', '.join(sorted(touched)) or 'none'}")
 for label, argv, cwd in runs:
