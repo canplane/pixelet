@@ -8,10 +8,9 @@
 //! (layer/floor.rs), by a destination's line, or as an ancestor of a
 //! missing tile. A tile asked for several reasons keeps the strongest
 //! (`Priority`). The pixels drawn do not enter the asks, since the camera grid
-//! is an angle. Where a tile marks a child as no tile (`Base::occupancy`), the
+//! is an angle. Where a tile marks a child as no tile (`Tile::occupancy`), the
 //! child's ground is the tile's own and the child is never asked for.
 
-use pxl_spec::bake::tile::earth::EARTH_DIST;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_core::global::Global;
@@ -45,17 +44,11 @@ use crate::sys::io::source;
 use crate::sys::sched::edge;
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::demand::tiles_within;
-use pxl_spec::space::layer::lattice::GROUND;
+use pxl_spec::space::layer::lattice::{demand_dist, GROUND};
 
 /// A layer the view asks tiles of. Its demand is held beside its tile cache.
 pub trait ViewLayer: Base {
     fn demand() -> &'static mut Demand<Self>;
-
-    /// How far from the eye the layer draws anything. Nothing of the layer is
-    /// asked for past it.
-    fn demand_dist() -> f64 {
-        f64::INFINITY
-    }
 }
 
 static TERRAIN: Global<Demand<TerrainTile>> = Global::new();
@@ -85,14 +78,10 @@ impl ViewLayer for EarthTile {
     fn demand() -> &'static mut Demand<EarthTile> {
         EARTH.get(Demand::default)
     }
-
-    fn demand_dist() -> f64 {
-        EARTH_DIST
-    }
 }
 
 /// What the fetch side needs of a layer, found by the stream its tiles come
-/// in (`Base::STREAM`).
+/// in (`Stream::of_layer`).
 pub struct Layer {
     pub stream: Stream,
     /// The most tiles the layer asks for at once: a base layer's tile cache
@@ -105,7 +94,7 @@ pub struct Layer {
 
 const fn layer<L: ViewLayer>() -> Layer {
     Layer {
-        stream: L::STREAM,
+        stream: Stream::of_layer(L::LAYER),
         slot_cnt: TileCache::<L>::SLOTS,
         on_arrival: on_arrived::<L>,
     }
@@ -392,7 +381,7 @@ impl<L: ViewLayer> Demand<L> {
                 <= if matches!(L::ASK_SCOPE, AskScope::Floor) {
                     0
                 } else {
-                    TileCache::<L>::DST_TILES + L::PIN_CAP
+                    TileCache::<L>::ZOOMS + L::PIN_CAP
                 },
             ENOTRECOVERABLE,
             named
@@ -413,21 +402,19 @@ impl<L: ViewLayer> Demand<L> {
         // and never asked for. Every ask is judged against the tile cache as
         // the asks left it, before any absence is written, so which tiles
         // are absent does not depend on the order they are taken in.
-        if let Some(layer) = L::STREAM.bake() {
-            let (mut absent_tiles, mut path) =
-                (core::mem::take(&mut self.absent_tiles), Path::default());
-            absent_tiles.clear();
-            absent_tiles.extend(
-                demand
-                    .iter()
-                    .copied()
-                    .filter(|&p| unanswered(p, &mut path) && !source::serves(layer, p)),
-            );
-            for &p in &absent_tiles {
-                self.absent(p);
-            }
-            self.absent_tiles = absent_tiles;
+        let (mut absent_tiles, mut path) =
+            (core::mem::take(&mut self.absent_tiles), Path::default());
+        absent_tiles.clear();
+        absent_tiles.extend(
+            demand
+                .iter()
+                .copied()
+                .filter(|&p| unanswered(p, &mut path) && !source::serves(L::LAYER, p)),
+        );
+        for &p in &absent_tiles {
+            self.absent(p);
         }
+        self.absent_tiles = absent_tiles;
         // The wants are listed by id, the order a stream's wants are declared
         // in (sys/io/request.rs `declare`). A tile's id is its key, so each
         // line read steps on from its neighbor's. They are listed after every
@@ -494,15 +481,15 @@ impl<L: ViewLayer> Demand<L> {
     /// since at the first fix the camera waits for that ground. `pinned`
     /// holds the tiles that a reader taking no coarser answer declares
     /// (`Base::PIN_CAP`), and they are asked for as the destination is. A
-    /// layer with a top of its own is observed out to its own reach
-    /// (`ViewLayer::demand_dist`).
+    /// layer with a top of its own (`Base::MIN_ZOOM`) is observed out to that
+    /// top's reach.
     pub fn step(&mut self, dst: Option<Quadrant>, pinned: &[Quadrant]) {
         let Some(min_zoom) = L::min_zoom() else {
             return;
         };
         let o = observation().map(|o| match L::MIN_ZOOM {
             Some(_) => Observation {
-                demand_dist: L::demand_dist(),
+                demand_dist: demand_dist(L::LATTICE, min_zoom),
                 ..o
             },
             None => o,
@@ -511,7 +498,7 @@ impl<L: ViewLayer> Demand<L> {
             return;
         }
         self.turn(o, dst, pinned, min_zoom);
-        declare(L::STREAM, &self.wants);
+        declare(Stream::of_layer(L::LAYER), &self.wants);
     }
 
     /// The body of `step` for the observation `o` and the layer's `top`. It
@@ -578,7 +565,7 @@ impl<L: ViewLayer> Demand<L> {
         }
         self.wants.clear();
         L::tile_cache().ask(&self.asks);
-        declare(L::STREAM, &[]);
+        declare(Stream::of_layer(L::LAYER), &[]);
         self.last = None;
         self.idle_revision = Some(L::tile_cache().revision());
     }

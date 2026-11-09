@@ -6,14 +6,12 @@
 //! draws them (domain/scene/marker/place.rs).
 
 use pxl_spec::bake::tile::place::{self, PlaceTile, PLACE_LATTICE};
-use pxl_spec::space::layer::lattice::Lattice;
 
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::Base;
 use crate::sys::io::body::Packet;
-use crate::sys::io::demand::{PhaseList, Stream};
+use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;
-use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::global::Global;
@@ -21,12 +19,6 @@ use xpute_core::global::Global;
 static PLACE: Global<TileCache<PlaceTile>> = Global::new();
 
 impl Base for PlaceTile {
-    const STREAM: Stream = Stream::place;
-    const LATTICE: Lattice = PLACE_LATTICE;
-
-    fn occupancy(&self) -> Occupancy {
-        self.occupancy
-    }
     fn tile_cache() -> &'static mut TileCache<PlaceTile> {
         PLACE.get(TileCache::default)
     }

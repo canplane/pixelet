@@ -27,9 +27,6 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 use crate::domain::layer::floor;
 use crate::domain::layer::{AskScope, Base};
 
-/// The number of observers whose demand the cache is sized for: the eye alone.
-const OBSERVERS: u32 = 1;
-
 /// A held tile. An empty tile takes no slot, since its body holds all of it.
 /// A tile marked `refetch` is fetched once more and stays readable until the
 /// new copy arrives.
@@ -103,16 +100,12 @@ impl<L: Base> TileCache<L> {
     /// coarsest zoom it is read at.
     pub const ZOOMS: u32 = (L::LEAF - L::COARSEST + 1);
 
-    /// The tiles on a destination's line: one at each zoom from its leaf to
-    /// the top.
-    pub const DST_TILES: u32 = Self::ZOOMS;
-
     /// The most tiles the demand at one zoom names, as the layer's lattice
     /// bounds it.
     pub const ZOOM_DEMAND_TILES: u32 = demand_tiles(L::LATTICE);
 
     const DEMAND_TILES: u32 = if matches!(L::ASK_SCOPE, AskScope::View) {
-        OBSERVERS * Self::ZOOM_DEMAND_TILES * Self::ZOOMS
+        Self::ZOOM_DEMAND_TILES * Self::ZOOMS
     } else {
         0
     };
@@ -120,18 +113,19 @@ impl<L: Base> TileCache<L> {
     /// The most tiles held hard on the lines over the misses: up to one zoom's
     /// demand at every zoom but the finest.
     const ANCESTOR_TILES: u32 = if matches!(L::ASK_SCOPE, AskScope::View) {
-        OBSERVERS * Self::ZOOM_DEMAND_TILES * (Self::ZOOMS - 1)
+        Self::ZOOM_DEMAND_TILES * (Self::ZOOMS - 1)
     } else {
         0
     };
 
     /// The tiles held hard apart from the view's demand: the floor
-    /// (layer/floor.rs), a destination's line, and the tiles a reader
-    /// that cannot take a coarser answer declares (`Base::PIN_CAP`).
+    /// (layer/floor.rs), a destination's line, one at each zoom from its leaf
+    /// to the top, and the tiles a reader that cannot take a coarser answer
+    /// declares (`Base::PIN_CAP`).
     const PINNED_TILES: u32 = match L::ASK_SCOPE {
         AskScope::Floor => floor::tiles(L::LATTICE),
-        AskScope::Line => Self::DST_TILES + L::PIN_CAP,
-        AskScope::View => floor::tiles(L::LATTICE) + Self::DST_TILES + L::PIN_CAP,
+        AskScope::Line => Self::ZOOMS + L::PIN_CAP,
+        AskScope::View => floor::tiles(L::LATTICE) + Self::ZOOMS + L::PIN_CAP,
     };
 
     /// The most tiles held hard at once.

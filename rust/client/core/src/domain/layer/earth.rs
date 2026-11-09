@@ -1,25 +1,23 @@
 // pxl-core/domain/layer/earth.rs
 
 //! The Earth's picture as a layer of the pyramid. Only its top zoom is
-//! baked, and only the floor's tiles around the eye are held, so the layer
-//! needs no demand, zoom or schedule of its own. A tile holds its packet
-//! until the GPU has its texels, and then the device generation that does,
-//! and nothing in the core after a frame takes them. Wherever no tile is
-//! held, the global picture answers.
+//! baked, and only the floor's tiles around the eye are held (`AskScope::Floor`,
+//! `MIN_ZOOM`). A tile holds its packet until the GPU has its texels, and
+//! then the device generation that does, and nothing in the core after a
+//! frame takes them. Wherever no tile is held, the global picture answers.
 
+use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
+use pxl_spec::bake::tile::{Occupancy, Tile};
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILES};
-
-use pxl_spec::bake::tile::Occupancy;
-use pxl_spec::space::layer::lattice::{Lattice, GROUND};
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::global::Global;
 
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::body::Packet;
-use crate::sys::io::demand::{PhaseList, Stream};
+use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;
 use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use pxl_spec::space::coord::zoom::Zoom;
@@ -37,16 +35,18 @@ pub enum EarthTile {
 
 static EARTH: Global<TileCache<EarthTile>> = Global::new();
 
-impl Base for EarthTile {
-    const STREAM: Stream = Stream::earth;
-    const LATTICE: Lattice = GROUND;
-    const ASK_SCOPE: AskScope = AskScope::Floor;
-    const MIN_ZOOM: Option<Zoom> = Some(EARTH_ZOOM);
+impl Tile for EarthTile {
+    const LAYER: BaseLayer = BaseLayer::earth;
 
     /// Only the top zoom is baked, so no child has a tile.
     fn occupancy(&self) -> Occupancy {
         Occupancy::ZERO
     }
+}
+
+impl Base for EarthTile {
+    const ASK_SCOPE: AskScope = AskScope::Floor;
+    const MIN_ZOOM: Option<Zoom> = Some(EARTH_ZOOM);
 
     fn tile_cache() -> &'static mut TileCache<EarthTile> {
         EARTH.get(TileCache::default)

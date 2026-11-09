@@ -9,8 +9,9 @@ use xpute_kit::wire::xtp::MAX_PKT_SZ;
 use std::borrow::Cow;
 use std::collections::TryReserveError;
 
-use super::{occupancy_of, Occupancy};
+use super::{occupancy_of, Occupancy, Tile};
 use crate::bake::malformed;
+use crate::bake::publication::BaseLayer;
 use crate::bake::separation::{self, Separation};
 use crate::procedural::Frame;
 use crate::space::coord::zoom::Zoom;
@@ -282,6 +283,14 @@ pub fn drawn(tile: Quadrant, terrain: TerrainTile) -> TerrainTile {
 // Made on first use: a constant array of zeros would ship in the module's data.
 static VOID_CELLS: std::sync::LazyLock<Vec<GroundId>> =
     std::sync::LazyLock::new(|| vec![sentinel::void; GROUND_COLUMN]);
+
+impl Tile for TerrainTile {
+    const LAYER: BaseLayer = BaseLayer::terrain;
+
+    fn occupancy(&self) -> Occupancy {
+        self.occupancy
+    }
+}
 
 /// Where the source has nothing at all, as a client holds it: void
 /// cells at sea level, which give no surface, so nothing is drawn while

@@ -6,10 +6,11 @@
 use super::*;
 use crate::domain::layer::Base;
 use crate::sys::serial;
-use pxl_spec::bake::tile::Occupancy;
+use pxl_spec::bake::publication::BaseLayer;
+use pxl_spec::bake::tile::{Occupancy, Tile};
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::zoom::units;
-use pxl_spec::space::layer::lattice::{demand_dist, Lattice};
+use pxl_spec::space::layer::lattice::demand_dist;
 
 /// A layer the view asks of as it asks of the ground, with a tile cache of
 /// its own. Its stream is one no shard serves alone, so no ask is answered
@@ -20,14 +21,16 @@ struct Probe;
 static PROBE_TILES: Global<TileCache<Probe>> = Global::new();
 static PROBE: Global<Demand<Probe>> = Global::new();
 
-impl Base for Probe {
-    const STREAM: Stream = Stream::earth;
-    const LATTICE: Lattice = GROUND;
+impl Tile for Probe {
+    const LAYER: BaseLayer = BaseLayer::earth;
+    const LEAF: Zoom = LEAF_ZOOM;
 
     fn occupancy(&self) -> Occupancy {
         Occupancy::ZERO
     }
+}
 
+impl Base for Probe {
     fn tile_cache() -> &'static mut TileCache<Probe> {
         PROBE_TILES.get(TileCache::default)
     }

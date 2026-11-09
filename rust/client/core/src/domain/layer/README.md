@@ -34,7 +34,9 @@ texels.
 
 ## The base
 
-The base layers are baked, and a base tile never changes within a version.
+The base layers are baked, and a base tile never changes within a version. A
+kind's lattice, zooms and packet bound are one row in pxl-spec (`bake/tile.rs`
+`BaseLayer::row`, `Tile`), which the client and the bake both read.
 
 **Terrain** (`terrain/`) is the ground. A cell is one byte, a palette index into
 OpenStreetMap Carto's palette (`spec/spec/asset/cube.json`), beside an

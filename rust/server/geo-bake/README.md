@@ -77,11 +77,11 @@ and run again. A change of a provider's release, of the code or of the coverage
 means a purge: the set is deleted and every shard baked again.
 
 A terrain tile is refused when it is encoded if its packet is longer than a
-client takes one, 2 MiB (`max_pkt_bytes`); the leaf or fold step that made it
-fails and nothing is committed. A tile's ways stay lines the client draws, so a
-change in how they are drawn takes no rebake, and what the client holds of them
-is its own to refuse: the bake knows nothing of the client's octree, pool or
-memory.
+client takes one, 2 MiB (pxl-spec `bake/tile/terrain.rs` `MAX_PKT_BYTES`); the
+leaf or fold step that made it fails and nothing is committed. A tile's ways
+stay lines the client draws, so a change in how they are drawn takes no rebake,
+and what the client holds of them is its own to refuse: the bake knows nothing
+of the client's octree, pool or memory.
 
 ## Publishing a version
 

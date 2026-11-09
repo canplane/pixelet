@@ -8,7 +8,6 @@
 use core::cmp::Ordering;
 
 use pxl_spec::bake::publication::BaseLayer;
-use pxl_spec::bake::tile;
 
 use crate::sys::io::demand_spec;
 pub use crate::sys::io::demand_spec::StreamName as Stream;
@@ -111,13 +110,27 @@ impl Stream {
     }
 
     /// The most bytes one of the stream's bodies takes: the longest packet of
-    /// its kind (pxl-spec `bake::tile::max_pkt_bytes`). A load and a shard's
-    /// objects have none, because only the heap bounds them.
+    /// its kind (pxl-spec `BaseLayer::row`). A load and a shard's objects
+    /// have none, because only the heap bounds them.
     pub const fn max_body(self) -> Option<u32> {
         match self.bake() {
-            Some(layer) => Some(tile::max_pkt_bytes(layer) as u32),
+            Some(layer) => Some(layer.row().max_pkt_bytes as u32),
             None => None,
         }
+    }
+
+    /// The stream `layer`'s tiles come in, the one row that names it.
+    pub const fn of_layer(layer: BaseLayer) -> Stream {
+        let mut s = 0;
+        while s < Stream::ALL.len() {
+            if let Source::Bake(l) = Stream::ALL[s].row().source {
+                if l as u32 == layer as u32 {
+                    return Stream::ALL[s];
+                }
+            }
+            s += 1;
+        }
+        panic!("a base layer is one stream's")
     }
 }
 

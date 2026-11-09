@@ -9,10 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use pxl_spec::bake::publication::BaseLayer;
-use pxl_spec::bake::tile::Occupancy;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM};
-use pxl_spec::space::layer::lattice::{coarsest, Lattice};
+use pxl_spec::bake::tile::Tile;
+use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant};
 
 use crate::util;
@@ -21,21 +19,7 @@ use crate::util::{pack, unpack, write_atomic, Level};
 /// A layer's tile as the pyramid holds it. One fold makes each zoom's tiles
 /// from the next finer one's; a parent reads its four children unless
 /// `sources` says otherwise.
-pub trait Base: Clone + PartialEq + Send + Sync + 'static {
-    /// The kind it is published as, whose `FORMAT` it is written in.
-    const LAYER: BaseLayer;
-
-    /// The zoom its tiles are made at; every coarser one is folded, up to
-    /// `COARSEST`.
-    const LEAF: Zoom = LEAF_ZOOM;
-
-    /// Its tiles' cells, as the client's layer reads them.
-    const LATTICE: Lattice;
-
-    /// The coarsest zoom it is folded to: the coarsest the client reads it
-    /// at (pxl-spec lattice.rs `coarsest`).
-    const COARSEST: Zoom = coarsest(Self::LATTICE);
-
+pub trait Base: Tile + Clone + PartialEq + Send + Sync + 'static {
     /// The tile as it is published at `at`; an error names the tile.
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String>;
 
@@ -47,9 +31,6 @@ pub trait Base: Clone + PartialEq + Send + Sync + 'static {
 
     /// `p` from its sources; None where a required one is not held.
     fn fold_tile<'a>(p: Quadrant, get: impl Fn(Quadrant) -> Option<&'a Self>) -> Option<Self>;
-
-    /// Which of its children are tiles, as the tile says.
-    fn occupancy(&self) -> Occupancy;
 }
 
 /// What a tile the set holds no object for is. The pyramid is correct only
@@ -231,7 +212,7 @@ pub fn fold<L: Base>(
     Ok(())
 }
 
-/// Every tile its parent marks as no tile (`Base::occupancy`), under
+/// Every tile its parent marks as no tile (`Tile::occupancy`), under
 /// `top`: what a reader never asks for.
 pub(crate) fn orphan_tiles<L: Base>(
     set: &TileSet,

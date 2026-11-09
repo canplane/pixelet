@@ -6,7 +6,7 @@
 //! pages, which holds an Earth tile and a terrain tile with the ways it
 //! usually has, cut from a run that the heap gives whole and takes back once
 //! the run's last slot is free. A terrain body longer than a slot, as far as a
-//! packet can be (pxl-spec `bake::tile::max_pkt_bytes`), is a heap block of
+//! packet can be (pxl-spec `BaseLayer::row`), is a heap block of
 //! its own. This is Bonwick's slab allocator for one large object, with
 //! its bookkeeping kept outside the run, and the stream and the body's length
 //! decide whether it takes a slot. A new run is taken only when every run held is full,

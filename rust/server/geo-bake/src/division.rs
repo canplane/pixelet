@@ -16,15 +16,14 @@ use pxl_spec::bake::tile::division::{Division, DivisionTile, DIVISION_LEAF, NONE
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::division::Subtype;
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, u_from_merc};
-use pxl_spec::space::coord::zoom::{units, Zoom};
-use pxl_spec::space::layer::lattice::{Lattice, GROUND, TILE_CELLS};
+use pxl_spec::space::coord::zoom::units;
+use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::coverage::BAKE_READ_DIST;
 use crate::pyramid::Base;
 use crate::terrain::pipeline::ground::render_polygon;
 use crate::wkb::wkb_to_geometries;
-use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile::division;
 
 /// Each area meeting the tile, cut to it, with its division and how deep that is.
@@ -236,12 +235,6 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
 }
 
 impl Base for DivisionTile {
-    const LAYER: BaseLayer = BaseLayer::division;
-
-    const LEAF: Zoom = DIVISION_LEAF;
-
-    const LATTICE: Lattice = GROUND;
-
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {
         division::encode(self).map_err(|e| format!("{}: {e:?}", at.key()))
     }
@@ -253,9 +246,5 @@ impl Base for DivisionTile {
     fn fold_tile<'a>(p: Quadrant, child_of: impl Fn(Quadrant) -> Option<&'a Self>) -> Option<Self> {
         let [a, b, c, d] = p.children().map(child_of);
         Some(division::fold([a?, b?, c?, d?], p.zoom))
-    }
-
-    fn occupancy(&self) -> Occupancy {
-        self.occupancy
     }
 }

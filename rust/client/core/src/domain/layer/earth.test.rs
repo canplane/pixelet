@@ -3,6 +3,7 @@
 use super::*;
 use crate::sys;
 use crate::sys::io::body;
+use crate::sys::io::demand::Stream;
 use fnv::FnvHashMap;
 use pxl_spec::bake::tile::earth::EARTH_BYTES;
 

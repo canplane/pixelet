@@ -37,11 +37,11 @@ REPO = Path(__file__).resolve().parent.parent
 # Where a file made for one upload lies until the upload ends (AGENTS.md).
 TMP = REPO / "tmp"
 BUCKET = "pixelet-bucket"
-KINDS = ["terrain", "place", "division", "earth"]
 SOURCE = "source"
 # Beside a copy's tiles, what it is: never uploaded.
 MANIFEST = "manifest.json"
 PUBLISHED = json.loads((REPO / "spec/spec/bake/publication.json").read_text())
+KINDS = [k for k in PUBLISHED["FORMAT"] if not k.startswith("$")]
 
 
 class Refused(Exception):
