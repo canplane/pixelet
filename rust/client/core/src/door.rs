@@ -23,7 +23,7 @@ mod touch;
 use crate::domain::control::sensor;
 use crate::domain::scene::character::surface::character_surface_close;
 use crate::domain::view::demand;
-use crate::door::cmd::{Sensor, SensorStart, SensorStop, UiSnapshot};
+use crate::door::cmd::{Major, Sensor, SensorStart, SensorStop, UiSnapshot};
 use crate::perf::record::{perf_record, perf_record_turn};
 use crate::perf::spec::Wake;
 use crate::perf::task::TaskRecord;
@@ -55,6 +55,7 @@ use xpute_core::mem::off_of_slice;
 use xpute_core::mem::section::PAGE_BYTES;
 use xpute_core::sched::task;
 use xpute_core::stop;
+use xpute_gpu::submission::{self as gpu_submission, Submission as GpuSubmission};
 #[cfg(not(target_arch = "wasm32"))]
 use xpute_runtime::native;
 
@@ -148,7 +149,6 @@ fn boot(b: BootInfo) {
     {
         text_device::install(b.call);
         native::named_by(cmd::mem_of);
-        touch::install();
     }
     if !machine::booted() {
         machine::boot(&MACHINE);
@@ -176,7 +176,7 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
     runtime::rise();
     edge::world_edge().rise(deadline_ms);
     // A device loss, which the runtime wrote into the device's block, is read
-    // before the commands, because a `GpuReady` among them asks for that
+    // before the commands, because a GPU_READY among them asks for that
     // block anew.
     if api::take_device_lost() {
         renderer::on_gpu_lost();
@@ -191,18 +191,23 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
         Submission::Life(l) => life::apply(s, l),
         Submission::Turn(t) => apply::turn::turn(t),
         Submission::Frame(f) => apply::turn::grant(f),
-        Submission::Surface(c) => apply::on_surface(c),
         Submission::Changed(c) => apply::fs::changed(c),
-        Submission::GpuReady => {
-            gpu_ready();
-            Ok(Some(0))
-        }
         Submission::Opened(opened) => {
             file::on_opened(&opened);
             Ok(Some(0))
         }
         Submission::Closed(_) => Ok(Some(0)),
-        Submission::Program(number, pkt) => cmd::ui::apply(s, number, &pkt),
+        Submission::Program(number, pkt) => {
+            match gpu_submission::decode(Major::GPU as u32, number, pkt) {
+                Ok(Some(GpuSubmission::Ready)) => {
+                    gpu_ready();
+                    Ok(Some(0))
+                }
+                Ok(Some(GpuSubmission::Surface(c))) => apply::on_surface(c),
+                Ok(None) => cmd::ui::apply(s, number, &pkt),
+                Err(e) => Err(e),
+            }
+        }
         _ => Ok(None),
     });
     let drained = now();

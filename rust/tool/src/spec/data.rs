@@ -1,13 +1,13 @@
 // pxl-tool/spec/data.rs
 
-//! pixelet's data specs, written by xpute's generator (xpute-tool
+//! pixelet's data specs, written by xpute's generator (xpute-gen
 //! spec/data.rs): JSON of named values as Rust constants, and as TypeScript
 //! `as const` where a spec lists a TypeScript file. The Rust carries no
 //! names: a list of them is its count, and an enum where the spec asks for
 //! one, and a table's keys are not listed; the TypeScript keeps them for what
 //! a person reads. A `file` is a slot of the catalog (catalog.rs).
 
-use xpute_tool::spec::data::{outputs_at, DataSpec, EnumScope, Layout, SlotType};
+use xpute_gen::spec::data::{outputs_at, DataSpec, EnumScope, Layout, SlotType};
 
 use super::catalog::{runs, FILE};
 use super::ingest::files;

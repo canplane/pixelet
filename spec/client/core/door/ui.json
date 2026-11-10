@@ -677,6 +677,10 @@
       "format": "hex2",
       "entries": [
         {
+          "name": "GPU",
+          "val": 16
+        },
+        {
           "name": "INPUT",
           "val": 17
         },

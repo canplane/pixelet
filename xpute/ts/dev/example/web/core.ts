@@ -3,7 +3,9 @@
 /**
  * This is the manifest of the smallest core (rust/dev/example), which both the page
  * and the worker that runs the core import. It names the core's module and
- * answers ASK with ANSWER. Build the core first (`make build`).
+ * answers ASK with ANSWER. Build the core first, from rust/:
+ *
+ *   cargo build -p xpute-example --target wasm32-unknown-unknown
  */
 
 import { type Manifest, Timeslice } from "@xpute/runtime";

@@ -15,7 +15,7 @@ const FRONT: Front = {
   cq_at: 256,
   sq_slots_at: 512,
   cq_slots_at: 1024,
-  gpu_at: 0,
+  stream_at: 0,
 };
 
 test("head - what the runtime lays it reads back, and the rings open on it", () => {
@@ -25,7 +25,7 @@ test("head - what the runtime lays it reads back, and the rings open on it", () 
   assert.equal(laid(mem, 0), true);
   const head = new Head(mem, 0);
   assert.deepStrictEqual(
-    [head.sq_at, head.cq_at, head.gpu_at],
+    [head.sq_at, head.cq_at, head.stream_at],
     [FRONT.sq_at, FRONT.cq_at, 0],
   );
   const sq = new Ring(mem, head.sq_at);

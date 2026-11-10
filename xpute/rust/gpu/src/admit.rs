@@ -6,8 +6,7 @@
 //! on the GPU. A runtime in the core's own process applies the rule to its own
 //! count (`runtime::native::admit_frame`). A page's runtime writes its count
 //! into the device's block (spec DEVICE), and `page` applies the rule there.
-//! The core is handed its admission with its boot (xpute-core
-//! `Form::admit_frame`).
+//! A program asks through what `core!` defines (`admit_frame`).
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
@@ -15,13 +14,6 @@ use xpute_core::global::Global;
 
 use crate::device::{STATUS_AT, UNFINISHED_AT};
 use crate::spec::STATUS;
-
-pub type Admit = fn() -> bool;
-
-/// Admits every frame: the admission of a core whose form hands it none.
-pub fn every() -> bool {
-    true
-}
 
 pub fn admits(unfinished: u32, latency: u32) -> bool {
     unfinished < latency
@@ -39,7 +31,7 @@ pub(crate) fn ask(block: &mut [u32]) {
     BLOCK.set(Some(block.as_mut_ptr()));
 }
 
-/// This is the admission of a WebAssembly core that has the GPU (xpute-core
+/// This is the admission of a WebAssembly core that has the GPU (this crate's
 /// `core!`), where `LATENCY` is the program's frame latency (`CoreConfig`). It
 /// admits a frame while the block's STATUS is READY and `admits` holds for the
 /// block's unfinished frames. It admits none before the core has asked for the

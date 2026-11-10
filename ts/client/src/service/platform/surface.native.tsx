@@ -1,13 +1,15 @@
 // @pxl/client/service/platform/surface.native.tsx
 
-/** The core's surfaces on a device are xpute's native view (@xpute/native
- * `SurfaceView`), which wgpu draws into directly. The view's layer arrives
+/** The core's surfaces on a device are xpute's native view (@xpute/gpu
+ * `SurfaceView`), which wgpu draws into directly; the world's is the subclass
+ * that tells the core its touches (modules/platform `WorldView`). The view's layer arrives
  * after the view mounts, so the view reports when its layer is bound. */
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
-import { SurfaceView, type SurfaceViewProps } from "@xpute/native";
-import { useEffect, useRef, useState } from "react";
+import { SurfaceView, type SurfaceViewProps } from "@xpute/gpu/native.ts";
+import { requireNativeView } from "expo";
+import { type ComponentType, useEffect, useRef, useState } from "react";
 import {
   type LayoutChangeEvent,
   Dimensions,
@@ -21,6 +23,11 @@ import type {
   Viewport,
   WorldSurfaceProps,
 } from "./types.ts";
+
+const WorldView: ComponentType<SurfaceViewProps> = requireNativeView(
+  "PxlPlatform",
+  "WorldView",
+);
 
 /** The surface fills the window. */
 export function surfaceBox(): { width: f64; height: f64 } {
@@ -99,11 +106,10 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
   };
 
   return (
-    <SurfaceView
+    <WorldView
       {...props}
       style={StyleSheet.absoluteFill}
       onLayout={onLayout}
-      touches
       onTouchStart={() => input.touched("down")}
     />
   );

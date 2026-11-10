@@ -52,7 +52,7 @@ pub const CQ_CAP: u32 = 128;
 /// The size of one ring slot in bytes, enough for a packet of one number.
 pub const SLOT_BYTES: u32 = 256;
 
-/// The length in words of the stream's range, its END word first. The header's GPU_AT word
+/// The length in words of the stream's range, its END word first. The header's STREAM_AT word
 /// points at the stream, so the runtime runs it after every turn as it runs a GPU stream.
 pub const STREAM_WORDS: u32 = 256;
 

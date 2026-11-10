@@ -484,7 +484,7 @@ impl Raster {
             s.draws = g.buf(word_bytes(record::LIGHT_DRAWS as usize), storage);
             s.args = g.buf(
                 word_bytes(raster::WORDS as usize),
-                storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
+                storage | buffer_usage::COPY_SRC,
             );
             s.hits = g.buf(
                 word_bytes(3),
@@ -583,8 +583,7 @@ impl Raster {
             0.0,
         ];
         g.write_buf(s.uniform, 0, bytes(&uniform));
-        let mut args = [0u32; raster::ARGS_WORDS as usize];
-        args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
+        let args = [0u32; raster::ARGS_WORDS as usize];
         g.write_buf(
             s.args,
             sequence::OPEN_LIGHT_RASTER_ARGS.to_at(),
@@ -674,11 +673,18 @@ impl Raster {
 
     /// Writes the drawable entries on the light's box as boxes and marks them drawn
     /// (record_draw.wgsl `light_rec_draw_cs`), then draws them into the light's cleared
-    /// targets.
+    /// targets, every place of the draws' buffer, each place the boxes did not reach holding 0
+    /// (raster.wgsl `vs`).
     pub(super) fn light_draw(&self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::light_raster);
         let s = &self.light;
+        g.clear_buf(
+            encoder,
+            s.draws,
+            0,
+            word_bytes(record::LIGHT_DRAWS as usize),
+        );
         let pass = g.compute_pass(encoder, stamp.pass());
         g.set_bind_group(pass, 0, s.rec_group, &[]);
         g.set_pipeline(pass, self.light_rec_draw.id);
@@ -699,7 +705,7 @@ impl Raster {
         g.declare_pass(pass, sequence::LIGHT_RASTER_PASS);
         g.set_pipeline(pass, self.draw_pipeline.id);
         g.set_bind_group(pass, 0, s.group, &[]);
-        g.draw_indirect(pass, s.args, sequence::LIGHT_RASTER.at());
+        g.draw(pass, raster::VERTICES, record::LIGHT_DRAWS, 0, 0);
         g.end(pass);
     }
 }

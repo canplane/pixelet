@@ -184,7 +184,7 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
         slot_bytes: spec::SLOT_BYTES,
         sq_at: at[SQ_DESC],
         cq_at: at[CQ_DESC],
-        gpu_at: at[STREAM],
+        stream_at: at[STREAM],
     };
     // SAFETY: as above.
     unsafe { head::write(mem, at[HEAD] as usize, &front) };
@@ -220,7 +220,7 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
         Submission::Program(cmd, pkt) => apply(mem, door, state, cmd, &pkt),
         // The conformance core keeps nothing across its life, reads no file
         // again, and draws nothing, so it answers 0 to every other
-        // submission, and a surface it is lent gets the handle 0, none.
+        // submission.
         _ => Ok(Some(0)),
     });
     state.stream.publish();
@@ -273,7 +273,6 @@ mod wasm {
         Config {
             heap_at: |data_end| range_at(data_end) + HEAP_AT,
             stack_bytes: spec::STACK_BYTES,
-            admit_frame: None,
         },
         entry
     );

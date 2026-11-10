@@ -10,8 +10,8 @@ use crate::domain::view::frame::pose::view_resize;
 use crate::sys::sched::edge::request_world_tick;
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::surface;
-use xpute_core::abi::gpu::{GpuSurfaceClose, GpuSurfaceResize};
 use xpute_core::ipc::door::Outcome;
+use xpute_gpu::abi::{GpuSurfaceClose, GpuSurfaceResize};
 use xpute_kit::status::errno::Errno;
 
 /// Returns the new surface's handle, or 0 when none could be opened. The

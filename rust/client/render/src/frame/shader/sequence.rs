@@ -197,14 +197,8 @@ pub const LIGHT_SAMPLE_HIT: Step = Step::dispatch_off(
     (LIGHT_ARGS, light::ARGS_SAMPLE_HIT),
 );
 /// The light's raster draw of the record (ray/raster.rs `Raster::light_draw`).
-pub const LIGHT_RASTER: Step = Step::draw_off(
-    "light_raster",
-    IN_LIGHT,
-    PIPELINE_RASTER,
-    &[],
-    (LIGHT_RASTER_ARGS, 0),
-)
-.in_pass(LIGHT_RASTER_PASS);
+pub const LIGHT_RASTER: Step =
+    Step::draw("light_raster", IN_LIGHT, PIPELINE_RASTER, &[]).in_pass(LIGHT_RASTER_PASS);
 pub const LIGHT_SLOTS: Step = Step::dispatch_off(
     "light_slots",
     IN_LIGHT,

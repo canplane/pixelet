@@ -7,7 +7,7 @@
 //! before it rings the core again, so overrunning that ring is a sizing bug,
 //! not a state to wait out.
 //!
-//! A command under xpute's majors (abi/sys.json, abi/gpu.json, abi/fs.json) is
+//! A command under xpute's majors (abi/sys.json, abi/fs.json) is
 //! applied here, or handed to the program as what it means. The program is
 //! handed every other command, and each open and close the runtime has
 //! completed.
@@ -51,8 +51,7 @@ use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::PacketWriter;
 
 use crate::abi::fs::{self, FsChanged, FsClose, FsOpenat, FsOpenatReply, FsRead, FsWrite};
-use crate::abi::gpu::{self, GpuSurfaceClose, GpuSurfaceResize};
-use crate::abi::sys::{Command, Nop, SysAbort, SysFrame, SysTurn};
+use crate::abi::sys::{Command, Major, Nop, SysAbort, SysFrame, SysTurn};
 use crate::call::answer_of;
 use crate::ipc::frame;
 use crate::ipc::fs::{Fd, FsClosed, FsOpened};
@@ -60,7 +59,7 @@ use crate::ipc::ring::Ring;
 use crate::mem::off_of_slice;
 use crate::sched::wake::NO_WAKE;
 
-/// An import is what xpute-tool generates from a protocol's table (`spec/cmd`):
+/// An import is what xpute-gen generates from a protocol's table (`spec/cmd`):
 /// its command number, the number of children its packet is written as, and its
 /// writer.
 pub trait Import {
@@ -104,8 +103,7 @@ impl Reading {
 pub type Outcome = Result<Option<i32>, MarshalError>;
 
 /// The door hands the program a change in its life that its runtime tells it
-/// of, a turn the scheduling policy grants, the GPU's answer, a surface the UI
-/// lends it, an open or a close the runtime has completed, a file changed
+/// of, a turn the scheduling policy grants, an open or a close the runtime has completed, a file changed
 /// under it, or a command of the program's own, with its number and its
 /// packet. Nothing answers a completion, so what the program returns for one
 /// is dropped. The drain runs before any phase's budget, so the program should
@@ -119,27 +117,12 @@ pub enum Submission<'a> {
     Turn(SysTurn),
     /// Frame pacing's grant for the next turn (SYS_FRAME).
     Frame(SysFrame),
-    /// The GPU the machine asked for has answered (GPU_READY), for the first
-    /// time or again after a loss. It tells of the GPU's state, not of the
-    /// core's life.
-    GpuReady,
-    Surface(Surface),
     Opened(FsOpened),
     Closed(FsClosed),
     /// A file changed under the core, so what the core read of it is stale
     /// (FS_CHANGED).
     Changed(FsChanged<'a>),
     Program(u32, Option<&'a [u8]>),
-}
-
-/// A surface is lent to the GPU by the UI (abi/gpu.json). It is opened, and the
-/// program answers with its handle, or 0 for none; its box is resized; it is
-/// let go.
-#[derive(Clone, Copy, Debug)]
-pub enum Surface {
-    Open,
-    Resize(GpuSurfaceResize),
-    Close(GpuSurfaceClose),
 }
 
 /// The core's life is as its runtime tells it (abi/sys.json). What each event
@@ -509,7 +492,8 @@ fn apply_frame(
     pkt: Option<&[u8]>,
     handle: &mut impl FnMut(Submission) -> Outcome,
 ) -> Outcome {
-    if f.cmd >> 8 >= frame::PROGRAM_MAJOR {
+    let major = f.cmd >> 8;
+    if major != Major::NOP as u32 && major != Major::SYS as u32 && major != fs::Major::FS as u32 {
         return handle(Submission::Program(f.cmd, pkt));
     }
     match Command::of(f.cmd) {
@@ -524,16 +508,8 @@ fn apply_frame(
         Some(Command::SYS_FRAME) => handle(Submission::Frame(SysFrame::read(pkt_of(pkt)?)?)),
         // The core's own report and rate, which the runtime never sends.
         Some(Command::SYS_ABORT | Command::SYS_PACE) => Ok(None),
-        None => match (gpu::Command::of(f.cmd), fs::Command::of(f.cmd)) {
-            (Some(gpu::Command::GPU_READY), _) => handle(Submission::GpuReady),
-            (Some(gpu::Command::GPU_SURFACE_OPEN), _) => handle(Submission::Surface(Surface::Open)),
-            (Some(gpu::Command::GPU_SURFACE_RESIZE), _) => handle(Submission::Surface(
-                Surface::Resize(GpuSurfaceResize::read(pkt_of(pkt)?)?),
-            )),
-            (Some(gpu::Command::GPU_SURFACE_CLOSE), _) => handle(Submission::Surface(
-                Surface::Close(GpuSurfaceClose::read(pkt_of(pkt)?)?),
-            )),
-            (_, Some(fs::Command::FS_CHANGED)) => {
+        None => match fs::Command::of(f.cmd) {
+            Some(fs::Command::FS_CHANGED) => {
                 handle(Submission::Changed(FsChanged::read(pkt_of(pkt)?)?))
             }
             // The core's file calls, which the runtime never sends, and the

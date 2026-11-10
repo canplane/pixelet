@@ -20,9 +20,12 @@ import {
   TreeReader,
 } from "@xpute/kit/wire/xtp/mod.ts";
 import { XPUTE } from "@xpute/native";
-import { Command as FsCommand, read as fs_read } from "./abi/fs.spec.ts";
-import { Command as GpuCommand } from "./abi/gpu.spec.ts";
-import { Command, sys_imports } from "./abi/sys.spec.ts";
+import {
+  Command as FsCommand,
+  Major as FsMajor,
+  read as fs_read,
+} from "./abi/fs.spec.ts";
+import { Command, Major, sys_imports } from "./abi/sys.spec.ts";
 import { encode_args } from "./ipc/doorbell.ts";
 import { FileError } from "./ipc/fs.ts";
 import { flag } from "./ipc/fs.spec.ts";
@@ -111,11 +114,11 @@ export async function start<G extends Grant>(
   ): i32 | void {
     const major = frame.major_of(cmd);
     const on =
-      major < frame.PROGRAM_MAJOR
-        ? major === 1
-          ? own
-          : undefined
-        : cfg.program;
+      major === Major.SYS
+        ? own
+        : major === Major.NOP || major === FsMajor.FS
+          ? undefined
+          : cfg.program;
     const res = on ? on(tag, cmd, f, pkt) : Errno.ENOSYS;
     if (ui_cmds.has(cmd)) ui.on(tag, cmd, f, named, pkt);
     return res;
@@ -256,19 +259,6 @@ export async function start<G extends Grant>(
   let shown = true;
   const steer = () => (resumed && shown ? XPUTE.resume() : XPUTE.pause());
 
-  const gpu = m.machine.gpu ? cfg.gpu : undefined;
-  if (gpu) {
-    gpu.watch(ui.gpu);
-    gpu.grant({
-      mem,
-      at: head.gpu_at,
-      ask: m.machine.gpu!,
-      ready: () => send(GpuCommand.GPU_READY),
-      wake: () => XPUTE.wake(),
-      shown: () => shown,
-    });
-  }
-
   // The core hears a runtime attach before anything else.
   send(Command.SYS_ATTACH);
   return {
@@ -300,12 +290,6 @@ export async function start<G extends Grant>(
       // SYS_SUSPEND and SYS_RESUME go as a call, because hiding is the core's
       // last sure moment to save what it holds.
       XPUTE.call(visible ? Command.SYS_RESUME : Command.SYS_SUSPEND, NOTHING);
-    },
-    bind(): never {
-      throw new InvariantError(Errno.ENOTSUP);
-    },
-    unbind(): never {
-      throw new InvariantError(Errno.ENOTSUP);
     },
   };
 }

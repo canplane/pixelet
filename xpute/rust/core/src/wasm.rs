@@ -17,7 +17,6 @@
 //!     xpute_core::wasm::Config {
 //!         heap_at: |data_end| data_end.next_multiple_of(PAGE_BYTES),
 //!         stack_bytes: 1 << 20,
-//!         admit_frame: None,
 //!     },
 //!     my_core::run
 //! );
@@ -41,10 +40,6 @@ pub struct Config {
     /// The stack size the module was linked with (`LinkConfig::stack_bytes`).
     /// Boot checks it against `__stack_high`.
     pub stack_bytes: u32,
-    /// What the core is handed as `Form::admit_frame`: the page's admission
-    /// where the core draws (xpute-gpu `admit::page`, which `core!` passes
-    /// when given the GPU), and none where it draws nothing.
-    pub admit_frame: Option<fn() -> bool>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -62,7 +57,6 @@ pub fn boot_info(
             data_end: data_end(),
             now,
             stop_hook: None,
-            admit_frame: cfg.admit_frame,
             publish: None,
         },
     }

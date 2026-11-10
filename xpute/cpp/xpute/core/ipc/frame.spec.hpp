@@ -9,8 +9,8 @@
 // negative errno. A packet, when the frame has one, lies in the ring's payload slot.
 //
 // All commands share one number space, `major << 8 | minor`. Majors 0x00 to 0x0F are
-// xpute's own (abi/sys.json, abi/gpu.json, abi/fs.json). Every other major is the
-// program's to assign, and so is what its commands mean. A runtime hands each frame to
+// xpute's own (abi/sys.json, abi/fs.json). Every
+// other major is the program's to assign. The door applies xpute's own, and hands the program every other command. A runtime hands each frame to
 // whatever answers its command's major.
 //
 // Flag bits 2 and up, and the result word of a submission, are reserved, so that a later
@@ -37,7 +37,7 @@ inline constexpr std::uint32_t PKT = 3u;
 // The frame's length in words.
 inline constexpr std::uint32_t WORDS = 4u;
 
-// The first major a program's commands may take; the majors below it are xpute's own.
+// The first major a program's commands may take; the majors below it are xpute's to give.
 inline constexpr std::uint32_t PROGRAM_MAJOR = 16u;
 
 // The bit at which the flags start in the CMD word.

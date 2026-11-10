@@ -28,7 +28,7 @@ make -j8 check check-build check-xpute && make -j8 test test-xpute test-gpu
 ```
 
 If the change touches a GPU call (`xpute/spec/gpu/`, xpute's `gpu` crates and
-packages, or how pxl-render encodes), also run `make -C xpute test-gpu` (a GPU
+packages, or how pxl-render encodes), also run `(cd xpute/rust && cargo test-gpu) && pnpm --dir xpute/ts test:gpu:web` (a GPU
 and Chrome, `$CHROME`).
 
 ## Squash
@@ -111,10 +111,17 @@ xpute's repository (`github.com/canplane/xpute`) gets one commit per round,
 made from the squash. Clone it under the session's scratch directory:
 
 ```bash
-./xpute/script/export.py --to <clone>            # prints the stamp, pixelet@<squash>
+make -C xpute/cpp amalgamation
+git -C <clone> rm -rq .
+git archive HEAD xpute | tar -x --strip-components=1 -C <clone>
+mkdir -p <clone>/cpp/amalgamation
+cp xpute/cpp/target/amalgamation/xpute.{hpp,cpp} <clone>/cpp/amalgamation/
+git -C <clone> add -A
 git -C <clone> commit -F <message>                # no Claude trailer
-./xpute/script/export.py --to <clone> --check    # the repository matches the tree
 ```
+
+Run this at the squash: the repository holds what git tracks under `xpute/`,
+and the C++ library's two files beside it.
 
 Write the message as prose, like the repository's other commits: a subject
 saying what xpute became, a paragraph per part, ending

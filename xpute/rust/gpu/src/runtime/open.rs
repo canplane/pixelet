@@ -23,17 +23,23 @@ pub struct Ask {
 
 impl Ask {
     /// This is the device the machine's GPU declares: its power preference and
-    /// features, with the adapter's own limits and the platform's primary
-    /// backends.
-    pub fn of(gpu: &xpute_core::machine::Gpu) -> Ask {
+    /// features (the generated `GPU_ASK`), with the adapter's own limits and the
+    /// platform's primary backends.
+    pub fn of(
+        (power, required, optional): (
+            &'static str,
+            &'static [&'static str],
+            &'static [&'static str],
+        ),
+    ) -> Ask {
         Ask {
             backends: wgpu::Backends::PRIMARY,
-            power_preference: match gpu.power {
+            power_preference: match power {
                 "low-power" => wgpu::PowerPreference::LowPower,
                 _ => wgpu::PowerPreference::HighPerformance,
             },
-            required: gpu.required,
-            optional: gpu.optional,
+            required,
+            optional,
             limits: wgpu::Adapter::limits,
             memory_hints: wgpu::MemoryHints::Performance,
         }

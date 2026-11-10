@@ -102,7 +102,7 @@ XPUTE_TEST(door_program_command_handed_over) {
 XPUTE_TEST(door_xpute_number_unknown_refused) {
     Fixture f = door();
     const Door &d = f.door;
-    XPUTE_CHECK(d.sq().push(5, 0x0f01, 0, 0) == Errno::ok);
+    XPUTE_CHECK(d.sq().push(5, 0x01f1, 0, 0) == Errno::ok);
     bool applied = false;
     d.receive(program([&](std::uint32_t, std::span<const std::uint8_t>) { return applied = true, Outcome{}; }));
     XPUTE_CHECK(!applied);

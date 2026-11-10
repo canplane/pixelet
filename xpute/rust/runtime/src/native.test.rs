@@ -24,7 +24,6 @@ fn cfg(heap_at: u32) -> Config {
             data_end: 0,
             now: || 42.0,
             stop_hook: None,
-            admit_frame: None,
             publish: None,
         },
     }

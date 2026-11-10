@@ -48,7 +48,7 @@ inline constexpr std::uint32_t CQ_CAP = 128u;
 // The size of one ring slot in bytes, enough for a packet of one number.
 inline constexpr std::uint32_t SLOT_BYTES = 256u;
 
-// The length in words of the stream's range, its END word first. The header's GPU_AT word
+// The length in words of the stream's range, its END word first. The header's STREAM_AT word
 // points at the stream, so the runtime runs it after every turn as it runs a GPU stream.
 inline constexpr std::uint32_t STREAM_WORDS = 256u;
 

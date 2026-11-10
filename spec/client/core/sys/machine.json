@@ -93,6 +93,9 @@
       "Its roots: the bakes' tiles, the shipped assets, the platform's storage and the placed objects' source (ts/client/src/service/sys/fs/namespace.ts)."
     ]
   },
+  "stream": {
+    "bytes": 4194304
+  },
   "gpu": {
     "$doc": [
       "The renderer's stream (pxl-render gpu/api.rs): `bytes` what one turn may send the",
@@ -100,7 +103,6 @@
       "derived. The stream says its own head. The device must have a depth-stencil format",
       "the renderer draws with, and takes timestamps where the adapter has them."
     ],
-    "bytes": 4194304,
     "power": "high-performance",
     "features": {
       "required": [

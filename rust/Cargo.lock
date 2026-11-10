@@ -2225,7 +2225,7 @@ dependencies = [
  "sha2",
  "ureq",
  "webp",
- "xpute-tool",
+ "xpute-gen",
 ]
 
 [[package]]
@@ -3593,14 +3593,22 @@ checksum = "ec7a2a501ed189703dba8b08142f057e887dfc4b2cc4db2d343ac6376ba3e0b9"
 
 [[package]]
 name = "xpute-core"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "xpute-kit",
 ]
 
 [[package]]
+name = "xpute-gen"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "xpute-gpu"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "image-webp",
  "png 0.18.1",
@@ -3615,25 +3623,17 @@ dependencies = [
 
 [[package]]
 name = "xpute-kit"
-version = "0.0.0"
+version = "0.1.0"
 
 [[package]]
 name = "xpute-runtime"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "jni-sys 0.3.1",
  "libc",
  "ndk-sys",
  "xpute-core",
  "xpute-kit",
-]
-
-[[package]]
-name = "xpute-tool"
-version = "0.0.0"
-dependencies = [
- "serde",
- "serde_json",
 ]
 
 [[package]]

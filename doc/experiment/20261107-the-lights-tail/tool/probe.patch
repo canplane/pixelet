@@ -1,0 +1,135 @@
+diff --git a/rust/client/core/src/perf/report.rs b/rust/client/core/src/perf/report.rs
+index 6c569302b5..68077f6125 100644
+--- a/rust/client/core/src/perf/report.rs
++++ b/rust/client/core/src/perf/report.rs
+@@ -167,7 +167,9 @@ pub fn perf_frame(t: FrameTurn) {
+         t: at,
+         refresh_ms: t.refresh_ms,
+         paced_ms: t.paced_ms,
+-        budget_ms: t.tick.budget_ms,
++        budget_ms: f64::from(
++            crate::sys::io::request::READS_STARTED.swap(0, core::sync::atomic::Ordering::Relaxed),
++        ),
+         effects_ms: t.effects_ms,
+         tick_ms: t.tick.total_ms,
+         // The core's phases fill the first of the slots xpute's tick has room
+@@ -179,7 +181,7 @@ pub fn perf_frame(t: FrameTurn) {
+         gpu: renderer.gpu,
+         terrain_loads,
+         device: renderer.device,
+-        heap_used_bytes: heap.peak as f64,
++        heap_used_bytes: crate::domain::control::camera::controller::dist(),
+         // The interval's figures come later: its turns' as each ends, and its
+         // length when the next frame closes it.
+         ..FrameSample::default()
+diff --git a/rust/client/core/src/sys/io/request.rs b/rust/client/core/src/sys/io/request.rs
+index 8aedbb71d1..a934dc9d8c 100644
+--- a/rust/client/core/src/sys/io/request.rs
++++ b/rust/client/core/src/sys/io/request.rs
+@@ -220,6 +220,8 @@ pub fn next_pump_at(at_ms: f64) -> Option<f64> {
+     (until > at_ms).then_some(until)
+ }
+ 
++pub static READS_STARTED: core::sync::atomic::AtomicU32 = core::sync::atomic::AtomicU32::new(0);
++
+ /// Starts the best ranked of the ready wants on the free credits. A failing
+ /// server gets one probe at a time.
+ fn start_ready(s: &mut Sched, at: f64) {
+@@ -254,6 +256,10 @@ fn start_ready(s: &mut Sched, at: f64) {
+         a.0.cmp(&b.0).then(tie(a).cmp(&tie(b)))
+     });
+     for &(rank, stream, w) in ready.iter().take(n) {
++        READS_STARTED.fetch_add(
++            if matches!(stream, Stream::terrain) { 1000 } else { 1 },
++            core::sync::atomic::Ordering::Relaxed,
++        );
+         let k = s.slots[..credits]
+             .iter()
+             .position(|c| c.out.is_none())
+diff --git a/rust/client/render/src/ray/cast.rs b/rust/client/render/src/ray/cast.rs
+index 4410eff29a..d6220bf864 100644
+--- a/rust/client/render/src/ray/cast.rs
++++ b/rust/client/render/src/ray/cast.rs
+@@ -1950,7 +1950,9 @@ impl RayPass {
+     /// How many rects mark decor's slots to generate again this frame (gpu/generator.rs
+     /// `marked_rects`).
+     pub fn decor_rects(&self) -> u32 {
+-        self.cast.as_ref().map_or(0, |c| c.generator.marked_rects())
++        self.cast
++            .as_ref()
++            .map_or(0, |c| u32::from(c.light_epoch == c.light_number))
+     }
+ 
+     pub fn generates(&self) -> bool {
+diff --git a/ts/client/src/ui/feature/debug/perf/drive.ts b/ts/client/src/ui/feature/debug/perf/drive.ts
+index 00c6433209..57c7275e1d 100644
+--- a/ts/client/src/ui/feature/debug/perf/drive.ts
++++ b/ts/client/src/ui/feature/debug/perf/drive.ts
+@@ -58,12 +58,54 @@ export const DRIVE_SETTINGS: readonly (readonly [number, number])[] = [
+ 
+ const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
+ 
++async function perfPath(path: string, x: number, y: number): Promise<string> {
++  const pointer = (phase: PointerPhase, at: [f64, f64], button = 0) =>
++    input.pointer(phase, PointerType.Mouse, POINTER_ID, button, at[0], at[1]);
++  await wait(SETTLE_MS);
++  if (path === "zoomin") {
++    for (let n = 0; n < RUN; n++) {
++      input.wheel(WHEEL);
++      await wait(STEP_MS);
++    }
++    await wait(8000);
++  }
++  perf.start();
++  const t0 = performance.now();
++  if (path === "pan") {
++    pointer(PointerPhase.Down, [x, y]);
++    const step = setInterval(() => {
++      const s = (performance.now() - t0) / 1000;
++      pointer(PointerPhase.Move, [x + 30 * s, y]);
++    }, STEP_MS);
++    await wait(DRIVE_S * 1000);
++    clearInterval(step);
++    pointer(PointerPhase.Up, [x + 30 * DRIVE_S, y]);
++  } else if (path === "walk") {
++    input.keys(0, 1);
++    const step = setInterval(() => input.keys(0, 1), 200);
++    await wait(DRIVE_S * 1000);
++    clearInterval(step);
++    input.keys(0, 0);
++  } else if (path === "zoomin") {
++    for (let n = 0; n < RUN; n++) {
++      input.wheel(-WHEEL);
++      await wait(50);
++    }
++    await wait(DRIVE_S * 1000 - RUN * 50);
++  } else if (path === "still") {
++    await wait(DRIVE_S * 1000);
++  }
++  return perfReportText(await perfReportRead());
++}
++
+ export async function perfDrive(): Promise<string> {
+   const box = surfaceBox();
+   if (!box) {
+     return "no canvas";
+   }
+   for (const [key, value] of DRIVE_SETTINGS) setting.set(key, value);
++  const path = new URLSearchParams(globalThis.location?.search ?? "").get("path");
++  if (path) return perfPath(path, box.width / 2, box.height / 2);
+   const tilt = TILT_SHARE * box.height;
+   const [x, y] = [box.width / 2, box.height / 2];
+   const pointer = (phase: PointerPhase, at: [f64, f64]) =>
+diff --git a/ts/client/src/ui/feature/debug/perf/measure.ts b/ts/client/src/ui/feature/debug/perf/measure.ts
+index 8ba8bfcabb..c30ca3afa5 100644
+--- a/ts/client/src/ui/feature/debug/perf/measure.ts
++++ b/ts/client/src/ui/feature/debug/perf/measure.ts
+@@ -55,7 +55,7 @@ export async function measure(): Promise<void> {
+     const trace = await perfTrace();
+     for (const [key, value] of before) setting.set(key, value);
+     const [lat, lon] = [r.view.pivot_lat, r.view.pivot_lon];
+-    if (off(lat, MEASURE_PLACE.lat) || off(lon, MEASURE_PLACE.lon)) {
++    if (!globalThis.location?.search && (off(lat, MEASURE_PLACE.lat) || off(lon, MEASURE_PLACE.lon))) {
+       throw new Error(`stands at ${lat}, ${lon}`);
+     }
+     const f = r.frames;

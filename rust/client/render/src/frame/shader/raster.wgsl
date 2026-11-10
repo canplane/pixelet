@@ -77,6 +77,10 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   o.id = word & RASTER_ID_MASK;
   // A face that is not drawn keeps every corner at this point, outside the clip volume.
   o.clip = vec4f(0.0, 0.0, -1.0, 1.0);
+  // A place of the light's draw that no box reached holds 0 (ray/raster.rs `light_draw`).
+  if (word == 0u) {
+    return o;
+  }
   let lacks = (o.id & RASTER_LACK) != 0u;
   let slot = (o.id & ~RASTER_LACK) - 1u;
   let origin = raster.origin.xyz;

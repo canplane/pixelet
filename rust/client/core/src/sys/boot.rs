@@ -6,8 +6,6 @@
 use xpute_core::entry::BootInfo;
 use xpute_core::global::Global;
 use xpute_core::mem::heap::HeapStat;
-use xpute_gpu::admit;
-use xpute_gpu::admit::Admit;
 
 static BOOT: Global<Option<BootInfo>> = Global::new();
 
@@ -20,16 +18,6 @@ pub fn set(boot: BootInfo) {
 pub fn heap_stat() -> HeapStat {
     BOOT.get(|| None)
         .map_or_else(HeapStat::default, |b| (b.heap_stat)())
-}
-
-/// The test of whether the GPU runtime can take a frame now without blocking
-/// (xpute_gpu::admit), as the runtime's form provides it
-/// (`Form::admit_frame`). Where the form provides none, and before the first
-/// turn, every frame is admitted.
-pub fn admit_frame() -> Admit {
-    BOOT.get(|| None)
-        .and_then(|b| b.form.admit_frame)
-        .unwrap_or(admit::every)
 }
 
 #[cfg(test)]

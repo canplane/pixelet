@@ -29,7 +29,9 @@ use pxl_spec::space::coord::q3::FRAC_W;
 /// which `ARGS_INSTANCES` is the part the boxes' room holds.
 ///
 /// The eye's boxes are its fresh drawable entries in view, at most `record::EYE_DRAWS`; the
-/// light's are those on its box, at most `record::LIGHT_DRAWS`. The faces' asks are at most
+/// light's are those on its box, at most `record::LIGHT_DRAWS`. The eye's draw reads these
+/// arguments. The light's draws every place of its draws' buffer, and its arguments keep the
+/// boxes' count alone. The faces' asks are at most
 /// one a sample, with `param::beam::SAMPLE` samples a camera grid cell a side: about 270
 /// thousand on a 16:9 view, whatever its pixels, where one dispatch's 65535 workgroups hold
 /// 4.2 million.

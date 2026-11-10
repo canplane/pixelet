@@ -15,6 +15,9 @@ object PxlNative {
     System.loadLibrary("pxl_core")
   }
 
+  /** A touch on the world's surface: phase 0 down, 1 move, 2 up, 3 out, 4 cancel. */
+  external fun touch(phase: Int, id: Int, x: Double, y: Double)
+
   /** Decodes a zstd body into a direct buffer, or returns null when it does
    * not decode. It touches none of the core's state, so it may run on any
    * thread at any time. */

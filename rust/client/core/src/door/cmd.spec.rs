@@ -49,6 +49,7 @@ use xpute_kit::wire::xtp::{PacketWriter, StrList, TreeReader};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Major {
+    GPU = 0x10,
     INPUT = 0x11,
     SENSOR = 0x12,
     SOURCE = 0x13,
@@ -62,7 +63,8 @@ pub enum Major {
 }
 
 impl Major {
-    pub const ALL: [Major; 10] = [
+    pub const ALL: [Major; 11] = [
+        Major::GPU,
         Major::INPUT,
         Major::SENSOR,
         Major::SOURCE,

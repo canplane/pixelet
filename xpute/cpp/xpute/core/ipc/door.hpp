@@ -10,7 +10,7 @@
 // core again, so overrunning that ring is a sizing bug, not a state to wait
 // out.
 //
-// A command under xpute's majors (abi/sys.json, abi/gpu.json, abi/fs.json) is
+// A command under xpute's majors (abi/sys.json, abi/fs.json) is
 // applied here, or handed to the program as what it means. The program is
 // handed every other command, and each open and close the runtime has
 // completed.
@@ -60,7 +60,6 @@
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/kit/status/errno.spec.hpp"
 #include "xpute/kit/wire/xtp/encode.hpp"
-#include "xpute/core/abi/gpu.spec.hpp"
 #include "xpute/core/abi/sys.spec.hpp"
 #include "xpute/core/abi/fs.spec.hpp"
 #include "xpute/core/call.hpp"
@@ -71,7 +70,7 @@
 
 namespace xpute {
 
-// An import is what xpute-tool generates from a protocol's table (`spec/cmd`):
+// An import is what xpute-gen generates from a protocol's table (`spec/cmd`):
 // its command number, the number of children its packet is written as, and its
 // writer.
 template <class E>
@@ -92,27 +91,16 @@ struct Outcome {
 // means the program keeps or resets is the program's to decide.
 enum class Life { attach, suspend, resume };
 
-// The GPU the machine asked for has answered (GPU_READY), for the first time or
-// again after a loss. It tells of the GPU's state, not of the core's life.
-struct GpuReady {};
-
-// A surface is lent to the GPU by the UI (abi/gpu.json). It is opened, and the
-// program answers with its handle, or 0 for none; its box is resized; it is
-// let go.
-struct SurfaceOpen {};
-using Surface = std::variant<SurfaceOpen, abi::gpu::GpuSurfaceResize, abi::gpu::GpuSurfaceClose>;
-
 struct Program {
     std::uint32_t cmd = 0;
     std::span<const std::uint8_t> pkt;
 };
 
 // The door hands the program a change in its life that its runtime tells it
-// of, a turn the scheduling policy grants (SYS_TURN) and its frame (SYS_FRAME), the GPU's answer, a
-// surface the UI lends it, an open or a close the runtime has completed, a file
+// of, a turn the scheduling policy grants (SYS_TURN) and its frame (SYS_FRAME), an open or a close the runtime has completed, a file
 // changed under it (FS_CHANGED), or a command of the program's own. Nothing
 // answers a completion, so what the program returns for one is dropped.
-using Submission = std::variant<Life, abi::sys::SysTurn, abi::sys::SysFrame, GpuReady, Surface, FsOpened, FsClosed, abi::fs::FsChanged, Program>;
+using Submission = std::variant<Life, abi::sys::SysTurn, abi::sys::SysFrame, FsOpened, FsClosed, abi::fs::FsChanged, Program>;
 
 // A stat says how full the rings ran since the stat was last taken
 // (`Door::take_stat`). Each figure is the most it reached.
@@ -422,9 +410,11 @@ class Door {
     }
 
     template <class Handle> static Outcome apply_frame(const Frame &f, std::span<const std::uint8_t> pkt, Handle &handle) noexcept {
-        if (f.cmd >> 8 >= frame::PROGRAM_MAJOR) return handle(Submission{Program{.cmd = f.cmd, .pkt = pkt}});
+        const std::uint32_t major = f.cmd >> 8;
+        if (major != static_cast<std::uint32_t>(abi::sys::Major::NOP) && major != static_cast<std::uint32_t>(abi::sys::Major::SYS) &&
+            major != static_cast<std::uint32_t>(abi::fs::Major::FS))
+            return handle(Submission{Program{.cmd = f.cmd, .pkt = pkt}});
         using S = abi::sys::Command;
-        using G = abi::gpu::Command;
         const auto is = [&f](auto c) { return f.cmd == static_cast<std::uint32_t>(c); };
         if (is(S::NOP)) {
             if (pkt.empty()) return {};
@@ -437,10 +427,6 @@ class Door {
         if (is(S::SYS_RESUME)) return handle(Submission{Life::resume});
         if (is(S::SYS_TURN)) return read_then<abi::sys::SysTurn>(pkt, handle, [](auto t) { return t; });
         if (is(S::SYS_FRAME)) return read_then<abi::sys::SysFrame>(pkt, handle, [](auto t) { return t; });
-        if (is(G::GPU_READY)) return handle(Submission{GpuReady{}});
-        if (is(G::GPU_SURFACE_OPEN)) return handle(Submission{Surface{SurfaceOpen{}}});
-        if (is(G::GPU_SURFACE_RESIZE)) return read_then<abi::gpu::GpuSurfaceResize>(pkt, handle, [](auto c) { return Surface{c}; });
-        if (is(G::GPU_SURFACE_CLOSE)) return read_then<abi::gpu::GpuSurfaceClose>(pkt, handle, [](auto c) { return Surface{c}; });
         if (is(abi::fs::Command::FS_CHANGED)) return read_then<abi::fs::FsChanged>(pkt, handle, [](auto c) { return c; });
         // The core's own report and file calls, which the runtime never sends,
         // and the numbers xpute gives to no command.

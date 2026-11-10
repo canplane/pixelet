@@ -132,8 +132,6 @@ fn open_completion_handed_over() {
         Submission::Life(_)
         | Submission::Turn(_)
         | Submission::Frame(_)
-        | Submission::GpuReady
-        | Submission::Surface(_)
         | Submission::Closed(_)
         | Submission::Changed(_)
         | Submission::Program(..) => {
@@ -208,8 +206,6 @@ fn program_command_handed_over() {
         Submission::Life(_)
         | Submission::Turn(_)
         | Submission::Frame(_)
-        | Submission::GpuReady
-        | Submission::Surface(_)
         | Submission::Opened(_)
         | Submission::Closed(_)
         | Submission::Changed(_) => {
@@ -228,7 +224,7 @@ fn program_command_handed_over() {
 #[test]
 fn xpute_number_unknown_refused() {
     let (d, _buf) = door();
-    assert_eq!(d.sq().push(5, 0x0f01, 0, 0, None), Errno::OK);
+    assert_eq!(d.sq().push(5, 0x01f1, 0, 0, None), Errno::OK);
     d.receive(|_| unreachable!("a number under xpute's majors is none of the program's"));
     let f = d.cq().peek().expect("a failure's reply");
     assert_eq!((f.tag, f.result), (5, Errno::ENOSYS as i32));

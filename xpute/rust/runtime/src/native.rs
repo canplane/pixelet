@@ -20,17 +20,13 @@ mod serve;
 mod thread;
 
 use core::ptr::NonNull;
-use core::sync::atomic::{AtomicU32, Ordering};
 
 use xpute_core::mem::heap::HeapStat;
 use xpute_core::mem::section::PAGE_BYTES;
 
 pub use alloc::Alloc;
 pub use say::{say, stop_hook};
-pub use serve::{
-    attach, call, fs_closed, fs_opened, named_by, post, take, touch, touch_by, Named, Touch,
-    STOPPED,
-};
+pub use serve::{attach, call, fs_closed, fs_opened, named_by, post, take, Named, STOPPED};
 pub use thread::{
     answer, answer_with, input, notify_on, pace, pause, resume, ring, terminated, vsync, wake,
     Answer, Notify, Pace, Vcpu,
@@ -60,20 +56,17 @@ pub struct Config {
 /// A device that runs beside the core, such as the GPU's runtime. Both
 /// functions are handed the core. `poll` runs before each turn and has the
 /// memory told what the device has completed. `publish` takes what the core
-/// has just published to the device, as the core rings it (`Form::publish`). `admit_frame` is handed to the core as
-/// `Form::admit_frame`.
+/// has just published to the device, as the core rings it (`Form::publish`).
 #[derive(Clone, Copy)]
 pub struct Device {
     pub poll: fn(Core),
     pub publish: fn(Core),
-    pub admit_frame: Option<fn() -> bool>,
 }
 
 impl Device {
     pub const NONE: Device = Device {
         poll: |_| {},
         publish: |_| {},
-        admit_frame: None,
     };
 }
 
@@ -151,29 +144,6 @@ impl Core {
         )
     }
 
-    /// Loads the word at byte `at` of the memory with acquire, for a runtime
-    /// whose language has no atomics of its own.
-    pub fn load(self, at: u32) -> u32 {
-        self.word(at).load(Ordering::Acquire)
-    }
-
-    /// Stores `word` at byte `at` of the memory with release, for the same
-    /// runtime as `load`.
-    pub fn store(self, at: u32, word: u32) {
-        self.word(at).store(word, Ordering::Release);
-    }
-
-    fn word(self, at: u32) -> &'static AtomicU32 {
-        let (mem, bytes) = self.mem();
-        assert!(
-            at.is_multiple_of(4) && at as usize + 4 <= bytes,
-            "no word at {at} of a {bytes}-byte memory"
-        );
-        // SAFETY: an aligned word inside the memory, which lives as long as the
-        // process, and which both ends touch only as an atomic.
-        unsafe { AtomicU32::from_ptr(mem.as_ptr().add(at as usize).cast()) }
-    }
-
     pub fn heap_stat(self) -> HeapStat {
         alloc::stat()
     }
@@ -219,7 +189,7 @@ pub fn turn(machine: &Machine, deadline_ms: f64, boot: fn() -> BootInfo, entry: 
 }
 
 /// Exports the core under xpute's C names, which
-/// `rust/runtime/include/xpute.h` declares and documents. The first call to
+/// `ts/native/ios/CXpute/xpute.h` declares and documents. The first call to
 /// any of them boots the core with `cfg`, its thread looping on `entry`
 /// (`Entry`). The generated `core()` is left to the program for its own
 /// calls into the core.
@@ -289,16 +259,6 @@ macro_rules! native_abi {
         }
 
         #[no_mangle]
-        pub extern "C" fn xpute_load(at: u32) -> u32 {
-            xpute_native::core().load(at)
-        }
-
-        #[no_mangle]
-        pub extern "C" fn xpute_store(at: u32, word: u32) {
-            xpute_native::core().store(at, word);
-        }
-
-        #[no_mangle]
         pub extern "C" fn xpute_pause() {
             $crate::native::pause();
         }
@@ -329,11 +289,6 @@ macro_rules! native_abi {
             // SAFETY: the core's memory, reserved for the process's life, whose
             // rings the caller has laid.
             unsafe { $crate::native::attach(at.as_ptr() as usize, bytes, sq_at, cq_at, fs) };
-        }
-
-        #[no_mangle]
-        pub extern "C" fn xpute_touch(phase: u32, id: i32, x: f64, y: f64) {
-            $crate::native::touch(phase, id, x, y);
         }
 
         #[no_mangle]
@@ -449,7 +404,7 @@ macro_rules! native_abi {
 /// machine's thread stack, xpute's stop hook (`stop_hook`), and turns that
 /// begin only while the rings have room (`ready`). Given a `device`, each
 /// turn runs after the device's poll, the core rings the device as it
-/// publishes, and the core is handed the device's admission (`Device`);
+/// publishes (`Device`);
 /// xpute-gpu's `native_core!` passes its runtime this way.
 ///
 /// On Android it also exports the C ABI to JNI, as the `external` functions of
@@ -499,7 +454,6 @@ macro_rules! native_core {
                     data_end: $machine.global_base(),
                     now: $crate::native::now,
                     stop_hook: Some($crate::native::stop_hook),
-                    admit_frame: xpute_native_core::DEVICE.admit_frame,
                     publish: Some(xpute_native_core::publish),
                 },
             },
@@ -583,19 +537,6 @@ macro_rules! native_core {
             // SAFETY: the environment and object JNI called with.
             unsafe { $crate::jni::init(env, this) };
             xpute_attach(sq_at as u32, cq_at as u32, fs != 0);
-        }
-
-        #[cfg(target_os = "android")]
-        #[no_mangle]
-        extern "system" fn Java_xpute_Core_touch(
-            _env: *mut $crate::jni::sys::JNIEnv,
-            _this: $crate::jni::sys::jobject,
-            phase: $crate::jni::sys::jint,
-            id: $crate::jni::sys::jint,
-            x: $crate::jni::sys::jdouble,
-            y: $crate::jni::sys::jdouble,
-        ) {
-            xpute_touch(phase as u32, id, x, y);
         }
 
         #[cfg(target_os = "android")]
@@ -685,31 +626,6 @@ macro_rules! native_core {
                 $crate::jni::bytes(env, pkt)
             };
             $crate::native::call(cmd as u32, &pkt)
-        }
-
-        /// # Safety
-        /// Only JNI calls this, with the environment and object of its call.
-        #[cfg(target_os = "android")]
-        #[no_mangle]
-        unsafe extern "system" fn Java_xpute_Core_load(
-            _env: *mut $crate::jni::sys::JNIEnv,
-            _this: $crate::jni::sys::jobject,
-            at: $crate::jni::sys::jdouble,
-        ) -> $crate::jni::sys::jdouble {
-            f64::from(xpute_load(at as u32))
-        }
-
-        /// # Safety
-        /// Only JNI calls this, with the environment and object of its call.
-        #[cfg(target_os = "android")]
-        #[no_mangle]
-        unsafe extern "system" fn Java_xpute_Core_store(
-            _env: *mut $crate::jni::sys::JNIEnv,
-            _this: $crate::jni::sys::jobject,
-            at: $crate::jni::sys::jdouble,
-            word: $crate::jni::sys::jdouble,
-        ) {
-            xpute_store(at as u32, word as u32);
         }
 
         /// # Safety

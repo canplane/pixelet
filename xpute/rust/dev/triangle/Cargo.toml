@@ -1,0 +1,27 @@
+[package]
+name = "xpute-triangle"
+edition.workspace = true
+version.workspace = true
+# This shows how a core takes the GPU plugin, read beside the page and the app
+# that run it (ts/dev/triangle), and it is never published.
+publish = false
+
+# The WebAssembly module a page instantiates and the shared library an Android
+# app loads (cdylib), and the static library an iPhone app links (staticlib).
+[lib]
+path = "src/lib.rs"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+xpute-kit.workspace = true
+xpute-core.workspace = true
+xpute-gpu.workspace = true
+
+# Off WebAssembly the core is a library with its own thread and its GPU runtime.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+xpute-runtime.workspace = true
+xpute-gpu = { workspace = true, features = ["runtime"] }
+
+# A build script takes its link flags as a module from this (build.rs).
+[build-dependencies]
+xpute-core.workspace = true

@@ -55,11 +55,11 @@
         "The offset in the memory where the completion ring begins."
       ]
     },
-    "GPU_AT": {
+    "STREAM_AT": {
       "$val": 6,
       "$doc": [
-        "The offset of the GPU stream, which the runtime runs after each turn; 0 when the machine",
-        "asks for no GPU."
+        "The offset of the stream, which is run after each turn; 0 when the machine",
+        "asks for none."
       ]
     }
   },

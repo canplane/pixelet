@@ -16,6 +16,7 @@ mod machine;
 use xpute_core::wasm;
 
 fn main() {
+    let _ = machine::GPU_ASK;
     wasm::link(&machine::MACHINE.link());
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=src/sys/machine.spec.rs");

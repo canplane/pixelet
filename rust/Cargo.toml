@@ -188,7 +188,7 @@ codegen-units = 256
 incremental = true
 
 # The device's library as a dev build of the app rebuilds it
-# (xpute/ts/native/script/core-build.py), as `watch` is the module's: the
+# (ts/client/script/core-build.py), as `watch` is the module's: the
 # native profile's code, without the one codegen unit and the whole-graph
 # LTO that make every build of it start over, so a change recompiles the
 # crates it reaches. A Release build of the app takes `native`.
@@ -199,7 +199,7 @@ codegen-units = 256
 incremental = true
 
 # wgpu with one hal command buffer per encoder on every backend, and the iOS
-# Simulator's Metal capabilities: what the fork changes is xpute/rust/gpu/README.md's.
+# Simulator's Metal capabilities: what the fork changes is wgpu-fork.md's.
 [patch.crates-io]
 naga = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
 naga-types = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }

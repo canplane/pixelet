@@ -45,7 +45,7 @@ export const CQ_CAP: u32 = 128 as number;
 /** The size of one ring slot in bytes, enough for a packet of one number. */
 export const SLOT_BYTES: u32 = 256 as number;
 
-/** The length in words of the stream's range, its END word first. The header's GPU_AT word
+/** The length in words of the stream's range, its END word first. The header's STREAM_AT word
  * points at the stream, so the runtime runs it after every turn as it runs a GPU stream. */
 export const STREAM_WORDS: u32 = 256 as number;
 

@@ -14,7 +14,7 @@ import {
   GPU_WAITING,
   type Gpu,
 } from "@/abi/state.ts";
-import type { GpuState } from "@xpute/runtime";
+import type { GpuState } from "@xpute/gpu/gpu.ts";
 
 export const GPU_STATE: Readonly<Record<GpuState, Gpu>> = {
   present: GPU_PRESENT,

@@ -16,13 +16,13 @@ pub mod setting;
 
 /// What xpute's generator writes and reads with, shared: the generated file,
 /// the JSON's tree, and the text helpers.
-pub use xpute_tool::spec::{
+pub use xpute_gen::spec::{
     align_star, casing_note, enum_name, file, js_num, json_str, line_comments, pascal, rgb,
     rgb_literal, rs_doc, rs_ident, snake, ts_doc, Node, Output,
 };
 
 use serde::Deserialize;
-use xpute_tool::spec::generate_at;
+use xpute_gen::spec::generate_at;
 
 use crate::root;
 

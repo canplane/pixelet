@@ -192,7 +192,7 @@ std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now, std
         .door = std::move(door), .stream = Stream(m, at[STREAM], STREAM_WORDS), .files = {}, .handles = {}, .now = now};
     // The stream lies where a GPU stream would, so the runtime runs it after
     // every turn.
-    write_head(m, at[HEAD], Head{.sq_cap = SQ_CAP, .cq_cap = CQ_CAP, .slot_bytes = SLOT_BYTES, .sq_at = at[SQ_DESC], .cq_at = at[CQ_DESC], .gpu_at = at[STREAM]});
+    write_head(m, at[HEAD], Head{.sq_cap = SQ_CAP, .cq_cap = CQ_CAP, .slot_bytes = SLOT_BYTES, .sq_at = at[SQ_DESC], .cq_at = at[CQ_DESC], .stream_at = at[STREAM]});
     return at[HEAD];
 }
 

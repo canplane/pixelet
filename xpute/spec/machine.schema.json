@@ -75,14 +75,20 @@
         "$doc": { "$ref": "#/$defs/doc" }
       }
     },
-    "gpu": {
-      "description": "The GPU the core asks for: a stream past the rings the core writes its GPU calls into and the runtime runs after each turn (xpute-gpu), which says its own head (xpute-core ipc/stream.rs). Absent, none.",
+    "stream": {
+      "description": "A stream past the rings, which the core writes records into and something beside it runs.",
       "type": "object",
-      "required": ["bytes", "power", "features"],
+      "required": ["bytes"],
+      "additionalProperties": false,
+      "properties": { "bytes": { "type": "integer", "minimum": 1 } }
+    },
+    "gpu": {
+      "description": "What the core asks of its GPU, read by the GPU plugin.",
+      "type": "object",
+      "required": ["power", "features"],
       "additionalProperties": false,
       "properties": {
         "$doc": { "$ref": "#/$defs/doc" },
-        "bytes": { "type": "integer", "minimum": 1 },
         "power": { "description": "WebGPU's power preference.", "enum": ["low-power", "high-performance"] },
         "features": {
           "description": "WebGPU's feature names. The surface's format is the platform's, and the limits the adapter's.",
@@ -167,7 +173,8 @@
     "stack": ["mem", "rings"],
     "rings": ["mem", "stack"],
     "fs": ["mem", "stack", "rings"],
-    "gpu": ["mem", "stack", "rings"]
+    "stream": ["mem", "stack", "rings"],
+    "gpu": ["mem", "stack", "rings", "stream"]
   },
   "$defs": {
     "doc": { "type": "array", "items": { "type": "string" } },

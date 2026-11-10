@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use sha2::{Digest, Sha256};
-use xpute_tool::fmt::format_text;
+use xpute_gen::fmt::format_text;
 
 use pxl_tool::asset::table::{Pack, Row};
 use pxl_tool::asset::{glb, pack, symbol, table};

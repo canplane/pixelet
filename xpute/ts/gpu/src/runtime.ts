@@ -195,6 +195,12 @@ export class GpuRuntime {
     u32,
     { handle: u32; context: GPUCanvasContext }
   >();
+  /** What the core said of a slot before its canvas was bound, which the bind
+   * applies: a bind and a resize reach a worker on two ports, in no order. */
+  private readonly _before_bind = new Map<
+    u32,
+    { cfg?: GPUCanvasConfiguration; size?: [u32, u32] }
+  >();
   /** This holds each slot's newest handle, kept after it is let go, so that an
    * older handle's bind is refused. */
   private readonly _seen = new Map<u32, u32>();
@@ -239,6 +245,14 @@ export class GpuRuntime {
     const was = this._surfaces.get(slot);
     if (was && was.context !== context) was.context.unconfigure();
     this._surfaces.set(slot, { handle, context });
+    const before = this._before_bind.get(slot);
+    if (before) {
+      this._before_bind.delete(slot);
+      if (before.size) {
+        [context.canvas.width, context.canvas.height] = before.size;
+      }
+      if (before.cfg) context.configure(before.cfg);
+    }
     return true;
   }
 
@@ -251,6 +265,15 @@ export class GpuRuntime {
     bound.context.unconfigure();
     this._surfaces.delete(slot);
     return true;
+  }
+
+  private _unbound(slot: u32): {
+    cfg?: GPUCanvasConfiguration;
+    size?: [u32, u32];
+  } {
+    let held = this._before_bind.get(slot);
+    if (!held) this._before_bind.set(slot, (held = {}));
+    return held;
   }
 
   /** Forgets every object of the device that went, and tells the core in its
@@ -1167,10 +1190,11 @@ export class GpuRuntime {
         return;
       }
       case op.CONFIGURE: {
-        const context = this._surfaces.get(r.u())?.context;
+        const slot = r.u();
+        const context = this._surfaces.get(slot)?.context;
         const format = r.u();
         const [usage, alphaMode] = [r.u(), CANVAS_ALPHA_MODE[r.u()]];
-        context?.configure({
+        const cfg: GPUCanvasConfiguration = {
           device: d,
           format:
             format === SURFACE_PREFERRED
@@ -1178,13 +1202,17 @@ export class GpuRuntime {
               : TEXTURE_FORMAT[format],
           usage,
           alphaMode,
-        });
+        };
+        if (context) context.configure(cfg);
+        else this._unbound(slot).cfg = cfg;
         return;
       }
       case op.RESIZE: {
-        const canvas = this._surfaces.get(r.u())?.context.canvas;
+        const slot = r.u();
+        const canvas = this._surfaces.get(slot)?.context.canvas;
         const [width, height] = [r.u(), r.u()];
-        if (canvas && (canvas.width !== width || canvas.height !== height)) {
+        if (!canvas) this._unbound(slot).size = [width, height];
+        else if (canvas.width !== width || canvas.height !== height) {
           [canvas.width, canvas.height] = [width, height];
         }
         return;

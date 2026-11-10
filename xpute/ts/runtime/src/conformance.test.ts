@@ -193,7 +193,7 @@ class Runtime {
     this.head = new Uint32Array(mem, core.head_at, WORDS);
     this.sq = new Ring(mem, head.sq_at);
     this._cq = new Ring(mem, head.cq_at);
-    this._stream_at = head.gpu_at;
+    this._stream_at = head.stream_at;
     // The fixture makes one call, INC, as a frame it laid at `at` in its
     // completion ring without publishing it.
     core.answer_with((at) => {

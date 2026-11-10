@@ -28,7 +28,7 @@ def repo_of(start):
 
 REPO = repo_of(APP)
 RUST = REPO / "rust"
-NUMBER_PATHS = REPO / "xpute/ts/native/script/number-paths.py"
+NUMBER_PATHS = APP / "script/number-paths.py"
 TARGET = "wasm32-unknown-unknown"
 # Cargo's own rule for its target directory: CARGO_TARGET_DIR, or else the
 # workspace's target/.
@@ -101,7 +101,7 @@ def finish(*args):
 
 
 def number_paths(module, table):
-    """xpute's own step, which numbers a native core's paths the same way."""
+    """The step that numbers a device core's paths the same way."""
     proc = subprocess.run([sys.executable, str(NUMBER_PATHS), str(module), str(table), str(RUST)], stdout=subprocess.PIPE, text=True)
     if proc.returncode != 0:
         raise Failed(proc.returncode)

@@ -38,9 +38,9 @@ pub mod word {
     pub const SQ_AT: u32 = 4;
     /// The offset in the memory where the completion ring begins.
     pub const CQ_AT: u32 = 5;
-    /// The offset of the GPU stream, which the runtime runs after each turn; 0 when the machine
-    /// asks for no GPU.
-    pub const GPU_AT: u32 = 6;
+    /// The offset of the stream, which is run after each turn; 0 when the machine
+    /// asks for none.
+    pub const STREAM_AT: u32 = 6;
     pub const KEYS: &[&str] = &[
         "MAGIC",
         "SQ_CAP",
@@ -48,7 +48,7 @@ pub mod word {
         "SLOT_BYTES",
         "SQ_AT",
         "CQ_AT",
-        "GPU_AT",
+        "STREAM_AT",
     ];
 }
 

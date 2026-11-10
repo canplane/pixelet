@@ -41,9 +41,9 @@ inline constexpr std::uint32_t SQ_AT = 4u;
 // The offset in the memory where the completion ring begins.
 inline constexpr std::uint32_t CQ_AT = 5u;
 
-// The offset of the GPU stream, which the runtime runs after each turn; 0 when the machine
-// asks for no GPU.
-inline constexpr std::uint32_t GPU_AT = 6u;
+// The offset of the stream, which is run after each turn; 0 when the machine
+// asks for none.
+inline constexpr std::uint32_t STREAM_AT = 6u;
 } // namespace word
 
 // The header's length in words.

@@ -7,26 +7,28 @@
 # core's form lives in its end's path: `core`'s `wasm` (a module's link
 # arguments, which a build script takes it for, and its entry) and `runtime`'s
 # `native`. `dev/` holds what develops them: `conformance`, the core the contract's traces
-# drive (spec/conformance/), the example and the generator.
+# drive (spec/conformance/), the example and xpute's own use of the generator (`gen`).
 
 [workspace]
 resolver = "2"
-members = ["kit", "core", "runtime", "gpu", "dev/conformance", "dev/example", "dev/tool"]
+members = ["kit", "core", "runtime", "gpu", "dev/conformance", "dev/example", "dev/triangle", "gen", "dev/tool"]
 
 [workspace.dependencies]
 # Each of the workspace's own crates is given by its path once, so a crate
 # names another by name.
-xpute-kit = { path = "kit" }
-xpute-core = { path = "core" }
-xpute-runtime = { path = "runtime" }
+xpute-kit = { path = "kit", version = "0.1.0" }
+xpute-core = { path = "core", version = "0.1.0" }
+xpute-runtime = { path = "runtime", version = "0.1.0" }
+xpute-gpu = { path = "gpu", version = "0.1.0" }
+xpute-gen = { path = "gen", version = "0.1.0" }
 # A test reads a golden packet's bytes back with this.
 hex = "0.4"
 
 [workspace.package]
 edition = "2021"
-version = "0.0.0"
-publish = false
-# The library crates (kit, core, runtime, gpu) carry these for a registry.
+version = "0.1.0"
+publish = true
+# The library crates (kit, core, runtime, gpu, gen) carry these for a registry.
 license = "MIT"
 repository = "https://github.com/canplane/xpute"
 readme = "../README.md"
@@ -38,16 +40,3 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
-
-# wgpu with one hal command buffer per encoder on every backend, and the iOS
-# Simulator's Metal capabilities: what the fork changes is xpute/rust/gpu/README.md's.
-[patch.crates-io]
-naga = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-naga-types = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu-core = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu-core-deps-apple = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu-core-deps-windows-linux-android = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu-hal = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu-naga-bridge = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu-types = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }

@@ -19,16 +19,14 @@ use crate::sys::section;
 use pxl_render::gpu::api;
 use pxl_render::gpu::upload;
 use xpute_core::entry::BootInfo;
-use xpute_core::machine::Gpu;
 use xpute_core::mem::section::span_of;
 use xpute_core::mem::section::{Section, PAGE_BYTES};
 use xpute_kit::status::errno::Errno;
 
-// The core's machine must take the GPU device, because the renderer draws
-// through it.
-const GPU: Gpu = match MACHINE.gpu {
-    Some(g) => g,
-    None => panic!("the core's machine takes the GPU device"),
+// The core's machine must have a stream, because the renderer draws through it.
+const STREAM_BYTES: u32 = match MACHINE.stream {
+    Some(s) => s.bytes,
+    None => panic!("the core's machine has a stream"),
 };
 
 /// The ranges of `.fixed`, in address order. A range belongs here only when
@@ -147,7 +145,7 @@ pub(crate) fn install(b: &BootInfo) {
     // renderer's alone.
     unsafe {
         upload::set_uploads(range(Fixed::Uploads).off, MAX_LIVE_UPLOADS);
-        api::install(MACHINE.gpu_at(), GPU.bytes);
+        api::install(MACHINE.stream_at(), STREAM_BYTES);
     }
 }
 

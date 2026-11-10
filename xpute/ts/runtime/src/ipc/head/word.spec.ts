@@ -19,6 +19,6 @@ export const SQ_AT = 4 as number;
 /** The offset in the memory where the completion ring begins. */
 export const CQ_AT = 5 as number;
 
-/** The offset of the GPU stream, which the runtime runs after each turn; 0 when the machine
- * asks for no GPU. */
-export const GPU_AT = 6 as number;
+/** The offset of the stream, which is run after each turn; 0 when the machine
+ * asks for none. */
+export const STREAM_AT = 6 as number;

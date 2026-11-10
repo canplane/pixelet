@@ -51,7 +51,6 @@ function ui(cmds: number[] = []): Ui & { heard: unknown[] } {
     heard,
     on: (_tag, cmd, f, named) =>
       heard.push([cmd, f?.at(0).get<number>(), [...(named ?? [])]]),
-    gpu: (state) => heard.push(state),
     stop: () => heard.push("stop"),
   };
 }
@@ -114,7 +113,7 @@ test("remote - once the core stops, a request waiting and every one after answer
   port1.close();
 });
 
-test("remote - the UI's calls reach the runtime by name, and the GPU comes down", async () => {
+test("remote - the UI's calls reach the runtime by name", async () => {
   const { port1, port2 } = new MessageChannel();
   const asked: string[] = [];
   const paused = Promise.withResolvers<void>();
@@ -132,10 +131,8 @@ test("remote - the UI's calls reach the runtime by name, and the GPU comes down"
   link.visible(false);
   link.wake();
   link.pause();
-  end.ui.gpu("present");
   await paused.promise;
   await tick();
   assert.deepStrictEqual(asked, ["resume", "visible false", "wake", "pause"]);
-  assert.deepStrictEqual(u.heard, ["present"]);
   port1.close();
 });

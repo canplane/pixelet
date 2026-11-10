@@ -151,8 +151,8 @@ pub fn publish(core: Core, stream_at: u32) {
     let _ = work.send(job);
 }
 
-/// This is the runtime's admission (`crate::admit`), handed to the core with
-/// its boot (xpute-core `Form::admit_frame`). It admits a frame while fewer
+/// This is the runtime's admission (`crate::admit`), which `core!` gives the
+/// program. It admits a frame while fewer
 /// than the frame latency are unfinished. Before the device opens, it admits
 /// every frame.
 pub fn admit_frame() -> bool {
@@ -161,7 +161,7 @@ pub fn admit_frame() -> bool {
 
 /// These are the numbers the exports below return besides 0, which means done.
 /// They are the C ABI's, and an embedder's header states them as they are here
-/// (include/xpute_gpu.h).
+/// (@xpute/gpu ios/CXputeGpu/xpute_gpu.h).
 ///
 /// `xpute_gpu_open` returns this when no device opens as the program asks.
 pub const NO_DEVICE: i32 = -1;
@@ -373,40 +373,29 @@ macro_rules! native_abi {
 }
 
 /// This defines a core of `machine` (its `MACHINE`) linked into this process
-/// with the GPU's runtime beside it. xpute-core's `core!` expands to it off
-/// WebAssembly when it is given the GPU's numbers. It is xpute-runtime's
+/// with the GPU's runtime beside it. This crate's `core!` expands to it off
+/// WebAssembly. It is xpute-runtime's
 /// `native_core!` with this runtime as its device: `poll` runs before each
-/// turn, `publish` runs the stream at the machine's `gpu_at` as the core rings,
-/// and `admit_frame` is the core's admission. It is also `native_abi!`, with
-/// the device the machine's GPU declares (`Ask::of`) and `numbers` made a
+/// turn, `publish` runs the stream at the machine's `stream_at` as the core rings.
+/// It is also `native_abi!`, with
+/// the device `ask` declares (`Ask::of`) and `numbers` made a
 /// `Config` by the platform's defaults (`config`). The program's crate depends
 /// on xpute-core and xpute-runtime besides this crate.
 #[macro_export]
 macro_rules! native_core {
-    ($machine:expr, $fixed_bytes:expr, $entry:expr, $numbers:expr $(,)?) => {
+    ($machine:expr, $fixed_bytes:expr, $entry:expr, $numbers:expr, $ask:expr $(,)?) => {
         ::xpute_runtime::native_core!(
             $machine,
             $fixed_bytes,
             $entry,
             device: ::xpute_runtime::native::Device {
                 poll: $crate::runtime::native::poll,
-                publish: |core| $crate::runtime::native::publish(core, $machine.gpu_at()),
-                admit_frame: Some($crate::runtime::native::admit_frame),
+                publish: |core| $crate::runtime::native::publish(core, $machine.stream_at()),
             }
         );
 
-        mod xpute_gpu_socket {
-            #[allow(unused_imports)]
-            use super::*;
-
-            pub(super) const GPU: ::xpute_core::machine::Gpu = match $machine.gpu {
-                Some(gpu) => gpu,
-                None => panic!("a core with the GPU's runtime takes the GPU device"),
-            };
-        }
-
         $crate::native_abi!(
-            $crate::runtime::Ask::of(&xpute_gpu_socket::GPU),
+            $crate::runtime::Ask::of($ask),
             $crate::runtime::native::config($numbers)
         );
     };

@@ -20,6 +20,7 @@ export interface Page {
 export type ToCore =
   | Page
   | { kind: "refused"; files: readonly RefusedFile[] }
+  | { kind: "gpu"; port: MessagePort }
   | { kind: "perf"; id: u32; what: string; args: unknown[] };
 
 export type ToUi =

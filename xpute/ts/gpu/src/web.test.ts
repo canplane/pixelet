@@ -2,7 +2,7 @@
 
 import { afterEach, expect, test, vi } from "vitest";
 
-import type { GpuGrant } from "@xpute/runtime";
+import type { GpuGrant } from "./gpu.ts";
 import { WebGpu } from "./web.ts";
 
 afterEach(() => {

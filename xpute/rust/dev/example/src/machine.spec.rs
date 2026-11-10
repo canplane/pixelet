@@ -18,7 +18,7 @@ pub const MACHINE: Machine = Machine {
     cq_cap: 16,
     turn_posts: 1,
     fs: false,
-    gpu: None,
+    stream: None,
 };
 
 // The runtime's MACHINE places the front's parts at these same numbers.
@@ -27,4 +27,4 @@ const _: () = assert!(MACHINE.sq_at() == 69632);
 const _: () = assert!(MACHINE.cq_at() == 73728);
 const _: () = assert!(MACHINE.sq_slots_at() == 77824);
 const _: () = assert!(MACHINE.cq_slots_at() == 79872);
-const _: () = assert!(MACHINE.gpu_at() == 0);
+const _: () = assert!(MACHINE.stream_at() == 0);

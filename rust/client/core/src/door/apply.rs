@@ -1,9 +1,9 @@
 // pxl-core/door/apply.rs
 
 //! Applies the commands the UI's protocol carries, each major's commands in
-//! its own module beside this one. It also applies the xpute commands the
-//! door hands over already decoded: a surface lent (`on_surface`), a turn's
-//! pacing (turn.rs `turn`) and a changed file (fs.rs `changed`).
+//! its own module beside this one. It also applies a surface lent
+//! (`on_surface`), which xpute-gpu decodes, and the xpute commands the door
+//! hands over already decoded: a turn's pacing (turn.rs `turn`) and a changed file (fs.rs `changed`).
 
 mod camera;
 mod edit;
@@ -20,7 +20,8 @@ pub(super) mod turn;
 use super::State;
 use crate::door::cmd::{self as abi, ui};
 use crate::sys::sched::edge;
-use xpute_core::ipc::door::{Outcome, Surface};
+use xpute_core::ipc::door::Outcome;
+use xpute_gpu::submission::Surface;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
