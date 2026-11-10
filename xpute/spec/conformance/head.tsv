@@ -9,4 +9,4 @@ scenarios	C0.boot
 # the ring at SQ_AT or CQ_AT says again in its own header.
 C0.boot.head.sizes	SQ_CAP CQ_CAP SLOT_BYTES
 # The words that say where a part lies, none of them 0: the two rings and the stream.
-C0.boot.head.places	SQ_AT CQ_AT GPU_AT
+C0.boot.head.places	SQ_AT CQ_AT STREAM_AT

@@ -29,10 +29,8 @@ final class DisplayFrames: NSObject {
   }
 }
 
-/// This is xpute's native module on iOS (src/mod.ts). It reaches the core and
-/// its GPU runtime through xpute's C ABI (xpute.h, xpute_gpu.h), and holds the
-/// view the core's surface draws into (SurfaceView.swift). android/'s
-/// XputeModule.kt is the same module under the same names.
+/// This is xpute's native module on iOS (src/mod.ts). It reaches the core through
+/// xpute's C ABI (xpute.h). android/'s XputeModule.kt is the same module under the same names.
 public class XputeModule: Module {
   /// The function given to `xpute_notify_on` sends its event through this
   /// module.
@@ -78,16 +76,6 @@ public class XputeModule: Module {
       // The region belongs to the core for the app's whole life, so nothing
       // is freed when the buffer is.
       return try NativeArrayBuffer.wrap(dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: Int(bytes)), cleanup: {})
-    }
-
-    // A word crosses as a Double: every u32 fits in one, and Expo's fast path
-    // takes it.
-    Function("load") { (at: Double) -> Double in
-      Double(xpute_load(UInt32(at)))
-    }
-
-    Function("store") { (at: Double, word: Double) in
-      xpute_store(UInt32(at), UInt32(word))
     }
 
     Function("wake") {
@@ -151,22 +139,8 @@ public class XputeModule: Module {
       XputeModule.answer = answer.copy()
     }
 
-    Function("gpuOpen") { () -> Bool in
-      xpute_gpu_open() == 0
-    }
-
     Function("say") { (line: String) in
       FileHandle.standardOutput.write(Data((line + "\n").utf8))
-    }
-
-    View(SurfaceView.self) {
-      Events("onAttach", "onDetach")
-      Prop("surface") { (view: SurfaceView, surface: UInt32) in
-        view.surface = surface
-      }
-      Prop("touches") { (view: SurfaceView, touches: Bool) in
-        view.touches = touches
-      }
     }
   }
 }

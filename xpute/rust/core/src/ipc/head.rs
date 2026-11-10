@@ -2,7 +2,7 @@
 
 //! `Head` is the header of the memory's front (spec/ipc/head.json; the front is
 //! described in machine.rs). A runtime writes these words in the page past the
-//! stack before the first turn, and they say where the rings and the GPU
+//! stack before the first turn, and they say where the rings and the
 //! stream it laid out lie. A core of a machine checks the header against the
 //! machine's numbers (machine.rs `boot`). A core that lays out its own front,
 //! as the conformance core does, writes the header itself (`write`).
@@ -21,8 +21,8 @@ pub struct Head {
     pub slot_bytes: u32,
     pub sq_at: u32,
     pub cq_at: u32,
-    /// 0 without the GPU device.
-    pub gpu_at: u32,
+    /// 0 without a stream.
+    pub stream_at: u32,
 }
 
 impl Head {
@@ -34,7 +34,7 @@ impl Head {
         w[word::SLOT_BYTES as usize] = self.slot_bytes;
         w[word::SQ_AT as usize] = self.sq_at;
         w[word::CQ_AT as usize] = self.cq_at;
-        w[word::GPU_AT as usize] = self.gpu_at;
+        w[word::STREAM_AT as usize] = self.stream_at;
         w
     }
 }

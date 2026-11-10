@@ -1,0 +1,25 @@
+[package]
+name = "xpute-gen"
+description = "xpute's generator: a program's machine and protocols, for both ends"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+# This generates a program's machine and protocols where each one's `gen` says:
+# `xpute-gen <machine.json> <protocol.json>...`, with `--check` to fail where
+# one is stale.
+[[bin]]
+name = "xpute-gen"
+path = "src/bin/gen.rs"
+
+# The generator depends on no crate of the workspace, because it writes into
+# them.
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }

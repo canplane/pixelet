@@ -2,6 +2,7 @@
 //
 // GENERATED from spec/client/core/door/ui.json
 
+export const GPU = 0x10;
 export const INPUT = 0x11;
 export const SENSOR = 0x12;
 export const SOURCE = 0x13;

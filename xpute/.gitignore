@@ -33,6 +33,8 @@ target/
 # What the native module's Gradle build leaves beside it.
 ts/native/android/build/
 ts/native/android/.gradle/
+ts/gpu/android/build/
+ts/gpu/android/.gradle/
 
 # A library's locks are its consumer's to keep.
 rust/Cargo.lock

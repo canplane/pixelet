@@ -23,7 +23,6 @@ function ui(): Ui & { stops: number } {
     cmds: [],
     stops: 0,
     on() {},
-    gpu() {},
     stop() {
       this.stops++;
     },

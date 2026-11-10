@@ -15,7 +15,7 @@ import { MAGIC, WORDS, word } from "./head.spec.ts";
 import * as ring from "./ring.spec.ts";
 
 /** A `Front` is the front a machine declares: the rings' sizes, and where the
- * rings, their slots and the GPU stream lie. `gpu_at` is 0 without the GPU
+ * rings, their slots and the GPU stream lie. `stream_at` is 0 without the GPU
  * device. */
 export interface Front {
   sq_cap: u32;
@@ -25,7 +25,7 @@ export interface Front {
   cq_at: u32;
   sq_slots_at: u32;
   cq_slots_at: u32;
-  gpu_at: u32;
+  stream_at: u32;
 }
 
 /** This says whether a header is laid at `at`. A core that outlived its
@@ -44,7 +44,7 @@ export function lay(mem: ArrayBufferLike, at: u32, f: Front): void {
   h[word.SLOT_BYTES] = f.slot_bytes;
   h[word.SQ_AT] = f.sq_at;
   h[word.CQ_AT] = f.cq_at;
-  h[word.GPU_AT] = f.gpu_at;
+  h[word.STREAM_AT] = f.stream_at;
   for (const [ring_at, cap, slots_at] of [
     [f.sq_at, f.sq_cap, f.sq_slots_at],
     [f.cq_at, f.cq_cap, f.cq_slots_at],
@@ -62,13 +62,13 @@ export function lay(mem: ArrayBufferLike, at: u32, f: Front): void {
 export class Head {
   readonly sq_at: u32;
   readonly cq_at: u32;
-  readonly gpu_at: u32;
+  readonly stream_at: u32;
 
   constructor(mem: ArrayBufferLike, at: u32) {
     const h = new Uint32Array(mem, at, WORDS);
     if (h[word.MAGIC] !== MAGIC) throw new MarshalError(Errno.EBADMSG);
     this.sq_at = h[word.SQ_AT];
     this.cq_at = h[word.CQ_AT];
-    this.gpu_at = h[word.GPU_AT];
+    this.stream_at = h[word.STREAM_AT];
   }
 }

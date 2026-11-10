@@ -8,6 +8,9 @@
  * memory.
  */
 
+import { gpu_grant } from "@xpute/gpu/gpu.ts";
+import { gpu_serve } from "@xpute/gpu/web.ts";
+import { Major } from "@/abi/cmd.spec.ts";
 import { type Link, serve } from "@xpute/runtime";
 import { MACHINE } from "@/abi/machine.spec.ts";
 import {
@@ -25,6 +28,7 @@ import type { Page, ToCore, ToUi } from "@/runtime/page.ts";
 import { fs_changed } from "@/service/core/fs.ts";
 import { answer, type PerfRead } from "@/service/core/perf.ts";
 import { source_declare } from "@/service/core/source.ts";
+import { gpu } from "@/service/platform/gpu.ts";
 import * as online from "@/service/platform/online.ts";
 
 const tell = (m: ToUi) => postMessage(m);
@@ -34,6 +38,8 @@ onmessage = ({ data: m }: MessageEvent<ToCore>) => {
   switch (m.kind) {
     case "page":
       return page.resolve(m);
+    case "gpu":
+      return gpu_serve(m.port, gpu);
     case "refused":
       return follow_refused_files(m.files, fs_changed);
     case "perf":
@@ -76,4 +82,7 @@ function up(link: Link): void {
 void serve({
   machine: MACHINE,
   core: async () => config(await keep()),
-}).then(up);
+}).then((r) => {
+  gpu_grant(gpu, r, MACHINE.gpu, Major.GPU);
+  up(r);
+});

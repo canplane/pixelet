@@ -6,6 +6,8 @@
 
 use crate::door::cmd::{Command, InputPointer, PointerPhase, PointerType};
 use xpute_kit::wire::xtp::PacketWriter;
+#[cfg(target_os = "android")]
+use xpute_runtime::jni::sys::{jclass, jdouble, jint, JNIEnv};
 use xpute_runtime::native;
 
 /// More than an INPUT_POINTER's packet.
@@ -33,6 +35,22 @@ fn touch(phase: u32, id: i32, x: f64, y: f64) {
     native::post(0, Command::INPUT_POINTER as u32, 0, 0, &buf[..len as usize]);
 }
 
-pub(crate) fn install() {
-    native::touch_by(touch);
+/// A touch on the world view, from the platform's main thread: 0 down, 1 move,
+/// 2 up, 3 out and 4 cancel, at x, y in the view's own units.
+#[no_mangle]
+pub extern "C" fn pxl_touch(phase: u32, id: i32, x: f64, y: f64) {
+    touch(phase, id, x, y);
+}
+
+#[cfg(target_os = "android")]
+#[no_mangle]
+extern "system" fn Java_me_plei_pixelet_platform_PxlNative_touch(
+    _env: *mut JNIEnv,
+    _class: jclass,
+    phase: jint,
+    id: jint,
+    x: jdouble,
+    y: jdouble,
+) {
+    touch(phase as u32, id, x, y);
 }

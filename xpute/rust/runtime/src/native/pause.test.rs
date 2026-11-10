@@ -52,7 +52,6 @@ fn paused_runs_only_the_rung_turn() {
                 data_end: 0,
                 now: || 0.0,
                 stop_hook: None,
-                admit_frame: None,
                 publish: None,
             },
         },

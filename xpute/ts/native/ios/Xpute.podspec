@@ -2,10 +2,9 @@
 #
 # This is xpute's module on an iPhone (*.swift), and the core linked with it.
 # The core is the app's core crate, as the app's package.json `xpute.core` names
-# it, and script/core-build.py builds it for the configuration and the SDK the
-# app is built as, into a directory each has of its own, which the app links
-# from. Swift imports xpute's C ABI from there (`import CXpute`), and the
-# crate's own headers beside it, where the crate has an include/.
+# it. The app builds it into this pod's directory, for the configuration and the
+# SDK the app is built as, and the app links from there. Swift imports xpute's
+# C ABI (`import CXpute`).
 
 require 'json'
 
@@ -19,10 +18,10 @@ include = '"$(PODS_CONFIGURATION_BUILD_DIR)/Xpute/include"'
 
 Pod::Spec.new do |s|
   s.name = 'Xpute'
-  s.version = '0.0.0'
+  s.version = '0.1.0'
   s.summary = "xpute's native module, and the core linked with it."
   s.homepage = 'https://github.com/canplane/xpute'
-  s.license = { type: 'UNLICENSED' }
+  s.license = { type: 'MIT' }
   s.author = 'xpute'
   s.source = { git: '' }
   s.platforms = { ios: '16.4' }
@@ -32,12 +31,17 @@ Pod::Spec.new do |s|
   s.dependency 'ExpoModulesCore'
   s.source_files = '*.swift'
 
-  # This runs on every build: cargo is what knows whether the core is current,
-  # and answers in a moment when it is. rustup's installer puts its tools in the
-  # home directory, which Xcode's PATH does not name.
+  # A file is written only where it differs, as a newer header rebuilds every
+  # Swift module that imports it.
   s.script_phase = {
-    name: 'Build the core',
-    script: "export PATH=\"$HOME/.cargo/bin:$PATH\"; exec \"$PODS_TARGET_SRCROOT/../script/core-build.py\" --app \"#{app}\"",
+    name: 'Put the C ABI where Swift imports it',
+    script: <<~'SH',
+      dir="$PODS_CONFIGURATION_BUILD_DIR/Xpute/include/CXpute"
+      mkdir -p "$dir"
+      for src in "$PODS_TARGET_SRCROOT/CXpute/xpute.h" "$PODS_TARGET_SRCROOT/CXpute/module.modulemap"; do
+        cmp -s "$src" "$dir/$(basename "$src")" || cp "$src" "$dir/"
+      done
+    SH
     execution_position: :before_compile,
     always_out_of_date: '1',
   }

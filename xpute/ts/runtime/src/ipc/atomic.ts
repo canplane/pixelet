@@ -2,8 +2,7 @@
 
 /**
  * A word of the core's memory that both ends touch is loaded with acquire and
- * stored with release. A native app's bundler takes atomic.native.ts in this
- * file's place, for an engine with no `Atomics`.
+ * stored with release.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";

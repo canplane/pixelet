@@ -5,7 +5,7 @@ use crate::domain::control::camera::state::{camera_state, Intent};
 use crate::domain::control::navigation::destination;
 use crate::domain::control::param;
 use crate::sys;
-use xpute_core::abi::gpu::GpuSurfaceClose;
+use xpute_gpu::abi::GpuSurfaceClose;
 use xpute_kit::wire::xtp::PacketWriter;
 
 fn surface(n: f64) -> Result<u32, Errno> {

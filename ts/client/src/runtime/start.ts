@@ -21,7 +21,7 @@ import { text_layout, text_raster } from "@/service/core/text.ts";
 import { answer, type PerfRead } from "@/service/core/perf.ts";
 import type { Perf } from "@/service/core/core.ts";
 import { source } from "@/service/platform/core.ts";
-import { gpu } from "@/service/platform/gpu.ts";
+import { after_turn } from "@/service/platform/gpu.ts";
 
 function calls() {
   return new Map<number, (f: BranchCursor) => i32 | void>([
@@ -52,7 +52,7 @@ export function config(handheld: boolean): Config<FrameGrant> {
       bytes: handheld ? Math.min(...sizes) : Math.max(...sizes),
     }),
     fs: namespace(),
-    gpu,
+    after_turn,
     policy: pacing,
     submit: () => {},
     program: (_tag, cmd, f) => asked.get(cmd)?.(f!),

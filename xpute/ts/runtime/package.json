@@ -1,8 +1,22 @@
 {
   "name": "@xpute/runtime",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/canplane/xpute",
+    "directory": "ts/runtime"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "!src/conformance.spec.ts",
+    "!src/conformance"
+  ],
   "exports": {
     ".": "./src/mod.ts",
     "./*": "./src/*"

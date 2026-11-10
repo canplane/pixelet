@@ -30,7 +30,7 @@
 #include "xpute/kit/status/error.hpp"
 #include "xpute/kit/wire/xtp/cursor.hpp"
 #include "xpute/kit/wire/xtp/encode.hpp"
-#include "number.hpp"
+#include "xpute/core/abi/number.hpp"
 
 namespace xpute::abi::sys {
 

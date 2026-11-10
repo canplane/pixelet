@@ -1,7 +1,7 @@
 // @pxl/app/modules/platform/android/build.gradle
 //
 // The device's half of the app's platform on Android, in src/main/java/.
-// xpute's module (@xpute/native) builds and packs the core.
+// This module builds and packs the core (script/core-build.py).
 
 plugins {
   id 'com.android.library'
@@ -11,8 +11,12 @@ plugins {
 group = 'me.plei.pixelet'
 version = '0.0.0'
 
+// The app is the directory over its android/.
+def app = rootProject.projectDir.parentFile
+
 android {
   namespace "me.plei.pixelet.platform"
+  ndkVersion rootProject.ext.ndkVersion
   defaultConfig {
     versionCode 1
     versionName "0.0.0"
@@ -22,5 +26,32 @@ android {
 
 dependencies {
   implementation 'androidx.core:core-ktx:1.16.0'
+  // The world's surface subclasses xpute's (WorldView.kt).
+  implementation project(':xpute-gpu')
 }
 
+// Each variant's library lies in a directory of its own, which that variant
+// alone packs.
+["debug", "release"].each { variant ->
+  def out = layout.buildDirectory.dir("core/${variant}")
+  android.sourceSets[variant].jniLibs.srcDirs += out.get().asFile
+
+  def build = tasks.register("buildCore${variant.capitalize()}", Exec) {
+    // cargo is what knows whether the core is current, and answers in a
+    // moment when it is: the task runs every build.
+    outputs.upToDateWhen { false }
+    def home = System.getProperty("user.home")
+    // rustup's installer puts its tools in the home directory, which
+    // Gradle's PATH need not name.
+    environment "PATH", "${home}/.cargo/bin:${System.getenv("PATH")}"
+    doFirst {
+      commandLine "${app}/script/core-build.py", "--android",
+        "--app", app.absolutePath,
+        "--variant", variant,
+        "--out", out.get().asFile.absolutePath,
+        "--ndk", android.ndkDirectory.absolutePath,
+        "--api", rootProject.ext.minSdkVersion.toString()
+    }
+  }
+  tasks.matching { it.name == "merge${variant.capitalize()}JniLibFolders" }.configureEach { dependsOn build }
+}

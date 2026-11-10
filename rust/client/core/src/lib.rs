@@ -19,7 +19,7 @@ pub(crate) mod ui;
 
 use door::layout::FIXED_BYTES;
 use pxl_render::api_spec::device;
-use sys::machine::MACHINE;
+use sys::machine::{GPU_ASK, MACHINE};
 use xpute_gpu::CoreConfig;
 
 /// How a device's GPU runtime paces the renderer's stream, as
@@ -31,4 +31,4 @@ const GPU: CoreConfig = CoreConfig {
 
 // The heap starts past the core's fixed ranges (door/layout.rs). The first
 // turn opens the front the runtime laid out where the machine places it.
-xpute_core::core!(MACHINE, FIXED_BYTES, door::run, gpu: GPU);
+xpute_gpu::core!(MACHINE, FIXED_BYTES, door::run, GPU, GPU_ASK);

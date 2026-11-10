@@ -9,7 +9,6 @@
 pub mod spec;
 
 use crate::domain::layer::Base as _;
-use crate::sys::boot;
 use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
 use xpute_core::sched::edge::{notified, Notify};
@@ -340,7 +339,7 @@ async fn frame_task() {
         // whose stream the runtime still holds (xpute_core ipc/stream.rs R3),
         // does not run. Its grant waits for the next turn, so the renderer is
         // never handed a frame it would have to put off.
-        if !api::stream_free() || (api::device().is_some() && !boot::admit_frame()()) {
+        if !api::stream_free() || (api::device().is_some() && !crate::admit_frame()) {
             request_world_tick();
             continue;
         }

@@ -86,6 +86,15 @@ public class PlatformModule: Module {
 
     // ---- the keyboard (ts/client/src/ui/shared/component/above-keyboard.native.tsx, KeyboardDock.swift) ----
 
+    // ---- the world's surface (service/platform/surface.native.tsx) ----
+
+    View(WorldView.self) {
+      Events("onAttach", "onDetach")
+      Prop("surface") { (view: WorldView, surface: UInt32) in
+        view.surface = surface
+      }
+    }
+
     View(KeyboardDock.self) {
       Events("onLift")
       Prop("clearance") { (view: KeyboardDock, clearance: Double) in

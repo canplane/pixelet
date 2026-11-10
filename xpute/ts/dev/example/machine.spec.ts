@@ -4,7 +4,7 @@
 
 /** The machine its JSON declares: the sizes a runtime may give, what a
  * reservation is counted in, the rings' sizes, where the front's header,
- * the rings, their slots and the GPU stream lie (0 without a GPU), which
+ * the rings, their slots and the stream lie (0 without one), which
  * the runtime lays before the first turn, whether it asks for the file
  * device, and the GPU it asks for. */
 export const MACHINE = {
@@ -18,7 +18,7 @@ export const MACHINE = {
   cq_at: 73728,
   sq_slots_at: 77824,
   cq_slots_at: 79872,
-  gpu_at: 0,
+  stream_at: 0,
   fs: false,
   gpu: null,
 } as const;

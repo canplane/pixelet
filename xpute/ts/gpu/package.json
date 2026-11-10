@@ -1,8 +1,24 @@
 {
   "name": "@xpute/gpu",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/canplane/xpute",
+    "directory": "ts/gpu"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
+  "files": [
+    "src",
+    "ios",
+    "android/build.gradle",
+    "android/src",
+    "expo-module.config.json",
+    "!src/**/*.test.ts"
+  ],
   "exports": {
     "./*": "./src/*"
   },
@@ -11,14 +27,30 @@
     "@xpute/kit": "workspace:*"
   },
   "peerDependencies": {
-    "@xpute/native": "workspace:*"
+    "@xpute/native": "workspace:*",
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
   },
   "peerDependenciesMeta": {
     "@xpute/native": {
       "optional": true
+    },
+    "expo": {
+      "optional": true
+    },
+    "react": {
+      "optional": true
+    },
+    "react-native": {
+      "optional": true
     }
   },
   "devDependencies": {
-    "@xpute/native": "workspace:*"
+    "@xpute/native": "workspace:*",
+    "@types/react": "^19.2.14",
+    "expo": "57.0.25",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
   }
 }

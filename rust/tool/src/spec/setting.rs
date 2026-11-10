@@ -7,7 +7,7 @@
 //! the `dev` settings so the bundler drops them.
 //! A setting whose `stored` is false the core's store neither keeps nor reads.
 
-use xpute_tool::spec::data::ts_literal;
+use xpute_gen::spec::data::ts_literal;
 
 use super::{
     casing_note, enum_name, file, js_num, line_comments, pascal, read, rs_doc, rs_ident, Node,

@@ -5,7 +5,9 @@
 
 use serde::Deserialize;
 
-use super::{file, generated, json_str, read_as, Output};
+use xpute_gen::spec::{file, generated, json_str, read_as, Output};
+
+use crate::root;
 
 const JSON: &str = "spec/status/errno.json";
 
@@ -30,7 +32,7 @@ struct ErrnoSpec {
 }
 
 pub fn outputs() -> Result<Vec<Output>, String> {
-    let spec: ErrnoSpec = read_as(JSON)?;
+    let spec: ErrnoSpec = read_as(&root().join(JSON).to_string_lossy())?;
     let mut head = vec!["//".to_string(), generated(JSON), "//".into()];
     head.extend(spec.doc.iter().map(|l| format!("// {l}")));
 

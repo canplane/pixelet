@@ -2,8 +2,7 @@
 //
 // This is xpute's module on Android (src/main/java/xpute/), and the core linked
 // with it: the app's core crate, as the app's package.json `xpute.core` names
-// it, which script/core-build.py builds for each variant the app is built as,
-// before the variant's native libraries are merged.
+// it, which the app builds and packs.
 
 import groovy.json.JsonSlurper
 
@@ -13,7 +12,7 @@ plugins {
 }
 
 group = 'xpute'
-version = '0.0.0'
+version = '0.1.0'
 
 // The app is the directory over its android/.
 def app = rootProject.projectDir.parentFile
@@ -28,37 +27,11 @@ android {
   defaultConfig {
     consumerProguardFiles "consumer-rules.pro"
     versionCode 1
-    versionName "0.0.0"
-    // The library Core.kt and Gpu.kt load: cargo's name for the crate's.
+    versionName "0.1.0"
+    // The library Core.kt and @xpute/gpu's Gpu.kt load: cargo's name for the crate's.
     buildConfigField "String", "CORE", "\"${core.package.replace('-', '_')}\""
   }
   buildFeatures {
     buildConfig true
   }
-}
-
-// Each variant's library lies in a directory of its own, which that variant
-// alone packs.
-["debug", "release"].each { variant ->
-  def out = layout.buildDirectory.dir("core/${variant}")
-  android.sourceSets[variant].jniLibs.srcDirs += out.get().asFile
-
-  def build = tasks.register("buildCore${variant.capitalize()}", Exec) {
-    // cargo is what knows whether the core is current, and answers in a
-    // moment when it is: the task runs every build.
-    outputs.upToDateWhen { false }
-    def home = System.getProperty("user.home")
-    // rustup's installer puts its tools in the home directory, which
-    // Gradle's PATH need not name.
-    environment "PATH", "${home}/.cargo/bin:${System.getenv("PATH")}"
-    doFirst {
-      commandLine "${projectDir}/../script/core-build.py", "--android",
-        "--app", app.absolutePath,
-        "--variant", variant,
-        "--out", out.get().asFile.absolutePath,
-        "--ndk", android.ndkDirectory.absolutePath,
-        "--api", rootProject.ext.minSdkVersion.toString()
-    }
-  }
-  tasks.matching { it.name == "merge${variant.capitalize()}JniLibFolders" }.configureEach { dependsOn build }
 }

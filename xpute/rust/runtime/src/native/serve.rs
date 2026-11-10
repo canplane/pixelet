@@ -492,25 +492,6 @@ pub fn fs_closed(fd: u32, result: i32) {
     CV.notify_all();
 }
 
-/// The program's word for a touch on a surface: its phase, its id and where it
-/// is, in the view's own units (`touch`).
-pub type Touch = fn(phase: u32, id: i32, x: f64, y: f64);
-
-static TOUCH: OnceLock<Touch> = OnceLock::new();
-
-/// The program says what a touch means.
-pub fn touch_by(touch: Touch) {
-    let _ = TOUCH.set(touch);
-}
-
-/// A touch on a surface, from the platform's main thread: 0 down, 1 move, 2 up,
-/// 3 out and 4 cancel. It reaches the program with no JavaScript between.
-pub fn touch(phase: u32, id: i32, x: f64, y: f64) {
-    if let Some(on) = TOUCH.get() {
-        on(phase, id, x, y);
-    }
-}
-
 /// Queues a frame for the submission ring.
 pub fn post(tag: u32, cmd: u32, flags: u32, result: i32, pkt: &[u8]) {
     with(|s| {

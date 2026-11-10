@@ -1,10 +1,8 @@
 // xpute-tool/lib.rs
 
-//! These are xpute's build tools. `spec` generates, for every language, the
-//! code that spec/ describes; `fmt` runs each generated file through the
-//! formatter its tree checks it with.
+//! xpute's own build tool: `spec` generates, with xpute-gen, every file that
+//! spec/ describes.
 
-pub mod fmt;
 pub mod spec;
 
 use std::path::PathBuf;

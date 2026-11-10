@@ -292,8 +292,7 @@ Both are peripherals a firmware enables. The machine names the devices the core
 needs, and the runtime attaches only what the machine asks for. An open or a
 close, which ask for a reply, from a core whose machine has no file device is
 answered ENODEV; a read or a write from such a core gets nothing back. A boot that backs files the
-machine does not ask for, or backs none where it does, is refused, and a GPU the
-machine does not ask for is not granted.
+machine does not ask for, or backs none where it does, is refused.
 
 Both name their objects by **handles**. The side that keeps an object hands out
 a number for it, as an operating system hands out a file descriptor. A handle
@@ -354,8 +353,7 @@ string to the device as it is, and a call's words follow the descriptor WebGPU
 takes, with nothing defaulted on the program's behalf. The core writes the calls
 through the **encoder**, which names each object by a handle from one table. The
 **GPU runtime** runs them, on WebGPU in a page and on wgpu in a native app, and
-whatever a run throws ends the core, as a trap does. The wgpu is a fork, for what
-`xpute/rust/gpu/README.md` says.
+whatever a run throws ends the core, as a trap does.
 
 Some calls finish on a later turn: an image copied in, a buffer read back, the
 queue's work done, or a pipeline made by WebGPU's asynchronous call. Each such
@@ -376,7 +374,7 @@ behind. What a surface shows, a canvas on a page or a view's layer on a device,
 is lent by the UI. The core answers a surface's open with a handle, and the UI
 binds its canvas under that handle, to the GPU runtime, which keeps the surface
 from then on. The machine's GPU ask says which adapter to prefer, WebGPU's power preference,
-and which features the core needs; the runtime asks the platform for that
+and which features the core needs; the GPU plugin asks the platform for that
 device, and `GPU_READY` tells the core when the device has answered, the first
 time and again after a loss, with the device block's status saying what the
 device is now. The ops and their words, the fence's results and the device's
@@ -578,9 +576,9 @@ The code, in the order its parts depend on each other.
   stream (`ipc/`), xpute's own commands and the devices' (`abi/`, `gpu/`), the
   errno table (`status/`), the machine's schema, the golden records (`golden/`)
   and the traces (`conformance/`).
-- `rust/dev/tool` is the generator: `xpute-gen` writes a program's machine and
-  protocols into both ends, `cargo spec` checks xpute's own generated files, and
-  `cargo spec --write` writes them.
+- `rust/gen` is the generator: `xpute-gen` writes a program's machine and
+  protocols into both ends. `rust/dev/tool` is xpute's own use of it: `cargo
+  spec` checks xpute's generated files, and `cargo spec --write` writes them.
 - `rust/kit`, `ts/kit` and `cpp/xpute/kit` are the kit: `collection`, `codec`,
   `wire/xtp` and `wire/tlv`, `status` (the errno table and `bug!`),
   `math/scalar` and `math/rng`, `alloc` (`buddy_tree`, `slab`), and `golden`,
@@ -591,20 +589,18 @@ The code, in the order its parts depend on each other.
 - `rust/gpu` is the GPU's calls, and behind its `runtime` feature the native GPU
   runtime. `cpp/xpute/gpu` is the encoder alone.
 - `rust/runtime` runs a native core: `native`, where the core's thread and the
-  rules of its loop live, `mem` and `jni`, with the C ABI in `include/xpute.h`.
+  rules of its loop live, `mem` and `jni`, with the C ABI in `ts/native/ios/CXpute/xpute.h`.
 - `ts/runtime` (`@xpute/runtime`) is the runtime end: `runtime.ts`, `start.ts`
   and `remote.ts` (the port), `platform.ts` and `module.ts` beside
   `platform.native.ts`, `ipc/` (the doorbell, the header, the file server and
   the namespace), and `sched/`.
 - `ts/gpu` (`@xpute/gpu`) is the GPU runtime on WebGPU (`GpuRuntime`, `WebGpu`),
-  and `NativeGpu`, which opens a device's GPU through the native module.
+  and on a device `NativeGpu` and the `SurfaceView`, over its own Expo module.
 - `ts/native` (`@xpute/native`) is the React Native module: the Kotlin and the
-  Swift over the C ABI and JNI, the `SurfaceView`, and `script/core-build.py`,
-  which builds the app's core crate as the app builds.
+  Swift over the C ABI and JNI.
 - `rust/dev/conformance` and `cpp/dev/conformance` are a core in each language for the
   traces, and `ts/runtime/src/conformance.test.ts` is the one runtime that runs
   them.
 - `rust/dev/example` and `ts/dev/example` are the smallest core, the test that drives
   it, and the page that runs it.
-- `cpp/amalgamation.awk` makes the C++ library's two files, and
-  `script/export.py` copies this tree into xpute's own repository.
+- `cpp/amalgamation.awk` makes the C++ library's two files.

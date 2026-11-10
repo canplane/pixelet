@@ -2,7 +2,7 @@
 #
 # Routes only. Each tree is a root of its own: ts/ the TypeScript workspace
 # (ts/pnpm-workspace.yaml), rust/ Cargo's, its commands as aliases in
-# rust/.cargo/config.toml, and xpute/ a project of its own (xpute/Makefile).
+# rust/.cargo/config.toml, and xpute/ a project of its own.
 # script/ holds the repository's own scripts, each in the language its work
 # takes and run by its path. Here is a target a tree for each verb, the aggregates
 # over them, and what runs across them: the generated code, the dev servers
@@ -32,7 +32,7 @@ install: install-ts install-xpute
 install-ts:
 	pnpm --dir ts install
 install-xpute:
-	$(MAKE) -C xpute install
+	pnpm --dir xpute/ts install
 
 # `check` and `test` hold pixelet's code. What a deploy adds before its push,
 # since CI checks nothing (.agents/skills/deploy/SKILL.md): `check-build`, the
@@ -53,7 +53,9 @@ check-spec:
 check-build:
 	pnpm --dir ts/client build:web
 check-xpute:
-	$(MAKE) -C xpute check
+	+cd xpute/rust && cargo fmt --check && cargo spec && cargo clippy --workspace --all-targets -- -D warnings
+	pnpm --dir xpute/ts check
+	$(MAKE) -C xpute/cpp check
 
 test: test-ts test-rust
 test-ts:
@@ -61,7 +63,11 @@ test-ts:
 test-rust:
 	+cd rust && cargo test-host && cargo test-render
 test-xpute:
-	$(MAKE) -C xpute test
+	+cd xpute/rust && cargo test --workspace && cargo core && cargo core-wasm
+	pnpm --dir xpute/ts test
+	$(MAKE) -C xpute/cpp test
+	pnpm --dir xpute/ts test:conformance
+	pnpm --dir xpute/ts test:example
 test-gpu:
 	+cd rust && cargo test-gpu
 
@@ -74,7 +80,7 @@ fmt-rust:
 # The code generated from spec/.
 spec:
 	+cd rust && cargo spec --write
-	$(MAKE) -C xpute spec
+	+cd xpute/rust && cargo spec --write
 
 # Where the tiles come from (SOURCE), a bakery's three: `dev` has them delivered,
 # every route the published deployment's, so not for bake work, its tile

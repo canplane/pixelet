@@ -99,17 +99,21 @@ impl Protocol {
         }
     }
 
-    /// The protocols at `paths` merged into one. Where two name the same enum, the last
-    /// one's wins.
-    pub fn load_each(paths: &[&str]) -> Protocol {
-        let mut all = Protocol::load(paths[0]);
-        for path in &paths[1..] {
-            let p = Protocol::load(path);
-            all.commands.extend(p.commands);
-            all.enums.extend(p.enums);
-            all.recs.extend(p.recs);
+    /// The protocol at `path` with its commands on `major`.
+    pub fn load_on(path: &str, major: u32) -> Protocol {
+        let mut p = Protocol::load(path);
+        for c in p.commands.values_mut() {
+            c.val |= major << 8;
         }
-        all
+        p
+    }
+
+    /// `self` and the commands of `other`.
+    pub fn with(mut self, other: Protocol) -> Protocol {
+        self.commands.extend(other.commands);
+        self.enums.extend(other.enums);
+        self.recs.extend(other.recs);
+        self
     }
 
     pub fn get(&self, name: &str) -> Option<&Command> {

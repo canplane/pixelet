@@ -31,7 +31,7 @@ const FRONT: Front = {
   cq_at: CQ_AT,
   sq_slots_at: SLOTS_AT,
   cq_slots_at: SLOTS_AT + slots_bytes(CAP, SLOT),
-  gpu_at: STREAM_AT,
+  stream_at: STREAM_AT,
 };
 /** The core posts these two commands each turn: one of the program's, and one
  * of xpute's own. */
@@ -105,7 +105,7 @@ test("mount - lays the front before any turn, and hands the program only its own
   );
   assert.deepStrictEqual(g.turns, [], "no turn before the front is laid");
   assert.deepStrictEqual(
-    [runtime.head.sq_at, runtime.head.cq_at, runtime.head.gpu_at],
+    [runtime.head.sq_at, runtime.head.cq_at, runtime.head.stream_at],
     [SQ_AT, CQ_AT, STREAM_AT],
   );
   runtime.call(PROGRAM_IMPORT);
@@ -164,25 +164,15 @@ test("mount - a core that stops runs no more turns and is told once", () => {
   }
 });
 
-test("mount - grants the GPU the core's stream and memory, and runs it as each turn returns", () => {
-  const granted: number[] = [];
+test("mount - runs after_turn as each turn returns", () => {
   let ran = 0;
-  const gpu = {
-    grant: (to: { at: number }) => void granted.push(to.at),
-    after_turn: () => void ran++,
-    watch: () => {},
-  };
-  const ask = {
-    power: "high-performance",
-    features: { required: [], optional: [] },
-  };
   const runtime = mount(
     core(),
-    { ...AT, gpu: ask },
-    { gpu, policy: stepped(), submit: () => {} },
+    AT,
+    { after_turn: () => void ran++, policy: stepped(), submit: () => {} },
     QUIET,
   );
-  assert.deepStrictEqual([granted, ran], [[STREAM_AT], 0]);
+  assert.deepStrictEqual(ran, 0);
   runtime.call(PROGRAM_IMPORT);
   assert.deepStrictEqual(ran, 1);
 });

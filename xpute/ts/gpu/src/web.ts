@@ -1,7 +1,7 @@
 // @xpute/gpu/web.ts
 
 /**
- * This is a page's GPU, granted to a core (@xpute/runtime `Gpu`). It asks for
+ * This is a page's GPU, granted to a core (gpu.ts `Gpu`). It asks for
  * the device the core's machine declares, and asks again after a loss or a
  * refusal while the page is shown. The runtime (runtime.ts) runs the core's
  * stream on the device as each turn returns. The core is told when a device
@@ -10,7 +10,7 @@
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import type { Canvas, Gpu, GpuGrant, GpuState } from "@xpute/runtime";
+import type { Canvas, Gpu, GpuGrant, GpuState } from "./gpu.ts";
 import { each_rec } from "@xpute/runtime/ipc/stream.ts";
 import { GpuRuntime } from "./runtime.ts";
 
@@ -24,7 +24,7 @@ const RETRY_MS = 1000;
  * of them. */
 const TRIES = 10;
 
-export class WebGpu implements Gpu {
+export class WebGpu implements Gpu, CanvasBinder {
   private runtime: GpuRuntime | null = null;
   private granted: GpuGrant | null = null;
   /** These are told of the GPU's state, and `state` is the last one told. */
@@ -179,4 +179,42 @@ export class WebGpu implements Gpu {
 function absent(): "unsupported" | "insecure" | null {
   if ("gpu" in navigator) return null;
   return isSecureContext ? "unsupported" : "insecure";
+}
+
+type Up =
+  | { kind: "bind"; handle: u32; canvas: OffscreenCanvas }
+  | { kind: "unbind"; handle: u32 };
+
+/** Serves `gpu`, in a page's worker, to the UI at the far end of `port`. */
+export function gpu_serve(port: MessagePort, gpu: Gpu & CanvasBinder): void {
+  gpu.watch((state) => port.postMessage(state));
+  port.onmessage = ({ data: m }: MessageEvent<Up>) => {
+    if (m.kind === "bind") gpu.bind(m.handle, m.canvas);
+    else gpu.unbind(m.handle);
+  };
+}
+
+/** What lends a page's canvases to the GPU in its worker. */
+export interface CanvasBinder {
+  bind(handle: u32, canvas: Canvas): void;
+  unbind(handle: u32): void;
+}
+
+/** The UI's end of `gpu_serve`, and `report` hears the GPU's state. */
+export function gpu_connect(
+  port: MessagePort,
+  report: (state: GpuState) => void,
+): CanvasBinder {
+  port.onmessage = ({ data }: MessageEvent<GpuState>) => report(data);
+  const up = (m: Up, moved: Transferable[] = []) => port.postMessage(m, moved);
+  return {
+    bind(handle, canvas) {
+      const off =
+        canvas instanceof OffscreenCanvas
+          ? canvas
+          : canvas.transferControlToOffscreen();
+      up({ kind: "bind", handle, canvas: off }, [off]);
+    },
+    unbind: (handle) => up({ kind: "unbind", handle }),
+  };
 }

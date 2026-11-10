@@ -8,7 +8,7 @@ description: Build the device app (ts/client) and put it on an iPhone, the iOS s
 Prebuild first: `ts/client/ios/` and `ts/client/android/` come from
 `expo prebuild` and are not committed. Each platform's build builds the core,
 `pxl-core` (`ts/client/package.json` `xpute.core`), through `@xpute/native`'s
-`xpute/ts/native/script/core-build.py`.
+`ts/client/script/core-build.py`.
 
 After the app moves or pnpm's links are remade, prebuild again with `--clean` and run `pod install` again.
 

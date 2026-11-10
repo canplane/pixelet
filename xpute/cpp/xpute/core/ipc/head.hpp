@@ -24,7 +24,7 @@ struct Head {
     std::uint32_t sq_at;
     std::uint32_t cq_at;
     // 0 without the GPU device.
-    std::uint32_t gpu_at;
+    std::uint32_t stream_at;
 
     constexpr std::array<std::uint32_t, head::WORDS> words() const noexcept {
         std::array<std::uint32_t, head::WORDS> w{};
@@ -34,7 +34,7 @@ struct Head {
         w[head::word::SLOT_BYTES] = slot_bytes;
         w[head::word::SQ_AT] = sq_at;
         w[head::word::CQ_AT] = cq_at;
-        w[head::word::GPU_AT] = gpu_at;
+        w[head::word::STREAM_AT] = stream_at;
         return w;
     }
 };

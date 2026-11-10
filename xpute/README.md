@@ -43,7 +43,8 @@ A program built on xpute has three parts.
   world it writes into its memory.
 - The **runtime** is xpute's TypeScript, `@xpute/runtime`, with Rust beside it
   on a device. It reserves the core's memory and lays out its front, rings each
-  turn, reads what the turn left, and runs the GPU and the file device.
+  turn, reads what the turn left, and runs the file device. The GPU is a plugin,
+  `@xpute/gpu`.
 - The **program** is everything else the app decides: what its commands mean,
   what backs its files, when its turns should run, and its UI.
 
@@ -77,7 +78,9 @@ its life and drive the two devices.
 The smallest program ships in this tree and shows every piece: a core that
 answers one command (`rust/dev/example`), the runtime that drives it in a test
 (`ts/dev/example/sum.test.ts`), and a page that runs it in a worker
-(`ts/dev/example/web`).
+(`ts/dev/example/web`). A core that draws takes the GPU plugin
+(`rust/dev/triangle`), and the same crate runs on a page (`ts/dev/triangle/web`)
+and in a React Native app (`ts/dev/triangle/app`).
 
 ### The machine
 
@@ -136,7 +139,8 @@ files. `xpute-gen machine.json asker.json` writes the machine's constants for
 both ends and, for the protocol, on the runtime the fields each export takes,
 by its number, the packets' readers and a handler for each import, and on the
 core a function for each import and a trait for the exports. The generated
-files are committed, and `--check` fails where one is stale.
+files are committed, and `--check` fails where one is stale. It installs with
+`cargo install --path rust/gen`.
 
 ### The core
 
@@ -181,7 +185,8 @@ the generated machine, and a function that makes the core's configuration where
 the core runs. The configuration holds what the program decides: where a page
 loads the module from, what answers the program's imports, its scheduling policy
 and what it submits with each turn, and, where the machine asks for them, what
-backs the files and which GPU the core is granted.
+backs the files. A core that draws takes `@xpute/gpu` beside this, and is
+defined by `xpute_gpu::core!`.
 
 ```ts
 export const manifest: Manifest = {
@@ -199,13 +204,12 @@ export const manifest: Manifest = {
 ```
 
 `boot(manifest, ui)` brings the core up beside its caller, as the test does in
-Node, and `ui` says what the UI hears of the core: the imports it takes, the
-GPU's state and the core's stop. A page keeps its turns off the thread that
+Node, and `ui` says what the UI hears of the core: the imports it takes and
+the core's stop. A page keeps its turns off the thread that
 draws: it calls `start(manifest, ui, worker)`, the worker's module calls
 `serve(manifest)`, and a message port between them carries frames. Either way
 the UI receives a **link**, the same on every platform, through which it sends
-commands, asks for turns, says whether it is shown, and lends the GPU its
-canvases. A call waits on a turn, and the turns run in the worker, so across the
+commands, asks for turns and says whether it is shown. A call waits on a turn, and the turns run in the worker, so across the
 port the page requests `SUM` instead, and the reply comes with a later turn:
 
 ```ts
@@ -225,7 +229,9 @@ const sum = await link.request(Command.SUM, 2, 3);
 
 A native app installs `@xpute/native`, the React Native module, which Expo
 autolinks, and names its core crate in its `package.json` under `xpute.core`.
-The module builds that crate for the device as the app builds, and links it in.
+The app builds that crate for the device as it builds, and the module links it:
+a static library at `$PODS_CONFIGURATION_BUILD_DIR/Xpute/lib<crate>.a` on an
+iPhone, and a shared one among the app's `jniLibs` on Android.
 The app's bundler takes each `x.native.ts` in place of `x.ts`, so the same
 manifest boots the core beside the UI, on a thread of its own, with no worker.
 
@@ -236,12 +242,74 @@ no RTTI and no floating-point contraction, the flags `cpp/Makefile` builds with.
 `cpp/target/amalgamation/`, and xpute's own repository carries them at
 `cpp/amalgamation/`.
 
+### The GPU
+
+The GPU is a plugin: `xpute-gpu` on the core's side, with its wgpu runtime behind
+the `runtime` feature, and `@xpute/gpu` on the runtime's. A core that draws gives
+its machine a stream and says what it asks of the device:
+
+```json
+{
+  "stream": { "bytes": 4194304 },
+  "gpu": {
+    "power": "high-performance",
+    "features": { "required": [], "optional": [] }
+  }
+}
+```
+
+The generator writes `GPU_ASK` beside `MACHINE`, and the crate defines its core
+through the plugin's macro, which also defines `admit_frame`, whether the GPU
+takes a frame now. The GPU's commands reach the program as any other, numbered
+by minors under a major the program chooses from its own, so its turn asks the
+plugin first and its UI names the same major (`gpu_protocol`, `gpu_grant`):
+
+```rust
+xpute_gpu::core!(MACHINE, FIXED_BYTES, entry, CONFIG, GPU_ASK);
+
+match xpute_gpu::submission::decode(GPU_MAJOR, cmd, pkt)? {
+    Some(Submission::Ready) => {}      // a device answered
+    Some(Submission::Surface(s)) => {} // a surface opened, sized or closed
+    None => {}                         // the program's own command
+}
+```
+
+On a page, `after_turn` runs the stream as each turn returns. The worker grants
+the GPU what the runtime holds, and a port of the app's carries the GPU's state
+up and the canvases down:
+
+```ts
+// The config, where the core runs.
+{ after_turn: () => gpu.after_turn(), /* ... */ }
+
+// The worker.
+const gpu = new WebGpu();
+serve(manifest).then((runtime) => gpu_grant(gpu, runtime, MACHINE.gpu, GPU_MAJOR));
+gpu_serve(port, gpu);
+
+// The page.
+const binder = gpu_connect(port, (state) => show(state));
+binder.bind(handle, canvas);
+```
+
+On a device the runtime runs the stream itself, and `@xpute/gpu`'s module opens
+the device and holds the view a surface draws into (`SurfaceView`):
+
+```ts
+const gpu = new NativeGpu();
+gpu.watch((state) => show(state));
+gpu.grant({
+  ready: () => gpu_protocol(link, GPU_MAJOR).send(GpuCommand.GPU_READY),
+  /* ... */
+});
+```
+
 ### The packages
 
 In TypeScript the parts are `@xpute/kit`, `@xpute/runtime`, `@xpute/gpu` and
 `@xpute/native`, and in Rust they are the crates `xpute-kit`, `xpute-core`,
-`xpute-runtime` and `xpute-gpu`. None is published to a registry. A program
-beside this tree lists the packages in its pnpm workspace and depends on them as
+`xpute-runtime` and `xpute-gpu`, with the generator `xpute-gen`. Each carries
+what a registry asks. A program beside this tree lists the packages in its pnpm workspace and depends on them as
 `workspace:*`, and it names the crates by `path`. `@xpute/native` is an optional
 peer of `@xpute/runtime` and `@xpute/gpu`, so a program that runs only on a page
 installs neither React Native nor Expo. Each TypeScript package is its
@@ -259,6 +327,9 @@ bundler or Node's type stripping takes them with no build.
 - [XTP's README](./ts/kit/src/wire/xtp/README.md) describes the packet format
   that every frame carries.
 - `rust/dev/example` and `ts/dev/example` are the example above, whole.
+- `rust/dev/triangle` and `ts/dev/triangle` are a core that draws, on a page and
+  in an app, with what an app copies to build its core
+  (`ts/dev/triangle/app/script/core-build.py`, `modules/core`, `metro.config.js`).
 
 ## Running it
 
@@ -269,18 +340,17 @@ the [WASI SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or
 `$WASI_SDK_PATH`.
 
 ```sh
-make install       # ts/'s packages, with pnpm
-make -j8 check     # formats, lints, types, the C++ compiled, spec/'s files
-make -j8 build     # the cores the traces drive, and the example's
-make -j8 test      # every tree's tests, the traces, the example
-make -j8 test-gpu  # the GPU runtimes, on wgpu and in Chrome ($CHROME)
-make fmt           # prettier and cargo fmt
-make spec          # the files generated from spec/, written
+(cd ts && pnpm install)             # ts/'s packages
+(cd rust && cargo spec --write)     # the files generated from spec/, written
+(cd rust && cargo clippy --workspace --all-targets -- -D warnings)
+(cd rust && cargo test --workspace)
+(cd rust && cargo test-gpu)         # the GPU runtime on wgpu
+(cd ts && pnpm check && pnpm test)
+make -C cpp -j8 check test          # the C++ compiled, its tests, its cores
+(cd rust && cargo core && cargo core-wasm)
+(cd ts && pnpm test:conformance)    # the traces, on every core
+(cd ts && pnpm test:gpu:web)        # the GPU runtime in Chrome ($CHROME)
 ```
-
-`make check-ts`, `make test-cpp`, `make test-rust` and the like run one tree's
-part. `./script/export.py --to <checkout>` copies this tree into xpute's own
-repository.
 
 ## License
 

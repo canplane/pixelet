@@ -8,7 +8,6 @@ import { Command as Sys } from "@xpute/runtime/abi/sys.spec.ts";
 import { Command, read } from "@/abi/cmd.spec.ts";
 import { onabort } from "@/service/sys/abort.ts";
 import { core, ui as link } from "@/service/core/core.ts";
-import { GPU_STATE, set_gpu } from "@/service/sys/gpu.ts";
 import {
   SENSOR_LISTENER,
   sensor_start,
@@ -51,7 +50,6 @@ export function ui(
   return {
     cmds: [...take.keys()],
     on: (_tag, cmd, f, named) => take.get(cmd)!(f!, named),
-    gpu: (state) => set_gpu(GPU_STATE[state]),
     stop: on.terminated,
   };
 }

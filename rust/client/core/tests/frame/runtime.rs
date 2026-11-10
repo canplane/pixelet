@@ -76,14 +76,18 @@ impl Runtime {
             )
         };
         let fs = Protocol::load("xpute/spec/abi/fs.json");
+        let ui = Protocol::load("spec/client/core/door/ui.json");
         Runtime {
             mem,
             sq,
             cq,
             next_call: 0,
             replies: BTreeMap::new(),
-            ui: Protocol::load("spec/client/core/door/ui.json"),
-            xpute: Protocol::load_each(&["xpute/spec/abi/sys.json", "xpute/spec/abi/gpu.json"]),
+            xpute: Protocol::load("xpute/spec/abi/sys.json").with(Protocol::load_on(
+                "xpute/spec/abi/gpu.json",
+                ui.member("Major", "GPU"),
+            )),
+            ui,
             disk: Fs::new(),
             fs,
             abort: None,

@@ -50,11 +50,6 @@ pub struct Form {
     /// why the core stopped and ends its thread (`stop::install`). A page has
     /// none, since the page's runtime outlives the core on its own.
     pub stop_hook: Option<PanicHook>,
-    /// Whether the GPU's runtime takes a frame now without blocking
-    /// (xpute-gpu `admit`). A native runtime answers from its own count of
-    /// unfinished frames; a page answers from the count its device's block
-    /// reports. A core that draws nothing has none.
-    pub admit_frame: Option<fn() -> bool>,
     /// Hands over the stream the core has just published; it is called as
     /// END is stored (`ipc::stream`, xpute-gpu `runtime::native::publish`).
     /// A page has none, since its runtime runs the stream when the turn

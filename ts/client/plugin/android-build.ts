@@ -7,7 +7,7 @@
  * choices are made here.
  *
  * - One ABI, arm64-v8a. The core is built for aarch64-linux-android alone
- *   (@xpute/native script/core-build.py), and an app that packs another ABI
+ *   (script/core-build.py), and an app that packs another ABI
  *   without the core dies loading its library on the phones that take that
  *   ABI.
  * - The SDK floor is set by the Vulkan that this build needs for wgpu.

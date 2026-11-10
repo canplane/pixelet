@@ -186,6 +186,20 @@ impl Step {
         }
     }
 
+    /// A draw of render pipeline `render` in a pass that sets `groups`.
+    pub const fn draw(
+        name: &'static str,
+        stage: u32,
+        render: u32,
+        groups: &'static [&'static Group],
+    ) -> Step {
+        Step {
+            pipeline: render,
+            groups,
+            ..Step::new(name, stage, DRAW)
+        }
+    }
+
     /// An indirect draw of render pipeline `render` in a pass that sets `groups`, which reads
     /// its count from `buf` at word `at`.
     pub const fn draw_off(

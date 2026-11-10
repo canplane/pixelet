@@ -1,0 +1,24 @@
+{
+  "name": "xpute-triangle-app",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.ts",
+  "dependencies": {
+    "@xpute/gpu": "workspace:*",
+    "@xpute/kit": "workspace:*",
+    "@xpute/native": "workspace:*",
+    "@xpute/runtime": "workspace:*",
+    "expo": "57.0.25",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14"
+  },
+  "xpute": {
+    "core": {
+      "workspace": "../../../../rust",
+      "package": "xpute-triangle"
+    }
+  }
+}

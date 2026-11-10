@@ -4,6 +4,7 @@
  * xpute's, across the worker's port. */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
+import { gpu_connect } from "@xpute/gpu/web.ts";
 import { start } from "@xpute/runtime";
 import { mirror_source, settled } from "@/service/sys/fs/source.ts";
 import { is_storage_key } from "@/service/sys/fs/storage.ts";
@@ -12,7 +13,8 @@ import { set_core } from "@/service/core/core.ts";
 import type { ToCore, ToUi } from "@/runtime/page.ts";
 import { manifest } from "@/runtime/start.ts";
 import { type OnOpen, started, ui } from "@/runtime/ui.ts";
-import { gpu_present } from "@/service/sys/gpu.ts";
+import { GPU_STATE, gpu_present, set_gpu } from "@/service/sys/gpu.ts";
+import { set_canvas_binder } from "@/service/platform/gpu.ts";
 import * as device from "@/service/platform/device.ts";
 import * as online from "@/service/platform/online.ts";
 import * as storage from "@/service/platform/storage.ts";
@@ -47,6 +49,9 @@ export async function open(on: OnOpen): Promise<boolean> {
       .map((key) => [key, storage.get(key)!]),
     handheld: device.handheld,
   });
+  const { port1, port2 } = new MessageChannel();
+  set_canvas_binder(gpu_connect(port1, (state) => set_gpu(GPU_STATE[state])));
+  worker.postMessage({ kind: "gpu", port: port2 } satisfies ToCore, [port2]);
   const link = await start(
     manifest(device.handheld),
     ui(on, (files) => ask({ kind: "refused", files })),

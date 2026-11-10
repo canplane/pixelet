@@ -1,13 +1,13 @@
 // xpute-core/machine.rs
 
 //! A program declares its machine: the memory it is given, its stack, its
-//! rings, and whether it takes the GPU device. The program writes it in its
-//! machine.json, from which xpute-tool generates `MACHINE`. The front of the
+//! rings, and whether it has a stream. The program writes it in its
+//! machine.json, from which xpute-gen generates `MACHINE`. The front of the
 //! memory, the region both ends share, follows from the machine and is laid
 //! out the same on every platform and on both ends:
 //!
 //! ```text
-//! 0 ─ stack ─ header page ─ SQ ─ CQ ─ SQ slots ─ CQ slots ─ GPU stream ─ GLOBAL_BASE
+//! 0 ─ stack ─ header page ─ SQ ─ CQ ─ SQ slots ─ CQ slots ─ stream ─ GLOBAL_BASE
 //! ```
 //!
 //! The runtime writes the front before the first turn: the header
@@ -28,18 +28,12 @@ use crate::ipc::ring::{ring_bytes, slots_bytes, Ring};
 use crate::mem::section::{page_up, PAGE_BYTES};
 use crate::wasm::LinkConfig;
 
-/// This is the GPU device: a stream the core writes its GPU calls into, which
-/// the runtime runs once it is published (xpute-gpu). The stream carries its
-/// own head (ipc/stream.rs).
+/// A stream past the rings, which the core writes records into and something
+/// beside it runs once they are published (ipc/stream.rs). What the records
+/// mean is the plugin's.
 #[derive(Clone, Copy)]
-pub struct Gpu {
+pub struct Stream {
     pub bytes: u32,
-    /// This is WebGPU's power preference.
-    pub power: &'static str,
-    /// These are WebGPU feature names: those the device must have, and those it
-    /// takes where the adapter has them.
-    pub required: &'static [&'static str],
-    pub optional: &'static [&'static str],
 }
 
 #[derive(Clone, Copy)]
@@ -63,7 +57,7 @@ pub struct Machine {
     pub turn_posts: u32,
     /// This says whether the core asks for the file device (abi/fs.json).
     pub fs: bool,
-    pub gpu: Option<Gpu>,
+    pub stream: Option<Stream>,
 }
 
 impl Machine {
@@ -88,10 +82,9 @@ impl Machine {
         self.sq_slots_at() + slots_bytes(self.sq_cap, self.slot_bytes)
     }
 
-    /// The GPU stream lies past the slots, and this is 0 without the GPU
-    /// device.
-    pub const fn gpu_at(&self) -> u32 {
-        match self.gpu {
+    /// The stream lies past the slots, and this is 0 without one.
+    pub const fn stream_at(&self) -> u32 {
+        match self.stream {
             Some(_) => self.cq_slots_at() + slots_bytes(self.cq_cap, self.slot_bytes),
             None => 0,
         }
@@ -105,7 +98,7 @@ impl Machine {
             slot_bytes: self.slot_bytes,
             sq_at: self.sq_at(),
             cq_at: self.cq_at(),
-            gpu_at: self.gpu_at(),
+            stream_at: self.stream_at(),
         }
     }
 
@@ -113,7 +106,7 @@ impl Machine {
     /// (`--global-base`), and a native core's own ranges begin here.
     pub const fn global_base(&self) -> u32 {
         let end = self.cq_slots_at() + slots_bytes(self.cq_cap, self.slot_bytes);
-        page_up(match self.gpu {
+        page_up(match self.stream {
             Some(g) => end + g.bytes,
             None => end,
         })
@@ -229,23 +222,12 @@ pub fn booted() -> bool {
 /// with. On any other target it is xpute-runtime's `native_core!`, so a
 /// program's crate depends on xpute-runtime for every target but wasm32.
 ///
-/// Given `gpu`, the numbers its native GPU runtime runs by (xpute-gpu
-/// `CoreConfig`), the machine takes the GPU device. Off WebAssembly the core is
-/// then xpute-gpu's `native_core!` instead: the GPU's runtime is a device
-/// beside the core, polled before each turn and rung as the core publishes
-/// its stream (`Form::publish`), and its admission is handed to the entry
-/// (`Form::admit_frame`). As a WebAssembly module, its admission is the
-/// page's (xpute-gpu `admit::page`) at the numbers' frame latency. The
-/// program's crate then depends on xpute-gpu, with its `runtime` feature for
-/// every target but wasm32.
-///
 /// ```ignore
 /// xpute_core::core!(MACHINE, FIXED_BYTES, door::run);
-/// xpute_core::core!(MACHINE, FIXED_BYTES, door::run, gpu: NUMBERS);
 /// ```
 #[macro_export]
 macro_rules! core {
-    (@wasm $machine:expr, $fixed_bytes:expr, $entry:expr, $admit:expr) => {
+    (@wasm $machine:expr, $fixed_bytes:expr, $entry:expr) => {
         #[cfg(target_arch = "wasm32")]
         mod xpute_core_machine {
             #[allow(unused_imports)]
@@ -264,37 +246,15 @@ macro_rules! core {
             $crate::wasm::Config {
                 heap_at: |data_end| $machine.heap_at(data_end, $fixed_bytes),
                 stack_bytes: $machine.stack_bytes,
-                admit_frame: $admit,
             },
             xpute_core_machine::xpute_turn
         );
-    };
-    ($machine:expr, $fixed_bytes:expr, $entry:expr, gpu: $gpu:expr $(,)?) => {
-        const _: () = $machine.check($fixed_bytes);
-        const _: $crate::entry::Entry = $entry;
-        const _: () = assert!(
-            $machine.gpu.is_some(),
-            "a core given the GPU's numbers takes the GPU device"
-        );
-        const _: () = {
-            let _ = $gpu;
-        };
-
-        $crate::core!(
-            @wasm $machine,
-            $fixed_bytes,
-            $entry,
-            Some(::xpute_gpu::admit::page::<{ $gpu.frame_latency }>)
-        );
-
-        #[cfg(not(target_arch = "wasm32"))]
-        ::xpute_gpu::native_core!($machine, $fixed_bytes, $entry, $gpu);
     };
     ($machine:expr, $fixed_bytes:expr, $entry:expr $(,)?) => {
         const _: () = $machine.check($fixed_bytes);
         const _: $crate::entry::Entry = $entry;
 
-        $crate::core!(@wasm $machine, $fixed_bytes, $entry, None);
+        $crate::core!(@wasm $machine, $fixed_bytes, $entry);
 
         #[cfg(not(target_arch = "wasm32"))]
         ::xpute_runtime::native_core!($machine, $fixed_bytes, $entry);

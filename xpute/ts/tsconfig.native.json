@@ -3,8 +3,9 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "moduleSuffixes": [".native", ""]
+    "moduleSuffixes": [".native", ""],
+    "jsx": "react-jsx"
   },
-  "include": ["kit", "runtime", "gpu", "native"],
+  "include": ["kit", "runtime", "gpu", "native", "dev/triangle/app"],
   "exclude": ["**/node_modules", "target", "**/*.native.ts", "**/*.test.ts"]
 }

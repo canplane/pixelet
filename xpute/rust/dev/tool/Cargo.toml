@@ -2,7 +2,7 @@
 name = "xpute-tool"
 edition.workspace = true
 version.workspace = true
-publish.workspace = true
+publish = false
 
 [lib]
 path = "src/lib.rs"
@@ -13,14 +13,8 @@ path = "src/lib.rs"
 name = "spec"
 path = "src/bin/spec.rs"
 
-# This generates a program's machine and protocols where each one's `gen` says:
-# `xpute-gen <machine.json> <protocol.json>...`, with `--check` to fail where
-# one is stale.
-[[bin]]
-name = "xpute-gen"
-path = "src/bin/gen.rs"
-
-# The tool depends on no crate of the workspace, because it writes into them.
+# The tool depends on no crate it writes into, only on the generator.
 [dependencies]
+xpute-gen.workspace = true
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }

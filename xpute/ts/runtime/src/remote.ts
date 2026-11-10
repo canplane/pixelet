@@ -5,10 +5,9 @@
  * worker that runs the core, with a MessagePort between them that carries
  * frames.
  *
- * - Up the port go the UI's frames, a lifecycle call by name, and a canvas,
- *   transferred once.
+ * - Up the port go the UI's frames, and a lifecycle call by name.
  * - Down the port come frames (a reply to a request, or an import the UI
- *   takes, with the memory it names copied), the GPU's state, the stop, and
+ *   takes, with the memory it names copied), the stop, and
  *   whether the core came up.
  * - A call waits on a turn, so a UI across a port can make none (ENOTSUP).
  *   Once the core stops, every request is answered ENOTRECOVERABLE.
@@ -26,8 +25,6 @@ import {
 } from "@xpute/kit/wire/xtp/mod.ts";
 import { encode_args } from "./ipc/doorbell.ts";
 import {
-  type Canvas,
-  type GpuState,
   type Link,
   type Manifest,
   boot,
@@ -37,21 +34,13 @@ import {
 import type { Grant } from "./sched/policy.ts";
 
 /** These are the calls a link carries by name. */
-const CALLS = [
-  "wake",
-  "input",
-  "resume",
-  "pause",
-  "visible",
-  "unbind",
-] as const;
+const CALLS = ["wake", "input", "resume", "pause", "visible"] as const;
 
 type Call = (typeof CALLS)[number];
 
 type Up =
   | { kind: "frame"; cmd: u32; id: u32; cnt: u32; pkt: U8Array | null }
-  | { kind: "call"; name: Call; arg: unknown }
-  | { kind: "bind"; handle: u32; canvas: OffscreenCanvas };
+  | { kind: "call"; name: Call; arg: unknown };
 
 /** A frame's `res` is a reply's result, or null for an import. */
 type Down =
@@ -63,7 +52,6 @@ type Down =
       pkt: U8Array | null;
       named: U8Array | null;
     }
-  | { kind: "gpu"; state: GpuState }
   | { kind: "stop" }
   | { kind: "rose"; why: string | null };
 
@@ -105,14 +93,6 @@ export function connect(
     up({ kind: "frame", cmd, id, cnt, pkt }, pkt ? [pkt.buffer] : []);
   }
 
-  function bind(handle: u32, canvas: Canvas): void {
-    const off =
-      canvas instanceof OffscreenCanvas
-        ? canvas
-        : canvas.transferControlToOffscreen();
-    up({ kind: "bind", handle, canvas: off }, [off]);
-  }
-
   function stop(): void {
     if (stopped) return;
     stopped = true;
@@ -137,8 +117,6 @@ export function connect(
           m.named,
           m.pkt,
         );
-      case "gpu":
-        return ui.gpu(m.state);
       case "stop":
         return stop();
       case "rose":
@@ -165,8 +143,6 @@ export function connect(
     resume: () => call("resume"),
     pause: () => call("pause"),
     visible: (v) => call("visible", v),
-    bind,
-    unbind: (handle) => call("unbind", handle),
   };
   return { link, rose: rose.promise, stop };
 }
@@ -190,7 +166,6 @@ export function attach(
       const moved = [p, n].flatMap((b) => (b ? [b.buffer] : []));
       down({ kind: "frame", tag, cmd, res: null, pkt: p, named: n }, moved);
     },
-    gpu: (state) => down({ kind: "gpu", state }),
     stop: () => down({ kind: "stop" }),
   };
   function serve(r: Runtime): void {
@@ -219,8 +194,6 @@ export function attach(
         }
         case "call":
           return (r[m.name] as (arg: unknown) => void)(m.arg);
-        case "bind":
-          return r.bind(m.handle, m.canvas);
       }
     };
   }

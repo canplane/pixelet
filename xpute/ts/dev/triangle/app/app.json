@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "triangle",
+    "slug": "xpute-triangle",
+    "version": "0.1.0",
+    "platforms": ["ios", "android"],
+    "ios": { "bundleIdentifier": "dev.xpute.triangle" },
+    "android": { "package": "dev.xpute.triangle" }
+  }
+}

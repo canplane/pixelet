@@ -25,7 +25,6 @@ import {
   sys_imports,
   type SysAbort,
 } from "@xpute/runtime/abi/sys.spec.ts";
-import { Command as GpuCommand } from "@xpute/runtime/abi/gpu.spec.ts";
 import * as fs from "@xpute/runtime/abi/fs.spec.ts";
 import { type Front, Head, laid, lay } from "@xpute/runtime/ipc/head.ts";
 import * as frame from "@xpute/runtime/ipc/frame.ts";
@@ -48,46 +47,6 @@ export interface Core {
   /** Makes `answer` answer each call from here on; until then every call
    * fails with ENOSYS. */
   answer_with(answer: (at: u32) => i32): void;
-}
-
-/** This is what a core asks of its GPU (its machine's `gpu`), by WebGPU's
- * names. */
-export interface GpuAsk {
-  power: string;
-  features: { required: readonly string[]; optional: readonly string[] };
-}
-
-/** This is a platform's GPU. `grant` opens a device as the core asks.
- * `after_turn` runs the core's stream as each turn returns, and whatever it
- * throws ends the core. `watch` reports when a device answers and whether there
- * is one. `bind` and `unbind` lend it the canvases it draws and take them back.
- * A native GPU binds its views itself, so it takes no canvas. */
-export interface Gpu {
-  grant(to: GpuGrant): void;
-  after_turn(): void;
-  watch(report: (state: GpuState) => void): void;
-  bind?(handle: u32, canvas: Canvas): void;
-  unbind?(handle: u32): void;
-}
-
-export type GpuState =
-  "present" | "waiting" | "missing" | "lost" | "unsupported" | "insecure";
-
-/** This is a page's canvas, or one transferred to the worker its runtime runs
- * in. */
-export type Canvas = HTMLCanvasElement | OffscreenCanvas;
-
-/** The GPU is granted the core's memory, the offset where the core's stream
- * begins, and what the core asks. `ready` tells the core a device answered
- * (GPU_READY), `wake` asks for a turn, and `shown` says whether the UI shows
- * the core (`Link.visible`). */
-export interface GpuGrant {
-  mem: ArrayBuffer;
-  at: u32;
-  ask: GpuAsk;
-  ready(): void;
-  wake(): void;
-  shown(): boolean;
 }
 
 /** The core gives this report as it aborts: the errno of the broken invariant,
@@ -128,15 +87,15 @@ function log_abort(e: SysAbort): void {
 }
 
 /** This is everything the app decides for its core: the module, where a page
- * loads one; what backs the files and which GPU is granted, where the machine
- * asks for them; what answers the program's commands (`program`); the
+ * loads one; what backs the files, where the machine asks for them; what runs
+ * beside a page's core as each turn returns (`after_turn`); what answers the program's commands (`program`); the
  * scheduling policy, and what the app submits with each turn it grants
  * (`submit`); and the memory an import names, as the protocol's generated
  * `<name>_mem` reads it (`mem_of`). */
 export interface Config<G extends Grant = Grant> {
   core?: ModuleSource;
   fs?: Fs;
-  gpu?: Gpu;
+  after_turn?(): void;
   program?: OnImport;
   policy: SchedulingPolicy<G>;
   submit(grant: G, delta_s: f64): void;
@@ -145,8 +104,7 @@ export interface Config<G extends Grant = Grant> {
 
 /** This is what a UI hears of its core. `on` is handed each import whose
  * command is in `cmds` (SYS_ABORT among them, for a UI that shows the stop),
- * with `named`, the memory the import names, and `pkt`, its packet. `gpu` hears
- * the GPU's state, and `stop` hears that the core has stopped. */
+ * with `named`, the memory the import names, and `pkt`, its packet, and `stop` hears that the core has stopped. */
 export interface Ui {
   cmds: readonly u32[];
   on(
@@ -156,11 +114,10 @@ export interface Ui {
     named: U8Array | null,
     pkt: U8Array | null,
   ): void;
-  gpu(state: GpuState): void;
   stop(): void;
 }
 
-export const QUIET: Ui = { cmds: [], on() {}, gpu() {}, stop() {} };
+export const QUIET: Ui = { cmds: [], on() {}, stop() {} };
 
 /** Each command of a protocol, by its number, and the fields its packet takes
  * in order. */
@@ -202,17 +159,14 @@ export interface Link {
   /** Says whether the program is shown. Each change is told to the core
    * (SYS_RESUME, SYS_SUSPEND). */
   visible(visible: boolean): void;
-  /** `bind` lends a canvas to the GPU under the core's handle, and `unbind`
-   * lets it go. Across a port a canvas is lent once, since it is
-   * transferred for good. */
-  bind(handle: u32, canvas: Canvas): void;
-  unbind(handle: u32): void;
 }
 
 export interface Runtime extends Link {
   core: Core;
   head: Head;
   doorbell: Doorbell;
+  /** Whether the UI shows the core. */
+  shown(): boolean;
   /** Tells the scheduler of what was submitted on `doorbell` itself. */
   kick(): void;
 }
@@ -225,17 +179,16 @@ export function bind_mem(m: ArrayBuffer): void {
 }
 
 /** Mounts the runtime on `core`. The front is laid as `m` places it, unless
- * it was laid already, and the GPU is granted where `m` asks for one. */
+ * it was laid already. */
 export function mount<G extends Grant>(
   core: Core,
-  m: Front & Pick<Machine, "head_at" | "gpu">,
+  m: Front & Pick<Machine, "head_at">,
   cfg: Config<G>,
   ui: Ui,
 ): Runtime {
   if (!laid(core.mem, m.head_at)) lay(core.mem, m.head_at, m);
   mem = core.mem;
   const head = new Head(core.mem, m.head_at);
-  const gpu = m.gpu ? cfg.gpu : undefined;
   const policy = cfg.policy;
   const span = cfg.mem_of ?? (() => null);
   const named = (cmd: u32, f: BranchCursor | null) => {
@@ -249,7 +202,7 @@ export function mount<G extends Grant>(
     head.cq_at,
     (deadline_ms) => {
       const wake = core.run(deadline_ms);
-      gpu?.after_turn();
+      cfg.after_turn?.();
       return wake;
     },
   );
@@ -294,7 +247,10 @@ export function mount<G extends Grant>(
   const ui_cmds = new Set(ui.cmds);
   doorbell.listen((tag, cmd, f, pkt) => {
     const major = frame.major_of(cmd);
-    const on = major < frame.PROGRAM_MAJOR ? own.get(major) : cfg.program;
+    const on =
+      major === Major.NOP || major === Major.SYS || major === fs.Major.FS
+        ? own.get(major)
+        : cfg.program;
     const res = on
       ? on(tag, cmd, f, pkt)
       : major === fs.Major.FS
@@ -313,25 +269,9 @@ export function mount<G extends Grant>(
   let resumed = false;
   let shown = true;
 
-  if (gpu) {
-    gpu.watch(ui.gpu);
-    gpu.grant({
-      mem: core.mem,
-      at: head.gpu_at,
-      ask: m.gpu!,
-      ready: () => send(GpuCommand.GPU_READY),
-      wake: () => scheduler.wake(),
-      shown: () => shown,
-    });
-  }
-
   function steer(): void {
     if (resumed && shown) scheduler.resume();
     else scheduler.pause();
-  }
-  function canvas(): Required<Pick<Gpu, "bind" | "unbind">> {
-    if (!gpu?.bind || !gpu.unbind) throw new InvariantError(Errno.ENOTSUP);
-    return gpu as Required<Gpu>;
   }
 
   // The core hears a runtime attach before anything else.
@@ -340,6 +280,7 @@ export function mount<G extends Grant>(
     core,
     head,
     doorbell,
+    shown: () => shown,
     send,
     request: (cmd, ...args) => kick(doorbell.request(cmd, encode_args(args))),
     call,
@@ -360,8 +301,6 @@ export function mount<G extends Grant>(
       // is the core's last sure moment to save what it holds.
       call(visible ? Command.SYS_RESUME : Command.SYS_SUSPEND);
     },
-    bind: (handle, c) => canvas().bind(handle, c),
-    unbind: (handle) => canvas().unbind(handle),
   };
 }
 
@@ -373,7 +312,6 @@ export interface Machine extends Front {
   region_bytes: u32;
   head_at: u32;
   fs: boolean;
-  gpu: GpuAsk | null;
 }
 
 /** This says where a page's core comes from: its module, fetched from a URL or
@@ -396,7 +334,7 @@ export interface Manifest<G extends Grant = Grant> {
  * what the core tells a UI goes to `ui`. The core takes `now` as its clock,
  * which counts as the UI's `performance.now()` does. It refuses with EINVAL a config
  * without `fs` for a machine that asks for files, and a config with `fs` for a
- * machine that does not. A GPU the machine does not ask for is not granted. */
+ * machine that does not. */
 export async function boot<G extends Grant>(
   m: Manifest<G>,
   ui: Ui,

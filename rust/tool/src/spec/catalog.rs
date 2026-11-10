@@ -6,7 +6,7 @@
 //! asset root, and its extent (pxl-spec asset/catalog.rs reads the layout).
 //! The runtime serves it, as hex in TypeScript.
 
-use xpute_tool::spec::data::Run;
+use xpute_gen::spec::data::Run;
 
 use super::ingest::{file_number, files};
 use super::{file, read, Node, Output};

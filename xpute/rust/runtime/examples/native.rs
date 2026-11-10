@@ -26,7 +26,6 @@ mod program {
                 data_end: 0,
                 now: native::now,
                 stop_hook: None,
-                admit_frame: None,
                 publish: None,
             },
         },

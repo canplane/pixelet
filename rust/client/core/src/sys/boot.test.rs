@@ -23,7 +23,6 @@ pub fn set_heap_stat(heap_stat: fn() -> HeapStat) {
             data_end: 0,
             now: || 0.0,
             stop_hook: None,
-            admit_frame: None,
             publish: None,
         },
     });

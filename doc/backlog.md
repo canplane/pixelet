@@ -14,12 +14,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P2
 
-- **The light's tail on the S23.** A p95 frame spends 90 to 140 ms in `light_hit`
-  and 75 to 100 in `light_sample`, where the median frame is about 60 ms whole
-  ([the journal](./experiment/20261103-the-frame-on-the-s23/README.md), "The
-  eye's stale voxels and the turns without a frame"). Which recasts make it is
-  not measured.
-
 ## Parked, with the reason on file
 
 - **A query over what is drawn, for an agent to read.** An agent debugging the

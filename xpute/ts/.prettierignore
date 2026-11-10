@@ -2,4 +2,7 @@ pnpm-lock.yaml
 target/
 .vite/
 native/android/build/
+gpu/android/build/
 *.md
+dev/triangle/app/ios
+dev/triangle/app/android
