@@ -1,22 +1,21 @@
-//! Answers the core's files in this harness, standing in for how ts/client/src/service/sys/fs/
-//! binds the roots on a device. The shipped assets come from the repository: the catalog
+//! A file's bytes in this harness, standing in for the binding
+//! ts/client/src/service/sys/fs/ gives on a device; xpute-runtime serves the file device
+//! with them. The shipped assets come from the repository: the catalog
 //! the client plugs in, and each file it names from asset/content/. The terrain is made
 //! here tile by tile, encoded as the bake writes a tile (`terrain`). The other bakes have
-//! no tiles, and the platform's storage and the objects' source hold nothing. A write is
-//! accepted and dropped.
+//! no tiles, and the platform's storage and the objects' source hold nothing.
 
 use std::borrow::Cow;
-use std::collections::BTreeMap;
 use std::path::Path;
 
 use pxl_spec::asset::cube::ground::{forest, grass};
-use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{self, TerrainTile, ELE_COLUMN, FOLD_COLUMN};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::quadrant::Quadrant;
+use xpute_core::io::fs::Token;
 use xpute_kit::status::errno::Errno;
 
 use crate::spec;
@@ -55,20 +54,13 @@ fn terrain(key: &str) -> Option<Vec<u8>> {
     Some(terrain::encode(&tile).expect("a tile encodes"))
 }
 
-struct Open {
-    /// What a read copies out; none for a file opened to write.
-    bytes: Option<Vec<u8>>,
-}
-
 pub struct Fs {
-    open: BTreeMap<u32, Open>,
+    terrain: u32,
     asset: u32,
     catalog: u32,
     /// Each shipped file's path below asset/content/, with file number n at index n - 1
     /// (spec/spec/asset/ingest.json).
     assets: Vec<String>,
-    /// The flag FS_OPENAT passes to open a file for writing (xpute spec/ipc/fs.json).
-    wronly: u32,
 }
 
 /// The catalog's bytes, read from the generated file the client plugs it in from
@@ -93,72 +85,29 @@ impl Fs {
             .iter()
             .map(|f| f["path"].as_str().expect("a file's path").to_string())
             .collect();
-        let flags = spec::json("xpute/spec/ipc/fs.json");
         Fs {
-            open: BTreeMap::new(),
-            asset: spec::file_val(&["root", "ASSET"]),
+            terrain: spec::file_val(&["path", "TERRAIN", "ID"]),
+            asset: spec::file_val(&["path", "ASSET", "ID"]),
             catalog: spec::file_val(&["CATALOG"]),
             assets,
-            wronly: flags["flag"]["O_WRONLY"]["$val"]
-                .as_u64()
-                .expect("O_WRONLY") as u32,
         }
     }
 
-    /// The whole file at `path` below `root`, or the errno the client would answer.
-    fn bytes(&self, root: u32, path: &str) -> Result<Vec<u8>, Errno> {
-        if root == BaseLayer::terrain as u32 {
-            return terrain(path).ok_or(Errno::ENOENT);
-        }
-        if root != self.asset {
-            return Err(Errno::ENOENT);
-        }
-        let n: u32 = path.parse().map_err(|_| Errno::ENOENT)?;
+    /// The whole file at `path`, a terrain tile (TERRAIN, quadkey) or a shipped file
+    /// (ASSET, number), or the errno the client would answer.
+    pub fn bytes(&self, path: &[Token]) -> Result<Vec<u8>, Errno> {
+        let n = match *path {
+            [Token::U32(r), Token::Str(key)] if r == self.terrain => {
+                return terrain(key).ok_or(Errno::ENOENT);
+            }
+            [Token::U32(r), Token::U32(n)] if r == self.asset => n,
+            _ => return Err(Errno::ENOENT),
+        };
         if n == self.catalog {
             return Ok(catalog());
         }
         let file = self.assets.get(n as usize - 1).ok_or(Errno::ENOENT)?;
         std::fs::read(Path::new(env!("PXL_REPO")).join("asset/content").join(file))
             .map_err(|_| Errno::ENOENT)
-    }
-
-    /// Answers FS_OPENAT with its completion's result: the file's size, or an errno.
-    pub fn open(&mut self, fd: u32, root: u32, flags: u32, path: &str) -> i32 {
-        if flags == self.wronly {
-            self.open.insert(fd, Open { bytes: None });
-            return 0;
-        }
-        match self.bytes(root, path) {
-            Ok(bytes) => {
-                let n = bytes.len() as i32;
-                self.open.insert(fd, Open { bytes: Some(bytes) });
-                n
-            }
-            Err(e) => e as i32,
-        }
-    }
-
-    pub fn read(&self, fd: u32) -> &[u8] {
-        self.open
-            .get(&fd)
-            .and_then(|f| f.bytes.as_deref())
-            .unwrap_or_else(|| panic!("a read of {fd}, which is open to read nothing"))
-    }
-
-    /// Answers FS_WRITE. The bytes are kept nowhere, because the file written is dropped
-    /// when it closes.
-    pub fn write(&self, fd: u32) {
-        assert!(
-            self.open.get(&fd).is_some_and(|f| f.bytes.is_none()),
-            "a write to {fd}, which is not open to write"
-        );
-    }
-
-    /// Answers FS_CLOSE with its completion's result.
-    pub fn close(&mut self, fd: u32) -> i32 {
-        match self.open.remove(&fd) {
-            Some(_) => 0,
-            None => Errno::EBADF as i32,
-        }
     }
 }

@@ -10,7 +10,7 @@
 use core::future::Future;
 use core::ops::Range;
 
-use pxl_render::asset::{MAX_SCENE_IDXS, MAX_SCENE_VERTICES};
+use pxl_render::asset::{SCENE_IDXS_CAP, SCENE_VERTICES_CAP};
 use pxl_render::gpu::draw::{DrawList, MODEL_VERTEX_WORDS};
 use xpute_core::mem;
 use xpute_core::mem::heap::alloc;
@@ -18,7 +18,7 @@ use xpute_core::mem::heap::alloc;
 // The largest mesh a parse accepts fits in one block, whose size in bytes is
 // a u32.
 const _: () = assert!(
-    (MAX_SCENE_VERTICES as u64 * MODEL_VERTEX_WORDS as u64 + MAX_SCENE_IDXS as u64) * 4
+    (SCENE_VERTICES_CAP as u64 * MODEL_VERTEX_WORDS as u64 + SCENE_IDXS_CAP as u64) * 4
         <= u32::MAX as u64
 );
 

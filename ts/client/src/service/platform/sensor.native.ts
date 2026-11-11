@@ -7,7 +7,7 @@
  * with the heading in the place of Safari's `webkitCompassHeading`.
  */
 
-import { AppState } from "react-native";
+import { AppState, Linking } from "react-native";
 import * as Location from "expo-horizon-location";
 
 import { coords_fix, geo_fix, listener } from "./sensor-listener.ts";
@@ -16,17 +16,49 @@ import { PLATFORM } from "./pxl-platform.ts";
 
 let granted: boolean | null = null;
 
+/** The last look at the permission. iOS's requester keeps only the latest
+ * request's promise, so a request made while another is out leaves the first
+ * unanswered. Each look waits for the one before and reads the answer it
+ * left, so one prompt answers every sensor that asked. */
+let looking: Promise<unknown> = Promise.resolve();
+
+function serial<T>(look: () => Promise<T>): Promise<T> {
+  const next = looking.then(() => look());
+  looking = next.catch(() => {});
+  return next;
+}
+
 /** Asks for the permission only while it is undetermined, and otherwise only
  * reads the answer. Asking opens an Android activity, and the app's resume
  * from it restarts the sensors, so asking every time would loop. */
-async function geo_permit(): Promise<boolean> {
-  const now = await Location.getForegroundPermissionsAsync();
-  const { status } =
-    now.status === Location.PermissionStatus.UNDETERMINED
-      ? await Location.requestForegroundPermissionsAsync()
-      : now;
-  granted = status === Location.PermissionStatus.GRANTED;
-  return granted;
+function geo_granted(): Promise<boolean> {
+  return serial(async () => {
+    const now = await Location.getForegroundPermissionsAsync();
+    const { status } =
+      now.status === Location.PermissionStatus.UNDETERMINED
+        ? await Location.requestForegroundPermissionsAsync()
+        : now;
+    granted = status === Location.PermissionStatus.GRANTED;
+    return granted;
+  });
+}
+
+/** iOS never asks again after a refusal, and Android stops asking after the
+ * second. The settings then grant it, and the app's return to the foreground
+ * starts the watch again. */
+function geo_permit(): Promise<boolean> {
+  return serial(async () => {
+    const now = await Location.getForegroundPermissionsAsync();
+    if (now.status === Location.PermissionStatus.GRANTED) return true;
+    if (!now.canAskAgain) {
+      granted = false;
+      await Linking.openSettings();
+      return false;
+    }
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    granted = status === Location.PermissionStatus.GRANTED;
+    return granted;
+  });
 }
 
 /** Rechecks the permission whenever the app comes back to the foreground, so
@@ -40,14 +72,16 @@ export function follow(): () => void {
 
 function recheck(): void {
   if (granted !== false) return;
-  void Location.getForegroundPermissionsAsync().then(({ status }) => {
-    if (granted !== false || status !== Location.PermissionStatus.GRANTED) {
-      return;
-    }
-    granted = true;
-    listener.permission("geolocation", "granted");
-    listener.permission("orientation", "granted");
-  });
+  void serial(() => Location.getForegroundPermissionsAsync()).then(
+    ({ status }) => {
+      if (granted !== false || status !== Location.PermissionStatus.GRANTED) {
+        return;
+      }
+      granted = true;
+      listener.permission("geolocation", "granted");
+      listener.permission("orientation", "granted");
+    },
+  );
 }
 
 interface Watch {
@@ -84,7 +118,7 @@ function geo_start(): void {
   const watch: Watch = { subscription: null, stopped: false };
   geolocation = watch;
   void (async () => {
-    if (!(await geo_permit())) return geo_fail(watch, "denied");
+    if (!(await geo_granted())) return geo_fail(watch, "denied");
     const subscription = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.BestForNavigation,
@@ -129,7 +163,7 @@ function orient_start(): void {
   orientation = watch;
   let told: number | null = null;
   void (async () => {
-    if (!(await geo_permit())) return orient_fail(watch, true);
+    if (!(await geo_granted())) return orient_fail(watch, true);
     const subscription = await Location.watchHeadingAsync(
       (h) => {
         const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
@@ -159,6 +193,7 @@ function orient_stop(): void {
 
 export const geo: GeolocationSensor = {
   has: true,
+  permit: geo_permit,
   start: geo_start,
   stop: geo_stop,
 };

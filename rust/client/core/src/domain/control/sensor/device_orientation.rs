@@ -12,7 +12,7 @@ use crate::domain::control::sensor::platform;
 use crate::domain::control::sensor::reading::{
     device_orient_store, device_orient_store_mut, SensorState,
 };
-use crate::sys::sched::edge::wake_at;
+use crate::sys::sched::wake_at;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 

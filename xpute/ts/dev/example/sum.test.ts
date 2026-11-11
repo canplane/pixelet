@@ -2,8 +2,8 @@
 
 /**
  * The smallest runtime, beside the smallest core (rust/dev/example). It boots the
- * core as the core's machine declares (machine.spec.ts): the module is read
- * from disk and opened over a memory of the one size the machine allows, with
+ * core as the core's manifest declares (manifest.spec.ts): the module is read
+ * from disk and opened over a memory of the one size the manifest allows, with
  * a policy for a runtime that has no display. The core's one protocol
  * (asker.spec.ts) gives the program's handler, which answers the core's call.
  * The test then sends one command and reads its reply. Build the core first
@@ -17,8 +17,8 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { boot, QUIET, Timeslice } from "@xpute/runtime";
-import { asker_imports, type AskerProtocol, Command } from "./asker.spec.ts";
-import { MACHINE } from "./machine.spec.ts";
+import { asker_exports, asker_imports, Command } from "./asker.spec.ts";
+import { MANIFEST } from "./manifest.spec.ts";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 /** A relative CARGO_TARGET_DIR is relative to rust/, where the root's tasks
@@ -36,17 +36,16 @@ const ANSWER = 100;
 
 test("example - a command answered with what the core asked its runtime", async () => {
   const runtime = await boot(
-    {
-      machine: MACHINE,
-      core: () => ({
-        core: { module: readFileSync(CORE), bytes: MACHINE.mem_bytes[0] },
-        program: asker_imports({ [Command.ASK]: () => ANSWER }),
-        policy: new Timeslice(4),
-        submit: () => {},
-      }),
-    },
+    MANIFEST,
+    () => ({
+      core: { module: readFileSync(CORE), bytes: MANIFEST.mem_bytes[0] },
+      program: [asker_imports({ [Command.ASK]: () => ANSWER })],
+      policy: new Timeslice(4),
+      submit: () => {},
+    }),
     QUIET,
   );
-  const asker: AskerProtocol = runtime;
-  assert.deepStrictEqual(asker.call(Command.SUM, 2, 3), 2 + 3 + ANSWER);
+  const asker = asker_exports(runtime);
+  runtime.resume();
+  assert.deepStrictEqual(await asker.sum(2, 3), 2 + 3 + ANSWER);
 });

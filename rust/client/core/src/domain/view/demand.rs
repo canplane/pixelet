@@ -41,7 +41,7 @@ use crate::sys::io::demand::{Order, PhaseList};
 use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::request::declare;
 use crate::sys::io::source;
-use crate::sys::sched::edge;
+use crate::sys::sched;
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::demand::tiles_within;
 use pxl_spec::space::layer::lattice::{demand_dist, GROUND};
@@ -656,7 +656,7 @@ pub fn admit_arrived(pass: &Pass) {
         None,
     );
     if stat.stopped_early {
-        edge::request_world_tick();
+        sched::request_world_tick();
     }
 }
 

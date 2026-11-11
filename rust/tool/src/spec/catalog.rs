@@ -2,8 +2,8 @@
 
 //! The catalog: every `file` leaf of the asset specs, a slot each, numbered in
 //! document order, spec by spec in `SPECS`' order. The Rust names each slot;
-//! the catalog fills them with the file each names, by its number below the
-//! asset root, and its extent (pxl-spec asset/catalog.rs reads the layout).
+//! the catalog fills them with the file each names, by its number after
+//! ASSET, and its extent (pxl-spec asset/catalog.rs reads the layout).
 //! The runtime serves it, as hex in TypeScript.
 
 use xpute_gen::spec::data::Run;
@@ -12,7 +12,7 @@ use super::ingest::{file_number, files};
 use super::{file, read, Node, Output};
 
 /// A data spec's `$type` for a file reference: in Rust its slot, in
-/// TypeScript its number below the asset root.
+/// TypeScript its number after ASSET.
 pub(crate) const FILE: &str = "file";
 
 pub(crate) const CUBE_JSON: &str = "spec/spec/asset/cube.json";
@@ -93,7 +93,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         "//",
         "// GENERATED from the asset specs and ingest.json",
         "//",
-        "// The catalog the runtime plugs in, served below the asset root at `CATALOG`",
+        "// The catalog the runtime plugs in, served at (ASSET, `CATALOG`)",
         "// (ts/client/src/service/sys/fs/asset.ts): the file each of the core's slots names and its",
         "// extent, laid out as pxl-spec asset/catalog.rs reads it, in hex.",
         "",

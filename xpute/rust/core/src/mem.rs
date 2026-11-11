@@ -58,11 +58,14 @@ impl Memory {
         unsafe { self.at::<u32>(off).write_unaligned(w) }
     }
 
+    /// Whether the `len` bytes at `off` lie inside the memory.
+    pub fn holds(self, off: usize, len: usize) -> bool {
+        off.checked_add(len).is_some_and(|end| end <= self.bytes)
+    }
+
     #[track_caller]
     fn within(self, off: usize, len: usize) {
-        off.checked_add(len)
-            .filter(|&end| end <= self.bytes)
-            .or_bug(Errno::EFAULT);
+        self.holds(off, len).then_some(()).or_bug(Errno::EFAULT);
     }
 
     /// A pointer outside the memory is a bug. On a native build, statics and

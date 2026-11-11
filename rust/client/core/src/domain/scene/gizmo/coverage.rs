@@ -37,7 +37,7 @@ use crate::domain::scene::gizmo::gizmo_spec;
 use crate::domain::scene::model::draw_list;
 use crate::domain::view::frame::pose::view;
 use crate::domain::view::observation::{observation, ByEye};
-use crate::sys::sched::edge::request_world_tick;
+use crate::sys::sched::request_world_tick;
 
 /// What an edge marks. The variants follow the spec's order
 /// (`gizmo_spec::coverage`), and that order is their rank: a stretch takes

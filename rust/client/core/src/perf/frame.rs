@@ -85,7 +85,7 @@ pub struct FrameSample {
     pub settled: f64,
     /// How many turns the interval held, the frame's and those without a
     /// runtime frame, and their total time (`busy_ms`), each turn measured
-    /// from its rise to its fall.
+    /// from its start to its end.
     pub turns: f64,
     pub busy_ms: f64,
     /// How far the interval's turns ran past its end (`over_ms`).
@@ -104,7 +104,7 @@ pub struct FrameSample {
     /// The time of each effect in the frame turn, indexed by `EffectName`.
     pub effects: [f64; EFFECTS],
     /// The frame's kind, an index into the renderer's FRAME_KINDS, and the
-    /// wake the turn asked for, an index into the edge's WAKES.
+    /// wake the turn asked for, an index into the turn's WAKES.
     pub kind: f64,
     pub wake: f64,
     pub gpu: GpuSample,
@@ -278,7 +278,7 @@ pub fn over_ms(f: &FrameSample) -> f64 {
 }
 
 /// The time the interval's turns spent outside every measured part: the
-/// door's commands, its pump, and each turn's own rise and fall.
+/// door's commands, its pump, and each turn's own start and end.
 pub fn unmeasured_ms(f: &FrameSample) -> f64 {
     (f.busy_ms - f.effects_ms - f.tick_ms - f.stage_ms - f.tasks_ms - f.perf_ms).max(0.0)
 }

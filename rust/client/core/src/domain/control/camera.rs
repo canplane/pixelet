@@ -22,7 +22,8 @@ use pxl_spec::space::coord::v3::V3;
 use xpute_core::global::Global;
 use xpute_kit::math::scalar::wrap;
 
-use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_POLAR};
+use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_POLAR, EASE_EPS_RAD, ROT_DAMP};
+use crate::domain::smooth::{smooth_angle, smooth_vec};
 
 // A facing is a direction in spherical coordinates about the world's Z
 // axis. The polar angle θ is measured from straight down and is clamped to
@@ -94,6 +95,24 @@ pub fn azimuth() -> f64 {
 /// The polar angle the camera is drawn at, in radians from straight down.
 pub fn polar() -> f64 {
     camera().polar
+}
+
+/// Eases the facing of `cam` over `delta` seconds, its polar angle toward
+/// `polar` at `polar_rate` and its azimuth toward `azimuth` the short way
+/// round, and returns whether it is still moving.
+pub fn ease_facing(
+    cam: &mut Camera,
+    polar: f64,
+    polar_rate: f64,
+    azimuth: f64,
+    delta: f64,
+) -> bool {
+    let ([eased_polar], polar_moving) =
+        smooth_vec([cam.polar], [polar], polar_rate, delta, EASE_EPS_RAD);
+    let (eased_azimuth, azimuth_moving) =
+        smooth_angle(cam.azimuth, azimuth, ROT_DAMP, delta, EASE_EPS_RAD);
+    (cam.polar, cam.azimuth) = facing_domain(eased_polar, eased_azimuth);
+    polar_moving || azimuth_moving
 }
 
 #[cfg(test)]

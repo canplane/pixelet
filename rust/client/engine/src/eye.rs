@@ -6,7 +6,7 @@
 //! and this file is the only place the layout is written.
 
 use crate::beam;
-use crate::object::Cut;
+use crate::object::{Cut, CUT_WORDS};
 
 /// The eye's position in Q3 steps, X, Y and Z.
 pub const ORIGIN: usize = 0;
@@ -25,12 +25,10 @@ pub const TAN: usize = 16;
 /// The zooms a cell is asked at, coarsest then finest.
 pub const RANGE: usize = 18;
 /// A preview's cut to air (`CARVE`) and its left-out leaf (`HIDE`), each as X, Y, Z and the
-/// zoom; a zoom of `NO_CUT` means none (`object::Cut`).
+/// zoom (`object::CUT_WORDS`), both as one run (`object::CUTS`); a zoom of `NO_CUT` means none
+/// (`object::Cut`).
 pub const CARVE: usize = 20;
 pub const HIDE: usize = 24;
-pub const CUT_WORDS: usize = 4;
-/// Both cuts, carve then hide, as one run of words.
-pub const CUTS: usize = 2 * CUT_WORDS;
 pub const NO_CUT: u32 = Cut::NONE.zoom;
 /// The light's cast into the shadow map: its frame's constants, taken from the light's box
 /// (`light::Light::words`). First come five vec4s of f32 bits: the start of texel (0, 0)'s

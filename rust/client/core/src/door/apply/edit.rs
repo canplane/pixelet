@@ -10,7 +10,7 @@ use crate::domain::control::edit::Tool;
 use crate::domain::control::input::camera_rehover;
 use crate::domain::layer::object::asset::Asset;
 use crate::door::cmd as abi;
-use xpute_core::ipc::door::Outcome;
+use xpute_core::io::door::Outcome;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 

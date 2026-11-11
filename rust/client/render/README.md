@@ -48,10 +48,10 @@ solid angle it shows the eye against a grid cell's (`screen_shade.wgsl`
 
 What the rays asked of each node is kept between frames in the node cache, a
 table keyed by the node (pxl-engine `node_cache.rs`). An entry is forgotten
-where what its node read changed: an edit, a cut, or a tile that landed under it
-(`forget_cs`). Where the bucket an entry needs is full, the cache gives up one
-that has not been drawn for two frames (pxl-engine `record.rs`). A few rare
-events forget every entry at once: what was placed changed by more than the
+where what its node read changed: a box of damage, a cut, or a tile that landed
+under it (`forget_cs`). Where the bucket an entry needs is full, the cache gives
+up one that has not been drawn for two frames (pxl-engine `record.rs`). A few
+rare events forget every entry at once: what was placed changed by more than the
 stream has room to send, or by revisions the GPU never held, or by a write that
 names no box, and the casts outrunning the frames a key's tag tells apart
 (`ray/cast.rs`). That is correct, and costs only a cast of everything again.
@@ -65,7 +65,7 @@ still world draws nothing at all.
 Decor the ground grows is stored nowhere: the GPU generates it from the same
 clip levels the rays read, and placed decor arrives beside it as records in
 the same layout (`gpu/generator.rs`). Its passes redo only the entries whose
-brick, edits or distance changed, and nothing generated is read back.
+brick, damage or distance changed, and nothing generated is read back.
 
 ## Time: the scale and the rate
 

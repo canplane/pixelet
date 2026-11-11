@@ -6,12 +6,13 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { gpu_connect } from "@xpute/gpu/web.ts";
 import { start } from "@xpute/runtime";
+import { MANIFEST } from "@/abi/manifest.spec.ts";
+import { keep_said } from "@xpute/runtime/say.ts";
 import { mirror_source, settled } from "@/service/sys/fs/source.ts";
 import { is_storage_key } from "@/service/sys/fs/storage.ts";
 import { set_online } from "@/service/origin/online.ts";
 import { set_core } from "@/service/core/core.ts";
 import type { ToCore, ToUi } from "@/runtime/page.ts";
-import { manifest } from "@/runtime/start.ts";
 import { type OnOpen, started, ui } from "@/runtime/ui.ts";
 import { GPU_STATE, gpu_present, set_gpu } from "@/service/sys/gpu.ts";
 import { set_canvas_binder } from "@/service/platform/gpu.ts";
@@ -22,6 +23,9 @@ import * as storage from "@/service/platform/storage.ts";
 /** Resolves once a GPU is present and the source is settled: true when the
  * source was declared, false when it was refused. */
 export async function open(on: OnOpen): Promise<boolean> {
+  // A build made for measuring keeps the page's lines, the runtime's among
+  // them, for the tool that drives it (script/perf/).
+  if (__PERF_DRIVE__) keep_said();
   // Metro bundles the worker through this call, and through no form of
   // `new Worker` that tree shaking also compiles (metro.config.ts).
   const worker = new Worker(require.unstable_resolveWorker("./worker.ts"), {
@@ -53,7 +57,7 @@ export async function open(on: OnOpen): Promise<boolean> {
   set_canvas_binder(gpu_connect(port1, (state) => set_gpu(GPU_STATE[state])));
   worker.postMessage({ kind: "gpu", port: port2 } satisfies ToCore, [port2]);
   const link = await start(
-    manifest(device.handheld),
+    MANIFEST,
     ui(on, (files) => ask({ kind: "refused", files })),
     () => worker,
   );

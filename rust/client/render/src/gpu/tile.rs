@@ -5,11 +5,11 @@
 //! word, which the GPU holds, is the number of the frame it last changed in. Each frame, a
 //! pass sets the words of the tiles that the one mark the CPU hands covers (`damage`), before
 //! anything reads them, and the draws that changed set the words of the tiles they cover
-//! (pass/mark.rs). A tile is claimed while it changed fewer than `damage_frames` frames
-//! ago, and every tile is claimed in a frame drawn whole. The screen keeps a tile claimed until
-//! its history has gathered the jitter's whole sequence; the map claims a tile only in the
+//! (pass/mark.rs). A tile is damaged while it changed fewer than `damage_frames` frames
+//! ago, and every tile is damaged in a frame drawn whole. The screen keeps a tile damaged until
+//! its history has gathered the jitter's whole sequence; the map damages a tile only in the
 //! frame it changed. A pass that draws the tiles reads the words and the uniform
-//! (screen_tile.wgsl) and draws only the claimed ones. A target drawn through its gate takes
+//! (screen_tile.wgsl) and draws only the damaged ones. A target drawn through its gate takes
 //! the number its gate writes into the stencil from here (`mask`).
 
 use crate::frame::shader::group::{
@@ -32,7 +32,7 @@ use crate::gpu::span_spec::GpuSpanName;
 pub const DAMAGE_MARGIN: f32 = 4.0;
 
 /// A mark: the pixels `[x, y, width, height]` that a change covers. A frame drawn through the
-/// gate claims the tiles they lie in (`TileGrid::damage`).
+/// gate damages the tiles they lie in (`TileGrid::damage`).
 pub type Damage = [u32; 4];
 
 /// The mark of the clip-space box `[x0, y0, x1, y1]`, Y up, on a target `width` by `height`
@@ -64,25 +64,25 @@ pub fn damage_of(
     })
 }
 
-/// The box of claimed tiles as it is set before its pass runs: an empty box, whose first tile
+/// The box of damaged tiles as it is set before its pass runs: an empty box, whose first tile
 /// lies past its last.
 const NO_DAMAGE_RECT: [u32; 4] = [u32::MAX, u32::MAX, 0, 0];
 
-/// How many numbers a frame drawn through the gate can write into its claimed tiles'
+/// How many numbers a frame drawn through the gate can write into its damaged tiles'
 /// stencil: 1 to 255, every value of the stencil's eight bits but 0, which a frame drawn whole
 /// leaves. When the numbers come round to 1, the frame clears the stencil first, so no tile
-/// holds this frame's number but those it claims (gpu/api.rs `Stencil`).
+/// holds this frame's number but those it damages (gpu/api.rs `Stencil`).
 const MASK_NUMBERS: u32 = 255;
 
 pub struct TileGrid {
-    /// A tile's side in pixels, and how many frames a tile stays claimed once it changed, in a
+    /// A tile's side in pixels, and how many frames a tile stays damaged once it changed, in a
     /// frame drawn through the gate.
     side: u32,
     damage_frames: u32,
     /// The span the marks' passes are timed in: the screen's (`dispatch_damage`) or the
     /// light's (`dispatch_rect_args`).
     span: GpuSpanName,
-    /// The uniform by which a frame draws the tiles. It claims the claimed tiles alone or
+    /// The uniform by which a frame draws the tiles. It covers the damaged tiles alone or
     /// every tile (`damage`).
     uniform: u32,
     /// Each tile's word, row after row, which the GPU holds; the target's size in pixels
@@ -90,7 +90,7 @@ pub struct TileGrid {
     changed_at: u32,
     size: [u32; 2],
     now: u32,
-    /// The number of the last frame whose mark asks for the frames of its claim (`asking`).
+    /// The number of the last frame whose mark asks for the frames of its damage (`asking`).
     /// A mark asks unless the scene's animation alone made it, and a frame drawn whole marks
     /// every tile and asks.
     asked_at: u32,
@@ -109,20 +109,20 @@ pub struct TileGrid {
     new_damage_rect: u32,
     /// The indirect args that draw a quad for each tile of `new_damage_rect`, with the pass
     /// and the group that set them from the box on the GPU once the marks are made. They exist
-    /// only where a tile is claimed in the frame it changed alone, as only then does the box
-    /// hold every claimed tile.
+    /// only where a tile is damaged in the frame it changed alone, as only then does the box
+    /// hold every damaged tile.
     rect_args: Option<(u32, Pipeline, u32)>,
-    /// The number the last frame drawn through the gate wrote into the claimed tiles'
+    /// The number the last frame drawn through the gate wrote into the damaged tiles'
     /// stencil, or 0 where the target was drawn whole (`mask`).
     mask_number: u32,
-    /// The box of the claimed tiles, from the first across and down to the last, in four
+    /// The box of the damaged tiles, from the first across and down to the last, in four
     /// words the GPU holds, and the pass that sets it (`dispatch_damage_rect`).
     damage_rect: u32,
     damage_rect_pipeline: Pipeline,
 }
 
 impl TileGrid {
-    /// Makes tiles `side` pixels a side, which stay claimed for `damage_frames` frames once
+    /// Makes tiles `side` pixels a side, which stay damaged for `damage_frames` frames once
     /// they changed, with their marks' passes timed in `span`.
     pub fn new(
         g: &Gpu,
@@ -206,12 +206,12 @@ impl TileGrid {
     /// Numbers a new frame and hands its mark. A frame drawn through the gate (`masked`) marks
     /// the tiles `damage` covers (`damage_of`). Any other frame marks every tile, or none where
     /// nothing it draws moved (`quiet`). A gated mark in a turn where the scene's animation
-    /// stepped (`animated`) is the animation's own, and it asks for no frame of its claim
-    /// (`asking`). The uniform claims the claimed tiles alone in a gated frame, and every tile
+    /// stepped (`animated`) is the animation's own, and it asks for no frame of its damage
+    /// (`asking`). The uniform covers the damaged tiles alone in a gated frame, and every tile
     /// in any other. `dispatch_damage` later sets the mark into the words on the GPU. Where a
-    /// tile is claimed only in the frame it changed (`damage_frames` 1, the map's), a frame
-    /// that is not gated sets nothing: it claims every tile by its uniform, and a later gated
-    /// frame claims only the tiles set in that frame, so no frame would read what it set.
+    /// tile is damaged only in the frame it changed (`damage_frames` 1, the map's), a frame
+    /// that is not gated sets nothing: it damages every tile by its uniform, and a later gated
+    /// frame damages only the tiles set in that frame, so no frame would read what it set.
     pub fn damage(
         &mut self,
         g: &Gpu,
@@ -272,7 +272,7 @@ impl TileGrid {
         g.end(pass);
     }
 
-    /// Sets the box of the tiles this frame claims, a thread a tile (damage_rect.wgsl), once the
+    /// Sets the box of the tiles this frame damages, a thread a tile (damage_rect.wgsl), once the
     /// frame's marks are made, and returns its buffer of four words. It is timed in the marks'
     /// span.
     pub fn dispatch_damage_rect(&self, ctx: &mut RenderContext) -> u32 {
@@ -302,7 +302,7 @@ impl TileGrid {
         self.span
     }
 
-    /// The words and the uniform by which this frame draws the tiles: the claimed tiles alone,
+    /// The words and the uniform by which this frame draws the tiles: the damaged tiles alone,
     /// or every tile (`damage`).
     pub fn this_frame(&self) -> (u32, u32) {
         (self.changed_at, self.uniform)
@@ -316,7 +316,7 @@ impl TileGrid {
     /// The box of tiles this frame's marks cover, from the first across and down to past the
     /// last, in four words on the GPU. It starts as the handed mark and the draws that mark
     /// widen it (tile_mark.wgsl), so no tile outside it changed this frame. It is kept only
-    /// where a tile is claimed in the frame it changed alone (`rect_args`).
+    /// where a tile is damaged in the frame it changed alone (`rect_args`).
     pub fn new_damage_rect(&self) -> u32 {
         self.new_damage_rect
     }
@@ -337,15 +337,15 @@ impl TileGrid {
     }
 
     /// The indirect args that draw a quad for each tile of the marks' box (screen_tile.wgsl
-    /// `rect_clip`), as `dispatch_rect_args` set them. They draw the claimed tiles alone where
-    /// a tile is claimed only in the frame it changed, as the map's is. They are none where a
-    /// tile stays claimed longer.
+    /// `rect_clip`), as `dispatch_rect_args` set them. They draw the damaged tiles alone where
+    /// a tile is damaged only in the frame it changed, as the map's is. They are none where a
+    /// tile stays damaged longer.
     pub fn rect_args(&self) -> Option<u32> {
         self.rect_args.as_ref().map(|b| b.0)
     }
 
     /// Prepares the pass `desc` that draws the target these tiles cover, through its gate
-    /// where `masked`. It returns the pass and the number the gate writes into the claimed
+    /// where `masked`. It returns the pass and the number the gate writes into the damaged
     /// tiles' stencil, which counts from 1 and comes round after `MASK_NUMBERS`. The pass
     /// keeps the stencil the last gated frame left, except when the numbers come round, and
     /// then it clears the stencil. The number is none where the target is drawn whole, which
@@ -374,7 +374,7 @@ impl TileGrid {
 
     /// The uniform's words for this frame, laid out as build.rs's `TileGrid` reads them
     /// (tile_word.wgsl). A quad is grown by `grow` pixels each way past its tile, and a tile
-    /// stays claimed for `damage_frames` frames once it changed.
+    /// stays damaged for `damage_frames` frames once it changed.
     pub fn words(&self, grow: f32, damage_frames: u32) -> [u32; TILES_WORDS] {
         let [across, down] = self.squares();
         let mut t = [0u32; TILES_WORDS];
@@ -386,13 +386,13 @@ impl TileGrid {
         t
     }
 
-    /// How many frames a tile stays claimed once it changed, in a frame drawn through the gate.
+    /// How many frames a tile stays damaged once it changed, in a frame drawn through the gate.
     pub fn damage_frames(&self) -> u32 {
         self.damage_frames
     }
 
-    /// Whether a mark that asks for the frames of its claim changed a tile so lately that the
-    /// tile stays claimed in a frame after this one. The mark may be handed (`damage`) or
+    /// Whether a mark that asks for the frames of its damage changed a tile so lately that the
+    /// tile stays damaged in a frame after this one. The mark may be handed (`damage`) or
     /// drawn (`marked_in`). A mark made by the scene's animation alone asks for none.
     pub fn asking(&self) -> bool {
         screen::in_damage(
@@ -409,7 +409,7 @@ impl TileGrid {
     /// Takes note of a mark that another pass set in the frame numbered `at`: the marks of the
     /// draws that changed (pass/mark.rs), or the propagation's in their frame
     /// (pass/propagate.rs). Unless the scene's animation made it (`animated`), the mark asks for
-    /// the frames of its claim as a handed mark does, where it is later than the last that
+    /// the frames of its damage as a handed mark does, where it is later than the last that
     /// asked.
     pub fn marked_in(&mut self, at: u32, animated: bool) {
         if !animated && screen::age(self.now, at) < screen::age(self.now, self.asked_at) {

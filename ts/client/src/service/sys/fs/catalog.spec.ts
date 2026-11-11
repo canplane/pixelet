@@ -2,7 +2,7 @@
 //
 // GENERATED from the asset specs and ingest.json
 //
-// The catalog the runtime plugs in, served below the asset root at `CATALOG`
+// The catalog the runtime plugs in, served at (ASSET, `CATALOG`)
 // (ts/client/src/service/sys/fs/asset.ts): the file each of the core's slots names and its
 // extent, laid out as pxl-spec asset/catalog.rs reads it, in hex.
 

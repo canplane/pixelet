@@ -9,7 +9,7 @@ use crate::domain::control::edit::{hover, tool};
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::preview::{Draft, RenderEdit};
-use crate::sys::sched::edge::request_world_tick;
+use crate::sys::sched::request_world_tick;
 use pxl_engine::answer::{self, PLACED_ASSET};
 use pxl_spec::asset::id::solid;
 use pxl_spec::asset::marker::{MARKER, MARKER_TEXT_CHARS};

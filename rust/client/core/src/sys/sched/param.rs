@@ -9,9 +9,9 @@ pub const HARD_SLACK_MS: f64 = 4.0;
 
 /// The share of the budget held back for content, which would otherwise
 /// starve while a load keeps the frame busy. The tick's visible phase may not
-/// take it (sys/sched/tick.rs `RESERVE`). After the frame, the turn's tasks
+/// take it (sys/sched/tick.rs `reserve`). After the frame, the turn's tasks
 /// get this share of the frame however far the frame overran
-/// (sys/sched/edge.rs `tasks_after_frame`).
+/// (sys/sched.rs `tasks_after_frame`).
 pub const CONTENT_SHARE: f64 = 0.2;
 
 /// The longest gap between frames, in seconds, that the world steps as

@@ -18,7 +18,7 @@ export interface Tx {
 }
 
 /** What a place needs to open the core: the size of its memory in bytes,
- * which must be one its machine allows. A place that links the core in needs
+ * which must be one its manifest allows. A place that links the core in needs
  * no config. */
 export interface Config {
   bytes: u32;
@@ -82,6 +82,10 @@ export interface SensorListener {
 
 export interface GeolocationSensor {
   has: boolean;
+  /** Called from a press, before it starts the watch. Resolves whether the
+   * watch may start: it asks again where a refusal may be asked again, and
+   * where it may not, opens the settings where the user grants it. */
+  permit(): Promise<boolean>;
   start(): void;
   stop(): void;
 }
@@ -134,6 +138,9 @@ export interface InputDriver {
    * makes of it for itself. */
   touched(phase: PointerPhase): void;
   wheel(delta_y: f64): void;
+  /** A trackpad's pinch: the factor its fingers' spread changed by since the
+   * last, over one as they spread. */
+  pinch(scale: f64): void;
   /** Returns whether the core took the key, in which case the page's default
    * action is prevented. */
   keyDown(code: string, at: { inField: boolean }): boolean;

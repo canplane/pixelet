@@ -2,15 +2,17 @@
 
 /**
  * The backend of the core's OBJECT files, which hold the objects placed in the
- * world. It keeps them in the platform's database (service/platform/db.ts). The
- * core reads two kinds of file: a shard, named by its tile's quadkey, and the
- * top of the tree (`object.TOP` in file.json). The core writes one: a batch of
- * edits to `object.EDITS`. In one transaction, each batch is laid over the
- * shards its writes fall in, and the top's rows for those shards are rebuilt
- * (object_tree.ts). A shard with no leaves has no file, and neither has a top
- * with no rows. A server can answer the same `open` and `commit` instead
- * (namespace.ts), and the core cannot tell the two apart. A commit sends no
- * answer back to the core, so a batch that cannot be kept is only logged.
+ * world. It keeps them in the platform's database (service/platform/db.ts),
+ * each under its key: a shard under its tile's quadkey, and the top of the
+ * tree under `TOP_KEY`. The core reads those two kinds of file, (OBJECT,
+ * quadkey) and (OBJECT, TOP), and writes one: a batch of edits, (OBJECT,
+ * EDIT), which binding.ts maps here. In one transaction,
+ * each batch is laid over the shards its writes fall in, and the top's rows
+ * for those shards are rebuilt (object_tree.ts). A shard with no leaves has no
+ * file, and neither has a top with no rows. A server can answer the same
+ * `open` and `commit` instead, and the core cannot tell the two apart. The
+ * transaction ends after the commit returns, so a batch the database then
+ * fails to keep is only logged.
  */
 
 import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
@@ -18,7 +20,7 @@ import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/runtime";
 import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 
-import { format, object } from "@/abi/file.spec.ts";
+import { format } from "@/abi/file.spec.ts";
 import {
   lay,
   shard_of,
@@ -28,6 +30,9 @@ import {
 } from "@/service/sys/fs/object_tree.ts";
 import { type Tx } from "@/service/platform/types.ts";
 import * as db from "@/service/platform/db.ts";
+
+/** The key the top is kept under; no quadkey has a letter. */
+export const TOP_KEY = "top";
 
 /** A file is one format byte followed by a tree packet. */
 function pkt(fmt: number, bytes: U8Array): U8Array {
@@ -133,12 +138,12 @@ async function move_aside(tx: Tx, key: string, now_ms: number): Promise<void> {
 /** A top that does not decode was written by another build, so it is set aside
  * and read as empty. */
 async function rows_of(tx: Tx): Promise<TopRow[]> {
-  const bytes = await tx.get(object.TOP);
+  const bytes = await tx.get(TOP_KEY);
   if (bytes === null) return [];
   try {
     return decode_top(bytes);
   } catch {
-    await move_aside(tx, object.TOP, Date.now());
+    await move_aside(tx, TOP_KEY, Date.now());
     return [];
   }
 }
@@ -157,7 +162,7 @@ async function leaves_of(tx: Tx, shard: string): Promise<Leaf[]> {
 }
 
 async function put_top(tx: Tx, rows: readonly TopRow[]): Promise<void> {
-  await tx.put(object.TOP, rows.length === 0 ? null : encode_top(rows));
+  await tx.put(TOP_KEY, rows.length === 0 ? null : encode_top(rows));
 }
 
 async function apply_edits(tx: Tx, writes: readonly Leaf[]): Promise<void> {
@@ -190,34 +195,34 @@ async function apply_edits(tx: Tx, writes: readonly Leaf[]): Promise<void> {
 /** A read sees every batch committed before it, because the database runs its
  * transactions one at a time, in the order they were begun. */
 export function object_backend(db: Db = DB): {
-  open(path: string): Promise<U8Array>;
-  commit(path: string, bytes: U8Array): void;
-  set_aside(path: string, now_ms: number): Promise<boolean>;
+  open(key: string): Promise<U8Array>;
+  commit(bytes: U8Array): void;
+  set_aside(key: string, now_ms: number): Promise<boolean>;
 } {
   return {
-    open(path) {
+    open(key) {
       return db.transaction(async (tx) => {
-        const bytes = await tx.get(path);
+        const bytes = await tx.get(key);
         if (bytes === null) throw new FileError(Errno.ENOENT);
         return bytes;
       });
     },
-    commit(path, bytes) {
-      if (path !== object.EDITS) throw new FileError(Errno.EROFS);
-      const writes = decode_writes(format.OBJECT_EDITS, bytes);
+    /** Applies an edit batch. */
+    commit(bytes) {
+      const writes = decode_writes(format.OBJECT_EDIT, bytes);
       db.transaction((tx) => apply_edits(tx, writes)).catch((err: unknown) => {
         console.error("[object] an edit batch was not kept:", err);
       });
     },
-    /** Sets aside a file the core refused, so that its path reads as empty.
+    /** Sets aside a file the core refused, so that its key reads as empty.
      * A shard's rows leave the top with it. Resolves false, with nothing
      * changed, when the database fails. */
-    set_aside(path, now_ms) {
+    set_aside(key, now_ms) {
       return db
         .transaction(async (tx) => {
-          await move_aside(tx, path, now_ms);
-          if (path !== object.TOP) {
-            const left = (await rows_of(tx)).filter((r) => r.shard !== path);
+          await move_aside(tx, key, now_ms);
+          if (key !== TOP_KEY) {
+            const left = (await rows_of(tx)).filter((r) => r.shard !== key);
             await put_top(tx, left);
           }
           return true;

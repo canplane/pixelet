@@ -26,6 +26,7 @@ fn cfg(frame_latency: u32) -> Config {
         configure_at: ConfigureAt::Here,
         frame_latency,
         upload_chunk_bytes: 1 << 16,
+        slow_ms: None,
         present_mode: wgpu::PresentMode::Fifo,
     }
 }
@@ -41,6 +42,7 @@ fn runtime(
         device.clone(),
         queue.clone(),
         cfg(frame_latency),
+        None,
         || {},
     )
 }
@@ -164,6 +166,7 @@ fn records_read_back() {
             device.clone(),
             queue.clone(),
             cfg(2),
+            None,
             || {},
         );
         g.each(&format!("{p}.turn"), |turn| {

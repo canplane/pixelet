@@ -6,11 +6,10 @@
 //! they view, and where it reads its count. Every indirect call in ray/cast.rs,
 //! ray/raster.rs, gpu/generator.rs and pass/shadow.rs takes the place of its count from its
 //! step here, and those files name the steps in this order (sequence.test.rs). access.rs
-//! `check` refuses the hazards among the calls as the crate is built, and `KNOWN` names each
-//! hazard the frame holds today.
+//! `check` refuses the hazards among the calls as the crate is built.
 
 use crate::frame::shader::access::{
-    check, light_marks, Bound, Frame, KnownHazard, Persistent, Range, Step, END, NO_RANGE,
+    check, light_marks, Bound, Frame, Persistent, Range, Step, END, NO_RANGE,
 };
 use crate::frame::shader::group::*;
 use crate::frame::shader::record::*;
@@ -90,7 +89,7 @@ pub const LIT_PASS: &[u32] = &[
 ];
 
 /// The eye's raster draw of the record and its faces' pass (ray/raster.rs `Raster::draw`),
-/// then the cast of the pixels in the claimed tiles (ray/cast.rs `RayPass::dispatch`).
+/// then the cast of the pixels in the damaged tiles (ray/cast.rs `RayPass::dispatch`).
 pub const RASTER: Step =
     Step::draw_off("raster", IN_EYE, PIPELINE_RASTER, &[], (RASTER_ARGS, 0)).in_pass(RASTER_PASS);
 pub const FACE: Step = Step::dispatch_off(
@@ -197,8 +196,14 @@ pub const LIGHT_SAMPLE_HIT: Step = Step::dispatch_off(
     (LIGHT_ARGS, light::ARGS_SAMPLE_HIT),
 );
 /// The light's raster draw of the record (ray/raster.rs `Raster::light_draw`).
-pub const LIGHT_RASTER: Step =
-    Step::draw("light_raster", IN_LIGHT, PIPELINE_RASTER, &[]).in_pass(LIGHT_RASTER_PASS);
+pub const LIGHT_RASTER: Step = Step::draw_off(
+    "light_raster",
+    IN_LIGHT,
+    PIPELINE_RASTER,
+    &[],
+    (LIGHT_RASTER_ARGS, 0),
+)
+.in_pass(LIGHT_RASTER_PASS);
 pub const LIGHT_SLOTS: Step = Step::dispatch_off(
     "light_slots",
     IN_LIGHT,
@@ -332,9 +337,9 @@ pub const OPEN_SAMPLES_QUEUE: Step = Step::write(
     header(ray::QUEUE_EYE_SAMPLES, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_CAST_TILES: Step = Step::write("open_cast_tiles", at(CAST_TILES, 0, 4));
-pub const OPEN_RASTER_ARGS: Step = Step::write(
-    "open_raster_args",
-    at(RASTER_ARGS, 0, raster::ASKED_AT + raster::ARGS_WORDS),
+pub const OPEN_RASTER_ASKS: Step = Step::write(
+    "open_raster_asks",
+    at(RASTER_ARGS, raster::ASKED_AT, raster::ARGS_WORDS),
 );
 pub const OPEN_RASTER_HIT_ASKS: Step = Step::write(
     "open_raster_hit_asks",
@@ -558,7 +563,7 @@ pub const FRAME: Frame = Frame {
         OPEN_CORNERS_QUEUE,
         OPEN_SAMPLES_QUEUE,
         OPEN_CAST_TILES,
-        OPEN_RASTER_ARGS,
+        OPEN_RASTER_ASKS,
         OPEN_RASTER_HIT_ASKS,
         OPEN_LIGHT_ARGS,
         OPEN_LIGHT_RECEIVER_TILES,
@@ -575,7 +580,7 @@ pub const FRAME: Frame = Frame {
         OPEN_NODE_CACHE_FRAME,
         OPEN_GENERATION_RECTS,
         // The cull of the decor generated last frame, which is drawn through the screen's
-        // gate: it opens the regions' args, then lists each region's instances in the claimed
+        // gate: it opens the regions' args, then lists each region's instances in the damaged
         // tiles (gpu/generator.rs `Generator::cull`).
         Step::dispatch(
             "decor_cull_args",
@@ -742,7 +747,7 @@ pub const FRAME: Frame = Frame {
             COMPUTE_GENERATION_ARGS,
             &[&GENERATION_ARGS_OF_BINDS],
         ),
-        // The light's cast: its receivers stand, its tiles are read and claimed, and then come
+        // The light's cast: its receivers stand, its tiles are read and damaged, and then come
         // its beam rays, its samples, the draw of its record and its slots.
         LIGHT_READS_OUT,
         LIGHT_READS_IN,
@@ -851,7 +856,7 @@ pub const FRAME: Frame = Frame {
         Step::dispatch(
             "light_queue",
             IN_LIGHT_HOLES,
-            COMPUTE_QUEUE,
+            COMPUTE_QUEUE_LIGHT,
             &[&LIGHT_WALK_BINDS],
         ),
         Step::dispatch(
@@ -863,7 +868,7 @@ pub const FRAME: Frame = Frame {
         Step::dispatch(
             "light_queue_parked",
             IN_LIGHT_HOLES,
-            COMPUTE_QUEUE_PARKED,
+            COMPUTE_QUEUE_LIGHT_PARKED,
             &[&LIGHT_WALK_BINDS],
         ),
         Step::dispatch(
@@ -876,7 +881,7 @@ pub const FRAME: Frame = Frame {
         Step::dispatch(
             "light_queue_last",
             IN_LIGHT_HOLES,
-            COMPUTE_QUEUE_LAST,
+            COMPUTE_QUEUE_LAST_LIGHT,
             &[&LIGHT_LAST_BINDS],
         ),
         LIGHT_REC_HITS_DISPATCH,
@@ -1032,11 +1037,7 @@ const PERSISTENT: &[Persistent] = &[
     },
 ];
 
-/// The hazards the frame holds today, each by its rule, its step and what it is held with
-/// (access.rs `check`).
-pub const KNOWN: &[KnownHazard] = &[];
-
-const _: () = check(&FRAME, KNOWN);
+const _: () = check(&FRAME);
 
 #[cfg(test)]
 #[path = "sequence.test.rs"]

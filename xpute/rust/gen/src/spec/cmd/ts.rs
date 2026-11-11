@@ -23,6 +23,7 @@ pub(super) fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
         Kind::Bool => "boolean".to_string(),
         Kind::Str => "string".to_string(),
         Kind::Extern => "u32".to_string(),
+        Kind::Path => "Path".to_string(),
         _ => f.ty.clone(),
     };
     Ok(if f.list {
@@ -34,9 +35,13 @@ pub(super) fn ts_type(spec: &Spec, f: &Field) -> Result<String, String> {
     })
 }
 
-/// The type a caller hands for a field of a packet the runtime sends.
+/// The type a caller hands for a field of a packet the runtime sends. A path
+/// goes as a branch of its tokens.
 pub(super) fn ts_arg(spec: &Spec, f: &Field) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
+    if kind == Kind::Path {
+        return Ok("Branch".to_string());
+    }
     if f.list && kind == Kind::Number {
         check_packed(f)?;
         return Ok("U32Array".to_string());
@@ -65,6 +70,9 @@ fn ts_read(spec: &Spec, f: &Field, i: usize) -> Result<String, String> {
         }
         check_packed(f)?;
         return Ok(format!("Array.from(b.at({i}).get<U32Array>())"));
+    }
+    if kind == Kind::Path {
+        return Ok(format!("read_path(b.at_branch({i}))"));
     }
     if kind == Kind::Record {
         return Ok(if f.optional {
@@ -254,6 +262,12 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
                 "import type {{ {} }} from \"@xpute/kit/{from}\";",
                 names.join(", ")
             ));
+        }
+    }
+    if spec.has_path()? {
+        out.push(format!("import type {{ Path }} from \"{}\";", t.path.1));
+        if reads(&tail, "read_path(") {
+            out.push(format!("import {{ read_path }} from \"{}\";", t.path.1));
         }
     }
     let mut modules: Vec<Output> = Vec::new();

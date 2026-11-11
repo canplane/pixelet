@@ -3,16 +3,19 @@
 //! This is the runtime for a core linked into the runtime's own process. It
 //! reserves the core's memory (`reserve`) and runs the core on a thread of its
 //! own, the only thread on which the core's `Global`s are sound. That thread
-//! acts as a vCPU (`thread`): it runs a turn at a display frame when one is
-//! wanted, and sleeps otherwise. Each call the core makes is handed to
-//! the thread that answers it (`answer_with`, `notify_on`), and the blocks the
-//! core allocates lie in its memory (`Alloc`).
+//! (`thread`) runs a turn at a display frame when one is wanted, and sleeps
+//! otherwise. What the core sends is served on the runtime's own thread
+//! (`serve`), each call the core makes is handed to the thread that answers it
+//! (`answer_with`, `notify_on`), and the blocks the core allocates lie in its
+//! memory (`Alloc`).
 //!
 //! A process holds one core, because the core's memory base is one value for
 //! the whole process. So the C ABI exports xpute's own names, with no prefix
 //! of the program's (`native_abi!`).
 
 mod alloc;
+#[path = "native/batch.spec.rs"]
+pub mod batch;
 mod pacing;
 mod reserve;
 mod say;
@@ -26,13 +29,13 @@ use xpute_core::mem::section::PAGE_BYTES;
 
 pub use alloc::Alloc;
 pub use say::{say, stop_hook};
-pub use serve::{attach, call, fs_closed, fs_opened, named_by, post, take, Named, STOPPED};
+pub use serve::{attach, fs_complete_open, post, take};
 pub use thread::{
-    answer, answer_with, input, notify_on, pace, pause, resume, ring, terminated, vsync, wake,
-    Answer, Notify, Pace, Vcpu,
+    answer, answer_with, handle, input, notify_on, pace, pause, resume, run, terminated, vsync,
+    wake, Answer, Notify, Pace, Turn,
 };
-pub use xpute_core::entry::{run, BootInfo, Entry, Form};
-pub use xpute_core::machine::Machine;
+pub use xpute_core::entry::{self, BootInfo, Entry};
+pub use xpute_core::manifest::Manifest;
 pub use xpute_core::stop::PanicHook;
 
 pub struct Config {
@@ -43,20 +46,25 @@ pub struct Config {
     pub heap_at: u32,
     pub stack_bytes: usize,
     pub thread_name: &'static str,
-    /// What the core is told about the form it was built in. A native
-    /// library's statics live in the process, not in the core's memory, so
-    /// its `data_end` is the end of the front the program lays at the bottom
-    /// of the memory, or 0 when there is none.
-    pub form: Form,
-    /// Whether a turn may begin now (`Vcpu::ready`). A core whose machine
-    /// has rings passes this module's `ready`.
-    pub ready: fn() -> bool,
+    /// A native library's statics live in the process, not in the core's
+    /// memory, so its `data_end` is the end of the front the program lays at
+    /// the bottom of the memory, or 0 when there is none (`BootInfo`).
+    pub data_end: u32,
+    pub now: fn() -> f64,
+    pub stop_hook: Option<PanicHook>,
+    pub publish: Option<fn()>,
+    /// A turn that takes longer than this many milliseconds is said, as
+    /// `[xpute] turn took <ms> ms`, the whole milliseconds, as a page's runtime
+    /// says it. With none, no turn is timed. A program with the GPU passes its
+    /// `CoreConfig`'s (xpute-gpu).
+    pub slow_ms: Option<u32>,
 }
 
 /// A device that runs beside the core, such as the GPU's runtime. Both
 /// functions are handed the core. `poll` runs before each turn and has the
 /// memory told what the device has completed. `publish` takes what the core
-/// has just published to the device, as the core rings it (`Form::publish`).
+/// has just published to the device, as the core publishes it
+/// (`BootInfo::publish`).
 #[derive(Clone, Copy)]
 pub struct Device {
     pub poll: fn(Core),
@@ -70,25 +78,17 @@ impl Device {
     };
 }
 
-/// This is `Vcpu::ready` for a core with a machine. A turn may begin before the
-/// first turn has opened the rings, and after that only while the completion
-/// ring has room for all that one turn may post (xpute-core ipc/door.rs
-/// `has_room`).
-pub fn ready() -> bool {
-    !xpute_core::machine::booted() || xpute_core::machine::door().has_room()
-}
-
 /// Proof that the core has booted; every call into the core goes through it.
 #[derive(Clone, Copy)]
 pub struct Core {
     _booted: (),
 }
 
-/// Reserves the memory and starts the core's thread, which loops on `turn` and
-/// `cfg.ready` (`Vcpu`). Before this returns, the thread is marked as the
+/// Reserves the memory and starts the core's thread, which loops on `turn`.
+/// Before this returns, the thread is marked as the
 /// core's and the memory's base is set. A process boots once; a second boot
 /// panics.
-pub fn boot(cfg: &Config, turn: fn(deadline_ms: f64) -> f64) -> Core {
+pub fn boot(cfg: &Config, turn: Turn) -> Core {
     assert!(
         cfg.heap_at < cfg.mem_bytes,
         "the heap begins at {} of a {}-byte memory",
@@ -102,34 +102,29 @@ pub fn boot(cfg: &Config, turn: fn(deadline_ms: f64) -> f64) -> Core {
     );
     assert!(reserve::core().is_none(), "a core is booted once a process");
     let core = reserve::map(cfg.mem_bytes as usize, cfg.heap_at as usize);
-    let vcpu = Vcpu {
+    thread::start(
+        cfg.thread_name,
+        cfg.stack_bytes,
         turn,
-        ready: cfg.ready,
-    };
-    thread::start(cfg.thread_name, cfg.stack_bytes, vcpu, move || {
-        xpute_core::global::mark_thread();
-        // SAFETY: the region was reserved for the process's life.
-        unsafe { xpute_core::mem::set(core.at, core.bytes) };
-    });
+        cfg.slow_ms,
+        move || {
+            xpute_core::global::mark_thread();
+            // SAFETY: the region was reserved for the process's life.
+            unsafe { xpute_core::mem::set(core.at, core.bytes) };
+        },
+    );
     Core { _booted: () }
 }
 
 impl Core {
-    /// Runs `f` on the core's thread between turns while the caller waits,
-    /// as QEMU's `run_on_cpu` runs work on a vCPU's thread. Meanwhile the
-    /// caller answers, on its own thread, each call `f` makes
-    /// (`answer_with`); a caller that is the thread that rings answers the
+    /// Runs `f` on the core's thread between turns while the caller waits.
+    /// Meanwhile the caller answers, on its own thread, each call `f` makes
+    /// (`answer_with`); a caller that is the thread that runs turns answers the
     /// calls of turns too. Returns `None` when the core has stopped, during
-    /// this call or before it. It panics on the core's thread, inside
-    /// `while_idle` and inside an answer, where it would wait for itself.
+    /// this call or before it. It panics on the core's thread and inside an
+    /// answer, where it would wait for itself.
     pub fn run_on<R: Send>(self, f: impl FnOnce() -> R + Send) -> Option<R> {
-        thread::run(f)
-    }
-
-    /// Runs `f` on this thread while the core's thread runs nothing. It
-    /// panics where `run_on` does.
-    pub fn while_idle<R>(self, f: impl FnOnce() -> R) -> R {
-        thread::while_idle(f)
+        thread::run_on(f)
     }
 
     /// The memory's first byte and its size. Read it through raw pointers,
@@ -151,9 +146,16 @@ impl Core {
     pub fn boot_info(self, cfg: &Config) -> BootInfo {
         BootInfo {
             mem_sz: u32::try_from(self.mem().1).expect("the memory is at most 4 GiB"),
-            call: thread::call,
+            host: xpute_core::host::Host {
+                receive: serve::receive,
+                send: serve::send,
+                call: thread::call,
+            },
             heap_stat: alloc::stat,
-            form: cfg.form,
+            data_end: cfg.data_end,
+            now: cfg.now,
+            stop_hook: cfg.stop_hook,
+            publish: cfg.publish,
         }
     }
 }
@@ -178,13 +180,11 @@ pub fn now() -> f64 {
     t.tv_sec as f64 * 1000.0 + t.tv_nsec as f64 / 1e6
 }
 
-/// Runs one turn of a core of `machine`. Before the first turn, the front the
-/// runtime laid is checked against the machine and opened (`machine::boot`);
+/// Runs one turn of a core of `manifest`. Before the first turn, the front the
+/// runtime laid is checked against the manifest and opened (xpute-core io/door.rs `boot`);
 /// every turn then runs `entry`.
-pub fn turn(machine: &Machine, deadline_ms: f64, boot: fn() -> BootInfo, entry: Entry) -> f64 {
-    if !xpute_core::machine::booted() {
-        xpute_core::machine::boot(machine);
-    }
+pub fn turn(manifest: &Manifest, deadline_ms: f64, boot: fn() -> BootInfo, entry: Entry) -> f64 {
+    xpute_core::io::door::boot(manifest);
     entry(deadline_ms, boot)
 }
 
@@ -211,20 +211,20 @@ macro_rules! native_abi {
             pub fn core() -> $crate::native::Core {
                 static CORE: ::std::sync::OnceLock<$crate::native::Core> =
                     ::std::sync::OnceLock::new();
-                *CORE.get_or_init(|| $crate::native::boot(cfg(), xpute_vcpu_turn))
+                *CORE.get_or_init(|| $crate::native::boot(cfg(), xpute_thread_turn))
             }
 
-            fn boot_info() -> $crate::native::BootInfo {
+            pub fn boot_info() -> $crate::native::BootInfo {
                 core().boot_info(cfg())
             }
 
-            fn xpute_vcpu_turn(deadline_ms: f64) -> f64 {
-                $crate::native::run(deadline_ms, boot_info, ENTRY)
+            fn xpute_thread_turn(deadline_ms: f64) -> f64 {
+                $crate::native::entry::run(deadline_ms, boot_info, ENTRY)
             }
 
             pub fn run(deadline_ms: f64) -> f64 {
                 core();
-                $crate::native::ring(deadline_ms).unwrap_or(f64::NAN)
+                $crate::native::run(deadline_ms).unwrap_or(f64::NAN)
             }
 
             pub fn mem(bytes: Option<&mut u32>) -> *mut u8 {
@@ -236,7 +236,7 @@ macro_rules! native_abi {
             }
         }
 
-        pub use xpute_native::core;
+        pub use xpute_native::{boot_info, core};
 
         #[no_mangle]
         pub extern "C" fn xpute_run(deadline_ms: f64) -> f64 {
@@ -284,11 +284,11 @@ macro_rules! native_abi {
         }
 
         #[no_mangle]
-        pub extern "C" fn xpute_attach(sq_at: u32, cq_at: u32, fs: bool) {
+        pub extern "C" fn xpute_attach(fs: bool) {
             let (at, bytes) = xpute_native::core().mem();
             // SAFETY: the core's memory, reserved for the process's life, whose
-            // rings the caller has laid.
-            unsafe { $crate::native::attach(at.as_ptr() as usize, bytes, sq_at, cq_at, fs) };
+            // front the caller has laid.
+            unsafe { $crate::native::attach(at.as_ptr() as usize, bytes, fs) };
         }
 
         #[no_mangle]
@@ -348,7 +348,7 @@ macro_rules! native_abi {
         /// # Safety
         /// `bytes` points at `len` readable bytes.
         #[no_mangle]
-        pub unsafe extern "C" fn xpute_fs_opened(
+        pub unsafe extern "C" fn xpute_fs_complete_open(
             fd: u32,
             result: i32,
             detail: u32,
@@ -361,25 +361,7 @@ macro_rules! native_abi {
                 // SAFETY: the caller's bytes.
                 unsafe { core::slice::from_raw_parts(bytes, len) }.to_vec()
             };
-            $crate::native::fs_opened(fd, result, detail, Some(file));
-        }
-
-        #[no_mangle]
-        pub extern "C" fn xpute_fs_closed(fd: u32, result: i32) {
-            $crate::native::fs_closed(fd, result);
-        }
-
-        /// # Safety
-        /// `pkt` points at `len` readable bytes.
-        #[no_mangle]
-        pub unsafe extern "C" fn xpute_call(cmd: u32, pkt: *const u8, len: usize) -> i32 {
-            let pkt = if len == 0 {
-                &[][..]
-            } else {
-                // SAFETY: the caller's bytes.
-                unsafe { core::slice::from_raw_parts(pkt, len) }
-            };
-            $crate::native::call(cmd, pkt)
+            $crate::native::fs_complete_open(fd, result, detail, file);
         }
 
         /// # Safety
@@ -392,36 +374,35 @@ macro_rules! native_abi {
     };
 }
 
-/// Links a core of `machine` (its `MACHINE`) into this process; this is the
+/// Links a core of `manifest` (its `MANIFEST`) into this process; this is the
 /// native form that xpute-core's `core!` expands to outside WebAssembly.
 /// `fixed_bytes` is the length of the core's fixed ranges, and `entry` runs
 /// each turn (`Entry`) once the first turn has opened the front the runtime
 /// laid (`turn`).
 ///
 /// It installs `Alloc` as the global allocator and boots the core through
-/// `native_abi!` with the smallest memory the machine allows, the core's own
-/// ranges just past the machine's front, the heap past the fixed ranges, the
-/// machine's thread stack, xpute's stop hook (`stop_hook`), and turns that
-/// begin only while the rings have room (`ready`). Given a `device`, each
-/// turn runs after the device's poll, the core rings the device as it
-/// publishes (`Device`);
-/// xpute-gpu's `native_core!` passes its runtime this way.
+/// `native_abi!` with the smallest memory the manifest allows, the core's own
+/// ranges just past the manifest's front, the heap past the fixed ranges, the
+/// manifest's thread stack and xpute's stop hook (`stop_hook`). Given a
+/// `device`, each turn runs after the device's poll, the device takes what the
+/// core publishes as it publishes it (`Device`), and a turn slower than
+/// `slow_ms` is said (`Config::slow_ms`); xpute-gpu's `native_core!` passes its
+/// runtime and its `CoreConfig`'s bound this way.
 ///
 /// On Android it also exports the C ABI to JNI, as the `external` functions of
 /// the Kotlin class `xpute.Core` (`jni`): `run(deadlineMs: Double): Double`,
 /// `wake()`, `input()`, `vsync(ageMs: Double)`, `pause()`, `resume()`,
-/// `answer()`, `attach(sqAt: Int, cqAt: Int, fs: Boolean)`, `pace(paceHz: Double,
+/// `answer()`, `attach(fs: Boolean)`, `pace(paceHz: Double,
 /// marginShare: Double, batchFrames: Double, settleMs: Double)`, `post(tag: Int, cmd: Int, flags:
-/// Int, result: Int, pkt: ByteArray)`, `take(): ByteArray`, `fsOpened(fd: Int,
-/// result: Int, detail: Int, bytes: ByteArray)`, `fsClosed(fd: Int, result:
-/// Int)`, `call(cmd: Int, pkt: ByteArray): Int`, `mem(): ByteBuffer`, `load(at: Double): Double` and
-/// `store(at: Double, word: Double)`. It calls back the class's static
+/// Int, result: Int, pkt: ByteArray)`, `take(): ByteArray`, `fsCompleteOpen(fd: Int,
+/// result: Int, detail: Int, bytes: ByteArray)` and `mem(): ByteBuffer`. It
+/// calls back the class's static
 /// `call(at: Int): Int` for each of the core's calls, and its static
 /// `onNotify()` for each piece of news `xpute_notify_on` describes.
 #[macro_export]
 macro_rules! native_core {
-    ($machine:expr, $fixed_bytes:expr, $entry:expr, device: $device:expr $(,)?) => {
-        const _: () = $machine.check($fixed_bytes);
+    ($manifest:expr, $fixed_bytes:expr, $entry:expr, device: $device:expr, slow_ms: $slow_ms:expr $(,)?) => {
+        const _: () = $manifest.check($fixed_bytes);
 
         #[global_allocator]
         static XPUTE_ALLOC: $crate::native::Alloc = $crate::native::Alloc;
@@ -435,7 +416,7 @@ macro_rules! native_core {
 
             pub(super) fn xpute_turn(deadline_ms: f64, boot: fn() -> $crate::native::BootInfo) -> f64 {
                 (DEVICE.poll)(core());
-                $crate::native::turn(&$machine, deadline_ms, boot, ENTRY)
+                $crate::native::turn(&$manifest, deadline_ms, boot, ENTRY)
             }
 
             pub(super) fn publish() {
@@ -445,17 +426,15 @@ macro_rules! native_core {
 
         $crate::native_abi!(
             $crate::native::Config {
-                mem_bytes: $machine.min_mem_bytes(),
-                heap_at: $machine.heap_at($machine.global_base(), $fixed_bytes),
-                stack_bytes: $machine.thread_stack_bytes as usize,
+                mem_bytes: $manifest.min_mem_bytes(),
+                heap_at: $manifest.heap_at($manifest.global_base(), $fixed_bytes),
+                stack_bytes: $manifest.thread_stack_bytes as usize,
                 thread_name: "xpute-core",
-                ready: $crate::native::ready,
-                form: $crate::native::Form {
-                    data_end: $machine.global_base(),
-                    now: $crate::native::now,
-                    stop_hook: Some($crate::native::stop_hook),
-                    publish: Some(xpute_native_core::publish),
-                },
+                data_end: $manifest.global_base(),
+                now: $crate::native::now,
+                stop_hook: Some($crate::native::stop_hook),
+                publish: Some(xpute_native_core::publish),
+                slow_ms: $slow_ms,
             },
             xpute_native_core::xpute_turn
         );
@@ -530,13 +509,11 @@ macro_rules! native_core {
         unsafe extern "system" fn Java_xpute_Core_attach(
             env: *mut $crate::jni::sys::JNIEnv,
             this: $crate::jni::sys::jobject,
-            sq_at: $crate::jni::sys::jint,
-            cq_at: $crate::jni::sys::jint,
             fs: $crate::jni::sys::jboolean,
         ) {
             // SAFETY: the environment and object JNI called with.
             unsafe { $crate::jni::init(env, this) };
-            xpute_attach(sq_at as u32, cq_at as u32, fs != 0);
+            xpute_attach(fs != 0);
         }
 
         #[cfg(target_os = "android")]
@@ -586,7 +563,7 @@ macro_rules! native_core {
         /// Only JNI calls this, with the environment and arguments of its call.
         #[cfg(target_os = "android")]
         #[no_mangle]
-        unsafe extern "system" fn Java_xpute_Core_fsOpened(
+        unsafe extern "system" fn Java_xpute_Core_fsCompleteOpen(
             env: *mut $crate::jni::sys::JNIEnv,
             _this: $crate::jni::sys::jobject,
             fd: $crate::jni::sys::jint,
@@ -596,36 +573,7 @@ macro_rules! native_core {
         ) {
             // SAFETY: the environment and array JNI called with.
             let bytes = unsafe { $crate::jni::bytes(env, bytes) };
-            $crate::native::fs_opened(fd as u32, result, detail as u32, Some(bytes));
-        }
-
-        #[cfg(target_os = "android")]
-        #[no_mangle]
-        extern "system" fn Java_xpute_Core_fsClosed(
-            _env: *mut $crate::jni::sys::JNIEnv,
-            _this: $crate::jni::sys::jobject,
-            fd: $crate::jni::sys::jint,
-            result: $crate::jni::sys::jint,
-        ) {
-            xpute_fs_closed(fd as u32, result);
-        }
-
-        /// # Safety
-        /// Only JNI calls this, with the environment and arguments of its call.
-        #[cfg(target_os = "android")]
-        #[no_mangle]
-        unsafe extern "system" fn Java_xpute_Core_call(
-            env: *mut $crate::jni::sys::JNIEnv,
-            this: $crate::jni::sys::jobject,
-            cmd: $crate::jni::sys::jint,
-            pkt: $crate::jni::sys::jbyteArray,
-        ) -> $crate::jni::sys::jint {
-            // SAFETY: the environment, object and array JNI called with.
-            let pkt = unsafe {
-                $crate::jni::init(env, this);
-                $crate::jni::bytes(env, pkt)
-            };
-            $crate::native::call(cmd as u32, &pkt)
+            $crate::native::fs_complete_open(fd as u32, result, detail as u32, bytes);
         }
 
         /// # Safety
@@ -643,7 +591,13 @@ macro_rules! native_core {
             }
         }
     };
-    ($machine:expr, $fixed_bytes:expr, $entry:expr $(,)?) => {
-        $crate::native_core!($machine, $fixed_bytes, $entry, device: $crate::native::Device::NONE);
+    ($manifest:expr, $fixed_bytes:expr, $entry:expr $(,)?) => {
+        $crate::native_core!(
+            $manifest,
+            $fixed_bytes,
+            $entry,
+            device: $crate::native::Device::NONE,
+            slow_ms: None
+        );
     };
 }

@@ -4,7 +4,7 @@
 //! the report reads, on and off together.
 
 use crate::perf::record::{perf_recording_start, perf_recording_stop, perf_release};
-use crate::sys::sched::tick::tick;
+use crate::turn;
 
 /// Follows the profiler's setting. It is called with the stored setting on
 /// the turn the settings are read, a few turns after boot, so a profiler left
@@ -25,12 +25,11 @@ pub fn perf_window_start() -> bool {
     if !perf_recording_start() {
         return false;
     }
-    tick().step_stats_reset();
-    tick().set_step_timing(true);
+    turn::set_step_timing(true);
     true
 }
 
 pub fn perf_window_stop() {
     perf_recording_stop();
-    tick().set_step_timing(false);
+    turn::set_step_timing(false);
 }

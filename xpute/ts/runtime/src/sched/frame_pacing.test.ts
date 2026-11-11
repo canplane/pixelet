@@ -141,7 +141,7 @@ test("frame pacing - the deadline runs from the frame's start, so a late turn ha
   near(q.grant(1005).deadline, 1000 + full.deadline, 1e-9);
 });
 
-test("frame pacing - input, or a core asking for the next edge, makes a turn interactive", () => {
+test("frame pacing - input, or a core asking for the next turn, makes a turn interactive", () => {
   const q = new FramePacing(POLICY);
   for (let i = 0; i < FRAME_WINDOW; i++) q.gap(1000 / 30);
   q.observe(0, q.grant(0), NO_WAKE);

@@ -91,9 +91,7 @@ function recordingText(r: RecordingSection): string {
     r.heap_range_max_bytes,
   )}   largest free min ${bytes(
     r.heap_largest_free_min_bytes,
-  )}   refusals ${r.heap_refusals}   ring peak cq ${r.ring_cq_peak} sq ${
-    r.ring_sq_peak
-  } left ${r.ring_left_peak}   body slots peak ${
+  )}   refusals ${r.heap_refusals}   body slots peak ${
     r.body_slots_peak
   }   terrain refused ${r.terrain_refusals}   (over the ${
     r.frames
@@ -214,7 +212,7 @@ function windowSection(r: PerfReport): string[] {
       f.missed,
       f.moving,
     )}% of moving frames)`,
-    `  busy    ${percentiles(f.busy)} ms   (the interval's turns, rise to fall)`,
+    `  busy    ${percentiles(f.busy)} ms   (the interval's turns, start to end)`,
     `  long    ${f.long} (turns past their interval)`,
     `  tick    ${percentiles(f.tick)} ms   overran ${f.overran}   budget ${n1(
       last.budget_ms,
@@ -232,7 +230,7 @@ function windowSection(r: PerfReport): string[] {
     `  perf ${percentiles(f.perf)} ms   (its own record and the UI's reads)`,
     `  rest    ${percentiles(
       f.rest,
-    )} ms   (busy unmeasured: the door's commands, rise and fall)`,
+    )} ms   (busy unmeasured: the door's commands, start and end)`,
     f.gpu_timed > 0
       ? `  gpu     ${percentiles(
           f.gpu_busy,

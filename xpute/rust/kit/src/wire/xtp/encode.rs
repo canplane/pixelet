@@ -1,13 +1,14 @@
 // xpute-kit/wire/xtp/encode.rs
 
+use crate::abi::word::field_set32;
 use crate::status::errno::Errno;
 use crate::status::error::MarshalError;
 
 use super::cursor::{bytes_of, ArrayElem};
 use super::spec::{
     BranchNode, GraftNode, Node, Numeric, ScalarNode, ScalarType, SequenceNode, SequenceType,
-    SequenceVal, SpecialType, ALIGN_SZ, ELEM_SZ, GET_DESC, GET_LEN, HDR_SZ, MAGIC, MAX_PKT_SZ,
-    RESERVED, WORD_SZ,
+    SequenceVal, SpecialType, ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT, ELEM_SZ, GET_DESC,
+    GET_LEN, HDR_SZ, MAGIC, MAX_PKT_SZ, RESERVED, WORD_SZ,
 };
 use super::view::NodeView;
 
@@ -156,8 +157,6 @@ fn strs_sz<S: AsRef<str>>(items: &[S]) -> u64 {
     4 * (items.len() as u64 + 1) + items.iter().map(|s| s.as_ref().len() as u64).sum::<u64>()
 }
 
-const ROOT: u32 = HDR_SZ;
-
 const fn align(n: u32, unit: u32) -> u32 {
     (n + unit - 1) & !(unit - 1)
 }
@@ -201,10 +200,10 @@ impl<'a> PacketWriter<'a> {
                 root: true,
             },
             root_type: SpecialType::NIL as u8,
-            lim: ROOT,
+            lim: HDR_SZ,
             err: None,
         };
-        match w.buf.get_mut(..ROOT as usize) {
+        match w.buf.get_mut(..HDR_SZ as usize) {
             Some(h) => h.fill(0),
             None => {
                 w.spoil(Errno::EINVAL);
@@ -220,7 +219,7 @@ impl<'a> PacketWriter<'a> {
         let at = w.branch_open(cnt);
         w.root_type = SpecialType::BRANCH as u8;
         w.table = Table {
-            base: at.unwrap_or(ROOT),
+            base: at.unwrap_or(HDR_SZ),
             cnt,
             written: 0,
             root: false,
@@ -264,7 +263,7 @@ impl<'a> PacketWriter<'a> {
             self.word(
                 f.base + WORD_SZ + f.written * WORD_SZ,
                 at.map_or(0, |b| b - f.base),
-                type_ as u32,
+                field_set32(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type_ as u32),
             );
         }
         self.table.written += 1;
@@ -553,7 +552,7 @@ impl<'a> PacketWriter<'a> {
         let outer = core::mem::replace(
             &mut self.table,
             Table {
-                base: at.unwrap_or(ROOT),
+                base: at.unwrap_or(HDR_SZ),
                 cnt,
                 written: 0,
                 root: false,
@@ -626,7 +625,11 @@ impl<'a> PacketWriter<'a> {
         }
         self.buf[self.lim as usize..end as usize].fill(0);
         self.word(0, MAGIC, RESERVED);
-        self.word(WORD_SZ, self.lim - HDR_SZ, self.root_type as u32);
+        self.word(
+            WORD_SZ,
+            self.lim - HDR_SZ,
+            field_set32(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, self.root_type as u32),
+        );
         Ok(end)
     }
 

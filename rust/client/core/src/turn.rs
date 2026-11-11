@@ -11,7 +11,7 @@ pub mod spec;
 use crate::domain::layer::Base as _;
 use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
-use xpute_core::sched::edge::{notified, Notify};
+use xpute_core::sched::turn::{notified, Notify};
 
 use crate::domain::control::input::{camera_input_step, rehover_at};
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
@@ -20,11 +20,10 @@ use crate::domain::control::navigation::off_center::{off_center, off_center_step
 use crate::domain::control::sensor::device_orientation::orient_watchdog_step;
 use crate::sys::io::param::CREDITS;
 use crate::sys::io::request::{pump, set_credits};
-use crate::sys::io::text::text_rise;
+use crate::sys::io::text::text_drop_unread;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use xpute_core::abi::sys::SysPace;
-use xpute_core::machine::door;
+use xpute_core::abi::sys::{sys_pace, SysPace};
 
 use crate::domain::control::camera;
 use crate::domain::control::camera::controller;
@@ -64,15 +63,15 @@ use crate::sys::io::demand::Stream;
 use crate::sys::io::fetch;
 use crate::sys::io::loader;
 use crate::sys::io::request;
-use crate::sys::sched::edge;
-use crate::sys::sched::edge::{request_world_tick, world_edge};
-use crate::sys::sched::tick::{tick, TickContext};
+use crate::sys::sched::tick::{TickContext, TickReport};
+use crate::sys::sched::{self, executor, request_world_tick};
 use pxl_render::gpu::api;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
-use xpute_core::sched::tick::TickReport;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use crate::sys::sched::param::MAX_STEP_S;
 use crate::sys::sched::phase_spec::Phase;
@@ -189,47 +188,110 @@ fn environment_tick(_: &mut TickContext) {
 /// Runs once, outside any frame. The frame task it spawns sleeps until the
 /// runtime grants the first frame.
 pub fn boot() {
-    tick().on_tick(
-        Phase::interaction as u8,
-        controller::controller_step,
-        StepName::controller as u32,
-    );
-    tick().on_tick(
-        Phase::interaction as u8,
-        camera_input_tick,
-        StepName::input as u32,
-    );
-    tick().on_tick(
-        Phase::interaction as u8,
-        camera_tick,
-        StepName::camera as u32,
-    );
-    tick().on_tick(Phase::interaction as u8, edit_tick, StepName::edit as u32);
-    tick().on_tick(Phase::interaction as u8, ghost_tick, StepName::ghost as u32);
-    // The environment runs after the camera, so it sees this tick's camera.
-    tick().on_tick(
-        Phase::interaction as u8,
-        environment_tick,
-        StepName::environment as u32,
-    );
-    tick().on_tick(
-        Phase::interaction as u8,
-        companion_tick,
-        StepName::companion as u32,
-    );
-    tick().on_tick(Phase::visible as u8, demand_tick, StepName::demand as u32);
-    tick().on_tick(Phase::visible as u8, scene_tick, StepName::scene as u32);
     world_tasks();
 }
 
-/// The world's tasks must fit in the executor's pool (door/executor.rs
-/// `TASKS`). A refused spawn means the pool is too small, and the core aborts.
-fn world_tasks() {
-    use xpute_core::sched::task::spawn;
-    let spawned = spawn(frame_task(), 0) && spawn(fetch::fetch_task(), 0);
-    if !spawned {
-        std::process::abort();
+type Step = (StepName, fn(&mut TickContext));
+
+/// The tick's steps, phase by phase, in the order they run.
+const STEPS: [(Phase, &[Step]); 2] = [
+    (
+        Phase::interaction,
+        &[
+            (StepName::controller, controller::controller_step),
+            (StepName::input, camera_input_tick),
+            (StepName::camera, camera_tick),
+            (StepName::edit, edit_tick),
+            (StepName::ghost, ghost_tick),
+            // The environment runs after the camera, so it sees this tick's
+            // camera.
+            (StepName::environment, environment_tick),
+            (StepName::companion, companion_tick),
+        ],
+    ),
+    (
+        Phase::visible,
+        &[
+            (StepName::demand, demand_tick),
+            (StepName::scene, scene_tick),
+        ],
+    ),
+];
+
+fn world_tick(delta: f64, deadline_ms: f64, t0: f64) -> TickReport {
+    let start = now();
+    let mut ctx = TickContext::new(delta, deadline_ms, t0);
+    for (phase, steps) in STEPS {
+        ctx.phase(phase, |ctx| {
+            for &(name, step) in steps {
+                timed(ctx, phase, name, step);
+            }
+        });
     }
+    ctx.report(start)
+}
+
+/// A step's time, summed while the profiler records.
+#[derive(Clone, Copy, Debug)]
+pub struct StepStat {
+    pub phase: Phase,
+    pub ms: f64,
+    pub cnt: u32,
+    pub max_ms: f64,
+}
+
+const STAT_NONE: StepStat = StepStat {
+    phase: Phase::ALL[0],
+    ms: 0.0,
+    cnt: 0,
+    max_ms: 0.0,
+};
+
+/// Each step's time by its name, since the profiler last began to record.
+static STEP_STATS: Global<[StepStat; spec::STEP_NAMES]> = Global::new();
+/// Whether the profiler records, and the steps are timed.
+static STEP_TIMING: Global<bool> = Global::new();
+
+fn step_stats_mut() -> &'static mut [StepStat; spec::STEP_NAMES] {
+    STEP_STATS.get(|| [STAT_NONE; spec::STEP_NAMES])
+}
+
+/// Runs the step `name` of `phase`, timed while the profiler records.
+fn timed(ctx: &mut TickContext, phase: Phase, name: StepName, step: fn(&mut TickContext)) {
+    if !*STEP_TIMING.get(|| false) {
+        return step(ctx);
+    }
+    let at = now();
+    step(ctx);
+    let ms = now() - at;
+    let s = &mut step_stats_mut()[name as usize];
+    (s.phase, s.ms, s.cnt, s.max_ms) = (phase, s.ms + ms, s.cnt + 1, s.max_ms.max(ms));
+}
+
+/// Starts summing each step's time from zero, or stops summing it; what was
+/// summed stays to be read.
+pub fn set_step_timing(on: bool) {
+    if on {
+        *step_stats_mut() = [STAT_NONE; spec::STEP_NAMES];
+    }
+    STEP_TIMING.set(on);
+}
+
+/// Each step that ran while the profiler recorded, by its name.
+pub fn step_stats() -> impl Iterator<Item = (StepName, StepStat)> {
+    let stats = *step_stats_mut();
+    StepName::ALL
+        .into_iter()
+        .map(move |name| (name, stats[name as usize]))
+        .filter(|(_, s)| s.cnt > 0)
+}
+
+/// Spawns the world's two tasks, each one of embassy's static tasks, which
+/// runs for the core's life.
+fn world_tasks() {
+    let spawner = executor::spawner();
+    spawner.spawn(frame_task().or_bug(Errno::ENOSPC));
+    spawner.spawn(fetch::fetch_task().or_bug(Errno::ENOSPC));
 }
 
 /// The milliseconds each effect took in the last turn, indexed by
@@ -303,6 +365,20 @@ pub struct TurnGrant {
 static FRAME: Global<Option<TurnGrant>> = Global::new();
 static FRAMES: Global<Notify> = Global::new();
 static NEW_FRAME: Global<bool> = Global::new();
+static REFUSED: Global<Refused> = Global::new();
+
+/// The frames the runtime granted that did not run since boot, by why
+/// (`frame_task`): the GPU admitted none, or the runtime still held the
+/// stream.
+#[derive(Clone, Copy, Default)]
+pub struct Refused {
+    pub admit: f64,
+    pub stream: f64,
+}
+
+pub fn refused_frames() -> Refused {
+    *REFUSED.get(Refused::default)
+}
 
 fn frames() -> &'static mut Notify {
     FRAMES.get(Notify::new)
@@ -310,7 +386,7 @@ fn frames() -> &'static mut Notify {
 
 /// Takes a frame the runtime granted. A frame still waiting for the GPU is
 /// replaced by this one, and its elapsed time is added to this one's.
-pub fn on_world_frame_asked(grant: TurnGrant) {
+pub fn grant_world_frame(grant: TurnGrant) {
     let frame = FRAME.get(|| None);
     let delta = frame.take().map_or(0.0, |was| was.delta);
     *frame = Some(TurnGrant {
@@ -332,30 +408,41 @@ pub fn take_new_frame() -> bool {
 
 /// The frame runs as one task because its parts must run in order, and
 /// nothing may rely on the order in which the executor runs tasks.
+#[embassy_executor::task]
 async fn frame_task() {
     loop {
         notified(frames).await;
-        // A frame the GPU cannot take without blocking (xpute_gpu::admit), or
-        // whose stream the runtime still holds (xpute_core ipc/stream.rs R3),
-        // does not run. Its grant waits for the next turn, so the renderer is
-        // never handed a frame it would have to put off.
-        if !api::stream_free() || (api::device().is_some() && !crate::admit_frame()) {
+        // A frame whose stream the runtime still holds (xpute_core
+        // io/stream.rs R3), or that the GPU cannot take without blocking
+        // (xpute_gpu::admit), does not run, and is counted by why. Its grant
+        // waits for the next turn, so the renderer is never handed a frame it
+        // would have to put off.
+        let refused = REFUSED.get(Refused::default);
+        let why = if !api::stream_free() {
+            Some(&mut refused.stream)
+        } else if api::device().is_some() && !crate::admit_frame() {
+            Some(&mut refused.admit)
+        } else {
+            None
+        };
+        if let Some(cnt) = why {
+            *cnt += 1.0;
             request_world_tick();
             continue;
         }
         let Some(grant) = FRAME.get(|| None).take() else {
             continue;
         };
-        let edge = world_edge();
+        let turn = sched::turn();
         let paced_ms = grant.paced_ms;
-        world_frame(grant, edge.deadline_ms(), edge.edge_at());
-        edge::tasks_after_frame(paced_ms);
+        world_frame(grant, turn.deadline_ms(), turn.start_at());
+        sched::tasks_after_frame(paced_ms);
         clipmap::fill_share();
         NEW_FRAME.set(true);
     }
 }
 
-fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
+fn world_frame(grant: TurnGrant, deadline_ms: f64, start_at: f64) -> TickReport {
     let TurnGrant {
         delta,
         refresh_ms,
@@ -364,12 +451,12 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     } = grant;
     let t0 = now();
     set_credits(CREDITS);
-    text_rise();
+    text_drop_unread();
     let effects_ms = world_turn();
     // A step longer than MAX_STEP_S would carry a character through a wall
     // or make a damped camera overshoot.
     let step = delta.min(MAX_STEP_S);
-    let report = tick().run(step, deadline_ms, edge_at);
+    let report = world_tick(step, deadline_ms, start_at);
     let after_tick = now();
     // Requests are pumped once a turn, after every producer has declared its
     // wants: the effects, the tick's tile streams (`demand_tick`), and the
@@ -387,7 +474,7 @@ fn world_frame(grant: TurnGrant, deadline_ms: f64, edge_at: f64) -> TickReport {
     );
     set_renderer_frame(&frame);
     if let Some(interval_ms) = frame.interval_ms {
-        door().send(&SysPace { interval_ms });
+        sys_pace(&SysPace { interval_ms });
     }
     let end = now();
     perf_frame(FrameTurn {
@@ -415,7 +502,7 @@ fn changes_step() {
     static CHANGED: Global<[Vec<Quadrant>; 3]> = Global::new();
     let [places, earth, divisions] = CHANGED.get(Default::default);
     let shared = change::take();
-    gpu::note_edited(change::written_boxes());
+    gpu::note_damage(change::damage());
     PlaceTile::tile_cache().take_changed(places);
     EarthTile::tile_cache().take_changed(earth);
     DivisionTile::tile_cache().take_changed(divisions);

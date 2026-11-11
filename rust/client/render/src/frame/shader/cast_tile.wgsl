@@ -1,8 +1,8 @@
 // pxl-render/frame/shader/cast_tile.wgsl
 
-// Lists the tiles claimed this frame for the pixels' cast (cast.wgsl `cast_cs`), one thread a
+// Lists the tiles damaged this frame for the pixels' cast (cast.wgsl `cast_cs`), one thread a
 // tile, ahead of the cast in its pass. The list's count is the first word of the cast's indirect
-// dispatch, so the cast takes the claimed tiles' pixels alone. A frame drawn whole lists every
+// dispatch, so the cast takes the damaged tiles' pixels alone. A frame drawn whole lists every
 // tile.
 
 struct TileList {

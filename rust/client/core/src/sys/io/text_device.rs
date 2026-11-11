@@ -8,14 +8,14 @@
 
 use std::sync::OnceLock;
 
-use xpute_core::call::{self, Call};
-use xpute_core::global::Global;
-use xpute_core::machine;
+use xpute_core::io::frame::Frame;
 use xpute_core::mem;
 use xpute_kit::status::errno::Errno;
+use xpute_runtime::native;
 
 use crate::sys::io::text_answer_spec::{LAYOUT_ANSWER, LINE};
-use crate::sys::io::text_spec::{Command, TextLayout, TextRaster};
+use crate::sys::io::text_spec::{Command, Major, TextLayout, TextRaster};
+use crate::sys::manifest::MANIFEST;
 
 /// The system's text: how wide a line of UTF-8 runs at a CSS weight and a size,
 /// and a line drawn from `x` into `width` by `height` pixels of RGBA, top row
@@ -37,7 +37,6 @@ pub struct SystemText {
 }
 
 static SYSTEM: OnceLock<SystemText> = OnceLock::new();
-static RUNTIME: Global<Option<Call>> = Global::new();
 
 /// Says what answers the core's text from now on. A process's text never
 /// changes, so a second call changes nothing.
@@ -198,20 +197,19 @@ fn raster(system: &SystemText, c: &TextRaster) -> Result<(), Errno> {
     Ok(())
 }
 
-/// Answers the text calls here, before they return, as the contract asks of
-/// whatever answers a frame's major; every other call goes to the runtime.
+/// Answers a text call here, before it returns, as the contract asks of
+/// whatever answers a frame's major; a command the text protocol does not
+/// carry is answered ENOSYS.
 fn answer(at: u32) -> i32 {
-    let cq = machine::door().cq();
-    let frame = cq.staged(at as usize);
-    let runtime = *RUNTIME.get(|| None);
+    let frame = Frame::at(mem::core(), at);
     let (layout_cmd, raster_cmd) = (Command::TEXT_LAYOUT as u32, Command::TEXT_RASTER as u32);
     if frame.cmd != layout_cmd && frame.cmd != raster_cmd {
-        return runtime.map_or(Errno::ENOSYS as i32, |call| call(at));
+        return Errno::ENOSYS as i32;
     }
     let Some(system) = SYSTEM.get() else {
         return Errno::ENOSYS as i32;
     };
-    let Ok(Some(pkt)) = cq.pkt(&frame) else {
+    let Ok(Some(pkt)) = frame.pkt(mem::core(), at, MANIFEST.frame_bytes()) else {
         return Errno::EBADMSG as i32;
     };
     let done = if frame.cmd == layout_cmd {
@@ -226,10 +224,10 @@ fn answer(at: u32) -> i32 {
     done.map_or_else(|e| e as i32, |()| 0)
 }
 
-/// Makes this core's calls come here first, `runtime` answering the rest.
-pub(crate) fn install(runtime: Call) {
-    RUNTIME.set(Some(runtime));
-    call::set(answer);
+/// Has the native runtime answer the text protocol's calls here, on the
+/// core's thread.
+pub(crate) fn install() {
+    native::handle(Major::TEXT as u32, answer);
 }
 
 /// Says what an iPhone app's Swift answers the core's text with.

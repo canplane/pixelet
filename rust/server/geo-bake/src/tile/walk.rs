@@ -13,17 +13,14 @@ use crate::util::{fmt_bytes, fmt_dur};
 pub struct Tally {
     pub baked: u64,
     pub empty: u64,
-    pub(crate) skipped: u64,
     pub failed: u64,
-    pub items: u64,
     pub bytes: u64,
 }
 
 /// What one item of a walk came to.
 pub enum Outcome {
-    Wrote { bytes: u64, items: u64 },
+    Tile { bytes: u64 },
     Empty,
-    Skipped,
 }
 
 /// Hands a band of items to a worker at a time: a band shares its worker's `W` (a leaf row's
@@ -54,23 +51,20 @@ pub fn over<T: Copy + Sync, W>(
                         let outcome = one(&mut w, item);
                         let mut t = totals.lock().expect("totals");
                         match outcome {
-                            Ok(Outcome::Wrote { bytes, items }) => (t.baked, t.bytes, t.items) = (t.baked + 1, t.bytes + bytes, t.items + items),
+                            Ok(Outcome::Tile { bytes }) => (t.baked, t.bytes) = (t.baked + 1, t.bytes + bytes),
                             Ok(Outcome::Empty) => t.empty += 1,
-                            Ok(Outcome::Skipped) => t.skipped += 1,
                             Err(err) => {
                                 t.failed += 1;
                                 eprintln!("[bake/{tag}/{}] failed: {err}", show(item));
                             }
                         }
-                        let done = t.baked + t.empty + t.skipped + t.failed;
+                        let done = t.baked + t.empty + t.failed;
                         if done.is_multiple_of(every) {
-                            let worked = done - t.skipped;
-                            let rate = if worked > 0 { started.elapsed().as_secs_f64() * 1000.0 / worked as f64 } else { 0.0 };
+                            let rate = started.elapsed().as_secs_f64() * 1000.0 / done as f64;
                             println!(
-                                "[bake/{tag}] {done}/{all} baked={} empty={} skipped={} failed={} {} {rate:.0}ms/tile eta={}",
+                                "[bake/{tag}] {done}/{all} baked={} empty={} failed={} {} {rate:.0}ms/tile eta={}",
                                 t.baked,
                                 t.empty,
-                                t.skipped,
                                 t.failed,
                                 fmt_bytes(t.bytes as f64),
                                 fmt_dur(rate * (all - done) as f64)
@@ -87,11 +81,10 @@ pub fn over<T: Copy + Sync, W>(
     }
     let t = totals.into_inner().expect("totals");
     println!(
-        "[bake/{tag}] done in {}: baked={} empty={} skipped={} failed={} {}",
+        "[bake/{tag}] done in {}: baked={} empty={} failed={} {}",
         fmt_dur(started.elapsed().as_secs_f64() * 1000.0),
         t.baked,
         t.empty,
-        t.skipped,
         t.failed,
         fmt_bytes(t.bytes as f64)
     );

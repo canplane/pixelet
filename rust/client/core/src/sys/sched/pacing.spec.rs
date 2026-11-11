@@ -7,7 +7,7 @@
 // what its frames leave. The client gives them to the runtime as it boots it
 // (ts/client/src/runtime/start.ts), on a page and on a device alike,
 // and the core reads the margin to size its tasks past a full frame
-// (pxl-core sys/sched/edge.rs).
+// (pxl-core sys/sched.rs).
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.

@@ -27,7 +27,7 @@ struct Resolve {
 // `resolve.blend.x`. Past 0 only the jitter has moved there since, and each frame takes its
 // even share of the sequence counted from the frame the tile changed in, so the first still
 // frame takes half. A frame takes all of it where the last frame's view did not hold the
-// place. The tile stays claimed for the frame it changed in and `TILE_JITTERS - 1` still
+// place. The tile stays damaged for the frame it changed in and `TILE_JITTERS - 1` still
 // frames (word.rs `screen::DAMAGE_FRAMES`).
 
 // How far what the frames before left may lie from the mean of this frame's pixels around it,

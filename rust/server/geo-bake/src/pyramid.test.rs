@@ -24,6 +24,8 @@ impl<const PLACE: bool> Tile for Count<PLACE> {
 }
 
 impl<const PLACE: bool> Base for Count<PLACE> {
+    const PRUNED: bool = PLACE;
+
     fn encode(&self, _: Quadrant) -> Result<Vec<u8>, String> {
         Ok(self.0.to_le_bytes().to_vec())
     }
@@ -105,6 +107,8 @@ impl Tile for Unencodable {
 }
 
 impl Base for Unencodable {
+    const PRUNED: bool = true;
+
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {
         Err(format!("tile {} size 9 > 1", at.key()))
     }

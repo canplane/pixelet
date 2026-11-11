@@ -1,45 +1,48 @@
 // pxl-core/sys/io/file.rs
 
-//! The core's files, over xpute's file table. The table keeps one owner for
-//! each descriptor, so an open's completion reaches its owner, and a
-//! completion for a descriptor since closed reaches no one. A file is an
-//! object below a root, named by one name (file.json `root`): a tile or a
-//! shard by its quadkey, an asset by its load's id, the storage file by its
-//! slot, and the sphere and the objects' top and edits by names of their own.
-//! Everything past that name, such as a version, a URL or a storage key, is
-//! the client's to decide (ts/client/src/service/sys/fs/). A file is bytes, and how a
-//! platform keeps them is up to its backend. A native test has no runtime
-//! and opens nothing.
+//! The core's files, over xpute's file table. The table keeps each
+//! descriptor and its owner until its close is completed, so each completion
+//! reaches its owner with what it came to (`on_opened`, `on_closed`), and a
+//! completion for a descriptor its owner closed reaches no one. A file's path
+//! is a tuple of tokens, as long as its branch of file.json's `path` tree
+//! takes: each token names a child of the node before it, and a branch that
+//! holds data takes the tokens left, a tile or a shard by its quadkey and an
+//! asset by its load's id. No path is kept: each is built where it is opened
+//! or written (`with_path`), and a received one is walked as it came
+//! (`named`); what is kept is what a path is made from, an id or a slot.
+//! Everything past the path, such as a version, a URL or a storage key, is
+//! the client's to decide (ts/client/src/service/sys/fs/). A file is bytes,
+//! and how a platform keeps them is up to its backend.
 //!
-//! The storage file holds the settings, in their slot (file.json
-//! `storage.SETTINGS`). It is a format byte (file.json `format`) followed by
+//! The storage file holds the settings, at (STORAGE, SETTINGS) (file.json
+//! `path`). It is a format byte (file.json `format`) followed by
 //! what the settings keep, and it is read whole and written whole. A file of
 //! another format, one its backend cannot read as bytes, or one larger than
 //! any heap is refused: it reads as nothing, it is never written over, and it
 //! is named to the client. The client then sets the file aside and empties
 //! the slot (`on_storage_emptied`).
 
-use core::fmt::{self, Write};
+use core::fmt;
 
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use pxl_spec::space::layer::quadrant::Quadrant;
+use xpute_core::abi::fs::{completion, Completion as FsCompletion};
 use xpute_core::global::Global;
-use xpute_core::ipc::door::Pos;
-pub use xpute_core::ipc::door::Reading;
-use xpute_core::ipc::file::FileTable;
-pub use xpute_core::ipc::file::Opened;
-use xpute_core::ipc::fs::{Fd, FsOpened};
+use xpute_core::io::door::Completion;
+pub use xpute_core::io::file::OpenResult;
+use xpute_core::io::file::{FileTable, StableBuf};
+use xpute_core::io::fs::{self, Fd, Token};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use crate::sys::io::body::{self, Packet};
 use crate::sys::io::demand::{Source, Stream};
-use crate::sys::io::file_spec::{format, object, root, storage};
-use crate::sys::io::param::{MAX_CREDITS, WRITES_A_TURN};
+use crate::sys::io::file_spec::{self, format, path};
+use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::room::Refusal;
-use crate::sys::io::runtime::{door, turn};
 use crate::sys::io::{fetch, loader};
-use crate::sys::machine::MACHINE;
-use crate::sys::sched::edge::request_world_tick;
+use crate::sys::manifest::MANIFEST;
+use crate::sys::sched::request_world_tick;
 
 pub enum StorageRead {
     /// Nothing was kept, or the file was empty.
@@ -52,30 +55,43 @@ pub enum StorageRead {
     Unreadable,
 }
 
-/// The owner of a descriptor. A `Load` is an asset's file, read as a model or
-/// an image as its attempt's id says.
+/// The owner of an open file. A `Fetch` is a tile's or a shard's read, by its
+/// attempt; a `Load`, an asset's file, by its attempt; `Storage`, the
+/// settings' file.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Owner {
     Fetch { key: u64, at_ms: f64 },
     Load { key: u64 },
     Storage,
+}
+
+/// What awaits a file's close, sent once the owner reads it whole or writes
+/// it: a read, whose packet the file table holds until the close is
+/// completed, or a write. A fetch is a body's; a load, by its want's id, and
+/// the storage file, the heap's.
+pub enum Request {
+    Fetch { key: u64, at_ms: f64 },
+    Load { id: u64 },
+    Storage,
     Write,
 }
 
-/// An object's path below its root. It is held inline, so making one
-/// allocates nothing.
+// SAFETY: a packet is a block of the body slots or the heap; moving it moves
+// its handle alone.
+unsafe impl StableBuf for Packet {}
+
+/// Text held inline, as a quadkey is written: the first `len` of `N` bytes,
+/// zero past them.
 #[derive(Clone, Copy, PartialEq)]
-pub struct Path {
-    bytes: [u8; PATH_BYTES],
+pub struct Text<const N: usize> {
+    pub bytes: [u8; N],
     len: usize,
 }
 
-/// The longest name the core opens: a u64 in decimal at its widest, which is
-/// longer than any quadkey.
-pub const PATH_BYTES: usize = 20;
+/// The longest quadkey, a leaf's.
+pub const KEY_BYTES: usize = LEAF_ZOOM as usize;
 
-const _: () = assert!(u64::MAX.ilog10() as usize + 1 == PATH_BYTES);
-const _: () = assert!(LEAF_ZOOM as usize <= PATH_BYTES);
+const _: () = assert!(file_spec::LEAF_ZOOM == LEAF_ZOOM);
 
 /// The id that names the objects' top among the object stream's ids. Every
 /// other id is a tile's, and no tile's id is 0.
@@ -87,25 +103,22 @@ enum ReadState {
     /// The heap refused the read room. The file is opened again once the heap
     /// gives some back, and no descriptor is held meanwhile.
     Refused(Refusal),
-    /// The read is posted, and its buffer belongs to the runtime until the
-    /// runtime's head has passed it.
-    Reading(Reading),
+    /// The read is out, and its buffer is the file table's until the file's
+    /// close is completed.
+    Reading,
     Read(StorageRead),
 }
 
-/// The most files open at once, plus slot 0: one for each credit, one for
-/// the storage file's read, and one for a write, which opens and closes
-/// within one call.
-const OPEN: usize = MAX_CREDITS as usize + 3;
+/// The most files open at once, plus slot 0: one for each credit and one for
+/// the storage file's read.
+const OPEN: usize = MAX_CREDITS as usize + 2;
 
 struct Fs {
-    files: FileTable<Owner, OPEN>,
+    files: FileTable<Owner, Request, Packet, OPEN>,
     storage: Option<ReadState>,
     /// Whether the storage file has been refused since the client last
     /// emptied its slot.
     refused: bool,
-    /// The turn `write` last wrote in, and how many files it wrote there.
-    written: (u64, u32),
 }
 
 static FS: Global<Fs> = Global::new();
@@ -115,38 +128,49 @@ fn fs() -> &'static mut Fs {
         files: FileTable::new(),
         storage: None,
         refused: false,
-        written: (0, 0),
     })
 }
 
-/// The storage file's path below STORAGE, its slot in decimal.
-pub fn storage_path() -> Path {
-    Path::of_id(u64::from(storage::SETTINGS))
-}
+/// The storage file's path, its slot after STORAGE.
+pub const STORAGE: [Token<'static>; 2] = [
+    Token::U32(path::STORAGE::ID),
+    Token::U32(path::STORAGE::SETTINGS::ID),
+];
 
-/// Opens the object `path` below `root`. Without a runtime nothing opens.
-pub fn open(root: u32, path: Path, owner: Owner) -> Option<Fd> {
-    Some(fs().files.open(door()?, root, path.as_str(), owner))
+/// Opens the file at `path`.
+pub fn open(path: &[Token], owner: Owner) {
+    fs().files.open(path, owner);
 }
 
 /// Opens the storage file to be read whole, for `take_storage`.
-pub fn open_storage() -> Option<Fd> {
-    open(root::STORAGE, storage_path(), Owner::Storage)
+pub fn open_storage() {
+    open(&STORAGE, Owner::Storage);
+}
+
+/// Hands a completion of the file device's to what awaits it (`on_opened`,
+/// `on_closed`); another protocol's goes by.
+pub fn on_completion(c: &Completion) {
+    match completion(c) {
+        Some(FsCompletion::FsOpen { fd, res, reply }) => {
+            on_opened(fd, res, reply.map_or(0, |r| r.detail));
+        }
+        Some(FsCompletion::FsClose { fd, res }) => on_closed(fd, res),
+        None => {}
+    }
 }
 
 /// Hands an open the runtime completed to its owner. The table finds the
 /// owner and lets go of a failed open's descriptor. A file larger than the
 /// heap every device is given could be held nowhere, so it is closed here
 /// and its owner hears EFBIG.
-pub fn on_opened(completed: &FsOpened) {
-    let FsOpened { fd, detail, .. } = *completed;
-    let Some(owner) = door().and_then(|_| fs().files.complete_open(completed)) else {
+fn on_opened(fd: Fd, res: Result<u32, Errno>, detail: u32) {
+    let Some((owner, opened)) = fs().files.complete_open(fd, res, detail) else {
         return;
     };
-    let opened = match Opened::of(completed) {
-        Opened::Bytes(n) if n > MACHINE.min_heap_bytes => {
+    let opened = match opened {
+        OpenResult::Bytes(n) if n > MANIFEST.min_heap_bytes => {
             close(fd);
-            Opened::Failed {
+            OpenResult::Failed {
                 errnum: Errno::EFBIG,
                 detail,
             }
@@ -157,31 +181,44 @@ pub fn on_opened(completed: &FsOpened) {
         Owner::Fetch { key, at_ms } => fetch::on_opened(fd, key, at_ms, opened),
         Owner::Load { key } => loader::on_opened(fd, key, opened),
         Owner::Storage => on_storage_opened(fd, opened),
-        Owner::Write => {}
     }
 }
 
-fn on_storage_opened(fd: Fd, opened: Opened) {
+fn on_storage_opened(fd: Fd, opened: OpenResult) {
     let read = match opened {
-        Opened::Bytes(0) => {
+        OpenResult::Bytes(0) => {
             close(fd);
             ReadState::Read(StorageRead::None)
         }
-        Opened::Bytes(n) => match read_whole(fd, n) {
-            Ok(reading) => ReadState::Reading(reading),
+        OpenResult::Bytes(n) => match read_bytes(fd, n, Request::Storage) {
+            Ok(()) => ReadState::Reading,
             Err(refused) => ReadState::Refused(refused),
         },
         // Only an absent file means nothing was kept.
-        Opened::Absent => ReadState::Read(StorageRead::None),
+        OpenResult::Absent => ReadState::Read(StorageRead::None),
         // The file is too large for any heap, or its backend cannot read it
         // as bytes.
-        Opened::Failed {
+        OpenResult::Failed {
             errnum: Errno::EFBIG | Errno::EBADMSG,
             ..
         } => ReadState::Read(refuse()),
-        Opened::Failed { .. } => ReadState::Read(StorageRead::Unreadable),
+        // A reload left the open unserved: the file is opened again.
+        OpenResult::Failed {
+            errnum: Errno::ECANCELED,
+            ..
+        } => return open_storage(),
+        OpenResult::Failed { .. } => ReadState::Read(StorageRead::Unreadable),
     };
     set_read(read);
+}
+
+/// The storage file's read, whose close completed with `read`: its bytes,
+/// or, where the close failed, nothing read, and the file is opened again.
+fn on_storage_read(read: Result<Packet, Errno>) {
+    match read {
+        Ok(bytes) => set_read(ReadState::Read(storage_of(&bytes))),
+        Err(_) => open_storage(),
+    }
 }
 
 fn set_read(read: ReadState) {
@@ -194,19 +231,12 @@ pub fn take_storage() -> Option<StorageRead> {
     let read = &mut fs().storage;
     match read.take()? {
         ReadState::Read(storage_read) => Some(storage_read),
-        ReadState::Reading(reading) => match take_read(reading) {
-            Ok(bytes) => Some(storage_of(bytes)),
-            Err(reading) => {
-                set_read(ReadState::Reading(reading));
-                None
-            }
-        },
         ReadState::Refused(refused) if refused.released() => {
             open_storage();
             None
         }
-        refused @ ReadState::Refused(_) => {
-            *read = Some(refused);
+        state @ (ReadState::Reading | ReadState::Refused(_)) => {
+            *read = Some(state);
             None
         }
     }
@@ -214,15 +244,12 @@ pub fn take_storage() -> Option<StorageRead> {
 
 /// The storage file's bytes as its backend read them: the settings' bytes
 /// where the format byte is theirs, refused where it is any other.
-fn storage_of(mut bytes: Vec<u8>) -> StorageRead {
-    if bytes.is_empty() {
-        return StorageRead::None;
+fn storage_of(bytes: &[u8]) -> StorageRead {
+    match bytes.split_first() {
+        None => StorageRead::None,
+        Some((&format::SETTINGS, settings)) => StorageRead::Bytes(settings.to_vec()),
+        Some(_) => refuse(),
     }
-    if bytes[0] != format::SETTINGS {
-        return refuse();
-    }
-    bytes.remove(0);
-    StorageRead::Bytes(bytes)
 }
 
 /// Refuses the storage file. The next snapshot names the refusal to the
@@ -243,65 +270,62 @@ pub fn on_storage_emptied() {
     fs().refused = false;
 }
 
-/// Posts a read of `fd` into `dst`. The runtime fills `dst` by the time its
-/// head has passed the read (`is_consumed`).
-///
-/// # Safety
-/// As `Door::read`: `dst` stays allocated, unmoved and unread until
-/// `is_consumed` says the runtime is done with it.
-pub unsafe fn read(fd: Fd, dst: &mut [u8]) -> Pos {
-    let door = door().or_bug(Errno::ENOTRECOVERABLE);
-    // SAFETY: the caller's.
-    unsafe { door.read(fd, dst) }
-}
-
-pub fn is_consumed(pos: Pos) -> bool {
-    door().or_bug(Errno::ENOTRECOVERABLE).is_consumed(pos)
-}
-
-/// Reads an opened file of `bytes` whole and closes it. Where the heap has no
-/// room the read is refused, and the owner opens the file again once
-/// `Refusal::over`.
-pub fn read_whole(fd: Fd, bytes: u32) -> Result<Reading, Refusal> {
-    let door = door().or_bug(Errno::ENOTRECOVERABLE);
-    fs().files
-        .read_whole(door, fd, bytes)
-        .map_err(|_| Refusal::now())
-}
-
-/// The bytes of `reading` once the runtime's head has passed its read.
-/// Before then the reading comes back, to be taken later.
-pub fn take_read(reading: Reading) -> Result<Vec<u8>, Reading> {
-    reading.take(door().or_bug(Errno::ENOTRECOVERABLE))
-}
-
-pub fn close(fd: Fd) {
-    if let Some(door) = door() {
-        fs().files.close(door, fd);
+/// Hands a close the runtime completed to what awaits it: a read's bytes to
+/// its reader. A write's result reaches no one, as nothing writes a file
+/// again.
+fn on_closed(fd: Fd, res: Result<u32, Errno>) {
+    let Some((request, pkt, res)) = fs().files.complete_close(fd, res) else {
+        return;
+    };
+    // A read's packet is the table's until its close completes, a write holds
+    // none.
+    let read = || res.map(|()| pkt.or_bug(Errno::ENOTRECOVERABLE));
+    match request {
+        Request::Fetch { key, at_ms } => fetch::on_read(key, at_ms, read()),
+        Request::Load { id } => loader::on_read(id, read()),
+        Request::Storage => on_storage_read(read()),
+        Request::Write => {}
     }
 }
 
+/// Reads the opened file `fd` of `bytes` whole into a heap block, for
+/// `request`, and closes it; the block is handed back filled as the close is
+/// completed (`on_closed`). Where the heap has no room the file is closed
+/// unread, and the owner opens it again once `Refusal::released`.
+pub fn read_bytes(fd: Fd, bytes: u32, request: Request) -> Result<(), Refusal> {
+    match body::take(None, bytes) {
+        Ok(pkt) => {
+            read(fd, pkt, request);
+            Ok(())
+        }
+        Err(refused) => {
+            close(fd);
+            Err(refused)
+        }
+    }
+}
+
+/// Reads the opened file `fd` whole into `pkt` and closes it; the packet is
+/// handed back filled, with `request`, as the close is completed
+/// (`on_closed`).
+pub fn read(fd: Fd, pkt: Packet, request: Request) {
+    fs().files.read_whole(fd, pkt, request);
+}
+
+/// Closes the open file `fd`, whose owner hears nothing more of it.
+pub fn close(fd: Fd) {
+    let _ = fs().files.close(fd);
+}
+
+/// The open file whose owner `owner` picks.
 pub fn find(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
     fs().files.find(owner)
 }
 
-/// Writes `bytes` whole as the object `path` below `root`, if the turn has a
-/// write left (`WRITES_A_TURN`). It returns false when the turn has none, and
-/// the owner writes on a later turn. Without a runtime nothing is written or
-/// counted.
-pub fn write(root: u32, path: Path, bytes: Vec<u8>) -> bool {
-    let Some(door) = door() else { return true };
-    let f = fs();
-    if f.written.0 != turn() {
-        f.written = (turn(), 0);
-    }
-    if f.written.1 >= WRITES_A_TURN {
-        return false;
-    }
-    f.written.1 += 1;
-    f.files
-        .write_whole(door, root, path.as_str(), bytes, Owner::Write);
-    true
+/// Replaces the file at `path` with `bytes`. Writes of one path land in the
+/// order sent.
+pub fn write(path: &[Token], bytes: &[u8]) {
+    fs().files.write_whole(path, bytes, Request::Write);
 }
 
 /// Writes `bytes` whole as the storage file's contents, after its format
@@ -310,89 +334,79 @@ pub fn write_storage(bytes: &[u8]) {
     if is_storage_refused() {
         return;
     }
-    let Some(door) = door() else { return };
     let whole = [&[format::SETTINGS][..], bytes].concat();
-    fs().files.write_whole(
-        door,
-        root::STORAGE,
-        storage_path().as_str(),
-        whole,
-        Owner::Write,
-    );
+    write(&STORAGE, &whole);
 }
 
-impl Path {
-    pub const EMPTY: Path = Path {
-        bytes: [0; PATH_BYTES],
+impl<const N: usize> Text<N> {
+    pub const EMPTY: Text<N> = Text {
+        bytes: [0; N],
         len: 0,
     };
 
-    /// The path of a load or a storage slot: its id in decimal.
-    pub fn of_id(id: u64) -> Path {
-        let mut p = Path::EMPTY;
-        write!(p, "{id}").or_bug(Errno::EOVERFLOW);
-        p
-    }
-
-    pub fn of_name(name: &str) -> Path {
-        let mut p = Path::EMPTY;
-        p.write_str(name).or_bug(Errno::EOVERFLOW);
-        p
-    }
-
-    /// The path of the tile or shard with this id, which is its quadkey. The
-    /// id `TOP_ID` gives the objects' top.
-    pub fn of_quadrant(id: u64) -> Path {
-        if id == TOP_ID {
-            return Path::of_name(object::TOP);
-        }
-        let mut p = Path::EMPTY;
-        Quadrant::of_id(id)
-            .write_key(&mut p)
-            .or_bug(Errno::EOVERFLOW);
-        p
-    }
-
-    pub fn as_bytes(&self) -> &[u8] {
-        &self.bytes[..self.len]
-    }
-
     pub fn as_str(&self) -> &str {
-        core::str::from_utf8(self.as_bytes()).or_bug(Errno::ENOTRECOVERABLE)
+        core::str::from_utf8(&self.bytes[..self.len]).or_bug(Errno::ENOTRECOVERABLE)
     }
 }
 
-impl Write for Path {
+impl<const N: usize> fmt::Write for Text<N> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        let end = self.len + s.len();
-        let to = self.bytes.get_mut(self.len..end).ok_or(fmt::Error)?;
+        let to = self
+            .bytes
+            .get_mut(self.len..self.len + s.len())
+            .ok_or(fmt::Error)?;
         to.copy_from_slice(s.as_bytes());
-        self.len = end;
+        self.len += s.len();
         Ok(())
     }
 }
 
-impl fmt::Display for Path {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
-/// The path that `stream`'s want `id` opens.
-pub fn path_of(stream: Stream, id: u64) -> Path {
+/// Answers `f` of the path that `stream`'s want `id` opens, built here at the
+/// length its branch takes: a tile or a shard by its quadkey after its
+/// stream's token, the objects' top as (OBJECT, TOP), and a load by its file.
+/// A load that is no file has no path.
+pub fn with_path<R>(stream: Stream, id: u64, f: impl FnOnce(&[Token]) -> R) -> Option<R> {
     match stream.row().source {
-        Source::Load => loader::of_id(id).map_or(Path::EMPTY, |(_, load)| load.path()),
-        Source::Bake(_) | Source::Objects => Path::of_quadrant(id),
+        Source::Load => loader::of_id(id).map(|(_, load)| f(&load.path())),
+        Source::Bake(_) | Source::Objects => Some(with_quadrant(stream.token()?, id, f)),
     }
 }
 
-/// The id that a path below OBJECT names, the inverse of `Path::of_quadrant`.
-/// A path that is neither a shard nor the top names none.
-pub fn id_of_path(path: &str) -> Option<u64> {
-    if path == object::TOP {
-        return Some(TOP_ID);
+/// Answers `f` of the path of the tile or shard `id` after `head`: its quadkey,
+/// or, for `TOP_ID`, the objects' top.
+pub fn with_quadrant<R>(head: u32, id: u64, f: impl FnOnce(&[Token]) -> R) -> R {
+    if id == TOP_ID {
+        return f(&[Token::U32(head), Token::U32(path::OBJECT::TOP::ID)]);
     }
-    Quadrant::of_key(path).map(Quadrant::id)
+    let mut key = Text::<KEY_BYTES>::EMPTY;
+    Quadrant::of_id(id)
+        .write_key(&mut key)
+        .or_bug(Errno::EOVERFLOW);
+    f(&[Token::U32(head), Token::Str(key.as_str())])
+}
+
+/// A file a received path names among those the core refuses and reads
+/// again: the storage file, or an objects' file by its want's id.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum File {
+    Storage,
+    Objects(u64),
+}
+
+/// The file `path` names, walked token by token as it came; none for any
+/// other path. An objects' file is (OBJECT, quadkey), a shard's, or (OBJECT,
+/// TOP), the top's (`with_quadrant`).
+pub fn of_path(path: fs::Path<'_>) -> Option<File> {
+    let mut tokens = path.iter();
+    let file = match (tokens.next()?, tokens.next()?) {
+        (Token::U32(path::STORAGE::ID), Token::U32(path::STORAGE::SETTINGS::ID)) => File::Storage,
+        (Token::U32(path::OBJECT::ID), Token::U32(path::OBJECT::TOP::ID)) => File::Objects(TOP_ID),
+        (Token::U32(path::OBJECT::ID), Token::Str(key)) => {
+            File::Objects(Quadrant::of_key(key)?.id())
+        }
+        _ => return None,
+    };
+    tokens.next().is_none().then_some(file)
 }
 
 #[cfg(test)]

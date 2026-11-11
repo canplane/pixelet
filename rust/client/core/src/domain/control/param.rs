@@ -1,8 +1,9 @@
 // pxl-core/domain/control/param.rs
 
 //! The tuned numbers of control: the camera's defaults and limits, how it
-//! settles and how gestures and keys move it; how far the pointer picks; and
-//! how long following and the sensors wait out a silence.
+//! settles and how gestures and keys move it; how far the pointer picks; how
+//! long following and the sensors wait out a silence; and how far the pivot
+//! goes before it is off the device.
 
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::zoom::{units, MIN_ZOOM};
@@ -41,17 +42,12 @@ pub const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(MIN_ZOOM));
 
 // ---- how the camera settles and keeps out of the ground ----
 
-/// How close the first-person eye and facing come to their targets before
-/// they stop easing. Each gap is smaller than a pixel at any distance.
-pub const FIRST_PERSON_EYE_EPS: f64 = 0.001;
-pub const FIRST_PERSON_FACING_EPS: f64 = 0.0001;
-/// How close the orbit's pivot, distance, polar angle and azimuth come to
-/// their targets before they stop easing. Each gap is smaller than a pixel
-/// at any distance the view is seen across.
-pub const ORBIT_PIVOT_EPS: f64 = 0.001;
-pub const ORBIT_DIST_EPS: f64 = 0.001;
-pub const ORBIT_POLAR_EPS: f64 = 0.0001;
-pub const ORBIT_AZIMUTH_EPS: f64 = 0.0001;
+/// How close the drawn camera comes to what it eases toward before it stops
+/// easing: an eye, a pivot or a distance within `EASE_EPS_U`, a polar angle or
+/// an azimuth within `EASE_EPS_RAD`. Each gap is smaller than a pixel at any
+/// distance the view is seen across.
+pub const EASE_EPS_U: f64 = 0.001;
+pub const EASE_EPS_RAD: f64 = 0.0001;
 /// The most samples a collision test takes along one step of the orbit
 /// (camera/collision.rs `way_hit`). Testing only where a step lands would let
 /// the camera tunnel, because the easing carries it through everything in
@@ -116,6 +112,16 @@ pub const HEADING_SMOOTH_ALPHA: f64 = 0.25;
 /// watch starting again, keeps following. A dead location lets following go
 /// before the camera looks frozen behind a disabled button.
 pub const SENSOR_GRACE_MS: f64 = 12000.0;
+
+/// The pivot goes off the device past `OFF_CENTER_U` across the ground and
+/// comes back within `ON_CENTER_U`, so a pivot near the edge does not flicker
+/// between the two (navigation/off_center.rs).
+pub const OFF_CENTER_U: f64 = 10.0;
+pub const ON_CENTER_U: f64 = 3.0;
+const _: () = assert!(
+    ON_CENTER_U < OFF_CENTER_U,
+    "the pivot comes back nearer than it goes off"
+);
 
 /// How far from the eye the pointer can pick, in units. It is a product
 /// decision: what can be edited is a sphere about the observer.

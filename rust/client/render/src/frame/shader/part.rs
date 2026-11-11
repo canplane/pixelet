@@ -82,10 +82,10 @@ pub const SHADER_QUEUE_CORNERS: u32 = 32;
 /// Finds where the rays of each cell of the camera grid start, from the beam rays about the
 /// cell (cell.wgsl). It is a port by hand with one compute entry point.
 pub const SHADER_CELL: u32 = 33;
-/// `SHADER_QUEUE_LAST` is the last walk of the holes, which asks the world where the node cache
-/// keeps no node (queue_last.wgsl). `SHADER_FORGET` makes the node cache forget what the
-/// world's changes have made stale (pxl-engine `node_cache`, forget.wgsl). Both are ports by
-/// hand.
+/// `SHADER_QUEUE_LAST` is the last walk of the eye's holes, which asks the world where the node
+/// cache keeps no node (queue_last.wgsl over queue.wgsl and hole.eye.wgsl). `SHADER_FORGET`
+/// makes the node cache forget what the world's changes have made stale (pxl-engine
+/// `node_cache`, forget.wgsl). Both are ports by hand.
 pub const SHADER_QUEUE_LAST: u32 = 34;
 pub const SHADER_FORGET: u32 = 35;
 /// The last walk of the eye's samples, which asks the world where the node cache keeps no node
@@ -100,7 +100,7 @@ pub const SHADER_LIGHT: u32 = 37;
 pub const SHADER_LIGHT_MAP: u32 = 38;
 pub const SHADER_QUEUE_ASK: u32 = 39;
 /// Brings the occlusion's half-resolution map up to each pixel and multiplies it into the
-/// world's color, drawn as the claimed tiles' quads (ao_apply.wgsl).
+/// world's color, drawn as the damaged tiles' quads (ao_apply.wgsl).
 pub const SHADER_AO_APPLY: u32 = 40;
 /// `SHADER_SAMPLE_HIT` writes the eye's samples into the record of voxels as stops (pxl-engine
 /// `record`, sample_hit.wgsl). It is a port by hand with two compute entry points.
@@ -133,25 +133,25 @@ pub const SHADER_GENERATION_THIN: u32 = 47;
 pub const SHADER_SCREEN_FINISH: u32 = 48;
 /// Gathers the world's color over frames (screen_resolve.wgsl).
 pub const SHADER_SCREEN_RESOLVE: u32 = 49;
-/// The gate of a frame not drawn whole: it clears each claimed tile to no color at the far
+/// The gate of a frame not drawn whole: it clears each damaged tile to no color at the far
 /// plane and raises its stencil (screen_mask.wgsl).
 pub const SHADER_SCREEN_MASK: u32 = 50;
 /// Shows on the canvas the finished picture kept at the canvas's size (screen_show.wgsl).
 pub const SHADER_SCREEN_SHOW: u32 = 51;
-/// Claims the screen's tiles whose pixels read a tile of the light's map that changed
+/// Damages the screen's tiles whose pixels read a tile of the light's map that changed
 /// (screen_propagate.wgsl). It has one compute entry point.
 pub const SHADER_SCREEN_PROPAGATE: u32 = 52;
-/// Copies the claimed tiles of the history the resolve wrote this frame back into the history
+/// Copies the damaged tiles of the history the resolve wrote this frame back into the history
 /// the frame before wrote (screen_write_back.wgsl).
 pub const SHADER_SCREEN_WRITE_BACK: u32 = 53;
-/// The gate of the samples' raster: it clears each claimed tile to no sample at the far plane
+/// The gate of the samples' raster: it clears each damaged tile to no sample at the far plane
 /// (raster_mask.wgsl).
 pub const SHADER_RASTER_MASK: u32 = 54;
 /// Writes the frame's number into the word of each tile the frame's one mark covers, or of
 /// every tile when the frame is drawn whole (screen_mark.wgsl). It has one compute entry
 /// point.
 pub const SHADER_SCREEN_MARK: u32 = 55;
-/// The gate of the light's map: it lays the world's depth in the map's claimed tiles and
+/// The gate of the light's map: it lays the world's depth in the map's damaged tiles and
 /// raises their stencil (light_mask.wgsl).
 pub const SHADER_LIGHT_MASK: u32 = 56;
 /// Sets the least and the most depth of each square of the screen, in the tiles the world's
@@ -187,9 +187,9 @@ pub const SHADER_LIGHT_SAMPLE_HIT: u32 = 68;
 /// `SHADER_QUEUE_ASK` then asks the world for that node, and
 /// `SHADER_QUEUE_LAST_SAMPLES` ends the sample's walk.
 pub const SHADER_QUEUE_SAMPLES: u32 = 69;
-/// Walks the holes over the node cache alone (queue_walk.wgsl), the eye's pixels and the
-/// light's slots alike. A hole that meets a node no slot keeps is parked. `SHADER_QUEUE_ASK`
-/// then asks the world for that node, and `SHADER_QUEUE_LAST` ends the hole's ray.
+/// Walks the eye's holes over the node cache alone (queue_walk.wgsl over queue.wgsl and
+/// hole.eye.wgsl). A hole that meets a node no slot keeps is parked. `SHADER_QUEUE_ASK` then
+/// asks the world for that node, and `SHADER_QUEUE_LAST` ends the hole's ray.
 pub const SHADER_QUEUE: u32 = 70;
 /// The last walk of the eye's beam rays, which asks the world where the node cache keeps no
 /// node (queue_last.wgsl over corner.wgsl and beam.eye.wgsl).
@@ -198,12 +198,12 @@ pub const SHADER_QUEUE_LAST_CORNERS: u32 = 71;
 pub const SHADER_QUEUE_LIGHT_SAMPLES: u32 = 72;
 /// `SHADER_QUEUE_LAST_CORNERS` for the light's map.
 pub const SHADER_QUEUE_LAST_LIGHT_CORNERS: u32 = 73;
-/// Lists the claimed tiles, so that `SHADER_CAST` takes only their pixels.
+/// Lists the damaged tiles, so that `SHADER_CAST` takes only their pixels.
 pub const SHADER_CAST_TILES: u32 = 74;
-/// Finds the box of the screen's tiles claimed in a frame drawn through the gate, for
+/// Finds the box of the screen's tiles damaged in a frame drawn through the gate, for
 /// `SHADER_DECOR_CULL`.
 pub const SHADER_DAMAGE_RECT: u32 = 75;
-/// Lists the generated decor's instances that meet the claimed tiles, the only ones a frame
+/// Lists the generated decor's instances that meet the damaged tiles, the only ones a frame
 /// drawn through the gate draws.
 pub const SHADER_DECOR_CULL: u32 = 76;
 /// Goes over every slot's drawable entries in the node cache (record_draw.wgsl). Each entry in
@@ -222,7 +222,11 @@ pub const SHADER_LIGHT_REC_HITS: u32 = 79;
 pub const SHADER_LIGHT_MARK_DRAWS_OPEN: u32 = 80;
 /// The camera grid's cells over the canvas (camera_grid.wgsl).
 pub const SHADER_CAMERA_GRID: u32 = 81;
-pub const SHADERS: u32 = 82;
+/// `SHADER_QUEUE` for the light's map.
+pub const SHADER_QUEUE_LIGHT: u32 = 82;
+/// `SHADER_QUEUE_LAST` for the light's map.
+pub const SHADER_QUEUE_LAST_LIGHT: u32 = 83;
+pub const SHADERS: u32 = 84;
 
 /// The parts of the air as the frame's shaders read it: its medium, its tables and the sky,
 /// the eye in it, the march through it, its light and the view through it. A shader's own
@@ -390,6 +394,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk_word",
         "raster_box",
         "eye_bind",
+        "px",
         "grid",
         "walk_node",
         "side",
@@ -487,12 +492,13 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "queue_walk",
     ],
     // SHADER_CELL
-    &["walk_word", "eye_bind", "grid", "window", "cell"],
+    &["walk_word", "eye_bind", "px", "grid", "window", "cell"],
     // SHADER_QUEUE_LAST
     &[
         "walk_word",
         "world_word",
         "eye_bind",
+        "px",
         "grid",
         "walk_node",
         "side",
@@ -513,10 +519,9 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "hit",
         "miss_word",
         "walked",
-        "light_aim",
-        "light_resume",
         "parked",
-        "hole_run",
+        "hole_run.eye",
+        "hole.eye",
         "queue",
         "queue_last",
     ],
@@ -527,6 +532,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk_word",
         "world_word",
         "eye_bind",
+        "px",
         "grid",
         "walk_node",
         "side",
@@ -603,6 +609,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "walk_word",
         "raster_box",
         "eye_bind",
+        "px",
         "grid",
         "walk_node",
         "side",
@@ -648,6 +655,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "eye_bind",
+        "px",
         "grid",
         "walk_node",
         "side",
@@ -861,6 +869,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "eye_bind",
+        "px",
         "grid",
         "walk_node",
         "side",
@@ -880,6 +889,7 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     &[
         "walk_word",
         "eye_bind",
+        "px",
         "grid",
         "walk_node",
         "side",
@@ -890,10 +900,9 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
         "hit",
         "miss_word",
         "walked",
-        "light_aim",
-        "light_resume",
         "parked",
-        "hole_run",
+        "hole_run.eye",
+        "hole.eye",
         "queue",
         "queue_walk",
     ],
@@ -1056,4 +1065,61 @@ pub const PARTS: [&[&str]; SHADERS as usize] = [
     ],
     // SHADER_CAMERA_GRID
     &["encode", "sky_word", "debug_look", "camera_grid"],
+    // SHADER_QUEUE_LIGHT
+    &[
+        "walk_word",
+        "eye_bind",
+        "px",
+        "grid",
+        "walk_node",
+        "side",
+        "resume",
+        "answer",
+        "cached",
+        "walk",
+        "hit",
+        "miss_word",
+        "walked",
+        "light_aim",
+        "light_resume",
+        "parked",
+        "hole_run.light",
+        "hole.light",
+        "queue",
+        "queue_walk",
+    ],
+    // SHADER_QUEUE_LAST_LIGHT
+    &[
+        "walk_word",
+        "world_word",
+        "eye_bind",
+        "px",
+        "grid",
+        "walk_node",
+        "side",
+        "resume",
+        "clipmap",
+        "seed",
+        "clip",
+        "brick",
+        "bound_mip",
+        "fold",
+        "world_rule",
+        "answer",
+        "way",
+        "world",
+        "world_split",
+        "ask",
+        "walk",
+        "hit",
+        "miss_word",
+        "walked",
+        "light_aim",
+        "light_resume",
+        "parked",
+        "hole_run.light",
+        "hole.light",
+        "queue",
+        "queue_last",
+    ],
 ];

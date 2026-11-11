@@ -21,8 +21,8 @@ test("deque holds what the record holds", async () => {
     const step = Number(k);
     const r = v.u32(`${k}.r`);
     let popped = "none";
-    if (r === 0 && !d.full()) d.push_back(step);
-    else if (r === 1 && !d.full()) d.push_front(step);
+    if (r === 0 && !d.is_full()) d.push_back(step);
+    else if (r === 1 && !d.is_full()) d.push_front(step);
     else if (r === 2) popped = show(d.pop_front());
     else if (r === 3) popped = show(d.pop_back());
     assert.deepStrictEqual(popped, v.s(`${k}.popped`), `${k}.popped`);

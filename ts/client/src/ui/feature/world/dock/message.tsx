@@ -51,7 +51,10 @@ export function useMessage(mode: DockMode) {
   function changeText(text: string) {
     setMessageText(text);
     if (drafting) {
-      void edit.marker_text(text.trim()).then((r) => setMarkerFits(r >= 0));
+      void edit.marker_text(text.trim()).then(
+        () => setMarkerFits(true),
+        () => setMarkerFits(false),
+      );
     }
   }
 

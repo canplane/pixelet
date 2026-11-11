@@ -1,9 +1,9 @@
-# A core's files (xpute-core ipc/file, the imports in ARCHITECTURE.md): what a core
-# owes the runtime's completions of its opens. The runtime's own end — roots, paths, reads, writes — is
+# A core's files (xpute-core io/file, the imports in ARCHITECTURE.md): what a core
+# owes the runtime's completions of its opens. The runtime's own end — paths, reads, writes — is
 # fs/file.tsv's; this is the core's, held across every core. A descriptor is a handle, so the
 # trace binds them by name and holds them to relations, as handle.tsv does.
 #
-# The runtime completes an open, FS_OPENAT tagged with its descriptor (spec/abi/fs.json), on a later
+# The runtime completes an open, FS_OPEN tagged with its descriptor (spec/abi/fs.json), on a later
 # turn however much later, with ECANCELED where its close came first; here a step completes it, so
 # the completion can be made to arrive after the descriptor it names has closed.
 # A failed open leaves no descriptor: the core's library lets its handle go as the completion is
@@ -11,14 +11,14 @@
 scenarios	files.stale files.failed
 
 files.stale.step.0	submit 1 OPEN ack 5
-files.stale.step.1	ring 0
+files.stale.step.1	run 0
 files.stale.step.2	submit 2 CLOSE ack $f1
 files.stale.step.3	submit 3 OPEN ack 6
-files.stale.step.4	ring 0
-files.stale.step.5	complete $f1 FS_OPENAT -125 0
-files.stale.step.6	complete $f2 FS_OPENAT 3 0
+files.stale.step.4	run 0
+files.stale.step.5	complete $f1 FS_OPEN -125 0
+files.stale.step.6	complete $f2 FS_OPEN 3 0
 files.stale.step.7	submit 6 CLOSE ack $f1
-files.stale.step.8	ring 0
+files.stale.step.8	run 0
 #
 # An open is a descriptor of its own.
 files.stale.turn.0.completions	1:OPEN=$f1
@@ -26,16 +26,16 @@ files.stale.turn.0.completions	1:OPEN=$f1
 files.stale.turn.1.completions	2:CLOSE=0 3:OPEN=$f2
 # The closed one's completion, ECANCELED, reaches no one — not its owner, 5, and not the slot's new
 # one; the new one's reaches its owner, 6, alone; and the closed descriptor is not one to close again.
-files.stale.turn.2.completions	6:OPENED 6:CLOSE=-9
+files.stale.turn.2.completions	6:OPEN_COMPLETION 6:CLOSE=-9
 files.stale.relation.0	$f1 != 0
 files.stale.relation.1	slot $f1 == slot $f2
 files.stale.relation.2	$f1 != $f2
 
 files.failed.step.0	submit 1 OPEN ack 7
-files.failed.step.1	ring 0
-files.failed.step.2	complete $f1 FS_OPENAT -2 0
+files.failed.step.1	run 0
+files.failed.step.2	complete $f1 FS_OPEN -2 0
 files.failed.step.3	submit 3 CLOSE ack $f1
-files.failed.step.4	ring 0
+files.failed.step.4	run 0
 files.failed.turn.0.completions	1:OPEN=$f1
-files.failed.turn.1.completions	7:OPENED 3:CLOSE=-9
+files.failed.turn.1.completions	7:OPEN_COMPLETION 3:CLOSE=-9
 files.failed.relation.0	$f1 != 0

@@ -17,9 +17,21 @@ import {
   handle_slot,
   SLOT_BITS,
 } from "@xpute/runtime/abi/handle.ts";
-import { bytes_of, each_rec, text_of } from "@xpute/runtime/ipc/stream.ts";
+import { bytes_of, each_rec, text_of } from "@xpute/runtime/io/stream.ts";
+import { say } from "@xpute/runtime/say.ts";
 
 import { NONE, op, RESULT, STATUS, SURFACE_PREFERRED } from "./api.spec.ts";
+import { Belt } from "./belt.ts";
+import { type GpuConfig, timed } from "./gpu.ts";
+import {
+  ERRORS_AT,
+  FEATS_AT,
+  FORMAT_AT,
+  PERIOD_AT,
+  STATUS_AT,
+  UNFINISHED_AT,
+  WORDS,
+} from "./device.ts";
 import {
   ADDRESS_MODE,
   BLEND_FACTOR,
@@ -203,10 +215,12 @@ export class GpuRuntime {
   >();
   /** This holds each slot's newest handle, kept after it is let go, so that an
    * older handle's bind is refused. */
-  private readonly _seen = new Map<u32, u32>();
+  private readonly _newest_handles = new Map<u32, u32>();
   /** This says where the core asked for the device's block, and is kept to
-   * write its unfinished frames and its status later. */
-  private _block: { addr: u32; words: u32 } | undefined;
+   * write its counts and its status later. */
+  private _block: u32 | undefined;
+  /** This counts the uncaptured errors the device raised (spec DEVICE). */
+  private _error_cnt = 0;
   /** This counts the frames drawn whose work the queue has not yet done (spec
    * DEVICE). A turn whose stream took a surface's texture draws a frame, which
    * stays unfinished until the queue's `onSubmittedWorkDone`, asked after the
@@ -215,21 +229,42 @@ export class GpuRuntime {
   /** This turn's stream has taken a surface's texture. */
   private _drew = false;
 
+  /** Every buffer write is staged through the belt and copied by `_uploads`,
+   * which is submitted ahead of what follows, as a device's runtime stages
+   * its writes. */
+  private readonly _belt: Belt;
+  private _uploads: GPUCommandEncoder | null = null;
+
   private readonly _device: GPUDevice;
   private readonly _mem: () => ArrayBufferLike;
   private readonly _wake: () => void;
+  private readonly _slow_ms: u32 | null;
 
   /** `wake` asks the runtime's loop for a turn. A completion written between
-   * turns is read only by a turn, so each completion calls it. */
-  constructor(device: GPUDevice, mem: () => ArrayBufferLike, wake: () => void) {
+   * turns is read only by a turn, so each completion calls it. `cfg` is the
+   * program's (gpu.ts `GpuConfig`). */
+  constructor(
+    device: GPUDevice,
+    mem: () => ArrayBufferLike,
+    wake: () => void,
+    cfg: GpuConfig,
+  ) {
     this._device = device;
     this._mem = mem;
     this._wake = wake;
+    this._slow_ms = cfg.slow_ms;
+    this._belt = new Belt(device, cfg.upload_chunk_bytes, cfg.slow_ms);
     // Nothing here destroys the device, so every loss is the browser's. The
     // core is told of it in its block.
     device.lost.then(() => {
       this._on_lost();
       this._wake();
+    });
+    // An error no scope caught is said and counted.
+    device.addEventListener("uncapturederror", (e) => {
+      say(`[gpu] ${e.error.message}`);
+      this._error_cnt++;
+      this._tell_counts();
     });
   }
 
@@ -239,9 +274,9 @@ export class GpuRuntime {
    * handle has bound the slot since. */
   bind(handle: u32, context: GPUCanvasContext): boolean {
     const slot = handle_slot(handle);
-    const seen = this._seen.get(slot);
-    if (seen !== undefined && older(handle, seen)) return false;
-    this._seen.set(slot, handle);
+    const newest = this._newest_handles.get(slot);
+    if (newest !== undefined && older(handle, newest)) return false;
+    this._newest_handles.set(slot, handle);
     const was = this._surfaces.get(slot);
     if (was && was.context !== context) was.context.unconfigure();
     this._surfaces.set(slot, { handle, context });
@@ -277,17 +312,15 @@ export class GpuRuntime {
   }
 
   /** Forgets every object of the device that went, and tells the core in its
-   * block. */
+   * block. The block is then let go: the next device's runtime writes it, and
+   * what this device answers late writes nothing. */
   private _on_lost(): void {
     this._objects.length = 0;
     this._making.clear();
-    if (this._block) {
-      const block = new Uint32Array(
-        this._mem(),
-        this._block.addr,
-        this._block.words,
-      );
-      Atomics.store(block, this._block.words - 1, STATUS.LOST);
+    if (this._block !== undefined) {
+      const block = new Uint32Array(this._mem(), this._block, WORDS);
+      Atomics.store(block, STATUS_AT, STATUS.LOST);
+      this._block = undefined;
     }
   }
 
@@ -295,31 +328,77 @@ export class GpuRuntime {
    * the stream drew counts as unfinished until the queue has done the work
    * submitted with it. */
   run(at: u32): void {
+    timed(this._slow_ms, "run", () => this._run(at));
+  }
+
+  /** `run` without the run's own time: each record is timed where the
+   * program asked (gpu.ts `timed`). */
+  private _run(at: u32): void {
     let r: WordCursor | undefined;
     this._drew = false;
+    const slow = this._slow_ms;
     each_rec(this._mem(), at, (code, w, a) => {
       r ??= new WordCursor(w);
       r.at = a;
-      this._record(code, r);
+      const rec = r;
+      if (slow === null) return this._record(code, rec);
+      timed(slow, `op ${code}`, () => this._record(code, rec));
     });
+    // The turn's staged writes reach the queue with the turn, as
+    // writeBuffer's would.
+    if (this._uploads) this._submit([]);
     if (!this._drew) return;
-    this._tell_unfinished(this._unfinished_cnt + 1);
-    this._device.queue
-      .onSubmittedWorkDone()
-      .then(() => this._tell_unfinished(this._unfinished_cnt - 1));
+    this._unfinished_cnt++;
+    this._tell_counts();
+    this._device.queue.onSubmittedWorkDone().then(() => {
+      this._unfinished_cnt--;
+      this._tell_counts();
+    });
   }
 
-  /** Keeps the count of unfinished frames, and stores it with release into
-   * the device's block (spec DEVICE). */
-  private _tell_unfinished(cnt: number): void {
-    this._unfinished_cnt = cnt;
-    if (!this._block) return;
-    const block = new Uint32Array(
-      this._mem(),
-      this._block.addr,
-      this._block.words,
-    );
-    Atomics.store(block, this._block.words - 2, cnt);
+  /** Stages `n` bytes of `src` from `src_at` through the belt, a chunk's room
+   * at a time, and copies them into `buffer` at `offset` ahead of what
+   * follows. No bytes write nothing, as in WebGPU. */
+  private _write(
+    buffer: GPUBuffer,
+    offset: u32,
+    src: ArrayBufferLike,
+    src_at: u32,
+    n: u32,
+  ): void {
+    for (let done = 0; done < n;) {
+      const room = this._belt.take(n - done);
+      room.bytes.set(new Uint8Array(src, src_at + done, room.n), room.at);
+      this._uploads ??= this._device.createCommandEncoder();
+      this._uploads.copyBufferToBuffer(
+        room.chunk,
+        room.at,
+        buffer,
+        offset + done,
+        room.n,
+      );
+      done += room.n;
+    }
+  }
+
+  /** Submits `then`, after the writes staged so far, and frees the belt's
+   * chunks those writes took once the queue is done with them. */
+  private _submit(then: GPUCommandBuffer[]): void {
+    const uploads = this._uploads;
+    this._uploads = null;
+    if (!uploads) return this._device.queue.submit(then);
+    this._belt.finish();
+    this._device.queue.submit([uploads.finish(), ...then]);
+    this._belt.recall();
+  }
+
+  /** Stores the uncaptured errors and the unfinished frames with release
+   * into the device's block (spec DEVICE). */
+  private _tell_counts(): void {
+    if (this._block === undefined) return;
+    const block = new Uint32Array(this._mem(), this._block, WORDS);
+    Atomics.store(block, ERRORS_AT, this._error_cnt);
+    Atomics.store(block, UNFINISHED_AT, this._unfinished_cnt);
   }
 
   private _put(id: u32, o: GpuObject): void {
@@ -357,9 +436,9 @@ export class GpuRuntime {
     const waits = () => this._making.get(slot) === id;
     pipeline
       .catch((e: unknown) => {
-        // Logged with its label, since the sync call's own error does not
+        // Said with its label, since the sync call's own error does not
         // name the pipeline on every device.
-        console.error(
+        say(
           `[gpu] pipeline ${label} refused: ${e instanceof Error ? e.message : String(e)}`,
         );
         return waits() ? sync() : undefined;
@@ -800,6 +879,13 @@ export class GpuRuntime {
       case op.DESTROY: {
         const id = r.u();
         const o = this._get<GpuObject>(id);
+        // The writes staged so far reach the queue before what they write
+        // goes, as a device's runtime submits them.
+        if (
+          (o instanceof GPUBuffer || o instanceof GPUTexture) &&
+          this._uploads
+        )
+          this._submit([]);
         if (
           o instanceof GPUBuffer ||
           o instanceof GPUTexture ||
@@ -813,26 +899,14 @@ export class GpuRuntime {
         const buffer = this._get<GPUBuffer>(r.u());
         const offset = r.u();
         const n = r.u();
-        d.queue.writeBuffer(
-          buffer,
-          offset,
-          r.w.buffer as ArrayBuffer,
-          r.w.byteOffset + 4 * r.at,
-          n,
-        );
+        this._write(buffer, offset, r.w.buffer, r.w.byteOffset + 4 * r.at, n);
         r.skip(Math.ceil(n / 4));
         return;
       }
       case op.WRITE_BUFFER_AT: {
         const buffer = this._get<GPUBuffer>(r.u());
         const offset = r.u();
-        d.queue.writeBuffer(
-          buffer,
-          offset,
-          this._mem() as ArrayBuffer,
-          r.u(),
-          r.u(),
-        );
+        this._write(buffer, offset, this._mem(), r.u(), r.u());
         return;
       }
       case op.WRITE_TEXTURE:
@@ -863,7 +937,7 @@ export class GpuRuntime {
         const to = this._texturePlace(r, place());
         const [flipY, premultipliedAlpha] = [r.flag(), r.flag()];
         // The bytes are copied now, since they are the core's again once the
-        // stream is handed back (xpute-core ipc/stream.rs R3).
+        // stream is handed back (xpute-core io/stream.rs R3).
         const image = new Blob([this._bytesAt(r.u(), r.u()).slice()]);
         const [word, ticket] = [r.u(), r.u()];
         // An image whose texture is gone, with the device or by the core, is
@@ -874,10 +948,12 @@ export class GpuRuntime {
         }).then(
           (source) => {
             if (this._objects.includes(to.texture)) {
-              (d.queue as ExternalImageQueue).copyExternalImageToTexture(
-                { source },
-                to,
-                [source.width, source.height],
+              timed(this._slow_ms, "image", () =>
+                (d.queue as ExternalImageQueue).copyExternalImageToTexture(
+                  { source },
+                  to,
+                  [source.width, source.height],
+                ),
               );
               this._signal(word, ticket, RESULT.OK);
             }
@@ -1153,7 +1229,7 @@ export class GpuRuntime {
           command_bufs.push(this._get<GPUCommandEncoder>(id).finish());
           this._forget(id);
         }
-        d.queue.submit(command_bufs);
+        this._submit(command_bufs);
         command_bufs.length = 0;
         return;
       }
@@ -1171,10 +1247,12 @@ export class GpuRuntime {
         buffer.mapAsync(GPUMapMode.READ, offset, size).then(
           () => {
             if (this._get<GPUBuffer>(id) !== buffer) return;
-            this._bytesAt(addr, size).set(
-              new Uint8Array(buffer.getMappedRange(offset, size)),
-            );
-            buffer.unmap();
+            timed(this._slow_ms, "map", () => {
+              this._bytesAt(addr, size).set(
+                new Uint8Array(buffer.getMappedRange(offset, size)),
+              );
+              buffer.unmap();
+            });
             this._signal(word, ticket, RESULT.OK);
           },
           () => {
@@ -1226,25 +1304,26 @@ export class GpuRuntime {
         return;
       }
       case op.DEVICE: {
-        const [addr, words] = [r.u(), r.u()];
-        this._block = { addr, words };
-        const out = new Uint32Array(this._mem(), addr, words);
+        const addr = r.u();
+        r.u();
+        this._block = addr;
+        const out = new Uint32Array(this._mem(), addr, WORDS);
         LIMIT_NAME.forEach(
           (name, k) => (out[k] = Math.min(d.limits[name], 0xffffffff)),
         );
         FEATURE_NAME.forEach((name, k) => {
           if (d.features.has(name as GPUFeatureName)) {
-            out[LIMIT_NAME.length + (k >> 5)] |= 1 << (k & 31);
+            out[FEATS_AT + (k >> 5)] |= 1 << (k & 31);
           }
         });
         // WebGPU resolves timestamps in nanoseconds, so the period is 1.
-        const period = LIMIT_NAME.length + Math.ceil(FEATURE_NAME.length / 32);
-        new Float32Array(this._mem(), addr, words)[period] = 1;
-        out[period + 1] = (TEXTURE_FORMAT as readonly string[]).indexOf(
+        new Float32Array(this._mem(), addr, WORDS)[PERIOD_AT] = 1;
+        out[FORMAT_AT] = (TEXTURE_FORMAT as readonly string[]).indexOf(
           navigator.gpu.getPreferredCanvasFormat(),
         );
-        out[words - 2] = this._unfinished_cnt;
-        Atomics.store(out, words - 1, STATUS.READY);
+        out[ERRORS_AT] = this._error_cnt;
+        out[UNFINISHED_AT] = this._unfinished_cnt;
+        Atomics.store(out, STATUS_AT, STATUS.READY);
         return;
       }
       default:

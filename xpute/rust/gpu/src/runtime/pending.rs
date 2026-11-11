@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use xpute_runtime::mem::Memory;
 
+use super::run::timed;
 use crate::spec::RESULT;
 
 /// A `Pending` is a request the device answers at a later poll: a MAP_ASYNC
@@ -36,8 +37,9 @@ pub(super) const REFUSED: u8 = 2;
 
 impl Pending {
     /// Writes the answer into `mem` once there is one, and says whether
-    /// the request still waits.
-    pub(super) fn poll(&self, mem: &mut Memory<'_>) -> bool {
+    /// the request still waits. A read's landing slower than `slow` is said
+    /// as `map` (`run::timed`), as a page's is.
+    pub(super) fn poll(&self, mem: &mut Memory<'_>, slow: Option<u32>) -> bool {
         let state = self.state.load(Ordering::Acquire);
         if state == WAITING {
             return true;
@@ -46,11 +48,14 @@ impl Pending {
             if state != ANSWERED {
                 return RESULT::REFUSED;
             }
-            let slice = buffer.slice(*offset..*offset + *size);
-            let copied = slice.get_mapped_range().map(|range| {
-                mem.write(*addr as usize, &range);
+            let copied = timed(slow, "map", || {
+                let slice = buffer.slice(*offset..*offset + *size);
+                let copied = slice.get_mapped_range().map(|range| {
+                    mem.write(*addr as usize, &range);
+                });
+                buffer.unmap();
+                copied
             });
-            buffer.unmap();
             if copied.is_ok() {
                 RESULT::OK
             } else {

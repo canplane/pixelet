@@ -41,9 +41,11 @@ export function genderOf(character: Character): Gender {
   return groups.person.gender[character.number] ?? GENDERS[0];
 }
 
-function numbered<V extends Character>(
+/** The character a setting's number names; the setting's default for a
+ * number that names none, or before the core has given one. */
+function characterAt<V extends Character>(
   characters: readonly V[],
-  number: number,
+  number: number | undefined,
   fallback: number,
 ): V {
   return (
@@ -52,10 +54,10 @@ function numbered<V extends Character>(
   );
 }
 
-export function personAt(number: number): Character {
-  return numbered(PERSONS, number, SETTING.person.default);
+export function personAt(number: number | undefined): Character {
+  return characterAt(PERSONS, number, SETTING.person.default);
 }
 
-export function petAt(number: number): Pet {
-  return numbered(PETS, number, SETTING.pet.default);
+export function petAt(number: number | undefined): Pet {
+  return characterAt(PETS, number, SETTING.pet.default);
 }

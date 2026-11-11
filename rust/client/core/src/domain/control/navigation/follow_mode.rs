@@ -13,7 +13,7 @@ use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::param::{HEADING_SMOOTH_ALPHA, SENSOR_GRACE_MS};
 use crate::domain::control::sensor::device_orientation::request_orient;
 use crate::domain::control::sensor::reading::{device_location_store, device_orient_store};
-use crate::sys::sched::edge::wake_at;
+use crate::sys::sched::wake_at;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 
@@ -21,14 +21,15 @@ struct Follow {
     /// Whether the camera follows the device. The controls turn it on and
     /// off, and a dead location turns it off.
     on: bool,
+    /// The azimuth, the device's place and its heading as following last
+    /// took them. Each is None while the camera does not follow, so following
+    /// again snaps to the device and its heading.
     smoothed_azimuth: Option<f64>,
-    was_following: bool,
     last_device: Option<Q3>,
     last_heading: Option<f64>,
-    /// When following is given up, and the location status that deadline
-    /// was set for (`grace_for`).
-    grace_due: Option<f64>,
-    grace_for: Option<SensorStatus>,
+    /// The location status a not-ready location's deadline was set for, and
+    /// when following is given up.
+    grace: Option<(SensorStatus, f64)>,
 }
 
 static FOLLOW: Global<Follow> = Global::new();
@@ -37,11 +38,9 @@ fn follow() -> &'static mut Follow {
     FOLLOW.get(|| Follow {
         on: false,
         smoothed_azimuth: None,
-        was_following: false,
         last_device: None,
         last_heading: None,
-        grace_due: None,
-        grace_for: None,
+        grace: None,
     })
 }
 
@@ -67,43 +66,39 @@ pub fn follow_mode_step() {
     if is_follow_mode && !ready {
         // The deadline restarts whenever the status changes, because Loading
         // to Error is a fresh gap with its own retry ahead.
-        if f.grace_for != Some(status) {
-            f.grace_for = Some(status);
-            f.grace_due = Some(now() + SENSOR_GRACE_MS);
-        }
-        match f.grace_due {
-            Some(due) if now() >= due => {
-                f.grace_due = None;
-                f.grace_for = None;
-                f.on = false;
+        let due = match f.grace {
+            Some((s, due)) if s == status => due,
+            _ => {
+                let due = now() + SENSOR_GRACE_MS;
+                f.grace = Some((status, due));
+                due
             }
-            Some(due) => wake_at(due),
-            None => {}
+        };
+        if now() >= due {
+            f.grace = None;
+            f.on = false;
+        } else {
+            wake_at(due);
         }
     } else {
-        f.grace_due = None;
-        f.grace_for = None;
+        f.grace = None;
     }
 
-    // The smoothed azimuth is dropped when following ends, so following
-    // again snaps to the heading instead of easing from a stale one.
-    let entered = is_follow_mode && !f.was_following;
     if !is_follow_mode {
         f.smoothed_azimuth = None;
-    }
-    f.was_following = is_follow_mode;
-    if !is_follow_mode {
+        f.last_device = None;
+        f.last_heading = None;
         return;
     }
 
     // The location is not smoothed here, because the smooth move is its only
     // smoothing stage.
-    if let Some(device) = device_coord.filter(|d| entered || Some(*d) != f.last_device) {
+    if let Some(device) = device_coord.filter(|d| Some(*d) != f.last_device) {
         go_to_ground(device, Motion::Smooth);
     }
     f.last_device = device_coord;
 
-    if let Some(heading) = heading.filter(|h| entered || Some(*h) != f.last_heading) {
+    if let Some(heading) = heading.filter(|h| Some(*h) != f.last_heading) {
         let raw_azimuth = heading * (core::f64::consts::PI / 180.0);
         let smoothed = match f.smoothed_azimuth {
             None => raw_azimuth,

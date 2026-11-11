@@ -30,8 +30,7 @@ fn hit_fill(w: WalkEnd) -> u32 {
 /// Puts the stop of walk `w` at pixel `id` as stop `r`, which the record takes (`keep_hit`,
 /// `beam::HIT_WORDS`, record_hits.wgsl). The ray entered through `face`, which has
 /// `beam::HIT_LACKS` set where the stop lacks. The stop holds its node, the asset it stopped
-/// at, and the line that the rays of its pixel's cell resumed from, off which the face's word
-/// is asked.
+/// at, and the line its observer gives it (hole.eye.wgsl, hole.light.wgsl `hit_line`).
 fn hit_put(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) {
   let k = hit_at(r);
   beams[k + HIT_NODE + NODE_ZOOM] = w.zoom;
@@ -45,20 +44,13 @@ fn hit_put(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) {
   beams[k + HIT_PX] = (id.y << 16u) | id.x;
   beams[k + HIT_ASSET] = w.asset.x;
   beams[k + HIT_ASSET + 1u] = w.asset.y;
-  // Only the eye's stops hold a line. The light asks no face's word off a line
-  // (record_hits.light.wgsl `hit_asks`).
-  var line = NONE;
-  if (!light_run()) {
-    let cell = grid_cell(px_tan(id, textureDimensions(rays).xy));
-    line = beams[cell_start(cell) + CELL_CORNER] * LINE_WORDS;
-  }
-  beams[k + HIT_LINE] = line;
+  beams[k + HIT_LINE] = hit_line(id);
 }
 
 /// The ray's words where walk `w` ended, entered through `face`, with `faces` saying what lies
 /// around that face (pxl-engine `face::word`). Where the ray met nothing, every word is zero.
 fn ray_word(w: WalkEnd, face: u32, faces: u32) -> vec4<u32> {
-  if (w.ends != 1u) {
+  if (w.ends != ENDS_CELL) {
     return vec4<u32>(0u);
   }
   return vec4<u32>(

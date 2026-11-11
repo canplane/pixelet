@@ -3,19 +3,18 @@
 // GENERATED from spec/abi/sys.json
 //
 // xpute's own protocol on majors NOP and SYS. Through it the runtime tells the core about
-// the core's life and its turns, and the core reports its end. NOP is the rings' own test.
+// the core's life and its turns, and the core reports its end. NOP is the channel's own test.
 // SYS_ATTACH, SYS_SUSPEND and SYS_RESUME tell the core that a runtime attached, for the
 // first time or again, that the core is about to be frozen, and that it was woken; what
 // each one means the core keeps or resets is the core's to decide. SYS_TURN marks a turn
 // that the runtime's scheduling policy grants, and carries the wall clock; SYS_FRAME and
 // SYS_PACE carry frame pacing's grant and the core's asked rate. SYS_ABORT
-// reports the broken invariant the core stops on, and the runtime hears it as a VMM hears
-// its guest exit.
+// reports the broken invariant the core stops on, the last frame the core sends.
 //
 // Each command is `major << 8 | minor` (kit abi/cmd). Its packet is an XTP branch whose
 // children are the command's fields, in order; a command with no fields carries no packet.
 // The GPU and the files are devices with protocols of their own (gpu.json, fs.json).
-// Majors 0x00 to 0x0F are xpute's (ipc/frame.json), and a program numbers the commands of
+// Majors 0x00 to 0x0F are xpute's (io/frame.json), and a program numbers the commands of
 // its own protocols past them.
 
 #pragma once
@@ -25,12 +24,15 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <variant>
 
 #include "xpute/kit/abi/cmd.hpp"
 #include "xpute/kit/status/error.hpp"
 #include "xpute/kit/wire/xtp/cursor.hpp"
 #include "xpute/kit/wire/xtp/encode.hpp"
 #include "xpute/core/abi/number.hpp"
+#include "xpute/core/host.hpp"
+#include "xpute/core/io/frame.hpp"
 
 namespace xpute::abi::sys {
 
@@ -70,22 +72,22 @@ namespace xpute::abi::sys {
 enum class Command : std::uint32_t {
 
     // ---- sys, export ----
-    // The rings' own test. The reply carries the packet's value, or 0 when the frame has no
+    // The channel's own test. The reply carries the packet's value, or 0 when the frame has no
     // packet.
     NOP = 0x0000,
     // A runtime has attached, for the first time or after an earlier runtime went away. The
-    // runtime sends it once it has laid the front of the core's memory (ipc/head.json). The core
+    // runtime sends it once it has laid the front of the core's memory (io/head.json). The core
     // lets go of whatever the earlier runtime's requests left behind.
     SYS_ATTACH = 0x0102,
     // The core is about to be frozen: its turns stop for as long as its runtime is hidden. This
-    // is the core's last sure moment to save. It is a call, and the runtime rings the core at
-    // once to have it answered.
+    // is the core's last sure moment to save. The UI sends it and does not wait; the runtime
+    // lets it reach the core in a turn before turns stop.
     SYS_SUSPEND = 0x0103,
-    // The core has been woken after SYS_SUSPEND. It is a call, rung at once as SYS_SUSPEND is.
+    // The core has been woken after SYS_SUSPEND.
     SYS_RESUME = 0x0104,
-    // Marks a turn that the scheduling policy grants, as opposed to a turn rung only because a
+    // Marks a turn that the scheduling policy grants, as opposed to a turn run only because a
     // command arrived. The runtime submits it after what the program submits for that turn,
-    // and before it rings. It carries the wall clock in Unix milliseconds. What frame pacing
+    // and before it runs the turn. It carries the wall clock in Unix milliseconds. What frame pacing
     // says of the turn comes before it (SYS_FRAME); anything else the policy has to say, the
     // program sends in commands of its own.
     SYS_TURN = 0x0105,
@@ -210,9 +212,11 @@ struct SysAbort {
     std::uint32_t b_high{};
     std::string_view file{};
 
-    // Its number, and the children it is written as.
+    // Its number, the children it is written as, and whether it goes
+    // with ACKREQ.
     static constexpr std::uint32_t NUMBER = 257;
     static constexpr std::uint32_t FIELDS = 8;
+    static constexpr bool ACKREQ = false;
 
     void write(xtp::PacketWriter &w) const noexcept {
         w.i32(errnum);
@@ -224,19 +228,65 @@ struct SysAbort {
         w.u32(b_high);
         w.str(file);
     }
+
+    std::array<std::uint32_t, 2> named() const noexcept {
+        return {0, 0};
+    }
 };
 
 // Command::SYS_PACE's packet.
 struct SysPace {
     double interval_ms{};
 
-    // Its number, and the children it is written as.
+    // Its number, the children it is written as, and whether it goes
+    // with ACKREQ.
     static constexpr std::uint32_t NUMBER = 263;
     static constexpr std::uint32_t FIELDS = 1;
+    static constexpr bool ACKREQ = false;
 
     void write(xtp::PacketWriter &w) const noexcept {
         w.f64(interval_ms);
     }
+
+    std::array<std::uint32_t, 2> named() const noexcept {
+        return {0, 0};
+    }
 };
+
+// Command::SYS_ABORT, posted for the runtime.
+template <class D> void sys_abort(const D &door, const SysAbort &e) noexcept { door.send(e); }
+
+// Command::SYS_PACE, posted for the runtime.
+template <class D> void sys_pace(const D &door, const SysPace &e) noexcept { door.send(e); }
+
+// `cmd` read and handed to the member of `h` of its name; ENOSYS for one this
+// protocol does not carry.
+template <class H> Outcome apply(H &h, std::uint32_t cmd, std::span<const std::uint8_t> pkt) noexcept {
+    if (cmd == static_cast<std::uint32_t>(Command::NOP)) {
+        Result<Nop> c = Nop::read(pkt);
+        if (!c) return {.err = c.error().errnum};
+        return h.nop(*c);
+    }
+    if (cmd == static_cast<std::uint32_t>(Command::SYS_ATTACH)) {
+        return h.sys_attach();
+    }
+    if (cmd == static_cast<std::uint32_t>(Command::SYS_SUSPEND)) {
+        return h.sys_suspend();
+    }
+    if (cmd == static_cast<std::uint32_t>(Command::SYS_RESUME)) {
+        return h.sys_resume();
+    }
+    if (cmd == static_cast<std::uint32_t>(Command::SYS_TURN)) {
+        Result<SysTurn> c = SysTurn::read(pkt);
+        if (!c) return {.err = c.error().errnum};
+        return h.sys_turn(*c);
+    }
+    if (cmd == static_cast<std::uint32_t>(Command::SYS_FRAME)) {
+        Result<SysFrame> c = SysFrame::read(pkt);
+        if (!c) return {.err = c.error().errnum};
+        return h.sys_frame(*c);
+    }
+    return {.err = Errno::enosys};
+}
 
 } // namespace xpute::abi::sys

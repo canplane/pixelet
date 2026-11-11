@@ -3,19 +3,18 @@
 // GENERATED from spec/abi/sys.json
 
 //! xpute's own protocol on majors NOP and SYS. Through it the runtime tells the core about
-//! the core's life and its turns, and the core reports its end. NOP is the rings' own test.
+//! the core's life and its turns, and the core reports its end. NOP is the channel's own test.
 //! SYS_ATTACH, SYS_SUSPEND and SYS_RESUME tell the core that a runtime attached, for the
 //! first time or again, that the core is about to be frozen, and that it was woken; what
 //! each one means the core keeps or resets is the core's to decide. SYS_TURN marks a turn
 //! that the runtime's scheduling policy grants, and carries the wall clock; SYS_FRAME and
 //! SYS_PACE carry frame pacing's grant and the core's asked rate. SYS_ABORT
-//! reports the broken invariant the core stops on, and the runtime hears it as a VMM hears
-//! its guest exit.
+//! reports the broken invariant the core stops on, the last frame the core sends.
 //!
 //! Each command is `major << 8 | minor` (kit abi/cmd). Its packet is an XTP branch whose
 //! children are the command's fields, in order; a command with no fields carries no packet.
 //! The GPU and the files are devices with protocols of their own (gpu.json, fs.json).
-//! Majors 0x00 to 0x0F are xpute's (ipc/frame.json), and a program numbers the commands of
+//! Majors 0x00 to 0x0F are xpute's (io/frame.json), and a program numbers the commands of
 //! its own protocols past them.
 
 // A list a record carries is a function handing out its items, whose
@@ -89,22 +88,22 @@ impl SysMinor {
 #[repr(u32)]
 pub enum Command {
     // ---- sys, export ----
-    /// The rings' own test. The reply carries the packet's value, or 0 when the frame has no
+    /// The channel's own test. The reply carries the packet's value, or 0 when the frame has no
     /// packet.
     NOP = 0x0000,
     /// A runtime has attached, for the first time or after an earlier runtime went away. The
-    /// runtime sends it once it has laid the front of the core's memory (ipc/head.json). The core
+    /// runtime sends it once it has laid the front of the core's memory (io/head.json). The core
     /// lets go of whatever the earlier runtime's requests left behind.
     SYS_ATTACH = 0x0102,
     /// The core is about to be frozen: its turns stop for as long as its runtime is hidden. This
-    /// is the core's last sure moment to save. It is a call, and the runtime rings the core at
-    /// once to have it answered.
+    /// is the core's last sure moment to save. The UI sends it and does not wait; the runtime
+    /// lets it reach the core in a turn before turns stop.
     SYS_SUSPEND = 0x0103,
-    /// The core has been woken after SYS_SUSPEND. It is a call, rung at once as SYS_SUSPEND is.
+    /// The core has been woken after SYS_SUSPEND.
     SYS_RESUME = 0x0104,
-    /// Marks a turn that the scheduling policy grants, as opposed to a turn rung only because a
+    /// Marks a turn that the scheduling policy grants, as opposed to a turn run only because a
     /// command arrived. The runtime submits it after what the program submits for that turn,
-    /// and before it rings. It carries the wall clock in Unix milliseconds. What frame pacing
+    /// and before it runs the turn. It carries the wall clock in Unix milliseconds. What frame pacing
     /// says of the turn comes before it (SYS_FRAME); anything else the policy has to say, the
     /// program sends in commands of its own.
     SYS_TURN = 0x0105,
@@ -252,11 +251,15 @@ impl SysAbort<'_> {
     }
 }
 
-impl crate::ipc::door::Import for SysAbort<'_> {
+impl crate::io::door::Import for SysAbort<'_> {
     const NUMBER: u32 = 257;
     const FIELDS: u32 = 8;
+    const ACKREQ: bool = false;
     fn write(&self, w: &mut PacketWriter) {
         SysAbort::write(self, w);
+    }
+    fn named(&self) -> (u32, u32) {
+        (0, 0)
     }
 }
 
@@ -284,10 +287,57 @@ impl SysPace {
     }
 }
 
-impl crate::ipc::door::Import for SysPace {
+impl crate::io::door::Import for SysPace {
     const NUMBER: u32 = 263;
     const FIELDS: u32 = 1;
+    const ACKREQ: bool = false;
     fn write(&self, w: &mut PacketWriter) {
         SysPace::write(self, w);
+    }
+    fn named(&self) -> (u32, u32) {
+        (0, 0)
+    }
+}
+
+/// The sys protocol's core end: what it posts to the runtime and what it hears from it.
+use crate::io::door::{door, Outcome};
+use xpute_kit::status::errno::Errno;
+
+/// Command::SYS_ABORT, posted for the runtime.
+pub fn sys_abort(e: &SysAbort<'_>) {
+    door().send(e);
+}
+
+/// Command::SYS_PACE, posted for the runtime.
+pub fn sys_pace(e: &SysPace) {
+    door().send(e);
+}
+
+/// What the program does with each command the runtime sends.
+pub trait Exports {
+    fn nop(&mut self, c: Nop) -> Outcome;
+    fn sys_attach(&mut self) -> Outcome;
+    fn sys_suspend(&mut self) -> Outcome;
+    fn sys_resume(&mut self) -> Outcome;
+    fn sys_turn(&mut self, c: SysTurn) -> Outcome;
+    fn sys_frame(&mut self, c: SysFrame) -> Outcome;
+}
+
+/// `cmd` read and handed to `h`; ENOSYS for one this protocol does not carry.
+pub fn apply<H: Exports>(h: &mut H, cmd: u32, pkt: &Option<&[u8]>) -> Outcome {
+    match cmd {
+        x if x == Command::NOP as u32 => h.nop(Nop::read(
+            pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+        )?),
+        x if x == Command::SYS_ATTACH as u32 => h.sys_attach(),
+        x if x == Command::SYS_SUSPEND as u32 => h.sys_suspend(),
+        x if x == Command::SYS_RESUME as u32 => h.sys_resume(),
+        x if x == Command::SYS_TURN as u32 => h.sys_turn(SysTurn::read(
+            pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+        )?),
+        x if x == Command::SYS_FRAME as u32 => h.sys_frame(SysFrame::read(
+            pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+        )?),
+        _ => Err(MarshalError::new(Errno::ENOSYS)),
     }
 }

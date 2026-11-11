@@ -25,7 +25,7 @@ static BLOCK: Global<Option<*mut u32>> = Global::new();
 
 /// Keeps the block that `call::device` names to the runtime, for `page` to
 /// read. The runtime writes the block's words for good (xpute-core
-/// ipc/stream.rs R4), so the core keeps the block in place and never writes
+/// io/stream.rs R4), so the core keeps the block in place and never writes
 /// it.
 pub(crate) fn ask(block: &mut [u32]) {
     BLOCK.set(Some(block.as_mut_ptr()));

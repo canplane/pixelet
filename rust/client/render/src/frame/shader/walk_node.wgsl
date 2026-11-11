@@ -36,12 +36,12 @@ struct Aim {
 const UNTIL_OPAQUE = 0u;
 const UNTIL_BEAM = 2u;
 
-/// The eye's ray at the tangents `tan_at` (pxl-engine `cast::through`, `Ray::new`). This is the
+/// The eye's ray at the tangents `tan` (pxl-engine `cast::through`, `Ray::new`). This is the
 /// one place the GPU works out an eye's ray's direction and its reciprocal. A GPU's division
 /// and square root round in its own way, so every pass that walks or marks an eye's ray takes
 /// it from here, and all of them walk the same ray.
-fn eye_aim(tan_at: vec2<f32>) -> Aim {
-  let aimed = eye_v3(FORWARD) + tan_at.x * eye_v3(RIGHT) + tan_at.y * eye_v3(UP);
+fn eye_aim(tan: vec2<f32>) -> Aim {
+  let aimed = eye_v3(FORWARD) + tan.x * eye_v3(RIGHT) + tan.y * eye_v3(UP);
   let dir = aimed / length(aimed);
   return Aim(
     vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u))),
@@ -95,11 +95,26 @@ fn root_start() -> Start {
   return start_at(0.0, vec3<u32>(0u), 0u, vec3<i32>(0));
 }
 
-/// Where a walk ended or stopped, and its state there. `ends` is 1 at a cell it stops at, 2 at
-/// a node that lacks, 3 where it went on to its reach, 4 where it is left to the walk that asks
-/// the world, and 5 where it ran out of the steps it was given. In the last two cases it stopped
-/// at `t`, at the node `zoom`, `corner` and `roots` name, and goes on from there with `parent`,
-/// `top` and `step` (`Start`). `visits` counts the nodes it entered.
+/// How a walk ends (`WalkEnd::ends`): not yet, while it walks.
+const ENDS_NONE = 0u;
+/// At a cell it stops at. This and a lack are its hit.
+const ENDS_CELL = 1u;
+/// At a node that lacks.
+const ENDS_LACK = 2u;
+/// Gone on to its reach.
+const ENDS_REACH = 3u;
+/// Left to the walk that asks the world.
+const ENDS_LEFT = 4u;
+/// Out of the steps it was given.
+const ENDS_OUT = 5u;
+/// At a lack where only the walk that asks may stop at one: its ray is walked again whole
+/// (cached.wgsl `lack_ends`, queue_walk.wgsl).
+const ENDS_AGAIN = 6u;
+
+/// Where a walk ended or stopped, and its state there, `ends` saying how. Where it is left
+/// (`ENDS_LEFT`) or out of steps (`ENDS_OUT`) it stopped at `t`, at the node `zoom`, `corner`
+/// and `roots` name, and goes on from there with `parent`, `top` and `step` (`Start`). `visits`
+/// counts the nodes it entered.
 struct WalkEnd {
   ends: u32,
   zoom: u32,

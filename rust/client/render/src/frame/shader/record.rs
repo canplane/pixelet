@@ -24,8 +24,8 @@ pub const COMPUTE_CELL: u32 = 9;
 /// One thread writes the workgroup count of the drawn receivers' pass
 /// (`SHADER_LIGHT_MARK_DRAWS`).
 pub const COMPUTE_LIGHT_MARK_DRAWS_OPEN: u32 = 10;
-/// The holes' queue (pxl-engine `ray::QUEUE_LANES`) runs five compute pipelines: its first and
-/// second walks over the node cache (`COMPUTE_QUEUE`, `COMPUTE_QUEUE_PARKED`), the asks of the
+/// The eye's holes' queue (pxl-engine `ray::QUEUE_LANES`) runs five compute pipelines: its first
+/// and second walks over the node cache (`COMPUTE_QUEUE`, `COMPUTE_QUEUE_PARKED`), the asks of the
 /// nodes each of those walks was parked at (`COMPUTE_QUEUE_ASK`, `COMPUTE_QUEUE_ASK_PARKED`),
 /// and its last walk, which asks the world (`COMPUTE_QUEUE_LAST`). The two asks serve every
 /// run's queue (ask_run.wgsl).
@@ -79,7 +79,7 @@ pub const COMPUTE_LIGHT_REC_DRAW: u32 = 45;
 /// Writes the stops of the light's holes into the node cache's drawable entries
 /// (record_hits.wgsl over record_hits.light.wgsl).
 pub const COMPUTE_LIGHT_REC_HITS: u32 = 46;
-/// Claims each tile the light's cast lists as read that has not been cast in its epoch
+/// Damages each tile the light's cast lists as read that has not been cast in its epoch
 /// (light_propagate.wgsl `light_damage_cs`).
 pub const COMPUTE_LIGHT_DAMAGE: u32 = 47;
 /// The rest of the samples' runs, the eye's and the light's: the second walk over the node
@@ -90,7 +90,13 @@ pub const COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED: u32 = 49;
 /// cache alone (`SHADER_QUEUE_CORNERS`).
 pub const COMPUTE_QUEUE_CORNERS_PARKED: u32 = 50;
 pub const COMPUTE_QUEUE_LIGHT_CORNERS_PARKED: u32 = 51;
-pub const COMPUTES: u32 = 52;
+/// The holes' queue's walks for the light's map (`SHADER_QUEUE_LIGHT`,
+/// `SHADER_QUEUE_LAST_LIGHT`), as `COMPUTE_QUEUE`, `COMPUTE_QUEUE_PARKED` and
+/// `COMPUTE_QUEUE_LAST` are the eye's.
+pub const COMPUTE_QUEUE_LIGHT: u32 = 52;
+pub const COMPUTE_QUEUE_LIGHT_PARKED: u32 = 53;
+pub const COMPUTE_QUEUE_LAST_LIGHT: u32 = 54;
+pub const COMPUTES: u32 = 55;
 
 /// Compute pipeline `id`'s shader and the entry point it runs, as the
 /// source names it.
@@ -148,6 +154,9 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_REC_HITS => (SHADER_REC_HITS, "rec_hits_cs"),
         COMPUTE_LIGHT_REC_DRAW => (SHADER_REC_DRAW, "light_rec_draw_cs"),
         COMPUTE_LIGHT_REC_HITS => (SHADER_LIGHT_REC_HITS, "rec_hits_cs"),
+        COMPUTE_QUEUE_LIGHT => (SHADER_QUEUE_LIGHT, "queue_cs"),
+        COMPUTE_QUEUE_LIGHT_PARKED => (SHADER_QUEUE_LIGHT, "queue_parked_cs"),
+        COMPUTE_QUEUE_LAST_LIGHT => (SHADER_QUEUE_LAST_LIGHT, "queue_last_cs"),
         _ => panic!("a compute pipeline number with no shader"),
     }
 }
@@ -190,7 +199,7 @@ pub const PIPELINE_IMPOSTOR: u32 = 8;
 pub const PIPELINE_SKY: u32 = 9;
 pub const PIPELINE_MIP: u32 = 10;
 /// The occlusion's half-resolution map laid over the world's color in the
-/// claimed tiles (pass/ao.rs `apply`).
+/// damaged tiles (pass/ao.rs `apply`).
 pub const PIPELINE_AO_APPLY: u32 = 11;
 pub const PIPELINE_AO_DOWNSAMPLE: u32 = 12;
 pub const PIPELINE_AO_SAMPLE: u32 = 13;
@@ -224,20 +233,20 @@ pub const PIPELINE_RASTER: u32 = 30;
 pub const PIPELINE_SCREEN_FINISH: u32 = 31;
 /// The world's color gathered over frames (pass/resolve.rs).
 pub const PIPELINE_SCREEN_RESOLVE: u32 = 32;
-/// The gate a frame not drawn whole is drawn through: it clears the claimed tiles and raises
+/// The gate a frame not drawn whole is drawn through: it clears the damaged tiles and raises
 /// their stencil (renderer.rs `frame`).
 pub const PIPELINE_SCREEN_MASK: u32 = 33;
 /// Shows on the canvas the finished picture kept at the canvas's size (pass/finish.rs).
 pub const PIPELINE_SCREEN_SHOW: u32 = 34;
-/// Copies the claimed tiles of the history the resolve wrote this frame back into the history
+/// Copies the damaged tiles of the history the resolve wrote this frame back into the history
 /// the frame before wrote (pass/resolve.rs).
 pub const PIPELINE_SCREEN_WRITE_BACK: u32 = 35;
 /// The gate the samples' raster is drawn through in a frame not drawn whole. It clears the
-/// claimed tiles to the far plane and leaves the rest at the nearest depth, where no box
+/// damaged tiles to the far plane and leaves the rest at the nearest depth, where no box
 /// passes the depth test (ray/raster.rs).
 pub const PIPELINE_RASTER_MASK: u32 = 36;
 /// The gate the light's map is drawn through when only the listed casters that changed have
-/// moved. It lays the world's depth in the claimed tiles and raises their stencil
+/// moved. It lays the world's depth in the damaged tiles and raises their stencil
 /// (pass/shadow.rs).
 pub const PIPELINE_LIGHT_MASK: u32 = 37;
 /// Draws a character where it was and where it is, and each fragment sets its screen tile's
@@ -701,7 +710,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[&SCREEN_GROUP],
         ),
         // The occlusion's half-resolution map, brought to each pixel and multiplied into the
-        // world's color, drawn as the claimed tiles' quads. The multiply is black blended over
+        // world's color, drawn as the damaged tiles' quads. The multiply is black blended over
         // by the occlusion's darkening, so the apply is a draw of the world's pass that
         // neither tests nor writes depth.
         PIPELINE_AO_APPLY => Descriptor::new(
@@ -771,7 +780,7 @@ const fn desc_of(id: u32) -> Descriptor {
             &[],
             &[&[[0, TEXTURE_UINT_ARRAY], [1, UNIFORM], [2, STORAGE]]],
         ),
-        // The same in the map's claimed tiles alone, one quad a tile of the marks' box, and it
+        // The same in the map's damaged tiles alone, one quad a tile of the marks' box, and it
         // raises their stencil (gpu/api.rs `Stencil::Mask`).
         PIPELINE_LIGHT_MASK => Descriptor::new(
             Header {

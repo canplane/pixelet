@@ -6,7 +6,7 @@
 
 // ---- gpu, export ----
 
-/** The GPU the machine asked for has answered, for the first time or again after the device
+/** The GPU the core asked for has answered, for the first time or again after the device
  * was lost. The STATUS word of the stream's device block tells the core the device's state. */
 export const GPU_READY = 0x0001;
 /** Asks the core to open a surface. The core answers with the surface's handle, or with 0

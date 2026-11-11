@@ -1,6 +1,6 @@
 // pxl-render/light.wgsl
 
-// Writes the world's depth from the light into every slot of the tiles the cast claimed
+// Writes the world's depth from the light into every slot of the tiles the cast damaged
 // (light_list.wgsl `light_item`), one workgroup for each tile (`light::TILE`) and one thread
 // for each slot. A slot takes its visible voxel, a drawable entry of the node cache
 // (pxl-engine `record`), where its own ray enters the voxel across a face some ray entered it
@@ -51,7 +51,7 @@ fn sky(at: vec2<u32>, p: vec2<u32>, band: u32) -> bool {
     && went_on_alike(s + vec2<u32>(1u, 1u), band, p);
 }
 
-/// Each slot of the tiles the cast claimed (light_list.wgsl `light_item`) takes its visible
+/// Each slot of the tiles the cast damaged (light_list.wgsl `light_item`) takes its visible
 /// voxel or the sky, or else is listed as a hole, as the eye's pixels are. The list has room for
 /// every slot of the map (pxl-engine `light::holes_at`), so no slot finds it full.
 @compute @workgroup_size(LIGHT_TILE, LIGHT_TILE, 1)
@@ -94,5 +94,5 @@ fn light_cs(
     return;
   }
   add_cnt(on, CNT_HOLE);
-  list_hole(header_word(LIGHT_HEADER_HOLES), at);
+  list_hole(header_word(LIGHT_HEADER_HOLES), size * size, at);
 }

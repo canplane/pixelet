@@ -14,8 +14,8 @@ interface PxlPlatform {
   storageSet(key: string, val: string): void;
   clipboardSet(text: string): void;
   headingAvailable(): boolean;
-  /** Android only: the part of the bottom inset that takes a touch, which is
-   * the navigation buttons, in dp. It is 0 under gesture navigation. */
+  /** The part of the bottom inset that takes a touch, in dp: Android's bar of
+   * navigation buttons. It is 0 under gesture navigation and on iOS. */
   tappableBottom(): f64;
 }
 

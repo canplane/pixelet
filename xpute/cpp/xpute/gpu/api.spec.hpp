@@ -3,13 +3,13 @@
 // GENERATED from spec/gpu/api.json
 //
 // The calls a core makes to a GPU it cannot reach, written as records of a stream
-// (ipc/stream). The vocabulary is WebGPU's, with its descriptors written out as words, and
+// (io/stream). The vocabulary is WebGPU's, with its descriptors written out as words, and
 // it serves any program. A record is an op, a count, and the op's words in the order the
 // op's doc lists them. Bytes go as a count followed by padded words, as the stream lays
 // them. Objects are named by the core's handles (abi/handle). An optional field holds NONE
 // when it is unset. Render and compute ops sit side by side.
 //
-// A transaction (ipc/stream) that does not commit drops its records and gives back the
+// A transaction (io/stream) that does not commit drops its records and gives back the
 // handles they took, so the runtime never hears of those objects. The encoder's begin and
 // commit open and close the transaction on both the stream and the handle table.
 
@@ -79,7 +79,7 @@ inline constexpr std::uint32_t WRITE_BUFFER = 13u;
 // buffer, offset, address, bytes. The runtime reads the bytes where they lie in the core's
 // memory when it runs the record, and makes no copy of them first. From the stream's
 // publish until the core loads END as 0, the core neither rewrites nor frees them
-// (ipc/stream R3).
+// (io/stream R3).
 inline constexpr std::uint32_t WRITE_BUFFER_AT = 14u;
 
 // texture, mip, origin x, y, z, aspect, bytes per row, rows per image, width, height, depth, the bytes.
@@ -198,12 +198,14 @@ inline constexpr std::uint32_t CURRENT = 47u;
 // words), then its timestamp period (f32 bits: how many nanoseconds one unit of a resolved
 // timestamp is, 1 when the units are nanoseconds as WebGPU's are), then the surface format
 // it prefers (TEXTURE_FORMAT: the format SURFACE_PREFERRED stands for, as the web's
-// getPreferredCanvasFormat gives it), then the count of unfinished frames, then STATUS.
-// The unfinished frames are the frames the core has drawn whose work the queue has not yet
-// done. Only the runtime writes that count: first before STATUS, as it writes the rest of
-// the block, and afterwards with release each time the count changes. The core loads the
-// count with acquire once STATUS reads READY, and draws a frame only while the count is
-// below its frame latency; both runtimes hold a frame to that rule (xpute-gpu admit).
+// getPreferredCanvasFormat gives it), then the count of uncaptured errors, then the count
+// of unfinished frames, then STATUS. The uncaptured errors are the errors the device raised
+// that no error scope caught, each logged where the runtime logs. The unfinished frames are
+// the frames the core has drawn whose work the queue has not yet done. Only the runtime
+// writes the two counts: first before STATUS, as it writes the rest of the block, and
+// afterwards with release each time a count changes. The core loads them with acquire once
+// STATUS reads READY, and draws a frame only while the unfinished frames are below its
+// frame latency; both runtimes hold a frame to that rule (xpute-gpu admit).
 inline constexpr std::uint32_t DEVICE = 48u;
 
 // RENDER_PIPELINE's words, then word, ticket. WebGPU's createRenderPipelineAsync; the word

@@ -19,12 +19,13 @@
 #include "xpute/kit/wire/xtp/cursor.hpp"
 #include "xpute/core/abi/sys.spec.hpp"
 #include "xpute/core/abi/handle.hpp"
-#include "xpute/core/call.hpp"
-#include "xpute/core/ipc/door.hpp"
-#include "xpute/core/ipc/file.hpp"
-#include "xpute/core/ipc/head.hpp"
-#include "xpute/core/ipc/ring.hpp"
-#include "xpute/core/ipc/stream.hpp"
+#include "xpute/core/entry.hpp"
+#include "xpute/core/host.hpp"
+#include "xpute/core/io/door.hpp"
+#include "xpute/core/io/file.hpp"
+#include "xpute/core/io/head.hpp"
+#include "xpute/core/io/frame.hpp"
+#include "xpute/core/io/stream.hpp"
 #include "xpute/core/mem.hpp"
 #include "xpute/core/mem/section.hpp"
 #include "xpute/core/sched/wake.hpp"
@@ -40,14 +41,15 @@ constexpr std::uint32_t page_up(std::uint32_t bytes) {
 
 // The parts the core shares with its runtime lie each on pages of its own, and
 // `layout` places them in an order the seed draws.
-enum Part : std::size_t { HEAD, SQ_DESC, CQ_DESC, SQ_SLOT, CQ_SLOT, STREAM, PARTS };
+enum Part : std::size_t { HEAD, RECEIVE, SEND, STREAM, PARTS };
+
+// A frame's room: its words and the most its packet takes.
+constexpr std::uint32_t FRAME_BYTES = frame::WORD_BYTES + PKT_BYTES;
 
 constexpr std::array<std::uint32_t, PARTS> PART_BYTES{
     head::WORDS * 4,
-    ring_bytes(SQ_CAP),
-    ring_bytes(CQ_CAP),
-    slots_bytes(SQ_CAP, SLOT_BYTES),
-    slots_bytes(CQ_CAP, SLOT_BYTES),
+    FRAME_BYTES,
+    FRAME_BYTES,
     STREAM_WORDS * 4,
 };
 
@@ -87,18 +89,20 @@ struct Inc {
 
     static constexpr std::uint32_t NUMBER = cmd::INC;
     static constexpr std::uint32_t FIELDS = 2;
+    static constexpr bool ACKREQ = false;
 
     void write(xtp::PacketWriter &w) const noexcept {
         w.u32(n);
         w.u32(at);
     }
+
+    std::array<std::uint32_t, 2> named() const noexcept { return {0, 0}; }
 };
 
 struct State {
-    Door door;
     Stream stream;
     // Each open file's owner is the number its OPEN packet named.
-    FileTable<std::uint32_t, HANDLES> files;
+    FileTable<std::uint32_t, std::monostate, Buffer, HANDLES> files;
     abi::Table<std::monostate, HANDLES> handles;
     xpute_conformance_now now;
     double mark = 0;
@@ -112,6 +116,11 @@ constexpr std::uint32_t HEAP_AT = page_up(STATE_AT + sizeof(State));
 
 static_assert(HEAP_AT + HEAP_BYTES <= MEM_BYTES, "the ranges run past the memory");
 static_assert(STATE_AT % alignof(State) == 0, "the state lies on its own alignment");
+
+static_assert(PKT_BYTES >= ABORT_PKT_BYTES, "a packet holds a stop report");
+
+// Every OPEN names this file; no trace's runtime serves it.
+constexpr std::array<Token, 2> PATH{std::uint32_t{1}, std::string_view{"f"}};
 
 State &state_of(Memory m, std::uint32_t range) {
     return *std::launder(reinterpret_cast<State *>(m.at(range + STATE_AT)));
@@ -145,7 +154,7 @@ Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
         return {.err = Errno::einval};
     case cmd::RAISE:
         if (arg > MOST_RAISE) return {.err = Errno::einval};
-        for (std::uint32_t k = 0; k < arg; k++) s.door.post(k, cmd::NOTE, 0, 0);
+        for (std::uint32_t k = 0; k < arg; k++) door::get().post(k, cmd::NOTE, 0, 0);
         return {.val = static_cast<std::int32_t>(arg)};
     case cmd::RECORD:
         s.stream.record(arg, {});
@@ -163,16 +172,16 @@ Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
         s.mark = s.now();
         return {};
     case cmd::OPEN:
-        return {.val = static_cast<std::int32_t>(s.files.open(s.door, 1, "f", arg))};
+        return {.val = static_cast<std::int32_t>(s.files.open(PATH, arg))};
     case cmd::CLOSE:
-        return s.files.close(s.door, arg) ? Outcome{} : Outcome{.err = Errno::ebadf};
+        return s.files.close(arg).ok() ? Outcome{} : Outcome{.err = Errno::ebadf};
     case cmd::SINCE: {
         double since = s.now() - s.mark;
         return {.val = static_cast<std::int32_t>(round(since))};
     }
     case cmd::CALL: {
         s.word = 0;
-        Result<std::uint32_t> res = s.door.call(Inc{.n = arg, .at = s.stream.mem().off_of(&s.word)});
+        Result<std::uint32_t> res = door::get().call(Inc{.n = arg, .at = s.stream.mem().off_of(&s.word)});
         if (!res) return {.err = res.error().errnum};
         // The word the runtime wrote before the call returned.
         return {.val = static_cast<std::int32_t>(*static_cast<volatile std::uint32_t *>(&s.word))};
@@ -187,30 +196,35 @@ Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
 std::uint32_t boot(Memory m, std::uint32_t range, xpute_conformance_now now, std::uint32_t seed) {
     std::array<std::uint32_t, PARTS> at = layout(seed);
     for (std::uint32_t &off : at) off += range;
-    Door door(Ring::init(m, at[SQ_DESC], SQ_CAP, at[SQ_SLOT], SLOT_BYTES), Ring::init(m, at[CQ_DESC], CQ_CAP, at[CQ_SLOT], SLOT_BYTES), MOST_RAISE);
-    new (m.at(range + STATE_AT)) State{
-        .door = std::move(door), .stream = Stream(m, at[STREAM], STREAM_WORDS), .files = {}, .handles = {}, .now = now};
+    door::set(Door(m, at[RECEIVE], at[SEND], FRAME_BYTES));
+    new (m.at(range + STATE_AT)) State{.stream = Stream(m, at[STREAM], STREAM_WORDS), .files = {}, .handles = {}, .now = now};
     // The stream lies where a GPU stream would, so the runtime runs it after
     // every turn.
-    write_head(m, at[HEAD], Head{.sq_cap = SQ_CAP, .cq_cap = CQ_CAP, .slot_bytes = SLOT_BYTES, .sq_at = at[SQ_DESC], .cq_at = at[CQ_DESC], .stream_at = at[STREAM]});
+    write_head(m, at[HEAD], Head{.pkt_bytes = PKT_BYTES, .stream_at = at[STREAM]});
     return at[HEAD];
 }
 
 double turn(Memory m, std::uint32_t range) {
     State &s = state_of(m, range);
     // The conformance core keeps nothing across its life, reads no file
-    // again, and draws nothing, so it answers 0 to every other submission,
+    // again, and draws nothing, so it answers 0 to every other event,
     // and a surface it is lent gets the handle 0, none.
-    double wake = s.door.turn([&s](const Submission &sub) {
-        if (const FsOpened *opened = std::get_if<FsOpened>(&sub)) {
-            if (std::optional<std::uint32_t> owner = s.files.complete_open(*opened)) s.door.post(*owner, cmd::OPENED, 0, opened->res);
+    door::get().receive([&s](const Event &sub) {
+        if (const Completion *c = std::get_if<Completion>(&sub)) {
+            std::optional<abi::fs::Completion> done = abi::fs::completion(*c);
+            if (const auto *o = done ? std::get_if<abi::fs::FsOpenCompletion>(&*done) : nullptr) {
+                std::uint32_t detail = o->reply ? o->reply->detail : 0;
+                if (auto got = s.files.complete_open(o->fd, o->res, detail)) door::get().post(got->first, cmd::OPEN_COMPLETION, 0, c->res);
+            } else if (const auto *cl = done ? std::get_if<abi::fs::FsCloseCompletion>(&*done) : nullptr) {
+                (void)s.files.complete_close(cl->fd, cl->res);
+            }
             return Outcome{};
         }
         if (const Program *p = std::get_if<Program>(&sub)) return apply(s, p->cmd, p->pkt);
         return Outcome{};
     });
     s.stream.publish();
-    return wake;
+    return NO_WAKE;
 }
 
 #ifdef __wasm__
@@ -223,10 +237,6 @@ std::uint32_t range_at() {
 
 double runtime_now() {
     return wasm::now();
-}
-
-std::int32_t runtime_call(std::uint32_t at) {
-    return wasm::call(at);
 }
 
 #endif
@@ -287,12 +297,18 @@ extern "C" std::uint32_t xpute_conformance_boot(std::uint32_t seed) {
     // A range past the memory's end means a runtime sized the memory for
     // another core.
     ensure(std::uint64_t{range} + MEM_BYTES <= wasm::mem_sz(), Errno::enomem, range);
-    set_call(runtime_call);
     return boot(mem::core(), range, runtime_now, seed);
 }
 
-extern "C" double run(double) {
-    return turn(mem::core(), range_at());
+namespace {
+// What the module's runtime hands the core, as its imports.
+BootInfo boot_info() {
+    return BootInfo{.host = wasm::host(), .now = runtime_now};
+}
+} // namespace
+
+extern "C" double run(double deadline_ms) {
+    return entry::run(deadline_ms, boot_info, [](double, Boot) { return turn(mem::core(), range_at()); });
 }
 
 #else
@@ -302,11 +318,30 @@ extern "C" double run(double) {
 // which stays unset.
 Memory memory_of(std::uint8_t *mem) noexcept { return Memory(reinterpret_cast<std::uintptr_t>(mem), MEM_BYTES); }
 
-extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now, xpute_conformance_call call, std::uint32_t seed) {
-    set_call(call);
+// What the native runtime hands the core at boot: its region, its clock and
+// its host, which the core's first turn installs (`boot_info`).
+namespace {
+struct Native {
+    std::uint8_t *mem;
+    xpute_conformance_now now;
+    Host host;
+};
+
+Native native;
+
+BootInfo boot_info() {
+    return BootInfo{.host = native.host, .now = native.now};
+}
+} // namespace
+
+extern "C" std::uint32_t xpute_conformance_boot(std::uint8_t *mem, xpute_conformance_now now, xpute_conformance_receive receive, xpute_conformance_send send,
+                                                xpute_conformance_call call, std::uint32_t seed) {
+    native = Native{.mem = mem, .now = now, .host = Host{.receive = receive, .send = send, .call = call}};
     return boot(memory_of(mem), 0, now, seed);
 }
 
-extern "C" double xpute_conformance_run(std::uint8_t *mem, double) { return turn(memory_of(mem), 0); }
+extern "C" double xpute_conformance_run(std::uint8_t *, double deadline_ms) {
+    return entry::run(deadline_ms, boot_info, [](double, Boot) { return turn(memory_of(native.mem), 0); });
+}
 
 #endif

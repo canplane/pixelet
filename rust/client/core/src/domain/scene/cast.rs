@@ -6,7 +6,7 @@
 //! domain/layer/terrain/clipmap.rs, the placed objects by
 //! domain/layer/object/store.rs `objects`.
 
-use pxl_engine::eye;
+use pxl_engine::{eye, object};
 use pxl_spec::space::camera::eye::Observation;
 use xpute_core::global::Global;
 
@@ -63,7 +63,7 @@ pub fn eye(o: &Observation, edit: &RenderEdit, steps: bool) -> Option<[u32; eye:
             ]
         })
     };
-    words[eye::CARVE..eye::CARVE + eye::CUT_WORDS].copy_from_slice(&cut(edit.carve));
-    words[eye::HIDE..eye::HIDE + eye::CUT_WORDS].copy_from_slice(&cut(edit.hide));
+    words[eye::CARVE..eye::CARVE + object::CUT_WORDS].copy_from_slice(&cut(edit.carve));
+    words[eye::HIDE..eye::HIDE + object::CUT_WORDS].copy_from_slice(&cut(edit.hide));
     Some(words)
 }

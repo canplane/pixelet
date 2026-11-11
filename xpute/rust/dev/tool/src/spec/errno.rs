@@ -1,7 +1,8 @@
 // xpute-tool/spec/errno.rs
 
 //! This generates xpute's errno table for TypeScript, Rust and C++ from one
-//! JSON. The numbers cross the ring, so every side must agree on them.
+//! JSON. The numbers cross between the core and its runtime, so every side
+//! must agree on them.
 
 use serde::Deserialize;
 
@@ -93,7 +94,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }
     flush(&mut run, &mut rs);
     rs.extend(["}".to_string(), String::new()]);
-    // A code from across the ring is read into a member once, where it
+    // A code from the other side is read into a member once, where it
     // arrives; a number no member has is the sender's error.
     rs.extend(
         [
@@ -160,6 +161,25 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 m.val,
                 json_str(&format!("{}: {}", m.name, m.doc))
             ));
+        }
+    }
+    ts.push("};".into());
+    ts.extend(
+        [
+            "",
+            "/** An errno's name, as the Rust and C++ ends print it (`errno_name`),",
+            " * or the number for one no member has. */",
+            "export function errno_name(errnum: i32): string {",
+            "  return ERRNO_NAME[errnum] ?? `${errnum}`;",
+            "}",
+            "",
+            "const ERRNO_NAME: Record<number, string> = {",
+        ]
+        .map(String::from),
+    );
+    for e in &spec.entries {
+        if let ErrnoEntry::Member(m) = e {
+            ts.push(format!("  [{}]: {},", m.val, json_str(&m.name)));
         }
     }
     ts.push("};".into());

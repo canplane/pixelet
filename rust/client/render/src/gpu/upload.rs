@@ -34,8 +34,8 @@ pub struct UploadTable {
     pub(crate) cnt: u32,
     pub(crate) bytes: u64,
     missing: u32,
-    /// The layout every upload's group is in (record.rs `UPLOAD_LAYOUT`),
-    /// made on the device as the first is grouped.
+    /// The layout every upload's group is in (record.rs `UPLOAD_LAYOUT`), made on the device
+    /// as the first is asked for (`layout`).
     layout: Option<Layout>,
 }
 
@@ -251,14 +251,19 @@ impl UploadTable {
     pub fn group(&mut self, g: &Gpu, handle: u32) -> Option<u32> {
         let i = self.find(handle).filter(|&i| self.buf[i] != 0)?;
         if self.group[i] == 0 {
-            let layout = *self.layout.get_or_insert_with(|| g.layout(&UPLOAD_LAYOUT));
             let id = g.bind_group(
-                layout,
+                self.layout(g),
                 &[buf_entry(0, self.buf[i]), buf_entry(1, self.buf[i])],
             );
             self.group[i] = id;
         }
         Some(self.group[i])
+    }
+
+    /// The layout every upload's group is in, made the first time it is asked for. A copy of
+    /// an upload is grouped in it too (pass/mark.rs `CopyCache`).
+    pub(crate) fn layout(&mut self, g: &Gpu) -> Layout {
+        *self.layout.get_or_insert_with(|| g.layout(&UPLOAD_LAYOUT))
     }
 
     /// The buffer that holds `handle`'s bytes on the device, and its size in bytes, which is

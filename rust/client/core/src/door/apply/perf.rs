@@ -12,7 +12,7 @@ use crate::perf::window::perf_window_start;
 use crate::perf::window::perf_window_stop;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
-use xpute_core::ipc::door::Outcome;
+use xpute_core::io::door::Outcome;
 use xpute_core::mem::off_of;
 use xpute_core::mem::off_of_slice;
 use xpute_kit::status::errno::Errno;
@@ -52,7 +52,8 @@ fn read_timed(read: impl FnOnce() -> u32) -> u32 {
 
 /// The address of STAT_SLOT's words (perf.json): the statistics over
 /// `window_ms` and the current values. The client reads them in place rather
-/// than as a post, because `Door::post` asserts on a full completion ring.
+/// than in a frame, whose packet takes no more than the manifest's
+/// `pkt_bytes`.
 /// The words stay valid until the next turn.
 fn stats_words(window_ms: Option<f64>) -> u32 {
     use crate::perf::spec::STAT_SLOT;

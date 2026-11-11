@@ -91,6 +91,27 @@ record replaces it.
 - The rate does not make a frame faster. At 142.5 ms the hot S23 stays under 11-06's
   30–40 Hz.
 
+## Closed, 11-11
+
+**A frame keeps no bound of its own**, closed with the user. What a frame does is its
+answer, and what may be cut is detail, which is bounded: the asks a frame takes
+(`ASKS_A_FRAME`) and the bricks a turn fills (`fill_share`), a coarser level read
+meanwhile. The load across frames is `auto`'s, judged 500 ms of frames at a time
+(pxl-core `resolution.rs`). A costly frame holds the screen for its own length and hands
+nothing on: its rays end in it, and at most two frames are on the GPU (`FRAME_LATENCY`).
+
+Other engines bound a frame no more:
+
+- Unreal's panic switch cuts no frame. After two or more frames in a row over budget it
+  lowers the resolution at once, the outside controller answering sooner, and its
+  documents say a sudden spike is not foreseen. The line above that sets it against this
+  record had it wrong.
+- Unity's HDRP judges the mean over groups of frames.
+- What others bound a frame is bringing in or updating data, shown coarser or stale
+  meanwhile: Nanite's page installs, virtual textures' uploads, Lumen's surface cache,
+  voxel engines' meshing. That is the budget of detail here. Stale data, as Lumen shows,
+  is not taken: the eye draws no stale voxel since 11-08.
+
 ## Sources
 
 - [Nanite root pages](https://forums.unrealengine.com/t/preventing-nanite-pop-in-issues-in-2d-rendering-use-cases/2512906)
@@ -99,5 +120,10 @@ record replaces it.
 - [Lumen surface cache](https://forums.unrealengine.com/t/surface-cache-statistics/2675304)
 - [RayCaching](https://uu.diva-portal.org/smash/get/diva2:1375732/FULLTEXT01.pdf)
 - [Unreal dynamic resolution](https://dev.epicgames.com/documentation/unreal-engine/dynamic-resolution-in-unreal-engine)
+- [Unreal's over-budget frame count](https://indxzero.github.io/ue544cvarwiki/articles/r.dynamicres.maxconsecutiveoverbudgetgpuframecount)
+- [Unity HDRP dynamic resolution](https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@13.1/manual/Dynamic-Resolution)
+- [Unreal virtual texture uploads a frame](https://forums.unrealengine.com/t/sorting-rvt-requests-according-to-distance/2600435)
+- [Lumen performance guide](https://dev.epicgames.com/documentation/unreal-engine/lumen-performance-guide-for-unreal-engine)
+- [Voxel Tools, performance](https://voxel-tools.readthedocs.io/en/latest/performance/)
 - [Android frame pacing](https://developer.android.com/games/sdk/frame-pacing)
 - [Application SpaceWarp](https://developers.meta.com/horizon/documentation/native/android/os-app-spacewarp)

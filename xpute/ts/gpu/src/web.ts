@@ -2,7 +2,7 @@
 
 /**
  * This is a page's GPU, granted to a core (gpu.ts `Gpu`). It asks for
- * the device the core's machine declares, and asks again after a loss or a
+ * the device the core's manifest declares, and asks again after a loss or a
  * refusal while the page is shown. The runtime (runtime.ts) runs the core's
  * stream on the device as each turn returns. The core is told when a device
  * answers. The canvases the program binds are kept by the core's handle. A
@@ -10,19 +10,16 @@
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import type { Canvas, Gpu, GpuGrant, GpuState } from "./gpu.ts";
-import { each_rec } from "@xpute/runtime/ipc/stream.ts";
+import {
+  Acquirer,
+  type Canvas,
+  type Gpu,
+  type GpuGrant,
+  type GpuState,
+} from "./gpu.ts";
+import { each_rec } from "@xpute/runtime/io/stream.ts";
+import { say } from "@xpute/runtime/say.ts";
 import { GpuRuntime } from "./runtime.ts";
-
-/** This is how long the page waits between asks for a device. Safari gives no
- * device for a while after it loses its GPU process, so the page keeps asking.
- * The first retry waits too, or an adapter that returns an already lost device
- * would loop at once. */
-const RETRY_MS = 1000;
-
-/** This is how many asks are made before the GPU is given up: about ten seconds
- * of them. */
-const TRIES = 10;
 
 export class WebGpu implements Gpu, CanvasBinder {
   private runtime: GpuRuntime | null = null;
@@ -30,12 +27,7 @@ export class WebGpu implements Gpu, CanvasBinder {
   /** These are told of the GPU's state, and `state` is the last one told. */
   private readonly _reports: ((state: GpuState) => void)[] = [];
   private state: GpuState | null = null;
-  /** This counts the asks made since a device last answered, so an outage is
-   * logged once as it starts and once as it ends. */
-  private tries = 0;
-  /** A device has answered before, so giving up now is losing the GPU, not
-   * lacking one. */
-  private had = false;
+  private acquirer: Acquirer | null = null;
   /** These are the bound canvases in the order they were bound, so a device
    * acquired again binds each slot's newest handle last. */
   private readonly canvases = new Map<u32, Canvas>();
@@ -49,11 +41,20 @@ export class WebGpu implements Gpu, CanvasBinder {
     this.granted = to;
     const why = absent();
     if (why !== null) {
-      console.error(`[gpu] cannot draw here: ${why}`);
+      say(`[gpu] cannot draw here: ${why}`);
       this.tell(why);
       return;
     }
-    this.request();
+    // A hidden page draws nothing, so an ask waits until the page is shown. A
+    // worker has no document, so the core's runtime says whether the page is
+    // shown (`GpuGrant.shown`).
+    this.acquirer = new Acquirer({
+      acquire: () => this.acquire(),
+      tell: (state) => this.tell(state),
+      ready: () => to.ready(),
+      shown: () => to.shown(),
+    });
+    this.acquirer.request();
   }
 
   /** Runs the stream as the turn returns. With no device the records are
@@ -83,54 +84,6 @@ export class WebGpu implements Gpu, CanvasBinder {
     for (const report of this._reports) report(state);
   }
 
-  private request(): void {
-    this.tries += 1;
-    void this.acquire().then(
-      (answered) => {
-        if (!answered) {
-          if (this.tries === 1) {
-            console.warn(
-              `[gpu] no adapter answered; asking every ${RETRY_MS} ms while the page is shown`,
-            );
-          }
-          if (this.tries >= TRIES) {
-            console.error(
-              `[gpu] no adapter answered in ${this.tries} requests; nothing can be drawn`,
-            );
-            this.tell(this.had ? "lost" : "missing");
-            return;
-          }
-          this.tell("waiting");
-          return this.retry();
-        }
-        this.tell("present");
-        this.had = true;
-        if (this.tries > 1) {
-          console.info(`[gpu] a device answered after ${this.tries} requests`);
-        }
-        this.tries = 0;
-        this.granted?.ready();
-      },
-      (err) => {
-        console.error(
-          "[gpu] the device request failed; nothing can be drawn:",
-          err,
-        );
-        this.tell(this.had ? "lost" : "missing");
-      },
-    );
-  }
-
-  /** A hidden page draws nothing, so an ask waits until the page is shown
-   * and spends no try. A worker has no document, so the core's runtime says
-   * whether the page is shown (`GpuGrant.shown`). */
-  private retry(): void {
-    setTimeout(
-      () => (this.granted!.shown() ? this.request() : this.retry()),
-      RETRY_MS,
-    );
-  }
-
   /** This answers false where no adapter answered. The core learns what the
    * device is from the device's block, which it asks the runtime for. */
   private async acquire(): Promise<boolean> {
@@ -154,17 +107,16 @@ export class WebGpu implements Gpu, CanvasBinder {
       d,
       () => this.granted!.mem,
       () => this.granted?.wake(),
+      this.granted!.cfg,
     );
     d.lost.then((info) => {
       // Nothing here destroys the device, so every loss is the browser's.
       // The runtime tells the core, and this class asks for a new device.
-      console.warn(`[gpu] device lost (${info.reason}): ${info.message}`);
+      say(`[gpu] device lost (${info.reason}): ${info.message}`);
       if (this.runtime !== h) return;
       this.runtime = null;
-      this.tell("waiting");
-      this.retry();
+      this.acquirer!.lost();
     });
-    d.onuncapturederror = (e) => console.error(`[gpu] ${e.error.message}`);
     this.canvases.forEach((canvas, handle) =>
       h.bind(handle, canvas.getContext("webgpu")!),
     );

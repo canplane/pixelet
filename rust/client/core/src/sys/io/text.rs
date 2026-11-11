@@ -4,9 +4,7 @@
 //! device (text.json TEXT_LAYOUT, TEXT_RASTER). The platform answers each
 //! call before the call returns, and writes the answer at the call's `at`
 //! (text_answer.json `LAYOUT_ANSWER`, `LINE`). Each world frame keeps only the
-//! answers that the frame before it read. A native test has no runtime, so a
-//! text there is one line of a fixed width for each character, and it is
-//! never drawn.
+//! answers that the frame before it read.
 
 use std::collections::hash_map::Entry;
 
@@ -14,7 +12,6 @@ use fnv::FnvHashMap;
 use xpute_core::global::Global;
 use xpute_core::mem::off_of_slice;
 
-use crate::sys::io::runtime::door;
 use crate::sys::io::text_answer_spec::{LAYOUT_ANSWER, LINE};
 use crate::sys::io::text_spec::text::{text_layout, text_raster};
 use crate::sys::io::text_spec::{TextLayout, TextRaster};
@@ -27,7 +24,7 @@ type LayoutKey = (u32, u64, u64, String);
 type RasterKey = (u32, u64, u32, u32, u32, u64, String);
 
 struct Answer<T> {
-    /// Whether the answer was read since the last frame's rise.
+    /// Whether the answer was read since the last frame's start.
     read: bool,
     at: T,
 }
@@ -57,9 +54,6 @@ pub fn text_lines(weight: u32, px: f64, max_width: f64, text_in: &str) -> Option
     let answer = match text().layouts.entry(key) {
         Entry::Occupied(o) => o.into_mut(),
         Entry::Vacant(v) => {
-            if door().is_none() {
-                return Some(unlaid(text_in));
-            }
             // A text breaks into no more lines than it has characters, and an
             // empty text into one.
             let lines = text_in.chars().count().max(1) as u32;
@@ -113,7 +107,7 @@ fn unlaid(text_in: &str) -> Vec<(&str, f64)> {
 
 /// One line of `text_in` drawn from `x` into `size` pixels of RGBA, top row
 /// first. `color` is 0xRRGGBBAA. The pixels stay at least until the next
-/// frame's rise. It is None where the platform could not draw the text this
+/// frame's start. It is None where the platform could not draw the text this
 /// turn, and a later turn asks again.
 pub fn text_pixels(
     weight: u32,
@@ -135,7 +129,6 @@ pub fn text_pixels(
     let answer = match text().rasters.entry(key) {
         Entry::Occupied(o) => o.into_mut(),
         Entry::Vacant(v) => {
-            door()?;
             let mut at = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
             let call = TextRaster {
                 weight,
@@ -155,15 +148,15 @@ pub fn text_pixels(
         }
     };
     answer.read = true;
-    // SAFETY: an answer's pixels are let go only at the next frame's rise or
+    // SAFETY: an answer's pixels are let go only at the next frame's start or
     // at a forget, and a reader reads them within the frame they were handed
     // out in.
     Some(unsafe { core::slice::from_raw_parts(answer.at.as_ptr(), answer.at.len()) })
 }
 
-/// Called as a frame rises. The answers that the frame before did not read
+/// Called as a frame starts. The answers that the frame before did not read
 /// are dropped.
-pub fn text_rise() {
+pub fn text_drop_unread() {
     let t = text();
     t.layouts.retain(|_, a| core::mem::take(&mut a.read));
     t.rasters.retain(|_, a| core::mem::take(&mut a.read));

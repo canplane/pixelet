@@ -5,7 +5,7 @@
 //! reversed as `mat4::perspective` makes it: the nearer depth is the greater.
 //! A frame draws only what moved: one that reads as the last stands and
 //! submits nothing, and one where only the listed draws that mark moved is
-//! drawn through the gate, in its claimed tiles alone.
+//! drawn through the gate, in its damaged tiles alone.
 
 use pxl_content::generation::GROUPS;
 use pxl_engine::eye;
@@ -39,8 +39,7 @@ use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, device, frame_begin, frame_commit, gpu, on_device_lost,
     pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes, Device, Entry,
-    Format, Gpu, Group, Image, Load, RenderContext, TimestampWrites, TrackedRenderPass,
-    WORLD_COLOR,
+    Format, Gpu, Group, Image, Load, RenderContext, TrackedRenderPass, WORLD_COLOR,
 };
 use crate::gpu::draw::{drifts, uniform_of, Draw, DrawTable, Position};
 use crate::gpu::draw::{
@@ -72,7 +71,7 @@ use crate::pass::impostor::ImpostorPass;
 use crate::pass::location::LocationPass;
 use crate::pass::mark::{CopyCache, DamageInput};
 use crate::pass::marker::MarkerPass;
-use crate::pass::model::{frame_layout, on_skins_lost, Extent, FrameGroup, Stage};
+use crate::pass::model::{frame_entries, frame_layout, on_skins_lost, Extent, Stage};
 use crate::pass::propagate::{self, Propagate};
 use crate::pass::resolve::Resolve;
 use crate::pass::shadow::{self, Shadow};
@@ -284,7 +283,7 @@ struct FrameRead {
 /// What a frame draws. It is a pure function of what the frame read
 /// (`FrameRead`), and renderer.test.rs explores it whole. `quiet` holds where
 /// nothing moved but the jitter. `masked` holds where only the listed draws
-/// that mark moved: the frame draws again only its claimed tiles. Otherwise
+/// that mark moved: the frame draws again only its damaged tiles. Otherwise
 /// the frame is drawn whole and its pixels are cast whole, as they also are
 /// where the light's receivers are marked afresh off every pixel's walk.
 /// `unchanged` holds where nothing moved, not even the jitter, and nothing is
@@ -371,7 +370,7 @@ pub struct FrameStat {
     /// What changed that cast the light's map this frame, a bit each in
     /// `LIGHT_CHANGED`'s order (ray/cast.rs `light_changed`), or 0 where it
     /// cast none. `decor_rects` counts the rects that marked decor's slots to
-    /// generate again (gpu/generator.rs `marked_rects`), or 0 where none did.
+    /// generate again (gpu/generator.rs `rect_cnt`), or 0 where none did.
     pub light_changed: f64,
     pub decor_rects: f64,
     /// The ray counts of the eye's cast and of the light's from an earlier
@@ -423,7 +422,11 @@ static DRAWN_FRAMES: Global<f64> = Global::new();
 /// counts names its counts by it (ray/count.rs `Frame`). A frame that
 /// stands takes no number, and nothing counts in it.
 fn next_frame() -> f64 {
-    *DRAWN_FRAMES.get(|| 0.0) + 1.0
+    drawn_frames() + 1.0
+}
+
+pub fn drawn_frames() -> f64 {
+    *DRAWN_FRAMES.get(|| 0.0)
 }
 
 pub fn on_gpu_lost() {
@@ -449,9 +452,6 @@ pub fn on_surface_closed(s: Surface) {
 
 pub struct Renderer {
     align: u32,
-    /// The spans' query set (`Gpu::spans`), or 0 where the device keeps no
-    /// timestamps. Then no frame is timed.
-    query_set: u32,
     /// For each read on its way back (`Gpu::submit_frame`), the world's pixels
     /// and the number of the frame whose spans it timed.
     read_px: [f64; api::READS],
@@ -463,8 +463,10 @@ pub struct Renderer {
     ghost: Pipeline,
     draws_buf: u32,
     draws_bytes: u32,
-    bind_group: u32,
-    model_group: FrameGroup,
+    /// The ghost box's group 0 (`box_groups`).
+    box_group: Group,
+    /// The model passes' group 0 (pass/model.rs `frame_entries`).
+    model_group: Group,
     shadow: Shadow,
     /// Whether the shadow map is cast and drawn this frame. It is while the
     /// map is made (`Shadow::on`) and the sun or the moon is up (`prepare`).
@@ -515,7 +517,7 @@ pub struct Renderer {
     marks: [Group; 2],
     light_mark: Group,
     /// The light map's tiles, each as wide as a tile of the light's cast
-    /// (pxl-engine `light::TILE`). A tile is claimed only in the frame it
+    /// (pxl-engine `light::TILE`). A tile is damaged only in the frame it
     /// changed in, since the map gathers nothing over frames (gpu/tile.rs).
     light_tiles: TileGrid,
     /// The uploads that the marking draws read, as the last frame drew them
@@ -569,17 +571,17 @@ impl Renderer {
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
         let shadow = Shadow::new(g, &mut pipelines);
-        let model_group = FrameGroup::new(
+        let mut model_group = Group::default();
+        model_group.set(
             g,
             frame_layout(g, &mut pipelines),
-            frame_buf,
-            shadow.entries(1),
-            air,
+            &frame_entries(frame_buf, shadow.entries(1), air),
         );
-        let query_set = if device.timestamps { g.spans() } else { 0 };
+        if device.timestamps {
+            g.spans();
+        }
         let mut r = Renderer {
             align: device.align,
-            query_set,
             read_px: [0.0; api::READS],
             read_frame: [0.0; api::READS],
             ghost: pipelines.build_world(g, PIPELINE_GHOST_BOX),
@@ -621,7 +623,7 @@ impl Renderer {
             sky,
             draws_buf,
             draws_bytes: DRAWS_INIT * 4,
-            bind_group: 0,
+            box_group: Group::default(),
             model_group,
             shadow,
             shadows: false,
@@ -715,13 +717,14 @@ impl Renderer {
     fn shadows_made(&mut self, g: &Gpu, on: bool) {
         self.screen.light_made(g, on);
         if self.shadow.sync(g, on) {
-            self.model_group.release();
-            self.model_group = FrameGroup::new(
+            self.model_group.set(
                 g,
                 frame_layout(g, &mut self.pipelines),
-                self.frame_buf,
-                self.shadow.entries(1),
-                self.atmosphere.entries(),
+                &frame_entries(
+                    self.frame_buf,
+                    self.shadow.entries(1),
+                    self.atmosphere.entries(),
+                ),
             );
             self.box_groups(g);
         }
@@ -731,10 +734,9 @@ impl Renderer {
     /// and the draws' uniforms. It also hands the draws' buffer to the skinned
     /// and the location passes, and the lit entries to the screen pass.
     fn box_groups(&mut self, g: &Gpu) {
-        release(self.bind_group);
         let mut e = self.lit_entries(self.frame_buf);
         e.push(buf_entry(3, self.draws_buf));
-        self.bind_group = g.bind_group(self.ghost.layouts[0], &e);
+        self.box_group.set(g, self.ghost.layouts[0], &e);
         self.skinned_mesh.set_draws(g, self.draws_buf);
         self.location.set_draws(g, self.draws_buf);
         let lit = self.lit_entries(self.frame_buf);
@@ -852,7 +854,7 @@ impl Renderer {
     fn draw_ghost_box(&self, pass: &mut TrackedRenderPass, draws: &DrawTable) {
         for d in draws.of(PIPELINE_GHOST_BOX) {
             pass.set_pipeline(self.ghost.id);
-            pass.set_bind_group(0, self.bind_group, &[]);
+            pass.set_bind_group(0, self.box_group.id(), &[]);
             pass.draw(BOX_VERTICES, d[1], d[3] * BOX_VERTICES, 0);
         }
     }
@@ -909,10 +911,9 @@ impl Renderer {
     /// once, for `CopyCache` to keep (pass/mark.rs).
     fn marks_read(&self, draws: &DrawTable, out: &mut Vec<u32>) {
         out.clear();
-        self.skinned_mesh
-            .marks_read(draws.of(PIPELINE_SKINNED), out);
+        self.skinned_mesh.marks_read(draws, out);
         self.decor.marks_read(draws, out);
-        self.impostor.marks_read(draws.of(PIPELINE_IMPOSTOR), out);
+        self.impostor.marks_read(draws, out);
         self.location.marks_read(draws, out);
         out.sort_unstable();
         out.dedup();
@@ -1124,11 +1125,11 @@ impl Renderer {
             core::array::from_fn(|k| self.decor.model_of(g, k as u32, b).map_or(0, |m| m.2));
         // The frame is drawn through the gate where nothing but the listed
         // draws that mark moved so far. What moved marks its tiles, and the
-        // tiles still gathering since they last changed stay claimed. The
-        // cast takes the claimed tiles and casts its pixels there alone.
+        // tiles still gathering since they last changed stay damaged. The
+        // cast takes the damaged tiles and casts its pixels there alone.
         let partial = read.same() && !beside_changed(update, &touched);
         // The tiles are sized before anything binds them. The pixels' cast
-        // casts the claimed tiles, its samples' raster draws them, and the
+        // casts the damaged tiles, its samples' raster draws them, and the
         // rays' screen pass draws them. The depth's bounds are sized with
         // them; the world's pass sets those bounds where the shadows are cast
         // (`Propagate::set_bounds`).
@@ -1161,18 +1162,14 @@ impl Renderer {
         // still shown.
         read.read(&[u32::from(self.screen.generated().is_some())]);
         self.prepare_character_surfaces(g, input.character_surfaces);
-        let q = self.query_set;
-        // A query that no pass wrote holds an earlier frame's value, so the
-        // frame passes along which queries were written.
-        let mut stamps: [TimestampWrites; GPU_SPAN_NAMES] =
-            core::array::from_fn(|span| TimestampWrites::of(q, span));
+        g.stamps_open();
         // What outlives the frame, the impostors' bake and the air's tables,
         // is drawn and submitted ahead of it. From here on the frame only
         // describes itself.
         let ahead = g.encoder();
         let baked = self.impostor.bake(g, ahead, &self.decor, b);
         read.mark(baked);
-        let mut ctx = RenderContext::new(g, ahead, &mut stamps);
+        let mut ctx = RenderContext::new(g, ahead);
         let (tables, exposed, copied) = self.atmosphere.draw(&mut ctx);
         read.mark(tables);
         if baked || tables || exposed || copied {
@@ -1245,10 +1242,10 @@ impl Renderer {
         // gated and the light's cast left the world as it was, the map is drawn
         // through its gate in the tiles the changed casters set, or not at
         // all. Only the GPU knows which tiles they set, so the map draws its
-        // claimed tiles within the box they cover, which the GPU keeps and
+        // damaged tiles within the box they cover, which the GPU keeps and
         // counts (`TileGrid::rect_args`).
         // The CPU hands the map no mark. Through the gate the casters mark
-        // their tiles by drawing, and a map drawn whole claims every tile by
+        // their tiles by drawing, and a map drawn whole damages every tile by
         // its uniform. Its stamp is read by no frame while the map's
         // `damage_frames` is 1 (`TileGrid::damage`).
         let cast = self.screen.kind() != FrameKind::plain;
@@ -1268,10 +1265,10 @@ impl Renderer {
             self.propagate
                 .prepare(g, &input.view_proj, light, spread, SHADOW_SIZE);
         }
-        // Where only the listed draws that mark moved, the claimed tiles are
+        // Where only the listed draws that mark moved, the damaged tiles are
         // those that what moved marked, however much of the screen they and
         // the tiles still gathering cover. Where anything else moved, every
-        // tile is claimed. The gate, the resolve and the finish draw these
+        // tile is damaged. The gate, the resolve and the finish draw these
         // tiles.
         self.resolve
             .tiles
@@ -1287,14 +1284,10 @@ impl Renderer {
         // stream is then dropped whole, and the screen keeps the last frame.
         frame_begin();
         let encoder = g.encoder();
-        let mut ctx = RenderContext::new(g, encoder, &mut stamps);
+        let mut ctx = RenderContext::new(g, encoder);
         // The screen's tiles' words come first, then its marks, then the
         // light's marks, each before anything reads them. A dropped
         // frame leaves them as they were, and the next frame is drawn whole.
-        // A span times from its first pass to its last (gpu/api.rs
-        // `TimestampWrites`), so the passes of the screen's damage (`damage`),
-        // the shadow map's (`shadow_damage`) and the propagation (`propagate`) are
-        // each encoded together.
         self.resolve.tiles.dispatch_damage(&mut ctx);
         if screen_marking {
             // A draw as it is is marked by this frame's words, and as it was by
@@ -1322,7 +1315,7 @@ impl Renderer {
             pass.end();
         }
         // In a frame through the gate, generated decor is drawn only where it
-        // meets the tiles the frame claims. It is culled to them now that the
+        // meets the tiles the frame damages. It is culled to them now that the
         // marks are made (`Generator::cull`).
         let generated = if masked {
             let tiles = &self.resolve.tiles;
@@ -1360,7 +1353,7 @@ impl Renderer {
             // The GPU counts the box the marks cover into the gate's draw.
             self.light_tiles.dispatch_rect_args(&mut ctx);
             // Generated decor is drawn into the map only where it meets the
-            // tiles the map claims, as the screen's gate draws it
+            // tiles the map damages, as the screen's gate draws it
             // (`Generator::cull`).
             let (light_frame, _) = self.shadow.frame_and_map();
             self.screen
@@ -1426,7 +1419,7 @@ impl Renderer {
             !a.end() && !masked
         };
         // A frame not drawn whole keeps the rest as the last frame left it.
-        // Its gate first clears the claimed tiles and writes this frame's
+        // Its gate first clears the damaged tiles and writes this frame's
         // number into their stencil, and every draw after it passes only
         // there (`Stencil`). The stencil is kept from frame to frame and
         // cleared only when the numbers come round. A frame drawn whole
@@ -1455,12 +1448,12 @@ impl Renderer {
         // occlusion reads. The impostors have no depth pipeline, so they are
         // drawn only here and cast no shadow.
         self.decor
-            .draw_generated(&mut pass, generated, b, Stage::Lit, self.model_group.frame);
+            .draw_generated(&mut pass, generated, b, Stage::Lit, self.model_group.id());
         self.screen.draw(&mut pass);
         // The impostors go last among the opaque pipelines, so the pixels
         // behind the alpha-tested fragments they discard are already filled.
         self.impostor
-            .draw_generated(&mut pass, generated, GROUPS, self.model_group.frame);
+            .draw_generated(&mut pass, generated, GROUPS, self.model_group.id());
         if ao_found {
             // The pass is split around the occlusion only where the occlusion
             // is found again, in a frame drawn whole. The occlusion reads the
@@ -1494,7 +1487,7 @@ impl Renderer {
         // The characters, whose clips play, and the clouds the core lists, the
         // cumulus, which the wind carries, are drawn over the world against
         // its depth. The occlusion is not laid over them.
-        let frame_group = self.model_group.frame;
+        let frame_group = self.model_group.id();
         self.skinned_mesh.draw(
             &mut pass,
             draws.of(PIPELINE_SKINNED),
@@ -1511,7 +1504,7 @@ impl Renderer {
         self.location.draw_zone(&mut pass, &draws, b);
         self.draw_ghost_box(&mut pass, &draws);
         self.decor
-            .draw_ghosts(&mut pass, &draws, b, self.model_group.frame);
+            .draw_ghosts(&mut pass, &draws, b, self.model_group.id());
         pass.end();
         let squares = self.resolve.tiles.squares();
         // The frame words the listed draws were drawn with are kept, so the
@@ -1521,7 +1514,7 @@ impl Renderer {
         self.last_frame_uploads
             .keep(g, ctx.encoder, &read_uploads, &touched, b);
         // The depth's bounds that the propagation reads are set in the tiles
-        // the world's pass drew, which are the claimed ones. There are none
+        // the world's pass drew, which are the damaged ones. There are none
         // without the shadows, and the propagation runs only with them. The
         // frame the shadows come on in moves the frame words
         // (`SHADOW_STRENGTH`), so that frame is drawn whole and sets every
@@ -1531,7 +1524,7 @@ impl Renderer {
         }
         let gathered = self.resolve.draw(&mut ctx, world, masked);
         // The finish runs at the canvas's size, in its own span. A frame not
-        // drawn whole finishes again only its claimed tiles
+        // drawn whole finishes again only its damaged tiles
         // (screen_tile.wgsl), unless the debug pass drew into the screen's
         // depth last frame.
         self.finish.draw(
@@ -1557,17 +1550,12 @@ impl Renderer {
             Self::character_surfaces(input.character_surfaces),
             uploads_changed || tables || exposed,
         );
-        let written = stamps
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| s.is_written())
-            .fold(0, |m, (k, _)| m | 1 << k);
-        let read_slot = g.submit_frame(encoder, written);
+        let read_slot = g.submit_frame(encoder);
         release(canvas_view);
         // The read that landed was asked by an earlier frame and times that
         // frame. This frame's figures are kept by the read it was asked in,
         // until that read lands.
-        let gpu = g.stamps_complete().filter(|_| q != 0).map(|r| GpuRead {
+        let gpu = g.stamps_complete().map(|r| GpuRead {
             frame: self.read_frame[r],
             spans: core::array::from_fn(|k| g.gpu_ms(k as u32)),
             busy_ms: g.gpu_busy_ms(),
@@ -1781,14 +1769,14 @@ fn targets(g: &Gpu, s: &mut Surface) {
     s.screen = screen;
 }
 
-/// Holds the edits named by the decor of a cast that was handed and never
+/// Holds the damage named by the decor of a cast that was handed and never
 /// drawn, for the next frame that is drawn.
-fn carry_edits(cast: &Option<Cast>) {
+fn carry_damage(cast: &Option<Cast>) {
     let Some(d) = cast.as_ref().map(|c| &c.decor) else {
         return;
     };
     if let Some(r) = RENDERER.get(|| None).as_mut() {
-        r.screen.carry_edits(d.edits);
+        r.screen.carry_damage(d.damage);
     }
 }
 
@@ -1798,7 +1786,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
     REDRAW.set(false);
     let world = surfaces().find(|s| s.role == surface_role::WORLD);
     let (Some(g), Some(device), Some(world)) = (gpu(), device(), world) else {
-        carry_edits(&input.cast);
+        carry_damage(&input.cast);
         take_lists(RENDERER.get(|| None).as_ref().and(gpu()), &input.update);
         if let Some(r) = RENDERER.get(|| None).as_mut() {
             r.put_off();
@@ -1826,7 +1814,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
         }
     }
     if !slot.as_mut().is_some_and(|r| r.ready(g)) {
-        carry_edits(&input.cast);
+        carry_damage(&input.cast);
         take_lists(slot.as_ref().map(|_| g), &input.update);
         if let Some(r) = slot.as_mut() {
             r.put_off();

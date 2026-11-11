@@ -167,7 +167,7 @@ impl Propagate {
     }
 
     /// Sets the depth's bound in the tiles the world's pass drew this frame, which are the
-    /// screen's claimed tiles (`set_groups`), `tiles` across and down. Its time is counted with
+    /// screen's damaged tiles (`set_groups`), `tiles` across and down. Its time is counted with
     /// the resolve, which follows it.
     pub fn set_bounds(&self, ctx: &mut RenderContext, tiles: [u32; 2]) {
         let g = ctx.g;

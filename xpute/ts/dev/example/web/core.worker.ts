@@ -1,6 +1,7 @@
 // @xpute/example/web/core.worker.ts
 
 import { serve } from "@xpute/runtime";
-import { manifest } from "./core.ts";
+import { MANIFEST } from "../manifest.spec.ts";
+import { core } from "./core.ts";
 
-void serve(manifest);
+void serve(MANIFEST, core);

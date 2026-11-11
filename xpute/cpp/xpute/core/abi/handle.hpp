@@ -1,9 +1,11 @@
 // cpp/xpute/core/abi/handle.hpp
 
 // A handle is `slot | generation << 16`: a slot and that slot's generation, so
-// a handle kept past its release names nothing that takes the slot later. The
-// other side reads only the slot. Slot 0 is never handed out, so 0 is never a
-// handle.
+// a handle kept past its release names nothing that takes the slot later. 0 is
+// never a handle. Slot 0 is a handle with no value, issued by the door under
+// its next generation (`tag_of`, io/door.hpp `Door::tag`), for a request or a
+// written file, and is read whole; slots from 1 hold a value, issued by the
+// table that holds it, and the other side reads such a handle's slot alone.
 
 #pragma once
 
@@ -25,33 +27,26 @@ constexpr std::uint32_t handle_slot(std::uint32_t handle) noexcept {
     return handle & ((1u << SLOT_BITS) - 1);
 }
 
+// The handle with no value under `generation`, which is never 0: slot 0's.
+constexpr std::uint32_t tag_of(std::uint16_t generation) noexcept { return std::uint32_t{generation} << SLOT_BITS; }
+
 // A table has N slots, each holding a `T` while its handle is live. A slot
 // given back is the next one taken. All-zero bytes are an empty table (for a
 // `T` whose zero is its default), so a table can lie in memory that starts
 // zeroed, or be emptied by zeroing it, without ever being built and moved.
 template <class T, std::size_t N> class Table {
-    static_assert(N >= 2 && N <= (std::size_t{1} << SLOT_BITS), "a slot is 16 bits, and slot 0 is never handed out");
+    static_assert(N >= 2 && N <= (std::size_t{1} << SLOT_BITS), "a slot is 16 bits, and slot 0 holds no value");
 
   public:
     // `insert` answers none when every slot is taken.
     std::optional<std::uint32_t> insert(T val) noexcept {
-        std::uint32_t slot;
-        if (free_ != 0) {
-            slot = free_;
-            free_ = slots_[slot].next;
-        } else if (std::size_t{top_} + 1 < N) {
-            slot = ++top_;
-        } else {
-            return std::nullopt;
-        }
-        Slot &s = slots_[slot];
-        // The generation is never 0, so no handle is 0.
-        auto generation = static_cast<std::uint16_t>(s.generation + 1);
-        s.generation = generation == 0 ? 1 : generation;
+        std::optional<std::uint32_t> slot = take();
+        if (!slot) return std::nullopt;
+        Slot &s = slots_[*slot];
         s.epoch = epoch_ + 1;
         s.val = std::move(val);
         cnt_++;
-        return handle_of(slot, s.generation);
+        return handle_of(*slot, s.generation);
     }
 
     bool live(std::uint32_t handle) const noexcept {
@@ -98,13 +93,31 @@ template <class T, std::size_t N> class Table {
     }
 
   private:
+    // Takes the next free slot under its next generation.
+    std::optional<std::uint32_t> take() noexcept {
+        std::uint32_t slot;
+        if (free_ != 0) {
+            slot = free_;
+            free_ = slots_[slot].next;
+        } else if (std::size_t{top_} + 1 < N) {
+            slot = ++top_;
+        } else {
+            return std::nullopt;
+        }
+        Slot &s = slots_[slot];
+        // The generation is never 0, so no handle is 0.
+        auto generation = static_cast<std::uint16_t>(s.generation + 1);
+        s.generation = generation == 0 ? 1 : generation;
+        return slot;
+    }
+
     struct Slot {
         std::uint16_t generation = 0;
         // One more than the epoch in which the slot was taken, or 0 while the
         // slot is free. It has 64 bits so that no program lives through enough
         // epochs for the count to wrap round to a stale value.
         std::uint64_t epoch = 0;
-        // The next slot in the free list. Slot 0 is never handed out, so 0
+        // The next slot in the free list. Slot 0 holds no value, so 0
         // ends the list.
         std::uint32_t next = 0;
         T val{};

@@ -155,7 +155,7 @@ fn zooms_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
 /// (pxl-engine `eye`, pxl-render eye_bind.wgsl). The cast sends one ray
 /// through the middle of each drawn pixel. The eye's position is written in
 /// Q3 as the rays' origin, which may stand over the world (pxl-spec
-/// `world::origin`). The scene writes the preview's cuts (`eye::CUTS`).
+/// `world::origin`). The scene writes the preview's cuts (`object::CUTS`).
 /// None without a screen.
 pub fn gpu_cast(o: &Observation, words: &mut [u32; eye::WORDS]) -> Option<()> {
     let lens = o.frustum?.lens()?;

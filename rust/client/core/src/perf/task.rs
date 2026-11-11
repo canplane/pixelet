@@ -5,29 +5,34 @@
 //! (`TaskRecord::of`), when the door takes the scheduler's end event (door.rs
 //! `run`).
 
+use core::fmt::Write;
 use core::mem::{offset_of, size_of};
 
 use fnv::FnvHashMap;
 use xpute_core::global::Global;
+use xpute_core::io::fs::Token;
 use xpute_core::mem::off_of_slice;
+use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::perf::spec::TASK;
 use crate::perf::word::{words, AsWords};
-use crate::sys::io::demand::{PhaseList, PHASES_MAX};
+use crate::sys::io::demand::{PhaseList, Stream, PHASES_MAX};
 use crate::sys::io::failure::Exit;
-use crate::sys::io::file::{path_of, PATH_BYTES};
+use crate::sys::io::file::{self, Text, KEY_BYTES};
 use crate::sys::io::request::Attempt;
 
-/// Room for a path's bytes, rounded up to whole words.
+/// Room for a path's name as text, rounded up to whole words: a quadkey, or
+/// a u32 in decimal.
 const TASK_PATH_BYTES: usize = 3 * 8;
-const _: () = assert!(PATH_BYTES <= TASK_PATH_BYTES);
+const _: () = assert!(KEY_BYTES <= TASK_PATH_BYTES);
+const _: () = assert!((u32::MAX.ilog10() as usize) < TASK_PATH_BYTES);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TaskRecord {
     pub stream: f64,
-    /// The path the task opened, zero past its end.
+    /// The name of the path the task opened, as text, zero past its end.
     pub path: [u8; TASK_PATH_BYTES],
     pub priority: f64,
     pub enqueue_ms: f64,
@@ -54,10 +59,19 @@ words!(TaskRecord, TASK::WORDS,
     at_file => TASK::at_file, at_file_bytes => TASK::at_file_bytes, at_line => TASK::at_line, phase_cnt => TASK::phase_cnt, phase_ids => TASK::phase_ids, phase_vals => TASK::phase_vals,
 );
 
-fn path_bytes(path: &[u8]) -> [u8; TASK_PATH_BYTES] {
-    let mut out = [0; TASK_PATH_BYTES];
-    out[..path.len()].copy_from_slice(path);
-    out
+/// The name of the file `stream`'s want `id` opens, its path's last token,
+/// as text: its quadkey, or its number in decimal. It is zero past its end,
+/// and all zero for a want that opens no file.
+fn path_bytes(stream: Stream, id: u64) -> [u8; TASK_PATH_BYTES] {
+    let mut out = Text::EMPTY;
+    file::with_path(stream, id, |path| match path.last() {
+        Some(Token::U32(n)) => write!(out, "{n}"),
+        Some(Token::Str(key)) => out.write_str(key),
+        None => Ok(()),
+    })
+    .transpose()
+    .or_bug(Errno::EOVERFLOW);
+    out.bytes
 }
 
 impl TaskRecord {
@@ -66,7 +80,7 @@ impl TaskRecord {
     pub fn of(a: &Attempt, at: f64, exit: Exit, phases: Option<PhaseList>) -> TaskRecord {
         let mut row = TaskRecord {
             stream: a.stream as u32 as f64,
-            path: path_bytes(path_of(a.stream, a.id).as_bytes()),
+            path: path_bytes(a.stream, a.id),
             priority: a.rank.class as f64 + a.rank.dist,
             enqueue_ms: a.enqueue_ms,
             start_ms: a.start_ms,

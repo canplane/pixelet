@@ -18,8 +18,7 @@ pub struct Arena<T: Default> {
     pub mem: Vec<T>,
 
     pub max_cap: u32,
-    cap_of: u32,
-    len_of: u32,
+    len: u32,
 }
 
 impl<T: Default> Arena<T> {
@@ -27,23 +26,22 @@ impl<T: Default> Arena<T> {
         let mut arena = Arena {
             mem: Vec::new(),
             max_cap: cfg.max_cap,
-            cap_of: 0,
-            len_of: 0,
+            len: 0,
         };
         arena.grow(cfg.init_cap.min(cfg.max_cap))?;
         Ok(arena)
     }
 
     pub fn cap(&self) -> u32 {
-        self.cap_of
+        self.mem.len() as u32
     }
 
     pub fn len(&self) -> u32 {
-        self.len_of
+        self.len
     }
 
     pub fn is_empty(&self) -> bool {
-        self.len_of == 0
+        self.len == 0
     }
 
     pub fn get(&mut self, idx: u32) -> &mut T {
@@ -51,42 +49,38 @@ impl<T: Default> Arena<T> {
     }
 
     pub fn alloc(&mut self) -> Result<&mut T, MarshalError> {
-        if self.len_of >= self.cap_of {
-            self.grow(self.len_of.saturating_add(1))?;
+        if self.len >= self.cap() {
+            self.grow(self.len.saturating_add(1))?;
         }
 
-        let i = self.len_of as usize;
-        self.len_of += 1;
+        let i = self.len as usize;
+        self.len += 1;
         Ok(&mut self.mem[i])
     }
 
     pub fn reserve(&mut self, cnt: u32) -> Result<(), MarshalError> {
-        self.grow(self.len_of.saturating_add(cnt))
+        self.grow(self.len.saturating_add(cnt))
     }
 
     /// Rewinds to `new_len` slots. A `new_len` above the current length is a
     /// bug, not a way to grow.
     pub fn truncate(&mut self, new_len: u32) {
-        crate::ensure!(new_len <= self.len_of, EINVAL, new_len, self.len_of);
-        self.len_of = new_len;
+        crate::ensure!(new_len <= self.len, EINVAL, new_len, self.len);
+        self.len = new_len;
     }
 
     /// The capacity doubles but stops at `max_cap`, so a request is refused
     /// only when it does not fit under `max_cap`.
     fn grow(&mut self, req: u32) -> Result<(), MarshalError> {
-        if req <= self.cap_of {
+        let cap = self.cap();
+        if req <= cap {
             return Ok(());
         }
         if req > self.max_cap {
             return Err(MarshalError::new(Errno::EOVERFLOW));
         }
-        let new_cap = self.cap_of.saturating_mul(2).clamp(req, self.max_cap);
-
-        self.mem.reserve(new_cap as usize - self.mem.len());
-        for _ in self.cap_of..new_cap {
-            self.mem.push(T::default());
-        }
-        self.cap_of = new_cap;
+        let new_cap = cap.saturating_mul(2).clamp(req, self.max_cap);
+        self.mem.resize_with(new_cap as usize, T::default);
         Ok(())
     }
 

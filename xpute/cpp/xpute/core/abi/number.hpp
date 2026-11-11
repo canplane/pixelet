@@ -1,7 +1,7 @@
 // cpp/xpute/core/abi/number.hpp
 
 // A number a packet carries is read as its field's type. What the runtime
-// sends is checked here, so that no code past the door (ipc/door.hpp) meets a
+// sends is checked here, so that no code past the door (io/door.hpp) meets a
 // NaN, an infinity, or an integer forced into range by a cast.
 
 #pragma once

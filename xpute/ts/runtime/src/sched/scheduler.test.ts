@@ -1,13 +1,13 @@
 // @xpute/runtime/sched/scheduler.test.ts
 
-/** Every wake the core asks for, at once or in `n` ms, is rung only at a
- * moment the policy gives and admits. The doorbell and the policy are
- * stand-ins that record the rings and the moments asked for. */
+/** Every wake the core asks for, at once or in `n` ms, is run only at a
+ * moment the policy gives and admits. The connection and the policy are
+ * stand-ins that record the turns and the moments asked for. */
 
 import { afterEach, test, vi } from "vitest";
 import assert from "node:assert/strict";
 
-import type { Doorbell } from "../ipc/doorbell.ts";
+import type { Connection } from "../io/connection.ts";
 import type { Grant, SchedulingPolicy } from "./policy.ts";
 import { Scheduler } from "./scheduler.ts";
 import { NO_WAKE } from "./wake.ts";
@@ -19,11 +19,9 @@ afterEach(() => {
 function setup() {
   const kicks: number[] = [];
   const moments: ((now: number) => void)[] = [];
-  const doorbell = {
+  const connection = {
     terminated: false,
-    on_wake: null as ((wake_ms: number) => void) | null,
-    on_turn: null as ((turn_ms: number, wake_ms: number) => void) | null,
-    ring: (deadline_ms: number) => (kicks.push(deadline_ms), -1),
+    run: (deadline_ms: number) => (kicks.push(deadline_ms), -1),
   };
   const policy: SchedulingPolicy = {
     next: (consider) => moments.push(consider),
@@ -32,18 +30,19 @@ function setup() {
     observe: () => {},
   };
   const scheduler = new Scheduler(
-    doorbell as unknown as Doorbell,
+    connection as unknown as Connection,
     policy,
     () => {},
   );
-  /** Hears what the thread told that the scheduler did not kick, as
-   * `Doorbell.turns` hears it: first the turn, then its wake. */
+  /** Hears a turn the scheduler did not kick, as the connection tells it: first
+   * the turn, then its wake. */
   const heard = (wake_ms: number) => {
-    doorbell.on_turn!(1, wake_ms);
-    doorbell.on_wake!(wake_ms);
+    scheduler.on_turn();
+    scheduler.on_wake(wake_ms);
   };
+  const wake = (wake_ms: number) => scheduler.on_wake(wake_ms);
   const moment = () => moments.shift()?.(performance.now());
-  return { scheduler, wake: doorbell.on_wake!, heard, kicks, moments, moment };
+  return { scheduler, wake, heard, kicks, moments, moment };
 }
 
 test("a thread core's timed wake waits for its time and the policy's moment", () => {

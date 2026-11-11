@@ -40,6 +40,25 @@ words!(RecordingStateSection, NOW::recording_state::WORDS,
     recording => NOW::recording_state::recording, elapsed_ms => NOW::recording_state::elapsed_ms, truncated => NOW::recording_state::truncated,
 );
 
+/// Whether the core draws, as perf.json's NOW `draw` says.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct DrawSection {
+    pub turns: f64,
+    pub frames: f64,
+    pub refused_admit: f64,
+    pub refused_stream: f64,
+    pub generation: f64,
+    pub status: f64,
+    pub errors: f64,
+    pub unfinished: f64,
+}
+
+words!(DrawSection, NOW::draw::WORDS,
+    turns => NOW::draw::turns, frames => NOW::draw::frames, refused_admit => NOW::draw::refused_admit, refused_stream => NOW::draw::refused_stream,
+    generation => NOW::draw::generation, status => NOW::draw::status, errors => NOW::draw::errors, unfinished => NOW::draw::unfinished,
+);
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FrameSection {
@@ -235,9 +254,6 @@ pub struct RecordingSection {
     pub heap_range_max_bytes: f64,
     pub heap_largest_free_min_bytes: f64,
     pub heap_refusals: f64,
-    pub ring_cq_peak: f64,
-    pub ring_sq_peak: f64,
-    pub ring_left_peak: f64,
     pub body_slots_peak: f64,
     pub terrain_refusals: f64,
 }
@@ -263,9 +279,6 @@ impl RecordingSection {
                     .min(h.heap_largest_free_min_bytes)
             },
             heap_refusals: h.heap_refusals,
-            ring_cq_peak: max(self.ring_cq_peak, h.ring_cq_peak),
-            ring_sq_peak: max(self.ring_sq_peak, h.ring_sq_peak),
-            ring_left_peak: max(self.ring_left_peak, h.ring_left_peak),
             body_slots_peak: max(self.body_slots_peak, h.body_slots_peak),
             terrain_refusals: self.terrain_refusals + h.terrain_refusals,
         };
@@ -277,7 +290,5 @@ words!(RecordingSection, STAT::recording::WORDS,
     heap_run_max_bytes => STAT::recording::heap_run_max_bytes, heap_slot_max_bytes => STAT::recording::heap_slot_max_bytes,
     heap_range_max_bytes => STAT::recording::heap_range_max_bytes,
     heap_largest_free_min_bytes => STAT::recording::heap_largest_free_min_bytes,
-    heap_refusals => STAT::recording::heap_refusals, ring_cq_peak => STAT::recording::ring_cq_peak,
-    ring_sq_peak => STAT::recording::ring_sq_peak, ring_left_peak => STAT::recording::ring_left_peak,
-    body_slots_peak => STAT::recording::body_slots_peak, terrain_refusals => STAT::recording::terrain_refusals,
+    heap_refusals => STAT::recording::heap_refusals, body_slots_peak => STAT::recording::body_slots_peak, terrain_refusals => STAT::recording::terrain_refusals,
 );

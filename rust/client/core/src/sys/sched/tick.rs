@@ -1,36 +1,74 @@
 // pxl-core/sys/sched/tick.rs
 
-//! The core's one tick: xpute's tick run over the core's phases
-//! (sys/sched/phase.spec.rs), with the share of the budget each phase leaves
-//! to the phases after it.
+//! The core's tick: each phase's steps run in order under one budget, the time
+//! to the deadline, each phase leaving the phases after it a share of it
+//! (sys/sched/phase.spec.rs). The turn runs the steps (turn.rs `world_tick`).
 
-use xpute_core::global::Global;
-pub use xpute_core::sched::tick::TickContext;
-use xpute_core::sched::tick::{Tick, TickPolicy};
+use xpute_core::clock::now;
+use xpute_core::sched::pass::Pass;
 
 use crate::sys::sched::param;
-use crate::sys::sched::phase_spec::Phase;
+use crate::sys::sched::phase_spec::{Phase, PHASES};
 
-/// The share of the budget each phase must leave to the phases after it.
-/// Only the visible phase leaves one: the content's share.
-const RESERVE: [f64; Phase::ALL.len()] = {
-    let mut share = [0.0; Phase::ALL.len()];
-    share[Phase::visible as usize] = param::CONTENT_SHARE;
-    share
-};
+/// The share of the budget a phase must leave to the phases after it. Only the
+/// visible phase leaves one: the content's share.
+fn reserve(phase: Phase) -> f64 {
+    match phase {
+        Phase::visible => param::CONTENT_SHARE,
+        _ => 0.0,
+    }
+}
 
-const POLICY: TickPolicy = TickPolicy {
-    hard_slack_ms: param::HARD_SLACK_MS,
-    reserve: &RESERVE,
-};
+pub struct TickContext {
+    pub delta: f64,
+    pub pass: Pass,
+    phase_ms: [f64; PHASES],
+    invalidated: bool,
+}
 
-/// Room for the steps registered at boot, with some to spare.
-const STEPS: usize = 32;
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct TickReport {
+    pub budget_ms: f64,
+    pub phase_ms: [f64; PHASES],
+    pub total_ms: f64,
+    pub invalidated: bool,
+}
 
-static TICK: Global<Tick<STEPS>> = Global::new();
+impl TickContext {
+    /// A tick of a turn that started at `t0` and whose deadline is
+    /// `deadline_ms` after it, stepping `delta` seconds.
+    pub fn new(delta: f64, deadline_ms: f64, t0: f64) -> TickContext {
+        TickContext {
+            delta,
+            pass: Pass::new(deadline_ms, t0, param::HARD_SLACK_MS),
+            phase_ms: [0.0; PHASES],
+            invalidated: false,
+        }
+    }
 
-/// The core's tick. A step's `name` is an index into the step names of the
-/// caller that registered it; the turn's names are in turn/step.spec.rs.
-pub fn tick() -> &'static mut Tick<STEPS> {
-    TICK.get(|| Tick::new(POLICY))
+    /// Marks the tick as wanting another turn. The core is run only when
+    /// something asks for a turn, so a step that animates calls this on every
+    /// tick.
+    pub fn invalidate(&mut self) {
+        self.invalidated = true;
+    }
+
+    /// Runs `phase`'s steps, which leave the phases after it their share.
+    pub fn phase(&mut self, phase: Phase, steps: impl FnOnce(&mut TickContext)) {
+        let start = now();
+        self.pass.reserve_ms = self.pass.total_ms * reserve(phase);
+        steps(self);
+        self.pass.reserve_ms = 0.0;
+        self.phase_ms[phase as usize] = now() - start;
+    }
+
+    /// What the tick that began at `start` came to.
+    pub fn report(&self, start: f64) -> TickReport {
+        TickReport {
+            budget_ms: self.pass.total_ms,
+            phase_ms: self.phase_ms,
+            total_ms: now() - start,
+            invalidated: self.invalidated,
+        }
+    }
 }

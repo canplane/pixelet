@@ -21,7 +21,7 @@ use xpute_core::global::Global;
 #[derive(Default)]
 struct ChangeLog {
     ground: Vec<Quadrant>,
-    written: Vec<Aabb>,
+    damage: Vec<Aabb>,
 }
 
 static CHANGES: Global<ChangeLog> = Global::new();
@@ -38,13 +38,14 @@ pub(crate) fn take() -> bool {
     TerrainTile::tile_cache().take_changed(&mut c.ground);
     c.ground.sort_unstable();
     c.ground.dedup();
-    store::take_written(&mut c.written);
-    !c.ground.is_empty() || !c.written.is_empty()
+    store::take_damage(&mut c.damage);
+    !c.ground.is_empty() || !c.damage.is_empty()
 }
 
-/// The boxes where objects were written, as the last take found them.
-pub fn written_boxes() -> &'static [Aabb] {
-    &changes().written
+/// The damage: the boxes where objects were written, as the last take found
+/// them.
+pub fn damage() -> &'static [Aabb] {
+    &changes().damage
 }
 
 /// Whether a change touches the columns over `xy`, whose corners are in units
@@ -82,7 +83,7 @@ fn touched(xy: [[f64; 2]; 2], layer: &[Quadrant], counted: impl Fn(&Quadrant) ->
         .filter(|t| counted(t))
         .chain(layer)
         .map(|t| t.region())
-        .chain(c.written.iter().copied());
+        .chain(c.damage.iter().copied());
     regions.any(|r| nearest_box(&r, about).shares(columns))
 }
 

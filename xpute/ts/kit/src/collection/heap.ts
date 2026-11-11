@@ -27,129 +27,64 @@ export interface Element<K extends primitive, T> {
   val: T;
 }
 
-export class MinHeap<K extends primitive, T> {
-  readonly a: Element<K, T>[];
+/** Whether a key goes before another: the smaller in a min-heap, the larger
+ * in a max-heap. */
+type Ahead = (x: primitive, y: primitive) => boolean;
 
-  // external storage (DOD-friendly): we operate on caller-owned array.
-  constructor(a: Element<K, T>[]) {
-    this.a = a;
+const MIN: Ahead = (x, y) => x < y;
+const MAX: Ahead = (x, y) => x > y;
+
+/**
+ * heapify(a, root, sz, ahead)
+ * - restore the heap property of the subtree at `root`, within a[0..sz)
+ * - assumes child subtrees already satisfy heap property.
+ */
+function heapify<K extends primitive, T>(
+  a: Element<K, T>[],
+  root: u32,
+  sz: u32,
+  ahead: Ahead,
+): void {
+  let i = root;
+  const e = a[i];
+
+  for (let child = (i << 1) + 1; child < sz; child = (i << 1) + 1) {
+    const r = child + 1;
+    if (r < sz && ahead(a[r].key, a[child].key)) child = r;
+
+    if (!ahead(a[child].key, e.key)) break;
+    a[i] = a[child];
+    i = child;
   }
 
-  size(): u32 {
-    return this.a.length;
-  }
+  a[i] = e;
+}
 
-  empty(): boolean {
-    return this.a.length === 0;
-  }
-
-  top(): Element<K, T> | undefined {
-    return this.a.length ? this.a[0] : undefined;
-  }
-
-  /**
-   * heapify(a, root, sz)
-   * - restore MIN-heap property of the subtree at `root`, within a[0..sz)
-   * - assumes child subtrees already satisfy heap property.
-   */
-  static heapify<K extends primitive, T>(
-    a: Element<K, T>[],
-    root: u32,
-    sz: u32,
-  ): void {
-    let i = root;
-    const e = a[i];
-
-    for (let child = (i << 1) + 1; child < sz; child = (i << 1) + 1) {
-      const r = child + 1;
-      if (r < sz && a[r].key < a[child].key) child = r;
-
-      if (a[child].key < e.key) {
-        a[i] = a[child];
-        i = child;
-      } else {
-        break;
-      }
-    }
-
-    a[i] = e;
-  }
-
-  /**
-   * build(a)
-   * - bottom-up heapify, O(n)
-   */
-  static build<K extends primitive, T>(a: Element<K, T>[]): void {
-    for (let i = (a.length >> 1) - 1; i >= 0; i--) {
-      MinHeap.heapify(a, i, a.length);
-    }
-  }
-
-  build(): void {
-    MinHeap.build(this.a);
-  }
-
-  /**
-   * push(e)
-   * - hole sift-up (MIN)
-   */
-  push(e: Element<K, T>): void {
-    let i = this.a.length;
-    this.a.push(e);
-
-    for (; i > 0;) {
-      const p = (i - 1) >> 1;
-      if (this.a[p].key <= e.key) break;
-      this.a[i] = this.a[p];
-      i = p;
-    }
-
-    this.a[i] = e;
-  }
-
-  /**
-   * pop() -> Element | undefined
-   * - removes and returns root (minimum key)
-   */
-  pop(): Element<K, T> | undefined {
-    const n = this.a.length;
-    if (n === 0) return undefined;
-
-    const out = this.a[0];
-
-    if (n === 1) {
-      this.a.pop();
-      return out;
-    }
-
-    this.a[0] = this.a.pop()!;
-    MinHeap.heapify(this.a, 0, n - 1);
-    return out;
-  }
-
-  /**
-   * replace_root(e)
-   * - overwrite root and restore heap property
-   * - requires non-empty heap
-   */
-  replace_root(e: Element<K, T>): void {
-    this.a[0] = e;
-    MinHeap.heapify(this.a, 0, this.a.length);
+/**
+ * build(a, ahead)
+ * - bottom-up heapify, O(n)
+ */
+function build<K extends primitive, T>(a: Element<K, T>[], ahead: Ahead): void {
+  for (let i = (a.length >> 1) - 1; i >= 0; i--) {
+    heapify(a, i, a.length, ahead);
   }
 }
 
-export class MaxHeap<K extends primitive, T> {
+class Heap<K extends primitive, T> {
   readonly a: Element<K, T>[];
+  private readonly _ahead: Ahead;
 
-  constructor(a: Element<K, T>[]) {
+  // external storage (DOD-friendly): we operate on caller-owned array.
+  constructor(a: Element<K, T>[], ahead: Ahead) {
     this.a = a;
+    this._ahead = ahead;
   }
 
-  size(): u32 {
+  len(): u32 {
     return this.a.length;
   }
 
-  empty(): boolean {
+  is_empty(): boolean {
     return this.a.length === 0;
   }
 
@@ -157,47 +92,13 @@ export class MaxHeap<K extends primitive, T> {
     return this.a.length ? this.a[0] : undefined;
   }
 
-  /**
-   * heapify(a, root, sz)
-   * - restore MAX-heap property of the subtree at `root`, within a[0..sz)
-   * - assumes child subtrees already satisfy heap property.
-   */
-  static heapify<K extends primitive, T>(
-    a: Element<K, T>[],
-    root: u32,
-    sz: u32,
-  ): void {
-    let i = root;
-    const e = a[i];
-
-    for (let child = (i << 1) + 1; child < sz; child = (i << 1) + 1) {
-      const r = child + 1;
-      if (r < sz && a[r].key > a[child].key) child = r;
-
-      if (a[child].key > e.key) {
-        a[i] = a[child];
-        i = child;
-      } else {
-        break;
-      }
-    }
-
-    a[i] = e;
-  }
-
-  static build<K extends primitive, T>(a: Element<K, T>[]): void {
-    for (let i = (a.length >> 1) - 1; i >= 0; i--) {
-      MaxHeap.heapify(a, i, a.length);
-    }
-  }
-
   build(): void {
-    MaxHeap.build(this.a);
+    build(this.a, this._ahead);
   }
 
   /**
    * push(e)
-   * - hole sift-up (MAX)
+   * - hole sift-up
    */
   push(e: Element<K, T>): void {
     let i = this.a.length;
@@ -205,7 +106,7 @@ export class MaxHeap<K extends primitive, T> {
 
     for (; i > 0;) {
       const p = (i - 1) >> 1;
-      if (this.a[p].key >= e.key) break;
+      if (!this._ahead(e.key, this.a[p].key)) break;
       this.a[i] = this.a[p];
       i = p;
     }
@@ -215,7 +116,7 @@ export class MaxHeap<K extends primitive, T> {
 
   /**
    * pop() -> Element | undefined
-   * - removes and returns root (maximum key)
+   * - removes and returns the top
    */
   pop(): Element<K, T> | undefined {
     const n = this.a.length;
@@ -229,7 +130,7 @@ export class MaxHeap<K extends primitive, T> {
     }
 
     this.a[0] = this.a.pop()!;
-    MaxHeap.heapify(this.a, 0, n - 1);
+    heapify(this.a, 0, n - 1, this._ahead);
     return out;
   }
 
@@ -240,7 +141,43 @@ export class MaxHeap<K extends primitive, T> {
    */
   replace_root(e: Element<K, T>): void {
     this.a[0] = e;
-    MaxHeap.heapify(this.a, 0, this.a.length);
+    heapify(this.a, 0, this.a.length, this._ahead);
+  }
+}
+
+export class MinHeap<K extends primitive, T> extends Heap<K, T> {
+  constructor(a: Element<K, T>[]) {
+    super(a, MIN);
+  }
+
+  static heapify<K extends primitive, T>(
+    a: Element<K, T>[],
+    root: u32,
+    sz: u32,
+  ): void {
+    heapify(a, root, sz, MIN);
+  }
+
+  static build<K extends primitive, T>(a: Element<K, T>[]): void {
+    build(a, MIN);
+  }
+}
+
+export class MaxHeap<K extends primitive, T> extends Heap<K, T> {
+  constructor(a: Element<K, T>[]) {
+    super(a, MAX);
+  }
+
+  static heapify<K extends primitive, T>(
+    a: Element<K, T>[],
+    root: u32,
+    sz: u32,
+  ): void {
+    heapify(a, root, sz, MAX);
+  }
+
+  static build<K extends primitive, T>(a: Element<K, T>[]): void {
+    build(a, MAX);
   }
 }
 

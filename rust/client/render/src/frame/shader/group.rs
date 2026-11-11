@@ -12,8 +12,7 @@ use crate::frame::shader::floor;
 use crate::frame::shader::record::*;
 use pxl_engine::{raster, ray};
 
-/// A pass of the light's map binds the light's head at this binding, and a pass of the eye
-/// binds the eye's, which names no light.
+/// A pass of the light's map binds the light's head at this binding.
 pub const HEADER_BINDING: u32 = 11;
 
 /// The group of the walks over the node cache alone of the lattice's runs, which are the runs
@@ -77,7 +76,7 @@ const _: () = assert!(
 /// The group of `cast_cs` (cast.wgsl, ray/cast.rs `px_group`): the eye, the rays, the
 /// beam's words, the node cache it lists the marked pixels in and reads the visible voxel's
 /// entry from, the visibility buffer, the words of the pixels to walk again, and the list of
-/// the claimed tiles.
+/// the damaged tiles.
 pub const CAST_GROUP: [u32; 21] = [
     0,
     COMPUTE,
@@ -240,18 +239,19 @@ const _: () = assert!(
     "a light receivers' pass's group binds past WebGPU's floor"
 );
 
-/// The cast's world group, over which `cell_cs`, `light_cell_cs` and `forget_cs` run: the eye,
-/// the beam rays' words that take the cells' starts, the node cache, and the head, by which a
-/// pass that both observers run reads which observer it runs for. The shadow map's passes
-/// bind the group over the light's buffers (ray/cast.rs `light_groups`).
-pub const WORLD_GROUP: [u32; 12] = [
+/// The cast's world group of the eye's passes over the world, `cell_cs` and `forget_cs`: the
+/// eye, the beam rays' words that take the cells' starts, and the node cache.
+pub const WORLD_GROUP: [u32; 9] = [
+    0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE_RW,
+];
+
+/// The group of the light's cells' pass, `light_cell_cs`: the eye, the light's list, which
+/// takes the cells' starts, and the light's head (ray/cast.rs `light_groups`).
+pub const LIGHT_WORLD_GROUP: [u32; 9] = [
     0,
     COMPUTE,
     UNIFORM,
     8,
-    COMPUTE,
-    STORAGE_RW,
-    9,
     COMPUTE,
     STORAGE_RW,
     HEADER_BINDING,
@@ -259,10 +259,30 @@ pub const WORLD_GROUP: [u32; 12] = [
     UNIFORM,
 ];
 
-/// The group of the holes' queue's walks over the node cache alone (queue_walk.wgsl), for
-/// either observer: the eye, the rays or the map they write, the observer's list, the node
-/// cache they read, the queue's words and the observer's head.
-pub const QUEUE_GROUP: [u32; 18] = [
+/// The group of the eye's holes' queue's walks over the node cache alone (queue_walk.wgsl over
+/// hole.eye.wgsl): the eye, the rays they write, the beam's words, the node cache they read and
+/// the queue's words.
+pub const QUEUE_GROUP: [u32; 15] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    8,
+    COMPUTE,
+    STORAGE_RW,
+    9,
+    COMPUTE,
+    STORAGE,
+    10,
+    COMPUTE,
+    STORAGE_RW,
+];
+
+/// `QUEUE_GROUP` with the light's head at `HEADER_BINDING`, for the light's map, whose list
+/// takes the beam's words' place and whose map the rays'.
+pub const LIGHT_QUEUE_GROUP: [u32; 18] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -283,9 +303,43 @@ pub const QUEUE_GROUP: [u32; 18] = [
     UNIFORM,
 ];
 
-/// The group of the holes' queue's last walk (queue_last.wgsl): the eye, the world's buffers,
-/// the rays or the map, the observer's list, the node cache it writes and the observer's head.
-pub const QUEUE_LAST_GROUP: [u32; 33] = [
+/// The group of the eye's holes' queue's last walk (queue_last.wgsl over hole.eye.wgsl): the
+/// eye, the world's buffers, the rays, the beam's words and the node cache it writes.
+pub const QUEUE_LAST_GROUP: [u32; 30] = [
+    0,
+    COMPUTE,
+    UNIFORM,
+    1,
+    COMPUTE,
+    STORAGE,
+    2,
+    COMPUTE,
+    STORAGE,
+    3,
+    COMPUTE,
+    STORAGE_TEXTURE_RW,
+    4,
+    COMPUTE,
+    STORAGE,
+    5,
+    COMPUTE,
+    STORAGE,
+    6,
+    COMPUTE,
+    STORAGE,
+    7,
+    COMPUTE,
+    STORAGE,
+    8,
+    COMPUTE,
+    STORAGE_RW,
+    9,
+    COMPUTE,
+    STORAGE_RW,
+];
+
+/// `QUEUE_LAST_GROUP` with the light's head at `HEADER_BINDING`, for the light's map.
+pub const LIGHT_QUEUE_LAST_GROUP: [u32; 33] = [
     0,
     COMPUTE,
     UNIFORM,
@@ -372,21 +426,20 @@ pub const LIGHT_LATTICE_LAST_GROUP: [u32; 30] = [
 ];
 
 const _: () = assert!(
-    floor::holds(&[&WORLD_GROUP])
+    floor::holds(&[&LIGHT_WORLD_GROUP])
         && floor::holds(&[&QUEUE_GROUP])
         && floor::holds(&[&LATTICE_ASK_GROUP])
         && floor::holds(&[&LIGHT_LATTICE_LAST_GROUP])
-        && floor::holds(&[&QUEUE_LAST_GROUP]),
+        && floor::holds(&[&LIGHT_QUEUE_GROUP])
+        && floor::holds(&[&LIGHT_QUEUE_LAST_GROUP]),
     "the cast's world's group or the holes' queue's binds past WebGPU's floor"
 );
 
 const _: () = assert!(
     binds(&[COMPUTE_CAST], &CAST_GROUP)
         && binds(&[COMPUTE_CAST_TILES], &CAST_TILES_GROUP)
-        && binds(
-            &[COMPUTE_CELL, COMPUTE_LIGHT_CELL, COMPUTE_FORGET],
-            &WORLD_GROUP
-        )
+        && binds(&[COMPUTE_CELL, COMPUTE_FORGET], &WORLD_GROUP)
+        && binds(&[COMPUTE_LIGHT_CELL], &LIGHT_WORLD_GROUP)
         && binds(
             &[
                 COMPUTE_QUEUE_SAMPLES,
@@ -418,10 +471,15 @@ const _: () = assert!(
         )
         && binds(&[COMPUTE_QUEUE, COMPUTE_QUEUE_PARKED], &QUEUE_GROUP)
         && binds(
+            &[COMPUTE_QUEUE_LIGHT, COMPUTE_QUEUE_LIGHT_PARKED],
+            &LIGHT_QUEUE_GROUP
+        )
+        && binds(
             &[COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_PARKED],
             &LATTICE_ASK_GROUP
         )
         && binds(&[COMPUTE_QUEUE_LAST], &QUEUE_LAST_GROUP)
+        && binds(&[COMPUTE_QUEUE_LAST_LIGHT], &LIGHT_QUEUE_LAST_GROUP)
         && binds(&[COMPUTE_LIGHT], &LIGHT_GROUP)
         && binds(&[COMPUTE_LIGHT_MARK_WALKED], &LIGHT_MARK_GROUP)
         && binds(&[COMPUTE_LIGHT_MARK_DRAWS], &LIGHT_MARK_DRAWS_GROUP)
@@ -606,7 +664,7 @@ pub const ARGS_GROUP: [u32; 15] = [
 
 /// The group of `decor_cull_cs` and `decor_cull_args_cs` (decor_cull.wgsl): the frame's
 /// words, the regions' uniforms and args, the instances, the gated list and its args, the box
-/// of the claimed tiles, the regions' counts and first slots, and the tiles' uniform.
+/// of the damaged tiles, the regions' counts and first slots, and the tiles' uniform.
 pub const CULL_GROUP: [u32; 27] = [
     0, COMPUTE, UNIFORM, 1, COMPUTE, STORAGE, 2, COMPUTE, STORAGE, 3, COMPUTE, STORAGE, 4, COMPUTE,
     STORAGE_RW, 5, COMPUTE, STORAGE_RW, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE, 31, COMPUTE,
@@ -645,7 +703,7 @@ pub const RECT_ARGS_GROUP: [u32; 9] = [
     0, COMPUTE, STORAGE, 1, COMPUTE, STORAGE_RW, 2, COMPUTE, UNIFORM,
 ];
 
-/// The group of the pass that finds the claimed tiles' box (damage_rect.wgsl): the box, the
+/// The group of the pass that finds the damaged tiles' box (damage_rect.wgsl): the box, the
 /// tiles' words and the tiles' uniform.
 pub const DAMAGE_RECT_GROUP: [u32; 9] = [
     0, COMPUTE, STORAGE_RW, 30, COMPUTE, STORAGE, 31, COMPUTE, UNIFORM,
@@ -816,8 +874,8 @@ pub const PIXELS_BINDS: Group = Group {
     ],
 };
 pub const LIGHT_WORLD_BINDS: Group = Group {
-    layout: &WORLD_GROUP,
-    binds: &[bind(8, LIGHT_LIST), bind(9, NODE_CACHE)],
+    layout: &LIGHT_WORLD_GROUP,
+    binds: &[bind(8, LIGHT_LIST)],
 };
 pub const WALK_BINDS: Group = Group {
     layout: &QUEUE_GROUP,
@@ -956,7 +1014,7 @@ pub const LIGHT_SLOTS_BINDS: Group = Group {
     ],
 };
 pub const LIGHT_WALK_BINDS: Group = Group {
-    layout: &QUEUE_GROUP,
+    layout: &LIGHT_QUEUE_GROUP,
     binds: &[
         bind(8, LIGHT_LIST),
         bind(9, NODE_CACHE),
@@ -968,7 +1026,7 @@ pub const LIGHT_WALK_ASK_BINDS: Group = Group {
     binds: &[bind(9, NODE_CACHE), queue_bind(ray::QUEUE_LIGHT_HOLES)],
 };
 pub const LIGHT_LAST_BINDS: Group = Group {
-    layout: &QUEUE_LAST_GROUP,
+    layout: &LIGHT_QUEUE_LAST_GROUP,
     binds: &[bind(8, LIGHT_LIST), bind(9, NODE_CACHE)],
 };
 pub const LIGHT_REC_HITS_BINDS: Group = Group {

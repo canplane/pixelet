@@ -1,6 +1,6 @@
 // xpute-gpu/encode.test.rs
 
-use xpute_core::ipc::stream::{Stream, WORD};
+use xpute_core::io::stream::{Stream, WORD};
 use xpute_kit::golden::Golden;
 
 use crate::program::{At, Encoder, PROGRAMS};

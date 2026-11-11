@@ -61,6 +61,7 @@ async function replay(): Promise<void> {
       device,
       () => mem,
       () => {},
+      { upload_chunk_bytes: 1 << 16, slow_ms: null },
     );
     const turns: string[] = [];
     g.each(`${p}.turn`, (k) => turns.push(k));
@@ -90,6 +91,7 @@ function guard(): void {
     device,
     () => new ArrayBuffer(0),
     () => {},
+    { upload_chunk_bytes: 1 << 16, slow_ms: null },
   );
   // These are slot 3, generations 1 and 2 (`slot | generation << 16`).
   const [old, newer] = [3 | (1 << 16), 3 | (2 << 16)];

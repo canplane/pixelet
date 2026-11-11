@@ -4,11 +4,12 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import type { XputeError } from "@xpute/kit/status/error.ts";
 import type { Hello } from "./remote.ts";
 import type { Manifest, Ui } from "./runtime.ts";
 import { start } from "./start.ts";
 
-const MANIFEST = { machine: { slot_bytes: 64 } } as unknown as Manifest;
+const MANIFEST = { pkt_bytes: 64 } as unknown as Manifest;
 
 function worker(): Worker & { port: Promise<MessagePort> } {
   const port = Promise.withResolvers<MessagePort>();
@@ -20,9 +21,8 @@ function worker(): Worker & { port: Promise<MessagePort> } {
 
 function ui(): Ui & { stops: number } {
   return {
-    cmds: [],
+    protocols: [],
     stops: 0,
-    on() {},
     stop() {
       this.stops++;
     },
@@ -51,7 +51,10 @@ test("start - a worker that fails after the core rose is the core's stop, told o
   const waiting = link.request(0x1001);
   w.onerror!(error as ErrorEvent);
   w.onmessageerror!(new MessageEvent("messageerror"));
-  assert.deepStrictEqual(await waiting, Errno.ENOTRECOVERABLE);
+  await assert.rejects(
+    waiting,
+    (e: XputeError) => e.errnum === Errno.ENOTRECOVERABLE,
+  );
   assert.deepStrictEqual(u.stops, 1);
   port.close();
 });

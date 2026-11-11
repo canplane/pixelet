@@ -19,13 +19,12 @@ fn beam_steps(c: vec2<u32>) -> u32 {
 }
 
 /// The tangents across and up of the ray of drawn pixel `p`, in a target of `size` pixels with
-/// row 0 at the top. The ray leaves the pixel's middle moved by the eye's jitter. This is the
-/// one place a drawn pixel's ray is worked out, and every pass that walks or marks one reads it
-/// here.
+/// row 0 at the top (px.wgsl `tan_at`). The ray leaves the pixel's middle moved by the eye's
+/// jitter. Every pass that walks or marks a drawn pixel's ray reads it here.
 fn px_tan(p: vec2<u32>, size: vec2<u32>) -> vec2<f32> {
   let jitter = vec2<f32>(eye_f32(JITTER), eye_f32(JITTER + 1u));
-  let at = (vec2<f32>(p) + vec2<f32>(0.5) + jitter) / vec2<f32>(size) * 2.0;
-  return vec2<f32>(at.x - 1.0, 1.0 - at.y) * vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
+  let tan = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
+  return tan_at(vec2<f32>(p) + vec2<f32>(0.5) + jitter, vec2<f32>(size), tan);
 }
 
 /// The screen's cell that holds the point at tangents `t`, clamped to the grid (`Grid::cell`).

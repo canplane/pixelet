@@ -166,6 +166,8 @@ function LocateCard() {
   const { t } = useTranslation();
   const location = useCore((s) => s.location.status);
   if (location === SensorStatus.Ready) return null;
+  // A watch asked for is not yet a location, so the card says it is looking.
+  const locating = location === SensorStatus.Loading;
   return (
     <AboveKeyboard inset={PANEL_EDGE}>
       <Backing
@@ -175,7 +177,8 @@ function LocateCard() {
         style={styles.locateCard}
       >
         <Pressable
-          onPress={sensor.locate}
+          onPress={() => void sensor.locate()}
+          disabled={locating}
           accessibilityRole="button"
           style={styles.locateRow}
         >
@@ -193,9 +196,9 @@ function LocateCard() {
           </Text>
           <Text
             maxFontSizeMultiplier={textScale.chrome}
-            style={styles.locateAction}
+            style={locating ? styles.locating : styles.locateAction}
           >
-            {t("world.sensors.turn_on")}
+            {locating ? t("world.search.locating") : t("world.sensors.turn_on")}
           </Text>
         </Pressable>
       </Backing>
@@ -388,6 +391,7 @@ const styles = StyleSheet.create({
     fontWeight: weight.semibold,
     color: color.action,
   },
+  locating: { ...textStyle.body, color: LABEL.secondary },
   resultsRoom: {
     paddingTop: PANEL_CONTENT_TOP,
     paddingBottom: chrome.target + 2 * PANEL_EDGE,

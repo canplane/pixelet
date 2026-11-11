@@ -3,12 +3,24 @@
 #
 #   ./script/perf/ios-safari.py <url> <dir>
 
+import ios
 from measure import measure
-from webkit import webkit
+from webkit import WebKit
 
 
-def ios_safari(url):
-    yield from webkit(url, {"browserName": "safari", "platformName": "iOS"}, None)
+class IosSafari(WebKit):
+    """The iPhone's Safari, as safaridriver's session opens it. Whether it
+    is already running is not read from here. The state is the iPhone's."""
+
+    @staticmethod
+    def running():
+        return None
+
+    def __init__(self, url):
+        super().__init__(url, {"browserName": "safari", "platformName": "iOS"}, None)
+
+    def state(self):
+        return ios.state()
 
 
-measure(ios_safari)
+measure(IosSafari)

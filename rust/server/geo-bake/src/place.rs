@@ -13,6 +13,8 @@ use pxl_spec::space::coord::zoom::{idx_of, LEAF_ZOOM};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 impl Base for PlaceTile {
+    const PRUNED: bool = true;
+
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {
         place::encode(self).map_err(|e| format!("{}: {e}", at.key()))
     }

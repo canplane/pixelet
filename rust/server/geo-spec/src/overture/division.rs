@@ -3,59 +3,53 @@
 //! Reverse geocoding over Overture's divisions, for the live search and the
 //! bake alike, read as Overture holds them: a division is a row of
 //! `overture_divisions`, its parent named by `parent_division_id`, and
-//! an area a polygon of one (`overture_division_areas`, its `division_id`). The
-//! caller runs the statements with its own client and hands the rows back
-//! here to be read into a name.
+//! an area a polygon of one (`overture_division_areas`, its `division_id`).
+//! A point is in the deepest division one of whose areas holds it, the lesser
+//! id at one depth; under that, in the child with no area whose point is
+//! nearest, and so on down (`steps`). Each reader gathers the areas and the
+//! children its own way and runs the statements with its own client: the bake
+//! a leaf tile's, the children within `BAKE_READ_DIST` of the tile, and the
+//! search a point's, the children within `BAKE_READ_DIST` of the point.
 
 use fnv::FnvHashMap;
 
 use pxl_spec::division::{DivisionPart, Subtype};
-use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, u_from_merc, u_per_m};
 
-/// How far a point looks for the nearest division where no area of it
-/// covers the point.
-pub(crate) const NEAREST_RADIUS_M: f64 = 2048.0;
+/// The divisions `$1` names and every parent of each.
+pub const LINEAGE_SQL: &str = "WITH RECURSIVE up AS (
+  SELECT d.gers_id, d.properties FROM overture_divisions d WHERE d.gers_id = ANY($1)
+  UNION SELECT p.gers_id, p.properties FROM overture_divisions p JOIN up ON p.gers_id = up.properties->>'parent_division_id'
+)
+SELECT up.gers_id, up.properties->>'subtype' AS subtype, up.properties->'names'->>'primary' AS name, up.properties->>'parent_division_id' AS parent,
+  (up.properties->'cartography'->>'prominence')::int AS prominence,
+  EXISTS (SELECT 1 FROM overture_division_areas s WHERE s.properties->>'division_id' = up.gers_id) AS area
+FROM up";
 
-/// [`NEAREST_RADIUS_M`] at the DB's `y`, in the DB's coordinates.
-pub fn radius_at(y: f64) -> f64 {
-    merc_from_u(NEAREST_RADIUS_M * u_per_m(u_from_merc(y)))
+/// Each division's children with no area, each with its point in EPSG:3857
+/// meters.
+pub type Children = FnvHashMap<String, Vec<([f64; 2], String)>>;
+
+/// The divisions a point at `at` steps down through from `first`, the
+/// division whose area holds it: to the child in `children` whose point is
+/// nearest, then to that one's nearest child, as far as there is one.
+/// Equal distances go to the lesser id, and a division already on the way down
+/// is not taken again.
+pub fn steps<'a>(first: &'a str, at: [f64; 2], children: &'a Children) -> Vec<&'a str> {
+    let mut taken = vec![first];
+    while let Some(kids) = children.get(taken[taken.len() - 1]) {
+        let nearest = kids
+            .iter()
+            .filter(|(_, id)| !taken.contains(&id.as_str()))
+            .map(|(p, id)| {
+                let [dx, dy] = [p[0] - at[0], p[1] - at[1]];
+                (dx * dx + dy * dy, id)
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0).then_with(|| a.1.cmp(b.1)));
+        let Some((_, id)) = nearest else { break };
+        taken.push(id);
+    }
+    taken.split_off(1)
 }
-
-/// The division each of a batch of points is in: `$1`/`$2` are EPSG:3857 meters, `$3` is
-/// [`radius_at`] of them, and `idx` counts the points from 1. It is the deepest division one
-/// of whose areas contains the point, or, where nearer, a child of it with no area, the
-/// nearest within reach; where no area contains the point, the nearest division within reach.
-/// Many localities have a point and no area. `approx` marks a division found by nearness.
-pub const FINEST_SQL: &str = "
-SELECT p.idx, COALESCE(c.id, a.id, n.id) AS division_id, a.id IS NULL OR c.id IS NOT NULL AS approx
-FROM unnest($1::float8[], $2::float8[], $3::float8[]) WITH ORDINALITY AS p(x, y, radius, idx)
-CROSS JOIN LATERAL (SELECT ST_SetSRID(ST_MakePoint(p.x, p.y), 3857) AS pt) g
-LEFT JOIN LATERAL (
-  SELECT d.gers_id AS id FROM overture_division_areas s JOIN overture_divisions d ON d.gers_id = s.properties->>'division_id'
-  WHERE ST_Contains(s.geom, g.pt)
-  ORDER BY jsonb_array_length(d.properties->'hierarchies'->0) DESC, d.gers_id LIMIT 1
-) a ON true
-LEFT JOIN LATERAL (
-  SELECT q.gers_id AS id FROM overture_divisions q
-  WHERE a.id IS NOT NULL AND q.properties->>'parent_division_id' = a.id AND ST_DWithin(q.geom, g.pt, p.radius)
-    AND NOT EXISTS (SELECT 1 FROM overture_division_areas qs WHERE qs.geom && q.geom AND qs.properties->>'division_id' = q.gers_id)
-  ORDER BY q.geom <-> g.pt LIMIT 1
-) c ON true
-LEFT JOIN LATERAL (
-  SELECT q.gers_id AS id FROM overture_divisions q
-  WHERE a.id IS NULL AND ST_DWithin(q.geom, g.pt, p.radius)
-  ORDER BY q.geom <-> g.pt LIMIT 1
-) n ON true
-WHERE COALESCE(c.id, a.id, n.id) IS NOT NULL";
-
-/// The divisions `$1` names and every ancestor of each, as the division's
-/// own hierarchy lists them.
-pub const LINEAGE_SQL: &str = "SELECT d.gers_id, d.subtype, d.name, d.properties->>'parent_division_id' AS parent
-FROM overture_divisions d
-WHERE d.gers_id IN (
-  SELECT e->>'division_id' FROM overture_divisions f, jsonb_array_elements(f.properties->'hierarchies'->0) e WHERE f.gers_id = ANY($1)
-  UNION SELECT unnest($1::text[])
-)";
 
 /// A division as the statements return it.
 #[derive(Clone, Debug)]
@@ -68,10 +62,15 @@ pub struct Division {
 }
 
 impl Division {
-    pub fn new(gers_id: String, subtype: &str, name: String, parent: Option<String>) -> Division {
+    pub fn new(
+        gers_id: String,
+        subtype: Option<&str>,
+        name: String,
+        parent: Option<String>,
+    ) -> Division {
         Division {
             gers_id,
-            subtype: Subtype::of_word(subtype),
+            subtype: subtype.and_then(Subtype::of_word),
             name,
             parent,
         }
@@ -84,18 +83,6 @@ impl Division {
             approx,
         })
     }
-}
-
-/// [`FINEST_SQL`]'s rows by point; `idx` counts from 1.
-pub fn by_point(
-    point_cnt: usize,
-    rows: impl IntoIterator<Item = (i64, String, bool)>,
-) -> Vec<Option<(String, bool)>> {
-    let mut out = vec![None; point_cnt];
-    for (idx, id, approx) in rows {
-        out[(idx - 1) as usize] = Some((id, approx));
-    }
-    out
 }
 
 /// A division's name, broad to narrow: it and each parent [`LINEAGE_SQL`]

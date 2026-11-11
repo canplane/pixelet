@@ -14,7 +14,7 @@ use crate::gpu::span_spec::{FrameKind, LightChanged};
 pub(super) struct CastRead {
     /// Whether the cast's input is byte for byte the last frame's and the cast's group is made
     /// (cast.rs `prepare`). The input is the eye's words without the light's, the jitter's and
-    /// the grid's; the clip levels' table; the shards; the overwrites' room and revision; and
+    /// the grid's; the clip levels' table; the shards; the objects' room and revision; and
     /// the world surface.
     pub same: bool,
     /// Where each pixel's ray passes through its pixel this frame (pxl-engine `eye::JITTER`).
@@ -23,7 +23,7 @@ pub(super) struct CastRead {
     /// again.
     pub jitter: [u32; 2],
     /// Whether nothing moved but the listed draws that mark tiles, so the frame may be drawn
-    /// through the gate in the claimed tiles alone (renderer.rs `partial`).
+    /// through the gate in the damaged tiles alone (renderer.rs `partial`).
     pub partial: bool,
     /// Whether shadows are cast, and whether the light's cast has its buffers (cast.rs
     /// `light_made`).
@@ -73,7 +73,7 @@ pub(super) struct Light {
     /// map; the world's receivers are the voxels the eye's rays hit.
     pub world: bool,
     /// Whether those marks are added to the ones already made, as the walked bits cover the
-    /// claimed tiles alone. Otherwise the marks start afresh.
+    /// damaged tiles alone. Otherwise the marks start afresh.
     pub additive: bool,
     /// Whether the receivers' marks take each pixel's footprint, which they do while the eye
     /// stands (`light::HEADER_FOOTPRINT`).
@@ -86,9 +86,9 @@ pub(super) struct Plan {
     /// `plain` casts nothing, as there is no world to cast in; `still` keeps the rays as they
     /// are; `px` casts the pixels again over the samples that stand; `cast` runs the whole cast.
     pub kind: FrameKind,
-    /// Whether every pixel is cast again though only the claimed tiles moved. The light's cast
+    /// Whether every pixel is cast again though only the damaged tiles moved. The light's cast
     /// needs walked bits that cover every pixel where it marks the world's receivers afresh,
-    /// and a gated cast would leave them covering the claimed tiles alone.
+    /// and a gated cast would leave them covering the damaged tiles alone.
     pub unmasked: bool,
     /// What the light's cast does, or none where it does not cast.
     pub light: Option<Light>,
@@ -116,7 +116,7 @@ pub(super) struct Schedule {
     jitter: [u32; 2],
     /// Whether the eye's walked bits cover every drawn pixel. The walked bits mark the holes,
     /// the pixels the raster left no voxel at, whose rays the holes' queue walks apart
-    /// (pxl-engine `ray::SQUARE_WORDS`). A gated pixels' cast sets them in the claimed tiles
+    /// (pxl-engine `ray::SQUARE_WORDS`). A gated pixels' cast sets them in the damaged tiles
     /// alone.
     walked_whole: bool,
     /// Whether the shadow map's tiles hold what the light's content last read: the last frame
@@ -129,7 +129,7 @@ pub(super) struct Schedule {
     /// the eye's rays hit.
     world: bool,
     /// Whether the marks with each pixel's footprint are owed: the last cast that marked the
-    /// world's receivers did so while the eye moved, or for the claimed tiles alone. They fall
+    /// world's receivers did so while the eye moved, or for the damaged tiles alone. They fall
     /// due once the eye stands.
     footprint_owed: bool,
     /// The last frame's plan.
@@ -187,7 +187,7 @@ impl Schedule {
         // The world's receivers are marked afresh where the light's content or the box moved,
         // and a fresh marking reads every pixel's walk. The owed footprints read every pixel's
         // walk too, as the pixels the walked bits leave out still owe theirs. Where the walked
-        // bits would cover the claimed tiles alone, because the last pixels' cast or this
+        // bits would cover the damaged tiles alone, because the last pixels' cast or this
         // frame's is gated, every pixel is cast again now (`unmasked`), so the bits cover every
         // pixel. The marking then follows the bits alone (`walked_whole`): it starts afresh
         // where they cover every pixel, and is added to the marks already made otherwise, the
@@ -223,11 +223,11 @@ impl Schedule {
             let last_corner = core::mem::replace(&mut self.corner, r.corner);
             let last_range = core::mem::replace(&mut self.range, r.range);
             // The marks are added to those already made where the walked bits cover the
-            // claimed tiles alone, which happens only within the epoch and under the same box.
+            // damaged tiles alone, which happens only within the epoch and under the same box.
             let additive = !walked_whole;
             xpute_kit::ensure!(!additive || (unchanged && !slid), ENOTRECOVERABLE);
             let world = core::mem::take(&mut self.world);
-            // Marks added for the claimed tiles alone leave the footprint owed to the rest, as
+            // Marks added for the damaged tiles alone leave the footprint owed to the rest, as
             // marks made while the eye moves do.
             if world {
                 self.footprint_owed = !stands || additive;
@@ -282,7 +282,7 @@ impl Schedule {
         &self.plan
     }
 
-    /// Whether the samples' raster is drawn through its gate, in the claimed tiles alone. It is
+    /// Whether the samples' raster is drawn through its gate, in the damaged tiles alone. It is
     /// where the frame casts the pixels and its walked bits cover those tiles alone.
     pub fn masked(&self) -> bool {
         self.plan.casts() && !self.walked_whole

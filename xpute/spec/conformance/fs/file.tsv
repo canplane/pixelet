@@ -1,41 +1,59 @@
-# The file device's traces: what its runtime's end owes a core (abi/fs.json, ipc/fs.json,
-# ARCHITECTURE.md's files), apart from the boundary's rules C0 to C7 — the boundary
+# The file device's traces: what its runtime's end owes a core (abi/fs.json,
+# ARCHITECTURE.md's files), apart from the boundary's rules 0 to 8 — the boundary
 # carries the calls, and this is what they mean. Run against the runtime's end
-# (ts/runtime/src/ipc/fs.test.ts): a step writes a record as a core's turn would, `turn`
+# (ts/runtime/src/io/fs.test.ts): a step writes a record as a core's turn would, `turn`
 # runs them as the runtime does after a turn, and what reaches the core is held to the trace.
 #
-#   file R P B        the runtime's file P below root R: its bytes in hex, ENOENT, or `later` —
-#                     answered only when a `deliver` says, as a transport answers
-#   openat FD R F P   a core's OPENAT: FD as the core issued it (slot and generation), F rd or wr,
-#                     P the path, `""` for an empty one
-#   read FD N / write FD TEXT / close FD
+# A path P is a JSON array of its tokens, each a number for a u32 or a string: `[7,"a"]`.
+#
+#   file P B          the binding's file P: its bytes in hex, ENOENT, or `later` — answered
+#                     only when a `deliver` says, as a transport answers
+#   refuse P ERRNO    the binding refuses to commit the file P, with ERRNO by name
+#   open FD P FLAG    a core's FS_OPEN tagged FD, as the core issued it (slot and
+#                     generation); FLAG O_RDONLY, O_WRONLY (io/fs.json `flag`) or a number
+#   read FD N [AT]    a core's FS_READ tagged FD, of N bytes into the core's memory at AT,
+#                     or at the trace's own place without it
+#   close FD
+#   write FD TEXT     a core's FS_WRITE of TEXT, tagged FD
 #   turn              the runtime runs the turn's records
-#   deliver R P B     the transport answers what `later` held, with B as `file` takes it
+#   deliver P B       the transport answers what `later` held, with B as `file` takes it
 #   expect opened FD RES   the next completion the core is sent, of an open: a size, or an errno by name
 #   expect closed FD RES   the next, of a close: 0, or an errno by name
 #   expect quiet      no completion the core has not been held to
 #   expect read HEX   what the last read put in the core's memory
-#   expect commit R P TEXT   what a close made the file
+#   expect commit P TEXT   what a write made the file
+#   expect unwritten P     that no write reached the file
 #
 # An open's completion comes on a later turn, however much later: `later` is how a trace says the
 # transport is slow, and nothing here fixes how many turns pass. Each open and each close is
-# completed once.
-scenarios	open.later open.absent read read.unknown write write.refused close.opening close.unknown stale.reuse root.walk
+# completed once. Run against the device's runtime too (xpute-runtime native/serve.test.rs).
+scenarios	open.later open.absent open.flag read read.fault read.zero read.unknown read.wronly write write.denied write.rdonly close.opening close.unknown stale.reuse
 
-open.later.step.0	file 7 a/b later
-open.later.step.1	openat 0x10001 7 rd a/b
+open.later.step.0	file [7,"a","b"] later
+open.later.step.1	open 0x10001 [7,"a","b"] O_RDONLY
 open.later.step.2	turn
 open.later.step.3	expect quiet
-open.later.step.4	deliver 7 a/b 616263
+open.later.step.4	deliver [7,"a","b"] 616263
 open.later.step.5	expect opened 0x10001 3
 
-open.absent.step.0	file 7 a/b ENOENT
-open.absent.step.1	openat 0x10001 7 rd a/b
+open.absent.step.0	file [7,"a","b"] ENOENT
+open.absent.step.1	open 0x10001 [7,"a","b"] O_RDONLY
 open.absent.step.2	turn
 open.absent.step.3	expect opened 0x10001 ENOENT
 
-read.step.0	file 7 a 68656c6c6f
-read.step.1	openat 0x10001 7 rd a
+# An open whose flag is neither O_RDONLY nor O_WRONLY is completed with EINVAL, and so is its
+# descriptor's close: a write of it reaches no file.
+open.flag.step.0	open 0x10001 [7,"a"] 2
+open.flag.step.1	write 0x10001 ab
+open.flag.step.2	close 0x10001
+open.flag.step.3	turn
+open.flag.step.4	expect opened 0x10001 EINVAL
+open.flag.step.5	expect closed 0x10001 EINVAL
+open.flag.step.6	expect quiet
+open.flag.step.7	expect unwritten [7,"a"]
+
+read.step.0	file [7,"a"] 68656c6c6f
+read.step.1	open 0x10001 [7,"a"] O_RDONLY
 read.step.2	turn
 read.step.3	expect opened 0x10001 5
 read.step.4	read 0x10001 5
@@ -45,7 +63,32 @@ read.step.7	expect read 68656c6c6f
 read.step.8	expect closed 0x10001 0
 read.step.9	expect quiet
 
-# A read of a descriptor this runtime does not hold, as the one a reload replaced left in the ring,
+# A read that runs past the core's memory copies nothing, and its descriptor's close is
+# completed with EFAULT.
+read.fault.step.0	file [7,"a"] 68656c6c6f
+read.fault.step.1	open 0x10001 [7,"a"] O_RDONLY
+read.fault.step.2	turn
+read.fault.step.3	expect opened 0x10001 5
+read.fault.step.4	read 0x10001 0xffffffff
+read.fault.step.5	close 0x10001
+read.fault.step.6	turn
+read.fault.step.7	expect read 0000000000
+read.fault.step.8	expect closed 0x10001 EFAULT
+read.fault.step.9	expect quiet
+
+# Offset 0 is no core's memory: a read into it copies nothing, and its descriptor's close is
+# completed with EFAULT.
+read.zero.step.0	file [7,"a"] 68656c6c6f
+read.zero.step.1	open 0x10001 [7,"a"] O_RDONLY
+read.zero.step.2	turn
+read.zero.step.3	expect opened 0x10001 5
+read.zero.step.4	read 0x10001 5 0
+read.zero.step.5	close 0x10001
+read.zero.step.6	turn
+read.zero.step.7	expect closed 0x10001 EFAULT
+read.zero.step.8	expect quiet
+
+# A read of a descriptor this runtime does not hold, as the one a reload replaced left unserved,
 # is dropped, and its close says so.
 read.unknown.step.0	read 0x10001 5
 read.unknown.step.1	close 0x10001
@@ -53,9 +96,22 @@ read.unknown.step.2	turn
 read.unknown.step.3	expect closed 0x10001 EBADF
 read.unknown.step.4	expect quiet
 
-# Opened to write and closed in one turn: an open to write is completed at once, and the close
-# commits what was written, read where the core keeps it.
-write.step.0	openat 0x10001 7 wr a
+# A read of a file opened to write copies nothing, the file is not replaced, and its descriptor's
+# close is completed with EBADF.
+read.wronly.step.0	open 0x10001 [7,"a"] O_WRONLY
+read.wronly.step.1	write 0x10001 ab
+read.wronly.step.2	read 0x10001 2
+read.wronly.step.3	close 0x10001
+read.wronly.step.4	turn
+read.wronly.step.5	expect opened 0x10001 0
+read.wronly.step.6	expect closed 0x10001 EBADF
+read.wronly.step.7	expect quiet
+read.wronly.step.8	expect read 0000
+read.wronly.step.9	expect unwritten [7,"a"]
+
+# An open to write is completed at once with 0. Each write's bytes go with its frame, kept in the
+# order written, and the close replaces the file with them and is completed with 0.
+write.step.0	open 0x10001 [7,"a"] O_WRONLY
 write.step.1	write 0x10001 ab
 write.step.2	write 0x10001 c
 write.step.3	close 0x10001
@@ -63,27 +119,42 @@ write.step.4	turn
 write.step.5	expect opened 0x10001 0
 write.step.6	expect closed 0x10001 0
 write.step.7	expect quiet
-write.step.8	expect commit 7 a abc
+write.step.8	expect commit [7,"a"] abc
 
-# A file refused to write is written and closed in the same turn: the write is dropped, the open
-# completed with its errno, and the close finds no descriptor.
-write.refused.step.0	openat 0x10001 7 wr ../a
-write.refused.step.1	write 0x10001 ab
-write.refused.step.2	close 0x10001
-write.refused.step.3	turn
-write.refused.step.4	expect opened 0x10001 EACCES
-write.refused.step.5	expect closed 0x10001 EBADF
-write.refused.step.6	expect quiet
+# What the binding refuses a written file with is the close's result: EROFS for a file it does
+# not write, as a filesystem answers.
+write.denied.step.0	refuse [7,"a"] EROFS
+write.denied.step.1	open 0x10001 [7,"a"] O_WRONLY
+write.denied.step.2	write 0x10001 ab
+write.denied.step.3	close 0x10001
+write.denied.step.4	turn
+write.denied.step.5	expect opened 0x10001 0
+write.denied.step.6	expect closed 0x10001 EROFS
+write.denied.step.7	expect quiet
+write.denied.step.8	expect unwritten [7,"a"]
+
+# A write to a file opened to read keeps nothing, and its descriptor's close is completed with
+# EBADF.
+write.rdonly.step.0	file [7,"a"] 6869
+write.rdonly.step.1	open 0x10001 [7,"a"] O_RDONLY
+write.rdonly.step.2	turn
+write.rdonly.step.3	expect opened 0x10001 2
+write.rdonly.step.4	write 0x10001 ab
+write.rdonly.step.5	close 0x10001
+write.rdonly.step.6	turn
+write.rdonly.step.7	expect closed 0x10001 EBADF
+write.rdonly.step.8	expect quiet
+write.rdonly.step.9	expect unwritten [7,"a"]
 
 # A close ends a descriptor still opening: its open is completed with ECANCELED before the close,
 # and nothing more, however late its transport.
-close.opening.step.0	file 7 a later
-close.opening.step.1	openat 0x10001 7 rd a
+close.opening.step.0	file [7,"a"] later
+close.opening.step.1	open 0x10001 [7,"a"] O_RDONLY
 close.opening.step.2	close 0x10001
 close.opening.step.3	turn
 close.opening.step.4	expect opened 0x10001 ECANCELED
 close.opening.step.5	expect closed 0x10001 0
-close.opening.step.6	deliver 7 a 61
+close.opening.step.6	deliver [7,"a"] 61
 close.opening.step.7	expect quiet
 
 # A close of a descriptor the runtime does not hold is completed with EBADF.
@@ -95,37 +166,17 @@ close.unknown.step.3	expect quiet
 # The slot a closed descriptor held is issued again under a new generation before the old open's
 # transport answers: the old open is completed with ECANCELED at its close, the late answer reaches
 # neither descriptor, and the new one gets its own.
-stale.reuse.step.0	file 7 a later
-stale.reuse.step.1	file 7 b later
-stale.reuse.step.2	openat 0x10001 7 rd a
+stale.reuse.step.0	file [7,"a"] later
+stale.reuse.step.1	file [7,"b"] later
+stale.reuse.step.2	open 0x10001 [7,"a"] O_RDONLY
 stale.reuse.step.3	turn
 stale.reuse.step.4	close 0x10001
-stale.reuse.step.5	openat 0x20001 7 rd b
+stale.reuse.step.5	open 0x20001 [7,"b"] O_RDONLY
 stale.reuse.step.6	turn
 stale.reuse.step.7	expect opened 0x10001 ECANCELED
 stale.reuse.step.8	expect closed 0x10001 0
-stale.reuse.step.9	deliver 7 a 61
+stale.reuse.step.9	deliver [7,"a"] 61
 stale.reuse.step.10	expect quiet
-stale.reuse.step.11	deliver 7 b 6262
+stale.reuse.step.11	deliver [7,"b"] 6262
 stale.reuse.step.12	expect opened 0x20001 2
 stale.reuse.step.13	expect quiet
-
-# A root is the whole of what it grants: a path walks down from it a name at a time, and a name
-# that is empty, `.` or `..` — an absolute path's first among them — is refused before any runtime sees it.
-root.walk.step.0	file 7 a/b 61
-root.walk.step.1	openat 0x10001 7 rd a/b
-root.walk.step.2	openat 0x10002 7 rd ../b
-root.walk.step.3	openat 0x10003 7 rd a/../b
-root.walk.step.4	openat 0x10004 7 rd ./b
-root.walk.step.5	openat 0x10005 7 rd a//b
-root.walk.step.6	openat 0x10006 7 rd /a
-root.walk.step.7	openat 0x10007 7 rd ""
-root.walk.step.8	turn
-root.walk.step.9	expect opened 0x10001 1
-root.walk.step.10	expect opened 0x10002 EACCES
-root.walk.step.11	expect opened 0x10003 EACCES
-root.walk.step.12	expect opened 0x10004 EACCES
-root.walk.step.13	expect opened 0x10005 EACCES
-root.walk.step.14	expect opened 0x10006 EACCES
-root.walk.step.15	expect opened 0x10007 EACCES
-root.walk.step.16	expect quiet

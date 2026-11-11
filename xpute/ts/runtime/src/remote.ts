@@ -7,27 +7,30 @@
  *
  * - Up the port go the UI's frames, and a lifecycle call by name.
  * - Down the port come frames (a reply to a request, or an import the UI
- *   takes, with the memory it names copied), the stop, and
- *   whether the core came up.
- * - A call waits on a turn, so a UI across a port can make none (ENOTSUP).
- *   Once the core stops, every request is answered ENOTRECOVERABLE.
+ *   takes, with the memory it names copied), the lines the worker says
+ *   (say.ts), the stop, and whether the core came up.
+ * - Once the core stops, every request is answered ENOTRECOVERABLE.
  */
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { InvariantError } from "@xpute/kit/status/error.ts";
+import { InvariantError, XputeError } from "@xpute/kit/status/error.ts";
 import {
   type Arg,
   type PacketRoom,
   PacketWriter,
   TreeReader,
 } from "@xpute/kit/wire/xtp/mod.ts";
-import { encode_args } from "./ipc/doorbell.ts";
+import { answer_of, encode_args } from "./io/connection.ts";
+import { major_of as frame_major } from "./io/frame.ts";
+import { say, say_through } from "./say.ts";
 import {
+  boot,
+  type Config,
   type Link,
   type Manifest,
-  boot,
+  routes_of,
   type Runtime,
   type Ui,
 } from "./runtime.ts";
@@ -52,6 +55,7 @@ type Down =
       pkt: U8Array | null;
       named: U8Array | null;
     }
+  | { kind: "say"; line: string }
   | { kind: "stop" }
   | { kind: "rose"; why: string | null };
 
@@ -60,7 +64,8 @@ type Down =
  * the UI's `performance.now()` counts it. */
 export interface Hello {
   xpute: MessagePort;
-  cmds: readonly u32[];
+  /** The majors the UI takes (`Ui.protocols`), whose frames go down. */
+  majors: readonly u32[];
   origin: f64;
 }
 
@@ -69,16 +74,17 @@ export interface Hello {
  * for when the worker that ran the core died without a word of its own. */
 export function connect(
   port: MessagePort,
-  slot_bytes: u32,
+  pkt_bytes: u32,
   ui: Ui,
 ): { link: Link; rose: Promise<void>; stop(): void } {
-  const buf = new Uint8Array(slot_bytes);
+  const buf = new Uint8Array(pkt_bytes);
   const view = new DataView(buf.buffer);
   const w = new PacketWriter();
   const room: PacketRoom = {
     writer: (n) => ((cnt = n), w.begin(buf, view, 0, buf.length, n)),
   };
   const waiting = new Map<u32, (res: i32) => void>();
+  const routes = routes_of(ui.protocols);
   const rose = Promise.withResolvers<void>();
   const up = (m: Up, moved: Transferable[] = []) => port.postMessage(m, moved);
   let cnt = 0;
@@ -110,13 +116,15 @@ export function connect(
           waiting.get(m.tag)?.(m.res);
           return void waiting.delete(m.tag);
         }
-        return ui.on(
+        return void routes.get(frame_major(m.cmd))?.(
           m.tag,
           m.cmd,
           m.pkt && new TreeReader(m.pkt).read_branch(),
-          m.named,
           m.pkt,
+          m.named,
         );
+      case "say":
+        return say(m.line);
       case "stop":
         return stop();
       case "rose":
@@ -124,48 +132,55 @@ export function connect(
     }
   };
 
+  // The runtime across the port is told each change, and this end keeps the
+  // last one for `shown`.
+  let shown = true;
   const link: Link = {
     send: (cmd, ...args) => void (stopped || frame(cmd, 0, args)),
     request(cmd, ...args) {
-      if (stopped) return Promise.resolve(Errno.ENOTRECOVERABLE);
+      if (stopped) return Promise.reject(new XputeError(Errno.ENOTRECOVERABLE));
       const id = (next = (next + 1) >>> 0 || 1);
-      return new Promise((done) => {
+      return new Promise<i32>((done) => {
         waiting.set(id, done);
         frame(cmd, id, args);
-      });
-    },
-    call(): never {
-      throw new InvariantError(Errno.ENOTSUP);
+      }).then(answer_of);
     },
     fits: (_cmd, ...args) => (encode_args(args)(room)?.finish() ?? 0) >= 0,
     wake: () => call("wake"),
     input: () => call("input"),
     resume: () => call("resume"),
     pause: () => call("pause"),
-    visible: (v) => call("visible", v),
+    visible: (v) => ((shown = v), call("visible", v)),
+    shown: () => shown,
   };
   return { link, rose: rose.promise, stop };
 }
 
 /** This is the worker's end of `port`. The `Ui` it returns posts down what the
- * UI takes, and `serve` hands the UI's frames and calls to the runtime `r`. */
+ * UI takes, the worker's lines go down from now on, and `serve` hands the UI's
+ * frames and calls to the runtime `r`. */
 export function attach(
   port: MessagePort,
-  cmds: readonly u32[],
+  majors: readonly u32[],
 ): {
   ui: Ui;
   serve(r: Runtime): void;
 } {
   const down = (m: Down, moved: Transferable[] = []) =>
     port.postMessage(m, moved);
+  say_through((line) => down({ kind: "say", line }));
   const ui: Ui = {
-    cmds,
-    on(tag, cmd, _f, named, pkt) {
-      const p = pkt?.slice() ?? null;
-      const n = named?.slice() ?? null;
-      const moved = [p, n].flatMap((b) => (b ? [b.buffer] : []));
-      down({ kind: "frame", tag, cmd, res: null, pkt: p, named: n }, moved);
-    },
+    protocols: [
+      {
+        majors,
+        on(tag, cmd, _f, pkt, named) {
+          const p = pkt?.slice() ?? null;
+          const n = named?.slice() ?? null;
+          const moved = [p, n].flatMap((b) => (b ? [b.buffer] : []));
+          down({ kind: "frame", tag, cmd, res: null, pkt: p, named: n }, moved);
+        },
+      },
+    ],
     stop: () => down({ kind: "stop" }),
   };
   function serve(r: Runtime): void {
@@ -176,10 +191,10 @@ export function attach(
           const encode =
             pkt && ((room: PacketRoom) => room.writer(cnt).copy(pkt));
           if (id === 0) {
-            r.doorbell.send(cmd, encode);
+            r.connection.send(cmd, encode);
             return r.kick();
           }
-          const answer = r.doorbell.request(cmd, encode);
+          const answer = r.connection.request(cmd, encode);
           r.kick();
           return void answer.then((res) =>
             down({
@@ -200,21 +215,30 @@ export function attach(
   return { ui, serve };
 }
 
-/** Serves the core of `m` from a page's worker. It takes the port `start`
- * sends, brings the core up, and serves the UI's frames. A message of the
- * worker's own, which carries no port, is left alone. */
-export function serve<G extends Grant>(m: Manifest<G>): Promise<Runtime> {
+/** Serves the core `manifest` declares, with the config `core` makes, from a
+ * page's worker. It takes the port `start` sends, brings the core up, and
+ * serves the UI's frames. A message of the worker's own, which carries no port,
+ * is left alone. */
+export function serve<G extends Grant>(
+  manifest: Manifest,
+  core: () => Config<G> | Promise<Config<G>>,
+): Promise<Runtime> {
   return new Promise((done, fail) => {
     const hello = async ({ data }: MessageEvent) => {
       const h = data as Partial<Hello> | null;
       if (!(h?.xpute instanceof MessagePort)) return;
       removeEventListener("message", hello);
       const port = h.xpute;
-      const end = attach(port, h.cmds ?? []);
+      const end = attach(port, h.majors ?? []);
       const shift =
         performance.timeOrigin - (h.origin ?? performance.timeOrigin);
       try {
-        const r = await boot(m, end.ui, () => performance.now() + shift);
+        const r = await boot(
+          manifest,
+          core,
+          end.ui,
+          () => performance.now() + shift,
+        );
         end.serve(r);
         port.postMessage({ kind: "rose", why: null } satisfies Down);
         done(r);

@@ -1,12 +1,11 @@
 # sys
 
 The core cannot read a file, open a connection or tell the time. The runtime
-owns all of that, as a virtual machine monitor owns the devices of its guest.
-What the core has is its memory, laid out once, and the turns the runtime gives
-it. `sys/` is the layer that makes those enough. It turns what the layers above
-want into asks of the runtime, fits every answer into memory that was set aside
-at boot, and spends each turn's time in an order the rest of the core can rely
-on.
+does all of that for it. What the core has is its memory, laid out once, and
+the turns the runtime gives it. `sys/` is the layer that makes those enough. It
+turns what the layers above want into asks of the runtime, fits every answer
+into memory that was set aside at boot, and spends each turn's time in an order
+the rest of the core can rely on.
 
 `sys/` imports nothing from the domain, the renderer or the profiler, and
 `cargo check-rules` refuses such an import.
@@ -17,8 +16,8 @@ The core's memory is one linear space whose sections never move after boot.
 
 ```text
  0 ┌──────────────┐
-   │ front        │ the stack, the header, the rings, the GPU stream,
-   │              │ the linker's data: laid out by xpute's machine
+   │ front        │ the stack, the header, the GPU stream, where
+   │              │ xpute's manifest puts them; then the linker's data
    ├──────────────┤
    │ .fixed       │ ranges placed once at boot, sized at compile time,
    │              │ never freed: the terrain, the divisions, the uploads
@@ -34,7 +33,7 @@ PNG has no bound, so the loader reads it into the heap. What is held only at
 times lives on the heap as well, the largest of it under caps that the build
 checks against the heap.
 `door/layout.rs` decides which ranges `.fixed` holds and how large each is, and
-hands each owner its range at boot. The machine names how much heap the core
+hands each owner its range at boot. The manifest names how much heap the core
 must keep, and both the compiler and the boot check that the front and `.fixed`
 leave it.
 
@@ -60,7 +59,7 @@ The tick runs the phases the core declares, in their order, against one
 budget. A phase that runs long cannot take everything: each phase holds back a
 share of what is left for the phases after it, so a busy load does not starve
 what follows (`sched/tick.rs`). After the frame, the turn's tasks get their
-own share of the frame time, however far the frame ran over (`sched/edge.rs`).
+own share of the frame time, however far the frame ran over (`sched.rs`).
 A task that has work left asks for the next turn; a core with nothing to do asks
 for none, and the runtime lets it sleep.
 

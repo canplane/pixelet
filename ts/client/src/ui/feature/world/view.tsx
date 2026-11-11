@@ -40,6 +40,7 @@ const INPUT: InputDriver = {
     worldPointer(POINTER_PHASE[phase], POINTER_KIND[kind], id, button, x, y),
   touched: (phase) => worldTouched(POINTER_PHASE[phase]),
   wheel: input.wheel,
+  pinch: input.pinch,
   keyDown,
   keyUp,
   releaseKeys,

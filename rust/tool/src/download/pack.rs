@@ -8,36 +8,10 @@
 
 use image::{ImageFormat, RgbaImage};
 
-use crate::asset::pack::{self, Item, Style, TILE_SIZE};
-use crate::root;
+use crate::asset::pack::{self, Item, TILE_SIZE};
+use crate::{fetch, root};
 use image::imageops;
 use image::imageops::FilterType;
-
-const RETRY_ATTEMPTS: u32 = 3;
-
-fn fetch_with_retry(url: &str) -> Result<Vec<u8>, String> {
-    let mut last = String::new();
-    for attempt in 1..=RETRY_ATTEMPTS {
-        match ureq::get(url).call() {
-            Ok(res) => {
-                let mut body = Vec::new();
-                res.into_reader()
-                    .read_to_end(&mut body)
-                    .map_err(|e| e.to_string())?;
-                if body.is_empty() {
-                    last = "empty response body".to_string();
-                } else {
-                    return Ok(body);
-                }
-            }
-            Err(e) => last = e.to_string(),
-        }
-        if attempt < RETRY_ATTEMPTS {
-            std::thread::sleep(std::time::Duration::from_millis(400 * attempt as u64));
-        }
-    }
-    Err(last)
-}
 
 fn cached_original(item: &Item, state: &pack::State) -> Option<RgbaImage> {
     if state.get(&item.file).map(String::as_str) != Some(item.url.as_str()) {
@@ -58,7 +32,7 @@ fn process(item: &Item, state: &mut pack::State) -> Result<Outcome, String> {
     let (mut img, outcome) = match cached_original(item, state) {
         Some(img) => (img, Outcome::Cached),
         None => {
-            let raw = fetch_with_retry(&item.url).map_err(|e| format!("download failed: {e}"))?;
+            let raw = fetch::get(&item.url).map_err(|e| format!("download failed: {e}"))?;
             std::fs::create_dir_all(item.original.parent().ok_or("no parent")?)
                 .map_err(|e| e.to_string())?;
             std::fs::write(&item.original, &raw).map_err(|e| e.to_string())?;
@@ -78,15 +52,7 @@ fn process(item: &Item, state: &mut pack::State) -> Result<Outcome, String> {
                 img.height()
             ));
         }
-        img = match item.style {
-            Style::Painted => imageops::resize(&img, TILE_SIZE, TILE_SIZE, FilterType::Lanczos3),
-            Style::Legacy => {
-                let (w, h) = (img.width(), img.height());
-                let raw = pack::nearest_resize(img.as_raw(), w, h, TILE_SIZE, TILE_SIZE);
-                RgbaImage::from_raw(TILE_SIZE, TILE_SIZE, raw)
-                    .ok_or("nearest resize produced the wrong length")?
-            }
-        };
+        img = imageops::resize(&img, TILE_SIZE, TILE_SIZE, FilterType::Lanczos3);
     }
 
     pack::flatten_alpha(img.as_mut(), item.palette_hex.as_deref());

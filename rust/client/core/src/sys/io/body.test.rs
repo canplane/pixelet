@@ -1,7 +1,6 @@
 // pxl-core/sys/io/body.test.rs
 
 use super::*;
-use crate::sys;
 use crate::sys::boot::test::{heap_release, set_counted_heap, set_heap_stat};
 use crate::sys::io::room::Refusal;
 use xpute_core::mem;
@@ -13,164 +12,174 @@ fn runs() -> usize {
 
 #[test]
 fn bodies_share_run() {
-    let _g = sys::serial();
-    let before = runs();
-    let bytes = SLOT_BYTES;
-    let mut out: Vec<Packet> = (0..SLOTS)
-        .map(|k| {
-            take(
-                Some(if k % 2 == 0 {
-                    Stream::terrain
-                } else {
-                    Stream::earth
-                }),
-                bytes,
-            )
-            .unwrap()
-        })
-        .collect();
-    assert_eq!(runs(), before + 1, "{SLOTS} bodies fill one run");
-    let mut at: Vec<usize> = out.iter().map(|b| b.0 .0).collect();
-    at.sort();
-    assert!(
-        at.windows(2).all(|w| w[1] - w[0] >= SLOT_BYTES as usize),
-        "no two slots overlap"
-    );
-    out.push(take(Some(Stream::terrain), bytes).unwrap());
-    assert_eq!(runs(), before + 2, "and the next borrows another");
-
-    for (k, p) in out.iter().enumerate() {
-        let Packet((at, n)) = *p;
-        // SAFETY: `n` bytes of a slot just taken.
-        unsafe { core::ptr::write_bytes(mem::at::<u8>(at), k as u8, n as usize) };
-    }
-    let released = releases();
-    let freed = out.remove(1);
-    let freed_at = freed.0 .0;
-    drop(freed);
-    assert_eq!(
-        releases(),
-        released.wrapping_add(1),
-        "a slot given back is a release"
-    );
-    let again = take(Some(Stream::earth), bytes).unwrap();
-    assert_eq!(
-        again.0 .0, freed_at,
-        "a slot given back is taken again before a run is borrowed"
-    );
-    assert_eq!(runs(), before + 2);
-    for (k, p) in out.iter().enumerate().skip(1) {
+    crate::on_core(|| {
+        let before = runs();
+        let bytes = SLOT_BYTES;
+        let mut out: Vec<Packet> = (0..SLOTS)
+            .map(|k| {
+                take(
+                    Some(if k % 2 == 0 {
+                        Stream::terrain
+                    } else {
+                        Stream::earth
+                    }),
+                    bytes,
+                )
+                .unwrap()
+            })
+            .collect();
+        assert_eq!(runs(), before + 1, "{SLOTS} bodies fill one run");
+        let mut at: Vec<usize> = out.iter().map(|b| b.0 .0).collect();
+        at.sort();
         assert!(
-            p.iter().all(|&b| b == (k + 1) as u8),
-            "a body was written over by its neighbors"
+            at.windows(2).all(|w| w[1] - w[0] >= SLOT_BYTES as usize),
+            "no two slots overlap"
         );
-    }
+        out.push(take(Some(Stream::terrain), bytes).unwrap());
+        assert_eq!(runs(), before + 2, "and the next borrows another");
 
-    out.push(again);
-    drop(out);
-    assert_eq!(runs(), before, "a run is given back once its last slot is");
+        for (k, p) in out.iter().enumerate() {
+            let Packet((at, n)) = *p;
+            // SAFETY: `n` bytes of a slot just taken.
+            unsafe { core::ptr::write_bytes(mem::at::<u8>(at), k as u8, n as usize) };
+        }
+        let released = releases();
+        let freed = out.remove(1);
+        let freed_at = freed.0 .0;
+        drop(freed);
+        assert_eq!(
+            releases(),
+            released.wrapping_add(1),
+            "a slot given back is a release"
+        );
+        let again = take(Some(Stream::earth), bytes).unwrap();
+        assert_eq!(
+            again.0 .0, freed_at,
+            "a slot given back is taken again before a run is borrowed"
+        );
+        assert_eq!(runs(), before + 2);
+        for (k, p) in out.iter().enumerate().skip(1) {
+            assert!(
+                p.iter().all(|&b| b == (k + 1) as u8),
+                "a body was written over by its neighbors"
+            );
+        }
+
+        out.push(again);
+        drop(out);
+        assert_eq!(runs(), before, "a run is given back once its last slot is");
+    });
 }
 
 #[test]
 fn other_bodies_own_block() {
-    let _g = sys::serial();
-    let before = runs();
-    for stream in [Some(Stream::place), Some(Stream::division), None] {
-        let block = take(stream, 4096).unwrap();
-        assert_eq!(runs(), before, "{stream:?} takes no slot");
-        let released = releases();
-        drop(block);
-        assert_eq!(releases(), released, "nor counts one given back");
-    }
+    crate::on_core(|| {
+        let before = runs();
+        for stream in [Some(Stream::place), Some(Stream::division), None] {
+            let block = take(stream, 4096).unwrap();
+            assert_eq!(runs(), before, "{stream:?} takes no slot");
+            let released = releases();
+            drop(block);
+            assert_eq!(releases(), released, "nor counts one given back");
+        }
+    });
 }
 
 #[test]
 fn slots_cap_and_wake() {
-    let _g = sys::serial();
-    let bytes = SLOT_BYTES;
-    let mut out: Vec<Packet> = (0..BODY_SLOTS)
-        .map(|_| take(Some(Stream::terrain), bytes).unwrap())
-        .collect();
-    let refused = take(Some(Stream::earth), bytes).err().unwrap();
-    assert!(!refused.released(), "every slot out: the body waits");
-    drop(out.pop());
-    assert!(refused.released(), "until one is given back");
-    drop(out);
+    crate::on_core(|| {
+        let bytes = SLOT_BYTES;
+        let mut out: Vec<Packet> = (0..BODY_SLOTS)
+            .map(|_| take(Some(Stream::terrain), bytes).unwrap())
+            .collect();
+        let refused = take(Some(Stream::earth), bytes).err().unwrap();
+        assert!(!refused.released(), "every slot out: the body waits");
+        drop(out.pop());
+        assert!(refused.released(), "until one is given back");
+        drop(out);
+    });
 }
 
 #[test]
 fn slot_peak() {
-    let _g = sys::serial();
-    take_peak();
-    let a = take(Some(Stream::terrain), 1).unwrap();
-    let b = take(Some(Stream::earth), 1).unwrap();
-    drop(a);
-    assert_eq!(take_peak(), 2, "two were out at once");
-    assert_eq!(take_peak(), 1, "and from then, the one still out");
-    drop(b);
+    crate::on_core(|| {
+        take_peak();
+        let a = take(Some(Stream::terrain), 1).unwrap();
+        let b = take(Some(Stream::earth), 1).unwrap();
+        drop(a);
+        assert_eq!(take_peak(), 2, "two were out at once");
+        assert_eq!(take_peak(), 1, "and from then, the one still out");
+        drop(b);
+    });
 }
 
 /// A terrain body longer than a slot is a heap block of its own, in no run.
 #[test]
 fn long_body_own_block() {
-    let _g = sys::serial();
-    let before = runs();
-    let b = take(Some(Stream::terrain), SLOT_BYTES + 1).unwrap();
-    assert_eq!(runs(), before, "no run is taken for it");
-    drop(b);
+    crate::on_core(|| {
+        let before = runs();
+        let b = take(Some(Stream::terrain), SLOT_BYTES + 1).unwrap();
+        assert_eq!(runs(), before, "no run is taken for it");
+        drop(b);
+    });
 }
 
 #[test]
 fn slot_cheaper_than_block() {
-    assert_eq!(SLOTS, BODY_RUN_SLOTS, "as sys/io/body.rs says");
-    for stream in Stream::ALL.into_iter().filter(|s| s.row().slotted) {
-        assert!((BODY_RUN_BYTES / SLOTS) < longest(stream).next_power_of_two());
-    }
+    crate::on_core(|| {
+        assert_eq!(SLOTS, BODY_RUN_SLOTS, "as sys/io/body.rs says");
+        for stream in Stream::ALL.into_iter().filter(|s| s.row().slotted) {
+            assert!((BODY_RUN_BYTES / SLOTS) < longest(stream).next_power_of_two());
+        }
+    });
 }
 
 #[test]
 fn slot_refusal_waits_slots() {
-    let _g = sys::serial();
-    set_counted_heap();
-    let bytes = SLOT_BYTES;
-    let mut out: Vec<Packet> = (0..BODY_SLOTS)
-        .map(|_| take(Some(Stream::terrain), bytes).unwrap())
-        .collect();
-    let refused = take(Some(Stream::terrain), bytes).err().unwrap();
-    heap_release();
-    assert!(
-        !refused.released(),
-        "the heap's pages given back give no slot"
-    );
-    drop(out.pop());
-    assert!(refused.released());
-    drop(out);
-    set_heap_stat(HeapStat::default);
+    crate::on_core(|| {
+        set_counted_heap();
+        let bytes = SLOT_BYTES;
+        let mut out: Vec<Packet> = (0..BODY_SLOTS)
+            .map(|_| take(Some(Stream::terrain), bytes).unwrap())
+            .collect();
+        let refused = take(Some(Stream::terrain), bytes).err().unwrap();
+        heap_release();
+        assert!(
+            !refused.released(),
+            "the heap's pages given back give no slot"
+        );
+        drop(out.pop());
+        assert!(refused.released());
+        drop(out);
+        set_heap_stat(HeapStat::default);
+    });
 }
 
 #[test]
 fn run_refusal_waits_heap() {
-    let _g = sys::serial();
-    let refused = Refusal::run();
-    assert!(!refused.released());
-    let block = take(Some(Stream::terrain), 1).unwrap();
-    drop(block);
-    assert!(
-        refused.released(),
-        "a slot given back in a run held serves it"
-    );
+    crate::on_core(|| {
+        let refused = Refusal::run();
+        assert!(!refused.released());
+        let block = take(Some(Stream::terrain), 1).unwrap();
+        drop(block);
+        assert!(
+            refused.released(),
+            "a slot given back in a run held serves it"
+        );
+    });
 }
 
 #[test]
 fn slot_return_asks_turn() {
-    let _g = sys::serial();
-    let bytes = SLOT_BYTES;
-    let mut out: Vec<Packet> = (0..BODY_SLOTS)
-        .map(|_| take(Some(Stream::terrain), bytes).unwrap())
-        .collect();
-    assert!(take(Some(Stream::terrain), bytes).is_err());
-    assert!(slot_table().waited, "refused for want of a slot");
-    drop(out.pop());
-    assert!(!slot_table().waited, "the slot given back asked the turn");
-    drop(out);
+    crate::on_core(|| {
+        let bytes = SLOT_BYTES;
+        let mut out: Vec<Packet> = (0..BODY_SLOTS)
+            .map(|_| take(Some(Stream::terrain), bytes).unwrap())
+            .collect();
+        assert!(take(Some(Stream::terrain), bytes).is_err());
+        assert!(slot_table().waited, "refused for want of a slot");
+        drop(out.pop());
+        assert!(!slot_table().waited, "the slot given back asked the turn");
+        drop(out);
+    });
 }

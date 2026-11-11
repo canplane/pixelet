@@ -131,11 +131,15 @@ impl TextLayout {
     }
 }
 
-impl xpute_core::ipc::door::Import for TextLayout {
+impl xpute_core::io::door::Import for TextLayout {
     const NUMBER: u32 = 7169;
     const FIELDS: u32 = 7;
+    const ACKREQ: bool = false;
     fn write(&self, w: &mut PacketWriter) {
         TextLayout::write(self, w);
+    }
+    fn named(&self) -> (u32, u32) {
+        (0, 0)
     }
 }
 
@@ -190,28 +194,31 @@ impl TextRaster {
     }
 }
 
-impl xpute_core::ipc::door::Import for TextRaster {
+impl xpute_core::io::door::Import for TextRaster {
     const NUMBER: u32 = 7170;
     const FIELDS: u32 = 9;
+    const ACKREQ: bool = false;
     fn write(&self, w: &mut PacketWriter) {
         TextRaster::write(self, w);
+    }
+    fn named(&self) -> (u32, u32) {
+        (0, 0)
     }
 }
 
 /// The text protocol's core end: what it posts to the runtime and what it hears from it.
 pub mod text {
     use super::*;
-    use xpute_core::ipc::door::Outcome;
-    use xpute_core::machine;
+    use xpute_core::io::door::door;
     use xpute_kit::status::errno::Errno;
 
     /// Command::TEXT_LAYOUT, answered by the runtime before this returns.
     pub fn text_layout(e: &TextLayout) -> Result<u32, Errno> {
-        machine::door().call(e)
+        door().call(e)
     }
 
     /// Command::TEXT_RASTER, answered by the runtime before this returns.
     pub fn text_raster(e: &TextRaster) -> Result<u32, Errno> {
-        machine::door().call(e)
+        door().call(e)
     }
 }

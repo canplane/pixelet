@@ -6,6 +6,6 @@
     "moduleSuffixes": [".native", ""],
     "jsx": "react-jsx"
   },
-  "include": ["kit", "runtime", "gpu", "native", "dev/triangle/app"],
+  "include": ["kit", "runtime", "gpu", "native"],
   "exclude": ["**/node_modules", "target", "**/*.native.ts", "**/*.test.ts"]
 }

@@ -36,7 +36,7 @@ use crate::domain::scene::marker::param::SPACING_PX;
 use crate::domain::scene::model;
 use crate::domain::view::frame::{coord, pose};
 use crate::domain::view::observation;
-use crate::sys::sched::edge;
+use crate::sys::sched;
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_render::gpu::draw::DrawList;
 use pxl_spec::brick::BRICK_SHIFT;
@@ -420,7 +420,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     let pending = p.pending.iter().any(|w| design::coming(&w.1)) || freed && !p.pending.is_empty();
     p.waiting = pending || refused || unlaid || unread > 0;
     if p.waiting {
-        edge::request_world_tick();
+        sched::request_world_tick();
     }
     p.draw_order.clear();
     for &i in &p.visible {

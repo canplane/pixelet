@@ -33,11 +33,13 @@ fn item_start(item: u32, aim: Aim) -> Start {
   return root_start();
 }
 
+/// Parks a beam ray in its corner's state. It returns false where the parked items' list has
+/// no room (item_list.wgsl `list_parked`).
 fn park(item: u32, t: f32, corner: vec3<u32>, zoom: u32, roots: vec3<i32>, step: u32) -> bool {
   let c = corner_of(item);
   let at = corner_state_at(c);
-  if ((beams[at + 4u] & PARKED) == 0u) {
-    list_parked(item);
+  if ((beams[at + 4u] & PARKED) == 0u && !list_parked(item)) {
+    return false;
   }
   beams[at] = bitcast<u32>(t);
   beams[at + 1u] = corner.x;

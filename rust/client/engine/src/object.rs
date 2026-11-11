@@ -14,7 +14,7 @@
 //! it.
 
 use pxl_spec::share;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{y_start, z_start, Zoom, LEAF_CELL_ZOOM};
 use pxl_spec::value;
 
 /// The bit of a slot's child pointer that marks a branch; the bits under it hold the
@@ -30,15 +30,16 @@ use pxl_spec::share::FULL;
 /// The bits of `FULL`; a share shifted down past them is none.
 const FULL_BITS: u32 = FULL.trailing_zeros();
 
-/// The most edits a frame hands to what reads them (pxl-core domain/scene/decor/gpu.rs).
-/// Each is the columns an overwrite wrote, as a box of leaf cells `[x0, y0, x1, y1)` with X on
-/// any lap. Past this many, the core joins the rest into the last.
-pub const EDITS: u32 = 8;
-/// The boxes of leaf cells that a frame's edits and a preview's cuts changed: the edits, and
-/// a preview's cut and left-out leaf both as they were and as they are. Past this many, the
-/// rest is joined into the last (pxl-render gpu/generator.rs `hold`). Whatever reads those
-/// columns asks them again: decor's generation, and the node cache's forgetting.
-pub const RECTS: u32 = EDITS + 4;
+/// The most damage rects the core hands a frame for written objects (pxl-core
+/// domain/scene/decor/gpu.rs). Each is the columns an object wrote, as a box of leaf cells
+/// `[x0, y0, x1, y1)` with X on any lap. Past this many, the core joins the rest into the last.
+pub const WRITE_DAMAGE_CAP: u32 = 8;
+/// The most damage rects a frame is asked over: the written objects' (`WRITE_DAMAGE_CAP`) and
+/// two for each of a preview's cuts, since each cut that moved gives its box as it was and as
+/// it is. Past this many, the rest is joined into the last (pxl-render gpu/generator.rs
+/// `hold`). Whatever reads those columns asks them again: decor's generation, and the node
+/// cache's forgetting.
+pub const DAMAGE_CAP: u32 = WRITE_DAMAGE_CAP + 2 * (CUTS / CUT_WORDS) as u32;
 
 /// The leaf cells a preview's entry at `zoom` and `at` covers, as a box.
 pub const fn cut_rect(zoom: Zoom, at: [i32; 3]) -> [i32; 4] {
@@ -75,7 +76,7 @@ pub const fn high(word: u32) -> u32 {
     word >> 16
 }
 
-/// A cube's eight children folded by volume: the one rule for what a node of an overwrite's tree
+/// A cube's eight children folded by volume: the one rule for what a node of the objects' tree
 /// holds at a coarser zoom. Each child comes as its fold word, with its kind low and the share of
 /// its cube filled high, `FULL` for whole; a leaf of a voxel fills its cube whole, and a leaf of
 /// nothing fills none. The fold's share is the mean of the children's, and its kind is the kind
@@ -192,6 +193,12 @@ impl NodeSlot {
     }
 }
 
+/// The words of a cut as the eye holds it: X, Y, Z and the zoom (pxl-engine eye.rs `CARVE`,
+/// `HIDE`).
+pub const CUT_WORDS: usize = 4;
+/// Both of a preview's cuts, carve then hide, as one run of words.
+pub const CUTS: usize = 2 * CUT_WORDS;
+
 /// A preview's entry, by its zoom and index; `NONE` for none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cut {
@@ -204,27 +211,6 @@ impl Cut {
         zoom: Zoom::MAX,
         at: [0; 3],
     };
-}
-
-/// The offset that turns Y's index at `zoom` into a count from the world's south edge: 0 at
-/// zoom 0, and half the plane's nodes at every finer zoom.
-pub const fn y_start(zoom: Zoom) -> i32 {
-    if zoom == 0 {
-        0
-    } else {
-        (1u32 << (zoom - 1)) as i32
-    }
-}
-
-/// The offset that turns Z's index at `zoom` into a count from the world's floor: 0 down to
-/// a shard's zoom, where one cube spans the world's height, and half the height's nodes at
-/// every finer zoom.
-pub const fn z_start(zoom: Zoom) -> i32 {
-    if zoom <= SHARD_ZOOM {
-        0
-    } else {
-        (1u32 << (zoom - SHARD_ZOOM - 1)) as i32
-    }
 }
 
 /// The node `at` of `zoom` indexed as the tree is cut: X counted from the start of a lap, Y

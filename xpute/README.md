@@ -1,19 +1,24 @@
 # xpute
 
-xpute is a small embedded kernel for the compiled part of a program, as a
-microcontroller's chip is for its firmware. The program's **core**, its compiled
-code, owns nothing but its memory, and a **runtime** gives it its time, one turn
-after another. The runtime implements only the devices that lend the core's
-memory across turns, the GPU and the files. Everything else belongs to the
-**program**, and it travels over one general channel whose messages xpute does
-not interpret, as a UART carries bytes it does not read.
+xpute is a foreign function interface for the compiled part of a program. The
+program's **core**, its compiled code, and xpute's **runtime**, which runs it,
+meet in four things: a calling convention over three host functions, which pass
+frames laid in the core's memory; bindings that a generator writes for both ends
+from the program's protocols, as WIT's tools do; the turn, the one call that
+gives the core its time; and two ways to move large data while that memory
+stays fixed, a read into a buffer the caller names, as WASI's `fd_read` reads,
+and the GPU stream, a command buffer the core records and the runtime runs. The
+core owns nothing but its memory, and the runtime implements only the devices
+that lend it across turns, the GPU and the files. Everything else belongs to the
+**program**, and it travels over one general channel whose messages xpute
+delivers and does not interpret.
 
 The same core runs as a WebAssembly module in a web page and as a library linked
 into an iOS or Android app, while the program's JavaScript does the I/O and
 draws the UI around it. xpute is both ends of that arrangement, the core's
 library and the runtime, and `kit`, the generic code beneath them.
 
-## Why a kernel this small
+## Why one interface
 
 A program whose logic is compiled and whose surface is JavaScript usually
 crosses between the two languages once for every piece of work: a binding for
@@ -21,18 +26,18 @@ each function, a copy for each argument, and a different binding on each
 platform. Every crossing costs time, and together the crossings become the
 program's real interface, scattered through glue code.
 
-xpute replaces those crossings with one memory that both sides share and a pair
-of rings inside it. Three things cross between the core and the runtime: the
-memory, one call into the core that runs a turn, and the number that call
-returns, which says when the core wants its next turn. Two calls go the other
-way, and each is answered before it returns: the runtime's clock, and a question
-the core needs answered within its turn. Everything else is a message written
-into the shared memory.
+xpute replaces those crossings with one memory that both sides share and one
+kind of message, a frame, laid in that memory. Into the core goes one call that
+runs a turn, and the number it returns says when the core wants its next turn.
+Out of the core go four functions, the same on every platform: one that hands
+it the next frame waiting for it, one that takes a frame it sends, a call
+answered before it returns, and the runtime's clock. What a frame says is the
+program's, so no binding is written for any one piece of work.
 
-That is the shape of firmware on a microcontroller. The chip gives its firmware
-RAM, a timer and a few peripherals, and the firmware decides everything else.
-The core is the firmware and xpute's runtime is the chip, and because the chip
-is this small, the same core runs unchanged in a page, on a phone and in a test.
+The runtime gives the core only its memory, its turns, a clock and the two
+devices that lend the memory, and the core decides everything else. Because
+that is all the runtime gives, the same core runs unchanged in a page, on a
+phone and in a test.
 
 ## The core, the runtime and the program
 
@@ -42,8 +47,8 @@ A program built on xpute has three parts.
   into one image. It runs only inside a turn, and everything it says to the
   world it writes into its memory.
 - The **runtime** is xpute's TypeScript, `@xpute/runtime`, with Rust beside it
-  on a device. It reserves the core's memory and lays out its front, rings each
-  turn, reads what the turn left, and runs the file device. The GPU is a plugin,
+  on a device. It reserves the core's memory and lays out its front, runs each
+  turn, reads what the turn sent, and runs the file device. The GPU is a plugin,
   `@xpute/gpu`.
 - The **program** is everything else the app decides: what its commands mean,
   what backs its files, when its turns should run, and its UI.
@@ -51,14 +56,14 @@ A program built on xpute has three parts.
 ```text
   ┌──────────────────────────────────────────────────────────────┐
   │ the core: the program's code, built on xpute's core library. │
-  │ It owns one memory, which holds the rings, and it runs only  │
-  │ inside run(deadline).                                        │
+  │ It owns one memory, where every frame is laid, and it runs   │
+  │ only inside run(deadline).                                   │
   └───────────┬─────────────────────────────────┬────────────────┘
               ▲                                 │
-              │ submission ring:                │ completion ring:
+              │ receive:                        │ send:
               │ what the core is sent           ▼ what the core says
   ┌───────────┴─────────────────────────────────┴────────────────┐
-  │ the runtime: lays out the memory, rings each turn, and       │
+  │ the runtime: lays out the memory, runs each turn, and        │
   │ routes each frame by the major of its command                │
   └───────────┬─────────────────────────────────┬────────────────┘
               │ majors 0x00 to 0x0F             │ majors 0x10 and up
@@ -67,7 +72,7 @@ A program built on xpute has three parts.
                                             does not read
 ```
 
-Each frame on the rings carries a command and a packet, the command's data in
+Each frame carries a command and a packet, the command's data in
 XTP, xpute's tree format. The high byte of a command's number is its major, and
 xpute delivers a program's frame by that major and reads nothing of what it
 says. xpute's own commands, under the majors below 0x10, tell the core about its turns and
@@ -78,18 +83,17 @@ its life and drive the two devices.
 The smallest program ships in this tree and shows every piece: a core that
 answers one command (`rust/dev/example`), the runtime that drives it in a test
 (`ts/dev/example/sum.test.ts`), and a page that runs it in a worker
-(`ts/dev/example/web`). A core that draws takes the GPU plugin
-(`rust/dev/triangle`), and the same crate runs on a page (`ts/dev/triangle/web`)
-and in a React Native app (`ts/dev/triangle/app`).
+(`ts/dev/example/web`).
 
-### The machine
+### The manifest
 
-A core declares its **machine** in a `machine.json`: the sizes of memory a
-runtime may give it, its stack, the capacities of its two rings, and which of
-xpute's devices it asks for. Both ends compute the same layout from it, so the
-runtime lays out the front of the memory exactly where the core expects it, and
-the core checks that before it runs. The example's machine asks for two
-megabytes, small rings and no devices:
+A core declares what it needs in its **manifest**, a `manifest.json`, as an
+Android app declares its own: the sizes of memory a runtime may give it, its
+stack, the most a frame's packet takes, and which of xpute's devices it asks
+for. Both ends compute the same front from it, so the runtime lays out the front
+of the memory exactly where the core expects it, and the core checks that before
+it runs. The example's manifest asks for two megabytes, small packets and no
+devices:
 
 ```json
 {
@@ -99,16 +103,16 @@ megabytes, small rings and no devices:
     "min_heap_bytes": 65536
   },
   "stack": { "module_bytes": 65536, "thread_bytes": 1048576 },
-  "rings": { "slot_bytes": 256, "sq_cap": 8, "cq_cap": 16, "turn_posts": 1 }
+  "pkt": { "bytes": 256 }
 }
 ```
 
-A machine that wants a GPU or files adds `gpu` or `fs`. Its schema is
-`spec/machine.schema.json`.
+A manifest that wants a GPU or files adds `gpu` or `fs`. Its schema is
+`spec/manifest.schema.json`.
 
 ### The protocol
 
-What the program says over the rings is its own **protocol**, a JSON file of
+What the program says in its frames is its own **protocol**, a JSON file of
 commands. Each command is an export, which the core handles, or an import, which
 the core sends, as a WIT world names them from the core's side. A command's
 number is its major and its minor, `major << 8 | minor`, and a program's majors
@@ -134,8 +138,8 @@ answered before it returns.
 }
 ```
 
-The **generator** writes both ends' code from the machine and the protocol
-files. `xpute-gen machine.json asker.json` writes the machine's constants for
+The **generator** writes both ends' code from the manifest and the protocol
+files. `xpute-gen manifest.json asker.json` writes the manifest's constants for
 both ends and, for the protocol, on the runtime the fields each export takes,
 by its number, the packets' readers and a handler for each import, and on the
 core a function for each import and a trait for the exports. The generated
@@ -147,16 +151,16 @@ files are committed, and `--check` fails where one is stale. It installs with
 The core crate holds the generated code and invokes one macro, `core!`, which
 defines the core in the form its target takes: a WebAssembly module on `wasm32`,
 and a native library anywhere else. A module's build script links it from the
-machine with one call, so that it imports its memory, puts its stack first and
+manifest with one call, so that it imports its memory, puts its stack first and
 places its data past the front. Off `wasm32` the macro expands to
 `xpute-runtime`'s native form, so the crate depends on `xpute-runtime` for every
 other target, and on `xpute-gpu` with its `runtime` feature there where the
-machine asks for a GPU. The core's entry runs one turn. The example's turn hands
-each waiting submission to the door, the core's end of the rings, and answers
+manifest asks for a GPU. The core's entry runs one turn. The example's turn hands
+each waiting submission to the door, the core's end of the channel, and answers
 its own commands through the generated `apply` and each of xpute's with 0:
 
 ```rust
-xpute_core::core!(machine::MACHINE, 0, entry);
+xpute_core::core!(manifest::MANIFEST, 0, entry);
 
 impl asker::Exports for Example {
     fn sum(&mut self, c: abi::Sum) -> Outcome {
@@ -166,55 +170,55 @@ impl asker::Exports for Example {
 }
 
 fn entry(_deadline_ms: f64, _boot: fn() -> BootInfo) -> f64 {
-    xpute_core::machine::door().turn(|s| match s {
-        Submission::Program(cmd, pkt) => asker::apply(&mut Example, cmd, &pkt),
+    xpute_core::io::door::door().receive(|s| match s {
+        Event::Program(cmd, pkt) => asker::apply(&mut Example, cmd, &pkt),
         _ => Ok(Some(0)),
-    })
+    });
+    NO_WAKE
 }
 ```
 
 What the entry returns says when the core wants its next turn: 0 for as soon as
 possible, a number of milliseconds, or a negative number for none until
-something arrives. The door's `turn` returns 0 while submissions are left, and
-none otherwise.
+something arrives. The door's `receive` takes every frame that waits, so a turn
+with nothing more to do returns none (`NO_WAKE`).
 
-### The manifest
+### The config
 
-On the JavaScript side the program declares its core once, in a **manifest**:
-the generated machine, and a function that makes the core's configuration where
-the core runs. The configuration holds what the program decides: where a page
-loads the module from, what answers the program's imports, its scheduling policy
-and what it submits with each turn, and, where the machine asks for them, what
-backs the files. A core that draws takes `@xpute/gpu` beside this, and is
-defined by `xpute_gpu::core!`.
+On the JavaScript side the program boots its core from two things, as
+`WebAssembly.instantiate` takes a module and its imports: the generated
+`MANIFEST`, and a function that makes the core's **config** where the core
+runs. The config holds what the program decides: where a page loads the module
+from, what answers the program's imports, its scheduling policy and what it
+submits with each turn, and, where the manifest asks for them, what backs the
+files. A core that draws takes `@xpute/gpu` beside this, and is defined by
+`xpute_gpu::core!`.
 
 ```ts
-export const manifest: Manifest = {
-  machine: MACHINE,
-  core: () => ({
-    core: {
-      module: new URL(CORE, import.meta.url),
-      bytes: MACHINE.mem_bytes[0],
-    },
-    program: asker_imports({ ask: () => ANSWER }),
-    policy: new Timeslice(4),
-    submit: () => {},
-  }),
-};
+export const core = (): Config => ({
+  core: {
+    module: new URL(CORE, import.meta.url),
+    bytes: MANIFEST.mem_bytes[0],
+  },
+  program: asker_imports({ ask: () => ANSWER }),
+  policy: new Timeslice(4),
+  submit: () => {},
+});
 ```
 
-`boot(manifest, ui)` brings the core up beside its caller, as the test does in
-Node, and `ui` says what the UI hears of the core: the imports it takes and
-the core's stop. A page keeps its turns off the thread that
-draws: it calls `start(manifest, ui, worker)`, the worker's module calls
-`serve(manifest)`, and a message port between them carries frames. Either way
-the UI receives a **link**, the same on every platform, through which it sends
-commands, asks for turns and says whether it is shown. A call waits on a turn, and the turns run in the worker, so across the
-port the page requests `SUM` instead, and the reply comes with a later turn:
+`boot(MANIFEST, core, ui)` brings the core up beside its caller, as the test
+does in Node, and `ui` says what the UI hears of the core: the protocols whose
+imports it takes and the core's stop. A page keeps its turns off the thread
+that draws: it calls `start(MANIFEST, ui, worker)`, the worker's module calls
+`serve(MANIFEST, core)`, and a message port between them carries frames. Either
+way the UI receives a **link**, the same on every platform, through which it
+sends commands, asks for turns, and says whether it is shown and reads it back.
+The UI never waits on the core: it requests `SUM`, and the reply comes with a
+later turn:
 
 ```ts
 const link = await start(
-  manifest,
+  MANIFEST,
   ui,
   () =>
     new Worker(new URL("./core.worker.ts", import.meta.url), {
@@ -232,8 +236,9 @@ autolinks, and names its core crate in its `package.json` under `xpute.core`.
 The app builds that crate for the device as it builds, and the module links it:
 a static library at `$PODS_CONFIGURATION_BUILD_DIR/Xpute/lib<crate>.a` on an
 iPhone, and a shared one among the app's `jniLibs` on Android.
-The app's bundler takes each `x.native.ts` in place of `x.ts`, so the same
-manifest boots the core beside the UI, on a thread of its own, with no worker.
+The app's bundler takes each `x.native.ts` in place of `x.ts`, and there
+`start(MANIFEST, core, ui)` boots the core beside the UI, on a thread of its
+own, with no worker.
 
 A C++ core takes xpute's library as two files, as SQLite ships its own: it
 includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with no exceptions,
@@ -246,7 +251,7 @@ no RTTI and no floating-point contraction, the flags `cpp/Makefile` builds with.
 
 The GPU is a plugin: `xpute-gpu` on the core's side, with its wgpu runtime behind
 the `runtime` feature, and `@xpute/gpu` on the runtime's. A core that draws gives
-its machine a stream and says what it asks of the device:
+its manifest a stream and says what it asks of the device:
 
 ```json
 {
@@ -258,25 +263,31 @@ its machine a stream and says what it asks of the device:
 }
 ```
 
-The generator writes `GPU_ASK` beside `MACHINE`, and the crate defines its core
+The generator writes `GPU_ASK` beside `MANIFEST`, and the crate defines its core
 through the plugin's macro, which also defines `admit_frame`, whether the GPU
 takes a frame now. The GPU's commands reach the program as any other, numbered
 by minors under a major the program chooses from its own, so its turn asks the
-plugin first and its UI names the same major (`gpu_protocol`, `gpu_grant`):
+plugin first and its UI names the same major (`gpu_exports`, `gpu_grant`):
 
 ```rust
-xpute_gpu::core!(MACHINE, FIXED_BYTES, entry, CONFIG, GPU_ASK);
+xpute_gpu::core!(MANIFEST, FIXED_BYTES, entry, CONFIG, GPU_ASK);
 
-match xpute_gpu::submission::decode(GPU_MAJOR, cmd, pkt)? {
-    Some(Submission::Ready) => {}      // a device answered
-    Some(Submission::Surface(s)) => {} // a surface opened, sized or closed
+match xpute_gpu::event::decode(GPU_MAJOR, cmd, pkt)? {
+    Some(Event::Ready) => {}      // a device answered
+    Some(Event::Surface(s)) => {} // a surface opened, sized or closed
     None => {}                         // the program's own command
 }
 ```
 
 On a page, `after_turn` runs the stream as each turn returns. The worker grants
-the GPU what the runtime holds, and a port of the app's carries the GPU's state
-up and the canvases down:
+the GPU what the runtime holds, with the program's settings for the page's
+runtime (`GpuConfig`, the page's counterpart of `CoreConfig`'s), and a port of
+the app's carries the GPU's state up and the canvases down. A page's runtime
+stages its buffer writes in mapped chunks of `upload_chunk_bytes`, as a device's
+does. `slow_ms` has the runtimes say a record of the stream, the stream's run,
+a completion's landing or the core's turn slower than that many milliseconds;
+on a page the core's
+runtime takes it in its config as well, and null, `None` or none times none:
 
 ```ts
 // The config, where the core runs.
@@ -284,7 +295,12 @@ up and the canvases down:
 
 // The worker.
 const gpu = new WebGpu();
-serve(manifest).then((runtime) => gpu_grant(gpu, runtime, MACHINE.gpu, GPU_MAJOR));
+serve(MANIFEST, core).then((runtime) =>
+  gpu_grant(gpu, runtime, MANIFEST.gpu, GPU_MAJOR, {
+    upload_chunk_bytes: 1 << 20,
+    slow_ms: null,
+  }),
+);
 gpu_serve(port, gpu);
 
 // The page.
@@ -293,14 +309,15 @@ binder.bind(handle, canvas);
 ```
 
 On a device the runtime runs the stream itself, and `@xpute/gpu`'s module opens
-the device and holds the view a surface draws into (`SurfaceView`):
+the device, opens it again after a loss as a page asks again, and holds the
+view a surface draws into (`SurfaceView`):
 
 ```ts
 const gpu = new NativeGpu();
 gpu.watch((state) => show(state));
 gpu.grant({
-  ready: () => gpu_protocol(link, GPU_MAJOR).send(GpuCommand.GPU_READY),
-  /* ... */
+  ready: () => gpu_exports(link, GPU_MAJOR).gpu_ready(),
+  shown: link.shown, // no ask is spent while the app is hidden
 });
 ```
 
@@ -322,14 +339,11 @@ bundler or Node's type stripping takes them with no build.
 - [ARCHITECTURE.md](./ARCHITECTURE.md) follows the same claim through each part,
   the memory, the turn, the channel, the two devices and the languages, and ends
   with the invariants every end keeps and a map of the code.
-- `spec/` is the contract itself: the header, the frame, the rings, the stream
+- `spec/` is the contract itself: the header, the frame, the stream
   and the devices' commands, from which every language's numbers are generated.
 - [XTP's README](./ts/kit/src/wire/xtp/README.md) describes the packet format
   that every frame carries.
 - `rust/dev/example` and `ts/dev/example` are the example above, whole.
-- `rust/dev/triangle` and `ts/dev/triangle` are a core that draws, on a page and
-  in an app, with what an app copies to build its core
-  (`ts/dev/triangle/app/script/core-build.py`, `modules/core`, `metro.config.js`).
 
 ## Running it
 

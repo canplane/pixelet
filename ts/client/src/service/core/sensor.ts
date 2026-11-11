@@ -2,7 +2,6 @@
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import {
-  Command,
   GeolocationErrorCode,
   PermissionAnswer,
   Sensor,
@@ -14,8 +13,10 @@ import * as sensor from "@/service/platform/sensor.ts";
 import { geo_fix, MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
 import { core } from "@/service/core/core.ts";
 
-export function locate(): void {
-  core.send(Command.SENSOR_LOCATE);
+/** Called from the press that asks for the location, which raises the
+ * permission's prompt or its settings. */
+export async function locate(): Promise<void> {
+  if (await sensor.geo.permit()) core.sensor_locate();
 }
 
 /** A reading the device could not give, such as NaN or an infinity, is sent
@@ -31,14 +32,7 @@ function core_pos(
   accuracy: f64 | null,
   course: f64 | null,
 ): void {
-  core.send(
-    Command.SENSOR_POS,
-    lon,
-    lat,
-    finite(alt),
-    finite(accuracy),
-    finite(course),
-  );
+  core.sensor_pos(lon, lat, finite(alt), finite(accuracy), finite(course));
 }
 
 function core_orient(
@@ -47,8 +41,7 @@ function core_orient(
   beta: f64 | null,
   gamma: f64 | null,
 ): void {
-  core.send(
-    Command.SENSOR_ORIENT,
+  core.sensor_orient(
     finite(webkit_compass_heading),
     finite(alpha),
     finite(beta),
@@ -77,14 +70,12 @@ const ANSWER = {
 
 export const SENSOR_LISTENER: SensorListener = {
   position: core_pos,
-  positionError: (err) =>
-    core.send(Command.SENSOR_ERR, Sensor.Geolocation, ERR[err]),
+  positionError: (err) => core.sensor_err(Sensor.Geolocation, ERR[err]),
   orientation: core_orient,
   // The compass gives no code for its failure.
-  orientationLost: () =>
-    core.send(Command.SENSOR_ERR, Sensor.Orientation, null),
+  orientationLost: () => core.sensor_err(Sensor.Orientation, null),
   permission: (sensor, answer) =>
-    core.send(Command.SENSOR_PERMISSION, SENSOR[sensor], ANSWER[answer]),
+    core.sensor_permission(SENSOR[sensor], ANSWER[answer]),
 };
 
 export function sensor_start(e: SensorStart): void {

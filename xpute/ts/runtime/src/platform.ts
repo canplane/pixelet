@@ -8,23 +8,23 @@
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import type { Core, Machine, ModuleSource } from "./runtime.ts";
+import type { Core, Manifest, ModuleSource } from "./runtime.ts";
 import { reserve_mem } from "./reserve.ts";
 import { open_module } from "./module.ts";
 
-/** Throws EINVAL without a source, or for a memory size the machine does not
+/** Throws EINVAL without a source, or for a memory size the manifest does not
  * allow. The module's clock, `env.now`, is `now`. The module is compiled from
  * its bytes rather than streamed, so that a `file:` URL works too: streaming
  * compilation refuses a response that is not `application/wasm`. */
 export async function open(
-  machine: Machine,
+  manifest: Manifest,
   source: ModuleSource | undefined,
   now: () => f64,
 ): Promise<Core> {
-  if (!source || !machine.mem_bytes.includes(source.bytes)) {
+  if (!source || !manifest.mem_bytes.includes(source.bytes)) {
     throw new InvariantError(Errno.EINVAL);
   }
-  const region = machine.region_bytes;
+  const region = manifest.region_bytes;
   const mem = reserve_mem([source.bytes / region], region);
   const wasm =
     source.module instanceof URL

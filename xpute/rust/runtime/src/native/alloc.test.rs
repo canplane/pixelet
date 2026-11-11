@@ -24,13 +24,11 @@ fn core() -> Core {
                 heap_at: HEAP_AT,
                 stack_bytes: 1 << 20,
                 thread_name: "test-core",
-                ready: || true,
-                form: xpute_runtime::native::Form {
-                    data_end: 0,
-                    now: native::now,
-                    stop_hook: None,
-                    publish: None,
-                },
+                data_end: 0,
+                now: native::now,
+                stop_hook: None,
+                publish: None,
+                slow_ms: None,
             },
             |_| -1.0,
         )

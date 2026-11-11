@@ -28,9 +28,6 @@ const KIND_LEFT = 0xfffffffeu;
 /// The answer where a slot keeps the node as a split at other zooms, or forgot it, so the walk
 /// goes into it without its box (cached.wgsl).
 const KIND_BLIND = 0xfffffffdu;
-/// How a walk ends at a lack where only the walk that asks may stop at one: its ray is walked
-/// again whole (`lack_ends`, queue_walk.wgsl).
-const ENDS_AGAIN = 6u;
 
 /// What was handed the node at `zoom` of the line at word `line` (pxl-engine
 /// `beam::LINE_INHERITANCE`).
@@ -86,8 +83,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
     top = false;
   }
   let last = start.step + min(steps, STEPS_CAP - min(start.step, STEPS_CAP));
-  // `ends` stays 0 while the walk goes on.
-  var ends = 0u;
+  var ends = ENDS_NONE;
   var asset = vec2<u32>(0u);
   var axis = 0u;
   var hit_t = t_max;
@@ -103,7 +99,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
     let t0 = max(t, largest(s.near));
     let t1 = min(t_max, smallest(s.far));
     var into = false;
-    var stops = false;
+    var hit = false;
     var inheritance = vec3<u32>(0u);
     // A node the ray only touches, at a face or an edge, is not entered, and nothing in it is
     // met.
@@ -111,7 +107,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
       let zooms = asked_zooms(lo, hi, range);
       let a = node_answer(parent, top, zoom, idx_of(corner, zoom, roots, r0), zooms, line != NONE);
       if (a.kind == KIND_LEFT) {
-        ends = 4u;
+        ends = ENDS_LEFT;
         hit_t = t;
         break;
       }
@@ -125,7 +121,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
         // A beam ray stops at a split too narrow to share where it meets the split's box, and
         // without the box that cannot be decided, so the walk is left here.
         if (beam && narrow(hi.x - lo.x, spacing_width(aim.spacing, squared(max(-lo, hi))))) {
-          ends = 4u;
+          ends = ENDS_LEFT;
           hit_t = t;
           break;
         }
@@ -149,42 +145,42 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
         let meets = max(t0, largest(b.near)) < min(t1, smallest(b.far));
         into = meets && !too_narrow;
         if (meets && too_narrow) {
-          ends = 1u;
-          stops = true;
+          ends = ENDS_CELL;
+          hit = true;
         }
       } else if (a.kind == KIND_CELL) {
         let inside = all(lo <= vec3<f32>(0.0)) && all(vec3<f32>(0.0) < hi);
         if (beam) {
           if (!clear) {
-            ends = 1u;
-            stops = true;
+            ends = ENDS_CELL;
+            hit = true;
           }
         } else if (!clear && !inside) {
           // A ray does not stop at the cell it starts inside. A cell that keeps less than its
           // cube is the box its share fills (pxl-engine `fill_bounds`).
           let k = (asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
           if (k == 0u) {
-            ends = 1u;
-            stops = true;
+            ends = ENDS_CELL;
+            hit = true;
           } else {
             let inset = (hi - lo) * (0.5 * (1.0 - side(k)));
             let b = span_of(dir, inv, lo + inset, hi - inset, t, t_max);
             if (min(t_max, smallest(b.far)) > max(t, largest(b.near))) {
               near_at = b.near;
-              ends = 1u;
-              stops = true;
+              ends = ENDS_CELL;
+              hit = true;
             }
           }
         }
       } else {
         ends = lack_ends();
-        stops = true;
+        hit = true;
       }
-      if (line != NONE && (into || stops || t1 >= t_max)) {
+      if (line != NONE && (into || hit || t1 >= t_max)) {
         line_hand(line, zoom, inheritance);
         end_in_line = !into;
       }
-      if (stops) {
+      if (hit) {
         // Where the ray enters the node, or the box of its share (pxl-engine `entry_plane`).
         axis = crossing(dir, near_at, true);
         hit_t = past_origin(near_at[axis]);
@@ -208,7 +204,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
       top = false;
     } else {
       if (t1 >= t_max) {
-        ends = 3u;
+        ends = ENDS_REACH;
         hit_t = t1;
         break;
       }
@@ -238,10 +234,10 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
       }
     }
   }
-  if (ends == 0u) {
+  if (ends == ENDS_NONE) {
     // The walk ran out of steps. Where it has taken `STEPS_CAP` steps in all it counts as gone
     // to its reach, as a walk a float sent wrong ends; otherwise it stops where it is.
-    ends = select(5u, 3u, step >= STEPS_CAP);
+    ends = select(ENDS_OUT, ENDS_REACH, step >= STEPS_CAP);
     hit_t = select(t, t_max, step >= STEPS_CAP);
   }
   if (line != NONE) {
@@ -256,8 +252,8 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
     beams[n + NODE_ROOTS] = u32(roots.x);
     beams[n + NODE_ROOTS + 1u] = u32(roots.y);
     beams[n + NODE_ROOTS + 2u] = u32(roots.z);
-    if (ends <= 3u && !end_in_line && !hand_end(line, parent, top, zoom, idx_of(corner, zoom, roots, r0))) {
-      ends = 4u;
+    if (ends <= ENDS_REACH && !end_in_line && !hand_end(line, parent, top, zoom, idx_of(corner, zoom, roots, r0))) {
+      ends = ENDS_LEFT;
     }
   }
   return WalkEnd(ends, zoom, corner, roots, asset, axis, hit_t, visits, parent, top, step);
@@ -265,7 +261,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
 
 /// The walk `w` ended as a lack at the deepest node it held, its ray going no further.
 fn to_lack(w: WalkEnd) -> WalkEnd {
-  return WalkEnd(2u, w.zoom, w.corner, w.roots, w.asset, w.axis, w.t, w.visits, w.parent, w.top, w.step);
+  return WalkEnd(ENDS_LACK, w.zoom, w.corner, w.roots, w.asset, w.axis, w.t, w.visits, w.parent, w.top, w.step);
 }
 
 /// The zooms at which the ray `aim` asks the node at `corner`, `zoom` and `roots`, as its walk

@@ -4,8 +4,7 @@
 //! places sections at `ALIGN(n)` boundaries. The memory never grows, so a view
 //! over it stays valid for the module's life.
 
-/// The unit every range begins on, and the heap buddy's smallest block: the
-/// page of a 32-bit machine with no MMU, which is what a core is.
+/// The unit every range begins on, and the heap buddy's smallest block.
 pub const PAGE_BYTES: u32 = 4096;
 
 // The buddy takes its smallest block as a log2.

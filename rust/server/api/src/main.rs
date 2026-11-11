@@ -16,7 +16,6 @@ async fn main() -> ExitCode {
     let server = Server {
         env: Env {
             prefix: "API",
-            default_port: 3002,
             db_url_key: "DB_MAIN_URL",
         },
         probe: Probe {

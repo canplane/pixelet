@@ -1,7 +1,8 @@
 // pxl-core/domain/control/input.rs
 
 //! The pointer's gestures and the movement keys, and what each asks of the
-//! camera: pan, rotate, pinch with its twist and tilt, and the wheel. A pan
+//! camera: pan, rotate, pinch with its twist and tilt, the wheel, and a
+//! trackpad's pinch, which the platform hands over as a scale. A pan
 //! by hand ends a pending destination, and a pointer down ends following
 //! the device. What the pointer is over, its hover and its tap, belongs to
 //! pxl-core pointer.rs. Events only gather what they ask, and the camera is
@@ -26,7 +27,7 @@ use crate::domain::control::navigation::destination::cancel as cancel_destinatio
 use crate::domain::control::navigation::follow_mode::set_following;
 use crate::domain::setting::store::settings;
 use crate::domain::view::frame::screen::size;
-use crate::sys::sched::edge::request_world_tick;
+use crate::sys::sched::request_world_tick;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 use xpute_kit::status::bug::OrBug;
@@ -80,6 +81,8 @@ struct Input {
     // The wheel's deltas are summed before a single exp(). That gives the
     // same zoom as one exp() per delta, since the exponents add.
     pending_wheel_delta_y: Option<f64>,
+    /// A trackpad pinch's scales since the last step, multiplied.
+    pending_pinch_scale: Option<f64>,
 
     /// The screen direction of the held keys, of unit length, or zero when
     /// none is held.
@@ -123,6 +126,7 @@ fn input() -> &'static mut Input {
         pending_view_x: 0.0,
         pending_view_y: 0.0,
         pending_wheel_delta_y: None,
+        pending_pinch_scale: None,
         keys: [0.0; 2],
         keys_at: 0.0,
         rotate_turn: None,
@@ -140,6 +144,12 @@ fn input() -> &'static mut Input {
 /// Negative because dragging up tilts toward the horizon.
 fn tilt_gain() -> f64 {
     -core::f64::consts::PI / (TILT_SWEEP_FRACTION * size()[1])
+}
+
+/// The polar angle a tilt asks for with the hand at `y`, a rotate drag's and a
+/// pinch's alike, or none while the tilt is locked (`tilt_lock`).
+fn tilt(anchor: &Anchor, y: f64) -> Option<f64> {
+    (!settings().tilt_lock).then(|| anchor.ask(y, linear(tilt_gain())))
 }
 
 fn update_pointer(s: &mut Input, view_x: f64, view_y: f64) {
@@ -180,8 +190,7 @@ fn do_rotate(s: &mut Input, view_x: f64, view_y: f64) {
     }
 
     if s.rotate_axis_lock == RotateAxisLock::Tilt {
-        if !settings().tilt_lock {
-            let polar = s.rotate_tilt.ask(view_y, linear(tilt_gain()));
+        if let Some(polar) = tilt(&s.rotate_tilt, view_y) {
             let took = controller::set_intent(IntentPatch {
                 polar: Some(polar),
                 ..Default::default()
@@ -246,8 +255,7 @@ fn update_pinch(s: &mut Input) {
     let intent = camera_state().intent;
     // A control that did not move is not asked, so a pinch that only zooms
     // writes no tilt.
-    let polar = s.pinch_tilt.ask(midpoint_y, linear(tilt_gain()));
-    let polar = (!settings().tilt_lock && polar != intent.polar).then_some(polar);
+    let polar = tilt(&s.pinch_tilt, midpoint_y).filter(|&p| p != intent.polar);
     let angle = libm::atan2(p1.y - p0.y, p1.x - p0.x);
     if dist < MIN_TWIST_DIST_PX {
         s.pinch_twist = None;
@@ -456,6 +464,11 @@ pub fn camera_wheel(delta_y: f64) {
     *input().pending_wheel_delta_y.get_or_insert(0.0) += delta_y;
 }
 
+/// A trackpad's pinch, its fingers' spread changed by `scale`.
+pub fn camera_pinch(scale: f64) {
+    *input().pending_pinch_scale.get_or_insert(1.0) *= scale;
+}
+
 /// The held movement keys. Each axis is -1, 0 or 1, with x to the right and
 /// y down.
 pub fn camera_keys(x: i32, y: i32) {
@@ -508,6 +521,9 @@ pub fn camera_input_step() {
     }
     if let Some(delta_y) = s.pending_wheel_delta_y.take() {
         controller::wheel(delta_y);
+    }
+    if let Some(scale) = s.pending_pinch_scale.take() {
+        controller::pinch_by(scale);
     }
 }
 

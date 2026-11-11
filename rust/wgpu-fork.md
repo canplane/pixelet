@@ -2,7 +2,7 @@
 
 A native GPU runtime draws with wgpu, taken from the fork
 [canplane/fork.wgpu](https://github.com/canplane/fork.wgpu), branch `xpute-30.0.1`,
-which is wgpu 30.0.1 with two commits on it. The program's Cargo workspace names
+which is wgpu 30.0.1 with three commits on it. The program's Cargo workspace names
 its revision in `[patch.crates-io]`, and every crate of wgpu's comes from it so that they stay one set.
 
 ## One command buffer an encoder
@@ -36,9 +36,25 @@ Simulator, decided by `target_abi = "sim"`: that indirect calls run, and that
 constant buffer offsets align to 256 bytes
 ([gfx-rs/wgpu#10189](https://github.com/gfx-rs/wgpu/issues/10189)).
 
+## Metal's pipeline cache
+
+Upstream's wgpu keeps a pipeline cache on Vulkan alone; on Metal its cache is
+empty ([gfx-rs/wgpu#8526](https://github.com/gfx-rs/wgpu/issues/8526)). In the
+fork a Metal cache is a binary archive (`MTLBinaryArchive`, in
+`wgpu-hal/src/metal/device.rs`), and `Features::PIPELINE_CACHE` is reported where
+the device takes one. A standard render pipeline and a compute pipeline look
+their functions up in the archive first and add them to it once made. Metal
+loads and serializes an archive only at a URL, so the data crosses through a
+file of its own under the system's temporary directory. A cache's validation key
+is the device's name and the system's version, and `wgpu-core` and
+`pipeline_cache_key` tell a Metal GPU by its name, since Metal names no vendor
+or device by number. It is the design proposed on that issue. xpute's native GPU
+runtime keeps the cache in the app's caches (xpute-gpu `runtime/cache.rs`), on
+Vulkan and Metal alike.
+
 ## When wgpu is upgraded
 
-The fork's two commits are rebased onto the new release, on a branch of its own, and
+The fork's three commits are rebased onto the new release, on a branch of its own, and
 a commit upstream has made unneeded is dropped. Where none is left the
 `[patch.crates-io]` tables go. wgpu-core's pass encoding is what the recording
 depends on, so the order of a pass's timestamp resets and writes and its deferred

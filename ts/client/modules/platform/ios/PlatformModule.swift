@@ -84,6 +84,14 @@ public class PlatformModule: Module {
       CLLocationManager.headingAvailable()
     }
 
+    // ---- the safe area (service/platform/safe-area.native.ts) ----
+
+    /// How much of the screen's bottom inset takes a touch, in points: none,
+    /// because the home indicator takes only a swipe.
+    Function("tappableBottom") { () -> Double in
+      0
+    }
+
     // ---- the keyboard (ts/client/src/ui/shared/component/above-keyboard.native.tsx, KeyboardDock.swift) ----
 
     // ---- the world's surface (service/platform/surface.native.tsx) ----

@@ -44,7 +44,7 @@ fn io(p: &Path, e: std::io::Error) -> String {
     format!("{}: {e}", p.display())
 }
 
-fn shard_tile(shard: Node) -> Quadrant {
+fn shard_quad(shard: Node) -> Quadrant {
     Quadrant::new(SHARD_ZOOM, shard.at)
 }
 
@@ -120,7 +120,7 @@ impl Stage {
         Ok(Some(
             shards
                 .into_iter()
-                .chain(self.whole()?.into_iter().map(shard_tile))
+                .chain(self.whole()?.into_iter().map(shard_quad))
                 .collect(),
         ))
     }
@@ -147,7 +147,7 @@ impl Stage {
         shard: Node,
         fill: impl FnOnce(&TileSet) -> Result<(), String>,
     ) -> Result<(), String> {
-        let at = shard_tile(shard);
+        let at = shard_quad(shard);
         fs::create_dir_all(&self.stage.root).map_err(|e| io(&self.stage.root, e))?;
         self.not_committing()?;
         self.remove_done(&shard.name())?;
@@ -178,7 +178,7 @@ impl Stage {
         self.not_committing()?;
         self.clear_fold(L::LEAF)?;
         let whole = self.whole()?;
-        let tiles: FnvHashSet<Quadrant> = whole.iter().copied().map(shard_tile).collect();
+        let tiles: FnvHashSet<Quadrant> = whole.iter().copied().map(shard_quad).collect();
         let mut changed: FnvHashSet<Quadrant> = self
             .stage
             .by_zoom()?
@@ -266,7 +266,7 @@ impl Stage {
             fs::rename(self.stage.path(p), self.set.path(p)).map_err(|e| io(&self.stage.path(p), e))
         };
         for shard in self.whole()? {
-            let at = shard_tile(shard);
+            let at = shard_quad(shard);
             for &p in staged
                 .get(&L::LEAF)
                 .into_iter()
@@ -293,32 +293,19 @@ impl Stage {
         self.remove_done(COMMIT)
     }
 
-    /// The set as a version is uploaded, into `to`, made empty first: every
-    /// tile, less where `pruned` those no reader asks for.
-    pub fn publish<L: Base>(&self, to: &Path, pruned: bool) -> Result<(), String> {
-        if to.exists() {
-            fs::remove_dir_all(to).map_err(|e| io(to, e))?;
-        }
-        fs::create_dir_all(to).map_err(|e| io(to, e))?;
+    /// The set as a version is uploaded (`TileSet::publish`): every tile
+    /// from the kind's coarsest, less, for a pruned kind, those no reader
+    /// asks for.
+    pub fn publish<L: Base>(&self) -> Result<(), String> {
         // A reader starts at the kind's coarsest, so no tile there goes.
-        let skip = if pruned {
+        let skip = if L::PRUNED {
             orphan_tiles::<L>(&self.set, L::COARSEST)?
         } else {
             FnvHashSet::default()
         };
-        for p in self
+        let to = self
             .set
-            .by_zoom()?
-            .into_values()
-            .flatten()
-            .filter(|p| p.zoom >= L::COARSEST && !skip.contains(p))
-        {
-            fs::hard_link(self.set.path(p), to.join(p.key()))
-                .map_err(|e| io(&self.set.path(p), e))?;
-        }
-        // What the copy is, which the set may stop being once it changes again.
-        let manifest = self.set.root.join(MANIFEST);
-        fs::copy(&manifest, to.join(MANIFEST)).map_err(|e| io(&manifest, e))?;
+            .publish(|p| p.zoom >= L::COARSEST && !skip.contains(&p))?;
         println!(
             "[bake] {}: {} tiles no reader asks for left out",
             to.display(),
@@ -409,7 +396,6 @@ impl Run {
         &self,
         absent: impl FnOnce(&Run) -> Result<A, String>,
         reads: &[&[&str]],
-        pruned: bool,
     ) -> Result<(), String> {
         if self.fold {
             self.stage.fold::<L>(&absent(self)?, self.concurrency)?;
@@ -431,9 +417,7 @@ impl Run {
             write_manifest(&self.stage.set, L::COARSEST, git_sha().as_deref(), fields)?;
         }
         if self.publish {
-            let mut to = self.stage.set.root.clone().into_os_string();
-            to.push(".publish");
-            self.stage.publish::<L>(Path::new(&to), pruned)?;
+            self.stage.publish::<L>()?;
         }
         Ok(())
     }

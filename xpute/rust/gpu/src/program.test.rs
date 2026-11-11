@@ -7,7 +7,7 @@
 //! stored that ticket at the fence, and the last turn reads the result back to
 //! the place the record names.
 
-use xpute_core::ipc::stream::Stream;
+use xpute_core::io::stream::Stream;
 
 use crate::encode::*;
 use crate::enums::*;

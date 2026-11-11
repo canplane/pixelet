@@ -7,10 +7,10 @@ use super::{or_refuse, refuse_unless};
 use crate::domain::control::sensor;
 use crate::domain::scene::resolution;
 use crate::domain::view::frame::pose::view_resize;
-use crate::sys::sched::edge::request_world_tick;
+use crate::sys::sched::request_world_tick;
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::surface;
-use xpute_core::ipc::door::Outcome;
+use xpute_core::io::door::Outcome;
 use xpute_gpu::abi::{GpuSurfaceClose, GpuSurfaceResize};
 use xpute_kit::status::errno::Errno;
 

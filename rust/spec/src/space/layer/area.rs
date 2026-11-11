@@ -8,7 +8,7 @@
 //! along shards' edges, which no node of a shard's size or finer straddles.
 
 use crate::space::coord::world::wrap_idx as wrap;
-use crate::space::coord::zoom::{idx_at, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, SHARD_ZOOM};
+use crate::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, SHARD_ZOOM};
 
 /// The shards a source serves, as one level of the pyramid at `SHARD_ZOOM` that the CPU and
 /// the GPU both read (`nine_at`). Every cell at that zoom has a key (`shard_key`, one of
@@ -197,20 +197,6 @@ impl Shard {
     }
 }
 
-/// The leaf tile holding the node's middle, with X as the world names it.
-pub fn tile_at(zoom: Zoom, c: [i32; 2]) -> [i32; 2] {
-    if zoom < LEAF_ZOOM {
-        let s = LEAF_ZOOM - zoom;
-        [
-            wrap(LEAF_ZOOM, (c[0] << s) + (1 << (s - 1))),
-            (c[1] << s) + (1 << (s - 1)),
-        ]
-    } else {
-        let s = zoom - LEAF_ZOOM;
-        [wrap(LEAF_ZOOM, c[0] >> s), c[1] >> s]
-    }
-}
-
 /// The service area's wall, the one rule that every reader asks, on the CPU and on a GPU
 /// alike. The column `b` at `cell_zoom` is the wall exactly where it is a leaf column or
 /// finer and the leaf cell holding it has a leaf cell beside it past the area. So the wall is
@@ -227,25 +213,6 @@ pub fn is_wall(shard: Shard, cell_zoom: Zoom, b: [i32; 2]) -> bool {
     let s = cell_zoom - LEAF_CELL_ZOOM;
     let l = [b[0] >> s, b[1] >> s];
     shard.walls((cell_zoom, b), [l, l])
-}
-
-/// Whether the wall (`is_wall`) may stand in the node `(zoom, c)` asked at `cell_zoom`:
-/// whether one of its columns is the wall, because a leaf cell in it or beside it is past the
-/// area (`Shard::walls`). A node wider than a shard may hold the area's edge anywhere, so for
-/// it the answer is always yes.
-pub fn is_walled(shard: Shard, cell_zoom: Zoom, (zoom, c): (Zoom, [i32; 2])) -> bool {
-    if cell_zoom < LEAF_CELL_ZOOM {
-        return false;
-    }
-    if zoom < SHARD_ZOOM {
-        return true;
-    }
-    let first = |v: i32| idx_at(zoom, v, LEAF_CELL_ZOOM);
-    let last = |v: i32| (idx_at(zoom, v + 1, LEAF_CELL_ZOOM) - 1).max(first(v));
-    shard.walls(
-        (zoom, c),
-        [[first(c[0]), first(c[1])], [last(c[0]), last(c[1])]],
-    )
 }
 
 /// Whether any leaf column among the leaf cells `lo` to `hi`, both included, is the wall

@@ -23,15 +23,11 @@ export class Deque<T> {
     return this.buf.length as u32;
   }
 
-  size(): u32 {
-    return this.len;
-  }
-
-  empty(): boolean {
+  is_empty(): boolean {
     return this.len === 0;
   }
 
-  full(): boolean {
+  is_full(): boolean {
     return this.len === (this.buf.length as u32);
   }
 
@@ -47,7 +43,7 @@ export class Deque<T> {
   }
 
   push_back(v: T): void {
-    if (this.full()) throw new InvariantError(Errno.ENOSPC);
+    if (this.is_full()) throw new InvariantError(Errno.ENOSPC);
     const cap = this.cap();
     const i = (this.head + this.len) % cap;
     this.buf[i] = v;
@@ -55,7 +51,7 @@ export class Deque<T> {
   }
 
   push_front(v: T): void {
-    if (this.full()) throw new InvariantError(Errno.ENOSPC);
+    if (this.is_full()) throw new InvariantError(Errno.ENOSPC);
     const cap = this.cap();
     this.head = (this.head + cap - 1) % cap;
     this.buf[this.head] = v;

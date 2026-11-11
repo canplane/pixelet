@@ -12,12 +12,12 @@ use pxl_spec::bake::publication::BaseLayer;
 use crate::sys::io::demand_spec;
 pub use crate::sys::io::demand_spec::StreamName as Stream;
 pub use crate::sys::io::demand_spec::TaskPhaseName;
-use crate::sys::io::file_spec::root;
+use crate::sys::io::file_spec::path;
 
 /// Where a stream's wants come from. A `Load` want is an asset file by its
 /// id, which the loader opens (sys/io/loader.rs). A `Bake` want is a bake's
-/// tile by its quadrant, below the root of the bake's kind. An `Objects` want
-/// is a shard's objects or the objects' top, which no bake makes, below
+/// tile by its quadrant, after the bake's id. An `Objects` want
+/// is a shard's objects or the objects' top, which no bake makes, after
 /// OBJECT.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Source {
@@ -98,13 +98,16 @@ impl Stream {
         }
     }
 
-    /// The root that the stream's files are opened below (file.json `root`),
-    /// with a want's id as the path. A load has none, because the loader
-    /// chooses its root.
-    pub const fn root(self) -> Option<u32> {
+    /// The id the stream's files' paths begin with (file.json `path`), a
+    /// want's id naming the file after it. A load has none,
+    /// because the loader makes its own paths.
+    pub const fn token(self) -> Option<u32> {
         match self.row().source {
-            Source::Bake(layer) => Some(layer as u32),
-            Source::Objects => Some(root::OBJECT),
+            Source::Bake(BaseLayer::terrain) => Some(path::TERRAIN::ID),
+            Source::Bake(BaseLayer::place) => Some(path::PLACE::ID),
+            Source::Bake(BaseLayer::division) => Some(path::DIVISION::ID),
+            Source::Bake(BaseLayer::earth) => Some(path::EARTH::ID),
+            Source::Objects => Some(path::OBJECT::ID),
             Source::Load => None,
         }
     }

@@ -19,9 +19,9 @@ pub(super) mod turn;
 
 use super::State;
 use crate::door::cmd::{self as abi, ui};
-use crate::sys::sched::edge;
-use xpute_core::ipc::door::Outcome;
-use xpute_gpu::submission::Surface;
+use crate::sys::sched::request_world_tick;
+use xpute_core::io::door::Outcome;
+use xpute_gpu::event::Surface;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
@@ -50,7 +50,7 @@ fn bearing(deg: Option<f64>) -> bool {
 /// post to the runtime as it ends. That way a sensor close sent while turns
 /// are paused is still heard.
 fn ask_turn(s: &mut State) -> Outcome {
-    edge::request_world_tick();
+    request_world_tick();
     s.snapshot_due = true;
     Ok(Some(0))
 }
@@ -97,6 +97,9 @@ impl ui::Exports for State {
     }
     fn input_wheel(&mut self, c: abi::InputWheel) -> Outcome {
         input::wheel(c)
+    }
+    fn input_pinch(&mut self, c: abi::InputPinch) -> Outcome {
+        input::pinch(c)
     }
     fn input_move(&mut self, c: abi::InputMove) -> Outcome {
         input::r#move(c)

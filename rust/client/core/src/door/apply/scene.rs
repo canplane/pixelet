@@ -10,7 +10,7 @@ use crate::domain::scene::resolution;
 use crate::door::cmd as abi;
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::surface;
-use xpute_core::ipc::door::Outcome;
+use xpute_core::io::door::Outcome;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 

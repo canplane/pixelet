@@ -60,8 +60,11 @@ fn add_cnt(on: bool, lane: u32) {
 
 /// Lists pixel or slot `p` as a hole, its column in the low 16 bits and its row in the high.
 /// The holes' list lies at word `at` of `beams`, its count first and its entries after it
-/// (pxl-engine `ray::holes_at`, `light::holes_at`). The entry's place is taken from the count
-/// in `args`.
-fn list_hole(at: u32, p: vec2<u32>) {
-  beams[at + 1u + atomicAdd(&args.cnt, 1u)] = p.x | (p.y << 16u);
+/// (pxl-engine `ray::holes_at`, `light::holes_at`), with room for `cap`. The entry's place is
+/// taken from the count in `args`, and a place past the room is not written.
+fn list_hole(at: u32, cap: u32, p: vec2<u32>) {
+  let k = atomicAdd(&args.cnt, 1u);
+  if (k < cap) {
+    beams[at + 1u + k] = p.x | (p.y << 16u);
+  }
 }

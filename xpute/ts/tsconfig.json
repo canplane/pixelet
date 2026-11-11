@@ -27,5 +27,5 @@
     "vitest.config.ts",
     "vitest.setup.ts"
   ],
-  "exclude": ["**/node_modules", "target", "**/*.native.ts", "dev/triangle/app"]
+  "exclude": ["**/node_modules", "target", "**/*.native.ts"]
 }

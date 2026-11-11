@@ -3,13 +3,13 @@
 // GENERATED from spec/gpu/api.json
 //
 // The calls a core makes to a GPU it cannot reach, written as records of a stream
-// (ipc/stream). The vocabulary is WebGPU's, with its descriptors written out as words, and
+// (io/stream). The vocabulary is WebGPU's, with its descriptors written out as words, and
 // it serves any program. A record is an op, a count, and the op's words in the order the
 // op's doc lists them. Bytes go as a count followed by padded words, as the stream lays
 // them. Objects are named by the core's handles (abi/handle). An optional field holds NONE
 // when it is unset. Render and compute ops sit side by side.
 //
-// A transaction (ipc/stream) that does not commit drops its records and gives back the
+// A transaction (io/stream) that does not commit drops its records and gives back the
 // handles they took, so the runtime never hears of those objects. The encoder's begin and
 // commit open and close the transaction on both the stream and the handle table.
 

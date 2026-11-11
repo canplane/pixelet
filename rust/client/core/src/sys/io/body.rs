@@ -34,7 +34,7 @@ use xpute_core::mem::section::PAGE_BYTES;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param::{BODY_RUN_BYTES, BODY_RUN_SLOTS, BODY_SLOTS};
 use crate::sys::io::room::Refusal;
-use crate::sys::sched::edge;
+use crate::sys::sched;
 
 struct Run {
     at: usize,
@@ -204,7 +204,7 @@ unsafe fn give(block: Block) {
     run.out &= !bit;
     s.releases = s.releases.wrapping_add(1);
     if core::mem::take(&mut s.waited) {
-        edge::request_world_tick();
+        sched::request_world_tick();
     }
     if run.out == 0 {
         let run = s.runs.swap_remove(i);

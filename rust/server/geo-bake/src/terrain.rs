@@ -19,6 +19,8 @@ use pxl_spec::space::layer::quadrant::{neighborhood, Quadrant};
 pub(crate) const CELL_U: f64 = units(GROUND.leaf_cell_zoom());
 
 impl Base for TerrainTile {
+    const PRUNED: bool = false;
+
     /// The packet, refused past the limit a client holds one to
     /// (pxl-spec `BaseLayer::row`).
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {

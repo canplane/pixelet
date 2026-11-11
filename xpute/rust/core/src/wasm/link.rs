@@ -26,7 +26,7 @@ pub struct LinkConfig {
     /// memory (`--stack-first`).
     pub stack_bytes: u32,
     /// Where the linker's own data begins (`--global-base`), for a core that
-    /// keeps the front of the memory below its data (`crate::machine`).
+    /// keeps the front of the memory below its data (`crate::manifest`).
     pub global_base: Option<u32>,
     /// The least memory the module can be instantiated with
     /// (`--initial-memory`), so that a runtime handing it less fails at once.

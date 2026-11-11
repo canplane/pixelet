@@ -22,7 +22,7 @@ pub struct File {
     pub extent: Option<[f64; 3]>,
 }
 
-/// Every file, in the order that numbers it below the asset root from 1.
+/// Every file, in the order that numbers it after ASSET from 1.
 pub fn files() -> Result<Vec<File>, String> {
     let spec = read(INGEST_JSON)?;
     let rows = spec
@@ -52,7 +52,7 @@ pub fn files() -> Result<Vec<File>, String> {
         .collect()
 }
 
-/// `path`'s number below the asset root, from 1.
+/// `path`'s number after ASSET, from 1.
 pub(crate) fn file_number(path: &str) -> Result<u32, String> {
     static PATHS: OnceLock<Result<Vec<String>, String>> = OnceLock::new();
     let paths = PATHS
@@ -164,7 +164,7 @@ fn render_ts(rows: &[File], pack: &Pack) -> Result<String, String> {
         r#"// @pxl/client/service/origin/ingest.spec.ts
 //
 // GENERATED from spec/spec/asset/ingest.json
-// Every shipped asset by its number below the asset root, file n at
+// Every shipped asset by its number after ASSET, file n at
 // `ASSET_FILES[n - 1]` (ts/client/src/service/sys/fs/asset.ts): the bucket key
 // (the SHA-256 of its bytes, which where it lies does not change), its size,
 // and for a model its extent in ENU world units, measured from the glb. The

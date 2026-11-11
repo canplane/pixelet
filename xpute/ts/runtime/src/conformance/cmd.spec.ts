@@ -31,10 +31,10 @@ export const MARK = 4104 as number;
 /** Reads the runtime's clock and replies with the whole milliseconds since the last MARK. */
 export const SINCE = 4105 as number;
 
-/** Opens a file on behalf of an owner, the packet's number, and replies with the
- * descriptor. The open's FS_OPENAT is posted for the file device, which no trace's runtime
- * takes. When a trace completes the open (`complete`), the core raises OPENED for that
- * owner if the descriptor is still open. */
+/** Opens the file (1, "f") on behalf of an owner, the packet's number, and replies with the
+ * descriptor. The open's FS_OPEN is posted for the file device, which no trace's runtime
+ * takes. When a trace completes the open (`complete`), the core raises OPEN_COMPLETION for
+ * that owner if the descriptor is still open. */
 export const OPEN = 4106 as number;
 
 /** Closes the packet's descriptor, whether or not its open has completed; fails with EBADF
@@ -54,6 +54,6 @@ export const INC = 4109 as number;
 /** The import that RAISE raises. */
 export const NOTE = 4353 as number;
 
-/** An open has completed. The frame is tagged with the open's owner, and its result is
- * what the runtime completed the open with. */
-export const OPENED = 4354 as number;
+/** An open's completion, handed on. The frame is tagged with the open's owner, and its
+ * result is what the runtime completed the open with. */
+export const OPEN_COMPLETION = 4354 as number;

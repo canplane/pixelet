@@ -5,15 +5,19 @@
 //! platform. `native` is the runtime for a core linked into the runtime's own
 //! process; it exists only on unix, because it maps the core's memory through
 //! libc. `jni` exports that native core to the Kotlin of an Android app.
+//! `abort_report` is the core's stop report as the runtime logs it.
 //!
 //! A program that links its core in writes one xpute-core `core!` over its
-//! machine, and outside WebAssembly `core!` expands to `native_core!`. A
+//! manifest, and outside WebAssembly `core!` expands to `native_core!`. A
 //! program that lays out its own memory instead declares the allocator and
 //! writes one `native_abi!`, as this example does:
 //!
 #![cfg_attr(unix, doc = concat!("```\n", include_str!("../examples/native.rs"), "```"))]
 
 pub mod mem;
+
+mod report;
+pub use report::abort_report;
 
 #[cfg(unix)]
 pub mod native;

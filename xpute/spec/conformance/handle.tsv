@@ -22,15 +22,15 @@ C6.reuse.step.11	submit 12 ISSUE ack
 C6.reuse.step.12	submit 13 ISSUE ack
 C6.reuse.step.13	submit 14 ISSUE ack
 C6.reuse.step.14	submit 15 ISSUE ack
-C6.reuse.step.15	ring 0
+C6.reuse.step.15	run 0
 C6.reuse.step.16	submit 16 RELEASE ack $h1
 C6.reuse.step.17	submit 17 ISSUE ack
-C6.reuse.step.18	ring 0
+C6.reuse.step.18	run 0
 C6.reuse.step.19	submit 18 USE ack $h1
 C6.reuse.step.20	submit 19 USE ack $h16
 C6.reuse.step.21	submit 20 RELEASE ack $h1
 C6.reuse.step.22	submit 21 USE ack 0
-C6.reuse.step.23	ring 0
+C6.reuse.step.23	run 0
 #
 # A handle is issued to each slot, and none is 0.
 C6.reuse.turn.0.completions	1:ISSUE=$h1 2:ISSUE=$h2 3:ISSUE=$h3 4:ISSUE=$h4 5:ISSUE=$h5 6:ISSUE=$h6 7:ISSUE=$h7 8:ISSUE=$h8 9:ISSUE=$h9 10:ISSUE=$h10 11:ISSUE=$h11 12:ISSUE=$h12 13:ISSUE=$h13 14:ISSUE=$h14 15:ISSUE=$h15

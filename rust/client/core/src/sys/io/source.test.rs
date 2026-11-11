@@ -17,36 +17,41 @@ fn formats() -> Vec<u32> {
 // this source serves.
 #[test]
 fn src_serves_by_shard() {
-    let s = parse(4, &formats(), ["0103300", "01033210"]).expect("a declaration the client reads");
-    for served in [
-        "01033",
-        "0103300",
-        "010330012",
-        "010332",
-        "01033210",
-        "010332103",
-    ] {
-        assert!(s.covers(tile(served)), "{served}");
-    }
-    for beside in ["01032", "0103301", "01033211", "010332110"] {
-        assert!(!s.covers(tile(beside)), "{beside}");
-    }
+    crate::on_core(|| {
+        let s =
+            parse(4, &formats(), ["0103300", "01033210"]).expect("a declaration the client reads");
+        for served in [
+            "01033",
+            "0103300",
+            "010330012",
+            "010332",
+            "01033210",
+            "010332103",
+        ] {
+            assert!(s.covers(tile(served)), "{served}");
+        }
+        for beside in ["01032", "0103301", "01033211", "010332110"] {
+            assert!(!s.covers(tile(beside)), "{beside}");
+        }
+    });
 }
 
 #[test]
 fn unfollowable_decl_refused() {
-    let f = formats();
-    // One declaration gives terrain a format past the one this client reads,
-    // and another gives the Earth no format.
-    let mut unread = f.clone();
-    unread[BaseLayer::terrain as usize] += 1;
-    let short = &f[..f.len() - 1];
-    assert!(parse(4, &unread, []).is_none(), "an unread format");
-    assert!(parse(4, short, []).is_none(), "a kind with no format");
-    assert!(
-        parse(4, &f, ["010330012"]).is_none(),
-        "a name finer than a shard"
-    );
-    assert!(parse(3, &f, []).is_none(), "a zoom above the pyramid");
-    assert!(parse(16, &f, []).is_none(), "a zoom below the leaves");
+    crate::on_core(|| {
+        let f = formats();
+        // One declaration gives terrain a format past the one this client reads,
+        // and another gives the Earth no format.
+        let mut unread = f.clone();
+        unread[BaseLayer::terrain as usize] += 1;
+        let short = &f[..f.len() - 1];
+        assert!(parse(4, &unread, []).is_none(), "an unread format");
+        assert!(parse(4, short, []).is_none(), "a kind with no format");
+        assert!(
+            parse(4, &f, ["010330012"]).is_none(),
+            "a name finer than a shard"
+        );
+        assert!(parse(3, &f, []).is_none(), "a zoom above the pyramid");
+        assert!(parse(16, &f, []).is_none(), "a zoom below the leaves");
+    });
 }

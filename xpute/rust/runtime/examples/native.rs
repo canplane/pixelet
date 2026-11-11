@@ -21,13 +21,11 @@ mod program {
             heap_at: 16 * xpute_core::mem::section::PAGE_BYTES,
             stack_bytes: 1 << 20,
             thread_name: "demo",
-            ready: || true,
-            form: xpute_runtime::native::Form {
-                data_end: 0,
-                now: native::now,
-                stop_hook: None,
-                publish: None,
-            },
+            data_end: 0,
+            now: native::now,
+            stop_hook: None,
+            publish: None,
+            slow_ms: None,
         },
         turn
     );

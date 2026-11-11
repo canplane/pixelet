@@ -230,16 +230,7 @@ fn debug_looks() -> String {
         share::finer::most == 1.0 && share::within::most == spans * spans,
         "debug_look.json's share bounds are the split's"
     );
-    let light = |c: u32| {
-        [c >> 16, c >> 8, c].map(|v| {
-            let v = (v & 255) as f32 / 255.0;
-            if v <= 0.04045 {
-                v / 12.92
-            } else {
-                libm::powf((v + 0.055) / 1.055, 2.4)
-            }
-        })
-    };
+    let light = |c: u32| color::linear_rgb(c).map(|v| v as f32);
     let parts = |v: [f32; 3]| format!("{:?}, {:?}, {:?}", v[0], v[1], v[2]);
     let vec3 = |v: [f32; 3]| format!("vec3f({})", parts(v));
     let ramp: Vec<String> = steps::ramp.iter().map(|&c| vec3(light(c))).collect();
@@ -307,7 +298,7 @@ const _: () = {
 /// that defines it.
 fn walk_word() -> String {
     use pxl_engine::clipmap::{self, Lookup};
-    use pxl_engine::object::{NodeSlot, RECTS};
+    use pxl_engine::object::{NodeSlot, DAMAGE_CAP};
     use pxl_engine::{
         answer, beam, cast, count, eye, face, light, node_cache, param, raster, ray, record,
     };
@@ -640,7 +631,7 @@ fn walk_word() -> String {
         ("NODE_CACHE_RECTS_AT", node_cache::RECTS_AT),
         ("NODE_CACHE_WRITTEN_AT", node_cache::WRITTEN_AT),
         ("NODE_CACHE_WRITTEN_CAP", node_cache::WRITTEN_CAP),
-        ("NODE_CACHE_RECTS", RECTS),
+        ("NODE_CACHE_RECTS", DAMAGE_CAP),
         ("KEYS_AT", node_cache::KEYS_AT),
         ("STATES_AT", node_cache::STATES_AT),
         ("RECS_AT", node_cache::RECS_AT),

@@ -17,8 +17,8 @@ use crate::frame::shader::word::frame::{
 };
 use crate::frame::shader::word::{DRAW_FLOATS, FRAME_FLOATS};
 use crate::gpu::api::{
-    buffer_usage, bytes, pass_desc, release, word_bytes, Entry, Gpu, Image, Load, RenderContext,
-    TrackedRenderPass,
+    buffer_usage, bytes, pass_desc, release, word_bytes, Entry, Gpu, Group, Image, Load,
+    RenderContext, TrackedRenderPass,
 };
 use crate::gpu::draw::{Draw, Position};
 use crate::gpu::pipeline::PipelineCache;
@@ -30,7 +30,7 @@ use crate::gpu::upload::uploads;
 use crate::look::color::linear_rgb;
 use crate::pass::atmosphere::AIR_ENTRIES;
 use crate::pass::finish::Finish;
-use crate::pass::model::{frame_layout, FrameGroup, Stage};
+use crate::pass::model::{frame_entries, frame_layout, Stage};
 use crate::pass::shadow::Shadow;
 use crate::pass::skinned_mesh::SkinnedPass;
 
@@ -39,7 +39,7 @@ pub struct CharacterPass {
     /// The buffer the skinned pass reads its draw uniforms from here. It has
     /// one slot, which holds the character's.
     draw_buf: u32,
-    frame_group: FrameGroup,
+    frame_group: Group,
     pub skinned_mesh: SkinnedPass,
     finish: Finish,
     /// What the surface's picture was made of when it was last drawn: the
@@ -85,10 +85,16 @@ impl CharacterPass {
         let layout = frame_layout(g, pipelines);
         let mut skinned_mesh = SkinnedPass::new(g, pipelines, align);
         skinned_mesh.set_draws(g, draw_buf);
+        let mut frame_group = Group::default();
+        frame_group.set(
+            g,
+            layout,
+            &frame_entries(frame_buf, shadow.blank_entries(1), air),
+        );
         CharacterPass {
             frame_buf,
             draw_buf,
-            frame_group: FrameGroup::new(g, layout, frame_buf, shadow.blank_entries(1), air),
+            frame_group,
             skinned_mesh,
             finish: Finish::new(g, pipelines),
             read: Read::default(),
@@ -101,7 +107,7 @@ impl CharacterPass {
         self.finish.set_groups(g, self.frame_buf, s, None);
     }
 
-    pub fn release(self) {
+    pub fn release(mut self) {
         self.frame_group.release();
         release(self.frame_buf);
         release(self.draw_buf);
@@ -202,7 +208,7 @@ impl CharacterPass {
             core::iter::once(rec),
             uploads(),
             Stage::Lit,
-            self.frame_group.frame,
+            self.frame_group.id(),
         );
         pass.end();
         // The finish encodes the color onto the surface's canvas by this

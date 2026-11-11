@@ -72,7 +72,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
 
     let mut ts = vec!["// @pxl/client/service/origin/publication.spec.ts".to_string()];
     ts.extend(header.iter().cloned());
-    ts.push("/** The base layers by the number the core names one by: the root a bake's objects are opened below (xpute's OPENAT). */".into());
+    ts.push("/** The base layers, each a bake's kind. */".into());
     ts.push(format!(
         "export const BASE_LAYERS = [{}] as const;",
         list(&|k| json_str(k))

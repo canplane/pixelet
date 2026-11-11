@@ -5,6 +5,7 @@
 
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
 use xpute_core::abi::handle::handle_slot;
 use xpute_runtime::mem::Memory;
@@ -22,9 +23,29 @@ use crate::enums::{
 };
 use crate::spec::{op, NONE, STATUS, SURFACE_PREFERRED};
 
+/// Runs `f`, and where `slow` is some and `f` took longer, says `[gpu] <what>
+/// took <ms> ms`, the whole milliseconds, as a page's runtime says it
+/// (`CoreConfig::slow_ms`, ts/gpu `timed`).
+pub(super) fn timed<R>(
+    slow: Option<u32>,
+    what: impl core::fmt::Display,
+    f: impl FnOnce() -> R,
+) -> R {
+    let Some(slow) = slow else {
+        return f();
+    };
+    let t0 = Instant::now();
+    let r = f();
+    let ms = t0.elapsed().as_millis();
+    if ms > u128::from(slow) {
+        xpute_runtime::native::say(&format!("[gpu] {what} took {ms} ms"));
+    }
+    r
+}
+
 /// Hands the stream at `at` back to the core, whether or not it was run:
 /// END is stored back to 0 with release, and only where the core published a
-/// count (xpute-core ipc/stream.rs R1, R2). Call it once nothing more of the
+/// count (xpute-core io/stream.rs R1, R2). Call it once nothing more of the
 /// records is read.
 pub fn release(mem: &mut Memory<'_>, at: u32) {
     if mem.load_acquire(at) != 0 {
@@ -37,15 +58,17 @@ impl GpuRuntime {
     /// (`release`). A frame the stream drew counts as unfinished before the
     /// core can ask to draw another.
     pub fn run(&mut self, mem: &mut Memory<'_>, at: u32) {
-        self.execute(mem, at);
-        if core::mem::take(&mut self.drew) {
-            self.count_frame();
-        }
+        timed(self.slow_ms, "run", || {
+            self.execute(mem, at);
+            if core::mem::take(&mut self.drew) {
+                self.count_frame();
+            }
+        });
         release(mem, at);
     }
 
     /// Runs the records of the stream at `at`, laid out as xpute-core
-    /// ipc/stream.rs says, and keeps the stream.
+    /// io/stream.rs says, and keeps the stream.
     fn execute(&mut self, mem: &mut Memory<'_>, at: u32) {
         let end = mem.load_acquire(at);
         let head = mem.word(at + 4);
@@ -64,12 +87,14 @@ impl GpuRuntime {
                     .iter()
                     .map(|w| u32::from_le_bytes(*w)),
             );
-            self.record(mem, code, &mut WordCursor::new(&scratch));
+            timed(self.slow_ms, format_args!("op {code}"), || {
+                self.record(mem, code, &mut WordCursor::new(&scratch))
+            });
             self.scratch = scratch;
             k += 2 + n;
         }
-        // The turn's staged writes reach the queue with the turn, as the
-        // web's writeBuffer does.
+        // The turn's staged writes reach the queue with the turn, as a page's
+        // runtime submits its own.
         if self.uploads.is_some() {
             self.submit(core::iter::empty());
         }
@@ -103,7 +128,7 @@ impl GpuRuntime {
     /// every chunk is taken, it submits the writes so far and waits on the
     /// queue until a chunk is back, as a driver's staging ring waits for the
     /// GPU. It must wait: a write record has no refusal, and its bytes are the
-    /// runtime's only while the record runs (xpute-core ipc/stream.rs R3), so
+    /// runtime's only while the record runs (xpute-core io/stream.rs R3), so
     /// they are staged before the record returns. It answers none only where
     /// the device is gone and its chunks' mappings were refused; the write is
     /// then lost with everything else the loss ends.
@@ -129,7 +154,7 @@ impl GpuRuntime {
     }
 
     /// Lets the object at `id` go. The writes staged so far reach the queue
-    /// first, where the web's writeBuffer already is, since a submit refuses a
+    /// first, as a page's runtime submits its own, since a submit refuses a
     /// copy into what has been destroyed.
     pub(super) fn destroy(&mut self, id: u32) {
         self.making.remove(&handle_slot(id));
@@ -813,7 +838,7 @@ impl GpuRuntime {
                         )
                     }) as u32,
                 );
-                self.tell_unfinished(mem);
+                self.tell_counts(mem);
                 mem.store_release(addr + 4 * device::STATUS_AT as u32, STATUS::READY);
             }
             _ => panic!("[gpu] op {code} is no op of spec/gpu/api.json"),
@@ -827,12 +852,18 @@ impl GpuRuntime {
         })
     }
 
+    /// The cache a pipeline the maker compiles goes through, where there is one.
+    fn pipeline_cache(&self) -> Option<wgpu::PipelineCache> {
+        self.cache.as_ref().map(|c| c.pipelines.clone())
+    }
+
     fn compute_pipeline(&mut self, r: &mut WordCursor) -> (u32, Make) {
         let id = r.u();
         let layout = self.pipeline_layout(r.opt());
         let module = self.shader(r.u()).clone();
         let entry = r.text().to_string();
         let device = self.device.clone();
+        let cache = self.pipeline_cache();
         let make: Make = Box::new(move || {
             Object::ComputePipeline(device.create_compute_pipeline(
                 &wgpu::ComputePipelineDescriptor {
@@ -841,7 +872,7 @@ impl GpuRuntime {
                     module: &module,
                     entry_point: Some(&entry),
                     compilation_options: Default::default(),
-                    cache: None,
+                    cache: cache.as_ref(),
                 },
             ))
         });
@@ -929,6 +960,7 @@ impl GpuRuntime {
         let fragment_module = fragment_module.map(|m| self.shader(m).clone());
         let depth_format = depth_format.map(|f| of(&self.names.texture_format, f, "format"));
         let device = self.device.clone();
+        let cache = self.pipeline_cache();
         let make: Make = Box::new(move || {
             let vertex_buffers: Vec<Option<wgpu::VertexBufferLayout>> = buffers
                 .iter()
@@ -979,7 +1011,7 @@ impl GpuRuntime {
                         targets: &targets,
                     }),
                     multiview_mask: None,
-                    cache: None,
+                    cache: cache.as_ref(),
                 }),
             )
         });

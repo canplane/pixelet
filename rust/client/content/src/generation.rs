@@ -147,10 +147,10 @@ pub const fn generated_for(header: [u32; 3], q: [i32; 2]) -> bool {
     header[2] == 1 && header[0] as i32 == q[0] && header[1] as i32 == q[1]
 }
 
-/// The most boxes a frame's generation is asked over: the edits and cuts held
-/// (`object::RECTS`), and each brick handed over this frame, which reaches its clip level's
+/// The most boxes a frame's generation is asked over: the damage and cuts held
+/// (`object::DAMAGE_CAP`), and each brick handed over this frame, which reaches its clip level's
 /// zoom and every coarser one (`asks`'s vote).
-pub const RECT_CAP: u32 = object::RECTS + clipmap::FRAME_BRICKS;
+pub const RECT_CAP: u32 = object::DAMAGE_CAP + clipmap::FRAME_BRICKS;
 /// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the finest clip level
 /// zoom whose candidates it reaches, or `EVERY` for all.
 pub const RECT_WORDS: u32 = 5;
@@ -217,13 +217,13 @@ pub const fn brick_rect(cell_zoom: Zoom, q: [i32; 2]) -> [i32; 4] {
     [q[0] << k, q[1] << k, (q[0] + 1) << k, (q[1] + 1) << k]
 }
 
-/// Whether one of the frame's boxes, `b` of leaf cells at `zoom` (`RECT_WORDS`), reaches what
-/// a candidate in `at` reads, where `at` is leaf cells of the clip level at `cell_zoom`: a
+/// Whether one of the frame's boxes, `b` of leaf cells at `zoom` (`RECT_WORDS`), reaches what a
+/// candidate in `at` reads, where `at` is leaf cells of the clip level at `cell_zoom`: a
 /// brick's (`brick_rect`), or one candidate's own. A candidate reads the world at its clip
 /// level's zoom and finer, each read a cell within `READ_REACH` of its own at that zoom. A
 /// brick filled at `zoom` answers only reads at `zoom` or finer (`clipmap::step`), so it
 /// reaches the clip levels at `zoom` and coarser, within `READ_REACH` of its own cells, not of
-/// theirs. An edit or a cut (`EVERY`) is read at every zoom, so it reaches within
+/// theirs. A box of damage or a cut (`EVERY`) is read at every zoom, so it reaches within
 /// `READ_REACH` of the clip level's own cells.
 pub fn reaches(b: [i32; 4], zoom: Zoom, cell_zoom: Zoom, at: [i32; 4]) -> bool {
     if zoom != EVERY && zoom < cell_zoom {

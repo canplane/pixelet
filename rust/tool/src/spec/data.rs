@@ -85,7 +85,7 @@ const DATA_SPECS: [DataSpec; 20] = [
     DataSpec {
         json: "spec/client/render/api.json",
         ts: Some("ts/client/src/abi/gpu.spec.ts"),
-        ts_names: Some(&["surface_role", "stream"]),
+        ts_names: Some(&["surface_role", "stream", "device"]),
         rs: Some("rust/client/render/src/api.spec.rs"),
         module: "api_spec",
         ..DataSpec::DEFAULT

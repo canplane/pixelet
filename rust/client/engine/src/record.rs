@@ -44,7 +44,7 @@
 //! Nothing an entry holds depends on the light's direction: the node, its answer and the
 //! faces some light ray reached through air are facts of the world, and the direction only
 //! places their boxes. So when the sun steps, every entry stays, and the map is redrawn from
-//! them along the new direction over the tiles the cast claims (`light::claims`). What the
+//! them along the new direction over the tiles the cast damages (`light::LIST_DAMAGE`). What the
 //! new direction meets that no light ray has met yet is not drawn. The epoch that the step
 //! begins casts the light's samples over every tile again, nearest first within the budget,
 //! so the map converges to the new direction's answer as the eye's picture does.
@@ -87,10 +87,10 @@
 //! one (`raster::STALE`): a tile is cast once in an epoch, and a stale box keeps a texel no
 //! fresh voxel covers from being taken for the sky (pxl-render light.wgsl).
 //!
-//! **Edits:** every write to what is placed that changes the tree or a record names the cube
+//! **Damage:** every write to what is placed that changes the tree or a record names the cube
 //! it wrote (pxl-core domain/layer/object/store.rs `Store::write`, `set_fold`, `clear_fold`).
 //! The GPU is handed the cube as the columns of its leaf cells; past the room for them,
-//! columns are joined, never dropped (pxl-core domain/scene/decor/gpu.rs `note_edited`;
+//! columns are joined, never dropped (pxl-core domain/scene/decor/gpu.rs `note_damage`;
 //! ray/cast.rs `hold`). A write that names no cube, or that rewrites more child groups
 //! than there is room for, forgets everything. A cell's answer reads the tree only along the
 //! cell's own path, and a write changes that path only within the cube and above it;
@@ -146,7 +146,7 @@ const _: () = assert!(
 /// The table holds every voxel a view can draw, the eye's and the light's, and the nodes a
 /// frame's asks keep. A node is drawn only where it spans at least one camera cell (grid.rs),
 /// so the cells bound the voxels drawn: the eye's cells at the widest view (`EYE_CELLS_CAP`),
-/// and the light's claimed tiles at one cell a tile (`LIGHT_CELLS_CAP`). Each cell's count is
+/// and the light's damaged tiles at one cell a tile (`LIGHT_CELLS_CAP`). Each cell's count is
 /// multiplied by the factors of `CELL_NODES`. The asks keep as many nodes a frame as a walk
 /// lists for them (`ray::QUEUE_RECS_CAP`), for the two frames an entry is spared
 /// (`ASKS_KEPT`).

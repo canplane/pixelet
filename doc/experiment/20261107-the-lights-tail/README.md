@@ -55,6 +55,14 @@ Nothing was kept; each of these was undone after its run, in a worktree of `ac32
   (`s23-t2-apart`); the eye's draw from a new buffer of words the CPU wrote, 30,000 instances
   (`s23-t4-eyecpu`); the eye's draw direct, so that the light's is the frame's only raster
   drawn indirect (`s23-t5-eyedirect`).
+- In a worktree of `3de91d61b4` with the direct draw undone, the light drawing indirectly from
+  its args as before, and the triangle and the slot counter on top: a probe pass that draws the
+  triangle alone, with no timestamp, from words the CPU wrote, into the light's cleared targets,
+  which the light's own pass then loads, at one place each run (`p4` before the light's beam
+  rays, `p6` after its samples, `p7` after `light_sample_hit`, right before `light_draw`); and
+  with no probe, the light's render pass with no timestamp (`p0-nostamp`), with a span of its
+  own that it begins and ends (`p0-ownspan`), and with a fresh span whose end alone it writes
+  (`p0-ownend`). The reports of the 11-11 runs are under `report/11-11-*`.
 
 ## How it was measured
 
@@ -69,6 +77,7 @@ Nothing was kept; each of these was undone after its run, in a worktree of `ac32
   was not.
 - The sweep's phase is taken from the frame's time and the drive's 960 ms leg; 0 is the
   farthest zoom and 0.5 the nearest.
+- On 11-11, Chrome was 157.0.8103.50 on the S23 and 157.0.8103.39 on the Mac.
 
 ## What came of it
 
@@ -248,6 +257,88 @@ and direct is 0.775 and 4.186 on the S23 and 0.828 and 0.925 on the Mac; between
 build it is up to 4.117 on the S23 and 1.210 on the Mac. The S23's shadows are the same to the eye
 in the two builds. `./script/diff-check.py` and Safari's probe (178 modules and pipelines ok) pass.
 
+### What loses the indirect draw
+
+One run each on the S23's page, by the slots the triangle covers:
+
+| run | what | casts | none | under 5,000 | every slot | partly | AP, °C |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| p0-indirect | indirect, as before the direct draw | 142 | 118 | 23 | 1 | | 31.6 to 42.4 |
+| p4 | probe before the light's beam rays | 100 | 45 | | 54 | 1 | 34.6 to 44.0 |
+| p6 | probe after the light's samples | 107 | 51 | | 54 | 2 | 35.9 to 44.7 |
+| p7 | probe right before `light_draw` | 105 | 48 | | 55 | 2 | 37.4 to 45.6 |
+| p0-nostamp | indirect in place, no timestamp | 71 | 32 | | 39 | | 37.5 to 44.1 |
+| p0-ownspan | indirect in place, its own begin and end | 54 | 23 | | 31 | | 42.4 to 43.8 |
+| p0-ownend | indirect in place, a fresh span's end alone | 111 | 92 | 19 | | | 38.4 to 44.9 |
+
+A cast that claims no slot counts under none.
+
+No pass between the eye's raster and the light's draw takes it away: the probe draws up to the
+place right before `light_draw`. What the light's own pass had that the probe had not was its
+timestamps. `light_raster` is one span over three passes, `light_sample_hit`'s, `light_rec_draw`'s
+and the render pass, and a span's first pass alone wrote its begin (`gpu/api.rs`
+`TimestampWrites`), so the render pass wrote an end without a begin. Without the timestamp, or
+with a begin and an end of its own, the indirect draw covers every claimed slot in place. With an
+end alone in a slot no other pass writes, it is lost as before. On the S23's Chrome a render pass
+that writes an end and no begin loses its indirect draws; its direct draws (`s23-direct`) and the
+eye's pass, which begins and ends its own span, are not lost. No console error comes with it.
+
+The hook on the WebGPU calls, mended (a render pass with no color attachment broke it), showed on
+the Mac the eye's and the light's render passes alike: the same pipeline, the same args buffer's
+size and usage, each at the start of a submit of its own.
+
+### The light's draw indirect again, every pass with both timestamps
+
+What was decided is in [ray, raster, ray](../../minutes/20261108-ray-raster-ray.md), its 11-11 section.
+The light's raster is drawn from its args again, as the eye's is, and the direct draw is gone.
+Every pass writes a begin and an end of its own; a span over several passes is their sum
+(`gpu/api.rs` `Stamp`). Runs alternate main (`3de91d61b4`, the direct draw) and this, with
+`ray_cnts` on: five rounds on the S23's page, three on the Mac and three in the app (one of the
+app's main runs ended with no result in 240 s, and is left out).
+
+| where | | runs | frames | GPU p50 / p95 | tail casts | holes, mean / p50 / max | `light_hit` a run, p95 | light's spans a run | `light_raster` p50 / p95 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| S23 page | main | 5 | 1,258 | 64.3 / 134.3 | 101 | 85,953 / 66,417 / 1,298,804 | 654, 10.2 | 5,988 | 1.64 / 3.21 |
+| S23 page | indirect | 5 | 1,053 | 73.4 / 149.0 | 74 | 85,847 / 65,464 / 788,240 | 614, 10.9 | 5,797 | 1.18 / 2.88 |
+| Mac | main | 3 | 1,916 | 27.5 / 45.3 | 226 | 86,973 / 70,371 / 1,897,984 | 610, 3.1 | 4,311 | 0.66 / 1.31 |
+| Mac | indirect | 3 | 2,351 | 23.1 / 40.3 | 153 | 74,009 / 51,062 / 1,897,984 | 480, 2.1 | 4,334 | 0.20 / 0.66 |
+| app | main | 2 | 426 | 78.8 / 184.0 | 38 | 67,357 / 56,427 / 129,212 | 1,220, 25.1 | 7,465 | 2.61 / 4.88 |
+| app | indirect | 3 | 711 | 71.3 / 155.0 | 68 | 71,610 / 62,231 / 311,754 | 1,203, 23.3 | 6,672 | 1.07 / 3.10 |
+
+AP ran 35.7 to 48.9 on the S23's page and 37.4 to 50.2 in the app. The light's indirect draw
+answers on the S23's page as the direct one did: 65,464 holes at the median against 66,417.
+
+Two of the five indirect runs on the S23 ran slow, 157 and 158 frames at a GPU p50 of 117 ms, and
+every span in them took 1.7 to 2 times its time in the other runs; one main run took 1.3 times.
+The S23's GPU p50 above holds them. The Mac's runs were taken while the machine had other load,
+and differ from each other as much as from the other build.
+
+`light_raster` is not the same measure in the two builds: in main the span ran from its first
+pass's begin to its last pass's end, and here it is the sum of its three passes.
+
+Then the frame's spans and passes were held in fixed arrays, and three more pairs ran on the S23's
+page, the GPU's clock (`/sys/class/kgsl/kgsl-3d0/devfreq/cur_freq`) read each second. A frame's
+passes timed were counted into the `debug` span for these runs, undone after them. The clock
+column is over the 22 seconds of the drive:
+
+| run | frames | GPU p50 / p95 | tail casts | holes p50 / max | `light_hit` a run | passes a frame, most | clock p50, MHz | AP, °C |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| indirect 1 | 297 | 55.2 / 113.4 | 27 | 69,870 / 133,067 | 660 | 48 | 719 | 33.8 to 44.9 |
+| main 1 | 296 | 58.0 / 113.5 | 24 | 60,445 / 118,980 | 629 | | 680 | 37.8 to 45.7 |
+| indirect 2 | 292 | 57.5 / 118.7 | 28 | 68,776 / 131,655 | 673 | 48 | 719 | 39.3 to 46.5 |
+| main 2 | 264 | 59.0 / 131.1 | 22 | 69,040 / 120,988 | 666 | | 615 | 40.1 to 45.7 |
+| indirect 3 | 199 | 87.7 / 166.8 | 13 | 73,955 / 1,036,848 | 667 | 48 | 475 | 40.4 to 44.5 |
+| main 3 | 160 | 115.3 / 168.8 | 8 | 71,181 / 122,806 | 578 | | 348 | 40.6 to 43.4 |
+
+The slow runs are the phone's clock: the third pair of both builds ran held at 475 and 348 to
+401 MHz through the drive, while the others ran at 615 to 719, with AP no higher. A frame times at
+most 48 passes, of the 256 the query set holds.
+
+Mac Safari ran each build once, with its window in front (two earlier tries behind other windows
+ended with no result in 240 s). Main: 452 frames, GPU p50 / p95 23.1 / 33.9, holes at the median
+50,810. Indirect: 685 frames, 22.2 / 38.6, 47,510. Both read every span the drive runs, and the
+same ones read nothing.
+
 ### What calls the tail, and whether a user meets it
 
 A worktree of `ac321a51af`, with `tool/probe.patch`, undone after it, recorded in each frame the terrain reads
@@ -337,11 +428,11 @@ costly frames rise through the clip levels with time: 18, 19, 20, 21, 21; 17, 18
 
 ## Not measured
 
-- Why the light's indirect draw covers next to nothing on the S23 where the direct one covers
-  all, and the eye's indirect draw does not suffer it. The app on the same phone does not lose it,
-  so it lies on the page's path; between Chrome's WebGPU and the calls the page makes was not told.
-- The WebGPU calls of the eye's and the light's passes as the page makes them. A hook wrapping
-  them in the page stopped the drive from finishing, on the Mac too, and was not debugged.
+- Why the S23's Chrome loses an indirect draw in a render pass that writes an end alone, within
+  Chrome, Dawn or the phone's driver.
+- The GPU's clock in the five first S23 runs of each build, whose two slow indirect runs came
+  before the clock was read.
+- What holds the S23's GPU at 348 to 475 MHz in some runs with AP no higher than in the others.
 - Whether the loss is a regression. The light's raster is in the tree before 11-07
   (`de4624772e`, 11-06), and no commit before `ac321a51af` was measured.
 - `assembleMobileRelease` at `ac321a51af` fails in `xpute/ts/native/script/number-paths.py`,

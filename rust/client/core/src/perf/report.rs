@@ -4,17 +4,16 @@
 //! it belongs to that one turn: what the turn measured of itself, what the
 //! renderer made of its frame, and the terrain tiles it took in.
 
+use crate::sys::sched::tick::TickReport;
 use pxl_render::gpu::span_spec::FrameKind;
 use pxl_render::renderer::GpuRead;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 use xpute_core::mem::heap::HeapStat;
-use xpute_core::sched::tick::TickReport;
 
 use crate::domain::layer::Base;
 use crate::domain::scene::stage::FrameReport;
-use crate::door;
 use crate::perf::frame::{DeviceSample, FrameSample, GpuSample, RaySample};
 use crate::perf::record::{
     perf_fold_recording, perf_record_frame, perf_record_gpu, perf_record_rays, perf_recording,
@@ -102,11 +101,9 @@ pub fn set_renderer_frame(report: &FrameReport) {
 }
 
 /// What this frame turn held, for the recording's extremes: the heap as its
-/// allocator reports it, the rings' and body slots' peaks since the frame
-/// before, and the terrain tiles refused a slot since then. Taking a peak or
+/// allocator reports it, the body slots' peak since the frame before, and the terrain tiles refused a slot since then. Taking a peak or
 /// a count starts it again from zero.
 fn peaks(h: &HeapStat) -> RecordingSection {
-    let rings = door::take_stat();
     RecordingSection {
         frames: 1.0,
         heap_live_max_bytes: h.live as f64,
@@ -115,9 +112,6 @@ fn peaks(h: &HeapStat) -> RecordingSection {
         heap_range_max_bytes: h.range as f64,
         heap_largest_free_min_bytes: h.largest_free as f64,
         heap_refusals: f64::from(h.refusals),
-        ring_cq_peak: f64::from(rings.cq_peak),
-        ring_sq_peak: f64::from(rings.sq_peak),
-        ring_left_peak: f64::from(rings.left_peak),
         body_slots_peak: f64::from(body::take_peak()),
         terrain_refusals: TerrainTile::tile_cache().take_refusals() as f64,
     }

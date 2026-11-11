@@ -9,15 +9,15 @@
 /// above it.
 fn sample_put(base: u32, w: WalkEnd) {
   let at = base + SAMPLE_NODE;
-  beams[at + NODE_ZOOM] = select(w.zoom, SAMPLE_NONE, w.ends == 3u);
+  beams[at + NODE_ZOOM] = select(w.zoom, SAMPLE_NONE, w.ends == ENDS_REACH);
   beams[at + NODE_CORNER] = w.corner.x;
   beams[at + NODE_CORNER + 1u] = w.corner.y;
   beams[at + NODE_CORNER + 2u] = w.corner.z;
   beams[at + NODE_ROOTS] = u32(w.roots.x);
   beams[at + NODE_ROOTS + 1u] = u32(w.roots.y);
   beams[at + NODE_ROOTS + 2u] = u32(w.roots.z);
-  beams[base + SAMPLE_LACKS] = select(0u, SAMPLE_LACK, w.ends == 2u) | (w.step << SAMPLE_STEPS_SHIFT);
-  beams[base + SAMPLE_ASSET] = select(w.asset.x, 0u, w.ends == 3u);
-  beams[base + SAMPLE_ASSET + 1u] = select(w.asset.y, 0u, w.ends == 3u);
-  beams[base + SAMPLE_AXIS] = select(w.axis, 0u, w.ends == 3u);
+  beams[base + SAMPLE_LACKS] = select(0u, SAMPLE_LACK, w.ends == ENDS_LACK) | (w.step << SAMPLE_STEPS_SHIFT);
+  beams[base + SAMPLE_ASSET] = select(w.asset.x, 0u, w.ends == ENDS_REACH);
+  beams[base + SAMPLE_ASSET + 1u] = select(w.asset.y, 0u, w.ends == ENDS_REACH);
+  beams[base + SAMPLE_AXIS] = select(w.axis, 0u, w.ends == ENDS_REACH);
 }

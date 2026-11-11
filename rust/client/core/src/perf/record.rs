@@ -341,8 +341,8 @@ pub fn perf_recording_extremes() -> RecordingSection {
 }
 
 /// Records the end of any turn, frame turn or not, into the interval in
-/// progress: its time from rise to fall, the part its tasks took, and the
-/// wake it asked as it fell. A turn that served the UI's read of the profiler
+/// progress: its time from start to end, the part its tasks took, and the
+/// wake it asked as it ended. A turn that served the UI's read of the profiler
 /// leaves the wake unrecorded.
 pub fn perf_record_turn(turn_ms: f64, poll_ms: f64, wake: f64) {
     let l = perf();

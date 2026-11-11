@@ -8,61 +8,54 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import type { XputeError } from "@xpute/kit/status/error.ts";
 import { type Core, mount, QUIET } from "./runtime.ts";
-import * as frame from "./ipc/frame.ts";
-import type { Front } from "./ipc/head.ts";
-import { Ring, ring_bytes, slots_bytes } from "./ipc/ring.ts";
-import * as ring from "./ipc/ring.spec.ts";
+import type { Host } from "./io/connection.ts";
+import * as frame from "./io/frame.ts";
+import type { Front } from "./io/head.ts";
 import type { Grant, SchedulingPolicy } from "./sched/policy.ts";
 
-const CAP = 8;
-const SLOT = 256;
+const PKT_BYTES = 256;
+const FRAME = frame.WORD_BYTES + PKT_BYTES;
 const HEAD_AT = 0;
 /** The core's GPU stream begins here, as the header names it. */
 const STREAM_AT = 32;
-const SQ_AT = 64;
-const CQ_AT = SQ_AT + ring_bytes(CAP);
-const SLOTS_AT = CQ_AT + ring_bytes(CAP);
-const FRONT: Front = {
-  sq_cap: CAP,
-  cq_cap: CAP,
-  slot_bytes: SLOT,
-  sq_at: SQ_AT,
-  cq_at: CQ_AT,
-  sq_slots_at: SLOTS_AT,
-  cq_slots_at: SLOTS_AT + slots_bytes(CAP, SLOT),
-  stream_at: STREAM_AT,
-};
-/** The core posts these two commands each turn: one of the program's, and one
+const RECEIVE_AT = 64;
+const SEND_AT = RECEIVE_AT + FRAME;
+const FRONT: Front = { pkt_bytes: PKT_BYTES, stream_at: STREAM_AT };
+/** The core sends these two commands each turn: one of the program's, and one
  * of xpute's own. */
 const PROGRAM_IMPORT = (frame.PROGRAM_MAJOR << 8) | 9;
 const OWN_IMPORT = 0x0109;
 
-/** This core opens the rings its runtime laid. Each turn it replies 0 to every
- * submission and posts PROGRAM_IMPORT and OWN_IMPORT. When `trap` says so, the
- * turn throws instead. */
+/** This core reaches its runtime through the host it is handed. Each turn it
+ * replies 0 to every frame it receives and sends PROGRAM_IMPORT and
+ * OWN_IMPORT. When `trap` says so, the turn throws instead. */
 function core(trap: () => boolean = () => false): Core & { turns: number[] } {
-  const mem = new ArrayBuffer(FRONT.cq_slots_at + slots_bytes(CAP, SLOT));
-  let sq: Ring | null = null;
-  let cq: Ring | null = null;
+  const mem = new ArrayBuffer(SEND_AT + FRAME);
+  let host: Host | null = null;
   const turns: number[] = [];
+  const send = (tag: number, cmd: number, flags: number) => {
+    frame.lay_frame(mem, SEND_AT, { tag, cmd, flags, result: 0, pkt: null });
+    host!.send(SEND_AT, 0, 0);
+  };
   return {
     mem,
     turns,
     run(deadline_ms) {
       turns.push(deadline_ms);
-      sq ??= new Ring(mem, SQ_AT);
-      cq ??= new Ring(mem, CQ_AT);
       if (trap()) throw new Error("the core trapped");
-      for (let at = sq.peek(); at >= 0; at = sq.peek()) {
-        cq.push(sq.tag(at), sq.cmd(at), frame.RES);
-        sq.advance();
+      while (host!.receive(RECEIVE_AT, FRAME) > 0) {
+        const f = frame.frame_at(mem, RECEIVE_AT);
+        send(f.tag, f.cmd, frame.RES);
       }
-      cq.push(0, PROGRAM_IMPORT);
-      cq.push(0, OWN_IMPORT);
+      send(0, PROGRAM_IMPORT, 0);
+      send(0, OWN_IMPORT, 0);
       return -1;
     },
-    answer_with() {},
+    host_with(h) {
+      host = h;
+    },
   };
 }
 
@@ -97,7 +90,12 @@ test("mount - lays the front before any turn, and hands the program only its own
     g,
     AT,
     {
-      program: (_tag, cmd) => void cmds.push(cmd),
+      program: [
+        {
+          majors: [PROGRAM_IMPORT >> 8],
+          on: (_tag, cmd) => void cmds.push(cmd),
+        },
+      ],
       policy: stepped(),
       submit: () => {},
     },
@@ -105,21 +103,28 @@ test("mount - lays the front before any turn, and hands the program only its own
   );
   assert.deepStrictEqual(g.turns, [], "no turn before the front is laid");
   assert.deepStrictEqual(
-    [runtime.head.sq_at, runtime.head.cq_at, runtime.head.stream_at],
-    [SQ_AT, CQ_AT, STREAM_AT],
+    [runtime.head.pkt_bytes, runtime.head.stream_at],
+    [PKT_BYTES, STREAM_AT],
   );
-  runtime.call(PROGRAM_IMPORT);
+  runtime.send(PROGRAM_IMPORT);
+  runtime.connection.run(0);
   assert.deepStrictEqual(cmds, [PROGRAM_IMPORT]);
 });
 
-test("mount - a front already laid is kept as it is, its rings' positions with it", () => {
+test("mount - a front already laid is kept as it is", () => {
   const g = core();
   mount(g, AT, { policy: stepped(), submit: () => {} }, QUIET);
-  const sq = new Uint32Array(g.mem, SQ_AT, ring.HEADER_WORDS);
-  const tail = sq[ring.TAIL];
-  assert.ok(tail > 0, "the attach is waiting in the submission ring");
-  mount(g, AT, { policy: stepped(), submit: () => {} }, QUIET);
-  assert.ok(sq[ring.TAIL] > tail, "laid again, the ring would start over");
+  const again = mount(
+    g,
+    { ...AT, stream_at: STREAM_AT + 8 },
+    { policy: stepped(), submit: () => {} },
+    QUIET,
+  );
+  assert.deepStrictEqual(
+    again.head.stream_at,
+    STREAM_AT,
+    "laid again, it would move",
+  );
 });
 
 test("mount - turns run between resume and pause, and wake asks for one only then", () => {
@@ -137,9 +142,9 @@ test("mount - turns run between resume and pause, and wake asks for one only the
   assert.deepStrictEqual(policy.asked, asked, "paused, so wake asks nothing");
 });
 
-test("mount - a core that stops runs no more turns and is told once", () => {
-  const error = console.error;
-  console.error = () => {};
+test("mount - a core that stops runs no more turns and is told once", async () => {
+  const log = console.log;
+  console.log = () => {};
   try {
     let trapping = false;
     let terminated = 0;
@@ -151,7 +156,12 @@ test("mount - a core that stops runs no more turns and is told once", () => {
       { ...QUIET, stop: () => terminated++ },
     );
     trapping = true;
-    assert.deepStrictEqual(runtime.call(PROGRAM_IMPORT), Errno.ENOTRECOVERABLE);
+    const answer = runtime.request(PROGRAM_IMPORT);
+    runtime.connection.run(0);
+    await assert.rejects(
+      answer,
+      (e: XputeError) => e.errnum === Errno.ENOTRECOVERABLE,
+    );
     runtime.resume();
     assert.deepStrictEqual(terminated, 1);
     assert.deepStrictEqual(
@@ -160,7 +170,7 @@ test("mount - a core that stops runs no more turns and is told once", () => {
       "a stopped core is resumed no more",
     );
   } finally {
-    console.error = error;
+    console.log = log;
   }
 });
 
@@ -173,6 +183,6 @@ test("mount - runs after_turn as each turn returns", () => {
     QUIET,
   );
   assert.deepStrictEqual(ran, 0);
-  runtime.call(PROGRAM_IMPORT);
+  runtime.connection.run(0);
   assert.deepStrictEqual(ran, 1);
 });

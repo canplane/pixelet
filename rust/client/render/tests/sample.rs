@@ -419,7 +419,7 @@ fn light_beams(
     let mut list = observed.words.clone();
     let reads_at = light::reads_at(size) as usize;
     list[reads_at..reads_at + (tiles * tiles) as usize].fill(CAST);
-    // Every tile is listed as fed, as a cast that claims them all lists them. The samples'
+    // Every tile is listed as fed, as a cast that damages them all lists them. The samples'
     // passes run over that list, each entry a square of the tile's samples (`list_every`).
     let fed = list_every(&mut list, size, light::LIST_SOURCES, 1);
     observed.groups = list_every(
@@ -1529,17 +1529,11 @@ fn holes_answer(
         ..Default::default()
     });
     let eye_buf = gpu.buf(&observed.eye, wgpu::BufferUsages::UNIFORM);
-    // The eye's head is all zero, as the cast binds it (ray/cast.rs `eye_header`).
-    let header = gpu.buf(
-        &vec![0u32; light::HEADER_WORDS],
-        wgpu::BufferUsages::UNIFORM,
-    );
     let beams = gpu.buf(&words, store_of());
     let mut binds = world_binds(b, &eye_buf, &beams, &node_cache_buf);
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
-    binds.push((11, header.as_entire_binding()));
     gpu.asks_spent.set(spent);
-    gpu.holes(ray::QUEUE_EYE_HOLES, &binds, &node_cache_buf);
+    gpu.holes(false, &binds, &node_cache_buf);
     gpu.asks_spent.set(false);
     let out = read_texture(&gpu.device, &gpu.queue, &rays);
     if spent {

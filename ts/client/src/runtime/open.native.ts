@@ -3,14 +3,14 @@
 /** The runtime runs on its own thread, and the UI reaches it through a link
  * (@xpute/runtime start.native.ts). */
 
-import { Command as GpuCommand } from "@xpute/gpu/abi.spec.ts";
-import { gpu_protocol } from "@xpute/gpu/gpu.ts";
+import { gpu_exports } from "@xpute/gpu/abi.spec.ts";
 import { start } from "@xpute/runtime";
 import { Major } from "@/abi/cmd.spec.ts";
 import { follow_refused_files } from "@/service/sys/fs/refusal.ts";
 import { declare_source, settled } from "@/service/sys/fs/source.ts";
 import { set_online } from "@/service/origin/online.ts";
-import { manifest, perf_here } from "@/runtime/start.ts";
+import { MANIFEST } from "@/abi/manifest.spec.ts";
+import { config, perf_here } from "@/runtime/start.ts";
 import { set_core } from "@/service/core/core.ts";
 import { type OnOpen, started, ui } from "@/runtime/ui.ts";
 import { fs_changed } from "@/service/core/fs.ts";
@@ -24,13 +24,15 @@ import * as online from "@/service/platform/online.ts";
  * source was declared, false when it was refused. */
 export async function open(on: OnOpen): Promise<boolean> {
   const link = await start(
-    manifest(device.handheld),
+    MANIFEST,
+    () => config(device.handheld),
     ui(on, (files) => follow_refused_files(files, fs_changed)),
   );
   set_core(link, perf_here);
   gpu.watch((state) => set_gpu(GPU_STATE[state]));
   gpu.grant({
-    ready: () => gpu_protocol(link, Major.GPU).send(GpuCommand.GPU_READY),
+    ready: () => gpu_exports(link, Major.GPU).gpu_ready(),
+    shown: link.shown,
   });
   started(on);
   online.watch(set_online);

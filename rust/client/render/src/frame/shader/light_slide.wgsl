@@ -8,7 +8,7 @@
 // ray/cast.rs `prepare`). A tile's read is set to none where the box slid onto the tile,
 // where the slide or the zooms moved it into another band (`Light::keeps`), or where its rays
 // may meet a cell of its band over a column of the world that changed (`Light::reaches`,
-// `light::COLUMNS_AT`). The propagation then claims such a tile anew if a receiver reads it
+// `light::COLUMNS_AT`). The propagation then damages such a tile anew if a receiver reads it
 // (light_propagate.wgsl). The other tiles hold what their cast left. Each thread writes only
 // its own tile's word, and the first thread also writes the cast's number as the last cast the
 // slide ran in (`light::SLIDE_RAN`). The slide runs where the box slid, the zooms moved or the

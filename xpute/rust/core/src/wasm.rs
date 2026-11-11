@@ -2,7 +2,7 @@
 
 //! This is the core built as one WebAssembly module: how its build script links
 //! it (`link`), what it reads of the module itself (`data_end`, `stack_high`,
-//! `given`, `now`), what it asks of its runtime (`call`), and `wasm_abi!`,
+//! `given`, `now`), how it reaches its runtime (`host`), and `wasm_abi!`,
 //! which defines the module's allocator and exports `run`. The native form's
 //! counterpart is xpute-runtime's `native_abi!`.
 //!
@@ -28,7 +28,7 @@ mod module;
 
 pub use link::{link, LinkConfig, WASM_PAGE_BYTES};
 #[cfg(target_arch = "wasm32")]
-pub use module::{call, data_end, mem_sz, now, stack_high};
+pub use module::{data_end, host, mem_sz, now, stack_high};
 
 /// xpute cannot assume these of a module core, and the program supplies them.
 pub struct Config {
@@ -51,14 +51,12 @@ pub fn boot_info(
     xpute_kit::ensure!(high == cfg.stack_bytes, ENOTRECOVERABLE, high);
     crate::entry::BootInfo {
         mem_sz: u32::try_from(mem_sz()).unwrap_or(u32::MAX),
-        call,
+        host: host(),
         heap_stat,
-        form: crate::entry::Form {
-            data_end: data_end(),
-            now,
-            stop_hook: None,
-            publish: None,
-        },
+        data_end: data_end(),
+        now,
+        stop_hook: None,
+        publish: None,
     }
 }
 

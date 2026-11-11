@@ -12,7 +12,7 @@ use xpute_runtime::mem::Memory;
 
 use super::object::Object;
 use super::pending::signal;
-use super::run::OwnedTexture;
+use super::run::{timed, OwnedTexture};
 use super::worker::Worker;
 use super::GpuRuntime;
 use crate::spec::RESULT;
@@ -49,7 +49,7 @@ impl Decoder {
 
 impl GpuRuntime {
     /// Copies `bytes` now, since they are the core's again once the stream is
-    /// handed back (xpute-core ipc/stream.rs R3).
+    /// handed back (xpute-core io/stream.rs R3).
     pub(super) fn copy_external_image(
         &mut self,
         to: OwnedTexture,
@@ -106,8 +106,11 @@ impl GpuRuntime {
                 height: image.height,
                 depth_or_array_layers: 1,
             };
-            self.queue
-                .write_texture(d.to.info(), &image.rgba, layout, size);
+            // The landing is timed as a page's is (`run::timed`).
+            timed(self.slow_ms, "image", || {
+                self.queue
+                    .write_texture(d.to.info(), &image.rgba, layout, size)
+            });
             signal(mem, d.word, d.ticket, Some(RESULT::OK));
         }
     }

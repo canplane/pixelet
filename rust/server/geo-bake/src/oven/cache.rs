@@ -15,14 +15,14 @@ use tokio::time::Instant;
 struct Flight {
     result: OnceLock<Result<(), Failure>>,
     completion: Notify,
-    asked: Arc<AtomicBool>,
+    client_waits: Arc<AtomicBool>,
 }
 
 /// What a job runs under: when it must be done by, and whether a client is
 /// waiting on it, which turns true when one joins a job a fold started.
 pub(super) struct Lease {
     pub deadline: Instant,
-    pub asked: Arc<AtomicBool>,
+    pub client_waits: Arc<AtomicBool>,
 }
 
 pub(super) struct Cache {
@@ -49,12 +49,12 @@ impl Cache {
 
     /// The job, not the HTTP connection, owns its lifetime. Failures stay failed
     /// while the server runs; resource refusals leave nothing. Do not time out this
-    /// future: it would release the key before the work stopped. `asked` is
+    /// future: it would release the key before the work stopped. `client_waits` is
     /// whether a client waits on it, rather than only a fold over it.
     pub(super) async fn once<F>(
         &self,
         key: String,
-        asked: bool,
+        client_waits: bool,
         make: impl FnOnce(Lease) -> F + Send + 'static,
     ) -> Result<(), Failure>
     where
@@ -78,16 +78,22 @@ impl Cache {
                 }
             }
         };
-        if asked {
-            flight.asked.store(true, Ordering::Relaxed);
+        if client_waits {
+            flight.client_waits.store(true, Ordering::Relaxed);
         }
         if let Some(permit) = permit {
             let task = flight.clone();
-            let asked = flight.asked.clone();
+            let client_waits = flight.client_waits.clone();
             let jobs = self.flights.clone();
             let deadline = Instant::now() + self.deadline;
             tokio::spawn(async move {
-                let job = async move { make(Lease { deadline, asked }).await };
+                let job = async move {
+                    make(Lease {
+                        deadline,
+                        client_waits,
+                    })
+                    .await
+                };
                 let result = tokio::spawn(job)
                     .await
                     .map_err(|e| Failure::Bake(e.to_string()))

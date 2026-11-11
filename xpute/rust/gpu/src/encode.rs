@@ -1,7 +1,7 @@
 // xpute-gpu/encode.rs
 
 //! The encoder writes a core's GPU calls as records of a stream (xpute-core
-//! `ipc::stream`) in the words spec/gpu/api.json gives each op. An object the
+//! `io::stream`) in the words spec/gpu/api.json gives each op. An object the
 //! core makes is named by a handle from one table (`Gpu`). A record that does
 //! not fit an open transaction is not written, and the handle of the object it
 //! would have made is given back.
@@ -13,7 +13,7 @@
 use core::sync::atomic::{AtomicU32, Ordering};
 
 use xpute_core::abi::handle::Table;
-use xpute_core::ipc::stream::{Stream, WORD};
+use xpute_core::io::stream::{Stream, WORD};
 use xpute_core::mem::off_of_slice;
 
 use crate::enums::{
@@ -31,7 +31,7 @@ pub type Id = u32;
 
 /// Loads a word that a record named for the runtime to answer, such as a
 /// fence or the device block's STATUS. The load is an acquire, so whatever the
-/// runtime wrote before it stored the word is seen (xpute-core ipc/stream.rs
+/// runtime wrote before it stored the word is seen (xpute-core io/stream.rs
 /// R4).
 pub fn load_acquire(word: &u32) -> u32 {
     // SAFETY: a live, aligned word, which the runtime stores into only
@@ -964,7 +964,7 @@ pub mod call {
     /// This is `write_buffer`, but the record names the bytes where they lie in
     /// the core's memory, and the runtime reads them there as it runs the
     /// stream. The core leaves them unchanged until the stream is handed back
-    /// (xpute-core ipc/stream.rs R3).
+    /// (xpute-core io/stream.rs R3).
     pub fn write_buffer_at(stream: &mut Stream, buffer: Id, offset: u32, bytes: &[u8]) -> bool {
         words(
             stream,

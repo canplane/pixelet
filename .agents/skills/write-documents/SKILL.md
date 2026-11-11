@@ -36,7 +36,7 @@ against is reference, kept in `spec/` and the generated code's comments.
   the thing.
 - **Earn a name before you use it.** Say the need first, then name what meets
   it. A name this project made needs this, and so does a field's term the reader
-  may not bring (`ring` as io_uring uses it).
+  may not bring (a `clipmap`).
 - **Order by dependency.** A model's vocabulary comes before the machine that
   uses it, and a map of the code comes last.
 - **An `ARCHITECTURE.md` ends, before its map, with what it took from earlier

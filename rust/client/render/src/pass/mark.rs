@@ -1,8 +1,8 @@
 // pxl-render/pass/mark.rs
 
 //! The marks of the listed draws that changed. A frame that is not drawn
-//! whole draws again only its claimed tiles (gpu/tile.rs), and a draw that
-//! changed claims its tiles by its mark. The mark sets the words of the
+//! whole draws again only its damaged tiles (gpu/tile.rs), and a draw that
+//! changed damages its tiles by its mark. The mark sets the words of the
 //! screen's tiles it covers, and of the light map's tiles where the draw
 //! casts a shadow (tile_mark.wgsl). The draw is drawn twice for its mark,
 //! with its vertices laid by its `vs_place`: where it was, by the
@@ -19,7 +19,6 @@
 //! it. It copies an upload after the frame has read it, whenever the lists
 //! moved it since.
 
-use crate::frame::shader::record::UPLOAD_LAYOUT;
 use crate::gpu::api::{
     buf_entry, buffer_usage, release, Format, Gpu, Layout, Stencil, TrackedRenderPass,
 };
@@ -236,14 +235,13 @@ struct Copy {
 
 /// A copy of each upload the marking draws read, as the last frame drew it,
 /// found by the upload's handle. Each copy's group is in the one layout that
-/// every upload's group has (record.rs `UPLOAD_LAYOUT`). A copy that no draw
+/// every upload's group has (gpu/upload.rs `UploadTable::layout`). A copy that no draw
 /// of this frame reads is let go, and it is released before the next frame's
 /// commands.
 #[derive(Default)]
 pub struct CopyCache {
     copies: Vec<Copy>,
     let_go: Vec<(u32, u32)>,
-    layout: Option<Layout>,
 }
 
 impl CopyCache {
@@ -251,7 +249,7 @@ impl CopyCache {
     /// `handles` names that has no copy of its size. A copy of another size
     /// is let go. The caller calls it before the frame's commands, so a frame
     /// that is dropped loses no copy.
-    pub fn prepare(&mut self, g: &Gpu, handles: &[u32], uploads: &UploadTable) {
+    pub fn prepare(&mut self, g: &Gpu, handles: &[u32], uploads: &mut UploadTable) {
         for (buf, group) in self.let_go.drain(..) {
             release(group);
             release(buf);
@@ -268,9 +266,8 @@ impl CopyCache {
                 }
                 None => {}
             }
-            let layout = *self.layout.get_or_insert_with(|| g.layout(&UPLOAD_LAYOUT));
             let buf = g.buf(size, buffer_usage::STORAGE | buffer_usage::COPY_DST);
-            let group = g.bind_group(layout, &[buf_entry(0, buf), buf_entry(1, buf)]);
+            let group = g.bind_group(uploads.layout(g), &[buf_entry(0, buf), buf_entry(1, buf)]);
             self.copies.push(Copy {
                 handle: h,
                 buf,

@@ -2,8 +2,14 @@
 
 import { AppState } from "react-native";
 
+/** Whether the app is shown now. */
+export function shown(): boolean {
+  return AppState.currentState === "active";
+}
+
 /** In the background, the app may be suspended or ended without further
- * notice. */
-export function watch(report: (visible: boolean) => void): void {
-  AppState.addEventListener("change", (state) => report(state === "active"));
+ * notice. The answer stops the watch. */
+export function watch(report: (visible: boolean) => void): () => void {
+  const sub = AppState.addEventListener("change", () => report(shown()));
+  return () => sub.remove();
 }

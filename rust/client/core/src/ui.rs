@@ -34,8 +34,8 @@ use crate::door::cmd::{
     PivotState, RefusedFile, Snapshot, UiView,
 };
 use crate::pointer;
-use crate::sys::io::file::{self, Path};
-use crate::sys::io::file_spec::root;
+use crate::sys::io::file;
+use crate::sys::io::file_spec::path;
 use crate::sys::io::request;
 use crate::sys::io::source;
 use pxl_render::gpu::surface::SURFACES;
@@ -100,16 +100,18 @@ pub struct SnapshotInput {
     character_surfaces: ([u32; SURFACES], usize),
     stall: Option<Message>,
     declared: bool,
-    /// The refused files as root and path. Only the first `.1` are filled.
-    refused_files: ([(u32, Path); REFUSED_SHOWN], usize),
+    /// Whether the storage file is refused, and the refused objects' files
+    /// by their wants' ids, of which only the first `.1` are filled.
+    refused_storage: bool,
+    refused_objects: ([u64; REFUSED_OBJECTS], usize),
     renderer_progress: f64,
     area_progress: f64,
 }
 
-/// How many refused files one snapshot names: the storage file, and as many
-/// object files as the view asks for at once. The rest are named in later
+/// How many refused objects' files one snapshot names besides the storage
+/// file: as many as the view asks for at once. The rest are named in later
 /// snapshots, as the client empties the ones already named.
-const REFUSED_SHOWN: usize = 1 + repository::WANTS as usize;
+const REFUSED_OBJECTS: usize = repository::WANTS as usize;
 
 fn snapshot_inputs() -> SnapshotInput {
     let (location, settings) = (device_location_store(), settings());
@@ -157,16 +159,11 @@ fn snapshot_inputs() -> SnapshotInput {
         character_surfaces,
         stall: stall(),
         declared: source::min_zoom().is_some(),
-        refused_files: {
-            let stored = file::is_storage_refused()
-                .then(|| (root::STORAGE, file::storage_path()))
-                .into_iter();
-            let objects = repository::refused_files()
-                .iter()
-                .map(|&s| (root::OBJECT, Path::of_quadrant(s)));
-            let mut refused = ([(0, Path::EMPTY); REFUSED_SHOWN], 0);
-            for (at, file) in refused.0.iter_mut().zip(stored.chain(objects)) {
-                *at = file;
+        refused_storage: file::is_storage_refused(),
+        refused_objects: {
+            let mut refused = ([0; REFUSED_OBJECTS], 0);
+            for (at, &id) in refused.0.iter_mut().zip(repository::refused_files()) {
+                *at = id;
                 refused.1 += 1;
             }
             refused
@@ -261,8 +258,13 @@ pub fn snapshot(shown: &SnapshotInput, out: &mut [u8]) -> Option<u32> {
         division: &|each| division_parts(shown.division, shown.named_to, each),
         character_surfaces: &shown.character_surfaces.0[..shown.character_surfaces.1],
         refused_files: &|each| {
-            for (root, path) in &shown.refused_files.0[..shown.refused_files.1] {
-                each(&RefusedFile { root: *root, path });
+            if shown.refused_storage {
+                each(&RefusedFile {
+                    path: &file::STORAGE,
+                });
+            }
+            for &id in &shown.refused_objects.0[..shown.refused_objects.1] {
+                file::with_quadrant(path::OBJECT::ID, id, |path| each(&RefusedFile { path }));
             }
         },
         stall: shown.stall,

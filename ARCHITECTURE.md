@@ -379,14 +379,14 @@ by the platform, so each platform shapes its own scripts and emoji.
 ## The core and the runtime
 
 The world lives in one Rust **core**, `pxl-core`, which draws through
-`pxl-render`. It owns no device. It is linked with `xpute-core`, a small library
-OS, into one image, and a **runtime** around it plays the virtual machine: it
-gives the core one memory, a GPU, its files and its time, and nothing else
-reaches in. On a page the image is a WebAssembly module and the runtime is
-TypeScript in a worker; on a device it is a library linked into the app and the
-runtime is that TypeScript with Rust beside it. The core cannot tell which, and
-does not need to, so the same world runs everywhere. xpute's own documents
-describe that machine; this one is about what pixelet does on it.
+`pxl-render`. It owns no device. It is linked with `xpute-core`, the core's end
+of the xpute interface, into one image, and a **runtime** around it gives the
+core one memory, a GPU, its files and its time, and nothing else reaches in. On
+a page the image is a WebAssembly module and the runtime is TypeScript in a
+worker; on a device it is a library linked into the app and the runtime is that
+TypeScript with Rust beside it. The core cannot tell which, and does not need
+to, so the same world runs everywhere. xpute's own documents describe that
+interface; this one is about what pixelet does over it.
 
 The core is given its time in **turns**. Each turn is paced to the display and
 arrives as a grant that carries its budget, frame pacing's SYS_FRAME before
@@ -495,7 +495,7 @@ up, and the folders are that order. The check-rules tool holds it.
   ────────────────────────────────────────────────────────────────────
   sys/                   what all of it stands on
     io/          reads and their scheduler
-    sched/       a turn's edge and its phases
+    sched/       a turn's tasks and its phases
     section      the memory's sections
     boot · load  bringing it up and what it loads
 

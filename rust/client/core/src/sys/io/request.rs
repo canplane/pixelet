@@ -22,7 +22,7 @@ use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
 use crate::sys::io::policy::{self, Fault, Rank};
 use crate::sys::io::room::Refusal;
 use crate::sys::load::LOAD_FILES;
-use crate::sys::sched::edge;
+use crate::sys::sched;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 use xpute_kit::math::rng::seed_mix64;
@@ -332,7 +332,7 @@ fn hold(s: &mut Sched, fault: Fault, f: Failure, started_ms: f64, at: f64) {
     }
     // A frame's pump shows the failure and starts a probe at once where the
     // hold has already ended or this failure began none.
-    edge::request_world_tick();
+    sched::request_world_tick();
 }
 
 /// Resets the scheduler when the runtime will not answer what it was asked

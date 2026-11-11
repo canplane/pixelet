@@ -171,7 +171,7 @@ async function ask_decl(): Promise<string | null> {
   }
 }
 
-/** Hands the core its part of the declaration (SOURCE_DECLARE). It returns
+/** Hands the core its part of the declaration (SOURCE_DECLARE). It resolves
  * false when that part is more than one command can carry, or when the core
  * refuses it. The core refuses, among others, a format this build cannot
  * read. */
@@ -179,7 +179,7 @@ export type SendSource = (
   min_zoom: number,
   formats: number[],
   shards: string[],
-) => boolean;
+) => Promise<boolean>;
 
 /** Resolves once the source is declared or refused. `source_state` then says
  * which. */
@@ -205,15 +205,15 @@ export async function declare_source(send: SendSource): Promise<void> {
     return;
   }
   const shards = Object.keys(read.shard);
-  // This is set before SOURCE_DECLARE is sent, because a frame that runs
-  // inside that call already opens tiles under the declaration.
+  // This is set before SOURCE_DECLARE is sent, because the turn that takes
+  // it already opens tiles under the declaration.
   cur_decl = read;
   if (
-    !send(
+    !(await send(
       read.min_zoom,
       BASE_LAYERS.map((kind) => read.format[kind]),
       shards,
-    )
+    ))
   ) {
     console.error(
       `[source] the core took no declaration of formats ${JSON.stringify(read.format)} and ${shards.length} shards`,

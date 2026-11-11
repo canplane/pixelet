@@ -67,11 +67,15 @@ impl GpuRuntime {
             .on_submitted_work_done(FrameGuard::count(&self.unfinished_cnt));
     }
 
-    /// Writes the unfinished frames into the device's block (spec DEVICE),
-    /// as a page's runtime does. It runs before each turn, after the queue's
-    /// callbacks that end frames have run.
-    pub(super) fn tell_unfinished(&self, mem: &mut Memory<'_>) {
+    /// Writes the uncaptured errors and the unfinished frames into the
+    /// device's block (spec DEVICE), as a page's runtime does. It runs before
+    /// each turn, after the queue's callbacks that end frames have run.
+    pub(super) fn tell_counts(&self, mem: &mut Memory<'_>) {
         if let Some(addr) = self.block {
+            mem.store_release(
+                addr + 4 * device::ERRORS_AT as u32,
+                self.error_cnt.load(Ordering::Relaxed),
+            );
             mem.store_release(
                 addr + 4 * device::UNFINISHED_AT as u32,
                 self.unfinished_cnt.load(Ordering::Relaxed),

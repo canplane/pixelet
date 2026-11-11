@@ -1,6 +1,6 @@
 // xpute-gen/spec/cmd.rs
 
-//! This generates the code for a protocol over xpute's rings, xpute's own or a
+//! This generates the code for a protocol over xpute's frames, xpute's own or a
 //! program's: its commands and the types their packets are made of. A protocol
 //! names its commands from the core's side, as a WIT world does: an `export` is
 //! a command the core implements and the runtime calls, and an `import` is one
@@ -47,6 +47,12 @@ struct Member {
     /// The fields of an `import` that say where the memory it names lies.
     #[serde(skip)]
     mem: Option<[String; 2]>,
+    /// The name of what an `import`'s tag carries.
+    #[serde(skip)]
+    tag: Option<String>,
+    /// Whether an `import` goes with ACKREQ, to be completed on a later turn.
+    #[serde(skip)]
+    ackreq: bool,
     /// This is the packet of an `import`'s completion, which the runtime writes
     /// and the core reads.
     #[serde(skip)]
@@ -97,7 +103,8 @@ struct Record {
 /// posted with ACKREQ and answered later; the runtime completes such an
 /// `import` on a later turn with a frame of the same tag flagged RES, whose
 /// packet is `reply`. `mem` names the two fields of an `import` that give where
-/// a region of the core's memory is and how long it is.
+/// a region of the core's memory is and how long it is. `tag` names what an
+/// `import`'s tag carries, which its handler is handed before its packet.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Cmd {
@@ -112,11 +119,12 @@ struct Cmd {
     ackreq: bool,
     reply: Option<Vec<Field>>,
     mem: Option<[String; 2]>,
+    tag: Option<String>,
 }
 
 /// A `Doc` is a protocol: the commands the runtime sends the core (`export`)
 /// and those the core posts to the runtime (`import`). `name` serves only the
-/// generated code's names. Nothing on the rings reads the protocol; a runtime
+/// generated code's names. Nothing that carries a frame reads the protocol; a runtime
 /// routes a frame by its command's major alone.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -176,8 +184,6 @@ struct Protocol {
     /// ACKREQ and answered later.
     exports: Vec<(String, bool, bool)>,
     imports: Vec<(String, bool)>,
-    /// Each import that names the core's memory, and its two fields.
-    mem: Vec<(String, [String; 2])>,
 }
 
 /// Reads `json`'s protocol and makes its commands members of `Command`. An
@@ -194,7 +200,6 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
         name: d.name.clone(),
         exports: Vec::new(),
         imports: Vec::new(),
-        mem: Vec::new(),
     };
     for (dir, cmds) in [("export", d.export), ("import", d.import)] {
         if cmds.is_empty() {
@@ -204,12 +209,24 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
             section: format!("{}, {dir}", d.name),
         }));
         for c in cmds {
+            if c.call && dir == "export" {
+                return Err(format!(
+                    "{shown}: {} is an export, and the UI never waits: ackreq or a send",
+                    c.name
+                ));
+            }
             if c.ackreq && c.call {
                 return Err(format!("{shown}: {} is answered later, so no call", c.name));
             }
             if c.reply.is_some() && dir == "export" {
                 return Err(format!(
                     "{shown}: {} is an export, answered by its result alone",
+                    c.name
+                ));
+            }
+            if c.tag.is_some() && dir == "export" {
+                return Err(format!(
+                    "{shown}: {} is an export, whose tag is its caller's",
                     c.name
                 ));
             }
@@ -221,8 +238,7 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
             } else {
                 (None, Some(c.pkt.unwrap_or_default()))
             };
-            let mem = c.mem.clone();
-            if let Some(m) = c.mem {
+            if let Some(m) = &c.mem {
                 let has = |n: &str| {
                     import
                         .as_ref()
@@ -234,7 +250,6 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
                         c.name
                     ));
                 }
-                of.mem.push((c.name.clone(), m));
             }
             if dir == "export" {
                 of.exports.push((c.name.clone(), c.call, c.ackreq));
@@ -247,7 +262,9 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
                 doc: c.doc,
                 pkt,
                 import,
-                mem,
+                mem: c.mem,
+                tag: c.tag,
+                ackreq: c.ackreq,
                 reply: c.reply,
             }));
         }
@@ -279,6 +296,9 @@ enum Kind {
     Enum,
     Extern,
     Record,
+    /// A file's path: a branch of tokens, each a u32 or a string, as many as
+    /// it has (`Token` and `Path` in xpute-core io/fs.rs).
+    Path,
 }
 
 const NUMBERS: [&str; 4] = ["u8", "u32", "i32", "f64"];
@@ -291,6 +311,8 @@ impl Spec {
             Kind::Bool
         } else if ty == "str" {
             Kind::Str
+        } else if ty == "path" {
+            Kind::Path
         } else if self.enums.iter().any(|e| e.name == ty) {
             Kind::Enum
         } else if self.externs.iter().any(|e| e.name == ty) {
@@ -300,6 +322,33 @@ impl Spec {
         } else {
             return Err(format!("protocol: no type {ty}"));
         })
+    }
+
+    /// Whether a field of a packet or a record is a path.
+    fn has_path(&self) -> Result<bool, String> {
+        let commands = self.commands()?;
+        let fields = commands
+            .iter()
+            .flat_map(|c| {
+                c.pkt
+                    .iter()
+                    .chain(c.import.iter())
+                    .chain(c.reply.iter())
+                    .flatten()
+            })
+            .chain(self.records.iter().flat_map(|r| r.fields.iter()));
+        for f in fields {
+            if self.kind(&f.ty)? == Kind::Path {
+                if f.list || f.optional {
+                    return Err(format!(
+                        "protocol: a path is neither a list nor optional ({})",
+                        f.name
+                    ));
+                }
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     fn extern_of(&self, ty: &str) -> Option<&Extern> {
@@ -411,16 +460,20 @@ pub struct Target {
     /// The module that holds the number checks a packet's reader calls.
     pub number: &'static str,
     /// For a core that raises the table's imports, the module whose `Import`
-    /// trait each import implements (`xpute_core::ipc::door`).
+    /// trait each import implements (`xpute_core::io::door`).
     pub import: Option<&'static str>,
     pub cpp: Option<(&'static str, &'static str)>,
     /// For xpute's own protocols, the path inside the runtime's own package
     /// from which its TypeScript binding imports the runtime's types.
     pub runtime_ts: Option<&'static str>,
+    /// Where a path's types are: the Rust module that holds `Token` and
+    /// `Path` (xpute-core io/fs.rs), and the TypeScript module that holds
+    /// `Path` and `read_path` (@xpute/runtime io/path.ts).
+    pub path: (&'static str, &'static str),
 }
 
 /// This is the first major a program's commands may take; the majors below it
-/// are xpute's own. It must equal `PROGRAM_MAJOR` of spec/ipc/frame.json.
+/// are xpute's own. It must equal `PROGRAM_MAJOR` of spec/io/frame.json.
 const PROGRAM_MAJOR: u32 = 0x10;
 
 /// Checks that no two commands across `specs` share a number.
@@ -484,9 +537,10 @@ fn one_protocol(spec: &Spec, json: &str) -> Result<Vec<Output>, String> {
         rs: rs_at,
         rs_logical: rs_at,
         number: "xpute_core::abi::number",
-        import: Some("xpute_core::ipc::door"),
+        import: Some("xpute_core::io::door"),
         cpp: None,
         runtime_ts: None,
+        path: ("xpute_core::io::fs", "@xpute/runtime/io/path.ts"),
     };
     let mut out = ts::emit(spec, &t)?;
     let (imports, body) = service::ts(spec, "@xpute/runtime")?;
@@ -509,7 +563,7 @@ fn one_protocol(spec: &Spec, json: &str) -> Result<Vec<Output>, String> {
     }
     out.push(Output::new(
         t.rs,
-        rs::emit(spec, &t, apart)? + &service::rs(spec)?,
+        rs::emit(spec, &t, apart)? + &service::rs(spec, "xpute_core::io::door", true)?,
     ));
     Ok(out)
 }
@@ -603,7 +657,11 @@ pub fn outputs_at(root: &Path, targets: &[Target]) -> Result<Vec<Output>, String
             first.text = splice_ts(&first.text, &imports, &body);
         }
         out.extend(ts);
-        out.push(Output::new(t.rs, rs::emit(spec, t, None)?));
+        let mut rs_text = rs::emit(spec, t, None)?;
+        if let Some(door) = t.import {
+            rs_text += &service::rs(spec, door, false)?;
+        }
+        out.push(Output::new(t.rs, rs_text));
         if let Some((path, namespace)) = t.cpp {
             out.push(Output::new(path, cpp::emit(spec, t, path, namespace)?));
         }

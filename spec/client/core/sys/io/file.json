@@ -1,75 +1,115 @@
 {
   "$doc": [
-    "The core's files: the roots it opens them below, the names below each and what a",
-    "file holds (pxl-core sys/io/file.rs, ts/client/src/service/sys/fs/)."
+    "The core's files: the tokens of their paths and what a file holds (pxl-core",
+    "sys/io/file.rs, ts/client/src/service/sys/fs/)."
   ],
-  "root": {
+  "path": {
     "$type": "u32",
     "$doc": [
-      "The roots the core opens files below (xpute's OPENAT). Below STORAGE a root is a",
-      "bake, numbered by its kind (pxl-spec bake/publication.spec.rs). Below every root a path is",
-      "one name: a tile's quadkey (pxl-spec space/layer/quadrant.rs), or what the root says. What it",
-      "is called and where past that, a tile's version and URL, a storage key, is what the client",
-      "(ts/client/src/service/sys/fs/) binds the root to, `@xpute/runtime` carrying the open there."
+      "The tree of the paths the core opens (xpute's FS_OPEN), as a URI's path is a",
+      "tree: each node takes one token, its `ID`, distinct among its siblings, and hands the",
+      "rest of the path to the child it names. A node that holds data takes the tokens left as",
+      "that data: a tile's quadkey (pxl-spec space/layer/quadrant.rs) as a string, or a load's id.",
+      "What a file is past its path, a tile's version and URL, a storage key, is the client's",
+      "binding (ts/client/src/service/sys/fs/)."
     ],
-    "STORAGE": {
-      "$val": 256,
+    "TERRAIN": {
       "$doc": [
-        "The platform's storage; a path is a storage file's id in decimal (`storage`); where the platform holds a slot is the client's choice."
-      ]
+        "The terrain bake: (TERRAIN, quadkey)."
+      ],
+      "ID": 0
+    },
+    "PLACE": {
+      "$doc": [
+        "The places bake: (PLACE, quadkey)."
+      ],
+      "ID": 1
+    },
+    "DIVISION": {
+      "$doc": [
+        "The divisions bake: (DIVISION, quadkey)."
+      ],
+      "ID": 2
+    },
+    "EARTH": {
+      "$doc": [
+        "The Earth bake: (EARTH, quadkey), and the picture of the whole Earth, (EARTH, SPHERE)."
+      ],
+      "ID": 3,
+      "SPHERE": {
+        "$doc": [
+          "The picture of the whole Earth, served under the Earth bake's version as its",
+          "`SPHERE` (spec/spec/bake/publication.json)."
+        ],
+        "ID": 0
+      }
+    },
+    "STORAGE": {
+      "$doc": [
+        "The platform's storage, where the platform holds a file being the client's choice. What a file holds is its owner's, written whole, its `format` first (pxl-core sys/io/file.rs)."
+      ],
+      "ID": 4,
+      "SETTINGS": {
+        "$doc": [
+          "The settings' overrides, in the platform's storage (domain/setting/store.rs)."
+        ],
+        "ID": 0
+      }
     },
     "ASSET": {
-      "$val": 257,
       "$doc": [
-        "The shipped assets; a path is a load's id in decimal, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs)."
-      ]
+        "The shipped assets: (ASSET, id), a load's id, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs)."
+      ],
+      "ID": 5
     },
     "OBJECT": {
-      "$val": 258,
       "$doc": [
-        "The placed objects, their source's: a file a shard, read, its path the shard's quadkey,",
-        "as a bake's tile is named, its `format.OBJECT` first; the top of their tree, read",
-        "(`object.TOP`); and their edits, written (`object.EDITS`)",
-        "(domain/layer/object/repository.rs). A shard with none has no file. The source keeps the",
-        "shards and the top and applies the edits; which source, a mock or a server, is the client's."
-      ]
+        "The placed objects, their source's: a shard, read, (OBJECT, quadkey), its",
+        "`format.OBJECT` first; the top of their tree, read, (OBJECT, TOP); and their edits,",
+        "written, (OBJECT, EDIT) (domain/layer/object/repository.rs). A shard with none has no",
+        "file. The source keeps the shards and the top and applies the edits; which source, a",
+        "mock or a server, is the client's."
+      ],
+      "ID": 6,
+      "TOP": {
+        "$doc": [
+          "The top of the tree, read: what each node at `SHARD_ZOOM` holding objects folds to",
+          "(`top`), so which shards hold any, its `format.OBJECT_TOP` first. Its source rebuilds",
+          "it from the shards as an edit lands; none is no shard holding any."
+        ],
+        "ID": 0
+      },
+      "EDIT": {
+        "$doc": [
+          "Edits, written, never read: a batch of writes in the order they were made (`write`),",
+          "its `format.OBJECT_EDIT` first, which the source applies to its shards."
+        ],
+        "ID": 1
+      }
     }
   },
   "CATALOG": {
     "$type": "u32",
     "$val": 0,
     "$doc": [
-      "Below the asset root, the catalog the client plugs in (pxl-spec asset/catalog.rs): the",
-      "file each of the asset specs' references names. Any other id below it is a file,",
+      "The load id of the catalog the client plugs in, (ASSET, CATALOG) (pxl-spec asset/catalog.rs):",
+      "the file each of the asset specs' references names. Any other id is a file,",
       "its row in the asset ingest's table counted from 1 (spec/spec/asset/ingest.json)."
     ]
   },
-  "object": {
-    "$type": "str",
+  "LEAF_ZOOM": {
+    "$type": "u32",
+    "$val": 15,
     "$doc": [
-      "Below OBJECT, the files that are no shard's; no quadkey has a letter."
-    ],
-    "TOP": {
-      "$val": "top",
-      "$doc": [
-        "The top of the tree, read: what each node at `SHARD_ZOOM` holding objects folds to",
-        "(`top`), so which shards hold any, its `format.OBJECT_TOP` first. Its source rebuilds",
-        "it from the shards as an edit lands; none is no shard holding any."
-      ]
-    },
-    "EDITS": {
-      "$val": "edits",
-      "$doc": [
-        "Edits, written, never read: a batch of writes in the order they were made (`write`),",
-        "its `format.OBJECT_EDITS` first, which the source applies to its shards."
-      ]
-    }
+      "The finest zoom a tile's quadkey in a path is at, so the most digits it has:",
+      "pxl-spec's `LEAF_ZOOM`, which the core holds this to (sys/io/file.rs)."
+    ]
   },
   "SHARD_ZOOM": {
     "$type": "u32",
     "$val": 8,
     "$doc": [
-      "The zoom of the tile a shard below OBJECT is: pxl-engine's `SHARD_ZOOM`, which the",
+      "The zoom of the tile a shard, (OBJECT, quadkey), is: pxl-engine's `SHARD_ZOOM`, which the",
       "core holds this to (domain/layer/object/repository.rs). A key's first digits to it name",
       "the shard, and each past it is a zoom's 0 to 7, on three axes (pxl-spec",
       "space/hierarchy/morton.rs)."
@@ -112,7 +152,7 @@
   "top": {
     "$type": "u32",
     "$doc": [
-      "The children of the tree packet `object.TOP` holds after its format byte, by index:",
+      "The children of the tree packet the top, (OBJECT, TOP), holds after its format byte, by index:",
       "each row a shard holding objects, which only its leaves are under."
     ],
     "SHARD": {
@@ -129,24 +169,11 @@
       ]
     }
   },
-  "storage": {
-    "$type": "u32",
-    "$doc": [
-      "The files the core keeps below STORAGE, by slot. What a slot holds is its",
-      "owner's, written whole, its slot's `format` first (pxl-core sys/io/file.rs)."
-    ],
-    "SETTINGS": {
-      "$val": 0,
-      "$doc": [
-        "The settings' overrides (domain/setting/store.rs)."
-      ]
-    }
-  },
   "format": {
     "$type": "u8",
     "$doc": [
-      "Each kept file's format, the first byte of what it holds: a storage slot's by its",
-      "name, a shard's file below OBJECT as OBJECT, the top and an edit batch as theirs. The",
+      "Each kept file's format, the first byte of what it holds: a stored file's by its",
+      "name, a shard's file as OBJECT, the top and an edit batch as theirs. The",
       "core reads a file of its format and refuses any other, reading none of it and never",
       "writing over it, as a driver refuses a volume whose superblock it does not know; what",
       "to do with the file is the client's. Bump one whenever a change makes an older file mean",
@@ -155,6 +182,6 @@
     "SETTINGS": 1,
     "OBJECT": 19,
     "OBJECT_TOP": 22,
-    "OBJECT_EDITS": 21
+    "OBJECT_EDIT": 21
   }
 }

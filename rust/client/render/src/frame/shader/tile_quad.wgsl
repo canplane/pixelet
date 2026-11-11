@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/tile_quad.wgsl
 
-// The vertex stage of a pass that draws a quad a tile, over the claimed tiles or over every
+// The vertex stage of a pass that draws a quad a tile, over the damaged tiles or over every
 // tile (screen_tile.wgsl `tile_clip`). It is a part of its own because screen_tile.wgsl is
 // also part of compute shaders, which run no vertex stage.
 

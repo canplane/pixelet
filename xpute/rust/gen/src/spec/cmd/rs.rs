@@ -11,6 +11,7 @@ pub(super) fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> 
         let kind = spec.kind(&f.ty)?;
         if f.list
             || kind == Kind::Str
+            || kind == Kind::Path
             || (kind == Kind::Record && rs_borrows(spec, &spec.record(&f.ty).fields)?)
         {
             return Ok(true);
@@ -35,6 +36,9 @@ fn rs_enum(spec: &Spec, ty: &str) -> String {
 
 fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
+    if kind == Kind::Path {
+        return Ok("Path<'a>".to_string());
+    }
     if f.list && kind == Kind::Number {
         return Ok(format!("&'a [{}]", f.ty));
     }
@@ -78,6 +82,7 @@ fn rs_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
         }
         Kind::Bool => return Ok(format!("{c}.get_bool()?")),
         Kind::Str => return Ok(format!("{c}.get_str_ref()?")),
+        Kind::Path => return Ok(format!("Path::read(pkt, {c})?")),
         _ => {}
     }
     let (repr, unknown) = match spec.enums.iter().find(|e| e.name == f.ty) {
@@ -129,6 +134,9 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
             rs_rec(spec, &f.ty, "'_")?
         ));
     }
+    if kind == Kind::Path {
+        return Ok("&'a [Token<'a>]".to_string());
+    }
     // An optional string is borrowed as a `&str`; a required one may be any
     // `Display`.
     if f.optional && kind == Kind::Str {
@@ -173,6 +181,7 @@ fn rs_write(spec: &Spec, f: &Field) -> Result<Vec<String>, String> {
         Kind::Record => format!("w.branch({fields}, |w| {v}.write(w));"),
         Kind::Str if f.optional => format!("w.str({v});"),
         Kind::Str => format!("w.str_display({v});"),
+        Kind::Path => format!("Path::write(w, {v});"),
         Kind::Enum | Kind::Extern if f.optional => format!("w.u32({v}.map(|m| m as u32));"),
         Kind::Enum | Kind::Extern => format!("w.u32(Some({v} as u32));"),
         _ => {
@@ -329,6 +338,9 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
         if strs { "StrList, " } else { "" }
     ));
     out.push(format!("use {}::{{finite, integer, unknown}};", t.number));
+    if spec.has_path()? {
+        out.push(format!("use {}::{{Path, Token}};", t.path.0));
+    }
     let names: &[String] = apart.map_or(&[], |a| &a.names);
     if let Some(a) = apart {
         let mut sorted = names.to_vec();
@@ -357,7 +369,8 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
             };
             let mut borrows = false;
             for f in pkt {
-                borrows |= f.list || spec.kind(&f.ty)? == Kind::Str;
+                let kind = spec.kind(&f.ty)?;
+                borrows |= f.list || kind == Kind::Str || kind == Kind::Path;
             }
             let lt = if borrows { "<'a>" } else { "" };
             out.extend([
@@ -428,7 +441,7 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
                     // the elided one of `pkt`.
                     out.push(format!(
                         "    pub fn parts(pkt: &[u8]) -> Result<({},), MarshalError> {{",
-                        types.join(", ").replace("'a ", "")
+                        types.join(", ").replace("'a ", "").replace("<'a>", "<'_>")
                     ));
                     out.push("        let f = TreeReader::new(pkt)?.read_branch()?;".into());
                     out.push("        Ok((".into());
@@ -460,38 +473,20 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
                     format!("impl {door}::Import for {name}{lt} {{"),
                     format!("    const NUMBER: u32 = {};", c.val),
                     format!("    const FIELDS: u32 = {};", import.len()),
+                    format!("    const ACKREQ: bool = {};", c.ackreq),
                     "    fn write(&self, w: &mut PacketWriter) {".to_string(),
                     format!("        {name}::write(self, w);"),
+                    "    }".to_string(),
+                    "    fn named(&self) -> (u32, u32) {".to_string(),
+                    match &c.mem {
+                        Some([at, len]) => format!("        (self.{at}, self.{len})"),
+                        None => "        (0, 0)".to_string(),
+                    },
                     "    }".to_string(),
                     "}".to_string(),
                 ]);
             }
         }
-    }
-    let commands = spec.commands()?;
-    let named: Vec<_> = commands
-        .iter()
-        .filter_map(|c| c.mem.as_ref().map(|m| (c, m)))
-        .collect();
-    if !named.is_empty() {
-        out.extend([
-            String::new(),
-            "/// The core's memory a command names, where it is and how long.".to_string(),
-            "pub fn mem_of(cmd: u32, pkt: &[u8]) -> Option<(u32, u32)> {".to_string(),
-            "    match cmd {".to_string(),
-        ]);
-        for (c, [at, len]) in named {
-            out.push(format!(
-                "        {} => {}::read(pkt).ok().map(|e| (e.{at}, e.{len})),",
-                c.val,
-                pascal(&c.name)
-            ));
-        }
-        out.extend([
-            "        _ => None,".to_string(),
-            "    }".to_string(),
-            "}".to_string(),
-        ]);
     }
     Ok(file(&out))
 }

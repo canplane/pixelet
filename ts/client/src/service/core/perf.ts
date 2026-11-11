@@ -12,8 +12,6 @@
 import type { F64Array } from "@xpute/kit/abi/array.ts";
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { td } from "@xpute/kit/codec/encoding.ts";
-import { FaultError } from "@xpute/kit/status/error.ts";
-import type { i32 } from "@xpute/kit/abi/word.ts";
 import { PHASES } from "@/abi/phase.spec.ts";
 import {
   OUTCOME_NAMES,
@@ -40,27 +38,19 @@ import {
 import { EFFECT_NAMES, STEP_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import { mem } from "@xpute/runtime";
-import { Command } from "@/abi/cmd.spec.ts";
 import { core, perf } from "@/service/core/core.ts";
 
 const WORD = 8;
 /** How many bytes a task's `path` column holds (perf.json `TASK`). */
 const PATH_BYTES = 3 * WORD;
 
-/** A profiler call answers with the address of its reply in the core's
- * memory, or with a negative errno when it refuses. */
-function reply_at(at: i32): u32 {
-  if (at < 0) throw new FaultError(-at as i32);
-  return at >>> 0;
-}
-
 export function start(): void {
-  core.send(Command.PERF_START);
+  core.perf_start();
 }
 
 /** Freezes the recording window, so that what is exported holds still. */
 export function stop(): void {
-  core.send(Command.PERF_STOP);
+  core.perf_stop();
 }
 
 const words = (at: u32, n: u32) => new Float64Array(mem, at, n);
@@ -215,6 +205,7 @@ export interface Worst {
 
 export type Section<S> = { [K in Exclude<keyof S, "AT" | "WORDS">]: f64 };
 export type ViewSection = Section<typeof NOW.view>;
+export type DrawSection = Section<typeof NOW.draw>;
 /** The highest or lowest values the frames held since the recording started
  * (STAT.recording). */
 export type RecordingSection = Section<typeof STAT.recording>;
@@ -354,11 +345,12 @@ function section<S extends { AT: u32; WORDS: u32 }>(
   return out as Section<S>;
 }
 
-function stats_of(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
-  const r = u32s(
-    reply_at(core.call(Command.PERF_STATS, window_ms)),
-    STAT_SLOT.WORDS,
-  );
+/** A profiler request answers with the address of its reply in the core's
+ * memory, which holds until the next request of its kind. */
+async function stats_of(
+  window_ms: f64 | null,
+): Promise<{ stats: F64Array; now: F64Array }> {
+  const r = u32s(await core.perf_stats(window_ms), STAT_SLOT.WORDS);
   return {
     stats: words(r[STAT_SLOT.stats_at], r[STAT_SLOT.stats_words]),
     now: words(r[STAT_SLOT.now_at], r[STAT_SLOT.now_words]),
@@ -367,8 +359,8 @@ function stats_of(window_ms: f64 | null): { stats: F64Array; now: F64Array } {
 
 /** The summary over the last `window_ms`, or over the whole recording when
  * `window_ms` is null. */
-function perf_summary(window_ms: f64 | null): Summary {
-  const { stats: s, now: n } = stats_of(window_ms);
+async function perf_summary(window_ms: f64 | null): Promise<Summary> {
+  const { stats: s, now: n } = await stats_of(window_ms);
   const R = NOW.recording_state;
   return {
     recording_state: {
@@ -386,13 +378,22 @@ function perf_summary(window_ms: f64 | null): Summary {
 
 /** Reads NOW's view alone. The core is asked for an empty window, so that no
  * frame or task is folded. */
-function perf_view(): ViewSection {
-  return section(stats_of(0).now, NOW.view);
+async function perf_view(): Promise<ViewSection> {
+  return section((await stats_of(0)).now, NOW.view);
+}
+
+/** Reads NOW's draw alone, as `perf_view` reads its view. */
+async function perf_draw(): Promise<DrawSection> {
+  return section((await stats_of(0)).now, NOW.draw);
 }
 
 /** Each ring's address and record count. */
-function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
-  const r = u32s(reply_at(core.call(Command.PERF_RINGS)), RING_SLOT.WORDS);
+async function rings(): Promise<{
+  frames: [u32, u32];
+  tasks: [u32, u32];
+  worst: [u32, u32];
+}> {
+  const r = u32s(await core.perf_rings(), RING_SLOT.WORDS);
   const ring = (name: (typeof RING_NAMES)[number]): [u32, u32] => {
     const at = RING_SLOT.slots + RING_NAMES.indexOf(name) * RING.WORDS;
     return [r[at + RING.at], r[at + RING.cnt]];
@@ -400,22 +401,22 @@ function rings(): { frames: [u32, u32]; tasks: [u32, u32]; worst: [u32, u32] } {
   return { frames: ring("frames"), tasks: ring("tasks"), worst: ring("worst") };
 }
 
-function perf_cnts(): RingCount {
-  const { frames, tasks, worst } = rings();
+async function perf_cnts(): Promise<RingCount> {
+  const { frames, tasks, worst } = await rings();
   return { frames: frames[1], tasks: tasks[1], worst: worst[1] };
 }
 
 /** Every frame the ring holds, oldest first. */
-function perf_frames(): Frame[] {
-  const [at, cnt] = rings().frames;
+async function perf_frames(): Promise<Frame[]> {
+  const [at, cnt] = (await rings()).frames;
   const w = words(at, cnt * FRAME.WORDS);
   return Array.from({ length: cnt }, (_, i) => frame_at(w, i * FRAME.WORDS));
 }
 
 /** The tasks the ring holds, oldest first: the last `last` of them, or all of
  * them when `last` is null. */
-function perf_tasks(last: u32 | null = null): TaskRecord[] {
-  const [ring, total] = rings().tasks;
+async function perf_tasks(last: u32 | null = null): Promise<TaskRecord[]> {
+  const [ring, total] = (await rings()).tasks;
   const from = last === null ? 0 : Math.max(0, total - last);
   const at = ring + from * TASK.WORDS * WORD;
   const cnt = total - from;
@@ -453,8 +454,8 @@ function perf_tasks(last: u32 | null = null): TaskRecord[] {
   });
 }
 
-function perf_worst(): Worst[] {
-  const [at, cnt] = rings().worst;
+async function perf_worst(): Promise<Worst[]> {
+  const [at, cnt] = (await rings()).worst;
   const w = words(at, cnt * WORST.WORDS);
   return Array.from({ length: cnt }, (_, i) => {
     const o = i * WORST.WORDS;
@@ -475,6 +476,7 @@ function perf_worst(): Worst[] {
 const READERS = {
   summary: perf_summary,
   view: perf_view,
+  draw: perf_draw,
   counts: perf_cnts,
   frames: perf_frames,
   tasks: perf_tasks,
@@ -488,12 +490,21 @@ export type PerfRead = keyof typeof READERS;
 export function read<K extends PerfRead>(
   what: K,
   ...args: Parameters<(typeof READERS)[K]>
-): Promise<ReturnType<(typeof READERS)[K]>> {
-  return perf(what, args) as Promise<ReturnType<(typeof READERS)[K]>>;
+): ReturnType<(typeof READERS)[K]> {
+  return perf(what, args) as ReturnType<(typeof READERS)[K]>;
 }
 
+/** The read last begun. PERF_STATS and PERF_RINGS each answer with a block the
+ * core fills again for the next of either, so a read begins only once the one
+ * before it has been read out. */
+let reading: Promise<unknown> = Promise.resolve();
+
 /** Answers a `read` on the side that holds the core's memory, where the caller
- * must be. */
-export function answer(what: PerfRead, args: unknown[]): unknown {
-  return (READERS[what] as (...a: unknown[]) => unknown)(...args);
+ * must be, one read at a time. */
+export function answer(what: PerfRead, args: unknown[]): Promise<unknown> {
+  const run = () =>
+    (READERS[what] as (...a: unknown[]) => Promise<unknown>)(...args);
+  const read = reading.then(run, run);
+  reading = read.catch(() => {});
+  return read;
 }

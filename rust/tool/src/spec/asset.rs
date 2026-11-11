@@ -102,10 +102,10 @@ pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
     ])
 }
 
-/// Whether an entry is one of the object's colors, which the catalog gives out to be placed
-/// past a ground byte.
+/// Whether an object's entry is one of its colors, which the catalog gives out to be placed
+/// past a ground byte: every entry but air.
 fn is_color(e: &Entry) -> bool {
-    e.val > 256
+    e.name != "air"
 }
 
 /// Each placeable cube with the section heading it is listed under.
@@ -406,7 +406,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     ]);
     ts.extend(
         cube_entries(&object)
-            .filter(|e| e.name != "air")
+            .filter(|e| is_color(e))
             .chain(cube_entries(&ground))
             .map(|e| format!("  {},", e.val)),
     );
@@ -429,7 +429,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         "export const CUBE_LABEL: Readonly<Record<number, string>> = {".to_string(),
     ]);
     for e in cube_entries(&object)
-        .filter(|e| e.name != "air")
+        .filter(|e| is_color(e))
         .chain(cube_entries(&ground))
     {
         let label = e
@@ -584,7 +584,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         "        /// names.".into(),
         format!(
             "        pub const fn grounds(val: u32) -> bool {{ matches!(val, {}) }}",
-            runs(cube_entries(&ground).map(|e| e.val)).join(" | ")
+            rs_runs(cube_entries(&ground).map(|e| e.val))
         ),
         String::new(),
         "        /// A way: decor faces along it and no pier stands on it.".into(),
@@ -593,7 +593,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         "        /// Whether a palette entry read into a word is a way (`transport`).".into(),
         format!(
             "        pub const fn transports(val: u32) -> bool {{ matches!(val, {}) }}",
-            runs(cube_entries(&ground).filter(|e| e.transport).map(|e| e.val)).join(" | ")
+            rs_runs(cube_entries(&ground).filter(|e| e.transport).map(|e| e.val))
         ),
     ]);
     rs.extend(["    }".to_string(), String::new()]);
@@ -639,7 +639,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         "        /// Whether a value read into a word, as a GPU has it, is one `of` names.".into(),
         format!(
             "        pub const fn objects(val: u32) -> bool {{ matches!(val, {}) }}",
-            runs(colors.iter().map(|e| e.val)).join(" | ")
+            rs_runs(colors.iter().map(|e| e.val))
         ),
         "    }".into(),
         "}".into(),
@@ -656,17 +656,10 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     Ok(out)
 }
 
-/// Ascending values as a TypeScript test of `val`, each run of consecutive
-/// ones a range, as `runs` patterns them.
+/// Ascending values as a TypeScript test of `val`, each run a range.
 fn ts_runs(vals: impl Iterator<Item = u32>) -> String {
-    let mut out: Vec<(u32, u32)> = Vec::new();
-    for v in vals {
-        match out.last_mut() {
-            Some((_, hi)) if *hi + 1 == v => *hi = v,
-            _ => out.push((v, v)),
-        }
-    }
-    out.into_iter()
+    runs(vals)
+        .into_iter()
         .map(|(lo, hi)| {
             if lo == hi {
                 format!("val === {lo}")
@@ -678,16 +671,10 @@ fn ts_runs(vals: impl Iterator<Item = u32>) -> String {
         .join(" || ")
 }
 
-/// Ascending values as patterns, each run of consecutive ones a range.
-fn runs(vals: impl Iterator<Item = u32>) -> Vec<String> {
-    let mut out: Vec<(u32, u32)> = Vec::new();
-    for v in vals {
-        match out.last_mut() {
-            Some((_, hi)) if *hi + 1 == v => *hi = v,
-            _ => out.push((v, v)),
-        }
-    }
-    out.into_iter()
+/// Ascending values as Rust patterns, each run a range.
+fn rs_runs(vals: impl Iterator<Item = u32>) -> String {
+    runs(vals)
+        .into_iter()
         .map(|(lo, hi)| {
             if lo == hi {
                 lo.to_string()
@@ -695,7 +682,20 @@ fn runs(vals: impl Iterator<Item = u32>) -> Vec<String> {
                 format!("{lo}..={hi}")
             }
         })
-        .collect()
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
+/// Ascending values grouped into runs of consecutive ones, each its first and last.
+fn runs(vals: impl Iterator<Item = u32>) -> Vec<(u32, u32)> {
+    let mut out: Vec<(u32, u32)> = Vec::new();
+    for v in vals {
+        match out.last_mut() {
+            Some((_, hi)) if *hi + 1 == v => *hi = v,
+            _ => out.push((v, v)),
+        }
+    }
+    out
 }
 
 pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {

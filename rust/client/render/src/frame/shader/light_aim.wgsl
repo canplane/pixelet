@@ -10,12 +10,6 @@ fn header_word(k: u32) -> u32 {
   return u32(header[k / 4u][k % 4u]);
 }
 
-/// Whether the pass runs for the light. The light's head names its map's side
-/// (`light::HEADER_SIZE`), and the head bound for the eye is all zero.
-fn light_run() -> bool {
-  return header_word(LIGHT_HEADER_SIZE) != 0u;
-}
-
 fn light_v3(k: u32) -> vec3<f32> {
   return eye_v3(LIGHT + k);
 }
@@ -130,5 +124,5 @@ fn depth_word(d: f32) -> u32 {
 
 /// The word a slot's ended walk leaves. A walk that stopped at nothing leaves the far plane.
 fn walked_word(w: WalkEnd) -> u32 {
-  return select(depth_word(1.0), hit_word(w.t, w.axis), w.ends == 1u);
+  return select(depth_word(1.0), hit_word(w.t, w.axis), w.ends == ENDS_CELL);
 }

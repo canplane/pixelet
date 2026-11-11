@@ -38,7 +38,6 @@ export class Arena<T extends object> {
   readonly mem: T[] = [];
 
   readonly max_cap: u32;
-  private _cap: u32 = 0;
   private _len: u32 = 0;
 
   private _factory: () => T;
@@ -46,14 +45,13 @@ export class Arena<T extends object> {
   constructor(factory: () => T, cfg: ArenaConfig) {
     const { init_cap: _init_cap, max_cap } = cfg;
     this.max_cap = max_cap;
-    this._cap = 0;
 
     this._factory = factory;
     this._grow(Math.min(_init_cap, max_cap));
   }
 
   get cap(): u32 {
-    return this._cap;
+    return this.mem.length;
   }
 
   get len(): u32 {
@@ -66,7 +64,7 @@ export class Arena<T extends object> {
 
   /** Allocate one object from the arena. */
   alloc(): T {
-    if (this._len >= this._cap) this._grow(this._len + 1);
+    if (this._len >= this.cap) this._grow(this._len + 1);
 
     return this.mem[this._len++];
   }
@@ -90,13 +88,13 @@ export class Arena<T extends object> {
   // The capacity doubles but stops at `max_cap`, so a request is refused
   // only when it does not fit under `max_cap`.
   private _grow(req: u32): void {
-    if (req <= this._cap) return;
+    const cap = this.cap;
+    if (req <= cap) return;
     if (req > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
-    const new_cap = Math.min(Math.max(this._cap * 2, req), this.max_cap);
+    const new_cap = Math.min(Math.max(cap * 2, req), this.max_cap);
 
     this.mem.length = new_cap; // V8 Array pre-allocation hint
-    for (let i = this._cap; i < new_cap; i++) this.mem[i] = this._factory();
-    this._cap = new_cap;
+    for (let i = cap; i < new_cap; i++) this.mem[i] = this._factory();
   }
 
   /** Scope guard that rewinds to the current mark on dispose. */
@@ -140,7 +138,6 @@ export class Vector<T extends AnyTypedArray> {
   mem: T;
 
   readonly max_cap: u32;
-  private _cap: u32;
   private _len: u32 = 0;
 
   readonly ctor: AnyTypedArrayCtor<T>;
@@ -149,13 +146,12 @@ export class Vector<T extends AnyTypedArray> {
     this.ctor = ctor;
     const { init_cap: _init_cap, max_cap } = cfg;
     this.max_cap = max_cap;
-    this._cap = Math.min(_init_cap, max_cap);
 
-    this.mem = new ctor(this._cap);
+    this.mem = new ctor(Math.min(_init_cap, max_cap));
   }
 
   get cap(): u32 {
-    return this._cap;
+    return this.mem.length;
   }
 
   get len(): u32 {
@@ -179,7 +175,7 @@ export class Vector<T extends AnyTypedArray> {
 
   /** Push one primitive value into scratch. Returns the written index. */
   push(v: AnyElementOf<T>): u32 {
-    if (this._len >= this._cap) this._grow(this._len + 1);
+    if (this._len >= this.cap) this._grow(this._len + 1);
 
     const i = this._len++;
     this.mem[i] = v;
@@ -210,9 +206,9 @@ export class Vector<T extends AnyTypedArray> {
    *   only when it does not fit under `max_cap`
    */
   private _grow(req: u32): void {
-    if (req <= this._cap) return;
+    if (req <= this.cap) return;
     if (req > this.max_cap) throw new MarshalError(Errno.EOVERFLOW);
-    const new_cap = Math.min(Math.max(this._cap * 2, req), this.max_cap);
+    const new_cap = Math.min(Math.max(this.cap * 2, req), this.max_cap);
 
     const new_mem: T = new this.ctor(new_cap);
     // TypeScript cannot type `set` across the number and bigint array
@@ -220,7 +216,6 @@ export class Vector<T extends AnyTypedArray> {
     new_mem.set(this.mem as any);
 
     this.mem = new_mem;
-    this._cap = new_cap;
   }
 
   /** Scope guard that rewinds to the current mark on dispose. */

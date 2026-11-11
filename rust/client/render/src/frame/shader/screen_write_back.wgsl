@@ -1,6 +1,6 @@
 // pxl-render/frame/shader/screen_write_back.wgsl
 
-// Copies the claimed tiles of the history the resolve wrote this frame back into the last
+// Copies the damaged tiles of the history the resolve wrote this frame back into the last
 // history, a texel a pixel over the tiles' quads (screen_tile.wgsl). In a frame not drawn
 // whole the last history stays the one read, so it must take this frame's tiles
 // (pass/resolve.rs `draw`).

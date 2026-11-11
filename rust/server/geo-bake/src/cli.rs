@@ -1,5 +1,6 @@
 // pxl-geo-bake/cli.rs
 
+use std::process::ExitCode;
 use std::str::FromStr;
 
 /// Enters the checkout a bake or the tile server works in: the nearest directory up from
@@ -16,6 +17,17 @@ pub fn enter() -> Result<(), String> {
         return Ok(());
     };
     std::env::set_current_dir(root).map_err(|e| format!("{}: {e}", root.display()))
+}
+
+/// A program's `main`: `run`, and its error said under `tag` and the exit failed.
+pub fn main(tag: &str, run: impl FnOnce() -> Result<(), String>) -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("[{tag}] {err}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 pub struct Argv {

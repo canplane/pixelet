@@ -5,7 +5,8 @@
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use xpute_core::entry::{BootInfo, Form};
+use xpute_core::entry::BootInfo;
+use xpute_core::host::Host;
 use xpute_core::mem::heap::HeapStat;
 use xpute_kit::status::errno::Errno;
 
@@ -17,14 +18,16 @@ static RELEASES: AtomicU32 = AtomicU32::new(0);
 pub fn set_heap_stat(heap_stat: fn() -> HeapStat) {
     set(BootInfo {
         mem_sz: 0,
-        call: |_| Errno::ENOSYS as i32,
-        heap_stat,
-        form: Form {
-            data_end: 0,
-            now: || 0.0,
-            stop_hook: None,
-            publish: None,
+        host: Host {
+            receive: |_, _| 0,
+            send: |_, _, _| {},
+            call: |_| Errno::ENOSYS as i32,
         },
+        heap_stat,
+        data_end: 0,
+        now: || 0.0,
+        stop_hook: None,
+        publish: None,
     });
 }
 

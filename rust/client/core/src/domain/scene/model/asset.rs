@@ -30,16 +30,19 @@ use pxl_render::gpu::draw::MODEL_VERTEX_WORDS;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use xpute_core::global::Global;
 use xpute_core::mem;
-use xpute_core::sched::edge::yield_if_spent;
-use xpute_core::sched::task;
+use xpute_core::sched::turn::yield_if_spent;
 
 use crate::domain::scene::model;
 use crate::domain::scene::model::registry::{Channel, Model, STEPS_PER_PAUSE};
+use crate::sys::io::body::Packet;
 use crate::sys::io::loader::{load_of, take_gltf};
 use crate::sys::io::room::Refusal;
 use crate::sys::load::Load;
-use crate::sys::sched::edge::{request_world_tick, world_edge};
+use crate::sys::sched::executor;
+use crate::sys::sched::{self, request_world_tick};
 use pxl_spec::asset::catalog::{Slot, SLOTS};
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
 const IDENTITY: [f32; 16] = [
@@ -54,7 +57,7 @@ pub const REGISTRATIONS: usize = SLOTS;
 /// model's number, or the heap's refusal of room.
 type Registration = Option<Result<u32, Refusal>>;
 
-/// Each registration, keyed by the file's number below the asset root and by
+/// Each registration, keyed by the file's number after ASSET and by
 /// the height it was asked at, as the f64's bits.
 static REGISTRY: Global<Vec<(u32, Option<u64>, Registration)>> = Global::new();
 
@@ -62,7 +65,7 @@ static REGISTRY: Global<Vec<(u32, Option<u64>, Registration)>> = Global::new();
 /// parse. A failed parse is final.
 type Parse = Option<Result<Rc<Gltf>, MarshalError>>;
 
-/// Each file's parse, keyed by its number below the asset root.
+/// Each file's parse, keyed by its number after ASSET.
 static PARSED: Global<Vec<(u32, Parse)>> = Global::new();
 
 /// The tasks running, the registrations and the parses.
@@ -106,8 +109,7 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<u32> {
         Some(at) => registered[at].2 = None,
         None => registered.push((file, key, None)),
     }
-    let spawned = task::spawn(registration(file, height_u, gltf), 0);
-    xpute_kit::ensure!(spawned, ENOSPC, file);
+    executor::spawner().spawn(registration(file, height_u, gltf).or_bug(Errno::ENOSPC));
     None
 }
 
@@ -126,16 +128,16 @@ fn gltf_of(load: Load) -> Option<Rc<Gltf>> {
     }
     let bytes = take_gltf(load)?;
     PARSED.get(Vec::new).push((file, None));
-    let spawned = task::spawn(parse(file, bytes), 0);
-    xpute_kit::ensure!(spawned, ENOSPC, file);
+    executor::spawner().spawn(parse(file, bytes).or_bug(Errno::ENOSPC));
     None
 }
 
 /// The file numbered `file` parsed off `bytes`, which go once it is. `gltf_of`
 /// left its entry as parsing, and this sets it once it is parsed or refused,
 /// then wakes a turn.
-async fn parse(file: u32, bytes: Vec<u8>) {
-    let parsed = parse_gltf(&bytes, &[], || yield_if_spent(world_edge)).await;
+#[embassy_executor::task(pool_size = REGISTRATIONS)]
+async fn parse(file: u32, bytes: Packet) {
+    let parsed = parse_gltf(&bytes, &[], || yield_if_spent(sched::turn)).await;
     if let Some((_, entry)) = PARSED.get(Vec::new).iter_mut().find(|(a, _)| *a == file) {
         *entry = Some(parsed.map(Rc::new));
     }
@@ -158,8 +160,9 @@ pub fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<u32> {
 /// Registers `gltf`, the file numbered `file`, at `height_u`. `model_of` left
 /// the file's entry as registering, and this sets it once the model is whole
 /// or refused, then wakes a turn.
+#[embassy_executor::task(pool_size = REGISTRATIONS)]
 async fn registration(file: u32, height_u: Option<f64>, gltf: Rc<Gltf>) {
-    let entry = register_model(&gltf, height_u, || yield_if_spent(world_edge))
+    let entry = register_model(&gltf, height_u, || yield_if_spent(sched::turn))
         .await
         .ok_or_else(Refusal::now);
     let key = height_u.map(f64::to_bits);

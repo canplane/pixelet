@@ -18,9 +18,9 @@
     "$type": "u32",
     "$doc": [
       "The one place the renderer's calls cross (gpu/api.rs): a stream",
-      "(xpute-core ipc/stream.rs) in the core's machine's GPU socket, which the",
+      "(xpute-core io/stream.rs) in the front of the core's memory, which the",
       "core writes its calls into during a turn and the runtime runs once the turn",
-      "has returned. Its size is the socket's (spec/client/core/sys/machine.json `gpu`).",
+      "has returned. Its size is the manifest's (spec/client/core/sys/manifest.json `stream`).",
       "",
       "Its head, past the stream's own words, is what the runtime writes for the",
       "core: the device's block (xpute DEVICE) and the timed spans' reads, three",
@@ -50,9 +50,11 @@
   "device": {
     "$type": "u32",
     "$doc": [
-      "What a device's GPU runtime runs the renderer's stream by (xpute-gpu runtime",
+      "What a GPU runtime runs the renderer's stream by: a device's (xpute-gpu runtime",
       "`Config`), which the core hands it (pxl-core lib.rs `GPU`, xpute-gpu",
-      "`CoreConfig`); a page's browser paces its frames and stages its writes itself."
+      "`CoreConfig`), and a page's, which reads the chunk its writes are staged in from",
+      "the page's worker (ts/client runtime/worker.ts, @xpute/gpu `GpuConfig`); a page's",
+      "browser paces its frames itself."
     ],
     "FRAME_LATENCY": {
       "$val": 2,
