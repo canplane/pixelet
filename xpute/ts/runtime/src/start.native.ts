@@ -22,7 +22,7 @@ import {
 import { XPUTE } from "@xpute/native";
 import { Command as FsCommand, read as fs_read } from "./abi/fs.spec.ts";
 import { Command, sys_imports } from "./abi/sys.spec.ts";
-import { answer_of, encode_args } from "./io/connection.ts";
+import { encode_args, reply_of } from "./io/connection.ts";
 import { commit, FileError } from "./io/fs.ts";
 import * as batch from "./io/batch.spec.ts";
 import { type Path, read_path } from "./io/path.ts";
@@ -76,7 +76,7 @@ export async function start<G extends Grant>(
     return end > 0 ? buf.subarray(0, end) : NOTHING;
   };
 
-  const waiting = new Map<u32, (res: i32) => void>();
+  const waiting = new Map<u32, (res: i32, named: U8Array | null) => void>();
   let next = 0;
   let stopped = false;
   const post = (tag: u32, cmd: u32, flags: u32, res: i32, pkt: U8Array) =>
@@ -105,7 +105,7 @@ export async function start<G extends Grant>(
     named: U8Array | null,
     pkt: U8Array | null,
   ): i32 | void {
-    const major = frame.major_of(cmd);
+    const major = frame.CMD_MAJOR(cmd);
     const on = routes.get(major);
     const take = ui_routes.get(major);
     take?.(tag, cmd, f, pkt, named);
@@ -175,7 +175,7 @@ export async function start<G extends Grant>(
       const done = waiting.get(tag);
       if (done) {
         waiting.delete(tag);
-        return done(res);
+        return done(res, named);
       }
       if (res < 0) console.warn(`[xpute] 0x${cmd.toString(16)} failed: ${res}`);
       return;
@@ -195,7 +195,7 @@ export async function start<G extends Grant>(
   function stop(): void {
     if (stopped) return;
     stopped = true;
-    waiting.forEach((done) => done(Errno.ENOTRECOVERABLE));
+    waiting.forEach((done) => done(Errno.ENOTRECOVERABLE, null));
     waiting.clear();
     ui.stop();
   }
@@ -219,7 +219,7 @@ export async function start<G extends Grant>(
         word(batch.PKT),
         word(batch.NAMED),
       ];
-      off += 4 * batch.HEADER_WORDS;
+      off += 4 * batch.HDR_WORDS;
       const pkt = pkt_len > 0 ? new Uint8Array(down, off, pkt_len) : null;
       off += padded(pkt_len);
       const named = new Uint8Array(down, off, named_len);
@@ -250,10 +250,10 @@ export async function start<G extends Grant>(
       if (stopped) return Promise.reject(new XputeError(Errno.ENOTRECOVERABLE));
       next = (next + 1) >>> 0 || 1;
       const id = next;
-      return new Promise<i32>((done) => {
-        waiting.set(id, done);
+      return new Promise<[i32, U8Array | null]>((done) => {
+        waiting.set(id, (res, named) => done([res, named]));
         post(id, cmd, frame.ACKREQ, 0, packet(args));
-      }).then(answer_of);
+      }).then(reply_of);
     },
     fits: (_cmd, ...args) => (encode_args(args)(room)?.finish() ?? 0) >= 0,
     wake: () => XPUTE.wake(),

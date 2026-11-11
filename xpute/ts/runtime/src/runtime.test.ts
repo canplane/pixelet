@@ -25,7 +25,7 @@ const SEND_AT = RECEIVE_AT + FRAME;
 const FRONT: Front = { pkt_bytes: PKT_BYTES, stream_at: STREAM_AT };
 /** The core sends these two commands each turn: one of the program's, and one
  * of xpute's own. */
-const PROGRAM_IMPORT = (frame.PROGRAM_MAJOR << 8) | 9;
+const PROGRAM_IMPORT = frame.CMD(frame.PROGRAM_MAJOR, 9);
 const OWN_IMPORT = 0x0109;
 
 /** This core reaches its runtime through the host it is handed. Each turn it
@@ -92,7 +92,7 @@ test("mount - lays the front before any turn, and hands the program only its own
     {
       program: [
         {
-          majors: [PROGRAM_IMPORT >> 8],
+          majors: [frame.CMD_MAJOR(PROGRAM_IMPORT)],
           on: (_tag, cmd) => void cmds.push(cmd),
         },
       ],

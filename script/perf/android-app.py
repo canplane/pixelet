@@ -53,4 +53,6 @@ class App:
         adb("reverse", "--remove", "tcp:8081")
 
 
+# The run holds its device from before it starts (`measure.hold`).
+android.hold()
 measure(App)

@@ -1,7 +1,7 @@
 // xpute-kit/math/scalar.test.rs
 
 use super::*;
-use crate::golden::Golden;
+use xpute_golden::Golden;
 
 const GOLDEN: &str = include_str!("../../../../spec/golden/math/scalar.tsv");
 

@@ -3,7 +3,7 @@
 // GENERATED from spec/io/batch.json
 //
 // A device's runtime hands its UI what the core sent as one batch (xpute-runtime
-// native/serve.rs `take`, @xpute/runtime start.native.ts). Each frame in it is HEADER_WORDS
+// native/serve.rs `take`, @xpute/runtime start.native.ts). Each frame in it is HDR_WORDS
 // little-endian words, TAG to NAMED their indices, then its packet and then the memory it
 // names, each padded to ALIGN bytes. Two commands no core sends are the runtime's own: STOPPED
 // and COMMIT.
@@ -29,7 +29,7 @@ export const PKT: u32 = 4 as number;
 export const NAMED: u32 = 5 as number;
 
 /** The words before a frame's packet. */
-export const HEADER_WORDS: u32 = 6 as number;
+export const HDR_WORDS: u32 = 6 as number;
 
 /** What a frame's packet and the memory it names are each padded to, in bytes. */
 export const ALIGN: u32 = 8 as number;

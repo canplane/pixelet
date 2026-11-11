@@ -4,7 +4,8 @@
 # core as a WebAssembly module with the WASI SDK's clang ($WASI_SDK_PATH, or
 # /opt/wasi-sdk). The library is xpute/, included from this directory by its
 # root ("xpute/kit/status/bug.hpp"); dev/conformance/ is the core the traces
-# drive, beside it and never shipped. The amalgamation is the library in two
+# drive, and dev/test/ the tests' runner and golden reader, beside it and never
+# shipped. The amalgamation is the library in two
 # files, xpute.hpp and xpute.cpp (amalgamation.awk), under
 # target/amalgamation/.
 #
@@ -36,7 +37,7 @@ FLAGS := -std=c++20 -fno-exceptions -fno-rtti -ffp-contract=off -Wall -Wextra -W
 # and what a failed test prints, though it is compiled from here, whether
 # named as a source or found under -I . as a header; the amalgamation names
 # its own two files, as a program that compiles them would.
-PREFIX_MAP := -fmacro-prefix-map=./=cpp/ $(foreach d,xpute dev/conformance,-fmacro-prefix-map=$(d)/=cpp/$(d)/)
+PREFIX_MAP := -fmacro-prefix-map=./=cpp/ $(foreach d,xpute dev/conformance dev/test,-fmacro-prefix-map=$(d)/=cpp/$(d)/)
 AMALGAMATION_MAP := -fmacro-prefix-map=$(AMALGAMATION)/= -fmacro-prefix-map=$(OUT)/conformance/=cpp/dev/conformance/
 # A link reads the conformance core's numbers as make variables
 # (`CONFORMANCE_STACK_BYTES`).
@@ -48,13 +49,11 @@ WASM_LINK := --target=wasm32-wasip1 -nostartfiles -Wl,--no-entry -Wl,--import-me
 	-Wl,-z,stack-size=$(CONFORMANCE_STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=run
 
 SOURCES := $(sort $(shell find xpute dev -name '*.cpp'))
-# Only the tests build these: their own files, the runner and the golden reader.
-TEST_ONLY := xpute/kit/test.cpp xpute/kit/test.hpp xpute/kit/golden.cpp xpute/kit/golden.hpp
 # The library is what the amalgamation holds: kit, then the core end over it,
 # then the GPU's calls over that, in the order the two files read.
 LAYERS := kit core gpu
-LIBRARY_HEADERS := $(filter-out $(TEST_ONLY),$(foreach d,$(LAYERS),$(sort $(shell find xpute/$(d) -name '*.hpp'))))
-LIBRARY_SOURCES := $(filter-out %.test.cpp $(TEST_ONLY),$(foreach d,$(LAYERS),$(filter xpute/$(d)/%,$(SOURCES))))
+LIBRARY_HEADERS := $(foreach d,$(LAYERS),$(sort $(shell find xpute/$(d) -name '*.hpp')))
+LIBRARY_SOURCES := $(filter-out %.test.cpp,$(foreach d,$(LAYERS),$(filter xpute/$(d)/%,$(SOURCES))))
 
 ifeq ($(OS),Windows_NT)
 LIBRARY := xpute_conformance.dll

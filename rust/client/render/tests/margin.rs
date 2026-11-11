@@ -136,14 +136,15 @@ fn hit_of(w: World, l: &Light, range: [Zoom; 2], c: [u32; 2], o: [i32; 3]) -> f3
 }
 
 fn device() -> Option<Gpu> {
+    let gpu = Gpu::new();
     // A shader that loops forever would hang the wait on the device, so the run gives up after
     // a fixed time.
+    // The bound starts once the process holds the GPU (`Gpu::new`).
     std::thread::spawn(|| {
         std::thread::sleep(std::time::Duration::from_secs(170));
         eprintln!("gave up after 170 s");
         std::process::exit(124);
     });
-    let gpu = Gpu::new();
     if gpu.is_none() {
         eprintln!("no adapter: skipped");
     }
@@ -152,9 +153,9 @@ fn device() -> Option<Gpu> {
 
 /// The light's list after the beam and `light_cell_cs` run over a cast that damages every tile,
 /// from a node cache no frame has written.
-fn beams_of(gpu: &Gpu, b: &WorldBuffer, eye: &[u32], header: &[u32]) -> Vec<u32> {
+fn beams_of(gpu: &Gpu, b: &WorldBuffer, eye: &[u32], hdr: &[u32]) -> Vec<u32> {
     let eye = gpu.buf(eye, wgpu::BufferUsages::UNIFORM);
-    let header = gpu.buf(header, wgpu::BufferUsages::UNIFORM);
+    let hdr = gpu.buf(hdr, wgpu::BufferUsages::UNIFORM);
     let mut node_cache = vec![0u32; node_cache::WORDS as usize];
     node_cache[node_cache::FRAME as usize] = FRAME;
     let node_cache = gpu.buf(&node_cache, store_of());
@@ -175,7 +176,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBuffer, eye: &[u32], header: &[u32]) -> Vec<u32>
             (7, b.pool.as_entire_binding()),
             (8, beams.as_entire_binding()),
             (9, node_cache.as_entire_binding()),
-            (11, header.as_entire_binding()),
+            (11, hdr.as_entire_binding()),
         ],
         &beams,
         &node_cache,
@@ -186,7 +187,7 @@ fn beams_of(gpu: &Gpu, b: &WorldBuffer, eye: &[u32], header: &[u32]) -> Vec<u32>
         &[
             (0, eye.as_entire_binding()),
             (8, beams.as_entire_binding()),
-            (11, header.as_entire_binding()),
+            (11, hdr.as_entire_binding()),
         ],
         [fed[0], fed[1], 1],
     );
@@ -247,15 +248,15 @@ fn light_cells_start_short_by_the_margin() {
         eye[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
         eye[eye::RANGE] = c.range[0];
         eye[eye::RANGE + 1] = c.range[1];
-        let mut header = vec![0u32; light::HEADER_WORDS];
-        header[light::HEADER_CAST] = CAST;
-        header[light::HEADER_EPOCH] = CAST;
-        for (k, v) in light::header_layout(SIZE) {
-            header[k] = v;
+        let mut hdr = vec![0u32; light::HDR_WORDS];
+        hdr[light::HDR_CAST] = CAST;
+        hdr[light::HDR_EPOCH] = CAST;
+        for (k, v) in light::hdr_layout(SIZE) {
+            hdr[k] = v;
         }
-        header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+        hdr[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
             .copy_from_slice(&starts.words());
-        let got = beams_of(&gpu, &b, &eye, &header);
+        let got = beams_of(&gpu, &b, &eye, &hdr);
         let hand_of = |w: &[u32], k: u32| f32::from_bits(w[light::hand_at(SIZE, k) as usize]);
         // The engine walks each beam ray from the origin the pass laid in the ray's line, not
         // from its own. A device rounds `StartGrid::start` one Q3 step off the engine's for some

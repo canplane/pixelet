@@ -174,6 +174,45 @@ export abstract class NodeCursor {
     return this;
   }
 
+  // ---- Checked Getters ----
+  //
+  // Each reads the node as one kind, as xpute-kit's cursor does
+  // (`get_number`, `get_bool`, `get_str_ref`, `get_array`): a node of another
+  // kind, an absent one among them, refuses the packet with EBADMSG.
+
+  /** Any number type an f64 holds exactly; a 64-bit integer is refused. */
+  get_number(): f64 {
+    const v = this.get();
+    if (typeof v !== "number") throw new MarshalError(Errno.EBADMSG);
+    return v;
+  }
+
+  get_bool(): boolean {
+    const v = this.get();
+    if (typeof v !== "boolean") throw new MarshalError(Errno.EBADMSG);
+    return v;
+  }
+
+  get_str(): string {
+    const v = this.get();
+    if (typeof v !== "string") throw new MarshalError(Errno.EBADMSG);
+    return v;
+  }
+
+  /** A packed array of u32. */
+  get_u32s(): U32Array {
+    const v = this.get();
+    if (!(v instanceof Uint32Array)) throw new MarshalError(Errno.EBADMSG);
+    return v;
+  }
+
+  /** The node read by `get` where it is present, and null where it is
+   * absent. */
+  get_opt<T>(get: (c: this) => T): T | null {
+    const present = this.opt();
+    return present === undefined ? null : get(present);
+  }
+
   // ---- Shallow Getter ----
 
   /**

@@ -26,7 +26,7 @@ const fn at(buf: u32, at: u32, words: u32) -> Range {
 }
 
 /// Words `word` to `word + words` of queue `queue`'s head.
-const fn header(queue: u32, word: u32, words: u32) -> Range {
+const fn hdr(queue: u32, word: u32, words: u32) -> Range {
     at(QUEUES, ray::queue_at(queue) + word, words)
 }
 
@@ -308,33 +308,31 @@ pub const IMPOSTOR_LIT_MASKED: Step = Step::draw_regions(
 pub const HITS: Step = Step::copy(
     "hits",
     IN_EYE_HOLES,
-    header(ray::QUEUE_EYE_HOLES, ray::QUEUE_HITS, 4),
+    hdr(ray::QUEUE_EYE_HOLES, ray::QUEUE_HITS, 4),
     at(NODE_CACHE, node_cache::HITS_ARGS, 4),
 );
 pub const LIGHT_HITS: Step = Step::copy(
     "light_hits",
     IN_LIGHT_HOLES,
-    header(ray::QUEUE_LIGHT_HOLES, ray::QUEUE_HITS, 4),
+    hdr(ray::QUEUE_LIGHT_HOLES, ray::QUEUE_HITS, 4),
     at(NODE_CACHE, node_cache::HITS_ARGS, 4),
 );
 
 /// The host's writes, which land before the frame's first call.
-pub const OPEN_NODE_CACHE: Step = Step::write(
-    "open_node_cache",
-    at(NODE_CACHE, 0, node_cache::HEADER_WORDS),
-);
+pub const OPEN_NODE_CACHE: Step =
+    Step::write("open_node_cache", at(NODE_CACHE, 0, node_cache::HDR_WORDS));
 pub const OPEN_MARKS: Step = Step::write("open_marks", at(MARKS, 0, ray::MISS_ARGS_WORDS as u32));
 pub const OPEN_QUEUE: Step = Step::write(
     "open_queue",
-    header(ray::QUEUE_EYE_HOLES, 0, ray::QUEUE_EMPTY.len() as u32),
+    hdr(ray::QUEUE_EYE_HOLES, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_CORNERS_QUEUE: Step = Step::write(
     "open_corners_queue",
-    header(ray::QUEUE_EYE_CORNERS, 0, ray::QUEUE_EMPTY.len() as u32),
+    hdr(ray::QUEUE_EYE_CORNERS, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_SAMPLES_QUEUE: Step = Step::write(
     "open_samples_queue",
-    header(ray::QUEUE_EYE_SAMPLES, 0, ray::QUEUE_EMPTY.len() as u32),
+    hdr(ray::QUEUE_EYE_SAMPLES, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_CAST_TILES: Step = Step::write("open_cast_tiles", at(CAST_TILES, 0, 4));
 pub const OPEN_RASTER_ASKS: Step = Step::write(
@@ -377,15 +375,15 @@ pub const OPEN_LIGHT_MISSES: Step = Step::write(
 );
 pub const OPEN_LIGHT_QUEUE: Step = Step::write(
     "open_light_queue",
-    header(ray::QUEUE_LIGHT_HOLES, 0, ray::QUEUE_EMPTY.len() as u32),
+    hdr(ray::QUEUE_LIGHT_HOLES, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_LIGHT_CORNERS_QUEUE: Step = Step::write(
     "open_light_corners_queue",
-    header(ray::QUEUE_LIGHT_CORNERS, 0, ray::QUEUE_EMPTY.len() as u32),
+    hdr(ray::QUEUE_LIGHT_CORNERS, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_LIGHT_SAMPLES_QUEUE: Step = Step::write(
     "open_light_samples_queue",
-    header(ray::QUEUE_LIGHT_SAMPLES, 0, ray::QUEUE_EMPTY.len() as u32),
+    hdr(ray::QUEUE_LIGHT_SAMPLES, 0, ray::QUEUE_EMPTY.len() as u32),
 );
 pub const OPEN_LIGHT_RASTER_ARGS: Step = Step::write(
     "open_light_raster_args",
@@ -502,8 +500,8 @@ pub const LIGHT_HOLES_CNT: Step = Step::copy(
     at(LIGHT_LIST, light::holes_at(SHADOW_SIZE), 1),
 );
 
-/// More of the host's writes. The host sets the raster's draw args to none when the record's
-/// draw runs (ray/raster.rs `rec_draw`), writes the node cache's asks and frame when
+/// More of the host's writes. The host sets the raster's draw args to none where the record's
+/// draw runs (ray/raster.rs `open_draw`), writes the node cache's asks and frame when
 /// nothing casts, and writes the decor's boxes (gpu/generator.rs `prepare`).
 pub const OPEN_RASTER_DRAW_ARGS: Step = Step::write(
     "open_raster_draw_args",
@@ -555,7 +553,7 @@ pub const FRAME: Frame = Frame {
     persistent: PERSISTENT,
     steps: &[
         // The host's writes as it prepares the frame (ray/cast.rs `RayPass::prepare`,
-        // ray/raster.rs `Raster::prepare`, `light_prepare`, `rec_draw`, gpu/generator.rs
+        // ray/raster.rs `Raster::prepare`, `light_prepare`, `open_draw`, gpu/generator.rs
         // `prepare`).
         OPEN_NODE_CACHE,
         OPEN_MARKS,
@@ -910,8 +908,8 @@ pub const FRAME: Frame = Frame {
 const APPENDS: &[Range] = &[
     at(RASTER_ARGS, raster::ASKED_AT, raster::ARGS_WORDS),
     at(RASTER_ARGS, raster::HIT_ASKED_AT, raster::ARGS_WORDS),
-    header(ray::QUEUE_EYE_HOLES, ray::QUEUE_HITS, 4),
-    header(ray::QUEUE_LIGHT_HOLES, ray::QUEUE_HITS, 4),
+    hdr(ray::QUEUE_EYE_HOLES, ray::QUEUE_HITS, 4),
+    hdr(ray::QUEUE_LIGHT_HOLES, ray::QUEUE_HITS, 4),
     at(
         LIGHT_RECEIVER_TILES,
         light::RECEIVER_TILES_LIST,
@@ -958,7 +956,7 @@ const fn persistent_marks(which: u32, owner: &'static str) -> Persistent {
 }
 
 /// A kept range of the stood or the read list's marks. Each mark is the number of the cast in
-/// which the world's receivers were last stood afresh (pxl-engine `light::HEADER_WORLD`).
+/// which the world's receivers were last stood afresh (pxl-engine `light::HDR_WORLD`).
 const fn persistent_world_marks(which: u32, owner: &'static str) -> Persistent {
     let [first, words] = light_marks(which);
     Persistent {

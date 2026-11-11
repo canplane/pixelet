@@ -31,6 +31,20 @@ pub struct Frame {
     pub pkt_len: u32,
 }
 
+/// A command's number is `major << 8 | minor`, which fits the 16 bits a frame
+/// carries for it; its major says what answers it (spec/io/frame.json).
+pub const fn cmd(major: u32, minor: u32) -> u32 {
+    ((major & 0xff) << 8) | (minor & 0xff)
+}
+
+pub const fn cmd_major(cmd: u32) -> u32 {
+    (cmd >> 8) & 0xff
+}
+
+pub const fn cmd_minor(cmd: u32) -> u32 {
+    cmd & 0xff
+}
+
 pub fn cmd_word(cmd: u32, flags: u32) -> u32 {
     (flags << FLAG_SHIFT) | (cmd & CMD_MASK)
 }

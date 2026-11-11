@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/client/core/door/ui.json
 
-//! The UI's protocol with the core: its commands, by number (@xpute/kit/abi/cmd.ts:
+//! The UI's protocol with the core: its commands, by number (@xpute/runtime io/frame.ts `CMD`:
 //! `major << 8 | minor`, past xpute's majors 0x00 to 0x0F), each with the packet
 //! it carries — an XTP branch whose children are its fields, in order. A command with no
 //! fields carries no packet. The JavaScript around the core is two
@@ -42,6 +42,8 @@ use core::fmt::Display;
 pub use crate::domain::cmd::{
     GeolocationErrorCode, Message, PermissionAnswer, PointerType, SensorStatus, Tracking,
 };
+pub use crate::domain::setting::schema_spec::SettingKey;
+pub use pxl_spec::asset::character::Group as CharacterGroup;
 use xpute_core::abi::number::{finite, integer, unknown};
 use xpute_core::io::fs::{Path, Token};
 use xpute_kit::status::error::MarshalError;
@@ -235,14 +237,16 @@ pub enum PerfMinor {
     STOP = 0x02,
     STATS = 0x03,
     RINGS = 0x04,
+    STRTAB = 0x05,
 }
 
 impl PerfMinor {
-    pub const ALL: [PerfMinor; 4] = [
+    pub const ALL: [PerfMinor; 5] = [
         PerfMinor::START,
         PerfMinor::STOP,
         PerfMinor::STATS,
         PerfMinor::RINGS,
+        PerfMinor::STRTAB,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -402,9 +406,8 @@ pub enum Command {
     SENSOR_POS = 0x1202,
     /// An orientation event; a field is absent where the browser gave none.
     SENSOR_ORIENT = 0x1205,
-    /// A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
-    /// or cut off; the compass's, where the platform says so (SYS_BOOT's
-    /// orient_silence_is_loss).
+    /// A watch's failure: refused from the start (PermissionDenied), cut off, or one it rides
+    /// out; the compass's, where the platform says so (SENSOR_PLATFORM's orient_silence_is_loss).
     SENSOR_ERR = 0x120b,
     /// What the tile source declares of itself, once the client has it: the tile root's
     /// `source`, the published one out of the bucket or the dev tile server's, read by the
@@ -463,8 +466,8 @@ pub enum Command {
     /// (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
     /// first of a run is taken to be where the camera already is, so nothing moves as
     /// it begins; the camera follows the tracker from there until POSE_END. Nothing in the
-    /// client sends it: it is the way in for an immersive mode's head pose (a Quest's, a
-    /// Vision Pro's) to drive the camera, from the device app.
+    /// client sends it: it is the way in for an immersive mode's head pose to drive the
+    /// camera, from the device app.
     INPUT_XR_POSE = 0x1109,
     /// The tracker let the camera go: back to the controller it had.
     INPUT_XR_POSE_END = 0x110a,
@@ -472,12 +475,14 @@ pub enum Command {
     PERF_START = 0x1901,
     /// Freezes the window, so what is exported holds still.
     PERF_STOP = 0x1902,
-    /// The profiler's statistics and what it holds now, where they lie: the reply is the address of STAT_SLOT's words (perf.json), the statistics
-    /// over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
+    /// The profiler's statistics and what it holds now: the reply names STAT's words then NOW's (perf.json), the statistics
+    /// over the last `window_ms`, the whole recording where it is absent. A
     /// number past the door is finite, so no window is infinite.
     PERF_STATS = 0x1903,
-    /// The rings where they lie, nothing reduced: the reply is the address of RING_SLOT's words (perf.json), good until the next turn.
+    /// One ring, nothing reduced: the reply names the records of the ring `ring` (its index in perf.json's RING_NAMES), the frames and the tasks oldest first, the worst frames longest first.
     PERF_RINGS = 0x1904,
+    /// The string table of the tasks' failure sites: the reply names its bytes, into which a TASK's `at_file` is an offset (perf.json).
+    PERF_STRTAB = 0x1905,
 
     // ---- ui, import ----
     SENSOR_START = 0x1201,
@@ -491,7 +496,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 33] = [
+    pub const ALL: [Command; 34] = [
         Command::SENSOR_POS,
         Command::SENSOR_ORIENT,
         Command::SENSOR_ERR,
@@ -521,6 +526,7 @@ impl Command {
         Command::PERF_STOP,
         Command::PERF_STATS,
         Command::PERF_RINGS,
+        Command::PERF_STRTAB,
         Command::SENSOR_START,
         Command::SENSOR_STOP,
         Command::UI_SNAPSHOT,
@@ -646,17 +652,20 @@ impl LonLat {
 pub struct LocationState {
     pub status: SensorStatus,
     pub has_location: bool,
+    /// Whether a watch runs, so that asking for the location again would start nothing.
+    pub watching: bool,
     /// Present exactly when status is Error: the failure the core chose.
     pub err: Option<Message>,
 }
 
 impl LocationState {
     /// The children it is written as.
-    pub const FIELDS: u32 = 3;
+    pub const FIELDS: u32 = 4;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
         w.bool(Some(self.has_location));
+        w.bool(Some(self.watching));
         w.u32(self.err.map(|m| m as u32));
     }
 }
@@ -678,17 +687,14 @@ impl CompanionState {
 
 pub struct OrientationState {
     pub status: SensorStatus,
-    /// Present exactly when status is Error: the failure the core chose.
-    pub err: Option<Message>,
 }
 
 impl OrientationState {
     /// The children it is written as.
-    pub const FIELDS: u32 = 2;
+    pub const FIELDS: u32 = 1;
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.status as u32));
-        w.u32(self.err.map(|m| m as u32));
     }
 }
 
@@ -760,15 +766,6 @@ impl SensorPos {
             },
         })
     }
-    pub const FIELDS: u32 = 5;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.f64(Some(self.lon));
-        w.f64(Some(self.lat));
-        w.f64(self.alt);
-        w.f64(self.accuracy);
-        w.f64(self.course);
-    }
 }
 
 /// Command::SENSOR_ORIENT's packet.
@@ -802,14 +799,6 @@ impl SensorOrient {
             },
         })
     }
-    pub const FIELDS: u32 = 4;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.f64(self.webkit_compass_heading);
-        w.f64(self.alpha);
-        w.f64(self.beta);
-        w.f64(self.gamma);
-    }
 }
 
 /// Command::SENSOR_ERR's packet.
@@ -818,6 +807,9 @@ pub struct SensorErr {
     pub sensor: Sensor,
     /// Geolocation's; orientation gives none.
     pub code: Option<GeolocationErrorCode>,
+    /// Whether the watch runs on past it, which the platform alone knows. A compass that
+    /// is lost runs no more.
+    pub watching: bool,
 }
 
 impl SensorErr {
@@ -832,13 +824,8 @@ impl SensorErr {
                 ),
                 None => None,
             },
+            watching: f.at(2)?.get_bool()?,
         })
-    }
-    pub const FIELDS: u32 = 2;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.sensor as u32));
-        w.u32(self.code.map(|m| m as u32));
     }
 }
 
@@ -882,12 +869,6 @@ impl SensorPermission {
                 .ok_or_else(|| unknown())?,
         })
     }
-    pub const FIELDS: u32 = 2;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.sensor as u32));
-        w.u32(Some(self.answer as u32));
-    }
 }
 
 /// Command::SENSOR_PLATFORM's packet.
@@ -913,14 +894,6 @@ impl SensorPlatform {
             orient_silence_is_loss: f.at(3)?.get_bool()?,
         })
     }
-    pub const FIELDS: u32 = 4;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.bool(Some(self.geolocation));
-        w.bool(Some(self.orient));
-        w.bool(Some(self.orient_permission));
-        w.bool(Some(self.orient_silence_is_loss));
-    }
 }
 
 /// Command::SETTING_DEV's packet.
@@ -935,11 +908,6 @@ impl SettingDev {
         Ok(SettingDev {
             dev: f.at(0)?.get_bool()?,
         })
-    }
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.bool(Some(self.dev));
     }
 }
 
@@ -968,16 +936,6 @@ impl InputPointer {
             y: finite(f.at(5)?.get_number()?)?,
         })
     }
-    pub const FIELDS: u32 = 6;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.phase as u32));
-        w.u32(Some(self.pointer_type as u32));
-        w.i32(Some(self.id));
-        w.i32(Some(self.button));
-        w.f64(Some(self.x));
-        w.f64(Some(self.y));
-    }
 }
 
 /// Command::INPUT_TYPING's packet.
@@ -992,11 +950,6 @@ impl InputTyping {
         Ok(InputTyping {
             typing: f.at(0)?.get_bool()?,
         })
-    }
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.bool(Some(self.typing));
     }
 }
 
@@ -1018,13 +971,6 @@ impl EditTool {
             val: integer::<u32>(f.at(1)?.get_number()?)?,
             scale_steps: integer::<i32>(f.at(2)?.get_number()?)?,
         })
-    }
-    pub const FIELDS: u32 = 3;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.tool as u32));
-        w.u32(Some(self.val));
-        w.i32(Some(self.scale_steps));
     }
 }
 
@@ -1056,11 +1002,6 @@ impl InputWheel {
             delta_y: finite(f.at(0)?.get_number()?)?,
         })
     }
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.f64(Some(self.delta_y));
-    }
 }
 
 /// Command::INPUT_PINCH's packet.
@@ -1075,11 +1016,6 @@ impl InputPinch {
         Ok(InputPinch {
             scale: finite(f.at(0)?.get_number()?)?,
         })
-    }
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.f64(Some(self.scale));
     }
 }
 
@@ -1098,12 +1034,6 @@ impl InputMove {
             y: integer::<i32>(f.at(1)?.get_number()?)?,
         })
     }
-    pub const FIELDS: u32 = 2;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.i32(Some(self.x));
-        w.i32(Some(self.y));
-    }
 }
 
 /// Command::SCENE_DRAW's packet.
@@ -1111,7 +1041,7 @@ impl InputMove {
 pub struct SceneDraw {
     pub surface: u32,
     pub content: SceneContent,
-    pub group: Option<pxl_spec::asset::character::Group>,
+    pub group: Option<CharacterGroup>,
     /// What the character is drawn over, 0xRRGGBB, sRGB.
     pub bg: Option<u32>,
 }
@@ -1125,8 +1055,7 @@ impl SceneDraw {
                 .ok_or_else(|| unknown())?,
             group: match f.at(2)?.opt() {
                 Some(c) => Some(
-                    pxl_spec::asset::character::Group::of(integer::<u8>(c.get_number()?)?)
-                        .ok_or_else(|| unknown())?,
+                    CharacterGroup::of(integer::<u8>(c.get_number()?)?).ok_or_else(|| unknown())?,
                 ),
                 None => None,
             },
@@ -1136,20 +1065,12 @@ impl SceneDraw {
             },
         })
     }
-    pub const FIELDS: u32 = 4;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.surface));
-        w.u32(Some(self.content as u32));
-        w.u32(self.group.map(|m| m as u32));
-        w.u32(self.bg);
-    }
 }
 
 /// Command::SETTING_SET's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct SettingSet {
-    pub key: crate::domain::setting::schema_spec::SettingKey,
+    pub key: SettingKey,
     /// A toggle's 0 or 1, a choice's option by its index, or a number.
     pub val: u32,
 }
@@ -1158,18 +1079,10 @@ impl SettingSet {
     pub fn read(pkt: &[u8]) -> Result<SettingSet, MarshalError> {
         let f = TreeReader::new(pkt)?.read_branch()?;
         Ok(SettingSet {
-            key: crate::domain::setting::schema_spec::SettingKey::of(integer::<u32>(
-                f.at(0)?.get_number()?,
-            )?)
-            .ok_or_else(|| unknown())?,
+            key: SettingKey::of(integer::<u32>(f.at(0)?.get_number()?)?)
+                .ok_or_else(|| unknown())?,
             val: integer::<u32>(f.at(1)?.get_number()?)?,
         })
-    }
-    pub const FIELDS: u32 = 2;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.key as u32));
-        w.u32(Some(self.val));
     }
 }
 
@@ -1201,11 +1114,6 @@ impl CameraTracking {
             tracking: Tracking::of(integer::<u32>(f.at(0)?.get_number()?)?)
                 .ok_or_else(|| unknown())?,
         })
-    }
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.tracking as u32));
     }
 }
 
@@ -1242,15 +1150,6 @@ impl CameraGoto {
             },
         })
     }
-    pub const FIELDS: u32 = 5;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.f64(Some(self.lon));
-        w.f64(Some(self.lat));
-        w.f64(self.dist);
-        w.f64(self.azimuth);
-        w.f64(self.polar);
-    }
 }
 
 /// Command::INPUT_XR_POSE's packet.
@@ -1278,17 +1177,6 @@ impl InputXrPose {
             qw: finite(f.at(6)?.get_number()?)?,
         })
     }
-    pub const FIELDS: u32 = 7;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.f64(Some(self.x));
-        w.f64(Some(self.y));
-        w.f64(Some(self.z));
-        w.f64(Some(self.qx));
-        w.f64(Some(self.qy));
-        w.f64(Some(self.qz));
-        w.f64(Some(self.qw));
-    }
 }
 
 /// Command::PERF_STATS's packet.
@@ -1307,10 +1195,20 @@ impl PerfStats {
             },
         })
     }
-    pub const FIELDS: u32 = 1;
+}
 
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.f64(self.window_ms);
+/// Command::PERF_RINGS's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct PerfRings {
+    pub ring: u32,
+}
+
+impl PerfRings {
+    pub fn read(pkt: &[u8]) -> Result<PerfRings, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(PerfRings {
+            ring: integer::<u32>(f.at(0)?.get_number()?)?,
+        })
     }
 }
 
@@ -1325,16 +1223,6 @@ impl SensorStart {
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.sensor as u32));
-    }
-}
-
-impl SensorStart {
-    /// As the runtime beside the core reads it.
-    pub fn read(pkt: &[u8]) -> Result<SensorStart, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SensorStart {
-            sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
-        })
     }
 }
 
@@ -1361,16 +1249,6 @@ impl SensorStop {
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.sensor as u32));
-    }
-}
-
-impl SensorStop {
-    /// As the runtime beside the core reads it.
-    pub fn read(pkt: &[u8]) -> Result<SensorStop, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SensorStop {
-            sensor: Sensor::of(integer::<u32>(f.at(0)?.get_number()?)?).ok_or_else(|| unknown())?,
-        })
     }
 }
 
@@ -1402,17 +1280,6 @@ impl UiSnapshot {
     }
 }
 
-impl UiSnapshot {
-    /// As the runtime beside the core reads it.
-    pub fn read(pkt: &[u8]) -> Result<UiSnapshot, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(UiSnapshot {
-            at: integer::<u32>(f.at(0)?.get_number()?)?,
-            len: integer::<u32>(f.at(1)?.get_number()?)?,
-        })
-    }
-}
-
 impl xpute_core::io::door::Import for UiSnapshot {
     const NUMBER: u32 = 6913;
     const FIELDS: u32 = 2;
@@ -1439,17 +1306,6 @@ impl UiView {
     pub fn write(&self, w: &mut PacketWriter) {
         w.f64(Some(self.azimuth));
         w.f64(Some(self.m_per_px));
-    }
-}
-
-impl UiView {
-    /// As the runtime beside the core reads it.
-    pub fn read(pkt: &[u8]) -> Result<UiView, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(UiView {
-            azimuth: finite(f.at(0)?.get_number()?)?,
-            m_per_px: finite(f.at(1)?.get_number()?)?,
-        })
     }
 }
 
@@ -1521,7 +1377,8 @@ pub mod ui {
         fn perf_start(&mut self) -> Outcome;
         fn perf_stop(&mut self) -> Outcome;
         fn perf_stats(&mut self, c: PerfStats) -> Outcome;
-        fn perf_rings(&mut self) -> Outcome;
+        fn perf_rings(&mut self, c: PerfRings) -> Outcome;
+        fn perf_strtab(&mut self) -> Outcome;
     }
 
     /// `cmd` read and handed to `h`; ENOSYS for one this protocol does not carry.
@@ -1597,7 +1454,10 @@ pub mod ui {
             x if x == Command::PERF_STATS as u32 => h.perf_stats(PerfStats::read(
                 pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
             )?),
-            x if x == Command::PERF_RINGS as u32 => h.perf_rings(),
+            x if x == Command::PERF_RINGS as u32 => h.perf_rings(PerfRings::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::PERF_STRTAB as u32 => h.perf_strtab(),
             _ => Err(MarshalError::new(Errno::ENOSYS)),
         }
     }

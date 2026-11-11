@@ -66,7 +66,13 @@ export interface SensorListener {
     accuracy: f64 | null,
     course: f64 | null,
   ): void;
-  positionError(err: "denied" | "unavailable" | "timeout" | "other"): void;
+  /** `watching` says whether the watch runs on past the failure, which only
+   * the platform knows: a page's watch rides out all but a refusal, and a
+   * device's ends on any. */
+  positionError(
+    err: "denied" | "unavailable" | "timeout" | "other",
+    watching: boolean,
+  ): void;
   orientation(
     compass: f64 | null,
     alpha: f64 | null,

@@ -28,18 +28,21 @@ pub(super) fn pos(c: abi::SensorPos) -> Outcome {
         c.accuracy.unwrap_or(f64::INFINITY),
         c.course,
     );
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 pub(super) fn err(c: abi::SensorErr) -> Outcome {
     match c.sensor {
         // A failure the platform gave no cause for counts as Other.
         abi::Sensor::Geolocation => {
-            geolocation::geolocation_err(c.code.unwrap_or(abi::GeolocationErrorCode::Other));
+            geolocation::geolocation_err(
+                c.code.unwrap_or(abi::GeolocationErrorCode::Other),
+                c.watching,
+            );
         }
         abi::Sensor::Orientation => device_orientation::on_orient_lost(),
     }
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 pub(super) fn orient(c: abi::SensorOrient) -> Outcome {
@@ -54,7 +57,7 @@ pub(super) fn orient(c: abi::SensorOrient) -> Outcome {
         Errno::EINVAL,
     )?;
     device_orientation::orient_event(c.webkit_compass_heading, c.alpha, c.beta, c.gamma);
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 pub(super) fn permission(c: abi::SensorPermission) -> Outcome {
@@ -68,7 +71,7 @@ pub(super) fn permission(c: abi::SensorPermission) -> Outcome {
             device_orientation::orient_permission(c.answer);
         }
     }
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 pub(super) fn locate(s: &mut State) -> Outcome {
@@ -85,5 +88,5 @@ pub(super) fn platform(c: abi::SensorPlatform) -> Outcome {
             silence_is_loss: c.orient_silence_is_loss,
         },
     };
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }

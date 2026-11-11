@@ -127,13 +127,14 @@ struct Cast {
 }
 
 fn device() -> Option<Gpu> {
+    let gpu = Gpu::new();
     // A loop in a hand-written shader can hang the wait on the device, so the run ends itself.
+    // The bound starts once the process holds the GPU (`Gpu::new`).
     std::thread::spawn(|| {
         std::thread::sleep(std::time::Duration::from_secs(600));
         eprintln!("gave up after 10 minutes");
         std::process::exit(124);
     });
-    let gpu = Gpu::new();
     if gpu.is_none() {
         eprintln!("no adapter: skipped");
     }

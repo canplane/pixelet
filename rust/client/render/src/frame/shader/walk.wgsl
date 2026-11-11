@@ -54,9 +54,9 @@ fn line_hand(line: u32, zoom: u32, inheritance: vec3<u32>) {
 /// A beam ray's line (`aim.line`, `beam::LINE_WORDS`) takes the place of a stack. The walk
 /// writes into it what was handed each node it goes into and the node it ends at, and reads that
 /// back after a pop, for the parent of the node it moves to. At the end the line also takes the
-/// node the walk ended or was left at. `ends` is 4 where cached.wgsl leaves the walk, at a node
-/// no slot keeps or at the end of a line where it cannot find what was handed the last node,
-/// and 5 where `steps` ran out first.
+/// node the walk ended or was left at. `ends` is `ENDS_LEFT` where cached.wgsl leaves the walk,
+/// at a node no slot keeps or at the end of a line where it cannot find what was handed the
+/// last node, and `ENDS_OUT` where `steps` ran out first.
 fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
   let beam = aim.until == UNTIL_BEAM;
   let line = aim.line;

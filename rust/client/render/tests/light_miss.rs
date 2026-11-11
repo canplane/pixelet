@@ -544,7 +544,7 @@ const CAST: u32 = 7;
 /// Lays the beam's lines and each cell's start in `list`, as the cast lays them
 /// (beam.light.wgsl, light_cell.wgsl). Every tile is read, and the beam runs over a node cache
 /// of its own.
-fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list: &mut [u32]) {
+fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, hdr]: [&wgpu::Buffer; 2], list: &mut [u32]) {
     let tiles = light::tiles(SIZE) as usize;
     let reads = light::reads_at(SIZE) as usize;
     list[reads..reads + tiles * tiles].fill(CAST);
@@ -564,7 +564,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list
             (7, b.pool.as_entire_binding()),
             (8, buf.as_entire_binding()),
             (9, node_cache.as_entire_binding()),
-            (11, header.as_entire_binding()),
+            (11, hdr.as_entire_binding()),
         ],
         &buf,
         &node_cache,
@@ -576,7 +576,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list
         &[
             (0, eye.as_entire_binding()),
             (8, buf.as_entire_binding()),
-            (11, header.as_entire_binding()),
+            (11, hdr.as_entire_binding()),
         ],
         [cells.div_ceil(side), cells.div_ceil(side), 1],
     );
@@ -618,16 +618,16 @@ fn run_case(
         eye_words[at + 2] = cut.at[2] as u32;
         eye_words[at + 3] = cut.zoom;
     }
-    let mut header = vec![0u32; light::HEADER_WORDS];
-    header[light::HEADER_CAST] = CAST;
-    header[light::HEADER_EPOCH] = CAST;
-    for (k, v) in light::header_layout(SIZE) {
-        header[k] = v;
+    let mut hdr = vec![0u32; light::HDR_WORDS];
+    hdr[light::HDR_CAST] = CAST;
+    hdr[light::HDR_EPOCH] = CAST;
+    for (k, v) in light::hdr_layout(SIZE) {
+        hdr[k] = v;
     }
-    header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+    hdr[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let eye_buf = gpu.buf(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+    let hdr_buf = gpu.buf(&hdr, wgpu::BufferUsages::UNIFORM);
 
     // The slots are listed row after row of the map, in the holes' list the queue takes.
     let n = SIZE * SIZE;
@@ -676,7 +676,7 @@ fn run_case(
     }
 
     // Every slot's walk resumes from its cell's start, which the beam the cast walks first lays.
-    lay_cells(gpu, b, [&eye_buf, &header_buf], &mut list);
+    lay_cells(gpu, b, [&eye_buf, &hdr_buf], &mut list);
 
     // The queue runs over a node cache that holds nothing yet.
     let map = map_of(gpu);
@@ -686,7 +686,7 @@ fn run_case(
     holes(
         gpu,
         b,
-        [&eye_buf, &header_buf, &node_cache_buf, &list_buf],
+        [&eye_buf, &hdr_buf, &node_cache_buf, &list_buf],
         &view,
         &walked,
     );
@@ -760,14 +760,14 @@ fn run_case(
     let b = edited.map_or(b, |e| e.b);
     let w = edited.map_or(w, |e| e.w);
     let mut list = list_of(&slots);
-    lay_cells(gpu, b, [&eye_buf, &header_buf], &mut list);
+    lay_cells(gpu, b, [&eye_buf, &hdr_buf], &mut list);
     let list2 = gpu.buf(&list, store_of());
     let map2 = map_of(gpu);
     let view2 = array_view(&map2);
     holes(
         gpu,
         b,
-        [&eye_buf, &header_buf, &next_buf, &list2],
+        [&eye_buf, &hdr_buf, &next_buf, &list2],
         &view2,
         &walked,
     );
@@ -877,7 +877,7 @@ fn list_of(slots: &[u32]) -> Vec<u32> {
 fn holes(
     gpu: &Gpu,
     b: &WorldBuffer,
-    [eye, header, node_cache, list]: [&wgpu::Buffer; 4],
+    [eye, hdr, node_cache, list]: [&wgpu::Buffer; 4],
     view: &wgpu::TextureView,
     walked: &[bool],
 ) {
@@ -892,7 +892,7 @@ fn holes(
         (7, b.pool.as_entire_binding()),
         (8, list.as_entire_binding()),
         (9, node_cache.as_entire_binding()),
-        (11, header.as_entire_binding()),
+        (11, hdr.as_entire_binding()),
     ];
     gpu.holes(true, &binds, node_cache);
     let hits = gpu.read(node_cache)[node_cache::HITS_CNT as usize].min(ray::HITS_A_FRAME);
@@ -1073,16 +1073,16 @@ fn fresh_map(gpu: &Gpu, b: &WorldBuffer, case: &Case, cuts: [Cut; 2]) -> (Vec<bo
         eye_words[at + 2] = cut.at[2] as u32;
         eye_words[at + 3] = cut.zoom;
     }
-    let mut header = vec![0u32; light::HEADER_WORDS];
-    header[light::HEADER_CAST] = CAST;
-    header[light::HEADER_EPOCH] = CAST;
-    for (k, v) in light::header_layout(SIZE) {
-        header[k] = v;
+    let mut hdr = vec![0u32; light::HDR_WORDS];
+    hdr[light::HDR_CAST] = CAST;
+    hdr[light::HDR_EPOCH] = CAST;
+    for (k, v) in light::hdr_layout(SIZE) {
+        hdr[k] = v;
     }
-    header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+    hdr[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let eye_buf = gpu.buf(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+    let hdr_buf = gpu.buf(&hdr, wgpu::BufferUsages::UNIFORM);
     let n = SIZE * SIZE;
     let walked: Vec<bool> = (0..n)
         .map(|k| k < n - NOT_LISTED && !k.is_multiple_of(SKIPPED_EVERY))
@@ -1092,7 +1092,7 @@ fn fresh_map(gpu: &Gpu, b: &WorldBuffer, case: &Case, cuts: [Cut; 2]) -> (Vec<bo
         .map(|k| (k % SIZE) | ((k / SIZE) << 16))
         .collect();
     let mut list = list_of(&slots);
-    lay_cells(gpu, b, [&eye_buf, &header_buf], &mut list);
+    lay_cells(gpu, b, [&eye_buf, &hdr_buf], &mut list);
     let mut node_cache = vec![0u32; node_cache::WORDS as usize];
     node_cache[node_cache::FRAME as usize] = FRAME;
     let map = map_of(gpu);
@@ -1102,7 +1102,7 @@ fn fresh_map(gpu: &Gpu, b: &WorldBuffer, case: &Case, cuts: [Cut; 2]) -> (Vec<bo
     holes(
         gpu,
         b,
-        [&eye_buf, &header_buf, &node_cache_buf, &list_buf],
+        [&eye_buf, &hdr_buf, &node_cache_buf, &list_buf],
         &view,
         &walked,
     );

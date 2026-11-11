@@ -16,12 +16,12 @@ fn module_name(p: &Protocol) -> String {
 
 /// The name of what the import `name`'s tag carries, where it carries one.
 pub(super) fn tag_of<'a>(spec: &'a Spec, name: &str) -> Option<&'a str> {
-    let c = spec.commands().ok()?.into_iter().find(|c| c.name == name)?;
+    let c = spec.cmds().ok()?.into_iter().find(|c| c.name == name)?;
     c.tag.as_deref()
 }
 
 pub(super) fn fields_of<'a>(spec: &'a Spec, name: &str, export: bool) -> Option<&'a [Field]> {
-    let c = spec.commands().ok()?.into_iter().find(|c| c.name == name)?;
+    let c = spec.cmds().ok()?.into_iter().find(|c| c.name == name)?;
     if export {
         c.pkt.as_deref()
     } else {
@@ -31,14 +31,14 @@ pub(super) fn fields_of<'a>(spec: &'a Spec, name: &str, export: bool) -> Option<
 
 /// Whether the import `name` goes with ACKREQ, to be completed on a later turn.
 pub(super) fn ackreq_of(spec: &Spec, name: &str) -> bool {
-    spec.commands()
+    spec.cmds()
         .ok()
         .and_then(|cs| cs.into_iter().find(|c| c.name == name).map(|c| c.ackreq))
         .unwrap_or(false)
 }
 
 pub(super) fn reply_of<'a>(spec: &'a Spec, name: &str) -> Option<&'a [Field]> {
-    let c = spec.commands().ok()?.into_iter().find(|c| c.name == name)?;
+    let c = spec.cmds().ok()?.into_iter().find(|c| c.name == name)?;
     c.reply.as_deref()
 }
 
@@ -57,6 +57,7 @@ pub(super) fn rs(spec: &Spec, door: &str, wrap: bool) -> Result<String, String> 
     let p = &spec.protocol;
     let name = module_name(p);
     let host = door.replace("::io::door", "::host");
+    let frame = door.replace("::io::door", "::io::frame");
     let requests: Vec<&str> = p
         .imports
         .iter()
@@ -156,16 +157,19 @@ pub(super) fn rs(spec: &Spec, door: &str, wrap: bool) -> Result<String, String> 
         }
         out.push("    }".into());
         out.push(String::new());
-        out.push(
-            "    /// `cmd` read and handed to `h`; ENOSYS for one this protocol does not carry."
-                .into(),
-        );
+        let minors = minors_only(spec);
+        out.push(if minors {
+            "    /// `cmd`, under the program's `major`, read and handed to `h`; ENOSYS for one this protocol does not carry.".into()
+        } else {
+            "    /// `cmd` read and handed to `h`; ENOSYS for one this protocol does not carry.".into()
+        });
         let reads = p
             .exports
             .iter()
             .any(|(cmd, _, _)| fields_of(spec, cmd, true).is_some());
         out.push(format!(
-            "    pub fn apply<H: Exports>(h: &mut H, cmd: u32, {}: &Option<&[u8]>) -> Outcome {{",
+            "    pub fn apply<H: Exports>(h: &mut H, {}cmd: u32, {}: &Option<&[u8]>) -> Outcome {{",
+            if minors { "major: u32, " } else { "" },
             if reads { "pkt" } else { "_pkt" }
         ));
         out.push("        match cmd {".into());
@@ -178,9 +182,12 @@ pub(super) fn rs(spec: &Spec, door: &str, wrap: bool) -> Result<String, String> 
                 ),
                 None => format!("h.{f}()"),
             };
-            out.push(format!(
-                "            x if x == Command::{cmd} as u32 => {arm},"
-            ));
+            let number = if minors {
+                format!("{frame}::cmd(major, Command::{cmd} as u32)")
+            } else {
+                format!("Command::{cmd} as u32")
+            };
+            out.push(format!("            x if x == {number} => {arm},"));
         }
         out.push("            _ => Err(MarshalError::new(Errno::ENOSYS)),".into());
         out.push("        }".into());
@@ -249,6 +256,118 @@ pub(super) fn rs(spec: &Spec, door: &str, wrap: bool) -> Result<String, String> 
     Ok(out.join("\n") + "\n")
 }
 
+/// Writes the protocol's runtime end of its `import`s: the majors they take
+/// (`MAJORS`), which the runtime routes them by; a trait the runtime
+/// implements, a method for each import, handed its tag where the spec names
+/// one, its packet read, and a copy of the memory it names; and `serve`, which
+/// reads each command and hands it to the trait's method, as the core end's
+/// `apply` hands an export.
+pub(super) fn rs_runtime(spec: &Spec) -> Result<String, String> {
+    let p = &spec.protocol;
+    let mut out: Vec<String> = Vec::new();
+    if p.imports.is_empty() {
+        return Ok(String::new());
+    }
+    let cmds = spec.cmds()?;
+    let names_mem = |cmd: &str| cmds.iter().any(|c| c.name == cmd && c.mem.is_some());
+    let reads = |cmd: &str| fields_of(spec, cmd, false).is_some_and(|f| !f.is_empty());
+    let majors: Vec<String> = majors_of(spec)
+        .into_iter()
+        .map(|(major, name)| {
+            name.map_or(format!("0x{major:02x}"), |n| format!("Major::{n} as u32"))
+        })
+        .collect();
+    if !majors.is_empty() {
+        out.push(String::new());
+        out.push("/// The majors the runtime routes the protocol's imports by, to `serve`.".into());
+        out.push(format!(
+            "pub const MAJORS: [u32; {}] = [{}];",
+            majors.len(),
+            majors.join(", ")
+        ));
+    }
+    out.push(String::new());
+    out.push("/// What the runtime does with each command the core posts.".into());
+    out.push("pub trait Imports {".into());
+    for (cmd, _) in &p.imports {
+        let mut params = vec!["&mut self".to_string()];
+        if let Some(tag) = tag_of(spec, cmd) {
+            params.push(format!("{tag}: u32"));
+        }
+        if reads(cmd) {
+            let fields = fields_of(spec, cmd, false).unwrap_or(&[]);
+            params.push(format!(
+                "e: {}{}",
+                pascal(cmd),
+                lifetime(spec, fields, true)?
+            ));
+        }
+        if names_mem(cmd) {
+            params.push("named: &[u8]".into());
+        }
+        out.push(format!(
+            "    fn {}({}) -> Outcome;",
+            cmd.to_lowercase(),
+            params.join(", ")
+        ));
+    }
+    out.push("}".into());
+    out.push(String::new());
+    let minors = minors_only(spec);
+    let used = |any: bool, name: &str| {
+        if any {
+            name.to_string()
+        } else {
+            format!("_{name}")
+        }
+    };
+    let tag = used(
+        p.imports.iter().any(|(c, _)| tag_of(spec, c).is_some()),
+        "tag",
+    );
+    let pkt = used(p.imports.iter().any(|(c, _)| reads(c)), "pkt");
+    let named = used(p.imports.iter().any(|(c, _)| names_mem(c)), "named");
+    out.push(if minors {
+        "/// `cmd`, under the program's `major`, read and handed to `h`; ENOSYS for one this protocol does not carry.".into()
+    } else {
+        "/// `cmd` read and handed to `h`; ENOSYS for one this protocol does not carry.".into()
+    });
+    out.push(format!(
+        "pub fn serve<H: Imports>(h: &mut H, {}{tag}: u32, cmd: u32, {pkt}: &Option<&[u8]>, {named}: &[u8]) -> Outcome {{",
+        if minors { "major: u32, " } else { "" },
+    ));
+    out.push("    match cmd {".into());
+    for (cmd, _) in &p.imports {
+        let mut args = Vec::new();
+        if tag_of(spec, cmd).is_some() {
+            args.push("tag".to_string());
+        }
+        if reads(cmd) {
+            args.push(format!(
+                "{}::read(pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?)?",
+                pascal(cmd)
+            ));
+        }
+        if names_mem(cmd) {
+            args.push("named".into());
+        }
+        let number = if minors {
+            format!("xpute_core::io::frame::cmd(major, Command::{cmd} as u32)")
+        } else {
+            format!("Command::{cmd} as u32")
+        };
+        out.push(format!(
+            "        x if x == {number} => h.{}({}),",
+            cmd.to_lowercase(),
+            args.join(", ")
+        ));
+    }
+    out.push("        _ => Err(MarshalError::new(Errno::ENOSYS)),".into());
+    out.push("    }".into());
+    out.push("}".into());
+    Ok(out.join("\n") + "\n")
+}
+
 /// Gives `<'_>` where the type borrows: with `read`, a packet read in place,
 /// as an export's is; without it, an import that writes a borrowed field.
 fn lifetime(spec: &Spec, fields: &[Field], read: bool) -> Result<&'static str, String> {
@@ -265,44 +384,43 @@ fn lifetime(spec: &Spec, fields: &[Field], read: bool) -> Result<&'static str, S
     Ok(if borrows { "<'_>" } else { "" })
 }
 
-/// The majors the protocol's `import`s take, each by its `Major` member where
-/// the protocol names one, and none where its commands are minors under a major
-/// the program gives.
-fn majors_of(spec: &Spec) -> Vec<String> {
+/// The majors the protocol's `import`s take, each with its `Major` member's
+/// name where the protocol names one, and none where its commands are minors
+/// under a major the program gives.
+fn majors_of(spec: &Spec) -> Vec<(u32, Option<String>)> {
     let named = spec.enums.iter().find(|e| e.name == "Major");
-    let Ok(commands) = spec.commands() else {
+    let Ok(cmds) = spec.cmds() else {
         return Vec::new();
     };
-    let mut out: Vec<String> = Vec::new();
+    let mut out: Vec<(u32, Option<String>)> = Vec::new();
     for (cmd, _) in &spec.protocol.imports {
-        let Some(c) = commands.iter().find(|c| c.name == *cmd) else {
+        let Some(c) = cmds.iter().find(|c| c.name == *cmd) else {
             continue;
         };
-        if c.val >> 8 == 0 {
+        let major = c.val >> 8;
+        if major == 0 || out.iter().any(|(m, _)| *m == major) {
             continue;
         }
-        let major = c.val >> 8;
-        let one = named
+        let name = named
             .and_then(|e| super::members(e).find(|m| m.val == major))
-            .map_or(format!("0x{major:02x}"), |m| format!("Major.{}", m.name));
-        if !out.contains(&one) {
-            out.push(one);
-        }
+            .map(|m| m.name.clone());
+        out.push((major, name));
     }
     out
 }
 
 /// Whether the protocol's commands are minors, under a major the program gives.
-fn minors_only(spec: &Spec) -> bool {
-    spec.commands()
+pub(super) fn minors_only(spec: &Spec) -> bool {
+    spec.cmds()
         .map(|cs| cs.iter().all(|c| c.val >> 8 == 0))
         .unwrap_or(false)
 }
 
 /// Writes the TypeScript binding's imports and body, the UI's end as WASI's
 /// JavaScript bindings shape one: a plain function for each `export`, which
-/// sends it, or requests it and answers a Promise of the reply's value that
-/// rejects with the errno it was refused with (`{proto}_exports`); and the
+/// sends it, or requests it and answers a Promise of the reply's value, or of
+/// the memory the reply names, that rejects with the errno it was refused with
+/// (`{proto}_exports`); and the
 /// interface the program implements for the protocol's `import`s, each member
 /// answering a call's value or throwing kit's error to refuse, with the
 /// protocol the runtime routes them to by major (`{proto}_imports`). A protocol
@@ -315,19 +433,21 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
     let p = &spec.protocol;
     let name = module_name(p);
     let ty = pascal(&p.name);
-    let majors = majors_of(spec);
+    let majors: Vec<String> = majors_of(spec)
+        .into_iter()
+        .map(|(major, name)| name.map_or(format!("0x{major:02x}"), |n| format!("Major.{n}")))
+        .collect();
     let minors = minors_only(spec);
     let number = |cmd: &str| {
         if minors {
-            format!("(major << 8) | Command.{cmd}")
+            format!("CMD(major, Command.{cmd})")
         } else {
             format!("Command.{cmd}")
         }
     };
-    let commands = spec.commands()?;
+    let cmds = spec.cmds()?;
     let doc_of = |cmd: &str| {
-        commands
-            .iter()
+        cmds.iter()
             .find(|c| c.name == cmd)
             .and_then(|c| c.doc.as_ref())
     };
@@ -340,15 +460,16 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
                 "/** The {} protocol's exports as the UI calls them over `link`: a send returns",
                 p.name
             ),
-            " * nothing, and a request a Promise of its reply's value, which rejects with the"
+            " * nothing, and a request a Promise of its reply's value, or of the memory its reply"
                 .into(),
-            " * errno it was refused with. `fits` says whether a send's packet fits a frame. */"
+            " * names, which rejects with the errno it was refused with. `fits` says whether a"
                 .into(),
+            " * send's packet fits a frame. */".into(),
             format!("export function {name}_exports(link: Link{major}) {{"),
             "  return {".into(),
         ]);
         let mut fits = Vec::new();
-        for (cmd, _, ack) in &p.exports {
+        for (cmd, ack, named) in &p.exports {
             let fields = fields_of(spec, cmd, true).unwrap_or(&[]);
             let mut params = Vec::new();
             let mut args = vec![number(cmd)];
@@ -360,12 +481,14 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
                 out.extend(ts_doc(doc, "    "));
             }
             let f = cmd.to_lowercase();
-            let way = if *ack { "request" } else { "send" };
-            out.push(format!(
-                "    {f}: ({}) => link.{way}({}),",
-                params.join(", "),
-                args.join(", ")
-            ));
+            // A request resolves with its reply's value, or with the memory
+            // its reply names.
+            let call = match (ack, named) {
+                (false, _) => format!("link.send({})", args.join(", ")),
+                (true, false) => format!("link.request({}).then((r) => r.val)", args.join(", ")),
+                (true, true) => format!("link.request({}).then((r) => r.named)", args.join(", ")),
+            };
+            out.push(format!("    {f}: ({}) => {call},", params.join(", ")));
             if !*ack {
                 fits.push(format!(
                     "      {f}: ({}) => link.fits({}),",
@@ -405,6 +528,12 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
             .any(|(cmd, _)| fields_of(spec, cmd, false).is_some_and(|f| !f.is_empty()));
         out.extend([
             String::new(),
+            "/** The majors the runtime routes the protocol's imports by. */".into(),
+            format!(
+                "export const MAJORS: readonly u32[] = [{}];",
+                majors.join(", ")
+            ),
+            String::new(),
             format!(
                 "/** What the program does with each command the core posts on the {} protocol: a",
                 p.name
@@ -413,7 +542,7 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
             format!("export interface {iface} {{"),
         ]);
         // A command that names the core's memory is handed a copy of it.
-        let names_mem = |cmd: &str| commands.iter().any(|c| c.name == cmd && c.mem.is_some());
+        let names_mem = |cmd: &str| cmds.iter().any(|c| c.name == cmd && c.mem.is_some());
         for (cmd, call) in &p.imports {
             let ret = if *call { "u32" } else { "void" };
             if let Some(doc) = doc_of(cmd) {
@@ -443,7 +572,6 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
         } else {
             ""
         };
-        let major_list = &majors;
         out.extend([
             String::new(),
             format!(
@@ -482,7 +610,7 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
             "      return refusal_of(err);".into(),
             "    }".into(),
             "  };".into(),
-            format!("  return {{ majors: [{}], on }};", major_list.join(", ")),
+            "  return { majors: MAJORS, on };".into(),
             "}".into(),
         ]);
     }
@@ -511,6 +639,9 @@ pub(super) fn ts(spec: &Spec, runtime: &str) -> Result<(Vec<String>, Vec<String>
             "import type {{ {} }} from \"{runtime}\";",
             types.join(", ")
         ));
+    }
+    if out.iter().any(|l| l.contains("CMD(major, ")) {
+        values.push("CMD");
     }
     if !values.is_empty() {
         imports.push(format!(

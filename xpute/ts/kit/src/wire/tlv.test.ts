@@ -6,7 +6,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { Golden } from "@xpute/kit/golden.ts";
+import { Golden } from "../../../dev/golden.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 import { bytes_to_hex, hex_to_bytes } from "@xpute/kit/codec/encoding.ts";

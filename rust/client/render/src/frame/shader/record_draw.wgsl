@@ -8,7 +8,7 @@
 // The eye's draw (`rec_draw_cs`) writes a box for each fresh drawable entry in view, which
 // draws the faces an eye's ray asked about (pxl-engine `record::ASKED`). The draw records the
 // frame it ran in (`node_cache::DRAWN`). Where the light's cast
-// stands the world's receivers this frame (`light::HEADER_WORLD_RECEIVERS`), the draw also
+// stands the world's receivers this frame (`light::HDR_WORLD_RECEIVERS`), the draw also
 // stands a receiver on each box it writes, by the rule every receiver stands by (light_box.wgsl
 // `box_tiles`, light_receiver_tile.wgsl). A pixel that takes the box's voxel has its hit
 // inside the box (visible.wgsl `visible_cell`), so the tiles the box stands on cover the hit.
@@ -131,7 +131,7 @@ fn rec_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   mark_drawn(id.x);
   put_draw(place, id.x, kind, select(0u, RASTER_EYED, near));
-  if (header_word(LIGHT_HEADER_WORLD_RECEIVERS) != 0u) {
+  if (hdr_word(LIGHT_HDR_WORLD_RECEIVERS) != 0u) {
     let t = box_tiles(b.lo, b.hi);
     if (t.has_tiles) {
       stand_box(t.first, t.last);
@@ -164,7 +164,7 @@ fn on_box(lo: vec3<f32>, hi: vec3<f32>) -> bool {
     first = min(first, t);
     last = max(last, t);
   }
-  let n = i32(header_word(LIGHT_HEADER_TILES));
+  let n = i32(hdr_word(LIGHT_HDR_TILES));
   return all(last >= vec2<i32>(0)) && all(first < vec2<i32>(n));
 }
 

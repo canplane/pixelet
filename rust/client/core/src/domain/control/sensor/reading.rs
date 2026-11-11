@@ -56,7 +56,7 @@ fn is_heading_delta_over(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
     }
 }
 
-/// The state of a sensor as the snapshot carries it: its status, and what
+/// The location's state as the snapshot carries it: its status, and what
 /// failed when it failed. `err` is None except at `SensorStatus::Error`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct SensorState {
@@ -138,23 +138,13 @@ impl DeviceLocationStore {
             timestamp,
         });
     }
-
-    pub fn set_is_tracking_location(&mut self, enabled: bool) {
-        if self.is_tracking_location == enabled {
-            return;
-        }
-        self.is_tracking_location = enabled;
-        if !enabled {
-            self.location = None;
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DeviceOrientationStore {
     pub is_tracking_orient: bool,
     pub orient: Option<DeviceOrientation>,
-    pub state: SensorState,
+    pub status: SensorStatus,
 }
 
 impl DeviceOrientationStore {
@@ -171,7 +161,7 @@ impl DeviceOrientationStore {
             });
             // Any first reading makes the sensor Ready, even one without a
             // heading.
-            self.state = SensorState::of(SensorStatus::Ready);
+            self.status = SensorStatus::Ready;
             return;
         };
 

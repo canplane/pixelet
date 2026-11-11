@@ -56,18 +56,18 @@ fn eye_words(l: &Light) -> Vec<u32> {
 
 /// The light's head for cast `cur` in `epoch`. `last_corner` is the box's corner in the
 /// cast before, and `last_range` holds the eye's zooms that cast was cast under.
-fn header_words(cur: u32, epoch: u32, last_corner: [i32; 2], last_range: [Zoom; 2]) -> Vec<u32> {
-    let mut header = vec![0u32; light::HEADER_WORDS];
-    header[light::HEADER_CAST] = cur;
-    header[light::HEADER_EPOCH] = epoch;
-    for (k, v) in light::header_layout(SIZE) {
-        header[k] = v;
+fn hdr_words(cur: u32, epoch: u32, last_corner: [i32; 2], last_range: [Zoom; 2]) -> Vec<u32> {
+    let mut hdr = vec![0u32; light::HDR_WORDS];
+    hdr[light::HDR_CAST] = cur;
+    hdr[light::HDR_EPOCH] = epoch;
+    for (k, v) in light::hdr_layout(SIZE) {
+        hdr[k] = v;
     }
-    header[light::HEADER_LAST_CORNER] = last_corner[0] as u32;
-    header[light::HEADER_LAST_CORNER + 1] = last_corner[1] as u32;
-    header[light::HEADER_LAST_RANGE] = last_range[0];
-    header[light::HEADER_LAST_RANGE + 1] = last_range[1];
-    header
+    hdr[light::HDR_LAST_CORNER] = last_corner[0] as u32;
+    hdr[light::HDR_LAST_CORNER + 1] = last_corner[1] as u32;
+    hdr[light::HDR_LAST_RANGE] = last_range[0];
+    hdr[light::HDR_LAST_RANGE + 1] = last_range[1];
+    hdr
 }
 
 fn run(
@@ -78,13 +78,7 @@ fn run(
     last_corner: [i32; 2],
     last_range: [Zoom; 2],
 ) -> Vec<u32> {
-    run_with(
-        gpu,
-        p,
-        l,
-        list,
-        header_words(40, 37, last_corner, last_range),
-    )
+    run_with(gpu, p, l, list, hdr_words(40, 37, last_corner, last_range))
 }
 
 fn run_with(
@@ -92,16 +86,16 @@ fn run_with(
     p: &wgpu::ComputePipeline,
     l: &Light,
     list: &[u32],
-    header: Vec<u32>,
+    hdr: Vec<u32>,
 ) -> Vec<u32> {
     let eye = gpu.buf(&eye_words(l), wgpu::BufferUsages::UNIFORM);
-    let header = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+    let hdr = gpu.buf(&hdr, wgpu::BufferUsages::UNIFORM);
     let list = gpu.buf(list, wgpu::BufferUsages::STORAGE);
     gpu.dispatch(
         p,
         &[
             (0, eye.as_entire_binding()),
-            (11, header.as_entire_binding()),
+            (11, hdr.as_entire_binding()),
             (12, list.as_entire_binding()),
         ],
         [N.div_ceil(SQUARE_SIDE), N.div_ceil(SQUARE_SIDE), 1],
@@ -259,15 +253,15 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
         let list: Vec<u32> = (0..light::list_words(SIZE))
             .map(|k| mix(k, n as u32) | 1)
             .collect();
-        let mut header = header_words(40, 37, corner, RANGE);
+        let mut hdr = hdr_words(40, 37, corner, RANGE);
         let at = 4 * light::COLUMNS_AT;
-        header[at] = columns.len() as u32;
+        hdr[at] = columns.len() as u32;
         for (k, c) in columns.iter().enumerate() {
             let w = at + 4 * (1 + 2 * k);
-            header[w..w + 4].copy_from_slice(&c.map(f32::to_bits));
-            header[w + 4..w + 6].copy_from_slice(&bands);
+            hdr[w..w + 4].copy_from_slice(&c.map(f32::to_bits));
+            hdr[w + 4..w + 6].copy_from_slice(&bands);
         }
-        let have = run_with(&gpu, &p, &l, &list, header);
+        let have = run_with(&gpu, &p, &l, &list, hdr);
         let reads = light::reads_at(SIZE);
         let (mut want, mut got) = (Vec::new(), Vec::new());
         let (mut case_kept, mut case_off) = (0, 0);
@@ -446,17 +440,17 @@ fn hand_propagation_reads_what_stands() {
         list[slide + light::READS_FROM as usize] = reads_from;
         let mut args = vec![0u32; light::args_words(SIZE) as usize];
         args[light::ARGS_LAY as usize] = light::LAY_VERTICES;
-        // A cast before this one stood the world's receivers afresh (`light::HEADER_WORLD`) and
+        // A cast before this one stood the world's receivers afresh (`light::HDR_WORLD`) and
         // propagates the first half of the stood tiles, none of them propagated before it.
         let carry = light::carry_at(SIZE) as usize;
         let half = stood.len() / 2;
         list[stood_at] = half as u32;
         list[carry + light::RECEIVER_TILES_CNT as usize] = 0;
-        let mut header = header_words(cur, epoch, [1304, -896], RANGE);
-        header[light::HEADER_SLIDE_CAST] = 0;
-        header[light::HEADER_WORLD] = cur - 3;
+        let mut hdr = hdr_words(cur, epoch, [1304, -896], RANGE);
+        hdr[light::HDR_SLIDE_CAST] = 0;
+        hdr[light::HDR_WORLD] = cur - 3;
         let eye = gpu.buf(&eye_words(&l), wgpu::BufferUsages::UNIFORM);
-        let header = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+        let hdr = gpu.buf(&hdr, wgpu::BufferUsages::UNIFORM);
         let list_buf = gpu.buf(&list, wgpu::BufferUsages::STORAGE);
         let args_buf = gpu.buf(&args, wgpu::BufferUsages::STORAGE);
         let per = ray::MISS_LANES * ray::MISS_ACROSS;
@@ -465,7 +459,7 @@ fn hand_propagation_reads_what_stands() {
                 p,
                 &[
                     (0, eye.as_entire_binding()),
-                    (11, header.as_entire_binding()),
+                    (11, hdr.as_entire_binding()),
                     (12, list.as_entire_binding()),
                     (21, args_buf.as_entire_binding()),
                 ],

@@ -31,7 +31,7 @@ import {
   STATUS_AT,
   UNFINISHED_AT,
   WORDS,
-} from "./device.ts";
+} from "./api/device.spec.ts";
 import {
   ADDRESS_MODE,
   BLEND_FACTOR,
@@ -200,7 +200,7 @@ export class GpuRuntime {
   private readonly _stamps: GPURenderPassTimestampWrites = {
     querySet: undefined as unknown as GPUQuerySet,
   };
-  private readonly _command_bufs: GPUCommandBuffer[] = [];
+  private readonly _cmd_bufs: GPUCommandBuffer[] = [];
   /** This holds each canvas context, at the slot the core names its surface by,
    * with the handle bound there. */
   private readonly _surfaces = new Map<
@@ -1223,14 +1223,14 @@ export class GpuRuntime {
       }
       case op.SUBMIT: {
         const n = r.u();
-        const command_bufs = this._command_bufs;
+        const cmd_bufs = this._cmd_bufs;
         for (let k = 0; k < n; k++) {
           const id = r.u();
-          command_bufs.push(this._get<GPUCommandEncoder>(id).finish());
+          cmd_bufs.push(this._get<GPUCommandEncoder>(id).finish());
           this._forget(id);
         }
-        this._submit(command_bufs);
-        command_bufs.length = 0;
+        this._submit(cmd_bufs);
+        cmd_bufs.length = 0;
         return;
       }
       case op.MAP_ASYNC: {

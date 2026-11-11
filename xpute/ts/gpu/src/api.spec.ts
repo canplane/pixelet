@@ -19,6 +19,7 @@ import * as BUFFER_USAGE from "./api/buffer_usage.spec.ts";
 import * as TEXTURE_USAGE from "./api/texture_usage.spec.ts";
 import * as SHADER_STAGE from "./api/shader_stage.spec.ts";
 import * as COLOR_WRITE from "./api/color_write.spec.ts";
+import * as DEVICE from "./api/device.spec.ts";
 import * as STATUS from "./api/status.spec.ts";
 import * as RESULT from "./api/result.spec.ts";
 
@@ -58,6 +59,12 @@ export { SHADER_STAGE };
 
 /** GPUColorWrite, its bits as WebGPU numbers them. */
 export { COLOR_WRITE };
+
+/** The words of the device block, in order (op DEVICE): one a limit (LIMIT_NAME), the words
+ * that hold a bit a feature (FEATURE_NAME), the timestamp period, the surface format, the
+ * uncaptured errors, the unfinished frames and STATUS, the last, which the runtime stores
+ * with release after the rest. */
+export { DEVICE };
 
 /** The last word of the DEVICE block: what the runtime knows of the device. Only the
  * runtime writes it, and it stores it with release after the rest of the block. The core

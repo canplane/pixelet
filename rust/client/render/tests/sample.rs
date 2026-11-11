@@ -61,7 +61,7 @@ const UNTOUCHED: u32 = 0xdead_beef;
 struct Observed {
     name: String,
     eye: Vec<u32>,
-    header: Vec<u32>,
+    hdr: Vec<u32>,
     words: Vec<u32>,
     lattice: [u32; 2],
     /// Whether its passes read the light's head, which the light's do and the eye's do not.
@@ -274,7 +274,7 @@ fn eye_of(c: &EyeCase, moved: [i32; 3]) -> Observed {
     Observed {
         name: c.name.to_string(),
         eye: words,
-        header: vec![0; light::HEADER_WORDS],
+        hdr: vec![0; light::HDR_WORDS],
         words: vec![0; grid.size() as usize],
         lattice: grid.samples,
         apart: false,
@@ -304,7 +304,7 @@ fn eye_beams(
         unreachable!()
     };
     let eye = gpu.buf(&observed.eye, wgpu::BufferUsages::UNIFORM);
-    let header = gpu.buf(&observed.header, wgpu::BufferUsages::UNIFORM);
+    let hdr = gpu.buf(&observed.hdr, wgpu::BufferUsages::UNIFORM);
     let beams = gpu.buf(&observed.words, store_of());
     gpu.corners(false, &world_binds(b, &eye, &beams, node_cache), node_cache);
     gpu.dispatch(
@@ -316,7 +316,7 @@ fn eye_beams(
             1,
         ],
     );
-    let _ = header;
+    let _ = hdr;
     gpu.read(&beams)
 }
 
@@ -371,19 +371,19 @@ fn light_of(c: &LightCase, moved: [i32; 2]) -> Observed {
         words[at + 2] = cut.at[2] as u32;
         words[at + 3] = cut.zoom;
     }
-    let mut header = vec![0u32; light::HEADER_WORDS];
-    header[light::HEADER_CAST] = CAST;
-    header[light::HEADER_EPOCH] = CAST;
-    for (k, v) in light::header_layout(c.size) {
-        header[k] = v;
+    let mut hdr = vec![0u32; light::HDR_WORDS];
+    hdr[light::HDR_CAST] = CAST;
+    hdr[light::HDR_EPOCH] = CAST;
+    for (k, v) in light::hdr_layout(c.size) {
+        hdr[k] = v;
     }
-    header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+    hdr[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let n = c.size / param::light::SAMPLE;
     Observed {
         name: c.name.to_string(),
         eye: words,
-        header,
+        hdr,
         words: vec![0; light::list_words(c.size) as usize],
         lattice: [n, n],
         apart: true,
@@ -414,7 +414,7 @@ fn light_beams(
         unreachable!()
     };
     let eye = gpu.buf(&observed.eye, wgpu::BufferUsages::UNIFORM);
-    let header = gpu.buf(&observed.header, wgpu::BufferUsages::UNIFORM);
+    let hdr = gpu.buf(&observed.hdr, wgpu::BufferUsages::UNIFORM);
     let tiles = light::tiles(size);
     let mut list = observed.words.clone();
     let reads_at = light::reads_at(size) as usize;
@@ -430,14 +430,14 @@ fn light_beams(
     );
     let beams = gpu.buf(&list, store_of());
     let mut world = world_binds(b, &eye, &beams, node_cache);
-    world.push((11, header.as_entire_binding()));
+    world.push((11, hdr.as_entire_binding()));
     gpu.light_beam(&world, &beams, node_cache, size);
     gpu.dispatch(
         &gpu.pipeline(src(SHADER_LIGHT_CELL), "light_cell_cs"),
         &[
             (0, eye.as_entire_binding()),
             (8, beams.as_entire_binding()),
-            (11, header.as_entire_binding()),
+            (11, hdr.as_entire_binding()),
         ],
         [fed[0], fed[1], 1],
     );
@@ -455,7 +455,7 @@ fn light_beams(
         // Some tiles are read, the box's corners among them. The tiles listed as fed are those
         // beside a read tile, as the propagation lists them (light_enlist.wgsl `enlist`),
         // but only about one in `every` and those on the box's first column and last row.
-        observed.header[light::HEADER_EPOCH] = CAST - 3;
+        observed.hdr[light::HDR_EPOCH] = CAST - 3;
         let side = light::TILE / param::light::SAMPLE;
         let at = light::list_cnt_at(size, light::LIST_SOURCES) as usize;
         let read = |i: u32, j: u32| {
@@ -539,7 +539,7 @@ fn run_frame(
 ) -> Vec<u32> {
     let name = format!("{} ({what})", observed.name);
     let eye_buf = gpu.buf(&observed.eye, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buf(&observed.header, wgpu::BufferUsages::UNIFORM);
+    let hdr_buf = gpu.buf(&observed.hdr, wgpu::BufferUsages::UNIFORM);
     let taken = observed.taken();
 
     let mut laid = words.to_vec();
@@ -554,7 +554,7 @@ fn run_frame(
     let last_cache = last_cache.map(|t| gpu.buf(t, store_of()));
     let mut binds = world_binds(b, &eye_buf, &beams, &node_cache);
     if observed.apart {
-        binds.push((11, header_buf.as_entire_binding()));
+        binds.push((11, hdr_buf.as_entire_binding()));
     }
     gpu.samples_last_cache(observed.apart, &binds, &node_cache, last_cache.as_ref());
     let node_cache = last_cache.unwrap_or(node_cache);
@@ -764,13 +764,14 @@ fn world_bufs(gpu: &Gpu, built: &Built) -> WorldBuffer {
 }
 
 fn device() -> Option<Gpu> {
+    let gpu = Gpu::new();
     // A loop in a hand-written shader can hang the wait on the device, so the run ends itself.
+    // The bound starts once the process holds the GPU (`Gpu::new`).
     std::thread::spawn(|| {
         std::thread::sleep(std::time::Duration::from_secs(1200));
         eprintln!("gave up after 20 minutes");
         std::process::exit(124);
     });
-    let gpu = Gpu::new();
     if gpu.is_none() {
         eprintln!("no adapter: skipped");
     }
@@ -1855,7 +1856,7 @@ fn stopped(
     node_cache: &[u32],
 ) -> Vec<u32> {
     let eye_buf = gpu.buf(&observed.eye, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buf(&observed.header, wgpu::BufferUsages::UNIFORM);
+    let hdr_buf = gpu.buf(&observed.hdr, wgpu::BufferUsages::UNIFORM);
     let mut laid = words.to_vec();
     for j in 0..observed.lattice[1] {
         for i in 0..observed.lattice[0] {
@@ -1871,7 +1872,7 @@ fn stopped(
     let node_cache = gpu.buf(node_cache, store_of());
     let mut binds = world_binds(b, &eye_buf, &beams, &node_cache);
     if observed.apart {
-        binds.push((11, header_buf.as_entire_binding()));
+        binds.push((11, hdr_buf.as_entire_binding()));
     }
     gpu.samples(observed.apart, &binds, &node_cache);
     gpu.read(&beams)
@@ -2106,7 +2107,7 @@ fn light_rec_case(
     let mut args = vec![0u32; raster::ARGS_WORDS as usize];
     args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
     let eye_buf = gpu.buf(&observed.eye, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buf(&observed.header, wgpu::BufferUsages::UNIFORM);
+    let hdr_buf = gpu.buf(&observed.hdr, wgpu::BufferUsages::UNIFORM);
     let beams = gpu.buf(words, store_of());
     let node_cache = gpu.buf(&laid, store_of());
     let args = gpu.buf(&args, store_of());
@@ -2116,7 +2117,7 @@ fn light_rec_case(
             (0, eye_buf.as_entire_binding()),
             (8, beams.as_entire_binding()),
             (9, node_cache.as_entire_binding()),
-            (11, header_buf.as_entire_binding()),
+            (11, hdr_buf.as_entire_binding()),
             (16, args.as_entire_binding()),
         ],
         [groups[0], groups[1], 1],
@@ -2180,14 +2181,14 @@ fn light_raster_drawn(
     let draws = gpu.buf(&vec![0u32; record::LIGHT_DRAWS as usize], store_of());
     let node_cache = gpu.buf(cache, store_of());
     let eye_buf = gpu.buf(&observed.eye, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buf(&observed.header, wgpu::BufferUsages::UNIFORM);
+    let hdr_buf = gpu.buf(&observed.hdr, wgpu::BufferUsages::UNIFORM);
     let draw = gpu.pipeline(src(SHADER_REC_DRAW), "light_rec_draw_cs");
     gpu.dispatch(
         &draw,
         &[
             (0, eye_buf.as_entire_binding()),
             (9, node_cache.as_entire_binding()),
-            (11, header_buf.as_entire_binding()),
+            (11, hdr_buf.as_entire_binding()),
             (14, draws.as_entire_binding()),
             (16, args.as_entire_binding()),
         ],
@@ -2374,17 +2375,17 @@ fn rec_case(
     // and must write none of the light's list, args and stood list. tests/light.rs checks what
     // it stands where receivers do stand.
     let size = SHADOW_SIZE;
-    let mut light_header = vec![0u32; light::HEADER_WORDS];
-    for (k, v) in light::header_layout(size) {
-        light_header[k] = v;
+    let mut light_hdr = vec![0u32; light::HDR_WORDS];
+    for (k, v) in light::hdr_layout(size) {
+        light_hdr[k] = v;
     }
-    light_header[light::HEADER_WORLD_RECEIVERS] = 0;
+    light_hdr[light::HDR_WORLD_RECEIVERS] = 0;
     let light_list: Vec<u32> = (0..light::list_words(size)).map(|k| k ^ 0x5a5a).collect();
     let light_args: Vec<u32> = (0..light::args_words(size)).map(|k| k ^ 0xa5a5).collect();
     let stood: Vec<u32> = (0..light::RECEIVER_TILES_WORDS)
         .map(|k| k ^ 0x3c3c)
         .collect();
-    let light_header_buf = gpu.buf(&light_header, wgpu::BufferUsages::UNIFORM);
+    let light_hdr_buf = gpu.buf(&light_hdr, wgpu::BufferUsages::UNIFORM);
     let light_list_buf = gpu.buf(&light_list, store_of());
     let light_args_buf = gpu.buf(&light_args, store_of());
     let receiver_tiles_buf = gpu.buf(&stood, store_of());
@@ -2393,7 +2394,7 @@ fn rec_case(
         &[
             (0, eye_buf.as_entire_binding()),
             (9, rec_buf.as_entire_binding()),
-            (11, light_header_buf.as_entire_binding()),
+            (11, light_hdr_buf.as_entire_binding()),
             (12, light_list_buf.as_entire_binding()),
             (14, boxes.as_entire_binding()),
             (16, args.as_entire_binding()),
@@ -3156,12 +3157,12 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
         let rec_buf = gpu.buf(&rec, store_of());
         let boxes = gpu.buf(&vec![UNWRITTEN; record::EYE_DRAWS as usize], store_of());
         let size = SHADOW_SIZE;
-        let mut light_header = vec![0u32; light::HEADER_WORDS];
-        for (k, v) in light::header_layout(size) {
-            light_header[k] = v;
+        let mut light_hdr = vec![0u32; light::HDR_WORDS];
+        for (k, v) in light::hdr_layout(size) {
+            light_hdr[k] = v;
         }
-        light_header[light::HEADER_WORLD_RECEIVERS] = 0;
-        let light_header_buf = gpu.buf(&light_header, wgpu::BufferUsages::UNIFORM);
+        light_hdr[light::HDR_WORLD_RECEIVERS] = 0;
+        let light_hdr_buf = gpu.buf(&light_hdr, wgpu::BufferUsages::UNIFORM);
         let light_list_buf = gpu.buf(&vec![0u32; light::list_words(size) as usize], store_of());
         let light_args_buf = gpu.buf(&vec![0u32; light::args_words(size) as usize], store_of());
         let receiver_tiles_buf = gpu.buf(
@@ -3172,7 +3173,7 @@ fn hand_eye_stale_box_about_the_eye_undrawn() {
             &draw,
             &[
                 (0, eye_buf.as_entire_binding()),
-                (11, light_header_buf.as_entire_binding()),
+                (11, light_hdr_buf.as_entire_binding()),
                 (12, light_list_buf.as_entire_binding()),
                 (14, boxes.as_entire_binding()),
                 (16, args.as_entire_binding()),

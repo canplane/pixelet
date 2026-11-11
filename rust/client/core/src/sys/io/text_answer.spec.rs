@@ -18,13 +18,13 @@
 
 /// TEXT_LAYOUT's answer at its `at`: how many lines, then `LINE` apiece.
 pub mod LAYOUT_ANSWER {
-    pub const cnt: u32 = 0;
-    pub const WORDS: u32 = 1;
+    pub const cnt: usize = 0;
+    pub const WORDS: usize = 1;
 }
 
 /// A line of TEXT_LAYOUT's answer: its end, a byte offset, and its width as f32 bits.
 pub mod LINE {
-    pub const end: u32 = 0;
-    pub const width: u32 = 1;
-    pub const WORDS: u32 = 2;
+    pub const end: usize = 0;
+    pub const width: usize = 1;
+    pub const WORDS: usize = 2;
 }

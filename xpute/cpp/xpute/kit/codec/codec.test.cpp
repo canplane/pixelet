@@ -4,7 +4,7 @@
 #include <string>
 #include <string_view>
 
-#include "xpute/kit/test.hpp"
+#include "dev/test/test.hpp"
 #include "encoding.hpp"
 #include "hash.hpp"
 
@@ -16,7 +16,7 @@ static std::span<const std::uint8_t> bytes_of(std::string_view s) {
 
 // RFC 4648's test vectors. Their encodings hold no character on which the URL
 // alphabet differs from the standard one.
-XPUTE_TEST(codec_base64url_rfc_vectors) {
+XPUTE_TEST(codec_base64url_rfc_vecs) {
     const std::pair<std::string_view, std::string_view> cases[] = {
         {"", ""}, {"f", "Zg"}, {"fo", "Zm8"}, {"foo", "Zm9v"}, {"foob", "Zm9vYg"}, {"fooba", "Zm9vYmE"}, {"foobar", "Zm9vYmFy"},
     };

@@ -14,6 +14,8 @@ class IosSafari(WebKit):
 
     @staticmethod
     def running():
+        """safaridriver opens its own session on the iPhone, beside whatever
+        Safari runs there, and tells nothing of it."""
         return None
 
     def __init__(self, url):
@@ -23,4 +25,6 @@ class IosSafari(WebKit):
         return ios.state()
 
 
+# The run holds its device from before it starts (`measure.hold`).
+ios.hold()
 measure(IosSafari)

@@ -11,7 +11,8 @@ import { attach, connect } from "./remote.ts";
 import type { Runtime, Ui } from "./runtime.ts";
 
 /** This runtime keeps what it is sent, each packet read back as its words,
- * and answers a request with its command plus one. */
+ * and answers a request with its command plus one, naming the bytes 7, 8 and
+ * 9. */
 function runtime(): {
   rt: Runtime;
   sent: [number, number[]][];
@@ -35,7 +36,7 @@ function runtime(): {
         void sent.push([cmd, read(encode)]),
       request: (cmd: number, encode: Encode | null) => {
         sent.push([cmd, read(encode)]);
-        return Promise.resolve(cmd + 1);
+        return Promise.resolve([cmd + 1, new Uint8Array([7, 8, 9])]);
       },
     },
     kick: () => {},
@@ -61,13 +62,14 @@ function ui(majors: number[] = []): Ui & { heard: unknown[] } {
 
 const tick = () => new Promise((done) => setTimeout(done, 0));
 
-test("remote - a UI's send and request reach the runtime as they were encoded", async () => {
+test("remote - a UI's send and request reach the runtime as they were encoded, and the reply crosses with the memory it names", async () => {
   const { port1, port2 } = new MessageChannel();
   const { rt, sent } = runtime();
   attach(port2, []).serve(rt);
   const { link } = connect(port1, 256, ui());
   link.send(0x1001, 7, 9);
-  assert.deepStrictEqual(await link.request(0x1002, 1, 2), 0x1003);
+  const r = await link.request(0x1002, 1, 2);
+  assert.deepStrictEqual([r.val, [...r.named]], [0x1003, [7, 8, 9]]);
   assert.deepStrictEqual(sent, [
     [0x1001, [7, 9]],
     [0x1002, [1, 2]],

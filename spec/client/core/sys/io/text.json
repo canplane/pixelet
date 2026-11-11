@@ -9,7 +9,11 @@
   ],
   "gen": {
     "ts": "../../../../../ts/client/src/abi/text.spec.ts",
-    "rs": "../../../../../rust/client/core/src/sys/io/text.spec.rs"
+    "rs": "../../../../../rust/client/core/src/sys/io/text.spec.rs",
+    "runtime": {
+      "rs": "../../../../../rust/client/core/src/sys/io/text.runtime.spec.rs",
+      "core": "crate::sys::io::text_spec"
+    }
   },
   "name": "text",
   "import": [

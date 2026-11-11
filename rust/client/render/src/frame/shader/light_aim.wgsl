@@ -4,10 +4,10 @@
 // a texel's ray and band, and the word a slot's walk leaves. Each is the rule pxl-engine
 // light.rs defines, written again here (`cell`, `ray`, `Light::band`, `depth`, `word`).
 
-@group(0) @binding(11) var<uniform> header: array<vec4<i32>, LIGHT_HEADER_VEC4S>;
+@group(0) @binding(11) var<uniform> hdr: array<vec4<i32>, LIGHT_HDR_VEC4S>;
 
-fn header_word(k: u32) -> u32 {
-  return u32(header[k / 4u][k % 4u]);
+fn hdr_word(k: u32) -> u32 {
+  return u32(hdr[k / 4u][k % 4u]);
 }
 
 fn light_v3(k: u32) -> vec3<f32> {
@@ -18,15 +18,15 @@ fn light_v3(k: u32) -> vec3<f32> {
 /// fixed point, each split into its whole steps and its fraction, so every device takes the
 /// same start.
 fn texel_start(w: vec2<i32>) -> vec3<i32> {
-  let base = header[LIGHT_STARTS_AT].xy;
+  let base = hdr[LIGHT_STARTS_AT].xy;
   let d = w - base;
   let k = d >= vec2<i32>(i32(LIGHT_ANCHOR));
   let ij = d - select(vec2<i32>(0), vec2<i32>(i32(LIGHT_ANCHOR)), k);
   let anchor = u32(k.x) + 2u * u32(k.y);
-  let at = header[LIGHT_STARTS_AT + STARTS_ANCHORS + anchor].xyz;
-  let a = header[LIGHT_STARTS_AT + STARTS_ACROSS].xyz;
-  let b = header[LIGHT_STARTS_AT + STARTS_DOWN].xyz;
-  let frac = header[LIGHT_STARTS_AT + STARTS_FRACS + anchor].xyz;
+  let at = hdr[LIGHT_STARTS_AT + STARTS_ANCHORS + anchor].xyz;
+  let a = hdr[LIGHT_STARTS_AT + STARTS_ACROSS].xyz;
+  let b = hdr[LIGHT_STARTS_AT + STARTS_DOWN].xyz;
+  let frac = hdr[LIGHT_STARTS_AT + STARTS_FRACS + anchor].xyz;
   let m = vec3<i32>((1i << LIGHT_STEP_BITS) - 1i);
   let s = vec3<u32>(LIGHT_STEP_BITS);
   let low = ij.x * (a & m) + ij.y * (b & m) + frac + vec3<i32>(1i << (LIGHT_STEP_BITS - 1u));
@@ -42,11 +42,11 @@ fn gap(k: i32, half: i32) -> i32 {
 }
 
 fn light_cell_at(c: vec2<u32>) -> u32 {
-  return header_word(LIGHT_HEADER_CELLS) + (c.y * header_word(LIGHT_HEADER_CELLS_ACROSS) + c.x) * CELL_WORDS;
+  return hdr_word(LIGHT_HDR_CELLS) + (c.y * hdr_word(LIGHT_HDR_CELLS_ACROSS) + c.x) * CELL_WORDS;
 }
 
 fn slot_texel(slot: vec2<u32>) -> vec2<u32> {
-  return vec2<u32>(vec2<i32>(slot) - light_corner()) & vec2<u32>(header_word(LIGHT_HEADER_SIZE) - 1u);
+  return vec2<u32>(vec2<i32>(slot) - light_corner()) & vec2<u32>(hdr_word(LIGHT_HDR_SIZE) - 1u);
 }
 
 fn light_corner() -> vec2<i32> {
@@ -61,7 +61,7 @@ fn tile_band(tile: vec2<i32>) -> u32 {
 }
 
 fn tile_band_in(tile: vec2<i32>, range: vec2<u32>) -> u32 {
-  let half = i32(header_word(LIGHT_HEADER_SIZE) / 2u);
+  let half = i32(hdr_word(LIGHT_HDR_SIZE) / 2u);
   let x = gap(tile.x, half);
   let y = gap(tile.y, half);
   let s2 = f32(x * x + y * y) * eye_f32(LIGHT + LIGHT_BAND_SCALE);
@@ -76,7 +76,7 @@ fn tile_band_in(tile: vec2<i32>, range: vec2<u32>) -> u32 {
 /// which is the middle clamped on each axis, and the one farthest from it, at the end of the
 /// larger gap on each axis. Where those two ask `band`, every tile does.
 fn tiles_ask(lo: vec2<i32>, hi: vec2<i32>, band: u32) -> bool {
-  let half = i32(header_word(LIGHT_HEADER_SIZE) / 2u);
+  let half = i32(hdr_word(LIGHT_HDR_SIZE) / 2u);
   let near = clamp(vec2<i32>(half / i32(LIGHT_TILE)), lo, hi);
   let far = select(lo, hi, vec2<bool>(gap(hi.x, half) > gap(lo.x, half), gap(hi.y, half) > gap(lo.y, half)));
   return tile_band(near) == band && tile_band(far) == band;

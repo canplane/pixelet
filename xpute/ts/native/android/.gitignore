@@ -1,0 +1,3 @@
+# What the module's own Gradle build leaves.
+/build/
+/.gradle/

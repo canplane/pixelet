@@ -8,7 +8,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { Golden } from "@xpute/kit/golden.ts";
+import { Golden } from "../../../dev/golden.ts";
 import {
   seed_mix32,
   make_rng32,

@@ -1,0 +1,14 @@
+[package]
+name = "xpute-golden"
+edition.workspace = true
+version.workspace = true
+# The golden records' reader, for the tests of every language's kit and of
+# any program that holds itself to records of its own; it is never published.
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+# A record that is missing or does not parse is a bug, said as the kit says one.
+[dependencies]
+xpute-kit = { workspace = true, features = ["std"] }

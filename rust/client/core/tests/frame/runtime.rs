@@ -1,7 +1,7 @@
 //! The UI's end of the core, kept the way the device's runtime keeps it (xpute-runtime native,
 //! xpute/ts/runtime/src/start.native.ts): the front's header is laid and the runtime attached
-//! before the first turn; the UI's commands are posted, turns are run, and what the core sent
-//! is taken after each. The file device is xpute-runtime's own, and this harness answers only
+//! before the first turn; the UI's commands are posted, written by their protocols' runtime
+//! ends, turns are run, and what the core sent is taken after each. The file device is xpute-runtime's own, and this harness answers only
 //! with a file's bytes (fs.rs): an open's, and a written file's commit, which it drops. The
 //! stop report is kept, and the snapshot is read from the memory its event named.
 
@@ -9,18 +9,32 @@ use std::collections::BTreeMap;
 use std::sync::{Condvar, Mutex, PoisonError};
 use std::time::Duration;
 
+use pxl_core::door::cmd_runtime::{self as ui, Major, Snapshot};
 use pxl_core::sys::manifest::MANIFEST;
-use xpute_core::abi::fs::{Command as FsCommand, FsOpen};
-use xpute_core::io::frame::{ACKREQ, PROGRAM_MAJOR, RES};
+use xpute_core::io::frame::{cmd, cmd_major, cmd_minor, ACKREQ, RES};
 use xpute_core::io::head;
 use xpute_core::mem::Memory;
+use xpute_gpu::runtime::abi as gpu;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::wire::xtp::PacketWriter;
+use xpute_runtime::abi::fs::{Command as FsCommand, FsOpen};
+use xpute_runtime::abi::{sys, Export, Outcome};
 use xpute_runtime::abort_report;
-use xpute_runtime::native::batch::{self, ALIGN, COMMIT, HEADER_WORDS, STOPPED};
+use xpute_runtime::native::batch::{self, ALIGN, COMMIT, HDR_WORDS, STOPPED};
 use xpute_runtime::native::{self, run, Core};
 
-use crate::fs::Fs;
-use crate::spec::{self, Protocol, V};
+use crate::fs;
+
+/// A GPU command, under the major the program gives the GPU (ui.json `Major::GPU`).
+pub struct Gpu<E>(pub E);
+
+impl<E: Export> Export for Gpu<E> {
+    const NUMBER: u32 = cmd(Major::GPU as u32, E::NUMBER);
+    const FIELDS: u32 = E::FIELDS;
+    fn write(&self, w: &mut PacketWriter) {
+        self.0.write(w);
+    }
+}
 
 /// What the last snapshot said: the share of the renderer's pipelines made so far, and
 /// whether a zoom is still easing in.
@@ -65,7 +79,7 @@ fn frames(down: &[u8]) -> Vec<Down<'_>> {
             u32::from_le_bytes(down[k..k + 4].try_into().expect("a word"))
         };
         let (pkt_len, named_len) = (word(batch::PKT) as usize, word(batch::NAMED) as usize);
-        let pkt_at = at + 4 * HEADER_WORDS as usize;
+        let pkt_at = at + 4 * HDR_WORDS as usize;
         let named_at = (pkt_at + pkt_len).next_multiple_of(align);
         out.push(Down {
             tag: word(batch::TAG),
@@ -84,9 +98,6 @@ pub struct Runtime {
     /// The tag of the last request; 0 is a send's.
     next_tag: u32,
     replies: BTreeMap<u32, i32>,
-    pub ui: Protocol,
-    xpute: Protocol,
-    disk: Fs,
     /// The core's stop report, as SYS_ABORT carried it.
     pub abort: Option<String>,
     pub shown: Shown,
@@ -110,69 +121,43 @@ impl Runtime {
         native::notify_on(Some(told));
         // SAFETY: the core's memory, whose front is laid.
         unsafe { native::attach(base.as_ptr().expose_provenance(), bytes, true) };
-        let ui = Protocol::load("spec/client/core/door/ui.json");
         Runtime {
             next_tag: 0,
             replies: BTreeMap::new(),
-            xpute: Protocol::load("xpute/spec/abi/sys.json").with(Protocol::load_on(
-                "xpute/spec/abi/gpu.json",
-                ui.member("Major", "GPU"),
-            )),
-            ui,
-            disk: Fs::new(),
             abort: None,
             shown: Shown::default(),
             refused: Vec::new(),
         }
     }
 
-    /// Posts a frame for the core with the packet `write` writes, or with no packet when it
-    /// writes none.
-    fn push(
-        &mut self,
-        tag: u32,
-        cmd: u32,
-        flags: u32,
-        result: i32,
-        write: impl Fn(&mut [u8]) -> Option<u32>,
-    ) {
+    /// Posts `e` for the core under `tag` with `flags`.
+    fn submit<E: Export>(&mut self, e: &E, tag: u32, flags: u32) {
         let mut buf = vec![0u8; MANIFEST.pkt_bytes as usize];
-        let n = write(&mut buf).unwrap_or(0) as usize;
-        native::post(tag, cmd, flags, result, &buf[..n]);
+        let mut w = PacketWriter::new(&mut buf, E::FIELDS);
+        e.write(&mut w);
+        let n = w.finish().expect("the packet fits a frame");
+        native::post(tag, E::NUMBER, flags, 0, &buf[..n as usize]);
     }
 
-    /// Sends the command `name`, the UI's or xpute's (abi/sys.json, abi/gpu.json), with its
-    /// fields given by name. The core takes it on the next turn.
-    pub fn send(&mut self, name: &str, vals: &[(&str, V)]) {
-        self.submit(name, vals, 0, 0);
+    /// Sends `e`, the UI's command or xpute's. The core takes it on the next turn.
+    pub fn send<E: Export>(&mut self, e: &E) {
+        self.submit(e, 0, 0);
     }
 
-    fn submit(&mut self, name: &str, vals: &[(&str, V)], tag: u32, flags: u32) {
-        let command = self
-            .ui
-            .get(name)
-            .or_else(|| self.xpute.get(name))
-            .unwrap_or_else(|| panic!("no command {name}"))
-            .clone();
-        self.push(tag, command.val, flags, 0, |slot| {
-            spec::write(&command, vals, slot)
-        });
-    }
-
-    /// Requests `name`, the UI's or xpute's, with ACKREQ under a tag of its own, and runs
-    /// turns with a deadline of 0 until its reply comes with a later turn's batch; returns
-    /// the reply's result.
-    pub fn request(&mut self, name: &str, vals: &[(&str, V)]) -> i32 {
+    /// Requests `e` with ACKREQ under a tag of its own, and runs turns with a deadline of 0
+    /// until its reply comes with a later turn's batch; returns the reply's result.
+    pub fn request<E: Export>(&mut self, e: &E) -> i32 {
         self.next_tag = self.next_tag.wrapping_add(1).max(1);
         let tag = self.next_tag;
-        self.submit(name, vals, tag, ACKREQ);
+        self.submit(e, tag, ACKREQ);
         loop {
             if let Some(r) = self.replies.remove(&tag) {
                 return r;
             }
             assert!(
                 self.turn(0.0).is_some(),
-                "the core stopped before it answered {name}"
+                "the core stopped before it answered {}",
+                name(E::NUMBER)
             );
         }
     }
@@ -221,56 +206,93 @@ impl Runtime {
             if f.flags & RES != 0 {
                 if f.result < 0 && f.tag == 0 {
                     self.refused
-                        .push(format!("{} {:?}", self.name(f.cmd), Errno::of(f.result)));
+                        .push(format!("{} {:?}", name(f.cmd), Errno::of(f.result)));
                 }
                 self.replies.insert(f.tag, f.result);
-            } else if f.cmd >> 8 >= PROGRAM_MAJOR {
-                self.program(f.cmd, f.named);
+                continue;
+            }
+            let pkt = (!f.pkt.is_empty()).then_some(f.pkt);
+            let major = cmd_major(f.cmd);
+            if f.cmd == COMMIT {
+                // What is written is dropped, as the run reads only the files it ships.
+                native::post(f.tag, FsCommand::FS_CLOSE as u32, RES, 0, &[]);
             } else if f.cmd == FsCommand::FS_OPEN as u32 {
-                let (path, _) = FsOpen::parts(f.pkt).expect("an open's packet");
-                let tokens = path.iter().collect::<Vec<_>>();
-                match self.disk.bytes(&tokens) {
+                let open = FsOpen::read(f.pkt).expect("an open's packet");
+                let tokens = open.path.iter().collect::<Vec<_>>();
+                match fs::bytes(&tokens) {
                     Ok(bytes) => native::fs_complete_open(f.tag, bytes.len() as i32, 0, bytes),
                     Err(e) => native::fs_complete_open(f.tag, e as i32, 0, Vec::new()),
                 }
-            } else if f.cmd == COMMIT {
-                // What is written is dropped, as the run reads only the files it ships.
-                native::post(f.tag, FsCommand::FS_CLOSE as u32, RES, 0, &[]);
             } else if f.cmd == FsCommand::FS_CLOSE as u32 {
                 // An open the core closed before it completed: every open here is answered
                 // at once, so there is nothing to abort.
-            } else if f.cmd == self.xpute.number("SYS_ABORT") {
-                self.abort = Some(abort_report(f.pkt).expect("a stop report"));
+            } else if ui::MAJORS.contains(&major) {
+                // What the UI alone takes is answered by nothing, as on the device.
+                ui::serve(self, f.tag, f.cmd, &pkt, f.named).expect("a UI's command");
+            } else if sys::MAJORS.contains(&major) {
+                // A command is completed where it fails or asks for an answer, as the
+                // device's UI completes it (@xpute/runtime start.native.ts).
+                match sys::serve(self, f.tag, f.cmd, &pkt, f.named) {
+                    Ok(Some(r)) if f.flags & ACKREQ != 0 || r < 0 => {
+                        native::post(f.tag, f.cmd, RES, r, &[]);
+                    }
+                    Ok(_) => {}
+                    Err(e) => native::post(f.tag, f.cmd, RES, e.errnum as i32, &[]),
+                }
             } else {
                 panic!("the core sent {:#x}, which no one here takes", f.cmd);
             }
         }
         stopped
     }
+}
 
-    fn name(&self, cmd: u32) -> String {
-        self.ui
-            .name_of(cmd)
-            .or_else(|| self.xpute.name_of(cmd))
-            .map_or_else(|| format!("{cmd:#x}"), str::to_string)
+/// What the core sends the UI: the snapshot, read from the memory its event names, and
+/// nothing else, as no sensor runs here.
+impl ui::Imports for Runtime {
+    fn sensor_start(&mut self, _: ui::SensorStart) -> Outcome {
+        Ok(None)
     }
 
-    /// Takes what the core sends the UI. The snapshot is read from the memory its event
-    /// named, and everything else is ignored.
-    fn program(&mut self, cmd: u32, named: &[u8]) {
-        if cmd != self.ui.number("UI_SNAPSHOT") {
-            return;
-        }
-        let s = spec::read(named);
+    fn sensor_stop(&mut self, _: ui::SensorStop) -> Outcome {
+        Ok(None)
+    }
+
+    fn ui_snapshot(&mut self, _: ui::UiSnapshot, named: &[u8]) -> Outcome {
+        let s = Snapshot::read(named).expect("a snapshot");
         self.shown = Shown {
-            renderer_progress: spec::num(
-                s.at(self.ui.rec_at("Snapshot", "renderer_progress"))
-                    .expect("the progress"),
-            ),
-            zooming: spec::flag(
-                s.at(self.ui.rec_at("Snapshot", "zooming"))
-                    .expect("the zoom"),
-            ),
+            renderer_progress: s.renderer_progress().expect("the progress"),
+            zooming: s.zooming().expect("the zoom"),
         };
+        Ok(None)
     }
+
+    fn ui_view(&mut self, _: ui::UiView) -> Outcome {
+        Ok(None)
+    }
+}
+
+/// The core's stop report, kept; its pace is the runtime's thread's (xpute-runtime
+/// native/serve.rs), and never comes here.
+impl sys::Imports for Runtime {
+    fn sys_abort(&mut self, e: sys::SysAbort<'_>) -> Outcome {
+        self.abort = Some(abort_report(&e));
+        Ok(None)
+    }
+
+    fn sys_pace(&mut self, _: sys::SysPace) -> Outcome {
+        Ok(None)
+    }
+}
+
+/// A command's name: the UI's, xpute's own, or the GPU's under its major.
+pub fn name(cmd: u32) -> String {
+    let gpu = (cmd_major(cmd) == Major::GPU as u32)
+        .then(|| gpu::Command::of(cmd_minor(cmd)).map(|c| format!("{c:?}")))
+        .flatten();
+    ui::Command::of(cmd)
+        .map(|c| format!("{c:?}"))
+        .or_else(|| sys::Command::of(cmd).map(|c| format!("{c:?}")))
+        .or(gpu)
+        .unwrap_or_else(|| format!("{cmd:#x}"))
 }

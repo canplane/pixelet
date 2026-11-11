@@ -59,6 +59,9 @@ inline constexpr std::uint32_t HANDLES = 16u;
 // The most frames one RAISE may ask for; a RAISE that asks for more is refused with EINVAL.
 inline constexpr std::uint32_t MOST_RAISE = 32u;
 
+// The most bytes one NAMED may name; a NAMED that asks for more is refused with EINVAL.
+inline constexpr std::uint32_t MOST_NAMED = 16u;
+
 // The conformance core's own commands, numbered `major << 8 | minor` past xpute's majors
 // (io/frame.json). Where a command takes a packet, the packet is a branch whose first
 // child is a number.
@@ -112,6 +115,10 @@ inline constexpr std::uint32_t CALL = 4108u;
 // writes the number plus one at the offset and answers 0 before the call returns. It
 // refuses a number of 0 with EINVAL and writes nothing.
 inline constexpr std::uint32_t INC = 4109u;
+
+// Replies 0, its reply naming as many bytes of the core's own state as the packet's
+// number, byte k holding k, which go with the reply's frame; 0 names none.
+inline constexpr std::uint32_t NAMED = 4110u;
 
 // The import that RAISE raises.
 inline constexpr std::uint32_t NOTE = 4353u;

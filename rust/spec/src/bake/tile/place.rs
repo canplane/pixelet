@@ -19,7 +19,7 @@ use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{Zoom, LEAF_ZOOM};
 use crate::space::layer::quadrant::Quadrant;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::shape;
+use xpute_kit::wire::xtp::shape;
 
 use crate::bake::malformed;
 use crate::param::place::SPREAD_STEPS;

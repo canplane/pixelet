@@ -1,0 +1,15 @@
+# A reply's trace (ARCHITECTURE.md, the contract's rule 1): memory a reply names goes with the reply's
+# frame, as it was when sent. NAMED (core.json `cmd`) replies naming bytes of the core's own state, byte
+# k holding k, so a reply written TAG:CMD=RESULT[hex] says the runtime took what it named. Written from
+# the rules and not recorded from a core.
+scenarios	R1.named R1.none
+# 
+# R1: the bytes a reply names come with it.
+R1.named.step.0	submit 1 NAMED ack 3
+R1.named.step.1	run 0
+R1.named.turn.0.completions	1:NAMED=0[000102]
+# 
+# A reply that names nothing carries nothing.
+R1.none.step.0	submit 2 NAMED ack 0
+R1.none.step.1	run 0
+R1.none.turn.0.completions	2:NAMED=0

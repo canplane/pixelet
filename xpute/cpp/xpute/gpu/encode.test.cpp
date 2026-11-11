@@ -11,8 +11,8 @@
 #include <string>
 #include <vector>
 
-#include "xpute/kit/golden.hpp"
-#include "xpute/kit/test.hpp"
+#include "dev/test/golden.hpp"
+#include "dev/test/test.hpp"
 #include "encode.hpp"
 
 using namespace xpute;

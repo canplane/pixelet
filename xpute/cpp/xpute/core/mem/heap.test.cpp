@@ -5,7 +5,7 @@
 #include <cstdlib>
 
 #include "xpute/kit/alloc/slab.hpp"
-#include "xpute/kit/test.hpp"
+#include "dev/test/test.hpp"
 
 using namespace xpute;
 

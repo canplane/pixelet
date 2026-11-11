@@ -93,8 +93,9 @@ Make the program faster while keeping every condition the design met.
   performance, hot; Safari on the Mac (WebKit's compiler, Metal) for the iPhone.
   Mac Chrome only shows a page running. Mobile web is the minimum; no polyfill
   or fallback for what time will fix.
-- Each experiment gets a journal entry under `doc/experiment/`: tried, came of
-  it, how we know, kept or dropped.
+- Each experiment gets a journal entry under `doc/experiment/`, or
+  `doc/gpu/experiment/` for the GPU's: tried, came of it, how we know, kept or
+  dropped.
 
 Report in three lines: the structure kept; the cost removed and what was added;
 the effect checked and the range not checked.

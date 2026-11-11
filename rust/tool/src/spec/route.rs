@@ -157,7 +157,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }));
 
     let spec_doc = spec.lines_at("$doc").unwrap_or_default();
-    let header = |logical: &str| {
+    let hdr = |logical: &str| {
         let mut h = vec![
             format!("// {logical}"),
             "//".to_string(),
@@ -168,7 +168,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         h
     };
 
-    let mut rs = header("pxl-spec/route.spec.rs");
+    let mut rs = hdr("pxl-spec/route.spec.rs");
     for (name, val) in &all {
         rs.extend(doc(name).unwrap_or_default().iter().map(|l| {
             if l.is_empty() {
@@ -196,7 +196,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
     ]);
 
-    let mut ts = header("@pxl/client/service/origin/route.spec.ts");
+    let mut ts = hdr("@pxl/client/service/origin/route.spec.ts");
     for (name, val) in &all {
         ts.extend(ts_doc(&doc(name).unwrap_or_default(), ""));
         ts.extend([
@@ -216,7 +216,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ]);
     }
 
-    let mut worker = header("@pxl/edge/route.spec.ts");
+    let mut worker = hdr("@pxl/edge/route.spec.ts");
     worker.extend(
         [
             "// The Worker is bundled for the Workers runtime rather than from src/, so it",

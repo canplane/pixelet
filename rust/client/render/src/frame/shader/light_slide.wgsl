@@ -2,9 +2,9 @@
 
 // Drops what an earlier cast of the epoch left in a tile of the box where the box slid since,
 // a `TILE`-aligned corner at a time (pass/shadow.rs `aim`), where the eye's zooms moved
-// (`light::HEADER_LAST_RANGE`), or where the world under the tile changed. It runs one thread
+// (`light::HDR_LAST_RANGE`), or where the world under the tile changed. It runs one thread
 // for each tile, after the host moved the reads with the box, so each tile's word is the word
-// of the tile that held its world texels under the corner before (`light::HEADER_LAST_CORNER`;
+// of the tile that held its world texels under the corner before (`light::HDR_LAST_CORNER`;
 // ray/cast.rs `prepare`). A tile's read is set to none where the box slid onto the tile,
 // where the slide or the zooms moved it into another band (`Light::keeps`), or where its rays
 // may meet a cell of its band over a column of the world that changed (`Light::reaches`,
@@ -62,15 +62,15 @@ fn light_slide_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     return;
   }
   if (all(id.xy == vec2<u32>(0u))) {
-    list_put(header_word(LIGHT_HEADER_SLIDE) + LIGHT_SLIDE_RAN, cast_number());
+    list_put(hdr_word(LIGHT_HDR_SLIDE) + LIGHT_SLIDE_RAN, cast_number());
   }
-  let was = vec2<i32>(i32(header_word(LIGHT_HEADER_LAST_CORNER)), i32(header_word(LIGHT_HEADER_LAST_CORNER + 1u)));
+  let was = vec2<i32>(i32(hdr_word(LIGHT_HDR_LAST_CORNER)), i32(hdr_word(LIGHT_HDR_LAST_CORNER + 1u)));
   var reached = !keeps_tile(id.xy, was);
   // The head holds `LIGHT_COLUMNS` columns at most (pxl-engine `light::COLUMNS`).
-  let columns = min(u32(header[LIGHT_COLUMNS_AT].x), LIGHT_COLUMNS);
+  let columns = min(u32(hdr[LIGHT_COLUMNS_AT].x), LIGHT_COLUMNS);
   for (var k = 0u; k < columns && !reached; k += 1u) {
     let at = LIGHT_COLUMNS_AT + 1u + 2u * k;
-    reached = reaches(id.xy, bitcast<vec4<f32>>(header[at]), bitcast<vec2<u32>>(header[at + 1u].xy));
+    reached = reaches(id.xy, bitcast<vec4<f32>>(hdr[at]), bitcast<vec2<u32>>(hdr[at + 1u].xy));
   }
   if (reached) {
     list_put(reads_at() + id.y * tiles + id.x, 0u);

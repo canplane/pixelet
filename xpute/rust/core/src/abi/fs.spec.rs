@@ -4,10 +4,9 @@
 
 //! The file device's protocol on major FS: a core's files, read whole into its own buffers
 //! and written whole, through a descriptor, as WASI's path_open, fd_read, fd_write and
-//! fd_close do. A file's name is an absolute path, a tuple of tokens, each a u32
-//! or a string, as many as the program uses. xpute gives no token a meaning: the program
-//! numbers its fixed names and keeps variable data in its own type, and its one binding
-//! answers every path (@xpute/runtime io/fs.ts).
+//! fd_close do. A file's name is an absolute path, a tuple of tokens, each an i32
+//! or a string, as many as the program uses. xpute gives no token a meaning, and the
+//! program's one binding answers every path (@xpute/runtime io/fs.ts).
 //!
 //! The core sends its calls as imports. The core issues each descriptor, a generational
 //! handle, and every frame of a descriptor carries it once, as its tag. FS_OPEN and FS_CLOSE
@@ -186,17 +185,6 @@ impl FsOpen<'_> {
     }
 }
 
-impl FsOpen<'_> {
-    /// As the runtime beside the core reads it.
-    pub fn parts(pkt: &[u8]) -> Result<(Path<'_>, u32), MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok((
-            Path::read(pkt, f.at(0)?)?,
-            integer::<u32>(f.at(1)?.get_number()?)?,
-        ))
-    }
-}
-
 impl crate::io::door::Import for FsOpen<'_> {
     const NUMBER: u32 = 769;
     const FIELDS: u32 = 2;
@@ -225,17 +213,6 @@ impl FsRead {
     }
 }
 
-impl FsRead {
-    /// As the runtime beside the core reads it.
-    pub fn read(pkt: &[u8]) -> Result<FsRead, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(FsRead {
-            at: integer::<u32>(f.at(0)?.get_number()?)?,
-            len: integer::<u32>(f.at(1)?.get_number()?)?,
-        })
-    }
-}
-
 impl crate::io::door::Import for FsRead {
     const NUMBER: u32 = 770;
     const FIELDS: u32 = 2;
@@ -261,17 +238,6 @@ impl FsWrite {
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.at));
         w.u32(Some(self.len));
-    }
-}
-
-impl FsWrite {
-    /// As the runtime beside the core reads it.
-    pub fn read(pkt: &[u8]) -> Result<FsWrite, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(FsWrite {
-            at: integer::<u32>(f.at(0)?.get_number()?)?,
-            len: integer::<u32>(f.at(1)?.get_number()?)?,
-        })
     }
 }
 

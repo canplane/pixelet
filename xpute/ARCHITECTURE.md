@@ -244,7 +244,8 @@ the core's to decide. The commands are in `spec/abi/sys.json`.
 
 There are three ways to ask over the channel. A **send** goes with the next turn
 and is answered only if it fails. A **request** asks for a reply, which comes
-with a later turn while nothing waits for it. A **call** is answered before it
+with a later turn while nothing waits for it, and which may hand over memory of
+the core's, named as any frame names it. A **call** is answered before it
 returns. The runtime calls the core by queueing the frame and running turns with
 a deadline of zero until the reply comes back, so its call is a turn of its own,
 which a UI across a port cannot wait for. The core calls the runtime by laying
@@ -257,10 +258,14 @@ few questions a turn cannot answer late.
 A **protocol** is a JSON file of commands, each an export, which the core
 handles, or an import, which the core sends, as a WIT world names them from the
 core's side. The **generator** writes both ends' code from the manifest and the
-protocols: on the runtime the fields each export takes, by its number, and a
-handler for each import, and on the core a function for each import and a trait
-for the exports. xpute's own protocols are generated the same way, so every
-language's numbers come from `spec/`, and the generated files are committed. The
+protocols, each end holding only its own direction, as WIT's guest and host
+bindings do. The core's end sends each import and reads each export into the
+program's trait (`apply`), and it reads a request's completion. The runtime's
+end writes each export and reads each import into the runtime's handler
+(`serve`, or the interface a TypeScript runtime routes to), and it reads a
+record the core lays out by a view that reads each field when asked. xpute's
+own protocols are generated the same way, so every language's numbers come
+from `spec/`, and the generated files are committed. The
 generator refuses a program's command under 0x10, and a number that two
 protocols both give.
 
@@ -309,11 +314,9 @@ and what was in flight on it completes by its id, as io_uring's `user_data`
 finds a completion: the close's completion finds what awaits it by its tag,
 the descriptor with its generation, so a slot taken again never takes an old
 completion.
-The one difference from WASI is the path: a tuple of tokens, each a u32 or a
+The one difference from WASI is the path: a tuple of tokens, each an i32 or a
 string, as many as the program uses, and not a string relative to a preopened
-directory. xpute gives no token a meaning. The program numbers its fixed names
-and keeps what varies, such as a tile's key, in a token of its own, so no
-token can lead anywhere the program did not mean.
+directory. xpute gives no token a meaning.
 
 A file is read whole or written whole. Its open and its close are requests in
 io_uring's manner. The core sends each with ACKREQ, and the runtime completes each once, on a later turn, with a frame of the same
@@ -497,8 +500,9 @@ being broken, and the traces hold every core to the rules they name by number.
 
 The door keeps three rules, which the core's door writes out in full:
 
-**R1.** Memory that a frame names goes with the frame, and once `send` returns
-it is the core's again. What a file's read names is the runtime's until the
+**R1.** Memory that a frame names goes with the frame, a reply's as an
+import's, and once `send` returns it is the core's again, so nothing reads the
+core's memory after the turn that sent it. What a file's read names is the runtime's until the
 close of its descriptor completes.
 
 **R2.** A completion finds its request by its tag.
@@ -557,7 +561,7 @@ its requests from io_uring, and its stream from a GPU's command buffer.
 | Precedent | What is taken |
 | --- | --- |
 | A WIT world and its generated bindings | A protocol: its commands, each an export or an import, named from the core's side, and the code both ends are generated with |
-| WASI's `path_open`, `fd_read`, `fd_write` and `fd_close` | The file device: descriptors, a read into the caller's buffer, a write and a close; a path is a tuple of tokens, each a u32 or a string, not a string relative to a preopened directory |
+| WASI's `path_open`, `fd_read`, `fd_write` and `fd_close` | The file device: descriptors, a read into the caller's buffer, a write and a close; a path is a tuple of tokens, each an i32 or a string, not a string relative to a preopened directory |
 | A GPU's command buffer, as WebGPU's command encoder records one | The GPU stream: calls recorded during a turn and run by the runtime after it |
 | Android's Frame Pacing library (Swappy) | Frame pacing, the scheduling policy for a display: turns a whole number of refreshes apart |
 | An Android app's manifest | The manifest: the core's own declaration, at build time, of the memory, stack, packet room and devices it needs |
@@ -581,15 +585,15 @@ The code, in the order its parts depend on each other.
   spec` checks xpute's generated files, and `cargo spec --write` writes them.
 - `rust/kit`, `ts/kit` and `cpp/xpute/kit` are the kit: `collection`, `codec`,
   `wire/xtp` and `wire/tlv`, `status` (the errno table and `bug!`),
-  `math/scalar` and `math/rng`, `alloc` (`buddy_tree`, `slab`), and `golden`,
-  the records' reader.
+  `math/scalar` and `math/rng`, and `alloc` (`buddy_tree`, `slab`).
 - `rust/core` is the core end: `mem`, `manifest`, `entry`, `io`, `abi/handle`,
   `sched`, `host`, `clock`, `stop` and `wasm`. `cpp/xpute/core` holds the same
   parts but the manifest and the entry, which a C++ core writes for itself.
 - `rust/gpu` is the GPU's calls, and behind its `runtime` feature the native GPU
-  runtime. `cpp/xpute/gpu` is the encoder alone.
+  runtime with the GPU protocol's runtime end (`runtime::abi`). `cpp/xpute/gpu` is the encoder alone.
 - `rust/runtime` runs a native core: `native`, where the core's thread and the
-  rules of its loop live, `mem` and `jni`, with the C ABI in `ts/native/ios/CXpute/xpute.h`.
+  rules of its loop live, `abi`, the runtime end of xpute's own protocols, `mem`
+  and `jni`, with the C ABI in `ts/native/ios/CXpute/xpute.h`.
 - `ts/runtime` (`@xpute/runtime`) is the runtime end: `runtime.ts`, `start.ts`
   and `remote.ts` (the port), `platform.ts` and `module.ts` beside
   `platform.native.ts`, `io/` (the connection, the frame, the header and
@@ -598,6 +602,8 @@ The code, in the order its parts depend on each other.
   and on a device `NativeGpu` and the `SurfaceView`, over its own Expo module.
 - `ts/native` (`@xpute/native`) is the React Native module: the Kotlin and the
   Swift over the C ABI and JNI.
+- `rust/dev/golden`, `ts/dev/golden.ts` and `cpp/dev/test/` are what the tests
+  take: the golden records' reader, and in C++ the tests' runner.
 - `rust/dev/conformance` and `cpp/dev/conformance` are a core in each language for the
   traces, and `ts/runtime/src/conformance.test.ts` is the one runtime that runs
   them.

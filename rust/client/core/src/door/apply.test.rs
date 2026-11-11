@@ -4,6 +4,7 @@ use super::*;
 use crate::domain::control::camera::state::{camera_state, Intent};
 use crate::domain::control::navigation::destination;
 use crate::domain::control::param;
+use crate::perf::spec::RING_NAMES;
 use xpute_gpu::abi::GpuSurfaceClose;
 use xpute_kit::wire::xtp::PacketWriter;
 
@@ -54,6 +55,7 @@ fn go_to(from: f64, dist: Option<f64>, azimuth: Option<f64>, polar: Option<f64>)
             abi::Command::CAMERA_GOTO as u32,
             &Some(&buf[..len as usize])
         )
+        .map(|r| r.map(|r| r.val))
         .map_err(|e| e.errnum),
         Ok(Some(0))
     );
@@ -86,5 +88,19 @@ fn go_to_asks_after() {
         );
         assert_eq!(go_to(100.0, None, None, Some(-1.0)).polar, 0.0, "clamped");
         assert_eq!(go_to(10.0, None, None, None).dist, 10.0, "nearer stays");
+    });
+}
+
+/// A ring past RING_NAMES is refused.
+#[test]
+fn ring_past_the_names_refused() {
+    crate::on_core(|| {
+        let ring = RING_NAMES as u32;
+        assert_eq!(
+            perf::rings(abi::PerfRings { ring })
+                .map_err(|e| e.errnum)
+                .err(),
+            Some(Errno::EINVAL)
+        );
     });
 }

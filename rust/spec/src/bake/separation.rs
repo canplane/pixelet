@@ -8,7 +8,7 @@
 use std::collections::TryReserveError;
 
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::shape::Shape;
+use xpute_kit::wire::xtp::shape::Shape;
 
 use super::malformed;
 use crate::procedural::Frame;

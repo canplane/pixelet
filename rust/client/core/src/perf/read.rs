@@ -1,9 +1,9 @@
 // pxl-core/perf/read.rs
 
 //! What PERF_STATS reads. The profiler's window is reduced into perf.json's
-//! STAT, and the state at the moment of the read into its NOW. The panel and
-//! the report read both in place. A section is written only through `put`
-//! (perf/word.rs).
+//! STAT, and the state at the moment of the read into its NOW, which the
+//! reply hands over together (`perf_read`). A section is written only through
+//! `put` (perf/word.rs).
 
 use crate::domain::control::camera;
 use crate::domain::control::camera::controller;
@@ -40,25 +40,16 @@ use pxl_spec::space::coord::zoom::Zoom;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 
-const STATS_WORDS: usize = STAT::WORDS as usize;
-const NOW_WORDS: usize = NOW::WORDS as usize;
 const REASONS: usize = LIMIT::REASONS as usize;
 const STEP_CAP: usize = LIMIT::STEP_CAP as usize;
 
-struct Read {
-    /// The words live on the heap, not in a static, because a native build's
-    /// statics lie outside the core's memory, which is all the client reads.
-    stats: Box<[f64; STATS_WORDS]>,
-    now: Box<[f64; NOW_WORDS]>,
-}
+/// STAT's words then NOW's, as PERF_STATS's reply names them. They live on
+/// the heap, not in a static, because a native build's statics lie outside the
+/// core's memory, which is all a frame names.
+static READ: Global<Box<[f64; STAT::WORDS + NOW::WORDS]>> = Global::new();
 
-static READ: Global<Read> = Global::new();
-
-fn read() -> &'static mut Read {
-    READ.get(|| Read {
-        stats: Box::new([0.0; STATS_WORDS]),
-        now: Box::new([0.0; NOW_WORDS]),
-    })
+fn read() -> &'static mut [f64; STAT::WORDS + NOW::WORDS] {
+    READ.get(|| Box::new([0.0; STAT::WORDS + NOW::WORDS]))
 }
 
 /// The percentiles of `vals` (perf.json PERCENTILE) and how many values
@@ -97,10 +88,18 @@ fn rank(sorted: &[f64], q: f64) -> f64 {
     sorted[at]
 }
 
-/// The statistics over the last `window_ms`, or over the whole recording
-/// when no window is given.
-pub fn perf_stats(window_ms: Option<f64>) -> &'static [f64] {
-    let (out, scratch) = (&mut read().stats[..], perf_scratch());
+/// The statistics over the last `window_ms`, or over the whole recording when
+/// no window is given, then the state at the moment of the read, apart from
+/// any window: STAT's words then NOW's.
+pub fn perf_read(window_ms: Option<f64>) -> &'static [f64] {
+    let words = read();
+    stats(&mut words[..STAT::WORDS], window_ms);
+    state(&mut words[STAT::WORDS..]);
+    words
+}
+
+fn stats(out: &mut [f64], window_ms: Option<f64>) {
+    let scratch = perf_scratch();
     out.fill(0.0);
     let since = window_ms.map_or(f64::NEG_INFINITY, |w| now() - w);
     put(
@@ -115,17 +114,13 @@ pub fn perf_stats(window_ms: Option<f64>) -> &'static [f64] {
     );
     put(out, STAT::steps::AT, &steps());
     put(out, STAT::recording::AT, &perf_recording_extremes());
-    out
 }
 
-/// The state at the moment of the read, apart from any window.
-pub fn perf_now() -> &'static [f64] {
-    let out = &mut read().now[..];
+fn state(out: &mut [f64]) {
     out.fill(0.0);
     put(out, NOW::recording_state::AT, &perf_recording_state());
     put(out, NOW::draw::AT, &draw());
     put(out, NOW::view::AT, &view());
-    out
 }
 
 fn draw() -> DrawSection {

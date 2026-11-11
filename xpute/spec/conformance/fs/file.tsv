@@ -4,7 +4,8 @@
 # (ts/runtime/src/io/fs.test.ts): a step writes a record as a core's turn would, `turn`
 # runs them as the runtime does after a turn, and what reaches the core is held to the trace.
 #
-# A path P is a JSON array of its tokens, each a number for a u32 or a string: `[7,"a"]`.
+# A path P is a JSON array of its tokens, each a number or a string: `[7,"a"]`. A token is an
+# i32 or a string; a trace writes a float or an integer past an i32 to see it refused.
 #
 #   file P B          the binding's file P: its bytes in hex, ENOENT, or `later` — answered
 #                     only when a `deliver` says, as a transport answers
@@ -27,7 +28,7 @@
 # An open's completion comes on a later turn, however much later: `later` is how a trace says the
 # transport is slow, and nothing here fixes how many turns pass. Each open and each close is
 # completed once. Run against the device's runtime too (xpute-runtime native/serve.test.rs).
-scenarios	open.later open.absent open.flag read read.fault read.zero read.unknown read.wronly write write.denied write.rdonly close.opening close.unknown stale.reuse
+scenarios	open.later open.absent open.flag token.negative token.max token.float token.wide read read.fault read.zero read.unknown read.wronly write write.denied write.rdonly close.opening close.unknown stale.reuse
 
 open.later.step.0	file [7,"a","b"] later
 open.later.step.1	open 0x10001 [7,"a","b"] O_RDONLY
@@ -51,6 +52,28 @@ open.flag.step.4	expect opened 0x10001 EINVAL
 open.flag.step.5	expect closed 0x10001 EINVAL
 open.flag.step.6	expect quiet
 open.flag.step.7	expect unwritten [7,"a"]
+
+# A token is any i32, a negative one and the largest among them.
+token.negative.step.0	file [-5,"a"] 61
+token.negative.step.1	open 0x10001 [-5,"a"] O_RDONLY
+token.negative.step.2	turn
+token.negative.step.3	expect opened 0x10001 1
+
+token.max.step.0	file [2147483647] 6162
+token.max.step.1	open 0x10001 [2147483647] O_RDONLY
+token.max.step.2	turn
+token.max.step.3	expect opened 0x10001 2
+
+# A float and an integer past an i32 are no token: the open is refused with EBADMSG.
+token.float.step.0	open 0x10001 [1.5] O_RDONLY
+token.float.step.1	turn
+token.float.step.2	expect opened 0x10001 EBADMSG
+token.float.step.3	expect quiet
+
+token.wide.step.0	open 0x10001 [2147483648] O_RDONLY
+token.wide.step.1	turn
+token.wide.step.2	expect opened 0x10001 EBADMSG
+token.wide.step.3	expect quiet
 
 read.step.0	file [7,"a"] 68656c6c6f
 read.step.1	open 0x10001 [7,"a"] O_RDONLY

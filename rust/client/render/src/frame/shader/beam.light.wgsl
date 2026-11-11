@@ -18,7 +18,7 @@ fn corner_queued(k: u32) -> vec2<u32> {
 }
 
 fn corner_state_at(c: vec2<u32>) -> u32 {
-  return header_word(LIGHT_HEADER_CORNER_STATES) + (c.y * beam_across() + c.x) * STATE_WORDS;
+  return hdr_word(LIGHT_HDR_CORNER_STATES) + (c.y * beam_across() + c.x) * STATE_WORDS;
 }
 
 fn beam_line(c: vec2<u32>) -> u32 {

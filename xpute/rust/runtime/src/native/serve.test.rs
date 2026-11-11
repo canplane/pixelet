@@ -3,9 +3,9 @@
 use std::collections::HashMap;
 
 use super::*;
-use xpute_core::abi::fs::FsWrite;
+use xpute_core::abi::fs as core_fs;
 use xpute_core::io::fs::Token;
-use xpute_kit::golden::Golden;
+use xpute_golden::Golden;
 use xpute_kit::wire::xtp::TreeReader;
 
 const TRACE: &str = include_str!("../../../../spec/conformance/fs/file.tsv");
@@ -77,7 +77,7 @@ fn frames(down: &[u8]) -> Vec<(u32, u32, Vec<u8>, Vec<u8>)> {
         };
         let (tag, cmd) = (word(batch::TAG), word(batch::CMD));
         let (pkt_len, named_len) = (word(batch::PKT) as usize, word(batch::NAMED) as usize);
-        at += 4 * HEADER_WORDS as usize;
+        at += 4 * HDR_WORDS as usize;
         let pkt = down[at..at + pkt_len].to_vec();
         at = (at + pkt_len).next_multiple_of(align);
         out.push((tag, cmd, pkt, down[at..at + named_len].to_vec()));
@@ -110,7 +110,7 @@ fn key_of(path: Path) -> String {
     let tokens: Vec<String> = path
         .iter()
         .map(|t| match t {
-            Token::U32(n) => n.to_string(),
+            Token::Int(n) => n.to_string(),
             Token::Str(s) => s.to_string(),
         })
         .collect();
@@ -176,31 +176,43 @@ fn run(g: &Golden, buf: &mut [u8], scenario: &str) {
                     "O_WRONLY" => flag::O_WRONLY,
                     n => number(n),
                 };
-                let tokens: Vec<String> = trace_key(a[2]).split('/').map(String::from).collect();
-                let path: Vec<Token> = tokens
-                    .iter()
-                    .map(|t| t.parse().map_or(Token::Str(t), Token::U32))
-                    .collect();
-                let open = FsOpen { path: &path, flags };
-                let pkt = pkt(FsOpen::FIELDS, |w| open.write(w));
+                // Each token goes as the trace writes it, so that a float or an
+                // integer past an i32 reaches the runtime to be refused.
+                let inner = a[2].trim_start_matches('[').trim_end_matches(']');
+                let tokens: Vec<&str> = inner.split(',').map(str::trim).collect();
+                let pkt = pkt(core_fs::FsOpen::FIELDS, |w| {
+                    w.branch(tokens.len() as u32, |w| {
+                        for t in &tokens {
+                            match t.strip_prefix('"') {
+                                Some(s) => w.str(Some(s.trim_end_matches('"'))),
+                                None => match (t.parse::<i32>(), t.parse::<u32>()) {
+                                    (Ok(n), _) => w.i32(Some(n)),
+                                    (_, Ok(n)) => w.u32(Some(n)),
+                                    _ => w.f64(Some(t.parse().unwrap())),
+                                },
+                            };
+                        }
+                    });
+                    w.u32(Some(flags));
+                });
                 turn.push(frame_of(number(a[1]), FsCommand::FS_OPEN, pkt, &[]));
             }
             "read" => {
                 let at = a.get(3).map_or(SCRATCH, |s| number(s));
-                let read = FsRead {
+                let read = core_fs::FsRead {
                     at,
                     len: number(a[2]),
                 };
-                let pkt = pkt(FsRead::FIELDS, |w| read.write(w));
+                let pkt = pkt(core_fs::FsRead::FIELDS, |w| read.write(w));
                 turn.push(frame_of(number(a[1]), FsCommand::FS_READ, pkt, &[]));
             }
             "write" => {
                 let bytes = a[2].as_bytes();
-                let write = FsWrite {
+                let write = core_fs::FsWrite {
                     at: SCRATCH,
                     len: bytes.len() as u32,
                 };
-                let pkt = pkt(FsWrite::FIELDS, |w| write.write(w));
+                let pkt = pkt(core_fs::FsWrite::FIELDS, |w| write.write(w));
                 turn.push(frame_of(number(a[1]), FsCommand::FS_WRITE, pkt, bytes));
             }
             "close" => turn.push(close_of(number(a[1]))),
@@ -208,7 +220,7 @@ fn run(g: &Golden, buf: &mut [u8], scenario: &str) {
                 with(|s| turn.drain(..).for_each(|f| take_frame(s, mem, f)));
                 for (tag, cmd, pkt, named) in frames(&take()) {
                     if cmd == FsCommand::FS_OPEN as u32 {
-                        let key = key_of(FsOpen::parts(&pkt).unwrap().0);
+                        let key = key_of(FsOpen::read(&pkt).unwrap().path);
                         match files.get(&key).copied() {
                             Some("later") => _ = waiting.insert(key, tag),
                             Some(b) => deliver(tag, b),
@@ -337,4 +349,28 @@ fn reload_cancels_what_the_program_left() {
     );
     take_frame(&mut s, mem, close_of(READ));
     assert_eq!(completed(READ), [(close, 0)], "a file read goes on");
+}
+
+/// A reply the core sends goes to the UI with the memory it named.
+#[test]
+fn reply_goes_to_the_ui_with_its_named_memory() {
+    let _serial = serial();
+    let mut buf = vec![0u8; 1 << 16];
+    let mem = mem_of(&mut buf);
+    *lock() = Some(fresh());
+    let reply = Down {
+        tag: 3,
+        cmd: 0x1001,
+        flags: frame::RES,
+        result: 0,
+        pkt: Vec::new(),
+        named: vec![7, 8, 9],
+    };
+    with(|s| take_frame(s, mem, reply));
+    let got: Vec<_> = frames(&take())
+        .into_iter()
+        .map(|(tag, cmd, _, named)| (tag, cmd, named))
+        .collect();
+    assert_eq!(got, vec![(3, 0x1001, vec![7, 8, 9])]);
+    *lock() = None;
 }

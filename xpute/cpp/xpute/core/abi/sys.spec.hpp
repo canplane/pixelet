@@ -11,7 +11,7 @@
 // SYS_PACE carry frame pacing's grant and the core's asked rate. SYS_ABORT
 // reports the broken invariant the core stops on, the last frame the core sends.
 //
-// Each command is `major << 8 | minor` (kit abi/cmd). Its packet is an XTP branch whose
+// Each command is `major << 8 | minor` (io/frame.json). Its packet is an XTP branch whose
 // children are the command's fields, in order; a command with no fields carries no packet.
 // The GPU and the files are devices with protocols of their own (gpu.json, fs.json).
 // Majors 0x00 to 0x0F are xpute's (io/frame.json), and a program numbers the commands of
@@ -26,10 +26,10 @@
 #include <string_view>
 #include <variant>
 
-#include "xpute/kit/abi/cmd.hpp"
 #include "xpute/kit/status/error.hpp"
 #include "xpute/kit/wire/xtp/cursor.hpp"
 #include "xpute/kit/wire/xtp/encode.hpp"
+#include "xpute/core/abi/enum.hpp"
 #include "xpute/core/abi/number.hpp"
 #include "xpute/core/host.hpp"
 #include "xpute/core/io/frame.hpp"
@@ -44,7 +44,7 @@ enum class Major : std::uint32_t {
 
 } // namespace xpute::abi::sys
 
-template <> struct xpute::EnumInfo<xpute::abi::sys::Major> {
+template <> struct xpute::abi::Members<xpute::abi::sys::Major> {
     static constexpr std::array<xpute::abi::sys::Major, 2> ALL{xpute::abi::sys::Major::NOP, xpute::abi::sys::Major::SYS};
 };
 
@@ -62,7 +62,7 @@ enum class SysMinor : std::uint32_t {
 
 } // namespace xpute::abi::sys
 
-template <> struct xpute::EnumInfo<xpute::abi::sys::SysMinor> {
+template <> struct xpute::abi::Members<xpute::abi::sys::SysMinor> {
     static constexpr std::array<xpute::abi::sys::SysMinor, 7> ALL{xpute::abi::sys::SysMinor::ABORT, xpute::abi::sys::SysMinor::ATTACH, xpute::abi::sys::SysMinor::SUSPEND, xpute::abi::sys::SysMinor::RESUME, xpute::abi::sys::SysMinor::TURN, xpute::abi::sys::SysMinor::FRAME, xpute::abi::sys::SysMinor::PACE};
 };
 
@@ -108,7 +108,7 @@ enum class Command : std::uint32_t {
 
 } // namespace xpute::abi::sys
 
-template <> struct xpute::EnumInfo<xpute::abi::sys::Command> {
+template <> struct xpute::abi::Members<xpute::abi::sys::Command> {
     static constexpr std::array<xpute::abi::sys::Command, 8> ALL{xpute::abi::sys::Command::NOP, xpute::abi::sys::Command::SYS_ATTACH, xpute::abi::sys::Command::SYS_SUSPEND, xpute::abi::sys::Command::SYS_RESUME, xpute::abi::sys::Command::SYS_TURN, xpute::abi::sys::Command::SYS_FRAME, xpute::abi::sys::Command::SYS_ABORT, xpute::abi::sys::Command::SYS_PACE};
 };
 

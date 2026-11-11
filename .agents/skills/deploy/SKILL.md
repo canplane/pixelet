@@ -28,7 +28,7 @@ make -j8 check check-build check-xpute && make -j8 test test-xpute test-gpu
 ```
 
 If the change touches a GPU call (`xpute/spec/gpu/`, xpute's `gpu` crates and
-packages, or how pxl-render encodes), also run `(cd xpute/rust && cargo test-gpu) && pnpm --dir xpute/ts test:gpu:web` (a GPU
+packages, or how pxl-render encodes), also run `(cd xpute/rust && ../../script/perf/mac.py cargo test-gpu) && script/perf/mac.py pnpm --dir xpute/ts test:gpu:web` (a GPU
 and Chrome, `$CHROME`).
 
 ## Squash

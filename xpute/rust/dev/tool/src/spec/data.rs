@@ -52,6 +52,7 @@ const DATA_SPECS: [DataSpec; 8] = [
     },
     DataSpec {
         json: "spec/gpu/api.json",
+        uses: &["spec/gpu/enum.json"],
         ts: Some("ts/gpu/src/api.spec.ts"),
         rs: Some("rust/gpu/src/api.spec.rs"),
         enum_scope: EnumScope::Named(&["BINDING_KIND", "RESOURCE_KIND"]),

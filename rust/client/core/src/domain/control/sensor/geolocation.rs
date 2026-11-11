@@ -1,12 +1,11 @@
 // pxl-core/domain/control/sensor/geolocation.rs
 
 //! The GPS sensor's decisions: when a watch runs and what an error means.
-//! The UI owns the watch itself, and the watch outlives a momentary error. A
-//! W3C watch ends only on PERMISSION_DENIED or clearWatch, and it keeps
-//! trying through POSITION_UNAVAILABLE and TIMEOUT
-//! (https://www.w3.org/TR/geolocation/#watchposition-method), so nothing is
-//! retried here. A device's module re-arms its own watch where its platform
-//! ends one (ts/client/src/service/platform/sensor.native.ts).
+//! The UI owns the watch itself, and says with each failure whether the watch
+//! runs on (SENSOR_ERR `watching`): a W3C watch rides out all but
+//! PERMISSION_DENIED (https://www.w3.org/TR/geolocation/#watchposition-method),
+//! and a device's ends on any. Nothing is retried here. A watch that ended starts again on a
+//! grant, a return to the foreground or a press of the location card.
 
 use crate::domain::cmd::GeolocationErrorCode;
 use crate::domain::cmd::Message;
@@ -32,7 +31,7 @@ struct Geolocation {
     open: bool,
     /// The turn's last command. The UI's watch follows it and ignores a
     /// repeated command.
-    command: Option<GeolocationCommand>,
+    cmd: Option<GeolocationCommand>,
 }
 
 static GEOLOCATION: Global<Geolocation> = Global::new();
@@ -40,7 +39,7 @@ static GEOLOCATION: Global<Geolocation> = Global::new();
 fn geolocation() -> &'static mut Geolocation {
     GEOLOCATION.get(|| Geolocation {
         open: false,
-        command: None,
+        cmd: None,
     })
 }
 
@@ -55,16 +54,21 @@ pub fn start_watching() {
         store.state = SensorState::failed(Message::GeolocationUnsupported);
         return;
     }
+    // A watch started again after a hidden spell keeps the location it had
+    // and reads as Loading until it gives a fix of its own.
     store.state = SensorState::of(SensorStatus::Loading);
-    store.set_is_tracking_location(true);
-    geolocation().command = Some(GeolocationCommand::Start);
+    store.is_tracking_location = true;
+    geolocation().cmd = Some(GeolocationCommand::Start);
 }
 
+/// The location is kept: a watch stopped while the app is hidden is not the
+/// location gone. It is dropped where the location ends (`geolocation_close`,
+/// `geolocation_err`).
 pub fn stop_watching() {
     let store = device_location_store_mut();
     if store.is_tracking_location {
-        store.set_is_tracking_location(false);
-        geolocation().command = Some(GeolocationCommand::Stop);
+        store.is_tracking_location = false;
+        geolocation().cmd = Some(GeolocationCommand::Stop);
     }
 }
 
@@ -76,7 +80,9 @@ pub fn geolocation_open() {
 pub fn geolocation_close() {
     geolocation().open = false;
     stop_watching();
-    device_location_store_mut().state = SensorState::of(SensorStatus::Idle);
+    let store = device_location_store_mut();
+    store.location = None;
+    store.state = SensorState::of(SensorStatus::Idle);
 }
 
 pub fn geolocation_visibility(visible: bool) {
@@ -109,12 +115,12 @@ pub fn geolocation_fix(lon: f64, lat: f64, alt: Option<f64>, accuracy: f64, cour
     device_location_store_mut().set_location([lon, lat], alt, accuracy, course);
 }
 
-/// A location error. A momentary error (unavailable, timed out) leaves the
-/// watch running, and the location reads as failed until the next fix. An
-/// error that ended the watch (a denial, or a device's watch that could not
-/// start) leaves nothing watching, and a grant or a return to the foreground
-/// starts the watch again.
-pub fn geolocation_err(code: GeolocationErrorCode) {
+/// A location error. Whether the watch runs on past it (`watching`) is the
+/// platform's to say. One it rides out leaves the watch running, and the location reads as
+/// failed until the next fix. One that ended it leaves nothing watching and no
+/// location, and a grant, a return to the foreground or a press starts the
+/// watch again.
+pub fn geolocation_err(code: GeolocationErrorCode, watching: bool) {
     let store = device_location_store_mut();
     store.state = SensorState::failed(match code {
         GeolocationErrorCode::PermissionDenied => Message::GeolocationPermissionDenied,
@@ -122,16 +128,14 @@ pub fn geolocation_err(code: GeolocationErrorCode) {
         GeolocationErrorCode::Timeout => Message::GeolocationTimeout,
         GeolocationErrorCode::Other => Message::GeolocationGenericError,
     });
-    if matches!(
-        code,
-        GeolocationErrorCode::PermissionDenied | GeolocationErrorCode::Other
-    ) {
-        store.set_is_tracking_location(false);
+    if !watching {
+        store.is_tracking_location = false;
+        store.location = None;
     }
 }
 
-pub fn take_geolocation_command() -> Option<GeolocationCommand> {
-    geolocation().command.take()
+pub fn take_geolocation_cmd() -> Option<GeolocationCommand> {
+    geolocation().cmd.take()
 }
 
 #[cfg(test)]

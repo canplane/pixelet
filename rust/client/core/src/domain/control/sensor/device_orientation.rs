@@ -4,14 +4,10 @@
 //! listen, and when silence counts as a lost sensor. The UI owns the
 //! listener and iOS's permission prompt, and the core hears only the answer.
 
-use crate::domain::cmd::Message;
-
 use crate::domain::cmd::{PermissionAnswer, SensorStatus};
 use crate::domain::control::param::WATCHDOG_TIMEOUT_MS;
 use crate::domain::control::sensor::platform;
-use crate::domain::control::sensor::reading::{
-    device_orient_store, device_orient_store_mut, SensorState,
-};
+use crate::domain::control::sensor::reading::{device_orient_store, device_orient_store_mut};
 use crate::sys::sched::wake_at;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
@@ -42,7 +38,7 @@ struct Orientation {
     last_event_at: f64,
     /// The turn's last command. The UI's listener follows it and ignores a
     /// repeated command.
-    command: Option<OrientationCommand>,
+    cmd: Option<OrientationCommand>,
 }
 
 static ORIENT: Global<Orientation> = Global::new();
@@ -50,7 +46,7 @@ static ORIENT: Global<Orientation> = Global::new();
 fn orient() -> &'static mut Orientation {
     ORIENT.get(|| Orientation {
         last_event_at: 0.0,
-        command: None,
+        cmd: None,
     })
 }
 
@@ -65,10 +61,10 @@ pub fn orient_event(
     // An API without a sensor answers once with nothing and never again, so
     // the sensor counts as unavailable.
     if webkit_compass_heading.is_none() && alpha.is_none() && beta.is_none() && gamma.is_none() {
-        orient().command = Some(OrientationCommand::Remove);
+        orient().cmd = Some(OrientationCommand::Remove);
         let store = device_orient_store_mut();
         store.set_is_tracking_orient(false);
-        store.state = SensorState::of(SensorStatus::Unavailable);
+        store.status = SensorStatus::Unavailable;
         return;
     }
     orient().last_event_at = now();
@@ -84,16 +80,16 @@ pub fn request_orient() -> bool {
     if store.is_tracking_orient {
         return true;
     }
-    if !platform().orient.supported || store.state.status == SensorStatus::Unavailable {
-        store.state = SensorState::of(SensorStatus::Unavailable);
+    if !platform().orient.supported || store.status == SensorStatus::Unavailable {
+        store.status = SensorStatus::Unavailable;
         return false;
     }
     if platform().orient.needs_permission {
         return false;
     }
-    store.state = SensorState::of(SensorStatus::Loading);
+    store.status = SensorStatus::Loading;
     let o = orient();
-    o.command = Some(OrientationCommand::Listen);
+    o.cmd = Some(OrientationCommand::Listen);
     o.last_event_at = now();
     store.set_is_tracking_orient(true);
     true
@@ -107,7 +103,7 @@ pub fn orient_permission(answer: PermissionAnswer) {
     match answer {
         PermissionAnswer::Asking => {
             if !store.is_tracking_orient {
-                store.state = SensorState::of(SensorStatus::Loading);
+                store.status = SensorStatus::Loading;
             }
         }
         PermissionAnswer::Granted if platform().orient.needs_permission => {
@@ -117,13 +113,9 @@ pub fn orient_permission(answer: PermissionAnswer) {
         PermissionAnswer::Granted => {
             request_orient();
         }
-        PermissionAnswer::Denied => {
+        PermissionAnswer::Denied | PermissionAnswer::Failed => {
             store.set_is_tracking_orient(false);
-            store.state = SensorState::failed(Message::OrientationPermissionDenied);
-        }
-        PermissionAnswer::Failed => {
-            store.set_is_tracking_orient(false);
-            store.state = SensorState::failed(Message::OrientationPermissionError);
+            store.status = SensorStatus::Error;
         }
     }
 }
@@ -131,14 +123,14 @@ pub fn orient_permission(answer: PermissionAnswer) {
 pub fn on_orient_lost() {
     let store = device_orient_store_mut();
     store.set_is_tracking_orient(false);
-    store.state = SensorState::failed(Message::OrientationSignalLost);
+    store.status = SensorStatus::Error;
 }
 
 pub fn orient_close() {
-    orient().command = Some(OrientationCommand::Remove);
+    orient().cmd = Some(OrientationCommand::Remove);
     let store = device_orient_store_mut();
     store.set_is_tracking_orient(false);
-    store.state = SensorState::of(SensorStatus::Idle);
+    store.status = SensorStatus::Idle;
 }
 
 /// Called when the page comes back into view. Background tabs stop
@@ -163,10 +155,10 @@ pub fn orient_watchdog_step() {
         wake_at(lost_at);
         return;
     }
-    o.command = Some(OrientationCommand::Remove);
+    o.cmd = Some(OrientationCommand::Remove);
     on_orient_lost();
 }
 
-pub fn take_orient_command() -> Option<OrientationCommand> {
-    orient().command.take()
+pub fn take_orient_cmd() -> Option<OrientationCommand> {
+    orient().cmd.take()
 }

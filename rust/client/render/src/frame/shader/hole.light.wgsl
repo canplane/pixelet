@@ -5,22 +5,22 @@
 // leaves at the slot.
 
 fn pool_at() -> u32 {
-  return header_word(LIGHT_HEADER_POOL);
+  return hdr_word(LIGHT_HDR_POOL);
 }
 
 /// Where the light's stops lie (hit.wgsl), past its pool (`light::hits_at`).
 fn hits_at() -> u32 {
-  return header_word(LIGHT_HEADER_HITS);
+  return hdr_word(LIGHT_HDR_HITS);
 }
 
 /// Where the listed holes lie: their count, then their entries (`light::holes_at`). There is
 /// room for one a slot of the map.
 fn holes_at() -> u32 {
-  return header_word(LIGHT_HEADER_HOLES);
+  return hdr_word(LIGHT_HDR_HOLES);
 }
 
 fn holes_cap() -> u32 {
-  let size = header_word(LIGHT_HEADER_SIZE);
+  let size = hdr_word(LIGHT_HDR_SIZE);
   return size * size;
 }
 

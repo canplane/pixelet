@@ -446,6 +446,22 @@
     "ALPHA": 8,
     "ALL": 15
   },
+  "DEVICE": {
+    "$packed": true,
+    "$doc": [
+      "The words of the device block, in order (op DEVICE): one a limit (LIMIT_NAME), the words",
+      "that hold a bit a feature (FEATURE_NAME), the timestamp period, the surface format, the",
+      "uncaptured errors, the unfinished frames and STATUS, the last, which the runtime stores",
+      "with release after the rest."
+    ],
+    "LIMITS_AT": "LIMIT_NAME",
+    "FEATS_AT": "FEATURE_NAME / 32",
+    "PERIOD_AT": 1,
+    "FORMAT_AT": 1,
+    "ERRORS_AT": 1,
+    "UNFINISHED_AT": 1,
+    "STATUS_AT": 1
+  },
   "STATUS": {
     "$type": "u32",
     "$doc": [

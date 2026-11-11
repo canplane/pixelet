@@ -4,8 +4,9 @@
 //! posted to the runtime's thread with no JavaScript between. It touches no
 //! state of the core's: it only writes the frame a page's UI would have sent.
 
-use crate::door::cmd::{Command, InputPointer, PointerPhase, PointerType};
+use crate::door::cmd_runtime::{InputPointer, PointerPhase, PointerType};
 use xpute_kit::wire::xtp::PacketWriter;
+use xpute_runtime::abi::Export;
 #[cfg(target_os = "android")]
 use xpute_runtime::jni::sys::{jclass, jdouble, jint, JNIEnv};
 use xpute_runtime::native;
@@ -32,7 +33,7 @@ fn touch(phase: u32, id: i32, x: f64, y: f64) {
         return;
     };
     native::input();
-    native::post(0, Command::INPUT_POINTER as u32, 0, 0, &buf[..len as usize]);
+    native::post(0, InputPointer::NUMBER, 0, 0, &buf[..len as usize]);
 }
 
 /// A touch on the world view, from the platform's main thread: 0 down, 1 move,

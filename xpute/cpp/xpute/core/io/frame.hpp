@@ -21,6 +21,20 @@ inline constexpr std::uint32_t CMD_MASK = (1u << FLAG_SHIFT) - 1;
 // The bytes a frame's words take, before its packet.
 inline constexpr std::uint32_t WORD_BYTES = WORDS * 4;
 
+// A command's number is `major << 8 | minor`, which fits the 16 bits a frame
+// carries for it; its major says what answers it (spec/io/frame.json).
+constexpr std::uint32_t cmd(std::uint32_t major, std::uint32_t minor) noexcept {
+    return (major & 0xff) << 8 | (minor & 0xff);
+}
+
+constexpr std::uint32_t cmd_major(std::uint32_t cmd) noexcept {
+    return cmd >> 8 & 0xff;
+}
+
+constexpr std::uint32_t cmd_minor(std::uint32_t cmd) noexcept {
+    return cmd & 0xff;
+}
+
 constexpr std::uint32_t cmd_word(std::uint32_t cmd, std::uint32_t flags) noexcept {
     return flags << FLAG_SHIFT | (cmd & CMD_MASK);
 }
@@ -80,11 +94,13 @@ struct Frame {
     }
 };
 
-// What the program answers a command: a value to reply with, or an errno. A
-// command the program does not know answers Errno::enosys.
+// What the program answers a command: a value to reply with and the core's
+// memory the reply names, which goes with its frame as with any frame's (R1),
+// or an errno. A command the program does not know answers Errno::enosys.
 struct Outcome {
     Errno err = Errno::ok;
     std::int32_t val = 0;
+    std::span<const std::uint8_t> named;
 };
 
 // The runtime's completion of a request the core made, as the frame that

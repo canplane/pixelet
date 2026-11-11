@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import koffi from "koffi";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import { Golden } from "@xpute/kit/golden.ts";
+import { Golden } from "../../dev/golden.ts";
 import { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { Command } from "@xpute/runtime/abi/sys.spec.ts";
@@ -175,6 +175,8 @@ interface Completion {
   cmd: number;
   reply: boolean;
   result: number;
+  /** The memory the frame named, as it was when sent. */
+  named: U8Array;
 }
 
 interface Turn {
@@ -190,7 +192,7 @@ class Runtime {
   private readonly _room: U8Array = new Uint8Array(new ArrayBuffer(PKT_BYTES));
   /** What waits for the core, and what it sent this turn. */
   private readonly _waiting: frame.Frame[] = [];
-  private _sent: frame.Frame[] = [];
+  private _sent: (frame.Frame & { named: U8Array })[] = [];
 
   private readonly _core: Core;
 
@@ -211,9 +213,10 @@ class Runtime {
         frame.lay_frame(mem, at, f);
         return 1;
       },
-      send: (at) => {
+      send: (at, named_at, named_len) => {
         const f = frame.frame_at(mem, at);
-        this._sent.push({ ...f, pkt: f.pkt && f.pkt.slice() });
+        const named = new Uint8Array(mem, named_at, named_len).slice();
+        this._sent.push({ ...f, pkt: f.pkt && f.pkt.slice(), named });
       },
       // The fixture makes one call, INC, as a frame it laid at `at`.
       call: (at) => {
@@ -276,7 +279,7 @@ class Runtime {
       // device, is skipped: no trace's runtime takes one.
       .filter(
         (f) =>
-          frame.major_of(f.cmd) >= frame.PROGRAM_MAJOR ||
+          frame.CMD_MAJOR(f.cmd) >= frame.PROGRAM_MAJOR ||
           (f.flags & frame.RES) !== 0,
       )
       .map((f) => ({
@@ -284,6 +287,7 @@ class Runtime {
         cmd: f.cmd,
         reply: (f.flags & frame.RES) !== 0,
         result: f.result,
+        named: f.named,
       }));
     return { completions, stream, wake };
   }
@@ -331,8 +335,9 @@ function cmd_name(n: number): string {
 }
 
 /** Renders what the core sent as a trace writes it: a reply as
- * TAG:CMD=RESULT, an event as TAG:CMD, and a run of one command's events
- * tagged 0, 1, 2 and up as CMD*n. */
+ * TAG:CMD=RESULT, and the memory it named after it in hex, as
+ * TAG:CMD=RESULT[0102]; an event as TAG:CMD, and a run of one command's
+ * events tagged 0, 1, 2 and up as CMD*n. */
 function render_completions(completions: Completion[]): string {
   const out: string[] = [];
   let run: [number, number] | null = null;
@@ -352,7 +357,10 @@ function render_completions(completions: Completion[]): string {
       continue;
     }
     flush();
-    out.push(`${c.tag}:${cmd_name(c.cmd)}=${c.result}`);
+    const named = [...c.named]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    out.push(`${c.tag}:${cmd_name(c.cmd)}=${c.result}${named && `[${named}]`}`);
   }
   flush();
   return out.length === 0 ? "-" : out.join(" ");
@@ -582,7 +590,15 @@ function run(
   }
 }
 
-for (const trace of ["head", "door", "handle", "clock", "file", "call"]) {
+for (const trace of [
+  "head",
+  "door",
+  "handle",
+  "clock",
+  "file",
+  "call",
+  "reply",
+]) {
   for (const [core, open] of Object.entries(CORES)) {
     test(`trace ${trace} - the ${core} core`, async () => {
       const g = await Golden.load(`conformance/${trace}.tsv`);

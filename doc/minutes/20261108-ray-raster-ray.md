@@ -74,7 +74,7 @@ tile of the light's box asks for one zoom, its band (`Light::band`). On the S23,
 walk (`light_hit`, `light_walk`) is the largest part of a p95 frame, 90 to 200 ms. On the
 Mac's drive, a whole cast of the light reads 30,000 to 38,000 boxes at the median, casts 1.9
 million texels and walks 146,000 of them
-([the journal](../experiment/20261103-the-frame-on-the-s23/README.md), 11-08).
+([the journal](../gpu/experiment/20261103-the-frame-on-the-s23/README.md), 11-08).
 
 A list in place of the light's rays was weighed. The light has no zoom to follow ray by ray,
 and the depth of the first thing each texel meets is what a raster's depth test of the band's
@@ -87,7 +87,7 @@ its own, held to `cast::first` texel by texel.
 
 ### The list, measured
 
-`list::cells` ran on the CPU (pxl-engine, not kept: [the patch](../experiment/20261103-the-frame-on-the-s23/tool/list/list-step1.patch)). It lists a
+`list::cells` ran on the CPU (pxl-engine, not kept: [the patch](../gpu/experiment/20261103-the-frame-on-the-s23/tool/list/list-step1.patch)). It lists a
 tile's cells at its band by a descent of the query over the parallelepiped that the tile's
 texels' rays sweep, and keeps each split's children only within its content box. It was run
 on the real world's test data, 14 cases of the light, 1,024 tiles of 8 texels a side each,

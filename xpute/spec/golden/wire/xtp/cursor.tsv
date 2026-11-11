@@ -46,7 +46,7 @@ packets.5.name	strs
 packets.5.packet	585450000000000020000000ba0000000300000000000000000000000100000007000000070000006168c3a96c6c6f00
 packets.5.type	186
 packets.5.deep	[string:61,string:68c3a96c6c6f,string:]
-malformed.truncated_header	errno:-74
+malformed.truncated_hdr	errno:-74
 malformed.bad_magic	errno:-74
 malformed.truncated_payload	errno:-74
 refused.0.packet	585450000000000010000000b9000000ffffffff000000006162000000000000

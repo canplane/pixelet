@@ -23,7 +23,7 @@ xpute-kit = { workspace = true, features = ["std"] }
 [dev-dependencies]
 hex.workspace = true
 serde = { version = "1", features = ["derive"] }
-xpute-kit = { workspace = true, features = ["std", "golden"] }
+xpute-golden.workspace = true
 
 [lints]
 workspace = true

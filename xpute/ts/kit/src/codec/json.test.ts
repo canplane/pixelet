@@ -9,7 +9,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { Golden } from "@xpute/kit/golden.ts";
+import { Golden } from "../../../dev/golden.ts";
 
 const utf8 = (hex: string): string =>
   new TextDecoder().decode(

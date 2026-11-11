@@ -24,36 +24,36 @@
 pub mod path {
     /// The terrain bake: (TERRAIN, quadkey).
     pub mod TERRAIN {
-        pub const ID: u32 = 0;
+        pub const ID: i32 = 0;
     }
     /// The places bake: (PLACE, quadkey).
     pub mod PLACE {
-        pub const ID: u32 = 1;
+        pub const ID: i32 = 1;
     }
     /// The divisions bake: (DIVISION, quadkey).
     pub mod DIVISION {
-        pub const ID: u32 = 2;
+        pub const ID: i32 = 2;
     }
     /// The Earth bake: (EARTH, quadkey), and the picture of the whole Earth, (EARTH, SPHERE).
     pub mod EARTH {
-        pub const ID: u32 = 3;
+        pub const ID: i32 = 3;
         /// The picture of the whole Earth, served under the Earth bake's version as its
         /// `SPHERE` (spec/spec/bake/publication.json).
         pub mod SPHERE {
-            pub const ID: u32 = 0;
+            pub const ID: i32 = 0;
         }
     }
     /// The platform's storage, where the platform holds a file being the client's choice. What a file holds is its owner's, written whole, its `format` first (pxl-core sys/io/file.rs).
     pub mod STORAGE {
-        pub const ID: u32 = 4;
+        pub const ID: i32 = 4;
         /// The settings' overrides, in the platform's storage (domain/setting/store.rs).
         pub mod SETTINGS {
-            pub const ID: u32 = 0;
+            pub const ID: i32 = 0;
         }
     }
     /// The shipped assets: (ASSET, id), a load's id, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs).
     pub mod ASSET {
-        pub const ID: u32 = 5;
+        pub const ID: i32 = 5;
     }
     /// The placed objects, their source's: a shard, read, (OBJECT, quadkey), its
     /// `format.OBJECT` first; the top of their tree, read, (OBJECT, TOP); and their edits,
@@ -61,17 +61,17 @@ pub mod path {
     /// file. The source keeps the shards and the top and applies the edits; which source, a
     /// mock or a server, is the client's.
     pub mod OBJECT {
-        pub const ID: u32 = 6;
+        pub const ID: i32 = 6;
         /// The top of the tree, read: what each node at `SHARD_ZOOM` holding objects folds to
         /// (`top`), so which shards hold any, its `format.OBJECT_TOP` first. Its source rebuilds
         /// it from the shards as an edit lands; none is no shard holding any.
         pub mod TOP {
-            pub const ID: u32 = 0;
+            pub const ID: i32 = 0;
         }
         /// Edits, written, never read: a batch of writes in the order they were made (`write`),
         /// its `format.OBJECT_EDIT` first, which the source applies to its shards.
         pub mod EDIT {
-            pub const ID: u32 = 1;
+            pub const ID: i32 = 1;
         }
     }
 }

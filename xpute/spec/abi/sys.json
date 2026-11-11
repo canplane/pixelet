@@ -9,7 +9,7 @@
     "SYS_PACE carry frame pacing's grant and the core's asked rate. SYS_ABORT",
     "reports the broken invariant the core stops on, the last frame the core sends.",
     "",
-    "Each command is `major << 8 | minor` (kit abi/cmd). Its packet is an XTP branch whose",
+    "Each command is `major << 8 | minor` (io/frame.json). Its packet is an XTP branch whose",
     "children are the command's fields, in order; a command with no fields carries no packet.",
     "The GPU and the files are devices with protocols of their own (gpu.json, fs.json).",
     "Majors 0x00 to 0x0F are xpute's (io/frame.json), and a program numbers the commands of",

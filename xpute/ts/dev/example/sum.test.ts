@@ -6,7 +6,8 @@
  * from disk and opened over a memory of the one size the manifest allows, with
  * a policy for a runtime that has no display. The core's one protocol
  * (asker.spec.ts) gives the program's handler, which answers the core's call.
- * The test then sends one command and reads its reply. Build the core first
+ * The test then sends one command through the protocol's generated exports, as
+ * the page does (web/main.ts), and reads its reply. Build the core first
  * (`make build`).
  */
 

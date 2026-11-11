@@ -21,9 +21,12 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
   place could give, no layer split out for a test.
 - One hand. The same work in the same shape, the same names for the same
   things. Rewrite a part rather than patch a new manner beside the old.
-- Keep a symmetry by role and contract, not by matching module lists. A local
-  gain alone does not weaken one. A contract changed on purpose is named as
-  such, with what keeps or replaces what it held.
+- Keep a symmetry by role and contract. xpute's Rust, C++ and TypeScript are
+  also laid out alike, where a part, its file and module names, what a module
+  holds and the shape of generated code are concerned, and differ only where
+  the language makes them (its casing, a template for inlined code, what it
+  already gives). A local gain alone does not weaken one. A contract changed
+  on purpose is named as such, with what keeps or replaces what it held.
 - A comment holds what the code cannot say: the contract, the reason, the
   invariant. It reads on its own in whole sentences, never says how the code
   came to be and never cites a minute under `doc/`.

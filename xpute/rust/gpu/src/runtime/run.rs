@@ -16,12 +16,11 @@ use super::object::Object;
 use super::pending::{Pending, ANSWERED, REFUSED, WAITING};
 use super::word::WordCursor;
 use super::GpuRuntime;
-use crate::device;
 use crate::enums::{
     BUFFER_BINDING_TYPE, CANVAS_ALPHA_MODE, CULL_MODE, LOAD_OP, QUERY_TYPE, STORE_OP,
     TEXTURE_SAMPLE_TYPE,
 };
-use crate::spec::{op, NONE, STATUS, SURFACE_PREFERRED};
+use crate::spec::{op, DEVICE, NONE, STATUS, SURFACE_PREFERRED};
 
 /// Runs `f`, and where `slow` is some and `f` took longer, says `[gpu] <what>
 /// took <ms> ms`, the whole milliseconds, as a page's runtime says it
@@ -723,13 +722,13 @@ impl GpuRuntime {
                 drop(self.take(id));
             }
             op::SUBMIT => {
-                let mut finished = core::mem::take(&mut self.command_bufs);
+                let mut finished = core::mem::take(&mut self.cmd_bufs);
                 finished.extend(r.list().iter().filter_map(|&id| match self.take(id) {
                     Some(Object::Encoder(e)) => Some(e.finish()),
                     _ => None,
                 }));
                 self.submit(finished.drain(..));
-                self.command_bufs = finished;
+                self.cmd_bufs = finished;
             }
             op::MAP_ASYNC => {
                 let (b, offset, size, addr, word, ticket) = (
@@ -821,7 +820,7 @@ impl GpuRuntime {
                 }
                 // wgpu resolves timestamps in ticks of this many nanoseconds.
                 mem.set_word(
-                    addr + 4 * device::PERIOD_AT as u32,
+                    addr + 4 * DEVICE::PERIOD_AT as u32,
                     self.queue.get_timestamp_period().to_bits(),
                 );
                 let preferred = self
@@ -830,7 +829,7 @@ impl GpuRuntime {
                     .iter()
                     .position(|f| *f == Some(self.preferred_format));
                 mem.set_word(
-                    addr + 4 * device::FORMAT_AT as u32,
+                    addr + 4 * DEVICE::FORMAT_AT as u32,
                     preferred.unwrap_or_else(|| {
                         panic!(
                             "[gpu] {:?} is no format the spec names",
@@ -839,7 +838,7 @@ impl GpuRuntime {
                     }) as u32,
                 );
                 self.tell_counts(mem);
-                mem.store_release(addr + 4 * device::STATUS_AT as u32, STATUS::READY);
+                mem.store_release(addr + 4 * DEVICE::STATUS_AT as u32, STATUS::READY);
             }
             _ => panic!("[gpu] op {code} is no op of spec/gpu/api.json"),
         }

@@ -1,15 +1,14 @@
 // @pxl/client/service/core/perf.ts
 
 /**
- * The core's profiler, read in place through views over the core's memory.
- * A read allocates nothing in the core's heap, which the profiler measures.
- * The layout of what is read is perf.json's (perf.spec.ts). A view holds
- * only until the core's next turn, so each read copies what it needs into
- * plain values. What is made of those values, and how they are shown, is the
+ * The core's profiler, read from the words each read's reply names, which go
+ * with the reply's frame. A read allocates nothing in the core's heap, which
+ * the profiler measures. The layout of what is read is perf.json's
+ * (perf.spec.ts). What is made of those values, and how they are shown, is the
  * UI's work (ui/feature/debug/perf/).
  */
 
-import type { F64Array } from "@xpute/kit/abi/array.ts";
+import type { F64Array, U8Array } from "@xpute/kit/abi/array.ts";
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { td } from "@xpute/kit/codec/encoding.ts";
 import { PHASES } from "@/abi/phase.spec.ts";
@@ -23,12 +22,9 @@ import {
   FRAME_GROUP,
   LIMIT,
   NOW,
-  RING,
   RING_NAMES,
-  RING_SLOT,
   PERCENTILE,
   STAT,
-  STAT_SLOT,
   STEP_STAT,
   STREAM_STAT,
   TASK,
@@ -37,8 +33,7 @@ import {
 } from "@/abi/perf.spec.ts";
 import { EFFECT_NAMES, STEP_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
-import { mem } from "@xpute/runtime";
-import { core, perf } from "@/service/core/core.ts";
+import { core } from "@/service/core/core.ts";
 
 const WORD = 8;
 /** How many bytes a task's `path` column holds (perf.json `TASK`). */
@@ -53,10 +48,16 @@ export function stop(): void {
   core.perf_stop();
 }
 
-const words = (at: u32, n: u32) => new Float64Array(mem, at, n);
-const u32s = (at: u32, n: u32) => new Uint32Array(mem, at, n);
-const site = (file: u32, bytes: u32, line: u32) =>
-  file === 0 ? null : `${td.decode(new Uint8Array(mem, file, bytes))}:${line}`;
+/** The words of a reply's bytes, which every runtime hands over 8-aligned. */
+const words = (b: U8Array) =>
+  new Float64Array(b.buffer, b.byteOffset, b.byteLength / WORD);
+/** A failure's site, or none at line 0, a failure of the runtime's: its line,
+ * and its file as the string table `strtab` (PERF_STRTAB) names it at `file`,
+ * or unknown at offset 0, where the table had no room for it. */
+const site = (strtab: U8Array, file: u32, bytes: u32, line: u32) =>
+  line === 0
+    ? null
+    : `${file === 0 ? "?" : td.decode(strtab.subarray(file, file + bytes))}:${line}`;
 
 /** The FRAME columns that are lists, one word for each name in the list. */
 export const LIST_COLUMNS = ["phases", "effects", "gpu_spans"] as const;
@@ -214,18 +215,19 @@ export type RayCount = { [K in (typeof FRAME_GROUP.rays)[number]]: f64 };
 /** What PERF_STATS sums over its window, section by section. `recording` and
  * `steps` are over the whole recording instead, from when it started. */
 export interface Summary {
-  recording_state: { recording: boolean; elapsed_ms: f64; truncated: boolean };
+  recording_state: {
+    recording: boolean;
+    elapsed_ms: f64;
+    truncated: boolean;
+    frames: u32;
+    tasks: u32;
+    worst: u32;
+  };
   frames: FrameSummary | null;
   tasks: TaskSummary[];
   steps: Step[];
   recording: RecordingSection;
   view: ViewSection;
-}
-
-export interface RingCount {
-  frames: u32;
-  tasks: u32;
-  worst: u32;
 }
 
 const percentiles_at = (s: F64Array, at: u32): Percentile => ({
@@ -345,16 +347,13 @@ function section<S extends { AT: u32; WORDS: u32 }>(
   return out as Section<S>;
 }
 
-/** A profiler request answers with the address of its reply in the core's
- * memory, which holds until the next request of its kind. */
+/** STAT's words over `window_ms` and NOW's, as PERF_STATS's reply names
+ * them. */
 async function stats_of(
   window_ms: f64 | null,
 ): Promise<{ stats: F64Array; now: F64Array }> {
-  const r = u32s(await core.perf_stats(window_ms), STAT_SLOT.WORDS);
-  return {
-    stats: words(r[STAT_SLOT.stats_at], r[STAT_SLOT.stats_words]),
-    now: words(r[STAT_SLOT.now_at], r[STAT_SLOT.now_words]),
-  };
+  const w = words(await core.perf_stats(window_ms));
+  return { stats: w.subarray(0, STAT.WORDS), now: w.subarray(STAT.WORDS) };
 }
 
 /** The summary over the last `window_ms`, or over the whole recording when
@@ -367,6 +366,9 @@ async function perf_summary(window_ms: f64 | null): Promise<Summary> {
       recording: n[R.AT + R.recording] !== 0,
       elapsed_ms: n[R.AT + R.elapsed_ms],
       truncated: n[R.AT + R.truncated] !== 0,
+      frames: n[R.AT + R.frames],
+      tasks: n[R.AT + R.tasks],
+      worst: n[R.AT + R.worst],
     },
     frames: frame_summary(s),
     tasks: task_summaries(s),
@@ -387,40 +389,31 @@ async function perf_draw(): Promise<DrawSection> {
   return section((await stats_of(0)).now, NOW.draw);
 }
 
-/** Each ring's address and record count. */
-async function rings(): Promise<{
-  frames: [u32, u32];
-  tasks: [u32, u32];
-  worst: [u32, u32];
-}> {
-  const r = u32s(await core.perf_rings(), RING_SLOT.WORDS);
-  const ring = (name: (typeof RING_NAMES)[number]): [u32, u32] => {
-    const at = RING_SLOT.slots + RING_NAMES.indexOf(name) * RING.WORDS;
-    return [r[at + RING.at], r[at + RING.cnt]];
-  };
-  return { frames: ring("frames"), tasks: ring("tasks"), worst: ring("worst") };
-}
-
-async function perf_cnts(): Promise<RingCount> {
-  const { frames, tasks, worst } = await rings();
-  return { frames: frames[1], tasks: tasks[1], worst: worst[1] };
+/** The records of the ring `name`, as PERF_RINGS's reply names them: the
+ * frames and the tasks oldest first, the worst frames longest first. */
+async function ring(name: (typeof RING_NAMES)[number]): Promise<U8Array> {
+  return core.perf_rings(RING_NAMES.indexOf(name));
 }
 
 /** Every frame the ring holds, oldest first. */
 async function perf_frames(): Promise<Frame[]> {
-  const [at, cnt] = (await rings()).frames;
-  const w = words(at, cnt * FRAME.WORDS);
+  const w = words(await ring("frames"));
+  const cnt = w.length / FRAME.WORDS;
   return Array.from({ length: cnt }, (_, i) => frame_at(w, i * FRAME.WORDS));
 }
 
 /** The tasks the ring holds, oldest first: the last `last` of them, or all of
  * them when `last` is null. */
 async function perf_tasks(last: u32 | null = null): Promise<TaskRecord[]> {
-  const [ring, total] = (await rings()).tasks;
+  const [tasks, strtab] = await Promise.all([
+    ring("tasks"),
+    core.perf_strtab(),
+  ]);
+  const all = words(tasks);
+  const total = all.length / TASK.WORDS;
   const from = last === null ? 0 : Math.max(0, total - last);
-  const at = ring + from * TASK.WORDS * WORD;
   const cnt = total - from;
-  const w = words(at, cnt * TASK.WORDS);
+  const w = all.subarray(from * TASK.WORDS);
   return Array.from({ length: cnt }, (_, i) => {
     const o = i * TASK.WORDS;
     const phase_cnt = w[o + TASK.phase_cnt];
@@ -435,7 +428,13 @@ async function perf_tasks(last: u32 | null = null): Promise<TaskRecord[]> {
     return {
       stream: STREAM_NAMES[w[o + TASK.stream]] ?? "?",
       path: td
-        .decode(new Uint8Array(mem, at + (o + TASK.path) * WORD, PATH_BYTES))
+        .decode(
+          new Uint8Array(
+            w.buffer,
+            w.byteOffset + (o + TASK.path) * WORD,
+            PATH_BYTES,
+          ),
+        )
         .replace(/\0+$/, ""),
       priority: w[o + TASK.priority],
       enqueue_ms: w[o + TASK.enqueue_ms],
@@ -445,6 +444,7 @@ async function perf_tasks(last: u32 | null = null): Promise<TaskRecord[]> {
       fail: w[o + TASK.fail],
       detail: w[o + TASK.detail],
       at: site(
+        strtab,
         w[o + TASK.at_file],
         w[o + TASK.at_file_bytes],
         w[o + TASK.at_line],
@@ -455,8 +455,8 @@ async function perf_tasks(last: u32 | null = null): Promise<TaskRecord[]> {
 }
 
 async function perf_worst(): Promise<Worst[]> {
-  const [at, cnt] = (await rings()).worst;
-  const w = words(at, cnt * WORST.WORDS);
+  const w = words(await ring("worst"));
+  const cnt = w.length / WORST.WORDS;
   return Array.from({ length: cnt }, (_, i) => {
     const o = i * WORST.WORDS;
     return {
@@ -477,7 +477,6 @@ const READERS = {
   summary: perf_summary,
   view: perf_view,
   draw: perf_draw,
-  counts: perf_cnts,
   frames: perf_frames,
   tasks: perf_tasks,
   worst: perf_worst,
@@ -485,26 +484,12 @@ const READERS = {
 
 export type PerfRead = keyof typeof READERS;
 
-/** Runs a read where the core's memory is: beside the UI on a device, and in
- * the core's worker on a page. */
+/** Runs a read over the UI's link, on a page and on a device alike. */
 export function read<K extends PerfRead>(
   what: K,
   ...args: Parameters<(typeof READERS)[K]>
 ): ReturnType<(typeof READERS)[K]> {
-  return perf(what, args) as ReturnType<(typeof READERS)[K]>;
-}
-
-/** The read last begun. PERF_STATS and PERF_RINGS each answer with a block the
- * core fills again for the next of either, so a read begins only once the one
- * before it has been read out. */
-let reading: Promise<unknown> = Promise.resolve();
-
-/** Answers a `read` on the side that holds the core's memory, where the caller
- * must be, one read at a time. */
-export function answer(what: PerfRead, args: unknown[]): Promise<unknown> {
-  const run = () =>
-    (READERS[what] as (...a: unknown[]) => Promise<unknown>)(...args);
-  const read = reading.then(run, run);
-  reading = read.catch(() => {});
-  return read;
+  return (READERS[what] as (...a: unknown[]) => unknown)(...args) as ReturnType<
+    (typeof READERS)[K]
+  >;
 }

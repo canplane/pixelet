@@ -70,10 +70,11 @@ const ANSWER = {
 
 export const SENSOR_LISTENER: SensorListener = {
   position: core_pos,
-  positionError: (err) => core.sensor_err(Sensor.Geolocation, ERR[err]),
+  positionError: (err, watching) =>
+    core.sensor_err(Sensor.Geolocation, ERR[err], watching),
   orientation: core_orient,
   // The compass gives no code for its failure.
-  orientationLost: () => core.sensor_err(Sensor.Orientation, null),
+  orientationLost: () => core.sensor_err(Sensor.Orientation, null, false),
   permission: (sensor, answer) =>
     core.sensor_permission(SENSOR[sensor], ANSWER[answer]),
 };

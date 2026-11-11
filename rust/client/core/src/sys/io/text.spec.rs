@@ -115,22 +115,6 @@ impl TextLayout {
     }
 }
 
-impl TextLayout {
-    /// As the runtime beside the core reads it.
-    pub fn read(pkt: &[u8]) -> Result<TextLayout, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(TextLayout {
-            weight: integer::<u32>(f.at(0)?.get_number()?)?,
-            px: finite(f.at(1)?.get_number()?)?,
-            max_width: finite(f.at(2)?.get_number()?)?,
-            at: integer::<u32>(f.at(3)?.get_number()?)?,
-            lines: integer::<u32>(f.at(4)?.get_number()?)?,
-            text_at: integer::<u32>(f.at(5)?.get_number()?)?,
-            text_len: integer::<u32>(f.at(6)?.get_number()?)?,
-        })
-    }
-}
-
 impl xpute_core::io::door::Import for TextLayout {
     const NUMBER: u32 = 7169;
     const FIELDS: u32 = 7;
@@ -173,24 +157,6 @@ impl TextRaster {
         w.f64(Some(self.x));
         w.u32(Some(self.text_at));
         w.u32(Some(self.text_len));
-    }
-}
-
-impl TextRaster {
-    /// As the runtime beside the core reads it.
-    pub fn read(pkt: &[u8]) -> Result<TextRaster, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(TextRaster {
-            weight: integer::<u32>(f.at(0)?.get_number()?)?,
-            px: finite(f.at(1)?.get_number()?)?,
-            color: integer::<u32>(f.at(2)?.get_number()?)?,
-            at: integer::<u32>(f.at(3)?.get_number()?)?,
-            width: integer::<u32>(f.at(4)?.get_number()?)?,
-            height: integer::<u32>(f.at(5)?.get_number()?)?,
-            x: finite(f.at(6)?.get_number()?)?,
-            text_at: integer::<u32>(f.at(7)?.get_number()?)?,
-            text_len: integer::<u32>(f.at(8)?.get_number()?)?,
-        })
     }
 }
 

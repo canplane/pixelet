@@ -1,6 +1,6 @@
 {
   "$doc": [
-    "The UI's protocol with the core: its commands, by number (@xpute/kit/abi/cmd.ts:",
+    "The UI's protocol with the core: its commands, by number (@xpute/runtime io/frame.ts `CMD`:",
     "`major << 8 | minor`, past xpute's majors 0x00 to 0x0F), each with the packet",
     "it carries — an XTP branch whose children are its fields, in order. A command with no",
     "fields carries no packet. The JavaScript around the core is two",
@@ -35,6 +35,10 @@
         "SensorStatus",
         "Message"
       ]
+    },
+    "runtime": {
+      "rs": "../../../../rust/client/core/src/door/cmd.runtime.spec.rs",
+      "core": "crate::door::cmd"
     }
   },
   "name": "ui",
@@ -104,9 +108,8 @@
       "name": "SENSOR_ERR",
       "val": 4619,
       "$doc": [
-        "A watch that ended in failure and was stopped, refused from the start (PermissionDenied)",
-        "or cut off; the compass's, where the platform says so (SYS_BOOT's",
-        "orient_silence_is_loss)."
+        "A watch's failure: refused from the start (PermissionDenied), cut off, or one it rides",
+        "out; the compass's, where the platform says so (SENSOR_PLATFORM's orient_silence_is_loss)."
       ],
       "pkt": [
         {
@@ -119,6 +122,14 @@
           "optional": true,
           "$doc": [
             "Geolocation's; orientation gives none."
+          ]
+        },
+        {
+          "name": "watching",
+          "type": "bool",
+          "$doc": [
+            "Whether the watch runs on past it, which the platform alone knows. A compass that",
+            "is lost runs no more."
           ]
         }
       ]
@@ -514,8 +525,8 @@
         "(x, y, z, w) from the camera's axes to the tracker's, in the world's units. The",
         "first of a run is taken to be where the camera already is, so nothing moves as",
         "it begins; the camera follows the tracker from there until POSE_END. Nothing in the",
-        "client sends it: it is the way in for an immersive mode's head pose (a Quest's, a",
-        "Vision Pro's) to drive the camera, from the device app."
+        "client sends it: it is the way in for an immersive mode's head pose to drive the",
+        "camera, from the device app."
       ],
       "pkt": [
         {
@@ -573,8 +584,8 @@
       "name": "PERF_STATS",
       "val": 6403,
       "$doc": [
-        "The profiler's statistics and what it holds now, where they lie: the reply is the address of STAT_SLOT's words (perf.json), the statistics",
-        "over the last `window_ms`, the whole recording where it is absent, good until the next turn. A",
+        "The profiler's statistics and what it holds now: the reply names STAT's words then NOW's (perf.json), the statistics",
+        "over the last `window_ms`, the whole recording where it is absent. A",
         "number past the door is finite, so no window is infinite."
       ],
       "pkt": [
@@ -584,15 +595,32 @@
           "optional": true
         }
       ],
-      "ackreq": true
+      "ackreq": true,
+      "named": true
     },
     {
       "name": "PERF_RINGS",
       "val": 6404,
       "$doc": [
-        "The rings where they lie, nothing reduced: the reply is the address of RING_SLOT's words (perf.json), good until the next turn."
+        "One ring, nothing reduced: the reply names the records of the ring `ring` (its index in perf.json's RING_NAMES), the frames and the tasks oldest first, the worst frames longest first."
       ],
-      "ackreq": true
+      "pkt": [
+        {
+          "name": "ring",
+          "type": "u32"
+        }
+      ],
+      "ackreq": true,
+      "named": true
+    },
+    {
+      "name": "PERF_STRTAB",
+      "val": 6405,
+      "$doc": [
+        "The string table of the tasks' failure sites: the reply names its bytes, into which a TASK's `at_file` is an offset (perf.json)."
+      ],
+      "ackreq": true,
+      "named": true
     }
   ],
   "import": [
@@ -661,13 +689,6 @@
     }
   ],
   "extern": [
-    {
-      "name": "BakeKind",
-      "rs": "pxl_spec::bake::publication::BakeKind",
-      "$doc": [
-        "By its index in BAKE_KINDS (publication.spec.ts)."
-      ]
-    },
     {
       "name": "SettingKey",
       "rs": "crate::domain::setting::schema_spec::SettingKey",
@@ -896,6 +917,10 @@
         {
           "name": "RINGS",
           "val": 4
+        },
+        {
+          "name": "STRTAB",
+          "val": 5
         }
       ]
     },
@@ -1209,21 +1234,6 @@
           "val": 519
         },
         {
-          "section": "0x03 which way the device is facing"
-        },
-        {
-          "name": "OrientationPermissionError",
-          "val": 770
-        },
-        {
-          "name": "OrientationPermissionDenied",
-          "val": 771
-        },
-        {
-          "name": "OrientationSignalLost",
-          "val": 772
-        },
-        {
           "section": "0x04 why the server does not answer the world's reads"
         },
         {
@@ -1410,6 +1420,13 @@
           "type": "bool"
         },
         {
+          "name": "watching",
+          "type": "bool",
+          "$doc": [
+            "Whether a watch runs, so that asking for the location again would start nothing."
+          ]
+        },
+        {
           "name": "err",
           "type": "Message",
           "optional": true,
@@ -1438,14 +1455,6 @@
         {
           "name": "status",
           "type": "SensorStatus"
-        },
-        {
-          "name": "err",
-          "type": "Message",
-          "optional": true,
-          "$doc": [
-            "Present exactly when status is Error: the failure the core chose."
-          ]
         }
       ]
     },

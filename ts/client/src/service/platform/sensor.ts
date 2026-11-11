@@ -38,7 +38,7 @@ function geo_prompt_wait(): void {
     navigator.permissions?.query({ name: "geolocation" }).then(
       (status) => {
         if (geo_watch !== null && status.state === "prompt") {
-          listener.positionError("timeout");
+          listener.positionError("timeout", true);
         }
       },
       () => {},
@@ -63,16 +63,16 @@ function geo_start(): void {
       switch (err.code) {
         case err.PERMISSION_DENIED:
           geo_stop();
-          listener.positionError("denied");
+          listener.positionError("denied", false);
           break;
         case err.POSITION_UNAVAILABLE:
-          listener.positionError("unavailable");
+          listener.positionError("unavailable", true);
           break;
         case err.TIMEOUT:
-          listener.positionError("timeout");
+          listener.positionError("timeout", true);
           break;
         default:
-          listener.positionError("other");
+          listener.positionError("other", true);
       }
     },
     // No timeout is set (PositionOptions.timeout is Infinity by default). With

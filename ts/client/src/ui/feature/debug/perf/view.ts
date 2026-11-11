@@ -65,17 +65,16 @@ export interface Gauge {
 }
 
 export async function perfGaugeRead(windowMs: f64): Promise<Gauge> {
-  const [s, counts, recent] = await Promise.all([
+  const [s, recent] = await Promise.all([
     read("summary", windowMs),
-    read("counts"),
     read("summary", RECENT_MS),
   ]);
   return {
     rec: {
       recording: s.recording_state.recording,
       elapsed_ms: s.recording_state.elapsed_ms,
-      tasks: counts.tasks,
-      frames: counts.frames,
+      tasks: s.recording_state.tasks,
+      frames: s.recording_state.frames,
       truncated: s.recording_state.truncated,
     },
     frames: s.frames,

@@ -6,7 +6,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { Golden } from "@xpute/kit/golden.ts";
+import { Golden } from "../../../../dev/golden.ts";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { bytes_to_hex } from "@xpute/kit/codec/encoding.ts";
 import { TreeEncoder, TreeView } from "@xpute/kit/wire/xtp/mod.ts";

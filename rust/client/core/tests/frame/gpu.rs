@@ -3,6 +3,11 @@
 //! each turn's submissions. Between turns the harness waits for
 //! the device to finish, so each frame's readback has landed by the next frame.
 
+#[path = "../../../render/tests/gpu/lock.rs"]
+mod lock;
+
+pub use lock::hold;
+
 use std::cell::RefCell;
 use std::time::Duration;
 
@@ -34,7 +39,7 @@ fn push() {
 }
 
 /// Opens the device as the core's manifest asks, and opens the scopes. Returns None when no
-/// adapter answers.
+/// adapter answers. The process holds the GPU before it opens one (`hold`).
 pub fn open() -> Option<()> {
     // SAFETY: no directory, so the test's pipelines are kept nowhere.
     if unsafe { pxl_core::xpute_gpu_open(core::ptr::null()) } != 0 {

@@ -29,5 +29,10 @@ pub mod text;
 pub mod text_answer_spec;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod text_device;
+/// The text protocol's runtime end, which a device answers the core's text
+/// calls through (`text_device`).
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "io/text.runtime.spec.rs"]
+pub(crate) mod text_runtime_spec;
 #[path = "io/text.spec.rs"]
 pub mod text_spec;

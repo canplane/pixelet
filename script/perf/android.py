@@ -1,8 +1,13 @@
-# The phone adb reaches.
+#!/usr/bin/env python3
+# The phone adb reaches. Run, it runs a command holding the phone (`hold`):
+#
+#   ./script/perf/android.py <command...>
 
 import os
 import re
 import subprocess
+
+import measure
 
 ADB = os.environ.get(
     "ADB", os.path.expanduser("~/Library/Android/sdk/platform-tools/adb")
@@ -33,3 +38,13 @@ def shot(path):
     """Writes a PNG of the phone's screen to `path`."""
     with open(path, "wb") as f:
         subprocess.run([ADB, "exec-out", "screencap", "-p"], check=True, stdout=f)
+
+
+def hold():
+    """Waits until this process holds the phone, by its serial
+    (`measure.hold`)."""
+    measure.hold(f"android-{adb('get-serialno').strip()}")
+
+
+if __name__ == "__main__":
+    measure.holding(hold)

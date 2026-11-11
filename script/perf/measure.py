@@ -15,7 +15,13 @@
 # a line, how busy its GPU is first; and `close()`, which ends what
 # the script started. `shot` and `state` are called from a thread of their
 # own, beside `lines`.
+#
+# How a vendor starts afresh and what its state reads are what its platform
+# reaches, and differ only so: a Mac browser's state adds its GPU process's
+# log and the CPU each of its processes took, a phone's its GPU's clock and
+# heat, and an iPhone's nothing, as devicectl and safaridriver read none.
 
+import fcntl
 import json
 import os
 import re
@@ -31,6 +37,43 @@ CAP_S = 240
 # that gives no session or no page by then ends the run, saying so.
 START_S = 120
 PIECE = re.compile(r"PXLPERF (\d+)/(\d+) (.*)")
+
+
+_held = {}
+
+
+def hold(device):
+    """Waits until this process holds `device`, and holds it until the process
+    ends. One user drives a device at a time across every checkout of the
+    repository: a run, the shader probe, and on the Mac the renderer's GPU tests
+    and the frame harness (rust/client/render/tests/gpu/lock.rs). The lock is
+    `tmp/lock/<device>.lock` in the main checkout, which its worktrees share."""
+    if device in _held:
+        return
+    common = subprocess.run(
+        ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        cwd=os.path.dirname(os.path.abspath(__file__)),
+        check=True,
+        stdout=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
+    path = os.path.join(os.path.dirname(common), "tmp", "lock", f"{device}.lock")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    f = open(path, "a")
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print(f"waiting for {device}, held at {path}", file=sys.stderr)
+        fcntl.flock(f, fcntl.LOCK_EX)
+    _held[device] = f
+
+
+def holding(hold):
+    """Runs the command in argv holding a device (`hold`), and exits as it
+    does: a device's module run as a script. The lock is not handed to the
+    command, so no process it leaves running keeps it."""
+    hold()
+    sys.exit(subprocess.run(sys.argv[1:], close_fds=False).returncode)
 
 
 class Expired(Exception):

@@ -10,7 +10,7 @@
 // GPU_SURFACE_OPEN answers with: the UI binds its canvas under that handle (@xpute/gpu
 // `gpu_connect`), and the stream's CONFIGURE and CURRENT records name the surface by it. What
 // a surface shows is the program's to decide. A command's number here is its minor, under the
-// one major the program gives the GPU (xpute_gpu `decode`, @xpute/gpu `gpu_exports`).
+// one major the program gives the GPU (xpute_gpu `abi::apply`, @xpute/gpu `gpu_exports`).
 
 #pragma once
 
@@ -21,10 +21,10 @@
 #include <string_view>
 #include <variant>
 
-#include "xpute/kit/abi/cmd.hpp"
 #include "xpute/kit/status/error.hpp"
 #include "xpute/kit/wire/xtp/cursor.hpp"
 #include "xpute/kit/wire/xtp/encode.hpp"
+#include "xpute/core/abi/enum.hpp"
 #include "xpute/core/abi/number.hpp"
 #include "xpute/core/host.hpp"
 #include "xpute/core/io/frame.hpp"
@@ -51,7 +51,7 @@ enum class Command : std::uint32_t {
 
 } // namespace xpute::abi::gpu
 
-template <> struct xpute::EnumInfo<xpute::abi::gpu::Command> {
+template <> struct xpute::abi::Members<xpute::abi::gpu::Command> {
     static constexpr std::array<xpute::abi::gpu::Command, 4> ALL{xpute::abi::gpu::Command::GPU_READY, xpute::abi::gpu::Command::GPU_SURFACE_OPEN, xpute::abi::gpu::Command::GPU_SURFACE_RESIZE, xpute::abi::gpu::Command::GPU_SURFACE_CLOSE};
 };
 
@@ -134,20 +134,20 @@ struct GpuSurfaceClose {
 };
 
 // `cmd` read and handed to the member of `h` of its name; ENOSYS for one this
-// protocol does not carry.
-template <class H> Outcome apply(H &h, std::uint32_t cmd, std::span<const std::uint8_t> pkt) noexcept {
-    if (cmd == static_cast<std::uint32_t>(Command::GPU_READY)) {
+// protocol does not carry. Its commands are minors under the program's `major`.
+template <class H> Outcome apply(H &h, std::uint32_t major, std::uint32_t cmd, std::span<const std::uint8_t> pkt) noexcept {
+    if (cmd == frame::cmd(major, static_cast<std::uint32_t>(Command::GPU_READY))) {
         return h.gpu_ready();
     }
-    if (cmd == static_cast<std::uint32_t>(Command::GPU_SURFACE_OPEN)) {
+    if (cmd == frame::cmd(major, static_cast<std::uint32_t>(Command::GPU_SURFACE_OPEN))) {
         return h.gpu_surface_open();
     }
-    if (cmd == static_cast<std::uint32_t>(Command::GPU_SURFACE_RESIZE)) {
+    if (cmd == frame::cmd(major, static_cast<std::uint32_t>(Command::GPU_SURFACE_RESIZE))) {
         Result<GpuSurfaceResize> c = GpuSurfaceResize::read(pkt);
         if (!c) return {.err = c.error().errnum};
         return h.gpu_surface_resize(*c);
     }
-    if (cmd == static_cast<std::uint32_t>(Command::GPU_SURFACE_CLOSE)) {
+    if (cmd == frame::cmd(major, static_cast<std::uint32_t>(Command::GPU_SURFACE_CLOSE))) {
         Result<GpuSurfaceClose> c = GpuSurfaceClose::read(pkt);
         if (!c) return {.err = c.error().errnum};
         return h.gpu_surface_close(*c);

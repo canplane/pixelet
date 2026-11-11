@@ -449,8 +449,8 @@ pub fn save() {
         return;
     }
     let edit = [
-        Token::U32(path::OBJECT::ID),
-        Token::U32(path::OBJECT::EDIT::ID),
+        Token::Int(path::OBJECT::ID),
+        Token::Int(path::OBJECT::EDIT::ID),
     ];
     if let Ok(batch) = encode_writes(format::OBJECT_EDIT, &st.unsent) {
         file::write(&edit, &batch);

@@ -44,10 +44,10 @@ fn staging_publish() {
 
 #[tokio::test]
 async fn wait_keeps_budget() {
-    let command = Command::new("/nonexistent/should-not-start");
+    let cmd = Command::new("/nonexistent/should-not-start");
     let expired = Instant::now() - Duration::from_secs(1);
     assert!(matches!(
-        supervise(command, expired).await,
+        supervise(cmd, expired).await,
         Err(Failure::Limited(_))
     ));
 }

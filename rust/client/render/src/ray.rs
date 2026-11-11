@@ -14,7 +14,7 @@ mod schedule;
 
 use crate::frame::shader::record::PIPELINE_SCREEN_RAY;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Entry, Gpu, TrackedRenderPass,
+    buf_entry, buffer_usage, bytes, view_entry, word_bytes, Entry, Gpu, Group, TrackedRenderPass,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::FrameKind;
@@ -34,11 +34,10 @@ fn casts_px(kind: FrameKind) -> bool {
 
 pub struct RayPass {
     pipeline: Pipeline,
-    /// The screen pass's bind group 0, over the lit entries and the ids in
-    /// `bindings`: the world surface's rays, the cast's eye buffer, and the
-    /// damaged tiles' words and uniform.
-    group: u32,
-    bindings: [u32; 4],
+    /// The screen pass's bind group 0, over the lit entries, the world
+    /// surface's rays, the cast's eye buffer, and the damaged tiles' words and
+    /// uniform.
+    group: Group,
     /// The damaged tiles' words and uniform (`Resolve::tiles`), and the
     /// number of tiles on the screen. The pixels' cast casts the damaged
     /// tiles alone, and the screen pass draws a quad for every tile, an
@@ -65,8 +64,7 @@ impl RayPass {
         g.write_buf(looks, 0, bytes(&words));
         RayPass {
             pipeline,
-            group: 0,
-            bindings: [0; 4],
+            group: Group::default(),
             tiles: ((0, 0), 0),
             lit: Vec::new(),
             looks,
@@ -84,8 +82,7 @@ impl RayPass {
     /// object, so it is released at once; `prepare` makes it again.
     pub fn set_lit(&mut self, entries: Vec<Entry>) {
         self.lit = entries;
-        release(self.group);
-        (self.group, self.bindings) = (0, [0; 4]);
+        self.group.release();
     }
 
     /// The renderer hands the frame's tiles before `prepare`, which binds
@@ -94,32 +91,29 @@ impl RayPass {
         self.tiles = (tiles, cnt);
     }
 
-    /// Makes the screen pass's group again when the rays, the eye buffer or
-    /// the tiles changed, or when `set_lit` released it. No group is made
-    /// until the lit entries and every buffer exist.
+    /// Sets the screen pass's group over the lit entries, the rays, the eye
+    /// buffer and the tiles. No group is made until the lit entries and every
+    /// buffer exist.
     fn regroup(&mut self, g: &Gpu, [rays, eye]: [u32; 2]) {
         let ((changed_at, tiles), _) = self.tiles;
-        let bindings = [rays, eye, changed_at, tiles];
-        if bindings == self.bindings || self.lit.is_empty() || bindings.contains(&0) {
+        if self.lit.is_empty() || [rays, eye, changed_at, tiles].contains(&0) {
             return;
         }
-        release(self.group);
         let mut e = self.lit.clone();
         e.push(view_entry(3, rays));
         e.push(buf_entry(20, self.looks));
         e.push(buf_entry(21, eye));
         e.push(buf_entry(30, changed_at));
         e.push(buf_entry(31, tiles));
-        self.group = g.bind_group(self.pipeline.layouts[0], &e);
-        self.bindings = bindings;
+        self.group.set(g, self.pipeline.layouts[0], &e);
     }
 
     pub fn draw(&self, pass: &mut TrackedRenderPass) {
-        if self.kind() == FrameKind::plain || self.group == 0 {
+        if self.kind() == FrameKind::plain || self.group.id() == 0 {
             return;
         }
         pass.set_pipeline(self.pipeline.id);
-        pass.set_bind_group(0, self.group, &[]);
+        pass.set_bind_group(0, self.group.id(), &[]);
         pass.draw(6, self.tiles.1, 0, 0);
     }
 }

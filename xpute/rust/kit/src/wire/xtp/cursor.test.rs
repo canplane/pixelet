@@ -1,10 +1,10 @@
 // xpute-kit/wire/xtp/cursor.test.rs
 
 use super::*;
-use crate::golden::Golden;
 use crate::wire::xtp::encode::{TreeEncoder, TreeEncoderConfig};
 use crate::wire::xtp::spec::{NodeValue, SequenceType};
 use crate::wire::xtp::view::{NodeView, TreeView};
+use xpute_golden::Golden;
 
 const GOLDEN: &str = include_str!("../../../../../spec/golden/wire/xtp/cursor.tsv");
 
@@ -166,7 +166,7 @@ fn matches_typescript() {
             Err(e) => format!("errno:{}", e.errnum as i32),
         }
     };
-    assert_eq!(refused(&good[..20]), v.s("malformed.truncated_header"));
+    assert_eq!(refused(&good[..20]), v.s("malformed.truncated_hdr"));
     assert_eq!(
         refused(&format!("00{}", &good[2..])),
         v.s("malformed.bad_magic")

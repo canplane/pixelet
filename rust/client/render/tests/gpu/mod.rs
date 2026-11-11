@@ -7,6 +7,8 @@
 
 #![allow(dead_code, reason = "each test reads its own of it")]
 
+mod lock;
+
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -61,8 +63,10 @@ pub struct Gpu {
 }
 
 impl Gpu {
-    /// A device with the adapter's own limits, or `None` where no adapter answers.
+    /// A device with the adapter's own limits, or `None` where no adapter answers. The process
+    /// holds the GPU from here on (`lock::hold`).
     pub fn new() -> Option<Gpu> {
+        lock::hold();
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
@@ -235,9 +239,9 @@ impl Gpu {
             )
         };
         // The light's walks read its header at 11. The eye's walks and the asks do not.
-        let header: &[u32] = if light { &[11] } else { &[] };
-        let walk = [&[0, 3, 8, 9, 10][..], header].concat();
-        let last = [&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9][..], header].concat();
+        let hdr: &[u32] = if light { &[11] } else { &[] };
+        let walk = [&[0, 3, 8, 9, 10][..], hdr].concat();
+        let last = [&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9][..], hdr].concat();
         let keep = [&walk[..], &[0, 1, 2, 4, 5, 6, 7, 9, 10], &last[..]];
         self.run(queue, ids, keep, all, node_cache, None);
     }
@@ -339,9 +343,9 @@ impl Gpu {
     ) {
         // The light's walks read its header at 11. The eye's walks and every lattice's asks do
         // not.
-        let header: &[u32] = if light { &[11] } else { &[] };
-        let walk = [&[0, 8, 9, 10][..], header].concat();
-        let last = [&[0, 1, 2, 4, 5, 6, 7, 8, 9][..], header].concat();
+        let hdr: &[u32] = if light { &[11] } else { &[] };
+        let walk = [&[0, 8, 9, 10][..], hdr].concat();
+        let last = [&[0, 1, 2, 4, 5, 6, 7, 8, 9][..], hdr].concat();
         let keep = [&walk[..], &[0, 1, 2, 4, 5, 6, 7, 9, 10], &last[..]];
         self.run(queue, ids, keep, all, node_cache, last_cache);
     }

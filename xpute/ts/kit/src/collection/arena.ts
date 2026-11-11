@@ -227,14 +227,14 @@ export class Vector<T extends AnyTypedArray> {
 class VectorGuard<T extends AnyTypedArray> implements Disposable {
   private readonly _mark: u32;
 
-  private readonly vector: Vector<T>;
+  private readonly vec: Vector<T>;
 
-  constructor(vector: Vector<T>) {
-    this.vector = vector;
-    this._mark = vector.len;
+  constructor(vec: Vector<T>) {
+    this.vec = vec;
+    this._mark = vec.len;
   }
 
   [Symbol.dispose]() {
-    this.vector.truncate(this._mark);
+    this.vec.truncate(this._mark);
   }
 }

@@ -13,6 +13,7 @@
 
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import { FINITE, INT_U32 } from "@xpute/runtime/abi/number.ts";
 import * as Major from "./text/major.spec.ts";
 import * as TextMinor from "./text/text_minor.spec.ts";
 import * as Command from "./text/command.spec.ts";
@@ -66,26 +67,29 @@ export interface TextRaster {
 /** Each import's packet, read from its branch, by its number. */
 export const read = {
   [Command.TEXT_LAYOUT]: (b: BranchCursor): TextLayout => ({
-    weight: b.at(0).get<u32>(),
-    px: b.at(1).get<f64>(),
-    max_width: b.at(2).get<f64>(),
-    at: b.at(3).get<u32>(),
-    lines: b.at(4).get<u32>(),
-    text_at: b.at(5).get<u32>(),
-    text_len: b.at(6).get<u32>(),
+    weight: INT_U32(b.at(0).get_number()),
+    px: FINITE(b.at(1).get_number()),
+    max_width: FINITE(b.at(2).get_number()),
+    at: INT_U32(b.at(3).get_number()),
+    lines: INT_U32(b.at(4).get_number()),
+    text_at: INT_U32(b.at(5).get_number()),
+    text_len: INT_U32(b.at(6).get_number()),
   }),
   [Command.TEXT_RASTER]: (b: BranchCursor): TextRaster => ({
-    weight: b.at(0).get<u32>(),
-    px: b.at(1).get<f64>(),
-    color: b.at(2).get<u32>(),
-    at: b.at(3).get<u32>(),
-    width: b.at(4).get<u32>(),
-    height: b.at(5).get<u32>(),
-    x: b.at(6).get<f64>(),
-    text_at: b.at(7).get<u32>(),
-    text_len: b.at(8).get<u32>(),
+    weight: INT_U32(b.at(0).get_number()),
+    px: FINITE(b.at(1).get_number()),
+    color: INT_U32(b.at(2).get_number()),
+    at: INT_U32(b.at(3).get_number()),
+    width: INT_U32(b.at(4).get_number()),
+    height: INT_U32(b.at(5).get_number()),
+    x: FINITE(b.at(6).get_number()),
+    text_at: INT_U32(b.at(7).get_number()),
+    text_len: INT_U32(b.at(8).get_number()),
   }),
 };
+
+/** The majors the runtime routes the protocol's imports by. */
+export const MAJORS: readonly u32[] = [Major.TEXT];
 
 /** What the program does with each command the core posts on the text protocol: a
  * call's member answers its value, and throws kit's error to refuse it. */
@@ -120,7 +124,7 @@ export function text_imports(h: TextImports): Protocol {
       return refusal_of(err);
     }
   };
-  return { majors: [Major.TEXT], on };
+  return { majors: MAJORS, on };
 }
 
 /** A packet the command carries, which a frame without one breaks. */

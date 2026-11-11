@@ -49,7 +49,7 @@ pub(super) use super::pacing::Grant;
 pub use super::pacing::Pace;
 use super::pacing::Pacing;
 use xpute_core::global::on_marked_thread;
-use xpute_core::io::frame::{Frame, PROGRAM_MAJOR, WORD_BYTES};
+use xpute_core::io::frame::{cmd_major, Frame, PROGRAM_MAJOR, WORD_BYTES};
 
 /// The core's thread calls this as it loops: it runs a turn with a deadline
 /// and answers when the core wants the next (`xpute_core::entry::Entry`).
@@ -482,7 +482,7 @@ pub(super) fn call(at: u32) -> i32 {
     // A frame that is not the core's, or at offset 0, is the core's bug.
     let ours = super::serve::in_core(mem, at, WORD_BYTES);
     xpute_kit::ensure!(ours, EFAULT, at);
-    let major = Frame::at(mem, at).cmd >> 8;
+    let major = cmd_major(Frame::at(mem, at).cmd);
     let handlers = HANDLERS.lock().unwrap_or_else(PoisonError::into_inner);
     if let Some(&(_, answer)) = handlers.iter().find(|&&(m, _)| m == major) {
         drop(handlers);

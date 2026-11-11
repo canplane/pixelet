@@ -3,7 +3,7 @@
 //! This writes a command table as Rust for a Rust core: its enums, a reader for
 //! each packet and a writer for each import.
 
-use super::{literal, members, Apart, Entry, Enum, Field, Kind, Member, Spec, Target};
+use super::{literal, members, Apart, Entry, Enum, Field, Kind, Member, RuntimeEnd, Spec, Target};
 use crate::spec::{file, generated, pascal, rs_doc};
 
 pub(super) fn rs_borrows(spec: &Spec, fields: &[Field]) -> Result<bool, String> {
@@ -28,13 +28,43 @@ fn rs_rec(spec: &Spec, name: &str, lifetime: &str) -> Result<String, String> {
     })
 }
 
-fn rs_enum(spec: &Spec, ty: &str) -> String {
-    spec.extern_of(ty)
-        .map(|x| x.rs.clone())
-        .unwrap_or_else(|| ty.to_string())
+/// The externs the protocol's fields take, each named where it lives and
+/// re-exported under its name, which the generated code spells it by.
+fn extern_uses(spec: &Spec) -> Result<Vec<String>, String> {
+    let cmds = spec.cmds()?;
+    let fields: Vec<&Field> = cmds
+        .iter()
+        .flat_map(|c| {
+            c.pkt
+                .iter()
+                .chain(c.import.iter())
+                .chain(c.reply.iter())
+                .flatten()
+        })
+        .chain(spec.records.iter().flat_map(|r| r.fields.iter()))
+        .collect();
+    Ok(spec
+        .externs
+        .iter()
+        .filter(|x| fields.iter().any(|f| f.ty == x.name))
+        .map(|x| match x.rs.rsplit("::").next() {
+            Some(last) if last == x.name => format!("pub use {};", x.rs),
+            _ => format!("pub use {} as {};", x.rs, x.name),
+        })
+        .collect())
 }
 
 fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
+    let one = rs_read_one_type(spec, f)?;
+    Ok(if f.optional {
+        format!("Option<{one}>")
+    } else {
+        one
+    })
+}
+
+/// The type one field's value is read as, an optional one's when present.
+fn rs_read_one_type(spec: &Spec, f: &Field) -> Result<String, String> {
     let kind = spec.kind(&f.ty)?;
     if kind == Kind::Path {
         return Ok("Path<'a>".to_string());
@@ -47,21 +77,16 @@ fn rs_read_type(spec: &Spec, f: &Field) -> Result<String, String> {
     }
     if f.list || kind == Kind::Record {
         return Err(format!(
-            "protocol: Rust reads no {} ({})",
+            "protocol: Rust reads no {} into a struct ({})",
             if f.list { "list" } else { "record" },
             f.name
         ));
     }
-    let one = match kind {
+    Ok(match kind {
         Kind::Number => f.ty.clone(),
         Kind::Str => "&'a str".to_string(),
         Kind::Bool => "bool".to_string(),
-        _ => rs_enum(spec, &f.ty),
-    };
-    Ok(if f.optional {
-        format!("Option<{one}>")
-    } else {
-        one
+        _ => f.ty.clone(),
     })
 }
 
@@ -94,7 +119,7 @@ fn rs_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
             (x.repr.clone(), None)
         }
     };
-    let path = rs_enum(spec, &f.ty);
+    let path = &f.ty;
     let member = if repr.as_deref() == Some("u8") {
         format!("{path}::of(integer::<u8>({c}.get_number()?)?)")
     } else {
@@ -123,6 +148,9 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
         if kind == Kind::Number {
             return Ok(format!("&'a [{}]", f.ty));
         }
+        if kind == Kind::Str {
+            return Ok("&'a [&'a str]".to_string());
+        }
         if kind != Kind::Record {
             return Err(format!(
                 "protocol: a list of {} ({}) is not written",
@@ -147,7 +175,7 @@ fn rs_write_type(spec: &Spec, f: &Field) -> Result<String, String> {
         Kind::Bool => "bool".to_string(),
         Kind::Str => "&'a dyn Display".to_string(),
         Kind::Record => rs_rec(spec, &f.ty, "'a")?,
-        _ => rs_enum(spec, &f.ty),
+        _ => f.ty.clone(),
     };
     Ok(if f.optional {
         format!("Option<{one}>")
@@ -165,6 +193,9 @@ fn rs_write(spec: &Spec, f: &Field) -> Result<Vec<String>, String> {
     if f.list {
         if kind == Kind::Number {
             return Ok(vec![format!("w.{}_array(Some({v}));", f.ty)]);
+        }
+        if kind == Kind::Str {
+            return Ok(vec![format!("w.strs(Some({v}));")]);
         }
         return Ok(vec![
             "let mut n = 0;".to_string(),
@@ -237,6 +268,121 @@ fn rs_writer(
         );
     }
     out.extend(["    }".to_string(), "}".to_string()]);
+    Ok(())
+}
+
+/// Writes `fields` as the struct `name` that a packet is read into in place,
+/// Command::`cmd`'s `what`.
+fn read_struct(
+    spec: &Spec,
+    out: &mut Vec<String>,
+    name: &str,
+    cmd: &str,
+    what: &str,
+    fields: &[Field],
+) -> Result<(), String> {
+    let mut borrows = false;
+    for f in fields {
+        let kind = spec.kind(&f.ty)?;
+        borrows |= f.list || kind == Kind::Str || kind == Kind::Path;
+    }
+    let lt = if borrows { "<'a>" } else { "" };
+    out.extend([
+        String::new(),
+        format!("/// Command::{cmd}'s {what}."),
+        "#[derive(Clone, Copy, Debug)]".to_string(),
+        format!("pub struct {name}{lt} {{"),
+    ]);
+    for f in fields {
+        if let Some(doc) = &f.doc {
+            out.extend(rs_doc(doc, "    ", "///"));
+        }
+        out.push(format!("    pub {}: {},", f.name, rs_read_type(spec, f)?));
+    }
+    out.extend([
+        "}".to_string(),
+        String::new(),
+        format!("impl{lt} {name}{lt} {{"),
+    ]);
+    out.push(format!(
+        "    pub fn read(pkt: &{}[u8]) -> Result<{name}{lt}, MarshalError> {{",
+        if borrows { "'a " } else { "" }
+    ));
+    out.push("        let f = TreeReader::new(pkt)?.read_branch()?;".into());
+    out.push(format!("        Ok({name} {{"));
+    for (i, f) in fields.iter().enumerate() {
+        out.push(format!("            {}: {},", f.name, rs_read(spec, f, i)?));
+    }
+    out.extend([
+        "        })".to_string(),
+        "    }".to_string(),
+        "}".to_string(),
+    ]);
+    Ok(())
+}
+
+/// Writes the record `r` as a view over its branch, which reads each field
+/// when it is asked for: a record as its own view, and a list of records as
+/// the views of its items.
+fn rs_view(spec: &Spec, out: &mut Vec<String>, r: &super::Record) -> Result<(), String> {
+    let name = &r.name;
+    out.push(String::new());
+    if let Some(doc) = &r.doc {
+        out.extend(rs_doc(doc, "", "///"));
+    }
+    out.extend([
+        "#[derive(Clone, Debug)]".to_string(),
+        format!("pub struct {name}<'a>(BranchCursor<'a>);"),
+        String::new(),
+        format!("impl<'a> {name}<'a> {{"),
+        format!("    pub fn read(pkt: &'a [u8]) -> Result<{name}<'a>, MarshalError> {{"),
+        format!("        Ok({name}(TreeReader::new(pkt)?.read_branch()?))"),
+        "    }".to_string(),
+        String::new(),
+        format!("    pub fn of(c: Cursor<'a>) -> Result<{name}<'a>, MarshalError> {{"),
+        format!("        Ok({name}(c.as_branch()?))"),
+        "    }".to_string(),
+    ]);
+    for (i, f) in r.fields.iter().enumerate() {
+        let kind = spec.kind(&f.ty)?;
+        let (one_ty, one) = if kind == Kind::Record && f.list {
+            (
+                format!(
+                    "impl Iterator<Item = Result<{}<'a>, MarshalError>> + 'a",
+                    f.ty
+                ),
+                format!(
+                    "{{ let b = c.as_branch()?; (0..b.len).map(move |k| {}::of(b.at(k)?)) }}",
+                    f.ty
+                ),
+            )
+        } else if kind == Kind::Record {
+            (format!("{}<'a>", f.ty), format!("{}::of(c)?", f.ty))
+        } else {
+            (rs_read_one_type(spec, f)?, rs_read_one(spec, f, "c")?)
+        };
+        let (ty, val) = if f.optional {
+            (
+                format!("Option<{one_ty}>"),
+                format!("match self.0.at({i})?.opt() {{ Some(c) => Some({one}), None => None }}"),
+            )
+        } else {
+            (one_ty, format!("{{ let c = self.0.at({i})?; {one} }}"))
+        };
+        out.push(String::new());
+        if let Some(doc) = &f.doc {
+            out.extend(rs_doc(doc, "    ", "///"));
+        }
+        out.push(format!(
+            "    pub fn {}(&self) -> Result<{ty}, MarshalError> {{",
+            f.name
+        ));
+        if kind == Kind::Path {
+            out.push("        let pkt = self.0.cursor.pkt;".into());
+        }
+        out.extend([format!("        Ok({val})"), "    }".to_string()]);
+    }
+    out.push("}".to_string());
     Ok(())
 }
 
@@ -323,7 +469,7 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
     // A list of strings is read as xpute's `StrList`, which is imported only where
     // a packet has such a list.
     let strs = spec
-        .commands()?
+        .cmds()?
         .iter()
         .flat_map(|c| {
             c.pkt
@@ -337,7 +483,7 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
         "use xpute_kit::wire::xtp::{{PacketWriter, {}TreeReader}};",
         if strs { "StrList, " } else { "" }
     ));
-    out.push(format!("use {}::{{finite, integer, unknown}};", t.number));
+    out.push(format!("use {}::{{finite, integer, unknown}};", t.number.0));
     if spec.has_path()? {
         out.push(format!("use {}::{{Path, Token}};", t.path.0));
     }
@@ -347,121 +493,32 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
         sorted.sort();
         out.push(format!("pub use {}::{{{}}};", a.path, sorted.join(", ")));
     }
+    out.extend(extern_uses(spec)?);
     for e in spec.enums.iter().filter(|e| !names.contains(&e.name)) {
         enum_decl(e, &mut out);
     }
     for r in &spec.records {
         rs_writer(spec, &mut out, &r.name, r.doc.as_deref(), &r.fields)?;
     }
-    for c in spec.commands()? {
-        let pascal_name = pascal(&c.name);
-        let pkts = [
-            (c.pkt.as_ref(), pascal_name.clone(), "packet"),
-            (
-                c.reply.as_ref().filter(|r| !r.is_empty()),
-                format!("{pascal_name}Reply"),
-                "completion's packet",
-            ),
-        ];
-        for (pkt, name, what) in pkts {
-            let Some(pkt) = pkt else {
-                continue;
-            };
-            let mut borrows = false;
-            for f in pkt {
-                let kind = spec.kind(&f.ty)?;
-                borrows |= f.list || kind == Kind::Str || kind == Kind::Path;
-            }
-            let lt = if borrows { "<'a>" } else { "" };
-            out.extend([
-                String::new(),
-                format!("/// Command::{}'s {what}.", c.name),
-                "#[derive(Clone, Copy, Debug)]".to_string(),
-                format!("pub struct {name}{lt} {{"),
-            ]);
-            for f in pkt {
-                if let Some(doc) = &f.doc {
-                    out.extend(rs_doc(doc, "    ", "///"));
-                }
-                out.push(format!("    pub {}: {},", f.name, rs_read_type(spec, f)?));
-            }
-            out.extend([
-                "}".to_string(),
-                String::new(),
-                format!("impl{lt} {name}{lt} {{"),
-            ]);
-            out.push(format!(
-                "    pub fn read(pkt: &{}[u8]) -> Result<{name}{lt}, MarshalError> {{",
-                if borrows { "'a " } else { "" }
-            ));
-            out.push("        let f = TreeReader::new(pkt)?.read_branch()?;".into());
-            out.push(format!("        Ok({name} {{"));
-            for (i, f) in pkt.iter().enumerate() {
-                out.push(format!("            {}: {},", f.name, rs_read(spec, f, i)?));
-            }
-            out.extend(["        })".to_string(), "    }".to_string()]);
-            if !borrows && what == "packet" {
-                out.extend([
-                    format!("    pub const FIELDS: u32 = {};", pkt.len()),
-                    String::new(),
-                    format!(
-                        "    pub fn write(&self, {}: &mut PacketWriter) {{",
-                        if pkt.is_empty() { "_" } else { "w" }
-                    ),
-                ]);
-                for f in pkt {
-                    out.extend(
-                        rs_write(spec, f)?
-                            .into_iter()
-                            .map(|l| format!("        {l}")),
-                    );
-                }
-                out.push("    }".to_string());
-            }
-            out.push("}".to_string());
+    for c in spec.cmds()? {
+        let name = pascal(&c.name);
+        if let Some(pkt) = &c.pkt {
+            read_struct(spec, &mut out, &name, &c.name, "packet", pkt)?;
         }
-        let name = pascal_name;
+        if let Some(reply) = c.reply.as_ref().filter(|r| !r.is_empty()) {
+            let reply_name = format!("{name}Reply");
+            read_struct(
+                spec,
+                &mut out,
+                &reply_name,
+                &c.name,
+                "completion's packet",
+                reply,
+            )?;
+        }
         if let Some(import) = &c.import {
             let doc = [format!("Command::{}'s packet.", c.name)];
             rs_writer(spec, &mut out, &name, Some(&doc), import)?;
-            if !import.is_empty() && !import.iter().any(|f| f.list) {
-                let borrows = rs_borrows(spec, import)?;
-                let lt = if borrows { "<'_>" } else { "" };
-                out.extend([
-                    String::new(),
-                    format!("impl {name}{lt} {{"),
-                    "    /// As the runtime beside the core reads it.".to_string(),
-                ]);
-                if borrows {
-                    let mut types = Vec::new();
-                    for f in import {
-                        types.push(rs_read_type(spec, f)?);
-                    }
-                    // The parts borrow from the packet, so their lifetime is
-                    // the elided one of `pkt`.
-                    out.push(format!(
-                        "    pub fn parts(pkt: &[u8]) -> Result<({},), MarshalError> {{",
-                        types.join(", ").replace("'a ", "").replace("<'a>", "<'_>")
-                    ));
-                    out.push("        let f = TreeReader::new(pkt)?.read_branch()?;".into());
-                    out.push("        Ok((".into());
-                    for (i, f) in import.iter().enumerate() {
-                        out.push(format!("            {},", rs_read(spec, f, i)?));
-                    }
-                    out.push("        ))".into());
-                } else {
-                    out.push(format!(
-                        "    pub fn read(pkt: &[u8]) -> Result<{name}, MarshalError> {{"
-                    ));
-                    out.push("        let f = TreeReader::new(pkt)?.read_branch()?;".into());
-                    out.push(format!("        Ok({name} {{"));
-                    for (i, f) in import.iter().enumerate() {
-                        out.push(format!("            {}: {},", f.name, rs_read(spec, f, i)?));
-                    }
-                    out.push("        })".into());
-                }
-                out.extend(["    }".to_string(), "}".to_string()]);
-            }
             if let Some(door) = t.import {
                 let lt = if rs_borrows(spec, import)? {
                     "<'_>"
@@ -486,6 +543,70 @@ pub(super) fn emit(spec: &Spec, t: &Target, apart: Option<&Apart>) -> Result<Str
                     "}".to_string(),
                 ]);
             }
+        }
+    }
+    Ok(file(&out))
+}
+
+/// Writes the protocol's runtime end as Rust, `r` saying where: the protocol's
+/// enums, named from its core end, and the externs its fields take; a view of each record; a writer for each
+/// export and each import's completion; and a struct each import's packet is
+/// read into.
+pub(super) fn emit_runtime(spec: &Spec, t: &Target, r: &RuntimeEnd) -> Result<String, String> {
+    let mut out = vec![
+        format!("// {}", r.rs_logical),
+        "//".into(),
+        generated(t.json),
+        "".into(),
+    ];
+    out.extend(rs_doc(&spec.doc, "", "//!"));
+    out.extend(
+        [
+            "",
+            "#![allow(non_camel_case_types, clippy::upper_case_acronyms, clippy::type_complexity, clippy::absolute_paths, unused_imports, dead_code, reason = \"generated from the spec\")]",
+            "",
+            "use core::fmt::Display;",
+            "",
+            "use xpute_core::abi::number::{finite, integer, unknown};",
+            "use xpute_core::io::fs::{Path, Token};",
+            "use xpute_kit::status::errno::Errno;",
+            "use xpute_kit::status::error::MarshalError;",
+            "use xpute_kit::wire::xtp::{BranchCursor, Cursor, PacketWriter, StrList, TreeReader};",
+        ]
+        .map(String::from),
+    );
+    out.push(format!("use {}::{{Export, Outcome}};", r.abi));
+    let mut enums: Vec<&str> = spec.enums.iter().map(|e| e.name.as_str()).collect();
+    enums.sort();
+    out.push(format!("pub use {}::{{{}}};", r.core, enums.join(", ")));
+    out.extend(extern_uses(spec)?);
+    for rec in &spec.records {
+        rs_view(spec, &mut out, rec)?;
+    }
+    for c in spec.cmds()? {
+        let name = pascal(&c.name);
+        if c.import.is_none() {
+            let pkt = c.pkt.as_deref().unwrap_or(&[]);
+            let doc = [format!("Command::{}'s packet.", c.name)];
+            rs_writer(spec, &mut out, &name, Some(&doc), pkt)?;
+            let lt = if rs_borrows(spec, pkt)? { "<'_>" } else { "" };
+            out.extend([
+                String::new(),
+                format!("impl Export for {name}{lt} {{"),
+                format!("    const NUMBER: u32 = {};", c.val),
+                format!("    const FIELDS: u32 = {};", pkt.len()),
+                "    fn write(&self, w: &mut PacketWriter) {".to_string(),
+                format!("        {name}::write(self, w);"),
+                "    }".to_string(),
+                "}".to_string(),
+            ]);
+        }
+        if let Some(reply) = c.reply.as_ref().filter(|r| !r.is_empty()) {
+            let doc = [format!("Command::{}'s completion's packet.", c.name)];
+            rs_writer(spec, &mut out, &format!("{name}Reply"), Some(&doc), reply)?;
+        }
+        if let Some(import) = c.import.as_ref().filter(|i| !i.is_empty()) {
+            read_struct(spec, &mut out, &name, &c.name, "packet", import)?;
         }
     }
     Ok(file(&out))

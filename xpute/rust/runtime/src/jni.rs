@@ -6,7 +6,8 @@
 //! Only JNI's own values cross: a number, an array of numbers, and the whole
 //! memory as one direct buffer, which the app hands its JavaScript unchanged.
 //! JNI's and the NDK's bindings are re-exported (`sys`, `ndk`), so that a
-//! program's macro expansion and xpute-gpu name them through this crate.
+//! program's macro expansion and a device beside the core name them through
+//! this crate.
 
 use std::sync::OnceLock;
 

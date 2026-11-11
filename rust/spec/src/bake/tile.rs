@@ -48,7 +48,7 @@ pub mod pkt {
 
     const WORD: usize = WORD_SZ as usize;
 
-    pub(crate) const HEADER: usize = HDR_SZ as usize;
+    pub(crate) const HDR: usize = HDR_SZ as usize;
 
     pub const fn branch(children: usize) -> usize {
         WORD * (1 + children)

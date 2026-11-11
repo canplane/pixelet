@@ -132,4 +132,6 @@ class Page(Cdp):
         shutil.rmtree(self.dir, ignore_errors=True)
 
 
+# The run holds its device from before it starts (`measure.hold`).
+mac.hold()
 measure(Page)

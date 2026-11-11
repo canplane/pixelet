@@ -4,7 +4,9 @@
 //! the runtime's table, which binds a file's number to its bucket key, and the
 //! texture pack's layout, which the renderer reads. A path is the specs' and
 //! the tools' name for a file; what is generated names it by its number
-//! (`file_number`), and Carto's symbols by theirs (`symbol_number`).
+//! (`file_number`), and Carto's symbols by theirs (`symbol_number`). Rust holds
+//! each file's path by its number as well, for what reads the files from the
+//! repository rather than the bucket.
 
 use std::fmt::Write;
 use std::sync::OnceLock;
@@ -154,7 +156,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             "ts/client/src/service/origin/ingest.spec.ts",
             render_ts(&rows, &pack)?,
         ),
-        Output::new("rust/spec/src/asset/ingest.spec.rs", render_rs(&pack)?),
+        Output::new(
+            "rust/spec/src/asset/ingest.spec.rs",
+            render_rs(&rows, &pack)?,
+        ),
     ])
 }
 
@@ -216,14 +221,14 @@ export const PACK = {
     Ok(out)
 }
 
-fn render_rs(pack: &Pack) -> Result<String, String> {
-    let mut out = vec![
-        r##"// pxl-spec/asset/ingest.spec.rs
+fn render_rs(rows: &[File], pack: &Pack) -> Result<String, String> {
+    let mut out = vec![r##"// pxl-spec/asset/ingest.spec.rs
 //
 // GENERATED from spec/spec/asset/ingest.json
-// The texture pack as the asset ingest composed it: which of its tiles each
-// cube wears on which face, and what each reads as from afar. Its image is
-// the file the catalog names for the cube kind's pack (catalog.spec.rs
+// Every shipped asset's path below asset/content/ by its number after ASSET,
+// and the texture pack as the asset ingest composed it: which of its tiles
+// each cube wears on which face, and what each reads as from afar. Its image
+// is the file the catalog names for the cube kind's pack (catalog.spec.rs
 // `pack`).
 
 use crate::asset::cube;
@@ -255,12 +260,19 @@ pub struct Pack {
     pub means: &'static [[u8; 3]],
 }
 
-pub const PACK: Pack = Pack {"##
-            .to_string(),
+/// Each shipped asset's path below asset/content/, file n at `ASSET_PATHS[n -
+/// 1]`.
+pub const ASSET_PATHS: &[&str] = &["##
+        .to_string()];
+    out.extend(rows.iter().map(|r| format!("    {:?},", r.path)));
+    out.extend([
+        "];".to_string(),
+        String::new(),
+        "pub const PACK: Pack = Pack {".to_string(),
         format!("    cell: {},", pack.cell),
         format!("    columns: {},", pack.columns),
         "    tiles: &[".to_string(),
-    ];
+    ]);
     for (group, ty, face, tile) in pack.faces.iter().filter(|f| f.0 != "sentinel") {
         let variant = if group == "object" {
             "Object"

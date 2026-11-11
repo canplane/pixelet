@@ -94,25 +94,25 @@ const _: () = assert!(
 /// skipped (`generated_for`); then how many records each decor laid (`cnt_at`). Placed decor's
 /// head is its count.
 pub const CNT_AT: u32 = 3;
-pub const HEADER_WORDS: u32 = CNT_AT + ROWS.len() as u32;
-pub const ENTRY_RECS_AT: u32 = EYE_ENTRIES * HEADER_WORDS;
+pub const HDR_WORDS: u32 = CNT_AT + ROWS.len() as u32;
+pub const ENTRY_RECS_AT: u32 = EYE_ENTRIES * HDR_WORDS;
 /// The records all the entries hold, which come before placed decor's.
 pub const ENTRY_RECS: u32 = EYE_ENTRIES * BRICK_REC_CAP;
-pub const PLACED_HEADER: u32 = ENTRY_RECS_AT + ENTRY_RECS * REC_WORDS;
-pub const PLACED_HEADER_WORDS: u32 = 4;
+pub const PLACED_HDR: u32 = ENTRY_RECS_AT + ENTRY_RECS * REC_WORDS;
+pub const PLACED_HDR_WORDS: u32 = 4;
 
 /// The runs of records a decor pass's workgroup reads (decor_run.wgsl `run_of`): for an
 /// entry, `RUN` records each; for placed decor, one record each.
 pub const RUNS: u32 = BRICK_REC_CAP / RUN;
 
 /// Entry `s`'s head.
-pub const fn header_at(s: u32) -> u32 {
-    s * HEADER_WORDS
+pub const fn hdr_at(s: u32) -> u32 {
+    s * HDR_WORDS
 }
 
 /// The word of entry `s`'s head counting the records decor `k` laid.
 pub const fn cnt_at(s: u32, k: u32) -> u32 {
-    header_at(s) + CNT_AT + k
+    hdr_at(s) + CNT_AT + k
 }
 
 /// Where `rows`' decor `k`'s records start among an entry's: the decors'
@@ -138,13 +138,13 @@ pub const fn rec_at(n: u32) -> u32 {
     if n < ENTRY_RECS {
         ENTRY_RECS_AT + n * REC_WORDS
     } else {
-        PLACED_HEADER + PLACED_HEADER_WORDS + (n - ENTRY_RECS) * REC_WORDS
+        PLACED_HDR + PLACED_HDR_WORDS + (n - ENTRY_RECS) * REC_WORDS
     }
 }
 
 /// Whether an entry's head says its records were generated for the brick `q`.
-pub const fn generated_for(header: [u32; 3], q: [i32; 2]) -> bool {
-    header[2] == 1 && header[0] as i32 == q[0] && header[1] as i32 == q[1]
+pub const fn generated_for(hdr: [u32; 3], q: [i32; 2]) -> bool {
+    hdr[2] == 1 && hdr[0] as i32 == q[0] && hdr[1] as i32 == q[1]
 }
 
 /// The most boxes a frame's generation is asked over: the damage and cuts held

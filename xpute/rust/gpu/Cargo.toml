@@ -38,7 +38,7 @@ runtime = ["dep:xpute-runtime", "dep:wgpu", "dep:serde", "dep:png", "dep:image-w
 [dev-dependencies]
 # The tests take the golden records' reader, and ask for a device without an
 # async runtime.
-xpute-kit = { workspace = true, features = ["golden"] }
+xpute-golden.workspace = true
 pollster = "1"
 # This is a device with no GPU under it, which makes and maps buffers but runs
 # nothing. The runtime's CPU tests stage their writes on it

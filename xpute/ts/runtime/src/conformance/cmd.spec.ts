@@ -51,6 +51,10 @@ export const CALL = 4108 as number;
  * refuses a number of 0 with EINVAL and writes nothing. */
 export const INC = 4109 as number;
 
+/** Replies 0, its reply naming as many bytes of the core's own state as the packet's
+ * number, byte k holding k, which go with the reply's frame; 0 names none. */
+export const NAMED = 4110 as number;
+
 /** The import that RAISE raises. */
 export const NOTE = 4353 as number;
 

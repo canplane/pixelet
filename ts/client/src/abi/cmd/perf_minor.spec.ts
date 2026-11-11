@@ -6,3 +6,4 @@ export const START = 0x01;
 export const STOP = 0x02;
 export const STATS = 0x03;
 export const RINGS = 0x04;
+export const STRTAB = 0x05;

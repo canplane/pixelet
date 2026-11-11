@@ -12,7 +12,7 @@
  * SYS_PACE carry frame pacing's grant and the core's asked rate. SYS_ABORT
  * reports the broken invariant the core stops on, the last frame the core sends.
  *
- * Each command is `major << 8 | minor` (kit abi/cmd). Its packet is an XTP branch whose
+ * Each command is `major << 8 | minor` (io/frame.json). Its packet is an XTP branch whose
  * children are the command's fields, in order; a command with no fields carries no packet.
  * The GPU and the files are devices with protocols of their own (gpu.json, fs.json).
  * Majors 0x00 to 0x0F are xpute's (io/frame.json), and a program numbers the commands of
@@ -21,6 +21,7 @@
 
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
+import { FINITE, INT_I32, INT_U32 } from "./number.ts";
 import * as Major from "./sys/major.spec.ts";
 import * as SysMinor from "./sys/sys_minor.spec.ts";
 import * as Command from "./sys/command.spec.ts";
@@ -61,23 +62,24 @@ export interface SysPace {
 /** Each import's packet, read from its branch, by its number. */
 export const read = {
   [Command.SYS_ABORT]: (b: BranchCursor): SysAbort => ({
-    errnum: b.at(0).get<i32>(),
-    line: b.at(1).get<u32>(),
-    column: b.at(2).get<u32>(),
-    a_low: b.at(3).get<u32>(),
-    a_high: b.at(4).get<u32>(),
-    b_low: b.at(5).get<u32>(),
-    b_high: b.at(6).get<u32>(),
-    file: b.at(7).get<string>(),
+    errnum: INT_I32(b.at(0).get_number()),
+    line: INT_U32(b.at(1).get_number()),
+    column: INT_U32(b.at(2).get_number()),
+    a_low: INT_U32(b.at(3).get_number()),
+    a_high: INT_U32(b.at(4).get_number()),
+    b_low: INT_U32(b.at(5).get_number()),
+    b_high: INT_U32(b.at(6).get_number()),
+    file: b.at(7).get_str(),
   }),
   [Command.SYS_PACE]: (b: BranchCursor): SysPace => ({
-    interval_ms: b.at(0).get<f64>(),
+    interval_ms: FINITE(b.at(0).get_number()),
   }),
 };
 
 /** The sys protocol's exports as the UI calls them over `link`: a send returns
- * nothing, and a request a Promise of its reply's value, which rejects with the
- * errno it was refused with. `fits` says whether a send's packet fits a frame. */
+ * nothing, and a request a Promise of its reply's value, or of the memory its reply
+ * names, which rejects with the errno it was refused with. `fits` says whether a
+ * send's packet fits a frame. */
 export function sys_exports(link: Link) {
   return {
     /** The channel's own test. The reply carries the packet's value, or 0 when the frame has no
@@ -120,6 +122,9 @@ export function sys_exports(link: Link) {
 /** The sys protocol's exports, as `sys_exports` binds them. */
 export type SysExports = ReturnType<typeof sys_exports>;
 
+/** The majors the runtime routes the protocol's imports by. */
+export const MAJORS: readonly u32[] = [Major.SYS];
+
 /** What the program does with each command the core posts on the sys protocol: a
  * call's member answers its value, and throws kit's error to refuse it. */
 export interface SysImports {
@@ -149,7 +154,7 @@ export function sys_imports(h: SysImports): Protocol {
       return refusal_of(err);
     }
   };
-  return { majors: [Major.SYS], on };
+  return { majors: MAJORS, on };
 }
 
 /** A packet the command carries, which a frame without one breaks. */

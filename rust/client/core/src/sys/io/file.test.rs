@@ -75,15 +75,15 @@ fn path_tokens() {
         assert_eq!(
             STORAGE,
             [
-                Token::U32(path::STORAGE::ID),
-                Token::U32(path::STORAGE::SETTINGS::ID)
+                Token::Int(path::STORAGE::ID),
+                Token::Int(path::STORAGE::SETTINGS::ID)
             ]
         );
         with_quadrant(path::TERRAIN::ID, shard.id(), |p| {
-            assert_eq!(p, [Token::U32(path::TERRAIN::ID), Token::Str("0123")]);
+            assert_eq!(p, [Token::Int(path::TERRAIN::ID), Token::Str("0123")]);
         });
         let top_path = with_path(Stream::object, TOP_ID, |p| {
-            assert_eq!(p, [Token::U32(object), Token::U32(top)]);
+            assert_eq!(p, [Token::Int(object), Token::Int(top)]);
         });
         assert!(top_path.is_some());
         let leaf = "3".repeat(KEY_BYTES);
@@ -112,7 +112,7 @@ fn path_file() {
             of_path(fs::Path::read(&buf[..n], c).expect("a path"))
         };
         let shard = Quadrant::of_key("0123").expect("a tile").id();
-        let object = Token::U32(path::OBJECT::ID);
+        let object = Token::Int(path::OBJECT::ID);
         assert_eq!(file_of(&STORAGE), Some(File::Storage));
         with_quadrant(path::OBJECT::ID, shard, |p| {
             assert_eq!(file_of(p), Some(File::Objects(shard)));
@@ -121,10 +121,10 @@ fn path_file() {
             assert_eq!(file_of(p), Some(File::Objects(TOP_ID)));
         });
         let bad: [&[Token]; 5] = [
-            &[object, Token::U32(path::OBJECT::EDIT::ID)],
-            &[Token::U32(path::TERRAIN::ID), Token::Str("0123")],
+            &[object, Token::Int(path::OBJECT::EDIT::ID)],
+            &[Token::Int(path::TERRAIN::ID), Token::Str("0123")],
             &[object, Token::Str("0124")],
-            &[object, Token::Str("0123"), Token::U32(0)],
+            &[object, Token::Str("0123"), Token::Int(0)],
             &[object],
         ];
         for tokens in bad {

@@ -41,6 +41,8 @@ class Safari(WebKit):
 
     @staticmethod
     def running():
+        """safaridriver drives only a Safari it starts, and quitting the
+        user's would close their windows, so a running Safari is refused."""
         on = subprocess.run(["pgrep", "-x", "Safari"], stdout=subprocess.DEVNULL)
         return "Safari is running" if on.returncode == 0 else None
 
@@ -70,4 +72,6 @@ class Safari(WebKit):
             subprocess.run(["osascript", "-e", 'quit app "Safari"'])
 
 
+# The run holds its device from before it starts (`measure.hold`).
+mac.hold()
 measure(Safari)

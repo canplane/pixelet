@@ -45,9 +45,6 @@ pub struct ScreenAo {
     apply: Pipeline,
     width: u32,
     height: u32,
-    /// The view of the world's depth that the groups were last made over. The passes only
-    /// read it.
-    depth_view: u32,
     half: u32,
     half_view: u32,
     /// The targets of the two denoise passes, which write into each other. `ping[0]` holds
@@ -55,8 +52,9 @@ pub struct ScreenAo {
     ping: [u32; 2],
     ping_view: [u32; 2],
     /// The groups of the four passes in their order: downsample, sample, denoise from
-    /// `ping[0]` into `ping[1]`, and denoise back.
-    groups: [u32; 4],
+    /// `ping[0]` into `ping[1]`, and denoise back. The downsample and the sample read the
+    /// world's depth.
+    groups: [Group; 4],
     /// The group `apply` draws by, over the map and the screen's tiles (`set_apply_group`).
     apply_group: Group,
 }
@@ -103,12 +101,11 @@ impl ScreenAo {
             apply: pipelines.build_world(g, PIPELINE_AO_APPLY),
             width: 0,
             height: 0,
-            depth_view: 0,
             half: 0,
             half_view: 0,
             ping: [0; 2],
             ping_view: [0; 2],
-            groups: [0; 4],
+            groups: Default::default(),
             apply_group: Group::default(),
         }
     }
@@ -134,32 +131,26 @@ impl ScreenAo {
         g.write_buf(self.uniform, 0, bytes(&self.uniform_words));
     }
 
-    /// Makes the half-resolution images, and the passes' groups over the world's depth view
-    /// `depth_view`, again when the size or the view is another. Returns true when it made
-    /// them, as the map then holds nothing yet.
+    /// Makes the half-resolution images again when the size is another, and sets the passes'
+    /// groups over them and the world's depth view `depth_view`. Returns true when a group was
+    /// made anew: the map is then to be found again.
     pub fn ensure(&mut self, g: &Gpu, width: u32, height: u32, depth_view: u32) -> bool {
-        if self.half != 0
-            && self.width == width
-            && self.height == height
-            && self.depth_view == depth_view
-        {
-            return false;
+        if self.half == 0 || self.width != width || self.height != height {
+            self.release_images();
+            let (hw, hh) = (
+                (width / AO_DOWNSCALE).max(1),
+                (height / AO_DOWNSCALE).max(1),
+            );
+            let attach = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
+            self.half = g.texture(hw, hh, 1, Format::r32float, 1, attach);
+            self.half_view = g.view(self.half, false, 0, 1, 0, 1);
+            for k in 0..2 {
+                self.ping[k] = g.texture(hw, hh, 1, g.canvas(), 1, attach);
+                self.ping_view[k] = g.view(self.ping[k], false, 0, 1, 0, 1);
+            }
+            self.width = width;
+            self.height = height;
         }
-        self.release_images();
-        let (hw, hh) = (
-            (width / AO_DOWNSCALE).max(1),
-            (height / AO_DOWNSCALE).max(1),
-        );
-        let attach = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-        self.depth_view = depth_view;
-        self.half = g.texture(hw, hh, 1, Format::r32float, 1, attach);
-        self.half_view = g.view(self.half, false, 0, 1, 0, 1);
-        for k in 0..2 {
-            self.ping[k] = g.texture(hw, hh, 1, g.canvas(), 1, attach);
-            self.ping_view[k] = g.view(self.ping[k], false, 0, 1, 0, 1);
-        }
-        self.width = width;
-        self.height = height;
 
         let view = view_entry;
         let sampler = sampler_entry(4, self.sampler);
@@ -170,21 +161,16 @@ impl ScreenAo {
         let group = |layout: Layout, frame: bool, between: &[Entry]| {
             let frame = frame.then(|| buf_entry(0, self.frame_buf));
             let e: Vec<Entry> = frame.iter().chain(between).copied().collect();
-
-            g.bind_group(layout, &e)
+            (layout, e)
         };
-        let g0 = group(
-            self.downsample.layouts[0],
-            true,
-            &[view(1, self.depth_view)],
-        );
+        let g0 = group(self.downsample.layouts[0], true, &[view(1, depth_view)]);
         let g1 = group(
             self.sample.layouts[0],
             true,
             &[
                 view(1, self.half_view),
                 view(2, self.noise_view),
-                view(3, self.depth_view),
+                view(3, depth_view),
                 uniform,
             ],
         );
@@ -202,16 +188,16 @@ impl ScreenAo {
                 ],
             )
         });
-        self.groups = [g0, g1, blur[0], blur[1]];
-        true
+        let [b0, b1] = blur;
+        let mut made = false;
+        for (group, (layout, e)) in self.groups.iter_mut().zip([g0, g1, b0, b1]) {
+            made |= group.set(g, layout, &e);
+        }
+        made
     }
 
     fn release_images(&mut self) {
         for id in [
-            self.groups[0],
-            self.groups[1],
-            self.groups[2],
-            self.groups[3],
             self.ping_view[0],
             self.ping[0],
             self.ping_view[1],
@@ -221,7 +207,6 @@ impl ScreenAo {
         ] {
             release(id);
         }
-        self.groups = [0; 4];
         self.half = 0;
         self.half_view = 0;
     }
@@ -230,10 +215,15 @@ impl ScreenAo {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::ao);
         let steps: [(u32, u32, u32, u32); 4] = [
-            (self.downsample.id, self.groups[0], self.half_view, 0),
-            (self.sample.id, self.groups[1], self.ping_view[0], 0),
-            (self.blur.id, self.groups[2], self.ping_view[1], 0),
-            (self.blur.id, self.groups[3], self.ping_view[0], self.stride),
+            (self.downsample.id, self.groups[0].id(), self.half_view, 0),
+            (self.sample.id, self.groups[1].id(), self.ping_view[0], 0),
+            (self.blur.id, self.groups[2].id(), self.ping_view[1], 0),
+            (
+                self.blur.id,
+                self.groups[3].id(),
+                self.ping_view[0],
+                self.stride,
+            ),
         ];
         for (k, &(pipeline, group, target, off)) in steps.iter().enumerate() {
             let pass = g.pass(

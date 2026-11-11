@@ -20,8 +20,9 @@ pub(super) mod turn;
 use super::State;
 use crate::door::cmd::{self as abi, ui};
 use crate::sys::sched::request_world_tick;
+use pxl_render::gpu::api;
 use xpute_core::io::door::Outcome;
-use xpute_gpu::event::Surface;
+use xpute_gpu::abi as gpu;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
@@ -52,15 +53,30 @@ fn bearing(deg: Option<f64>) -> bool {
 fn ask_turn(s: &mut State) -> Outcome {
     request_world_tick();
     s.snapshot_due = true;
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
-/// A surface the UI lends the GPU (GPU_SURFACE_OPEN, _RESIZE, _CLOSE).
-pub(super) fn on_surface(c: Surface) -> Outcome {
-    match c {
-        Surface::Open => surface::open(),
-        Surface::Resize(c) => surface::resize(c),
-        Surface::Close(c) => surface::close(c),
+/// The GPU's commands, under the major the program gives it: the device's
+/// answer (GPU_READY), and a surface the UI lends the GPU (GPU_SURFACE_OPEN,
+/// _RESIZE, _CLOSE).
+impl gpu::Exports for State {
+    /// The GPU answers, the first time or again after a loss. The core then
+    /// asks for the device's block and makes the renderer on it once the block
+    /// is in (pxl-render gpu/api.rs). A later loss is reported through the
+    /// block and read at the start of a turn.
+    fn gpu_ready(&mut self) -> Outcome {
+        api::on_device_answered();
+        request_world_tick();
+        Ok(Some(0.into()))
+    }
+    fn gpu_surface_open(&mut self) -> Outcome {
+        surface::open()
+    }
+    fn gpu_surface_resize(&mut self, c: gpu::GpuSurfaceResize) -> Outcome {
+        surface::resize(c)
+    }
+    fn gpu_surface_close(&mut self, c: gpu::GpuSurfaceClose) -> Outcome {
+        surface::close(c)
     }
 }
 
@@ -149,8 +165,11 @@ impl ui::Exports for State {
     fn perf_stats(&mut self, c: abi::PerfStats) -> Outcome {
         perf::stats(c)
     }
-    fn perf_rings(&mut self) -> Outcome {
-        perf::rings()
+    fn perf_rings(&mut self, c: abi::PerfRings) -> Outcome {
+        perf::rings(c)
+    }
+    fn perf_strtab(&mut self) -> Outcome {
+        perf::strtab()
     }
 }
 

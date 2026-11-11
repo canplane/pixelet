@@ -17,7 +17,7 @@
 //! The cache is one buffer of words:
 //!
 //! - the head: the frame's number, what is forgotten, and the eye's clip levels' entries that
-//!   moved (`HEADER_WORDS`);
+//!   moved (`HDR_WORDS`);
 //! - the frame in which the eye's draw last ran (`DRAWN`);
 //! - the keys, one word a slot, a bucket's side by side (`KEYS_AT`);
 //! - the states, one word a slot (`STATES_AT`);
@@ -127,12 +127,12 @@ pub const LAST_CNT: u32 = LAST_NEXT + 1;
 /// The nodes the frame has asked of the world so far, all runs together
 /// (`ray::ASKS_A_FRAME`). The host sets it to none each frame a run runs.
 pub const ASKED: u32 = LAST_CNT + 1;
-pub const HEADER_WORDS: u32 = ASKED + 1;
+pub const HDR_WORDS: u32 = ASKED + 1;
 /// The frame in which the eye's draw last ran, written by that draw (pxl-render
 /// record_draw.wgsl `rec_draw_cs`). Until the draw runs again, the boxes the raster draws
 /// are those of the entries it marked then (`record::drawn`). It lies past the head that the
 /// host writes each frame.
-pub const DRAWN: u32 = HEADER_WORDS;
+pub const DRAWN: u32 = HDR_WORDS;
 /// Where `observer`'s walks keep counter `lane` (`count::BEAM` to `count::ASKS`) in the
 /// head.
 pub const fn lane_at(observer: u32, lane: u32) -> u32 {

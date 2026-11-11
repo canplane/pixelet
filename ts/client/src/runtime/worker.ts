@@ -4,8 +4,7 @@
  * A page's core and runtime run in a worker of their own, so that a turn
  * holds up none of the UI's events. The core is served on xpute's port once
  * the page has sent what a worker cannot read. The refused files are followed
- * here, where the files are, and the profiler is read here, beside the core's
- * memory.
+ * here, where the files are.
  */
 
 import { gpu_grant } from "@xpute/gpu/gpu.ts";
@@ -24,11 +23,10 @@ import {
 import { follow_refused_files } from "@/service/sys/fs/refusal.ts";
 import { set_storage } from "@/service/sys/fs/storage.ts";
 import { set_online } from "@/service/origin/online.ts";
-import { config, perf_here } from "@/runtime/start.ts";
+import { config } from "@/runtime/start.ts";
 import { set_core } from "@/service/core/core.ts";
 import type { Page, ToCore, ToUi } from "@/runtime/page.ts";
 import { fs_changed } from "@/service/core/fs.ts";
-import { answer, type PerfRead } from "@/service/core/perf.ts";
 import { source_declare } from "@/service/core/source.ts";
 import { gpu } from "@/service/platform/gpu.ts";
 import * as online from "@/service/platform/online.ts";
@@ -44,10 +42,6 @@ onmessage = ({ data: m }: MessageEvent<ToCore>) => {
       return gpu_serve(m.port, gpu);
     case "refused":
       return follow_refused_files(m.files, fs_changed);
-    case "perf":
-      return void answer(m.what as PerfRead, m.args).then((val) =>
-        tell({ kind: "perf", id: m.id, val }),
-      );
   }
 };
 
@@ -67,7 +61,7 @@ async function keep(): Promise<boolean> {
 /** The core's commands are bound here too, for what sys/ sends from this
  * side. */
 function up(link: Link): void {
-  set_core(link, perf_here);
+  set_core(link);
   online.watch(set_online);
   watch_source(() =>
     tell({

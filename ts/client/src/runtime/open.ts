@@ -3,7 +3,6 @@
 /** A page's core runs in a worker of its own, and the UI's link to it is
  * xpute's, across the worker's port. */
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
 import { gpu_connect } from "@xpute/gpu/web.ts";
 import { start } from "@xpute/runtime";
 import { MANIFEST } from "@/abi/manifest.spec.ts";
@@ -32,17 +31,12 @@ export async function open(on: OnOpen): Promise<boolean> {
     type: "module",
   });
   const ask = (m: ToCore) => worker.postMessage(m);
-  const reads = new Map<u32, (val: unknown) => void>();
-  let next = 0;
   worker.onmessage = ({ data: m }: MessageEvent<ToUi>) => {
     switch (m.kind) {
       case "source":
         return mirror_source(m.state, m.decl);
       case "keep":
         return storage.set(m.key, m.val);
-      case "perf":
-        reads.get(m.id)?.(m.val);
-        return void reads.delete(m.id);
     }
   };
   ask({
@@ -61,15 +55,7 @@ export async function open(on: OnOpen): Promise<boolean> {
     ui(on, (files) => ask({ kind: "refused", files })),
     () => worker,
   );
-  set_core(
-    link,
-    (what, args) =>
-      new Promise((done) => {
-        const id = (next = (next + 1) >>> 0 || 1);
-        reads.set(id, done);
-        ask({ kind: "perf", id, what, args });
-      }),
-  );
+  set_core(link);
   started(on);
   online.watch(set_online);
   await gpu_present();

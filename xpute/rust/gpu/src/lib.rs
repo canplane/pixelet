@@ -5,8 +5,10 @@
 //! runtime runs them on a device; spec/gpu/ gives each op's words and the
 //! enumerations they carry. `admit` says whether the runtime takes another
 //! frame now. With the `runtime` feature, the crate also holds the runtime for
-//! a native device (`runtime`). What the core hears on the GPU's major is
-//! `event`, and a core that takes this GPU is defined by `core!`. The crate
+//! a native device (`runtime`). What the core hears on the GPU's major, the
+//! minors of a major the program gives it, goes through `abi::apply` to the
+//! program's `abi::Exports`, and a core that takes this GPU is defined by
+//! `core!`. The crate
 //! stands apart from xpute-kit and
 //! xpute-core, so a program that draws nothing links none of it.
 
@@ -22,7 +24,6 @@ pub mod enums;
 pub mod admit;
 pub mod device;
 pub mod encode;
-pub mod event;
 
 /// These are the settings of a native GPU runtime that the program chooses; the
 /// platform chooses the rest of `runtime::Config` (`runtime::native::config`).

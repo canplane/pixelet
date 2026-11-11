@@ -3,8 +3,8 @@
 #include <bit>
 #include <string>
 
-#include "xpute/kit/golden.hpp"
-#include "xpute/kit/test.hpp"
+#include "dev/test/golden.hpp"
+#include "dev/test/test.hpp"
 #include "rng.hpp"
 
 using namespace xpute;

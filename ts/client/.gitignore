@@ -1,0 +1,14 @@
+# The paths the core's module was built with (script/wasm-build.py).
+/core.paths*.json
+
+# The number the deployment serves (script/build-number.py), which a dev build of
+# either app is labeled after.
+/.build_number
+
+# Expo's per-machine state for the app: the dev server's settings, the types
+# it generates and the build stamp (metro.config.ts).
+/.expo/
+
+# What `expo prebuild` generates, made again from app.config.ts and the modules.
+/ios/
+/android/

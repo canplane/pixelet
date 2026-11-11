@@ -140,11 +140,16 @@ answered before it returns.
 
 The **generator** writes both ends' code from the manifest and the protocol
 files. `xpute-gen manifest.json asker.json` writes the manifest's constants for
-both ends and, for the protocol, on the runtime the fields each export takes,
-by its number, the packets' readers and a handler for each import, and on the
-core a function for each import and a trait for the exports. The generated
-files are committed, and `--check` fails where one is stale. It installs with
-`cargo install --path rust/gen`.
+both ends and, for the protocol, each end as WIT's bindings give a guest and a
+host. The core's end has a function for each import, and a trait for the
+exports with `apply`, which reads an export and hands it to the trait. The
+runtime's end has a function or a writer for each export, and an interface for
+the imports, to which the runtime routes each import read, in Rust a trait with
+`serve`. Each end holds only its own direction, what it writes and what it
+reads. The runtime's end is TypeScript, and Rust as well where the protocol's
+`gen` names a file for it (`runtime`). The generated files are committed, and
+`--check` fails where one is stale. It installs with `cargo install --path
+rust/gen`.
 
 ### The core
 
@@ -165,14 +170,14 @@ xpute_core::core!(manifest::MANIFEST, 0, entry);
 impl asker::Exports for Example {
     fn sum(&mut self, c: abi::Sum) -> Outcome {
         let answer = asker::ask().map_err(MarshalError::new)?;
-        Ok(Some((c.a + c.b) as i32 + answer as i32))
+        Ok(Some(((c.a + c.b) as i32 + answer as i32).into()))
     }
 }
 
 fn entry(_deadline_ms: f64, _boot: fn() -> BootInfo) -> f64 {
     xpute_core::io::door::door().receive(|s| match s {
         Event::Program(cmd, pkt) => asker::apply(&mut Example, cmd, &pkt),
-        _ => Ok(Some(0)),
+        _ => Ok(Some(0.into())),
     });
     NO_WAKE
 }
@@ -200,7 +205,7 @@ export const core = (): Config => ({
     module: new URL(CORE, import.meta.url),
     bytes: MANIFEST.mem_bytes[0],
   },
-  program: asker_imports({ ask: () => ANSWER }),
+  program: [asker_imports({ [Command.ASK]: () => ANSWER })],
   policy: new Timeslice(4),
   submit: () => {},
 });
@@ -213,8 +218,8 @@ that draws: it calls `start(MANIFEST, ui, worker)`, the worker's module calls
 `serve(MANIFEST, core)`, and a message port between them carries frames. Either
 way the UI receives a **link**, the same on every platform, through which it
 sends commands, asks for turns, and says whether it is shown and reads it back.
-The UI never waits on the core: it requests `SUM`, and the reply comes with a
-later turn:
+The UI never waits on the core: it requests `SUM` through the protocol's
+generated exports, and the reply's value comes with a later turn:
 
 ```ts
 const link = await start(
@@ -226,7 +231,7 @@ const link = await start(
     }),
 );
 link.resume();
-const sum = await link.request(Command.SUM, 2, 3);
+const sum = await asker_exports(link).sum(2, 3);
 ```
 
 ### On a device, and in C++
@@ -267,15 +272,20 @@ The generator writes `GPU_ASK` beside `MANIFEST`, and the crate defines its core
 through the plugin's macro, which also defines `admit_frame`, whether the GPU
 takes a frame now. The GPU's commands reach the program as any other, numbered
 by minors under a major the program chooses from its own, so its turn asks the
-plugin first and its UI names the same major (`gpu_exports`, `gpu_grant`):
+plugin's generated `apply` with that major, and its UI names the same major
+(`gpu_exports`, `gpu_grant`):
 
 ```rust
 xpute_gpu::core!(MANIFEST, FIXED_BYTES, entry, CONFIG, GPU_ASK);
 
-match xpute_gpu::event::decode(GPU_MAJOR, cmd, pkt)? {
-    Some(Event::Ready) => {}      // a device answered
-    Some(Event::Surface(s)) => {} // a surface opened, sized or closed
-    None => {}                         // the program's own command
+impl xpute_gpu::abi::Exports for Program {
+    fn gpu_ready(&mut self) -> Outcome { /* a device answered */ }
+    fn gpu_surface_open(&mut self) -> Outcome { /* a surface lent */ }
+    // ... _resize, _close
+}
+
+Event::Program(cmd, pkt) if cmd >> 8 == GPU_MAJOR => {
+    xpute_gpu::abi::apply(&mut program, GPU_MAJOR, cmd, &pkt)
 }
 ```
 

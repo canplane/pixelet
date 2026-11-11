@@ -18,10 +18,13 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { install } from "../../client/src/remote-console.ts";
 import { entries, make, type Pipeline } from "./pipeline.ts";
 
-const RECORDED = import.meta.glob<string>("../../../doc/experiment/**/*.wgsl", {
-  query: "?raw",
-  import: "default",
-});
+const RECORDED = import.meta.glob<string>(
+  "../../../doc/**/experiment/**/*.wgsl",
+  {
+    query: "?raw",
+    import: "default",
+  },
+);
 
 async function assembled(): Promise<{
   modules: Record<string, string>;

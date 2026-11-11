@@ -8,24 +8,24 @@
 
 /// The map's side, in texels.
 fn light_size() -> u32 {
-  return header_word(LIGHT_HEADER_SIZE);
+  return hdr_word(LIGHT_HDR_SIZE);
 }
 
 /// The cast's number, counted up from one each cast.
 fn cast_number() -> u32 {
-  return header_word(LIGHT_HEADER_CAST);
+  return hdr_word(LIGHT_HDR_CAST);
 }
 
 /// The number of the cast that began the epoch, since which the light, the eye's zooms and the
 /// world stayed as they were cast for. What a cast of the epoch left in a tile stands while the
-/// box keeps the tile (`light::HEADER_EPOCH`).
+/// box keeps the tile (`light::HDR_EPOCH`).
 fn light_epoch() -> u32 {
-  return header_word(LIGHT_HEADER_EPOCH);
+  return hdr_word(LIGHT_HDR_EPOCH);
 }
 
-/// Whether the cast's marks take each pixel's footprint (`light::HEADER_FOOTPRINT`).
+/// Whether the cast's marks take each pixel's footprint (`light::HDR_FOOTPRINT`).
 fn footprint() -> bool {
-  return header_word(LIGHT_HEADER_FOOTPRINT) != 0u;
+  return hdr_word(LIGHT_HDR_FOOTPRINT) != 0u;
 }
 
 /// Where a point `v` units from the eye lies on the box, in texels across and down from the
@@ -45,13 +45,13 @@ fn tile_of(v: vec3<f32>) -> vec2<i32> {
 
 /// Whether box tile `tile` keeps what a cast left in it, after the box slid to its corner from
 /// `was` and the eye's zooms moved from those of the cast before (`Light::keeps`,
-/// `light::HEADER_LAST_RANGE`). It keeps it where the tile lay in the box before as well and
+/// `light::HDR_LAST_RANGE`). It keeps it where the tile lay in the box before as well and
 /// its band did not change.
 fn keeps_tile(tile: vec2<u32>, was: vec2<i32>) -> bool {
   let n = i32(light_tiles());
   let here = vec2<i32>(tile);
   let before = here + (light_corner() - was) / i32(LIGHT_TILE);
-  let last_range = vec2<u32>(header_word(LIGHT_HEADER_LAST_RANGE), header_word(LIGHT_HEADER_LAST_RANGE + 1u));
+  let last_range = vec2<u32>(hdr_word(LIGHT_HDR_LAST_RANGE), hdr_word(LIGHT_HDR_LAST_RANGE + 1u));
   return all(before >= vec2<i32>(0)) && all(before < vec2<i32>(n))
     && tile_band_in(before, last_range) == tile_band(here);
 }

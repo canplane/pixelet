@@ -14,13 +14,13 @@ class Cdp:
 
     id = 0
     session = None
-    cond = threading.Condition()
+    cv = threading.Condition()
     reading = False
     answers = {}
 
     def send(self, method, params=None):
         """`method`'s answer; an error raises."""
-        with self.cond:
+        with self.cv:
             self.id += 1
             mine = self.id
             msg = {"id": mine, "method": method, "params": params or {}}
@@ -28,9 +28,9 @@ class Cdp:
                 msg["sessionId"] = self.session
             self.put(json.dumps(msg).encode())
         while True:
-            with self.cond:
+            with self.cv:
                 while mine not in self.answers and self.reading:
-                    self.cond.wait()
+                    self.cv.wait()
                 if mine in self.answers:
                     m = self.answers.pop(mine)
                     break
@@ -39,11 +39,11 @@ class Cdp:
             try:
                 m = self.get()
             finally:
-                with self.cond:
+                with self.cv:
                     self.reading = False
                     if m is not None and "id" in m:
                         self.answers[m["id"]] = m
-                    self.cond.notify_all()
+                    self.cv.notify_all()
         if "error" in m:
             raise RuntimeError(f"{method}: {m['error'].get('message')}")
         return m["result"]

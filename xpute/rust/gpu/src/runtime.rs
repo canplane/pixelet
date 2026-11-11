@@ -14,6 +14,8 @@
 //! `native` holds the runtime for a core linked into its own process, and
 //! exports it under xpute's names (`native_abi!`).
 
+#[path = "runtime/abi.spec.rs"]
+pub mod abi;
 mod admit;
 mod belt;
 mod cache;
@@ -40,7 +42,7 @@ use std::sync::Arc;
 
 use xpute_runtime::mem::Memory;
 
-use crate::device;
+use crate::spec::DEVICE;
 use crate::spec::STATUS;
 use belt::Belt;
 use cache::Cache;
@@ -110,7 +112,7 @@ pub struct GpuRuntime {
     /// These are a record's words, copied out of the core's memory so that
     /// running the record may write that memory.
     scratch: Vec<u32>,
-    command_bufs: Vec<wgpu::CommandBuffer>,
+    cmd_bufs: Vec<wgpu::CommandBuffer>,
     /// This turn's stream has taken a surface's texture.
     drew: bool,
     /// This counts the frames this runtime drew that the queue has not yet
@@ -186,7 +188,7 @@ impl GpuRuntime {
             making: HashMap::new(),
             decoding: VecDeque::new(),
             scratch: Vec::new(),
-            command_bufs: Vec::new(),
+            cmd_bufs: Vec::new(),
             drew: false,
             unfinished_cnt: Arc::new(AtomicU32::new(0)),
             frame_latency: cfg.frame_latency,
@@ -218,7 +220,7 @@ impl GpuRuntime {
         self.decoding.clear();
         self.making.clear();
         if let Some(addr) = self.block.take() {
-            mem.store_release(addr + 4 * device::STATUS_AT as u32, STATUS::LOST);
+            mem.store_release(addr + 4 * DEVICE::STATUS_AT as u32, STATUS::LOST);
         }
     }
 

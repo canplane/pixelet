@@ -3,11 +3,9 @@
 /**
  * Writes a line where a page's lines go, as a native runtime writes one to
  * its process's output (xpute-runtime native/say.rs) and a device's UI with
- * `XPUTE.say`. The page's runtime says its own lines here: a core's stop, a
- * device lost or refused, an uncaptured error, and a GPU record, a GPU run,
- * a GPU completion's landing or a turn slower than the program asked
- * (@xpute/gpu `GpuConfig`,
- * runtime.ts `Config`). The UI's thread writes each
+ * `XPUTE.say`. The page's runtime says its own lines here, such as a core's
+ * stop or a turn slower than the program asked (runtime.ts `Config`), and so
+ * does a device that runs beside the core. The UI's thread writes each
  * line to the console, and keeps it in `globalThis.said` where the page made
  * that list for a tool driving it to read (`keep_said`). A worker has no page:
  * once its runtime is attached to the UI (remote.ts `attach`), its lines go up

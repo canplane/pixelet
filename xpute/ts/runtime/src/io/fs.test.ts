@@ -6,7 +6,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import { Golden } from "@xpute/kit/golden.ts";
+import { Golden } from "../../../dev/golden.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { Branch, PacketWriter, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import { Command, fs_imports } from "@xpute/runtime/abi/fs.spec.ts";
@@ -45,11 +45,18 @@ class Turn {
     this._frames.push([tag, cmd, buf.slice(0, w.finish()), named]);
   }
 
-  take(server: FsServer): void {
+  /** Hands the turn's frames to `server` as the runtime routes them, and
+   * answers a refusal as the runtime does (io/connection.ts `_read`): a
+   * failure is replied to, through `refused`. */
+  take(
+    server: FsServer,
+    refused: (tag: number, cmd: number, res: number) => void,
+  ): void {
     const listener = fs_imports(server).on;
     for (const [tag, cmd, pkt, named] of this._frames) {
       const f = pkt.byteLength > 0 ? new TreeReader(pkt).read_branch() : null;
-      listener(tag, cmd, f, pkt, named);
+      const res = listener(tag, cmd, f, pkt, named);
+      if (res !== undefined && res < 0) refused(tag, cmd, res);
     }
     this._frames = [];
   }
@@ -139,7 +146,10 @@ async function run(g: Golden, scenario: string): Promise<void> {
         turn.post(Number(a[0]), Command.FS_CLOSE, 0, () => {});
         break;
       case "turn":
-        turn.take(server);
+        turn.take(
+          server,
+          (tag, cmd, res) => void answers.push([cmd, tag, res]),
+        );
         await settle();
         break;
       case "deliver": {

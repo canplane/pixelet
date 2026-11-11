@@ -37,5 +37,5 @@ pub(super) fn apply(s: &mut State, life: Life) -> Outcome {
             device_orientation::orient_visible();
         }
     }
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }

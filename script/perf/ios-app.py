@@ -49,4 +49,6 @@ class App:
         self.lines.close()
 
 
+# The run holds its device from before it starts (`measure.hold`).
+ios.hold()
 measure(App)

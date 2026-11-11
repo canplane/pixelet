@@ -1,7 +1,12 @@
-# The Mac this runs on.
+#!/usr/bin/env python3
+# The Mac this runs on. Run, it runs a command holding its GPU (`hold`):
+#
+#   ./script/perf/mac.py <command...>
 
 import re
 import subprocess
+
+import measure
 
 # How busy the GPU is, in %, as its IOAccelerator reports it.
 BUSY = re.compile(r'"Device Utilization %"=(\d+)')
@@ -18,3 +23,13 @@ def state():
     ).stdout
     busy = BUSY.search(accel)
     return f"gpu_util {busy[1] + '%' if busy else None}"
+
+
+def hold():
+    """Waits until this process holds the Mac's GPU, as the renderer's GPU
+    tests do (`measure.hold`)."""
+    measure.hold("gpu")
+
+
+if __name__ == "__main__":
+    measure.holding(hold)

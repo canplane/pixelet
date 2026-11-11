@@ -14,7 +14,7 @@ const FRAME: u32 = 256;
 /// Where the test keeps what an import names: past both frames, which a
 /// packet laid in the send frame would write over.
 pub(crate) const SCRATCH: usize = 2 * FRAME as usize;
-const PROGRAM: u32 = frame::PROGRAM_MAJOR << 8 | 1;
+const PROGRAM: u32 = frame::cmd(frame::PROGRAM_MAJOR, 1);
 
 /// What the core sent: its frame, its packet and the memory it named.
 pub(crate) struct Sent {
@@ -128,7 +128,7 @@ fn every_waiting_frame_applied_in_one_turn() {
     for tag in 1..=20 {
         submit(tag, PROGRAM, frame::ACKREQ, 0, &[]);
     }
-    d.receive(|_| Ok(Some(0)));
+    d.receive(|_| Ok(Some(0.into())));
     let tags: Vec<u32> = sent().iter().map(|s| s.frame.tag).collect();
     assert_eq!(tags, (1..=20).collect::<Vec<_>>(), "each once, in order");
 }
@@ -144,7 +144,7 @@ fn open_completion_handed_over() {
                 fs::Completion::FsOpen { fd, res, reply } => (fd, res, reply.map(|r| r.detail)),
                 fs::Completion::FsClose { .. } => unreachable!("an open's"),
             });
-            Ok(Some(0))
+            Ok(Some(0.into()))
         }
         Event::Life(_)
         | Event::Turn(_)
@@ -159,7 +159,7 @@ fn open_completion_handed_over() {
 }
 
 #[test]
-fn program_command_handed_over() {
+fn program_cmd_handed_over() {
     let (d, _buf) = door();
     let tag = 6;
     submit(tag, PROGRAM, frame::ACKREQ, 0, &[]);
@@ -167,7 +167,7 @@ fn program_command_handed_over() {
     d.receive(|event| match event {
         Event::Program(cmd, _) => {
             got = Some(cmd);
-            Ok(Some(1))
+            Ok(Some(1.into()))
         }
         Event::Life(_)
         | Event::Turn(_)
@@ -249,6 +249,39 @@ fn named_memory_taken_with_the_frame() {
     assert_eq!(sent().remove(0).named, vec![7, 8, 9]);
 }
 
+/// The memory a reply names goes with its frame, as it was when sent.
+#[test]
+fn reply_named_memory_taken_with_the_frame() {
+    let (d, mut buf) = door();
+    buf[SCRATCH..SCRATCH + 3].copy_from_slice(&[7, 8, 9]);
+    // SAFETY: the test's memory, which outlives the receive.
+    let named: &'static [u8] = unsafe { core::slice::from_raw_parts(buf.as_ptr().add(SCRATCH), 3) };
+    submit(5, PROGRAM, frame::ACKREQ, 0, &[]);
+    d.receive(|_| Ok(Some(Reply { val: 2, named })));
+    let s = sent().remove(0);
+    assert_eq!(
+        (s.frame.tag, s.frame.flags & frame::RES, s.frame.result),
+        (5, frame::RES, 2)
+    );
+    assert_eq!(s.named, vec![7, 8, 9]);
+}
+
+/// Memory a reply names outside the core's memory, as a native build's
+/// static is, is the core's bug.
+#[test]
+#[should_panic(expected = "EFAULT")]
+fn reply_naming_memory_outside_the_core_stops_it() {
+    static OUTSIDE: [u8; 1] = [0];
+    let (d, _buf) = door();
+    submit(5, PROGRAM, frame::ACKREQ, 0, &[]);
+    d.receive(|_| {
+        Ok(Some(Reply {
+            val: 0,
+            named: &OUTSIDE,
+        }))
+    });
+}
+
 /// A stop report with no file path takes `ABORT_PKT_BYTES`, as the writer
 /// lays it.
 #[test]
@@ -288,28 +321,36 @@ fn abort_sends_the_report_after_what_was_sent() {
     );
 }
 
-/// A path's token is a string or a number that is a u32; any other node, a
-/// fraction or a branch, is refused as it is read.
+/// A path's token is a string or a number that is an i32; any other node, a
+/// fraction, a bool, an integer past an i32 or a branch, is refused as it is
+/// read.
 #[test]
-fn path_takes_u32_and_str_tokens() {
+fn path_takes_i32_and_str_tokens() {
     let mut buf = [0u8; 128];
     let mut w = PacketWriter::new(&mut buf, 1);
     w.branch(3, |w| {
-        w.u32(Some(u32::MAX)).str(Some("0123")).i32(Some(4));
+        w.i32(Some(i32::MIN)).str(Some("0123")).i32(Some(i32::MAX));
     });
     let n = w.finish().unwrap() as usize;
     let f = TreeReader::new(&buf[..n]).unwrap().read_branch().unwrap();
     let path = Path::read(&buf[..n], f.at(0).unwrap()).unwrap();
     assert_eq!(
         path.iter().collect::<Vec<_>>(),
-        [Token::U32(u32::MAX), Token::Str("0123"), Token::U32(4)]
+        [
+            Token::Int(i32::MIN),
+            Token::Str("0123"),
+            Token::Int(i32::MAX)
+        ]
     );
     for bad in [
         |w: &mut PacketWriter| {
             w.f64(Some(0.5));
         },
         |w: &mut PacketWriter| {
-            w.i32(Some(-1));
+            w.bool(Some(true));
+        },
+        |w: &mut PacketWriter| {
+            w.u32(Some(u32::MAX));
         },
         |w: &mut PacketWriter| {
             w.branch(0, |_| {});

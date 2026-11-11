@@ -154,11 +154,6 @@
     }
   },
   "device": {
-    "orientation": {
-      "permission_denied": "방향 센서 사용을 허용해 주세요.",
-      "permission_error": "방향 센서를 사용할 수 없습니다.",
-      "signal_lost": "방향을 확인할 수 없습니다."
-    },
     "geolocation": {
       "unsupported": "이 환경에서는 위치 정보를 사용할 수 없습니다.",
       "permission_denied": "위치 정보 사용을 허용해 주세요.",

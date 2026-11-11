@@ -29,7 +29,7 @@ struct Example;
 impl asker::Exports for Example {
     fn sum(&mut self, c: abi::Sum) -> Outcome {
         let answer = asker::ask().map_err(MarshalError::new)?;
-        Ok(Some((c.a + c.b) as i32 + answer as i32))
+        Ok(Some(((c.a + c.b) as i32 + answer as i32).into()))
     }
 }
 
@@ -37,7 +37,7 @@ impl asker::Exports for Example {
 fn entry(_deadline_ms: f64, _boot: fn() -> BootInfo) -> f64 {
     xpute_core::io::door::door().receive(|s| match s {
         Event::Program(cmd, pkt) => asker::apply(&mut Example, cmd, &pkt),
-        _ => Ok(Some(0)),
+        _ => Ok(Some(0.into())),
     });
     NO_WAKE
 }

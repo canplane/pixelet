@@ -69,19 +69,61 @@ fn ts_read(spec: &Spec, f: &Field, i: usize) -> Result<String, String> {
             ));
         }
         check_packed(f)?;
-        return Ok(format!("Array.from(b.at({i}).get<U32Array>())"));
+        return Ok(format!("Array.from(b.at({i}).get_u32s())"));
     }
     if kind == Kind::Path {
         return Ok(format!("read_path(b.at_branch({i}))"));
     }
-    if kind == Kind::Record {
-        return Ok(if f.optional {
-            format!("optional(b.at({i}), read_{})", snake(&f.ty))
+    let one = |c: &str| -> Result<String, String> {
+        if kind == Kind::Record {
+            return Ok(format!("read_{}({c}.as_branch())", snake(&f.ty)));
+        }
+        ts_read_one(spec, f, c)
+    };
+    Ok(if f.optional {
+        format!("b.at({i}).get_opt((c) => {})", one("c")?)
+    } else {
+        one(&format!("b.at({i})"))?
+    })
+}
+
+/// The integer types @xpute/runtime abi/number.ts checks, each by its own
+/// `INT_*`.
+const INTEGERS: [&str; 3] = ["u8", "u32", "i32"];
+
+/// Reads one field's value at the cursor `c`: its kind through the cursor's
+/// checked getters, and a number through @xpute/runtime abi/number.ts, as the
+/// Rust runtime end reads it through xpute-kit's cursor and xpute-core
+/// abi/number.rs.
+fn ts_read_one(spec: &Spec, f: &Field, c: &str) -> Result<String, String> {
+    let integer = |ty: &str| -> Result<String, String> {
+        if INTEGERS.contains(&ty) {
+            Ok(format!("INT_{}({c}.get_number())", ty.to_uppercase()))
         } else {
-            format!("read_{}(b.at_branch({i}))", snake(&f.ty))
-        });
-    }
-    Ok(format!("b.at({i}).get<{}>()", ts_type(spec, f)?))
+            Err(format!("cmd.json: no integer type {ty} ({})", f.name))
+        }
+    };
+    Ok(match spec.kind(&f.ty)? {
+        Kind::Number if f.ty == "f64" => format!("FINITE({c}.get_number())"),
+        Kind::Number => integer(&f.ty)?,
+        Kind::Bool => format!("{c}.get_bool()"),
+        Kind::Str => format!("{c}.get_str()"),
+        Kind::Extern => {
+            let repr = spec.extern_of(&f.ty).and_then(|x| x.repr.clone());
+            integer(repr.as_deref().unwrap_or("u32"))?
+        }
+        _ => {
+            let e = spec
+                .enums
+                .iter()
+                .find(|e| e.name == f.ty)
+                .ok_or(format!("cmd.json: no type {} ({})", f.ty, f.name))?;
+            match &e.unknown {
+                Some(u) => format!("MEMBER({c}.get_number(), {0}, {0}.{u})", e.name),
+                None => format!("MEMBER({c}.get_number(), {})", e.name),
+            }
+        }
+    })
 }
 
 struct TsUse {
@@ -158,12 +200,12 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
         words: Vec::new(),
         arrays: Vec::new(),
     };
-    let commands = spec.commands()?;
+    let cmds = spec.cmds()?;
     let nested: Vec<&str> = spec
         .records
         .iter()
         .flat_map(|r| r.fields.iter())
-        .chain(commands.iter().filter_map(|c| c.import.as_ref()).flatten())
+        .chain(cmds.iter().filter_map(|c| c.import.as_ref()).flatten())
         .map(|f| f.ty.as_str())
         .collect();
     for r in &spec.records {
@@ -189,7 +231,7 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
         tail.push("}".into());
     }
     let mut readers: Vec<String> = Vec::new();
-    for c in &commands {
+    for c in &cmds {
         let name = pascal(&c.name);
         if let Some(import) = &c.import {
             tail.extend([
@@ -232,17 +274,17 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
             "}",
         ]);
     }
-    if reads(&tail, "optional(") {
-        helpers.extend([
-            "",
-            "/** A record that may be absent. */",
-            "function optional<T>(c: NodeCursor, read: (b: BranchCursor) => T): T | null {",
-            "  const present = c.opt();",
-            "  return present === undefined ? null : read(present.as_branch());",
-            "}",
-        ]);
-    }
     tail.splice(0..0, helpers.iter().map(|l| l.to_string()));
+    let mut checks: Vec<String> = ["FINITE".to_string(), "MEMBER".to_string()]
+        .into_iter()
+        .chain(
+            INTEGERS
+                .iter()
+                .map(|ty| format!("INT_{}", ty.to_uppercase())),
+        )
+        .filter(|f| reads(&tail, &format!("{f}(")))
+        .collect();
+    checks.sort();
     let xtp: Vec<&str> = ["BranchCursor", "NodeCursor"]
         .into_iter()
         .filter(|c| reads(&tail, c))
@@ -263,6 +305,13 @@ pub(super) fn emit(spec: &Spec, t: &Target) -> Result<Vec<Output>, String> {
                 names.join(", ")
             ));
         }
+    }
+    if !checks.is_empty() {
+        out.push(format!(
+            "import {{ {} }} from \"{}\";",
+            checks.join(", "),
+            t.number.1
+        ));
     }
     if spec.has_path()? {
         out.push(format!("import type {{ Path }} from \"{}\";", t.path.1));

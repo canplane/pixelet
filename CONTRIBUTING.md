@@ -5,6 +5,9 @@ in [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Setting up
 
+Development takes a Mac: the iPhone build needs Xcode, and Safari stands in for
+the iPhone's browser.
+
 You need GNU Make, Python 3.11 or newer, [Node](https://nodejs.org/) at the
 version `ts/.tool-versions` pins with pnpm (`corepack enable`), Rust through
 [rustup](https://rustup.rs/) (the toolchain is pinned in
@@ -67,8 +70,8 @@ On Android, with JDK 17 and the NDK installed:
 
 ```bash
 make install
-(cd ts/client && pnpm exec expo prebuild --platform android --no-install)
-(cd ts/client/android && ./gradlew :app:installMobileRelease)
+(cd ts/client && pnpm exec expo prebuild --platform android --no-install --clean)
+(cd ts/client/android && ./gradlew :app:installRelease)
 ```
 
 On iOS, generate the project with `--platform ios`, run `pod install` in
@@ -109,7 +112,7 @@ changes by default), and `--list` names them without running them. A deploy
 adds `check-build`, the bundle a deploy builds; xpute's own `check-xpute` and
 `test-xpute`; and
 `test-gpu`, the renderer's passes on this machine's GPU. A change to xpute's GPU
-encoder or runtime also takes `(cd xpute/rust && cargo test-gpu) && pnpm --dir xpute/ts test:gpu:web`, which needs a GPU and
+encoder or runtime also takes `(cd xpute/rust && ../../script/perf/mac.py cargo test-gpu) && script/perf/mac.py pnpm --dir xpute/ts test:gpu:web`, which needs a GPU and
 Chrome. `make fmt` formats.
 
 `make check` also lints Android, with the newest NDK installed

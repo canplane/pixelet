@@ -2,7 +2,7 @@
 
 #include "range.hpp"
 
-#include "xpute/kit/test.hpp"
+#include "dev/test/test.hpp"
 
 using namespace xpute;
 

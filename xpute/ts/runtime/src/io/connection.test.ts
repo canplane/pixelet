@@ -129,7 +129,11 @@ test("connection - a request answered in the turn that traps takes its answer", 
   });
   const answer = connection.request(1);
   quiet(() => connection.run(0));
-  assert.deepStrictEqual(await answer, 7, "not the stop's ENOTRECOVERABLE");
+  assert.deepStrictEqual(
+    (await answer)[0],
+    7,
+    "not the stop's ENOTRECOVERABLE",
+  );
 });
 
 test("connection - a turn run is heard before its wake", () => {
@@ -202,7 +206,7 @@ test("connection - a request is answered by the reply its turn sends, and waits 
   const answer = connection.request(1);
   assert.deepStrictEqual(turns, 0, "requesting runs nothing");
   connection.run(0);
-  assert.deepStrictEqual(await answer, 41);
+  assert.deepStrictEqual((await answer)[0], 41);
 });
 
 test("connection - a request still waiting as the core stops is answered ENOTRECOVERABLE", async () => {
@@ -211,8 +215,11 @@ test("connection - a request still waiting as the core stops is answered ENOTREC
   });
   const answer = connection.request(1);
   quiet(() => connection.run(0));
-  assert.deepStrictEqual(await answer, Errno.ENOTRECOVERABLE);
-  assert.deepStrictEqual(await connection.request(1), Errno.ENOTRECOVERABLE);
+  assert.deepStrictEqual(await answer, [Errno.ENOTRECOVERABLE, null]);
+  assert.deepStrictEqual(await connection.request(1), [
+    Errno.ENOTRECOVERABLE,
+    null,
+  ]);
 });
 
 test("connection - the memory a frame names is taken as it was sent", () => {
@@ -231,4 +238,21 @@ test("connection - the memory a frame names is taken as it was sent", () => {
   });
   connection.run(0);
   assert.deepStrictEqual(named, new Uint8Array([7, 8, 9]));
+});
+
+test("connection - a reply hands over the memory it names, as it was sent", async () => {
+  // This core replies naming three bytes of its own, then writes over them in
+  // the same turn.
+  const connection = bell((c) => {
+    const own = new Uint8Array(c.mem, OWN_AT, 3);
+    for (const f of c.take()) {
+      own.set([7, 8, 9]);
+      c.send({ tag: f.tag, cmd: f.cmd, flags: frame.RES, result: 0 }, 3);
+      own.fill(0);
+    }
+    return -1;
+  });
+  const answer = connection.request(1);
+  connection.run(0);
+  assert.deepStrictEqual(await answer, [0, new Uint8Array([7, 8, 9])]);
 });

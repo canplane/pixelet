@@ -8,7 +8,9 @@
 use std::borrow::Cow;
 use std::path::Path;
 
+use pxl_core::sys::file_spec::{path, CATALOG};
 use pxl_spec::asset::cube::ground::{forest, grass};
+use pxl_spec::asset::ingest::ASSET_PATHS;
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{self, TerrainTile, ELE_COLUMN, FOLD_COLUMN};
 use pxl_spec::bake::tile::Occupancy;
@@ -17,8 +19,6 @@ use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::io::fs::Token;
 use xpute_kit::status::errno::Errno;
-
-use crate::spec;
 
 /// The ground's height everywhere, in leaf cells over the sea.
 const HEIGHT: i16 = 8;
@@ -54,15 +54,6 @@ fn terrain(key: &str) -> Option<Vec<u8>> {
     Some(terrain::encode(&tile).expect("a tile encodes"))
 }
 
-pub struct Fs {
-    terrain: u32,
-    asset: u32,
-    catalog: u32,
-    /// Each shipped file's path below asset/content/, with file number n at index n - 1
-    /// (spec/spec/asset/ingest.json).
-    assets: Vec<String>,
-}
-
 /// The catalog's bytes, read from the generated file the client plugs it in from
 /// (ts/client/src/service/sys/fs/catalog.spec.ts).
 fn catalog() -> Vec<u8> {
@@ -76,38 +67,20 @@ fn catalog() -> Vec<u8> {
     hex::decode(hex).expect("the catalog is hex")
 }
 
-impl Fs {
-    pub fn new() -> Fs {
-        let ingest = spec::json("spec/spec/asset/ingest.json");
-        let assets = ingest["files"]
-            .as_array()
-            .expect("the ingest's files")
-            .iter()
-            .map(|f| f["path"].as_str().expect("a file's path").to_string())
-            .collect();
-        Fs {
-            terrain: spec::file_val(&["path", "TERRAIN", "ID"]),
-            asset: spec::file_val(&["path", "ASSET", "ID"]),
-            catalog: spec::file_val(&["CATALOG"]),
-            assets,
+/// The whole file at `path`, a terrain tile (TERRAIN, quadkey) or a shipped file (ASSET,
+/// number), or the errno the client would answer.
+pub fn bytes(path: &[Token]) -> Result<Vec<u8>, Errno> {
+    let n = match *path {
+        [Token::Int(path::TERRAIN::ID), Token::Str(key)] => {
+            return terrain(key).ok_or(Errno::ENOENT);
         }
+        [Token::Int(path::ASSET::ID), Token::Int(n)] => n,
+        _ => return Err(Errno::ENOENT),
+    };
+    if n as u32 == CATALOG {
+        return Ok(catalog());
     }
-
-    /// The whole file at `path`, a terrain tile (TERRAIN, quadkey) or a shipped file
-    /// (ASSET, number), or the errno the client would answer.
-    pub fn bytes(&self, path: &[Token]) -> Result<Vec<u8>, Errno> {
-        let n = match *path {
-            [Token::U32(r), Token::Str(key)] if r == self.terrain => {
-                return terrain(key).ok_or(Errno::ENOENT);
-            }
-            [Token::U32(r), Token::U32(n)] if r == self.asset => n,
-            _ => return Err(Errno::ENOENT),
-        };
-        if n == self.catalog {
-            return Ok(catalog());
-        }
-        let file = self.assets.get(n as usize - 1).ok_or(Errno::ENOENT)?;
-        std::fs::read(Path::new(env!("PXL_REPO")).join("asset/content").join(file))
-            .map_err(|_| Errno::ENOENT)
-    }
+    let file = ASSET_PATHS.get(n as usize - 1).ok_or(Errno::ENOENT)?;
+    std::fs::read(Path::new(env!("PXL_REPO")).join("asset/content").join(file))
+        .map_err(|_| Errno::ENOENT)
 }

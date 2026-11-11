@@ -7,7 +7,7 @@
 #include <source_location>
 #include <vector>
 
-#include "xpute/kit/test.hpp"
+#include "dev/test/test.hpp"
 
 using namespace xpute;
 
@@ -18,7 +18,7 @@ constexpr std::uint32_t FRAME = 256;
 // Where the test keeps what an import names: past both frames, which a packet
 // laid in the send frame would write over.
 constexpr std::uint32_t SCRATCH = 2 * FRAME;
-constexpr std::uint32_t PROGRAM = frame::PROGRAM_MAJOR << 8 | 1;
+constexpr std::uint32_t PROGRAM = frame::cmd(frame::PROGRAM_MAJOR, 1);
 
 // What the core sent: its frame, its packet and the memory it named.
 struct Sent {
@@ -169,7 +169,7 @@ XPUTE_TEST(door_completions_handed_over) {
     XPUTE_CHECK_EQ(sent().empty(), true, "a completion is answered by nothing");
 }
 
-XPUTE_TEST(door_program_command_handed_over) {
+XPUTE_TEST(door_program_cmd_handed_over) {
     Door d = open_door();
     submit(6, PROGRAM, frame::ACKREQ, 0);
     std::uint32_t got = 0xffff;
@@ -208,6 +208,21 @@ XPUTE_TEST(door_named_memory_taken_with_the_frame) {
     XPUTE_CHECK((sent().at(0).named == std::vector<std::uint8_t>{7, 8, 9}));
 }
 
+// The memory a reply names goes with its frame, as it was when sent.
+XPUTE_TEST(door_reply_named_memory_taken_with_the_frame) {
+    Door d = open_door();
+    std::uint8_t *p = runtime.mem().at(SCRATCH);
+    p[0] = 7, p[1] = 8, p[2] = 9;
+    submit(5, PROGRAM, frame::ACKREQ, 0);
+    d.receive(program([&](std::uint32_t, std::span<const std::uint8_t>) {
+        return Outcome{.val = 2, .named = std::span<const std::uint8_t>(p, 3)};
+    }));
+    p[0] = 0;
+    Sent s = sent().at(0);
+    XPUTE_CHECK(s.frame.tag == 5 && (s.frame.flags & frame::RES) && s.frame.result == 2);
+    XPUTE_CHECK((s.named == std::vector<std::uint8_t>{7, 8, 9}));
+}
+
 // A stop report with no file path takes `ABORT_PKT_BYTES`, as the writer
 // lays it.
 XPUTE_TEST(door_abort_pkt_bytes_of_the_format) {
@@ -239,9 +254,10 @@ XPUTE_TEST(door_abort_sends_the_report_after_what_was_sent) {
     XPUTE_CHECK_EQ(got[2].pkt.empty(), false, "the report carries where it stopped");
 }
 
-// A path's token is a string or a number that is a u32; any other node, a
-// fraction or a branch, is refused as it is read.
-XPUTE_TEST(door_path_takes_u32_and_str_tokens) {
+// A path's token is a string or a number that is an i32; any other node, a
+// fraction, a bool, an integer past an i32 or a branch, is refused as it is
+// read.
+XPUTE_TEST(door_path_takes_i32_and_str_tokens) {
     // The path `fill` writes, as child 0 of a packet in a buffer kept for the
     // test's life.
     auto read = [](auto &&fill) -> Result<Path> {
@@ -253,13 +269,14 @@ XPUTE_TEST(door_path_takes_u32_and_str_tokens) {
         return Path::read(or_bug(or_bug(t.read_branch(), Errno::ebadmsg).at(0), Errno::ebadmsg));
     };
     Result<Path> ok = read([](xtp::PacketWriter &w) {
-        w.branch(3, [](xtp::PacketWriter &w) { w.u32(0xffffffffu).str("0123").i32(4); });
+        w.branch(3, [](xtp::PacketWriter &w) { w.i32(INT32_MIN).str("0123").i32(INT32_MAX); });
     });
     XPUTE_CHECK(ok && ok->len() == 3);
-    XPUTE_CHECK((ok->at(0) == Token{std::uint32_t{0xffffffffu}} && ok->at(1) == Token{std::string_view("0123")} &&
-                 ok->at(2) == Token{std::uint32_t{4}}));
+    XPUTE_CHECK((ok->at(0) == Token{std::int32_t{INT32_MIN}} && ok->at(1) == Token{std::string_view("0123")} &&
+                 ok->at(2) == Token{std::int32_t{INT32_MAX}}));
     XPUTE_CHECK(!read([](xtp::PacketWriter &w) { w.branch(1, [](xtp::PacketWriter &w) { w.f64(0.5); }); }));
-    XPUTE_CHECK(!read([](xtp::PacketWriter &w) { w.branch(1, [](xtp::PacketWriter &w) { w.i32(-1); }); }));
+    XPUTE_CHECK(!read([](xtp::PacketWriter &w) { w.branch(1, [](xtp::PacketWriter &w) { w.boolean(true); }); }));
+    XPUTE_CHECK(!read([](xtp::PacketWriter &w) { w.branch(1, [](xtp::PacketWriter &w) { w.u32(0xffffffffu); }); }));
     XPUTE_CHECK(!read([](xtp::PacketWriter &w) {
         w.branch(1, [](xtp::PacketWriter &w) { w.branch(0, [](xtp::PacketWriter &) {}); });
     }));

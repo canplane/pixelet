@@ -21,7 +21,8 @@
   before, or what it adds is justified by what it buys and why less would not
   do. Report the state removed, or the state added and what it buys.
 - Before a commit, the review agent (`.claude/agents/review.md`) reads the
-  change.
+  change. Each finding is checked against the code or its source before it is
+  acted on or passed on, and a fix is no larger than its finding.
 
 ## The system
 
@@ -55,6 +56,10 @@
   folder you made.
 - Cargo builds into `<root>/rust/target/session/$CLAUDE_CODE_SESSION_ID`,
   written absolute.
+- A command that uses a device's GPU or starts or stops an app on it, and does
+  not hold the device itself (the shader probe, an install, xpute's GPU tests),
+  runs under its device's module: `script/perf/mac.py`, `android.py` or `ios.py`
+  `<command>`.
 - A change is checked by `./script/diff-check.py [base]`: the checks and tests
   of what the change since `base` reaches (default HEAD and the uncommitted). `make check`
   and `make test` whole are a deploy's. A passed check is not run again over

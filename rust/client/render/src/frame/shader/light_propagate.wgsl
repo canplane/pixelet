@@ -9,7 +9,7 @@
 // (light_mark_draws.wgsl) and the characters on what the eye meets, and neither is taller than
 // the height the way up climbs to. A tile is listed as read by the first thread to swap its
 // mark to the number of the cast in which the world's receivers were last stood afresh
-// (`light::HEADER_WORLD`, `light::LIST_READS`). It stays listed, as the tiles stood on do,
+// (`light::HDR_WORLD`, `light::LIST_READS`). It stays listed, as the tiles stood on do,
 // until the receivers are stood afresh again (`light::carry_at`). So a cast propagates only the
 // tiles stood on since the casts before it propagated theirs, and keeps their reads. Then
 // `light_damage_cs` takes one thread for each tile listed as read. It damages each tile that no
@@ -81,7 +81,7 @@ fn light_propagate_cs(
   // The thread's place in the stood list, counted past the tiles the casts before propagated
   // (`light::carry_at`), as list.wgsl `list_place` numbers a list walked apart.
   let n = light_tiles();
-  let propagated = in_cap(list_at(header_word(LIGHT_HEADER_CARRY) + LIGHT_RECEIVER_TILES_CNT), n * n);
+  let propagated = in_cap(list_at(hdr_word(LIGHT_HDR_CARRY) + LIGHT_RECEIVER_TILES_CNT), n * n);
   let k = propagated + (group.y * MISS_ACROSS + group.x) * MISS_LANES + lane.x;
   let at = list_cnt_at(LIGHT_LIST_RECEIVERS);
   if (k >= in_cap(list_at(at), n * n)) {
@@ -89,7 +89,7 @@ fn light_propagate_cs(
   }
   let w = list_at(at + 1u + k);
   let s = vec2<i32>(i32(w & 0xffffu), i32(w >> 16u));
-  let world = header_word(LIGHT_HEADER_WORLD);
+  let world = hdr_word(LIGHT_HDR_WORLD);
   let u = up();
   // Step `k` lies at least `k - 1` tiles from the tile stood on along the way's longer axis. A
   // step `n` tiles and the taps' span away reads only tiles past the box, so the steps past

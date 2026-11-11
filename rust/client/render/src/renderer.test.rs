@@ -375,7 +375,7 @@ fn a_cloud_draws_no_frame_whole() {
 /// and unchanged as the conditions written out here do. What is unchanged is
 /// also quiet, and what is masked or quiet stands.
 #[test]
-fn a_frame_decides_as_its_conditions_did_over_every_read() {
+fn a_frame_decides_as_its_conds_did_over_every_read() {
     for b in 0..1u32 << 8 {
         let bit = |k: u32| b >> k & 1 != 0;
         let r = FrameRead {

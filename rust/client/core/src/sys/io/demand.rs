@@ -101,7 +101,7 @@ impl Stream {
     /// The id the stream's files' paths begin with (file.json `path`), a
     /// want's id naming the file after it. A load has none,
     /// because the loader makes its own paths.
-    pub const fn token(self) -> Option<u32> {
+    pub const fn token(self) -> Option<i32> {
         match self.row().source {
             Source::Bake(BaseLayer::terrain) => Some(path::TERRAIN::ID),
             Source::Bake(BaseLayer::place) => Some(path::PLACE::ID),

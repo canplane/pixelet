@@ -10,7 +10,7 @@ import { follow_refused_files } from "@/service/sys/fs/refusal.ts";
 import { declare_source, settled } from "@/service/sys/fs/source.ts";
 import { set_online } from "@/service/origin/online.ts";
 import { MANIFEST } from "@/abi/manifest.spec.ts";
-import { config, perf_here } from "@/runtime/start.ts";
+import { config } from "@/runtime/start.ts";
 import { set_core } from "@/service/core/core.ts";
 import { type OnOpen, started, ui } from "@/runtime/ui.ts";
 import { fs_changed } from "@/service/core/fs.ts";
@@ -28,7 +28,7 @@ export async function open(on: OnOpen): Promise<boolean> {
     () => config(device.handheld),
     ui(on, (files) => follow_refused_files(files, fs_changed)),
   );
-  set_core(link, perf_here);
+  set_core(link);
   gpu.watch((state) => set_gpu(GPU_STATE[state]));
   gpu.grant({
     ready: () => gpu_exports(link, Major.GPU).gpu_ready(),

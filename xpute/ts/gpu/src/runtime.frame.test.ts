@@ -11,7 +11,12 @@ import { afterEach, test, vi } from "vitest";
 import assert from "node:assert/strict";
 
 import { op, STATUS } from "./api.spec.ts";
-import { ERRORS_AT, STATUS_AT, UNFINISHED_AT, WORDS } from "./device.ts";
+import {
+  ERRORS_AT,
+  STATUS_AT,
+  UNFINISHED_AT,
+  WORDS,
+} from "./api/device.spec.ts";
 import { GpuRuntime } from "./runtime.ts";
 import { OWN_WORDS } from "@xpute/runtime/io/stream.spec.ts";
 

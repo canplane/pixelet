@@ -108,6 +108,8 @@ struct State {
     double mark = 0;
     // What the runtime writes as it answers CALL's INC.
     std::uint32_t word = 0;
+    // What NAMED's reply names, byte k holding k.
+    std::array<std::uint8_t, MOST_NAMED> named{};
 };
 
 // The heap begins here. The memory never grows, so a module's allocator sits
@@ -120,7 +122,7 @@ static_assert(STATE_AT % alignof(State) == 0, "the state lies on its own alignme
 static_assert(PKT_BYTES >= ABORT_PKT_BYTES, "a packet holds a stop report");
 
 // Every OPEN names this file; no trace's runtime serves it.
-constexpr std::array<Token, 2> PATH{std::uint32_t{1}, std::string_view{"f"}};
+constexpr std::array<Token, 2> PATH{std::int32_t{1}, std::string_view{"f"}};
 
 State &state_of(Memory m, std::uint32_t range) {
     return *std::launder(reinterpret_cast<State *>(m.at(range + STATE_AT)));
@@ -142,7 +144,8 @@ Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
     // A command that takes a number fails with EBADMSG when its packet does
     // not read as one.
     std::uint32_t arg = 0;
-    if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE || cmd == cmd::OPEN || cmd == cmd::CLOSE || cmd == cmd::CALL) {
+    if (cmd == cmd::RAISE || cmd == cmd::RECORD || cmd == cmd::RELEASE || cmd == cmd::USE || cmd == cmd::OPEN || cmd == cmd::CLOSE || cmd == cmd::CALL ||
+        cmd == cmd::NAMED) {
         std::optional<std::uint32_t> n = first_u32(pkt);
         if (!n) return {.err = Errno::ebadmsg};
         arg = *n;
@@ -185,6 +188,11 @@ Outcome apply(State &s, std::uint32_t cmd, std::span<const std::uint8_t> pkt) {
         if (!res) return {.err = res.error().errnum};
         // The word the runtime wrote before the call returned.
         return {.val = static_cast<std::int32_t>(*static_cast<volatile std::uint32_t *>(&s.word))};
+    }
+    case cmd::NAMED: {
+        if (arg > MOST_NAMED) return {.err = Errno::einval};
+        for (std::uint32_t k = 0; k < arg; k++) s.named[k] = static_cast<std::uint8_t>(k);
+        return {.named = std::span<const std::uint8_t>(s.named.data(), arg)};
     }
     default:
         return {.err = Errno::enosys};

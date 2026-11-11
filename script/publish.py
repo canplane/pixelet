@@ -174,7 +174,7 @@ def upload(record, kind):
 USAGE = f"usage: ./script/publish.py [upload] <{'|'.join(KINDS)}>… | serve <kind> <version> | override <shard> <kind> <version|->"
 
 
-def command(record, args):
+def cmd(record, args):
     """What `args` changes of what the bucket serves, `record`: the
     declaration to serve, or none where nothing is served (`upload`)."""
     first, rest = (args[0], args[1:]) if args else ("", [])
@@ -214,7 +214,7 @@ def command(record, args):
 def main():
     try:
         endpoint()
-        served = command(served_now(), sys.argv[1:])
+        served = cmd(served_now(), sys.argv[1:])
         if served:
             serve(declared(served))
     except Refused as e:

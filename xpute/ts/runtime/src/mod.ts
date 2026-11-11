@@ -24,8 +24,14 @@ export {
   QUIET,
   type Ui,
 } from "./runtime.ts";
-export { type Encode, type OnImport, refusal_of } from "./io/connection.ts";
+export {
+  type Encode,
+  type OnImport,
+  type Reply,
+  refusal_of,
+} from "./io/connection.ts";
 export { type Binding, FileError } from "./io/fs.ts";
+export { CMD } from "./io/frame.ts";
 export type { Path, Token } from "./io/path.ts";
 export { Command as FsCommand } from "./abi/fs.spec.ts";
 export { Timeslice } from "./sched/timeslice.ts";

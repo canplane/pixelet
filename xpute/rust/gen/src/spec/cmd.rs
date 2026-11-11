@@ -102,9 +102,11 @@ struct Record {
 /// `import` before the core's call returns. With `ackreq`, the command is
 /// posted with ACKREQ and answered later; the runtime completes such an
 /// `import` on a later turn with a frame of the same tag flagged RES, whose
-/// packet is `reply`. `mem` names the two fields of an `import` that give where
-/// a region of the core's memory is and how long it is. `tag` names what an
-/// `import`'s tag carries, which its handler is handed before its packet.
+/// packet is `reply`. With `named`, an `export`'s reply names the core's memory
+/// that holds its answer, which goes with the reply's frame. `mem` names the
+/// two fields of an `import` that give where a region of the core's memory is
+/// and how long it is. `tag` names what an `import`'s tag carries, which its
+/// handler is handed before its packet.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Cmd {
@@ -117,6 +119,8 @@ struct Cmd {
     call: bool,
     #[serde(default)]
     ackreq: bool,
+    #[serde(default)]
+    named: bool,
     reply: Option<Vec<Field>>,
     mem: Option<[String; 2]>,
     tag: Option<String>,
@@ -155,6 +159,18 @@ pub(crate) struct Gen {
     /// Enums that a module below the protocol's own code reads. They are
     /// written into a file of their own, where that module can name them.
     pub(crate) enums: Option<Apart>,
+    /// The protocol's runtime end in Rust, where a Rust runtime takes it.
+    pub(crate) runtime: Option<Runtime>,
+}
+
+/// The runtime end's file `rs`, relative to the JSON's own directory, and the
+/// Rust module `core` that holds the protocol's core end, whose enums it
+/// names.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Runtime {
+    pub(crate) rs: String,
+    pub(crate) core: String,
 }
 
 /// The enums `names`, written apart into `rs`, a file relative to the JSON's
@@ -180,8 +196,8 @@ struct Spec {
 /// A `Protocol` is a protocol as the emitters read it.
 struct Protocol {
     name: String,
-    /// Each export's name, whether it is a call, and whether it is posted with
-    /// ACKREQ and answered later.
+    /// Each export's name, whether it is posted with ACKREQ and answered
+    /// later, and whether its reply names memory.
     exports: Vec<(String, bool, bool)>,
     imports: Vec<(String, bool)>,
 }
@@ -230,6 +246,12 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
                     c.name
                 ));
             }
+            if c.named && (dir != "export" || !c.ackreq) {
+                return Err(format!(
+                    "{shown}: {} names memory in a reply, so it is an export with ackreq",
+                    c.name
+                ));
+            }
             if c.reply.is_some() && !c.ackreq {
                 return Err(format!("{shown}: {} has a reply and no ackreq", c.name));
             }
@@ -252,7 +274,7 @@ fn read_spec(json: &str, shown: &str) -> Result<Spec, String> {
                 }
             }
             if dir == "export" {
-                of.exports.push((c.name.clone(), c.call, c.ackreq));
+                of.exports.push((c.name.clone(), c.ackreq, c.named));
             } else {
                 of.imports.push((c.name.clone(), c.call));
             }
@@ -296,7 +318,7 @@ enum Kind {
     Enum,
     Extern,
     Record,
-    /// A file's path: a branch of tokens, each a u32 or a string, as many as
+    /// A file's path: a branch of tokens, each an i32 or a string, as many as
     /// it has (`Token` and `Path` in xpute-core io/fs.rs).
     Path,
 }
@@ -326,8 +348,8 @@ impl Spec {
 
     /// Whether a field of a packet or a record is a path.
     fn has_path(&self) -> Result<bool, String> {
-        let commands = self.commands()?;
-        let fields = commands
+        let cmds = self.cmds()?;
+        let fields = cmds
             .iter()
             .flat_map(|c| {
                 c.pkt
@@ -362,7 +384,7 @@ impl Spec {
             .expect("a record kind() found")
     }
 
-    fn commands(&self) -> Result<Vec<&Member>, String> {
+    fn cmds(&self) -> Result<Vec<&Member>, String> {
         let table = self
             .enums
             .iter()
@@ -457,8 +479,10 @@ pub struct Target {
     pub ts_logical: &'static str,
     pub rs: &'static str,
     pub rs_logical: &'static str,
-    /// The module that holds the number checks a packet's reader calls.
-    pub number: &'static str,
+    /// Where the number checks a packet's reader calls are: the Rust module
+    /// (xpute-core abi/number.rs) and the TypeScript one (@xpute/runtime
+    /// abi/number.ts).
+    pub number: (&'static str, &'static str),
     /// For a core that raises the table's imports, the module whose `Import`
     /// trait each import implements (`xpute_core::io::door`).
     pub import: Option<&'static str>,
@@ -470,6 +494,20 @@ pub struct Target {
     /// `Path` (xpute-core io/fs.rs), and the TypeScript module that holds
     /// `Path` and `read_path` (@xpute/runtime io/path.ts).
     pub path: (&'static str, &'static str),
+    /// Where the protocol's runtime end goes, for a runtime in Rust.
+    pub runtime: Option<RuntimeEnd>,
+}
+
+/// A protocol's runtime end in Rust: its file, as the file names itself, the
+/// module that holds the protocol's core end, whose enums it names, and the
+/// module that holds the runtime's `Export`, which each export's writer
+/// implements, and `Outcome`, which each import's handler answers
+/// (`xpute_runtime::abi`).
+pub struct RuntimeEnd {
+    pub rs: &'static str,
+    pub rs_logical: &'static str,
+    pub core: &'static str,
+    pub abi: &'static str,
 }
 
 /// This is the first major a program's commands may take; the majors below it
@@ -480,7 +518,7 @@ const PROGRAM_MAJOR: u32 = 0x10;
 fn check_once(specs: &[(&Spec, &str)]) -> Result<(), String> {
     let mut seen: Vec<(u32, &str, &str)> = Vec::new();
     for (spec, json) in specs {
-        for c in spec.commands()? {
+        for c in spec.cmds()? {
             if let Some((_, name, at)) = seen.iter().find(|(v, ..)| *v == c.val) {
                 return Err(format!(
                     "{json}: {} is 0x{:04x}, which {at} gives {name}",
@@ -503,7 +541,7 @@ pub fn protocol_outputs(root: &Path, jsons: &[&str]) -> Result<Vec<Output>, Stri
         let spec = read_spec(&root.join(json).to_string_lossy(), json)?;
         check_numbers(&spec, json)?;
         if let Some(c) = spec
-            .commands()?
+            .cmds()?
             .into_iter()
             .find(|c| c.val >> 8 < PROGRAM_MAJOR)
         {
@@ -536,11 +574,23 @@ fn one_protocol(spec: &Spec, json: &str) -> Result<Vec<Output>, String> {
         ts_logical: ts_at,
         rs: rs_at,
         rs_logical: rs_at,
-        number: "xpute_core::abi::number",
+        number: ("xpute_core::abi::number", "@xpute/runtime/abi/number.ts"),
         import: Some("xpute_core::io::door"),
         cpp: None,
         runtime_ts: None,
         path: ("xpute_core::io::fs", "@xpute/runtime/io/path.ts"),
+        runtime: match &gen.runtime {
+            Some(r) => {
+                let rs = keep(beside(json, &r.rs)?);
+                Some(RuntimeEnd {
+                    rs,
+                    rs_logical: rs,
+                    core: keep(r.core.clone()),
+                    abi: "xpute_runtime::abi",
+                })
+            }
+            None => None,
+        },
     };
     let mut out = ts::emit(spec, &t)?;
     let (imports, body) = service::ts(spec, "@xpute/runtime")?;
@@ -565,6 +615,12 @@ fn one_protocol(spec: &Spec, json: &str) -> Result<Vec<Output>, String> {
         t.rs,
         rs::emit(spec, &t, apart)? + &service::rs(spec, "xpute_core::io::door", true)?,
     ));
+    if let Some(r) = &t.runtime {
+        out.push(Output::new(
+            r.rs,
+            rs::emit_runtime(spec, &t, r)? + &service::rs_runtime(spec)?,
+        ));
+    }
     Ok(out)
 }
 
@@ -611,7 +667,11 @@ fn splice_ts(text: &str, imports: &[String], body: &[String]) -> String {
     let body_text = body.join("\n");
     let words = ["f64", "i32", "u32", "u8"]
         .into_iter()
-        .filter(|w| body_text.contains(&format!(": {w}")) || body_text.contains(&format!("<{w}>")))
+        .filter(|w| {
+            [format!(": {w}"), format!("<{w}>"), format!(" {w}[]")]
+                .iter()
+                .any(|spelled| body_text.contains(spelled))
+        })
         .collect();
     import_spelled(&mut lines, words, "@xpute/kit/abi/word.ts");
     let arrays = ["U32Array"]
@@ -637,7 +697,7 @@ pub fn outputs_at(root: &Path, targets: &[Target]) -> Result<Vec<Output>, String
         let spec = read_spec(&root.join(t.json).to_string_lossy(), t.json)?;
         check_numbers(&spec, t.json)?;
         if let Some(c) = spec
-            .commands()?
+            .cmds()?
             .into_iter()
             .find(|c| c.val >> 8 >= PROGRAM_MAJOR)
         {
@@ -662,6 +722,12 @@ pub fn outputs_at(root: &Path, targets: &[Target]) -> Result<Vec<Output>, String
             rs_text += &service::rs(spec, door, false)?;
         }
         out.push(Output::new(t.rs, rs_text));
+        if let Some(r) = &t.runtime {
+            out.push(Output::new(
+                r.rs,
+                rs::emit_runtime(spec, t, r)? + &service::rs_runtime(spec)?,
+            ));
+        }
         if let Some((path, namespace)) = t.cpp {
             out.push(Output::new(path, cpp::emit(spec, t, path, namespace)?));
         }

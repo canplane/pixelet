@@ -8,11 +8,12 @@
  * turn waits until the runtime has stored it at the fence. The test also holds
  * that a surface's handle keeps its slot only while it is the one bound there.
  *
- * ts/gpu/script/browser.ts serves it to Chrome, and the page posts its outcome
- * back: "ok", or what failed.
+ * ts/gpu/script/browser.ts serves it to Chrome, handing the golden reader
+ * where the page serves spec/, and the page posts its outcome back: "ok", or
+ * what failed.
  */
 
-import { Golden } from "@xpute/kit/golden.ts";
+import { Golden } from "../../dev/golden.ts";
 
 import { GpuRuntime } from "./runtime.ts";
 
@@ -86,7 +87,10 @@ function guard(): void {
   const released: string[] = [];
   const context = (name: string) =>
     ({ unconfigure: () => released.push(name) }) as unknown as GPUCanvasContext;
-  const device = { lost: new Promise<never>(() => {}) } as unknown as GPUDevice;
+  const device = {
+    lost: new Promise<never>(() => {}),
+    addEventListener: () => {},
+  } as unknown as GPUDevice;
   const runtime = new GpuRuntime(
     device,
     () => new ArrayBuffer(0),

@@ -56,15 +56,14 @@ pub fn text_lines(weight: u32, px: f64, max_width: f64, text_in: &str) -> Option
         Entry::Vacant(v) => {
             // A text breaks into no more lines than it has characters, and an
             // empty text into one.
-            let lines = text_in.chars().count().max(1) as u32;
-            let mut at = vec![0u32; (LAYOUT_ANSWER::WORDS + LINE::WORDS * lines) as usize]
-                .into_boxed_slice();
+            let lines = text_in.chars().count().max(1);
+            let mut at = vec![0u32; LAYOUT_ANSWER::WORDS + LINE::WORDS * lines].into_boxed_slice();
             let call = TextLayout {
                 weight,
                 px,
                 max_width,
                 at: off_of_slice(&raw mut *at) as u32,
-                lines,
+                lines: lines as u32,
                 text_at: off_of_slice(text_in.as_bytes()) as u32,
                 text_len: text_in.len() as u32,
             };
@@ -78,18 +77,18 @@ pub fn text_lines(weight: u32, px: f64, max_width: f64, text_in: &str) -> Option
     // The client's answer is checked here, where it comes back in. A line
     // that ends inside a character or out of order makes the answer no
     // layout.
-    let pairs = answer.at[LAYOUT_ANSWER::WORDS as usize..]
-        .as_chunks::<{ LINE::WORDS as usize }>()
+    let pairs = answer.at[LAYOUT_ANSWER::WORDS..]
+        .as_chunks::<{ LINE::WORDS }>()
         .0;
-    let cnt = answer.at[LAYOUT_ANSWER::cnt as usize] as usize;
+    let cnt = answer.at[LAYOUT_ANSWER::cnt] as usize;
     if cnt > pairs.len() {
         return Some(unlaid(text_in));
     }
     let mut lines = Vec::with_capacity(cnt);
     let mut start = 0;
     for pair in &pairs[..cnt] {
-        let end = pair[LINE::end as usize] as usize;
-        let width = f64::from(f32::from_bits(pair[LINE::width as usize]));
+        let end = pair[LINE::end] as usize;
+        let width = f64::from(f32::from_bits(pair[LINE::width]));
         if end < start || !text_in.is_char_boundary(end) || !width.is_finite() {
             return Some(unlaid(text_in));
         }

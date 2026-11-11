@@ -685,9 +685,11 @@ fn rs_leaf(
 
 /// A table with `"$packed": true` is laid out end to end. Each field gives its
 /// width in words, and the generator writes where the field begins, and the
-/// table's `WORDS` where the last field ends. A section inside the table is
+/// table's `WORDS` where the last field ends. What it writes are indices, so a
+/// packed table declares no `$type`: its numbers are a `usize` in Rust, a
+/// `std::size_t` in C++ and a number in TypeScript. A section inside the table is
 /// itself a packed table, given its `AT`. A width is a number or a product of
-/// terms (`"2 * COUNT"`). A term is a number; a list or a packed table above
+/// terms (`"2 * COUNT"`), divided by others rounding up (`"FLAGS / 32"`). A term is a number; a list, a named list or a packed table above
 /// it in the file, standing for its length or its `WORDS`; a number in such a
 /// table (`TABLE.FIELD`); or else a name from a file the spec uses (`used`).
 /// Growing a field therefore moves everything after it.
@@ -717,8 +719,12 @@ fn lay(
     used: &[(String, Node)],
 ) -> Result<Vec<(String, Node)>, String> {
     let mut at = 0.0;
-    let mut out = Vec::with_capacity(entries.len() + 1);
+    let mut out = Vec::with_capacity(entries.len() + 2);
+    out.push(("$type".into(), Node::Str("usize".into())));
     for (k, v) in entries {
+        if k == "$type" {
+            return Err("$type: a packed table's numbers are indices, and it declares none".into());
+        }
         if k.starts_with('$') {
             out.push((k, v));
             continue;
@@ -781,16 +787,29 @@ fn width(v: &Node, above: &[(String, Node)], used: &[(String, Node)]) -> Result<
                 }),
             None => named(t).and_then(|n| match n {
                 Node::Arr(a) => Some(a.len() as f64),
-                Node::Obj(_) if n.is_wrapper() => n.val().num(),
+                Node::Obj(_) if n.is_wrapper() => match n.val() {
+                    Node::Arr(a) => Some(a.len() as f64),
+                    v => v.num(),
+                },
                 Node::Obj(o) => words_of(o),
                 _ => n.num(),
             }),
         };
         found.ok_or_else(|| format!("`{t}` names no width above it"))
     };
-    // A width is a product of terms, minus any further terms:
-    // `TABLE.FIELD - 1`.
-    let product = |p: &str| p.split('*').map(term).product::<Result<f64, String>>();
+    // A width is a product of terms, divided by further terms rounding up,
+    // minus any further terms: `TABLE.FIELD - 1`, `FLAGS / 32` for the words
+    // that hold a bit each.
+    let product = |p: &str| -> Result<f64, String> {
+        let mut parts = p.split('/');
+        let n = parts
+            .next()
+            .unwrap_or_default()
+            .split('*')
+            .map(term)
+            .product::<Result<f64, String>>()?;
+        parts.try_fold(n, |n, d| Ok::<f64, String>((n / term(d)?).ceil()))
+    };
     match v {
         Node::Num(n) => Ok(*n),
         Node::Str(s) => {
@@ -1110,9 +1129,18 @@ fn rs_outputs(
 fn cpp_file(d: &DataSpec, spec: &Node, cpp_path: &str, namespace: &str) -> Result<String, String> {
     let mut cpp = head(cpp_path, d.json, spec);
     let lists = spec.named().any(|(_, n)| matches!(n, Node::Arr(_)));
+    let packed = spec.named().any(|(_, n)| match n {
+        Node::Obj(t) => t
+            .iter()
+            .any(|(f, x)| f == "$packed" && *x == Node::Bool(true)),
+        _ => false,
+    });
     cpp.extend([String::new(), "#pragma once".into(), String::new()]);
     if lists {
         cpp.push("#include <array>".into());
+    }
+    if packed {
+        cpp.push("#include <cstddef>".into());
     }
     cpp.push("#include <cstdint>".into());
     if lists {
@@ -1187,9 +1215,10 @@ fn cpp_items(
     let (ty, suffix) = match t {
         "u32" => ("std::uint32_t", "u"),
         "i32" => ("std::int32_t", ""),
+        "usize" => ("std::size_t", "u"),
         other => {
             return Err(format!(
-                "{name}: a C++ header takes u32 and i32, not {other}"
+                "{name}: a C++ header takes u32, i32 and usize, not {other}"
             ))
         }
     };

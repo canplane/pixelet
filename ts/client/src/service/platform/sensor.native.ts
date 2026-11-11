@@ -1,14 +1,13 @@
 // @pxl/client/service/platform/sensor.native.ts
 
 /**
- * Position and heading through expo-horizon-location, the fork of
- * expo-location that reads position without Google Play Services, which
- * Horizon OS lacks. Both reach the listener in the same shape as the page's,
- * with the heading in the place of Safari's `webkitCompassHeading`.
+ * Position and heading through expo-location. Both reach the listener in the
+ * same shape as the page's, with the heading in the place of Safari's
+ * `webkitCompassHeading`.
  */
 
 import { AppState, Linking } from "react-native";
-import * as Location from "expo-horizon-location";
+import * as Location from "expo-location";
 
 import { coords_fix, geo_fix, listener } from "./sensor-listener.ts";
 import type { GeolocationSensor, OrientationSensor } from "./types.ts";
@@ -45,20 +44,39 @@ function geo_granted(): Promise<boolean> {
 
 /** iOS never asks again after a refusal, and Android stops asking after the
  * second. The settings then grant it, and the app's return to the foreground
- * starts the watch again. */
+ * starts the watch again. A granted location still needs the device's own
+ * location switched on. */
 function geo_permit(): Promise<boolean> {
   return serial(async () => {
     const now = await Location.getForegroundPermissionsAsync();
-    if (now.status === Location.PermissionStatus.GRANTED) return true;
-    if (!now.canAskAgain) {
-      granted = false;
-      await Linking.openSettings();
-      return false;
+    if (now.status !== Location.PermissionStatus.GRANTED) {
+      if (!now.canAskAgain) {
+        granted = false;
+        await Linking.openSettings();
+        return false;
+      }
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      granted = status === Location.PermissionStatus.GRANTED;
+      if (!granted) return false;
     }
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    granted = status === Location.PermissionStatus.GRANTED;
-    return granted;
+    return services_on();
   });
+}
+
+/** An Android phone turns the location on through Play Services' dialog,
+ * which rejects when it is declined. iOS has no such dialog and resolves at
+ * once, so its settings open, and the app's return to the foreground starts
+ * the watch again. */
+async function services_on(): Promise<boolean> {
+  if (await Location.hasServicesEnabledAsync()) return true;
+  try {
+    await Location.enableNetworkProviderAsync();
+  } catch {
+    return false;
+  }
+  if (await Location.hasServicesEnabledAsync()) return true;
+  await Linking.openSettings();
+  return false;
 }
 
 /** Rechecks the permission whenever the app comes back to the foreground, so
@@ -107,10 +125,11 @@ function watch_keep(
 
 let geolocation: Watch | null = null;
 
-function geo_fail(watch: Watch, err: "denied" | "other"): void {
+/** A device's watch ends on any failure. */
+function geo_fail(watch: Watch, err: "denied" | "unavailable" | "other"): void {
   if (geolocation !== watch) return;
   geo_stop();
-  listener.positionError(err);
+  listener.positionError(err, false);
 }
 
 function geo_start(): void {
@@ -119,19 +138,26 @@ function geo_start(): void {
   geolocation = watch;
   void (async () => {
     if (!(await geo_granted())) return geo_fail(watch, "denied");
+    // A watch the core starts asks only for a permission not yet decided and
+    // raises no settings dialog: the location switched off ends it, and the
+    // press turns the location on (`services_on`).
+    if (!(await Location.hasServicesEnabledAsync())) {
+      return geo_fail(watch, "unavailable");
+    }
     const subscription = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.BestForNavigation,
         timeInterval: 1000,
         distanceInterval: 0,
+        mayShowUserSettingsDialog: false,
       },
       (pos) => geo_fix(coords_fix(pos.coords)),
       // Android's watch never ends on its own: expo's watch callbacks leave
       // onLocationError empty, and the fused provider keeps the request. iOS
       // rides out locationUnknown while CoreLocation keeps trying, and ends
       // the stream on any other failure. An ended watch is reported as a
-      // failure, and the core starts the watch again on a grant or on a
-      // return to the foreground.
+      // failure, and the core starts the watch again on a grant, a return to
+      // the foreground or a press.
       () => geo_fail(watch, "other"),
     );
     watch_keep(watch, subscription);

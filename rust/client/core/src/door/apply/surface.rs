@@ -21,7 +21,7 @@ pub(super) fn open() -> Outcome {
     if handle != 0 {
         request_world_tick();
     }
-    Ok(Some(handle as i32))
+    Ok(Some((handle as i32).into()))
 }
 
 /// Makes the surface `handle` draw the world. The sensors are watched while
@@ -58,7 +58,7 @@ pub(super) fn resize(c: GpuSurfaceResize) -> Outcome {
         );
     }
     request_world_tick();
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 pub(super) fn close(c: GpuSurfaceClose) -> Outcome {
@@ -70,5 +70,5 @@ pub(super) fn close(c: GpuSurfaceClose) -> Outcome {
     if role == surface_role::WORLD && !world_open {
         sensor::sensors_close();
     }
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }

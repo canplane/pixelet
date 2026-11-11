@@ -7,7 +7,7 @@
 
 /// The queue bound (pxl-engine `ray::QUEUE_EYE_CORNERS` and the rest).
 fn bound_queue() -> u32 {
-  return (QUEUE_WORDS - arrayLength(&queue)) / QUEUE_HEADER_STRIDE;
+  return (QUEUE_WORDS - arrayLength(&queue)) / QUEUE_HDR_STRIDE;
 }
 
 /// A queue's number is its run's tag, but for the light's holes, which take the eye's.

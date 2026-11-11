@@ -20,17 +20,21 @@ export { Command };
 export interface Ask {}
 
 /** The asker protocol's exports as the UI calls them over `link`: a send returns
- * nothing, and a request a Promise of its reply's value, which rejects with the
- * errno it was refused with. `fits` says whether a send's packet fits a frame. */
+ * nothing, and a request a Promise of its reply's value, or of the memory its reply
+ * names, which rejects with the errno it was refused with. `fits` says whether a
+ * send's packet fits a frame. */
 export function asker_exports(link: Link) {
   return {
     /** Carries two numbers. The core answers with their sum plus the number ASK answers. */
-    sum: (a: u32, b: u32) => link.request(Command.SUM, a, b),
+    sum: (a: u32, b: u32) => link.request(Command.SUM, a, b).then((r) => r.val),
   };
 }
 
 /** The asker protocol's exports, as `asker_exports` binds them. */
 export type AskerExports = ReturnType<typeof asker_exports>;
+
+/** The majors the runtime routes the protocol's imports by. */
+export const MAJORS: readonly u32[] = [0x10];
 
 /** What the program does with each command the core posts on the asker protocol: a
  * call's member answers its value, and throws kit's error to refuse it. */
@@ -55,5 +59,5 @@ export function asker_imports(h: AskerImports): Protocol {
       return refusal_of(err);
     }
   };
-  return { majors: [0x10], on };
+  return { majors: MAJORS, on };
 }

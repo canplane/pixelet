@@ -34,10 +34,14 @@ pub struct RecordingStateSection {
     pub recording: f64,
     pub elapsed_ms: f64,
     pub truncated: f64,
+    pub frames: f64,
+    pub tasks: f64,
+    pub worst: f64,
 }
 
 words!(RecordingStateSection, NOW::recording_state::WORDS,
     recording => NOW::recording_state::recording, elapsed_ms => NOW::recording_state::elapsed_ms, truncated => NOW::recording_state::truncated,
+    frames => NOW::recording_state::frames, tasks => NOW::recording_state::tasks, worst => NOW::recording_state::worst,
 );
 
 /// Whether the core draws, as perf.json's NOW `draw` says.

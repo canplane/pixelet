@@ -35,7 +35,7 @@ pxl-engine separately (`283ded8dc2`), and this record uses the new name.
   growth is accepted: a few KB per module, from rustc's copy of each small
   helper in every crate that calls it. Since 2026-11-05 the WGSL is written by
   hand and held to pxl-engine word for word
-  ([the shaders by hand](./20261105-the-shaders-by-hand-held-to-the-engine.md)).
+  ([the shaders by hand](../gpu/minutes/20261105-the-shaders-by-hand-held-to-the-engine.md)).
 - **The decor's scatter, placement and generation and the palette files move
   as files**, no behaviour changed. A refusal of a changed palette id in the
   generator was dropped from scope.

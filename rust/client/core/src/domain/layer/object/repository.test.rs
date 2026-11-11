@@ -4,7 +4,7 @@ use pxl_spec::asset::marker::MARKER;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::morton::{key_of, key_of_name};
-use xpute_kit::golden::Golden;
+use xpute_golden::Golden;
 
 use super::*;
 use crate::sys::io::request;

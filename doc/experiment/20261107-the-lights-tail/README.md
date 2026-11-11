@@ -12,7 +12,7 @@ and none is tried again here.
 | what | when | what came of it | record |
 | --- | --- | --- | --- |
 | A budget of the rays' visits, rays parked across frames | until 11-07 | Removed: terrain broke while moving, with ghosts. Every ray ends in its frame, so an epoch casts every tile it reads at once, and the S23's p95 became the light's | [a ray ends in its frame](../../minutes/20261107-a-ray-ends-in-its-frame.md) |
-| Casting again only the tiles a world change reaches | `aa2ee5efef`, kept | `light_hit` p95 17 to 5.2–5.4 ms with a character walking | [the journal](../20261103-the-frame-on-the-s23/README.md), "What makes the light cast again" |
+| Casting again only the tiles a world change reaches | `aa2ee5efef`, kept | `light_hit` p95 17 to 5.2–5.4 ms with a character walking | [the journal](../../gpu/experiment/20261103-the-frame-on-the-s23/README.md), "What makes the light cast again" |
 | A brick's columns read by the bands that read it | 11-08, kept | The gain is not separated from run to run | the journal, the same section |
 | Sliding the depth step | held, not merged | A stepped cast costs as much as the whole recast it replaces, so the tail stays | the journal, the same section |
 | Keeping tiles across a depth step | weighed, dropped | A kept slot's ray would start a step from a fresh one's | the journal, the same section |
@@ -207,7 +207,7 @@ cast has 1,329,968 voxels and 11,409 holes (s23-noentry).
 The app answers on the same phone: with wgpu on Vulkan the triangle covers every claimed slot
 through the same indirect call, and its casts of 12,037 to 17,089 stops take 148,971 to 246,432
 voxels. The app's wgpu is a patched fork (`rust/Cargo.toml`, `[patch.crates-io]`,
-[the patch](../../minutes/20261110-the-patch-that-fixed-one-phone.md)), so it is not the same stack
+[the patch](../../gpu/minutes/20261110-the-patch-that-fixed-one-phone.md)), so it is not the same stack
 with another front. What it says is that the loss is not the phone's alone. It lies on the page's
 path on this phone.
 

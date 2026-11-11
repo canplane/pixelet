@@ -3,7 +3,7 @@
 //! A baked terrain tile and its wire: `[samples, ground, occupancy, separation]`.
 
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::shape;
+use xpute_kit::wire::xtp::shape;
 use xpute_kit::wire::xtp::MAX_PKT_SZ;
 
 use std::borrow::Cow;
@@ -33,7 +33,7 @@ use crate::ground::ELE_PADDED_SPAN;
 use crate::space::coord::world::wrap_idx;
 use crate::space::layer::area::Shard;
 use crate::way;
-use crate::way::{header, HEADER_WORDS, SEGMENT_WORDS};
+use crate::way::{hdr, HDR_WORDS, SEGMENT_WORDS};
 
 /// The most a packet takes: what a client holds one in and refuses one
 /// past, and where a bake refuses a tile.
@@ -111,7 +111,7 @@ pub fn brick_lines(
 ) {
     let cnt = pairs.len();
     let frame = Frame::of(tile);
-    out[..HEADER_WORDS as usize].copy_from_slice(&header(frame.per_m(), &frame.stations()));
+    out[..HDR_WORDS as usize].copy_from_slice(&hdr(frame.per_m(), &frame.stations()));
     let (mut n, mut last) = (0, None);
     for e in pairs.iter_mut() {
         let p = e.1;

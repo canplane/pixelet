@@ -2,8 +2,8 @@
 
 **2026-11-06** — recorded with the user, in the session that runs the S23 batch
 (eff52c1d). The measurements and the patches, as they happened, are in
-[the journal](../experiment/20261103-the-frame-on-the-s23/README.md); the batch's
-plan is [beside it](../experiment/20261103-the-frame-on-the-s23/README.md).
+[the journal](../gpu/experiment/20261103-the-frame-on-the-s23/README.md); the batch's
+plan is [beside it](../gpu/experiment/20261103-the-frame-on-the-s23/README.md).
 
 ## What the user decided
 

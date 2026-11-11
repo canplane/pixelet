@@ -257,38 +257,38 @@ pub const INTERVAL_M: [f32; 2] = [BEAM_PILLAR_INTERVAL_M, WIDE_BEAM_PIER_INTERVA
 /// What a brick's lines open with (brick.rs `LINES_*`): its tile's leaf cells a
 /// ground meter (`Frame::per_m`), as a float's bits, then its stations
 /// (`StationGrid`), a word each: the narrow beam's step and then the wide's, the phase `phase[w][axis]` at
-/// `HEADER_PHASE + 2w + axis`, and the leaf cells a cell.
-pub const HEADER_PER_M: usize = 0;
-pub const HEADER_STEP: usize = 1;
-pub const HEADER_PHASE: usize = 3;
-pub const HEADER_LEAF: usize = 7;
-pub const HEADER_WORDS: u32 = 8;
+/// `HDR_PHASE + 2w + axis`, and the leaf cells a cell.
+pub const HDR_PER_M: usize = 0;
+pub const HDR_STEP: usize = 1;
+pub const HDR_PHASE: usize = 3;
+pub const HDR_LEAF: usize = 7;
+pub const HDR_WORDS: u32 = 8;
 
-pub fn header(per_m: f32, st: &StationGrid) -> [u32; HEADER_WORDS as usize] {
+pub fn hdr(per_m: f32, st: &StationGrid) -> [u32; HDR_WORDS as usize] {
     let [[p0, p1], [p2, p3]] = st.phase;
-    let mut w = [0; HEADER_WORDS as usize];
-    w[HEADER_PER_M] = per_m.to_bits();
-    w[HEADER_STEP] = st.step[0] as u32;
-    w[HEADER_STEP + 1] = st.step[1] as u32;
-    w[HEADER_PHASE] = p0 as u32;
-    w[HEADER_PHASE + 1] = p1 as u32;
-    w[HEADER_PHASE + 2] = p2 as u32;
-    w[HEADER_PHASE + 3] = p3 as u32;
-    w[HEADER_LEAF] = st.leaf;
+    let mut w = [0; HDR_WORDS as usize];
+    w[HDR_PER_M] = per_m.to_bits();
+    w[HDR_STEP] = st.step[0] as u32;
+    w[HDR_STEP + 1] = st.step[1] as u32;
+    w[HDR_PHASE] = p0 as u32;
+    w[HDR_PHASE + 1] = p1 as u32;
+    w[HDR_PHASE + 2] = p2 as u32;
+    w[HDR_PHASE + 3] = p3 as u32;
+    w[HDR_LEAF] = st.leaf;
     w
 }
 
-pub(crate) fn of_header(w: [u32; HEADER_WORDS as usize]) -> (f32, StationGrid) {
+pub(crate) fn of_hdr(w: [u32; HDR_WORDS as usize]) -> (f32, StationGrid) {
     let i = |k: usize| w[k] as i32;
     let st = StationGrid {
-        step: [i(HEADER_STEP), i(HEADER_STEP + 1)],
+        step: [i(HDR_STEP), i(HDR_STEP + 1)],
         phase: [
-            [i(HEADER_PHASE), i(HEADER_PHASE + 1)],
-            [i(HEADER_PHASE + 2), i(HEADER_PHASE + 3)],
+            [i(HDR_PHASE), i(HDR_PHASE + 1)],
+            [i(HDR_PHASE + 2), i(HDR_PHASE + 3)],
         ],
-        leaf: w[HEADER_LEAF],
+        leaf: w[HDR_LEAF],
     };
-    (f32::from_bits(w[HEADER_PER_M]), st)
+    (f32::from_bits(w[HDR_PER_M]), st)
 }
 
 /// A bent's columns across the deck, from its line: the middle, both edges,

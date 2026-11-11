@@ -3,7 +3,7 @@
 // GENERATED from spec/client/core/door/ui.json
 
 /**
- * The UI's protocol with the core: its commands, by number (@xpute/kit/abi/cmd.ts:
+ * The UI's protocol with the core: its commands, by number (@xpute/runtime io/frame.ts `CMD`:
  * `major << 8 | minor`, past xpute's majors 0x00 to 0x0F), each with the packet
  * it carries — an XTP branch whose children are its fields, in order. A command with no
  * fields carries no packet. The JavaScript around the core is two
@@ -25,9 +25,10 @@
  * without one refuses the packet. The generator refuses a number given twice.
  */
 
-import type { BranchCursor, NodeCursor } from "@xpute/kit/wire/xtp/mod.ts";
+import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { U32Array } from "@xpute/kit/abi/array.ts";
 import type { f64, i32, u32, u8 } from "@xpute/kit/abi/word.ts";
+import { FINITE, INT_U32, INT_U8, MEMBER } from "@xpute/runtime/abi/number.ts";
 import type { Path } from "@xpute/runtime/io/path.ts";
 import { read_path } from "@xpute/runtime/io/path.ts";
 import * as Major from "./cmd/major.spec.ts";
@@ -158,12 +159,6 @@ function list<T>(b: BranchCursor, read: (b: BranchCursor) => T): T[] {
   return Array.from({ length: b.len }, (_, k) => read(b.at_branch(k)));
 }
 
-/** A record that may be absent. */
-function optional<T>(c: NodeCursor, read: (b: BranchCursor) => T): T | null {
-  const present = c.opt();
-  return present === undefined ? null : read(present.as_branch());
-}
-
 /** What the page's UI shows of the core (ui.rs): written after a turn that changed it, and replaced whole. */
 export interface Snapshot {
   pivot: PivotState;
@@ -201,22 +196,22 @@ export interface Snapshot {
 
 export function read_snapshot(b: BranchCursor): Snapshot {
   return {
-    pivot: read_pivot_state(b.at_branch(0)),
-    location: read_location_state(b.at_branch(1)),
-    companion: read_companion_state(b.at_branch(2)),
-    draft: b.at(3).get<string | null>(),
-    orient: read_orientation_state(b.at_branch(4)),
-    is_follow_mode: b.at(5).get<boolean>(),
-    camera_busy: b.at(6).get<boolean>(),
-    zooming: b.at(7).get<boolean>(),
-    over_marker: b.at(8).get<boolean>(),
-    settings: Array.from(b.at(9).get<U32Array>()),
+    pivot: read_pivot_state(b.at(0).as_branch()),
+    location: read_location_state(b.at(1).as_branch()),
+    companion: read_companion_state(b.at(2).as_branch()),
+    draft: b.at(3).get_opt((c) => c.get_str()),
+    orient: read_orientation_state(b.at(4).as_branch()),
+    is_follow_mode: b.at(5).get_bool(),
+    camera_busy: b.at(6).get_bool(),
+    zooming: b.at(7).get_bool(),
+    over_marker: b.at(8).get_bool(),
+    settings: Array.from(b.at(9).get_u32s()),
     division: list(b.at_branch(10), read_division_part),
-    character_surfaces: Array.from(b.at(11).get<U32Array>()),
+    character_surfaces: Array.from(b.at(11).get_u32s()),
     refused_files: list(b.at_branch(12), read_refused_file),
-    stall: b.at(13).get<Message | null>(),
-    renderer_progress: b.at(14).get<f64>(),
-    area_progress: b.at(15).get<f64>(),
+    stall: b.at(13).get_opt((c) => MEMBER(c.get_number(), Message)),
+    renderer_progress: FINITE(b.at(14).get_number()),
+    area_progress: FINITE(b.at(15).get_number()),
   };
 }
 
@@ -231,10 +226,10 @@ export interface PivotState {
 
 function read_pivot_state(b: BranchCursor): PivotState {
   return {
-    status: b.at(0).get<GroundStatus>(),
-    is_off_center: b.at(1).get<boolean>(),
-    lon_lat: optional(b.at(2), read_lon_lat),
-    outside: b.at(3).get<boolean>(),
+    status: MEMBER(b.at(0).get_number(), GroundStatus),
+    is_off_center: b.at(1).get_bool(),
+    lon_lat: b.at(2).get_opt((c) => read_lon_lat(c.as_branch())),
+    outside: b.at(3).get_bool(),
   };
 }
 
@@ -244,21 +239,27 @@ export interface LonLat {
 }
 
 function read_lon_lat(b: BranchCursor): LonLat {
-  return { lon: b.at(0).get<f64>(), lat: b.at(1).get<f64>() };
+  return {
+    lon: FINITE(b.at(0).get_number()),
+    lat: FINITE(b.at(1).get_number()),
+  };
 }
 
 export interface LocationState {
   status: SensorStatus;
   has_location: boolean;
+  /** Whether a watch runs, so that asking for the location again would start nothing. */
+  watching: boolean;
   /** Present exactly when status is Error: the failure the core chose. */
   err: Message | null;
 }
 
 function read_location_state(b: BranchCursor): LocationState {
   return {
-    status: b.at(0).get<SensorStatus>(),
-    has_location: b.at(1).get<boolean>(),
-    err: b.at(2).get<Message | null>(),
+    status: MEMBER(b.at(0).get_number(), SensorStatus),
+    has_location: b.at(1).get_bool(),
+    watching: b.at(2).get_bool(),
+    err: b.at(3).get_opt((c) => MEMBER(c.get_number(), Message)),
   };
 }
 
@@ -268,23 +269,15 @@ export interface CompanionState {
 }
 
 function read_companion_state(b: BranchCursor): CompanionState {
-  return {
-    person_ready: b.at(0).get<boolean>(),
-    pet_ready: b.at(1).get<boolean>(),
-  };
+  return { person_ready: b.at(0).get_bool(), pet_ready: b.at(1).get_bool() };
 }
 
 export interface OrientationState {
   status: SensorStatus;
-  /** Present exactly when status is Error: the failure the core chose. */
-  err: Message | null;
 }
 
 function read_orientation_state(b: BranchCursor): OrientationState {
-  return {
-    status: b.at(0).get<SensorStatus>(),
-    err: b.at(1).get<Message | null>(),
-  };
+  return { status: MEMBER(b.at(0).get_number(), SensorStatus) };
 }
 
 /** One division of the name, in its own name. */
@@ -301,10 +294,10 @@ export interface DivisionPart {
 
 function read_division_part(b: BranchCursor): DivisionPart {
   return {
-    subtype: b.at(0).get<u8>(),
-    name: b.at(1).get<string>(),
-    shown: b.at(2).get<boolean>(),
-    area: b.at(3).get<boolean>(),
+    subtype: INT_U8(b.at(0).get_number()),
+    name: b.at(1).get_str(),
+    shown: b.at(2).get_bool(),
+    area: b.at(3).get_bool(),
   };
 }
 
@@ -343,24 +336,25 @@ export interface UiView {
 /** Each import's packet, read from its branch, by its number. */
 export const read = {
   [Command.SENSOR_START]: (b: BranchCursor): SensorStart => ({
-    sensor: b.at(0).get<Sensor>(),
+    sensor: MEMBER(b.at(0).get_number(), Sensor),
   }),
   [Command.SENSOR_STOP]: (b: BranchCursor): SensorStop => ({
-    sensor: b.at(0).get<Sensor>(),
+    sensor: MEMBER(b.at(0).get_number(), Sensor),
   }),
   [Command.UI_SNAPSHOT]: (b: BranchCursor): UiSnapshot => ({
-    at: b.at(0).get<u32>(),
-    len: b.at(1).get<u32>(),
+    at: INT_U32(b.at(0).get_number()),
+    len: INT_U32(b.at(1).get_number()),
   }),
   [Command.UI_VIEW]: (b: BranchCursor): UiView => ({
-    azimuth: b.at(0).get<f64>(),
-    m_per_px: b.at(1).get<f64>(),
+    azimuth: FINITE(b.at(0).get_number()),
+    m_per_px: FINITE(b.at(1).get_number()),
   }),
 };
 
 /** The ui protocol's exports as the UI calls them over `link`: a send returns
- * nothing, and a request a Promise of its reply's value, which rejects with the
- * errno it was refused with. `fits` says whether a send's packet fits a frame. */
+ * nothing, and a request a Promise of its reply's value, or of the memory its reply
+ * names, which rejects with the errno it was refused with. `fits` says whether a
+ * send's packet fits a frame. */
 export function ui_exports(link: Link) {
   return {
     /** A GPS fix; a field is absent where the browser gave none. */
@@ -385,18 +379,22 @@ export function ui_exports(link: Link) {
         beta,
         gamma,
       ),
-    /** A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
-     * or cut off; the compass's, where the platform says so (SYS_BOOT's
-     * orient_silence_is_loss). */
-    sensor_err: (sensor: Sensor, code: GeolocationErrorCode | null) =>
-      link.send(Command.SENSOR_ERR, sensor, code),
+    /** A watch's failure: refused from the start (PermissionDenied), cut off, or one it rides
+     * out; the compass's, where the platform says so (SENSOR_PLATFORM's orient_silence_is_loss). */
+    sensor_err: (
+      sensor: Sensor,
+      code: GeolocationErrorCode | null,
+      watching: boolean,
+    ) => link.send(Command.SENSOR_ERR, sensor, code, watching),
     /** What the tile source declares of itself, once the client has it: the tile root's
      * `source`, the published one out of the bucket or the dev tile server's, read by the
      * client (ts/client/src/service/sys/fs/source.ts) and handed over as numbers and names.
      * Until it comes nothing is observed: the floor is held at the zoom it names, and no
      * tile is asked for that no shard it serves is over or under (pxl-core sys/io/source.rs). */
     source_declare: (min_zoom: u32, format: U32Array, shard: string[]) =>
-      link.request(Command.SOURCE_DECLARE, min_zoom, format, shard),
+      link
+        .request(Command.SOURCE_DECLARE, min_zoom, format, shard)
+        .then((r) => r.val),
     /** A permission as the UI's prompt or the browser's change reported it. */
     sensor_permission: (sensor: Sensor, answer: PermissionAnswer) =>
       link.send(Command.SENSOR_PERMISSION, sensor, answer),
@@ -433,10 +431,12 @@ export function ui_exports(link: Link) {
     input_typing: (typing: boolean) => link.send(Command.INPUT_TYPING, typing),
     /** The tool and what it takes, the UI's to choose and keep: the core is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer. */
     edit_tool: (tool: Tool, val: u32, scale_steps: i32) =>
-      link.request(Command.EDIT_TOOL, tool, val, scale_steps),
+      link
+        .request(Command.EDIT_TOOL, tool, val, scale_steps)
+        .then((r) => r.val),
     /** The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (spec/spec/asset/marker.json) is refused whole, never cut: EMSGSIZE, which the UI shows as what does not fit. */
     edit_marker_text: (text: string) =>
-      link.request(Command.EDIT_MARKER_TEXT, text),
+      link.request(Command.EDIT_MARKER_TEXT, text).then((r) => r.val),
     edit_marker_cancel: () => link.send(Command.EDIT_MARKER_CANCEL),
     /** The marker's draft committed with its text, where its place is still free or still a marker, and closed. */
     edit_marker_commit: () => link.send(Command.EDIT_MARKER_COMMIT),
@@ -484,8 +484,8 @@ export function ui_exports(link: Link) {
      * (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
      * first of a run is taken to be where the camera already is, so nothing moves as
      * it begins; the camera follows the tracker from there until POSE_END. Nothing in the
-     * client sends it: it is the way in for an immersive mode's head pose (a Quest's, a
-     * Vision Pro's) to drive the camera, from the device app. */
+     * client sends it: it is the way in for an immersive mode's head pose to drive the
+     * camera, from the device app. */
     input_xr_pose: (
       x: f64,
       y: f64,
@@ -501,13 +501,16 @@ export function ui_exports(link: Link) {
     perf_start: () => link.send(Command.PERF_START),
     /** Freezes the window, so what is exported holds still. */
     perf_stop: () => link.send(Command.PERF_STOP),
-    /** The profiler's statistics and what it holds now, where they lie: the reply is the address of STAT_SLOT's words (perf.json), the statistics
-     * over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
+    /** The profiler's statistics and what it holds now: the reply names STAT's words then NOW's (perf.json), the statistics
+     * over the last `window_ms`, the whole recording where it is absent. A
      * number past the door is finite, so no window is infinite. */
     perf_stats: (window_ms: f64 | null) =>
-      link.request(Command.PERF_STATS, window_ms),
-    /** The rings where they lie, nothing reduced: the reply is the address of RING_SLOT's words (perf.json), good until the next turn. */
-    perf_rings: () => link.request(Command.PERF_RINGS),
+      link.request(Command.PERF_STATS, window_ms).then((r) => r.named),
+    /** One ring, nothing reduced: the reply names the records of the ring `ring` (its index in perf.json's RING_NAMES), the frames and the tasks oldest first, the worst frames longest first. */
+    perf_rings: (ring: u32) =>
+      link.request(Command.PERF_RINGS, ring).then((r) => r.named),
+    /** The string table of the tasks' failure sites: the reply names its bytes, into which a TASK's `at_file` is an offset (perf.json). */
+    perf_strtab: () => link.request(Command.PERF_STRTAB).then((r) => r.named),
     fits: {
       sensor_pos: (
         lon: f64,
@@ -529,8 +532,11 @@ export function ui_exports(link: Link) {
           beta,
           gamma,
         ),
-      sensor_err: (sensor: Sensor, code: GeolocationErrorCode | null) =>
-        link.fits(Command.SENSOR_ERR, sensor, code),
+      sensor_err: (
+        sensor: Sensor,
+        code: GeolocationErrorCode | null,
+        watching: boolean,
+      ) => link.fits(Command.SENSOR_ERR, sensor, code, watching),
       sensor_permission: (sensor: Sensor, answer: PermissionAnswer) =>
         link.fits(Command.SENSOR_PERMISSION, sensor, answer),
       sensor_platform: (
@@ -602,6 +608,9 @@ export function ui_exports(link: Link) {
 /** The ui protocol's exports, as `ui_exports` binds them. */
 export type UiExports = ReturnType<typeof ui_exports>;
 
+/** The majors the runtime routes the protocol's imports by. */
+export const MAJORS: readonly u32[] = [Major.SENSOR, Major.UI];
+
 /** What the program does with each command the core posts on the ui protocol: a
  * call's member answers its value, and throws kit's error to refuse it. */
 export interface UiImports {
@@ -640,7 +649,7 @@ export function ui_imports(h: UiImports): Protocol {
       return refusal_of(err);
     }
   };
-  return { majors: [Major.SENSOR, Major.UI], on };
+  return { majors: MAJORS, on };
 }
 
 /** A packet the command carries, which a frame without one breaks. */
