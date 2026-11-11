@@ -22,8 +22,8 @@ import {
   PacketWriter,
   TreeReader,
 } from "@xpute/kit/wire/xtp/mod.ts";
-import { answer_of, encode_args } from "./io/connection.ts";
-import { major_of as frame_major } from "./io/frame.ts";
+import { encode_args, reply_of } from "./io/connection.ts";
+import { CMD_MAJOR } from "./io/frame.ts";
 import { say, say_through } from "./say.ts";
 import {
   boot,
@@ -45,7 +45,8 @@ type Up =
   | { kind: "frame"; cmd: u32; id: u32; cnt: u32; pkt: U8Array | null }
   | { kind: "call"; name: Call; arg: unknown };
 
-/** A frame's `res` is a reply's result, or null for an import. */
+/** A frame's `res` is a reply's result, or null for an import, and `named`
+ * the memory the frame names, copied. */
 type Down =
   | {
       kind: "frame";
@@ -83,7 +84,7 @@ export function connect(
   const room: PacketRoom = {
     writer: (n) => ((cnt = n), w.begin(buf, view, 0, buf.length, n)),
   };
-  const waiting = new Map<u32, (res: i32) => void>();
+  const waiting = new Map<u32, (res: i32, named: U8Array | null) => void>();
   const routes = routes_of(ui.protocols);
   const rose = Promise.withResolvers<void>();
   const up = (m: Up, moved: Transferable[] = []) => port.postMessage(m, moved);
@@ -102,7 +103,7 @@ export function connect(
   function stop(): void {
     if (stopped) return;
     stopped = true;
-    waiting.forEach((done) => done(Errno.ENOTRECOVERABLE));
+    waiting.forEach((done) => done(Errno.ENOTRECOVERABLE, null));
     waiting.clear();
     ui.stop();
   }
@@ -113,10 +114,10 @@ export function connect(
     switch (m.kind) {
       case "frame":
         if (m.res !== null) {
-          waiting.get(m.tag)?.(m.res);
+          waiting.get(m.tag)?.(m.res, m.named);
           return void waiting.delete(m.tag);
         }
-        return void routes.get(frame_major(m.cmd))?.(
+        return void routes.get(CMD_MAJOR(m.cmd))?.(
           m.tag,
           m.cmd,
           m.pkt && new TreeReader(m.pkt).read_branch(),
@@ -140,10 +141,10 @@ export function connect(
     request(cmd, ...args) {
       if (stopped) return Promise.reject(new XputeError(Errno.ENOTRECOVERABLE));
       const id = (next = (next + 1) >>> 0 || 1);
-      return new Promise<i32>((done) => {
-        waiting.set(id, done);
+      return new Promise<[i32, U8Array | null]>((done) => {
+        waiting.set(id, (res, named) => done([res, named]));
         frame(cmd, id, args);
-      }).then(answer_of);
+      }).then(reply_of);
     },
     fits: (_cmd, ...args) => (encode_args(args)(room)?.finish() ?? 0) >= 0,
     wake: () => call("wake"),
@@ -196,15 +197,11 @@ export function attach(
           }
           const answer = r.connection.request(cmd, encode);
           r.kick();
-          return void answer.then((res) =>
-            down({
-              kind: "frame",
-              tag: id,
-              cmd,
-              res,
-              pkt: null,
-              named: null,
-            }),
+          return void answer.then(([res, named]) =>
+            down(
+              { kind: "frame", tag: id, cmd, res, pkt: null, named },
+              named ? [named.buffer] : [],
+            ),
           );
         }
         case "call":

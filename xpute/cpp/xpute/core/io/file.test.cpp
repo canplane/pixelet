@@ -7,7 +7,7 @@
 #include <tuple>
 #include <vector>
 
-#include "xpute/kit/test.hpp"
+#include "dev/test/test.hpp"
 
 using namespace xpute;
 
@@ -31,7 +31,7 @@ Memory &host_mem() {
 }
 
 // The path (7, "a").
-std::array<Token, 2> path() { return {std::uint32_t{7}, std::string_view("a")}; }
+std::array<Token, 2> path() { return {std::int32_t{7}, std::string_view("a")}; }
 
 // A door whose runtime receives nothing and records each frame it is sent,
 // made the core's.

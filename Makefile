@@ -63,6 +63,7 @@ check-xpute:
 test: test-ts test-rust
 test-ts:
 	pnpm --dir ts test
+	script/perf/mac.py pnpm --dir ts/tool/shader test
 test-rust:
 	@cargo nextest --version >/dev/null 2>&1 || { echo "pxl-core's unit tests run under cargo-nextest, which make install brings" >&2; exit 1; }
 	+cd rust && cargo test-host && cargo test-core && cargo test-frame && cargo test-render

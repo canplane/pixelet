@@ -19,7 +19,7 @@ static GRANT: Global<Option<SysFrame>> = Global::new();
 pub(in crate::door) fn grant(c: SysFrame) -> Outcome {
     refuse_unless(c.refresh_ms >= 0.0 && c.paced_ms >= 0.0, Errno::EINVAL)?;
     GRANT.set(Some(c));
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 /// A turn the runtime's policy grants, with the clock (SYS_TURN). It is
@@ -44,5 +44,5 @@ pub(in crate::door) fn turn(c: SysTurn) -> Outcome {
         interactive: g.interactive,
     });
     clock::set_wall_now(c.unix_ms);
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }

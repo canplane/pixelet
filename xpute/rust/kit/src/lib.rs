@@ -15,8 +15,6 @@ pub mod alloc;
 pub mod codec;
 #[cfg(feature = "std")]
 pub mod collection;
-#[cfg(feature = "std")]
-pub mod golden;
 pub mod math;
 #[cfg(feature = "std")]
 pub mod status;

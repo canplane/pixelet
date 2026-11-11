@@ -12,7 +12,7 @@ use core::sync::atomic::{AtomicU32, Ordering};
 
 use xpute_core::global::Global;
 
-use crate::device::{STATUS_AT, UNFINISHED_AT};
+use crate::spec::DEVICE;
 use crate::spec::STATUS;
 
 pub fn admits(unfinished: u32, latency: u32) -> bool {
@@ -41,7 +41,7 @@ pub fn page<const LATENCY: u32>() -> bool {
         // SAFETY: the block `ask` kept, which stays live and in place; its
         // words the runtime writes are only ever loaded atomically.
         let word = |k: usize| unsafe { AtomicU32::from_ptr(at.add(k)) }.load(Ordering::Acquire);
-        word(STATUS_AT) == STATUS::READY && admits(word(UNFINISHED_AT), LATENCY)
+        word(DEVICE::STATUS_AT) == STATUS::READY && admits(word(DEVICE::UNFINISHED_AT), LATENCY)
     })
 }
 

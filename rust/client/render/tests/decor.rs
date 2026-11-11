@@ -6,6 +6,8 @@
 
 mod real_world;
 
+mod gpu;
+
 use pxl_spec::brick;
 use pxl_spec::share::EIGHTHS;
 use std::collections::{BTreeMap, BTreeSet};
@@ -633,19 +635,11 @@ fn hand_pipeline(device: &wgpu::Device, kind: u32) -> wgpu::ComputePipeline {
 }
 
 fn device() -> Option<(wgpu::Device, wgpu::Queue)> {
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(gpu) = gpu::Gpu::new() else {
         eprintln!("no adapter: skipped");
         return None;
     };
-    Some(
-        pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            required_limits: adapter.limits(),
-            ..Default::default()
-        }))
-        .unwrap(),
-    )
+    Some((gpu.device, gpu.queue))
 }
 
 /// The first word of the `i`-th record of decor `j` in entry `s`.
@@ -906,8 +900,8 @@ fn differ(name: &str, by: &str, got: &[u32], e: &Expected) -> u64 {
                 told += 1;
                 let (s, at) = if (k as u32) < generation::ENTRY_RECS_AT {
                     (
-                        k as u32 / generation::HEADER_WORDS,
-                        k as u32 % generation::HEADER_WORDS,
+                        k as u32 / generation::HDR_WORDS,
+                        k as u32 % generation::HDR_WORDS,
                     )
                 } else {
                     let rec = (k as u32 - generation::ENTRY_RECS_AT) / REC_WORDS;
@@ -1533,7 +1527,7 @@ fn hand_thin_lays_as_scatter() {
     let words = generation::rec_at(generation::ENTRY_RECS) as usize;
     let size = |pairs: u32| [BRICK_CELLS.div_ceil(generation::LANES), 1, pairs];
     let (mut laid_total, mut pairs_total) = (0u64, 0u64);
-    let (mut none_past, mut stale_headers) = (0u64, 0u64);
+    let (mut none_past, mut stale_hdrs) = (0u64, 0u64);
     for (name, eye) in [
         ("east of the seam", real_world::EYE),
         ("west of the seam", [(1 << 23) - 300, (40 << 16) + 30]),
@@ -1552,7 +1546,7 @@ fn hand_thin_lays_as_scatter() {
                 if row[2] == 0 {
                     continue;
                 }
-                let h = generation::header_at(s) as usize;
+                let h = generation::hdr_at(s) as usize;
                 init[h] = row[0] as u32;
                 init[h + 1] = row[1] as u32;
                 init[h + 2] = 1;
@@ -1620,7 +1614,7 @@ fn hand_thin_lays_as_scatter() {
             let row = built.clipmap[s as usize];
             let cell_zoom = FIRST_CELL_ZOOM + s / ENTRIES;
             let mut before = init.clone();
-            before[generation::header_at(s) as usize] = (row[0] + 1) as u32;
+            before[generation::hdr_at(s) as usize] = (row[0] + 1) as u32;
             let mut list = vec![0u32; generation::LIST_WORDS as usize];
             list[generation::THIN_ARGS as usize + 2] = 1;
             list[generation::LIST_AT as usize] = generation::pair_word(s, j);
@@ -1635,14 +1629,14 @@ fn hand_thin_lays_as_scatter() {
                 (east.len() as u32, east),
                 "{name}, {s} {j}: a head naming another brick"
             );
-            stale_headers += 1;
+            stale_hdrs += 1;
         }
         eprintln!("{name}: {} pairs", pairs.len());
     }
     eprintln!(
-        "thin: {pairs_total} pairs, {laid_total} laid, {none_past} past where they stand, {stale_headers} headers naming another brick"
+        "thin: {pairs_total} pairs, {laid_total} laid, {none_past} past where they stand, {stale_hdrs} headers naming another brick"
     );
-    assert!(laid_total > 0 && none_past > 0 && stale_headers > 0);
+    assert!(laid_total > 0 && none_past > 0 && stale_hdrs > 0);
 }
 
 /// The test's reference for `decor_mark_cs`, which marks the words one entry after another by
@@ -1671,11 +1665,11 @@ fn mark_rust(clipmap: &[[i32; 4]], recs: &mut [u32], list: &mut [u32], shown: &[
         let (cell_zoom, q, h) = (
             clip::eye_cell_zoom(s / ENTRIES),
             [entry[0], entry[1]],
-            generation::header_at(s) as usize,
+            generation::hdr_at(s) as usize,
         );
-        let header = [recs[h], recs[h + 1], recs[h + 2]];
+        let hdr = [recs[h], recs[h + 1], recs[h + 2]];
         let whole =
-            list[generation::LIST_EVERY as usize] != 0 || !generation::generated_for(header, q);
+            list[generation::LIST_EVERY as usize] != 0 || !generation::generated_for(hdr, q);
         let at = generation::brick_rect(cell_zoom, q);
         if !whole
             && !boxes
@@ -1728,7 +1722,7 @@ fn holds_recs(recs: &[u32], clipmap: &[[i32; 4]], g: u32) -> bool {
     if g >= generation::EYE_ENTRIES {
         return true;
     }
-    let (h, q) = (generation::header_at(g) as usize, clipmap[g as usize]);
+    let (h, q) = (generation::hdr_at(g) as usize, clipmap[g as usize]);
     q[2] != 0 && generation::generated_for([recs[h], recs[h + 1], recs[h + 2]], [q[0], q[1]])
 }
 
@@ -1753,7 +1747,7 @@ fn run_of(recs: &[u32], g: u32, k: u32) -> (u32, u32) {
         let n = (g - generation::EYE_ENTRIES) * generation::RUNS + k;
         (
             generation::ENTRY_RECS + n,
-            u32::from(n < recs[generation::PLACED_HEADER as usize]),
+            u32::from(n < recs[generation::PLACED_HDR as usize]),
         )
     }
 }
@@ -1837,7 +1831,7 @@ fn recs_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
     for s in 0..generation::EYE_ENTRIES {
         let row = built.clipmap[s as usize];
         let cell_zoom = clip::eye_cell_zoom(s / ENTRIES);
-        let h = generation::header_at(s) as usize;
+        let h = generation::hdr_at(s) as usize;
         let stale = mix(s, [5, 5]).is_multiple_of(9);
         recs[h] = (row[0] + stale as i32) as u32;
         recs[h + 1] = row[1] as u32;
@@ -1881,7 +1875,7 @@ fn recs_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
             }
         }
     }
-    recs[generation::PLACED_HEADER as usize] = placed;
+    recs[generation::PLACED_HDR as usize] = placed;
     for n in 0..placed {
         let r = generation::rec_at(generation::ENTRY_RECS + n) as usize;
         let j = n % ROWS.len() as u32;
@@ -2455,7 +2449,7 @@ fn fresh_uniforms(cap: u32) -> Vec<u32> {
 }
 
 /// A list's head and boxes as `Generator::prepare` writes them, before a mark.
-fn list_header(frame: &Frame) -> Vec<u32> {
+fn list_hdr(frame: &Frame) -> Vec<u32> {
     let mut list = vec![0u32; generation::LIST_WORDS as usize];
     list[generation::THIN_ARGS as usize] = BRICK_CELLS.div_ceil(generation::LANES);
     list[generation::THIN_ARGS as usize + 1] = 1;
@@ -2485,10 +2479,10 @@ impl Model {
         claims: &mut Vec<[i32; 3]>,
     ) -> Vec<u32> {
         for &s in &frame.stale {
-            self.recs[generation::header_at(s) as usize + 2] = 0;
+            self.recs[generation::hdr_at(s) as usize + 2] = 0;
         }
         if frame.marking {
-            let mut list = list_header(frame);
+            let mut list = list_hdr(frame);
             mark_rust(world.clipmap, &mut self.recs, &mut list, &self.shown);
             // Thin, then what each listed record stands as.
             let whole = list[generation::THIN_ARGS as usize + 2] as usize;
@@ -2499,7 +2493,7 @@ impl Model {
             for &w in &list[at_whole..at_whole + whole] {
                 let (s, j) = generation::pair_of(w);
                 let cell_zoom = clip::eye_cell_zoom(s / ENTRIES);
-                let h = generation::header_at(s) as usize;
+                let h = generation::hdr_at(s) as usize;
                 let q = [self.recs[h] as i32, self.recs[h + 1] as i32];
                 let leaves = thin_leaves(j as usize, cell_zoom, q);
                 let cap = generation::cap(&ROWS[j as usize]);
@@ -2634,7 +2628,7 @@ fn frame_differs(
     }
     let r = REC_WORDS as usize;
     let first = generation::rec_at(generation::ENTRY_RECS) as usize;
-    for p in 0..want[generation::PLACED_HEADER as usize] as usize {
+    for p in 0..want[generation::PLACED_HDR as usize] as usize {
         let at = first + p * r;
         if got.recs[at..at + r] != want[at..at + r] {
             out.push(format!(
@@ -2699,14 +2693,14 @@ fn frame_differs(
 /// The light's head `light_mark_draws_cs` is run under, laid out for the map's side as the
 /// renderer lays it (ray/cast.rs). The world's receivers stood in the cast before, no host's
 /// draw stands within a box, and the marks take no footprint.
-fn mark_header() -> Vec<u32> {
-    let mut header = vec![0u32; light::HEADER_WORDS];
-    header[light::HEADER_CAST] = CAST_NUMBER;
-    header[light::HEADER_WORLD] = CAST_NUMBER - 1;
-    for (k, v) in light::header_layout(MAP_SIDE) {
-        header[k] = v;
+fn mark_hdr() -> Vec<u32> {
+    let mut hdr = vec![0u32; light::HDR_WORDS];
+    hdr[light::HDR_CAST] = CAST_NUMBER;
+    hdr[light::HDR_WORLD] = CAST_NUMBER - 1;
+    for (k, v) in light::hdr_layout(MAP_SIDE) {
+        hdr[k] = v;
     }
-    header
+    hdr
 }
 
 /// The tiles of the light's box the decor in the frame's instances stands on, as the Rust says
@@ -2716,7 +2710,7 @@ fn mark_header() -> Vec<u32> {
 /// then it stands on the tiles of its footprint, `WIDEST` square at its base
 /// (`Light::corner_tiles`).
 fn stood_rust(got: &FrameLeft, sizing: &Sizing, cap: u32, tally: &mut Tally) -> BTreeSet<[i32; 2]> {
-    let (eye_words, header) = (sizing.eye(), mark_header());
+    let (eye_words, hdr) = (sizing.eye(), mark_hdr());
     let f = |k: usize| f32::from_bits(eye_words[k]);
     let v3 = |k: usize| [f(k), f(k + 1), f(k + 2)];
     let axes = [v3(eye::FORWARD), v3(eye::RIGHT), v3(eye::UP)];
@@ -2730,7 +2724,7 @@ fn stood_rust(got: &FrameLeft, sizing: &Sizing, cap: u32, tally: &mut Tally) -> 
             .try_into()
             .unwrap(),
     );
-    let footprint = header[light::HEADER_FOOTPRINT] != 0;
+    let footprint = hdr[light::HDR_FOOTPRINT] != 0;
     // How far the anchor lies from the eye on `axis`, in units: its whole cells less the eye's,
     // wrapping round the world on X, less the eye's fraction of a cell.
     let anchor = |axis: usize| {
@@ -2785,7 +2779,7 @@ fn stood_rust(got: &FrameLeft, sizing: &Sizing, cap: u32, tally: &mut Tally) -> 
 /// draws stand on (`stood_rust`), with `tally` counting the draws that stand on nothing. No
 /// tile was marked before the pass, so each tile stood on must be listed once
 /// (`light::LIST_RECEIVERS`), and its mark must name the cast the world's receivers stood in
-/// (`light::HEADER_WORLD`). The stood list's args must hold their count, the propagation's rows
+/// (`light::HDR_WORLD`). The stood list's args must hold their count, the propagation's rows
 /// for it and, once a tile is stood on, the slide's workgroups across
 /// (`light::RECEIVER_TILES_WORDS`). No other word of the list or the args may change.
 fn stood_differs(got: &FrameLeft, sizing: &Sizing, cap: u32, tally: &mut Tally) -> Vec<String> {
@@ -2893,7 +2887,7 @@ impl Chain<'_> {
         for &s in &frame.stale {
             q.write_buffer(
                 &self.recs,
-                (generation::header_at(s) as u64 + 2) * 4,
+                (generation::hdr_at(s) as u64 + 2) * 4,
                 bytes(&[0]),
             );
         }
@@ -2901,7 +2895,7 @@ impl Chain<'_> {
             q.write_buffer(
                 &self.list,
                 0,
-                bytes(&list_header(frame)[..generation::LIST_AT as usize]),
+                bytes(&list_hdr(frame)[..generation::LIST_AT as usize]),
             );
         }
         q.write_buffer(
@@ -3032,12 +3026,12 @@ impl Chain<'_> {
         }
         q.submit([e.finish()]);
         // The light's mark then lists the tiles the compacted decor stands on, reading its
-        // lanes, under the head `mark_header` lays. None of the world's receivers' tiles is
+        // lanes, under the head `mark_hdr` lays. None of the world's receivers' tiles is
         // marked. The mark's workgroups are those its one opening thread sets, with the placed
         // decor's after the characters'.
-        let header = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let hdr = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytes(&mark_header()),
+            contents: bytes(&mark_hdr()),
             usage: wgpu::BufferUsages::UNIFORM,
         });
         let list = buf(d, &vec![0u32; light::list_words(MAP_SIDE) as usize]);
@@ -3047,7 +3041,7 @@ impl Chain<'_> {
         let stood = buf(d, &receiver_tiles_words);
         let binds = [
             (0, &eye_buf),
-            (11, &header),
+            (11, &hdr),
             (12, &list),
             (18, &drawing),
             (19, &self.regions),
@@ -3190,7 +3184,7 @@ fn hand_frames_answer_as_the_rust() {
         let cap = generation::ENTRY_RECS + placed.next_power_of_two().max(64);
         let workgroups = generation::EYE_ENTRIES + placed.div_ceil(generation::RUNS);
         let mut init = vec![0u32; generation::rec_at(cap) as usize];
-        init[generation::PLACED_HEADER as usize] = placed;
+        init[generation::PLACED_HDR as usize] = placed;
         for n in 0..placed {
             let r = generation::rec_at(generation::ENTRY_RECS + n) as usize;
             let j = n % ROWS.len() as u32;

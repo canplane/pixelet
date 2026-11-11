@@ -10,9 +10,8 @@
 export const SENSOR_POS = 0x1202;
 /** An orientation event; a field is absent where the browser gave none. */
 export const SENSOR_ORIENT = 0x1205;
-/** A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
- * or cut off; the compass's, where the platform says so (SYS_BOOT's
- * orient_silence_is_loss). */
+/** A watch's failure: refused from the start (PermissionDenied), cut off, or one it rides
+ * out; the compass's, where the platform says so (SENSOR_PLATFORM's orient_silence_is_loss). */
 export const SENSOR_ERR = 0x120b;
 /** What the tile source declares of itself, once the client has it: the tile root's
  * `source`, the published one out of the bucket or the dev tile server's, read by the
@@ -71,8 +70,8 @@ export const CAMERA_GOTO = 0x1804;
  * (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
  * first of a run is taken to be where the camera already is, so nothing moves as
  * it begins; the camera follows the tracker from there until POSE_END. Nothing in the
- * client sends it: it is the way in for an immersive mode's head pose (a Quest's, a
- * Vision Pro's) to drive the camera, from the device app. */
+ * client sends it: it is the way in for an immersive mode's head pose to drive the
+ * camera, from the device app. */
 export const INPUT_XR_POSE = 0x1109;
 /** The tracker let the camera go: back to the controller it had. */
 export const INPUT_XR_POSE_END = 0x110a;
@@ -80,12 +79,14 @@ export const INPUT_XR_POSE_END = 0x110a;
 export const PERF_START = 0x1901;
 /** Freezes the window, so what is exported holds still. */
 export const PERF_STOP = 0x1902;
-/** The profiler's statistics and what it holds now, where they lie: the reply is the address of STAT_SLOT's words (perf.json), the statistics
- * over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
+/** The profiler's statistics and what it holds now: the reply names STAT's words then NOW's (perf.json), the statistics
+ * over the last `window_ms`, the whole recording where it is absent. A
  * number past the door is finite, so no window is infinite. */
 export const PERF_STATS = 0x1903;
-/** The rings where they lie, nothing reduced: the reply is the address of RING_SLOT's words (perf.json), good until the next turn. */
+/** One ring, nothing reduced: the reply names the records of the ring `ring` (its index in perf.json's RING_NAMES), the frames and the tasks oldest first, the worst frames longest first. */
 export const PERF_RINGS = 0x1904;
+/** The string table of the tasks' failure sites: the reply names its bytes, into which a TASK's `at_file` is an offset (perf.json). */
+export const PERF_STRTAB = 0x1905;
 
 // ---- ui, import ----
 

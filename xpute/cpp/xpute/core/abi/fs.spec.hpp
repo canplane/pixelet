@@ -4,10 +4,9 @@
 //
 // The file device's protocol on major FS: a core's files, read whole into its own buffers
 // and written whole, through a descriptor, as WASI's path_open, fd_read, fd_write and
-// fd_close do. A file's name is an absolute path, a tuple of tokens, each a u32
-// or a string, as many as the program uses. xpute gives no token a meaning: the program
-// numbers its fixed names and keeps variable data in its own type, and its one binding
-// answers every path (@xpute/runtime io/fs.ts).
+// fd_close do. A file's name is an absolute path, a tuple of tokens, each an i32
+// or a string, as many as the program uses. xpute gives no token a meaning, and the
+// program's one binding answers every path (@xpute/runtime io/fs.ts).
 //
 // The core sends its calls as imports. The core issues each descriptor, a generational
 // handle, and every frame of a descriptor carries it once, as its tag. FS_OPEN and FS_CLOSE
@@ -29,10 +28,10 @@
 #include <string_view>
 #include <variant>
 
-#include "xpute/kit/abi/cmd.hpp"
 #include "xpute/kit/status/error.hpp"
 #include "xpute/kit/wire/xtp/cursor.hpp"
 #include "xpute/kit/wire/xtp/encode.hpp"
+#include "xpute/core/abi/enum.hpp"
 #include "xpute/core/abi/number.hpp"
 #include "xpute/core/host.hpp"
 #include "xpute/core/io/frame.hpp"
@@ -47,7 +46,7 @@ enum class Major : std::uint32_t {
 
 } // namespace xpute::abi::fs
 
-template <> struct xpute::EnumInfo<xpute::abi::fs::Major> {
+template <> struct xpute::abi::Members<xpute::abi::fs::Major> {
     static constexpr std::array<xpute::abi::fs::Major, 1> ALL{xpute::abi::fs::Major::FS};
 };
 
@@ -63,7 +62,7 @@ enum class FsMinor : std::uint32_t {
 
 } // namespace xpute::abi::fs
 
-template <> struct xpute::EnumInfo<xpute::abi::fs::FsMinor> {
+template <> struct xpute::abi::Members<xpute::abi::fs::FsMinor> {
     static constexpr std::array<xpute::abi::fs::FsMinor, 5> ALL{xpute::abi::fs::FsMinor::OPEN, xpute::abi::fs::FsMinor::READ, xpute::abi::fs::FsMinor::WRITE, xpute::abi::fs::FsMinor::CLOSE, xpute::abi::fs::FsMinor::CHANGED};
 };
 
@@ -109,7 +108,7 @@ enum class Command : std::uint32_t {
 
 } // namespace xpute::abi::fs
 
-template <> struct xpute::EnumInfo<xpute::abi::fs::Command> {
+template <> struct xpute::abi::Members<xpute::abi::fs::Command> {
     static constexpr std::array<xpute::abi::fs::Command, 5> ALL{xpute::abi::fs::Command::FS_CHANGED, xpute::abi::fs::Command::FS_OPEN, xpute::abi::fs::Command::FS_READ, xpute::abi::fs::Command::FS_WRITE, xpute::abi::fs::Command::FS_CLOSE};
 };
 

@@ -7,6 +7,7 @@
 
 pub mod cursor;
 pub mod encode;
+pub mod shape;
 pub mod spec;
 pub mod view;
 

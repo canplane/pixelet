@@ -1,6 +1,6 @@
 // pxl-spec/bake/source.test.rs
 
-use xpute_kit::golden::Golden;
+use xpute_golden::Golden;
 
 use super::*;
 

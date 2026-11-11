@@ -12,7 +12,7 @@ use fnv::FnvHashMap;
 use std::borrow::Cow;
 
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::shape;
+use xpute_kit::wire::xtp::shape;
 
 use crate::bake::malformed;
 use crate::bake::publication::BaseLayer;

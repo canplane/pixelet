@@ -31,7 +31,7 @@ use crate::domain::view::frame::pose;
 use crate::domain::view::frame::screen::units_per_px_at;
 use crate::door::cmd::{
     CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
-    PivotState, RefusedFile, Snapshot, UiView,
+    PivotState, RefusedFile, SensorStatus, Snapshot, UiView,
 };
 use crate::pointer;
 use crate::sys::io::file;
@@ -82,10 +82,11 @@ pub struct SnapshotInput {
     status: GroundStatus,
     is_off_center: bool,
     pivot: Option<Q3>,
-    location: (SensorState, bool),
+    /// The location's state, whether one is known and whether a watch runs.
+    location: (SensorState, bool, bool),
     companion: [bool; 2],
     drafting: bool,
-    orient: SensorState,
+    orient: SensorStatus,
     is_follow_mode: bool,
     camera_busy: bool,
     zooming: bool,
@@ -139,10 +140,14 @@ fn snapshot_inputs() -> SnapshotInput {
         status,
         is_off_center: off_center().is_off_center,
         pivot,
-        location: (location.state, location.location.is_some()),
+        location: (
+            location.state,
+            location.location.is_some(),
+            location.is_tracking_location,
+        ),
         companion: companion_ready(),
         drafting: write::marker_draft().is_some(),
-        orient: device_orient_store().state,
+        orient: device_orient_store().status,
         is_follow_mode: following(),
         camera_busy: dragging(),
         zooming: zooming(),
@@ -239,6 +244,7 @@ pub fn snapshot(shown: &SnapshotInput, out: &mut [u8]) -> Option<u32> {
         location: LocationState {
             status: shown.location.0.status,
             has_location: shown.location.1,
+            watching: shown.location.2,
             err: shown.location.0.err,
         },
         companion: CompanionState {
@@ -247,8 +253,7 @@ pub fn snapshot(shown: &SnapshotInput, out: &mut [u8]) -> Option<u32> {
         },
         draft: write::marker_draft(),
         orient: OrientationState {
-            status: shown.orient.status,
-            err: shown.orient.err,
+            status: shown.orient,
         },
         is_follow_mode: shown.is_follow_mode,
         camera_busy: shown.camera_busy,

@@ -55,8 +55,7 @@ pub struct Config {
     pub publish: Option<fn()>,
     /// A turn that takes longer than this many milliseconds is said, as
     /// `[xpute] turn took <ms> ms`, the whole milliseconds, as a page's runtime
-    /// says it. With none, no turn is timed. A program with the GPU passes its
-    /// `CoreConfig`'s (xpute-gpu).
+    /// says it. With none, no turn is timed.
     pub slow_ms: Option<u32>,
 }
 
@@ -386,8 +385,7 @@ macro_rules! native_abi {
 /// manifest's thread stack and xpute's stop hook (`stop_hook`). Given a
 /// `device`, each turn runs after the device's poll, the device takes what the
 /// core publishes as it publishes it (`Device`), and a turn slower than
-/// `slow_ms` is said (`Config::slow_ms`); xpute-gpu's `native_core!` passes its
-/// runtime and its `CoreConfig`'s bound this way.
+/// `slow_ms` is said (`Config::slow_ms`).
 ///
 /// On Android it also exports the C ABI to JNI, as the `external` functions of
 /// the Kotlin class `xpute.Core` (`jni`): `run(deadlineMs: Double): Double`,

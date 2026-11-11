@@ -154,11 +154,6 @@
     }
   },
   "device": {
-    "orientation": {
-      "permission_denied": "Please allow access to the orientation sensor.",
-      "permission_error": "The orientation sensor isn’t available.",
-      "signal_lost": "Can’t determine your heading."
-    },
     "geolocation": {
       "unsupported": "Location services aren’t supported in this environment.",
       "permission_denied": "Please allow location access.",

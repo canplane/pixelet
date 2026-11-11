@@ -9,7 +9,7 @@ fn rec_at(n: u32) -> u32 {
   if (n < ENTRY_RECS) {
     return ENTRY_RECS_AT + n * REC_WORDS;
   }
-  return PLACED_HEADER + PLACED_HEADER_WORDS + (n - ENTRY_RECS) * REC_WORDS;
+  return PLACED_HDR + PLACED_HDR_WORDS + (n - ENTRY_RECS) * REC_WORDS;
 }
 
 /// `holds_recs`: whether workgroup `g`'s records still hold. Placed decor's, past the entries,
@@ -27,7 +27,7 @@ fn holds_recs(g: u32) -> bool {
 fn run_of(g: u32, k: u32) -> vec2<u32> {
   if (g >= EYE_ENTRIES) {
     let n = (g - EYE_ENTRIES) * RUNS + k;
-    return vec2<u32>(ENTRY_RECS + n, u32(n < recs[PLACED_HEADER]));
+    return vec2<u32>(ENTRY_RECS + n, u32(n < recs[PLACED_HDR]));
   }
   let first = k * RUN;
   var j = 0u;

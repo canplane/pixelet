@@ -26,12 +26,13 @@ import * as fs from "@xpute/runtime/abi/fs.spec.ts";
 import { type Front, Head, laid, lay } from "@xpute/runtime/io/head.ts";
 import * as frame from "@xpute/runtime/io/frame.ts";
 import {
-  answer_of,
   Connection,
   encode_args,
   type Heard,
   type Host,
   type OnImport,
+  type Reply,
+  reply_of,
 } from "@xpute/runtime/io/connection.ts";
 import { type Binding, FsServer } from "@xpute/runtime/io/fs.ts";
 import type { Grant, SchedulingPolicy } from "@xpute/runtime/sched/policy.ts";
@@ -128,9 +129,9 @@ export interface Link {
   /** Sends a command with the next turn. */
   send(cmd: u32, ...args: Arg[]): void;
   /** Sends a command with ACKREQ. The promise resolves with the core's
-   * reply, which comes with a later turn, or rejects with the errno the
-   * command was refused with (`answer_of`). */
-  request(cmd: u32, ...args: Arg[]): Promise<u32>;
+   * reply, its value and the memory it names, which comes with a later turn,
+   * or rejects with the errno the command was refused with (`reply_of`). */
+  request(cmd: u32, ...args: Arg[]): Promise<Reply>;
   /** This says whether a command's packet fits a frame. */
   fits(cmd: u32, ...args: Arg[]): boolean;
   /** Asks for a turn. */
@@ -230,7 +231,7 @@ export function mount<G extends Grant>(
   ]);
   const ui_routes = routes_of(ui.protocols);
   connection.listen((tag, cmd, f, pkt, named) => {
-    const major = frame.major_of(cmd);
+    const major = frame.CMD_MAJOR(cmd);
     const on = routes.get(major);
     const take = ui_routes.get(major);
     take?.(tag, cmd, f, pkt, named);
@@ -261,7 +262,7 @@ export function mount<G extends Grant>(
     shown: () => shown,
     send,
     request: (cmd, ...args) =>
-      kick(connection.request(cmd, encode_args(args))).then(answer_of),
+      kick(connection.request(cmd, encode_args(args))).then(reply_of),
     fits: (_cmd, ...args) => {
       const pkt = encode_args(args)(connection);
       return pkt === null || connection.fits(pkt);
@@ -290,7 +291,7 @@ export function routes_of(protocols: readonly Protocol[]): Map<u32, OnImport> {
 /** The file device of a manifest that asks for none: each open and close is
  * answered ENODEV (abi/fs.json). */
 export const NO_FILES: Protocol = {
-  majors: [fs.Major.FS],
+  majors: fs.MAJORS,
   on: () => Errno.ENODEV,
 };
 

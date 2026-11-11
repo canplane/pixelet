@@ -22,5 +22,5 @@ pub(in crate::door) fn changed(c: FsChanged<'_>) -> Outcome {
         // An objects' file is read again, as its source now holds it.
         File::Objects(id) => refuse_unless(repository::on_emptied(id), Errno::EINVAL)?,
     }
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }

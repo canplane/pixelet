@@ -40,7 +40,7 @@ fn went_on_alike(s: vec2<u32>, band: u32, p: vec2<u32>) -> bool {
 /// the slot takes no sky (pxl-engine `light::samples_about`).
 fn sky(at: vec2<u32>, p: vec2<u32>, band: u32) -> bool {
   let d = LIGHT_SAMPLE;
-  let n = header_word(LIGHT_HEADER_SIZE);
+  let n = hdr_word(LIGHT_HDR_SIZE);
   let r = at % d;
   let about = p.x >= r.x && p.x - r.x + d < n && p.y >= r.y && p.y - r.y + d < n;
   let s = at / d;
@@ -59,12 +59,12 @@ fn light_cs(
   @builtin(workgroup_id) group: vec3<u32>,
   @builtin(local_invocation_id) lane: vec3<u32>,
 ) {
-  let size = header_word(LIGHT_HEADER_SIZE);
+  let size = hdr_word(LIGHT_HDR_SIZE);
   let at = light_item(LEVEL_RAY, group.xy * LIGHT_TILE + lane.xy);
   if (at.x >= size || at.y >= size) {
     return;
   }
-  let on = header_word(LIGHT_HEADER_COUNTED) != 0u;
+  let on = hdr_word(LIGHT_HDR_COUNTED) != 0u;
   let p = slot_texel(at);
   let aim = light_aim(p);
   let band = aim.range.x;
@@ -94,5 +94,5 @@ fn light_cs(
     return;
   }
   add_cnt(on, CNT_HOLE);
-  list_hole(header_word(LIGHT_HEADER_HOLES), size * size, at);
+  list_hole(hdr_word(LIGHT_HDR_HOLES), size * size, at);
 }

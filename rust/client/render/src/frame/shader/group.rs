@@ -13,7 +13,7 @@ use crate::frame::shader::record::*;
 use pxl_engine::{raster, ray};
 
 /// A pass of the light's map binds the light's head at this binding.
-pub const HEADER_BINDING: u32 = 11;
+pub const HDR_BINDING: u32 = 11;
 
 /// The group of the walks over the node cache alone of the lattice's runs, which are the runs
 /// of the samples and of the beam rays (queue_walk.wgsl over sample.wgsl or corner.wgsl): the
@@ -22,7 +22,7 @@ pub const LATTICE_WALK_GROUP: [u32; 12] = [
     0, COMPUTE, UNIFORM, 8, COMPUTE, STORAGE_RW, 9, COMPUTE, STORAGE, 10, COMPUTE, STORAGE_RW,
 ];
 
-/// `LATTICE_WALK_GROUP` with the light's head at `HEADER_BINDING`, for the light's map.
+/// `LATTICE_WALK_GROUP` with the light's head at `HDR_BINDING`, for the light's map.
 pub const LIGHT_LATTICE_WALK_GROUP: [u32; 15] = [
     0,
     COMPUTE,
@@ -36,7 +36,7 @@ pub const LIGHT_LATTICE_WALK_GROUP: [u32; 15] = [
     10,
     COMPUTE,
     STORAGE_RW,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
 ];
@@ -57,7 +57,7 @@ pub const LIGHT_GROUP: [u32; 21] = [
     10,
     COMPUTE,
     STORAGE_TEXTURE_RW,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
     15,
@@ -121,7 +121,7 @@ pub const LIGHT_MARK_GROUP: [u32; 21] = [
     3,
     COMPUTE,
     STORAGE_TEXTURE_RW,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
     12,
@@ -142,7 +142,7 @@ pub const LIGHT_MARK_DRAWS_GROUP: [u32; 24] = [
     0,
     COMPUTE,
     UNIFORM,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
     12,
@@ -172,7 +172,7 @@ pub const LIGHT_MARK_DRAWS_OPEN_GROUP: [u32; 27] = [
     0,
     COMPUTE,
     UNIFORM,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
     12,
@@ -202,7 +202,7 @@ pub const LIGHT_PROPAGATE_GROUP: [u32; 12] = [
     0,
     COMPUTE,
     UNIFORM,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
     12,
@@ -223,7 +223,7 @@ pub const LIGHT_SLIDE_GROUP: [u32; 9] = [
     0,
     COMPUTE,
     UNIFORM,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
     12,
@@ -254,7 +254,7 @@ pub const LIGHT_WORLD_GROUP: [u32; 9] = [
     8,
     COMPUTE,
     STORAGE_RW,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
 ];
@@ -280,7 +280,7 @@ pub const QUEUE_GROUP: [u32; 15] = [
     STORAGE_RW,
 ];
 
-/// `QUEUE_GROUP` with the light's head at `HEADER_BINDING`, for the light's map, whose list
+/// `QUEUE_GROUP` with the light's head at `HDR_BINDING`, for the light's map, whose list
 /// takes the beam's words' place and whose map the rays'.
 pub const LIGHT_QUEUE_GROUP: [u32; 18] = [
     0,
@@ -298,7 +298,7 @@ pub const LIGHT_QUEUE_GROUP: [u32; 18] = [
     10,
     COMPUTE,
     STORAGE_RW,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
 ];
@@ -338,7 +338,7 @@ pub const QUEUE_LAST_GROUP: [u32; 30] = [
     STORAGE_RW,
 ];
 
-/// `QUEUE_LAST_GROUP` with the light's head at `HEADER_BINDING`, for the light's map.
+/// `QUEUE_LAST_GROUP` with the light's head at `HDR_BINDING`, for the light's map.
 pub const LIGHT_QUEUE_LAST_GROUP: [u32; 33] = [
     0,
     COMPUTE,
@@ -370,7 +370,7 @@ pub const LIGHT_QUEUE_LAST_GROUP: [u32; 33] = [
     9,
     COMPUTE,
     STORAGE_RW,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
 ];
@@ -391,7 +391,7 @@ pub const LATTICE_LAST_GROUP: [u32; 27] = [
     STORAGE_RW,
 ];
 
-/// `LATTICE_LAST_GROUP` with the light's head at `HEADER_BINDING`, for the light's map.
+/// `LATTICE_LAST_GROUP` with the light's head at `HDR_BINDING`, for the light's map.
 pub const LIGHT_LATTICE_LAST_GROUP: [u32; 30] = [
     0,
     COMPUTE,
@@ -420,7 +420,7 @@ pub const LIGHT_LATTICE_LAST_GROUP: [u32; 30] = [
     9,
     COMPUTE,
     STORAGE_RW,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
 ];
@@ -517,7 +517,7 @@ pub const REC_GROUP: [u32; 24] = [
     16,
     COMPUTE,
     STORAGE_RW,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
     12,
@@ -570,7 +570,7 @@ pub const LIGHT_REC_HITS_GROUP: [u32; 18] = [
     9,
     COMPUTE,
     STORAGE_RW,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
     16,
@@ -590,7 +590,7 @@ pub const LIGHT_SAMPLE_HIT_GROUP: [u32; 15] = [
     9,
     COMPUTE,
     STORAGE_RW,
-    HEADER_BINDING,
+    HDR_BINDING,
     COMPUTE,
     UNIFORM,
     16,

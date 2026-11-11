@@ -13,8 +13,7 @@
   "type": "module",
   "files": [
     "src",
-    "!src/**/*.test.ts",
-    "!src/golden.ts"
+    "!src/**/*.test.ts"
   ],
   "exports": {
     "./*": "./src/*"

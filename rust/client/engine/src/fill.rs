@@ -112,7 +112,7 @@ impl Scratch<'_> {
 }
 
 impl way::SpanTable for Scratch<'_> {
-    fn header(&self, c: [i32; 2]) -> (i32, u32) {
+    fn hdr(&self, c: [i32; 2]) -> (i32, u32) {
         clipmap::head_of(at(self.words, self.column(c)))
     }
     fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32) {
@@ -125,7 +125,7 @@ impl way::SpanTable for Scratch<'_> {
 }
 
 /// The head word of a column's spans (`clipmap::SPANS_COLUMN_WORDS`).
-fn header_word(s: &SpanList) -> u32 {
+fn hdr_word(s: &SpanList) -> u32 {
     let face = if s.face == i32::MIN {
         i16::MIN as i32
     } else {
@@ -247,7 +247,7 @@ pub fn keep(sq: &impl brick::Brick, scratch: &mut [u32], i: u32) -> bool {
         column(sq, c)
     };
     let at = SPANS_AT + i * SPANS_COLUMN_WORDS;
-    put(scratch, at, header_word(&s));
+    put(scratch, at, hdr_word(&s));
     let mut j = 0;
     while j < s.n as usize {
         let w = at + 1 + 2 * j as u32;
@@ -336,7 +336,7 @@ pub fn brick(
 fn run_keeps(spans: &Scratch, i: u32) -> bool {
     use way::SpanTable;
     let c = [(i % SPANS_ACROSS) as i32 - 1, (i / SPANS_ACROSS) as i32 - 1];
-    let (face, n) = spans.header(c);
+    let (face, n) = spans.hdr(c);
     let own = |v: i32| (0..BRICK as i32).contains(&v);
     if n > 0 {
         return true;
@@ -348,7 +348,7 @@ fn run_keeps(spans: &Scratch, i: u32) -> bool {
         .iter()
         .any(|d: &[i32; 2]| {
             let b = [c[0] + d[0], c[1] + d[1]];
-            (0..spans.header(b).1).any(|j| spans.span(b, j).1 & AIR_OF != 0)
+            (0..spans.hdr(b).1).any(|j| spans.span(b, j).1 & AIR_OF != 0)
         })
 }
 

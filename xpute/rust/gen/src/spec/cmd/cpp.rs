@@ -4,7 +4,7 @@
 //! each packet, and a struct and a writer for each import. A C++ core writes no
 //! record.
 
-use super::service::{ackreq_of, fields_of, reply_of, tag_of};
+use super::service::{ackreq_of, fields_of, minors_only, reply_of, tag_of};
 use super::{literal, members, Entry, Field, Kind, Member, Spec, Target};
 use crate::spec::{file, generated, pascal};
 
@@ -205,10 +205,10 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
             "#include <string_view>",
             "#include <variant>",
             "",
-            "#include \"xpute/kit/abi/cmd.hpp\"",
             "#include \"xpute/kit/status/error.hpp\"",
             "#include \"xpute/kit/wire/xtp/cursor.hpp\"",
             "#include \"xpute/kit/wire/xtp/encode.hpp\"",
+            "#include \"xpute/core/abi/enum.hpp\"",
             "#include \"xpute/core/abi/number.hpp\"",
             "#include \"xpute/core/host.hpp\"",
             "#include \"xpute/core/io/frame.hpp\"",
@@ -245,7 +245,7 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
             format!("}} // namespace {namespace}"),
             String::new(),
             format!(
-                "template <> struct xpute::EnumInfo<{namespace}::{}> {{",
+                "template <> struct xpute::abi::Members<{namespace}::{}> {{",
                 e.name
             ),
             format!(
@@ -265,7 +265,7 @@ pub fn emit(spec: &Spec, t: &Target, path: &str, namespace: &str) -> Result<Stri
     if !spec.records.is_empty() {
         return Err(format!("{}: a C++ core writes no record", t.json));
     }
-    for c in spec.commands()? {
+    for c in spec.cmds()? {
         let pascal_name = pascal(&c.name);
         let pkts = [
             (c.pkt.as_ref(), pascal_name.clone(), "packet"),
@@ -385,17 +385,28 @@ fn core_end(spec: &Spec, out: &mut Vec<String>) -> Result<(), String> {
         ));
     }
     if !p.exports.is_empty() {
+        let minors = minors_only(spec);
         out.extend([
             String::new(),
             "// `cmd` read and handed to the member of `h` of its name; ENOSYS for one this".into(),
-            "// protocol does not carry.".into(),
-            "template <class H> Outcome apply(H &h, std::uint32_t cmd, std::span<const std::uint8_t> pkt) noexcept {".into(),
+            if minors {
+                "// protocol does not carry. Its commands are minors under the program's `major`.".into()
+            } else {
+                "// protocol does not carry.".into()
+            },
+            format!(
+                "template <class H> Outcome apply(H &h, {}std::uint32_t cmd, std::span<const std::uint8_t> pkt) noexcept {{",
+                if minors { "std::uint32_t major, " } else { "" }
+            ),
         ]);
         for (cmd, _, _) in &p.exports {
             let f = cmd.to_lowercase();
-            out.push(format!(
-                "    if (cmd == static_cast<std::uint32_t>(Command::{cmd})) {{"
-            ));
+            let number = if minors {
+                format!("frame::cmd(major, static_cast<std::uint32_t>(Command::{cmd}))")
+            } else {
+                format!("static_cast<std::uint32_t>(Command::{cmd})")
+            };
+            out.push(format!("    if (cmd == {number}) {{"));
             match fields_of(spec, cmd, true) {
                 Some(_) => out.extend([
                     format!(

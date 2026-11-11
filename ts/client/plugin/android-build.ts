@@ -11,11 +11,6 @@
  *   without the core dies loading its library on the phones that take that
  *   ABI.
  * - The SDK floor is set by the Vulkan that this build needs for wgpu.
- * - The debug builds of both flavors, a phone's and a Quest's (the `mobile`
- *   and `quest` flavors that expo-horizon-core adds), load their JavaScript
- *   from Metro. React Native treats a variant as a debug build only when its
- *   whole name is listed, which is `debug` by default, and bundles the
- *   JavaScript into the APK of every other variant.
  * - Gradle's daemon runs on Java 17, whatever launches it, because the NDK
  *   build of expo-modules-core fails under a newer Java ("A restricted method
  *   in java.lang.System has been called"). Android Studio's sync writes the
@@ -41,12 +36,6 @@ const PROPERTIES = {
   "android.enableShrinkResourcesInReleaseBuilds": "true",
 };
 
-const FLAVORS = ["mobile", "quest"];
-const DEBUGGABLE = FLAVORS.flatMap((flavor) => [
-  `${flavor}Debug`,
-  `${flavor}DebugOptimized`,
-]);
-const MARK = "// pxl: the flavors' debug builds (plugin/android-build.ts)";
 const DAEMON_JAVA = "17";
 const BUNDLE_INPUT_MARK =
   "// pxl: the bundle's input (plugin/android-build.ts)";
@@ -91,19 +80,9 @@ const plugin: ConfigPlugin = (cfg) => {
   ]);
   return withAppBuildGradle(cfg, (cfg) => {
     const gradle = cfg.modResults.contents;
-    if (gradle.includes(MARK)) return cfg;
-    const at = gradle.search(/^react \{\n/m);
-    if (at < 0) {
-      throw new Error(
-        "android-build: the app's build.gradle has no react block",
-      );
+    if (!gradle.includes(BUNDLE_INPUT_MARK)) {
+      cfg.modResults.contents = gradle + BUNDLE_INPUT;
     }
-    const end = gradle.indexOf("\n", at) + 1;
-    const line = `    ${MARK}\n    debuggableVariants = ${JSON.stringify(
-      DEBUGGABLE,
-    )}\n`;
-    cfg.modResults.contents =
-      gradle.slice(0, end) + line + gradle.slice(end) + BUNDLE_INPUT;
     return cfg;
   });
 };

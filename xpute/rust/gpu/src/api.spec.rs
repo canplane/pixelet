@@ -346,6 +346,31 @@ pub mod COLOR_WRITE {
     pub const KEYS: &[&str] = &["RED", "GREEN", "BLUE", "ALPHA", "ALL"];
 }
 
+/// The words of the device block, in order (op DEVICE): one a limit (LIMIT_NAME), the words
+/// that hold a bit a feature (FEATURE_NAME), the timestamp period, the surface format, the
+/// uncaptured errors, the unfinished frames and STATUS, the last, which the runtime stores
+/// with release after the rest.
+pub mod DEVICE {
+    pub const LIMITS_AT: usize = 0;
+    pub const FEATS_AT: usize = 31;
+    pub const PERIOD_AT: usize = 32;
+    pub const FORMAT_AT: usize = 33;
+    pub const ERRORS_AT: usize = 34;
+    pub const UNFINISHED_AT: usize = 35;
+    pub const STATUS_AT: usize = 36;
+    pub const WORDS: usize = 37;
+    pub const KEYS: &[&str] = &[
+        "LIMITS_AT",
+        "FEATS_AT",
+        "PERIOD_AT",
+        "FORMAT_AT",
+        "ERRORS_AT",
+        "UNFINISHED_AT",
+        "STATUS_AT",
+        "WORDS",
+    ];
+}
+
 /// The last word of the DEVICE block: what the runtime knows of the device. Only the
 /// runtime writes it, and it stores it with release after the rest of the block. The core
 /// loads it with acquire before it reads the block.

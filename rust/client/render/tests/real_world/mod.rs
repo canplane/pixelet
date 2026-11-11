@@ -342,7 +342,7 @@ pub fn source(
         phase: [[0; 2], [3 << s, 5 << s]],
         leaf: 1 << s,
     };
-    source.lines[..way::HEADER_WORDS as usize].copy_from_slice(&way::header(per_m, &stations));
+    source.lines[..way::HDR_WORDS as usize].copy_from_slice(&way::hdr(per_m, &stations));
     if !lined {
         return source;
     }
@@ -400,8 +400,7 @@ pub fn source(
     let n = segments.len() as u32;
     let entries = brick::WAYS_BINS * n;
     let mut lines = vec![0; brick::lines_words(entries, n) as usize];
-    lines[..way::HEADER_WORDS as usize]
-        .copy_from_slice(&source.lines[..way::HEADER_WORDS as usize]);
+    lines[..way::HDR_WORDS as usize].copy_from_slice(&source.lines[..way::HDR_WORDS as usize]);
     for b in 0..brick::WAYS_BINS {
         lines[(LINES_BINS_AT + b) as usize] = b * n;
     }

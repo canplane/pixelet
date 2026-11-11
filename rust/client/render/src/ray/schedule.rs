@@ -52,7 +52,7 @@ pub(super) struct Light {
     /// What changed that it casts, a bit for each `LightChanged` (span.json `LIGHT_CHANGED`).
     /// It is never 0.
     pub changed: u32,
-    /// Whether an epoch begins (pxl-engine `light::HEADER_EPOCH`). An epoch is a run of casts
+    /// Whether an epoch begins (pxl-engine `light::HDR_EPOCH`). An epoch is a run of casts
     /// over which what decides a tile's content stands, so a tile one of them cast stands for
     /// the rest; it begins where that content moved.
     pub epoch: bool,
@@ -63,20 +63,20 @@ pub(super) struct Light {
     /// them are cast again.
     pub columns_changed: bool,
     /// The box's corner this cast is cast under, and the corner of the cast before
-    /// (`light::HEADER_LAST_CORNER`).
+    /// (`light::HDR_LAST_CORNER`).
     pub corner: [i32; 2],
     pub last_corner: [i32; 2],
-    /// The eye's zooms the cast before was cast under (`light::HEADER_LAST_RANGE`).
+    /// The eye's zooms the cast before was cast under (`light::HDR_LAST_RANGE`).
     pub last_range: [u32; 2],
     /// Whether this cast marks the tiles the world's receivers stand on
-    /// (`light::HEADER_WORLD_RECEIVERS`). A receiver is a drawn thing that reads the shadow
+    /// (`light::HDR_WORLD_RECEIVERS`). A receiver is a drawn thing that reads the shadow
     /// map; the world's receivers are the voxels the eye's rays hit.
     pub world: bool,
     /// Whether those marks are added to the ones already made, as the walked bits cover the
     /// damaged tiles alone. Otherwise the marks start afresh.
     pub additive: bool,
     /// Whether the receivers' marks take each pixel's footprint, which they do while the eye
-    /// stands (`light::HEADER_FOOTPRINT`).
+    /// stands (`light::HDR_FOOTPRINT`).
     pub footprint: bool,
 }
 

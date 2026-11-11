@@ -8,7 +8,7 @@
     "GPU_SURFACE_OPEN answers with: the UI binds its canvas under that handle (@xpute/gpu",
     "`gpu_connect`), and the stream's CONFIGURE and CURRENT records name the surface by it. What",
     "a surface shows is the program's to decide. A command's number here is its minor, under the",
-    "one major the program gives the GPU (xpute_gpu `decode`, @xpute/gpu `gpu_exports`)."
+    "one major the program gives the GPU (xpute_gpu `abi::apply`, @xpute/gpu `gpu_exports`)."
   ],
   "name": "gpu",
   "export": [

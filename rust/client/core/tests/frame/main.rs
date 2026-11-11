@@ -17,9 +17,12 @@ mod fs;
 mod gpu;
 mod pace;
 mod runtime;
-mod spec;
 mod watch;
 
+use pxl_core::door::cmd_runtime::{
+    CameraGoto, InputPointer, InputWheel, PointerPhase, PointerType, SceneContent, SceneDraw,
+    SensorPlatform, SettingDev, SettingKey, SettingSet, SourceDeclare,
+};
 use pxl_engine::ray::holes_words;
 use pxl_render::api_spec::device::FRAME_LATENCY;
 use pxl_render::frame::shader::word::screen::JITTERS;
@@ -29,15 +32,17 @@ use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::{MIN_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant};
-use runtime::Runtime;
-use spec::V;
+use runtime::{Gpu, Runtime};
+use xpute_gpu::runtime::abi::{GpuReady, GpuSurfaceOpen, GpuSurfaceResize};
+use xpute_runtime::abi::sys::{SysAttach, SysFrame, SysTurn};
+use xpute_runtime::abi::Export;
 use xpute_runtime::native::pause;
 
 /// The refresh interval of the display the frames are paced to, 60 Hz.
 const REFRESH_MS: f64 = 1000.0 / 60.0;
 
 /// The surface's size in pixels, a phone's at a device pixel ratio of 1.
-const SIZE: [f64; 2] = [390.0, 844.0];
+const SIZE: [u32; 2] = [390, 844];
 
 /// The surface's size for the last frames, an 8K display's at a device pixel ratio of 1.
 const LARGE: [u32; 2] = [7680, 4320];
@@ -99,16 +104,14 @@ impl Run {
         pace::frame();
         self.clock_ms += REFRESH_MS;
         self.frame_cnt += 1;
-        self.runtime.send(
-            "SYS_FRAME",
-            &[
-                ("refresh_ms", V::Num(REFRESH_MS)),
-                ("paced_ms", V::Num(REFRESH_MS)),
-                ("interactive", V::Bool(interactive)),
-            ],
-        );
-        self.runtime
-            .send("SYS_TURN", &[("unix_ms", V::Num(self.clock_ms))]);
+        self.runtime.send(&SysFrame {
+            refresh_ms: REFRESH_MS,
+            paced_ms: REFRESH_MS,
+            interactive,
+        });
+        self.runtime.send(&SysTurn {
+            unix_ms: self.clock_ms,
+        });
         watch::waiting(format!("frame {}: its turn", self.frame_cnt));
         let wake = self.runtime.turn(REFRESH_MS);
         self.check(wake.is_some());
@@ -136,9 +139,10 @@ impl Run {
     }
 
     /// Makes one of the UI's requests and checks it as a frame is checked.
-    fn request(&mut self, name: &str, vals: &[(&str, V)]) -> i32 {
+    fn request<E: Export>(&mut self, e: &E) -> i32 {
+        let name = runtime::name(E::NUMBER);
         watch::waiting(format!("frame {}: {name}'s answer", self.frame_cnt));
-        let r = self.runtime.request(name, vals);
+        let r = self.runtime.request(e);
         self.check(true);
         assert!(r >= 0, "{name} answered {r}");
         r
@@ -187,26 +191,23 @@ impl Run {
         asked + 1
     }
 
-    fn pointer(&mut self, phase: &str, x: f64, y: f64) {
-        let ui = &self.runtime.ui;
-        let vals = [
-            ("phase", V::Num(ui.member("PointerPhase", phase).into())),
-            (
-                "pointer_type",
-                V::Num(ui.member("PointerType", "Mouse").into()),
-            ),
-            ("id", V::Num(1.0)),
+    fn pointer(&mut self, phase: PointerPhase, x: f64, y: f64) {
+        self.runtime.send(&InputPointer {
+            phase,
+            pointer_type: PointerType::Mouse,
+            id: 1,
             // The secondary button rotates (domain/control/input.rs).
-            ("button", V::Num(2.0)),
-            ("x", V::Num(x)),
-            ("y", V::Num(y)),
-        ];
-        self.runtime.send("INPUT_POINTER", &vals);
+            button: 2,
+            x,
+            y,
+        });
         self.frame(true);
     }
 }
 
 fn main() {
+    // The run's bounds start once the process holds the GPU.
+    gpu::hold();
     watch::start();
     frames();
 }
@@ -230,57 +231,47 @@ fn frames() {
     };
     // The boot in the order runtime/boot.ts gives it: the runtime attaches, the platform is
     // described, and the GPU is ready.
-    run.runtime.send("SYS_ATTACH", &[]);
-    run.runtime.send(
-        "SENSOR_PLATFORM",
-        &[
-            ("geolocation", V::Bool(false)),
-            ("orient", V::Bool(false)),
-            ("orient_permission", V::Bool(false)),
-            ("orient_silence_is_loss", V::Bool(false)),
-        ],
-    );
-    run.runtime.send("SETTING_DEV", &[("dev", V::Bool(true))]);
-    run.runtime.send("GPU_READY", &[]);
+    run.runtime.send(&SysAttach {});
+    run.runtime.send(&SensorPlatform {
+        geolocation: false,
+        orient: false,
+        orient_permission: false,
+        orient_silence_is_loss: false,
+    });
+    run.runtime.send(&SettingDev { dev: true });
+    run.runtime.send(&Gpu(GpuReady {}));
     run.frame(false);
     // The tile source, declared as service/core/source.ts declares it, with the place's shard
     // alone. Every tile of the shard is a page its version leaves out (fs.rs), so the world
     // there is sea.
     let format = BaseLayer::ALL.map(|l| FORMAT.of(l)).to_vec();
-    run.request(
-        "SOURCE_DECLARE",
-        &[
-            ("min_zoom", V::Num(MIN_ZOOM.into())),
-            ("format", V::Nums(format)),
-            ("shard", V::Strs(vec![shard_of(PLACE).key()])),
-        ],
-    );
+    let shard = shard_of(PLACE).key();
+    run.request(&SourceDeclare {
+        min_zoom: MIN_ZOOM,
+        format: &format,
+        shard: &[&shard],
+    });
 
     // The world's surface, opened the way the scene's place opens it (service/core/surface.ts,
     // service/core/scene.ts).
-    let surface = run.request("GPU_SURFACE_OPEN", &[]);
+    let surface = run.request(&Gpu(GpuSurfaceOpen {}));
     assert!(surface > 0, "no surface was opened");
-    let surface = V::Num(f64::from(surface));
-    let resize = |run: &mut Run, [w, h]: [f64; 2]| {
-        run.runtime.send(
-            "GPU_SURFACE_RESIZE",
-            &[
-                ("surface", surface.clone()),
-                ("width", V::Num(w)),
-                ("height", V::Num(h)),
-                ("device_pixel_ratio", V::Num(1.0)),
-            ],
-        );
+    let surface = surface as u32;
+    let resize = |run: &mut Run, [width, height]: [u32; 2]| {
+        run.runtime.send(&Gpu(GpuSurfaceResize {
+            surface,
+            width,
+            height,
+            device_pixel_ratio: 1.0,
+        }));
     };
     resize(&mut run, SIZE);
-    let world = run.runtime.ui.member("SceneContent", "World");
-    run.request(
-        "SCENE_DRAW",
-        &[
-            ("surface", surface.clone()),
-            ("content", V::Num(world.into())),
-        ],
-    );
+    run.request(&SceneDraw {
+        surface,
+        content: SceneContent::World,
+        group: None,
+        bg: None,
+    });
     let mut made = 0;
     let began = std::time::Instant::now();
     while run.runtime.shown.renderer_progress < 1.0 {
@@ -294,38 +285,37 @@ fn frames() {
     }
 
     // The camera goes to the place, and its view asks for one jitter sequence of casts.
-    run.request(
-        "CAMERA_GOTO",
-        &[("lon", V::Num(PLACE[0])), ("lat", V::Num(PLACE[1]))],
-    );
+    run.request(&CameraGoto {
+        lon: PLACE[0],
+        lat: PLACE[1],
+        dist: None,
+        azimuth: None,
+        polar: None,
+    });
     run.frames(JITTERS);
 
     // The view stands still while the turns keep coming.
     run.frames(JITTERS);
 
     // A rotation: the secondary button dragged across the view.
-    let [cx, cy] = SIZE.map(|s| s / 2.0);
-    run.pointer("Down", cx, cy);
+    let [cx, cy] = SIZE.map(|s| f64::from(s) / 2.0);
+    run.pointer(PointerPhase::Down, cx, cy);
     for k in 1..=8 {
-        run.pointer("Move", cx + 12.0 * f64::from(k), cy);
+        run.pointer(PointerPhase::Move, cx + 12.0 * f64::from(k), cy);
     }
-    run.pointer("Up", cx + 96.0, cy);
+    run.pointer(PointerPhase::Up, cx + 96.0, cy);
     run.frames(JITTERS);
 
     // A zoom step.
-    run.runtime
-        .send("INPUT_WHEEL", &[("delta_y", V::Num(100.0))]);
+    run.runtime.send(&InputWheel { delta_y: 100.0 });
     run.frame(true);
     run.frames(JITTERS);
 
     // The shadows go on, which asks for the light's cast.
-    run.request(
-        "SETTING_SET",
-        &[
-            ("key", V::Num(spec::setting("shadows").into())),
-            ("val", V::Num(1.0)),
-        ],
-    );
+    run.request(&SettingSet {
+        key: SettingKey::shadows,
+        val: 1,
+    });
     run.frames(JITTERS);
 
     // The camera finishes its ease, then idle turns run until the view rests.
@@ -338,7 +328,7 @@ fn frames() {
     );
 
     // The surface grows to an 8K display's, the view is cast again over it, and it rests.
-    resize(&mut run, LARGE.map(f64::from));
+    resize(&mut run, LARGE);
     run.frames(JITTERS);
     let rested = run.rest();
     // The largest size the resolution rule draws the surface at, at full ratio (pxl-render

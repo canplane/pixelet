@@ -348,8 +348,8 @@ impl Generator {
             // workgroups across and up, with the third count, the pairs listed, left 0 for
             // `decor_mark_cs` to fill. It then says whether every entry generates whole, how
             // many boxes there are, and that no pair generates in part yet.
-            let mut header = [0u32; generation::RECTS_AT as usize];
-            let mut put = |at: u32, val: u32| header[at as usize] = val;
+            let mut hdr = [0u32; generation::RECTS_AT as usize];
+            let mut put = |at: u32, val: u32| hdr[at as usize] = val;
             put(
                 generation::THIN_ARGS,
                 brick::BRICK_CELLS.div_ceil(generation::LANES),
@@ -366,7 +366,7 @@ impl Generator {
             g.write_buf(
                 self.list,
                 sequence::OPEN_GENERATION_LIST.to_at(),
-                bytes(&header),
+                bytes(&hdr),
             );
             g.write_buf(
                 self.list,
@@ -382,7 +382,7 @@ impl Generator {
         if placed_changed {
             g.write_buf(
                 self.recs,
-                generation::PLACED_HEADER * 4,
+                generation::PLACED_HDR * 4,
                 bytes(&[f.placed_recs.len() as u32, 0, 0, 0]),
             );
             if !f.placed_recs.is_empty() {

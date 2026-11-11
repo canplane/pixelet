@@ -1,7 +1,7 @@
 // xpute-kit/codec/json.test.rs
 
 use super::*;
-use crate::golden::Golden;
+use xpute_golden::Golden;
 
 const GOLDEN: &str = include_str!("../../../../spec/golden/codec/json.tsv");
 

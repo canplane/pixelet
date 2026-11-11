@@ -143,9 +143,9 @@ fn write_lands_before_destroy() {
 fn native_tells_unfinished() {
     let (adapter, device, queue) = device();
     let mut h = runtime(adapter, &device, queue, 1);
-    let mut bytes = [0u8; 4 * crate::device::WORDS];
+    let mut bytes = [0u8; 4 * crate::spec::DEVICE::WORDS];
     let mut mem = Memory::of(&mut bytes);
-    let unfinished = 4 * crate::device::UNFINISHED_AT as u32;
+    let unfinished = 4 * crate::spec::DEVICE::UNFINISHED_AT as u32;
     h.block = Some(0);
     assert!(h.admit_frame());
     h.count_frame();
@@ -168,9 +168,9 @@ fn native_tells_unfinished() {
 fn lost_told_once() {
     let (adapter, device, queue) = device();
     let mut h = runtime(adapter, &device, queue, 1);
-    let mut bytes = [0u8; 4 * crate::device::WORDS];
+    let mut bytes = [0u8; 4 * crate::spec::DEVICE::WORDS];
     let mut mem = Memory::of(&mut bytes);
-    let status = 4 * crate::device::STATUS_AT as u32;
+    let status = 4 * crate::spec::DEVICE::STATUS_AT as u32;
     h.block = Some(0);
     assert!(!h.lost());
     h.device_lost.store(true, Ordering::Release);

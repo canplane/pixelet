@@ -17,20 +17,26 @@ pub mod spec;
 
 pub type Fd = u32;
 
-/// A token of a file's path: a number the program gives a fixed name, or
-/// variable data in its own type. xpute gives no token a meaning.
+/// A token of a file's path: an i32 or a string, each of which compares
+/// exactly. xpute gives no token a meaning.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Token<'a> {
-    U32(u32),
+    Int(i32),
     Str(&'a str),
 }
 
 impl<'a> Token<'a> {
-    /// Reads a branch's child: a string, or a number that is a u32.
+    /// Reads a branch's child: a string, or a number whose value is a whole
+    /// i32, as a whole float's is. Any other child, a fraction, a bool, a
+    /// branch or an integer past an i32, is EBADMSG.
     fn of(c: &Cursor<'a>) -> Result<Token<'a>, MarshalError> {
         match c.get_str_ref() {
             Ok(s) => Ok(Token::Str(s)),
-            Err(_) => Ok(Token::U32(integer(c.get_number()?)?)),
+            Err(_) => c
+                .get_number()
+                .and_then(integer)
+                .map(Token::Int)
+                .map_err(|_| MarshalError::new(Errno::EBADMSG)),
         }
     }
 }
@@ -60,12 +66,12 @@ impl<'a> Path<'a> {
         })
     }
 
-    /// Writes `tokens` as a path: a branch of a u32 or a string each.
+    /// Writes `tokens` as a path: a branch of an i32 or a string each.
     pub fn write(w: &mut PacketWriter, tokens: &[Token]) {
         w.branch(tokens.len() as u32, |w| {
             for t in tokens {
                 match *t {
-                    Token::U32(v) => w.u32(Some(v)),
+                    Token::Int(v) => w.i32(Some(v)),
                     Token::Str(s) => w.str(Some(s)),
                 };
             }

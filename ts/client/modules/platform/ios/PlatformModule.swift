@@ -77,7 +77,7 @@ public class PlatformModule: Module {
 
     // ---- the compass (service/platform/sensor.native.ts) ----
 
-    /// Whether the device has a compass at all. expo-horizon-location tells that
+    /// Whether the device has a compass at all. expo-location tells that
     /// only by failing a watch, and a failed watch reads as a compass lost
     /// rather than one that was never there.
     Function("headingAvailable") { () -> Bool in

@@ -345,7 +345,7 @@ fn node_answer(parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32
 /// What a walk that asks returns when it ends at a lack: it stops there, as every node over the
 /// lack was answered at the zooms asked.
 fn lack_ends() -> u32 {
-  return 2u;
+  return ENDS_LACK;
 }
 
 /// Finds what the node inherits where a beam ray's walk ended without asking: from its

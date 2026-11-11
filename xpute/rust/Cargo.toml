@@ -7,11 +7,12 @@
 # core's form lives in its end's path: `core`'s `wasm` (a module's link
 # arguments, which a build script takes it for, and its entry) and `runtime`'s
 # `native`. `dev/` holds what develops them: `conformance`, the core the contract's traces
-# drive (spec/conformance/), the example and xpute's own use of the generator (`gen`).
+# drive (spec/conformance/), `golden`, the golden records' reader the tests take, the
+# example and xpute's own use of the generator (`gen`).
 
 [workspace]
 resolver = "2"
-members = ["kit", "core", "runtime", "gpu", "dev/conformance", "dev/example", "gen", "dev/tool"]
+members = ["kit", "core", "runtime", "gpu", "dev/conformance", "dev/example", "dev/golden", "gen", "dev/tool"]
 
 [workspace.dependencies]
 # Each of the workspace's own crates is given by its path once, so a crate
@@ -21,6 +22,7 @@ xpute-core = { path = "core", version = "0.1.0" }
 xpute-runtime = { path = "runtime", version = "0.1.0" }
 xpute-gpu = { path = "gpu", version = "0.1.0" }
 xpute-gen = { path = "gen", version = "0.1.0" }
+xpute-golden = { path = "dev/golden" }
 # A test reads a golden packet's bytes back with this.
 hex = "0.4"
 

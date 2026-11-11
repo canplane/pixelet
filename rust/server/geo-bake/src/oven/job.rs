@@ -173,16 +173,15 @@ impl Runner {
                 .join(format!(".work-{}", SERIAL.fetch_add(1, Ordering::Relaxed))),
         );
         std::fs::create_dir_all(&out.0).map_err(|e| e.to_string())?;
-        let mut command = Command::new(std::env::current_exe().map_err(|e| e.to_string())?);
-        command
-            .arg("--oven-job")
+        let mut cmd = Command::new(std::env::current_exe().map_err(|e| e.to_string())?);
+        cmd.arg("--oven-job")
             .arg(serde_json::to_string(&job).map_err(|e| e.to_string())?)
             .arg(&out.0)
             .arg(self.limit.seconds.to_string())
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .kill_on_drop(true);
-        supervise(command, deadline).await?;
+        supervise(cmd, deadline).await?;
         if Instant::now() >= deadline {
             return Err(Failure::Limited("oven generation deadline"));
         }
@@ -190,11 +189,11 @@ impl Runner {
     }
 }
 
-async fn supervise(mut command: Command, deadline: Instant) -> Result<(), Failure> {
+async fn supervise(mut cmd: Command, deadline: Instant) -> Result<(), Failure> {
     if Instant::now() >= deadline {
         return Err(Failure::Limited("oven generation deadline"));
     }
-    let mut child = command.spawn().map_err(|e| e.to_string())?;
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
     match time::timeout_at(deadline, child.wait()).await {
         Ok(status) => {
             if status.map_err(|e| e.to_string())?.success() {

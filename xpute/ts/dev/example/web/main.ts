@@ -6,7 +6,7 @@
  */
 
 import { QUIET, start } from "@xpute/runtime";
-import { Command } from "../asker.spec.ts";
+import { asker_exports } from "../asker.spec.ts";
 import { MANIFEST } from "../manifest.spec.ts";
 import { ANSWER } from "./core.ts";
 
@@ -22,5 +22,5 @@ const link = await start(
     }),
 );
 link.resume();
-const sum = await link.request(Command.SUM, 2, 3);
+const sum = await asker_exports(link).sum(2, 3);
 say(`2 + 3 + ${ANSWER} = ${sum}`);

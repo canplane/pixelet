@@ -19,14 +19,8 @@ const NETWORK = 1;
 const SERVER = 2;
 const WORLD = 3;
 const LOCATION = 4;
-const ORIENTATION = 5;
 type Report =
-  | typeof GPU
-  | typeof NETWORK
-  | typeof SERVER
-  | typeof WORLD
-  | typeof LOCATION
-  | typeof ORIENTATION;
+  typeof GPU | typeof NETWORK | typeof SERVER | typeof WORLD | typeof LOCATION;
 
 /** The ready word is shown once, when the first world and its companion are
  * on screen. */
@@ -123,12 +117,6 @@ export function ToastController() {
   const locationStatus = useCore((s) => s.location.status);
   const locationError = useCore((s) => s.location.err);
   useNotice(LOCATION, location(locationStatus, locationError));
-
-  const orientationError = useCore((s) => s.orient.err);
-  useNotice(
-    ORIENTATION,
-    orientationError !== null ? error(messageKey(orientationError)) : null,
-  );
 
   const gpu = useGpu();
   const stall = useCore((s) => s.stall);

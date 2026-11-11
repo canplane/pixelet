@@ -27,20 +27,20 @@ pub(super) fn tool(c: abi::EditTool) -> Outcome {
         },
     });
     camera_rehover();
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 pub(super) fn marker_text(c: abi::EditMarkerText<'_>) -> Outcome {
     or_refuse(write::set_draft_text(c.text).ok(), Errno::EMSGSIZE)?;
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 pub(super) fn marker_commit() -> Outcome {
     write::commit_draft();
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 pub(super) fn marker_cancel() -> Outcome {
     write::cancel_draft();
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }

@@ -1,8 +1,8 @@
 // Runs ts/gpu/src/runtime.test.ts where the web runtime runs: in Chrome, on its
-// WebGPU. The test is bundled for the browser and served at its own path
-// beside the tree's spec/. Chrome is started headless on the page, and the
-// page posts its outcome back. Without Chrome, or without WebGPU in it, the
-// run fails.
+// WebGPU. The test is bundled for the browser and served beside the tree's
+// spec/, whose root the bundle's golden reader is handed. Chrome is started
+// headless on the page, and the page posts its outcome back. Without Chrome,
+// or without WebGPU in it, the run fails.
 //
 //   pnpm --dir ts test:gpu:web          ($CHROME names the browser's binary)
 
@@ -25,6 +25,9 @@ const CHROME =
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : "google-chrome");
 const SECONDS = 60;
+/** Where the page serves the tree's spec/, which the bundle's golden reader
+ * takes as its root (`GOLDEN_ROOT`). */
+const SPEC = "/spec/";
 
 async function main(): Promise<number> {
   // vite bundles the test and all it imports into one ES module, as a
@@ -33,6 +36,7 @@ async function main(): Promise<number> {
     configFile: false,
     root: join(ROOT, "ts"),
     logLevel: "warn",
+    define: { GOLDEN_ROOT: JSON.stringify(SPEC) },
     build: {
       outDir: dirname(BUNDLE),
       emptyOutDir: false,
@@ -65,7 +69,7 @@ async function main(): Promise<number> {
         .writeHead(200, { "content-type": "text/javascript" })
         .end(await readFile(BUNDLE));
     }
-    if (path.startsWith("/spec/") && !path.includes("..")) {
+    if (path.startsWith(SPEC) && !path.includes("..")) {
       return res.writeHead(200).end(await readFile(join(ROOT, path)));
     }
     res.writeHead(404).end();

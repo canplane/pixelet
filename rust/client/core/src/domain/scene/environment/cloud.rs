@@ -469,8 +469,8 @@ fn build(
         ]);
     }
     let instance_cnt: usize = columns.iter().map(Vec::len).sum();
-    let header = 1 + columns.len();
-    let words = header
+    let hdr = 1 + columns.len();
+    let words = hdr
         + columns
             .iter()
             .map(|l| GroupRange::words(l.len()))
@@ -481,7 +481,7 @@ fn build(
     let out: &mut [u32] =
         unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), bytes as usize / 4) };
     out[0] = columns.len() as u32;
-    let mut first = header;
+    let mut first = hdr;
     for (g, l) in columns.iter().enumerate() {
         out[1 + g] = l.len() as u32;
         let column = GroupRange {

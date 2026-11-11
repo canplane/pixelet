@@ -1,36 +1,25 @@
 // xpute-gpu/device.rs
 
-//! These are the word offsets of the device's block (spec DEVICE). The runtime
-//! writes the block where the core asks for it (`call::device`), and the core
-//! reads it. The limits come first, one word for each name in LIMIT_NAME.
+//! This reads the device's block, laid out by spec/gpu/api.json's DEVICE
+//! (`spec::DEVICE`). The runtime writes the block where the core asks for it
+//! (`call::device`), and the core reads it. The limits come first, one word for
+//! each name in LIMIT_NAME; the features take one bit for each name in
+//! FEATURE_NAME; the timestamp period is in nanoseconds per tick, as f32 bits;
+//! the surface format the runtime prefers is an index into TEXTURE_FORMAT; the
+//! runtime keeps the counts of uncaptured errors and of the core's unfinished
+//! frames up to date; and STATUS, the last, the runtime stores with release
+//! after the rest of the block, so a core that loads READY with acquire sees
+//! the whole block.
 
 use crate::encode::load_acquire;
-use crate::enums::{FeatureName, LimitName, TextureFormat, FEATURE_NAME, LIMIT_NAME};
-use crate::spec::STATUS;
-
-/// The features take one bit for each name in FEATURE_NAME.
-pub const FEATS_AT: usize = LIMIT_NAME.len();
-/// The timestamp period is in nanoseconds per tick, as f32 bits.
-pub const PERIOD_AT: usize = FEATS_AT + FEATURE_NAME.len().div_ceil(32);
-/// The surface format the runtime prefers is an index into TEXTURE_FORMAT.
-pub const FORMAT_AT: usize = PERIOD_AT + 1;
-/// This counts the uncaptured errors the device raised, and the runtime keeps
-/// it up to date.
-pub const ERRORS_AT: usize = FORMAT_AT + 1;
-/// This counts the core's frames the GPU has not yet finished, and the runtime
-/// keeps it up to date.
-pub const UNFINISHED_AT: usize = ERRORS_AT + 1;
-/// This is the device's STATUS, the block's last word. The runtime stores it
-/// with release after the rest of the block, so a core that loads READY with
-/// acquire sees the whole block.
-pub const STATUS_AT: usize = UNFINISHED_AT + 1;
-pub const WORDS: usize = STATUS_AT + 1;
+use crate::enums::{FeatureName, LimitName, TextureFormat};
+use crate::spec::{DEVICE, STATUS};
 
 /// The device as its block describes it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Device {
-    limits: [u32; LIMIT_NAME.len()],
-    feats: [u32; FEATURE_NAME.len().div_ceil(32)],
+    limits: [u32; DEVICE::FEATS_AT],
+    feats: [u32; DEVICE::PERIOD_AT - DEVICE::FEATS_AT],
     /// The timestamp period, in nanoseconds per tick.
     pub period_ns: f32,
     /// The surface format the runtime prefers.
@@ -42,18 +31,18 @@ impl Device {
     /// READY, which this loads with acquire so the whole block is seen; none
     /// before then, and none where its format names no texture format.
     pub fn read(block: &[u32]) -> Option<Device> {
-        if load_acquire(&block[STATUS_AT]) != STATUS::READY {
+        if load_acquire(&block[DEVICE::STATUS_AT]) != STATUS::READY {
             return None;
         }
-        let mut limits = [0; LIMIT_NAME.len()];
-        limits.copy_from_slice(&block[..FEATS_AT]);
-        let mut feats = [0; FEATURE_NAME.len().div_ceil(32)];
-        feats.copy_from_slice(&block[FEATS_AT..PERIOD_AT]);
+        let mut limits = [0; DEVICE::FEATS_AT];
+        limits.copy_from_slice(&block[..DEVICE::FEATS_AT]);
+        let mut feats = [0; DEVICE::PERIOD_AT - DEVICE::FEATS_AT];
+        feats.copy_from_slice(&block[DEVICE::FEATS_AT..DEVICE::PERIOD_AT]);
         Some(Device {
             limits,
             feats,
-            period_ns: f32::from_bits(block[PERIOD_AT]),
-            format: *TextureFormat::ALL.get(block[FORMAT_AT] as usize)?,
+            period_ns: f32::from_bits(block[DEVICE::PERIOD_AT]),
+            format: *TextureFormat::ALL.get(block[DEVICE::FORMAT_AT] as usize)?,
         })
     }
 

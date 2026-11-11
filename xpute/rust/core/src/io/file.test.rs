@@ -1,16 +1,17 @@
 // xpute-core/io/file.test.rs
 
 use super::*;
-use crate::abi::fs::{Command, FsOpen};
+use crate::abi::fs::Command;
 use crate::abi::handle::handle_slot;
 use crate::io::door::test::{door, sent, SCRATCH};
 use crate::io::frame;
 use crate::io::fs::spec::flag;
-use crate::io::fs::Token;
+use crate::io::fs::{Path, Token};
+use xpute_kit::wire::xtp::TreeReader;
 
 type Files = FileTable<&'static str, &'static str, Vec<u8>, 4>;
 
-const PATH: [Token; 2] = [Token::U32(7), Token::Str("a")];
+const PATH: [Token; 2] = [Token::Int(7), Token::Str("a")];
 
 /// A runtime's result code as a completion carries it.
 fn res(code: i32) -> Result<u32, Errno> {
@@ -51,6 +52,13 @@ fn let_go_at_close() {
     assert!(files.complete_close(a, res(0)).is_none());
 }
 
+/// The path and the flags an open's packet carries.
+fn opened(pkt: &[u8]) -> (Path<'_>, u32) {
+    let f = TreeReader::new(pkt).unwrap().read_branch().unwrap();
+    let flags = f.at(1).unwrap().get_number().unwrap() as u32;
+    (Path::read(pkt, f.at(0).unwrap()).unwrap(), flags)
+}
+
 /// An open and a close are tagged with the descriptor and ask for
 /// completion; the path goes as its tokens, each its own type.
 #[test]
@@ -59,7 +67,7 @@ fn open_and_close_ask_for_completion() {
     let fd = files.open(&PATH, "first");
     files.close(fd).unwrap();
     let sent = sent();
-    let (path, flags) = FsOpen::parts(&sent[0].pkt).unwrap();
+    let (path, flags) = opened(&sent[0].pkt);
     assert_eq!(flags, flag::O_RDONLY);
     assert_eq!(path.iter().collect::<Vec<_>>(), PATH);
     for (s, cmd) in sent.iter().zip([Command::FS_OPEN, Command::FS_CLOSE]) {
@@ -165,7 +173,7 @@ fn write_whole_request_hears_its_close() {
     );
     assert!(sent.iter().all(|s| s.frame.tag == fd));
     assert_eq!(handle_slot(fd), 0, "it takes no slot");
-    assert_eq!(FsOpen::parts(&sent[0].pkt).unwrap().1, flag::O_WRONLY);
+    assert_eq!(opened(&sent[0].pkt).1, flag::O_WRONLY);
     assert_eq!(sent[1].named, vec![1, 2]);
     assert_eq!(
         files.complete_open(fd, res(0), 404),

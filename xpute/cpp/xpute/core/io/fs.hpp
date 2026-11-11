@@ -24,9 +24,9 @@ namespace xpute {
 
 using Fd = std::uint32_t;
 
-// A token of a file's path: a number the program gives a fixed name, or
-// variable data in its own type. xpute gives no token a meaning.
-using Token = std::variant<std::uint32_t, std::string_view>;
+// A token of a file's path: an i32 or a string, each of which compares
+// exactly. xpute gives no token a meaning.
+using Token = std::variant<std::int32_t, std::string_view>;
 
 // A file's path as a packet carries it, a branch of its tokens, read in place.
 // Each token was checked when the path was read.
@@ -48,12 +48,12 @@ class Path {
         return p;
     }
 
-    // Writes `tokens` as a path: a branch of a u32 or a string each.
+    // Writes `tokens` as a path: a branch of an i32 or a string each.
     static void write(xtp::PacketWriter &w, std::span<const Token> tokens) noexcept {
         w.branch(static_cast<std::uint32_t>(tokens.size()), [&](xtp::PacketWriter &w) {
             for (const Token &t : tokens) {
-                if (const std::uint32_t *v = std::get_if<std::uint32_t>(&t)) {
-                    w.u32(*v);
+                if (const std::int32_t *v = std::get_if<std::int32_t>(&t)) {
+                    w.i32(*v);
                 } else {
                     w.str(std::get<std::string_view>(t));
                 }
@@ -69,13 +69,15 @@ class Path {
     }
 
   private:
-    // Reads a branch's child: a string, or a number that is a u32.
+    // Reads a branch's child: a string, or a number whose value is a whole
+    // i32, as a whole float's is. Any other child, a fraction, a bool, a
+    // branch or an integer past an i32, is EBADMSG.
     static Result<Token> token_of(const xtp::Cursor &c) noexcept {
         if (Result<std::string_view> s = c.get_str_ref()) return Token{*s};
         Result<double> n = c.get_number();
-        if (!n) return n.error();
-        Result<std::uint32_t> v = abi::integer<std::uint32_t>(*n);
-        if (!v) return v.error();
+        if (!n) return marshal_error(Errno::ebadmsg);
+        Result<std::int32_t> v = abi::integer<std::int32_t>(*n);
+        if (!v) return marshal_error(Errno::ebadmsg);
         return Token{*v};
     }
 

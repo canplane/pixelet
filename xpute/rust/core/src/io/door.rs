@@ -23,8 +23,9 @@
 //! and handed to the runtime's `call`. The runtime routes each import by its
 //! command's major.
 //!
-//! - R1. Memory an import names (`Import::named`) is taken with the frame, so
-//!   it is the core's again once `send` returns: a file's write is. A file's
+//! - R1. Memory an import names (`Import::named`), or a reply (`Reply`), is
+//!   taken with the frame, so it is the core's again once `send` returns: a
+//!   file's write is, and a reply's bytes. A file's
 //!   read names memory the runtime fills later: it is the runtime's until the
 //!   FS_CLOSE of its descriptor is completed, and the file table holds the
 //!   buffer until then (io/file.rs). Memory a call names is the runtime's
@@ -81,9 +82,25 @@ pub const ABORT_PKT_BYTES: u32 = {
 /// or none when it does not fit.
 type Write<'a> = &'a dyn Fn(&mut [u8]) -> Option<u32>;
 
-/// What the program answers an event: a value to reply with, or none for
-/// a command it does not know, which is replied to with ENOSYS.
-pub type Outcome = Result<Option<i32>, MarshalError>;
+/// What the program answers an event: a reply, or none for a command it does
+/// not know, which is replied to with ENOSYS.
+pub type Outcome = Result<Option<Reply>, MarshalError>;
+
+/// A reply to a command: its value, and the core's memory it names, which goes
+/// with the reply's frame as with any frame's (R1), empty for none. What it
+/// names lies in the core's memory, as the heap does; a native build's statics
+/// do not, and naming one is a bug (EFAULT).
+#[derive(Clone, Copy, Debug)]
+pub struct Reply {
+    pub val: i32,
+    pub named: &'static [u8],
+}
+
+impl From<i32> for Reply {
+    fn from(val: i32) -> Reply {
+        Reply { val, named: &[] }
+    }
+}
 
 /// The door hands the program a change in its life that its runtime tells it
 /// of, a turn the scheduling policy grants, a file changed under it, a command
@@ -303,19 +320,19 @@ impl Door {
             }
             let result = match pkt {
                 Ok(pkt) => match apply_frame(&f, pkt, &mut handle) {
-                    Ok(Some(val)) => Ok(val),
+                    Ok(Some(reply)) => Ok(reply),
                     Ok(None) => Err(Errno::ENOSYS as i32),
                     Err(e) => Err(e.errnum as i32),
                 },
                 Err(e) => Err(e.errnum as i32),
             };
-            if f.flags & frame::ACKREQ != 0 || result.is_err() {
-                self.post(
-                    f.tag,
-                    f.cmd,
-                    frame::RES,
-                    result.unwrap_or_else(|errnum| errnum),
-                );
+            match result {
+                Ok(r) if f.flags & frame::ACKREQ != 0 => {
+                    let named = (self.mem.off_of_slice(r.named) as u32, r.named.len() as u32);
+                    self.send_frame(f.tag, f.cmd, frame::RES, r.val, named, None);
+                }
+                Ok(_) => {}
+                Err(errnum) => self.post(f.tag, f.cmd, frame::RES, errnum),
             }
         }
     }
@@ -338,7 +355,7 @@ struct Own<'h, F> {
 
 impl<F: FnMut(Event) -> Outcome> sys::Exports for Own<'_, F> {
     fn nop(&mut self, c: Nop) -> Outcome {
-        Ok(Some(c.val as i32))
+        Ok(Some((c.val as i32).into()))
     }
     fn sys_attach(&mut self) -> Outcome {
         (self.handle)(Event::Life(Life::Attach))
@@ -372,7 +389,7 @@ fn apply_frame(
     handle: &mut impl FnMut(Event) -> Outcome,
 ) -> Outcome {
     let own = &mut Own { handle };
-    match f.cmd >> 8 {
+    match frame::cmd_major(f.cmd) {
         m if m == Major::NOP as u32 || m == Major::SYS as u32 => sys::apply(own, f.cmd, &pkt),
         m if m == fs::Major::FS as u32 => fs::apply(own, f.cmd, &pkt),
         m if m < PROGRAM_MAJOR => Ok(None),

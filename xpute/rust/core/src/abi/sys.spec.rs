@@ -11,7 +11,7 @@
 //! SYS_PACE carry frame pacing's grant and the core's asked rate. SYS_ABORT
 //! reports the broken invariant the core stops on, the last frame the core sends.
 //!
-//! Each command is `major << 8 | minor` (kit abi/cmd). Its packet is an XTP branch whose
+//! Each command is `major << 8 | minor` (io/frame.json). Its packet is an XTP branch whose
 //! children are the command's fields, in order; a command with no fields carries no packet.
 //! The GPU and the files are devices with protocols of their own (gpu.json, fs.json).
 //! Majors 0x00 to 0x0F are xpute's (io/frame.json), and a program numbers the commands of
@@ -153,11 +153,6 @@ impl Nop {
             val: integer::<u32>(f.at(0)?.get_number()?)?,
         })
     }
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.val));
-    }
 }
 
 /// Command::SYS_TURN's packet.
@@ -172,11 +167,6 @@ impl SysTurn {
         Ok(SysTurn {
             unix_ms: finite(f.at(0)?.get_number()?)?,
         })
-    }
-    pub const FIELDS: u32 = 1;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.f64(Some(self.unix_ms));
     }
 }
 
@@ -196,13 +186,6 @@ impl SysFrame {
             paced_ms: finite(f.at(1)?.get_number()?)?,
             interactive: f.at(2)?.get_bool()?,
         })
-    }
-    pub const FIELDS: u32 = 3;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.f64(Some(self.refresh_ms));
-        w.f64(Some(self.paced_ms));
-        w.bool(Some(self.interactive));
     }
 }
 
@@ -234,23 +217,6 @@ impl SysAbort<'_> {
     }
 }
 
-impl SysAbort<'_> {
-    /// As the runtime beside the core reads it.
-    pub fn parts(pkt: &[u8]) -> Result<(i32, u32, u32, u32, u32, u32, u32, &str), MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok((
-            integer::<i32>(f.at(0)?.get_number()?)?,
-            integer::<u32>(f.at(1)?.get_number()?)?,
-            integer::<u32>(f.at(2)?.get_number()?)?,
-            integer::<u32>(f.at(3)?.get_number()?)?,
-            integer::<u32>(f.at(4)?.get_number()?)?,
-            integer::<u32>(f.at(5)?.get_number()?)?,
-            integer::<u32>(f.at(6)?.get_number()?)?,
-            f.at(7)?.get_str_ref()?,
-        ))
-    }
-}
-
 impl crate::io::door::Import for SysAbort<'_> {
     const NUMBER: u32 = 257;
     const FIELDS: u32 = 8;
@@ -274,16 +240,6 @@ impl SysPace {
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.f64(Some(self.interval_ms));
-    }
-}
-
-impl SysPace {
-    /// As the runtime beside the core reads it.
-    pub fn read(pkt: &[u8]) -> Result<SysPace, MarshalError> {
-        let f = TreeReader::new(pkt)?.read_branch()?;
-        Ok(SysPace {
-            interval_ms: finite(f.at(0)?.get_number()?)?,
-        })
     }
 }
 

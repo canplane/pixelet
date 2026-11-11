@@ -23,8 +23,9 @@
 // handed to the runtime's `call`. The runtime routes each import by its
 // command's major.
 //
-// - R1. Memory an import names (`named`) is taken with the frame, so it is
-//   the core's again once `send` returns: a file's write is. A file's read
+// - R1. Memory an import names (`named`), or a reply (`Outcome::named`), is
+//   taken with the frame, so it is the core's again once `send` returns: a
+//   file's write is, and a reply's bytes. A file's read
 //   names memory the runtime fills later: it is the runtime's until the
 //   FS_CLOSE of its descriptor is completed, and the file table holds the
 //   buffer until then (file.hpp). Memory a call names is the runtime's only
@@ -199,7 +200,7 @@ class Door {
             if (a.err != Errno::ok) {
                 post(f.tag, f.cmd, frame::RES, static_cast<std::int32_t>(a.err));
             } else if (f.flags & frame::ACKREQ) {
-                post(f.tag, f.cmd, frame::RES, a.val);
+                send_frame(f.tag, f.cmd, frame::RES, a.val, {mem_.off_of(a.named), static_cast<std::uint32_t>(a.named.size())}, std::nullopt);
             }
         }
     }
@@ -264,7 +265,7 @@ class Door {
     // protocols' generated `apply`, and every command past xpute's majors to
     // the program. A number xpute gives no protocol is answered with ENOSYS.
     template <class Handle> static Outcome apply_frame(const Frame &f, std::span<const std::uint8_t> pkt, Handle &handle) noexcept {
-        const std::uint32_t major = f.cmd >> 8;
+        const std::uint32_t major = frame::cmd_major(f.cmd);
         Own<Handle> own{handle};
         if (major == static_cast<std::uint32_t>(abi::sys::Major::NOP) || major == static_cast<std::uint32_t>(abi::sys::Major::SYS))
             return abi::sys::apply(own, f.cmd, pkt);

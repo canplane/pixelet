@@ -1,12 +1,13 @@
 // pxl-core/perf/record.rs
 
 //! Records where the core's time and work go. Each record is laid out word
-//! for word as perf.json says, in columns the UI reads in place, so reading
-//! the profiler allocates nothing in the heap it measures. The columns live
-//! on the heap while the profiler's setting is on: they are taken whole when
-//! recording starts and given back when the setting is turned off
-//! (`perf_release`). The heap figures include them throughout, so they never
-//! show up in a frame's heap delta.
+//! for word as perf.json says, in columns a read's reply hands over as they
+//! lie, so reading the profiler allocates nothing in the heap it measures.
+//! The columns, the failures' string table among them, live on the heap while
+//! the profiler's setting is on: they are taken whole when recording starts
+//! and given back when the setting is turned off (`perf_release`). The heap
+//! figures include them throughout, so they never show up in a frame's heap
+//! delta.
 
 use core::mem::size_of;
 
@@ -28,6 +29,8 @@ const WINDOW_MS: f64 = LIMIT::WINDOW_MS as f64;
 const TASK_CAP: usize = 2_048;
 const FRAME_CAP: usize = 4_096;
 const WORST_CAP: usize = 12;
+/// The bytes of the failures' file names, which are few.
+const STRTAB_CAP: usize = 8_192;
 pub const PERCENTILES_CAP: usize = if FRAME_CAP > TASK_CAP {
     FRAME_CAP
 } else {
@@ -71,13 +74,14 @@ pub(super) fn drop_front<T: Copy>(ring: &mut [T], len: &mut usize, n: usize) {
     *len -= n;
 }
 
-/// The byte size of each column, in order: tasks, frames, the worst frames
-/// and the read's scratch (read.rs).
-const COLUMNS: [u32; 4] = [
+/// The byte size of each column, in order: tasks, frames, the worst frames,
+/// the read's scratch (read.rs) and the string table.
+const COLUMNS: [u32; 5] = [
     (TASK_CAP * size_of::<TaskRecord>()) as u32,
     (FRAME_CAP * size_of::<FrameSample>()) as u32,
     (WORST_CAP * size_of::<WorstFrame>()) as u32,
     (PERCENTILES_CAP * size_of::<f64>()) as u32,
+    STRTAB_CAP as u32,
 ];
 
 /// The heap the profiler holds while its setting is on. The buddy allocator
@@ -122,6 +126,12 @@ struct Perf {
     extreme: RecordingSection,
     /// Where the read sorts the values it takes percentiles of (read.rs).
     scratch: Box<[f64]>,
+    /// The file names of the failures' sites, each at the offset a task's row
+    /// names it at (`at_file`), and NUL-ended, as ELF's string table holds a
+    /// file's names: offset 0 is the empty name, which no site has. Its
+    /// first `strtab_len` bytes are taken.
+    strtab: Box<[u8]>,
+    strtab_len: usize,
     /// The interval in progress. It is the last frame turn's record, and
     /// every turn after it adds its time here until the next frame turn
     /// closes it.
@@ -152,6 +162,8 @@ fn perf() -> &'static mut Perf {
         worst_len: 0,
         extreme: RecordingSection::default(),
         scratch: Box::default(),
+        strtab: Box::default(),
+        strtab_len: 0,
         open: None,
         frame_task_ms: 0.0,
         read_turn: false,
@@ -169,6 +181,9 @@ pub fn perf_recording_state() -> RecordingStateSection {
         recording: l.recording as u8 as f64,
         elapsed_ms: l.stopped_at.unwrap_or_else(now) - l.started_at,
         truncated: l.truncated as u8 as f64,
+        frames: perf_frames().len() as f64,
+        tasks: perf_tasks().len() as f64,
+        worst: perf_worst().len() as f64,
     }
 }
 
@@ -178,17 +193,21 @@ pub fn perf_recording_state() -> RecordingStateSection {
 pub fn perf_recording_start() -> bool {
     let l = perf();
     if l.task_ring.is_empty() {
-        let (Some(tasks), Some(frames), Some(worst), Some(scratch)) = (
+        let (Some(tasks), Some(frames), Some(worst), Some(scratch), Some(strtab)) = (
             heap_column(TASK_CAP),
             heap_column(FRAME_CAP),
             heap_column(WORST_CAP),
             heap_column(PERCENTILES_CAP),
+            heap_column(STRTAB_CAP),
         ) else {
             return false;
         };
-        (l.task_ring, l.frame_ring, l.worst, l.scratch) = (tasks, frames, worst, scratch);
+        (l.task_ring, l.frame_ring, l.worst, l.scratch, l.strtab) =
+            (tasks, frames, worst, scratch, strtab);
     }
     (l.task_len, l.frame_len, l.worst_len) = (0, 0, 0);
+    // The empty name, at offset 0.
+    l.strtab_len = 1;
     (l.task_head, l.frame_head) = (0, 0);
     l.open = None;
     l.extreme = RecordingSection::default();
@@ -219,8 +238,10 @@ pub fn perf_release() {
         l.worst_len,
         l.task_head,
         l.frame_head,
-    ) = (0, 0, 0, 0, 0);
-    (l.task_ring, l.frame_ring, l.worst, l.scratch) = (
+        l.strtab_len,
+    ) = (0, 0, 0, 0, 0, 0);
+    (l.task_ring, l.frame_ring, l.worst, l.scratch, l.strtab) = (
+        Box::default(),
         Box::default(),
         Box::default(),
         Box::default(),
@@ -233,13 +254,21 @@ pub(crate) fn perf_scratch() -> &'static mut [f64] {
     &mut perf().scratch
 }
 
-/// Records a settled task. `row` is built only while recording.
-pub fn perf_record(row: impl FnOnce() -> TaskRecord) {
+/// Records a settled task. `row` is built only while recording, and it names
+/// a failure's file through the string table it is handed. A name the table
+/// has no room for is lost, as a record a full column drops is (`truncated`).
+pub fn perf_record(row: impl FnOnce(&mut dyn FnMut(&'static str) -> Option<u32>) -> TaskRecord) {
     let l = perf();
     if !l.recording {
         return;
     }
-    let row = row();
+    let mut lost = false;
+    let row = row(&mut |file| {
+        let off = name_at(&mut l.strtab, &mut l.strtab_len, file);
+        lost |= off.is_none();
+        off
+    });
+    l.truncated |= lost;
     let dropped = trim(
         &l.task_ring[..l.task_len],
         &mut l.task_head,
@@ -394,6 +423,32 @@ fn land(l: &mut Perf, s: FrameSample) {
     }
 }
 
+/// The offset of `file` in the string table `t`, whose first `*len` bytes are
+/// taken: where the table holds it already, or else after them, NUL-ended.
+/// None where the table has no room for it.
+fn name_at(t: &mut [u8], len: &mut usize, file: &str) -> Option<u32> {
+    let mut at = 1;
+    for name in t.get(1..*len)?.split(|&b| b == 0) {
+        if name == file.as_bytes() {
+            return Some(at as u32);
+        }
+        at += name.len() + 1;
+    }
+    let end = *len + file.len() + 1;
+    let room = t.get_mut(*len..end)?;
+    room[..file.len()].copy_from_slice(file.as_bytes());
+    room[file.len()] = 0;
+    let off = *len as u32;
+    *len = end;
+    Some(off)
+}
+
+/// The string table's names so far, empty while the columns are not held.
+pub fn perf_strtab() -> &'static [u8] {
+    let l = perf();
+    &l.strtab[..l.strtab_len]
+}
+
 fn first_at<T>(ring: &[T], t: f64, at: impl Fn(&T) -> f64) -> usize {
     ring.partition_point(|rec| at(rec) < t)
 }
@@ -423,3 +478,7 @@ pub fn perf_tasks_since(t: f64) -> &'static [TaskRecord] {
     let ring = perf_tasks();
     &ring[first_at(ring, t, |r| r.end_ms)..]
 }
+
+#[cfg(test)]
+#[path = "record.test.rs"]
+mod test;

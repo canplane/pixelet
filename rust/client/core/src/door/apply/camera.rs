@@ -17,7 +17,7 @@ use xpute_kit::status::errno::Errno;
 pub(super) fn tracking(c: abi::CameraTracking) -> Outcome {
     follow_mode::tracking_action(c.tracking);
     request_world_tick();
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 pub(super) fn north_up(s: &mut State) -> Outcome {

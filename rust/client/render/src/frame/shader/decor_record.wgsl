@@ -5,7 +5,7 @@
 
 /// The word of entry `s`'s header that counts the records decor `k` laid (`cnt_at`).
 fn cnt_at(s: u32, k: u32) -> u32 {
-  return s * HEADER_WORDS + CNT_AT + k;
+  return s * HDR_WORDS + CNT_AT + k;
 }
 
 /// The first word of entry `s`'s `i`-th record of decor `k` (`entry_rec`, `rec_at`).
@@ -40,6 +40,6 @@ fn pair_decor(w: u32) -> u32 {
 /// `generated_for`: whether entry `s`'s header says its records were generated for the brick
 /// `q`.
 fn generated_for(s: u32, q: vec2<i32>) -> bool {
-  let h = s * HEADER_WORDS;
+  let h = s * HDR_WORDS;
   return recs[h + 2u] == 1u && i32(recs[h]) == q.x && i32(recs[h + 1u]) == q.y;
 }

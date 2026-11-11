@@ -39,7 +39,7 @@ pub(super) fn draw(s: &mut State, c: abi::SceneDraw) -> Outcome {
             if role == surface_role::NONE {
                 super::surface::draw_world(c.surface);
             }
-            Ok(Some(0))
+            Ok(Some(0.into()))
         }
         abi::SceneContent::Character => {
             let (Some(group), Some(bg)) = (c.group, c.bg) else {

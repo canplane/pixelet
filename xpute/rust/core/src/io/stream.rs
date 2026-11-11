@@ -24,13 +24,13 @@
 //!   it reads the records, and stores 0 once it is done with them. The core
 //!   loads END before it writes records again.
 //! - R3. The records, and any memory a record names for the runtime to read
-//!   (xpute-gpu's WRITE_BUFFER_AT and WRITE_TEXTURE_AT, an image's bytes),
+//!   (the bytes a record uploads, such as a buffer's or an image's),
 //!   are the runtime's from the moment the count is stored until the core
 //!   loads END as 0. In between, nothing in the core rewrites or frees that
 //!   memory, and no copy of it is made. END can mark that moment because the
 //!   runtime's last read of the core's memory is when it runs a record, and
-//!   the write that runs it copies the bytes before it returns (wgpu's
-//!   `write_buffer`, `write_texture`). Code that writes such memory writes it
+//!   the write that runs it copies the bytes before it returns, as WebGPU's
+//!   `writeBuffer` and `writeTexture` do. Code that writes such memory writes it
 //!   while the stream is the core's; otherwise it defers only itself, or
 //!   writes a second buffer the runtime does not hold. A runtime stores 0
 //!   whether or not it ran the records, so a runtime with nothing to run them
@@ -43,10 +43,9 @@
 //!   where the request can fail, the runtime stores there the ticket it
 //!   finished, with release. The core takes the request as done when the
 //!   fence, loaded with acquire, equals the ticket it asked with; a late
-//!   answer to a request that was dropped or superseded never does
-//!   (xpute-gpu spec RESULT). A block's status word (the device's STATUS) is
-//!   the runtime's alone, stored with release after the block. No word is
-//!   written by both sides.
+//!   answer to a request that was dropped or superseded never does. A
+//!   block's status word is the runtime's alone, stored with release after
+//!   the block. No word is written by both sides.
 //!
 //! A core that finds END not yet 0 writes no records (`is_free`), and the
 //! turn leaves what it would have recorded for a later turn.
@@ -190,9 +189,8 @@ impl Stream {
         }
     }
 
-    /// `fits` says whether records of `bytes` bytes (`rec_bytes`, or
-    /// xpute-gpu encode's `call::*_bytes`) fit with `leave` bytes left after
-    /// them.
+    /// `fits` says whether records of `bytes` bytes (`rec_bytes`) fit with
+    /// `leave` bytes left after them.
     pub fn fits(&self, bytes: usize, leave: usize) -> bool {
         self.left() >= bytes + leave
     }

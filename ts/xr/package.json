@@ -1,0 +1,10 @@
+{
+  "name": "@pxl/xr",
+  "private": true,
+  "type": "module",
+  "main": "../client/index.ts",
+  "dependencies": {
+    "expo-horizon-core": "~57.0.2",
+    "expo-horizon-location": "~57.0.2"
+  }
+}

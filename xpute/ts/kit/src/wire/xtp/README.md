@@ -200,8 +200,8 @@ tree.branch((b) =>
 const packet = new TreeEncoder().encode(tree);
 const root = new TreeReader(packet).read_branch();
 
-console.log(root.at(0).get<number>()); // 1
-console.log(root.at(1).get<string | null>()); // null
+console.log(root.at(0).get_number()); // 1
+console.log(root.at(1).get_opt((c) => c.get_str())); // null
 console.log(root.at(2).opt()); // undefined
 ```
 
@@ -264,9 +264,9 @@ tree.branch((b) =>
 const packet = new TreeEncoder().encode(tree);
 const b = new TreeReader(packet).read_branch();
 
-const level = b.at(0).get<number>();
-const name = b.at(1).get<string>();
-const hp = b.at(2).get<number>();
+const level = b.at(0).get_number();
+const name = b.at(1).get_str();
+const hp = b.at(2).get_number();
 
 console.log(`[${level}] ${name} (HP: ${hp})`);
 ```
@@ -303,8 +303,8 @@ tree.branch((b) =>
 const packet = new TreeEncoder().encode(tree);
 const b = new TreeReader(packet).read_branch();
 
-const id = b.at(0).get<number>();
-const name = b.at(1).get<string | null>();
+const id = b.at(0).get_number();
+const name = b.at(1).get_opt((c) => c.get_str());
 const bytes = b.at(2).opt()?.get<Uint8Array>() ?? null;
 
 console.log({ id, name, bytes });
@@ -330,7 +330,7 @@ const list = new TreeReader(huge_payload_bytes).read_branch();
 
 console.log(`total items: ${list.len}`);
 
-const target = list.at(123).get<string>(); // assumes list.len > 123
+const target = list.at(123).get_str(); // assumes list.len > 123
 console.log(target);
 
 for (const child of list) {
@@ -388,7 +388,7 @@ A common real-world pattern is to build subtrees separately and then assemble th
 
 ```ts
 import { encoder, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
-import { to_tuple } from "@xpute/kit/wire/lower.ts";
+import { to_tuple } from "@xpute/kit/wire/xtp/lower.ts";
 
 const USER_KEYS = ["id", "name"] as const;
 const BLOB_KEYS = ["id", "body"] as const;
@@ -625,7 +625,7 @@ For quick-and-dirty usage, `Object.entries()` can also be acceptable, but
 Example helper use:
 
 ```ts
-import { from_tuple, to_tuple } from "@xpute/kit/wire/lower.ts";
+import { from_tuple, to_tuple } from "@xpute/kit/wire/xtp/lower.ts";
 import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 
 const obj = {

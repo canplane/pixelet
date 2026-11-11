@@ -3,7 +3,7 @@
 // The shadow map's lattice, as the light's beam, cells and slots read it from the light's list
 // (pxl-engine light.rs). This part says where a beam ray's line, how far the rays about it
 // start, a cell's start and a sample lie, from the words the head lays out
-// (`light::header_layout`). It says which place of the lattice the thread at an id takes
+// (`light::hdr_layout`). It says which place of the lattice the thread at an id takes
 // (`light_item`). It also says where the reads and each list's marks lie, by which the
 // receivers' passes damage tiles (`light::reads_at`, `list_marks_at`). The list is bound as
 // `beams`, the name resume.wgsl reads it by. The receivers' passes bind it under a binding of
@@ -18,7 +18,7 @@ const LEVEL_RAY = 3u;
 
 /// The number of beam rays across the map, which is also the number down.
 fn beam_across() -> u32 {
-  return header_word(LIGHT_HEADER_BEAM_ACROSS);
+  return hdr_word(LIGHT_HDR_BEAM_ACROSS);
 }
 
 fn light_line(k: u32) -> u32 {
@@ -28,18 +28,18 @@ fn light_line(k: u32) -> u32 {
 /// The word that says how far the rays about beam ray `k` start (`light::hand_at`). There is
 /// one word for each beam ray, past the lines and before the cells.
 fn light_hand_at(k: u32) -> u32 {
-  return header_word(LIGHT_HEADER_HANDS) + k;
+  return hdr_word(LIGHT_HDR_HANDS) + k;
 }
 
 /// The first word of sample `s`, wrapped as the slots are (`light::sample`).
 fn light_sample_at(s: vec2<u32>) -> u32 {
-  let n = header_word(LIGHT_HEADER_SAMPLES_ACROSS);
-  return header_word(LIGHT_HEADER_SAMPLES) + ((s.y % n) * n + s.x % n) * SAMPLE_WORDS;
+  let n = hdr_word(LIGHT_HDR_SAMPLES_ACROSS);
+  return hdr_word(LIGHT_HDR_SAMPLES) + ((s.y % n) * n + s.x % n) * SAMPLE_WORDS;
 }
 
 /// Where list `which` lies: its count, then its entries (`light::list_cnt_at`).
 fn list_cnt_at(which: u32) -> u32 {
-  return header_word(LIGHT_HEADER_LISTS + which);
+  return hdr_word(LIGHT_HDR_LISTS + which);
 }
 
 /// The number of places in list `which`: one for every beam ray's corner, or one for every
@@ -65,7 +65,7 @@ fn list_of(level: u32) -> u32 {
 
 /// The slot that holds box texel `p`, the inverse of light_aim.wgsl `slot_texel`.
 fn texel_slot(p: vec2<u32>) -> vec2<u32> {
-  return vec2<u32>(vec2<i32>(p) + light_corner()) & vec2<u32>(header_word(LIGHT_HEADER_SIZE) - 1u);
+  return vec2<u32>(vec2<i32>(p) + light_corner()) & vec2<u32>(hdr_word(LIGHT_HDR_SIZE) - 1u);
 }
 
 /// What of `level` the thread at `id` of its pass takes, from the list of what feeds the tiles
@@ -135,17 +135,17 @@ fn light_on(level: u32, at: vec2<u32>) -> vec2<i32> {
 
 /// The number of tiles across the map, which is also the number down.
 fn light_tiles() -> u32 {
-  return header_word(LIGHT_HEADER_TILES);
+  return hdr_word(LIGHT_HDR_TILES);
 }
 
 /// Where the reads lie: one word for each tile, holding the number of the cast that last
 /// damaged it (`light::reads_at`).
 fn reads_at() -> u32 {
-  return header_word(LIGHT_HEADER_READS);
+  return hdr_word(LIGHT_HDR_READS);
 }
 
 /// Where the marks of list `which` begin among the args' words (light_propagate.wgsl). Each
 /// place has a word holding the last cast that listed it (`light::list_marks_at`).
 fn list_marks_at(which: u32) -> u32 {
-  return header_word(LIGHT_HEADER_MARKS + which);
+  return hdr_word(LIGHT_HDR_MARKS + which);
 }

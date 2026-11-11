@@ -41,5 +41,5 @@ fn tile_place(t: vec2<i32>) -> u32 {
 /// The first cast whose reads hold: the later of the epoch the host began and the one that a
 /// slide left unrun began (`light::reads_epoch`, `light::READS_FROM`).
 fn reads_epoch() -> u32 {
-  return max(light_epoch(), list_at(header_word(LIGHT_HEADER_SLIDE) + LIGHT_READS_FROM));
+  return max(light_epoch(), list_at(hdr_word(LIGHT_HDR_SLIDE) + LIGHT_READS_FROM));
 }

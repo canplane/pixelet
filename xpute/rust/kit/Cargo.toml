@@ -17,8 +17,7 @@ default = ["std"]
 # Everything but `math::rng`. Without it the kit is `no_std` and holds the
 # seeds alone.
 std = []
-# The golden records' reader (src/golden.rs), for another crate's tests.
-golden = ["std"]
 
 [dev-dependencies]
 hex.workspace = true
+xpute-golden.workspace = true

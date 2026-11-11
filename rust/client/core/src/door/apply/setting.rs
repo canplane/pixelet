@@ -29,5 +29,5 @@ pub(super) fn set(s: &mut State, c: abi::SettingSet) -> Outcome {
 /// attached.
 pub(super) fn dev(c: abi::SettingDev) -> Outcome {
     set_dev(c.dev);
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }

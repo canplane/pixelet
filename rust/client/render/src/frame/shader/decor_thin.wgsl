@@ -12,7 +12,7 @@
 /// them are plain: a record's words are written by the one thread whose add to its decor's
 /// count took it, and read by the passes after.
 struct RecordBuffer {
-  headers: array<atomic<u32>, ENTRY_RECS_AT>,
+  hdrs: array<atomic<u32>, ENTRY_RECS_AT>,
   words: array<u32>,
 }
 
@@ -25,8 +25,8 @@ fn decor_thin_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let brick = pair_entry(pair);
   let j = pair_decor(pair);
   let cell_zoom = FIRST_CELL_ZOOM + brick / CLIP_ENTRIES;
-  let header = brick * HEADER_WORDS;
-  let q = vec2<i32>(i32(atomicLoad(&recs.headers[header])), i32(atomicLoad(&recs.headers[header + 1u])));
+  let hdr = brick * HDR_WORDS;
+  let q = vec2<i32>(i32(atomicLoad(&recs.hdrs[hdr])), i32(atomicLoad(&recs.hdrs[hdr + 1u])));
   let s = LEAF_CELL_ZOOM - cell_zoom;
   let corner = (q << vec2<u32>(BRICK_SHIFT + s))
     + vec2<i32>(i32(id.x % BRICK), i32(id.x / BRICK)) * (1i << s);
@@ -41,7 +41,7 @@ fn decor_thin_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     }
     let c = candidate_at(j, leaf);
     if (stands_at(j, variant_of(j, c.seed), cell_zoom) && retained(j, c)) {
-      let k = atomicAdd(&recs.headers[cnt_at(brick, j)], 1u);
+      let k = atomicAdd(&recs.hdrs[cnt_at(brick, j)], 1u);
       let r = entry_word(brick, j, k) - ENTRY_RECS_AT;
       recs.words[r + 1u] = u32(leaf.x);
       recs.words[r + 2u] = u32(leaf.y);

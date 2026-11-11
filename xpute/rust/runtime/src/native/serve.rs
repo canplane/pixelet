@@ -8,7 +8,8 @@
 //! UI sends is queued for the core (`post`), and what the UI hears is handed
 //! over in a batch (`take`), with the memory each frame names.
 //!
-//! The file device is served here. A read is copied into the core's memory
+//! The file device is served here, through its protocol's generated runtime
+//! end (`crate::abi::fs`), as SYS_PACE is through sys's. A read is copied into the core's memory
 //! before its descriptor's close is completed, from the bytes the program
 //! handed over when the open completed. An open to write is completed here at
 //! once, and what is written is held here until the file's close. What backs
@@ -31,16 +32,19 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Condvar, Mutex, MutexGuard, Once, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use xpute_core::abi::fs::{Command as FsCommand, FsOpen, FsRead};
-use xpute_core::abi::sys::{Command as SysCommand, SysPace};
 use xpute_core::io::frame::{self, Frame, WORD_BYTES};
 use xpute_core::io::fs::spec::flag;
 use xpute_core::io::fs::Path;
 use xpute_core::mem::Memory;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::PacketWriter;
 
-use super::batch::{self, ALIGN, COMMIT, HEADER_WORDS, STOPPED};
+use crate::abi::fs::{self, Command as FsCommand, FsOpen, FsOpenReply, FsRead, FsWrite};
+use crate::abi::sys::{self, SysAbort, SysFrame, SysPace, SysTurn};
+use crate::abi::{Export, Outcome};
+
+use super::batch::{self, ALIGN, COMMIT, HDR_WORDS, STOPPED};
 use super::thread::{self, Grant};
 
 /// Room for a packet the runtime writes itself.
@@ -227,7 +231,7 @@ fn without_fs(down: &[u8]) -> Vec<u8> {
             u32::from_le_bytes([w[0], w[1], w[2], w[3]]) as usize
         };
         let align = ALIGN as usize;
-        let end = at + 4 * HEADER_WORDS as usize;
+        let end = at + 4 * HDR_WORDS as usize;
         let end = (end + word(batch::PKT)).next_multiple_of(align);
         let end = (end + word(batch::NAMED)).next_multiple_of(align);
         let cmd = word(batch::CMD) as u32;
@@ -339,28 +343,28 @@ fn serve(mem: Memory) {
 /// A frame's grant as the frames that carry it: what frame pacing says of the
 /// turn (SYS_FRAME), then the turn with the wall clock (SYS_TURN).
 fn granted(grant: Grant) -> [Up; 2] {
-    let frame = pkt(3, |w| {
-        w.f64(Some(grant.refresh_ms))
-            .f64(Some(grant.paced_ms))
-            .bool(Some(grant.interactive));
-    });
-    let unix_ms = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0.0, |d| d.as_secs_f64() * 1000.0);
-    let turn = pkt(1, |w| {
-        w.f64(Some(unix_ms));
-    });
-    let up = |cmd: SysCommand, pkt: Vec<u8>| Up {
+    let frame = SysFrame {
+        refresh_ms: grant.refresh_ms,
+        paced_ms: grant.paced_ms,
+        interactive: grant.interactive,
+    };
+    let turn = SysTurn {
+        unix_ms: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0.0, |d| d.as_secs_f64() * 1000.0),
+    };
+    [up_of(&frame), up_of(&turn)]
+}
+
+/// The runtime's own export `e` as a frame for the core.
+fn up_of<E: Export>(e: &E) -> Up {
+    Up {
         tag: 0,
-        cmd: cmd as u32,
+        cmd: E::NUMBER,
         flags: 0,
         result: 0,
-        pkt,
-    };
-    [
-        up(SysCommand::SYS_FRAME, frame),
-        up(SysCommand::SYS_TURN, turn),
-    ]
+        pkt: pkt(E::FIELDS, |w| e.write(w)),
+    }
 }
 
 /// The bytes of a packet of `cnt` children that `write` writes. The runtime's
@@ -389,7 +393,7 @@ pub(super) fn frame(grant: Grant) {
 }
 
 fn down(s: &mut Shared, tag: u32, cmd: u32, flags: u32, result: i32, pkt: &[u8], named: &[u8]) {
-    let mut header = [0u32; HEADER_WORDS as usize];
+    let mut hdr = [0u32; HDR_WORDS as usize];
     for (k, w) in [
         (batch::TAG, tag),
         (batch::CMD, cmd),
@@ -398,9 +402,9 @@ fn down(s: &mut Shared, tag: u32, cmd: u32, flags: u32, result: i32, pkt: &[u8],
         (batch::PKT, pkt.len() as u32),
         (batch::NAMED, named.len() as u32),
     ] {
-        header[k as usize] = w;
+        hdr[k as usize] = w;
     }
-    for w in header {
+    for w in hdr {
         s.down.extend_from_slice(&w.to_le_bytes());
     }
     for bytes in [pkt, named] {
@@ -426,116 +430,144 @@ fn bytes_of(mem: Memory, at: u32, len: u32) -> &'static [u8] {
     unsafe { core::slice::from_raw_parts(mem.at::<u8>(at as usize), len as usize) }
 }
 
+/// Serves a frame the core sent: xpute's own commands, by their protocols'
+/// generated majors (`MAJORS`), through their generated `serve`, here, as the
+/// page's runtime routes by them (@xpute/runtime `routes_of`); every other
+/// frame, and a completion the core sent, goes to the UI. A command is
+/// completed here where it fails or asks for an answer and has one now, as the
+/// page's connection completes it (@xpute/runtime io/connection.ts).
 fn take_frame(s: &mut Shared, mem: Memory, f: Down) {
-    if f.cmd == SysCommand::SYS_PACE as u32 {
-        if let Ok(c) = SysPace::read(&f.pkt) {
-            thread::ask(c.interval_ms);
-        }
-        return;
-    }
-    if f.flags & frame::RES == 0 && take_file(s, mem, &f) {
-        return;
-    }
-    down(s, f.tag, f.cmd, f.flags, f.result, &f.pkt, &f.named);
-}
-
-/// Serves a frame of the file device, and says whether nothing more is to be
-/// done with it.
-fn take_file(s: &mut Shared, mem: Memory, f: &Down) -> bool {
-    let pkt = f.pkt.as_slice();
-    let Some(cmd) = FsCommand::of(f.cmd) else {
-        return false;
-    };
-    if !s.fs {
+    let major = frame::cmd_major(f.cmd);
+    let pkt = (!f.pkt.is_empty()).then_some(f.pkt.as_slice());
+    let ends = &mut Ends { s, mem, f: &f };
+    let outcome = if f.flags & frame::RES != 0 {
+        ends.pass()
+    } else if sys::MAJORS.contains(&major) {
+        sys::serve(ends, f.tag, f.cmd, &pkt, &f.named)
+    } else if !fs::MAJORS.contains(&major) {
+        ends.pass()
+    } else if ends.s.fs {
+        fs::serve(ends, f.tag, f.cmd, &pkt, &f.named)
+    } else {
         // A manifest with no file device: every frame of it is refused with
         // ENODEV, as the page's runtime refuses it (@xpute/runtime NO_FILES).
-        complete(f.tag, f.cmd, Errno::ENODEV as i32, Vec::new());
-        return true;
+        Err(MarshalError::new(Errno::ENODEV))
+    };
+    match outcome {
+        Ok(Some(result)) if f.flags & frame::ACKREQ != 0 || result < 0 => {
+            complete(f.tag, f.cmd, result, Vec::new());
+        }
+        Ok(_) => {}
+        Err(e) => complete(f.tag, f.cmd, e.errnum as i32, Vec::new()),
     }
-    let fd = f.tag;
-    match cmd {
-        // What an open's path names is the program's. An open to write
-        // reaches no binding before its close, so it is completed at once.
-        FsCommand::FS_OPEN => {
-            let Ok((path, flags)) = FsOpen::parts(pkt) else {
-                complete_open(fd, Errno::EBADMSG as i32, 0);
-                return true;
-            };
-            match flags {
-                flag::O_RDONLY => {
-                    s.files.insert(
-                        fd,
-                        File::Read {
-                            bytes: None,
-                            err: 0,
-                        },
-                    );
-                    return false;
-                }
-                flag::O_WRONLY => {
-                    let file = File::Write {
-                        path: pkt_of_path(pkt, path),
-                        bytes: Vec::new(),
-                        closing: false,
-                        err: 0,
-                    };
-                    s.files.insert(fd, file);
-                    complete_open(fd, 0, 0);
-                }
-                // A refused open's close completes with its errno too, as no
-                // read or write of it reaches a file.
-                _ => {
-                    let refused = File::Read {
-                        bytes: Some(Vec::new()),
-                        err: Errno::EINVAL as i32,
-                    };
-                    s.files.insert(fd, refused);
-                    complete_open(fd, Errno::EINVAL as i32, 0);
-                }
+}
+
+/// This thread's end of xpute's own imports, for the frame `f`: what is served
+/// here answers what it can now, and none where its answer comes later or the
+/// UI takes the frame.
+struct Ends<'a> {
+    s: &'a mut Shared,
+    mem: Memory,
+    f: &'a Down,
+}
+
+impl Ends<'_> {
+    /// Hands the frame to the UI.
+    fn pass(&mut self) -> Outcome {
+        let f = self.f;
+        down(self.s, f.tag, f.cmd, f.flags, f.result, &f.pkt, &f.named);
+        Ok(None)
+    }
+}
+
+impl sys::Imports for Ends<'_> {
+    fn sys_abort(&mut self, _: SysAbort<'_>) -> Outcome {
+        self.pass()
+    }
+
+    fn sys_pace(&mut self, e: SysPace) -> Outcome {
+        thread::ask(e.interval_ms);
+        Ok(None)
+    }
+}
+
+impl fs::Imports for Ends<'_> {
+    /// What an open's path names is the program's. An open to write reaches
+    /// no binding before its close, so it is completed here at once, with its
+    /// reply, as the program completes an open to read (`fs_complete_open`).
+    fn fs_open(&mut self, fd: u32, e: FsOpen<'_>) -> Outcome {
+        match e.flags {
+            flag::O_RDONLY => {
+                let file = File::Read {
+                    bytes: None,
+                    err: 0,
+                };
+                self.s.files.insert(fd, file);
+                self.pass()
             }
-            true
-        }
-        FsCommand::FS_READ => {
-            let Ok(c) = FsRead::read(pkt) else {
-                return true;
-            };
-            let Some(file) = s.files.get_mut(&fd) else {
-                return true;
-            };
-            let File::Read {
-                bytes: Some(bytes), ..
-            } = file
-            else {
-                file.fail(Errno::EBADF);
-                return true;
-            };
-            if !in_core(mem, c.at, c.len) {
-                file.fail(Errno::EFAULT);
-                return true;
+            flag::O_WRONLY => {
+                let file = File::Write {
+                    path: pkt_of_path(&self.f.pkt, e.path),
+                    bytes: Vec::new(),
+                    closing: false,
+                    err: 0,
+                };
+                self.s.files.insert(fd, file);
+                complete_open(fd, 0, 0);
+                Ok(None)
             }
-            let len = (c.len as usize).min(bytes.len());
-            // SAFETY: the bytes the frame names, inside the core's memory and
-            // the runtime's until the close of its descriptor is completed
-            // (xpute-core io/door.rs R1).
-            unsafe {
-                core::ptr::copy_nonoverlapping(bytes.as_ptr(), mem.at::<u8>(c.at as usize), len);
+            // A refused open's close completes with its errno too, as no read
+            // or write of it reaches a file.
+            _ => {
+                let refused = File::Read {
+                    bytes: Some(Vec::new()),
+                    err: Errno::EINVAL as i32,
+                };
+                self.s.files.insert(fd, refused);
+                complete_open(fd, Errno::EINVAL as i32, 0);
+                Ok(None)
             }
-            true
         }
-        // A write's bytes are held with its file, until its close.
-        FsCommand::FS_WRITE => {
-            match s.files.get_mut(&fd) {
-                Some(File::Write { bytes, .. }) => bytes.extend_from_slice(&f.named),
-                Some(file @ File::Read { .. }) => file.fail(Errno::EBADF),
-                None => {}
-            }
-            true
+    }
+
+    fn fs_read(&mut self, fd: u32, e: FsRead) -> Outcome {
+        let Some(file) = self.s.files.get_mut(&fd) else {
+            return Ok(None);
+        };
+        let File::Read {
+            bytes: Some(bytes), ..
+        } = file
+        else {
+            file.fail(Errno::EBADF);
+            return Ok(None);
+        };
+        if !in_core(self.mem, e.at, e.len) {
+            file.fail(Errno::EFAULT);
+            return Ok(None);
         }
-        FsCommand::FS_CLOSE => {
-            close(s, fd);
-            true
+        let len = (e.len as usize).min(bytes.len());
+        // SAFETY: the bytes the frame names, inside the core's memory and the
+        // runtime's until the close of its descriptor is completed (xpute-core
+        // io/door.rs R1).
+        unsafe {
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), self.mem.at::<u8>(e.at as usize), len);
         }
-        FsCommand::FS_CHANGED => false,
+        Ok(None)
+    }
+
+    /// A write's bytes are held with its file, until its close.
+    fn fs_write(&mut self, fd: u32, _: FsWrite, named: &[u8]) -> Outcome {
+        match self.s.files.get_mut(&fd) {
+            Some(File::Write { bytes, .. }) => bytes.extend_from_slice(named),
+            Some(file @ File::Read { .. }) => file.fail(Errno::EBADF),
+            None => {}
+        }
+        Ok(None)
+    }
+
+    fn fs_close(&mut self, fd: u32) -> Outcome {
+        close(self.s, fd);
+        Ok(None)
     }
 }
 
@@ -587,9 +619,8 @@ fn complete(tag: u32, cmd: u32, result: i32, pkt: Vec<u8>) {
 }
 
 fn complete_open(fd: u32, result: i32, detail: u32) {
-    let pkt = pkt(1, |w| {
-        w.u32(Some(detail));
-    });
+    let reply = FsOpenReply { detail };
+    let pkt = pkt(FsOpenReply::FIELDS, |w| reply.write(w));
     complete(fd, FsCommand::FS_OPEN as u32, result, pkt);
 }
 

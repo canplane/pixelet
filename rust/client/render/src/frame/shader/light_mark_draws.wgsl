@@ -82,11 +82,11 @@ fn light_mark_draws_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_i
   var first = 0u;
   var lanes = 1u;
   if (group.x < LIGHT_RECEIVER_BOXES) {
-    if (group.x >= u32(header[LIGHT_RECEIVER_BOXES_AT].x)) {
+    if (group.x >= u32(hdr[LIGHT_RECEIVER_BOXES_AT].x)) {
       return;
     }
-    lo = bitcast<vec3<f32>>(header[LIGHT_RECEIVER_BOXES_AT + 1u + 2u * group.x].xyz);
-    hi = bitcast<vec3<f32>>(header[LIGHT_RECEIVER_BOXES_AT + 2u + 2u * group.x].xyz);
+    lo = bitcast<vec3<f32>>(hdr[LIGHT_RECEIVER_BOXES_AT + 1u + 2u * group.x].xyz);
+    hi = bitcast<vec3<f32>>(hdr[LIGHT_RECEIVER_BOXES_AT + 2u + 2u * group.x].xyz);
     foot_lo = lo;
     foot_hi = hi;
     first = lane;

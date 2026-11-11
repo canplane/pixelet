@@ -13,7 +13,7 @@
 /// the host writes the boxes and this pass only reads them, and each pair is written by the one
 /// thread whose add took its place and read by the passes after.
 struct List {
-  header: array<atomic<u32>, RECTS_AT>,
+  hdr: array<atomic<u32>, RECTS_AT>,
   words: array<u32>,
 }
 
@@ -22,7 +22,7 @@ struct List {
 
 fn list_word(k: u32) -> u32 {
   if (k < RECTS_AT) {
-    return atomicLoad(&list.header[k]);
+    return atomicLoad(&list.hdr[k]);
   }
   return list.words[k - RECTS_AT];
 }
@@ -37,7 +37,7 @@ fn decor_mark_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let cell_zoom = FIRST_CELL_ZOOM + s / CLIP_ENTRIES;
   let whole = list_word(LIST_EVERY) != 0u || !generated_for(s, row.xy);
   if (whole) {
-    let h = s * HEADER_WORDS;
+    let h = s * HDR_WORDS;
     recs[h] = u32(row.x);
     recs[h + 1u] = u32(row.y);
     recs[h + 2u] = 1u;
@@ -56,18 +56,18 @@ fn decor_mark_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let cap = LIST_WORDS - LIST_AT;
   for (var j = 0u; j < DECORS; j += 1u) {
     if (((shown[j] >> (cell_zoom - FIRST_CELL_ZOOM)) & 1u) != 0u) {
-      let all = atomicAdd(&list.header[GENERATE_CNT], 1u);
+      let all = atomicAdd(&list.hdr[GENERATE_CNT], 1u);
       if (all >= cap) {
         continue;
       }
-      atomicMax(&list.header[GENERATE_ARGS + 2u], workgroups(all + 1u, cap, 1u));
+      atomicMax(&list.hdr[GENERATE_ARGS + 2u], workgroups(all + 1u, cap, 1u));
       var w = 0u;
       if (whole) {
-        let n = atomicAdd(&list.header[THIN_CNT], 1u);
-        atomicMax(&list.header[THIN_ARGS + 2u], workgroups(n + 1u, cap, 1u));
+        let n = atomicAdd(&list.hdr[THIN_CNT], 1u);
+        atomicMax(&list.hdr[THIN_ARGS + 2u], workgroups(n + 1u, cap, 1u));
         w = LIST_AT + n;
       } else {
-        w = part_at(atomicAdd(&list.header[LIST_PARTS], 1u));
+        w = part_at(atomicAdd(&list.hdr[LIST_PARTS], 1u));
       }
       list.words[w - RECTS_AT] = pair_word(s, j);
     }

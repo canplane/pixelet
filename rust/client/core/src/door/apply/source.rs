@@ -14,5 +14,5 @@ pub(super) fn declare(c: abi::SourceDeclare<'_>) -> Outcome {
         source::declare(c.min_zoom, c.format, c.shard.iter()).is_ok(),
         Errno::EINVAL,
     )?;
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }

@@ -3,7 +3,7 @@
 // Stands the world's receivers of the shadow map that the eye walked apart on the tiles their
 // hits lie on. Every receiver stands by one rule (pxl-engine `Light::box_tiles`): a box within
 // the effects' reach (`Light::reach`) stands on the tiles its corners lie on, and on the
-// footprint about them where the head asks for it (`light::HEADER_FOOTPRINT`). Each drawn
+// footprint about them where the head asks for it (`light::HDR_FOOTPRINT`). Each drawn
 // pixel did one of three things. It took a drawable entry's voxel, whose box the raster drew,
 // and so hit within that box, which the record's draw stands as it writes it (record_draw.wgsl
 // `rec_draw_cs`). It met the sky, which receives nothing. Or it was walked apart, and its

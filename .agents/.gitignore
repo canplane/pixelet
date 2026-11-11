@@ -1,0 +1,10 @@
+# .claude is a link to this folder: only the agent files and the skills are
+# committed, and what the tool writes here stays local.
+/*
+!/.gitignore
+!/agents/
+!/skills/
+
+# Personal, uncommitted variants of shared agent content
+/skills/.local/
+*.local.md

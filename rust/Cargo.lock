@@ -2103,9 +2103,9 @@ dependencies = [
  "pxl-engine",
  "pxl-render",
  "pxl-spec",
- "serde_json",
  "wgpu",
  "xpute-core",
+ "xpute-golden",
  "xpute-gpu",
  "xpute-kit",
  "xpute-runtime",
@@ -2207,6 +2207,7 @@ dependencies = [
  "hex",
  "libm",
  "serde",
+ "xpute-golden",
  "xpute-kit",
 ]
 
@@ -3604,6 +3605,13 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "xpute-golden"
+version = "0.1.0"
+dependencies = [
+ "xpute-kit",
 ]
 
 [[package]]

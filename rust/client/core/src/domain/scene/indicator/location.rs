@@ -219,8 +219,6 @@ struct Zone {
 
 #[derive(Default)]
 pub struct LocationIndicator {
-    /// The last fix, kept across a GPS dropout.
-    last_known_device_coord: Option<Q3>,
     /// The last height found under the fix, or None until one is found.
     last_known_center_z: Option<f64>,
     /// The center the zone was last grounded at, or None when no height was
@@ -239,11 +237,13 @@ pub struct LocationIndicator {
 }
 
 impl LocationIndicator {
+    /// Stands at the device's location as the store keeps it, which outlives
+    /// a dropout and a hidden spell, and is gone where the location ends.
     fn step(&mut self, draw: &mut DrawList, device_coord: Option<Q3>) {
-        if device_coord.is_some() {
-            self.last_known_device_coord = device_coord;
-        }
-        let Some(device) = self.last_known_device_coord else {
+        let Some(device) = device_coord else {
+            if self.zone.take().is_some() {
+                request_world_tick();
+            }
             return;
         };
 

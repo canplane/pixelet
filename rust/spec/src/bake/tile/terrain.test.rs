@@ -1,6 +1,6 @@
 // pxl-spec/bake/tile/terrain.test.rs
 
-use xpute_kit::golden::Golden;
+use xpute_golden::Golden;
 
 use super::*;
 use crate::bake::tile::earth;

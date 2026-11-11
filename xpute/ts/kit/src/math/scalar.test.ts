@@ -5,7 +5,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { Golden } from "@xpute/kit/golden.ts";
+import { Golden } from "../../../dev/golden.ts";
 import {
   approx_eq,
   ceil_to_step,

@@ -8,6 +8,9 @@
 
 pub(crate) mod boot;
 pub(crate) mod io;
+/// The roots of the core's files (sys/io/file.json), which a binding answers
+/// every path by.
+pub use io::file_spec;
 pub(crate) mod load;
 #[path = "sys/manifest.spec.rs"]
 pub mod manifest;

@@ -3,7 +3,7 @@
 **2026-11-03** — recorded with the user, over two sessions that compared their
 numbers. Main was at `661f15a75d`, as `original` keeps it; what was measured is
 `d25f5b631`, the page on both phones since
-[the shaders on two phones](../experiment/20261103-the-shaders-by-hand/README.md).
+[the shaders on two phones](../gpu/experiment/20261103-the-shaders-by-hand/README.md).
 
 Nothing was resolved. What the user said is under its own heading and is the
 user's view, no order yet. Everything under The sessions' proposal is the
@@ -76,7 +76,7 @@ the eye's; the spans below are the eye's on both.
   about 90 s.
 
 **A node costs the S23 26–62 times what it costs the Mac, over the same nodes**
-([the walk on a phone](../experiment/20261103-the-frame-on-the-s23/README.md), both
+([the walk on a phone](../gpu/experiment/20261103-the-frame-on-the-s23/README.md), both
 on one dev build with the shadows off, the Mac's GPU p50 then 7.7 ms). A cast
 visits 1.7 million nodes on the S23 and 1.9 million on the Mac, 13–14 a sample.
 `sample` takes 111 ns a node against 1.8, `miss` 260 against 5.8, `beam` 138
@@ -85,7 +85,7 @@ against 5.3. So the count of nodes does not tell the phone from the Mac, though 
 adds 50–70 ms to `sample` and gains the frame nothing; Auto, both knobs at their
 floor, holds 6–8 fps.
 
-**What a visit pays** ([the same record](../experiment/20261103-the-frame-on-the-s23/README.md),
+**What a visit pays** ([the same record](../gpu/experiment/20261103-the-frame-on-the-s23/README.md),
 synthetic, no renderer): on the S23 a visit of 13 plain loads takes 0.53 ns, the
 keys alone atomic 1.42, all atomic 9–29, a 33-entry stack at a run-time index 20
 (8 entries, none), and locals that never run go from 1.09 at 125 to 434 at 500,

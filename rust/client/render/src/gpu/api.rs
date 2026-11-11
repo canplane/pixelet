@@ -24,7 +24,7 @@ use xpute_gpu::enums::{
     StoreOp, TextureAspect, TextureDimension, TextureFormat, TextureSampleType,
     TextureViewDimension, VertexFormat, VertexStepMode,
 };
-use xpute_gpu::spec::{BUFFER_USAGE, COLOR_WRITE, STATUS, TEXTURE_USAGE};
+use xpute_gpu::spec::{BUFFER_USAGE, COLOR_WRITE, DEVICE, STATUS, TEXTURE_USAGE};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -78,13 +78,13 @@ pub type Image = (u32, &'static [u8]);
 /// pass of the frame it timed, two words a tick (`read_at`). The stream records the head's
 /// length itself, so the runtime does not read this layout.
 const DEVICE_AT: usize = Stream::OWN_WORDS;
-const READS_AT: usize = DEVICE_AT + device::WORDS;
+const READS_AT: usize = DEVICE_AT + DEVICE::WORDS;
 /// How many reads of the spans may be out at once, each into its own mapped buffer. A frame's
 /// read lands a frame or two after the frame, so with three no new read waits for an earlier
 /// one to be taken.
 pub const READS: usize = 3;
 const READ_WORDS: usize = 2 + 2 * 2 * PASSES;
-const HEADER: usize = READS_AT + READS * READ_WORDS;
+const HDR: usize = READS_AT + READS * READ_WORDS;
 
 /// The head word that holds read `k`'s fence. The read's result and ticks follow it.
 const fn read_at(k: usize) -> usize {
@@ -702,7 +702,7 @@ fn state() -> &'static mut State {
     STATE.get(|| None).as_mut().or_bug(Errno::ENODEV)
 }
 
-fn header(k: usize) -> &'static mut u32 {
+fn hdr(k: usize) -> &'static mut u32 {
     let at = state().at as usize + k * WORD;
     // SAFETY: a word of the stream's head, the core's and the runtime's alone.
     unsafe { &mut *mem::at::<u32>(at) }
@@ -735,7 +735,7 @@ pub unsafe fn install(at: u32, bytes: u32) -> u32 {
     // bytes are an empty one of, aligned as the range is.
     let (stream, encoder) = unsafe {
         (
-            Stream::new(mem::core(), at as usize, words, HEADER),
+            Stream::new(mem::core(), at as usize, words, HDR),
             &mut *mem::at::<Encoder<OBJECTS>>(at as usize + bytes as usize - ENCODER_BYTES),
         )
     };
@@ -753,7 +753,7 @@ pub(crate) fn install_apart(device: Device) {
     // SAFETY: leaked, so it lives as long as the process, and nothing else names it.
     let stream = unsafe {
         let mem = mem::Memory::new(region.as_mut_ptr().expose_provenance(), WORDS * WORD);
-        Stream::new(mem, 0, WORDS, HEADER)
+        Stream::new(mem, 0, WORDS, HDR)
     };
     // SAFETY: all-zero bytes are an encoder that has made nothing (xpute-gpu encode).
     let encoder = unsafe { Box::<Encoder<OBJECTS>>::new_zeroed().assume_init() };
@@ -852,7 +852,7 @@ pub fn device() -> Option<Device> {
     if s.device.is_none() && s.device_out {
         let at = s.at as usize + DEVICE_AT * WORD;
         // SAFETY: the head's block, which the runtime writes and the core only reads.
-        let block = unsafe { core::slice::from_raw_parts(mem::at::<u32>(at), device::WORDS) };
+        let block = unsafe { core::slice::from_raw_parts(mem::at::<u32>(at), DEVICE::WORDS) };
         let read = device::Device::read(block)?;
         let align = read.limit(LimitName::minUniformBufferOffsetAlignment);
         xpute_kit::ensure!(
@@ -884,7 +884,7 @@ pub fn on_device_answered() {
 fn ask_device(s: &mut State) {
     let at = s.at as usize + DEVICE_AT * WORD;
     // SAFETY: the head's block, the runtime's to write.
-    let block = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), device::WORDS) };
+    let block = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), DEVICE::WORDS) };
     call::device(&mut s.stream, block);
     s.device_out = true;
 }
@@ -896,7 +896,7 @@ pub fn take_device_lost() -> bool {
     let Some(s) = STATE.get(|| None).as_mut() else {
         return false;
     };
-    let lost = load_acquire(header(DEVICE_AT + device::STATUS_AT)) == STATUS::LOST;
+    let lost = load_acquire(hdr(DEVICE_AT + DEVICE::STATUS_AT)) == STATUS::LOST;
     !core::mem::replace(&mut s.lost, lost) && lost
 }
 
@@ -919,11 +919,11 @@ pub fn device_block() -> DeviceBlock {
     if STATE.get(|| None).is_none() {
         return DeviceBlock::default();
     }
-    let word = |k: usize| load_acquire(header(DEVICE_AT + k));
+    let word = |k: usize| load_acquire(hdr(DEVICE_AT + k));
     DeviceBlock {
-        status: word(device::STATUS_AT),
-        errors: word(device::ERRORS_AT),
-        unfinished: word(device::UNFINISHED_AT),
+        status: word(DEVICE::STATUS_AT),
+        errors: word(DEVICE::ERRORS_AT),
+        unfinished: word(DEVICE::UNFINISHED_AT),
     }
 }
 
@@ -946,8 +946,7 @@ fn take_stamps(s: &mut State) -> Option<usize> {
     let (spans, cnt) = s.stamps_read[r];
     let period_ms = f64::from(s.device.map_or(1.0, |d| d.period_ns)) / 1e6;
     let ticks = read_at(r) + 2;
-    let tick =
-        |k: usize| u64::from(*header(ticks + 2 * k)) | u64::from(*header(ticks + 2 * k + 1)) << 32;
+    let tick = |k: usize| u64::from(*hdr(ticks + 2 * k)) | u64::from(*hdr(ticks + 2 * k + 1)) << 32;
     let mut ran = [(0u64, 0u64); PASSES];
     for (k, r) in ran[..cnt].iter_mut().enumerate() {
         let (b, e) = (tick(2 * k), tick(2 * k + 1));
@@ -1457,7 +1456,7 @@ impl Gpu {
         (depth, stencil): (Format, Stencil),
         (fence, ticket): (&u32, u32),
     ) -> Id {
-        let mut at = record::HEADER as usize;
+        let mut at = record::HDR as usize;
         let mut next = || {
             at += 1;
             words[at - 1]
@@ -1518,7 +1517,7 @@ impl Gpu {
                 layout: Some(layout),
                 vertex: encode::VertexState {
                     module,
-                    entry: VERTEX_ENTRY[words[record::HEADER as usize - 1] as usize],
+                    entry: VERTEX_ENTRY[words[record::HDR as usize - 1] as usize],
                     buffers: &bufs,
                 },
                 primitive: encode::PrimitiveState {

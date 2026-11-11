@@ -26,7 +26,6 @@ import {
   weight,
 } from "@/ui/shared/component/theme.ts";
 import { SectionTitle } from "@/ui/shared/component/section-title.tsx";
-import { SensorStatus } from "@/abi/cmd.spec.ts";
 import { statusColor } from "@/ui/feature/world/top/sensor-icon.tsx";
 import { LABEL, STATUS } from "@/ui/shared/component/palette.ts";
 import { AboveKeyboard } from "@/ui/shared/component/above-keyboard.tsx";
@@ -164,10 +163,13 @@ const CLEAR = 16;
 
 function LocateCard() {
   const { t } = useTranslation();
+  // The card offers the location until one is known, kept or fixed. A press
+  // starts a watch, so while one runs, failing or not, it says it is looking
+  // and takes no press.
   const location = useCore((s) => s.location.status);
-  if (location === SensorStatus.Ready) return null;
-  // A watch asked for is not yet a location, so the card says it is looking.
-  const locating = location === SensorStatus.Loading;
+  const known = useCore((s) => s.location.has_location);
+  const locating = useCore((s) => s.location.watching);
+  if (known) return null;
   return (
     <AboveKeyboard inset={PANEL_EDGE}>
       <Backing

@@ -148,11 +148,6 @@ pub enum Message {
     GeolocationTimeout = 0x0206,
     GeolocationGenericError = 0x0207,
 
-    // ---- 0x03 which way the device is facing ----
-    OrientationPermissionError = 0x0302,
-    OrientationPermissionDenied = 0x0303,
-    OrientationSignalLost = 0x0304,
-
     // ---- 0x04 why the server does not answer the world's reads ----
     /// Reads reach the server and fail; they are tried again.
     WorldReadFailing = 0x0403,
@@ -161,15 +156,12 @@ pub enum Message {
 }
 
 impl Message {
-    pub const ALL: [Message; 10] = [
+    pub const ALL: [Message; 7] = [
         Message::GeolocationUnsupported,
         Message::GeolocationPermissionDenied,
         Message::GeolocationPositionUnavailable,
         Message::GeolocationTimeout,
         Message::GeolocationGenericError,
-        Message::OrientationPermissionError,
-        Message::OrientationPermissionDenied,
-        Message::OrientationSignalLost,
         Message::WorldReadFailing,
         Message::WorldUnavailable,
     ];

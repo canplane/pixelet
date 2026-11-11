@@ -72,12 +72,12 @@ pub const WAYS_BINS: u32 = WAYS_BINS_ACROSS * WAYS_BINS_ACROSS;
 
 /// A brick's lines, laid out by the CPU while the brick is filled (bake/tile/terrain.rs
 /// `brick_lines`), from which its fill makes its columns' spans and which it then gives back.
-/// First comes its tile's header (`way::header`); then `WAYS_BINS + 1` words, each bin's first
+/// First comes its tile's header (`way::hdr`); then `WAYS_BINS + 1` words, each bin's first
 /// entry and, after the last bin's, how many entries there are; then the entries, a word each,
 /// each one of the brick's segments, a bin's in order; then the segments the bins reach, in
 /// their lines' order, `way::SEGMENT_WORDS` each. No limit bounds how many: the words follow
 /// the brick (`lines_words`).
-pub const LINES_BINS_AT: u32 = way::HEADER_WORDS;
+pub const LINES_BINS_AT: u32 = way::HDR_WORDS;
 pub const LINES_ENTRIES_AT: u32 = LINES_BINS_AT + WAYS_BINS + 1;
 
 /// The words of a brick's lines with `entries` entries over `segments` segments.
@@ -150,14 +150,14 @@ fn segment_at(sq: &impl Brick, at: u32) -> Segment {
     Segment::of(w)
 }
 
-fn header_of(sq: &impl Brick) -> (f32, StationGrid) {
-    let mut w = [0; way::HEADER_WORDS as usize];
+fn hdr_of(sq: &impl Brick) -> (f32, StationGrid) {
+    let mut w = [0; way::HDR_WORDS as usize];
     let mut k = 0;
     while k < w.len() {
         w[k] = sq.line(k as u32);
         k += 1;
     }
-    way::of_header(w)
+    way::of_hdr(w)
 }
 
 /// A brick's columns as its lines and its cells give them.
@@ -166,7 +166,7 @@ impl<Q: Brick> ColumnGrid for Q {
         Brick::cell_zoom(self)
     }
     fn per_m(&self) -> f32 {
-        header_of(self).0
+        hdr_of(self).0
     }
     fn cnt(&self, c: [i32; 2]) -> u32 {
         bin_of(self, c).1
@@ -191,7 +191,7 @@ impl<Q: Brick> ColumnGrid for Q {
         area::is_wall(self.shard(), cell_zoom, b)
     }
     fn stations(&self) -> StationGrid {
-        header_of(self).1
+        hdr_of(self).1
     }
     /// Its own palette index as its fill laid it (pxl-engine clipmap.rs `OWN_WORDS`), the wall
     /// apart (`is_walled`).

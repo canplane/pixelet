@@ -133,8 +133,8 @@ fn fs() -> &'static mut Fs {
 
 /// The storage file's path, its slot after STORAGE.
 pub const STORAGE: [Token<'static>; 2] = [
-    Token::U32(path::STORAGE::ID),
-    Token::U32(path::STORAGE::SETTINGS::ID),
+    Token::Int(path::STORAGE::ID),
+    Token::Int(path::STORAGE::SETTINGS::ID),
 ];
 
 /// Opens the file at `path`.
@@ -374,15 +374,15 @@ pub fn with_path<R>(stream: Stream, id: u64, f: impl FnOnce(&[Token]) -> R) -> O
 
 /// Answers `f` of the path of the tile or shard `id` after `head`: its quadkey,
 /// or, for `TOP_ID`, the objects' top.
-pub fn with_quadrant<R>(head: u32, id: u64, f: impl FnOnce(&[Token]) -> R) -> R {
+pub fn with_quadrant<R>(head: i32, id: u64, f: impl FnOnce(&[Token]) -> R) -> R {
     if id == TOP_ID {
-        return f(&[Token::U32(head), Token::U32(path::OBJECT::TOP::ID)]);
+        return f(&[Token::Int(head), Token::Int(path::OBJECT::TOP::ID)]);
     }
     let mut key = Text::<KEY_BYTES>::EMPTY;
     Quadrant::of_id(id)
         .write_key(&mut key)
         .or_bug(Errno::EOVERFLOW);
-    f(&[Token::U32(head), Token::Str(key.as_str())])
+    f(&[Token::Int(head), Token::Str(key.as_str())])
 }
 
 /// A file a received path names among those the core refuses and reads
@@ -399,9 +399,9 @@ pub enum File {
 pub fn of_path(path: fs::Path<'_>) -> Option<File> {
     let mut tokens = path.iter();
     let file = match (tokens.next()?, tokens.next()?) {
-        (Token::U32(path::STORAGE::ID), Token::U32(path::STORAGE::SETTINGS::ID)) => File::Storage,
-        (Token::U32(path::OBJECT::ID), Token::U32(path::OBJECT::TOP::ID)) => File::Objects(TOP_ID),
-        (Token::U32(path::OBJECT::ID), Token::Str(key)) => {
+        (Token::Int(path::STORAGE::ID), Token::Int(path::STORAGE::SETTINGS::ID)) => File::Storage,
+        (Token::Int(path::OBJECT::ID), Token::Int(path::OBJECT::TOP::ID)) => File::Objects(TOP_ID),
+        (Token::Int(path::OBJECT::ID), Token::Str(key)) => {
             File::Objects(Quadrant::of_key(key)?.id())
         }
         _ => return None,

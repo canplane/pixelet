@@ -7,7 +7,7 @@
 // (`record::light_whole`).
 
 fn hits_at() -> u32 {
-  return header_word(LIGHT_HEADER_HITS);
+  return hdr_word(LIGHT_HDR_HITS);
 }
 
 fn hits_cap() -> u32 {

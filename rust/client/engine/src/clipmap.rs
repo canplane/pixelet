@@ -196,7 +196,7 @@ impl<P: Pool + ?Sized> KeptSpans<'_, P> {
 }
 
 impl<P: Pool + ?Sized> way::SpanTable for KeptSpans<'_, P> {
-    fn header(&self, c: [i32; 2]) -> (i32, u32) {
+    fn hdr(&self, c: [i32; 2]) -> (i32, u32) {
         match self.column(c) {
             0 => (i32::MIN, 0),
             at => head_of(self.pool.word(self.run + at)),
@@ -262,7 +262,7 @@ pub const SPANS_ACROSS: u32 = BRICK + 2;
 pub const SPANS_COLUMNS: u32 = SPANS_ACROSS * SPANS_ACROSS;
 /// A column's spans in words (pxl-spec `way::SpanList`). The head word holds the count
 /// (`SPANS_CNT`) and, above it, the face cell as an `i16`, `i16::MIN` for none (fill.rs
-/// `header_word`). Then each span holds its lowest and past its highest, an `i16` each as the
+/// `hdr_word`). Then each span holds its lowest and past its highest, an `i16` each as the
 /// world's z is and held to that range (`answer::bound_word`), and its value.
 pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * SPANS as u32;
 pub const SPANS_WORDS: u32 = SPANS_AT + SPANS_COLUMNS * SPANS_COLUMN_WORDS;

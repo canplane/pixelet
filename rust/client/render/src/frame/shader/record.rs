@@ -602,22 +602,18 @@ const SKY_GROUP: [[u32; 2]; 14] = and(
 /// read it.
 #[derive(Clone, Copy)]
 struct Descriptor {
-    header: Header,
+    hdr: Header,
     bufs: &'static [VertexBufferLayout],
     groups: &'static [Group],
 }
 
 impl Descriptor {
     const fn new(
-        header: Header,
+        hdr: Header,
         bufs: &'static [VertexBufferLayout],
         groups: &'static [Group],
     ) -> Self {
-        Self {
-            header,
-            bufs,
-            groups,
-        }
+        Self { hdr, bufs, groups }
     }
 }
 
@@ -1033,7 +1029,7 @@ const fn stages_reading(group: Group, binding: u32) -> u32 {
         let mut k = 0;
         while k < desc.groups.len() {
             if alike(desc.groups[k], group) {
-                stages |= stages_of(desc.header.shader, k as u32, binding);
+                stages |= stages_of(desc.hdr.shader, k as u32, binding);
             }
             k += 1;
         }
@@ -1044,7 +1040,7 @@ const fn stages_reading(group: Group, binding: u32) -> u32 {
 
 /// The number of words in a descriptor's record (see Record words above).
 const fn words(desc: &Descriptor) -> usize {
-    let mut n = HEADER as usize + 1 + 1;
+    let mut n = HDR as usize + 1 + 1;
     let mut k = 0;
     while k < desc.bufs.len() {
         n += 3 + 3 * desc.bufs[k].attributes.len();
@@ -1074,8 +1070,8 @@ const REC_WORDS: usize = {
 const fn rec(id: u32) -> ([u32; REC_WORDS], usize) {
     let mut out = [0; REC_WORDS];
     let desc = desc_of(id);
-    let h = desc.header;
-    let header = [
+    let h = desc.hdr;
+    let hdr = [
         h.shader,
         h.fragment as u32,
         h.topology,
@@ -1088,8 +1084,8 @@ const fn rec(id: u32) -> ([u32; REC_WORDS], usize) {
         h.vertex,
     ];
     let mut n = 0;
-    while n < header.len() {
-        out[n] = header[n];
+    while n < hdr.len() {
+        out[n] = hdr[n];
         n += 1;
     }
     out[n] = desc.bufs.len() as u32;
@@ -1172,7 +1168,7 @@ pub fn reads_shadow_map(id: u32) -> bool {
 /// what every WebGPU device binds (`floor::holds`).
 const fn is_floored(id: u32) -> bool {
     let (words, _) = &RECS[id as usize];
-    let mut at = HEADER as usize;
+    let mut at = HDR as usize;
     let bufs = words[at];
     at += 1;
     let mut k = 0;
@@ -1215,11 +1211,11 @@ const _: () = {
 /// group, as build.rs `BINDS` requires of a compute group.
 const fn lays_out(id: u32) -> bool {
     let desc = desc_of(id);
-    let entries = STAGES[desc.header.shader as usize];
+    let entries = STAGES[desc.hdr.shader as usize];
     let mut k = 0;
     while k < entries.len() {
         let [g, b, by, takes, vertex] = entries[k];
-        if vertex & 1 << desc.header.vertex != 0 || (desc.header.fragment && by & FRAGMENT != 0) {
+        if vertex & 1 << desc.hdr.vertex != 0 || (desc.hdr.fragment && by & FRAGMENT != 0) {
             if g as usize >= desc.groups.len() {
                 return false;
             }

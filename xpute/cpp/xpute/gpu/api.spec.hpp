@@ -16,6 +16,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
@@ -305,6 +306,29 @@ inline constexpr std::uint32_t ALPHA = 8u;
 
 inline constexpr std::uint32_t ALL = 15u;
 } // namespace COLOR_WRITE
+
+// The words of the device block, in order (op DEVICE): one a limit (LIMIT_NAME), the words
+// that hold a bit a feature (FEATURE_NAME), the timestamp period, the surface format, the
+// uncaptured errors, the unfinished frames and STATUS, the last, which the runtime stores
+// with release after the rest.
+namespace DEVICE {
+
+inline constexpr std::size_t LIMITS_AT = 0u;
+
+inline constexpr std::size_t FEATS_AT = 31u;
+
+inline constexpr std::size_t PERIOD_AT = 32u;
+
+inline constexpr std::size_t FORMAT_AT = 33u;
+
+inline constexpr std::size_t ERRORS_AT = 34u;
+
+inline constexpr std::size_t UNFINISHED_AT = 35u;
+
+inline constexpr std::size_t STATUS_AT = 36u;
+
+inline constexpr std::size_t WORDS = 37u;
+} // namespace DEVICE
 
 // The last word of the DEVICE block: what the runtime knows of the device. Only the
 // runtime writes it, and it stores it with release after the rest of the block. The core

@@ -3,7 +3,7 @@
 // GENERATED from spec/client/core/perf/perf.json
 //
 // The profiler's records and sections as the core lays them out and the client reads
-// them in place (perf/record.rs, ts/client/src/service/core/perf.ts):
+// them from the replies that hand them over (perf/record.rs, ts/client/src/service/core/perf.ts):
 // word offsets, eight bytes a word. The names the numbers index are their owners':
 // a task's io's (spec/client/core/sys/io/demand.json), a step's and an effect's the
 // turn's (spec/client/core/turn/step.json), a GPU span's the renderer's
@@ -20,9 +20,6 @@ import * as WORST from "./perf/worst.spec.ts";
 import * as PERCENTILE from "./perf/percentile.spec.ts";
 import * as STREAM_STAT from "./perf/stream_stat.spec.ts";
 import * as STEP_STAT from "./perf/step_stat.spec.ts";
-import * as STAT_SLOT from "./perf/stat_slot.spec.ts";
-import * as RING from "./perf/ring.spec.ts";
-import * as RING_SLOT from "./perf/ring_slot.spec.ts";
 
 export const WAKES = ["next", "timer", "none"] as const;
 
@@ -95,7 +92,7 @@ export const FRAME_GROUP = {
   heap: ["heap_used_bytes"],
 } as const;
 
-/** One settled task (perf/task.rs TaskRecord). `path` is the bytes of the path it opened, zero past their end, and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the address of the file name, `at_file_bytes` long, of the line a failure was made at, and 0 where the failure was the runtime's. */
+/** One settled task (perf/task.rs TaskRecord). `path` is the bytes of the path it opened, zero past their end, and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the offset of the file name, `at_file_bytes` long, of the line a failure was made at, in the string table PERF_STRTAB hands over, or 0 where the table had no room for the name, whose `at_line` is kept; every site word is 0 where the failure was the runtime's. */
 export { TASK };
 
 /** One of the worst moving frames since the recording started, by its interval, and what changed from the frame before it: its uploads, their bytes and the heap's high-water mark, each this frame's less that one's, all 0 where `has_prev` is 0. A still interval is long on purpose and is never among them. */
@@ -176,17 +173,21 @@ export const STAT = {
 
 /** What PERF_STATS finds as it reads, the window aside: each section's words at its AT, as STAT lays out its own. Every word an f64. */
 export const NOW = {
+  /** Whether it records, how long the recording has run, whether it lost what it had no room for (a ring's oldest records, or a failure's file name the string table could not hold), and how many records each ring holds (RING_NAMES). */
   recording_state: {
     AT: 0 as number,
     recording: 0 as number,
     elapsed_ms: 1 as number,
     truncated: 2 as number,
-    WORDS: 3 as number,
+    frames: 3 as number,
+    tasks: 4 as number,
+    worst: 5 as number,
+    WORDS: 6 as number,
   },
   /** Whether the core draws, as the read finds it, recording or not, every count since the core booted: `turns` its turns (sys/io/runtime.rs `turn`); `frames` the frames the renderer encoded (pxl-render renderer.rs `drawn_frames`); `refused_admit` and `refused_stream` the frames the runtime granted that did not run, as the GPU admitted none (xpute-gpu admit) or the runtime still held the stream (xpute-core ipc/stream.rs R3) (turn.rs `frame_task`).
    * Then the device, as the runtime wrote its block (xpute spec DEVICE), the same on a page and on a device: `generation` the devices lost so far (pxl-render gpu/api.rs `device_generation`); `status` its STATUS, 0 before the block is written; `errors` the uncaptured errors it raised; and `unfinished` the frames whose work its queue has not done, each a frame the runtime asked the queue to say done and has not heard of. */
   draw: {
-    AT: 3 as number,
+    AT: 6 as number,
     turns: 0 as number,
     frames: 1 as number,
     refused_admit: 2 as number,
@@ -202,7 +203,7 @@ export const NOW = {
    * The hover is what the pointer meets, exactly, at the zooms the eye's rays ask, whatever the tool could strike, and `cell_zoom` the zoom the eye's rays draw there (pxl-core domain/query/ray.rs `by_dist`).
    * The pick is what the tool held strikes there (pxl-core domain/control/edit/pick.rs `pick_at`): `hit_kind` what it met, an index into HIT_KINDS; `pick_zoom` the zoom of the box struck and `ray_zoom` the rays' there, `folded` 1 where they draw coarser than the box, which strikes nothing. `place_x`..`place_z` is the corner the tool takes (pxl-core domain/control/edit.rs `Hover`), `place_zoom` the zoom it places at, and `blocked` 1 where that room is taken (domain/control/edit/collision.rs `is_placement_blocked`). */
   view: {
-    AT: 11 as number,
+    AT: 14 as number,
     eye_x: 0 as number,
     eye_y: 1 as number,
     eye_z: 2 as number,
@@ -230,16 +231,7 @@ export const NOW = {
     blocked: 24 as number,
     WORDS: 25 as number,
   },
-  WORDS: 36 as number,
+  WORDS: 39 as number,
 } as const;
 
-/** What PERF_STATS answers with the address of: u32 words, where STAT and NOW lie in the module's memory and their words. */
-export { STAT_SLOT };
-
-/** Where one ring lies: its address in the module's memory and its record count. */
-export { RING };
-
 export const RING_NAMES = ["frames", "tasks", "worst"] as const;
-
-/** What PERF_RINGS answers with the address of: u32 words, a RING apiece in RING_NAMES' order. */
-export { RING_SLOT };

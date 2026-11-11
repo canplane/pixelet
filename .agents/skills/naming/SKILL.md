@@ -20,9 +20,11 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   rotation `rot`, altitude `alt`, error `err`, packet `pkt`, initial `init`,
   matrix `mat`, configuration or config `cfg`, descriptor `desc`, context `ctx`,
   coordinate `coord`, declaration `decl`, definition `def`, sequence `seq`,
-  atmosphere `atmos`, record `rec`. A plural is `vals`, `bufs`, `offs`, `cnts`,
-  `idxs` or `recs`, and whole otherwise. `pkt` is only a wire packet; `rec` only
-  the noun, and to record stays whole.
+  atmosphere `atmos`, record `rec`, header `hdr`, command `cmd`, vector `vec`,
+  condition `cond`. A plural is `vals`, `bufs`, `offs`, `cnts`, `idxs`, `recs`,
+  `hdrs`, `cmds`, `vecs` or `conds`, and whole otherwise. `pkt` is only a wire
+  packet; `rec` only the noun, and to record stays whole. A condition variable
+  is `cv`.
 - Whole, though they look short: `zoom`; `size` in pixelet, GPU texture sizes
   included, and `sz` in xpute (`HDR_SZ`, `WORD_SZ`); `environment`; `source` as
   a source of data; `encode`, `decode`.
@@ -84,7 +86,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | a value that differs from the turn before | `changed` | moved |
   | a box on a plane | a `rect` | box |
   | the most a thing holds | its `cap` | room, most, limit |
-  | a buffer's fixed first words | its `header` | head |
+  | a buffer's fixed first words | its `hdr` | head |
   | the pixels a change covers, to be drawn again | the `damage` | mark, claimed |
   | what a player places in the world | an `object` | overwrite |
   | where a ray ends | its `hit` | stop |

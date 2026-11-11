@@ -145,7 +145,7 @@ pub const HITS_A_FRAME: u32 = 1 << 18;
 
 /// The queues' words, all in one buffer (pxl-render queue_walk.wgsl `queue`,
 /// queue_ask.wgsl). First comes a head for each run's queue (`QUEUES`), each
-/// `QUEUE_HEADER_STRIDE` words after the last, from which the run's passes bind their view
+/// `QUEUE_HDR_STRIDE` words after the last, from which the run's passes bind their view
 /// (`queue_at`). Then come the asks' records, one region that every queue's view reaches
 /// (`queue_recs_at`). One region is enough because the runs of a frame, and the two walks
 /// of a run, go one after another, and no pass reads a record past the asks that follow the
@@ -162,7 +162,7 @@ pub const QUEUE_ASKS: u32 = 2;
 pub const QUEUE_ASKS_PARKED: u32 = 3;
 pub const QUEUE_HITS: u32 = 4;
 pub const QUEUE_PARKED: u32 = 8;
-pub const QUEUE_HEADER_WORDS: u32 = 9;
+pub const QUEUE_HDR_WORDS: u32 = 9;
 /// The runs' queues, a head each: the eye's beam rays, its samples and its holes, and the
 /// same three for the light.
 pub const QUEUE_EYE_CORNERS: u32 = 0;
@@ -174,15 +174,15 @@ pub const QUEUE_LIGHT_HOLES: u32 = 5;
 pub const QUEUES: u32 = 6;
 /// The words from one head to the next: the alignment a storage buffer's view is bound at
 /// (`STORAGE_ALIGN_WORDS`).
-pub const QUEUE_HEADER_STRIDE: u32 = crate::STORAGE_ALIGN_WORDS;
+pub const QUEUE_HDR_STRIDE: u32 = crate::STORAGE_ALIGN_WORDS;
 const _: () = assert!(
-    QUEUE_HEADER_WORDS <= QUEUE_HEADER_STRIDE,
+    QUEUE_HDR_WORDS <= QUEUE_HDR_STRIDE,
     "a header fits its stride"
 );
 
 /// The first word of queue `queue`'s head, which is also the first word of its view.
 pub const fn queue_at(queue: u32) -> u32 {
-    queue * QUEUE_HEADER_STRIDE
+    queue * QUEUE_HDR_STRIDE
 }
 
 /// The first word of the asks' records, counted from the first word of queue `queue`'s view:
@@ -199,7 +199,7 @@ pub const QUEUE_REC_WORDS: u32 = 9;
 /// it is asked by the last walk instead.
 pub const QUEUE_RECS_CAP: u32 = 1 << 17;
 pub const QUEUE_WORDS: u32 = queue_at(QUEUES) + QUEUE_RECS_CAP * QUEUE_REC_WORDS;
-pub const QUEUE_EMPTY: [u32; QUEUE_HEADER_WORDS as usize] = [0, 0, 0, 0, 0, 1, 1, 0, 0];
+pub const QUEUE_EMPTY: [u32; QUEUE_HDR_WORDS as usize] = [0, 0, 0, 0, 0, 1, 1, 0, 0];
 
 /// A parked ray's state as the queue keeps it, the same for every kind of item (pxl-render
 /// parked.wgsl): its distance as f32 bits, its node's corner, and its zoom, roots and steps

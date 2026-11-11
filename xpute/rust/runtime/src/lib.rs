@@ -14,6 +14,7 @@
 //!
 #![cfg_attr(unix, doc = concat!("```\n", include_str!("../examples/native.rs"), "```"))]
 
+pub mod abi;
 pub mod mem;
 
 mod report;

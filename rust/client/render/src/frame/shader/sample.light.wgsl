@@ -5,7 +5,7 @@
 // (light_list.wgsl), and each sample's ray asks its tile's band.
 
 fn sample_lattice() -> vec2<u32> {
-  return vec2<u32>(header_word(LIGHT_HEADER_SAMPLES_ACROSS));
+  return vec2<u32>(hdr_word(LIGHT_HDR_SAMPLES_ACROSS));
 }
 
 /// The sample the thread at `id` takes, on one of the tiles listed as fed, or `NONE` past the

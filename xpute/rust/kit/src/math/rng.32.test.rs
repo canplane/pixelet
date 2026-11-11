@@ -1,8 +1,8 @@
 // xpute-kit/math/rng.32.test.rs
 
 use super::*;
-use crate::golden::Golden;
 use crate::math::rng::u32_to_unit;
+use xpute_golden::Golden;
 
 const GOLDEN: &str = include_str!("../../../../spec/golden/math/rng.32.tsv");
 

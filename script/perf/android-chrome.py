@@ -141,4 +141,6 @@ class Tab(Cdp):
                 adb("shell", "am", "force-stop", PACKAGE)
 
 
+# The run holds its device from before it starts (`measure.hold`).
+android.hold()
 measure(Tab)

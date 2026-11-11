@@ -63,6 +63,9 @@ pub const HANDLES: u32 = 16;
 /// The most frames one RAISE may ask for; a RAISE that asks for more is refused with EINVAL.
 pub const MOST_RAISE: u32 = 32;
 
+/// The most bytes one NAMED may name; a NAMED that asks for more is refused with EINVAL.
+pub const MOST_NAMED: u32 = 16;
+
 /// The conformance core's own commands, numbered `major << 8 | minor` past xpute's majors
 /// (io/frame.json). Where a command takes a packet, the packet is a branch whose first
 /// child is a number.
@@ -103,6 +106,9 @@ pub mod cmd {
     /// writes the number plus one at the offset and answers 0 before the call returns. It
     /// refuses a number of 0 with EINVAL and writes nothing.
     pub const INC: u32 = 4109;
+    /// Replies 0, its reply naming as many bytes of the core's own state as the packet's
+    /// number, byte k holding k, which go with the reply's frame; 0 names none.
+    pub const NAMED: u32 = 4110;
     /// The import that RAISE raises.
     pub const NOTE: u32 = 4353;
     /// An open's completion, handed on. The frame is tagged with the open's owner, and its
@@ -122,6 +128,7 @@ pub mod cmd {
         "CLOSE",
         "CALL",
         "INC",
+        "NAMED",
         "NOTE",
         "OPEN_COMPLETION",
     ];

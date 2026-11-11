@@ -251,7 +251,7 @@ The session recommends keeping rust-gpu: nothing mature to move to.
 - Whether one source for CPU and GPU (`README.md:26`) must hold. If it may go,
   the session proposes moving one compute entry to Slang and comparing the WGSL's
   size and Safari's compile. Closed the same day: rust-gpu is to be removed
-  ([rust-gpu goes](./20261103-rust-gpu-goes.md)).
+  ([rust-gpu goes](../gpu/minutes/20261103-rust-gpu-goes.md)).
 - Whether xpute is meant for outside use, or a portfolio piece. The first calls
   for the envelope and trailing optionals first, the second for the envelope and
   the dump tool.

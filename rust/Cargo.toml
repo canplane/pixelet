@@ -57,6 +57,7 @@ hex = "0.4"
 xpute-kit = { path = "../xpute/rust/kit", default-features = false }
 xpute-core = { path = "../xpute/rust/core" }
 xpute-gpu = { path = "../xpute/rust/gpu" }
+xpute-golden = { path = "../xpute/rust/dev/golden" }
 xpute-runtime = { path = "../xpute/rust/runtime" }
 pxl-engine = { path = "client/engine" }
 pxl-content = { path = "client/content" }

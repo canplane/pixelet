@@ -33,7 +33,7 @@ fn pointers() -> &'static mut Pointers {
 
 pub(super) fn typing(c: abi::InputTyping) -> Outcome {
     pointers().typing = c.typing;
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 /// Forgets what an earlier UI said and pressed.
@@ -81,23 +81,23 @@ pub(super) fn pointer(c: abi::InputPointer) -> Outcome {
     if pinching() {
         clear_hover_coord();
     }
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 pub(super) fn wheel(c: abi::InputWheel) -> Outcome {
     camera_wheel(c.delta_y);
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 pub(super) fn pinch(c: abi::InputPinch) -> Outcome {
     refuse_unless(c.scale > 0.0, Errno::EINVAL)?;
     camera_pinch(c.scale);
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 pub(super) fn r#move(c: abi::InputMove) -> Outcome {
     camera_keys(c.x, c.y);
-    Ok(Some(0))
+    Ok(Some(0.into()))
 }
 
 pub(super) fn xr_pose(s: &mut State, c: abi::InputXrPose) -> Outcome {

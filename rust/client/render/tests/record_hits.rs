@@ -58,13 +58,14 @@ const CAST: u32 = 7;
 const UNWALKED: u32 = u32::MAX;
 
 fn device() -> Option<Gpu> {
+    let gpu = Gpu::new();
     // A loop in a hand-written shader can hang the wait on the device, so the run ends itself.
+    // The bound starts once the process holds the GPU (`Gpu::new`).
     std::thread::spawn(|| {
         std::thread::sleep(std::time::Duration::from_secs(1200));
         eprintln!("gave up after 20 minutes");
         std::process::exit(124);
     });
-    let gpu = Gpu::new();
     if gpu.is_none() {
         eprintln!("no adapter: skipped");
     }
@@ -644,7 +645,7 @@ fn cache_word(k: usize) -> String {
 /// record's passes run over, each kept as laid and bound on the device. `words` are the eye's
 /// beam rays' words or the light's list, and `asks_at` the first word of the asks its hits
 /// open. `rays` are the eye's rays or the light's map, `size` texels a layer. Only the light has
-/// a head (`header_buf`).
+/// a head (`hdr_buf`).
 struct Run {
     name: String,
     reads: bool,
@@ -655,7 +656,7 @@ struct Run {
     asks_at: u32,
     size: [u32; 2],
     eye_buf: wgpu::Buffer,
-    header_buf: Option<wgpu::Buffer>,
+    hdr_buf: Option<wgpu::Buffer>,
     words_buf: wgpu::Buffer,
     node_cache_buf: wgpu::Buffer,
     args_buf: wgpu::Buffer,
@@ -672,8 +673,8 @@ impl Run {
             (9, self.node_cache_buf.as_entire_binding()),
             (16, self.args_buf.as_entire_binding()),
         ];
-        if let Some(header) = &self.header_buf {
-            binds.push((11, header.as_entire_binding()));
+        if let Some(hdr) = &self.hdr_buf {
+            binds.push((11, hdr.as_entire_binding()));
         }
         binds
     }
@@ -820,7 +821,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
         args: Vec::new(),
         asks_at: grid.hit_asks_at,
         size: s.size,
-        header_buf: None,
+        hdr_buf: None,
         eye_buf,
         words_buf,
         node_cache_buf,
@@ -866,7 +867,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
 /// Lays the light's beam lines and each cell's start in its list `list`, as the cast lays them
 /// (beam.light.wgsl, light_cell.wgsl). Every tile is read, and the beam runs over a node cache
 /// of its own.
-fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list: &mut [u32]) {
+fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, hdr]: [&wgpu::Buffer; 2], list: &mut [u32]) {
     let tiles = light::tiles(SIZE) as usize;
     let reads = light::reads_at(SIZE) as usize;
     list[reads..reads + tiles * tiles].fill(CAST);
@@ -875,7 +876,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list
     let node_cache = gpu.buf(&node_cache, store_of());
     let buf = gpu.buf(list, store_of());
     let mut binds = world_binds(b, eye, &buf, &node_cache);
-    binds.push((11, header.as_entire_binding()));
+    binds.push((11, hdr.as_entire_binding()));
     gpu.light_beam(&binds, &buf, &node_cache, SIZE);
     let cells = light::cells_across(SIZE);
     gpu.dispatch(
@@ -883,7 +884,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, header]: [&wgpu::Buffer; 2], list
         &[
             (0, eye.as_entire_binding()),
             (8, buf.as_entire_binding()),
-            (11, header.as_entire_binding()),
+            (11, hdr.as_entire_binding()),
         ],
         [cells.div_ceil(WORKGROUP), cells.div_ceil(WORKGROUP), 1],
     );
@@ -917,16 +918,16 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
         eye[at..at + 3].copy_from_slice(&Cut::NONE.at.map(|v| v as u32));
         eye[at + 3] = Cut::NONE.zoom;
     }
-    let mut header = vec![0u32; light::HEADER_WORDS];
-    header[light::HEADER_CAST] = CAST;
-    header[light::HEADER_EPOCH] = CAST;
-    for (k, v) in light::header_layout(SIZE) {
-        header[k] = v;
+    let mut hdr = vec![0u32; light::HDR_WORDS];
+    hdr[light::HDR_CAST] = CAST;
+    hdr[light::HDR_EPOCH] = CAST;
+    for (k, v) in light::hdr_layout(SIZE) {
+        hdr[k] = v;
     }
-    header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+    hdr[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let eye_buf = gpu.buf(&eye, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+    let hdr_buf = gpu.buf(&hdr, wgpu::BufferUsages::UNIFORM);
 
     // Every slot of the map is listed, row after row, in the holes' list the queue takes.
     let mut list = vec![0u32; light::buf_words(SIZE) as usize];
@@ -935,7 +936,7 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
     for k in 0..SIZE * SIZE {
         list[holes + 1 + k as usize] = (k % SIZE) | ((k / SIZE) << 16);
     }
-    lay_cells(gpu, b, [&eye_buf, &header_buf], &mut list);
+    lay_cells(gpu, b, [&eye_buf, &hdr_buf], &mut list);
     let mut node_cache = vec![0u32; node_cache::WORDS as usize];
     node_cache[node_cache::FRAME as usize] = FRAME;
     // The light's raster's args, as the renderer lays them (ray/raster.rs `light_prepare`).
@@ -962,12 +963,12 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
             &vec![0; (SIZE * SIZE) as usize],
         ),
         eye_buf,
-        header_buf: Some(header_buf),
+        hdr_buf: Some(hdr_buf),
     };
     let view = array_view(&run.rays);
     let mut binds = world_binds(b, &run.eye_buf, &run.words_buf, &run.node_cache_buf);
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
-    binds.extend(run.header_buf.iter().map(|h| (11, h.as_entire_binding())));
+    binds.extend(run.hdr_buf.iter().map(|h| (11, h.as_entire_binding())));
     gpu.holes(true, &binds, &run.node_cache_buf);
     drop(binds);
 

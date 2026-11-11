@@ -27,17 +27,11 @@ jspm_packages/
 # Backup files sometimes created by rustfmt/editor tooling
 **/*.rs.bk
 
-# Build output: each language's own target/, beside its tree's root (rust/,
-# cpp/'s Makefile, ts/'s browser bundle).
+# Build output: each language's own target/.
 target/
-# What the native module's Gradle build leaves beside it.
-ts/native/android/build/
-ts/native/android/.gradle/
-ts/gpu/android/build/
-ts/gpu/android/.gradle/
 
 # A library's locks are its consumer's to keep.
-rust/Cargo.lock
+Cargo.lock
 pnpm-lock.yaml
 
 # What a run keeps or leaves for itself: caches and temporary folders.

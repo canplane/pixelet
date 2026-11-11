@@ -3,7 +3,6 @@
 /** These messages cross between a page's UI and the core's worker, beside
  * xpute's port. */
 
-import type { u32 } from "@xpute/kit/abi/word.ts";
 import type { RefusedFile } from "@/abi/cmd.spec.ts";
 import type { Source } from "@/abi/state.ts";
 import type { Declaration } from "@/service/sys/fs/source.ts";
@@ -20,10 +19,8 @@ export interface Page {
 export type ToCore =
   | Page
   | { kind: "refused"; files: readonly RefusedFile[] }
-  | { kind: "gpu"; port: MessagePort }
-  | { kind: "perf"; id: u32; what: string; args: unknown[] };
+  | { kind: "gpu"; port: MessagePort };
 
 export type ToUi =
   | { kind: "source"; state: Source; decl: Declaration | null }
-  | { kind: "keep"; key: string; val: string }
-  | { kind: "perf"; id: u32; val: unknown };
+  | { kind: "keep"; key: string; val: string };

@@ -7,8 +7,8 @@
 #include <vector>
 
 #include "xpute/kit/codec/encoding.hpp"
-#include "xpute/kit/golden.hpp"
-#include "xpute/kit/test.hpp"
+#include "dev/test/golden.hpp"
+#include "dev/test/test.hpp"
 #include "cursor.hpp"
 #include "encode.hpp"
 
@@ -156,7 +156,7 @@ XPUTE_TEST(xtp_cursor_matches_other_languages) {
 
     const std::string &good = v.s("packets.0.packet");
     auto refused = [](const std::string &h) { return read_deep(bytes(h)); };
-    XPUTE_CHECK_EQ(refused(good.substr(0, 20)), v.s("malformed.truncated_header"), "a header cut short");
+    XPUTE_CHECK_EQ(refused(good.substr(0, 20)), v.s("malformed.truncated_hdr"), "a header cut short");
     XPUTE_CHECK_EQ(refused("00" + good.substr(2)), v.s("malformed.bad_magic"), "a magic that is not");
     XPUTE_CHECK_EQ(refused(good.substr(0, 40)), v.s("malformed.truncated_payload"), "a payload cut short");
     v.each("refused", [&](const std::string &k) { XPUTE_CHECK_EQ(refused(v.s(k + ".packet")), v.s(k + ".read"), k.c_str()); });

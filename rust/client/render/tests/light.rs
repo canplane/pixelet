@@ -411,13 +411,13 @@ fn run_slots(
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
     eye_words[eye::RANGE] = c.range[0];
     eye_words[eye::RANGE + 1] = c.range[1];
-    let mut header = vec![0u32; light::HEADER_WORDS];
-    header[light::HEADER_CAST] = CAST;
-    header[light::HEADER_EPOCH] = if c.one_in.is_some() { CAST - 3 } else { CAST };
-    for (k, v) in light::header_layout(SIZE) {
-        header[k] = v;
+    let mut hdr = vec![0u32; light::HDR_WORDS];
+    hdr[light::HDR_CAST] = CAST;
+    hdr[light::HDR_EPOCH] = if c.one_in.is_some() { CAST - 3 } else { CAST };
+    for (k, v) in light::hdr_layout(SIZE) {
+        hdr[k] = v;
     }
-    header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+    hdr[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let map0: Vec<u32> = (0..SIZE * SIZE)
         .map(|k| noise(k ^ 0xabc) | 1 << 31)
@@ -524,7 +524,7 @@ fn run_slots(
         );
         let (vis_v, map_v) = (array_view(&vis_t), array_view(&map_t));
         let eye_buf = gpu.buf(&eye_words, wgpu::BufferUsages::UNIFORM);
-        let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+        let hdr_buf = gpu.buf(&hdr, wgpu::BufferUsages::UNIFORM);
         let list_buf = gpu.buf(&list, wgpu::BufferUsages::STORAGE);
         let misses_buf = gpu.buf(&ray::MISS_ARGS_EMPTY, wgpu::BufferUsages::STORAGE);
         let rec_buf = gpu.buf(&rec, wgpu::BufferUsages::STORAGE);
@@ -534,7 +534,7 @@ fn run_slots(
                 (0, eye_buf.as_entire_binding()),
                 (8, list_buf.as_entire_binding()),
                 (10, wgpu::BindingResource::TextureView(&map_v)),
-                (11, header_buf.as_entire_binding()),
+                (11, hdr_buf.as_entire_binding()),
                 (15, wgpu::BindingResource::TextureView(&vis_v)),
                 (17, misses_buf.as_entire_binding()),
                 (9, rec_buf.as_entire_binding()),
@@ -756,7 +756,7 @@ fn within_by(d: f32, reach: f32) -> (bool, bool) {
 /// of one point. `rec_draw_cs` (record_draw.wgsl) stands every box the eye's draw writes,
 /// one for each fresh held voxel in view, with its planes as `cast::asset_box` lays them. It stands
 /// each box as it writes it, where the head says the world's receivers stand
-/// (`light::HEADER_WORLD_RECEIVERS`).
+/// (`light::HDR_WORLD_RECEIVERS`).
 ///
 /// The cast's first stood tile must open the slide, and where a slide did not run it must
 /// begin the reads' epoch anew (`light::READS_FROM`). Where nothing is stood, as when every hit
@@ -1141,14 +1141,14 @@ fn run_marks(
     kind_cnt.count("tiles stood on", want.must.len() as u64);
     kind_cnt.add("casts that stood nothing", want.may.is_empty());
 
-    let mut header = vec![0u32; light::HEADER_WORDS];
-    header[light::HEADER_CAST] = CAST;
-    header[light::HEADER_WORLD] = CAST;
-    header[light::HEADER_FOOTPRINT] = u32::from(c.footprint);
-    header[light::HEADER_SLIDE_CAST] = CAST - 2;
-    header[light::HEADER_WORLD_RECEIVERS] = 1;
-    for (k, v) in light::header_layout(SIZE) {
-        header[k] = v;
+    let mut hdr = vec![0u32; light::HDR_WORDS];
+    hdr[light::HDR_CAST] = CAST;
+    hdr[light::HDR_WORLD] = CAST;
+    hdr[light::HDR_FOOTPRINT] = u32::from(c.footprint);
+    hdr[light::HDR_SLIDE_CAST] = CAST - 2;
+    hdr[light::HDR_WORLD_RECEIVERS] = 1;
+    for (k, v) in light::hdr_layout(SIZE) {
+        hdr[k] = v;
     }
     // The list is noise but for the slide's words, which say the slide last ran before the
     // last cast that owed one. Each tile's mark names another cast than this one, the cast the
@@ -1181,7 +1181,7 @@ fn run_marks(
     );
     let view = array_view(&rays);
     let eye_buf = gpu.buf(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+    let hdr_buf = gpu.buf(&hdr, wgpu::BufferUsages::UNIFORM);
     let list_buf = gpu.buf(&list, wgpu::BufferUsages::STORAGE);
     let args_buf = gpu.buf(&args, wgpu::BufferUsages::STORAGE);
     let receiver_tiles_buf = gpu.buf(&stood, wgpu::BufferUsages::STORAGE);
@@ -1191,7 +1191,7 @@ fn run_marks(
     let rec_buf = gpu.buf(&rec, wgpu::BufferUsages::STORAGE);
     let mut binds: Vec<(u32, wgpu::BindingResource)> = vec![
         (0, eye_buf.as_entire_binding()),
-        (11, header_buf.as_entire_binding()),
+        (11, hdr_buf.as_entire_binding()),
         (12, list_buf.as_entire_binding()),
         (21, args_buf.as_entire_binding()),
         (22, receiver_tiles_buf.as_entire_binding()),
@@ -1292,11 +1292,11 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     let p = gpu.pipeline(&module, "probe_cs");
     let mut eye_words = vec![0u32; eye::WORDS];
     eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
-    let mut header = vec![0u32; light::HEADER_WORDS];
-    header[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
+    let mut hdr = vec![0u32; light::HDR_WORDS];
+    hdr[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
         .copy_from_slice(&starts.words());
     let eye_buf = gpu.buf(&eye_words, wgpu::BufferUsages::UNIFORM);
-    let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+    let hdr_buf = gpu.buf(&hdr, wgpu::BufferUsages::UNIFORM);
     let out = gpu.buf(
         &vec![0u32; 3 * (SIZE * SIZE) as usize],
         wgpu::BufferUsages::STORAGE,
@@ -1305,7 +1305,7 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         &p,
         &[
             (0, eye_buf.as_entire_binding()),
-            (11, header_buf.as_entire_binding()),
+            (11, hdr_buf.as_entire_binding()),
             (40, out.as_entire_binding()),
         ],
         [SIZE / 16, SIZE / 16, 1],
@@ -1342,7 +1342,7 @@ fn every_pass_bands_a_tile_alike() {
 
 @compute @workgroup_size(8, 8, 1)
 fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  let across = header_word(LIGHT_HEADER_SIZE) / LIGHT_TILE + 2u * PROBE_LEAD;
+  let across = hdr_word(LIGHT_HDR_SIZE) / LIGHT_TILE + 2u * PROBE_LEAD;
   if (id.x >= across || id.y >= across) {
     return;
   }
@@ -1408,10 +1408,10 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         eye_words[eye::LIGHT..eye::LIGHT + eye::LIGHT_WORDS].copy_from_slice(&l.words());
         eye_words[eye::RANGE] = range[0];
         eye_words[eye::RANGE + 1] = range[1];
-        let mut header = vec![0u32; light::HEADER_WORDS];
-        header[light::HEADER_SIZE] = size;
+        let mut hdr = vec![0u32; light::HDR_WORDS];
+        hdr[light::HDR_SIZE] = size;
         let eye_buf = gpu.buf(&eye_words, wgpu::BufferUsages::UNIFORM);
-        let header_buf = gpu.buf(&header, wgpu::BufferUsages::UNIFORM);
+        let hdr_buf = gpu.buf(&hdr, wgpu::BufferUsages::UNIFORM);
         let across = light::tiles(size) + 2 * LEAD;
         let want: Vec<u32> = (0..across * across)
             .map(|k| {
@@ -1430,7 +1430,7 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
                     p,
                     &[
                         (0, eye_buf.as_entire_binding()),
-                        (11, header_buf.as_entire_binding()),
+                        (11, hdr_buf.as_entire_binding()),
                         (40, out.as_entire_binding()),
                     ],
                     [across.div_ceil(8), across.div_ceil(8), 1],

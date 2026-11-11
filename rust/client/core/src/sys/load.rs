@@ -43,13 +43,14 @@ impl LoadKind {
 }
 
 impl Load {
-    /// The file's path: (ASSET, id), or the sphere's after EARTH.
+    /// The file's path: (ASSET, id), or the sphere's after EARTH. A file's id is
+    /// below SPHERE, so it is an i32 as it is.
     pub fn path(self) -> [Token<'static>; 2] {
         match self {
-            Load::File(n) => [Token::U32(path::ASSET::ID), Token::U32(n)],
+            Load::File(n) => [Token::Int(path::ASSET::ID), Token::Int(n as i32)],
             Load::Sphere => [
-                Token::U32(path::EARTH::ID),
-                Token::U32(path::EARTH::SPHERE::ID),
+                Token::Int(path::EARTH::ID),
+                Token::Int(path::EARTH::SPHERE::ID),
             ],
         }
     }

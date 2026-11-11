@@ -5,10 +5,9 @@
 /**
  * The file device's protocol on major FS: a core's files, read whole into its own buffers
  * and written whole, through a descriptor, as WASI's path_open, fd_read, fd_write and
- * fd_close do. A file's name is an absolute path, a tuple of tokens, each a u32
- * or a string, as many as the program uses. xpute gives no token a meaning: the program
- * numbers its fixed names and keeps variable data in its own type, and its one binding
- * answers every path (@xpute/runtime io/fs.ts).
+ * fd_close do. A file's name is an absolute path, a tuple of tokens, each an i32
+ * or a string, as many as the program uses. xpute gives no token a meaning, and the
+ * program's one binding answers every path (@xpute/runtime io/fs.ts).
  *
  * The core sends its calls as imports. The core issues each descriptor, a generational
  * handle, and every frame of a descriptor carries it once, as its tag. FS_OPEN and FS_CLOSE
@@ -24,6 +23,7 @@
 
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
+import { INT_U32 } from "./number.ts";
 import type { Path } from "../io/path.ts";
 import { read_path } from "../io/path.ts";
 import * as Major from "./fs/major.spec.ts";
@@ -74,21 +74,22 @@ export interface FsClose {}
 export const read = {
   [Command.FS_OPEN]: (b: BranchCursor): FsOpen => ({
     path: read_path(b.at_branch(0)),
-    flags: b.at(1).get<u32>(),
+    flags: INT_U32(b.at(1).get_number()),
   }),
   [Command.FS_READ]: (b: BranchCursor): FsRead => ({
-    at: b.at(0).get<u32>(),
-    len: b.at(1).get<u32>(),
+    at: INT_U32(b.at(0).get_number()),
+    len: INT_U32(b.at(1).get_number()),
   }),
   [Command.FS_WRITE]: (b: BranchCursor): FsWrite => ({
-    at: b.at(0).get<u32>(),
-    len: b.at(1).get<u32>(),
+    at: INT_U32(b.at(0).get_number()),
+    len: INT_U32(b.at(1).get_number()),
   }),
 };
 
 /** The fs protocol's exports as the UI calls them over `link`: a send returns
- * nothing, and a request a Promise of its reply's value, which rejects with the
- * errno it was refused with. `fits` says whether a send's packet fits a frame. */
+ * nothing, and a request a Promise of its reply's value, or of the memory its reply
+ * names, which rejects with the errno it was refused with. `fits` says whether a
+ * send's packet fits a frame. */
 export function fs_exports(link: Link) {
   return {
     /** The file at `path` changed under the core, as reported by what backs it. What the core
@@ -102,6 +103,9 @@ export function fs_exports(link: Link) {
 
 /** The fs protocol's exports, as `fs_exports` binds them. */
 export type FsExports = ReturnType<typeof fs_exports>;
+
+/** The majors the runtime routes the protocol's imports by. */
+export const MAJORS: readonly u32[] = [Major.FS];
 
 /** What the program does with each command the core posts on the fs protocol: a
  * call's member answers its value, and throws kit's error to refuse it. */
@@ -161,7 +165,7 @@ export function fs_imports(h: FsImports): Protocol {
       return refusal_of(err);
     }
   };
-  return { majors: [Major.FS], on };
+  return { majors: MAJORS, on };
 }
 
 /** A packet the command carries, which a frame without one breaks. */

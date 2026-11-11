@@ -14,6 +14,12 @@ mod apply;
 /// core shares with every runtime is in `xpute_core::abi`.
 #[path = "door/cmd.spec.rs"]
 pub mod cmd;
+/// The same protocol's runtime end, as a native runtime beside the core takes
+/// it: what a device's touch writes, and what a harness of whole frames sends
+/// and reads.
+#[cfg(not(target_arch = "wasm32"))]
+#[path = "door/cmd.runtime.spec.rs"]
+pub mod cmd_runtime;
 pub mod layout;
 mod life;
 #[cfg(not(target_arch = "wasm32"))]
@@ -48,10 +54,11 @@ use xpute_core::clock::now;
 use xpute_core::entry::BootInfo;
 use xpute_core::global::Global;
 use xpute_core::io::door::{door, Event};
+use xpute_core::io::frame::cmd_major;
 use xpute_core::mem::off_of_slice;
 use xpute_core::mem::section::PAGE_BYTES;
 use xpute_core::stop;
-use xpute_gpu::event::{self as gpu_event, Event as GpuEvent};
+use xpute_gpu::abi as gpu;
 
 struct State {
     /// The UI snapshot and view last posted. Each is posted again only when
@@ -77,15 +84,6 @@ fn close_surface(handle: u32) {
         renderer::on_surface_closed(closed);
     }
     character_surface_close(handle);
-}
-
-/// Called when the GPU answers, the first time or again after a loss. The
-/// core then asks for the device's block and makes the renderer on it once
-/// the block is in (pxl-render gpu/api.rs). A later loss is reported through
-/// the block and read at the start of a turn.
-fn gpu_ready() {
-    api::on_device_answered();
-    request_world_tick();
 }
 
 /// Called when a UI has booted. On a device the core outlives a JavaScript
@@ -152,17 +150,13 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
         Event::Changed(c) => apply::fs::changed(c),
         Event::Completion(c) => {
             file::on_completion(&c);
-            Ok(Some(0))
+            Ok(Some(0.into()))
         }
-        Event::Program(number, pkt) => match gpu_event::decode(Major::GPU as u32, number, pkt) {
-            Ok(Some(GpuEvent::Ready)) => {
-                gpu_ready();
-                Ok(Some(0))
-            }
-            Ok(Some(GpuEvent::Surface(c))) => apply::on_surface(c),
-            Ok(None) => cmd::ui::apply(s, number, &pkt),
-            Err(e) => Err(e),
-        },
+        // The GPU's commands are minors under the major the program gives it.
+        Event::Program(number, pkt) if cmd_major(number) == Major::GPU as u32 => {
+            gpu::apply(s, Major::GPU as u32, number, &pkt)
+        }
+        Event::Program(number, pkt) => cmd::ui::apply(s, number, &pkt),
         _ => Ok(None),
     });
     let drained = now();
@@ -183,7 +177,7 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
             request::Event::Start(key, stream, id) => dispatch::start(key, stream, id),
             request::Event::Stop(key) => dispatch::stop(key),
             request::Event::End(a, at, exit, phases) => {
-                perf_record(|| TaskRecord::of(&a, at, exit, phases));
+                perf_record(|name_at| TaskRecord::of(&a, at, exit, phases, name_at));
             }
         }
     }
@@ -209,22 +203,18 @@ pub fn run(deadline_ms: f64, boot_info: fn() -> BootInfo) -> f64 {
 static SNAPSHOT: Global<Vec<u8>> = Global::new();
 
 fn post_ui(s: &mut State) {
-    use crate::domain::control::sensor::device_orientation::{
-        take_orient_command, OrientationCommand,
-    };
-    use crate::domain::control::sensor::geolocation::{
-        take_geolocation_command, GeolocationCommand,
-    };
+    use crate::domain::control::sensor::device_orientation::{take_orient_cmd, OrientationCommand};
+    use crate::domain::control::sensor::geolocation::{take_geolocation_cmd, GeolocationCommand};
 
     let start = |sensor: Sensor| cmd::ui::sensor_start(&SensorStart { sensor });
     let stop = |sensor: Sensor| cmd::ui::sensor_stop(&SensorStop { sensor });
-    if let Some(c) = take_geolocation_command() {
+    if let Some(c) = take_geolocation_cmd() {
         match c {
             GeolocationCommand::Start => start(Sensor::Geolocation),
             GeolocationCommand::Stop => stop(Sensor::Geolocation),
         }
     }
-    if let Some(c) = take_orient_command() {
+    if let Some(c) = take_orient_cmd() {
         match c {
             OrientationCommand::Listen => start(Sensor::Orientation),
             OrientationCommand::Remove => stop(Sensor::Orientation),

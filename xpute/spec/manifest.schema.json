@@ -92,8 +92,8 @@
       }
     },
     "name": { "description": "A protocol's word for itself, for the generated names only.", "type": "string" },
-    "export": { "description": "What the core implements and the runtime calls: what the runtime sends the core.", "type": "array", "items": { "$ref": "#/$defs/command" } },
-    "import": { "description": "What the runtime implements and the core calls: what the core posts to the runtime.", "type": "array", "items": { "$ref": "#/$defs/command" } },
+    "export": { "description": "What the core implements and the runtime calls: what the runtime sends the core.", "type": "array", "items": { "$ref": "#/$defs/cmd" } },
+    "import": { "description": "What the runtime implements and the core calls: what the core posts to the runtime.", "type": "array", "items": { "$ref": "#/$defs/cmd" } },
     "extern": {
       "description": "Types the program's Rust names, read and written as a number.",
       "type": "array",
@@ -168,7 +168,7 @@
   },
   "$defs": {
     "doc": { "type": "array", "items": { "type": "string" } },
-    "command": {
+    "cmd": {
       "type": "object",
       "required": ["name", "val"],
       "additionalProperties": false,
@@ -190,7 +190,12 @@
           "description": "Posted with ACKREQ and answered later, never waited for. An `import`, its tag the core's: the runtime completes it on a later turn with a frame of the same tag and command flagged RES, its result and `reply`'s packet. An `export`, its tag the runtime's: the core replies as it applies it, with its result.",
           "type": "boolean"
         },
+        "named": {
+          "description": "An `ackreq` export's reply names the core's memory that holds its answer, which goes with the reply's frame, and the UI's request resolves with a copy of it.",
+          "type": "boolean"
+        },
         "reply": { "description": "An `ackreq` import's completion's packet, its fields in order.", "type": "array", "items": { "$ref": "#/$defs/field" } },
+        "tag": { "description": "What an import's tag carries, which the core gives and its handler is handed before its packet, as a file's descriptor.", "type": "string" },
         "mem": { "description": "An import's two fields that name the core's memory, where it is and how long: a runtime hands a UI apart from the core a copy.", "type": "array", "items": { "type": "string" }, "minItems": 2, "maxItems": 2 }
       }
     },

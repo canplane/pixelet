@@ -61,12 +61,6 @@ impl Sum {
             b: integer::<u32>(f.at(1)?.get_number()?)?,
         })
     }
-    pub const FIELDS: u32 = 2;
-
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.a));
-        w.u32(Some(self.b));
-    }
 }
 
 /// Command::ASK's packet.

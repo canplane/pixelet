@@ -57,10 +57,9 @@ xpute-core.workspace = true
 [dev-dependencies]
 # The records a test holds the core to beside the client
 # (spec/golden/object/top.tsv).
-xpute-kit = { workspace = true, features = ["std", "golden"] }
-# The core's whole frames on a device (tests/frame/): the protocols' JSON they speak by,
-# the catalog's hex, and the device's error scopes, waited out without a runtime.
-serde_json = "1"
+xpute-golden.workspace = true
+# The core's whole frames on a device (tests/frame/): the catalog's hex, and the device's
+# error scopes, waited out without a runtime.
 hex.workspace = true
 wgpu = { version = "30", default-features = false, features = ["metal", "vulkan"] }
 pollster = "1"

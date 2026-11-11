@@ -8,7 +8,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { Golden } from "@xpute/kit/golden.ts";
+import { Golden } from "../../../dev/golden.ts";
 import { Deque } from "@xpute/kit/collection/deque.ts";
 
 const show = (x: number | undefined): string =>

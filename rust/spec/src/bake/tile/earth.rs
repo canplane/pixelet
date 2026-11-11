@@ -11,7 +11,7 @@ use crate::bake::malformed;
 use crate::space::coord::zoom::{Zoom, MIN_ZOOM};
 use crate::space::layer::lattice::{demand_dist, GROUND, TILE_CELLS};
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::shape;
+use xpute_kit::wire::xtp::shape;
 
 /// The Earth's one zoom: the ground's top. Its tiles are the ground's lattice,
 /// a ground cell a texel, so the tile follows the grid as the ground does.
@@ -30,7 +30,7 @@ pub const PICTURE: (u32, u32) = (2048, 1024);
 
 /// Every packet's length: its texels, as `encode` lays them.
 pub(crate) const PKT_BYTES: usize =
-    super::pkt::HEADER + super::pkt::branch(1) + super::pkt::seq(EARTH_BYTES);
+    super::pkt::HDR + super::pkt::branch(1) + super::pkt::seq(EARTH_BYTES);
 
 type Packet = (Vec<u8>,);
 

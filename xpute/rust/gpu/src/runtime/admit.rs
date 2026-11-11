@@ -7,7 +7,7 @@ use xpute_runtime::mem::Memory;
 
 use super::surface::Frame;
 use super::GpuRuntime;
-use crate::device;
+use crate::spec::DEVICE;
 
 /// A `FrameGuard` is a frame drawn and not yet done. It stays counted until
 /// the queue's callback that holds it ends, either called once the work is done
@@ -73,11 +73,11 @@ impl GpuRuntime {
     pub(super) fn tell_counts(&self, mem: &mut Memory<'_>) {
         if let Some(addr) = self.block {
             mem.store_release(
-                addr + 4 * device::ERRORS_AT as u32,
+                addr + 4 * DEVICE::ERRORS_AT as u32,
                 self.error_cnt.load(Ordering::Relaxed),
             );
             mem.store_release(
-                addr + 4 * device::UNFINISHED_AT as u32,
+                addr + 4 * DEVICE::UNFINISHED_AT as u32,
                 self.unfinished_cnt.load(Ordering::Relaxed),
             );
         }

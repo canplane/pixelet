@@ -116,14 +116,14 @@ impl Counter {
         }
         // A bit for each observer that counts. The eye counts only in a full cast, so the
         // pixels a `px` frame casts again count nothing.
-        let mut header = [0u32; 1 + (count::OBSERVERS * count::WALKS) as usize];
+        let mut hdr = [0u32; 1 + (count::OBSERVERS * count::WALKS) as usize];
         for (o, &cast) in frame.casts.iter().enumerate() {
-            header[0] |= u32::from(self.on && cast) << o;
+            hdr[0] |= u32::from(self.on && cast) << o;
         }
         g.write_buf(
             node_cache,
             word_bytes(node_cache::CNT_ON as usize),
-            bytes(&header),
+            bytes(&hdr),
         );
         if !self.on {
             return;

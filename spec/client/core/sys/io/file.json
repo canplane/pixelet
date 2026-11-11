@@ -4,7 +4,7 @@
     "sys/io/file.rs, ts/client/src/service/sys/fs/)."
   ],
   "path": {
-    "$type": "u32",
+    "$type": "i32",
     "$doc": [
       "The tree of the paths the core opens (xpute's FS_OPEN), as a URI's path is a",
       "tree: each node takes one token, its `ID`, distinct among its siblings, and hands the",

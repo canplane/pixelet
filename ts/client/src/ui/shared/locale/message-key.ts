@@ -14,13 +14,6 @@ export function messageKey(message: Message): string {
     case Message.GeolocationGenericError:
       return "device.geolocation.generic_error";
 
-    case Message.OrientationPermissionError:
-      return "device.orientation.permission_error";
-    case Message.OrientationPermissionDenied:
-      return "device.orientation.permission_denied";
-    case Message.OrientationSignalLost:
-      return "device.orientation.signal_lost";
-
     case Message.WorldReadFailing:
       return "toast.server_unstable";
     case Message.WorldUnavailable:

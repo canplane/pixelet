@@ -4,7 +4,7 @@
 // a receiver stands on (pxl-engine `light::LIST_RECEIVERS`). The propagation then takes one
 // thread for each tile listed (light_propagate.wgsl). Each tile is listed once while it
 // stands, by the first thread to swap its mark to the number of the cast in which the world's
-// receivers were last stood afresh (`light::HEADER_WORLD`). The world's receivers and the
+// receivers were last stood afresh (`light::HDR_WORLD`). The world's receivers and the
 // drawn ones list alike, so a tile stays listed in every cast after it until the receivers are
 // stood afresh again (`light::carry_at`). A mark is read first and swapped only where it
 // differs, so a tile that many receivers stand on takes one swap in a cast that stands it
@@ -35,8 +35,8 @@ const MARKS_FIRST: u32 = LIGHT_ARGS_PASSES + LIGHT_LISTS;
 fn receiver_tiles_first() {
   let n = light_tiles();
   atomicStore(&args.slide[0], workgroups(n, n, SQUARE_SIDE));
-  let at = header_word(LIGHT_HEADER_SLIDE);
-  if (list_at(at + LIGHT_SLIDE_RAN) < header_word(LIGHT_HEADER_SLIDE_CAST)) {
+  let at = hdr_word(LIGHT_HDR_SLIDE);
+  if (list_at(at + LIGHT_SLIDE_RAN) < hdr_word(LIGHT_HDR_SLIDE_CAST)) {
     list_put(at + LIGHT_READS_FROM, cast_number());
   }
 }
@@ -62,7 +62,7 @@ fn stand(t: vec2<i32>) {
   if (w == NO_TILE) {
     return;
   }
-  let world = header_word(LIGHT_HEADER_WORLD);
+  let world = hdr_word(LIGHT_HDR_WORLD);
   let mark = MARKS_FIRST + list_marks_at(LIGHT_LIST_RECEIVERS) + w;
   if (atomicLoad(&light_args[mark]) != world && atomicExchange(&light_args[mark], world) != world) {
     receiver_tiles_put(t);

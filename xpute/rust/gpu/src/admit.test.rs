@@ -17,11 +17,11 @@ fn admits_below_latency() {
 #[test]
 fn page_reads_block() {
     assert!(!page::<2>(), "no block asked");
-    ask(Vec::leak(vec![0; crate::device::WORDS]));
+    ask(Vec::leak(vec![0; crate::spec::DEVICE::WORDS]));
     let at = BLOCK.get(|| None).expect("the block kept");
     // SAFETY: the leaked block, its words only ever touched atomically.
     let word = |k: usize| unsafe { AtomicU32::from_ptr(at.add(k)) };
-    let (unfinished, status) = (word(UNFINISHED_AT), word(STATUS_AT));
+    let (unfinished, status) = (word(DEVICE::UNFINISHED_AT), word(DEVICE::STATUS_AT));
     assert!(!page::<2>(), "the runtime has written no status");
     unfinished.store(1, Ordering::Release);
     status.store(STATUS::READY, Ordering::Release);

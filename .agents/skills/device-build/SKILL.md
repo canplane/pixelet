@@ -1,6 +1,6 @@
 ---
 name: device-build
-description: Build the device app (ts/client) and put it on an iPhone, the iOS simulator, an Android emulator, an Android phone, a Meta Quest or an Apple Vision Pro — the one-time setup of each machine, the Debug and Release builds, install and launch, and the failures each has had. Use when a device build is asked for, when one fails, or when a machine is set up for one.
+description: Build the device app (ts/client) and put it on an iPhone, the iOS simulator, an Android emulator or an Android phone — the one-time setup of each machine, the Debug and Release builds, install and launch, and the failures each has had. Use when a device build is asked for, when one fails, or when a machine is set up for one.
 ---
 
 # Building for a device
@@ -10,7 +10,7 @@ Prebuild first: `ts/client/ios/` and `ts/client/android/` come from
 `pxl-core` (`ts/client/package.json` `xpute.core`), through `@xpute/native`'s
 `ts/client/script/core-build.py`.
 
-After the app moves or pnpm's links are remade, prebuild again with `--clean` and run `pod install` again.
+After the app moves, pnpm's links are remade or a config plugin is dropped from `app.config.ts`, prebuild again with `--clean` and run `pod install` again.
 
 A **Release** build embeds the JavaScript bundle. A **Debug** build loads it
 from Metro (`make dev-native`) on port 8081. The running Metro serves your tree
@@ -55,8 +55,8 @@ devices` the second.
 xcodebuild -workspace pixelet.xcworkspace -scheme pixelet -configuration Release \
   -destination 'id=<xcodebuild id>' -derivedDataPath build/derived \
   DEVELOPMENT_TEAM=<team> CODE_SIGN_STYLE=Automatic -allowProvisioningUpdates -quiet
-xcrun devicectl device install app --device <devicectl id> build/derived/Build/Products/Release-iphoneos/pixelet.app
-xcrun devicectl device process launch --terminate-existing --device <devicectl id> me.plei.pixelet
+../../../script/perf/ios.py xcrun devicectl device install app --device <devicectl id> build/derived/Build/Products/Release-iphoneos/pixelet.app
+../../../script/perf/ios.py xcrun devicectl device process launch --terminate-existing --device <devicectl id> me.plei.pixelet
 ```
 
 Add `--console` to the launch to stream the app's stdout, where the core's
@@ -72,26 +72,13 @@ in Xcode (`com.apple.dt.Devices`). From `ts/client/ios`, with an id from
 xcrun simctl boot <id> && open -b com.apple.dt.Devices
 xcodebuild -workspace pixelet.xcworkspace -scheme pixelet -configuration Debug \
   -destination 'id=<id>' -derivedDataPath build/derived -quiet
-xcrun simctl install booted build/derived/Build/Products/Debug-iphonesimulator/pixelet.app
+../../../script/perf/mac.py xcrun simctl install booted build/derived/Build/Products/Debug-iphonesimulator/pixelet.app
 xcrun simctl privacy booted grant location me.plei.pixelet
 xcrun simctl location booted set 37.2741,127.0437
-xcrun simctl launch booted me.plei.pixelet
+../../../script/perf/mac.py xcrun simctl launch booted me.plei.pixelet
 ```
 
 `xcrun simctl io booted screenshot <file>.png` for a look.
-
-### An Apple Vision Pro
-
-The iPhone app runs unchanged on visionOS, in a window. In the simulator, once
-Xcode has the runtime (`xcodebuild -downloadPlatform visionOS`):
-
-```bash
-xcodebuild -workspace pixelet.xcworkspace -scheme pixelet -configuration Release \
-  -destination 'id=<Vision Pro simulator id>' -derivedDataPath build/derived
-xcrun simctl install <id> build/derived/Build/Products/Release-iphonesimulator/pixelet.app
-xcrun simctl location <id> set 37.2741,127.0437
-xcrun simctl launch <id> me.plei.pixelet
-```
 
 ## Android
 
@@ -117,24 +104,21 @@ xcrun simctl launch <id> me.plei.pixelet
 make install && (cd ts/client && pnpm exec expo prebuild --platform android --no-install)
 ```
 
-The app has two flavors, `mobile` for a phone and `quest` for a Meta Quest, so
-every variant names one: `mobileRelease`, `questDebug`. A phone takes only
-`mobile`. `plugin/android-build.ts` tells React Native that both flavors' debug
-variants are debug builds.
-
 ### Build, install, launch
 
 From `ts/client/android`, with `ANDROID_HOME=~/Library/Android/sdk` and the
 platform tools' `adb`:
 
 ```bash
-jenv exec ./gradlew :app:assembleMobileRelease
-adb install -r app/build/outputs/apk/mobile/release/app-mobile-release.apk
-adb shell am start -S -n me.plei.pixelet/.MainActivity
+jenv exec ./gradlew :app:assembleRelease
+../../../script/perf/android.py adb install -r app/build/outputs/apk/release/app-release.apk
+../../../script/perf/android.py adb shell am start -S -n me.plei.pixelet/.MainActivity
 ```
 
-`./gradlew :app:installMobileRelease` builds and installs in one step; a bare
-`installRelease` is ambiguous between the flavors and fails. The core's last
+On an emulator, which draws on the Mac's GPU, the two run under
+script/perf/mac.py in place of android.py.
+`./gradlew :app:installRelease` builds and installs in one step, under the same
+module. The core's last
 messages and panics go to logcat under the tag `pxl`:
 `adb logcat -d | grep -E "FATAL| pxl |ReactNativeJS"`.
 
@@ -146,21 +130,4 @@ adb emu geo fix 126.9780 37.5665
 ```
 `adb exec-out screencap -p > shot.png` for a look.
 
-### A Meta Quest
-
-Build the `quest` flavor (`assembleQuestRelease`, or `assembleQuestDebug` to
-load from Metro) and use `adb` as for a phone. A headset accepts `adb` once
-developer mode is on (in the Meta Horizon phone app, with a Meta developer
-account) and it is plugged in and trusted.
-
-Without a headset, use Meta's Spatial Simulator. `npx metavr@latest init` signs
-in to a Meta account; run `metavr` through npx:
-
-```bash
-npx metavr tools install spatialsim
-npx metavr ssim start    # an emulator adb sees, emulator-5554 if it is the first
-adb install -r app/build/outputs/apk/quest/release/app-quest-release.apk
-adb shell cmd location set-location-enabled true
-adb emu geo fix 127.0437 37.2741
-```
-
+A headset's build is not this one: `ts/xr/README.md`.

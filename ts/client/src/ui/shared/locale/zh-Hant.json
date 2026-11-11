@@ -154,11 +154,6 @@
     }
   },
   "device": {
-    "orientation": {
-      "permission_denied": "請允許使用方向感測器。",
-      "permission_error": "無法使用方向感測器。",
-      "signal_lost": "無法確定方向。"
-    },
     "geolocation": {
       "unsupported": "目前環境無法使用位置資訊。",
       "permission_denied": "請允許使用位置資訊。",

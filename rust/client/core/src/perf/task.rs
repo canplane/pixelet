@@ -8,10 +8,7 @@
 use core::fmt::Write;
 use core::mem::{offset_of, size_of};
 
-use fnv::FnvHashMap;
-use xpute_core::global::Global;
 use xpute_core::io::fs::Token;
-use xpute_core::mem::off_of_slice;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -65,7 +62,7 @@ words!(TaskRecord, TASK::WORDS,
 fn path_bytes(stream: Stream, id: u64) -> [u8; TASK_PATH_BYTES] {
     let mut out = Text::EMPTY;
     file::with_path(stream, id, |path| match path.last() {
-        Some(Token::U32(n)) => write!(out, "{n}"),
+        Some(Token::Int(n)) => write!(out, "{n}"),
         Some(Token::Str(key)) => out.write_str(key),
         None => Ok(()),
     })
@@ -76,8 +73,15 @@ fn path_bytes(stream: Stream, id: u64) -> [u8; TASK_PATH_BYTES] {
 
 impl TaskRecord {
     /// The row of `a`, which ended at `at` with `exit`, and the phase timings
-    /// its run reported.
-    pub fn of(a: &Attempt, at: f64, exit: Exit, phases: Option<PhaseList>) -> TaskRecord {
+    /// its run reported. `name_at` gives a failure's file name its offset in
+    /// the profiler's string table, or none where the table has no room.
+    pub fn of(
+        a: &Attempt,
+        at: f64,
+        exit: Exit,
+        phases: Option<PhaseList>,
+        name_at: &mut dyn FnMut(&'static str) -> Option<u32>,
+    ) -> TaskRecord {
         let mut row = TaskRecord {
             stream: a.stream as u32 as f64,
             path: path_bytes(a.stream, a.id),
@@ -100,8 +104,10 @@ impl TaskRecord {
             Exit::Failed(fail) => fail.at,
             Exit::Ok | Exit::Aborted | Exit::Refused(_) => None,
         } {
-            row.at_file = off_of_slice(file_in_mem(at.file()).as_bytes()) as f64;
-            row.at_file_bytes = at.file().len() as f64;
+            if let Some(off) = name_at(at.file()) {
+                row.at_file = f64::from(off);
+                row.at_file_bytes = at.file().len() as f64;
+            }
             row.at_line = at.line() as f64;
         }
         for (k, (name, val)) in phases.iter().flat_map(|p| p.iter()).enumerate() {
@@ -111,16 +117,4 @@ impl TaskRecord {
         }
         row
     }
-}
-
-static FILES: Global<FnvHashMap<usize, Box<str>>> = Global::new();
-
-/// On a device a location's file name lies outside the core's memory, where
-/// the client cannot read it, so a row names a copy on the heap. The names
-/// are few, and the copies are never freed.
-fn file_in_mem(file: &'static str) -> &'static str {
-    FILES
-        .get(FnvHashMap::default)
-        .entry(file.as_ptr().addr())
-        .or_insert_with(|| file.into())
 }

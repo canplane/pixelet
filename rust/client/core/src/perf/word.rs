@@ -43,16 +43,15 @@ pub fn zeroed<T: AsWords>() -> T {
     unsafe { core::mem::zeroed() }
 }
 
-pub fn put<T: AsWords>(out: &mut [f64], at: u32, val: &T) {
+pub fn put<T: AsWords>(out: &mut [f64], at: usize, val: &T) {
     let words = as_words(val);
-    let at = at as usize;
     out[at..at + words.len()].copy_from_slice(words);
 }
 
 macro_rules! words {
     ($t:ty, $words:expr, $($($field:ident).+ => $at:expr),+ $(,)?) => {
-        const _: () = assert!(size_of::<$t>() == $words as usize * 8, concat!(stringify!($t), " is not the size perf.json lays out"));
-        $(const _: () = assert!(offset_of!($t, $($field).+) == $at as usize * 8, concat!(stringify!($t), " puts ", stringify!($($field).+), " off the word perf.json gives it"));)+
+        const _: () = assert!(size_of::<$t>() == $words * 8, concat!(stringify!($t), " is not the size perf.json lays out"));
+        $(const _: () = assert!(offset_of!($t, $($field).+) == $at * 8, concat!(stringify!($t), " puts ", stringify!($($field).+), " off the word perf.json gives it"));)+
         // SAFETY: the two assertions above are the claim.
         unsafe impl AsWords for $t {}
     };

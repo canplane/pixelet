@@ -13,7 +13,7 @@ use core::cell::Cell;
 
 use xpute_core::abi::fs::{completion, Completion};
 use xpute_core::abi::handle::Table;
-use xpute_core::io::door::{self, door, Door, Event, Import, Outcome, ABORT_PKT_BYTES};
+use xpute_core::io::door::{self, door, Door, Event, Import, Outcome, Reply, ABORT_PKT_BYTES};
 use xpute_core::io::file::FileTable;
 use xpute_core::io::frame::WORD_BYTES;
 use xpute_core::io::fs::Token;
@@ -73,7 +73,7 @@ const HEAP_AT: u32 = page_up(STATE_AT + core::mem::size_of::<State>() as u32);
 const _: () = assert!(spec::PKT_BYTES >= ABORT_PKT_BYTES);
 
 /// Every OPEN names this file; no trace's runtime serves it.
-const PATH: &[Token] = &[Token::U32(1), Token::Str("f")];
+const PATH: &[Token] = &[Token::Int(1), Token::Str("f")];
 
 const _: () = assert!(
     HEAP_AT as usize + spec::HEAP_BYTES as usize <= spec::MEM_BYTES as usize,
@@ -120,6 +120,8 @@ struct State {
     mark: f64,
     /// What the runtime writes as it answers CALL's INC.
     word: u32,
+    /// What NAMED's reply names, byte k holding k.
+    named: [u8; spec::MOST_NAMED as usize],
 }
 
 /// CALL makes this import: a number, and the offset of the word the runtime
@@ -195,6 +197,7 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
         now,
         mark: 0.0,
         word: 0,
+        named: [0; spec::MOST_NAMED as usize],
     };
     // SAFETY: the state's range is the layout's, inside the memory and on
     // the state's alignment (the asserts above).
@@ -222,13 +225,13 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
                 }
                 None => {}
             }
-            Ok(Some(0))
+            Ok(Some(0.into()))
         }
         Event::Program(cmd, pkt) => apply(mem, door(), state, cmd, &pkt),
         // The conformance core keeps nothing across its life, reads no file
         // again, and draws nothing, so it answers 0 to every other
         // event.
-        _ => Ok(Some(0)),
+        _ => Ok(Some(0.into())),
     });
     state.stream.publish();
     NO_WAKE
@@ -349,6 +352,7 @@ mod wasm {
     }
 }
 
+/// What each of the conformance protocol's commands answers.
 fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u8]>) -> Outcome {
     let State {
         stream,
@@ -357,10 +361,11 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
         now,
         mark,
         word,
+        named,
     } = state;
     let bad_handle = || MarshalError::new(Errno::EBADF);
     match cmd {
-        spec::cmd::OK => Ok(Some(0)),
+        spec::cmd::OK => Ok(Some(0.into())),
         spec::cmd::FAIL => Err(MarshalError::new(Errno::EINVAL)),
         spec::cmd::RAISE => {
             let n = arg(pkt)?;
@@ -370,34 +375,35 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
             for k in 0..n {
                 door.post(k, spec::cmd::NOTE, 0, 0);
             }
-            Ok(Some(n as i32))
+            Ok(Some((n as i32).into()))
         }
         spec::cmd::RECORD => {
             stream.record(arg(pkt)?, &[], &[], None);
-            Ok(Some(0))
+            Ok(Some(0.into()))
         }
         spec::cmd::ISSUE => Ok(Some(
-            handles
+            (handles
                 .insert(())
-                .ok_or_else(|| MarshalError::new(Errno::ENFILE))? as i32,
+                .ok_or_else(|| MarshalError::new(Errno::ENFILE))? as i32)
+                .into(),
         )),
         spec::cmd::RELEASE => handles
             .remove(arg(pkt)?)
-            .map(|()| Some(0))
+            .map(|()| Some(0.into()))
             .ok_or_else(bad_handle),
         spec::cmd::USE => handles
             .live(arg(pkt)?)
-            .then_some(Some(0))
+            .then_some(Some(0.into()))
             .ok_or_else(bad_handle),
         spec::cmd::MARK => {
             *mark = now();
-            Ok(Some(0))
+            Ok(Some(0.into()))
         }
-        spec::cmd::SINCE => Ok(Some(round(now() - *mark) as i32)),
-        spec::cmd::OPEN => Ok(Some(files.open(PATH, arg(pkt)?) as i32)),
+        spec::cmd::SINCE => Ok(Some((round(now() - *mark) as i32).into())),
+        spec::cmd::OPEN => Ok(Some((files.open(PATH, arg(pkt)?) as i32).into())),
         spec::cmd::CLOSE => files
             .close(arg(pkt)?)
-            .map(|()| Some(0))
+            .map(|()| Some(0.into()))
             .map_err(|_| bad_handle()),
         spec::cmd::CALL => {
             let n = arg(pkt)?;
@@ -405,7 +411,22 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
             let at = mem.off_of(&raw const *word) as u32;
             door.call(&Inc { n, at }).map_err(MarshalError::new)?;
             // SAFETY: the word the runtime wrote before the call returned.
-            Ok(Some(unsafe { (&raw const *word).read_volatile() } as i32))
+            Ok(Some(
+                (unsafe { (&raw const *word).read_volatile() } as i32).into(),
+            ))
+        }
+        spec::cmd::NAMED => {
+            let n = arg(pkt)?;
+            if n > spec::MOST_NAMED {
+                return Err(MarshalError::new(Errno::EINVAL));
+            }
+            for (k, b) in named[..n as usize].iter_mut().enumerate() {
+                *b = k as u8;
+            }
+            // SAFETY: the core's state, which lies in its memory for the
+            // core's life.
+            let named = unsafe { core::slice::from_raw_parts(named.as_ptr(), n as usize) };
+            Ok(Some(Reply { val: 0, named }))
         }
         _ => Ok(None),
     }

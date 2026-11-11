@@ -11,10 +11,12 @@ use std::sync::OnceLock;
 use xpute_core::io::frame::Frame;
 use xpute_core::mem;
 use xpute_kit::status::errno::Errno;
+use xpute_kit::status::error::MarshalError;
+use xpute_runtime::abi::Outcome;
 use xpute_runtime::native;
 
 use crate::sys::io::text_answer_spec::{LAYOUT_ANSWER, LINE};
-use crate::sys::io::text_spec::{Command, Major, TextLayout, TextRaster};
+use crate::sys::io::text_runtime_spec::{self as text, TextLayout, TextRaster};
 use crate::sys::manifest::MANIFEST;
 
 /// The system's text: how wide a line of UTF-8 runs at a CSS weight and a size,
@@ -153,8 +155,8 @@ fn text_of(at: u32, len: u32) -> Result<&'static str, Errno> {
 /// `LAYOUT_ANSWER`, `LINE`).
 fn layout(system: &SystemText, c: &TextLayout) -> Result<(), Errno> {
     let text = text_of(c.text_at, c.text_len)?;
-    let head = LAYOUT_ANSWER::WORDS as usize;
-    let words = head + LINE::WORDS as usize * c.lines as usize;
+    let head = LAYOUT_ANSWER::WORDS;
+    let words = head + LINE::WORDS * c.lines as usize;
     // SAFETY: the block the core made for this answer, of `words` words, which
     // no one else touches until the call returns.
     let at = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(c.at as usize), words) };
@@ -164,13 +166,13 @@ fn layout(system: &SystemText, c: &TextLayout) -> Result<(), Errno> {
     };
     let mut ends = line_ends(text, c.max_width, &mut width);
     ends.truncate(c.lines as usize);
-    at[LAYOUT_ANSWER::cnt as usize] = ends.len() as u32;
+    at[LAYOUT_ANSWER::cnt] = ends.len() as u32;
     let mut start = 0;
     for (i, &end) in ends.iter().enumerate() {
         let w = width(text[start..end].trim_matches(is_space)) as f32;
-        let l = head + LINE::WORDS as usize * i;
-        at[l + LINE::end as usize] = end as u32;
-        at[l + LINE::width as usize] = w.to_bits();
+        let l = head + LINE::WORDS * i;
+        at[l + LINE::end] = end as u32;
+        at[l + LINE::width] = w.to_bits();
         start = end;
     }
     Ok(())
@@ -197,37 +199,44 @@ fn raster(system: &SystemText, c: &TextRaster) -> Result<(), Errno> {
     Ok(())
 }
 
+/// The system's text, as the text protocol's runtime end takes it.
+struct Device(&'static SystemText);
+
+impl text::Imports for Device {
+    fn text_layout(&mut self, e: TextLayout) -> Outcome {
+        layout(self.0, &e).map_err(MarshalError::new)?;
+        Ok(Some(0))
+    }
+
+    fn text_raster(&mut self, e: TextRaster) -> Outcome {
+        raster(self.0, &e).map_err(MarshalError::new)?;
+        Ok(Some(0))
+    }
+}
+
 /// Answers a text call here, before it returns, as the contract asks of
 /// whatever answers a frame's major; a command the text protocol does not
 /// carry is answered ENOSYS.
 fn answer(at: u32) -> i32 {
-    let frame = Frame::at(mem::core(), at);
-    let (layout_cmd, raster_cmd) = (Command::TEXT_LAYOUT as u32, Command::TEXT_RASTER as u32);
-    if frame.cmd != layout_cmd && frame.cmd != raster_cmd {
-        return Errno::ENOSYS as i32;
-    }
     let Some(system) = SYSTEM.get() else {
         return Errno::ENOSYS as i32;
     };
-    let Ok(Some(pkt)) = frame.pkt(mem::core(), at, MANIFEST.frame_bytes()) else {
+    let frame = Frame::at(mem::core(), at);
+    let Ok(pkt) = frame.pkt(mem::core(), at, MANIFEST.frame_bytes()) else {
         return Errno::EBADMSG as i32;
     };
-    let done = if frame.cmd == layout_cmd {
-        TextLayout::read(pkt)
-            .map_err(|_| Errno::EBADMSG)
-            .and_then(|c| layout(system, &c))
-    } else {
-        TextRaster::read(pkt)
-            .map_err(|_| Errno::EBADMSG)
-            .and_then(|c| raster(system, &c))
-    };
-    done.map_or_else(|e| e as i32, |()| 0)
+    match text::serve(&mut Device(system), frame.tag, frame.cmd, &pkt, &[]) {
+        Ok(val) => val.unwrap_or(0),
+        Err(e) => e.errnum as i32,
+    }
 }
 
 /// Has the native runtime answer the text protocol's calls here, on the
-/// core's thread.
+/// core's thread, on each of its majors.
 pub(crate) fn install() {
-    native::handle(Major::TEXT as u32, answer);
+    for major in text::MAJORS {
+        native::handle(major, answer);
+    }
 }
 
 /// Says what an iPhone app's Swift answers the core's text with.

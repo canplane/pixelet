@@ -89,6 +89,12 @@
     "$doc": ["The most frames one RAISE may ask for; a RAISE that asks for more is refused with EINVAL."]
   },
 
+  "MOST_NAMED": {
+    "$val": 16,
+    "$type": "u32",
+    "$doc": ["The most bytes one NAMED may name; a NAMED that asks for more is refused with EINVAL."]
+  },
+
   "cmd": {
     "$type": "u32",
     "$doc": [
@@ -138,6 +144,13 @@
         "The call that CALL makes; its packet is a branch of a number and an offset. The runtime",
         "writes the number plus one at the offset and answers 0 before the call returns. It",
         "refuses a number of 0 with EINVAL and writes nothing."
+      ]
+    },
+    "NAMED": {
+      "$val": 4110,
+      "$doc": [
+        "Replies 0, its reply naming as many bytes of the core's own state as the packet's",
+        "number, byte k holding k, which go with the reply's frame; 0 names none."
       ]
     },
     "NOTE": { "$val": 4353, "$doc": ["The import that RAISE raises."] },

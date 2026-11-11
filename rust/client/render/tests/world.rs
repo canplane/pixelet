@@ -6,6 +6,7 @@
 //! (`Inheritance::of`). It must answer as it did from what its parent handed it, because the
 //! world's answer belongs to the node, whichever way a walk came to it.
 
+mod gpu;
 mod real_world;
 
 use pxl_spec::brick;
@@ -931,17 +932,11 @@ fn hand_world_answers_as_the_rust() {
         "a node answers as it does from the top off what its parent handed it"
     );
 
-    let instance =
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
-    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+    let Some(gpu) = gpu::Gpu::new() else {
         eprintln!("no adapter: the hand query skipped");
         return;
     };
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_limits: adapter.limits(),
-        ..Default::default()
-    }))
-    .unwrap();
+    let (device, queue) = (gpu.device, gpu.queue);
 
     // The same asks go to the query by hand, a chunk at a time.
     use wgpu::util::DeviceExt as _;

@@ -10,7 +10,7 @@ struct Damage {
   // `xy` is the mark's first tile across and down, and `zw` the tile just past its last.
   tiles: vec4u,
   // `x` is this frame's number and `y` the number of tiles across; `zw` are unused.
-  header: vec4u,
+  hdr: vec4u,
 };
 
 @group(0) @binding(0) var<uniform> damage: Damage;
@@ -24,5 +24,5 @@ fn screen_mark_cs(@builtin(global_invocation_id) id: vec3u) {
     return;
   }
   let t = m.xy + vec2u(id.x % w, id.x / w);
-  changed_at[t.y * damage.header.y + t.x] = damage.header.x;
+  changed_at[t.y * damage.hdr.y + t.x] = damage.hdr.x;
 }

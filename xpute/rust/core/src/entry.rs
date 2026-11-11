@@ -45,7 +45,7 @@ pub struct BootInfo {
     /// none, since the page's runtime outlives the core on its own.
     pub stop_hook: Option<PanicHook>,
     /// Hands over the stream the core has just published; it is called as
-    /// END is stored (`io::stream`, xpute-gpu `runtime::native::publish`).
+    /// END is stored (`io::stream`).
     /// A page has none, since its runtime runs the stream when the turn
     /// returns.
     pub publish: Option<fn()>,

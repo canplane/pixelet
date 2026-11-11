@@ -16,8 +16,6 @@ import {
 } from "@/abi/pacing.spec.ts";
 import { binding } from "@/service/sys/fs/binding.ts";
 import { text_layout, text_raster } from "@/service/core/text.ts";
-import { answer, type PerfRead } from "@/service/core/perf.ts";
-import type { Perf } from "@/service/core/core.ts";
 import { source } from "@/service/platform/core.ts";
 import { after_turn } from "@/service/platform/gpu.ts";
 
@@ -55,5 +53,3 @@ export function config(handheld: boolean): Config<FrameGrant> {
     program,
   };
 }
-
-export const perf_here: Perf = (what, args) => answer(what as PerfRead, args);

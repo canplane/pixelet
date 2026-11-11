@@ -19,12 +19,6 @@ export const GeolocationPositionUnavailable = 0x0205;
 export const GeolocationTimeout = 0x0206;
 export const GeolocationGenericError = 0x0207;
 
-// ---- 0x03 which way the device is facing ----
-
-export const OrientationPermissionError = 0x0302;
-export const OrientationPermissionDenied = 0x0303;
-export const OrientationSignalLost = 0x0304;
-
 // ---- 0x04 why the server does not answer the world's reads ----
 
 /** Reads reach the server and fail; they are tried again. */

@@ -56,6 +56,9 @@ export const HANDLES: u32 = 16 as number;
 /** The most frames one RAISE may ask for; a RAISE that asks for more is refused with EINVAL. */
 export const MOST_RAISE: u32 = 32 as number;
 
+/** The most bytes one NAMED may name; a NAMED that asks for more is refused with EINVAL. */
+export const MOST_NAMED: u32 = 16 as number;
+
 /** The conformance core's own commands, numbered `major << 8 | minor` past xpute's majors
  * (io/frame.json). Where a command takes a packet, the packet is a branch whose first
  * child is a number. */

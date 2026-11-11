@@ -18,9 +18,12 @@ agenda, its minutes and its reports beside its rules.
 - [experiment/](./experiment/) — measurements, dated, each with its procedure,
   its numbers and what produced them; evidence under those conditions, not a
   rule.
-- [tip/](./tip/) — what was learned the hard way and holds beyond one
-  change, a file a lesson: what to keep clear of and how to check it, each
+- [lesson/](./lesson/) — what was learned the hard way and holds beyond one
+  change, a file a lesson or a file a genre gathering a part's lessons with their
+  sources: what to keep clear of and how to check it, each
   pointing at the experiment that showed it.
+- [gpu/](./gpu/) — the GPU's and WebGPU's records gathered in one place: its
+  minutes, its experiments and its lessons, laid out as above.
 - [note/](./note/) — what the user recalls afterward of how something came to
   be, no meeting's, a file a subject, `YYYYMMDD-topic.md`, with what the history
   shows beside it: testimony of why, not a decision.

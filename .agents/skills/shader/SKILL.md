@@ -7,10 +7,11 @@ description: Change the WGSL or what a shader is assembled from, and check it wh
 
 Before writing, read:
 
-- `doc/tip/shaders-phones-take.md`: what a shader keeps clear of for the phones'
-  browsers, and what a host and a shader may share.
-- `doc/tip/naga-on-metal.md`: what the native apps' translator gets wrong.
-- `doc/tip/cpu-and-gpu-agree.md`, for a value the CPU and the GPU both decide.
+- `doc/gpu/lesson/shaders-phones-take.md`: what a shader keeps clear of for the
+  phones' browsers, and what a host and a shader may share.
+- `doc/gpu/lesson/naga-on-metal.md`: what the native apps' translator gets wrong.
+- `doc/gpu/lesson/cpu-and-gpu-agree.md`, for a value the CPU and the GPU both
+  decide.
 
 After writing, in this order:
 
@@ -26,7 +27,7 @@ renderer makes over it, on the device it is opened on.
 
 ```sh
 cd ts/tool/shader
-CARGO_TARGET_DIR=<root>/rust/target/session/<id> pnpm exec vite --host --port <port> --strictPort
+CARGO_TARGET_DIR=<root>/rust/target/session/<id> ../../../script/perf/mac.py pnpm exec vite --host --port <port> --strictPort
 open -a Safari http://127.0.0.1:<port>/probe.html
 ```
 
@@ -42,12 +43,12 @@ open -a Safari http://127.0.0.1:<port>/probe.html
 - A module's name starts with its number (`70-queue_walk`). `?only=<prefix>,…`
   probes the names that start so. `?bisect=<name>` finds the line a device
   refuses, `?from=` and `?to=` narrowing it. `?src=<end of a path>` probes a
-  shader recorded under `doc/experiment/`.
+  shader recorded under an experiment of `doc/`.
 - Stop the server when it has ended.
 
 ## The S23
 
-With the probe served on port 5173, over USB, `adb forward tcp:9333
+With the probe served on port 5173 under script/perf/android.py, over USB, `adb forward tcp:9333
 localabstract:chrome_devtools_remote` and `adb reverse tcp:5173 tcp:5173`, then
-`doc/experiment/20261103-the-shaders-by-hand/tool/cdp.js` compiles a WGSL file
+`doc/gpu/experiment/20261103-the-shaders-by-hand/tool/cdp.js` compiles a WGSL file
 there from the Mac.

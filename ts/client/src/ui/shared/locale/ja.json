@@ -154,11 +154,6 @@
     }
   },
   "device": {
-    "orientation": {
-      "permission_denied": "方位センサーの使用を許可してください。",
-      "permission_error": "方位センサーを使用できません。",
-      "signal_lost": "方位を確認できません。"
-    },
     "geolocation": {
       "unsupported": "この環境では位置情報を使用できません。",
       "permission_denied": "位置情報の使用を許可してください。",

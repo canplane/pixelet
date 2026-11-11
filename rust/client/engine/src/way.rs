@@ -21,7 +21,7 @@ fn at_or_after(v: [i32; 2], best: [i32; 2]) -> bool {
 /// them (pxl-engine fill.rs `spans`, clipmap.rs `KeptSpans`): column `c`'s face cell and how many
 /// spans it has (`SpanList`), and its `j`-th span with its value.
 pub trait SpanTable {
-    fn header(&self, c: [i32; 2]) -> (i32, u32);
+    fn hdr(&self, c: [i32; 2]) -> (i32, u32);
     fn span(&self, c: [i32; 2], j: u32) -> ([i32; 2], u32);
 }
 
@@ -115,7 +115,7 @@ fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
 /// the spans in place, the column's own first, and a cell the column writes reads nothing beside
 /// it.
 pub fn way_cell(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, z: i32) -> u32 {
-    let (face, n) = k.header(c);
+    let (face, n) = k.hdr(c);
     let v = at(k, c, n, cell_zoom, z);
     if v != NOTHING {
         return if v & AIR_OF != 0 { value::VOID } else { v };
@@ -123,7 +123,7 @@ pub fn way_cell(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, z: i32) -> u32
     let mut m = 1;
     while z < face && m < 7 {
         let (b, zb) = beside(c, m, z);
-        let v = at(k, b, k.header(b).1, cell_zoom, zb);
+        let v = at(k, b, k.hdr(b).1, cell_zoom, zb);
         if v != NOTHING && v & AIR_OF != 0 {
             return v & !AIR_OF;
         }
@@ -142,7 +142,7 @@ pub fn way_cell(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, z: i32) -> u32
 /// `way_cell` reads something in, read from the spans.
 pub fn lined_hull(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, top: i32) -> [i32; 2] {
     let s = 1i32 << (LEAF_CELL_ZOOM - cell_zoom);
-    let (face, n) = k.header(c);
+    let (face, n) = k.hdr(c);
     let [mut lo, mut hi] = ground::EMPTY;
     let mut j = 0;
     while j < n {
@@ -162,7 +162,7 @@ pub fn lined_hull(k: &impl SpanTable, c: [i32; 2], cell_zoom: Zoom, top: i32) ->
     let mut m = if face == i32::MIN { 7 } else { 1 };
     while m < 7 {
         let (b, dz) = beside(c, m, 0);
-        let nb = k.header(b).1;
+        let nb = k.hdr(b).1;
         let mut j = 0;
         while j < nb {
             let (run, v) = k.span(b, j);
@@ -237,7 +237,7 @@ mod tests {
     }
 
     impl SpanTable for Five {
-        fn header(&self, c: [i32; 2]) -> (i32, u32) {
+        fn hdr(&self, c: [i32; 2]) -> (i32, u32) {
             let (face, _, n) = self.of(c);
             (*face, *n)
         }

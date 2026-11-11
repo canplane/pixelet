@@ -71,6 +71,22 @@ export function answer_of(res: i32): u32 {
   return res;
 }
 
+const NONE = new Uint8Array(0);
+
+/** A request's reply as program code takes it: its value (`answer_of`), and
+ * a copy of the memory the reply names, empty for none, which every runtime
+ * hands over 8-aligned, so it can be read as words. */
+export interface Reply {
+  val: u32;
+  named: U8Array;
+}
+
+/** The reply of the result `res` and the memory `named`, as `answer_of`
+ * takes the result. */
+export function reply_of([res, named]: readonly [i32, U8Array | null]): Reply {
+  return { val: answer_of(res), named: named ?? NONE };
+}
+
 /** An error as a line says it: what it is, then its stack, which says where
  * the core trapped, as a native runtime's stop report says the panic and its
  * place. One engine's stack begins with what the error is and another's
@@ -133,7 +149,10 @@ export class Connection implements PacketRoom {
   private _sent: Sent[] = [];
   /** The tag of the UI's last request; 0 is a send's. */
   private _next_tag: u32 = 0;
-  private readonly _replies = new Map<u32, (result: i32) => void>();
+  private readonly _replies = new Map<
+    u32,
+    (result: i32, named: U8Array | null) => void
+  >();
   /** This is set while what the core sent is read, and while a listener
    * answers the core's call, so that nothing runs the core then. */
   private _reading = false;
@@ -208,21 +227,26 @@ export class Connection implements PacketRoom {
   }
 
   /** Sends `cmd` with ACKREQ, tagged with the next call's id. The promise
-   * settles with the reply the core sends as it applies the request, which
-   * is read as its turn returns; nothing blocks here. A core that has
-   * stopped answers ENOTRECOVERABLE, and every request still waiting is
-   * answered so when the core stops. A packet larger than a frame's room
-   * answers EMSGSIZE. */
-  request(cmd: u32, encode: Encode | null = null): Promise<i32> {
-    if (this._terminated) return Promise.resolve(Errno.ENOTRECOVERABLE);
+   * settles with the reply the core sends as it applies the request, its
+   * result and a copy of the memory it names, which is read as its turn
+   * returns; nothing blocks here. A core that has stopped answers
+   * ENOTRECOVERABLE, and every request still waiting is answered so when the
+   * core stops. A packet larger than a frame's room answers EMSGSIZE. */
+  request(
+    cmd: u32,
+    encode: Encode | null = null,
+  ): Promise<[i32, U8Array | null]> {
+    if (this._terminated) {
+      return Promise.resolve([Errno.ENOTRECOVERABLE, null]);
+    }
     this._next_tag = (this._next_tag + 1) >>> 0 || 1;
     const tag = this._next_tag;
     return new Promise((resolve) => {
-      this._replies.set(tag, (result) => resolve(result));
+      this._replies.set(tag, (result, named) => resolve([result, named]));
       const errnum = this._submit(tag, cmd, encode, frame.ACKREQ);
       if (errnum !== Errno.OK) {
         this._replies.delete(tag);
-        resolve(errnum);
+        resolve([errnum, null]);
       }
     });
   }
@@ -287,7 +311,7 @@ export class Connection implements PacketRoom {
       if (read) this._read();
       const replies = [...this._replies.values()];
       this._replies.clear();
-      for (const r of replies) r(Errno.ENOTRECOVERABLE);
+      for (const r of replies) r(Errno.ENOTRECOVERABLE, null);
     } catch (err) {
       say(
         `[xpute/connection] the runtime could not take what the core sent: ${told(err)}`,
@@ -366,7 +390,7 @@ export class Connection implements PacketRoom {
           const reply = this._replies.get(s.tag);
           if (reply !== undefined) {
             this._replies.delete(s.tag);
-            reply(s.result);
+            reply(s.result, s.named);
           } else if (s.result < 0) {
             console.warn(
               `[xpute/connection] command 0x${s.cmd.toString(16)} failed: ${strerror(
