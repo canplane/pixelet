@@ -18,7 +18,7 @@ use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::follow_mode;
 use crate::domain::control::support::{exact, nearest};
 use crate::domain::query::{is_unknown, unknown};
-use crate::sys::sched::edge;
+use crate::sys::sched;
 use xpute_core::global::Global;
 
 static DST: Global<Option<(Q3, Motion)>> = Global::new();
@@ -33,7 +33,7 @@ fn dst() -> &'static mut Option<(Q3, Motion)> {
 /// unknown, the pivot stands on the surface.
 pub fn go_to_ground(at: Q3, motion: Motion) {
     *dst() = Some((at, motion));
-    edge::request_world_tick();
+    sched::request_world_tick();
 }
 
 /// Puts the pivot at `at` as it is. A pending destination is dropped,

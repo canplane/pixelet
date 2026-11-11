@@ -17,38 +17,37 @@ const DATA_SPECS: [DataSpec; 8] = [
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/ipc/head.json",
-        ts: Some("ts/runtime/src/ipc/head.spec.ts"),
-        rs: Some("rust/core/src/ipc/head.spec.rs"),
-        cpp: Some(("cpp/xpute/core/ipc/head.spec.hpp", "xpute::head")),
+        json: "spec/io/head.json",
+        ts: Some("ts/runtime/src/io/head.spec.ts"),
+        rs: Some("rust/core/src/io/head.spec.rs"),
+        cpp: Some(("cpp/xpute/core/io/head.spec.hpp", "xpute::head")),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/ipc/frame.json",
-        ts: Some("ts/runtime/src/ipc/frame.spec.ts"),
-        rs: Some("rust/core/src/ipc/frame.spec.rs"),
-        cpp: Some(("cpp/xpute/core/ipc/frame.spec.hpp", "xpute::frame")),
+        json: "spec/io/frame.json",
+        ts: Some("ts/runtime/src/io/frame.spec.ts"),
+        rs: Some("rust/core/src/io/frame.spec.rs"),
+        cpp: Some(("cpp/xpute/core/io/frame.spec.hpp", "xpute::frame")),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/ipc/ring.json",
-        ts: Some("ts/runtime/src/ipc/ring.spec.ts"),
-        rs: Some("rust/core/src/ipc/ring.spec.rs"),
-        cpp: Some(("cpp/xpute/core/ipc/ring.spec.hpp", "xpute::ring")),
+        json: "spec/io/fs.json",
+        ts: Some("ts/runtime/src/io/fs.spec.ts"),
+        rs: Some("rust/core/src/io/fs.spec.rs"),
+        cpp: Some(("cpp/xpute/core/io/fs.spec.hpp", "xpute::fs")),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/ipc/fs.json",
-        ts: Some("ts/runtime/src/ipc/fs.spec.ts"),
-        rs: Some("rust/core/src/ipc/fs.spec.rs"),
-        cpp: Some(("cpp/xpute/core/ipc/fs.spec.hpp", "xpute::fs")),
+        json: "spec/io/batch.json",
+        ts: Some("ts/runtime/src/io/batch.spec.ts"),
+        rs: Some("rust/runtime/src/native/batch.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/ipc/stream.json",
-        ts: Some("ts/runtime/src/ipc/stream.spec.ts"),
-        rs: Some("rust/core/src/ipc/stream.spec.rs"),
-        cpp: Some(("cpp/xpute/core/ipc/stream.spec.hpp", "xpute::stream")),
+        json: "spec/io/stream.json",
+        ts: Some("ts/runtime/src/io/stream.spec.ts"),
+        rs: Some("rust/core/src/io/stream.spec.rs"),
+        cpp: Some(("cpp/xpute/core/io/stream.spec.hpp", "xpute::stream")),
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -105,6 +104,7 @@ const LAYOUT: Layout = Layout {
     rs: &[
         ("rust/core/src/", "xpute-core"),
         ("rust/gpu/src/", "xpute-gpu"),
+        ("rust/runtime/src/", "xpute-runtime"),
         ("rust/dev/conformance/src/", "xpute-conformance"),
     ],
     rs_names: true,

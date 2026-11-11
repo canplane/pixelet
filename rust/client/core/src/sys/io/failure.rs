@@ -9,7 +9,7 @@ use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
 pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
-use crate::sys::io::file::Opened;
+use crate::sys::io::file::OpenResult;
 use crate::sys::io::room::Refusal;
 
 /// How an attempt ended, as one value, so an attempt that ended well cannot
@@ -21,7 +21,7 @@ pub enum Exit {
     Failed(Failure),
     /// The heap or the body slots refused the body room. Neither the object
     /// nor the server failed, and the want may start again once what refused
-    /// it gives some room back (`Refusal::over`).
+    /// it gives some room back (`Refusal::released`).
     Refused(Refusal),
 }
 
@@ -41,6 +41,16 @@ impl Exit {
             Exit::Aborted => Outcome::aborted,
             Exit::Failed(_) | Exit::Refused(_) => Outcome::err,
         }
+    }
+}
+
+/// How an attempt that failed with `f` ends: one the runtime cancelled, as
+/// a reload of its program leaves an open, is aborted, so its want starts
+/// again; any other failed.
+pub fn exit_of(f: Failure) -> Exit {
+    match f.errnum {
+        Errno::ECANCELED => Exit::Aborted,
+        _ => Exit::Failed(f),
     }
 }
 
@@ -84,17 +94,17 @@ impl From<Errno> for Failure {
 
 /// The failure of an open that brought no bytes. An open that brought bytes
 /// is no failure, and taking it for one is a bug.
-impl From<Opened> for Failure {
+impl From<OpenResult> for Failure {
     #[track_caller]
-    fn from(opened: Opened) -> Failure {
+    fn from(opened: OpenResult) -> Failure {
         match opened {
-            Opened::Failed { errnum, detail } => Failure {
+            OpenResult::Failed { errnum, detail } => Failure {
                 errnum,
                 detail: detail as u16,
                 at: None,
             },
-            Opened::Absent => Failure::from(Errno::ENOENT),
-            Opened::Bytes(_) => Failure::from(Errno::ENOTRECOVERABLE),
+            OpenResult::Absent => Failure::from(Errno::ENOENT),
+            OpenResult::Bytes(_) => Failure::from(Errno::ENOTRECOVERABLE),
         }
     }
 }

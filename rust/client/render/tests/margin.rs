@@ -150,7 +150,7 @@ fn device() -> Option<Gpu> {
     gpu
 }
 
-/// The light's list after the beam and `light_cell_cs` run over a cast that claims every tile,
+/// The light's list after the beam and `light_cell_cs` run over a cast that damages every tile,
 /// from a node cache no frame has written.
 fn beams_of(gpu: &Gpu, b: &WorldBuffer, eye: &[u32], header: &[u32]) -> Vec<u32> {
     let eye = gpu.buf(eye, wgpu::BufferUsages::UNIFORM);

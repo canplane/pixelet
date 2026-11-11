@@ -12,7 +12,9 @@ import { gpu_grant } from "@xpute/gpu/gpu.ts";
 import { gpu_serve } from "@xpute/gpu/web.ts";
 import { Major } from "@/abi/cmd.spec.ts";
 import { type Link, serve } from "@xpute/runtime";
-import { MACHINE } from "@/abi/machine.spec.ts";
+import { device } from "@/abi/gpu.spec.ts";
+import { MANIFEST } from "@/abi/manifest.spec.ts";
+import { LIMIT } from "@/abi/perf.spec.ts";
 import {
   declare_source,
   source_decl,
@@ -43,11 +45,9 @@ onmessage = ({ data: m }: MessageEvent<ToCore>) => {
     case "refused":
       return follow_refused_files(m.files, fs_changed);
     case "perf":
-      return tell({
-        kind: "perf",
-        id: m.id,
-        val: answer(m.what as PerfRead, m.args),
-      });
+      return void answer(m.what as PerfRead, m.args).then((val) =>
+        tell({ kind: "perf", id: m.id, val }),
+      );
   }
 };
 
@@ -79,10 +79,14 @@ function up(link: Link): void {
   void declare_source(source_declare);
 }
 
-void serve({
-  machine: MACHINE,
-  core: async () => config(await keep()),
-}).then((r) => {
-  gpu_grant(gpu, r, MACHINE.gpu, Major.GPU);
+void serve(MANIFEST, async () => config(await keep())).then((r) => {
+  // The page's runtime stages its writes in the chunks a device's does
+  // (spec/client/render/api.json `device`), and in a build made for
+  // measuring says what runs slower than perf.json's LIMIT.SLOW_MS, as the
+  // core has a device's runtime do (pxl-core lib.rs `GPU`).
+  gpu_grant(gpu, r, MANIFEST.gpu, Major.GPU, {
+    upload_chunk_bytes: device.UPLOAD_CHUNK_BYTES,
+    slow_ms: __PERF_DRIVE__ ? LIMIT.SLOW_MS : null,
+  });
   up(r);
 });

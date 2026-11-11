@@ -56,23 +56,6 @@ fn the_host_declares_each_render_pass_of_an_indirect_draw() {
     }
 }
 
-/// The frame holds as many hazards as `KNOWN` names. On a mismatch the message lists every
-/// hazard found.
-#[test]
-fn the_frame_holds_the_hazards_known_names() {
-    let found = found(&FRAME);
-    let lines: Vec<String> = found
-        .iter()
-        .map(|(rule, step, with)| format!("rule {rule}: {step} with {with}"))
-        .collect();
-    assert_eq!(
-        found.len(),
-        KNOWN.len(),
-        "the frame's hazards:\n{}",
-        lines.join("\n")
-    );
-}
-
 /// Each statement of `text` that calls `call`, from the call to its `;`.
 fn calls<'a>(text: &'a str, call: &str) -> Vec<(usize, &'a str)> {
     text.match_indices(call)

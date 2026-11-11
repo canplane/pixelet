@@ -8,8 +8,8 @@ use crate::domain::control::sensor::device_orientation;
 use crate::domain::control::sensor::geolocation;
 use crate::domain::layer::object::repository;
 use crate::domain::setting::store::settings_open;
-use crate::sys::sched::edge;
-use xpute_core::ipc::door::{Life, Outcome};
+use crate::sys::sched;
+use xpute_core::io::door::{Life, Outcome};
 
 pub(super) fn apply(s: &mut State, life: Life) -> Outcome {
     match life {
@@ -22,7 +22,7 @@ pub(super) fn apply(s: &mut State, life: Life) -> Outcome {
             // for them (domain/layer/object/repository.rs).
             settings_open();
             // The UI must hold the core's state from its first render on.
-            edge::request_world_tick();
+            sched::request_world_tick();
             s.snapshot_due = true;
         }
         // Suspend is the last moment a save is sure to happen. The objects

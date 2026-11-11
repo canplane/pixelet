@@ -20,16 +20,12 @@ use crate::gpu::draw::{Block, DRAW_WORDS, MODEL_VERTEX_WORDS};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::pass::atmosphere::AIR_ENTRIES;
 
-fn frame_group(
-    g: &Gpu,
-    layout: Layout,
-    frame: u32,
-    shadow: [Entry; 2],
-    air: [Entry; AIR_ENTRIES],
-) -> u32 {
+/// The model passes' group 0 entries: the frame words, the light's shadow map
+/// and the air.
+pub fn frame_entries(frame: u32, shadow: [Entry; 2], air: [Entry; AIR_ENTRIES]) -> Vec<Entry> {
     let mut e = vec![buf_entry(0, frame), shadow[0], shadow[1]];
     e.extend(air);
-    g.bind_group(layout, &e)
+    e
 }
 
 /// The bind group of each skin image, all over one sampler. A group is made
@@ -108,30 +104,6 @@ pub enum Stage {
 /// pipeline's layout binds to every model pipeline.
 pub fn frame_layout(g: &Gpu, pipelines: &mut PipelineCache) -> Layout {
     pipelines.build_world(g, PIPELINE_SKINNED).layouts[0]
-}
-
-/// The model passes' group 0. It binds the frame words, the light's shadow map
-/// and the air.
-pub struct FrameGroup {
-    pub frame: u32,
-}
-
-impl FrameGroup {
-    pub fn new(
-        g: &Gpu,
-        layout: Layout,
-        frame_buf: u32,
-        shadow: [Entry; 2],
-        air: [Entry; AIR_ENTRIES],
-    ) -> FrameGroup {
-        FrameGroup {
-            frame: frame_group(g, layout, frame_buf, shadow, air),
-        }
-    }
-
-    pub fn release(&self) {
-        release(self.frame);
-    }
 }
 
 pub struct UniformBuffer {

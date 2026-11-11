@@ -35,7 +35,7 @@ fn eye_vec3(k: u32) -> vec3f {
 // formed it (walk_node.wgsl `eye_aim`, pxl-engine cast.rs `through`), so the t a ray left is
 // laid along the same direction it was cast in.
 fn through(a: vec3f) -> vec3f {
-  return a / sqrt(dot(a, a));
+  return a / length(a);
 }
 
 fn eye_tan() -> vec2f {
@@ -51,7 +51,7 @@ fn eye_jitter() -> vec2f {
 // The direction of the ray through the fragment position `frag`, before it is made a unit. It
 // is linear in `frag`, which `px_steps` relies on.
 fn aim(frag: vec2f, size: vec2f) -> vec3f {
-  let t = px_tan(frag + eye_jitter(), size, eye_tan());
+  let t = tan_at(frag + eye_jitter(), size, eye_tan());
   return eye_vec3(EYE_FORWARD) + t.x * eye_vec3(EYE_RIGHT) + t.y * eye_vec3(EYE_UP);
 }
 

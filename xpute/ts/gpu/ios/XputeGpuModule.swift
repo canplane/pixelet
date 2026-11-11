@@ -8,11 +8,32 @@ import CXputeGpu
 import ExpoModulesCore
 
 public class XputeGpuModule: Module {
+  /// The function given to `xpute_gpu_lost_on` sends its event through this
+  /// module.
+  nonisolated(unsafe) static weak var current: XputeGpuModule?
+
   public func definition() -> ModuleDefinition {
     Name("XputeGpu")
 
+    /// Fires once each time the open device is lost and let go.
+    Events("onLost")
+
+    OnCreate {
+      XputeGpuModule.current = self
+      // A C function captures nothing, so it reaches the module through the
+      // static. It is called from the thread that found the loss, and Expo's
+      // sendEvent itself schedules the event onto the JavaScript thread.
+      xpute_gpu_lost_on { XputeGpuModule.current?.sendEvent("onLost") }
+    }
+    OnDestroy {
+      XputeGpuModule.current = nil
+      xpute_gpu_lost_on(nil)
+    }
+
+    // The device keeps its compiled pipelines among the app's caches.
     Function("open") { () -> Bool in
-      xpute_gpu_open() == 0
+      let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
+      return xpute_gpu_open(caches?.path) == 0
     }
 
     View(SurfaceView.self) {

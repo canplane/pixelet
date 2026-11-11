@@ -77,10 +77,6 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
   o.id = word & RASTER_ID_MASK;
   // A face that is not drawn keeps every corner at this point, outside the clip volume.
   o.clip = vec4f(0.0, 0.0, -1.0, 1.0);
-  // A place of the light's draw that no box reached holds 0 (ray/raster.rs `light_draw`).
-  if (word == 0u) {
-    return o;
-  }
   let lacks = (o.id & RASTER_LACK) != 0u;
   let slot = (o.id & ~RASTER_LACK) - 1u;
   let origin = raster.origin.xyz;
@@ -197,9 +193,9 @@ fn raster_planes(d: f32, lo: f32, hi: f32, far: f32) -> vec2f {
 }
 
 // The tangents across and up of the ray through the screen point `at`, in drawn pixels, formed
-// as the cast forms them (px.wgsl `px_tan`) from the raster's view.
+// as the cast forms them (px.wgsl `tan_at`) from the raster's view.
 fn raster_tan(at: vec2f) -> vec2f {
-  return px_tan(at, raster.screen.yz, vec2f(raster.right.w, raster.up.w));
+  return tan_at(at, raster.screen.yz, vec2f(raster.right.w, raster.up.w));
 }
 
 // Whether the ray from `o` along the unit vector `u` enters the box `lo`..`hi` within its
@@ -245,7 +241,7 @@ fn fs(i: RasterOut) -> @location(0) vec4u {
   } else {
     let tan = raster_tan(i.clip.xy + raster.first.xy);
     let s = raster.forward.xyz + tan.x * raster.right.xyz + tan.y * raster.up.xyz;
-    u = s / sqrt(dot(s, s));
+    u = s / length(s);
   }
   if (!raster_enters(o, u, i.lo, i.hi, i.axis)) {
     discard;

@@ -8,4 +8,4 @@ export const OBJECT = 19 as number;
 
 export const OBJECT_TOP = 22 as number;
 
-export const OBJECT_EDITS = 21 as number;
+export const OBJECT_EDIT = 21 as number;

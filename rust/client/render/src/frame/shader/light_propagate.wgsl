@@ -12,8 +12,8 @@
 // (`light::HEADER_WORLD`, `light::LIST_READS`). It stays listed, as the tiles stood on do,
 // until the receivers are stood afresh again (`light::carry_at`). So a cast propagates only the
 // tiles stood on since the casts before it propagated theirs, and keeps their reads. Then
-// `light_damage_cs` takes one thread for each tile listed as read. It claims each tile that no
-// cast of the reads' epoch claimed (`reads_epoch`): the tile's word names the cast
+// `light_damage_cs` takes one thread for each tile listed as read. It damages each tile that no
+// cast of the reads' epoch damaged (`reads_epoch`): the tile's word names the cast
 // (`light::reads_at`), and what feeds the tile is listed for the passes that cast it
 // (`enlist`). It also opens the map's lay to every tile read (`light::ARGS_LAY`; pass/shadow.rs
 // `Shadow::begin`).
@@ -105,8 +105,8 @@ fn light_propagate_cs(
   }
 }
 
-/// Opens the map's lay to every tile listed as read, and claims each such tile that no cast of
-/// the reads' epoch claimed, one thread for each tile.
+/// Opens the map's lay to every tile listed as read, and damages each such tile that no cast of
+/// the reads' epoch damaged, one thread for each tile.
 @compute @workgroup_size(LIGHT_LIST_LANES, 1, 1)
 fn light_damage_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let n = light_tiles();

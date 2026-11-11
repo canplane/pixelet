@@ -61,7 +61,17 @@ import type { NodeView } from "./view.ts";
 const DESC_REG: [u32, NodeType] = [NONE, SpecialType.NIL];
 
 /** A field of a command's packet as a caller hands it. */
-export type Arg = number | boolean | string | null | U32Array | string[];
+export type Arg =
+  number | boolean | string | null | U32Array | string[] | Branch;
+
+/** A branch of arguments, each written by what it is (`PacketWriter.arg`). */
+export class Branch {
+  readonly args: readonly Arg[];
+
+  constructor(args: readonly Arg[]) {
+    this.args = args;
+  }
+}
 
 // ============ Encoder ============
 
@@ -350,6 +360,9 @@ export class PacketWriter {
         return this.str(v);
     }
     if (v === null) return this.nil();
+    if (v instanceof Branch) {
+      return this.branch(v.args.length, (w) => v.args.forEach((a) => w.arg(a)));
+    }
     return v instanceof Uint32Array
       ? this.array(SequenceType.U32_ARRAY, v)
       : this.strs(v);

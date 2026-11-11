@@ -517,7 +517,7 @@ pub const COLUMNS: usize = 64;
 pub const HEADER_VEC4S: usize = COLUMNS_AT + 1 + 2 * COLUMNS;
 pub const HEADER_WORDS: usize = 4 * HEADER_VEC4S;
 /// The cast's number, counted up from one each cast. A tile the cast lists to cast is marked
-/// with it (`list_marks_at`), and a tile it claims is named by it (`reads_at`).
+/// with it (`list_marks_at`), and a tile it damages is named by it (`reads_at`).
 pub const HEADER_CAST: usize = 0;
 pub const HEADER_COUNTED: usize = 1;
 /// The number of the cast since which nothing but the record of which tiles are read, and
@@ -525,9 +525,7 @@ pub const HEADER_COUNTED: usize = 1;
 /// light, the eye's zooms and the world it was cast for still hold, wherever the box kept the
 /// tile (`reads_at`, `Light::keeps`).
 pub const HEADER_EPOCH: usize = 2;
-/// The map's side, by which the slots' lattice is laid out. A pass that the eye's rays and
-/// the shadow map share is handed, for the eye, a head of all zeros in its place: a head
-/// naming no map is the eye's.
+/// The map's side, by which the slots' lattice is laid out.
 pub const HEADER_SIZE: usize = 3;
 /// The clipmap's corner that the cast before was cast under, X and Y, in the first two words
 /// of the second vec4. From it follows how many tiles the box has slid since, its corners
@@ -925,12 +923,12 @@ pub const fn holes_at(size: u32) -> u32 {
 }
 
 /// The tiles a receiver reads, past the holes: one word a tile (`TILE` texels a side),
-/// `tiles` to a row, holding the number of the cast that last claimed the tile in its epoch
+/// `tiles` to a row, holding the number of the cast that last damaged the tile in its epoch
 /// (`HEADER_EPOCH`). A tile is read where it lies within the taps of the way up from a tile a
 /// receiver stands on (`LIST_RECEIVERS`; pxl-render light_propagate.wgsl `up`). A tile that
 /// this cast's number names is the cast's to cast; one that an earlier cast of the reads'
 /// epoch names holds what that cast left (`reads_epoch`); no receiver reads any other. The
-/// number is written by the tile's claim (light_propagate.wgsl `light_damage_cs`) and set to
+/// number is written by the tile's damage (light_propagate.wgsl `light_damage_cs`) and set to
 /// none by the slide (light_slide.wgsl).
 pub const fn reads_at(size: u32) -> u32 {
     holes_at(size) + 1 + size * size
@@ -1025,10 +1023,10 @@ impl Light {
 }
 
 /// What a cast lists, in the list's buffer, each entry a tile as `i | j << 16`. First come
-/// what feeds a tile it claimed at each level of the lattice, by the reach it feeds within
+/// what feeds a tile it damaged at each level of the lattice, by the reach it feeds within
 /// (pxl-render light_enlist.wgsl `enlist`), each entry the box tile it lies on: the beam
 /// rays' corners (`LIST_CORNERS`), the tiles whose cells and samples feed one
-/// (`LIST_SOURCES`), and the tiles claimed, whose slots it casts (`LIST_DAMAGE`). Then come
+/// (`LIST_SOURCES`), and the tiles damaged, whose slots it casts (`LIST_DAMAGE`). Then come
 /// the tiles a receiver stands on (`LIST_RECEIVERS`), the world's first and then the drawn
 /// receivers' (pxl-render light_mark.wgsl, light_mark_draws.wgsl), and the tiles a receiver
 /// reads, in which the map is laid (`LIST_READS`; light_propagate.wgsl, pass/shadow.rs
@@ -1190,11 +1188,11 @@ pub const fn reads_epoch(epoch: u32, reads_from: u32) -> u32 {
 /// of their own: three words (x, y, z) for each pass from its `ARGS_*` word, the map's lay's
 /// four (`ARGS_LAY`), a draw's, `ARGS_PASSES` in all, and each list's count (`ARGS_CNTS`).
 /// A cast starts with none: `LIST_ACROSS` workgroups to a row and no rows, no list holding
-/// anything. A tile claimed as the cast's to cast (pxl-render light_propagate.wgsl) opens the
-/// rows that what it lists takes (`list_cnt_at`); a cast that claims none, as where the
+/// anything. A tile damaged as the cast's to cast (pxl-render light_propagate.wgsl) opens the
+/// rows that what it lists takes (`list_cnt_at`); a cast that damages none, as where the
 /// receivers moved only within the tiles already cast, casts none. The lay draws six vertices
 /// and one instance for each tile read (light_propagate.wgsl). So a cast whose receivers stand
-/// on nothing claims, lays and draws no tile. Past `ARGS_WORDS`, which a cast writes, lie the
+/// on nothing damages, lays and draws no tile. Past `ARGS_WORDS`, which a cast writes, lie the
 /// lists' marks, which last from cast to cast (`args_words`). The lay's instances are the read
 /// list's count, kept from cast to cast with the list (`CARRY_READ`) and set once the tiles
 /// wanted are listed (light_propagate.wgsl `light_damage_cs`). The passes that write these

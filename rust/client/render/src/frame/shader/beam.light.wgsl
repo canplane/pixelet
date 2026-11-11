@@ -3,11 +3,11 @@
 // The shadow map's beam rays, as the beam rays' walks read them from the light's list
 // (corner.wgsl, light_list.wgsl). A beam ray starts over every `light::BEAM`-th texel, from
 // `BEAM_WINDOW` of them before the box's first (pxl-engine `light::corner_at`). A run takes only
-// those listed for the tiles the cast claimed. Each goes along the light from where its texel
+// those listed for the tiles the cast damaged. Each goes along the light from where its texel
 // lies on the near plane, at its tile's band (`Light::band`), and keeps its line in the light's
 // list.
 
-/// How many beam rays a run takes: those listed for the tiles the cast claimed, one a place in
+/// How many beam rays a run takes: those listed for the tiles the cast damaged, one a place in
 /// the list (light_list.wgsl `light_item_at`).
 fn corner_cnt() -> u32 {
   return in_cap(beams[list_cnt_at(LIGHT_LIST_CORNERS)], beam_across() * beam_across());

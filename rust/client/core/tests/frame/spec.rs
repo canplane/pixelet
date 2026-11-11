@@ -27,8 +27,6 @@ pub struct Field {
 pub struct Command {
     pub val: u32,
     pub fields: Vec<Field>,
-    /// The fields a completion of the command carries, when the spec gives any.
-    pub reply: Vec<Field>,
 }
 
 /// A command spec's commands in both directions, its enums' members and its recs.
@@ -64,7 +62,6 @@ impl Protocol {
                     Command {
                         val,
                         fields: fields(&c["pkt"]),
-                        reply: fields(&c["reply"]),
                     },
                 );
             }
@@ -143,12 +140,6 @@ impl Protocol {
             .and_then(|e| e.get(name))
             .copied()
             .unwrap_or_else(|| panic!("no {of}::{name}"))
-    }
-
-    /// The index of `field` among the children of `command`'s packet.
-    pub fn at(&self, command: &str, field: &str) -> u32 {
-        idx(&self.command(command).fields, field)
-            .unwrap_or_else(|| panic!("{command} has no field {field}"))
     }
 
     pub fn rec_at(&self, rec: &str, field: &str) -> u32 {
@@ -239,7 +230,7 @@ pub fn file_val(path: &[&str]) -> u32 {
     for p in path {
         j = j[*p].take();
     }
-    j["$val"]
-        .as_u64()
+    let val = if j["$val"].is_null() { &j } else { &j["$val"] };
+    val.as_u64()
         .unwrap_or_else(|| panic!("no value at {path:?}")) as u32
 }

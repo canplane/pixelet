@@ -1,41 +1,17 @@
 // pxl-core/domain/control/camera/first_person.rs
 
 //! The first-person camera turns about its eye, which is also its pivot. No
-//! control sets its height. Its `to` stands wherever the pan's walk leaves
-//! it, and the drawn eye eases toward it, so a step up or down eases like
-//! every other move.
+//! control sets its height. The pivot's `to` (state.rs `CameraState`) stands
+//! wherever the pan's walk leaves it, and the drawn eye eases toward it, so a
+//! step up or down eases like every other move.
 
-use pxl_spec::space::coord::q3::Q3;
+use crate::domain::control::camera::state::{camera_state, ease_pivot, resolved_to};
+use crate::domain::control::camera::{camera, ease_facing, eye_world, set_eye_world};
+use crate::domain::control::param::CAM_DAMP;
 
-use crate::domain::control::camera::state::camera_state;
-use crate::domain::control::camera::{camera, eye_world, facing_domain, set_eye_world};
-use crate::domain::control::param::{
-    CAM_DAMP, FIRST_PERSON_EYE_EPS, FIRST_PERSON_FACING_EPS, ROT_DAMP,
-};
-use crate::domain::control::support::resolve_to;
-use crate::domain::param::POS_DAMP;
-use crate::domain::smooth::{smooth_angle, smooth_vec};
-use crate::domain::view::frame::coord::world_to_canonical;
-use xpute_core::global::Global;
-
-/// Where the eye goes to. It is a canonical point, so it stays the same
-/// when the eye goes round the world. None until it is first put.
-static TO: Global<Option<Q3>> = Global::new();
-
-fn to() -> &'static mut Option<Q3> {
-    TO.get(|| None)
-}
-
-/// Where the pivot goes to, which in first person is where the eye goes to.
-pub(crate) fn pivot_to() -> Option<Q3> {
-    to().or_else(|| eye_world().map(|e| world_to_canonical(&e)))
-}
-
-pub(crate) fn put(at: Q3, snap: bool) {
-    *to() = Some(at);
-    if snap {
-        set_eye_world(&resolve_to(to(), eye_world().unwrap_or_default()));
-    }
+/// Puts the eye at the pivot's `to` at once.
+pub(crate) fn snap() {
+    set_eye_world(&resolved_to(eye_world().unwrap_or_default()));
 }
 
 /// Eases the drawn eye and facing over `delta` seconds and returns whether
@@ -43,31 +19,12 @@ pub(crate) fn put(at: Q3, snap: bool) {
 pub(crate) fn turn(delta: f64) -> bool {
     let mut moving = false;
     if let Some(eye) = eye_world() {
-        let to = resolve_to(to(), eye);
-        let (next, m) = smooth_vec(eye, to, POS_DAMP, delta, FIRST_PERSON_EYE_EPS);
+        let (next, m) = ease_pivot(eye, delta);
         if next != eye {
             set_eye_world(&next);
         }
         moving |= m;
     }
     let vs = camera_state().intent;
-    let cam = camera();
-    let ([polar], m) = smooth_vec(
-        [cam.polar],
-        [vs.polar],
-        CAM_DAMP,
-        delta,
-        FIRST_PERSON_FACING_EPS,
-    );
-    moving |= m;
-    let (azimuth, m) = smooth_angle(
-        cam.azimuth,
-        vs.azimuth,
-        ROT_DAMP,
-        delta,
-        FIRST_PERSON_FACING_EPS,
-    );
-    moving |= m;
-    (cam.polar, cam.azimuth) = facing_domain(polar, azimuth);
-    moving
+    moving | ease_facing(camera(), vs.polar, CAM_DAMP, vs.azimuth, delta)
 }

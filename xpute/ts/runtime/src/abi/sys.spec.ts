@@ -4,19 +4,18 @@
 
 /**
  * xpute's own protocol on majors NOP and SYS. Through it the runtime tells the core about
- * the core's life and its turns, and the core reports its end. NOP is the rings' own test.
+ * the core's life and its turns, and the core reports its end. NOP is the channel's own test.
  * SYS_ATTACH, SYS_SUSPEND and SYS_RESUME tell the core that a runtime attached, for the
  * first time or again, that the core is about to be frozen, and that it was woken; what
  * each one means the core keeps or resets is the core's to decide. SYS_TURN marks a turn
  * that the runtime's scheduling policy grants, and carries the wall clock; SYS_FRAME and
  * SYS_PACE carry frame pacing's grant and the core's asked rate. SYS_ABORT
- * reports the broken invariant the core stops on, and the runtime hears it as a VMM hears
- * its guest exit.
+ * reports the broken invariant the core stops on, the last frame the core sends.
  *
  * Each command is `major << 8 | minor` (kit abi/cmd). Its packet is an XTP branch whose
  * children are the command's fields, in order; a command with no fields carries no packet.
  * The GPU and the files are devices with protocols of their own (gpu.json, fs.json).
- * Majors 0x00 to 0x0F are xpute's (ipc/frame.json), and a program numbers the commands of
+ * Majors 0x00 to 0x0F are xpute's (io/frame.json), and a program numbers the commands of
  * its own protocols past them.
  */
 
@@ -27,7 +26,8 @@ import * as SysMinor from "./sys/sys_minor.spec.ts";
 import * as Command from "./sys/command.spec.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import type { Protocol, OnImport } from "../mod.ts";
+import type { Link, Protocol, OnImport } from "../mod.ts";
+import { refusal_of } from "../mod.ts";
 
 /** One of Major's, as its enum was a type. */
 type Major = (typeof Major)[keyof typeof Major];
@@ -75,26 +75,53 @@ export const read = {
   }),
 };
 
-/** What the runtime sends on the sys protocol: each command by its number, and
- * the fields its packet takes in order. It is sent, requested and answered
- * later, or called and answered before it returns. */
-export type SysSend = {
-  [Command.NOP]: [val: u32];
-  [Command.SYS_ATTACH]: [];
-  [Command.SYS_TURN]: [unix_ms: f64];
-  [Command.SYS_FRAME]: [refresh_ms: f64, paced_ms: f64, interactive: boolean];
-};
-export type SysRequest = Record<never, never>;
-export type SysCall = {
-  [Command.SYS_SUSPEND]: [];
-  [Command.SYS_RESUME]: [];
-};
+/** The sys protocol's exports as the UI calls them over `link`: a send returns
+ * nothing, and a request a Promise of its reply's value, which rejects with the
+ * errno it was refused with. `fits` says whether a send's packet fits a frame. */
+export function sys_exports(link: Link) {
+  return {
+    /** The channel's own test. The reply carries the packet's value, or 0 when the frame has no
+     * packet. */
+    nop: (val: u32) => link.send(Command.NOP, val),
+    /** A runtime has attached, for the first time or after an earlier runtime went away. The
+     * runtime sends it once it has laid the front of the core's memory (io/head.json). The core
+     * lets go of whatever the earlier runtime's requests left behind. */
+    sys_attach: () => link.send(Command.SYS_ATTACH),
+    /** The core is about to be frozen: its turns stop for as long as its runtime is hidden. This
+     * is the core's last sure moment to save. The UI sends it and does not wait; the runtime
+     * lets it reach the core in a turn before turns stop. */
+    sys_suspend: () => link.send(Command.SYS_SUSPEND),
+    /** The core has been woken after SYS_SUSPEND. */
+    sys_resume: () => link.send(Command.SYS_RESUME),
+    /** Marks a turn that the scheduling policy grants, as opposed to a turn run only because a
+     * command arrived. The runtime submits it after what the program submits for that turn,
+     * and before it runs the turn. It carries the wall clock in Unix milliseconds. What frame pacing
+     * says of the turn comes before it (SYS_FRAME); anything else the policy has to say, the
+     * program sends in commands of its own. */
+    sys_turn: (unix_ms: f64) => link.send(Command.SYS_TURN, unix_ms),
+    /** The display frame frame pacing grants the next SYS_TURN at (@xpute/runtime
+     * sched/frame_pacing.ts, xpute-runtime native/pacing.rs): the display's refresh, the interval
+     * turns are paced at, a whole number of refreshes and the frame's budget, and whether the
+     * turn follows an input. A runtime whose policy paces no display sends none. */
+    sys_frame: (refresh_ms: f64, paced_ms: f64, interactive: boolean) =>
+      link.send(Command.SYS_FRAME, refresh_ms, paced_ms, interactive),
+    fits: {
+      nop: (val: u32) => link.fits(Command.NOP, val),
+      sys_attach: () => link.fits(Command.SYS_ATTACH),
+      sys_suspend: () => link.fits(Command.SYS_SUSPEND),
+      sys_resume: () => link.fits(Command.SYS_RESUME),
+      sys_turn: (unix_ms: f64) => link.fits(Command.SYS_TURN, unix_ms),
+      sys_frame: (refresh_ms: f64, paced_ms: f64, interactive: boolean) =>
+        link.fits(Command.SYS_FRAME, refresh_ms, paced_ms, interactive),
+    },
+  };
+}
 
-/** The sys protocol over a link. */
-export type SysProtocol = Protocol<SysSend, SysRequest, SysCall>;
+/** The sys protocol's exports, as `sys_exports` binds them. */
+export type SysExports = ReturnType<typeof sys_exports>;
 
-/** What the program does with each command the core posts on the sys protocol; a
- * call's answer is its return. */
+/** What the program does with each command the core posts on the sys protocol: a
+ * call's member answers its value, and throws kit's error to refuse it. */
 export interface SysImports {
   /** Reports the broken invariant the core stops on (xpute-kit status/bug.rs). */
   [Command.SYS_ABORT](e: SysAbort): void;
@@ -104,19 +131,25 @@ export interface SysImports {
   [Command.SYS_PACE](e: SysPace): void;
 }
 
-/** `h` as the handler a runtime routes the sys protocol's commands to, each one read and
- * handed to its member; ENOSYS for one the protocol does not carry. */
-export function sys_imports(h: SysImports): OnImport {
-  return (_tag, cmd, f) => {
-    switch (cmd) {
-      case Command.SYS_ABORT:
-        return h[Command.SYS_ABORT](read[Command.SYS_ABORT](need(f)));
-      case Command.SYS_PACE:
-        return h[Command.SYS_PACE](read[Command.SYS_PACE](need(f)));
-      default:
-        return Errno.ENOSYS;
+/** `h` as the protocol the runtime routes the sys protocol's majors to: each
+ * command read and handed to its member, whose refusal is answered with its
+ * errno; ENOSYS for one the protocol does not carry. */
+export function sys_imports(h: SysImports): Protocol {
+  const on: OnImport = (_tag, cmd, f) => {
+    try {
+      switch (cmd) {
+        case Command.SYS_ABORT:
+          return h[Command.SYS_ABORT](read[Command.SYS_ABORT](need(f)));
+        case Command.SYS_PACE:
+          return h[Command.SYS_PACE](read[Command.SYS_PACE](need(f)));
+        default:
+          return Errno.ENOSYS;
+      }
+    } catch (err) {
+      return refusal_of(err);
     }
   };
+  return { majors: [Major.SYS], on };
 }
 
 /** A packet the command carries, which a frame without one breaks. */

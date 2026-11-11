@@ -22,7 +22,7 @@ use crate::domain::setting::store::{settings, CameraMode};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::frame::pose::ObserverPose;
 use crate::domain::view::frame::screen::units_per_px_at;
-use crate::sys::sched::edge::request_world_tick;
+use crate::sys::sched::request_world_tick;
 use crate::sys::sched::tick::TickContext;
 use xpute_core::global::Global;
 
@@ -42,9 +42,7 @@ pub fn pivot_world() -> Option<V3> {
 }
 
 pub fn pivot() -> Option<Q3> {
-    let at = pivot_world()?;
-    let c = world_to_canonical(&at);
-    Some(c)
+    pivot_world().map(|at| world_to_canonical(&at))
 }
 
 /// How the camera moves to a new pivot. A place found elsewhere (a search,
@@ -59,22 +57,31 @@ pub enum Motion {
 /// While a tracker holds the pose, this does nothing, and the controller
 /// under the tracker does not move in its place.
 pub fn put_pivot(to: Q3, motion: Motion) {
-    let snap = motion == Motion::Snap;
-    match active() {
-        Active::Tracked => return,
-        Active::Orbit => orbit::put(to, snap),
-        Active::FirstPerson => first_person::put(to, snap),
+    if active() == Active::Tracked {
+        return;
+    }
+    camera_state_mut().to = Some(to);
+    if motion == Motion::Snap {
+        snap();
     }
     request_world_tick();
+}
+
+/// Puts the active controller's camera at the pivot's `to` at once.
+fn snap() {
+    match active() {
+        Active::Orbit => orbit::snap(),
+        Active::FirstPerson => first_person::snap(),
+        Active::Tracked => {}
+    }
 }
 
 /// Where the pivot is going to: the place last put, which a smooth move
 /// eases toward, or else where the pivot stands. None while tracked.
 pub fn pivot_to() -> Option<Q3> {
     match active() {
-        Active::Orbit => orbit::pivot_to(),
-        Active::FirstPerson => first_person::pivot_to(),
         Active::Tracked => None,
+        Active::Orbit | Active::FirstPerson => camera_state().to.or_else(pivot),
     }
 }
 
@@ -115,9 +122,9 @@ pub enum Active {
 /// Where the tracker's space lies in the world, fixed when the tracker took
 /// over, and where the camera is in that space now.
 struct TrackerSpace {
-    world_turn: Mat4,
+    world_rot: Mat4,
     world_at: V3,
-    turn: Mat4,
+    rot: Mat4,
     at: V3,
 }
 
@@ -149,12 +156,13 @@ pub fn pose() -> Option<ObserverPose> {
     let c = controller();
     match (&c.tracker, c.base) {
         (Some(t), _) => {
-            let (mut camera_to_world, mut rot, mut moved) = (mat4::new(), mat4::new(), [0.0; 3]);
-            mat4::mul(&mut camera_to_world, &t.world_turn, &t.turn);
-            mat4::transform_point(&mut moved, &t.world_turn, t.at[0], t.at[1], t.at[2]);
+            let (mut camera_to_world, mut world_to_camera, mut moved) =
+                (mat4::new(), mat4::new(), [0.0; 3]);
+            mat4::mul(&mut camera_to_world, &t.world_rot, &t.rot);
+            mat4::transform_point(&mut moved, &t.world_rot, t.at[0], t.at[1], t.at[2]);
             Some(ObserverPose {
                 eye: v3::add(&t.world_at, &moved),
-                rot: *mat4::transpose(&mut rot, &camera_to_world),
+                rot: *mat4::transpose(&mut world_to_camera, &camera_to_world),
             })
         }
         (None, _) => {
@@ -213,6 +221,8 @@ pub fn wheel(delta_y: f64) {
     }
 }
 
+/// The pinch's start is the gesture's and is taken in every mode, so a pinch
+/// that the mode turns to orbit midway zooms on from where it began.
 pub fn pinch_begin(span: f64) {
     orbit::pinch_begin(span);
 }
@@ -220,6 +230,15 @@ pub fn pinch_begin(span: f64) {
 pub fn pinch(span: f64) {
     if active() == Active::Orbit {
         orbit::pinch(span);
+    }
+}
+
+/// A trackpad's pinch, its fingers' spread changed by `scale`. The camera's
+/// distance is divided by it, as a pinch of two touches divides it (gesture.rs
+/// `spread`). First person has no zoom, so it ignores the pinch.
+pub fn pinch_by(scale: f64) {
+    if active() == Active::Orbit {
+        orbit::zoom_by(1.0 / scale);
     }
 }
 
@@ -231,7 +250,7 @@ pub fn controller_step(ctx: &mut TickContext) {
 
 pub fn camera_step(ctx: &mut TickContext) {
     let moving = match active() {
-        Active::Orbit => orbit::turn(ctx.delta) == Some(true),
+        Active::Orbit => orbit::turn(ctx.delta),
         Active::FirstPerson => first_person::turn(ctx.delta),
         Active::Tracked => false,
     };
@@ -268,10 +287,8 @@ fn take_mode(want: CameraMode) -> bool {
         });
     }
     if let Some(at) = at {
-        match want {
-            CameraMode::orbit => orbit::put(at, true),
-            CameraMode::first_person => first_person::put(at, true),
-        }
+        camera_state_mut().to = Some(at);
+        snap();
     }
     true
 }
@@ -282,28 +299,28 @@ fn take_mode(want: CameraMode) -> bool {
 /// world so that the camera stays where it is. Before the camera has an
 /// eye, there is nowhere to place it, and the pose is dropped.
 pub fn tracked_pose(at: V3, q: [f64; 4]) {
-    let mut turn = mat4::new();
-    mat4::rot_quat(&mut turn, q);
+    let mut rot = mat4::new();
+    mat4::rot_quat(&mut rot, q);
     let c = controller();
     if c.tracker.is_none() {
         let Some(now) = pose() else { return };
-        let (mut camera_to_world, mut turn_back, mut world_turn, mut off) =
+        let (mut camera_to_world, mut rot_back, mut world_rot, mut off) =
             (mat4::new(), mat4::new(), mat4::new(), [0.0; 3]);
         mat4::transpose(&mut camera_to_world, &now.rot);
         mat4::mul(
-            &mut world_turn,
+            &mut world_rot,
             &camera_to_world,
-            mat4::transpose(&mut turn_back, &turn),
+            mat4::transpose(&mut rot_back, &rot),
         );
-        mat4::transform_point(&mut off, &world_turn, at[0], at[1], at[2]);
+        mat4::transform_point(&mut off, &world_rot, at[0], at[1], at[2]);
         c.tracker = Some(TrackerSpace {
-            world_turn,
+            world_rot,
             world_at: v3::sub(&now.eye, &off),
-            turn,
+            rot,
             at,
         });
     } else if let Some(t) = &mut c.tracker {
-        (t.turn, t.at) = (turn, at);
+        (t.rot, t.at) = (rot, at);
     }
     request_world_tick();
 }

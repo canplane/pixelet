@@ -26,7 +26,7 @@
 
 use crate::domain::scene::param;
 use crate::domain::setting::store::{settings, ResMode};
-use crate::sys::sched::edge;
+use crate::sys::sched;
 use crate::sys::sched::pacing_spec::{PACE_HZ, RATE_MIN_HZ};
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::api;
@@ -412,7 +412,7 @@ pub fn load(pace: Pace, gpu: Option<GpuRead>) -> Option<f64> {
     let ratio = surface_ratio(s.role, [s.px_w, s.px_h], s.dpr);
     if s.ratio != ratio {
         s.ratio = ratio;
-        edge::request_world_tick();
+        sched::request_world_tick();
     }
     interval_ms
 }

@@ -11,12 +11,13 @@
 //! copied into. What reads them is each indirect call. A compute pass whose
 //! indirect call would read args written in its command buffer is ended
 //! there and begun again in a new one, its pipeline and groups set again and
-//! its span's end moved to it; a render pass, whose indirect draws are known
-//! only as it draws, begins a new command buffer wherever args were written
-//! in the one it would join. A new pass keeps the rule whatever it writes
-//! and reads.
+//! the new part one more pass of its span; a render pass, whose indirect
+//! draws are known only as it draws, begins a new command buffer wherever
+//! args were written in the one it would join. A new pass keeps the rule
+//! whatever it writes and reads.
 
 use crate::frame::shader::floor::BIND_GROUPS as GROUPS;
+use crate::gpu::span_spec::GpuSpanName;
 use xpute_gpu::encode::Id;
 
 /// An encoder as its recorder names it, and the command buffers it is cut
@@ -31,7 +32,7 @@ struct Chain {
 
 /// A pass being recorded: the handle its recorder names it by, the pass it is recorded as now,
 /// and its encoder as named. A compute pass also holds what its next part is begun with where
-/// it is cut: its pipeline, its groups and their offsets, and its span's query set and end.
+/// it is cut: its pipeline, its groups and their offsets, and the span it is timed in.
 pub struct Open {
     named: Id,
     pub at: Id,
@@ -39,7 +40,7 @@ pub struct Open {
     compute: bool,
     pub pipeline: Id,
     pub groups: [(Id, Vec<u32>); GROUPS],
-    pub end: Option<(Id, u32)>,
+    pub span: Option<GpuSpanName>,
     /// A render pass's: every group set in it, and every buffer an indirect draw of it read,
     /// as a render pass is one usage scope whole.
     drawn_groups: Vec<Id>,
@@ -224,8 +225,8 @@ impl Split {
         }
     }
 
-    /// Records a pass begun on `encoder` as `pass`, whose span ends at `end` of its query set.
-    pub fn opened(&mut self, pass: Id, encoder: Id, compute: bool, end: Option<(Id, u32)>) {
+    /// Records a pass begun on `encoder` as `pass`, timed in `span`.
+    pub fn opened(&mut self, pass: Id, encoder: Id, compute: bool, span: Option<GpuSpanName>) {
         self.open.push(Open {
             named: pass,
             at: pass,
@@ -233,7 +234,7 @@ impl Split {
             compute,
             pipeline: 0,
             groups: Default::default(),
-            end,
+            span,
             drawn_groups: Vec::new(),
             drawn_args: Vec::new(),
             declared: &[],

@@ -16,8 +16,8 @@ import { perfTraceSave } from "./perf/trace.ts";
 import { perfReportRead } from "./perf/view.ts";
 import { raw } from "@/service/core/raw.ts";
 
-/** Call this once the core has booted: the doorbell that `xpute.cmd` rings
- * exists only from then. */
+/** Call this once the core has booted: the connection `xpute.cmd` sends
+ * through exists only from then. */
 export function installConsole(): void {
   const g = globalThis as { xpute?: unknown; pxl?: unknown };
   g.xpute = raw;

@@ -7,8 +7,8 @@
 //! file until the catalog lands, and its reader treats it as still loading.
 //!
 //! An open that fails leaves its asset unasked, so that it is asked again.
-//! An open the heap refused room waits as a tile's body does
-//! (sys/io/request.rs `Wait::Room`). Bytes that do not read are final,
+//! An open the heap refused room, or the file table a descriptor, waits as a
+//! tile's body does (sys/io/request.rs `Wait::Room`). Bytes that do not read are final,
 //! because asking again brings the same bytes. A model's bytes are handed
 //! once to the scene, which parses them (`take_gltf`). An image's bytes are
 //! handed to the renderer under the asset's number until its texture lands
@@ -16,29 +16,31 @@
 
 use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};
-use pxl_spec::bake::publication::BaseLayer;
 use xpute_core::global::Global;
-use xpute_core::ipc::fs::Fd;
-use xpute_core::sched::edge::{runtime_turn, yield_if_spent};
-use xpute_core::sched::task;
+use xpute_core::io::fs::Fd;
+use xpute_core::sched::turn::yield_if_spent;
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
+use crate::sys::io::body::Packet;
 use crate::sys::io::demand::Order;
-use crate::sys::io::failure::{Exit, Failure};
-use crate::sys::io::file::{self, Opened, Owner, Reading};
-use crate::sys::io::file_spec::{root, CATALOG};
+use crate::sys::io::failure::{exit_of, Exit, Failure};
+use crate::sys::io::file::{self, OpenResult, Owner, Request};
+use crate::sys::io::file_spec::CATALOG;
 use crate::sys::io::request::{attempt_of, settle};
 use crate::sys::io::source;
-use crate::sys::load::{Load, LoadKind};
-use crate::sys::sched::edge::{request_world_tick, world_edge};
+use crate::sys::load::{Load, LoadKind, LOAD_FILES};
+use crate::sys::sched::executor;
+use crate::sys::sched::{self, request_world_tick};
 
 enum Entry {
     Pending,
-    /// The bytes are with the file's arrival task, and the credit is given
-    /// back.
+    /// The file is being read, or its bytes are with its arrival task, and
+    /// the credit is given back.
     InTask,
     /// The file's bytes, kept until the reader takes them in: a model's until
     /// the scene takes them, an image's until its texture lands.
-    Bytes(Vec<u8>),
+    Bytes(Packet),
     /// The reader has taken the file in and keeps it, and the bytes are gone.
     InReader,
     Failed,
@@ -47,7 +49,7 @@ enum Entry {
 const KINDS: usize = LoadKind::ALL.len();
 
 struct Loader {
-    /// The entries by kind, then by number below the asset root. A row grows
+    /// The entries by kind, then by number after ASSET. A row grows
     /// to the highest number asked, and an unasked number holds None. One
     /// file can be wanted as several kinds, so each kind has its own row.
     entries: [Vec<Option<Entry>>; KINDS],
@@ -99,15 +101,16 @@ pub fn load_of(slot: Slot) -> Option<Load> {
 
 /// A model's bytes, handed over once. It is None while the file loads and
 /// after the bytes are taken.
-pub fn take_gltf(load: Load) -> Option<Vec<u8>> {
+pub fn take_gltf(load: Load) -> Option<Packet> {
     let entry = loader()
         .at(LoadKind::Gltf, load)
         .get_or_insert(Entry::Pending);
-    let Entry::Bytes(bytes) = entry else {
+    if !matches!(entry, Entry::Bytes(_)) {
+        return None;
+    }
+    let Entry::Bytes(bytes) = core::mem::replace(entry, Entry::InReader) else {
         return None;
     };
-    let bytes = core::mem::take(bytes);
-    *entry = Entry::InReader;
     Some(bytes)
 }
 
@@ -119,7 +122,7 @@ pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
         .at(LoadKind::Image, load)
         .get_or_insert(Entry::Pending)
     {
-        Entry::Bytes(bytes) => Some((load.id(), bytes.as_slice())),
+        Entry::Bytes(bytes) => Some((load.id(), &bytes[..])),
         Entry::InReader => Some((load.id(), &[])),
         _ => None,
     }
@@ -157,54 +160,63 @@ pub fn load_wants() -> &'static [(u64, Order)] {
 /// Opens the file of `load`. A model and an image of one load are the same
 /// file, and the attempt's id says which it is read as.
 pub fn open_asset(key: u64, load: Load) {
-    let root = match load {
-        Load::Sphere => BaseLayer::earth as u32,
-        Load::File(_) => root::ASSET,
-    };
-    file::open(root, load.path(), Owner::Load { key });
+    file::open(&load.path(), Owner::Load { key });
 }
 
 /// Takes the answer to an asset's open. The room for the bytes is taken now,
-/// the descriptor is closed and the credit is given back, so taking the
-/// bytes in holds neither.
-pub fn on_opened(fd: Fd, key: u64, opened: Opened) {
-    let what = attempt_of(key).and_then(|(_, id)| of_id(id));
-    let Opened::Bytes(n) = opened else {
-        settle(key, Exit::Failed(Failure::from(opened)), None);
+/// the file is read whole and closed, which lets its descriptor go, and the
+/// credit is given back with it, so taking the bytes in holds neither; they
+/// arrive as the close is completed (`on_read`).
+pub fn on_opened(fd: Fd, key: u64, opened: OpenResult) {
+    let id = attempt_of(key).map(|(_, id)| id);
+    let what = id.and_then(of_id);
+    let OpenResult::Bytes(n) = opened else {
+        settle(key, exit_of(Failure::from(opened)), None);
         if let Some((kind, load)) = what {
             *loader().at(kind, load) = None;
         }
         return;
     };
-    let Some((kind, load)) = what else {
+    let (Some(id), Some((kind, load))) = (id, what) else {
         return file::close(fd);
     };
-    match file::read_whole(fd, n) {
-        Ok(reading) => {
+    match file::read_bytes(fd, n, Request::Load { id }) {
+        Ok(()) => {
             settle(key, Exit::Ok, None);
             *loader().at(kind, load) = Some(Entry::InTask);
-            // The task pool has room for one task for each file in flight
-            // (sys/load.rs `LOAD_FILES`), so the spawn cannot fail.
-            let spawned = task::spawn(arrival(kind, load, reading), 0);
-            xpute_kit::ensure!(spawned, ENOSPC, load.id());
         }
         Err(refused) => settle(key, Exit::Refused(refused), None),
     }
 }
 
-/// Takes in a file read whole, in a task of its own, once the runtime's head
-/// has passed its read. Where the turn is spent before the tasks run, each
-/// arrival still advances one step a turn, so no arrival waits on another.
-async fn arrival(kind: LoadKind, load: Load, mut reading: Reading) {
-    let bytes = loop {
-        match file::take_read(reading) {
-            Ok(bytes) => break bytes,
-            Err(unread) => reading = unread,
-        }
-        runtime_turn(world_edge).await;
+/// The read of the want `id` is done, as its close is completed: its bytes,
+/// taken in by a task of its own, or the close's errno.
+pub fn on_read(id: u64, read: Result<Packet, Errno>) {
+    let Some((kind, load)) = of_id(id) else {
+        return;
     };
-    yield_if_spent(world_edge).await;
+    // The task's pool has room for one for each file in flight
+    // (sys/load.rs `LOAD_FILES`), so the spawn cannot fail.
+    executor::spawner().spawn(arrival(kind, load, read).or_bug(Errno::ENOSPC));
+}
+
+/// Takes in a file read whole, in a task of its own. Where the turn is spent
+/// before the tasks run, each arrival still advances one step a turn, so no
+/// arrival waits on another. A read whose close failed filled nothing, and
+/// the load fails; one a reload cancelled is asked again.
+#[embassy_executor::task(pool_size = LOAD_FILES)]
+async fn arrival(kind: LoadKind, load: Load, read: Result<Packet, Errno>) {
+    yield_if_spent(sched::turn).await;
     let l = loader();
+    let bytes = match read {
+        Ok(bytes) => bytes,
+        Err(errnum) => {
+            let entry = (errnum != Errno::ECANCELED).then_some(Entry::Failed);
+            *l.at(kind, load) = entry;
+            request_world_tick();
+            return;
+        }
+    };
     let entry = match kind {
         LoadKind::Gltf => Entry::Bytes(bytes),
         // An image is kept only where its header gives its size (pxl-spec

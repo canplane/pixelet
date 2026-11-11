@@ -25,7 +25,6 @@ use crate::domain::layer::tile_cache::TileCache;
 
 use crate::domain::layer::object::store::Write;
 use crate::domain::layer::terrain::clipmap::test;
-use crate::sys::serial;
 use pxl_engine::world::placed_in;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::bake::separation::Separation;
@@ -137,154 +136,157 @@ pub(crate) fn write(store: &mut Store, corner: V3, side: Zoom, state: u32) {
 
 #[test]
 fn no_surface_placed_stands() {
-    let _g = serial();
-    let leaf = top().children()[0];
-    let void = drawn(
-        vec![0; CELLS],
-        vec![sentinel::void; SPAN * SPAN].into(),
-        Default::default(),
-    );
-    let (x0, y0, _) = leaf.rect();
-    let at = [x0 + 10.5, y0 + 10.5];
-    resident(at, &[(leaf, void)]);
+    crate::on_core(|| {
+        let leaf = top().children()[0];
+        let void = drawn(
+            vec![0; CELLS],
+            vec![sentinel::void; SPAN * SPAN].into(),
+            Default::default(),
+        );
+        let (x0, y0, _) = leaf.rect();
+        let at = [x0 + 10.5, y0 + 10.5];
+        resident(at, &[(leaf, void)]);
 
-    let access = placed(Store::default());
-    assert_eq!(
-        access
-            .surface_of(
-                GROUND.leaf_cell_zoom(),
-                GROUND.cell_of(LEAF_ZOOM, &point(at[0], at[1])).node().1
-            )
-            .val()
-            .unwrap(),
-        None
-    );
-    assert_eq!(
-        access.surface_support(&point(at[0], at[1])),
-        Answer::Exact(None)
-    );
-    assert_eq!(
-        access
+        let access = placed(Store::default());
+        assert_eq!(
+            access
+                .surface_of(
+                    GROUND.leaf_cell_zoom(),
+                    GROUND.cell_of(LEAF_ZOOM, &point(at[0], at[1])).node().1
+                )
+                .val()
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            access.surface_support(&point(at[0], at[1])),
+            Answer::Exact(None)
+        );
+        assert_eq!(
+            access
+                .first_hit(&down(at), at_zoom(LEAF_ZOOM))
+                .val()
+                .flatten(),
+            None
+        );
+
+        let mut store = Store::default();
+        let red = cube::Object::red as AssetId;
+        write(
+            &mut store,
+            [x0 + 10.0, y0 + 10.0, 5.0],
+            OBJECT_COARSEST,
+            red,
+        );
+        let access = placed(store);
+        assert_eq!(
+            access.surface_support(&point(at[0], at[1])),
+            Answer::Exact(Some(6.0))
+        );
+        let hit = access
             .first_hit(&down(at), at_zoom(LEAF_ZOOM))
             .val()
-            .flatten(),
-        None
-    );
-
-    let mut store = Store::default();
-    let red = cube::Object::red as AssetId;
-    write(
-        &mut store,
-        [x0 + 10.0, y0 + 10.0, 5.0],
-        OBJECT_COARSEST,
-        red,
-    );
-    let access = placed(store);
-    assert_eq!(
-        access.surface_support(&point(at[0], at[1])),
-        Answer::Exact(Some(6.0))
-    );
-    let hit = access
-        .first_hit(&down(at), at_zoom(LEAF_ZOOM))
-        .val()
-        .flatten()
-        .unwrap();
-    assert!(matches!(hit.kind, HitKind::Object(_)), "{hit:?}");
+            .flatten()
+            .unwrap();
+        assert!(matches!(hit.kind, HitKind::Object(_)), "{hit:?}");
+    });
 }
 
 /// A deck stands on its own, not on the ground under it: over a void cell
 /// the query meets its slab where the renderer draws it.
 #[test]
 fn deck_over_void_met() {
-    use pxl_spec::bake::separation::{Builder, Form, POINT_SCALE};
-    let _g = serial();
-    let leaf = top().children()[0];
-    let mut separation = Builder::default();
-    separation.push(
-        [([0.0, 10.5], 10, 0), ([40.0, 10.5], 10, 0)],
-        4 * POINT_SCALE as u8,
-        ground::residential_road,
-        Form::Bridge,
-        0,
-    );
-    let void = drawn(
-        vec![0; CELLS],
-        vec![sentinel::void; SPAN * SPAN].into(),
-        separation.finish(),
-    );
-    let (x0, y0, _) = leaf.rect();
-    let at = [x0 + 20.5, y0 + 10.5];
-    resident(at, &[(leaf, void)]);
-    let access = placed(Store::default());
-    assert_eq!(
-        access.surface_support(&point(at[0], at[1])),
-        Answer::Exact(Some(10.0))
-    );
-    let hit = access
-        .first_hit(&down(at), at_zoom(LEAF_ZOOM))
-        .val()
-        .flatten()
-        .unwrap();
-    assert_eq!(hit.point[2], 10.0, "{hit:?}");
+    crate::on_core(|| {
+        use pxl_spec::bake::separation::{Builder, Form, POINT_SCALE};
+        let leaf = top().children()[0];
+        let mut separation = Builder::default();
+        separation.push(
+            [([0.0, 10.5], 10, 0), ([40.0, 10.5], 10, 0)],
+            4 * POINT_SCALE as u8,
+            ground::residential_road,
+            Form::Bridge,
+            0,
+        );
+        let void = drawn(
+            vec![0; CELLS],
+            vec![sentinel::void; SPAN * SPAN].into(),
+            separation.finish(),
+        );
+        let (x0, y0, _) = leaf.rect();
+        let at = [x0 + 20.5, y0 + 10.5];
+        resident(at, &[(leaf, void)]);
+        let access = placed(Store::default());
+        assert_eq!(
+            access.surface_support(&point(at[0], at[1])),
+            Answer::Exact(Some(10.0))
+        );
+        let hit = access
+            .first_hit(&down(at), at_zoom(LEAF_ZOOM))
+            .val()
+            .flatten()
+            .unwrap();
+        assert_eq!(hit.point[2], 10.0, "{hit:?}");
+    });
 }
 
 /// A ray whose frame runs on past the antimeridian meets the ground and the
 /// objects there, which are stored under the world's canonical positions.
 #[test]
 fn ray_across_antimeridian() {
-    let _g = serial();
-    let n = 1i32 << LEAF_ZOOM;
-    let flat = || {
-        let cells = vec![ground::land; SPAN * SPAN];
-        drawn(vec![5; CELLS], cells.into(), Default::default())
-    };
-    let tile = |x: i32| Quadrant::new(LEAF_ZOOM, [x, 0]);
-    let seam = world::ROUND / 2.0;
-    resident(
-        [seam, 100.5],
-        &[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())],
-    );
-    let top = placed(Store::default())
-        .surface_of(
-            GROUND.leaf_cell_zoom(),
-            GROUND
-                .cell_of(LEAF_ZOOM, &point(-seam + 20.5, 100.5))
-                .node()
-                .1,
-        )
-        .val()
-        .flatten()
-        .unwrap()
-        .top;
+    crate::on_core(|| {
+        let n = 1i32 << LEAF_ZOOM;
+        let flat = || {
+            let cells = vec![ground::land; SPAN * SPAN];
+            drawn(vec![5; CELLS], cells.into(), Default::default())
+        };
+        let tile = |x: i32| Quadrant::new(LEAF_ZOOM, [x, 0]);
+        let seam = world::ROUND / 2.0;
+        resident(
+            [seam, 100.5],
+            &[(tile(n / 2 - 1), flat()), (tile(n / 2), flat())],
+        );
+        let top = placed(Store::default())
+            .surface_of(
+                GROUND.leaf_cell_zoom(),
+                GROUND
+                    .cell_of(LEAF_ZOOM, &point(-seam + 20.5, 100.5))
+                    .node()
+                    .1,
+            )
+            .val()
+            .flatten()
+            .unwrap()
+            .top;
 
-    let mut store = Store::default();
-    let red = cube::Object::red as AssetId;
-    write(&mut store, [-seam + 40.0, 100.0, top], OBJECT_COARSEST, red);
-    let access = placed(store);
+        let mut store = Store::default();
+        let red = cube::Object::red as AssetId;
+        write(&mut store, [-seam + 40.0, 100.0, top], OBJECT_COARSEST, red);
+        let access = placed(store);
 
-    let ground = access
-        .first_hit(&down([seam + 20.5, 100.5]), at_zoom(LEAF_ZOOM))
-        .exact()
-        .flatten()
-        .unwrap();
-    assert_eq!(
-        [ground.point[0], ground.point[2]],
-        [seam + 20.5, top],
-        "{ground:?}"
-    );
+        let ground = access
+            .first_hit(&down([seam + 20.5, 100.5]), at_zoom(LEAF_ZOOM))
+            .exact()
+            .flatten()
+            .unwrap();
+        assert_eq!(
+            [ground.point[0], ground.point[2]],
+            [seam + 20.5, top],
+            "{ground:?}"
+        );
 
-    let along = Ray {
-        origin: [seam - 30.0, 100.5, top + 0.5],
-        dir: [1.0, 0.0, 0.0],
-        t_max: 200.0,
-    };
-    let hit = access
-        .first_hit(&along, at_zoom(LEAF_ZOOM))
-        .exact()
-        .flatten()
-        .unwrap();
-    assert!(matches!(hit.kind, HitKind::Object(_)), "{hit:?}");
-    assert_eq!(hit.point[0], seam + 40.0, "{hit:?}");
+        let along = Ray {
+            origin: [seam - 30.0, 100.5, top + 0.5],
+            dir: [1.0, 0.0, 0.0],
+            t_max: 200.0,
+        };
+        let hit = access
+            .first_hit(&along, at_zoom(LEAF_ZOOM))
+            .exact()
+            .flatten()
+            .unwrap();
+        assert!(matches!(hit.kind, HitKind::Object(_)), "{hit:?}");
+        assert_eq!(hit.point[0], seam + 40.0, "{hit:?}");
+    });
 }
 
 pub(crate) fn flat_at_five() -> [f64; 2] {
@@ -304,25 +306,26 @@ pub(crate) fn flat_at_five() -> [f64; 2] {
 /// where its line does.
 #[test]
 fn ray_from_above_meets_ground() {
-    let _g = serial();
-    let at = flat_at_five();
-    let access = placed(Store::default());
-    let top = access
-        .first_hit(&down(at), at_zoom(LEAF_ZOOM))
-        .val()
-        .flatten()
-        .unwrap()
-        .point[2];
-    let high = 2.0 * world::BOUNDS.max[2];
-    let over = Ray {
-        origin: [at[0], at[1], high],
-        dir: [0.0, 0.0, -1.0],
-        t_max: 2.0 * high,
-    };
-    let met = access.first_hit(&over, at_zoom(LEAF_ZOOM));
-    assert!(matches!(met, Answer::Exact(_)), "{met:?}");
-    let hit = met.val().flatten().unwrap();
-    assert_eq!([hit.point[2], hit.t], [top, high - top], "{hit:?}");
+    crate::on_core(|| {
+        let at = flat_at_five();
+        let access = placed(Store::default());
+        let top = access
+            .first_hit(&down(at), at_zoom(LEAF_ZOOM))
+            .val()
+            .flatten()
+            .unwrap()
+            .point[2];
+        let high = 2.0 * world::BOUNDS.max[2];
+        let over = Ray {
+            origin: [at[0], at[1], high],
+            dir: [0.0, 0.0, -1.0],
+            t_max: 2.0 * high,
+        };
+        let met = access.first_hit(&over, at_zoom(LEAF_ZOOM));
+        assert!(matches!(met, Answer::Exact(_)), "{met:?}");
+        let hit = met.val().flatten().unwrap();
+        assert_eq!([hit.point[2], hit.t], [top, high - top], "{hit:?}");
+    });
 }
 
 /// A dig is met as the cells asked fold it, and nothing finer. At the
@@ -334,56 +337,58 @@ fn ray_from_above_meets_ground() {
 /// dug lower half.
 #[test]
 fn dig_met_as_folded() {
-    use pxl_content::cave::hollow;
-    use pxl_engine::answer::side;
-    use pxl_spec::share::EIGHTHS;
-    use pxl_spec::value::AIR;
-    let _g = serial();
-    let [x, y] = flat_at_five();
-    // A column with no cave under the dig, so the ground under it is met.
-    let clear = |x: f64| hollow((LEAF_CELL_ZOOM, [x, y, 3.0].map(|v| libm::floor(v) as i32))) == 0;
-    let x = (0..).map(|i| x + f64::from(i)).find(|&x| clear(x)).unwrap();
-    let half = units(OBJECT_COARSEST + 1);
-    let dug = |n: usize| {
-        let mut store = Store::default();
-        for k in 0..n {
-            let [dx, dy, dz] = [k & 1, k >> 1 & 1, k >> 2 & 1].map(|b| b as f64 * half);
-            write(
-                &mut store,
-                [x + dx, y + dy, 4.0 + dz],
-                OBJECT_COARSEST + 1,
-                AIR,
+    crate::on_core(|| {
+        use pxl_content::cave::hollow;
+        use pxl_engine::answer::side;
+        use pxl_spec::share::EIGHTHS;
+        use pxl_spec::value::AIR;
+        let [x, y] = flat_at_five();
+        // A column with no cave under the dig, so the ground under it is met.
+        let clear =
+            |x: f64| hollow((LEAF_CELL_ZOOM, [x, y, 3.0].map(|v| libm::floor(v) as i32))) == 0;
+        let x = (0..).map(|i| x + f64::from(i)).find(|&x| clear(x)).unwrap();
+        let half = units(OBJECT_COARSEST + 1);
+        let dug = |n: usize| {
+            let mut store = Store::default();
+            for k in 0..n {
+                let [dx, dy, dz] = [k & 1, k >> 1 & 1, k >> 2 & 1].map(|b| b as f64 * half);
+                write(
+                    &mut store,
+                    [x + dx, y + dy, 4.0 + dz],
+                    OBJECT_COARSEST + 1,
+                    AIR,
+                );
+            }
+            store
+        };
+        for (n, stands) in [(1, 5.0), (3, 5.0), (4, 5.0), (8, 4.0)] {
+            let left = EIGHTHS - n as u32;
+            let top = if left == 0 {
+                4.0
+            } else {
+                4.5 + f64::from(side(left)) / 2.0
+            };
+            let store = dug(n);
+            let access = placed(store);
+            let at = [x + half / 2.0, y + half / 2.0];
+            let hit = access
+                .first_hit(&down(at), at_zoom(LEAF_ZOOM))
+                .exact()
+                .flatten()
+                .unwrap();
+            // The top is checked as `cast::top` gives it: a share of the cell,
+            // in f32.
+            assert!(
+                (hit.cube.max[2] - top).abs() < 1e-6,
+                "{n} of 8 dug: {hit:?}"
+            );
+            assert_eq!(
+                access.surface_support(&point(at[0], at[1])),
+                Answer::Exact(Some(stands)),
+                "{n} of 8 dug"
             );
         }
-        store
-    };
-    for (n, stands) in [(1, 5.0), (3, 5.0), (4, 5.0), (8, 4.0)] {
-        let left = EIGHTHS - n as u32;
-        let top = if left == 0 {
-            4.0
-        } else {
-            4.5 + f64::from(side(left)) / 2.0
-        };
-        let store = dug(n);
-        let access = placed(store);
-        let at = [x + half / 2.0, y + half / 2.0];
-        let hit = access
-            .first_hit(&down(at), at_zoom(LEAF_ZOOM))
-            .exact()
-            .flatten()
-            .unwrap();
-        // The top is checked as `cast::top` gives it: a share of the cell,
-        // in f32.
-        assert!(
-            (hit.cube.max[2] - top).abs() < 1e-6,
-            "{n} of 8 dug: {hit:?}"
-        );
-        assert_eq!(
-            access.surface_support(&point(at[0], at[1])),
-            Answer::Exact(Some(stands)),
-            "{n} of 8 dug"
-        );
-    }
+    });
 }
 
 /// What is held is met as finely as it is held. A half cube on the ground,
@@ -391,25 +396,26 @@ fn dig_met_as_folded() {
 /// zoom the cube is placed at.
 #[test]
 fn half_cube_met() {
-    let _g = serial();
-    let [x, y] = flat_at_five();
-    let half = units(OBJECT_COARSEST + 1);
-    let mut store = Store::default();
-    let red = cube::Object::red as AssetId;
-    write(&mut store, [x, y, 5.0], OBJECT_COARSEST + 1, red);
-    let access = placed(store);
-    let at = [x + half / 2.0, y + half / 2.0];
-    let hit = access
-        .first_hit(&down(at), finest())
-        .exact()
-        .flatten()
-        .unwrap();
-    assert!(matches!(hit.kind, HitKind::Object(_)), "{hit:?}");
-    assert_eq!(
-        [hit.point[2], hit.cube.extent()[0]],
-        [5.0 + half, half],
-        "{hit:?}"
-    );
+    crate::on_core(|| {
+        let [x, y] = flat_at_five();
+        let half = units(OBJECT_COARSEST + 1);
+        let mut store = Store::default();
+        let red = cube::Object::red as AssetId;
+        write(&mut store, [x, y, 5.0], OBJECT_COARSEST + 1, red);
+        let access = placed(store);
+        let at = [x + half / 2.0, y + half / 2.0];
+        let hit = access
+            .first_hit(&down(at), finest())
+            .exact()
+            .flatten()
+            .unwrap();
+        assert!(matches!(hit.kind, HitKind::Object(_)), "{hit:?}");
+        assert_eq!(
+            [hit.point[2], hit.cube.extent()[0]],
+            [5.0 + half, half],
+            "{hit:?}"
+        );
+    });
 }
 
 /// A walker stands on what is placed as it is held, wherever in its cell it
@@ -417,100 +423,103 @@ fn half_cube_met() {
 /// placed in it.
 #[test]
 fn walker_stands_any_tier() {
-    let _g = serial();
-    let [x, y] = flat_at_five();
-    let red = cube::Object::red as AssetId;
-    for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
-        let (cell, side) = (units(GROUND.leaf_cell_zoom()), units(zoom));
-        let mut store = Store::default();
-        // The cube sits in the cell's far corner, away from its middle.
-        write(
-            &mut store,
-            [x + cell - side, y + cell - side, 5.0],
-            zoom,
-            red,
-        );
-        let access = placed(store);
-        let at = point(x + 0.1, y + 0.1);
-        assert_eq!(
-            access.surface_support(&at),
-            Answer::Exact(Some(5.0 + side)),
-            "a cube of z{zoom}"
-        );
-    }
+    crate::on_core(|| {
+        let [x, y] = flat_at_five();
+        let red = cube::Object::red as AssetId;
+        for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
+            let (cell, side) = (units(GROUND.leaf_cell_zoom()), units(zoom));
+            let mut store = Store::default();
+            // The cube sits in the cell's far corner, away from its middle.
+            write(
+                &mut store,
+                [x + cell - side, y + cell - side, 5.0],
+                zoom,
+                red,
+            );
+            let access = placed(store);
+            let at = point(x + 0.1, y + 0.1);
+            assert_eq!(
+                access.surface_support(&at),
+                Answer::Exact(Some(5.0 + side)),
+                "a cube of z{zoom}"
+            );
+        }
+    });
 }
 
 /// In a stack with a cell left out, what stands in the gap stands on the
 /// cube under it.
 #[test]
 fn stack_gap_floored() {
-    let _g = serial();
-    let [x, y] = flat_at_five();
-    let mut store = Store::default();
-    let red = cube::Object::red as AssetId;
-    for z in [5.0, 7.0] {
-        write(&mut store, [x, y, z], OBJECT_COARSEST, red);
-    }
-    let access = placed(store);
-    let gap = world::point(x + 0.5, y + 0.5, 6.5);
-    assert_eq!(
-        access.floor_under(&gap, LEAF_ZOOM),
-        Answer::Exact(Some(6.0))
-    );
-    assert_eq!(access.surface_support(&gap), Answer::Exact(Some(6.0)));
+    crate::on_core(|| {
+        let [x, y] = flat_at_five();
+        let mut store = Store::default();
+        let red = cube::Object::red as AssetId;
+        for z in [5.0, 7.0] {
+            write(&mut store, [x, y, z], OBJECT_COARSEST, red);
+        }
+        let access = placed(store);
+        let gap = world::point(x + 0.5, y + 0.5, 6.5);
+        assert_eq!(
+            access.floor_under(&gap, LEAF_ZOOM),
+            Answer::Exact(Some(6.0))
+        );
+        assert_eq!(access.surface_support(&gap), Answer::Exact(Some(6.0)));
+    });
 }
 
 /// A ray that goes on from where the last ray from its point ended meets what
 /// a ray from the top meets.
 #[test]
 fn ray_goes_on_from_the_last() {
-    use super::ray::{at_zoom, Until};
-    use crate::domain::layer::tile_cache::Path;
+    crate::on_core(|| {
+        use super::ray::{at_zoom, Until};
+        use crate::domain::layer::tile_cache::Path;
 
-    let _g = serial();
-    let [x, y] = flat_at_five();
-    let mut store = Store::default();
-    let red = cube::Object::red as AssetId;
-    for z in [5.0, 7.0] {
-        write(&mut store, [x, y, z], OBJECT_COARSEST, red);
-    }
-    let access = placed(store);
-    let detail = at_zoom(LEAF_ZOOM);
-    let ray = |z: f64, dir: f64| Ray {
-        origin: [x + 0.5, y + 0.5, z],
-        dir: [0.0, 0.0, dir],
-        t_max: 64.0,
-    };
-    for z in [3.5, 5.5, 6.0, 6.5, 7.0, 7.5, 9.5] {
-        let (mut path, mut descent) = (Path::default(), None);
-        access.along(
-            &ray(z, 1.0),
-            detail,
-            Until::Transparent,
-            None,
-            &mut path,
-            &mut descent,
-        );
-        assert!(descent.is_some());
-        let on = access.along(
-            &ray(z, -1.0),
-            detail,
-            Until::Opaque,
-            None,
-            &mut path,
-            &mut descent,
-        );
-        let top = access.along(
-            &ray(z, -1.0),
-            detail,
-            Until::Opaque,
-            None,
-            &mut Path::default(),
-            &mut None,
-        );
-        let met = |a: Answer<Option<Hit>>| a.val().flatten().map(|h| (h.t, h.cube));
-        assert_eq!(met(on), met(top), "from {z}");
-    }
+        let [x, y] = flat_at_five();
+        let mut store = Store::default();
+        let red = cube::Object::red as AssetId;
+        for z in [5.0, 7.0] {
+            write(&mut store, [x, y, z], OBJECT_COARSEST, red);
+        }
+        let access = placed(store);
+        let detail = at_zoom(LEAF_ZOOM);
+        let ray = |z: f64, dir: f64| Ray {
+            origin: [x + 0.5, y + 0.5, z],
+            dir: [0.0, 0.0, dir],
+            t_max: 64.0,
+        };
+        for z in [3.5, 5.5, 6.0, 6.5, 7.0, 7.5, 9.5] {
+            let (mut path, mut descent) = (Path::default(), None);
+            access.along(
+                &ray(z, 1.0),
+                detail,
+                Until::Transparent,
+                None,
+                &mut path,
+                &mut descent,
+            );
+            assert!(descent.is_some());
+            let on = access.along(
+                &ray(z, -1.0),
+                detail,
+                Until::Opaque,
+                None,
+                &mut path,
+                &mut descent,
+            );
+            let top = access.along(
+                &ray(z, -1.0),
+                detail,
+                Until::Opaque,
+                None,
+                &mut Path::default(),
+                &mut None,
+            );
+            let met = |a: Answer<Option<Hit>>| a.val().flatten().map(|h| (h.t, h.cube));
+            assert_eq!(met(on), met(top), "from {z}");
+        }
+    });
 }
 
 /// A cell coarser than what is placed in it is read as the cast draws it
@@ -519,29 +528,30 @@ fn ray_goes_on_from_the_last() {
 /// a ray at that zoom meets it.
 #[test]
 fn coarse_cell_floored_as_drawn() {
-    let _g = serial();
-    let [x, y] = flat_at_five();
-    let mut store = Store::default();
-    let red = cube::Object::red as AssetId;
-    write(&mut store, [x, y, 5.0], OBJECT_COARSEST, red);
-    write(&mut store, [x + 1.0, y, 5.0], OBJECT_FINEST, red);
-    let access = placed(store);
-    let zoom = LEAF_ZOOM - 1;
-    let at = [x + 0.5, y + 0.5];
-    let drawn = access
-        .first_hit(&down(at), at_zoom(zoom))
-        .exact()
-        .flatten()
-        .unwrap()
-        .cube
-        .max[2];
-    for z in [drawn + 3.0, drawn - 0.25] {
-        assert_eq!(
-            access.floor_under(&world::point(at[0], at[1], z), zoom),
-            Answer::Exact(Some(drawn)),
-            "from {z}"
-        );
-    }
+    crate::on_core(|| {
+        let [x, y] = flat_at_five();
+        let mut store = Store::default();
+        let red = cube::Object::red as AssetId;
+        write(&mut store, [x, y, 5.0], OBJECT_COARSEST, red);
+        write(&mut store, [x + 1.0, y, 5.0], OBJECT_FINEST, red);
+        let access = placed(store);
+        let zoom = LEAF_ZOOM - 1;
+        let at = [x + 0.5, y + 0.5];
+        let drawn = access
+            .first_hit(&down(at), at_zoom(zoom))
+            .exact()
+            .flatten()
+            .unwrap()
+            .cube
+            .max[2];
+        for z in [drawn + 3.0, drawn - 0.25] {
+            assert_eq!(
+                access.floor_under(&world::point(at[0], at[1], z), zoom),
+                Answer::Exact(Some(drawn)),
+                "from {z}"
+            );
+        }
+    });
 }
 
 /// Quake III's step-slide, a column at a time. When blocked, the walker
@@ -550,112 +560,115 @@ fn coarse_cell_floored_as_drawn() {
 /// slid along.
 #[test]
 fn walker_climbs_or_slides() {
-    let _g = serial();
-    let [x, y] = flat_at_five();
-    let mut store = Store::default();
-    let red = cube::Object::red as AssetId;
-    // A wall three cubes high stands in the column east of the walker's.
-    for z in [5.0, 6.0, 7.0] {
-        write(&mut store, [x + 1.0, y, z], OBJECT_COARSEST, red);
-    }
-    let from = world::point(x + 0.5, y + 0.5, over(5.0));
-    let floor = |p: Q3| q3::to_real(i64::from(p[2])) - units(GROUND.leaf_cell_zoom()) / 2.0;
-    let east = world::point(x + 1.5, y + 0.5, 0.0);
-    let access = placed(store);
-    let to = access.step_slide(&from, &east, true);
-    assert_eq!(
-        (q3::to_real(i64::from(to[0])), floor(to)),
-        (x + 1.5, 8.0),
-        "climbed onto the wall"
-    );
-    // A roof two cells over the walker stops the climb before it tops the
-    // wall.
-    write(store::object_mut(), [x, y, 7.0], OBJECT_COARSEST, red);
-    let to = access.step_slide(&from, &east, true);
-    assert!(
-        q3::to_real(i64::from(to[0])) < x + 1.0,
-        "stopped at the wall"
-    );
-    assert_eq!(floor(to), 5.0);
-    // Going north-east, the east is slid along and the north is walked.
-    let to = access.step_slide(&from, &world::point(x + 1.5, y + 1.5, 0.0), true);
-    assert!(
-        q3::to_real(i64::from(to[0])) < x + 1.0,
-        "slid along the wall"
-    );
-    assert_eq!((q3::to_real(i64::from(to[1])), floor(to)), (y + 1.5, 5.0));
+    crate::on_core(|| {
+        let [x, y] = flat_at_five();
+        let mut store = Store::default();
+        let red = cube::Object::red as AssetId;
+        // A wall three cubes high stands in the column east of the walker's.
+        for z in [5.0, 6.0, 7.0] {
+            write(&mut store, [x + 1.0, y, z], OBJECT_COARSEST, red);
+        }
+        let from = world::point(x + 0.5, y + 0.5, over(5.0));
+        let floor = |p: Q3| q3::to_real(i64::from(p[2])) - units(GROUND.leaf_cell_zoom()) / 2.0;
+        let east = world::point(x + 1.5, y + 0.5, 0.0);
+        let access = placed(store);
+        let to = access.step_slide(&from, &east, true);
+        assert_eq!(
+            (q3::to_real(i64::from(to[0])), floor(to)),
+            (x + 1.5, 8.0),
+            "climbed onto the wall"
+        );
+        // A roof two cells over the walker stops the climb before it tops the
+        // wall.
+        write(store::object_mut(), [x, y, 7.0], OBJECT_COARSEST, red);
+        let to = access.step_slide(&from, &east, true);
+        assert!(
+            q3::to_real(i64::from(to[0])) < x + 1.0,
+            "stopped at the wall"
+        );
+        assert_eq!(floor(to), 5.0);
+        // Going north-east, the east is slid along and the north is walked.
+        let to = access.step_slide(&from, &world::point(x + 1.5, y + 1.5, 0.0), true);
+        assert!(
+            q3::to_real(i64::from(to[0])) < x + 1.0,
+            "slid along the wall"
+        );
+        assert_eq!((q3::to_real(i64::from(to[1])), floor(to)), (y + 1.5, 5.0));
+    });
 }
 
 /// A height picks the floor nearest it: the ground under a deck or the deck,
 /// whichever is closer. A solid with no clear cell over it is no floor.
 #[test]
 fn height_nearest_floor() {
-    let _g = serial();
-    let [x, y] = flat_at_five();
-    let mut store = Store::default();
-    let red = cube::Object::red as AssetId;
-    // A deck a cube thick has its top at 10, with the ground at 5 under it.
-    write(&mut store, [x, y, 9.0], OBJECT_COARSEST, red);
-    let access = placed(store);
-    let near = |z: f64| access.support_nearest(&world::point(x + 0.5, y + 0.5, z));
-    assert_eq!(
-        near(6.0),
-        Answer::Exact(Some(5.0)),
-        "the ground under the deck"
-    );
-    assert_eq!(near(12.0), Answer::Exact(Some(10.0)), "the deck");
-    // A cube right under the deck's cube has no clear cell over its top.
-    write(store::object_mut(), [x, y, 8.0], OBJECT_COARSEST, red);
-    assert_eq!(
-        access.support_nearest(&world::point(x + 0.5, y + 0.5, 9.0)),
-        Answer::Exact(Some(10.0))
-    );
+    crate::on_core(|| {
+        let [x, y] = flat_at_five();
+        let mut store = Store::default();
+        let red = cube::Object::red as AssetId;
+        // A deck a cube thick has its top at 10, with the ground at 5 under it.
+        write(&mut store, [x, y, 9.0], OBJECT_COARSEST, red);
+        let access = placed(store);
+        let near = |z: f64| access.support_nearest(&world::point(x + 0.5, y + 0.5, z));
+        assert_eq!(
+            near(6.0),
+            Answer::Exact(Some(5.0)),
+            "the ground under the deck"
+        );
+        assert_eq!(near(12.0), Answer::Exact(Some(10.0)), "the deck");
+        // A cube right under the deck's cube has no clear cell over its top.
+        write(store::object_mut(), [x, y, 8.0], OBJECT_COARSEST, red);
+        assert_eq!(
+            access.support_nearest(&world::point(x + 0.5, y + 0.5, 9.0)),
+            Answer::Exact(Some(10.0))
+        );
+    });
 }
 
 #[test]
 fn box_placed_matches_store() {
-    let _g = serial();
-    let unit = UNIT_ZOOM;
-    let mut store = Store::default();
-    let corners: [V3; 5] = [
-        [3.0, 4.0, 5.0],
-        [3.0, 5.0, 5.0],
-        [10.0, 4.0, 2.0],
-        [40.0, 4.0, 5.0],
-        [3.0, 4.0, 30.0],
-    ];
-    for (k, &c) in corners.iter().enumerate() {
-        write(&mut store, c, unit, 100 + k as u32);
-    }
-    // The box spans the first three's cells; the last two lie past it.
-    let cell = |c: V3| idx_of(unit, &world::point(c[0], c[1], c[2]));
-    let (a, b, c) = (cell(corners[0]), cell(corners[1]), cell(corners[2]));
-    let lo = [a[0].min(c[0]), a[1].min(b[1]), c[2].min(a[2])];
-    let hi = [a[0].max(c[0]), a[1].max(b[1]), c[2].max(a[2])];
-    let lanes = store.columns();
-    let mut asked = Vec::new();
-    let mut placed = placed_in(lo, hi);
-    loop {
-        let (at, word, more) = placed.next(&lanes);
-        if !more {
-            break;
+    crate::on_core(|| {
+        let unit = UNIT_ZOOM;
+        let mut store = Store::default();
+        let corners: [V3; 5] = [
+            [3.0, 4.0, 5.0],
+            [3.0, 5.0, 5.0],
+            [10.0, 4.0, 2.0],
+            [40.0, 4.0, 5.0],
+            [3.0, 4.0, 30.0],
+        ];
+        for (k, &c) in corners.iter().enumerate() {
+            write(&mut store, c, unit, 100 + k as u32);
         }
-        asked.push((at, word & 0xffff));
-    }
-    let mut in_store = Vec::new();
-    let space = Aabb {
-        min: [3.0, 4.0, 2.0],
-        max: [11.0, 6.0, 6.0],
-    };
-    store.entries_in(&space, &mut |e| {
-        if e.zoom == unit {
-            in_store.push((e.at, e.asset_id));
+        // The box spans the first three's cells; the last two lie past it.
+        let cell = |c: V3| idx_of(unit, &world::point(c[0], c[1], c[2]));
+        let (a, b, c) = (cell(corners[0]), cell(corners[1]), cell(corners[2]));
+        let lo = [a[0].min(c[0]), a[1].min(b[1]), c[2].min(a[2])];
+        let hi = [a[0].max(c[0]), a[1].max(b[1]), c[2].max(a[2])];
+        let lanes = store.columns();
+        let mut asked = Vec::new();
+        let mut placed = placed_in(lo, hi);
+        loop {
+            let (at, word, more) = placed.next(&lanes);
+            if !more {
+                break;
+            }
+            asked.push((at, word & 0xffff));
         }
+        let mut in_store = Vec::new();
+        let space = Aabb {
+            min: [3.0, 4.0, 2.0],
+            max: [11.0, 6.0, 6.0],
+        };
+        store.entries_in(&space, &mut |e| {
+            if e.zoom == unit {
+                in_store.push((e.at, e.asset_id));
+            }
+        });
+        asked.sort_unstable();
+        in_store.sort_unstable();
+        assert_eq!(asked.len(), 3, "{asked:?}");
+        assert_eq!(asked, in_store);
     });
-    asked.sort_unstable();
-    in_store.sort_unstable();
-    assert_eq!(asked.len(), 3, "{asked:?}");
-    assert_eq!(asked, in_store);
 }
 
 /// A brick handed after the clip levels were folded without it is read with
@@ -667,76 +680,77 @@ fn box_placed_matches_store() {
 /// zoom coarser than a brick.
 #[test]
 fn late_brick_spike() {
-    use crate::domain::layer::terrain::clipmap::clip_read;
-    use crate::domain::layer::terrain::clipmap::test::{hand, unland};
-    use pxl_engine::clipmap as cells;
-    use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIPS, CLIP_SIZE};
-    use pxl_spec::brick::BRICK;
-    use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
-    let _g = serial();
-    let leaf = top().children()[0];
-    let mut ele = vec![5; CELLS];
-    ele[200 * SPAN + 300] = 400;
-    let spiked = drawn(
-        ele,
-        vec![ground::land; SPAN * SPAN].into(),
-        Default::default(),
-    );
-    let (x0, y0, _) = leaf.rect();
-    resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
-    let world = placed(Store::default());
-    // Find the spike's column in the clip level of the eye's leaves.
-    let (first, _) = clip_read().origin(LEAF_CELL_ZOOM);
-    let top = |g: [i32; 2]| {
-        cells::column_top(cells::cell(&clip_read(), Lookup::NONE, LEAF_CELL_ZOOM, g).1)
-    };
-    let spike = (0..CLIP_SIZE as i32 * CLIP_SIZE as i32)
-        .map(|k| {
-            let w = CLIP_SIZE as i32;
-            [
-                first[0] * BRICK as i32 + k % w,
-                first[1] * BRICK as i32 + k / w,
-            ]
-        })
-        .find(|&g| top(g) == 400)
-        .expect("the spike held");
-    let side = units(GROUND.leaf_cell_zoom());
-    let at = [
-        (f64::from(spike[0]) + 0.5) * side,
-        (f64::from(spike[1]) + 0.5) * side,
-    ];
-    let met = |access: &World| {
-        access
-            .first_hit(&down(at), at_zoom(LEAF_ZOOM))
-            .val()
-            .flatten()
-            .unwrap()
-            .point[2]
-    };
-    let before = met(&world);
-    unland(LEAF_CELL_ZOOM, spike);
-    hand();
-    assert_eq!(met(&world), before, "the spike met");
-    let q = cells::brick_of(spike).0;
-    let mut outside = 0;
-    for k in 0..BRICK * BRICK {
-        let g = [
-            q[0] * BRICK as i32 + (k % BRICK) as i32,
-            q[1] * BRICK as i32 + (k / BRICK) as i32,
+    crate::on_core(|| {
+        use crate::domain::layer::terrain::clipmap::clip_read;
+        use crate::domain::layer::terrain::clipmap::test::{hand, unland};
+        use pxl_engine::clipmap as cells;
+        use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIPS, CLIP_SIZE};
+        use pxl_spec::brick::BRICK;
+        use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
+        let leaf = top().children()[0];
+        let mut ele = vec![5; CELLS];
+        ele[200 * SPAN + 300] = 400;
+        let spiked = drawn(
+            ele,
+            vec![ground::land; SPAN * SPAN].into(),
+            Default::default(),
+        );
+        let (x0, y0, _) = leaf.rect();
+        resident([x0 + 300.0, y0 + 200.0], &[(leaf, spiked)]);
+        let world = placed(Store::default());
+        // Find the spike's column in the clip level of the eye's leaves.
+        let (first, _) = clip_read().origin(LEAF_CELL_ZOOM);
+        let top = |g: [i32; 2]| {
+            cells::column_top(cells::cell(&clip_read(), Lookup::NONE, LEAF_CELL_ZOOM, g).1)
+        };
+        let spike = (0..CLIP_SIZE as i32 * CLIP_SIZE as i32)
+            .map(|k| {
+                let w = CLIP_SIZE as i32;
+                [
+                    first[0] * BRICK as i32 + k % w,
+                    first[1] * BRICK as i32 + k / w,
+                ]
+            })
+            .find(|&g| top(g) == 400)
+            .expect("the spike held");
+        let side = units(GROUND.leaf_cell_zoom());
+        let at = [
+            (f64::from(spike[0]) + 0.5) * side,
+            (f64::from(spike[1]) + 0.5) * side,
         ];
-        let h = top(g);
-        for zoom in MIN_ZOOM..LEAF_CELL_ZOOM - BRICK_MIPS {
-            let s = LEAF_CELL_ZOOM - zoom;
-            let (b, _, _) = cells::bound_over(
-                &clip_read(),
-                &mut Lookup::NONE.clone(),
-                [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
-                (zoom, [g[0] >> s, g[1] >> s]),
-            );
-            outside += u32::from(h < b[0][0] || h > b[0][1]);
+        let met = |access: &World| {
+            access
+                .first_hit(&down(at), at_zoom(LEAF_ZOOM))
+                .val()
+                .flatten()
+                .unwrap()
+                .point[2]
+        };
+        let before = met(&world);
+        unland(LEAF_CELL_ZOOM, spike);
+        hand();
+        assert_eq!(met(&world), before, "the spike met");
+        let q = cells::brick_of(spike).0;
+        let mut outside = 0;
+        for k in 0..BRICK * BRICK {
+            let g = [
+                q[0] * BRICK as i32 + (k % BRICK) as i32,
+                q[1] * BRICK as i32 + (k / BRICK) as i32,
+            ];
+            let h = top(g);
+            for zoom in MIN_ZOOM..LEAF_CELL_ZOOM - BRICK_MIPS {
+                let s = LEAF_CELL_ZOOM - zoom;
+                let (b, _, _) = cells::bound_over(
+                    &clip_read(),
+                    &mut Lookup::NONE.clone(),
+                    [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
+                    (zoom, [g[0] >> s, g[1] >> s]),
+                );
+                outside += u32::from(h < b[0][0] || h > b[0][1]);
+            }
         }
-    }
-    assert_eq!(outside, 0, "cells outside the bound over them");
+        assert_eq!(outside, 0, "cells outside the bound over them");
+    });
 }
 
 /// A lost device takes every brick it held with it. The turn that sees the
@@ -746,34 +760,35 @@ fn late_brick_spike() {
 /// are gone.
 #[test]
 fn device_loss_drops_bounds() {
-    use crate::domain::layer::terrain::clipmap::{clip_read, test::lose};
-    use pxl_engine::clipmap as cells;
-    use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIPS};
-    use pxl_engine::ground::UNBOUNDED;
-    use pxl_spec::brick::BRICK;
-    use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
-    let _g = serial();
-    flat_at_five();
-    let (first, _) = clip_read().origin(LEAF_CELL_ZOOM);
-    let zoom = LEAF_CELL_ZOOM - BRICK_MIPS - 1;
-    let over = || {
-        let s = LEAF_CELL_ZOOM - zoom;
-        let g = [
-            (first[0] * BRICK as i32) >> s,
-            (first[1] * BRICK as i32) >> s,
-        ];
-        let mut place = Lookup::NONE;
-        cells::bound_over(
-            &clip_read(),
-            &mut place,
-            [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
-            (zoom, g),
-        )
-        .0
-    };
-    assert_ne!(over(), [UNBOUNDED; 2], "held");
-    lose();
-    assert_eq!(over(), [UNBOUNDED; 2], "over cells gone");
+    crate::on_core(|| {
+        use crate::domain::layer::terrain::clipmap::{clip_read, test::lose};
+        use pxl_engine::clipmap as cells;
+        use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIPS};
+        use pxl_engine::ground::UNBOUNDED;
+        use pxl_spec::brick::BRICK;
+        use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
+        flat_at_five();
+        let (first, _) = clip_read().origin(LEAF_CELL_ZOOM);
+        let zoom = LEAF_CELL_ZOOM - BRICK_MIPS - 1;
+        let over = || {
+            let s = LEAF_CELL_ZOOM - zoom;
+            let g = [
+                (first[0] * BRICK as i32) >> s,
+                (first[1] * BRICK as i32) >> s,
+            ];
+            let mut place = Lookup::NONE;
+            cells::bound_over(
+                &clip_read(),
+                &mut place,
+                [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
+                (zoom, g),
+            )
+            .0
+        };
+        assert_ne!(over(), [UNBOUNDED; 2], "held");
+        lose();
+        assert_eq!(over(), [UNBOUNDED; 2], "over cells gone");
+    });
 }
 
 /// What the ground generates stands where it was generated, whatever is put
@@ -781,32 +796,33 @@ fn device_loss_drops_bounds() {
 /// generates on the base (pxl-content `generation::placement`).
 #[test]
 fn generated_decor_stays() {
-    use pxl_spec::value::AIR;
-    let _g = serial();
-    let [x, y] = flat_at_five();
-    let near = |store: Store| {
-        let world = placed(store);
-        let space = Aabb {
-            min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
-            max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
+    crate::on_core(|| {
+        use pxl_spec::value::AIR;
+        let [x, y] = flat_at_five();
+        let near = |store: Store| {
+            let world = placed(store);
+            let space = Aabb {
+                min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
+                max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
+            };
+            world.generated_over(&space)
         };
-        world.generated_over(&space)
-    };
-    let bare = near(Store::default());
-    let tree = *bare.first().expect("a decor generates about the eye");
-    let [cx, cy, cz] = tree.generated_in().unwrap();
-    let column = |dz: i32| [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
+        let bare = near(Store::default());
+        let tree = *bare.first().expect("a decor generates about the eye");
+        let [cx, cy, cz] = tree.generated_in().unwrap();
+        let column = |dz: i32| [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
 
-    let mut store = Store::default();
-    let red = cube::Object::red as AssetId;
-    write(&mut store, column(6), OBJECT_COARSEST, red);
-    assert_eq!(near(store), bare, "a cube over it moves nothing");
-
-    for (under, what) in [(AIR, "a carve"), (red, "a cube")] {
         let mut store = Store::default();
-        write(&mut store, column(-1), OBJECT_COARSEST, under);
-        assert_eq!(near(store), bare, "{what} under it moves nothing");
-    }
+        let red = cube::Object::red as AssetId;
+        write(&mut store, column(6), OBJECT_COARSEST, red);
+        assert_eq!(near(store), bare, "a cube over it moves nothing");
+
+        for (under, what) in [(AIR, "a carve"), (red, "a cube")] {
+            let mut store = Store::default();
+            write(&mut store, column(-1), OBJECT_COARSEST, under);
+            assert_eq!(near(store), bare, "{what} under it moves nothing");
+        }
+    });
 }
 
 /// Only an edit in its own box, air or a cube, takes what the ground
@@ -814,44 +830,45 @@ fn generated_decor_stays() {
 /// (pxl-content `generation::DecorQuery::edited`).
 #[test]
 fn generated_decor_edit_removes() {
-    use pxl_spec::value::AIR;
-    let _g = serial();
-    let [x, y] = flat_at_five();
-    let world = placed(Store::default());
-    let space = Aabb {
-        min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
-        max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
-    };
-    let at = |tree: &Instance| {
-        let [cx, cy, cz] = tree.generated_in().unwrap();
-        (Decor::of(tree.id), [cx, cy, cz])
-    };
-    let generates_on = |store: Store, decor: &Decor, [cx, cy, _]: [i32; 3]| {
-        let world = placed(store);
-        scatter::generated_at(&mut scatter::DecorWorld::new(&world), decor, [cx, cy], true)
-            .map(|(_, generates)| generates)
-    };
-    // Pick a decor that generates on bare ground with its box whole.
-    let (decor, [cx, cy, cz]) = world
-        .generated_over(&space)
-        .iter()
-        .map(at)
-        .find(|(d, c)| generates_on(Store::default(), d, *c) == Some(true))
-        .expect("a decor generates about the eye");
-    let generates = |store: Store| generates_on(store, decor, [cx, cy, cz]);
-    let red = cube::Object::red as AssetId;
-    for (dz, val, what, still) in [
-        (0, AIR, "air in its box", false),
-        (0, red, "a cube in its box", false),
-        (-1, AIR, "air under it", true),
-        (-1, red, "a cube under it", true),
-        (6, red, "a cube over it", true),
-    ] {
-        let mut store = Store::default();
-        let at = [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
-        write(&mut store, at, OBJECT_COARSEST, val);
-        assert_eq!(generates(store), Some(still), "{what}");
-    }
+    crate::on_core(|| {
+        use pxl_spec::value::AIR;
+        let [x, y] = flat_at_five();
+        let world = placed(Store::default());
+        let space = Aabb {
+            min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
+            max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
+        };
+        let at = |tree: &Instance| {
+            let [cx, cy, cz] = tree.generated_in().unwrap();
+            (Decor::of(tree.id), [cx, cy, cz])
+        };
+        let generates_on = |store: Store, decor: &Decor, [cx, cy, _]: [i32; 3]| {
+            let world = placed(store);
+            scatter::generated_at(&mut scatter::DecorWorld::new(&world), decor, [cx, cy], true)
+                .map(|(_, generates)| generates)
+        };
+        // Pick a decor that generates on bare ground with its box whole.
+        let (decor, [cx, cy, cz]) = world
+            .generated_over(&space)
+            .iter()
+            .map(at)
+            .find(|(d, c)| generates_on(Store::default(), d, *c) == Some(true))
+            .expect("a decor generates about the eye");
+        let generates = |store: Store| generates_on(store, decor, [cx, cy, cz]);
+        let red = cube::Object::red as AssetId;
+        for (dz, val, what, still) in [
+            (0, AIR, "air in its box", false),
+            (0, red, "a cube in its box", false),
+            (-1, AIR, "air under it", true),
+            (-1, red, "a cube under it", true),
+            (6, red, "a cube over it", true),
+        ] {
+            let mut store = Store::default();
+            let at = [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
+            write(&mut store, at, OBJECT_COARSEST, val);
+            assert_eq!(generates(store), Some(still), "{what}");
+        }
+    });
 }
 
 /// What the ground generates is struck only for the decors the frame generates
@@ -861,87 +878,90 @@ fn generated_decor_edit_removes() {
 /// (`World::first_visible`).
 #[test]
 fn generated_decor_struck_where_generated() {
-    use pxl_spec::asset::decor::DECORS;
-    let _g = serial();
-    let [x, y] = flat_at_five();
-    let world = placed(Store::default());
-    let space = Aabb {
-        min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
-        max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
-    };
-    let generates = |i: &Instance| {
-        let [cx, cy, _] = i.generated_in().unwrap();
-        let decor = Decor::of(i.id);
-        scatter::generated_at(&mut scatter::DecorWorld::new(&world), decor, [cx, cy], true)
-            .is_some_and(|(_, generates)| generates)
-    };
-    let tree = world
-        .generated_over(&space)
-        .into_iter()
-        .find(generates)
-        .expect("a decor generates about the eye");
-    let b = decor::claim(&tree).unwrap();
-    let ray = Ray {
-        origin: [
-            (b.min[0] + b.max[0]) / 2.0,
-            (b.min[1] + b.max[1]) / 2.0,
-            b.max[2] + 1.0,
-        ],
-        dir: [0.0, 0.0, -1.0],
-        t_max: 20.0,
-    };
-    let met = |decors: u32| {
-        world
-            .first_visible(&ray, finest(), decors)
-            .exact()
-            .flatten()
-            .expect("the ground under it")
-            .kind
-    };
-    let leaves = (1 << DECORS.len()) - 1;
-    assert!(
-        matches!(met(leaves), HitKind::Decor(i) if i.generated_in() == tree.generated_in()),
-        "{:?}",
-        met(leaves)
-    );
-    let none = 0;
-    assert!(!matches!(met(none), HitKind::Decor(_)), "{:?}", met(none));
-    let body = world.first_hit(&ray, finest()).exact().flatten().unwrap();
-    assert_eq!(body.kind, HitKind::Ground, "a body passes it");
+    crate::on_core(|| {
+        use pxl_spec::asset::decor::DECORS;
+        let [x, y] = flat_at_five();
+        let world = placed(Store::default());
+        let space = Aabb {
+            min: [x - 8.0, y - 8.0, world::BOUNDS.min[2]],
+            max: [x + 8.0, y + 8.0, world::BOUNDS.max[2]],
+        };
+        let generates = |i: &Instance| {
+            let [cx, cy, _] = i.generated_in().unwrap();
+            let decor = Decor::of(i.id);
+            scatter::generated_at(&mut scatter::DecorWorld::new(&world), decor, [cx, cy], true)
+                .is_some_and(|(_, generates)| generates)
+        };
+        let tree = world
+            .generated_over(&space)
+            .into_iter()
+            .find(generates)
+            .expect("a decor generates about the eye");
+        let b = decor::claim(&tree).unwrap();
+        let ray = Ray {
+            origin: [
+                (b.min[0] + b.max[0]) / 2.0,
+                (b.min[1] + b.max[1]) / 2.0,
+                b.max[2] + 1.0,
+            ],
+            dir: [0.0, 0.0, -1.0],
+            t_max: 20.0,
+        };
+        let met = |decors: u32| {
+            world
+                .first_visible(&ray, finest(), decors)
+                .exact()
+                .flatten()
+                .expect("the ground under it")
+                .kind
+        };
+        let leaves = (1 << DECORS.len()) - 1;
+        assert!(
+            matches!(met(leaves), HitKind::Decor(i) if i.generated_in() == tree.generated_in()),
+            "{:?}",
+            met(leaves)
+        );
+        let none = 0;
+        assert!(!matches!(met(none), HitKind::Decor(_)), "{:?}", met(none));
+        let body = world.first_hit(&ray, finest()).exact().flatten().unwrap();
+        assert_eq!(body.kind, HitKind::Ground, "a body passes it");
+    });
 }
 
 /// A decor whose base sinks under its cell is struck at the box it is drawn
 /// as, the claim's, and not the cells it claims, which are raised to its cell.
 #[test]
 fn sunk_decor_struck_at_its_drawn_box() {
-    use super::ray::Viewer;
-    use pxl_content::generation::Prop;
-    use pxl_spec::asset::decor::DECORS;
-    use pxl_spec::space::coord::q3::FRAC_W;
-    let sunk = scatter::instance(
-        &DECORS[0],
-        &Prop {
-            variant: 0,
-            turn: 0,
-            at: [100, 200, 5],
-            sink: 1 << (FRAC_W - 1),
-        },
-    );
-    let b = decor::claim(&sunk).unwrap();
-    assert_eq!(b.min[2], 4.5);
-    let ray = Ray {
-        origin: [100.5, 200.5, 30.0],
-        dir: [0.0, 0.0, -1.0],
-        t_max: 40.0,
-    };
-    let mut viewer = Viewer {
-        ray: &ray,
-        decors: u32::MAX,
-        met: None,
-    };
-    assert!(viewer.sees(&sunk));
-    let met = viewer.met.unwrap();
-    assert_eq!((met.cube, met.t), (b, 30.0 - b.max[2]));
+    crate::on_core(|| {
+        use super::ray::Viewer;
+        use pxl_content::generation::Prop;
+        use pxl_spec::asset::decor::DECORS;
+        use pxl_spec::space::coord::q3::FRAC_W;
+        let sunk = scatter::instance(
+            &DECORS[0],
+            &Prop {
+                variant: 0,
+                turn: 0,
+                at: [100, 200, 5],
+                sink: 1 << (FRAC_W - 1),
+            },
+        );
+        let b = decor::claim(&sunk).unwrap();
+        assert_eq!(b.min[2], 4.5);
+        let ray = Ray {
+            origin: [100.5, 200.5, 30.0],
+            dir: [0.0, 0.0, -1.0],
+            t_max: 40.0,
+        };
+        let mut viewer = Viewer {
+            ray: &ray,
+            decors: u32::MAX,
+            met: None,
+        };
+        assert!(viewer.sees(&sunk));
+        let met = viewer.met.unwrap();
+        assert_eq!((met.cube, met.t), (b, 30.0 - b.max[2]));
+    });
 }
 
 /// A decor someone placed is the same to whatever asks as one the ground
@@ -949,44 +969,45 @@ fn sunk_decor_struck_at_its_drawn_box() {
 /// body passes it. A ray that starts inside the box does not meet it.
 #[test]
 fn placed_decor_answers_its_box() {
-    use pxl_engine::answer::PLACED_ASSET;
-    use pxl_spec::asset::decor::DECORS;
-    let _g = serial();
-    let [x, y] = flat_at_five();
-    let [cx, cy] = [x.floor(), y.floor()];
-    let tree = DECORS[0];
-    let mut store = Store::default();
-    write(&mut store, [cx, cy, 5.0], OBJECT_COARSEST, tree.id);
-    let world = placed(store);
-    let cell = [cx as i32, cy as i32, 5];
-    let word = PLACED_ASSET | tree.id;
-    assert_eq!(world.asset((LEAF_CELL_ZOOM, cell)).exact(), Some(word));
-    let shot = |z: f64, dir: f64| Ray {
-        origin: [cx + 0.5, cy + 0.5, z],
-        dir: [0.0, 0.0, dir],
-        t_max: 40.0,
-    };
-    let seen = world
-        .first_visible(&shot(30.0, -1.0), finest(), 0)
-        .exact()
-        .flatten()
-        .unwrap();
-    assert!(matches!(seen.kind, HitKind::Decor(i) if i.generated_in().is_none()));
-    assert_eq!(seen.normal, [0.0, 0.0, 1.0]);
-    let body = world.first_hit(&shot(30.0, -1.0), finest());
-    assert_eq!(body.exact().flatten().unwrap().kind, HitKind::Ground);
-    let from_inside = world
-        .first_visible(&shot(5.5, -1.0), finest(), 0)
-        .exact()
-        .flatten()
-        .unwrap();
-    assert_eq!(from_inside.kind, HitKind::Ground);
-    let stands = world.floor_under(&world::point(cx + 0.5, cy + 0.5, 6.5), LEAF_ZOOM);
-    assert_eq!(
-        stands.exact().flatten(),
-        Some(5.0),
-        "a body stands under it"
-    );
+    crate::on_core(|| {
+        use pxl_engine::answer::PLACED_ASSET;
+        use pxl_spec::asset::decor::DECORS;
+        let [x, y] = flat_at_five();
+        let [cx, cy] = [x.floor(), y.floor()];
+        let tree = DECORS[0];
+        let mut store = Store::default();
+        write(&mut store, [cx, cy, 5.0], OBJECT_COARSEST, tree.id);
+        let world = placed(store);
+        let cell = [cx as i32, cy as i32, 5];
+        let word = PLACED_ASSET | tree.id;
+        assert_eq!(world.asset((LEAF_CELL_ZOOM, cell)).exact(), Some(word));
+        let shot = |z: f64, dir: f64| Ray {
+            origin: [cx + 0.5, cy + 0.5, z],
+            dir: [0.0, 0.0, dir],
+            t_max: 40.0,
+        };
+        let seen = world
+            .first_visible(&shot(30.0, -1.0), finest(), 0)
+            .exact()
+            .flatten()
+            .unwrap();
+        assert!(matches!(seen.kind, HitKind::Decor(i) if i.generated_in().is_none()));
+        assert_eq!(seen.normal, [0.0, 0.0, 1.0]);
+        let body = world.first_hit(&shot(30.0, -1.0), finest());
+        assert_eq!(body.exact().flatten().unwrap().kind, HitKind::Ground);
+        let from_inside = world
+            .first_visible(&shot(5.5, -1.0), finest(), 0)
+            .exact()
+            .flatten()
+            .unwrap();
+        assert_eq!(from_inside.kind, HitKind::Ground);
+        let stands = world.floor_under(&world::point(cx + 0.5, cy + 0.5, 6.5), LEAF_ZOOM);
+        assert_eq!(
+            stands.exact().flatten(),
+            Some(5.0),
+            "a body stands under it"
+        );
+    });
 }
 
 /// A service area of the shards at `SHARD_ZOOM` in column `.0` and east of
@@ -1015,66 +1036,69 @@ impl Area for EastOf {
 /// and a cell past it are neither (`World::within`, `World::editable`).
 #[test]
 fn area_edge_leaf_cell_thick() {
-    use pxl_spec::space::coord::zoom::SHARD_ZOOM;
-    let _g = serial();
-    let s = LEAF_ZOOM - SHARD_ZOOM;
-    // The westmost leaf of a served shard whose west neighbor is not served.
-    let leaf = Quadrant::new(LEAF_ZOOM, [5 << s, 3 << s]);
-    let area = EastOf(5);
-    let flat = drawn(
-        vec![5; CELLS],
-        vec![ground::land; SPAN * SPAN].into(),
-        Default::default(),
-    );
-    let (x0, y0, _) = leaf.rect();
-    resident([x0 + 10.0, y0 + 10.0], &[(leaf, flat)]);
-    let world = placed(Store::default());
-    let cell = units(GROUND.leaf_cell_zoom());
-    // For the leaf cell `i` cells east of the leaf's west edge: whether it
-    // is the area's, and whether a cube of it on the ground is editable.
-    let column = |i: f64| {
-        let (x, y) = (x0 + i * cell, y0 + 10.0 * cell);
-        let space = Aabb {
-            min: [x, y, 5.0],
-            max: [x + cell, y + cell, 5.0 + cell],
+    crate::on_core(|| {
+        use pxl_spec::space::coord::zoom::SHARD_ZOOM;
+        let s = LEAF_ZOOM - SHARD_ZOOM;
+        // The westmost leaf of a served shard whose west neighbor is not served.
+        let leaf = Quadrant::new(LEAF_ZOOM, [5 << s, 3 << s]);
+        let area = EastOf(5);
+        let flat = drawn(
+            vec![5; CELLS],
+            vec![ground::land; SPAN * SPAN].into(),
+            Default::default(),
+        );
+        let (x0, y0, _) = leaf.rect();
+        resident([x0 + 10.0, y0 + 10.0], &[(leaf, flat)]);
+        let world = placed(Store::default());
+        let cell = units(GROUND.leaf_cell_zoom());
+        // For the leaf cell `i` cells east of the leaf's west edge: whether it
+        // is the area's, and whether a cube of it on the ground is editable.
+        let column = |i: f64| {
+            let (x, y) = (x0 + i * cell, y0 + 10.0 * cell);
+            let space = Aabb {
+                min: [x, y, 5.0],
+                max: [x + cell, y + cell, 5.0 + cell],
+            };
+            (
+                limit::within_in(&area, &point(x + 0.5 * cell, y + 0.5 * cell)),
+                world.editable_in(&area, &space),
+            )
         };
-        (
-            limit::within_in(&area, &point(x + 0.5 * cell, y + 0.5 * cell)),
-            world.editable_in(&area, &space),
-        )
-    };
-    assert_eq!(column(1.0), (true, true), "one in from the wall");
-    assert_eq!(column(0.0), (false, false), "the wall's column");
-    assert_eq!(column(-1.0), (false, false), "past the wall");
+        assert_eq!(column(1.0), (true, true), "one in from the wall");
+        assert_eq!(column(0.0), (false, false), "the wall's column");
+        assert_eq!(column(-1.0), (false, false), "past the wall");
+    });
 }
 
 /// A decor from another version's catalog, read from a saved file, is
 /// unknown: it has no instance, and the core does not stop.
 #[test]
 fn stored_decor_past_the_catalog_is_unknown() {
-    use crate::domain::layer::object::asset::Asset;
-    use crate::domain::layer::object::meta::decor_instance;
-    use pxl_spec::asset::id::IDX_BITS;
-    use pxl_spec::space::layer::octant::Octant;
-    let _g = serial();
-    let [x, y] = flat_at_five();
-    let past: AssetId = (1 << IDX_BITS) | ((1 << IDX_BITS) - 1);
-    let mut store = Store::default();
-    write(&mut store, [x, y, 5.0], OBJECT_COARSEST, past);
-    let at = Octant::holding(OBJECT_COARSEST, &world::point(x, y, 5.0));
-    let entry = placed(store).entry_at(at).unwrap();
-    assert_eq!(entry.asset_id, past);
-    assert_eq!(entry.asset(), Asset::Unknown);
-    assert!(decor_instance(&entry).is_none());
+    crate::on_core(|| {
+        use crate::domain::layer::object::asset::Asset;
+        use crate::domain::layer::object::meta::decor_instance;
+        use pxl_spec::asset::id::IDX_BITS;
+        use pxl_spec::space::layer::octant::Octant;
+        let [x, y] = flat_at_five();
+        let past: AssetId = (1 << IDX_BITS) | ((1 << IDX_BITS) - 1);
+        let mut store = Store::default();
+        write(&mut store, [x, y, 5.0], OBJECT_COARSEST, past);
+        let at = Octant::holding(OBJECT_COARSEST, &world::point(x, y, 5.0));
+        let entry = placed(store).entry_at(at).unwrap();
+        assert_eq!(entry.asset_id, past);
+        assert_eq!(entry.asset(), Asset::Unknown);
+        assert!(decor_instance(&entry).is_none());
+    });
 }
 
 /// The area's progress the UI shows while the ground loads is the share of
 /// the tiles asked for that show.
 #[test]
 fn shown_share_of_what_is_asked() {
-    let _g = serial();
-    flat_at_five();
-    let tile_cache = TerrainTile::tile_cache();
-    assert!(tile_cache.is_shown());
-    assert_eq!(tile_cache.shown_share(), 1.0);
+    crate::on_core(|| {
+        flat_at_five();
+        let tile_cache = TerrainTile::tile_cache();
+        assert!(tile_cache.is_shown());
+        assert_eq!(tile_cache.shown_share(), 1.0);
+    });
 }

@@ -1,6 +1,5 @@
 // @pxl/client/service/platform/safe-area.native.ts
 
-import { Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { SafeArea } from "./types.ts";
@@ -11,6 +10,6 @@ export function useSafeArea(): SafeArea {
   return {
     top,
     bottom,
-    tappable: Platform.OS === "android" ? PLATFORM.tappableBottom() : 0,
+    tappable: PLATFORM.tappableBottom(),
   };
 }

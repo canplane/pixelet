@@ -1,8 +1,7 @@
 // @pxl/client/abi/state.ts
 
 /** The states the client reports beside the core, which the UI shows. They
- * are numbers both read, as a kernel's uapi headers are, so that neither side
- * reaches into the other. */
+ * are numbers both read, so that neither side reaches into the other. */
 
 /**
  * Where the client's boot stands:

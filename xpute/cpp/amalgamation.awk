@@ -13,7 +13,7 @@
 # `program` is a program of the library's own written against the two files: its
 # includes of the library become one of xpute.hpp, and its other includes are
 # left as they are. A header is found as the compiler finds it under -I cpp:
-# beside the file that names it ("ring.hpp"), or from cpp/
+# beside the file that names it ("frame.hpp"), or from cpp/
 # ("xpute/kit/status/bug.hpp"). A quoted include that the library names and no
 # file given answers is an error, so a header left out of the list fails here
 # and not in a program that includes xpute.hpp.

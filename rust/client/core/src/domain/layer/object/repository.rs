@@ -4,14 +4,14 @@
 //! they come from. It is the one way the layer's records are read and
 //! written. What the view asks for arrives here, and each edit leaves from
 //! here, every write as `<key, asset_id, ext>`. The objects are kept by their
-//! source, a mock or a server (ts/client/src/service/sys/fs/object.ts), below OBJECT
-//! (file.json `root`); this file reads what the source serves and sends it
+//! source, a mock or a server (ts/client/src/service/sys/fs/object.ts), after OBJECT
+//! (file.json `path`); this file reads what the source serves and sends it
 //! the edits.
 //!
 //! The source keeps the objects one shard at a time (pxl-spec
 //! `SHARD_ZOOM`), in one file for each shard named by the shard's quadkey,
 //! as a baked tile is named by its own. It also keeps the top of their tree
-//! (file.json `object.TOP`): the fold of each node at `SHARD_ZOOM` that holds
+//! (file.json `path`, (OBJECT, TOP)): the fold of each node at `SHARD_ZOOM` that holds
 //! objects. The top is read first, and its folds stand in the store for the
 //! shards not read yet (store.rs `Store::set_fold`), so a view from afar
 //! draws from them.
@@ -24,7 +24,7 @@
 //! a shard stays read.
 //!
 //! The writes the store takes go up as edits in batches (file.json
-//! `object.EDITS`), and the source applies them to its shards and its top. A
+//! `path`, (OBJECT, EDIT)), and the source applies them to its shards and its top. A
 //! file that does not decode is refused: it is named to the client to set
 //! aside (`refused_files`), and read again once the client says it did
 //! (`on_emptied`).
@@ -41,20 +41,21 @@ use pxl_spec::space::layer::demand::GROUND_DEMAND_TILES;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
+use xpute_core::io::fs::Token;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderConfig, TreeReader, TreeView};
 
 use super::store::{object, object_mut};
 use crate::domain::layer::object::ext::Ext;
-use crate::domain::layer::object::store::{apply, note_written, Write};
+use crate::domain::layer::object::store::{apply, note_damage, Write};
 use crate::sys::io::body::Packet;
 use crate::sys::io::demand::{Order, PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::{Exit, Failure};
-use crate::sys::io::file::{self, Path};
-use crate::sys::io::file_spec::{self, format, object as object_file, root, top, write as column};
+use crate::sys::io::file;
+use crate::sys::io::file_spec::{self, format, path, top, write as column};
 use crate::sys::io::request::declare;
-use crate::sys::sched::edge::request_world_tick;
+use crate::sys::sched::request_world_tick;
 use pxl_spec::object::ext::{class_of, Class};
 
 /// The most files wanted at once. Before the top is read, only the top is
@@ -78,7 +79,7 @@ struct State {
     top_shards: Option<FnvHashSet<u64>>,
     /// The shards read, by id. Their leaves are in the store.
     read_shards: FnvHashSet<u64>,
-    /// The refused files below OBJECT, by id. Each stays refused until the
+    /// The refused files after OBJECT, by id. Each stays refused until the
     /// client says it emptied the file or gave it back to its source.
     refused_files: Vec<u64>,
     /// The writes the store took since the last batch went up, in order.
@@ -117,10 +118,10 @@ fn change(c: Change) {
 
 fn make(c: Change) {
     match c {
-        Change::Fold(at, word) => note_written(&[object_mut().set_fold(at, word)]),
+        Change::Fold(at, word) => note_damage(&[object_mut().set_fold(at, word)]),
         Change::Shard(at, writes) => {
             if let Some(changed) = object_mut().clear_fold(at) {
-                note_written(&[changed]);
+                note_damage(&[changed]);
             }
             apply(writes);
         }
@@ -215,7 +216,7 @@ fn changed() {
     st.revision = st.revision.wrapping_add(1);
 }
 
-/// Takes in a file below OBJECT that arrived, the top or a shard, or the
+/// Takes in a file after OBJECT that arrived, the top or a shard, or the
 /// news that it is absent (`admit`).
 pub fn on_arrived(id: u64, pkt: Option<Packet>, phases: &mut PhaseList) -> Result<(), Exit> {
     let at = now();
@@ -224,7 +225,7 @@ pub fn on_arrived(id: u64, pkt: Option<Packet>, phases: &mut PhaseList) -> Resul
     result.map_err(|e| Exit::Failed(Failure::from(e)))
 }
 
-/// Takes in file `id` below OBJECT with its `bytes`, or none where it is
+/// Takes in file `id` after OBJECT with its `bytes`, or none where it is
 /// absent. The top's folds are held for the shards not read yet, and a
 /// shard's leaves go into the store in place of its fold. A file that does
 /// not decode leaves the store as it was and is refused.
@@ -440,21 +441,19 @@ pub fn step() {
     save();
 }
 
-/// Sends the writes since the last batch as one edit batch when the turn has
-/// a file write left (sys/io/file.rs `write`); otherwise the batch goes on a
-/// later turn. A batch that does not encode is dropped unsent.
+/// Sends the writes since the last batch as one edit batch (sys/io/file.rs
+/// `write`). A batch that does not encode is dropped unsent.
 pub fn save() {
     let st = state();
     if st.unsent.is_empty() {
         return;
     }
-    let Ok(batch) = encode_writes(format::OBJECT_EDITS, &st.unsent) else {
-        st.unsent.clear();
-        return;
-    };
-    if !file::write(root::OBJECT, Path::of_name(object_file::EDITS), batch) {
-        request_world_tick();
-        return;
+    let edit = [
+        Token::U32(path::OBJECT::ID),
+        Token::U32(path::OBJECT::EDIT::ID),
+    ];
+    if let Ok(batch) = encode_writes(format::OBJECT_EDIT, &st.unsent) {
+        file::write(&edit, &batch);
     }
     st.unsent.clear();
 }

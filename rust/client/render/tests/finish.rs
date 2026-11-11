@@ -1,7 +1,7 @@
 //! This test draws the finish as the renderer does (pass/finish.rs), from its shader module as
 //! build.rs assembles it. The world's finish draws the canvas and the picture in one pass, and
 //! both must equal what a character surface's finish draws onto the canvas alone. A frame not
-//! drawn whole shows the picture first and then finishes only its claimed tiles again. Both
+//! drawn whole shows the picture first and then finishes only its damaged tiles again. Both
 //! targets must still equal what the whole frame drew.
 
 mod gpu;
@@ -184,8 +184,8 @@ impl<'a> Finish<'a> {
     }
 
     /// Writes the tiles' uniform for frame 9. The finish then draws the tiles that changed
-    /// fewer than `damage_frames` frames before it, so `u32::MAX` claims every tile.
-    fn claim(&self, damage_frames: u32) {
+    /// fewer than `damage_frames` frames before it, so `u32::MAX` damages every tile.
+    fn damage(&self, damage_frames: u32) {
         let across = WORLD.map(|v| v.div_ceil(SIDE));
         let grow = WORLD[0] as f32 / CANVAS[0] as f32;
         let words = [
@@ -345,7 +345,7 @@ fn the_world_s_canvas_and_picture_are_the_character_surface_s_one_canvas() {
     let f = Finish::new(&gpu);
     let one = pipeline(&gpu, SHADER_SCREEN_FINISH, 1, true);
     let two = pipeline(&gpu, SHADER_SCREEN_FINISH, 2, true);
-    f.claim(u32::MAX);
+    f.damage(u32::MAX);
     let (alone, alone_view) = canvas(&gpu);
     f.draw(&one, &[&alone_view], false);
     let (shown, shown_view) = canvas(&gpu);
@@ -369,7 +369,7 @@ fn the_world_s_canvas_and_picture_are_the_character_surface_s_one_canvas() {
     let show = pipeline(&gpu, SHADER_SCREEN_SHOW, 1, false);
     let (next, next_view) = canvas(&gpu);
     f.show(&show, &picture_view, &next_view);
-    f.claim(1);
+    f.damage(1);
     f.draw(&two, &[&next_view, &picture_view], true);
     assert_eq!(
         read(&gpu, &next),

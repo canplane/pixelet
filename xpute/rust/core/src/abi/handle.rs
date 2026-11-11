@@ -1,8 +1,11 @@
 // xpute-core/abi/handle.rs
 
 //! A handle is a slot and that slot's generation, so a handle kept past its
-//! release names nothing that takes the slot later. The other side reads only
-//! the slot. 0 is never a handle.
+//! release names nothing that takes the slot later. 0 is never a handle. Slot
+//! 0 is a handle with no value, issued by the door under its next generation
+//! (`tag_of`, io/door.rs `Door::tag`), for a request or a written file, and is
+//! read whole; slots from 1 hold a value, issued by the table that holds it,
+//! and the other side reads such a handle's slot alone.
 
 use core::mem::MaybeUninit;
 
@@ -24,14 +27,19 @@ fn handle_of(slot: u32, generation: u16) -> u32 {
     slot | ((generation as u32) << SLOT_BITS)
 }
 
+/// The handle with no value under `generation`, which is never 0: slot 0's.
+pub fn tag_of(generation: u16) -> u32 {
+    handle_of(0, generation)
+}
+
 struct Slot<T> {
     generation: u16,
     /// One more than the epoch in which the slot was taken, or 0 while the
     /// slot is free. It is a `u64` so that no program lives through enough
     /// epochs for the count to wrap round to a stale value.
     taken_epoch: u64,
-    /// The next slot in the free list. Slot 0 is never handed out, so 0 ends
-    /// the list.
+    /// The next slot in the free list. Slot 0 holds no value, so 0 ends the
+    /// list.
     next: u32,
     /// Initialized while `taken_epoch` is not 0.
     val: MaybeUninit<T>,
@@ -63,7 +71,7 @@ impl<T: Copy, const N: usize> Table<T, N> {
         const {
             assert!(
                 N >= 2 && N <= 1 << SLOT_BITS,
-                "a slot is 16 bits, and slot 0 is never handed out"
+                "a slot is 16 bits, and slot 0 holds no value"
             )
         };
         Table {
@@ -84,6 +92,16 @@ impl<T: Copy, const N: usize> Table<T, N> {
 
     /// `insert` answers none when every slot is taken.
     pub fn insert(&mut self, val: T) -> Option<u32> {
+        let slot = self.take()?;
+        let s = &mut self.slot[slot as usize];
+        s.taken_epoch = self.epoch + 1;
+        s.val = MaybeUninit::new(val);
+        self.cnt += 1;
+        Some(handle_of(slot, s.generation))
+    }
+
+    /// Takes the next free slot under its next generation.
+    fn take(&mut self) -> Option<u32> {
         let slot = if self.free != 0 {
             let slot = self.free;
             self.free = self.slot[slot as usize].next;
@@ -97,10 +115,7 @@ impl<T: Copy, const N: usize> Table<T, N> {
         let s = &mut self.slot[slot as usize];
         // The generation is never 0, so no handle is 0.
         s.generation = s.generation.wrapping_add(1).max(1);
-        s.taken_epoch = self.epoch + 1;
-        s.val = MaybeUninit::new(val);
-        self.cnt += 1;
-        Some(handle_of(slot, s.generation))
+        Some(slot)
     }
 
     pub fn live(&self, handle: u32) -> bool {

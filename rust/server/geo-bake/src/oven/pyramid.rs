@@ -37,12 +37,12 @@ fn bake_missing(
     data: Arc<Dataset>,
     runner: Arc<Runner>,
     p: Quadrant,
-    asked: bool,
+    client_waits: bool,
 ) -> Pin<Box<dyn Future<Output = Result<(), Failure>> + Send>> {
     Box::pin(async move {
         let d = data.clone();
         data.cache
-            .once(p.key(), asked, move |lease| async move {
+            .once(p.key(), client_waits, move |lease| async move {
                 if !d.coverage.meets(p.zoom, p.at) {
                     return d.cache.publish(&p.key(), None).map_err(Failure::from);
                 }

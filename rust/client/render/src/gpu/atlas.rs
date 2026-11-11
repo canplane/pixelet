@@ -18,6 +18,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::text::{Raster, TextOf};
+use crate::look::color;
 use crate::look::marker::{Font, Halo, ATLAS_SCALE};
 use pxl_spec::asset::symbol::{SYMBOL_MASKS, SYMBOL_PX};
 use xpute_kit::math::scalar::round;
@@ -67,15 +68,8 @@ fn px(v: f32) -> f32 {
 /// The color `0xRRGGBBAA` with its channels made linear and its alpha kept. The atlas's
 /// texture is sRGB, and a shader writes linear values into it.
 fn linear(rgba: u32) -> [f32; 4] {
-    let ch = |shift: u32| {
-        let c = ((rgba >> shift) & 0xff) as f32 / 255.0;
-        if c <= 0.04045 {
-            c / 12.92
-        } else {
-            libm::powf((c + 0.055) / 1.055, 2.4)
-        }
-    };
-    [ch(24), ch(16), ch(8), (rgba & 0xff) as f32 / 255.0]
+    let [r, g, b] = color::linear_rgb(rgba >> 8).map(|v| v as f32);
+    [r, g, b, (rgba & 0xff) as f32 / 255.0]
 }
 
 fn shape(kind: u32, rect: [f32; 4], color: u32, p: [f32; 4], q: [f32; 2]) -> [f32; SHAPE_FLOATS] {

@@ -5,12 +5,12 @@
 //! The GPU device's protocol, which tells the core the device's state and the
 //! surfaces the UI lends it. The core's own calls to the GPU are not commands: they are
 //! records in its GPU stream (gpu/api.json). GPU_READY tells the core that the device its
-//! machine asked for has answered. A surface is a canvas or a view that the UI hands over,
+//! core asked for has answered. A surface is a canvas or a view that the UI hands over,
 //! and from then on only the core draws into it. The surface is named by the handle that
 //! GPU_SURFACE_OPEN answers with: the UI binds its canvas under that handle (@xpute/gpu
 //! `gpu_connect`), and the stream's CONFIGURE and CURRENT records name the surface by it. What
 //! a surface shows is the program's to decide. A command's number here is its minor, under the
-//! one major the program gives the GPU (xpute_gpu `decode`, @xpute/gpu `gpu_protocol`).
+//! one major the program gives the GPU (xpute_gpu `decode`, @xpute/gpu `gpu_exports`).
 
 // A list a record carries is a function handing out its items, whose
 // type is long to spell and is spelled once, here, for each. A table
@@ -37,7 +37,7 @@ use xpute_kit::wire::xtp::{PacketWriter, TreeReader};
 #[repr(u32)]
 pub enum Command {
     // ---- gpu, export ----
-    /// The GPU the machine asked for has answered, for the first time or again after the device
+    /// The GPU the core asked for has answered, for the first time or again after the device
     /// was lost. The STATUS word of the stream's device block tells the core the device's state.
     GPU_READY = 0x0001,
     /// Asks the core to open a surface. The core answers with the surface's handle, or with 0
@@ -111,5 +111,32 @@ impl GpuSurfaceClose {
 
     pub fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.surface));
+    }
+}
+
+/// The gpu protocol's core end: what it posts to the runtime and what it hears from it.
+use xpute_core::io::door::{door, Outcome};
+use xpute_kit::status::errno::Errno;
+
+/// What the program does with each command the runtime sends.
+pub trait Exports {
+    fn gpu_ready(&mut self) -> Outcome;
+    fn gpu_surface_open(&mut self) -> Outcome;
+    fn gpu_surface_resize(&mut self, c: GpuSurfaceResize) -> Outcome;
+    fn gpu_surface_close(&mut self, c: GpuSurfaceClose) -> Outcome;
+}
+
+/// `cmd` read and handed to `h`; ENOSYS for one this protocol does not carry.
+pub fn apply<H: Exports>(h: &mut H, cmd: u32, pkt: &Option<&[u8]>) -> Outcome {
+    match cmd {
+        x if x == Command::GPU_READY as u32 => h.gpu_ready(),
+        x if x == Command::GPU_SURFACE_OPEN as u32 => h.gpu_surface_open(),
+        x if x == Command::GPU_SURFACE_RESIZE as u32 => h.gpu_surface_resize(
+            GpuSurfaceResize::read(pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?)?,
+        ),
+        x if x == Command::GPU_SURFACE_CLOSE as u32 => h.gpu_surface_close(GpuSurfaceClose::read(
+            pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+        )?),
+        _ => Err(MarshalError::new(Errno::ENOSYS)),
     }
 }

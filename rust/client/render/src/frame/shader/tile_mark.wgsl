@@ -12,7 +12,7 @@
 
 struct MarkGrid {
   // Laid out as tile_word.wgsl's `TileGrid`: `cnt` holds the tiles across and down, the frames a
-  // tile stays claimed and this frame's number, and `size` the target's size, a quad's growth
+  // tile stays damaged and this frame's number, and `size` the target's size, a quad's growth
   // and a tile's side.
   cnt: vec4u,
   size: vec4f,

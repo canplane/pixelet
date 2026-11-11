@@ -5,7 +5,12 @@ use super::*;
 fn division(id: &str, subtype: &str, name: &str, parent: Option<&str>) -> (String, Division) {
     (
         id.to_string(),
-        Division::new(id.into(), subtype, name.into(), parent.map(String::from)),
+        Division::new(
+            id.into(),
+            Some(subtype),
+            name.into(),
+            parent.map(String::from),
+        ),
     )
 }
 
@@ -69,4 +74,37 @@ fn unknown_subtype_skipped() {
             .collect::<Vec<_>>(),
         ["France"]
     );
+}
+
+fn children(rows: &[(&str, [f64; 2], &str)]) -> Children {
+    let mut c = Children::default();
+    for &(parent, p, id) in rows {
+        c.entry(parent.to_string())
+            .or_default()
+            .push((p, id.to_string()));
+    }
+    c
+}
+
+#[test]
+fn steps_down_to_the_nearest_child() {
+    let c = children(&[
+        ("a", [10.0, 0.0], "b"),
+        ("a", [50.0, 0.0], "c"),
+        ("b", [12.0, 0.0], "d"),
+    ]);
+    assert_eq!(
+        steps("a", [0.0, 0.0], &c),
+        ["b", "d"],
+        "as far down as there is a child"
+    );
+    assert!(steps("x", [0.0, 0.0], &c).is_empty(), "no child, no step");
+}
+
+#[test]
+fn steps_tie_to_the_lesser_id_and_take_none_twice() {
+    let tie = children(&[("a", [-5.0, 0.0], "z"), ("a", [5.0, 0.0], "m")]);
+    assert_eq!(steps("a", [0.0, 0.0], &tie), ["m"]);
+    let looped = children(&[("a", [1.0, 0.0], "b"), ("b", [1.0, 0.0], "a")]);
+    assert_eq!(steps("a", [0.0, 0.0], &looped), ["b"]);
 }

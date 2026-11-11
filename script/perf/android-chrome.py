@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# One measurement in the Chrome of the phone adb reaches, its site's data
-# cleared and the cache off.
+# One measurement in the Chrome of the phone adb reaches, started afresh, its
+# site's data cleared and the cache off.
 #
 #   ./script/perf/android-chrome.py <url> <dir>
 
@@ -11,18 +11,36 @@ import time
 import urllib.parse
 import urllib.request
 
+import android
 from android import adb
 from cdp import Cdp
-from measure import measure, polled
+from measure import CAPTURE_S, measure, polled
 
-CHROME = "com.android.chrome/com.google.android.apps.chrome.Main"
+PACKAGE = "com.android.chrome"
+CHROME = f"{PACKAGE}/com.google.android.apps.chrome.Main"
 
 
 class Tab(Cdp):
-    """A tab of the phone's Chrome on `url`, spoken to over a WebSocket through
-    adb's forward. A URL on this machine reaches it through adb's reverse."""
+    """A tab of the phone's Chrome on `url`, started afresh and stopped as the
+    run ends, spoken to over a WebSocket through adb's forward: a reach
+    (measure.py). A URL on this machine reaches it through adb's reverse. The
+    state is the phone's."""
 
     reverse = port = tab = sock = None
+
+    @staticmethod
+    def running():
+        """The run stops the phone's Chrome before it starts it, as Android
+        keeps a Chrome the user closed cached, so nothing running is shared."""
+        return None
+
+    def __init__(self, url):
+        try:
+            self.open(url)
+        except BaseException:
+            self.close()
+            raise
+        self.lines = polled(self.ev)
 
     def tabs(self, url):
         """The ids of the phone's pages on `url`."""
@@ -38,6 +56,7 @@ class Tab(Cdp):
         if parts.hostname in ("localhost", "127.0.0.1"):
             self.reverse = f"tcp:{parts.port}"
             adb("reverse", self.reverse, self.reverse)
+        adb("shell", "am", "force-stop", PACKAGE)
         adb("shell", "am", "start", "-n", CHROME)
         self.port = adb("forward", "tcp:0", "localabstract:chrome_devtools_remote").strip()
         self.base = f"http://127.0.0.1:{self.port}/json"
@@ -99,25 +118,27 @@ class Tab(Cdp):
                 if head[0] & 0x80:
                     return json.loads(message)
 
+    def state(self):
+        return android.state()
+
     def close(self):
-        if self.sock:
-            self.reader.close()
-            self.sock.close()
-        if self.tab:
-            urllib.request.urlopen(f"{self.base}/close/{self.tab}").close()
-        if self.port:
-            adb("forward", "--remove", f"tcp:{self.port}")
-        if self.reverse:
-            adb("reverse", "--remove", self.reverse)
+        """Ends each thing the tab opened, though one before fails."""
+        try:
+            if self.sock:
+                self.reader.close()
+                self.sock.close()
+            if self.tab:
+                urllib.request.urlopen(
+                    f"{self.base}/close/{self.tab}", timeout=CAPTURE_S
+                ).close()
+        finally:
+            try:
+                if self.port:
+                    adb("forward", "--remove", f"tcp:{self.port}")
+                if self.reverse:
+                    adb("reverse", "--remove", self.reverse)
+            finally:
+                adb("shell", "am", "force-stop", PACKAGE)
 
 
-def android_chrome(url):
-    tab = Tab()
-    try:
-        tab.open(url)
-        yield from polled(tab.ev)
-    finally:
-        tab.close()
-
-
-measure(android_chrome)
+measure(Tab)

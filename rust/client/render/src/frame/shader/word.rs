@@ -382,23 +382,23 @@ pub const AO_DOWNSCALE: u32 = 2;
 pub const AO_NOISE_SIDE: u32 = 128;
 
 /// The screen's tiles. A frame that is not drawn whole draws again only the
-/// tiles it claims, as the light's map is cast tile by tile (pxl-engine
+/// tiles it damages, as the light's map is cast tile by tile (pxl-engine
 /// light.rs). Each tile is `TILE` drawn pixels a side. Its word is the
 /// number of the frame it last changed in (`changed_at`), as a light tile's
 /// word names a cast, and its age is the frames since then (`age`). The
 /// words live on the GPU, as the light's do, because passes on the GPU mark
 /// the tiles that changed, and words the CPU wrote each frame would undo
-/// those marks. A tile stays claimed until its history has run through the
+/// those marks. A tile stays damaged until its history has run through the
 /// jitter's `JITTERS` frames (`DAMAGE_FRAMES`, pass/resolve.rs).
 pub mod screen {
     /// A tile's side in drawn pixels.
     pub const TILE: u32 = 32;
-    /// The threads of a workgroup of the pass that lists the claimed tiles.
+    /// The threads of a workgroup of the pass that lists the damaged tiles.
     pub const CAST_TILES_LANES: u32 = 64;
     /// The number of frames in which the jitter's sequence covers a pixel.
     pub const JITTERS: u32 = 8;
 
-    /// The frames a screen tile stays claimed once it changes, the uniform's
+    /// The frames a screen tile stays damaged once it changes, the uniform's
     /// `damage_frames`. In the frame it changes, what earlier frames left is
     /// held within the colors this frame's pixels show. Then come
     /// `JITTERS - 1` still frames: the first one's color takes half of the
@@ -411,20 +411,20 @@ pub mod screen {
     /// (gpu/tile.rs `TileGrid::words`). The first four are u32s: the tiles
     /// across and down, `damage_frames`, and this frame's number. When the
     /// frame is drawn whole, `damage_frames` is u32::MAX, so every tile is
-    /// claimed. The last four are f32 bits: the target's pixels across and
+    /// damaged. The last four are f32 bits: the target's pixels across and
     /// down, how far a quad is grown past its tile, and a tile's side.
     pub const TILES_WORDS: usize = 8;
 
     /// The frames since a tile last changed, in the frame numbered `now`, from
     /// the tile's word `changed_at`. The difference wraps, so the frame number
-    /// may wrap too. This and `in_damage` are the one rule a tile is claimed
+    /// may wrap too. This and `in_damage` are the one rule a tile is damaged
     /// by: build.rs writes the same rule for the shaders as `tiles_age` and
     /// `tiles_in_damage` (tile_word.wgsl), and checks that the two agree.
     pub const fn age(now: u32, changed_at: u32) -> u32 {
         now.wrapping_sub(changed_at)
     }
 
-    /// Whether a tile `age` frames old is claimed, where a tile stays claimed
+    /// Whether a tile `age` frames old is damaged, where a tile stays damaged
     /// `damage_frames` frames once changed.
     pub const fn in_damage(age: u32, damage_frames: u32) -> bool {
         age < damage_frames

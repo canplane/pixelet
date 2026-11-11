@@ -1,13 +1,15 @@
 // cpp/xpute/core/wasm.hpp
 
 // This is the core built as one WebAssembly module: what it reads of the module
-// itself, what it asks of its runtime (`call`), and its entry, `run`, which
-// xpute names and the program defines. It is linked as every module core is
-// (cpp/Makefile `WASM_LINK`).
+// itself, the host it reaches its runtime through (`host`), and its entry,
+// `run`, which xpute names and the program defines. It is linked as every
+// module core is (cpp/Makefile `WASM_LINK`).
 
 #pragma once
 
 #include <cstdint>
+
+#include "xpute/core/host.hpp"
 
 #ifdef __wasm__
 
@@ -24,6 +26,8 @@ extern const std::uint8_t __stack_high;
 
 // Imports of `env`, the module the runtime instantiates the core with.
 __attribute__((import_module("env"), import_name("now"))) double xpute_wasm_now(void);
+__attribute__((import_module("env"), import_name("receive"))) std::int32_t xpute_wasm_receive(std::uint32_t at, std::uint32_t cap);
+__attribute__((import_module("env"), import_name("send"))) void xpute_wasm_send(std::uint32_t at, std::uint32_t named_at, std::uint32_t named_len);
 __attribute__((import_module("env"), import_name("call"))) std::int32_t xpute_wasm_call(std::uint32_t at);
 
 // `run` runs one turn that may last `deadline_ms`, and answers in how many ms
@@ -56,10 +60,9 @@ inline double now() noexcept {
     return xpute_wasm_now();
 }
 
-// The runtime reads and writes the memory the frame names before `call`
-// returns.
-inline std::int32_t call(std::uint32_t at) noexcept {
-    return xpute_wasm_call(at);
+// The host the module's runtime gives as its imports (xpute/core/host.hpp).
+inline Host host() noexcept {
+    return Host{.receive = xpute_wasm_receive, .send = xpute_wasm_send, .call = xpute_wasm_call};
 }
 
 } // namespace xpute::wasm

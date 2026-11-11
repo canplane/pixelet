@@ -56,7 +56,7 @@ struct WorkerPool {
 }
 
 struct Waiter {
-    asked: Arc<AtomicBool>,
+    client_waits: Arc<AtomicBool>,
     wake: oneshot::Sender<()>,
 }
 
@@ -75,7 +75,7 @@ impl WorkerPool {
         loop {
             let next = waiting
                 .iter()
-                .position(|w| w.asked.load(Ordering::Relaxed))
+                .position(|w| w.client_waits.load(Ordering::Relaxed))
                 .or((!waiting.is_empty()).then_some(0));
             let Some(i) = next else {
                 *free += 1;
@@ -98,7 +98,7 @@ impl WorkerPool {
             }
             let (wake, woken) = oneshot::channel();
             waiting.push_back(Waiter {
-                asked: lease.asked.clone(),
+                client_waits: lease.client_waits.clone(),
                 wake,
             });
             woken

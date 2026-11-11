@@ -13,7 +13,17 @@ class XputeGpuModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("XputeGpu")
 
-    Function("open") { Gpu.open() }
+    /** Fires once each time the open device is lost and let go. It is sent
+     * from the thread that found the loss, and Expo carries the event to the
+     * JavaScript thread. */
+    Events("onLost")
+
+    OnCreate { Gpu.lost = { sendEvent("onLost") } }
+
+    OnDestroy { Gpu.lost = null }
+
+    // The device keeps its compiled pipelines among the app's caches.
+    Function("open") { Gpu.open(appContext.cacheDirectory.path) }
 
     View(SurfaceView::class) {
       Events("onAttach", "onDetach")

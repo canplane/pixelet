@@ -198,15 +198,16 @@ lto = false
 codegen-units = 256
 incremental = true
 
-# wgpu with one hal command buffer per encoder on every backend, and the iOS
-# Simulator's Metal capabilities: what the fork changes is wgpu-fork.md's.
+# wgpu with one hal command buffer per encoder on every backend, the iOS
+# Simulator's Metal capabilities and Metal's pipeline cache: what the fork
+# changes is wgpu-fork.md's.
 [patch.crates-io]
-naga = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-naga-types = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu-core = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu-core-deps-apple = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu-core-deps-windows-linux-android = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu-hal = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu-naga-bridge = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
-wgpu-types = { git = "https://github.com/canplane/fork.wgpu", rev = "f68999dfdc5f957ee3008bfd014df7400dfe04e7" }
+naga = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+naga-types = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu-core = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu-core-deps-apple = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu-core-deps-windows-linux-android = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu-hal = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu-naga-bridge = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu-types = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }

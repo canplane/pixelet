@@ -57,9 +57,9 @@ async fn client_wait_first() {
     let workers = Arc::new(WorkerPool {
         state: Mutex::new((1, VecDeque::new())),
     });
-    let lease = |asked: bool| Lease {
+    let lease = |client_waits: bool| Lease {
         deadline: Instant::now() + Duration::from_secs(5),
-        asked: Arc::new(AtomicBool::new(asked)),
+        client_waits: Arc::new(AtomicBool::new(client_waits)),
     };
     let permit = workers.acquire(&lease(true)).await.unwrap();
     let order = Arc::new(Mutex::new(Vec::new()));

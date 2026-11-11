@@ -1,14 +1,14 @@
 // pxl-geo-bake/division.rs
 
 //! The divisions layer's leaf, a tile at `DIVISION_LEAF`, read from Overture
-//! as it holds them. A cell is in the deepest division whose area holds its
-//! center; under that, in the child with no area whose point is nearest,
-//! and so on down, the points looked for within the bakes' reach of the tile
-//! (`coverage.rs` `BAKE_READ_DIST`) and no further. A cell in no area is in none.
-//! Equal distances go to the lesser id, and a division already on the way
-//! down is not taken again.
+//! as it holds them. A cell's center is the point that steps down
+//! (pxl-geo-spec `overture::division`), among the children whose points lie
+//! within `BAKE_READ_DIST` of the tile. A cell in no area is in none.
 
 use fnv::FnvHashMap;
+
+use pxl_geo_spec::overture::division::{steps, Children, LINEAGE_SQL};
+use pxl_geo_spec::BAKE_READ_DIST;
 
 use postgres::types::ToSql;
 use postgres::Client;
@@ -20,7 +20,6 @@ use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
-use crate::coverage::BAKE_READ_DIST;
 use crate::pyramid::Base;
 use crate::terrain::pipeline::ground::render_polygon;
 use crate::wkb::wkb_to_geometries;
@@ -38,18 +37,8 @@ FROM overture_divisions d
 WHERE d.geom && ST_MakeEnvelope($1, $2, $3, $4, 3857)
   AND NOT EXISTS (SELECT 1 FROM overture_division_areas s WHERE s.properties->>'division_id' = d.gers_id)";
 
-/// The divisions `$1` names and every parent of each.
-const RECS_SQL: &str = "WITH RECURSIVE up AS (
-  SELECT d.gers_id, d.properties FROM overture_divisions d WHERE d.gers_id = ANY($1)
-  UNION SELECT p.gers_id, p.properties FROM overture_divisions p JOIN up ON p.gers_id = up.properties->>'parent_division_id'
-)
-SELECT up.gers_id, up.properties->>'subtype' AS subtype, up.properties->'names'->>'primary' AS name, up.properties->>'parent_division_id' AS parent,
-  (up.properties->'cartography'->>'prominence')::int AS prominence,
-  EXISTS (SELECT 1 FROM overture_division_areas s WHERE s.properties->>'division_id' = up.gers_id) AS area
-FROM up";
-
 /// Every statement the layer runs, for the catalog check.
-pub const READS: [&str; 3] = [AREAS_SQL, POINTS_SQL, RECS_SQL];
+pub const READS: [&str; 3] = [AREAS_SQL, POINTS_SQL, LINEAGE_SQL];
 
 /// Ids numbered as they are met.
 #[derive(Default)]
@@ -105,7 +94,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     areas.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| b.1.cmp(&a.1)));
     let mut cells = vec![NONE; n * n];
     for (_, id, wkb) in &areas {
-        let at = ids.of(id);
+        let number = ids.of(id);
         for g in wkb_to_geometries(wkb)
             .into_iter()
             .filter(|g| g.points.len() >= 3)
@@ -116,7 +105,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
                 .iter()
                 .map(|h| h.iter().map(|p| local([p[0], p[1]])).collect())
                 .collect();
-            render_polygon(&points, at, &mut cells, &holes, None);
+            render_polygon(&points, number, &mut cells, &holes, None);
         }
     }
 
@@ -129,7 +118,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
         &(max[0] + margin),
         &(max[1] + margin),
     ];
-    let mut children: FnvHashMap<String, Vec<([f64; 2], String)>> = FnvHashMap::default();
+    let mut children = Children::default();
     for r in client.query(POINTS_SQL, &ring).map_err(db)? {
         if let Some(parent) = r.get::<_, Option<String>>("parent") {
             children
@@ -138,12 +127,9 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
                 .push(([r.get("x"), r.get("y")], r.get("gers_id")));
         }
     }
-    for kids in children.values_mut() {
-        kids.sort_by(|a, b| a.1.cmp(&b.1));
-    }
     for idx in 0..(n * n) as u32 {
-        let mut at = cells[idx as usize];
-        if at == NONE {
+        let mut number = cells[idx as usize];
+        if number == NONE {
             continue;
         }
         let [tx, ty] = GROUND.in_tile(idx);
@@ -151,28 +137,17 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
             min[0] + (f64::from(tx) + 0.5) * step,
             min[1] + (f64::from(ty) + 0.5) * step,
         ];
-        let mut taken = vec![at];
-        while let Some(kids) = children.get(&ids.list[at as usize]) {
-            let nearest = kids
-                .iter()
-                .filter(|(_, id)| ids.number.get(id).is_none_or(|k| !taken.contains(k)))
-                .map(|(p, id)| {
-                    let [dx, dy] = [p[0] - center[0], p[1] - center[1]];
-                    (dx * dx + dy * dy, id)
-                })
-                .min_by(|a, b| a.0.total_cmp(&b.0));
-            let Some((_, id)) = nearest else { break };
-            at = ids.of(id);
-            taken.push(at);
+        for id in steps(&ids.list[number as usize].clone(), center, &children) {
+            number = ids.of(id);
         }
-        cells[idx as usize] = at;
+        cells[idx as usize] = number;
     }
     if cells.iter().all(|&c| c == NONE) {
         return Ok(None);
     }
 
     // Last, each division a cell names is read, with its parents.
-    let rows = client.query(RECS_SQL, &[&ids.list]).map_err(db)?;
+    let rows = client.query(LINEAGE_SQL, &[&ids.list]).map_err(db)?;
     let mut recs: FnvHashMap<&str, (Division, Option<&str>)> = FnvHashMap::default();
     for r in &rows {
         let Some(kind) = r
@@ -198,7 +173,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
     // The divisions in id order, so a tile is the same whatever order its rows came in.
     let mut order: Vec<&str> = recs.keys().copied().collect();
     order.sort();
-    let at: FnvHashMap<&str, u32> = order
+    let idx_of: FnvHashMap<&str, u32> = order
         .iter()
         .enumerate()
         .map(|(k, id)| (*id, k as u32))
@@ -208,7 +183,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
         .map(|id| {
             let (d, parent) = &recs[*id];
             Division {
-                parent: parent.and_then(|p| at.get(p)).copied().unwrap_or(NONE),
+                parent: parent.and_then(|p| idx_of.get(p)).copied().unwrap_or(NONE),
                 ..*d
             }
         })
@@ -222,7 +197,7 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
                 } else {
                     ids.list
                         .get(c as usize)
-                        .and_then(|id| at.get(id.as_str()))
+                        .and_then(|id| idx_of.get(id.as_str()))
                         .copied()
                         .unwrap_or(NONE)
                 }
@@ -235,6 +210,8 @@ pub fn leaf(client: &mut Client, tile: [i32; 2]) -> Result<Option<DivisionTile>,
 }
 
 impl Base for DivisionTile {
+    const PRUNED: bool = true;
+
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {
         division::encode(self).map_err(|e| format!("{}: {e:?}", at.key()))
     }

@@ -42,9 +42,12 @@ impl GpuRuntime {
     }
 
     /// Puts each pipeline made since the last poll at its handle and answers
-    /// its fence.
+    /// its fence. Once the maker has none left to make, the cache keeps what it
+    /// compiled (`Cache::save`).
     pub(super) fn land_pipelines(&mut self, mem: &mut Memory<'_>) {
+        let mut landed = false;
         while let Ok((id, pipeline)) = self.maker.answers.try_recv() {
+            landed = true;
             let slot = handle_slot(id);
             let Some(&Making { word, ticket, .. }) = self.making.get(&slot).filter(|m| m.id == id)
             else {
@@ -53,6 +56,9 @@ impl GpuRuntime {
             self.making.remove(&slot);
             self.put(id, pipeline);
             signal(mem, word, ticket, None);
+        }
+        if let (true, true, Some(cache)) = (landed, self.making.is_empty(), &self.cache) {
+            cache.save();
         }
     }
 }

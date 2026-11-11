@@ -5,7 +5,7 @@
 // start, a cell's start and a sample lie, from the words the head lays out
 // (`light::header_layout`). It says which place of the lattice the thread at an id takes
 // (`light_item`). It also says where the reads and each list's marks lie, by which the
-// receivers' passes claim tiles (`light::reads_at`, `list_marks_at`). The list is bound as
+// receivers' passes damage tiles (`light::reads_at`, `list_marks_at`). The list is bound as
 // `beams`, the name resume.wgsl reads it by. The receivers' passes bind it under a binding of
 // their own (light_stand.wgsl).
 
@@ -51,7 +51,7 @@ fn list_cap(which: u32) -> u32 {
   return light_tiles() * light_tiles();
 }
 
-/// The list in which what feeds a claimed tile at `level` is listed (`light::LIST_CORNERS`,
+/// The list in which what feeds a damaged tile at `level` is listed (`light::LIST_CORNERS`,
 /// `LIST_SOURCES`, `LIST_DAMAGE`). Cells and samples share the sources' list.
 fn list_of(level: u32) -> u32 {
   if (level == LEVEL_CORNER) {
@@ -69,7 +69,7 @@ fn texel_slot(p: vec2<u32>) -> vec2<u32> {
 }
 
 /// What of `level` the thread at `id` of its pass takes, from the list of what feeds the tiles
-/// the cast claimed. A workgroup is a square of `SAMPLE_SIDE` × `SAMPLE_SIDE` threads, the
+/// the cast damaged. A workgroup is a square of `SAMPLE_SIDE` × `SAMPLE_SIDE` threads, the
 /// list's `LIST_LANES`, and an entry takes a square of places (`light_item_at`). Past the list
 /// the thread takes `NONE`.
 fn light_item(level: u32, id: vec2<u32>) -> vec2<u32> {
@@ -78,7 +78,7 @@ fn light_item(level: u32, id: vec2<u32>) -> vec2<u32> {
   return light_item_at(level, place);
 }
 
-/// What of `level` lies at place `place` of the list of what feeds the tiles the cast claimed.
+/// What of `level` lies at place `place` of the list of what feeds the tiles the cast damaged.
 /// Each entry takes `across` × `across` places in order, where `across` is how many of the
 /// level's items lie along a tile's side. Past the list it is `NONE`.
 fn light_item_at(level: u32, place: u32) -> vec2<u32> {
@@ -139,7 +139,7 @@ fn light_tiles() -> u32 {
 }
 
 /// Where the reads lie: one word for each tile, holding the number of the cast that last
-/// claimed it (`light::reads_at`).
+/// damaged it (`light::reads_at`).
 fn reads_at() -> u32 {
   return header_word(LIGHT_HEADER_READS);
 }

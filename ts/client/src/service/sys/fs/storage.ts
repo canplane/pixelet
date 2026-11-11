@@ -12,6 +12,7 @@
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
+import type { u32 } from "@xpute/kit/abi/word.ts";
 import {
   b64url_to_bytes,
   bytes_to_b64url,
@@ -20,7 +21,7 @@ import {
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/runtime";
 
-import { storage } from "@/abi/file.spec.ts";
+import { path } from "@/abi/file.spec.ts";
 import * as local from "@/service/platform/storage.ts";
 
 /** A write the platform refuses keeps nothing and does not throw. */
@@ -46,9 +47,9 @@ function bytes_of(text: string): U8Array {
   }
 }
 
-/** A file's path below STORAGE is its slot number in decimal. */
-const KEYS: ReadonlyMap<string, string> = new Map([
-  [String(storage.SETTINGS), "pxl:settings"],
+/** Each stored file's key, by its id under STORAGE (file.json `path`). */
+const KEYS: ReadonlyMap<u32, string> = new Map([
+  [path.STORAGE.SETTINGS.ID, "pxl:settings"],
 ]);
 
 /** Whether `key` holds a storage file or one set aside. These are the keys a
@@ -78,27 +79,27 @@ function set_aside_key(s: Storage, key: string, now_ms: number): boolean {
   return true;
 }
 
-export function set_aside(s: Storage, path: string, now_ms: number): boolean {
-  const key = KEYS.get(path);
+export function set_aside(s: Storage, slot: u32, now_ms: number): boolean {
+  const key = KEYS.get(slot);
   return key !== undefined && set_aside_key(s, key, now_ms);
 }
 
-function key_of(path: string): string {
-  const key = KEYS.get(path);
+function key_of(slot: u32): string {
+  const key = KEYS.get(slot);
   if (key === undefined) throw new FileError(Errno.ENOENT);
   return key;
 }
 
-export function open_storage(path: string, s: Storage = STORAGE): U8Array {
-  const text = s.get(key_of(path));
+export function open_storage(slot: u32, s: Storage = STORAGE): U8Array {
+  const text = s.get(key_of(slot));
   if (text === null) throw new FileError(Errno.ENOENT);
   return bytes_of(text);
 }
 
 export function commit_storage(
-  path: string,
+  slot: u32,
   bytes: U8Array,
   s: Storage = STORAGE,
 ): void {
-  s.set(key_of(path), bytes_to_b64url(bytes));
+  s.set(key_of(slot), bytes_to_b64url(bytes));
 }

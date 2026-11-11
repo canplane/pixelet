@@ -16,8 +16,9 @@ use pxl_engine::{cast, count, node_cache, ray};
 use pxl_render::frame::shader::record::{
     compute, src, COMPUTE_QUEUE, COMPUTE_QUEUE_ASK, COMPUTE_QUEUE_ASK_PARKED,
     COMPUTE_QUEUE_CORNERS, COMPUTE_QUEUE_CORNERS_PARKED, COMPUTE_QUEUE_LAST,
-    COMPUTE_QUEUE_LAST_CORNERS, COMPUTE_QUEUE_LAST_LIGHT_CORNERS, COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
-    COMPUTE_QUEUE_LAST_SAMPLES, COMPUTE_QUEUE_LIGHT_CORNERS, COMPUTE_QUEUE_LIGHT_CORNERS_PARKED,
+    COMPUTE_QUEUE_LAST_CORNERS, COMPUTE_QUEUE_LAST_LIGHT, COMPUTE_QUEUE_LAST_LIGHT_CORNERS,
+    COMPUTE_QUEUE_LAST_LIGHT_SAMPLES, COMPUTE_QUEUE_LAST_SAMPLES, COMPUTE_QUEUE_LIGHT,
+    COMPUTE_QUEUE_LIGHT_CORNERS, COMPUTE_QUEUE_LIGHT_CORNERS_PARKED, COMPUTE_QUEUE_LIGHT_PARKED,
     COMPUTE_QUEUE_LIGHT_SAMPLES, COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED, COMPUTE_QUEUE_PARKED,
     COMPUTE_QUEUE_SAMPLES, COMPUTE_QUEUE_SAMPLES_PARKED,
 };
@@ -197,36 +198,48 @@ impl Gpu {
         self.corners(true, world, node_cache);
     }
 
-    /// Runs one observer's holes as the cast runs them (ray/cast.rs `walk_run`). Two walks
-    /// read the node cache alone, and an ask follows each. The queue's hits are then copied into
-    /// `node_cache` (`node_cache::HITS_ARGS`), as the cast copies them. The last walk runs after. `all` binds what any of the passes reads except the queue's words:
-    /// the eye at 0, the world at 1, 2 and 4 to 7, the rays or the map at 3, the observer's list
-    /// at 8, the node cache at 9 and the observer's header at 11. Each pass takes the bindings
-    /// its entry reads.
+    /// Runs an observer's holes as the cast runs them (ray/cast.rs `walk_run`), the light's
+    /// where `light` is set and the eye's otherwise. Two walks read the node cache alone, and
+    /// an ask follows each. The queue's hits are then copied into `node_cache`
+    /// (`node_cache::HITS_ARGS`), as the cast copies them. The last walk runs after. `all`
+    /// binds what any of the passes reads except the queue's words: the eye at 0, the world at
+    /// 1, 2 and 4 to 7, the rays or the map at 3, the observer's list at 8, the node cache at 9
+    /// and the light's header at 11. Each pass takes the bindings its entry reads.
     pub fn holes(
         &self,
-        queue: u32,
+        light: bool,
         all: &[(u32, wgpu::BindingResource)],
         node_cache: &wgpu::Buffer,
     ) {
-        self.run(
-            queue,
-            [
-                COMPUTE_QUEUE,
-                COMPUTE_QUEUE_ASK,
-                COMPUTE_QUEUE_PARKED,
-                COMPUTE_QUEUE_ASK_PARKED,
-                COMPUTE_QUEUE_LAST,
-            ],
-            [
-                &[0, 3, 8, 9, 10, 11],
-                &[0, 1, 2, 4, 5, 6, 7, 9, 10],
-                &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11],
-            ],
-            all,
-            node_cache,
-            None,
-        );
+        let (queue, ids) = if light {
+            (
+                ray::QUEUE_LIGHT_HOLES,
+                [
+                    COMPUTE_QUEUE_LIGHT,
+                    COMPUTE_QUEUE_ASK,
+                    COMPUTE_QUEUE_LIGHT_PARKED,
+                    COMPUTE_QUEUE_ASK_PARKED,
+                    COMPUTE_QUEUE_LAST_LIGHT,
+                ],
+            )
+        } else {
+            (
+                ray::QUEUE_EYE_HOLES,
+                [
+                    COMPUTE_QUEUE,
+                    COMPUTE_QUEUE_ASK,
+                    COMPUTE_QUEUE_PARKED,
+                    COMPUTE_QUEUE_ASK_PARKED,
+                    COMPUTE_QUEUE_LAST,
+                ],
+            )
+        };
+        // The light's walks read its header at 11. The eye's walks and the asks do not.
+        let header: &[u32] = if light { &[11] } else { &[] };
+        let walk = [&[0, 3, 8, 9, 10][..], header].concat();
+        let last = [&[0, 1, 2, 3, 4, 5, 6, 7, 8, 9][..], header].concat();
+        let keep = [&walk[..], &[0, 1, 2, 4, 5, 6, 7, 9, 10], &last[..]];
+        self.run(queue, ids, keep, all, node_cache, None);
     }
 
     /// Runs an observer's beam rays as the cast runs them (ray/cast.rs `walk_run`), the
@@ -448,7 +461,7 @@ impl Gpu {
 }
 
 /// Fills list `which` of the light's list `words`, over a map `size` texels a side, with every
-/// item of its level, as a cast that claims every tile lays it (light_enlist.wgsl `enlist`).
+/// item of its level, as a cast that damages every tile lays it (light_enlist.wgsl `enlist`).
 /// Returns the workgroups a pass dispatches over that list when each entry is `per` items a
 /// side (light_list.wgsl `light_item`).
 pub fn list_every(words: &mut [u32], size: u32, which: u32, per: u32) -> [u32; 2] {

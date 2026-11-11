@@ -54,7 +54,7 @@ pub const INIT_SIZE: u32 = 1024;
 
 /// The largest side the atlas grows to. An RGBA texture this size takes 16 MiB
 /// before its mips.
-const MAX_SIZE: u32 = 2048;
+const SIZE_CAP: u32 = 2048;
 
 /// The transparent margin, in device pixels, round each sprite inside its
 /// slot. A linear sample at the sprite's edge reads the margin, not a
@@ -63,30 +63,30 @@ pub const PAD: u32 = 1;
 
 /// The most slots an atlas can have. A live or free slot holds a rectangle
 /// at least `WIDTH_BUCKET` by `HEIGHT_BUCKET`, no two of them overlap, and
-/// the atlas is at most `MAX_SIZE` a side. An unused slot is taken again
+/// the atlas is at most `SIZE_CAP` a side. An unused slot is taken again
 /// before a new one is made, so the slots never outnumber this bound.
-pub const SLOTS_MAX: usize = ((MAX_SIZE / WIDTH_BUCKET) * (MAX_SIZE / HEIGHT_BUCKET)) as usize;
+pub const SLOTS_CAP: usize = ((SIZE_CAP / WIDTH_BUCKET) * (SIZE_CAP / HEIGHT_BUCKET)) as usize;
 
 /// A set of slots, one bit a slot.
 #[derive(Clone, Copy)]
-pub struct SlotSet([u64; SLOTS_MAX / 64]);
+pub struct SlotSet([u64; SLOTS_CAP / 64]);
 
 impl Default for SlotSet {
     fn default() -> SlotSet {
-        SlotSet([0; SLOTS_MAX / 64])
+        SlotSet([0; SLOTS_CAP / 64])
     }
 }
 
 impl SlotSet {
     pub fn insert(&mut self, slot: u32) {
         let s = slot as usize;
-        xpute_kit::ensure!(s < SLOTS_MAX, ENOSPC, s);
+        xpute_kit::ensure!(s < SLOTS_CAP, ENOSPC, s);
         self.0[s / 64] |= 1 << (s % 64);
     }
 
     pub fn contains(&self, slot: u32) -> bool {
         let s = slot as usize;
-        s < SLOTS_MAX && self.0[s / 64] >> (s % 64) & 1 == 1
+        s < SLOTS_CAP && self.0[s / 64] >> (s % 64) & 1 == 1
     }
 
     pub fn is_empty(&self) -> bool {
@@ -378,9 +378,9 @@ impl Atlas {
     }
 
     /// Doubles the atlas's side, or returns false when the atlas is already
-    /// at `MAX_SIZE`.
+    /// at `SIZE_CAP`.
     fn grow(&mut self) -> bool {
-        if self.size >= MAX_SIZE {
+        if self.size >= SIZE_CAP {
             return false;
         }
         let (slots, ws, hs) = self.live_slots();

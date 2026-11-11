@@ -2,8 +2,8 @@
 //
 // GENERATED from spec/client/core/sys/io/file.json
 //
-// The core's files: the roots it opens them below, the names below each and what a
-// file holds (pxl-core sys/io/file.rs, ts/client/src/service/sys/fs/).
+// The core's files: the tokens of their paths and what a file holds (pxl-core
+// sys/io/file.rs, ts/client/src/service/sys/fs/).
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
@@ -15,41 +15,77 @@
     reason = "generated from the spec"
 )]
 
-/// The roots the core opens files below (xpute's OPENAT). Below STORAGE a root is a
-/// bake, numbered by its kind (pxl-spec bake/publication.spec.rs). Below every root a path is
-/// one name: a tile's quadkey (pxl-spec space/layer/quadrant.rs), or what the root says. What it
-/// is called and where past that, a tile's version and URL, a storage key, is what the client
-/// (ts/client/src/service/sys/fs/) binds the root to, `@xpute/runtime` carrying the open there.
-pub mod root {
-    /// The platform's storage; a path is a storage file's id in decimal (`storage`); where the platform holds a slot is the client's choice.
-    pub const STORAGE: u32 = 256;
-    /// The shipped assets; a path is a load's id in decimal, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs).
-    pub const ASSET: u32 = 257;
-    /// The placed objects, their source's: a file a shard, read, its path the shard's quadkey,
-    /// as a bake's tile is named, its `format.OBJECT` first; the top of their tree, read
-    /// (`object.TOP`); and their edits, written (`object.EDITS`)
-    /// (domain/layer/object/repository.rs). A shard with none has no file. The source keeps the
-    /// shards and the top and applies the edits; which source, a mock or a server, is the client's.
-    pub const OBJECT: u32 = 258;
+/// The tree of the paths the core opens (xpute's FS_OPEN), as a URI's path is a
+/// tree: each node takes one token, its `ID`, distinct among its siblings, and hands the
+/// rest of the path to the child it names. A node that holds data takes the tokens left as
+/// that data: a tile's quadkey (pxl-spec space/layer/quadrant.rs) as a string, or a load's id.
+/// What a file is past its path, a tile's version and URL, a storage key, is the client's
+/// binding (ts/client/src/service/sys/fs/).
+pub mod path {
+    /// The terrain bake: (TERRAIN, quadkey).
+    pub mod TERRAIN {
+        pub const ID: u32 = 0;
+    }
+    /// The places bake: (PLACE, quadkey).
+    pub mod PLACE {
+        pub const ID: u32 = 1;
+    }
+    /// The divisions bake: (DIVISION, quadkey).
+    pub mod DIVISION {
+        pub const ID: u32 = 2;
+    }
+    /// The Earth bake: (EARTH, quadkey), and the picture of the whole Earth, (EARTH, SPHERE).
+    pub mod EARTH {
+        pub const ID: u32 = 3;
+        /// The picture of the whole Earth, served under the Earth bake's version as its
+        /// `SPHERE` (spec/spec/bake/publication.json).
+        pub mod SPHERE {
+            pub const ID: u32 = 0;
+        }
+    }
+    /// The platform's storage, where the platform holds a file being the client's choice. What a file holds is its owner's, written whole, its `format` first (pxl-core sys/io/file.rs).
+    pub mod STORAGE {
+        pub const ID: u32 = 4;
+        /// The settings' overrides, in the platform's storage (domain/setting/store.rs).
+        pub mod SETTINGS {
+            pub const ID: u32 = 0;
+        }
+    }
+    /// The shipped assets: (ASSET, id), a load's id, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs).
+    pub mod ASSET {
+        pub const ID: u32 = 5;
+    }
+    /// The placed objects, their source's: a shard, read, (OBJECT, quadkey), its
+    /// `format.OBJECT` first; the top of their tree, read, (OBJECT, TOP); and their edits,
+    /// written, (OBJECT, EDIT) (domain/layer/object/repository.rs). A shard with none has no
+    /// file. The source keeps the shards and the top and applies the edits; which source, a
+    /// mock or a server, is the client's.
+    pub mod OBJECT {
+        pub const ID: u32 = 6;
+        /// The top of the tree, read: what each node at `SHARD_ZOOM` holding objects folds to
+        /// (`top`), so which shards hold any, its `format.OBJECT_TOP` first. Its source rebuilds
+        /// it from the shards as an edit lands; none is no shard holding any.
+        pub mod TOP {
+            pub const ID: u32 = 0;
+        }
+        /// Edits, written, never read: a batch of writes in the order they were made (`write`),
+        /// its `format.OBJECT_EDIT` first, which the source applies to its shards.
+        pub mod EDIT {
+            pub const ID: u32 = 1;
+        }
+    }
 }
 
-/// Below the asset root, the catalog the client plugs in (pxl-spec asset/catalog.rs): the
-/// file each of the asset specs' references names. Any other id below it is a file,
+/// The load id of the catalog the client plugs in, (ASSET, CATALOG) (pxl-spec asset/catalog.rs):
+/// the file each of the asset specs' references names. Any other id is a file,
 /// its row in the asset ingest's table counted from 1 (spec/spec/asset/ingest.json).
 pub const CATALOG: u32 = 0;
 
-/// Below OBJECT, the files that are no shard's; no quadkey has a letter.
-pub mod object {
-    /// The top of the tree, read: what each node at `SHARD_ZOOM` holding objects folds to
-    /// (`top`), so which shards hold any, its `format.OBJECT_TOP` first. Its source rebuilds
-    /// it from the shards as an edit lands; none is no shard holding any.
-    pub const TOP: &str = "top";
-    /// Edits, written, never read: a batch of writes in the order they were made (`write`),
-    /// its `format.OBJECT_EDITS` first, which the source applies to its shards.
-    pub const EDITS: &str = "edits";
-}
+/// The finest zoom a tile's quadkey in a path is at, so the most digits it has:
+/// pxl-spec's `LEAF_ZOOM`, which the core holds this to (sys/io/file.rs).
+pub const LEAF_ZOOM: u32 = 15;
 
-/// The zoom of the tile a shard below OBJECT is: pxl-engine's `SHARD_ZOOM`, which the
+/// The zoom of the tile a shard, (OBJECT, quadkey), is: pxl-engine's `SHARD_ZOOM`, which the
 /// core holds this to (domain/layer/object/repository.rs). A key's first digits to it name
 /// the shard, and each past it is a zoom's 0 to 7, on three axes (pxl-spec
 /// space/hierarchy/morton.rs).
@@ -71,7 +107,7 @@ pub mod write {
     pub const TEXT: u32 = 3;
 }
 
-/// The children of the tree packet `object.TOP` holds after its format byte, by index:
+/// The children of the tree packet the top, (OBJECT, TOP), holds after its format byte, by index:
 /// each row a shard holding objects, which only its leaves are under.
 pub mod top {
     /// A `strs` column holding each row's shard by its quadkey.
@@ -81,15 +117,8 @@ pub mod top {
     pub const FOLD: u32 = 1;
 }
 
-/// The files the core keeps below STORAGE, by slot. What a slot holds is its
-/// owner's, written whole, its slot's `format` first (pxl-core sys/io/file.rs).
-pub mod storage {
-    /// The settings' overrides (domain/setting/store.rs).
-    pub const SETTINGS: u32 = 0;
-}
-
-/// Each kept file's format, the first byte of what it holds: a storage slot's by its
-/// name, a shard's file below OBJECT as OBJECT, the top and an edit batch as theirs. The
+/// Each kept file's format, the first byte of what it holds: a stored file's by its
+/// name, a shard's file as OBJECT, the top and an edit batch as theirs. The
 /// core reads a file of its format and refuses any other, reading none of it and never
 /// writing over it, as a driver refuses a volume whose superblock it does not know; what
 /// to do with the file is the client's. Bump one whenever a change makes an older file mean
@@ -98,5 +127,5 @@ pub mod format {
     pub const SETTINGS: u8 = 1;
     pub const OBJECT: u8 = 19;
     pub const OBJECT_TOP: u8 = 22;
-    pub const OBJECT_EDITS: u8 = 21;
+    pub const OBJECT_EDIT: u8 = 21;
 }

@@ -142,3 +142,42 @@ per square, chunk or column across frames, and a job goes to what does it better
 **The structure stays.** The eye and the light are each rays that find, a raster that draws
 what they found, and a walk where a hole is left (ARCHITECTURE.md, Drawing). What remains of
 the S23's p95 is sought within this structure.
+
+## The light's raster on the S23, 11-11
+
+Recorded with the user, in the session that took up the light's tail on the S23
+([the experiment](../experiment/20261107-the-lights-tail/README.md)). Main was at
+`3de91d61b4`.
+
+**What was found.** On the S23's page the light's raster drew next to nothing, so its
+texels were walked as holes. Its span `light_raster` was shared by three passes, two
+compute passes and the render pass, and the first alone wrote the beginning. On the S23's
+Chrome (157.0.8103.50) a render pass that writes only its end-of-pass timestamp loses an
+indirect draw, with no console error; with both timestamps, or with none, it draws. The
+Mac's Chrome (157.0.8103.39) and the S23's app do not lose it. The eye's render pass had a
+span of its own and was never affected.
+
+**A draw whose count the GPU makes is drawn indirectly, the eye's and the light's alike.**
+How many boxes a raster draws is decided in the frame by a compute pass, so the count is
+the GPU's, and the GPU reads it where it wrote it. A draw whose count the CPU knows, a
+full-screen pass or the tiles a frame claims, is drawn directly. Which way a draw goes
+follows from who knows its count, not from a measurement.
+
+**The light's direct draw goes.** It went in on 11-10 (`360e05dd5f`) as a workaround for
+the loss. Its count stood in for one the CPU does not know: an upper bound, a word of 0 for
+each place no box reached, and the buffer cleared each cast, so the light's cost followed
+that bound and not what was seen.
+
+**Every pass writes both of its timestamps.** A span that several passes share is the sum
+of their passes, and no pass writes its end alone.
+
+**Where the draw is lost is not ours to find.** Whether Chrome, Dawn or the phone's driver
+drops it is not sought: no pass here writes its end alone, so nothing here meets it.
+
+Weighed and not taken:
+
+- **Direct everywhere.** It is symmetric too, but every raster would cost its bound each
+  frame, against the rule that a frame costs what it sees.
+- **A span of its own for the light's render pass**, with a check in `gpu/api.rs` that
+  refuses an end without a beginning. It closes this case and leaves the shared spans,
+  which can make it again; a pass that cannot write its end alone leaves nothing to check.

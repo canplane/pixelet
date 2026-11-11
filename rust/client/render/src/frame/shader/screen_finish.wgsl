@@ -8,7 +8,7 @@
 // because what is drawn over the world is tested against that depth. Where the two sizes are
 // equal, each pixel takes its own world texel.
 //
-// The pass draws only the claimed tiles, at the canvas's pixels (screen_tile.wgsl). It writes
+// The pass draws only the damaged tiles, at the canvas's pixels (screen_tile.wgsl). It writes
 // one color to the canvas and, at location 1, to the picture the world's surface keeps. A
 // pipeline whose only target is the canvas leaves the second unwritten.
 

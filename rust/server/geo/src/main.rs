@@ -17,7 +17,6 @@ async fn main() -> ExitCode {
     let server = Server {
         env: Env {
             prefix: "GEO",
-            default_port: 3000,
             db_url_key: "DB_GEO_URL",
         },
         probe: Probe {

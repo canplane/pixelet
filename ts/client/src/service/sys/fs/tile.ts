@@ -1,8 +1,8 @@
 // @pxl/client/service/sys/fs/tile.ts
 
 /**
- * The backend of the bakes' roots. The core opens a name, which is a tile's
- * quadkey or the Earth's sphere. This reads the object the source serves for
+ * The backend of the bakes' files. The core opens a tile by its quadkey, or
+ * the Earth's sphere (binding.ts). This reads the object the source serves for
  * that name (spec/spec/route.json `object`), under the version the
  * declaration gives it. The name is the core's, and the version is the
  * client's to choose. tile.fixture.json records the object each name must
@@ -10,9 +10,7 @@
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import type { u32 } from "@xpute/kit/abi/word.ts";
 import {
-  BASE_LAYERS,
   type BaseLayer,
   tileObject,
 } from "@/service/origin/publication.spec.ts";
@@ -44,11 +42,10 @@ export function version_of(
 
 export function read_object(
   decl: Declaration,
-  bake: u32,
+  kind: BaseLayer,
   name: string,
   signal: AbortSignal,
 ): Promise<U8Array> {
-  const kind = BASE_LAYERS[bake];
   const object = tileObject(version_of(decl, kind, name), name);
   return get(tile_url(kind, object), signal);
 }

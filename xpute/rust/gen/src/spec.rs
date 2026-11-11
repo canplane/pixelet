@@ -3,11 +3,11 @@
 //! This generates the TypeScript, Rust and C++ code that spec/ JSON describes:
 //! the named values of a data spec (data.rs), the readers and writers of a
 //! command table (cmd.rs), xpute's errno table (errno.rs) and a program's
-//! machine (machine.rs). It links none of the crates it writes into.
+//! manifest (manifest.rs). It links none of the crates it writes into.
 
 pub mod cmd;
 pub mod data;
-pub mod machine;
+pub mod manifest;
 
 use std::collections::BTreeSet;
 use std::fs::File;

@@ -41,7 +41,7 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::layer::object::ext::{Ext, Pool, NONE};
 use crate::domain::layer::object::sparse_tree::SparseTree;
 use crate::domain::layer::object::volume::fold;
-use crate::sys::sched::edge::request_world_tick;
+use crate::sys::sched::request_world_tick;
 use pxl_engine::object::{self, path, NodeSlot};
 use pxl_render::gpu::api;
 use pxl_render::ray::ObjectTable;
@@ -102,24 +102,25 @@ pub(in crate::domain::layer) fn object_mut() -> &'static mut Store {
 pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) -> bool {
     let regions = object_mut().write(writes);
     if !regions.is_empty() {
-        note_written(&regions);
+        note_damage(&regions);
     }
     !regions.is_empty()
 }
 
-static WRITTEN: Global<Vec<Aabb>> = Global::new();
+static DAMAGE: Global<Vec<Aabb>> = Global::new();
 
-/// Keeps the regions where the objects changed, for the turn to pass on to
-/// what draws the objects and what is derived from them (`take_written`).
-pub(super) fn note_written(regions: &[Aabb]) {
-    WRITTEN.get(Vec::new).extend_from_slice(regions);
+/// Keeps the damage, the regions where the objects changed, for the turn to
+/// pass on to what draws the objects and what is derived from them
+/// (`take_damage`).
+pub(super) fn note_damage(regions: &[Aabb]) {
+    DAMAGE.get(Vec::new).extend_from_slice(regions);
     request_world_tick();
 }
 
-/// Moves into `out` the regions written since the turn last took them.
-pub(in crate::domain::layer) fn take_written(out: &mut Vec<Aabb>) {
+/// Moves into `out` the damage noted since the turn last took it.
+pub(in crate::domain::layer) fn take_damage(out: &mut Vec<Aabb>) {
     out.clear();
-    core::mem::swap(out, WRITTEN.get(Vec::new));
+    core::mem::swap(out, DAMAGE.get(Vec::new));
 }
 
 /// What the GPU was last handed of the tree: the store's revision at that

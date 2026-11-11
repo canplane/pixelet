@@ -19,6 +19,10 @@ const JSON: &str = "spec/client/core/domain/setting/schema.json";
 struct Setting<'a> {
     key: &'a str,
     spec: &'a Node,
+    /// Offered by a development build only (`"dev": true`).
+    dev: bool,
+    /// Kept by the core's store unless marked `"stored": false`.
+    stored: bool,
 }
 
 impl Setting<'_> {
@@ -27,17 +31,6 @@ impl Setting<'_> {
     }
     fn options(&self) -> Option<&str> {
         self.spec.str_at("options")
-    }
-    fn flag(&self, name: &str) -> bool {
-        self.spec.get(name) == Some(&Node::Bool(true))
-    }
-    /// Stored unless marked `"stored": false`; anything else there is refused.
-    fn stored(&self) -> Result<bool, String> {
-        match self.spec.get("stored") {
-            None | Some(Node::Bool(true)) => Ok(true),
-            Some(Node::Bool(false)) => Ok(false),
-            Some(_) => Err(format!("{JSON}: {}'s stored is not a bool", self.key)),
-        }
     }
     fn default(&self) -> &Node {
         self.spec
@@ -62,6 +55,15 @@ fn number(n: &Node, what: &str) -> Result<u32, String> {
         .ok_or(format!("{JSON}: {what}'s number is not a whole u32"))
 }
 
+/// A setting's bool field, `default` where it is absent; anything else there is refused.
+fn bool_at(spec: &Node, key: &str, name: &str, default: bool) -> Result<bool, String> {
+    match spec.get(name) {
+        None => Ok(default),
+        Some(Node::Bool(b)) => Ok(*b),
+        Some(_) => Err(format!("{JSON}: {key}'s {name} is not a bool")),
+    }
+}
+
 /// A table's numbers are each given out once.
 fn check_numbers(table: &str, numbered: &[(&str, u32)]) -> Result<(), String> {
     for (i, (name, n)) in numbered.iter().enumerate() {
@@ -77,8 +79,15 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let every = spec.get("SETTING").ok_or(format!("{JSON}: no SETTING"))?;
     let settings: Vec<Setting> = every
         .named()
-        .map(|(key, spec)| Setting { key, spec })
-        .collect();
+        .map(|(key, spec)| {
+            Ok(Setting {
+                key,
+                spec,
+                dev: bool_at(spec, key, "dev", false)?,
+                stored: bool_at(spec, key, "stored", true)?,
+            })
+        })
+        .collect::<Result<_, String>>()?;
     let numbers = settings
         .iter()
         .map(|s| {
@@ -273,12 +282,11 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             pascal(s.kind())
         )
     }));
-    let mut session = Vec::new();
-    for s in &settings {
-        if !s.stored()? {
-            session.push(format!("SettingKey::{}", s.key));
-        }
-    }
+    let session: Vec<String> = settings
+        .iter()
+        .filter(|s| !s.stored)
+        .map(|s| format!("SettingKey::{}", s.key))
+        .collect();
     rs.extend([
         "        }".to_string(),
         "    }".into(),
@@ -295,7 +303,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
         "    /// Offered by a development build only.".into(),
         "    pub fn dev(self) -> bool {".into(),
-        format!("        {}", keys_where(&|s| s.flag("dev"))),
+        format!("        {}", keys_where(&|s| s.dev)),
         "    }".into(),
         String::new(),
         "    /// A choice's option a development build only offers.".into(),
@@ -526,7 +534,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             .into(),
         format!(
             "export const SETTING_PROD = {} as const;",
-            ts_literal(&table(&|s| !s.flag("dev"))?, "f64", "", &[])?
+            ts_literal(&table(&|s| !s.dev)?, "f64", "", &[])?
         ),
     ]);
 

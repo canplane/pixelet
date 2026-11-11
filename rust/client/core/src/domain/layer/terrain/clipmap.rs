@@ -52,7 +52,7 @@ use crate::domain::layer::terrain::tile;
 use crate::domain::layer::Base;
 use crate::sys::io::room::Refusal;
 use crate::sys::io::source::ServiceArea;
-use crate::sys::sched::edge::{request_world_tick, world_edge};
+use crate::sys::sched::{self, request_world_tick};
 use xpute_core::mem::range::arr;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -938,7 +938,7 @@ enum Poll {
 }
 
 /// Fills the due bricks one part at a time (`fill_stage`), after the frame.
-/// It runs as far as the turn's share for tasks holds (sys/sched/edge.rs
+/// It runs as far as the turn's share for tasks holds (sys/sched.rs
 /// `tasks_after_frame`), which is the frame's share however far the frame
 /// overran, and always at least one part, so a turn that spent its share
 /// before this point still moves the fill. What is left, and a filled brick
@@ -958,7 +958,7 @@ pub fn fill_share() {
             }
             Poll::Ran => ran = true,
         }
-        if world_edge().is_spent() {
+        if sched::turn().is_spent() {
             break;
         }
     }

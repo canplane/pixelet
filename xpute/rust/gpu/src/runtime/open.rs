@@ -22,7 +22,7 @@ pub struct Ask {
 }
 
 impl Ask {
-    /// This is the device the machine's GPU declares: its power preference and
+    /// This is the device the manifest's GPU declares: its power preference and
     /// features (the generated `GPU_ASK`), with the adapter's own limits and the
     /// platform's primary backends.
     pub fn of(
@@ -65,43 +65,50 @@ pub enum OpenError {
     Feature(&'static str),
 }
 
-/// This is a device opened as asked, and the instance a program makes its
-/// surfaces with (`GpuRuntime::bind`).
-pub struct Opened {
-    pub instance: wgpu::Instance,
+/// The wgpu objects of a device opened as asked, on an instance (`instance`).
+pub struct Wgpu {
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
 }
 
-/// Opens a device as `ask` says, for `GpuRuntime::new`. It blocks on wgpu's
-/// futures, which a native backend resolves at once. The instance is made
-/// without a display handle, since each surface brings its own
-/// (`SurfaceTargetUnsafe`).
-pub fn open(ask: &Ask) -> Result<Opened, OpenError> {
+/// This is the instance devices are opened on as `ask` says (`open`), and a
+/// program makes its surfaces with (`GpuRuntime::bind`). It is made without a
+/// display handle, since each surface brings its own (`SurfaceTargetUnsafe`).
+/// It outlives a device lost; a surface goes with its device's runtime, and
+/// the next device's runtime makes each again of the window it was made of
+/// (`native::open`).
+pub fn instance(ask: &Ask) -> wgpu::Instance {
     // The core's indirect calls are its own shaders' output, so they are not
     // validated, which would also put a pass of wgpu's ahead of each pass that
     // draws indirectly.
     let defaults = wgpu::InstanceDescriptor::new_without_display_handle();
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+    wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: ask.backends,
         flags: defaults.flags - wgpu::InstanceFlags::VALIDATION_INDIRECT_CALL,
         ..defaults
-    });
+    })
+}
+
+/// Opens a device on `instance` as `ask` says, for `GpuRuntime::new`. It
+/// blocks on wgpu's futures, which a native backend resolves at once.
+pub fn open(instance: &wgpu::Instance, ask: &Ask) -> Result<Wgpu, OpenError> {
     let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: ask.power_preference,
         ..Default::default()
     }))
     .map_err(OpenError::Adapter)?;
+    // The runtime keeps the pipelines it compiles across launches where the
+    // adapter can (`Cache`), which no program asks for by a WebGPU name.
+    let keeps = adapter.features() & wgpu::Features::PIPELINE_CACHE;
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_features: ask.features(&adapter)?,
+        required_features: ask.features(&adapter)? | keeps,
         required_limits: (ask.limits)(&adapter),
         memory_hints: ask.memory_hints.clone(),
         ..Default::default()
     }))
     .map_err(OpenError::Device)?;
-    Ok(Opened {
-        instance,
+    Ok(Wgpu {
         adapter,
         device,
         queue,

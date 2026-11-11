@@ -111,9 +111,8 @@ fn run() -> Result<(), String> {
                         let pkt = terrain.encode(at)?;
                         let packed = pack(&pkt, Level::Stored).map_err(|e| e.to_string())?;
                         set.write(at, &packed)?;
-                        Ok(Outcome::Wrote {
+                        Ok(Outcome::Tile {
                             bytes: packed.len() as u64,
-                            items: 0,
                         })
                     },
                 )?;
@@ -124,19 +123,9 @@ fn run() -> Result<(), String> {
             })?;
         }
     }
-    run.finish::<TerrainTile, _>(
-        |run| Ok(Absence::new(run.read_baked()?)),
-        &leaf::READS,
-        false,
-    )
+    run.finish::<TerrainTile, _>(|run| Ok(Absence::new(run.read_baked()?)), &leaf::READS)
 }
 
 fn main() -> ExitCode {
-    match run() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(err) => {
-            eprintln!("[bake] {err}");
-            ExitCode::FAILURE
-        }
-    }
+    cli::main("bake/terrain", run)
 }

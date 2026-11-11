@@ -24,7 +24,7 @@ pub const SETTLE_TURNS: u32 = 4;
 
 /// The most pixels the world is drawn at along each side: the largest texture side of the
 /// floor, the limits every WebGPU device meets (frame/shader/floor.rs). Every size that
-/// `drawn_fits` allows lies within it, and at that size the screen's claimed tiles, a word a
+/// `drawn_fits` allows lies within it, and at that size the screen's damaged tiles, a word a
 /// tile (ray/cast.rs `CAST_TILES_START`), still fit the floor.
 pub const DRAWN_CAP: [u32; 2] = [floor::MAX_TEXTURE_DIMENSION_2D; 2];
 
@@ -95,7 +95,7 @@ pub struct Surface {
     /// The finished picture, at the canvas's size and in the canvas's format, made with the
     /// screen's depth. Every frame finishes into it in the same pass that finishes the canvas.
     /// The canvas's texture is a new one each frame, so a gated frame first shows the picture
-    /// whole on the canvas and then finishes both only in its claimed tiles (pass/finish.rs).
+    /// whole on the canvas and then finishes both only in its damaged tiles (pass/finish.rs).
     /// Only a world surface has it.
     pub picture: u32,
     pub picture_view: u32,

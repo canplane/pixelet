@@ -1,8 +1,20 @@
 # What every vendor's measurement shares. A vendor's script starts a build made
-# for measuring (`PXL_PERF_DRIVE=1`) from nothing and hands `measure` the lines
-# it says; `measure` writes the result into <dir>: values.json, report.txt and
-# trace.json, which ui.perfetto.dev opens. The scenario and the values are the
-# app's (ts/client/src/ui/feature/debug/perf/measure.ts).
+# for measuring (`PXL_PERF_DRIVE=1`) from nothing and hands `measure` how it
+# reaches it; `measure` writes the result into <dir>: values.json, report.txt and
+# trace.json, which ui.perfetto.dev opens. Beside them, however the run ends, it
+# keeps said.txt, every other line the app said and each capture's, and shots/,
+# the screen every `CAPTURE_S`. The scenario, the values and the progress are
+# the app's (ts/client/src/ui/feature/debug/perf/measure.ts).
+#
+# A run starts its browser or app afresh, so that nothing a run before left
+# shares its process or its GPU's, and starts none where the vendor says one is
+# running: what it would share. A vendor's reach is made by the vendor's
+# `start(target)`, which starts it afresh, and `start.running()` says what is
+# running, or None. The reach has `lines`, what the app says; `shot(path)`,
+# which writes a PNG of the screen to `path`; `state()`, the device's state as
+# a line, how busy its GPU is first; and `close()`, which ends what
+# the script started. `shot` and `state` are called from a thread of their
+# own, beside `lines`.
 
 import json
 import os
@@ -10,14 +22,24 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
-from contextlib import closing
 
 # The longest a run may take, its install included.
 CAP_S = 240
+# The longest a reach may take to start, an app's install included: a browser
+# that gives no session or no page by then ends the run, saying so.
+START_S = 120
 PIECE = re.compile(r"PXLPERF (\d+)/(\d+) (.*)")
+
+
+class Expired(Exception):
+    """A limit of the run's ran out. It is no OSError, so no wait a vendor
+    retries on a failed connection takes it for one."""
 # The most lines read from a page at once.
 BATCH = 30
+# The seconds between captures of the screen and the device's state.
+CAPTURE_S = 10
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # A page's size: 4K, at Chrome's two device pixels a side.
 SIZE = {"width": 1920, "height": 1080}
@@ -61,25 +83,123 @@ def told(lines):
     raise RuntimeError("the output ended before the app had told its result")
 
 
+class Tail:
+    """The lines `stream` gives that `keep` finds, read in a thread of their
+    own as they come; `take()` hands each once."""
+
+    def __init__(self, stream, keep):
+        self.lock = threading.Lock()
+        self.kept = []
+
+        def read():
+            # The cap's alarm is the main thread's to take.
+            signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGALRM})
+            for line in stream:
+                if keep.search(line):
+                    with self.lock:
+                        self.kept.append(line.rstrip())
+
+        threading.Thread(target=read, daemon=True).start()
+
+    def take(self):
+        with self.lock:
+            kept, self.kept = self.kept, []
+        return kept
+
+
+def processes():
+    """Every process as (pid, parent's pid, CPU seconds so far, command line)."""
+    ps = subprocess.run(
+        ["ps", "-axo", "pid=,ppid=,time=,args="], stdout=subprocess.PIPE, text=True
+    ).stdout
+    for line in ps.splitlines():
+        pid, ppid, cpu, cmd = line.split(None, 3)
+        days, _, clock = cpu.rpartition("-")
+        secs = 0.0
+        for part in clock.split(":"):
+            secs = secs * 60 + float(part)
+        yield int(pid), int(ppid), secs + 86400 * int(days or 0), cmd
+
+
+class Cpu:
+    """The CPU each of a vendor's roles took since the last `take`, as a
+    share of one core: `page` the processes that run the page, `gpu` its GPU
+    process, `compiler` the Metal shader compiler. `role(ppid, cmd)` names a
+    process's role, or None. A process that ran as the run began is another
+    app's and is left out; one of the same kind another app starts meanwhile is
+    counted, and what a process took between its last take and its end is
+    not."""
+
+    ROLES = ("page", "gpu", "compiler")
+
+    def __init__(self, role):
+        self.role = role
+        self.before = {pid for pid, *_ in processes()}
+        self.at = time.monotonic()
+        self.was = {}
+
+    def take(self):
+        now, took, seen = time.monotonic(), dict.fromkeys(self.ROLES, 0.0), {}
+        for pid, ppid, secs, cmd in processes():
+            role = self.role(ppid, cmd)
+            if role is None or pid in self.before:
+                continue
+            seen[pid] = secs
+            took[role] += secs - self.was.get(pid, 0.0)
+        span, self.at, self.was = now - self.at, now, seen
+        return "cpu " + " ".join(f"{r} {100 * s / span:.0f}%" for r, s in took.items())
+
+
 def measure(start):
-    """One run: `start(target)` gives the lines, and letting go of them ends
-    what it started."""
+    """One run: `start(target)` gives the vendor's reach, started afresh, and
+    closing it ends what it started. Why a run ended is noted before what it
+    started is closed, so a close that fails after it hides nothing."""
     if len(sys.argv) != 3:
         print(f"{os.path.basename(sys.argv[0])} <target> <dir>", file=sys.stderr)
         sys.exit(2)
     target, out = sys.argv[1:]
+    running = start.running()
+    if running is not None:
+        sys.exit(f"{running}, and a run starts it afresh: close it first")
+
+    limit = f"not started in {START_S} s"
 
     def expired(*_):
-        raise TimeoutError(f"no result in {CAP_S} s")
+        raise Expired(limit)
 
+    os.makedirs(os.path.join(out, "shots"), exist_ok=True)
     signal.signal(signal.SIGALRM, expired)
-    signal.alarm(CAP_S)
-    with closing(start(target)) as lines:
-        run = json.loads(told(lines))
+    signal.alarm(START_S)
+    with open(os.path.join(out, "said.txt"), "w") as said:
+        t0 = time.monotonic()
+        lock = threading.Lock()
+
+        def note(line):
+            """Keeps `line` in said.txt, after the run's seconds so far."""
+            with lock:
+                if not said.closed:
+                    said.write(f"{time.monotonic() - t0:.1f} {line.rstrip()}\n")
+                    said.flush()
+
+        reach = None
+        try:
+            reach = start(target)
+            limit = f"no result in {CAP_S} s"
+            signal.alarm(max(1, round(CAP_S - (time.monotonic() - t0))))
+            run = heard(reach, out, note, t0)
+        except BaseException as e:
+            note(f"ended: {e!r}")
+            raise
+        finally:
+            if reach is not None:
+                try:
+                    reach.close()
+                except BaseException as e:
+                    note(f"close failed: {e!r}")
+                    raise
     if "error" in run:
         sys.exit(f"{target}: {run['error']}")
     report, trace = run.pop("report"), run.pop("trace")
-    os.makedirs(out, exist_ok=True)
     with open(os.path.join(out, "values.json"), "w") as f:
         json.dump(run, f)
     with open(os.path.join(out, "report.txt"), "w") as f:
@@ -87,3 +207,38 @@ def measure(start):
     with open(os.path.join(out, "trace.json"), "w") as f:
         json.dump(trace, f)
     print(f"{run['build']}: {out}")
+
+
+def heard(reach, out, note, t0):
+    """The result `reach`'s lines tell, every other line noted as it comes and
+    the screen and the state captured beside them until it is told."""
+    ended = threading.Event()
+
+    def capture():
+        # The cap's alarm is the main thread's to take.
+        signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGALRM})
+        while not ended.wait(CAPTURE_S):
+            name = f"shots/{time.monotonic() - t0:04.0f}.png"
+            try:
+                reach.shot(os.path.join(out, name))
+                note(f"shot {name}")
+            except Exception as e:
+                note(f"shot failed: {e!r}")
+            try:
+                note(f"state {reach.state()}")
+            except Exception as e:
+                note(f"state failed: {e!r}")
+
+    def lines():
+        for line in reach.lines:
+            if not PIECE.search(line):
+                note(line)
+            yield line
+
+    capturing = threading.Thread(target=capture, daemon=True)
+    capturing.start()
+    try:
+        return json.loads(told(lines()))
+    finally:
+        ended.set()
+        capturing.join(CAPTURE_S)

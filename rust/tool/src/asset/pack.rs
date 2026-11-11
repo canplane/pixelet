@@ -16,25 +16,12 @@ pub const TILE_SIZE: u32 = 256;
 /// Tiles a row of the laid-out image.
 pub const COLUMNS: u32 = 8;
 
-/// Painted sources are far above 256² and need a smoothing resample; legacy
-/// pixel art keeps nearest-neighbor, the default.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Deserialize)]
-pub enum Style {
-    #[serde(rename = "cute-painted-fantasy-v1")]
-    Painted,
-    #[default]
-    #[serde(rename = "legacy")]
-    Legacy,
-}
-
 #[derive(Deserialize)]
 struct Entry {
     url: String,
     file: String,
     #[serde(rename = "paletteHex")]
     palette_hex: Option<String>,
-    #[serde(default)]
-    style: Style,
 }
 
 /// The ground's palette entries: each a top, and some a side and a bottom.
@@ -75,7 +62,6 @@ pub struct Item {
     pub dest: PathBuf,
     pub original: PathBuf,
     pub palette_hex: Option<String>,
-    pub style: Style,
 }
 
 pub fn load(raw: &Path, content: &Path) -> Result<Vec<Item>, String> {
@@ -94,7 +80,6 @@ pub fn load(raw: &Path, content: &Path) -> Result<Vec<Item>, String> {
             dest: content.join(&e.file),
             original: raw.join(&e.file),
             palette_hex: e.palette_hex.clone(),
-            style: e.style,
         });
     };
 
@@ -177,22 +162,6 @@ pub fn write_state(cube_dir: &Path, state: &State) -> Result<(), String> {
 /// A non-square source is a sprite sheet or a bad crop; never stretch it.
 pub fn looks_like_sprite_sheet(w: u32, h: u32) -> bool {
     w != h && w.max(h) as f64 / w.min(h) as f64 >= 1.2
-}
-
-pub fn nearest_resize(src: &[u8], sw: u32, sh: u32, dw: u32, dh: u32) -> Vec<u8> {
-    let mut dst = vec![0u8; (dw * dh * 4) as usize];
-    for y in 0..dh {
-        let sy = ((y as f64 + 0.5) * (sh as f64 / dh as f64)).floor() as u32;
-        let sy = sy.min(sh - 1);
-        for x in 0..dw {
-            let sx = ((x as f64 + 0.5) * (sw as f64 / dw as f64)).floor() as u32;
-            let sx = sx.min(sw - 1);
-            let s = ((sy * sw + sx) * 4) as usize;
-            let d = ((y * dw + x) * 4) as usize;
-            dst[d..d + 4].copy_from_slice(&src[s..s + 4]);
-        }
-    }
-    dst
 }
 
 fn hex_to_rgb(hex: &str) -> Option<[u8; 3]> {

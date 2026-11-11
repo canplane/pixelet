@@ -24,6 +24,10 @@ extern "C" {
 extern "C" {
     #[link_name = "now"]
     fn runtime_now() -> f64;
+    #[link_name = "receive"]
+    fn runtime_receive(at: u32, cap: u32) -> i32;
+    #[link_name = "send"]
+    fn runtime_send(at: u32, named_at: u32, named_len: u32);
     #[link_name = "call"]
     fn runtime_call(at: u32) -> i32;
 }
@@ -47,8 +51,14 @@ pub fn now() -> f64 {
     unsafe { runtime_now() }
 }
 
-pub fn call(at: u32) -> i32 {
-    // SAFETY: an import of one number; what it names, the runtime reads and
-    // writes before it returns.
-    unsafe { runtime_call(at) }
+/// The module's imports, as the host the core reaches its runtime through
+/// (`crate::host`). What each names, the runtime reads and writes before it
+/// returns.
+pub fn host() -> crate::host::Host {
+    crate::host::Host {
+        // SAFETY: imports of numbers alone, which name the core's own memory.
+        receive: |at, cap| unsafe { runtime_receive(at, cap) },
+        send: |at, named_at, named_len| unsafe { runtime_send(at, named_at, named_len) },
+        call: |at| unsafe { runtime_call(at) },
+    }
 }

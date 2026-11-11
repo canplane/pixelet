@@ -47,9 +47,8 @@ fn run() -> Result<(), String> {
                             let packed = pack(&divisions.encode(at)?, Level::Stored)
                                 .map_err(|e| e.to_string())?;
                             set.write(at, &packed)?;
-                            Ok(Outcome::Wrote {
+                            Ok(Outcome::Tile {
                                 bytes: packed.len() as u64,
-                                items: 0,
                             })
                         }
                     },
@@ -61,15 +60,9 @@ fn run() -> Result<(), String> {
             })?;
         }
     }
-    run.finish::<DivisionTile, _>(|_| Ok(DivisionTile::default()), &[&READS], true)
+    run.finish::<DivisionTile, _>(|_| Ok(DivisionTile::default()), &[&READS])
 }
 
 fn main() -> ExitCode {
-    match run() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(err) => {
-            eprintln!("[bake/division] {err}");
-            ExitCode::FAILURE
-        }
-    }
+    cli::main("bake/division", run)
 }

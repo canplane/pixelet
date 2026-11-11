@@ -7,6 +7,7 @@
 use std::io::Read;
 use std::process::ExitCode;
 
+use pxl_geo_bake::cli;
 use pxl_geo_bake::source::decl_of;
 
 fn run() -> Result<(), String> {
@@ -20,11 +21,5 @@ fn run() -> Result<(), String> {
 }
 
 fn main() -> ExitCode {
-    match run() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("[declaration] {e}");
-            ExitCode::FAILURE
-        }
-    }
+    cli::main("declaration", run)
 }

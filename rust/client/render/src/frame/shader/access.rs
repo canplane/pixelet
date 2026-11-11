@@ -34,9 +34,6 @@
 //! 4. a kept range written by a call other than its owner or the host, an owner that does not
 //!    write it, or, where a rule owns the range, a call that applies the rule but not through
 //!    atomics.
-//!
-//! The frame names each hazard it holds today in its known list, and `check` also refuses a
-//! known hazard the frame no longer holds.
 
 use crate::frame::shader::record::{compute, lays_out_writable, ACCESS, NONE, STAGES, STORAGE_RW};
 use crate::frame::shader::word::SHADOW_SIZE;
@@ -186,20 +183,6 @@ impl Step {
         }
     }
 
-    /// A draw of render pipeline `render` in a pass that sets `groups`.
-    pub const fn draw(
-        name: &'static str,
-        stage: u32,
-        render: u32,
-        groups: &'static [&'static Group],
-    ) -> Step {
-        Step {
-            pipeline: render,
-            groups,
-            ..Step::new(name, stage, DRAW)
-        }
-    }
-
     /// An indirect draw of render pipeline `render` in a pass that sets `groups`, which reads
     /// its count from `buf` at word `at`.
     pub const fn draw_off(
@@ -335,15 +318,6 @@ pub struct Persistent {
     pub invalidation: &'static str,
 }
 
-/// A hazard the frame holds today: its rule, 1 to 4, the call it is held at, and what it is
-/// held with: the other call, the buffer, or the kept range's owner (`with`).
-#[derive(Clone, Copy)]
-pub struct KnownHazard {
-    pub rule: u32,
-    pub step: &'static str,
-    pub with: &'static str,
-}
-
 /// The first word and the word count of list `which`'s marks in the light's args (pxl-engine
 /// `light::list_marks_at`). Each tile has one word, the number of the cast that last listed it.
 pub const fn light_marks(which: u32) -> [u32; 2] {
@@ -358,7 +332,7 @@ pub const fn light_marks(which: u32) -> [u32; 2] {
 pub const TOUCHES: &[Touch] = {
     use crate::frame::shader::record::*;
     /// Words of the light's args (pxl-engine `light::ARGS_WORDS`). `opened` is the x of a
-    /// pass's dispatch, which the claim raises as it lists (light_enlist.wgsl `opened`).
+    /// pass's dispatch, which the damage pass raises as it lists (light_enlist.wgsl `opened`).
     /// `cnt` is a list's count, and `marks` are a list's marks, which lie past the counts.
     const fn opened(w: u32) -> [u32; 2] {
         [w + 1, 1]
@@ -463,7 +437,7 @@ pub const TOUCHES: &[Touch] = {
             writes: &[cnt(light::LIST_READS), marks(light::LIST_READS)],
             reads: &[cnt(light::LIST_READS), marks(light::LIST_READS)],
         },
-        // The claim claims each tile read that is due to be cast again, lists what feeds it,
+        // The damage pass damages each tile read that is due to be cast again, lists what feeds it,
         // and opens the passes that cast those. It also sets the lay's tiles to those read
         // (light_propagate.wgsl `light_damage_cs`, light_enlist.wgsl).
         Touch {
@@ -514,16 +488,22 @@ pub const TOUCHES: &[Touch] = {
             writes: &[RECEIVER_TILES],
             reads: &[RECEIVER_TILES],
         },
-        // In the node cache's head, the last walk adds to the stops' dispatch and count, and to
-        // the frame's asks (queue_last.wgsl).
+        // In the node cache's head, the holes' last walk, the eye's and the light's, adds to the
+        // stops' dispatch and count, and to the frame's asks (queue_last.wgsl).
         Touch {
             compute: COMPUTE_QUEUE_LAST,
             binding: 9,
             writes: &[[node_cache::HITS_ARGS, 4], ASKED],
             reads: &[[node_cache::HITS_ARGS, 4], ASKED],
         },
+        Touch {
+            compute: COMPUTE_QUEUE_LAST_LIGHT,
+            binding: 9,
+            writes: &[[node_cache::HITS_ARGS, 4], ASKED],
+            reads: &[[node_cache::HITS_ARGS, 4], ASKED],
+        },
         // In the holes' queue's words, the walks over the node cache raise the stops' count and
-        // dispatch (queue_walk.wgsl). The holes' asks
+        // dispatch (queue_walk.wgsl), the eye's and the light's. The holes' asks
         // add to the frame's asks in the node cache's head (queue_ask.wgsl).
         Touch {
             compute: COMPUTE_QUEUE,
@@ -533,6 +513,18 @@ pub const TOUCHES: &[Touch] = {
         },
         Touch {
             compute: COMPUTE_QUEUE_PARKED,
+            binding: 10,
+            writes: &[QUEUE_HITS],
+            reads: &[QUEUE_HITS],
+        },
+        Touch {
+            compute: COMPUTE_QUEUE_LIGHT,
+            binding: 10,
+            writes: &[QUEUE_HITS],
+            reads: &[QUEUE_HITS],
+        },
+        Touch {
+            compute: COMPUTE_QUEUE_LIGHT_PARKED,
             binding: 10,
             writes: &[QUEUE_HITS],
             reads: &[QUEUE_HITS],
@@ -1233,7 +1225,7 @@ pub const fn hazards(f: &Frame) -> ([Hazard; HAZARDS_CAP], usize) {
     (out, n)
 }
 
-/// What a hazard is held with, as a known hazard names it: the kept range's owner for rule 4,
+/// What a hazard is held with: the kept range's owner for rule 4,
 /// the other step for rule 2 and for rule 3 with a later writer, and otherwise the buffer.
 pub const fn with(f: &Frame, found: &Hazard) -> &'static str {
     if found.rule == 4 {
@@ -1243,12 +1235,6 @@ pub const fn with(f: &Frame, found: &Hazard) -> &'static str {
     } else {
         f.bufs[found.buf as usize].name
     }
-}
-
-const fn names(f: &Frame, known: &KnownHazard, found: &Hazard) -> bool {
-    known.rule == found.rule
-        && same(known.step, f.steps[found.step].name)
-        && same(known.with, with(f, found))
 }
 
 /// Refuses rule 1 at the step whose count's buffer a group set for it binds writable.
@@ -1264,48 +1250,22 @@ const fn refuse_two_writers(name: &str) {
 const fn refuse_read_before_written(name: &str) {
     panic!("{}", name)
 }
-/// A known hazard the frame no longer holds, refused by its step's name.
-const fn refuse_known_missing(name: &str) {
-    panic!("{}", name)
-}
 
-/// Refuses, as the crate is built, a frame whose declarations do not hold (`declared`), a
-/// hazard the frame holds that `known` does not name, and a hazard `known` names that the frame
-/// no longer holds. Each refusal panics with the step's name inside a function of its own
-/// rule, so the build's error says which rule refused the frame.
-pub const fn check(f: &Frame, known: &[KnownHazard]) {
+/// Refuses, as the crate is built, a frame whose declarations do not hold (`declared`) and
+/// every hazard the frame holds. Each refusal panics with the step's name inside a function of
+/// its own rule, so the build's error says which rule refused the frame.
+pub const fn check(f: &Frame) {
     declared(f);
     let (found, n) = hazards(f);
     let mut k = 0;
     while k < n {
-        let mut is_known = false;
-        let mut m = 0;
-        while m < known.len() {
-            is_known |= names(f, &known[m], &found[k]);
-            m += 1;
-        }
-        if !is_known {
-            let name = f.steps[found[k].step].name;
-            match found[k].rule {
-                1 => refuse_args_bound_writable(name),
-                2 => refuse_two_writers(name),
-                _ => refuse_read_before_written(name),
-            }
+        let name = f.steps[found[k].step].name;
+        match found[k].rule {
+            1 => refuse_args_bound_writable(name),
+            2 => refuse_two_writers(name),
+            _ => refuse_read_before_written(name),
         }
         k += 1;
-    }
-    let mut m = 0;
-    while m < known.len() {
-        let mut matched = false;
-        let mut k = 0;
-        while k < n {
-            matched |= names(f, &known[m], &found[k]);
-            k += 1;
-        }
-        if !matched {
-            refuse_known_missing(known[m].step);
-        }
-        m += 1;
     }
 }
 

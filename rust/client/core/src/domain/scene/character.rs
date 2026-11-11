@@ -43,7 +43,7 @@ use crate::domain::scene::model::{draw_list, models};
 use crate::domain::scene::transform::Transform;
 use crate::domain::view::lens::{cell_there, decor_impostor_angle, decor_model_angle, StepClock};
 use crate::sys::io::loader::{load_image, load_of};
-use crate::sys::sched::edge::wake_at;
+use crate::sys::sched::wake_at;
 
 pub const CHARACTERS: usize = person::models.len() + pet::models.len();
 

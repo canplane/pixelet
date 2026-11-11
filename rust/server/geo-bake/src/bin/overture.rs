@@ -213,13 +213,7 @@ const PARENT: (&str, &str) = ("division", "parent_division_id");
 const ANCESTOR: &str = "";
 
 fn main() -> ExitCode {
-    match run() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("[ingest] {e}");
-            ExitCode::FAILURE
-        }
-    }
+    cli::main("ingest", run)
 }
 
 fn run() -> Result<(), String> {

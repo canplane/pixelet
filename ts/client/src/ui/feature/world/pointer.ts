@@ -19,9 +19,6 @@ import {
 } from "@/ui/feature/world/dock/store.ts";
 import * as input from "@/service/core/input.ts";
 
-/** The pointers whose press ended the typing. Each one's lift is sent as a
- * cancel, so that it taps nothing. */
-const spent = new Set<i32>();
 /** The pressed pointers, each with its kind. Their moves drag rather than
  * hover. */
 const pressed = new Map<i32, PointerType>();
@@ -43,20 +40,18 @@ export function worldPointer(
   const typing = dockMode() === DockMode.Message;
   switch (phase) {
     case PointerPhase.Down:
+      // Sent while the core still types, so it spends the press (INPUT_TYPING).
       pressed.set(id, pointerType);
       putKeyboardAway();
-      if (typing) {
-        spent.add(id);
-        setDockMode(DockMode.Palette);
-      }
-      break;
+      input.pointer(phase, pointerType, id, button, x, y);
+      if (typing) setDockMode(DockMode.Palette);
+      return;
     case PointerPhase.Move:
       if (typing && !pressed.has(id)) return;
       break;
     case PointerPhase.Up:
     case PointerPhase.Cancel:
       pressed.delete(id);
-      if (spent.delete(id)) phase = PointerPhase.Cancel;
       break;
   }
   input.pointer(phase, pointerType, id, button, x, y);
@@ -64,7 +59,8 @@ export function worldPointer(
 
 /** What the UI makes of a device's touch, which reaches the core without it.
  * A press puts the keyboard away and ends the typing; the core has already
- * spent that touch (INPUT_TYPING). */
+ * spent that touch (INPUT_TYPING), as it spends a pointer `worldPointer`
+ * sends. */
 export function worldTouched(phase: PointerPhase): void {
   if (phase !== PointerPhase.Down) return;
   putKeyboardAway();

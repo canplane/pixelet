@@ -26,6 +26,7 @@
 //!   through.
 //!
 //!   | setting | zoom in | anything else |
+//!   | through | as asked | as asked |
 //!   | stop | Stop | Stop |
 //!   | climb | Climb | Climb |
 //!   | climb, its way hit | Dive | Stop |
@@ -141,7 +142,7 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     if mode == OrbitObstacleMode::through {
         return *to;
     }
-    if to.dist <= NEAREST_DIST && to.polar <= core::f64::consts::FRAC_PI_2 {
+    if at_nearest(to) && above_pivot(to) {
         return *to;
     }
     let world = World::now();
@@ -169,6 +170,16 @@ fn between(from: &ViewPose, to: &ViewPose, t: f64) -> ViewPose {
         polar: from.polar + (to.polar - from.polar) * t,
         azimuth: from.azimuth + turn * t,
     }
+}
+
+/// Whether `at` is at the nearest (`NEAREST_DIST`).
+fn at_nearest(at: &ViewPose) -> bool {
+    at.dist <= NEAREST_DIST
+}
+
+/// Whether the eye of `at` is at or above the pivot's level.
+fn above_pivot(at: &ViewPose) -> bool {
+    at.polar <= core::f64::consts::FRAC_PI_2
 }
 
 fn in_solid(at: &ViewPose, access: &Ground<'_>) -> bool {
@@ -239,7 +250,7 @@ fn way_hit(
 ) -> Option<f64> {
     let mut last = draw(from);
     if in_solid(&last, access) {
-        let under_nearest = from.dist <= NEAREST_DIST && from.polar > core::f64::consts::FRAC_PI_2;
+        let under_nearest = at_nearest(from) && !above_pivot(from);
         let no_deeper = eye(&draw(to)).0[2] >= eye(&last).0[2];
         return (!(under_nearest && no_deeper)).then_some(0.0);
     }
@@ -359,7 +370,7 @@ static CLIMB_PITCH: Global<Memo<MemoKey, f64>> = Global::new();
 /// distance of `at`, would be in something solid even looking straight
 /// down, as under the roof of a tunnel or a cave.
 fn climb_pose(at: ViewPose, access: &Ground<'_>) -> ViewPose {
-    if at.dist <= NEAREST_DIST {
+    if at_nearest(&at) {
         return at;
     }
     let climbed = steepened(at, access);

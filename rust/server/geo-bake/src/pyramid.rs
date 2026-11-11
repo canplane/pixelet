@@ -20,6 +20,10 @@ use crate::util::{pack, unpack, write_atomic, Level};
 /// from the next finer one's; a parent reads its four children unless
 /// `sources` says otherwise.
 pub trait Base: Tile + Clone + PartialEq + Send + Sync + 'static {
+    /// Whether a version leaves out the tiles their parent marks as no tile
+    /// (`Tile::occupancy`), which no reader asks for.
+    const PRUNED: bool;
+
     /// The tile as it is published at `at`; an error names the tile.
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String>;
 
@@ -92,6 +96,27 @@ impl TileSet {
         unpack(&stored)
             .map(Some)
             .map_err(|e| format!("{}: {e}", path.display()))
+    }
+
+    /// The set as a version is uploaded, `<set>.publish/`, made empty first: the tiles `keep`
+    /// passes, linked, and the manifest copied, which the set may stop being once it changes
+    /// again.
+    pub fn publish(&self, keep: impl Fn(Quadrant) -> bool) -> Result<PathBuf, String> {
+        let mut to = self.root.clone().into_os_string();
+        to.push(".publish");
+        let to = PathBuf::from(to);
+        if to.exists() {
+            fs::remove_dir_all(&to).map_err(|e| format!("{}: {e}", to.display()))?;
+        }
+        fs::create_dir_all(&to).map_err(|e| format!("{}: {e}", to.display()))?;
+        for p in self.by_zoom()?.into_values().flatten().filter(|&p| keep(p)) {
+            fs::hard_link(self.path(p), to.join(p.key()))
+                .map_err(|e| format!("{}: {e}", self.path(p).display()))?;
+        }
+        let manifest = self.root.join(MANIFEST);
+        fs::copy(&manifest, to.join(MANIFEST))
+            .map_err(|e| format!("{}: {e}", manifest.display()))?;
+        Ok(to)
     }
 
     /// Every tile, each zoom's sorted, from one listing: a name's length is its zoom.

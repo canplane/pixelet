@@ -2,21 +2,25 @@
 
 //! The Rust conformance core exports the same two calls as the C++ conformance
 //! core, so that one runtime drives both. `boot` takes a seed, lays out the
-//! parts of the front by it, writes the front's header as a runtime does for a
-//! machine, and answers the header's offset. Natively, the runtime hands the
-//! core a region, a clock and its call. As wasm, the core imports all three,
-//! its range starts past the linker's data, and its turn is the module's `run`.
+//! parts of the front by it, writes the front's header as a runtime does from a
+//! core's manifest, and answers the header's offset. Natively, the runtime hands
+//! the core a region, a clock and its host (xpute-core host.rs). As wasm, the
+//! core imports them, its range starts past the linker's data, and its turn is
+//! the module's `run`.
 
 #[cfg(not(target_arch = "wasm32"))]
 use core::cell::Cell;
 
+use xpute_core::abi::fs::{completion, Completion};
 use xpute_core::abi::handle::Table;
-use xpute_core::ipc::door::{Door, Import, Outcome, Submission};
-use xpute_core::ipc::file::FileTable;
-use xpute_core::ipc::head::{self, Head};
-use xpute_core::ipc::ring::{ring_bytes, slots_bytes, Ring};
-use xpute_core::ipc::stream::Stream;
+use xpute_core::io::door::{self, door, Door, Event, Import, Outcome, ABORT_PKT_BYTES};
+use xpute_core::io::file::FileTable;
+use xpute_core::io::frame::WORD_BYTES;
+use xpute_core::io::fs::Token;
+use xpute_core::io::head::{self, Head};
+use xpute_core::io::stream::Stream;
 use xpute_core::mem::Memory;
+use xpute_core::sched::wake::NO_WAKE;
 use xpute_kit::math::rng::SplitMix32;
 use xpute_kit::math::scalar::round;
 use xpute_kit::status::errno::Errno;
@@ -34,19 +38,18 @@ const fn page_up(bytes: u32) -> u32 {
 // The parts the core shares with its runtime lie each on pages of its own, and
 // `layout` places them in an order the seed draws.
 const HEAD: usize = 0;
-const SQ_DESC: usize = 1;
-const CQ_DESC: usize = 2;
-const SQ_SLOT: usize = 3;
-const CQ_SLOT: usize = 4;
-const STREAM: usize = 5;
-const PARTS: usize = 6;
+const RECEIVE: usize = 1;
+const SEND: usize = 2;
+const STREAM: usize = 3;
+const PARTS: usize = 4;
+
+/// A frame's room: its words and the most its packet takes.
+const FRAME_BYTES: u32 = WORD_BYTES + spec::PKT_BYTES;
 
 const PART_BYTES: [u32; PARTS] = [
     head::spec::WORDS * 4,
-    ring_bytes(spec::SQ_CAP),
-    ring_bytes(spec::CQ_CAP),
-    slots_bytes(spec::SQ_CAP, spec::SLOT_BYTES),
-    slots_bytes(spec::CQ_CAP, spec::SLOT_BYTES),
+    FRAME_BYTES,
+    FRAME_BYTES,
     spec::STREAM_WORDS * 4,
 ];
 
@@ -65,39 +68,52 @@ const STATE_AT: u32 = {
 
 /// Where the heap begins, which only the wasm build uses; a native build
 /// allocates from the process.
-const HEAP_AT: u32 = page_up(STATE_AT + core::mem::size_of::<Core>() as u32);
+const HEAP_AT: u32 = page_up(STATE_AT + core::mem::size_of::<State>() as u32);
+
+const _: () = assert!(spec::PKT_BYTES >= ABORT_PKT_BYTES);
+
+/// Every OPEN names this file; no trace's runtime serves it.
+const PATH: &[Token] = &[Token::U32(1), Token::Str("f")];
 
 const _: () = assert!(
     HEAP_AT as usize + spec::HEAP_BYTES as usize <= spec::MEM_BYTES as usize,
     "the ranges run past the memory"
 );
 const _: () = assert!(
-    (STATE_AT as usize).is_multiple_of(core::mem::align_of::<Core>()),
+    (STATE_AT as usize).is_multiple_of(core::mem::align_of::<State>()),
     "the state lies on its own alignment"
 );
 
 pub type Now = extern "C" fn() -> f64;
-pub type Call = extern "C" fn(u32) -> i32;
+pub type Receive = extern "C" fn(at: u32, cap: u32) -> i32;
+pub type Send = extern "C" fn(at: u32, named_at: u32, named_len: u32);
+pub type Call = extern "C" fn(at: u32) -> i32;
+
+/// What the native runtime hands the core at boot: its region, its clock and
+/// its host, which the core's first turn installs (`boot_info`).
+#[cfg(not(target_arch = "wasm32"))]
+#[derive(Clone, Copy)]
+struct Native {
+    mem: *mut u8,
+    now: Now,
+    receive: Receive,
+    send: Send,
+    call: Call,
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 thread_local! {
-    /// This is the native runtime's call, which `boot` installs as the core's.
-    static CALL: Cell<Option<Call>> = const { Cell::new(None) };
+    static NATIVE: Cell<Option<Native>> = const { Cell::new(None) };
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn call(at: u32) -> i32 {
-    CALL.with(Cell::get).map_or(Errno::ENOSYS as i32, |f| f(at))
-}
-
-struct Core {
-    door: Door,
-    state: State,
+fn native() -> Native {
+    NATIVE.with(Cell::get).expect("a booted core")
 }
 
 struct State {
     stream: Stream,
-    files: FileTable<u32, { spec::HANDLES as usize }>,
+    files: FileTable<u32, (), Vec<u8>, { spec::HANDLES as usize }>,
     handles: Table<(), { spec::HANDLES as usize }>,
     now: Now,
     /// This is the clock at the last MARK.
@@ -116,9 +132,13 @@ struct Inc {
 impl Import for Inc {
     const NUMBER: u32 = spec::cmd::INC;
     const FIELDS: u32 = 2;
+    const ACKREQ: bool = false;
     fn write(&self, w: &mut PacketWriter) {
         w.u32(Some(self.n));
         w.u32(Some(self.at));
+    }
+    fn named(&self) -> (u32, u32) {
+        (0, 0)
     }
 }
 
@@ -150,58 +170,35 @@ fn layout(seed: u32) -> [u32; PARTS] {
 /// outlives the core, and nothing else may write it while a call runs.
 unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
     let at = layout(seed).map(|off| range + off);
-    // SAFETY: the caller's memory; the ranges are the layout's.
-    let (sq, cq, stream) = unsafe {
-        (
-            Ring::init(
-                mem,
-                at[SQ_DESC] as usize,
-                spec::SQ_CAP,
-                at[SQ_SLOT],
-                spec::SLOT_BYTES,
-            ),
-            Ring::init(
-                mem,
-                at[CQ_DESC] as usize,
-                spec::CQ_CAP,
-                at[CQ_SLOT],
-                spec::SLOT_BYTES,
-            ),
-            Stream::new(
-                mem,
-                at[STREAM] as usize,
-                spec::STREAM_WORDS as usize,
-                Stream::OWN_WORDS,
-            ),
+    // SAFETY: the caller's memory; the range is the layout's.
+    let stream = unsafe {
+        Stream::new(
+            mem,
+            at[STREAM] as usize,
+            spec::STREAM_WORDS as usize,
+            Stream::OWN_WORDS,
         )
     };
-    let door = Door::new(sq, cq, spec::MOST_RAISE);
+    door::set(Door::new(mem, at[RECEIVE], at[SEND], FRAME_BYTES));
     // The stream lies where a GPU stream would, so the runtime runs it after
     // every turn.
     let front = Head {
-        sq_cap: spec::SQ_CAP,
-        cq_cap: spec::CQ_CAP,
-        slot_bytes: spec::SLOT_BYTES,
-        sq_at: at[SQ_DESC],
-        cq_at: at[CQ_DESC],
+        pkt_bytes: spec::PKT_BYTES,
         stream_at: at[STREAM],
     };
     // SAFETY: as above.
     unsafe { head::write(mem, at[HEAD] as usize, &front) };
-    let core = Core {
-        door,
-        state: State {
-            stream,
-            files: FileTable::new(),
-            handles: Table::new(),
-            now,
-            mark: 0.0,
-            word: 0,
-        },
+    let state = State {
+        stream,
+        files: FileTable::new(),
+        handles: Table::new(),
+        now,
+        mark: 0.0,
+        word: 0,
     };
     // SAFETY: the state's range is the layout's, inside the memory and on
     // the state's alignment (the asserts above).
-    unsafe { mem.at::<Core>((range + STATE_AT) as usize).write(core) };
+    unsafe { mem.at::<State>((range + STATE_AT) as usize).write(state) };
     at[HEAD]
 }
 
@@ -209,22 +206,32 @@ unsafe fn boot(mem: Memory, range: u32, now: Now, seed: u32) -> u32 {
 /// `boot` must have laid out a core at `range` in `mem`.
 unsafe fn turn(mem: Memory, range: u32) -> f64 {
     // SAFETY: the state boot made, which nothing else holds while a turn runs.
-    let Core { door, state } = unsafe { &mut *mem.at::<Core>((range + STATE_AT) as usize) };
-    let wake = door.turn(|submission| match submission {
-        Submission::Opened(opened) => {
-            if let Some(owner) = state.files.complete_open(&opened) {
-                door.post(owner, spec::cmd::OPENED, 0, opened.res);
+    let state = unsafe { &mut *mem.at::<State>((range + STATE_AT) as usize) };
+    door().receive(|event| match event {
+        Event::Completion(c) => {
+            match completion(&c) {
+                Some(Completion::FsOpen { fd, res, reply }) => {
+                    let detail = reply.map_or(0, |r| r.detail);
+                    if let Some((owner, _)) = state.files.complete_open(fd, res, detail) {
+                        let code = res.map_or_else(|e| e as i32, |n| n as i32);
+                        door().post(owner, spec::cmd::OPEN_COMPLETION, 0, code);
+                    }
+                }
+                Some(Completion::FsClose { fd, res }) => {
+                    state.files.complete_close(fd, res);
+                }
+                None => {}
             }
             Ok(Some(0))
         }
-        Submission::Program(cmd, pkt) => apply(mem, door, state, cmd, &pkt),
+        Event::Program(cmd, pkt) => apply(mem, door(), state, cmd, &pkt),
         // The conformance core keeps nothing across its life, reads no file
         // again, and draws nothing, so it answers 0 to every other
-        // submission.
+        // event.
         _ => Ok(Some(0)),
     });
     state.stream.publish();
-    wake
+    NO_WAKE
 }
 
 /// # Safety
@@ -235,23 +242,53 @@ unsafe fn turn(mem: Memory, range: u32) -> f64 {
 pub unsafe extern "C" fn xpute_conformance_boot(
     mem: *mut u8,
     now: Now,
-    runtime: Call,
+    receive: Receive,
+    send: Send,
+    call: Call,
     seed: u32,
 ) -> u32 {
-    CALL.with(|h| h.set(Some(runtime)));
-    xpute_core::call::set(call);
+    NATIVE.with(|h| {
+        h.set(Some(Native {
+            mem,
+            now,
+            receive,
+            send,
+            call,
+        }))
+    });
     // SAFETY: the caller's memory, the range from its start.
     unsafe { boot(given(mem), 0, now, seed) }
 }
 
 /// # Safety
-/// `mem` must be a memory over which `xpute_conformance_boot` laid out a
+/// `mem` must be the memory over which `xpute_conformance_boot` laid out a
 /// core.
 #[cfg(not(target_arch = "wasm32"))]
 #[no_mangle]
-pub unsafe extern "C" fn xpute_conformance_run(mem: *mut u8, _deadline_ms: f64) -> f64 {
-    // SAFETY: the caller's memory, booted.
-    unsafe { turn(given(mem), 0) }
+pub unsafe extern "C" fn xpute_conformance_run(_mem: *mut u8, deadline_ms: f64) -> f64 {
+    xpute_core::entry::run(deadline_ms, boot_info, |_, _| {
+        // SAFETY: the memory boot was handed, booted.
+        unsafe { turn(given(native().mem), 0) }
+    })
+}
+
+/// What the native runtime handed the core, as every core's entry takes it. The
+/// core allocates from the process, so it reports no heap of its own.
+#[cfg(not(target_arch = "wasm32"))]
+fn boot_info() -> xpute_core::entry::BootInfo {
+    xpute_core::entry::BootInfo {
+        mem_sz: spec::MEM_BYTES,
+        host: xpute_core::host::Host {
+            receive: |at, cap| (native().receive)(at, cap),
+            send: |at, named_at, named_len| (native().send)(at, named_at, named_len),
+            call: |at| (native().call)(at),
+        },
+        heap_stat: Default::default,
+        data_end: 0,
+        now: || (native().now)(),
+        stop_hook: None,
+        publish: None,
+    }
 }
 
 /// A native runtime hands over `spec::MEM_BYTES` from `mem`.
@@ -357,11 +394,11 @@ fn apply(mem: Memory, door: &Door, state: &mut State, cmd: u32, pkt: &Option<&[u
             Ok(Some(0))
         }
         spec::cmd::SINCE => Ok(Some(round(now() - *mark) as i32)),
-        spec::cmd::OPEN => Ok(Some(files.open(door, 1, "f", arg(pkt)?) as i32)),
+        spec::cmd::OPEN => Ok(Some(files.open(PATH, arg(pkt)?) as i32)),
         spec::cmd::CLOSE => files
-            .close(door, arg(pkt)?)
-            .map(|_| Some(0))
-            .ok_or_else(bad_handle),
+            .close(arg(pkt)?)
+            .map(|()| Some(0))
+            .map_err(|_| bad_handle()),
         spec::cmd::CALL => {
             let n = arg(pkt)?;
             *word = 0;

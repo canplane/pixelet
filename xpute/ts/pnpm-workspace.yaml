@@ -5,7 +5,6 @@ packages:
   - runtime
   - gpu
   - native
-  - dev/triangle/app
 
 # koffi opens a native core.
 onlyBuiltDependencies:

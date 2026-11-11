@@ -44,7 +44,7 @@ export const WRITE_BUFFER = 13 as number;
 /** buffer, offset, address, bytes. The runtime reads the bytes where they lie in the core's
  * memory when it runs the record, and makes no copy of them first. From the stream's
  * publish until the core loads END as 0, the core neither rewrites nor frees them
- * (ipc/stream R3). */
+ * (io/stream R3). */
 export const WRITE_BUFFER_AT = 14 as number;
 
 /** texture, mip, origin x, y, z, aspect, bytes per row, rows per image, width, height, depth, the bytes. */
@@ -163,12 +163,14 @@ export const CURRENT = 47 as number;
  * words), then its timestamp period (f32 bits: how many nanoseconds one unit of a resolved
  * timestamp is, 1 when the units are nanoseconds as WebGPU's are), then the surface format
  * it prefers (TEXTURE_FORMAT: the format SURFACE_PREFERRED stands for, as the web's
- * getPreferredCanvasFormat gives it), then the count of unfinished frames, then STATUS.
- * The unfinished frames are the frames the core has drawn whose work the queue has not yet
- * done. Only the runtime writes that count: first before STATUS, as it writes the rest of
- * the block, and afterwards with release each time the count changes. The core loads the
- * count with acquire once STATUS reads READY, and draws a frame only while the count is
- * below its frame latency; both runtimes hold a frame to that rule (xpute-gpu admit). */
+ * getPreferredCanvasFormat gives it), then the count of uncaptured errors, then the count
+ * of unfinished frames, then STATUS. The uncaptured errors are the errors the device raised
+ * that no error scope caught, each logged where the runtime logs. The unfinished frames are
+ * the frames the core has drawn whose work the queue has not yet done. Only the runtime
+ * writes the two counts: first before STATUS, as it writes the rest of the block, and
+ * afterwards with release each time a count changes. The core loads them with acquire once
+ * STATUS reads READY, and draws a frame only while the unfinished frames are below its
+ * frame latency; both runtimes hold a frame to that rule (xpute-gpu admit). */
 export const DEVICE = 48 as number;
 
 /** RENDER_PIPELINE's words, then word, ticket. WebGPU's createRenderPipelineAsync; the word

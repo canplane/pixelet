@@ -124,57 +124,63 @@ fn steps(m: &Model, start: f32, far: f32) -> Vec<f32> {
 /// gone the full `far`, short only by the arc's shortfall.
 #[test]
 fn a_step_goes_a_pixel() {
-    let m = swaying();
-    let far = 0.01;
-    // A point may go farther than the chord by as much as an arc exceeds its
-    // chord.
-    let bound = far * 1.0001 + 1e-6;
-    let at = steps(&m, 0.0, far);
-    for w in at.windows(2) {
-        let (from, to) = (w[0], w[1]);
-        let was = drawn(&m, from);
-        let farthest = (1..=32)
-            .map(|k| gone(&was, &drawn(&m, from + (to - from) * k as f32 / 32.0)))
-            .fold(0.0, f32::max);
-        assert!(
-            farthest <= bound,
-            "from {from} to {to} the pose went {farthest}, past {bound}"
-        );
-        if !SWAY_TURNS.contains(&to) && to < 1.0 {
+    crate::on_core(|| {
+        let m = swaying();
+        let far = 0.01;
+        // A point may go farther than the chord by as much as an arc exceeds its
+        // chord.
+        let bound = far * 1.0001 + 1e-6;
+        let at = steps(&m, 0.0, far);
+        for w in at.windows(2) {
+            let (from, to) = (w[0], w[1]);
+            let was = drawn(&m, from);
+            let farthest = (1..=32)
+                .map(|k| gone(&was, &drawn(&m, from + (to - from) * k as f32 / 32.0)))
+                .fold(0.0, f32::max);
             assert!(
-                gone(&was, &drawn(&m, to)) >= 0.99 * far,
-                "from {from} to {to} the pose went short of a pixel"
+                farthest <= bound,
+                "from {from} to {to} the pose went {farthest}, past {bound}"
             );
+            if !SWAY_TURNS.contains(&to) && to < 1.0 {
+                assert!(
+                    gone(&was, &drawn(&m, to)) >= 0.99 * far,
+                    "from {from} to {to} the pose went short of a pixel"
+                );
+            }
         }
-    }
+    });
 }
 
 /// Far from the eye, where a pixel spans more than the clip moves, the clip
 /// steps only at its turns and its end: three steps a loop of forty keys.
 #[test]
 fn far_steps_at_turns() {
-    let m = swaying();
-    assert_eq!(
-        steps(&m, 0.0, 1.0e3),
-        [0.0, SWAY_TURNS[0], SWAY_TURNS[1], 1.0]
-    );
+    crate::on_core(|| {
+        let m = swaying();
+        assert_eq!(
+            steps(&m, 0.0, 1.0e3),
+            [0.0, SWAY_TURNS[0], SWAY_TURNS[1], 1.0]
+        );
+    });
 }
 
 /// The clip's turns lie where its motion turns back and nowhere else, and the
 /// steps land on each turn after their start, whatever a pixel spans.
 #[test]
 fn steps_keep_turns() {
-    let m = swaying();
-    assert_eq!(m.clips[0].turns, SWAY_TURNS);
-    for far in [0.003, 0.02, 0.1, 0.5] {
-        for start in [0.0, 0.013, 0.26, 0.749] {
-            let at = steps(&m, start, far);
-            for turn in SWAY_TURNS.into_iter().filter(|&t| t > start) {
-                assert!(
-                    at.contains(&turn),
-                    "from {start}, {far} a step, the steps {at:?} pass the turn at {turn}"
-                );
+    crate::on_core(|| {
+        let m = swaying();
+        assert_eq!(m.clips[0].turns, SWAY_TURNS);
+        for far in [0.003, 0.02, 0.1, 0.5] {
+            for start in [0.0, 0.013, 0.26, 0.749] {
+                let at = steps(&m, start, far);
+                for turn in SWAY_TURNS.into_iter().filter(|&t| t > start) {
+                    assert!(
+                        at.contains(&turn),
+                        "from {start}, {far} a step, the steps {at:?} pass the turn at {turn}"
+                    );
+                }
             }
         }
-    }
+    });
 }

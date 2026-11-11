@@ -78,8 +78,8 @@ impl<'a> Memory<'a> {
     }
 
     /// The word at `at` as an atomic. It is for a word that hands memory
-    /// between the runtime and the core, such as a ring's position or a
-    /// stream's END, which both sides touch only atomically. The word must be
+    /// between the runtime and the core, such as a stream's END, which both
+    /// sides touch only atomically. The word must be
     /// aligned.
     fn atomic(&self, at: u32) -> &AtomicU32 {
         let p = self.range(at as usize, 4).cast::<u32>();

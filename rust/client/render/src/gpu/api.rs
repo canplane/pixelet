@@ -13,17 +13,16 @@
 
 use xpute_core::abi::handle::handle_slot;
 use xpute_core::global::Global;
-use xpute_core::ipc::stream::{Stream, WORD};
+use xpute_core::io::stream::{Stream, WORD};
 use xpute_core::mem;
 use xpute_gpu::device;
-pub use xpute_gpu::encode::OBJECT_OPS;
 use xpute_gpu::encode::{self, call, Gpu as Encoder, Id};
 use xpute_gpu::enums::{
     AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction,
-    CullMode, FilterMode, FrontFace, IndexFormat, LoadOp, MipmapFilterMode, PrimitiveTopology,
-    QueryType, SamplerBindingType, StencilOperation, StorageTextureAccess, StoreOp, TextureAspect,
-    TextureDimension, TextureFormat, TextureSampleType, TextureViewDimension, VertexFormat,
-    VertexStepMode, FEATURE_NAME, LIMIT_NAME,
+    CullMode, FeatureName, FilterMode, FrontFace, IndexFormat, LimitName, LoadOp, MipmapFilterMode,
+    PrimitiveTopology, QueryType, SamplerBindingType, StencilOperation, StorageTextureAccess,
+    StoreOp, TextureAspect, TextureDimension, TextureFormat, TextureSampleType,
+    TextureViewDimension, VertexFormat, VertexStepMode,
 };
 use xpute_gpu::spec::{BUFFER_USAGE, COLOR_WRITE, STATUS, TEXTURE_USAGE};
 use xpute_kit::status::bug::OrBug;
@@ -60,6 +59,9 @@ pub const OBJECTS: usize = 1 << 15;
 use crate::frame::shader::record::GROUP_ENTRIES;
 
 const SPANS: usize = GPU_SPAN_NAMES;
+/// The most passes a frame times, each with a begin and an end of its own. A pass past them
+/// is not timed.
+const PASSES: usize = 256;
 
 /// WebGPU's default `minUniformBufferOffsetAlignment`. Every adapter's limit is a power of two
 /// no larger than this, so a larger value comes from no real device and is refused (`device`).
@@ -73,7 +75,7 @@ pub type Image = (u32, &'static [u8]);
 
 /// The head's words that follow the stream's own. The device's block comes first. Then come
 /// `READS` reads of the spans, each a fence, a result, and the begin and end ticks of every
-/// span of the frame it timed, two words a tick (`read_at`). The stream records the head's
+/// pass of the frame it timed, two words a tick (`read_at`). The stream records the head's
 /// length itself, so the runtime does not read this layout.
 const DEVICE_AT: usize = Stream::OWN_WORDS;
 const READS_AT: usize = DEVICE_AT + device::WORDS;
@@ -81,7 +83,7 @@ const READS_AT: usize = DEVICE_AT + device::WORDS;
 /// read lands a frame or two after the frame, so with three no new read waits for an earlier
 /// one to be taken.
 pub const READS: usize = 3;
-const READ_WORDS: usize = 2 + 2 * 2 * SPANS;
+const READ_WORDS: usize = 2 + 2 * 2 * PASSES;
 const HEADER: usize = READS_AT + READS * READ_WORDS;
 
 /// The head word that holds read `k`'s fence. The read's result and ticks follow it.
@@ -99,46 +101,18 @@ pub struct Device {
     period_ns: f32,
 }
 
-/// A span's pair of timestamp queries. The span's first pass writes the begin and every pass
-/// writes the end, so the last pass's end stands. A span with no passes reads 0.
+/// A span's timestamps. Each pass it is handed to writes a begin and an end of its own
+/// (`Gpu::stamp_pass`), and the span's time is the sum of its passes' (`take_stamps`). On the
+/// S23's Chrome a render pass that writes an end without a begin loses its indirect draws.
 #[derive(Clone, Copy)]
-pub struct TimestampWrites {
-    set: Id,
-    begin: Option<u32>,
-    end: u32,
+pub struct Stamp<'a> {
+    g: &'a Gpu,
+    span: GpuSpanName,
 }
 
-impl TimestampWrites {
-    pub const NONE: TimestampWrites = TimestampWrites {
-        set: 0,
-        begin: None,
-        end: 0,
-    };
-
-    pub fn of(set: Id, span: usize) -> TimestampWrites {
-        if set == 0 {
-            return TimestampWrites::NONE;
-        }
-        let begin = 2 * span as u32;
-        TimestampWrites {
-            set,
-            begin: Some(begin),
-            end: begin + 1,
-        }
-    }
-
-    pub fn is_written(&self) -> bool {
-        self.set != 0 && self.begin.is_none()
-    }
-
-    pub fn pass(&mut self) -> Option<encode::TimestampWrites> {
-        let t = (self.set != 0).then_some(encode::TimestampWrites {
-            query_set: self.set,
-            begin: self.begin,
-            end: Some(self.end),
-        });
-        self.begin = None;
-        t
+impl Stamp<'_> {
+    pub fn pass(&self) -> Option<encode::TimestampWrites> {
+        self.g.stamp_pass(self.span)
     }
 }
 
@@ -152,21 +126,20 @@ pub fn place(texture: Id, origin: [u32; 3]) -> encode::TexelCopyTexture {
     }
 }
 
-/// An encoder being recorded, with the timestamp writes of the frame's spans. Each pass is
-/// handed this and writes the timestamps of its own span.
+/// An encoder being recorded. Each pass is handed this and writes the timestamps of its own
+/// span.
 pub struct RenderContext<'a> {
     pub g: &'a Gpu,
     pub encoder: Id,
-    stamps: &'a mut [TimestampWrites; GPU_SPAN_NAMES],
 }
 
 impl<'a> RenderContext<'a> {
-    pub fn new(g: &'a Gpu, encoder: Id, stamps: &'a mut [TimestampWrites; GPU_SPAN_NAMES]) -> Self {
-        Self { g, encoder, stamps }
+    pub fn new(g: &'a Gpu, encoder: Id) -> Self {
+        Self { g, encoder }
     }
 
-    pub fn stamp(&mut self, span: GpuSpanName) -> &mut TimestampWrites {
-        &mut self.stamps[span as usize]
+    pub fn stamp(&self, span: GpuSpanName) -> Stamp<'a> {
+        Stamp { g: self.g, span }
     }
 }
 
@@ -310,7 +283,7 @@ impl<'a> TrackedRenderPass<'a> {
 
 /// The depth format of the targets a pass can draw into through a gate: the world surfaces'
 /// depth and the light map's. A frame that is not drawn whole is drawn through a gate, which
-/// marks the tiles the frame claims. The format is a 32-bit float with a stencil, and the
+/// marks the tiles the frame damages. The format is a 32-bit float with a stencil, and the
 /// stencil holds those marks, so the passes after the gate skip the other tiles (`Stencil`).
 pub const MASKED_DEPTH: Format = Format::depth32float_stencil8;
 
@@ -325,7 +298,7 @@ pub const WORLD_COLOR: Format = Format::rgba16float;
 pub const TARGETS: usize = 2;
 
 /// What a pipeline does with the stencil beside its depth (`MASKED_DEPTH`). In each tile, the
-/// stencil holds the number of the gated frame that last claimed the tile. `Unused` leaves the
+/// stencil holds the number of the gated frame that last damaged the tile. `Unused` leaves the
 /// stencil alone. `Masked` passes only where the stencil holds the pass's reference, which is
 /// this frame's number; every draw of the world's pass is masked. `Mask` writes the reference,
 /// as the gate does (renderer.rs `frame`). A pass clears the stencil to 0 unless it keeps
@@ -365,7 +338,7 @@ pub struct PassDesc {
 
 impl PassDesc {
     /// Loads the stencil as the last pass left it, holding the number of the gated frame that
-    /// last claimed each tile (`Stencil`).
+    /// last damaged each tile (`Stencil`).
     pub fn load_stencil(self) -> PassDesc {
         PassDesc {
             stencil_load: Load::Load,
@@ -560,10 +533,10 @@ pub struct Group {
 }
 
 impl Group {
-    /// The group over `layout` and `entries`: the kept one where it was made over both, and
-    /// otherwise a new one made in its place.
+    /// Keeps the group over `layout` and `entries`: the kept one where it was made over both,
+    /// and otherwise a new one made in its place. Says whether it was made anew.
     #[track_caller]
-    pub fn set(&mut self, g: &Gpu, layout: Layout, entries: &[Entry]) -> Id {
+    pub fn set(&mut self, g: &Gpu, layout: Layout, entries: &[Entry]) -> bool {
         let same = self.id != 0
             && self.layout == layout.id
             && self.entries.len() == entries.len()
@@ -579,7 +552,7 @@ impl Group {
             self.entries.clear();
             self.entries.extend_from_slice(entries);
         }
-        self.id
+        !same
     }
 
     /// The group as last set, or 0 before the first set.
@@ -591,6 +564,45 @@ impl Group {
         release(self.id);
         *self = Group::default();
     }
+}
+
+/// The entries of the bind group over `layout` that `table` describes (frame/shader/group.rs).
+/// Each binding the table names is bound to its range of the frame's buffer that `buf` gives.
+/// The entries of `rest` that the layout binds and the table does not name follow. Only the
+/// table binds the frame's buffers, so an entry of `rest` that binds one is a bug. `buf`
+/// answers 0 for a buffer its caller does not hold.
+#[track_caller]
+pub fn frame_entries(
+    layout: Layout,
+    table: &access::Group,
+    buf: impl Fn(u32) -> Id,
+    rest: &[Entry],
+) -> Vec<Entry> {
+    let named = |binding: u32| table.binds.iter().any(|b| b.binding == binding);
+    let mut entries: Vec<Entry> = table
+        .binds
+        .iter()
+        .map(|b| match (b.at, b.words) {
+            (0, END) => buf_entry(b.binding, buf(b.buf)),
+            _ => buf_range_entry(
+                b.binding,
+                buf(b.buf),
+                word_bytes(b.at as usize),
+                word_bytes(b.words as usize),
+            ),
+        })
+        .collect();
+    for e in rest
+        .iter()
+        .filter(|e| layout.binds(e.binding) && !named(e.binding))
+    {
+        if let encode::Resource::Buffer { buffer, .. } = e.resource {
+            let shared = (0..BUFS.len() as u32).any(|k| buf(k) == buffer);
+            xpute_kit::ensure!(buffer == 0 || !shared, ENOTRECOVERABLE, e.binding, buffer);
+        }
+        entries.push(*e);
+    }
+    entries
 }
 
 pub fn bytes<T: Copy>(lane: &[T]) -> &[u8] {
@@ -618,8 +630,11 @@ struct State {
     /// The spans' query set, the buffer it resolves into, and one buffer per read that the
     /// resolved ticks are copied into and mapped back through.
     stamps: Option<(Id, Id, [Id; READS])>,
-    /// For each read, the spans it timed, one bit a span.
-    stamps_written: [u64; READS],
+    /// The span of each pass this frame has timed so far, in order (`Gpu::stamp_pass`).
+    stamp_spans: [GpuSpanName; PASSES],
+    stamp_cnt: usize,
+    /// For each read, the span of each pass it timed, and how many passes it timed.
+    stamps_read: [([GpuSpanName; PASSES], usize); READS],
     /// For each read, the order in which it was asked, or 0 where it is not out. The reads are
     /// taken in that order.
     stamps_out: [u32; READS],
@@ -630,10 +645,10 @@ struct State {
     stamps_asked: Option<usize>,
     /// Each span's own time from the last read taken in, in ms.
     gpu_ms: [f64; SPANS],
-    /// The time the last read's spans ran, in ms, with overlapping spans counted once. This is
-    /// the frame's GPU time; the spans' sum is not, where passes overlap. A pass with no work
-    /// may be dropped and leave its begin tick unwritten; its span is then counted from the
-    /// latest end before it, so it adds its own length and not the time since an older tick.
+    /// The time the last read's passes ran, in ms, with overlapping passes counted once. This
+    /// is the frame's GPU time; the spans' sum is not, where passes overlap. A pass with no work
+    /// may be dropped and leave its begin tick unwritten; it is then counted from the latest end
+    /// before it, so it adds its own length and not the time since an older tick.
     gpu_busy_ms: f64,
     /// The read that the last submitted frame took in, if it took one. When it did, the span
     /// times are that read's; when it did not, they are still the earlier read's, not
@@ -768,7 +783,9 @@ impl State {
             device_out: false,
             device: None,
             stamps: None,
-            stamps_written: [0; READS],
+            stamp_spans: [GpuSpanName::ALL[0]; PASSES],
+            stamp_cnt: 0,
+            stamps_read: [([GpuSpanName::ALL[0]; PASSES], 0); READS],
             stamps_out: [0; READS],
             stamps_asked_cnt: 0,
             stamps_asked: None,
@@ -801,7 +818,7 @@ pub fn gpu() -> Option<&'static Gpu> {
 }
 
 /// Whether the runtime has handed the stream back since the core last published it
-/// (xpute_core ipc/stream.rs R3). Until it has, the core records nothing and the frame waits.
+/// (xpute_core io/stream.rs R3). Until it has, the core records nothing and the frame waits.
 pub fn stream_free() -> bool {
     STATE.get(|| None).as_mut().is_none_or(writable)
 }
@@ -832,30 +849,12 @@ fn writable(s: &mut State) -> bool {
 /// status turns READY reads it.
 pub fn device() -> Option<Device> {
     let s = STATE.get(|| None).as_mut()?;
-    if s.device.is_none()
-        && s.device_out
-        && load_acquire(header(DEVICE_AT + device::STATUS_AT)) == STATUS::READY
-    {
-        let word = |k: usize| *header(DEVICE_AT + k);
-        let limit = |name: &str| {
-            word(
-                LIMIT_NAME
-                    .iter()
-                    .position(|n| *n == name)
-                    .or_bug(Errno::ENOENT),
-            )
-        };
-        let feat = |name: &str| {
-            let k = FEATURE_NAME
-                .iter()
-                .position(|n| *n == name)
-                .or_bug(Errno::ENOENT);
-            word(device::FEATS_AT + k / 32) >> (k % 32) & 1 != 0
-        };
-        let canvas = *Format::ALL
-            .get(word(device::FORMAT_AT) as usize)
-            .or_bug(Errno::EINVAL);
-        let align = limit("minUniformBufferOffsetAlignment");
+    if s.device.is_none() && s.device_out {
+        let at = s.at as usize + DEVICE_AT * WORD;
+        // SAFETY: the head's block, which the runtime writes and the core only reads.
+        let block = unsafe { core::slice::from_raw_parts(mem::at::<u32>(at), device::WORDS) };
+        let read = device::Device::read(block)?;
+        let align = read.limit(LimitName::minUniformBufferOffsetAlignment);
         xpute_kit::ensure!(
             align.is_power_of_two() && align <= UNIFORM_ALIGN_MAX,
             EINVAL,
@@ -863,9 +862,9 @@ pub fn device() -> Option<Device> {
         );
         s.device = Some(Device {
             align,
-            timestamps: feat("timestamp-query"),
-            canvas,
-            period_ns: f32::from_bits(word(device::PERIOD_AT)),
+            timestamps: read.has(FeatureName::timestamp_query),
+            canvas: read.format,
+            period_ns: read.period_ns,
         });
     }
     s.device
@@ -907,6 +906,27 @@ pub fn device_generation() -> u32 {
     STATE.get(|| None).as_ref().map_or(0, |s| s.generation)
 }
 
+/// The device's block as the runtime last wrote it (xpute spec DEVICE), each word 0 before
+/// the block is written.
+#[derive(Clone, Copy, Default)]
+pub struct DeviceBlock {
+    pub status: u32,
+    pub errors: u32,
+    pub unfinished: u32,
+}
+
+pub fn device_block() -> DeviceBlock {
+    if STATE.get(|| None).is_none() {
+        return DeviceBlock::default();
+    }
+    let word = |k: usize| load_acquire(header(DEVICE_AT + k));
+    DeviceBlock {
+        status: word(device::STATUS_AT),
+        errors: word(device::ERRORS_AT),
+        unfinished: word(device::UNFINISHED_AT),
+    }
+}
+
 /// Takes in the ticks of the earliest-asked read that is out, if its fence says they landed.
 /// It sets each span's own time and the busy time, frees the read for another frame to ask,
 /// and returns which read it took. A read that was refused is freed and measures nothing. One
@@ -923,24 +943,28 @@ fn take_stamps(s: &mut State) -> Option<usize> {
     if fence[1] != RESULT::OK {
         return None;
     }
-    let written = s.stamps_written[r];
+    let (spans, cnt) = s.stamps_read[r];
     let period_ms = f64::from(s.device.map_or(1.0, |d| d.period_ns)) / 1e6;
     let ticks = read_at(r) + 2;
     let tick =
         |k: usize| u64::from(*header(ticks + 2 * k)) | u64::from(*header(ticks + 2 * k + 1)) << 32;
-    let mut ran = [(0u64, 0u64); SPANS];
-    for (k, r) in ran.iter_mut().enumerate() {
+    let mut ran = [(0u64, 0u64); PASSES];
+    for (k, r) in ran[..cnt].iter_mut().enumerate() {
         let (b, e) = (tick(2 * k), tick(2 * k + 1));
-        if written & 1u64 << k != 0 && e >= b {
+        if e >= b {
             *r = (b, e);
         }
     }
-    // A span's own time is its end less the later of its begin and the latest end before it.
+    let ran = &mut ran[..cnt];
+    // A pass's own time is its end less the later of its begin and the latest end before it.
     // A tiled GPU starts a render pass's vertex work early, so the pass's begin is stamped
     // before the passes it waits on have finished. A render pass's end and a compute pass's
     // begin are stamped in order, so counting from the latest earlier end leaves out the time
-    // that belongs to the passes before it.
-    let ends = ran;
+    // that belongs to the passes before it. A span's time is its passes' sum.
+    let mut ends = [(0u64, 0u64); PASSES];
+    ends[..ran.len()].copy_from_slice(ran);
+    let ends = &ends[..ran.len()];
+    s.gpu_ms = [0.0; SPANS];
     for (k, r) in ran.iter_mut().enumerate() {
         let (b, e) = *r;
         let before = ends
@@ -950,16 +974,16 @@ fn take_stamps(s: &mut State) -> Option<usize> {
             .map(|(_, &(_, ej))| ej)
             .max();
         r.0 = before.map_or(b, |p| p.clamp(b, e));
-        s.gpu_ms[k] = (r.1 - r.0) as f64 * period_ms;
+        s.gpu_ms[spans[k] as usize] += (r.1 - r.0) as f64 * period_ms;
     }
-    let mut cnt = 0;
-    for k in 0..SPANS {
+    let mut n = 0;
+    for k in 0..ran.len() {
         if ran[k].1 != 0 {
-            ran[cnt] = ran[k];
-            cnt += 1;
+            ran[n] = ran[k];
+            n += 1;
         }
     }
-    let ran = &mut ran[..cnt];
+    let ran = &mut ran[..n];
     ran.sort_unstable();
     let mut busy = 0;
     let mut run: Option<(u64, u64)> = None;
@@ -1008,7 +1032,7 @@ pub fn gpu_publish() {
 }
 
 /// Whether `vals` overlaps memory that a WRITE_BUFFER_AT record names, among the records not
-/// yet published or in the hand-off the runtime has not given back (xpute_core ipc/stream.rs
+/// yet published or in the hand-off the runtime has not given back (xpute_core io/stream.rs
 /// R3). While it does, the runtime is still to read that memory, so the values' writer leaves
 /// them unchanged and in place.
 pub fn in_flight<T>(vals: &[T]) -> bool {
@@ -1579,11 +1603,7 @@ impl Gpu {
         group
     }
 
-    /// The bind group over `layout` that `table` describes (frame/shader/group.rs). Each
-    /// binding the table names is bound to its range of the frame's buffer that `buf` gives.
-    /// The entries of `rest` that the layout binds and the table does not name follow. Only the
-    /// table binds the frame's buffers, so an entry of `rest` that binds one is a bug. `buf`
-    /// answers 0 for a buffer its caller does not hold.
+    /// The bind group over `layout` that `table` describes (`frame_entries`).
     #[track_caller]
     pub fn frame_group(
         &self,
@@ -1592,31 +1612,7 @@ impl Gpu {
         buf: impl Fn(u32) -> Id,
         rest: &[Entry],
     ) -> Id {
-        let named = |binding: u32| table.binds.iter().any(|b| b.binding == binding);
-        let mut entries: Vec<Entry> = table
-            .binds
-            .iter()
-            .map(|b| match (b.at, b.words) {
-                (0, END) => buf_entry(b.binding, buf(b.buf)),
-                _ => buf_range_entry(
-                    b.binding,
-                    buf(b.buf),
-                    word_bytes(b.at as usize),
-                    word_bytes(b.words as usize),
-                ),
-            })
-            .collect();
-        for e in rest
-            .iter()
-            .filter(|e| layout.binds(e.binding) && !named(e.binding))
-        {
-            if let encode::Resource::Buffer { buffer, .. } = e.resource {
-                let shared = (0..BUFS.len() as u32).any(|k| buf(k) == buffer);
-                xpute_kit::ensure!(buffer == 0 || !shared, ENOTRECOVERABLE, e.binding, buffer);
-            }
-            entries.push(*e);
-        }
-        self.bind_group(layout, &entries)
+        self.bind_group(layout, &frame_entries(layout, table, buf, rest))
     }
 
     pub fn canvas(&self) -> Format {
@@ -1630,7 +1626,7 @@ impl Gpu {
 
     /// Writes `bytes` into buffer `id` in one record however large. The runtime reads the
     /// bytes where they lie when it runs the turn. They are the runtime's from the turn's
-    /// publish until it hands the stream back (xpute_core ipc/stream.rs R3), so their owner
+    /// publish until it hands the stream back (xpute_core io/stream.rs R3), so their owner
     /// asks `in_flight` before it writes them again.
     pub fn upload_buf(&self, id: Id, off: u32, bytes: &[u8]) {
         let s = self.s();
@@ -1724,8 +1720,8 @@ impl Gpu {
 
     /// The pass in which an indirect call on `pass` that reads `buf` is recorded. Where `buf`
     /// was written in the pass's own command buffer (`Split::cuts`), a compute pass is ended
-    /// and begun again in a new command buffer, with its pipeline and groups set again and its
-    /// span's end moved to the new part. A render pass already begins in a command buffer of
+    /// and begun again in a new command buffer, with its pipeline and groups set again, the new
+    /// part one more pass of the same span. A render pass already begins in a command buffer of
     /// its own where args were written before it (`Split::draws_apart`), so only its own draws
     /// could have written `buf`, which is a bug.
     #[track_caller]
@@ -1749,16 +1745,12 @@ impl Gpu {
         let (encoder, compute) = s.split.pass_on(pass).or_bug(Errno::ENOTRECOVERABLE);
         xpute_kit::ensure!(compute, ENOTRECOVERABLE, pass, buf);
         let o = s.split.open(pass).or_bug(Errno::ENOTRECOVERABLE);
-        let (was, end, pipeline) = (o.at, o.end, o.pipeline);
+        let (was, span, pipeline) = (o.at, o.span, o.pipeline);
         let groups = o.groups.clone();
         s.encoder.end(&mut s.stream, was);
         self.split(encoder);
+        let stamp = span.and_then(|span| self.stamp_pass(span));
         let s = self.s();
-        let stamp = end.map(|(query_set, end)| encode::TimestampWrites {
-            query_set,
-            begin: None,
-            end: Some(end),
-        });
         let at = handle_of(
             s.encoder
                 .compute_pass(&mut s.stream, s.split.at(encoder), &stamp),
@@ -1843,12 +1835,15 @@ impl Gpu {
     #[track_caller]
     pub fn compute_pass(&self, encoder: Id, stamp: Option<encode::TimestampWrites>) -> Id {
         let s = self.s();
-        let end = stamp.as_ref().and_then(|t| Some((t.query_set, t.end?)));
+        let span = stamp
+            .as_ref()
+            .and_then(|t| t.begin)
+            .map(|b| s.stamp_spans[b as usize / 2]);
         let pass = handle_of(
             s.encoder
                 .compute_pass(&mut s.stream, s.split.at(encoder), &stamp),
         );
-        s.split.opened(pass, encoder, true, end);
+        s.split.opened(pass, encoder, true, span);
         self.label(pass, "compute", core::panic::Location::caller());
         pass
     }
@@ -2020,25 +2015,26 @@ impl Gpu {
     /// Before that, the earliest-asked read that is out is taken in if it landed, and it may
     /// then be asked again. A read's ticket is the order it was asked in, and its fence holds
     /// the ticket once it lands. Returns the read this frame's spans come back in.
-    pub fn submit_frame(&self, encoder: Id, written: u64) -> Option<usize> {
+    pub fn submit_frame(&self, encoder: Id) -> Option<usize> {
         let s = self.s();
         s.stamps_complete = take_stamps(s);
         let free = (0..READS).find(|&r| s.stamps_out[r] == 0);
         let bufs = s.split.submitted(encoder);
-        let (Some((set, resolve, mapped)), Some(r), true) = (s.stamps, free, written != 0) else {
+        let passes = s.stamp_cnt;
+        let (Some((set, resolve, mapped)), Some(r), true) = (s.stamps, free, passes != 0) else {
             for e in bufs {
                 s.encoder.submit(&mut s.stream, &[e]);
             }
             return None;
         };
-        let bytes = 2 * SPANS as u32 * 8;
+        let bytes = 2 * passes as u32 * 8;
         let last = *bufs.last().or_bug(Errno::ENOTRECOVERABLE);
-        call::resolve_query_set(&mut s.stream, last, set, 0, 2 * SPANS as u32, resolve, 0);
+        call::resolve_query_set(&mut s.stream, last, set, 0, 2 * passes as u32, resolve, 0);
         call::copy_buffer_to_buffer(&mut s.stream, last, (resolve, 0), (mapped[r], 0), bytes);
         for e in bufs {
             s.encoder.submit(&mut s.stream, &[e]);
         }
-        s.stamps_written[r] = written;
+        s.stamps_read[r] = (s.stamp_spans, passes);
         s.stamps_asked_cnt = s.stamps_asked_cnt.wrapping_add(1).max(1);
         s.stamps_out[r] = s.stamps_asked_cnt;
         let at = s.at as usize + read_at(r) * WORD;
@@ -2047,7 +2043,7 @@ impl Gpu {
         let (fence, ticks) = unsafe {
             (
                 &*mem::at::<[u32; 2]>(at),
-                core::slice::from_raw_parts_mut(mem::at::<u8>(at + 2 * WORD), 2 * SPANS * 8),
+                core::slice::from_raw_parts_mut(mem::at::<u8>(at + 2 * WORD), 2 * passes * 8),
             )
         };
         call::map_async(&mut s.stream, mapped[r], 0, ticks, fence, s.stamps_out[r]);
@@ -2076,19 +2072,20 @@ impl Gpu {
         handle_of(s.encoder.current(&mut s.stream, handle_slot(surface)))
     }
 
-    /// Makes the spans' query set, two queries a span, with the buffer they resolve into and
-    /// one mapped buffer per read. Returns the query set.
-    pub fn spans(&self) -> Id {
+    /// Makes the spans' query set, two queries a pass, with the buffer they resolve into and
+    /// one mapped buffer per read. A device that keeps no timestamps has none, and no frame
+    /// of it is timed.
+    pub fn spans(&self) {
         let s = self.s();
         let set = handle_of(s.encoder.query_set(
             &mut s.stream,
             QueryType::timestamp,
-            2 * SPANS as u32,
+            2 * PASSES as u32,
         ));
         let resolve = handle_of(s.encoder.buffer(
             &mut s.stream,
             &encode::BufferDescriptor {
-                size: (2 * SPANS * 8) as u32,
+                size: (2 * PASSES * 8) as u32,
                 usage: BUFFER_USAGE::QUERY_RESOLVE | BUFFER_USAGE::COPY_SRC,
                 mapped_at_creation: false,
             },
@@ -2097,19 +2094,36 @@ impl Gpu {
             handle_of(s.encoder.buffer(
                 &mut s.stream,
                 &encode::BufferDescriptor {
-                    size: (2 * SPANS * 8) as u32,
+                    size: (2 * PASSES * 8) as u32,
                     usage: BUFFER_USAGE::MAP_READ | BUFFER_USAGE::COPY_DST,
                     mapped_at_creation: false,
                 },
             ))
         });
         s.stamps = Some((set, resolve, mapped));
-        set
     }
 
-    /// How many objects are made and not yet let go, counted by the op that made each.
-    pub fn objects(&self) -> &'static [u32; OBJECT_OPS] {
-        self.s().encoder.objects()
+    /// Opens the frame's timestamps: no pass of it is timed yet.
+    pub fn stamps_open(&self) {
+        self.s().stamp_cnt = 0;
+    }
+
+    /// The timestamps of one more pass of span `span`, a begin and an end of its own, where the
+    /// frame is timed and has room for them.
+    pub fn stamp_pass(&self, span: GpuSpanName) -> Option<encode::TimestampWrites> {
+        let s = self.s();
+        let (set, ..) = s.stamps?;
+        let k = s.stamp_cnt;
+        if k == PASSES {
+            return None;
+        }
+        s.stamp_spans[k] = span;
+        s.stamp_cnt += 1;
+        Some(encode::TimestampWrites {
+            query_set: set,
+            begin: Some(2 * k as u32),
+            end: Some(2 * k as u32 + 1),
+        })
     }
 
     /// Span `span`'s time in ms from the last read taken in.

@@ -116,7 +116,7 @@ pub struct Shadow {
     blank_view: u32,
     blank_sampler: u32,
     /// The pipeline that lays the world's depth into the map, and the gate's pipeline, which
-    /// lays it in the claimed tiles alone. `lay_group` binds the world, the corner and the
+    /// lays it in the damaged tiles alone. `lay_group` binds the world, the corner and the
     /// light's list, whose reads keep lit the tiles the epoch has not cast yet. `mask_group`
     /// binds those and also the map's tiles' words and uniform and the marks' box
     /// (`TileGrid::new_damage_rect`). `set_groups` sets both before the frame.
@@ -507,10 +507,10 @@ impl Shadow {
     /// world's depth in the tiles the light's cast last listed as read, a quad a tile, as many
     /// as the cast opened (`light::ARGS_LAY`). Every texel a receiver reads lies in one of
     /// those tiles, and no receiver reads the far plane the rest hold. A pass drawn through its
-    /// gate (`masked`) draws the claimed tiles of `tiles` alone and keeps the rest as the last
-    /// frame left them; a gated frame always casts. The gate lays the world in the claimed
+    /// gate (`masked`) draws the damaged tiles of `tiles` alone and keeps the rest as the last
+    /// frame left them; a gated frame always casts. The gate lays the world in the damaged
     /// tiles and raises their stencil to the number `TileGrid::mask` gives: a quad a tile of the
-    /// box the frame's marks cover, with the unclaimed ones collapsed, as many as the GPU
+    /// box the frame's marks cover, with the undamaged ones collapsed, as many as the GPU
     /// counted (`TileGrid::rect_args`). Both draws bind the groups `set_groups` set before the
     /// frame.
     pub fn begin<'a>(

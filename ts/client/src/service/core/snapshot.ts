@@ -38,9 +38,9 @@ const INIT: Snapshot = {
 let snapshot: Snapshot = INIT;
 const listeners = new ListenerSet();
 
-/** `bytes` view the snapshot where it lies, and stay valid only until the
- * runtime's head passes it, because the core writes the next snapshot in the
- * same place. So the snapshot is read whole at once. */
+/** `bytes` are the snapshot as the core named it when it sent it, valid only
+ * inside the call that hands them over, so the snapshot is read whole at
+ * once. */
 export function set_snapshot(bytes: U8Array): void {
   snapshot = read_snapshot(new TreeReader(bytes).read_branch());
   listeners.notify();

@@ -28,8 +28,8 @@ fn is_changed(cell_zoom: u32, at: vec4<i32>) -> bool {
   let rects = min(list_word(LIST_RECTS), RECT_CAP);
   for (var k = 0u; k < rects; k += 1u) {
     let b = RECTS_AT + RECT_WORDS * k;
-    let edit = vec4<i32>(i32(list_word(b)), i32(list_word(b + 1u)), i32(list_word(b + 2u)), i32(list_word(b + 3u)));
-    if (reaches(edit, list_word(b + 4u), cell_zoom, at)) {
+    let rect = vec4<i32>(i32(list_word(b)), i32(list_word(b + 1u)), i32(list_word(b + 2u)), i32(list_word(b + 3u)));
+    if (reaches(rect, list_word(b + 4u), cell_zoom, at)) {
       return true;
     }
   }

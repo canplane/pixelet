@@ -1,7 +1,7 @@
 // pxl-core/door/apply/turn.rs
 
 //! A turn is granted in two steps. The runtime's frame pacing first submits
-//! the frame it grants the turn at (xpute's SYS_FRAME). Then SYS_TURN rings the
+//! the frame it grants the turn at (xpute's SYS_FRAME). Then SYS_TURN marks the
 //! granted turn and gives the clock.
 
 use super::refuse_unless;
@@ -10,10 +10,10 @@ use crate::turn;
 use crate::turn::TurnGrant;
 use xpute_core::abi::sys::{SysFrame, SysTurn};
 use xpute_core::global::Global;
-use xpute_core::ipc::door::Outcome;
+use xpute_core::io::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
-/// The frame for the next turn rung, which that turn's SYS_TURN takes.
+/// The frame for the next turn run, which that turn's SYS_TURN takes.
 static GRANT: Global<Option<SysFrame>> = Global::new();
 
 pub(in crate::door) fn grant(c: SysFrame) -> Outcome {
@@ -37,7 +37,7 @@ pub(in crate::door) fn turn(c: SysTurn) -> Outcome {
     } else {
         0.0
     };
-    turn::on_world_frame_asked(TurnGrant {
+    turn::grant_world_frame(TurnGrant {
         delta,
         refresh_ms: g.refresh_ms,
         paced_ms: g.paced_ms,

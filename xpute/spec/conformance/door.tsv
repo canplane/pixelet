@@ -3,60 +3,57 @@
 # observes; every size is the fixture's (spec/conformance/core.json), none a production one.
 # 
 # A step is `submit TAG CMD ack|noack [NUMBER]` (TAG the frame's whole tag word, the sender's id; CMD
-# one of the core's own, core.json `cmd`, or of xpute's, NOP, FS_OPENAT and FS_CLOSE, or a number in hex),
-# `complete TAG CMD RESULT [NUMBER]` (a frame flagged RES, as a device completes the core's request), `ring DEADLINE`, or
-# `settle` (a turn with a deadline of 0 after another while a command is left). Per turn t, and for the whole trace: the completion ring as
+# one of the core's own, core.json `cmd`, or of xpute's, NOP, FS_OPEN and FS_CLOSE, or a number in hex),
+# `complete TAG CMD RESULT [NUMBER]` (a frame flagged RES, as a device completes the core's request), `run DEADLINE`, or
+# `settle` (a turn with a deadline of 0 after another while a command is left). Per turn t, and for the whole trace: what the core sent as
 # TAG:CMD=RESULT for a reply and TAG:CMD for an event, an event run tagged 0 up written CMD*n; the stream
 # as its records' ops; and what the turn asked for next (next, later, none). Each place is its own
 # sequence: nothing orders one against another.
-scenarios	C3.fail C3.unnumbered C4.order C5.raised C5.deferred C5.places
+scenarios	C3.fail C3.unnumbered C4.order C5.raised C5.burst C5.places
 # 
 # C3: ACKREQ gets exactly one reply, and no ACKREQ gets one only on failure; a reply keeps its tag and cmd.
 # A failure unasked is here; an OK asked and unasked and a failure asked are C4.order's.
 C3.fail.step.0	submit 9 FAIL noack
-C3.fail.step.1	ring 0
+C3.fail.step.1	run 0
 C3.fail.turn.0.completions	9:FAIL=-22
 # A command nobody numbers fails with ENOSYS, and so is answered unasked.
 C3.unnumbered.step.0	submit 5 0x0fff noack
-C3.unnumbered.step.1	ring 0
+C3.unnumbered.step.1	run 0
 C3.unnumbered.turn.0.completions	5:0x0fff=-38
 # 
 # C4: what is sent is applied in the order sent, each once. And C2: a turn with a deadline of 0 is a turn, and
-# applies what waits; that the last asks for none is C5.deferred's.
+# applies what waits; that the last asks for none is C5.burst's.
 C4.order.step.0	submit 1 OK ack
 C4.order.step.1	submit 2 FAIL ack
 C4.order.step.2	submit 3 OK noack
 C4.order.step.3	submit 4 OK ack
-C4.order.step.4	ring 0
+C4.order.step.4	run 0
 C4.order.turn.0.completions	1:OK=0 2:FAIL=-22 4:OK=0
 # 
 # C5: one place keeps the order things were left in it. RAISE raises its events and then replies, so
 # they come first; that they carry no RES, and so read as no one's reply, is C3's.
 C5.raised.step.0	submit 4 RAISE ack 3
-C5.raised.step.1	ring 0
+C5.raised.step.1	run 0
 C5.raised.turn.0.completions	NOTE*3 4:RAISE=3
 # 
-# C5 and C4: eight commands whose events and replies outgrow the fixture's completion ring. However a
-# core keeps its output in bounds, what one turn leaves fits, what it could not answer waits in order
-# for a later turn it asks for, and every reply comes once, after its own events.
-C5.deferred.step.0	submit 1 RAISE ack 32
-C5.deferred.step.1	submit 2 RAISE ack 32
-C5.deferred.step.2	submit 3 RAISE ack 32
-C5.deferred.step.3	submit 4 RAISE ack 32
-C5.deferred.step.4	submit 5 RAISE ack 32
-C5.deferred.step.5	submit 6 RAISE ack 32
-C5.deferred.step.6	submit 7 RAISE ack 32
-C5.deferred.step.7	submit 8 RAISE ack 32
-C5.deferred.step.8	settle
-C5.deferred.completions	NOTE*32 1:RAISE=32 NOTE*32 2:RAISE=32 NOTE*32 3:RAISE=32 NOTE*32 4:RAISE=32 NOTE*32 5:RAISE=32 NOTE*32 6:RAISE=32 NOTE*32 7:RAISE=32 NOTE*32 8:RAISE=32
-C5.deferred.turns.least	2
-C5.deferred.wake.before_last	next
-C5.deferred.wake.last	none
+# C5 and C4: eight commands, each raising the most events it may. One turn takes them all, in the order sent,
+# every reply once and after its own events, and it asks for none after.
+C5.burst.step.0	submit 1 RAISE ack 32
+C5.burst.step.1	submit 2 RAISE ack 32
+C5.burst.step.2	submit 3 RAISE ack 32
+C5.burst.step.3	submit 4 RAISE ack 32
+C5.burst.step.4	submit 5 RAISE ack 32
+C5.burst.step.5	submit 6 RAISE ack 32
+C5.burst.step.6	submit 7 RAISE ack 32
+C5.burst.step.7	submit 8 RAISE ack 32
+C5.burst.step.8	run 0
+C5.burst.turn.0.completions	NOTE*32 1:RAISE=32 NOTE*32 2:RAISE=32 NOTE*32 3:RAISE=32 NOTE*32 4:RAISE=32 NOTE*32 5:RAISE=32 NOTE*32 6:RAISE=32 NOTE*32 7:RAISE=32 NOTE*32 8:RAISE=32
+C5.burst.turn.0.wake	none
 # 
-# C5: the completion ring and the stream are two places, each in its own order.
+# C5: what the core sends and the stream are two places, each in its own order.
 C5.places.step.0	submit 1 RECORD ack 10
 C5.places.step.1	submit 2 OK ack
 C5.places.step.2	submit 3 RECORD ack 11
-C5.places.step.3	ring 0
+C5.places.step.3	run 0
 C5.places.turn.0.completions	1:RECORD=0 2:OK=0 3:RECORD=0
 C5.places.turn.0.stream	10 11

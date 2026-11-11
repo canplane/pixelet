@@ -4,7 +4,7 @@
 // xpute-runtime's `native_core!` and `native_abi!` export it, for an app in C,
 // Objective-C or Swift. The core runs on its own thread, which begins a wanted
 // turn at a display frame (`xpute_vsync`; xpute-runtime native/thread.rs). The
-// app's thread waits on the core only for a turn it rings, and it answers the
+// app's thread waits on the core only for a turn it runs, and it answers the
 // core's calls.
 
 #pragma once
@@ -13,17 +13,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Rings a turn that ends no sooner than deadline_ms after its rise, and waits
+// Runs a turn that ends no sooner than deadline_ms after it starts, and waits
 // until a turn begun after this call has ended, answering the core's calls
 // meanwhile. Returns when the core wants the next turn, in ms: 0 for at once,
-// -1 for never. It returns early if no turn may begin until the app reads the
-// completion ring. The first call boots the core, and its first turn checks
-// the front the runtime laid against the core's machine. Returns NaN once the
+// -1 for never. The first call boots the core, and its first turn checks
+// the front the runtime laid against the core's manifest. Returns NaN once the
 // core has stopped: its thread is gone, and no later turn runs.
 double xpute_run(double deadline_ms);
 
-// Asks for a turn at the next display frame, after the app has written the
-// submission ring or read the completion ring.
+// Asks for a turn at the next display frame, after something came that the
+// core has to take.
 void xpute_wake(void);
 
 // Says that an input came now, so the turns are interactive for a while.
@@ -34,7 +33,7 @@ void xpute_input(void);
 // admits it.
 void xpute_vsync(double age_ms);
 
-// From now on, only a turn `xpute_run` rings may begin. An app calls this
+// From now on, only a turn `xpute_run` runs may begin. An app calls this
 // while it is hidden.
 void xpute_pause(void);
 
@@ -42,8 +41,8 @@ void xpute_pause(void);
 void xpute_resume(void);
 
 // Returns the first byte of the core's memory, and writes its size through
-// `bytes`, which may be null. The runtime lays the front's header and the
-// rings in this memory and reads the rings through it.
+// `bytes`, which may be null. The runtime lays the front's header in this
+// memory, and a call's frame lies in it.
 uint8_t *xpute_mem(uint32_t *bytes);
 
 // Makes `answer` answer the core's calls; null sets none. Each call is a frame
@@ -61,20 +60,20 @@ void xpute_notify_on(void (*f)(void));
 // Answers, on this thread, the call that waits for its answer, if one does.
 void xpute_answer(void);
 
-// Starts the runtime's own thread over the rings at the given offsets, the
-// app having laid them, and forgets what an earlier attach left. `fs` says
-// whether the machine asks for the file device.
-void xpute_attach(uint32_t sq_at, uint32_t cq_at, bool fs);
+// Starts the runtime's own thread, the app having laid the front's header, and
+// forgets what an earlier app attached left; what the core sent is still
+// served. `fs` says whether the manifest asks for the file device.
+void xpute_attach(bool fs);
 
 // The program's numbers for frame pacing (@xpute/runtime sched/frame_pacing.ts
 // `FramePacingConfig`), given before the turns run.
 void xpute_pace(double pace_hz, double margin_share, double batch_frames, double settle_ms);
 
-// Queues a frame for the submission ring.
+// Queues a frame for the core.
 void xpute_post(uint32_t tag, uint32_t cmd, uint32_t flags, int32_t result, const uint8_t *pkt,
                 size_t len);
 
-// Hands over what the app has not heard from the completion ring, a batch of
+// Hands over what the app has not heard from the core, a batch of
 // frames: six little-endian u32s (tag, command, flags, result, the packet's
 // length, the named memory's length), then each of those bytes padded to 8.
 // The bytes are the app's until `xpute_taken_free`.
@@ -83,13 +82,5 @@ void xpute_taken_free(uint8_t *at, size_t len);
 
 // Completes the open of `fd` with the file's bytes, or with a negative result
 // and the number the store refused with.
-void xpute_fs_opened(uint32_t fd, int32_t result, uint32_t detail, const uint8_t *bytes,
+void xpute_fs_complete_open(uint32_t fd, int32_t result, uint32_t detail, const uint8_t *bytes,
                      size_t len);
-
-// Completes the close of `fd`, whose written bytes the app was handed.
-void xpute_fs_closed(uint32_t fd, int32_t result);
-
-// Calls the core: submits `cmd` with ACKREQ and rings turns until its reply has
-// been read, answering the turns' calls on this thread meanwhile. Returns the
-// reply's result, or ENOTRECOVERABLE once the core has stopped.
-int32_t xpute_call(uint32_t cmd, const uint8_t *pkt, size_t len);

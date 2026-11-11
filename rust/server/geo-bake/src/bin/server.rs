@@ -355,11 +355,5 @@ fn run() -> Result<(), String> {
 }
 
 fn main() -> ExitCode {
-    match run() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(err) => {
-            eprintln!("[tile] {err}");
-            ExitCode::FAILURE
-        }
-    }
+    cli::main("tile", run)
 }

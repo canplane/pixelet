@@ -12,13 +12,14 @@
  */
 
 import type { BranchCursor } from "@xpute/kit/wire/xtp/mod.ts";
-import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import * as Major from "./text/major.spec.ts";
 import * as TextMinor from "./text/text_minor.spec.ts";
 import * as Command from "./text/command.spec.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import type { OnImport } from "@xpute/runtime";
+import type { Protocol, OnImport } from "@xpute/runtime";
+import { refusal_of } from "@xpute/runtime";
 
 /** One of Major's, as its enum was a type. */
 type Major = (typeof Major)[keyof typeof Major];
@@ -86,34 +87,40 @@ export const read = {
   }),
 };
 
-/** What the program does with each command the core posts on the text protocol; a
- * call's answer is its return. */
+/** What the program does with each command the core posts on the text protocol: a
+ * call's member answers its value, and throws kit's error to refuse it. */
 export interface TextImports {
   /** The text in the platform's own family at the weight and size, broken into lines no
    * wider than the width where it can be; at `at` in the core's memory, how many lines,
    * then a line's end (a byte offset) and its width (f32) apiece, `lines` of them at most
    * (sys/io/text_answer.json LAYOUT_ANSWER, LINE). A call: answered before it returns. */
-  [Command.TEXT_LAYOUT](e: TextLayout): i32;
+  [Command.TEXT_LAYOUT](e: TextLayout): u32;
   /** One line drawn in the platform's own family, starting at x with the middle of its em
    * box on the middle row, into `width` by `height` pixels at `at` in the core's memory,
    * RGBA a byte a channel, top row first, alpha not premultiplied. A call: answered before
    * it returns. */
-  [Command.TEXT_RASTER](e: TextRaster): i32;
+  [Command.TEXT_RASTER](e: TextRaster): u32;
 }
 
-/** `h` as the handler a runtime routes the text protocol's commands to, each one read and
- * handed to its member; ENOSYS for one the protocol does not carry. */
-export function text_imports(h: TextImports): OnImport {
-  return (_tag, cmd, f) => {
-    switch (cmd) {
-      case Command.TEXT_LAYOUT:
-        return h[Command.TEXT_LAYOUT](read[Command.TEXT_LAYOUT](need(f)));
-      case Command.TEXT_RASTER:
-        return h[Command.TEXT_RASTER](read[Command.TEXT_RASTER](need(f)));
-      default:
-        return Errno.ENOSYS;
+/** `h` as the protocol the runtime routes the text protocol's majors to: each
+ * command read and handed to its member, whose refusal is answered with its
+ * errno; ENOSYS for one the protocol does not carry. */
+export function text_imports(h: TextImports): Protocol {
+  const on: OnImport = (_tag, cmd, f) => {
+    try {
+      switch (cmd) {
+        case Command.TEXT_LAYOUT:
+          return h[Command.TEXT_LAYOUT](read[Command.TEXT_LAYOUT](need(f)));
+        case Command.TEXT_RASTER:
+          return h[Command.TEXT_RASTER](read[Command.TEXT_RASTER](need(f)));
+        default:
+          return Errno.ENOSYS;
+      }
+    } catch (err) {
+      return refusal_of(err);
     }
   };
+  return { majors: [Major.TEXT], on };
 }
 
 /** A packet the command carries, which a frame without one breaks. */

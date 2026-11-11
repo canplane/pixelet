@@ -24,9 +24,10 @@ fn runtime(
         configure_at: ConfigureAt::Here,
         frame_latency,
         upload_chunk_bytes: CHUNK_BYTES,
+        slow_ms: None,
         present_mode: wgpu::PresentMode::Fifo,
     };
-    GpuRuntime::new(adapter, device.clone(), queue, cfg, || {})
+    GpuRuntime::new(adapter, device.clone(), queue, cfg, None, || {})
 }
 
 fn device() -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
@@ -149,7 +150,7 @@ fn native_tells_unfinished() {
     assert!(h.admit_frame());
     h.count_frame();
     assert!(!h.admit_frame(), "its one frame unfinished");
-    h.tell_unfinished(&mut mem);
+    h.tell_counts(&mut mem);
     assert_eq!(mem.load_acquire(unfinished), 1);
     h.poll(&mut mem);
     assert_eq!(
@@ -158,4 +159,29 @@ fn native_tells_unfinished() {
         "the frame done as the device is polled"
     );
     assert!(h.admit_frame());
+}
+
+/// A device lost stays lost, so its owner lets the runtime go. The first poll
+/// after the loss writes LOST into the device's block and lets the block go, so
+/// a later poll writes nothing over the block the next device's runtime writes.
+#[test]
+fn lost_told_once() {
+    let (adapter, device, queue) = device();
+    let mut h = runtime(adapter, &device, queue, 1);
+    let mut bytes = [0u8; 4 * crate::device::WORDS];
+    let mut mem = Memory::of(&mut bytes);
+    let status = 4 * crate::device::STATUS_AT as u32;
+    h.block = Some(0);
+    assert!(!h.lost());
+    h.device_lost.store(true, Ordering::Release);
+    assert!(!h.poll(&mut mem), "a lost device answers nothing");
+    assert_eq!(mem.load_acquire(status), STATUS::LOST);
+    assert!(h.lost(), "a loss is never cleared");
+    mem.store_release(status, STATUS::READY);
+    h.poll(&mut mem);
+    assert_eq!(
+        mem.load_acquire(status),
+        STATUS::READY,
+        "the block is the next runtime's"
+    );
 }

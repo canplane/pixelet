@@ -2,7 +2,7 @@
 
 //! The orbit camera. The eye moves on a sphere about the pivot, and the
 //! sphere's radius is the zoom. The controls write what the camera is to
-//! reach: the intent (state.rs) and the pivot's `to`. `turn` eases the drawn
+//! reach: the intent and the pivot's `to` (state.rs). `turn` eases the drawn
 //! camera toward them (domain/smooth.rs). Everything that reads the world
 //! reads the drawn camera.
 //!
@@ -14,35 +14,23 @@
 //! Where the way of a control still hits something, a zoom in goes through
 //! it (`dive`) and any other control stops (`Step`).
 
-use pxl_spec::space::coord::q3::Q3;
-
 use pxl_spec::space::coord::v3::{self, V3};
 
 use crate::domain::control::camera::collision::{allowed_view, climb_polar};
 use crate::domain::control::camera::gesture::{spread, Anchor};
-use crate::domain::control::camera::state::{camera_state, camera_state_mut, Intent, IntentPatch};
-use crate::domain::control::camera::{camera, facing_dir, facing_domain, set_eye_world};
+use crate::domain::control::camera::state::{
+    camera_state, camera_state_mut, ease_pivot, resolved_to, Intent, IntentPatch,
+};
+use crate::domain::control::camera::{camera, ease_facing, facing_dir, set_eye_world};
 use crate::domain::control::param;
 use crate::domain::control::param::DOLLY_GAIN;
-use crate::domain::control::param::{CAM_DAMP, ROT_DAMP};
-use crate::domain::control::param::{
-    CLIMB_RELAX_DAMP, CLIMB_RISE_DAMP, ORBIT_AZIMUTH_EPS, ORBIT_DIST_EPS, ORBIT_PIVOT_EPS,
-    ORBIT_POLAR_EPS,
-};
-use crate::domain::control::param::{MAX_DIST, MIN_DIST};
-use crate::domain::control::support::resolve_to;
-use crate::domain::param::POS_DAMP;
+use crate::domain::control::param::{CAM_DAMP, CLIMB_RELAX_DAMP, CLIMB_RISE_DAMP, EASE_EPS_U};
 use crate::domain::setting::store::{settings, OrbitObstacleMode};
-use crate::domain::smooth::{smooth_angle, smooth_vec};
-use crate::domain::view::frame::coord::world_to_canonical;
+use crate::domain::smooth::smooth_vec;
 use xpute_core::global::Global;
-use xpute_kit::math::scalar::clamp;
 
 pub struct OrbitState {
     pub dist: f64,
-    /// Where the pivot goes to, as a canonical point. None until it is first
-    /// put.
-    to: Option<Q3>,
     pinch_from: Anchor,
 }
 
@@ -51,7 +39,6 @@ static ORBIT: Global<OrbitState> = Global::new();
 pub fn orbit() -> &'static mut OrbitState {
     ORBIT.get(|| OrbitState {
         dist: param::DEFAULT_DIST,
-        to: None,
         pinch_from: Anchor::new(param::DEFAULT_DIST, 1.0),
     })
 }
@@ -84,7 +71,7 @@ pub fn ask(partial: IntentPatch) -> Intent {
 }
 
 pub fn zoom_settling() -> bool {
-    (camera_state().intent.dist - orbit().dist).abs() > ORBIT_DIST_EPS
+    (camera_state().intent.dist - orbit().dist).abs() > EASE_EPS_U
 }
 
 /// A wheel turn of `delta_y` CSS pixels.
@@ -117,35 +104,31 @@ pub fn zoom_to(dist: f64) -> f64 {
     .dist
 }
 
-pub(crate) fn pivot_to() -> Option<Q3> {
-    orbit()
-        .to
-        .or_else(|| pivot_world().map(|p| world_to_canonical(&p)))
-}
-
-pub(crate) fn put(at: Q3, snap: bool) {
-    orbit().to = Some(at);
-    if snap {
-        let (o, cam) = (orbit(), camera());
-        let at = resolve_to(&mut o.to, pivot_world().unwrap_or_default());
-        let e = orbit_eye_off(o.dist, cam.polar, cam.azimuth);
-        set_eye_world(&v3::add(&at, &e));
-    }
+/// Puts the pivot at its `to` at once, the eye at the drawn distance and
+/// facing from it.
+pub(crate) fn snap() {
+    let at = resolved_to(pivot_world().unwrap_or_default());
+    let cam = camera();
+    let e = orbit_eye_off(orbit().dist, cam.polar, cam.azimuth);
+    set_eye_world(&v3::add(&at, &e));
 }
 
 /// Eases the drawn orbit over `delta` seconds and returns whether it is
-/// still moving. None when the camera has no eye.
-pub(crate) fn turn(delta: f64) -> Option<bool> {
-    let drawn_pivot = pivot_world()?;
+/// still moving. A camera with no eye has nothing to ease.
+pub(crate) fn turn(delta: f64) -> bool {
+    let Some(drawn_pivot) = pivot_world() else {
+        return false;
+    };
     let vs = camera_state().intent;
     let (o, cam) = (orbit(), camera());
     let was = (drawn_pivot, o.dist, cam.polar, cam.azimuth);
 
-    let to = resolve_to(&mut o.to, drawn_pivot);
-    let (at, mut moving) = smooth_vec(drawn_pivot, to, POS_DAMP, delta, ORBIT_PIVOT_EPS);
+    let (at, mut moving) = ease_pivot(drawn_pivot, delta);
 
-    let ([dist], m) = smooth_vec([o.dist], [vs.dist], CAM_DAMP, delta, ORBIT_DIST_EPS);
-    o.dist = clamp(dist, MIN_DIST, MAX_DIST);
+    // The distance eases between two that the intent holds to the camera's
+    // range (state.rs `with_patch`), so it stays within it.
+    let ([dist], m) = smooth_vec([o.dist], [vs.dist], CAM_DAMP, delta, EASE_EPS_U);
+    o.dist = dist;
     moving |= m;
 
     // Under `climb`, the ground pitches the facing toward straight down
@@ -160,11 +143,7 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
         (true, false) => CLIMB_RELAX_DAMP,
         (false, _) => CAM_DAMP,
     };
-    let ([polar], m) = smooth_vec([cam.polar], [polar], rate, delta, ORBIT_POLAR_EPS);
-    moving |= m;
-    let (azimuth, m) = smooth_angle(cam.azimuth, vs.azimuth, ROT_DAMP, delta, ORBIT_AZIMUTH_EPS);
-    moving |= m;
-    (cam.polar, cam.azimuth) = facing_domain(polar, azimuth);
+    moving |= ease_facing(cam, polar, rate, vs.azimuth, delta);
 
     // The eye is written only when something moved, so a camera at rest is
     // never rewritten.
@@ -172,5 +151,5 @@ pub(crate) fn turn(delta: f64) -> Option<bool> {
         let e = orbit_eye_off(o.dist, cam.polar, cam.azimuth);
         set_eye_world(&v3::add(&at, &e));
     }
-    Some(moving)
+    moving
 }

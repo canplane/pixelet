@@ -43,6 +43,7 @@ pub use crate::domain::cmd::{
     GeolocationErrorCode, Message, PermissionAnswer, PointerType, SensorStatus, Tracking,
 };
 use xpute_core::abi::number::{finite, integer, unknown};
+use xpute_core::io::fs::{Path, Token};
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{PacketWriter, StrList, TreeReader};
 
@@ -92,16 +93,18 @@ pub enum InputMinor {
     XR_POSE = 0x09,
     XR_POSE_END = 0x0a,
     TYPING = 0x0b,
+    PINCH = 0x0c,
 }
 
 impl InputMinor {
-    pub const ALL: [InputMinor; 6] = [
+    pub const ALL: [InputMinor; 7] = [
         InputMinor::POINTER,
         InputMinor::WHEEL,
         InputMinor::MOVE,
         InputMinor::XR_POSE,
         InputMinor::XR_POSE_END,
         InputMinor::TYPING,
+        InputMinor::PINCH,
     ];
 
     /// The member a number names, or none for a number nobody gave out.
@@ -420,7 +423,7 @@ pub enum Command {
     /// A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
     /// (transforms aside), as the world surface's size is (GPU_SURFACE_RESIZE).
     INPUT_POINTER = 0x1102,
-    /// Whether the UI is taking typed text. A device's touches reach the core without the UI (pxl-core door/touch.rs), so a touch pressed while this holds is spent on ending the typing: its lift ends the gesture with no tap, and its drag still moves the world.
+    /// Whether the UI is taking typed text. A pointer pressed while this holds, a device's touch too (pxl-core door/touch.rs), is spent on ending the typing: its lift ends the gesture with no tap, and its drag still moves the world.
     INPUT_TYPING = 0x110b,
     /// The tool and what it takes, the UI's to choose and keep: the core is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer.
     EDIT_TOOL = 0x1a01,
@@ -430,6 +433,8 @@ pub enum Command {
     /// The marker's draft committed with its text, where its place is still free or still a marker, and closed.
     EDIT_MARKER_COMMIT = 0x1a04,
     INPUT_WHEEL = 0x1103,
+    /// A pinch the platform recognized, as a trackpad's is: the factor the fingers' spread changed by since the last. Over one, they spread, and the camera comes nearer by that factor, as under two touches.
+    INPUT_PINCH = 0x110c,
     /// The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down.
     INPUT_MOVE = 0x1106,
     /// What a surface the UI opened draws, until its GPU_SURFACE_CLOSE. The world, with the
@@ -477,7 +482,7 @@ pub enum Command {
     // ---- ui, import ----
     SENSOR_START = 0x1201,
     SENSOR_STOP = 0x1203,
-    /// The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
+    /// The UI's snapshot, when it changed: a Snapshot packet far past a frame's room, so a
     /// block the core holds, valid until the next snapshot.
     UI_SNAPSHOT = 0x1b01,
     /// The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
@@ -486,7 +491,7 @@ pub enum Command {
 }
 
 impl Command {
-    pub const ALL: [Command; 32] = [
+    pub const ALL: [Command; 33] = [
         Command::SENSOR_POS,
         Command::SENSOR_ORIENT,
         Command::SENSOR_ERR,
@@ -501,6 +506,7 @@ impl Command {
         Command::EDIT_MARKER_CANCEL,
         Command::EDIT_MARKER_COMMIT,
         Command::INPUT_WHEEL,
+        Command::INPUT_PINCH,
         Command::INPUT_MOVE,
         Command::SCENE_DRAW,
         Command::SETTING_SET,
@@ -537,7 +543,7 @@ pub struct Snapshot<'a> {
     pub orient: OrientationState,
     pub is_follow_mode: bool,
     pub camera_busy: bool,
-    /// A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is.
+    /// A zoom is in hand: two fingers are down, or a wheel's or a trackpad pinch's zoom is still arriving. The scale is shown while it is.
     pub zooming: bool,
     /// The pointer is over a scene marker a tap would act on with the tool held: a place to go to, or a pin to erase or draft.
     pub over_marker: bool,
@@ -711,19 +717,16 @@ impl DivisionPart<'_> {
 }
 
 pub struct RefusedFile<'a> {
-    /// file.json's `root`.
-    pub root: u32,
-    /// Its path below the root, as the core opened it.
-    pub path: &'a dyn Display,
+    /// Its path, as the core opened it (file.json `path`).
+    pub path: &'a [Token<'a>],
 }
 
 impl RefusedFile<'_> {
     /// The children it is written as.
-    pub const FIELDS: u32 = 2;
+    pub const FIELDS: u32 = 1;
 
     pub fn write(&self, w: &mut PacketWriter) {
-        w.u32(Some(self.root));
-        w.str_display(self.path);
+        Path::write(w, self.path);
     }
 }
 
@@ -1060,6 +1063,26 @@ impl InputWheel {
     }
 }
 
+/// Command::INPUT_PINCH's packet.
+#[derive(Clone, Copy, Debug)]
+pub struct InputPinch {
+    pub scale: f64,
+}
+
+impl InputPinch {
+    pub fn read(pkt: &[u8]) -> Result<InputPinch, MarshalError> {
+        let f = TreeReader::new(pkt)?.read_branch()?;
+        Ok(InputPinch {
+            scale: finite(f.at(0)?.get_number()?)?,
+        })
+    }
+    pub const FIELDS: u32 = 1;
+
+    pub fn write(&self, w: &mut PacketWriter) {
+        w.f64(Some(self.scale));
+    }
+}
+
 /// Command::INPUT_MOVE's packet.
 #[derive(Clone, Copy, Debug)]
 pub struct InputMove {
@@ -1315,11 +1338,15 @@ impl SensorStart {
     }
 }
 
-impl xpute_core::ipc::door::Import for SensorStart {
+impl xpute_core::io::door::Import for SensorStart {
     const NUMBER: u32 = 4609;
     const FIELDS: u32 = 1;
+    const ACKREQ: bool = false;
     fn write(&self, w: &mut PacketWriter) {
         SensorStart::write(self, w);
+    }
+    fn named(&self) -> (u32, u32) {
+        (0, 0)
     }
 }
 
@@ -1347,11 +1374,15 @@ impl SensorStop {
     }
 }
 
-impl xpute_core::ipc::door::Import for SensorStop {
+impl xpute_core::io::door::Import for SensorStop {
     const NUMBER: u32 = 4611;
     const FIELDS: u32 = 1;
+    const ACKREQ: bool = false;
     fn write(&self, w: &mut PacketWriter) {
         SensorStop::write(self, w);
+    }
+    fn named(&self) -> (u32, u32) {
+        (0, 0)
     }
 }
 
@@ -1382,11 +1413,15 @@ impl UiSnapshot {
     }
 }
 
-impl xpute_core::ipc::door::Import for UiSnapshot {
+impl xpute_core::io::door::Import for UiSnapshot {
     const NUMBER: u32 = 6913;
     const FIELDS: u32 = 2;
+    const ACKREQ: bool = false;
     fn write(&self, w: &mut PacketWriter) {
         UiSnapshot::write(self, w);
+    }
+    fn named(&self) -> (u32, u32) {
+        (self.at, self.len)
     }
 }
 
@@ -1418,47 +1453,42 @@ impl UiView {
     }
 }
 
-impl xpute_core::ipc::door::Import for UiView {
+impl xpute_core::io::door::Import for UiView {
     const NUMBER: u32 = 6914;
     const FIELDS: u32 = 2;
+    const ACKREQ: bool = false;
     fn write(&self, w: &mut PacketWriter) {
         UiView::write(self, w);
     }
-}
-
-/// The core's memory a command names, where it is and how long.
-pub fn mem_of(cmd: u32, pkt: &[u8]) -> Option<(u32, u32)> {
-    match cmd {
-        6913 => UiSnapshot::read(pkt).ok().map(|e| (e.at, e.len)),
-        _ => None,
+    fn named(&self) -> (u32, u32) {
+        (0, 0)
     }
 }
 
 /// The ui protocol's core end: what it posts to the runtime and what it hears from it.
 pub mod ui {
     use super::*;
-    use xpute_core::ipc::door::Outcome;
-    use xpute_core::machine;
+    use xpute_core::io::door::{door, Outcome};
     use xpute_kit::status::errno::Errno;
 
     /// Command::SENSOR_START, posted for the runtime.
     pub fn sensor_start(e: &SensorStart) {
-        machine::door().send(e);
+        door().send(e);
     }
 
     /// Command::SENSOR_STOP, posted for the runtime.
     pub fn sensor_stop(e: &SensorStop) {
-        machine::door().send(e);
+        door().send(e);
     }
 
     /// Command::UI_SNAPSHOT, posted for the runtime.
     pub fn ui_snapshot(e: &UiSnapshot) {
-        machine::door().send(e);
+        door().send(e);
     }
 
     /// Command::UI_VIEW, posted for the runtime.
     pub fn ui_view(e: &UiView) {
-        machine::door().send(e);
+        door().send(e);
     }
 
     /// What the program does with each command the runtime sends.
@@ -1477,6 +1507,7 @@ pub mod ui {
         fn edit_marker_cancel(&mut self) -> Outcome;
         fn edit_marker_commit(&mut self) -> Outcome;
         fn input_wheel(&mut self, c: InputWheel) -> Outcome;
+        fn input_pinch(&mut self, c: InputPinch) -> Outcome;
         fn input_move(&mut self, c: InputMove) -> Outcome;
         fn scene_draw(&mut self, c: SceneDraw) -> Outcome;
         fn setting_set(&mut self, c: SettingSet) -> Outcome;
@@ -1532,6 +1563,9 @@ pub mod ui {
             x if x == Command::EDIT_MARKER_CANCEL as u32 => h.edit_marker_cancel(),
             x if x == Command::EDIT_MARKER_COMMIT as u32 => h.edit_marker_commit(),
             x if x == Command::INPUT_WHEEL as u32 => h.input_wheel(InputWheel::read(
+                pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
+            )?),
+            x if x == Command::INPUT_PINCH as u32 => h.input_pinch(InputPinch::read(
                 pkt.ok_or_else(|| MarshalError::new(Errno::EBADMSG))?,
             )?),
             x if x == Command::INPUT_MOVE as u32 => h.input_move(InputMove::read(

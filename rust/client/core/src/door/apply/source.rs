@@ -6,7 +6,7 @@
 use super::refuse_unless;
 use crate::door::cmd as abi;
 use crate::sys::io::source;
-use xpute_core::ipc::door::Outcome;
+use xpute_core::io::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
 pub(super) fn declare(c: abi::SourceDeclare<'_>) -> Outcome {

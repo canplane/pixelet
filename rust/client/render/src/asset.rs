@@ -11,7 +11,7 @@
 //!
 //! The bytes are not trusted. A file that reaches past its buffers, names an
 //! index out of range, gives a node two parents or a cycle, would decode more
-//! than `COMPS_PER_BYTE` of its size, or draws more than the `MAX_SCENE_*`
+//! than `COMPS_PER_BYTE` of its size, or draws more than the `SCENE_*_CAP`
 //! is refused as malformed or too large, and one that needs what is not read (a
 //! sparse accessor, a required extension) as unsupported; none panics.
 
@@ -105,9 +105,9 @@ const COMPS_PER_BYTE: usize = 4;
 /// The most the scene may draw. A mesh counts at every node that draws it, as it is decoded
 /// once but laid out for each node. Whatever accepts an upload may bound what it claims more
 /// tightly.
-pub const MAX_SCENE_VERTICES: u32 = 1 << 20;
-pub const MAX_SCENE_IDXS: u32 = 1 << 22;
-pub const MAX_SCENE_PRIMITIVES: u32 = 1 << 12;
+pub const SCENE_VERTICES_CAP: u32 = 1 << 20;
+pub const SCENE_IDXS_CAP: u32 = 1 << 22;
+pub const SCENE_PRIMITIVES_CAP: u32 = 1 << 12;
 
 fn comp_size(t: usize) -> Option<usize> {
     match t {
@@ -731,7 +731,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
             }
         }
     }
-    let most = [MAX_SCENE_VERTICES, MAX_SCENE_IDXS, MAX_SCENE_PRIMITIVES];
+    let most = [SCENE_VERTICES_CAP, SCENE_IDXS_CAP, SCENE_PRIMITIVES_CAP];
     if drawn.iter().zip(most).any(|(&d, m)| d > m as usize) {
         return Err(MarshalError::new(Errno::EFBIG));
     }

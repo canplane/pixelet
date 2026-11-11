@@ -1,19 +1,23 @@
-//! The runtime's end of the core's rings, kept the way @xpute/runtime's doorbell and the
-//! client's services keep it (xpute/ts/runtime/src/ipc/doorbell.ts,
-//! ts/client/src/service/core/). It lays the front before the first turn, sends the UI's
-//! commands and waits for its calls' answers. Everything a turn posts is read before the next
-//! turn is rung: the file calls are answered (fs.rs), the stop report is kept, and the
-//! snapshot is read where the core names it.
+//! The UI's end of the core, kept the way the device's runtime keeps it (xpute-runtime native,
+//! xpute/ts/runtime/src/start.native.ts): the front's header is laid and the runtime attached
+//! before the first turn; the UI's commands are posted, turns are run, and what the core sent
+//! is taken after each. The file device is xpute-runtime's own, and this harness answers only
+//! with a file's bytes (fs.rs): an open's, and a written file's commit, which it drops. The
+//! stop report is kept, and the snapshot is read from the memory its event named.
 
 use std::collections::BTreeMap;
+use std::sync::{Condvar, Mutex, PoisonError};
+use std::time::Duration;
 
-use pxl_core::sys::machine::MACHINE;
-use xpute_core::ipc::frame::{ACKREQ, PROGRAM_MAJOR, RES};
-use xpute_core::ipc::head;
-use xpute_core::ipc::ring::Ring;
+use pxl_core::sys::manifest::MANIFEST;
+use xpute_core::abi::fs::{Command as FsCommand, FsOpen};
+use xpute_core::io::frame::{ACKREQ, PROGRAM_MAJOR, RES};
+use xpute_core::io::head;
 use xpute_core::mem::Memory;
 use xpute_kit::status::errno::Errno;
-use xpute_runtime::native::{ring, Core};
+use xpute_runtime::abort_report;
+use xpute_runtime::native::batch::{self, ALIGN, COMMIT, HEADER_WORDS, STOPPED};
+use xpute_runtime::native::{self, run, Core};
 
 use crate::fs::Fs;
 use crate::spec::{self, Protocol, V};
@@ -26,15 +30,62 @@ pub struct Shown {
     pub zooming: bool,
 }
 
+/// Whether the runtime has told the UI that frames wait for it (`native::notify_on`), which
+/// the runtime's own thread sets.
+static TOLD: Mutex<bool> = Mutex::new(false);
+static TOLD_CV: Condvar = Condvar::new();
+
+extern "C" fn told() {
+    *TOLD.lock().unwrap_or_else(PoisonError::into_inner) = true;
+    TOLD_CV.notify_all();
+}
+
+/// How long the harness waits for the runtime to hand over the stop report of a core that
+/// stopped.
+const STOP_WAIT: Duration = Duration::from_secs(10);
+
+/// A frame the core sent, as `take` hands it over.
+struct Down<'a> {
+    tag: u32,
+    cmd: u32,
+    flags: u32,
+    result: i32,
+    pkt: &'a [u8],
+    named: &'a [u8],
+}
+
+/// The frames of `down`, a batch (xpute spec/io/batch.json), in the order sent.
+fn frames(down: &[u8]) -> Vec<Down<'_>> {
+    let mut out = Vec::new();
+    let mut at = 0;
+    let align = ALIGN as usize;
+    while at < down.len() {
+        let word = |k: u32| {
+            let k = at + 4 * k as usize;
+            u32::from_le_bytes(down[k..k + 4].try_into().expect("a word"))
+        };
+        let (pkt_len, named_len) = (word(batch::PKT) as usize, word(batch::NAMED) as usize);
+        let pkt_at = at + 4 * HEADER_WORDS as usize;
+        let named_at = (pkt_at + pkt_len).next_multiple_of(align);
+        out.push(Down {
+            tag: word(batch::TAG),
+            cmd: word(batch::CMD),
+            flags: word(batch::FLAGS),
+            result: word(batch::RESULT) as i32,
+            pkt: &down[pkt_at..pkt_at + pkt_len],
+            named: &down[named_at..named_at + named_len],
+        });
+        at = (named_at + named_len).next_multiple_of(align);
+    }
+    out
+}
+
 pub struct Runtime {
-    mem: Memory,
-    sq: Ring,
-    cq: Ring,
-    next_call: u32,
+    /// The tag of the last request; 0 is a send's.
+    next_tag: u32,
     replies: BTreeMap<u32, i32>,
     pub ui: Protocol,
     xpute: Protocol,
-    fs: Protocol,
     disk: Fs,
     /// The core's stop report, as SYS_ABORT carried it.
     pub abort: Option<String>,
@@ -43,45 +94,25 @@ pub struct Runtime {
     pub refused: Vec<String>,
 }
 
-fn major_of(cmd: u32) -> u32 {
-    cmd >> 8
-}
-
 impl Runtime {
-    /// Lays the front on `core`'s memory where its machine places it, before the first turn.
+    /// Lays the front's header on `core`'s memory where its manifest places it, and attaches
+    /// the runtime with the file device, before the first turn. The core's calls are refused,
+    /// as no program answers them here.
     pub fn lay(core: Core) -> Runtime {
-        let m = MACHINE;
+        let m = MANIFEST;
         let (base, bytes) = core.mem();
         // SAFETY: the core's memory, reserved for the process's life; its front is the
-        // runtime's to write before the first turn, and its rings each side's by their rules.
+        // runtime's to write before the first turn.
         let mem = unsafe { Memory::new(base.as_ptr().expose_provenance(), bytes) };
-        // SAFETY: the front's header and rings, which no turn has read yet.
-        let (sq, cq) = unsafe {
-            head::write(mem, m.head_at() as usize, &m.head());
-            (
-                Ring::init(
-                    mem,
-                    m.sq_at() as usize,
-                    m.sq_cap,
-                    m.sq_slots_at(),
-                    m.slot_bytes,
-                ),
-                Ring::init(
-                    mem,
-                    m.cq_at() as usize,
-                    m.cq_cap,
-                    m.cq_slots_at(),
-                    m.slot_bytes,
-                ),
-            )
-        };
-        let fs = Protocol::load("xpute/spec/abi/fs.json");
+        // SAFETY: the front's header, which no turn has read yet.
+        unsafe { head::write(mem, m.head_at() as usize, &m.head()) };
+        native::answer_with(None);
+        native::notify_on(Some(told));
+        // SAFETY: the core's memory, whose front is laid.
+        unsafe { native::attach(base.as_ptr().expose_provenance(), bytes, true) };
         let ui = Protocol::load("spec/client/core/door/ui.json");
         Runtime {
-            mem,
-            sq,
-            cq,
-            next_call: 0,
+            next_tag: 0,
             replies: BTreeMap::new(),
             xpute: Protocol::load("xpute/spec/abi/sys.json").with(Protocol::load_on(
                 "xpute/spec/abi/gpu.json",
@@ -89,15 +120,14 @@ impl Runtime {
             )),
             ui,
             disk: Fs::new(),
-            fs,
             abort: None,
             shown: Shown::default(),
             refused: Vec::new(),
         }
     }
 
-    /// Pushes a frame on the submission ring with the packet `write` writes, or with no
-    /// packet when it writes none. When the ring is full, a turn is rung to make room.
+    /// Posts a frame for the core with the packet `write` writes, or with no packet when it
+    /// writes none.
     fn push(
         &mut self,
         tag: u32,
@@ -106,17 +136,9 @@ impl Runtime {
         result: i32,
         write: impl Fn(&mut [u8]) -> Option<u32>,
     ) {
-        let mut buf = vec![0u8; self.sq.slot_bytes as usize];
-        let pkt = write(&mut buf).map(|n| &buf[..n as usize]);
-        loop {
-            match self.sq.push(tag, cmd, flags, result, pkt) {
-                Errno::OK => return,
-                Errno::EAGAIN => {
-                    self.turn(0.0);
-                }
-                e => panic!("command {cmd:#x} refused by the ring: {e:?}"),
-            }
-        }
+        let mut buf = vec![0u8; MANIFEST.pkt_bytes as usize];
+        let n = write(&mut buf).unwrap_or(0) as usize;
+        native::post(tag, cmd, flags, result, &buf[..n]);
     }
 
     /// Sends the command `name`, the UI's or xpute's (abi/sys.json, abi/gpu.json), with its
@@ -137,11 +159,12 @@ impl Runtime {
         });
     }
 
-    /// Makes the call `name`, the UI's or xpute's, ringing turns with a deadline of 0 until
-    /// the core answers, and returns the result.
-    pub fn call(&mut self, name: &str, vals: &[(&str, V)]) -> i32 {
-        self.next_call = self.next_call.wrapping_add(1).max(1);
-        let tag = self.next_call;
+    /// Requests `name`, the UI's or xpute's, with ACKREQ under a tag of its own, and runs
+    /// turns with a deadline of 0 until its reply comes with a later turn's batch; returns
+    /// the reply's result.
+    pub fn request(&mut self, name: &str, vals: &[(&str, V)]) -> i32 {
+        self.next_tag = self.next_tag.wrapping_add(1).max(1);
+        let tag = self.next_tag;
         self.submit(name, vals, tag, ACKREQ);
         loop {
             if let Some(r) = self.replies.remove(&tag) {
@@ -154,82 +177,75 @@ impl Runtime {
         }
     }
 
-    /// Rings a turn with `deadline_ms` and reads its posts after it. Returns when the core
-    /// wants the next turn, or None when the core has stopped.
+    /// Runs a turn with `deadline_ms`, and takes what the runtime has told of since. Returns
+    /// when the core wants the next turn, or None when the core has stopped, once the runtime
+    /// has handed over all it sent.
     pub fn turn(&mut self, deadline_ms: f64) -> Option<f64> {
-        let wake = ring(deadline_ms);
-        self.drain();
-        wake
+        let wake = run(deadline_ms);
+        if wake.is_some() {
+            self.drain();
+            return wake;
+        }
+        let mut stopped = false;
+        while !stopped {
+            let mut g = TOLD.lock().unwrap_or_else(PoisonError::into_inner);
+            while !*g {
+                let (next, waited) = TOLD_CV
+                    .wait_timeout(g, STOP_WAIT)
+                    .unwrap_or_else(PoisonError::into_inner);
+                assert!(!waited.timed_out(), "the stop was never handed over");
+                g = next;
+            }
+            drop(g);
+            stopped = self.drain();
+        }
+        None
     }
 
-    /// Reads the completion ring until it is empty, then submits the file calls'
-    /// completions.
-    fn drain(&mut self) {
-        let mut results = Vec::new();
-        while let Some(f) = self.cq.peek() {
-            let pkt = self.cq.pkt(&f).expect("the core's frame names its slot");
+    /// Takes what the runtime has told of, as a device's UI does when told: a reply to a
+    /// command, what the core tells the UI, its stop report, and what the file device asks of
+    /// the program, an open to read, answered with the file's bytes, and a written file's
+    /// commit, which is dropped. Answers whether the batch says the core has stopped.
+    fn drain(&mut self) -> bool {
+        if !core::mem::take(&mut *TOLD.lock().unwrap_or_else(PoisonError::into_inner)) {
+            return false;
+        }
+        native::answer();
+        let batch = native::take();
+        let mut stopped = false;
+        for f in frames(&batch) {
+            if f.cmd == STOPPED {
+                stopped = true;
+                continue;
+            }
             if f.flags & RES != 0 {
                 if f.result < 0 && f.tag == 0 {
                     self.refused
                         .push(format!("{} {:?}", self.name(f.cmd), Errno::of(f.result)));
                 }
                 self.replies.insert(f.tag, f.result);
-            } else if major_of(f.cmd) >= PROGRAM_MAJOR {
-                self.program(f.cmd, pkt);
-            } else if major_of(f.cmd) == self.fs.member("Major", "FS") {
-                let cmd = self.fs.name_of(f.cmd).expect("an fs command").to_string();
-                let read = spec::read(pkt.unwrap_or(&[]));
-                let field =
-                    |name: &str| spec::num(read.at(self.fs.at(&cmd, name)).expect(name)) as u32;
-                match cmd.as_str() {
-                    "FS_OPENAT" => {
-                        let path = read
-                            .at(self.fs.at(&cmd, "path"))
-                            .and_then(|c| c.get_str_ref())
-                            .expect("an open's path");
-                        let res = self
-                            .disk
-                            .open(field("fd"), field("root"), field("flags"), path);
-                        results.push((field("fd"), f.cmd, res));
-                    }
-                    "FS_READ" => {
-                        let bytes = self.disk.read(field("fd"));
-                        let n = bytes.len().min(field("len") as usize);
-                        // SAFETY: the bytes the read names, the runtime's in the gap between turns.
-                        unsafe {
-                            core::ptr::copy_nonoverlapping(
-                                bytes.as_ptr(),
-                                self.mem.at::<u8>(field("at") as usize),
-                                n,
-                            );
-                        }
-                    }
-                    "FS_WRITE" => self.disk.write(field("fd")),
-                    "FS_CLOSE" => results.push((field("fd"), f.cmd, self.disk.close(field("fd")))),
-                    _ => panic!("the core posted {cmd}"),
+            } else if f.cmd >> 8 >= PROGRAM_MAJOR {
+                self.program(f.cmd, f.named);
+            } else if f.cmd == FsCommand::FS_OPEN as u32 {
+                let (path, _) = FsOpen::parts(f.pkt).expect("an open's packet");
+                let tokens = path.iter().collect::<Vec<_>>();
+                match self.disk.bytes(&tokens) {
+                    Ok(bytes) => native::fs_complete_open(f.tag, bytes.len() as i32, 0, bytes),
+                    Err(e) => native::fs_complete_open(f.tag, e as i32, 0, Vec::new()),
                 }
+            } else if f.cmd == COMMIT {
+                // What is written is dropped, as the run reads only the files it ships.
+                native::post(f.tag, FsCommand::FS_CLOSE as u32, RES, 0, &[]);
+            } else if f.cmd == FsCommand::FS_CLOSE as u32 {
+                // An open the core closed before it completed: every open here is answered
+                // at once, so there is nothing to abort.
             } else if f.cmd == self.xpute.number("SYS_ABORT") {
-                self.abort = Some(self.report(pkt.expect("a report's packet")));
+                self.abort = Some(abort_report(f.pkt).expect("a stop report"));
             } else {
-                panic!("the core posted {:#x}, which no one here takes", f.cmd);
-            }
-            self.cq.advance();
-        }
-        let openat = self.fs.command("FS_OPENAT");
-        let reply = spec::Command {
-            val: openat.val,
-            fields: openat.reply.clone(),
-            reply: Vec::new(),
-        };
-        for (fd, cmd, res) in results {
-            if cmd == reply.val {
-                self.push(fd, cmd, RES, res, |slot| {
-                    spec::write(&reply, &[("detail", V::Num(0.0))], slot)
-                });
-            } else {
-                self.push(fd, cmd, RES, res, |_| None);
+                panic!("the core sent {:#x}, which no one here takes", f.cmd);
             }
         }
+        stopped
     }
 
     fn name(&self, cmd: u32) -> String {
@@ -239,19 +255,13 @@ impl Runtime {
             .map_or_else(|| format!("{cmd:#x}"), str::to_string)
     }
 
-    /// Takes what the core posts to the UI. The snapshot is read where it lies, and every
-    /// other post is ignored.
-    fn program(&mut self, cmd: u32, pkt: Option<&[u8]>) {
+    /// Takes what the core sends the UI. The snapshot is read from the memory its event
+    /// named, and everything else is ignored.
+    fn program(&mut self, cmd: u32, named: &[u8]) {
         if cmd != self.ui.number("UI_SNAPSHOT") {
             return;
         }
-        let read = spec::read(pkt.expect("a snapshot's event"));
-        let field =
-            |name: &str| spec::num(read.at(self.ui.at("UI_SNAPSHOT", name)).expect(name)) as usize;
-        // SAFETY: the snapshot the event names, the runtime's until its head passes the event.
-        let bytes =
-            unsafe { core::slice::from_raw_parts(self.mem.at::<u8>(field("at")), field("len")) };
-        let s = spec::read(bytes);
+        let s = spec::read(named);
         self.shown = Shown {
             renderer_progress: spec::num(
                 s.at(self.ui.rec_at("Snapshot", "renderer_progress"))
@@ -262,22 +272,5 @@ impl Runtime {
                     .expect("the zoom"),
             ),
         };
-    }
-
-    fn report(&self, pkt: &[u8]) -> String {
-        let r = spec::read(pkt);
-        let at = |name: &str| r.at(self.xpute.at("SYS_ABORT", name)).expect(name);
-        let num = |name: &str| spec::num(at(name)) as i64;
-        let word = |low: &str, high: &str| (num(high) as u64) << 32 | num(low) as u64;
-        let errnum = num("errnum") as i32;
-        format!(
-            "{} at {}:{}:{} ({}, {})",
-            Errno::of(errnum).map_or_else(|| errnum.to_string(), |e| format!("{e:?}")),
-            at("file").get_str_ref().unwrap_or("?"),
-            num("line"),
-            num("column"),
-            word("a_low", "a_high"),
-            word("b_low", "b_high"),
-        )
     }
 }

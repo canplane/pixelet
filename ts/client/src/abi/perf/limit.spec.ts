@@ -9,3 +9,5 @@ export const REASON_WORDS = 3 as number;
 export const STEP_CAP = 32 as number;
 
 export const WINDOW_MS = 60000 as number;
+
+export const SLOW_MS = 1000 as number;

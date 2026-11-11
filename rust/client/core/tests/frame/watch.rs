@@ -6,7 +6,7 @@
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-/// The longest one wait may take: a turn rung, a call answered, the device's work done.
+/// The longest one wait may take: a turn run, a call answered, the device's work done.
 const WAIT: Duration = Duration::from_secs(60);
 
 /// The longest the whole run may take.

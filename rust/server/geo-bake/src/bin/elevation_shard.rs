@@ -18,6 +18,7 @@ use pxl_spec::space::coord::zoom::{units, LEAF_ZOOM};
 use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant};
 use std::process::ExitCode;
 
+use pxl_geo_bake::cli;
 use pxl_geo_bake::coverage::{Coverage, SHARD_APRON};
 use pxl_geo_bake::elevation::{BLOCK, BLOCK_ZOOM};
 use pxl_spec::ground::TILE_ELE_SPAN;
@@ -77,11 +78,5 @@ fn run() -> Result<(), String> {
 }
 
 fn main() -> ExitCode {
-    match run() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("[elevation_shard] {e}");
-            ExitCode::FAILURE
-        }
-    }
+    cli::main("elevation_shard", run)
 }

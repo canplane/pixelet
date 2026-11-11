@@ -3,7 +3,9 @@
 import { Component, type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
+import { Message } from "@/abi/cmd.spec.ts";
 import { BOOT_LOADING, BOOT_STARTED } from "@/abi/state.ts";
+import { installConsole } from "@/ui/feature/debug/console.ts";
 import { useStanding } from "./feature/cover/standing.ts";
 import { coverOf, UI_PANIC } from "./feature/cover/cover.ts";
 import { ModalHost } from "./modal.tsx";
@@ -16,10 +18,21 @@ import { DockMode, setDockMode } from "@/ui/feature/world/dock/store.ts";
 function AppBody({ children }: { children: ReactNode }) {
   const standing = useStanding();
   const cover = coverOf(standing);
-  // A build made for measuring runs the drive once the world has started
-  // (perf/measure.ts); any other build holds no way to.
+  // A console over the core is installed once the core runs.
   useEffect(() => {
-    if (__PERF_DRIVE__ && standing.boot === BOOT_STARTED)
+    if (standing.boot === BOOT_LOADING) installConsole();
+  }, [standing.boot]);
+  useEffect(() => {
+    if (standing.stall === Message.WorldUnavailable) {
+      console.error(
+        "[read] a read failed past every retry; the space is given up",
+      );
+    }
+  }, [standing.stall]);
+  // A build made for measuring measures from the core's start, as the world
+  // begins to load (perf/measure.ts); any other build holds no way to.
+  useEffect(() => {
+    if (__PERF_DRIVE__ && standing.boot === BOOT_LOADING)
       void import("@/ui/feature/debug/perf/measure.ts").then((m) =>
         m.measure(),
       );

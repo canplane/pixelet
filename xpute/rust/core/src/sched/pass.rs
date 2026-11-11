@@ -10,11 +10,11 @@ use crate::clock::now;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Pass {
-    /// The time of the turn's rising edge. The budget counts from it, so the
+    /// The time the turn started. The budget counts from it, so the
     /// time the turn spent before this pass comes off what is left.
     pub t0: f64,
     pub total_ms: f64,
-    /// The time held back for the phases after the current one.
+    /// The time held back for what the turn runs after this pass.
     pub reserve_ms: f64,
     /// A hard limit this far past the remaining budget. Unlike the budget, it
     /// applies before any step has done work, since a step can cost time and

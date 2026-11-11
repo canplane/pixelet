@@ -15,9 +15,10 @@ const TARGETS: [Target; 3] = [
         rs: "rust/core/src/abi/sys.spec.rs",
         rs_logical: "xpute-core/abi/sys.spec.rs",
         number: "crate::abi::number",
-        import: Some("crate::ipc::door"),
+        import: Some("crate::io::door"),
         cpp: Some(("cpp/xpute/core/abi/sys.spec.hpp", "xpute::abi::sys")),
         runtime_ts: Some("../mod.ts"),
+        path: ("crate::io::fs", "../io/path.ts"),
     },
     Target {
         json: "spec/abi/gpu.json",
@@ -26,9 +27,10 @@ const TARGETS: [Target; 3] = [
         rs: "rust/gpu/src/abi.spec.rs",
         rs_logical: "xpute-gpu/abi.spec.rs",
         number: "xpute_core::abi::number",
-        import: Some("xpute_core::ipc::door"),
+        import: Some("xpute_core::io::door"),
         cpp: Some(("cpp/xpute/gpu/abi.spec.hpp", "xpute::abi::gpu")),
         runtime_ts: Some("@xpute/runtime"),
+        path: ("xpute_core::io::fs", "@xpute/runtime/io/path.ts"),
     },
     Target {
         json: "spec/abi/fs.json",
@@ -37,9 +39,10 @@ const TARGETS: [Target; 3] = [
         rs: "rust/core/src/abi/fs.spec.rs",
         rs_logical: "xpute-core/abi/fs.spec.rs",
         number: "crate::abi::number",
-        import: Some("crate::ipc::door"),
+        import: Some("crate::io::door"),
         cpp: Some(("cpp/xpute/core/abi/fs.spec.hpp", "xpute::abi::fs")),
         runtime_ts: Some("../mod.ts"),
+        path: ("crate::io::fs", "../io/path.ts"),
     },
 ];
 

@@ -16,10 +16,11 @@
     "$type": "u32",
     "$doc": [
       "The size of the range the core shares with its runtime. The range holds the front's",
-      "header, both rings, the stream and the gaps LAYOUTS draws between them, then the core's",
-      "own state and heap. The core's boot answers where the range begins, and so where the",
-      "header is (the contract's rule 0). The rest of the memory, a module's stack and data,",
-      "is the build's, and no number here sizes it."
+      "header, the frame it receives into, the frame it sends from, the stream and the gaps",
+      "LAYOUTS draws between them, then the core's own state and heap. The core's boot",
+      "answers where the range begins, and so where the header is (the contract's rule 0).",
+      "The rest of the memory, a module's stack and data, is the build's, and no number here",
+      "sizes it."
     ]
   },
 
@@ -32,8 +33,8 @@
       "parts it shares with its runtime, the header among them, and how many pages to leave",
       "before each part. Every core draws the same way. No shared part lies where it lay under",
       "another seed, so only a runtime that finds every part through the header passes every",
-      "layout (the contract's rule 0). No machine fixes where these parts lie, so the fixture",
-      "lays its front and writes its header itself, as a runtime does for a machine."
+      "layout (the contract's rule 0). No manifest.json fixes where these parts lie, so the fixture",
+      "lays its front and writes its header itself, as a runtime does from a core's manifest."
     ]
   },
 
@@ -43,26 +44,10 @@
     "$doc": ["The most pages a layout leaves before each part it lays."]
   },
 
-  "SQ_CAP": {
-    "$val": 16,
-    "$type": "u32",
-    "$doc": ["How many frames the submission ring holds."]
-  },
-
-  "CQ_CAP": {
-    "$val": 128,
-    "$type": "u32",
-    "$doc": [
-      "How many frames the completion ring holds. It is less than what eight commands leave",
-      "when each raises MOST_RAISE frames, so a trace that sends eight of them makes a turn's",
-      "output outgrow the ring."
-    ]
-  },
-
-  "SLOT_BYTES": {
+  "PKT_BYTES": {
     "$val": 256,
     "$type": "u32",
-    "$doc": ["The size of one ring slot in bytes, enough for a packet of one number."]
+    "$doc": ["The most bytes a frame's packet takes, either way, enough for a packet of one number."]
   },
 
   "STREAM_WORDS": {
@@ -108,7 +93,7 @@
     "$type": "u32",
     "$doc": [
       "The conformance core's own commands, numbered `major << 8 | minor` past xpute's majors",
-      "(ipc/frame.json). Where a command takes a packet, the packet is a branch whose first",
+      "(io/frame.json). Where a command takes a packet, the packet is a branch whose first",
       "child is a number."
     ],
     "OK": { "$val": 4097, "$doc": ["Succeeds and replies 0."] },
@@ -129,10 +114,10 @@
     "OPEN": {
       "$val": 4106,
       "$doc": [
-        "Opens a file on behalf of an owner, the packet's number, and replies with the",
-        "descriptor. The open's FS_OPENAT is posted for the file device, which no trace's runtime",
-        "takes. When a trace completes the open (`complete`), the core raises OPENED for that",
-        "owner if the descriptor is still open."
+        "Opens the file (1, \"f\") on behalf of an owner, the packet's number, and replies with the",
+        "descriptor. The open's FS_OPEN is posted for the file device, which no trace's runtime",
+        "takes. When a trace completes the open (`complete`), the core raises OPEN_COMPLETION for",
+        "that owner if the descriptor is still open."
       ]
     },
     "CLOSE": { "$val": 4107, "$doc": [
@@ -156,9 +141,9 @@
       ]
     },
     "NOTE": { "$val": 4353, "$doc": ["The import that RAISE raises."] },
-    "OPENED": { "$val": 4354, "$doc": [
-   "An open has completed. The frame is tagged with the open's owner, and its result is",
-   "what the runtime completed the open with."
+    "OPEN_COMPLETION": { "$val": 4354, "$doc": [
+   "An open's completion, handed on. The frame is tagged with the open's owner, and its",
+   "result is what the runtime completed the open with."
  ] }
   }
 }

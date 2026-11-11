@@ -28,7 +28,7 @@ use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord;
 use crate::domain::view::lens;
 use crate::domain::view::lens::{visible_step_s, StepClock};
-use crate::sys::sched::edge::{request_world_tick, wake_at};
+use crate::sys::sched::{request_world_tick, wake_at};
 use pxl_render::frame::shader::word;
 use pxl_render::param::location::beacon;
 use xpute_core::clock::now;

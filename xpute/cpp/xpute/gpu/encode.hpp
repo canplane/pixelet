@@ -1,6 +1,6 @@
 // cpp/xpute/gpu/encode.hpp
 
-// The encoder writes a core's GPU calls as records of a stream (ipc/stream) in
+// The encoder writes a core's GPU calls as records of a stream (io/stream) in
 // the words spec/gpu/api.json gives each op, as rust/gpu/src/encode.rs writes
 // them. An object the core makes is named by a handle from one table (`Gpu`).
 // A record that does not fit an open transaction is not written, and the
@@ -21,7 +21,7 @@
 #include <variant>
 
 #include "xpute/core/abi/handle.hpp"
-#include "xpute/core/ipc/stream.hpp"
+#include "xpute/core/io/stream.hpp"
 #include "xpute/kit/status/bug.hpp"
 #include "api.spec.hpp"
 #include "enum.spec.hpp"
@@ -661,7 +661,7 @@ bool write_buffer(Stream &stream, Id buffer, std::uint32_t offset, std::span<con
 std::uint64_t write_buffer_bytes(std::span<const std::uint8_t> bytes) noexcept;
 // This is `write_buffer`, but the record names the bytes where they lie in the
 // core's memory, and the runtime reads them there as it runs the stream. The
-// core leaves them unchanged until the stream is handed back (ipc/stream.hpp
+// core leaves them unchanged until the stream is handed back (io/stream.hpp
 // R3).
 bool write_buffer_at(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
 // `layout` holds the bytes per row and the rows per image.
@@ -712,8 +712,9 @@ bool queue_done(Stream &stream, const std::uint32_t &fence, std::uint32_t ticket
 bool configure(Stream &stream, std::uint32_t surface, std::optional<TextureFormat> format, std::uint32_t usage, CanvasAlphaMode alpha) noexcept;
 bool resize(Stream &stream, std::uint32_t surface, std::array<std::uint32_t, 2> size) noexcept;
 // Asks the runtime to write the device's block (spec DEVICE) into `into`:
-// its limits, features, unfinished frames and status. The runtime writes the
-// block's words for good, so `into` stays in place (ipc/stream.hpp R4).
+// its limits, features, uncaptured errors, unfinished frames and status. The
+// runtime writes the block's words for good, so `into` stays in place
+// (io/stream.hpp R4).
 bool device(Stream &stream, std::span<std::uint32_t> into) noexcept;
 
 } // namespace call

@@ -15,7 +15,12 @@
 
 /// What the ray that ended as `w` shows (queue.wgsl `finish`): what it met. These walks read the
 /// node cache alone and cannot ask the world, so a ray they end as a lack, which happens only
-/// past its pool's room, shows nothing.
+/// where it finds no room to park, shows nothing, where the last walk shows a lack's deepest node held
+/// (queue_last.wgsl `shows`). The cache does not hold that node as a cell: the walk passed it
+/// as a split. To find it these walks would take the world's query whole, and they are kept to
+/// the cache so that their pipelines stay small: the S23 refuses a pipeline with too many words
+/// live across its loop (cached.wgsl), and a driver that inlines writes a query asked from two
+/// places twice. A pool runs out only where a frame parks more than `ray::POOL_CAP` holes.
 fn shows(aim: Aim, w: WalkEnd) -> WalkEnd {
   return w;
 }
@@ -105,9 +110,8 @@ fn queue_walk(parked: bool) {
     var step = s.step;
     loop {
       let w = walk(aim, Start(t, corner, zoom, roots, vec3<u32>(0u), true, step), QUEUE_STEPS);
-      // `ends` is 5 where the walk ran out of its steps, and 4 where it met a node no slot keeps
-      // (walk.wgsl `walk`).
-      if (w.ends == 5u) {
+      // Out of its steps, or left at a node no slot keeps (walk.wgsl `walk`).
+      if (w.ends == ENDS_OUT) {
         t = w.t;
         corner = w.corner;
         zoom = w.zoom;
@@ -120,7 +124,7 @@ fn queue_walk(parked: bool) {
         if (!park(item, start.t, start.corner, start.zoom, start.roots, start.step)) {
           finish(item, aim, to_lack(w));
         }
-      } else if (w.ends == 4u) {
+      } else if (w.ends == ENDS_LEFT) {
         if (park(item, w.t, w.corner, w.zoom, w.roots, w.step)) {
           list_ask(aim, w, parked);
         } else {

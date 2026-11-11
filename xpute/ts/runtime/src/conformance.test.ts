@@ -2,10 +2,10 @@
 
 /**
  * This runs the traces under spec/conformance/ against every core, Rust or C++,
- * native or WebAssembly, through this package's rings, header and stream, under
- * each of the layouts a core draws from its seed (LAYOUTS). Build the cores
- * first with `make build` at xpute's root, which builds Rust with Cargo and C++
- * with cpp/Makefile.
+ * native or WebAssembly, through this package's host, header and stream,
+ * under each of the layouts a core draws from its seed (LAYOUTS). Build the
+ * cores first: the Rust one with Cargo, natively and for wasm32, and the C++
+ * one with cpp/Makefile.
  */
 
 import { test } from "vitest";
@@ -15,27 +15,25 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import koffi from "koffi";
 
+import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Golden } from "@xpute/kit/golden.ts";
 import { PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { Command } from "@xpute/runtime/abi/sys.spec.ts";
 import * as fs from "@xpute/runtime/abi/fs.spec.ts";
 import { handle_slot } from "@xpute/runtime/abi/handle.ts";
-import { Head } from "@xpute/runtime/ipc/head.ts";
-import { WORDS, word } from "@xpute/runtime/ipc/head.spec.ts";
-import * as frame from "@xpute/runtime/ipc/frame.ts";
-import { Ring } from "@xpute/runtime/ipc/ring.ts";
-import { each_rec } from "@xpute/runtime/ipc/stream.ts";
+import { Head } from "@xpute/runtime/io/head.ts";
+import { WORDS, word } from "@xpute/runtime/io/head.spec.ts";
+import { UNSET } from "@xpute/runtime/io/connection.ts";
+import * as frame from "@xpute/runtime/io/frame.ts";
+import { each_rec } from "@xpute/runtime/io/stream.ts";
 import { open_module } from "@xpute/runtime/module.ts";
 import {
-  CQ_CAP,
   cmd,
   LAYOUTS,
   MEM_BYTES,
-  SLOT_BYTES,
-  SQ_CAP,
+  PKT_BYTES,
 } from "@xpute/runtime/conformance.spec.ts";
-import * as ring from "@xpute/runtime/ipc/ring.spec.ts";
 import type { Core } from "@xpute/runtime/runtime.ts";
 import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 
@@ -59,43 +57,52 @@ function library(dir: string, name: string): string {
 }
 
 const NOW = koffi.proto("double xpute_now(void)");
+const RECEIVE = koffi.proto("int32_t xpute_receive(uint32_t at, uint32_t cap)");
+const SEND = koffi.proto(
+  "void xpute_send(uint32_t at, uint32_t named_at, uint32_t named_len)",
+);
 const CALL = koffi.proto("int32_t xpute_call(uint32_t at)");
 
 /** A module's whole memory: the core's range, and room past it for the
  * module's own stack and data, whose sizes the build decides. */
 const MODULE_BYTES = 4 << 20;
 
-const MODULE_IMPORTS = ["env.call", "env.memory", "env.now"];
-
-/** This is a core as the runtime holds it, with `head_at`, the offset its boot
- * answered for the front's header. */
-interface Opened extends Core {
-  head_at: number;
-}
+const MODULE_IMPORTS = [
+  "env.call",
+  "env.memory",
+  "env.now",
+  "env.receive",
+  "env.send",
+];
 
 interface Opener {
-  /** `open` boots a core under the layout `seed` draws. */
-  open(seed: number): Opened;
+  /** `open` boots a core under the layout `seed` draws, and answers it with
+   * the offset its boot answered for the front's header. */
+  open(seed: number): [Core, number];
   close(): void;
-}
-
-/** This answers a core's calls until its runtime sets an answer. */
-function answer_enosys(): number {
-  return Errno.ENOSYS;
 }
 
 function native(path: string): Opener {
   const lib = koffi.load(path);
   const boot = lib.func(
-    "uint32_t xpute_conformance_boot(void *mem, xpute_now *now, xpute_call *call, uint32_t seed)",
+    "uint32_t xpute_conformance_boot(void *mem, xpute_now *now, xpute_receive *receive, xpute_send *send, xpute_call *call, uint32_t seed)",
   );
   const core_run = lib.func(
     "double xpute_conformance_run(void *mem, double deadline)",
   );
   const now = koffi.register(() => clock_ms, koffi.pointer(NOW));
-  let answer: (at: number) => number = answer_enosys;
-  const runtime = koffi.register(
-    (at: number) => answer(at),
+  let host = UNSET;
+  const receive = koffi.register(
+    (at: number, cap: number) => host.receive(at, cap),
+    koffi.pointer(RECEIVE),
+  );
+  const send = koffi.register(
+    (at: number, named_at: number, named_len: number) =>
+      host.send(at, named_at, named_len),
+    koffi.pointer(SEND),
+  );
+  const call = koffi.register(
+    (at: number) => host.call(at),
     koffi.pointer(CALL),
   );
   // The core keeps the region between calls, so it must be memory that does
@@ -106,18 +113,17 @@ function native(path: string): Opener {
     open(seed) {
       const at = koffi.alloc("double", MEM_BYTES / 8);
       regions.push(at);
-      answer = answer_enosys;
-      const head_at = boot(at, now, runtime, seed);
-      return {
+      host = UNSET;
+      const head_at = boot(at, now, receive, send, call, seed);
+      const core: Core = {
         mem: koffi.view(at, MEM_BYTES),
-        head_at,
         run: (deadline) => core_run(at, deadline),
-        answer_with: (a) => (answer = a),
+        host_with: (h) => (host = h),
       };
+      return [core, head_at];
     },
     close() {
-      koffi.unregister(now);
-      koffi.unregister(runtime);
+      for (const f of [now, receive, send, call]) koffi.unregister(f);
       lib.unload();
       for (const at of regions) koffi.free(at);
     },
@@ -142,7 +148,7 @@ function module(path: string): Opener {
       const boot = core.instance.exports.xpute_conformance_boot as (
         seed: number,
       ) => number;
-      return { ...core, head_at: boot(seed) >>> 0 };
+      return [core, boot(seed) >>> 0];
     },
     close() {},
   };
@@ -179,34 +185,47 @@ interface Turn {
 
 class Runtime {
   readonly head: Uint32Array;
-  readonly sq: Ring;
-  private readonly _cq: Ring;
   private readonly _stream_at: number;
   private readonly _writer = new PacketWriter();
+  private readonly _room: U8Array = new Uint8Array(new ArrayBuffer(PKT_BYTES));
+  /** What waits for the core, and what it sent this turn. */
+  private readonly _waiting: frame.Frame[] = [];
+  private _sent: frame.Frame[] = [];
 
-  private readonly _core: Opened;
+  private readonly _core: Core;
 
-  constructor(core: Opened) {
+  constructor(core: Core, head_at: number) {
     this._core = core;
     const mem = core.mem;
-    const head = new Head(mem, core.head_at);
-    this.head = new Uint32Array(mem, core.head_at, WORDS);
-    this.sq = new Ring(mem, head.sq_at);
-    this._cq = new Ring(mem, head.cq_at);
+    const head = new Head(mem, head_at);
+    this.head = new Uint32Array(mem, head_at, WORDS);
     this._stream_at = head.stream_at;
-    // The fixture makes one call, INC, as a frame it laid at `at` in its
-    // completion ring without publishing it.
-    core.answer_with((at) => {
-      const cq = this._cq;
-      const e = cq.entry_of(at);
-      if (cq.cmd(e) !== cmd.INC) return Errno.ENOSYS;
-      const pkt = cq.pkt(e);
-      if (pkt === null) return Errno.EBADMSG;
-      const f = new TreeReader(pkt).read_branch();
-      const [n, word] = [f.at(0).get<number>(), f.at(1).get<number>()];
-      if (n === 0) return Errno.EINVAL;
-      new Uint32Array(mem, word, 1)[0] = n + 1;
-      return 0;
+    core.host_with({
+      receive: (at, cap) => {
+        const f = this._waiting.shift();
+        if (f === undefined) return 0;
+        assert.ok(
+          frame.WORD_BYTES + (f.pkt?.byteLength ?? 0) <= cap,
+          "a frame that fits the core's room",
+        );
+        frame.lay_frame(mem, at, f);
+        return 1;
+      },
+      send: (at) => {
+        const f = frame.frame_at(mem, at);
+        this._sent.push({ ...f, pkt: f.pkt && f.pkt.slice() });
+      },
+      // The fixture makes one call, INC, as a frame it laid at `at`.
+      call: (at) => {
+        const c = frame.frame_at(mem, at);
+        if (c.cmd !== cmd.INC) return Errno.ENOSYS;
+        if (c.pkt === null) return Errno.EBADMSG;
+        const f = new TreeReader(c.pkt).read_branch();
+        const [n, word] = [f.at(0).get<number>(), f.at(1).get<number>()];
+        if (n === 0) return Errno.EINVAL;
+        new Uint32Array(mem, word, 1)[0] = n + 1;
+        return 0;
+      },
     });
   }
 
@@ -225,67 +244,57 @@ class Runtime {
     result: number,
     args: number[],
   ): void {
-    const sq = this.sq;
-    let pkt: PacketWriter | null = null;
+    let pkt: U8Array | null = null;
     if (args.length > 0) {
-      assert.ok(
-        sq.write(this._writer, args.length),
-        "a full ring takes no packet",
+      const w = this._writer.begin(
+        this._room,
+        new DataView(this._room.buffer),
+        0,
+        this._room.byteLength,
+        args.length,
       );
       // A negative number, such as an open's -errno, is written as an i32.
       for (const a of args) {
-        if (a < 0) this._writer.i32(a);
-        else this._writer.u32(a);
+        if (a < 0) w.i32(a);
+        else w.u32(a);
       }
-      pkt = this._writer;
+      const end = w.finish();
+      assert.ok(end >= 0, "a packet that fits a frame");
+      pkt = this._room.slice(0, end);
     }
-    assert.deepStrictEqual(sq.push(tag, cmd, flags, pkt, result), Errno.OK);
+    this._waiting.push({ tag, cmd, flags, result, pkt });
   }
 
-  ring(deadline_ms: number): Turn {
+  run(deadline_ms: number): Turn {
     const wake = this._core.run(deadline_ms);
     const stream: number[] = [];
     each_rec(this._core.mem, this._stream_at, (op) => stream.push(op));
-    const completions: Completion[] = [];
-    const cq = this._cq;
-    for (let at = cq.peek(); at >= 0; at = cq.peek()) {
+    const sent = this._sent;
+    this._sent = [];
+    const completions: Completion[] = sent
       // An event of xpute's own, from the runtime's control or the file
       // device, is skipped: no trace's runtime takes one.
-      if (
-        frame.major_of(cq.cmd(at)) < frame.PROGRAM_MAJOR &&
-        (cq.flags(at) & frame.RES) === 0
-      ) {
-        cq.advance();
-        continue;
-      }
-      completions.push({
-        tag: cq.tag(at),
-        cmd: cq.cmd(at),
-        reply: (cq.flags(at) & frame.RES) !== 0,
-        result: cq.result(at),
-      });
-      cq.advance();
-    }
+      .filter(
+        (f) =>
+          frame.major_of(f.cmd) >= frame.PROGRAM_MAJOR ||
+          (f.flags & frame.RES) !== 0,
+      )
+      .map((f) => ({
+        tag: f.tag,
+        cmd: f.cmd,
+        reply: (f.flags & frame.RES) !== 0,
+        result: f.result,
+      }));
     return { completions, stream, wake };
   }
 
   get pending(): boolean {
-    return this.sq.len > 0;
+    return this._waiting.length > 0;
   }
 
   word(name: string): number {
     if (!(name in word)) throw new Error(`no header word ${name}`);
     return this.head[word[name as keyof typeof word]];
-  }
-
-  /** This reads word `at` of the own header of the ring that the header word
-   * `ring_at` places. */
-  ring_word(ring_at: string, at: number): number {
-    return new Uint32Array(
-      this.head.buffer,
-      this.word(ring_at),
-      ring.HEADER_WORDS,
-    )[at];
   }
 }
 
@@ -298,12 +307,12 @@ const CMD_NAMES = Object.entries(cmd).filter(
  * runtime's control commands and the file device's. */
 const RUNTIME_NAMES: [string, number][] = [
   ["NOP", Command.NOP],
-  ["FS_OPENAT", fs.Command.FS_OPENAT],
+  ["FS_OPEN", fs.Command.FS_OPEN],
   ["FS_CLOSE", fs.Command.FS_CLOSE],
 ];
 
 /** The fixture's numbers, which the header's size words must repeat. */
-const SIZES: Record<string, number> = { SQ_CAP, CQ_CAP, SLOT_BYTES };
+const SIZES: Record<string, number> = { PKT_BYTES };
 
 /** Reads a command named in either table, or written as a number in hex. */
 function cmd_number(name: string): number {
@@ -321,7 +330,7 @@ function cmd_name(n: number): string {
   );
 }
 
-/** Renders a completion ring's sequence as a trace writes it: a reply as
+/** Renders what the core sent as a trace writes it: a reply as
  * TAG:CMD=RESULT, an event as TAG:CMD, and a run of one command's events
  * tagged 0, 1, 2 and up as CMD*n. */
 function render_completions(completions: Completion[]): string {
@@ -437,7 +446,7 @@ function run(
 ): void {
   const name = `${core}, layout ${seed}: ${trace}`;
   clock_ms = 0;
-  const runtime = new Runtime(opener.open(seed));
+  const runtime = new Runtime(...opener.open(seed));
   const turns: Turn[] = [];
   const vars = new Map<string, number>();
   for (let i = 0; g.has(`${trace}.step.${i}`); i++) {
@@ -461,10 +470,10 @@ function run(
         );
         break;
       }
-      case "ring": {
+      case "run": {
         // A turn is held to the trace as soon as it is seen, so the results
         // it binds can be named by the steps after it.
-        const turn = runtime.ring(Number(step[1]));
+        const turn = runtime.run(Number(step[1]));
         const at = `${trace}.turn.${turns.length}.completions`;
         if (g.has(at)) {
           expect(
@@ -482,7 +491,7 @@ function run(
         break;
       case "settle":
         for (;;) {
-          turns.push(runtime.ring(0));
+          turns.push(runtime.run(0));
           if (!runtime.pending) break;
           assert.ok(
             turns.length < MOST_SETTLE_TURNS,
@@ -516,7 +525,7 @@ function run(
     assert.deepStrictEqual(
       render_completions(turns.flatMap((t) => t.completions)),
       g.s(at("completions")),
-      `${name}: the completion ring`,
+      `${name}: what the core sent`,
     );
   }
   if (g.has(at("stream"))) {
@@ -561,16 +570,6 @@ function run(
         `${name}: the header's ${k}`,
       );
     }
-    assert.deepStrictEqual(
-      [
-        runtime.ring_word("SQ_AT", ring.CAP),
-        runtime.ring_word("CQ_AT", ring.CAP),
-        runtime.ring_word("SQ_AT", ring.SLOT_BYTES),
-        runtime.ring_word("CQ_AT", ring.SLOT_BYTES),
-      ],
-      [SQ_CAP, CQ_CAP, SLOT_BYTES, SLOT_BYTES],
-      `${name}: the rings' own headers`,
-    );
   }
   if (g.has(at("head.places"))) {
     for (const k of g.s(at("head.places")).split(" ")) {

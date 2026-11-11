@@ -1,7 +1,7 @@
 // pxl-core/door/layout.rs
 
-//! How memory past the machine's front is laid out (machine.json, xpute-core
-//! machine.rs). `.fixed` comes first and holds ranges that each owner sizes
+//! How memory past the front is laid out (manifest.json, xpute-core
+//! manifest.rs). `.fixed` comes first and holds ranges that each owner sizes
 //! and receives at boot (`install`). The heap follows.
 
 use crate::domain::layer::division;
@@ -14,7 +14,7 @@ use crate::domain::scene::environment::cloud;
 use crate::perf::record;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param;
-use crate::sys::machine::MACHINE;
+use crate::sys::manifest::MANIFEST;
 use crate::sys::section;
 use pxl_render::gpu::api;
 use pxl_render::gpu::upload;
@@ -23,10 +23,10 @@ use xpute_core::mem::section::span_of;
 use xpute_core::mem::section::{Section, PAGE_BYTES};
 use xpute_kit::status::errno::Errno;
 
-// The core's machine must have a stream, because the renderer draws through it.
-const STREAM_BYTES: u32 = match MACHINE.stream {
+// The core's manifest must have a stream, because the renderer draws through it.
+const STREAM_BYTES: u32 = match MANIFEST.stream {
     Some(s) => s.bytes,
-    None => panic!("the core's machine has a stream"),
+    None => panic!("the core's manifest has a stream"),
 };
 
 /// The ranges of `.fixed`, in address order. A range belongs here only when
@@ -73,7 +73,7 @@ pub const FIXED_BYTES: u32 = span_of(&FIXED, PAGE_BYTES);
 // The front, the fixed ranges and the heap a phone is guaranteed must fit in
 // the smallest memory size, and the linker's data must not begin before the
 // front ends.
-const _: () = MACHINE.check(FIXED_BYTES);
+const _: () = MANIFEST.check(FIXED_BYTES);
 
 /// The buddy allocator's block for the longest body of `stream`'s kind, a
 /// power of two. It is 0 for a kind whose bodies go in slots or that has no
@@ -124,7 +124,7 @@ const HEAP_FLOWS_BYTES: u64 = {
 };
 
 const _: () = assert!(
-    HEAP_FLOWS_BYTES <= MACHINE.min_heap_bytes as u64,
+    HEAP_FLOWS_BYTES <= MANIFEST.min_heap_bytes as u64,
     "the caps of the heap's bounded flows do not fit the heap a phone is guaranteed"
 );
 
@@ -138,14 +138,14 @@ pub(crate) fn range(f: Fixed) -> Section {
 }
 
 pub(crate) fn install(b: &BootInfo) {
-    section::set_fixed(section::lay_out(b.mem_sz, b.form.data_end, FIXED_BYTES));
+    section::set_fixed(section::lay_out(b.mem_sz, b.data_end, FIXED_BYTES));
     fixed::RANGE.set(range(Fixed::Terrain));
     division::RANGE.set(range(Fixed::Division));
     // SAFETY: `.fixed.uploads` and the GPU device's stream, zeroed, each the
     // renderer's alone.
     unsafe {
         upload::set_uploads(range(Fixed::Uploads).off, MAX_LIVE_UPLOADS);
-        api::install(MACHINE.stream_at(), STREAM_BYTES);
+        api::install(MANIFEST.stream_at(), STREAM_BYTES);
     }
 }
 

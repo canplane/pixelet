@@ -16,6 +16,10 @@ path = "src/lib.rs"
 xpute-core.workspace = true
 xpute-kit.workspace = true
 
+# The tests take the golden records' reader.
+[dev-dependencies]
+xpute-kit = { workspace = true, features = ["golden"] }
+
 # A native runtime maps the core's memory from the system
 # (src/native/reserve.rs), and `native` is unix's alone.
 [target.'cfg(unix)'.dependencies]

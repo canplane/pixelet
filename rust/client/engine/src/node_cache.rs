@@ -77,7 +77,7 @@
 use crate::answer::Kind;
 use crate::clipmap::{self, EYE_CLIP_LEVELS};
 use crate::count;
-use crate::object::RECTS;
+use crate::object::DAMAGE_CAP;
 use crate::world::INHERITANCE_WORDS;
 use crate::ZOOM_BITS;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -90,7 +90,7 @@ use pxl_spec::value::VOID;
 /// level each, the box those bricks lie in (`CHANGED_BRICKS_AT`). From `RECTS_AT` come the
 /// boxes of leaf cells whose columns what is placed or a preview's cuts changed since the last
 /// cast: their count, then four words each; decor's generation is asked over the same boxes
-/// (`object::RECTS`, `object::cut_rect`; pxl-render gpu/generator.rs). From `WRITTEN_AT` come
+/// (`object::DAMAGE_CAP`, `object::cut_rect`; pxl-render gpu/generator.rs). From `WRITTEN_AT` come
 /// the child groups of what is placed written since the last cast, by their first slots: their
 /// count, then at most `WRITTEN_CAP`, past which everything is forgotten (pxl-render
 /// forget.wgsl `reads_written`). Last, `CNT_ON` and `CNT_AT` say whether the walks count
@@ -106,7 +106,7 @@ pub const CHANGED_WORDS: u32 = (EYE_CLIP_LEVELS * clipmap::ENTRIES).div_ceil(32)
 /// nodes that read only bricks held present (pxl-render forget.wgsl `forgets`).
 pub const CHANGED_BRICKS_AT: u32 = CHANGED_AT + CHANGED_WORDS;
 pub const RECTS_AT: u32 = CHANGED_BRICKS_AT + 4 * EYE_CLIP_LEVELS;
-pub const WRITTEN_AT: u32 = RECTS_AT + 1 + 4 * RECTS;
+pub const WRITTEN_AT: u32 = RECTS_AT + 1 + 4 * DAMAGE_CAP;
 pub const WRITTEN_CAP: u32 = 32;
 /// Which observers' walks and pixels count what they ask, one bit an observer (`count::EYE`,
 /// `count::LIGHT`), set while the `ray_cnts` setting is on and the observer casts; then the

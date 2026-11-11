@@ -17,7 +17,7 @@ use crate::domain::scene::gizmo::gizmo_spec::frame;
 use crate::domain::scene::gizmo::param::{POINT_HALF, RING_RADIUS};
 use crate::domain::scene::model::draw_list;
 use crate::domain::view::frame::coord::to_world;
-use crate::sys::sched::edge::request_world_tick;
+use crate::sys::sched::request_world_tick;
 use pxl_render::gpu::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
 use xpute_core::global::Global;

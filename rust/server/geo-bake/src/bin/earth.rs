@@ -28,6 +28,7 @@ use image::ImageFormat;
 
 use pxl_geo_bake::cli;
 use pxl_geo_bake::pyramid::{TileSet, MANIFEST};
+use pxl_geo_bake::tile::walk::{self, Outcome};
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
 use pxl_spec::bake::publication::{FORMAT, TILE_SPHERE};
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
@@ -337,67 +338,41 @@ fn run() -> Result<(), String> {
     let tiles: Vec<[i32; 2]> = (-half..half)
         .flat_map(|y| (-half..half).map(move |x| [x, y]))
         .collect();
-    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
-    let written = std::sync::atomic::AtomicU32::new(0);
-    let failed = std::sync::Mutex::new(None);
-    std::thread::scope(|scope| {
-        for t in 0..threads {
-            let (tiles, day, night, out, written, failed) =
-                (&tiles, &day_plate, &night_plate, &out, &written, &failed);
-            scope.spawn(move || {
-                for &[px, py] in tiles.iter().skip(t).step_by(threads) {
-                    let Some(rgba) = tile_texels(px, py, day, night) else {
-                        continue;
-                    };
-                    let name = Quadrant::new(EARTH_ZOOM, [px, py]).key();
-                    let stored = earth::encode(&rgba)
-                        .map_err(|e| format!("{e:?}"))
-                        .and_then(|pkt| pack(&pkt, Level::Stored).map_err(|e| e.to_string()));
-                    match stored
-                        .and_then(|b| write_atomic(&out.join(&name), &b).map_err(|e| e.to_string()))
-                    {
-                        Ok(()) => drop(written.fetch_add(1, std::sync::atomic::Ordering::Relaxed)),
-                        Err(e) => {
-                            *failed.lock().unwrap_or_else(|e| e.into_inner()) =
-                                Some(format!("{name}: {e}"));
-                        }
-                    }
-                }
-            });
-        }
-    });
-    if let Some(e) = failed.into_inner().unwrap_or_else(|e| e.into_inner()) {
-        return Err(e);
+    let bands: Vec<&[[i32; 2]]> = tiles.chunks(1).collect();
+    let t = walk::over(
+        "earth",
+        &bands,
+        std::thread::available_parallelism().map_or(4, |n| n.get()),
+        64,
+        |[x, y]| format!("{x}:{y}"),
+        || Ok(()),
+        |_, [px, py]| {
+            let Some(rgba) = tile_texels(px, py, &day_plate, &night_plate) else {
+                return Ok(Outcome::Empty);
+            };
+            let pkt = earth::encode(&rgba).map_err(|e| format!("{e:?}"))?;
+            let packed = pack(&pkt, Level::Stored).map_err(|e| e.to_string())?;
+            set.write(Quadrant::new(EARTH_ZOOM, [px, py]), &packed)?;
+            Ok(Outcome::Tile {
+                bytes: packed.len() as u64,
+            })
+        },
+    )?;
+    if t.failed > 0 {
+        return Err(format!("{} tiles failed", t.failed));
     }
-    let objects = written.into_inner();
-    println!("[earth] {objects} tiles -> {}", out.display());
     write_manifest(
         &out.join(MANIFEST),
         git_sha().as_deref(),
-        serde_json::json!({ "objects": objects + 1, "z": EARTH_ZOOM, "format": FORMAT.earth }),
+        serde_json::json!({ "objects": t.baked + 1, "z": EARTH_ZOOM, "format": FORMAT.earth }),
     )?;
-    // The copy an upload takes (script/publish.py), its manifest with it, as the other bakes' `publish` stage makes one.
-    let copy = PathBuf::from("./out/earth.publish");
-    if copy.exists() {
-        std::fs::remove_dir_all(&copy).map_err(|e| format!("{}: {e}", copy.display()))?;
-    }
-    std::fs::create_dir_all(&copy).map_err(|e| e.to_string())?;
-    for p in set.by_zoom()?.into_values().flatten() {
-        std::fs::hard_link(set.path(p), copy.join(p.key()))
-            .map_err(|e| format!("{}: {e}", set.path(p).display()))?;
-    }
-    for name in [TILE_SPHERE, MANIFEST] {
-        std::fs::copy(out.join(name), copy.join(name)).map_err(|e| e.to_string())?;
-    }
+    // The copy an upload takes (script/publish.py), the global picture with the tiles.
+    let copy = set.publish(|_| true)?;
+    std::fs::copy(out.join(TILE_SPHERE), copy.join(TILE_SPHERE))
+        .map_err(|e| format!("{}: {e}", out.join(TILE_SPHERE).display()))?;
     Ok(())
 }
 
 fn main() -> ExitCode {
-    match run() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("[earth] {e}");
-            ExitCode::FAILURE
-        }
-    }
+    cli::main("earth", run)
 }

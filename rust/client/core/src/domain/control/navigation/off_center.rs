@@ -5,6 +5,7 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
 
 use crate::domain::control::camera::controller;
+use crate::domain::control::param::{OFF_CENTER_U, ON_CENTER_U};
 use crate::domain::control::sensor::reading::device_location_store;
 use crate::domain::query::unknown;
 use xpute_core::global::Global;
@@ -38,9 +39,8 @@ pub fn off_center() -> OffCenter {
     }
 }
 
-/// Decides once a turn whether the pivot is off the device. The pivot goes
-/// off past 10 units and comes back within 3, so a pivot near the edge does
-/// not flicker between the two.
+/// Decides once a turn whether the pivot is off the device, past
+/// `OFF_CENTER_U` and back within `ON_CENTER_U`.
 pub fn off_center_step() {
     let off = OFF_CENTER.get(|| false);
     // Only the horizontal distance counts. The fix's Z is a GPS altitude and
@@ -51,9 +51,9 @@ pub fn off_center_step() {
             // X is measured the short way across the antimeridian.
             let [dx, dy, _] = world::between(&pivot, &device).map(q3::to_real);
             let dist = (dx * dx + dy * dy).sqrt();
-            if !*off && dist > 10.0 {
+            if !*off && dist > OFF_CENTER_U {
                 *off = true;
-            } else if *off && dist < 3.0 {
+            } else if *off && dist < ON_CENTER_U {
                 *off = false;
             }
         }

@@ -4,21 +4,21 @@
 //! jitter (pxl-engine `eye::JITTER`) taken from a sequence that covers the pixel in `JITTERS`
 //! frames, and blends it into what the frames before left (screen_resolve.wgsl). The world
 //! surface has two histories, written in turn, and the one written this frame is what the
-//! finish encodes (pass/finish.rs). A frame drawn through the gate writes its claimed tiles back
+//! finish encodes (pass/finish.rs). A frame drawn through the gate writes its damaged tiles back
 //! into the last history, which the finish then encodes.
 //!
 //! Each screen tile keeps its age, the frames since it last changed. Where only the jitter has
 //! moved since, nothing the frames before left is stale, and each frame takes its even share of
 //! the sequence. Where the tile changed this frame, what the frames before left is moved to
 //! where this frame's eye sees it, and held within what this frame's pixels about it hold. A
-//! tile is claimed, and drawn again, until it has run through the sequence (word.rs
+//! tile is damaged, and drawn again, until it has run through the sequence (word.rs
 //! `screen::DAMAGE_FRAMES`, screen_tile.wgsl). Once every tile has, the jitter holds and the
 //! frame stands still.
 //!
 //! The tiles' words live on the GPU, as the light's do (gpu/tile.rs). Each holds the number of
 //! the frame its tile last changed in, which the frame's marks set. The CPU hands the marks, so
 //! it knows whether any tile gathers from what it handed. The resolve and the write-back draw
-//! the claimed tiles alone, a quad each (screen_tile.wgsl).
+//! the damaged tiles alone, a quad each (screen_tile.wgsl).
 
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::world;
@@ -48,7 +48,7 @@ pub struct Resolve {
     pipeline: Pipeline,
     sampler: u32,
     uniform: u32,
-    /// The write-back, which writes a gated frame's claimed tiles into the last history.
+    /// The write-back, which writes a gated frame's damaged tiles into the last history.
     back: Pipeline,
     /// The groups `set_groups` sets, one for each of the surface's histories. A resolve group
     /// reads its history as the last frame's, and a write-back group reads its history as this
@@ -68,7 +68,7 @@ pub struct Resolve {
     /// Where the jitter is in its sequence, and this frame's jitter in drawn pixels.
     phase: u32,
     jitter: [f32; 2],
-    /// The screen's tiles, each claimed until it has gathered the jitter's whole sequence since
+    /// The screen's tiles, each damaged until it has gathered the jitter's whole sequence since
     /// it changed (gpu/tile.rs). The gate, the pixels' cast, the resolve, the write-back and
     /// the finish all draw by them.
     pub tiles: TileGrid,
@@ -155,7 +155,7 @@ impl Resolve {
 
     /// Blends the frame's world color, `s`'s, into what the frames before left, writing the
     /// history this turn writes, each tile by its age. When the frame is drawn through the gate
-    /// (`masked`), only the claimed tiles are blended, and they are written back into the last
+    /// (`masked`), only the damaged tiles are blended, and they are written back into the last
     /// history, which stays the one read. The passes are their own, over the groups set for
     /// `s` (`set_groups`), and their time is counted in the span `resolve`. Returns the history
     /// the finish encodes.

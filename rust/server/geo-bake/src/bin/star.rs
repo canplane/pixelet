@@ -82,11 +82,5 @@ fn run() -> Result<(), String> {
 }
 
 fn main() -> ExitCode {
-    match run() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("[bake-stars] {e}");
-            ExitCode::FAILURE
-        }
-    }
+    cli::main("bake-stars", run)
 }

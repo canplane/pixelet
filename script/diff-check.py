@@ -185,6 +185,12 @@ if any(map(under, [*shaders, *patched, "rust/client/render/tests/"])):
     task("test-gpu")
 
 print(f"diff-check: {len(changed)} changed file(s); crates {', '.join(sorted(touched)) or 'none'}")
+# pxl-core's unit tests run one to a process under cargo-nextest, and nothing
+# runs them otherwise.
+nextest = any("nextest" in argv for _, argv, _ in runs)
+if nextest and not listing and subprocess.run(["cargo", "nextest", "--version"], cwd=RUST, capture_output=True).returncode != 0:
+    print("diff-check: pxl-core's unit tests run under cargo-nextest, which make install brings", file=sys.stderr)
+    sys.exit(1)
 for label, argv, cwd in runs:
     if listing:
         print("  " + " ".join(argv))

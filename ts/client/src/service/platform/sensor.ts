@@ -164,6 +164,9 @@ function orient_stop(): void {
 
 export const geo: GeolocationSensor = {
   has: "geolocation" in navigator,
+  // The watch raises the browser's prompt itself, wherever the browser still
+  // asks. A page cannot open the browser's settings.
+  permit: () => Promise.resolve(true),
   start: geo_start,
   stop: geo_stop,
 };

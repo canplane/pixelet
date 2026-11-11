@@ -66,9 +66,9 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | the camera modes | `orbit`, `first_person` (the UI says 1인칭/3인칭) | free |
   | what a mouse, touch or controller points with | `pointer` | cursor |
   | the raster's nearest sample at each pixel | the visibility buffer | pick |
-  | a frame's number on xpute's rings, its meaning the program's | a `cmd`, a `Command` | vec, vector, opcode |
+  | a frame's number between xpute's core and runtime, its meaning the program's | a `cmd`, a `Command` | vec, vector, opcode |
   | what the UI asks of the core | a command | |
-  | a core's command to its runtime, a frame on the CQ | an import | hostcall, system call, hypercall |
+  | a core's command to its runtime, a frame it sends | an import | hostcall, system call, hypercall |
   | an import answered before it returns | a call | hostcall |
   | a node of the plane at a zoom | `Quadrant`, `quad_at` | Tile |
   | a node under a shard, through the height as well | `Octant` | EntryAt |
@@ -91,8 +91,8 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | decor drawn as a model, an impostor or not at all by its distance | its `lod` | tier |
 
   `at` is where a thing is, `to` where it is going.
-- xpute's names are the mechanism's: the core, the runtime, the UI, a device, the
-  SQ and the CQ. pixelet names its parts by the side of xpute they sit on, the
-  owner in the prefix (`pxl_core`, `xpute_core`, `Runtime.core`).
+- xpute's names are the mechanism's: the core, the runtime, the UI, a device, a
+  frame and the host. pixelet names its parts by the side of xpute they sit on,
+  the owner in the prefix (`pxl_core`, `xpute_core`, `Runtime.core`).
 - A file, folder or type name is singular (`service/`, `remote.ts`,
   `component/`).

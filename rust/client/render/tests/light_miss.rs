@@ -894,7 +894,7 @@ fn holes(
         (9, node_cache.as_entire_binding()),
         (11, header.as_entire_binding()),
     ];
-    gpu.holes(ray::QUEUE_LIGHT_HOLES, &binds, node_cache);
+    gpu.holes(true, &binds, node_cache);
     let hits = gpu.read(node_cache)[node_cache::HITS_CNT as usize].min(ray::HITS_A_FRAME);
     let words = gpu.read(list);
     let at = light::hits_at(SIZE) as usize;

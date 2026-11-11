@@ -32,11 +32,11 @@ open -a Safari http://127.0.0.1:<port>/probe.html
 
 - Read the result in the server's output or `ts/tool/shader/.dev-console.log`:
   a line for each module and each pipeline, `[probe] <name> <entry>: ok (<ms> ms)`.
-- Keep Safari's window in front and uncovered until it ends: behind another
-  window the page stops compiling, with no error and no line printed.
+- Keep the page shown until it ends: hidden, as the performance skill says a
+  page is hidden, it stops compiling, with no error and no line printed.
 - It has ended at `[probe] done`, and only there. A silence with the Mac's
-  `MTLCompilerService` idle is a stopped page, not a slow module: bring the
-  window forward and probe the rest with `?only=`.
+  `MTLCompilerService` idle is a stopped page, not a slow module: show the page
+  again and probe the rest with `?only=`.
 - A module's or a pipeline's line without `ok`, and `[probe] device lost`, is a
   refusal.
 - A module's name starts with its number (`70-queue_walk`). `?only=<prefix>,…`

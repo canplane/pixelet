@@ -1,12 +1,12 @@
 // pxl-render/light_enlist.wgsl
 
-// How the propagation (light_propagate.wgsl) writes the light's args and lists. A claimed tile
+// How the propagation (light_propagate.wgsl) writes the light's args and lists. A damaged tile
 // lists what feeds it at each level of the lattice, and raises the rows of the passes that
 // take those entries. The args hold the passes' workgroups, the lists' counts and the lists'
 // marks.
 
 /// The workgroups of the passes that cast tiles, then the lists' counts and marks
-/// (`light::ARGS_WORDS`). A claim reads and writes all three together.
+/// (`light::ARGS_WORDS`). The damage pass reads and writes all three together.
 struct Dispatch {
   passes: array<atomic<u32>, LIGHT_ARGS_PASSES>,
   cnts: array<atomic<u32>, LIGHT_LISTS>,
@@ -24,9 +24,9 @@ fn opened(w: u32, e: u32, cap: u32, across: u32) {
   atomicMax(&args.passes[w + 1u], workgroups((e + 1u) * square, cap * square, per));
 }
 
-/// Lists the places of list `which`, `across` a row, that feed claimed tile `t`. Place `p` lies
+/// Lists the places of list `which`, `across` a row, that feed damaged tile `t`. Place `p` lies
 /// on tile `p + off`, and it feeds `t` where its reach `lo`..`hi` about that tile holds `t`. A
-/// place is listed only where no claim of this cast listed it yet (`light::list_marks_at`),
+/// place is listed only where no damaged tile of this cast listed it yet (`light::list_marks_at`),
 /// and the rows of the passes that take it are raised (`opened`).
 fn enlist_in(cur: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>, hi: vec2<i32>, off: vec2<i32>) {
   let marks = list_marks_at(which);
@@ -55,7 +55,7 @@ fn enlist_in(cur: u32, t: vec2<i32>, which: u32, across: i32, lo: vec2<i32>, hi:
   }
 }
 
-/// Lists what feeds claimed tile `t` at each level. A tile's slots feed only that tile. A
+/// Lists what feeds damaged tile `t` at each level. A tile's slots feed only that tile. A
 /// tile's cells and samples feed it and the tiles one either way. A beam ray feeds the cells
 /// whose window of `2 + 2 · BEAM_WINDOW` beam rays holds it, and the beam rays are numbered
 /// from the tile that beam ray 0 lies on (`light_on`).

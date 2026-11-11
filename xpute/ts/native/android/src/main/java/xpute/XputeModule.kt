@@ -63,7 +63,7 @@ class XputeModule : Module() {
 
     Function("answer") { Core.answer() }
 
-    Function("attach") { sqAt: Double, cqAt: Double, fs: Boolean -> Core.attach(sqAt.toLong().toInt(), cqAt.toLong().toInt(), fs) }
+    Function("attach") { fs: Boolean -> Core.attach(fs) }
 
     Function("pace") { paceHz: Double, marginShare: Double, batchFrames: Double, settleMs: Double ->
       Core.pace(paceHz, marginShare, batchFrames, settleMs)
@@ -78,13 +78,10 @@ class XputeModule : Module() {
       NativeArrayBuffer(ByteBuffer.allocateDirect(bytes.size).put(bytes).also { it.flip() })
     }
 
-    Function("fsOpened") { fd: Double, result: Double, detail: Double, bytes: Uint8Array ->
-      Core.fsOpened(fd.toLong().toInt(), result.toInt(), detail.toLong().toInt(), bytesOf(bytes))
+    Function("fsCompleteOpen") { fd: Double, result: Double, detail: Double, bytes: Uint8Array ->
+      Core.fsCompleteOpen(fd.toLong().toInt(), result.toInt(), detail.toLong().toInt(), bytesOf(bytes))
     }
 
-    Function("fsClosed") { fd: Double, result: Double -> Core.fsClosed(fd.toLong().toInt(), result.toInt()) }
-
-    Function("call") { cmd: Double, pkt: Uint8Array -> Core.call(cmd.toLong().toInt(), bytesOf(pkt)).toDouble() }
 
     // @xpute/runtime's answer, called on the JavaScript thread, which is the
     // app's thread here.

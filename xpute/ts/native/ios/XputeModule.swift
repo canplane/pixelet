@@ -98,8 +98,8 @@ public class XputeModule: Module {
       xpute_answer()
     }
 
-    Function("attach") { (sqAt: Double, cqAt: Double, fs: Bool) in
-      xpute_attach(UInt32(sqAt), UInt32(cqAt), fs)
+    Function("attach") { (fs: Bool) in
+      xpute_attach(fs)
     }
 
     Function("pace") { (paceHz: Double, marginShare: Double, batchFrames: Double, settleMs: Double) in
@@ -120,18 +120,10 @@ public class XputeModule: Module {
         cleanup: { xpute_taken_free(at, bytes) })
     }
 
-    Function("fsOpened") { (fd: Double, result: Double, detail: Double, bytes: Uint8Array) in
-      xpute_fs_opened(
+    Function("fsCompleteOpen") { (fd: Double, result: Double, detail: Double, bytes: Uint8Array) in
+      xpute_fs_complete_open(
         UInt32(fd), Int32(result), UInt32(detail),
         bytes.rawPointer.assumingMemoryBound(to: UInt8.self), bytes.byteLength)
-    }
-
-    Function("fsClosed") { (fd: Double, result: Double) in
-      xpute_fs_closed(UInt32(fd), Int32(result))
-    }
-
-    Function("call") { (cmd: Double, pkt: Uint8Array) -> Double in
-      Double(xpute_call(UInt32(cmd), pkt.rawPointer.assumingMemoryBound(to: UInt8.self), pkt.byteLength))
     }
 
     /// The answer is kept past the call, so a copy of the value is stored.

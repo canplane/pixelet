@@ -1,7 +1,7 @@
 // @pxl/client/service/core/input.ts
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
-import { Command, PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
+import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
 import {
   type PointerKind,
   type PointerPhase as PlacePhase,
@@ -23,21 +23,26 @@ export function pointer(
   y: f64,
 ): void {
   interactive();
-  core.send(Command.INPUT_POINTER, phase, pointer_type, id, button, x, y);
+  core.input_pointer(phase, pointer_type, id, button, x, y);
 }
 
 export function typing(on: boolean): void {
-  core.send(Command.INPUT_TYPING, on);
+  core.input_typing(on);
 }
 
 export function wheel(delta_y: f64): void {
   interactive();
-  core.send(Command.INPUT_WHEEL, delta_y);
+  core.input_wheel(delta_y);
+}
+
+export function pinch(scale: f64): void {
+  interactive();
+  core.input_pinch(scale);
 }
 
 export function keys(x: i32, y: i32): void {
   interactive();
-  core.send(Command.INPUT_MOVE, x, y);
+  core.input_move(x, y);
 }
 
 /** Opens the world's view and returns the function that closes it. Turns run,

@@ -63,7 +63,9 @@ services:
       DB_GEO_URL: postgresql://${DB_GEO_USER}:${DB_GEO_PASSWORD}@db-geo:5432/${DB_GEO_NAME}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       GEO_HOST: 0.0.0.0
-      GEO_PORT: "3000"
+      GEO_PORT: 3000
+      MAX_BODY_SIZE_MB: 1
+      DB_POOL_SIZE: 8
     networks:
       - pixelet
 
@@ -83,7 +85,9 @@ services:
       DB_MAIN_URL: postgresql://${DB_MAIN_USER}:${DB_MAIN_PASSWORD}@db-main:5432/${DB_MAIN_NAME}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       API_HOST: 0.0.0.0
-      API_PORT: "3000"
+      API_PORT: 3000
+      MAX_BODY_SIZE_MB: 1
+      DB_POOL_SIZE: 8
     networks:
       - pixelet
 

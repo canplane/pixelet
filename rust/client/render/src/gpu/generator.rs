@@ -34,8 +34,8 @@ use crate::frame::shader::record::{
 };
 use crate::frame::shader::word::{instance, DRAW_FLOATS};
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, bytes, release, word_bytes, Entry, Gpu, Layout,
-    RenderContext,
+    buf_entry, buf_range_entry, buffer_usage, bytes, frame_entries, release, word_bytes, Entry,
+    Gpu, Group, Layout, RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::read::Read;
@@ -58,26 +58,26 @@ pub struct DecorFrame<'a> {
     /// positions are about it, and from it they are drawn against the frame's eye (word.rs
     /// `frame::EYE`).
     pub anchor: Q3,
-    /// The boxes of leaf cells the overwrites wrote since the last frame, `object::EDITS` at
-    /// most (pxl-content `generation::meets`). The entries whose decor they reach generate
-    /// again.
-    pub edits: &'a [[i32; 4]],
+    /// The damage: the boxes of leaf cells the objects wrote since the last frame,
+    /// `object::WRITE_DAMAGE_CAP` at most (pxl-content `generation::meets`). The entries whose
+    /// decor they reach generate again.
+    pub damage: &'a [[i32; 4]],
 }
 
-/// What decor's generation reads besides the frame's decor: the clip levels' table, a
-/// preview's cuts, and the bricks filled this frame. None of it is the eye's place. An entry
-/// is a place of the clip levels' table with the brick it holds. An entry generates whole where its
-/// brick is another. Otherwise it generates again only the records that a box reaches by what
-/// the record's own candidate reads (`generation::reaches`): an edit, a cut as it was or as it
-/// is, or a brick filled at the entry's clip level zoom or finer. Neither the overwrites nor the
-/// service area's index make an entry generate by themselves: every write of the overwrites
-/// names its box (the frame's `edits`), and the index is made once, before any brick is held.
+/// What decor's generation reads besides the frame's decor: the clip levels' table, a preview's
+/// cuts, and the bricks filled this frame. None of it is the eye's place. An entry is a place
+/// of the clip levels' table with the brick it holds. An entry generates whole where its brick
+/// is another. Otherwise it generates again only the records that a box reaches by what the
+/// record's own candidate reads (`generation::reaches`): a box of damage, a cut as it was or as
+/// it is, or a brick filled at the entry's clip level zoom or finer. Neither the objects nor
+/// the service area's index make an entry generate by themselves: every write of the objects
+/// names its box (the frame's `damage`), and the index is made once, before any brick is held.
 /// A brick filled reaches its own clip level's zoom and every coarser one, as a coarser clip
 /// level's decor faces the way the leaf cells vote, each cell read from the finest clip level
 /// that holds it (pxl-content `generation::asks`).
 pub struct Generation<'a> {
     pub clipmap: &'a [i32],
-    pub cuts: &'a [u32; eye::CUTS],
+    pub cuts: &'a [u32; object::CUTS],
     /// The bricks handed this frame, each as its cells' zoom and the brick's place.
     pub fresh: &'a [(Zoom, [i32; 2])],
     /// The eye's words as the cast holds them (pxl-engine `eye`). The count pass reads the
@@ -92,7 +92,7 @@ pub struct Generator {
     cnt: Pipeline,
     args_pipeline: Pipeline,
     compact: Pipeline,
-    groups: [u32; 6],
+    groups: [Group; 6],
     /// What `decor_mark_cs` reads and the list it writes, by which `decor_thin_cs` and
     /// `decor_pose_cs` are dispatched, laid out as pxl-content `generation::THIN_ARGS` says.
     list: u32,
@@ -123,28 +123,27 @@ pub struct Generator {
     cap: u32,
     /// How many placed decor records were last handed.
     placed_cnt: u32,
-    /// The world the groups bind. The groups are made again exactly when the world handed is
-    /// another.
-    bindings: World,
+    /// Whether decor is on this frame. Only `prepare` sets it, and it makes the buffers and
+    /// the groups first, so while it is set they are made.
     on: bool,
     /// The decors' zooms as last written, which stay constant once the core has handed its
     /// table; the clip levels' table, the cuts and the placed decor as last handed; and
     /// whether this frame marks entries to generate.
     zooms_read: Read,
     clipmap: Read,
-    cuts: [u32; eye::CUTS],
+    cuts: [u32; object::CUTS],
     placed: Read,
     marking: bool,
     /// The boxes whose entries generate again, held until a frame that marks by them is drawn.
     /// A frame that is dropped, or handed and never drawn, hands them again; an entry
-    /// generated twice generates the same. Past `object::RECTS` boxes, the rest are joined
+    /// generated twice generates the same. Past `object::DAMAGE_CAP` boxes, the rest are joined
     /// into the last.
-    pending_rects: [[i32; 4]; object::RECTS as usize],
-    holding: usize,
-    /// How many of `pending_rects` this frame marks by, and how many boxes it marks by in
-    /// all, counting the bricks handed (`marked_rects`).
-    marked: usize,
-    rects: u32,
+    damage: [[i32; 4]; object::DAMAGE_CAP as usize],
+    damage_cnt: usize,
+    /// How many of `damage` this frame marks by, and how many boxes it marks by in
+    /// all, counting the bricks handed (`rect_cnt`).
+    mark_cnt: usize,
+    rect_cnt: u32,
     /// Whether the entries' records may not hold what the entries generate, as after decor was
     /// off or the decors' zooms changed. The next frame drawn with decor then generates every
     /// entry.
@@ -158,7 +157,7 @@ pub struct Generator {
 }
 
 /// The buffers of the world `decor_pose_cs` asks, as the cast binds them: the cast's eye, the clip
-/// levels' table, the bricks' words, the service area's index, the overwrites, and the ways'
+/// levels' table, the bricks' words, the service area's index, the objects, and the ways'
 /// pool.
 pub type World = [u32; 6];
 
@@ -187,7 +186,7 @@ impl Generator {
             cnt: pipelines.build_compute(g, COMPUTE_GENERATION_CNT, &CNT_GROUP),
             args_pipeline: pipelines.build_compute(g, COMPUTE_GENERATION_ARGS, &ARGS_GROUP),
             compact: pipelines.build_compute(g, COMPUTE_GENERATION_COMPACT, &COMPACT_GROUP),
-            groups: [0; 6],
+            groups: Default::default(),
             list: buf(
                 word_bytes(generation::LIST_WORDS as usize),
                 storage | buffer_usage::INDIRECT,
@@ -222,27 +221,25 @@ impl Generator {
             cull: pipelines.build_compute(g, COMPUTE_DECOR_CULL, &CULL_GROUP),
             cap: 0,
             placed_cnt: 0,
-            bindings: [0; 6],
             on: false,
             zooms_read: Read::default(),
             clipmap: Read::default(),
-            cuts: [0; eye::CUTS],
+            cuts: [0; object::CUTS],
             placed: Read::default(),
             cnt_read: Read::default(),
             counting: false,
             marking: false,
-            pending_rects: [[0; 4]; object::RECTS as usize],
-            holding: 0,
-            marked: 0,
-            rects: 0,
+            damage: [[0; 4]; object::DAMAGE_CAP as usize],
+            damage_cnt: 0,
+            mark_cnt: 0,
+            rect_cnt: 0,
             stale: true,
         }
     }
 
     /// Takes the frame's decor `f` and what its generation reads (`generation`). `meshes`
-    /// holds each group's index count, 0 while its model loads. The groups are made again
-    /// where `world` is not the one they bind or the records' capacity grew, so a frame
-    /// without a cast misses no change.
+    /// holds each group's index count, 0 while its model loads. The groups are set over
+    /// `world` each frame (`api::Group`), so a frame without a cast misses no change.
     pub fn prepare(
         &mut self,
         g: &Gpu,
@@ -299,11 +296,7 @@ impl Generator {
             self.cap = need;
             self.placed.forget();
         }
-        let regroup = grew || world != self.bindings;
-        if regroup {
-            self.regroup(g, world);
-            self.bindings = world;
-        }
+        let regroup = self.regroup(g, world);
         let s = &mut self.zooms_read;
         s.begin();
         s.read(f.zooms);
@@ -313,25 +306,25 @@ impl Generator {
             g.write_buf(self.zooms, 0, bytes(f.zooms));
             self.stale = true;
         }
-        // The boxes whose entries generate again are held: the edits, and each cut that moved,
+        // The boxes whose entries generate again are held: the damage, and each cut that moved,
         // both as it was and as it is. They join any box a frame not drawn handed.
-        for &b in f.edits {
-            hold(&mut self.pending_rects, &mut self.holding, b);
+        for &b in f.damage {
+            hold(&mut self.damage, &mut self.damage_cnt, b);
         }
         cut_rects(&self.cuts, generation.cuts, |b| {
-            hold(&mut self.pending_rects, &mut self.holding, b);
+            hold(&mut self.damage, &mut self.damage_cnt, b);
         });
         self.cuts = *generation.cuts;
         let w = &mut self.clipmap;
         w.begin();
         w.read(generation.clipmap);
         let changed = !w.end();
-        self.marked = self.holding;
+        self.mark_cnt = self.damage_cnt;
         // A brick filled at any clip level makes decor generate again at that clip level and
         // the coarser ones.
         let fresh = !generation.fresh.is_empty();
-        self.marking = self.stale || changed || fresh || self.marked != 0;
-        self.rects = 0;
+        self.marking = self.stale || changed || fresh || self.mark_cnt != 0;
+        self.rect_cnt = 0;
         if self.marking {
             // The boxes held come first, each reaching every zoom. Each brick handed follows,
             // reaching its clip level's zoom and the coarser ones.
@@ -340,20 +333,17 @@ impl Generator {
                 .fresh
                 .iter()
                 .map(|&(cell_zoom, q)| (generation::brick_rect(cell_zoom, q), cell_zoom));
-            let pending_rects = self.pending_rects[..self.marked]
+            let damage = self.damage[..self.mark_cnt]
                 .iter()
                 .map(|&b| (b, generation::EVERY));
             let mut n = 0;
-            for (b, zoom) in pending_rects
-                .chain(fresh)
-                .take(generation::RECT_CAP as usize)
-            {
+            for (b, zoom) in damage.chain(fresh).take(generation::RECT_CAP as usize) {
                 let at = n * generation::RECT_WORDS as usize;
                 rects[at..at + 4].copy_from_slice(&b.map(|v| v as u32));
                 rects[at + 4] = zoom;
                 n += 1;
             }
-            self.rects = n as u32;
+            self.rect_cnt = n as u32;
             // The list's head (pxl-content `generation::THIN_ARGS`) holds each pass's
             // workgroups across and up, with the third count, the pairs listed, left 0 for
             // `decor_mark_cs` to fill. It then says whether every entry generates whole, how
@@ -455,28 +445,24 @@ impl Generator {
         }
     }
 
-    fn regroup(&mut self, g: &Gpu, world: World) {
+    /// Sets the groups over `world`, and says whether one was made anew: the world handed is
+    /// another, or the records' capacity grew.
+    fn regroup(&mut self, g: &Gpu, world: World) -> bool {
         let entries = |ids: &[(u32, u32)]| -> Vec<Entry> {
             ids.iter()
                 .map(|&(binding, b)| buf_entry(binding, b))
                 .collect()
         };
-        let group = |pipeline: &Pipeline, ids: &[(u32, u32)]| {
-            g.bind_group(pipeline.layouts[0], &entries(ids))
-        };
+        let group = |pipeline: &Pipeline, ids: &[(u32, u32)]| (pipeline.layouts[0], entries(ids));
         let framed = |pipeline: &Pipeline, table: &access::Group, ids: &[(u32, u32)]| {
-            g.frame_group(
-                pipeline.layouts[0],
-                table,
-                |b| self.buf_of(b),
-                &entries(ids),
+            let layout = pipeline.layouts[0];
+            (
+                layout,
+                frame_entries(layout, table, |b| self.buf_of(b), &entries(ids)),
             )
         };
-        for id in self.groups {
-            release(id);
-        }
         let [eye, clipmap, ground, shards, objects, pool] = world;
-        let groups = [
+        let made = [
             framed(
                 &self.mark,
                 &GENERATION_MARK_BINDS,
@@ -533,14 +519,18 @@ impl Generator {
                 ],
             ),
         ];
-        self.groups = groups;
+        let mut anew = false;
+        for (group, (layout, e)) in self.groups.iter_mut().zip(made) {
+            anew |= group.set(g, layout, &e);
+        }
+        anew
     }
 
     /// Turns decor off for this frame: nothing is generated or drawn, and the next frame with
     /// decor generates every entry (`stale`).
     pub fn off(&mut self) {
         self.on = false;
-        self.rects = 0;
+        self.rect_cnt = 0;
         self.stale = true;
         self.cnt_read.forget();
     }
@@ -549,18 +539,18 @@ impl Generator {
     /// entry, are done.
     pub fn on_drawn(&mut self) {
         if self.marking {
-            self.pending_rects.copy_within(self.marked..self.holding, 0);
-            self.holding -= self.marked;
+            self.damage.copy_within(self.mark_cnt..self.damage_cnt, 0);
+            self.damage_cnt -= self.mark_cnt;
             self.stale = false;
         }
-        self.marked = 0;
+        self.mark_cnt = 0;
     }
 
     /// Called when the frame was dropped and nothing of it was recorded. What it wrote is
     /// written again: the entries it marked are marked again by the boxes still held, and the
     /// clip levels' table and the placed decor are read anew.
     pub fn on_dropped(&mut self) {
-        self.marked = 0;
+        self.mark_cnt = 0;
         self.clipmap.forget();
         self.placed.forget();
         self.zooms_read.forget();
@@ -570,13 +560,13 @@ impl Generator {
     /// Whether its passes run this frame, marking or counting. The frame then draws what they
     /// leave.
     pub fn works(&self) -> bool {
-        self.on && self.groups[0] != 0 && (self.marking || self.counting)
+        self.on && (self.marking || self.counting)
     }
 
-    /// Holds, for the next frame, the edits of a frame whose decor was handed and never drawn.
-    pub fn carry_edits(&mut self, edits: &[[i32; 4]]) {
-        for &b in edits {
-            hold(&mut self.pending_rects, &mut self.holding, b);
+    /// Holds, for the next frame, the damage of a frame whose decor was handed and never drawn.
+    pub fn carry_damage(&mut self, damage: &[[i32; 4]]) {
+        for &b in damage {
+            hold(&mut self.damage, &mut self.damage_cnt, b);
         }
     }
 
@@ -585,12 +575,12 @@ impl Generator {
     /// level cell a thread, and generates a record a thread where any may stand. Where it
     /// counts, it counts every record, lays the regions out and compacts the records.
     pub fn dispatch(&self, g: &Gpu, pass: u32) {
-        if !self.on || self.groups[0] == 0 {
+        if !self.on {
             return;
         }
         if self.marking {
             g.set_pipeline(pass, self.mark.id);
-            g.set_bind_group(pass, 0, self.groups[0], &[]);
+            g.set_bind_group(pass, 0, self.groups[0].id(), &[]);
             g.dispatch(
                 pass,
                 generation::EYE_ENTRIES.div_ceil(generation::LANES),
@@ -598,8 +588,8 @@ impl Generator {
                 1,
             );
             let passes = [
-                (&self.thin, self.groups[1], &sequence::THIN),
-                (&self.generate, self.groups[2], &sequence::GENERATE),
+                (&self.thin, self.groups[1].id(), &sequence::THIN),
+                (&self.generate, self.groups[2].id(), &sequence::GENERATE),
             ];
             for (pipeline, group, step) in passes {
                 g.set_pipeline(pass, pipeline.id);
@@ -621,15 +611,15 @@ impl Generator {
         ];
         for (k, (pipeline, x)) in passes.into_iter().enumerate() {
             g.set_pipeline(pass, pipeline.id);
-            g.set_bind_group(pass, 0, self.groups[3 + k], &[]);
+            g.set_bind_group(pass, 0, self.groups[3 + k].id(), &[]);
             g.dispatch(pass, x, 1, 1);
         }
     }
 
-    /// How many boxes this frame marks entries by to generate again: the edits and cuts held and
+    /// How many boxes this frame marks entries by to generate again: the damage and cuts held and
     /// the bricks handed, `generation::RECT_CAP` at most, or 0 where it marks none.
-    pub fn marked_rects(&self) -> u32 {
-        self.rects
+    pub fn rect_cnt(&self) -> u32 {
+        self.rect_cnt
     }
 
     /// Whether decor is compacted again this frame, so its instances may stand elsewhere.
@@ -639,7 +629,7 @@ impl Generator {
 
     /// The decor compacted, while decor is on (`DecorBuffer`).
     pub fn decor_buf(&self) -> Option<DecorBuffer> {
-        (self.on && self.instances != 0).then_some(DecorBuffer {
+        self.on.then_some(DecorBuffer {
             drawing: self.drawing,
             regions: self.regions,
             instances: self.instances,
@@ -650,7 +640,7 @@ impl Generator {
     /// What the draws read while decor is on: the instances' group, the regions' indirect
     /// args, the draw uniforms' group, and what a frame draws through each gate.
     pub fn indirect_draw(&self) -> Option<IndirectDraw> {
-        (self.on && self.instances != 0).then_some(IndirectDraw {
+        self.on.then_some(IndirectDraw {
             instances_group: self.instances_group,
             args: self.args,
             uniform_group: self.uniform_group,
@@ -660,11 +650,11 @@ impl Generator {
     }
 
     /// Lists the instances a frame draws through the gate `mask`: those whose bounding ball
-    /// meets the box of the claimed tiles of `tiles`, as the frame's words `frame` see it
+    /// meets the box of the damaged tiles of `tiles`, as the frame's words `frame` see it
     /// (damage_rect.wgsl, decor_cull.wgsl). It runs once the tiles' marks are made, timed in
     /// the marks' span.
     pub fn cull(&self, ctx: &mut RenderContext, mask: Mask, frame: u32, tiles: &TileGrid) {
-        if !(self.on && self.instances != 0) {
+        if !self.on {
             return;
         }
         let damage_rect = tiles.dispatch_damage_rect(ctx);
@@ -699,7 +689,7 @@ impl Generator {
     }
 }
 
-/// The gate a frame draws decor through (`Generator::cull`): the screen's claimed tiles, or
+/// The gate a frame draws decor through (`Generator::cull`): the screen's damaged tiles, or
 /// the light map's. Both are drawn in one frame, so each keeps its own list.
 #[derive(Clone, Copy)]
 pub enum Mask {
@@ -708,7 +698,7 @@ pub enum Mask {
 }
 
 /// What a frame draws through a gate in place of the instances: the instances that meet its
-/// claimed tiles, listed at each region's place, the regions' args with them, and the draws'
+/// damaged tiles, listed at each region's place, the regions' args with them, and the draws'
 /// group over that list.
 #[derive(Clone, Copy)]
 struct Culled {
@@ -765,15 +755,16 @@ impl IndirectDraw {
     }
 }
 
-/// Holds box `b` after the `holding` boxes of `pending_rects`. Once `pending_rects` is full,
-/// `b` is joined into the last box. Decor's generation (`Generator`) and the node cache's
-/// forgetting (ray/cast.rs) both hold the boxes they are asked over this way.
-pub(crate) fn hold(pending_rects: &mut [[i32; 4]], holding: &mut usize, b: [i32; 4]) {
-    if *holding < pending_rects.len() {
-        pending_rects[*holding] = b;
-        *holding += 1;
+/// Appends box `b` after the `damage_cnt` boxes of `damage`, or, once `damage` is full,
+/// joins it into the last box, so no box is lost however many come before they are taken.
+/// The core's damage (pxl-core domain/scene/decor/gpu.rs `note_damage`), decor's generation
+/// (`Generator`) and the node cache's forgetting (ray/cast.rs) all hold their boxes this way.
+pub fn hold(damage: &mut [[i32; 4]], damage_cnt: &mut usize, b: [i32; 4]) {
+    if *damage_cnt < damage.len() {
+        damage[*damage_cnt] = b;
+        *damage_cnt += 1;
     } else {
-        let last = &mut pending_rects[*holding - 1];
+        let last = &mut damage[*damage_cnt - 1];
         *last = [
             last[0].min(b[0]),
             last[1].min(b[1]),
@@ -786,12 +777,15 @@ pub(crate) fn hold(pending_rects: &mut [[i32; 4]], holding: &mut usize, b: [i32;
 /// Hands `each` the boxes a preview's cuts changed from `was` to `is`: each cut that moved,
 /// both as it was and as it is (pxl-engine `object::cut_rect`).
 pub(crate) fn cut_rects(
-    was: &[u32; eye::CUTS],
-    is: &[u32; eye::CUTS],
+    was: &[u32; object::CUTS],
+    is: &[u32; object::CUTS],
     mut each: impl FnMut([i32; 4]),
 ) {
-    for k in [0, eye::CUT_WORDS] {
-        let (was, is) = (&was[k..k + eye::CUT_WORDS], &is[k..k + eye::CUT_WORDS]);
+    for k in [0, object::CUT_WORDS] {
+        let (was, is) = (
+            &was[k..k + object::CUT_WORDS],
+            &is[k..k + object::CUT_WORDS],
+        );
         if was != is {
             for c in [was, is].into_iter().filter(|c| c[3] != eye::NO_CUT) {
                 each(object::cut_rect(

@@ -28,7 +28,7 @@ pxl-engine.workspace = true
 pxl-content.workspace = true
 pxl-render.workspace = true
 # The executor the door polls the core's tasks on inside a turn
-# (door/executor.rs). No platform feature: the pender is the core's own, and
+# (sys/sched/executor.rs). No platform feature: the pender is the core's own, and
 # the platform one for wasm brings wasm-bindgen.
 embassy-executor = { version = "0.10", default-features = false }
 critical-section = "1.1"
@@ -49,7 +49,7 @@ xpute-gpu = { workspace = true, features = ["runtime"] }
 # alone, none of the formats before it.
 zstd = { version = "0.13", default-features = false }
 
-# The module's link arguments, from the core's machine (build.rs,
+# The module's link arguments, from the core's manifest (build.rs,
 # xpute_core::wasm `link`).
 [build-dependencies]
 xpute-core.workspace = true
@@ -79,7 +79,7 @@ dev = []
 workspace = true
 
 # The core's whole frames (tests/frame/), a program of their own: one core a process, its
-# turns rung by the program alone, and a clock of its own that ends the process on a hang.
+# turns run by the program alone, and a clock of its own that ends the process on a hang.
 [[test]]
 name = "frame"
 path = "tests/frame/main.rs"

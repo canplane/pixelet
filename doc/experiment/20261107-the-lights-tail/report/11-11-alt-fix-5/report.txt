@@ -1,0 +1,99 @@
+=== perf @ t=67851.1ms  build #99-3de91d61b4-dirty 3de91d61b4-dirty (2026-11-11T02:48:34.511Z) ===
+frames n=157  over 19.8s  fps 7.9  moving 157  still 0   refresh 16.6 ms   paced 16.6 ms   scale 1.00   turns 499
+  kinds   cast 157   wakes next 157
+  interval p50 124.0  p95 316.0  max 516.0 ms   missed 134 (85% of moving frames)
+  busy    p50 15.4  p95 21.2  max 24.8 ms   (the interval's turns, rise to fall)
+  long    0 (turns past their interval)
+  tick    p50 6.1  p95 9.1  max 13.3 ms   overran 31   budget 1.8   phase p95 interaction 1.2  visible 8.2  content 0.0  cosmetic 0.0  report 0.0
+  effects p50 2.6  p95 6.3  max 8.7 ms   p95 navigation 0.1  bootstrap 0.1  dst 0.1  decor 0.1  location 6.2
+  stage   p50 2.8  p95 4.6  max 7.0 ms   (the pump and the render)
+  tasks   p50 3.0  p95 4.8  max 7.7 ms
+  perf p50 0.0  p95 0.6  max 0.9 ms   (its own record and the UI's reads)
+  rest    p50 0.3  p95 0.8  max 1.0 ms   (busy unmeasured: the door's commands, rise and fall)
+  gpu     p50 117.0  p95 196.3  max 264.3 ms busy   (over the 156 frames a read timed)
+  busy by kind  cast p50 117.0 p95 196.3 (156) ms   (n: the kind's frames a read timed)
+  spans   p95 air 2.8 (151)  exposure 2.6 (155)  world 9.6 (156)  resolve 2.6 (156)  finish 1.9 (156)  cast 16.8 (155)  beam_hit 2.7 (156)  beam 16.2 (156)  grid_cell 0.1 (156)  sample_hit 10.6 (156)  sample 11.4 (156)  raster_box 3.3 (156)  sraster 2.7 (156)  px 8.8 (156)  hole 15.5 (156)  light_world_receivers 0.1 (155)  light_draws 3.2 (118)  light_slide 0.1 (51)  light_propagate 3.3 (107)  light_damage 6.2 (156)  light_beam_hit 9.7 (156)  light_beam 19.5 (156)  light_sample 29.4 (156)  light_raster 3.3 (156)  light_slot 6.8 (112)  light_hit 14.2 (156)  light_walk 7.3 (156)  generate 0.4 (156)  shadow 1.2 (156)  face 0.9 (155)  damage 0.1 (16) ms   (n: the frames a read timed that ran each)
+  eye     cast in 76 frames   nodes a cast: beam 130134.8  sample 40832.0  hole walk 8073.6 (20743.4 asked of the world)   cast again 100.00%: voxel 61.65%  hole 0.88% (0.4 nodes each)  sky 37.47%   boxes 11221.7 a cast
+  light   cast in 76 frames   nodes a cast: beam 33309.6  sample 13596.2  hole walk 10584.4 (20584.4 asked of the world)   cast again 28.58%: voxel 0.45%  hole 0.69% (0.4 nodes each)  sky 27.44%   boxes 757.5 a cast
+  view    pivot 38.11930°, 128.46560° 1692.3 m  distance 4197.2 u  polar 81.6°  azimuth 33.3°   drawn 2.1 Mpx
+  steps   visible/scene 3.0/6.6  visible/demand 2.0/6.6  interaction/companion 0.5/1.8  interaction/camera 0.1/0.6  interaction/environment 0.0/0.3  interaction/input 0.0/0.2  interaction/edit 0.0/0.1  interaction/ghost 0.0/0.1  interaction/controller 0.0/0.1   (ms a run and max, since the recording started)
+  heap used Δ +0 MiB   (the high-water mark)
+  since   heap max live 29.2 MiB  run 1.1 MiB  slot 1 MiB  range 415.8 MiB   largest free min 16 MiB   refusals 0   ring peak cq 12 sq 46 left 0   body slots peak 6   terrain refused 0   (over the 158 frames since the recording started)
+tasks n=178
+  terrain  network  n=178   p50 966.3  p95 2238.8 ms   ok 115  ab 63  err 0
+                    mean net 615.2  bytes 894116  decode 0.0
+long frames n=39
+--- last 20 tasks ---
+[  65383.1] terrain:0103321                   ok        580.4ms  q 3.7 + run 576.7 p5438.51171875  [net 288.7 bytes 1051392 decode 0.1]
+[  63191.2] terrain:0103                      ok       2796.4ms  q 3.2 + run 2793.2 p0  [net 2630.3 bytes 1051392 decode 0.0]
+[  65495.0] terrain:010332130                 ok       1029.1ms  q 3.7 + run 1025.4 p2461.440644060959  [net 729.0 bytes 1051392 decode 0.1]
+[  65988.0] terrain:01033213030332            ok        558.4ms  q 1.7 + run 556.7 p0  [net 240.0 bytes 1051448 decode 0.0]
+[  64015.9] terrain:01033213030331            ok       2530.6ms  q 1.5 + run 2529.1 p0  [net 2211.8 bytes 1051392 decode 0.0]
+[  65383.1] terrain:01033213                  ok       1451.6ms  q 3.7 + run 1447.9 p5438.51171875  [net 1124.9 bytes 1051392 decode 0.1]
+[  65259.0] terrain:010332                    ok       1576.3ms  q 127.8 + run 1448.5 p5438.51171875  [net 1125.0 bytes 1051392 decode 0.1]
+[  65495.0] terrain:0103321303                ok       1341.2ms  q 473.9 + run 867.3 p680.55859375  [net 850.0 bytes 1051392 decode 0.0]
+[  66242.7] terrain:010332130303320           ok        593.5ms  q 286.7 + run 306.8 p0  [net 289.8 bytes 264960 decode 0.0]
+[  66837.5] terrain:010332130                 aborted   159.9ms  q 3.7 + run 156.2 p1490.19140625
+[  66837.5] terrain:0103321302                aborted   159.9ms  q 3.7 + run 156.2 p1549.1915245673338
+[  65693.4] terrain:01033213032               aborted  1304.0ms  q 1147.8 + run 156.2 p1560.19140625
+[  66525.2] terrain:01033213030330            ok        664.3ms  q 23.5 + run 640.8 p0  [net 469.4 bytes 1051448 decode 0.0]
+[  66242.7] terrain:010332130303321           ok       1127.5ms  q 306.0 + run 821.5 p0  [net 632.5 bytes 264960 decode 0.0]
+[  65988.0] terrain:01033213030333            ok       1407.3ms  q 853.2 + run 554.1 p0  [net 339.5 bytes 1051392 decode 0.0]
+[  66992.7] terrain:010332                    ok        402.6ms  q 4.7 + run 397.9 p10628.2578125  [net 234.9 bytes 1051392 decode 0.0]
+[  65383.1] terrain:01033                     ok       2012.7ms  q 1614.3 + run 398.4 p10707.2578125  [net 234.9 bytes 1051392 decode 0.0]
+[  67371.1] terrain:0103321300                aborted   293.8ms  q 27.7 + run 266.1 p2769.75
+[  66992.7] terrain:01033212                  aborted   672.2ms  q 202.5 + run 469.7 p8247.8046875
+[  67371.1] terrain:01033213003               aborted   293.8ms  q 27.7 + run 266.1 p2813.75
+--- worst 12 moving frames since recording ---
+[  64573.8] cast  interval 516.0 = 6 turns 12.0 + off-turn 504.0  effects 3.2  worst location 3.1  tick 2.7/0.0  stage 1.8  tasks 3.0  perf 0.5  gpu busy 264.3  draws 37 tris 60k  uploads 73  heap used 48 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  49022.1] cast  interval 439.0 = 7 turns 13.5 + off-turn 425.5  effects 0.1  worst location 0.1  tick 5.9/12.6  stage 2.2  tasks 4.8  perf 0.1  gpu busy 250.9  draws 22 tris 46k  uploads 73  heap used 48 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  56831.4] cast  interval 410.0 = 6 turns 15.6 + off-turn 394.4  effects 5.9  worst location 5.9  tick 4.0/13.2  stage 2.1  tasks 2.9  perf 0.3  gpu busy 226.6  draws 24 tris 48k  uploads 73  heap used 48 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  58630.7] cast  interval 387.0 = 5 turns 12.1 + off-turn 374.9  effects 2.5  worst location 2.4  tick 3.3/4.1  stage 2.3  tasks 2.9  perf 0.5  gpu busy 196.3  draws 33 tris 60k  uploads 73  heap used 48 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  62538.4] cast  interval 383.0 = 6 turns 12.1 + off-turn 370.9  effects 2.8  worst location 2.8  tick 3.4/0.2  stage 1.8  tasks 2.9  perf 0.5  gpu busy 200.3  draws 27 tris 54k  uploads 73  heap used 48 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  50911.7] cast  interval 367.0 = 4 turns 14.8 + off-turn 352.2  effects 5.4  worst location 5.3  tick 3.7/10.9  stage 2.1  tasks 2.9  perf 0.0  gpu busy 216.7  draws 20 tris 50k  uploads 73  heap used 48 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  60723.4] cast  interval 344.0 = 6 turns 14.5 + off-turn 329.5  effects 2.4  worst location 2.4  tick 3.4/13.2  stage 2.0  tasks 5.9  perf 0.6  gpu busy 130.2  draws 23 tris 48k  uploads 73  heap used 48 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  51301.5] cast  interval 316.0 = 7 turns 8.8 + off-turn 307.2  effects 0.1  worst bootstrap 0.1  tick 3.0/0.0  stage 2.2  tasks 3.0  perf 0.2  gpu busy 140.5  draws 20 tris 50k  uploads 73  heap used 48 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  58315.5] cast  interval 295.0 = 5 turns 17.1 + off-turn 277.9  effects 4.9  worst location 4.9  tick 5.8/13.3  stage 2.6  tasks 2.9  perf 0.4  gpu busy 134.8  draws 26 tris 54k  uploads 73  heap used 48 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  66550.4] cast  interval 289.0 = 5 turns 11.6 + off-turn 277.4  effects 2.4  worst location 2.3  tick 3.3/8.8  stage 1.7  tasks 3.0  perf 0.9  gpu busy 106.4  draws 31 tris 59k  uploads 73  heap used 48 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  62251.1] cast  interval 274.0 = 7 turns 20.5 + off-turn 253.5  effects 7.1  worst location 7.0  tick 6.2/12.2  stage 2.8  tasks 3.1  perf 0.6  gpu busy 134.6  draws 27 tris 54k  uploads 73  heap used 48 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+[  64280.2] cast  interval 267.0 = 6 turns 12.9 + off-turn 254.1  effects 3.0  worst location 3.0  tick 4.1/11.3  stage 2.0  tasks 2.9  perf 0.5  gpu busy 130.9  draws 32 tris 50k  uploads 73  heap used 48 MiB  Δuploads +0 Δuploads bytes +0 MiB Δheap used +0 MiB
+--- long frames ---
+[   8464.6] loaf     511.9 ms  blocking 0.0  script 0.0  render 4.4
+[   8982.5] loaf     361.3 ms  blocking 0.0  script 0.0  render 0.8
+[  10207.9] loaf     173.6 ms  blocking 0.0  script 0.0  render 0.2
+[    980.3] longtask 56.0 ms  blocking 6.0  script 0.0  render 0.0
+[  43953.2] loaf     307.0 ms  blocking 0.0  script 0.0  render 1.2
+[  44284.2] loaf     101.0 ms  blocking 0.0  script 0.0  render 1.1
+[  46669.4] loaf     70.7 ms  blocking 0.0  script 0.0  render 1.5
+[  46806.2] loaf     60.1 ms  blocking 0.0  script 0.0  render 3.5
+[  47983.2] loaf     96.7 ms  blocking 0.0  script 0.0  render 0.8
+[  48136.9] loaf     112.0 ms  blocking 0.0  script 0.0  render 1.2
+[  48328.6] loaf     84.0 ms  blocking 0.0  script 0.0  render 1.4
+[  48635.6] loaf     187.1 ms  blocking 0.0  script 0.0  render 2.4
+[  49337.2] loaf     116.1 ms  blocking 0.0  script 0.0  render 1.0
+[  49481.0] loaf     53.4 ms  blocking 0.0  script 0.0  render 3.1
+[  49832.4] loaf     67.7 ms  blocking 0.0  script 0.0  render 1.2
+[  50827.3] loaf     81.1 ms  blocking 0.0  script 0.0  render 0.5
+[  50917.8] loaf     67.5 ms  blocking 0.0  script 0.0  render 2.9
+[  51306.8] loaf     71.3 ms  blocking 0.0  script 0.0  render 1.7
+[  52327.3] loaf     71.6 ms  blocking 0.0  script 0.0  render 1.5
+[  52828.8] loaf     136.6 ms  blocking 0.0  script 0.0  render 0.9
+[  55350.9] loaf     98.4 ms  blocking 0.0  script 7.9  render 3.1
+[  56328.5] loaf     193.7 ms  blocking 0.0  script 0.0  render 1.5
+[  57261.1] loaf     67.8 ms  blocking 0.0  script 0.0  render 2.4
+[  57832.3] loaf     184.3 ms  blocking 0.0  script 0.0  render 0.9
+[  58829.9] loaf     180.9 ms  blocking 0.0  script 0.0  render 1.3
+[  59030.7] loaf     53.4 ms  blocking 0.0  script 0.0  render 2.7
+[  60328.9] loaf     79.7 ms  blocking 0.0  script 0.0  render 1.2
+[  60828.7] loaf     232.5 ms  blocking 0.0  script 0.0  render 1.3
+[  61098.3] loaf     53.7 ms  blocking 0.0  script 0.0  render 1.4
+[  61832.7] loaf     112.9 ms  blocking 0.0  script 0.0  render 1.3
+[  62329.4] loaf     180.5 ms  blocking 0.0  script 0.0  render 1.2
+[  62830.9] loaf     83.8 ms  blocking 0.0  script 0.0  render 1.3
+[  62934.4] loaf     71.1 ms  blocking 0.0  script 5.3  render 3.3
+[  64328.7] loaf     210.7 ms  blocking 0.0  script 0.0  render 1.4
+[  64828.8] loaf     254.7 ms  blocking 0.0  script 0.0  render 1.3
+[  65104.4] loaf     69.7 ms  blocking 0.0  script 5.0  render 3.0
+[  65832.4] loaf     122.3 ms  blocking 0.0  script 0.0  render 1.4
+[  66328.4] loaf     195.2 ms  blocking 0.0  script 0.0  render 3.2
+[  66848.9] loaf     61.4 ms  blocking 0.0  script 0.0  render 3.5

@@ -1,7 +1,7 @@
 // @pxl/client/service/platform/surface.tsx
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
-import { round } from "@xpute/kit/math/scalar.ts";
+import { clamp, round } from "@xpute/kit/math/scalar.ts";
 import { useEffect, useRef } from "react";
 
 import type {
@@ -16,6 +16,11 @@ import type {
 /** How many CSS pixels one line of a wheel scrolls: a page's default line
  * height. */
 const LINE_PX = 16;
+
+/** The most one event of a pinch scales by, either way: about what a wheel's
+ * notch zooms, as Chrome's PDF viewer holds it. A pinch's events stay under
+ * it, and a wheel turned with ctrl held zooms no faster than without. */
+const PINCH_MOST = 1.25;
 
 const FILL = {
   position: "absolute",
@@ -134,12 +139,14 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   const place = () => {
     rect = canvas.getBoundingClientRect();
   };
+  // A primary press with Shift held is taken as a secondary one, so that a
+  // trackpad turns the view with one finger as well as with two pressed.
   const pointer = (phase: PointerPhase) => (e: PointerEvent) =>
     input.pointer(
       phase,
       pointerKind(e),
       e.pointerId,
-      e.button,
+      e.button === 0 && e.shiftKey ? 2 : e.button,
       ((e.clientX - rect.left) * canvas.clientWidth) / (rect.width || 1),
       ((e.clientY - rect.top) * canvas.clientHeight) / (rect.height || 1),
     );
@@ -152,15 +159,21 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
     place();
     down(e);
   };
+  // A trackpad's pinch comes as a wheel with ctrl held, whose deltaY is -100
+  // times the log of the pinch's scale, in Chrome, Safari and Firefox alike.
+  // The page's zoom, its default, is prevented. A wheel turned with ctrl
+  // held cannot be told from it (`PINCH_MOST`).
   const onWheel = (e: WheelEvent) => {
-    if (e.ctrlKey) e.preventDefault();
     const per =
       e.deltaMode === WheelEvent.DOM_DELTA_LINE
         ? LINE_PX
         : e.deltaMode === WheelEvent.DOM_DELTA_PAGE
           ? globalThis.innerHeight
           : 1;
-    input.wheel(e.deltaY * per);
+    if (!e.ctrlKey) return input.wheel(e.deltaY * per);
+    e.preventDefault();
+    const scale = Math.exp((-e.deltaY * per) / 100);
+    input.pinch(clamp(scale, 1 / PINCH_MOST, PINCH_MOST));
   };
   const onContextMenu = (e: MouseEvent) => e.preventDefault();
   const onResize = () => {

@@ -2,14 +2,14 @@
 
 //! This writes xpute's own generated files, with the generator a program takes
 //! (xpute-gen): its protocols (cmd.rs), its data specs (data.rs), its errno
-//! table (errno.rs) and its example's machine.
+//! table (errno.rs) and its example's manifest.
 
 pub mod cmd;
 pub mod data;
 pub mod errno;
 
 use xpute_gen::spec::cmd::protocol_outputs;
-use xpute_gen::spec::{generate_at, machine, Output};
+use xpute_gen::spec::{generate_at, manifest, Output};
 
 use crate::root;
 
@@ -37,8 +37,10 @@ fn check_versions() -> Result<(), String> {
 pub fn outputs() -> Result<Vec<Output>, String> {
     check_versions()?;
     let mut out = cmd::outputs()?;
-    out.extend(machine::outputs(&root(), "rust/dev/example/machine.json")?);
-    out.extend(machine::outputs(&root(), "rust/dev/triangle/machine.json")?);
+    out.extend(manifest::outputs(
+        &root(),
+        "rust/dev/example/manifest.json",
+    )?);
     out.extend(protocol_outputs(&root(), &["rust/dev/example/asker.json"])?);
     out.extend(errno::outputs()?);
     out.extend(data::outputs()?);

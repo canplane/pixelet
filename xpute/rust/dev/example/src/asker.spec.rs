@@ -79,24 +79,27 @@ impl Ask {
     pub fn write(&self, _: &mut PacketWriter) {}
 }
 
-impl xpute_core::ipc::door::Import for Ask {
+impl xpute_core::io::door::Import for Ask {
     const NUMBER: u32 = 4098;
     const FIELDS: u32 = 0;
+    const ACKREQ: bool = false;
     fn write(&self, w: &mut PacketWriter) {
         Ask::write(self, w);
+    }
+    fn named(&self) -> (u32, u32) {
+        (0, 0)
     }
 }
 
 /// The asker protocol's core end: what it posts to the runtime and what it hears from it.
 pub mod asker {
     use super::*;
-    use xpute_core::ipc::door::Outcome;
-    use xpute_core::machine;
+    use xpute_core::io::door::{door, Outcome};
     use xpute_kit::status::errno::Errno;
 
     /// Command::ASK, answered by the runtime before this returns.
     pub fn ask() -> Result<u32, Errno> {
-        machine::door().call(&Ask {})
+        door().call(&Ask {})
     }
 
     /// What the program does with each command the runtime sends.

@@ -14,7 +14,7 @@ use pxl_content::scatter;
 use pxl_engine::object;
 use pxl_render::gpu::api;
 use pxl_render::gpu::draw::Position;
-use pxl_render::gpu::generator::DecorFrame;
+use pxl_render::gpu::generator::{hold, DecorFrame};
 use pxl_spec::asset::decor::DECORS;
 use pxl_spec::asset::id;
 use pxl_spec::space::coord::aabb::Aabb;
@@ -43,11 +43,11 @@ struct Frame {
     walk_zoom: Zoom,
     drawing: [u32; drawing::WORDS as usize],
     recs: Vec<[u32; generation::REC_WORDS as usize]>,
-    /// The column boxes, in leaf cells, where objects were written since a
-    /// frame last took them (`note_edited`). The first `edited` of them are
-    /// the ones the next frame hands.
-    edits: [[i32; 4]; object::EDITS as usize],
-    edited: usize,
+    /// The damage: the column boxes, in leaf cells, where objects were written
+    /// since a frame last took them (`note_damage`). The first `damage_cnt` of
+    /// them are the ones the next frame hands.
+    damage: [[i32; 4]; object::WRITE_DAMAGE_CAP as usize],
+    damage_cnt: usize,
     /// The unit cell the eye stands in, as a draw's Q3 position (pxl-render
     /// gpu/draw.rs `Position`). The GPU draws the decor's lanes about it.
     anchor: Q3,
@@ -73,7 +73,7 @@ struct Key {
 /// What a walk of placed decor was made over: the eye's cell at the walk's
 /// zoom (`walk_zoom`) and the placed decor the eraser's preview hides. The
 /// placed decor is walked again when this changes or when a write meets the
-/// walked box (`note_edited`), so one walk serves while the eye stays in its
+/// walked box (`note_damage`), so one walk serves while the eye stays in its
 /// cell.
 #[derive(Clone, Copy, PartialEq)]
 struct WalkKey {
@@ -90,8 +90,8 @@ fn hand_over() -> &'static mut Frame {
         walk_zoom: UNIT_ZOOM,
         drawing: [0; drawing::WORDS as usize],
         recs: Vec::new(),
-        edits: [[0; 4]; object::EDITS as usize],
-        edited: 0,
+        damage: [[0; 4]; object::WRITE_DAMAGE_CAP as usize],
+        damage_cnt: 0,
         anchor: [0; 3],
         last_key: None,
         last_walk: None,
@@ -141,7 +141,7 @@ pub fn step(eye: V3, edit: &RenderEdit) {
         max: [0, 1, 2].map(|k| (cell[k] + 2) as f64 * side),
     };
     let walk_key = WalkKey { zoom, cell, hide };
-    let met = h.edits[..h.edited].iter().any(|e| meets(e, &around));
+    let met = h.damage[..h.damage_cnt].iter().any(|e| meets(e, &around));
     if h.last_walk == Some(walk_key) && !met {
         return;
     }
@@ -198,9 +198,9 @@ fn walk_zoom() -> Zoom {
     zoom
 }
 
-/// Whether an edit's columns, `[x0, y0, x1, y1)` in leaf cells, meet those of
-/// `around`. X goes round the world, and the edit's X is on whatever lap it
-/// was written on, so the test tries it on every lap that could meet.
+/// Whether a box of damage, `[x0, y0, x1, y1)` in leaf cells, meets the
+/// columns of `around`. X goes round the world, and the box's X is on whatever
+/// lap it was written on, so the test tries it on every lap that could meet.
 fn meets(e: &[i32; 4], around: &Aabb) -> bool {
     let leaf = units(LEAF_CELL_ZOOM);
     let lap = 1i64 << LEAF_CELL_ZOOM;
@@ -245,9 +245,10 @@ fn drawing(p: &mut [u32; drawing::WORDS as usize], key: Key) {
 /// Holds the regions where objects were written (domain/query/change.rs) for
 /// the next frame to hand. Each is kept as its columns in leaf cells,
 /// `[x0, y0, x1, y1)`, with X on whatever lap it was written on. Past
-/// `object::EDITS` regions, the rest are merged into the last one, so no
-/// write is lost however many turns pass before a frame takes them.
-pub fn note_edited(regions: &[Aabb]) {
+/// `object::WRITE_DAMAGE_CAP` regions, the rest are joined into the last one
+/// (pxl-render gpu/generator.rs `hold`), so no write is lost however many
+/// turns pass before a frame takes them.
+pub fn note_damage(regions: &[Aabb]) {
     let h = hand_over();
     let leaf = units(LEAF_CELL_ZOOM);
     for r in regions {
@@ -258,33 +259,22 @@ pub fn note_edited(regions: &[Aabb]) {
             libm::ceil(r.max[1] / leaf),
         ]
         .map(|v| v as i32);
-        if h.edited < h.edits.len() {
-            h.edits[h.edited] = b;
-            h.edited += 1;
-        } else {
-            let last = &mut h.edits[h.edited - 1];
-            *last = [
-                last[0].min(b[0]),
-                last[1].min(b[1]),
-                last[2].max(b[2]),
-                last[3].max(b[3]),
-            ];
-        }
+        hold(&mut h.damage, &mut h.damage_cnt, b);
     }
 }
 
 /// The hand-over `step` built, with each decor's zooms as they are now
-/// (`decor_zooms`). The edits `note_edited` held are handed once and then
+/// (`decor_zooms`). The damage `note_damage` held is handed once and then
 /// cleared.
 pub fn frame() -> DecorFrame<'static> {
     let h = hand_over();
-    let edited = core::mem::take(&mut h.edited);
+    let damage_cnt = core::mem::take(&mut h.damage_cnt);
     h.zooms = decor_zooms(settings().decor);
     DecorFrame {
         zooms: &h.zooms,
         drawing: &h.drawing,
         placed_recs: &h.recs,
         anchor: h.anchor,
-        edits: &h.edits[..edited],
+        damage: &h.damage[..damage_cnt],
     }
 }

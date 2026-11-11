@@ -1,7 +1,7 @@
 //! These tests dispatch `decor_cull_cs` (frame/shader/decor_cull.wgsl) alone and hold it to the
-//! rule its comment states. A frame through the gate draws only its claimed tiles, the tiles
+//! rule its comment states. A frame through the gate draws only its damaged tiles, the tiles
 //! that changed (gpu/tile.rs). Of each region's instances, the shader must list exactly those
-//! whose ball (decor_ball.wgsl) meets the box of the claimed tiles as the frame sees it. It must
+//! whose ball (decor_ball.wgsl) meets the box of the damaged tiles as the frame sees it. It must
 //! write that list at the region's own place and set the region's args to the count it listed.
 //! One test runs the screen's gate under a perspective view, and the other runs the light map's
 //! gate under an orthographic view. The instances are scattered about the view, some well
@@ -26,24 +26,24 @@ use pxl_render::frame::shader::word::{instance, screen};
 const CAP: u32 = 4096;
 
 /// A target drawn through a gate. `size` is the target in pixels, and `side` is a tile's side
-/// in pixels. `claimed` is the box of claimed tiles: the first tile across and down, then the
+/// in pixels. `damage` is the box of damaged tiles: the first tile across and down, then the
 /// last tile across and down.
 struct Target {
     size: [u32; 2],
     side: u32,
-    claimed: [u32; 4],
+    damage: [u32; 4],
 }
 
 const SCREEN: Target = Target {
     size: [1080, 1920],
     side: 32,
-    claimed: [10, 20, 15, 31],
+    damage: [10, 20, 15, 31],
 };
 
 const LIGHT: Target = Target {
     size: [SHADOW_SIZE; 2],
     side: light::TILE,
-    claimed: [100, 90, 140, 131],
+    damage: [100, 90, 140, 131],
 };
 
 fn device() -> Option<Gpu> {
@@ -119,14 +119,14 @@ fn orthographic(eye: [f64; 3], half: f64) -> M4 {
     mul(&proj, &view(eye))
 }
 
-/// How far the ball at `c` of radius `r` reaches inside the claimed box of target `t` as `m`
+/// How far the ball at `c` of radius `r` reaches inside the box `damage` of target `t` as `m`
 /// sees it, in world units. The box is grown a pixel each way, as the shader grows it for the
 /// jitter. The value is the least over the box's four side planes. It is positive where the
 /// ball meets the box and negative where the ball lies wholly past it.
 fn inside(t: &Target, m: &M4, c: [f64; 3], r: f64) -> f64 {
     let side = f64::from(t.side);
     let size = t.size.map(f64::from);
-    let b = t.claimed;
+    let b = t.damage;
     let lo = [f64::from(b[0]) * side - 1.0, f64::from(b[1]) * side - 1.0];
     let hi = [
         (f64::from(b[2] + 1) * side).min(size[0]) + 1.0,
@@ -165,7 +165,7 @@ fn a_masked_light_map_lists_the_instances_that_meet_its_rect() {
 }
 
 /// Checks that the gate of target `t`, seen through `m`, lists exactly the instances whose ball
-/// meets its claimed box.
+/// meets its box `damage`.
 fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     let translation = [3.0f32, -2.0, 0.5];
     // The eye's X sits just under `i32::MAX`, so the anchor's X wraps past it. The shader must
@@ -249,7 +249,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     let instances_buf = gpu.buf(&instances, storage);
     let culled = gpu.buf(&vec![u32::MAX; instances.len()], storage);
     let culled_args = gpu.buf(&vec![u32::MAX; args.len()], storage);
-    let box_buf = gpu.buf(&t.claimed, storage);
+    let box_buf = gpu.buf(&t.damage, storage);
     let regions_buf = gpu.buf(&region_words, storage);
     let tiles_buf = gpu.buf(&tiles, wgpu::BufferUsages::UNIFORM);
     let binds = [

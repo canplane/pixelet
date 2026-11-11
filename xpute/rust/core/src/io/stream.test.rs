@@ -1,0 +1,33 @@
+// xpute-core/io/stream.test.rs
+
+use super::*;
+
+fn stream(words: usize) -> Stream {
+    let range = Box::leak(vec![0u32; words].into_boxed_slice());
+    // SAFETY: leaked, so the range outlives the stream.
+    unsafe {
+        Stream::new(
+            Memory::new(range.as_mut_ptr().expose_provenance(), words * WORD),
+            0,
+            words,
+            Stream::OWN_WORDS,
+        )
+    }
+}
+
+#[test]
+fn overflow_drops_whole() {
+    let mut s = stream(16);
+    s.record(1, &[7], &[], None);
+    let before = s.left();
+    s.begin();
+    s.record(2, &[1, 2], &[], None);
+    s.record(3, &[0; 12], &[], None);
+    s.record(4, &[], &[], None);
+    assert!(!s.commit(), "a record past the range drops the transaction");
+    assert_eq!(s.left(), before, "the stream is as it was at `begin`");
+    s.begin();
+    s.record(5, &[1], &[], None);
+    assert!(s.commit(), "a transaction that fits is kept");
+    assert_eq!(s.left(), before - rec_bytes(1, None));
+}

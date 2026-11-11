@@ -63,7 +63,7 @@ A leaf may carry an extension, such as a marker's words, kept in a pool for its
 class of ids (pxl-spec `object/ext.rs` `class_of`) and placed and erased with
 its leaf.
 
-The objects come from the objects' source, under the `OBJECT` root
+The objects come from the objects' source, as the files of kind `OBJECT`
 (`object/repository.rs`). It keeps a file for each shard that holds objects, and
 the top: what each of those shards folds to. The top is read first and its folds
 stand in the tree where shards are not read; a shard the top lists is read as a

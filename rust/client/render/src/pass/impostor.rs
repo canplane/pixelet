@@ -143,13 +143,9 @@ impl ImpostorPass {
         });
     }
 
-    /// Pushes onto `out` the uploads `draws` read (`MarkPass::reads`).
-    pub fn marks_read<'a>(
-        &self,
-        draws: impl Iterator<Item = &'a [u32; DRAW_WORDS]>,
-        out: &mut Vec<u32>,
-    ) {
-        self.mark.reads(draws, out);
+    /// Pushes onto `out` the uploads the listed draws read (`MarkPass::reads`).
+    pub fn marks_read(&self, draws: &DrawTable, out: &mut Vec<u32>) {
+        self.mark.reads(draws.of(PIPELINE_IMPOSTOR), out);
     }
 
     /// Adds the pass's draws to `stat`, two triangles an instance.

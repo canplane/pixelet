@@ -5,7 +5,7 @@
 //! static opaque draws laid: it downsamples the depth, samples the occlusion and denoises it
 //! twice. The renderer runs it only in a frame where what it reads changed, and the map is held
 //! across frames. Every drawn frame, `apply` multiplies the map into the world's color in the
-//! claimed tiles, as a draw of the world's pass. The world's pass is ended and begun again
+//! damaged tiles, as a draw of the world's pass. The world's pass is ended and begun again
 //! around `run` only in a frame that finds the map again. The images take about 3 bytes a
 //! pixel.
 
@@ -270,9 +270,9 @@ impl ScreenAo {
 
     /// Multiplies the map into the world's color at each pixel, as a draw in the world's pass
     /// `pass` after the static opaque draws (ao_apply.wgsl). It draws a quad for each of the
-    /// `cnt` tiles, and the quad of a tile that the group's tiles do not claim collapses.
+    /// `cnt` tiles, and the quad of a tile the group's tiles leave undamaged collapses.
     /// Every drawn frame calls it, whether or not the map was found again, as the world's
-    /// color is drawn again in the claimed tiles each frame.
+    /// color is drawn again in the damaged tiles each frame.
     pub fn apply(&self, pass: &mut TrackedRenderPass, cnt: u32) {
         pass.set_pipeline(self.apply.id);
         pass.set_bind_group(0, self.apply_group.id(), &[]);

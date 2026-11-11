@@ -218,9 +218,9 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
     let mut tally = Tally::default();
     let (mut kept, mut off, mut extra) = (0u32, 0u32, 0u32);
     let corner = [1304, -896];
-    // The columns are in units from the eye: a brick's, two edits a few cells wide, one far
-    // off the box, a strip across the world's whole width, and the same strip read by the
-    // leaf's band alone.
+    // The columns are in units from the eye: a brick's, two boxes of damage a few cells wide,
+    // one far off the box, a strip across the world's whole width, and the same strip read by
+    // the leaf's band alone.
     const EVERY: [Zoom; 2] = [0, Zoom::MAX];
     let changes: [Change; 5] = [
         (
@@ -230,7 +230,7 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
             EVERY,
         ),
         (
-            "two edits, the light low",
+            "two boxes of damage, the light low",
             [0.8, 0.1, -0.3],
             &[[-20.0, 5.0, -17.0, 9.0], [30.0, -40.0, 31.0, -39.0]],
             EVERY,
@@ -322,7 +322,7 @@ fn texel_at(l: &Light, v: [f32; 3]) -> [f32; 2] {
 /// stood on and propagated (`light::carry_at`). The second cast takes only the tiles past the
 /// count kept, and the two must together list the tiles that all the stood tiles read.
 ///
-/// Then `light_damage_cs` must claim each tile read whose word names a cast before the reads'
+/// Then `light_damage_cs` must damage each tile read whose word names a cast before the reads'
 /// epoch: it writes the cast's number in the tile's word and lists the tile
 /// (`light::LIST_DAMAGE`). The reads' epoch is the later of the host's epoch and the one that a
 /// slide which did not run began (`light::reads_epoch`).
@@ -336,7 +336,7 @@ fn hand_propagation_reads_what_stands() {
         return;
     };
     let p = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_propagate_cs");
-    let claim = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_damage_cs");
+    let damage = gpu.pipeline(src(SHADER_LIGHT_PROPAGATE), "light_damage_cs");
     let mut tally = Tally::default();
     let (cur, epoch) = (40u32, 30u32);
     for (case, dir, reads_from) in [
@@ -483,7 +483,7 @@ fn hand_propagation_reads_what_stands() {
         propagation(&list_buf, &p, rows(stood.len()));
         propagation(
             &list_buf,
-            &claim,
+            &damage,
             [(N * N).div_ceil(light::LIST_LANES), 1, 1],
         );
         let out = gpu.read(&list_buf);
@@ -546,24 +546,24 @@ fn hand_propagation_reads_what_stands() {
         for j in 0..N as i32 {
             for i in 0..N as i32 {
                 let k = (j as u32 * N + i as u32) as usize;
-                let claims = got.contains(&[i, j]) && was[k] < ep;
-                want.push(if claims { cur } else { was[k] });
+                let damaged = got.contains(&[i, j]) && was[k] < ep;
+                want.push(if damaged { cur } else { was[k] });
                 have.push(out[reads + k]);
             }
         }
-        let claimed = want.iter().zip(&was).filter(|(w, v)| w != v).count() as u32;
+        let damaged = want.iter().zip(&was).filter(|(w, v)| w != v).count() as u32;
         tally.compare(&format!("{case}: the reads"), &want, &have, |k| {
             format!("tile {} {}", k as u32 % N, k as u32 / N)
         });
         tally.compare(
-            &format!("{case}: the claimed listed"),
-            &[claimed],
+            &format!("{case}: the damaged listed"),
+            &[damaged],
             &[out_args[(light::ARGS_CNTS + light::LIST_DAMAGE) as usize]],
-            |_| "the claimed list's count".into(),
+            |_| "the damage list's count".into(),
         );
         assert!(
-            claimed > 0 && read_cnt > stood.len(),
-            "{case}: {claimed} {read_cnt}"
+            damaged > 0 && read_cnt > stood.len(),
+            "{case}: {damaged} {read_cnt}"
         );
     }
     tally.end("light_propagate_cs");

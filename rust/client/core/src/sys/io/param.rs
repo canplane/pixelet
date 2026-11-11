@@ -25,12 +25,6 @@ pub const MAX_CREDITS: u32 = 16;
 /// for (`BODY_SLOTS`).
 pub const CREDITS: u32 = if cfg!(target_os = "android") { 5 } else { 6 };
 
-/// The most files `write` writes in one turn (sys/io/file.rs). Each such file
-/// is one batch of the objects' edits (domain/layer/object/repository.rs). A
-/// write past this number waits for a later turn. The frames the files may
-/// post in a turn count these writes (sys/io/runtime.rs `FILE_FRAMES`).
-pub const WRITES_A_TURN: u32 = 8;
-
 /// The most terrain and Earth bodies held at once, in slots of the heap's
 /// runs (sys/io/body.rs). A body holds its slot while it is on a credit and
 /// until it is decoded; an Earth body holds it until its texels are taken.

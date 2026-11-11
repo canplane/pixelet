@@ -36,13 +36,13 @@ pub struct RayPass {
     pipeline: Pipeline,
     /// The screen pass's bind group 0, over the lit entries and the ids in
     /// `bindings`: the world surface's rays, the cast's eye buffer, and the
-    /// claimed tiles' words and uniform.
+    /// damaged tiles' words and uniform.
     group: u32,
     bindings: [u32; 4],
-    /// The claimed tiles' words and uniform (`Resolve::tiles`), and the
-    /// number of tiles on the screen. The pixels' cast casts the claimed
+    /// The damaged tiles' words and uniform (`Resolve::tiles`), and the
+    /// number of tiles on the screen. The pixels' cast casts the damaged
     /// tiles alone, and the screen pass draws a quad for every tile, an
-    /// unclaimed one collapsed (screen_tile.wgsl).
+    /// undamaged one collapsed (screen_tile.wgsl).
     tiles: ((u32, u32), u32),
     /// The entries a cell's face is painted by (`Renderer::lit_entries`).
     /// It is empty until the renderer first hands them.

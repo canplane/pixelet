@@ -10,7 +10,7 @@
 //! (forget.wgsl).
 //!
 //! The targets are written whole each frame before they are read. In a frame not drawn whole,
-//! a gate of their own clears the depth to the nearest and sets the claimed tiles back to the
+//! a gate of their own clears the depth to the nearest and sets the damaged tiles back to the
 //! far plane (raster_mask.wgsl), so boxes pass the early depth test in those tiles alone; the
 //! pixels' cast skips the other tiles and reads nothing there. The args and the boxes are
 //! written again each frame the samples are cast, and kept where only the pixels are cast
@@ -40,9 +40,7 @@ use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::GpuSpanName;
 use pxl_engine::param::raster::GROWTH;
 
-/// The eye's raster. Its targets are at the rays' size: the visibility buffer, which holds each
-/// pixel's voxel (r32uint), and the depth it is tested by. The visibility buffer is drawn into
-/// as a 2D view and read as an array of one layer (`visibility_array`).
+/// The eye's raster. Its targets are at the rays' size.
 pub(super) struct Raster {
     /// Sets each sample's stop on its node's drawable entry (sample_hit.wgsl).
     pub(super) sample_hit: Pipeline,
@@ -63,7 +61,7 @@ pub(super) struct Raster {
     pub(super) light_sample_hit: Pipeline,
     face: Pipeline,
     draw_pipeline: Pipeline,
-    /// Draws the gate the boxes pass through in a frame not drawn whole: it sets the claimed
+    /// Draws the gate the boxes pass through in a frame not drawn whole: it sets the damaged
     /// tiles' depth back to the far plane (raster_mask.wgsl).
     mask: Pipeline,
     pub(super) args: u32,
@@ -74,11 +72,7 @@ pub(super) struct Raster {
     hits: u32,
     draws: u32,
     uniform: u32,
-    visibility: u32,
-    visibility_view: u32,
-    pub(super) visibility_array: u32,
-    depth: u32,
-    depth_view: u32,
+    pub(super) targets: Targets,
     size: [u32; 2],
     /// The groups, by index: the samples' stops, the boxes' draw, the samples' faces' asks, the
     /// record's draw (made by `rec_group`), the holes' faces' asks, and the holes' stops.
@@ -105,17 +99,84 @@ pub(super) struct LightRaster {
     /// (`Raster::hits`).
     hits: u32,
     uniform: u32,
-    visibility: u32,
-    visibility_view: u32,
-    pub(super) visibility_array: u32,
-    depth: u32,
-    depth_view: u32,
+    pub(super) targets: Targets,
     group: u32,
     rec_group: u32,
     rec_bufs: [u32; 7],
     /// The group of its holes' stops (`LIGHT_REC_HITS_GROUP`), made again with the record's
     /// draw group.
     rec_hits_group: u32,
+}
+
+/// A raster's targets: the visibility buffer, which holds each pixel's voxel (r32uint), and the
+/// depth it is tested by. The visibility buffer is drawn into as a 2D view and read as an array
+/// of one layer (`visibility_array`).
+#[derive(Default)]
+pub(super) struct Targets {
+    visibility: u32,
+    visibility_view: u32,
+    pub(super) visibility_array: u32,
+    depth: u32,
+    depth_view: u32,
+}
+
+impl Targets {
+    fn new(g: &Gpu, [w, h]: [u32; 2]) -> Targets {
+        let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
+        let visibility = g.texture(w, h, 1, Format::r32uint, 1, usage);
+        let depth = g.texture(w, h, 1, Format::depth32float, 1, usage);
+        Targets {
+            visibility,
+            visibility_view: g.view(visibility, false, 0, 1, 0, 1),
+            visibility_array: g.view(visibility, true, 0, 1, 0, 1),
+            depth,
+            depth_view: g.view(depth, false, 0, 1, 0, 1),
+        }
+    }
+
+    fn release(&self) {
+        for id in [
+            self.visibility_view,
+            self.visibility_array,
+            self.visibility,
+            self.depth_view,
+            self.depth,
+        ] {
+            release(id);
+        }
+    }
+}
+
+/// A raster's view, as raster.wgsl's `Raster` lays it out, a vec4 a member: the view's axes,
+/// each with its `w`, the turn and whether the view is the light's, the screen, the first ray's
+/// offset and the origin the boxes are laid from.
+struct View {
+    right: [f32; 4],
+    up: [f32; 4],
+    forward: [f32; 4],
+    turn: u32,
+    light: bool,
+    screen: [f32; 4],
+    first: [f32; 2],
+    origin: [i32; 3],
+}
+
+impl View {
+    fn write(&self, g: &Gpu, uniform: u32) {
+        let bits = |v: [f32; 4]| v.map(f32::to_bits);
+        let [x, y] = self.first.map(f32::to_bits);
+        let [ox, oy, oz] = self.origin.map(|v| v as u32);
+        let words: [[u32; 4]; RASTER_FLOATS / 4] = [
+            bits(self.right),
+            bits(self.up),
+            bits(self.forward),
+            [self.turn, u32::from(self.light), 0, 0],
+            bits(self.screen),
+            [x, y, 0, 0],
+            [ox, oy, oz, 0],
+        ];
+        g.write_buf(uniform, 0, bytes(words.as_flattened()));
+    }
 }
 
 impl Raster {
@@ -158,11 +219,7 @@ impl Raster {
                 word_bytes(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
-            visibility: 0,
-            visibility_view: 0,
-            visibility_array: 0,
-            depth: 0,
-            depth_view: 0,
+            targets: Targets::default(),
             size: [0; 2],
             groups: [0; 6],
             bindings: [0; 9],
@@ -173,8 +230,8 @@ impl Raster {
 
     /// Readies the raster for a frame that casts the pixels, before its dispatches. It makes
     /// the targets again where the rays' `size` changed, and writes the raster's view off the
-    /// eye's words `e`. Where the samples are cast again (`samples_cast`), it clears the args;
-    /// otherwise the boxes the last cast left are kept. The groups bind the cast's eye, beams
+    /// eye's words `e`. Where the samples are cast again (`samples_cast`), it opens their faces'
+    /// asks; otherwise the boxes the last cast left are kept. The groups bind the cast's eye, beams
     /// and node cache, the world query's buffers the faces' asks read, and the rays, at whose
     /// pixels the holes' faces are put (`rec_hits`).
     pub(super) fn prepare(
@@ -187,22 +244,8 @@ impl Raster {
         [eye, beams, node_cache, clipmap, ground, shards, objects, pool, rays]: [u32; 9],
     ) {
         if size != self.size {
-            for v in [
-                self.visibility_view,
-                self.visibility_array,
-                self.visibility,
-                self.depth_view,
-                self.depth,
-            ] {
-                release(v);
-            }
-            let [w, h] = size;
-            let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-            self.visibility = g.texture(w, h, 1, Format::r32uint, 1, usage);
-            self.visibility_view = g.view(self.visibility, false, 0, 1, 0, 1);
-            self.visibility_array = g.view(self.visibility, true, 0, 1, 0, 1);
-            self.depth = g.texture(w, h, 1, Format::depth32float, 1, usage);
-            self.depth_view = g.view(self.depth, false, 0, 1, 0, 1);
+            self.targets.release();
+            self.targets = Targets::new(g, size);
             self.size = size;
         }
         // The raster's view forms each pixel's ray as the cast does (grid.wgsl `px_tan`): the
@@ -214,61 +257,35 @@ impl Raster {
         let [w, h] = size.map(|s| s.max(1) as f32);
         let far = f32::from_bits(e[eye::FAR]);
         let px = (2.0 * tan[0] / w).max(2.0 * tan[1] / h);
-        let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, u, f));
-        let uniform: [f32; RASTER_FLOATS] = [
-            r[0],
-            r[1],
-            r[2],
-            tan[0],
-            u[0],
-            u[1],
-            u[2],
-            tan[1],
-            f[0],
-            f[1],
-            f[2],
-            raster::NEAR,
-            f32::from_bits(turn),
-            0.0,
-            0.0,
-            0.0,
-            GROWTH * px,
-            w,
-            h,
-            far,
-            f32::from_bits(e[eye::JITTER]),
-            f32::from_bits(e[eye::JITTER + 1]),
-            0.0,
-            0.0,
-            f32::from_bits(e[eye::ORIGIN]),
-            f32::from_bits(e[eye::ORIGIN + 1]),
-            f32::from_bits(e[eye::ORIGIN + 2]),
-            0.0,
-        ];
-        g.write_buf(self.uniform, 0, bytes(&uniform));
+        View {
+            right: [r[0], r[1], r[2], tan[0]],
+            up: [u[0], u[1], u[2], tan[1]],
+            forward: [f[0], f[1], f[2], raster::NEAR],
+            turn: BOX_VERTICES * u32::from(raster::is_flipped(r, u, f)),
+            light: false,
+            screen: [GROWTH * px, w, h, far],
+            first: [e[eye::JITTER], e[eye::JITTER + 1]].map(f32::from_bits),
+            origin: [0, 1, 2].map(|k| e[eye::ORIGIN + k] as i32),
+        }
+        .write(g, self.uniform);
         if samples_cast {
-            // No box is drawn and no face asked yet. The faces' dispatch lies at
-            // `raster::ASKED_AT`, and its asks start where the grid lays them
-            // (`beam::Grid::asks_at`).
-            let mut args = [0u32; (raster::ASKED_AT + raster::ARGS_WORDS) as usize];
-            args[..raster::ARGS_WORDS as usize].copy_from_slice(&draw_args());
-            let asked = raster::ASKED_AT as usize;
-            args[asked + raster::ARGS_FACES as usize + 1] = 1;
-            args[asked + raster::ARGS_FACES as usize + 2] = 1;
-            args[asked + raster::ARGS_ASKS as usize] = grid.asks_at;
-            g.write_buf(self.args, sequence::OPEN_RASTER_ARGS.to_at(), bytes(&args));
+            // No face is asked yet. The faces' dispatch lies at `raster::ASKED_AT`, and its
+            // asks start where the grid lays them (`beam::Grid::asks_at`). No box is drawn
+            // yet either: the record's draw, which runs in every frame the samples are cast
+            // (ray/cast.rs `draws_rec`), sets the draw's args (`rec_draw`).
+            g.write_buf(
+                self.args,
+                sequence::OPEN_RASTER_ASKS.to_at(),
+                bytes(&faces_args(grid.asks_at)),
+            );
         }
         // The holes' stops have opened no face ask yet. They run every frame the pixels are
         // cast, so this is written in every one; their faces' dispatch lies at
         // `raster::HIT_ASKED_AT`.
-        let mut hit_args = [0u32; raster::ARGS_WORDS as usize];
-        hit_args[raster::ARGS_FACES as usize + 1] = 1;
-        hit_args[raster::ARGS_FACES as usize + 2] = 1;
-        hit_args[raster::ARGS_ASKS as usize] = grid.hit_asks_at;
         g.write_buf(
             self.args,
             sequence::OPEN_RASTER_HIT_ASKS.to_at(),
-            bytes(&hit_args),
+            bytes(&faces_args(grid.hit_asks_at)),
         );
         let bindings = [
             eye, beams, node_cache, clipmap, ground, shards, objects, pool, rays,
@@ -383,14 +400,14 @@ impl Raster {
     /// Draws the raster. Where the samples were cast again (`samples_cast`), their stops are set
     /// on the entries first. Where `draws_rec`, the entries in view are written as boxes
     /// again; otherwise the boxes the last draw wrote are kept. The boxes are then drawn into
-    /// cleared targets, through the gate in the `claimed` tiles where the frame is not drawn
+    /// cleared targets, through the gate in the tiles of `damage` where the frame is not drawn
     /// whole.
     pub(super) fn draw(
         &self,
         ctx: &mut RenderContext,
         grid: &beam::Grid,
         (samples_cast, draws_rec): (bool, bool),
-        claimed: Option<((u32, u32), u32)>,
+        damage: Option<((u32, u32), u32)>,
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         if samples_cast {
@@ -405,21 +422,21 @@ impl Raster {
             self.rec_draw(ctx);
         }
         // The depth is reversed, nearer greater (pxl-engine `raster::NEAR`). Gated, it is
-        // cleared to the nearest, which no box passes, and the gate sets the claimed tiles back
+        // cleared to the nearest, which no box passes, and the gate sets the damaged tiles back
         // to the far plane; otherwise it is cleared to the far plane.
         let pass = g.pass(
             encoder,
             &pass_desc(
-                self.visibility_view,
+                self.targets.visibility_view,
                 Load::Clear,
-                self.depth_view,
+                self.targets.depth_view,
                 Load::Clear,
-                if claimed.is_some() { 1.0 } else { 0.0 },
+                if damage.is_some() { 1.0 } else { 0.0 },
                 ctx.stamp(GpuSpanName::sraster).pass(),
             ),
         );
         g.declare_pass(pass, sequence::RASTER_PASS);
-        if let Some((tiles, cnt)) = claimed {
+        if let Some((tiles, cnt)) = damage {
             let group = g.bind_group(
                 self.mask.layouts[0],
                 &[buf_entry(30, tiles.0), buf_entry(31, tiles.1)],
@@ -474,6 +491,16 @@ fn draw_args() -> [u32; raster::ARGS_WORDS as usize] {
     args
 }
 
+/// The faces' dispatch before any box opens a workgroup, its asks starting at word `asks_at`
+/// of the beam rays' (pxl-engine `raster::ARGS_FACES`, `raster::ARGS_ASKS`).
+fn faces_args(asks_at: u32) -> [u32; raster::ARGS_WORDS as usize] {
+    let mut args = [0; raster::ARGS_WORDS as usize];
+    args[raster::ARGS_FACES as usize + 1] = 1;
+    args[raster::ARGS_FACES as usize + 2] = 1;
+    args[raster::ARGS_ASKS as usize] = asks_at;
+    args
+}
+
 impl Raster {
     /// Makes the light's buffers and its targets at the map's `size` where they are not made,
     /// and says whether they are.
@@ -484,7 +511,7 @@ impl Raster {
             s.draws = g.buf(word_bytes(record::LIGHT_DRAWS as usize), storage);
             s.args = g.buf(
                 word_bytes(raster::WORDS as usize),
-                storage | buffer_usage::COPY_SRC,
+                storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
             );
             s.hits = g.buf(
                 word_bytes(3),
@@ -494,12 +521,7 @@ impl Raster {
                 word_bytes(RASTER_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             );
-            let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-            s.visibility = g.texture(size, size, 1, Format::r32uint, 1, usage);
-            s.visibility_view = g.view(s.visibility, false, 0, 1, 0, 1);
-            s.visibility_array = g.view(s.visibility, true, 0, 1, 0, 1);
-            s.depth = g.texture(size, size, 1, Format::depth32float, 1, usage);
-            s.depth_view = g.view(s.depth, false, 0, 1, 0, 1);
+            s.targets = Targets::new(g, [size; 2]);
         }
         s.uniform != 0
     }
@@ -508,20 +530,11 @@ impl Raster {
     /// again.
     pub(super) fn light_release(&mut self) {
         let s = core::mem::take(&mut self.light);
-        for id in [
-            s.group,
-            s.rec_group,
-            s.rec_hits_group,
-            s.visibility_view,
-            s.visibility_array,
-            s.visibility,
-            s.depth_view,
-            s.depth,
-            s.uniform,
-            s.args,
-            s.hits,
-            s.draws,
-        ] {
+        for id in [s.group, s.rec_group, s.rec_hits_group] {
+            release(id);
+        }
+        s.targets.release();
+        for id in [s.uniform, s.args, s.hits, s.draws] {
             release(id);
         }
     }
@@ -548,46 +561,24 @@ impl Raster {
         };
         let (r, d) = (unit(v.across), unit(v.down));
         let up = [-d[0], -d[1], -d[2]];
-        let turn = BOX_VERTICES * u32::from(raster::is_flipped(r, up, v.dir));
         let n = size as f32;
-        let uniform: [f32; RASTER_FLOATS] = [
-            r[0],
-            r[1],
-            r[2],
-            length(v.across),
-            d[0],
-            d[1],
-            d[2],
-            length(v.down),
-            v.dir[0],
-            v.dir[1],
-            v.dir[2],
-            0.0,
-            f32::from_bits(turn),
-            f32::from_bits(1),
-            0.0,
-            0.0,
-            GROWTH * length(v.across),
-            n,
-            n,
-            v.t_max,
+        View {
+            right: [r[0], r[1], r[2], length(v.across)],
+            up: [d[0], d[1], d[2], length(v.down)],
+            forward: [v.dir[0], v.dir[1], v.dir[2], 0.0],
+            turn: BOX_VERTICES * u32::from(raster::is_flipped(r, up, v.dir)),
+            light: true,
+            screen: [GROWTH * length(v.across), n, n, v.t_max],
             // No jitter. The origin is where box texel (0, 0)'s ray starts, which the light's
             // boxes are laid from (record_draw.wgsl `light_rec_draw_cs`).
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            f32::from_bits(origin[0] as u32),
-            f32::from_bits(origin[1] as u32),
-            f32::from_bits(origin[2] as u32),
-            0.0,
-        ];
-        g.write_buf(s.uniform, 0, bytes(&uniform));
-        let args = [0u32; raster::ARGS_WORDS as usize];
+            first: [0.0; 2],
+            origin,
+        }
+        .write(g, s.uniform);
         g.write_buf(
             s.args,
             sequence::OPEN_LIGHT_RASTER_ARGS.to_at(),
-            bytes(&args),
+            bytes(&draw_args()),
         );
     }
 
@@ -673,18 +664,11 @@ impl Raster {
 
     /// Writes the drawable entries on the light's box as boxes and marks them drawn
     /// (record_draw.wgsl `light_rec_draw_cs`), then draws them into the light's cleared
-    /// targets, every place of the draws' buffer, each place the boxes did not reach holding 0
-    /// (raster.wgsl `vs`).
+    /// targets.
     pub(super) fn light_draw(&self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::light_raster);
         let s = &self.light;
-        g.clear_buf(
-            encoder,
-            s.draws,
-            0,
-            word_bytes(record::LIGHT_DRAWS as usize),
-        );
         let pass = g.compute_pass(encoder, stamp.pass());
         g.set_bind_group(pass, 0, s.rec_group, &[]);
         g.set_pipeline(pass, self.light_rec_draw.id);
@@ -694,9 +678,9 @@ impl Raster {
         let pass = g.pass(
             encoder,
             &pass_desc(
-                s.visibility_view,
+                s.targets.visibility_view,
                 Load::Clear,
-                s.depth_view,
+                s.targets.depth_view,
                 Load::Clear,
                 0.0,
                 stamp.pass(),
@@ -705,7 +689,7 @@ impl Raster {
         g.declare_pass(pass, sequence::LIGHT_RASTER_PASS);
         g.set_pipeline(pass, self.draw_pipeline.id);
         g.set_bind_group(pass, 0, s.group, &[]);
-        g.draw(pass, raster::VERTICES, record::LIGHT_DRAWS, 0, 0);
+        g.draw_indirect(pass, s.args, sequence::LIGHT_RASTER.at());
         g.end(pass);
     }
 }

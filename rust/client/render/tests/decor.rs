@@ -3259,13 +3259,13 @@ fn hand_frames_answer_as_the_rust() {
             &mut tally,
             &mut claims,
         );
-        let edits: Vec<([i32; 4], Zoom)> = claims
+        let damage: Vec<([i32; 4], Zoom)> = claims
             .iter()
             .take(12)
             .map(|&p| (reach(p, 6), generation::EVERY))
             .collect();
-        tally.add("frame: a placed decor took a record", !edits.is_empty());
-        if edits.is_empty() {
+        tally.add("frame: a placed decor took a record", !damage.is_empty());
+        if damage.is_empty() {
             total.merge(tally);
             continue;
         }
@@ -3277,7 +3277,7 @@ fn hand_frames_answer_as_the_rust() {
             Frame {
                 name: "the placed decor gone, some stale",
                 every: false,
-                boxes: edits.clone(),
+                boxes: damage.clone(),
                 stale,
                 placed_decor: false,
                 ..first.clone()
@@ -3313,7 +3313,7 @@ fn hand_frames_answer_as_the_rust() {
             Frame {
                 name: "the placed decor back",
                 every: false,
-                boxes: edits.clone(),
+                boxes: damage.clone(),
                 ..first.clone()
             },
             &mut tally,

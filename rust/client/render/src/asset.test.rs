@@ -286,8 +286,8 @@ fn oversize_decode_refused() {
 
 #[test]
 fn mesh_counted_per_node() {
-    let nodes = vec![r#"{"mesh":0}"#; MAX_SCENE_PRIMITIVES as usize + 1].join(",");
-    let roots: Vec<String> = (0..=MAX_SCENE_PRIMITIVES).map(|i| i.to_string()).collect();
+    let nodes = vec![r#"{"mesh":0}"#; SCENE_PRIMITIVES_CAP as usize + 1].join(",");
+    let roots: Vec<String> = (0..=SCENE_PRIMITIVES_CAP).map(|i| i.to_string()).collect();
     let instanced = edited(&[
         (
             r#""nodes":[0]"#,

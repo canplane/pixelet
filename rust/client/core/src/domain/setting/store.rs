@@ -35,12 +35,12 @@ fn dev() -> bool {
 
 /// Whether `val` may be set for `key` in this build. A dev-only setting or
 /// option is offered only in a development build, or in a release compiled
-/// for measuring (`PXL_PERF_DRIVE`), whose drive sets them. Storage outlives
+/// for measuring (`crate::MEASURING`), whose drive sets them. Storage outlives
 /// the build, and a dev value with no row left in the UI to turn it off would
 /// otherwise stay in force. Loading drops such a value, and `set_setting`
 /// refuses it from the console.
 pub fn is_offered(key: SettingKey, val: u32) -> bool {
-    let compiled = cfg!(feature = "dev") || option_env!("PXL_PERF_DRIVE").is_some();
+    let compiled = cfg!(feature = "dev") || crate::MEASURING;
     !(key.dev() || key.dev_option(val)) || (compiled && dev())
 }
 
@@ -108,8 +108,8 @@ static SETTINGS_STORE: Global<Setting> = Global::new();
 /// write however many there are.
 static UNSAVED: Global<bool> = Global::new();
 
-/// Where the store stands against its storage file, which is opened on the
-/// storage root (sys/io/file.rs `open_storage`). Until the slot is read, the
+/// Where the store stands against its storage file, which is opened at the
+/// settings' slot (sys/io/file.rs `open_storage`). Until the slot is read, the
 /// store holds the defaults and nothing is written over the slot.
 #[derive(Clone, Copy, PartialEq)]
 enum Load {
@@ -175,12 +175,19 @@ pub fn on_settings_emptied() {
     }
 }
 
-/// Writes unsaved changes to a slot that was read. With a refused or
-/// unreadable slot the changes stay in the store alone.
+/// Writes unsaved changes to a slot that was read (`writes`).
 pub fn settings_keep_step() {
-    if *load() == Load::Loaded && core::mem::take(UNSAVED.get(|| false)) {
+    if writes() {
+        UNSAVED.set(false);
         file::write_storage(&settings().storage_bytes());
     }
+}
+
+/// Whether the keep writes the store: there are unsaved changes, and the slot
+/// was read. A slot not yet read, refused or unreadable is never written
+/// over, and its changes stay in the store alone.
+fn writes() -> bool {
+    *load() == Load::Loaded && *UNSAVED.get(|| false)
 }
 
 /// The stored pairs over the defaults. A pair whose number no setting has is

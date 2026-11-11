@@ -160,7 +160,7 @@
           ]
         }
       ],
-      "call": true
+      "ackreq": true
     },
     {
       "name": "SENSOR_PERMISSION",
@@ -265,7 +265,7 @@
       "name": "INPUT_TYPING",
       "val": 4363,
       "$doc": [
-        "Whether the UI is taking typed text. A device's touches reach the core without the UI (pxl-core door/touch.rs), so a touch pressed while this holds is spent on ending the typing: its lift ends the gesture with no tap, and its drag still moves the world."
+        "Whether the UI is taking typed text. A pointer pressed while this holds, a device's touch too (pxl-core door/touch.rs), is spent on ending the typing: its lift ends the gesture with no tap, and its drag still moves the world."
       ],
       "pkt": [
         {
@@ -333,6 +333,19 @@
       "pkt": [
         {
           "name": "delta_y",
+          "type": "f64"
+        }
+      ]
+    },
+    {
+      "name": "INPUT_PINCH",
+      "val": 4364,
+      "$doc": [
+        "A pinch the platform recognized, as a trackpad's is: the factor the fingers' spread changed by since the last. Over one, they spread, and the camera comes nearer by that factor, as under two touches."
+      ],
+      "pkt": [
+        {
+          "name": "scale",
           "type": "f64"
         }
       ]
@@ -571,7 +584,7 @@
           "optional": true
         }
       ],
-      "call": true
+      "ackreq": true
     },
     {
       "name": "PERF_RINGS",
@@ -579,7 +592,7 @@
       "$doc": [
         "The rings where they lie, nothing reduced: the reply is the address of RING_SLOT's words (perf.json), good until the next turn."
       ],
-      "call": true
+      "ackreq": true
     }
   ],
   "import": [
@@ -607,7 +620,7 @@
       "name": "UI_SNAPSHOT",
       "val": 6913,
       "$doc": [
-        "The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a",
+        "The UI's snapshot, when it changed: a Snapshot packet far past a frame's room, so a",
         "block the core holds, valid until the next snapshot."
       ],
       "pkt": [
@@ -749,6 +762,10 @@
         {
           "name": "TYPING",
           "val": 11
+        },
+        {
+          "name": "PINCH",
+          "val": 12
         }
       ]
     },
@@ -1269,7 +1286,7 @@
           "name": "zooming",
           "type": "bool",
           "$doc": [
-            "A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is."
+            "A zoom is in hand: two fingers are down, or a wheel's or a trackpad pinch's zoom is still arriving. The scale is shown while it is."
           ]
         },
         {
@@ -1470,17 +1487,10 @@
       "name": "RefusedFile",
       "fields": [
         {
-          "name": "root",
-          "type": "u32",
-          "$doc": [
-            "file.json's `root`."
-          ]
-        },
-        {
           "name": "path",
-          "type": "str",
+          "type": "path",
           "$doc": [
-            "Its path below the root, as the core opened it."
+            "Its path, as the core opened it (file.json `path`)."
           ]
         }
       ]

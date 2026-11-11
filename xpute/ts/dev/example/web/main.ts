@@ -7,13 +7,14 @@
 
 import { QUIET, start } from "@xpute/runtime";
 import { Command } from "../asker.spec.ts";
-import { ANSWER, manifest } from "./core.ts";
+import { MANIFEST } from "../manifest.spec.ts";
+import { ANSWER } from "./core.ts";
 
 const out = document.querySelector("#out")!;
 const say = (line: string) => (out.textContent += `${line}\n`);
 
 const link = await start(
-  manifest,
+  MANIFEST,
   { ...QUIET, stop: () => say("stopped") },
   () =>
     new Worker(new URL("./core.worker.ts", import.meta.url), {

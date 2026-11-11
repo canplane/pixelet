@@ -24,28 +24,23 @@ interface Xpute {
   wake(): void;
   /** Says that an input came now, so the turns are interactive for a while. */
   input(): void;
-  /** From now on only a turn `run` rings may begin. */
+  /** From now on only a turn `run` runs may begin. */
   pause(): void;
   /** Turns begin again at the display's frames. */
   resume(): void;
   /** Answers here the call that waits, if one does. */
   answer(): void;
-  /** Starts the runtime's own thread over the rings at these offsets; `fs`
-   * says whether the machine asks for the file device. */
-  attach(sqAt: u32, cqAt: u32, fs: boolean): void;
+  /** Starts the runtime's own thread; `fs` says whether the manifest asks for
+   * the file device. */
+  attach(fs: boolean): void;
   /** The program's numbers for frame pacing, given before the turns run. */
   pace(paceHz: f64, marginShare: f64, batchFrames: f64, settleMs: f64): void;
-  /** Queues a frame for the submission ring. */
+  /** Queues a frame for the core. */
   post(tag: u32, cmd: u32, flags: u32, result: i32, pkt: Uint8Array): void;
   /** Hands over what the UI has not heard (xpute.h `xpute_take`). */
   take(): ArrayBuffer;
   /** Completes the open of `fd`, with its bytes or a negative result. */
-  fsOpened(fd: u32, result: i32, detail: u32, bytes: Uint8Array): void;
-  /** Completes the close of `fd`. */
-  fsClosed(fd: u32, result: i32): void;
-  /** Calls the core: submits `cmd` and rings turns until its reply, which it
-   * returns, answering the turns' calls here meanwhile. */
-  call(cmd: u32, pkt: Uint8Array): i32;
+  fsCompleteOpen(fd: u32, result: i32, detail: u32, bytes: Uint8Array): void;
   /** Makes `answer` answer the core's calls from here on. */
   callOn(answer: (at: u32) => i32): void;
   /** Writes a line to the process's output: stdout on iOS, the log under the

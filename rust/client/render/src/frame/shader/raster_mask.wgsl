@@ -2,9 +2,9 @@
 
 // The gate the samples' raster is drawn through in a frame not drawn whole
 // (ray/raster.rs `draw`). The raster's depth is cleared to the nearest,
-// and the gate sets each claimed tile (screen_tile.wgsl) back to what a
+// and the gate sets each damaged tile (screen_tile.wgsl) back to what a
 // cleared pass starts from: no sample, and the far plane's depth, which is 0
-// as the depth is reversed. So the boxes pass the depth test in the claimed
+// as the depth is reversed. So the boxes pass the depth test in the damaged
 // tiles alone.
 
 @fragment

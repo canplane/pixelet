@@ -21,14 +21,19 @@ use crate::perf::record::{
 };
 use crate::perf::section::TASK_PHASES;
 use crate::perf::section::{
-    FrameSection, Percentile, StepSection, StepStat, StreamStat, TaskSection, ViewSection,
+    DrawSection, FrameSection, Percentile, StepSection, StepStat, StreamStat, TaskSection,
+    ViewSection,
 };
 use crate::perf::spec::{self, LIMIT, NOW, STAT};
 use crate::perf::task::TaskRecord;
 use crate::perf::word::put;
 use crate::sys::io::failure::Outcome;
-use crate::sys::sched::tick::tick;
+use crate::sys::sched;
+use crate::turn;
+use crate::turn::refused_frames;
+use pxl_render::gpu::api;
 use pxl_render::gpu::span_spec::FRAME_KINDS;
+use pxl_render::renderer;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -118,8 +123,24 @@ pub fn perf_now() -> &'static [f64] {
     let out = &mut read().now[..];
     out.fill(0.0);
     put(out, NOW::recording_state::AT, &perf_recording_state());
+    put(out, NOW::draw::AT, &draw());
     put(out, NOW::view::AT, &view());
     out
+}
+
+fn draw() -> DrawSection {
+    let refused = refused_frames();
+    let block = api::device_block();
+    DrawSection {
+        turns: sched::turns() as f64,
+        frames: renderer::drawn_frames(),
+        refused_admit: refused.admit,
+        refused_stream: refused.stream,
+        generation: f64::from(api::device_generation()),
+        status: f64::from(block.status),
+        errors: f64::from(block.errors),
+        unfinished: f64::from(block.unfinished),
+    }
 }
 
 fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
@@ -348,15 +369,10 @@ fn view() -> ViewSection {
 
 fn steps() -> StepSection {
     let mut steps = StepSection::default();
-    for s in tick()
-        .step_stats()
-        .iter()
-        .filter(|s| s.cnt > 0)
-        .take(STEP_CAP)
-    {
+    for (name, s) in turn::step_stats().take(STEP_CAP) {
         steps.slots[steps.cnt as usize] = StepStat {
-            phase: f64::from(s.phase),
-            name: s.name as f64,
+            phase: f64::from(s.phase as u8),
+            name: f64::from(name as u8),
             ms: s.ms,
             cnt: s.cnt as f64,
             max_ms: s.max_ms,

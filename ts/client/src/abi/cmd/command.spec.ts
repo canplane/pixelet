@@ -31,7 +31,7 @@ export const SETTING_DEV = 0x1602;
 /** A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
  * (transforms aside), as the world surface's size is (GPU_SURFACE_RESIZE). */
 export const INPUT_POINTER = 0x1102;
-/** Whether the UI is taking typed text. A device's touches reach the core without the UI (pxl-core door/touch.rs), so a touch pressed while this holds is spent on ending the typing: its lift ends the gesture with no tap, and its drag still moves the world. */
+/** Whether the UI is taking typed text. A pointer pressed while this holds, a device's touch too (pxl-core door/touch.rs), is spent on ending the typing: its lift ends the gesture with no tap, and its drag still moves the world. */
 export const INPUT_TYPING = 0x110b;
 /** The tool and what it takes, the UI's to choose and keep: the core is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer. */
 export const EDIT_TOOL = 0x1a01;
@@ -41,6 +41,8 @@ export const EDIT_MARKER_CANCEL = 0x1a03;
 /** The marker's draft committed with its text, where its place is still free or still a marker, and closed. */
 export const EDIT_MARKER_COMMIT = 0x1a04;
 export const INPUT_WHEEL = 0x1103;
+/** A pinch the platform recognized, as a trackpad's is: the factor the fingers' spread changed by since the last. Over one, they spread, and the camera comes nearer by that factor, as under two touches. */
+export const INPUT_PINCH = 0x110c;
 /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
 export const INPUT_MOVE = 0x1106;
 /** What a surface the UI opened draws, until its GPU_SURFACE_CLOSE. The world, with the
@@ -89,7 +91,7 @@ export const PERF_RINGS = 0x1904;
 
 export const SENSOR_START = 0x1201;
 export const SENSOR_STOP = 0x1203;
-/** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
+/** The UI's snapshot, when it changed: a Snapshot packet far past a frame's room, so a
  * block the core holds, valid until the next snapshot. */
 export const UI_SNAPSHOT = 0x1b01;
 /** The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a

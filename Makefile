@@ -19,7 +19,7 @@
 # With -j the trees run in parallel; xpute's make and cargo share its job
 # slots ($(MAKE), and + before cargo).
 
-.PHONY: install install-ts install-xpute \
+.PHONY: install install-ts install-xpute install-rust \
 	check check-ts check-rust check-rules check-spec check-build check-xpute \
 	test test-ts test-rust test-xpute test-gpu \
 	fmt fmt-ts fmt-rust \
@@ -27,12 +27,15 @@
 	serve-tile watch-wasm web web-preview \
 	sync-build-number deploy
 
-# Each tree's packages, by its own manager: ts/'s here, xpute's by its make.
-install: install-ts install-xpute
+# Each tree's packages, by its own manager: ts/'s here, xpute's by its make,
+# and the cargo tools the tests run under.
+install: install-ts install-xpute install-rust
 install-ts:
 	pnpm --dir ts install
 install-xpute:
 	pnpm --dir xpute/ts install
+install-rust:
+	cargo install cargo-nextest --locked
 
 # `check` and `test` hold pixelet's code. What a deploy adds before its push,
 # since CI checks nothing (.agents/skills/deploy/SKILL.md): `check-build`, the
@@ -61,7 +64,8 @@ test: test-ts test-rust
 test-ts:
 	pnpm --dir ts test
 test-rust:
-	+cd rust && cargo test-host && cargo test-render
+	@cargo nextest --version >/dev/null 2>&1 || { echo "pxl-core's unit tests run under cargo-nextest, which make install brings" >&2; exit 1; }
+	+cd rust && cargo test-host && cargo test-core && cargo test-frame && cargo test-render
 test-xpute:
 	+cd xpute/rust && cargo test --workspace && cargo core && cargo core-wasm
 	pnpm --dir xpute/ts test

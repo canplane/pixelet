@@ -615,12 +615,12 @@ fn hand_faces_answer_as_face_word() {
 }
 
 /// A screen the pixels are cast on. `reach` is the share of the samples' reach that the eye
-/// keeps when it casts. One tile in `unclaimed_in` is left unclaimed, and none where it is 0.
+/// keeps when it casts. One tile in `undamaged_in` is left undamaged, and none where it is 0.
 struct Screen {
     size: [u32; 2],
     jitter: [f32; 2],
     reach: f32,
-    unclaimed_in: u32,
+    undamaged_in: u32,
 }
 
 /// The tangents of pixel `p`'s ray, as `cast_cs` works them out (grid.wgsl `px_tan`).
@@ -681,13 +681,13 @@ fn hand_pixels_answer_as_cast_entry() {
             size: [256, 160],
             jitter: [0.0, 0.0],
             reach: 1.0,
-            unclaimed_in: 0,
+            undamaged_in: 0,
         },
         Screen {
             size: [301, 173],
             jitter: [0.25, -0.375],
             reach: 1.0,
-            unclaimed_in: 3,
+            undamaged_in: 3,
         },
         // The eye's reach is cut after its samples were cast, and `cast_cs` must not enter a
         // cell past the new reach.
@@ -695,7 +695,7 @@ fn hand_pixels_answer_as_cast_entry() {
             size: [199, 121],
             jitter: [-0.5, 0.125],
             reach: 0.4,
-            unclaimed_in: 5,
+            undamaged_in: 5,
         },
     ];
     let mut tally = Tally::default();
@@ -798,13 +798,13 @@ fn hand_pixels_answer_as_cast_entry() {
         );
         let vis_view = array_view(&vis);
 
-        // A tile is claimed when it changed within the last `screen::DAMAGE_FRAMES` frames. One
-        // tile in `unclaimed_in` last changed just outside that window.
+        // A tile is damaged when it changed within the last `screen::DAMAGE_FRAMES` frames. One
+        // tile in `undamaged_in` last changed just outside that window.
         let now = 77u32;
         let tiles = [wd.div_ceil(screen::TILE), ht.div_ceil(screen::TILE)];
         let changed: Vec<u32> = (0..tiles[0] * tiles[1])
             .map(|t| {
-                if s.unclaimed_in != 0 && mix(t, 5).is_multiple_of(s.unclaimed_in) {
+                if s.undamaged_in != 0 && mix(t, 5).is_multiple_of(s.undamaged_in) {
                     now - screen::DAMAGE_FRAMES
                 } else {
                     now - mix(t, 6) % screen::DAMAGE_FRAMES

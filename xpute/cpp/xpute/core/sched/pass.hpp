@@ -28,7 +28,7 @@ struct PassStat {
 };
 
 struct Pass {
-    // The time of the turn's rising edge. The budget counts from it, so the
+    // The time the turn started. The budget counts from it, so the
     // time the turn spent before this pass comes off what is left.
     double t0 = 0;
     double total_ms = 0;
@@ -39,7 +39,7 @@ struct Pass {
     // still report none.
     double hard_slack_ms = 0;
 
-    Pass(double total, double rise, double slack) noexcept : t0(rise), total_ms(total), hard_slack_ms(slack) {}
+    Pass(double total, double start, double slack) noexcept : t0(start), total_ms(total), hard_slack_ms(slack) {}
 
     double remaining() const noexcept { return std::max(t0 + total_ms - reserve_ms - now(), 0.0); }
 

@@ -1,6 +1,7 @@
 //! Runs whole frames of the core the way a device runs them. The core is linked as its
-//! native core (lib.rs `core!`, xpute-gpu's `native_core!`) and driven through its rings
-//! the way the app's UI drives it (ts/client/src/service/core/). Each frame's turn comes one
+//! native core (lib.rs `core!`, xpute-gpu's `native_core!`) and driven through
+//! xpute-runtime's native runtime the way the app's UI drives it (runtime.rs,
+//! ts/client/src/service/core/). Each frame's turn comes one
 //! refresh after the last on the core's clock, however long the machine takes (pace.rs),
 //! and the world's surface is drawn offscreen on a wgpu device. A test that encodes a pass
 //! by hand binds its own groups and sees one usage scope. Only the renderer's real frames
@@ -134,10 +135,10 @@ impl Run {
         );
     }
 
-    /// Makes one of the UI's calls and checks it as a frame is checked.
-    fn call(&mut self, name: &str, vals: &[(&str, V)]) -> i32 {
+    /// Makes one of the UI's requests and checks it as a frame is checked.
+    fn request(&mut self, name: &str, vals: &[(&str, V)]) -> i32 {
         watch::waiting(format!("frame {}: {name}'s answer", self.frame_cnt));
-        let r = self.runtime.call(name, vals);
+        let r = self.runtime.request(name, vals);
         self.check(true);
         assert!(r >= 0, "{name} answered {r}");
         r
@@ -212,7 +213,7 @@ fn main() {
 
 fn frames() {
     let core = pxl_core::core();
-    // The test rings every turn itself, on the display's clock, and the core's own thread
+    // The test runs every turn itself, on the display's clock, and the core's own thread
     // runs none.
     pause();
     pace::install(core);
@@ -246,7 +247,7 @@ fn frames() {
     // alone. Every tile of the shard is a page its version leaves out (fs.rs), so the world
     // there is sea.
     let format = BaseLayer::ALL.map(|l| FORMAT.of(l)).to_vec();
-    run.call(
+    run.request(
         "SOURCE_DECLARE",
         &[
             ("min_zoom", V::Num(MIN_ZOOM.into())),
@@ -257,7 +258,7 @@ fn frames() {
 
     // The world's surface, opened the way the scene's place opens it (service/core/surface.ts,
     // service/core/scene.ts).
-    let surface = run.call("GPU_SURFACE_OPEN", &[]);
+    let surface = run.request("GPU_SURFACE_OPEN", &[]);
     assert!(surface > 0, "no surface was opened");
     let surface = V::Num(f64::from(surface));
     let resize = |run: &mut Run, [w, h]: [f64; 2]| {
@@ -273,7 +274,7 @@ fn frames() {
     };
     resize(&mut run, SIZE);
     let world = run.runtime.ui.member("SceneContent", "World");
-    run.call(
+    run.request(
         "SCENE_DRAW",
         &[
             ("surface", surface.clone()),
@@ -293,7 +294,7 @@ fn frames() {
     }
 
     // The camera goes to the place, and its view asks for one jitter sequence of casts.
-    run.call(
+    run.request(
         "CAMERA_GOTO",
         &[("lon", V::Num(PLACE[0])), ("lat", V::Num(PLACE[1]))],
     );
@@ -318,7 +319,7 @@ fn frames() {
     run.frames(JITTERS);
 
     // The shadows go on, which asks for the light's cast.
-    run.call(
+    run.request(
         "SETTING_SET",
         &[
             ("key", V::Num(spec::setting("shadows").into())),

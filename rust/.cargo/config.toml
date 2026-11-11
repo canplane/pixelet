@@ -14,7 +14,11 @@ lint-host = ["clippy", "--all-targets", "-p", "pxl-spec", "-p", "pxl-engine", "-
 lint-ios = ["clippy", "--target", "aarch64-apple-ios", "-p", "pxl-core", "--", "-D", "warnings"]
 lint-android = ["clippy", "--target", "aarch64-linux-android", "-p", "pxl-core", "--no-default-features", "--", "-D", "warnings"]
 # pxl-tool holds every model to the committed table.
-test-host = ["test", "-p", "pxl-spec", "-p", "pxl-engine", "-p", "pxl-content", "-p", "pxl-core", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-geo-bake", "-p", "pxl-api", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve"]
+test-host = ["test", "-p", "pxl-spec", "-p", "pxl-engine", "-p", "pxl-content", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-geo-bake", "-p", "pxl-api", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve"]
+# pxl-core's unit tests, one to a process, each booting a core of its own
+# (sys.rs `on_core`); and its whole frames, a program of their own.
+test-core = ["nextest", "run", "-p", "pxl-core", "--lib"]
+test-frame = ["test", "-p", "pxl-core", "--test", "frame"]
 # The renderer's own tests here, and its passes on this machine's GPU, held to
 # pxl-engine word for word (tests/).
 test-render = ["test", "-p", "pxl-render", "--lib"]

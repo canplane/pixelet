@@ -23,10 +23,11 @@
 )]
 
 /// The size of the range the core shares with its runtime. The range holds the front's
-/// header, both rings, the stream and the gaps LAYOUTS draws between them, then the core's
-/// own state and heap. The core's boot answers where the range begins, and so where the
-/// header is (the contract's rule 0). The rest of the memory, a module's stack and data,
-/// is the build's, and no number here sizes it.
+/// header, the frame it receives into, the frame it sends from, the stream and the gaps
+/// LAYOUTS draws between them, then the core's own state and heap. The core's boot
+/// answers where the range begins, and so where the header is (the contract's rule 0).
+/// The rest of the memory, a module's stack and data, is the build's, and no number here
+/// sizes it.
 pub const MEM_BYTES: u32 = 262144;
 
 /// How many layouts a runtime runs every trace against: one for each seed below this
@@ -34,23 +35,15 @@ pub const MEM_BYTES: u32 = 262144;
 /// parts it shares with its runtime, the header among them, and how many pages to leave
 /// before each part. Every core draws the same way. No shared part lies where it lay under
 /// another seed, so only a runtime that finds every part through the header passes every
-/// layout (the contract's rule 0). No machine fixes where these parts lie, so the fixture
-/// lays its front and writes its header itself, as a runtime does for a machine.
+/// layout (the contract's rule 0). No manifest.json fixes where these parts lie, so the fixture
+/// lays its front and writes its header itself, as a runtime does from a core's manifest.
 pub const LAYOUTS: u32 = 8;
 
 /// The most pages a layout leaves before each part it lays.
 pub const GAP_PAGES: u32 = 3;
 
-/// How many frames the submission ring holds.
-pub const SQ_CAP: u32 = 16;
-
-/// How many frames the completion ring holds. It is less than what eight commands leave
-/// when each raises MOST_RAISE frames, so a trace that sends eight of them makes a turn's
-/// output outgrow the ring.
-pub const CQ_CAP: u32 = 128;
-
-/// The size of one ring slot in bytes, enough for a packet of one number.
-pub const SLOT_BYTES: u32 = 256;
+/// The most bytes a frame's packet takes, either way, enough for a packet of one number.
+pub const PKT_BYTES: u32 = 256;
 
 /// The length in words of the stream's range, its END word first. The header's STREAM_AT word
 /// points at the stream, so the runtime runs it after every turn as it runs a GPU stream.
@@ -71,7 +64,7 @@ pub const HANDLES: u32 = 16;
 pub const MOST_RAISE: u32 = 32;
 
 /// The conformance core's own commands, numbered `major << 8 | minor` past xpute's majors
-/// (ipc/frame.json). Where a command takes a packet, the packet is a branch whose first
+/// (io/frame.json). Where a command takes a packet, the packet is a branch whose first
 /// child is a number.
 pub mod cmd {
     /// Succeeds and replies 0.
@@ -94,10 +87,10 @@ pub mod cmd {
     pub const MARK: u32 = 4104;
     /// Reads the runtime's clock and replies with the whole milliseconds since the last MARK.
     pub const SINCE: u32 = 4105;
-    /// Opens a file on behalf of an owner, the packet's number, and replies with the
-    /// descriptor. The open's FS_OPENAT is posted for the file device, which no trace's runtime
-    /// takes. When a trace completes the open (`complete`), the core raises OPENED for that
-    /// owner if the descriptor is still open.
+    /// Opens the file (1, "f") on behalf of an owner, the packet's number, and replies with the
+    /// descriptor. The open's FS_OPEN is posted for the file device, which no trace's runtime
+    /// takes. When a trace completes the open (`complete`), the core raises OPEN_COMPLETION for
+    /// that owner if the descriptor is still open.
     pub const OPEN: u32 = 4106;
     /// Closes the packet's descriptor, whether or not its open has completed; fails with EBADF
     /// for a descriptor that is not open.
@@ -112,11 +105,24 @@ pub mod cmd {
     pub const INC: u32 = 4109;
     /// The import that RAISE raises.
     pub const NOTE: u32 = 4353;
-    /// An open has completed. The frame is tagged with the open's owner, and its result is
-    /// what the runtime completed the open with.
-    pub const OPENED: u32 = 4354;
+    /// An open's completion, handed on. The frame is tagged with the open's owner, and its
+    /// result is what the runtime completed the open with.
+    pub const OPEN_COMPLETION: u32 = 4354;
     pub const KEYS: &[&str] = &[
-        "OK", "FAIL", "RAISE", "RECORD", "ISSUE", "RELEASE", "USE", "MARK", "SINCE", "OPEN",
-        "CLOSE", "CALL", "INC", "NOTE", "OPENED",
+        "OK",
+        "FAIL",
+        "RAISE",
+        "RECORD",
+        "ISSUE",
+        "RELEASE",
+        "USE",
+        "MARK",
+        "SINCE",
+        "OPEN",
+        "CLOSE",
+        "CALL",
+        "INC",
+        "NOTE",
+        "OPEN_COMPLETION",
     ];
 }

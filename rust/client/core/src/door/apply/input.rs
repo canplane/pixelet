@@ -1,54 +1,52 @@
 // pxl-core/door/apply/input.rs
 
-//! The INPUT major's commands: the pointer, the wheel, the held movement
-//! keys, and a tracker's pose.
+//! The INPUT major's commands: the pointer, the wheel, a trackpad's pinch,
+//! the held movement keys, and a tracker's pose.
 
 use super::State;
 use super::{ask_turn, refuse_unless};
 use crate::domain::control::camera::controller;
 use crate::domain::control::edit::{clear_hover, clear_hover_coord};
 use crate::domain::control::input::{
-    camera_keys, camera_pointer_down, camera_pointer_move, camera_pointer_out, camera_pointer_up,
-    camera_wheel, pinching,
+    camera_keys, camera_pinch, camera_pointer_down, camera_pointer_move, camera_pointer_out,
+    camera_pointer_up, camera_wheel, pinching,
 };
 use crate::door::cmd as abi;
 use crate::pointer::tap;
 use xpute_core::global::Global;
-use xpute_core::ipc::door::Outcome;
+use xpute_core::io::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
 #[derive(Default)]
-struct Touches {
+struct Pointers {
     /// The UI is taking typed text (INPUT_TYPING).
     typing: bool,
-    /// The touches pressed while it was, whose lifts tap nothing.
+    /// The pointers pressed while it was, whose lifts tap nothing.
     spent: Vec<i32>,
 }
 
-static TOUCHES: Global<Touches> = Global::new();
+static POINTERS: Global<Pointers> = Global::new();
 
-fn touches() -> &'static mut Touches {
-    TOUCHES.get(Touches::default)
+fn pointers() -> &'static mut Pointers {
+    POINTERS.get(Pointers::default)
 }
 
 pub(super) fn typing(c: abi::InputTyping) -> Outcome {
-    touches().typing = c.typing;
+    pointers().typing = c.typing;
     Ok(Some(0))
 }
 
 /// Forgets what an earlier UI said and pressed.
-pub(in crate::door) fn forget_touches() {
-    *touches() = Touches::default();
+pub(in crate::door) fn forget_pointers() {
+    *pointers() = Pointers::default();
 }
 
-/// A touch pressed while the UI types is spent: its lift is a cancel.
+/// A pointer pressed while the UI types is spent: its lift is a cancel.
 fn phase_of(c: &abi::InputPointer) -> abi::PointerPhase {
-    let t = touches();
+    let t = pointers();
     let at = t.spent.iter().position(|&id| id == c.id);
     match (c.phase, at) {
-        (abi::PointerPhase::Down, None)
-            if t.typing && c.pointer_type == abi::PointerType::Touch =>
-        {
+        (abi::PointerPhase::Down, None) if t.typing => {
             t.spent.push(c.id);
             c.phase
         }
@@ -88,6 +86,12 @@ pub(super) fn pointer(c: abi::InputPointer) -> Outcome {
 
 pub(super) fn wheel(c: abi::InputWheel) -> Outcome {
     camera_wheel(c.delta_y);
+    Ok(Some(0))
+}
+
+pub(super) fn pinch(c: abi::InputPinch) -> Outcome {
+    refuse_unless(c.scale > 0.0, Errno::EINVAL)?;
+    camera_pinch(c.scale);
     Ok(Some(0))
 }
 

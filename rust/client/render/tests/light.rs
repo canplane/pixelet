@@ -88,8 +88,8 @@ struct SlotCase {
     name: &'static str,
     lit: LightBox,
     range: [Zoom; 2],
-    /// `None` makes the cast the first of its epoch, where every tile read is claimed. `Some(k)`
-    /// puts it later in its epoch, where about one tile in `k` is claimed.
+    /// `None` makes the cast the first of its epoch, where every tile read is damaged. `Some(k)`
+    /// puts it later in its epoch, where about one tile in `k` is damaged.
     one_in: Option<u32>,
 }
 
@@ -160,7 +160,7 @@ fn hand_light_cs_answers_as_the_rust() {
             one_in: None,
         },
         SlotCase {
-            name: "tiles claimed within the epoch",
+            name: "tiles damaged within the epoch",
             lit: lit(
                 over(&built, [EYE[0] + 90, EYE[1] + 90], 40),
                 [0.5, -0.1, -0.86],
@@ -356,24 +356,24 @@ fn run_slots(
     // The tiles the cast casts are listed once each, and the room past the list is filled with
     // a tile that is not listed. In the first cast of an epoch, the tiles listed are those
     // read, which is all but some. Later in the epoch, they are some of the box, each marked
-    // read, as a claimed tile is (light_propagate.wgsl).
+    // read, as a damaged tile is (light_propagate.wgsl).
     let reads_at = light::reads_at(SIZE) as usize;
     let mut threads: Vec<Option<[u32; 2]>> = Vec::new();
     let mut entries = Vec::new();
     for j in 0..tiles {
         for i in 0..tiles {
             let t = j * tiles + i;
-            let (claimed, word) = match c.one_in {
+            let (damaged, word) = match c.one_in {
                 Some(every) => {
-                    let claimed = (i + 2 * j).is_multiple_of(every) || i == 0 || j == tiles - 1;
-                    (claimed, if claimed { CAST } else { CAST - 1 })
+                    let damaged = (i + 2 * j).is_multiple_of(every) || i == 0 || j == tiles - 1;
+                    (damaged, if damaged { CAST } else { CAST - 1 })
                 }
                 None => {
                     let read = !noise(t ^ 0x77).is_multiple_of(5);
                     (read, if read { CAST } else { CAST - 1 })
                 }
             };
-            if claimed {
+            if damaged {
                 entries.push(j << 16 | i);
             }
             list[reads_at + t as usize] = word;
@@ -387,7 +387,7 @@ fn run_slots(
     let unlisted = (0..tiles * tiles)
         .map(|k| ((k / tiles) << 16) | (k % tiles))
         .find(|e| !entries.contains(e))
-        .expect("a tile not claimed");
+        .expect("a tile not damaged");
     list[at + 1 + entries.len()..at + 1 + cap].fill(unlisted);
     // The unlisted tile is marked read, so that a thread that took the room past the list
     // would cast it and differ from the Rust.
@@ -1331,8 +1331,8 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 #[test]
 fn every_pass_bands_a_tile_alike() {
     use pxl_render::frame::shader::record::{
-        compute, COMPUTE_LIGHT, COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_SLIDE, COMPUTE_QUEUE,
-        COMPUTE_QUEUE_LAST, COMPUTE_QUEUE_LAST_LIGHT_CORNERS, COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
+        compute, COMPUTE_LIGHT, COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_SLIDE, COMPUTE_QUEUE_LAST_LIGHT,
+        COMPUTE_QUEUE_LAST_LIGHT_CORNERS, COMPUTE_QUEUE_LAST_LIGHT_SAMPLES, COMPUTE_QUEUE_LIGHT,
         COMPUTE_QUEUE_LIGHT_CORNERS, COMPUTE_QUEUE_LIGHT_SAMPLES,
     };
     use pxl_spec::space::camera::grid::INV_SPLIT2;
@@ -1360,8 +1360,8 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         COMPUTE_LIGHT,
         COMPUTE_QUEUE_LIGHT_SAMPLES,
         COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
-        COMPUTE_QUEUE_LAST,
-        COMPUTE_QUEUE,
+        COMPUTE_QUEUE_LAST_LIGHT,
+        COMPUTE_QUEUE_LIGHT,
         COMPUTE_QUEUE_LIGHT_CORNERS,
         COMPUTE_QUEUE_LAST_LIGHT_CORNERS,
         COMPUTE_LIGHT_CELL,

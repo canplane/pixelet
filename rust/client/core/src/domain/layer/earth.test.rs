@@ -1,7 +1,6 @@
 // pxl-core/domain/layer/earth.test.rs
 
 use super::*;
-use crate::sys;
 use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
 use fnv::FnvHashMap;
@@ -38,40 +37,43 @@ fn is_sent_on(tile: Option<&EarthTile>, on: u32) -> bool {
 
 #[test]
 fn a_full_stream_leaves_the_rest_waiting() {
-    let _g = sys::serial();
-    let (a, b) = (tile(0), tile(1));
-    let cache = holding(&[a, b]);
-    let mut stream_has_room = true;
-    upload(&mut |_, _| std::mem::take(&mut stream_has_room), 7);
-    assert!(
-        is_sent_on(cache.get(a), 7) && matches!(cache.get(b), Some(EarthTile::Waiting(_))),
-        "the first taken, the second kept for a later turn"
-    );
-    upload(&mut |_, _| true, 7);
-    assert!(is_sent_on(cache.get(b), 7));
-    EARTH.set(TileCache::default());
+    crate::on_core(|| {
+        let (a, b) = (tile(0), tile(1));
+        let cache = holding(&[a, b]);
+        let mut stream_has_room = true;
+        upload(&mut |_, _| std::mem::take(&mut stream_has_room), 7);
+        assert!(
+            is_sent_on(cache.get(a), 7) && matches!(cache.get(b), Some(EarthTile::Waiting(_))),
+            "the first taken, the second kept for a later turn"
+        );
+        upload(&mut |_, _| true, 7);
+        assert!(is_sent_on(cache.get(b), 7));
+        EARTH.set(TileCache::default());
+    });
 }
 
 #[test]
 fn a_new_device_fetches_again() {
-    let _g = sys::serial();
-    let a = tile(0);
-    let cache = holding(&[a]);
-    upload(&mut |_, _| true, 3);
-    assert!(!cache.needs_refetch(a));
-    upload(&mut |_, _| false, 4);
-    assert!(
-        cache.needs_refetch(a) && is_sent_on(cache.get(a), 3),
-        "its texels went to device 3, so it is fetched again and stays until they come"
-    );
-    EARTH.set(TileCache::default());
+    crate::on_core(|| {
+        let a = tile(0);
+        let cache = holding(&[a]);
+        upload(&mut |_, _| true, 3);
+        assert!(!cache.needs_refetch(a));
+        upload(&mut |_, _| false, 4);
+        assert!(
+            cache.needs_refetch(a) && is_sent_on(cache.get(a), 3),
+            "its texels went to device 3, so it is fetched again and stays until they come"
+        );
+        EARTH.set(TileCache::default());
+    });
 }
 
 #[test]
 fn a_waiting_tile_takes_its_packet_with_it() {
-    let _g = sys::serial();
-    holding(&[tile(0)]);
-    let released = body::releases();
-    EARTH.set(TileCache::default());
-    assert_eq!(body::releases(), released.wrapping_add(1));
+    crate::on_core(|| {
+        holding(&[tile(0)]);
+        let released = body::releases();
+        EARTH.set(TileCache::default());
+        assert_eq!(body::releases(), released.wrapping_add(1));
+    });
 }

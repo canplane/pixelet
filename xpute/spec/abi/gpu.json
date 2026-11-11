@@ -3,12 +3,12 @@
     "The GPU device's protocol, which tells the core the device's state and the",
     "surfaces the UI lends it. The core's own calls to the GPU are not commands: they are",
     "records in its GPU stream (gpu/api.json). GPU_READY tells the core that the device its",
-    "machine asked for has answered. A surface is a canvas or a view that the UI hands over,",
+    "core asked for has answered. A surface is a canvas or a view that the UI hands over,",
     "and from then on only the core draws into it. The surface is named by the handle that",
     "GPU_SURFACE_OPEN answers with: the UI binds its canvas under that handle (@xpute/gpu",
     "`gpu_connect`), and the stream's CONFIGURE and CURRENT records name the surface by it. What",
     "a surface shows is the program's to decide. A command's number here is its minor, under the",
-    "one major the program gives the GPU (xpute_gpu `decode`, @xpute/gpu `gpu_protocol`)."
+    "one major the program gives the GPU (xpute_gpu `decode`, @xpute/gpu `gpu_exports`)."
   ],
   "name": "gpu",
   "export": [
@@ -16,7 +16,7 @@
       "name": "GPU_READY",
       "val": 1,
       "$doc": [
-        "The GPU the machine asked for has answered, for the first time or again after the device",
+        "The GPU the core asked for has answered, for the first time or again after the device",
         "was lost. The STATUS word of the stream's device block tells the core the device's state."
       ]
     },

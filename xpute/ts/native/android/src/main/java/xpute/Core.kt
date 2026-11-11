@@ -11,7 +11,7 @@ import java.nio.ByteBuffer
  * shared library that the module's build makes of the app's core crate
  * (build.gradle). The core runs on its own thread, which begins its turns at
  * the display's frames; the app's thread asks for turns, waits on it only for a
- * turn it rings, and answers its calls.
+ * turn it runs, and answers its calls.
  * It takes nothing of React Native's; the Expo module (XputeModule.kt) is one
  * host that uses it.
  */
@@ -29,7 +29,7 @@ object Core {
   /** Tells the core's thread of a display frame, `ageMs` after its time. */
   external fun vsync(ageMs: Double)
 
-  /** From now on only a turn `run` rings may begin. */
+  /** From now on only a turn `run` runs may begin. */
   external fun pause()
 
   /** Turns begin again at the display's frames. */
@@ -38,26 +38,20 @@ object Core {
   /** Answers on this thread the call that waits, if one does. */
   external fun answer()
 
-  /** Starts the runtime's own thread over the rings at the given offsets. */
-  external fun attach(sqAt: Int, cqAt: Int, fs: Boolean)
+  /** Starts the runtime's own thread (xpute.h `xpute_attach`). */
+  external fun attach(fs: Boolean)
 
   /** The program's numbers for frame pacing, given before the turns run. */
   external fun pace(paceHz: Double, marginShare: Double, batchFrames: Double, settleMs: Double)
 
-  /** Queues a frame for the submission ring. */
+  /** Queues a frame for the core. */
   external fun post(tag: Int, cmd: Int, flags: Int, result: Int, pkt: ByteArray)
 
   /** Hands over what the UI has not heard (xpute.h `xpute_take`). */
   external fun take(): ByteArray
 
   /** Completes the open of `fd`. */
-  external fun fsOpened(fd: Int, result: Int, detail: Int, bytes: ByteArray)
-
-  /** Completes the close of `fd`. */
-  external fun fsClosed(fd: Int, result: Int)
-
-  /** Calls the core and waits for its reply (xpute.h `xpute_call`). */
-  external fun call(cmd: Int, pkt: ByteArray): Int
+  external fun fsCompleteOpen(fd: Int, result: Int, detail: Int, bytes: ByteArray)
 
   /** The function that answers the core's call laid at the byte it is given,
    * on the app's thread. */

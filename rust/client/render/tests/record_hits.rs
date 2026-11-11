@@ -643,7 +643,8 @@ fn cache_word(k: usize) -> String {
 /// An observer's frame up to its record of its holes' hits: the hits, and the words the
 /// record's passes run over, each kept as laid and bound on the device. `words` are the eye's
 /// beam rays' words or the light's list, and `asks_at` the first word of the asks its hits
-/// open. `rays` are the eye's rays or the light's map, `size` texels a layer.
+/// open. `rays` are the eye's rays or the light's map, `size` texels a layer. Only the light has
+/// a head (`header_buf`).
 struct Run {
     name: String,
     reads: bool,
@@ -654,7 +655,7 @@ struct Run {
     asks_at: u32,
     size: [u32; 2],
     eye_buf: wgpu::Buffer,
-    header_buf: wgpu::Buffer,
+    header_buf: Option<wgpu::Buffer>,
     words_buf: wgpu::Buffer,
     node_cache_buf: wgpu::Buffer,
     args_buf: wgpu::Buffer,
@@ -671,8 +672,8 @@ impl Run {
             (9, self.node_cache_buf.as_entire_binding()),
             (16, self.args_buf.as_entire_binding()),
         ];
-        if !self.reads {
-            binds.push((11, self.header_buf.as_entire_binding()));
+        if let Some(header) = &self.header_buf {
+            binds.push((11, header.as_entire_binding()));
         }
         binds
     }
@@ -819,11 +820,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
         args: Vec::new(),
         asks_at: grid.hit_asks_at,
         size: s.size,
-        // The eye's head is all zero, as the cast binds it (ray/cast.rs `eye_header`).
-        header_buf: gpu.buf(
-            &vec![0u32; light::HEADER_WORDS],
-            wgpu::BufferUsages::UNIFORM,
-        ),
+        header_buf: None,
         eye_buf,
         words_buf,
         node_cache_buf,
@@ -841,8 +838,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
     let view = array_view(&run.rays);
     let mut binds = world_binds(b, &run.eye_buf, &run.words_buf, &run.node_cache_buf);
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
-    binds.push((11, run.header_buf.as_entire_binding()));
-    gpu.holes(ray::QUEUE_EYE_HOLES, &binds, &run.node_cache_buf);
+    gpu.holes(false, &binds, &run.node_cache_buf);
     drop(binds);
 
     let origin = c.origin;
@@ -966,13 +962,13 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
             &vec![0; (SIZE * SIZE) as usize],
         ),
         eye_buf,
-        header_buf,
+        header_buf: Some(header_buf),
     };
     let view = array_view(&run.rays);
     let mut binds = world_binds(b, &run.eye_buf, &run.words_buf, &run.node_cache_buf);
     binds.push((3, wgpu::BindingResource::TextureView(&view)));
-    binds.push((11, run.header_buf.as_entire_binding()));
-    gpu.holes(ray::QUEUE_LIGHT_HOLES, &binds, &run.node_cache_buf);
+    binds.extend(run.header_buf.iter().map(|h| (11, h.as_entire_binding())));
+    gpu.holes(true, &binds, &run.node_cache_buf);
     drop(binds);
 
     // A hit's node is held from where its slot's ray starts, and the hit is whole where the

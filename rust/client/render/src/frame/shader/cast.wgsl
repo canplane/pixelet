@@ -1,6 +1,6 @@
 // pxl-render/cast.wgsl
 
-// Finds each drawn pixel's ray without a walk, one thread a pixel of the tiles claimed
+// Finds each drawn pixel's ray without a walk, one thread a pixel of the tiles damaged
 // (cast_tile.wgsl). A pixel takes its ray from the visible voxel the raster kept at it, when
 // that is a fresh voxel of a drawable entry of the node cache (pxl-engine `raster`,
 // `record::fresh`; ray/raster.rs), as light.wgsl takes a slot's (visible.wgsl). The ray then
@@ -22,7 +22,7 @@ fn node_cache_word(k: u32) -> u32 {
 /// where the raster kept none. It is read as an array of one layer.
 @group(0) @binding(13) var visibility: texture_2d_array<u32>;
 @group(0) @binding(14) var<storage, read_write> args: MissCount;
-/// The tiles claimed, after this pass's dispatch words: cast_tile.wgsl's `TileList`, its layout
+/// The tiles damaged, after this pass's dispatch words: cast_tile.wgsl's `TileList`, its layout
 /// read without the atomics, which a read-only binding cannot hold.
 struct TileList {
   count: u32,
@@ -30,7 +30,7 @@ struct TileList {
   cnt: u32,
   at: array<u32>,
 }
-@group(0) @binding(30) var<storage, read> claimed: TileList;
+@group(0) @binding(30) var<storage, read> damage: TileList;
 
 /// The first of the four samples about the screen's point at the tangents `at`
 /// (`Grid::sample_before`).
@@ -112,14 +112,14 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
 
 @compute @workgroup_size(CAST_SIDE, CAST_SIDE, 1)
 fn cast_cs(@builtin(workgroup_id) w: vec3<u32>, @builtin(local_invocation_id) l: vec3<u32>) {
-  let tile = claimed.at[w.x];
+  let tile = damage.at[w.x];
   let corner = vec2<u32>(tile & 0xffffu, tile >> 16u) * SCREEN_TILE + w.yz * CAST_SIDE;
   let size = textureDimensions(rays).xy;
   let p = corner + l.xy;
   if (cast_px(p, size)) {
     let b = hole_bit(p, size);
     atomicOr(&marked[b.x % SQUARE_WORDS], 1u << b.y);
-    list_hole(eye_holes_at(size), p);
+    list_hole(eye_holes_at(size), size.x * size.y, p);
   }
   workgroupBarrier();
   // The square's walked words are written whole, a thread a word.

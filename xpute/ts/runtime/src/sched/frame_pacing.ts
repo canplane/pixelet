@@ -7,13 +7,13 @@
  * leave. None of this is xpute's mechanism: the program that composes a page
  * injects this policy, with its own numbers, when the runtime boots.
  *
- * A turn's deadline is its frame's, as Android's Choreographer hands a frame
- * its deadline: the frame's start plus what its frames leave after the
- * margin. A turn rung late into its frame has that much less time, and a
- * turn that ran past its deadline owes the next turn nothing. A turn is
- * interactive within `settle_ms` after an input, or when the core asked for
- * the next turn at once. An interactive turn gets one frame, and any other
- * turn `batch_frames` frames, less the margin either way.
+ * A turn's deadline is its frame's: the frame's start plus what its frames
+ * leave after the margin. A turn started late into its frame has that much
+ * less time, and a turn that ran past its deadline owes the next turn
+ * nothing. A turn is interactive within `settle_ms` after an input, or when
+ * the core asked for the next turn at once. An interactive turn gets one
+ * frame, and any other turn `batch_frames` frames, less the margin either
+ * way.
  *
  * The display's refresh is a low percentile of the gaps between the
  * animation frames the runtime is handed (`gap`), counting every frame seen,
@@ -163,7 +163,7 @@ export class FramePacing implements SchedulingPolicy<FrameGrant> {
     const c = this.cfg;
     const interactive = now - this.input_at < c.settle_ms || this.asked_next;
     const frames = interactive ? 1 : c.batch_frames;
-    // The deadline counts from the frame's start, so a turn rung late into
+    // The deadline counts from the frame's start, so a turn started late into
     // its frame has that much less time.
     const start = this.frame_at >= 0 ? this.frame_at : now;
     return {

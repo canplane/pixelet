@@ -1,6 +1,6 @@
 // pxl-render/light_stand.wgsl
 
-// The light's list (pxl-engine light.rs `list_words`) as the passes that stand, read and claim
+// The light's list (pxl-engine light.rs `list_words`) as the passes that stand, read and damage
 // its tiles write it. These passes bind it apart from `beams` (light_list.wgsl), read and write
 // each word whole, and touch no word past the buffer. No word of it is atomic, as each has one
 // writer in a pass. A listed tile's place is its own, taken from a count kept atomic apart

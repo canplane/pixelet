@@ -15,7 +15,7 @@ use crate::frame::shader::word::{marker, MARKER_FLOATS};
 use crate::frame::shelf::{Atlas, Paint, SlotSet};
 use crate::gpu::api::{
     buf_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
-    Format, Gpu, Layout, Load, RenderContext,
+    Format, Gpu, Group, Load, RenderContext,
 };
 use crate::gpu::atlas::{AtlasPainter, DisplayList};
 use crate::gpu::draw::{DrawStat, DrawTable};
@@ -132,14 +132,11 @@ fn bubble(p: &mut DisplayList, lines: &[String], box_w: f32) {
 
 /// The markers' upload, bound in two groups. The regions' group binds it
 /// with the world's depth, and the markers' group binds it with the regions'
-/// numbers. The other fields name what the groups were made over.
-#[derive(Clone, Copy, Default)]
+/// numbers.
+#[derive(Default)]
 struct Groups {
-    group: u32,
-    region_group: u32,
-    upload: u32,
-    depth: u32,
-    numbers: u32,
+    group: Group,
+    region_group: Group,
 }
 
 pub struct MarkerPass {
@@ -365,17 +362,11 @@ impl MarkerPass {
             return;
         };
         let m = &mut self.groups;
-        if m.upload != upload || m.depth != depth || m.numbers != self.numbers_view || m.group == 0
-        {
-            let bound = |layout: Layout, view: u32| {
-                g.bind_group(layout, &[buf_entry(0, upload), view_entry(1, view)])
-            };
-            release(m.group);
-            release(m.region_group);
-            m.group = bound(self.pipeline.layouts[2], self.numbers_view);
-            m.region_group = bound(self.region_pipeline.layouts[2], depth);
-            (m.upload, m.depth, m.numbers) = (upload, depth, self.numbers_view);
-        }
+        let entries = |view: u32| [buf_entry(0, upload), view_entry(1, view)];
+        m.group
+            .set(g, self.pipeline.layouts[2], &entries(self.numbers_view));
+        m.region_group
+            .set(g, self.region_pipeline.layouts[2], &entries(depth));
         // The uniform is written every frame, because the eye's view moves the markers.
         let mut s = [0.0f32; MARKER_FLOATS];
         s[marker::VIEW..marker::VIEW + 16].copy_from_slice(&self.view);
@@ -432,7 +423,7 @@ impl MarkerPass {
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         let (group, off) = slots.at(0);
         g.set_bind_group(pass, 1, group, &[off]);
-        g.set_bind_group(pass, 2, self.groups.region_group, &[]);
+        g.set_bind_group(pass, 2, self.groups.region_group.id(), &[]);
         g.draw(pass, 4, d[1], 0, 0);
         g.end(pass);
         let pass = g.pass(
@@ -443,7 +434,7 @@ impl MarkerPass {
         g.set_bind_group(pass, 0, self.frame_group, &[]);
         g.set_bind_group(pass, 3, self.atlas_group, &[]);
         g.set_bind_group(pass, 1, group, &[off]);
-        g.set_bind_group(pass, 2, self.groups.group, &[]);
+        g.set_bind_group(pass, 2, self.groups.group.id(), &[]);
         g.draw(pass, 4, d[1], 0, 0);
         g.end(pass);
     }

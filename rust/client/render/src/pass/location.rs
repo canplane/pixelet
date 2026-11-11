@@ -213,7 +213,7 @@ impl LocationPass {
     }
 
     /// Draws each beacon. The pipeline, the models' group 0 `frame`
-    /// (pass/model.rs `FrameGroup`), the list's uniforms (`set_draws`)
+    /// (pass/model.rs `frame_entries`), the list's uniforms (`set_draws`)
     /// and the octahedron are bound once. Each beacon is drawn as the
     /// instance its slot names, and its vertices read their draw at that slot
     /// (location.slot.wgsl).

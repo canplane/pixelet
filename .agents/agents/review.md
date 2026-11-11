@@ -23,11 +23,15 @@ meant to do and where it is, not why its author thinks it is right.
 - **Structure.** A concept living twice or derived again; a pass reading
   another layer's storage or going around the query; machinery that removes
   nothing; a dead item, or a doc or citation naming what is gone.
+- **Hold firmly.** A change against AGENTS.md's first section: symmetry broken,
+  an ad hoc piece laid over a rule, what `doc/` records as dropped brought back
+  unremarked, or state added that nothing justifies.
 
 ## Report
 
-Findings, most severe first, each with its file and line, a concrete failure,
-and whether you verified it (read or ran) or only suspect it. A finding is a
-fact for the author to weigh: one that would remove a structure first states
-what it expresses and which of its values are independent. List the areas
-found sound. Under about 800 words.
+Report only what is real: a failure that happens, or a structure the checks
+above name, never a preference or a remote case. Findings, most severe first,
+each with its file and line, a concrete failure, and whether you verified it
+(read or ran) or only suspect it. A finding is a fact for the author to weigh:
+one that would remove a structure first states what it expresses and which of
+its values are independent. List the areas found sound. Under about 800 words.

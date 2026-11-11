@@ -170,8 +170,8 @@ function PetPicker(props: PetPickerProps) {
 /** A pick takes effect at once and the sheet stays open, so that characters
  * can be compared. */
 export function CharacterPicker() {
-  const person = personAt(useCore((s) => s.settings[SETTING.person.key] ?? -1));
-  const pet = petAt(useCore((s) => s.settings[SETTING.pet.key] ?? -1));
+  const person = personAt(useCore((s) => s.settings[SETTING.person.key]));
+  const pet = petAt(useCore((s) => s.settings[SETTING.pet.key]));
 
   // The picker opens on the selected person's gender, so that a pick does not
   // look reset when the sheet opens again.

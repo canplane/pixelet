@@ -1,16 +1,17 @@
 // cpp/xpute/core/sched/task.hpp
 
-// Coroutine tasks run on an executor installed once, as a global allocator is.
-// A task's frame comes from the core's heap; when the heap has no room, no task
-// is made. An executor may ignore priority, so no correctness may rest on the
-// order in which tasks are polled. Work that must run in order within a turn
-// runs in one task.
+// A task is a C++20 coroutine. Its frame comes from the core's heap; when the
+// heap has no room, no task is made. What resumes a task, and in what order, is
+// the program's own scheduler, which xpute does not hold: the scheduler sets in
+// a task's promise how to queue it again (`queue`) as it starts the task, and
+// each task it awaits takes the same. No correctness may rest on the order in
+// which tasks run; work that must run in order within a turn runs in one task.
+// A task checks the deadline at its own yield points (turn.hpp).
 
 #pragma once
 
 #include <coroutine>
 #include <cstddef>
-#include <cstdint>
 #include <cstdlib>
 #include <new>
 #include <optional>
@@ -19,27 +20,14 @@
 
 namespace xpute {
 
-// A lower number runs sooner.
-using Priority = std::uint8_t;
-
-class Executor {
-  public:
-    virtual bool spawn(std::coroutine_handle<> task, Priority priority) noexcept = 0;
-    virtual void wake(std::coroutine_handle<> task) noexcept = 0;
-    // Must not be called from inside a task.
-    virtual void poll() noexcept = 0;
-    virtual bool pending() const noexcept = 0;
-
-  protected:
-    ~Executor() = default;
-};
-
+// A task to wake, and how its scheduler queues it to run again; with none,
+// waking it does nothing.
 struct Waker {
     std::coroutine_handle<> task;
-    Executor *executor = nullptr;
+    void (*queue)(std::coroutine_handle<> task) noexcept = nullptr;
 
     void wake() const noexcept {
-        if (executor != nullptr) executor->wake(task);
+        if (queue != nullptr) queue(task);
     }
 };
 
@@ -49,7 +37,8 @@ namespace task_detail {
 
 // A spawned task has no continuation; its frame is destroyed when it ends.
 struct PromiseBase {
-    Executor *executor = nullptr;
+    // How the program's scheduler queues this task again (`Waker`).
+    void (*queue)(std::coroutine_handle<> task) noexcept = nullptr;
     std::coroutine_handle<> continuation;
 
     static void *operator new(std::size_t n) noexcept { return ::operator new(n, std::nothrow); }
@@ -118,7 +107,7 @@ template <class T> class [[nodiscard]] Task {
         bool await_ready() const noexcept { return false; }
         template <class P> std::coroutine_handle<> await_suspend(std::coroutine_handle<P> parent) const noexcept {
             h.promise().continuation = parent;
-            h.promise().executor = parent.promise().executor;
+            h.promise().queue = parent.promise().queue;
             return h;
         }
         T await_resume() const noexcept {
@@ -150,17 +139,7 @@ inline Task<void> Promise<void>::get_return_object_on_allocation_failure() noexc
 } // namespace task_detail
 
 template <class P> Waker waker_of(std::coroutine_handle<P> h) noexcept {
-    return Waker{h, h.promise().executor};
+    return Waker{h, h.promise().queue};
 }
-
-void set_executor(Executor &executor) noexcept;
-
-Executor *executor() noexcept;
-
-bool spawn(Task<> task, Priority priority) noexcept;
-
-void poll() noexcept;
-
-bool pending() noexcept;
 
 } // namespace xpute

@@ -6,8 +6,8 @@ import assert from "node:assert/strict";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
 import { FileError } from "@xpute/runtime";
 
-import { root, storage as slots } from "@/abi/file.spec.ts";
-import { follow_refused_files, set_aside_by_root } from "./refusal.ts";
+import { path } from "@/abi/file.spec.ts";
+import { follow_refused_files, set_aside_by_path } from "./refusal.ts";
 import {
   is_storage_key,
   commit_storage,
@@ -16,7 +16,7 @@ import {
   type Storage,
 } from "./storage.ts";
 
-const SETTINGS = String(slots.SETTINGS);
+const SETTINGS = path.STORAGE.SETTINGS.ID;
 
 function storage(
   entries: Record<string, string> = {},
@@ -45,7 +45,7 @@ test("set_aside - storage that refuses the copy keeps the slot as it was", () =>
   const s = storage({ "pxl:settings": "AAAA" }, true);
   assert.deepStrictEqual(set_aside(s, SETTINGS, 7), false);
   assert.deepStrictEqual(s.map.get("pxl:settings"), "AAAA");
-  assert.deepStrictEqual(set_aside(storage(), "99", 7), false);
+  assert.deepStrictEqual(set_aside(storage(), 99, 7), false);
 });
 
 test("open_storage - a file's bytes read back as committed, kept as text", () => {
@@ -69,15 +69,15 @@ test("open_storage - text that keeps no bytes is no file of bytes", () => {
 test("follow_refused_files - each refused file is set aside and emptied once", async () => {
   const s = storage({ "pxl:settings": '{"ao":"screen"}' });
   const told: string[] = [];
-  const settings = { root: root.STORAGE, path: SETTINGS };
-  const tell = (f: { root: number; path: string }): void =>
-    void told.push(`${f.root}/${f.path}`);
-  follow_refused_files([settings], tell, set_aside_by_root(s));
-  follow_refused_files([settings], tell, set_aside_by_root(s));
+  const settings = { path: [path.STORAGE.ID, SETTINGS] };
+  const tell = (f: { path: readonly (number | string)[] }): void =>
+    void told.push(f.path.join("/"));
+  follow_refused_files([settings], tell, set_aside_by_path(s));
+  follow_refused_files([settings], tell, set_aside_by_path(s));
   await Promise.resolve();
-  assert.deepStrictEqual(told, [`${root.STORAGE}/${slots.SETTINGS}`]);
+  assert.deepStrictEqual(told, [`${path.STORAGE.ID}/${SETTINGS}`]);
   assert.deepStrictEqual(s.map.get("pxl:settings"), "");
-  follow_refused_files([], tell, set_aside_by_root(s));
+  follow_refused_files([], tell, set_aside_by_path(s));
   assert.deepStrictEqual(told.length, 1);
 });
 

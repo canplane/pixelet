@@ -2,7 +2,6 @@
 
 import { create } from "zustand";
 
-import { strerror } from "@xpute/kit/status/errno.spec.ts";
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import { CUBES, ground, object } from "@/ui/shared/asset/cube.spec.ts";
 import { DECORS } from "@/ui/shared/asset/decor.spec.ts";
@@ -172,9 +171,10 @@ async function hold(
   id: AssetId,
   scaleSteps: i32,
 ): Promise<boolean> {
-  const result = await edit.tool(tool, id, scaleSteps);
-  if (result < 0) {
-    console.error(`[dock] the core refused the tool: ${strerror(result)}`);
+  try {
+    await edit.tool(tool, id, scaleSteps);
+  } catch (err) {
+    console.error(`[dock] the core refused the tool: ${String(err)}`);
     return false;
   }
   store.setState({ tool, id, scaleSteps });

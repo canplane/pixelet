@@ -33,10 +33,11 @@ fn push() {
     });
 }
 
-/// Opens the device as the core's machine asks, and opens the scopes. Returns None when no
+/// Opens the device as the core's manifest asks, and opens the scopes. Returns None when no
 /// adapter answers.
 pub fn open() -> Option<()> {
-    if pxl_core::xpute_gpu_open() != 0 {
+    // SAFETY: no directory, so the test's pipelines are kept nowhere.
+    if unsafe { pxl_core::xpute_gpu_open(core::ptr::null()) } != 0 {
         return None;
     }
     on_stream(push).expect("the device runs");

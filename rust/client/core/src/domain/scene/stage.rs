@@ -30,7 +30,7 @@ use crate::domain::setting::store::{settings, AoMode};
 use crate::domain::view::demand::ViewLayer as _;
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::load::Load;
-use crate::sys::sched::edge::request_world_tick;
+use crate::sys::sched::request_world_tick;
 
 /// The device generation under which the last frame reached the screen
 /// (`api::device_generation`, the count of devices lost so far).
@@ -44,8 +44,8 @@ pub fn screen_shows_world() -> bool {
 }
 
 /// NASA's Blue Marble for July 2004, one picture of the Earth that serves
-/// every hour and season. It is opened below the earth bake's root, so it is
-/// under that bake's version.
+/// every hour and season. It is opened after EARTH, so it is under that
+/// bake's version.
 const EARTH: Load = Load::Sphere;
 
 use crate::domain::layer::object::store;

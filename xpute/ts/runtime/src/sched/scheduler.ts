@@ -1,19 +1,19 @@
 // @xpute/runtime/sched/scheduler.ts
 
 /**
- * Decides when a core's turn is rung. A turn is rung only when the runtime
- * (`wake`) or the core's last falling edge asked for one, and only at a
+ * Decides when a core's turn is run. A turn is run only when the runtime
+ * (`wake`) or the core's last turn asked for one, and only at a
  * moment that the scheduling policy the scheduler was booted with gives and
  * admits (policy.ts). A moment the policy does not admit passes the turn on
  * to the next moment.
  *
- * Each wake the core asks for, at once or in `n` ms, as the doorbell hears it
- * (`Doorbell.ring`), and each wake the runtime asks for (`wake`), waits for a
+ * Each wake the core asks for, at once or in `n` ms, as the connection hears it
+ * (`Connection.run`), and each wake the runtime asks for (`wake`), waits for a
  * moment the policy gives and admits. At that moment the turn's grant is
- * submitted and the core is rung with its deadline. What the runtime sends is
+ * submitted and the core is run with its deadline. What the runtime sends is
  * such a wake, and the granted turn applies it.
  *
- * Every turn rung is heard (`Doorbell.on_turn`). A turn heard drops the timer
+ * Every turn run is heard (`on_turn`). A turn heard drops the timer
  * and every moment asked for an earlier wake: a moment the policy hands back
  * from before the turn runs nothing, and only a turn the runtime still wants
  * is asked for again, so the scheduler never holds a request it no longer
@@ -22,7 +22,7 @@
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import type { Doorbell } from "../ipc/doorbell.ts";
+import type { Connection } from "../io/connection.ts";
 import type { Grant, SchedulingPolicy } from "./policy.ts";
 
 /** HTML's timer delay is a signed 32-bit count of ms; past it a timer fires at once. */
@@ -49,45 +49,46 @@ export class Scheduler<G extends Grant = Grant> {
   private _running = false;
   private readonly _consider = (now: f64): void => this._turn(now);
 
-  private readonly _doorbell: Doorbell;
+  private readonly _connection: Connection;
   private readonly _policy: SchedulingPolicy<G>;
   private readonly _submit: (grant: G, delta_s: f64) => void;
 
-  /** `submit` fills the rings for a granted turn before the doorbell
-   * rings. */
+  /** `submit` sends what a granted turn takes before the connection runs it. */
   constructor(
-    doorbell: Doorbell,
+    connection: Connection,
     policy: SchedulingPolicy<G>,
     submit: (grant: G, delta_s: f64) => void,
   ) {
-    this._doorbell = doorbell;
+    this._connection = connection;
     this._policy = policy;
     this._submit = submit;
-    doorbell.on_wake = (wake_ms) => this._wake_in(wake_ms);
-    // A turn heard is followed by the wake it asks for (`Doorbell.ring`). So
-    // the timer and the moments asked for an earlier wake are dropped, and only
-    // a turn the runtime still wants is asked for again.
-    doorbell.on_turn = () => {
-      this._gen++;
-      this._drop_timer();
-      if (this._runtime_wants) this._ask();
-    };
+  }
+
+  /** A turn heard is followed by the wake it asks for (`on_wake`). So the
+   * timer and the moments asked for an earlier wake are dropped, and only a
+   * turn the runtime still wants is asked for again. */
+  on_turn(): void {
+    this._gen++;
+    this._drop_timer();
+    if (this._runtime_wants) this._ask();
   }
 
   /** Lets turns run from now on. It does nothing if they already run or the
    * core has stopped. */
   resume(): void {
-    if (this._running || this._doorbell.terminated) return;
+    if (this._running || this._connection.terminated) return;
     this._running = true;
     this._last = performance.now();
     this.wake();
   }
 
-  /** Stops turns until `resume`. It does nothing if none run. */
+  /** Stops turns until `resume`. It does nothing if none run. What waits for
+   * the core still reaches it: one turn takes it now. */
   pause(): void {
     if (!this._running) return;
     this._running = false;
     this._drop_timer();
+    if (this._connection.waiting) this._connection.run(0);
   }
 
   /** Asks for a turn the runtime wants, at a moment asked of the policy. It
@@ -101,7 +102,7 @@ export class Scheduler<G extends Grant = Grant> {
 
   /** Asks the policy for a moment, at most once in a generation. */
   private _ask(): void {
-    if (!this._running || this._doorbell.terminated) return;
+    if (!this._running || this._connection.terminated) return;
     if (this._asked_gens.at(-1) === this._gen) return;
     this._asked_gens.push(this._gen);
     this._policy.next(this._consider);
@@ -112,7 +113,9 @@ export class Scheduler<G extends Grant = Grant> {
     this._timer_at = Infinity;
   }
 
-  private _wake_in(wake_ms: f64): void {
+  /** The core wants its next turn in `wake_ms`: at once for 0, never for a
+   * negative number. */
+  on_wake(wake_ms: f64): void {
     if (!this._running) return;
     if (wake_ms === 0) return this._ask();
     if (wake_ms < 0) return;
@@ -129,7 +132,7 @@ export class Scheduler<G extends Grant = Grant> {
 
   private _turn(now: f64): void {
     if (this._asked_gens.shift() !== this._gen) return;
-    if (!this._running || this._doorbell.terminated) return;
+    if (!this._running || this._connection.terminated) return;
     if (!this._policy.admit(now)) return this._ask();
     this._runtime_wants = false;
     // The gap is not clamped. How long a gap still counts as motion is for the
@@ -147,7 +150,7 @@ export class Scheduler<G extends Grant = Grant> {
       this._batching = false;
     }
     const t0 = performance.now();
-    const wake_ms = this._doorbell.ring(left_ms(grant));
+    const wake_ms = this._connection.run(left_ms(grant));
     this._policy.observe(performance.now() - t0, grant, wake_ms);
   }
 }

@@ -1,0 +1,47 @@
+{
+  "$doc": [
+    "The header at the front of a core's memory. The front is what the runtime lays out before",
+    "the core's first turn: this header and the GPU stream (ARCHITECTURE.md). The header lies on",
+    "the page past the core's stack. Both ends compute every number in the header from the same",
+    "manifest, so the header records what the runtime laid; it does not tell the core where to",
+    "look. On its first turn the core holds each word to its manifest and stops with ENOEXEC",
+    "where one differs (xpute-core manifest.rs)."
+  ],
+  "MAGIC": {
+    "$val": 1414877272,
+    "$type": "u32",
+    "$doc": [
+      "The bytes \"XPUT\" read as a little-endian word. It tells a laid header from memory that",
+      "nothing has written."
+    ]
+  },
+  "word": {
+    "$type": "u32",
+    "$doc": [
+      "The index of each header word, counted from the header's start."
+    ],
+    "MAGIC": {
+      "$val": 0
+    },
+    "PKT_BYTES": {
+      "$val": 1,
+      "$doc": [
+        "The most bytes a frame's packet takes, either way."
+      ]
+    },
+    "STREAM_AT": {
+      "$val": 2,
+      "$doc": [
+        "The offset of the stream, which is run after each turn; 0 when the manifest",
+        "asks for none."
+      ]
+    }
+  },
+  "WORDS": {
+    "$val": 3,
+    "$type": "u32",
+    "$doc": [
+      "The header's length in words."
+    ]
+  }
+}

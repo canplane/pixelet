@@ -10,7 +10,7 @@ use crate::domain::setting::store::settings_mut;
 use crate::domain::setting::store::SettingKey;
 use crate::door::cmd as abi;
 use crate::perf::window::perf_follow;
-use xpute_core::ipc::door::Outcome;
+use xpute_core::io::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
 pub(super) fn set(s: &mut State, c: abi::SettingSet) -> Outcome {

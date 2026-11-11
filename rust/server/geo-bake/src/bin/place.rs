@@ -10,6 +10,8 @@
 //!   --out <dir>          the set (default ./out/place), staged beside it in <dir>.stage
 //!   --concurrency <n>    parallel folds (default 8)
 
+use std::process::ExitCode;
+
 use pxl_geo_bake::cli;
 use pxl_geo_bake::coverage::{Coverage, Overture};
 use pxl_geo_bake::place::{self, leaves};
@@ -42,15 +44,9 @@ fn run() -> Result<(), String> {
             println!("[bake/place/{}] {} leaves", shard.name(), tiles.len());
         }
     }
-    run.finish::<PlaceTile, _>(|_| Ok(PlaceTile::default()), &[&place::READS], true)
+    run.finish::<PlaceTile, _>(|_| Ok(PlaceTile::default()), &[&place::READS])
 }
 
-fn main() -> std::process::ExitCode {
-    match run() {
-        Ok(()) => std::process::ExitCode::SUCCESS,
-        Err(e) => {
-            eprintln!("[bake/place] {e}");
-            std::process::ExitCode::FAILURE
-        }
-    }
+fn main() -> ExitCode {
+    cli::main("bake/place", run)
 }

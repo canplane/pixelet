@@ -26,7 +26,7 @@ fn with_args() -> Split {
 #[test]
 fn a_call_reading_args_written_before_it_is_cut_apart() {
     let mut s = with_args();
-    s.opened(PASS, ENCODER, true, Some((7, 1)));
+    s.opened(PASS, ENCODER, true, Some(GpuSpanName::cast));
     assert!(!s.cuts(PASS, ARGS), "nothing written yet");
     s.bound(PASS, 0, WRITES_ARGS, &[]);
     s.ran(PASS);
@@ -41,14 +41,14 @@ fn a_call_reading_args_written_before_it_is_cut_apart() {
 
 /// A compute pass cut keeps what its next part is begun with.
 #[test]
-fn a_cut_pass_keeps_its_pipeline_groups_and_end() {
+fn a_cut_pass_keeps_its_pipeline_groups_and_span() {
     let mut s = with_args();
-    s.opened(PASS, ENCODER, true, Some((7, 3)));
+    s.opened(PASS, ENCODER, true, Some(GpuSpanName::light_sample));
     s.piped(PASS, 8);
     s.bound(PASS, 1, WRITES_ARGS, &[256]);
     assert_eq!(s.pass_on(PASS), Some((ENCODER, true)));
     let o = s.open(PASS).unwrap();
-    assert_eq!((o.pipeline, o.end), (8, Some((7, 3))));
+    assert_eq!((o.pipeline, o.span), (8, Some(GpuSpanName::light_sample)));
     assert_eq!(o.groups[1], (WRITES_ARGS, vec![256]));
     o.at = 11;
     assert_eq!(s.pass_at(PASS), 11, "its calls go to the part recorded now");

@@ -28,6 +28,8 @@
 import type { BranchCursor, NodeCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import type { U32Array } from "@xpute/kit/abi/array.ts";
 import type { f64, i32, u32, u8 } from "@xpute/kit/abi/word.ts";
+import type { Path } from "@xpute/runtime/io/path.ts";
+import { read_path } from "@xpute/runtime/io/path.ts";
 import * as Major from "./cmd/major.spec.ts";
 import * as InputMinor from "./cmd/input_minor.spec.ts";
 import * as SensorMinor from "./cmd/sensor_minor.spec.ts";
@@ -52,8 +54,10 @@ import * as SensorStatus from "./cmd/sensor_status.spec.ts";
 import * as Message from "./cmd/message.spec.ts";
 import * as Command from "./cmd/command.spec.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import type { Protocol, OnImport } from "@xpute/runtime";
+import type { Link, Protocol, OnImport } from "@xpute/runtime";
+import { refusal_of } from "@xpute/runtime";
 
 /** One of Major's, as its enum was a type. */
 type Major = (typeof Major)[keyof typeof Major];
@@ -170,7 +174,7 @@ export interface Snapshot {
   orient: OrientationState;
   is_follow_mode: boolean;
   camera_busy: boolean;
-  /** A zoom is in hand: two fingers are down, or a wheel's zoom is still arriving. The scale is shown while it is. */
+  /** A zoom is in hand: two fingers are down, or a wheel's or a trackpad pinch's zoom is still arriving. The scale is shown while it is. */
   zooming: boolean;
   /** The pointer is over a scene marker a tap would act on with the tool held: a place to go to, or a pin to erase or draft. */
   over_marker: boolean;
@@ -305,14 +309,12 @@ function read_division_part(b: BranchCursor): DivisionPart {
 }
 
 export interface RefusedFile {
-  /** file.json's `root`. */
-  root: u32;
-  /** Its path below the root, as the core opened it. */
-  path: string;
+  /** Its path, as the core opened it (file.json `path`). */
+  path: Path;
 }
 
 function read_refused_file(b: BranchCursor): RefusedFile {
-  return { root: b.at(0).get<u32>(), path: b.at(1).get<string>() };
+  return { path: read_path(b.at_branch(0)) };
 }
 
 /** Command.SENSOR_START's packet. */
@@ -356,145 +358,289 @@ export const read = {
   }),
 };
 
-/** What the runtime sends on the ui protocol: each command by its number, and
- * the fields its packet takes in order. It is sent, requested and answered
- * later, or called and answered before it returns. */
-export type UiSend = {
-  [Command.SENSOR_POS]: [
-    lon: f64,
-    lat: f64,
-    alt: f64 | null,
-    accuracy: f64 | null,
-    course: f64 | null,
-  ];
-  [Command.SENSOR_ORIENT]: [
-    webkit_compass_heading: f64 | null,
-    alpha: f64 | null,
-    beta: f64 | null,
-    gamma: f64 | null,
-  ];
-  /** @param code Geolocation's; orientation gives none. */
-  [Command.SENSOR_ERR]: [sensor: Sensor, code: GeolocationErrorCode | null];
-  [Command.SENSOR_PERMISSION]: [sensor: Sensor, answer: PermissionAnswer];
-  /** @param orient_permission iOS 13+'s gate: requestPermission exists and must run inside a gesture.
-   * @param orient_silence_is_loss A browser's compass talks while the device is still and cannot say it stopped, so silence is the only sign of loss; a device's speaks only when the heading turns and reports a failure itself (SENSOR_ERR). */
-  [Command.SENSOR_PLATFORM]: [
-    geolocation: boolean,
-    orient: boolean,
-    orient_permission: boolean,
-    orient_silence_is_loss: boolean,
-  ];
-  [Command.SETTING_DEV]: [dev: boolean];
-  [Command.INPUT_POINTER]: [
-    phase: PointerPhase,
-    pointer_type: PointerType,
-    id: i32,
-    button: i32,
-    x: f64,
-    y: f64,
-  ];
-  [Command.INPUT_TYPING]: [typing: boolean];
-  [Command.EDIT_MARKER_CANCEL]: [];
-  [Command.EDIT_MARKER_COMMIT]: [];
-  [Command.INPUT_WHEEL]: [delta_y: f64];
-  [Command.INPUT_MOVE]: [x: i32, y: i32];
-  /** @param bg What the character is drawn over, 0xRRGGBB, sRGB. */
-  [Command.SCENE_DRAW]: [
-    surface: u32,
-    content: SceneContent,
-    group: u32 | null,
-    bg: u32 | null,
-  ];
-  /** @param val A toggle's 0 or 1, a choice's option by its index, or a number. */
-  [Command.SETTING_SET]: [key: u32, val: u32];
-  [Command.SCENE_CHAT]: [text: string];
-  [Command.CAMERA_TRACKING]: [tracking: Tracking];
-  [Command.CAMERA_NORTH_UP]: [];
-  [Command.SENSOR_LOCATE]: [];
-  /** @param dist The zoom, the eye's distance from the pivot, clamped to the zoom's range; absent, a view far out comes in.
-   * @param azimuth The heading about Z in radians, wrapped.
-   * @param polar The angle down from vertical in radians, clamped. */
-  [Command.CAMERA_GOTO]: [
-    lon: f64,
-    lat: f64,
-    dist: f64 | null,
-    azimuth: f64 | null,
-    polar: f64 | null,
-  ];
-  [Command.INPUT_XR_POSE]: [
-    x: f64,
-    y: f64,
-    z: f64,
-    qx: f64,
-    qy: f64,
-    qz: f64,
-    qw: f64,
-  ];
-  [Command.INPUT_XR_POSE_END]: [];
-  [Command.PERF_START]: [];
-  [Command.PERF_STOP]: [];
-};
-export type UiRequest = {
-  /** @param val The item to place, its id (id.json); read only for that tool.
-   * @param scale_steps A cube's scale, as a decor's `scale_steps`: 0 a unit, each step down its half, to 1 - OBJECT_SCALES (pxl-spec bake/object.spec.rs). Read only for an item, and only a cube's is chosen. */
-  [Command.EDIT_TOOL]: [tool: Tool, val: u32, scale_steps: i32];
-  [Command.EDIT_MARKER_TEXT]: [text: string];
-};
-export type UiCall = {
-  /** @param min_zoom The coarsest zoom the source supplies whole.
-   * @param format Each kind's format, one a kind, indexed by its bake's number (pxl-spec bake/publication.spec.rs).
-   * @param shard The shards it serves, by name. Their order means nothing: no two at a zoom are over one node, and the finer wins. */
-  [Command.SOURCE_DECLARE]: [min_zoom: u32, format: U32Array, shard: string[]];
-  [Command.PERF_STATS]: [window_ms: f64 | null];
-  [Command.PERF_RINGS]: [];
-};
+/** The ui protocol's exports as the UI calls them over `link`: a send returns
+ * nothing, and a request a Promise of its reply's value, which rejects with the
+ * errno it was refused with. `fits` says whether a send's packet fits a frame. */
+export function ui_exports(link: Link) {
+  return {
+    /** A GPS fix; a field is absent where the browser gave none. */
+    sensor_pos: (
+      lon: f64,
+      lat: f64,
+      alt: f64 | null,
+      accuracy: f64 | null,
+      course: f64 | null,
+    ) => link.send(Command.SENSOR_POS, lon, lat, alt, accuracy, course),
+    /** An orientation event; a field is absent where the browser gave none. */
+    sensor_orient: (
+      webkit_compass_heading: f64 | null,
+      alpha: f64 | null,
+      beta: f64 | null,
+      gamma: f64 | null,
+    ) =>
+      link.send(
+        Command.SENSOR_ORIENT,
+        webkit_compass_heading,
+        alpha,
+        beta,
+        gamma,
+      ),
+    /** A watch that ended in failure and was stopped, refused from the start (PermissionDenied)
+     * or cut off; the compass's, where the platform says so (SYS_BOOT's
+     * orient_silence_is_loss). */
+    sensor_err: (sensor: Sensor, code: GeolocationErrorCode | null) =>
+      link.send(Command.SENSOR_ERR, sensor, code),
+    /** What the tile source declares of itself, once the client has it: the tile root's
+     * `source`, the published one out of the bucket or the dev tile server's, read by the
+     * client (ts/client/src/service/sys/fs/source.ts) and handed over as numbers and names.
+     * Until it comes nothing is observed: the floor is held at the zoom it names, and no
+     * tile is asked for that no shard it serves is over or under (pxl-core sys/io/source.rs). */
+    source_declare: (min_zoom: u32, format: U32Array, shard: string[]) =>
+      link.request(Command.SOURCE_DECLARE, min_zoom, format, shard),
+    /** A permission as the UI's prompt or the browser's change reported it. */
+    sensor_permission: (sensor: Sensor, answer: PermissionAnswer) =>
+      link.send(Command.SENSOR_PERMISSION, sensor, answer),
+    /** What the place's sensors are: whether it has a position and a heading, whether the
+     * heading asks a permission, and how it says it is lost. Sent once the core is attached. */
+    sensor_platform: (
+      geolocation: boolean,
+      orient: boolean,
+      orient_permission: boolean,
+      orient_silence_is_loss: boolean,
+    ) =>
+      link.send(
+        Command.SENSOR_PLATFORM,
+        geolocation,
+        orient,
+        orient_permission,
+        orient_silence_is_loss,
+      ),
+    /** Whether this is a development build, which offers the settings schema.json marks `dev`.
+     * Sent once the core is attached. */
+    setting_dev: (dev: boolean) => link.send(Command.SETTING_DEV, dev),
+    /** A pointer event on the world's canvas, in CSS pixels from the top left of its layout box
+     * (transforms aside), as the world surface's size is (GPU_SURFACE_RESIZE). */
+    input_pointer: (
+      phase: PointerPhase,
+      pointer_type: PointerType,
+      id: i32,
+      button: i32,
+      x: f64,
+      y: f64,
+    ) =>
+      link.send(Command.INPUT_POINTER, phase, pointer_type, id, button, x, y),
+    /** Whether the UI is taking typed text. A pointer pressed while this holds, a device's touch too (pxl-core door/touch.rs), is spent on ending the typing: its lift ends the gesture with no tap, and its drag still moves the world. */
+    input_typing: (typing: boolean) => link.send(Command.INPUT_TYPING, typing),
+    /** The tool and what it takes, the UI's to choose and keep: the core is told, and answers EINVAL for an item the catalog does not give out. It picks again under a hovering pointer. */
+    edit_tool: (tool: Tool, val: u32, scale_steps: i32) =>
+      link.request(Command.EDIT_TOOL, tool, val, scale_steps),
+    /** The draft's text (Snapshot.draft), which the marker is drawn with and committed with. Text past MARKER_TEXT_CHARS (spec/spec/asset/marker.json) is refused whole, never cut: EMSGSIZE, which the UI shows as what does not fit. */
+    edit_marker_text: (text: string) =>
+      link.request(Command.EDIT_MARKER_TEXT, text),
+    edit_marker_cancel: () => link.send(Command.EDIT_MARKER_CANCEL),
+    /** The marker's draft committed with its text, where its place is still free or still a marker, and closed. */
+    edit_marker_commit: () => link.send(Command.EDIT_MARKER_COMMIT),
+    input_wheel: (delta_y: f64) => link.send(Command.INPUT_WHEEL, delta_y),
+    /** A pinch the platform recognized, as a trackpad's is: the factor the fingers' spread changed by since the last. Over one, they spread, and the camera comes nearer by that factor, as under two touches. */
+    input_pinch: (scale: f64) => link.send(Command.INPUT_PINCH, scale),
+    /** The screen direction the held movement keys point, sent when it changes: each axis -1, 0 or 1, x to the right and y down. */
+    input_move: (x: i32, y: i32) => link.send(Command.INPUT_MOVE, x, y),
+    /** What a surface the UI opened draws, until its GPU_SURFACE_CLOSE. The world, with the
+     * sensors watched while it shows; or the companion's character of a group alone, as the picker shows it, a second one
+     * on the same surface replacing the first. EBADF where the surface is not open, EBUSY where it already draws the
+     * other content, EINVAL where the character's fields are not all given for a character or any is given for the
+     * world. */
+    scene_draw: (
+      surface: u32,
+      content: SceneContent,
+      group: u32 | null,
+      bg: u32 | null,
+    ) => link.send(Command.SCENE_DRAW, surface, content, group, bg),
+    /** A setting set from the sheet or the character picker; refused until the core has read the
+     * kept settings, which would be read over it. */
+    setting_set: (key: u32, val: u32) =>
+      link.send(Command.SETTING_SET, key, val),
+    /** A line the player said, shown over the character. */
+    scene_chat: (text: string) => link.send(Command.SCENE_CHAT, text),
+    /** The tracking button's press, as the button showed it. */
+    camera_tracking: (tracking: Tracking) =>
+      link.send(Command.CAMERA_TRACKING, tracking),
+    /** The compass was pressed: north comes up. */
+    camera_north_up: () => link.send(Command.CAMERA_NORTH_UP),
+    /** The search panel's location card's press: the location asked for. The compass is
+     * asked for where it is used, entering follow mode (TRACKING), and never alone: nothing
+     * reads it without the location. */
+    sensor_locate: () => link.send(Command.SENSOR_LOCATE),
+    /** A search result: the pivot moved there, and the view asked with it at once, as the
+     * controls ask it where the camera stands; a view field absent keeps what the view has. */
+    camera_goto: (
+      lon: f64,
+      lat: f64,
+      dist: f64 | null,
+      azimuth: f64 | null,
+      polar: f64 | null,
+    ) => link.send(Command.CAMERA_GOTO, lon, lat, dist, azimuth, polar),
+    /** A tracked pose: where a tracker has the camera, and its turn as a unit quaternion
+     * (x, y, z, w) from the camera's axes to the tracker's, in the world's units. The
+     * first of a run is taken to be where the camera already is, so nothing moves as
+     * it begins; the camera follows the tracker from there until POSE_END. Nothing in the
+     * client sends it: it is the way in for an immersive mode's head pose (a Quest's, a
+     * Vision Pro's) to drive the camera, from the device app. */
+    input_xr_pose: (
+      x: f64,
+      y: f64,
+      z: f64,
+      qx: f64,
+      qy: f64,
+      qz: f64,
+      qw: f64,
+    ) => link.send(Command.INPUT_XR_POSE, x, y, z, qx, qy, qz, qw),
+    /** The tracker let the camera go: back to the controller it had. */
+    input_xr_pose_end: () => link.send(Command.INPUT_XR_POSE_END),
+    /** Starts a fresh recording window. */
+    perf_start: () => link.send(Command.PERF_START),
+    /** Freezes the window, so what is exported holds still. */
+    perf_stop: () => link.send(Command.PERF_STOP),
+    /** The profiler's statistics and what it holds now, where they lie: the reply is the address of STAT_SLOT's words (perf.json), the statistics
+     * over the last `window_ms`, the whole recording where it is absent, good until the next turn. A
+     * number past the door is finite, so no window is infinite. */
+    perf_stats: (window_ms: f64 | null) =>
+      link.request(Command.PERF_STATS, window_ms),
+    /** The rings where they lie, nothing reduced: the reply is the address of RING_SLOT's words (perf.json), good until the next turn. */
+    perf_rings: () => link.request(Command.PERF_RINGS),
+    fits: {
+      sensor_pos: (
+        lon: f64,
+        lat: f64,
+        alt: f64 | null,
+        accuracy: f64 | null,
+        course: f64 | null,
+      ) => link.fits(Command.SENSOR_POS, lon, lat, alt, accuracy, course),
+      sensor_orient: (
+        webkit_compass_heading: f64 | null,
+        alpha: f64 | null,
+        beta: f64 | null,
+        gamma: f64 | null,
+      ) =>
+        link.fits(
+          Command.SENSOR_ORIENT,
+          webkit_compass_heading,
+          alpha,
+          beta,
+          gamma,
+        ),
+      sensor_err: (sensor: Sensor, code: GeolocationErrorCode | null) =>
+        link.fits(Command.SENSOR_ERR, sensor, code),
+      sensor_permission: (sensor: Sensor, answer: PermissionAnswer) =>
+        link.fits(Command.SENSOR_PERMISSION, sensor, answer),
+      sensor_platform: (
+        geolocation: boolean,
+        orient: boolean,
+        orient_permission: boolean,
+        orient_silence_is_loss: boolean,
+      ) =>
+        link.fits(
+          Command.SENSOR_PLATFORM,
+          geolocation,
+          orient,
+          orient_permission,
+          orient_silence_is_loss,
+        ),
+      setting_dev: (dev: boolean) => link.fits(Command.SETTING_DEV, dev),
+      input_pointer: (
+        phase: PointerPhase,
+        pointer_type: PointerType,
+        id: i32,
+        button: i32,
+        x: f64,
+        y: f64,
+      ) =>
+        link.fits(Command.INPUT_POINTER, phase, pointer_type, id, button, x, y),
+      input_typing: (typing: boolean) =>
+        link.fits(Command.INPUT_TYPING, typing),
+      edit_marker_cancel: () => link.fits(Command.EDIT_MARKER_CANCEL),
+      edit_marker_commit: () => link.fits(Command.EDIT_MARKER_COMMIT),
+      input_wheel: (delta_y: f64) => link.fits(Command.INPUT_WHEEL, delta_y),
+      input_pinch: (scale: f64) => link.fits(Command.INPUT_PINCH, scale),
+      input_move: (x: i32, y: i32) => link.fits(Command.INPUT_MOVE, x, y),
+      scene_draw: (
+        surface: u32,
+        content: SceneContent,
+        group: u32 | null,
+        bg: u32 | null,
+      ) => link.fits(Command.SCENE_DRAW, surface, content, group, bg),
+      setting_set: (key: u32, val: u32) =>
+        link.fits(Command.SETTING_SET, key, val),
+      scene_chat: (text: string) => link.fits(Command.SCENE_CHAT, text),
+      camera_tracking: (tracking: Tracking) =>
+        link.fits(Command.CAMERA_TRACKING, tracking),
+      camera_north_up: () => link.fits(Command.CAMERA_NORTH_UP),
+      sensor_locate: () => link.fits(Command.SENSOR_LOCATE),
+      camera_goto: (
+        lon: f64,
+        lat: f64,
+        dist: f64 | null,
+        azimuth: f64 | null,
+        polar: f64 | null,
+      ) => link.fits(Command.CAMERA_GOTO, lon, lat, dist, azimuth, polar),
+      input_xr_pose: (
+        x: f64,
+        y: f64,
+        z: f64,
+        qx: f64,
+        qy: f64,
+        qz: f64,
+        qw: f64,
+      ) => link.fits(Command.INPUT_XR_POSE, x, y, z, qx, qy, qz, qw),
+      input_xr_pose_end: () => link.fits(Command.INPUT_XR_POSE_END),
+      perf_start: () => link.fits(Command.PERF_START),
+      perf_stop: () => link.fits(Command.PERF_STOP),
+    },
+  };
+}
 
-/** The ui protocol over a link. */
-export type UiProtocol = Protocol<UiSend, UiRequest, UiCall>;
+/** The ui protocol's exports, as `ui_exports` binds them. */
+export type UiExports = ReturnType<typeof ui_exports>;
 
-/** What the program does with each command the core posts on the ui protocol; a
- * call's answer is its return. */
+/** What the program does with each command the core posts on the ui protocol: a
+ * call's member answers its value, and throws kit's error to refuse it. */
 export interface UiImports {
   [Command.SENSOR_START](e: SensorStart): void;
   [Command.SENSOR_STOP](e: SensorStop): void;
-  /** The UI's snapshot, when it changed: a Snapshot packet far past a ring frame, so a
+  /** The UI's snapshot, when it changed: a Snapshot packet far past a frame's room, so a
    * block the core holds, valid until the next snapshot. */
-  [Command.UI_SNAPSHOT](e: UiSnapshot): void;
+  [Command.UI_SNAPSHOT](e: UiSnapshot, named: U8Array): void;
   /** The view's azimuth and scale, when either moved: a frame of its own, so a rotation or a
    * zoom, which moves them every frame, leaves the snapshot as it was. */
   [Command.UI_VIEW](e: UiView): void;
 }
 
-/** `h` as the handler a runtime routes the ui protocol's commands to, each one read and
- * handed to its member; ENOSYS for one the protocol does not carry. */
-export function ui_imports(h: UiImports): OnImport {
-  return (_tag, cmd, f) => {
-    switch (cmd) {
-      case Command.SENSOR_START:
-        return h[Command.SENSOR_START](read[Command.SENSOR_START](need(f)));
-      case Command.SENSOR_STOP:
-        return h[Command.SENSOR_STOP](read[Command.SENSOR_STOP](need(f)));
-      case Command.UI_SNAPSHOT:
-        return h[Command.UI_SNAPSHOT](read[Command.UI_SNAPSHOT](need(f)));
-      case Command.UI_VIEW:
-        return h[Command.UI_VIEW](read[Command.UI_VIEW](need(f)));
-      default:
-        return Errno.ENOSYS;
+/** `h` as the protocol the runtime routes the ui protocol's majors to: each
+ * command read and handed to its member, whose refusal is answered with its
+ * errno; ENOSYS for one the protocol does not carry. */
+export function ui_imports(h: UiImports): Protocol {
+  const on: OnImport = (_tag, cmd, f, _pkt, named) => {
+    try {
+      switch (cmd) {
+        case Command.SENSOR_START:
+          return h[Command.SENSOR_START](read[Command.SENSOR_START](need(f)));
+        case Command.SENSOR_STOP:
+          return h[Command.SENSOR_STOP](read[Command.SENSOR_STOP](need(f)));
+        case Command.UI_SNAPSHOT:
+          return h[Command.UI_SNAPSHOT](
+            read[Command.UI_SNAPSHOT](need(f)),
+            need(named),
+          );
+        case Command.UI_VIEW:
+          return h[Command.UI_VIEW](read[Command.UI_VIEW](need(f)));
+        default:
+          return Errno.ENOSYS;
+      }
+    } catch (err) {
+      return refusal_of(err);
     }
   };
-}
-
-/** The core's memory a command on the ui protocol names, where it is and how
- * long; null for none. */
-export function ui_mem(cmd: u32, f: BranchCursor | null): [u32, u32] | null {
-  switch (cmd) {
-    case Command.UI_SNAPSHOT: {
-      const e = read[Command.UI_SNAPSHOT](need(f));
-      return [e.at, e.len];
-    }
-    default:
-      return null;
-  }
+  return { majors: [Major.SENSOR, Major.UI], on };
 }
 
 /** A packet the command carries, which a frame without one breaks. */

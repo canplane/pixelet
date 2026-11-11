@@ -25,7 +25,7 @@ use crate::domain::view::frame::pose::{anchor, km_per_u};
 use crate::domain::view::lens::StepClock;
 use crate::domain::view::observation;
 use crate::sys::sched::clock::wall_now;
-use crate::sys::sched::edge::wake_at;
+use crate::sys::sched::wake_at;
 use celestial::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
 use xpute_core::clock::now;
 use xpute_core::global::Global;

@@ -1,7 +1,7 @@
 // xpute-core/abi/number.rs
 
 //! A number a packet carries is read as its field's type. What the runtime
-//! sends is checked here, so that no code past the door (`ipc::door`) meets a
+//! sends is checked here, so that no code past the door (`io::door`) meets a
 //! NaN, an infinity, or an integer forced into range by a cast.
 
 use xpute_kit::status::errno::Errno;

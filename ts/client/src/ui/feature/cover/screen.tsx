@@ -8,12 +8,16 @@ import { LABEL } from "@/ui/shared/component/palette.ts";
 import type { Cover } from "./cover.ts";
 import { ProgressBar } from "./progress-bar.tsx";
 
+/** The bar stands at the middle of the screen, and the line hangs under it, so
+ * a line that wraps to more rows moves nothing. */
 function Progress({ of, share }: { of: string; share: number }) {
   const { t } = useTranslation();
   return (
     <View style={styles.cover}>
-      <ProgressBar share={share} />
-      <Text style={styles.line}>{t(of)}</Text>
+      <View style={styles.bar}>
+        <ProgressBar share={share} />
+        <Text style={styles.line}>{t(of)}</Text>
+      </View>
     </View>
   );
 }
@@ -76,7 +80,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     backgroundColor: color.ground,
   },
-  line: { ...textStyle.footnote, textAlign: "center", color: LABEL.secondary },
+  bar: { alignSelf: "stretch", alignItems: "center" },
+  line: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    marginTop: 12,
+    ...textStyle.footnote,
+    textAlign: "center",
+    color: LABEL.secondary,
+  },
   title: { ...textStyle.title2, textAlign: "center", color: LABEL.primary },
   body: {
     maxWidth: 384,

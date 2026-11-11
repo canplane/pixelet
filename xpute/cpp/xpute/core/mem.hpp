@@ -52,9 +52,14 @@ class Memory {
         return s.empty() ? 0 : off_of(static_cast<const void *>(s.data()), loc);
     }
 
+    // Whether the `len` bytes at `off` lie inside the memory.
+    bool holds(std::uint32_t off, std::uint32_t len) const noexcept {
+        return static_cast<std::uint64_t>(off) + len <= bytes_;
+    }
+
   private:
     void within(std::uint32_t off, std::uint32_t len, std::source_location loc) const noexcept {
-        ensure(static_cast<std::uintptr_t>(off) + len <= bytes_, Errno::efault, off, bytes_, loc);
+        ensure(holds(off, len), Errno::efault, off, bytes_, loc);
     }
 
     std::uintptr_t base_;

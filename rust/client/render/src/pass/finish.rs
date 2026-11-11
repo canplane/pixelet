@@ -8,7 +8,7 @@
 //! world onto two targets of one color: the canvas, and the picture kept at the canvas's size
 //! (`Surface::picture`). The canvas's texture is a new one each frame, so a frame not drawn
 //! whole first shows the picture whole on the canvas, then finishes both targets again only in
-//! its claimed tiles (screen_tile.wgsl).
+//! its damaged tiles (screen_tile.wgsl).
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_FINISH, PIPELINE_SCREEN_SHOW};
 use crate::gpu::api::{
@@ -98,9 +98,9 @@ impl Finish {
     /// Finishes `color`, `s`'s world color as it is shown, onto `canvas`, and `s`'s depth into
     /// its screen depth, in a pass of its own whose time is counted in `span`. `color` is one
     /// of the colors `set_groups` set a group over. `tiles` holds the screen's tiles the groups
-    /// bind, where `s` has them, and whether only their claimed tiles are finished. When `s`
+    /// bind, where `s` has them, and whether only their damaged tiles are finished. When `s`
     /// keeps its picture (`Surface::picture`), the pass writes it as well. When only the
-    /// claimed tiles are finished, the picture is first shown whole on `canvas`, so the rest
+    /// damaged tiles are finished, the picture is first shown whole on `canvas`, so the rest
     /// stands as an earlier frame left it.
     pub fn draw(
         &self,
@@ -112,7 +112,7 @@ impl Finish {
         tiles: Option<(&TileGrid, bool)>,
     ) {
         let has_picture = s.picture_view != 0;
-        let claimed = tiles
+        let damage = tiles
             .filter(|&(_, partial)| partial && has_picture)
             .map(|(t, _)| t);
         let (g, encoder) = (ctx.g, ctx.encoder);
@@ -125,7 +125,7 @@ impl Finish {
         let grow = s.width as f32 / s.screen.0.max(1) as f32;
         let squares = [s.width, s.height].map(|v| v.div_ceil(SIDE));
         let t = match tiles {
-            Some((t, _)) => t.words(grow, claimed.map_or(u32::MAX, TileGrid::damage_frames)),
+            Some((t, _)) => t.words(grow, damage.map_or(u32::MAX, TileGrid::damage_frames)),
             None => [
                 squares[0],
                 squares[1],
@@ -138,7 +138,7 @@ impl Finish {
             ],
         };
         g.write_buf(self.tiles, 0, bytes(&t));
-        if claimed.is_some() {
+        if damage.is_some() {
             let pass = g.pass(
                 encoder,
                 &pass_desc(canvas, Load::Clear, 0, Load::Clear, 0.0, stamp.pass()),
@@ -148,7 +148,7 @@ impl Finish {
             g.draw(pass, 3, 1, 0, 0);
             g.end(pass);
         }
-        let load = if claimed.is_some() {
+        let load = if damage.is_some() {
             Load::Load
         } else {
             Load::Clear

@@ -2,10 +2,10 @@
 
 // Picks what a frame through the gate draws of the decor generated (gpu/generator.rs
 // `Generator::cull`). Of each region's instances, it lists those whose ball (decor_ball.wgsl)
-// meets the box of the claimed tiles (damage_rect.wgsl) as the frame sees it. They are listed
+// meets the box of the damaged tiles (damage_rect.wgsl) as the frame sees it. They are listed
 // at the region's own place in a list beside the instances (`culled`), and the region's args
 // count the instances listed. The draws read this list in place of the instances' own
-// (instance.wgsl `order`). A pixel past the claimed tiles keeps the last frame's color, so an
+// (instance.wgsl `order`). A pixel past the damaged tiles keeps the last frame's color, so an
 // instance whose ball meets none of them has nothing to draw.
 
 @group(0) @binding(1) var<storage, read> uniforms: array<u32>;
@@ -43,7 +43,7 @@ fn inside(p: vec4<f32>, c: vec3<f32>, r: f32) -> bool {
   return dot(p.xyz, c) + p.w >= -r * length(p.xyz);
 }
 
-/// Lists each instance whose ball meets the claimed tiles, one thread a place of the
+/// Lists each instance whose ball meets the damaged tiles, one thread a place of the
 /// instances' lists, which lie region after region.
 @compute @workgroup_size(64, 1, 1)
 fn decor_cull_cs(@builtin(global_invocation_id) id: vec3<u32>) {
@@ -82,7 +82,7 @@ fn decor_cull_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   for (var k = 0u; k < 3u; k += 1u) {
     v[k] += bitcast<f32>(instances[off + k * stride + slot]);
   }
-  // The claimed tiles' pixels, grown a pixel each way for the jitter that moves a draw
+  // The damaged tiles' pixels, grown a pixel each way for the jitter that moves a draw
   // (frame.wgsl `jittered`), taken as planes of clip space through the eye.
   let side = tiles.size.w;
   let size = tiles.size.xy;
