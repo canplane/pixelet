@@ -94,6 +94,8 @@ impl Area for Clipmap<'_> {
 
 impl ground::Resident for Clipmap<'_> {
     type Content = Sample;
+    type Place = Lookup;
+    const NOWHERE: Lookup = Lookup::NONE;
     fn relief(
         &mut self,
         place: &mut Lookup,

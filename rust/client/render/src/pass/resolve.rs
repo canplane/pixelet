@@ -56,7 +56,7 @@ pub struct Resolve {
     groups: [Group; 2],
     back_groups: [Group; 2],
     /// The history this frame writes. The other is the last frame's.
-    turn: usize,
+    cur: usize,
     /// The surface's histories the resolve gathered into, and the frames gathered since they
     /// were made. New histories hold nothing from before.
     histories: [u32; 2],
@@ -93,7 +93,7 @@ impl Resolve {
             back: pipelines.build(g, PIPELINE_SCREEN_WRITE_BACK, WORLD_COLOR),
             groups: [Group::default(), Group::default()],
             back_groups: [Group::default(), Group::default()],
-            turn: 0,
+            cur: 0,
             histories: [0; 2],
             gathered: 0,
             view: (mat4::new(), [0.0; 3]),
@@ -154,7 +154,7 @@ impl Resolve {
     }
 
     /// Blends the frame's world color, `s`'s, into what the frames before left, writing the
-    /// history this turn writes, each tile by its age. When the frame is drawn through the gate
+    /// history this frame writes, each tile by its age. When the frame is drawn through the gate
     /// (`masked`), only the damaged tiles are blended, and they are written back into the last
     /// history, which stays the one read. The passes are their own, over the groups set for
     /// `s` (`set_groups`), and their time is counted in the span `resolve`. Returns the history
@@ -163,9 +163,9 @@ impl Resolve {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let stamp = ctx.stamp(GpuSpanName::resolve);
         if s.history_view != self.histories {
-            (self.histories, self.gathered, self.turn) = (s.history_view, 0, 0);
+            (self.histories, self.gathered, self.cur) = (s.history_view, 0, 0);
         }
-        let (k, was) = (self.turn, 1 - self.turn);
+        let (k, was) = (self.cur, 1 - self.cur);
         // A square that changed this frame takes a share of no less than `BLEND_LEAST`. A
         // square where only the jitter has moved since takes its even share of the sequence,
         // found from its age (screen_resolve.wgsl).
@@ -236,7 +236,7 @@ impl Resolve {
     /// (`asks`, as `jitter` read it).
     pub fn on_drawn(&mut self, masked: bool) {
         if !masked {
-            self.turn = 1 - self.turn;
+            self.cur = 1 - self.cur;
         }
         self.gathered = self.gathered.saturating_add(1);
         self.last = self.view;

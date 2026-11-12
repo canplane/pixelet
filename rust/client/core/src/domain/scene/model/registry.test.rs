@@ -28,14 +28,8 @@ pub(crate) fn swaying() -> Model {
     ];
     let cnt = vertices.len();
     let mut m = Model::new(cnt as u32, 3, 1).expect("the heap gives the model room");
-    // SAFETY: the model's block, just taken, its columns a vertex count apart.
-    let w = unsafe {
-        core::slice::from_raw_parts_mut(
-            mem::at::<u32>(m.at()),
-            cnt * MODEL_VERTEX_WORDS as usize + 3,
-        )
-    };
-    w.fill(0);
+    // The model's mesh, its columns a vertex count apart.
+    let w = m.words();
     for (v, p) in vertices.iter().enumerate() {
         for k in 0..3 {
             w[v * 3 + k] = p[k].to_bits();

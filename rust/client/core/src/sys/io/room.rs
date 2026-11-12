@@ -1,17 +1,15 @@
 // pxl-core/sys/io/room.rs
 
-//! A refusal of room, by the heap, by the body slots (sys/io/body.rs) or by the ways' pool
-//! (domain/layer/terrain/pool.rs), which counts its runs given back here. It records how many
-//! times what refused it had given room back, and it is over once that count moves. A refused request waits only on what refused
-//! it, never on the other. A slot given back returns nothing to the heap
-//! until its whole run is empty, and only then does the heap's count move;
-//! memory the heap gets back frees no slot. A body refused a new run of slots
-//! waits on both counts, because a slot given back in a run already held
-//! serves it too.
+//! A refusal of room, by the heap, by the body slots (sys/io/body.rs) or by
+//! the ways' pool (domain/layer/terrain/pool.rs), which counts its runs given
+//! back here. It
+//! records how many times what refused it had given room back, and it is over
+//! once that count moves. A refused request waits only on what refused it,
+//! never on the other.
 
-use crate::sys::boot::heap_stat;
+use crate::sys::heap;
 use crate::sys::io::body;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Refusal(Room, u32);
@@ -20,7 +18,6 @@ pub struct Refusal(Room, u32);
 enum Room {
     Heap,
     Bodies,
-    Run,
     Ways,
 }
 
@@ -36,9 +33,8 @@ pub fn way_given_back() {
 impl Room {
     fn release_cnt(self) -> u32 {
         match self {
-            Room::Heap => heap_stat().releases,
+            Room::Heap => heap::stat().releases,
             Room::Bodies => body::releases(),
-            Room::Run => heap_stat().releases.wrapping_add(body::releases()),
             Room::Ways => *WAYS_GIVEN.get(|| 0),
         }
     }
@@ -53,12 +49,6 @@ impl Refusal {
     /// A refusal by the body slots, when every slot is out.
     pub fn bodies() -> Refusal {
         Refusal(Room::Bodies, Room::Bodies.release_cnt())
-    }
-
-    /// A refusal by the heap of a new run of body slots, when every run held
-    /// is full.
-    pub fn run() -> Refusal {
-        Refusal(Room::Run, Room::Run.release_cnt())
     }
 
     /// A refusal by the ways' pool, when its cap keeps it from holding a run.

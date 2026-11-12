@@ -4,7 +4,6 @@ use super::*;
 use crate::domain::view::lens;
 use pxl_content::cloud::drift;
 use pxl_render::gpu::draw::{lists_bytes, set_lists};
-use xpute_core::mem::heap::alloc;
 
 /// The drift's step written out by hand: a twelfth of a camera grid cell at
 /// the nearest drawn cloud, over the wind's speed. `drift_step_s` must give
@@ -38,9 +37,7 @@ fn cloud_steps_unchanged() {
 fn only_time_moving_moves_no_draw() {
     crate::on_core(|| {
         const LIVE: usize = 4;
-        let (at, _) = alloc(lists_bytes(LIVE)).unwrap();
-        // SAFETY: a block of the heap's, the lists' alone for the test's run.
-        unsafe { set_lists(at, LIVE) };
+        set_lists(Vec::leak(vec![0; lists_bytes(LIVE) as usize / 4]), LIVE);
         let key = [-3, 7];
         let eye = [
             key[0] as f64 * PATCH + 100.0,
@@ -49,7 +46,7 @@ fn only_time_moving_moves_no_draw() {
         ];
         let (e, alts) = (900.0, [5000.0, 6200.0]);
         let (mut list, id) = (DrawList::default(), DrawId::default());
-        let mut turn = |time: f64| {
+        let mut frame = |time: f64| {
             let off = drift(time);
             let receiver = patch_box(box_corner(key, off, eye), PATCH, e, alts);
             let corner = [
@@ -81,14 +78,14 @@ fn only_time_moving_moves_no_draw() {
             let l = list.take();
             (l.changes.len(), l.receivers.to_vec())
         };
-        let (changes, first) = turn(0.0);
+        let (changes, first) = frame(0.0);
         assert_eq!(changes, 1, "drawn first");
         // These times stay within a cell of drift: the wind along X carries the
         // field a cell in 4096 / 24 seconds.
         for time in [0.29, 1.0, 10.0, 100.0, 170.0] {
-            assert_eq!(turn(time), (0, first.clone()), "{time} s");
+            assert_eq!(frame(time), (0, first.clone()), "{time} s");
         }
-        let (changes, receivers) = turn(200.0);
+        let (changes, receivers) = frame(200.0);
         assert_eq!(changes, 0, "the record stands");
         assert_ne!(receivers, first, "past a cell the stand moves");
     });

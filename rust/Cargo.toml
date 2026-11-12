@@ -5,7 +5,8 @@
 # they can answer anything, is server/common.
 #
 # The client is pxl-engine, what the CPU and the GPU compute alike, pxl-content,
-# pixelet's content, and over them two crates, pxl-render and pxl-core, and
+# pixelet's content, pxl-global, the one global the core's state lives in,
+# and over them two crates, pxl-render and pxl-core, and
 # pxl-core is its artifact: one `xpute_core::core!` makes it the WebAssembly module the
 # main thread and each worker instantiate for themselves, and the library
 # linked into a device's app, which draws with wgpu where the page's runtime
@@ -27,6 +28,7 @@
 resolver = "2"
 members = [
   "spec",
+  "client/global",
   "client/engine",
   "client/content",
   "client/render",
@@ -58,6 +60,7 @@ xpute-kit = { path = "../xpute/rust/kit", default-features = false }
 xpute-core = { path = "../xpute/rust/core" }
 xpute-gpu = { path = "../xpute/rust/gpu" }
 xpute-golden = { path = "../xpute/rust/dev/golden" }
+pxl-global = { path = "client/global" }
 pxl-engine = { path = "client/engine" }
 pxl-content = { path = "client/content" }
 pxl-spec = { path = "spec" }

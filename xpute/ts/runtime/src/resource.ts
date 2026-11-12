@@ -19,12 +19,22 @@ export class Table<T> {
   private readonly _map = new Map<Handle, T>();
   private _next: Handle = 1;
 
-  /** Puts `v` at the next handle, and answers it. */
-  add(v: T): Handle {
+  /** Issues the next handle, for `put` to fill. */
+  issue(): Handle {
     const h = this._next;
     if (h > HANDLE_MAX) throw new InvariantError(Errno.EMFILE);
     this._next = h + 1;
+    return h;
+  }
+
+  put(h: Handle, v: T): void {
     this._map.set(h, v);
+  }
+
+  /** Puts `v` at the next handle, and answers it. */
+  add(v: T): Handle {
+    const h = this.issue();
+    this.put(h, v);
     return h;
   }
 

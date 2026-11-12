@@ -3,7 +3,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/runtime";
+import { FaultError } from "@xpute/kit/status/error.ts";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 
@@ -66,7 +66,7 @@ async function errno(f: () => unknown): Promise<number | undefined> {
   try {
     await f();
   } catch (err) {
-    return err instanceof FileError ? err.errnum : undefined;
+    return err instanceof FaultError ? err.errnum : undefined;
   }
   return undefined;
 }

@@ -5,7 +5,7 @@
 //! shadow map and the air. Each pass writes its draws' uniforms once before
 //! the pass, one slot a draw, and draws them by one loop.
 
-use xpute_core::global::Global;
+use pxl_global::Global;
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;

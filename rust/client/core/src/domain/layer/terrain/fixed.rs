@@ -1,6 +1,6 @@
 // pxl-core/domain/layer/terrain/fixed.rs
 
-//! The layout of `.fixed.terrain`, the room every resident terrain tile and
+//! The layout of the terrain's fixed range (sys/range.rs), the room every resident terrain tile and
 //! every held brick lies in, and where each slot's bytes are. The room is
 //! a sequence of planes. A plane is one array with an element for every tile
 //! slot, or for every brick slot, end to end. The planes, in order: a tile's
@@ -14,10 +14,9 @@ use pxl_spec::brick::BRICK_CELLS;
 
 use crate::domain::layer::tile_cache::TileCache;
 use pxl_engine::clipmap::SLOTS;
-use xpute_core::mem::range::arr_bytes;
-use xpute_core::mem::range::OwnedRange;
+use crate::sys::range::{arr_bytes, OwnedRange};
 
-/// The `.fixed.terrain` section, which the boot hands in.
+/// The terrain's range in `.fixed`, which the boot hands in.
 pub static RANGE: OwnedRange = OwnedRange::new();
 
 const TILE_SLOTS: u32 = TileCache::<TerrainTile>::SLOTS;

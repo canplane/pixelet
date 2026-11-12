@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 
 import { messageKey } from "@/ui/shared/locale/message-key.ts";
-import { GroundStatus, Message, SensorStatus } from "@/abi/ui.ts";
+import { GroundStatus, Message, SensorStatus } from "@/abi/overlay.ts";
 import { BOOT_STARTED, GPU_WAITING, type Gpu } from "@/abi/state.ts";
 import { boot_state, watch_boot } from "@/service/sys/boot.ts";
 
@@ -73,14 +73,10 @@ function useNotice(id: Report, notice: Notice | null, holdMs = 0): void {
 const error = (key: string): Notice => ({ key, tone: ToastTone.Error });
 const loading = (key: string): Notice => ({ key, tone: ToastTone.Loading });
 
-/** Only a page times out a location request, when its permission prompt has
- * gone unanswered for `PROMPT_MS` (service/platform/sensor.ts). That is not a
- * failure, so it shows no toast. */
 function location(
   status: SensorStatus,
   failure: Message | null,
 ): Notice | null {
-  if (failure === Message.GeolocationTimeout) return null;
   if (failure !== null) return error(messageKey(failure));
   return status === SensorStatus.Loading
     ? loading("toast.location_checking")

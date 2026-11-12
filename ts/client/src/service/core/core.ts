@@ -1,7 +1,7 @@
 // @pxl/client/service/core/core.ts
 
-/** The core as the UI reaches it: the UI's own interface, mounted for the
- * core before it boots, and a reference to each interface the core serves,
+/** The core as the UI reaches it: the interfaces the UI serves, mounted for
+ * the core before it boots, and a reference to each interface the core serves,
  * opened over the UI's remote end of the link (`ui`) once it has. */
 
 import type { Ref, Remote } from "@xpute/runtime";
@@ -13,25 +13,21 @@ import * as perf from "@/abi/perf.ts";
 import * as scene from "@/abi/scene.ts";
 import * as sensor from "@/abi/sensor.ts";
 import * as setting from "@/abi/setting.ts";
-import * as source from "@/abi/source.ts";
-import * as ui_abi from "@/abi/ui.ts";
+import * as overlay from "@/abi/overlay.ts";
 import { set_snapshot, view_posted } from "@/service/core/snapshot.ts";
-import { sensor_start, sensor_stop } from "@/service/core/sensor.ts";
 
 /** The interfaces the core serves, by their bindings. */
-const SERVED = { camera, edit, input, perf, scene, sensor, setting, source };
+const SERVED = { camera, edit, input, perf, scene, sensor, setting };
 
 /** A reference to each interface the core serves, which its binding's
  * functions take first. */
 export let core: Record<keyof typeof SERVED, Ref>;
 export let ui: Remote;
 
-/** Mounts the UI's interface on `remote`, before the core boots. */
-export function mount_ui(remote: Remote): void {
+/** Mounts the interfaces the UI serves on `remote`, before the core boots. */
+export function serve_overlay(remote: Remote): void {
   ui = remote;
-  ui_abi.mount(remote, {
-    sensor_start,
-    sensor_stop,
+  overlay.mount(remote, {
     show: set_snapshot,
     view: (azimuth, m_per_px) => view_posted({ azimuth, m_per_px }),
   });

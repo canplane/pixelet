@@ -3,7 +3,7 @@
 //! The draw list's uploads on the device, found by the list's handle, as the renderer and its
 //! passes read them.
 
-use xpute_core::global::Global;
+use pxl_global::Global;
 use xpute_core::mem;
 
 use crate::frame::shader::record::UPLOAD_LAYOUT;
@@ -18,7 +18,8 @@ const fn slots_of(live: usize) -> usize {
     (2 * live).next_power_of_two()
 }
 
-/// The uploads, found by the list's handle in an open-addressed table in `.fixed.uploads`.
+/// The uploads, found by the list's handle in an open-addressed table in the uploads' fixed
+/// range.
 /// The heap holds the bytes and the device holds a copy, so a lost device is restored from the
 /// addresses.
 pub struct UploadTable {
@@ -29,7 +30,7 @@ pub struct UploadTable {
     idx_cnt: &'static mut [u32],
     buf: &'static mut [u32],
     group: &'static mut [u32],
-    /// The most the owners can hold live (pxl-core door/layout.rs `MAX_LIVE_UPLOADS`).
+    /// The most the owners can hold live (pxl-core link/layout.rs `MAX_LIVE_UPLOADS`).
     live: u32,
     pub(crate) cnt: u32,
     pub(crate) bytes: u64,
@@ -45,7 +46,7 @@ pub(crate) fn buf_size(len: u32) -> u32 {
 
 fn mem(at: u32, n: u32) -> &'static [u8] {
     // SAFETY: a heap block the draw list named, live until its free is listed.
-    unsafe { core::slice::from_raw_parts(mem::at::<u8>(at as usize), n as usize) }
+    unsafe { mem::bytes(at, n) }
 }
 
 /// The table's columns: handle, address, length, the vertex and index counts, buffer and group.
@@ -56,31 +57,31 @@ pub const fn uploads_bytes(live: usize) -> u32 {
     (UPLOAD_COLUMNS * slots_of(live) * 4) as u32 + draw::lists_bytes(live)
 }
 
-/// # Safety
-/// `at` must address `uploads_bytes(live)`, 4-aligned and zeroed, the
-/// renderer's alone for as long as the module runs.
-pub unsafe fn set_uploads(at: u32, live: usize) {
+/// Lays the table for `live` uploads, then the draw list's, in `room`, `uploads_bytes(live)`
+/// zeroed, the renderer's alone for as long as the core runs.
+pub fn set_uploads(room: &'static mut [u32], live: usize) {
     let slots = slots_of(live);
-    // SAFETY: the caller's range, one column of `slots` words after another.
-    let column = |k: usize| unsafe {
-        core::slice::from_raw_parts_mut(mem::at::<u32>(at as usize + k * slots * 4), slots)
+    let mut room = room;
+    let mut column = || {
+        let (c, rest) = core::mem::take(&mut room).split_at_mut(slots);
+        room = rest;
+        c
     };
     UPLOADS.set(UploadTable {
-        handle: column(0),
-        at: column(1),
-        len: column(2),
-        vertex_cnt: column(3),
-        idx_cnt: column(4),
-        buf: column(5),
-        group: column(6),
+        handle: column(),
+        at: column(),
+        len: column(),
+        vertex_cnt: column(),
+        idx_cnt: column(),
+        buf: column(),
+        group: column(),
         live: live as u32,
         cnt: 0,
         bytes: 0,
         missing: 0,
         layout: None,
     });
-    // SAFETY: the range's rest past the table, the lists' alone.
-    unsafe { draw::set_lists(at as usize + UPLOAD_COLUMNS * slots * 4, live) };
+    draw::set_lists(room, live);
 }
 
 fn home(handle: u32, slot_cnt: usize) -> usize {
@@ -95,7 +96,7 @@ impl UploadTable {
         self.layout = None;
     }
 
-    /// Puts the missing uploads back on the device, as far as the turn's stream has room.
+    /// Puts the missing uploads back on the device, as far as the frame's stream has room.
     pub(crate) fn restore(&mut self, g: &Gpu) {
         if self.missing == 0 {
             return;
@@ -107,7 +108,7 @@ impl UploadTable {
         }
     }
 
-    /// Puts upload `i` on the device. Returns false, and leaves it missing, when the turn's
+    /// Puts upload `i` on the device. Returns false, and leaves it missing, when the frame's
     /// stream has no room.
     fn put(&mut self, g: &Gpu, i: usize) -> bool {
         if !room(write_buffer_bytes(mem(self.at[i], self.len[i] & !3))) {
@@ -184,7 +185,7 @@ impl UploadTable {
         }
     }
 
-    /// Writes the changed range of `handle`'s upload. When the turn's stream has no room, the
+    /// Writes the changed range of `handle`'s upload. When the frame's stream has no room, the
     /// buffer is released and the upload is put again whole once there is room.
     pub(crate) fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u32, from: u32, len: u32) {
         let Some(i) = self.find(handle) else { return };

@@ -89,18 +89,18 @@ SIZE = {"width": 1920, "height": 1080}
 
 
 def polled(ev):
-    """The lines a page has said, as it says them, `BATCH` to an answer, as one
+    """The lines a page writes, as it writes them, `BATCH` to an answer, as one
     answer of a whole result does not come back from a phone's Chrome. A page
     between documents answers nothing."""
     seen = 0
     while True:
         try:
-            said = ev(f"(globalThis.said ?? []).slice({seen}, {seen + BATCH})")
+            lines = ev(f"(globalThis.lines ?? []).slice({seen}, {seen + BATCH})")
         except RuntimeError:
-            said = []
-        yield from said
-        seen += len(said)
-        if len(said) < BATCH:
+            lines = []
+        yield from lines
+        seen += len(lines)
+        if len(lines) < BATCH:
             time.sleep(1)
 
 

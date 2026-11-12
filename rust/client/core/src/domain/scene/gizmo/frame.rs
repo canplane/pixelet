@@ -20,7 +20,7 @@ use crate::domain::view::frame::coord::to_world;
 use crate::sys::sched::invalidate;
 use pxl_render::gpu::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 const RING_SEGMENTS: u32 = 64;
 

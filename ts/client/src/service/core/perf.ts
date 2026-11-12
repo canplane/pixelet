@@ -28,7 +28,6 @@ import {
   STEP_STAT,
   STREAM_STAT,
   TASK,
-  WAKES,
   WORST,
 } from "@/abi/perf.spec.ts";
 import { EFFECT_NAMES, STEP_NAMES } from "@/abi/step.spec.ts";
@@ -113,24 +112,15 @@ export interface FrameSummary {
   moving: f64;
   /** The sum of the moving frames' intervals. */
   moving_ms: f64;
-  missed: f64;
   overran: f64;
-  /** How many intervals had a turn that ran past their end. */
-  long: f64;
-  turns: f64;
   /** How many frames a GPU read timed. The GPU's figures are taken over
    * these frames alone. */
   gpu_timed: f64;
   interval: Percentile;
-  busy: Percentile;
   tick: Percentile;
-  /** The parts of `busy` besides `tick`. `rest` is what they leave of it,
-   * which no span measured. */
   effect: Percentile;
   stage: Percentile;
-  task: Percentile;
   perf: Percentile;
-  rest: Percentile;
   /** The GPU's busy time: the time its spans ran, with overlapping spans
    * counted once. */
   gpu_busy: Percentile;
@@ -143,10 +133,8 @@ export interface FrameSummary {
   phases: { name: string; p95: f64 }[];
   effects_p95: { name: string; p95: f64 }[];
   gpu_spans: { name: string; p95: f64; n: f64 }[];
-  /** How many frames were of each kind the renderer draws, and how many
-   * turns last asked for each wake. */
+  /** How many frames were of each kind the renderer draws. */
   kinds: { name: string; n: f64 }[];
-  wakes: { name: string; n: f64 }[];
   /** How many of the world's pixels the last frame a read timed drew. */
   gpu_px: f64;
   /** The ray counts of the window's frames, summed for each of FRAME's rays
@@ -248,19 +236,13 @@ function frame_summary(s: F64Array): FrameSummary | null {
     seconds: s[a + F.seconds],
     moving: s[a + F.moving],
     moving_ms: s[a + F.moving_ms],
-    missed: s[a + F.missed],
     overran: s[a + F.overran],
-    long: s[a + F.long],
-    turns: s[a + F.turns],
     gpu_timed: s[a + F.gpu_timed],
     interval: percentiles_at(s, a + F.interval),
-    busy: percentiles_at(s, a + F.busy),
     tick: percentiles_at(s, a + F.tick),
     effect: percentiles_at(s, a + F.effect),
     stage: percentiles_at(s, a + F.stage),
-    task: percentiles_at(s, a + F.task),
     perf: percentiles_at(s, a + F.perf),
-    rest: percentiles_at(s, a + F.rest),
     gpu_busy: percentiles_at(s, a + F.gpu_busy),
     gpu_busy_kinds: FRAME_KINDS.map((name, k) => ({
       name,
@@ -279,7 +261,6 @@ function frame_summary(s: F64Array): FrameSummary | null {
       n: s[a + F.gpu_spans_cnt + k],
     })),
     kinds: FRAME_KINDS.map((name, k) => ({ name, n: s[a + F.kinds + k] })),
-    wakes: WAKES.map((name, k) => ({ name, n: s[a + F.wakes + k] })),
     gpu_px: s[a + F.gpu_px],
     ray_cnt: Object.fromEntries(
       FRAME_GROUP.rays.map((name, k) => [name, s[a + F.rays + k]]),
@@ -390,10 +371,27 @@ async function perf_draw(): Promise<DrawSection> {
   return section((await stats_of(0)).now, NOW.draw);
 }
 
-/** The records of the ring `name`, as PERF_RINGS's reply names them: the
- * frames and the tasks oldest first, the worst frames longest first. */
+/** The words of a record of each ring, in RING_NAMES' order. */
+const RING_WORDS = [FRAME.WORDS, TASK.WORDS, WORST.WORDS] as const;
+
+/** The records of the ring `name`: the frames and the tasks oldest first,
+ * the worst frames longest first, read a page at a time until a page comes
+ * short (perf.json LIMIT.PAGE_BYTES). */
 async function ring(name: (typeof RING_NAMES)[number]): Promise<U8Array> {
-  return perf.rings(core.perf, RING_NAMES.indexOf(name));
+  const k = RING_NAMES.indexOf(name);
+  const record = 8 * RING_WORDS[k]!;
+  const full = Math.floor(LIMIT.PAGE_BYTES / record) * record;
+  const pages: U8Array[] = [];
+  let bytes = 0;
+  for (;;) {
+    const page = await perf.rings(core.perf, k, bytes / record, 0xffff_ffff);
+    pages.push(page);
+    bytes += page.length;
+    if (page.length < full) break;
+  }
+  const out = new Uint8Array(bytes);
+  pages.reduce((at, p) => (out.set(p, at), at + p.length), 0);
+  return out;
 }
 
 /** Every frame the ring holds, oldest first. */

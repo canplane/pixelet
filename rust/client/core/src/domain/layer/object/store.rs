@@ -20,11 +20,11 @@
 //! source gives, with empty children (`set_fold`), until the shard's leaves
 //! take its place.
 
+use pxl_global::Global;
 use pxl_spec::space::coord::zoom::{
     base_of, cube, units, y_start, z_start, Zoom, CUBE_ZOOM, SHARD_ZOOM,
 };
 use pxl_spec::value;
-use xpute_core::global::Global;
 
 use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::AssetId;
@@ -109,7 +109,7 @@ pub(crate) fn apply(writes: impl IntoIterator<Item = Write>) -> bool {
 
 static DAMAGE: Global<Vec<Aabb>> = Global::new();
 
-/// Keeps the damage, the regions where the objects changed, for the turn to
+/// Keeps the damage, the regions where the objects changed, for the frame to
 /// pass on to what draws the objects and what is derived from them
 /// (`take_damage`).
 pub(super) fn note_damage(regions: &[Aabb]) {
@@ -117,7 +117,7 @@ pub(super) fn note_damage(regions: &[Aabb]) {
     invalidate();
 }
 
-/// Moves into `out` the damage noted since the turn last took it.
+/// Moves into `out` the damage noted since the frame last took it.
 pub(in crate::domain::layer) fn take_damage(out: &mut Vec<Aabb>) {
     out.clear();
     core::mem::swap(out, DAMAGE.get(Vec::new));

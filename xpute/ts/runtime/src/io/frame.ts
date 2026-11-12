@@ -1,27 +1,19 @@
 // @xpute/runtime/io/frame.ts
 
 /**
- * A frame is four words: the request's tag, its command, the result, and the
- * packet's length. The command is the RES bit (31), the handle the callee
- * issued (bits 8..30) and the method's place among its object's (bits 0..7).
+ * A frame's words are laid out by spec/io/frame.json: the request's tag, its
+ * command, the result, and the packet's length. The command is the RES bit,
+ * the handle the callee issued and the method's place among its object's.
  * The packet, the method's args in XTP, lies right past the words. The words
  * are little-endian (xpute-core io/frame.rs).
  */
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 
-const TAG = 0;
-const CMD = 1;
-const RESULT = 2;
-const PKT = 3;
+import { CMD, METHOD_BITS, PKT, RES, RESULT, TAG, WORDS } from "./frame.spec.ts";
 
 /** The bytes a frame's words take, before its packet. */
-export const WORD_BYTES: u32 = 16;
-
-/** The bit of the command that marks a later answer. */
-const RES = 0x8000_0000;
-/** The bits of the command below the handle, which hold the method. */
-const METHOD_BITS = 8;
+export const WORD_BYTES: u32 = WORDS * 4;
 
 /** The largest handle a command holds. */
 export const HANDLE_MAX: u32 = RES / (1 << METHOD_BITS) - 1;

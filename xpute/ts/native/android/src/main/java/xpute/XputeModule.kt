@@ -87,6 +87,6 @@ class XputeModule : Module() {
     // app's thread here.
     Function("callOn") { answer: JavaScriptFunction<Int> -> Core.answer = { at -> answer.invoke(at) } }
 
-    Function("say") { line: String -> Log.i("xpute", line); Unit }
+    Function("log") { line: String -> Log.i("xpute", line); Unit }
   }
 }

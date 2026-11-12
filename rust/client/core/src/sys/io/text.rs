@@ -9,8 +9,8 @@
 use std::collections::hash_map::Entry;
 
 use fnv::FnvHashMap;
-use xpute_core::global::Global;
-use xpute_core::mem::off_of_slice;
+use pxl_global::Global;
+use xpute_core::mem;
 
 use crate::sys::io::text_answer_spec::{LAYOUT_ANSWER, LINE};
 use crate::abi::text;
@@ -42,7 +42,7 @@ fn text() -> &'static mut Text {
 
 /// `text_in` broken into lines no wider than `max_width`, each with its
 /// width; a `max_width` of 0 gives one line. It is None where the platform
-/// could not lay the text out this turn, and a later turn asks again.
+/// could not lay the text out this frame, and a later frame asks again.
 pub fn text_lines(weight: u32, px: f64, max_width: f64, text_in: &str) -> Option<Vec<(&str, f64)>> {
     let key = (
         weight,
@@ -61,9 +61,9 @@ pub fn text_lines(weight: u32, px: f64, max_width: f64, text_in: &str) -> Option
                 weight,
                 px,
                 max_width,
-                off_of_slice(&raw mut *at) as u32,
+                mem::off(at.as_mut_ptr().cast()),
                 lines as u32,
-                off_of_slice(text_in.as_bytes()) as u32,
+                mem::off(text_in.as_ptr()),
                 text_in.len() as u32,
             );
             if laid.is_err() {
@@ -106,7 +106,7 @@ fn unlaid(text_in: &str) -> Vec<(&str, f64)> {
 /// One line of `text_in` drawn from `x` into `size` pixels of RGBA, top row
 /// first. `color` is 0xRRGGBBAA. The pixels stay at least until the next
 /// frame's start. It is None where the platform could not draw the text this
-/// turn, and a later turn asks again.
+/// frame, and a later frame asks again.
 pub fn text_pixels(
     weight: u32,
     px: f64,
@@ -132,11 +132,11 @@ pub fn text_pixels(
                 weight,
                 px,
                 color,
-                off_of_slice(&raw mut *at) as u32,
+                mem::off(at.as_mut_ptr().cast()),
                 size[0],
                 size[1],
                 x,
-                off_of_slice(text_in.as_bytes()) as u32,
+                mem::off(text_in.as_ptr()),
                 text_in.len() as u32,
             );
             if drawn.is_err() {
@@ -160,10 +160,3 @@ pub fn text_drop_unread() {
     t.rasters.retain(|_, a| core::mem::take(&mut a.read));
 }
 
-/// Drops every answer once the runtime that was asked is gone. An answer the
-/// runtime never wrote would otherwise read as empty forever.
-pub fn text_forget() {
-    let t = text();
-    t.layouts.clear();
-    t.rasters.clear();
-}

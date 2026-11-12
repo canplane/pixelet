@@ -16,7 +16,7 @@ pub(crate) fn snap() {
 
 /// Eases the drawn eye and facing over `delta` seconds and returns whether
 /// they are still moving.
-pub(crate) fn turn(delta: f64) -> bool {
+pub(crate) fn step(delta: f64) -> bool {
     let mut moving = false;
     if let Some(eye) = eye_world() {
         let (next, m) = ease_pivot(eye, delta);

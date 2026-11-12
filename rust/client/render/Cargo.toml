@@ -10,6 +10,7 @@ doctest = false
 
 [dependencies]
 libm.workspace = true
+pxl-global.workspace = true
 xpute-core.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
 pxl-spec.workspace = true

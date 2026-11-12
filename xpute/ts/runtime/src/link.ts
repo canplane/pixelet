@@ -57,8 +57,8 @@ export interface LinkObject {
   call(m: Method, tag: Tag, args: BranchCursor | null): i32 | Reply;
 }
 
-/** What opens the object a URI names. */
-export type Opener = (uri: readonly Token[]) => LinkObject;
+/** What opens the object a URI names, given the handle it is issued. */
+export type Opener = (uri: readonly Token[], h: Handle) => LinkObject;
 
 /** What a method answers: its result, a status or a value, and its return
  * data, written once its args are read. */
@@ -119,11 +119,14 @@ export function refusal_of(e: unknown): i32 {
   throw e;
 }
 
-/** What a core gives its runtime: its memory, and its two exports. */
+/** What a core gives its runtime: its memory, and its three exports
+ * (wit/link.wit). */
 export interface Core {
   readonly mem: ArrayBuffer;
   /** link_init: where the link's layout lies, the inbox and a frame's room. */
   init(): u32;
+  /** link_boot: the core's first entry, which boots it. */
+  boot(): void;
   /** link_in: the frame laid in the inbox. */
   in(): i32;
 }
@@ -150,12 +153,14 @@ export class Link {
   }
 
   /** Enters the core first, once the runtime's own objects are mounted: the
-   * core lays its link and boots, and may open them. */
+   * core lays its link, the runtime reads its layout, and then the core
+   * boots, and may open them. */
   init(): void {
     const at = this._core.init();
     const layout = new DataView(this._core.mem, at, 8);
     this._inbox = layout.getUint32(0, true);
     this._room = layout.getUint32(4, true);
+    this._core.boot();
   }
 
   mount(prefix: readonly Token[], open: Opener): void {
@@ -173,7 +178,14 @@ export class Link {
   send(h: Handle, m: Method, args: Packet = [], answer?: Answer): void {
     const t = this._tag();
     if (answer !== undefined) this._pending.set(t, answer);
-    const { result, data } = this._out(t, h, m, false, 0, args);
+    let out: Answered;
+    try {
+      out = this._out(t, h, m, false, 0, args);
+    } catch (e) {
+      this._pending.delete(t);
+      throw e;
+    }
+    const { result, data } = out;
     if (result === Errno.EINPROGRESS || !this._pending.delete(t) || answer === undefined) return;
     const copy = data && data.slice();
     queueMicrotask(() => answer(result, copy));
@@ -183,6 +195,11 @@ export class Link {
    * `result` and its return data. A later answer is found by its tag alone. */
   complete(t: Tag, result: i32, data: readonly Arg[] = []): void {
     this._out(t, ROOT, 0, true, result, data);
+  }
+
+  /** The core's memory, as it stands now: it grows, so it is read anew. */
+  get mem(): ArrayBuffer {
+    return this._core.mem;
   }
 
   /** The `len` bytes at `at` in the core's memory. */
@@ -235,7 +252,9 @@ export class Link {
       if (leads && (best === undefined || p.length > best[0].length)) best = m;
     }
     if (best === undefined) throw new XputeError(Errno.ENOENT);
-    return this._objects.add(best[1](uri));
+    const h = this._objects.issue();
+    this._objects.put(h, best[1](uri, h));
+    return h;
   }
 
   /** The next request's tag: a counter that wraps, past every tag still
@@ -267,7 +286,9 @@ export class Link {
     const view = new DataView(this._core.mem, at, this._room);
     let pkt_len = 0;
     if (args instanceof Uint8Array) {
-      if (WORD_BYTES + args.length > this._room) throw new InvariantError(Errno.EMSGSIZE);
+      // A packet written elsewhere, as one from across a port, past the room
+      // is its sender's fault, refused (remote.ts `serve` answers EMSGSIZE).
+      if (WORD_BYTES + args.length > this._room) throw new MarshalError(Errno.EMSGSIZE);
       bytes.set(args, WORD_BYTES);
       pkt_len = args.length;
     } else if (args.length > 0) {

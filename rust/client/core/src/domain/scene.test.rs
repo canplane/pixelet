@@ -6,7 +6,6 @@ use crate::domain::scene::indicator::ghost::GhostDraw;
 use crate::domain::view::frame::pose::{view, view_compose, ObserverPose};
 use pxl_render::gpu::draw::{lists_bytes, set_lists, DrawList, DRAW_PIPELINES};
 use pxl_spec::space::coord::mat4;
-use xpute_core::mem::heap::alloc;
 
 /// When only the eye moves, every draw keeps its uniforms and its receiver box
 /// (pxl-render gpu/draw.rs `ReceiverBox`), so no draw changes (`Change`) and
@@ -18,9 +17,7 @@ use xpute_core::mem::heap::alloc;
 fn an_eye_moved_changes_no_draw() {
     crate::on_core(|| {
         const LIVE: usize = 16;
-        let (at, _) = alloc(lists_bytes(LIVE)).unwrap();
-        // SAFETY: a block of the heap's, the lists' alone for the test's run.
-        unsafe { set_lists(at, LIVE) };
+        set_lists(Vec::leak(vec![0; lists_bytes(LIVE) as usize / 4]), LIVE);
         let mut list = DrawList::default();
         let (mut ghost, mut debug, mut coverage) = (
             GhostDraw::default(),

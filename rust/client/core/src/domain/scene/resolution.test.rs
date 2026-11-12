@@ -335,7 +335,7 @@ fn predicted_by_part() {
 }
 
 /// The rate steps a refresh at a time within what the display and
-/// `RATE_MIN_HZ` allow, and never past that floor (`floor`). Turns count as
+/// `RATE_MIN_HZ` allow, and never past that floor (`floor`). Frames count as
 /// slowed only when they take more refreshes than the display's own pacing
 /// does (`own`, @xpute/runtime sched/frame_pacing.ts `pace_ms`).
 #[test]

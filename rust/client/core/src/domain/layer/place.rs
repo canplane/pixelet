@@ -7,14 +7,14 @@
 
 use pxl_spec::bake::tile::place::{self, PlaceTile, PLACE_LATTICE};
 
+use crate::sys::io::body::Body;
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::Base;
-use crate::sys::io::body::Packet;
 use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 static PLACE: Global<TileCache<PlaceTile>> = Global::new();
 
@@ -28,7 +28,7 @@ impl Base for PlaceTile {
     fn receive(
         _tile: Quadrant,
         _slot: u32,
-        pkt: Packet,
+        pkt: Body,
         _phases: &mut PhaseList,
     ) -> Result<PlaceTile, Exit> {
         Ok(place::decode(&pkt)?)

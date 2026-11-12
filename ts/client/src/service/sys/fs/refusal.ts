@@ -5,14 +5,12 @@
  * `refused_files`. Each is set aside once by the backend its path names
  * (binding.ts): a storage file's slot is emptied (storage.ts), or
  * a file of placed objects is taken out of its source (object.ts). Then the
- * core is told that it may read the file again (FS_CHANGED).
+ * files open at its path hear that it changed (file.ts `changed`).
  */
 
-import type { Path } from "@xpute/runtime";
-
-import type { RefusedFile } from "@/abi/ui.ts";
+import type { RefusedFile } from "@/abi/overlay.ts";
 import { path } from "@/abi/file.spec.ts";
-import { object_key, walk } from "@/service/sys/fs/binding.ts";
+import { object_key, type Path, walk } from "@/service/sys/fs/binding.ts";
 import { OBJECTS } from "@/service/sys/fs/object.ts";
 import { STORAGE, set_aside, type Storage } from "@/service/sys/fs/storage.ts";
 
@@ -34,6 +32,9 @@ export function set_aside_by_path(s: Storage): SetAside {
   };
 }
 
+/** A refused file's path, its tokens' values. */
+export const path_of = (f: RefusedFile): Path => f.path.map((t) => t.val);
+
 /** The files set aside that the snapshots may still name, by their paths.
  * A snapshot keeps naming a file until the core hears that it changed, and
  * this set keeps such a file from being set aside twice. */
@@ -52,7 +53,7 @@ export function follow_refused_files(
     const at = JSON.stringify(f.path);
     if (emptying.has(at)) continue;
     emptying.add(at);
-    void Promise.resolve(aside(f.path, Date.now())).then((set) => {
+    void Promise.resolve(aside(path_of(f), Date.now())).then((set) => {
       if (set) emptied(f);
       else emptying.delete(at);
     });

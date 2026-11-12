@@ -6,8 +6,8 @@
 //!
 //! A character plays the clips of a model registered once at the character's
 //! height. What belongs to one character alone is its catalog row, its clips'
-//! times, its joint palette in a heap block of its own, and the place its walk
-//! gives it (`companion.rs` `Walk`).
+//! times, its joint palette in a heap block of its own, and the place the
+//! companion's walk gives it (`companion.rs`).
 //!
 //! Each view draws a character by its own eye. The world chooses as it does
 //! for decor's lods (`view::lens`), by how many camera grid cells the
@@ -30,18 +30,17 @@ pub use pxl_spec::asset::character::Group;
 use pxl_spec::space::coord::v3;
 use xpute_core::clock::now;
 use xpute_core::mem;
-use xpute_core::mem::heap::{alloc, free};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::domain::scene::animation;
-use crate::domain::scene::character::companion::Walk;
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::asset::model_of;
 use crate::domain::scene::model::registry::{blend, ModelTable};
 use crate::domain::scene::model::{draw_list, models};
 use crate::domain::scene::transform::Transform;
 use crate::domain::view::lens::{cell_there, decor_impostor_angle, decor_model_angle, StepClock};
+use crate::sys::heap;
 use crate::sys::io::loader::{load_image, load_of};
 use crate::sys::sched::invalidate_at;
 
@@ -82,8 +81,8 @@ pub struct Character {
     previous: Option<ClipTime>,
     fade: f32,
     fade_len: f32,
-    palette_at: usize,
-    palette_bytes: u32,
+    /// The joints' palette, one mat4 a joint, which the renderer uploads.
+    palette: Box<[f32]>,
     palette_handle: u32,
     local: Vec<[f32; 10]>,
     global: Vec<[f32; 16]>,
@@ -110,7 +109,6 @@ pub struct Character {
     /// Where the character's walk last placed it in the world. None while the
     /// eye is the pivot.
     transform: Option<Transform>,
-    walk: Walk,
 }
 
 impl Character {
@@ -129,7 +127,7 @@ impl Character {
     }
 
     /// The character of row `number` of `group`, drawn as `model`, with its
-    /// palette's block taken from the heap. None when the model is not
+    /// palette taken from the heap. None when the model is not
     /// registered or the heap refuses.
     fn new(
         draw: &mut DrawList,
@@ -139,22 +137,19 @@ impl Character {
         number: u8,
     ) -> Option<Character> {
         let joints = models.get(model)?.joints();
-        let palette_bytes = word_bytes(joints.max(1) * 16);
-        let (palette_at, palette_bytes) = alloc(palette_bytes)?;
-        // SAFETY: the block just acquired; identity joints until the first tick.
-        unsafe {
-            let p = core::slice::from_raw_parts_mut(
-                mem::at::<f32>(palette_at),
-                palette_bytes as usize / 4,
-            );
-            p.fill(0.0);
-            for j in 0..joints.max(1) {
-                for d in 0..4 {
-                    p[j * 16 + d * 5] = 1.0;
-                }
+        // Identity joints until the first tick.
+        let mut palette = heap::zeroed::<f32>(joints.max(1) * 16)?;
+        for j in 0..joints.max(1) {
+            for d in 0..4 {
+                palette[j * 16 + d * 5] = 1.0;
             }
         }
-        let palette_handle = draw.upload(palette_at as u32, palette_bytes, 0, 0);
+        let palette_handle = draw.upload(
+            mem::off(palette.as_ptr().cast()),
+            word_bytes(palette.len()),
+            0,
+            0,
+        );
         Some(Character {
             group,
             number,
@@ -163,8 +158,7 @@ impl Character {
             previous: None,
             fade: 0.0,
             fade_len: 0.0,
-            palette_at,
-            palette_bytes,
+            palette,
             palette_handle,
             local: vec![[0.0; 10]; joints],
             global: vec![[0.0; 16]; joints],
@@ -177,7 +171,6 @@ impl Character {
             clip_time: 0.0,
             id: DrawId::default(),
             transform: None,
-            walk: Walk::new([0.0; 2]),
         })
     }
 
@@ -222,8 +215,6 @@ impl Character {
 
     pub fn free(self, draw: &mut DrawList) {
         draw.free(self.palette_handle);
-        // SAFETY: the block this instance took and has not given back.
-        unsafe { free((self.palette_at, self.palette_bytes)) };
     }
 
     /// Advances the character's clips and returns whether a frame must be
@@ -237,12 +228,12 @@ impl Character {
     /// the motion. A clip that moves it a cell or more steps when any point
     /// of it may have gone a display pixel from where it was drawn, or at the
     /// next key where its motion turns back (`Model::next_step`). Such a step
-    /// asks for no frame: the turn is woken at the next step and draws it, as
+    /// asks for no frame: the frame is woken at the next step and draws it, as
     /// it is for the location indicator's bob.
     ///
     /// A character surface that shows the character (`on_surface`) sees it
     /// whole, before the surface's own eye (`surface_draw`). There its clips
-    /// run a frame a step, and every turn asks for a frame.
+    /// run a frame a step, and every frame asks for a frame.
     pub fn tick(
         &mut self,
         draw: &mut DrawList,
@@ -360,15 +351,15 @@ impl Character {
                 *to = blend(from, to, w);
             }
         }
-        // SAFETY: the character's own palette block, one mat4 a joint.
-        let palette = unsafe {
-            core::slice::from_raw_parts_mut(mem::at::<f32>(self.palette_at), joints * 16)
-        };
-        m.palette(&self.local, &mut self.global, palette);
+        m.palette(
+            &self.local,
+            &mut self.global,
+            &mut self.palette[..joints * 16],
+        );
         draw.rewrite(
             self.palette_handle,
-            self.palette_at as u32,
-            self.palette_bytes,
+            mem::off(self.palette.as_ptr().cast()),
+            word_bytes(self.palette.len()),
         );
         asks
     }

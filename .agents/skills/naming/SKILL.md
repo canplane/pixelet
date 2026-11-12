@@ -21,8 +21,8 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   matrix `mat`, configuration or config `cfg`, descriptor `desc`, context `ctx`,
   coordinate `coord`, declaration `decl`, definition `def`, sequence `seq`,
   atmosphere `atmos`, record `rec`, header `hdr`, command `cmd`, vector `vec`,
-  condition `cond`. A plural is `vals`, `bufs`, `offs`, `cnts`, `idxs`, `recs`,
-  `hdrs`, `cmds`, `vecs` or `conds`, and whole otherwise. `pkt` is only a wire
+  condition `cond`, resource `resrc`. A plural is `vals`, `bufs`, `offs`, `cnts`,
+  `idxs`, `recs`, `hdrs`, `cmds`, `vecs`, `conds` or `resrcs`, and whole otherwise. `pkt` is only a wire
   packet; `rec` only the noun, and to record stays whole. A condition variable
   is `cv`.
 - Whole, though they look short: `zoom`; `size` in pixelet, GPU texture sizes
@@ -83,7 +83,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | how high the ground is above sea level, stored or worked out | `ele` | height |
   | how high a thing in the air is above sea level: a device's, an eye's, a cloud's | `alt` | height |
   | a thing's size up, how far it stands over a surface, or the Z a bridge or a tunnel runs at | `height` | |
-  | a value that differs from the turn before | `changed` | moved |
+  | a value that differs from the frame before | `changed` | moved |
   | a box on a plane | a `rect` | box |
   | the most a thing holds | its `cap` | room, most, limit |
   | a buffer's fixed first words | its `hdr` | head |

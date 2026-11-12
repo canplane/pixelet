@@ -28,11 +28,10 @@ use crate::domain::scene::stage::screen_shows_world;
 use crate::domain::setting::store::{are_settings_loaded, settings, SettingKey};
 use crate::domain::view::frame::pose;
 use crate::domain::view::frame::screen::units_per_px_at;
-use crate::abi::ui::{
+use crate::abi::overlay::{
     CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
     PivotState, RefusedFile, SensorStatus, Snapshot,
 };
-use xpute_core::abi::link::Token;
 use crate::pointer;
 use crate::sys::io::file;
 use crate::sys::io::file_spec::path;
@@ -68,16 +67,6 @@ fn division_parts(at: Option<(Quadrant, u32)>, named_to: Option<Zoom>) -> Vec<Di
         });
     });
     parts
-}
-
-/// A file's path as a URI.
-fn uri(path: &[file::Token]) -> Vec<Token> {
-    path.iter()
-        .map(|t| match t {
-            file::Token::Int(n) => Token::Int(*n),
-            file::Token::Str(s) => Token::Str((*s).to_owned()),
-        })
-        .collect()
 }
 
 /// The values a snapshot is built from, read from their owners and compared
@@ -234,10 +223,10 @@ impl SnapshotMemo {
 pub fn snapshot(shown: &SnapshotInput) -> Snapshot {
     let mut refused_files = Vec::new();
     if shown.refused_storage {
-        refused_files.push(RefusedFile { path: uri(&file::STORAGE) });
+        refused_files.push(RefusedFile { path: file::storage_path() });
     }
     for &id in &shown.refused_objects.0[..shown.refused_objects.1] {
-        file::with_quadrant(path::OBJECT::ID, id, |path| refused_files.push(RefusedFile { path: uri(path) }));
+        refused_files.push(RefusedFile { path: file::quadrant_path(path::OBJECT::ID, id) });
     }
     Snapshot {
         pivot: PivotState {

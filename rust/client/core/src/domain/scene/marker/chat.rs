@@ -9,7 +9,7 @@
 use std::rc::Rc;
 
 use xpute_core::clock::now;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 use crate::domain::scene::marker::design::Design;
 use crate::domain::scene::marker::param::SHOWN_MS;
@@ -43,7 +43,7 @@ pub fn append_chat_line(text: &str) {
 }
 
 /// The line to show, in its bubble, or None once it has shown for
-/// `SHOWN_MS`. While it shows, the turn is woken for the moment it expires.
+/// `SHOWN_MS`. While it shows, the frame is woken for the moment it expires.
 pub(super) fn shown_line() -> Option<Design> {
     let line = chat().line.as_ref()?;
     if line.at_ms + SHOWN_MS <= now() {

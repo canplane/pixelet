@@ -3,7 +3,7 @@
 // This is the C ABI of the GPU's runtime, for a core linked into its runtime's
 // own process (xpute.h); xpute-gpu's `native_abi!` exports it. Each call runs
 // on the core's thread while the caller waits. The runtime runs the core's
-// stream as each turn returns, and asks for a turn when a request it
+// stream as each entry returns, and asks for an entry when a request it
 // holds completes. A device the system loses is let go: the windows bound stay
 // bound, the app is told (`xpute_gpu_lost_on`), and the next
 // `xpute_gpu_open` opens a new device, which binds them again.

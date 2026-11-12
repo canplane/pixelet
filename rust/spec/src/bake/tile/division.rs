@@ -17,7 +17,7 @@ use xpute_kit::wire::xtp::shape;
 use crate::bake::malformed;
 use crate::bake::publication::BaseLayer;
 use crate::bake::tile::{occupancy_of, Occupancy, StringTable, Tile};
-use crate::division::Subtype;
+use crate::division::{Subtype, NAME_BYTES};
 use crate::ground::majority;
 use crate::space::coord::adapter::epsg3857::cell_zoom_of;
 use crate::space::coord::zoom::Zoom;
@@ -187,6 +187,7 @@ pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
     let kinds: Vec<u8> = tile.kinds.iter().map(|&k| k as u8).collect();
     let areas: Vec<u8> = tile.areas.iter().map(|&a| a as u8).collect();
     let names: Vec<&str> = tile.iter().map(|d| d.name).collect();
+    check_names(names.iter().copied())?;
     shape::encode::<Packet>(
         (
             &tile.cells,
@@ -202,8 +203,16 @@ pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
     )
 }
 
+/// Every name within NAME_BYTES.
+fn check_names<'a>(mut names: impl Iterator<Item = &'a str>) -> Result<(), MarshalError> {
+    if names.any(|n| n.len() > NAME_BYTES) {
+        return Err(malformed());
+    }
+    Ok(())
+}
+
 /// Every cell a division of the tile or none, every parent one or none, and
-/// no walk up the parents a cycle.
+/// no walk up the parents a cycle or longer than a division of each subtype.
 fn check(cells: &[u32], parents: &[u32]) -> Result<(), MarshalError> {
     let n = parents.len();
     if n >= NONE as usize {
@@ -217,7 +226,7 @@ fn check(cells: &[u32], parents: &[u32]) -> Result<(), MarshalError> {
     for start in 0..n {
         let mut at = start as u32;
         for step in 0.. {
-            if step > n {
+            if step >= Subtype::ALL.len() {
                 return Err(malformed());
             }
             match parents[at as usize] {
@@ -257,6 +266,7 @@ fn read_tile(pkt: &[u8]) -> Result<Table<'_>, MarshalError> {
         return Err(malformed());
     }
     check(cells, parents)?;
+    check_names(names.iter())?;
     Ok(Table {
         cells,
         occupancy,

@@ -12,8 +12,8 @@
 //! cap or the heap refuses. Word 0 is never handed out: a brick's `ROOT_AT` of 0 names no run.
 
 use pxl_engine::clipmap::{Pool, RUN_WORDS_MOST, SLOTS, WAYS_POOL_WORDS};
+use pxl_global::Global;
 use pxl_render::gpu::api;
-use xpute_core::global::Global;
 use xpute_kit::collection::list::List;
 
 use crate::sys::io::room;
@@ -23,7 +23,7 @@ const CHUNK_WORDS: u32 = 1 << 14;
 const CHUNK_CNT: u32 = WAYS_POOL_WORDS / CHUNK_WORDS;
 
 /// The heap the pool takes at its cap, counted in the buddy allocator's blocks: each chunk
-/// rounded up to a power of two, and the list of chunks likewise (door/layout.rs
+/// rounded up to a power of two, and the list of chunks likewise (link/layout.rs
 /// `HEAP_FLOWS_BYTES`).
 pub const POOL_BYTES: u64 = (CHUNK_CNT as u64) * (CHUNK_WORDS as u64 * 4).next_power_of_two()
     + (CHUNK_CNT as u64 * size_of::<Box<[u32]>>() as u64).next_power_of_two();

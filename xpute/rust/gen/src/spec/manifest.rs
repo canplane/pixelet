@@ -1,10 +1,9 @@
 // xpute-gen/spec/manifest.rs
 
-//! This generates a program's manifest (spec/manifest.schema.json) as `MANIFEST`,
-//! for both ends, into the files its `gen` names. The manifest declares what
-//! xpute gives the core: the memory, the stack, the room of a frame's packet,
-//! the stream and the GPU. `MANIFEST` also carries where the front's parts lie, which the
-//! runtime lays out and the core holds its header to. Nothing a protocol
+//! This generates a program's manifest (spec/manifest.schema.json) for both
+//! ends, into the files its `gen` names: what the core asks of xpute, its
+//! memory, its fixed ranges and the heap it counts on, its stacks, its stream
+//! and its GPU. Nothing a protocol
 //! carries is part of the manifest.
 
 use std::path::Path;
@@ -13,21 +12,13 @@ use serde::Deserialize;
 
 use super::{beside, file, generated, read_as, Output};
 
-/// Every range of the front begins on a page. This must equal `PAGE_BYTES` of
-/// xpute-core's mem/section.rs.
-const PAGE_BYTES: u32 = 4096;
-
-const fn page_up(bytes: u32) -> u32 {
-    bytes.div_ceil(PAGE_BYTES) * PAGE_BYTES
-}
-
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Mem {
     #[serde(rename = "$doc")]
     _doc: Option<Vec<String>>,
-    bytes: Vec<u32>,
-    region_bytes: u32,
+    bytes: u32,
+    fixed_bytes: u32,
     min_heap_bytes: u32,
 }
 
@@ -38,15 +29,6 @@ struct Stack {
     _doc: Option<Vec<String>>,
     module_bytes: u32,
     thread_bytes: u32,
-}
-
-/// The most bytes a frame's packet takes, either way.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Pkt {
-    #[serde(rename = "$doc")]
-    _doc: Option<Vec<String>>,
-    bytes: u32,
 }
 
 #[derive(Deserialize)]
@@ -98,41 +80,14 @@ struct Manifest {
     gen: Gen,
     mem: Mem,
     stack: Stack,
-    pkt: Pkt,
     stream: Option<Stream>,
     gpu: Option<Gpu>,
-}
-
-/// The front's parts lie where xpute-core manifest.rs places them: the header's
-/// page past the stack, and the stream on the page past it, which is 0 when the
-/// manifest has none. The generated Rust asserts at
-/// compile time that both computations agree.
-impl Manifest {
-    fn head_at(&self) -> u32 {
-        page_up(self.stack.module_bytes)
-    }
-
-    fn stream_at(&self) -> u32 {
-        match self.stream {
-            Some(_) => self.head_at() + PAGE_BYTES,
-            None => 0,
-        }
-    }
-
-    /// This answers each place under the name both ends give it, with its
-    /// offset.
-    fn places(&self) -> [(&'static str, u32); 2] {
-        [("head_at", self.head_at()), ("stream_at", self.stream_at())]
-    }
 }
 
 /// Generates `json`'s manifest as Rust and TypeScript into the files its `gen`
 /// names. `json` and the paths of the outputs are relative to `root`.
 pub fn outputs(root: &Path, json: &str) -> Result<Vec<Output>, String> {
     let m: Manifest = read_as(&root.join(json).to_string_lossy())?;
-    if m.mem.bytes.is_empty() {
-        return Err(format!("{json}: mem.bytes names no size"));
-    }
     let (ts, rs) = (beside(json, &m.gen.ts)?, beside(json, &m.gen.rs)?);
     Ok(vec![
         Output::new(&rs, manifest_rs(&m, json, &rs)),
@@ -141,39 +96,30 @@ pub fn outputs(root: &Path, json: &str) -> Result<Vec<Output>, String> {
 }
 
 fn manifest_rs(m: &Manifest, json: &str, shown: &str) -> String {
-    let stream = match &m.stream {
-        Some(s) => format!("Some(Stream {{ bytes: {} }})", s.bytes),
-        None => "None".into(),
-    };
-    let sizes: Vec<String> = m.mem.bytes.iter().map(u32::to_string).collect();
     let mut lines = vec![
         format!("// {shown}"),
         "//".into(),
         generated(json),
         String::new(),
-        "//! The manifest its JSON declares (xpute-core manifest.rs), which a build".into(),
-        "//! script includes too as it links the module.".into(),
+        "//! The manifest its JSON declares, which a build script includes too as it".into(),
+        "//! links the module.".into(),
         String::new(),
-        if m.stream.is_some() {
-            "use xpute_core::manifest::{Manifest, Stream};".into()
-        } else {
-            "use xpute_core::manifest::Manifest;".into()
-        },
-        String::new(),
-        "pub const MANIFEST: Manifest = Manifest {".into(),
-        format!("    mem_bytes: &[{}],", sizes.join(", ")),
-        format!("    region_bytes: {},", m.mem.region_bytes),
-        format!("    min_heap_bytes: {},", m.mem.min_heap_bytes),
-        format!("    stack_bytes: {},", m.stack.module_bytes),
-        format!("    thread_stack_bytes: {},", m.stack.thread_bytes),
-        format!("    pkt_bytes: {},", m.pkt.bytes),
-        format!("    stream: {stream},"),
-        "};".into(),
-        String::new(),
-        "// The runtime's MANIFEST places the front's parts at these same numbers.".into(),
+        "/// The core's memory, whole before its first entry and never grown.".into(),
+        format!("pub const MEM_BYTES: u32 = {};", m.mem.bytes),
+        "/// The program's fixed ranges, past the module's data.".into(),
+        format!("pub const FIXED_BYTES: u32 = {};", m.mem.fixed_bytes),
+        "/// The heap the core counts on, past the fixed ranges.".into(),
+        format!("pub const MIN_HEAP_BYTES: u32 = {};", m.mem.min_heap_bytes),
+        "/// A module's stack, first in its memory.".into(),
+        format!("pub const STACK_BYTES: u32 = {};", m.stack.module_bytes),
+        "/// A native core's thread's stack.".into(),
+        format!("pub const THREAD_STACK_BYTES: u32 = {};", m.stack.thread_bytes),
     ];
-    for (name, at) in m.places() {
-        lines.push(format!("const _: () = assert!(MANIFEST.{name}() == {at});"));
+    if let Some(s) = &m.stream {
+        lines.extend([
+            "/// The stream's room.".into(),
+            format!("pub const STREAM_BYTES: u32 = {};", s.bytes),
+        ]);
     }
     if let Some(g) = &m.gpu {
         lines.extend([
@@ -201,27 +147,17 @@ fn manifest_ts(m: &Manifest, json: &str, shown: &str) -> String {
         ),
         None => "null".into(),
     };
-    let sizes: Vec<String> = m.mem.bytes.iter().map(u32::to_string).collect();
-    let mut lines = vec![
+    let lines = vec![
         format!("// {shown}"),
         "//".into(),
         generated(json),
         String::new(),
-        "/** The manifest its JSON declares: the sizes a runtime may give, what a".into(),
-        " * reservation is counted in, the most a frame's packet takes, where the".into(),
-        " * front's header and the stream lie (0 without one), which".into(),
-        " * the runtime lays before the first turn, and the GPU it asks for. */".into(),
+        "/** The manifest its JSON declares: the core's memory, whole before its".into(),
+        " * first entry and never grown, and the GPU the core asks for. */".into(),
         "export const MANIFEST = {".into(),
-        format!("  mem_bytes: [{}],", sizes.join(", ")),
-        format!("  region_bytes: {},", m.mem.region_bytes),
-        format!("  pkt_bytes: {},", m.pkt.bytes),
-    ];
-    for (name, at) in m.places() {
-        lines.push(format!("  {name}: {at},"));
-    }
-    lines.extend([
+        format!("  mem_bytes: {},", m.mem.bytes),
         format!("  gpu: {gpu},"),
         "} as const;".into(),
-    ]);
+    ];
     file(&lines)
 }

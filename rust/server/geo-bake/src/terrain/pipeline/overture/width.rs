@@ -18,6 +18,28 @@ pub const fn carto_u(px: f64) -> f64 {
     px * units(cell_zoom_of(CARTO_ZOOM))
 }
 
+/// A runway's, the widest line Carto draws at z16, in its pixels.
+pub(crate) const WIDEST_LINE: f64 = 24.0;
+
+/// `water-lines`' waterways, each its fill's width at z16 (`water.mss`: a
+/// canal is a stream by `@canal-scale-factor`, a ditch and a drain take z14's
+/// until z17); a line of another class has no fill.
+const WATERWAYS: [(&str, f64); 5] = [
+    ("river", 8.0),
+    ("canal", 4.2),
+    ("stream", 3.0),
+    ("ditch", 2.0),
+    ("drain", 2.0),
+];
+
+/// A waterway line's width in u, if Carto draws one of its class.
+pub(crate) fn waterway_width(class: &str) -> Option<f64> {
+    WATERWAYS
+        .iter()
+        .find(|(c, _)| *c == class)
+        .map(|(_, px)| carto_u(*px))
+}
+
 /// `@footway-width-z16`: a sidewalk is a footway.
 const FOOTWAY: f64 = 1.3;
 

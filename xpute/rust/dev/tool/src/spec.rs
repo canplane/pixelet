@@ -56,7 +56,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             ts: Some(("ts/gpu/src/abi", "@xpute/gpu/abi")),
             core: "xpute_core",
             runtime_ts: "@xpute/runtime",
-            externs: &[],
+            externs: &[("xpute:core", "xpute_core::abi", "@xpute/runtime/abi")],
         },
     )?);
     Ok(out)

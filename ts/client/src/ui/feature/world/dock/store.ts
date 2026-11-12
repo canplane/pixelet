@@ -231,13 +231,18 @@ export function stepScale(delta: i32): void {
   flashSwatch(id, true);
 }
 
+/** The line joins the chat once the core takes it, and a line it refuses
+ * whole does not. */
 export function appendChatLine(text: string): void {
-  store.setState((s) => ({
-    chatLines: [...s.chatLines, { id: nextChatLineId++, text }].slice(
-      -MAX_CHAT_LINES,
-    ),
-  }));
-  scene.chat(text);
+  scene.chat(text).then(
+    () =>
+      store.setState((s) => ({
+        chatLines: [...s.chatLines, { id: nextChatLineId++, text }].slice(
+          -MAX_CHAT_LINES,
+        ),
+      })),
+    () => {},
+  );
 }
 
 export function useInHand(id: AssetId): boolean {

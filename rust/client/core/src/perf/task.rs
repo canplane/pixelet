@@ -2,22 +2,23 @@
 
 //! A task's row in the profiler's columns: what ran, when, and how it ended.
 //! A row is made from an attempt the request scheduler ended
-//! (`TaskRecord::of`), when the door takes the scheduler's end event (door.rs
-//! `run`).
+//! (`TaskRecord::of`), when the link takes the scheduler's end event (link.rs
+//! `end`).
 
 use core::fmt::Write;
 use core::mem::{offset_of, size_of};
 
-use xpute_core::io::fs::Token;
+use xpute_core::abi::link::Token;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::perf::spec::TASK;
 use crate::perf::word::{words, AsWords};
-use crate::sys::io::demand::{PhaseList, Stream, PHASES_MAX};
+use crate::sys::io::demand::{PhaseList, Source, Stream, PHASES_MAX};
 use crate::sys::io::failure::Exit;
 use crate::sys::io::file::{self, Text, KEY_BYTES};
 use crate::sys::io::request::Attempt;
+use crate::sys::load;
 
 /// Room for a path's name as text, rounded up to whole words: a quadkey, or
 /// a u32 in decimal.
@@ -61,12 +62,17 @@ words!(TaskRecord, TASK::WORDS,
 /// and all zero for a want that opens no file.
 fn path_bytes(stream: Stream, id: u64) -> [u8; TASK_PATH_BYTES] {
     let mut out = Text::EMPTY;
-    file::with_path(stream, id, |path| match path.last() {
+    // A load's file is the loader's to name; any other want's, the files'.
+    let path = match stream.row().source {
+        Source::Load => load::of_id(id).map(|(_, load)| load.path()),
+        _ => file::path_of(stream, id),
+    }
+    .unwrap_or_default();
+    match path.last() {
         Some(Token::Int(n)) => write!(out, "{n}"),
         Some(Token::Str(key)) => out.write_str(key),
         None => Ok(()),
-    })
-    .transpose()
+    }
     .or_bug(Errno::EOVERFLOW);
     out.bytes
 }

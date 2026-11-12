@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest";
 
-import { Message } from "@/abi/ui.ts";
+import { Message } from "@/abi/overlay.ts";
 
 import {
   BOOT_FAILED,
@@ -12,7 +12,6 @@ import {
   BOOT_STARTING,
   BOOT_TERMINATED,
   GPU_ASKING,
-  GPU_LOST,
   GPU_INSECURE,
   GPU_MISSING,
   GPU_UNSUPPORTED,
@@ -34,7 +33,6 @@ const running: Standing = {
   stopCode: null,
   progress: 1,
   area: 1,
-  placed: true,
 };
 const starting: Standing = {
   ...running,
@@ -85,8 +83,6 @@ test("coverOf - loading, the world under it: what it waits on, then a panic if b
   for (const [s, key] of [
     [{}, "progress.shaders"],
     [{ progress: 1 }, "progress.area"],
-    [{ progress: 1, placed: false }, "progress.location"],
-    [{ placed: false }, "progress.shaders"],
     [{ online: false }, "progress.offline"],
     [{ stall: Message.WorldReadFailing }, "progress.server"],
     [{ gpu: GPU_WAITING }, "progress.gpu"],
@@ -97,7 +93,6 @@ test("coverOf - loading, the world under it: what it waits on, then a panic if b
       share: expect.any(Number),
     });
   }
-  expect(of({ gpu: GPU_LOST })).toMatchObject({ kind: "panic" });
   expect(of({ stall: Message.WorldUnavailable })).toMatchObject({
     kind: "panic",
   });
@@ -109,10 +104,6 @@ test("coverOf - once it shows, a panic or nothing", () => {
   expect(of({ online: false })).toBeNull();
   expect(of({ gpu: GPU_WAITING })).toBeNull();
   expect(of({ stall: Message.WorldReadFailing })).toBeNull();
-  expect(of({ gpu: GPU_LOST })).toMatchObject({
-    kind: "panic",
-    code: "GPU_LOST",
-  });
   expect(of({ stall: Message.WorldUnavailable })).toMatchObject({
     kind: "panic",
     code: "WORLD_UNAVAILABLE",
@@ -126,7 +117,7 @@ test("coverOf - once it shows, a panic or nothing", () => {
 
 test("coverOf - the bar's share: half what the renderer makes, half what shows", () => {
   const share = (progress: number, area: number) =>
-    coverOf({ ...loading, progress, area, placed: true });
+    coverOf({ ...loading, progress, area });
   expect(share(0, 0)).toMatchObject({ share: 0 });
   expect(share(1, 0)).toMatchObject({ share: 0.5 });
   expect(share(1, 0.5)).toMatchObject({ share: 0.75 });

@@ -39,7 +39,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{Grid, GROUND};
 use xpute_core::clock;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 // The world's scroll rate. A character that glides at it cancels the scroll
 // and holds at the screen's center, so this is the only smoothing of its
@@ -118,7 +118,7 @@ impl SettleTracker {
     }
 }
 
-/// What the companion's walk reads of the camera each turn, in world
+/// What the companion's walk reads of the camera each frame, in world
 /// coordinates as f64.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Camera {
@@ -145,6 +145,10 @@ struct Companion {
     /// The person and the pet, indexed by their group's number, each once it
     /// has loaded.
     characters: [Option<Character>; Group::ALL.len()],
+    /// Each character's walk to the pivot, by the same index, made with its
+    /// character. A character that has no place starts a fresh one
+    /// (`Character::step`).
+    walks: [Walk; Group::ALL.len()],
     /// The floor the pivot is drawn on, kept by the pivot (`pivot_floor`).
     pivot_floor: Memo<Q3, Option<f64>>,
     /// The pet's floor beside the person, found by walking there from the
@@ -175,43 +179,49 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     let s = companion();
     s.pet_floor.forget_touched();
     // A memo must see every change once, so the pivot's floor checks for
-    // touched columns on every frame turn, also on one that does not ask it.
+    // touched columns on every frame, also on one that does not ask it.
     s.pivot_floor.forget_touched();
     let settings = settings();
-    for (slot, (group, number)) in s
+    for ((slot, walk), (group, number)) in s
         .characters
         .iter_mut()
+        .zip(&mut s.walks)
         .zip([(Group::person, settings.person), (Group::pet, settings.pet)])
     {
+        // A walk lives as long as its character.
         if slot.as_ref().is_some_and(|c| c.number != number) {
             if let Some(c) = slot.take() {
                 c.free(draw_list());
+                *walk = Walk::default();
             }
         }
         if slot.is_none() {
             *slot = Character::of(group, number);
         }
-        if let Some(c) = slot {
-            c.walk.floor_memo.forget_touched();
-        }
+    }
+    for w in &mut s.walks {
+        w.floor_memo.forget_touched();
     }
     let [person, pet] = &mut s.characters;
+    let [person_walk, pet_walk] = &mut s.walks;
     let Some(camera) = camera else {
-        for c in [person, pet].into_iter().flatten() {
-            (c.transform, c.walk) = (None, Walk::new(c.walk.at));
+        for (c, w) in [(person, person_walk), (pet, pet_walk)] {
+            if let Some(c) = c {
+                (c.transform, *w) = (None, Walk::new(w.at));
+            }
         }
         return;
     };
     // While nothing is known under the pivot, each character with a height
     // holds where it is, and the rest of its step goes on.
-    let hold = |c: &Character| c.walk.floor(World::now()).map(|z| (c.walk.at, z));
+    let hold = |w: &Walk| w.floor(World::now()).map(|z| (w.at, z));
     if let Some(person) = person {
         if let Some((target, z)) = camera
             .floor
             .map(|z| (camera.pivot, z))
-            .or_else(|| hold(person))
+            .or_else(|| hold(person_walk))
         {
-            person.step(ctx, target, z, &camera);
+            person.step(person_walk, ctx, target, z, &camera);
         }
     }
     let Some(pet) = pet else { return };
@@ -234,23 +244,30 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     if let Some((target, z)) = camera
         .floor
         .map(|z| (target, walked(z)))
-        .or_else(|| hold(pet))
+        .or_else(|| hold(pet_walk))
     {
-        pet.step(ctx, target, z, &camera);
+        pet.step(pet_walk, ctx, target, z, &camera);
     }
 }
 
 impl Character {
-    /// Walks the character toward `target`, where it will stand at
+    /// Walks the character by `walk` toward `target`, where it will stand at
     /// `arrive_floor`, places it where the walk ends, and plays its walk clip
     /// while it walks. A character that had no place starts a fresh walk at
     /// `target`.
-    fn step(&mut self, ctx: &TickContext, target: [f64; 2], arrive_floor: f64, camera: &Camera) {
+    fn step(
+        &mut self,
+        walk: &mut Walk,
+        ctx: &TickContext,
+        target: [f64; 2],
+        arrive_floor: f64,
+        camera: &Camera,
+    ) {
         if self.transform.is_none() {
-            self.walk = Walk::new(target);
+            *walk = Walk::new(target);
         }
         let half = BODY_SHARE * self.height_u();
-        let (at, rot, walking) = self.walk.step(ctx, target, arrive_floor, half, camera);
+        let (at, rot, walking) = walk.step(ctx, target, arrive_floor, half, camera);
         // Scale 1 draws the model as registered, which is the character's
         // height.
         self.transform = Some(Transform {
@@ -267,7 +284,7 @@ impl Character {
 /// zoom the eye draws it at.
 type FloorMemo = Memo<([f64; 2], f64, Zoom), ([f64; 2], f64)>;
 
-pub struct Walk {
+struct Walk {
     at: [f64; 2],
     heading: f64,
     was_following: bool,
@@ -285,9 +302,15 @@ pub struct Walk {
     floor_memo: FloorMemo,
 }
 
+impl Default for Walk {
+    fn default() -> Walk {
+        Walk::new([0.0; 2])
+    }
+}
+
 impl Walk {
     /// A walk at `target` that stands on no floor yet.
-    pub fn new(target: [f64; 2]) -> Walk {
+    fn new(target: [f64; 2]) -> Walk {
         Walk {
             at: target,
             heading: 0.0,

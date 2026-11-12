@@ -1,6 +1,6 @@
 // pxl-core/domain/query/change.rs
 
-//! Where the ground's answers moved since the frame turn before: the ground
+//! Where the ground's answers moved since the frame before: the ground
 //! tiles and clipmap bricks whose answer moved, by identity, which fixes their
 //! contents, and the boxes where objects were written. A reader that keeps an answer asks again
 //! only when one of these touches the columns it read, which its queries
@@ -9,6 +9,7 @@
 
 use crate::domain::layer::object::store;
 use crate::domain::layer::Base as _;
+use pxl_global::Global;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::brick;
 use pxl_spec::space::coord::aabb::Aabb;
@@ -16,7 +17,6 @@ use pxl_spec::space::coord::world::{nearest, nearest_box, BOUNDS};
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_core::global::Global;
 
 #[derive(Default)]
 struct ChangeLog {
@@ -30,8 +30,8 @@ fn changes() -> &'static mut ChangeLog {
     CHANGES.get(ChangeLog::default)
 }
 
-/// Takes the frame turn's changes from the ground's tile cache and the object
-/// store, replacing the last turn's. Each ground node appears once, however
+/// Takes the frame's changes from the ground's tile cache and the object
+/// store, replacing the last frame's. Each ground node appears once, however
 /// many times it moved. True when anything moved.
 pub(crate) fn take() -> bool {
     let c = changes();
@@ -52,10 +52,10 @@ pub fn damage() -> &'static [Aabb] {
 /// with X on any lap. A change is a moved ground tile, a written object, or
 /// one of `layer`'s tiles that the reader also reads and whose answer moved.
 ///
-/// The changes are taken once a frame turn, in its visible phase after its
+/// The changes are taken once a frame, in its visible phase after its
 /// arrivals are admitted, and held until the next take. What moves between
-/// frame turns waits in the tile cache and the store for that take. So a
-/// reader that asks every frame turn, in its effects or its interaction
+/// frames waits in the tile cache and the store for that take. So a
+/// reader that asks every frame, in its effects or its interaction
 /// phase, sees each change exactly once.
 pub fn within(xy: [[f64; 2]; 2], layer: &[Quadrant]) -> bool {
     touched(xy, layer, |_| true)
@@ -147,7 +147,7 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
     pub const NONE: Memo<K, A> = Memo(None);
 
     /// Drops the answer when a change touched its columns. The caller calls
-    /// this every frame turn, so that it sees each change once (`within`).
+    /// this every frame, so that it sees each change once (`within`).
     pub fn forget_touched(&mut self) {
         if self
             .0

@@ -2,25 +2,21 @@
 //
 // GENERATED from spec/client/core/sys/manifest.json
 
-//! The manifest its JSON declares (xpute-core manifest.rs), which a build
-//! script includes too as it links the module.
+//! The manifest its JSON declares, which a build script includes too as it
+//! links the module.
 
-use xpute_core::manifest::{Manifest, Stream};
-
-pub const MANIFEST: Manifest = Manifest {
-    mem_bytes: &[1073741824, 536870912],
-    region_bytes: 67108864,
-    min_heap_bytes: 268435456,
-    stack_bytes: 1048576,
-    thread_stack_bytes: 8388608,
-    pkt_bytes: 4096,
-    fs: true,
-    stream: Some(Stream { bytes: 4194304 }),
-};
-
-// The runtime's MANIFEST places the front's parts at these same numbers.
-const _: () = assert!(MANIFEST.head_at() == 1048576);
-const _: () = assert!(MANIFEST.stream_at() == 1052672);
+/// The core's memory, whole before its first entry and never grown.
+pub const MEM_BYTES: u32 = 536870912;
+/// The program's fixed ranges, past the module's data.
+pub const FIXED_BYTES: u32 = 154800128;
+/// The heap the core counts on, past the fixed ranges.
+pub const MIN_HEAP_BYTES: u32 = 268435456;
+/// A module's stack, first in its memory.
+pub const STACK_BYTES: u32 = 1048576;
+/// A native core's thread's stack.
+pub const THREAD_STACK_BYTES: u32 = 8388608;
+/// The stream's room.
+pub const STREAM_BYTES: u32 = 4194304;
 
 // What the core asks of its GPU: the power preference, and the features
 // the device must have and those it takes where the adapter has them.

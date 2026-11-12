@@ -11,14 +11,14 @@
 //! is an angle. Where a tile marks a child as no tile (`Tile::occupancy`), the
 //! child's ground is the tile's own and the child is never asked for.
 
+use pxl_global::Global;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use xpute_core::global::Global;
 
 use crate::domain::layer::earth::EarthTile;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::{AskScope, Base};
-use crate::sys::io::body::Packet;
+use crate::sys::io::body::Body;
 use crate::sys::io::demand::{Source, Stream};
 use crate::sys::io::fetch::{answer_cnt, take_answer, Response};
 use crate::sys::io::request::{attempt_of, settle};
@@ -88,7 +88,7 @@ pub struct Layer {
     pub slot_cnt: u32,
     /// Called when a want's file arrives, with the want's id and the file, or
     /// with None when the source has nothing for it.
-    on_arrival: fn(u64, Option<Packet>, &mut PhaseList) -> Result<(), Exit>,
+    on_arrival: fn(u64, Option<Body>, &mut PhaseList) -> Result<(), Exit>,
 }
 
 const fn layer<L: ViewLayer>() -> Layer {
@@ -174,7 +174,7 @@ impl Ask {
     }
 }
 
-/// Everything the asks depend on. Two turns that agree on all of it ask for
+/// Everything the asks depend on. Two frames that agree on all of it ask for
 /// the same tiles, so the second decides nothing.
 #[derive(Clone, Copy, PartialEq)]
 struct Key {
@@ -453,7 +453,7 @@ impl<L: ViewLayer> Demand<L> {
     /// it is asked by (`ask_tiles`). The places are read in one walk down the
     /// pyramid in key order, so each tile's ground steps on from its
     /// neighbor's. The result depends on what is asked and on `o` alone, so a
-    /// turn that asks what the last one did only needs this.
+    /// frame that asks what the last one did only needs this.
     fn reorder(&mut self, o: Option<&Observation>) {
         let mut ground = ColumnWalk::default();
         let mut ask_tiles = self.ask_tiles.iter().peekable();
@@ -470,8 +470,8 @@ impl<L: ViewLayer> Demand<L> {
         self.observation = o.copied();
     }
 
-    /// The layer's turn, from the observation of the eye this turn composed,
-    /// the eye this turn's frame casts from (turn.rs `camera_tick`). When
+    /// The layer's frame, from the observation of the eye this frame composed,
+    /// the eye this frame casts from (frame.rs `camera_tick`). When
     /// anything in `Key` changed, the layer observes again. When nothing it
     /// reads moved and the eye names the tiles it named before (`names_same`),
     /// it only places the wants again.
@@ -496,13 +496,13 @@ impl<L: ViewLayer> Demand<L> {
         if o.is_none() && dst.is_none() && pinned.is_empty() {
             return;
         }
-        self.turn(o, dst, pinned, min_zoom);
+        self.want(o, dst, pinned, min_zoom);
         declare(Stream::of_layer(L::LAYER), &self.wants);
     }
 
     /// The body of `step` for the observation `o` and the layer's `top`. It
     /// leaves the wants in `wants`.
-    fn turn(
+    fn want(
         &mut self,
         o: Option<Observation>,
         dst: Option<Quadrant>,
@@ -581,7 +581,7 @@ fn names(was: &[Quadrant], name: impl FnOnce(&mut dyn FnMut(Quadrant))) -> bool 
 }
 
 /// What the objects' shards are asked from (`object_step`): the
-/// observation, the source's top and the repository's revision. Two turns
+/// observation, the source's top and the repository's revision. Two frames
 /// agreeing on all three ask for the same shards in the same order.
 type ObjectKey = (Option<Observation>, Option<Zoom>, u32);
 
@@ -627,32 +627,29 @@ pub fn admit_arrived() {
         }
         of
     };
-    let stat = sched::run(
-        0..answer_cnt(&OF),
-        |_| {
-            let Some(Response {
-                key,
-                stream,
-                id,
-                pkt,
-                mut phases,
-            }) = take_answer(&OF)
-            else {
-                return false;
-            };
-            // A key the request scheduler no longer holds belongs to a request
-            // stopped or reset since it was answered.
-            if attempt_of(key).is_none() {
-                return false;
-            }
-            let result = match of_stream(stream) {
-                Some(l) => (l.on_arrival)(id, pkt, &mut phases),
-                None => Err(Failure::from(Errno::ENOTRECOVERABLE).into()),
-            };
-            settle(key, Exit::from(result), Some(phases));
-            true
-        },
-    );
+    let stat = sched::run(0..answer_cnt(&OF), |_| {
+        let Some(Response {
+            key,
+            stream,
+            id,
+            pkt,
+            mut phases,
+        }) = take_answer(&OF)
+        else {
+            return false;
+        };
+        // A key the request scheduler no longer holds belongs to a request
+        // stopped or reset since it was answered.
+        if attempt_of(key).is_none() {
+            return false;
+        }
+        let result = match of_stream(stream) {
+            Some(l) => (l.on_arrival)(id, pkt, &mut phases),
+            None => Err(Failure::from(Errno::ENOTRECOVERABLE).into()),
+        };
+        settle(key, Exit::from(result), Some(phases));
+        true
+    });
     if stat.stopped_early {
         sched::invalidate();
     }
@@ -663,7 +660,7 @@ pub fn admit_arrived() {
 /// closure that held it.
 fn on_arrived<L: ViewLayer>(
     id: u64,
-    pkt: Option<Packet>,
+    pkt: Option<Body>,
     phases: &mut PhaseList,
 ) -> Result<(), Exit> {
     let p = Quadrant::of_id(id);

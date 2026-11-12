@@ -27,7 +27,7 @@ use pxl_spec::space::coord::{q3, world};
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 use crate::domain::layer::terrain::clipmap::{eye_bricks, BrickCover, EyeBrick};
 use crate::domain::layer::Base as _;

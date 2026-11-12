@@ -15,7 +15,7 @@ import { BOOT_FAILED, BOOT_STARTED, BOOT_TERMINATED } from "@/abi/state.ts";
 import { read } from "@/service/core/perf.ts";
 import { boot_state, watch_boot } from "@/service/sys/boot.ts";
 import * as setting from "@/service/core/setting.ts";
-import { say } from "@/service/platform/say.ts";
+import { log } from "@/service/platform/log.ts";
 import * as visibility from "@/service/platform/visibility.ts";
 import * as snapshot from "@/service/core/snapshot.ts";
 import { MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
@@ -34,14 +34,14 @@ const PIECE = 1000;
  * apart, so that a log's buffer drains between them. */
 const BURST = 32;
 const BURST_GAP_MS = 16;
-/** How far apart the run's progress is said. */
+/** How far apart the run's progress is logged. */
 const PROGRESS_MS = 1000;
 
 async function tell(text: string): Promise<void> {
   const n = Math.ceil(text.length / PIECE);
   for (let i = 0; i < n; i++) {
     const piece = text.slice(i * PIECE, (i + 1) * PIECE);
-    say(`PXLPERF ${i + 1}/${n} ${piece}`);
+    log(`PXLPERF ${i + 1}/${n} ${piece}`);
     if ((i + 1) % BURST === 0) {
       await new Promise((done) => setTimeout(done, BURST_GAP_MS));
     }
@@ -52,7 +52,7 @@ const off = (v: f64 | null, at: f64) =>
   v === null || Math.abs(v - at) > PLACE_SLACK_DEG;
 
 /** Says the run's progress, a line a second until the answer is called,
- * whether or not the core answers: when it was said, whether the page is
+ * whether or not the core answers: when it was logged, whether the page is
  * shown, the boot's state (abi/state.ts), how long the read of NOW's draw that
  * is out has gone unanswered (`unanswered_ms`, 0 with none out), and that
  * draw as the last answer gave it, each as its name and its value, or the
@@ -76,7 +76,7 @@ function progress(): () => void {
   const tick = setInterval(() => {
     const t = performance.now();
     const unanswered = asked < 0 ? 0 : t - asked;
-    say(
+    log(
       `PXLRUN t ${t} shown ${Number(visibility.shown())} boot ${boot_state()} unanswered_ms ${unanswered} ${draw}`,
     );
     if (asked < 0) void ask();

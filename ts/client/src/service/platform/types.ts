@@ -116,11 +116,10 @@ export interface SurfaceDriver {
    * none left. */
   open(): Promise<u32>;
   size(handle: u32, width: u32, height: u32, dpr: f64): void;
+  /** Closes the surface, which takes back the canvas `bind` lent. */
   close(handle: u32): void;
-  /** Lends a page's canvas to the GPU under `handle`, until `unbind` takes it
-   * back. */
+  /** Lends a page's canvas to the GPU under `handle`, until `close`. */
   bind(handle: u32, canvas: HTMLCanvasElement): void;
-  unbind(handle: u32): void;
 }
 
 export type PointerPhase = "down" | "move" | "up" | "cancel" | "out";
@@ -153,8 +152,6 @@ export interface InputDriver {
   keyUp(code: string): void;
   releaseKeys(): void;
   releasePointers(): void;
-  /** Asks for a turn, for when a box moved without the core asking. */
-  requestFrame(): void;
 }
 
 export interface WorldSurfaceProps {

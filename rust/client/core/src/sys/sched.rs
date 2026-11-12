@@ -5,12 +5,12 @@
 //! leaves the entry.
 //!
 //! - `invalidate` asks for a frame: the frame task waits on it, then on the
-//!   display's next vsync, and runs the world's frame (turn.rs).
+//!   display's next vsync, and runs the world's frame (frame.rs).
 //! - `invalidate_at` asks for a frame at a time. Only the earliest time is
 //!   armed, by one `timer.sleep` of xpute's, its delay rounded up; a sleep
 //!   armed for any other time does nothing when it wakes, and an earlier time
 //!   arms one more.
-//! - Each entry has a budget, from its start (`begin`, door.rs `enter`): `spent`
+//! - Each entry has a budget, from its start (`begin`, link.rs `enter`): `spent`
 //!   reads it, `run` spends it on a list once one item has done work, and
 //!   `yield_if_spent` leaves the entry once it is spent.
 
@@ -25,10 +25,8 @@ use core::future::poll_fn;
 use core::task::{Poll, Waker};
 use std::cell::Cell;
 
+use xpute_core::abi::timer::{sleep, sleep_then};
 use xpute_core::clock::now;
-use xpute_core::link;
-use xpute_core::abi::timer::sleep;
-use xpute_kit::wire::xtp::PacketWriter;
 
 use crate::sys::sched::param::BUDGET_MS;
 
@@ -74,16 +72,12 @@ pub fn invalidate_at(at: f64) {
     }
     EARLIEST.set(at);
     let ms = (at - now()).max(0.0).ceil() as u32;
-    link::send(
-        xpute_core::abi::timer::SLEEP,
-        Some((1, &|w: &mut PacketWriter| _ = w.u32(Some(ms)))),
-        Some(Box::new(move |_| {
-            if EARLIEST.get() == at {
-                EARLIEST.set(f64::INFINITY);
-                invalidate();
-            }
-        })),
-    );
+    sleep_then(ms, move |_| {
+        if EARLIEST.get() == at {
+            EARLIEST.set(f64::INFINITY);
+            invalidate();
+        }
+    });
 }
 
 /// Starts the entry's budget.

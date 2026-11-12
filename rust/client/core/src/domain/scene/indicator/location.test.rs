@@ -109,7 +109,7 @@ fn beacon_holds_on_stall() {
             ..Frame::default()
         });
         // A minute passes, as in a hidden tab. The frame's step is capped as
-        // turn.rs caps it (`MAX_STEP_S`), so the bob must not leap.
+        // frame.rs caps it (`MAX_STEP_S`), so the bob must not leap.
         clock::set(|| 60_000.0);
         location.tick(&Frame {
             delta_s: 0.1,

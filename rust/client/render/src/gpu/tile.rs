@@ -205,7 +205,7 @@ impl TileGrid {
 
     /// Numbers a new frame and hands its mark. A frame drawn through the gate (`masked`) marks
     /// the tiles `damage` covers (`damage_of`). Any other frame marks every tile, or none where
-    /// nothing it draws moved (`quiet`). A gated mark in a turn where the scene's animation
+    /// nothing it draws moved (`quiet`). A gated mark in a frame where the scene's animation
     /// stepped (`animated`) is the animation's own, and it asks for no frame of its damage
     /// (`asking`). The uniform covers the damaged tiles alone in a gated frame, and every tile
     /// in any other. `dispatch_damage` later sets the mark into the words on the GPU. Where a

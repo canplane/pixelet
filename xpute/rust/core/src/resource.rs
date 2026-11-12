@@ -25,12 +25,22 @@ impl<T> Table<T> {
         }
     }
 
-    /// Puts `v` at the next handle, and answers it.
-    pub fn add(&mut self, v: T) -> Handle {
+    /// Issues the next handle, for `put` to fill.
+    pub fn issue(&mut self) -> Handle {
         let h = self.next;
         xpute_kit::ensure!(h <= HANDLE_MAX, EMFILE, h);
         self.next = h + 1;
+        h
+    }
+
+    pub fn put(&mut self, h: Handle, v: T) {
         self.map.insert(h, v);
+    }
+
+    /// Puts `v` at the next handle, and answers it.
+    pub fn add(&mut self, v: T) -> Handle {
+        let h = self.issue();
+        self.put(h, v);
         h
     }
 

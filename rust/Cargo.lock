@@ -2076,6 +2076,7 @@ dependencies = [
  "pollster",
  "pxl-content",
  "pxl-engine",
+ "pxl-global",
  "pxl-render",
  "pxl-spec",
  "wgpu",
@@ -2144,6 +2145,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "pxl-global"
+version = "0.0.0"
+
+[[package]]
 name = "pxl-render"
 version = "0.0.0"
 dependencies = [
@@ -2154,6 +2159,7 @@ dependencies = [
  "pollster",
  "pxl-content",
  "pxl-engine",
+ "pxl-global",
  "pxl-spec",
  "wgpu",
  "xpute-core",

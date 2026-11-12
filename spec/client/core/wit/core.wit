@@ -17,6 +17,7 @@ world core {
   export edit;
   export source;
   export perf;
-  import ui;
+  import overlay;
+  import watch;
   import text;
 }

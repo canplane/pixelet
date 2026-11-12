@@ -753,7 +753,7 @@ fn late_brick_spike() {
     });
 }
 
-/// A lost device takes every brick it held with it. The turn that sees the
+/// A lost device takes every brick it held with it. The frame that sees the
 /// loss gives up their cells (domain/layer/terrain/clipmap.rs
 /// `assign_slots`, as `step` runs it) and folds the clip levels over none,
 /// so no node over a brick of the eye's leaves keeps a bound of cells that

@@ -11,56 +11,67 @@ import {
   refusal_of,
   type Ref,
 } from "../link.ts";
+import * as link from "./link.ts";
 
+/** `[method]file.size` */
+export const FILE_SIZE: Method = 0;
 /** `[method]file.read` */
-export const FILE_READ: Method = 0;
+export const FILE_READ: Method = 1;
 /** `[method]file.write` */
-export const FILE_WRITE: Method = 1;
+export const FILE_WRITE: Method = 2;
 /** `[method]file.changed` */
-export const FILE_CHANGED: Method = 2;
+export const FILE_CHANGED: Method = 3;
 /** `[method]file.close` */
-export const FILE_CLOSE: Method = 3;
+export const FILE_CLOSE: Method = 4;
 
 export interface File {
-  read(at: number, len: number): Promise<number>;
-  write(at: number, len: number): Promise<void>;
+  size(): Promise<number>;
+  read(buf: link.Lent): Promise<number>;
+  write(buf: link.Lent): Promise<void>;
   changed(): Promise<void>;
   close(): Promise<void>;
 }
 
 /** The object over `imp`. */
-export function file(link: Pick<Link, "complete">, imp: File): LinkObject {
+export function file(l: Pick<Link, "complete">, imp: File): LinkObject {
   return {
     call(m, tag, args) {
       try {
         switch (m) {
+          case FILE_SIZE: {
+            imp.size().then(
+              (v) => l.complete(tag, v, []),
+              (e: unknown) => l.complete(tag, refusal_of(e)),
+            );
+            return Errno.EINPROGRESS;
+          }
           case FILE_READ: {
             if (args === null) return Errno.EBADMSG;
-            imp.read(args.at(0).get_number(), args.at(1).get_number()).then(
-              (v) => link.complete(tag, v, []),
-              (e: unknown) => link.complete(tag, refusal_of(e)),
+            imp.read(link.read_Lent(args.at(0))).then(
+              (v) => l.complete(tag, v, []),
+              (e: unknown) => l.complete(tag, refusal_of(e)),
             );
             return Errno.EINPROGRESS;
           }
           case FILE_WRITE: {
             if (args === null) return Errno.EBADMSG;
-            imp.write(args.at(0).get_number(), args.at(1).get_number()).then(
-              () => link.complete(tag, 0, []),
-              (e: unknown) => link.complete(tag, refusal_of(e)),
+            imp.write(link.read_Lent(args.at(0))).then(
+              () => l.complete(tag, 0, []),
+              (e: unknown) => l.complete(tag, refusal_of(e)),
             );
             return Errno.EINPROGRESS;
           }
           case FILE_CHANGED: {
             imp.changed().then(
-              () => link.complete(tag, 0, []),
-              (e: unknown) => link.complete(tag, refusal_of(e)),
+              () => l.complete(tag, 0, []),
+              (e: unknown) => l.complete(tag, refusal_of(e)),
             );
             return Errno.EINPROGRESS;
           }
           case FILE_CLOSE: {
             imp.close().then(
-              () => link.complete(tag, 0, []),
-              (e: unknown) => link.complete(tag, refusal_of(e)),
+              () => l.complete(tag, 0, []),
+              (e: unknown) => l.complete(tag, refusal_of(e)),
             );
             return Errno.EINPROGRESS;
           }
@@ -74,22 +85,20 @@ export function file(link: Pick<Link, "complete">, imp: File): LinkObject {
   };
 }
 
-export async function file_read(
-  ref: Ref,
-  at: number,
-  len: number,
-): Promise<number> {
-  const a = await ref.link.send(ref.handle, FILE_READ, [at, len]);
+export async function file_size(ref: Ref): Promise<number> {
+  const a = await ref.link.send(ref.handle, FILE_SIZE, []);
   if (a.result < 0) throw new XputeError(a.result);
   return a.result;
 }
 
-export async function file_write(
-  ref: Ref,
-  at: number,
-  len: number,
-): Promise<void> {
-  const a = await ref.link.send(ref.handle, FILE_WRITE, [at, len]);
+export async function file_read(ref: Ref, buf: link.Lent): Promise<number> {
+  const a = await ref.link.send(ref.handle, FILE_READ, [link.write_Lent(buf)]);
+  if (a.result < 0) throw new XputeError(a.result);
+  return a.result;
+}
+
+export async function file_write(ref: Ref, buf: link.Lent): Promise<void> {
+  const a = await ref.link.send(ref.handle, FILE_WRITE, [link.write_Lent(buf)]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 

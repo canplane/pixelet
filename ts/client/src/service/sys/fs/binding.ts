@@ -12,7 +12,7 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { type Binding, FileError, type Path } from "@xpute/runtime";
+import { FaultError } from "@xpute/kit/status/error.ts";
 
 import { LEAF_ZOOM, path, SHARD_ZOOM } from "@/abi/file.spec.ts";
 import {
@@ -25,6 +25,16 @@ import { source_decl } from "@/service/sys/fs/source.ts";
 import { commit_storage, open_storage } from "@/service/sys/fs/storage.ts";
 import { read_object } from "@/service/sys/fs/tile.ts";
 
+/** A file's path: a tuple of tokens, as the URI the core opens it by. */
+export type Path = readonly (number | string)[];
+
+/** What the paths are bound to: a file's bytes to read, and the bytes a
+ * written file commits. */
+export interface Binding {
+  open(p: Path, signal: AbortSignal): U8Array | Promise<U8Array>;
+  commit(p: Path, bytes: U8Array): void | Promise<void>;
+}
+
 /** A node of the generated tree: its own number under `ID`, and each child a
  * node beside it. The tree's top, `path`, is a node with no `ID`. */
 type Node = { readonly ID?: number; readonly [child: string]: unknown };
@@ -33,7 +43,7 @@ type Node = { readonly ID?: number; readonly [child: string]: unknown };
  * file it writes, and the key a placed objects' file is kept under. */
 interface Handler {
   open?(rest: Path, signal: AbortSignal): U8Array | Promise<U8Array>;
-  commit?(rest: Path, bytes: U8Array): void;
+  commit?(rest: Path, bytes: U8Array): void | Promise<void>;
   key?(rest: Path): string | undefined;
 }
 
@@ -43,11 +53,11 @@ const QUADKEY = new RegExp(`^[0-3]{1,${LEAF_ZOOM}}$`);
 const SHARD = new RegExp(`^[0-3]{${SHARD_ZOOM}}$`);
 
 const none = (): never => {
-  throw new FileError(Errno.ENOENT);
+  throw new FaultError(Errno.ENOENT);
 };
 
 const read_only = (): never => {
-  throw new FileError(Errno.EROFS);
+  throw new FaultError(Errno.EROFS);
 };
 
 /** The one string left, where `form` matches it. */
@@ -164,7 +174,7 @@ export function binding(): Binding {
     commit(p, bytes) {
       const [h, rest] = handler_of(p);
       if (h?.commit === undefined) return read_only();
-      h.commit(rest, bytes);
+      return h.commit(rest, bytes);
     },
   };
 }

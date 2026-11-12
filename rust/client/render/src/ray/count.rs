@@ -9,7 +9,7 @@
 //! frame that counted them.
 
 use pxl_engine::{count, node_cache, raster, ray};
-use xpute_core::mem::off_of;
+use xpute_core::mem;
 
 use crate::gpu::api::{buffer_usage, bytes, signaled, word_bytes, Gpu, RESULT};
 
@@ -197,7 +197,7 @@ impl Counter {
         }
         if self.copied && !self.mapped && signaled {
             (self.copied, self.mapped) = (false, true);
-            let addr = off_of(self.read_cnts.as_ptr()) as u32;
+            let addr = mem::off(self.read_cnts.as_ptr().cast());
             self.ticket = self.ticket.wrapping_add(1);
             g.map_read(
                 self.read,

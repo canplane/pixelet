@@ -34,7 +34,7 @@ use crate::domain::scene::indicator::location::{location_animate, location_draw}
 use crate::domain::scene::model::registry::ModelTable;
 
 /// Returns whether anything is still moving, in which case the stage asks for
-/// another turn.
+/// another frame.
 pub fn animate(list: &mut DrawList, models: &ModelTable, frame: &Frame) -> bool {
     companion_animate(list, models, frame, character_surface_shows())
         | location_animate(frame)

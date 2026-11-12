@@ -6,7 +6,7 @@
 //! column from its lines into the brick's scratch (`spans`, `clipmap::SPANS_AT`); from them
 //! the brick's levels, level 0 holding each column's own entry (`mip`), and the spans the query
 //! reads, kept in a run of the ways' pool (`spans_run_words`, `lay_spans`). The core runs
-//! these a part at a time, as its turns have room (pxl-core domain/layer/terrain/clipmap.rs
+//! these a part at a time, as its entries have room (pxl-core domain/layer/terrain/clipmap.rs
 //! `fill_share`).
 
 use crate::answer;

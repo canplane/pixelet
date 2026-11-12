@@ -22,9 +22,7 @@ const PX_PER_UNIT: f64 = 1000.0;
 /// asked for a frame and whether the clip stepped.
 fn idle(dist: f64) -> Vec<(bool, bool)> {
     const LIVE: usize = 16;
-    let (at, _) = alloc(lists_bytes(LIVE)).unwrap();
-    // SAFETY: a block of the heap's, the lists' alone for the test's run.
-    unsafe { set_lists(at, LIVE) };
+    set_lists(Vec::leak(vec![0; lists_bytes(LIVE) as usize / 4]), LIVE);
     let mut draw = DrawList::default();
     let mut models = ModelTable::default();
     let model = models.add(&mut draw, swaying());
@@ -71,7 +69,7 @@ fn clip_steps(dist: f64) -> usize {
 /// Near the eye, the swaying clip moves a pixel within a frame, so it steps
 /// every tick except where it slows to turn back. Far from the eye, it steps
 /// when the clip's own steps fall, at most a frame late, and stands still
-/// between them. Either way it asks for no frame: the turn is woken for the
+/// between them. Either way it asks for no frame: the frame is woken for the
 /// next step, and only a step notes the animation that draws it.
 #[test]
 fn idle_asks_nothing_between_steps() {

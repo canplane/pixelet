@@ -1,6 +1,6 @@
 // @pxl/client/ui/feature/cover/cover.ts
 
-import { Message } from "@/abi/ui.ts";
+import { Message } from "@/abi/overlay.ts";
 import {
   BOOT_FAILED,
   BOOT_LOADING,
@@ -11,7 +11,6 @@ import {
   type Boot,
   GPU_ASKING,
   GPU_INSECURE,
-  GPU_LOST,
   GPU_MISSING,
   GPU_UNSUPPORTED,
   GPU_WAITING,
@@ -35,9 +34,6 @@ export interface Standing {
   progress: number;
   /** The share of the view's ground that shows, from 0 to 1. */
   area: number;
-  /** Whether the view has a place: the core has heard the location, or has
-   * given up on it. */
-  placed: boolean;
 }
 
 /** What covers the app. `of` is the locale key of its words. `progress` shows
@@ -67,7 +63,6 @@ export const UI_PANIC = panic("panic.app", "UI_ERROR");
 /** The panic for what breaks the world once it is made, or while it is being
  * made. */
 function panicOf(s: Standing): Cover | null {
-  if (s.gpu === GPU_LOST) return panic("panic.gpu", "GPU_LOST");
   if (s.stall === Message.WorldUnavailable) {
     return panic(messageKey(s.stall), "WORLD_UNAVAILABLE");
   }
@@ -79,7 +74,6 @@ function panicOf(s: Standing): Cover | null {
 function blockOf(s: Standing): Cover | null {
   switch (s.gpu) {
     case GPU_MISSING:
-    case GPU_LOST:
       return failed("failed.gpu");
     case GPU_UNSUPPORTED:
       return failed("failed.webgpu");
@@ -99,10 +93,10 @@ function blockOf(s: Standing): Cover | null {
 
 /** What the world waits on while it is made, once nothing blocks it. First
  * come the pipelines, which the renderer makes as soon as a GPU answers, with
- * the source asked for beside them. Then come the view's place and its area. */
+ * the source asked for beside them. Then comes the view's area. */
 function waitOf(s: Standing): Cover {
   if (s.progress < 1) return progress(s, "progress.shaders");
-  return progress(s, s.placed ? "progress.area" : "progress.location");
+  return progress(s, "progress.area");
 }
 
 /** The one place that decides what covers the app, through the boot's steps:

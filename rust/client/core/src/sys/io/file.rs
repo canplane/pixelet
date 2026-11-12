@@ -1,48 +1,48 @@
 // pxl-core/sys/io/file.rs
 
-//! The core's files, over xpute's file table. The table keeps each
-//! descriptor and its owner until its close is completed, so each completion
-//! reaches its owner with what it came to (`on_opened`, `on_closed`), and a
-//! completion for a descriptor its owner closed reaches no one. A file's path
-//! is a tuple of tokens, as long as its branch of file.json's `path` tree
-//! takes: each token names a child of the node before it, and a branch that
-//! holds data takes the tokens left, a tile or a shard by its quadkey and an
-//! asset by its load's id. No path is kept: each is built where it is opened
-//! or written (`with_path`), and a received one is walked as it came
-//! (`named`); what is kept is what a path is made from, an id or a slot.
-//! Everything past the path, such as a version, a URL or a storage key, is
-//! the client's to decide (ts/client/src/service/sys/fs/). A file is bytes,
-//! and how a platform keeps them is up to its backend.
+//! The core's files, over xpute's fs (wit/fs.wit). A file is opened by its
+//! path's URI to a `File`, which lets its handle go as it drops, and is read
+//! or written whole by a task: its size, one read of it and its close, or one
+//! write and its close, whose errno says whether the write was applied. A
+//! file's path is a tuple of tokens, as long as its branch of file.json's
+//! `path` tree takes: each token names a child of the node before it, and a
+//! branch that holds data takes the tokens left, a tile or a shard by its
+//! quadkey and an asset by its load's id. No path is kept: each is built
+//! where it is opened or written (`path_of`); what is kept is what a path is
+//! made from, an id or a slot. Everything past the path, such as a version, a
+//! URL or a storage key, is the client's to decide
+//! (ts/client/src/service/sys/fs/). A file is bytes, and how a platform keeps
+//! them is up to its backend.
 //!
 //! The storage file holds the settings, at (STORAGE, SETTINGS) (file.json
-//! `path`). It is a format byte (file.json `format`) followed by
-//! what the settings keep, and it is read whole and written whole. A file of
-//! another format, one its backend cannot read as bytes, or one larger than
-//! any heap is refused: it reads as nothing, it is never written over, and it
-//! is named to the client. The client then sets the file aside and empties
-//! the slot (`on_storage_emptied`).
+//! `path`). It is a format byte (file.json `format`) followed by what the
+//! settings keep, and it is read whole and written whole. A file of another
+//! format, one its backend cannot read as bytes, or one larger than any heap
+//! is refused: it reads as nothing, it is never written over, and it is named
+//! to the client. A refused file is watched until it changes, as the client
+//! sets it aside, and is read again (`watch`).
+//!
+//! A read lends its buffer, which its caller makes once the file's size is
+//! known (`read_whole`): a body slot (sys/io/body.rs) or a heap buffer
+//! (`heap`). Either lies in the core's memory, so its offset holds.
 
 use core::fmt;
+use std::cell::{Cell, RefCell};
+use std::collections::{BTreeMap, VecDeque};
 
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+use pxl_spec::space::layer::demand::GROUND_DEMAND_TILES;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_core::abi::fs::{completion, Completion as FsCompletion};
-use xpute_core::global::Global;
-use xpute_core::io::door::Completion;
-pub use xpute_core::io::file::OpenResult;
-use xpute_core::io::file::{FileTable, StableBuf};
-use xpute_core::io::fs::{self, Fd, Token};
+use xpute_core::abi::fs;
+use xpute_core::abi::link::Token;
+use xpute_core::link::{self, Handle, Lend};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::sys::io::body::{self, Packet};
 use crate::sys::io::demand::{Source, Stream};
 use crate::sys::io::file_spec::{self, format, path};
-use crate::sys::io::param::MAX_CREDITS;
-use crate::sys::io::room::Refusal;
-use crate::sys::io::{fetch, loader};
-use crate::sys::manifest::MANIFEST;
-use crate::sys::sched::invalidate;
+use crate::sys::manifest::MIN_HEAP_BYTES;
+use crate::sys::sched::{executor, invalidate};
 
 pub enum StorageRead {
     /// Nothing was kept, or the file was empty.
@@ -55,37 +55,19 @@ pub enum StorageRead {
     Unreadable,
 }
 
-/// The owner of an open file. A `Fetch` is a tile's or a shard's read, by its
-/// attempt; a `Load`, an asset's file, by its attempt; `Storage`, the
-/// settings' file.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Owner {
-    Fetch { key: u64, at_ms: f64 },
-    Load { key: u64 },
-    Storage,
+/// An open file, its handle let go as it drops.
+pub struct File(Handle);
+
+impl File {
+    pub fn open(path: &[Token]) -> Result<File, Errno> {
+        link::open(path).map(File)
+    }
 }
 
-/// What awaits a file's close, sent once the owner reads it whole or writes
-/// it: a read, whose packet the file table holds until the close is
-/// completed, or a write. A fetch is a body's; a load, by its want's id, and
-/// the storage file, the heap's.
-pub enum Request {
-    Fetch { key: u64, at_ms: f64 },
-    Load { id: u64 },
-    Storage,
-    Write,
-}
-
-// SAFETY: a packet is a block of the body slots or the heap; moving it moves
-// its handle alone.
-unsafe impl StableBuf for Packet {}
-
-/// Text held inline, as a quadkey is written: the first `len` of `N` bytes,
-/// zero past them.
-#[derive(Clone, Copy, PartialEq)]
-pub struct Text<const N: usize> {
-    pub bytes: [u8; N],
-    len: usize,
+impl Drop for File {
+    fn drop(&mut self) {
+        link::release(self.0);
+    }
 }
 
 /// The longest quadkey, a leaf's.
@@ -97,149 +79,147 @@ const _: () = assert!(file_spec::LEAF_ZOOM == LEAF_ZOOM);
 /// other id is a tile's, and no tile's id is 0.
 pub const TOP_ID: u64 = 0;
 
-/// The state of the storage file's read, from its open until its owner takes
-/// it.
-enum ReadState {
-    /// The heap refused the read room. The file is opened again once the heap
-    /// gives some back, and no descriptor is held meanwhile.
-    Refused(Refusal),
-    /// The read is out, and its buffer is the file table's until the file's
-    /// close is completed.
-    Reading,
-    Read(StorageRead),
+/// A refused file, which the client sets aside: the storage file, or an
+/// objects' file by its want's id.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Refused {
+    Storage,
+    Objects(u64),
 }
 
-/// The most files open at once, plus slot 0: one for each credit and one for
-/// the storage file's read.
-const OPEN: usize = MAX_CREDITS as usize + 2;
+/// The refused files watched at once: the storage file, and the objects'
+/// files a snapshot names, one for each tile of the ground's demand
+/// (domain/layer/object/repository.rs `watch_named`). A watch that ends has
+/// left its slot before its owner names the next (`take_changed`).
+pub const WATCHED: usize = 1 + GROUND_DEMAND_TILES as usize;
 
-struct Fs {
-    files: FileTable<Owner, Request, Packet, OPEN>,
-    storage: Option<ReadState>,
+thread_local! {
+    /// The files the request scheduler's attempts read, by the attempt's key,
+    /// for a stop to close.
+    static ATTEMPTS: RefCell<BTreeMap<u64, Handle>> = const { RefCell::new(BTreeMap::new()) };
+    /// The storage file as it was read, until its owner takes it.
+    static STORAGE_READ: RefCell<Option<StorageRead>> = const { RefCell::new(None) };
     /// Whether the storage file has been refused since the client last
     /// emptied its slot.
-    refused: bool,
+    static STORAGE_REFUSED: Cell<bool> = const { Cell::new(false) };
+    /// The writes not yet landed, in the order sent, and whether the writer
+    /// runs.
+    static WRITES: RefCell<VecDeque<(Vec<Token>, Box<[u8]>)>> = const { RefCell::new(VecDeque::new()) };
+    static WRITING: Cell<bool> = const { Cell::new(false) };
+    /// The refused files that changed, until their owners take them
+    /// (`take_changed`).
+    static CHANGED: RefCell<VecDeque<Refused>> = const { RefCell::new(VecDeque::new()) };
 }
 
-static FS: Global<Fs> = Global::new();
+/// Reads the file at `path` whole, at most `most` bytes (EFBIG past them),
+/// into the buffer `buf` makes for its size; `buf`'s refusal is the read's.
+/// An attempt's read, by its `key`, is closed by `stop`, which cancels it
+/// (ECANCELED).
+pub async fn read_whole<B: Lend>(
+    path: &[Token],
+    most: u32,
+    key: Option<u64>,
+    buf: impl FnOnce(u32) -> Result<B, Errno>,
+) -> Result<B, Errno> {
+    let f = File::open(path)?;
+    if let Some(k) = key {
+        ATTEMPTS.with_borrow_mut(|a| a.insert(k, f.0));
+    }
+    let read = read_open(&f, most, buf).await;
+    if let Some(k) = key {
+        ATTEMPTS.with_borrow_mut(|a| a.remove(&k));
+    }
+    read
+}
 
-fn fs() -> &'static mut Fs {
-    FS.get(|| Fs {
-        files: FileTable::new(),
-        storage: None,
-        refused: false,
-    })
+/// The open file `f`'s size, one read of that many bytes, and its close.
+async fn read_open<B: Lend>(
+    f: &File,
+    most: u32,
+    buf: impl FnOnce(u32) -> Result<B, Errno>,
+) -> Result<B, Errno> {
+    let n = fs::file_size(f.0).await?;
+    if n > most {
+        return Err(Errno::EFBIG);
+    }
+    let (buf, read) = fs::file_read(f.0, buf(n)?).await;
+    if read? != n {
+        return Err(Errno::EIO);
+    }
+    fs::file_close(f.0).await?;
+    Ok(buf)
+}
+
+/// A heap buffer of `n` bytes, for a read.
+pub fn heap(n: u32) -> Result<Vec<u8>, Errno> {
+    Ok(vec![0u8; n as usize])
+}
+
+/// Closes the file the attempt `key` reads, which cancels its read; what its
+/// reader hears of it afterwards is dropped.
+pub fn stop(key: u64) {
+    if let Some(h) = ATTEMPTS.with_borrow_mut(|a| a.remove(&key)) {
+        fs::file_close_then(h, |_| {});
+    }
+}
+
+/// Replaces the file at `path` with `bytes`. Writes land in the order sent,
+/// one at a time, by one writer task.
+pub fn write(path: Vec<Token>, bytes: Box<[u8]>) {
+    WRITES.with_borrow_mut(|w| w.push_back((path, bytes)));
+    if !WRITING.replace(true) {
+        executor::spawner().spawn(writer().or_bug(Errno::ENOSPC));
+    }
+}
+
+/// Lands the writes queued, until none is left. A write that fails is not
+/// tried again: what it held is written again by the next.
+#[embassy_executor::task]
+async fn writer() {
+    while let Some((path, bytes)) = WRITES.with_borrow_mut(VecDeque::pop_front) {
+        let _ = write_whole(&path, bytes).await;
+    }
+    WRITING.set(false);
+}
+
+async fn write_whole(path: &[Token], bytes: Box<[u8]>) -> Result<(), Errno> {
+    let f = File::open(path)?;
+    let (_, written) = fs::file_write(f.0, bytes.into_vec()).await;
+    written?;
+    fs::file_close(f.0).await
 }
 
 /// The storage file's path, its slot after STORAGE.
-pub const STORAGE: [Token<'static>; 2] = [
-    Token::Int(path::STORAGE::ID),
-    Token::Int(path::STORAGE::SETTINGS::ID),
-];
-
-/// Opens the file at `path`.
-pub fn open(path: &[Token], owner: Owner) {
-    fs().files.open(path, owner);
+pub fn storage_path() -> Vec<Token> {
+    vec![
+        Token::Int(path::STORAGE::ID),
+        Token::Int(path::STORAGE::SETTINGS::ID),
+    ]
 }
 
-/// Opens the storage file to be read whole, for `take_storage`.
+/// Reads the storage file whole, for `take_storage`.
 pub fn open_storage() {
-    open(&STORAGE, Owner::Storage);
+    executor::spawner().spawn(storage_read().or_bug(Errno::ENOSPC));
 }
 
-/// Hands a completion of the file device's to what awaits it (`on_opened`,
-/// `on_closed`); another protocol's goes by.
-pub fn on_completion(c: &Completion) {
-    match completion(c) {
-        Some(FsCompletion::FsOpen { fd, res, reply }) => {
-            on_opened(fd, res, reply.map_or(0, |r| r.detail));
-        }
-        Some(FsCompletion::FsClose { fd, res }) => on_closed(fd, res),
-        None => {}
-    }
-}
-
-/// Hands an open the runtime completed to its owner. The table finds the
-/// owner and lets go of a failed open's descriptor. A file larger than the
-/// heap every device is given could be held nowhere, so it is closed here
-/// and its owner hears EFBIG.
-fn on_opened(fd: Fd, res: Result<u32, Errno>, detail: u32) {
-    let Some((owner, opened)) = fs().files.complete_open(fd, res, detail) else {
-        return;
-    };
-    let opened = match opened {
-        OpenResult::Bytes(n) if n > MANIFEST.min_heap_bytes => {
-            close(fd);
-            OpenResult::Failed {
-                errnum: Errno::EFBIG,
-                detail,
-            }
-        }
-        opened => opened,
-    };
-    match owner {
-        Owner::Fetch { key, at_ms } => fetch::on_opened(fd, key, at_ms, opened),
-        Owner::Load { key } => loader::on_opened(fd, key, opened),
-        Owner::Storage => on_storage_opened(fd, opened),
-    }
-}
-
-fn on_storage_opened(fd: Fd, opened: OpenResult) {
-    let read = match opened {
-        OpenResult::Bytes(0) => {
-            close(fd);
-            ReadState::Read(StorageRead::None)
-        }
-        OpenResult::Bytes(n) => match read_bytes(fd, n, Request::Storage) {
-            Ok(()) => ReadState::Reading,
-            Err(refused) => ReadState::Refused(refused),
-        },
+#[embassy_executor::task]
+async fn storage_read() {
+    let read = match read_whole(&storage_path(), MIN_HEAP_BYTES, None, heap).await {
+        Ok(bytes) => storage_of(&bytes),
         // Only an absent file means nothing was kept.
-        OpenResult::Absent => ReadState::Read(StorageRead::None),
+        Err(Errno::ENOENT) => StorageRead::None,
         // The file is too large for any heap, or its backend cannot read it
         // as bytes.
-        OpenResult::Failed {
-            errnum: Errno::EFBIG | Errno::EBADMSG,
-            ..
-        } => ReadState::Read(refuse()),
-        // A reload left the open unserved: the file is opened again.
-        OpenResult::Failed {
-            errnum: Errno::ECANCELED,
-            ..
-        } => return open_storage(),
-        OpenResult::Failed { .. } => ReadState::Read(StorageRead::Unreadable),
+        Err(Errno::EFBIG | Errno::EBADMSG) => refuse(),
+        Err(_) => StorageRead::Unreadable,
     };
-    set_read(read);
-}
-
-/// The storage file's read, whose close completed with `read`: its bytes,
-/// or, where the close failed, nothing read, and the file is opened again.
-fn on_storage_read(read: Result<Packet, Errno>) {
-    match read {
-        Ok(bytes) => set_read(ReadState::Read(storage_of(&bytes))),
-        Err(_) => open_storage(),
-    }
-}
-
-fn set_read(read: ReadState) {
-    fs().storage = Some(read);
+    STORAGE_READ.set(Some(read));
     invalidate();
 }
 
 /// What the storage file held, once it is read whole, or None until then.
 pub fn take_storage() -> Option<StorageRead> {
-    let read = &mut fs().storage;
-    match read.take()? {
-        ReadState::Read(storage_read) => Some(storage_read),
-        ReadState::Refused(refused) if refused.released() => {
-            open_storage();
-            None
-        }
-        state @ (ReadState::Reading | ReadState::Refused(_)) => {
-            *read = Some(state);
-            None
-        }
-    }
+    STORAGE_READ.take()
 }
 
 /// The storage file's bytes as its backend read them: the settings' bytes
@@ -253,79 +233,16 @@ fn storage_of(bytes: &[u8]) -> StorageRead {
 }
 
 /// Refuses the storage file. The next snapshot names the refusal to the
-/// client, which sets the file aside.
+/// client, which sets the file aside, and the file is watched until it does.
 fn refuse() -> StorageRead {
-    fs().refused = true;
+    STORAGE_REFUSED.set(true);
+    watch(Refused::Storage);
     invalidate();
     StorageRead::Unreadable
 }
 
 pub fn is_storage_refused() -> bool {
-    fs().refused
-}
-
-/// The client has set the refused storage file aside and emptied its slot,
-/// so the settings may read the slot again and write it.
-pub fn on_storage_emptied() {
-    fs().refused = false;
-}
-
-/// Hands a close the runtime completed to what awaits it: a read's bytes to
-/// its reader. A write's result reaches no one, as nothing writes a file
-/// again.
-fn on_closed(fd: Fd, res: Result<u32, Errno>) {
-    let Some((request, pkt, res)) = fs().files.complete_close(fd, res) else {
-        return;
-    };
-    // A read's packet is the table's until its close completes, a write holds
-    // none.
-    let read = || res.map(|()| pkt.or_bug(Errno::ENOTRECOVERABLE));
-    match request {
-        Request::Fetch { key, at_ms } => fetch::on_read(key, at_ms, read()),
-        Request::Load { id } => loader::on_read(id, read()),
-        Request::Storage => on_storage_read(read()),
-        Request::Write => {}
-    }
-}
-
-/// Reads the opened file `fd` of `bytes` whole into a heap block, for
-/// `request`, and closes it; the block is handed back filled as the close is
-/// completed (`on_closed`). Where the heap has no room the file is closed
-/// unread, and the owner opens it again once `Refusal::released`.
-pub fn read_bytes(fd: Fd, bytes: u32, request: Request) -> Result<(), Refusal> {
-    match body::take(None, bytes) {
-        Ok(pkt) => {
-            read(fd, pkt, request);
-            Ok(())
-        }
-        Err(refused) => {
-            close(fd);
-            Err(refused)
-        }
-    }
-}
-
-/// Reads the opened file `fd` whole into `pkt` and closes it; the packet is
-/// handed back filled, with `request`, as the close is completed
-/// (`on_closed`).
-pub fn read(fd: Fd, pkt: Packet, request: Request) {
-    fs().files.read_whole(fd, pkt, request);
-}
-
-/// Closes the open file `fd`, whose owner hears nothing more of it.
-pub fn close(fd: Fd) {
-    let _ = fs().files.close(fd);
-}
-
-/// The open file whose owner `owner` picks.
-pub fn find(owner: impl Fn(&Owner) -> bool) -> Option<Fd> {
-    fs().files.find(owner)
-}
-
-/// Replaces the file at `path` with `bytes`. Writes of one path land in the
-/// order sent.
-pub fn write(path: &[Token], bytes: &[u8]) {
-    fs().files.write_whole(path, bytes, Request::Write);
+    STORAGE_REFUSED.get()
 }
 
 /// Writes `bytes` whole as the storage file's contents, after its format
@@ -334,9 +251,54 @@ pub fn write_storage(bytes: &[u8]) {
     if is_storage_refused() {
         return;
     }
-    let whole = [&[format::SETTINGS][..], bytes].concat();
-    write(&STORAGE, &whole);
+    write(storage_path(), [&[format::SETTINGS][..], bytes].concat().into_boxed_slice());
 }
+
+impl Refused {
+    pub fn path(self) -> Vec<Token> {
+        match self {
+            Refused::Storage => storage_path(),
+            Refused::Objects(id) => quadrant_path(path::OBJECT::ID, id),
+        }
+    }
+}
+
+/// Watches the refused file `r` until it changes under the core, as the
+/// client sets it aside; then it is read again.
+pub fn watch(r: Refused) {
+    executor::spawner().spawn(watched(r).or_bug(Errno::ENOSPC));
+}
+
+#[embassy_executor::task(pool_size = WATCHED)]
+async fn watched(r: Refused) {
+    let changed = match File::open(&r.path()) {
+        Ok(f) => fs::file_changed(f.0).await,
+        Err(e) => Err(e),
+    };
+    if changed.is_err() {
+        return;
+    }
+    if let Refused::Storage = r {
+        STORAGE_REFUSED.set(false);
+    }
+    CHANGED.with_borrow_mut(|c| c.push_back(r));
+    invalidate();
+}
+
+/// A refused file that has changed since, for its owner to read again: the
+/// settings for the storage file, the objects' repository for theirs.
+pub fn take_changed() -> Option<Refused> {
+    CHANGED.with_borrow_mut(VecDeque::pop_front)
+}
+
+/// Text held inline, as a quadkey is written: the first `len` of `N` bytes,
+/// zero past them.
+#[derive(Clone, Copy, PartialEq)]
+pub struct Text<const N: usize> {
+    pub bytes: [u8; N],
+    len: usize,
+}
+
 
 impl<const N: usize> Text<N> {
     pub const EMPTY: Text<N> = Text {
@@ -361,54 +323,26 @@ impl<const N: usize> fmt::Write for Text<N> {
     }
 }
 
-/// Answers `f` of the path that `stream`'s want `id` opens, built here at the
-/// length its branch takes: a tile or a shard by its quadkey after its
-/// stream's token, the objects' top as (OBJECT, TOP), and a load by its file.
-/// A load that is no file has no path.
-pub fn with_path<R>(stream: Stream, id: u64, f: impl FnOnce(&[Token]) -> R) -> Option<R> {
+/// The path that `stream`'s want `id` opens, built at the length its branch
+/// takes: a tile or a shard by its quadkey after its stream's token, the
+/// objects' top as (OBJECT, TOP). A load opens through the loader
+/// (sys/io/loader.rs), so its stream has no path here.
+pub fn path_of(stream: Stream, id: u64) -> Option<Vec<Token>> {
     match stream.row().source {
-        Source::Load => loader::of_id(id).map(|(_, load)| f(&load.path())),
-        Source::Bake(_) | Source::Objects => Some(with_quadrant(stream.token()?, id, f)),
+        Source::Load => None,
+        Source::Bake(_) | Source::Objects => Some(quadrant_path(stream.token()?, id)),
     }
 }
 
-/// Answers `f` of the path of the tile or shard `id` after `head`: its quadkey,
-/// or, for `TOP_ID`, the objects' top.
-pub fn with_quadrant<R>(head: i32, id: u64, f: impl FnOnce(&[Token]) -> R) -> R {
+/// The path of the tile or shard `id` after `head`: its quadkey, or, for
+/// `TOP_ID`, the objects' top.
+pub fn quadrant_path(head: i32, id: u64) -> Vec<Token> {
     if id == TOP_ID {
-        return f(&[Token::Int(head), Token::Int(path::OBJECT::TOP::ID)]);
+        return vec![Token::Int(head), Token::Int(path::OBJECT::TOP::ID)];
     }
     let mut key = Text::<KEY_BYTES>::EMPTY;
     Quadrant::of_id(id)
         .write_key(&mut key)
         .or_bug(Errno::EOVERFLOW);
-    f(&[Token::Int(head), Token::Str(key.as_str())])
+    vec![Token::Int(head), Token::Str(key.as_str().to_owned())]
 }
-
-/// A file a received path names among those the core refuses and reads
-/// again: the storage file, or an objects' file by its want's id.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum File {
-    Storage,
-    Objects(u64),
-}
-
-/// The file `path` names, walked token by token as it came; none for any
-/// other path. An objects' file is (OBJECT, quadkey), a shard's, or (OBJECT,
-/// TOP), the top's (`with_quadrant`).
-pub fn of_path(path: fs::Path<'_>) -> Option<File> {
-    let mut tokens = path.iter();
-    let file = match (tokens.next()?, tokens.next()?) {
-        (Token::Int(path::STORAGE::ID), Token::Int(path::STORAGE::SETTINGS::ID)) => File::Storage,
-        (Token::Int(path::OBJECT::ID), Token::Int(path::OBJECT::TOP::ID)) => File::Objects(TOP_ID),
-        (Token::Int(path::OBJECT::ID), Token::Str(key)) => {
-            File::Objects(Quadrant::of_key(key)?.id())
-        }
-        _ => return None,
-    };
-    tokens.next().is_none().then_some(file)
-}
-
-#[cfg(test)]
-#[path = "file.test.rs"]
-pub(crate) mod test;

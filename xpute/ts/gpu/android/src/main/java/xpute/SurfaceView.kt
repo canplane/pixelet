@@ -16,7 +16,7 @@ import expo.modules.kotlin.views.ExpoView
  * the moment the system takes it back: `surfaceDestroyed` does not return until
  * the core's GPU runtime has let the surface go. The view tells when the
  * surface is bound (`onAttach`) and when it no longer is (`onDetach`). The core
- * sizes the surface and draws every frame inside a turn, so nothing here draws,
+ * sizes the surface and draws every frame inside an entry, so nothing here draws,
  * and the view takes no input: a program that wants the system view's touches
  * subclasses it.
  */

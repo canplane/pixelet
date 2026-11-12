@@ -17,6 +17,7 @@ use fnv::FnvHashMap;
 use pxl_content::cloud::{cloud_draw, holds_cloud};
 use pxl_content::generation::drawing;
 use pxl_content::param::cloud::{CUMULUS_KM, WIND};
+use pxl_global::Global;
 use pxl_render::frame::shader::record::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::frame::shader::word::DECOR_GROUPS;
 use pxl_render::gpu::draw::{DrawId, DrawList, Position, ReceiverBox};
@@ -24,11 +25,8 @@ use pxl_spec::asset::catalog::{model_extent, Slot};
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
-use xpute_core::global::Global;
 use xpute_core::mem;
-use xpute_core::mem::heap::{alloc, free};
 
-use crate::sys::sched;
 use crate::domain::scene::column::{self, GroupRange};
 use crate::domain::scene::environment::param::{
     CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
@@ -42,7 +40,9 @@ use crate::domain::view::frame::pose::{eye, km_per_u};
 use crate::domain::view::lens::{self, cull_dist_u, decor_impostor_angle, decor_model_angle};
 use crate::domain::view::observation;
 use crate::domain::view::param;
+use crate::sys::heap;
 use crate::sys::io::loader::{catalog, load_image, load_of};
+use crate::sys::sched;
 use pxl_content::generation;
 use pxl_content::param::cloud;
 use pxl_render::gpu::api::Image;
@@ -95,8 +95,8 @@ fn shows(local: [f32; 2], d2: f64) -> bool {
 }
 
 struct Patch {
-    at: u32,
-    bytes: u32,
+    /// Its columns, then from `idx` its list, which the renderer uploads.
+    words: Box<[u32]>,
     handle: u32,
     idx: u32,
     alts: [f32; 2],
@@ -109,13 +109,13 @@ struct Patch {
 struct CloudLayer {
     models: [Option<u32>; VARIANTS.len()],
     patches: FnvHashMap<[i64; 2], Patch>,
-    /// The vectors from here on are kept between turns, so a turn where
+    /// The vectors from here on are kept between frames, so a frame where
     /// nothing changed allocates nothing.
     demand: Vec<[i64; 2]>,
     stale: Vec<[i64; 2]>,
     columns: [Vec<[f32; 5]>; VARIANTS.len()],
     impostors: Vec<u32>,
-    /// How far from the eye the nearest cloud drawn last turn stands, or
+    /// How far from the eye the nearest cloud drawn last frame stands, or
     /// infinity when none was drawn.
     nearest_dist: f64,
 }
@@ -249,20 +249,20 @@ pub fn step(draw: &mut DrawList, frame: &Frame) {
     for k in c.stale.drain(..) {
         if let Some(b) = c.patches.remove(&k) {
             draw.free(b.handle);
-            // SAFETY: the patch's, not given back yet; nothing reads it past this turn.
-            unsafe { free((b.at as usize, b.bytes)) };
         }
     }
     let (patches, columns) = (&mut c.patches, &mut c.columns);
     c.demand.retain(|k| !patches.contains_key(k));
-    sched::run(c.demand.iter().copied(), |key| match build(key, base, columns, draw) {
-        Some(b) => {
-            patches.insert(key, b);
-            true
+    sched::run(c.demand.iter().copied(), |key| {
+        match build(key, base, columns, draw) {
+            Some(b) => {
+                patches.insert(key, b);
+                true
+            }
+            None => false,
         }
-        None => false,
     });
-    for (&key, b) in &c.patches {
+    for (&key, b) in c.patches.iter_mut() {
         let corner = [
             key[0] as f64 * PATCH - off[0],
             key[1] as f64 * PATCH - off[1],
@@ -303,11 +303,10 @@ pub fn step(draw: &mut DrawList, frame: &Frame) {
                     .min(v3::len(&gap.map(|g| g.max(0.0))).max(param::NEAR));
             }
         }
-        let patch = PatchDraw {
+        let mut patch = PatchDraw {
             handle: b.handle,
-            at: b.at,
+            words: &mut b.words,
             idx: b.idx,
-            bytes: b.bytes,
             corner: [nearest(corner[0], eye[0]), corner[1]],
             box_corner: box_corner(key, off, eye),
             side: PATCH,
@@ -323,7 +322,15 @@ pub fn step(draw: &mut DrawList, frame: &Frame) {
                 (widest(a), CLOUD_WIDTH.map(|w| w / widest(a))),
             )
         });
-        present_patch(draw, &patch, pos, eye, groups, opacity, &mut c.impostors);
+        present_patch(
+            draw,
+            &mut patch,
+            pos,
+            eye,
+            groups,
+            opacity,
+            &mut c.impostors,
+        );
     }
 }
 
@@ -419,9 +426,7 @@ fn clouds_of(key: [i64; 2], base: f64) -> impl Iterator<Item = Cloud> {
 /// hash, which is asked once per patch when it is built, and asks the catalog
 /// once per variant.
 fn patch_clouds(b: &Patch) -> impl Iterator<Item = ([f64; 3], [f64; 3])> + '_ {
-    // SAFETY: the patch's bytes, held until it goes, which is after this turn reads them.
-    let words: &[u32] =
-        unsafe { core::slice::from_raw_parts(mem::at::<u32>(b.at as usize), b.bytes as usize / 4) };
+    let words = &b.words;
     column::groups(words)
         .zip(VARIANTS.map(|file| (widest(file), model_extent(catalog(), file)[2])))
         .flat_map(move |((first, n), (wide, tall))| {
@@ -472,10 +477,7 @@ fn build(
             .map(|l| GroupRange::words(l.len()))
             .sum::<usize>();
     let idx = (words * 4) as u32;
-    let (at, bytes) = alloc(idx + instance_cnt as u32 * 4)?;
-    // SAFETY: a heap block of the bytes asked for, this patch's until given back.
-    let out: &mut [u32] =
-        unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(at), bytes as usize / 4) };
+    let mut out = heap::zeroed::<u32>(words + instance_cnt)?;
     out[0] = columns.len() as u32;
     let mut first = hdr;
     for (g, l) in columns.iter().enumerate() {
@@ -492,10 +494,9 @@ fn build(
         out[column.flags()..column.flags() + l.len().div_ceil(4)].fill(0);
         first += GroupRange::words(l.len());
     }
-    let handle = draw.upload(at as u32, bytes, 0, 0);
+    let handle = draw.upload(mem::off(out.as_ptr().cast()), out.len() as u32 * 4, 0, 0);
     Some(Patch {
-        at: at as u32,
-        bytes,
+        words: out,
         handle,
         idx,
         alts: if instance_cnt == 0 { [0.0; 2] } else { alts },
@@ -508,9 +509,8 @@ fn build(
 /// instances stand between.
 struct PatchDraw<'a> {
     handle: u32,
-    at: u32,
+    words: &'a mut [u32],
     idx: u32,
-    bytes: u32,
     corner: [f64; 2],
     /// The corner its draws stand by (`box_corner`).
     box_corner: [f64; 2],
@@ -527,7 +527,7 @@ struct PatchDraw<'a> {
 /// out, because an impostor cannot be blended.
 fn present_patch(
     draw: &mut DrawList,
-    b: &PatchDraw,
+    b: &mut PatchDraw,
     pos: Position,
     eye: V3,
     groups: impl Iterator<Item = (u32, (f64, [f64; 2]))>,
@@ -552,11 +552,7 @@ fn present_patch(
         far(zlo, zhi, eye[2]),
     ])
     .max(1e-3);
-    // SAFETY: the patch's bytes, `bytes` long, its owner's to write past `index`.
-    let words: &mut [u32] = unsafe {
-        core::slice::from_raw_parts_mut(mem::at::<u32>(b.at as usize), b.bytes as usize / 4)
-    };
-    let (columns_of, list) = words.split_at_mut(b.idx as usize / 4);
+    let (columns_of, list) = b.words.split_at_mut(b.idx as usize / 4);
     // A patch wholly within THIN_FROM shows every cloud, so no cloud's draw
     // is tested.
     let thin = farthest > THIN_FROM;
@@ -647,7 +643,12 @@ fn present_patch(
         }
     }
     if changed {
-        draw.rewrite_part(b.handle, b.at, b.idx, at as u32 * 4);
+        draw.rewrite_part(
+            b.handle,
+            mem::off(b.words.as_ptr().cast()),
+            b.idx,
+            at as u32 * 4,
+        );
     }
 }
 

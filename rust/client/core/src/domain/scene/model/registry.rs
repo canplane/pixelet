@@ -13,7 +13,8 @@ use core::ops::Range;
 use pxl_render::asset::{SCENE_IDXS_CAP, SCENE_VERTICES_CAP};
 use pxl_render::gpu::draw::{DrawList, MODEL_VERTEX_WORDS};
 use xpute_core::mem;
-use xpute_core::mem::heap::alloc;
+
+use crate::sys::heap;
 
 // The largest mesh a parse accepts fits in one block, whose size in bytes is
 // a u32.
@@ -66,8 +67,8 @@ pub struct MeshRef {
 }
 
 pub struct Model {
-    at: usize,
-    bytes: u32,
+    /// The model's mesh: the vertex columns, then the indices.
+    words: Box<[u32]>,
     handle: u32,
     vertex_cnt: u32,
     idx_cnt: u32,
@@ -235,8 +236,8 @@ impl ModelTable {
     /// number, which names it from then on.
     pub fn add(&mut self, draw: &mut DrawList, mut model: Model) -> u32 {
         model.handle = draw.upload(
-            model.at as u32,
-            model.bytes,
+            mem::off(model.words.as_ptr().cast()),
+            model.words.len() as u32 * 4,
             model.vertex_cnt,
             model.idx_cnt,
         );
@@ -259,15 +260,13 @@ impl Model {
     /// `vertex_cnt` vertices and `idx_cnt` indices. None when the heap
     /// refuses.
     pub fn new(vertex_cnt: u32, idx_cnt: u32, joint_cnt: u32) -> Option<Model> {
-        let bytes = vertex_cnt
+        let words = vertex_cnt
             .checked_mul(MODEL_VERTEX_WORDS)
-            .and_then(|words| words.checked_add(idx_cnt))
-            .and_then(|words| words.checked_mul(4))?;
-        let (at, bytes) = alloc(bytes)?;
+            .and_then(|words| words.checked_add(idx_cnt))?;
+        let words = heap::zeroed::<u32>(words as usize)?;
         let j = joint_cnt as usize;
         Some(Model {
-            at,
-            bytes,
+            words,
             handle: 0,
             vertex_cnt,
             idx_cnt,
@@ -293,10 +292,9 @@ impl Model {
         })
     }
 
-    /// The address of the model's block: the vertex columns, then the
-    /// indices.
-    pub fn at(&self) -> usize {
-        self.at
+    /// The model's mesh to write: the vertex columns, then the indices.
+    pub fn words(&mut self) -> &mut [u32] {
+        &mut self.words
     }
 
     /// `parent` is -1 for a root joint, and `root_pre` is the transform above
@@ -350,10 +348,8 @@ impl Model {
     /// The model's block has been written.
     pub async unsafe fn seal<P: Future<Output = ()>>(&mut self, scale: f32, pause: impl Fn() -> P) {
         self.scale = scale;
-        // SAFETY: the caller's; its positions are the block's first column.
-        let positions = unsafe {
-            core::slice::from_raw_parts(mem::at::<f32>(self.at), self.vertex_cnt as usize * 3)
-        };
+        // Its positions are the mesh's first column.
+        let positions = &self.words[..self.vertex_cnt as usize * 3];
         let mut far = 0.0f32;
         for (k, run) in positions
             .as_chunks::<3>()
@@ -366,6 +362,7 @@ impl Model {
             }
             far = run
                 .iter()
+                .map(|p| p.map(f32::from_bits))
                 .map(|p| p[0] * p[0] + p[1] * p[1] + p[2] * p[2])
                 .fold(far, f32::max);
         }
@@ -487,10 +484,8 @@ impl Model {
     ) -> impl Iterator<Item = [f32; 3]> + 'a {
         let cnt = self.vertex_cnt as usize;
         let column = move |k: usize| k * cnt;
-        // SAFETY: the model's block, written (`seal`): its vertex columns first.
-        let w = unsafe {
-            core::slice::from_raw_parts(mem::at::<u32>(self.at), cnt * MODEL_VERTEX_WORDS as usize)
-        };
+        // The model's mesh, written (`seal`): its vertex columns first.
+        let w = &self.words[..cnt * MODEL_VERTEX_WORDS as usize];
         vertices.map(move |v| {
             let p = [0, 1, 2].map(|k| f32::from_bits(w[column(0) + v * 3 + k]));
             let mut q = [0.0f32; 3];

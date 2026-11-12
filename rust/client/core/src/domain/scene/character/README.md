@@ -14,7 +14,7 @@ for another row (`companion_step`). The companion stays while the eye is the
 pivot; it is placed nowhere then.
 
 Where a character stands is the core's, never the UI's: its walk stands it each
-turn in the interaction phase (`companion.rs` `Walk`, `../../../turn.rs`
+frame in the interaction phase (`companion.rs` `Walk`, `../../../frame.rs`
 `companion_tick`), the pet at its own place beside the person's, neither
 anchored to the other.
 

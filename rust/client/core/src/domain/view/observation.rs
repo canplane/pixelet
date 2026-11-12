@@ -1,7 +1,7 @@
 // pxl-core/domain/view/observation.rs
 
 //! The core's side of an observation (pxl-spec `camera::eye::Observation`).
-//! The observation is made from the view as the turn composed it
+//! The observation is made from the view as the frame composed it
 //! (domain/view/frame/pose.rs) and from what the world is known to hold.
 //! From it come the bricks of the eye's clip levels, the tiles each layer is
 //! asked for, and the order a tile is read in.
@@ -9,7 +9,7 @@
 use crate::sys::io::demand::Order;
 use pxl_content::scatter::COARSEST_STAND;
 use pxl_spec::space::layer::lattice::{demand_dist, draw_dist, Lattice, GROUND};
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 use pxl_spec::brick::{bricks_zoom, BRICK_SHIFT};
 use pxl_spec::space::camera::eye::Observation;
@@ -49,11 +49,11 @@ pub fn eye_draw_dist() -> Option<f64> {
 /// `Some(None)` means the last reader found no eye or no demand distance.
 static OBSERVATION: Global<Option<Option<Observation>>> = Global::new();
 
-/// Called once a frame turn (turn.rs `camera_tick`). The kept observation
+/// Called once a frame (frame.rs `camera_tick`). The kept observation
 /// holds the eye's height over the ground under it, so it is dropped when a
-/// change touched that ground. It must run every frame turn, so that
+/// change touched that ground. It must run every frame, so that
 /// `change::within` sees each change once.
-pub fn turn() {
+pub fn forget_touched() {
     let cached = OBSERVATION.get(|| None);
     if cached.is_some_and(|o| o.is_some_and(|o| change::within([[o.eye[0], o.eye[1]]; 2], &[]))) {
         *cached = None;

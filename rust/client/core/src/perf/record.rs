@@ -13,7 +13,7 @@ use core::mem::size_of;
 
 use pxl_render::renderer::GpuRead;
 use xpute_core::clock::now;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 use crate::perf::frame::{FrameSample, WorstFrame};
 use crate::perf::report::RayRead;
@@ -30,7 +30,7 @@ const TASK_CAP: usize = 2_048;
 const FRAME_CAP: usize = 4_096;
 const WORST_CAP: usize = 12;
 /// The bytes of the failures' file names, which are few.
-const STRTAB_CAP: usize = 8_192;
+pub const STRTAB_CAP: usize = 8_192;
 pub const PERCENTILES_CAP: usize = if FRAME_CAP > TASK_CAP {
     FRAME_CAP
 } else {

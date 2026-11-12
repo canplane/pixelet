@@ -24,7 +24,7 @@ use crate::domain::scene::column::GroupRange;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::indicator::param::GHOST_OPACITY;
 use crate::domain::setting::store::settings;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 #[derive(Clone, Copy, PartialEq)]
 enum Shape {

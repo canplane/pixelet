@@ -21,14 +21,14 @@ use pxl_render::look::marker::ATLAS_SCALE;
 use pxl_render::look::marker::{
     bubble_size, pill_size, point_size, Font, BUBBLE_FONT, BUBBLE_TEXT_W, PILL_FONT, POINT_FONT,
 };
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 /// `text` in `font`, broken into lines no wider than `max_width` (0 for one
 /// line), each with its width. None when the platform could not lay it out
-/// this turn.
+/// this frame.
 fn lines(font: Font, max_width: f64, text: &str) -> Option<Vec<(&str, f64)>> {
     text_lines(font.weight, f64::from(font.px), max_width, text)
 }
@@ -40,7 +40,7 @@ fn width(font: Font, text: &str) -> Option<f64> {
 
 /// One line of `text` in `font` and `color` (0xRRGGBBAA), as the atlas
 /// paints it: drawn at the atlas's scale into the line's box (`raster_box`).
-/// None when it could not be drawn this turn, and a later turn asks again.
+/// None when it could not be drawn this frame, and a later frame asks again.
 pub fn text_raster(font: Font, color: u32, text: &str) -> Option<Raster<'static>> {
     let advance = width(font, text)? as f32;
     let (size, origin) = raster_box(font, advance);
@@ -139,10 +139,10 @@ pub(super) fn retain(designs: &FnvHashSet<Design>) -> bool {
 }
 
 /// Whether the design will become ready (`ready`) with nothing else
-/// changing. Either its text has been asked of the client and a later turn
+/// changing. Either its text has been asked of the client and a later frame
 /// brings the answer, or its slot is given and the render will paint it. A
 /// design the atlas has no room for becomes ready only once a slot is freed
-/// (`retain`), so it asks for no turn of its own.
+/// (`retain`), so it asks for no frame of its own.
 pub(super) fn coming(design: &Design) -> bool {
     sprites()
         .get(design)
@@ -150,7 +150,7 @@ pub(super) fn coming(design: &Design) -> bool {
 }
 
 /// The design's width, its height, and how far down from its top it stands.
-/// None when its text could not be laid out this turn.
+/// None when its text could not be laid out this frame.
 pub(super) fn size(design: &Design) -> Option<[f64; 3]> {
     if let Some(b) = sprites().get(design) {
         return Some(b.size);

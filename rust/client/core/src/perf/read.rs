@@ -37,7 +37,7 @@ use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_core::clock::now;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 const REASONS: usize = LIMIT::REASONS as usize;
 const STEP_CAP: usize = LIMIT::STEP_CAP as usize;

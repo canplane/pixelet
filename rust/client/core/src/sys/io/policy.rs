@@ -26,9 +26,8 @@
 
 use crate::sys::io::demand::{Class, Order, Stream};
 use crate::sys::io::failure::Failure;
-use crate::sys::io::loader::of_id;
 use crate::sys::io::param;
-use crate::sys::load::LoadKind;
+use crate::sys::load::{of_id, LoadKind};
 use core::cmp::Ordering;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_kit::math::rng::{u32_to_unit, SplitMix64};

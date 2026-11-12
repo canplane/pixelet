@@ -6,4 +6,3 @@ pub mod clipmap;
 pub mod fixed;
 pub mod pool;
 mod query;
-pub mod tile;

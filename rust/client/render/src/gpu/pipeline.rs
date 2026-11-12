@@ -5,7 +5,7 @@
 //! every one declaring the same group.
 //!
 //! The renderer is made in three steps (renderer.rs `render_frame`). First every shader
-//! module is made, a few a turn (`make_modules`). Then the renderer is made, and each of its
+//! module is made, a few a frame (`make_modules`). Then the renderer is made, and each of its
 //! pipelines is made by WebGPU's async call, with the word its ticket lands in kept here. Then
 //! no frame is drawn until every word says its pipeline is made (`made`). A pipeline asked for
 //! once the renderer draws must be found already made; anything else is a bug.
@@ -85,17 +85,17 @@ impl PipelineCache {
     /// `stream::RESERVE` past it, as an upload waits for room (`room`). Returns whether every
     /// module is made.
     pub fn make_modules(&mut self, g: &Gpu) -> bool {
-        let mut turn_bytes = None;
+        let mut frame_bytes = None;
         while self.modules_made < SHADERS {
             let code = src(self.modules_made);
             let past =
-                turn_bytes.is_some_and(|b: usize| b + code.len() > stream::MODULE_BYTES as usize);
+                frame_bytes.is_some_and(|b: usize| b + code.len() > stream::MODULE_BYTES as usize);
             if past || !room(shader_bytes(code)) {
                 break;
             }
             self.modules[self.modules_made as usize] = g.shader(code);
             self.modules_made += 1;
-            turn_bytes = Some(turn_bytes.unwrap_or(0) + code.len());
+            frame_bytes = Some(frame_bytes.unwrap_or(0) + code.len());
         }
         self.modules_made == SHADERS
     }

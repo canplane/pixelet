@@ -12,11 +12,11 @@ use pxl_spec::bake::tile::{Occupancy, Tile};
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILES};
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
+use crate::sys::io::body::Body;
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
-use crate::sys::io::body::Packet;
 use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;
 use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
@@ -28,7 +28,7 @@ pub enum EarthTile {
     /// The packet the GPU does not have yet. The tile owns the packet and
     /// lets it go with itself. Every slot may hold one, and the request
     /// scheduler leaves body slots for them (sys/io/request.rs `spare_slots`).
-    Waiting(Packet),
+    Waiting(Body),
     /// Sent to the device of this generation (`device_generation`).
     Sent(u32),
 }
@@ -55,7 +55,7 @@ impl Base for EarthTile {
     fn receive(
         _tile: Quadrant,
         _slot: u32,
-        pkt: Packet,
+        pkt: Body,
         _phases: &mut PhaseList,
     ) -> Result<EarthTile, Exit> {
         earth::decode(&pkt)?;

@@ -6,7 +6,7 @@ import Foundation
 import QuartzCore
 
 /// This tells the core's thread each display frame (`xpute_vsync`), which
-/// begins the turns. A display link calls it on the main thread.
+/// begins the entries. A display link calls it on the main thread.
 final class DisplayFrames: NSObject {
   private var link: CADisplayLink?
 
@@ -131,7 +131,7 @@ public class XputeModule: Module {
       XputeModule.answer = answer.copy()
     }
 
-    Function("say") { (line: String) in
+    Function("log") { (line: String) in
       FileHandle.standardOutput.write(Data((line + "\n").utf8))
     }
   }

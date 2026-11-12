@@ -51,8 +51,23 @@ use crate::resource::Table;
 
 pub use crate::resource::Handle;
 
+// A module takes the runtime's `link_out` under `env` (TS link.ts `imports`).
+#[cfg_attr(target_arch = "wasm32", link(wasm_import_module = "env"))]
 unsafe extern "C" {
     fn link_out(at: u32) -> i32;
+}
+
+/// What an async method lends: a buffer that says where it lies in the
+/// core's memory and how long (wit/link.wit `lent`), and stays put while the
+/// answer owns it.
+pub trait Lend: Unpin + 'static {
+    fn span(&mut self) -> (u32, u32);
+}
+
+impl<T: Copy + Unpin + 'static> Lend for Vec<T> {
+    fn span(&mut self) -> (u32, u32) {
+        (mem::off(self.as_ptr().cast()), core::mem::size_of_val(&self[..]) as u32)
+    }
 }
 
 pub type Tag = u32;
@@ -72,10 +87,10 @@ pub trait Object {
 
 /// What hears an async method's value, once it has one, and answers the
 /// request with it.
-pub type Done<T> = Box<dyn FnOnce(Result<T, Errno>)>;
+pub type Return<T> = Box<dyn FnOnce(Result<T, Errno>)>;
 
-/// What opens the object a URI names.
-type Opener = dyn Fn(&[Token]) -> Result<Rc<dyn Object>, Errno>;
+/// What opens the object a URI names, given the handle it is issued.
+type Opener = dyn Fn(&[Token], Handle) -> Result<Rc<dyn Object>, Errno>;
 
 /// What a method answers: its result, a status or a value, and its return
 /// data, written once its args are read.
@@ -132,15 +147,19 @@ fn link() -> Link {
     LINK.get().or_bug(Errno::ENOTRECOVERABLE)
 }
 
-/// Defines the core's two exports, over frames of `room` bytes, with `boot`
-/// mounting what the core serves and opening what it calls, and `enter` and
-/// `end` starting and ending each entry (`init`).
+/// Defines the core's three exports (wit/link.wit), over frames of `room`
+/// bytes, with `boot` mounting what the core serves and opening what it
+/// calls, and `enter` and `end` starting and ending each entry.
 #[macro_export]
 macro_rules! link {
     ($room:expr, $boot:expr, $enter:expr, $end:expr) => {
         #[unsafe(no_mangle)]
         pub extern "C" fn link_init() -> u32 {
-            $crate::link::init($room, $boot, $enter, $end)
+            $crate::link::init($room, $enter, $end)
+        }
+        #[unsafe(no_mangle)]
+        pub extern "C" fn link_boot() {
+            $crate::link::boot($boot)
         }
         #[unsafe(no_mangle)]
         pub extern "C" fn link_in() -> i32 {
@@ -150,15 +169,12 @@ macro_rules! link {
 }
 
 /// Lays the link over frames of `room` bytes, a multiple of 8 that holds a
-/// frame's words, and runs `boot`, in the core's first entry. Every entry,
-/// this one too, starts by `enter`, the program's, and ends by `end`: run once
-/// the due answers have run, it answers whether it left work, and it runs
-/// again, after the answers its work made due, until it leaves none. It
-/// answers where the link's layout lies: two words, the inbox and a frame's
-/// room, then the inbox and the outbox.
-pub fn init(room: u32, boot: impl FnOnce(), enter: fn(), end: fn() -> bool) -> u32 {
+/// frame's words, and runs nothing of the program; `enter` and `end` are the
+/// program's start and end of every entry (`boot`, `recv`). It answers where
+/// the link's layout lies: two words, the inbox and a frame's room, then the
+/// inbox and the outbox.
+pub fn init(room: u32, enter: fn(), end: fn() -> bool) -> u32 {
     xpute_kit::ensure!(room % 8 == 0 && room >= WORD_BYTES, EINVAL, room);
-    xpute_kit::ensure!(!ENTERED.replace(true), EBUSY);
     let words: &'static mut [u64] = Vec::leak(vec![0; 1 + 2 * room as usize / 8]);
     let at = mem::off(words.as_ptr().cast());
     let inbox = at + 8;
@@ -169,14 +185,21 @@ pub fn init(room: u32, boot: impl FnOnce(), enter: fn(), end: fn() -> bool) -> u
     LINK.set(Some(Link { inbox, room }));
     ENTER.set(enter);
     END.set(end);
-    enter();
-    boot();
-    leave();
     at
 }
 
+/// The core's first entry, once the runtime has read the layout. Unlike every
+/// later entry, it starts by `boot`, which opens what the program's `enter`
+/// may read, and only then by `enter`; it ends as every entry does (`leave`).
+pub fn boot(boot: impl FnOnce()) {
+    xpute_kit::ensure!(!ENTERED.replace(true), EBUSY);
+    boot();
+    ENTER.get()();
+    leave();
+}
+
 /// Puts `open` as the opener of the URIs that start with `prefix`.
-pub fn mount(prefix: Vec<Token>, open: impl Fn(&[Token]) -> Result<Rc<dyn Object>, Errno> + 'static) {
+pub fn mount(prefix: Vec<Token>, open: impl Fn(&[Token], Handle) -> Result<Rc<dyn Object>, Errno> + 'static) {
     MOUNTS.with_borrow_mut(|m| m.push((prefix, Rc::new(open))));
 }
 
@@ -238,7 +261,7 @@ pub fn answer(result: i32) -> Result<u32, Errno> {
 /// The frame the runtime laid in the inbox: a later answer, to its request,
 /// or a method, to its object.
 pub fn recv() -> i32 {
-    start();
+    enter();
     let result = apply();
     leave();
     result
@@ -299,17 +322,20 @@ fn opened(args: Option<BranchCursor<'_>>) -> Result<Handle, Errno> {
                 .map(|(_, o)| o.clone())
         })
         .ok_or(Errno::ENOENT)?;
-    let o = open(&uri)?;
-    Ok(OBJECTS.with_borrow_mut(|t| t.add(o)))
+    let h = OBJECTS.with_borrow_mut(Table::issue);
+    let o = open(&uri, h)?;
+    OBJECTS.with_borrow_mut(|t| t.put(h, o));
+    Ok(h)
 }
 
-/// Starts an entry: the program's start of it.
-fn start() {
+/// Starts an entry by the program's `enter`. Every entry ends by `leave`.
+fn enter() {
     xpute_kit::ensure!(!ENTERED.replace(true), EBUSY);
     ENTER.get()();
 }
 
-/// Runs the answers due and the program's end, again until neither has work
+/// Ends an entry: runs the answers due and the program's `end`, which answers
+/// whether it left work, again until neither has work
 /// left, and ends the entry.
 fn leave() {
     loop {

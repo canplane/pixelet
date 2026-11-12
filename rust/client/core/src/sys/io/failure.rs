@@ -9,7 +9,6 @@ use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
 pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
-use crate::sys::io::file::OpenResult;
 use crate::sys::io::room::Refusal;
 
 /// How an attempt ended, as one value, so an attempt that ended well cannot
@@ -88,23 +87,6 @@ impl From<Errno> for Failure {
             errnum,
             detail: 0,
             at: Some(Location::caller()),
-        }
-    }
-}
-
-/// The failure of an open that brought no bytes. An open that brought bytes
-/// is no failure, and taking it for one is a bug.
-impl From<OpenResult> for Failure {
-    #[track_caller]
-    fn from(opened: OpenResult) -> Failure {
-        match opened {
-            OpenResult::Failed { errnum, detail } => Failure {
-                errnum,
-                detail: detail as u16,
-                at: None,
-            },
-            OpenResult::Absent => Failure::from(Errno::ENOENT),
-            OpenResult::Bytes(_) => Failure::from(Errno::ENOTRECOVERABLE),
         }
     }
 }

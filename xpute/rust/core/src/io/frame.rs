@@ -1,28 +1,23 @@
 // xpute-core/io/frame.rs
 
-//! A frame is four words: the request's tag, its command, the result, and
-//! the packet's length. The command is the RES bit (31), the handle the
-//! callee issued (bits 8..30) and the method's place among its object's (bits
-//! 0..7). The packet, the method's args in XTP, lies right past the words.
-//! The words are little-endian, as both forms' memory is.
+//! A frame's words are laid out by spec/io/frame.json: the request's tag, its
+//! command, the result, and the packet's length. The command is the RES bit,
+//! the handle the callee issued and the method's place among its object's.
+//! The packet, the method's args in XTP, lies right past the words. The words
+//! are little-endian, as both forms' memory is.
 
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
 use crate::mem;
 
-const TAG: u32 = 0;
-const CMD: u32 = 1;
-const RESULT: u32 = 2;
-const PKT: u32 = 3;
+#[path = "frame.spec.rs"]
+mod spec;
+
+use spec::{CMD, METHOD_BITS, PKT, RES, RESULT, TAG, WORDS};
 
 /// The bytes a frame's words take, before its packet.
-pub const WORD_BYTES: u32 = 16;
-
-/// The bit of the command that marks a later answer.
-const RES: u32 = 1 << 31;
-/// The bits of the command below the handle, which hold the method.
-const METHOD_BITS: u32 = 8;
+pub const WORD_BYTES: u32 = WORDS * 4;
 
 /// The largest handle a command holds.
 pub const HANDLE_MAX: u32 = (RES >> METHOD_BITS) - 1;

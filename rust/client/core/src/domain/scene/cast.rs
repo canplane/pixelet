@@ -8,7 +8,7 @@
 
 use pxl_engine::{eye, object};
 use pxl_spec::space::camera::eye::Observation;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 use crate::domain::preview::RenderEdit;
 use crate::domain::view::lens;

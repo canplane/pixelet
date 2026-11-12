@@ -104,7 +104,7 @@ impl Inheritance {
     clippy::too_many_arguments,
     reason = "the world's four stores, where the node is, and the zooms and cuts it is asked at, each its own"
 )]
-pub fn node<H: ground::Resident, W: BrickSource, L: Table, P: Pool + ?Sized>(
+pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Pool + ?Sized>(
     resident: &mut H,
     bricks: &W,
     columns: &L,

@@ -1,5 +1,5 @@
 # This is the Rust kit, and the core's end over it. `kit` is what any program
-# that links it may use. `core` asks to be run its way (a turn at a time,
+# that links it may use. `core` asks to be run its way (an entry at a time,
 # a deadline measured from the frame, I/O asked of the runtime), and it depends
 # on `kit`, never the reverse. `gpu` is WebGPU's vocabulary for a core's calls
 # to a device it cannot reach. A core's form lives in its end's path: `core`'s

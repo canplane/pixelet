@@ -53,9 +53,9 @@ function object(imp: Life): LinkObject {
 }
 
 /** Mounts `imp` at the URI, one object for every open. */
-export function mount(link: Pick<Link, "mount">, imp: Life): void {
+export function mount(l: Pick<Link, "mount">, imp: Life): void {
   const o = object(imp);
-  link.mount(URI, () => o);
+  l.mount(URI, () => o);
 }
 
 /** Opens the singleton on the other side, once, at boot. */

@@ -187,6 +187,11 @@ export abstract class NodeCursor {
     return v;
   }
 
+  get_u64(): u64 {
+    if (this.type !== ScalarType.U64) throw new MarshalError(Errno.EBADMSG);
+    return this._u64();
+  }
+
   get_bool(): boolean {
     const v = this.get();
     if (typeof v !== "boolean") throw new MarshalError(Errno.EBADMSG);

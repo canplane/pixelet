@@ -3,8 +3,8 @@
 // This is the C ABI of a core linked into its runtime's own process, as
 // xpute-runtime's `native_core!` and `native_abi!` export it, for an app in C,
 // Objective-C or Swift. The core runs on its own thread, which begins a wanted
-// turn at a display frame (`xpute_vsync`; xpute-runtime native/thread.rs). The
-// app's thread waits on the core only for a turn it runs, and it answers the
+// entry at a display frame (`xpute_vsync`; xpute-runtime native/thread.rs). The
+// app's thread waits on the core only for an entry it runs, and it answers the
 // core's calls.
 
 #pragma once
@@ -13,31 +13,31 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Runs a turn that ends no sooner than deadline_ms after it starts, and waits
-// until a turn begun after this call has ended, answering the core's calls
-// meanwhile. Returns when the core wants the next turn, in ms: 0 for at once,
-// -1 for never. The first call boots the core, and its first turn checks
+// Runs an entry that ends no sooner than deadline_ms after it starts, and waits
+// until an entry begun after this call has ended, answering the core's calls
+// meanwhile. Returns when the core wants the next entry, in ms: 0 for at once,
+// -1 for never. The first call boots the core, and its first entry checks
 // the front the runtime laid against the core's manifest. Returns NaN once the
-// core has stopped: its thread is gone, and no later turn runs.
+// core has stopped: its thread is gone, and no later entry runs.
 double xpute_run(double deadline_ms);
 
-// Asks for a turn at the next display frame, after something came that the
+// Asks for an entry at the next display frame, after something came that the
 // core has to take.
 void xpute_wake(void);
 
-// Says that an input came now, so the turns are interactive for a while.
+// Says that an input came now, so the entries are interactive for a while.
 void xpute_input(void);
 
 // The platform's display link calls this at each display frame, age_ms after
-// that frame's time. A frame begins a turn when one is wanted and the pacing
+// that frame's time. A frame begins an entry when one is wanted and the pacing
 // admits it.
 void xpute_vsync(double age_ms);
 
-// From now on, only a turn `xpute_run` runs may begin. An app calls this
+// From now on, only an entry `xpute_run` runs may begin. An app calls this
 // while it is hidden.
 void xpute_pause(void);
 
-// Turns begin again at the display's frames.
+// Entries begin again at the display's frames.
 void xpute_resume(void);
 
 // Returns the first byte of the core's memory, and writes its size through
@@ -66,7 +66,7 @@ void xpute_answer(void);
 void xpute_attach(bool fs);
 
 // The program's numbers for frame pacing (@xpute/runtime sched/frame_pacing.ts
-// `FramePacingConfig`), given before the turns run.
+// `FramePacingConfig`), given before the entries run.
 void xpute_pace(double pace_hz, double margin_share, double batch_frames, double settle_ms);
 
 // Queues a frame for the core.

@@ -2,7 +2,6 @@
 
 import { useSyncExternalStore } from "react";
 
-import { GroundStatus } from "@/abi/ui.ts";
 import { boot_state, watch_boot } from "@/service/sys/boot.ts";
 import { stop_code } from "@/service/sys/abort.ts";
 import { useGpu, useCore, useOnline, useSource } from "@/ui/shared/watch.ts";
@@ -18,6 +17,5 @@ export function useStanding(): Standing {
     stopCode: useSyncExternalStore(watch_boot, stop_code),
     progress: useCore((s) => s.renderer_progress),
     area: useCore((s) => s.area_progress),
-    placed: useCore((s) => s.pivot.status !== GroundStatus.Idle),
   };
 }

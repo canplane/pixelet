@@ -25,7 +25,7 @@ use crate::frame::shader::record::{
 };
 use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use xpute_core::mem::off_of;
+use xpute_core::mem;
 
 use crate::frame::shader::word::atmos::{
     BOTTOM_RADIUS, CAMERA_ALT, CITY_LIGHT, DRAWN, EARTH_DIST, EARTH_TILES, EARTH_WINDOW, EXPOSURE,
@@ -768,10 +768,10 @@ impl Atmosphere {
     }
 
     /// Asks for the measures to be mapped back, once the encoder that copies them is
-    /// submitted. Their landing wakes the turn that reads them.
+    /// submitted. Their landing wakes the frame that reads them.
     pub fn read_back(&mut self, g: &Gpu) {
         if self.flying != 0 && !self.mapped {
-            let addr = off_of(self.landed_words.as_ptr()) as u32;
+            let addr = mem::off(self.landed_words.as_ptr().cast());
             self.ticket = self.ticket.wrapping_add(1);
             g.map_read(
                 self.slopes.1,

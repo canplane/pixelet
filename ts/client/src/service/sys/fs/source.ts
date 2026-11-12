@@ -141,7 +141,7 @@ export function settled(): Promise<boolean> {
 
 /** On a page, the core and the asking for the declaration run in a worker.
  * The page's thread holds no files, so the UI learns the source's state and
- * declaration through this (runtime/open.ts). */
+ * declaration through this (runtime/worker.ts). */
 export function mirror_source(next: Source, decl: Declaration | null): void {
   cur_decl = decl;
   set(next);
@@ -205,7 +205,7 @@ export async function declare_source(send: SendSource): Promise<void> {
     return;
   }
   const shards = Object.keys(read.shard);
-  // This is set before SOURCE_DECLARE is sent, because the turn that takes
+  // This is set before SOURCE_DECLARE is sent, because the frame that takes
   // it already opens tiles under the declaration.
   cur_decl = read;
   if (

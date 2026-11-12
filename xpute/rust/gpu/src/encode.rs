@@ -1,7 +1,7 @@
 // xpute-gpu/encode.rs
 
-//! The encoder writes a core's GPU calls as records of a stream (xpute-core
-//! `io::stream`) in the words spec/gpu/api.json gives each op. An object the
+//! The encoder writes a core's GPU calls as records of a stream (stream.rs)
+//! in the words spec/gpu/api.json gives each op. An object the
 //! core makes is named by a handle from one table (`Gpu`). A record that does
 //! not fit an open transaction is not written, and the handle of the object it
 //! would have made is given back.
@@ -12,9 +12,10 @@
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use xpute_core::abi::handle::Table;
-use xpute_core::io::stream::{Stream, WORD};
-use xpute_core::mem::off_of_slice;
+use xpute_core::mem;
+
+use crate::handle::Table;
+use crate::stream::{Stream, WORD};
 
 use crate::enums::{
     AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction,
@@ -31,8 +32,7 @@ pub type Id = u32;
 
 /// Loads a word that a record named for the runtime to answer, such as a
 /// fence or the device block's STATUS. The load is an acquire, so whatever the
-/// runtime wrote before it stored the word is seen (xpute-core io/stream.rs
-/// R4).
+/// runtime wrote before it stored the word is seen (stream.rs).
 pub fn load_acquire(word: &u32) -> u32 {
     // SAFETY: a live, aligned word, which the runtime stores into only
     // atomically; nothing here writes through it.
@@ -507,13 +507,13 @@ fn compute_pipeline_words(s: &mut dyn Sink, d: &ComputePipelineDescriptor) {
 }
 
 /// The ops numbered below DESTROY make objects that last until the core
-/// destroys them. The ops past it make what a turn lets go: an encoder, a
+/// destroys them. The ops past it make what an entry lets go: an encoder, a
 /// pass, a surface's current texture.
 pub const OBJECT_OPS: usize = op::DESTROY as usize;
 
 /// These are the calls that make objects, over a table of `N` handles. Each
 /// handle holds the op that made its object where the object lasts
-/// (`OBJECT_OPS`), and 0 where a turn lets it go. A `Gpu` whose bytes are all
+/// (`OBJECT_OPS`), and 0 where an entry lets it go. A `Gpu` whose bytes are all
 /// zero holds no object, as `new` makes it.
 pub struct Gpu<const N: usize> {
     handles: Table<u8, N>,
@@ -760,7 +760,7 @@ impl<const N: usize> Gpu<N> {
         fence: &u32,
         ticket: u32,
     ) -> Option<Id> {
-        let at = off_of_slice(core::slice::from_ref(fence)) as u32;
+        let at = mem::off(core::ptr::from_ref(fence).cast());
         self.make_as(
             stream,
             op::RENDER_PIPELINE_ASYNC,
@@ -791,7 +791,7 @@ impl<const N: usize> Gpu<N> {
         fence: &u32,
         ticket: u32,
     ) -> Option<Id> {
-        let at = off_of_slice(core::slice::from_ref(fence)) as u32;
+        let at = mem::off(core::ptr::from_ref(fence).cast());
         self.make_as(
             stream,
             op::COMPUTE_PIPELINE_ASYNC,
@@ -873,8 +873,8 @@ impl<const N: usize> Gpu<N> {
         })
     }
 
-    /// This makes a view of `surface`'s texture for this turn. Every CURRENT of
-    /// one turn names the same texture.
+    /// This makes a view of `surface`'s texture for this entry. Every CURRENT of
+    /// one entry names the same texture.
     pub fn current(&mut self, stream: &mut Stream, surface: u32) -> Option<Id> {
         self.make(stream, op::CURRENT, &|s| s.word(surface))
     }
@@ -964,7 +964,7 @@ pub mod call {
     /// This is `write_buffer`, but the record names the bytes where they lie in
     /// the core's memory, and the runtime reads them there as it runs the
     /// stream. The core leaves them unchanged until the stream is handed back
-    /// (xpute-core io/stream.rs R3).
+    /// (stream.rs).
     pub fn write_buffer_at(stream: &mut Stream, buffer: Id, offset: u32, bytes: &[u8]) -> bool {
         words(
             stream,
@@ -972,7 +972,7 @@ pub mod call {
             &[
                 buffer,
                 offset,
-                off_of_slice(bytes) as u32,
+                mem::off(bytes.as_ptr().cast()),
                 bytes.len() as u32,
             ],
         )
@@ -1022,7 +1022,7 @@ pub mod call {
     ) -> bool {
         emit(stream, op::WRITE_TEXTURE_AT, &|s| {
             texture_write(s, place, layout, size);
-            [off_of_slice(bytes) as u32, bytes.len() as u32]
+            [mem::off(bytes.as_ptr().cast()), bytes.len() as u32]
                 .into_iter()
                 .for_each(|w| s.word(w));
         })
@@ -1044,8 +1044,8 @@ pub mod call {
         ticket: u32,
     ) -> bool {
         let (image_at, word_at) = (
-            off_of_slice(image) as u32,
-            off_of_slice(fence.as_slice()) as u32,
+            mem::off(image.as_ptr().cast()),
+            mem::off(fence.as_slice().as_ptr().cast()),
         );
         emit(stream, op::COPY_EXTERNAL_IMAGE, &|s| {
             texture_place(s, to);
@@ -1333,8 +1333,8 @@ pub mod call {
                 buffer,
                 offset,
                 into.len() as u32,
-                off_of_slice(into) as u32,
-                off_of_slice(fence.as_slice()) as u32,
+                mem::off(into.as_ptr().cast()),
+                mem::off(fence.as_slice().as_ptr().cast()),
                 ticket,
             ],
         )
@@ -1346,7 +1346,7 @@ pub mod call {
         words(
             stream,
             op::QUEUE_DONE,
-            &[off_of_slice(core::slice::from_ref(fence)) as u32, ticket],
+            &[mem::off(core::ptr::from_ref(fence).cast()), ticket],
         )
     }
 
@@ -1373,24 +1373,4 @@ pub mod call {
     pub fn resize(stream: &mut Stream, surface: u32, size: [u32; 2]) -> bool {
         words(stream, op::RESIZE, &[surface, size[0], size[1]])
     }
-
-    /// Asks the runtime to write the device's block into `into` (laid out as
-    /// `crate::device` says): its limits, features, unfinished frames and
-    /// status. Admission reads the block from then on (`admit::frame`), so
-    /// `into` stays in place for good.
-    pub fn device(stream: &mut Stream, into: &mut [u32]) -> bool {
-        let asked = words(
-            stream,
-            op::DEVICE,
-            &[off_of_slice(into) as u32, into.len() as u32],
-        );
-        if asked {
-            crate::admit::ask(into);
-        }
-        asked
-    }
 }
-
-#[cfg(test)]
-#[path = "encode.test.rs"]
-mod test;

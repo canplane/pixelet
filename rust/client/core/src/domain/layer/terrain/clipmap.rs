@@ -7,16 +7,39 @@
 //! zoom is held once, in one slot, however many clip levels want it (`Slot`).
 //!
 //! A brick is filled here from its tile in two stages. Its folds, four
-//! asset ids per cell, are cut from the tile's packet in the turn the packet
+//! asset ids per cell, are cut from the tile's packet in the entry the packet
 //! lands, and the packet is then freed (`cut`). Later, after the frame and
 //! as far as the entry's budget leaves room (`fill_share`), its cells
 //! are filled from those folds and the tile's samples and lines into
-//! `.fixed.terrain`, and the spans its cells were filled by into a run of the
+//! the terrain's fixed range, and the spans its cells were filled by into a run of the
 //! ways' pool (pool.rs).
 //! The next frame hands the brick to the GPU, and it is present from then on
 //! (`upload`). Nothing of a tile is kept for a brick still to come: a brick
 //! that enters later asks for its tile again (`TileCache::refetch`).
+//!
+//! The clip levels are cut from terrain tiles, a layer of the pyramid. A
+//! tile's slot is a room in the terrain's fixed range for the part read of
+//! the tile as a whole, its elevation samples, decoded into it straight from
+//! the packet; its separation lines, sized by the tile, are vectors of its
+//! own on the heap and go with it. A tile's cells belong to the clip levels:
+//! they cut what they want of them from the packet in the entry it lands, and
+//! the packet is then dropped. A tile the bake left without an
+//! object is drawn from the tile over it, whose cells there are open water;
+//! at the source's top, such a tile is void.
 
+use crate::domain::layer::terrain::fixed::{
+    cells_off, ele_off, fill_off, folds_off, CELLS_ARR_BYTES, FOLDS_ARR_BYTES, RANGE,
+};
+use crate::domain::layer::terrain::pool::{way_pool, PoolRefusal, Run};
+use crate::domain::layer::tile_cache::TileCache;
+use crate::domain::layer::Base;
+use crate::sys::io::body::Body;
+use crate::sys::io::demand::{PhaseList, Stream, TaskPhaseName};
+use crate::sys::io::failure::Exit;
+use crate::sys::io::request;
+use crate::sys::io::room::Refusal;
+use crate::sys::io::source::ServiceArea;
+use crate::sys::sched::{self, invalidate};
 use pxl_engine::clipmap;
 use pxl_engine::clipmap::{
     BrickSource, Entry, Lookup, BRICK_MIPS, BRICK_WORDS, CLIP_LEVELS, ENTRIES, EYE_CLIP_LEVELS,
@@ -25,11 +48,12 @@ use pxl_engine::clipmap::{
 use pxl_engine::fill;
 use pxl_engine::ground;
 use pxl_engine::ground::Extent;
+use pxl_global::Global;
 use pxl_render::gpu::api;
 use pxl_render::ray::{BrickWrite, TerrainWrite};
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{
-    brick_lines, brick_pairs, palette_cells, TerrainTile, ELE_COLUMN, FOLD_COLUMN,
+    brick_lines, brick_pairs, decode_into, palette_cells, TerrainTile, ELE_COLUMN, FOLD_COLUMN,
 };
 use pxl_spec::brick;
 use pxl_spec::brick::{BRICK, BRICK_CELLS, BRICK_SHIFT};
@@ -39,21 +63,10 @@ use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_Z
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_core::global::Global;
+use xpute_core::clock::now;
 use xpute_kit::collection::list::List;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
-
-use crate::domain::layer::terrain::fixed::{
-    cells_off, fill_off, folds_off, CELLS_ARR_BYTES, FOLDS_ARR_BYTES, RANGE,
-};
-use crate::domain::layer::terrain::pool::{way_pool, PoolRefusal, Run};
-use crate::domain::layer::terrain::tile;
-use crate::domain::layer::Base;
-use crate::sys::io::room::Refusal;
-use crate::sys::io::source::ServiceArea;
-use crate::sys::sched::{self, invalidate};
-use xpute_core::mem::range::arr;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Center {
@@ -97,7 +110,7 @@ struct ClipLevel {
 }
 
 /// Where a brick of the ground is held: its array of cells in
-/// `.fixed.terrain` (`cells`) and its row of the GPU's bricks (pxl-render
+/// the terrain's fixed range (`cells`) and its row of the GPU's bricks (pxl-render
 /// ray/ground.rs `GROUND_BYTES`). A brick at a zoom has one slot, however
 /// many clip levels want it.
 ///
@@ -139,7 +152,7 @@ enum Fill {
     /// The ways' pool has no room for its run at its cap (`PoolRefusal::Cap`),
     /// or a column of it made more spans than a column holds (`want` is
     /// `NEVER`). The slot does not count as absent, so the brick is not filled
-    /// again every turn, and its tile is not asked for again, while a clip
+    /// again every frame, and its tile is not asked for again, while a clip
     /// level wants it (`assign_slots`); a reader reads the coarser clip level
     /// instead. Once the pool gives a run back, a brick whose `want` then fits
     /// is absent again and filled again, once for that give-back (`wake`); a
@@ -229,7 +242,7 @@ struct Clipmap {
     /// list no longer matches the slots as they are.
     due: List<u32, { SLOTS as usize }>,
     due_stale: bool,
-    /// The brick being filled, whose fill goes on over the turns it takes.
+    /// The brick being filled, whose fill goes on over the entries it takes.
     filling: Option<BrickFill>,
     /// The heap's state when it first refused a brick room, kept while a
     /// brick waits on it (`Fill::Waiting`).
@@ -314,7 +327,7 @@ fn tile_of(cell_zoom: Zoom, q: [i32; 2]) -> (Quadrant, [u32; 2]) {
     )
 }
 
-/// Every brick's planes on the CPU, in `.fixed.terrain` (fixed.rs); a test
+/// Every brick's planes on the CPU, in the terrain's fixed range (fixed.rs); a test
 /// may set its own. The bricks' spans live on the heap instead (pool.rs).
 struct BrickMemory {
     /// Each brick's whole words (`clipmap::BRICK_WORDS`), `CELLS_ARR_BYTES`
@@ -329,13 +342,12 @@ static PLANES: Global<BrickMemory> = Global::new();
 
 fn planes() -> &'static mut BrickMemory {
     PLANES.get(|| {
-        let r = RANGE.get();
         // SAFETY: the planes are the clip levels' alone, plain numbers, zeroed
         // at boot.
         unsafe {
             BrickMemory {
-                cells: arr(r, cells_off(0), (SLOTS * CELLS_ARR_BYTES / 4) as usize),
-                folds: arr(r, folds_off(0), (SLOTS * FOLDS_ARR_BYTES / 4) as usize),
+                cells: RANGE.arr(cells_off(0), (SLOTS * CELLS_ARR_BYTES / 4) as usize),
+                folds: RANGE.arr(folds_off(0), (SLOTS * FOLDS_ARR_BYTES / 4) as usize),
             }
         }
     })
@@ -346,7 +358,7 @@ fn planes() -> &'static mut BrickMemory {
 /// the table carries the eye's to the GPU (`table`).
 ///
 /// Two places write which brick a clip level wants or whether it is
-/// present: `assign_slots`, in a turn's step, which folds before it returns,
+/// present: `assign_slots`, in a frame's step, which folds before it returns,
 /// and the bricks a frame hands over (`upload`), folded once after all of
 /// them. No read of a bound (`clip_read`) comes between a write and its
 /// fold, so a bound read never sees other bricks than a read of the cells
@@ -400,7 +412,7 @@ fn in_flight(b: u32) -> bool {
     api::in_flight(cells(b)) || api::in_flight(folds(b))
 }
 
-/// Lays out the turn's clip levels. `at` gives where each center now
+/// Lays out the frame's clip levels. `at` gives where each center now
 /// stands, in units, X then Y, indexed by `Center`, or none where a center is
 /// not set. A brick no clip level wants any more gives up its slot
 /// (`assign_slots`), and the tiles a clip level now wants but holds nothing
@@ -409,7 +421,7 @@ fn in_flight(b: u32) -> bool {
 /// The entries depend only on whether a clip level moved a brick or changed
 /// zoom, the device was lost, the tile cache changed (`TileCache::revision`),
 /// or a brick went absent again, so they are stepped only then. It runs
-/// before the turn's arrivals and its stage. Returns true where the tiles
+/// before the frame's arrivals and its stage. Returns true where the tiles
 /// the clip levels other than the eye's want changed.
 pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     let w = clipmap();
@@ -483,14 +495,14 @@ pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     // Tiles are asked for again only as far as the spare body slots a packet
     // arrives in allow, in slot order; the rest wait until room is given
     // back.
-    let mut room = tile::again_room();
+    let mut cap = refetch_cap();
     for b in 0..SLOTS {
         let slot = w.slots[b as usize];
         if slot.is_absent() {
             let t = tile_of(slot.cell_zoom, slot.brick).0;
-            if room > 0 && !terrain.needs_refetch(t) {
+            if cap > 0 && !terrain.needs_refetch(t) {
                 terrain.refetch(t);
-                room -= u32::from(terrain.needs_refetch(t));
+                cap -= u32::from(terrain.needs_refetch(t));
             }
         }
     }
@@ -811,7 +823,7 @@ const _: () = assert!(
     "the table is the rows the GPU binds and the other clip levels' folds"
 );
 
-/// The room a brick's fill works in, arrays in `.fixed.terrain` (fixed.rs
+/// The room a brick's fill works in, arrays in the terrain's fixed range (fixed.rs
 /// `FILL_ARRAY_BYTES`): a tile's samples and its spans; and its lines, laid out for the fill
 /// alone, taken from the heap as it begins and given back when it ends (`begin`, `end`).
 struct FillScratch {
@@ -824,12 +836,11 @@ static FILL: Global<FillScratch> = Global::new();
 
 fn fill_scratch() -> &'static mut FillScratch {
     FILL.get(|| {
-        let r = RANGE.get();
         // SAFETY: the fill's arrays are its alone, plain numbers, zeroed at boot.
         unsafe {
             FillScratch {
-                ele: arr(r, fill_off(0), ELE_COLUMN),
-                spans: arr(r, fill_off(1), SPANS_WORDS as usize),
+                ele: RANGE.arr(fill_off(0), ELE_COLUMN),
+                spans: RANGE.arr(fill_off(1), SPANS_WORDS as usize),
                 lines: Vec::new(),
             }
         }
@@ -843,7 +854,7 @@ fn slot_wants(w: &Clipmap, tile: Quadrant, b: u32) -> bool {
         && tile_of(slot.cell_zoom, slot.brick).0 == tile
 }
 
-/// Cuts from `pkt`, the tile's packet, in the turn it landed, the folds of
+/// Cuts from `pkt`, the tile's packet, in the entry it landed, the folds of
 /// every absent brick of `tile` that a clip level wants. The folds are all
 /// that a brick's fill reads of a packet beyond what the tile keeps
 /// (its `separation` and `ele`), so the packet can be
@@ -917,7 +928,7 @@ struct BrickFill {
     stage: Stage,
 }
 
-/// A part of a brick's fill, the unit a turn takes. `Spans` is one row of
+/// A part of a brick's fill, the unit a frame takes. `Spans` is one row of
 /// its spans, the ring's rows included.
 #[derive(Clone, Copy)]
 enum Stage {
@@ -931,7 +942,7 @@ enum Stage {
 enum Poll {
     /// A part ran, and more may.
     Ran,
-    /// The runtime holds what the part writes, so a later turn runs it.
+    /// The runtime holds what the part writes, so a later frame runs it.
     Stop,
     /// No brick is due.
     Done,
@@ -1118,7 +1129,7 @@ fn wait_heap(w: &mut Clipmap, b: u32) -> bool {
 /// Keeps the brick's spans in a run of the ways' pool and ends its fill: a column past pxl-spec
 /// `way::SPANS` refuses it for good; past the pool's cap it is refused until a run is given back;
 /// where the heap refuses it waits. Where a free run would fit and the runtime still holds it, a
-/// later turn lays the brick (`WayPool::take`).
+/// later frame lays the brick (`WayPool::take`).
 fn lay(w: &mut Clipmap, b: u32, filling: BrickFill) -> Poll {
     let f = fill_scratch();
     if filling.past {
@@ -1271,6 +1282,58 @@ pub(in crate::domain::layer) fn bound_over(
 }
 
 const _: () = assert!(BRICK_MIPS <= BRICK_SHIFT);
+
+static TERRAIN: Global<TileCache<TerrainTile>> = Global::new();
+
+impl Base for TerrainTile {
+    /// The tiles of the clip levels around the pivot and a destination.
+    const PIN_CAP: u32 = PINNED_TILES;
+
+    fn tile_cache() -> &'static mut TileCache<TerrainTile> {
+        TERRAIN.get(TileCache::default)
+    }
+
+    /// Decodes the packet into the slot in one pass, so no tile-sized copy
+    /// stands between arrival and drawing, and has the clip levels cut what
+    /// they want from it before it is dropped. No terrain packet is kept
+    /// past its frame. A heap that refuses its lines waits on the heap.
+    fn receive(
+        tile: Quadrant,
+        slot: u32,
+        pkt: Body,
+        phases: &mut PhaseList,
+    ) -> Result<TerrainTile, Exit> {
+        let t0 = now();
+        // SAFETY: the slot is this tile's, and nothing reads it until the tile is set.
+        let decoded = decode_into::<Exit>(&pkt, unsafe { ele_of(slot) })?;
+        phases.push(TaskPhaseName::decode_ms, now() - t0);
+        cut(tile, &pkt);
+        Ok(decoded)
+    }
+
+    fn empty() -> Option<TerrainTile> {
+        Some(TerrainTile::default())
+    }
+}
+
+/// How many tiles may be asked for their packets again now: the spare body
+/// slots (sys/io/request.rs `spare_slots`) less the tiles already asked
+/// again whose packets have not come (`step`).
+pub fn refetch_cap() -> u32 {
+    // A tile whose object failed is not counted, since it is not read again
+    // while it is wanted.
+    let coming = TerrainTile::tile_cache()
+        .asked_again(|p| !request::has_object_failed(Stream::terrain, p.id()));
+    request::spare_slots().saturating_sub(coming)
+}
+
+/// # Safety
+/// The slot's samples must belong to the tile given them, and to no other
+/// tile, from now until another tile takes the slot.
+unsafe fn ele_of(slot: u32) -> &'static mut [i16] {
+    // SAFETY: as this function's, and the plane is plain numbers.
+    unsafe { RANGE.arr(ele_off(slot), ELE_COLUMN) }
+}
 
 #[cfg(test)]
 #[path = "clipmap.test.rs"]

@@ -62,8 +62,9 @@ STRIPS = [
 WASM_OPT = ["-O3", *STRIPS] if PUBLISHED else STRIPS
 
 # embassy and critical-section export their `#[no_mangle]` symbols. Only
-# these exports stay.
-EXPORTS = ["run"]
+# these exports stay: the module's memory and the link's three exports
+# (@xpute/runtime link.ts `Core`).
+EXPORTS = ["memory", "link_init", "link_boot", "link_in"]
 
 
 class Failed(Exception):

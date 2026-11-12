@@ -10,7 +10,7 @@
 //! bound to a core's surface and let go. A published stream runs beside the
 //! core, and a completion asks for a turn.
 //!
-//! No turn waits on the device. `publish` hands its work over and returns, and
+//! No turn waits on the device. `flush` hands its work over and returns, and
 //! `poll` skips a turn the device is busy for. An async pipeline is compiled
 //! apart from the stream, and a sync one holds it (xpute-core io/stream.rs):
 //! the core goes on turning and records nothing until END comes back. A frame's
@@ -228,7 +228,7 @@ pub fn poll(core: Core) {
 /// the frame before it. While no device is open, before the first or after a
 /// loss, the stream is handed back unrun, as a page's runtime does, so the
 /// core is never held and no record waits for a device that opens later.
-pub fn publish(core: Core, stream_at: u32) {
+pub fn flush(core: Core, stream_at: u32) {
     let Some(work) = WORK.get() else {
         super::run::release(&mut view(core), stream_at);
         return;
@@ -266,12 +266,6 @@ pub unsafe fn path(at: *const c_char) -> Option<PathBuf> {
     s.to_str().ok().map(PathBuf::from)
 }
 
-/// Says what refused the device, the way a stop is said (xpute-runtime
-/// native `say`).
-pub fn say_refused(e: &OpenError) {
-    xpute_runtime::native::say(&format!("the device did not open: {e:?}"));
-}
-
 /// Opens a device as `ask` says (`open`), on the instance the first call
 /// makes, keeping its compiled pipelines in `cache_dir`, the directory the
 /// platform keeps an app's caches in, where one is given (`Cache`). A device
@@ -297,7 +291,9 @@ pub fn open(ask: &Ask, cfg: Config, cache_dir: Option<&Path>) -> Result<(), Open
         adapter,
         device,
         queue,
-    } = super::open(&d.instance, ask)?;
+    } = super::open(&d.instance, ask).inspect_err(|e| {
+        xpute_runtime::native::log(&format!("[gpu] the device did not open: {e:?}"));
+    })?;
     let runtime = d.runtime.insert(GpuRuntime::new(
         adapter,
         device,
@@ -313,7 +309,7 @@ pub fn open(ask: &Ask, cfg: Config, cache_dir: Option<&Path>) -> Result<(), Open
             Ok(surface) => {
                 runtime.bind(*handle, surface);
             }
-            Err(e) => xpute_runtime::native::say(&format!(
+            Err(e) => xpute_runtime::native::log(&format!(
                 "[gpu] no surface of surface {handle:#x}'s window on this device: {e}"
             )),
         }
@@ -400,7 +396,7 @@ pub fn unbind(handle: u32) {
 ///   (`open`), keeping its compiled pipelines in `cache_dir`, the directory the
 ///   platform keeps the app's caches in, or nowhere when it is null. It
 ///   returns 0 when a device is open, newly or already, and ENODEV when
-///   none opens as asked, after saying what refused it (`say_refused`). After
+///   none opens as asked, after logging what refused it (`open`). After
 ///   a loss it opens a new device.
 /// - `xpute_gpu_lost_on(void (*lost)(void))` makes `lost` be told of each
 ///   device lost, once a loss (`lost_on`); null sets none.
@@ -430,10 +426,7 @@ macro_rules! native_abi {
             pub fn open(cache_dir: Option<&::std::path::Path>) -> i32 {
                 match $crate::runtime::native::open(&$ask, $cfg, cache_dir) {
                     Ok(()) => 0,
-                    Err(e) => {
-                        $crate::runtime::native::say_refused(&e);
-                        ::xpute_kit::status::errno::Errno::ENODEV as i32
-                    }
+                    Err(_) => ::xpute_kit::status::errno::Errno::ENODEV as i32,
                 }
             }
 
@@ -536,7 +529,7 @@ macro_rules! native_abi {
 /// with the GPU's runtime beside it. This crate's `core!` expands to it off
 /// WebAssembly. It is xpute-runtime's
 /// `native_core!` with this runtime as its device: `poll` runs before each
-/// turn, `publish` runs the stream at the manifest's `stream_at` as each turn
+/// turn, `flush` runs the stream at the manifest's `stream_at` as each turn
 /// returns. It is also `native_abi!`, with
 /// the device `ask` declares (`Ask::of`) and `numbers` made a
 /// `Config` by the platform's defaults (`config`). The program's crate depends
@@ -550,7 +543,7 @@ macro_rules! native_core {
             $entry,
             device: ::xpute_runtime::native::Device {
                 poll: $crate::runtime::native::poll,
-                publish: |core| $crate::runtime::native::publish(core, $manifest.stream_at()),
+                publish: |core| $crate::runtime::native::flush(core, $manifest.stream_at()),
             },
             slow_ms: $numbers.slow_ms
         );

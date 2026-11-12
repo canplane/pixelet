@@ -24,7 +24,8 @@ export {
   type Tag,
   uri,
 } from "./link.ts";
-export { Remote, serve } from "./remote.ts";
+export { Remote, serve, type Taker } from "./remote.ts";
 export { Table } from "./resource.ts";
+export { type Stop, serve_stop } from "./stop.ts";
 export { serve_timer } from "./timer.ts";
 export { wait } from "./wait.ts";

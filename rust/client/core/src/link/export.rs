@@ -1,0 +1,259 @@
+// pxl-core/link/export.rs
+
+//! The interfaces the core serves (spec/client/core/wit/), each one's
+//! methods in its own module beside this one, served by one object, `Core`,
+//! which `mount` mounts at each interface's URI. Its GPU surfaces (surface.rs)
+//! are xpute's, and come apart.
+
+mod camera;
+mod edit;
+pub(super) mod input;
+mod perf;
+mod scene;
+mod sensor;
+mod setting;
+mod source;
+mod surface;
+
+use std::rc::Rc;
+
+use crate::abi;
+use crate::sys::sched::invalidate;
+use xpute_kit::status::errno::Errno;
+
+/// Refuses what the decoder cannot check: a value outside the range the core
+/// takes, or a handle the core does not hold. Nothing past the link checks
+/// these again.
+fn or_refuse<T>(v: Option<T>, errnum: Errno) -> Result<T, Errno> {
+    v.ok_or(errnum)
+}
+
+fn refuse_unless(valid: bool, errnum: Errno) -> Result<(), Errno> {
+    or_refuse(valid.then_some(()), errnum)
+}
+
+fn on_earth(lon: f64, lat: f64) -> bool {
+    (-180.0..=180.0).contains(&lon) && (-90.0..=90.0).contains(&lat)
+}
+
+/// Whether `deg` is absent or a bearing in degrees, as a compass or a course
+/// gives it.
+fn bearing(deg: Option<f64>) -> bool {
+    deg.is_none_or(|d| (0.0..=360.0).contains(&d))
+}
+
+/// Answers a method applied: the next frame shows it, and the entry's end
+/// posts to the UI (link.rs `end`).
+fn applied() -> Result<(), Errno> {
+    invalidate();
+    Ok(())
+}
+
+/// What serves the core's interfaces.
+struct Core;
+
+/// Mounts the interfaces the core serves.
+pub(super) fn mount() {
+    abi::camera::mount(Rc::new(Core));
+    abi::input::mount(Rc::new(Core));
+    abi::scene::mount(Rc::new(Core));
+    abi::sensor::mount(Rc::new(Core));
+    abi::setting::mount(Rc::new(Core));
+    abi::edit::mount(Rc::new(Core));
+    abi::source::mount(Rc::new(Core));
+    abi::perf::mount(Rc::new(Core));
+    surface::mount();
+    xpute_core::abi::life::mount(Rc::new(Core));
+}
+
+impl abi::camera::Camera for Core {
+    fn track(&self, tracking: abi::camera::Tracking) -> Result<(), Errno> {
+        camera::track(tracking)
+    }
+    fn north_up(&self) -> Result<(), Errno> {
+        camera::north_up()
+    }
+    fn goto(
+        &self,
+        lon: f64,
+        lat: f64,
+        dist: Option<f64>,
+        azimuth: Option<f64>,
+        polar: Option<f64>,
+    ) -> Result<(), Errno> {
+        camera::goto(lon, lat, dist, azimuth, polar)
+    }
+}
+
+impl abi::input::Input for Core {
+    fn pointer(
+        &self,
+        phase: abi::input::PointerPhase,
+        pointer_type: abi::input::PointerType,
+        id: i32,
+        button: i32,
+        x: f64,
+        y: f64,
+    ) -> Result<(), Errno> {
+        input::pointer(phase, pointer_type, id, button, x, y)
+    }
+    fn typing(&self, typing: bool) -> Result<(), Errno> {
+        input::typing(typing)
+    }
+    fn wheel(&self, delta_y: f64) -> Result<(), Errno> {
+        input::wheel(delta_y)
+    }
+    fn pinch(&self, scale: f64) -> Result<(), Errno> {
+        input::pinch(scale)
+    }
+    fn r#move(&self, x: i32, y: i32) -> Result<(), Errno> {
+        input::r#move(x, y)
+    }
+    fn xr_pose(
+        &self,
+        x: f64,
+        y: f64,
+        z: f64,
+        qx: f64,
+        qy: f64,
+        qz: f64,
+        qw: f64,
+    ) -> Result<(), Errno> {
+        input::xr_pose(x, y, z, qx, qy, qz, qw)
+    }
+    fn xr_pose_end(&self) -> Result<(), Errno> {
+        input::xr_pose_end()
+    }
+}
+
+impl abi::scene::Scene for Core {
+    fn draw(
+        &self,
+        surface: u32,
+        content: abi::scene::SceneContent,
+        group: Option<u8>,
+        bg: Option<u32>,
+    ) -> Result<(), Errno> {
+        scene::draw(surface, content, group, bg)
+    }
+    fn chat(&self, text: String) -> Result<(), Errno> {
+        scene::chat(text)
+    }
+}
+
+impl abi::sensor::Sensor for Core {
+    fn pos(
+        &self,
+        lon: f64,
+        lat: f64,
+        alt: Option<f64>,
+        accuracy: Option<f64>,
+        course: Option<f64>,
+    ) -> Result<(), Errno> {
+        sensor::pos(lon, lat, alt, accuracy, course)
+    }
+    fn orient(
+        &self,
+        webkit_compass_heading: Option<f64>,
+        alpha: Option<f64>,
+        beta: Option<f64>,
+        gamma: Option<f64>,
+    ) -> Result<(), Errno> {
+        sensor::orient(webkit_compass_heading, alpha, beta, gamma)
+    }
+    fn err(
+        &self,
+        sensor: abi::types::Sensor,
+        code: Option<abi::sensor::GeolocationErrorCode>,
+        watching: bool,
+    ) -> Result<(), Errno> {
+        sensor::err(sensor, code, watching)
+    }
+    fn permission(
+        &self,
+        sensor: abi::types::Sensor,
+        answer: abi::sensor::PermissionAnswer,
+    ) -> Result<(), Errno> {
+        sensor::permission(sensor, answer)
+    }
+    fn platform(
+        &self,
+        geolocation: bool,
+        orient: bool,
+        orient_permission: bool,
+        orient_silence_is_loss: bool,
+    ) -> Result<(), Errno> {
+        sensor::platform(
+            geolocation,
+            orient,
+            orient_permission,
+            orient_silence_is_loss,
+        )
+    }
+    fn locate(&self) -> Result<(), Errno> {
+        sensor::locate()
+    }
+}
+
+impl abi::setting::Setting for Core {
+    fn dev(&self, dev: bool) -> Result<(), Errno> {
+        setting::dev(dev)
+    }
+    fn set(&self, key: u32, val: u32) -> Result<(), Errno> {
+        setting::set(key, val)
+    }
+}
+
+impl abi::edit::Edit for Core {
+    fn hold(&self, tool: abi::edit::Tool, val: u32, scale_steps: i32) -> Result<(), Errno> {
+        edit::hold(tool, val, scale_steps)
+    }
+    fn marker_text(&self, text: String) -> Result<(), Errno> {
+        edit::marker_text(text)
+    }
+    fn marker_cancel(&self) -> Result<(), Errno> {
+        edit::marker_cancel()
+    }
+    fn marker_commit(&self) -> Result<(), Errno> {
+        edit::marker_commit()
+    }
+}
+
+impl abi::source::Source for Core {
+    fn declare(&self, min_zoom: u32, format: Vec<u32>, shard: Vec<String>) -> Result<(), Errno> {
+        source::declare(min_zoom, format, shard)
+    }
+}
+
+impl abi::perf::Perf for Core {
+    fn start(&self) -> Result<(), Errno> {
+        perf::start()
+    }
+    fn stop(&self) -> Result<(), Errno> {
+        perf::stop()
+    }
+    fn stats(&self, window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
+        perf::stats(window_ms)
+    }
+    fn rings(&self, ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, Errno> {
+        perf::rings(ring, from, cnt)
+    }
+    fn strtab(&self) -> Result<Vec<u8>, Errno> {
+        perf::strtab()
+    }
+}
+
+impl xpute_core::abi::life::Life for Core {
+    fn hidden(&self) -> Result<(), Errno> {
+        super::life::on_hidden();
+        Ok(())
+    }
+    fn shown(&self) -> Result<(), Errno> {
+        super::life::on_shown();
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+#[path = "export.test.rs"]
+mod test;

@@ -6,10 +6,8 @@
 use super::*;
 use core::cell::Cell;
 use xpute_core::clock;
-use xpute_core::mem::heap::HeapStat;
 use xpute_kit::status::errno::Errno;
 
-use crate::sys::boot::test::{heap_release, set_counted_heap, set_heap_stat};
 use crate::sys::io::param::RETRY_ATTEMPTS;
 
 thread_local! {
@@ -108,22 +106,6 @@ fn same_set_no_change() {
 }
 
 #[test]
-fn reset_stops_what_is_out() {
-    crate::on_core(|| {
-        let key = one_out();
-        declare(Stream::terrain, &[(1, seen(0.0)), (2, seen(1.0))]);
-        pump();
-        reset();
-        let (starts, stops) = take_events();
-        assert!(starts.is_empty(), "a start outlived the reset");
-        assert_eq!(stops.len(), 2);
-        assert!(stops.contains(&key));
-        assert!(attempt_of(key).is_none());
-        assert_eq!(cnts(Stream::terrain), (0, 0));
-    });
-}
-
-#[test]
 fn answer_asked_once() {
     crate::on_core(|| {
         let key = one_out();
@@ -153,7 +135,7 @@ fn failure_backs_off() {
             pump();
             assert!(
                 take_events().0.is_empty(),
-                "held back, not re-asked every turn"
+                "held back, not re-asked every frame"
             );
         }
         assert_eq!(cnts(Stream::terrain), (1, 0), "wanted, nothing out");
@@ -200,63 +182,6 @@ fn failed_object_dropped() {
 }
 
 #[test]
-fn heap_refusal_waits_release() {
-    crate::on_core(|| {
-        let key = one_out();
-        set_counted_heap();
-        at(0.0);
-        settle(key, Exit::Refused(Refusal::now()), None);
-        for t in 0..5 {
-            at(t as f64 * 10_000.0);
-            declare(Stream::terrain, &[(1, seen(0.0))]);
-            pump();
-            assert!(take_events().0.is_empty(), "no time ends a heap's refusal");
-        }
-        let both = [(1, seen(0.0)), (2, seen(0.0))];
-        at(50_000.0);
-        declare(Stream::terrain, &both);
-        pump();
-        assert_eq!(
-            take_events().0.len(),
-            1,
-            "and the server is not held for it"
-        );
-        heap_release();
-        at(50_000.0);
-        declare(Stream::terrain, &both);
-        pump();
-        assert_eq!(
-            take_events().0.len(),
-            1,
-            "asked again once the heap gives some back"
-        );
-        set_heap_stat(HeapStat::default);
-    });
-}
-
-#[test]
-fn early_release_not_rewaited() {
-    crate::on_core(|| {
-        let key = one_out();
-        set_counted_heap();
-        // The heap refuses, then gives room back before the refusal is settled.
-        let refused = Refusal::now();
-        heap_release();
-        at(0.0);
-        settle(key, Exit::Refused(refused), None);
-        at(0.0);
-        declare(Stream::terrain, &[(1, seen(0.0))]);
-        pump();
-        assert_eq!(
-            take_events().0.len(),
-            1,
-            "the release after the refusal already ends its wait"
-        );
-        set_heap_stat(HeapStat::default);
-    });
-}
-
-#[test]
 fn failing_server_probe() {
     crate::on_core(|| {
         begin();
@@ -299,49 +224,6 @@ fn failing_server_probe() {
 }
 
 #[test]
-fn ended_hold_asks_no_turn() {
-    crate::on_core(|| {
-        let key = one_out();
-        failed(key, Errno::ENETUNREACH);
-        declare(Stream::terrain, &[]);
-        pump();
-        assert!(wake() >= 0.0, "the hold's end is asked for");
-        at(until());
-        pump();
-        assert!(wake() < 0.0, "and nothing after it");
-    });
-}
-
-/// What a turn's end asks for: the end of the hold, or none.
-fn wake() -> f64 {
-    if let Some(at) = next_pump_at(now()) {
-        sched::invalidate_at(at);
-    }
-    sched::turn().end()
-}
-
-/// A probe that fails after the turn's pump still brings a pump that asks for
-/// the end of the new hold, and a probe that is out asks for no turn.
-#[test]
-fn failed_probe_keeps_retrying() {
-    crate::on_core(|| {
-        let key = one_out();
-        failed(key, Errno::ENETUNREACH);
-        assert_eq!(wake(), 0.0, "a pump is asked for");
-        declare(Stream::terrain, &[(1, seen(0.0))]);
-        pump();
-        assert!(wake() > 0.0, "which asks for the hold's end");
-        at(until());
-        pump();
-        let (starts, _) = take_events();
-        assert_eq!(starts.len(), 1, "the probe");
-        assert!(wake() < 0.0, "out, it asks for no turn");
-        failed(starts[0], Errno::ENETUNREACH);
-        assert_eq!(wake(), 0.0, "and failing, one more pump");
-    });
-}
-
-#[test]
 fn outage_counts_once() {
     crate::on_core(|| {
         begin();
@@ -375,8 +257,8 @@ fn cur_demand_said() {
         );
         at(0.0);
         pump();
-        // What the camera left is stopped in the turn it leaves, and the freed
-        // credits start what is wanted now in the same turn.
+        // What the camera left is stopped in the frame it leaves, and the freed
+        // credits start what is wanted now in the same frame.
         let (starts, stops) = take_events();
         assert_eq!(stops.len(), 2, "every obsolete attempt is told to stop");
         assert_eq!(starts.len(), 1, "and the current want starts at once");
@@ -421,8 +303,8 @@ fn wants_served_at_rest() {
         let mut wanted: Vec<(u64, Order)> =
             (1..13).map(|k| (k, seen((k * 7 % 12) as f64))).collect();
         let mut out: Vec<u64> = Vec::new();
-        for turn in 0..200 {
-            at(turn as f64);
+        for t in 0..200 {
+            at(t as f64);
             declare(Stream::place, &wanted);
             pump();
             let (starts, stops) = take_events();

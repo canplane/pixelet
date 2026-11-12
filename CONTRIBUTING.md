@@ -56,8 +56,7 @@ The make targets set everything a run needs. Point a run at another
 deployment or other ports only by the variables `ts/client/script/proxy.ts`
 reads, and run a server alone by its own target (`make serve-tile`).
 
-A page leaves two helpers in the browser console. `xpute.cmd` sends
-the core any command by its number, and `pxl.perf` is the profiler: `report()`
+A page leaves a helper in the browser console. `pxl.perf` is the profiler: `report()`
 summarizes where the frames' time went and `trace()` saves a trace for
 ui.perfetto.dev.
 
