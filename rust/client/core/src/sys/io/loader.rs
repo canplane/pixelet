@@ -18,7 +18,6 @@ use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};
 use xpute_core::global::Global;
 use xpute_core::io::fs::Fd;
-use xpute_core::sched::turn::yield_if_spent;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -31,7 +30,7 @@ use crate::sys::io::request::{attempt_of, settle};
 use crate::sys::io::source;
 use crate::sys::load::{Load, LoadKind, LOAD_FILES};
 use crate::sys::sched::executor;
-use crate::sys::sched::{self, request_world_tick};
+use crate::sys::sched::{self, invalidate};
 
 enum Entry {
     Pending,
@@ -206,14 +205,14 @@ pub fn on_read(id: u64, read: Result<Packet, Errno>) {
 /// the load fails; one a reload cancelled is asked again.
 #[embassy_executor::task(pool_size = LOAD_FILES)]
 async fn arrival(kind: LoadKind, load: Load, read: Result<Packet, Errno>) {
-    yield_if_spent(sched::turn).await;
+    sched::yield_if_spent().await;
     let l = loader();
     let bytes = match read {
         Ok(bytes) => bytes,
         Err(errnum) => {
             let entry = (errnum != Errno::ECANCELED).then_some(Entry::Failed);
             *l.at(kind, load) = entry;
-            request_world_tick();
+            invalidate();
             return;
         }
     };
@@ -233,7 +232,7 @@ async fn arrival(kind: LoadKind, load: Load, read: Result<Packet, Errno>) {
     };
     *l.at(kind, load) = Some(entry);
     // A turn hands the entry on to its reader.
-    request_world_tick();
+    invalidate();
 }
 
 /// The renderer has made the texture of the image numbered `image`

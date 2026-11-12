@@ -4,15 +4,13 @@
 //! (SOURCE_DECLARE).
 
 use super::refuse_unless;
-use crate::door::cmd as abi;
 use crate::sys::io::source;
-use xpute_core::io::door::Outcome;
 use xpute_kit::status::errno::Errno;
 
-pub(super) fn declare(c: abi::SourceDeclare<'_>) -> Outcome {
+pub(super) fn declare(min_zoom: u32, format: Vec<u32>, shard: Vec<String>) -> Result<(), Errno> {
     refuse_unless(
-        source::declare(c.min_zoom, c.format, c.shard.iter()).is_ok(),
+        source::declare(min_zoom, &format, shard.iter().map(String::as_str)).is_ok(),
         Errno::EINVAL,
     )?;
-    Ok(Some(0.into()))
+    Ok(())
 }

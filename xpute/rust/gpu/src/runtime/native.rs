@@ -24,10 +24,10 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Mutex, MutexGuard, OnceLock, PoisonError};
 
+use xpute_kit::status::errno::Errno;
 use xpute_runtime::mem::Memory;
 use xpute_runtime::native::Core;
 
-use super::admit::Admission;
 use super::{Ask, Config, ConfigureAt, GpuRuntime, OpenError, Wgpu};
 use crate::CoreConfig;
 
@@ -103,10 +103,6 @@ type Job = Box<dyn FnOnce() + Send>;
 /// once a device has opened, and outlives every device.
 static WORK: OnceLock<Sender<Job>> = OnceLock::new();
 
-/// The open device's admission, read as the core asks (`admit_frame`), and
-/// none while no device is open.
-static ADMISSION: Mutex<Option<Admission>> = Mutex::new(None);
-
 /// This is the platform's function told of each device lost (`lost_on`).
 pub type Lost = extern "C" fn();
 
@@ -145,10 +141,6 @@ fn device() -> MutexGuard<'static, Option<Device>> {
     DEVICE.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-fn admission() -> MutexGuard<'static, Option<Admission>> {
-    ADMISSION.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
 /// Makes `lost` be told of each device lost from the next one on; with none,
 /// nothing is told. It is called once a loss, on the thread that found it,
 /// after the runtime has written the loss into the core's device block and let
@@ -173,7 +165,6 @@ impl Device {
         let answered = h.poll(mem);
         if lost {
             self.runtime = None;
-            *admission() = None;
             let lost = *LOST.lock().unwrap_or_else(PoisonError::into_inner);
             if let Some(f) = lost {
                 f();
@@ -230,8 +221,8 @@ pub fn poll(core: Core) {
     }
 }
 
-/// Takes the stream at `stream_at`, which the core has just published by
-/// storing END with release (xpute-core `BootInfo::publish`). The records run on
+/// Takes the stream at `stream_at`, which the core published by storing END
+/// with release, as the turn that published it returns. The records run on
 /// the device and END is stored back to 0 with release, as a page's runtime
 /// does, and only then are the frames shown, since showing one can wait for
 /// the frame before it. While no device is open, before the first or after a
@@ -260,31 +251,6 @@ pub fn publish(core: Core, stream_at: u32) {
     });
     let _ = work.send(job);
 }
-
-/// This is the runtime's admission (`crate::admit`), which `core!` gives the
-/// program. It admits a frame while a device is open and fewer than the frame
-/// latency are unfinished, as a page's admits one only while its device is
-/// READY (`crate::admit::page`). While no device is open, before the first or
-/// after a loss, it admits none.
-pub fn admit_frame() -> bool {
-    admission().as_ref().is_some_and(Admission::admits)
-}
-
-/// These are the numbers the exports below return besides 0, which means done.
-/// They are the C ABI's, and an embedder's header states them as they are here
-/// (@xpute/gpu ios/CXputeGpu/xpute_gpu.h).
-///
-/// `xpute_gpu_open` returns this when no device opens as the program asks.
-pub const NO_DEVICE: i32 = -1;
-/// `xpute_gpu_surface_bind` returns this before `xpute_gpu_open` is first
-/// called.
-pub const NOT_OPEN: i32 = -2;
-/// `xpute_gpu_surface_bind` returns this when the system makes no surface of
-/// the window.
-pub const NO_SURFACE: i32 = -3;
-/// `xpute_gpu_surface_bind` returns this when a newer handle has bound the slot
-/// since.
-pub const SLOT_TAKEN: i32 = -4;
 
 /// The path a C string names, or none for a null pointer or a path that is no
 /// UTF-8.
@@ -340,7 +306,6 @@ pub fn open(ask: &Ask, cfg: Config, cache_dir: Option<&Path>) -> Result<(), Open
         cache_dir,
         xpute_runtime::native::wake,
     ));
-    *admission() = Some(runtime.admission());
     #[cfg(any(target_vendor = "apple", target_os = "android"))]
     for (handle, window) in &d.windows {
         // SAFETY: a window the runtime holds a reference on.
@@ -383,9 +348,9 @@ fn target(window: NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe {
 }
 
 /// Binds the core's surface `handle` to `window`, on the open device and on
-/// every device opened after it. Returns 0 when bound, `NOT_OPEN` before
-/// `open` is first called, `NO_SURFACE` when the system makes no surface of
-/// the window, and `SLOT_TAKEN` when a newer handle has bound the slot since.
+/// every device opened after it. Returns 0 when bound, ENODEV before `open` is
+/// first called, EINVAL when the system makes no surface of the window, and
+/// EBUSY when a newer handle has bound the slot since.
 /// While no device is open the window is kept, and the next device binds it
 /// (`open`). The runtime holds a reference of its own on a window bound until
 /// it is unbound (`Window`).
@@ -396,15 +361,15 @@ fn target(window: NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe {
 pub unsafe fn bind(handle: u32, window: NonNull<c_void>) -> i32 {
     let mut guard = device();
     let Some(d) = guard.as_mut() else {
-        return NOT_OPEN;
+        return Errno::ENODEV as i32;
     };
     if let Some(h) = d.runtime.as_mut() {
         // SAFETY: the caller's live window, which `Window` holds from here.
         let Ok(surface) = (unsafe { d.instance.create_surface_unsafe(target(window)) }) else {
-            return NO_SURFACE;
+            return Errno::EINVAL as i32;
         };
         if !h.bind(handle, surface) {
-            return SLOT_TAKEN;
+            return Errno::EBUSY as i32;
         }
     }
     d.windows.retain(|&(bound, _)| bound != handle);
@@ -434,14 +399,14 @@ pub fn unbind(handle: u32) {
 /// - `xpute_gpu_open(const char *cache_dir) -> int32_t` opens a device
 ///   (`open`), keeping its compiled pipelines in `cache_dir`, the directory the
 ///   platform keeps the app's caches in, or nowhere when it is null. It
-///   returns 0 when a device is open, newly or already, and `NO_DEVICE` when
+///   returns 0 when a device is open, newly or already, and ENODEV when
 ///   none opens as asked, after saying what refused it (`say_refused`). After
 ///   a loss it opens a new device.
 /// - `xpute_gpu_lost_on(void (*lost)(void))` makes `lost` be told of each
 ///   device lost, once a loss (`lost_on`); null sets none.
 /// - `xpute_gpu_surface_bind(uint32_t handle, void *window) -> int32_t`
 ///   binds the core's surface `handle` to `window` (`bind`), and returns
-///   `NO_SURFACE` for a null window. It exists on an Apple platform and on
+///   EINVAL for a null window. It exists on an Apple platform and on
 ///   Android, whose windows `target` takes.
 /// - `xpute_gpu_surface_unbind(uint32_t handle)` lets the window go
 ///   (`unbind`).
@@ -467,7 +432,7 @@ macro_rules! native_abi {
                     Ok(()) => 0,
                     Err(e) => {
                         $crate::runtime::native::say_refused(&e);
-                        $crate::runtime::native::NO_DEVICE
+                        ::xpute_kit::status::errno::Errno::ENODEV as i32
                     }
                 }
             }
@@ -477,7 +442,7 @@ macro_rules! native_abi {
             #[cfg(any(target_vendor = "apple", target_os = "android"))]
             pub unsafe fn bind(handle: u32, window: *mut ::core::ffi::c_void) -> i32 {
                 let Some(window) = ::core::ptr::NonNull::new(window) else {
-                    return $crate::runtime::native::NO_SURFACE;
+                    return ::xpute_kit::status::errno::Errno::EINVAL as i32;
                 };
                 // SAFETY: the caller's live window.
                 unsafe { $crate::runtime::native::bind(handle, window) }
@@ -571,8 +536,8 @@ macro_rules! native_abi {
 /// with the GPU's runtime beside it. This crate's `core!` expands to it off
 /// WebAssembly. It is xpute-runtime's
 /// `native_core!` with this runtime as its device: `poll` runs before each
-/// turn, `publish` runs the stream at the manifest's `stream_at` as the core
-/// publishes it. It is also `native_abi!`, with
+/// turn, `publish` runs the stream at the manifest's `stream_at` as each turn
+/// returns. It is also `native_abi!`, with
 /// the device `ask` declares (`Ask::of`) and `numbers` made a
 /// `Config` by the platform's defaults (`config`). The program's crate depends
 /// on xpute-core and xpute-runtime besides this crate.

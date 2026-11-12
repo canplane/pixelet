@@ -3,7 +3,7 @@
 //! This generates a program's manifest (spec/manifest.schema.json) as `MANIFEST`,
 //! for both ends, into the files its `gen` names. The manifest declares what
 //! xpute gives the core: the memory, the stack, the room of a frame's packet,
-//! and the file and GPU devices. `MANIFEST` also carries where the front's parts lie, which the
+//! the stream and the GPU. `MANIFEST` also carries where the front's parts lie, which the
 //! runtime lays out and the core holds its header to. Nothing a protocol
 //! carries is part of the manifest.
 
@@ -99,18 +99,8 @@ struct Manifest {
     mem: Mem,
     stack: Stack,
     pkt: Pkt,
-    fs: Option<Fs>,
     stream: Option<Stream>,
     gpu: Option<Gpu>,
-}
-
-/// A manifest asks for the file device by having an `fs` entry, which carries
-/// nothing else.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Fs {
-    #[serde(rename = "$doc", default)]
-    _doc: Vec<String>,
 }
 
 /// The front's parts lie where xpute-core manifest.rs places them: the header's
@@ -177,7 +167,6 @@ fn manifest_rs(m: &Manifest, json: &str, shown: &str) -> String {
         format!("    stack_bytes: {},", m.stack.module_bytes),
         format!("    thread_stack_bytes: {},", m.stack.thread_bytes),
         format!("    pkt_bytes: {},", m.pkt.bytes),
-        format!("    fs: {},", m.fs.is_some()),
         format!("    stream: {stream},"),
         "};".into(),
         String::new(),
@@ -221,8 +210,7 @@ fn manifest_ts(m: &Manifest, json: &str, shown: &str) -> String {
         "/** The manifest its JSON declares: the sizes a runtime may give, what a".into(),
         " * reservation is counted in, the most a frame's packet takes, where the".into(),
         " * front's header and the stream lie (0 without one), which".into(),
-        " * the runtime lays before the first turn, whether it asks for the file".into(),
-        " * device, and the GPU it asks for. */".into(),
+        " * the runtime lays before the first turn, and the GPU it asks for. */".into(),
         "export const MANIFEST = {".into(),
         format!("  mem_bytes: [{}],", sizes.join(", ")),
         format!("  region_bytes: {},", m.mem.region_bytes),
@@ -232,7 +220,6 @@ fn manifest_ts(m: &Manifest, json: &str, shown: &str) -> String {
         lines.push(format!("  {name}: {at},"));
     }
     lines.extend([
-        format!("  fs: {},", m.fs.is_some()),
         format!("  gpu: {gpu},"),
         "} as const;".into(),
     ]);

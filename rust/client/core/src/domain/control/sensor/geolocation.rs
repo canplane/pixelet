@@ -7,9 +7,9 @@
 //! and a device's ends on any. Nothing is retried here. A watch that ended starts again on a
 //! grant, a return to the foreground or a press of the location card.
 
-use crate::domain::cmd::GeolocationErrorCode;
-use crate::domain::cmd::Message;
-use crate::domain::cmd::SensorStatus;
+use crate::abi::sensor::GeolocationErrorCode;
+use crate::abi::ui::Message;
+use crate::abi::ui::SensorStatus;
 use crate::domain::control::sensor::platform;
 use crate::domain::control::sensor::reading::{
     device_location_store, device_location_store_mut, SensorState,

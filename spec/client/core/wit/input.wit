@@ -1,0 +1,23 @@
+package pxl:core@0.1.0;
+
+interface input {
+  enum pointer-phase {
+    down,
+    move,
+    up,
+    out,
+    // The pointer's gesture ends with no tap: the platform took it, or the UI
+    // spent it on something of its own.
+    cancel,
+  }
+  // What the pointer is, as the browser's `pointerType` says.
+  enum pointer-type { mouse, touch, pen }
+
+  pointer: func(phase: pointer-phase, pointer-type: pointer-type, id: s32, button: s32, x: f64, y: f64);
+  typing: func(typing: bool);
+  wheel: func(delta-y: f64);
+  pinch: func(scale: f64);
+  move: func(x: s32, y: s32);
+  xr-pose: func(x: f64, y: f64, z: f64, qx: f64, qy: f64, qz: f64, qw: f64);
+  xr-pose-end: func();
+}

@@ -332,7 +332,7 @@ fn hold(s: &mut Sched, fault: Fault, f: Failure, started_ms: f64, at: f64) {
     }
     // A frame's pump shows the failure and starts a probe at once where the
     // hold has already ended or this failure began none.
-    sched::request_world_tick();
+    sched::invalidate();
 }
 
 /// Resets the scheduler when the runtime will not answer what it was asked

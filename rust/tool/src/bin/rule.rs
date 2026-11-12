@@ -19,9 +19,8 @@ use regex::Regex;
 
 /// The crates that address the core's memory by offset, in which an offset becomes a pointer
 /// only through `xpute_core::mem::at` or `Memory::at`.
-const OFF_CRATES: [&str; 4] = [
+const OFF_CRATES: [&str; 3] = [
     "xpute/rust/core/src/",
-    "xpute/rust/runtime/src/",
     "rust/client/core/src/",
     "rust/client/render/src/",
 ];

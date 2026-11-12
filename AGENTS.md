@@ -27,19 +27,12 @@
 ## The system
 
 - `pxl-core` and `xpute-core` link into one image, the core. xpute is the FFI
-  between it and its runtime: three host functions passing frames in the core's
-  memory, bindings generated from the protocols, the turn, and, for large data
-  in fixed memory, reads into the caller's buffer and the GPU stream.
+  between it and its runtime.
 - Under `xpute/`: runtime, core and their contract, with no pixelet domain or
   name. It is to be published: don't propose removing a part of its `kit` or its
   C++ core because nothing here calls it.
-- xpute's ABI takes the majors under `PROGRAM_MAJOR`, the app's from it. No
-  ports.
-- What the app's numbers mean is the client's services (`ts/client/README.md`),
-  never `@xpute/runtime` or `xpute-runtime`.
 - The UI computes no coordinate or tile. It reaches what is below it through
-  `service/` alone, the core through `service/core/` alone, and that through the
-  generated command table alone.
+  `service/` alone, and the core through `service/core/` alone.
 - What differs by platform is a file pair in `service/platform/` (`<x>.ts` the
   page's, `<x>.native.ts` the device's) or, for a piece of the UI, a file and
   its override beside it (`ts/client/src/ui/shared/component/README.md`).

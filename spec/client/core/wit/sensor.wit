@@ -1,0 +1,21 @@
+package pxl:core@0.1.0;
+
+interface sensor {
+  use types.{sensor};
+
+  enum geolocation-error-code { other, permission-denied, position-unavailable, timeout }
+  enum permission-answer { asking, granted, denied, failed }
+
+  // A GPS fix; a field is absent where the platform gave none.
+  pos: func(lon: f64, lat: f64, alt: option<f64>, accuracy: option<f64>, course: option<f64>);
+  // An orientation event; a field is absent where the platform gave none.
+  orient: func(webkit-compass-heading: option<f64>, alpha: option<f64>, beta: option<f64>, gamma: option<f64>);
+  // A watch's failure, geolocation's with its code, and whether the watch runs
+  // on past it.
+  err: func(sensor: sensor, code: option<geolocation-error-code>, watching: bool);
+  permission: func(sensor: sensor, answer: permission-answer);
+  // What the place's sensors are: a position, a heading, whether the heading
+  // asks a permission inside a gesture, and whether its silence is a loss.
+  platform: func(geolocation: bool, orient: bool, orient-permission: bool, orient-silence-is-loss: bool);
+  locate: func();
+}

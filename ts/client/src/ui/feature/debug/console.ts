@@ -1,9 +1,9 @@
 // @pxl/client/ui/feature/debug/console.ts
 
 /**
- * What every build puts on the console. `xpute.cmd(cmd, ...args)` sends
- * the core any command by its number, the way the UI sends one (`raw` in
- * service/core/raw.ts). `pxl.perf` holds what the profiler panel exports,
+ * What every build puts on the console. `xpute.cmd(handle, method, ...args)`
+ * sends any method of a handle the core issued, the way the UI sends one
+ * (`raw` in service/core/raw.ts). `pxl.perf` holds what the profiler panel exports,
  * computed on the client from what the core's profiler holds. `report()` gives
  * the summary of the profiler's window as text, and `read()` gives the same
  * summary as values. `trace()` saves the window as a trace for

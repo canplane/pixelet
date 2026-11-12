@@ -5,7 +5,7 @@
 
 import { Branch } from "@xpute/kit/wire/xtp/mod.ts";
 import { fs_exports } from "@xpute/runtime/abi/fs.spec.ts";
-import type { RefusedFile } from "@/abi/cmd.spec.ts";
+import type { RefusedFile } from "@/abi/ui.ts";
 import { ui } from "@/service/core/core.ts";
 
 export function fs_changed(f: RefusedFile): void {

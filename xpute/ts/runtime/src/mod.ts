@@ -1,39 +1,30 @@
 // @xpute/runtime
 
-/**
- * An app takes this from the runtime. From one manifest it starts its core
- * where the platform runs it (`start`, with `serve` inside a page's worker),
- * or boots the core beside it (`boot`). It also takes the UI's link to the
- * core, the types of what the app decides (its files, its policy),
- * and the devices' commands it sends with. The runtime's other parts are
- * imported by path.
- */
-
-export { serve } from "./remote.ts";
-export { start } from "./start";
+export { serve_clock } from "./clock.ts";
+export { tell_life } from "./life.ts";
 export {
-  type Abort,
-  abort_of,
-  boot,
-  type Config,
-  type Link,
-  mem,
-  type Manifest,
-  type ModuleSource,
-  type Protocol,
-  QUIET,
-  type Ui,
-} from "./runtime.ts";
-export {
-  type Encode,
-  type OnImport,
-  type Reply,
+  type Answer,
+  type Answered,
+  type Core,
+  type Handle,
+  Link,
+  type LinkObject,
+  type Method,
+  OPEN,
+  open,
+  type Opener,
+  type Packet,
+  RELEASE,
+  release,
   refusal_of,
-} from "./io/connection.ts";
-export { type Binding, FileError } from "./io/fs.ts";
-export { CMD } from "./io/frame.ts";
-export type { Path, Token } from "./io/path.ts";
-export { Command as FsCommand } from "./abi/fs.spec.ts";
-export { Timeslice } from "./sched/timeslice.ts";
-export { type FrameGrant, FramePacing } from "./sched/frame_pacing.ts";
-export type { Grant, SchedulingPolicy } from "./sched/policy.ts";
+  type Ref,
+  type Reply,
+  ROOT,
+  type Sender,
+  type Tag,
+  uri,
+} from "./link.ts";
+export { Remote, serve } from "./remote.ts";
+export { Table } from "./resource.ts";
+export { serve_timer } from "./timer.ts";
+export { wait } from "./wait.ts";

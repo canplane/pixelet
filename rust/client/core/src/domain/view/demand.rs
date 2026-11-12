@@ -23,7 +23,6 @@ use crate::sys::io::demand::{Source, Stream};
 use crate::sys::io::fetch::{answer_cnt, take_answer, Response};
 use crate::sys::io::request::{attempt_of, settle};
 use pxl_spec::bake::tile::division::DivisionTile;
-use xpute_core::sched::pass::Pass;
 use xpute_kit::status::errno::Errno;
 
 use fnv::FnvHashMap;
@@ -615,10 +614,10 @@ pub fn object_step() {
 }
 
 /// Admits the tiles that arrived, the pyramid's and the objects' shards
-/// (`LAYERS`), within the budget of `pass`, and at least one where any has
-/// arrived. Each fetch settles here. What the pass leaves stays queued, and
-/// a turn is asked for it.
-pub fn admit_arrived(pass: &Pass) {
+/// (`LAYERS`), within the entry's budget, and at least one where any has
+/// arrived. Each fetch settles here. What the budget leaves stays queued, and
+/// a frame is asked for it.
+pub fn admit_arrived() {
     const OF: [Stream; LAYERS.len()] = {
         let mut of = [Stream::asset; LAYERS.len()];
         let mut k = 0;
@@ -628,7 +627,7 @@ pub fn admit_arrived(pass: &Pass) {
         }
         of
     };
-    let stat = pass.run(
+    let stat = sched::run(
         0..answer_cnt(&OF),
         |_| {
             let Some(Response {
@@ -653,10 +652,9 @@ pub fn admit_arrived(pass: &Pass) {
             settle(key, Exit::from(result), Some(phases));
             true
         },
-        None,
     );
     if stat.stopped_early {
-        sched::request_world_tick();
+        sched::invalidate();
     }
 }
 

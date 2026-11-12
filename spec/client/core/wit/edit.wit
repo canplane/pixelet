@@ -1,0 +1,12 @@
+package pxl:core@0.1.0;
+
+interface edit {
+  // What the pointer holds: itself, the eraser, or an item to place, which
+  // `val` names.
+  enum tool { pointer, item, eraser }
+
+  hold: func(tool: tool, val: u32, scale-steps: s32);
+  marker-text: func(text: string);
+  marker-cancel: func();
+  marker-commit: func();
+}

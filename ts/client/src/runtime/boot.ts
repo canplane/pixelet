@@ -1,61 +1,41 @@
 // @pxl/client/runtime/boot.ts
 
 /**
- * A page opens the runtime in the core's worker (open.ts), and a device
- * opens it beside the UI (open.native.ts). The UI takes no part in the boot.
- * It reads where the boot stands (service/sys/boot.ts), and, once the core
- * has started, what the core shows it.
+ * A page opens the core in a worker of its own (worker.ts) and reaches it
+ * across a message port. The UI takes no part in the boot: it reads where the
+ * boot stands (service/sys/boot.ts), and, once the core has started, what the
+ * core shows it.
  */
 
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { InvariantError } from "@xpute/kit/status/error.ts";
-import { GroundStatus, type Snapshot } from "@/abi/cmd.spec.ts";
-import {
-  BOOT_FAILED,
-  BOOT_LOADING,
-  BOOT_OPENING,
-  BOOT_STARTED,
-  BOOT_STARTING,
-  BOOT_TERMINATED,
-} from "@/abi/state.ts";
-import { boot_state, set_boot } from "@/service/sys/boot.ts";
-import * as snapshot from "@/service/core/snapshot.ts";
-import { open } from "@/runtime/open.ts";
+import { Remote } from "@xpute/runtime";
+import { BOOT_STARTING } from "@/abi/state.ts";
+import { set_boot } from "@/service/sys/boot.ts";
+import { mount_ui, open_core } from "@/service/core/core.ts";
+import { source } from "@/service/platform/core.ts";
 
-let called = false;
-
-/** Whether the world has arrived, or nothing of it will show: every pipeline
- * is made, and the view is drawn or lies past the service area. When locating
- * fails, the view is drawn at its default place. */
-function loaded(s: Snapshot): boolean {
-  return (
-    s.renderer_progress === 1 &&
-    (s.pivot.status === GroundStatus.Success || s.pivot.outside)
-  );
+/** What the page sends the worker to open the core: the module, how to
+ * fetch it, the UI's port, and the prefixes of the objects the UI serves. */
+export interface Open {
+  module: string;
+  init: RequestInit | undefined;
+  port: MessagePort;
+  prefixes: Remote["prefixes"];
 }
 
 export function boot(): void {
-  if (called) throw new InvariantError(Errno.EALREADY);
-  called = true;
-  open({
-    started: () => {
-      if (boot_state() === BOOT_OPENING) set_boot(BOOT_STARTING);
-    },
-    snapshot: () => {
-      if (boot_state() === BOOT_LOADING && loaded(snapshot.cur()))
-        set_boot(BOOT_STARTED);
-    },
-    // When the core stops, its turns end with it, whatever the boot's state.
-    terminated: () => set_boot(BOOT_TERMINATED),
-  }).then(
-    (declared) => {
-      if (declared && boot_state() === BOOT_STARTING) set_boot(BOOT_LOADING);
-    },
-    (err) => {
-      console.error("[boot] the client did not start:", err);
-      const state = boot_state();
-      if (state === BOOT_OPENING || state === BOOT_STARTING)
-        set_boot(BOOT_FAILED);
-    },
+  // Metro bundles the worker through this call, and through no form of
+  // `new Worker` that tree shaking also compiles (metro.config.ts).
+  const worker = new Worker(require.unstable_resolveWorker("./worker.ts"), {
+    type: "module",
+  });
+  const { port1, port2 } = new MessageChannel();
+  const { module, init } = source();
+  const remote = new Remote(port1);
+  mount_ui(remote);
+  worker.postMessage(
+    { module: module.href, init, port: port2, prefixes: remote.prefixes } satisfies Open,
+    [port2],
   );
+  void open_core(remote);
+  set_boot(BOOT_STARTING);
 }

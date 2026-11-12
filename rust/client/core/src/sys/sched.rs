@@ -1,71 +1,129 @@
 // pxl-core/sys/sched.rs
 
-//! How the core spends a turn: the one turn every task of the core runs
-//! against (xpute_core::sched::turn), which decides when the turn's tasks
-//! yield and whether the core asks for the next turn; the phases of its tick
-//! and the share of the budget each holds back; and the wall clock time the
-//! runtime tells it.
+//! The core's own cooperative scheduling, on embassy's executor: the frame's
+//! signal, a frame armed for a time, the entry's budget, and the yield that
+//! leaves the entry.
+//!
+//! - `invalidate` asks for a frame: the frame task waits on it, then on the
+//!   display's next vsync, and runs the world's frame (turn.rs).
+//! - `invalidate_at` asks for a frame at a time. Only the earliest time is
+//!   armed, by one `timer.sleep` of xpute's, its delay rounded up; a sleep
+//!   armed for any other time does nothing when it wakes, and an earlier time
+//!   arms one more.
+//! - Each entry has a budget, from its start (`begin`, door.rs `enter`): `spent`
+//!   reads it, `run` spends it on a list once one item has done work, and
+//!   `yield_if_spent` leaves the entry once it is spent.
 
-pub mod clock;
+pub mod display;
 pub mod executor;
-#[path = "sched/pacing.spec.rs"]
-pub mod pacing_spec;
 pub mod param;
 #[path = "sched/phase.spec.rs"]
 pub mod phase_spec;
 pub mod tick;
 
+use core::future::poll_fn;
+use core::task::{Poll, Waker};
+use std::cell::Cell;
+
 use xpute_core::clock::now;
-use xpute_core::global::Global;
-use xpute_core::sched::turn::Turn;
+use xpute_core::link;
+use xpute_core::abi::timer::sleep;
+use xpute_kit::wire::xtp::PacketWriter;
 
-use crate::sys::sched::pacing_spec::MARGIN_SHARE;
-use crate::sys::sched::param::CONTENT_SHARE;
+use crate::sys::sched::param::BUDGET_MS;
 
-static TURN: Global<Turn> = Global::new();
-/// How many turns have started.
-static TURNS: Global<u64> = Global::new();
-
-/// The one turn every task of the core runs against.
-pub fn turn() -> &'static mut Turn {
-    TURN.get(Turn::new)
+thread_local! {
+    /// Whether a frame is asked for, and the frame task's waker.
+    static INVALID: Cell<bool> = const { Cell::new(false) };
+    static FRAME_WAKER: Cell<Option<Waker>> = const { Cell::new(None) };
+    /// The earliest time a frame is armed for, or infinity.
+    static EARLIEST: Cell<f64> = const { Cell::new(f64::INFINITY) };
+    /// The entry's deadline.
+    static DEADLINE: Cell<f64> = const { Cell::new(f64::INFINITY) };
 }
 
-/// Starts a turn that may last `deadline_ms` (`Turn::start`), and counts it.
-pub fn start(deadline_ms: f64) {
-    *TURNS.get(|| 0) += 1;
-    turn().start(deadline_ms);
-}
-
-/// How many turns have started, which the profiler shows.
-pub fn turns() -> u64 {
-    *TURNS.get(|| 0)
-}
-
-/// Lets the turn's tasks run for their share of the turn after the frame,
-/// however far the frame overran the deadline. The share is `CONTENT_SHARE`
-/// of the frame time the runtime paces, less the runtime's margin, which the
-/// deadline leaves out as well.
-pub fn tasks_after_frame(paced_ms: f64) {
-    turn().extend_to(now() + CONTENT_SHARE * paced_ms * (1.0 - MARGIN_SHARE));
-}
-
-/// Ends the turn and answers the ms until the core wants its next
-/// (`Turn::end`). A task that is queued and not yet polled asks for the next
-/// turn too, because a turn with no frame and no deadline left polls no task.
-pub fn wake_ms() -> f64 {
-    if executor::pending() {
-        turn().ask_next();
+/// Asks for a frame.
+pub fn invalidate() {
+    INVALID.set(true);
+    if let Some(w) = FRAME_WAKER.take() {
+        w.wake();
     }
-    turn().end()
 }
 
-pub fn request_world_tick() {
-    turn().ask_next();
+/// Whether a frame is asked for and not yet taken.
+pub fn is_invalid() -> bool {
+    INVALID.get()
 }
 
-/// Asks for a turn at `at`. Of several asks the earliest wins, and a wait
-/// that is still pending when its turn comes must ask again.
-pub fn wake_at(at: f64) {
-    turn().wake_at(at);
+/// Waits until a frame is asked for, and takes the ask.
+pub async fn invalidated() {
+    poll_fn(|cx| {
+        if INVALID.replace(false) {
+            return Poll::Ready(());
+        }
+        FRAME_WAKER.set(Some(cx.waker().clone()));
+        Poll::Pending
+    })
+    .await;
+}
+
+/// Asks for a frame at `at`, on the clock.
+pub fn invalidate_at(at: f64) {
+    if at >= EARLIEST.get() {
+        return;
+    }
+    EARLIEST.set(at);
+    let ms = (at - now()).max(0.0).ceil() as u32;
+    link::send(
+        xpute_core::abi::timer::SLEEP,
+        Some((1, &|w: &mut PacketWriter| _ = w.u32(Some(ms)))),
+        Some(Box::new(move |_| {
+            if EARLIEST.get() == at {
+                EARLIEST.set(f64::INFINITY);
+                invalidate();
+            }
+        })),
+    );
+}
+
+/// Starts the entry's budget.
+pub fn begin() {
+    DEADLINE.set(now() + BUDGET_MS);
+}
+
+pub fn spent() -> bool {
+    now() >= DEADLINE.get()
+}
+
+/// What `run` came to: the items it stepped, and whether the budget stopped
+/// it before the list's end.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Run {
+    pub step_cnt: u32,
+    pub stopped_early: bool,
+}
+
+/// Steps `items` in order until the entry's budget is spent. `step` answers
+/// whether it did work, and the budget holds only once one step has, so the
+/// list always moves.
+pub fn run<T>(items: impl IntoIterator<Item = T>, mut step: impl FnMut(T) -> bool) -> Run {
+    let mut r = Run::default();
+    let mut worked = false;
+    for item in items {
+        if worked && spent() {
+            r.stopped_early = true;
+            break;
+        }
+        worked |= step(item);
+        r.step_cnt += 1;
+    }
+    r
+}
+
+/// Leaves the entry once its budget is spent, and comes back in a later one.
+pub async fn yield_if_spent() {
+    if spent() {
+        // A timer that fails leaves the entry all the same.
+        _ = sleep(0).await;
+    }
 }

@@ -1,0 +1,6 @@
+package pxl:core@0.1.0;
+
+// The types more than one interface takes.
+interface types {
+  enum sensor { geolocation, orientation }
+}

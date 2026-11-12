@@ -12,7 +12,6 @@
 //! stands apart from xpute-kit and
 //! xpute-core, so a program that draws nothing links none of it.
 
-#[path = "abi.spec.rs"]
 pub mod abi;
 
 #[path = "api.spec.rs"]
@@ -27,9 +26,9 @@ pub mod encode;
 
 /// These are the settings of a native GPU runtime that the program chooses; the
 /// platform chooses the rest of `runtime::Config` (`runtime::native::config`).
-/// A WebAssembly core states them as well. There the page's admission reads
-/// the frame latency (`admit::page`), and nothing reads the chunk size or the
-/// slow bound, which a page's runtimes take from the page's program (ts/gpu
+/// A WebAssembly core states them as well. Admission reads the frame latency
+/// (`admit::frame`). On WebAssembly nothing reads the chunk size or the slow
+/// bound, which a page's runtimes take from the page's program (ts/gpu
 /// `GpuConfig`, ts/runtime `Config`).
 #[derive(Clone, Copy)]
 pub struct CoreConfig {
@@ -60,9 +59,9 @@ mod program;
 
 /// A core of `manifest` that takes this GPU, as `xpute_core::core!` defines one
 /// without it. `cfg` is its `CoreConfig`, and `ask` the
-/// generated `GPU_ASK`. A WebAssembly core admits frames
-/// as a page does (`admit::page`), and any other runs `native_core!`. It
-/// defines `admit_frame` where it is invoked.
+/// generated `GPU_ASK`. Every core admits frames by its device's block
+/// (`admit::frame`), and one off WebAssembly runs `native_core!`. It defines
+/// `admit_frame` where it is invoked.
 #[macro_export]
 macro_rules! core {
     ($manifest:expr, $fixed_bytes:expr, $entry:expr, $cfg:expr, $ask:expr $(,)?) => {
@@ -85,10 +84,7 @@ macro_rules! core {
         /// Whether the GPU's runtime takes a frame now without blocking
         /// (`admit`).
         pub fn admit_frame() -> bool {
-            #[cfg(target_arch = "wasm32")]
-            return $crate::admit::page::<{ $cfg.frame_latency }>();
-            #[cfg(not(target_arch = "wasm32"))]
-            return $crate::runtime::native::admit_frame();
+            $crate::admit::frame::<{ $cfg.frame_latency }>()
         }
     };
 }

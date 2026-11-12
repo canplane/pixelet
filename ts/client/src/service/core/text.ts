@@ -1,24 +1,51 @@
 // @pxl/client/service/core/text.ts
 
 /**
- * TEXT, the text device's protocol (spec/client/core/sys/io/text.json). The core's
- * calls TEXT_LAYOUT and TEXT_RASTER are answered from the platform's text
- * before they return, so what they write into the core's memory is in place
- * by the time the call returns.
+ * The text the runtime serves the core (spec/client/core/wit/text.wit), from
+ * the platform's text. Its methods answer at once, so what they write into
+ * the core's memory is in place by the time the call returns.
  */
 
-import type { i32 } from "@xpute/kit/abi/word.ts";
 import { td, te } from "@xpute/kit/codec/encoding.ts";
+import type { Link } from "@xpute/runtime";
 
-import type { TextLayout, TextRaster } from "@/abi/text.spec.ts";
+import * as text from "@/abi/text.ts";
 import { LAYOUT_ANSWER, LINE } from "@/abi/text_answer.spec.ts";
 import * as font from "@/service/platform/text.ts";
-import { mem } from "@xpute/runtime";
 
-/** The text a call names in the core's memory, which holds it only until the
- * call returns. */
-function text_of(at: number, len: number): string {
-  return td.decode(new Uint8Array(mem, at, len));
+export function serve_text(link: Link): void {
+  /** The text a call names in the core's memory, which holds it only until
+   * the call returns. */
+  const text_of = (at: number, len: number): string => td.decode(link.bytes(at, len));
+
+  text.mount(link, {
+    /** A line's end counts UTF-8 bytes, and its width leaves out the spaces
+     * at its ends. */
+    layout(weight, px, max_width, at, lines, text_at, text_len) {
+      const s = text_of(text_at, text_len);
+      const width = (t: string) => font.width(weight, px, t);
+      const ends = line_ends(s, max_width, width).slice(0, lines);
+      const b = link.bytes(at, 4 * (LAYOUT_ANSWER.WORDS + LINE.WORDS * lines));
+      const out = new DataView(b.buffer, b.byteOffset, b.byteLength);
+      out.setUint32(4 * LAYOUT_ANSWER.cnt, ends.length, true);
+      let start = 0;
+      let start_byte = 0;
+      ends.forEach((end, i) => {
+        const line = s.slice(start, end);
+        start_byte += te.encode(line).length;
+        const l = LAYOUT_ANSWER.WORDS + LINE.WORDS * i;
+        out.setUint32(4 * (l + LINE.end), start_byte, true);
+        out.setFloat32(4 * (l + LINE.width), width(line.trim()), true);
+        start = end;
+      });
+      return 0;
+    },
+    raster(weight, px, color, at, width, height, x, text_at, text_len) {
+      const s = text_of(text_at, text_len);
+      font.raster(weight, px, color, s, x, width, height, link.bytes(at, width * height * 4));
+      return 0;
+    },
+  });
 }
 
 /** The characters no line may start with: closing marks and, in Japanese, the
@@ -89,46 +116,4 @@ function line_ends(
   }
   ends[ends.length - 1] = text.length;
   return ends;
-}
-
-/** A line's end counts UTF-8 bytes, and its width leaves out the spaces at
- * its ends. */
-export function text_layout(e: TextLayout): i32 {
-  const { weight, px, max_width, at, lines, text_at, text_len } = e;
-  const text = text_of(text_at, text_len);
-  const width = (s: string) => font.width(weight, px, s);
-  const ends = line_ends(text, max_width, width).slice(0, lines);
-  const out = new DataView(
-    mem,
-    at,
-    4 * (LAYOUT_ANSWER.WORDS + LINE.WORDS * lines),
-  );
-  out.setUint32(4 * LAYOUT_ANSWER.cnt, ends.length, true);
-  let start = 0;
-  let start_byte = 0;
-  ends.forEach((end, i) => {
-    const line = text.slice(start, end);
-    start_byte += te.encode(line).length;
-    const l = LAYOUT_ANSWER.WORDS + LINE.WORDS * i;
-    out.setUint32(4 * (l + LINE.end), start_byte, true);
-    out.setFloat32(4 * (l + LINE.width), width(line.trim()), true);
-    start = end;
-  });
-  return 0;
-}
-
-export function text_raster(e: TextRaster): i32 {
-  const { weight, px, color, at, width, height, x, text_at, text_len } = e;
-  const text = text_of(text_at, text_len);
-  font.raster(
-    weight,
-    px,
-    color,
-    text,
-    x,
-    width,
-    height,
-    new Uint8Array(mem, at, width * height * 4),
-  );
-  return 0;
 }

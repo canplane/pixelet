@@ -23,10 +23,10 @@ pub const EDGE_STRENGTH: f64 = 0.3;
 pub const AO_STRENGTH: f64 = 0.2;
 
 // ---- the drawn resolution ----
-// These tune resolution.rs. A `RES_` constant serves both of `auto`'s knobs,
-// the rate and the scale; `RES_MIN` and `RES_STEPS` set the scale's steps. A
-// `SCALE_` constant serves only the judging done where the device reports no
-// GPU time, when the scale alone moves.
+// These tune resolution.rs and rate.rs. A `RES_` constant serves the scale,
+// and `RES_BAND` the frame rate as well; `RES_MIN` and `RES_STEPS` set the
+// scale's steps. A `SCALE_` constant serves only the judging done where the
+// device reports no GPU time.
 
 /// The least share of the display's pixels on each axis that the world is
 /// drawn at.
@@ -48,8 +48,8 @@ pub const RES_UP_WINDOWS: u32 = 4;
 /// keeps the step it is at.
 pub const RES_BAND: f64 = 0.1;
 
-/// The tightest frame budget, one frame at 60 Hz.
-pub const RES_BUDGET_FLOOR_MS: f64 = 1000.0 / 60.0;
+/// The slowest rate `auto`'s frame rate paces frames at (rate.rs).
+pub const RATE_MIN_HZ: f64 = 30.0;
 
 /// The windows after a change that are not judged, a second of them. A change
 /// rebuilds the render targets or casts the lattice again in full, so the

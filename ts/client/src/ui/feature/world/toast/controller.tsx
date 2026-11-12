@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 
 import { messageKey } from "@/ui/shared/locale/message-key.ts";
-import { GroundStatus, Message, SensorStatus } from "@/abi/cmd.spec.ts";
+import { GroundStatus, Message, SensorStatus } from "@/abi/ui.ts";
 import { BOOT_STARTED, GPU_WAITING, type Gpu } from "@/abi/state.ts";
 import { boot_state, watch_boot } from "@/service/sys/boot.ts";
 

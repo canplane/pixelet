@@ -3,8 +3,8 @@
 use pxl_spec::space::coord::q3::Q3;
 use xpute_kit::math::scalar::wrap;
 
-use crate::domain::cmd::SensorStatus;
-use crate::domain::cmd::Tracking;
+use crate::abi::ui::SensorStatus;
+use crate::abi::camera::Tracking;
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::camera::state::IntentPatch;
@@ -13,7 +13,7 @@ use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::param::{HEADING_SMOOTH_ALPHA, SENSOR_GRACE_MS};
 use crate::domain::control::sensor::device_orientation::request_orient;
 use crate::domain::control::sensor::reading::{device_location_store, device_orient_store};
-use crate::sys::sched::wake_at;
+use crate::sys::sched::invalidate_at;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 
@@ -78,7 +78,7 @@ pub fn follow_mode_step() {
             f.grace = None;
             f.on = false;
         } else {
-            wake_at(due);
+            invalidate_at(due);
         }
     } else {
         f.grace = None;

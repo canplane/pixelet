@@ -9,7 +9,7 @@
 //! A brick is filled here from its tile in two stages. Its folds, four
 //! asset ids per cell, are cut from the tile's packet in the turn the packet
 //! lands, and the packet is then freed (`cut`). Later, after the frame and
-//! as far as the turn's share for tasks leaves room (`fill_share`), its cells
+//! as far as the entry's budget leaves room (`fill_share`), its cells
 //! are filled from those folds and the tile's samples and lines into
 //! `.fixed.terrain`, and the spans its cells were filled by into a run of the
 //! ways' pool (pool.rs).
@@ -52,7 +52,7 @@ use crate::domain::layer::terrain::tile;
 use crate::domain::layer::Base;
 use crate::sys::io::room::Refusal;
 use crate::sys::io::source::ServiceArea;
-use crate::sys::sched::{self, request_world_tick};
+use crate::sys::sched::{self, invalidate};
 use xpute_core::mem::range::arr;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -651,7 +651,7 @@ pub fn upload(write: &mut TerrainWrite<'_>) {
             run: &pieces,
         });
         if !fits {
-            request_world_tick();
+            invalidate();
             break;
         }
         (w.slots[b as usize].present, w.slots[b as usize].fill) = (true, Fill::Idle);
@@ -938,11 +938,10 @@ enum Poll {
 }
 
 /// Fills the due bricks one part at a time (`fill_stage`), after the frame.
-/// It runs as far as the turn's share for tasks holds (sys/sched.rs
-/// `tasks_after_frame`), which is the frame's share however far the frame
-/// overran, and always at least one part, so a turn that spent its share
-/// before this point still moves the fill. What is left, and a filled brick
-/// waiting to be handed over, ask for the next turn.
+/// It runs as far as the entry's budget holds (sys/sched.rs `spent`), and
+/// always at least one part, so an entry that spent its budget before this
+/// point still moves the fill. What is left, and a filled brick waiting to be
+/// handed over, ask for the next frame.
 pub fn fill_share() {
     let w = clipmap();
     if core::mem::take(&mut w.due_stale) {
@@ -958,12 +957,12 @@ pub fn fill_share() {
             }
             Poll::Ran => ran = true,
         }
-        if sched::turn().is_spent() {
+        if sched::spent() {
             break;
         }
     }
     if ran {
-        request_world_tick();
+        invalidate();
     }
 }
 

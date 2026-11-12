@@ -7,42 +7,7 @@ use xpute_gen::spec::Output;
 
 use crate::root;
 
-const DATA_SPECS: [DataSpec; 8] = [
-    DataSpec {
-        json: "spec/conformance/core.json",
-        ts: Some("ts/runtime/src/conformance.spec.ts"),
-        rs: Some("rust/dev/conformance/src/core.spec.rs"),
-        cpp: Some(("cpp/dev/conformance/core.spec.hpp", "xpute::conformance")),
-        mk: Some(("cpp/dev/conformance/core.spec.mk", "CONFORMANCE_")),
-        ..DataSpec::DEFAULT
-    },
-    DataSpec {
-        json: "spec/io/head.json",
-        ts: Some("ts/runtime/src/io/head.spec.ts"),
-        rs: Some("rust/core/src/io/head.spec.rs"),
-        cpp: Some(("cpp/xpute/core/io/head.spec.hpp", "xpute::head")),
-        ..DataSpec::DEFAULT
-    },
-    DataSpec {
-        json: "spec/io/frame.json",
-        ts: Some("ts/runtime/src/io/frame.spec.ts"),
-        rs: Some("rust/core/src/io/frame.spec.rs"),
-        cpp: Some(("cpp/xpute/core/io/frame.spec.hpp", "xpute::frame")),
-        ..DataSpec::DEFAULT
-    },
-    DataSpec {
-        json: "spec/io/fs.json",
-        ts: Some("ts/runtime/src/io/fs.spec.ts"),
-        rs: Some("rust/core/src/io/fs.spec.rs"),
-        cpp: Some(("cpp/xpute/core/io/fs.spec.hpp", "xpute::fs")),
-        ..DataSpec::DEFAULT
-    },
-    DataSpec {
-        json: "spec/io/batch.json",
-        ts: Some("ts/runtime/src/io/batch.spec.ts"),
-        rs: Some("rust/runtime/src/native/batch.spec.rs"),
-        ..DataSpec::DEFAULT
-    },
+const DATA_SPECS: [DataSpec; 3] = [
     DataSpec {
         json: "spec/io/stream.json",
         ts: Some("ts/runtime/src/io/stream.spec.ts"),
@@ -105,8 +70,6 @@ const LAYOUT: Layout = Layout {
     rs: &[
         ("rust/core/src/", "xpute-core"),
         ("rust/gpu/src/", "xpute-gpu"),
-        ("rust/runtime/src/", "xpute-runtime"),
-        ("rust/dev/conformance/src/", "xpute-conformance"),
     ],
     rs_names: true,
     slots: &[],

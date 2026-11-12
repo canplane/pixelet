@@ -1,15 +1,7 @@
 // @pxl/client/service/core/snapshot.ts
 
-import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
-import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
-import {
-  GroundStatus,
-  read_snapshot,
-  SensorStatus,
-  type UiView,
-  type Snapshot,
-} from "@/abi/cmd.spec.ts";
+import { GroundStatus, SensorStatus, type Snapshot } from "@/abi/ui.ts";
 
 const INIT: Snapshot = {
   pivot: {
@@ -43,11 +35,9 @@ const INIT: Snapshot = {
 let snapshot: Snapshot = INIT;
 const listeners = new ListenerSet();
 
-/** `bytes` are the snapshot as the core named it when it sent it, valid only
- * inside the call that hands them over, so the snapshot is read whole at
- * once. */
-export function set_snapshot(bytes: U8Array): void {
-  snapshot = read_snapshot(new TreeReader(bytes).read_branch());
+/** The core's snapshot, replaced whole when it changes. */
+export function set_snapshot(s: Snapshot): void {
+  snapshot = s;
   listeners.notify();
 }
 
@@ -57,10 +47,16 @@ export function cur(): Snapshot {
   return snapshot;
 }
 
+/** The view's azimuth, and the meters a logical pixel spans at the pivot. */
+export interface UiView {
+  azimuth: number;
+  m_per_px: number;
+}
+
 let view: UiView = { azimuth: 0, m_per_px: 0 };
 const view_listeners = new ListenerSet();
 
-/** Takes the core's UI_VIEW, which a rotation or a zoom posts every frame.
+/** Takes the core's view, which a rotation or a zoom posts every frame.
  * Only what watches the view is told, so the snapshot's readers are not woken
  * every frame. */
 export function view_posted(e: UiView): void {

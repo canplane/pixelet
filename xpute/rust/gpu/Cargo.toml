@@ -15,10 +15,6 @@ path = "src/lib.rs"
 [dependencies]
 xpute-core.workspace = true
 xpute-kit.workspace = true
-# The runtime's end below reads the core's memory by offset
-# (xpute_runtime::mem). wgpu already brings libc where xpute-runtime takes it,
-# and xpute-runtime depends on nothing of this crate's.
-xpute-runtime = { workspace = true, optional = true }
 # These serve the runtime's end on a native device (src/runtime.rs), which a
 # core never links: wgpu runs the records, its serde names read the spec's, and
 # an external image is decoded here where the web asks its browser.
@@ -33,7 +29,7 @@ zune-jpeg = { version = "0.5", optional = true }
 pollster = { version = "1", optional = true }
 
 [features]
-runtime = ["dep:xpute-runtime", "dep:wgpu", "dep:serde", "dep:png", "dep:image-webp", "dep:zune-jpeg", "dep:pollster"]
+runtime = ["dep:wgpu", "dep:serde", "dep:png", "dep:image-webp", "dep:zune-jpeg", "dep:pollster"]
 
 [dev-dependencies]
 # The tests take the golden records' reader, and ask for a device without an

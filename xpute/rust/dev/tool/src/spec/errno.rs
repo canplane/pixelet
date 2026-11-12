@@ -110,40 +110,11 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             rs.push(format!("            {} => Some(Errno::{}),", m.val, m.name));
         }
     }
-    rs.extend(["            _ => None,", "        }", "    }", "}", ""].map(String::from));
+    rs.extend(["            _ => None,", "        }", "    }", "}"].map(String::from));
     ts.push(String::new());
 
-    let tail_doc = [
-        "Conventions:",
-        "- errno == Errno::OK  -> success",
-        "- errno != Errno::OK  -> failure",
-        "- data == None        -> no payload",
-    ];
-    rs.push("// Result pair: (errno, data)".into());
-    rs.push("//".into());
-    rs.extend(tail_doc.iter().map(|l| format!("// {l}")));
-    rs.extend(
-        [
-            "//",
-            "// `None` is the \"no value / no payload\" sentinel: the empty result slot,",
-            "// nothing about pointers.",
-            "pub type ErrnoResult<T> = (Errno, Option<T>);",
-        ]
-        .map(String::from),
-    );
     ts.extend(
         [
-            "// Result pair: [errno, data]",
-            "//",
-            "// Conventions:",
-            "// - errno == OK  -> success",
-            "// - errno != OK  -> failure",
-            "// - data === null      -> no payload",
-            "//",
-            "// `null` is used as the canonical \"no value / no payload\" sentinel.",
-            "// It does not imply pointer semantics; it is just the empty result slot.",
-            "export type ErrnoResult<T> = [i32, T | null];",
-            "",
             "/** An errno as a reader is shown it: its name and what it means. The",
             " * strings are for a person to read; an error carries the number alone. */",
             "export function strerror(errnum: i32): string {",

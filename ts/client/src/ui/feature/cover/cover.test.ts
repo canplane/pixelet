@@ -2,7 +2,7 @@
 
 import { expect, test } from "vitest";
 
-import { Message } from "@/abi/cmd.spec.ts";
+import { Message } from "@/abi/ui.ts";
 
 import {
   BOOT_FAILED,

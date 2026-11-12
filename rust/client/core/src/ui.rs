@@ -8,7 +8,6 @@ use crate::domain::layer::Base as _;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::{units, Zoom, FINEST_ZOOM};
-use xpute_kit::wire::xtp::PacketWriter;
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::dist;
@@ -29,10 +28,11 @@ use crate::domain::scene::stage::screen_shows_world;
 use crate::domain::setting::store::{are_settings_loaded, settings, SettingKey};
 use crate::domain::view::frame::pose;
 use crate::domain::view::frame::screen::units_per_px_at;
-use crate::door::cmd::{
+use crate::abi::ui::{
     CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
-    PivotState, RefusedFile, SensorStatus, Snapshot, UiView,
+    PivotState, RefusedFile, SensorStatus, Snapshot,
 };
+use xpute_core::abi::link::Token;
 use crate::pointer;
 use crate::sys::io::file;
 use crate::sys::io::file_spec::path;
@@ -56,20 +56,28 @@ fn named_to(u_per_px: f64) -> Option<Zoom> {
 /// The pivot's division and every division above it, from the broadest to
 /// the narrowest. A division is shown when the view names down to its zoom
 /// (`named_to`).
-fn division_parts(
-    at: Option<(Quadrant, u32)>,
-    named_to: Option<Zoom>,
-    each: &mut dyn FnMut(&DivisionPart<'_>),
-) {
-    let Some(at) = at else { return };
+fn division_parts(at: Option<(Quadrant, u32)>, named_to: Option<Zoom>) -> Vec<DivisionPart> {
+    let mut parts = Vec::new();
+    let Some(at) = at else { return parts };
     each_division(at, |part| {
-        each(&DivisionPart {
+        parts.push(DivisionPart {
             subtype: part.kind as u8,
-            name: &part.name,
+            name: part.name.to_string(),
             shown: named_to.is_some_and(|z| part.shown_from() <= z),
             area: part.area,
         });
     });
+    parts
+}
+
+/// A file's path as a URI.
+fn uri(path: &[file::Token]) -> Vec<Token> {
+    path.iter()
+        .map(|t| match t {
+            file::Token::Int(n) => Token::Int(*n),
+            file::Token::Str(s) => Token::Str((*s).to_owned()),
+        })
+        .collect()
 }
 
 /// The values a snapshot is built from, read from their owners and compared
@@ -207,9 +215,9 @@ impl SnapshotMemo {
         Some(now)
     }
 
-    /// The view now, or None when neither its azimuth nor its scale has
-    /// changed since it was last sent. What it returns counts as sent.
-    pub fn take_view_changed(&mut self) -> Option<UiView> {
+    /// The view now, its azimuth and meters per pixel, or None when neither
+    /// has changed since it was last sent. What it returns counts as sent.
+    pub fn take_view_changed(&mut self) -> Option<(f64, f64)> {
         let now = (
             camera_state().intent.azimuth,
             m_per_px(units_per_px_at(dist()), controller::pivot()),
@@ -218,17 +226,20 @@ impl SnapshotMemo {
             return None;
         }
         self.last_view = Some(now);
-        Some(UiView {
-            azimuth: now.0,
-            m_per_px: now.1,
-        })
+        Some(now)
     }
 }
 
-/// Writes the snapshot built from `shown` into `out`. Returns None when it
-/// does not fit.
-pub fn snapshot(shown: &SnapshotInput, out: &mut [u8]) -> Option<u32> {
-    let snapshot = Snapshot {
+/// The snapshot built from `shown`.
+pub fn snapshot(shown: &SnapshotInput) -> Snapshot {
+    let mut refused_files = Vec::new();
+    if shown.refused_storage {
+        refused_files.push(RefusedFile { path: uri(&file::STORAGE) });
+    }
+    for &id in &shown.refused_objects.0[..shown.refused_objects.1] {
+        file::with_quadrant(path::OBJECT::ID, id, |path| refused_files.push(RefusedFile { path: uri(path) }));
+    }
+    Snapshot {
         pivot: PivotState {
             status: shown.status,
             is_off_center: shown.is_off_center,
@@ -251,7 +262,7 @@ pub fn snapshot(shown: &SnapshotInput, out: &mut [u8]) -> Option<u32> {
             person_ready: shown.companion[0],
             pet_ready: shown.companion[1],
         },
-        draft: write::marker_draft(),
+        draft: write::marker_draft().map(str::to_owned),
         orient: OrientationState {
             status: shown.orient,
         },
@@ -259,26 +270,14 @@ pub fn snapshot(shown: &SnapshotInput, out: &mut [u8]) -> Option<u32> {
         camera_busy: shown.camera_busy,
         zooming: shown.zooming,
         over_marker: shown.over_marker,
-        settings: shown.settings.as_ref().map_or(&[], |s| s),
-        division: &|each| division_parts(shown.division, shown.named_to, each),
-        character_surfaces: &shown.character_surfaces.0[..shown.character_surfaces.1],
-        refused_files: &|each| {
-            if shown.refused_storage {
-                each(&RefusedFile {
-                    path: &file::STORAGE,
-                });
-            }
-            for &id in &shown.refused_objects.0[..shown.refused_objects.1] {
-                file::with_quadrant(path::OBJECT::ID, id, |path| each(&RefusedFile { path }));
-            }
-        },
+        settings: shown.settings.map_or(Vec::new(), |s| s.to_vec()),
+        division: division_parts(shown.division, shown.named_to),
+        character_surfaces: shown.character_surfaces.0[..shown.character_surfaces.1].to_vec(),
+        refused_files,
         stall: shown.stall,
         renderer_progress: shown.renderer_progress,
         area_progress: shown.area_progress,
-    };
-    let mut w = PacketWriter::new(out, Snapshot::FIELDS);
-    snapshot.write(&mut w);
-    w.fit_len()
+    }
 }
 
 /// Why the server is not answering the world's reads now: the reads are

@@ -4,11 +4,12 @@
 //! listen, and when silence counts as a lost sensor. The UI owns the
 //! listener and iOS's permission prompt, and the core hears only the answer.
 
-use crate::domain::cmd::{PermissionAnswer, SensorStatus};
+use crate::abi::sensor::PermissionAnswer;
+use crate::abi::ui::SensorStatus;
 use crate::domain::control::param::WATCHDOG_TIMEOUT_MS;
 use crate::domain::control::sensor::platform;
 use crate::domain::control::sensor::reading::{device_orient_store, device_orient_store_mut};
-use crate::sys::sched::wake_at;
+use crate::sys::sched::invalidate_at;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 
@@ -152,7 +153,7 @@ pub fn orient_watchdog_step() {
     let o = orient();
     let lost_at = o.last_event_at + WATCHDOG_TIMEOUT_MS;
     if now() < lost_at {
-        wake_at(lost_at);
+        invalidate_at(lost_at);
         return;
     }
     o.cmd = Some(OrientationCommand::Remove);

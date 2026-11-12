@@ -22,7 +22,8 @@ use crate::domain::setting::store::{settings, CameraMode};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::frame::pose::ObserverPose;
 use crate::domain::view::frame::screen::units_per_px_at;
-use crate::sys::sched::request_world_tick;
+use crate::sys::sched::invalidate;
+use crate::sys::sched;
 use crate::sys::sched::tick::TickContext;
 use xpute_core::global::Global;
 
@@ -64,7 +65,7 @@ pub fn put_pivot(to: Q3, motion: Motion) {
     if motion == Motion::Snap {
         snap();
     }
-    request_world_tick();
+    invalidate();
 }
 
 /// Puts the active controller's camera at the pivot's `to` at once.
@@ -244,7 +245,7 @@ pub fn pinch_by(scale: f64) {
 
 pub fn controller_step(ctx: &mut TickContext) {
     if switch() {
-        ctx.invalidate();
+        sched::invalidate();
     }
 }
 
@@ -255,7 +256,7 @@ pub fn camera_step(ctx: &mut TickContext) {
         Active::Tracked => false,
     };
     if moving {
-        ctx.invalidate();
+        sched::invalidate();
     }
 }
 
@@ -263,7 +264,7 @@ fn switch() -> bool {
     if !take_mode(settings().camera_mode) {
         return false;
     }
-    request_world_tick();
+    invalidate();
     true
 }
 
@@ -322,12 +323,12 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
     } else if let Some(t) = &mut c.tracker {
         (t.rot, t.at) = (rot, at);
     }
-    request_world_tick();
+    invalidate();
 }
 
 pub fn tracked_end() {
     if controller().tracker.take().is_some() {
-        request_world_tick();
+        invalidate();
     }
 }
 

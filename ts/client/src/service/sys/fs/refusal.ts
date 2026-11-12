@@ -10,7 +10,7 @@
 
 import type { Path } from "@xpute/runtime";
 
-import type { RefusedFile } from "@/abi/cmd.spec.ts";
+import type { RefusedFile } from "@/abi/ui.ts";
 import { path } from "@/abi/file.spec.ts";
 import { object_key, walk } from "@/service/sys/fs/binding.ts";
 import { OBJECTS } from "@/service/sys/fs/object.ts";

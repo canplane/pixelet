@@ -16,6 +16,7 @@ pub mod indicator;
 pub mod marker;
 pub mod model;
 pub mod param;
+pub mod rate;
 pub mod resolution;
 pub mod stage;
 pub mod transform;

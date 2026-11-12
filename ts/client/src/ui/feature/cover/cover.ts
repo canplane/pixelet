@@ -1,6 +1,6 @@
 // @pxl/client/ui/feature/cover/cover.ts
 
-import { Message } from "@/abi/cmd.spec.ts";
+import { Message } from "@/abi/ui.ts";
 import {
   BOOT_FAILED,
   BOOT_LOADING,

@@ -111,7 +111,7 @@ A level is a few bricks of cells a side, each held in the entry its place names,
 so the level follows its center a brick at a time and no held cell moves. A
 brick at a zoom is held once, however many levels want it. A tile's folds are
 cut into its bricks as it lands, and the bricks are filled after the frame, a
-part at a time within the turn's share for tasks (`fill_share`): their cells, a
+part at a time within the entry's budget (`fill_share`): their cells, a
 min-max mipmap over them, and their ways as spans, a run in one pool all bricks
 share (`terrain/pool.rs`), 64 MiB and no more, what the GPU reads and nothing else.
 All of it is uploaded, so the CPU's query (`clip_read`) and the GPU's cast meet the

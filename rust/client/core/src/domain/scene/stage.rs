@@ -5,6 +5,7 @@
 //! handed to it here.
 
 use crate::domain::scene::frame::Frame;
+use crate::sys::sched;
 use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shader::word::{DECOR_GROUPS, DRAW_FLOATS};
 use pxl_render::gpu::draw::DRAW_WORDS;
@@ -30,7 +31,7 @@ use crate::domain::setting::store::{settings, AoMode};
 use crate::domain::view::demand::ViewLayer as _;
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::load::Load;
-use crate::sys::sched::request_world_tick;
+use crate::sys::sched::invalidate;
 
 /// The device generation under which the last frame reached the screen
 /// (`api::device_generation`, the count of devices lost so far).
@@ -83,12 +84,9 @@ pub struct FrameReport {
     pub kind: FrameKind,
     pub stat: Option<FrameStat>,
     pub scale: f64,
-    /// The interval at which the drawn resolution's judge asks the turns to
-    /// be paced (`resolution::load`). None when it asks for no change.
-    pub interval_ms: Option<f64>,
 }
 
-/// `pace` is how the turn paced this frame, and the drawn resolution is
+/// `pace` is how this frame was paced, and the drawn resolution is
 /// judged by it (domain/scene/resolution.rs `load`). `edit` is the pointer's
 /// preview, by which the GPU's rays cut the world.
 pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
@@ -203,14 +201,14 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
         animated,
     });
     if out.redraw {
-        request_world_tick();
+        invalidate();
     }
     // An image the frame has taken into a texture needs its file no more.
     api::take_complete(loader::on_image_complete);
     // The scale is read before `resolution::load`, which may change it for
     // the next frame.
     let scale = resolution::drawn_scale();
-    let interval_ms = resolution::load(pace, out.stat.and_then(|stat| stat.gpu));
+    resolution::load(pace, out.stat.and_then(|stat| stat.gpu));
     if out.stat.is_some() {
         SCREEN_DEVICE.set(Some(api::device_generation()));
     }
@@ -218,7 +216,6 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
         kind: out.kind,
         stat: out.stat,
         scale,
-        interval_ms,
     }
 }
 
@@ -255,10 +252,10 @@ pub fn scene_step(
     let animating = scene::animate(list, models, &frame);
     scene::draw(list, models);
     gpu::step(frame.eye, edit);
-    cloud::step(draw_list(), &frame, &ctx.pass);
+    cloud::step(draw_list(), &frame);
     marker::step(ctx, &frame, draft);
     marker::draw(draw_list());
     if animating {
-        ctx.invalidate();
+        sched::invalidate();
     }
 }

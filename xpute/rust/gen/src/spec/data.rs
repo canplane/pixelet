@@ -3,7 +3,7 @@
 //! A data spec is a JSON file of named values, written into the files each spec
 //! names as TypeScript `as const` values, Rust constants, C++ constants and
 //! make variables. A number is an f64 unless a `$type` says otherwise. A u64 is
-//! written as a hex string, and an rgb color as `#RRGGBB`. A value wrapped as
+//! written as a hex string. A value wrapped as
 //! `{ "$val", "$doc" }` carries its reason in `$doc`. A table may be laid out
 //! in words (`laid_out`), with its widths read from the specs it uses. A list
 //! of names may give each member as `{ "name", <flag>: bool, … }`, with the
@@ -17,7 +17,7 @@ use std::path::Path;
 
 use super::{
     align_star, casing_note, enum_name, file, generated, js_num, json_str, line_comments, read,
-    rgb_literal, rs_doc, rs_ident, snake, ts_doc, Node, Output,
+    rs_doc, rs_ident, snake, ts_doc, Node, Output,
 };
 
 /// Which of a spec's lists of names, and tables of numbers, the Rust also
@@ -303,7 +303,6 @@ pub fn ts_literal(n: &Node, ty: &str, indent: &str, slots: &[SlotType]) -> Resul
         Node::Num(v) => format!("{} as number", js_num(*v)),
         Node::Bool(b) => b.to_string(),
         Node::Str(s) if ty == "u64" => format!("{s}n"),
-        Node::Str(s) if ty == "rgb" => rgb_literal(s)?,
         Node::Str(s) => match slots.iter().find(|k| k.ty == ty) {
             Some(k) => format!("{} as number", k.number(s)?),
             None => json_str(s),
@@ -369,7 +368,7 @@ struct Scope<'a> {
 fn is_primitive(ty: &str) -> bool {
     matches!(
         ty,
-        "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" | "f32" | "f64" | "rgb" | "str"
+        "u8" | "u16" | "u32" | "u64" | "i8" | "i16" | "i32" | "i64" | "f32" | "f64" | "str"
     )
 }
 
@@ -390,7 +389,6 @@ fn rs_scalar(n: &Node, ty: &str, scope: &Scope) -> Result<(String, String), Stri
         Node::Bool(b) => ("bool".to_string(), b.to_string()),
         Node::Str(s) => match ty {
             "u64" => ("u64".to_string(), s.clone()),
-            "rgb" => ("u32".to_string(), rgb_literal(s)?),
             _ => match scope.slots.iter().position(|k| k.ty == ty) {
                 Some(i) => {
                     let (rs, next) = (scope.slots[i].rs, &scope.next[i]);
@@ -639,7 +637,7 @@ fn rs_leaf(
         }
         let strings = matches!(a.first(), Some(Node::Str(_)));
         let slot = scope.slots.iter().any(|k| k.ty == ty);
-        if strings && ty != "u64" && ty != "rgb" && !slot && enum_path(ty, scope).is_none() {
+        if strings && ty != "u64" && !slot && enum_path(ty, scope).is_none() {
             let names: Vec<&str> = a.iter().map(|e| e.str().unwrap_or_default()).collect();
             out.push(rs_names(name, &names, indent, scope));
             if scope.enum_scope.has(name) && a.iter().all(|e| e.str().is_some_and(is_name)) {

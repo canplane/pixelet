@@ -33,6 +33,7 @@ import {
 } from "@/abi/perf.spec.ts";
 import { EFFECT_NAMES, STEP_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
+import * as perf from "@/abi/perf.ts";
 import { core } from "@/service/core/core.ts";
 
 const WORD = 8;
@@ -40,12 +41,12 @@ const WORD = 8;
 const PATH_BYTES = 3 * WORD;
 
 export function start(): void {
-  core.perf_start();
+  void perf.start(core.perf);
 }
 
 /** Freezes the recording window, so that what is exported holds still. */
 export function stop(): void {
-  core.perf_stop();
+  void perf.stop(core.perf);
 }
 
 /** The words of a reply's bytes, which every runtime hands over 8-aligned. */
@@ -352,7 +353,7 @@ function section<S extends { AT: u32; WORDS: u32 }>(
 async function stats_of(
   window_ms: f64 | null,
 ): Promise<{ stats: F64Array; now: F64Array }> {
-  const w = words(await core.perf_stats(window_ms));
+  const w = words(await perf.stats(core.perf, window_ms));
   return { stats: w.subarray(0, STAT.WORDS), now: w.subarray(STAT.WORDS) };
 }
 
@@ -392,7 +393,7 @@ async function perf_draw(): Promise<DrawSection> {
 /** The records of the ring `name`, as PERF_RINGS's reply names them: the
  * frames and the tasks oldest first, the worst frames longest first. */
 async function ring(name: (typeof RING_NAMES)[number]): Promise<U8Array> {
-  return core.perf_rings(RING_NAMES.indexOf(name));
+  return perf.rings(core.perf, RING_NAMES.indexOf(name));
 }
 
 /** Every frame the ring holds, oldest first. */
@@ -407,7 +408,7 @@ async function perf_frames(): Promise<Frame[]> {
 async function perf_tasks(last: u32 | null = null): Promise<TaskRecord[]> {
   const [tasks, strtab] = await Promise.all([
     ring("tasks"),
-    core.perf_strtab(),
+    perf.strtab(core.perf),
   ]);
   const all = words(tasks);
   const total = all.length / TASK.WORDS;

@@ -43,7 +43,7 @@ use crate::domain::scene::model::{draw_list, models};
 use crate::domain::scene::transform::Transform;
 use crate::domain::view::lens::{cell_there, decor_impostor_angle, decor_model_angle, StepClock};
 use crate::sys::io::loader::{load_image, load_of};
-use crate::sys::sched::wake_at;
+use crate::sys::sched::invalidate_at;
 
 pub const CHARACTERS: usize = person::models.len() + pet::models.len();
 
@@ -301,7 +301,7 @@ impl Character {
             self.run += since.clamp(0.0, (step(self.run) - self.run).max(frame.delta_s));
             let (time, next, stepped) = self.clock.at(self.run, step);
             if next.is_finite() {
-                wake_at(wall + (next - self.run) * 1000.0);
+                invalidate_at(wall + (next - self.run) * 1000.0);
             }
             dt = (time - self.clip_time) as f32;
             self.clip_time = time;

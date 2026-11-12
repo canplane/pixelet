@@ -28,7 +28,7 @@ use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord;
 use crate::domain::view::lens;
 use crate::domain::view::lens::{visible_step_s, StepClock};
-use crate::sys::sched::{request_world_tick, wake_at};
+use crate::sys::sched::{invalidate, invalidate_at};
 use pxl_render::frame::shader::word;
 use pxl_render::param::location::beacon;
 use xpute_core::clock::now;
@@ -242,7 +242,7 @@ impl LocationIndicator {
     fn step(&mut self, draw: &mut DrawList, device_coord: Option<Q3>) {
         let Some(device) = device_coord else {
             if self.zone.take().is_some() {
-                request_world_tick();
+                invalidate();
             }
             return;
         };
@@ -319,7 +319,7 @@ impl LocationIndicator {
                 z.center = center_pos;
             }
             self.drawn = instances;
-            request_world_tick();
+            invalidate();
         }
         (Some(center_pos), exact)
     }
@@ -363,7 +363,7 @@ impl LocationIndicator {
             let step = visible_step_s(v3::len(&beacon), beacon_speed());
             let (_, next, s) = p.clock.at(p.run, |at| at + step);
             stepped = s;
-            wake_at(now() + (next - p.run) * 1000.0);
+            invalidate_at(now() + (next - p.run) * 1000.0);
         }
         if slides || stepped {
             animation::note_animation();

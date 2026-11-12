@@ -4,7 +4,7 @@
  * This is a native app's GPU, granted to a core (gpu.ts `Gpu`). The
  * device and its runtime run in the app's own process (xpute-gpu runtime
  * native), reached through this package's module. That runtime
- * runs the core's stream as the core publishes it, and kicks the core when a
+ * runs the core's stream as each turn returns, and kicks the core when a
  * request completes. This class opens a device, tells the core that it
  * answered, and opens one again after a loss or a refusal, as a page's GPU
  * asks again (web.ts `WebGpu`).

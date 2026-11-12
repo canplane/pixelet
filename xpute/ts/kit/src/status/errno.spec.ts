@@ -82,17 +82,6 @@ export const EINPROGRESS = -115; // Operation now in progress
 export const ECANCELED = -125; // Operation canceled
 export const ENOTRECOVERABLE = -131; // State not recoverable: an invariant the code stands on does not hold
 
-// Result pair: [errno, data]
-//
-// Conventions:
-// - errno == OK  -> success
-// - errno != OK  -> failure
-// - data === null      -> no payload
-//
-// `null` is used as the canonical "no value / no payload" sentinel.
-// It does not imply pointer semantics; it is just the empty result slot.
-export type ErrnoResult<T> = [i32, T | null];
-
 /** An errno as a reader is shown it: its name and what it means. The
  * strings are for a person to read; an error carries the number alone. */
 export function strerror(errnum: i32): string {

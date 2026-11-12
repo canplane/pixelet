@@ -6,11 +6,6 @@
 //! query and the layers, and neither names the other. A module here uses
 //! only the modules below it in that order.
 
-/// The enums of the UI's protocol that the domain reads, generated from
-/// ui.json. The protocol's code itself belongs to the door
-/// (door/cmd.spec.rs), so the domain does not depend on it.
-#[path = "domain/cmd.spec.rs"]
-pub mod cmd;
 pub mod control;
 pub mod layer;
 pub mod param;

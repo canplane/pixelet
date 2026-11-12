@@ -2,8 +2,8 @@
 
 import { useSyncExternalStore } from "react";
 
-import type { UiView, Snapshot } from "@/abi/cmd.spec.ts";
-import { watch_snapshot, watch_view } from "@/service/core/snapshot.ts";
+import type { Snapshot } from "@/abi/ui.ts";
+import { type UiView, watch_snapshot, watch_view } from "@/service/core/snapshot.ts";
 import type { Gpu, Source } from "@/abi/state.ts";
 import { gpu, watch_gpu } from "@/service/sys/gpu.ts";
 import { online, watch_online } from "@/service/origin/online.ts";

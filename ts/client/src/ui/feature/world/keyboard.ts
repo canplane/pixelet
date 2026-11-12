@@ -10,7 +10,7 @@
  */
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import { Tool } from "@/abi/cmd.spec.ts";
+import { Tool } from "@/abi/edit.ts";
 import { KIND } from "@/ui/shared/asset/id.spec.ts";
 import { kindOf } from "@/ui/shared/asset/catalog.ts";
 import { closeModal, modalOpen, openModal } from "@/ui/shared/modal.ts";

@@ -17,7 +17,7 @@ use crate::domain::scene::gizmo::gizmo_spec::frame;
 use crate::domain::scene::gizmo::param::{POINT_HALF, RING_RADIUS};
 use crate::domain::scene::model::draw_list;
 use crate::domain::view::frame::coord::to_world;
-use crate::sys::sched::request_world_tick;
+use crate::sys::sched::invalidate;
 use pxl_render::gpu::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
 use xpute_core::global::Global;
@@ -156,5 +156,5 @@ pub fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f64>) {
         .set(draw_list(), g.next.about, &g.next.lines, g.next.lines.len());
     core::mem::swap(&mut g.drawn, &mut g.next);
     g.shown = true;
-    request_world_tick();
+    invalidate();
 }

@@ -1,0 +1,22 @@
+// pixelet's core in WIT's shape; the execution meaning is xpute's
+// (xpute/wit/link.wit). The core implements what it exports and calls what it
+// imports.
+
+package pxl:core@0.1.0;
+
+world core {
+  export xpute:core/life@0.1.0;
+  import xpute:core/timer@0.1.0;
+  import xpute:core/clock@0.1.0;
+  import xpute:gpu/vsync@0.1.0;
+  export camera;
+  export input;
+  export scene;
+  export sensor;
+  export setting;
+  export edit;
+  export source;
+  export perf;
+  import ui;
+  import text;
+}

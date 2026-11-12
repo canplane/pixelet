@@ -1,9 +1,9 @@
 // pxl-core/door/apply.rs
 
-//! Applies the commands the UI's protocol carries, each major's commands in
-//! its own module beside this one. It also applies a surface lent
-//! (`on_surface`), which xpute-gpu decodes, and the xpute commands the door
-//! hands over already decoded: a turn's pacing (turn.rs `turn`) and a changed file (fs.rs `changed`).
+//! The interfaces the core serves (spec/client/core/wit/), each one's
+//! methods in its own module beside this one, served by one object, `Core`,
+//! which `mount` mounts at each interface's URI. Its GPU surfaces (surface.rs)
+//! and a changed file (fs.rs) are xpute's, and come apart.
 
 mod camera;
 mod edit;
@@ -15,25 +15,21 @@ mod sensor;
 mod setting;
 mod source;
 mod surface;
-pub(super) mod turn;
 
-use super::State;
-use crate::door::cmd::{self as abi, ui};
-use crate::sys::sched::request_world_tick;
-use pxl_render::gpu::api;
-use xpute_core::io::door::Outcome;
-use xpute_gpu::abi as gpu;
+use std::rc::Rc;
+
+use crate::abi;
+use crate::sys::sched::invalidate;
 use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
 
 /// Refuses what the decoder cannot check: a value outside the range the core
 /// takes, or a handle the core does not hold. Nothing past the door checks
 /// these again.
-fn or_refuse<T>(v: Option<T>, errnum: Errno) -> Result<T, MarshalError> {
-    v.ok_or_else(|| MarshalError::new(errnum))
+fn or_refuse<T>(v: Option<T>, errnum: Errno) -> Result<T, Errno> {
+    v.ok_or(errnum)
 }
 
-fn refuse_unless(valid: bool, errnum: Errno) -> Result<(), MarshalError> {
+fn refuse_unless(valid: bool, errnum: Errno) -> Result<(), Errno> {
     or_refuse(valid.then_some(()), errnum)
 }
 
@@ -47,129 +43,165 @@ fn bearing(deg: Option<f64>) -> bool {
     deg.is_none_or(|d| (0.0..=360.0).contains(&d))
 }
 
-/// Answers a UI command by asking for a turn and by marking this turn to
-/// post to the runtime as it ends. That way a sensor close sent while turns
-/// are paused is still heard.
-fn ask_turn(s: &mut State) -> Outcome {
-    request_world_tick();
-    s.snapshot_due = true;
-    Ok(Some(0.into()))
+/// Answers a method applied: the next frame shows it, and the entry's end
+/// posts to the UI (door.rs `end`).
+fn applied() -> Result<(), Errno> {
+    invalidate();
+    Ok(())
 }
 
-/// The GPU's commands, under the major the program gives it: the device's
-/// answer (GPU_READY), and a surface the UI lends the GPU (GPU_SURFACE_OPEN,
-/// _RESIZE, _CLOSE).
-impl gpu::Exports for State {
-    /// The GPU answers, the first time or again after a loss. The core then
-    /// asks for the device's block and makes the renderer on it once the block
-    /// is in (pxl-render gpu/api.rs). A later loss is reported through the
-    /// block and read at the start of a turn.
-    fn gpu_ready(&mut self) -> Outcome {
-        api::on_device_answered();
-        request_world_tick();
-        Ok(Some(0.into()))
+/// What serves the core's interfaces.
+struct Core;
+
+/// Mounts the interfaces the core serves.
+pub(super) fn mount() {
+    abi::camera::mount(Rc::new(Core));
+    abi::input::mount(Rc::new(Core));
+    abi::scene::mount(Rc::new(Core));
+    abi::sensor::mount(Rc::new(Core));
+    abi::setting::mount(Rc::new(Core));
+    abi::edit::mount(Rc::new(Core));
+    abi::source::mount(Rc::new(Core));
+    abi::perf::mount(Rc::new(Core));
+    xpute_core::abi::life::mount(Rc::new(Core));
+}
+
+impl abi::camera::Camera for Core {
+    fn track(&self, tracking: abi::camera::Tracking) -> Result<(), Errno> {
+        camera::track(tracking)
     }
-    fn gpu_surface_open(&mut self) -> Outcome {
-        surface::open()
+    fn north_up(&self) -> Result<(), Errno> {
+        camera::north_up()
     }
-    fn gpu_surface_resize(&mut self, c: gpu::GpuSurfaceResize) -> Outcome {
-        surface::resize(c)
-    }
-    fn gpu_surface_close(&mut self, c: gpu::GpuSurfaceClose) -> Outcome {
-        surface::close(c)
+    fn goto(&self, lon: f64, lat: f64, dist: Option<f64>, azimuth: Option<f64>, polar: Option<f64>) -> Result<(), Errno> {
+        camera::goto(lon, lat, dist, azimuth, polar)
     }
 }
 
-impl ui::Exports for State {
-    fn sensor_pos(&mut self, c: abi::SensorPos) -> Outcome {
-        sensor::pos(c)
+impl abi::input::Input for Core {
+    fn pointer(
+        &self,
+        phase: abi::input::PointerPhase,
+        pointer_type: abi::input::PointerType,
+        id: i32,
+        button: i32,
+        x: f64,
+        y: f64,
+    ) -> Result<(), Errno> {
+        input::pointer(phase, pointer_type, id, button, x, y)
     }
-    fn sensor_orient(&mut self, c: abi::SensorOrient) -> Outcome {
-        sensor::orient(c)
+    fn typing(&self, typing: bool) -> Result<(), Errno> {
+        input::typing(typing)
     }
-    fn sensor_err(&mut self, c: abi::SensorErr) -> Outcome {
-        sensor::err(c)
+    fn wheel(&self, delta_y: f64) -> Result<(), Errno> {
+        input::wheel(delta_y)
     }
-    fn sensor_permission(&mut self, c: abi::SensorPermission) -> Outcome {
-        sensor::permission(c)
+    fn pinch(&self, scale: f64) -> Result<(), Errno> {
+        input::pinch(scale)
     }
-    fn sensor_platform(&mut self, c: abi::SensorPlatform) -> Outcome {
-        sensor::platform(c)
+    fn r#move(&self, x: i32, y: i32) -> Result<(), Errno> {
+        input::r#move(x, y)
     }
-    fn setting_dev(&mut self, c: abi::SettingDev) -> Outcome {
-        setting::dev(c)
+    fn xr_pose(&self, x: f64, y: f64, z: f64, qx: f64, qy: f64, qz: f64, qw: f64) -> Result<(), Errno> {
+        input::xr_pose(x, y, z, qx, qy, qz, qw)
     }
-    fn sensor_locate(&mut self) -> Outcome {
-        sensor::locate(self)
+    fn xr_pose_end(&self) -> Result<(), Errno> {
+        input::xr_pose_end()
     }
-    fn source_declare(&mut self, c: abi::SourceDeclare<'_>) -> Outcome {
-        source::declare(c)
+}
+
+impl abi::scene::Scene for Core {
+    fn draw(&self, surface: u32, content: abi::scene::SceneContent, group: Option<u8>, bg: Option<u32>) -> Result<(), Errno> {
+        scene::draw(surface, content, group, bg)
     }
-    fn input_typing(&mut self, c: abi::InputTyping) -> Outcome {
-        input::typing(c)
+    fn chat(&self, text: String) -> Result<(), Errno> {
+        scene::chat(text)
     }
-    fn input_pointer(&mut self, c: abi::InputPointer) -> Outcome {
-        input::pointer(c)
+}
+
+impl abi::sensor::Sensor for Core {
+    fn pos(&self, lon: f64, lat: f64, alt: Option<f64>, accuracy: Option<f64>, course: Option<f64>) -> Result<(), Errno> {
+        sensor::pos(lon, lat, alt, accuracy, course)
     }
-    fn input_wheel(&mut self, c: abi::InputWheel) -> Outcome {
-        input::wheel(c)
+    fn orient(
+        &self,
+        webkit_compass_heading: Option<f64>,
+        alpha: Option<f64>,
+        beta: Option<f64>,
+        gamma: Option<f64>,
+    ) -> Result<(), Errno> {
+        sensor::orient(webkit_compass_heading, alpha, beta, gamma)
     }
-    fn input_pinch(&mut self, c: abi::InputPinch) -> Outcome {
-        input::pinch(c)
+    fn err(&self, sensor: abi::types::Sensor, code: Option<abi::sensor::GeolocationErrorCode>, watching: bool) -> Result<(), Errno> {
+        sensor::err(sensor, code, watching)
     }
-    fn input_move(&mut self, c: abi::InputMove) -> Outcome {
-        input::r#move(c)
+    fn permission(&self, sensor: abi::types::Sensor, answer: abi::sensor::PermissionAnswer) -> Result<(), Errno> {
+        sensor::permission(sensor, answer)
     }
-    fn input_xr_pose(&mut self, c: abi::InputXrPose) -> Outcome {
-        input::xr_pose(self, c)
+    fn platform(&self, geolocation: bool, orient: bool, orient_permission: bool, orient_silence_is_loss: bool) -> Result<(), Errno> {
+        sensor::platform(geolocation, orient, orient_permission, orient_silence_is_loss)
     }
-    fn input_xr_pose_end(&mut self) -> Outcome {
-        input::xr_pose_end(self)
+    fn locate(&self) -> Result<(), Errno> {
+        sensor::locate()
     }
-    fn edit_tool(&mut self, c: abi::EditTool) -> Outcome {
-        edit::tool(c)
+}
+
+impl abi::setting::Setting for Core {
+    fn dev(&self, dev: bool) -> Result<(), Errno> {
+        setting::dev(dev)
     }
-    fn edit_marker_text(&mut self, c: abi::EditMarkerText<'_>) -> Outcome {
-        edit::marker_text(c)
+    fn set(&self, key: u32, val: u32) -> Result<(), Errno> {
+        setting::set(key, val)
     }
-    fn edit_marker_cancel(&mut self) -> Outcome {
+}
+
+impl abi::edit::Edit for Core {
+    fn hold(&self, tool: abi::edit::Tool, val: u32, scale_steps: i32) -> Result<(), Errno> {
+        edit::hold(tool, val, scale_steps)
+    }
+    fn marker_text(&self, text: String) -> Result<(), Errno> {
+        edit::marker_text(text)
+    }
+    fn marker_cancel(&self) -> Result<(), Errno> {
         edit::marker_cancel()
     }
-    fn edit_marker_commit(&mut self) -> Outcome {
+    fn marker_commit(&self) -> Result<(), Errno> {
         edit::marker_commit()
     }
-    fn scene_chat(&mut self, c: abi::SceneChat<'_>) -> Outcome {
-        scene::chat(self, c)
+}
+
+impl abi::source::Source for Core {
+    fn declare(&self, min_zoom: u32, format: Vec<u32>, shard: Vec<String>) -> Result<(), Errno> {
+        source::declare(min_zoom, format, shard)
     }
-    fn scene_draw(&mut self, c: abi::SceneDraw) -> Outcome {
-        scene::draw(self, c)
+}
+
+impl abi::perf::Perf for Core {
+    fn start(&self) -> Result<(), Errno> {
+        perf::start()
     }
-    fn setting_set(&mut self, c: abi::SettingSet) -> Outcome {
-        setting::set(self, c)
+    fn stop(&self) -> Result<(), Errno> {
+        perf::stop()
     }
-    fn camera_tracking(&mut self, c: abi::CameraTracking) -> Outcome {
-        camera::tracking(c)
+    fn stats(&self, window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
+        perf::stats(window_ms)
     }
-    fn camera_north_up(&mut self) -> Outcome {
-        camera::north_up(self)
+    fn rings(&self, ring: u32) -> Result<Vec<u8>, Errno> {
+        perf::rings(ring)
     }
-    fn camera_goto(&mut self, c: abi::CameraGoto) -> Outcome {
-        camera::goto(self, c)
-    }
-    fn perf_start(&mut self) -> Outcome {
-        perf::start(self)
-    }
-    fn perf_stop(&mut self) -> Outcome {
-        perf::stop(self)
-    }
-    fn perf_stats(&mut self, c: abi::PerfStats) -> Outcome {
-        perf::stats(c)
-    }
-    fn perf_rings(&mut self, c: abi::PerfRings) -> Outcome {
-        perf::rings(c)
-    }
-    fn perf_strtab(&mut self) -> Outcome {
+    fn strtab(&self) -> Result<Vec<u8>, Errno> {
         perf::strtab()
+    }
+}
+
+impl xpute_core::abi::life::Life for Core {
+    fn hidden(&self) -> Result<(), Errno> {
+        super::life::hidden();
+        Ok(())
+    }
+    fn shown(&self) -> Result<(), Errno> {
+        super::life::shown();
+        Ok(())
     }
 }
 

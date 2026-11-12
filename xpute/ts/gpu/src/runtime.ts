@@ -103,6 +103,15 @@ function place(): Place {
   };
 }
 
+/** This is what the core asked of a surface, whether or not a canvas is bound
+ * to it, so a canvas bound later is configured and sized as asked: CONFIGURE's
+ * configuration, RESIZE's size, and the handle and canvas context bound. */
+type Surface = {
+  cfg?: GPUCanvasConfiguration;
+  size?: [u32, u32];
+  bound?: { handle: u32; context: GPUCanvasContext };
+};
+
 /** This is a `GPUQueue` with `copyExternalImageToTexture`, which the lib's type
  * does not list. */
 type ExternalImageQueue = GPUQueue & {
@@ -201,18 +210,8 @@ export class GpuRuntime {
     querySet: undefined as unknown as GPUQuerySet,
   };
   private readonly _cmd_bufs: GPUCommandBuffer[] = [];
-  /** This holds each canvas context, at the slot the core names its surface by,
-   * with the handle bound there. */
-  private readonly _surfaces = new Map<
-    u32,
-    { handle: u32; context: GPUCanvasContext }
-  >();
-  /** What the core said of a slot before its canvas was bound, which the bind
-   * applies: a bind and a resize reach a worker on two ports, in no order. */
-  private readonly _before_bind = new Map<
-    u32,
-    { cfg?: GPUCanvasConfiguration; size?: [u32, u32] }
-  >();
+  /** This holds each surface at the slot the core names it by. */
+  private readonly _surfaces = new Map<u32, Surface>();
   /** This holds each slot's newest handle, kept after it is let go, so that an
    * older handle's bind is refused. */
   private readonly _newest_handles = new Map<u32, u32>();
@@ -269,46 +268,37 @@ export class GpuRuntime {
   }
 
   /** Binds the canvas's `context` to the core's surface `handle`, which
-   * CONFIGURE, RESIZE and CURRENT name by its slot. A context the slot held
-   * before is unconfigured. It answers false, binding nothing, where a newer
-   * handle has bound the slot since. */
+   * CONFIGURE, RESIZE and CURRENT name by its slot, and sizes and configures
+   * it as the core asked. A context the slot held before is unconfigured. It
+   * answers false, binding nothing, where a newer handle has bound the slot
+   * since. */
   bind(handle: u32, context: GPUCanvasContext): boolean {
     const slot = handle_slot(handle);
     const newest = this._newest_handles.get(slot);
     if (newest !== undefined && older(handle, newest)) return false;
     this._newest_handles.set(slot, handle);
-    const was = this._surfaces.get(slot);
-    if (was && was.context !== context) was.context.unconfigure();
-    this._surfaces.set(slot, { handle, context });
-    const before = this._before_bind.get(slot);
-    if (before) {
-      this._before_bind.delete(slot);
-      if (before.size) {
-        [context.canvas.width, context.canvas.height] = before.size;
-      }
-      if (before.cfg) context.configure(before.cfg);
-    }
+    const s = this._surface(slot);
+    if (s.bound && s.bound.context !== context) s.bound.context.unconfigure();
+    s.bound = { handle, context };
+    if (s.size) [context.canvas.width, context.canvas.height] = s.size;
+    if (s.cfg) context.configure(s.cfg);
     return true;
   }
 
   /** Lets `handle`'s context go, if `handle` is still the one bound in its
    * slot, and says whether it was. An older handle unbinds no newer one. */
   unbind(handle: u32): boolean {
-    const slot = handle_slot(handle);
-    const bound = this._surfaces.get(slot);
-    if (handle === 0 || bound?.handle !== handle) return false;
-    bound.context.unconfigure();
-    this._surfaces.delete(slot);
+    const s = this._surfaces.get(handle_slot(handle));
+    if (!s?.bound || s.bound.handle !== handle) return false;
+    s.bound.context.unconfigure();
+    s.bound = undefined;
     return true;
   }
 
-  private _unbound(slot: u32): {
-    cfg?: GPUCanvasConfiguration;
-    size?: [u32, u32];
-  } {
-    let held = this._before_bind.get(slot);
-    if (!held) this._before_bind.set(slot, (held = {}));
-    return held;
+  private _surface(slot: u32): Surface {
+    let s = this._surfaces.get(slot);
+    if (!s) this._surfaces.set(slot, (s = {}));
+    return s;
   }
 
   /** Forgets every object of the device that went, and tells the core in its
@@ -1268,8 +1258,7 @@ export class GpuRuntime {
         return;
       }
       case op.CONFIGURE: {
-        const slot = r.u();
-        const context = this._surfaces.get(slot)?.context;
+        const s = this._surface(r.u());
         const format = r.u();
         const [usage, alphaMode] = [r.u(), CANVAS_ALPHA_MODE[r.u()]];
         const cfg: GPUCanvasConfiguration = {
@@ -1281,23 +1270,25 @@ export class GpuRuntime {
           usage,
           alphaMode,
         };
-        if (context) context.configure(cfg);
-        else this._unbound(slot).cfg = cfg;
+        s.cfg = cfg;
+        s.bound?.context.configure(cfg);
         return;
       }
       case op.RESIZE: {
-        const slot = r.u();
-        const canvas = this._surfaces.get(slot)?.context.canvas;
+        const s = this._surface(r.u());
         const [width, height] = [r.u(), r.u()];
-        if (!canvas) this._unbound(slot).size = [width, height];
-        else if (canvas.width !== width || canvas.height !== height) {
+        s.size = [width, height];
+        const canvas = s.bound?.context.canvas;
+        if (canvas && (canvas.width !== width || canvas.height !== height)) {
           [canvas.width, canvas.height] = [width, height];
         }
         return;
       }
       case op.CURRENT: {
         const id = r.u();
-        const texture = this._surfaces.get(r.u())?.context.getCurrentTexture();
+        const texture = this._surfaces
+          .get(r.u())
+          ?.bound?.context.getCurrentTexture();
         if (!texture) return;
         this._put(id, { view: texture.createView(), format: texture.format });
         this._drew = true;

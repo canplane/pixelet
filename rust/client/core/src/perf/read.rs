@@ -13,7 +13,7 @@ use crate::domain::query::Ray;
 use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
-use crate::perf::frame::{is_missed, long, overran, unmeasured_ms};
+use crate::perf::frame::overran;
 use crate::perf::frame::{FrameSample, RaySample, GPU_SPANS};
 use crate::perf::record::{
     perf_frames_since, perf_recording_extremes, perf_recording_state, perf_scratch,
@@ -28,7 +28,6 @@ use crate::perf::spec::{self, LIMIT, NOW, STAT};
 use crate::perf::task::TaskRecord;
 use crate::perf::word::put;
 use crate::sys::io::failure::Outcome;
-use crate::sys::sched;
 use crate::turn;
 use crate::turn::refused_frames;
 use pxl_render::gpu::api;
@@ -127,7 +126,6 @@ fn draw() -> DrawSection {
     let refused = refused_frames();
     let block = api::device_block();
     DrawSection {
-        turns: sched::turns() as f64,
         frames: renderer::drawn_frames(),
         refused_admit: refused.admit,
         refused_stream: refused.stream,
@@ -142,7 +140,6 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
     let (Some(first), Some(last)) = (frames.first(), frames.last()) else {
         return FrameSection::default();
     };
-    let sum = |pick: &dyn Fn(&FrameSample) -> f64| frames.iter().map(pick).sum::<f64>();
     let seconds = ((last.t - first.t) / 1000.0).max(1e-3);
     let moving = || frames.iter().filter(|f| f.settled == 0.0);
     let cnt = |of: &dyn Fn(&FrameSample) -> bool| frames.iter().filter(|f| of(f)).count() as f64;
@@ -160,18 +157,12 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
         seconds,
         moving: moving().count() as f64,
         moving_ms: moving().map(|f| f.interval_ms).sum(),
-        missed: moving().filter(|f| is_missed(f)).count() as f64,
         overran: cnt(&overran),
-        long: cnt(&long),
-        turns: sum(&|f| f.turns),
         interval: percentiles(scratch, moving().map(|f| f.interval_ms)),
-        busy: percentiles(scratch, frames.iter().map(|f| f.busy_ms)),
         tick: percentiles(scratch, frames.iter().map(|f| f.tick_ms)),
         effect: percentiles(scratch, frames.iter().map(|f| f.effects_ms)),
         stage: percentiles(scratch, frames.iter().map(|f| f.stage_ms)),
-        task: percentiles(scratch, frames.iter().map(|f| f.tasks_ms)),
         perf: percentiles(scratch, frames.iter().map(|f| f.perf_ms)),
-        rest: percentiles(scratch, frames.iter().map(unmeasured_ms)),
         effects_p95: core::array::from_fn(|k| {
             percentiles(scratch, frames.iter().map(|f| f.effects[k])).p95
         }),
@@ -192,7 +183,6 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
         gpu_spans_p95: spans.map(|(p95, _)| p95),
         gpu_spans_cnt: spans.map(|(_, n)| n),
         kinds: core::array::from_fn(|k| cnt(&|f| f.kind == k as f64)),
-        wakes: core::array::from_fn(|k| cnt(&|f| f.wake == k as f64)),
         gpu_px: read().next_back().map_or(0.0, |f| f.gpu.px),
         ray_sample: frames.iter().fold(RaySample::default(), |mut sum, f| {
             sum.add(&f.ray_sample);

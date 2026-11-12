@@ -1,25 +1,21 @@
-# This is the Rust kit, and the two ends over it. `kit` is what any program
+# This is the Rust kit, and the core's end over it. `kit` is what any program
 # that links it may use. `core` asks to be run its way (a turn at a time,
 # a deadline measured from the frame, I/O asked of the runtime), and it depends
-# on `kit`, never the reverse. `runtime` is the runtime's end in Rust, for a
-# core linked into the runtime's own native process. `gpu` is WebGPU's
-# vocabulary for a core's calls to a device it cannot reach, beside both. A
-# core's form lives in its end's path: `core`'s `wasm` (a module's link
-# arguments, which a build script takes it for, and its entry) and `runtime`'s
-# `native`. `dev/` holds what develops them: `conformance`, the core the contract's traces
-# drive (spec/conformance/), `golden`, the golden records' reader the tests take, the
-# example and xpute's own use of the generator (`gen`).
+# on `kit`, never the reverse. `gpu` is WebGPU's vocabulary for a core's calls
+# to a device it cannot reach. A core's form lives in its end's path: `core`'s
+# `wasm` (a module's link arguments, which a build script takes it for, and its
+# entry). `dev/` holds what develops them: `golden`, the golden records' reader
+# the tests take, and xpute's own use of the generator (`gen`).
 
 [workspace]
 resolver = "2"
-members = ["kit", "core", "runtime", "gpu", "dev/conformance", "dev/example", "dev/golden", "gen", "dev/tool"]
+members = ["kit", "core", "gpu", "dev/golden", "gen", "dev/tool"]
 
 [workspace.dependencies]
 # Each of the workspace's own crates is given by its path once, so a crate
 # names another by name.
 xpute-kit = { path = "kit", version = "0.1.0" }
 xpute-core = { path = "core", version = "0.1.0" }
-xpute-runtime = { path = "runtime", version = "0.1.0" }
 xpute-gpu = { path = "gpu", version = "0.1.0" }
 xpute-gen = { path = "gen", version = "0.1.0" }
 xpute-golden = { path = "dev/golden" }

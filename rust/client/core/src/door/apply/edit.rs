@@ -9,38 +9,36 @@ use crate::domain::control::edit::write;
 use crate::domain::control::edit::Tool;
 use crate::domain::control::input::camera_rehover;
 use crate::domain::layer::object::asset::Asset;
-use crate::door::cmd as abi;
-use xpute_core::io::door::Outcome;
+use crate::abi::edit;
 use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
 
-pub(super) fn tool(c: abi::EditTool) -> Outcome {
-    set_tool(match c.tool {
-        abi::Tool::Pointer => Tool::Pointer,
-        abi::Tool::Eraser => Tool::Eraser,
-        abi::Tool::Item => match Asset::of(c.val) {
-            Asset::Unknown => return Err(MarshalError::new(Errno::EINVAL)),
+pub(super) fn hold(tool: edit::Tool, val: u32, scale_steps: i32) -> Result<(), Errno> {
+    set_tool(match tool {
+        edit::Tool::Pointer => Tool::Pointer,
+        edit::Tool::Eraser => Tool::Eraser,
+        edit::Tool::Item => match Asset::of(val) {
+            Asset::Unknown => return Err(Errno::EINVAL),
             asset => Tool::Item {
                 asset,
-                zoom: asset.zoom(c.scale_steps),
+                zoom: asset.zoom(scale_steps),
             },
         },
     });
     camera_rehover();
-    Ok(Some(0.into()))
+    Ok(())
 }
 
-pub(super) fn marker_text(c: abi::EditMarkerText<'_>) -> Outcome {
-    or_refuse(write::set_draft_text(c.text).ok(), Errno::EMSGSIZE)?;
-    Ok(Some(0.into()))
+pub(super) fn marker_text(text: String) -> Result<(), Errno> {
+    or_refuse(write::set_draft_text(&text).ok(), Errno::EMSGSIZE)?;
+    Ok(())
 }
 
-pub(super) fn marker_commit() -> Outcome {
+pub(super) fn marker_commit() -> Result<(), Errno> {
     write::commit_draft();
-    Ok(Some(0.into()))
+    Ok(())
 }
 
-pub(super) fn marker_cancel() -> Outcome {
+pub(super) fn marker_cancel() -> Result<(), Errno> {
     write::cancel_draft();
-    Ok(Some(0.into()))
+    Ok(())
 }

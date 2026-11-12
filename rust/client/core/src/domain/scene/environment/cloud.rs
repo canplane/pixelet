@@ -27,8 +27,8 @@ use pxl_spec::space::coord::world::nearest;
 use xpute_core::global::Global;
 use xpute_core::mem;
 use xpute_core::mem::heap::{alloc, free};
-use xpute_core::sched::pass::Pass;
 
+use crate::sys::sched;
 use crate::domain::scene::column::{self, GroupRange};
 use crate::domain::scene::environment::param::{
     CLOUD_GONE_KM, CLOUD_SALT, CLOUD_SHARE, CLOUD_SPACING_CELLS, CLOUD_WIDTH,
@@ -183,7 +183,7 @@ pub fn clouds_shown() -> f64 {
 /// Takes the cloud models as they arrive, keeps built the patches in which
 /// the eye could see a cloud, and lists their draws, moved as far as the wind
 /// has carried the field (`environment_drift`).
-pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
+pub fn step(draw: &mut DrawList, frame: &Frame) {
     let c = clouds();
     c.nearest_dist = f64::INFINITY;
     for (slot, file) in c.models.iter_mut().zip(VARIANTS) {
@@ -255,17 +255,13 @@ pub fn step(draw: &mut DrawList, frame: &Frame, pass: &Pass) {
     }
     let (patches, columns) = (&mut c.patches, &mut c.columns);
     c.demand.retain(|k| !patches.contains_key(k));
-    pass.run(
-        c.demand.iter().copied(),
-        |key| match build(key, base, columns, draw) {
-            Some(b) => {
-                patches.insert(key, b);
-                true
-            }
-            None => false,
-        },
-        None,
-    );
+    sched::run(c.demand.iter().copied(), |key| match build(key, base, columns, draw) {
+        Some(b) => {
+            patches.insert(key, b);
+            true
+        }
+        None => false,
+    });
     for (&key, b) in &c.patches {
         let corner = [
             key[0] as f64 * PATCH - off[0],

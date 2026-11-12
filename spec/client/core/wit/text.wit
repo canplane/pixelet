@@ -1,0 +1,11 @@
+package pxl:core@0.1.0;
+
+// The platform's text, which the runtime implements and the core calls. Each
+// writes its answer at `at` in the core's memory, lent for the call, and
+// reads the UTF-8 text at [text-at, text-at + text-len).
+interface text {
+  // Breaks the text into lines no wider than `max-width`, at most `lines`.
+  layout: func(weight: u32, px: f64, max-width: f64, at: u32, lines: u32, text-at: u32, text-len: u32) -> u32;
+  // Draws the text into a `width` by `height` RGBA image at `at`.
+  raster: func(weight: u32, px: f64, color: u32, at: u32, width: u32, height: u32, x: f64, text-at: u32, text-len: u32) -> u32;
+}

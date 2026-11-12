@@ -33,7 +33,7 @@ fn dst() -> &'static mut Option<(Q3, Motion)> {
 /// unknown, the pivot stands on the surface.
 pub fn go_to_ground(at: Q3, motion: Motion) {
     *dst() = Some((at, motion));
-    sched::request_world_tick();
+    sched::invalidate();
 }
 
 /// Puts the pivot at `at` as it is. A pending destination is dropped,
