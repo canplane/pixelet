@@ -1,106 +1,87 @@
 // xpute-core/io/frame.rs
 
-//! A frame's four words are laid out by spec/io/frame.json, and its packet,
-//! when it has one, lies right past them. The door keeps two frames, the one
-//! the core receives into and the one it sends from (door.rs).
-
-#[path = "frame.spec.rs"]
-mod spec;
-
-pub use spec::*;
+//! A frame is four words: the request's tag, its command, the result, and
+//! the packet's length. The command is the RES bit (31), the handle the
+//! callee issued (bits 8..30) and the method's place among its object's (bits
+//! 0..7). The packet, the method's args in XTP, lies right past the words.
+//! The words are little-endian, as both forms' memory is.
 
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
-use crate::mem::Memory;
+use crate::mem;
 
-const CMD_MASK: u32 = (1 << FLAG_SHIFT) - 1;
+const TAG: u32 = 0;
+const CMD: u32 = 1;
+const RESULT: u32 = 2;
+const PKT: u32 = 3;
 
 /// The bytes a frame's words take, before its packet.
-pub const WORD_BYTES: u32 = WORDS * 4;
+pub const WORD_BYTES: u32 = 16;
 
-/// A frame's four words as read, with its command word split into the command
-/// and its flags.
+/// The bit of the command that marks a later answer.
+const RES: u32 = 1 << 31;
+/// The bits of the command below the handle, which hold the method.
+const METHOD_BITS: u32 = 8;
+
+/// The largest handle a command holds.
+pub const HANDLE_MAX: u32 = (RES >> METHOD_BITS) - 1;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Frame {
     pub tag: u32,
-    pub cmd: u32,
-    pub flags: u32,
+    /// A later answer, to the receiver's request `tag`.
+    pub res: bool,
+    pub handle: u32,
+    pub method: u32,
     pub result: i32,
-    /// The length in bytes of the frame's packet, 0 for none.
     pub pkt_len: u32,
 }
 
-/// A command's number is `major << 8 | minor`, which fits the 16 bits a frame
-/// carries for it; its major says what answers it (spec/io/frame.json).
-pub const fn cmd(major: u32, minor: u32) -> u32 {
-    ((major & 0xff) << 8) | (minor & 0xff)
+fn word(at: u32) -> u32 {
+    // SAFETY: a frame's word in the core's memory.
+    let b = unsafe { mem::bytes(at, 4) };
+    u32::from_le_bytes([b[0], b[1], b[2], b[3]])
 }
 
-pub const fn cmd_major(cmd: u32) -> u32 {
-    (cmd >> 8) & 0xff
-}
-
-pub const fn cmd_minor(cmd: u32) -> u32 {
-    cmd & 0xff
-}
-
-pub fn cmd_word(cmd: u32, flags: u32) -> u32 {
-    (flags << FLAG_SHIFT) | (cmd & CMD_MASK)
-}
-
-pub fn cmd_of(word: u32) -> u32 {
-    word & CMD_MASK
-}
-
-pub fn flags_of(word: u32) -> u32 {
-    word >> FLAG_SHIFT
+fn set_word(at: u32, w: u32) {
+    // SAFETY: as `word`.
+    unsafe { mem::bytes(at, 4) }.copy_from_slice(&w.to_le_bytes());
 }
 
 impl Frame {
-    /// The frame's words at `at`.
-    pub fn at(mem: Memory, at: u32) -> Frame {
-        let word = |k: u32| mem.word((at + 4 * k) as usize);
-        let cmd = word(CMD);
+    /// The frame laid at `at`.
+    pub fn at(at: u32) -> Frame {
+        let cmd = word(at + 4 * CMD);
         Frame {
-            tag: word(TAG),
-            cmd: cmd_of(cmd),
-            flags: flags_of(cmd),
-            result: word(RESULT) as i32,
-            pkt_len: word(PKT),
+            tag: word(at + 4 * TAG),
+            res: cmd & RES != 0,
+            handle: (cmd & !RES) >> METHOD_BITS,
+            method: cmd & ((1 << METHOD_BITS) - 1),
+            result: word(at + 4 * RESULT) as i32,
+            pkt_len: word(at + 4 * PKT),
         }
     }
 
-    /// Writes the frame's words at `at`.
-    pub fn lay(&self, mem: Memory, at: u32) {
-        let set = |k: u32, w: u32| mem.set_word((at + 4 * k) as usize, w);
-        set(TAG, self.tag);
-        set(CMD, cmd_word(self.cmd, self.flags));
-        set(RESULT, self.result as u32);
-        set(PKT, self.pkt_len);
+    /// Lays the frame's words at `at`.
+    pub fn lay(&self, at: u32) {
+        set_word(at + 4 * TAG, self.tag);
+        let res = if self.res { RES } else { 0 };
+        set_word(at + 4 * CMD, res | self.handle << METHOD_BITS | self.method);
+        set_word(at + 4 * RESULT, self.result as u32);
+        set_word(at + 4 * PKT, self.pkt_len);
     }
 
-    /// The packet of the frame laid at `at`, which with the frame's words
-    /// takes no more than `room` bytes. A packet longer than the room is
-    /// EBADMSG.
-    pub fn pkt(
-        &self,
-        mem: Memory,
-        at: u32,
-        room: u32,
-    ) -> Result<Option<&'static [u8]>, MarshalError> {
+    /// The packet of the frame laid at `at` in a room of `room` bytes; a
+    /// packet past the room is EBADMSG.
+    pub fn pkt(&self, at: u32, room: u32) -> Result<Option<&'static [u8]>, MarshalError> {
         if self.pkt_len == 0 {
             return Ok(None);
         }
         if u64::from(WORD_BYTES) + u64::from(self.pkt_len) > u64::from(room) {
             return Err(MarshalError::new(Errno::EBADMSG));
         }
-        // SAFETY: the frame's room in the memory, which the caller names.
-        Ok(Some(unsafe {
-            core::slice::from_raw_parts(
-                mem.at::<u8>((at + WORD_BYTES) as usize),
-                self.pkt_len as usize,
-            )
-        }))
+        // SAFETY: the frame's room in the core's memory.
+        Ok(Some(unsafe { mem::bytes(at + WORD_BYTES, self.pkt_len) }))
     }
 }

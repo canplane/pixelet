@@ -1,0 +1,16 @@
+package xpute:core@0.1.0;
+
+// xpute's files, which the runtime serves, each opened by its path's URI.
+interface fs {
+  resource file {
+    // Fills [at, at + len) of the core's memory, lent until the answer.
+    read: async func(at: u32, len: u32) -> u32;
+    // Writes [at, at + len) of the core's memory, lent until the answer.
+    write: async func(at: u32, len: u32);
+    // Answers when the file changes under its holder.
+    changed: async func();
+    // Ends the file and answers whether what was written was applied, which
+    // a release does not report.
+    close: async func();
+  }
+}

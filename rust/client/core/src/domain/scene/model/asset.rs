@@ -30,7 +30,6 @@ use pxl_render::gpu::draw::MODEL_VERTEX_WORDS;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use xpute_core::global::Global;
 use xpute_core::mem;
-use xpute_core::sched::turn::yield_if_spent;
 
 use crate::domain::scene::model;
 use crate::domain::scene::model::registry::{Channel, Model, STEPS_PER_PAUSE};
@@ -39,7 +38,7 @@ use crate::sys::io::loader::{load_of, take_gltf};
 use crate::sys::io::room::Refusal;
 use crate::sys::load::Load;
 use crate::sys::sched::executor;
-use crate::sys::sched::{self, request_world_tick};
+use crate::sys::sched::{self, invalidate};
 use pxl_spec::asset::catalog::{Slot, SLOTS};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -137,11 +136,11 @@ fn gltf_of(load: Load) -> Option<Rc<Gltf>> {
 /// then wakes a turn.
 #[embassy_executor::task(pool_size = REGISTRATIONS)]
 async fn parse(file: u32, bytes: Packet) {
-    let parsed = parse_gltf(&bytes, &[], || yield_if_spent(sched::turn)).await;
+    let parsed = parse_gltf(&bytes, &[], || sched::yield_if_spent()).await;
     if let Some((_, entry)) = PARSED.get(Vec::new).iter_mut().find(|(a, _)| *a == file) {
         *entry = Some(parsed.map(Rc::new));
     }
-    request_world_tick();
+    invalidate();
 }
 
 /// `slot`'s model as `model_of` registered it at `height_u`, without asking
@@ -162,7 +161,7 @@ pub fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<u32> {
 /// or refused, then wakes a turn.
 #[embassy_executor::task(pool_size = REGISTRATIONS)]
 async fn registration(file: u32, height_u: Option<f64>, gltf: Rc<Gltf>) {
-    let entry = register_model(&gltf, height_u, || yield_if_spent(sched::turn))
+    let entry = register_model(&gltf, height_u, || sched::yield_if_spent())
         .await
         .ok_or_else(Refusal::now);
     let key = height_u.map(f64::to_bits);
@@ -173,7 +172,7 @@ async fn registration(file: u32, height_u: Option<f64>, gltf: Rc<Gltf>) {
     {
         *at = Some(entry);
     }
-    request_world_tick();
+    invalidate();
 }
 
 /// A primitive as its model lays it out. Its vertices start at `first`. In a

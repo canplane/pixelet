@@ -2,11 +2,10 @@
 //
 // GENERATED from spec/client/core/sys/sched/phase.json
 //
-// The core's tick phases, in the order they run on xpute's tick (xpute-core
-// sched/tick.rs): what moves the eye first, unbudgeted and O(1); then what is
-// visible, which holds back the content's share (pxl-core sys/sched/param.rs
-// `CONTENT_SHARE`); then content, then the cosmetic and the report. A phase's
-// number is its place here, and a report of per-phase time is indexed by it.
+// The core's tick phases, in the order they run (pxl-core sys/sched/tick.rs):
+// what moves the eye first, unbudgeted and O(1); then what is visible. A
+// phase's number is its place here, and a report of per-phase time is indexed
+// by it.
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
@@ -19,26 +18,17 @@
     reason = "generated from the spec"
 )]
 
-pub const PHASES: usize = 5;
+pub const PHASES: usize = 2;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Phase {
     interaction = 0,
     visible = 1,
-    content = 2,
-    cosmetic = 3,
-    report = 4,
 }
 
 impl Phase {
     /// Every member, in the JSON's own order.
-    pub const ALL: [Phase; 5] = [
-        Phase::interaction,
-        Phase::visible,
-        Phase::content,
-        Phase::cosmetic,
-        Phase::report,
-    ];
+    pub const ALL: [Phase; 2] = [Phase::interaction, Phase::visible];
 
     /// The member a number names, or none for a number the set does not
     /// give out.

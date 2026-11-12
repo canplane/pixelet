@@ -37,7 +37,7 @@ use crate::domain::scene::gizmo::gizmo_spec;
 use crate::domain::scene::model::draw_list;
 use crate::domain::view::frame::pose::view;
 use crate::domain::view::observation::{observation, ByEye};
-use crate::sys::sched::request_world_tick;
+use crate::sys::sched::invalidate;
 
 /// What an edge marks. The variants follow the spec's order
 /// (`gizmo_spec::coverage`), and that order is their rank: a stretch takes
@@ -149,7 +149,7 @@ pub fn coverage_gizmo_step(show: bool) {
     let (Some(o), Some(top)) = (observation().filter(|_| show), TerrainTile::min_zoom()) else {
         if c.drawn.take().is_some() {
             c.mesh.set(draw, [0.0; 3], &[], 0);
-            request_world_tick();
+            invalidate();
         }
         return;
     };
@@ -183,7 +183,7 @@ pub fn coverage_gizmo_step(show: bool) {
         c.mesh.set(draw, about, &c.next.0, c.next.1);
         c.drawn = Some(about);
         core::mem::swap(&mut c.next, &mut c.vertices);
-        request_world_tick();
+        invalidate();
     }
 }
 

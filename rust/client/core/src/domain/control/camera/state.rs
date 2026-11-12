@@ -11,7 +11,7 @@ use crate::domain::control::param::{
 use crate::domain::control::support::resolve_to;
 use crate::domain::param::POS_DAMP;
 use crate::domain::smooth::smooth_vec;
-use crate::sys::sched::request_world_tick;
+use crate::sys::sched::invalidate;
 use xpute_core::global::Global;
 
 /// The facing and the distance the controls ask the camera for.
@@ -77,7 +77,7 @@ impl CameraState {
             return;
         }
         self.intent = next;
-        request_world_tick();
+        invalidate();
     }
 }
 

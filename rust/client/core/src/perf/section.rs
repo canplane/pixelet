@@ -6,7 +6,7 @@
 use core::mem::{offset_of, size_of};
 
 use crate::perf::frame::{FrameSample, RaySample, EFFECTS, GPU_SPANS};
-use crate::perf::spec::{FRAME, LIMIT, NOW, PERCENTILE, STAT, STEP_STAT, STREAM_STAT, WAKES};
+use crate::perf::spec::{FRAME, LIMIT, NOW, PERCENTILE, STAT, STEP_STAT, STREAM_STAT};
 use crate::perf::word::{words, zeroed, AsWords};
 use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
 use crate::sys::sched::phase_spec::PHASES;
@@ -48,7 +48,6 @@ words!(RecordingStateSection, NOW::recording_state::WORDS,
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DrawSection {
-    pub turns: f64,
     pub frames: f64,
     pub refused_admit: f64,
     pub refused_stream: f64,
@@ -59,7 +58,7 @@ pub struct DrawSection {
 }
 
 words!(DrawSection, NOW::draw::WORDS,
-    turns => NOW::draw::turns, frames => NOW::draw::frames, refused_admit => NOW::draw::refused_admit, refused_stream => NOW::draw::refused_stream,
+    frames => NOW::draw::frames, refused_admit => NOW::draw::refused_admit, refused_stream => NOW::draw::refused_stream,
     generation => NOW::draw::generation, status => NOW::draw::status, errors => NOW::draw::errors, unfinished => NOW::draw::unfinished,
 );
 
@@ -75,24 +74,15 @@ pub struct FrameSection {
     /// their mean interval, and a second over that mean is the rate they were
     /// drawn at.
     pub moving_ms: f64,
-    pub missed: f64,
     pub overran: f64,
-    /// How many intervals had turns that ran past the interval's end.
-    pub long: f64,
-    pub turns: f64,
     /// How many frames a GPU read timed. The GPU's figures cover these frames
     /// alone.
     pub gpu_timed: f64,
     pub interval: Percentile,
-    pub busy: Percentile,
     pub tick: Percentile,
-    /// The other measured parts of `busy`, then `rest`, what they leave of it
-    /// unmeasured.
     pub effect: Percentile,
     pub stage: Percentile,
-    pub task: Percentile,
     pub perf: Percentile,
-    pub rest: Percentile,
     /// Each effect's p95, indexed by `EffectName`.
     pub effects_p95: [f64; EFFECTS],
     /// The GPU's time, with overlapping spans counted once.
@@ -107,10 +97,8 @@ pub struct FrameSection {
     pub phases_p95: [f64; PHASES],
     pub gpu_spans_p95: [f64; GPU_SPANS],
     pub gpu_spans_cnt: [f64; GPU_SPANS],
-    /// How many frames fell in each of the renderer's FRAME_KINDS, and how
-    /// many intervals ended on each of the WAKES as the last turn's ask.
+    /// How many frames fell in each of the renderer's FRAME_KINDS.
     pub kinds: [f64; FRAME_KINDS],
-    pub wakes: [f64; WAKES],
     /// The world's pixel count in the last frame a read timed.
     pub gpu_px: f64,
     /// The ray counts of the window's frames, summed field by field.
@@ -134,17 +122,16 @@ impl Default for FrameSection {
 words!(FrameSection, STAT::frames::WORDS,
     present => STAT::frames::present, cnt => STAT::frames::cnt, seconds => STAT::frames::seconds,
     moving => STAT::frames::moving, moving_ms => STAT::frames::moving_ms,
-    missed => STAT::frames::missed, overran => STAT::frames::overran,
-    long => STAT::frames::long, turns => STAT::frames::turns, gpu_timed => STAT::frames::gpu_timed,
-    interval => STAT::frames::interval, busy => STAT::frames::busy,
+    overran => STAT::frames::overran, gpu_timed => STAT::frames::gpu_timed,
+    interval => STAT::frames::interval,
     tick => STAT::frames::tick, effect => STAT::frames::effect,
-    stage => STAT::frames::stage, task => STAT::frames::task,
-    perf => STAT::frames::perf, rest => STAT::frames::rest,
+    stage => STAT::frames::stage,
+    perf => STAT::frames::perf,
     effects_p95 => STAT::frames::effects_p95, gpu_busy => STAT::frames::gpu_busy,
     gpu_busy_kinds => STAT::frames::gpu_busy_kinds,
     phases_p95 => STAT::frames::phases_p95, gpu_spans_p95 => STAT::frames::gpu_spans_p95,
     gpu_spans_cnt => STAT::frames::gpu_spans_cnt,
-    kinds => STAT::frames::kinds, wakes => STAT::frames::wakes,
+    kinds => STAT::frames::kinds,
     gpu_px => STAT::frames::gpu_px, ray_sample => STAT::frames::rays,
     first => STAT::frames::first, last => STAT::frames::last,
 );

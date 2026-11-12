@@ -24,9 +24,10 @@ object Gpu {
   external fun open(cacheDir: String?): Boolean
 
   /** Binds the core's surface `handle` to `surface`, whose native window the
-   * runtime holds until it is unbound. Returns 0, or -2 before `open` is first
-   * called, -3 when the system would not make a surface of it, and -4 when a
-   * newer handle has bound the same slot since. While no device is open the
+   * runtime holds until it is unbound. Returns 0, or -ENODEV (-19) before
+   * `open` is first called, -EINVAL (-22) when the system would not make a
+   * surface of it, and -EBUSY (-16) when a newer handle has bound the same slot
+   * since. While no device is open the
    * surface is kept, and the next device binds it. */
   external fun surfaceBind(handle: Int, surface: Surface): Int
 

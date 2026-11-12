@@ -27,7 +27,7 @@ import {
   useRecentPicks,
   useSwatchFlash,
 } from "./store.ts";
-import { Tool } from "@/abi/cmd.spec.ts";
+import { Tool } from "@/abi/edit.ts";
 import { KIND } from "@/ui/shared/asset/id.spec.ts";
 import {
   type AssetId,

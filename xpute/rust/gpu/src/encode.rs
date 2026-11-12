@@ -1376,8 +1376,8 @@ pub mod call {
 
     /// Asks the runtime to write the device's block into `into` (laid out as
     /// `crate::device` says): its limits, features, unfinished frames and
-    /// status. The page's admission reads the block from then on
-    /// (`admit::page`), so `into` stays in place for good.
+    /// status. Admission reads the block from then on (`admit::frame`), so
+    /// `into` stays in place for good.
     pub fn device(stream: &mut Stream, into: &mut [u32]) -> bool {
         let asked = words(
             stream,

@@ -13,8 +13,7 @@ use xpute_core::global::Global;
 use xpute_core::mem::off_of_slice;
 
 use crate::sys::io::text_answer_spec::{LAYOUT_ANSWER, LINE};
-use crate::sys::io::text_spec::text::{text_layout, text_raster};
-use crate::sys::io::text_spec::{TextLayout, TextRaster};
+use crate::abi::text;
 
 /// A layout's key: the weight, the bits of `px`, the bits of the max width
 /// (0 for one line), and the text.
@@ -58,16 +57,16 @@ pub fn text_lines(weight: u32, px: f64, max_width: f64, text_in: &str) -> Option
             // empty text into one.
             let lines = text_in.chars().count().max(1);
             let mut at = vec![0u32; LAYOUT_ANSWER::WORDS + LINE::WORDS * lines].into_boxed_slice();
-            let call = TextLayout {
+            let laid = text::layout(
                 weight,
                 px,
                 max_width,
-                at: off_of_slice(&raw mut *at) as u32,
-                lines: lines as u32,
-                text_at: off_of_slice(text_in.as_bytes()) as u32,
-                text_len: text_in.len() as u32,
-            };
-            if text_layout(&call).is_err() {
+                off_of_slice(&raw mut *at) as u32,
+                lines as u32,
+                off_of_slice(text_in.as_bytes()) as u32,
+                text_in.len() as u32,
+            );
+            if laid.is_err() {
                 return None;
             }
             v.insert(Answer { read: false, at })
@@ -129,18 +128,18 @@ pub fn text_pixels(
         Entry::Occupied(o) => o.into_mut(),
         Entry::Vacant(v) => {
             let mut at = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
-            let call = TextRaster {
+            let drawn = text::raster(
                 weight,
                 px,
                 color,
-                at: off_of_slice(&raw mut *at) as u32,
-                width: size[0],
-                height: size[1],
+                off_of_slice(&raw mut *at) as u32,
+                size[0],
+                size[1],
                 x,
-                text_at: off_of_slice(text_in.as_bytes()) as u32,
-                text_len: text_in.len() as u32,
-            };
-            if text_raster(&call).is_err() {
+                off_of_slice(text_in.as_bytes()) as u32,
+                text_in.len() as u32,
+            );
+            if drawn.is_err() {
                 return None;
             }
             v.insert(Answer { read: false, at })

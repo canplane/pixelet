@@ -1,250 +1,96 @@
 // @xpute/runtime/remote.ts
 
 /**
- * This is a UI apart from its core, as a page's main thread is apart from the
- * worker that runs the core, with a MessagePort between them that carries
- * frames.
- *
- * - Up the port go the UI's frames, and a lifecycle call by name.
- * - Down the port come frames (a reply to a request, or an import the UI
- *   takes, with the memory it names copied), the lines the worker says
- *   (say.ts), the stop, and whether the core came up.
- * - Once the core stops, every request is answered ENOTRECOVERABLE.
+ * A UI on another thread than its core's link, as a page's main thread is to
+ * the core's worker, reaches the link over a message port: `serve` on the
+ * link's side, `Remote` on the UI's. Packets cross the port as bytes. The UI
+ * sends methods to the core's objects and is answered by promise, with the
+ * return data. The objects it serves the core are mounted on the Remote
+ * before the core boots, and their prefixes go with the core's module, so
+ * that `serve` mounts their stand-ins before the core opens them; the link
+ * answers their methods 0 at once, since the UI is across the port. The UI
+ * never waits, so it has no `call`.
  */
 
-import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { U8Array } from "@xpute/kit/abi/array.ts";
+import type { i32 } from "@xpute/kit/abi/word.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { InvariantError, XputeError } from "@xpute/kit/status/error.ts";
-import {
-  type Arg,
-  type PacketRoom,
-  PacketWriter,
-  TreeReader,
-} from "@xpute/kit/wire/xtp/mod.ts";
-import { encode_args, reply_of } from "./io/connection.ts";
-import { CMD_MAJOR } from "./io/frame.ts";
-import { say, say_through } from "./say.ts";
-import {
-  boot,
-  type Config,
-  type Link,
-  type Manifest,
-  routes_of,
-  type Runtime,
-  type Ui,
-} from "./runtime.ts";
-import type { Grant } from "./sched/policy.ts";
+import { MarshalError } from "@xpute/kit/status/error.ts";
+import { type Arg, MAX_PKT_SZ, PacketWriter, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
+import type { Token } from "./abi/link.ts";
+import type { Answered, Handle, Link, LinkObject, Method, Opener, Sender } from "./link.ts";
 
-/** These are the calls a link carries by name. */
-const CALLS = ["wake", "input", "resume", "pause", "visible"] as const;
+type ToLink = { tag: number; h: Handle; m: Method; pkt: U8Array | null };
+type ToUi = { tag: number; result: i32; data: U8Array | null } | { obj: number; m: Method; pkt: U8Array | null };
 
-type Call = (typeof CALLS)[number];
-
-type Up =
-  | { kind: "frame"; cmd: u32; id: u32; cnt: u32; pkt: U8Array | null }
-  | { kind: "call"; name: Call; arg: unknown };
-
-/** A frame's `res` is a reply's result, or null for an import, and `named`
- * the memory the frame names, copied. */
-type Down =
-  | {
-      kind: "frame";
-      tag: u32;
-      cmd: u32;
-      res: i32 | null;
-      pkt: U8Array | null;
-      named: U8Array | null;
-    }
-  | { kind: "say"; line: string }
-  | { kind: "stop" }
-  | { kind: "rose"; why: string | null };
-
-/** This is what `start` sends the worker first. `origin` is the UI's
- * `performance.timeOrigin`, so that the worker can count the core's clock as
- * the UI's `performance.now()` counts it. */
-export interface Hello {
-  xpute: MessagePort;
-  /** The majors the UI takes (`Ui.protocols`), whose frames go down. */
-  majors: readonly u32[];
-  origin: f64;
-}
-
-/** This is the UI's end of `port`, and what comes down is handed to `ui`.
- * `rose` settles once the core is up. `stop` ends the link as the core's stop,
- * for when the worker that ran the core died without a word of its own. */
-export function connect(
-  port: MessagePort,
-  pkt_bytes: u32,
-  ui: Ui,
-): { link: Link; rose: Promise<void>; stop(): void } {
-  const buf = new Uint8Array(pkt_bytes);
-  const view = new DataView(buf.buffer);
-  const w = new PacketWriter();
-  const room: PacketRoom = {
-    writer: (n) => ((cnt = n), w.begin(buf, view, 0, buf.length, n)),
-  };
-  const waiting = new Map<u32, (res: i32, named: U8Array | null) => void>();
-  const routes = routes_of(ui.protocols);
-  const rose = Promise.withResolvers<void>();
-  const up = (m: Up, moved: Transferable[] = []) => port.postMessage(m, moved);
-  let cnt = 0;
-  let next = 0;
-  let stopped = false;
-
-  function frame(cmd: u32, id: u32, args: Arg[]): void {
-    cnt = 0;
-    const end = encode_args(args)(room)?.finish() ?? 0;
-    if (end < 0) throw new InvariantError(Errno.EMSGSIZE);
-    const pkt = end > 0 ? buf.slice(0, end) : null;
-    up({ kind: "frame", cmd, id, cnt, pkt }, pkt ? [pkt.buffer] : []);
-  }
-
-  function stop(): void {
-    if (stopped) return;
-    stopped = true;
-    waiting.forEach((done) => done(Errno.ENOTRECOVERABLE, null));
-    waiting.clear();
-    ui.stop();
-  }
-
-  const call = (name: Call, arg?: unknown) => up({ kind: "call", name, arg });
-
-  port.onmessage = ({ data: m }: MessageEvent<Down>) => {
-    switch (m.kind) {
-      case "frame":
-        if (m.res !== null) {
-          waiting.get(m.tag)?.(m.res, m.named);
-          return void waiting.delete(m.tag);
-        }
-        return void routes.get(CMD_MAJOR(m.cmd))?.(
-          m.tag,
-          m.cmd,
-          m.pkt && new TreeReader(m.pkt).read_branch(),
-          m.pkt,
-          m.named,
-        );
-      case "say":
-        return say(m.line);
-      case "stop":
-        return stop();
-      case "rose":
-        return m.why === null ? rose.resolve() : rose.reject(new Error(m.why));
-    }
-  };
-
-  // The runtime across the port is told each change, and this end keeps the
-  // last one for `shown`.
-  let shown = true;
-  const link: Link = {
-    send: (cmd, ...args) => void (stopped || frame(cmd, 0, args)),
-    request(cmd, ...args) {
-      if (stopped) return Promise.reject(new XputeError(Errno.ENOTRECOVERABLE));
-      const id = (next = (next + 1) >>> 0 || 1);
-      return new Promise<[i32, U8Array | null]>((done) => {
-        waiting.set(id, (res, named) => done([res, named]));
-        frame(cmd, id, args);
-      }).then(reply_of);
-    },
-    fits: (_cmd, ...args) => (encode_args(args)(room)?.finish() ?? 0) >= 0,
-    wake: () => call("wake"),
-    input: () => call("input"),
-    resume: () => call("resume"),
-    pause: () => call("pause"),
-    visible: (v) => ((shown = v), call("visible", v)),
-    shown: () => shown,
-  };
-  return { link, rose: rose.promise, stop };
-}
-
-/** This is the worker's end of `port`. The `Ui` it returns posts down what the
- * UI takes, the worker's lines go down from now on, and `serve` hands the UI's
- * frames and calls to the runtime `r`. */
-export function attach(
-  port: MessagePort,
-  majors: readonly u32[],
-): {
-  ui: Ui;
-  serve(r: Runtime): void;
-} {
-  const down = (m: Down, moved: Transferable[] = []) =>
-    port.postMessage(m, moved);
-  say_through((line) => down({ kind: "say", line }));
-  const ui: Ui = {
-    protocols: [
-      {
-        majors,
-        on(tag, cmd, _f, pkt, named) {
-          const p = pkt?.slice() ?? null;
-          const n = named?.slice() ?? null;
-          const moved = [p, n].flatMap((b) => (b ? [b.buffer] : []));
-          down({ kind: "frame", tag, cmd, res: null, pkt: p, named: n }, moved);
-        },
+/** Serves `link` to the UI across `port`, the UI's objects mounted at
+ * `prefixes` (`Remote.prefixes`), each by its place there. */
+export function serve(port: MessagePort, link: Link, prefixes: readonly (readonly Token[])[]): void {
+  const tell = (m: ToUi) => port.postMessage(m);
+  prefixes.forEach((prefix, obj) => {
+    const o: LinkObject = {
+      call(m, _tag, args) {
+        tell({ obj, m, pkt: args === null ? null : args.pkt.slice() });
+        return 0;
       },
-    ],
-    stop: () => down({ kind: "stop" }),
+    };
+    link.mount(prefix, () => o);
+  });
+  port.onmessage = ({ data: m }: MessageEvent<ToLink>) => {
+    link.send(m.h, m.m, m.pkt ?? [], (result, data) => tell({ tag: m.tag, result, data }));
   };
-  function serve(r: Runtime): void {
-    port.onmessage = ({ data: m }: MessageEvent<Up>) => {
-      switch (m.kind) {
-        case "frame": {
-          const { cmd, id, cnt, pkt } = m;
-          const encode =
-            pkt && ((room: PacketRoom) => room.writer(cnt).copy(pkt));
-          if (id === 0) {
-            r.connection.send(cmd, encode);
-            return r.kick();
-          }
-          const answer = r.connection.request(cmd, encode);
-          r.kick();
-          return void answer.then(([res, named]) =>
-            down(
-              { kind: "frame", tag: id, cmd, res, pkt: null, named },
-              named ? [named.buffer] : [],
-            ),
-          );
-        }
-        case "call":
-          return (r[m.name] as (arg: unknown) => void)(m.arg);
+}
+
+/** The UI's end of a link `serve` serves across a port. */
+export class Remote implements Sender {
+  /** The prefixes of the objects the UI serves, which `serve` mounts. */
+  readonly prefixes: (readonly Token[])[] = [];
+  private readonly _port: MessagePort;
+  private readonly _answers = new Map<number, (a: Answered) => void>();
+  /** The objects the UI serves, each opened once, as it is mounted. */
+  private readonly _objects: LinkObject[] = [];
+  private _next = 0;
+
+  constructor(port: MessagePort) {
+    this._port = port;
+    port.onmessage = ({ data: m }: MessageEvent<ToUi>) => {
+      if ("tag" in m) {
+        const a = this._answers.get(m.tag);
+        this._answers.delete(m.tag);
+        a?.({ result: m.result, data: m.data });
+      } else {
+        this._objects[m.obj]?.call(m.m, 0, m.pkt === null ? null : new TreeReader(m.pkt).read_branch());
       }
     };
   }
-  return { ui, serve };
+
+  send(h: Handle, m: Method, args: readonly Arg[]): Promise<Answered> {
+    const tag = this._next++;
+    return new Promise((resolve) => {
+      this._answers.set(tag, resolve);
+      this._port.postMessage({ tag, h, m, pkt: packet(args) } satisfies ToLink);
+    });
+  }
+
+  /** Mounts an object the UI serves, before the core boots. */
+  mount(prefix: readonly Token[], open: Opener): void {
+    this._objects.push(open(prefix));
+    this.prefixes.push(prefix);
+  }
 }
 
-/** Serves the core `manifest` declares, with the config `core` makes, from a
- * page's worker. It takes the port `start` sends, brings the core up, and
- * serves the UI's frames. A message of the worker's own, which carries no port,
- * is left alone. */
-export function serve<G extends Grant>(
-  manifest: Manifest,
-  core: () => Config<G> | Promise<Config<G>>,
-): Promise<Runtime> {
-  return new Promise((done, fail) => {
-    const hello = async ({ data }: MessageEvent) => {
-      const h = data as Partial<Hello> | null;
-      if (!(h?.xpute instanceof MessagePort)) return;
-      removeEventListener("message", hello);
-      const port = h.xpute;
-      const end = attach(port, h.majors ?? []);
-      const shift =
-        performance.timeOrigin - (h.origin ?? performance.timeOrigin);
-      try {
-        const r = await boot(
-          manifest,
-          core,
-          end.ui,
-          () => performance.now() + shift,
-        );
-        end.serve(r);
-        port.postMessage({ kind: "rose", why: null } satisfies Down);
-        done(r);
-      } catch (err) {
-        const why = String((err as Error)?.message ?? err);
-        port.postMessage({ kind: "rose", why } satisfies Down);
-        fail(err);
-      }
-    };
-    addEventListener("message", hello);
-  });
+/** The packet `args` write, or none for no args. A packet past the largest
+ * XTP takes is EOVERFLOW. */
+function packet(args: readonly Arg[]): U8Array | null {
+  if (args.length === 0) return null;
+  for (let cap = 1 << 10; ; cap = Math.min(cap * 2, MAX_PKT_SZ)) {
+    const buf = new Uint8Array(cap);
+    const w = new PacketWriter().begin(buf, new DataView(buf.buffer), 0, cap, args.length);
+    for (const a of args) w.arg(a);
+    try {
+      return buf.subarray(0, w.finish_or_throw());
+    } catch (e) {
+      if (!(e instanceof MarshalError) || e.errnum !== Errno.EOVERFLOW || cap === MAX_PKT_SZ) throw e;
+    }
+  }
 }

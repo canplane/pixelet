@@ -209,7 +209,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     let p = ARRANGEMENT.get(Arrangement::default);
     if pose::eye().is_none() {
         if p.set.free(model::draw_list()) {
-            ctx.invalidate();
+            sched::invalidate();
         }
         // Nothing is drawn now, so what comes back is laid out afresh.
         (p.last, p.waiting, p.found_for) = (None, false, None);
@@ -310,9 +310,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
             }),
     );
     entering.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
-    let read = ctx
-        .pass
-        .run(
+    let read = sched::run(
             entering.iter(),
             |&(_, brick, columns)| {
                 pin::read(brick, &columns, &mut pins);
@@ -321,7 +319,6 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
                 }
                 true
             },
-            None,
         )
         .step_cnt as usize;
     let unread = entering.len() - read;
@@ -420,7 +417,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     let pending = p.pending.iter().any(|w| design::coming(&w.1)) || freed && !p.pending.is_empty();
     p.waiting = pending || refused || unlaid || unread > 0;
     if p.waiting {
-        sched::request_world_tick();
+        sched::invalidate();
     }
     p.draw_order.clear();
     for &i in &p.visible {
@@ -464,7 +461,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     // changed.
     if instances != p.instances {
         p.set.write(model::draw_list(), &instances);
-        ctx.invalidate();
+        sched::invalidate();
     }
     let drawn_instances = core::mem::replace(&mut p.instances, instances);
     (p.sized, p.spare, p.spare_instances) = (sized, drawn_before, drawn_instances);

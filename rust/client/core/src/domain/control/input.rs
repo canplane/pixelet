@@ -17,7 +17,7 @@ use crate::domain::control::param::{
     TAP_DRAG_THRESHOLD_PX, TILT_SWEEP_FRACTION,
 };
 
-use crate::domain::cmd::PointerType;
+use crate::abi::input::PointerType;
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::{active, Active};
 use crate::domain::control::camera::gesture::{linear, Anchor};
@@ -27,7 +27,7 @@ use crate::domain::control::navigation::destination::cancel as cancel_destinatio
 use crate::domain::control::navigation::follow_mode::set_following;
 use crate::domain::setting::store::settings;
 use crate::domain::view::frame::screen::size;
-use crate::sys::sched::request_world_tick;
+use crate::sys::sched::invalidate;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 use xpute_kit::status::bug::OrBug;
@@ -413,7 +413,7 @@ pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[
             0 => {
                 let mode = s.drag_mode;
                 end_drag(s);
-                request_world_tick();
+                invalidate();
                 if mode != DragMode::None {
                     return tap_if_still(s, mode);
                 }
@@ -442,7 +442,7 @@ pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[
     // Nothing moves once the pointer is up, so without this tick the
     // characters would not see the release until something else asked for
     // a turn.
-    request_world_tick();
+    invalidate();
     tap_if_still(s, mode)
 }
 
@@ -483,7 +483,7 @@ pub fn camera_keys(x: i32, y: i32) {
         s.keys_at = now();
     }
     s.keys = keys;
-    request_world_tick();
+    invalidate();
 }
 
 /// Writes into the camera what the pointer and the keys asked since the
@@ -498,7 +498,7 @@ pub fn camera_input_step() {
         // screen and the pan's runs up it, so y changes sign.
         let way = [s.keys[0] * share, -s.keys[1] * share];
         by_hand(|| controller::pan_across(way[0], way[1]));
-        request_world_tick();
+        invalidate();
     }
     if s.drag_pending {
         s.drag_pending = false;

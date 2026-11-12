@@ -55,7 +55,7 @@ use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::file;
 use crate::sys::io::file_spec::{self, format, path, top, write as column};
 use crate::sys::io::request::declare;
-use crate::sys::sched::request_world_tick;
+use crate::sys::sched::invalidate;
 use pxl_spec::object::ext::{class_of, Class};
 
 /// The most files wanted at once. Before the top is read, only the top is
@@ -112,7 +112,7 @@ fn change(c: Change) {
         make(c);
     } else {
         st.changes.push(c);
-        request_world_tick();
+        invalidate();
     }
 }
 
@@ -246,7 +246,7 @@ fn admit(id: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
     if result.is_err() && !state().refused_files.contains(&id) {
         state().refused_files.push(id);
         changed();
-        request_world_tick();
+        invalidate();
     }
     result
 }
@@ -285,7 +285,7 @@ pub fn on_emptied(id: u64) -> bool {
     // Drop the failed want, so that the next declaration starts a new one.
     st.wants.retain(|&(n, _)| n != id);
     declare(Stream::object, &st.wants);
-    request_world_tick();
+    invalidate();
     true
 }
 

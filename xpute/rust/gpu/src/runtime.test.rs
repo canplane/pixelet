@@ -124,7 +124,7 @@ fn stale_handle_inert() {
     );
     assert_eq!(h.claim(newer), Some(3), "the newer binds again");
     assert!(!h.unbind(old), "an old handle unbinds nothing");
-    assert_eq!(h.surfaces[3].handle, newer);
+    assert_eq!(h.surfaces[3].handle, Some(newer));
     assert!(h.unbind(newer), "the newer unbinds its own");
     assert!(!h.unbind(newer), "and only once");
     assert_eq!(

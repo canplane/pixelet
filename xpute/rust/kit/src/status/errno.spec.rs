@@ -147,14 +147,3 @@ impl Errno {
         }
     }
 }
-
-// Result pair: (errno, data)
-//
-// Conventions:
-// - errno == Errno::OK  -> success
-// - errno != Errno::OK  -> failure
-// - data == None        -> no payload
-//
-// `None` is the "no value / no payload" sentinel: the empty result slot,
-// nothing about pointers.
-pub type ErrnoResult<T> = (Errno, Option<T>);

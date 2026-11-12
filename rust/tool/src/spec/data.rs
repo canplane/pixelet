@@ -14,7 +14,7 @@ use super::ingest::files;
 use super::Output;
 use crate::root;
 
-const DATA_SPECS: [DataSpec; 20] = [
+const DATA_SPECS: [DataSpec; 19] = [
     DataSpec {
         json: "spec/spec/space/earth.json",
         rs: Some("rust/spec/src/space/coord/earth.spec.rs"),
@@ -112,13 +112,6 @@ const DATA_SPECS: [DataSpec; 20] = [
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/core/sys/sched/pacing.json",
-        ts: Some("ts/client/src/abi/pacing.spec.ts"),
-        rs: Some("rust/client/core/src/sys/sched/pacing.spec.rs"),
-        module: "pacing_spec",
-        ..DataSpec::DEFAULT
-    },
-    DataSpec {
         json: "spec/client/core/sys/io/demand.json",
         ts: Some("ts/client/src/abi/demand.spec.ts"),
         rs: Some("rust/client/core/src/sys/io/demand.spec.rs"),
@@ -159,7 +152,7 @@ const DATA_SPECS: [DataSpec; 20] = [
         ],
         ts: Some("ts/client/src/abi/perf.spec.ts"),
         rs: Some("rust/client/core/src/perf/perf.spec.rs"),
-        enum_scope: EnumScope::Named(&["WAKES", "HIT_KINDS"]),
+        enum_scope: EnumScope::Named(&["HIT_KINDS"]),
         ..DataSpec::DEFAULT
     },
 ];

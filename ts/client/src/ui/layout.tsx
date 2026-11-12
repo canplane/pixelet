@@ -3,7 +3,7 @@
 import { Component, type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { Message } from "@/abi/cmd.spec.ts";
+import { Message } from "@/abi/ui.ts";
 import { BOOT_LOADING, BOOT_STARTED } from "@/abi/state.ts";
 import { installConsole } from "@/ui/feature/debug/console.ts";
 import { useStanding } from "./feature/cover/standing.ts";

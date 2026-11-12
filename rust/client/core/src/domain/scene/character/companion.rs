@@ -29,7 +29,7 @@ use crate::domain::setting::store::settings;
 use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::sys::sched::tick::TickContext;
-use crate::sys::sched::wake_at;
+use crate::sys::sched::invalidate_at;
 use pxl_render::gpu::api::Image;
 use pxl_render::gpu::draw::{Draw, DrawList};
 use pxl_spec::asset::character::IDLE_CLIP;
@@ -360,7 +360,7 @@ impl Walk {
             }
             let just_settled = self.settle.update(target, now, SETTLE_DELAY_S);
             if self.settle.last_seen != self.settle.settled_at {
-                wake_at((self.settle.last_change_time + SETTLE_DELAY_S) * 1000.0);
+                invalidate_at((self.settle.last_change_time + SETTLE_DELAY_S) * 1000.0);
             }
             // A release fixes the destination at once. A pan begun within the
             // settle delay keeps the target moving, so waiting for it to settle

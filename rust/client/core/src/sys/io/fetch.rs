@@ -9,7 +9,6 @@
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 use xpute_core::io::fs::Fd;
-use xpute_core::sched::turn::{notified, yield_if_spent, Notify};
 use xpute_kit::collection::list::List;
 use xpute_kit::status::errno::Errno;
 
@@ -19,15 +18,7 @@ use crate::sys::io::failure::{exit_of, Exit, Failure};
 use crate::sys::io::file::{self, OpenResult, Owner, Request};
 use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::request::{attempt_of, settle};
-use crate::sys::sched::{self, request_world_tick};
-
-/// A fetch's end, held until the turn hands it on: its body, filled, or None
-/// where the source has no object; or how the attempt ended without one.
-struct Arrival {
-    key: u64,
-    body: Result<Option<Packet>, Exit>,
-    net_ms: f64,
-}
+use crate::sys::sched::invalidate;
 
 /// A body, or the source's absence, held until the layer that asked takes
 /// it.
@@ -42,26 +33,18 @@ pub struct Response {
 
 const CREDITS: usize = MAX_CREDITS as usize;
 
-/// The arrivals and the answers, oldest first, past `drop_stopped`. Each is
-/// a live attempt's, on a credit.
+/// The answers, oldest first, past `drop_stopped`. Each is a live attempt's,
+/// on a credit.
 struct Queue {
-    arrivals: List<Arrival, CREDITS>,
     answers: List<Response, CREDITS>,
-    notify: Notify,
 }
 
 static QUEUE: Global<Queue> = Global::new();
 
 fn queue() -> &'static mut Queue {
     QUEUE.get(|| Queue {
-        arrivals: List::new(),
         answers: List::new(),
-        notify: Notify::new(),
     })
-}
-
-fn notify() -> &'static mut Notify {
-    &mut queue().notify
 }
 
 /// Opens the file of `stream`'s want `id`.
@@ -109,57 +92,17 @@ pub fn on_read(key: u64, at_ms: f64, read: Result<Packet, Errno>) {
     arrive(key, at_ms, body);
 }
 
-/// Queues an attempt's end for the turn to hand on; one the scheduler no
-/// longer holds is dropped, and its body given back.
+/// Answers an attempt's end to its layer, and asks for a frame to take it;
+/// any other end settles the attempt here. One the scheduler no longer holds
+/// is dropped, and its body given back.
 fn arrive(key: u64, at_ms: f64, body: Result<Option<Packet>, Exit>) {
     drop_stopped();
-    if attempt_of(key).is_none() {
-        return;
-    }
-    let q = queue();
-    q.arrivals.push(Arrival {
-        key,
-        body,
-        net_ms: now() - at_ms,
-    });
-    q.notify.notify();
-}
-
-/// Gives back the bodies of what the scheduler no longer holds. This asks
-/// for no time of the turn, so it runs whether or not the turn is spent.
-fn drop_stopped() {
-    let q = queue();
-    q.arrivals.retain(|a| attempt_of(a.key).is_some());
-    q.answers.retain(|a| attempt_of(a.key).is_some());
-}
-
-/// Hands on each arrival, oldest first, and yields where the turn is spent.
-/// The layer decodes what it is handed (domain/view/demand.rs
-/// `admit_arrived`).
-#[embassy_executor::task]
-pub async fn fetch_task() {
-    loop {
-        notified(notify).await;
-        while !queue().arrivals.is_empty() {
-            yield_if_spent(sched::turn).await;
-            drop_stopped();
-            if !queue().arrivals.is_empty() {
-                arrived(queue().arrivals.remove(0));
-            }
-        }
-    }
-}
-
-/// Answers a body or an absence to its layer, and asks for a turn to take
-/// it. Any other end settles the attempt here.
-fn arrived(a: Arrival) {
-    let key = a.key;
     let Some((stream, id)) = attempt_of(key) else {
         return;
     };
     let mut phases = PhaseList::default();
-    phases.push(TaskPhaseName::net_ms, a.net_ms);
-    match a.body {
+    phases.push(TaskPhaseName::net_ms, now() - at_ms);
+    match body {
         Ok(pkt) => {
             if let Some(pkt) = &pkt {
                 phases.push(TaskPhaseName::bytes, pkt.len() as f64);
@@ -171,10 +114,15 @@ fn arrived(a: Arrival) {
                 pkt,
                 phases,
             });
-            request_world_tick();
+            invalidate();
         }
         Err(exit) => settle(key, exit, Some(phases)),
     }
+}
+
+/// Gives back the bodies of what the scheduler no longer holds.
+fn drop_stopped() {
+    queue().answers.retain(|a| attempt_of(a.key).is_some());
 }
 
 /// How many answers to any stream in `of` wait to be taken.

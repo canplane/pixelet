@@ -24,8 +24,8 @@ use crate::domain::setting::store::settings;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
 use crate::domain::view::lens::StepClock;
 use crate::domain::view::observation;
-use crate::sys::sched::clock::wall_now;
-use crate::sys::sched::wake_at;
+use xpute_core::clock::wall;
+use crate::sys::sched::invalidate_at;
 use celestial::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
 use xpute_core::clock::now;
 use xpute_core::global::Global;
@@ -35,8 +35,8 @@ use xpute_core::global::Global;
 /// sky moves with the wall clock while nothing else asks for a frame, so
 /// without this wake a still view would never show it move.
 pub fn environment_step() {
-    let next_ms = environment().observe(wall_now());
-    wake_at(now() + next_ms);
+    let next_ms = environment().observe(wall());
+    invalidate_at(now() + next_ms);
 }
 
 static ENVIRONMENT: Global<EnvironmentDraw> = Global::new();

@@ -9,7 +9,7 @@ use crate::domain::control::edit::{hover, tool};
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::preview::{Draft, RenderEdit};
-use crate::sys::sched::request_world_tick;
+use crate::sys::sched::invalidate;
 use pxl_engine::answer::{self, PLACED_ASSET};
 use pxl_spec::asset::id::solid;
 use pxl_spec::asset::marker::{MARKER, MARKER_TEXT_CHARS};
@@ -145,7 +145,7 @@ pub fn draft_at(at: Octant) {
             .to_string(),
     };
     *draft_mut() = Some(Draft { at, text });
-    request_world_tick();
+    invalidate();
 }
 
 /// Opens a new marker's draft for a marker tool's tap on the free cell whose
@@ -156,7 +156,7 @@ pub fn draft_new(corner: &Q3) {
 
 pub fn cancel_draft() {
     if draft_mut().take().is_some() {
-        request_world_tick();
+        invalidate();
     }
 }
 
@@ -175,7 +175,7 @@ pub fn set_draft_text(text: &str) -> Result<(), Errno> {
     if let Some(d) = draft_mut() {
         d.text.clear();
         d.text.push_str(text);
-        request_world_tick();
+        invalidate();
     }
     Ok(())
 }
@@ -186,7 +186,7 @@ pub fn commit_draft() {
     let Some(Draft { at, text }) = draft_mut().take() else {
         return;
     };
-    request_world_tick();
+    invalidate();
     let (zoom, cell) = (at.zoom(), at.at());
     let stands = match World::now().entry_at(at) {
         Some(e) => e.asset() == Asset::Marker,

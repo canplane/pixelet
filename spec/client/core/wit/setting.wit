@@ -1,0 +1,7 @@
+package pxl:core@0.1.0;
+
+interface setting {
+  dev: func(dev: bool);
+  // A setting by its number in schema.json's SETTING.
+  set: func(key: u32, val: u32);
+}

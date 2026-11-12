@@ -204,7 +204,7 @@ unsafe fn give(block: Block) {
     run.out &= !bit;
     s.releases = s.releases.wrapping_add(1);
     if core::mem::take(&mut s.waited) {
-        sched::request_world_tick();
+        sched::invalidate();
     }
     if run.out == 0 {
         let run = s.runs.swap_remove(i);

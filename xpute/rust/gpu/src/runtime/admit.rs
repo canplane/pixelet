@@ -31,33 +31,14 @@ impl Drop for FrameGuard {
     }
 }
 
-/// The rule `admit_frame` keeps, for whoever asks beside the running stream.
-pub(super) struct Admission {
-    unfinished_cnt: Arc<AtomicU32>,
-    frame_latency: u32,
-}
-
-impl Admission {
-    pub(super) fn admits(&self) -> bool {
+impl GpuRuntime {
+    /// This says whether this turn may draw a frame. It may while fewer frames
+    /// than the frame latency are unfinished.
+    pub fn admit_frame(&self) -> bool {
         crate::admit::admits(
             self.unfinished_cnt.load(Ordering::Relaxed),
             self.frame_latency,
         )
-    }
-}
-
-impl GpuRuntime {
-    pub(super) fn admission(&self) -> Admission {
-        Admission {
-            unfinished_cnt: self.unfinished_cnt.clone(),
-            frame_latency: self.frame_latency,
-        }
-    }
-
-    /// This says whether this turn may draw a frame. It may while fewer frames
-    /// than the frame latency are unfinished.
-    pub fn admit_frame(&self) -> bool {
-        self.admission().admits()
     }
 
     /// Counts a frame the stream drew as unfinished until the queue has done

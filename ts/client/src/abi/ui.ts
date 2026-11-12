@@ -1,0 +1,356 @@
+// @pxl/client/abi/ui.ts
+//
+// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
+import { Branch, type NodeCursor } from "@xpute/kit/wire/xtp/mod.ts";
+import {
+  type Link,
+  type LinkObject,
+  type Method,
+  open as open_uri,
+  refusal_of,
+  type Ref,
+  type Sender,
+  uri,
+} from "@xpute/runtime";
+import * as link from "@xpute/runtime/abi/link.ts";
+import * as types from "./types.ts";
+
+/** The singleton's URI. */
+export const URI = uri("pxl:core", "ui");
+
+/** `sensor-start` */
+export const SENSOR_START: Method = 0;
+/** `sensor-stop` */
+export const SENSOR_STOP: Method = 1;
+/** `show` */
+export const SHOW: Method = 2;
+/** `view` */
+export const VIEW: Method = 3;
+
+export const GroundStatus = {
+  Idle: 0,
+  Loading: 1,
+  Success: 2,
+} as const;
+export type GroundStatus = (typeof GroundStatus)[keyof typeof GroundStatus];
+
+export const SensorStatus = {
+  Idle: 0,
+  Loading: 1,
+  Ready: 2,
+  Error: 3,
+  Unavailable: 4,
+} as const;
+export type SensorStatus = (typeof SensorStatus)[keyof typeof SensorStatus];
+
+export const Message = {
+  GeolocationUnsupported: 0,
+  GeolocationPermissionDenied: 1,
+  GeolocationPositionUnavailable: 2,
+  GeolocationTimeout: 3,
+  GeolocationGenericError: 4,
+  WorldReadFailing: 5,
+  WorldUnavailable: 6,
+} as const;
+export type Message = (typeof Message)[keyof typeof Message];
+
+export interface LonLat {
+  lon: number;
+  lat: number;
+}
+
+export function write_LonLat(r: LonLat): Branch {
+  return new Branch([r.lon, r.lat]);
+}
+
+export function read_LonLat(c: NodeCursor): LonLat {
+  const b = c.as_branch();
+  return {
+    lon: b.at(0).get_number(),
+    lat: b.at(1).get_number(),
+  };
+}
+
+export interface PivotState {
+  status: GroundStatus;
+  is_off_center: boolean;
+  lon_lat: LonLat | null;
+  outside: boolean;
+}
+
+export function write_PivotState(r: PivotState): Branch {
+  return new Branch([
+    r.status,
+    r.is_off_center,
+    r.lon_lat === null ? null : write_LonLat(r.lon_lat),
+    r.outside,
+  ]);
+}
+
+export function read_PivotState(c: NodeCursor): PivotState {
+  const b = c.as_branch();
+  return {
+    status: b.at(0).get_number() as GroundStatus,
+    is_off_center: b.at(1).get_bool(),
+    lon_lat: b.at(2).get_opt((c) => read_LonLat(c)),
+    outside: b.at(3).get_bool(),
+  };
+}
+
+export interface LocationState {
+  status: SensorStatus;
+  has_location: boolean;
+  watching: boolean;
+  err: Message | null;
+}
+
+export function write_LocationState(r: LocationState): Branch {
+  return new Branch([r.status, r.has_location, r.watching, r.err]);
+}
+
+export function read_LocationState(c: NodeCursor): LocationState {
+  const b = c.as_branch();
+  return {
+    status: b.at(0).get_number() as SensorStatus,
+    has_location: b.at(1).get_bool(),
+    watching: b.at(2).get_bool(),
+    err: b.at(3).get_opt((c) => c.get_number() as Message),
+  };
+}
+
+export interface CompanionState {
+  person_ready: boolean;
+  pet_ready: boolean;
+}
+
+export function write_CompanionState(r: CompanionState): Branch {
+  return new Branch([r.person_ready, r.pet_ready]);
+}
+
+export function read_CompanionState(c: NodeCursor): CompanionState {
+  const b = c.as_branch();
+  return {
+    person_ready: b.at(0).get_bool(),
+    pet_ready: b.at(1).get_bool(),
+  };
+}
+
+export interface OrientationState {
+  status: SensorStatus;
+}
+
+export function write_OrientationState(r: OrientationState): Branch {
+  return new Branch([r.status]);
+}
+
+export function read_OrientationState(c: NodeCursor): OrientationState {
+  const b = c.as_branch();
+  return {
+    status: b.at(0).get_number() as SensorStatus,
+  };
+}
+
+export interface DivisionPart {
+  subtype: number;
+  name: string;
+  shown: boolean;
+  area: boolean;
+}
+
+export function write_DivisionPart(r: DivisionPart): Branch {
+  return new Branch([r.subtype, r.name, r.shown, r.area]);
+}
+
+export function read_DivisionPart(c: NodeCursor): DivisionPart {
+  const b = c.as_branch();
+  return {
+    subtype: b.at(0).get_number(),
+    name: b.at(1).get_str(),
+    shown: b.at(2).get_bool(),
+    area: b.at(3).get_bool(),
+  };
+}
+
+export interface RefusedFile {
+  path: link.Token[];
+}
+
+export function write_RefusedFile(r: RefusedFile): Branch {
+  return new Branch([new Branch(r.path.map((x) => link.write_Token(x)))]);
+}
+
+export function read_RefusedFile(c: NodeCursor): RefusedFile {
+  const b = c.as_branch();
+  return {
+    path: b
+      .at(0)
+      .as_branch()
+      .children()
+      .map((c) => link.read_Token(c)),
+  };
+}
+
+export interface Snapshot {
+  pivot: PivotState;
+  location: LocationState;
+  companion: CompanionState;
+  draft: string | null;
+  orient: OrientationState;
+  is_follow_mode: boolean;
+  camera_busy: boolean;
+  zooming: boolean;
+  over_marker: boolean;
+  settings: number[];
+  division: DivisionPart[];
+  character_surfaces: number[];
+  refused_files: RefusedFile[];
+  stall: Message | null;
+  renderer_progress: number;
+  area_progress: number;
+}
+
+export function write_Snapshot(r: Snapshot): Branch {
+  return new Branch([
+    write_PivotState(r.pivot),
+    write_LocationState(r.location),
+    write_CompanionState(r.companion),
+    r.draft,
+    write_OrientationState(r.orient),
+    r.is_follow_mode,
+    r.camera_busy,
+    r.zooming,
+    r.over_marker,
+    new Branch(r.settings.map((x) => x)),
+    new Branch(r.division.map((x) => write_DivisionPart(x))),
+    new Branch(r.character_surfaces.map((x) => x)),
+    new Branch(r.refused_files.map((x) => write_RefusedFile(x))),
+    r.stall,
+    r.renderer_progress,
+    r.area_progress,
+  ]);
+}
+
+export function read_Snapshot(c: NodeCursor): Snapshot {
+  const b = c.as_branch();
+  return {
+    pivot: read_PivotState(b.at(0)),
+    location: read_LocationState(b.at(1)),
+    companion: read_CompanionState(b.at(2)),
+    draft: b.at(3).get_opt((c) => c.get_str()),
+    orient: read_OrientationState(b.at(4)),
+    is_follow_mode: b.at(5).get_bool(),
+    camera_busy: b.at(6).get_bool(),
+    zooming: b.at(7).get_bool(),
+    over_marker: b.at(8).get_bool(),
+    settings: b
+      .at(9)
+      .as_branch()
+      .children()
+      .map((c) => c.get_number()),
+    division: b
+      .at(10)
+      .as_branch()
+      .children()
+      .map((c) => read_DivisionPart(c)),
+    character_surfaces: b
+      .at(11)
+      .as_branch()
+      .children()
+      .map((c) => c.get_number()),
+    refused_files: b
+      .at(12)
+      .as_branch()
+      .children()
+      .map((c) => read_RefusedFile(c)),
+    stall: b.at(13).get_opt((c) => c.get_number() as Message),
+    renderer_progress: b.at(14).get_number(),
+    area_progress: b.at(15).get_number(),
+  };
+}
+
+export interface Ui {
+  sensor_start(sensor: types.Sensor): void;
+  sensor_stop(sensor: types.Sensor): void;
+  show(snapshot: Snapshot): void;
+  view(azimuth: number, m_per_px: number): void;
+}
+
+/** The object over `imp`. */
+function object(imp: Ui): LinkObject {
+  return {
+    call(m, tag, args) {
+      try {
+        switch (m) {
+          case SENSOR_START: {
+            if (args === null) return Errno.EBADMSG;
+            imp.sensor_start(args.at(0).get_number() as types.Sensor);
+            return 0;
+          }
+          case SENSOR_STOP: {
+            if (args === null) return Errno.EBADMSG;
+            imp.sensor_stop(args.at(0).get_number() as types.Sensor);
+            return 0;
+          }
+          case SHOW: {
+            if (args === null) return Errno.EBADMSG;
+            imp.show(read_Snapshot(args.at(0)));
+            return 0;
+          }
+          case VIEW: {
+            if (args === null) return Errno.EBADMSG;
+            imp.view(args.at(0).get_number(), args.at(1).get_number());
+            return 0;
+          }
+          default:
+            return Errno.ENOSYS;
+        }
+      } catch (e) {
+        return refusal_of(e);
+      }
+    },
+  };
+}
+
+/** Mounts `imp` at the URI, one object for every open. */
+export function mount(link: Pick<Link, "mount">, imp: Ui): void {
+  const o = object(imp);
+  link.mount(URI, () => o);
+}
+
+/** Opens the singleton on the other side, once, at boot. */
+export async function open(link: Sender): Promise<Ref> {
+  return { link, handle: await open_uri(link, URI) };
+}
+
+export async function sensor_start(
+  ref: Ref,
+  sensor: types.Sensor,
+): Promise<void> {
+  const a = await ref.link.send(ref.handle, SENSOR_START, [sensor]);
+  if (a.result < 0) throw new XputeError(a.result);
+}
+
+export async function sensor_stop(
+  ref: Ref,
+  sensor: types.Sensor,
+): Promise<void> {
+  const a = await ref.link.send(ref.handle, SENSOR_STOP, [sensor]);
+  if (a.result < 0) throw new XputeError(a.result);
+}
+
+export async function show(ref: Ref, snapshot: Snapshot): Promise<void> {
+  const a = await ref.link.send(ref.handle, SHOW, [write_Snapshot(snapshot)]);
+  if (a.result < 0) throw new XputeError(a.result);
+}
+
+export async function view(
+  ref: Ref,
+  azimuth: number,
+  m_per_px: number,
+): Promise<void> {
+  const a = await ref.link.send(ref.handle, VIEW, [azimuth, m_per_px]);
+  if (a.result < 0) throw new XputeError(a.result);
+}

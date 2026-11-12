@@ -71,11 +71,6 @@
     ],
     "bytes": 4096
   },
-  "fs": {
-    "$doc": [
-      "Its files: the bakes' tiles, the shipped assets, the platform's storage and the placed objects' source, behind one binding (ts/client/src/service/sys/fs/binding.ts)."
-    ]
-  },
   "stream": {
     "bytes": 4194304
   },

@@ -166,19 +166,20 @@ export interface GpuGrant {
   shown(): boolean;
 }
 
-/** Grants `gpu` the core's memory and stream on `r`, the runtime beside it, its
- * commands on the program's `major`, and the program's settings `cfg`. */
+/** Grants `gpu` the core's memory on `r`, the runtime beside it, the stream
+ * and the ask the core's manifest `m` gives, its commands on the program's
+ * `major`, and the program's settings `cfg`. */
 export function gpu_grant(
   gpu: Gpu,
   r: Runtime,
-  ask: GpuAsk,
+  m: { stream_at: u32; gpu: GpuAsk },
   major: u32,
   cfg: GpuConfig,
 ): void {
   gpu.grant({
     mem: r.core.mem,
-    at: r.head.stream_at,
-    ask,
+    at: m.stream_at,
+    ask: m.gpu,
     cfg,
     ready: () => gpu_exports(r, major).gpu_ready(),
     wake: r.wake,

@@ -41,7 +41,7 @@ use xpute_kit::status::errno::Errno;
 use crate::domain::layer::object::ext::{Ext, Pool, NONE};
 use crate::domain::layer::object::sparse_tree::SparseTree;
 use crate::domain::layer::object::volume::fold;
-use crate::sys::sched::request_world_tick;
+use crate::sys::sched::invalidate;
 use pxl_engine::object::{self, path, NodeSlot};
 use pxl_render::gpu::api;
 use pxl_render::ray::ObjectTable;
@@ -114,7 +114,7 @@ static DAMAGE: Global<Vec<Aabb>> = Global::new();
 /// (`take_damage`).
 pub(super) fn note_damage(regions: &[Aabb]) {
     DAMAGE.get(Vec::new).extend_from_slice(regions);
-    request_world_tick();
+    invalidate();
 }
 
 /// Moves into `out` the damage noted since the turn last took it.

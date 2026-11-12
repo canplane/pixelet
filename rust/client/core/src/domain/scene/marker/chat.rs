@@ -13,7 +13,7 @@ use xpute_core::global::Global;
 
 use crate::domain::scene::marker::design::Design;
 use crate::domain::scene::marker::param::SHOWN_MS;
-use crate::sys::sched::wake_at;
+use crate::sys::sched::invalidate_at;
 
 /// A line is stamped with the runtime's clock, not the frame's. A line said
 /// after a still spell would otherwise take the last frame's time and read
@@ -49,7 +49,7 @@ pub(super) fn shown_line() -> Option<Design> {
     if line.at_ms + SHOWN_MS <= now() {
         return None;
     }
-    wake_at(line.at_ms + SHOWN_MS);
+    invalidate_at(line.at_ms + SHOWN_MS);
     Some(Design::Bubble {
         text: line.text.clone(),
     })

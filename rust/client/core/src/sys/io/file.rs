@@ -42,7 +42,7 @@ use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::room::Refusal;
 use crate::sys::io::{fetch, loader};
 use crate::sys::manifest::MANIFEST;
-use crate::sys::sched::request_world_tick;
+use crate::sys::sched::invalidate;
 
 pub enum StorageRead {
     /// Nothing was kept, or the file was empty.
@@ -223,7 +223,7 @@ fn on_storage_read(read: Result<Packet, Errno>) {
 
 fn set_read(read: ReadState) {
     fs().storage = Some(read);
-    request_world_tick();
+    invalidate();
 }
 
 /// What the storage file held, once it is read whole, or None until then.
@@ -256,7 +256,7 @@ fn storage_of(bytes: &[u8]) -> StorageRead {
 /// client, which sets the file aside.
 fn refuse() -> StorageRead {
     fs().refused = true;
-    request_world_tick();
+    invalidate();
     StorageRead::Unreadable
 }
 

@@ -12,7 +12,7 @@ import {
   kindOf,
   MARKER,
 } from "@/ui/shared/asset/catalog.ts";
-import { Tool } from "@/abi/cmd.spec.ts";
+import { Tool } from "@/abi/edit.ts";
 import { OBJECT_SCALES } from "@/ui/feature/world/object.spec.ts";
 import * as storage from "@/service/platform/storage.ts";
 import * as DockMode from "./mode.ts";

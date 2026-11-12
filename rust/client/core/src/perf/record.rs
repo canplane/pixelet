@@ -15,7 +15,7 @@ use pxl_render::renderer::GpuRead;
 use xpute_core::clock::now;
 use xpute_core::global::Global;
 
-use crate::perf::frame::{over_ms, FrameSample, WorstFrame};
+use crate::perf::frame::{FrameSample, WorstFrame};
 use crate::perf::report::RayRead;
 use crate::perf::section::{RecordingSection, RecordingStateSection};
 use crate::perf::spec::LIMIT;
@@ -132,16 +132,9 @@ struct Perf {
     /// first `strtab_len` bytes are taken.
     strtab: Box<[u8]>,
     strtab_len: usize,
-    /// The interval in progress. It is the last frame turn's record, and
-    /// every turn after it adds its time here until the next frame turn
-    /// closes it.
+    /// The interval in progress: the last frame's record, which the profiler's
+    /// reads add their time to until the next frame closes it.
     open: Option<FrameSample>,
-    /// How long this turn's frame task ran. The turn's end subtracts it from
-    /// the time the turn's tasks ran.
-    frame_task_ms: f64,
-    /// Whether this turn served the UI's read of the profiler. Such a turn's
-    /// wake is not the world's, so it is not recorded.
-    read_turn: bool,
 }
 
 static PERF: Global<Perf> = Global::new();
@@ -165,8 +158,6 @@ fn perf() -> &'static mut Perf {
         strtab: Box::default(),
         strtab_len: 0,
         open: None,
-        frame_task_ms: 0.0,
-        read_turn: false,
     })
 }
 
@@ -281,27 +272,21 @@ pub fn perf_record(row: impl FnOnce(&mut dyn FnMut(&'static str) -> Option<u32>)
     }
 }
 
-/// Records a frame turn whose record is `s`. It closes the interval in
-/// progress with `interval_ms`, the runtime's gap that just ended, and
-/// `settled`, whether the runtime settled it. It then lands that interval and
-/// opens `s`'s. `frame_task_ms` is how long the frame task ran, which the
-/// turn's end subtracts from the tasks' time.
-pub fn perf_record_frame(s: FrameSample, interval_ms: f64, settled: bool, frame_task_ms: f64) {
+/// Records a frame whose record is `s`. It closes the interval in progress
+/// with `interval_ms`, the gap that just ended, and `settled`, whether that
+/// frame asked for no next one. It then lands that interval and opens `s`'s.
+pub fn perf_record_frame(s: FrameSample, interval_ms: f64, settled: bool) {
     let l = perf();
     if !l.recording {
         return;
     }
     let at = now();
-    l.frame_task_ms = frame_task_ms;
     if let Some(mut f) = l.open.replace(s) {
         (f.interval_ms, f.settled) = (interval_ms, f64::from(u8::from(settled)));
-        f.over_ms = over_ms(&f);
         land(l, f);
     }
-    // Landing the record is profiler time too, so it moves out of the frame
-    // task's time and into `perf_ms`.
+    // Landing the record is profiler time too, so it goes into `perf_ms`.
     let ms = now() - at;
-    l.frame_task_ms += ms;
     if let Some(f) = l.open.as_mut() {
         f.perf_ms += ms;
     }
@@ -369,32 +354,11 @@ pub fn perf_recording_extremes() -> RecordingSection {
     perf().extreme
 }
 
-/// Records the end of any turn, frame turn or not, into the interval in
-/// progress: its time from start to end, the part its tasks took, and the
-/// wake it asked as it ended. A turn that served the UI's read of the profiler
-/// leaves the wake unrecorded.
-pub fn perf_record_turn(turn_ms: f64, poll_ms: f64, wake: f64) {
-    let l = perf();
-    let frame_task_ms = core::mem::take(&mut l.frame_task_ms);
-    let read_turn = core::mem::take(&mut l.read_turn);
-    let Some(f) = l.open.as_mut().filter(|_| l.recording) else {
-        return;
-    };
-    f.turns += 1.0;
-    f.busy_ms += turn_ms;
-    // The frame task runs inside the poll, so this is never negative.
-    f.tasks_ms += poll_ms - frame_task_ms;
-    if !read_turn {
-        f.wake = wake;
-    }
-}
-
-/// Records that this turn served the UI's read of the profiler, which took
+/// Records that an entry served the UI's read of the profiler, which took
 /// `ms`. That time is the profiler's cost to the interval in progress
 /// (`perf_ms`).
 pub fn perf_record_read(ms: f64) {
     let l = perf();
-    l.read_turn = true;
     if let Some(f) = l.open.as_mut().filter(|_| l.recording) {
         f.perf_ms += ms;
     }

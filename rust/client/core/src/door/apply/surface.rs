@@ -7,7 +7,7 @@ use super::{or_refuse, refuse_unless};
 use crate::domain::control::sensor;
 use crate::domain::scene::resolution;
 use crate::domain::view::frame::pose::view_resize;
-use crate::sys::sched::request_world_tick;
+use crate::sys::sched::invalidate;
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::surface;
 use xpute_core::io::door::Outcome;
@@ -19,7 +19,7 @@ use xpute_kit::status::errno::Errno;
 pub(super) fn open() -> Outcome {
     let handle = surface::surface_open();
     if handle != 0 {
-        request_world_tick();
+        invalidate();
     }
     Ok(Some((handle as i32).into()))
 }
@@ -38,7 +38,7 @@ pub(super) fn draw_world(handle: u32) -> bool {
         s.ratio = resolution::surface_ratio(s.role, [s.px_w, s.px_h], s.dpr);
         view_resize(f64::from(s.px_w) / s.dpr, f64::from(s.px_h) / s.dpr);
     }
-    request_world_tick();
+    invalidate();
     true
 }
 
@@ -57,7 +57,7 @@ pub(super) fn resize(c: GpuSurfaceResize) -> Outcome {
             f64::from(c.height) / c.device_pixel_ratio,
         );
     }
-    request_world_tick();
+    invalidate();
     Ok(Some(0.into()))
 }
 

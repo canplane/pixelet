@@ -8,7 +8,7 @@
 
 use crate::domain::scene::character::companion::companion_surface_draw;
 use crate::domain::scene::character::Group;
-use crate::sys::sched::request_world_tick;
+use crate::sys::sched::invalidate;
 use pxl_render::gpu::api::Image;
 use pxl_render::gpu::draw::Draw;
 use xpute_core::global::Global;
@@ -26,7 +26,7 @@ fn surfaces() -> &'static mut Vec<(u32, Group, u32)> {
 pub fn character_surface_open(id: u32, group: Group, bg: u32) {
     character_surface_close(id);
     surfaces().push((id, group, bg));
-    request_world_tick();
+    invalidate();
 }
 
 /// Stops surface `id` showing a character, and returns whether it showed

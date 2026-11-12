@@ -1,13 +1,12 @@
 // xpute-gen/spec.rs
 
 //! This generates the TypeScript, Rust and C++ code that spec/ JSON describes:
-//! the named values of a data spec (data.rs), the readers and writers of a
-//! command table (cmd.rs), xpute's errno table (errno.rs) and a program's
-//! manifest (manifest.rs). It links none of the crates it writes into.
+//! the named values of a data spec (data.rs), xpute's errno table (errno.rs)
+//! a program's manifest (manifest.rs) and the link's bindings from WIT (wit.rs). It links none of the crates it writes into.
 
-pub mod cmd;
 pub mod data;
 pub mod manifest;
+pub mod wit;
 
 use std::collections::BTreeSet;
 use std::fs::File;

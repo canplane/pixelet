@@ -11,7 +11,6 @@ pub mod spec;
 use crate::domain::layer::Base as _;
 use pxl_spec::space::coord::q3::{self, Q3};
 use spec::{EffectName, StepName};
-use xpute_core::sched::turn::{notified, Notify};
 
 use crate::domain::control::input::{camera_input_step, rehover_at};
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
@@ -23,7 +22,6 @@ use crate::sys::io::request::{pump, set_credits};
 use crate::sys::io::text::text_drop_unread;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use xpute_core::abi::sys::{sys_pace, SysPace};
 
 use crate::domain::control::camera;
 use crate::domain::control::camera::controller;
@@ -46,6 +44,7 @@ use crate::domain::scene::indicator::ghost::ghost_set;
 use crate::domain::scene::indicator::location::location_step;
 use crate::domain::scene::marker;
 use crate::domain::scene::model::draw_list;
+use crate::domain::scene::rate;
 use crate::domain::scene::resolution::Pace;
 use crate::domain::scene::stage;
 use crate::domain::scene::stage::scene_step;
@@ -60,11 +59,12 @@ use crate::perf::report::{perf_frame, set_renderer_frame, FrameTurn};
 use crate::perf::window::perf_follow;
 use crate::pointer;
 use crate::sys::io::demand::Stream;
-use crate::sys::io::fetch;
 use crate::sys::io::loader;
 use crate::sys::io::request;
 use crate::sys::sched::tick::{TickContext, TickReport};
-use crate::sys::sched::{self, executor, request_world_tick};
+use crate::sys::sched::display;
+use crate::sys::sched::{self, executor, invalidate};
+use xpute_gpu::abi::vsync;
 use pxl_render::gpu::api;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -105,14 +105,14 @@ fn edit_tick(_: &mut TickContext) {
     // A changed preview changes the world as drawn, both where the old
     // preview was and where the new one is.
     if write::render_edit_step() {
-        request_world_tick();
+        invalidate();
     }
 }
 
 fn ghost_tick(_: &mut TickContext) {
     use crate::domain::control::edit::ghost::ghost;
     if ghost_set(draw_list(), &ghost()) {
-        request_world_tick();
+        invalidate();
     }
 }
 
@@ -136,7 +136,7 @@ fn demand_tick(ctx: &mut TickContext) {
     if pinned {
         TerrainTile::demand().on_changed();
     }
-    demand::admit_arrived(&ctx.pass);
+    demand::admit_arrived();
     changes_step();
     TerrainTile::demand().step(destination::tile(), clipmap::pinned_tiles());
     // No place tile is fetched while places are hidden.
@@ -185,8 +185,8 @@ fn environment_tick(_: &mut TickContext) {
     environment_step();
 }
 
-/// Runs once, outside any frame. The frame task it spawns sleeps until the
-/// runtime grants the first frame.
+/// Runs once, outside any frame. The frame task it spawns waits until a
+/// frame is asked for.
 pub fn boot() {
     world_tasks();
 }
@@ -218,9 +218,9 @@ const STEPS: [(Phase, &[Step]); 2] = [
     ),
 ];
 
-fn world_tick(delta: f64, deadline_ms: f64, t0: f64) -> TickReport {
+fn world_tick(delta: f64) -> TickReport {
     let start = now();
-    let mut ctx = TickContext::new(delta, deadline_ms, t0);
+    let mut ctx = TickContext::new(delta);
     for (phase, steps) in STEPS {
         ctx.phase(phase, |ctx| {
             for &(name, step) in steps {
@@ -286,12 +286,10 @@ pub fn step_stats() -> impl Iterator<Item = (StepName, StepStat)> {
         .filter(|(_, s)| s.cnt > 0)
 }
 
-/// Spawns the world's two tasks, each one of embassy's static tasks, which
-/// runs for the core's life.
+/// Spawns the world's frame task, one of embassy's static tasks, which runs
+/// for the core's life.
 fn world_tasks() {
-    let spawner = executor::spawner();
-    spawner.spawn(frame_task().or_bug(Errno::ENOSPC));
-    spawner.spawn(fetch::fetch_task().or_bug(Errno::ENOSPC));
+    executor::spawner().spawn(frame_task().or_bug(Errno::ENOSPC));
 }
 
 /// The milliseconds each effect took in the last turn, indexed by
@@ -350,26 +348,12 @@ pub fn world_turn() -> f64 {
     now() - at
 }
 
-pub struct TurnGrant {
-    pub delta: f64,
-    /// The display's refresh interval, and the interval the runtime paces
-    /// turns at (`paced_ms`), both in milliseconds. The paced interval is a
-    /// whole number of refreshes and is the frame's budget. The client sets
-    /// this pacing when it boots xpute's runtime (@xpute/runtime
-    /// sched/frame_pacing.ts `FrameGrant`).
-    pub refresh_ms: f64,
-    pub paced_ms: f64,
-    pub interactive: bool,
-}
-
-static FRAME: Global<Option<TurnGrant>> = Global::new();
-static FRAMES: Global<Notify> = Global::new();
-static NEW_FRAME: Global<bool> = Global::new();
 static REFUSED: Global<Refused> = Global::new();
+/// When the last frame ran.
+static LAST: Global<Option<f64>> = Global::new();
 
-/// The frames the runtime granted that did not run since boot, by why
-/// (`frame_task`): the GPU admitted none, or the runtime still held the
-/// stream.
+/// The frames that did not run since boot, by why (`frame_task`): the GPU
+/// admitted none, or the runtime still held the stream.
 #[derive(Clone, Copy, Default)]
 pub struct Refused {
     pub admit: f64,
@@ -380,43 +364,33 @@ pub fn refused_frames() -> Refused {
     *REFUSED.get(Refused::default)
 }
 
-fn frames() -> &'static mut Notify {
-    FRAMES.get(Notify::new)
-}
-
-/// Takes a frame the runtime granted. A frame still waiting for the GPU is
-/// replaced by this one, and its elapsed time is added to this one's.
-pub fn grant_world_frame(grant: TurnGrant) {
-    let frame = FRAME.get(|| None);
-    let delta = frame.take().map_or(0.0, |was| was.delta);
-    *frame = Some(TurnGrant {
-        delta: delta + grant.delta,
-        ..grant
-    });
-    frames().notify();
-}
-
-/// Whether a granted frame waits to run. A turn that carries a frame polls
-/// the tasks whatever its deadline, so even a late turn draws.
-pub fn world_frame_waiting() -> bool {
-    FRAME.get(|| None).is_some()
-}
-
-pub fn take_new_frame() -> bool {
-    core::mem::take(NEW_FRAME.get(|| false))
-}
-
 /// The frame runs as one task because its parts must run in order, and
-/// nothing may rely on the order in which the executor runs tasks.
+/// nothing may rely on the order in which the executor runs tasks. It waits
+/// until a frame is asked for, then for vsyncs, each measuring the display
+/// (sys/sched/display.rs), until the frame's target interval (rate.rs) has
+/// passed since the last frame, within half a display interval, and runs the
+/// world's frame.
 #[embassy_executor::task]
 async fn frame_task() {
     loop {
-        notified(frames).await;
-        // A frame whose stream the runtime still holds (xpute_core
-        // io/stream.rs R3), or that the GPU cannot take without blocking
-        // (xpute_gpu::admit), does not run, and is counted by why. Its grant
-        // waits for the next turn, so the renderer is never handed a frame it
-        // would have to put off.
+        if !sched::is_invalid() {
+            display::idle();
+        }
+        sched::invalidated().await;
+        loop {
+            vsync::next().await.or_bug(Errno::EPROTO);
+            let at = now();
+            display::answered(at);
+            let display_ms = display::interval_ms();
+            let target_ms = f64::from(rate::intervals()) * display_ms;
+            if LAST.get(|| None).is_none_or(|last| at - last >= target_ms - display_ms / 2.0) {
+                break;
+            }
+        }
+        // A frame whose stream the runtime still holds, or that the GPU
+        // cannot take without blocking (xpute_gpu::admit), does not run, is
+        // counted by why, and asks for the next, so the renderer is never
+        // handed a frame it would have to put off.
         let refused = REFUSED.get(Refused::default);
         let why = if !api::stream_free() {
             Some(&mut refused.stream)
@@ -427,69 +401,59 @@ async fn frame_task() {
         };
         if let Some(cnt) = why {
             *cnt += 1.0;
-            request_world_tick();
+            invalidate();
             continue;
         }
-        let Some(grant) = FRAME.get(|| None).take() else {
-            continue;
-        };
-        let turn = sched::turn();
-        let paced_ms = grant.paced_ms;
-        world_frame(grant, turn.deadline_ms(), turn.start_at());
-        sched::tasks_after_frame(paced_ms);
+        world_frame();
         clipmap::fill_share();
-        NEW_FRAME.set(true);
     }
 }
 
-fn world_frame(grant: TurnGrant, deadline_ms: f64, start_at: f64) -> TickReport {
-    let TurnGrant {
-        delta,
-        refresh_ms,
-        paced_ms,
-        interactive,
-    } = grant;
+/// Runs the world's frame in its order: the effects, the tick, the requests'
+/// pump and the stage. It steps the world by the time since the last frame,
+/// and the frame is moving where it asked for the next. The frame rate then
+/// judges the frame by its gap and its cost, the GPU's busy time where a read
+/// timed it and the frame's own.
+fn world_frame() -> TickReport {
     let t0 = now();
+    let gap_ms = LAST.get(|| None).map_or(0.0, |at| t0 - at);
+    let delta = gap_ms / 1000.0;
     set_credits(CREDITS);
     text_drop_unread();
     let effects_ms = world_turn();
     // A step longer than MAX_STEP_S would carry a character through a wall
     // or make a damped camera overshoot.
     let step = delta.min(MAX_STEP_S);
-    let report = world_tick(step, deadline_ms, start_at);
+    let report = world_tick(step);
     let after_tick = now();
-    // Requests are pumped once a turn, after every producer has declared its
+    // Requests are pumped once a frame, after every producer has declared its
     // wants: the effects, the tick's tile streams (`demand_tick`), and the
     // assets either of them asked for.
     request::declare(Stream::asset, loader::load_wants());
     pump();
+    let moving = sched::is_invalid();
+    let display_ms = display::interval_ms();
     let frame = stage::stage_render(
         Pace {
-            refresh_ms,
-            paced_ms,
-            gap_ms: delta * 1000.0,
-            moving: interactive,
+            gap_ms,
+            display_ms,
+            moving,
         },
         &write::render_edit(),
     );
-    set_renderer_frame(&frame);
-    if let Some(interval_ms) = frame.interval_ms {
-        sys_pace(&SysPace { interval_ms });
-    }
     let end = now();
+    let gpu_ms = frame.stat.as_ref().and_then(|s| s.gpu).map_or(0.0, |g| g.busy_ms);
+    rate::judge(gap_ms, gpu_ms.max(end - t0), display_ms);
+    set_renderer_frame(&frame);
     perf_frame(FrameTurn {
         tick: report,
-        interval_ms: delta * 1000.0,
-        refresh_ms,
-        paced_ms,
-        settled: !interactive,
+        refresh_ms: display_ms,
+        paced_ms: gap_ms,
+        settled: !moving,
         effects_ms,
         stage_ms: end - after_tick,
-        task_ms: end - t0,
     });
-    if report.invalidated {
-        request_world_tick();
-    }
+    LAST.set(Some(t0));
     report
 }
 

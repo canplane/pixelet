@@ -1,84 +1,59 @@
 // @xpute/runtime/io/frame.ts
 
-/** A frame's four words are laid out by spec/io/frame.json, and its packet,
- * when it has one, lies right past them. */
+/**
+ * A frame is four words: the request's tag, its command, the result, and the
+ * packet's length. The command is the RES bit (31), the handle the callee
+ * issued (bits 8..30) and the method's place among its object's (bits 0..7).
+ * The packet, the method's args in XTP, lies right past the words. The words
+ * are little-endian (xpute-core io/frame.rs).
+ */
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
-import type { U8Array } from "@xpute/kit/abi/array.ts";
-import * as spec from "./frame.spec.ts";
 
-// The frame's words by name, but the command word's index, which
-// frame.spec.ts keeps: `CMD` here is the command number's helper.
-export {
-  ACKREQ,
-  FLAG_SHIFT,
-  PKT,
-  PROGRAM_MAJOR,
-  RES,
-  RESULT,
-  TAG,
-  WORDS,
-} from "./frame.spec.ts";
-
-const CMD_MASK: u32 = (1 << spec.FLAG_SHIFT) - 1;
-
-export const CMD_WORD = (cmd: u32, flags: u32): u32 =>
-  ((flags << spec.FLAG_SHIFT) | (cmd & CMD_MASK)) >>> 0;
-
-export const CMD_OF = (word: u32): u32 => word & CMD_MASK;
-
-export const FLAGS_OF = (word: u32): u32 => word >>> spec.FLAG_SHIFT;
-
-/** A command's number is `major << 8 | minor`, which fits the 16 bits a
- * frame carries for it; its major says what answers it. */
-export const CMD = (major: u32, minor: u32): u32 =>
-  ((major & 0xff) << 8) | (minor & 0xff);
-
-export const CMD_MAJOR = (cmd: u32): u32 => (cmd >>> 8) & 0xff;
-
-export const CMD_MINOR = (cmd: u32): u32 => cmd & 0xff;
+const TAG = 0;
+const CMD = 1;
+const RESULT = 2;
+const PKT = 3;
 
 /** The bytes a frame's words take, before its packet. */
-export const WORD_BYTES: u32 = spec.WORDS * 4;
+export const WORD_BYTES: u32 = 16;
 
-/** A frame as laid in a core's memory: its words, and its packet, which lies
- * right past them. */
+/** The bit of the command that marks a later answer. */
+const RES = 0x8000_0000;
+/** The bits of the command below the handle, which hold the method. */
+const METHOD_BITS = 8;
+
+/** The largest handle a command holds. */
+export const HANDLE_MAX: u32 = RES / (1 << METHOD_BITS) - 1;
+
 export interface Frame {
   tag: u32;
-  cmd: u32;
-  flags: u32;
+  /** A later answer, to the receiver's request `tag`. */
+  res: boolean;
+  handle: u32;
+  method: u32;
   result: i32;
-  pkt: U8Array | null;
+  pkt_len: u32;
 }
 
-/** The frame laid at `at`, its packet a view of the memory where it lies,
- * right past its words. */
-export function frame_at(mem: ArrayBuffer, at: u32): Frame {
-  const w = new Uint32Array(mem, at, spec.WORDS);
+/** The frame laid at `at`. */
+export function read(v: DataView, at: u32): Frame {
+  const word = (k: u32): u32 => v.getUint32(at + 4 * k, true);
+  const cmd = word(CMD);
   return {
-    tag: w[spec.TAG],
-    cmd: CMD_OF(w[spec.CMD]),
-    flags: FLAGS_OF(w[spec.CMD]),
-    result: w[spec.RESULT] | 0,
-    pkt:
-      w[spec.PKT] === 0
-        ? null
-        : new Uint8Array(mem, at + WORD_BYTES, w[spec.PKT]),
+    tag: word(TAG),
+    res: (cmd & RES) !== 0,
+    handle: (cmd & ~RES) >>> METHOD_BITS,
+    method: cmd & ((1 << METHOD_BITS) - 1),
+    result: word(RESULT) | 0,
+    pkt_len: word(PKT),
   };
 }
 
-/** Whether the `len` bytes at `at` are the core's to lend: inside its memory
- * and not at offset 0, which is no core's. No bytes lend nothing, wherever. */
-export function in_core(mem: ArrayBuffer, at: u32, len: u32): boolean {
-  return len === 0 || (at !== 0 && at + len <= mem.byteLength);
-}
-
-/** Lays `f` at `at`, its packet right past its words. */
-export function lay_frame(mem: ArrayBuffer, at: u32, f: Frame): void {
-  const w = new Uint32Array(mem, at, spec.WORDS);
-  w[spec.TAG] = f.tag;
-  w[spec.CMD] = CMD_WORD(f.cmd, f.flags);
-  w[spec.RESULT] = f.result >>> 0;
-  w[spec.PKT] = f.pkt?.byteLength ?? 0;
-  if (f.pkt) new Uint8Array(mem, at + WORD_BYTES, f.pkt.byteLength).set(f.pkt);
+/** Lays the frame's words at `at`. */
+export function lay(v: DataView, at: u32, f: Frame): void {
+  v.setUint32(at + 4 * TAG, f.tag, true);
+  v.setUint32(at + 4 * CMD, ((f.res ? RES : 0) | (f.handle << METHOD_BITS) | f.method) >>> 0, true);
+  v.setUint32(at + 4 * RESULT, f.result >>> 0, true);
+  v.setUint32(at + 4 * PKT, f.pkt_len, true);
 }

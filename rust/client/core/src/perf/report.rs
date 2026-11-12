@@ -117,23 +117,18 @@ fn peaks(h: &HeapStat) -> RecordingSection {
     }
 }
 
-/// A frame turn's own measures (turn.rs `world_frame`).
+/// A frame's own measures (turn.rs `world_frame`).
 pub struct FrameTurn {
     pub tick: TickReport,
-    /// The runtime's gap that ended at this frame and closes the interval
-    /// before it. `settled` says whether the runtime settled that interval,
-    /// which the runtime reports with this frame.
-    pub interval_ms: f64,
-    /// The display's refresh interval and the interval the runtime paced this
-    /// frame at (turn.rs `TurnGrant`).
+    /// The display's measured interval, and the gap since the last frame,
+    /// which closes the interval before this one and which this frame was
+    /// paced at.
     pub refresh_ms: f64,
     pub paced_ms: f64,
+    /// Whether this frame asked for no next one.
     pub settled: bool,
     pub effects_ms: f64,
     pub stage_ms: f64,
-    /// The frame task's whole time, which the turn's end subtracts from its
-    /// tasks' time.
-    pub task_ms: f64,
 }
 
 /// Records the frame turn once its frame is drawn. What taking the record
@@ -184,8 +179,7 @@ pub fn perf_frame(t: FrameTurn) {
             perf_ms: own_ms,
             ..rec
         },
-        t.interval_ms,
+        t.paced_ms,
         t.settled,
-        t.task_ms + own_ms,
     );
 }

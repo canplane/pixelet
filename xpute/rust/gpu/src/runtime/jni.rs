@@ -104,7 +104,8 @@ extern "C" fn lost() {
 /// This is `Gpu.surfaceBind`: it binds the core's surface `handle` to a view's
 /// `surface`, through the native window the surface is (`bind`, the program's
 /// `xpute_gpu_surface_bind`), which holds its own reference on the window. It
-/// returns 0, `NOT_OPEN`, `NO_SURFACE` or `SLOT_TAKEN`.
+/// returns 0 or a negative errno, as `bind` does, and EINVAL where the surface
+/// has no native window.
 ///
 /// # Safety
 /// `e` is what JNI called with, and `surface` a live `android.view.Surface`.
@@ -117,7 +118,7 @@ pub unsafe fn bind(
     // SAFETY: the environment and the surface the call was given; the window
     // made this way is this call's until released below.
     let Some(window) = NonNull::new(unsafe { ANativeWindow_fromSurface(e, surface) }) else {
-        return crate::runtime::native::NO_SURFACE;
+        return Errno::EINVAL as i32;
     };
     // SAFETY: a live window, on which `bind` takes a reference of its own.
     let bound = unsafe { bind(handle, window.as_ptr().cast()) };

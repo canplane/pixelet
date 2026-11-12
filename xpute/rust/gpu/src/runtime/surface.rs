@@ -16,12 +16,12 @@ pub(super) struct Surface {
     /// This is RESIZE's size, at least a pixel each way.
     pub(super) size: [u32; 2],
     bound: Option<Bound>,
-    /// This is the handle bound here, or 0 for none. A slot outlives its
-    /// handles, so an old handle let go must not release the one bound since.
-    pub(super) handle: u32,
+    /// This is the handle bound here. A slot outlives its handles, so an old
+    /// handle let go must not release the one bound since.
+    pub(super) handle: Option<u32>,
     /// This is the newest handle bound here, kept after it is let go, so that
     /// an older handle's late bind is refused.
-    newest_handle: u32,
+    newest_handle: Option<u32>,
     /// This turn's texture is here, and every CURRENT of the turn shares it.
     pub(super) frame: Option<Frame>,
     /// This is the texture drawn into where the window gives none. It is kept
@@ -51,8 +51,8 @@ impl Default for Surface {
             cfg: None,
             size: [1, 1],
             bound: None,
-            handle: 0,
-            newest_handle: 0,
+            handle: None,
+            newest_handle: None,
             frame: None,
             offscreen: None,
         }
@@ -108,11 +108,11 @@ impl GpuRuntime {
     pub(super) fn claim(&mut self, handle: u32) -> Option<u32> {
         let slot = handle_slot(handle);
         let s = self.surface(slot);
-        if s.newest_handle != 0 && older(handle, s.newest_handle) {
+        if s.newest_handle.is_some_and(|newest| older(handle, newest)) {
             return None;
         }
-        s.newest_handle = handle;
-        s.handle = handle;
+        s.newest_handle = Some(handle);
+        s.handle = Some(handle);
         Some(slot)
     }
 
@@ -122,8 +122,8 @@ impl GpuRuntime {
         let s = self
             .surfaces
             .get_mut(slot as usize)
-            .filter(|s| handle != 0 && s.handle == handle)?;
-        s.handle = 0;
+            .filter(|s| s.handle == Some(handle))?;
+        s.handle = None;
         Some(slot)
     }
 

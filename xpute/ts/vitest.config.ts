@@ -12,7 +12,6 @@ export default defineConfig({
       "runtime/src/**/*.test.ts",
       "gpu/src/runtime.frame.test.ts",
       "gpu/src/web.test.ts",
-      "dev/example/**/*.test.ts",
     ],
     testTimeout: 0,
     setupFiles: ["vitest.setup.ts"],

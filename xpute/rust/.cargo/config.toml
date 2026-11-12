@@ -1,10 +1,7 @@
 # These are the workspace's own commands, run from rust/ as the root's tasks
-# do: what a check holds a change to, and the core the contract's traces drive,
-# native and as a module.
+# do: what a check holds a change to.
 [alias]
 lint = ["clippy", "--all-targets", "--", "-D", "warnings"]
-core = ["build", "-p", "xpute-conformance"]
-core-wasm = ["build", "-p", "xpute-conformance", "-p", "xpute-example", "--target", "wasm32-unknown-unknown"]
 test-gpu = ["test", "-p", "xpute-gpu", "--features", "runtime"]
 # `cargo spec` says which files generated from spec/ are stale, and
 # `cargo spec --write` writes them.

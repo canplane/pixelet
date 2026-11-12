@@ -1,15 +1,14 @@
 // xpute-tool/spec.rs
 
 //! This writes xpute's own generated files, with the generator a program takes
-//! (xpute-gen): its protocols (cmd.rs), its data specs (data.rs), its errno
-//! table (errno.rs) and its example's manifest.
+//! (xpute-gen): its data specs (data.rs), its errno table (errno.rs) and its
+//! link's bindings, from wit/.
 
-pub mod cmd;
 pub mod data;
 pub mod errno;
 
-use xpute_gen::spec::cmd::protocol_outputs;
-use xpute_gen::spec::{generate_at, manifest, Output};
+use xpute_gen::spec::wit::{wit_outputs, WitTarget};
+use xpute_gen::spec::{generate_at, Output};
 
 use crate::root;
 
@@ -36,14 +35,30 @@ fn check_versions() -> Result<(), String> {
 
 pub fn outputs() -> Result<Vec<Output>, String> {
     check_versions()?;
-    let mut out = cmd::outputs()?;
-    out.extend(manifest::outputs(
-        &root(),
-        "rust/dev/example/manifest.json",
-    )?);
-    out.extend(protocol_outputs(&root(), &["rust/dev/example/asker.json"])?);
-    out.extend(errno::outputs()?);
+    let mut out = errno::outputs()?;
     out.extend(data::outputs()?);
+    out.extend(wit_outputs(
+        &root(),
+        &WitTarget {
+            dirs: &["wit"],
+            rs: Some(("rust/core/src/abi.rs", "xpute-core/abi.rs")),
+            ts: Some(("ts/runtime/src/abi", "@xpute/runtime/abi")),
+            core: "crate",
+            runtime_ts: "../link.ts",
+            externs: &[],
+        },
+    )?);
+    out.extend(wit_outputs(
+        &root(),
+        &WitTarget {
+            dirs: &["wit", "wit/gpu"],
+            rs: Some(("rust/gpu/src/abi.rs", "xpute-gpu/abi.rs")),
+            ts: Some(("ts/gpu/src/abi", "@xpute/gpu/abi")),
+            core: "xpute_core",
+            runtime_ts: "@xpute/runtime",
+            externs: &[],
+        },
+    )?);
     Ok(out)
 }
 

@@ -315,7 +315,7 @@ fn ended_hold_asks_no_turn() {
 /// What a turn's end asks for: the end of the hold, or none.
 fn wake() -> f64 {
     if let Some(at) = next_pump_at(now()) {
-        sched::wake_at(at);
+        sched::invalidate_at(at);
     }
     sched::turn().end()
 }

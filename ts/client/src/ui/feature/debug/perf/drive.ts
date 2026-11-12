@@ -15,7 +15,7 @@
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { PointerPhase, PointerType } from "@/abi/cmd.spec.ts";
+import { PointerPhase, PointerType } from "@/abi/input.ts";
 import { SETTING } from "@/abi/schema.spec.ts";
 import { perfReportText } from "./report.ts";
 import { perfReportRead } from "./view.ts";
