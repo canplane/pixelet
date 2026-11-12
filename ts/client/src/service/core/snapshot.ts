@@ -1,7 +1,7 @@
 // @pxl/client/service/core/snapshot.ts
 
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
-import { GroundStatus, SensorStatus, type Snapshot } from "@/abi/ui.ts";
+import { GroundStatus, SensorStatus, type Snapshot } from "@/abi/overlay.ts";
 
 const INIT: Snapshot = {
   pivot: {

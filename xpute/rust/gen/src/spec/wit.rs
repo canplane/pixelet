@@ -25,7 +25,8 @@ pub struct WitTarget<'a> {
     /// The packages' directories, dependencies first; the last is the one
     /// written.
     pub dirs: &'a [&'a str],
-    /// The Rust file, and its header's name.
+    /// The Rust module file, which declares a module per interface in the
+    /// directory of its name, and its header's name.
     pub rs: Option<(&'a str, &'a str)>,
     /// The TypeScript directory, a module per interface, and its header's
     /// name.
@@ -83,7 +84,7 @@ fn objs<'a>(r: &'a Resolve, i: InterfaceId, at: &str) -> Result<Vec<Obj<'a>>, St
     }
     // The names the generated code's own locals take.
     for f in iface.functions.values() {
-        if let Some(p) = f.params.iter().find(|p| ["ref", "a", "b", "w", "m", "tag", "args", "link", "handle"].contains(&p.name.as_str())) {
+        if let Some(p) = f.params.iter().find(|p| ["ref", "a", "b", "l", "w", "m", "r", "data", "tag", "args", "then", "link", "handle", "lent", "lent_at", "lent_len"].contains(&p.name.as_str())) {
             return Err(format!("{at}.{}: `{}`, a name the bindings keep for their own", f.name, p.name));
         }
     }
@@ -133,7 +134,7 @@ fn check_func(r: &Resolve, f: &Function, at: &str) -> Result<(), String> {
 /// Fails on what the link does not carry.
 fn check_type(r: &Resolve, ty: &Type, at: &str) -> Result<(), String> {
     match ty {
-        Type::Bool | Type::U8 | Type::U16 | Type::U32 | Type::S8 | Type::S16 | Type::S32 => Ok(()),
+        Type::Bool | Type::U8 | Type::U16 | Type::U32 | Type::U64 | Type::S8 | Type::S16 | Type::S32 => Ok(()),
         Type::F32 | Type::F64 | Type::String => Ok(()),
         Type::Id(t) => match &r.types[*t].kind {
             TypeDefKind::Record(rec) => {
@@ -170,6 +171,7 @@ fn check_type(r: &Resolve, ty: &Type, at: &str) -> Result<(), String> {
 enum Kind {
     Bool,
     Int { rs: &'static str, signed: bool },
+    U64,
     Float { rs: &'static str },
     Str,
     Bytes,
@@ -186,6 +188,7 @@ fn kind(r: &Resolve, ty: &Type) -> Kind {
         Type::U8 => Kind::Int { rs: "u8", signed: false },
         Type::U16 => Kind::Int { rs: "u16", signed: false },
         Type::U32 => Kind::Int { rs: "u32", signed: false },
+        Type::U64 => Kind::U64,
         Type::S8 => Kind::Int { rs: "i8", signed: true },
         Type::S16 => Kind::Int { rs: "i16", signed: true },
         Type::S32 => Kind::Int { rs: "i32", signed: true },
@@ -282,12 +285,20 @@ impl Gen<'_> {
 
     // ---- Rust ----
 
-    /// The Rust of the args `ps`: none, or how many and what writes them.
-    fn rs_args(&self, ps: &[(String, Kind)], boxed: bool) -> String {
+    /// The Rust of the args `ps`: none, or how many and what writes them,
+    /// `lent` the one that lends memory, written as the lent record of its
+    /// (at, len).
+    fn rs_args(&self, ps: &[(String, Kind)], boxed: bool, lent: Option<&str>) -> String {
         if ps.is_empty() {
             return "None".into();
         }
-        let writes: Vec<String> = ps.iter().map(|(n, k)| self.rs_write(n, k)).collect();
+        let writes: Vec<String> = ps
+            .iter()
+            .map(|(n, k)| match lent {
+                Some(l) if l == n => format!("{} {{ at: lent_at, len: lent_len }}.write(w);", self.rs_ty(k, true)),
+                _ => self.rs_write(n, k),
+            })
+            .collect();
         let w = format!("|w: &mut PacketWriter| {{ {} }}", writes.join(" "));
         if boxed {
             format!("Some(({}, Box::new(move {w})))", ps.len())
@@ -321,6 +332,20 @@ impl Gen<'_> {
                 self.rs_read("c", k, true)
             ),
         }
+    }
+
+    /// Whether `ty` is xpute:core's `link.lent`, the one place raw memory
+    /// enters WIT.
+    fn is_lent(&self, ty: &Type) -> bool {
+        let Type::Id(mut t) = *ty else { return false };
+        while let TypeDefKind::Type(Type::Id(n)) = self.r.types[t].kind {
+            t = n;
+        }
+        let td = &self.r.types[t];
+        let TypeOwner::Interface(i) = td.owner else { return false };
+        td.name.as_deref() == Some("lent")
+            && self.r.interfaces[i].name.as_deref() == Some("link")
+            && package_name(self.r, i) == "xpute:core"
     }
 
     /// The serving side of an object: its trait, and the object over it.
@@ -364,7 +389,7 @@ impl Gen<'_> {
         if o.resource {
             let _ = writeln!(out, "/// The object over `imp`, for an opener to answer.\npub fn {}(imp: Rc<dyn {t}>) -> Rc<dyn Object> {{\n    Rc::new({t}Object(imp))\n}}\n", snake(&o.name));
         } else {
-            let _ = writeln!(out, "/// Mounts `imp` at the URI, one object for every open.\npub fn mount(imp: Rc<dyn {t}>) {{\n    let o: Rc<dyn Object> = Rc::new({t}Object(imp));\n    link::mount(link::uri(&URI), move |_| Ok(o.clone()));\n}}\n");
+            let _ = writeln!(out, "/// Mounts `imp` at the URI, one object for every open.\npub fn mount(imp: Rc<dyn {t}>) {{\n    let o: Rc<dyn Object> = Rc::new({t}Object(imp));\n    link::mount(link::uri(&URI), move |_, _| Ok(o.clone()));\n}}\n");
         }
     }
 
@@ -372,15 +397,33 @@ impl Gen<'_> {
     /// singleton's the one opened at boot.
     fn rs_caller(&self, o: &Obj, out: &mut String) {
         if !o.resource {
-            let _ = writeln!(out, "thread_local! {{\n    static HANDLE: Cell<Option<Handle>> = const {{ Cell::new(None) }};\n}}\n\n/// Opens the singleton on the other side, once, at boot.\npub fn open() -> Result<(), Errno> {{\n    HANDLE.set(Some(link::open(&link::uri(&URI))?));\n    Ok(())\n}}\n\nfn handle() -> Handle {{\n    HANDLE.get().or_bug(Errno::EBADF)\n}}\n");
+            let _ = writeln!(out, "thread_local! {{\n    static HANDLE: Cell<Option<Handle>> = const {{ Cell::new(None) }};\n}}\n\n/// Opens the singleton on the other side, once, at boot.\npub fn open() -> Result<(), Errno> {{\n    HANDLE.set(Some(link::open(&link::uri(&URI))?));\n    Ok(())\n}}\n\n/// The singleton's handle, which `open` opened.\npub fn handle() -> Handle {{\n    HANDLE.get().or_bug(Errno::EBADF)\n}}\n");
         }
         for f in &o.methods {
             let ps = self.kinds(f);
+            let lent = params(f).find(|p| self.is_lent(&p.ty)).map(|p| snake(&p.name));
+            // A sync call lends a slice of any plain elements; an async call
+            // lends any buffer that says its span (link `Lend`), which the
+            // answer hands back.
+            let core = self.core;
+            let lent_ty = if is_async(f) { "L" } else { "&mut [T]" };
+            let generic = match &lent {
+                Some(_) if is_async(f) => format!("<L: {core}::link::Lend>"),
+                Some(_) => "<T: Copy + Unpin + 'static>".to_string(),
+                None => String::new(),
+            };
             let mut sig: Vec<String> = if o.resource { vec![format!("{}: Handle", snake(&o.name))] } else { vec![] };
-            sig.extend(ps.iter().map(|(n, k)| format!("{n}: {}", self.rs_ty(k, false))));
+            sig.extend(ps.iter().map(|(n, k)| {
+                if lent.as_deref() == Some(n.as_str()) { format!("{n}: {lent_ty}") } else { format!("{n}: {}", self.rs_ty(k, false)) }
+            }));
             let h = if o.resource { snake(&o.name) } else { "handle()".into() };
             let rk = self.ret(f);
             let ret = rk.as_ref().map_or("()".into(), |k| self.rs_ty(k, true));
+            let lend = match &lent {
+                Some(l) if is_async(f) => format!("let mut {l} = {l}; let (lent_at, lent_len) = {core}::link::Lend::span(&mut {l}); "),
+                Some(l) => format!("let lent_at = {core}::mem::off({l}.as_ptr().cast()); let lent_len = core::mem::size_of_val(&{l}[..]) as u32; "),
+                None => String::new(),
+            };
             let c = screaming(o, f);
             let name = if o.resource { snake(&format!("{}-{}", o.name, method_name(f))) } else { snake(method_name(f)) };
             if is_async(f) {
@@ -388,6 +431,7 @@ impl Gen<'_> {
                     .iter()
                     .map(|(n, k)| match k {
                         Kind::Str | Kind::Bytes | Kind::List(_) => format!("let {n} = {n}.to_owned(); "),
+                        Kind::Record(_) if lent.as_deref() == Some(n.as_str()) => String::new(),
                         Kind::Record(_) => format!("let {n} = {n}.clone(); "),
                         Kind::Option(e) => match **e {
                             Kind::Str | Kind::Bytes | Kind::List(_) => format!("let {n} = {n}.map(ToOwned::to_owned); "),
@@ -397,9 +441,18 @@ impl Gen<'_> {
                         _ => String::new(),
                     })
                     .collect();
-                let _ = writeln!(out, "pub fn {name}({}) -> impl core::future::Future<Output = Result<{ret}, Errno>> {{\n    {owns}\n    let sent = wait({h}, {c}, {}, ());\n    async move {{\n        let (r, data) = sent.await;\n        {}\n    }}\n}}\n", sig.join(", "), self.rs_args(&ps, true), self.rs_answer(&rk));
+                let (output, kept, give) = match &lent {
+                    Some(l) => (format!("(L, Result<{ret}, Errno>)"), l.clone(), format!("(lent, {})", self.rs_answer(&rk))),
+                    None => (format!("Result<{ret}, Errno>"), "()".into(), self.rs_answer(&rk)),
+                };
+                let _ = writeln!(out, "pub fn {name}{generic}({}) -> impl core::future::Future<Output = {output}> {{\n    {owns}{lend}\n    let sent = wait({h}, {c}, {}, {kept});\n    async move {{\n        let (r, data, lent) = sent.await;\n        {give}\n    }}\n}}\n", sig.join(", "), self.rs_args(&ps, true, lent.as_deref()));
+                // The same call sent now, its answer handed to `then`, for a
+                // caller with no executor.
+                let mut then_sig = sig.clone();
+                then_sig.push(format!("then: impl FnOnce({output}) + 'static"));
+                let _ = writeln!(out, "pub fn {name}_then{generic}({}) {{\n    {lend}\n    let lent = {kept};\n    link::send({h}, {c}, {}, Some(Box::new(move |r, data| then({give}))));\n}}\n", then_sig.join(", "), self.rs_args(&ps, false, lent.as_deref()));
             } else {
-                let _ = writeln!(out, "pub fn {name}({}) -> Result<{ret}, Errno> {{\n    let (r, data) = link::call({h}, {c}, {});\n    {}\n}}\n", sig.join(", "), self.rs_args(&ps, false), self.rs_answer(&rk));
+                let _ = writeln!(out, "pub fn {name}{generic}({}) -> Result<{ret}, Errno> {{\n    {lend}let (r, data) = link::call({h}, {c}, {});\n    {}\n}}\n", sig.join(", "), self.rs_args(&ps, false, lent.as_deref()), self.rs_answer(&rk));
             }
         }
     }
@@ -408,7 +461,13 @@ impl Gen<'_> {
         let iname = self.iname();
         let core = self.core;
         let mut body = String::new();
-        let _ = writeln!(body, "use std::cell::Cell;\nuse std::rc::Rc;\nuse xpute_kit::status::bug::OrBug;\nuse xpute_kit::status::errno::Errno;\nuse xpute_kit::status::error::MarshalError;\nuse xpute_kit::wire::xtp::{{BranchCursor, Cursor, PacketWriter, TreeReader}};\nuse {core}::link::{{self, Done, Handle, Method, Object, Reply, Tag}};\nuse {core}::wait::wait;\n");
+        let _ = writeln!(body, "use std::cell::Cell;\nuse std::rc::Rc;\nuse xpute_kit::status::bug::OrBug;\nuse xpute_kit::status::errno::Errno;\nuse xpute_kit::status::error::MarshalError;\nuse xpute_kit::wire::xtp::{{BranchCursor, Cursor, PacketWriter, TreeReader}};");
+        // An interface of types alone, as the link's own, takes nothing of
+        // the link, which takes its types.
+        if !objs.is_empty() {
+            let _ = writeln!(body, "use {core}::link::{{self, Done, Handle, Method, Object, Reply, Tag}};\nuse {core}::wait::wait;");
+        }
+        body.push('\n');
         if objs.iter().any(|o| !o.resource) {
             let _ = writeln!(body, "/// The singleton's URI.\npub const URI: [&str; 2] = [\"{}\", \"{iname}\"];\n", self.pkg);
         }
@@ -423,16 +482,7 @@ impl Gen<'_> {
             self.rs_served(o, &mut body);
             self.rs_caller(o, &mut body);
         }
-        let mut out = format!("pub mod {} {{\n    #![allow(unused_imports, unused_variables, dead_code, clippy::all, reason = \"generated from WIT\")]\n", snake(&iname));
-        for l in body.lines() {
-            if l.is_empty() {
-                out.push('\n');
-            } else {
-                let _ = writeln!(out, "    {l}");
-            }
-        }
-        out.push_str("}\n");
-        out
+        format!("#![allow(unused_imports, unused_variables, dead_code, clippy::all, reason = \"generated from WIT\")]\n\n{body}")
     }
 
     // ---- TypeScript ----
@@ -456,7 +506,7 @@ impl Gen<'_> {
             let _ = writeln!(out, "  {}({}): {r};", ts_name(method_name(f)), sig.join(", "));
         }
         let fname = if o.resource { ts_name(&o.name) } else { "object".into() };
-        let host = if o.methods.iter().any(|f| is_async(f)) { "link: Pick<Link, \"complete\">, " } else { "" };
+        let host = if o.methods.iter().any(|f| is_async(f)) { "l: Pick<Link, \"complete\">, " } else { "" };
         let _ = writeln!(out, "}}\n\n/** The object over `imp`. */\n{}function {fname}({host}imp: {t}): LinkObject {{\n  return {{\n    call(m, tag, args) {{\n      try {{\n        switch (m) {{", if o.resource { "export " } else { "" });
         for f in &o.methods {
             let decs: Vec<String> = self.ts_params(f).iter().enumerate().map(|(k, (_, kd))| self.ts_dec(&format!("args.at({k})"), kd)).collect();
@@ -475,7 +525,7 @@ impl Gen<'_> {
             }
             if is_async(f) {
                 let bind = if rk.is_none() { "()" } else { "(v)" };
-                let _ = writeln!(out, "            {call}.then(\n              {bind} => link.complete(tag, {result}, {data}),\n              (e: unknown) => link.complete(tag, refusal_of(e)),\n            );\n            return Errno.EINPROGRESS;\n          }}");
+                let _ = writeln!(out, "            {call}.then(\n              {bind} => l.complete(tag, {result}, {data}),\n              (e: unknown) => l.complete(tag, refusal_of(e)),\n            );\n            return Errno.EINPROGRESS;\n          }}");
             } else if rk.is_none() {
                 let _ = writeln!(out, "            {call};\n            return 0;\n          }}");
             } else if data == "[]" {
@@ -486,9 +536,9 @@ impl Gen<'_> {
         }
         let _ = writeln!(out, "          default:\n            return Errno.ENOSYS;\n        }}\n      }} catch (e) {{\n        return refusal_of(e);\n      }}\n    }},\n  }};\n}}\n");
         if !o.resource {
-            let host = if host.is_empty() { "link: Pick<Link, \"mount\">" } else { "link: Pick<Link, \"mount\" | \"complete\">" };
-            let pass = if o.methods.iter().any(|f| is_async(f)) { "link, " } else { "" };
-            let _ = writeln!(out, "/** Mounts `imp` at the URI, one object for every open. */\nexport function mount({host}, imp: {t}): void {{\n  const o = object({pass}imp);\n  link.mount(URI, () => o);\n}}\n");
+            let host = if host.is_empty() { "l: Pick<Link, \"mount\">" } else { "l: Pick<Link, \"mount\" | \"complete\">" };
+            let pass = if o.methods.iter().any(|f| is_async(f)) { "l, " } else { "" };
+            let _ = writeln!(out, "/** Mounts `imp` at the URI, one object for every open. */\nexport function mount({host}, imp: {t}): void {{\n  const o = object({pass}imp);\n  l.mount(URI, () => o);\n}}\n");
         }
     }
 
@@ -606,6 +656,7 @@ impl Gen<'_> {
         match k {
             Kind::Bool => "bool".into(),
             Kind::Int { rs, .. } | Kind::Float { rs } => (*rs).into(),
+            Kind::U64 => "u64".into(),
             Kind::Str => if owned { "String" } else { "&str" }.into(),
             Kind::Bytes => if owned { "Vec<u8>" } else { "&[u8]" }.into(),
             Kind::List(e) => {
@@ -629,6 +680,7 @@ impl Gen<'_> {
             Kind::Int { signed: false, rs: "u8" } => format!("w.u8(Some({e}));"),
             Kind::Int { signed: false, .. } | Kind::Handle => format!("w.u32(Some({e} as u32));"),
             Kind::Int { signed: true, .. } => format!("w.i32(Some({e} as i32));"),
+            Kind::U64 => format!("w.u64(Some({e}));"),
             Kind::Float { .. } => format!("w.f64(Some({e} as f64));"),
             Kind::Str => format!("w.str(Some(&*{e}));"),
             Kind::Bytes => format!("w.array::<u8>(Some(&*{e}));"),
@@ -651,6 +703,7 @@ impl Gen<'_> {
             Kind::Bool => format!("{c}.get_bool()"),
             Kind::Int { rs, .. } | Kind::Float { rs } => format!("{c}.get_number().map(|v| v as {rs})"),
             Kind::Handle => format!("{c}.get_number().map(|v| v as u32)"),
+            Kind::U64 => format!("{c}.get_u64()"),
             Kind::Str if owned => format!("{c}.get_str_ref().map(str::to_owned)"),
             Kind::Str => format!("{c}.get_str_ref()"),
             Kind::Bytes if owned => format!("{c}.get_array::<u8>().map(<[u8]>::to_vec)"),
@@ -677,9 +730,11 @@ impl Gen<'_> {
             let n = pascal(name);
             match &td.kind {
                 TypeDefKind::Enum(e) => {
-                    let _ = writeln!(out, "#[repr(u32)]\n#[derive(Clone, Copy, Debug, PartialEq, Eq)]\npub enum {n} {{");
+                    // An enum's default is its first case.
+                    let _ = writeln!(out, "#[repr(u32)]\n#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]\npub enum {n} {{");
                     for (k, c) in e.cases.iter().enumerate() {
-                        let _ = writeln!(out, "    {} = {k},", pascal(&c.name));
+                        let first = if k == 0 { "#[default]\n    " } else { "" };
+                        let _ = writeln!(out, "    {first}{} = {k},", pascal(&c.name));
                     }
                     let _ = writeln!(out, "}}\n\nimpl {n} {{\n    pub const ALL: [{n}; {}] = [{}];\n\n    pub fn of(v: u32) -> Option<{n}> {{\n        {n}::ALL.get(v as usize).copied()\n    }}\n}}\n",
                         e.cases.len(),
@@ -745,6 +800,7 @@ impl Gen<'_> {
         match k {
             Kind::Bool => "boolean".into(),
             Kind::Int { .. } | Kind::Float { .. } | Kind::Handle => "number".into(),
+            Kind::U64 => "bigint".into(),
             Kind::Str => "string".into(),
             Kind::Bytes => "U8Array".into(),
             Kind::List(e) => format!("{}[]", self.ts_ty(e)),
@@ -768,6 +824,7 @@ impl Gen<'_> {
         match k {
             Kind::Bool => format!("{c}.get_bool()"),
             Kind::Int { .. } | Kind::Float { .. } | Kind::Handle => format!("{c}.get_number()"),
+            Kind::U64 => format!("{c}.get_u64()"),
             Kind::Enum(_) => format!("({c}.get_number() as {})", self.ts_ty(k)),
             Kind::Str => format!("{c}.get_str()"),
             Kind::Bytes => format!("({c}.get() as U8Array)"),
@@ -851,6 +908,7 @@ fn node_class(k: &Kind) -> Option<&'static str> {
     match k {
         Kind::Bool => Some("bool"),
         Kind::Int { .. } | Kind::Float { .. } | Kind::Enum(_) | Kind::Handle => Some("number"),
+        Kind::U64 => Some("bigint"),
         Kind::Str => Some("string"),
         Kind::Bytes => Some("bytes"),
         Kind::List(_) | Kind::Record(_) => Some("branch"),
@@ -888,6 +946,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
     let src = t.dirs.last().copied().unwrap_or("");
     let mut rs = String::new();
     let mut outs = Vec::new();
+    let rs_dir = t.rs.map(|(path, logical)| (path.trim_end_matches(".rs"), logical.trim_end_matches(".rs")));
     for (iname, &i) in &p.interfaces {
         let at = format!("{pname}/{iname}");
         let objs = objs(&r, i, &at)?;
@@ -907,8 +966,12 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
             uses: RefCell::default(),
             externs: t.externs,
         };
-        rs.push_str(&g.rs_iface(&objs));
-        rs.push('\n');
+        if let Some((dir, logical)) = rs_dir {
+            let m = snake(iname);
+            let text = format!("// {logical}/{m}.rs\n//\n// GENERATED from {src} (xpute-gen spec/wit.rs)\n\n{}", g.rs_iface(&objs));
+            outs.push(Output::new(&format!("{dir}/{m}.rs"), text));
+            let _ = writeln!(rs, "pub mod {m};");
+        }
         if let Some((dir, logical)) = t.ts {
             let body = g.ts_iface(&objs);
             let imports = g.ts_imports(&body, t.runtime_ts);

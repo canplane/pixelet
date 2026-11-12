@@ -20,7 +20,7 @@ use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::value::VOID;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 use super::change;
 use super::node::At;

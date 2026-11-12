@@ -80,9 +80,9 @@ function object(imp: Edit): LinkObject {
 }
 
 /** Mounts `imp` at the URI, one object for every open. */
-export function mount(link: Pick<Link, "mount">, imp: Edit): void {
+export function mount(l: Pick<Link, "mount">, imp: Edit): void {
   const o = object(imp);
-  link.mount(URI, () => o);
+  l.mount(URI, () => o);
 }
 
 /** Opens the singleton on the other side, once, at boot. */

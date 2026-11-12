@@ -26,7 +26,7 @@ use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shelf::NO_SLOT;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::octant::Octant;
-use xpute_core::global::Global;
+use pxl_global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -80,7 +80,7 @@ struct Arrangement {
     hits: Vec<([f64; 4], MarkerHit)>,
     /// The pins and places read so far, a brick's together, as each source
     /// reads them (`pin.rs`, `place.rs`). These buffers, like the others
-    /// here, are kept between turns so a turn where nothing changed
+    /// here, are kept between frames so a frame where nothing changed
     /// allocates nothing.
     pins: Vec<pin::Pin>,
     places: Vec<place::Place>,
@@ -90,18 +90,18 @@ struct Arrangement {
     /// drawn keeps what was read from it, so an eye that moves casts rays
     /// only in the bricks it enters.
     found_for: Option<Read>,
-    /// The same, for the bricks read this turn.
+    /// The same, for the bricks read this frame.
     now: Read,
     /// Whether places, ground or objects changed since they were read.
     changed: bool,
     /// The place tiles whose answer changed, besides the ground's changes
     /// (domain/query/change.rs). A brick they touch is read again.
     changed_places: Vec<Quadrant>,
-    /// The bricks this turn would read, with their distance from the eye and
+    /// The bricks this frame would read, with their distance from the eye and
     /// their columns.
     entering: Vec<(f64, Brick, Aabb)>,
     sized: Vec<Instance>,
-    /// Last turn's `sized`, whose buffer is reused.
+    /// Last frame's `sized`, whose buffer is reused.
     spare: Vec<Instance>,
     /// The designs not ready yet, each with the index in `sized` of the
     /// instance that shows its old drawing until it is.
@@ -119,7 +119,7 @@ struct Arrangement {
     /// step does nothing.
     last: Option<Input>,
     /// Whether the last run left a design not laid out or not painted, which
-    /// a later turn brings, or a brick not read yet. If so, the next turn
+    /// a later frame brings, or a brick not read yet. If so, the next frame
     /// runs again.
     waiting: bool,
 }
@@ -204,7 +204,7 @@ pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f6
 }
 
 /// Lays out the markers for `frame`. `draft` is the marker tool's draft as
-/// the turn hands it (turn.rs `scene_tick`).
+/// the frame hands it (frame.rs `scene_tick`).
 pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     let p = ARRANGEMENT.get(Arrangement::default);
     if pose::eye().is_none() {
@@ -267,8 +267,8 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     // no change touches (domain/query/change.rs), as long as the places
     // setting did not turn. A brick left or touched drops what was read from
     // it. Only bricks entered or touched are read, nearest the eye first, as
-    // many a turn as one pass of the tick's budget reads and at least one.
-    // The rest are not read yet, so a later turn reads them.
+    // many a frame as one pass of the tick's budget reads and at least one.
+    // The rest are not read yet, so a later frame reads them.
     p.changed = false;
     let last_bricks = match &p.found_for {
         Some(f) if f.places == places => f.bricks.as_slice(),
@@ -361,7 +361,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
             }
             _ => (design, None),
         };
-        // The design's text is not laid out yet. A later turn lays it out.
+        // The design's text is not laid out yet. A later frame lays it out.
         let Some([width, height, anchor]) = design::size(&design) else {
             unlaid = true;
             continue;
@@ -396,7 +396,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     // atlas has no room for it, the hold is given up: the instance shows the
     // new design, which waits, and the next run frees the old design's slot
     // and asks again. A design whose text is not laid out yet stays held and
-    // asks nothing. It asks on the turn its text arrives (`design::coming`).
+    // asks nothing. It asks on the frame its text arrives (`design::coming`).
     let mut refused = false;
     for &i in &p.visible {
         let Ok(k) = p.pending.binary_search_by_key(&i, |w| w.0) else {
@@ -410,7 +410,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
             refused = true;
         }
     }
-    // Neither the render's painting nor the client's layout asks for a turn,
+    // Neither the render's painting nor the client's layout asks for a frame,
     // so the arrangement asks for one itself: while a design is on its way
     // (`design::coming`), when a freed slot may make room for a design that
     // had none, or when a hold given up frees the old slot.

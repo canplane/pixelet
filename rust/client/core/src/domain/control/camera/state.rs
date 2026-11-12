@@ -12,7 +12,7 @@ use crate::domain::control::support::resolve_to;
 use crate::domain::param::POS_DAMP;
 use crate::domain::smooth::smooth_vec;
 use crate::sys::sched::invalidate;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 /// The facing and the distance the controls ask the camera for.
 #[derive(Clone, Copy, Debug, PartialEq)]

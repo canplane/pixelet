@@ -26,15 +26,15 @@ export interface Vsync {
 }
 
 /** The object over `imp`. */
-function object(link: Pick<Link, "complete">, imp: Vsync): LinkObject {
+function object(l: Pick<Link, "complete">, imp: Vsync): LinkObject {
   return {
     call(m, tag, args) {
       try {
         switch (m) {
           case NEXT: {
             imp.next().then(
-              () => link.complete(tag, 0, []),
-              (e: unknown) => link.complete(tag, refusal_of(e)),
+              () => l.complete(tag, 0, []),
+              (e: unknown) => l.complete(tag, refusal_of(e)),
             );
             return Errno.EINPROGRESS;
           }
@@ -49,12 +49,9 @@ function object(link: Pick<Link, "complete">, imp: Vsync): LinkObject {
 }
 
 /** Mounts `imp` at the URI, one object for every open. */
-export function mount(
-  link: Pick<Link, "mount" | "complete">,
-  imp: Vsync,
-): void {
-  const o = object(link, imp);
-  link.mount(URI, () => o);
+export function mount(l: Pick<Link, "mount" | "complete">, imp: Vsync): void {
+  const o = object(l, imp);
+  l.mount(URI, () => o);
 }
 
 /** Opens the singleton on the other side, once, at boot. */

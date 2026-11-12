@@ -1,0 +1,44 @@
+// pxl-core/link/export/edit.rs
+
+//! The EDIT major's commands: the tool held and what it places, and the
+//! marker draft it left waiting.
+
+use super::or_refuse;
+use crate::domain::control::edit::set_tool;
+use crate::domain::control::edit::write;
+use crate::domain::control::edit::Tool;
+use crate::domain::control::input::camera_rehover;
+use crate::domain::layer::object::asset::Asset;
+use crate::abi::edit;
+use xpute_kit::status::errno::Errno;
+
+pub(super) fn hold(tool: edit::Tool, val: u32, scale_steps: i32) -> Result<(), Errno> {
+    set_tool(match tool {
+        edit::Tool::Pointer => Tool::Pointer,
+        edit::Tool::Eraser => Tool::Eraser,
+        edit::Tool::Item => match Asset::of(val) {
+            Asset::Unknown => return Err(Errno::EINVAL),
+            asset => Tool::Item {
+                asset,
+                zoom: asset.zoom(scale_steps),
+            },
+        },
+    });
+    camera_rehover();
+    Ok(())
+}
+
+pub(super) fn marker_text(text: String) -> Result<(), Errno> {
+    or_refuse(write::set_draft_text(&text).ok(), Errno::EMSGSIZE)?;
+    Ok(())
+}
+
+pub(super) fn marker_commit() -> Result<(), Errno> {
+    write::commit_draft();
+    Ok(())
+}
+
+pub(super) fn marker_cancel() -> Result<(), Errno> {
+    write::cancel_draft();
+    Ok(())
+}

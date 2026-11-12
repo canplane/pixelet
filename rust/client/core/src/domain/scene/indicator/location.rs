@@ -29,10 +29,10 @@ use crate::domain::view::frame::coord;
 use crate::domain::view::lens;
 use crate::domain::view::lens::{visible_step_s, StepClock};
 use crate::sys::sched::{invalidate, invalidate_at};
+use pxl_global::Global;
 use pxl_render::frame::shader::word;
 use pxl_render::param::location::beacon;
 use xpute_core::clock::now;
-use xpute_core::global::Global;
 
 // The zone's radius in the ground's leaf cells, from its footprint
 // (`ZONE_FOOTPRINT_U`). The 0.707 taken off is half a cell's diagonal, so a
@@ -251,7 +251,7 @@ impl LocationIndicator {
             device,
             pos: coord::to_world(&device),
         };
-        // The memo is checked every turn, so it sees each change once. A zone
+        // The memo is checked every frame, so it sees each change once. A zone
         // whose block the heap refused is laid again.
         let mut grounded = core::mem::take(&mut self.ground_center);
         if self.zone.is_some() && self.block.handle == 0 {
@@ -332,7 +332,7 @@ impl LocationIndicator {
     /// beacon slides toward its target, a step each frame, only while the
     /// slide spans a camera cell, and snaps otherwise. The bob and the spin
     /// step a seen step at a time while the bob spans a camera cell, and the
-    /// turn is woken for the next step (`lens::StepClock`). Otherwise they
+    /// frame is woken for the next step (`lens::StepClock`). Otherwise they
     /// hold still.
     pub fn tick(&mut self, frame: &Frame) -> bool {
         let Some(p) = self.zone.as_mut() else {

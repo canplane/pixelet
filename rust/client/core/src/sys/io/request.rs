@@ -1,10 +1,10 @@
 // pxl-core/sys/io/request.rs
 
 //! The request scheduler, the one authority over which reads are out. Each
-//! stream declares its wants whole every turn, and each read that is out
+//! stream declares its wants whole every frame, and each read that is out
 //! holds a credit. `pump` stops what nobody wants any more and starts the
 //! rest in the policy's order. What starts, stops and ends waits in `events`
-//! until the turn takes it.
+//! until the frame takes it.
 //!
 //! An answer ends its want, and a failure ends only its attempt. After an
 //! object fails, its want is held back for as long as it is wanted. A body
@@ -23,8 +23,8 @@ use crate::sys::io::policy::{self, Fault, Rank};
 use crate::sys::io::room::Refusal;
 use crate::sys::load::LOAD_FILES;
 use crate::sys::sched;
+use pxl_global::Global;
 use xpute_core::clock::now;
-use xpute_core::global::Global;
 use xpute_kit::math::rng::seed_mix64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -115,7 +115,7 @@ struct Sched {
     credits: u32,
     most_credits: u32,
     events: VecDeque<Event>,
-    /// Scratch for `declare` and `pump`, so that a turn allocates nothing.
+    /// Scratch for `declare` and `pump`, so that a frame allocates nothing.
     fresh: Vec<Want>,
     ready: Vec<(Rank, Stream, Want)>,
     outage: Outage,
@@ -155,7 +155,7 @@ pub fn open(frames: impl Fn(Stream) -> u32) {
 /// Replaces `stream`'s wants with `wanted`, which is sorted by id. Of a
 /// repeated id, the last order counts. An id that stays keeps the time it was
 /// first wanted and its wait, so a producer declares everything it wants
-/// every turn.
+/// every frame.
 pub fn declare(stream: Stream, wanted: &[(u64, Order)]) {
     let (s, at) = (sched(), now());
     let i = stream as usize;
@@ -190,11 +190,11 @@ pub fn set_credits(credits: u32) {
     s.most_credits = s.most_credits.max(s.credits);
 }
 
-/// Runs once a turn, after every producer has declared. A pump after only
+/// Runs once a frame, after every producer has declared. A pump after only
 /// the first producer would fill every slot with that producer's wants.
 pub fn pump() {
     let (s, at) = (sched(), now());
-    // Abandoned work stops in the turn it is abandoned. After a zoom out and
+    // Abandoned work stops in the frame it is abandoned. After a zoom out and
     // back in, the credits must not stay on the zoom passed through.
     for k in 0..SLOTS {
         if s.slots[k]
@@ -214,7 +214,7 @@ pub fn pump() {
 
 /// When a frame's pump is waited for at `at_ms`, if one is: the end of the
 /// hold on every start. Nothing else may come to wake the core then. It is
-/// asked every turn, since a timer lasts only until the next turn.
+/// asked every entry, since a timer lasts only until the next entry.
 pub fn next_pump_at(at_ms: f64) -> Option<f64> {
     let until = sched().outage.until;
     (until > at_ms).then_some(until)
@@ -247,7 +247,7 @@ fn start_ready(s: &mut Sched, at: f64) {
             }
         }
     }
-    // The stream and the id break ties only so that two runs of the same turn
+    // The stream and the id break ties only so that two runs of the same frame
     // start the same work.
     ready.sort_unstable_by(|a, b| {
         let tie = |r: &(Rank, Stream, Want)| (r.1 as u8, r.2.id);
@@ -335,23 +335,6 @@ fn hold(s: &mut Sched, fault: Fault, f: Failure, started_ms: f64, at: f64) {
     sched::invalidate();
 }
 
-/// Resets the scheduler when the runtime will not answer what it was asked
-/// to run. What is out stops, as what is no longer wanted does, so an open
-/// that will not be answered lets go of its descriptor. The pending starts
-/// are dropped.
-pub fn reset() {
-    let (s, at) = (sched(), now());
-    s.events.retain(|e| !matches!(e, Event::Start(..)));
-    for k in 0..SLOTS {
-        if s.slots[k].out.is_some() {
-            stop(s, k, at);
-        }
-    }
-    s.wants.iter_mut().for_each(Vec::clear);
-    s.outage = NO_OUTAGE;
-    s.given_up = false;
-}
-
 /// Whether `stream`'s want of `id` is held back because its object failed.
 pub fn has_object_failed(stream: Stream, id: u64) -> bool {
     let s = sched();
@@ -361,7 +344,7 @@ pub fn has_object_failed(stream: Stream, id: u64) -> bool {
 /// The body slots that a tile asked for again may arrive in. The count
 /// leaves out one slot for each of the most credits ever granted, because a
 /// body may still be out on each, and one for each Earth tile the Earth's
-/// bound holds, whose packet waits for a frame (sys/io/body.rs).
+/// bound holds, whose packet waits for a frame.
 pub fn spare_slots() -> u32 {
     let s = sched();
     let earth = s.bounds[Stream::earth as usize] as u32;

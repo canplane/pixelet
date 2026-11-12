@@ -10,10 +10,10 @@
  *
  * A device waits on its queue where every chunk is taken. A page cannot wait
  * inside a record, so it makes one chunk more, mapped as it is made, and keeps
- * it: the pool holds as many chunks as the turns' writes and the GPU's lag
+ * it: the pool holds as many chunks as the entries' writes and the GPU's lag
  * have needed at once. The lag is bounded by the frame's admission, which
  * draws no frame while the frame latency's frames are unfinished (xpute-gpu
- * admit), so the turns that write wait as a device's belt would.
+ * admit), so the entries that write wait as a device's belt would.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
@@ -54,7 +54,7 @@ export class Belt {
 
   private readonly device: GPUDevice;
   private readonly chunk_bytes: u32;
-  /** A remap's landing slower than this is said (gpu.ts `timed`). */
+  /** A remap's landing slower than this is logged (gpu.ts `timed`). */
   private readonly slow_ms: u32 | null;
 
   constructor(device: GPUDevice, chunk_bytes: u32, slow_ms: u32 | null) {

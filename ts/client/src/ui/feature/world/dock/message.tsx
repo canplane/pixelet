@@ -17,7 +17,6 @@ import { useCore } from "@/ui/shared/watch.ts";
 import { appendChatLine, DockMode, setDockMode } from "./store.ts";
 import { SLOT } from "./strip.tsx";
 import * as edit from "@/service/core/edit.ts";
-import * as scene from "@/service/core/scene.ts";
 import * as snapshot from "@/service/core/snapshot.ts";
 
 /** The dock holds this state, so that it is there whether or not the cards are
@@ -76,9 +75,9 @@ export function useMessage(mode: DockMode) {
   }
 
   const canSend = messageText.trim() !== "";
-  // The core refuses a line too long for it and never cuts one short, so a
-  // line that does not fit cannot be sent.
-  const fits = drafting ? markerFits : scene.chat_fits(messageText.trim());
+  // A marker's text the core refused cannot be committed. A chat line too
+  // long for the link is refused whole, never cut short.
+  const fits = drafting ? markerFits : true;
 
   return {
     drafting,

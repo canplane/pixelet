@@ -16,8 +16,7 @@ use pxl_spec::space::coord::mat4::Mat4;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
-use xpute_core::abi::handle::handle_slot;
-use xpute_core::global::Global;
+use pxl_global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -53,7 +52,7 @@ use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::{put_mat, put_steps};
 use crate::gpu::read::{Read, SlotMirror};
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
-use crate::gpu::surface::{on_surfaces_lost, surface, surfaces, Surface, SETTLE_TURNS, SURFACES};
+use crate::gpu::surface::{on_surfaces_lost, slot_of, surface, surfaces, Surface, SETTLE_TURNS, SURFACES};
 use crate::gpu::text::TextOf;
 use crate::gpu::tile::{self, Damage, TileGrid};
 use crate::gpu::upload::uploads;
@@ -438,11 +437,10 @@ pub fn on_gpu_lost() {
     on_surfaces_lost();
 }
 
-pub fn on_surface_closed(s: Surface) {
+pub fn on_surface_closed(slot: usize, s: Surface) {
     for id in s.targets() {
         release(id);
     }
-    let slot = handle_slot(s.handle) as usize;
     if let Some(r) = RENDERER.get(|| None).as_mut() {
         if let Some(pass) = r.character_passes[slot].take() {
             pass.release();
@@ -1629,7 +1627,7 @@ impl Renderer {
         for &(id, (rec, _), image, _) in Self::character_surfaces(surfaces) {
             let Some(s) = surface(id) else { continue };
             targets(g, s);
-            let slot = handle_slot(id) as usize;
+            let Some(slot) = slot_of(id) else { continue };
             if self.character_passes[slot].is_none() {
                 self.character_passes[slot] = Some(CharacterPass::new(
                     g,
@@ -1660,7 +1658,7 @@ impl Renderer {
     ) {
         for (id, draw, image, bg) in surfaces {
             let Some(s) = surface(*id) else { continue };
-            let Some(pass) = self.character_passes[handle_slot(*id) as usize].as_mut() else {
+            let Some(pass) = slot_of(*id).and_then(|k| self.character_passes[k].as_mut()) else {
                 continue;
             };
             pass.draw(ctx, s, self.frame, draw, *image, *bg, changed);

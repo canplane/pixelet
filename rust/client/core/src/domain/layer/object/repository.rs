@@ -31,6 +31,8 @@
 
 use fnv::FnvHashSet;
 use pxl_engine::object;
+use pxl_global::Global;
+use pxl_spec::asset::marker::MARKER_TEXT_CHARS;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::aabb::Aabb;
@@ -39,9 +41,8 @@ use pxl_spec::space::hierarchy::morton::{key_of_name, name, node_of};
 use pxl_spec::space::layer::area::shard_over;
 use pxl_spec::space::layer::demand::GROUND_DEMAND_TILES;
 use pxl_spec::space::layer::quadrant::Quadrant;
+use xpute_core::abi::link::Token;
 use xpute_core::clock::now;
-use xpute_core::global::Global;
-use xpute_core::io::fs::Token;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderConfig, TreeReader, TreeView};
@@ -49,7 +50,7 @@ use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderConfig, TreeReader, Tre
 use super::store::{object, object_mut};
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::store::{apply, note_damage, Write};
-use crate::sys::io::body::Packet;
+use crate::sys::io::body::Body;
 use crate::sys::io::demand::{Order, PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::file;
@@ -64,6 +65,10 @@ use pxl_spec::object::ext::{class_of, Class};
 /// `object_step`), which are no more than one zoom's demand of ground tiles
 /// (pxl-spec layer/demand.rs `demand_tiles`).
 pub const WANTS: u32 = GROUND_DEMAND_TILES;
+
+// Every objects' file a snapshot names can be watched beside the storage
+// file (sys/io/file.rs `WATCHED`).
+const _: () = assert!(WANTS as usize + 1 <= file::WATCHED);
 
 /// The id that names the top among the wanted files; every other wanted id
 /// is a shard's.
@@ -84,7 +89,7 @@ struct State {
     refused_files: Vec<u64>,
     /// The writes the store took since the last batch went up, in order.
     unsent: Vec<Write>,
-    /// The files `want` asks for, by id; the buffer is reused across turns.
+    /// The files `want` asks for, by id; the buffer is reused across frames.
     wants: Vec<(u64, Order)>,
     /// A counter that advances whenever something `want` reads changes: the
     /// top or a shard is read, or a file is refused or emptied.
@@ -218,7 +223,7 @@ fn changed() {
 
 /// Takes in a file after OBJECT that arrived, the top or a shard, or the
 /// news that it is absent (`admit`).
-pub fn on_arrived(id: u64, pkt: Option<Packet>, phases: &mut PhaseList) -> Result<(), Exit> {
+pub fn on_arrived(id: u64, pkt: Option<Body>, phases: &mut PhaseList) -> Result<(), Exit> {
     let at = now();
     let result = admit(id, pkt.as_deref());
     phases.push(TaskPhaseName::decode_ms, now() - at);
@@ -245,6 +250,7 @@ fn admit(id: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
     };
     if result.is_err() && !state().refused_files.contains(&id) {
         state().refused_files.push(id);
+        watch_named(state().refused_files.len() - 1);
         changed();
         invalidate();
     }
@@ -269,6 +275,17 @@ fn on_shard(id: u64, writes: Vec<Write>) {
     changed();
 }
 
+/// Watches the refused file at `at` among the refused, where a snapshot names
+/// it: the first WANTS are named (ui.rs), and the client sets aside only
+/// those, so a file is watched from when it is named until it changes.
+fn watch_named(at: usize) {
+    if at < WANTS as usize {
+        if let Some(&id) = state().refused_files.get(at) {
+            file::watch(file::Refused::Objects(id));
+        }
+    }
+}
+
 pub fn refused_files() -> &'static [u64] {
     &state().refused_files
 }
@@ -281,6 +298,9 @@ pub fn on_emptied(id: u64) -> bool {
         return false;
     };
     st.refused_files.remove(i);
+    if i < WANTS as usize {
+        watch_named(WANTS as usize - 1);
+    }
     st.revision = st.revision.wrapping_add(1);
     // Drop the failed want, so that the next declaration starts a new one.
     st.wants.retain(|&(n, _)| n != id);
@@ -368,6 +388,10 @@ fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
         if asset_ids.get(r).and_then(|&v| class_of(v)) != Some(Class::marker_text) {
             return Err(MarshalError::new(Errno::EINVAL));
         }
+        // A marker's text past its cap means the same.
+        if t.chars().count() > MARKER_TEXT_CHARS as usize {
+            return Err(MarshalError::new(Errno::EINVAL));
+        }
         ext[r] = Some(Ext::MarkerText(t.to_string()));
     }
     keys.iter()
@@ -422,7 +446,7 @@ fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, MarshalError> {
         .collect()
 }
 
-/// Queues a write the store took, to go up as an edit with the turn's other
+/// Queues a write the store took, to go up as an edit with the frame's other
 /// writes (`step`).
 pub fn send(write: Write) {
     state().unsent.push(write);
@@ -448,12 +472,12 @@ pub fn save() {
     if st.unsent.is_empty() {
         return;
     }
-    let edit = [
+    let edit = vec![
         Token::Int(path::OBJECT::ID),
         Token::Int(path::OBJECT::EDIT::ID),
     ];
     if let Ok(batch) = encode_writes(format::OBJECT_EDIT, &st.unsent) {
-        file::write(&edit, &batch);
+        file::write(edit, batch.into_boxed_slice());
     }
     st.unsent.clear();
 }

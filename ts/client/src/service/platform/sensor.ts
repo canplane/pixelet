@@ -27,25 +27,6 @@ function orient_gated(): boolean {
 
 let geo_watch: number | null = null;
 
-/** How long the world waits on a location prompt that no one answers before
- * it opens at the core's fallback place. An answer that comes later still
- * moves it. A device needs no such wait, because its prompt is the system's
- * and holds the app itself. The value is a product choice. */
-const PROMPT_MS = 5000;
-
-function geo_prompt_wait(): void {
-  setTimeout(() => {
-    navigator.permissions?.query({ name: "geolocation" }).then(
-      (status) => {
-        if (geo_watch !== null && status.state === "prompt") {
-          listener.positionError("timeout", true);
-        }
-      },
-      () => {},
-    );
-  }, PROMPT_MS);
-}
-
 function geo_stop(): void {
   if (geo_watch !== null) navigator.geolocation.clearWatch(geo_watch);
   geo_watch = null;
@@ -77,10 +58,9 @@ function geo_start(): void {
     },
     // No timeout is set (PositionOptions.timeout is Infinity by default). With
     // one, TIMEOUT would fire on a clock while no fix comes, and each would
-    // cost the core a turn for nothing.
+    // cost the core an entry for nothing.
     { enableHighAccuracy: true, maximumAge: 5000 },
   );
-  geo_prompt_wait();
 }
 
 let orient_event: string | null = null;

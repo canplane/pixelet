@@ -22,10 +22,10 @@ use crate::domain::setting::store::{settings, CameraMode};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::frame::pose::ObserverPose;
 use crate::domain::view::frame::screen::units_per_px_at;
-use crate::sys::sched::invalidate;
 use crate::sys::sched;
+use crate::sys::sched::invalidate;
 use crate::sys::sched::tick::TickContext;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 pub fn dist() -> f64 {
     match active() {
@@ -251,8 +251,8 @@ pub fn controller_step(ctx: &mut TickContext) {
 
 pub fn camera_step(ctx: &mut TickContext) {
     let moving = match active() {
-        Active::Orbit => orbit::turn(ctx.delta),
-        Active::FirstPerson => first_person::turn(ctx.delta),
+        Active::Orbit => orbit::step(ctx.delta),
+        Active::FirstPerson => first_person::step(ctx.delta),
         Active::Tracked => false,
     };
     if moving {

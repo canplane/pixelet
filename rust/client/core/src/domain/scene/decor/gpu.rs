@@ -22,7 +22,7 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, UNIT_ZOOM};
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::preview::RenderEdit;

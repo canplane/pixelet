@@ -11,7 +11,7 @@ use crate::domain::scene::character::Group;
 use crate::sys::sched::invalidate;
 use pxl_render::gpu::api::Image;
 use pxl_render::gpu::draw::Draw;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 /// The open surfaces: each surface's id, the group of the companion's
 /// character it shows, and the color it clears to as sRGB 0xRRGGBB.

@@ -13,7 +13,6 @@ import { fixed } from "@/ui/shared/fixed.ts";
 import { HIT_KINDS } from "@/abi/perf.spec.ts";
 
 const SPAN_ROWS = 3;
-const MISSED_WARN_SHARE = 0.1;
 
 function Row(props: { k: string; v: string; warn?: boolean }) {
   return (
@@ -174,22 +173,12 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
           warn={f.interval.p95 > f.last.paced_ms + f.last.refresh_ms / 2}
         />
         <Row
-          k="missed/moving"
-          v={`${f.missed}/${f.moving}`}
-          warn={f.missed > f.moving * MISSED_WARN_SHARE}
-        />
-        <Row
           k="refresh/paced"
           v={`${n1(f.last.refresh_ms)}/${n1(f.last.paced_ms)} ms`}
         />
-        <Row
-          k="cpu busy p95"
-          v={`${n1(f.busy.p95)} ms`}
-          warn={f.busy.p95 > f.last.paced_ms}
-        />
       </>
     ),
-    turn: null,
+    cpu: null,
     frame: null,
     gpu: f !== null && (
       <>

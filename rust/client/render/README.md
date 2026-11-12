@@ -74,7 +74,7 @@ what is done a pixel at a time: the pixels' cast and holes, the visibility
 buffer, the world's passes, the occlusion. The beam rays, cells, samples and
 boxes run on angular cells and do not shrink, and the finish and the markers
 always draw at the display's pixels, so text stays sharp. Each GPU span says
-which kind it is (span.json `per_px`). The rate spaces the turns, a refresh at a
+which kind it is (span.json `per_px`). The rate spaces the frames, a refresh at a
 time, down to 30 Hz (`RATE_MIN_HZ`), and gives every pass more time.
 
 `auto` steers both as congestion control steers a connection. While the GPU's
@@ -120,7 +120,7 @@ casters are pushed by the same formula, so no plane shadows itself
 
 ## The frame
 
-Each turn the core hands a draw list (`gpu/draw.rs`) of what it draws beside the
+Each frame the core hands a draw list (`gpu/draw.rs`) of what it draws beside the
 world: the cumulus, the characters, the location indicator, an edit's ghost, the
 markers and the debug lines. A draw holds its position as a `Q3` and a remainder
 in `f32`, and the shader takes the wrapping integer difference from the eye
@@ -163,7 +163,7 @@ loses comes back through `on_gpu_lost`, which makes everything again.
 
 The renderer is made before its first frame, so that making it never holds the
 GPU process's main thread, which every frame the browser presents waits on
-(`gpu/pipeline.rs` `PipelineCache`). Shader modules are made a few a turn, within
+(`gpu/pipeline.rs` `PipelineCache`). Shader modules are made a few a frame, within
 `MODULE_BYTES` of the stream; then every pipeline is asked for by WebGPU's async
 call, which compiles off that thread and reports through a ticket's word; and no
 frame is drawn until every word says its pipeline is made. The snapshot carries

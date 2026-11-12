@@ -102,7 +102,6 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
 
   const onLayout = (e: LayoutChangeEvent) => {
     props.onLayout?.(e);
-    input.requestFrame();
   };
 
   return (

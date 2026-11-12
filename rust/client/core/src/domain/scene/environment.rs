@@ -24,13 +24,13 @@ use crate::domain::setting::store::settings;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
 use crate::domain::view::lens::StepClock;
 use crate::domain::view::observation;
-use xpute_core::clock::wall;
 use crate::sys::sched::invalidate_at;
 use celestial::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
+use pxl_global::Global;
 use xpute_core::clock::now;
-use xpute_core::global::Global;
+use xpute_core::clock::wall;
 
-/// Observes the sky at the wall clock's time and wakes a turn when the next
+/// Observes the sky at the wall clock's time and wakes a frame when the next
 /// step of the sky or of the clouds falls (`EnvironmentDraw::observe`). The
 /// sky moves with the wall clock while nothing else asks for a frame, so
 /// without this wake a still view would never show it move.
@@ -218,7 +218,7 @@ impl EnvironmentDraw {
         // the rate it moves over the minute after `at`. A light whose step
         // has not landed gives `unknown`. The sky's clock passes 0 for it, so
         // it steps at every observation. The wake passes infinity for it,
-        // because the landing of the renderer's measures wakes a turn of its
+        // because the landing of the renderer's measures wakes a frame of its
         // own (pxl-render `complete`).
         const MINUTE_MS: f64 = 60_000.0;
         let rate = |at: f64, unknown: f64| {
@@ -300,7 +300,7 @@ impl EnvironmentDraw {
         // The camera's Z, in units, is its altitude over the sea.
         let km_per_u = km_per_u();
         self.alt_km = frame.camera[2] * km_per_u;
-        // The ground under the eye, as the turn observed it.
+        // The ground under the eye, as the frame observed it.
         let ground = observation::observation().map_or(0.0, |o| o.ground);
         let light = Light {
             sun: self.sun,

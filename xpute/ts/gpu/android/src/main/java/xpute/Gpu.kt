@@ -9,7 +9,7 @@ import android.view.Surface
  * JNI (xpute-gpu `native_abi!`, src/runtime/jni.rs). These are the same
  * calls that the iOS module's Swift makes through the C ABI (xpute_gpu.h).
  * Each call reaches the runtime on the core's thread while the caller waits,
- * and a completion asks the core for a turn from there. A device the system
+ * and a completion asks the core for an entry from there. A device the system
  * loses is let go and told (`onLost`), and the next `open` opens a new one.
  */
 object Gpu {

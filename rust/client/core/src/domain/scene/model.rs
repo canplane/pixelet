@@ -5,8 +5,8 @@
 //! places models on the ground. The draw list lives here because a model's
 //! mesh is uploaded through it, and this is the lowest module that needs it.
 
+use pxl_global::Global;
 use pxl_render::gpu::draw::DrawList;
-use xpute_core::global::Global;
 
 use crate::domain::scene::model::registry::ModelTable;
 
@@ -19,7 +19,7 @@ pub fn models() -> &'static mut ModelTable {
     MODELS.get(ModelTable::default)
 }
 
-/// The list the renderer is handed each turn. Every drawn layer adds its draws
+/// The list the renderer is handed each frame. Every drawn layer adds its draws
 /// to it.
 static DRAW_LIST: Global<DrawList> = Global::new();
 

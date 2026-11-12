@@ -17,6 +17,10 @@
     reason = "generated from the spec"
 )]
 
+pub mod DIVISION_NAME {
+    pub const BYTES: u32 = 128;
+}
+
 pub mod DIVISION_SUBTYPE {
     pub const COUNTRY: u8 = 0;
     pub const DEPENDENCY: u8 = 1;

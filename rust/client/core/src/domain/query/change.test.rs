@@ -10,7 +10,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 const COLUMNS: [[f64; 2]; 2] = [[0.5, 0.5], [1.5, 1.5]];
 
-/// Whether a kept answer, exact or not, survives a turn whose one change is
+/// Whether a kept answer, exact or not, survives a frame whose one change is
 /// the ground node at `zoom` over `COLUMNS`.
 fn kept(exact: bool, zoom: Zoom) -> bool {
     changes().ground = vec![Quadrant::new(zoom, [0, 0])];

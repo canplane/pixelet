@@ -43,11 +43,6 @@ export function open(): () => void {
   return sensor.follow();
 }
 
-/** Asks for a turn now, as a box that moved needs one. */
-export function frame(): void {
-  ui.wake();
-}
-
 export const POINTER_PHASE: Readonly<Record<PlacePhase, PointerPhase>> = {
   down: PointerPhase.Down,
   move: PointerPhase.Move,

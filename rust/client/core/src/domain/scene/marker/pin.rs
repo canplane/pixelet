@@ -158,7 +158,7 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, draft: Option<&Draft>, out: &mut V
 }
 
 /// `draft` as arrangement.rs `Input` compares it: its entry, and its text by
-/// the text's hash, so a turn where nothing changed allocates nothing.
+/// the text's hash, so a frame where nothing changed allocates nothing.
 pub(super) fn draft_key(draft: Option<&Draft>) -> Option<(Octant, u64)> {
     draft.map(|d| {
         let mut h = fnv::FnvHasher::default();

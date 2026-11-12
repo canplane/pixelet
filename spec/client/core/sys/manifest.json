@@ -1,7 +1,7 @@
 {
   "$doc": [
-    "The core's manifest (xpute spec/manifest.schema.json): the memory a device gives it,",
-    "its stack, the most a frame's packet takes, its files and the GPU it asks for."
+    "The core's manifest (xpute spec/manifest.schema.json): its memory, its fixed ranges and",
+    "the heap it counts on, its stacks, its stream and the GPU it asks for."
   ],
   "gen": {
     "ts": "../../../../ts/client/src/abi/manifest.spec.ts",
@@ -9,45 +9,21 @@
   },
   "mem": {
     "$doc": [
-      "`bytes`: what a desktop is asked to reserve, then a handheld. A handheld's is half of",
-      "the desktop's, because a reservation is committed lazily by the OS but JavaScriptCore",
-      "reports the whole of it as the page's JavaScript memory. The smaller is also the floor",
-      "the module declares to the engine (`--initial-memory`), so a page that reserves less",
-      "fails to instantiate rather than booting into a core with nowhere to put the terrain.",
+      "`bytes`: the core's memory, 512 MiB on every platform, the limit chosen for it. The",
+      "page's worker grows the module's memory to it before the core's first entry, and the",
+      "core never grows it (sys/heap.rs), so a full heap stops the core: the stack, the",
+      "module's data, the fixed ranges, then the heap.",
       "",
-      "`region_bytes`: a reservation is a whole number of these and the bytes past the last",
-      "one are left out.",
+      "`fixed_bytes`: the fixed ranges past the module's data, `.fixed` (door/layout.rs), 147.63 MiB, which",
+      "the compiler holds the ranges' sum under.",
       "",
-      "`min_heap_bytes`: the heap a phone is guaranteed, and so what everything in front of",
-      "it is checked against: the front, the module's data and the fixed ranges together",
-      "must leave this much of the smaller size. Measured from where the heap begins, so",
-      "the question is asked twice: at compile time against the lowest the heap could start",
-      "(the front's end plus the fixed ranges, xpute-core manifest.rs `check`), so a terrain",
-      "grown past a phone fails to build; and at boot against where it actually started and",
-      "what the device gave.",
-      "",
-      "`min_heap_bytes` is 256 MiB. The fixed ranges take 83.63 MiB, the terrain's 74.31 MiB of them.",
-      "",
-      "The caps of the heap's bounded flows, added up, are checked against it at compile time too",
-      "(door/layout.rs `HEAP_FLOWS_BYTES`): the runs that `BODY_SLOTS` terrain and Earth",
-      "bodies fill (sys/io/body.rs), two baked tile's bodies for every credit, one out and one",
-      "stopped whose read the runtime has not passed, in the buddy's block for a division's,",
-      "the ways' pool at its cap, and the profiler's lanes while its setting is on, each in the",
-      "buddy's blocks, a power of two, 228.57 MiB. A shard's body has no longest and is not",
-      "counted. The sum is a budget, not the most live at once.",
-      "",
-      "The buddy's blocks stop short of the heap's end, since a block splits only where its",
-      "middle lies inside the heap: a handheld's heap of about 410 MiB is reached to 384 MiB,",
-      "and a desktop's of about 920 MiB to 896 MiB. `min_heap_bytes` is below both.",
-      "",
-      "Each figure here in MiB to two places is held to the code by a test",
-      "(door/layout.test.rs)."
+      "`min_heap_bytes`: the heap the core counts on past the fixed ranges, 256 MiB, which the",
+      "boot checks the memory it is given leaves (sys/heap.rs). A whole file read and a fetched body are capped by it,",
+      "and the caps of the heap's bounded flows, added up in the buddy's blocks, are held under",
+      "it at compile time (door/layout.rs `HEAP_FLOWS_BYTES`)."
     ],
-    "bytes": [
-      1073741824,
-      536870912
-    ],
-    "region_bytes": 67108864,
+    "bytes": 536870912,
+    "fixed_bytes": 154800128,
     "min_heap_bytes": 268435456
   },
   "stack": {
@@ -64,12 +40,6 @@
     ],
     "module_bytes": 1048576,
     "thread_bytes": 8388608
-  },
-  "pkt": {
-    "$doc": [
-      "A page, since a SOURCE_DECLARE's or a SCENE_CHAT's packet can come near one."
-    ],
-    "bytes": 4096
   },
   "stream": {
     "bytes": 4194304

@@ -17,6 +17,7 @@ doctest = false
 
 [dependencies]
 fnv.workspace = true
+pxl-global.workspace = true
 libm.workspace = true
 xpute-core.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
@@ -27,7 +28,7 @@ pxl-spec.workspace = true
 pxl-engine.workspace = true
 pxl-content.workspace = true
 pxl-render.workspace = true
-# The executor the door polls the core's tasks on inside a turn
+# The executor the link polls the core's tasks on inside an entry
 # (sys/sched/executor.rs). No platform feature: the pender is the core's own, and
 # the platform one for wasm brings wasm-bindgen.
 embassy-executor = { version = "0.10", default-features = false }
@@ -37,7 +38,7 @@ critical-section = "1.1"
 # its memory, its thread, the allocator over both, the stop hook and the C
 # ABI with its JNI, which src/sys/unpack.rs reaches JNI's bindings through too;
 # and the GPU's runtime that runs the renderer's stream on the device around
-# each turn, as the page's runs it on WebGPU. Metal on an iPhone, Vulkan on
+# each entry, as the page's runs it on WebGPU. Metal on an iPhone, Vulkan on
 # Android; each backend compiles to nothing on the other's system.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 xpute-gpu ={ workspace = true, features = ["runtime"] }
@@ -47,11 +48,6 @@ xpute-gpu ={ workspace = true, features = ["runtime"] }
 # (ts/client/script/core-build.py). No defaults: RFC 8878's frame
 # alone, none of the formats before it.
 zstd = { version = "0.13", default-features = false }
-
-# The module's link arguments, from the core's manifest (build.rs,
-# xpute_core::wasm `link`).
-[build-dependencies]
-xpute-core.workspace = true
 
 [dev-dependencies]
 # The records a test holds the core to beside the client

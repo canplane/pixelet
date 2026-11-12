@@ -4,10 +4,10 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError, type Path } from "@xpute/runtime";
+import { FaultError } from "@xpute/kit/status/error.ts";
 
 import { LEAF_ZOOM, path as tree } from "@/abi/file.spec.ts";
-import { binding, object_key, walk } from "./binding.ts";
+import { binding, object_key, type Path, walk } from "./binding.ts";
 import { TOP_KEY } from "./object.ts";
 
 const signal = new AbortController().signal;
@@ -16,7 +16,7 @@ function errnum(f: () => unknown): number | undefined {
   try {
     f();
   } catch (err) {
-    return err instanceof FileError ? err.errnum : undefined;
+    return err instanceof FaultError ? err.errnum : undefined;
   }
   return undefined;
 }

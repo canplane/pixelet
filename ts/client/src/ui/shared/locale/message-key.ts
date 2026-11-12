@@ -1,6 +1,6 @@
 // @pxl/client/ui/shared/locale/message-key.ts
 
-import { Message } from "@/abi/ui.ts";
+import { Message } from "@/abi/overlay.ts";
 
 export function messageKey(message: Message): string {
   switch (message) {

@@ -28,7 +28,7 @@ use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::api;
 use pxl_render::gpu::surface::{surfaces, Surface};
 use pxl_render::renderer::GpuRead;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 /// How a frame was paced.
 #[derive(Clone, Copy)]

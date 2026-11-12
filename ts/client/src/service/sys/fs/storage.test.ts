@@ -4,9 +4,10 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/runtime";
+import { FaultError } from "@xpute/kit/status/error.ts";
 
 import { path } from "@/abi/file.spec.ts";
+import type { RefusedFile } from "@/abi/overlay.ts";
 import { follow_refused_files, set_aside_by_path } from "./refusal.ts";
 import {
   is_storage_key,
@@ -61,7 +62,7 @@ test("open_storage - text that keeps no bytes is no file of bytes", () => {
   try {
     open_storage(SETTINGS, s);
   } catch (err) {
-    errnum = err instanceof FileError ? err.errnum : undefined;
+    errnum = err instanceof FaultError ? err.errnum : undefined;
   }
   assert.deepStrictEqual(errnum, Errno.EBADMSG);
 });
@@ -69,9 +70,13 @@ test("open_storage - text that keeps no bytes is no file of bytes", () => {
 test("follow_refused_files - each refused file is set aside and emptied once", async () => {
   const s = storage({ "pxl:settings": '{"ao":"screen"}' });
   const told: string[] = [];
-  const settings = { path: [path.STORAGE.ID, SETTINGS] };
-  const tell = (f: { path: readonly (number | string)[] }): void =>
-    void told.push(f.path.join("/"));
+  const settings: RefusedFile = {
+    path: [
+      { tag: "int", val: path.STORAGE.ID },
+      { tag: "int", val: SETTINGS },
+    ],
+  };
+  const tell = (f: RefusedFile): void => void told.push(f.path.map((t) => t.val).join("/"));
   follow_refused_files([settings], tell, set_aside_by_path(s));
   follow_refused_files([settings], tell, set_aside_by_path(s));
   await Promise.resolve();

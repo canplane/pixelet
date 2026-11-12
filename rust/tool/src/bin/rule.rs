@@ -6,8 +6,8 @@
 //! what stands above the naming file: across a crate's folders and the client's, and inside
 //! the client's UI and services, the core's heads, pxl-render's, the camera's and the view's. It
 //! also holds that only the top names the profiler, that no renderer stands under the core's
-//! sys/, that only the screen reads the screen's pixels, and that no Rust file lies outside
-//! a crate's module tree. A rule Rust alone can keep is clippy's (rust/clippy.toml,
+//! sys/, that only the screen reads the screen's pixels, that no Rust file lies outside
+//! a crate's module tree, and that the modules' and files' dependencies form no cycle. A rule Rust alone can keep is clippy's (rust/clippy.toml,
 //! xpute/rust/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
@@ -73,9 +73,10 @@ struct Order {
 /// the UI's protocol among it. The protocol's enums, which the domain reads, the settings,
 /// and an edit not yet made, which the top hands from control to the scene, stand where both
 /// heads may name them. The profiler reads anything and stands beside the order, in none of its steps, and
-/// only the top, which records into it, names it.
+/// only the top, which records into it, names it. The link's bindings, which name nothing of
+/// the core, stand under everything that calls or serves through them.
 const CORE: &str = "rust/client/core/src/";
-const CORE_ORDER: [(&str, u8); 15] = [
+const CORE_ORDER: [(&str, u8); 16] = [
     ("turn", 7),
     ("door", 7),
     ("ui", 7),
@@ -91,6 +92,7 @@ const CORE_ORDER: [(&str, u8); 15] = [
     ("query", 3),
     ("layer", 2),
     ("sys", 1),
+    ("abi", 0),
 ];
 const CORE_HEADS: [&str; 2] = ["scene", "control"];
 const CORE_BESIDE: [&str; 1] = ["perf"];
@@ -138,7 +140,7 @@ const VIEW_ORDER: [(&str, u8); 6] = [
 /// the root, which sequences the parts that draw (`SCENE_OWN`), over the
 /// markers, the characters and the indicators, over what they draw with,
 /// each part keeping its own state.
-const SCENE_ORDER: [(&str, u8); 15] = [
+const SCENE_ORDER: [(&str, u8); 16] = [
     ("stage", 7),
     ("marker", 5),
     ("character", 4),
@@ -152,6 +154,7 @@ const SCENE_ORDER: [(&str, u8); 15] = [
     ("column", 0),
     ("frame", 0),
     ("param", 0),
+    ("rate", 0),
     ("resolution", 0),
     ("transform", 0),
 ];
@@ -872,6 +875,243 @@ fn unlinked(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String
         .collect()
 }
 
+/// The dependency cycles that stood before the cycle rule, each as its graph and its members
+/// in order, for the user to review. No other cycle stands, and one of these that gains or
+/// loses a member is another.
+const CYCLES_KNOWN: [&str; 18] = [
+    "rust/client/core: domain::control::camera::collision domain::control::camera::orbit",
+    "rust/client/core: domain::control::edit domain::control::edit::pick",
+    "rust/client/core: domain::control::navigation::destination domain::control::navigation::follow_mode",
+    "rust/client/core: domain::control::sensor domain::control::sensor::device_orientation domain::control::sensor::geolocation",
+    "rust/client/core: domain::layer::terrain::clipmap domain::layer::terrain::tile",
+    "rust/client/core: domain::query::decor domain::query::node domain::query::scatter",
+    "rust/client/core: domain::scene::marker::arrangement domain::scene::marker::line domain::scene::marker::pin domain::scene::marker::place",
+    "rust/client/core: domain::scene::character domain::scene::character::companion",
+    "rust/client/core: perf::frame perf::record perf::report perf::section perf::window turn",
+    "rust/client/core: sys::io::loader sys::io::policy sys::io::request",
+    "rust/client/engine: clipmap ground way",
+    "rust/server/geo-bake: separation terrain::pipeline::overture::policy terrain::repository",
+    "rust/spec: space::coord::world space::coord::zoom",
+    "rust/tool: spec::asset spec::catalog spec::ingest",
+    "ts: ts/client/src/ui/feature/debug/accordion.tsx ts/client/src/ui/feature/debug/legend.tsx ts/client/src/ui/feature/debug/perf.tsx ts/client/src/ui/feature/debug/view.tsx ts/client/src/ui/feature/debug/window.tsx",
+    "ts: xpute/ts/kit/src/math/rng.32.ts xpute/ts/kit/src/math/rng.64.ts xpute/ts/kit/src/math/rng.ts",
+    "xpute/rust/gpu: runtime::jni runtime::native",
+    "xpute/rust/gpu: runtime::make runtime::pending runtime::run",
+];
+
+/// xpute's TypeScript packages, by the name an import writes and the folder it stands for.
+const TS_PACKAGES: [(&str, &str); 4] = [
+    ("@xpute/runtime", "xpute/ts/runtime/src/"),
+    ("@xpute/gpu", "xpute/ts/gpu/src/"),
+    ("@xpute/kit", "xpute/ts/kit/src/"),
+    ("@xpute/native", "xpute/ts/native/src/"),
+];
+
+/// The strongly connected parts of `g` with more than one member, each sorted.
+fn strong_parts(g: &std::collections::BTreeMap<String, std::collections::BTreeSet<String>>) -> Vec<Vec<String>> {
+    struct Walk<'a> {
+        g: &'a std::collections::BTreeMap<String, std::collections::BTreeSet<String>>,
+        idx: std::collections::BTreeMap<&'a str, usize>,
+        low: std::collections::BTreeMap<&'a str, usize>,
+        stack: Vec<&'a str>,
+        on: std::collections::BTreeSet<&'a str>,
+        parts: Vec<Vec<String>>,
+    }
+    fn visit<'a>(w: &mut Walk<'a>, v: &'a str) {
+        let n = w.idx.len();
+        w.idx.insert(v, n);
+        w.low.insert(v, n);
+        w.stack.push(v);
+        w.on.insert(v);
+        for u in w.g.get(v).into_iter().flatten() {
+            let u = u.as_str();
+            if !w.g.contains_key(u) {
+                continue;
+            }
+            if !w.idx.contains_key(u) {
+                visit(w, u);
+                let l = w.low[v].min(w.low[u]);
+                w.low.insert(v, l);
+            } else if w.on.contains(u) {
+                let l = w.low[v].min(w.idx[u]);
+                w.low.insert(v, l);
+            }
+        }
+        if w.low[v] == w.idx[v] {
+            let mut part = Vec::new();
+            while let Some(u) = w.stack.pop() {
+                w.on.remove(u);
+                part.push(u.to_string());
+                if u == v {
+                    break;
+                }
+            }
+            if part.len() > 1 {
+                part.sort();
+                w.parts.push(part);
+            }
+        }
+    }
+    let mut w = Walk {
+        g,
+        idx: Default::default(),
+        low: Default::default(),
+        stack: Vec::new(),
+        on: Default::default(),
+        parts: Vec::new(),
+    };
+    for v in g.keys() {
+        if !w.idx.contains_key(v.as_str()) {
+            visit(&mut w, v);
+        }
+    }
+    w.parts
+}
+
+/// Each crate's module graph, by its `crate::`, `super::` and `self::` paths, and the
+/// TypeScript files' graph, by their imports, as a page resolves them and as iOS and Android
+/// do (`.ios` or `.android`, then `.native`, before the page's own file). A test's file, a
+/// generated spec and the crate's root, which declares every module, are no node of it. Each
+/// cycle not in `CYCLES_KNOWN`.
+fn cycles(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
+    use std::collections::{BTreeMap, BTreeSet};
+    let mut found: BTreeSet<String> = BTreeSet::new();
+    let path = Regex::new(r"\b(crate|(?:super::)*super|self)::(?:\{([^}]*)\}|((?:[a-z_0-9]+::)*[a-z_0-9]+)(?:::\{([^}]*)\})?)").expect("a module path's pattern");
+    let comment = Regex::new(r"(?m)//.*$").expect("a comment's pattern");
+    let roots = files.iter().filter(|f| {
+        f.ends_with("/src/lib.rs") && (f.starts_with("rust/") || f.starts_with("xpute/rust/"))
+    });
+    for lib in roots {
+        let src = lib.trim_end_matches("lib.rs");
+        let name = src.trim_end_matches("/src/");
+        let module = |f: &str| -> String {
+            let m = f[src.len()..].trim_end_matches(".rs").trim_end_matches("/mod");
+            if m == "lib" { String::new() } else { m.replace('/', "::") }
+        };
+        let mods: Vec<&str> = files
+            .iter()
+            .copied()
+            .filter(|f| {
+                f.starts_with(src)
+                    && f.ends_with(".rs")
+                    && !f[src.len()..].starts_with("bin/")
+                    && !f.ends_with(".test.rs")
+                    && !f.ends_with(".spec.rs")
+            })
+            .collect();
+        let names: BTreeSet<String> = mods.iter().map(|f| module(f)).collect();
+        let owner = |p: &str| -> String {
+            let mut p = p.to_string();
+            while !names.contains(&p) {
+                match p.rsplit_once("::") {
+                    Some((head, _)) => p = head.to_string(),
+                    None => return String::new(),
+                }
+            }
+            p
+        };
+        let mut g: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for f in &mods {
+            let m = module(f);
+            let text = read(f).unwrap_or_default();
+            let code = comment.replace_all(&text, "");
+            let mut deps = BTreeSet::new();
+            for c in path.captures_iter(&code) {
+                // Where the path starts: the root, or the file's module and as
+                // many steps up as it says `super`.
+                let base: Vec<&str> = match &c[1] {
+                    "crate" => Vec::new(),
+                    "self" => m.split("::").filter(|s| !s.is_empty()).collect(),
+                    supers => {
+                        let up = supers.matches("super").count();
+                        let steps: Vec<&str> = m.split("::").filter(|s| !s.is_empty()).collect();
+                        steps[..steps.len().saturating_sub(up)].to_vec()
+                    }
+                };
+                let join = |tail: &str| -> String {
+                    let mut p = base.join("::");
+                    for t in tail.split("::").filter(|t| !t.is_empty()) {
+                        if !p.is_empty() {
+                            p.push_str("::");
+                        }
+                        p.push_str(t);
+                    }
+                    p
+                };
+                let head = join(c.get(3).map_or("", |p| p.as_str()));
+                deps.insert(owner(&head));
+                let items = c.get(2).or(c.get(4)).map_or("", |i| i.as_str());
+                for item in items.split(',') {
+                    let item = item.trim().split(|ch: char| !(ch.is_alphanumeric() || ch == '_')).next().unwrap_or("");
+                    if !item.is_empty() && item != "self" {
+                        let p = if head.is_empty() { item.to_string() } else { format!("{head}::{item}") };
+                        deps.insert(owner(&p));
+                    }
+                }
+            }
+            deps.retain(|d| !d.is_empty() && *d != m);
+            g.insert(m, deps);
+        }
+        for part in strong_parts(&g) {
+            found.insert(format!("{name}: {}", part.join(" ")));
+        }
+    }
+    let aliases = ts_aliases(read);
+    let ts: Vec<&str> = files
+        .iter()
+        .copied()
+        .filter(|f| {
+            (f.starts_with("ts/client/src/") || f.starts_with("xpute/ts/"))
+                && (f.ends_with(".ts") || f.ends_with(".tsx"))
+                && !f.contains(".test.")
+                && f.contains("/src/")
+        })
+        .collect();
+    let have: BTreeSet<&str> = ts.iter().copied().collect();
+    // The page's own files, then each device's, its overrides found first.
+    let platforms: [(&[&str], &[&str]); 3] = [
+        (&[], &[".native.", ".ios.", ".android."]),
+        (&[".ios", ".native"], &[".android."]),
+        (&[".android", ".native"], &[".ios."]),
+    ];
+    for (over, apart) in platforms {
+        let resolve = |p: &str| -> Option<String> {
+            let stem = p.trim_end_matches(".tsx").trim_end_matches(".ts");
+            over.iter()
+                .flat_map(|o| [format!("{stem}{o}.tsx"), format!("{stem}{o}.ts")])
+                .chain([p.to_string(), format!("{p}.ts"), format!("{p}.tsx"), format!("{p}/mod.ts")])
+                .find(|t| have.contains(t.as_str()))
+        };
+        let mut g: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for f in ts.iter().filter(|f| !apart.iter().any(|a| f.contains(a))) {
+            let text = read(f).unwrap_or_default();
+            let mut deps: BTreeSet<String> = imported(&text, f, &aliases)
+                .into_iter()
+                .filter_map(|(_, p)| resolve(&p))
+                .collect();
+            let pkg = Regex::new(r#"(?:\bfrom|\bimport\s*\(?)\s*["'](@xpute/[a-z]+)(/[^"']*)?["']"#).expect("a package import's pattern");
+            for c in pkg.captures_iter(&text) {
+                let Some((_, dir)) = TS_PACKAGES.iter().find(|(n, _)| *n == &c[1]) else { continue };
+                let p = match c.get(2) {
+                    Some(rest) => format!("{dir}{}", &rest.as_str()[1..]),
+                    None => format!("{dir}mod.ts"),
+                };
+                deps.extend(resolve(&p));
+            }
+            deps.remove(*f);
+            g.insert(f.to_string(), deps);
+        }
+        for part in strong_parts(&g) {
+            found.insert(format!("ts: {}", part.join(" ")));
+        }
+    }
+    found
+        .into_iter()
+        .filter(|c| !CYCLES_KNOWN.contains(&c.as_str()))
+        .map(|c| format!("{c}: a dependency cycle; one of its members owns what the others need, and they reach it one way (rule.rs `cycles`)"))
+        .collect()
+}
+
 /// The tree's files, one path a line from `root`: git's files, tracked and not ignored, where
 /// `root` is a checkout's own top; otherwise, as in an export laid out under a checkout's
 /// ignored target, every file under it except the builds' and the packages', of which git
@@ -1026,13 +1266,14 @@ fn run() -> Result<Vec<String>, String> {
     }
 
     problems.extend(unlinked(&files, &read));
+    problems.extend(cycles(&files, &read));
     Ok(problems)
 }
 
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the layers' order, the profiler beside it, sys/ under the renderer, the screen's pixels and the crates' module trees hold");
+            println!("check-rules: the memory's offsets, one rounding, ES modules, the layers' order, the profiler beside it, sys/ under the renderer, the screen's pixels, the crates' module trees and a dependency graph without cycles hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {

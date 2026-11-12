@@ -1,9 +1,7 @@
 // @pxl/client/ui/feature/debug/console.ts
 
 /**
- * What every build puts on the console. `xpute.cmd(handle, method, ...args)`
- * sends any method of a handle the core issued, the way the UI sends one
- * (`raw` in service/core/raw.ts). `pxl.perf` holds what the profiler panel exports,
+ * What every build puts on the console. `pxl.perf` holds what the profiler panel exports,
  * computed on the client from what the core's profiler holds. `report()` gives
  * the summary of the profiler's window as text, and `read()` gives the same
  * summary as values. `trace()` saves the window as a trace for
@@ -14,13 +12,11 @@ import { perfDrive } from "./perf/drive.ts";
 import { perfReportText } from "./perf/report.ts";
 import { perfTraceSave } from "./perf/trace.ts";
 import { perfReportRead } from "./perf/view.ts";
-import { raw } from "@/service/core/raw.ts";
 
-/** Call this once the core has booted: the connection `xpute.cmd` sends
- * through exists only from then. */
+/** Call this once the core has booted: the profiler `pxl.perf` reads is the
+ * core's. */
 export function installConsole(): void {
-  const g = globalThis as { xpute?: unknown; pxl?: unknown };
-  g.xpute = raw;
+  const g = globalThis as { pxl?: unknown };
   g.pxl = {
     perf: {
       report: async () => perfReportText(await perfReportRead()),

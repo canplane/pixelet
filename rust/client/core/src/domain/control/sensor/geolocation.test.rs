@@ -21,7 +21,7 @@ fn a_fix_is_kept_where_it_is() {
 
 /// Opens the location afresh on a platform that has one.
 fn opened() {
-    platform().geolocation = true;
+    platform().supported = true;
     geolocation_close();
     take_geolocation_cmd();
     geolocation_open();

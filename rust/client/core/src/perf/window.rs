@@ -3,11 +3,12 @@
 //! The profiler's window turns recording, and the tick's step timing that
 //! the report reads, on and off together.
 
-use crate::perf::record::{perf_recording_start, perf_recording_stop, perf_release};
-use crate::turn;
+use crate::perf::record::{
+    perf_recording_start, perf_recording_stop, perf_release, set_step_timing,
+};
 
 /// Follows the profiler's setting. It is called with the stored setting on
-/// the turn the settings are read, a few turns after boot, so a profiler left
+/// the frame the settings are read, a few frames after boot, so a profiler left
 /// on has the world's start in its window. When the setting is off, the
 /// recording's columns go back to the heap.
 pub fn perf_follow(on: bool) {
@@ -25,11 +26,11 @@ pub fn perf_window_start() -> bool {
     if !perf_recording_start() {
         return false;
     }
-    turn::set_step_timing(true);
+    set_step_timing(true);
     true
 }
 
 pub fn perf_window_stop() {
     perf_recording_stop();
-    turn::set_step_timing(false);
+    set_step_timing(false);
 }

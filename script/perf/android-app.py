@@ -14,7 +14,7 @@ from measure import measure, stream
 
 APP = "me.plei.pixelet"
 METRO_PORT = os.environ.get("METRO_PORT", "8081")
-# The log tag XPUTE.say writes under.
+# The log tag XPUTE.log writes under.
 TAG = "xpute"
 
 

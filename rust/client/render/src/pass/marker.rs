@@ -206,7 +206,7 @@ impl MarkerPass {
     /// Paints the sprites that changed into the atlas, and says whether the
     /// atlas changed: made again, or painted on. A sprite that cannot be
     /// painted yet is left for a later frame: its text is not drawn yet, or
-    /// its pixels do not fit this turn's stream.
+    /// its pixels do not fit this frame's stream.
     pub fn sync_atlas(&mut self, g: &Gpu, mip: &MipPass, atlas: &mut Atlas, text: TextOf) -> bool {
         let flush = atlas.flush(self.generation, &mut self.dirty);
         self.generation = flush.generation;

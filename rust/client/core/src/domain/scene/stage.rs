@@ -15,7 +15,7 @@ use pxl_render::pass::atmosphere::EARTH_LAYERS;
 use pxl_render::ray::{Cast, GroundInput};
 use pxl_render::renderer::{render_frame, EarthLayer, FrameInput, FrameStat};
 use pxl_spec::space::coord::{q3, v3};
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 use crate::domain::layer::earth::{self, EarthTile, EARTH_SLOTS};
 use crate::domain::scene::character::companion::companion_skins;
@@ -76,7 +76,7 @@ const _: () = assert!(
     "a GPU layer for each frame the earth layer holds"
 );
 
-/// What the renderer made of the turn's frame, for the profiler to record
+/// What the renderer made of the frame, for the profiler to record
 /// (perf/report.rs `set_renderer_frame`). `scale` is the scale the world was
 /// drawn at, read before the resolution's judge can change it for the next
 /// frame.
@@ -219,7 +219,7 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
     }
 }
 
-/// The scene's part of a turn (turn.rs `scene_tick`), handed what control
+/// The scene's part of a frame (frame.rs `scene_tick`), handed what control
 /// decided. `pivot` and `heading` are the camera's and place the world gizmo.
 /// `edit` is the pointer's preview, and decor leaves out what it hides. `draft` is the
 /// marker tool's draft, which the markers show.
@@ -244,7 +244,7 @@ pub fn scene_step(
     };
 
     // The world gizmo is laid before the scene adds its draws, so its lines
-    // and the origin they are drawn about come from the same turn.
+    // and the origin they are drawn about come from the same frame.
     let show = settings().world_gizmo;
     frame_gizmo_step(show, pivot, heading);
     coverage_gizmo_step(show);

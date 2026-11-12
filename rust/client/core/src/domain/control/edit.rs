@@ -18,15 +18,14 @@ pub mod write;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::domain::control::edit::pick::{pick_at, Pick};
+use crate::domain::control::edit::pick::{pick_at, Pick, Target};
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::preview::{Ghost, RenderEdit};
 use crate::domain::query::World;
+use pxl_global::Global;
 use pxl_spec::space::coord::zoom::{base_of, cube, idx_of, Zoom};
-use pxl_spec::space::layer::octant::Octant;
-use xpute_core::global::Global;
 
 /// The tool the pointer holds, as the UI chose it (`EDIT_TOOL`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -141,14 +140,6 @@ pub(crate) fn point_at(ndc_x: f64, ndc_y: f64) {
 /// While a gesture is under way, the pointer points at nothing to place.
 pub(crate) fn clear_hover_coord() {
     state().hover.coord = None;
-}
-
-/// What the pick struck, as a tool reads it: the cell an edit takes, and the
-/// decor the ground generated there, which has no entry in the store.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Target {
-    pub at: Octant,
-    pub decor: Option<Instance>,
 }
 
 impl Hover {

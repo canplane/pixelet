@@ -264,6 +264,8 @@ impl Area for GroundRead<'_> {
 
 impl ground::Resident for GroundRead<'_> {
     type Content = Pixelet;
+    type Place = Lookup;
+    const NOWHERE: Lookup = Lookup::NONE;
     /// The bound over the node of its cells at the zooms `cells`, off the
     /// clip levels, stepped from `place` (pxl-engine
     /// `ground::Resident::relief`). The node's line names the tile that a

@@ -37,7 +37,7 @@ pub(super) fn timed<R>(
     let r = f();
     let ms = t0.elapsed().as_millis();
     if ms > u128::from(slow) {
-        xpute_runtime::native::say(&format!("[gpu] {what} took {ms} ms"));
+        xpute_runtime::native::log(&format!("[gpu] {what} took {ms} ms"));
     }
     r
 }

@@ -6,20 +6,16 @@
 //! nearest it, and a place without one goes on the surface. A place named
 //! with its own height is put as it is (`go_to`).
 
-use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use pxl_spec::space::layer::lattice::{Grid, GROUND};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
-use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::{put_pivot, Motion};
-use crate::domain::control::camera::state::IntentPatch;
-use crate::domain::control::navigation::follow_mode;
 use crate::domain::control::support::{exact, nearest};
-use crate::domain::query::{is_unknown, unknown};
+use crate::domain::query::is_unknown;
 use crate::sys::sched;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 static DST: Global<Option<(Q3, Motion)>> = Global::new();
 
@@ -76,28 +72,4 @@ pub fn dst_step() {
     };
     *dst() = None;
     put_pivot(to, motion);
-}
-
-/// Sends the pivot to the surface at the X and Y of `to`, and stops
-/// following the device. A marker's height is its zoom's, coarser than where
-/// the pivot stands, so the pivot goes on the surface once that is known
-/// exactly.
-pub(crate) fn go_on_ground(to: Q3, motion: Motion) {
-    follow_mode::set_following(false);
-    go_to_ground(unknown(&to), motion);
-}
-
-pub fn go_to_place(to: Q3) {
-    go_on_ground(to, Motion::Smooth);
-    controller::come_in_to_default();
-}
-
-/// Goes to a search's place at `lon`, `lat` degrees, with the view asked
-/// with it. A view far out comes in to the default distance, and then the
-/// view is asked, so a distance asked with the search wins over the coming
-/// in.
-pub fn go_to_deg(lon: f64, lat: f64, view: IntentPatch) {
-    go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
-    controller::come_in_to_default();
-    controller::set_intent(view);
 }

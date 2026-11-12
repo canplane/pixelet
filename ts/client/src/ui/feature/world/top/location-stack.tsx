@@ -6,7 +6,7 @@ import { type GlyphName, Spinner } from "@/ui/shared/component/icon.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import { Tracking } from "@/abi/camera.ts";
-import { SensorStatus } from "@/abi/ui.ts";
+import { SensorStatus } from "@/abi/overlay.ts";
 import { CompassFace } from "./compass.tsx";
 import { ButtonStack } from "./button-stack.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";

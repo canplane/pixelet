@@ -7,6 +7,9 @@
 // how deep to read it. The numbers are stored, so a subtype is appended,
 // never inserted.
 
+import * as DIVISION_NAME from "./division/division_name.spec.ts";
 import * as DIVISION_SUBTYPE from "./division/division_subtype.spec.ts";
+
+export { DIVISION_NAME };
 
 export { DIVISION_SUBTYPE };

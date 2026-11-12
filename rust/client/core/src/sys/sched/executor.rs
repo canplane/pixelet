@@ -3,19 +3,19 @@
 //! embassy's raw executor, which keeps the queue of the core's tasks; each
 //! task is one of embassy's static tasks, spawned through `spawner`, and checks
 //! the entry's budget at its own yield points (sys/sched.rs). Every entry's
-//! end polls the executor until no task is ready (door.rs `end`). The pender
+//! end polls the executor until no task is ready (link.rs `end`). The pender
 //! only records that work is queued, because embassy forbids calling poll from
 //! it, and `pending` reports that record.
 
 use embassy_executor::raw::Executor as Raw;
 use embassy_executor::Spawner;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 struct OneThread;
 
 critical_section::set_impl!(OneThread);
 
-// SAFETY: the module runs on one thread and a turn never re-enters another.
+// SAFETY: the module runs on one thread and an entry never re-enters another.
 unsafe impl critical_section::Impl for OneThread {
     unsafe fn acquire() {}
 
@@ -43,7 +43,7 @@ pub fn spawner() -> Spawner {
 /// Polls every task that is queued.
 pub fn poll() {
     PENDED.set(false);
-    // SAFETY: called from an entry's end alone (door.rs `end`), which no entry
+    // SAFETY: called from an entry's end alone (link.rs `end`), which no entry
     // re-enters, and never from the pender.
     unsafe { raw().poll() };
 }

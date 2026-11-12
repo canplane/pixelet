@@ -8,7 +8,7 @@
 
 use pxl_spec::asset::catalog::SLOTS;
 
-use xpute_core::io::fs::Token;
+use xpute_core::abi::link::Token;
 
 use crate::sys::io::file_spec::path;
 
@@ -45,10 +45,10 @@ impl LoadKind {
 impl Load {
     /// The file's path: (ASSET, id), or the sphere's after EARTH. A file's id is
     /// below SPHERE, so it is an i32 as it is.
-    pub fn path(self) -> [Token<'static>; 2] {
+    pub fn path(self) -> Vec<Token> {
         match self {
-            Load::File(n) => [Token::Int(path::ASSET::ID), Token::Int(n as i32)],
-            Load::Sphere => [
+            Load::File(n) => vec![Token::Int(path::ASSET::ID), Token::Int(n as i32)],
+            Load::Sphere => vec![
                 Token::Int(path::EARTH::ID),
                 Token::Int(path::EARTH::SPHERE::ID),
             ],
@@ -69,4 +69,15 @@ impl Load {
             _ => None,
         }
     }
+}
+
+/// A want's id, with the kind in the high word, because one file can be
+/// wanted as more than one kind.
+pub fn id_of(kind: LoadKind, load: Load) -> u64 {
+    (kind as u64) << 32 | u64::from(load.id())
+}
+
+pub fn of_id(id: u64) -> Option<(LoadKind, Load)> {
+    let kind = LoadKind::ALL.into_iter().find(|&k| k as u64 == id >> 32)?;
+    Some((kind, Load::of(id as u32)?))
 }

@@ -16,11 +16,8 @@ export function draw_character(surface: u32, group: u32, bg: u32): void {
   void scene.draw(core.scene, surface, SceneContent.Character, group, bg);
 }
 
-export function chat(text: string): void {
-  void scene.chat(core.scene, text);
-}
-
-/** A line too long for one command is refused whole, never cut. */
-export function chat_fits(text: string): boolean {
-  return core.fits.scene_chat(text);
+/** Resolves once the core takes the line, and rejects when it refuses it
+ * whole, too long for the link or for the core. */
+export function chat(text: string): Promise<void> {
+  return scene.chat(core.scene, text);
 }

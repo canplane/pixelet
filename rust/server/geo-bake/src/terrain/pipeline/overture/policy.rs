@@ -16,7 +16,7 @@ use crate::separation::WayRange;
 use crate::terrain::pipeline::feature::{closes, Feature, Layer, Rank};
 use crate::terrain::pipeline::overture::between::{merged, uncovered, Line};
 use crate::terrain::pipeline::overture::role::Role;
-use crate::terrain::pipeline::overture::width::{carto_u, width_u};
+use crate::terrain::pipeline::overture::width::{carto_u, waterway_width, width_u, WIDEST_LINE};
 use crate::terrain::repository::{BaseRow, BuildingRow};
 use crate::wkb::wkb_to_geometries;
 
@@ -156,25 +156,6 @@ fn land_paint(class: &str) -> Option<Paint> {
         .map(|&(_, paint)| paint)
 }
 
-/// `water-lines`' waterways, each its fill's width at z16 (`water.mss`: a
-/// canal is a stream by `@canal-scale-factor`, a ditch and a drain take z14's
-/// until z17); a line of another class has no fill.
-const WATERWAYS: [(&str, f64); 5] = [
-    ("river", 8.0),
-    ("canal", 4.2),
-    ("stream", 3.0),
-    ("ditch", 2.0),
-    ("drain", 2.0),
-];
-
-/// A waterway line's width in u, if Carto draws one of its class.
-pub(crate) fn waterway_width(class: &str) -> Option<f64> {
-    WATERWAYS
-        .iter()
-        .find(|(c, _)| *c == class)
-        .map(|(_, px)| carto_u(*px))
-}
-
 /// Water areas but what Carto draws as landcover in water's color or as a
 /// shoal; a physical feature or a spring (a bay, a strait) has no fill.
 fn water_paint(subtype: &str, class: &str, closed: bool) -> Option<Paint> {
@@ -283,9 +264,6 @@ fn infrastructure_paint(class: &str, closed: bool) -> Option<Paint> {
         feat,
     ))
 }
-
-/// A runway's, the widest line Carto draws at z16, in its pixels.
-pub(crate) const WIDEST_LINE: f64 = 24.0;
 
 /// A Base line's width in u: Carto's at z16, as a way's
 /// (`overture/width.rs`), its casing included.

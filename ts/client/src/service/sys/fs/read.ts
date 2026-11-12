@@ -4,7 +4,7 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/runtime";
+import { FaultError } from "@xpute/kit/status/error.ts";
 import { online } from "@/service/origin/online.ts";
 import * as origin from "@/service/origin/route.ts";
 
@@ -25,17 +25,14 @@ export async function get(url: string, signal: AbortSignal): Promise<U8Array> {
         }`,
       );
     }
-    throw new FileError(online() ? Errno.EIO : Errno.ENETUNREACH);
+    throw new FaultError(online() ? Errno.EIO : Errno.ENETUNREACH);
   }
-  if (res.status === 204) throw new FileError(Errno.ENOENT);
+  if (res.status === 204) throw new FaultError(Errno.ENOENT);
   if (!res.ok) {
     console.warn(`[read] ${url}: HTTP ${res.status}`);
     // A 404 is the object's failure: its key names nothing. Any other status
     // is the server's failure.
-    throw new FileError(
-      res.status === 404 ? Errno.ENXIO : Errno.EACCES,
-      res.status,
-    );
+    throw new FaultError(res.status === 404 ? Errno.ENXIO : Errno.EACCES);
   }
   return body;
 }

@@ -7,17 +7,16 @@
 //! and a device's ends on any. Nothing is retried here. A watch that ended starts again on a
 //! grant, a return to the foreground or a press of the location card.
 
+use crate::abi::overlay::Message;
+use crate::abi::overlay::SensorStatus;
 use crate::abi::sensor::GeolocationErrorCode;
-use crate::abi::ui::Message;
-use crate::abi::ui::SensorStatus;
-use crate::domain::control::sensor::platform;
 use crate::domain::control::sensor::reading::{
     device_location_store, device_location_store_mut, SensorState,
 };
+use pxl_global::Global;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use pxl_spec::space::layer::lattice::{Grid, GROUND};
-use xpute_core::global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GeolocationCommand {
@@ -29,7 +28,7 @@ struct Geolocation {
     /// Whether the world's surface is open, so a return to the foreground
     /// starts the watch again.
     open: bool,
-    /// The turn's last command. The UI's watch follows it and ignores a
+    /// The frame's last command. The UI's watch follows it and ignores a
     /// repeated command.
     cmd: Option<GeolocationCommand>,
 }
@@ -43,6 +42,20 @@ fn geolocation() -> &'static mut Geolocation {
     })
 }
 
+/// The location as the UI reports it once the core is attached: whether the
+/// platform has one.
+#[derive(Clone, Copy, Default)]
+pub struct GeolocationPlatform {
+    pub supported: bool,
+}
+
+static PLATFORM: Global<GeolocationPlatform> = Global::new();
+
+/// Until the UI reports it, the place has no location.
+pub fn platform() -> &'static mut GeolocationPlatform {
+    PLATFORM.get(GeolocationPlatform::default)
+}
+
 /// A watch runs while the store tracks the location
 /// (`DeviceLocationStore::is_tracking_location`).
 pub fn start_watching() {
@@ -50,7 +63,7 @@ pub fn start_watching() {
     if store.is_tracking_location {
         return;
     }
-    if !platform().geolocation {
+    if !platform().supported {
         store.state = SensorState::failed(Message::GeolocationUnsupported);
         return;
     }

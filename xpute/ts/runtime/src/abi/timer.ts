@@ -26,7 +26,7 @@ export interface Timer {
 }
 
 /** The object over `imp`. */
-function object(link: Pick<Link, "complete">, imp: Timer): LinkObject {
+function object(l: Pick<Link, "complete">, imp: Timer): LinkObject {
   return {
     call(m, tag, args) {
       try {
@@ -34,8 +34,8 @@ function object(link: Pick<Link, "complete">, imp: Timer): LinkObject {
           case SLEEP: {
             if (args === null) return Errno.EBADMSG;
             imp.sleep(args.at(0).get_number()).then(
-              () => link.complete(tag, 0, []),
-              (e: unknown) => link.complete(tag, refusal_of(e)),
+              () => l.complete(tag, 0, []),
+              (e: unknown) => l.complete(tag, refusal_of(e)),
             );
             return Errno.EINPROGRESS;
           }
@@ -50,12 +50,9 @@ function object(link: Pick<Link, "complete">, imp: Timer): LinkObject {
 }
 
 /** Mounts `imp` at the URI, one object for every open. */
-export function mount(
-  link: Pick<Link, "mount" | "complete">,
-  imp: Timer,
-): void {
-  const o = object(link, imp);
-  link.mount(URI, () => o);
+export function mount(l: Pick<Link, "mount" | "complete">, imp: Timer): void {
+  const o = object(l, imp);
+  l.mount(URI, () => o);
 }
 
 /** Opens the singleton on the other side, once, at boot. */

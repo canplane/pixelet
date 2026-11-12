@@ -14,9 +14,9 @@ use pxl_spec::space::coord::world::nearest;
 
 use crate::domain::view::param;
 use crate::domain::view::param::FALLBACK_G4326;
+use pxl_global::Global;
 use pxl_spec::space::camera::grid::fov;
 use pxl_spec::space::coord::adapter::epsg3857::height_u_per_m;
-use xpute_core::global::Global;
 
 /// `rot` is a pure rotation: it turns the world's axes into the camera's
 /// right, up and back.
@@ -27,7 +27,7 @@ pub struct ObserverPose {
 }
 
 pub struct View {
-    /// The camera's pose as this turn composed it. None until the camera
+    /// The camera's pose as this frame composed it. None until the camera
     /// stands somewhere.
     pub pose: Option<ObserverPose>,
 
@@ -92,7 +92,7 @@ pub fn view_mut() -> &'static mut View {
     VIEW.get(View::new)
 }
 
-/// Where the eye stands as the turn composed the view. None until the camera
+/// Where the eye stands as the frame composed the view. None until the camera
 /// stands somewhere.
 pub fn eye() -> Option<V3> {
     Some(view().pose?.eye)
@@ -193,7 +193,7 @@ fn compose() {
 /// `Frustum::lens`). Without a screen the ray runs along the pose's forward.
 ///
 /// A pick passes the pose its controller holds, which may have moved since
-/// the turn composed the view. The lens's tangents depend on the screen
+/// the frame composed the view. The lens's tangents depend on the screen
 /// alone, so they hold for any pose.
 pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, dir: &mut V3) {
     let tan = view().frustum.lens().map_or([0.0; 2], |l| l.tan);

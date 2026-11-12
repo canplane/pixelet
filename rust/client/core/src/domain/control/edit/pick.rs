@@ -12,7 +12,6 @@ use pxl_spec::space::coord::zoom::{of_side, units, Zoom};
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::edit::collision::object_aabb;
-use crate::domain::control::edit::Target;
 use crate::domain::control::param::PICK_DIST_U;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::query;
@@ -22,6 +21,7 @@ use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::frame::pose::{eye, ray_of};
 use crate::domain::view::lens::{decor_zooms, leaf_decors};
 use pxl_spec::space::coord::aabb::Aabb;
+use pxl_spec::space::layer::octant::Octant;
 
 // Larger than the error of a round trip through the 1/256 grid (±1/512 u),
 // and smaller than the gap between any two object tiers (the finest tier's
@@ -45,6 +45,14 @@ fn grid_floor(v: f64, size: f64) -> f64 {
 pub(crate) struct Pick {
     pub hit: Hit,
     pub ray_zoom: Option<Zoom>,
+}
+
+/// What the pick struck, as a tool reads it: the cell an edit takes, and the
+/// decor the ground generated there, which has no entry in the store.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Target {
+    pub at: Octant,
+    pub decor: Option<Instance>,
 }
 
 impl Pick {
@@ -152,8 +160,8 @@ impl Pick {
     }
 }
 
-/// The ray is cast from the camera's pose as it is now, which a door event or
-/// a controller may have moved since the turn composed the view.
+/// The ray is cast from the camera's pose as it is now, which a link event or
+/// a controller may have moved since the frame composed the view.
 pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
     let pose = controller::pose()?;
     let (mut origin, mut dir) = ([0.0; 3], [0.0; 3]);

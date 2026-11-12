@@ -128,8 +128,7 @@
       "$doc": [
         "buffer, offset, address, bytes. The runtime reads the bytes where they lie in the core's",
         "memory when it runs the record, and makes no copy of them first. From the stream's",
-        "publish until the core loads END as 0, the core neither rewrites nor frees them",
-        "(io/stream R3)."
+        "flush until `gpu.run` answers, the core neither rewrites nor frees them (stream.rs)."
       ]
     },
     "WRITE_TEXTURE": {
@@ -339,7 +338,7 @@
     "CURRENT": {
       "$val": 47,
       "$doc": [
-        "id, surface. The id names a view of the surface's texture for this turn."
+        "id, surface. The id names a view of the surface's texture for this entry."
       ]
     },
     "DEVICE": {
@@ -368,7 +367,7 @@
         "core names the pipeline in no other record. When the device refuses the pipeline, the",
         "runtime makes it as RENDER_PIPELINE would, reports the error as that op would, and still",
         "writes the word. A runtime with no asynchronous call makes the pipeline at once and",
-        "writes the word the same way, before the next turn reads it."
+        "writes the word the same way, before the next entry reads it."
       ]
     },
     "COMPUTE_PIPELINE_ASYNC": {

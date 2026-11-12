@@ -12,7 +12,7 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
 import { PHASES } from "@/abi/phase.spec.ts";
-import { FRAME_GROUP, WAKES } from "@/abi/perf.spec.ts";
+import { FRAME_GROUP } from "@/abi/perf.spec.ts";
 import type { FrameColumn, ListColumn } from "@/service/core/perf.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
@@ -42,9 +42,6 @@ const UNIT = /_(ms|bytes|px)$/;
 export const phaseText = ([k, v]: [string, f64]) =>
   `${k.replace(UNIT, "")} ${k === "bytes" ? round(v) : n1(v)}`;
 
-export const pct = (part: number, whole: number) =>
-  whole > 0 ? round((part / whole) * 100) : 0;
-
 export const tris = (t: number) =>
   t >= 1000 ? `${round(t / 1000)}k` : String(round(t));
 
@@ -52,7 +49,6 @@ export const tris = (t: number) =>
 type NameColumn = Extract<FrameColumn, `${string}_name`>;
 const NAME_TABLES: { readonly [K in NameColumn]: readonly string[] } = {
   kind_name: FRAME_KINDS,
-  wake_name: WAKES,
 };
 const isNameColumn = (name: string): name is NameColumn =>
   Object.hasOwn(NAME_TABLES, name);

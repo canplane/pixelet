@@ -9,8 +9,7 @@ use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
 use crate::elevation::Raster;
 use crate::segment::Part;
-use crate::terrain::pipeline::overture::policy::{INFRASTRUCTURE, LAND, WIDEST_LINE};
-use crate::terrain::pipeline::overture::width::carto_u;
+use crate::terrain::pipeline::overture::width::{carto_u, WIDEST_LINE};
 
 // Buildings and roads are not clipped: a bbox clip breaks ring closure.
 // Water and coast are clipped.
@@ -133,9 +132,6 @@ pub struct TerrainRepository {
     segments: Statement,
     base: Statement,
     coast: Statement,
-    /// The base query's `$5` and `$6`: the classes the policy paints.
-    infrastructure: Vec<&'static str>,
-    land: Vec<&'static str>,
 }
 
 impl TerrainRepository {
@@ -150,8 +146,6 @@ impl TerrainRepository {
             segments: segments?,
             base: base?,
             coast: coast?,
-            infrastructure: INFRASTRUCTURE.iter().map(|(class, _)| *class).collect(),
-            land: LAND.iter().map(|(class, _)| *class).collect(),
         })
     }
 
@@ -164,10 +158,13 @@ impl TerrainRepository {
         self.raster.tile_grid(client, tile)
     }
 
+    /// A leaf tile's rows, its infrastructure and land read only in the classes
+    /// `infrastructure` and `land` name, the base query's `$5` and `$6`.
     pub(crate) fn fetch_tile_src(
         &self,
         client: &mut Client,
         tile: [i32; 2],
+        [infrastructure, land]: [&[&str]; 2],
     ) -> Result<TileSource, postgres::Error> {
         let [[minx, miny, _], [maxx, maxy, _]] = source_bbox(get_tile_bbox(LEAF_ZOOM, tile));
         let bbox: [&(dyn ToSql + Sync); 4] = [&minx, &miny, &maxx, &maxy];
@@ -193,14 +190,7 @@ impl TerrainRepository {
             base_rows: client
                 .query(
                     &self.base,
-                    &[
-                        bbox[0],
-                        bbox[1],
-                        bbox[2],
-                        bbox[3],
-                        &self.infrastructure,
-                        &self.land,
-                    ],
+                    &[bbox[0], bbox[1], bbox[2], bbox[3], &infrastructure, &land],
                 )?
                 .iter()
                 .map(|row| BaseRow {

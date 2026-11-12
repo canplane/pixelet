@@ -16,19 +16,18 @@
 
 use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};
-use xpute_core::global::Global;
-use xpute_core::io::fs::Fd;
+use pxl_global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::sys::io::body::Packet;
 use crate::sys::io::demand::Order;
 use crate::sys::io::failure::{exit_of, Exit, Failure};
-use crate::sys::io::file::{self, OpenResult, Owner, Request};
+use crate::sys::io::file;
+use crate::sys::manifest::MIN_HEAP_BYTES;
 use crate::sys::io::file_spec::CATALOG;
 use crate::sys::io::request::{attempt_of, settle};
 use crate::sys::io::source;
-use crate::sys::load::{Load, LoadKind, LOAD_FILES};
+use crate::sys::load::{id_of, of_id, Load, LoadKind, LOAD_FILES};
 use crate::sys::sched::executor;
 use crate::sys::sched::{self, invalidate};
 
@@ -39,7 +38,7 @@ enum Entry {
     InTask,
     /// The file's bytes, kept until the reader takes them in: a model's until
     /// the scene takes them, an image's until its texture lands.
-    Bytes(Packet),
+    Bytes(Box<[u8]>),
     /// The reader has taken the file in and keeps it, and the bytes are gone.
     InReader,
     Failed,
@@ -54,7 +53,7 @@ struct Loader {
     entries: [Vec<Option<Entry>>; KINDS],
     sphere: [Option<Entry>; KINDS],
     catalog: Option<Catalog>,
-    /// Scratch for `load_wants`, so that declaring the wants every turn
+    /// Scratch for `load_wants`, so that declaring the wants every frame
     /// allocates nothing.
     wants: Vec<(u64, Order)>,
 }
@@ -100,7 +99,7 @@ pub fn load_of(slot: Slot) -> Option<Load> {
 
 /// A model's bytes, handed over once. It is None while the file loads and
 /// after the bytes are taken.
-pub fn take_gltf(load: Load) -> Option<Packet> {
+pub fn take_gltf(load: Load) -> Option<Box<[u8]>> {
     let entry = loader()
         .at(LoadKind::Gltf, load)
         .get_or_insert(Entry::Pending);
@@ -127,17 +126,6 @@ pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
     }
 }
 
-/// A want's id, with the kind in the high word, because one file can be
-/// wanted as more than one kind.
-pub fn id_of(kind: LoadKind, load: Load) -> u64 {
-    (kind as u64) << 32 | u64::from(load.id())
-}
-
-pub fn of_id(id: u64) -> Option<(LoadKind, Load)> {
-    let kind = LoadKind::ALL.into_iter().find(|&k| k as u64 == id >> 32)?;
-    Some((kind, Load::of(id as u32)?))
-}
-
 /// The files asked for and not yet read, by id, in the form a stream
 /// declares its wants. They come by kind, the files by number and the sphere
 /// after them. The sphere is wanted only once its source declares the
@@ -156,66 +144,47 @@ pub fn load_wants() -> &'static [(u64, Order)] {
     &l.wants
 }
 
-/// Opens the file of `load`. A model and an image of one load are the same
-/// file, and the attempt's id says which it is read as.
+/// Reads the file of `load` for the attempt `key`, in a task of its own. A
+/// model and an image of one load are the same file, and the attempt's id
+/// says which it is read as.
 pub fn open_asset(key: u64, load: Load) {
-    file::open(&load.path(), Owner::Load { key });
-}
-
-/// Takes the answer to an asset's open. The room for the bytes is taken now,
-/// the file is read whole and closed, which lets its descriptor go, and the
-/// credit is given back with it, so taking the bytes in holds neither; they
-/// arrive as the close is completed (`on_read`).
-pub fn on_opened(fd: Fd, key: u64, opened: OpenResult) {
-    let id = attempt_of(key).map(|(_, id)| id);
-    let what = id.and_then(of_id);
-    let OpenResult::Bytes(n) = opened else {
-        settle(key, exit_of(Failure::from(opened)), None);
-        if let Some((kind, load)) = what {
-            *loader().at(kind, load) = None;
-        }
-        return;
-    };
-    let (Some(id), Some((kind, load))) = (id, what) else {
-        return file::close(fd);
-    };
-    match file::read_bytes(fd, n, Request::Load { id }) {
-        Ok(()) => {
-            settle(key, Exit::Ok, None);
-            *loader().at(kind, load) = Some(Entry::InTask);
-        }
-        Err(refused) => settle(key, Exit::Refused(refused), None),
-    }
-}
-
-/// The read of the want `id` is done, as its close is completed: its bytes,
-/// taken in by a task of its own, or the close's errno.
-pub fn on_read(id: u64, read: Result<Packet, Errno>) {
-    let Some((kind, load)) = of_id(id) else {
-        return;
-    };
+    let Some((_, id)) = attempt_of(key) else { return };
+    let Some((kind, _)) = of_id(id) else { return };
     // The task's pool has room for one for each file in flight
     // (sys/load.rs `LOAD_FILES`), so the spawn cannot fail.
-    executor::spawner().spawn(arrival(kind, load, read).or_bug(Errno::ENOSPC));
+    executor::spawner().spawn(arrival(key, kind, load).or_bug(Errno::ENOSPC));
 }
 
-/// Takes in a file read whole, in a task of its own. Where the turn is spent
-/// before the tasks run, each arrival still advances one step a turn, so no
-/// arrival waits on another. A read whose close failed filled nothing, and
-/// the load fails; one a reload cancelled is asked again.
+/// Reads a file whole and takes it in, in a task of its own, and gives the
+/// attempt's credit back once it is read. Where the entry is spent before the
+/// tasks run, each arrival still advances one step an entry, so no arrival
+/// waits on another. A file that cannot be read, absent among them, fails
+/// its load; a read its stop cancelled reaches no one, and the load is asked
+/// again.
 #[embassy_executor::task(pool_size = LOAD_FILES)]
-async fn arrival(kind: LoadKind, load: Load, read: Result<Packet, Errno>) {
-    sched::yield_if_spent().await;
+async fn arrival(key: u64, kind: LoadKind, load: Load) {
+    let read = file::read_whole(&load.path(), MIN_HEAP_BYTES, Some(key), file::heap)
+        .await
+        .map(Vec::into_boxed_slice);
     let l = loader();
     let bytes = match read {
-        Ok(bytes) => bytes,
+        Ok(bytes) => {
+            settle(key, Exit::Ok, None);
+            *l.at(kind, load) = Some(Entry::InTask);
+            bytes
+        }
+        Err(Errno::ECANCELED) => {
+            *l.at(kind, load) = None;
+            return;
+        }
         Err(errnum) => {
-            let entry = (errnum != Errno::ECANCELED).then_some(Entry::Failed);
-            *l.at(kind, load) = entry;
+            settle(key, exit_of(Failure::from(errnum)), None);
+            *l.at(kind, load) = Some(Entry::Failed);
             invalidate();
             return;
         }
     };
+    sched::yield_if_spent().await;
     let entry = match kind {
         LoadKind::Gltf => Entry::Bytes(bytes),
         // An image is kept only where its header gives its size (pxl-spec
@@ -231,7 +200,7 @@ async fn arrival(kind: LoadKind, load: Load, read: Result<Packet, Errno>) {
         }
     };
     *l.at(kind, load) = Some(entry);
-    // A turn hands the entry on to its reader.
+    // A frame hands the entry on to its reader.
     invalidate();
 }
 

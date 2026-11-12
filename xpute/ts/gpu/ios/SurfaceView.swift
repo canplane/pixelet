@@ -11,7 +11,7 @@ import UIKit
 /// window, and never past the moment it lets the layer go. A view reaches
 /// its window only after it is mounted and laid out, so it tells when the
 /// surface is bound (`onAttach`) and when it no longer is (`onDetach`). The
-/// core sizes the surface and draws every frame inside a turn, so nothing
+/// core sizes the surface and draws every frame inside an entry, so nothing
 /// here draws, and the view takes no input: a program that wants the view's
 /// touches subclasses it.
 open class SurfaceView: ExpoView {

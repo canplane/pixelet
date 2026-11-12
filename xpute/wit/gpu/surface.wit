@@ -1,0 +1,11 @@
+package xpute:gpu@0.1.0;
+
+// A surface the GPU draws on, which the core serves: the side that holds the
+// canvas opens one at ("xpute:gpu", "surface"), gives the runtime the canvas
+// beside the link under the surface's handle, and releases it to close it.
+interface surface {
+  resource surface {
+    // The canvas's size in physical pixels, and its pixels per logical one.
+    resize: func(width: u32, height: u32, dpr: f32);
+  }
+}

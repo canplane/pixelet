@@ -18,7 +18,7 @@ fn object_top_ranked() {
 #[test]
 fn pictures_before_models() {
     crate::on_core(|| {
-        use crate::sys::io::loader::id_of;
+        use crate::sys::load::id_of;
         use crate::sys::load::{Load, LoadKind};
         let model = rank(
             Stream::asset,

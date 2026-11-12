@@ -5,14 +5,12 @@ use pxl_spec::space::coord::adapter::epsg4326;
 use crate::domain::view::param::FALLBACK_G4326;
 use pxl_spec::space::coord::q3::{FRAC_W, Q3};
 
-use crate::abi::ui::SensorStatus;
 use crate::domain::control::camera::controller::pivot;
 use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::navigation::destination::{go_to_ground, pending};
 use crate::domain::control::navigation::off_center::off_center;
-use crate::domain::control::sensor::reading::device_location_store;
 use crate::domain::query::unknown;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 fn fallback_seed() -> Q3 {
     // The fallback names a place, not a height, so the pivot stands on the
@@ -30,27 +28,27 @@ fn is_at(a: &Q3, b: &Q3) -> bool {
 }
 
 struct Bootstrap {
-    last: Option<(Option<Q3>, SensorStatus)>,
+    /// The fix and whether the camera was placed, as the last step saw them.
+    last: Option<(Option<Q3>, bool)>,
 }
 
 static BOOTSTRAP: Global<Bootstrap> = Global::new();
 
 pub fn map_bootstrap_step() {
     let device_coord = off_center().device_coord;
-    let location_status = device_location_store().state.status;
+    let at = pivot();
     let b = BOOTSTRAP.get(|| Bootstrap { last: None });
-    if b.last == Some((device_coord, location_status)) {
+    if b.last == Some((device_coord, at.is_some())) {
         return;
     }
-    b.last = Some((device_coord, location_status));
-    // The fallback is used only once the location has given up (Error) and
-    // the camera was never placed. A later dropout leaves the camera where it
+    b.last = Some((device_coord, at.is_some()));
+    // The camera starts at the fallback whenever it was never placed, without
+    // waiting on the location. A later dropout leaves the camera where it
     // was.
     let fallback = fallback_seed();
-    let at = pivot();
     let seed = match device_coord {
         Some(device) => device,
-        None if at.is_none() && location_status == SensorStatus::Error => fallback,
+        None if at.is_none() => fallback,
         None => return,
     };
     // A real fix that lands after the fallback takes over from it. A place

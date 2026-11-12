@@ -8,15 +8,15 @@ import { create } from "zustand";
 import { cornerPanel } from "@/ui/shared/component/corner-card.ts";
 import { alpha, color } from "@/ui/shared/component/theme.ts";
 import { gauge } from "./perf/gauge.tsx";
-import type { PanelName } from "./window.tsx";
+import type { SettingName } from "@/ui/shared/setting.ts";
 
 /** Opening a panel closes the one that was open, so the corner holds one open
- * panel at a time. */
-const store = create<{ open: PanelName | null }>()(() => ({
+ * panel at a time. A panel is named by the setting that shows it. */
+const store = create<{ open: SettingName | null }>()(() => ({
   open: null,
 }));
 
-const toggle = (name: PanelName) =>
+const toggle = (name: SettingName) =>
   store.setState(({ open }) => ({
     open: open === name ? null : name,
   }));
@@ -32,7 +32,7 @@ export function Accordion({
   end,
   children,
 }: {
-  name: PanelName;
+  name: SettingName;
   title: string;
   note?: string;
   end?: ReactNode;

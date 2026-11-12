@@ -3,7 +3,7 @@
 //! The GPU's copy of the terrain bricks the core fills for the clip levels.
 //! A brick is its words, a word of four asset ids for each cell, and
 //! its kept spans, a run in a pool every brick shares. The runtime reads each
-//! brick from the core's own memory when it runs the turn.
+//! brick from the core's own memory when it runs the frame.
 
 use pxl_engine::clipmap::{BRICK_WORDS, FRAME_BRICKS, SLOTS, WAYS_POOL_WORDS};
 use pxl_spec::brick::BRICK_CELLS;
@@ -26,7 +26,7 @@ pub struct GroundInput<'a> {
 /// `upload`). Its words are laid out as pxl-engine `clipmap::BRICK_WORDS`
 /// says. `run` is its run of kept spans in the ways' pool, in pieces, each its
 /// first word in the pool and the words from there, none where it keeps no span.
-/// Every slice is the core's own memory: the runtime reads it when it runs the turn, and the core asks
+/// Every slice is the core's own memory: the runtime reads it when it runs the frame, and the core asks
 /// `in_flight` before it writes any of it again.
 pub struct BrickWrite<'a> {
     pub slot: u32,

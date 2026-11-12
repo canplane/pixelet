@@ -22,7 +22,7 @@ fn the_renderer_makes_every_group_as_its_layout_lays_it_out() {
     let made = (0..SHADERS).any(|_| pipelines.make_modules(g));
     assert!(
         made,
-        "every module is made in as many turns as there are shaders"
+        "every module is made in as many frames as there are shaders"
     );
     // The test asserts nothing more itself: every bind group the renderer
     // makes is checked against its layout's group as it is made (api.rs
@@ -30,7 +30,7 @@ fn the_renderer_makes_every_group_as_its_layout_lays_it_out() {
     Renderer::new(g, device, pipelines);
 }
 
-/// A draw that a scripted turn sets: the index of its id, its record's words,
+/// A draw that a scripted frame sets: the index of its id, its record's words,
 /// where it is, its opacity, and whether it is a cloud's, which drifts with
 /// the wind.
 #[derive(Clone, Copy)]
@@ -61,9 +61,9 @@ const fn cloud(id: usize, pipeline: u32, words: [u32; 3], at: [f64; 3]) -> Spec 
     }
 }
 
-/// A scripted turn: the draws it sets, in order, the handles its lists touch,
+/// A scripted frame: the draws it sets, in order, the handles its lists touch,
 /// and how far the wind has carried the clouds, in Q3 steps of 1/256 unit.
-struct Turn {
+struct Frame {
     specs: Vec<Spec>,
     touched: Vec<u32>,
     drift: i64,
@@ -82,10 +82,10 @@ fn passes() -> Vec<(u32, UploadOf)> {
     ]
 }
 
-/// The oracle's lists: a turn's draws rebuilt whole, with nothing kept from
-/// the turns before. `records` holds every draw's record in the order it was
+/// The oracle's lists: a frame's draws rebuilt whole, with nothing kept from
+/// the frames before. `records` holds every draw's record in the order it was
 /// set, and a draw's uniform index is its place. A cloud's uniform holds its
-/// place on the field's map, which drifts, and `drift` is the drift the turn
+/// place on the field's map, which drifts, and `drift` is the drift the frame
 /// draws at.
 struct Rebuilt {
     recs: Vec<[u32; DRAW_WORDS]>,
@@ -97,7 +97,7 @@ const BOX_SIDE: f32 = 1.0;
 const BOX_RGB: u32 = 0x00ffffff;
 const BOX_LAYER: u32 = 3;
 
-fn rebuilt(t: &Turn) -> Rebuilt {
+fn rebuilt(t: &Frame) -> Rebuilt {
     let off = t.drift as f64 / 256.0;
     let mut r = Rebuilt {
         recs: Vec::new(),
@@ -197,11 +197,11 @@ fn rebuilt_beside(was: &Rebuilt, now: &Rebuilt, touched: &[u32]) -> bool {
     w != n || n.iter().any(|(d, _)| touched.binary_search(&d[0]).is_ok())
 }
 
-/// Turn after turn, the kept draws and their changes answer as the oracle
+/// Frame after frame, the kept draws and their changes answer as the oracle
 /// does, which rebuilds the lists whole and diffs them (`Rebuilt`). The two
 /// agree on whether the lists moved, whether they read the same, whether a
 /// draw whose moves draw the frame whole moved, and on every pass's marks.
-/// The turns draw first, draw again as they were, move a character and its
+/// The frames draw first, draw again as they were, move a character and its
 /// palette, rewrite a cloud's upload, carry the clouds on the wind, move the
 /// ghost and empty the zone, let a cloud go and draw a ghost's decor, turn a
 /// cloud blended, add a marker, set the markers in another order, and fill
@@ -228,7 +228,7 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
         edit(&mut s);
         s
     };
-    let turn = |specs: Vec<Spec>, touched: &[u32], drift: i64| Turn {
+    let frame = |specs: Vec<Spec>, touched: &[u32], drift: i64| Frame {
         specs,
         touched: touched.to_vec(),
         drift,
@@ -267,18 +267,18 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
         reordered(s);
         s[3].words[1] = 4;
     };
-    let turns = [
-        turn(base.clone(), &[10, 11, 20, 30, 50, 51, 60], 0),
-        turn(base.clone(), &[], 0),
-        turn(with(&character_moved), &[11], 0),
-        turn(with(&character_moved), &[50], 0),
-        turn(with(&character_moved), &[], 3),
-        turn(with(&ghost_moved), &[], 3),
-        turn(with(&cloud_gone), &[41, 51], 3),
-        turn(with(&blended), &[], 3),
-        turn(with(&marked_twice), &[31], 3),
-        turn(with(&reordered), &[], 3),
-        turn(with(&filled), &[], 3),
+    let frames = [
+        frame(base.clone(), &[10, 11, 20, 30, 50, 51, 60], 0),
+        frame(base.clone(), &[], 0),
+        frame(with(&character_moved), &[11], 0),
+        frame(with(&character_moved), &[50], 0),
+        frame(with(&character_moved), &[], 3),
+        frame(with(&ghost_moved), &[], 3),
+        frame(with(&cloud_gone), &[41, 51], 3),
+        frame(with(&blended), &[], 3),
+        frame(with(&marked_twice), &[31], 3),
+        frame(with(&reordered), &[], 3),
+        frame(with(&filled), &[], 3),
     ];
     let ids: Vec<DrawId> = (0..11).map(|_| DrawId::default()).collect();
     let mut list = DrawList::default();
@@ -288,7 +288,7 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
         drift: Position::of([0.0; 3]),
     };
 
-    for (k, t) in turns.iter().enumerate() {
+    for (k, t) in frames.iter().enumerate() {
         for s in &t.specs {
             let stand =
                 reads_shadow_map(s.pipeline).then(|| ReceiverBox::of(s.at, s.at.map(|v| v + 1.0)));
@@ -326,12 +326,12 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
         let kept_changed = first || !lists.changes.is_empty() || lists.reordered;
         let kept_same =
             !kept_changed && !uploads_changed && !(lists.draws.drifting() && drift_changed);
-        assert_eq!(kept_changed, rebuilt_changed, "turn {k}: lists changed");
-        assert_eq!(kept_same, rebuilt_same, "turn {k}: listed the same");
+        assert_eq!(kept_changed, rebuilt_changed, "frame {k}:lists changed");
+        assert_eq!(kept_same, rebuilt_same, "frame {k}:listed the same");
         assert_eq!(
             beside_changed(&lists, &t.touched),
             rebuilt_beside(&was, &now, &t.touched),
-            "turn {k}: beside"
+            "frame {k}:beside"
         );
         let m = DamageInput {
             draws: lists.draws,
@@ -349,7 +349,7 @@ fn kept_draws_answer_as_the_rebuilt_lists_did() {
         assert_eq!(
             kept,
             rebuilt_marks(&was, &now, &t.touched),
-            "turn {k}: marks"
+            "frame {k}:marks"
         );
         was = now;
     }

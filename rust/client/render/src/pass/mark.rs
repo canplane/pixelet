@@ -10,7 +10,7 @@
 //! frame's. The marked tiles then hold the pixels it covered then and covers
 //! now, each at its own frame's jitter.
 //!
-//! A draw counts as changed in three cases. The turn changed it (gpu/draw.rs
+//! A draw counts as changed in three cases. The frame changed it (gpu/draw.rs
 //! `Change`), and it is drawn as it was and as it is. The upload it reads
 //! moved; `touched` holds the handles this frame's lists upload, rewrite or
 //! free. Or it drifts with the wind and the wind's drift moved; each of its
@@ -33,8 +33,8 @@ pub(crate) type UploadOf = fn(&[u32; DRAW_WORDS]) -> u32;
 /// Writes a mark's uniform into its slot as the mark's pipeline reads it.
 type PutMark = fn(&mut [u8], &Draw);
 
-/// What a frame's marks are made from. `draws` are the draws as the turn
-/// left them, and `changes` are the turn's changes. `touched` holds the
+/// What a frame's marks are made from. `draws` are the draws as the frame
+/// left them, and `changes` are the frame's changes. `touched` holds the
 /// handles the frame's lists touch, sorted. `drift` holds how far the wind
 /// has carried the clouds, first as this frame draws them and then as the
 /// last frame drew them (word.rs `frame::DRIFT_Q`).
@@ -61,7 +61,7 @@ fn drawn_at((d, mut u): Draw, drift: Position) -> Draw {
 
 /// Hands `take` each draw of `pipeline` that a frame marks
 /// (`MarkPass::prepare`), as it is drawn at its frame's drift, with whether it
-/// is the draw as it is (true) or as it was. A draw the turn changed is
+/// is the draw as it is (true) or as it was. A draw the frame changed is
 /// handed as it is, as it was, or both, by which of the two it has. A draw
 /// whose upload moved, or that drifts while the drift moved, is handed both
 /// ways. `read` names the upload a draw reads.

@@ -9,7 +9,6 @@
 use crate::answer::{
     bound_of, bound_word, box_word, In, Kind, PackedBox, BOX_BITS, BOX_NONE, BOX_STEPS, BOX_WHOLE,
 };
-use crate::clipmap::Lookup;
 use crate::content::Content;
 use pxl_spec::ground::{cells, face_cell, face_ele, UNKNOWN};
 use pxl_spec::share::FULL;
@@ -120,24 +119,29 @@ pub const EMPTY: [i32; 2] = [i16::MAX as i32, i16::MIN as i32];
 pub trait Resident: Area {
     /// The content whose rules its ground follows: its caves and its strata.
     type Content: Content;
+    /// Where it holds a node's cells (pxl-engine `clipmap::Lookup`). The ground carries a
+    /// place from a node to the nodes under it and hands it back, and reads nothing of it.
+    type Place: Copy;
+    /// The place of no cells: past the area, where nothing is read.
+    const NOWHERE: Self::Place;
     /// The lowest and highest that the ground's cells reach over the node `node`, and the ways'
     /// over them, kept apart (`Extent`), read from the finest held tile over every zoom from
     /// `cells`' coarsest to its finest (`clipmap::bound_over`). Where no brick it reads is held,
     /// the bounds are no tighter than the elevations' whole range (`UNBOUNDED`), which only splits
     /// more; where no tile over the node is held, it returns false. `place` is where the cells
-    /// at `cells`' finest zoom of a node over it were found, or `Lookup::NONE`, and becomes where
+    /// at `cells`' finest zoom of a node over it were found, or `NOWHERE`, and becomes where
     /// the node's own are found (`clipmap::step`).
     fn relief(
         &mut self,
-        place: &mut Lookup,
+        place: &mut Self::Place,
         cells: [Zoom; 2],
         node: (Zoom, [i32; 3]),
     ) -> (Extent, bool);
     /// The column of the cell `c` at `zoom` from the clip levels (`clipmap::ground`), or the
     /// wall where it is the wall (`area::is_wall`, read from `shard`, what is known of the area
     /// there). Its cell is taken where `place` found the zoom's cells (`relief`), or found anew
-    /// where `place` is `NONE`.
-    fn cell(&mut self, shard: Shard, place: Lookup, zoom: Zoom, c: [i32; 3]) -> Cell;
+    /// where `place` is `NOWHERE`.
+    fn cell(&mut self, shard: Shard, place: Self::Place, zoom: Zoom, c: [i32; 3]) -> Cell;
 }
 
 /// What the ground answers of a node (`node`): its kind, and a cell's
@@ -157,15 +161,15 @@ pub type Answer = In<[u32; 2]>;
 ///
 /// `shard` is what is known of the area at the node, known at a shard or finer; it is the
 /// asker's, which asks it once at its entry (`Shard::at`). `place` is where the cells of a
-/// node over it were held (`Resident::relief`), or `NONE` where none were, and becomes the
+/// node over it were held (`Resident::relief`), or `NOWHERE` where none were, and becomes the
 /// node's: where a cell's column was read, at which the ways written over it are read
-/// (pxl-engine `world::node`), and `NONE` past the area, where nothing is read. With the
+/// (pxl-engine `world::node`), and `NOWHERE` past the area, where nothing is read. With the
 /// answer it returns the column the cell was read from, `Cell::NONE` for a coarser node, and
 /// the ways' bound read with the ground's own (`Resident::relief`), `EMPTY` where none was.
 pub fn node<H: Resident>(
     resident: &mut H,
     shard: Shard,
-    place: &mut Lookup,
+    place: &mut H::Place,
     (zoom, c): (Zoom, [i32; 3]),
     [far, near]: [Zoom; 2],
     is_cell: bool,
@@ -198,7 +202,7 @@ pub fn node<H: Resident>(
         } else {
             split
         };
-        *place = Lookup::NONE;
+        *place = H::NOWHERE;
         return (answer, Cell::NONE, EMPTY);
     }
     // A node coarser than any tile lies in no one tile's index, so it is split.

@@ -8,7 +8,7 @@ use crate::domain::control::camera::controller;
 use crate::domain::control::param::{OFF_CENTER_U, ON_CENTER_U};
 use crate::domain::control::sensor::reading::device_location_store;
 use crate::domain::query::unknown;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct OffCenter {
@@ -31,7 +31,7 @@ fn device_coord() -> Option<Q3> {
 }
 
 /// The device's location, and whether the pivot has wandered off it as of
-/// this turn's `off_center_step`.
+/// this frame's `off_center_step`.
 pub fn off_center() -> OffCenter {
     OffCenter {
         device_coord: device_coord(),
@@ -39,7 +39,7 @@ pub fn off_center() -> OffCenter {
     }
 }
 
-/// Decides once a turn whether the pivot is off the device, past
+/// Decides once a frame whether the pivot is off the device, past
 /// `OFF_CENTER_U` and back within `ON_CENTER_U`.
 pub fn off_center_step() {
     let off = OFF_CENTER.get(|| false);

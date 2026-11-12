@@ -161,32 +161,32 @@ fn a_draw_set_as_it_was_is_no_change() {
     // A Q3 of -1, whose i32 bits read as a NaN.
     let at = Position::of([q3::to_real(-1), 5.5, 1.0e-3]);
     let box_at = ReceiverBox::of([-1.0, 5.0, 0.0], [1.0, 6.0, 2.0]);
-    let turn = |d: &mut DrawList, stand: ReceiverBox, debug_at: Option<f64>| {
+    let frame = |d: &mut DrawList, stand: ReceiverBox, debug_at: Option<f64>| {
         d.draw_as(&marker, PIPELINE_MARKER, 3, 2, 0, at, None);
         d.draw_box(&ghost, at, 0.5, 1.0, 0x00ffffff, 0, Some(stand));
         if let Some(x) = debug_at {
             d.draw_as(&debug, PIPELINE_DEBUG, 5, 1, 0, Position::of([x; 3]), None);
         }
     };
-    turn(&mut d, box_at, None);
+    frame(&mut d,box_at, None);
     let l = d.take();
     assert_eq!(l.changes.len(), 2, "both drawn first");
     assert!(l.changes.iter().all(|c| c.was.is_none()));
-    turn(&mut d, box_at, None);
+    frame(&mut d,box_at, None);
     let l = d.take();
     assert!(l.changes.is_empty() && !l.reordered);
     assert_eq!(l.receivers, &[box_at]);
     let moved = ReceiverBox::of([-1.0, 5.0, 0.0], [1.0, 6.0, 3.0]);
-    turn(&mut d, moved, None);
+    frame(&mut d,moved, None);
     let l = d.take();
     assert!(l.changes.is_empty(), "a stand is no draw's");
     assert_eq!(l.receivers, &[moved], "a stand moved");
-    turn(&mut d, box_at, Some(0.0));
+    frame(&mut d,box_at, Some(0.0));
     let l = d.take();
     assert_eq!(l.changes.len(), 1);
     let slot = l.changes[0].slot;
     assert!(l.changes[0].was.is_none() && l.draws.now(slot).is_some());
-    turn(&mut d, box_at, Some(1.0));
+    frame(&mut d,box_at, Some(1.0));
     let l = d.take();
     let was = l.changes[0]
         .was
@@ -195,7 +195,7 @@ fn a_draw_set_as_it_was_is_no_change() {
         (l.changes.len(), was),
         (1, Some((5, Position::of([0.0; 3]))))
     );
-    turn(&mut d, box_at, None);
+    frame(&mut d,box_at, None);
     let l = d.take();
     assert_eq!(l.changes.len(), 1);
     assert!(
@@ -203,13 +203,13 @@ fn a_draw_set_as_it_was_is_no_change() {
         "let go"
     );
     assert_eq!(l.draws.of(PIPELINE_DEBUG).len(), 0);
-    turn(&mut d, box_at, Some(1.0));
+    frame(&mut d,box_at, Some(1.0));
     let l = d.take();
     assert_eq!(l.changes.len(), 1);
     assert!(l.changes[0].was.is_none(), "drawn anew");
 }
 
-/// Each pipeline's draws are drawn in the order the turn set them, and a turn that set them in
+/// Each pipeline's draws are drawn in the order the frame set them, and a frame that set them in
 /// another order says so. A draw whose pipeline changed moves into the other pipeline's draws.
 #[test]
 fn draws_keep_the_order_they_are_set_in() {
@@ -247,7 +247,7 @@ fn draws_keep_the_order_they_are_set_in() {
     assert_eq!(l.changes.len(), 1);
 }
 
-/// A draw set twice in a turn is refused.
+/// A draw set twice in a frame is refused.
 #[test]
 #[should_panic]
 fn a_draw_set_twice_is_refused() {

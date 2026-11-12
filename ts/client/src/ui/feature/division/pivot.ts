@@ -1,6 +1,6 @@
 // @pxl/client/ui/feature/division/pivot.ts
 
-import type { LonLat } from "@/abi/ui.ts";
+import type { LonLat } from "@/abi/overlay.ts";
 import { assembleLabel } from "./label.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
 import { useCore } from "@/ui/shared/watch.ts";

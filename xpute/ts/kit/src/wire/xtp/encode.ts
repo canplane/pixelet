@@ -62,7 +62,7 @@ const DESC_REG: [u32, NodeType] = [NONE, SpecialType.NIL];
 
 /** A field of a command's packet as a caller hands it. */
 export type Arg =
-  number | boolean | string | null | U8Array | U32Array | string[] | Branch;
+  number | bigint | boolean | string | null | U8Array | U32Array | string[] | Branch;
 
 /** A branch of arguments, each written by what it is (`PacketWriter.arg`). */
 export class Branch {
@@ -354,6 +354,8 @@ export class PacketWriter {
     switch (typeof v) {
       case "number":
         return exact_i32(v) ? this.i32(v) : this.f64(v);
+      case "bigint":
+        return this.u64(v);
       case "boolean":
         return this.bool(v);
       case "string":

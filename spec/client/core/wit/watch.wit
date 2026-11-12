@@ -1,0 +1,10 @@
+package pxl:core@0.1.0;
+
+// A sensor's watch, started and stopped by the core, its readings coming in
+// through `sensor`.
+interface watch {
+  use types.{sensor};
+
+  start: func(sensor: sensor);
+  stop: func(sensor: sensor);
+}

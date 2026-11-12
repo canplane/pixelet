@@ -1,6 +1,6 @@
 // pxl-core/domain/view/demand.test.rs
 //
-// A layer's demand, kept from turn to turn as an eye moves, is held to a
+// A layer's demand, kept from frame to frame as an eye moves, is held to a
 // demand that observes each eye afresh.
 
 use super::*;
@@ -34,7 +34,7 @@ impl Base for Probe {
         PROBE_TILES.get(TileCache::default)
     }
 
-    fn receive(_: Quadrant, _: u32, _: Packet, _: &mut PhaseList) -> Result<Probe, Exit> {
+    fn receive(_: Quadrant, _: u32, _: Box<[u8]>, _: &mut PhaseList) -> Result<Probe, Exit> {
         Err(Failure::from(Errno::ENOTRECOVERABLE).into())
     }
 }
@@ -61,11 +61,11 @@ fn at(eye: [f64; 3], east: Option<f64>, top: Zoom) -> Observation {
 }
 
 /// An eye drifts within its tiles, turns, crosses into new tiles, climbs and
-/// comes down, and a tile arrives on the way. On every turn, the wants the
+/// comes down, and a tile arrives on the way. On every frame, the wants the
 /// kept demand declares, their order and its floor equal what a fresh
 /// demand observing the same eye finds.
 #[test]
-fn turns_ask_what_a_fresh_observation_asks() {
+fn frames_ask_what_a_fresh_observation_asks() {
     crate::on_core(|| {
         let top = LEAF_ZOOM - 6;
         let (x0, y0, side) = Quadrant::new(top, [3, -2]).rect();
@@ -91,31 +91,31 @@ fn turns_ask_what_a_fresh_observation_asks() {
             eyes.push([at_k[0], at_k[1], height]);
             eyes.push([at_k[0], at_k[1], height]);
         }
-        let mut turns = Vec::new();
+        let mut frames = Vec::new();
         for (k, eye) in eyes.iter().enumerate() {
             let east = (k % 3 != 0).then_some(eye[0] - k as f64 * leaf);
-            turns.push(at(*eye, east, top));
+            frames.push(at(*eye, east, top));
         }
         let dst = Quadrant::new(LEAF_ZOOM, [0, 0]);
         let reused = Probe::demand();
         let mut changed = Vec::new();
-        for (k, o) in turns.iter().enumerate() {
+        for (k, o) in frames.iter().enumerate() {
             let dst = (k >= 20).then_some(dst);
-            reused.turn(Some(*o), dst, &[], top);
+            reused.want(Some(*o), dst, &[], top);
             let mut fresh = Demand::<Probe>::default();
-            fresh.turn(Some(*o), dst, &[], top);
+            fresh.want(Some(*o), dst, &[], top);
             assert_eq!(
                 reused.wants, fresh.wants,
-                "turn {k}: the wants and their order"
+                "frame {k}: the wants and their order"
             );
-            assert_eq!(reused.floor, fresh.floor, "turn {k}: the floor");
-            assert_eq!(reused.observation, fresh.observation, "turn {k}");
-            // A tile arrives, as one would between turns.
+            assert_eq!(reused.floor, fresh.floor, "frame {k}: the floor");
+            assert_eq!(reused.observation, fresh.observation, "frame {k}");
+            // A tile arrives, as one would between frames.
             if k == 50 {
                 let p = Quadrant::of_id(reused.wants[reused.wants.len() / 2].0);
                 Probe::tile_cache().set(p, Probe);
             }
-            // The demand is told what moved, as the turn tells it (turn.rs
+            // The demand is told what moved, as the frame tells it (frame.rs
             // `changes_step`).
             Probe::tile_cache().take_changed(&mut changed);
             if !changed.is_empty() {

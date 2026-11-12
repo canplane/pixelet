@@ -19,7 +19,7 @@ import {
   is_b64url,
 } from "@xpute/kit/codec/encoding.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/runtime";
+import { FaultError } from "@xpute/kit/status/error.ts";
 
 import { path } from "@/abi/file.spec.ts";
 import * as local from "@/service/platform/storage.ts";
@@ -39,11 +39,11 @@ export function set_storage(s: Storage): void {
 }
 
 function bytes_of(text: string): U8Array {
-  if (!is_b64url(text)) throw new FileError(Errno.EBADMSG);
+  if (!is_b64url(text)) throw new FaultError(Errno.EBADMSG);
   try {
     return b64url_to_bytes(text);
   } catch {
-    throw new FileError(Errno.EBADMSG);
+    throw new FaultError(Errno.EBADMSG);
   }
 }
 
@@ -53,7 +53,7 @@ const KEYS: ReadonlyMap<u32, string> = new Map([
 ]);
 
 /** Whether `key` holds a storage file or one set aside. These are the keys a
- * page copies to its core's worker (runtime/open.ts). */
+ * page copies to its core's worker (runtime/worker.ts). */
 export function is_storage_key(key: string): boolean {
   for (const k of KEYS.values()) {
     if (key === k || key.startsWith(`${k}:aside:`)) return true;
@@ -86,13 +86,13 @@ export function set_aside(s: Storage, slot: u32, now_ms: number): boolean {
 
 function key_of(slot: u32): string {
   const key = KEYS.get(slot);
-  if (key === undefined) throw new FileError(Errno.ENOENT);
+  if (key === undefined) throw new FaultError(Errno.ENOENT);
   return key;
 }
 
 export function open_storage(slot: u32, s: Storage = STORAGE): U8Array {
   const text = s.get(key_of(slot));
-  if (text === null) throw new FileError(Errno.ENOENT);
+  if (text === null) throw new FaultError(Errno.ENOENT);
   return bytes_of(text);
 }
 

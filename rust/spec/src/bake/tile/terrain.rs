@@ -405,7 +405,7 @@ pub fn palette_cells(pkt: &[u8]) -> Result<&[GroundId], MarshalError> {
 }
 
 /// Decodes a tile as a client holds it: its padded samples straight into `ele`, in
-/// `.fixed.terrain`, and its lines onto the heap, owned by the tile, as large as the bake's limit
+/// the terrain's fixed range, and its lines onto the heap, owned by the tile, as large as the bake's limit
 /// on a tile's bytes lets them be (`MAX_PKT_BYTES`); a heap that refuses them answers for
 /// itself. Its cells go to its clip levels (`palette_cells`).
 pub fn decode_into<E: From<MarshalError> + From<TryReserveError>>(

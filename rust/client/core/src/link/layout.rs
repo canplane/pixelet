@@ -1,0 +1,145 @@
+// pxl-core/link/layout.rs
+
+//! The core's fixed ranges (sys/range.rs): `.fixed`, past the module's data
+//! and before the heap, holds each owner's range at the size its consts give,
+//! in the order of `Fixed`, each handed its place at boot (`install`). Then
+//! the bound the heap's flows are held to.
+
+use crate::domain::layer::division;
+use crate::domain::layer::terrain::fixed;
+use crate::domain::layer::terrain::pool;
+use crate::domain::scene::character;
+use crate::domain::scene::character::Group;
+use crate::domain::scene::decor::asset;
+use crate::domain::scene::environment::cloud;
+use crate::perf::record;
+use crate::sys::io::body;
+use crate::sys::io::demand::Stream;
+use crate::sys::io::param;
+use crate::sys::manifest;
+use crate::sys::heap::PAGE_BYTES;
+use crate::sys::range;
+use pxl_render::gpu::upload;
+
+/// Every model the core can hold at once. No model is ever freed, so this is
+/// the sum of every owner's bound.
+const MODELS_MAX: usize = character::MODELS_MAX + asset::MODELS_MAX + cloud::MODELS_MAX;
+
+/// The uploads that exist once each: the ghost's, the location indicator's
+/// zone, the two debug line sets (the frame gizmo's and the coverage gizmo's,
+/// domain/scene/gizmo/) and the markers'.
+const SINGLE_UPLOADS: usize = 5;
+
+/// One palette upload for each of the companion's characters, the person and
+/// the pet.
+const CHARACTER_UPLOADS: usize = Group::ALL.len();
+
+/// The sum of every owner's bound, so the renderer's upload table cannot
+/// fill. Each bound is a count the structure fixes (the models the catalogs
+/// can name, the cloud patches within reach, the characters, the singles),
+/// so an overflow of the table is a bug, not load. The renderer frees a
+/// list's uploads before it takes the list's new ones, so it never holds
+/// more than this.
+pub(crate) const MAX_LIVE_UPLOADS: usize =
+    MODELS_MAX + cloud::PATCHES_MAX + CHARACTER_UPLOADS + SINGLE_UPLOADS;
+
+/// The ranges of `.fixed`, in address order. A range belongs here when it is
+/// mostly in use whenever the core runs, or when its flow's memory must be
+/// fixed: the body slots, the largest flow (sys/io/body.rs). Anything else
+/// held only at times, or far below its worst most of the time, goes on the
+/// heap (`HEAP_FLOWS_BYTES`).
+#[derive(Clone, Copy)]
+enum Fixed {
+    Terrain,
+    Division,
+    Bodies,
+    Uploads,
+}
+
+const FIXED: [u32; 4] = [
+    fixed::TERRAIN_BYTES,
+    division::DIVISION_BYTES,
+    param::BODY_SLOTS * body::SLOT_BYTES,
+    upload::uploads_bytes(MAX_LIVE_UPLOADS),
+];
+
+/// Where range `f` begins in `.fixed`: each range on a page.
+const fn off(f: Fixed) -> u32 {
+    let (mut at, mut k) = (0, 0);
+    while k < f as usize {
+        at += FIXED[k].next_multiple_of(PAGE_BYTES);
+        k += 1;
+    }
+    at
+}
+
+const FIXED_BYTES: u32 = off(Fixed::Uploads) + FIXED[Fixed::Uploads as usize];
+
+// The heap begins past the size manifest.json declares, since its first
+// block is asked for before `install`; the declared size is the ranges' on a
+// page, no more.
+const _: () = assert!(
+    FIXED_BYTES.next_multiple_of(PAGE_BYTES) == manifest::FIXED_BYTES,
+    "manifest.json's mem.fixed_bytes is not the fixed ranges' size on a page"
+);
+
+// The stack, the fixed ranges and the heap the core counts on fit the
+// memory; the boot checks the module's data with them against the memory
+// given.
+const _: () = assert!(
+    manifest::STACK_BYTES as u64 + manifest::FIXED_BYTES as u64 + manifest::MIN_HEAP_BYTES as u64
+        <= manifest::MEM_BYTES as u64,
+    "the stack, the fixed ranges and the heap do not fit the core's memory"
+);
+
+/// Hands each owner its range, before anything reads one.
+pub(crate) fn install() {
+    let at = |f: Fixed| range::Range::at(off(f), FIXED[f as usize]);
+    fixed::RANGE.set(at(Fixed::Terrain));
+    division::RANGE.set(at(Fixed::Division));
+    body::RANGE.set(at(Fixed::Bodies));
+    // SAFETY: the uploads' range, zeroed, the renderer's alone.
+    let uploads = unsafe { at(Fixed::Uploads).arr::<u32>(0, FIXED[Fixed::Uploads as usize] as usize / 4) };
+    upload::set_uploads(uploads, MAX_LIVE_UPLOADS);
+}
+
+/// The buddy's block for the longest body of a stream whose bodies take no
+/// slot, a power of two.
+const fn longest_unslotted() -> u64 {
+    let mut most = 0;
+    let mut k = 0;
+    while k < Stream::ALL.len() {
+        let s = Stream::ALL[k];
+        if let Some(max) = s.max_body() {
+            if !s.row().slotted && max as u64 > most {
+                most = max as u64;
+            }
+        }
+        k += 1;
+    }
+    most.next_power_of_two()
+}
+
+/// The caps of the heap's bounded flows added up, each in the buddy's
+/// power-of-two blocks, checked against the heap the core counts on past the
+/// fixed ranges. The sum is a budget, not the most live at once: some of the
+/// flows share the credits, and free blocks do not add up to one block. The
+/// flows:
+/// - two bodies of a kind that takes no slot (sys/io/body.rs) for every credit, one out and one stopped
+///   whose read the runtime has not answered (sys/io/fetch.rs), each freed
+///   once it is decoded or answered;
+/// - the ways' pool at its cap, which holds each brick's kept spans
+///   (domain/layer/terrain/pool.rs, pxl-engine clipmap.rs `WAYS_POOL_WORDS`);
+/// - the profiler's lanes while its setting is on (perf/record.rs).
+///
+/// Each flow is refused past its cap, and waits or stays absent when the heap
+/// refuses it. A shard's body has no longest (`Stream::max_body`), so no sum
+/// counts it. The rest of the heap is workspace.
+const HEAP_FLOWS_BYTES: u64 = 2 * param::MAX_CREDITS as u64 * longest_unslotted()
+    + pool::POOL_BYTES
+    + record::PERF_BYTES;
+
+const _: () = assert!(
+    HEAP_FLOWS_BYTES <= manifest::MIN_HEAP_BYTES as u64,
+    "the caps of the heap's bounded flows do not fit the heap the core counts on"
+);

@@ -5,13 +5,12 @@
 //! listener and iOS's permission prompt, and the core hears only the answer.
 
 use crate::abi::sensor::PermissionAnswer;
-use crate::abi::ui::SensorStatus;
+use crate::abi::overlay::SensorStatus;
 use crate::domain::control::param::WATCHDOG_TIMEOUT_MS;
-use crate::domain::control::sensor::platform;
 use crate::domain::control::sensor::reading::{device_orient_store, device_orient_store_mut};
 use crate::sys::sched::invalidate_at;
 use xpute_core::clock::now;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OrientationCommand {
@@ -32,12 +31,20 @@ pub struct OrientationPlatform {
     pub silence_is_loss: bool,
 }
 
+static PLATFORM: Global<OrientationPlatform> = Global::new();
+
+/// The compass as the UI reports it once the core is attached. Until then
+/// the place has none.
+pub fn platform() -> &'static mut OrientationPlatform {
+    PLATFORM.get(OrientationPlatform::default)
+}
+
 struct Orientation {
     /// The time the watchdog measures silence from: the last event, the
     /// start of tracking, or the page's return to view. It is read only while
     /// tracking, and every start of tracking sets it.
     last_event_at: f64,
-    /// The turn's last command. The UI's listener follows it and ignores a
+    /// The frame's last command. The UI's listener follows it and ignores a
     /// repeated command.
     cmd: Option<OrientationCommand>,
 }
@@ -81,11 +88,11 @@ pub fn request_orient() -> bool {
     if store.is_tracking_orient {
         return true;
     }
-    if !platform().orient.supported || store.status == SensorStatus::Unavailable {
+    if !platform().supported || store.status == SensorStatus::Unavailable {
         store.status = SensorStatus::Unavailable;
         return false;
     }
-    if platform().orient.needs_permission {
+    if platform().needs_permission {
         return false;
     }
     store.status = SensorStatus::Loading;
@@ -107,7 +114,7 @@ pub fn orient_permission(answer: PermissionAnswer) {
                 store.status = SensorStatus::Loading;
             }
         }
-        PermissionAnswer::Granted if platform().orient.needs_permission => {
+        PermissionAnswer::Granted if platform().needs_permission => {
             orient().last_event_at = now();
             store.set_is_tracking_orient(true);
         }
@@ -147,7 +154,7 @@ pub fn orient_visible() {
 /// the last event would amount to a loss. An event before then moves that
 /// deadline, so a sensor that keeps talking is never polled.
 pub fn orient_watchdog_step() {
-    if !platform().orient.silence_is_loss || !device_orient_store().is_tracking_orient {
+    if !platform().silence_is_loss || !device_orient_store().is_tracking_orient {
         return;
     }
     let o = orient();

@@ -1,172 +1,135 @@
 // @xpute/gpu/web.ts
 
 /**
- * This is a page's GPU, granted to a core (gpu.ts `Gpu`). It asks for
- * the device the core's manifest declares, and asks again after a loss or a
- * refusal while the page is shown. The runtime (runtime.ts) runs the core's
- * stream on the device as each turn returns. The core is told when a device
- * answers. The canvases the program binds are kept by the core's handle. A
- * WebAssembly module reaches WebGPU no other way.
+ * A page's GPU, served to a core in the page's worker (wit/gpu/gpu.wit): the
+ * runtime (runtime.ts) runs the records the core lends to `gpu.run` on the
+ * device the core's `device` holds, and draws on the canvases given beside
+ * the link under their surface's handle (wit/gpu/surface.wit). The device is
+ * asked for when the core asks it ready, and a refusal is answered, not
+ * retried: the core asks again when it sees fit. A WebAssembly module reaches
+ * WebGPU no other way.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import {
-  Acquirer,
-  type Canvas,
-  type Gpu,
-  type GpuGrant,
-  type GpuState,
-} from "./gpu.ts";
-import { each_rec } from "@xpute/runtime/io/stream.ts";
-import { say } from "@xpute/runtime/say.ts";
+import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { FaultError } from "@xpute/kit/status/error.ts";
+import { type Link, uri } from "@xpute/runtime";
+import * as gpu from "./abi/gpu.ts";
+import type { GpuAsk, GpuConfig, GpuState } from "./gpu.ts";
 import { GpuRuntime } from "./runtime.ts";
+import { STATUS } from "./api.spec.ts";
 
-export class WebGpu implements Gpu, CanvasBinder {
+/** The URI the core opens its device at. */
+export const DEVICE = uri("xpute:gpu", "device");
+
+export class WebGpu {
   private runtime: GpuRuntime | null = null;
-  private granted: GpuGrant | null = null;
-  /** These are told of the GPU's state, and `state` is the last one told. */
-  private readonly _reports: ((state: GpuState) => void)[] = [];
-  private state: GpuState | null = null;
-  private acquirer: Acquirer | null = null;
-  /** These are the bound canvases in the order they were bound, so a device
-   * acquired again binds each slot's newest handle last. */
-  private readonly canvases = new Map<u32, Canvas>();
+  /** The canvases given, by their surface's handle. */
+  private readonly canvases = new Map<u32, OffscreenCanvas>();
+  /** What waits for the next completion, and for the device's loss. */
+  private settled: (() => void)[] = [];
+  private lost: (() => void)[] = [];
+  /** Where the core lent the device's block, while it is lent. */
+  private block: u32 | null = null;
+  private readonly link: Link;
+  private readonly ask: GpuAsk;
+  private readonly cfg: GpuConfig;
+  private readonly report: (state: GpuState) => void;
 
-  watch(report: (state: GpuState) => void): void {
-    this._reports.push(report);
-    if (this.state !== null) report(this.state);
+  /** `report` hears what the page has of a GPU, as each ask finds it. */
+  constructor(link: Link, ask: GpuAsk, cfg: GpuConfig, report: (state: GpuState) => void) {
+    this.link = link;
+    this.ask = ask;
+    this.cfg = cfg;
+    this.report = report;
   }
 
-  grant(to: GpuGrant): void {
-    this.granted = to;
-    const why = absent();
-    if (why !== null) {
-      say(`[gpu] cannot draw here: ${why}`);
-      this.tell(why);
-      return;
-    }
-    // A hidden page draws nothing, so an ask waits until the page is shown. A
-    // worker has no document, so the core's runtime says whether the page is
-    // shown (`GpuGrant.shown`).
-    this.acquirer = new Acquirer({
-      acquire: () => this.acquire(),
-      tell: (state) => this.tell(state),
-      ready: () => to.ready(),
-      shown: () => to.shown(),
+  /** Mounts `gpu` and the device's opener on the link. */
+  serve(): void {
+    gpu.mount(this.link, {
+      run: async (records) => {
+        this.runtime?.run(new Uint32Array(this.link.mem, records.at, records.len / 4));
+      },
     });
-    this.acquirer.request();
+    this.link.mount(DEVICE, () =>
+      gpu.device(this.link, {
+        lost: (block) => {
+          this.block = block.at;
+          this.runtime?.attach(block.at);
+          return new Promise<void>((done) => this.lost.push(done));
+        },
+        ready: () => this.acquire(),
+        settled: () => new Promise<void>((done) => this.settled.push(done)),
+      }),
+    );
   }
 
-  /** Runs the stream as the turn returns. With no device the records are
-   * dropped and the stream is handed back unrun; the core remakes
-   * everything on the next device. */
-  after_turn(): void {
-    if (!this.granted) return;
-    if (this.runtime) this.runtime.run(this.granted.at);
-    else each_rec(this.granted.mem, this.granted.at, () => {});
-  }
-
-  /** `canvas` is drawn where it is: a page's own canvas, or one the page
-   * transferred to the worker its runtime runs in. */
-  bind(handle: u32, canvas: Canvas): void {
-    this.canvases.delete(handle);
+  /** The canvas given under the surface `handle` (remote.ts `give`). */
+  bind(handle: u32, canvas: OffscreenCanvas): void {
     this.canvases.set(handle, canvas);
     this.runtime?.bind(handle, canvas.getContext("webgpu")!);
   }
 
+  /** The surface `handle` was released, and its canvas goes with it. */
   unbind(handle: u32): void {
     this.canvases.delete(handle);
     this.runtime?.unbind(handle);
   }
 
-  private tell(state: GpuState): void {
-    this.state = state;
-    for (const report of this._reports) report(state);
-  }
-
-  /** This answers false where no adapter answered. The core learns what the
-   * device is from the device's block, which it asks the runtime for. */
-  private async acquire(): Promise<boolean> {
-    const adapter = await navigator.gpu.requestAdapter({
-      powerPreference: this.granted!.ask.power as GPUPowerPreference,
-    });
-    if (!adapter) return false;
+  /** Asks for a device as the core asks, and answers the block's STATUS once
+   * it is written. A page with no WebGPU, or no adapter, answers ENODEV.
+   * `navigator.gpu` exists only in a secure context, so a LAN address over
+   * http has none while localhost has it. */
+  private async acquire(): Promise<u32> {
+    if (this.runtime !== null) return STATUS.READY;
+    if (!("gpu" in navigator)) {
+      const why = isSecureContext ? "unsupported" : "insecure";
+      console.warn(`[gpu] cannot draw here: ${why}`);
+      this.report(why);
+      throw new FaultError(Errno.ENODEV);
+    }
+    const adapter = await navigator.gpu.requestAdapter({ powerPreference: this.ask.power as GPUPowerPreference });
+    if (!adapter) {
+      console.warn("[gpu] cannot draw here: no adapter answered");
+      this.report("missing");
+      throw new FaultError(Errno.ENODEV);
+    }
     const { vendor, architecture, device, description } = adapter.info;
-    console.info(
-      `[gpu] adapter: ${[vendor, architecture, device, description].filter(Boolean).join(" · ")}`,
-    );
-    const d = await adapter.requestDevice({
-      requiredFeatures: [
-        ...(this.granted!.ask.features.required as GPUFeatureName[]),
-        ...(this.granted!.ask.features.optional as GPUFeatureName[]).filter(
-          (f) => adapter.features.has(f),
-        ),
-      ],
-    });
-    const h = new GpuRuntime(
-      d,
-      () => this.granted!.mem,
-      () => this.granted?.wake(),
-      this.granted!.cfg,
-    );
+    console.info(`[gpu] adapter: ${[vendor, architecture, device, description].filter(Boolean).join(" · ")}`);
+    let d: GPUDevice;
+    try {
+      d = await adapter.requestDevice({
+        requiredFeatures: [
+          ...(this.ask.features.required as GPUFeatureName[]),
+          ...(this.ask.features.optional as GPUFeatureName[]).filter((f) => adapter.features.has(f)),
+        ],
+      });
+    } catch (e) {
+      // A feature the core requires is missing, or the adapter refused.
+      console.warn(`[gpu] no device: ${e instanceof Error ? e.message : String(e)}`);
+      this.report("missing");
+      throw new FaultError(Errno.ENODEV);
+    }
+    const r = new GpuRuntime(d, () => this.link.mem, () => this.tell(this.settled), this.cfg);
     d.lost.then((info) => {
-      // Nothing here destroys the device, so every loss is the browser's.
-      // The runtime tells the core, and this class asks for a new device.
-      say(`[gpu] device lost (${info.reason}): ${info.message}`);
-      if (this.runtime !== h) return;
+      // Nothing here destroys the device, so every loss is the browser's;
+      // the runtime has written LOST into the block.
+      console.warn(`[gpu] device lost (${info.reason}): ${info.message}`);
+      if (this.runtime !== r) return;
       this.runtime = null;
-      this.acquirer!.lost();
+      this.block = null;
+      // The core asks for a device again.
+      this.report("waiting");
+      this.tell(this.lost);
     });
-    this.canvases.forEach((canvas, handle) =>
-      h.bind(handle, canvas.getContext("webgpu")!),
-    );
-    this.runtime = h;
-    return true;
+    this.canvases.forEach((canvas, handle) => r.bind(handle, canvas.getContext("webgpu")!));
+    this.runtime = r;
+    if (this.block !== null) r.attach(this.block);
+    this.report("present");
+    return STATUS.READY;
   }
-}
 
-/** This says why this page has no WebGPU, or null where it has it.
- * `navigator.gpu` exists only in a secure context, so a LAN address over http
- * has none while localhost has it. */
-function absent(): "unsupported" | "insecure" | null {
-  if ("gpu" in navigator) return null;
-  return isSecureContext ? "unsupported" : "insecure";
-}
-
-type Up =
-  | { kind: "bind"; handle: u32; canvas: OffscreenCanvas }
-  | { kind: "unbind"; handle: u32 };
-
-/** Serves `gpu`, in a page's worker, to the UI at the far end of `port`. */
-export function gpu_serve(port: MessagePort, gpu: Gpu & CanvasBinder): void {
-  gpu.watch((state) => port.postMessage(state));
-  port.onmessage = ({ data: m }: MessageEvent<Up>) => {
-    if (m.kind === "bind") gpu.bind(m.handle, m.canvas);
-    else gpu.unbind(m.handle);
-  };
-}
-
-/** What lends a page's canvases to the GPU in its worker. */
-export interface CanvasBinder {
-  bind(handle: u32, canvas: Canvas): void;
-  unbind(handle: u32): void;
-}
-
-/** The UI's end of `gpu_serve`, and `report` hears the GPU's state. */
-export function gpu_connect(
-  port: MessagePort,
-  report: (state: GpuState) => void,
-): CanvasBinder {
-  port.onmessage = ({ data }: MessageEvent<GpuState>) => report(data);
-  const up = (m: Up, moved: Transferable[] = []) => port.postMessage(m, moved);
-  return {
-    bind(handle, canvas) {
-      const off =
-        canvas instanceof OffscreenCanvas
-          ? canvas
-          : canvas.transferControlToOffscreen();
-      up({ kind: "bind", handle, canvas: off }, [off]);
-    },
-    unbind: (handle) => up({ kind: "unbind", handle }),
-  };
+  private tell(waiting: (() => void)[]): void {
+    for (const done of waiting.splice(0)) done();
+  }
 }

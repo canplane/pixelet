@@ -6,7 +6,10 @@
 //! ancestors, broad to narrow; the client picks the depth, the order and the
 //! language. A provider maps its own areas onto these subtypes in its adapter.
 
-use crate::division_spec::DIVISION_SUBTYPE;
+use crate::division_spec::{DIVISION_NAME, DIVISION_SUBTYPE};
+
+/// The most bytes a division's name takes (division.json `DIVISION_NAME`).
+pub const NAME_BYTES: usize = DIVISION_NAME::BYTES as usize;
 
 /// Overture's subtypes, broadest first, numbered as spec/spec/division.json numbers them,
 /// which is also how a subtype crosses as JSON.

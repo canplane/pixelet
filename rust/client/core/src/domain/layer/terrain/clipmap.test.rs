@@ -90,7 +90,7 @@ pub(crate) fn hold(center: [f64; 2], tiles: &[TileData]) {
 }
 
 /// Marks the brick at `cell_zoom` that holds cell `g` as filled and not yet
-/// handed over, and folds the clip levels without it, as a turn's step leaves
+/// handed over, and folds the clip levels without it, as an entry's step leaves
 /// them before a frame hands the brick over.
 pub(crate) fn unland(cell_zoom: Zoom, g: [i32; 2]) {
     let w = clipmap();
@@ -107,7 +107,7 @@ pub(crate) fn hand() {
     upload(&mut |_| true);
 }
 
-/// Loses the device, as a turn's step finds it lost: the GPU's copy of
+/// Loses the device, as a frame's step finds it lost: the GPU's copy of
 /// every brick is gone, and each present brick must be handed over again
 /// (`assign_slots`).
 pub(crate) fn lose() {
@@ -341,7 +341,7 @@ fn brick_filled_in_parts_reads_as_one_filled_whole() {
             wanted
                 .iter()
                 .all(|&b| w.slots[b as usize].fill == Fill::Cut),
-            "each cut in the turn the packet landed"
+            "each cut in the entry the packet landed"
         );
         // Drop the packet, so the fill can read only the tile and the slots.
         drop(pkt);
@@ -449,38 +449,6 @@ fn void_tile_bricks_filled_with_no_packet() {
         assert!(
             w.slots.iter().any(|s| s.fill == Fill::Filled),
             "filled off the void's palette index, over samples all zero"
-        );
-    });
-}
-
-#[test]
-fn spent_turn_runs_one_part_and_asks_the_next() {
-    crate::on_core(|| {
-        use crate::sys::sched;
-        let w = fill_room();
-        let (t, tile, pkt) = hilly_tile();
-        cache_tile(t, tile);
-        cut(t, &pkt);
-        sched::turn().start(0.0);
-        sched::wake_ms();
-        fill_share();
-        assert!(w.filling.is_some(), "begun, and no further");
-        assert_eq!(sched::wake_ms(), 0.0, "the next turn asked");
-        let stage = |w: &Clipmap| w.filling.map(|f| f.stage);
-        fill_share();
-        assert!(
-            matches!(stage(w), Some(Stage::Spans(0))),
-            "a part a spent turn, so a turn past its share still moves the fill"
-        );
-        // A turn with room takes as much as it has.
-        sched::turn().start(1e9);
-        fill_share();
-        assert!(w.due.is_empty() && w.filling.is_none());
-        assert!(w.slots.iter().any(|s| s.fill == Fill::Filled));
-        assert_eq!(
-            sched::wake_ms(),
-            0.0,
-            "what is filled asks the frame that hands it"
         );
     });
 }
@@ -897,42 +865,3 @@ fn handing_shows_everywhere() {
     });
 }
 
-#[test]
-fn heap_wait_rehanded() {
-    crate::on_core(|| {
-        use crate::sys::boot::test::set_heap_stat;
-        use core::sync::atomic::{AtomicU32, Ordering};
-        use xpute_core::mem::heap::HeapStat;
-        static RELEASES: AtomicU32 = AtomicU32::new(0);
-        set_heap_stat(|| HeapStat {
-            releases: RELEASES.load(Ordering::Relaxed),
-            ..HeapStat::default()
-        });
-        CLIPMAP.set(fresh());
-        let w = clipmap();
-        lay(w, leaf(CENTER), leaf(CENTER));
-        let eye = LEAF_CELL_ZOOM - FIRST_CELL_ZOOM;
-        let q = want(w, eye, 0);
-        let b = slot_of(w, LEAF_CELL_ZOOM, q).unwrap();
-        // The state a fill leaves when the heap refused the pool a chunk.
-        (w.slots[b as usize].fill, w.heap) = (Fill::Waiting, Some(Refusal::now()));
-        assert!(!wake(w), "no page given back: it waits");
-        lay(w, leaf(CENTER), leaf(CENTER));
-        assert!(
-            w.slots[b as usize].fill == Fill::Waiting,
-            "unhanded while it waits"
-        );
-        assert!(
-            !slot_wants(w, tile_of(LEAF_CELL_ZOOM, q).0, b),
-            "nor its tile kept for it"
-        );
-        RELEASES.fetch_add(1, Ordering::Relaxed);
-        assert!(wake(w) && w.heap.is_none());
-        assign_slots(w, false);
-        assert!(
-            w.slots[b as usize].is_absent() && slot_wants(w, tile_of(LEAF_CELL_ZOOM, q).0, b),
-            "absent, to be handed again"
-        );
-        set_heap_stat(HeapStat::default);
-    });
-}

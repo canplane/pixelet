@@ -29,7 +29,7 @@ use crate::domain::setting::store::settings;
 use crate::domain::view::frame::screen::size;
 use crate::sys::sched::invalidate;
 use xpute_core::clock::now;
-use xpute_core::global::Global;
+use pxl_global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -441,7 +441,7 @@ pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[
     end_drag(s);
     // Nothing moves once the pointer is up, so without this tick the
     // characters would not see the release until something else asked for
-    // a turn.
+    // a frame.
     invalidate();
     tap_if_still(s, mode)
 }

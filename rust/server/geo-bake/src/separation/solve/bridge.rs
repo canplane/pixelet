@@ -34,7 +34,7 @@ use crate::segment::{End, PartId};
 use crate::separation::elevation::sample_cells;
 use crate::separation::way::{Polyline, Way};
 use crate::separation::{Line, WayRange};
-use crate::terrain::pipeline::overture::policy::waterway_width;
+use crate::terrain::pipeline::overture::width::waterway_width;
 
 use super::*;
 

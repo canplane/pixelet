@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/canplane/xpute/spec/manifest.schema.json",
   "title": "xpute manifest",
-  "description": "A program's manifest: the memory, stack, packet room, stream and GPU its core asks for. xpute-gen writes MANIFEST from it into both ends.",
+  "description": "A program's manifest: the memory, fixed ranges, heap, stacks, stream and GPU its core asks for. xpute-gen writes it into both ends.",
   "type": "object",
   "required": ["$doc"],
   "properties": {
@@ -18,24 +18,14 @@
       }
     },
     "mem": {
-      "description": "The memory the runtime gives the core, which never grows.",
       "type": "object",
-      "required": ["bytes", "region_bytes", "min_heap_bytes"],
+      "required": ["bytes", "fixed_bytes", "min_heap_bytes"],
       "additionalProperties": false,
       "properties": {
         "$doc": { "$ref": "#/$defs/doc" },
-        "bytes": {
-          "description": "The sizes a runtime may give, any one of them, each a whole number of regions. The program picks one; the module is linked against the smallest.",
-          "type": "array",
-          "items": { "type": "integer", "minimum": 1 },
-          "minItems": 1
-        },
-        "region_bytes": { "description": "What a reservation is counted in.", "type": "integer", "minimum": 1 },
-        "min_heap_bytes": {
-          "description": "The heap the smallest size must leave past the front, the linker's data and the program's fixed ranges, checked as the core compiles.",
-          "type": "integer",
-          "minimum": 0
-        }
+        "bytes": { "description": "The core's memory, whole before its first entry and never grown: the stack, the module's data, the fixed ranges and the heap.", "type": "integer", "minimum": 1 },
+        "fixed_bytes": { "description": "The program's fixed ranges, past the module's data and before the heap, never freed.", "type": "integer", "minimum": 0 },
+        "min_heap_bytes": { "description": "The heap the core counts on, past the fixed ranges.", "type": "integer", "minimum": 0 }
       }
     },
     "stack": {
@@ -48,17 +38,8 @@
         "thread_bytes": { "description": "A native core's thread's stack, outside the memory.", "type": "integer", "minimum": 1 }
       }
     },
-    "pkt": {
-      "type": "object",
-      "required": ["bytes"],
-      "additionalProperties": false,
-      "properties": {
-        "$doc": { "$ref": "#/$defs/doc" },
-        "bytes": { "description": "The most bytes a frame's packet takes, either way: a multiple of 8.", "type": "integer", "minimum": 8, "multipleOf": 8 }
-      }
-    },
     "stream": {
-      "description": "A stream past the front's frames, which the core writes records into and something beside it runs.",
+      "description": "A stream the core writes records into and something beside it runs.",
       "type": "object",
       "required": ["bytes"],
       "additionalProperties": false,
@@ -85,12 +66,11 @@
     }
   },
   "dependentRequired": {
-    "gen": ["mem", "stack", "pkt"],
-    "mem": ["stack", "pkt"],
-    "stack": ["mem", "pkt"],
-    "pkt": ["mem", "stack"],
-    "stream": ["mem", "stack", "pkt"],
-    "gpu": ["mem", "stack", "pkt", "stream"]
+    "gen": ["mem", "stack"],
+    "mem": ["stack"],
+    "stack": ["mem"],
+    "stream": ["mem", "stack"],
+    "gpu": ["mem", "stack", "stream"]
   },
   "$defs": {
     "doc": { "type": "array", "items": { "type": "string" } }

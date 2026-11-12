@@ -18,7 +18,7 @@ pub use crate::domain::setting::schema_spec::{
     AoMode, CameraMode, OrbitObstacleMode, ResMode, Setting, SettingKey,
 };
 use crate::sys::io::file::{self, StorageRead};
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 static DEV: Global<bool> = Global::new();
 
@@ -104,7 +104,7 @@ fn unleb(bytes: &[u8], at: &mut usize) -> Option<u32> {
 static SETTINGS_STORE: Global<Setting> = Global::new();
 
 /// Whether the store differs from what storage holds. The store is written
-/// at most once a turn, so a turn of changes costs the runtime one file
+/// at most once a frame, so a frame of changes costs the runtime one file
 /// write however many there are.
 static UNSAVED: Global<bool> = Global::new();
 
@@ -144,7 +144,7 @@ pub fn are_settings_loaded() -> bool {
     *load() != Load::Asked
 }
 
-/// Loads the slot once its file arrives, and is true on that turn alone. A
+/// Loads the slot once its file arrives, and is true on that frame alone. A
 /// setting that is not offered, unknown or invalid stays at its default, and
 /// so does every setting when the slot cannot be read.
 pub fn settings_load_step() -> bool {

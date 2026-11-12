@@ -212,7 +212,6 @@
     "gpu": "Connecting to the GPU…",
     "offline": "Waiting for the network…",
     "server": "Waiting for the server…",
-    "location": "Waiting for your location…",
     "shaders": "Compiling shaders…",
     "area": "Loading area…"
   },
@@ -241,10 +240,6 @@
   "panic": {
     "app": {
       "title": "The app stopped.",
-      "body": "Reload or reopen the app."
-    },
-    "gpu": {
-      "title": "The WebGPU connection was lost.",
       "body": "Reload or reopen the app."
     },
     "server": {

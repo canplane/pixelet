@@ -101,7 +101,7 @@ pub struct FrameSample {
     /// The terrain tiles the tile cache took in during the frame turn.
     pub terrain_loads: f64,
     pub device: DeviceSample,
-    /// The heap's high-water mark (xpute-core mem/heap.rs `HeapStat`).
+    /// The heap's high-water mark (sys/heap.rs `HeapStat`).
     pub heap_used_bytes: f64,
 }
 

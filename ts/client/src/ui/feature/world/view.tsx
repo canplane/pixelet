@@ -45,7 +45,6 @@ const INPUT: InputDriver = {
   keyUp,
   releaseKeys,
   releasePointers,
-  requestFrame: input.frame,
 };
 
 /** A component of its own, so that a change of the marker under the pointer

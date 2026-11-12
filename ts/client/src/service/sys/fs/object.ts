@@ -10,14 +10,14 @@
  * each batch is laid over the shards its writes fall in, and the top's rows
  * for those shards are rebuilt (object_tree.ts). A shard with no leaves has no
  * file, and neither has a top with no rows. A server can answer the same
- * `open` and `commit` instead, and the core cannot tell the two apart. The
- * transaction ends after the commit returns, so a batch the database then
- * fails to keep is only logged.
+ * `open` and `commit` instead, and the core cannot tell the two apart. A
+ * batch the database fails to keep fails its commit, and so the file's
+ * close.
  */
 
 import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
 import * as Errno from "@xpute/kit/status/errno.spec.ts";
-import { FileError } from "@xpute/runtime";
+import { FaultError } from "@xpute/kit/status/error.ts";
 import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 
 import { format } from "@/abi/file.spec.ts";
@@ -36,7 +36,7 @@ export const TOP_KEY = "top";
 
 /** A file is one format byte followed by a tree packet. */
 function pkt(fmt: number, bytes: U8Array): U8Array {
-  if (bytes[0] !== fmt) throw new FileError(Errno.EBADMSG);
+  if (bytes[0] !== fmt) throw new FaultError(Errno.EBADMSG);
   // The tree reader needs the packet to start on a word boundary. A view at
   // offset 1 would not, so the packet is copied.
   return bytes.slice(1);
@@ -55,7 +55,7 @@ export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
   const [keys, asset_ids, rows, texts] = new TreeReader(pkt(fmt, bytes))
     .read_branch()
     .get<[string[], U32Array, U32Array, string[]]>();
-  if (keys.length !== asset_ids.length) throw new FileError(Errno.EINVAL);
+  if (keys.length !== asset_ids.length) throw new FaultError(Errno.EINVAL);
   const out: Leaf[] = keys.map((key, r) => ({
     key,
     asset_id: asset_ids[r]!,
@@ -63,7 +63,7 @@ export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
   }));
   rows.forEach((r, k) => {
     if (out[r] === undefined || texts[k] === undefined) {
-      throw new FileError(Errno.EINVAL);
+      throw new FaultError(Errno.EINVAL);
     }
     out[r]!.text = texts[k]!;
   });
@@ -95,7 +95,7 @@ export function decode_top(bytes: U8Array): TopRow[] {
   const [shard, fold] = new TreeReader(pkt(format.OBJECT_TOP, bytes))
     .read_branch()
     .get<[string[], U32Array]>();
-  if (shard.length !== fold.length) throw new FileError(Errno.EINVAL);
+  if (shard.length !== fold.length) throw new FaultError(Errno.EINVAL);
   return shard.map((s, r) => ({ shard: s, fold: fold[r]! }));
 }
 
@@ -196,23 +196,21 @@ async function apply_edits(tx: Tx, writes: readonly Leaf[]): Promise<void> {
  * transactions one at a time, in the order they were begun. */
 export function object_backend(db: Db = DB): {
   open(key: string): Promise<U8Array>;
-  commit(bytes: U8Array): void;
+  commit(bytes: U8Array): Promise<void>;
   set_aside(key: string, now_ms: number): Promise<boolean>;
 } {
   return {
     open(key) {
       return db.transaction(async (tx) => {
         const bytes = await tx.get(key);
-        if (bytes === null) throw new FileError(Errno.ENOENT);
+        if (bytes === null) throw new FaultError(Errno.ENOENT);
         return bytes;
       });
     },
     /** Applies an edit batch. */
     commit(bytes) {
       const writes = decode_writes(format.OBJECT_EDIT, bytes);
-      db.transaction((tx) => apply_edits(tx, writes)).catch((err: unknown) => {
-        console.error("[object] an edit batch was not kept:", err);
-      });
+      return db.transaction((tx) => apply_edits(tx, writes));
     },
     /** Sets aside a file the core refused, so that its key reads as empty.
      * A shard's rows leave the top with it. Resolves false, with nothing

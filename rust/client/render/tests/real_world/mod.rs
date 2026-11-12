@@ -242,6 +242,8 @@ impl BrickSource for World<'_> {
 
 impl Resident for World<'_> {
     type Content = Pixelet;
+    type Place = Lookup;
+    const NOWHERE: Lookup = Lookup::NONE;
     fn relief(
         &mut self,
         place: &mut Lookup,

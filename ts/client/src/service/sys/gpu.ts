@@ -1,12 +1,12 @@
 // @pxl/client/service/sys/gpu.ts
 
-/** This state is kept for the UI to show. The core hears of the device itself
- * on the GPU's own port (@xpute/gpu). */
+/** This state is kept for the UI to show, as the page's worker reports it
+ * (runtime/worker.ts). The core hears of the device itself on the link
+ * (@xpute/gpu web.ts). */
 
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import {
   GPU_ASKING,
-  GPU_LOST,
   GPU_MISSING,
   GPU_INSECURE,
   GPU_PRESENT,
@@ -18,9 +18,8 @@ import type { GpuState } from "@xpute/gpu/gpu.ts";
 
 export const GPU_STATE: Readonly<Record<GpuState, Gpu>> = {
   present: GPU_PRESENT,
-  waiting: GPU_WAITING,
   missing: GPU_MISSING,
-  lost: GPU_LOST,
+  waiting: GPU_WAITING,
   unsupported: GPU_UNSUPPORTED,
   insecure: GPU_INSECURE,
 };

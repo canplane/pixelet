@@ -1,30 +1,29 @@
 // pxl-core/perf/report.rs
 
-//! Builds a frame turn's record once its frame is drawn, so every figure in
-//! it belongs to that one turn: what the turn measured of itself, what the
+//! Builds a frame's record once its frame is drawn, so every figure in
+//! it belongs to that one frame: what the frame measured of itself, what the
 //! renderer made of its frame, and the terrain tiles it took in.
 
 use crate::sys::sched::tick::TickReport;
+use pxl_global::Global;
 use pxl_render::gpu::span_spec::FrameKind;
 use pxl_render::renderer::GpuRead;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_core::clock::now;
-use xpute_core::global::Global;
-use xpute_core::mem::heap::HeapStat;
 
 use crate::domain::layer::Base;
 use crate::domain::scene::stage::FrameReport;
-use crate::perf::frame::{DeviceSample, FrameSample, GpuSample, RaySample};
+use crate::perf::frame::{DeviceSample, FrameSample, GpuSample, RaySample, EFFECTS};
 use crate::perf::record::{
     perf_fold_recording, perf_record_frame, perf_record_gpu, perf_record_rays, perf_recording,
+    RayRead,
 };
 use crate::perf::section::RecordingSection;
-use crate::sys::boot;
+use crate::sys::heap::{self, HeapStat};
 use crate::sys::io::body;
-use crate::turn;
 
-/// What the renderer made of this turn's frame (domain/scene/stage.rs
-/// `stage_render`), with the reads of earlier frames that landed this turn.
+/// What the renderer made of this frame (domain/scene/stage.rs
+/// `stage_render`), with the reads of earlier frames that landed this frame.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct RendererFrame {
     kind: FrameKind,
@@ -32,14 +31,6 @@ struct RendererFrame {
     device: DeviceSample,
     gpu_read: Option<GpuRead>,
     ray_read: Option<RayRead>,
-}
-
-/// A frame's ray counts as they land, with the renderer's number for the
-/// frame that counted them.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct RayRead {
-    pub frame: f64,
-    pub sample: RaySample,
 }
 
 impl Default for RendererFrame {
@@ -56,8 +47,8 @@ impl Default for RendererFrame {
 
 static RENDERER: Global<RendererFrame> = Global::new();
 
-/// Takes the renderer's report for this turn's frame (domain/scene/stage.rs
-/// `stage_render`) and the reads of earlier frames that landed this turn.
+/// Takes the renderer's report for this frame (domain/scene/stage.rs
+/// `stage_render`) and the reads of earlier frames that landed this frame.
 /// The figures are 0 when the renderer drew no frame.
 pub fn set_renderer_frame(report: &FrameReport) {
     let (kind, scale) = (report.kind, report.scale);
@@ -100,7 +91,7 @@ pub fn set_renderer_frame(report: &FrameReport) {
     });
 }
 
-/// What this frame turn held, for the recording's extremes: the heap as its
+/// What this frame held, for the recording's extremes: the heap as its
 /// allocator reports it, the body slots' peak since the frame before, and the terrain tiles refused a slot since then. Taking a peak or
 /// a count starts it again from zero.
 fn peaks(h: &HeapStat) -> RecordingSection {
@@ -117,8 +108,8 @@ fn peaks(h: &HeapStat) -> RecordingSection {
     }
 }
 
-/// A frame's own measures (turn.rs `world_frame`).
-pub struct FrameTurn {
+/// A frame's own measures (frame.rs `run`).
+pub struct CpuSample {
     pub tick: TickReport,
     /// The display's measured interval, and the gap since the last frame,
     /// which closes the interval before this one and which this frame was
@@ -128,16 +119,18 @@ pub struct FrameTurn {
     /// Whether this frame asked for no next one.
     pub settled: bool,
     pub effects_ms: f64,
+    /// Each effect's time in the frame, by `EffectName`.
+    pub effects: [f64; EFFECTS],
     pub stage_ms: f64,
 }
 
-/// Records the frame turn once its frame is drawn. What taking the record
+/// Records the frame once its frame is drawn. What taking the record
 /// costs counts as the profiler's time (`perf_ms`), not the frame task's.
-pub fn perf_frame(t: FrameTurn) {
+pub fn perf_frame(t: CpuSample) {
     let at = now();
     // The peaks and counts are taken whether or not the profiler records, so
     // a recording that starts later counts from its own start.
-    let heap = boot::heap_stat();
+    let heap = heap::stat();
     let section = peaks(&heap);
     let terrain_loads = f64::from(TerrainTile::tile_cache().take_loads());
     let renderer = core::mem::take(RENDERER.get(RendererFrame::default));
@@ -163,13 +156,13 @@ pub fn perf_frame(t: FrameTurn) {
         // for.
         phases: core::array::from_fn(|k| t.tick.phase_ms[k]),
         stage_ms: t.stage_ms,
-        effects: turn::effect_times(),
+        effects: t.effects,
         kind: f64::from(renderer.kind as u8),
         gpu: renderer.gpu,
         terrain_loads,
         device: renderer.device,
         heap_used_bytes: heap.peak as f64,
-        // The interval's figures come later: its turns' as each ends, and its
+        // The interval's figures come later: its frames' as each ends, and its
         // length when the next frame closes it.
         ..FrameSample::default()
     };

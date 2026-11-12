@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
-import { SensorStatus } from "@/abi/ui.ts";
+import { SensorStatus } from "@/abi/overlay.ts";
 
 import type { GlyphName } from "@/ui/shared/component/icon.tsx";
 import { haloGap, HaloIcon } from "./halo.tsx";

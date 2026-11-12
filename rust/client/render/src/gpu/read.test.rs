@@ -8,7 +8,7 @@ fn read_of(r: &mut Read, lane: &[u32]) -> bool {
     r.end()
 }
 
-/// After a dropped frame or a turn put off, what a stage reads next reads as
+/// After a dropped frame or a frame put off, what a stage reads next reads as
 /// changed, though it is what the stage read before.
 #[test]
 fn forgotten_reads_as_changed() {

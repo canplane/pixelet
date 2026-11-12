@@ -35,7 +35,7 @@ export interface Perf {
   start(): void;
   stop(): void;
   stats(window_ms: number | null): U8Array;
-  rings(ring: number): U8Array;
+  rings(ring: number, from: number, cnt: number): U8Array;
   strtab(): U8Array;
 }
 
@@ -60,7 +60,11 @@ function object(imp: Perf): LinkObject {
           }
           case RINGS: {
             if (args === null) return Errno.EBADMSG;
-            const v = imp.rings(args.at(0).get_number());
+            const v = imp.rings(
+              args.at(0).get_number(),
+              args.at(1).get_number(),
+              args.at(2).get_number(),
+            );
             return { result: 0, data: [v] };
           }
           case STRTAB: {
@@ -78,9 +82,9 @@ function object(imp: Perf): LinkObject {
 }
 
 /** Mounts `imp` at the URI, one object for every open. */
-export function mount(link: Pick<Link, "mount">, imp: Perf): void {
+export function mount(l: Pick<Link, "mount">, imp: Perf): void {
   const o = object(imp);
-  link.mount(URI, () => o);
+  l.mount(URI, () => o);
 }
 
 /** Opens the singleton on the other side, once, at boot. */
@@ -108,8 +112,13 @@ export async function stats(
   return new TreeReader(a.data).read_branch().at(0).get() as U8Array;
 }
 
-export async function rings(ref: Ref, ring: number): Promise<U8Array> {
-  const a = await ref.link.send(ref.handle, RINGS, [ring]);
+export async function rings(
+  ref: Ref,
+  ring: number,
+  from: number,
+  cnt: number,
+): Promise<U8Array> {
+  const a = await ref.link.send(ref.handle, RINGS, [ring, from, cnt]);
   if (a.result < 0) throw new XputeError(a.result);
   if (a.data === null) throw new XputeError(Errno.EBADMSG);
   return new TreeReader(a.data).read_branch().at(0).get() as U8Array;

@@ -15,7 +15,7 @@ import type {
   ViewSection,
   Worst,
 } from "@/service/core/perf.ts";
-import { n1, pct, phaseText, tris, valueText } from "./column.ts";
+import { n1, phaseText, tris, valueText } from "./column.ts";
 import { fps, type PerfReport } from "./view.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
@@ -27,12 +27,6 @@ const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 const signedBytes = (b: number) =>
   `${b >= 0 ? "+" : ""}${valueText("_bytes", b)}`;
 const bytes = (b: number) => valueText("_bytes", b);
-/** Says how far the interval's turns ran past the interval's end, or, when
- * they ended inside it, how much of the interval was left with no turn. */
-const pastText = (f: Frame) =>
-  f.over_ms > 0
-    ? `over by ${n1(f.over_ms)}`
-    : `off-turn ${n1(f.interval_ms - f.busy_ms)}`;
 const percentiles = (s: Percentile) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 type RayColumn<K = keyof RayCount> = K extends `eye_${infer C}` ? C : never;
@@ -149,13 +143,9 @@ export function frameLine({ sample: s, delta }: Worst): string {
   return `[${n1(s.t).padStart(9)}] ${valueText(
     "kind_name",
     s.kind_name,
-  )}  interval ${n1(s.interval_ms)} = ${s.turns} turns ${n1(s.busy_ms)} + ${pastText(
-    s,
-  )}  effects ${n1(s.effects_ms)}${worstEffectText(s)}  tick ${n1(s.tick_ms)}/${n1(
+  )}  interval ${n1(s.interval_ms)}  effects ${n1(s.effects_ms)}${worstEffectText(s)}  tick ${n1(s.tick_ms)}/${n1(
     s.budget_ms,
-  )}${s.settled ? " (still)" : ""}  stage ${n1(s.stage_ms)}  tasks ${n1(
-    s.tasks_ms,
-  )}  perf ${n1(s.perf_ms)}  gpu busy ${
+  )}${s.settled ? " (still)" : ""}  stage ${n1(s.stage_ms)}  perf ${n1(s.perf_ms)}  gpu busy ${
     s.gpu_timed ? n1(s.gpu_busy_ms) : "-"
   }  draws ${s.draws} tris ${tris(s.triangles)}  uploads ${s.uploads}  heap used ${bytes(
     s.heap_used_bytes,
@@ -206,14 +196,9 @@ function windowSection(r: PerfReport): string[] {
       fps(f) ?? NaN,
     )}  moving ${f.moving}  still ${f.n - f.moving}   refresh ${n1(
       last.refresh_ms,
-    )} ms   paced ${n1(last.paced_ms)} ms   scale ${fixed(last.scale, 2)}   turns ${f.turns}`,
-    `  kinds   ${counted(f.kinds)}   wakes ${counted(f.wakes)}`,
-    `  interval ${percentiles(f.interval)} ms   missed ${f.missed} (${pct(
-      f.missed,
-      f.moving,
-    )}% of moving frames)`,
-    `  busy    ${percentiles(f.busy)} ms   (the interval's turns, start to end)`,
-    `  long    ${f.long} (turns past their interval)`,
+    )} ms   paced ${n1(last.paced_ms)} ms   scale ${fixed(last.scale, 2)}`,
+    `  kinds   ${counted(f.kinds)}`,
+    `  interval ${percentiles(f.interval)} ms`,
     `  tick    ${percentiles(f.tick)} ms   overran ${f.overran}   budget ${n1(
       last.budget_ms,
     )}${last.settled ? " (still)" : ""}   phase p95 ${f.phases
@@ -226,11 +211,7 @@ function windowSection(r: PerfReport): string[] {
         .join("  ") || "-"
     }`,
     `  stage   ${percentiles(f.stage)} ms   (the pump and the render)`,
-    `  tasks   ${percentiles(f.task)} ms`,
     `  perf ${percentiles(f.perf)} ms   (its own record and the UI's reads)`,
-    `  rest    ${percentiles(
-      f.rest,
-    )} ms   (busy unmeasured: the door's commands, start and end)`,
     f.gpu_timed > 0
       ? `  gpu     ${percentiles(
           f.gpu_busy,

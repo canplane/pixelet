@@ -70,7 +70,7 @@ stand in the tree where shards are not read; a shard the top lists is read as a
 baked tile is, when the view asks for the ground at the shard's zoom, and its
 leaves replace its folds; a shard the top does not list is empty without asking.
 Writes go up as batches of edits, in the order made, a while after the first and
-no more than a turn allows. The source applies them and rebuilds the top's rows;
+no more than a frame allows. The source applies them and rebuilds the top's rows;
 the core writes neither a shard nor the top. The client's `OBJECT` backend folds
 by the same rule (`ts/client/src/service/sys/fs/object_tree.ts`), and one golden
 record holds the two equal (`spec/golden/object/top.tsv`).

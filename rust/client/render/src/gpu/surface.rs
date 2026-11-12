@@ -4,8 +4,7 @@
 //! the world inside it is drawn at a size of its own (`render_px`). The page scales whatever
 //! buffer the canvas has into its layout box, so a buffer of a stale size still shows whole.
 
-use xpute_core::abi::handle::{handle_slot, Table as Handles};
-use xpute_core::global::Global;
+use pxl_global::Global;
 use xpute_kit::math::scalar::round;
 
 use crate::api_spec::surface_role;
@@ -13,14 +12,13 @@ use crate::frame::shader::floor;
 use crate::frame::shader::word::screen::TILE;
 use pxl_engine::{ray, WORKGROUPS_CAP};
 
-/// The surface table's slots. Slot 0 is never handed out, so at most `SURFACES - 1` surfaces
-/// are open at once.
+/// The surface table's slots: at most this many surfaces are open at once.
 pub const SURFACES: usize = 9;
 
-/// The turns a new size must hold before the targets are made at it. A box being animated
+/// The frames a new size must hold before the targets are made at it. A box being animated
 /// passes through a new size each frame, and each size would otherwise make new depth and
 /// color targets.
-pub const SETTLE_TURNS: u32 = 4;
+pub const SETTLE_FRAMES: u32 = 4;
 
 /// The most pixels the world is drawn at along each side: the largest texture side of the
 /// floor, the limits every WebGPU device meets (frame/shader/floor.rs). Every size that
@@ -62,9 +60,9 @@ pub struct Surface {
     pub width: u32,
     pub height: u32,
     /// The world's size and the canvas's size as last asked. They must hold for
-    /// `SETTLE_TURNS` turns before the targets are made at them.
+    /// `SETTLE_FRAMES` frames before the targets are made at them.
     pub wanted_sizes: ((u32, u32), (u32, u32)),
-    pub waited_turns: u32,
+    pub waited_frames: u32,
     /// The frame's depth, with a stencil (`MASKED_DEPTH`). The world draws into it, and then
     /// what moves on its own draws over the world (renderer.rs, stage 2). A pass draws
     /// into it through `depth_view`, and a binding reads it through `depth_only_view`.
@@ -158,8 +156,9 @@ impl Surface {
     }
 }
 
+/// The surfaces open, each by the handle the link issued it (xpute wit/gpu
+/// surface.wit); a free slot's handle is 0, which the link never issues.
 struct Table {
-    handles: Handles<(), SURFACES>,
     surfaces: [Surface; SURFACES],
 }
 
@@ -167,26 +166,30 @@ static TABLE: Global<Table> = Global::new();
 
 fn table() -> &'static mut Table {
     TABLE.get(|| Table {
-        handles: Handles::new(),
         surfaces: [Surface::default(); SURFACES],
     })
 }
 
-/// Opens a canvas, which draws nothing until its role is set (`surface_role`). Returns 0 when
-/// every surface is taken.
-pub fn surface_open() -> u32 {
-    let t = table();
-    let Some(handle) = t.handles.insert(()) else {
-        return 0;
+/// Opens the canvas `handle`, which draws nothing until its role is set (`surface_role`).
+/// Returns false when every surface is taken.
+pub fn surface_open(handle: u32) -> bool {
+    let Some(free) = slot_of(0) else {
+        return false;
     };
-    t.surfaces[handle_slot(handle) as usize] = Surface {
+    table().surfaces[free] = Surface {
         handle,
         role: surface_role::NONE,
         dpr: 1.0,
         ratio: 1.0,
         ..Surface::default()
     };
-    handle
+    true
+}
+
+/// The slot the surface `handle` takes in the table, which what is kept for each surface is
+/// indexed by.
+pub fn slot_of(handle: u32) -> Option<usize> {
+    table().surfaces.iter().position(|s| s.handle == handle)
 }
 
 /// Sets a canvas's size and ratios, and returns whether its handle was live.
@@ -201,20 +204,15 @@ pub fn surface_resize(handle: u32, px_w: u32, px_h: u32, dpr: f64, ratio: f64) -
     true
 }
 
-pub fn surface_close(handle: u32) -> Option<Surface> {
-    let t = table();
-    t.handles.remove(handle)?;
-    let slot = handle_slot(handle) as usize;
-    let closed = t.surfaces[slot];
-    t.surfaces[slot] = Surface::default();
-    Some(closed)
+/// Closes the surface `handle`, and answers the slot it took and what it was.
+pub fn surface_close(handle: u32) -> Option<(usize, Surface)> {
+    let slot = slot_of(handle).filter(|_| handle != 0)?;
+    Some((slot, core::mem::take(&mut table().surfaces[slot])))
 }
 
 pub fn surface(handle: u32) -> Option<&'static mut Surface> {
-    let t = table();
-    t.handles
-        .live(handle)
-        .then(|| &mut t.surfaces[handle_slot(handle) as usize])
+    let slot = slot_of(handle).filter(|_| handle != 0)?;
+    Some(&mut table().surfaces[slot])
 }
 
 pub fn surfaces() -> impl Iterator<Item = &'static mut Surface> {

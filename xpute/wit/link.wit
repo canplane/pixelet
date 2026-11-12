@@ -21,11 +21,26 @@
 // resource whose end must report a result keeps its own method for it, as a
 // file's `close`. A program opens every singleton it calls once, at boot.
 //
+// A core has three exports. `link_init` lays the link and answers its layout,
+// the inbox and a frame's room, and runs nothing of the program. `link_boot`
+// is the core's first entry: the program's boot opens what it calls, and only
+// then does the entry start. A program opens the stop first, so a bug in its
+// boot is reported. `link_in` enters the core with
+// the frame laid in its inbox. The runtime calls init, reads the layout, then
+// boot, so every entry comes from a runtime that knows the room. A trap out
+// of any export stops the core for good.
+//
 // A method that may answer later is an `async func`, and is sent; any other
 // always answers at once. An `async func` always answers later, with
 // EINPROGRESS, so waiting on one leaves the core's entry. The core runs only
 // when the runtime enters it: with a request, an answer, or the answer of
 // what it armed, such as `timer.sleep`.
+//
+// Raw memory enters WIT in one place, `link.lent`: a span of the caller's
+// memory, (at, len), the callee's to read or write until the answer. The
+// caller's binding takes a buffer it owns, lends it with the call and hands
+// it back with the answer, so the lend lasts as long as the ownership; a call
+// dropped before its answer keeps the buffer alive until the answer comes.
 //
 // A bool, an unsigned integer or a handle returns in the answer's result,
 // below 2^31; any other return, in its packet. A variant crosses as its
@@ -43,5 +58,11 @@ interface link {
   variant token {
     int(s32),
     str(string),
+  }
+
+  // A span of the caller's memory, lent until the answer.
+  record lent {
+    at: u32,
+    len: u32,
   }
 }

@@ -11,7 +11,7 @@
 //!
 //! A file's bytes, as the loader read them (sys/io/loader.rs `take_gltf`),
 //! are parsed once, in a task of their own (pxl-render `parse_gltf`), which
-//! yields between its units once the turn's deadline has passed. The parse is
+//! yields between its units once the entry's deadline has passed. The parse is
 //! kept for every registration of the file, and the bytes are let go. A
 //! registration runs in its own task too, and yields the same way, between a
 //! primitive, a run of
@@ -28,12 +28,10 @@ use fnv::FnvHashMap;
 use pxl_render::asset::{parse_gltf, scene_nodes, world_mats, Gltf, GltfPrimitive};
 use pxl_render::gpu::draw::MODEL_VERTEX_WORDS;
 use pxl_spec::space::coord::mat4::{self, Mat4};
-use xpute_core::global::Global;
-use xpute_core::mem;
+use pxl_global::Global;
 
 use crate::domain::scene::model;
 use crate::domain::scene::model::registry::{Channel, Model, STEPS_PER_PAUSE};
-use crate::sys::io::body::Packet;
 use crate::sys::io::loader::{load_of, take_gltf};
 use crate::sys::io::room::Refusal;
 use crate::sys::load::Load;
@@ -133,9 +131,9 @@ fn gltf_of(load: Load) -> Option<Rc<Gltf>> {
 
 /// The file numbered `file` parsed off `bytes`, which go once it is. `gltf_of`
 /// left its entry as parsing, and this sets it once it is parsed or refused,
-/// then wakes a turn.
+/// then wakes a frame.
 #[embassy_executor::task(pool_size = REGISTRATIONS)]
-async fn parse(file: u32, bytes: Packet) {
+async fn parse(file: u32, bytes: Box<[u8]>) {
     let parsed = parse_gltf(&bytes, &[], || sched::yield_if_spent()).await;
     if let Some((_, entry)) = PARSED.get(Vec::new).iter_mut().find(|(a, _)| *a == file) {
         *entry = Some(parsed.map(Rc::new));
@@ -158,7 +156,7 @@ pub fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<u32> {
 
 /// Registers `gltf`, the file numbered `file`, at `height_u`. `model_of` left
 /// the file's entry as registering, and this sets it once the model is whole
-/// or refused, then wakes a turn.
+/// or refused, then wakes a frame.
 #[embassy_executor::task(pool_size = REGISTRATIONS)]
 async fn registration(file: u32, height_u: Option<f64>, gltf: Rc<Gltf>) {
     let entry = register_model(&gltf, height_u, || sched::yield_if_spent())
@@ -330,10 +328,7 @@ async fn register_model<P: Future<Output = ()>>(
     }
 
     let mut m = Model::new(vertex_cnt, idx_cnt, joint_cnt)?;
-    let n = (vertex_cnt * MODEL_VERTEX_WORDS + idx_cnt) as usize;
-    // SAFETY: the model's block, `n` words, ours alone: no number names the
-    // model until it joins the registry, sealed.
-    let words = unsafe { core::slice::from_raw_parts_mut(mem::at::<u32>(m.at()), n) };
+    let words = m.words();
     let mut ys = [f64::INFINITY, f64::NEG_INFINITY];
     let (mut v0, mut i0) = (0usize, 0usize);
     for &(node_idx, mesh, prim_idx) in &parts {

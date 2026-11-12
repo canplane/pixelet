@@ -19,7 +19,7 @@ pub(super) struct CastRead {
     pub same: bool,
     /// Where each pixel's ray passes through its pixel this frame (pxl-engine `eye::JITTER`).
     /// The jitter steps through its sequence only while a change other than the scene's
-    /// animation settles (pass/resolve.rs `asks`), so a turn that only animates casts no pixel
+    /// animation settles (pass/resolve.rs `asks`), so a frame that only animates casts no pixel
     /// again.
     pub jitter: [u32; 2],
     /// Whether nothing moved but the listed draws that mark tiles, so the frame may be drawn

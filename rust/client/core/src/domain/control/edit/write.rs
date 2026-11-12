@@ -11,6 +11,7 @@ use crate::domain::layer::object::ext::Ext;
 use crate::domain::preview::{Draft, RenderEdit};
 use crate::sys::sched::invalidate;
 use pxl_engine::answer::{self, PLACED_ASSET};
+use pxl_global::Global;
 use pxl_spec::asset::id::solid;
 use pxl_spec::asset::marker::{MARKER, MARKER_TEXT_CHARS};
 use pxl_spec::asset::AssetId;
@@ -19,7 +20,6 @@ use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::zoom::{base_of, cube, units, Zoom, UNIT_ZOOM};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
-use xpute_core::global::Global;
 use xpute_kit::status::errno::Errno;
 
 use crate::domain::layer::instance::Instance;
@@ -119,8 +119,8 @@ pub fn restores_scattered(at: &Q3, id: AssetId) -> Option<Instance> {
     is_carved(&World::now(), at).then(|| World::now().generated_instance(Decor::of(id), at))?
 }
 
-/// The marker draft the tool holds open. The turn hands it to the scene's
-/// markers, and each change to it here asks for the turn that draws it.
+/// The marker draft the tool holds open. The frame hands it to the scene's
+/// markers, and each change to it here asks for the frame that draws it.
 static DRAFT: Global<Option<Draft>> = Global::new();
 
 fn draft_mut() -> &'static mut Option<Draft> {
@@ -243,12 +243,12 @@ pub fn remove(at: Octant) {
 
 static RENDER_EDIT: Global<RenderEdit> = Global::new();
 
-/// What the tool held leaves out of the world as drawn, as this turn decided.
+/// What the tool held leaves out of the world as drawn, as this frame decided.
 pub fn render_edit() -> RenderEdit {
     *RENDER_EDIT.get(RenderEdit::default)
 }
 
-/// Decides what the tool held leaves out of the drawing this turn and returns
+/// Decides what the tool held leaves out of the drawing this frame and returns
 /// whether it changed.
 pub fn render_edit_step() -> bool {
     let now = tool().render_edit(&hover());

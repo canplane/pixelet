@@ -7,7 +7,13 @@ use xpute_gen::spec::Output;
 
 use crate::root;
 
-const DATA_SPECS: [DataSpec; 3] = [
+const DATA_SPECS: [DataSpec; 4] = [
+    DataSpec {
+        json: "spec/io/frame.json",
+        ts: Some("ts/runtime/src/io/frame.spec.ts"),
+        rs: Some("rust/core/src/io/frame.spec.rs"),
+        ..DataSpec::DEFAULT
+    },
     DataSpec {
         json: "spec/io/stream.json",
         ts: Some("ts/runtime/src/io/stream.spec.ts"),

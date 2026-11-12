@@ -3,10 +3,10 @@
 //! The device's GPS and compass readings, and which changes are significant
 //! enough to keep.
 
-use crate::abi::ui::Message;
-use crate::abi::ui::SensorStatus;
+use crate::abi::overlay::Message;
+use crate::abi::overlay::SensorStatus;
 use xpute_core::clock::now;
-use xpute_core::global::Global;
+use pxl_global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DeviceLocation {

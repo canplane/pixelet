@@ -10,16 +10,15 @@
 //! asks the camera to move lives outside the folder (domain/control/input.rs,
 //! navigation).
 
-pub mod collision;
 pub mod controller;
 pub mod first_person;
 pub mod gesture;
 pub mod orbit;
 pub mod state;
 
+use pxl_global::Global;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::v3::V3;
-use xpute_core::global::Global;
 use xpute_kit::math::scalar::wrap;
 
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_POLAR, EASE_EPS_RAD, ROT_DAMP};

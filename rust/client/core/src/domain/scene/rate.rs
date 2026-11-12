@@ -2,7 +2,7 @@
 
 //! `auto`'s frame rate: a frame every `intervals` of the display's measured
 //! intervals (sys/sched/display.rs), which the frame task keeps by skipping
-//! vsyncs (turn.rs `frame_task`). A drawn frame that came more than half an
+//! vsyncs (frame.rs `frame_task`). A drawn frame that came more than half an
 //! interval later than its target adds an interval; one whose cost, the GPU's
 //! busy time where a read timed it and the frame task's own, would fit one
 //! interval fewer by `RES_BAND` takes one off. It never paces slower than

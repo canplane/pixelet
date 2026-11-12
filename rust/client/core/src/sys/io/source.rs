@@ -15,7 +15,7 @@ use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM, MIN_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::Area;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_core::global::Global;
+use pxl_global::Global;
 use xpute_kit::status::errno::Errno;
 
 struct Source {

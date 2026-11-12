@@ -109,7 +109,6 @@ function attach(
     stopRatio();
     observer.disconnect();
     surface.close(handle);
-    surface.unbind(handle);
   };
 }
 
@@ -176,10 +175,7 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
     input.pinch(clamp(scale, 1 / PINCH_MOST, PINCH_MOST));
   };
   const onContextMenu = (e: MouseEvent) => e.preventDefault();
-  const onResize = () => {
-    place();
-    input.requestFrame();
-  };
+  const onResize = place;
   // A key in a composition belongs to the IME, and a shortcut to the browser,
   // so neither goes to the core. Tab still goes in a composition, because it
   // switches the dock even in the middle of a word.

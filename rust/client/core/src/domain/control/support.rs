@@ -10,9 +10,9 @@
 
 use crate::domain::query::change::Memo;
 use crate::domain::query::{floor_of, is_unknown, on_floor, unknown};
+use pxl_global::Global;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
-use xpute_core::global::Global;
 
 use crate::domain::layer::Answer;
 use crate::domain::query::World;
@@ -43,7 +43,7 @@ fn stand_memo() -> &'static mut Memo<Q3, Answer<Option<Q3>>> {
 }
 
 /// Drops the kept answer of `standing` where a change touched the columns
-/// it read. It runs on every frame turn, so each change is seen exactly once
+/// it read. It runs on every frame, so each change is seen exactly once
 /// (`change::within`).
 pub fn support_step() {
     stand_memo().forget_touched();

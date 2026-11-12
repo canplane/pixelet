@@ -1,7 +1,7 @@
 // pxl-core/domain/preview.rs
 
 //! An edit not yet made, in the form both heads share. Control decides the
-//! preview, and the turn hands it to the scene, which draws it (turn.rs). A
+//! preview, and the frame hands it to the scene, which draws it (frame.rs). A
 //! preview has three parts: what it changes in the world as drawn; the ghost
 //! it shows under the pointer; and a marker's draft, drawn with the text
 //! typed so far.

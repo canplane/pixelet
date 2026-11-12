@@ -14,6 +14,19 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P2
 
+- **The data-spec generator, by one convention.** xpute-gen's data specs
+  follow no single rule: a table's TypeScript shape turns on its content (an
+  all-number table goes to a file of its own), and enums, flags, slot numbers
+  and `laid_out` offsets are inferred or set by the caller's options. The
+  direction discussed: DTCG's structure (`$value`, a `$type` inherited from the
+  group, `$description`, a tool's data in `$extensions`) with our own scalar
+  types; one fixed form per language (Rust modules, TypeScript ES modules,
+  arrays for lists) so that no key survives the build; names only where a spec
+  declares them, and an ordered table written as an array; each transform
+  declared in `$extensions`; the generator a crate of its own outside xpute,
+  which runs it only at development time. Open: the shape of the
+  `$extensions` declarations.
+
 ## Parked, with the reason on file
 
 - **A query over what is drawn, for an agent to read.** An agent debugging the

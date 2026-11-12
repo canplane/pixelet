@@ -5,6 +5,11 @@
     "how deep to read it. The numbers are stored, so a subtype is appended,",
     "never inserted."
   ],
+  "DIVISION_NAME": {
+    "$type": "u32",
+    "BYTES": 128,
+    "$BYTES": "The most bytes a division's name takes in UTF-8. A tile with a longer name is malformed: its bake fails and a reader refuses it (pxl-spec bake/tile/division.rs). A cell names at most one division of each subtype, so a chain of names is at most DIVISION_SUBTYPE's count long."
+  },
   "DIVISION_SUBTYPE": {
     "$type": "u8",
     "COUNTRY": 0,
