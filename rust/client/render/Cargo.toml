@@ -11,7 +11,8 @@ doctest = false
 [dependencies]
 libm.workspace = true
 pxl-global.workspace = true
-xpute-core.workspace = true
+xpute-link.workspace = true
+xpute-guest.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
 pxl-spec.workspace = true
 # The GPU's decor pass's bounds and the record it writes (renderer.rs);
@@ -21,21 +22,23 @@ pxl-engine.workspace = true
 pxl-content.workspace = true
 
 # WebGPU's calls written into a stream (gpu/api.rs): xpute's encoder, which
-# the page's runtime and the device app's run alike.
-xpute-gpu.workspace = true
+# the page's host and the device app's run alike.
+xpute-gpu-guest.workspace = true
+# The stream's words, which the encoder writes and its hosts read.
+xpute-gpu-link.workspace = true
 
 [build-dependencies]
-# The light a debug view's color decodes to, the same bits on every machine (build.rs
-# `debug_looks`), as the crate's own is.
+# The light a debug view's color decodes to, the same bits on every machine
+# (build/shared.rs `debug_look`), as the crate's own is.
 libm.workspace = true
-# The zooms the screen's rays are painted by (build.rs `lattice.wgsl`) and the
-# values every shader may name (`words`); the cloud field's hash
-# (`cloud_hash.wgsl`) and where night falls (`words`), pixelet's content; every
-# effect's reach (`words`), the world's.
+# The values and small functions the shaders share with the engine, pixelet's
+# content and the world (build/shared.rs): the values every shader may name
+# (`constant`), the zoom the screen's rays are painted by (`ray`), the cloud
+# field's hash (`cloud_hash`) and where night falls.
 pxl-engine.workspace = true
 pxl-content.workspace = true
 pxl-spec.workspace = true
-# The hash's words (build.rs `world_word`).
+# The hash's words (build/shared.rs `world_word`).
 xpute-kit.workspace = true
 # Every shader validated, and what its stages read, as it is built (build.rs `assemble`).
 naga = { version = "30", features = ["wgsl-in"] }

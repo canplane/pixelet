@@ -17,13 +17,25 @@ pub mod setting;
 /// What xpute's generator writes and reads with, shared: the generated file,
 /// the JSON's tree, and the text helpers.
 pub use xpute_gen::spec::{
-    align_star, casing_note, enum_name, file, js_num, json_str, line_comments, pascal, rgb,
-    rgb_literal, rs_doc, rs_ident, snake, ts_doc, Node, Output,
+    align_star, casing_note, enum_name, file, mark, js_num, json_str, line_comments, pascal,
+    rs_doc, rs_ident, snake, ts_doc, Node, Output,
 };
+
+/// `#rrggbb`, a color as the specs write one, as one number, `0xRRGGBB`, for
+/// the tool's own work on it (the texture pack's ground); the generated code
+/// writes the string, which pxl-spec's `rgb` reads.
+pub fn rgb(hex: &str) -> Result<u32, String> {
+    hex.strip_prefix('#')
+        .filter(|d| d.len() == 6 && d.chars().all(|c| c.is_ascii_hexdigit()))
+        .and_then(|d| u32::from_str_radix(d, 16).ok())
+        .ok_or(format!("color JSON: \"{hex}\" is not #rrggbb"))
+}
 
 use serde::Deserialize;
 use xpute_gen::spec::generate_at;
 
+use crate::asset::symbol;
+use crate::brand;
 use crate::root;
 
 pub fn outputs() -> Result<Vec<Output>, String> {
@@ -34,7 +46,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     out.extend(asset::cube_outputs()?);
     out.extend(asset::decor_outputs()?);
     out.extend(bake::publication_outputs()?);
-    out.extend(bake::object_outputs()?);
     out.extend(bake::place_theme_outputs()?);
     out.extend(data::outputs()?);
     out.extend(ingest::outputs()?);
@@ -43,11 +54,12 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     Ok(out)
 }
 
-/// The trees whose generated files another generator writes: xpute's, by
-/// xpute-tool.
-const OTHERS: [&str; 1] = ["xpute/"];
+/// What another generator writes, which `spec` leaves be: xpute's tree, by
+/// xpute-tool, and the files bin/asset.rs and bin/brand.rs write from what
+/// they read outside spec/.
+const OTHERS: [&str; 4] = ["xpute/", symbol::RS, symbol::TS, brand::SYMBOL_PATH];
 
-/// Writes every generated file that differs from what its JSON writes and deletes every one
+/// Writes every generated file that differs from what its source writes and deletes every one
 /// that nothing writes any more; where `write` is false, it fails wherever it finds either
 /// instead.
 pub fn generate(write: bool) -> Result<(), String> {

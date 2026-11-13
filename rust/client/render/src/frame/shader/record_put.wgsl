@@ -58,7 +58,7 @@ fn args_most(i: u32, v: u32) {
 }
 
 fn eye_origin() -> vec3<i32> {
-  return vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
+  return vec3<i32>(i32(eye_word(EYE_ORIGIN)), i32(eye_word(EYE_ORIGIN + 1u)), i32(eye_word(EYE_ORIGIN + 2u)));
 }
 
 /// The node laid at word `k` of the beam rays' words (pxl-engine `beam::NODE_WORDS`), as a

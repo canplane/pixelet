@@ -1,6 +1,6 @@
 // @pxl/client/ui/feature/search/place_theme.spec.ts
 //
-// GENERATED from spec/spec/bake/place_category.json and spec/spec/bake/place_theme.json
+// GENERATED from spec/spec/bake/place_category.json and spec/spec/bake/place_theme.json (pxl-tool spec/bake.rs)
 //
 // What OpenStreetMap Carto draws for a place of each category: the tags Carto
 // styles it under (`carto`, the attributes `style/amenity-points.mss` reads,

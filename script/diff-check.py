@@ -152,7 +152,31 @@ fmt_rust = [arg for name in sorted(touched & members) for arg in ("-p", name)]
 # ts/client imports xpute's TypeScript, and every app and the Worker the client.
 # What `make check` and `make test` leave to a deploy (the bundle, xpute's own
 # checks and tests) is not selected here either.
-ts = under("ts/") or under("xpute/ts/")
+def xpute_packages() -> list[str]:
+    """xpute's TypeScript packages, as xpute's pnpm-workspace.yaml lists them:
+    one `  - <dir>` a line under `packages:`, up to a blank line, each with a
+    named package.json and a src/. Anything else there refuses the file."""
+    file = ROOT / "xpute/pnpm-workspace.yaml"
+    _, sep, after = file.read_text().partition("\npackages:\n")
+    if not sep:
+        sys.exit(f"{file}: no `packages:`")
+    dirs = []
+    for line in itertools.takewhile(bool, after.split("\n")):
+        m = re.fullmatch(r"  - ([A-Za-z0-9_./-]+)", line)
+        if not m:
+            sys.exit(f"{file}: `{line}` is not `  - <dir>`")
+        d = f"xpute/{m[1]}"
+        if not isinstance(json.loads((ROOT / d / "package.json").read_text()).get("name"), str):
+            sys.exit(f"{d}/package.json: no name")
+        if not (ROOT / d / "src").is_dir():
+            sys.exit(f"{d}: no src/")
+        dirs.append(d)
+    if not dirs:
+        sys.exit(f"{file}: lists no package")
+    return dirs
+
+
+ts = under("ts/") or any(under(f"{p}/") for p in xpute_packages())
 
 if ts:
     task("check-ts")
@@ -170,6 +194,7 @@ shaders = [
     *translated,
     "rust/client/render/src/frame/shader/",
     "rust/client/render/build.rs",
+    "rust/client/render/build/",
     "rust/client/render/src/param.rs",
     "rust/client/render/src/look/",
 ]

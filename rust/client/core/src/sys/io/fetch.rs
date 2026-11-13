@@ -8,10 +8,11 @@
 
 use std::cell::RefCell;
 
-use xpute_core::clock::now;
+use xpute_guest::clock::now;
 use xpute_kit::collection::list::List;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+use xpute_link::abi::types::Token;
 
 use crate::sys::io::body::{self, Body};
 use crate::sys::io::demand::{PhaseList, Stream, TaskPhaseName};
@@ -20,7 +21,7 @@ use crate::sys::io::file;
 use crate::sys::io::param::MAX_CREDITS;
 use crate::sys::io::request::{attempt_of, settle};
 use crate::sys::io::room::Refusal;
-use crate::sys::manifest::MIN_HEAP_BYTES;
+use crate::sys::manifest::mem;
 use crate::sys::sched::{executor, invalidate};
 
 pub struct Response {
@@ -52,10 +53,10 @@ pub fn start(key: u64, stream: Stream, id: u64) {
 /// answers it. Only an absent file means there is no object, so an empty file
 /// is a bad body, and one longer than a packet of its kind can be is refused.
 /// With every slot out the read waits for one given back, before it opens
-/// the file. A read its stop cancelled reaches no one.
+/// the file. A read its stop canceled reaches no one.
 #[embassy_executor::task(pool_size = CREDITS)]
-async fn fetch(key: u64, stream: Stream, path: Vec<xpute_core::abi::link::Token>, at_ms: f64) {
-    let most = stream.max_body().unwrap_or(MIN_HEAP_BYTES);
+async fn fetch(key: u64, stream: Stream, path: Vec<Token>, at_ms: f64) {
+    let most = stream.max_body().unwrap_or(mem::min_heap_bytes);
     let read = if stream.row().slotted {
         let Some(mut slot) = body::take() else {
             return arrive(key, at_ms, Err(Exit::Refused(Refusal::bodies())));

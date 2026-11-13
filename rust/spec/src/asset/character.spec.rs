@@ -1,6 +1,6 @@
 // pxl-spec/asset/character.spec.rs
 //
-// GENERATED from spec/spec/asset/character.json
+// GENERATED from spec/spec/asset/character.json (xpute-gen data.rs)
 //
 // The characters: a person or a pet, a model with clips, the
 // characters a player can be. Each group's models by their path under
@@ -12,7 +12,6 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
-    clippy::absolute_paths,
     non_camel_case_types,
     dead_code,
     reason = "generated from the spec"
@@ -29,13 +28,24 @@ pub enum Group {
 }
 
 impl Group {
-    /// Every member, in the JSON's own order.
+    /// Every member, in its source's own order.
     pub const ALL: [Group; 2] = [Group::person, Group::pet];
 
-    /// The member a number names, or none for a number the set does not
-    /// give out.
-    pub fn of(val: u8) -> Option<Group> {
-        Group::ALL.into_iter().find(|member| *member as u8 == val)
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u8) -> Option<Group> {
+        match val {
+            0 => Some(Group::person),
+            1 => Some(Group::pet),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Group::person => "person",
+            Group::pet => "pet",
+        }
     }
 }
 
@@ -47,21 +57,8 @@ pub mod groups {
         pub const size: f64 = 1.0;
         /// Each variant's gender (`GENDER`), row for row with its models.
         pub const gender: [u8; 12] = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1];
-        pub const models: [crate::asset::catalog::Slot; 12] = [
-            crate::asset::catalog::Slot(28),
-            crate::asset::catalog::Slot(29),
-            crate::asset::catalog::Slot(30),
-            crate::asset::catalog::Slot(31),
-            crate::asset::catalog::Slot(32),
-            crate::asset::catalog::Slot(33),
-            crate::asset::catalog::Slot(34),
-            crate::asset::catalog::Slot(35),
-            crate::asset::catalog::Slot(36),
-            crate::asset::catalog::Slot(37),
-            crate::asset::catalog::Slot(38),
-            crate::asset::catalog::Slot(39),
-        ];
-        pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(40);
+        pub const models: [u16; 12] = [28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39];
+        pub const skin: u16 = 40;
         /// The catch-up move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".
@@ -73,34 +70,37 @@ pub mod groups {
         /// World units tall — a quarter cell, the step the object tiers also take.
         pub const size: f64 = 0.25;
         /// Each pet's name, the one every locale shows (an item has one name), row for row with its models.
-        pub const label: usize = 24;
-        pub const models: [crate::asset::catalog::Slot; 24] = [
-            crate::asset::catalog::Slot(41),
-            crate::asset::catalog::Slot(42),
-            crate::asset::catalog::Slot(43),
-            crate::asset::catalog::Slot(44),
-            crate::asset::catalog::Slot(45),
-            crate::asset::catalog::Slot(46),
-            crate::asset::catalog::Slot(47),
-            crate::asset::catalog::Slot(48),
-            crate::asset::catalog::Slot(49),
-            crate::asset::catalog::Slot(50),
-            crate::asset::catalog::Slot(51),
-            crate::asset::catalog::Slot(52),
-            crate::asset::catalog::Slot(53),
-            crate::asset::catalog::Slot(54),
-            crate::asset::catalog::Slot(55),
-            crate::asset::catalog::Slot(56),
-            crate::asset::catalog::Slot(57),
-            crate::asset::catalog::Slot(58),
-            crate::asset::catalog::Slot(59),
-            crate::asset::catalog::Slot(60),
-            crate::asset::catalog::Slot(61),
-            crate::asset::catalog::Slot(62),
-            crate::asset::catalog::Slot(63),
-            crate::asset::catalog::Slot(64),
+        pub const label: &[&str] = &[
+            "Beaver",
+            "Bee",
+            "Bunny",
+            "Cat",
+            "Caterpillar",
+            "Chick",
+            "Cow",
+            "Crab",
+            "Deer",
+            "Dog",
+            "Elephant",
+            "Fish",
+            "Fox",
+            "Giraffe",
+            "Wild Boar",
+            "Koala",
+            "Lion",
+            "Monkey",
+            "Panda",
+            "Parrot",
+            "Penguin",
+            "Pig",
+            "Polar Bear",
+            "Tiger",
         ];
-        pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(65);
+        pub const models: [u16; 24] = [
+            41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
+            63, 64,
+        ];
+        pub const skin: u16 = 65;
         /// The catch-up move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".
@@ -121,17 +121,23 @@ pub enum Gender {
 }
 
 impl Gender {
-    /// Every member, in the JSON's own order.
+    /// Every member, in its source's own order.
     pub const ALL: [Gender; 2] = [Gender::female, Gender::male];
 
-    /// The member a number names, or none for a number the set does not
-    /// give out.
-    pub fn of(val: u8) -> Option<Gender> {
-        Gender::ALL.into_iter().find(|member| *member as u8 == val)
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u8) -> Option<Gender> {
+        match val {
+            0 => Some(Gender::female),
+            1 => Some(Gender::male),
+            _ => None,
+        }
     }
-}
 
-pub mod GENDER {
-    pub const female: u8 = 0;
-    pub const male: u8 = 1;
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Gender::female => "female",
+            Gender::male => "male",
+        }
+    }
 }

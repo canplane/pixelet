@@ -3,9 +3,9 @@
 # links what it leaves: so the core in an app is always the tree's, built for
 # the configuration and the system the app is.
 #
-# The app names its core in its package.json:
+# The app names its core, xpute's guest, in its package.json:
 #
-#   "xpute": { "core": {
+#   "xpute": { "guest": {
 #     "workspace": "<the cargo workspace, from the app>",
 #     "package": "<the crate>",
 #     "profile": { "debug": "<cargo profile>", "release": "<cargo profile>" },
@@ -126,7 +126,7 @@ def main():
         else:
             i += 1
     app = Path(args.get("app") or fail("--app is not given"))
-    core = json.loads((app / "package.json").read_text()).get("xpute", {}).get("core") or fail(f"{app}/package.json names no xpute.core")
+    core = json.loads((app / "package.json").read_text()).get("xpute", {}).get("guest") or fail(f"{app}/package.json names no xpute.guest")
     workspace = (app / core["workspace"]).resolve()
     package = core["package"]
     lib = package.replace("-", "_")

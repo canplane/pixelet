@@ -10,7 +10,7 @@ use pxl_spec::asset::cube::ALL_CUBES;
 use pxl_spec::asset::ingest::{CubeFace, PACK};
 use pxl_spec::asset::{shipped_sentinel_tile, shipped_texture_tile, TileOrigin};
 
-use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_usage, bytes, place, release, texture_usage, Format, Gpu, Image};
 use crate::gpu::mip::{mip_levels, MipPass};

@@ -51,7 +51,7 @@ const BOUNDS_GROUP: [u32; 12] = [
 ];
 
 // Each compute group here must lay out what its shader reads, as the shader declares it
-// (build.rs `BINDS`).
+// (build/bind.rs `BINDS`).
 const _: () = assert!(
     binds(&[COMPUTE_SCREEN_PROPAGATE], &GROUP) && binds(&[COMPUTE_SCREEN_BOUND], &BOUNDS_GROUP),
     "a compute group lays out other than its shader reads (record.rs `binds`)"

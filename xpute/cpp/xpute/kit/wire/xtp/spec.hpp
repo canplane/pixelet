@@ -4,7 +4,7 @@
 // This header holds its layout, its type byte, and the helpers that read and
 // write a packet's words. The format is described in
 // ts/kit/src/wire/xtp/README.md, and the golden records under
-// spec/golden/wire/xtp/ hold the C++, Rust and TypeScript sides to the same
+// kit/spec/golden/wire/xtp/ hold the C++, Rust and TypeScript sides to the same
 // bytes.
 //
 // A packet is a 16-byte header and one root node, all little-endian. A len,

@@ -40,7 +40,7 @@ fn beam_aim(c: vec2<u32>) -> Aim {
 /// How far apart the light's beam rays lie: `light::BEAM` texels across, and none in angle, as
 /// the light's rays are parallel (`Light::spacing`).
 fn beam_spacing() -> vec2<f32> {
-  return vec2<f32>(f32(LIGHT_BEAM) * eye_f32(LIGHT + LIGHT_WIDTH), 0.0);
+  return vec2<f32>(f32(LIGHT_BEAM) * eye_f32(EYE_LIGHT + LIGHT_WIDTH), 0.0);
 }
 
 /// Lays the origin a line's nodes are held from, as every light ray starts from its own

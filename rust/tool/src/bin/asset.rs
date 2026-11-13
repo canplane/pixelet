@@ -201,15 +201,15 @@ fn run() -> Result<(), String> {
     std::fs::write(root.join("rust/spec/src/asset/symbol.mask"), &masks)
         .map_err(|e| e.to_string())?;
     write_formatted(
-        &root.join("rust/spec/src/asset/symbol.spec.rs"),
+        &root.join(symbol::RS),
         &symbol::render_rs(&symbols),
     )?;
     write_formatted(
-        &root.join("ts/client/src/ui/feature/search/place-symbol.ts"),
+        &root.join(symbol::TS),
         &symbol::render_ts(&symbols),
     )?;
 
-    // What the code is generated from: the runtime's table, the pack's layout
+    // What the code is generated from: the host's table, the pack's layout
     // and the catalog.
     write_formatted(
         &root.join("spec/spec/asset/ingest.json"),

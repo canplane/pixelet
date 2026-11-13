@@ -1,6 +1,6 @@
 // @pxl/client/abi/schema.spec.ts
 //
-// GENERATED from spec/client/core/domain/setting/schema.json
+// GENERATED from spec/client/core/domain/setting/schema.json (pxl-tool spec/setting.rs)
 //
 // Every setting the app has, declared once: its default, its kind, and
 // where it is shown, its `section`: one of the settings sheet's, or
@@ -104,7 +104,7 @@ export const SETTING = {
     section: "camera",
     dev: true,
   },
-  /** Only `climb` goes into a tunnel (camera/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
+  /** Only `climb` goes into a tunnel (camera/orbit.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default. */
   orbit_obstacle: {
     key: 7 as number,
     kind: "choice",

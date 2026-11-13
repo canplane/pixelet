@@ -1,32 +1,30 @@
 {
   "$doc": [
-    "The core's manifest (xpute spec/manifest.schema.json): its memory, its fixed ranges and",
-    "the heap it counts on, its stacks, its stream and the GPU it asks for."
+    "The core's manifest (xpute link/spec/manifest.schema.json): its memory, its fixed ranges and",
+    "the heap it counts on, and its stacks."
   ],
-  "gen": {
-    "ts": "../../../../ts/client/src/abi/manifest.spec.ts",
-    "rs": "../../../../rust/client/core/src/sys/manifest.spec.rs"
-  },
   "mem": {
+    "$type": "u32",
     "$doc": [
       "`bytes`: the core's memory, 512 MiB on every platform, the limit chosen for it. The",
       "page's worker grows the module's memory to it before the core's first entry, and the",
       "core never grows it (sys/heap.rs), so a full heap stops the core: the stack, the",
       "module's data, the fixed ranges, then the heap.",
       "",
-      "`fixed_bytes`: the fixed ranges past the module's data, `.fixed` (door/layout.rs), 147.63 MiB, which",
+      "`fixed_bytes`: the fixed ranges past the module's data, `.fixed` (link/layout.rs), 147.63 MiB, which",
       "the compiler holds the ranges' sum under.",
       "",
       "`min_heap_bytes`: the heap the core counts on past the fixed ranges, 256 MiB, which the",
       "boot checks the memory it is given leaves (sys/heap.rs). A whole file read and a fetched body are capped by it,",
       "and the caps of the heap's bounded flows, added up in the buddy's blocks, are held under",
-      "it at compile time (door/layout.rs `HEAP_FLOWS_BYTES`)."
+      "it at compile time (link/layout.rs `HEAP_FLOWS_BYTES`)."
     ],
     "bytes": 536870912,
     "fixed_bytes": 154800128,
     "min_heap_bytes": 268435456
   },
   "stack": {
+    "$type": "u32",
     "$doc": [
       "`module_bytes`: the stack, at the bottom of the memory, first so that an overflow",
       "goes below zero, wraps as an unsigned 32-bit address and lands outside the memory,",
@@ -40,25 +38,5 @@
     ],
     "module_bytes": 1048576,
     "thread_bytes": 8388608
-  },
-  "stream": {
-    "bytes": 4194304
-  },
-  "gpu": {
-    "$doc": [
-      "The renderer's stream (pxl-render gpu/api.rs): `bytes` what one turn may send the",
-      "device, then at its end the encoder's handle table, a product number said rather than",
-      "derived. The stream says its own head. The device must have a depth-stencil format",
-      "the renderer draws with, and takes timestamps where the adapter has them."
-    ],
-    "power": "high-performance",
-    "features": {
-      "required": [
-        "depth32float-stencil8"
-      ],
-      "optional": [
-        "timestamp-query"
-      ]
-    }
   }
 }

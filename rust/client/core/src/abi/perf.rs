@@ -1,6 +1,6 @@
 // pxl-core/abi/perf.rs
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 #![allow(
     unused_imports,
@@ -10,17 +10,21 @@
     reason = "generated from WIT"
 )]
 
-use std::cell::Cell;
 use std::rc::Rc;
-use xpute_core::link::{self, Handle, Method, Object, Reply, Return, Tag};
-use xpute_core::wait::wait;
-use xpute_kit::status::bug::OrBug;
+use xpute_guest::link;
+use xpute_guest::wait::wait;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{BranchCursor, Cursor, PacketWriter, TreeReader};
+use xpute_kit::wire::xtp::{
+    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
+};
+use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
-/// The singleton's URI.
-pub const URI: [&str; 2] = ["pxl:core", "perf"];
+/// The interface's handle, named by `pxl:core/perf` (frame.json `NAMED`).
+pub const HANDLE: Handle = 0x6be6ac;
+
+/// The interface's qualified name: its package and its name.
+pub const NAME: [&str; 2] = ["pxl:core", "perf"];
 
 /// `start`
 pub const START: Method = 0;
@@ -112,51 +116,35 @@ impl Object for PerfObject {
     }
 }
 
-/// Mounts `imp` at the URI, one object for every open.
+/// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn Perf>) {
-    let o: Rc<dyn Object> = Rc::new(PerfObject(imp));
-    link::mount(link::uri(&URI), move |_, _| Ok(o.clone()));
-}
-
-thread_local! {
-    static HANDLE: Cell<Option<Handle>> = const { Cell::new(None) };
-}
-
-/// Opens the singleton on the other side, once, at boot.
-pub fn open() -> Result<(), Errno> {
-    HANDLE.set(Some(link::open(&link::uri(&URI))?));
-    Ok(())
-}
-
-/// The singleton's handle, which `open` opened.
-pub fn handle() -> Handle {
-    HANDLE.get().or_bug(Errno::EBADF)
+    link::mount_named(HANDLE, Rc::new(PerfObject(imp)));
 }
 
 pub fn start() -> Result<(), Errno> {
-    let (r, data) = link::call(handle(), START, None);
-    link::answer(r).map(|_| ())
+    let (r, data) = link::call(HANDLE, START, None);
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn stop() -> Result<(), Errno> {
-    let (r, data) = link::call(handle(), STOP, None);
-    link::answer(r).map(|_| ())
+    let (r, data) = link::call(HANDLE, STOP, None);
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn stats(window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         STATS,
         Some((1, &|w: &mut PacketWriter| match &window_ms {
             Some(v) => {
-                w.f64(Some((*v) as f64));
+                w.f64(Some(*v as f64));
             }
             None => {
                 w.nil();
             }
         })),
     );
-    link::answer(r).and_then(|_| {
+    xpute_link::answer(r).and_then(|_| {
         let p = data.as_deref().ok_or(Errno::EBADMSG)?;
         TreeReader::new(p)
             .and_then(|t| t.read_branch())
@@ -168,7 +156,7 @@ pub fn stats(window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
 
 pub fn rings(ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         RINGS,
         Some((3, &|w: &mut PacketWriter| {
             w.u32(Some(ring as u32));
@@ -176,7 +164,7 @@ pub fn rings(ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, Errno> {
             w.u32(Some(cnt as u32));
         })),
     );
-    link::answer(r).and_then(|_| {
+    xpute_link::answer(r).and_then(|_| {
         let p = data.as_deref().ok_or(Errno::EBADMSG)?;
         TreeReader::new(p)
             .and_then(|t| t.read_branch())
@@ -187,8 +175,8 @@ pub fn rings(ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, Errno> {
 }
 
 pub fn strtab() -> Result<Vec<u8>, Errno> {
-    let (r, data) = link::call(handle(), STRTAB, None);
-    link::answer(r).and_then(|_| {
+    let (r, data) = link::call(HANDLE, STRTAB, None);
+    xpute_link::answer(r).and_then(|_| {
         let p = data.as_deref().ok_or(Errno::EBADMSG)?;
         TreeReader::new(p)
             .and_then(|t| t.read_branch())

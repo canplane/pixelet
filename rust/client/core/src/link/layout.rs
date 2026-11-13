@@ -79,7 +79,7 @@ const FIXED_BYTES: u32 = off(Fixed::Uploads) + FIXED[Fixed::Uploads as usize];
 // block is asked for before `install`; the declared size is the ranges' on a
 // page, no more.
 const _: () = assert!(
-    FIXED_BYTES.next_multiple_of(PAGE_BYTES) == manifest::FIXED_BYTES,
+    FIXED_BYTES.next_multiple_of(PAGE_BYTES) == manifest::mem::fixed_bytes,
     "manifest.json's mem.fixed_bytes is not the fixed ranges' size on a page"
 );
 
@@ -87,8 +87,8 @@ const _: () = assert!(
 // memory; the boot checks the module's data with them against the memory
 // given.
 const _: () = assert!(
-    manifest::STACK_BYTES as u64 + manifest::FIXED_BYTES as u64 + manifest::MIN_HEAP_BYTES as u64
-        <= manifest::MEM_BYTES as u64,
+    manifest::stack::module_bytes as u64 + manifest::mem::fixed_bytes as u64 + manifest::mem::min_heap_bytes as u64
+        <= manifest::mem::bytes as u64,
     "the stack, the fixed ranges and the heap do not fit the core's memory"
 );
 
@@ -126,7 +126,7 @@ const fn longest_unslotted() -> u64 {
 /// flows share the credits, and free blocks do not add up to one block. The
 /// flows:
 /// - two bodies of a kind that takes no slot (sys/io/body.rs) for every credit, one out and one stopped
-///   whose read the runtime has not answered (sys/io/fetch.rs), each freed
+///   whose read the host has not answered (sys/io/fetch.rs), each freed
 ///   once it is decoded or answered;
 /// - the ways' pool at its cap, which holds each brick's kept spans
 ///   (domain/layer/terrain/pool.rs, pxl-engine clipmap.rs `WAYS_POOL_WORDS`);
@@ -140,6 +140,6 @@ const HEAP_FLOWS_BYTES: u64 = 2 * param::MAX_CREDITS as u64 * longest_unslotted(
     + record::PERF_BYTES;
 
 const _: () = assert!(
-    HEAP_FLOWS_BYTES <= manifest::MIN_HEAP_BYTES as u64,
+    HEAP_FLOWS_BYTES <= manifest::mem::min_heap_bytes as u64,
     "the caps of the heap's bounded flows do not fit the heap the core counts on"
 );

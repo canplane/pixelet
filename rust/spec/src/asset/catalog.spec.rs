@@ -1,6 +1,6 @@
 // pxl-spec/asset/catalog.spec.rs
 //
-// GENERATED from the asset specs
+// GENERATED from the asset specs (pxl-tool spec/catalog.rs)
 
 use super::Slot;
 
@@ -8,4 +8,4 @@ use super::Slot;
 pub const SLOTS: usize = 71;
 
 /// The cube kind's texture pack (cube.json `pack`).
-pub const pack: Slot = Slot(0);
+pub const pack: Slot = 0;

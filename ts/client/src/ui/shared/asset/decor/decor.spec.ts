@@ -1,6 +1,6 @@
 // @pxl/client/ui/shared/asset/decor/decor.spec.ts
 //
-// GENERATED from spec/spec/asset/decor.json
+// GENERATED from spec/spec/asset/decor.json (pxl-tool spec/asset.rs)
 
 export const tree = 1024;
 

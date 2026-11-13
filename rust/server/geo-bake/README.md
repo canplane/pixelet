@@ -38,8 +38,8 @@ A cell takes what covers its center as seen from above, so a tunnel paints
 nothing. A leaf is baked only where land, a building or a way reaches it; the
 sea is wherever OSM's land polygons do not reach.
 
-Bridges and tunnels are solved from the tile and as much of its neighbours as
-their structures reach, never further, so two neighbours solve the same height
+Bridges and tunnels are solved from the tile and as much of its neighbors as
+their structures reach, never further, so two neighbors solve the same height
 where they meet (`separation/`). The elevation is sampled at the leaf's
 resolution with a pad of samples past each edge, which the client's interpolant
 needs, and a bridge's footing is the elevation of the cell it stands in as the

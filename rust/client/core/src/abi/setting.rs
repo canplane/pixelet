@@ -1,6 +1,6 @@
 // pxl-core/abi/setting.rs
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 #![allow(
     unused_imports,
@@ -10,17 +10,21 @@
     reason = "generated from WIT"
 )]
 
-use std::cell::Cell;
 use std::rc::Rc;
-use xpute_core::link::{self, Handle, Method, Object, Reply, Return, Tag};
-use xpute_core::wait::wait;
-use xpute_kit::status::bug::OrBug;
+use xpute_guest::link;
+use xpute_guest::wait::wait;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{BranchCursor, Cursor, PacketWriter, TreeReader};
+use xpute_kit::wire::xtp::{
+    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
+};
+use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
-/// The singleton's URI.
-pub const URI: [&str; 2] = ["pxl:core", "setting"];
+/// The interface's handle, named by `pxl:core/setting` (frame.json `NAMED`).
+pub const HANDLE: Handle = 0x6f63cb;
+
+/// The interface's qualified name: its package and its name.
+pub const NAME: [&str; 2] = ["pxl:core", "setting"];
 
 /// `dev`
 pub const DEV: Method = 0;
@@ -62,46 +66,30 @@ impl Object for SettingObject {
     }
 }
 
-/// Mounts `imp` at the URI, one object for every open.
+/// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn Setting>) {
-    let o: Rc<dyn Object> = Rc::new(SettingObject(imp));
-    link::mount(link::uri(&URI), move |_, _| Ok(o.clone()));
-}
-
-thread_local! {
-    static HANDLE: Cell<Option<Handle>> = const { Cell::new(None) };
-}
-
-/// Opens the singleton on the other side, once, at boot.
-pub fn open() -> Result<(), Errno> {
-    HANDLE.set(Some(link::open(&link::uri(&URI))?));
-    Ok(())
-}
-
-/// The singleton's handle, which `open` opened.
-pub fn handle() -> Handle {
-    HANDLE.get().or_bug(Errno::EBADF)
+    link::mount_named(HANDLE, Rc::new(SettingObject(imp)));
 }
 
 pub fn dev(dev: bool) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         DEV,
         Some((1, &|w: &mut PacketWriter| {
             w.bool(Some(dev));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn set(key: u32, val: u32) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         SET,
         Some((2, &|w: &mut PacketWriter| {
             w.u32(Some(key as u32));
             w.u32(Some(val as u32));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }

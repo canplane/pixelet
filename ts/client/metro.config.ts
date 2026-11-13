@@ -78,11 +78,38 @@ process.env.EXPO_UNSTABLE_TREE_SHAKING = "1";
 
 const base = getDefaultConfig(here);
 
+/** xpute's packages, as xpute's pnpm-workspace.yaml lists them: one
+ * `  - <dir>` a line under `packages:`, up to a blank line, each with a named
+ * package.json and a src/. Anything else there refuses the file. */
+function xputePackages(): string[] {
+  const file = path.join(REPO, "xpute/pnpm-workspace.yaml");
+  const after = fs.readFileSync(file, "utf8").split("\npackages:\n")[1];
+  if (after === undefined) throw new Error(`${file}: no \`packages:\``);
+  const lines = after.split("\n");
+  const end = lines.indexOf("");
+  const dirs = (end < 0 ? lines : lines.slice(0, end)).map((l) => {
+    const m = l.match(/^ {2}- ([A-Za-z0-9_./-]+)$/);
+    if (!m) throw new Error(`${file}: \`${l}\` is not \`  - <dir>\``);
+    const dir = path.join(REPO, "xpute", m[1]);
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(dir, "package.json"), "utf8"),
+    );
+    if (typeof manifest.name !== "string")
+      throw new Error(`${dir}/package.json: no name`);
+    if (!fs.statSync(path.join(dir, "src")).isDirectory())
+      throw new Error(`${dir}: no src/`);
+    return dir;
+  });
+  if (dirs.length === 0) throw new Error(`${file}: lists no package`);
+  return dirs;
+}
+const XPUTE = xputePackages();
+
 /** A release build compiles each exported literal into the files that read
  * it (babel.config.ts), so the transforms it may reuse depend on them. */
 const LITERALS =
   process.env.NODE_ENV === "production"
-    ? digest([path.join(here, "src"), path.join(REPO, "xpute/ts")])
+    ? digest([path.join(here, "src"), ...XPUTE])
     : "";
 
 const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
@@ -128,7 +155,7 @@ export default {
   ...base,
   // The UI's files, xpute's and pnpm's store all lie outside this app's
   // directory. The bundle reads nothing outside these folders.
-  watchFolders: [WORKSPACE, path.join(REPO, "xpute/ts")],
+  watchFolders: [WORKSPACE, ...XPUTE],
   cacheStores: [new Store({ root: CACHE })],
   // A build made for measuring differs in what its modules compile to
   // (babel.config.ts), so it shares no transform with any other.

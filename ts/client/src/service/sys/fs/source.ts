@@ -159,7 +159,7 @@ async function ask_decl(): Promise<string | null> {
   try {
     const res = await get(TILE_SOURCE_ROUTE);
     if (res.ok) return await res.text();
-    // The body of a refusal is not read. Cancelling it lets the connection go
+    // The body of a refusal is not read. Canceling it lets the connection go
     // at once, rather than when the response is collected.
     await res.body?.cancel();
     return null;

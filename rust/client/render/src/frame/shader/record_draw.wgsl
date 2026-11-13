@@ -61,15 +61,15 @@ fn mark_drawn(slot: u32) {
 }
 /// Whether the box `lo`..`hi`, in units from the eye, meets what the eye sees (pxl-engine
 /// `record::in_view`). Some point of it must lie before the eye, its nearest point along
-/// `FORWARD` must be short of the eye's reach, and some point of it must lie inside each of the
+/// `EYE_FORWARD` must be short of the eye's reach, and some point of it must lie inside each of the
 /// screen's sides, widened by `REC_VIEW_GROWTH`.
 fn in_view(lo: vec3<f32>, hi: vec3<f32>) -> bool {
-  let f = eye_v3(FORWARD);
-  let r = eye_v3(RIGHT);
-  let u = eye_v3(UP);
-  let tan = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u)) * (1.0 + REC_VIEW_GROWTH);
+  let f = eye_v3(EYE_FORWARD);
+  let r = eye_v3(EYE_RIGHT);
+  let u = eye_v3(EYE_UP);
+  let tan = vec2<f32>(eye_f32(EYE_TAN), eye_f32(EYE_TAN + 1u)) * (1.0 + REC_VIEW_GROWTH);
   return reaches(f, lo, hi) > 0.0
-    && -reaches(-f, lo, hi) < eye_f32(FAR)
+    && -reaches(-f, lo, hi) < eye_f32(EYE_FAR)
     && reaches(tan.x * f - r, lo, hi) >= 0.0
     && reaches(tan.x * f + r, lo, hi) >= 0.0
     && reaches(tan.y * f - u, lo, hi) >= 0.0
@@ -111,10 +111,10 @@ fn rec_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (kind == KIND_SPLIT) {
     return;
   }
-  let o = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
+  let o = vec3<i32>(i32(eye_word(EYE_ORIGIN)), i32(eye_word(EYE_ORIGIN + 1u)), i32(eye_word(EYE_ORIGIN + 2u)));
   let k = entry_node(id.x, o);
   let b = asset_box(id.x, k, o);
-  let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
+  let tan_xy = vec2<f32>(eye_f32(EYE_TAN), eye_f32(EYE_TAN + 1u));
   let near = is_eyed(b.lo, b.hi, tan_xy);
   if (!near && !in_view(b.lo, b.hi)) {
     return;
@@ -143,8 +143,8 @@ fn rec_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 /// texel (0, 0), as pxl-engine `Light::texel_at` finds it. `v` is in units from where the ray
 /// of box texel (0, 0) starts.
 fn box_texel(v: vec3<f32>) -> vec2<f32> {
-  let across = dot(v, light_v3(LIGHT_ACROSS)) * eye_f32(LIGHT + LIGHT_ACROSS2_INVERSE);
-  let down = dot(v, light_v3(LIGHT_DOWN)) * eye_f32(LIGHT + LIGHT_DOWN2_INVERSE);
+  let across = dot(v, light_v3(LIGHT_ACROSS)) * eye_f32(EYE_LIGHT + LIGHT_ACROSS2_INVERSE);
+  let down = dot(v, light_v3(LIGHT_DOWN)) * eye_f32(EYE_LIGHT + LIGHT_DOWN2_INVERSE);
   return vec2<f32>(across, down);
 }
 

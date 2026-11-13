@@ -16,13 +16,13 @@ use pxl_engine::object;
 use pxl_spec::asset::decor::{Decor, DECORS};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{units, Zoom, UNIT_ZOOM};
+use pxl_spec::space::coord::world::idx_of;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::value::VOID;
 use pxl_global::Global;
 
-use super::change;
 use super::node::At;
 use super::scatter::{generated_at, DecorWorld};
 use super::world::World;
@@ -236,22 +236,6 @@ impl World {
                 })
             })
         })
-    }
-}
-
-/// Reports as read the columns a decor claiming the node's leaf cell may
-/// stand on, for an asker that keeps what the cell answers.
-pub(super) fn report_claims((zoom, c): Node<3>) {
-    if let Some(s) = zoom.checked_sub(GROUND.leaf_cell_zoom()) {
-        let [x, y] = [c[0] >> s, c[1] >> s].map(f64::from);
-        change::report_read(
-            [
-                x - f64::from(CLAIM_EXTENT[0]),
-                y - f64::from(CLAIM_EXTENT[1]),
-            ],
-            [x, y],
-            GROUND.leaf_cell_zoom(),
-        );
     }
 }
 

@@ -26,7 +26,7 @@ export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
 export const LIST_NAMES: Record<ListColumn, readonly string[]> = {
   phases: PHASES,
   effects: EFFECT_NAMES,
-  gpu_spans: GPU_SPAN_NAMES,
+  gpu_spans: GPU_SPAN_NAMES.map((s) => s.name),
 };
 
 export type FrameGroup = Exclude<keyof typeof FRAME_GROUP, "$doc">;

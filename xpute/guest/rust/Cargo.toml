@@ -1,0 +1,16 @@
+[package]
+name = "xpute-guest"
+description = "xpute's guest end: its side of the link, and the clocks it reads"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+xpute-kit.workspace = true
+xpute-link.workspace = true

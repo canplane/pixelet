@@ -4,10 +4,7 @@
 //! the world divided by 2^z is at zoom z. A cell's, a square's and a tile's size are each
 //! named by this one number; a bigger zoom is finer, and one zoom finer is half as wide.
 
-use super::aabb::Aabb;
-use super::q3::{FRAC_W, Q3};
-use super::world;
-use super::world::HEIGHT_BITS;
+use super::q3::FRAC_W;
 use xpute_kit::math::scalar::round;
 
 /// A zoom; every size is named by one.
@@ -16,6 +13,19 @@ pub type Zoom = u32;
 /// The zoom of a unit: 1u is a z24 cell's side, and X goes once around the world in 2^24
 /// units.
 pub const UNIT_ZOOM: Zoom = 24;
+
+/// The world's extent an axis, in bits of a unit:
+///
+/// - X, 24: a unit is a z24 cell's side, so a lap is 2^24 units (`UNIT_ZOOM`), and
+///   a web map's z16 pixel is a z24 cell;
+/// - Y, 24: the Mercator plane is a square;
+/// - Z, 16: ±2^15 units of height, as a tile's elevation samples and the cells' elevations
+///   worked out from them are each an `i16` in ground cells, a ground cell being a unit
+///   (`bake/constant.rs`, `ground.rs` `ele_at`).
+pub const EXTENT: [u32; 3] = [UNIT_ZOOM, UNIT_ZOOM, HEIGHT_BITS];
+
+/// The world's height in units, as bits: Z spans 2^16 of them about sea level.
+pub const HEIGHT_BITS: u32 = 16;
 
 /// The coarsest cube: a tile at this zoom is as wide as the world is tall, so the pyramid is
 /// alike on every axis from here on finer, and 3D begins. A tile at this zoom with the
@@ -117,50 +127,6 @@ pub const fn idx(zoom: Zoom, units: i64) -> i64 {
     } else {
         units << -s
     }
-}
-
-/// The cell at `zoom` a position stands in, a floor on each axis, Y and Z's
-/// from the world's edge (`y_start`, `z_start`): one above where an axis has no digit.
-pub fn idx_of(zoom: Zoom, at: &Q3) -> [i32; 3] {
-    let shift = FRAC_W as i32 + shamt(zoom);
-    // Shifted as an i64, as wide as zoom 0's 32 bits; the index is no wider
-    // than the position it is of.
-    let floor = |k: usize, start: i32| {
-        let edge = 1i64 << (world::EXTENT[k] - 1 + FRAC_W);
-        (((i64::from(at[k]) + edge) >> shift) as i32).wrapping_sub(start)
-    };
-    [
-        (i64::from(at[0]) >> shift) as i32,
-        floor(1, y_start(zoom)),
-        floor(2, z_start(zoom)),
-    ]
-}
-
-/// Whether axis `axis` has a digit at `zoom`, so that a node there stands for part of it, not
-/// for the world's whole extent of it. X wraps around.
-pub const fn has_digit(axis: usize, zoom: Zoom) -> bool {
-    axis == 0 || zoom > UNIT_ZOOM - world::EXTENT[axis]
-}
-
-/// `idx_of`'s inverse, to the cell's base.
-pub fn base_of(zoom: Zoom, idx: [i32; 3]) -> Q3 {
-    let shift = FRAC_W as i32 + shamt(zoom);
-    let [x, y, z] = idx.map(i64::from);
-    world::at(x << shift, y << shift, z << shift)
-}
-
-/// The box the node `idx` of `zoom` stands for, the world's whole of an axis it
-/// has no digit of.
-pub fn cube(zoom: Zoom, idx: [i32; 3]) -> Aabb {
-    let side = units(zoom);
-    let mut b = world::BOUNDS;
-    for (k, &v) in idx.iter().enumerate() {
-        if has_digit(k, zoom) {
-            b.min[k] = f64::from(v) * side;
-            b.max[k] = b.min[k] + side;
-        }
-    }
-    b
 }
 
 #[cfg(test)]

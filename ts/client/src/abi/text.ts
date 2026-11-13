@@ -1,48 +1,43 @@
 // @pxl/client/abi/text.ts
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
+import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import {
   type Link,
   type LinkObject,
   type Method,
-  open as open_uri,
   refusal_of,
-  type Ref,
   type Sender,
+  type Handle,
   uri,
-} from "@xpute/runtime";
+} from "@xpute/link/link.ts";
+import * as types from "@xpute/link/abi/types.ts";
 
-/** The singleton's URI. */
-export const URI = uri("pxl:core", "text");
+/** The interface's handle, named by `pxl:core/text` (frame.json `NAMED`). */
+export const HANDLE: Handle = 0x61d944;
 
-/** `layout` */
-export const LAYOUT: Method = 0;
+/** The interface's qualified name: its package and its name. */
+export const NAME = uri("pxl:core", "text");
+
+/** `width` */
+export const WIDTH: Method = 0;
 /** `raster` */
 export const RASTER: Method = 1;
 
 export interface Text {
-  layout(
-    weight: number,
-    px: number,
-    max_width: number,
-    at: number,
-    lines: number,
-    text_at: number,
-    text_len: number,
-  ): number;
+  width(weight: number, px: number, text: types.Lent): number;
   raster(
     weight: number,
     px: number,
     color: number,
-    at: number,
+    image: types.Lent,
     width: number,
     height: number,
     x: number,
-    text_at: number,
-    text_len: number,
+    text: types.Lent,
   ): number;
 }
 
@@ -52,18 +47,14 @@ function object(imp: Text): LinkObject {
     call(m, tag, args) {
       try {
         switch (m) {
-          case LAYOUT: {
+          case WIDTH: {
             if (args === null) return Errno.EBADMSG;
-            const v = imp.layout(
+            const v = imp.width(
               args.at(0).get_number(),
               args.at(1).get_number(),
-              args.at(2).get_number(),
-              args.at(3).get_number(),
-              args.at(4).get_number(),
-              args.at(5).get_number(),
-              args.at(6).get_number(),
+              types.read_Lent(args.at(2)),
             );
-            return v;
+            return { result: 0, data: [v] };
           }
           case RASTER: {
             if (args === null) return Errno.EBADMSG;
@@ -71,12 +62,11 @@ function object(imp: Text): LinkObject {
               args.at(0).get_number(),
               args.at(1).get_number(),
               args.at(2).get_number(),
-              args.at(3).get_number(),
+              types.read_Lent(args.at(3)),
               args.at(4).get_number(),
               args.at(5).get_number(),
               args.at(6).get_number(),
-              args.at(7).get_number(),
-              args.at(8).get_number(),
+              types.read_Lent(args.at(7)),
             );
             return v;
           }
@@ -90,62 +80,47 @@ function object(imp: Text): LinkObject {
   };
 }
 
-/** Mounts `imp` at the URI, one object for every open. */
-export function mount(l: Pick<Link, "mount">, imp: Text): void {
-  const o = object(imp);
-  l.mount(URI, () => o);
+/** Serves `imp` under the interface's handle. */
+export function mount(l: Pick<Link, "mount_named">, imp: Text): void {
+  l.mount_named(HANDLE, object(imp));
 }
 
-/** Opens the singleton on the other side, once, at boot. */
-export async function open(link: Sender): Promise<Ref> {
-  return { link, handle: await open_uri(link, URI) };
-}
-
-export async function layout(
-  ref: Ref,
+export async function width(
+  link: Sender,
   weight: number,
   px: number,
-  max_width: number,
-  at: number,
-  lines: number,
-  text_at: number,
-  text_len: number,
+  text: types.Lent,
 ): Promise<number> {
-  const a = await ref.link.send(ref.handle, LAYOUT, [
+  const a = await link.send(HANDLE, WIDTH, [
     weight,
     px,
-    max_width,
-    at,
-    lines,
-    text_at,
-    text_len,
+    types.write_Lent(text),
   ]);
   if (a.result < 0) throw new XputeError(a.result);
-  return a.result;
+  if (a.data === null) throw new XputeError(Errno.EBADMSG);
+  return new TreeReader(a.data).read_branch().at(0).get_number();
 }
 
 export async function raster(
-  ref: Ref,
+  link: Sender,
   weight: number,
   px: number,
   color: number,
-  at: number,
+  image: types.Lent,
   width: number,
   height: number,
   x: number,
-  text_at: number,
-  text_len: number,
+  text: types.Lent,
 ): Promise<number> {
-  const a = await ref.link.send(ref.handle, RASTER, [
+  const a = await link.send(HANDLE, RASTER, [
     weight,
     px,
     color,
-    at,
+    types.write_Lent(image),
     width,
     height,
     x,
-    text_at,
-    text_len,
+    types.write_Lent(text),
   ]);
   if (a.result < 0) throw new XputeError(a.result);
   return a.result;

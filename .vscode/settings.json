@@ -9,7 +9,7 @@
   "js/ts.updateImportsOnFileMove.enabled": "never",
 
   // Rust. Cargo's two workspaces, each its own root: rust-analyzer finds
-  // only a manifest at most one folder down, which reaches rust/ but not
-  // xpute/rust/.
-  "rust-analyzer.linkedProjects": ["rust/Cargo.toml", "xpute/rust/Cargo.toml"]
+  // only a manifest at most one folder down, which reaches rust/ and xpute/
+  // alike, but names both.
+  "rust-analyzer.linkedProjects": ["rust/Cargo.toml", "xpute/Cargo.toml"]
 }

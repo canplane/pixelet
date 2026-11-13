@@ -1,109 +1,222 @@
 // pxl-core/sys/io/text.rs
 
-//! Text that the platform lays out and draws, through calls to its text
-//! device (text.json TEXT_LAYOUT, TEXT_RASTER). The platform answers each
-//! call before the call returns, and writes the answer at the call's `at`
-//! (text_answer.json `LAYOUT_ANSWER`, `LINE`). Each world frame keeps only the
-//! answers that the frame before it read.
+//! Text that the platform measures and draws, through its `text` (text.wit
+//! `width`, `raster`), and that the core breaks into lines itself: words fill
+//! each line greedily, a word too wide for a line breaks between characters,
+//! no line starts with a closing mark or ends with an opening one, and a
+//! line's width leaves out the spaces at its ends. The platform answers each
+//! call before it returns, reading the text the call lends, and a raster
+//! writes into the image it lends. Each world frame keeps only the answers that
+//! the frame before it read.
 
 use std::collections::hash_map::Entry;
 
 use fnv::FnvHashMap;
 use pxl_global::Global;
-use xpute_core::mem;
 
-use crate::sys::io::text_answer_spec::{LAYOUT_ANSWER, LINE};
 use crate::abi::text;
 
-/// A layout's key: the weight, the bits of `px`, the bits of the max width
-/// (0 for one line), and the text.
-type LayoutKey = (u32, u64, u64, String);
-/// A raster's key: the weight, the bits of `px`, the color, the width, the
-/// height, the bits of `x`, and the text.
-type RasterKey = (u32, u64, u32, u32, u32, u64, String);
+/// A layout's key: the weight, `px` and the max width (0 for one line) by
+/// their bits, and the text's UTF-8, which a miss lends to the platform.
+#[derive(PartialEq, Eq, Hash)]
+struct LayoutKey {
+    weight: u32,
+    px: u64,
+    max_width: u64,
+    text: Box<[u8]>,
+}
 
-struct Answer<T> {
+/// A raster's key: the weight, `px` by its bits, the color, the width and the
+/// height, `x` by its bits, and the text's UTF-8, as a layout's.
+#[derive(PartialEq, Eq, Hash)]
+struct RasterKey {
+    weight: u32,
+    px: u64,
+    color: u32,
+    width: u32,
+    height: u32,
+    x: u64,
+    text: Box<[u8]>,
+}
+
+struct Cached<T> {
     /// Whether the answer was read since the last frame's start.
     read: bool,
-    at: T,
+    /// The layout's words or the image's pixels.
+    buf: T,
 }
+
+/// A layout: each line's end, a byte offset, and its width.
+type Lines = Box<[(usize, f64)]>;
 
 #[derive(Default)]
-struct Text {
-    layouts: FnvHashMap<LayoutKey, Answer<Box<[u32]>>>,
-    rasters: FnvHashMap<RasterKey, Answer<Box<[u8]>>>,
+struct Cache {
+    layouts: FnvHashMap<LayoutKey, Cached<Lines>>,
+    rasters: FnvHashMap<RasterKey, Cached<Box<[u8]>>>,
 }
 
-static TEXT: Global<Text> = Global::new();
+static CACHE: Global<Cache> = Global::new();
 
-fn text() -> &'static mut Text {
-    TEXT.get(Text::default)
+fn cache() -> &'static mut Cache {
+    CACHE.get(Cache::default)
 }
 
-/// `text_in` broken into lines no wider than `max_width`, each with its
+/// `text` broken into lines no wider than `max_width`, each with its
 /// width; a `max_width` of 0 gives one line. It is None where the platform
-/// could not lay the text out this frame, and a later frame asks again.
-pub fn text_lines(weight: u32, px: f64, max_width: f64, text_in: &str) -> Option<Vec<(&str, f64)>> {
-    let key = (
+/// could not measure the text this frame, and a later frame asks again.
+pub fn text_lines(weight: u32, px: f64, max_width: f64, text: &str) -> Option<Vec<(&str, f64)>> {
+    let key = LayoutKey {
         weight,
-        px.to_bits(),
-        max_width.to_bits(),
-        text_in.to_owned(),
-    );
-    let answer = match text().layouts.entry(key) {
+        px: px.to_bits(),
+        max_width: max_width.to_bits(),
+        text: Box::from(text.as_bytes()),
+    };
+    let c = cache();
+    let cached = match c.layouts.entry(key) {
         Entry::Occupied(o) => o.into_mut(),
         Entry::Vacant(v) => {
-            // A text breaks into no more lines than it has characters, and an
-            // empty text into one.
-            let lines = text_in.chars().count().max(1);
-            let mut at = vec![0u32; LAYOUT_ANSWER::WORDS + LINE::WORDS * lines].into_boxed_slice();
-            let laid = text::layout(
-                weight,
-                px,
-                max_width,
-                mem::off(at.as_mut_ptr().cast()),
-                lines as u32,
-                mem::off(text_in.as_ptr()),
-                text_in.len() as u32,
-            );
-            if laid.is_err() {
-                return None;
-            }
-            v.insert(Answer { read: false, at })
+            // The key's text is lent to each measure, and becomes the key once
+            // the lines are found.
+            let mut key = v.into_key();
+            let mut width = |at: usize, end: usize| {
+                text::width(weight, px, &mut key.text[at..end])
+                    .ok()
+                    .filter(|w| w.is_finite())
+            };
+            let buf = lines(text, max_width, &mut width)?.into_boxed_slice();
+            c.layouts.entry(key).or_insert(Cached { read: false, buf })
         }
     };
-    answer.read = true;
-    // The client's answer is checked here, where it comes back in. A line
-    // that ends inside a character or out of order makes the answer no
-    // layout.
-    let pairs = answer.at[LAYOUT_ANSWER::WORDS..]
-        .as_chunks::<{ LINE::WORDS }>()
-        .0;
-    let cnt = answer.at[LAYOUT_ANSWER::cnt] as usize;
-    if cnt > pairs.len() {
-        return Some(unlaid(text_in));
-    }
-    let mut lines = Vec::with_capacity(cnt);
+    cached.read = true;
     let mut start = 0;
-    for pair in &pairs[..cnt] {
-        let end = pair[LINE::end] as usize;
-        let width = f64::from(f32::from_bits(pair[LINE::width]));
-        if end < start || !text_in.is_char_boundary(end) || !width.is_finite() {
-            return Some(unlaid(text_in));
-        }
-        lines.push((&text_in[start..end], width));
-        start = end;
+    Some(
+        cached
+            .buf
+            .iter()
+            .map(|&(end, width)| {
+                let line = (&text[start..end], width);
+                start = end;
+                line
+            })
+            .collect(),
+    )
+}
+
+/// A space, as a page's `\s` and `trim` read it.
+fn is_space(c: char) -> bool {
+    matches!(
+        c,
+        '\u{9}'..='\u{d}'
+            | ' '
+            | '\u{a0}'
+            | '\u{1680}'
+            | '\u{2000}'..='\u{200a}'
+            | '\u{2028}'
+            | '\u{2029}'
+            | '\u{202f}'
+            | '\u{205f}'
+            | '\u{3000}'
+            | '\u{feff}'
+    )
+}
+
+/// The characters no line may start with: closing marks and, in Japanese, the
+/// small kana and the marks that lean on the character before them.
+const NO_LINE_START: &str =
+    "、。，．・：；？！）］｝〕〉》」』】”’…‥ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮゝゞヽヾ々,.:;!?)]}";
+
+/// The characters no line may end with: opening marks.
+const NO_LINE_END: &str = "（［｛〔〈《「『【“‘([{";
+
+/// Each line's end, a byte offset, and its width, by `width`, the width of
+/// the text between two offsets; None where a measure fails.
+fn lines(
+    text: &str,
+    max_width: f64,
+    width: &mut impl FnMut(usize, usize) -> Option<f64>,
+) -> Option<Vec<(usize, f64)>> {
+    let mut start = 0;
+    ends(text, max_width, width)?
+        .into_iter()
+        .map(|end| {
+            let line = &text[start..end];
+            let at = start + (line.len() - line.trim_start_matches(is_space).len());
+            let w = width(at, at + line.trim_matches(is_space).len())?;
+            start = end;
+            Some((end, w))
+        })
+        .collect()
+}
+
+/// Where the lines end, the last at the text's end. Words fill each line
+/// greedily; a word too wide for a line by itself, as Korean, Japanese or
+/// Chinese typed without spaces can be, breaks between characters. A space
+/// stays at the head of the next line, which its width leaves out.
+fn ends(
+    text: &str,
+    max_width: f64,
+    width: &mut impl FnMut(usize, usize) -> Option<f64>,
+) -> Option<Vec<usize>> {
+    let words: Vec<(usize, usize)> = text
+        .split(is_space)
+        .filter(|w| !w.is_empty())
+        .map(|w| {
+            let at = w.as_ptr() as usize - text.as_ptr() as usize;
+            (at, at + w.len())
+        })
+        .collect();
+    let Some(&(first, first_end)) = words.first() else {
+        return Some(vec![text.len()]);
+    };
+    if max_width <= 0.0 {
+        return Some(vec![text.len()]);
     }
-    Some(lines)
+    let mut spans = Vec::new();
+    let (mut start, mut end) = (first, first_end);
+    for &(ws, we) in &words[1..] {
+        if width(start, we)? <= max_width {
+            end = we;
+        } else {
+            spans.push((start, end));
+            (start, end) = (ws, we);
+        }
+    }
+    spans.push((start, end));
+    let mut ends = Vec::with_capacity(spans.len());
+    for (s, e) in spans {
+        if width(s, e)? > max_width {
+            let mut chunk = s;
+            for (i, ch) in text[s..e].char_indices() {
+                let (i, next) = (s + i, s + i + ch.len_utf8());
+                if i > chunk && width(chunk, next)? > max_width {
+                    chunk = allowed_break(text, chunk, i);
+                    ends.push(chunk);
+                }
+            }
+        }
+        ends.push(e);
+    }
+    if let Some(last) = ends.last_mut() {
+        *last = text.len();
+    }
+    Some(ends)
 }
 
-/// One line at a width guessed from its characters, for where the client
-/// does not lay the text out.
-fn unlaid(text_in: &str) -> Vec<(&str, f64)> {
-    vec![(text_in, text_in.chars().count() as f64 * 7.0)]
+/// Moves the break at `at` back past any mark that NO_LINE_START or
+/// NO_LINE_END keeps with its neighbor, but never past the line's first
+/// character, which starts at `line`.
+fn allowed_break(text: &str, line: usize, mut at: usize) -> usize {
+    while let Some((before, ch)) = text[..at].char_indices().next_back() {
+        let starts = text[at..].chars().next().is_some_and(|c| NO_LINE_START.contains(c));
+        if before <= line || !(starts || NO_LINE_END.contains(ch)) {
+            break;
+        }
+        at = before;
+    }
+    at
 }
 
-/// One line of `text_in` drawn from `x` into `size` pixels of RGBA, top row
+/// One line of `text` drawn from `x` into `size` pixels of RGBA, top row
 /// first. `color` is 0xRRGGBBAA. The pixels stay at least until the next
 /// frame's start. It is None where the platform could not draw the text this
 /// frame, and a later frame asks again.
@@ -113,50 +226,41 @@ pub fn text_pixels(
     color: u32,
     size: [u32; 2],
     x: f64,
-    text_in: &str,
+    text: &str,
 ) -> Option<&'static [u8]> {
-    let key = (
+    let key = RasterKey {
         weight,
-        px.to_bits(),
+        px: px.to_bits(),
         color,
-        size[0],
-        size[1],
-        x.to_bits(),
-        text_in.to_owned(),
-    );
-    let answer = match text().rasters.entry(key) {
+        width: size[0],
+        height: size[1],
+        x: x.to_bits(),
+        text: Box::from(text.as_bytes()),
+    };
+    let c = cache();
+    let cached = match c.rasters.entry(key) {
         Entry::Occupied(o) => o.into_mut(),
         Entry::Vacant(v) => {
-            let mut at = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
-            let drawn = text::raster(
-                weight,
-                px,
-                color,
-                mem::off(at.as_mut_ptr().cast()),
-                size[0],
-                size[1],
-                x,
-                mem::off(text_in.as_ptr()),
-                text_in.len() as u32,
-            );
+            let mut image = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
+            let mut key = v.into_key();
+            let drawn = text::raster(weight, px, color, &mut image[..], size[0], size[1], x, &mut key.text[..]);
             if drawn.is_err() {
                 return None;
             }
-            v.insert(Answer { read: false, at })
+            c.rasters.entry(key).or_insert(Cached { read: false, buf: image })
         }
     };
-    answer.read = true;
+    cached.read = true;
     // SAFETY: an answer's pixels are let go only at the next frame's start or
     // at a forget, and a reader reads them within the frame they were handed
     // out in.
-    Some(unsafe { core::slice::from_raw_parts(answer.at.as_ptr(), answer.at.len()) })
+    Some(unsafe { core::slice::from_raw_parts(cached.buf.as_ptr(), cached.buf.len()) })
 }
 
 /// Called as a frame starts. The answers that the frame before did not read
 /// are dropped.
 pub fn text_drop_unread() {
-    let t = text();
-    t.layouts.retain(|_, a| core::mem::take(&mut a.read));
-    t.rasters.retain(|_, a| core::mem::take(&mut a.read));
+    let c = cache();
+    c.layouts.retain(|_, e| core::mem::take(&mut e.read));
+    c.rasters.retain(|_, e| core::mem::take(&mut e.read));
 }
-

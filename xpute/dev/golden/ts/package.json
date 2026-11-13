@@ -1,0 +1,11 @@
+{
+  "name": "@xpute/golden",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/mod.ts"
+  },
+  "dependencies": {
+    "@xpute/kit": "workspace:*"
+  }
+}

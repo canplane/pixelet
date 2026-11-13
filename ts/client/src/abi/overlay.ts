@@ -1,24 +1,27 @@
 // @pxl/client/abi/overlay.ts
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import type { U32Array } from "@xpute/kit/abi/array.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { Branch, type NodeCursor } from "@xpute/kit/wire/xtp/mod.ts";
 import {
   type Link,
   type LinkObject,
   type Method,
-  open as open_uri,
   refusal_of,
-  type Ref,
   type Sender,
+  type Handle,
   uri,
-} from "@xpute/runtime";
-import * as link from "@xpute/runtime/abi/link.ts";
+} from "@xpute/link/link.ts";
+import * as types from "@xpute/link/abi/types.ts";
 
-/** The singleton's URI. */
-export const URI = uri("pxl:core", "overlay");
+/** The interface's handle, named by `pxl:core/overlay` (frame.json `NAMED`). */
+export const HANDLE: Handle = 0x7b1393;
+
+/** The interface's qualified name: its package and its name. */
+export const NAME = uri("pxl:core", "overlay");
 
 /** `show` */
 export const SHOW: Method = 0;
@@ -32,6 +35,21 @@ export const GroundStatus = {
 } as const;
 export type GroundStatus = (typeof GroundStatus)[keyof typeof GroundStatus];
 
+/** The name of the `GroundStatus` member numbered `n`, or undefined for a number
+ * no member has. */
+export function ground_status_name(
+  n: number,
+): keyof typeof GroundStatus | undefined {
+  return (Object.keys(GroundStatus) as (keyof typeof GroundStatus)[]).find(
+    (k) => GroundStatus[k] === n,
+  );
+}
+
+/** The `GroundStatus` member `n` is, or null for a number no member has. */
+export function ground_status_of(n: number): GroundStatus | null {
+  return ground_status_name(n) === undefined ? null : (n as GroundStatus);
+}
+
 export const SensorStatus = {
   Idle: 0,
   Loading: 1,
@@ -40,6 +58,21 @@ export const SensorStatus = {
   Unavailable: 4,
 } as const;
 export type SensorStatus = (typeof SensorStatus)[keyof typeof SensorStatus];
+
+/** The name of the `SensorStatus` member numbered `n`, or undefined for a number
+ * no member has. */
+export function sensor_status_name(
+  n: number,
+): keyof typeof SensorStatus | undefined {
+  return (Object.keys(SensorStatus) as (keyof typeof SensorStatus)[]).find(
+    (k) => SensorStatus[k] === n,
+  );
+}
+
+/** The `SensorStatus` member `n` is, or null for a number no member has. */
+export function sensor_status_of(n: number): SensorStatus | null {
+  return sensor_status_name(n) === undefined ? null : (n as SensorStatus);
+}
 
 export const Message = {
   GeolocationUnsupported: 0,
@@ -51,6 +84,19 @@ export const Message = {
   WorldUnavailable: 6,
 } as const;
 export type Message = (typeof Message)[keyof typeof Message];
+
+/** The name of the `Message` member numbered `n`, or undefined for a number
+ * no member has. */
+export function message_name(n: number): keyof typeof Message | undefined {
+  return (Object.keys(Message) as (keyof typeof Message)[]).find(
+    (k) => Message[k] === n,
+  );
+}
+
+/** The `Message` member `n` is, or null for a number no member has. */
+export function message_of(n: number): Message | null {
+  return message_name(n) === undefined ? null : (n as Message);
+}
 
 export interface LonLat {
   lon: number;
@@ -170,11 +216,11 @@ export function read_DivisionPart(c: NodeCursor): DivisionPart {
 }
 
 export interface RefusedFile {
-  path: link.Token[];
+  path: types.Token[];
 }
 
 export function write_RefusedFile(r: RefusedFile): Branch {
-  return new Branch([new Branch(r.path.map((x) => link.write_Token(x)))]);
+  return new Branch([new Branch(r.path.map((x) => types.write_Token(x)))]);
 }
 
 export function read_RefusedFile(c: NodeCursor): RefusedFile {
@@ -184,7 +230,7 @@ export function read_RefusedFile(c: NodeCursor): RefusedFile {
       .at(0)
       .as_branch()
       .children()
-      .map((c) => link.read_Token(c)),
+      .map((c) => types.read_Token(c)),
   };
 }
 
@@ -198,9 +244,9 @@ export interface Snapshot {
   camera_busy: boolean;
   zooming: boolean;
   over_marker: boolean;
-  settings: number[];
+  settings: U32Array;
   division: DivisionPart[];
-  character_surfaces: number[];
+  character_surfaces: U32Array;
   refused_files: RefusedFile[];
   stall: Message | null;
   renderer_progress: number;
@@ -218,9 +264,9 @@ export function write_Snapshot(r: Snapshot): Branch {
     r.camera_busy,
     r.zooming,
     r.over_marker,
-    new Branch(r.settings.map((x) => x)),
+    r.settings,
     new Branch(r.division.map((x) => write_DivisionPart(x))),
-    new Branch(r.character_surfaces.map((x) => x)),
+    r.character_surfaces,
     new Branch(r.refused_files.map((x) => write_RefusedFile(x))),
     r.stall,
     r.renderer_progress,
@@ -240,21 +286,13 @@ export function read_Snapshot(c: NodeCursor): Snapshot {
     camera_busy: b.at(6).get_bool(),
     zooming: b.at(7).get_bool(),
     over_marker: b.at(8).get_bool(),
-    settings: b
-      .at(9)
-      .as_branch()
-      .children()
-      .map((c) => c.get_number()),
+    settings: b.at(9).get() as U32Array,
     division: b
       .at(10)
       .as_branch()
       .children()
       .map((c) => read_DivisionPart(c)),
-    character_surfaces: b
-      .at(11)
-      .as_branch()
-      .children()
-      .map((c) => c.get_number()),
+    character_surfaces: b.at(11).get() as U32Array,
     refused_files: b
       .at(12)
       .as_branch()
@@ -297,27 +335,21 @@ function object(imp: Overlay): LinkObject {
   };
 }
 
-/** Mounts `imp` at the URI, one object for every open. */
-export function mount(l: Pick<Link, "mount">, imp: Overlay): void {
-  const o = object(imp);
-  l.mount(URI, () => o);
+/** Serves `imp` under the interface's handle. */
+export function mount(l: Pick<Link, "mount_named">, imp: Overlay): void {
+  l.mount_named(HANDLE, object(imp));
 }
 
-/** Opens the singleton on the other side, once, at boot. */
-export async function open(link: Sender): Promise<Ref> {
-  return { link, handle: await open_uri(link, URI) };
-}
-
-export async function show(ref: Ref, snapshot: Snapshot): Promise<void> {
-  const a = await ref.link.send(ref.handle, SHOW, [write_Snapshot(snapshot)]);
+export async function show(link: Sender, snapshot: Snapshot): Promise<void> {
+  const a = await link.send(HANDLE, SHOW, [write_Snapshot(snapshot)]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
 export async function view(
-  ref: Ref,
+  link: Sender,
   azimuth: number,
   m_per_px: number,
 ): Promise<void> {
-  const a = await ref.link.send(ref.handle, VIEW, [azimuth, m_per_px]);
+  const a = await link.send(HANDLE, VIEW, [azimuth, m_per_px]);
   if (a.result < 0) throw new XputeError(a.result);
 }

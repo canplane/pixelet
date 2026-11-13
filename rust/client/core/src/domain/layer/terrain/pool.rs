@@ -4,7 +4,7 @@
 //! the heap, holding what the GPU reads and nothing else. Each brick's kept spans are a run here
 //! (clipmap.rs `lay`), given back with the brick's slot, and the GPU's copy follows it: a brick's
 //! run is handed over as its brick is (clipmap.rs `upload`, pxl-render ray/ground.rs `hand`), the
-//! words read in place, so `take` passes over a free run the runtime still holds. A brick with
+//! words read in place, so `take` passes over a free run the host still holds. A brick with
 //! nothing to keep takes nothing.
 //!
 //! The pool grows a chunk at a time as runs reach past its end. A run may cross chunks: readers
@@ -72,7 +72,7 @@ pub(in crate::domain::layer) enum PoolRefusal {
 }
 
 impl WayPool {
-    /// Takes a run of `n` words from the lowest free run that holds it and that the runtime does
+    /// Takes a run of `n` words from the lowest free run that holds it and that the host does
     /// not still hold (`in_flight`), or else past every other run, growing the chunks it reaches
     /// first. `n` is at least 1.
     pub fn take(&mut self, n: u32) -> Result<Run, PoolRefusal> {
@@ -156,7 +156,7 @@ impl WayPool {
         }
     }
 
-    /// Whether the runtime holds any of `run` (pxl-render `api::in_flight`).
+    /// Whether the host holds any of `run` (pxl-render `api::in_flight`).
     fn in_flight(&self, run: Run) -> bool {
         #[cfg(test)]
         if TEST_HELD.get(|| [0; 2]) == &run {
@@ -198,7 +198,7 @@ impl Pool for WayPool {
     }
 }
 
-/// A run a test holds as the runtime would (`in_flight`).
+/// A run a test holds as the host would (`in_flight`).
 #[cfg(test)]
 pub(in crate::domain::layer) static TEST_HELD: Global<Run> = Global::new();
 

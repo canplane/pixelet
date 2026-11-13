@@ -9,7 +9,7 @@ use pxl_global::Global;
 use pxl_render::gpu::span_spec::FrameKind;
 use pxl_render::renderer::GpuRead;
 use pxl_spec::bake::tile::terrain::TerrainTile;
-use xpute_core::clock::now;
+use xpute_guest::clock::now;
 
 use crate::domain::layer::Base;
 use crate::domain::scene::stage::FrameReport;

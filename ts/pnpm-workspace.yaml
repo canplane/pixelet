@@ -6,7 +6,15 @@ packages:
   - client
   - build
   - tool/shader
-  - ../xpute/ts/*
+  - ../xpute/kit/ts
+  - ../xpute/link/ts
+  - ../xpute/web/host
+  - ../xpute/web/runtime
+  - ../xpute/native/runtime/expo
+  - ../xpute/gpu/link/ts
+  - ../xpute/gpu/web/host
+  - ../xpute/gpu/native/runtime/expo
+  - ../xpute/dev/golden/ts
 
 # Only webgpu may run its install script, which installs the binary of Dawn,
 # the WebGPU implementation the shader test compiles shaders on.

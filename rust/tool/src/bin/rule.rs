@@ -8,7 +8,7 @@
 //! also holds that only the top names the profiler, that no renderer stands under the core's
 //! sys/, that only the screen reads the screen's pixels, that no Rust file lies outside
 //! a crate's module tree, and that the modules' and files' dependencies form no cycle. A rule Rust alone can keep is clippy's (rust/clippy.toml,
-//! xpute/rust/clippy.toml).
+//! xpute/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
 
@@ -18,9 +18,10 @@ use pxl_tool::root;
 use regex::Regex;
 
 /// The crates that address the core's memory by offset, in which an offset becomes a pointer
-/// only through `xpute_core::mem::at` or `Memory::at`.
-const OFF_CRATES: [&str; 3] = [
-    "xpute/rust/core/src/",
+/// only through `xpute_link::mem::at` or `Memory::at`.
+const OFF_CRATES: [&str; 4] = [
+    "xpute/link/rust/src/",
+    "xpute/guest/rust/src/",
     "rust/client/core/src/",
     "rust/client/render/src/",
 ];
@@ -32,8 +33,8 @@ const OFF_CRATES: [&str; 3] = [
 /// round_half_away, as options a library offers.
 const ROUNDING_ROOTS: [&str; 3] = ["rust/", "ts/", "xpute/"];
 const ROUNDING_VARIANT_FILES: [&str; 4] = [
-    "xpute/ts/kit/src/math/scalar.ts",
-    "xpute/ts/kit/src/math/scalar.test.ts",
+    "xpute/kit/ts/src/math/scalar.ts",
+    "xpute/kit/ts/src/math/scalar.test.ts",
     "xpute/cpp/xpute/kit/math/scalar.hpp",
     "xpute/cpp/xpute/kit/math/scalar.test.cpp",
 ];
@@ -77,8 +78,8 @@ struct Order {
 /// the core, stand under everything that calls or serves through them.
 const CORE: &str = "rust/client/core/src/";
 const CORE_ORDER: [(&str, u8); 16] = [
-    ("turn", 7),
-    ("door", 7),
+    ("frame", 7),
+    ("link", 7),
     ("ui", 7),
     ("pointer", 7),
     ("scene", 6),
@@ -193,8 +194,9 @@ const ENGINE_ORDER: [(&str, u8); 21] = [
 /// catalog is; the ways a column makes over them; a brick over the ways, and a tile's place;
 /// and the bake's formats on top.
 const SPEC: &str = "rust/spec/src/";
-const SPEC_ORDER: [(&str, u8); 16] = [
+const SPEC_ORDER: [(&str, u8); 17] = [
     ("value", 0),
+    ("color", 0),
     ("share", 0),
     ("directory", 0),
     ("division", 0),
@@ -323,7 +325,7 @@ const PASS_ORDER: [(&str, u8); 18] = [
 const PASS_OWN: u8 = 6;
 
 /// The client's order (ts/client/src, AGENTS.md): its entry over the UI
-/// and the wiring that opens the runtime, the two heads; under them the
+/// and the wiring that opens the host, the two heads; under them the
 /// services; and at the bottom the numbers both read and the build's values.
 const CLIENT: &str = "ts/client/src/";
 const CLIENT_ORDER: [(&str, u8); 9] = [
@@ -554,8 +556,8 @@ fn screen_reached(text: &str) -> Vec<usize> {
     lines
 }
 
-/// xpute's words are runtime, core and their contract (AGENTS.md): pixelet's
-/// appear nowhere under it.
+/// xpute's words are the guest, its hosts and the link between them (AGENTS.md):
+/// pixelet's appear nowhere under it.
 const XPUTE: &str = "xpute/";
 const PIXELET_WORDS: &str = r"(?i)\b(pixelet|pxl[-_]\w+)\b";
 
@@ -822,7 +824,7 @@ fn unlinked(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String
         out
     }
     let rust =
-        |f: &&&str| f.ends_with(".rs") && (f.starts_with("rust/") || f.starts_with("xpute/rust/"));
+        |f: &&&str| f.ends_with(".rs") && (f.starts_with("rust/") || f.starts_with("xpute/"));
     let module = Regex::new(r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*;")
         .expect("a module's pattern");
     let path_attr = Regex::new(r#"#\[path\s*=\s*"([^"]+)"\]"#).expect("a path's pattern");
@@ -876,36 +878,70 @@ fn unlinked(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String
 }
 
 /// The dependency cycles that stood before the cycle rule, each as its graph and its members
-/// in order, for the user to review. No other cycle stands, and one of these that gains or
-/// loses a member is another.
-const CYCLES_KNOWN: [&str; 18] = [
-    "rust/client/core: domain::control::camera::collision domain::control::camera::orbit",
-    "rust/client/core: domain::control::edit domain::control::edit::pick",
-    "rust/client/core: domain::control::navigation::destination domain::control::navigation::follow_mode",
-    "rust/client/core: domain::control::sensor domain::control::sensor::device_orientation domain::control::sensor::geolocation",
-    "rust/client/core: domain::layer::terrain::clipmap domain::layer::terrain::tile",
-    "rust/client/core: domain::query::decor domain::query::node domain::query::scatter",
-    "rust/client/core: domain::scene::marker::arrangement domain::scene::marker::line domain::scene::marker::pin domain::scene::marker::place",
-    "rust/client/core: domain::scene::character domain::scene::character::companion",
-    "rust/client/core: perf::frame perf::record perf::report perf::section perf::window turn",
-    "rust/client/core: sys::io::loader sys::io::policy sys::io::request",
-    "rust/client/engine: clipmap ground way",
-    "rust/server/geo-bake: separation terrain::pipeline::overture::policy terrain::repository",
-    "rust/spec: space::coord::world space::coord::zoom",
-    "rust/tool: spec::asset spec::catalog spec::ingest",
-    "ts: ts/client/src/ui/feature/debug/accordion.tsx ts/client/src/ui/feature/debug/legend.tsx ts/client/src/ui/feature/debug/perf.tsx ts/client/src/ui/feature/debug/view.tsx ts/client/src/ui/feature/debug/window.tsx",
-    "ts: xpute/ts/kit/src/math/rng.32.ts xpute/ts/kit/src/math/rng.64.ts xpute/ts/kit/src/math/rng.ts",
-    "xpute/rust/gpu: runtime::jni runtime::native",
-    "xpute/rust/gpu: runtime::make runtime::pending runtime::run",
-];
+/// in order. pxl-tool's waits for the catalog's redesign, which changes its edges. No other
+/// cycle stands, and one of these that gains or loses a member is another.
+const CYCLES_KNOWN: [&str; 1] = ["rust/tool: spec::asset spec::catalog spec::ingest"];
 
-/// xpute's TypeScript packages, by the name an import writes and the folder it stands for.
-const TS_PACKAGES: [(&str, &str); 4] = [
-    ("@xpute/runtime", "xpute/ts/runtime/src/"),
-    ("@xpute/gpu", "xpute/ts/gpu/src/"),
-    ("@xpute/kit", "xpute/ts/kit/src/"),
-    ("@xpute/native", "xpute/ts/native/src/"),
-];
+/// The workspace file that lists xpute's TypeScript packages, the one source every reader of
+/// them takes, and pixelet's, which must list the same for pnpm.
+const XPUTE_WORKSPACE: &str = "xpute/pnpm-workspace.yaml";
+const TS_WORKSPACE: &str = "ts/pnpm-workspace.yaml";
+
+/// The directories a pnpm-workspace.yaml lists under `packages:`, one `  - <dir>` a line up to
+/// the next blank line, or why it cannot be read so: an entry with a glob, a quote or a
+/// comment refuses it.
+fn workspace_dirs(read: &dyn Fn(&str) -> Option<String>, file: &str) -> Result<Vec<String>, String> {
+    let text = read(file).ok_or(format!("{file}: unreadable"))?;
+    let entry = Regex::new(r"^  - ([A-Za-z0-9_./-]+)$").expect("a workspace entry's pattern");
+    let after = text.split_once("\npackages:\n").ok_or(format!("{file}: no `packages:`"))?.1;
+    let dirs: Vec<String> = after
+        .lines()
+        .take_while(|l| !l.is_empty())
+        .map(|l| {
+            entry
+                .captures(l)
+                .map(|c| c[1].to_string())
+                .ok_or(format!("{file}: `{l}` is not `  - <dir>`"))
+        })
+        .collect::<Result<_, _>>()?;
+    if dirs.is_empty() {
+        return Err(format!("{file}: lists no package"));
+    }
+    Ok(dirs)
+}
+
+/// xpute's TypeScript packages, each a directory its pnpm-workspace.yaml lists, by the name
+/// its package.json gives, which an import writes, and the folder it stands for; or why one
+/// cannot be read so.
+fn xpute_packages(read: &dyn Fn(&str) -> Option<String>) -> Result<Vec<(String, String)>, String> {
+    workspace_dirs(read, XPUTE_WORKSPACE)?
+        .into_iter()
+        .map(|d| {
+            let manifest = format!("xpute/{d}/package.json");
+            let text = read(&manifest).ok_or(format!("{manifest}: unreadable"))?;
+            let json: serde_json::Value = serde_json::from_str(&text).map_err(|e| format!("{manifest}: {e}"))?;
+            let name = json["name"].as_str().ok_or(format!("{manifest}: no name"))?;
+            let src = format!("xpute/{d}/src/");
+            if !root().join(&src).is_dir() {
+                return Err(format!("xpute/{d}: no src/"));
+            }
+            Ok((name.to_string(), src))
+        })
+        .collect()
+}
+
+/// Whether pixelet's workspace lists xpute's packages as xpute's own does, in its order.
+fn workspaces_agree(read: &dyn Fn(&str) -> Option<String>) -> Result<(), String> {
+    let xpute = workspace_dirs(read, XPUTE_WORKSPACE)?;
+    let listed: Vec<String> = workspace_dirs(read, TS_WORKSPACE)?
+        .into_iter()
+        .filter_map(|d| d.strip_prefix("../xpute/").map(String::from))
+        .collect();
+    if listed != xpute {
+        return Err(format!("{TS_WORKSPACE}: its ../xpute/ entries are not {XPUTE_WORKSPACE}'s list"));
+    }
+    Ok(())
+}
 
 /// The strongly connected parts of `g` with more than one member, each sorted.
 fn strong_parts(g: &std::collections::BTreeMap<String, std::collections::BTreeSet<String>>) -> Vec<Vec<String>> {
@@ -973,13 +1009,13 @@ fn strong_parts(g: &std::collections::BTreeMap<String, std::collections::BTreeSe
 /// do (`.ios` or `.android`, then `.native`, before the page's own file). A test's file, a
 /// generated spec and the crate's root, which declares every module, are no node of it. Each
 /// cycle not in `CYCLES_KNOWN`.
-fn cycles(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String> {
+fn cycles(files: &[&str], read: &dyn Fn(&str) -> Option<String>, packages: &[(String, String)]) -> Vec<String> {
     use std::collections::{BTreeMap, BTreeSet};
     let mut found: BTreeSet<String> = BTreeSet::new();
     let path = Regex::new(r"\b(crate|(?:super::)*super|self)::(?:\{([^}]*)\}|((?:[a-z_0-9]+::)*[a-z_0-9]+)(?:::\{([^}]*)\})?)").expect("a module path's pattern");
     let comment = Regex::new(r"(?m)//.*$").expect("a comment's pattern");
     let roots = files.iter().filter(|f| {
-        f.ends_with("/src/lib.rs") && (f.starts_with("rust/") || f.starts_with("xpute/rust/"))
+        f.ends_with("/src/lib.rs") && (f.starts_with("rust/") || f.starts_with("xpute/"))
     });
     for lib in roots {
         let src = lib.trim_end_matches("lib.rs");
@@ -1061,7 +1097,7 @@ fn cycles(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String> 
         .iter()
         .copied()
         .filter(|f| {
-            (f.starts_with("ts/client/src/") || f.starts_with("xpute/ts/"))
+            (f.starts_with("ts/client/src/") || f.starts_with("xpute/"))
                 && (f.ends_with(".ts") || f.ends_with(".tsx"))
                 && !f.contains(".test.")
                 && f.contains("/src/")
@@ -1089,9 +1125,9 @@ fn cycles(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String> 
                 .into_iter()
                 .filter_map(|(_, p)| resolve(&p))
                 .collect();
-            let pkg = Regex::new(r#"(?:\bfrom|\bimport\s*\(?)\s*["'](@xpute/[a-z]+)(/[^"']*)?["']"#).expect("a package import's pattern");
+            let pkg = Regex::new(r#"(?:\bfrom|\bimport\s*\(?)\s*["'](@xpute/[a-z-]+)(/[^"']*)?["']"#).expect("a package import's pattern");
             for c in pkg.captures_iter(&text) {
-                let Some((_, dir)) = TS_PACKAGES.iter().find(|(n, _)| *n == &c[1]) else { continue };
+                let Some((_, dir)) = packages.iter().find(|(n, _)| n == &c[1]) else { continue };
                 let p = match c.get(2) {
                     Some(rest) => format!("{dir}{}", &rest.as_str()[1..]),
                     None => format!("{dir}mod.ts"),
@@ -1266,7 +1302,13 @@ fn run() -> Result<Vec<String>, String> {
     }
 
     problems.extend(unlinked(&files, &read));
-    problems.extend(cycles(&files, &read));
+    if let Err(e) = workspaces_agree(&read) {
+        problems.push(e);
+    }
+    match xpute_packages(&read) {
+        Ok(packages) => problems.extend(cycles(&files, &read, &packages)),
+        Err(e) => problems.push(e),
+    }
     Ok(problems)
 }
 

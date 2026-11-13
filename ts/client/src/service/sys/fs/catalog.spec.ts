@@ -1,8 +1,8 @@
 // @pxl/client/service/sys/fs/catalog.spec.ts
 //
-// GENERATED from the asset specs and ingest.json
+// GENERATED from the asset specs and ingest.json (pxl-tool spec/catalog.rs)
 //
-// The catalog the runtime plugs in, served at (ASSET, `CATALOG`)
+// The catalog the host plugs in, served at (ASSET, `CATALOG`)
 // (ts/client/src/service/sys/fs/asset.ts): the file each of the core's slots names and its
 // extent, laid out as pxl-spec asset/catalog.rs reads it, in hex.
 

@@ -11,7 +11,7 @@ fn hdr_word(k: u32) -> u32 {
 }
 
 fn light_v3(k: u32) -> vec3<f32> {
-  return eye_v3(LIGHT + k);
+  return eye_v3(EYE_LIGHT + k);
 }
 
 /// Where the ray of world texel `w` starts (`StartGrid::start`). The steps are summed exactly in
@@ -50,21 +50,21 @@ fn slot_texel(slot: vec2<u32>) -> vec2<u32> {
 }
 
 fn light_corner() -> vec2<i32> {
-  return vec2<i32>(i32(eye_word(LIGHT + LIGHT_CORNER_X)), i32(eye_word(LIGHT + LIGHT_CORNER_Y)));
+  return vec2<i32>(i32(eye_word(EYE_LIGHT + LIGHT_CORNER_X)), i32(eye_word(EYE_LIGHT + LIGHT_CORNER_Y)));
 }
 
 /// The band of box tile `tile`, which may lie past the box (`Light::band`). A tile's band is
 /// the zoom every walk over it asks. It is taken from a whole number of texels squared, under
 /// 2^24, times the host's scale, in one product, so every pass gives a tile the same band.
 fn tile_band(tile: vec2<i32>) -> u32 {
-  return tile_band_in(tile, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
+  return tile_band_in(tile, vec2<u32>(eye_word(EYE_RANGE), eye_word(EYE_RANGE + 1u)));
 }
 
 fn tile_band_in(tile: vec2<i32>, range: vec2<u32>) -> u32 {
   let half = i32(hdr_word(LIGHT_HDR_SIZE) / 2u);
   let x = gap(tile.x, half);
   let y = gap(tile.y, half);
-  let s2 = f32(x * x + y * y) * eye_f32(LIGHT + LIGHT_BAND_SCALE);
+  let s2 = f32(x * x + y * y) * eye_f32(EYE_LIGHT + LIGHT_BAND_SCALE);
   return zoom_in_splits(s2, range);
 }
 
@@ -90,7 +90,7 @@ fn texel_band(texel: vec2<u32>) -> u32 {
 /// box's depth: `t` times the reciprocal of the reach that the host rounded, pushed back by the
 /// bias of the face's axis (`light::depth`, `light::word`).
 fn hit_word(t: f32, axis: u32) -> u32 {
-  return depth_word(min(t * eye_f32(LIGHT + LIGHT_T_MAX_INVERSE) + light_v3(LIGHT_BIAS)[axis], 1.0));
+  return depth_word(min(t * eye_f32(EYE_LIGHT + LIGHT_T_MAX_INVERSE) + light_v3(LIGHT_BIAS)[axis], 1.0));
 }
 
 /// The reciprocal of the light's rays' direction on each axis. The host rounds it once, so the
@@ -106,7 +106,7 @@ fn light_ray(p: vec2<i32>, band: u32) -> Aim {
     texel_start(light_corner() + p),
     light_v3(LIGHT_DIR),
     light_inverse(),
-    eye_f32(LIGHT + LIGHT_T_MAX),
+    eye_f32(EYE_LIGHT + LIGHT_T_MAX),
     vec2<u32>(band),
     UNTIL_OPAQUE,
     NONE,

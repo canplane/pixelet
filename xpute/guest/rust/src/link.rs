@@ -1,0 +1,205 @@
+// xpute-guest/link.rs
+
+//! The guest's end of the link (xpute-link link.rs): its one side, which lays
+//! in its outbox and crosses by `link_out`, its three exports (`link!`), and
+//! the entry they run each call in. The machine's names are read here as the
+//! guest's callers have read them.
+
+use std::cell::Cell;
+use std::rc::Rc;
+
+use xpute_kit::status::errno::Errno;
+use xpute_link::abi::types::Token;
+use xpute_link::frame::WORD_BYTES;
+use xpute_link::mem;
+use xpute_link::{Answer, Args, Handle, Layout, Method, Object, Packet, Side, Tag};
+
+// A module takes the host's `link_out` under `env` (TS link.ts `imports`).
+#[cfg_attr(target_arch = "wasm32", link(wasm_import_module = "env"))]
+unsafe extern "C" {
+    fn link_out(at: u32) -> i32;
+}
+
+/// The guest's own side: it lays in its outbox, past the inbox, and crosses
+/// by `link_out`.
+fn cross_out(at: u32) -> i32 {
+    // SAFETY: the frame just laid in the outbox.
+    unsafe { link_out(at) }
+}
+
+thread_local! {
+    static SIDE: Side = const { Side::new(|l| l.inbox + l.room, cross_out) };
+    /// Whether the guest is in an entry.
+    static ENTERED: Cell<bool> = const { Cell::new(false) };
+    /// The program's start and end of an entry (`init`).
+    static ENTER: Cell<fn()> = const { Cell::new(|| {}) };
+    static END: Cell<fn() -> bool> = const { Cell::new(|| false) };
+}
+
+/// Defines the guest's three exports (link/wit/types.wit), over frames of
+/// `room` bytes, with `boot` mounting what the guest serves and opening what it
+/// calls, and `enter` and `end` starting and ending each entry.
+#[macro_export]
+macro_rules! link {
+    ($room:expr, $boot:expr, $enter:expr, $end:expr) => {
+        #[cfg(target_arch = "wasm32")]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn link_init() -> u32 {
+            $crate::link::init($room, $enter, $end)
+        }
+        #[cfg(target_arch = "wasm32")]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn link_boot() {
+            $crate::link::boot($boot)
+        }
+        #[cfg(target_arch = "wasm32")]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn link_in() -> i32 {
+            $crate::link::recv()
+        }
+        // A native guest's exports catch its panic and answer a trap
+        // (`TRAP`, or u32::MAX for init's layout).
+        #[cfg(not(target_arch = "wasm32"))]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn link_init() -> u32 {
+            $crate::link::caught(u32::MAX, || $crate::link::init($room, $enter, $end))
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn link_boot() -> i32 {
+            $crate::link::caught($crate::xpute_link::TRAP, || {
+                $crate::link::boot($boot);
+                0
+            })
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        #[unsafe(no_mangle)]
+        pub extern "C" fn link_in() -> i32 {
+            $crate::link::caught($crate::xpute_link::TRAP, $crate::link::recv)
+        }
+    };
+}
+
+/// Lays the link over frames of `room` bytes, a multiple of 8 that holds a
+/// frame's words, and runs nothing of the program; `enter` and `end` are the
+/// program's start and end of every entry (`boot`, `recv`). It answers where
+/// the link's layout lies: two words, the inbox and a frame's room, then the
+/// inbox and the outbox.
+pub fn init(room: u32, enter: fn(), end: fn() -> bool) -> u32 {
+    xpute_kit::ensure!(room.is_multiple_of(8) && room >= WORD_BYTES, EINVAL, room);
+    let words: &'static mut [u64] = Vec::leak(vec![0; 1 + 2 * room as usize / 8]);
+    let at = mem::off(words.as_ptr().cast());
+    let inbox = at + 8;
+    // SAFETY: the layout's two words, which only `init` writes.
+    let layout = unsafe { mem::bytes(at, 8) };
+    layout[..4].copy_from_slice(&inbox.to_le_bytes());
+    layout[4..].copy_from_slice(&room.to_le_bytes());
+    SIDE.with(|s| s.set_layout(Layout { inbox, room }));
+    ENTER.set(enter);
+    END.set(end);
+    at
+}
+
+/// The guest's first entry, once the host has read the layout. Unlike every
+/// later entry, it starts by `boot`, which opens what the program's `enter`
+/// may read, and only then by `enter`; it ends as every entry does (`leave`).
+pub fn boot(boot: impl FnOnce()) {
+    xpute_kit::ensure!(!ENTERED.replace(true), EBUSY);
+    boot();
+    ENTER.get()();
+    leave();
+}
+
+/// Puts `open` as the opener of the URIs that start with `prefix`.
+pub fn mount(
+    prefix: Vec<Token>,
+    open: impl Fn(&[Token], Handle) -> Result<Rc<dyn Object>, Errno> + 'static,
+) {
+    SIDE.with(|s| s.mount(prefix, open));
+}
+
+/// Serves `o` under its interface's named handle `h`.
+pub fn mount_named(h: Handle, o: Rc<dyn Object>) {
+    SIDE.with(|s| s.mount_named(h, o));
+}
+
+/// Opens the object `uri` names on the host, and answers its handle.
+pub fn open(uri: &[Token]) -> Result<Handle, Errno> {
+    SIDE.with(|s| s.open(uri))
+}
+
+/// Lets the object `h` names on the host go.
+pub fn drop(h: Handle) {
+    SIDE.with(|s| s.drop(h));
+}
+
+/// Calls `m` of `h`, which answers at once: its result, and its return data,
+/// readable until the next crossing.
+pub fn call(h: Handle, m: Method, args: Args) -> (i32, Option<&'static [u8]>) {
+    SIDE.with(|s| s.call(h, m, Packet::Args(args)))
+}
+
+/// Sends `m` of `h`, its answer pending from before the crossing, as the
+/// host's is (link.ts `send`), and answers the request's tag.
+pub fn send(h: Handle, m: Method, args: Args, answer: Option<Answer>) -> Tag {
+    SIDE.with(|s| s.send(h, m, Packet::Args(args), answer))
+}
+
+/// Cancels the request `t`, while its answer is pending (frame.json `CANCEL`).
+pub fn cancel(t: Tag) {
+    SIDE.with(|s| s.cancel(t));
+}
+
+/// Puts `stop` as how the request `t` the guest serves stops if it is
+/// canceled.
+pub fn on_cancel(t: Tag, stop: Box<dyn FnOnce()>) {
+    SIDE.with(|s| s.on_cancel(t, stop));
+}
+
+/// Answers the request `t`, whose method answered EINPROGRESS, with `result`
+/// and its return data. A later answer is found by its tag alone.
+pub fn task_return(t: Tag, result: i32, data: Args) {
+    SIDE.with(|s| s.task_return(t, result, Packet::Args(data)));
+}
+
+/// Whether control is in the guest's own code on this thread: inside an
+/// entry, and not out on the host through `link_out`. A program's report
+/// of its failures takes only these, as hooks are the process's on a device.
+pub fn in_guest() -> bool {
+    ENTERED.get() && !SIDE.with(Side::crossing)
+}
+
+/// Runs `f`, the body of a native export, its panic caught as `trap`.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn caught<T>(trap: T, f: impl FnOnce() -> T) -> T {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).unwrap_or(trap)
+}
+
+/// The frame the host laid in the inbox: a later answer, to its request,
+/// or a method, to its object, in an entry of its own.
+pub fn recv() -> i32 {
+    enter();
+    let result = SIDE.with(|s| s.recv(s.layout().inbox));
+    leave();
+    result
+}
+
+/// Starts an entry by the program's `enter`. Every entry ends by `leave`.
+fn enter() {
+    xpute_kit::ensure!(!ENTERED.replace(true), EBUSY);
+    ENTER.get()();
+}
+
+/// Ends an entry: runs the answers due and the program's `end`, which answers
+/// whether it left work, again until neither has work left, and ends the
+/// entry.
+fn leave() {
+    loop {
+        SIDE.with(Side::run_due);
+        let again = END.get()();
+        if !again && !SIDE.with(Side::has_due) {
+            break;
+        }
+    }
+    ENTERED.set(false);
+}

@@ -1,0 +1,34 @@
+// tsc checks and emits nothing. xpute's packages (`@xpute/kit`,
+// `@xpute/link`, `@xpute/web-host`, `@xpute/gpu-web-host` and the rest)
+// resolve as the packages they are (pnpm-workspace.yaml), as vitest resolves
+// them. A file a native app has of its own (platform.native.ts) is read under
+// tsconfig.native.json.
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "strict": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "noImplicitOverride": true,
+    "skipLibCheck": true,
+    "types": ["node", "@webgpu/types"]
+  },
+  "include": [
+    "kit/ts",
+    "link/ts",
+    "web",
+    "native/runtime/expo",
+    "gpu/link/ts",
+    "gpu/web",
+    "gpu/native/runtime/expo",
+    "dev/golden/ts",
+    "vitest.config.ts",
+    "vitest.setup.ts"
+  ],
+  "exclude": ["**/node_modules", "target", "**/*.native.ts"]
+}

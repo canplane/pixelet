@@ -5,8 +5,8 @@
 //! number of axes; a node's size is its zoom (`zoom.rs`).
 
 use crate::space::coord::aabb::Aabb;
-use crate::space::coord::world::BOUNDS;
-use crate::space::coord::zoom::{has_digit, units, Zoom};
+use crate::space::coord::world::{has_digit, BOUNDS};
+use crate::space::coord::zoom::{units, Zoom};
 
 /// A node of the hierarchy in `D` axes: its zoom and its index there.
 pub type Node<const D: usize> = (Zoom, [i32; D]);

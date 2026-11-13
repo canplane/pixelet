@@ -3,7 +3,7 @@
 //! Every file generated from `spec/`, written or checked.
 //!
 //!   make spec          # write every generated file
-//!   make check-spec    # fail where one on disk is not what its JSON writes
+//!   make check-spec    # fail where one on disk is not what its source writes
 
 use std::process::ExitCode;
 

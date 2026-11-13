@@ -11,7 +11,7 @@ use pxl_spec::space::layer::lattice::{Cell, GROUND};
 use pxl_spec::space::layer::quadrant::{quad_rows, Quadrant};
 use std::rc::Rc;
 
-use super::arrangement::{cell_zoom, surface, Brick, Instance, Key, MarkerHit};
+use super::{cell_zoom, surface, Brick, Instance, Key, MarkerHit};
 use crate::domain::layer::place::carto_zoom;
 use crate::domain::query::{cell_zoom_at, World};
 use crate::domain::scene::marker::design::Design;
@@ -19,8 +19,8 @@ use pxl_spec::bake::place_theme::{DOT_ZOOM, FILL, ICON_ZOOM, INK, LABEL_ZOOM};
 use pxl_spec::bake::tile::place::{stands, symbol_of, PLACE_FIRST, PLACE_LATTICE};
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::world::{wrap_idx, BOUNDS};
-use pxl_spec::space::coord::zoom::{idx_of, Zoom};
+use pxl_spec::space::coord::world::{idx_of, wrap_idx, BOUNDS};
+use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of};
 
 /// A place read from a drawn brick: what Carto shows of it, the ground leaf

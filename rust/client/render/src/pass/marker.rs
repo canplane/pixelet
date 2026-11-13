@@ -9,7 +9,7 @@
 
 use crate::frame::shader::record::PIPELINE_MARKER;
 use crate::frame::shader::record::PIPELINE_MARKER_REGION;
-use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::word::{marker, MARKER_FLOATS};
 use crate::frame::shelf::{Atlas, Paint, SlotSet};

@@ -7,7 +7,6 @@
     "sRGB."
   ],
   "grid": {
-    "$type": "rgb",
     "$doc": [
       "The camera grid's lines."
     ],
@@ -18,7 +17,6 @@
     }
   },
   "share": {
-    "$type": "rgb",
     "$doc": [
       "The tint on a cell the rays stop on, by the solid angle its face shows the",
       "eye over a grid cell's, in this order, each up to its `most`."
@@ -54,12 +52,10 @@
       "$doc": "The steps the ramp runs up to, the same on every screen so two compare."
     },
     "none": {
-      "$type": "rgb",
       "$val": "#808080",
       "$doc": "A pixel that walked nothing, apart from the ramp's every color."
     },
     "ramp": {
-      "$type": "rgb",
       "$val": [
         "#23171b",
         "#493eaf",

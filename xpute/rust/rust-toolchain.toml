@@ -1,8 +1,0 @@
-# The toolchain is pinned to the patch, so that a toolchain release cannot turn
-# a lint on under it.
-[toolchain]
-channel = "1.98.1"
-profile = "minimal"
-components = ["clippy", "rustfmt"]
-# A core is compiled to a module for this target.
-targets = ["wasm32-unknown-unknown"]

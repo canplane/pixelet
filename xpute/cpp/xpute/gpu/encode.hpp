@@ -1,7 +1,7 @@
 // cpp/xpute/gpu/encode.hpp
 
 // The encoder writes a core's GPU calls as records of a stream (io/stream) in
-// the words spec/gpu/api.json gives each op, as rust/gpu/src/encode.rs writes
+// the words gpu/link/spec/api.json gives each op, as rust/gpu/src/encode.rs writes
 // them. An object the core makes is named by a handle from one table (`Gpu`).
 // A record that does not fit an open transaction is not written, and the
 // handle of the object it would have made is given back. One function gives

@@ -28,7 +28,7 @@ use crate::domain::control::navigation::follow_mode::set_following;
 use crate::domain::setting::store::settings;
 use crate::domain::view::frame::screen::size;
 use crate::sys::sched::invalidate;
-use xpute_core::clock::now;
+use xpute_guest::clock::now;
 use pxl_global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;

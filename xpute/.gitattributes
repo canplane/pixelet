@@ -7,4 +7,4 @@
 *.test.rs linguist-detectable=false
 *.test.ts linguist-detectable=false
 *.test.cpp linguist-detectable=false
-spec/golden/** linguist-generated=true
+**/spec/golden/** linguist-generated=true

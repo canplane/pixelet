@@ -1,6 +1,6 @@
 // pxl-core/sys/sched/display.rs
 
-//! The display's interval, measured from xpute-gpu's vsync answers: the gaps
+//! The display's interval, measured from xpute-gpu-guest's vsync answers: the gaps
 //! between vsyncs armed back to back, read at their low quartile, so a late
 //! answer and the early one after it do not move it.
 

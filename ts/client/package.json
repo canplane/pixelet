@@ -21,10 +21,14 @@
   "dependencies": {
     "@expo/metro-runtime": "57.0.16",
     "@expo/ui": "~57.0.20",
-    "@xpute/gpu": "workspace:*",
-    "@xpute/runtime": "workspace:*",
+    "@xpute/gpu-link": "workspace:*",
+    "@xpute/gpu-web-host": "workspace:*",
+    "@xpute/gpu-native-runtime": "workspace:*",
+    "@xpute/link": "workspace:*",
+    "@xpute/web-host": "workspace:*",
+    "@xpute/web-runtime": "workspace:*",
     "@xpute/kit": "workspace:*",
-    "@xpute/native": "workspace:*",
+    "@xpute/native-runtime": "workspace:*",
     "expo": "57.0.25",
     "expo-file-system": "~57.0.7",
     "expo-glass-effect": "~57.0.4",
@@ -47,7 +51,7 @@
     "@types/babel__core": "^7.20.5"
   },
   "xpute": {
-    "core": {
+    "guest": {
       "workspace": "../../rust",
       "package": "pxl-core",
       "profile": {

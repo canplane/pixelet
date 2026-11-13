@@ -44,7 +44,7 @@ export async function search(
 
   const res = await get(`${SEARCH_URL}?${params.toString()}`, opts?.signal);
   if (!res.ok) {
-    // The body of a refused request is never read. Cancelling it lets the
+    // The body of a refused request is never read. Canceling it lets the
     // connection go now, rather than when the response is garbage-collected.
     await res.body?.cancel();
     throw new Error(`[search] http ${res.status}`);

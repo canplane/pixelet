@@ -1,6 +1,6 @@
 // pxl-core/abi/overlay.rs
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 #![allow(
     unused_imports,
@@ -10,48 +10,67 @@
     reason = "generated from WIT"
 )]
 
-use std::cell::Cell;
 use std::rc::Rc;
-use xpute_core::link::{self, Handle, Method, Object, Reply, Return, Tag};
-use xpute_core::wait::wait;
-use xpute_kit::status::bug::OrBug;
+use xpute_guest::link;
+use xpute_guest::wait::wait;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{BranchCursor, Cursor, PacketWriter, TreeReader};
+use xpute_kit::wire::xtp::{
+    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
+};
+use xpute_link::abi::types::Token;
+use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
-/// The singleton's URI.
-pub const URI: [&str; 2] = ["pxl:core", "overlay"];
+/// The interface's handle, named by `pxl:core/overlay` (frame.json `NAMED`).
+pub const HANDLE: Handle = 0x7b1393;
+
+/// The interface's qualified name: its package and its name.
+pub const NAME: [&str; 2] = ["pxl:core", "overlay"];
 
 /// `show`
 pub const SHOW: Method = 0;
 /// `view`
 pub const VIEW: Method = 1;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GroundStatus {
-    #[default]
     Idle = 0,
     Loading = 1,
     Success = 2,
 }
 
 impl GroundStatus {
+    /// Every member, in its source's own order.
     pub const ALL: [GroundStatus; 3] = [
         GroundStatus::Idle,
         GroundStatus::Loading,
         GroundStatus::Success,
     ];
 
-    pub fn of(v: u32) -> Option<GroundStatus> {
-        GroundStatus::ALL.get(v as usize).copied()
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<GroundStatus> {
+        match val {
+            0 => Some(GroundStatus::Idle),
+            1 => Some(GroundStatus::Loading),
+            2 => Some(GroundStatus::Success),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            GroundStatus::Idle => "Idle",
+            GroundStatus::Loading => "Loading",
+            GroundStatus::Success => "Success",
+        }
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SensorStatus {
-    #[default]
     Idle = 0,
     Loading = 1,
     Ready = 2,
@@ -60,6 +79,7 @@ pub enum SensorStatus {
 }
 
 impl SensorStatus {
+    /// Every member, in its source's own order.
     pub const ALL: [SensorStatus; 5] = [
         SensorStatus::Idle,
         SensorStatus::Loading,
@@ -68,15 +88,33 @@ impl SensorStatus {
         SensorStatus::Unavailable,
     ];
 
-    pub fn of(v: u32) -> Option<SensorStatus> {
-        SensorStatus::ALL.get(v as usize).copied()
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<SensorStatus> {
+        match val {
+            0 => Some(SensorStatus::Idle),
+            1 => Some(SensorStatus::Loading),
+            2 => Some(SensorStatus::Ready),
+            3 => Some(SensorStatus::Error),
+            4 => Some(SensorStatus::Unavailable),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            SensorStatus::Idle => "Idle",
+            SensorStatus::Loading => "Loading",
+            SensorStatus::Ready => "Ready",
+            SensorStatus::Error => "Error",
+            SensorStatus::Unavailable => "Unavailable",
+        }
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Message {
-    #[default]
     GeolocationUnsupported = 0,
     GeolocationPermissionDenied = 1,
     GeolocationPositionUnavailable = 2,
@@ -87,6 +125,7 @@ pub enum Message {
 }
 
 impl Message {
+    /// Every member, in its source's own order.
     pub const ALL: [Message; 7] = [
         Message::GeolocationUnsupported,
         Message::GeolocationPermissionDenied,
@@ -97,8 +136,31 @@ impl Message {
         Message::WorldUnavailable,
     ];
 
-    pub fn of(v: u32) -> Option<Message> {
-        Message::ALL.get(v as usize).copied()
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<Message> {
+        match val {
+            0 => Some(Message::GeolocationUnsupported),
+            1 => Some(Message::GeolocationPermissionDenied),
+            2 => Some(Message::GeolocationPositionUnavailable),
+            3 => Some(Message::GeolocationTimeout),
+            4 => Some(Message::GeolocationGenericError),
+            5 => Some(Message::WorldReadFailing),
+            6 => Some(Message::WorldUnavailable),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Message::GeolocationUnsupported => "GeolocationUnsupported",
+            Message::GeolocationPermissionDenied => "GeolocationPermissionDenied",
+            Message::GeolocationPositionUnavailable => "GeolocationPositionUnavailable",
+            Message::GeolocationTimeout => "GeolocationTimeout",
+            Message::GeolocationGenericError => "GeolocationGenericError",
+            Message::WorldReadFailing => "WorldReadFailing",
+            Message::WorldUnavailable => "WorldUnavailable",
+        }
     }
 }
 
@@ -183,7 +245,7 @@ impl LocationState {
             w.bool(Some(self.watching));
             match &self.err {
                 Some(v) => {
-                    w.u32(Some((*v) as u32));
+                    w.u32(Some(*v as u32));
                 }
                 None => {
                     w.nil();
@@ -293,7 +355,7 @@ impl DivisionPart {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RefusedFile {
-    pub path: Vec<xpute_core::abi::link::Token>,
+    pub path: Vec<Token>,
 }
 
 impl RefusedFile {
@@ -313,7 +375,7 @@ impl RefusedFile {
             path: b.at(0).and_then(|c| {
                 c.as_branch().and_then(|b| {
                     (0..b.len)
-                        .map(|i| b.at(i).and_then(|c| xpute_core::abi::link::Token::read(c)))
+                        .map(|i| b.at(i).and_then(|c| Token::read(c)))
                         .collect::<Result<Vec<_>, MarshalError>>()
                 })
             })?,
@@ -349,7 +411,7 @@ impl Snapshot {
             self.companion.write(w);
             match &self.draft {
                 Some(v) => {
-                    w.str(Some(&*(*v)));
+                    w.str(Some(&**v));
                 }
                 None => {
                     w.nil();
@@ -360,21 +422,13 @@ impl Snapshot {
             w.bool(Some(self.camera_busy));
             w.bool(Some(self.zooming));
             w.bool(Some(self.over_marker));
-            w.branch(self.settings.len() as u32, |w| {
-                for x in self.settings.iter() {
-                    w.u32(Some((*x) as u32));
-                }
-            });
+            w.array::<u32>(Some(&*self.settings));
             w.branch(self.division.len() as u32, |w| {
                 for x in self.division.iter() {
                     (*x).write(w);
                 }
             });
-            w.branch(self.character_surfaces.len() as u32, |w| {
-                for x in self.character_surfaces.iter() {
-                    w.u32(Some((*x) as u32));
-                }
-            });
+            w.array::<u32>(Some(&*self.character_surfaces));
             w.branch(self.refused_files.len() as u32, |w| {
                 for x in self.refused_files.iter() {
                     (*x).write(w);
@@ -382,7 +436,7 @@ impl Snapshot {
             });
             match &self.stall {
                 Some(v) => {
-                    w.u32(Some((*v) as u32));
+                    w.u32(Some(*v as u32));
                 }
                 None => {
                     w.nil();
@@ -409,13 +463,9 @@ impl Snapshot {
             camera_busy: b.at(6).and_then(|c| c.get_bool())?,
             zooming: b.at(7).and_then(|c| c.get_bool())?,
             over_marker: b.at(8).and_then(|c| c.get_bool())?,
-            settings: b.at(9).and_then(|c| {
-                c.as_branch().and_then(|b| {
-                    (0..b.len)
-                        .map(|i| b.at(i).and_then(|c| c.get_number().map(|v| v as u32)))
-                        .collect::<Result<Vec<_>, MarshalError>>()
-                })
-            })?,
+            settings: b
+                .at(9)
+                .and_then(|c| c.get_array::<u32>().map(<[u32]>::to_vec))?,
             division: b.at(10).and_then(|c| {
                 c.as_branch().and_then(|b| {
                     (0..b.len)
@@ -423,13 +473,9 @@ impl Snapshot {
                         .collect::<Result<Vec<_>, MarshalError>>()
                 })
             })?,
-            character_surfaces: b.at(11).and_then(|c| {
-                c.as_branch().and_then(|b| {
-                    (0..b.len)
-                        .map(|i| b.at(i).and_then(|c| c.get_number().map(|v| v as u32)))
-                        .collect::<Result<Vec<_>, MarshalError>>()
-                })
-            })?,
+            character_surfaces: b
+                .at(11)
+                .and_then(|c| c.get_array::<u32>().map(<[u32]>::to_vec))?,
             refused_files: b.at(12).and_then(|c| {
                 c.as_branch().and_then(|b| {
                     (0..b.len)
@@ -487,46 +533,30 @@ impl Object for OverlayObject {
     }
 }
 
-/// Mounts `imp` at the URI, one object for every open.
+/// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn Overlay>) {
-    let o: Rc<dyn Object> = Rc::new(OverlayObject(imp));
-    link::mount(link::uri(&URI), move |_, _| Ok(o.clone()));
-}
-
-thread_local! {
-    static HANDLE: Cell<Option<Handle>> = const { Cell::new(None) };
-}
-
-/// Opens the singleton on the other side, once, at boot.
-pub fn open() -> Result<(), Errno> {
-    HANDLE.set(Some(link::open(&link::uri(&URI))?));
-    Ok(())
-}
-
-/// The singleton's handle, which `open` opened.
-pub fn handle() -> Handle {
-    HANDLE.get().or_bug(Errno::EBADF)
+    link::mount_named(HANDLE, Rc::new(OverlayObject(imp)));
 }
 
 pub fn show(snapshot: &Snapshot) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         SHOW,
         Some((1, &|w: &mut PacketWriter| {
             snapshot.write(w);
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn view(azimuth: f64, m_per_px: f64) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         VIEW,
         Some((2, &|w: &mut PacketWriter| {
             w.f64(Some(azimuth as f64));
             w.f64(Some(m_per_px as f64));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }

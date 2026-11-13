@@ -8,7 +8,7 @@
 use core::fmt::Write;
 use core::mem::{offset_of, size_of};
 
-use xpute_core::abi::link::Token;
+use xpute_link::abi::types::Token;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -41,7 +41,7 @@ pub struct TaskRecord {
     pub fail: f64,
     pub detail: f64,
     /// Where the failure was raised: the file name's address and length, and
-    /// the line. All are 0 when the runtime raised it.
+    /// the line. All are 0 when the host raised it.
     pub at_file: f64,
     pub at_file_bytes: f64,
     pub at_line: f64,

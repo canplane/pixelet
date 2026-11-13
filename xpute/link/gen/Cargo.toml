@@ -1,0 +1,18 @@
+[package]
+name = "xpute-link-gen"
+description = "The link's generator: its bindings from WIT"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+# The generator depends on no crate of the workspace but the generator's
+# writer, because it writes into them.
+[dependencies]
+xpute-gen.workspace = true
+wit-parser = "=0.263.0"

@@ -21,7 +21,7 @@ use pxl_content::generation::{self, GROUPS};
 use pxl_engine::clipmap;
 use pxl_engine::{beam, eye, light, node_cache, object, ray};
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
-use xpute_gpu::encode::Id;
+use xpute_gpu_guest::encode::Id;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -87,7 +87,7 @@ pub struct Cast<'a> {
     /// (`clipmap::Entry`); its fourth word holds nothing.
     pub clipmap: &'a [i32],
     /// The service area's index (pxl-spec `area::Area`), four keys a row (pxl-core
-    /// domain/scene/cast.rs `shards`). The runtime reads it where it lies, so its writer asks
+    /// domain/scene/cast.rs `shards`). The host reads it where it lies, so its writer asks
     /// `in_flight` (gpu/api.rs) before it writes it again.
     pub shards: &'a [[i32; 4]],
     pub objects: ObjectTable<'a>,
@@ -107,7 +107,7 @@ pub struct Cast<'a> {
 /// pointer lane and its data lane, with room for `cap` words each before they grow, at
 /// `revision`. `written_groups` names, by their first slots, the child groups written since
 /// revision `since`, the last the core uploaded (pxl-core domain/layer/object/store.rs `Upload`). The
-/// runtime reads the lanes where they lie, so their writer asks `in_flight` (gpu/api.rs)
+/// host reads the lanes where they lie, so their writer asks `in_flight` (gpu/api.rs)
 /// before it writes them again.
 pub struct ObjectTable<'a> {
     pub first_child: &'a [u32],

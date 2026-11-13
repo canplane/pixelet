@@ -41,7 +41,7 @@ std::vector<std::uint8_t> bytes(const std::string &hex_text) {
 } // namespace
 
 XPUTE_TEST(xtp_writer_matches_other_languages) {
-    Golden v = Golden::load("spec/golden/wire/xtp/encode.tsv");
+    Golden v = Golden::load("kit/spec/golden/wire/xtp/encode.tsv");
     auto check = [&v](const char *name, auto &&build) {
         std::string k;
         v.each("", [&](const std::string &j) {

@@ -18,7 +18,7 @@ fn laid(slot_cnt: usize) -> Vec<u8> {
 #[test]
 fn reads_each_slot() {
     let c = Catalog::read(&laid(SLOTS)).expect("a catalog of the compiled slots");
-    let last = Slot(SLOTS as u16 - 1);
+    let last = SLOTS as Slot - 1;
     assert_eq!(c.file(last), SLOTS as u32);
     assert_eq!(
         c.extent(last),

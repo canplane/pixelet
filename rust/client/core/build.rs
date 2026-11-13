@@ -7,7 +7,6 @@
 // and the platform links the core as it links any library.
 
 #[path = "src/sys/manifest.spec.rs"]
-#[allow(dead_code)]
 mod manifest;
 
 fn main() {
@@ -17,5 +16,5 @@ fn main() {
         return;
     }
     println!("cargo:rustc-link-arg=--stack-first");
-    println!("cargo:rustc-link-arg=-zstack-size={}", manifest::STACK_BYTES);
+    println!("cargo:rustc-link-arg=-zstack-size={}", manifest::stack::module_bytes);
 }

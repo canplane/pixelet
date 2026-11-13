@@ -1,0 +1,12 @@
+package xpute:clocks@0.1.0;
+
+// The host's system clock, as wasi:clocks@0.3's `system-clock`.
+interface system-clock {
+  // A time since the Unix epoch, 1970-01-01T00:00:00Z.
+  record instant {
+    seconds: s64,
+    nanoseconds: u32,
+  }
+
+  now: func() -> instant;
+}

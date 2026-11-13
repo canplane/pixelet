@@ -2,7 +2,7 @@
 
 use super::*;
 use pxl_spec::space::coord::q3;
-use xpute_core::clock;
+use xpute_guest::clock;
 
 /// The zone laid the plain way, asking the ground again for every box and for
 /// each of its four sides. `lay_zone` must lay the same bytes while asking

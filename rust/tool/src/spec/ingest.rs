@@ -1,7 +1,7 @@
 // pxl-tool/spec/ingest.rs
 
 //! What the asset ingest wrote (`spec/spec/asset/ingest.json`), rendered:
-//! the runtime's table, which binds a file's number to its bucket key, and the
+//! the host's table, which binds a file's number to its bucket key, and the
 //! texture pack's layout, which the renderer reads. A path is the specs' and
 //! the tools' name for a file; what is generated names it by its number
 //! (`file_number`), and Carto's symbols by theirs (`symbol_number`). Rust holds
@@ -12,9 +12,12 @@ use std::fmt::Write;
 use std::sync::OnceLock;
 
 use super::asset::cube_number;
-use super::{file, read, Node, Output};
+use super::{file, mark, read, Node, Output};
 
 pub(crate) const INGEST_JSON: &str = "spec/spec/asset/ingest.json";
+
+/// What the ingest's generated files name as their writer.
+const TOOL: &str = "pxl-tool spec/ingest.rs";
 
 pub struct File {
     pub path: String,
@@ -165,11 +168,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
 fn render_ts(rows: &[File], pack: &Pack) -> Result<String, String> {
     let mut out = String::with_capacity(rows.len() * 160);
+    out.push_str("// @pxl/client/service/origin/ingest.spec.ts\n//\n");
+    out.push_str(&format!("// {}\n", mark(INGEST_JSON, TOOL)));
     out.push_str(
-        r#"// @pxl/client/service/origin/ingest.spec.ts
-//
-// GENERATED from spec/spec/asset/ingest.json
-// Every shipped asset by its number after ASSET, file n at
+        r#"// Every shipped asset by its number after ASSET, file n at
 // `ASSET_FILES[n - 1]` (ts/client/src/service/sys/fs/asset.ts): the bucket key
 // (the SHA-256 of its bytes, which where it lies does not change), its size,
 // and for a model its extent in ENU world units, measured from the glb. The
@@ -222,10 +224,10 @@ export const PACK = {
 }
 
 fn render_rs(rows: &[File], pack: &Pack) -> Result<String, String> {
-    let mut out = vec![r##"// pxl-spec/asset/ingest.spec.rs
-//
-// GENERATED from spec/spec/asset/ingest.json
-// Every shipped asset's path below asset/content/ by its number after ASSET,
+    let mut out = vec![
+        "// pxl-spec/asset/ingest.spec.rs\n//".to_string(),
+        format!("// {}", mark(INGEST_JSON, TOOL)),
+        r##"// Every shipped asset's path below asset/content/ by its number after ASSET,
 // and the texture pack as the asset ingest composed it: which of its tiles
 // each cube wears on which face, and what each reads as from afar. Its image
 // is the file the catalog names for the cube kind's pack (catalog.spec.rs

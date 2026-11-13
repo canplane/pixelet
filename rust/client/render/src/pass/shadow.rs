@@ -24,7 +24,7 @@ use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
-use xpute_gpu::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMode};
+use xpute_gpu_link::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMode};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 

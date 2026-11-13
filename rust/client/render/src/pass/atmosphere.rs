@@ -14,7 +14,8 @@ use core::ops::Range;
 
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::adapter::epsg3857::height_u_per_m;
-use pxl_spec::space::coord::world::{around, HEIGHT_BITS};
+use pxl_spec::space::coord::world::around;
+use pxl_spec::space::coord::zoom::HEIGHT_BITS;
 use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILES};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 
@@ -23,9 +24,9 @@ use crate::frame::shader::record::{
     PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER,
     STORAGE_RW, STORAGE_TEXTURE_2D, STORAGE_TEXTURE_3D, TEXTURE, UNIFORM,
 };
-use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use xpute_core::mem;
+use xpute_link::mem;
 
 use crate::frame::shader::word::atmos::{
     BOTTOM_RADIUS, CAMERA_ALT, CITY_LIGHT, DRAWN, EARTH_DIST, EARTH_TILES, EARTH_WINDOW, EXPOSURE,
@@ -300,7 +301,7 @@ pub struct Atmosphere {
     pending: u32,
     flying: u32,
     /// The measures as they land, and the mapping's fence and result. Both are on the heap,
-    /// as the runtime writes them and a native build's statics lie outside the memory it
+    /// as the host writes them and a native build's statics lie outside the memory it
     /// writes. `ticket` is the core's number the mapping was last asked with, and `mapped`
     /// says whether a mapping is out, or landed and not yet taken.
     landed_words: Box<[u32; SLOPES]>,
@@ -879,7 +880,7 @@ fn alt_sample(alt: f32) -> f32 {
 /// the angle from straight down to the horizon there, and the near and far ends of the air's
 /// depth law, in km. The near end is how far the eye stands above the world's top, and 0 while
 /// the eye stands within the world. The world's top is the greatest Z a position holds,
-/// `HEIGHT_BITS` bits about sea level, taken in metres where a unit is longest, at the
+/// `HEIGHT_BITS` bits about sea level, taken in meters where a unit is longest, at the
 /// equator (pxl-spec 3857.rs `height_u_per_m`). So an eye high over the world spends no
 /// slice on the empty air under it, whatever latitude a unit is measured at. The far end is
 /// how far a ray from the eye runs, past the horizon, to where it leaves the air.

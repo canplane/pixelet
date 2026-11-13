@@ -40,7 +40,7 @@ impl Kind {
 }
 
 /// A uniform's field. The shaders read it through an accessor named
-/// `<uniform>_<name>()`, in lower case (build.rs `accessors`). `at` is the
+/// `<uniform>_<name>()`, in lower case (build/shared.rs `accessors`). `at` is the
 /// index of its first float in the uniform.
 #[derive(Clone, Copy)]
 pub struct Field {
@@ -418,8 +418,8 @@ pub mod screen {
     /// The frames since a tile last changed, in the frame numbered `now`, from
     /// the tile's word `changed_at`. The difference wraps, so the frame number
     /// may wrap too. This and `in_damage` are the one rule a tile is damaged
-    /// by: build.rs writes the same rule for the shaders as `tiles_age` and
-    /// `tiles_in_damage` (tile_word.wgsl), and checks that the two agree.
+    /// by: tile_word.wgsl spells the same rule for the shaders as `tiles_age`
+    /// and `tiles_in_damage`, and build.rs checks that the two agree.
     pub const fn age(now: u32, changed_at: u32) -> u32 {
         now.wrapping_sub(changed_at)
     }

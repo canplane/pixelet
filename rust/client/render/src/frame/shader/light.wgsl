@@ -72,10 +72,10 @@ fn light_cs(
   if (visible != 0u) {
     // The visible voxel is a drawable entry drawn this cast, so no walk claims its slot while
     // this pass reads it (`record::drawn`).
-    let slot = (visible & ~VISIBLE_LACK) - 1u;
+    let slot = (visible & ~RASTER_LACK) - 1u;
     let state = node_cache_word(state_at(slot));
     let faces = state & REC_FACES;
-    if ((visible & VISIBLE_LACK) == 0u && entry_kind(slot) != KIND_SPLIT && faces != 0u) {
+    if ((visible & RASTER_LACK) == 0u && entry_kind(slot) != KIND_SPLIT && faces != 0u) {
       let k = entry_node(slot, vec3<i32>(aim.origin));
       let fill = (node_cache_word(entry_at(slot) + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
       let entry = visible_cell(aim, k.zoom, k.corner, k.roots - origin_roots(aim.origin), fill, faces);

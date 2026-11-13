@@ -47,7 +47,7 @@ Make the program faster while keeping every condition the design met.
   (`build`, `longest`, `gpu`, `tick`) for the comparison, `report.txt` for where
   the time went, `trace.json` at ui.perfetto.dev for a frame on the timeline;
   and, however the run ends, `said.txt` and `shots/`. `said.txt` holds, each
-  after the run's seconds, every line the app said but the result, the runtime's
+  after the run's seconds, every line the app said but the result, the host's
   own among them (a core's stop, a device lost, an uncaptured error, and in a
   measured build a GPU record by its op's number, a GPU run, a GPU
   completion's landing or a core's entry slower than perf.json's

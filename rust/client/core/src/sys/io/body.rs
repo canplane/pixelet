@@ -7,8 +7,8 @@
 //! its own.
 //!
 //! A slot is held by its guard, `Slot`, from `take` until the guard drops. A
-//! read lends it (xpute-core link `Lend`) and the read's answer hands it
-//! back, so a read stopped mid-way still holds its slot until the runtime
+//! read lends it (xpute-link `Lend`) and the read's answer hands it
+//! back, so a read stopped mid-way still holds its slot until the host
 //! has answered. A layer holds a body until it is decoded; an Earth body
 //! until a drawn frame takes its texels (domain/layer/earth.rs `upload`). With
 //! every slot out a body waits for one given back (sys/io/room.rs
@@ -18,6 +18,7 @@
 use core::ops::{Deref, DerefMut};
 
 use pxl_global::Global;
+use xpute_link::mem;
 
 use crate::sys::heap::PAGE_BYTES;
 use crate::sys::io::demand::Stream;
@@ -115,9 +116,9 @@ impl DerefMut for Slot {
     }
 }
 
-impl xpute_core::link::Lend for Slot {
+impl xpute_link::Lend for Slot {
     fn span(&mut self) -> (u32, u32) {
-        (xpute_core::mem::off(self.bytes().as_ptr()), self.len)
+        (mem::off(self.bytes().as_ptr()), self.len)
     }
 }
 

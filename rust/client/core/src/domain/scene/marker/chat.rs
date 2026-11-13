@@ -8,14 +8,14 @@
 
 use std::rc::Rc;
 
-use xpute_core::clock::now;
+use xpute_guest::clock::now;
 use pxl_global::Global;
 
 use crate::domain::scene::marker::design::Design;
 use crate::domain::scene::marker::param::SHOWN_MS;
 use crate::sys::sched::invalidate_at;
 
-/// A line is stamped with the runtime's clock, not the frame's. A line said
+/// A line is stamped with the host's clock, not the frame's. A line said
 /// after a still spell would otherwise take the last frame's time and read
 /// as long gone. The stamp is the line's own, so a swap of character cannot
 /// make a dismissed line look new.

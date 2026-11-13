@@ -273,8 +273,8 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       if (edited) {
         // Where nothing is placed or cut, the cell holds as the world unedited answered it,
         // and no ask is made.
-        carve = eye_cut(CARVE);
-        hide = eye_cut(HIDE);
+        carve = eye_cut(EYE_CARVE);
+        hide = eye_cut(EYE_HIDE);
         put = world_root(zoom, c).x;
         if (!cut_holds(carve, zoom, c) && tree_val(put, hide, zoom, c) == VAL_VOID) {
           edited = false;

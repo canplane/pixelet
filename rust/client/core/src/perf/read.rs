@@ -17,7 +17,7 @@ use crate::perf::frame::overran;
 use crate::perf::frame::{FrameSample, RaySample, GPU_SPANS};
 use crate::perf::record::{
     perf_frames_since, perf_recording_extremes, perf_recording_state, perf_scratch,
-    perf_tasks_since,
+    perf_tasks_since, step_stats,
 };
 use crate::perf::section::TASK_PHASES;
 use crate::perf::section::{
@@ -28,16 +28,15 @@ use crate::perf::spec::{self, LIMIT, NOW, STAT};
 use crate::perf::task::TaskRecord;
 use crate::perf::word::put;
 use crate::sys::io::failure::Outcome;
-use crate::turn;
-use crate::turn::refused_frames;
+use crate::frame::refused_frames;
+use pxl_global::Global;
 use pxl_render::gpu::api;
 use pxl_render::gpu::span_spec::FRAME_KINDS;
 use pxl_render::renderer;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
-use xpute_core::clock::now;
-use pxl_global::Global;
+use xpute_guest::clock::now;
 
 const REASONS: usize = LIMIT::REASONS as usize;
 const STEP_CAP: usize = LIMIT::STEP_CAP as usize;
@@ -169,8 +168,8 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
         gpu_timed: cnt(&|f| f.gpu.timed != 0.0),
         gpu_busy: percentiles(scratch, read().map(|f| f.gpu.busy_ms)),
         gpu_busy_kinds: {
-            let mut by = [0.0; 3 * FRAME_KINDS];
-            for k in 0..FRAME_KINDS {
+            let mut by = [0.0; 3 * FRAME_KINDS.len()];
+            for k in 0..FRAME_KINDS.len() {
                 let busy = read().filter(|f| f.kind == k as f64).map(|f| f.gpu.busy_ms);
                 let (s, n) = percentiles_n(scratch, busy);
                 by[3 * k..3 * k + 3].copy_from_slice(&[s.p50, s.p95, n as f64]);
@@ -354,7 +353,7 @@ fn view() -> ViewSection {
 
 fn steps() -> StepSection {
     let mut steps = StepSection::default();
-    for (name, s) in turn::step_stats().take(STEP_CAP) {
+    for (name, s) in step_stats().take(STEP_CAP) {
         steps.slots[steps.cnt as usize] = StepStat {
             phase: f64::from(s.phase as u8),
             name: f64::from(name as u8),

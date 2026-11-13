@@ -23,7 +23,7 @@
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::world;
 
-use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_RESOLVE, PIPELINE_SCREEN_WRITE_BACK};
 use crate::frame::shader::word::screen::{DAMAGE_FRAMES, JITTERS};

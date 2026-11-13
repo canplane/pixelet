@@ -25,7 +25,8 @@ use crate::domain::layer::object::store::Entry;
 use crate::domain::preview::{Ghost, RenderEdit};
 use crate::domain::query::World;
 use pxl_global::Global;
-use pxl_spec::space::coord::zoom::{base_of, cube, idx_of, Zoom};
+use pxl_spec::space::coord::world::{base_of, cube, idx_of};
+use pxl_spec::space::coord::zoom::Zoom;
 
 /// The tool the pointer holds, as the UI chose it (`EDIT_TOOL`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

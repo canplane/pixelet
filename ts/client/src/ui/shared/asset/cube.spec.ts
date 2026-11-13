@@ -1,6 +1,6 @@
 // @pxl/client/ui/shared/asset/cube.spec.ts
 //
-// GENERATED from spec/spec/asset/cube.json
+// GENERATED from spec/spec/asset/cube.json (pxl-tool spec/asset.rs)
 //
 // One value space: a ground cell is a byte, a Carto palette entry numbered in the
 // order Carto paints, and an object's value a u16 whose byte range is

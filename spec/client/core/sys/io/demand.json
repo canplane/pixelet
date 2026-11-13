@@ -4,24 +4,33 @@
     "its run came to an end, and the phases a run reports its time in. The profiler",
     "records and reports them by these names (spec/client/core/perf/perf.json)."
   ],
-  "STREAM_NAMES": [
-    "terrain",
-    "place",
-    "division",
-    "asset",
-    "earth",
-    "object"
-  ],
-  "OUTCOME_NAMES": [
-    "ok",
-    "aborted",
-    "err"
-  ],
-  "TASK_PHASE_NAMES": [
-    "net_ms",
-    "bytes",
-    "decode_ms"
-  ],
+  "STREAM_NAMES": {
+    "$type": "enum",
+    "$val": [
+      "terrain",
+      "place",
+      "division",
+      "asset",
+      "earth",
+      "object"
+    ]
+  },
+  "OUTCOME_NAMES": {
+    "$type": "enum",
+    "$val": [
+      "ok",
+      "aborted",
+      "err"
+    ]
+  },
+  "TASK_PHASE_NAMES": {
+    "$type": "enum",
+    "$val": [
+      "net_ms",
+      "bytes",
+      "decode_ms"
+    ]
+  },
   "TASK_PHASES_MAX": {
     "$val": 6,
     "$type": "u32",

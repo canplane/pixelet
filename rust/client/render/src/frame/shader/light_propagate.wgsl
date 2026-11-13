@@ -23,7 +23,7 @@
 fn reads_texel(size: u32, p: vec2<i32>, pad: f32) -> bool {
   let half = f32(size) * 0.5;
   let d = vec2<f32>(p) + vec2<f32>(0.5) - vec2<f32>(half);
-  let r = eye_f32(LIGHT + LIGHT_REACH_NDC) * half + pad;
+  let r = eye_f32(EYE_LIGHT + LIGHT_REACH_NDC) * half + pad;
   return d.x * d.x + d.y * d.y <= r * r;
 }
 

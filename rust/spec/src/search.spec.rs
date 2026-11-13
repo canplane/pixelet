@@ -1,6 +1,6 @@
 // pxl-spec/search.spec.rs
 //
-// GENERATED from spec/spec/search.json
+// GENERATED from spec/spec/search.json (xpute-gen data.rs)
 //
 // What the search endpoint (route.json `SEARCH_URL`) answers, by number: a
 // result's kind, which says what its `category` numbers. A place's is its
@@ -13,7 +13,6 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
-    clippy::absolute_paths,
     dead_code,
     reason = "generated from the spec"
 )]

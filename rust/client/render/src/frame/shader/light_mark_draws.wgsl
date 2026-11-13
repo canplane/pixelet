@@ -63,10 +63,10 @@ fn instance_pos(k: u32, o: vec3<i32>) -> vec3<f32> {
 /// Whether a ball of `radius` at `v` units from the eye meets the eye's view (`eye::sees`). The
 /// slopes of the view's sides are the ones the host worked out (`Grid::slope`).
 fn sees(v: vec3<f32>, radius: f32) -> bool {
-  let f = dot(v, eye_v3(FORWARD));
-  let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
-  let o = vec2<f32>(dot(v, eye_v3(RIGHT)), dot(v, eye_v3(UP)));
-  let slope = vec2<f32>(eye_f32(GRID + GRID_SLOPE), eye_f32(GRID + GRID_SLOPE + 1u));
+  let f = dot(v, eye_v3(EYE_FORWARD));
+  let tan_xy = vec2<f32>(eye_f32(EYE_TAN), eye_f32(EYE_TAN + 1u));
+  let o = vec2<f32>(dot(v, eye_v3(EYE_RIGHT)), dot(v, eye_v3(EYE_UP)));
+  let slope = vec2<f32>(eye_f32(EYE_GRID + GRID_SLOPE), eye_f32(EYE_GRID + GRID_SLOPE + 1u));
   let side = abs(o) - tan_xy * f <= radius * slope;
   return f >= -radius && side.x && side.y;
 }
@@ -96,7 +96,7 @@ fn light_mark_draws_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_i
     if (k >= instance_cnt()) {
       return;
     }
-    let o = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
+    let o = vec3<i32>(i32(eye_word(EYE_ORIGIN)), i32(eye_word(EYE_ORIGIN + 1u)), i32(eye_word(EYE_ORIGIN + 2u)));
     let base = instance_pos(k, o);
     let middle = decor_middle(base);
     lo = middle - vec3<f32>(decor_radius());

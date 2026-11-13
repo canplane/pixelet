@@ -7,5 +7,5 @@
     "grid is stored as its asset's id (pxl-spec object.rs)."
   ],
   "IDX_BITS": { "$val": 10, "$type": "u32" },
-  "KIND": { "$type": "u16", "cube": 0, "decor": 1, "marker": 2 }
+  "KIND": { "$type": "enum", "cube": 0, "decor": 1, "marker": 2 }
 }

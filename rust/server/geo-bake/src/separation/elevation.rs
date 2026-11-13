@@ -11,7 +11,8 @@ use crate::terrain::CELL_U;
 use pxl_spec::ground;
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg3857::u_from_merc;
-use pxl_spec::space::coord::zoom::{idx_of, LEAF_ZOOM};
+use pxl_spec::space::coord::world::idx_of;
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
 /// Elevations at points from the tiles' elevations, in cells, as the client
 /// draws the elevation: the elevation of the cell a point lies in (pxl-spec

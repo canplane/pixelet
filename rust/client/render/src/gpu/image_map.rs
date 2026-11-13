@@ -3,7 +3,7 @@
 //! A picture the sky draws from, the moon's face or the Earth's, in a texture
 //! with its mip chain. Until it arrives the shaders draw its mean.
 
-use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{place, release, texture_usage, Format, Gpu, Image};
 

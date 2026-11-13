@@ -66,7 +66,7 @@ impl Form {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Separation {
     pub starts: Vec<u32>,      // Line d holds the points starts[d]..starts[d + 1].
-    pub points: Vec<[i16; 2]>, // Each point of the centreline, in 1/POINT_SCALE of a tile cell, as the source gives it.
+    pub points: Vec<[i16; 2]>, // Each point of the centerline, in 1/POINT_SCALE of a tile cell, as the source gives it.
     pub heights: Vec<i16>, // The road surface at each point, in leaf cells, solved over many tiles.
     pub widths: Vec<u8>, // Each line's width, in 1/POINT_SCALE of a tile cell, as the source gives it.
     pub asset_ids: Vec<u8>, // Each line's transport type: the source's class, which is the slab's material.

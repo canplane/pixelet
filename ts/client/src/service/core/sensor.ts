@@ -8,13 +8,13 @@ import * as platform from "@/service/platform/sensor.ts";
 import { geo_fix, MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
 import * as sensor from "@/abi/sensor.ts";
 import * as watch from "@/abi/watch.ts";
-import type { Remote } from "@xpute/runtime";
-import { core } from "@/service/core/core.ts";
+import type { Remote } from "@xpute/link";
+import { ui } from "@/service/core/core.ts";
 
 /** Called from the press that asks for the location, which raises the
  * permission's prompt or its settings. */
 export async function locate(): Promise<void> {
-  if (await platform.geo.permit()) void sensor.locate(core.sensor);
+  if (await platform.geo.permit()) void sensor.locate(ui);
 }
 
 /** A reading the device could not give, such as NaN or an infinity, is sent
@@ -30,7 +30,7 @@ function core_pos(
   accuracy: f64 | null,
   course: f64 | null,
 ): void {
-  void sensor.pos(core.sensor, lon, lat, finite(alt), finite(accuracy), finite(course));
+  void sensor.pos(ui, lon, lat, finite(alt), finite(accuracy), finite(course));
 }
 
 function core_orient(
@@ -39,7 +39,7 @@ function core_orient(
   beta: f64 | null,
   gamma: f64 | null,
 ): void {
-  void sensor.orient(core.sensor, 
+  void sensor.orient(ui, 
     finite(webkit_compass_heading),
     finite(alpha),
     finite(beta),
@@ -69,19 +69,19 @@ const ANSWER = {
 export const SENSOR_LISTENER: SensorListener = {
   position: core_pos,
   positionError: (err, watching) =>
-    void sensor.err(core.sensor, Sensor.Geolocation, ERR[err], watching),
+    void sensor.err(ui, Sensor.Geolocation, ERR[err], watching),
   orientation: core_orient,
   // The compass gives no code for its failure.
-  orientationLost: () => void sensor.err(core.sensor, Sensor.Orientation, null, false),
+  orientationLost: () => void sensor.err(ui, Sensor.Orientation, null, false),
   permission: (which, answer) =>
-    void sensor.permission(core.sensor, SENSOR[which], ANSWER[answer]),
+    void sensor.permission(ui, SENSOR[which], ANSWER[answer]),
 };
 
 /** Tells the core which sensors the device has, once its interfaces are
  * open. */
 export function tell_platform(): Promise<void> {
   const { geo, orient } = platform;
-  return sensor.platform(core.sensor, geo.has, orient.has, orient.gated, orient.silence);
+  return sensor.platform(ui, geo.has, orient.has, orient.gated, orient.silence);
 }
 
 /** Serves `watch` on `remote`, the core's start and stop of the device's

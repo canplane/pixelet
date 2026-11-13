@@ -16,7 +16,7 @@ anything here.
 
 A position is a `Q3` (`coord/q3.rs`): three `i32`, each axis its unit index over
 8 bits of fraction. An axis holds as many index bits as the world is wide on it
-(`coord/world.rs` `EXTENT`):
+(`coord/zoom.rs` `EXTENT`):
 
 ```
      31                                  8 7         0
@@ -56,9 +56,10 @@ The zooms are size and nothing else — the rightmost column is this program's
 arrangement, not the number's meaning. A zoom finer than z24 is a fraction of a
 unit and lives in a position's fraction, down to z32, a 256th.
 
-A size answers the same questions at every zoom (`coord/zoom.rs`): its side in
-units (`units`), which cell a point lies in and where that cell begins
-(`idx_of`, `base_of`), and its box (`cube`). The world is zoom 0's cell, once
+A size answers the same questions at every zoom: its side in units
+(`coord/zoom.rs` `units`), and, in the world, which cell a point lies in and
+where that cell begins (`coord/world.rs` `idx_of`, `base_of`), and its box
+(`cube`). The world is zoom 0's cell, once
 around in X (`coord/world.rs` `ROUND`, `around`), and a stored X stands where it
 is nearest the eye (`nearest`); which lap a cell's X is named on is
 `coord/world.rs` `wrap_idx`, which every walk names it by.
@@ -136,7 +137,7 @@ zoom.
 
 Every tree in this world is dyadic. A node's parent is its coordinate halved and
 its children are the 2^D under it (`hierarchy/tree.rs`), its size is a zoom, a
-cube at a zoom is one box (`coord/zoom.rs` `cube`), and a ray crosses a box by
+cube at a zoom is one box (`coord/world.rs` `cube`), and a ray crosses a box by
 the ray's span between the box's planes on each axis (pxl-engine `cast.rs`
 `spans`, `entry_plane`). That much is one law, written once. What a node holds,
 whether it is resident, how it is stored and how a reader walks it are each

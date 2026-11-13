@@ -1,6 +1,6 @@
 // pxl-spec/asset/decor.spec.rs
 //
-// GENERATED from spec/spec/asset/decor.json
+// GENERATED from spec/spec/asset/decor.json (pxl-tool spec/asset.rs)
 //
 // The decors, the cube catalog's sibling: drawn as a model, not a cell the rays meet.
 //
@@ -140,42 +140,15 @@ pub const DECORS: [Decor; 4] = [
         id: crate::asset::id::asset_id(crate::asset::id::Kind::decor, 0),
         row: &ROWS[0],
         variants: &[
-            Variant {
-                model: crate::asset::catalog::Slot(2),
-                skin: crate::asset::catalog::Slot(1),
-            },
-            Variant {
-                model: crate::asset::catalog::Slot(3),
-                skin: crate::asset::catalog::Slot(1),
-            },
-            Variant {
-                model: crate::asset::catalog::Slot(4),
-                skin: crate::asset::catalog::Slot(1),
-            },
-            Variant {
-                model: crate::asset::catalog::Slot(5),
-                skin: crate::asset::catalog::Slot(1),
-            },
-            Variant {
-                model: crate::asset::catalog::Slot(6),
-                skin: crate::asset::catalog::Slot(1),
-            },
-            Variant {
-                model: crate::asset::catalog::Slot(8),
-                skin: crate::asset::catalog::Slot(7),
-            },
-            Variant {
-                model: crate::asset::catalog::Slot(9),
-                skin: crate::asset::catalog::Slot(7),
-            },
-            Variant {
-                model: crate::asset::catalog::Slot(10),
-                skin: crate::asset::catalog::Slot(7),
-            },
-            Variant {
-                model: crate::asset::catalog::Slot(11),
-                skin: crate::asset::catalog::Slot(7),
-            },
+            Variant { model: 2, skin: 1 },
+            Variant { model: 3, skin: 1 },
+            Variant { model: 4, skin: 1 },
+            Variant { model: 5, skin: 1 },
+            Variant { model: 6, skin: 1 },
+            Variant { model: 8, skin: 7 },
+            Variant { model: 9, skin: 7 },
+            Variant { model: 10, skin: 7 },
+            Variant { model: 11, skin: 7 },
         ],
     },
     // Boats on open water: rivers, lakes and the sea near a coast; wetland is
@@ -190,20 +163,20 @@ pub const DECORS: [Decor; 4] = [
         row: &ROWS[1],
         variants: &[
             Variant {
-                model: crate::asset::catalog::Slot(13),
-                skin: crate::asset::catalog::Slot(12),
+                model: 13,
+                skin: 12,
             },
             Variant {
-                model: crate::asset::catalog::Slot(14),
-                skin: crate::asset::catalog::Slot(12),
+                model: 14,
+                skin: 12,
             },
             Variant {
-                model: crate::asset::catalog::Slot(15),
-                skin: crate::asset::catalog::Slot(12),
+                model: 15,
+                skin: 12,
             },
             Variant {
-                model: crate::asset::catalog::Slot(16),
-                skin: crate::asset::catalog::Slot(12),
+                model: 16,
+                skin: 12,
             },
         ],
     },
@@ -216,24 +189,24 @@ pub const DECORS: [Decor; 4] = [
         row: &ROWS[2],
         variants: &[
             Variant {
-                model: crate::asset::catalog::Slot(18),
-                skin: crate::asset::catalog::Slot(17),
+                model: 18,
+                skin: 17,
             },
             Variant {
-                model: crate::asset::catalog::Slot(19),
-                skin: crate::asset::catalog::Slot(17),
+                model: 19,
+                skin: 17,
             },
             Variant {
-                model: crate::asset::catalog::Slot(20),
-                skin: crate::asset::catalog::Slot(17),
+                model: 20,
+                skin: 17,
             },
             Variant {
-                model: crate::asset::catalog::Slot(21),
-                skin: crate::asset::catalog::Slot(17),
+                model: 21,
+                skin: 17,
             },
             Variant {
-                model: crate::asset::catalog::Slot(22),
-                skin: crate::asset::catalog::Slot(17),
+                model: 22,
+                skin: 17,
             },
         ],
     },
@@ -245,20 +218,20 @@ pub const DECORS: [Decor; 4] = [
         row: &ROWS[3],
         variants: &[
             Variant {
-                model: crate::asset::catalog::Slot(24),
-                skin: crate::asset::catalog::Slot(23),
+                model: 24,
+                skin: 23,
             },
             Variant {
-                model: crate::asset::catalog::Slot(25),
-                skin: crate::asset::catalog::Slot(23),
+                model: 25,
+                skin: 23,
             },
             Variant {
-                model: crate::asset::catalog::Slot(26),
-                skin: crate::asset::catalog::Slot(23),
+                model: 26,
+                skin: 23,
             },
             Variant {
-                model: crate::asset::catalog::Slot(27),
-                skin: crate::asset::catalog::Slot(23),
+                model: 27,
+                skin: 23,
             },
         ],
     },

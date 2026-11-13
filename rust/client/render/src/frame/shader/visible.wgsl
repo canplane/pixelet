@@ -34,7 +34,7 @@ fn visible_cell(aim: Aim, zoom: u32, corner: vec3<u32>, roots: vec3<i32>, fill: 
   let og = vec3<u32>(aim.origin) + vec3<u32>(0u, Y_START, Z_START);
   let lo = units(corner, og, roots);
   let hi = far_of(corner, under(zoom), og, roots);
-  let inset = (hi - lo) * (0.5 * (1.0 - side(fill)));
+  let inset = (hi - lo) * (0.5 * (1.0 - fill_side(fill)));
   let b = span_of(dir, aim.inv, lo + inset, hi - inset, 0.0, aim.t_max);
   let axis = crossing(dir, b.near, true);
   // The side the ray enters through, numbered as the bits of `faces` are (pxl-engine

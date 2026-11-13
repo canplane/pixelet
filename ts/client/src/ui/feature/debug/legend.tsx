@@ -18,7 +18,7 @@ import { grid, share, steps } from "@/abi/debug_look.spec.ts";
 import { useCore } from "@/ui/shared/watch.ts";
 
 interface Look {
-  rgb: number;
+  rgb: string;
   alpha?: number;
   dashed?: boolean;
 }
@@ -46,8 +46,6 @@ const SHARE: Record<keyof typeof share, string> = {
   within: `${share.finer.most} to ${share.within.most} grid cells`,
   coarser: `coarser, past ${share.within.most}`,
 };
-
-const hex = (rgb: number) => `#${rgb.toString(16).padStart(6, "0")}`;
 
 const useShown = (name: "world_gizmo" | "camera_gizmo" | "ray_steps") =>
   useCore((s) => s.settings[SETTING[name].key] === 1);
@@ -88,11 +86,11 @@ function Row({
         <View
           style={
             filled
-              ? [styles.patch, { backgroundColor: hex(look.rgb) }]
+              ? [styles.patch, { backgroundColor: look.rgb }]
               : [
                   styles.stroke,
                   {
-                    borderColor: hex(look.rgb),
+                    borderColor: look.rgb,
                     borderStyle: look.dashed ? "dashed" : "solid",
                     opacity: look.alpha ?? 1,
                   },
@@ -144,7 +142,7 @@ export function RayStepsLegend() {
           <Defs>
             <LinearGradient id="steps-ramp" x1="0" y1="0" x2="1" y2="0">
               {steps.ramp.map((rgb, i) => (
-                <Stop key={i} offset={i / last} stopColor={hex(rgb)} />
+                <Stop key={i} offset={i / last} stopColor={rgb} />
               ))}
             </LinearGradient>
           </Defs>

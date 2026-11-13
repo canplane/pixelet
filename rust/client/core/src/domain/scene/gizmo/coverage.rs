@@ -13,21 +13,21 @@ use fnv::{FnvHashMap, FnvHashSet};
 use pxl_spec::brick;
 
 use pxl_engine::clipmap::FIRST_CELL_ZOOM;
+use pxl_global::Global;
 use pxl_render::gpu::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::bake::tile::Tile as _;
+use pxl_spec::color::{rgb, Rgb};
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::cell_zoom_at;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::zoom::{
-    base_of, units, within, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM,
-};
+use pxl_spec::space::coord::world::base_of;
+use pxl_spec::space::coord::zoom::{units, within, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM};
 use pxl_spec::space::coord::{q3, world};
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use pxl_global::Global;
 
 use crate::domain::layer::terrain::clipmap::{eye_bricks, BrickCover, EyeBrick};
 use crate::domain::layer::Base as _;
@@ -67,20 +67,24 @@ impl Mark {
     ];
 
     /// The mark's color, its opacity, and whether it is dashed.
-    fn look(self) -> (u32, f32, bool) {
+    fn look(self) -> (Rgb, f32, bool) {
         use gizmo_spec::coverage::*;
         match self {
-            Mark::Drawn => (drawn::rgb, drawn::alpha, drawn::dashed),
+            Mark::Drawn => (const { rgb(drawn::rgb) }, drawn::alpha, drawn::dashed),
             Mark::DrawnFromFloor => (
-                drawn_from_floor::rgb,
+                const { rgb(drawn_from_floor::rgb) },
                 drawn_from_floor::alpha,
                 drawn_from_floor::dashed,
             ),
-            Mark::Unbuilt => (unbuilt::rgb, unbuilt::alpha, unbuilt::dashed),
-            Mark::FloorOnly => (floor_only::rgb, floor_only::alpha, floor_only::dashed),
-            Mark::NoTile => (no_tile::rgb, no_tile::alpha, no_tile::dashed),
-            Mark::Quadrant => (tile::rgb, tile::alpha, tile::dashed),
-            Mark::Shard => (shard::rgb, shard::alpha, shard::dashed),
+            Mark::Unbuilt => (const { rgb(unbuilt::rgb) }, unbuilt::alpha, unbuilt::dashed),
+            Mark::FloorOnly => (
+                const { rgb(floor_only::rgb) },
+                floor_only::alpha,
+                floor_only::dashed,
+            ),
+            Mark::NoTile => (const { rgb(no_tile::rgb) }, no_tile::alpha, no_tile::dashed),
+            Mark::Quadrant => (const { rgb(tile::rgb) }, tile::alpha, tile::dashed),
+            Mark::Shard => (const { rgb(shard::rgb) }, shard::alpha, shard::dashed),
         }
     }
 
@@ -142,7 +146,7 @@ pub fn coverage_gizmo_draw(draw: &mut DrawList) {
 /// lines or their origin changed. A brick that lands changes its mark, and
 /// the ground under it changes with it. It must run before the frame's list
 /// begins (domain/scene/stage.rs), so the lines and the origin they are drawn
-/// about come from the same turn.
+/// about come from the same frame.
 pub fn coverage_gizmo_step(show: bool) {
     let c = COVERAGE.get(Coverage::default);
     let draw = draw_list();

@@ -8,7 +8,7 @@
 
 use pxl_spec::asset::catalog::SLOTS;
 
-use xpute_core::abi::link::Token;
+use xpute_link::abi::types::Token;
 
 use crate::sys::io::file_spec::path;
 

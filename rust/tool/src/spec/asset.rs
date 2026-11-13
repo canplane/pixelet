@@ -2,7 +2,7 @@
 
 use super::catalog::{slots, CUBE_JSON, DECOR_JSON};
 use super::{
-    align_star, casing_note, file, js_num, json_str, read, rgb_literal, rs_doc, rs_ident, ts_doc,
+    align_star, casing_note, file, mark, js_num, json_str, read, rs_doc, rs_ident, ts_doc,
     Node, Output,
 };
 const ID_JSON: &str = "spec/spec/asset/id.json";
@@ -146,9 +146,9 @@ pub fn ground_colors() -> Result<std::collections::BTreeMap<String, u32>, String
 
 pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     let spec = read(COLOR_JSON)?;
-    let hdr: Vec<String> = [
+    let head: Vec<String> = [
         "//",
-        "// GENERATED from spec/spec/asset/color.json",
+        format!("// {}", mark("spec/spec/asset/color.json", "pxl-tool spec/asset.rs")).as_str(),
         "//",
         "// The color of every palette entry and every placed color: what a cube *is* to",
         "// the eye when no texture is drawn over it — everything drawn with the",
@@ -161,7 +161,7 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     .to_vec();
 
     let mut ts = vec!["// @pxl/client/ui/shared/asset/color.spec.ts".to_string()];
-    ts.extend(hdr.iter().cloned());
+    ts.extend(head.iter().cloned());
     ts.extend([
         String::new(),
         "/** Each cube's color as `#rrggbb`, by its number. */".to_string(),
@@ -182,10 +182,10 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
 
     let types = read(CUBE_JSON)?;
     let mut rs = vec!["// pxl-spec/asset/color.spec.rs".to_string()];
-    rs.extend(hdr);
+    rs.extend(head);
     rs.push(String::new());
     rs.extend(casing_note());
-    rs.extend(["", "use super::cube;", "use super::Swatch;"].map(String::from));
+    rs.extend(["", "use super::cube;", "use super::Swatch;", "use crate::color::rgb;"].map(String::from));
     let groups = [
         ("sentinel", "sentinel", "u8"),
         ("ground", "ground", "u8"),
@@ -222,9 +222,9 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
                 .str_at("hex")
                 .ok_or(format!("color.json: {group}.{name} has no hex"))?;
             rs.push(format!(
-                "        cube::{module}::{} => Some(Swatch::new({})),",
+                "        cube::{module}::{} => Some(Swatch::new(rgb({}))),",
                 rs_ident(name),
-                rgb_literal(hex)?
+                json_str(hex)
             ));
         }
         if group == "ground" {
@@ -307,9 +307,9 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         }
     }
 
-    let hdr: Vec<String> = [
+    let head: Vec<String> = [
         "//",
-        "// GENERATED from spec/spec/asset/cube.json",
+        format!("// {}", mark("spec/spec/asset/cube.json", "pxl-tool spec/asset.rs")).as_str(),
         "//",
         "// One value space: a ground cell is a byte, a Carto palette entry numbered in the",
         "// order Carto paints, and an object's value a u16 whose byte range is",
@@ -332,7 +332,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     };
 
     let mut ts = vec!["// @pxl/client/ui/shared/asset/cube.spec.ts".to_string()];
-    ts.extend(hdr.iter().cloned());
+    ts.extend(head.iter().cloned());
     // Every placeable cube under its heading: the ground's palette entries, and the colors past a ground byte.
     let cube_sections: Vec<(&str, &Entry)> = with_sections(&ground)
         .chain(with_sections(&object).filter(|(_, e)| is_color(e)))
@@ -363,11 +363,11 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         ("ground", ground_node, &ground),
         ("object", object_node, &object),
     ] {
-        let logical = format!("@pxl/client/ui/shared/asset/cube/{group}.spec.ts");
+        let package_path = format!("@pxl/client/ui/shared/asset/cube/{group}.spec.ts");
         let mut m = vec![
-            format!("// {logical}"),
+            format!("// {package_path}"),
             "//".to_string(),
-            "// GENERATED from spec/spec/asset/cube.json".to_string(),
+            format!("// {}", mark("spec/spec/asset/cube.json", "pxl-tool spec/asset.rs")),
         ];
         m.extend(note(node, ""));
         for item in list.iter() {
@@ -446,7 +446,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
         .find(|e| e.name == "air")
         .ok_or(format!("{CUBE_JSON}: no object.air"))?;
     let mut voxel = vec!["// @pxl/client/service/sys/fs/voxel.spec.ts".to_string()];
-    voxel.extend(hdr.iter().cloned());
+    voxel.extend(head.iter().cloned());
     voxel.push(String::new());
     if let Some(doc) = &air.doc {
         voxel.extend(ts_doc(doc, ""));
@@ -471,7 +471,7 @@ pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
     ]);
 
     let mut rs = vec!["// pxl-spec/asset/cube.spec.rs".to_string()];
-    rs.extend(hdr);
+    rs.extend(head);
     rs.push(String::new());
     rs.extend(casing_note());
     rs.extend(
@@ -701,9 +701,9 @@ fn runs(vals: impl Iterator<Item = u32>) -> Vec<(u32, u32)> {
 pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     let spec = read(DECOR_JSON)?;
     let doc = spec.lines_at("$doc").unwrap_or_default();
-    let hdr: Vec<String> = [
+    let head: Vec<String> = [
         "//",
-        "// GENERATED from spec/spec/asset/decor.json",
+        format!("// {}", mark("spec/spec/asset/decor.json", "pxl-tool spec/asset.rs")).as_str(),
         "//",
         "// The decors, the cube catalog's sibling: drawn as a model, not a cell the rays meet.",
         "//",
@@ -724,12 +724,12 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     let (rows, table) = decor_table(&spec, &ground_palette()?, &slots()?)?;
 
     let mut ts = vec!["// @pxl/client/ui/shared/asset/decor.spec.ts".to_string()];
-    ts.extend(hdr.iter().cloned());
+    ts.extend(head.iter().cloned());
     ts.extend(doc.iter().map(|l| format!("// {l}")));
     let mut constants = vec![
         "// @pxl/client/ui/shared/asset/decor/decor.spec.ts".to_string(),
         "//".to_string(),
-        "// GENERATED from spec/spec/asset/decor.json".to_string(),
+        format!("// {}", mark("spec/spec/asset/decor.json", "pxl-tool spec/asset.rs")),
     ];
     constants.extend(
         ids.iter()
@@ -764,7 +764,7 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     ts.push("};".to_string());
 
     let mut rs = vec!["// pxl-spec/asset/decor.spec.rs".to_string()];
-    rs.extend(hdr.iter().cloned());
+    rs.extend(head.iter().cloned());
     rs.extend(doc.iter().map(|l| format!("// {l}")));
     rs.push("//".into());
     rs.extend(casing_note());
@@ -803,7 +803,6 @@ fn decor_table(
     asset_ids: &[(String, u32)],
     slots: &[String],
 ) -> Result<(Vec<String>, Vec<String>), String> {
-    const SLOT: &str = "crate::asset::catalog::Slot";
     let slot_of = |path: &str| {
         slots
             .iter()
@@ -876,7 +875,7 @@ fn decor_table(
                                 .join(", ")
                         ));
                         models.push(format!(
-                            "Variant {{ model: {SLOT}({}), skin: {SLOT}({skin}) }}",
+                            "Variant {{ model: {}, skin: {skin} }}",
                             slot_of(model)?
                         ));
                     }

@@ -5,7 +5,7 @@
 //! (domain/scene/character/companion.rs `line_hangs`). A tap on the bubble
 //! goes nowhere.
 
-use super::arrangement::{Instance, Key};
+use super::{Instance, Key};
 use crate::domain::scene::character::companion::line_hangs;
 use crate::domain::scene::marker::chat::shown_line;
 use crate::domain::scene::marker::design::Design;

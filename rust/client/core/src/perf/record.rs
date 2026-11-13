@@ -11,15 +11,17 @@
 
 use core::mem::size_of;
 
-use pxl_render::renderer::GpuRead;
-use xpute_core::clock::now;
 use pxl_global::Global;
+use pxl_render::renderer::GpuRead;
+use xpute_guest::clock::now;
 
-use crate::perf::frame::{FrameSample, WorstFrame};
-use crate::perf::report::RayRead;
+use crate::perf::frame::{FrameSample, RaySample, WorstFrame};
 use crate::perf::section::{RecordingSection, RecordingStateSection};
 use crate::perf::spec::LIMIT;
+use crate::perf::step::{self, StepName};
 use crate::perf::task::TaskRecord;
+use crate::sys::sched::phase_spec::Phase;
+use crate::sys::sched::tick::TickContext;
 
 /// The rings keep the last minute (perf.json `LIMIT.WINDOW_MS`), as the UI's
 /// long frames do. At 60 Hz that is 3,600 frames. A faster display or a busy
@@ -86,7 +88,7 @@ const COLUMNS: [u32; 5] = [
 
 /// The heap the profiler holds while its setting is on. The buddy allocator
 /// gives each column a power-of-two block, so each column counts at its size
-/// rounded up (door/layout.rs `HEAP_FLOWS_BYTES`).
+/// rounded up (link/layout.rs `HEAP_FLOWS_BYTES`).
 pub const PERF_BYTES: u64 = {
     let mut sum = 0;
     let mut k = 0;
@@ -332,6 +334,14 @@ pub fn perf_record_gpu(r: GpuRead) {
     });
 }
 
+/// A frame's ray counts as they land, with the renderer's number for the
+/// frame that counted them.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RayRead {
+    pub frame: f64,
+    pub sample: RaySample,
+}
+
 /// The ray counts `r` of the frame the renderer numbered `r.frame`, written
 /// into that frame's record.
 pub fn perf_record_rays(r: RayRead) {
@@ -342,7 +352,7 @@ pub fn perf_record_rays(r: RayRead) {
     at_frame(l, r.frame, |f| f.ray_sample = r.sample);
 }
 
-/// Folds what a frame turn held, `section`, into the recording's extremes.
+/// Folds what a frame held, `section`, into the recording's extremes.
 pub fn perf_fold_recording(section: &RecordingSection) {
     let l = perf();
     if l.recording {
@@ -446,3 +456,58 @@ pub fn perf_tasks_since(t: f64) -> &'static [TaskRecord] {
 #[cfg(test)]
 #[path = "record.test.rs"]
 mod test;
+
+/// A step's time, summed while the profiler records.
+#[derive(Clone, Copy, Debug)]
+pub struct StepStat {
+    pub phase: Phase,
+    pub ms: f64,
+    pub cnt: u32,
+    pub max_ms: f64,
+}
+
+const STAT_NONE: StepStat = StepStat {
+    phase: Phase::ALL[0],
+    ms: 0.0,
+    cnt: 0,
+    max_ms: 0.0,
+};
+
+/// Each step's time by its name, since the profiler last began to record.
+static STEP_STATS: Global<[StepStat; step::STEP_NAMES.len()]> = Global::new();
+/// Whether the profiler records, and the steps are timed.
+static STEP_TIMING: Global<bool> = Global::new();
+
+fn step_stats_mut() -> &'static mut [StepStat; step::STEP_NAMES.len()] {
+    STEP_STATS.get(|| [STAT_NONE; step::STEP_NAMES.len()])
+}
+
+/// Runs the step `name` of `phase`, timed while the profiler records.
+pub fn timed(ctx: &mut TickContext, phase: Phase, name: StepName, step: fn(&mut TickContext)) {
+    if !*STEP_TIMING.get(|| false) {
+        return step(ctx);
+    }
+    let at = now();
+    step(ctx);
+    let ms = now() - at;
+    let s = &mut step_stats_mut()[name as usize];
+    (s.phase, s.ms, s.cnt, s.max_ms) = (phase, s.ms + ms, s.cnt + 1, s.max_ms.max(ms));
+}
+
+/// Starts summing each step's time from zero, or stops summing it; what was
+/// summed stays to be read.
+pub fn set_step_timing(on: bool) {
+    if on {
+        *step_stats_mut() = [STAT_NONE; step::STEP_NAMES.len()];
+    }
+    STEP_TIMING.set(on);
+}
+
+/// Each step that ran while the profiler recorded, by its name.
+pub fn step_stats() -> impl Iterator<Item = (StepName, StepStat)> {
+    let stats = *step_stats_mut();
+    StepName::ALL
+        .into_iter()
+        .map(move |name| (name, stats[name as usize]))
+        .filter(|(_, s)| s.cnt > 0)
+}

@@ -5,16 +5,29 @@
 //! `as const` where a spec lists a TypeScript file. The Rust carries no
 //! names: a list of them is its count, and an enum where the spec asks for
 //! one, and a table's keys are not listed; the TypeScript keeps them for what
-//! a person reads. A `file` is a slot of the catalog (catalog.rs).
+//! a person reads. A `file` is a reference to an asset: the tool numbers each
+//! and hands the generator plain numbers (`numbered`).
 
-use xpute_gen::spec::data::{outputs_at, DataSpec, EnumScope, Layout, SlotType};
+use xpute_gen::spec::data::{table_outputs, DataSpec};
 
-use super::catalog::{runs, FILE};
+use super::catalog::{run_of, FILE};
 use super::ingest::files;
-use super::Output;
+use super::{read, Node, Output};
 use crate::root;
 
-const DATA_SPECS: [DataSpec; 19] = [
+const DATA_SPECS: [DataSpec; 20] = [
+    DataSpec {
+        json: "spec/client/core/sys/manifest.json",
+        ts: Some("ts/client/src/abi/manifest.spec.ts"),
+        rs: Some("rust/client/core/src/sys/manifest.spec.rs"),
+        ..DataSpec::DEFAULT
+    },
+    DataSpec {
+        json: "spec/spec/bake/object.json",
+        ts: Some("ts/client/src/ui/feature/world/object.spec.ts"),
+        rs: Some("rust/spec/src/bake/object.spec.rs"),
+        ..DataSpec::DEFAULT
+    },
     DataSpec {
         json: "spec/spec/space/earth.json",
         rs: Some("rust/spec/src/space/coord/earth.spec.rs"),
@@ -28,24 +41,18 @@ const DATA_SPECS: [DataSpec; 19] = [
     DataSpec {
         json: "spec/spec/object/ext.json",
         rs: Some("rust/spec/src/object/ext.spec.rs"),
-        module: "ext",
-        enum_scope: EnumScope::All,
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/spec/asset/marker.json",
         ts: Some("ts/client/src/ui/shared/asset/marker.spec.ts"),
-        ts_names: Some(&["PIN_LABEL", "MARKER_TEXT_CHARS"]),
         rs: Some("rust/spec/src/asset/marker.spec.rs"),
-        module: "marker",
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/spec/asset/id.json",
         ts: Some("ts/client/src/ui/shared/asset/id.spec.ts"),
         rs: Some("rust/spec/src/asset/id.spec.rs"),
-        module: "id",
-        enum_scope: EnumScope::All,
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -63,128 +70,128 @@ const DATA_SPECS: [DataSpec; 19] = [
     DataSpec {
         json: "spec/spec/asset/character.json",
         ts: Some("ts/client/src/ui/shared/asset/character.spec.ts"),
-        ts_names: Some(&["groups", "GENDER"]),
         rs: Some("rust/spec/src/asset/character.spec.rs"),
-        module: "character",
-        enum_scope: EnumScope::All,
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/spec/asset/sky.json",
         rs: Some("rust/spec/src/asset/sky.spec.rs"),
-        module: "sky",
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/core/domain/scene/gizmo/gizmo.json",
         ts: Some("ts/client/src/abi/gizmo.spec.ts"),
         rs: Some("rust/client/core/src/domain/scene/gizmo/gizmo.spec.rs"),
-        module: "gizmo_spec",
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/render/api.json",
         ts: Some("ts/client/src/abi/gpu.spec.ts"),
-        ts_names: Some(&["surface_role", "stream", "device"]),
         rs: Some("rust/client/render/src/api.spec.rs"),
-        module: "api_spec",
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/render/frame/shader/debug_look.json",
         ts: Some("ts/client/src/abi/debug_look.spec.ts"),
         rs: Some("rust/client/render/src/frame/shader/debug_look.spec.rs"),
-        module: "debug_look_spec",
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/core/sys/io/file.json",
         ts: Some("ts/client/src/abi/file.spec.ts"),
         rs: Some("rust/client/core/src/sys/io/file.spec.rs"),
-        module: "file_spec",
-        ..DataSpec::DEFAULT
-    },
-    DataSpec {
-        json: "spec/client/core/sys/io/text_answer.json",
-        ts: Some("ts/client/src/abi/text_answer.spec.ts"),
-        rs: Some("rust/client/core/src/sys/io/text_answer.spec.rs"),
-        module: "text_answer_spec",
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/core/sys/io/demand.json",
         ts: Some("ts/client/src/abi/demand.spec.ts"),
         rs: Some("rust/client/core/src/sys/io/demand.spec.rs"),
-        module: "demand_spec",
-        enum_scope: EnumScope::Named(&["STREAM_NAMES", "OUTCOME_NAMES", "TASK_PHASE_NAMES"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/core/sys/sched/phase.json",
         ts: Some("ts/client/src/abi/phase.spec.ts"),
         rs: Some("rust/client/core/src/sys/sched/phase.spec.rs"),
-        module: "phase_spec",
-        enum_scope: EnumScope::Named(&["PHASES"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/core/turn/step.json",
+        json: "spec/client/core/perf/step.json",
         ts: Some("ts/client/src/abi/step.spec.ts"),
-        rs: Some("rust/client/core/src/turn/step.spec.rs"),
-        enum_scope: EnumScope::Named(&["STEP_NAMES", "EFFECT_NAMES"]),
+        rs: Some("rust/client/core/src/perf/step.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/render/gpu/span.json",
         ts: Some("ts/client/src/abi/span.spec.ts"),
         rs: Some("rust/client/render/src/gpu/span.spec.rs"),
-        module: "span_spec",
-        enum_scope: EnumScope::Named(&["GPU_SPAN_NAMES", "FRAME_KINDS", "LIGHT_CHANGED"]),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/core/perf/perf.json",
-        uses: &[
-            "spec/client/core/sys/sched/phase.json",
-            "spec/client/core/sys/io/demand.json",
-            "spec/client/core/turn/step.json",
-            "spec/client/render/gpu/span.json",
-        ],
         ts: Some("ts/client/src/abi/perf.spec.ts"),
         rs: Some("rust/client/core/src/perf/perf.spec.rs"),
-        enum_scope: EnumScope::Named(&["HIT_KINDS"]),
         ..DataSpec::DEFAULT
     },
 ];
 
-/// A TypeScript file's directory, and the name it is imported by.
-const TS_LAYOUT: [(&str, &str); 1] = [("ts/client/src/", "@pxl/client/")];
-
-/// A Rust file's `src/`, and its crate's name.
-const RS_LAYOUT: [(&str, &str); 3] = [
-    ("rust/client/core/src/", "pxl-core"),
-    ("rust/client/render/src/", "pxl-render"),
-    ("rust/spec/src/", "pxl-spec"),
-];
-
-/// What a file reference is written as in Rust: a type whose one field is
-/// the reference's slot.
-const SLOT: &str = "crate::asset::catalog::Slot";
-
+/// Each spec's files, as the generator writes them from plain data. A file
+/// reference is, in Rust, the slot the catalog numbers it by: the spec's
+/// references in document order from its run's first (catalog.rs); in
+/// TypeScript, the file's number after ASSET, its place in the file list
+/// from 1.
 pub fn outputs() -> Result<Vec<Output>, String> {
     let files: Vec<String> = files()?.into_iter().map(|f| f.path).collect();
-    let runs = runs()?;
-    let slots = [SlotType {
-        ty: FILE,
-        rs: SLOT,
-        names: &files,
-        runs: &runs,
-    }];
-    let layout = Layout {
-        ts: &TS_LAYOUT,
-        rs: &RS_LAYOUT,
-        rs_names: false,
-        slots: &slots,
-    };
-    outputs_at(&root(), &DATA_SPECS, &layout)
+    let mut out = Vec::new();
+    for d in &DATA_SPECS {
+        let spec = read(d.json)?;
+        let mut refs = 0;
+        let ts = numbered(&spec, None, &mut |path| {
+            refs += 1;
+            let k = files.iter().position(|f| f == path);
+            k.map(|k| k as u16 + 1).ok_or(format!("{}: {path} is no file the ingest lists", d.json))
+        })?;
+        if refs == 0 {
+            out.extend(table_outputs(&root(), d, spec)?);
+            continue;
+        }
+        let (first, cnt) = run_of(d.json)?;
+        let mut next = first;
+        let rs = numbered(&spec, None, &mut |_| {
+            next += 1;
+            Ok(next - 1)
+        })?;
+        if next != first + cnt {
+            return Err(format!("{}: its references are not the {cnt} of its run", d.json));
+        }
+        out.extend(table_outputs(&root(), &DataSpec { ts: None, ..*d }, rs)?);
+        out.extend(table_outputs(&root(), &DataSpec { rs: None, ..*d }, ts)?);
+    }
+    Ok(out)
+}
+
+/// `n` with each `file` leaf under it replaced by its number, which `number`
+/// gives in document order, as catalog.rs `leaves` walks them, and its
+/// `$type` by `u16`.
+fn numbered(
+    n: &Node,
+    ty: Option<&str>,
+    number: &mut impl FnMut(&str) -> Result<u16, String>,
+) -> Result<Node, String> {
+    let ty = n.str_at("$type").or(ty);
+    Ok(match n {
+        Node::Str(s) if ty == Some(FILE) => Node::Num(f64::from(number(s)?)),
+        Node::Arr(a) => Node::Arr(a.iter().map(|e| numbered(e, ty, number)).collect::<Result<_, _>>()?),
+        Node::Obj(entries) => Node::Obj(
+            entries
+                .iter()
+                .map(|(k, v)| match k.as_str() {
+                    "$type" if v.str() == Some(FILE) => Ok((k.clone(), Node::Str("u16".into()))),
+                    "$val" => Ok((k.clone(), numbered(v, ty, number)?)),
+                    k if k.starts_with('$') => Ok((k.to_string(), v.clone())),
+                    _ => Ok((k.clone(), numbered(v, ty, number)?)),
+                })
+                .collect::<Result<_, String>>()?,
+        ),
+        n => n.clone(),
+    })
 }

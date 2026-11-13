@@ -9,7 +9,7 @@ import UIKit
 /// The device's half of the client's services on iOS (the .native files in
 /// ts/client/src/service/platform/), as one module that answers what the UI
 /// asks of the system. The core, and the view it draws into, are in xpute's own
-/// module (@xpute/native).
+/// module (@xpute/native-runtime).
 public class PlatformModule: Module {
 
   public func definition() -> ModuleDefinition {
@@ -97,7 +97,7 @@ public class PlatformModule: Module {
     // ---- the world's surface (service/platform/surface.native.tsx) ----
 
     View(WorldView.self) {
-      Events("onAttach", "onDetach")
+      Events("onAttach", "onDetach", "onPointer")
       Prop("surface") { (view: WorldView, surface: UInt32) in
         view.surface = surface
       }

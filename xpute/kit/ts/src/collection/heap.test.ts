@@ -1,0 +1,45 @@
+// @xpute/kit/collection/heap.test.ts
+
+/**
+ * Holds the TypeScript heaps to golden/collection/heap.tsv, the record every
+ * language's heaps must match.
+ */
+
+import { test } from "vitest";
+import assert from "node:assert/strict";
+
+import { Golden } from "@xpute/golden";
+import {
+  type Element,
+  heapsort,
+  MaxHeap,
+  MinHeap,
+} from "@xpute/kit/collection/heap.ts";
+
+const show = (e: Element<number, number> | undefined): string =>
+  e === undefined ? "none" : `${e.key}:${e.val}`;
+
+test("heaps pop what the record holds", async () => {
+  const v = await Golden.load("golden/collection/heap.tsv");
+  const min = new MinHeap<number, number>([]);
+  const max = new MaxHeap<number, number>([]);
+  v.each("steps", (k) => {
+    if (v.s(`${k}.op`) === "pop") {
+      assert.deepStrictEqual(show(min.pop()), v.s(`${k}.min`), `${k}.min`);
+      assert.deepStrictEqual(show(max.pop()), v.s(`${k}.max`), `${k}.max`);
+    } else {
+      const e = { key: Number(v.s(`${k}.key`)), val: Number(v.s(`${k}.val`)) };
+      min.push(e);
+      max.push(e);
+    }
+  });
+  const arr: Element<number, number>[] = [];
+  v.each("input", (k) => {
+    const [key, val] = v.s(k).split(":").map(Number);
+    arr.push({ key, val });
+  });
+  heapsort(arr);
+  const want: string[] = [];
+  v.each("sorted", (k) => want.push(v.s(k)));
+  assert.deepStrictEqual(arr.map(show), want);
+});

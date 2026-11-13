@@ -4,15 +4,13 @@
 //! document order, spec by spec in `SPECS`' order. The Rust names each slot;
 //! the catalog fills them with the file each names, by its number after
 //! ASSET, and its extent (pxl-spec asset/catalog.rs reads the layout).
-//! The runtime serves it, as hex in TypeScript.
-
-use xpute_gen::spec::data::Run;
+//! The host serves it, as hex in TypeScript.
 
 use super::ingest::{file_number, files};
-use super::{file, read, Node, Output};
+use super::{file, mark, read, Node, Output};
 
 /// A data spec's `$type` for a file reference: in Rust its slot, in
-/// TypeScript its number after ASSET.
+/// TypeScript its number after ASSET (data.rs `numbered`).
 pub(crate) const FILE: &str = "file";
 
 pub(crate) const CUBE_JSON: &str = "spec/spec/asset/cube.json";
@@ -47,8 +45,11 @@ fn leaves(n: &Node, ty: Option<&str>, out: &mut Vec<String>) {
     }
 }
 
+/// A spec's run of slots: the spec, its first slot, and how many it holds.
+type Run = (&'static str, u16, u16);
+
 /// Each spec's run: its first slot, and how many it makes.
-pub(crate) fn runs() -> Result<Vec<Run<'static>>, String> {
+pub(crate) fn runs() -> Result<Vec<Run>, String> {
     let mut first = 0;
     paths()?
         .into_iter()
@@ -91,9 +92,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let ts = [
         "// @pxl/client/service/sys/fs/catalog.spec.ts",
         "//",
-        "// GENERATED from the asset specs and ingest.json",
+        format!("// {}", mark("the asset specs and ingest.json", "pxl-tool spec/catalog.rs")).as_str(),
         "//",
-        "// The catalog the runtime plugs in, served at (ASSET, `CATALOG`)",
+        "// The catalog the host plugs in, served at (ASSET, `CATALOG`)",
         "// (ts/client/src/service/sys/fs/asset.ts): the file each of the core's slots names and its",
         "// extent, laid out as pxl-spec asset/catalog.rs reads it, in hex.",
         "",
@@ -105,7 +106,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let rs = [
         "// pxl-spec/asset/catalog.spec.rs",
         "//",
-        "// GENERATED from the asset specs",
+        format!("// {}", mark("the asset specs", "pxl-tool spec/catalog.rs")).as_str(),
         "",
         "use super::Slot;",
         "",
@@ -117,7 +118,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         format!("pub const SLOTS: usize = {};", slots.len()),
         String::new(),
         "/// The cube kind's texture pack (cube.json `pack`).".to_string(),
-        format!("pub const pack: Slot = Slot({});", run_of(CUBE_JSON)?.0),
+        format!("pub const pack: Slot = {};", run_of(CUBE_JSON)?.0),
     ])
     .collect::<Vec<_>>();
     Ok(vec![

@@ -1,14 +1,11 @@
 // @pxl/client/ui/shared/asset/character.spec.ts
 //
-// GENERATED from spec/spec/asset/character.json
+// GENERATED from spec/spec/asset/character.json (xpute-gen data.rs)
 //
 // The characters: a person or a pet, a model with clips, the
 // characters a player can be. Each group's models by their path under
 // asset/content/, how tall it stands and which clip is its move. What a
 // path is, its number and its extent, is the catalog's (pxl_spec::asset::catalog).
-
-import * as Group from "./character/group.spec.ts";
-import * as GENDER from "./character/gender.spec.ts";
 
 /** The groups a character is of, each numbered, and in each its variants,
  * each numbered by its row, row for row with its models, the colormap its pack
@@ -120,8 +117,50 @@ export const groups = {
   },
 } as const;
 
-export { Group };
+export const Group = {
+  person: 0,
+  pet: 1,
+} as const;
+export type Group = (typeof Group)[keyof typeof Group];
+
+/** The name of the `Group` member numbered `n`, or undefined for a number
+ * no member has. */
+export function group_name(n: number): keyof typeof Group | undefined {
+  return (Object.keys(Group) as (keyof typeof Group)[]).find(
+    (k) => Group[k] === n,
+  );
+}
+
+/** The `Group` member `n` is, or null for a number no member has. */
+export function group_of(n: number): Group | null {
+  return group_name(n) === undefined ? null : (n as Group);
+}
+
+/** The clip a character stands in, "idle", by its index in both packs' animations. */
+export const IDLE_CLIP = 1 as number;
 
 /** A person's gender, which splits the picker into two rows; a person is
  * shown by its place in its row. */
-export { GENDER };
+export const GENDER = {
+  female: 0 as number,
+  male: 1 as number,
+} as const;
+
+export const Gender = {
+  female: 0,
+  male: 1,
+} as const;
+export type Gender = (typeof Gender)[keyof typeof Gender];
+
+/** The name of the `Gender` member numbered `n`, or undefined for a number
+ * no member has. */
+export function gender_name(n: number): keyof typeof Gender | undefined {
+  return (Object.keys(Gender) as (keyof typeof Gender)[]).find(
+    (k) => Gender[k] === n,
+  );
+}
+
+/** The `Gender` member `n` is, or null for a number no member has. */
+export function gender_of(n: number): Gender | null {
+  return gender_name(n) === undefined ? null : (n as Gender);
+}

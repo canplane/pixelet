@@ -1,0 +1,75 @@
+// xpute's link in WIT's shape; the execution meaning is xpute's (xpute-guest
+// link.rs). WIT's grammar is used as far as xpute needs it: interfaces, `func`
+// and `async func`, resources and their methods, records, enums, variants
+// whose cases carry one payload each, lists, options, bool, the integers to
+// 32 bits, f32, f64 and strings.
+//
+// Whatever is called is an object, under a handle. A singleton interface's is
+// named: frame.json's NAMED bit and the hash of its package and its name,
+// ("xpute:clocks", "monotonic-clock"), which the generator writes on both sides,
+// so it is called with no open. A resource's the side that serves it issues,
+// opened by a URI: a tuple of tokens, each an s32 or a string, as a file's are
+// the program's path tokens. A frame's command carries the handle, the
+// method's number and the RES bit (31): the handle in bits 8..30, the method in
+// bits 0..7. A method's number is its place in its interface, in declaration
+// order: a singleton interface's functions, or one resource's methods.
+//
+// The root, handle 0, has two methods. `open(uri) -> handle`, number 0, the
+// serving side answers at once from the opener mounted at the URI's longest
+// matching leading tokens. An open is pipelined, so a missing file opens, and
+// its first async method answers ENOENT. `cancel(tag)`, number 1, cancels a
+// call the sender has pending (frame.json CANCEL). Every handle has a
+// drop, method 0xFF, as the component model's resource drop, which takes no
+// result and lets the object go; a
+// resource whose end must report a result keeps its own method for it, as a
+// file's `close`.
+//
+// A guest has three exports. `link_init` lays the link and answers its layout,
+// the inbox and a frame's room, and runs nothing of the program. `link_boot`
+// is the guest's first entry: the program's boot mounts what it serves, and
+// only then does the entry start. An interface is called by its named handle
+// with no open (frame.json `NAMED`), so a bug in a boot is reported through the
+// stop at once. `link_in` enters the guest with the frame laid in its
+// inbox. The host calls init, reads the layout, then boot, so every entry
+// comes from a host that knows the room. A trap out of any export stops the
+// guest for good.
+//
+// A method that may answer later is an `async func`, and is sent; any other
+// always answers at once. An `async func` always answers later, with
+// EINPROGRESS, so waiting on one leaves the guest's entry. The guest runs only
+// when the host enters it: with a request, an answer, or the answer of what it
+// armed, such as `monotonic-clock.wait-for`.
+//
+// Raw memory enters WIT in one place, `xpute:link/types.lent`: a borrow, in the
+// component model's sense, of a span of the caller's memory, (at, len), valid
+// until the answer. The data stays where it is and only its place crosses; the
+// callee reads or writes it there. The caller's binding takes a buffer it owns,
+// lends it with the call and hands it back with the answer, so the borrow lasts
+// as long as the ownership. A call dropped before its answer is canceled
+// (frame.json `CANCEL`), as the component model cancels a dropped subtask, and
+// keeps the buffer alive until its answer, ECANCELED or its own, comes.
+//
+// A bool, an unsigned integer or a handle returns in the answer's result,
+// below 2^31; any other return, in its packet. A variant crosses as its
+// payload alone, whose node's type tells its case, so no two cases cross as
+// one type; an option's none is a nil node.
+//
+// The link's crossings (xpute-guest link.rs) are no world's: a world holds
+// only interfaces, and a program's world only those it uses.
+
+package xpute:link@0.1.0;
+
+// What the link itself takes.
+interface types {
+  // A URI's token.
+  variant token {
+    int(s32),
+    str(string),
+  }
+
+  // A borrow of a span of the caller's memory, valid until the answer.
+  record lent {
+    at: u32,
+    len: u32,
+  }
+}

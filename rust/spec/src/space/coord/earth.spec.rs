@@ -1,6 +1,6 @@
 // pxl-spec/space/coord/earth.spec.rs
 //
-// GENERATED from spec/spec/space/earth.json
+// GENERATED from spec/spec/space/earth.json (xpute-gen data.rs)
 //
 // The Earth as the map takes it: Web Mercator's sphere, which every meter the
 // map measures is a meter of (pxl-spec space/coord/adapter/4326.rs).
@@ -10,7 +10,6 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
-    clippy::absolute_paths,
     dead_code,
     reason = "generated from the spec"
 )]

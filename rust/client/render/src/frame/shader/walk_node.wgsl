@@ -41,14 +41,14 @@ const UNTIL_BEAM = 2u;
 /// and square root round in its own way, so every pass that walks or marks an eye's ray takes
 /// it from here, and all of them walk the same ray.
 fn eye_aim(tan: vec2<f32>) -> Aim {
-  let aimed = eye_v3(FORWARD) + tan.x * eye_v3(RIGHT) + tan.y * eye_v3(UP);
+  let aimed = eye_v3(EYE_FORWARD) + tan.x * eye_v3(EYE_RIGHT) + tan.y * eye_v3(EYE_UP);
   let dir = aimed / length(aimed);
   return Aim(
-    vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u))),
+    vec3<i32>(i32(eye_word(EYE_ORIGIN)), i32(eye_word(EYE_ORIGIN + 1u)), i32(eye_word(EYE_ORIGIN + 2u))),
     dir,
     ray_inv(ray_dir(dir)),
-    eye_f32(FAR),
-    vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)),
+    eye_f32(EYE_FAR),
+    vec2<u32>(eye_word(EYE_RANGE), eye_word(EYE_RANGE + 1u)),
     UNTIL_OPAQUE,
     NONE,
     vec2<f32>(0.0),

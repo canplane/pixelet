@@ -6,7 +6,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 # Naming
 
 - Use short, plain names, as in UNIX V6 and K&R's C.
-- The system (xpute, the commands' modules, what the core asks of its runtime)
+- The system (xpute, the commands' modules, what the guest asks of its host)
   takes its word from Unix, Linux or Wayland; a device outside them keeps its
   platform's word. The application takes its field's word (graphics, cartography,
   games). A metaphor no field uses is no name.
@@ -43,6 +43,8 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   it: a row's class is its `kind`, the coarsest zoom it shows at its
   `first_zoom`, a grid with a value a cell its `cells`. A column holds many and
   is plural; the row read from it is singular.
+- Spelling is American (`color`, `behavior`, `center`). A word copied from
+  outside keeps its own (OpenStreetMap's `community_centre`).
 - PascalCase types, camelCase and the React UI's own names stay whole (`let
   cfg: Config`). A name that comes up from the core or xpute keeps its spelling
   in the UI (`cnt`, `lat`), and a name copied from an outside API keeps that
@@ -68,9 +70,9 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | the camera modes | `orbit`, `first_person` (the UI says 1인칭/3인칭) | free |
   | what a mouse, touch or controller points with | `pointer` | cursor |
   | the raster's nearest sample at each pixel | the visibility buffer | pick |
-  | a frame's number between xpute's core and runtime, its meaning the program's | a `cmd`, a `Command` | vec, vector, opcode |
+  | a frame's number between xpute's guest and host, its meaning the program's | a `cmd`, a `Command` | vec, vector, opcode |
   | what the UI asks of the core | a command | |
-  | a core's command to its runtime, a frame it sends | an import | hostcall, system call, hypercall |
+  | a guest's command to its host, a frame it sends | an import | hostcall, system call, hypercall |
   | an import answered before it returns | a call | hostcall |
   | a node of the plane at a zoom | `Quadrant`, `quad_at` | Tile |
   | a node under a shard, through the height as well | `Octant` | EntryAt |
@@ -93,8 +95,15 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | decor drawn as a model, an impostor or not at all by its distance | its `lod` | tier |
 
   `at` is where a thing is, `to` where it is going.
-- xpute's names are the mechanism's: the core, the runtime, the UI, a device, a
-  frame and the host. pixelet names its parts by the side of xpute they sit on,
-  the owner in the prefix (`pxl_core`, `xpute_core`, `Runtime.core`).
+- xpute's names are the mechanism's, as the component model has them: the
+  guest, the host that serves it, the UI, a device and a frame. Two are
+  outside the standard: the `link`, xpute's own word, the protocol both sides
+  run, and its code; and the runtime, the platform's execution environment the
+  host runs in, as the JS field has it (a browser, Node). xpute's tree is laid
+  out by platform: `link/`, `guest/`, `web/host`, `web/runtime`, `native/host`
+  and `native/runtime`, and the GPU's `gpu/link`, `gpu/guest`, `gpu/web/host`,
+  `gpu/native/host` and `gpu/native/runtime`. pixelet's core is its guest.
+  pixelet names its parts by the side of xpute they sit on, the owner in the
+  prefix (`pxl_core`, `xpute_guest`, `@xpute/web-host`).
 - A file, folder or type name is singular (`service/`, `remote.ts`,
   `component/`).

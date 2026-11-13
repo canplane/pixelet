@@ -1,6 +1,6 @@
 // pxl-spec/asset/sky.spec.rs
 //
-// GENERATED from spec/spec/asset/sky.json
+// GENERATED from spec/spec/asset/sky.json (xpute-gen data.rs)
 //
 // The sky: what hangs in the sky, claiming no cell, so no
 // cell holds it. Each by its files' paths under asset/content/; what a
@@ -11,7 +11,6 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
-    clippy::absolute_paths,
     dead_code,
     reason = "generated from the spec"
 )]
@@ -20,15 +19,11 @@
 /// cloud one of its models (pxl-core domain/scene/environment/cloud.rs).
 /// Quaternius, CC0.
 pub mod cumulus {
-    pub const models: [crate::asset::catalog::Slot; 3] = [
-        crate::asset::catalog::Slot(66),
-        crate::asset::catalog::Slot(67),
-        crate::asset::catalog::Slot(68),
-    ];
-    pub const skin: crate::asset::catalog::Slot = crate::asset::catalog::Slot(69);
+    pub const models: [u16; 3] = [66, 67, 68];
+    pub const skin: u16 = 69;
 }
 
 /// The moon's near side, the picture the sky draws it with (NASA).
 pub mod moon {
-    pub const picture: crate::asset::catalog::Slot = crate::asset::catalog::Slot(70);
+    pub const picture: u16 = 70;
 }

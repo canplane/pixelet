@@ -1,6 +1,6 @@
 // pxl-core/abi/scene.rs
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 #![allow(
     unused_imports,
@@ -10,36 +10,53 @@
     reason = "generated from WIT"
 )]
 
-use std::cell::Cell;
 use std::rc::Rc;
-use xpute_core::link::{self, Handle, Method, Object, Reply, Return, Tag};
-use xpute_core::wait::wait;
-use xpute_kit::status::bug::OrBug;
+use xpute_guest::link;
+use xpute_guest::wait::wait;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{BranchCursor, Cursor, PacketWriter, TreeReader};
+use xpute_kit::wire::xtp::{
+    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
+};
+use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
-/// The singleton's URI.
-pub const URI: [&str; 2] = ["pxl:core", "scene"];
+/// The interface's handle, named by `pxl:core/scene` (frame.json `NAMED`).
+pub const HANDLE: Handle = 0x7c289a;
+
+/// The interface's qualified name: its package and its name.
+pub const NAME: [&str; 2] = ["pxl:core", "scene"];
 
 /// `draw`
 pub const DRAW: Method = 0;
 /// `chat`
 pub const CHAT: Method = 1;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum SceneContent {
-    #[default]
     World = 0,
     Character = 1,
 }
 
 impl SceneContent {
+    /// Every member, in its source's own order.
     pub const ALL: [SceneContent; 2] = [SceneContent::World, SceneContent::Character];
 
-    pub fn of(v: u32) -> Option<SceneContent> {
-        SceneContent::ALL.get(v as usize).copied()
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<SceneContent> {
+        match val {
+            0 => Some(SceneContent::World),
+            1 => Some(SceneContent::Character),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            SceneContent::World => "World",
+            SceneContent::Character => "Character",
+        }
     }
 }
 
@@ -96,25 +113,9 @@ impl Object for SceneObject {
     }
 }
 
-/// Mounts `imp` at the URI, one object for every open.
+/// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn Scene>) {
-    let o: Rc<dyn Object> = Rc::new(SceneObject(imp));
-    link::mount(link::uri(&URI), move |_, _| Ok(o.clone()));
-}
-
-thread_local! {
-    static HANDLE: Cell<Option<Handle>> = const { Cell::new(None) };
-}
-
-/// Opens the singleton on the other side, once, at boot.
-pub fn open() -> Result<(), Errno> {
-    HANDLE.set(Some(link::open(&link::uri(&URI))?));
-    Ok(())
-}
-
-/// The singleton's handle, which `open` opened.
-pub fn handle() -> Handle {
-    HANDLE.get().or_bug(Errno::EBADF)
+    link::mount_named(HANDLE, Rc::new(SceneObject(imp)));
 }
 
 pub fn draw(
@@ -124,14 +125,14 @@ pub fn draw(
     bg: Option<u32>,
 ) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         DRAW,
         Some((4, &|w: &mut PacketWriter| {
             w.u32(Some(surface as u32));
             w.u32(Some(content as u32));
             match &group {
                 Some(v) => {
-                    w.u8(Some((*v)));
+                    w.u8(Some(*v));
                 }
                 None => {
                     w.nil();
@@ -139,7 +140,7 @@ pub fn draw(
             }
             match &bg {
                 Some(v) => {
-                    w.u32(Some((*v) as u32));
+                    w.u32(Some(*v as u32));
                 }
                 None => {
                     w.nil();
@@ -147,16 +148,16 @@ pub fn draw(
             }
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn chat(text: &str) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         CHAT,
         Some((1, &|w: &mut PacketWriter| {
             w.str(Some(&*text));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }

@@ -32,7 +32,7 @@ use crate::sys::sched::{invalidate, invalidate_at};
 use pxl_global::Global;
 use pxl_render::frame::shader::word;
 use pxl_render::param::location::beacon;
-use xpute_core::clock::now;
+use xpute_guest::clock::now;
 
 // The zone's radius in the ground's leaf cells, from its footprint
 // (`ZONE_FOOTPRINT_U`). The 0.707 taken off is half a cell's diagonal, so a

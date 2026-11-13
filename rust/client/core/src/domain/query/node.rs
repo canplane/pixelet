@@ -1,7 +1,9 @@
 // pxl-core/domain/query/node.rs
 
-//! What is in a node: the world's one query. One record of a node answers
-//! for two sizes, the cell at the zoom asked and a coarser node.
+//! What the layers compose in a node, the descent the world's one query
+//! stands on (query.rs `World::node`, which adds the decor standing in it).
+//! One record of a node answers for two sizes, the cell at the zoom asked and
+//! a coarser node.
 //!
 //! At the zoom a reader asks, the answer is what the node is: the cell, by
 //! the one rule (pxl-engine `ground::node`). Each source answers from its
@@ -61,9 +63,7 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 use pxl_spec::value::VOID;
 
 use super::change;
-use super::decor::report_claims;
 use super::world::World;
-use crate::domain::layer::instance::Instance;
 use crate::domain::layer::terrain::clipmap::clip_read;
 use crate::domain::layer::terrain::pool::way_pool;
 use crate::domain::layer::tile_cache::Path;
@@ -86,16 +86,6 @@ pub(super) struct At {
 }
 
 impl World {
-    /// What is in the cell `node` at its own zoom, which is `coarsest` or
-    /// finer, for an asker with nothing handed down (`asset_at`), the decor
-    /// standing in it included. X is on the asker's lap.
-    pub fn asset(&self, node: Node<3>) -> Answer<u32> {
-        report_claims(node);
-        self.asset_at(node, |at, zooms, path| {
-            self.node(at, zooms, path, &mut |_| true)
-        })
-    }
-
     /// `node` with nothing handed down, as a descent's root is. Each source
     /// finds what it needs down the node's line from the top.
     pub(super) fn start(&self, node: Node<3>) -> At {
@@ -140,23 +130,6 @@ impl World {
         }
     }
 
-    /// What is in `at`'s node, asked over `zooms`, the zooms from far to
-    /// near that a reader asks within it: this is the world's one query. What
-    /// the layers compose (`layer_node`), with the decor standing in it
-    /// (`with_decor`), which only the CPU answers. So a tree the ground grew
-    /// and a tree someone planted are one thing to whatever asks, of the
-    /// decor it `sees`.
-    pub(super) fn node(
-        &self,
-        at: &mut At,
-        zooms: [Zoom; 2],
-        path: &mut Path,
-        sees: &mut dyn FnMut(&Instance) -> bool,
-    ) -> Answer<In<[u32; 2]>> {
-        let (answer, relief) = self.layers(at, zooms, path);
-        answer.map(|i| self.with_decor(at, zooms[1], relief, i, sees))
-    }
-
     /// What the layers compose in `at`'s node (`layers`), under the decor
     /// standing in it: what decor's own generation stands on and asks
     /// (domain/query/scatter.rs).
@@ -182,7 +155,7 @@ impl World {
     /// The four palette indices a cell is drawn by are left to the GPU.
     /// `path` are the ground's lines the asking walk read, and the node's
     /// line steps on from them (`walk_line`).
-    fn layers(
+    pub(super) fn layers(
         &self,
         at: &mut At,
         zooms: [Zoom; 2],

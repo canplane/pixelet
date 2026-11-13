@@ -47,7 +47,7 @@ fn line_inheritance(line: u32, z: u32) -> vec3<u32> {
 /// (`beam::NODE_WORDS`). It is returned as its index (`Node::idx`), its roots taken from the
 /// eye's origin, with its zoom in `w`.
 fn node_idx(k: u32) -> vec4<i32> {
-  let o = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
+  let o = vec3<i32>(i32(eye_word(EYE_ORIGIN)), i32(eye_word(EYE_ORIGIN + 1u)), i32(eye_word(EYE_ORIGIN + 2u)));
   let r0 = vec3<i32>(o.x >> 31u, 0i, i32(u32(o.z) + Z_START) >> 31u);
   let zoom = beams[k + NODE_ZOOM];
   let corner = vec3<u32>(beams[k + NODE_CORNER], beams[k + NODE_CORNER + 1u], beams[k + NODE_CORNER + 2u]);
@@ -129,7 +129,7 @@ fn hides(
     z += 1u;
     at = world_child(at, z, over(n, zoom, z));
   }
-  let a = world_node(at, zoom, n, zoom, zoom, eye_cut(CARVE), eye_cut(HIDE)).asset.x;
+  let a = world_node(at, zoom, n, zoom, zoom, eye_cut(EYE_CARVE), eye_cut(EYE_HIDE)).asset.x;
   return fills(a) && ((a >> FILL_SHIFT) & (EIGHTHS - 1u)) == 0u;
 }
 
@@ -193,8 +193,8 @@ fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // The holes' stops have room for `HITS_A_FRAME` asks, and the samples for one ask a sample
   // (`beam::Grid::hit_asks_at`, `asks_at`). Where the asks start tells which list this is.
   let asks = args[RASTER_ARGS_ASKS];
-  let samples = eye_word(GRID + GRID_SAMPLES) * eye_word(GRID + GRID_SAMPLES + 1u);
-  let cap = select(samples, HITS_A_FRAME, asks == eye_word(GRID + GRID_HIT_ASKS_AT));
+  let samples = eye_word(EYE_GRID + GRID_SAMPLES) * eye_word(EYE_GRID + GRID_SAMPLES + 1u);
+  let cap = select(samples, HITS_A_FRAME, asks == eye_word(EYE_GRID + GRID_HIT_ASKS_AT));
   if (id.x >= in_cap(args[RASTER_ARGS_INSTANCES], cap)) {
     return;
   }

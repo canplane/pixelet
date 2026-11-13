@@ -1,9 +1,9 @@
 # sys
 
-The core cannot read a file, open a connection or tell the time. The runtime
+The core cannot read a file, open a connection or tell the time. The host
 does all of that for it. What the core has is its memory, laid out once, and
-the entries the runtime gives it. `sys/` is the layer that makes those enough. It
-turns what the layers above want into asks of the runtime, fits every answer
+the entries the host gives it. `sys/` is the layer that makes those enough. It
+turns what the layers above want into asks of the host, fits every answer
 into memory that was set aside at boot, and spends each entry's time in an order
 the rest of the core can rely on.
 
@@ -12,7 +12,7 @@ the rest of the core can rely on.
 
 ## The memory, laid out once
 
-The core's memory is `MEM_BYTES`, whole before its first entry and never
+The core's memory is the manifest's `mem.bytes`, whole before its first entry and never
 grown, so a full heap stops the core. Its sections never move.
 
 ```text
@@ -51,7 +51,7 @@ Every other body is a heap buffer of its own, owned by whoever holds it.
 
 ## An entry
 
-The runtime decides when the core runs. Each entry arrives with a grant that
+The host decides when the core runs. Each entry arrives with a grant that
 says how long the frame may take and how many reads may be out, and the core
 spends it in one order: the effects of what the UI sent, then the tick, then the
 draw, then the tasks (`frame.rs`).
@@ -62,7 +62,7 @@ share of what is left for the phases after it, so a busy load does not starve
 what follows (`sched/tick.rs`). After the frame, the entry's tasks get their
 own share of the frame time, however far the frame ran over (`sched.rs`).
 A task that has work left asks for the next entry; a core with nothing to do asks
-for none, and the runtime lets it sleep.
+for none, and the host lets it sleep.
 
 ## Reads
 
@@ -83,7 +83,7 @@ stops what nobody wants any more, ranks the rest by the one policy
                                         └▶ loader (assets)
                                               │
                                               ▼
-                                  file ─▶ the runtime's file device
+                                  file ─▶ the host's file device
                                               │ completion
                                               ▼
                                    packet ─▶ the layer that asked
@@ -122,4 +122,4 @@ and named to the client, which sets it aside (`io/file.rs`).
 
 Text is the one thing the core asks of its platform and waits for. A layout or
 a raster is a call that the platform answers before it returns, writing the
-answer where the call said (`io/text.rs`).
+answer into the buffer the call lends (`io/text.rs`).

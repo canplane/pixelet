@@ -9,7 +9,7 @@
 // `screen::JITTERS`.
 
 // The uniform `TileGrid` and the rule a tile's word is read by, `tiles_age` and
-// `tiles_in_damage`, come from tile_word.wgsl, which build.rs writes from word.rs `screen`.
+// `tiles_in_damage`, come from tile_word.wgsl, which spells word.rs `screen`'s rule.
 // `cnt` holds the tiles across and down, the frames a tile stays damaged once it changed
 // (`damage_frames`), and this frame's number. In a frame drawn whole, `damage_frames` is
 // `u32::MAX`, so every tile is damaged. `size` holds the target's pixels across and down, how

@@ -135,7 +135,7 @@ std::string read_deep(std::span<const std::uint8_t> pkt) {
 } // namespace
 
 XPUTE_TEST(xtp_cursor_matches_other_languages) {
-    Golden v = Golden::load("spec/golden/wire/xtp/cursor.tsv");
+    Golden v = Golden::load("kit/spec/golden/wire/xtp/cursor.tsv");
     v.each("packets", [&v](const std::string &k) {
         std::vector<std::uint8_t> pkt = bytes(v.s(k + ".packet"));
         Result<TreeReader> reader = TreeReader::make(pkt);

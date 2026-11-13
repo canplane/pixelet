@@ -1,6 +1,6 @@
 // pxl-spec/space/coord/geoid.spec.rs
 //
-// GENERATED from spec/spec/space/geoid.json
+// GENERATED from spec/spec/space/geoid.json (xpute-gen data.rs)
 //
 // EGM2008's geoid height over the WGS84 ellipsoid, in meters to a tenth: what a GPS height,
 // the ellipsoid's, is over the terrain's, EGM2008's (GEDTM30, EPSG:3855). From GeographicLib's
@@ -12,7 +12,6 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
-    clippy::absolute_paths,
     dead_code,
     reason = "generated from the spec"
 )]

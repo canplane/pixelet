@@ -1,6 +1,6 @@
 // @pxl/client/ui/feature/search/search.spec.ts
 //
-// GENERATED from spec/spec/search.json
+// GENERATED from spec/spec/search.json (xpute-gen data.rs)
 //
 // What the search endpoint (route.json `SEARCH_URL`) answers, by number: a
 // result's kind, which says what its `category` numbers. A place's is its
@@ -8,6 +8,7 @@
 // 1, 0 for none); a division's is its subtype (division.json), as each part
 // of a result's `context` gives its own.
 
-import * as SEARCH_KIND from "./search/search_kind.spec.ts";
-
-export { SEARCH_KIND };
+export const SEARCH_KIND = {
+  PLACE: 0 as number,
+  DIVISION: 1 as number,
+} as const;

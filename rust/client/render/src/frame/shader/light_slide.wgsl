@@ -26,7 +26,7 @@ fn reaches(tile: vec2<u32>, c: vec4<f32>, bands: vec2<u32>) -> bool {
   if (band < bands.x || band > bands.y) {
     return false;
   }
-  let grow = ldexp(1.0, i32(UNIT_ZOOM) - i32(band)) + eye_f32(LIGHT + LIGHT_WIDTH);
+  let grow = ldexp(1.0, i32(UNIT_ZOOM) - i32(band)) + eye_f32(EYE_LIGHT + LIGHT_WIDTH);
   let lo = c.xy - vec2<f32>(grow);
   let hi = c.zw + vec2<f32>(grow);
   let t = f32(LIGHT_TILE);
@@ -36,7 +36,7 @@ fn reaches(tile: vec2<u32>, c: vec4<f32>, bands: vec2<u32>) -> bool {
   let down = light_v3(LIGHT_DOWN).xy;
   let e0 = across * t;
   let e1 = down * t;
-  let e2 = light_v3(LIGHT_DIR).xy * eye_f32(LIGHT + LIGHT_T_MAX);
+  let e2 = light_v3(LIGHT_DIR).xy * eye_f32(EYE_LIGHT + LIGHT_T_MAX);
   let mid = light_v3(0u).xy + i * across + j * down + 0.5 * (e0 + e1 + e2);
   let at = 0.5 * (lo + hi) - mid;
   let half = 0.5 * (hi - lo);

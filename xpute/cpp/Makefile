@@ -42,7 +42,7 @@ AMALGAMATION_MAP := -fmacro-prefix-map=$(AMALGAMATION)/= -fmacro-prefix-map=$(OU
 # A link reads the conformance core's numbers as make variables
 # (`CONFORMANCE_STACK_BYTES`).
 include dev/conformance/core.spec.mk
-# A module core is linked with the flags xpute-core's `wasm::link` prints for
+# A module core is linked with the flags xpute-guest's `wasm::link` prints for
 # a Rust core: its memory imported and its stack first. It exports `run`, the
 # entry the contract names (ARCHITECTURE.md), beside the core's own boot.
 WASM_LINK := --target=wasm32-wasip1 -nostartfiles -Wl,--no-entry -Wl,--import-memory -Wl,--stack-first \

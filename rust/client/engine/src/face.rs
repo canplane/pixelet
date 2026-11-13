@@ -23,7 +23,7 @@ pub const EDGES: u32 = 4;
 /// The word's three fields, in the order they are asked; what one field holds decides what
 /// the next asks. Bit `k` of a field belongs to edge `k`, or to corner `k`. A rise bit is set
 /// where a cell hides what is in front of the face across the edge: the face meets a wall
-/// there and closes in towards it.
+/// there and closes in toward it.
 pub const RISE_SHIFT: u32 = 0;
 /// A line bit is set where the edge meets the air: neither the cell in front of the face
 /// across it nor the cell beside it hides it. Such an edge is convex or a step down, and it is

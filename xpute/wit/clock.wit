@@ -1,8 +1,0 @@
-package xpute:core@0.1.0;
-
-// The runtime's clock.
-interface clock {
-  // Writes two f64 at `at` in the core's memory, lent for the call: the time
-  // in ms, which never runs backward, and the wall clock in Unix ms.
-  now: func(at: u32);
-}

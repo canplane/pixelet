@@ -18,9 +18,10 @@ use crate::domain::scene::gizmo::param::{POINT_HALF, RING_RADIUS};
 use crate::domain::scene::model::draw_list;
 use crate::domain::view::frame::coord::to_world;
 use crate::sys::sched::invalidate;
+use pxl_global::Global;
 use pxl_render::gpu::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
-use pxl_global::Global;
+use pxl_spec::color::{rgb, Rgb};
 
 const RING_SEGMENTS: u32 = 64;
 
@@ -59,7 +60,11 @@ impl Sketch {
         for i in 0..8 {
             for k in 0..3 {
                 if i & (1 << k) == 0 {
-                    self.line(corner(i), corner(i | 1 << k), linear_rgb(frame::pivot::rgb));
+                    self.line(
+                        corner(i),
+                        corner(i | 1 << k),
+                        linear_rgb(const { rgb(frame::pivot::rgb) }),
+                    );
                 }
             }
         }
@@ -67,7 +72,7 @@ impl Sketch {
 
     /// Draws a ring of `RING_RADIUS` about `center`, in the plane of the unit
     /// axes `a` and `b`.
-    fn ring(&mut self, center: V3, a: V3, b: V3, (rgb, dashed): (u32, bool)) {
+    fn ring(&mut self, center: V3, a: V3, b: V3, (rgb, dashed): (Rgb, bool)) {
         let color = linear_rgb(rgb);
         let at = |i: u32| -> V3 {
             let (s, c) = libm::sincos(i as f64 / RING_SEGMENTS as f64 * core::f64::consts::TAU);
@@ -90,7 +95,7 @@ fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
         units(GROUND.leaf_cell_zoom()),
     );
     s.cube(cell, units(GROUND.leaf_cell_zoom()));
-    s.point(at, linear_rgb(frame::pivot::rgb));
+    s.point(at, linear_rgb(const { rgb(frame::pivot::rgb) }));
     // In first person the eye is at the pivot, so nothing drawn about it
     // would be seen.
     let Some(azimuth) = heading else { return };
@@ -98,12 +103,12 @@ fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
     let (east, north, up) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]);
     let (right, forward) = ([cos, -sin, 0.0], [sin, cos, 0.0]);
     let tip = |d: V3| -> V3 { core::array::from_fn(|k| at[k] + d[k] * RING_RADIUS) };
-    s.ring(at, east, north, (frame::level::rgb, frame::level::dashed));
-    s.ring(at, right, up, (frame::forward::rgb, frame::forward::dashed));
-    s.ring(at, north, up, (frame::north::rgb, frame::north::dashed));
-    s.point(tip(forward), linear_rgb(frame::forward::rgb));
-    s.point(tip(north), linear_rgb(frame::north::rgb));
-    s.point(tip(up), linear_rgb(frame::up::rgb));
+    s.ring(at, east, north, (const { rgb(frame::level::rgb) }, frame::level::dashed));
+    s.ring(at, right, up, (const { rgb(frame::forward::rgb) }, frame::forward::dashed));
+    s.ring(at, north, up, (const { rgb(frame::north::rgb) }, frame::north::dashed));
+    s.point(tip(forward), linear_rgb(const { rgb(frame::forward::rgb) }));
+    s.point(tip(north), linear_rgb(const { rgb(frame::north::rgb) }));
+    s.point(tip(up), linear_rgb(const { rgb(frame::up::rgb) }));
 }
 
 struct Gizmo {
@@ -139,7 +144,7 @@ pub fn frame_gizmo_draw(draw: &mut DrawList) {
 /// when the sketch changed, so the floor under the pivot is drawn in its
 /// place as soon as it is known. It must run before the frame's list begins
 /// (domain/scene/stage.rs), so the lines and the origin they are drawn about
-/// come from the same turn.
+/// come from the same frame.
 pub fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f64>) {
     let g = gizmo();
     let Some(at) = pivot.filter(|_| show) else {

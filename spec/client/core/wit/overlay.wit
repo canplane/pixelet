@@ -2,7 +2,7 @@ package pxl:core@0.1.0;
 
 // What is drawn over the world: the core's state, told when it changes.
 interface overlay {
-  use xpute:core/link@0.1.0.{token};
+  use xpute:link/types@0.1.0.{token};
 
   enum ground-status { idle, loading, success }
   enum sensor-status { idle, loading, ready, error, unavailable }

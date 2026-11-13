@@ -1,22 +1,24 @@
 // @pxl/client/abi/camera.ts
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import {
   type Link,
   type LinkObject,
   type Method,
-  open as open_uri,
   refusal_of,
-  type Ref,
   type Sender,
+  type Handle,
   uri,
-} from "@xpute/runtime";
+} from "@xpute/link/link.ts";
 
-/** The singleton's URI. */
-export const URI = uri("pxl:core", "camera");
+/** The interface's handle, named by `pxl:core/camera` (frame.json `NAMED`). */
+export const HANDLE: Handle = 0x5a7108;
+
+/** The interface's qualified name: its package and its name. */
+export const NAME = uri("pxl:core", "camera");
 
 /** `track` */
 export const TRACK: Method = 0;
@@ -31,6 +33,19 @@ export const Tracking = {
   Unfollow: 2,
 } as const;
 export type Tracking = (typeof Tracking)[keyof typeof Tracking];
+
+/** The name of the `Tracking` member numbered `n`, or undefined for a number
+ * no member has. */
+export function tracking_name(n: number): keyof typeof Tracking | undefined {
+  return (Object.keys(Tracking) as (keyof typeof Tracking)[]).find(
+    (k) => Tracking[k] === n,
+  );
+}
+
+/** The `Tracking` member `n` is, or null for a number no member has. */
+export function tracking_of(n: number): Tracking | null {
+  return tracking_name(n) === undefined ? null : (n as Tracking);
+}
 
 export interface Camera {
   track(tracking: Tracking): void;
@@ -80,41 +95,29 @@ function object(imp: Camera): LinkObject {
   };
 }
 
-/** Mounts `imp` at the URI, one object for every open. */
-export function mount(l: Pick<Link, "mount">, imp: Camera): void {
-  const o = object(imp);
-  l.mount(URI, () => o);
+/** Serves `imp` under the interface's handle. */
+export function mount(l: Pick<Link, "mount_named">, imp: Camera): void {
+  l.mount_named(HANDLE, object(imp));
 }
 
-/** Opens the singleton on the other side, once, at boot. */
-export async function open(link: Sender): Promise<Ref> {
-  return { link, handle: await open_uri(link, URI) };
-}
-
-export async function track(ref: Ref, tracking: Tracking): Promise<void> {
-  const a = await ref.link.send(ref.handle, TRACK, [tracking]);
+export async function track(link: Sender, tracking: Tracking): Promise<void> {
+  const a = await link.send(HANDLE, TRACK, [tracking]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
-export async function north_up(ref: Ref): Promise<void> {
-  const a = await ref.link.send(ref.handle, NORTH_UP, []);
+export async function north_up(link: Sender): Promise<void> {
+  const a = await link.send(HANDLE, NORTH_UP, []);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
 export async function goto(
-  ref: Ref,
+  link: Sender,
   lon: number,
   lat: number,
   dist: number | null,
   azimuth: number | null,
   polar: number | null,
 ): Promise<void> {
-  const a = await ref.link.send(ref.handle, GOTO, [
-    lon,
-    lat,
-    dist,
-    azimuth,
-    polar,
-  ]);
+  const a = await link.send(HANDLE, GOTO, [lon, lat, dist, azimuth, polar]);
   if (a.result < 0) throw new XputeError(a.result);
 }

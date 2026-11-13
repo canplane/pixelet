@@ -43,7 +43,7 @@ impl Exit {
     }
 }
 
-/// How an attempt that failed with `f` ends: one the runtime cancelled, as
+/// How an attempt that failed with `f` ends: one the host canceled, as
 /// a reload of its program leaves an open, is aborted, so its want starts
 /// again; any other failed.
 pub fn exit_of(f: Failure) -> Exit {

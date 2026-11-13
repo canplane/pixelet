@@ -1,23 +1,24 @@
 // pxl-core/sys/io/text_device.rs
 
 //! A device's text calls (text.json TEXT_LAYOUT, TEXT_RASTER), answered by the
-//! system's font engine (Text.swift, Text.kt) on the core's own thread, so a
-//! turn that needs a text waits for no other thread. On a page the runtime
+//! system's font engine (Text.swift, Text.kt) on the core's own thread, so an
+//! entry that needs a text waits for no other thread. On a page the runtime
 //! answers the same calls (ts/client/src/service/core/text.ts), and the two
 //! break lines alike.
 
 use std::sync::OnceLock;
 
-use xpute_core::io::frame::Frame;
-use xpute_core::mem;
+use xpute_link::frame::Frame;
+use xpute_link::mem;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_runtime::abi::Outcome;
-use xpute_runtime::native;
+use xpute_native_host::abi::Outcome;
+use xpute_native_host::native;
 
 use crate::sys::io::text_answer_spec::{LAYOUT_ANSWER, LINE};
 use crate::sys::io::text_runtime_spec::{self as text, TextLayout, TextRaster};
 use crate::sys::manifest::MANIFEST;
+use pxl_spec::color::Rgba;
 
 /// The system's text: how wide a line of UTF-8 runs at a CSS weight and a size,
 /// and a line drawn from `x` into `width` by `height` pixels of RGBA, top row
@@ -28,7 +29,7 @@ pub struct SystemText {
     pub raster: unsafe extern "C" fn(
         weight: f64,
         px: f64,
-        rgba: u32,
+        rgba: Rgba,
         text: *const u8,
         len: usize,
         x: f64,
@@ -256,10 +257,10 @@ mod android {
 
     use xpute_kit::status::bug::OrBug;
     use xpute_kit::status::errno::Errno;
-    use xpute_runtime::jni::sys::{
+    use xpute_native_host::jni::sys::{
         jbyteArray, jclass, jmethodID, jobject, jvalue, JNIEnv, JavaVM, JNI_OK, JNI_VERSION_1_6,
     };
-    use xpute_runtime::jni::{self, sys::jint};
+    use xpute_native_host::jni::{self, sys::jint};
 
     use super::{text_on, SystemText};
 
@@ -329,7 +330,7 @@ mod android {
     unsafe extern "C" fn raster(
         weight: f64,
         px: f64,
-        rgba: u32,
+        rgba: Rgba,
         text: *const u8,
         len: usize,
         x: f64,

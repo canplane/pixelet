@@ -9,7 +9,8 @@ use crate::content::Sample;
 use crate::object::ancestor_at;
 use pxl_spec::share::EIGHTHS;
 use pxl_spec::space::coord::q3::FRAC_W;
-use pxl_spec::space::coord::world::{wrap_idx, HEIGHT_BITS};
+use pxl_spec::space::coord::world::wrap_idx;
+use pxl_spec::space::coord::zoom::HEIGHT_BITS;
 use pxl_spec::space::coord::zoom::{y_start, z_start, Zoom, MIN_ZOOM, UNIT_ZOOM};
 
 #[test]

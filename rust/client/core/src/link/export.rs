@@ -1,9 +1,9 @@
 // pxl-core/link/export.rs
 
-//! The interfaces the core serves (spec/client/core/wit/), each one's
-//! methods in its own module beside this one, served by one object, `Core`,
-//! which `mount` mounts at each interface's URI. Its GPU surfaces (surface.rs)
-//! are xpute's, and come apart.
+//! The interfaces the core serves (spec/client/core/wit/), each one's methods
+//! in its own module beside this one, served by one object, `Core`, which
+//! `mount` mounts under each interface's named handle. Its GPU surfaces
+//! (surface.rs) are xpute's, and come apart.
 
 mod camera;
 mod edit;
@@ -19,6 +19,7 @@ use std::rc::Rc;
 
 use crate::abi;
 use crate::sys::sched::invalidate;
+use xpute_guest::abi::life::life;
 use xpute_kit::status::errno::Errno;
 
 /// Refuses what the decoder cannot check: a value outside the range the core
@@ -63,7 +64,7 @@ pub(super) fn mount() {
     abi::source::mount(Rc::new(Core));
     abi::perf::mount(Rc::new(Core));
     surface::mount();
-    xpute_core::abi::life::mount(Rc::new(Core));
+    life::mount(Rc::new(Core));
 }
 
 impl abi::camera::Camera for Core {
@@ -243,7 +244,7 @@ impl abi::perf::Perf for Core {
     }
 }
 
-impl xpute_core::abi::life::Life for Core {
+impl life::Life for Core {
     fn hidden(&self) -> Result<(), Errno> {
         super::life::on_hidden();
         Ok(())

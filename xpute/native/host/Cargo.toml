@@ -1,0 +1,25 @@
+[package]
+name = "xpute-native-host"
+description = "xpute's host on a native device: the guest's thread, its link to the guest, and what it serves"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+xpute-kit.workspace = true
+# The contract's pure types, shared rather than copied: a frame's words, a
+# URI's tokens, the handle table, and the guest's memory (lib.rs).
+xpute-link.workspace = true
+
+# An Android app's native side reaches the host through JNI (src/jni.rs),
+# and a line is told to the NDK's log (src/log.rs). These are the NDK's own
+# headers as bindings, with nothing over them.
+[target.'cfg(target_os = "android")'.dependencies]
+jni-sys = "0.3"
+ndk-sys = "0.6"

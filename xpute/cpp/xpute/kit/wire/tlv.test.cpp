@@ -49,7 +49,7 @@ std::string show(const tlv::Value &v) {
 } // namespace
 
 XPUTE_TEST(tlv_matches_other_languages) {
-    Golden v = Golden::load("spec/golden/wire/tlv.tsv");
+    Golden v = Golden::load("kit/spec/golden/wire/tlv.tsv");
     std::vector<std::uint8_t> buf;
     tlv::Writer w(buf);
     const std::uint8_t three[] = {9, 8, 7};

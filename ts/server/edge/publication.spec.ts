@@ -1,6 +1,6 @@
 // @pxl/edge/publication.spec.ts
 //
-// GENERATED from spec/spec/bake/publication.json
+// GENERATED from spec/spec/bake/publication.json (pxl-tool spec/bake.rs)
 
 /** The base layers, each a kind a baked page is published under. */
 export const BASE_LAYERS = ["terrain", "place", "division", "earth"] as const;

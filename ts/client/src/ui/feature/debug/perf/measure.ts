@@ -100,7 +100,7 @@ function started(): Promise<void> {
  * begins to load (BOOT_LOADING), to its result, on whatever runs it. It ends
  * at once with the error where the page is hidden, which draws nothing while
  * its core waits for it to be shown again, or where the core stops, whose
- * reason the runtime says. */
+ * reason the host says. */
 export async function measure(): Promise<void> {
   const stopProgress = progress();
   const unwatch: (() => void)[] = [];

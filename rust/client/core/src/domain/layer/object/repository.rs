@@ -41,8 +41,8 @@ use pxl_spec::space::hierarchy::morton::{key_of_name, name, node_of};
 use pxl_spec::space::layer::area::shard_over;
 use pxl_spec::space::layer::demand::GROUND_DEMAND_TILES;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_core::abi::link::Token;
-use xpute_core::clock::now;
+use xpute_link::abi::types::Token;
+use xpute_guest::clock::now;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderConfig, TreeReader, TreeView};
@@ -94,7 +94,7 @@ struct State {
     /// A counter that advances whenever something `want` reads changes: the
     /// top or a shard is read, or a file is refused or emptied.
     revision: u32,
-    /// The changes waiting for the store, in order, held while the runtime
+    /// The changes waiting for the store, in order, held while the host
     /// holds the store's columns (`change`).
     changes: Vec<Change>,
 }
@@ -108,7 +108,7 @@ enum Change {
     Edit(Write),
 }
 
-/// Makes `c` at once when the runtime holds none of the store's columns
+/// Makes `c` at once when the host holds none of the store's columns
 /// (store.rs `Store::is_in_flight`) and no other change waits. Otherwise it
 /// holds `c` for `step`, in order. Only writers of the store wait.
 fn change(c: Change) {
@@ -453,8 +453,8 @@ pub fn send(write: Write) {
 }
 
 pub fn step() {
-    // Make every change held while the runtime held the store's columns, now
-    // that it holds none. The runtime cannot take them back during the loop.
+    // Make every change held while the host held the store's columns, now
+    // that it holds none. The host cannot take them back during the loop.
     if !state().changes.is_empty() && !object().is_in_flight() {
         let mut changes = core::mem::take(&mut state().changes);
         for c in changes.drain(..) {

@@ -3,7 +3,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 
 import { LEAF_ZOOM, path as tree } from "@/abi/file.spec.ts";

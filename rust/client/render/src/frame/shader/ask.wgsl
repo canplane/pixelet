@@ -144,7 +144,7 @@ fn world_answer(parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u3
   } else {
     inheritance = world_child(parent, zoom, c);
   }
-  return world_node(inheritance, zoom, c, zooms & ((1u << ZOOM_BITS) - 1u), zooms >> ZOOM_BITS, eye_cut(CARVE), eye_cut(HIDE));
+  return world_node(inheritance, zoom, c, zooms & ((1u << ZOOM_BITS) - 1u), zooms >> ZOOM_BITS, eye_cut(EYE_CARVE), eye_cut(EYE_HIDE));
 }
 
 /// Whether a slot of the bucket from `first` keeps the node `c` at `zoom` for a walk asking it

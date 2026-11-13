@@ -28,7 +28,7 @@ follows what changed on the screen.
 
 The chapters below follow that idea in the order the system is built: the world
 the question is asked of, the eye that asks it, the drawing that remembers the
-answers, the core and the runtime underneath, and the data made ahead of time.
+answers, the core and the host underneath, and the data made ahead of time.
 
 ## The world
 
@@ -376,14 +376,14 @@ ray met. Markers, the labels and pins that face the viewer, are drawn once into
 an atlas and kept there until what they show changes, and their text is laid out
 by the platform, so each platform shapes its own scripts and emoji.
 
-## The core and the runtime
+## The core and the host
 
 The world lives in one Rust **core**, `pxl-core`, which draws through
-`pxl-render`. It owns no device. It is linked with `xpute-core`, the core's end
-of the xpute interface, into one image, and a **runtime** around it gives the
+`pxl-render`. It owns no device. It is linked with `xpute-guest`, the guest's
+end of the xpute interface, into one image, and a **host** around it gives the
 core one memory, a GPU, its files and its time, and nothing else reaches in. On
-a page the image is a WebAssembly module and the runtime is TypeScript in a
-worker; on a device it is a library linked into the app and the runtime is that
+a page the image is a WebAssembly module and the host is TypeScript in a
+worker; on a device it is a library linked into the app and the host is that
 TypeScript with Rust beside it. The core cannot tell which, and does not need
 to, so the same world runs everywhere. xpute's own documents describe that
 interface; this one is about what pixelet does over it.

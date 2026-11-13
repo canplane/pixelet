@@ -271,7 +271,7 @@ pub const PIPELINES: u32 = 44;
 // its entry count and a (binding, visibility, kind) for each entry.
 pub use crate::api_spec::record::*;
 /// A binding's stages are xpute's own bits (SHADER_STAGE), and `NONE` is no stage.
-pub use xpute_gpu::spec::SHADER_STAGE::{COMPUTE, FRAGMENT, VERTEX};
+pub use xpute_gpu_link::spec::SHADER_STAGE::{COMPUTE, FRAGMENT, VERTEX};
 pub const NONE: u32 = 0;
 
 /// `group` with its uniform at `binding` bound at a dynamic offset. The CPU decides that, and
@@ -1207,8 +1207,8 @@ const _: () = {
 /// Whether pipeline `id`'s groups lay out exactly what its shader reads. Every binding read by
 /// the entry points it runs (its vertex entry, `Header::vertex`, and `fs` when it has a
 /// fragment stage) must have an entry in its group, of a kind the binding's declaration takes
-/// (build.rs `layout_kinds`). Every entry must be read by some pipeline that lays out the same
-/// group, as build.rs `BINDS` requires of a compute group.
+/// (build/bind.rs `layout_kinds`). Every entry must be read by some pipeline that lays out the
+/// same group, as build/bind.rs `BINDS` requires of a compute group.
 const fn lays_out(id: u32) -> bool {
     let desc = desc_of(id);
     let entries = STAGES[desc.hdr.shader as usize];

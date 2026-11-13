@@ -35,10 +35,10 @@ fn cnt_one(i: u32) {
     return;
   }
   let corner = vec3<i32>(i32(recs[i + 1u]), i32(recs[i + 2u]), i32(recs[i + 3u]));
-  let origin = vec3<i32>(i32(eye_word(ORIGIN)), i32(eye_word(ORIGIN + 1u)), i32(eye_word(ORIGIN + 2u)));
+  let origin = vec3<i32>(i32(eye_word(EYE_ORIGIN)), i32(eye_word(EYE_ORIGIN + 1u)), i32(eye_word(EYE_ORIGIN + 2u)));
   let d2 = dist2(origin, corner);
   let placed = i >= PLACED_HDR + PLACED_HDR_WORDS;
-  let ask_zoom = zoom_at(d2, vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u)));
+  let ask_zoom = zoom_at(d2, vec2<u32>(eye_word(EYE_RANGE), eye_word(EYE_RANGE + 1u)));
   let zoom = select(ray_zoom(ask_zoom, corner.xy), ask_zoom, placed);
   let cell_zoom = rec_cell_zoom(w);
   var drawn_here = zoom == cell_zoom;

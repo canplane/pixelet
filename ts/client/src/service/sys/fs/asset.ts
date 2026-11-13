@@ -11,7 +11,7 @@
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { hex_to_bytes } from "@xpute/kit/codec/encoding.ts";
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 import { CATALOG } from "@/abi/file.spec.ts";
 import { CATALOG_HEX } from "@/service/sys/fs/catalog.spec.ts";

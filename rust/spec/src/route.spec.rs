@@ -1,6 +1,6 @@
 // pxl-spec/route.spec.rs
 //
-// GENERATED from spec/spec/route.json
+// GENERATED from spec/spec/route.json (pxl-tool spec/route.rs)
 // The address space, as four reserved roots and the branches under them,
 // and the two origins they are served from.
 //

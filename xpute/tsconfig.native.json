@@ -1,0 +1,19 @@
+// The packages as a native app's bundler reads them: x.native.ts in place of
+// x.ts where there is one. A test is no part of an app, and runs on x.ts.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "moduleSuffixes": [".native", ""],
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "kit/ts",
+    "link/ts",
+    "web",
+    "native/runtime/expo",
+    "gpu/link/ts",
+    "gpu/web",
+    "gpu/native/runtime/expo"
+  ],
+  "exclude": ["**/node_modules", "target", "**/*.native.ts", "**/*.test.ts"]
+}

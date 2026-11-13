@@ -7,7 +7,7 @@
 //! domain/scene/environment/cloud.rs).
 
 use crate::frame::shader::record::{PIPELINE_CLOUD, PIPELINE_CLOUD_FIELD};
-use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::word::clouds::{BASE, CNT, DRAW_DIST, DRIFT, FRAC, SHOWN};
 use crate::frame::shader::word::{CLOUDS_FLOATS, CLOUD_TILE_TEXELS, CLOUD_TILE_UNITS};
@@ -20,8 +20,7 @@ use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::pass::atmosphere::AIR_ENTRIES;
 use pxl_content::cloud::LATTICE_CNT;
 use pxl_content::param::cloud::LATTICE_SHAMT;
-use pxl_spec::space::coord::world::EXTENT;
-use pxl_spec::space::coord::zoom::UNIT_ZOOM;
+use pxl_spec::space::coord::zoom::{EXTENT, UNIT_ZOOM};
 
 const _: () = assert!(
     EXTENT[0] == UNIT_ZOOM && EXTENT[1] == UNIT_ZOOM,

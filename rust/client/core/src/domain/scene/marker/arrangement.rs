@@ -13,10 +13,9 @@
 //! where a tap on it goes.
 
 use super::selection::select_visible;
-use super::{line, pin, place};
+use super::{line, pin, place, Brick, Instance, Key, MarkerHit};
 
 use crate::domain::preview::Draft;
-use crate::domain::query::{at_zoom, Ray, World};
 use crate::domain::scene::marker::candidate::CandidateTable;
 use crate::domain::scene::marker::design::{self, Design};
 use crate::domain::scene::marker::set::{self, Set};
@@ -39,25 +38,11 @@ use crate::domain::view::observation;
 use crate::sys::sched;
 use fnv::{FnvHashMap, FnvHashSet};
 use pxl_render::gpu::draw::DrawList;
-use pxl_spec::brick::BRICK_SHIFT;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world::BOUNDS;
-use pxl_spec::space::coord::zoom::{units, Zoom};
-use pxl_spec::space::hierarchy::tree::Node;
+use pxl_spec::space::coord::zoom::units;
 use pxl_spec::space::layer::quadrant::Quadrant;
-
-/// A brick of the eye's clip levels that markers are read over, named by its
-/// zoom and place. Its X runs on round the world without wrapping, as the
-/// view's frame does (domain/view/observation.rs `bricks`).
-pub(super) type Brick = Node<2>;
-
-/// The zoom of a brick's cells: the camera grid's zoom at the brick's
-/// nearest point, the finest the brick draws.
-pub(super) fn cell_zoom((zoom, _): Brick) -> Zoom {
-    zoom + BRICK_SHIFT
-}
 
 /// The box over `brick` between `heights`.
 pub(super) fn region((zoom, [x, y]): Brick, [low, high]: [f64; 2]) -> Aabb {
@@ -136,31 +121,6 @@ struct Input {
     bubble: line::Bubble,
 }
 
-/// The name a holder gives what it shows, stable from one run to the next
-/// and independent of what is painted (`design.rs`). A pin is named by its
-/// holder (`pin::Holder`), a place by its tile and its index there, and the
-/// chat's line by its speaker, of whom there is one. The arrangement uses the
-/// key only to tell instances apart, so it can keep an instance's old drawing
-/// until its new one is painted. Where a tap goes is the instance's own
-/// (`Instance::tap`).
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(super) enum Key {
-    Pin(pin::Holder),
-    Place(Quadrant, u32),
-    Line,
-}
-
-/// What a source hands the arrangement: its holder's key, the design it
-/// paints, where it stands, and where a tap on it goes, or None where it
-/// takes no tap.
-#[derive(Clone)]
-pub(super) struct Instance {
-    pub(super) key: Key,
-    pub(super) design: Design,
-    pub(super) pos: Q3,
-    pub(super) tap: Option<MarkerHit>,
-}
-
 static ARRANGEMENT: Global<Arrangement> = Global::new();
 
 /// What `pins` and `places` were read from: the drawn bricks, and whether
@@ -185,22 +145,6 @@ pub fn on_changed(places: &[Quadrant]) {
     let p = ARRANGEMENT.get(Arrangement::default);
     p.changed = true;
     p.changed_places.extend_from_slice(places);
-}
-
-/// The height at which a ray down over `at`, from `high`, first meets what is
-/// drawn at `zoom` above `low`, or None where nothing there is known.
-pub(super) fn surface(at: &Q3, (high, low): (f64, f64), zoom: Zoom) -> Option<f64> {
-    let xy = q3::unpack(at);
-    let ray = Ray {
-        origin: [xy[0], xy[1], high],
-        dir: [0.0, 0.0, -1.0],
-        t_max: high - low,
-    };
-    let hit = World::now()
-        .first_hit(&ray, at_zoom(zoom))
-        .val()
-        .flatten()?;
-    Some(high - hit.t)
 }
 
 /// Lays out the markers for `frame`. `draft` is the marker tool's draft as
@@ -469,14 +413,6 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
 
 pub fn draw(draw: &mut DrawList) {
     ARRANGEMENT.get(Arrangement::default).set.draw(draw);
-}
-
-/// What a tap on a scene marker hit: a place to go to, or a pin's entry,
-/// which the tool held decides what to do with.
-#[derive(Clone, Copy)]
-pub enum MarkerHit {
-    To(Q3),
-    Pin(Octant, Q3),
 }
 
 /// The marker that took a tap at `ndc_x`, `ndc_y`, in [−1, 1] with y up, or

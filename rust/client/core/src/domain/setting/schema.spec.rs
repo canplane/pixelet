@@ -1,6 +1,6 @@
 // pxl-core/domain/setting/schema.spec.rs
 //
-// GENERATED from spec/client/core/domain/setting/schema.json
+// GENERATED from spec/client/core/domain/setting/schema.json (pxl-tool spec/setting.rs)
 //
 // Every setting the app has, declared once: its default, its kind, and
 // where it is shown, its `section`: one of the settings sheet's, or
@@ -121,7 +121,7 @@ impl AoMode {
 }
 
 /// How many device pixels the world is drawn at to a CSS pixel, and the rate
-/// turns go at.
+/// frames go at.
 ///
 ///   auto  — a frame each whole number of vsync intervals, to RATE_MIN_HZ;
 ///           the display's pixels, stepped down to a share of them, while
@@ -233,7 +233,7 @@ pub enum SettingKey {
     camera_mode = 5,
     /// The pivot stands on what supports it and a pan takes the lowest way over what is in it (control/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck.
     surface_follow = 6,
-    /// Only `climb` goes into a tunnel (camera/collision.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default.
+    /// Only `climb` goes into a tunnel (camera/orbit.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default.
     orbit_obstacle = 7,
     /// Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.

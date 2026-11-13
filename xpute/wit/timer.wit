@@ -1,7 +1,0 @@
-package xpute:core@0.1.0;
-
-// The runtime's timer.
-interface timer {
-  // Answers once `ms` have passed; 0, at the event loop's next pass.
-  sleep: async func(ms: u32);
-}

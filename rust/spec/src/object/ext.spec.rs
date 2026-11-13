@@ -1,6 +1,6 @@
 // pxl-spec/object/ext.spec.rs
 //
-// GENERATED from spec/spec/object/ext.json
+// GENERATED from spec/spec/object/ext.json (xpute-gen data.rs)
 //
 // What a placed thing may carry beyond its id: its extension. Things whose
 // extensions have one shape are a class, and each class keeps its
@@ -12,7 +12,6 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
-    clippy::absolute_paths,
     non_camel_case_types,
     dead_code,
     reason = "generated from the spec"
@@ -25,16 +24,21 @@ pub enum Class {
 }
 
 impl Class {
-    /// Every member, in the JSON's own order.
+    /// Every member, in its source's own order.
     pub const ALL: [Class; 1] = [Class::marker_text];
 
-    /// The member a number names, or none for a number the set does not
-    /// give out.
-    pub fn of(val: u8) -> Option<Class> {
-        Class::ALL.into_iter().find(|member| *member as u8 == val)
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u8) -> Option<Class> {
+        match val {
+            0 => Some(Class::marker_text),
+            _ => None,
+        }
     }
-}
 
-pub mod CLASS {
-    pub const marker_text: u8 = 0;
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Class::marker_text => "marker_text",
+        }
+    }
 }

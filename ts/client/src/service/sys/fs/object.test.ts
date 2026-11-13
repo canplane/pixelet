@@ -2,7 +2,7 @@
 
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";

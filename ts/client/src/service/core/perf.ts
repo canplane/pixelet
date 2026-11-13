@@ -33,25 +33,25 @@ import {
 import { EFFECT_NAMES, STEP_NAMES } from "@/abi/step.spec.ts";
 import { FRAME_KINDS, GPU_SPAN_NAMES } from "@/abi/span.spec.ts";
 import * as perf from "@/abi/perf.ts";
-import { core } from "@/service/core/core.ts";
+import { ui } from "@/service/core/core.ts";
 
 const WORD = 8;
 /** How many bytes a task's `path` column holds (perf.json `TASK`). */
 const PATH_BYTES = 3 * WORD;
 
 export function start(): void {
-  void perf.start(core.perf);
+  void perf.start(ui);
 }
 
 /** Freezes the recording window, so that what is exported holds still. */
 export function stop(): void {
-  void perf.stop(core.perf);
+  void perf.stop(ui);
 }
 
-/** The words of a reply's bytes, which every runtime hands over 8-aligned. */
+/** The words of a reply's bytes, which every host hands over 8-aligned. */
 const words = (b: U8Array) =>
   new Float64Array(b.buffer, b.byteOffset, b.byteLength / WORD);
-/** A failure's site, or none at line 0, a failure of the runtime's: its line,
+/** A failure's site, or none at line 0, a failure of the host's: its line,
  * and its file as the string table `strtab` (PERF_STRTAB) names it at `file`,
  * or unknown at offset 0, where the table had no room for it. */
 const site = (strtab: U8Array, file: u32, bytes: u32, line: u32) =>
@@ -158,7 +158,7 @@ export interface TaskRecord {
   fail: u32;
   detail: u32;
   /** Where in the core the task failed, as `file:line`, or null for a
-   * failure of the runtime's. */
+   * failure of the host's. */
   at: string | null;
   phases: [string, f64][];
 }
@@ -255,7 +255,7 @@ function frame_summary(s: F64Array): FrameSummary | null {
       name,
       p95: s[a + F.effects_p95 + k],
     })),
-    gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({
+    gpu_spans: GPU_SPAN_NAMES.map(({ name }, k) => ({
       name,
       p95: s[a + F.gpu_spans_p95 + k],
       n: s[a + F.gpu_spans_cnt + k],
@@ -334,7 +334,7 @@ function section<S extends { AT: u32; WORDS: u32 }>(
 async function stats_of(
   window_ms: f64 | null,
 ): Promise<{ stats: F64Array; now: F64Array }> {
-  const w = words(await perf.stats(core.perf, window_ms));
+  const w = words(await perf.stats(ui, window_ms));
   return { stats: w.subarray(0, STAT.WORDS), now: w.subarray(STAT.WORDS) };
 }
 
@@ -384,7 +384,7 @@ async function ring(name: (typeof RING_NAMES)[number]): Promise<U8Array> {
   const pages: U8Array[] = [];
   let bytes = 0;
   for (;;) {
-    const page = await perf.rings(core.perf, k, bytes / record, 0xffff_ffff);
+    const page = await perf.rings(ui, k, bytes / record, 0xffff_ffff);
     pages.push(page);
     bytes += page.length;
     if (page.length < full) break;
@@ -406,7 +406,7 @@ async function perf_frames(): Promise<Frame[]> {
 async function perf_tasks(last: u32 | null = null): Promise<TaskRecord[]> {
   const [tasks, strtab] = await Promise.all([
     ring("tasks"),
-    perf.strtab(core.perf),
+    perf.strtab(ui),
   ]);
   const all = words(tasks);
   const total = all.length / TASK.WORDS;

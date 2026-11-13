@@ -6,7 +6,8 @@
 
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::space::coord::q3::{FRAC_W, Q3};
-use pxl_spec::space::coord::zoom::{idx_of, UNIT_ZOOM};
+use pxl_spec::space::coord::world::idx_of;
+use pxl_spec::space::coord::zoom::UNIT_ZOOM;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use super::*;

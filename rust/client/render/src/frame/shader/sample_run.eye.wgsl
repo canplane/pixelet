@@ -16,7 +16,7 @@ fn queue_recs_at() -> u32 {
 
 /// Where the run lists the items it parked (pxl-engine `beam::Grid::asks_at`).
 fn parked_items_at() -> u32 {
-  return eye_word(GRID + GRID_ASKS_AT);
+  return eye_word(EYE_GRID + GRID_ASKS_AT);
 }
 
 fn visits_at() -> u32 {

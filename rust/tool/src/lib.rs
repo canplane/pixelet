@@ -1,6 +1,7 @@
 // pxl-tool/lib.rs
 
 pub mod asset;
+pub mod brand;
 /// pxl-spec's file, compiled here as well, because the tool depends on no workspace crate
 /// (Cargo.toml says why), so the project's folders are still named in one place.
 #[path = "../../spec/src/directory.rs"]

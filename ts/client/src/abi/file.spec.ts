@@ -1,14 +1,9 @@
 // @pxl/client/abi/file.spec.ts
 //
-// GENERATED from spec/client/core/sys/io/file.json
+// GENERATED from spec/client/core/sys/io/file.json (xpute-gen data.rs)
 //
 // The core's files: the tokens of their paths and what a file holds (pxl-core
 // sys/io/file.rs, ts/client/src/service/sys/fs/).
-
-import type { u32 } from "@xpute/kit/abi/word.ts";
-import * as write from "./file/write.spec.ts";
-import * as top from "./file/top.spec.ts";
-import * as format from "./file/format.spec.ts";
 
 /** The tree of the paths the core opens (xpute's FS_OPEN), as a URI's path is a
  * tree: each node takes one token, its `ID`, distinct among its siblings, and hands the
@@ -74,28 +69,43 @@ export const path = {
 /** The load id of the catalog the client plugs in, (ASSET, CATALOG) (pxl-spec asset/catalog.rs):
  * the file each of the asset specs' references names. Any other id is a file,
  * its row in the asset ingest's table counted from 1 (spec/spec/asset/ingest.json). */
-export const CATALOG: u32 = 0 as number;
+export const CATALOG = 0 as number;
 
 /** The finest zoom a tile's quadkey in a path is at, so the most digits it has:
  * pxl-spec's `LEAF_ZOOM`, which the core holds this to (sys/io/file.rs). */
-export const LEAF_ZOOM: u32 = 15 as number;
+export const LEAF_ZOOM = 15 as number;
 
 /** The zoom of the tile a shard, (OBJECT, quadkey), is: pxl-engine's `SHARD_ZOOM`, which the
  * core holds this to (domain/layer/object/repository.rs). A key's first digits to it name
  * the shard, and each past it is a zoom's 0 to 7, on three axes (pxl-spec
  * space/hierarchy/morton.rs). */
-export const SHARD_ZOOM: u32 = 8 as number;
+export const SHARD_ZOOM = 8 as number;
 
 /** The children of the tree packet a shard's file and an edit batch hold after their
  * format byte, by index: each row a write `<key, asset_id, ext>`, a leaf as the write that made
  * it in a shard's file, in the order made in a batch, where VOID erases (pxl-core
  * domain/layer/object/store.rs `Write`). A record a class's (pxl-spec object/ext.rs),
  * its row and its fields as columns. */
-export { write };
+export const write = {
+  /** A `strs` column holding each key as an octkey (pxl-spec space/hierarchy/morton.rs `name`, 3D): the shard's quadkey, then a digit 0 to 7 a zoom. */
+  KEY: 0 as number,
+  /** A `u32[]` column holding each row's catalog value. */
+  ASSET_ID: 1 as number,
+  /** A `u32[]` column holding, for each marker with a text, the row that text is for. */
+  TEXT_ROW: 2 as number,
+  /** A `strs` column holding those markers' texts. */
+  TEXT: 3 as number,
+} as const;
 
 /** The children of the tree packet the top, (OBJECT, TOP), holds after its format byte, by index:
  * each row a shard holding objects, which only its leaves are under. */
-export { top };
+export const top = {
+  /** A `strs` column holding each row's shard by its quadkey. */
+  SHARD: 0 as number,
+  /** A `u32[]` column holding what each row's leaves fold to, its word in the objects' tree
+   * (pxl-engine object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled. */
+  FOLD: 1 as number,
+} as const;
 
 /** Each kept file's format, the first byte of what it holds: a stored file's by its
  * name, a shard's file as OBJECT, the top and an edit batch as theirs. The
@@ -103,4 +113,9 @@ export { top };
  * writing over it, as a driver refuses a volume whose superblock it does not know; what
  * to do with the file is the client's. Bump one whenever a change makes an older file mean
  * something other than it meant when it was written. */
-export { format };
+export const format = {
+  SETTINGS: 1 as number,
+  OBJECT: 19 as number,
+  OBJECT_TOP: 22 as number,
+  OBJECT_EDIT: 21 as number,
+} as const;

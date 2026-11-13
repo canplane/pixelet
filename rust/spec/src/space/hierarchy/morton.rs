@@ -3,13 +3,12 @@
 //! A node's one key at any zoom: its index's digits in two's complement, as the signed
 //! indices are, interleaved a zoom at a time from the coarsest in `child_idx`'s order,
 //! left-aligned, then a 1 that marks where they end. An axis has digits from the zoom its
-//! extent reaches (`world.rs` `EXTENT`): X and Y from z1, and Z, with 16 bits to X's 24, from
+//! extent reaches (`zoom.rs` `EXTENT`): X and Y from z1, and Z, with 16 bits to X's 24, from
 //! z9. So a 3D key equals the 2D one down to z8, and an axis's first digit is its sign. A
 //! coarser key's digits prefix a finer one's over the same ground, in any number of axes.
 
 use super::tree::Node;
-use crate::space::coord::world::EXTENT;
-use crate::space::coord::zoom::{Zoom, UNIT_ZOOM};
+use crate::space::coord::zoom::{Zoom, EXTENT, UNIT_ZOOM};
 use core::fmt;
 
 const LANES: [u32; 3] = EXTENT;

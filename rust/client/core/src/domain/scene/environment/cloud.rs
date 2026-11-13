@@ -25,7 +25,7 @@ use pxl_spec::asset::catalog::{model_extent, Slot};
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;
-use xpute_core::mem;
+use xpute_link::mem;
 
 use crate::domain::scene::column::{self, GroupRange};
 use crate::domain::scene::environment::param::{

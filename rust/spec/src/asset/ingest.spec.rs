@@ -1,6 +1,6 @@
 // pxl-spec/asset/ingest.spec.rs
 //
-// GENERATED from spec/spec/asset/ingest.json
+// GENERATED from spec/spec/asset/ingest.json (pxl-tool spec/ingest.rs)
 // Every shipped asset's path below asset/content/ by its number after ASSET,
 // and the texture pack as the asset ingest composed it: which of its tiles
 // each cube wears on which face, and what each reads as from afar. Its image

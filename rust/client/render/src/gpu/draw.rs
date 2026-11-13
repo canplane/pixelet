@@ -21,7 +21,7 @@ use pxl_global::Global;
 use pxl_spec::space::coord::q3::{from_real, ONE, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::between;
-use xpute_core::mem;
+use xpute_link::mem;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -75,7 +75,7 @@ pub fn drifted(u: &mut [f32], drift: Position) {
 /// - On Q3 (`r` zero), the result equals `f32((at - eye) as f64)`. The f64 difference is
 ///   exact and is narrowed once. `f32(q - eye)` rounds the same exact difference once, and the
 ///   power-of-two scale after it is exact. A device that rounds an i32 to f32 other than to
-///   nearest can differ by an ulp past 2^24 Q3, where WGSL lets it pick either neighbour.
+///   nearest can differ by an ulp past 2^24 Q3, where WGSL lets it pick either neighbor.
 /// - With a remainder, the result is within an ulp of that f64 difference, or within an ulp
 ///   and 2^-33 units. Below 2^24 Q3, `r` has been rounded to f32 once and is added in a second
 ///   rounding, which can land on the other side of a tie. Past 2^24 Q3, the difference is
@@ -293,8 +293,8 @@ pub struct DrawList {
     /// The slots let go, which a new draw takes first.
     free_slots: Vec<u32>,
     /// The uniforms by slot, `DRAW_FLOATS` a slot, in two copies. A frame writes into the copy
-    /// the runtime does not hold (gpu/api.rs `in_flight`), because the renderer hands the
-    /// uniforms to the runtime where they lie. The slots written since the other copy was last
+    /// the host does not hold (gpu/api.rs `in_flight`), because the renderer hands the
+    /// uniforms to the host where they lie. The slots written since the other copy was last
     /// written are copied into it when the frame takes it (`behind`).
     uniforms: Vec<f32>,
     other_uniforms: Vec<f32>,
@@ -335,7 +335,7 @@ impl ReceiverBox {
     }
 
     /// The box around the ball that a thing standing at `at` stands within. The ball is
-    /// centred on the thing's middle, and its radius is as large as decor is tall and wide.
+    /// centered on the thing's middle, and its radius is as large as decor is tall and wide.
     /// decor_ball.wgsl reads a placed decor's ball the same way.
     pub fn ball(at: V3) -> ReceiverBox {
         let r = f64::from(TALLEST + WIDEST);
@@ -525,9 +525,9 @@ impl DrawList {
         self.rewrites.extend_from_slice(&[handle, at, from, bytes]);
     }
 
-    /// Chooses the copy the frame writes its uniforms into. Where the runtime holds the current
+    /// Chooses the copy the frame writes its uniforms into. Where the host holds the current
     /// copy, the frame switches to the other and first copies in the slots it lacks. A hand-off
-    /// carries one frame's uniforms, so the runtime holds at most one copy.
+    /// carries one frame's uniforms, so the host holds at most one copy.
     fn begin(&mut self) {
         if self.begun {
             return;

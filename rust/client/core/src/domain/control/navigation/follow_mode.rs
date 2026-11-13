@@ -14,7 +14,7 @@ use crate::domain::control::param::{HEADING_SMOOTH_ALPHA, SENSOR_GRACE_MS};
 use crate::domain::control::sensor::device_orientation::request_orient;
 use crate::domain::control::sensor::reading::{device_location_store, device_orient_store};
 use crate::sys::sched::invalidate_at;
-use xpute_core::clock::now;
+use xpute_guest::clock::now;
 use pxl_global::Global;
 
 struct Follow {
