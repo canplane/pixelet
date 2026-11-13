@@ -9,10 +9,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// A touch on the world view, from the platform's main thread: phase 0 down,
-// 1 move, 2 up, 3 out, 4 cancel, at x, y in the view's own units.
-void pxl_touch(uint32_t phase, int32_t id, double x, double y);
-
 // A body the app's fetch hands over still zstd (src/sys/unpack.rs), which never
 // reaches the core and so runs on the caller's thread, off the JavaScript
 // thread: 0 with the decoded bytes at *out, *out_len long, the library's

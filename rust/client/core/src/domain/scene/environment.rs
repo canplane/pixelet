@@ -27,15 +27,15 @@ use crate::domain::view::observation;
 use crate::sys::sched::invalidate_at;
 use celestial::{equatorial_to_local, j2000_days, moon_pos, sun_pos};
 use pxl_global::Global;
-use xpute_core::clock::now;
-use xpute_core::clock::wall;
+use xpute_guest::clock::now;
+use xpute_guest::clock::system;
 
 /// Observes the sky at the wall clock's time and wakes a frame when the next
 /// step of the sky or of the clouds falls (`EnvironmentDraw::observe`). The
 /// sky moves with the wall clock while nothing else asks for a frame, so
 /// without this wake a still view would never show it move.
 pub fn environment_step() {
-    let next_ms = environment().observe(wall());
+    let next_ms = environment().observe(system());
     invalidate_at(now() + next_ms);
 }
 

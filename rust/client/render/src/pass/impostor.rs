@@ -11,7 +11,7 @@ use crate::frame::shader::record::PIPELINE_IMPOSTOR;
 use crate::frame::shader::record::{PIPELINE_IMPOSTOR_BAKE, PIPELINE_IMPOSTOR_MARK};
 use crate::gpu::draw::DRAW_WORDS;
 use crate::gpu::draw::{uniform_of, DrawStat, DrawTable};
-use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::sequence;
 use crate::frame::shader::word::DECOR_GROUPS;

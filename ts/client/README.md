@@ -1,7 +1,7 @@
 # @pxl/client
 
 The client is everything around the core: the UI people touch, the services that
-answer the core's needs on each platform, and the runtime that runs the core. It
+answer the core's needs on each platform, and the host that runs the core. It
 is one Expo app for iOS, Android and the page. The world is not here: the client
 never computes a coordinate or a tile, it only carries the core's requests out
 and the core's snapshot back.
@@ -19,7 +19,7 @@ and the core's snapshot back.
     platform/   what differs by platform, as file pairs
      │
      ▼
-  runtime/    xpute's runtime, opened where the platform places the core
+  runtime/    where xpute's host runs, opened where the platform places the core
 ```
 
 The UI reaches the core only through `service/core/`, and `service/core/`
@@ -35,7 +35,7 @@ so the bundle holds a command's number and not its name.
 What differs between the page and a device is a pair of files in
 `service/platform/`: `<x>.ts` is the page's and `<x>.native.ts` the device's,
 and the shapes both share are in `platform/types.ts`. Metro picks the right one
-for each build. The pair that opens the runtime is in `runtime/`: on a page the
+for each build. The pair that opens the host is in `runtime/`: on a page the
 core runs in a worker (`open.ts`), and on a device it runs beside the UI, linked
 into the app (`open.native.ts`). A piece of the UI that the platforms draw
 differently is a file with its override beside it
@@ -43,7 +43,7 @@ differently is a file with its override beside it
 
 ## The boot
 
-`runtime/boot.ts` brings the client up from the bottom: it opens the runtime,
+`runtime/boot.ts` brings the client up from the bottom: it opens the host,
 binds the core's commands to it, and reports where the boot stands as the core
 starts, a GPU answers, the world's source is declared and the first snapshots
 come. The UI only reads that state, through the services, and shows a cover over

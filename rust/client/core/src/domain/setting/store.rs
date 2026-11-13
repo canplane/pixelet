@@ -104,7 +104,7 @@ fn unleb(bytes: &[u8], at: &mut usize) -> Option<u32> {
 static SETTINGS_STORE: Global<Setting> = Global::new();
 
 /// Whether the store differs from what storage holds. The store is written
-/// at most once a frame, so a frame of changes costs the runtime one file
+/// at most once a frame, so a frame of changes costs the host one file
 /// write however many there are.
 static UNSAVED: Global<bool> = Global::new();
 

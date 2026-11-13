@@ -2,7 +2,7 @@
 //
 // Keeps the platform's long frames (service/platform/long-frame.ts) in one
 // ring, for the profiler to show beside the core's frames on one timeline: the
-// runtime counts the core's clock as the UI thread's `performance.now()`.
+// host counts the core's clock as the UI thread's `performance.now()`.
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { type LongFrame } from "@/service/platform/types.ts";

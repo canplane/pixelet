@@ -13,7 +13,8 @@
 use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELLS};
 use pxl_spec::bake::tile::Tile;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{idx_of, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
+use pxl_spec::space::coord::world::idx_of;
 use pxl_spec::space::layer::lattice::{Grid, GROUND};
 use pxl_spec::space::layer::quadrant::Quadrant;
 use pxl_global::Global;

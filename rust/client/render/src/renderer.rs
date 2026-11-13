@@ -1,7 +1,7 @@
 // pxl-render/renderer.rs
 
 //! The renderer. It draws the world's cast and the scheduler's draw lists on
-//! the device, within the core's own turn. Its depth is the device's,
+//! the device, within the core's own frame. Its depth is the device's,
 //! reversed as `mat4::perspective` makes it: the nearer depth is the greater.
 //! A frame draws only what moved: one that reads as the last stands and
 //! submits nothing, and one where only the listed draws that mark moved is
@@ -11,12 +11,12 @@ use pxl_content::generation::GROUPS;
 use pxl_engine::eye;
 use pxl_engine::light::TILE as LIGHT_TILE;
 use pxl_engine::ray;
+use pxl_global::Global;
 use pxl_spec::space::coord::globe::MERCATOR_RADIUS_U;
 use pxl_spec::space::coord::mat4::Mat4;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
-use pxl_global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -52,7 +52,9 @@ use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::{put_mat, put_steps};
 use crate::gpu::read::{Read, SlotMirror};
 use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES};
-use crate::gpu::surface::{on_surfaces_lost, slot_of, surface, surfaces, Surface, SETTLE_TURNS, SURFACES};
+use crate::gpu::surface::{
+    on_surfaces_lost, slot_of, surface, surfaces, Surface, SETTLE_FRAMES, SURFACES,
+};
 use crate::gpu::text::TextOf;
 use crate::gpu::tile::{self, Damage, TileGrid};
 use crate::gpu::upload::uploads;
@@ -82,7 +84,7 @@ use crate::ray::{Cast, GroundInput, RayCount, RayPass};
 const DRAWS_INIT: u32 = 256 * DRAW_FLOATS as u32;
 
 const _: () = assert!(
-    GPU_SPAN_NAMES <= 64,
+    GPU_SPAN_NAMES.len() <= 64,
     "a span a bit of the mask of the spans a frame wrote (`Gpu::submit_frame`)"
 );
 
@@ -168,8 +170,8 @@ pub struct FrameInput<'a> {
     /// Whether the frame's draws are counted (`FrameStat::draws`). Only the
     /// profiler sets it, so a frame the profiler does not record counts none.
     pub counted: bool,
-    /// Whether what the core animates stepped this turn. The animation wakes
-    /// the turn at its own steps, so the resolve asks for no frame after it.
+    /// Whether what the core animates stepped this frame. The animation wakes
+    /// the frame at its own steps, so the resolve asks for no frame after it.
     pub animated: bool,
 }
 
@@ -240,7 +242,7 @@ fn beside(d: &[u32; DRAW_WORDS], u: &[f32]) -> bool {
     BESIDE.contains(&d[4]) && !drifts(u)
 }
 
-/// Whether the turn moved a draw whose moves draw the frame whole
+/// Whether the frame moved a draw whose moves draw the frame whole
 /// (`beside`). It did if it changed one, as it was or as it is, or if an
 /// upload one reads moved (`touched`, sorted).
 fn beside_changed(update: &DrawUpdate, touched: &[u32]) -> bool {
@@ -263,7 +265,7 @@ fn beside_changed(update: &DrawUpdate, touched: &[u32]) -> bool {
 /// that nothing but the listed draws that mark moved before its cast.
 /// `still` says that all it reads read as last time except its lists and its
 /// jitter, over rays cast again at most at their own pixels. `lists_same`
-/// says that nothing in the lists changed this turn.
+/// says that nothing in the lists changed this frame.
 /// `clouds_damage` says that the cloud sheets in view moved. The rest are the
 /// rays' own: whether the light's receivers are marked afresh, which casts
 /// every pixel (`unmasked`, `RayPass::unmasked`), whether the rays cast pixels
@@ -317,10 +319,10 @@ pub struct EarthLayer<'a> {
 }
 
 pub struct FrameOutput {
-    /// Which case the frame turn ended in: no device or surface, not
+    /// Which case the frame ended in: no device or surface, not
     /// admitted, dropped from the stream, or the kind of frame it drew.
     pub kind: FrameKind,
-    /// Whether another turn is wanted, as when a surface waits for its size
+    /// Whether another frame is wanted, as when a surface waits for its size
     /// to settle, a frame was dropped, or the resolve asks for more frames.
     pub redraw: bool,
     pub stat: Option<FrameStat>,
@@ -334,19 +336,21 @@ pub struct FrameOutput {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GpuRead {
     pub frame: f64,
-    pub spans: [f64; GPU_SPAN_NAMES],
+    pub spans: [f64; GPU_SPAN_NAMES.len()],
     pub busy_ms: f64,
     pub px: f64,
 }
 
 impl GpuRead {
     /// The read's time in the spans that run threads over the world's drawn
-    /// pixels (span.json `per_px`, `GpuSpanName::PER_PX`). It is the time a
-    /// lower drawn resolution can buy back.
+    /// pixels (span.json `per_px`). It is the time a lower drawn resolution
+    /// can buy back.
     pub fn px_ms(&self) -> f64 {
-        GpuSpanName::PER_PX
+        GPU_SPAN_NAMES
             .iter()
-            .map(|&s| self.spans[s as usize])
+            .zip(self.spans)
+            .filter(|(span, _)| span.per_px)
+            .map(|(_, ms)| ms)
             .sum()
     }
 }
@@ -381,7 +385,7 @@ pub struct FrameStat {
 static RENDERER: Global<Option<Renderer>> = Global::new();
 
 /// The renderer's pipelines while their shader modules are made, a few a
-/// turn, before the renderer exists (`render_frame`). The renderer takes them
+/// frame, before the renderer exists (`render_frame`). The renderer takes them
 /// once all the modules are made.
 static MAKING: Global<Option<PipelineCache>> = Global::new();
 
@@ -917,7 +921,7 @@ impl Renderer {
         out.dedup();
     }
 
-    /// Called when a turn takes the lists and draws no frame. The next frame
+    /// Called when a frame takes the lists and draws nothing. The next frame
     /// does not see the uploads and the draws they moved, so it is drawn
     /// whole, the draws' uniforms are written whole, and what the marks read
     /// is copied again (`CopyCache::forget`).
@@ -998,7 +1002,7 @@ impl Renderer {
         let draws = update.draws;
         let uniforms = draws.uniforms;
         // The draws' uniforms go in a buffer with room for them all. Only the
-        // slots the turn changed are written, one record for each run of
+        // slots the frame changed are written, one record for each run of
         // adjacent slots (`SlotMirror::write`).
         let uniform_bytes = word_bytes(uniforms.len());
         let grew = uniform_bytes > self.draws_bytes;
@@ -1019,7 +1023,7 @@ impl Renderer {
             word_bytes(DRAW_FLOATS) as usize,
             update.changes.iter().map(|c| c.slot),
         );
-        // What the passes made of the draws stands while the turn changed
+        // What the passes made of the draws stands while the frame changed
         // none, drew none in another order, and the device already held their
         // uniforms.
         let lists_changed = uniforms_changed || !update.changes.is_empty() || update.reordered;
@@ -1089,7 +1093,7 @@ impl Renderer {
             self.jitter_written = jitter;
             self.drift_written = drift_now;
         }
-        // Whether nothing in the lists changed this turn.
+        // Whether nothing in the lists changed this frame.
         let drifted = draws.drifting() && drift_now != drift_bits(&self.last_frame_words);
         let lists_same = !lists_changed && !uploads_changed && !drifted;
         if words_changed || drift_changed {
@@ -1507,7 +1511,7 @@ impl Renderer {
         let squares = self.resolve.tiles.squares();
         // The frame words the listed draws were drawn with are kept, so the
         // next frame can mark the draws where they were. The draws as they
-        // were come with the next turn's changes (gpu/draw.rs `Change`).
+        // were come with the next frame's changes (gpu/draw.rs `Change`).
         self.last_frame_words = self.frame;
         self.last_frame_uploads
             .keep(g, ctx.encoder, &read_uploads, &touched, b);
@@ -1581,10 +1585,10 @@ impl Renderer {
             self.last_frame_uploads.forget();
         } else {
             self.resolve.on_drawn(masked);
-            // Once anything moved, the frames ask for turns until the jitter's
+            // Once anything moved, the frames ask for frames until the jitter's
             // sequence has run through, since nothing else asks for those
             // frames while the world stands. What moves on its own (a
-            // character, the clouds, the location indicator) wakes the turn at
+            // character, the clouds, the location indicator) wakes the frame at
             // its own steps and is drawn with the jitter held
             // (`Resolve::asks`), so it asks for no frame between.
             if self.resolve.asks() && (quiet || !animated) {
@@ -1708,7 +1712,7 @@ fn mark_entries(frame: u32, tiles: &TileGrid) -> [Entry; 4] {
 }
 
 /// Makes `s`'s targets at its size. A new size is applied once it has held
-/// for `SETTLE_TURNS` turns; until then the page scales the old buffer.
+/// for `SETTLE_FRAMES` frames; until then the page scales the old buffer.
 fn targets(g: &Gpu, s: &mut Surface) {
     let ((width, height), screen) = (s.render_px(), s.screen_px());
     if !s.configured {
@@ -1718,21 +1722,21 @@ fn targets(g: &Gpu, s: &mut Surface) {
     }
     let made = s.depth != 0;
     if made && s.width == width && s.height == height && s.screen == screen {
-        s.waited_turns = 0;
+        s.waited_frames = 0;
         return;
     }
     if made {
         if s.wanted_sizes != ((width, height), screen) {
             s.wanted_sizes = ((width, height), screen);
-            s.waited_turns = 0;
+            s.waited_frames = 0;
         }
-        s.waited_turns += 1;
-        if s.waited_turns < SETTLE_TURNS {
+        s.waited_frames += 1;
+        if s.waited_frames < SETTLE_FRAMES {
             REDRAW.set(true);
             return;
         }
     }
-    s.waited_turns = 0;
+    s.waited_frames = 0;
     g.resize(s.handle, screen.0, screen.1);
     for id in s.targets() {
         release(id);
@@ -1796,9 +1800,9 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
         };
     };
     // The renderer is made in three steps before it draws (gpu/pipeline.rs).
-    // First its shaders' modules are made, a few a turn. Then the renderer
+    // First its shaders' modules are made, a few a frame. Then the renderer
     // is made, and it asks for every pipeline by WebGPU's async call. Then
-    // nothing happens until each pipeline is made. A turn before that draws
+    // nothing happens until each pipeline is made. A frame before that draws
     // nothing and asks for the next.
     let slot = RENDERER.get(|| None);
     if slot.is_none() {
@@ -1817,8 +1821,8 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
         if let Some(r) = slot.as_mut() {
             r.put_off();
         }
-        // The modules are made a few a turn, so another turn is wanted while
-        // there is no renderer. A pipeline asked for wakes the turn as it is
+        // The modules are made a few a frame, so another frame is wanted while
+        // there is no renderer. A pipeline asked for wakes the frame as it is
         // made (`complete`).
         return FrameOutput {
             kind: FrameKind::unready,
@@ -1839,7 +1843,7 @@ pub fn render_frame(input: FrameInput) -> FrameOutput {
 /// Whether what the device finished since this last ran wants a frame. That
 /// is an image that landed and is to be taken (`api::images_complete`), a
 /// pipeline made, which the progress shows and the first frame waits on, or
-/// the air's measures (`Atmosphere::complete`). Each wakes the turn when its
+/// the air's measures (`Atmosphere::complete`). Each wakes the frame when its
 /// fence is stored (xpute `RESULT`), so none is polled.
 pub fn complete() -> bool {
     let images = api::images_complete();

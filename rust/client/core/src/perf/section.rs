@@ -15,8 +15,8 @@ use pxl_render::gpu::span_spec::FRAME_KINDS;
 const REASONS: usize = LIMIT::REASONS as usize;
 const REASON_WORDS: usize = LIMIT::REASON_WORDS as usize;
 const STEP_CAP: usize = LIMIT::STEP_CAP as usize;
-pub const TASK_PHASES: usize = TASK_PHASE_NAMES;
-const CATEGORIES: usize = STREAM_NAMES;
+pub const TASK_PHASES: usize = TASK_PHASE_NAMES.len();
+const CATEGORIES: usize = STREAM_NAMES.len();
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -90,15 +90,15 @@ pub struct FrameSection {
     /// Three words for each of the renderer's FRAME_KINDS: the p50 and p95 of
     /// the GPU's busy time over that kind's timed frames, and how many there
     /// were. All three are 0 for a kind no timed frame had.
-    pub gpu_busy_kinds: [f64; 3 * FRAME_KINDS],
+    pub gpu_busy_kinds: [f64; 3 * FRAME_KINDS.len()],
     /// Only the p95 of each phase and each GPU span is kept, because only it
     /// is read. A span's p95 covers the timed frames that ran the span, and
     /// `gpu_spans_cnt` counts those frames.
-    pub phases_p95: [f64; PHASES],
+    pub phases_p95: [f64; PHASES.len()],
     pub gpu_spans_p95: [f64; GPU_SPANS],
     pub gpu_spans_cnt: [f64; GPU_SPANS],
     /// How many frames fell in each of the renderer's FRAME_KINDS.
-    pub kinds: [f64; FRAME_KINDS],
+    pub kinds: [f64; FRAME_KINDS.len()],
     /// The world's pixel count in the last frame a read timed.
     pub gpu_px: f64,
     /// The ray counts of the window's frames, summed field by field.
@@ -233,7 +233,7 @@ pub struct StepSection {
 words!(StepSection, STAT::steps::WORDS, cnt => STAT::steps::cnt, slots => STAT::steps::slots);
 
 /// The largest and smallest values the frames held since the recording
-/// started (perf.json STAT.recording). Each frame turn's figures are folded
+/// started (perf.json STAT.recording). Each frame's figures are folded
 /// in by `fold`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -250,7 +250,7 @@ pub struct RecordingSection {
 }
 
 impl RecordingSection {
-    /// Folds in one frame turn's figures, `h`. Each figure keeps its largest
+    /// Folds in one frame's figures, `h`. Each figure keeps its largest
     /// value, except the largest free block, which keeps its smallest. The
     /// heap's refusals are taken as they stand, since the heap's count only
     /// grows, and the refused tiles are summed.

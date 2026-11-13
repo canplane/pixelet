@@ -1,7 +1,7 @@
 // pxl-core/link/life.rs
 
-//! The app's lifecycle, which the core serves (xpute wit/life.wit): hidden,
-//! the last moment a save is sure to happen, and shown again.
+//! The app's lifecycle, which the core serves (xpute wit/life/life.wit):
+//! hidden, the last moment a save is sure to happen, and shown again.
 
 use core::future::poll_fn;
 use core::task::{Poll, Waker};

@@ -22,7 +22,7 @@ const LIT_INK = 2;
 /**
  * An item is `ITEM_SLOPE * cell + ITEM_BASE` wide. At that size a lit item,
  * scaled by LIT_SCALE and ringed 1 + LIT_INK pixels wide on each side, reaches
- * exactly halfway into the gap, so two lit neighbours never touch.
+ * exactly halfway into the gap, so two lit neighbors never touch.
  */
 const ITEM_SLOPE = 1 / LIT_SCALE;
 const ITEM_BASE = (GRID_GAP - 2 * (1 + LIT_INK)) / LIT_SCALE;

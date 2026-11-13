@@ -14,7 +14,7 @@ fn asset_box(slot: u32, k: Node, o: vec3<i32>) -> Aabb {
   var lo = p.lo;
   var hi = p.hi;
   if (eighths != 0u) {
-    let inset = (hi - lo) * (0.5 * (1.0 - side(eighths)));
+    let inset = (hi - lo) * (0.5 * (1.0 - fill_side(eighths)));
     lo += inset;
     hi -= inset;
   }

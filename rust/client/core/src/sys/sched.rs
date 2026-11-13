@@ -7,9 +7,9 @@
 //! - `invalidate` asks for a frame: the frame task waits on it, then on the
 //!   display's next vsync, and runs the world's frame (frame.rs).
 //! - `invalidate_at` asks for a frame at a time. Only the earliest time is
-//!   armed, by one `timer.sleep` of xpute's, its delay rounded up; a sleep
-//!   armed for any other time does nothing when it wakes, and an earlier time
-//!   arms one more.
+//!   armed, by the timer task's one `monotonic-clock.wait-for` of xpute's, its
+//!   delay rounded up; an earlier time asked meanwhile arms the task again,
+//!   and the wait it lets go answers no one.
 //! - Each entry has a budget, from its start (`begin`, link.rs `enter`): `spent`
 //!   reads it, `run` spends it on a list once one item has done work, and
 //!   `yield_if_spent` leaves the entry once it is spent.
@@ -21,12 +21,15 @@ pub mod param;
 pub mod phase_spec;
 pub mod tick;
 
-use core::future::poll_fn;
+use core::future::{poll_fn, Future};
+use core::pin::pin;
 use core::task::{Poll, Waker};
 use std::cell::Cell;
 
-use xpute_core::abi::timer::{sleep, sleep_then};
-use xpute_core::clock::now;
+use xpute_guest::abi::clocks::monotonic_clock::wait_for;
+use xpute_guest::clock::{duration, now};
+use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::errno::Errno;
 
 use crate::sys::sched::param::BUDGET_MS;
 
@@ -34,8 +37,10 @@ thread_local! {
     /// Whether a frame is asked for, and the frame task's waker.
     static INVALID: Cell<bool> = const { Cell::new(false) };
     static FRAME_WAKER: Cell<Option<Waker>> = const { Cell::new(None) };
-    /// The earliest time a frame is armed for, or infinity.
+    /// The earliest time a frame is armed for, or infinity, and the timer
+    /// task's waker.
     static EARLIEST: Cell<f64> = const { Cell::new(f64::INFINITY) };
+    static TIMER_WAKER: Cell<Option<Waker>> = const { Cell::new(None) };
     /// The entry's deadline.
     static DEADLINE: Cell<f64> = const { Cell::new(f64::INFINITY) };
 }
@@ -71,13 +76,44 @@ pub fn invalidate_at(at: f64) {
         return;
     }
     EARLIEST.set(at);
-    let ms = (at - now()).max(0.0).ceil() as u32;
-    sleep_then(ms, move |_| {
+    if let Some(w) = TIMER_WAKER.take() {
+        w.wake();
+    }
+}
+
+/// Starts the timer task.
+pub fn boot() {
+    executor::spawner().spawn(timer().or_bug(Errno::ENOSPC));
+}
+
+/// Waits for the earliest time a frame is armed for, and asks for the frame
+/// once it passes; an earlier time asked meanwhile arms it again.
+#[embassy_executor::task]
+async fn timer() {
+    loop {
+        let at = poll_fn(|cx| {
+            let at = EARLIEST.get();
+            if at.is_finite() {
+                return Poll::Ready(at);
+            }
+            TIMER_WAKER.set(Some(cx.waker().clone()));
+            Poll::Pending
+        })
+        .await;
+        let mut armed = pin!(wait_for(duration(at - now())));
+        poll_fn(|cx| {
+            if EARLIEST.get() != at || armed.as_mut().poll(cx).is_ready() {
+                return Poll::Ready(());
+            }
+            TIMER_WAKER.set(Some(cx.waker().clone()));
+            Poll::Pending
+        })
+        .await;
         if EARLIEST.get() == at {
             EARLIEST.set(f64::INFINITY);
             invalidate();
         }
-    });
+    }
 }
 
 /// Starts the entry's budget.
@@ -117,7 +153,7 @@ pub fn run<T>(items: impl IntoIterator<Item = T>, mut step: impl FnMut(T) -> boo
 /// Leaves the entry once its budget is spent, and comes back in a later one.
 pub async fn yield_if_spent() {
     if spent() {
-        // A timer that fails leaves the entry all the same.
-        _ = sleep(0).await;
+        // A wait that fails leaves the entry all the same.
+        _ = wait_for(0).await;
     }
 }

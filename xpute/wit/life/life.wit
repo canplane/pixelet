@@ -1,0 +1,10 @@
+package xpute:life@0.1.0;
+
+// The app's lifecycle, which a program serves by exporting it and the host
+// calls; a program that does not export it is never called.
+interface life {
+  // The app is hidden: the guest's last sure moment to save.
+  hidden: func();
+  // The app is shown again.
+  shown: func();
+}

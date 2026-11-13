@@ -3,7 +3,7 @@
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Tracking } from "@/abi/camera.ts";
 import * as camera from "@/abi/camera.ts";
-import { core } from "@/service/core/core.ts";
+import { ui } from "@/service/core/core.ts";
 import * as sensor from "@/service/platform/sensor.ts";
 
 /** iOS Safari asks for the compass only during a press, and the prompt runs
@@ -13,15 +13,15 @@ export async function tracking(tracking: Tracking): Promise<void> {
     console.error("[orientation] could not start the sensor.");
     return;
   }
-  void camera.track(core.camera, tracking);
+  void camera.track(ui, tracking);
 }
 
 export function north_up(): void {
-  void camera.north_up(core.camera);
+  void camera.north_up(ui);
 }
 
 /** Moves the pivot to a search result, and keeps the rest of the view as it
  * is. */
 export function goto(lon: f64, lat: f64): void {
-  void camera.goto(core.camera, lon, lat, null, null, null);
+  void camera.goto(ui, lon, lat, null, null, null);
 }

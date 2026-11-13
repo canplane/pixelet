@@ -9,7 +9,7 @@ use crate::abi::overlay::SensorStatus;
 use crate::domain::control::param::WATCHDOG_TIMEOUT_MS;
 use crate::domain::control::sensor::reading::{device_orient_store, device_orient_store_mut};
 use crate::sys::sched::invalidate_at;
-use xpute_core::clock::now;
+use xpute_guest::clock::now;
 use pxl_global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

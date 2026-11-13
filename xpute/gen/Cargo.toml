@@ -1,0 +1,18 @@
+[package]
+name = "xpute-gen"
+description = "xpute's generator: data specs, and the writer every generator writes with"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+# The generator depends on no crate of the workspace, because it writes into
+# them.
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["float_roundtrip"] }

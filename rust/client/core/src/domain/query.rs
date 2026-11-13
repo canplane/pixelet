@@ -52,6 +52,62 @@ pub use ray::{at_zoom, by_dist, cell_zoom_at, finest, zoom_range, Hit, HitKind, 
 pub use support::{floor_of, is_unknown, on_floor, over, unknown};
 pub use world::{ColumnWalk, World};
 
+use pxl_content::generation::CLAIM_EXTENT;
+use pxl_engine::answer::In;
+use pxl_spec::space::coord::zoom::Zoom;
+use pxl_spec::space::hierarchy::tree::Node;
+use pxl_spec::space::layer::lattice::GROUND;
+
+use crate::domain::layer::instance::Instance;
+use crate::domain::layer::tile_cache::Path;
+use crate::domain::layer::Answer;
+use node::At;
+
+impl World {
+    /// What is in the cell `node` at its own zoom, which is `coarsest` or
+    /// finer, for an asker with nothing handed down (`asset_at`), the decor
+    /// standing in it included. X is on the asker's lap.
+    pub fn asset(&self, node: Node<3>) -> Answer<u32> {
+        report_claims(node);
+        self.asset_at(node, |at, zooms, path| {
+            self.node(at, zooms, path, &mut |_| true)
+        })
+    }
+
+    /// What is in `at`'s node, asked over `zooms`, the zooms from far to
+    /// near that a reader asks within it: this is the world's one query. What
+    /// the layers compose (`layer_node`), with the decor standing in it
+    /// (`with_decor`), which only the CPU answers. So a tree the ground grew
+    /// and a tree someone planted are one thing to whatever asks, of the
+    /// decor it `sees`.
+    fn node(
+        &self,
+        at: &mut At,
+        zooms: [Zoom; 2],
+        path: &mut Path,
+        sees: &mut dyn FnMut(&Instance) -> bool,
+    ) -> Answer<In<[u32; 2]>> {
+        let (answer, relief) = self.layers(at, zooms, path);
+        answer.map(|i| self.with_decor(at, zooms[1], relief, i, sees))
+    }
+}
+
+/// Reports as read the columns a decor claiming the node's leaf cell may
+/// stand on, for an asker that keeps what the cell answers.
+fn report_claims((zoom, c): Node<3>) {
+    if let Some(s) = zoom.checked_sub(GROUND.leaf_cell_zoom()) {
+        let [x, y] = [c[0] >> s, c[1] >> s].map(f64::from);
+        change::report_read(
+            [
+                x - f64::from(CLAIM_EXTENT[0]),
+                y - f64::from(CLAIM_EXTENT[1]),
+            ],
+            [x, y],
+            GROUND.leaf_cell_zoom(),
+        );
+    }
+}
+
 #[cfg(test)]
 #[path = "query.test.rs"]
 pub(crate) mod test;

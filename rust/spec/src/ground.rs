@@ -13,8 +13,7 @@
 //! draw it alike whatever they fuse or reorder.
 
 use crate::share::{eighths, FULL};
-use crate::space::coord::world::HEIGHT_BITS;
-use crate::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, UNIT_ZOOM};
+use crate::space::coord::zoom::{Zoom, HEIGHT_BITS, LEAF_CELL_ZOOM, LEAF_ZOOM, UNIT_ZOOM};
 use crate::space::layer::lattice::TILE_CELLS;
 use crate::value;
 

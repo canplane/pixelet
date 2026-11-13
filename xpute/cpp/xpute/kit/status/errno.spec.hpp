@@ -1,6 +1,6 @@
 // cpp/xpute/kit/status/errno.spec.hpp
 //
-// GENERATED from spec/status/errno.json
+// GENERATED from kit/spec/errno.json
 //
 // POSIX/Linux-aligned negative errno
 

@@ -1,6 +1,6 @@
 // pxl-core/sys/sched/phase.spec.rs
 //
-// GENERATED from spec/client/core/sys/sched/phase.json
+// GENERATED from spec/client/core/sys/sched/phase.json (xpute-gen data.rs)
 //
 // The core's tick phases, in the order they run (pxl-core sys/sched/tick.rs):
 // what moves the eye first, unbudgeted and O(1); then what is visible. A
@@ -12,13 +12,12 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
-    clippy::absolute_paths,
     non_camel_case_types,
     dead_code,
     reason = "generated from the spec"
 )]
 
-pub const PHASES: usize = 2;
+pub const PHASES: &[&str] = &["interaction", "visible"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Phase {
@@ -27,12 +26,23 @@ pub enum Phase {
 }
 
 impl Phase {
-    /// Every member, in the JSON's own order.
+    /// Every member, in its source's own order.
     pub const ALL: [Phase; 2] = [Phase::interaction, Phase::visible];
 
-    /// The member a number names, or none for a number the set does not
-    /// give out.
-    pub fn of(val: u8) -> Option<Phase> {
-        Phase::ALL.into_iter().find(|member| *member as u8 == val)
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u8) -> Option<Phase> {
+        match val {
+            0 => Some(Phase::interaction),
+            1 => Some(Phase::visible),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Phase::interaction => "interaction",
+            Phase::visible => "visible",
+        }
     }
 }

@@ -6,6 +6,7 @@
     "path is, its number and its extent, is the catalog's (pxl_spec::asset::catalog)."
   ],
   "groups": {
+    "$type": "enum",
     "$doc": [
       "The groups a character is of, each numbered, and in each its variants,",
       "each numbered by its row, row for row with its models, the colormap its pack",
@@ -152,7 +153,7 @@
     ]
   },
   "GENDER": {
-    "$type": "u8",
+    "$type": "enum",
     "$doc": [
       "A person's gender, which splits the picker into two rows; a person is",
       "shown by its place in its row."

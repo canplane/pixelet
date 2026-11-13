@@ -35,7 +35,7 @@ struct TileList {
 /// The first of the four samples about the screen's point at the tangents `at`
 /// (`Grid::sample_before`).
 fn sample_before(at: vec2<f32>) -> vec2<u32> {
-  let v = vec2<f32>(at.x + eye_f32(TAN), eye_f32(TAN + 1u) - at.y);
+  let v = vec2<f32>(at.x + eye_f32(EYE_TAN), eye_f32(EYE_TAN + 1u) - at.y);
   return vec2<u32>(max(floor(v * SAMPLE_SPACING_INVERSE), vec2<f32>(0.0))) + vec2<u32>(NEAR_SAMPLES);
 }
 
@@ -44,7 +44,7 @@ fn sample_before(at: vec2<f32>) -> vec2<u32> {
 /// grid's ray nearest it, the sample before it on the lattice: its beam ray's and its own
 /// (`beam::SAMPLE_STEPS_SHIFT`).
 fn taken_word(px: vec2<f32>, ground: u32) -> u32 {
-  if (eye_word(STEPS) == 0u) {
+  if (eye_word(EYE_STEPS) == 0u) {
     return ground;
   }
   return beam_steps(grid_cell(px)) + (beams[sample_word(sample_before(px)) + SAMPLE_LACKS] >> SAMPLE_STEPS_SHIFT);
@@ -70,7 +70,7 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
   let px = px_tan(p, size.xy);
   let aim = eye_aim(px);
   let on = ((node_cache[CNT_ON] >> CNT_EYE) & 1u) != 0u;
-  if (visible != 0u && (visible & VISIBLE_LACK) == 0u) {
+  if (visible != 0u && (visible & RASTER_LACK) == 0u) {
     // The voxel's entry was drawn, so it is fresh (record_draw.wgsl), and the boxes are kept
     // only while the eye's words its freshness reads stand. No claim takes its slot while its
     // box is drawn (`record::drawn`). A slot forgotten since the boxes were drawn has no faces

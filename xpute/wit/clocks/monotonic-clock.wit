@@ -1,0 +1,14 @@
+package xpute:clocks@0.1.0;
+
+// The host's monotonic clock, as wasi:clocks@0.3's `monotonic-clock`.
+interface monotonic-clock {
+  use types.{duration};
+
+  // A mark in nanoseconds, which never runs backward; only differences
+  // between two mean anything.
+  type mark = u64;
+
+  now: func() -> mark;
+  // Answers once `how-long` has passed; 0, at the event loop's next pass.
+  wait-for: async func(how-long: duration);
+}

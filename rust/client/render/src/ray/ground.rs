@@ -2,7 +2,7 @@
 
 //! The GPU's copy of the terrain bricks the core fills for the clip levels.
 //! A brick is its words, a word of four asset ids for each cell, and
-//! its kept spans, a run in a pool every brick shares. The runtime reads each
+//! its kept spans, a run in a pool every brick shares. The host reads each
 //! brick from the core's own memory when it runs the frame.
 
 use pxl_engine::clipmap::{BRICK_WORDS, FRAME_BRICKS, SLOTS, WAYS_POOL_WORDS};
@@ -26,7 +26,7 @@ pub struct GroundInput<'a> {
 /// `upload`). Its words are laid out as pxl-engine `clipmap::BRICK_WORDS`
 /// says. `run` is its run of kept spans in the ways' pool, in pieces, each its
 /// first word in the pool and the words from there, none where it keeps no span.
-/// Every slice is the core's own memory: the runtime reads it when it runs the frame, and the core asks
+/// Every slice is the core's own memory: the host reads it when it runs the frame, and the core asks
 /// `in_flight` before it writes any of it again.
 pub struct BrickWrite<'a> {
     pub slot: u32,
@@ -86,7 +86,7 @@ impl GroundBuffer {
     /// cast makes its groups again over the new id (`prepare`).
     ///
     /// A device out of memory may fail to make the larger buffer. Nothing
-    /// reports it, as the runtime keeps no error scope, and the renderer goes
+    /// reports it, as the host keeps no error scope, and the renderer goes
     /// on with a buffer the device holds as an error. The last doubling holds
     /// the old 32 MiB pool beside the new 64 MiB one until the copy is
     /// submitted.

@@ -11,7 +11,7 @@ use pxl_render::frame::shader::record::{
     VERTEX_ENTRY,
 };
 use pxl_render::gpu::api::vertex_format;
-use xpute_gpu::enums::VERTEX_FORMAT;
+use xpute_gpu_link::enums::VERTEX_FORMAT;
 
 fn main() {
     let dir = std::env::args()

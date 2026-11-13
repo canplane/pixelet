@@ -57,16 +57,6 @@ export function worldPointer(
   input.pointer(phase, pointerType, id, button, x, y);
 }
 
-/** What the UI makes of a device's touch, which reaches the core without it.
- * A press puts the keyboard away and ends the typing; the core has already
- * spent that touch (INPUT_TYPING), as it spends a pointer `worldPointer`
- * sends. */
-export function worldTouched(phase: PointerPhase): void {
-  if (phase !== PointerPhase.Down) return;
-  putKeyboardAway();
-  if (dockMode() === DockMode.Message) setDockMode(DockMode.Palette);
-}
-
 /** Ends every pressed pointer with a cancel. The caller calls it when the page
  * loses its pointers, on a blur, when it is hidden or when the surface goes,
  * because their lifts will not come. */

@@ -9,7 +9,7 @@
 // (`ray::pool_at`).
 
 fn walked_at() -> u32 {
-  return eye_word(GRID + GRID_WALKED_AT);
+  return eye_word(EYE_GRID + GRID_WALKED_AT);
 }
 
 /// How many squares a target of `size` pixels holds across and down (pxl-engine

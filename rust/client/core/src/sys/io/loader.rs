@@ -23,7 +23,7 @@ use xpute_kit::status::errno::Errno;
 use crate::sys::io::demand::Order;
 use crate::sys::io::failure::{exit_of, Exit, Failure};
 use crate::sys::io::file;
-use crate::sys::manifest::MIN_HEAP_BYTES;
+use crate::sys::manifest::mem;
 use crate::sys::io::file_spec::CATALOG;
 use crate::sys::io::request::{attempt_of, settle};
 use crate::sys::io::source;
@@ -159,11 +159,11 @@ pub fn open_asset(key: u64, load: Load) {
 /// attempt's credit back once it is read. Where the entry is spent before the
 /// tasks run, each arrival still advances one step an entry, so no arrival
 /// waits on another. A file that cannot be read, absent among them, fails
-/// its load; a read its stop cancelled reaches no one, and the load is asked
+/// its load; a read its stop canceled reaches no one, and the load is asked
 /// again.
 #[embassy_executor::task(pool_size = LOAD_FILES)]
 async fn arrival(key: u64, kind: LoadKind, load: Load) {
-    let read = file::read_whole(&load.path(), MIN_HEAP_BYTES, Some(key), file::heap)
+    let read = file::read_whole(&load.path(), mem::min_heap_bytes, Some(key), file::heap)
         .await
         .map(Vec::into_boxed_slice);
     let l = loader();

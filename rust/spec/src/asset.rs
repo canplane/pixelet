@@ -34,14 +34,16 @@ use id::{idx_of, kind_of, Kind};
 use ingest::{CubeFace, PACK};
 use xpute_kit::status::errno::Errno;
 
-/// A catalog color, packed `0xRRGGBB` by the generator.
+use crate::color::Rgb;
+
+/// A catalog color.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Swatch {
-    pub rgb: u32,
+    pub rgb: Rgb,
 }
 
 impl Swatch {
-    pub const fn new(rgb: u32) -> Swatch {
+    pub const fn new(rgb: Rgb) -> Swatch {
         Swatch { rgb }
     }
 }

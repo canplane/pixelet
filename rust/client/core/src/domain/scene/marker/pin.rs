@@ -12,7 +12,7 @@
 
 use core::hash::Hasher;
 
-use super::arrangement::{surface, Brick, Instance, Key, MarkerHit};
+use super::{surface, Brick, Instance, Key, MarkerHit};
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::preview::Draft;
 use crate::domain::query::{cell_zoom_at, World};
@@ -22,21 +22,13 @@ use pxl_spec::asset::marker::{marker_cell_of, marker_shows};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::world::point;
-use pxl_spec::space::coord::zoom::{cube, units, Zoom};
+use pxl_spec::space::coord::world::{cube, point};
+use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
 
 /// A pin's cell (`marker_cell_of`): its zoom and place.
 type Cell = (Zoom, [i32; 3]);
-
-/// What a pin instance stands for: one pin's entry, or the pin's cell whose
-/// count it shows.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub(super) enum Holder {
-    One(Octant),
-    Cell(Cell),
-}
 
 /// A pin read from a drawn brick: its pill, where it stands, and its base.
 /// It also keeps what the last run showed: the camera grid's cell zoom at its
@@ -86,7 +78,7 @@ fn cnt(n: usize) -> Design {
 /// decides what to do with it.
 fn one(at: Octant, design: Design, pos: Q3) -> Instance {
     Instance {
-        key: Key::Pin(Holder::One(at)),
+        key: Key::Pin(at),
         design,
         pos,
         tap: Some(MarkerHit::Pin(at, pos)),
@@ -149,7 +141,7 @@ pub(super) fn show(pins: &mut [Pin], eye: V3, draft: Option<&Draft>, out: &mut V
         };
         run.iter_mut().for_each(|p| p.crowd = Some((cell, at)));
         out.push(Instance {
-            key: Key::Pin(Holder::Cell(cell)),
+            key: Key::PinCell(cell),
             design: cnt(n),
             pos: at,
             tap: Some(MarkerHit::To(at)),

@@ -28,8 +28,8 @@ use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::character::groups::{person, pet};
 pub use pxl_spec::asset::character::Group;
 use pxl_spec::space::coord::v3;
-use xpute_core::clock::now;
-use xpute_core::mem;
+use xpute_guest::clock::now;
+use xpute_link::mem;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 

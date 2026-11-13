@@ -1,6 +1,6 @@
 // pxl-spec/division.spec.rs
 //
-// GENERATED from spec/spec/division.json
+// GENERATED from spec/spec/division.json (xpute-gen data.rs)
 //
 // A division's subtype, Overture's, broadest first (pxl-spec division.rs
 // `Subtype`): a name is a division and its ancestors, and the client picks
@@ -12,7 +12,6 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
-    clippy::absolute_paths,
     dead_code,
     reason = "generated from the spec"
 )]

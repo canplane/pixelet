@@ -26,8 +26,10 @@ use crate::axis;
 use pxl_spec::share::EIGHTHS;
 use pxl_spec::space::camera::grid::cell_zoom_at;
 use pxl_spec::space::coord::q3::FRAC_W;
-use pxl_spec::space::coord::world::{wrap_idx, HEIGHT_BITS};
-use pxl_spec::space::coord::zoom::{y_start, z_start, Zoom, FINEST_ZOOM, MIN_ZOOM, UNIT_ZOOM};
+use pxl_spec::space::coord::world::wrap_idx;
+use pxl_spec::space::coord::zoom::{
+    y_start, z_start, Zoom, FINEST_ZOOM, HEIGHT_BITS, MIN_ZOOM, UNIT_ZOOM,
+};
 use pxl_spec::space::layer::lattice::{draw_dist, GROUND};
 
 /// The direction at the tangents `tx` across and `ty` up from the optical axis, as a

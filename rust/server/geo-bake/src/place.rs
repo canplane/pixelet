@@ -9,7 +9,8 @@ use pxl_geo_spec::overture::properties::CATEGORY_SQL;
 use pxl_spec::bake::tile::place::{self, category_of, PlaceTile, SourcePlace};
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{idx_of, LEAF_ZOOM};
+use pxl_spec::space::coord::world::idx_of;
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 impl Base for PlaceTile {

@@ -1,6 +1,6 @@
 // @pxl/client/ui/shared/asset/cube/ground.spec.ts
 //
-// GENERATED from spec/spec/asset/cube.json
+// GENERATED from spec/spec/asset/cube.json (pxl-tool spec/asset.rs)
 // The ground: one byte a cell, a palette entry from OpenStreetMap Carto, numbered in
 // the order Carto paints.
 // `transport` marks a way: decor faces along it and no pier stands on it.

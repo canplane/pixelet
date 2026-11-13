@@ -12,7 +12,7 @@ use core::ops::Range;
 
 use pxl_render::asset::{SCENE_IDXS_CAP, SCENE_VERTICES_CAP};
 use pxl_render::gpu::draw::{DrawList, MODEL_VERTEX_WORDS};
-use xpute_core::mem;
+use xpute_link::mem;
 
 use crate::sys::heap;
 

@@ -1,6 +1,6 @@
 // pxl-core/sys/io/file.spec.rs
 //
-// GENERATED from spec/client/core/sys/io/file.json
+// GENERATED from spec/client/core/sys/io/file.json (xpute-gen data.rs)
 //
 // The core's files: the tokens of their paths and what a file holds (pxl-core
 // sys/io/file.rs, ts/client/src/service/sys/fs/).
@@ -10,7 +10,6 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
-    clippy::absolute_paths,
     dead_code,
     reason = "generated from the spec"
 )]

@@ -372,9 +372,9 @@ impl TileGrid {
         self.size.map(|v| v.div_ceil(self.side))
     }
 
-    /// The uniform's words for this frame, laid out as build.rs's `TileGrid` reads them
-    /// (tile_word.wgsl). A quad is grown by `grow` pixels each way past its tile, and a tile
-    /// stays damaged for `damage_frames` frames once it changed.
+    /// The uniform's words for this frame, laid out as tile_word.wgsl's `TileGrid` reads them.
+    /// A quad is grown by `grow` pixels each way past its tile, and a tile stays damaged for
+    /// `damage_frames` frames once it changed.
     pub fn words(&self, grow: f32, damage_frames: u32) -> [u32; TILES_WORDS] {
         let [across, down] = self.squares();
         let mut t = [0u32; TILES_WORDS];

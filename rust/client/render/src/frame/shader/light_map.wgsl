@@ -15,7 +15,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @buil
   let k = vi % LAY_VERTICES;
   let step = vec2f(f32(k == 1u || k == 2u || k == 4u), f32(k == 2u || k == 4u || k == 5u));
   let side = vec2f(textureDimensions(world_depth));
-  let p = (tile + step) * f32(LAY_TILE) / side;
+  let p = (tile + step) * f32(LIGHT_TILE) / side;
   return vec4f(p.x * 2.0 - 1.0, 1.0 - p.y * 2.0, 0.0, 1.0);
 }
 

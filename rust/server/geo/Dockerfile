@@ -1,6 +1,6 @@
 # pxl-geo's image — the world's data server.
 #
-# Build context is the repo root, which holds rust/ and xpute/rust/ both
+# Build context is the repo root, which holds rust/ and xpute/ both
 # (the root's .dockerignore lets in only those): docker build -f rust/server/geo/Dockerfile .
 
 # Must equal rust/rust-toolchain.toml; the build runs under the image's own
@@ -10,7 +10,7 @@ WORKDIR /src
 ENV RUSTUP_TOOLCHAIN=$RUST_VERSION
 
 COPY rust ./rust
-COPY xpute/rust ./xpute/rust
+COPY xpute ./xpute
 
 # The server profile, not release: release aborts on panic.
 # `sharing=locked`: both images share the registry cache, and cargo's package

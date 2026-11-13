@@ -1,24 +1,26 @@
 // @pxl/client/abi/perf.ts
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import {
   type Link,
   type LinkObject,
   type Method,
-  open as open_uri,
   refusal_of,
-  type Ref,
   type Sender,
+  type Handle,
   uri,
-} from "@xpute/runtime";
+} from "@xpute/link/link.ts";
 
-/** The singleton's URI. */
-export const URI = uri("pxl:core", "perf");
+/** The interface's handle, named by `pxl:core/perf` (frame.json `NAMED`). */
+export const HANDLE: Handle = 0x6be6ac;
+
+/** The interface's qualified name: its package and its name. */
+export const NAME = uri("pxl:core", "perf");
 
 /** `start` */
 export const START: Method = 0;
@@ -81,51 +83,45 @@ function object(imp: Perf): LinkObject {
   };
 }
 
-/** Mounts `imp` at the URI, one object for every open. */
-export function mount(l: Pick<Link, "mount">, imp: Perf): void {
-  const o = object(imp);
-  l.mount(URI, () => o);
+/** Serves `imp` under the interface's handle. */
+export function mount(l: Pick<Link, "mount_named">, imp: Perf): void {
+  l.mount_named(HANDLE, object(imp));
 }
 
-/** Opens the singleton on the other side, once, at boot. */
-export async function open(link: Sender): Promise<Ref> {
-  return { link, handle: await open_uri(link, URI) };
-}
-
-export async function start(ref: Ref): Promise<void> {
-  const a = await ref.link.send(ref.handle, START, []);
+export async function start(link: Sender): Promise<void> {
+  const a = await link.send(HANDLE, START, []);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
-export async function stop(ref: Ref): Promise<void> {
-  const a = await ref.link.send(ref.handle, STOP, []);
+export async function stop(link: Sender): Promise<void> {
+  const a = await link.send(HANDLE, STOP, []);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
 export async function stats(
-  ref: Ref,
+  link: Sender,
   window_ms: number | null,
 ): Promise<U8Array> {
-  const a = await ref.link.send(ref.handle, STATS, [window_ms]);
+  const a = await link.send(HANDLE, STATS, [window_ms]);
   if (a.result < 0) throw new XputeError(a.result);
   if (a.data === null) throw new XputeError(Errno.EBADMSG);
   return new TreeReader(a.data).read_branch().at(0).get() as U8Array;
 }
 
 export async function rings(
-  ref: Ref,
+  link: Sender,
   ring: number,
   from: number,
   cnt: number,
 ): Promise<U8Array> {
-  const a = await ref.link.send(ref.handle, RINGS, [ring, from, cnt]);
+  const a = await link.send(HANDLE, RINGS, [ring, from, cnt]);
   if (a.result < 0) throw new XputeError(a.result);
   if (a.data === null) throw new XputeError(Errno.EBADMSG);
   return new TreeReader(a.data).read_branch().at(0).get() as U8Array;
 }
 
-export async function strtab(ref: Ref): Promise<U8Array> {
-  const a = await ref.link.send(ref.handle, STRTAB, []);
+export async function strtab(link: Sender): Promise<U8Array> {
+  const a = await link.send(HANDLE, STRTAB, []);
   if (a.result < 0) throw new XputeError(a.result);
   if (a.data === null) throw new XputeError(Errno.EBADMSG);
   return new TreeReader(a.data).read_branch().at(0).get() as U8Array;

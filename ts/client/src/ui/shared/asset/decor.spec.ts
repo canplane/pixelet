@@ -1,6 +1,6 @@
 // @pxl/client/ui/shared/asset/decor.spec.ts
 //
-// GENERATED from spec/spec/asset/decor.json
+// GENERATED from spec/spec/asset/decor.json (pxl-tool spec/asset.rs)
 //
 // The decors, the cube catalog's sibling: drawn as a model, not a cell the rays meet.
 //

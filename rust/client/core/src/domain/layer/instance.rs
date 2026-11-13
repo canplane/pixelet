@@ -9,7 +9,7 @@ use pxl_spec::asset::decor::DecorMeta;
 use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::zoom::cube;
+use pxl_spec::space::coord::world::cube;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use pxl_spec::space::layer::octant::Octant;

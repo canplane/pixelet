@@ -115,7 +115,7 @@ are answered in Rust on the core's thread, which removes the one place the core
 waits for JavaScript. Then the runtime's thread is made, with the rings, the
 scheduler and the file server, and the UI behind a port. It becomes the ring's one
 writer, so a turn's grant goes back on the ring as a frame and that outside path
-goes. Touches and tile bodies follow, and the runtime's thread takes them directly.
+goes.
 
 ## What this does not show
 

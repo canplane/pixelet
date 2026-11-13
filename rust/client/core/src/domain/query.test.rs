@@ -7,9 +7,8 @@ use pxl_spec::asset::cube::{self, ground, sentinel};
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::bake::tile::terrain::{GroundCells, GroundId, TerrainTile, GROUND_COLUMN};
-use pxl_spec::space::coord::zoom::{
-    idx_of, units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, UNIT_ZOOM,
-};
+use pxl_spec::space::coord::world::idx_of;
+use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, UNIT_ZOOM};
 use pxl_spec::space::layer::lattice::{Grid, GROUND, TILE_CELLS};
 
 use super::*;

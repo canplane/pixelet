@@ -5,7 +5,7 @@
 
 use crate::abi::overlay::Message;
 use crate::abi::overlay::SensorStatus;
-use xpute_core::clock::now;
+use xpute_guest::clock::now;
 use pxl_global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -58,10 +58,17 @@ fn is_heading_delta_over(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
 
 /// The location's state as the snapshot carries it: its status, and what
 /// failed when it failed. `err` is None except at `SensorStatus::Error`.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SensorState {
     pub status: SensorStatus,
     pub err: Option<Message>,
+}
+
+/// A sensor is idle until it is asked to start.
+impl Default for SensorState {
+    fn default() -> SensorState {
+        SensorState::of(SensorStatus::Idle)
+    }
 }
 
 impl SensorState {
@@ -140,11 +147,22 @@ impl DeviceLocationStore {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DeviceOrientationStore {
     pub is_tracking_orient: bool,
     pub orient: Option<DeviceOrientation>,
     pub status: SensorStatus,
+}
+
+/// The device's orientation is idle until it is asked to start.
+impl Default for DeviceOrientationStore {
+    fn default() -> DeviceOrientationStore {
+        DeviceOrientationStore {
+            is_tracking_orient: false,
+            orient: None,
+            status: SensorStatus::Idle,
+        }
+    }
 }
 
 impl DeviceOrientationStore {

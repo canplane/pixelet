@@ -1,27 +1,47 @@
-// rust/client/core/src/sys/manifest.spec.rs
+// pxl-core/sys/manifest.spec.rs
 //
-// GENERATED from spec/client/core/sys/manifest.json
+// GENERATED from spec/client/core/sys/manifest.json (xpute-gen data.rs)
+//
+// The core's manifest (xpute link/spec/manifest.schema.json): its memory, its fixed ranges and
+// the heap it counts on, and its stacks.
 
-//! The manifest its JSON declares, which a build script includes too as it
-//! links the module.
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    dead_code,
+    reason = "generated from the spec"
+)]
 
-/// The core's memory, whole before its first entry and never grown.
-pub const MEM_BYTES: u32 = 536870912;
-/// The program's fixed ranges, past the module's data.
-pub const FIXED_BYTES: u32 = 154800128;
-/// The heap the core counts on, past the fixed ranges.
-pub const MIN_HEAP_BYTES: u32 = 268435456;
-/// A module's stack, first in its memory.
-pub const STACK_BYTES: u32 = 1048576;
-/// A native core's thread's stack.
-pub const THREAD_STACK_BYTES: u32 = 8388608;
-/// The stream's room.
-pub const STREAM_BYTES: u32 = 4194304;
+/// `bytes`: the core's memory, 512 MiB on every platform, the limit chosen for it. The
+/// page's worker grows the module's memory to it before the core's first entry, and the
+/// core never grows it (sys/heap.rs), so a full heap stops the core: the stack, the
+/// module's data, the fixed ranges, then the heap.
+///
+/// `fixed_bytes`: the fixed ranges past the module's data, `.fixed` (link/layout.rs), 147.63 MiB, which
+/// the compiler holds the ranges' sum under.
+///
+/// `min_heap_bytes`: the heap the core counts on past the fixed ranges, 256 MiB, which the
+/// boot checks the memory it is given leaves (sys/heap.rs). A whole file read and a fetched body are capped by it,
+/// and the caps of the heap's bounded flows, added up in the buddy's blocks, are held under
+/// it at compile time (link/layout.rs `HEAP_FLOWS_BYTES`).
+pub mod mem {
+    pub const bytes: u32 = 536870912;
+    pub const fixed_bytes: u32 = 154800128;
+    pub const min_heap_bytes: u32 = 268435456;
+}
 
-// What the core asks of its GPU: the power preference, and the features
-// the device must have and those it takes where the adapter has them.
-pub const GPU_ASK: (&str, &[&str], &[&str]) = (
-    "high-performance",
-    &["depth32float-stencil8"],
-    &["timestamp-query"],
-);
+/// `module_bytes`: the stack, at the bottom of the memory, first so that an overflow
+/// goes below zero, wraps as an unsigned 32-bit address and lands outside the memory,
+/// which traps. With the stack after the data it would write over `.data` silently
+/// instead. There is no MMU here and so no guard page: the wraparound is the whole of
+/// the protection.
+///
+/// `thread_bytes`: the core's thread's stack on a device, where the core is a library
+/// on a thread of its own: a main thread's 8 MiB, since React Native's JavaScript thread
+/// has 1 MiB and wgpu's depth has no bound to state.
+pub mod stack {
+    pub const module_bytes: u32 = 1048576;
+    pub const thread_bytes: u32 = 8388608;
+}

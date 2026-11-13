@@ -42,10 +42,10 @@ pub struct PipelineCache {
     layout_len: usize,
     pipelines: [(u64, Pipeline); PIPELINE_CAP],
     pipeline_len: usize,
-    /// Each pipeline's fence, by its place in `pipelines`. The runtime stores `TICKET` there
+    /// Each pipeline's fence, by its place in `pipelines`. The host stores `TICKET` there
     /// once the pipeline is made. The words are boxed so they stay where the records named
     /// them. They are freed with the renderer, which happens only on a lost device, whose
-    /// runtime writes nothing more.
+    /// host writes nothing more.
     words: Box<[u32; PIPELINE_CAP]>,
     /// How many of the pipelines are made, in whatever order WebGPU made
     /// them, as `made` last counted.

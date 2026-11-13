@@ -8,7 +8,7 @@ import {
 } from "@/service/platform/types.ts";
 import * as sensor from "@/service/platform/sensor.ts";
 import * as input from "@/abi/input.ts";
-import { core } from "@/service/core/core.ts";
+import { ui } from "@/service/core/core.ts";
 
 export function pointer(
   phase: PointerPhase,
@@ -18,23 +18,23 @@ export function pointer(
   x: f64,
   y: f64,
 ): void {
-  void input.pointer(core.input, phase, pointer_type, id, button, x, y);
+  void input.pointer(ui, phase, pointer_type, id, button, x, y);
 }
 
 export function typing(on: boolean): void {
-  void input.typing(core.input, on);
+  void input.typing(ui, on);
 }
 
 export function wheel(delta_y: f64): void {
-  void input.wheel(core.input, delta_y);
+  void input.wheel(ui, delta_y);
 }
 
 export function pinch(scale: f64): void {
-  void input.pinch(core.input, scale);
+  void input.pinch(ui, scale);
 }
 
 export function keys(x: i32, y: i32): void {
-  void input.move(core.input, x, y);
+  void input.move(ui, x, y);
 }
 
 /** Follows the sensors while the world's view is open: called as it opens,

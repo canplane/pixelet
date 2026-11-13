@@ -22,7 +22,6 @@ use crate::domain::setting::store::{settings, CameraMode};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::frame::pose::ObserverPose;
 use crate::domain::view::frame::screen::units_per_px_at;
-use crate::sys::sched;
 use crate::sys::sched::invalidate;
 use crate::sys::sched::tick::TickContext;
 use pxl_global::Global;
@@ -245,7 +244,7 @@ pub fn pinch_by(scale: f64) {
 
 pub fn controller_step(ctx: &mut TickContext) {
     if switch() {
-        sched::invalidate();
+        invalidate();
     }
 }
 
@@ -256,7 +255,7 @@ pub fn camera_step(ctx: &mut TickContext) {
         Active::Tracked => false,
     };
     if moving {
-        sched::invalidate();
+        invalidate();
     }
 }
 

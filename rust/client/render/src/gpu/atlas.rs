@@ -9,7 +9,7 @@ use crate::frame::shader::record::PIPELINE_ATLAS;
 use crate::frame::shader::word::{
     ATLAS_FILL, ATLAS_HALO, ATLAS_STROKE, ATLAS_TEXT, ATLAS_TRIANGLE,
 };
-use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shelf::PAD;
 use crate::gpu::api::{
@@ -21,13 +21,14 @@ use crate::gpu::text::{Raster, TextOf};
 use crate::look::color;
 use crate::look::marker::{Font, Halo, ATLAS_SCALE};
 use pxl_spec::asset::symbol::{SYMBOL_MASKS, SYMBOL_PX};
+use pxl_spec::color::Rgba;
 use xpute_kit::math::scalar::round;
 
 const SHAPE_FLOATS: usize = 20;
 
 struct Line {
     font: Font,
-    color: u32,
+    color: Rgba,
     text: String,
     /// The line's horizontal middle and the height of its em box's middle, in logical
     /// pixels.
@@ -46,13 +47,13 @@ pub struct DisplayList {
 /// its mask in `color`.
 struct Icon {
     symbol: usize,
-    color: u32,
+    color: Rgba,
     at: [f32; 2],
 }
 
 /// A symbol's mask in `color`, laid out as the platform hands a line of text: RGBA, not
 /// premultiplied, top row first. The mask scales the color's alpha.
-fn symbol_rgba(symbol: usize, color: u32) -> Vec<u8> {
+fn symbol_rgba(symbol: usize, color: Rgba) -> Vec<u8> {
     let side = (SYMBOL_PX * SYMBOL_PX) as usize;
     let mask = &SYMBOL_MASKS[symbol * side..(symbol + 1) * side];
     let [r, g, b, a] = color.to_be_bytes();
@@ -67,12 +68,12 @@ fn px(v: f32) -> f32 {
 
 /// The color `0xRRGGBBAA` with its channels made linear and its alpha kept. The atlas's
 /// texture is sRGB, and a shader writes linear values into it.
-fn linear(rgba: u32) -> [f32; 4] {
+fn linear(rgba: Rgba) -> [f32; 4] {
     let [r, g, b] = color::linear_rgb(rgba >> 8).map(|v| v as f32);
     [r, g, b, (rgba & 0xff) as f32 / 255.0]
 }
 
-fn shape(kind: u32, rect: [f32; 4], color: u32, p: [f32; 4], q: [f32; 2]) -> [f32; SHAPE_FLOATS] {
+fn shape(kind: u32, rect: [f32; 4], color: Rgba, p: [f32; 4], q: [f32; 2]) -> [f32; SHAPE_FLOATS] {
     let mut s = [0.0; SHAPE_FLOATS];
     s[..4].copy_from_slice(&rect);
     s[4..8].copy_from_slice(&linear(color));
@@ -83,7 +84,7 @@ fn shape(kind: u32, rect: [f32; 4], color: u32, p: [f32; 4], q: [f32; 2]) -> [f3
 }
 
 impl DisplayList {
-    pub fn round_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, color: u32) {
+    pub fn round_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, color: Rgba) {
         let rect = [px(x), px(y), px(x + w), px(y + h)];
         self.shapes.push(shape(
             ATLAS_FILL,
@@ -94,17 +95,17 @@ impl DisplayList {
         ));
     }
 
-    pub fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, color: u32) {
+    pub fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, color: Rgba) {
         self.round_rect(x, y, w, h, 0.0, color);
     }
 
-    pub fn circle(&mut self, cx: f32, cy: f32, r: f32, color: u32) {
+    pub fn circle(&mut self, cx: f32, cy: f32, r: f32, color: Rgba) {
         self.round_rect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, color);
     }
 
     /// A disc whose edge fades over `edge` and whose fill is `shade` lighter
     /// at its top and as much darker at its foot.
-    pub fn soft_circle(&mut self, cx: f32, cy: f32, r: f32, edge: f32, shade: f32, color: u32) {
+    pub fn soft_circle(&mut self, cx: f32, cy: f32, r: f32, edge: f32, shade: f32, color: Rgba) {
         let rect = [px(cx - r), px(cy - r), px(cx + r), px(cy + r)];
         let scale = ATLAS_SCALE as f32;
         self.shapes.push(shape(
@@ -116,7 +117,7 @@ impl DisplayList {
         ));
     }
 
-    pub fn ring(&mut self, cx: f32, cy: f32, r: f32, width: f32, color: u32) {
+    pub fn ring(&mut self, cx: f32, cy: f32, r: f32, width: f32, color: Rgba) {
         let rect = [px(cx - r), px(cy - r), px(cx + r), px(cy + r)];
         let scale = ATLAS_SCALE as f32;
         self.shapes.push(shape(
@@ -128,7 +129,7 @@ impl DisplayList {
         ));
     }
 
-    pub fn triangle(&mut self, a: [f32; 2], b: [f32; 2], c: [f32; 2], color: u32) {
+    pub fn triangle(&mut self, a: [f32; 2], b: [f32; 2], c: [f32; 2], color: Rgba) {
         let [a, b, c] = [a, b, c].map(|[x, y]| [px(x), px(y)]);
         let rect = [
             a[0].min(b[0]).min(c[0]),
@@ -146,7 +147,7 @@ impl DisplayList {
     }
 
     /// Carto's symbol whose index among `SYMBOL_MASKS` is `symbol`, centered at (cx, cy).
-    pub fn icon(&mut self, symbol: usize, color: u32, cx: f32, cy: f32) {
+    pub fn icon(&mut self, symbol: usize, color: Rgba, cx: f32, cy: f32) {
         self.icons.push(Icon {
             symbol,
             color,
@@ -156,7 +157,7 @@ impl DisplayList {
 
     /// A line of text whose horizontal middle is `x` and whose em box's middle is at height
     /// `y`.
-    pub fn text(&mut self, font: Font, color: u32, text: &str, x: f32, y: f32) {
+    pub fn text(&mut self, font: Font, color: Rgba, text: &str, x: f32, y: f32) {
         self.lines.push(Line {
             font,
             color,
@@ -168,7 +169,7 @@ impl DisplayList {
 
     /// A line of text drawn over a halo, its own glyphs grown by `halo`. Every halo lies under
     /// the text of every line.
-    pub fn haloed_text(&mut self, font: Font, color: u32, halo: Halo, text: &str, x: f32, y: f32) {
+    pub fn haloed_text(&mut self, font: Font, color: Rgba, halo: Halo, text: &str, x: f32, y: f32) {
         self.text(font, color, text, x, y);
         if let Some(line) = self.lines.last_mut() {
             line.halo = Some(halo);
@@ -198,7 +199,7 @@ impl AtlasPainter {
     }
 
     /// The rasters of a display list's lines, as the platform has drawn them. It returns none
-    /// while any line is not drawn yet; the list is painted on the turn its last raster lands.
+    /// while any line is not drawn yet; the list is painted on the frame its last raster lands.
     pub fn rasters(list: &DisplayList, text: TextOf) -> Option<Vec<Raster<'static>>> {
         list.lines
             .iter()
@@ -209,7 +210,7 @@ impl AtlasPainter {
     /// Records the painting of `list` into the rectangle `rect` of `atlas`, with the lines'
     /// rasters as `rasters` returned them. It returns the objects it made, which the caller
     /// releases once the encoder is submitted. It returns none and records nothing when the
-    /// pixels do not fit this turn's stream (`room`).
+    /// pixels do not fit this frame's stream (`room`).
     pub fn paint(
         &self,
         g: &Gpu,

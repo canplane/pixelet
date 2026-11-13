@@ -1,23 +1,25 @@
 // @pxl/client/abi/watch.ts
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import {
   type Link,
   type LinkObject,
   type Method,
-  open as open_uri,
   refusal_of,
-  type Ref,
   type Sender,
+  type Handle,
   uri,
-} from "@xpute/runtime";
+} from "@xpute/link/link.ts";
 import * as types from "./types.ts";
 
-/** The singleton's URI. */
-export const URI = uri("pxl:core", "watch");
+/** The interface's handle, named by `pxl:core/watch` (frame.json `NAMED`). */
+export const HANDLE: Handle = 0x71919e;
+
+/** The interface's qualified name: its package and its name. */
+export const NAME = uri("pxl:core", "watch");
 
 /** `start` */
 export const START: Method = 0;
@@ -55,23 +57,17 @@ function object(imp: Watch): LinkObject {
   };
 }
 
-/** Mounts `imp` at the URI, one object for every open. */
-export function mount(l: Pick<Link, "mount">, imp: Watch): void {
-  const o = object(imp);
-  l.mount(URI, () => o);
+/** Serves `imp` under the interface's handle. */
+export function mount(l: Pick<Link, "mount_named">, imp: Watch): void {
+  l.mount_named(HANDLE, object(imp));
 }
 
-/** Opens the singleton on the other side, once, at boot. */
-export async function open(link: Sender): Promise<Ref> {
-  return { link, handle: await open_uri(link, URI) };
-}
-
-export async function start(ref: Ref, sensor: types.Sensor): Promise<void> {
-  const a = await ref.link.send(ref.handle, START, [sensor]);
+export async function start(link: Sender, sensor: types.Sensor): Promise<void> {
+  const a = await link.send(HANDLE, START, [sensor]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
-export async function stop(ref: Ref, sensor: types.Sensor): Promise<void> {
-  const a = await ref.link.send(ref.handle, STOP, [sensor]);
+export async function stop(link: Sender, sensor: types.Sensor): Promise<void> {
+  const a = await link.send(HANDLE, STOP, [sensor]);
   if (a.result < 0) throw new XputeError(a.result);
 }

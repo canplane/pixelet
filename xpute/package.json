@@ -1,0 +1,32 @@
+{
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "pnpm fmt:check && pnpm lint && pnpm typecheck",
+    "typecheck": "tsc -p . && tsc -p tsconfig.native.json",
+    "test": "vitest run",
+    "test:gpu:web": "node gpu/web/host/script/browser.ts",
+    "fmt": "prettier --write .",
+    "fmt:check": "prettier --check .",
+    "lint": "oxlint"
+  },
+  "devDependencies": {
+    "@xpute/gpu-web-host": "workspace:*",
+    "@xpute/link": "workspace:*",
+    "@xpute/web-host": "workspace:*",
+    "@xpute/kit": "workspace:*",
+    "@xpute/golden": "workspace:*",
+    "@types/node": "^24",
+    "@webgpu/types": "~0.1.74",
+    "koffi": "^3.3.5",
+    "oxlint": "^1.90.0",
+    "prettier": "^3.9.10",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.5"
+  }
+}

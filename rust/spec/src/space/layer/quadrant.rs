@@ -8,8 +8,8 @@ use core::fmt;
 
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::q3;
-use crate::space::coord::world::wrap_idx;
-use crate::space::coord::zoom::{base_of, units, Zoom, LEAF_ZOOM, MIN_ZOOM};
+use crate::space::coord::world::{base_of, wrap_idx};
+use crate::space::coord::zoom::{units, Zoom, LEAF_ZOOM, MIN_ZOOM};
 use crate::space::hierarchy::morton::{self, key_of, node_of};
 use crate::space::hierarchy::tree::{ancestor_of, child_idx, child_of, parent_of, region, Node};
 use crate::space::layer::area::shard_over;

@@ -372,7 +372,7 @@ const Program PROGRAMS[] = {
 } // namespace
 
 XPUTE_TEST(gpu_programs_match_record) {
-    Golden g = Golden::load("spec/golden/gpu/program.tsv");
+    Golden g = Golden::load("gpu/link/spec/golden/program.tsv");
     std::vector<std::string> recorded;
     g.each("program", [&](const std::string &k) { recorded.push_back(g.s(k)); });
     XPUTE_CHECK_EQ(recorded.size(), std::size(PROGRAMS), "the programs, as the record lists them");

@@ -21,9 +21,7 @@
 //! take its place.
 
 use pxl_global::Global;
-use pxl_spec::space::coord::zoom::{
-    base_of, cube, units, y_start, z_start, Zoom, CUBE_ZOOM, SHARD_ZOOM,
-};
+use pxl_spec::space::coord::zoom::{units, y_start, z_start, Zoom, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::value;
 
 use crate::domain::layer::object::asset::Asset;
@@ -31,7 +29,7 @@ use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::world::{node_near, wrap_cell};
+use pxl_spec::space::coord::world::{base_of, cube, node_near, wrap_cell};
 use pxl_spec::space::hierarchy::morton::node_of;
 use pxl_spec::space::hierarchy::tree::{region, Node};
 use pxl_spec::space::layer::octant::Octant;
@@ -247,9 +245,9 @@ pub(super) type Tree = SparseTree<u32, 3>;
 type Enter<'a> = dyn FnMut(Zoom, [i32; 3], &Aabb, Option<Leaf>) -> bool + 'a;
 
 impl Store {
-    /// Whether the runtime holds the tree's columns, which the renderer lends
+    /// Whether the host holds the tree's columns, which the renderer lends
     /// it in place for the GPU to read (pxl-render gpu/api.rs `in_flight`).
-    /// Nothing may write the tree until the runtime gives them back
+    /// Nothing may write the tree until the host gives them back
     /// (repository.rs `Change`).
     pub(crate) fn is_in_flight(&self) -> bool {
         api::in_flight(self.tree.first_child()) || api::in_flight(self.tree.data())

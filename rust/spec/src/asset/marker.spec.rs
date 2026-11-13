@@ -1,6 +1,6 @@
 // pxl-spec/asset/marker.spec.rs
 //
-// GENERATED from spec/spec/asset/marker.json
+// GENERATED from spec/spec/asset/marker.json (xpute-gen data.rs)
 //
 // How the marker kind is shown: its one shape, the pin, the marker someone
 // puts up at a place (id.json). A pin's cell is the camera grid's at its
@@ -13,7 +13,6 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
-    clippy::absolute_paths,
     dead_code,
     reason = "generated from the spec"
 )]

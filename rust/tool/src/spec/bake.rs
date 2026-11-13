@@ -1,7 +1,7 @@
 // pxl-tool/spec/bake.rs
 
 use super::ingest::symbol_number;
-use super::{file, json_str, line_comments, read, rgb, rs_doc, ts_doc, Output};
+use super::{file, mark, json_str, line_comments, read, rs_doc, ts_doc, Output};
 
 pub fn publication_outputs() -> Result<Vec<Output>, String> {
     let spec = read("spec/spec/bake/publication.json")?;
@@ -57,9 +57,9 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
         ));
     }
     let sphere_doc = spec.lines_at("$SPHERE").unwrap_or_default();
-    let hdr = [
+    let head = [
         "//".to_string(),
-        "// GENERATED from spec/spec/bake/publication.json".into(),
+        format!("// {}", mark("spec/spec/bake/publication.json", "pxl-tool spec/bake.rs")),
         "".into(),
     ];
     let list = |f: &dyn Fn(&str) -> String| {
@@ -71,7 +71,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     };
 
     let mut ts = vec!["// @pxl/client/service/origin/publication.spec.ts".to_string()];
-    ts.extend(hdr.iter().cloned());
+    ts.extend(head.iter().cloned());
     ts.push("/** The base layers, each a bake's kind. */".into());
     ts.push(format!(
         "export const BASE_LAYERS = [{}] as const;",
@@ -101,7 +101,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     // The Worker's own: it is bundled for the Workers runtime, apart from the
     // client, so it reads a copy beside it written from the same JSON.
     let mut edge = vec!["// @pxl/edge/publication.spec.ts".to_string()];
-    edge.extend(hdr.iter().cloned());
+    edge.extend(head.iter().cloned());
     edge.push("/** The base layers, each a kind a baked page is published under. */".into());
     edge.push(format!(
         "export const BASE_LAYERS = [{}] as const;",
@@ -126,7 +126,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     edge.push(format!("export const TILE_SPHERE = {};", json_str(sphere)));
 
     let mut rs = vec!["// pxl-spec/bake/publication.spec.rs".to_string()];
-    rs.extend(hdr);
+    rs.extend(head);
     rs.extend(rs_doc(&format_doc, "", "///"));
     rs.push("pub struct Format {".into());
     rs.extend(formats.iter().map(|(k, _)| format!("    pub {k}: u32,")));
@@ -234,49 +234,6 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     ])
 }
 
-pub fn object_outputs() -> Result<Vec<Output>, String> {
-    let json = "spec/spec/bake/object.json";
-    let spec = read(json)?;
-    let doc = spec.lines_at("$doc").unwrap_or_default();
-    let scales = spec
-        .get("OBJECT_SCALES")
-        .and_then(|n| n.num())
-        .ok_or(format!("{json}: no OBJECT_SCALES"))?;
-    if scales < 1.0 || scales.fract() != 0.0 {
-        return Err(format!("{json}: OBJECT_SCALES {scales} is not a count"));
-    }
-    let scales = scales as u32;
-    let hdr = [
-        "//".to_string(),
-        "// GENERATED from spec/spec/bake/object.json".into(),
-        "".into(),
-    ];
-
-    let mut ts = vec!["// @pxl/client/ui/feature/world/object.spec.ts".to_string()];
-    ts.extend(hdr.iter().cloned());
-    ts.push("/**".into());
-    ts.extend(doc.iter().map(|l| {
-        if l.is_empty() {
-            " *".to_string()
-        } else {
-            format!(" * {l}")
-        }
-    }));
-    ts.extend([
-        " */".to_string(),
-        format!("export const OBJECT_SCALES = {scales};"),
-    ]);
-
-    let mut rs = vec!["// pxl-spec/bake/object.spec.rs".to_string()];
-    rs.extend(hdr);
-    rs.extend(rs_doc(&doc, "", "///"));
-    rs.push(format!("pub const OBJECT_SCALES: usize = {scales};"));
-    Ok(vec![
-        Output::new("ts/client/src/ui/feature/world/object.spec.ts", file(&ts)),
-        Output::new("rust/spec/src/bake/object.spec.rs", file(&rs)),
-    ])
-}
-
 // The Rust reads a place's look by its category number: for each category, in lists the
 // core indexes, what Carto draws for it, with 0 for a zoom at which it never shows.
 
@@ -319,14 +276,13 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let color = |k: &str, f: &str| -> Result<String, String> {
         match rows.get(k).and_then(|r| r.str_at(f)) {
             None => Ok("0".into()),
-            Some(c) => rgb(c).map(|n| format!("0x{n:06x}ff")),
+            Some(c) => Ok(format!("rgb({}) << 8 | 0xff", json_str(c))),
         }
     };
     let mut rs = vec![
         "// pxl-spec/bake/place_theme.spec.rs".to_string(),
         "//".into(),
-        "// GENERATED from spec/spec/bake/place_category.json and spec/spec/bake/place_theme.json"
-            .into(),
+        format!("// {}", mark("spec/spec/bake/place_category.json and spec/spec/bake/place_theme.json", "pxl-tool spec/bake.rs")),
         "//".into(),
     ];
     rs.extend(line_comments(&cat.lines_at("$doc").unwrap_or_default(), ""));
@@ -335,6 +291,7 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
         &theme.lines_at("$doc").unwrap_or_default(),
         "",
     ));
+    rs.extend([String::new(), "use crate::color::{rgb, Rgba};".into()]);
     let mut list = |doc: &str,
                     ty: &str,
                     name: &str,
@@ -376,14 +333,14 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
         &|k| zoom(k, "label"),
     )?;
     list(
-        "A category's icon or dot fill as `0xRRGGBBAA`",
-        "u32",
+        "A category's icon or dot fill",
+        "Rgba",
         "FILL",
         &|k| color(k, "fill"),
     )?;
     list(
-        "A category's label fill, its ink, as `0xRRGGBBAA`",
-        "u32",
+        "A category's label fill, its ink",
+        "Rgba",
         "INK",
         &|k| color(k, "text"),
     )?;
@@ -403,8 +360,7 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let mut ts = vec![
         "// @pxl/client/ui/feature/search/place_theme.spec.ts".to_string(),
         "//".into(),
-        "// GENERATED from spec/spec/bake/place_category.json and spec/spec/bake/place_theme.json"
-            .into(),
+        format!("// {}", mark("spec/spec/bake/place_category.json and spec/spec/bake/place_theme.json", "pxl-tool spec/bake.rs")),
         "//".into(),
     ];
     ts.extend(line_comments(
@@ -414,7 +370,7 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let fill = |k: &str| -> Result<String, String> {
         match rows.get(k).and_then(|r| r.str_at("fill")) {
             None => Ok(json_str("")),
-            Some(c) => rgb(c).map(|n| json_str(&format!("#{n:06x}"))),
+            Some(c) => Ok(json_str(c)),
         }
     };
     for (doc, name, ty, each) in [

@@ -115,7 +115,7 @@ fn node_planes(k: Node, o: vec3<i32>) -> Aabb {
 /// The zoom at which the eye's walk asks a node with planes `p`, at the node's nearest point,
 /// as walk.wgsl asks it (pxl-engine `cast::node_zooms`).
 fn asked_near(p: Aabb) -> u32 {
-  let range = vec2<u32>(eye_word(RANGE), eye_word(RANGE + 1u));
+  let range = vec2<u32>(eye_word(EYE_RANGE), eye_word(EYE_RANGE + 1u));
   if (range.x == range.y) {
     return range.x;
   }

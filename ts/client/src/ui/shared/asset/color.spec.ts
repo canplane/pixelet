@@ -1,6 +1,6 @@
 // @pxl/client/ui/shared/asset/color.spec.ts
 //
-// GENERATED from spec/spec/asset/color.json
+// GENERATED from spec/spec/asset/color.json (pxl-tool spec/asset.rs)
 //
 // The color of every palette entry and every placed color: what a cube *is* to
 // the eye when no texture is drawn over it — everything drawn with the

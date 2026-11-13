@@ -24,7 +24,7 @@ use crate::sys::io::room::Refusal;
 use crate::sys::load::LOAD_FILES;
 use crate::sys::sched;
 use pxl_global::Global;
-use xpute_core::clock::now;
+use xpute_guest::clock::now;
 use xpute_kit::math::rng::seed_mix64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -384,7 +384,7 @@ fn attempting(s: &Sched, stream: Stream, id: u64) -> bool {
         .any(|a| a.stream == stream && a.id == id)
 }
 
-/// Ends the attempt in slot `k` and spends its key. Whatever the runtime
+/// Ends the attempt in slot `k` and spends its key. Whatever the host
 /// still reports under the key, an abort or a body that raced the stop, is
 /// dropped.
 fn end(s: &mut Sched, k: usize) -> Attempt {

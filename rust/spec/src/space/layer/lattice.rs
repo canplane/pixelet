@@ -10,8 +10,9 @@ use crate::space::camera::grid::{cell_zoom_at, split_dist, CLIP_MARGIN};
 use crate::space::coord::q3;
 use crate::space::coord::q3::{FRAC_W, Q3};
 use crate::space::coord::world;
+use crate::space::coord::world::{base_of, idx_of};
 use crate::space::coord::zoom::{
-    base_of, cnt, idx_of, shamt, units, Zoom, FINEST_ZOOM, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM,
+    cnt, shamt, units, Zoom, FINEST_ZOOM, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM,
 };
 use crate::space::hierarchy::tree::{
     ancestor_of, child_idx, child_of, first_descendant_of, off_in, parent_of, Node,

@@ -26,7 +26,7 @@ static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 /// nine cells about it are served. Before a source is declared the index is
 /// one row of zeros, because a GPU binding cannot be empty, and a read past
 /// its end is zero as well. The renderer hands the GPU this memory where it
-/// lies, so the index is not rebuilt while the runtime holds it (pxl-render
+/// lies, so the index is not rebuilt while the host holds it (pxl-render
 /// gpu/api.rs `in_flight`); a source declared meanwhile is built in at a
 /// later call.
 pub fn shards() -> &'static [[i32; 4]] {

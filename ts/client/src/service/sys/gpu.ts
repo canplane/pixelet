@@ -2,7 +2,7 @@
 
 /** This state is kept for the UI to show, as the page's worker reports it
  * (runtime/worker.ts). The core hears of the device itself on the link
- * (@xpute/gpu web.ts). */
+ * (@xpute/gpu-web-host web.ts). */
 
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import {
@@ -14,7 +14,7 @@ import {
   GPU_WAITING,
   type Gpu,
 } from "@/abi/state.ts";
-import type { GpuState } from "@xpute/gpu/gpu.ts";
+import type { GpuState } from "@xpute/gpu-link";
 
 export const GPU_STATE: Readonly<Record<GpuState, Gpu>> = {
   present: GPU_PRESENT,

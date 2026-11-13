@@ -2,7 +2,7 @@
 
 //! A position: three `i32`, one for each axis, each counting 1/256 of a unit, with the same
 //! bits on every machine. An axis holds its extent's integer bits and the fraction's together
-//! (`world.rs` `EXTENT`): X and Y fill an `i32`, and Z takes 24 bits of one. What an axis
+//! (`zoom.rs` `EXTENT`): X and Y fill an `i32`, and Z takes 24 bits of one. What an axis
 //! means, and that X wraps around, belongs to the world; a position is made only through the
 //! world's one door (`world::at`).
 

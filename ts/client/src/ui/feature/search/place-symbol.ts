@@ -1,6 +1,6 @@
 // @pxl/client/ui/feature/search/place-symbol.ts
 //
-// Written by `make ingest-asset` from asset/raw/place/symbol/ — do not edit.
+// GENERATED from asset/raw/place/symbol/ (pxl-tool bin/asset.rs)
 //
 // Carto's place symbols (openstreetmap-carto `symbols/`, CC0) as outlines,
 // symbol n at `PLACE_SYMBOLS[n - 1]` (place_theme.spec.ts `SYMBOL`): its box,

@@ -169,7 +169,7 @@ call, which compiles off that thread and reports through a ticket's word; and no
 frame is drawn until every word says its pipeline is made. The snapshot carries
 how far it has come (`renderer_progress`), which the UI's bar shows. A pipeline
 asked for once the renderer draws is a bug (`EBUSY`). wgpu has no async call,
-and the device's runtime answers the same op at once.
+and the device's host answers the same op at once.
 
 ## The shaders, held to the engine
 
@@ -186,9 +186,9 @@ the layouts and numbers they read are generated from pxl-engine and pxl-spec by
   pixel and a beam's width, which only the GPU walks, are worked out on the GPU
   alone, each in one function (`walk_node.wgsl` `eye_aim`, `spacing_width`).
 - The build validates every shader with naga, and checks each pipeline's groups
-  against the bindings its shaders read, both ways (`build.rs` `BINDS`,
+  against the bindings its shaders read, both ways (`build/bind.rs` `BINDS`,
   `frame/shader/record.rs` `lays_out`); no struct of a shader holds a struct
-  (`build.rs` `refuse_faults`).
+  (`build/check.rs` `refuse_faults`).
 - A test compiles each shader with Tint, the compiler a browser runs, and makes
   every pipeline the renderer makes (`ts/tool/shader/shader.test.ts`).
 

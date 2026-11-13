@@ -26,10 +26,11 @@
 
 ## The system
 
-- `pxl-core` and `xpute-core` link into one image, the core. xpute is the FFI
-  between it and its runtime.
-- Under `xpute/`: runtime, core and their contract, with no pixelet domain or
-  name. It is to be published: don't propose removing a part of its `kit` or its
+- `pxl-core` and `xpute-guest` link into one image, the guest. xpute is the FFI
+  between it and its host.
+- Under `xpute/`: the guest, its hosts, the link between them and the
+  runtimes they run in, laid out by platform, with no pixelet domain or name.
+  It is to be published: don't propose removing a part of its `kit` or its
   C++ core because nothing here calls it.
 - The UI computes no coordinate or tile. It reaches what is below it through
   `service/` alone, and the core through `service/core/` alone.

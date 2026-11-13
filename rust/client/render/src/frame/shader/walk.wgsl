@@ -163,7 +163,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
             ends = ENDS_CELL;
             hit = true;
           } else {
-            let inset = (hi - lo) * (0.5 * (1.0 - side(k)));
+            let inset = (hi - lo) * (0.5 * (1.0 - fill_side(k)));
             let b = span_of(dir, inv, lo + inset, hi - inset, t, t_max);
             if (min(t_max, smallest(b.far)) > max(t, largest(b.near))) {
               near_at = b.near;

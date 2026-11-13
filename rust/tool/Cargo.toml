@@ -12,7 +12,11 @@ doctest = false
 # when that output is broken.
 [dependencies]
 # The generators are xpute's, handed pixelet's tables (spec/cmd.rs, spec/data.rs).
-xpute-gen = { path = "../../xpute/rust/gen" }
+xpute-gen = { path = "../../xpute/gen" }
+xpute-link-gen = { path = "../../xpute/link/gen" }
+# xpute and its GPU plugin declare their targets.
+xpute-gen-targets = { path = "../../xpute/gen-targets" }
+xpute-gpu-gen-targets = { path = "../../xpute/gpu/gen-targets" }
 fnv.workspace = true
 libm.workspace = true
 sha2 = "0.11"

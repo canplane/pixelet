@@ -10,8 +10,8 @@
 use xpute_gen::spec::data::ts_literal;
 
 use super::{
-    casing_note, enum_name, file, js_num, line_comments, pascal, read, rs_doc, rs_ident, Node,
-    Output,
+    casing_note, enum_name, file, mark, js_num, line_comments, pascal, read, rs_doc,
+    rs_ident, Node, Output,
 };
 
 const JSON: &str = "spec/client/core/domain/setting/schema.json";
@@ -152,7 +152,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let mut rs = vec![
         "// pxl-core/domain/setting/schema.spec.rs".to_string(),
         "//".into(),
-        format!("// GENERATED from {JSON}"),
+        format!("// {}", mark(JSON, "pxl-tool spec/setting.rs")),
         "//".into(),
     ];
     rs.extend(line_comments(
@@ -514,7 +514,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let mut ts = vec![
         "// @pxl/client/abi/schema.spec.ts".to_string(),
         "//".into(),
-        format!("// GENERATED from {JSON}"),
+        format!("// {}", mark(JSON, "pxl-tool spec/setting.rs")),
         "//".into(),
     ];
     ts.extend(line_comments(
@@ -525,7 +525,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
         format!(
             "export const SETTING = {} as const;",
-            ts_literal(&table(&|_| true)?, "f64", "", &[])?
+            ts_literal(&table(&|_| true)?, "f64", "")?
         ),
     ]);
     ts.extend([
@@ -534,7 +534,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             .into(),
         format!(
             "export const SETTING_PROD = {} as const;",
-            ts_literal(&table(&|s| !s.dev)?, "f64", "", &[])?
+            ts_literal(&table(&|s| !s.dev)?, "f64", "")?
         ),
     ]);
 

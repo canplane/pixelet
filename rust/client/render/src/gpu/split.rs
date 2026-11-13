@@ -18,7 +18,7 @@
 
 use crate::frame::shader::floor::BIND_GROUPS as GROUPS;
 use crate::gpu::span_spec::GpuSpanName;
-use xpute_gpu::encode::Id;
+use xpute_gpu_guest::encode::Id;
 
 /// An encoder as its recorder names it, and the command buffers it is cut
 /// into: the encoder recorded into now, those ended before it in the order

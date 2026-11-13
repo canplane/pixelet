@@ -53,7 +53,7 @@ XPUTE_TEST(json_in_place_read) {
 }
 
 XPUTE_TEST(json_matches_runtime_parse) {
-    Golden v = Golden::load("spec/golden/codec/json.tsv");
+    Golden v = Golden::load("kit/spec/golden/codec/json.tsv");
     v.each("grammar", [&](const std::string &k) {
         std::string got = read_json(text_of(v, k + ".text")) ? "json" : "refused";
         XPUTE_CHECK_EQ(got, v.s(k + ".read"), "a text judged JSON otherwise than the runtime judges it");
@@ -61,7 +61,7 @@ XPUTE_TEST(json_matches_runtime_parse) {
 }
 
 XPUTE_TEST(json_depth_limit) {
-    Golden v = Golden::load("spec/golden/codec/json.tsv");
+    Golden v = Golden::load("kit/spec/golden/codec/json.tsv");
     std::uint64_t most = v.u64("depth.most");
     auto nested = [](std::uint64_t n) { return std::string(n, '[') + "0" + std::string(n, ']'); };
     XPUTE_CHECK(read_json(nested(most)).has_value());
@@ -69,7 +69,7 @@ XPUTE_TEST(json_depth_limit) {
 }
 
 XPUTE_TEST(json_big_number_as_runtime) {
-    Golden v = Golden::load("spec/golden/codec/json.tsv");
+    Golden v = Golden::load("kit/spec/golden/codec/json.tsv");
     v.each("number", [&](const std::string &k) {
         std::optional<double> n = read_json(v.s(k + ".text"))->as_f64();
         XPUTE_CHECK(n.has_value());

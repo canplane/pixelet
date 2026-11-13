@@ -18,8 +18,8 @@
 // The tests must cover: a tile marked too many only costs work, and a tile missed is a
 // failure.
 
-// `TileGrid`, `tiles_age` and `tiles_in_damage` come from tile_word.wgsl, which build.rs writes
-// from word.rs `screen`.
+// `TileGrid`, `tiles_age` and `tiles_in_damage` come from tile_word.wgsl, which spells word.rs
+// `screen`'s rule.
 
 struct Propagate {
   // `unproject` takes a point from the screen's clip space, with its reversed depth, to units

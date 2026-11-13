@@ -1,0 +1,13 @@
+[package]
+name = "xpute-gpu-gen-targets"
+description = "The GPU plugin's generation targets, which the generating tools read"
+edition.workspace = true
+version.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+xpute-gen.workspace = true
+xpute-link-gen.workspace = true

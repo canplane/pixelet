@@ -1,6 +1,6 @@
 // @pxl/client/abi/debug_look.spec.ts
 //
-// GENERATED from spec/client/render/frame/shader/debug_look.json
+// GENERATED from spec/client/render/frame/shader/debug_look.json (xpute-gen data.rs)
 //
 // What the renderer's two debug views are drawn in, so the screen and the
 // UI's legend of them read one look: the camera gizmo's grid and the tints

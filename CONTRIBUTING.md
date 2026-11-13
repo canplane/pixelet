@@ -111,7 +111,7 @@ changes by default), and `--list` names them without running them. A deploy
 adds `check-build`, the bundle a deploy builds; xpute's own `check-xpute` and
 `test-xpute`; and
 `test-gpu`, the renderer's passes on this machine's GPU. A change to xpute's GPU
-encoder or runtime also takes `(cd xpute/rust && ../../script/perf/mac.py cargo test-gpu) && script/perf/mac.py pnpm --dir xpute/ts test:gpu:web`, which needs a GPU and
+encoder or host also takes `(cd xpute && ../script/perf/mac.py cargo test-gpu) && script/perf/mac.py pnpm --dir xpute test:gpu:web`, which needs a GPU and
 Chrome. `make fmt` formats.
 
 `make check` also lints Android, with the newest NDK installed

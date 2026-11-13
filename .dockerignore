@@ -1,11 +1,23 @@
 # The servers' images (rust/server/geo/Dockerfile, rust/server/api/Dockerfile)
 # build from the repository's root, the one directory holding both trees they
-# copy: rust/ and the xpute crates it links by path, xpute/rust/. Docker reads
-# this file only at the context's root, so it lives here, and lets in those two
-# trees alone.
+# copy: rust/ and xpute's Cargo workspace, whose crates it links by path. Docker
+# reads this file only at the context's root, so it lives here, and lets in
+# those two trees alone.
 
 *
 !rust
-!xpute/rust
+!xpute/Cargo.toml
+!xpute/kit/rust
+!xpute/link/rust
+!xpute/guest/rust
+!xpute/native/host
+!xpute/gpu/link/rust
+!xpute/gpu/guest/rust
+!xpute/gpu/native/host
+!xpute/gpu/gen-targets
+!xpute/gen
+!xpute/gen-targets
+!xpute/dev/golden/rust
+!xpute/dev/tool
 **/target
 **/.env

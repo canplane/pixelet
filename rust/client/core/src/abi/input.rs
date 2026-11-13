@@ -1,6 +1,6 @@
 // pxl-core/abi/input.rs
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 #![allow(
     unused_imports,
@@ -10,17 +10,21 @@
     reason = "generated from WIT"
 )]
 
-use std::cell::Cell;
 use std::rc::Rc;
-use xpute_core::link::{self, Handle, Method, Object, Reply, Return, Tag};
-use xpute_core::wait::wait;
-use xpute_kit::status::bug::OrBug;
+use xpute_guest::link;
+use xpute_guest::wait::wait;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{BranchCursor, Cursor, PacketWriter, TreeReader};
+use xpute_kit::wire::xtp::{
+    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
+};
+use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
-/// The singleton's URI.
-pub const URI: [&str; 2] = ["pxl:core", "input"];
+/// The interface's handle, named by `pxl:core/input` (frame.json `NAMED`).
+pub const HANDLE: Handle = 0x5ee0f8;
+
+/// The interface's qualified name: its package and its name.
+pub const NAME: [&str; 2] = ["pxl:core", "input"];
 
 /// `pointer`
 pub const POINTER: Method = 0;
@@ -37,10 +41,9 @@ pub const XR_POSE: Method = 5;
 /// `xr-pose-end`
 pub const XR_POSE_END: Method = 6;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PointerPhase {
-    #[default]
     Down = 0,
     Move = 1,
     Up = 2,
@@ -49,6 +52,7 @@ pub enum PointerPhase {
 }
 
 impl PointerPhase {
+    /// Every member, in its source's own order.
     pub const ALL: [PointerPhase; 5] = [
         PointerPhase::Down,
         PointerPhase::Move,
@@ -57,25 +61,59 @@ impl PointerPhase {
         PointerPhase::Cancel,
     ];
 
-    pub fn of(v: u32) -> Option<PointerPhase> {
-        PointerPhase::ALL.get(v as usize).copied()
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<PointerPhase> {
+        match val {
+            0 => Some(PointerPhase::Down),
+            1 => Some(PointerPhase::Move),
+            2 => Some(PointerPhase::Up),
+            3 => Some(PointerPhase::Out),
+            4 => Some(PointerPhase::Cancel),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            PointerPhase::Down => "Down",
+            PointerPhase::Move => "Move",
+            PointerPhase::Up => "Up",
+            PointerPhase::Out => "Out",
+            PointerPhase::Cancel => "Cancel",
+        }
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PointerType {
-    #[default]
     Mouse = 0,
     Touch = 1,
     Pen = 2,
 }
 
 impl PointerType {
+    /// Every member, in its source's own order.
     pub const ALL: [PointerType; 3] = [PointerType::Mouse, PointerType::Touch, PointerType::Pen];
 
-    pub fn of(v: u32) -> Option<PointerType> {
-        PointerType::ALL.get(v as usize).copied()
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<PointerType> {
+        match val {
+            0 => Some(PointerType::Mouse),
+            1 => Some(PointerType::Touch),
+            2 => Some(PointerType::Pen),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            PointerType::Mouse => "Mouse",
+            PointerType::Touch => "Touch",
+            PointerType::Pen => "Pen",
+        }
     }
 }
 
@@ -191,25 +229,9 @@ impl Object for InputObject {
     }
 }
 
-/// Mounts `imp` at the URI, one object for every open.
+/// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn Input>) {
-    let o: Rc<dyn Object> = Rc::new(InputObject(imp));
-    link::mount(link::uri(&URI), move |_, _| Ok(o.clone()));
-}
-
-thread_local! {
-    static HANDLE: Cell<Option<Handle>> = const { Cell::new(None) };
-}
-
-/// Opens the singleton on the other side, once, at boot.
-pub fn open() -> Result<(), Errno> {
-    HANDLE.set(Some(link::open(&link::uri(&URI))?));
-    Ok(())
-}
-
-/// The singleton's handle, which `open` opened.
-pub fn handle() -> Handle {
-    HANDLE.get().or_bug(Errno::EBADF)
+    link::mount_named(HANDLE, Rc::new(InputObject(imp)));
 }
 
 pub fn pointer(
@@ -221,7 +243,7 @@ pub fn pointer(
     y: f64,
 ) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         POINTER,
         Some((6, &|w: &mut PacketWriter| {
             w.u32(Some(phase as u32));
@@ -232,57 +254,57 @@ pub fn pointer(
             w.f64(Some(y as f64));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn typing(typing: bool) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         TYPING,
         Some((1, &|w: &mut PacketWriter| {
             w.bool(Some(typing));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn wheel(delta_y: f64) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         WHEEL,
         Some((1, &|w: &mut PacketWriter| {
             w.f64(Some(delta_y as f64));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn pinch(scale: f64) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         PINCH,
         Some((1, &|w: &mut PacketWriter| {
             w.f64(Some(scale as f64));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn r#move(x: i32, y: i32) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         MOVE,
         Some((2, &|w: &mut PacketWriter| {
             w.i32(Some(x as i32));
             w.i32(Some(y as i32));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn xr_pose(x: f64, y: f64, z: f64, qx: f64, qy: f64, qz: f64, qw: f64) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         XR_POSE,
         Some((7, &|w: &mut PacketWriter| {
             w.f64(Some(x as f64));
@@ -294,10 +316,10 @@ pub fn xr_pose(x: f64, y: f64, z: f64, qx: f64, qy: f64, qz: f64, qw: f64) -> Re
             w.f64(Some(qw as f64));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn xr_pose_end() -> Result<(), Errno> {
-    let (r, data) = link::call(handle(), XR_POSE_END, None);
-    link::answer(r).map(|_| ())
+    let (r, data) = link::call(HANDLE, XR_POSE_END, None);
+    xpute_link::answer(r).map(|_| ())
 }

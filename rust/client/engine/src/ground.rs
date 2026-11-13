@@ -12,8 +12,10 @@ use crate::answer::{
 use crate::content::Content;
 use pxl_spec::ground::{cells, face_cell, face_ele, UNKNOWN};
 use pxl_spec::share::FULL;
-use pxl_spec::space::coord::world::{HEIGHT_BITS, SEA_LEVEL};
-use pxl_spec::space::coord::zoom::{z_start, Zoom, LEAF_CELL_ZOOM, MIN_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::coord::world::SEA_LEVEL;
+use pxl_spec::space::coord::zoom::{
+    z_start, Zoom, HEIGHT_BITS, LEAF_CELL_ZOOM, MIN_ZOOM, SHARD_ZOOM,
+};
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::value;
 use pxl_spec::value::VOID;

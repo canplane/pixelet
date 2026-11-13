@@ -239,13 +239,13 @@ fn creases(h: Hit, faces: u32, p: mat2x3f) -> Crease {
   var edge = 0.0;
   var ao = 1.0;
   for (var k = 0u; k < 4u; k++) {
-    if (((faces >> (FACES_LINE + k)) & 1u) != 0u || ((faces >> (FACES_RISE + k)) & 1u) != 0u) {
+    if (((faces >> (FACE_LINE_SHIFT + k)) & 1u) != 0u || ((faces >> (FACE_RISE_SHIFT + k)) & 1u) != 0u) {
       edge = max(edge, line_at(to[k] * h.side, across[k]));
     }
-    if (((faces >> (FACES_RISE + k)) & 1u) != 0u) {
+    if (((faces >> (FACE_RISE_SHIFT + k)) & 1u) != 0u) {
       ao *= 1.0 - occlusion_of(to[k]);
     }
-    if (((faces >> (FACES_CORNER + k)) & 1u) != 0u) {
+    if (((faces >> (FACE_CORNER_SHIFT + k)) & 1u) != 0u) {
       let a = k & 1u;
       let b = 2u + (k >> 1u);
       ao *= 1.0 - occlusion_of(length(vec2f(to[a], to[b])));

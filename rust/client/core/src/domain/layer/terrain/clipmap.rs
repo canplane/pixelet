@@ -3,7 +3,7 @@
 //! The ground's cells as the core holds them (pxl-engine `clipmap`). Each
 //! center a reader declares has one clip level per zoom, as deep as that
 //! reader reads. The centers are the eye, the pivot where walking and
-//! editing happen, and a destination being travelled to. A brick at a given
+//! editing happen, and a destination being traveled to. A brick at a given
 //! zoom is held once, in one slot, however many clip levels want it (`Slot`).
 //!
 //! A brick is filled here from its tile in two stages. Its folds, four
@@ -63,7 +63,7 @@ use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_Z
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::{GROUND, TILE_CELLS};
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_core::clock::now;
+use xpute_guest::clock::now;
 use xpute_kit::collection::list::List;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -405,9 +405,9 @@ fn folds(b: u32) -> &'static [u32] {
     &planes().folds[at..at + BRICK_CELLS as usize]
 }
 
-/// Whether the runtime holds the words slot `b` was last handed from
+/// Whether the host holds the words slot `b` was last handed from
 /// (pxl-render gpu/api.rs `in_flight`). Nothing may write them until the
-/// runtime gives them back.
+/// host gives them back.
 fn in_flight(b: u32) -> bool {
     api::in_flight(cells(b)) || api::in_flight(folds(b))
 }
@@ -858,7 +858,7 @@ fn slot_wants(w: &Clipmap, tile: Quadrant, b: u32) -> bool {
 /// every absent brick of `tile` that a clip level wants. The folds are all
 /// that a brick's fill reads of a packet beyond what the tile keeps
 /// (its `separation` and `ele`), so the packet can be
-/// freed afterwards. A brick whose slot the runtime holds is left absent, and
+/// freed afterwards. A brick whose slot the host holds is left absent, and
 /// its tile is asked for again.
 pub fn cut(tile: Quadrant, pkt: &[u8]) {
     let w = clipmap();
@@ -942,7 +942,7 @@ enum Stage {
 enum Poll {
     /// A part ran, and more may.
     Ran,
-    /// The runtime holds what the part writes, so a later frame runs it.
+    /// The host holds what the part writes, so a later frame runs it.
     Stop,
     /// No brick is due.
     Done,
@@ -1128,7 +1128,7 @@ fn wait_heap(w: &mut Clipmap, b: u32) -> bool {
 
 /// Keeps the brick's spans in a run of the ways' pool and ends its fill: a column past pxl-spec
 /// `way::SPANS` refuses it for good; past the pool's cap it is refused until a run is given back;
-/// where the heap refuses it waits. Where a free run would fit and the runtime still holds it, a
+/// where the heap refuses it waits. Where a free run would fit and the host still holds it, a
 /// later frame lays the brick (`WayPool::take`).
 fn lay(w: &mut Clipmap, b: u32, filling: BrickFill) -> Poll {
     let f = fill_scratch();

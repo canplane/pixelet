@@ -18,9 +18,9 @@
 mod spec;
 pub use spec::*;
 
-/// A file reference a definition makes, numbered in the asset specs' order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Slot(pub u16);
+/// A file reference a definition makes, numbered in the asset specs' order
+/// (pxl-tool spec/catalog.rs numbers them).
+pub type Slot = u16;
 
 pub struct Catalog {
     files: Vec<u32>,
@@ -54,13 +54,13 @@ impl Catalog {
 
     /// The file `slot` names, by its number below the asset root.
     pub fn file(&self, slot: Slot) -> u32 {
-        self.files[usize::from(slot.0)]
+        self.files[usize::from(slot)]
     }
 
     /// What the ingest measured of the file `slot` names, in ENU units;
     /// zero for an image.
     pub fn extent(&self, slot: Slot) -> [f64; 3] {
-        self.extents[usize::from(slot.0)]
+        self.extents[usize::from(slot)]
     }
 }
 

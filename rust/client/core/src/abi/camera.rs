@@ -1,6 +1,6 @@
 // pxl-core/abi/camera.rs
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 #![allow(
     unused_imports,
@@ -10,17 +10,21 @@
     reason = "generated from WIT"
 )]
 
-use std::cell::Cell;
 use std::rc::Rc;
-use xpute_core::link::{self, Handle, Method, Object, Reply, Return, Tag};
-use xpute_core::wait::wait;
-use xpute_kit::status::bug::OrBug;
+use xpute_guest::link;
+use xpute_guest::wait::wait;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{BranchCursor, Cursor, PacketWriter, TreeReader};
+use xpute_kit::wire::xtp::{
+    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
+};
+use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
-/// The singleton's URI.
-pub const URI: [&str; 2] = ["pxl:core", "camera"];
+/// The interface's handle, named by `pxl:core/camera` (frame.json `NAMED`).
+pub const HANDLE: Handle = 0x5a7108;
+
+/// The interface's qualified name: its package and its name.
+pub const NAME: [&str; 2] = ["pxl:core", "camera"];
 
 /// `track`
 pub const TRACK: Method = 0;
@@ -29,20 +33,35 @@ pub const NORTH_UP: Method = 1;
 /// `goto`
 pub const GOTO: Method = 2;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Tracking {
-    #[default]
     Recenter = 0,
     Follow = 1,
     Unfollow = 2,
 }
 
 impl Tracking {
+    /// Every member, in its source's own order.
     pub const ALL: [Tracking; 3] = [Tracking::Recenter, Tracking::Follow, Tracking::Unfollow];
 
-    pub fn of(v: u32) -> Option<Tracking> {
-        Tracking::ALL.get(v as usize).copied()
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<Tracking> {
+        match val {
+            0 => Some(Tracking::Recenter),
+            1 => Some(Tracking::Follow),
+            2 => Some(Tracking::Unfollow),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Tracking::Recenter => "Recenter",
+            Tracking::Follow => "Follow",
+            Tracking::Unfollow => "Unfollow",
+        }
     }
 }
 
@@ -112,41 +131,25 @@ impl Object for CameraObject {
     }
 }
 
-/// Mounts `imp` at the URI, one object for every open.
+/// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn Camera>) {
-    let o: Rc<dyn Object> = Rc::new(CameraObject(imp));
-    link::mount(link::uri(&URI), move |_, _| Ok(o.clone()));
-}
-
-thread_local! {
-    static HANDLE: Cell<Option<Handle>> = const { Cell::new(None) };
-}
-
-/// Opens the singleton on the other side, once, at boot.
-pub fn open() -> Result<(), Errno> {
-    HANDLE.set(Some(link::open(&link::uri(&URI))?));
-    Ok(())
-}
-
-/// The singleton's handle, which `open` opened.
-pub fn handle() -> Handle {
-    HANDLE.get().or_bug(Errno::EBADF)
+    link::mount_named(HANDLE, Rc::new(CameraObject(imp)));
 }
 
 pub fn track(tracking: Tracking) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         TRACK,
         Some((1, &|w: &mut PacketWriter| {
             w.u32(Some(tracking as u32));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn north_up() -> Result<(), Errno> {
-    let (r, data) = link::call(handle(), NORTH_UP, None);
-    link::answer(r).map(|_| ())
+    let (r, data) = link::call(HANDLE, NORTH_UP, None);
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn goto(
@@ -157,14 +160,14 @@ pub fn goto(
     polar: Option<f64>,
 ) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         GOTO,
         Some((5, &|w: &mut PacketWriter| {
             w.f64(Some(lon as f64));
             w.f64(Some(lat as f64));
             match &dist {
                 Some(v) => {
-                    w.f64(Some((*v) as f64));
+                    w.f64(Some(*v as f64));
                 }
                 None => {
                     w.nil();
@@ -172,7 +175,7 @@ pub fn goto(
             }
             match &azimuth {
                 Some(v) => {
-                    w.f64(Some((*v) as f64));
+                    w.f64(Some(*v as f64));
                 }
                 None => {
                     w.nil();
@@ -180,7 +183,7 @@ pub fn goto(
             }
             match &polar {
                 Some(v) => {
-                    w.f64(Some((*v) as f64));
+                    w.f64(Some(*v as f64));
                 }
                 None => {
                     w.nil();
@@ -188,5 +191,5 @@ pub fn goto(
             }
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }

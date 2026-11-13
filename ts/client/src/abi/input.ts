@@ -1,22 +1,24 @@
 // @pxl/client/abi/input.ts
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import {
   type Link,
   type LinkObject,
   type Method,
-  open as open_uri,
   refusal_of,
-  type Ref,
   type Sender,
+  type Handle,
   uri,
-} from "@xpute/runtime";
+} from "@xpute/link/link.ts";
 
-/** The singleton's URI. */
-export const URI = uri("pxl:core", "input");
+/** The interface's handle, named by `pxl:core/input` (frame.json `NAMED`). */
+export const HANDLE: Handle = 0x5ee0f8;
+
+/** The interface's qualified name: its package and its name. */
+export const NAME = uri("pxl:core", "input");
 
 /** `pointer` */
 export const POINTER: Method = 0;
@@ -42,12 +44,42 @@ export const PointerPhase = {
 } as const;
 export type PointerPhase = (typeof PointerPhase)[keyof typeof PointerPhase];
 
+/** The name of the `PointerPhase` member numbered `n`, or undefined for a number
+ * no member has. */
+export function pointer_phase_name(
+  n: number,
+): keyof typeof PointerPhase | undefined {
+  return (Object.keys(PointerPhase) as (keyof typeof PointerPhase)[]).find(
+    (k) => PointerPhase[k] === n,
+  );
+}
+
+/** The `PointerPhase` member `n` is, or null for a number no member has. */
+export function pointer_phase_of(n: number): PointerPhase | null {
+  return pointer_phase_name(n) === undefined ? null : (n as PointerPhase);
+}
+
 export const PointerType = {
   Mouse: 0,
   Touch: 1,
   Pen: 2,
 } as const;
 export type PointerType = (typeof PointerType)[keyof typeof PointerType];
+
+/** The name of the `PointerType` member numbered `n`, or undefined for a number
+ * no member has. */
+export function pointer_type_name(
+  n: number,
+): keyof typeof PointerType | undefined {
+  return (Object.keys(PointerType) as (keyof typeof PointerType)[]).find(
+    (k) => PointerType[k] === n,
+  );
+}
+
+/** The `PointerType` member `n` is, or null for a number no member has. */
+export function pointer_type_of(n: number): PointerType | null {
+  return pointer_type_name(n) === undefined ? null : (n as PointerType);
+}
 
 export interface Input {
   pointer(
@@ -139,19 +171,13 @@ function object(imp: Input): LinkObject {
   };
 }
 
-/** Mounts `imp` at the URI, one object for every open. */
-export function mount(l: Pick<Link, "mount">, imp: Input): void {
-  const o = object(imp);
-  l.mount(URI, () => o);
-}
-
-/** Opens the singleton on the other side, once, at boot. */
-export async function open(link: Sender): Promise<Ref> {
-  return { link, handle: await open_uri(link, URI) };
+/** Serves `imp` under the interface's handle. */
+export function mount(l: Pick<Link, "mount_named">, imp: Input): void {
+  l.mount_named(HANDLE, object(imp));
 }
 
 export async function pointer(
-  ref: Ref,
+  link: Sender,
   phase: PointerPhase,
   pointer_type: PointerType,
   id: number,
@@ -159,7 +185,7 @@ export async function pointer(
   x: number,
   y: number,
 ): Promise<void> {
-  const a = await ref.link.send(ref.handle, POINTER, [
+  const a = await link.send(HANDLE, POINTER, [
     phase,
     pointer_type,
     id,
@@ -170,28 +196,28 @@ export async function pointer(
   if (a.result < 0) throw new XputeError(a.result);
 }
 
-export async function typing(ref: Ref, typing: boolean): Promise<void> {
-  const a = await ref.link.send(ref.handle, TYPING, [typing]);
+export async function typing(link: Sender, typing: boolean): Promise<void> {
+  const a = await link.send(HANDLE, TYPING, [typing]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
-export async function wheel(ref: Ref, delta_y: number): Promise<void> {
-  const a = await ref.link.send(ref.handle, WHEEL, [delta_y]);
+export async function wheel(link: Sender, delta_y: number): Promise<void> {
+  const a = await link.send(HANDLE, WHEEL, [delta_y]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
-export async function pinch(ref: Ref, scale: number): Promise<void> {
-  const a = await ref.link.send(ref.handle, PINCH, [scale]);
+export async function pinch(link: Sender, scale: number): Promise<void> {
+  const a = await link.send(HANDLE, PINCH, [scale]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
-export async function move(ref: Ref, x: number, y: number): Promise<void> {
-  const a = await ref.link.send(ref.handle, MOVE, [x, y]);
+export async function move(link: Sender, x: number, y: number): Promise<void> {
+  const a = await link.send(HANDLE, MOVE, [x, y]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
 export async function xr_pose(
-  ref: Ref,
+  link: Sender,
   x: number,
   y: number,
   z: number,
@@ -200,11 +226,11 @@ export async function xr_pose(
   qz: number,
   qw: number,
 ): Promise<void> {
-  const a = await ref.link.send(ref.handle, XR_POSE, [x, y, z, qx, qy, qz, qw]);
+  const a = await link.send(HANDLE, XR_POSE, [x, y, z, qx, qy, qz, qw]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
-export async function xr_pose_end(ref: Ref): Promise<void> {
-  const a = await ref.link.send(ref.handle, XR_POSE_END, []);
+export async function xr_pose_end(link: Sender): Promise<void> {
+  const a = await link.send(HANDLE, XR_POSE_END, []);
   if (a.result < 0) throw new XputeError(a.result);
 }

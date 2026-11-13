@@ -6,7 +6,7 @@
 //! the pass, one slot a draw, and draws them by one loop.
 
 use pxl_global::Global;
-use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 

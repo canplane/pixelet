@@ -1,6 +1,6 @@
 // @pxl/client/ui/shared/asset/cube/object.spec.ts
 //
-// GENERATED from spec/spec/asset/cube.json
+// GENERATED from spec/spec/asset/cube.json (pxl-tool spec/asset.rs)
 // What only an object can be: past a byte, so no ground cell holds it. An
 // object's value is a u16 whose byte range is the ground's palette.
 

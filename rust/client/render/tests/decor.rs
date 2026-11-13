@@ -3490,6 +3490,7 @@ fn hand_halve_as_the_rust() {
         [0xffff, 0xffff, 0xffff, 0],
     ]);
     let source = [
+        include_str!(concat!(env!("OUT_DIR"), "/shader/constant.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/world_word.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/decor_word.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/seed.wgsl")),
@@ -3579,6 +3580,7 @@ fn hand_scatter_count_as_the_rust() {
         }
     }
     let source = [
+        include_str!(concat!(env!("OUT_DIR"), "/shader/constant.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/walk_word.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/world_word.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/decor_word.wgsl")),

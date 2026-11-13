@@ -1,23 +1,25 @@
 // @pxl/client/abi/sensor.ts
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import {
   type Link,
   type LinkObject,
   type Method,
-  open as open_uri,
   refusal_of,
-  type Ref,
   type Sender,
+  type Handle,
   uri,
-} from "@xpute/runtime";
+} from "@xpute/link/link.ts";
 import * as types from "./types.ts";
 
-/** The singleton's URI. */
-export const URI = uri("pxl:core", "sensor");
+/** The interface's handle, named by `pxl:core/sensor` (frame.json `NAMED`). */
+export const HANDLE: Handle = 0x5534df;
+
+/** The interface's qualified name: its package and its name. */
+export const NAME = uri("pxl:core", "sensor");
 
 /** `pos` */
 export const POS: Method = 0;
@@ -41,6 +43,25 @@ export const GeolocationErrorCode = {
 export type GeolocationErrorCode =
   (typeof GeolocationErrorCode)[keyof typeof GeolocationErrorCode];
 
+/** The name of the `GeolocationErrorCode` member numbered `n`, or undefined for a number
+ * no member has. */
+export function geolocation_error_code_name(
+  n: number,
+): keyof typeof GeolocationErrorCode | undefined {
+  return (
+    Object.keys(GeolocationErrorCode) as (keyof typeof GeolocationErrorCode)[]
+  ).find((k) => GeolocationErrorCode[k] === n);
+}
+
+/** The `GeolocationErrorCode` member `n` is, or null for a number no member has. */
+export function geolocation_error_code_of(
+  n: number,
+): GeolocationErrorCode | null {
+  return geolocation_error_code_name(n) === undefined
+    ? null
+    : (n as GeolocationErrorCode);
+}
+
 export const PermissionAnswer = {
   Asking: 0,
   Granted: 1,
@@ -49,6 +70,23 @@ export const PermissionAnswer = {
 } as const;
 export type PermissionAnswer =
   (typeof PermissionAnswer)[keyof typeof PermissionAnswer];
+
+/** The name of the `PermissionAnswer` member numbered `n`, or undefined for a number
+ * no member has. */
+export function permission_answer_name(
+  n: number,
+): keyof typeof PermissionAnswer | undefined {
+  return (
+    Object.keys(PermissionAnswer) as (keyof typeof PermissionAnswer)[]
+  ).find((k) => PermissionAnswer[k] === n);
+}
+
+/** The `PermissionAnswer` member `n` is, or null for a number no member has. */
+export function permission_answer_of(n: number): PermissionAnswer | null {
+  return permission_answer_name(n) === undefined
+    ? null
+    : (n as PermissionAnswer);
+}
 
 export interface Sensor {
   pos(
@@ -147,43 +185,31 @@ function object(imp: Sensor): LinkObject {
   };
 }
 
-/** Mounts `imp` at the URI, one object for every open. */
-export function mount(l: Pick<Link, "mount">, imp: Sensor): void {
-  const o = object(imp);
-  l.mount(URI, () => o);
-}
-
-/** Opens the singleton on the other side, once, at boot. */
-export async function open(link: Sender): Promise<Ref> {
-  return { link, handle: await open_uri(link, URI) };
+/** Serves `imp` under the interface's handle. */
+export function mount(l: Pick<Link, "mount_named">, imp: Sensor): void {
+  l.mount_named(HANDLE, object(imp));
 }
 
 export async function pos(
-  ref: Ref,
+  link: Sender,
   lon: number,
   lat: number,
   alt: number | null,
   accuracy: number | null,
   course: number | null,
 ): Promise<void> {
-  const a = await ref.link.send(ref.handle, POS, [
-    lon,
-    lat,
-    alt,
-    accuracy,
-    course,
-  ]);
+  const a = await link.send(HANDLE, POS, [lon, lat, alt, accuracy, course]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
 export async function orient(
-  ref: Ref,
+  link: Sender,
   webkit_compass_heading: number | null,
   alpha: number | null,
   beta: number | null,
   gamma: number | null,
 ): Promise<void> {
-  const a = await ref.link.send(ref.handle, ORIENT, [
+  const a = await link.send(HANDLE, ORIENT, [
     webkit_compass_heading,
     alpha,
     beta,
@@ -193,32 +219,32 @@ export async function orient(
 }
 
 export async function err(
-  ref: Ref,
+  link: Sender,
   sensor: types.Sensor,
   code: GeolocationErrorCode | null,
   watching: boolean,
 ): Promise<void> {
-  const a = await ref.link.send(ref.handle, ERR, [sensor, code, watching]);
+  const a = await link.send(HANDLE, ERR, [sensor, code, watching]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
 export async function permission(
-  ref: Ref,
+  link: Sender,
   sensor: types.Sensor,
   answer: PermissionAnswer,
 ): Promise<void> {
-  const a = await ref.link.send(ref.handle, PERMISSION, [sensor, answer]);
+  const a = await link.send(HANDLE, PERMISSION, [sensor, answer]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
 export async function platform(
-  ref: Ref,
+  link: Sender,
   geolocation: boolean,
   orient: boolean,
   orient_permission: boolean,
   orient_silence_is_loss: boolean,
 ): Promise<void> {
-  const a = await ref.link.send(ref.handle, PLATFORM, [
+  const a = await link.send(HANDLE, PLATFORM, [
     geolocation,
     orient,
     orient_permission,
@@ -227,7 +253,7 @@ export async function platform(
   if (a.result < 0) throw new XputeError(a.result);
 }
 
-export async function locate(ref: Ref): Promise<void> {
-  const a = await ref.link.send(ref.handle, LOCATE, []);
+export async function locate(link: Sender): Promise<void> {
+  const a = await link.send(HANDLE, LOCATE, []);
   if (a.result < 0) throw new XputeError(a.result);
 }

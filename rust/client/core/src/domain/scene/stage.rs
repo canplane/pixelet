@@ -5,7 +5,6 @@
 //! handed to it here.
 
 use crate::domain::scene::frame::Frame;
-use crate::sys::sched;
 use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shader::word::{DECOR_GROUPS, DRAW_FLOATS};
 use pxl_render::gpu::draw::DRAW_WORDS;
@@ -256,6 +255,6 @@ pub fn scene_step(
     marker::step(ctx, &frame, draft);
     marker::draw(draw_list());
     if animating {
-        sched::invalidate();
+        invalidate();
     }
 }

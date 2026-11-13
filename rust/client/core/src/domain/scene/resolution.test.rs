@@ -138,7 +138,7 @@ fn timed_windows() {
         assert_eq!(
             (changed, k.step, k.since),
             (0, 0, u32::MAX),
-            "no read, no judgement"
+            "no read, no judgment"
         );
     });
 }
@@ -337,7 +337,7 @@ fn predicted_by_part() {
 /// The rate steps a refresh at a time within what the display and
 /// `RATE_MIN_HZ` allow, and never past that floor (`floor`). Frames count as
 /// slowed only when they take more refreshes than the display's own pacing
-/// does (`own`, @xpute/runtime sched/frame_pacing.ts `pace_ms`).
+/// does (`own`, @xpute/web-host sched/frame_pacing.ts `pace_ms`).
 #[test]
 fn rate_by_display() {
     crate::on_core(|| {

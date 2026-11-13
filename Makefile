@@ -33,7 +33,7 @@ install: install-ts install-xpute install-rust
 install-ts:
 	pnpm --dir ts install
 install-xpute:
-	pnpm --dir xpute/ts install
+	pnpm --dir xpute install
 install-rust:
 	cargo install cargo-nextest --locked
 
@@ -56,8 +56,8 @@ check-spec:
 check-build:
 	pnpm --dir ts/client build:web
 check-xpute:
-	+cd xpute/rust && cargo fmt --check && cargo spec && cargo clippy --workspace --all-targets -- -D warnings
-	pnpm --dir xpute/ts check
+	+cd xpute && cargo fmt --check && cargo spec && cargo clippy --workspace --all-targets -- -D warnings
+	pnpm --dir xpute check
 	$(MAKE) -C xpute/cpp check
 
 test: test-ts test-rust
@@ -68,8 +68,8 @@ test-rust:
 	@cargo nextest --version >/dev/null 2>&1 || { echo "pxl-core's unit tests run under cargo-nextest, which make install brings" >&2; exit 1; }
 	+cd rust && cargo test-host && cargo test-core && cargo test-render
 test-xpute:
-	+cd xpute/rust && cargo test --workspace
-	pnpm --dir xpute/ts test
+	+cd xpute && cargo test --workspace
+	pnpm --dir xpute test
 	$(MAKE) -C xpute/cpp test
 test-gpu:
 	+cd rust && cargo test-gpu
@@ -83,7 +83,7 @@ fmt-rust:
 # The code generated from spec/.
 spec:
 	+cd rust && cargo spec --write
-	+cd xpute/rust && cargo spec --write
+	+cd xpute && cargo spec --write
 
 # Where the tiles come from (SOURCE), a bakery's three: `dev` has them delivered,
 # every route the published deployment's, so not for bake work, its tile

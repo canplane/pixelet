@@ -38,7 +38,7 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::zoom::{units, Zoom};
 use pxl_spec::space::layer::lattice::{Grid, GROUND};
-use xpute_core::clock;
+use xpute_guest::clock;
 use pxl_global::Global;
 
 // The world's scroll rate. A character that glides at it cancels the scroll

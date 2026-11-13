@@ -1,6 +1,6 @@
-# The native GPU runtime's wgpu
+# The native GPU host's wgpu
 
-A native GPU runtime draws with wgpu, taken from the fork
+A native GPU host draws with wgpu, taken from the fork
 [canplane/fork.wgpu](https://github.com/canplane/fork.wgpu), branch `xpute-30.0.1`,
 which is wgpu 30.0.1 with three commits on it. The program's Cargo workspace names
 its revision in `[patch.crates-io]`, and every crate of wgpu's comes from it so that they stay one set.
@@ -49,7 +49,7 @@ file of its own under the system's temporary directory. A cache's validation key
 is the device's name and the system's version, and `wgpu-core` and
 `pipeline_cache_key` tell a Metal GPU by its name, since Metal names no vendor
 or device by number. It is the design proposed on that issue. xpute's native GPU
-runtime keeps the cache in the app's caches (xpute-gpu `runtime/cache.rs`), on
+host keeps the cache in the app's caches (xpute-gpu-native-host `cache.rs`), on
 Vulkan and Metal alike.
 
 ## When wgpu is upgraded

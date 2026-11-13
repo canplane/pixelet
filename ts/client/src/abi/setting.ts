@@ -1,22 +1,24 @@
 // @pxl/client/abi/setting.ts
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import {
   type Link,
   type LinkObject,
   type Method,
-  open as open_uri,
   refusal_of,
-  type Ref,
   type Sender,
+  type Handle,
   uri,
-} from "@xpute/runtime";
+} from "@xpute/link/link.ts";
 
-/** The singleton's URI. */
-export const URI = uri("pxl:core", "setting");
+/** The interface's handle, named by `pxl:core/setting` (frame.json `NAMED`). */
+export const HANDLE: Handle = 0x6f63cb;
+
+/** The interface's qualified name: its package and its name. */
+export const NAME = uri("pxl:core", "setting");
 
 /** `dev` */
 export const DEV: Method = 0;
@@ -54,23 +56,21 @@ function object(imp: Setting): LinkObject {
   };
 }
 
-/** Mounts `imp` at the URI, one object for every open. */
-export function mount(l: Pick<Link, "mount">, imp: Setting): void {
-  const o = object(imp);
-  l.mount(URI, () => o);
+/** Serves `imp` under the interface's handle. */
+export function mount(l: Pick<Link, "mount_named">, imp: Setting): void {
+  l.mount_named(HANDLE, object(imp));
 }
 
-/** Opens the singleton on the other side, once, at boot. */
-export async function open(link: Sender): Promise<Ref> {
-  return { link, handle: await open_uri(link, URI) };
-}
-
-export async function dev(ref: Ref, dev: boolean): Promise<void> {
-  const a = await ref.link.send(ref.handle, DEV, [dev]);
+export async function dev(link: Sender, dev: boolean): Promise<void> {
+  const a = await link.send(HANDLE, DEV, [dev]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
-export async function set(ref: Ref, key: number, val: number): Promise<void> {
-  const a = await ref.link.send(ref.handle, SET, [key, val]);
+export async function set(
+  link: Sender,
+  key: number,
+  val: number,
+): Promise<void> {
+  const a = await link.send(HANDLE, SET, [key, val]);
   if (a.result < 0) throw new XputeError(a.result);
 }

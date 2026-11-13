@@ -12,7 +12,7 @@
 //!
 //! The decoder runs on the native module's queue, never on the JavaScript
 //! thread or the core's. It touches only the caller's bytes and its own, so
-//! it needs no handoff to the core (xpute-runtime native `Core::run`). An
+//! it needs no handoff to the core (xpute-native-host native `Core::run`). An
 //! Android app calls it through Kotlin's `PxlNative`
 //! (`Java_me_plei_pixelet_platform_PxlNative_unpack`), and an iPhone app
 //! through the C ABI (include/pxl_native.h).
@@ -22,7 +22,7 @@ use xpute_kit::status::bug::OrBug;
 #[cfg(target_os = "android")]
 use xpute_kit::status::errno::Errno;
 #[cfg(target_os = "android")]
-use xpute_runtime::jni;
+use xpute_native_host::jni;
 use zstd::stream;
 
 /// Decodes every frame of `body`, skipping skippable frames. Returns None

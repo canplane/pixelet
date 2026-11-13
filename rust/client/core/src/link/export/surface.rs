@@ -1,8 +1,8 @@
 // pxl-core/link/export/surface.rs
 
-//! The surfaces the UI lends the GPU (xpute wit/gpu/surface.wit), each an
+//! The surfaces the UI lends the GPU (xpute gpu/wit/surface.wit), each an
 //! object the core serves under the handle the link issued it: opened by the
-//! UI, resized by it, and closed as the UI releases it.
+//! UI, resized by it, and closed as the UI drops it.
 
 use std::rc::Rc;
 
@@ -13,18 +13,19 @@ use crate::domain::view::frame::pose::view_resize;
 use crate::sys::sched::invalidate;
 use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::surface;
-use xpute_core::link::{self, Handle};
-use xpute_gpu::abi::surface as wit;
+use xpute_guest::link;
+use xpute_link::Handle;
+use xpute_gpu_guest::abi::surface as wit;
 use xpute_kit::status::errno::Errno;
 
-/// The surface the link issued `.0`, closed as the UI releases it.
+/// The surface the link issued `.0`, closed as the UI drops it.
 struct Surface(Handle);
 
 /// Mounts the surfaces' opener: each open opens a surface under its handle,
 /// which draws nothing until SCENE_DRAW (scene.rs `draw`); ENFILE where every
 /// surface is taken.
 pub(super) fn mount() {
-    link::mount(link::uri(&["xpute:gpu", "surface"]), |_, h| {
+    link::mount(xpute_link::uri(&wit::NAME), |_, h| {
         refuse_unless(surface::surface_open(h), Errno::ENFILE)?;
         invalidate();
         Ok(wit::surface(Rc::new(Surface(h))))

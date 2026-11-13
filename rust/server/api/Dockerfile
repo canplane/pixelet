@@ -8,7 +8,7 @@ WORKDIR /src
 ENV RUSTUP_TOOLCHAIN=$RUST_VERSION
 
 COPY rust ./rust
-COPY xpute/rust ./xpute/rust
+COPY xpute ./xpute
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/src/rust/target \

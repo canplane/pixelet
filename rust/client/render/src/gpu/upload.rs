@@ -4,7 +4,7 @@
 //! passes read them.
 
 use pxl_global::Global;
-use xpute_core::mem;
+use xpute_link::mem;
 
 use crate::frame::shader::record::UPLOAD_LAYOUT;
 use crate::gpu::api::{buf_entry, buffer_usage, release, room, write_buffer_bytes, Gpu, Layout};

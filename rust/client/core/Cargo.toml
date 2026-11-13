@@ -4,7 +4,7 @@ edition.workspace = true
 version.workspace = true
 publish.workspace = true
 
-# The core is its own artifact (lib.rs `core!`): the WebAssembly module a
+# The core is its own artifact (lib.rs `link!`): the WebAssembly module a
 # page instantiates (cdylib, pxl_core.wasm), the static library an iPhone
 # app links (staticlib) and the shared one an Android app loads (cdylib).
 # Each build asks cargo for the one it takes by name (`cargo rustc
@@ -19,11 +19,14 @@ doctest = false
 fnv.workspace = true
 pxl-global.workspace = true
 libm.workspace = true
-xpute-core.workspace = true
+xpute-link.workspace = true
+xpute-guest.workspace = true
 xpute-kit = { workspace = true, features = ["std"] }
-# Whether the GPU's runtime takes a frame now (xpute_gpu::admit), which the
-# renderer is told each frame (domain/scene/stage.rs).
-xpute-gpu.workspace = true
+# Whether the GPU's host takes a frame now (xpute_gpu_guest::admit::frame), which
+# the renderer is told each frame (domain/scene/stage.rs).
+xpute-gpu-guest.workspace = true
+# The GPU's words both sides take: a program's settings and the stream's enums.
+xpute-gpu-link.workspace = true
 pxl-spec.workspace = true
 pxl-engine.workspace = true
 pxl-content.workspace = true
@@ -34,14 +37,17 @@ pxl-render.workspace = true
 embassy-executor = { version = "0.10", default-features = false }
 critical-section = "1.1"
 
-# The core's native form off WebAssembly (xpute_core::core!, lib.rs):
+# The core's native form off WebAssembly (xpute_guest::link!, lib.rs):
 # its memory, its thread, the allocator over both, the stop hook and the C
 # ABI with its JNI, which src/sys/unpack.rs reaches JNI's bindings through too;
-# and the GPU's runtime that runs the renderer's stream on the device around
+# and the GPU's host that runs the renderer's stream on the device around
 # each entry, as the page's runs it on WebGPU. Metal on an iPhone, Vulkan on
 # Android; each backend compiles to nothing on the other's system.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-xpute-gpu ={ workspace = true, features = ["runtime"] }
+xpute-gpu-native-host.workspace = true
+# The host beside the core in the app's process: its thread, its link, and
+# what it serves of pixelet's own (sys/runtime_abi.rs).
+xpute-native-host.workspace = true
 # The bodies the app's fetch hands over still zstd (src/sys/unpack.rs), read by
 # libzstd, the format's reference implementation, as the bake writes them
 # (pxl-geo-bake). C, built by each target's own compiler

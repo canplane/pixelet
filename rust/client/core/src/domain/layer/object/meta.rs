@@ -6,7 +6,8 @@
 use pxl_content::generation::placed_pose;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::{idx_of, UNIT_ZOOM};
+use pxl_spec::space::coord::world::idx_of;
+use pxl_spec::space::coord::zoom::UNIT_ZOOM;
 
 use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store::Entry;

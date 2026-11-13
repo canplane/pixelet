@@ -9,7 +9,7 @@
 //! frame that counted them.
 
 use pxl_engine::{count, node_cache, raster, ray};
-use xpute_core::mem;
+use xpute_link::mem;
 
 use crate::gpu::api::{buffer_usage, bytes, signaled, word_bytes, Gpu, RESULT};
 
@@ -71,7 +71,7 @@ pub(super) struct Counter {
     copied: bool,
     mapped: bool,
     read_cnts: Box<[u32; WORDS]>,
-    /// The runtime writes the mapping's fence and result here. The fence
+    /// The host writes the mapping's fence and result here. The fence
     /// holds `ticket`, the number the last mapping was asked with, once that
     /// mapping lands.
     mapping: Box<[u32; 2]>,

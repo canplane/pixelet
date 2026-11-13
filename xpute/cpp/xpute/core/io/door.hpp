@@ -60,7 +60,7 @@
 
 namespace xpute {
 
-// An import is what xpute-gen generates from a protocol's table (`spec/cmd`):
+// An import is what xpute-link-gen generates from a protocol's table (`spec/cmd`):
 // its command number, the number of children its packet is written as,
 // whether it goes with ACKREQ, its writer, and the memory it names, where it
 // is and how long (0 long for none).

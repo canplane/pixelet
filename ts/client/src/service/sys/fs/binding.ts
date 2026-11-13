@@ -11,7 +11,7 @@
  * settings and the objects' edits are written. */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 
 import { LEAF_ZOOM, path, SHARD_ZOOM } from "@/abi/file.spec.ts";

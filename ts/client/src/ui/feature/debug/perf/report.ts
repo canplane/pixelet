@@ -2,7 +2,7 @@
 
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
-import { strerror } from "@xpute/kit/status/errno.spec.ts";
+import { strerror } from "@xpute/kit/status/error.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
 
 import type {

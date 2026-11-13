@@ -7,7 +7,7 @@
 // words (`beam::Grid::hit_asks_at`).
 
 fn hits_at() -> u32 {
-  return eye_word(GRID + GRID_HITS_AT);
+  return eye_word(EYE_GRID + GRID_HITS_AT);
 }
 
 fn hits_cap() -> u32 {
@@ -23,5 +23,5 @@ fn hit_whole(k: Node, r: u32) -> bool {
 }
 
 fn hit_asks() -> AskList {
-  return AskList(RASTER_HIT_ASKED_AT, eye_word(GRID + GRID_HIT_ASKS_AT), HITS_A_FRAME);
+  return AskList(RASTER_HIT_ASKED_AT, eye_word(EYE_GRID + GRID_HIT_ASKS_AT), HITS_A_FRAME);
 }

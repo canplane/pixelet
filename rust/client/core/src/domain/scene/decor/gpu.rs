@@ -20,8 +20,8 @@ use pxl_spec::asset::id;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::world::wrap_idx;
-use pxl_spec::space::coord::zoom::{idx_of, units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, UNIT_ZOOM};
+use pxl_spec::space::coord::world::{idx_of, wrap_idx};
+use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, UNIT_ZOOM};
 use pxl_global::Global;
 
 use crate::domain::layer::object::meta::user_decor_pick;
@@ -145,8 +145,8 @@ pub fn step(eye: V3, edit: &RenderEdit) {
     if h.last_walk == Some(walk_key) && !met {
         return;
     }
-    // The renderer hands the records to the runtime in place, without a copy.
-    // While the runtime still holds them they must not change, so the walk
+    // The renderer hands the records to the host in place, without a copy.
+    // While the host still holds them they must not change, so the walk
     // waits for a later frame (pxl-render gpu/api.rs `in_flight`).
     if api::in_flight(&h.recs) {
         h.last_walk = None;

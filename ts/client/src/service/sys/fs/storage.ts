@@ -18,7 +18,7 @@ import {
   bytes_to_b64url,
   is_b64url,
 } from "@xpute/kit/codec/encoding.ts";
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 
 import { path } from "@/abi/file.spec.ts";

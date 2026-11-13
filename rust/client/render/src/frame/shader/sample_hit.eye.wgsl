@@ -13,5 +13,5 @@ fn sample_whole(s: vec2<u32>, k: Node) -> bool {
 /// a sample.
 fn sample_asks() -> AskList {
   let n = sample_lattice();
-  return AskList(RASTER_ASKED_AT, eye_word(GRID + GRID_ASKS_AT), n.x * n.y);
+  return AskList(RASTER_ASKED_AT, eye_word(EYE_GRID + GRID_ASKS_AT), n.x * n.y);
 }

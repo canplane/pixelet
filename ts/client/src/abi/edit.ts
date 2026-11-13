@@ -1,22 +1,24 @@
 // @pxl/client/abi/edit.ts
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import {
   type Link,
   type LinkObject,
   type Method,
-  open as open_uri,
   refusal_of,
-  type Ref,
   type Sender,
+  type Handle,
   uri,
-} from "@xpute/runtime";
+} from "@xpute/link/link.ts";
 
-/** The singleton's URI. */
-export const URI = uri("pxl:core", "edit");
+/** The interface's handle, named by `pxl:core/edit` (frame.json `NAMED`). */
+export const HANDLE: Handle = 0x453522;
+
+/** The interface's qualified name: its package and its name. */
+export const NAME = uri("pxl:core", "edit");
 
 /** `hold` */
 export const HOLD: Method = 0;
@@ -33,6 +35,19 @@ export const Tool = {
   Eraser: 2,
 } as const;
 export type Tool = (typeof Tool)[keyof typeof Tool];
+
+/** The name of the `Tool` member numbered `n`, or undefined for a number
+ * no member has. */
+export function tool_name(n: number): keyof typeof Tool | undefined {
+  return (Object.keys(Tool) as (keyof typeof Tool)[]).find(
+    (k) => Tool[k] === n,
+  );
+}
+
+/** The `Tool` member `n` is, or null for a number no member has. */
+export function tool_of(n: number): Tool | null {
+  return tool_name(n) === undefined ? null : (n as Tool);
+}
 
 export interface Edit {
   hold(tool: Tool, val: number, scale_steps: number): void;
@@ -79,38 +94,32 @@ function object(imp: Edit): LinkObject {
   };
 }
 
-/** Mounts `imp` at the URI, one object for every open. */
-export function mount(l: Pick<Link, "mount">, imp: Edit): void {
-  const o = object(imp);
-  l.mount(URI, () => o);
-}
-
-/** Opens the singleton on the other side, once, at boot. */
-export async function open(link: Sender): Promise<Ref> {
-  return { link, handle: await open_uri(link, URI) };
+/** Serves `imp` under the interface's handle. */
+export function mount(l: Pick<Link, "mount_named">, imp: Edit): void {
+  l.mount_named(HANDLE, object(imp));
 }
 
 export async function hold(
-  ref: Ref,
+  link: Sender,
   tool: Tool,
   val: number,
   scale_steps: number,
 ): Promise<void> {
-  const a = await ref.link.send(ref.handle, HOLD, [tool, val, scale_steps]);
+  const a = await link.send(HANDLE, HOLD, [tool, val, scale_steps]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
-export async function marker_text(ref: Ref, text: string): Promise<void> {
-  const a = await ref.link.send(ref.handle, MARKER_TEXT, [text]);
+export async function marker_text(link: Sender, text: string): Promise<void> {
+  const a = await link.send(HANDLE, MARKER_TEXT, [text]);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
-export async function marker_cancel(ref: Ref): Promise<void> {
-  const a = await ref.link.send(ref.handle, MARKER_CANCEL, []);
+export async function marker_cancel(link: Sender): Promise<void> {
+  const a = await link.send(HANDLE, MARKER_CANCEL, []);
   if (a.result < 0) throw new XputeError(a.result);
 }
 
-export async function marker_commit(ref: Ref): Promise<void> {
-  const a = await ref.link.send(ref.handle, MARKER_COMMIT, []);
+export async function marker_commit(link: Sender): Promise<void> {
+  const a = await link.send(HANDLE, MARKER_COMMIT, []);
   if (a.result < 0) throw new XputeError(a.result);
 }

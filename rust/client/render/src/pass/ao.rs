@@ -15,7 +15,7 @@ use crate::frame::shader::record::{
     PIPELINE_AO_APPLY, PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIPELINE_AO_SAMPLE,
 };
 use crate::frame::shader::word::{ao, AO_DOWNSCALE, AO_FLOATS, AO_NOISE_SIDE};
-use xpute_gpu::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{
     buf_entry, buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry,

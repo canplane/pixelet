@@ -1,6 +1,6 @@
 // @pxl/client/service/origin/ingest.spec.ts
 //
-// GENERATED from spec/spec/asset/ingest.json
+// GENERATED from spec/spec/asset/ingest.json (pxl-tool spec/ingest.rs)
 // Every shipped asset by its number after ASSET, file n at
 // `ASSET_FILES[n - 1]` (ts/client/src/service/sys/fs/asset.ts): the bucket key
 // (the SHA-256 of its bytes, which where it lies does not change), its size,

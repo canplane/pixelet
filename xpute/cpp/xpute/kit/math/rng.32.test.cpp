@@ -10,7 +10,7 @@
 using namespace xpute;
 
 XPUTE_TEST(rng32_matches_record) {
-    Golden v = Golden::load("spec/golden/math/rng.32.tsv");
+    Golden v = Golden::load("kit/spec/golden/math/rng.32.tsv");
     v.each("", [&v](const std::string &k) {
         std::uint32_t seed = v.u32(k + ".seed");
         XPUTE_CHECK_EQ(mix32(seed), v.u32(k + ".mix32"), (k + ".mix32").c_str());

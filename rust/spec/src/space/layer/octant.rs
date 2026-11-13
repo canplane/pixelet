@@ -5,8 +5,8 @@
 //! is written at.
 
 use crate::space::coord::q3::Q3;
-use crate::space::coord::world::wrap_cell;
-use crate::space::coord::zoom::{idx_of, Zoom};
+use crate::space::coord::world::{idx_of, wrap_cell};
+use crate::space::coord::zoom::Zoom;
 use crate::space::hierarchy::morton::{key_of, name};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]

@@ -156,7 +156,7 @@ impl Surface {
     }
 }
 
-/// The surfaces open, each by the handle the link issued it (xpute wit/gpu
+/// The surfaces open, each by the handle the link issued it (xpute gpu/wit
 /// surface.wit); a free slot's handle is 0, which the link never issues.
 struct Table {
     surfaces: [Surface; SURFACES],

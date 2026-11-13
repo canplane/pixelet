@@ -1,6 +1,6 @@
 // pxl-core/abi/sensor.rs
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 #![allow(
     unused_imports,
@@ -10,17 +10,21 @@
     reason = "generated from WIT"
 )]
 
-use std::cell::Cell;
 use std::rc::Rc;
-use xpute_core::link::{self, Handle, Method, Object, Reply, Return, Tag};
-use xpute_core::wait::wait;
-use xpute_kit::status::bug::OrBug;
+use xpute_guest::link;
+use xpute_guest::wait::wait;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{BranchCursor, Cursor, PacketWriter, TreeReader};
+use xpute_kit::wire::xtp::{
+    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
+};
+use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
-/// The singleton's URI.
-pub const URI: [&str; 2] = ["pxl:core", "sensor"];
+/// The interface's handle, named by `pxl:core/sensor` (frame.json `NAMED`).
+pub const HANDLE: Handle = 0x5534df;
+
+/// The interface's qualified name: its package and its name.
+pub const NAME: [&str; 2] = ["pxl:core", "sensor"];
 
 /// `pos`
 pub const POS: Method = 0;
@@ -35,10 +39,9 @@ pub const PLATFORM: Method = 4;
 /// `locate`
 pub const LOCATE: Method = 5;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum GeolocationErrorCode {
-    #[default]
     Other = 0,
     PermissionDenied = 1,
     PositionUnavailable = 2,
@@ -46,6 +49,7 @@ pub enum GeolocationErrorCode {
 }
 
 impl GeolocationErrorCode {
+    /// Every member, in its source's own order.
     pub const ALL: [GeolocationErrorCode; 4] = [
         GeolocationErrorCode::Other,
         GeolocationErrorCode::PermissionDenied,
@@ -53,15 +57,31 @@ impl GeolocationErrorCode {
         GeolocationErrorCode::Timeout,
     ];
 
-    pub fn of(v: u32) -> Option<GeolocationErrorCode> {
-        GeolocationErrorCode::ALL.get(v as usize).copied()
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<GeolocationErrorCode> {
+        match val {
+            0 => Some(GeolocationErrorCode::Other),
+            1 => Some(GeolocationErrorCode::PermissionDenied),
+            2 => Some(GeolocationErrorCode::PositionUnavailable),
+            3 => Some(GeolocationErrorCode::Timeout),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            GeolocationErrorCode::Other => "Other",
+            GeolocationErrorCode::PermissionDenied => "PermissionDenied",
+            GeolocationErrorCode::PositionUnavailable => "PositionUnavailable",
+            GeolocationErrorCode::Timeout => "Timeout",
+        }
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum PermissionAnswer {
-    #[default]
     Asking = 0,
     Granted = 1,
     Denied = 2,
@@ -69,6 +89,7 @@ pub enum PermissionAnswer {
 }
 
 impl PermissionAnswer {
+    /// Every member, in its source's own order.
     pub const ALL: [PermissionAnswer; 4] = [
         PermissionAnswer::Asking,
         PermissionAnswer::Granted,
@@ -76,8 +97,25 @@ impl PermissionAnswer {
         PermissionAnswer::Failed,
     ];
 
-    pub fn of(v: u32) -> Option<PermissionAnswer> {
-        PermissionAnswer::ALL.get(v as usize).copied()
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<PermissionAnswer> {
+        match val {
+            0 => Some(PermissionAnswer::Asking),
+            1 => Some(PermissionAnswer::Granted),
+            2 => Some(PermissionAnswer::Denied),
+            3 => Some(PermissionAnswer::Failed),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            PermissionAnswer::Asking => "Asking",
+            PermissionAnswer::Granted => "Granted",
+            PermissionAnswer::Denied => "Denied",
+            PermissionAnswer::Failed => "Failed",
+        }
     }
 }
 
@@ -244,25 +282,9 @@ impl Object for SensorObject {
     }
 }
 
-/// Mounts `imp` at the URI, one object for every open.
+/// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn Sensor>) {
-    let o: Rc<dyn Object> = Rc::new(SensorObject(imp));
-    link::mount(link::uri(&URI), move |_, _| Ok(o.clone()));
-}
-
-thread_local! {
-    static HANDLE: Cell<Option<Handle>> = const { Cell::new(None) };
-}
-
-/// Opens the singleton on the other side, once, at boot.
-pub fn open() -> Result<(), Errno> {
-    HANDLE.set(Some(link::open(&link::uri(&URI))?));
-    Ok(())
-}
-
-/// The singleton's handle, which `open` opened.
-pub fn handle() -> Handle {
-    HANDLE.get().or_bug(Errno::EBADF)
+    link::mount_named(HANDLE, Rc::new(SensorObject(imp)));
 }
 
 pub fn pos(
@@ -273,14 +295,14 @@ pub fn pos(
     course: Option<f64>,
 ) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         POS,
         Some((5, &|w: &mut PacketWriter| {
             w.f64(Some(lon as f64));
             w.f64(Some(lat as f64));
             match &alt {
                 Some(v) => {
-                    w.f64(Some((*v) as f64));
+                    w.f64(Some(*v as f64));
                 }
                 None => {
                     w.nil();
@@ -288,7 +310,7 @@ pub fn pos(
             }
             match &accuracy {
                 Some(v) => {
-                    w.f64(Some((*v) as f64));
+                    w.f64(Some(*v as f64));
                 }
                 None => {
                     w.nil();
@@ -296,7 +318,7 @@ pub fn pos(
             }
             match &course {
                 Some(v) => {
-                    w.f64(Some((*v) as f64));
+                    w.f64(Some(*v as f64));
                 }
                 None => {
                     w.nil();
@@ -304,7 +326,7 @@ pub fn pos(
             }
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn orient(
@@ -314,12 +336,12 @@ pub fn orient(
     gamma: Option<f64>,
 ) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         ORIENT,
         Some((4, &|w: &mut PacketWriter| {
             match &webkit_compass_heading {
                 Some(v) => {
-                    w.f64(Some((*v) as f64));
+                    w.f64(Some(*v as f64));
                 }
                 None => {
                     w.nil();
@@ -327,7 +349,7 @@ pub fn orient(
             }
             match &alpha {
                 Some(v) => {
-                    w.f64(Some((*v) as f64));
+                    w.f64(Some(*v as f64));
                 }
                 None => {
                     w.nil();
@@ -335,7 +357,7 @@ pub fn orient(
             }
             match &beta {
                 Some(v) => {
-                    w.f64(Some((*v) as f64));
+                    w.f64(Some(*v as f64));
                 }
                 None => {
                     w.nil();
@@ -343,7 +365,7 @@ pub fn orient(
             }
             match &gamma {
                 Some(v) => {
-                    w.f64(Some((*v) as f64));
+                    w.f64(Some(*v as f64));
                 }
                 None => {
                     w.nil();
@@ -351,7 +373,7 @@ pub fn orient(
             }
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn err(
@@ -360,13 +382,13 @@ pub fn err(
     watching: bool,
 ) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         ERR,
         Some((3, &|w: &mut PacketWriter| {
             w.u32(Some(sensor as u32));
             match &code {
                 Some(v) => {
-                    w.u32(Some((*v) as u32));
+                    w.u32(Some(*v as u32));
                 }
                 None => {
                     w.nil();
@@ -375,19 +397,19 @@ pub fn err(
             w.bool(Some(watching));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn permission(sensor: super::types::Sensor, answer: PermissionAnswer) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         PERMISSION,
         Some((2, &|w: &mut PacketWriter| {
             w.u32(Some(sensor as u32));
             w.u32(Some(answer as u32));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn platform(
@@ -397,7 +419,7 @@ pub fn platform(
     orient_silence_is_loss: bool,
 ) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         PLATFORM,
         Some((4, &|w: &mut PacketWriter| {
             w.bool(Some(geolocation));
@@ -406,10 +428,10 @@ pub fn platform(
             w.bool(Some(orient_silence_is_loss));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn locate() -> Result<(), Errno> {
-    let (r, data) = link::call(handle(), LOCATE, None);
-    link::answer(r).map(|_| ())
+    let (r, data) = link::call(HANDLE, LOCATE, None);
+    xpute_link::answer(r).map(|_| ())
 }

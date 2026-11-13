@@ -32,8 +32,8 @@ fn footprint() -> bool {
 /// middle of texel (0, 0) (`Light::texel_at`).
 fn texel_at(v: vec3<f32>) -> vec2<f32> {
   let d = v - light_v3(0u);
-  let across = dot(d, light_v3(LIGHT_ACROSS)) * eye_f32(LIGHT + LIGHT_ACROSS2_INVERSE);
-  let down = dot(d, light_v3(LIGHT_DOWN)) * eye_f32(LIGHT + LIGHT_DOWN2_INVERSE);
+  let across = dot(d, light_v3(LIGHT_ACROSS)) * eye_f32(EYE_LIGHT + LIGHT_ACROSS2_INVERSE);
+  let down = dot(d, light_v3(LIGHT_DOWN)) * eye_f32(EYE_LIGHT + LIGHT_DOWN2_INVERSE);
   return vec2<f32>(across, down);
 }
 
@@ -60,8 +60,8 @@ fn keeps_tile(tile: vec2<u32>, was: vec2<i32>) -> bool {
 /// effects' share of the box's half-width, and one texel more for the normal offset at which a
 /// receiver reads the map.
 fn light_reach() -> f32 {
-  let width = eye_f32(LIGHT + LIGHT_WIDTH);
-  return eye_f32(LIGHT + LIGHT_REACH_NDC) * width * (f32(light_size()) * 0.5) + width;
+  let width = eye_f32(EYE_LIGHT + LIGHT_WIDTH);
+  return eye_f32(EYE_LIGHT + LIGHT_REACH_NDC) * width * (f32(light_size()) * 0.5) + width;
 }
 
 /// Whether the box from `lo` to `hi`, units from the eye, comes within `reach` of it

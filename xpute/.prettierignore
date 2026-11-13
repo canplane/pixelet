@@ -1,0 +1,7 @@
+pnpm-lock.yaml
+spec/
+target/
+.vite/
+native/runtime/expo/android/build/
+gpu/native/runtime/expo/android/build/
+*.md

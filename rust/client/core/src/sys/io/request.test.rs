@@ -5,7 +5,7 @@
 
 use super::*;
 use core::cell::Cell;
-use xpute_core::clock;
+use xpute_guest::clock;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys::io::param::RETRY_ATTEMPTS;

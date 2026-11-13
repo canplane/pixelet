@@ -3,7 +3,8 @@
 use super::*;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::ROUND;
-use pxl_spec::space::coord::zoom::{idx_of, UNIT_ZOOM};
+use pxl_spec::space::coord::world::idx_of;
+use pxl_spec::space::coord::zoom::UNIT_ZOOM;
 
 /// X is continuous across the seam where it wraps. Seen from an eye on the
 /// seam, the points one unit to either side are two units apart, and a

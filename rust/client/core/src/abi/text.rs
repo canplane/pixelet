@@ -1,6 +1,6 @@
 // pxl-core/abi/text.rs
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 #![allow(
     unused_imports,
@@ -10,45 +10,41 @@
     reason = "generated from WIT"
 )]
 
-use std::cell::Cell;
 use std::rc::Rc;
-use xpute_core::link::{self, Handle, Method, Object, Reply, Return, Tag};
-use xpute_core::wait::wait;
-use xpute_kit::status::bug::OrBug;
+use xpute_guest::link;
+use xpute_guest::wait::wait;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{BranchCursor, Cursor, PacketWriter, TreeReader};
+use xpute_kit::wire::xtp::{
+    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
+};
+use xpute_link::abi::types::Lent;
+use xpute_link::mem;
+use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
-/// The singleton's URI.
-pub const URI: [&str; 2] = ["pxl:core", "text"];
+/// The interface's handle, named by `pxl:core/text` (frame.json `NAMED`).
+pub const HANDLE: Handle = 0x61d944;
 
-/// `layout`
-pub const LAYOUT: Method = 0;
+/// The interface's qualified name: its package and its name.
+pub const NAME: [&str; 2] = ["pxl:core", "text"];
+
+/// `width`
+pub const WIDTH: Method = 0;
 /// `raster`
 pub const RASTER: Method = 1;
 
 pub trait Text {
-    fn layout(
-        &self,
-        weight: u32,
-        px: f64,
-        max_width: f64,
-        at: u32,
-        lines: u32,
-        text_at: u32,
-        text_len: u32,
-    ) -> Result<u32, Errno>;
+    fn width(&self, weight: u32, px: f64, text: Lent) -> Result<f64, Errno>;
     fn raster(
         &self,
         weight: u32,
         px: f64,
         color: u32,
-        at: u32,
+        image: Lent,
         width: u32,
         height: u32,
         x: f64,
-        text_at: u32,
-        text_len: u32,
+        text: Lent,
     ) -> Result<u32, Errno>;
 }
 
@@ -58,20 +54,21 @@ impl Object for TextObject {
     fn call(&self, m: Method, tag: Tag, args: Option<BranchCursor<'_>>) -> Reply {
         let run = || -> Result<Reply, MarshalError> {
             Ok(match m {
-                LAYOUT => {
+                WIDTH => {
                     let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;
                     let weight = b.at(0).and_then(|c| c.get_number().map(|v| v as u32))?;
                     let px = b.at(1).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let max_width = b.at(2).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let at = b.at(3).and_then(|c| c.get_number().map(|v| v as u32))?;
-                    let lines = b.at(4).and_then(|c| c.get_number().map(|v| v as u32))?;
-                    let text_at = b.at(5).and_then(|c| c.get_number().map(|v| v as u32))?;
-                    let text_len = b.at(6).and_then(|c| c.get_number().map(|v| v as u32))?;
-                    match self
-                        .0
-                        .layout(weight, px, max_width, at, lines, text_at, text_len)
-                    {
-                        Ok(v) => Reply::from(v as i32),
+                    let text = b.at(2).and_then(|c| Lent::read(c))?;
+                    match self.0.width(weight, px, text) {
+                        Ok(v) => Reply {
+                            result: 0,
+                            data: Some((
+                                1,
+                                Box::new(move |w: &mut PacketWriter| {
+                                    w.f64(Some(v as f64));
+                                }),
+                            )),
+                        },
                         Err(e) => Reply::from(e as i32),
                     }
                 }
@@ -80,15 +77,14 @@ impl Object for TextObject {
                     let weight = b.at(0).and_then(|c| c.get_number().map(|v| v as u32))?;
                     let px = b.at(1).and_then(|c| c.get_number().map(|v| v as f64))?;
                     let color = b.at(2).and_then(|c| c.get_number().map(|v| v as u32))?;
-                    let at = b.at(3).and_then(|c| c.get_number().map(|v| v as u32))?;
+                    let image = b.at(3).and_then(|c| Lent::read(c))?;
                     let width = b.at(4).and_then(|c| c.get_number().map(|v| v as u32))?;
                     let height = b.at(5).and_then(|c| c.get_number().map(|v| v as u32))?;
                     let x = b.at(6).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let text_at = b.at(7).and_then(|c| c.get_number().map(|v| v as u32))?;
-                    let text_len = b.at(8).and_then(|c| c.get_number().map(|v| v as u32))?;
+                    let text = b.at(7).and_then(|c| Lent::read(c))?;
                     match self
                         .0
-                        .raster(weight, px, color, at, width, height, x, text_at, text_len)
+                        .raster(weight, px, color, image, width, height, x, text)
                     {
                         Ok(v) => Reply::from(v as i32),
                         Err(e) => Reply::from(e as i32),
@@ -101,77 +97,76 @@ impl Object for TextObject {
     }
 }
 
-/// Mounts `imp` at the URI, one object for every open.
+/// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn Text>) {
-    let o: Rc<dyn Object> = Rc::new(TextObject(imp));
-    link::mount(link::uri(&URI), move |_, _| Ok(o.clone()));
+    link::mount_named(HANDLE, Rc::new(TextObject(imp)));
 }
 
-thread_local! {
-    static HANDLE: Cell<Option<Handle>> = const { Cell::new(None) };
-}
-
-/// Opens the singleton on the other side, once, at boot.
-pub fn open() -> Result<(), Errno> {
-    HANDLE.set(Some(link::open(&link::uri(&URI))?));
-    Ok(())
-}
-
-/// The singleton's handle, which `open` opened.
-pub fn handle() -> Handle {
-    HANDLE.get().or_bug(Errno::EBADF)
-}
-
-pub fn layout(
+pub fn width<T0: Copy + Unpin + 'static>(
     weight: u32,
     px: f64,
-    max_width: f64,
-    at: u32,
-    lines: u32,
-    text_at: u32,
-    text_len: u32,
-) -> Result<u32, Errno> {
+    text: &mut [T0],
+) -> Result<f64, Errno> {
+    let text_at = mem::off(text.as_ptr().cast());
+    let text_len = size_of_val(&text[..]) as u32;
     let (r, data) = link::call(
-        handle(),
-        LAYOUT,
-        Some((7, &|w: &mut PacketWriter| {
+        HANDLE,
+        WIDTH,
+        Some((3, &|w: &mut PacketWriter| {
             w.u32(Some(weight as u32));
             w.f64(Some(px as f64));
-            w.f64(Some(max_width as f64));
-            w.u32(Some(at as u32));
-            w.u32(Some(lines as u32));
-            w.u32(Some(text_at as u32));
-            w.u32(Some(text_len as u32));
+            Lent {
+                at: text_at,
+                len: text_len,
+            }
+            .write(w);
         })),
     );
-    link::answer(r).map(|v| v as u32)
+    xpute_link::answer(r).and_then(|_| {
+        let p = data.as_deref().ok_or(Errno::EBADMSG)?;
+        TreeReader::new(p)
+            .and_then(|t| t.read_branch())
+            .and_then(|b| b.at(0))
+            .and_then(|c| c.get_number().map(|v| v as f64))
+            .map_err(|e| e.errnum)
+    })
 }
 
-pub fn raster(
+pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
     weight: u32,
     px: f64,
     color: u32,
-    at: u32,
+    image: &mut [T0],
     width: u32,
     height: u32,
     x: f64,
-    text_at: u32,
-    text_len: u32,
+    text: &mut [T1],
 ) -> Result<u32, Errno> {
+    let image_at = mem::off(image.as_ptr().cast());
+    let image_len = size_of_val(&image[..]) as u32;
+    let text_at = mem::off(text.as_ptr().cast());
+    let text_len = size_of_val(&text[..]) as u32;
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         RASTER,
-        Some((9, &|w: &mut PacketWriter| {
+        Some((8, &|w: &mut PacketWriter| {
             w.u32(Some(weight as u32));
             w.f64(Some(px as f64));
             w.u32(Some(color as u32));
-            w.u32(Some(at as u32));
+            Lent {
+                at: image_at,
+                len: image_len,
+            }
+            .write(w);
             w.u32(Some(width as u32));
             w.u32(Some(height as u32));
             w.f64(Some(x as f64));
-            w.u32(Some(text_at as u32));
-            w.u32(Some(text_len as u32));
+            Lent {
+                at: text_at,
+                len: text_len,
+            }
+            .write(w);
         })),
     );
-    link::answer(r).map(|v| v as u32)
+    xpute_link::answer(r).map(|v| v as u32)
 }

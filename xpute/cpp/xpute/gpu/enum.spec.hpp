@@ -1,10 +1,10 @@
 // cpp/xpute/gpu/enum.spec.hpp
 //
-// GENERATED from spec/gpu/enum.json
+// GENERATED from gpu/link/spec/enum.json (xpute-gen data.rs)
 //
 // WebGPU's own enumerations. Each one lists its WebGPU spec's strings in order, and a
-// member's number is its place in that list. A runtime hands the device the string as it
-// is, and a core names a member by its generated constant. Nothing here belongs to any one
+// member's number is its place in that list. A host hands the device the string as it
+// is, and a guest names a member by its generated constant. Nothing here belongs to any one
 // program. A value that WebGPU leaves optional is NONE (api.json) when it is unset.
 
 #pragma once

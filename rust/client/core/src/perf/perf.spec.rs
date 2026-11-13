@@ -1,30 +1,29 @@
 // pxl-core/perf/perf.spec.rs
 //
-// GENERATED from spec/client/core/perf/perf.json
+// GENERATED from spec/client/core/perf/perf.json (xpute-gen data.rs)
 //
 // The profiler's records and sections as the core lays them out and the client reads
 // them from the replies that hand them over (perf/record.rs, ts/client/src/service/core/perf.ts):
 // word offsets, eight bytes a word. The names the numbers index are their owners':
 // a task's io's (spec/client/core/sys/io/demand.json), a step's and an effect's the
-// turn's (spec/client/core/turn/step.json), a GPU span's the renderer's
+// frame's (spec/client/core/perf/step.json), a GPU span's the renderer's
 // (spec/client/render/gpu/span.json). A packed table gives each field's
 // width and the generator lays the offsets out. Nothing is built
 // for a read: the core writes numbers where they stay, and the words for them are
 // the UI's. LIMIT holds the bounds the profiler keeps, and the one a build made for
-// measuring hands its GPU runtimes, which the core and the client both read.
+// measuring hands its GPU hosts, which the core and the client both read.
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
 #![allow(
     non_upper_case_globals,
     non_snake_case,
-    clippy::absolute_paths,
     non_camel_case_types,
     dead_code,
     reason = "generated from the spec"
 )]
 
-pub const HIT_KINDS: usize = 4;
+pub const HIT_KINDS: &[&str] = &["ground", "object", "objects", "decor"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum HitKind {
@@ -35,7 +34,7 @@ pub enum HitKind {
 }
 
 impl HitKind {
-    /// Every member, in the JSON's own order.
+    /// Every member, in its source's own order.
     pub const ALL: [HitKind; 4] = [
         HitKind::ground,
         HitKind::object,
@@ -43,10 +42,25 @@ impl HitKind {
         HitKind::decor,
     ];
 
-    /// The member a number names, or none for a number the set does not
-    /// give out.
-    pub fn of(val: u8) -> Option<HitKind> {
-        HitKind::ALL.into_iter().find(|member| *member as u8 == val)
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u8) -> Option<HitKind> {
+        match val {
+            0 => Some(HitKind::ground),
+            1 => Some(HitKind::object),
+            2 => Some(HitKind::objects),
+            3 => Some(HitKind::decor),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            HitKind::ground => "ground",
+            HitKind::object => "object",
+            HitKind::objects => "objects",
+            HitKind::decor => "decor",
+        }
     }
 }
 
@@ -59,7 +73,7 @@ pub mod LIMIT {
     pub const SLOW_MS: u32 = 1000;
 }
 
-/// One frame and the interval it opened (perf/frame.rs FrameSample): every figure of one frame, landed when the next frame closes the interval. `interval_ms` is that interval, `refresh_ms` the display's measured interval (pxl-core sys/sched/display.rs), and `paced_ms` the gap since the last frame, which the frame was paced at (pxl-core turn.rs `world_frame`). `settled` is 1 where the frame asked for no next one, else 0. `effects_ms`, `tick_ms` and `stage_ms` are the frame's parts, `stage_ms` the requests' pump and the render, and `perf_ms` what the profiler cost it, its own record of the frame and the UI's reads of it. `effects` is each effect's time in the frame turn, in EFFECT_NAMES' order, `effects_ms` their sum. `gpu_timed` is 1 where the GPU's read of this frame has landed, which comes a frame or two later and is written back into this frame's record (`gpu_frame` the renderer's number of it, 0 where it drew none): its `gpu_spans` are then that read's, `gpu_busy_ms` the time they ran, those that overlap counted once, the frame's GPU time, which the spans' sum overstates where passes overlap (pxl-render gpu/api.rs `Gpu::gpu_busy_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; and 0 where nothing measured it (its read not landed yet or cut off by a stop, or the device keeps no timestamps), its spans, busy time and pixels 0 too. `scale` is the share of the display's pixels, each way, the world was drawn at, in every frame (pxl-core domain/scene/resolution.rs `drawn_scale`). `kind_name` indexes the renderer's FRAME_KINDS. `draws` and `triangles` are the frame's, every pipeline a draw names (pxl-render gpu/draw.rs `DRAW_PIPELINES`), counted while the profiler records. `light_changed` says what changed that cast the light's map in the frame, a bit each in LIGHT_CHANGED's order (pxl-render ray/cast.rs `light_changed`), 0 where it did not cast; `decor_rects` is how many rects decor's slots were marked by to generate again in it, the bricks handed in it and the edits and cuts held (pxl-render gpu/generator.rs `prepare`), 0 where it marked none. The ray columns are the `ray_cnts` setting's, written into the frame they were counted in as the counts land a frame or two later, by the renderer's number of it as a GPU read is (pxl-render ray/count.rs `RayCount`), 0 where none landed: `eye_cast` and `light_cast` 1 where the eye cast in full or the light's map cast and its counts landed; then the eye's pixels (`eye_rays`) and the light's map's slots (`light_rays`), and an observer's each: the nodes its beam rays, its samples and its holes' walk visited (`_beam`, `_sample`, `_hole_walk`), the asks of the world among the last (`_asks`), its pixels or slots that took the visible voxel, a walk of their own as holes and the sky (`_voxel`, `_hole`, `_sky`), together every one it cast again, so the light's three over `light_rays` are the share of its map a cast cast again, and the boxes drawn (pxl-engine `count`). `terrain_loads` is how many terrain tiles the tile cache took in during the frame turn (pxl-core domain/layer/tile_cache.rs `take_loads`). `uploads` and `uploads_bytes` are the renderer's upload table and `pack_bytes` its texture pack (pxl-render renderer.rs `FrameStat`), and `heap_used_bytes` the heap's high-water mark (pxl-core sys/heap.rs `HeapStat`). A column's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names.
+/// One frame and the interval it opened (perf/frame.rs FrameSample): every figure of one frame, landed when the next frame closes the interval. `interval_ms` is that interval, `refresh_ms` the display's measured interval (pxl-core sys/sched/display.rs), and `paced_ms` the gap since the last frame, which the frame was paced at (pxl-core frame.rs `run`). `settled` is 1 where the frame asked for no next one, else 0. `effects_ms`, `tick_ms` and `stage_ms` are the frame's parts, `stage_ms` the requests' pump and the render, and `perf_ms` what the profiler cost it, its own record of the frame and the UI's reads of it. `effects` is each effect's time in the frame, in EFFECT_NAMES' order, `effects_ms` their sum. `gpu_timed` is 1 where the GPU's read of this frame has landed, which comes a frame or two later and is written back into this frame's record (`gpu_frame` the renderer's number of it, 0 where it drew none): its `gpu_spans` are then that read's, `gpu_busy_ms` the time they ran, those that overlap counted once, the frame's GPU time, which the spans' sum overstates where passes overlap (pxl-render gpu/api.rs `Gpu::gpu_busy_ms`), and `gpu_px` the world's pixels of the frame the read timed, what the spans were measured over; and 0 where nothing measured it (its read not landed yet or cut off by a stop, or the device keeps no timestamps), its spans, busy time and pixels 0 too. `scale` is the share of the display's pixels, each way, the world was drawn at, in every frame (pxl-core domain/scene/resolution.rs `drawn_scale`). `kind_name` indexes the renderer's FRAME_KINDS. `draws` and `triangles` are the frame's, every pipeline a draw names (pxl-render gpu/draw.rs `DRAW_PIPELINES`), counted while the profiler records. `light_changed` says what changed that cast the light's map in the frame, a bit each in LIGHT_CHANGED's order (pxl-render ray/cast.rs `light_changed`), 0 where it did not cast; `decor_rects` is how many rects decor's slots were marked by to generate again in it, the bricks handed in it and the edits and cuts held (pxl-render gpu/generator.rs `prepare`), 0 where it marked none. The ray columns are the `ray_cnts` setting's, written into the frame they were counted in as the counts land a frame or two later, by the renderer's number of it as a GPU read is (pxl-render ray/count.rs `RayCount`), 0 where none landed: `eye_cast` and `light_cast` 1 where the eye cast in full or the light's map cast and its counts landed; then the eye's pixels (`eye_rays`) and the light's map's slots (`light_rays`), and an observer's each: the nodes its beam rays, its samples and its holes' walk visited (`_beam`, `_sample`, `_hole_walk`), the asks of the world among the last (`_asks`), its pixels or slots that took the visible voxel, a walk of their own as holes and the sky (`_voxel`, `_hole`, `_sky`), together every one it cast again, so the light's three over `light_rays` are the share of its map a cast cast again, and the boxes drawn (pxl-engine `count`). `terrain_loads` is how many terrain tiles the tile cache took in during the frame (pxl-core domain/layer/tile_cache.rs `take_loads`). `uploads` and `uploads_bytes` are the renderer's upload table and `pack_bytes` its texture pack (pxl-render renderer.rs `FrameStat`), and `heap_used_bytes` the heap's high-water mark (pxl-core sys/heap.rs `HeapStat`). A column's name says its unit: `_ms`, `_bytes`, `_px`, and `_name` for an index into a list of names.
 pub mod FRAME {
     pub const t: usize = 0;
     pub const interval_ms: usize = 1;
@@ -114,17 +128,63 @@ pub mod FRAME {
 
 /// FRAME's columns in groups, every column in one (column.test.ts), in the order a reader asks in turn — where the time went, what was drawn and cast, what landed, and what it holds. The trace prints every column by its group's order, so a column the core adds is printed without a word written for it; the panel shows some groups, a few rows each, and the report its own lines. The `rays` group's columns lie in FRAME in its order, which the window's sums of them (STAT.frames.rays) keep.
 pub mod FRAME_GROUP {
-    pub const time: usize = 6;
-    pub const turn: usize = 6;
-    pub const frame: usize = 1;
-    pub const gpu: usize = 10;
-    pub const rays: usize = 20;
-    pub const tiles: usize = 1;
-    pub const device: usize = 3;
-    pub const heap: usize = 1;
+    pub const time: &[&str] = &[
+        "t",
+        "interval_ms",
+        "refresh_ms",
+        "paced_ms",
+        "settled",
+        "budget_ms",
+    ];
+    pub const cpu: &[&str] = &[
+        "effects_ms",
+        "tick_ms",
+        "phases",
+        "stage_ms",
+        "perf_ms",
+        "effects",
+    ];
+    pub const frame: &[&str] = &["kind_name"];
+    pub const gpu: &[&str] = &[
+        "gpu_timed",
+        "gpu_spans",
+        "gpu_busy_ms",
+        "gpu_px",
+        "scale",
+        "draws",
+        "triangles",
+        "gpu_frame",
+        "light_changed",
+        "decor_rects",
+    ];
+    pub const rays: &[&str] = &[
+        "eye_cast",
+        "eye_rays",
+        "eye_beam",
+        "eye_sample",
+        "eye_hole_walk",
+        "eye_asks",
+        "eye_voxel",
+        "eye_hole",
+        "eye_sky",
+        "eye_boxes",
+        "light_cast",
+        "light_rays",
+        "light_beam",
+        "light_sample",
+        "light_hole_walk",
+        "light_asks",
+        "light_voxel",
+        "light_hole",
+        "light_sky",
+        "light_boxes",
+    ];
+    pub const tiles: &[&str] = &["terrain_loads"];
+    pub const device: &[&str] = &["uploads", "uploads_bytes", "pack_bytes"];
+    pub const heap: &[&str] = &["heap_used_bytes"];
 }
 
-/// One settled task (perf/task.rs TaskRecord). `path` is the bytes of the path it opened, zero past their end, and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the offset of the file name, `at_file_bytes` long, of the line a failure was made at, in the string table PERF_STRTAB hands over, or 0 where the table had no room for the name, whose `at_line` is kept; every site word is 0 where the failure was the runtime's.
+/// One settled task (perf/task.rs TaskRecord). `path` is the bytes of the path it opened, zero past their end, and every other word an f64; `start_ms` is NaN for a task that never ran; `stream`, `outcome` and each of `phase_ids` index STREAM_NAMES, OUTCOME_NAMES and TASK_PHASE_NAMES. `at_file` is the offset of the file name, `at_file_bytes` long, of the line a failure was made at, in the string table PERF_STRTAB hands over, or 0 where the table had no room for the name, whose `at_line` is kept; every site word is 0 where the failure was the host's.
 pub mod TASK {
     pub const stream: usize = 0;
     pub const path: usize = 1;
@@ -227,7 +287,7 @@ pub mod STAT {
         pub const slots: usize = 1;
         pub const WORDS: usize = 161;
     }
-    /// What the frames held at the most or the least since the recording started, as the steps are timed, folded as each frame turn's record is taken (perf/record.rs `perf_fold_recording`): `frames` the frame turns folded; the heap's figures by their allocator's names (pxl-core sys/heap.rs `HeapStat`), the most of each but `largest_free`, the least, and `refusals` as it last stood; the body slots' peak (sys/io/body.rs `take_peak`); and `terrain_refusals` the terrain tiles the tile cache refused a slot, summed (domain/layer/tile_cache.rs `take_refusals`). Every word 0 before a frame is folded.
+    /// What the frames held at the most or the least since the recording started, as the steps are timed, folded as each frame's record is taken (perf/record.rs `perf_fold_recording`): `frames` the frames folded; the heap's figures by their allocator's names (pxl-core sys/heap.rs `HeapStat`), the most of each but `largest_free`, the least, and `refusals` as it last stood; the body slots' peak (sys/io/body.rs `take_peak`); and `terrain_refusals` the terrain tiles the tile cache refused a slot, summed (domain/layer/tile_cache.rs `take_refusals`). Every word 0 before a frame is folded.
     pub mod recording {
         pub const AT: usize = 656;
         pub const frames: usize = 0;
@@ -257,8 +317,8 @@ pub mod NOW {
         pub const worst: usize = 5;
         pub const WORDS: usize = 6;
     }
-    /// Whether the core draws, as the read finds it, recording or not, every count since the core booted: `frames` the frames the renderer encoded (pxl-render renderer.rs `drawn_frames`); `refused_admit` and `refused_stream` the frames that did not run, as the GPU admitted none (xpute-gpu admit) or the runtime still held the stream (xpute-core ipc/stream.rs R3) (turn.rs `frame_task`).
-    /// Then the device, as the runtime wrote its block (xpute spec DEVICE), the same on a page and on a device: `generation` the devices lost so far (pxl-render gpu/api.rs `device_generation`); `status` its STATUS, 0 before the block is written; `errors` the uncaptured errors it raised; and `unfinished` the frames whose work its queue has not done, each a frame the runtime asked the queue to say done and has not heard of.
+    /// Whether the core draws, as the read finds it, recording or not, every count since the core booted: `frames` the frames the renderer encoded (pxl-render renderer.rs `drawn_frames`); `refused_admit` and `refused_stream` the frames that did not run, as the GPU admitted none (xpute-gpu-guest `admit::frame`) or the host still held the stream (xpute-gpu-guest stream.rs) (frame.rs `frame_task`).
+    /// Then the device, as the host wrote its block (xpute spec DEVICE), the same on a page and on a device: `generation` the devices lost so far (pxl-render gpu/api.rs `device_generation`); `status` its STATUS, 0 before the block is written; `errors` the uncaptured errors it raised; and `unfinished` the frames whose work its queue has not done, each a frame the host asked the queue to say done and has not heard of.
     pub mod draw {
         pub const AT: usize = 6;
         pub const frames: usize = 0;
@@ -306,4 +366,4 @@ pub mod NOW {
     pub const WORDS: usize = 38;
 }
 
-pub const RING_NAMES: usize = 3;
+pub const RING_NAMES: &[&str] = &["frames", "tasks", "worst"];

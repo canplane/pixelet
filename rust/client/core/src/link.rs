@@ -2,7 +2,7 @@
 
 //! The core's side of the link: its boot, and the start and end of every
 //! entry, which xpute's link runs (lib.rs `link!`). The boot mounts what the
-//! core serves and opens what it calls; the start begins the entry's budget;
+//! core serves and starts its tasks; the start begins the entry's budget;
 //! the end runs the core's tasks until none is ready and tells the UI what
 //! changed.
 
@@ -11,8 +11,6 @@ mod export;
 mod gpu;
 pub mod layout;
 mod life;
-#[cfg(not(target_arch = "wasm32"))]
-mod touch;
 
 use crate::abi;
 use crate::abi::types::Sensor;
@@ -27,18 +25,18 @@ use crate::sys::io::dispatch;
 use crate::sys::io::file;
 use crate::sys::io::loader;
 use crate::sys::io::request;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::sys::io::text_device;
-use crate::sys::manifest::STREAM_BYTES;
 use crate::sys::sched::executor;
 use crate::sys::sched::{self, invalidate, invalidate_at};
 use crate::ui;
 use crate::ui::SnapshotMemo;
 use pxl_global::Global;
+use pxl_render::api_spec::stream;
 use pxl_render::gpu::api;
 use pxl_render::gpu::surface;
 use pxl_render::renderer;
-use xpute_core::clock::now;
+use xpute_guest::abi::stop::stop;
+use xpute_guest::clock::now;
+use xpute_guest::link::in_guest;
 use xpute_kit::status::bug::{self, OrBug};
 use xpute_kit::status::errno::Errno;
 
@@ -64,40 +62,35 @@ fn close_surface(handle: u32) {
     character_surface_close(handle);
 }
 
-/// Boots the core in its first entry (xpute-core link `boot`).
+/// Boots the core in its first entry (xpute-guest link `boot`).
 pub fn boot() {
-    // From here a bug or a panic is told to the runtime before the core stops.
-    xpute_core::abi::stop::open().or_bug(Errno::ENOENT);
+    // From here a bug or a panic in the core's own code is told to the
+    // host before the core stops. Both hooks are the process's on a device, so
+    // what is not the core's own (another thread's, or the host's while the
+    // core is out on `link_out`) goes on as it would have.
     bug::set_report(|errnum, at, n1, n2| {
-        let _ = xpute_core::abi::stop::stopped(errnum as i32, at.file(), at.line(), n1, n2);
+        if in_guest() {
+            let _ = stop::stopped(errnum as i32, at.file(), at.line(), n1, n2);
+        }
     });
-    std::panic::set_hook(Box::new(|info| {
+    let prev = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        if !in_guest() {
+            return prev(info);
+        }
+        // A bug's own panic, which its report told already.
+        if info.payload().is::<bug::Bug>() {
+            return;
+        }
         let (file, line) = info.location().map_or(("", 0), |at| (at.file(), at.line()));
-        let _ = xpute_core::abi::stop::stopped(Errno::ENOTRECOVERABLE as i32, file, line, 0, 0);
+        let _ = stop::stopped(Errno::ENOTRECOVERABLE as i32, file, line, 0, 0);
     }));
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        text_device::install();
-    }
     layout::install();
     export::mount();
-    // The runtime's singletons the core calls, each opened once.
-    let opened = [
-        xpute_core::abi::timer::open(),
-        xpute_core::abi::clock::open(),
-        xpute_gpu::abi::vsync::open(),
-        xpute_gpu::abi::gpu::open(),
-        abi::overlay::open(),
-        abi::watch::open(),
-        abi::text::open(),
-    ];
-    opened
-        .into_iter()
-        .collect::<Result<(), Errno>>()
-        .or_bug(Errno::ENOENT);
     // The renderer's stream, as large as the manifest says, and the device it runs on.
-    api::install(STREAM_BYTES);
+    api::install(stream::BYTES);
     gpu::boot();
+    sched::boot();
     // A layer asks for no more tiles at once than its tile cache has slots.
     request::open(|c| demand::of_stream(c).map_or(0, |l| l.slot_cnt));
     // The settings' slot is opened here and read by the frames that follow.
@@ -110,19 +103,19 @@ pub fn boot() {
     frame::boot();
 }
 
-/// Starts an entry (xpute-core link `boot`, `recv`): its budget.
+/// Starts an entry (xpute-guest link `boot`, `recv`): its budget.
 pub fn enter() {
     sched::begin();
 }
 
 /// Ends an entry, as xpute's link runs it once the due answers have run, and
-/// again until it leaves no work (xpute-core link `leave`). Each run reads
+/// again until it leaves no work (xpute-guest link `leave`). Each run reads
 /// what the GPU did, polls the core's tasks, and answers that work is left
 /// while one is ready. With none ready, it hands the request scheduler's
 /// events on, arms the next pump, flushes the GPU's stream and posts to the
 /// UI what changed, and answers whether any of that readied a task.
 pub fn end() -> bool {
-    // A device loss, which the runtime wrote into the device's block, is read
+    // A device loss, which the host wrote into the device's block, is read
     // before the tasks run.
     if api::take_device_lost() {
         renderer::on_gpu_lost();

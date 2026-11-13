@@ -7,7 +7,7 @@ description: Build the device app (ts/client) and put it on an iPhone, the iOS s
 
 Prebuild first: `ts/client/ios/` and `ts/client/android/` come from
 `expo prebuild` and are not committed. Each platform's build builds the core,
-`pxl-core` (`ts/client/package.json` `xpute.core`), through `@xpute/native`'s
+`pxl-core` (`ts/client/package.json` `xpute.guest`), through `@xpute/native-runtime`'s
 `ts/client/script/core-build.py`.
 
 After the app moves, pnpm's links are remade or a config plugin is dropped from `app.config.ts`, prebuild again with `--clean` and run `pod install` again.
@@ -42,7 +42,7 @@ make install && (cd ts/client && pnpm exec expo prebuild --platform ios --no-ins
 ```
 
 Run both again after a file is added under `modules/platform/` or
-`xpute/ts/native/ios/` (only `pod install` adds a new Swift file to the pod),
+`xpute/native/runtime/expo/ios/` or `xpute/gpu/native/runtime/expo/ios/` (only `pod install` adds a new Swift file to the pod),
 after `app.config.ts` or a plugin changes, or after a dependency is added.
 
 ### Build, install, launch

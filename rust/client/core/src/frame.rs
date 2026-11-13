@@ -66,8 +66,8 @@ use pxl_global::Global;
 use pxl_render::gpu::api;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_core::clock::now;
-use xpute_gpu::abi::vsync;
+use xpute_guest::clock::now;
+use xpute_gpu_guest::abi::vsync;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -288,7 +288,7 @@ static REFUSED: Global<Refused> = Global::new();
 static LAST: Global<Option<f64>> = Global::new();
 
 /// The frames that did not run since boot, by why (`frame_task`): the GPU
-/// admitted none, or the runtime still held the stream.
+/// admitted none, or the host still held the stream.
 #[derive(Clone, Copy, Default)]
 pub struct Refused {
     pub admit: f64,
@@ -325,9 +325,9 @@ async fn frame_task() {
                 break;
             }
         }
-        // A frame whose stream the runtime still holds, or that the GPU
-        // cannot take without blocking (xpute_gpu::admit), does not run, is
-        // counted by why, and asks for the next, so the renderer is never
+        // A frame whose stream the host still holds, or that the GPU cannot
+        // take without blocking (xpute_gpu_guest::admit::frame), does not run,
+        // is counted by why, and asks for the next, so the renderer is never
         // handed a frame it would have to put off.
         let refused = REFUSED.get(Refused::default);
         let why = if !api::stream_free() {

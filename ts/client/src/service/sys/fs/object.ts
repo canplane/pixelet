@@ -16,7 +16,7 @@
  */
 
 import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
-import * as Errno from "@xpute/kit/status/errno.spec.ts";
+import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 

@@ -25,8 +25,8 @@ struct Lay {
 // The depth the world's cast left at the map's texel under `clip`.
 fn light_lay(clip: vec4f) -> f32 {
   let side = vec2i(textureDimensions(world_depth));
-  let t = vec2u(clip.xy) / LAY_TILE;
-  let across = u32(side.x) / LAY_TILE;
+  let t = vec2u(clip.xy) / LIGHT_TILE;
+  let across = u32(side.x) / LIGHT_TILE;
   let epoch = max(u32(lay.corner.z), reads[lay.read.y]);
   if (reads[u32(lay.corner.w) + t.y * across + t.x] < epoch) {
     return 1.0;

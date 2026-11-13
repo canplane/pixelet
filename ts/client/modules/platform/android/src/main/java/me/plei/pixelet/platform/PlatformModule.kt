@@ -18,7 +18,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
  * The device's half of the client's services on Android (the .native files in
  * ts/client/src/service/platform/). It answers what the UI asks of the system,
  * under the same names as the iPhone's PlatformModule.swift. The core is in
- * xpute's own module (@xpute/native), and the view it draws into in @xpute/gpu's.
+ * xpute's own module (@xpute/native-runtime), and the view it draws into in @xpute/gpu-native-runtime's.
  */
 class PlatformModule : Module() {
   private val context: Context
@@ -30,7 +30,7 @@ class PlatformModule : Module() {
     // ---- the world's surface (service/platform/surface.native.tsx) ----
 
     View(WorldView::class) {
-      Events("onAttach", "onDetach")
+      Events("onAttach", "onDetach", "onPointer")
       Prop("surface") { view: WorldView, surface: Int -> view.surface = surface }
     }
 

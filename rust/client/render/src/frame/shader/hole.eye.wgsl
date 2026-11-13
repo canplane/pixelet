@@ -14,7 +14,7 @@ fn pool_at() -> u32 {
 
 /// Where the eye's stops lie (hit.wgsl), past the beam rays' words (`beam::Grid::hits_at`).
 fn hits_at() -> u32 {
-  return eye_word(GRID + GRID_HITS_AT);
+  return eye_word(EYE_GRID + GRID_HITS_AT);
 }
 
 /// Where the listed holes lie: their count, then their entries (`ray::holes_at`). There is
@@ -58,7 +58,7 @@ fn hole_write(at: vec2<u32>, w: WalkEnd, shown: WalkEnd, face: u32, faces: u32) 
   }
   var word = ray_word(shown, face, around);
   // In the ray steps view, the steps of its beam ray and of its own walk.
-  if (eye_word(STEPS) != 0u) {
+  if (eye_word(EYE_STEPS) != 0u) {
     word.z = beam_steps(grid_cell(px_tan(at, eye_size()))) + w.step;
   }
   write_ray(at, word);

@@ -42,7 +42,7 @@ fn light_of(world_pos: vec3f) -> Light {
 // directions, which lets the air's volume hold it (atmos_air.wgsl). The lights
 // at the point are not part of it: they change with the point's height, are
 // read where it stands (`light_of`), and are passed beside it, as no struct
-// holds another (build.rs `refuse_faults`).
+// holds another (build/check.rs `refuse_faults`).
 struct Air {
   transmittance: f32,
   scattered: vec3f,

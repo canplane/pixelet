@@ -5,8 +5,11 @@
     "phase's number is its place here, and a report of per-phase time is indexed",
     "by it."
   ],
-  "PHASES": [
-    "interaction",
-    "visible"
-  ]
+  "PHASES": {
+    "$type": "enum",
+    "$val": [
+      "interaction",
+      "visible"
+    ]
+  }
 }

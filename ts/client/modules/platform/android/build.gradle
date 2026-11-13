@@ -27,7 +27,7 @@ android {
 dependencies {
   implementation 'androidx.core:core-ktx:1.16.0'
   // The world's surface subclasses xpute's (WorldView.kt).
-  implementation project(':xpute-gpu')
+  implementation project(':xpute-gpu-native-runtime')
 }
 
 // Each variant's library lies in a directory of its own, which that variant

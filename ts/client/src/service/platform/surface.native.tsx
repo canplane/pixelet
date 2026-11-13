@@ -1,17 +1,19 @@
 // @pxl/client/service/platform/surface.native.tsx
 
-/** The core's surfaces on a device are xpute's native view (@xpute/gpu
+/** The core's surfaces on a device are xpute's native view (@xpute/gpu-native-runtime
  * `SurfaceView`), which wgpu draws into directly; the world's is the subclass
- * that tells the core its touches (modules/platform `WorldView`). The view's layer arrives
+ * that gives its touches as pointer events (modules/platform `WorldView`),
+ * fed to the input as a page's canvas feeds its own. The view's layer arrives
  * after the view mounts, so the view reports when its layer is bound. */
 
-import type { f64, u32 } from "@xpute/kit/abi/word.ts";
+import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
-import { SurfaceView, type SurfaceViewProps } from "@xpute/gpu/native.ts";
+import { SurfaceView, type SurfaceViewProps } from "@xpute/gpu-native-runtime";
 import { requireNativeView } from "expo";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import {
   type LayoutChangeEvent,
+  type NativeSyntheticEvent,
   Dimensions,
   PixelRatio,
   StyleSheet,
@@ -19,15 +21,18 @@ import {
 
 import type {
   CharacterSurfaceProps,
+  PointerPhase,
   SurfaceDriver,
   Viewport,
   WorldSurfaceProps,
 } from "./types.ts";
 
-const WorldView: ComponentType<SurfaceViewProps> = requireNativeView(
-  "PxlPlatform",
-  "WorldView",
-);
+/** A touch on the world's view, in the view's units. */
+type Touch = { phase: PointerPhase; id: i32; x: f64; y: f64 };
+
+const WorldView: ComponentType<
+  SurfaceViewProps & { onPointer: (e: NativeSyntheticEvent<Touch>) => void }
+> = requireNativeView("PxlPlatform", "WorldView");
 
 /** The surface fills the window. */
 export function surfaceBox(): { width: f64; height: f64 } {
@@ -109,7 +114,10 @@ export function World({ surface: driver, input }: WorldSurfaceProps) {
       {...props}
       style={StyleSheet.absoluteFill}
       onLayout={onLayout}
-      onTouchStart={() => input.touched("down")}
+      onPointer={(e) => {
+        const { phase, id, x, y } = e.nativeEvent;
+        input.pointer(phase, "touch", id, 0, x, y);
+      }}
     />
   );
 }

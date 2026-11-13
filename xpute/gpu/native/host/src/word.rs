@@ -1,0 +1,53 @@
+// xpute-gpu-native-host/word.rs
+
+use xpute_gpu_link::spec::NONE;
+
+/// These are a record's words, read in order.
+pub(super) struct WordCursor<'w> {
+    w: &'w [u32],
+    at: usize,
+}
+
+impl<'w> WordCursor<'w> {
+    pub(super) fn new(w: &'w [u32]) -> WordCursor<'w> {
+        WordCursor { w, at: 0 }
+    }
+    pub(super) fn u(&mut self) -> u32 {
+        let v = self.w[self.at];
+        self.at += 1;
+        v
+    }
+    pub(super) fn i(&mut self) -> i32 {
+        self.u() as i32
+    }
+    pub(super) fn f32(&mut self) -> f32 {
+        f32::from_bits(self.u())
+    }
+    pub(super) fn flag(&mut self) -> bool {
+        self.u() != 0
+    }
+    /// This reads a count, then that many words.
+    pub(super) fn list(&mut self) -> &'w [u32] {
+        let n = self.u() as usize;
+        let words = &self.w[self.at..self.at + n];
+        self.at += n;
+        words
+    }
+    pub(super) fn opt(&mut self) -> Option<u32> {
+        Some(self.u()).filter(|&v| v != NONE)
+    }
+    /// This reads a count, then the bytes padded to whole words.
+    pub(super) fn bytes(&mut self) -> &'w [u8] {
+        let n = self.u() as usize;
+        let words = &self.w[self.at..self.at + n.div_ceil(4)];
+        self.at += n.div_ceil(4);
+        // SAFETY: the words as their bytes, which are the guest's in order on
+        // a little-endian runtime, as every runtime is; at least `n` of them.
+        let all: &'w [u8] =
+            unsafe { core::slice::from_raw_parts(words.as_ptr().cast::<u8>(), 4 * words.len()) };
+        &all[..n]
+    }
+    pub(super) fn text(&mut self) -> String {
+        String::from_utf8_lossy(self.bytes()).into_owned()
+    }
+}

@@ -1,0 +1,7 @@
+package xpute:clocks@0.1.0;
+
+// The clocks' shared types, as wasi:clocks@0.3's `types`.
+interface types {
+  // A duration in nanoseconds.
+  type duration = u64;
+}

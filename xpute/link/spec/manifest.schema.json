@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/canplane/xpute/link/spec/manifest.schema.json",
+  "title": "xpute manifest",
+  "description": "A program's manifest: the memory, fixed ranges, heap and stacks its guest asks for. A data spec, it is written into the guest and its host as any other is (xpute-gen data.rs), each table of u32s.",
+  "type": "object",
+  "required": ["$doc", "mem", "stack"],
+  "properties": {
+    "$doc": { "$ref": "#/$defs/doc" },
+    "mem": {
+      "type": "object",
+      "required": ["$type", "bytes", "fixed_bytes", "min_heap_bytes"],
+      "additionalProperties": false,
+      "properties": {
+        "$doc": { "$ref": "#/$defs/doc" },
+        "$type": { "const": "u32" },
+        "bytes": { "description": "The guest's memory, whole before its first entry and never grown: the stack, the module's data, the fixed ranges and the heap.", "type": "integer", "minimum": 1 },
+        "fixed_bytes": { "description": "The program's fixed ranges, past the module's data and before the heap, never freed.", "type": "integer", "minimum": 0 },
+        "min_heap_bytes": { "description": "The heap the guest counts on, past the fixed ranges.", "type": "integer", "minimum": 0 }
+      }
+    },
+    "stack": {
+      "type": "object",
+      "required": ["$type", "module_bytes", "thread_bytes"],
+      "additionalProperties": false,
+      "properties": {
+        "$doc": { "$ref": "#/$defs/doc" },
+        "$type": { "const": "u32" },
+        "module_bytes": { "description": "A module's stack, first in the memory.", "type": "integer", "minimum": 1 },
+        "thread_bytes": { "description": "A native guest's thread's stack, outside the memory.", "type": "integer", "minimum": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "doc": { "type": "array", "items": { "type": "string" } }
+  }
+}

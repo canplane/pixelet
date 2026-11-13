@@ -5,7 +5,7 @@
 // tangents of its place on the lattice (pxl-engine `beam::Grid::sample`).
 
 fn sample_lattice() -> vec2<u32> {
-  return vec2<u32>(eye_word(GRID + GRID_SAMPLES), eye_word(GRID + GRID_SAMPLES + 1u));
+  return vec2<u32>(eye_word(EYE_GRID + GRID_SAMPLES), eye_word(EYE_GRID + GRID_SAMPLES + 1u));
 }
 
 /// The sample the thread at `id` takes in a pass over the lattice (sample_hit.wgsl): the one
@@ -30,8 +30,8 @@ fn sample_queued(k: u32) -> vec2<u32> {
 /// `NEAR_SAMPLES` samples beyond the screen's left and top (pxl-engine `beam::Grid::sample`).
 fn sample_aim(s: vec2<u32>) -> Aim {
   return eye_aim(vec2<f32>(
-    -eye_f32(TAN) + (f32(s.x) - f32(NEAR_SAMPLES)) * SAMPLE_SPACING,
-    eye_f32(TAN + 1u) - (f32(s.y) - f32(NEAR_SAMPLES)) * SAMPLE_SPACING,
+    -eye_f32(EYE_TAN) + (f32(s.x) - f32(NEAR_SAMPLES)) * SAMPLE_SPACING,
+    eye_f32(EYE_TAN + 1u) - (f32(s.y) - f32(NEAR_SAMPLES)) * SAMPLE_SPACING,
   ));
 }
 
@@ -39,7 +39,7 @@ fn sample_aim(s: vec2<u32>) -> Aim {
 /// `beam::Grid::sample_cell`, `beam::Grid::cell_at`). A sample beyond the screen takes the
 /// nearest cell.
 fn sample_cell_word(s: vec2<u32>) -> u32 {
-  let span_n = vec2<u32>(eye_word(GRID + GRID_SPAN), eye_word(GRID + GRID_SPAN + 1u));
+  let span_n = vec2<u32>(eye_word(EYE_GRID + GRID_SPAN), eye_word(EYE_GRID + GRID_SPAN + 1u));
   let first = vec2<u32>(NEAR_SAMPLES);
   let cell = min(
     (max(s, first) - first) / SAMPLE,

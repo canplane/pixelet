@@ -1,6 +1,6 @@
 // pxl-core/abi/edit.rs
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 #![allow(
     unused_imports,
@@ -10,17 +10,21 @@
     reason = "generated from WIT"
 )]
 
-use std::cell::Cell;
 use std::rc::Rc;
-use xpute_core::link::{self, Handle, Method, Object, Reply, Return, Tag};
-use xpute_core::wait::wait;
-use xpute_kit::status::bug::OrBug;
+use xpute_guest::link;
+use xpute_guest::wait::wait;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{BranchCursor, Cursor, PacketWriter, TreeReader};
+use xpute_kit::wire::xtp::{
+    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
+};
+use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
-/// The singleton's URI.
-pub const URI: [&str; 2] = ["pxl:core", "edit"];
+/// The interface's handle, named by `pxl:core/edit` (frame.json `NAMED`).
+pub const HANDLE: Handle = 0x453522;
+
+/// The interface's qualified name: its package and its name.
+pub const NAME: [&str; 2] = ["pxl:core", "edit"];
 
 /// `hold`
 pub const HOLD: Method = 0;
@@ -31,20 +35,35 @@ pub const MARKER_CANCEL: Method = 2;
 /// `marker-commit`
 pub const MARKER_COMMIT: Method = 3;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Tool {
-    #[default]
     Pointer = 0,
     Item = 1,
     Eraser = 2,
 }
 
 impl Tool {
+    /// Every member, in its source's own order.
     pub const ALL: [Tool; 3] = [Tool::Pointer, Tool::Item, Tool::Eraser];
 
-    pub fn of(v: u32) -> Option<Tool> {
-        Tool::ALL.get(v as usize).copied()
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<Tool> {
+        match val {
+            0 => Some(Tool::Pointer),
+            1 => Some(Tool::Item),
+            2 => Some(Tool::Eraser),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Tool::Pointer => "Pointer",
+            Tool::Item => "Item",
+            Tool::Eraser => "Eraser",
+        }
     }
 }
 
@@ -98,30 +117,14 @@ impl Object for EditObject {
     }
 }
 
-/// Mounts `imp` at the URI, one object for every open.
+/// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn Edit>) {
-    let o: Rc<dyn Object> = Rc::new(EditObject(imp));
-    link::mount(link::uri(&URI), move |_, _| Ok(o.clone()));
-}
-
-thread_local! {
-    static HANDLE: Cell<Option<Handle>> = const { Cell::new(None) };
-}
-
-/// Opens the singleton on the other side, once, at boot.
-pub fn open() -> Result<(), Errno> {
-    HANDLE.set(Some(link::open(&link::uri(&URI))?));
-    Ok(())
-}
-
-/// The singleton's handle, which `open` opened.
-pub fn handle() -> Handle {
-    HANDLE.get().or_bug(Errno::EBADF)
+    link::mount_named(HANDLE, Rc::new(EditObject(imp)));
 }
 
 pub fn hold(tool: Tool, val: u32, scale_steps: i32) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         HOLD,
         Some((3, &|w: &mut PacketWriter| {
             w.u32(Some(tool as u32));
@@ -129,26 +132,26 @@ pub fn hold(tool: Tool, val: u32, scale_steps: i32) -> Result<(), Errno> {
             w.i32(Some(scale_steps as i32));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn marker_text(text: &str) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         MARKER_TEXT,
         Some((1, &|w: &mut PacketWriter| {
             w.str(Some(&*text));
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn marker_cancel() -> Result<(), Errno> {
-    let (r, data) = link::call(handle(), MARKER_CANCEL, None);
-    link::answer(r).map(|_| ())
+    let (r, data) = link::call(HANDLE, MARKER_CANCEL, None);
+    xpute_link::answer(r).map(|_| ())
 }
 
 pub fn marker_commit() -> Result<(), Errno> {
-    let (r, data) = link::call(handle(), MARKER_COMMIT, None);
-    link::answer(r).map(|_| ())
+    let (r, data) = link::call(HANDLE, MARKER_COMMIT, None);
+    xpute_link::answer(r).map(|_| ())
 }

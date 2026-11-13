@@ -1,6 +1,6 @@
 // pxl-core/abi/source.rs
 //
-// GENERATED from spec/client/core/wit (xpute-gen spec/wit.rs)
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 #![allow(
     unused_imports,
@@ -10,17 +10,21 @@
     reason = "generated from WIT"
 )]
 
-use std::cell::Cell;
 use std::rc::Rc;
-use xpute_core::link::{self, Handle, Method, Object, Reply, Return, Tag};
-use xpute_core::wait::wait;
-use xpute_kit::status::bug::OrBug;
+use xpute_guest::link;
+use xpute_guest::wait::wait;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{BranchCursor, Cursor, PacketWriter, TreeReader};
+use xpute_kit::wire::xtp::{
+    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
+};
+use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
-/// The singleton's URI.
-pub const URI: [&str; 2] = ["pxl:core", "source"];
+/// The interface's handle, named by `pxl:core/source` (frame.json `NAMED`).
+pub const HANDLE: Handle = 0x6a88bf;
+
+/// The interface's qualified name: its package and its name.
+pub const NAME: [&str; 2] = ["pxl:core", "source"];
 
 /// `declare`
 pub const DECLARE: Method = 0;
@@ -38,13 +42,9 @@ impl Object for SourceObject {
                 DECLARE => {
                     let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;
                     let min_zoom = b.at(0).and_then(|c| c.get_number().map(|v| v as u32))?;
-                    let format = b.at(1).and_then(|c| {
-                        c.as_branch().and_then(|b| {
-                            (0..b.len)
-                                .map(|i| b.at(i).and_then(|c| c.get_number().map(|v| v as u32)))
-                                .collect::<Result<Vec<_>, MarshalError>>()
-                        })
-                    })?;
+                    let format = b
+                        .at(1)
+                        .and_then(|c| c.get_array::<u32>().map(<[u32]>::to_vec))?;
                     let shard = b.at(2).and_then(|c| {
                         c.as_branch().and_then(|b| {
                             (0..b.len)
@@ -64,44 +64,24 @@ impl Object for SourceObject {
     }
 }
 
-/// Mounts `imp` at the URI, one object for every open.
+/// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn Source>) {
-    let o: Rc<dyn Object> = Rc::new(SourceObject(imp));
-    link::mount(link::uri(&URI), move |_, _| Ok(o.clone()));
-}
-
-thread_local! {
-    static HANDLE: Cell<Option<Handle>> = const { Cell::new(None) };
-}
-
-/// Opens the singleton on the other side, once, at boot.
-pub fn open() -> Result<(), Errno> {
-    HANDLE.set(Some(link::open(&link::uri(&URI))?));
-    Ok(())
-}
-
-/// The singleton's handle, which `open` opened.
-pub fn handle() -> Handle {
-    HANDLE.get().or_bug(Errno::EBADF)
+    link::mount_named(HANDLE, Rc::new(SourceObject(imp)));
 }
 
 pub fn declare(min_zoom: u32, format: &[u32], shard: &[String]) -> Result<(), Errno> {
     let (r, data) = link::call(
-        handle(),
+        HANDLE,
         DECLARE,
         Some((3, &|w: &mut PacketWriter| {
             w.u32(Some(min_zoom as u32));
-            w.branch(format.len() as u32, |w| {
-                for x in format.iter() {
-                    w.u32(Some((*x) as u32));
-                }
-            });
+            w.array::<u32>(Some(&*format));
             w.branch(shard.len() as u32, |w| {
                 for x in shard.iter() {
-                    w.str(Some(&*(*x)));
+                    w.str(Some(&**x));
                 }
             });
         })),
     );
-    link::answer(r).map(|_| ())
+    xpute_link::answer(r).map(|_| ())
 }

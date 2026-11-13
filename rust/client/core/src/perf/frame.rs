@@ -9,8 +9,8 @@ use crate::sys::sched::phase_spec::PHASES;
 use pxl_engine::count;
 
 use crate::perf::spec::{FRAME, FRAME_GROUP, WORST};
+use crate::perf::step;
 use crate::perf::word::{as_words, as_words_mut, words, zeroed, AsWords};
-use crate::turn::spec;
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
 use pxl_render::ray;
 
@@ -64,8 +64,8 @@ pub struct DeviceSample {
     pub pack_bytes: f64,
 }
 
-/// One frame turn and the interval it opened (perf.json FRAME). The record
-/// lands when the next frame turn closes the interval.
+/// One frame and the interval it opened (perf.json FRAME). The record
+/// lands when the next frame closes the interval.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct FrameSample {
@@ -74,8 +74,7 @@ pub struct FrameSample {
     /// which is capped at MAX_STEP_S.
     pub interval_ms: f64,
     /// The display's measured interval (sys/sched/display.rs), and the gap
-    /// since the last frame, which the frame was paced at (turn.rs
-    /// `world_frame`).
+    /// since the last frame, which the frame was paced at (frame.rs `run`).
     pub refresh_ms: f64,
     pub paced_ms: f64,
     /// 1 when the frame asked for no next one. It is written once, when the
@@ -85,12 +84,12 @@ pub struct FrameSample {
     /// The frame's measured parts.
     pub effects_ms: f64,
     pub tick_ms: f64,
-    pub phases: [f64; PHASES],
+    pub phases: [f64; PHASES.len()],
     pub stage_ms: f64,
     /// What the profiler itself cost the interval: recording the frame, and
     /// the UI's reads of the records.
     pub perf_ms: f64,
-    /// The time of each effect in the frame turn, indexed by `EffectName`.
+    /// The time of each effect in the frame, indexed by `EffectName`.
     pub effects: [f64; EFFECTS],
     /// The frame's kind, an index into the renderer's FRAME_KINDS.
     pub kind: f64,
@@ -98,7 +97,7 @@ pub struct FrameSample {
     /// This frame's ray counts, written back when they land (record.rs
     /// `perf_record_rays`).
     pub ray_sample: RaySample,
-    /// The terrain tiles the tile cache took in during the frame turn.
+    /// The terrain tiles the tile cache took in during the frame.
     pub terrain_loads: f64,
     pub device: DeviceSample,
     /// The heap's high-water mark (sys/heap.rs `HeapStat`).
@@ -224,7 +223,7 @@ words!(FrameSample, FRAME::WORDS,
 
 // The `rays` group's columns, each at its offset in FRAME counted from the
 // group's first column.
-words!(RaySample, FRAME_GROUP::rays,
+words!(RaySample, FRAME_GROUP::rays.len(),
     eye_cast => 0, eye_rays => FRAME::eye_rays - FRAME::eye_cast,
     eye_beam => FRAME::eye_beam - FRAME::eye_cast, eye_sample => FRAME::eye_sample - FRAME::eye_cast,
     eye_hole_walk => FRAME::eye_hole_walk - FRAME::eye_cast, eye_asks => FRAME::eye_asks - FRAME::eye_cast, eye_voxel => FRAME::eye_voxel - FRAME::eye_cast,
@@ -242,8 +241,8 @@ words!(WorstFrame, WORST::WORDS,
     uploads_delta_bytes => WORST::uploads_delta_bytes, heap_used_delta_bytes => WORST::heap_used_delta_bytes,
 );
 
-pub const GPU_SPANS: usize = GPU_SPAN_NAMES;
-pub const EFFECTS: usize = spec::EFFECT_NAMES;
+pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
+pub const EFFECTS: usize = step::EFFECT_NAMES.len();
 
 /// Whether the tick ran past the entry's budget.
 pub fn overran(f: &FrameSample) -> bool {

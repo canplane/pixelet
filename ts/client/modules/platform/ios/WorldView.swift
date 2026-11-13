@@ -1,14 +1,15 @@
 // @pxl/native/modules/platform/ios/WorldView.swift
 
 import ExpoModulesCore
-import PxlNative
 import UIKit
 import XputeGpu
 
-/// The world's surface, which tells the core its touches (`pxl_touch`).
+/// The world's surface, which hands its touches to the UI as pointer events
+/// (`onPointer`), as a page's canvas gives its pointer events.
 final class WorldView: SurfaceView {
   let attachEvent = EventDispatcher("onAttach")
   let detachEvent = EventDispatcher("onDetach")
+  let pointerEvent = EventDispatcher("onPointer")
 
   override func attached(_ surface: UInt32) {
     attachEvent(["surface": surface])
@@ -23,7 +24,7 @@ final class WorldView: SurfaceView {
   /// touch whose end never came is replaced by the next.
   private var ids: [ObjectIdentifier: Int32] = [:]
 
-  private func tell(_ set: Set<UITouch>, _ phases: UInt32...) {
+  private func tell(_ set: Set<UITouch>, _ phases: String...) {
     for touch in set {
       let key = ObjectIdentifier(touch)
       let id: Int32
@@ -35,34 +36,38 @@ final class WorldView: SurfaceView {
       }
       let at = touch.location(in: self)
       for phase in phases {
-        pxl_touch(phase, id, Double(at.x), Double(at.y))
+        send(phase, id, Double(at.x), Double(at.y))
       }
-      if phases.contains(2) || phases.contains(4) {
+      if phases.contains("up") || phases.contains("cancel") {
         ids[key] = nil
       }
     }
   }
 
+  private func send(_ phase: String, _ id: Int32, _ x: Double, _ y: Double) {
+    pointerEvent(["phase": phase, "id": id, "x": x, "y": y])
+  }
+
   override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
     super.touchesBegan(touches, with: event)
-    tell(touches, 0)
+    tell(touches, "down")
   }
 
   override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
     super.touchesMoved(touches, with: event)
-    tell(touches, 1)
+    tell(touches, "move")
   }
 
   // A lifted finger also leaves the surface, as a page's pointerleave follows
   // its pointerup, so that nothing stays hovered under it.
   override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
     super.touchesEnded(touches, with: event)
-    tell(touches, 2, 3)
+    tell(touches, "up", "out")
   }
 
   override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
     super.touchesCancelled(touches, with: event)
-    tell(touches, 4, 3)
+    tell(touches, "cancel", "out")
   }
 
   override func didMoveToWindow() {
@@ -71,8 +76,8 @@ final class WorldView: SurfaceView {
     // A view gone from its window hears no more of its touches.
     if window == nil {
       ids.values.forEach { id in
-        pxl_touch(4, id, 0, 0)
-        pxl_touch(3, id, 0, 0)
+        send("cancel", id, 0, 0)
+        send("out", id, 0, 0)
       }
       ids.removeAll()
     }

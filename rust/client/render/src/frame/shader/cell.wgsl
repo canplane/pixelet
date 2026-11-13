@@ -17,10 +17,10 @@
 /// (`Grid::cell_window`, `Grid::window`). It is measured at the cell's corner farthest from the
 /// screen's axis, as the slope grows outward.
 fn cell_window(c: vec2<u32>) -> u32 {
-  let tan_xy = vec2<f32>(eye_f32(TAN), eye_f32(TAN + 1u));
+  let tan_xy = vec2<f32>(eye_f32(EYE_TAN), eye_f32(EYE_TAN + 1u));
   let at = max(abs(-tan_xy + vec2<f32>(c) * GRID_CELL), abs(-tan_xy + vec2<f32>(c + 1u) * GRID_CELL));
-  let radius = eye_f32(GRID + GRID_RADIUS);
-  let radius_tan = eye_f32(GRID + GRID_RADIUS_TAN);
+  let radius = eye_f32(EYE_GRID + GRID_RADIUS);
+  let radius_tan = eye_f32(EYE_GRID + GRID_RADIUS_TAN);
   let edge = sqrt(at.x * at.x + at.y * at.y);
   let beyond = (edge + radius_tan) / (1.0 - edge * radius_tan);
   let stretch = 1.0 + beyond * beyond;
@@ -29,16 +29,16 @@ fn cell_window(c: vec2<u32>) -> u32 {
 
 @compute @workgroup_size(CELL_SIDE, CELL_SIDE, 1)
 fn cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x >= eye_word(GRID + GRID_SPAN) || id.y >= eye_word(GRID + GRID_SPAN + 1u)) {
+  if (id.x >= eye_word(EYE_GRID + GRID_SPAN) || id.y >= eye_word(EYE_GRID + GRID_SPAN + 1u)) {
     return;
   }
   // The window is held to the last cell's, for which the grid's corners are laid (`Grid::of`,
   // `past`), as a GPU's ceiling may take the next window for that cell.
-  let k = min(cell_window(id.xy), eye_word(GRID + GRID_PAST));
-  let first = id.xy + vec2<u32>(eye_word(GRID + GRID_PAST)) - vec2<u32>(k);
+  let k = min(cell_window(id.xy), eye_word(EYE_GRID + GRID_PAST));
+  let first = id.xy + vec2<u32>(eye_word(EYE_GRID + GRID_PAST)) - vec2<u32>(k);
   // How far each corner's rays start lies in one word a corner, past the lines
   // (`Grid::hand_at`).
-  let least = window_least(eye_word(GRID + GRID_HANDS_AT), eye_word(GRID + GRID_CORNERS), first, 2u + 2u * k);
+  let least = window_least(eye_word(EYE_GRID + GRID_HANDS_AT), eye_word(EYE_GRID + GRID_CORNERS), first, 2u + 2u * k);
   let at = cell_start(id.xy);
   beams[at + CELL_T] = least.x;
   beams[at + CELL_CORNER] = least.y;

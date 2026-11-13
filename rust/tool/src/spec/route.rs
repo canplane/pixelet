@@ -7,7 +7,7 @@
 
 use regex::Regex;
 
-use super::{json_str, line_comments, read, ts_doc, Node, Output};
+use super::{mark, json_str, line_comments, read, ts_doc, Node, Output};
 use crate::root;
 
 const JSON: &str = "spec/spec/route.json";
@@ -157,18 +157,18 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }));
 
     let spec_doc = spec.lines_at("$doc").unwrap_or_default();
-    let hdr = |logical: &str| {
+    let head = |package_path: &str| {
         let mut h = vec![
-            format!("// {logical}"),
+            format!("// {package_path}"),
             "//".to_string(),
-            format!("// GENERATED from {JSON}"),
+            format!("// {}", mark(JSON, "pxl-tool spec/route.rs")),
         ];
         h.extend(line_comments(&spec_doc, ""));
         h.push(String::new());
         h
     };
 
-    let mut rs = hdr("pxl-spec/route.spec.rs");
+    let mut rs = head("pxl-spec/route.spec.rs");
     for (name, val) in &all {
         rs.extend(doc(name).unwrap_or_default().iter().map(|l| {
             if l.is_empty() {
@@ -196,7 +196,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
     ]);
 
-    let mut ts = hdr("@pxl/client/service/origin/route.spec.ts");
+    let mut ts = head("@pxl/client/service/origin/route.spec.ts");
     for (name, val) in &all {
         ts.extend(ts_doc(&doc(name).unwrap_or_default(), ""));
         ts.extend([
@@ -216,7 +216,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ]);
     }
 
-    let mut worker = hdr("@pxl/edge/route.spec.ts");
+    let mut worker = head("@pxl/edge/route.spec.ts");
     worker.extend(
         [
             "// The Worker is bundled for the Workers runtime rather than from src/, so it",

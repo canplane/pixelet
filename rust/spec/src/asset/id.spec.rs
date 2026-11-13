@@ -1,6 +1,6 @@
 // pxl-spec/asset/id.spec.rs
 //
-// GENERATED from spec/spec/asset/id.json
+// GENERATED from spec/spec/asset/id.json (xpute-gen data.rs)
 //
 // An asset's id is a u16: its kind over its index within that kind.
 // `id >> IDX_BITS` is the kind, the low bits the index. The kind is what an
@@ -13,7 +13,6 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
-    clippy::absolute_paths,
     non_camel_case_types,
     dead_code,
     reason = "generated from the spec"
@@ -30,18 +29,25 @@ pub enum Kind {
 }
 
 impl Kind {
-    /// Every member, in the JSON's own order.
+    /// Every member, in its source's own order.
     pub const ALL: [Kind; 3] = [Kind::cube, Kind::decor, Kind::marker];
 
-    /// The member a number names, or none for a number the set does not
-    /// give out.
-    pub fn of(val: u8) -> Option<Kind> {
-        Kind::ALL.into_iter().find(|member| *member as u8 == val)
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u8) -> Option<Kind> {
+        match val {
+            0 => Some(Kind::cube),
+            1 => Some(Kind::decor),
+            2 => Some(Kind::marker),
+            _ => None,
+        }
     }
-}
 
-pub mod KIND {
-    pub const cube: u16 = 0;
-    pub const decor: u16 = 1;
-    pub const marker: u16 = 2;
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Kind::cube => "cube",
+            Kind::decor => "decor",
+            Kind::marker => "marker",
+        }
+    }
 }

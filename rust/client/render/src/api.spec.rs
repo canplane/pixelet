@@ -1,8 +1,8 @@
 // pxl-render/api.spec.rs
 //
-// GENERATED from spec/client/render/api.json
+// GENERATED from spec/client/render/api.json (xpute-gen data.rs)
 //
-// pixelet's conventions over xpute's GPU calls (xpute/spec/gpu/api.json), which
+// pixelet's conventions over xpute's GPU calls (xpute/gpu/link/spec/api.json), which
 // the renderer writes through xpute's encoder (gpu/api.rs): the stream it writes
 // them into, its pipeline records' codes, and what a surface shows.
 
@@ -11,7 +11,6 @@
 #![allow(
     non_upper_case_globals,
     non_snake_case,
-    clippy::absolute_paths,
     dead_code,
     reason = "generated from the spec"
 )]
@@ -25,44 +24,57 @@ pub mod surface_role {
 }
 
 /// The one place the renderer's calls cross (gpu/api.rs): a stream
-/// (xpute-core io/stream.rs) in the front of the core's memory, which the
-/// core writes its calls into during a turn and the runtime runs once the turn
-/// has returned. Its size is the manifest's (spec/client/core/sys/manifest.json `stream`).
+/// (xpute-gpu-guest stream.rs) in the front of the core's memory, which the
+/// core writes its calls into during an entry and the host runs once the entry
+/// has returned. Its size is `BYTES`.
 ///
-/// Its head, past the stream's own words, is what the runtime writes for the
+/// Its head, past the stream's own words, is what the host writes for the
 /// core: the device's block (xpute DEVICE) and the timed spans' reads, three
 /// of them (gpu/api.rs `READS`), each its word, then each span's begin and end
 /// ticks. gpu/api.rs lays them out, and the stream says the head's length itself.
 pub mod stream {
-    /// What an upload leaves of the range. The records a turn cannot put off — a
+    /// The stream's room: what one entry may send the device, then at its end the
+    /// encoder's handle table, a product number said rather than derived. The
+    /// stream says its own head.
+    pub const BYTES: u32 = 4194304;
+    /// What an upload leaves of the range. The records a frame cannot put off — a
     /// frame's passes and draws, the renderer's pipelines — are never refused, so
     /// an upload, or a shader module made before the renderer (`MODULE_BYTES`),
-    /// which can wait a turn, is taken only while this much is left after it.
+    /// which can wait a frame, is taken only while this much is left after it.
     pub const RESERVE: u32 = 1048576;
-    /// The WGSL a turn hands the device as shader modules before the renderer is
-    /// made (gpu/pipeline.rs `PipelineCache::make_modules`): one module a turn, then
+    /// The WGSL a frame hands the device as shader modules before the renderer is
+    /// made (gpu/pipeline.rs `PipelineCache::make_modules`): one module a frame, then
     /// more while their sources stay within this and `RESERVE` is left. A page
     /// makes a module on its main thread, so this bounds the task that makes
-    /// them, a module larger than it alone in its turn.
+    /// them, a module larger than it alone in its frame.
     pub const MODULE_BYTES: u32 = 131072;
 }
 
-/// What a GPU runtime runs the renderer's stream by: a device's (xpute-gpu runtime
-/// `Config`), which the core hands it (pxl-core lib.rs `GPU`, xpute-gpu
-/// `CoreConfig`), and a page's, which reads the chunk its writes are staged in from
-/// the page's worker (ts/client runtime/worker.ts, @xpute/gpu `GpuConfig`); a page's
+/// What the GPU's host runs the renderer's stream by: a device's (xpute-gpu-native-host
+/// `Config`), which the core hands it (pxl-core lib.rs `GPU`, xpute-gpu-link
+/// `GpuConfig`), and a page's, which reads the chunk its writes are staged in from
+/// the page's worker (ts/client runtime/worker.ts, @xpute/gpu-link `GpuConfig`); a page's
 /// browser paces its frames itself.
 pub mod device {
-    /// The frames drawn and not yet finished on the GPU at once: a turn draws only
-    /// while fewer are (xpute-gpu runtime `GpuRuntime::admit`), and a surface queues as
+    /// The frames drawn and not yet finished on the GPU at once: a frame draws only
+    /// while fewer are (xpute-gpu-guest `admit::frame`), and a surface queues as
     /// many. Two, as wgpu configures a surface by default
     /// (`Surface::get_default_config`): one frame's lag behind the input, with the
     /// GPU kept busy while the next is drawn.
     pub const FRAME_LATENCY: u32 = 2;
-    /// The chunk the runtime stages buffer writes in, each mapped once and reused: a
+    /// The chunk the host stages buffer writes in, each mapped once and reused: a
     /// mesh, the largest write a frame makes, is about a MiB, and a larger write
     /// takes a chunk of its own.
     pub const UPLOAD_CHUNK_BYTES: u32 = 1048576;
+    /// WebGPU's power preference, which the device is asked with (xpute-gpu-link and
+    /// @xpute/gpu-link `GpuAsk`, xpute-gpu-native-host `Ask::of`).
+    pub const POWER: &str = "high-performance";
+    /// The WebGPU features the device must have: a depth-stencil format the
+    /// renderer draws with.
+    pub const REQUIRED_FEATURES: &[&str] = &["depth32float-stencil8"];
+    /// The WebGPU features the device takes where the adapter has them: timestamps,
+    /// for the timed spans.
+    pub const OPTIONAL_FEATURES: &[&str] = &["timestamp-query"];
 }
 
 /// A pipeline record's codes (frame/shader/record.rs, expanded into xpute's

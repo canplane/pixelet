@@ -139,9 +139,6 @@ export interface InputDriver {
     x: f64,
     y: f64,
   ): void;
-  /** A device's touch, which reaches the core without the UI: what the UI
-   * makes of it for itself. */
-  touched(phase: PointerPhase): void;
   wheel(delta_y: f64): void;
   /** A trackpad's pinch: the factor its fingers' spread changed by since the
    * last, over one as they spread. */

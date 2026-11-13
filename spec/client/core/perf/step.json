@@ -1,0 +1,35 @@
+{
+  "$doc": [
+    "The frame's vocabulary, the core's and the UI's: the steps a tick runs, as frame.rs",
+    "registers them, and the effects a frame runs around them. The profiler records and",
+    "reports them by these names (spec/client/core/perf/perf.json)."
+  ],
+  "STEP_NAMES": {
+    "$type": "enum",
+    "$val": [
+      "controller",
+      "input",
+      "camera",
+      "edit",
+      "ghost",
+      "environment",
+      "companion",
+      "demand",
+      "scene"
+    ]
+  },
+  "EFFECT_NAMES": {
+    "$type": "enum",
+    "$val": [
+      "navigation",
+      "bootstrap",
+      "orient",
+      "follow",
+      "dst",
+      "decor",
+      "objects",
+      "location",
+      "settings"
+    ]
+  }
+}
