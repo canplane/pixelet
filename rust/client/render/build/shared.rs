@@ -592,7 +592,7 @@ fn world_word() -> String {
     use pxl_engine::clipmap as clip;
     use pxl_engine::object::{self, Cut};
     use pxl_engine::{answer, ground, seed};
-    use pxl_spec::asset::cube::ground as palette;
+    use pxl_spec::asset::cube::Ground;
     use pxl_spec::brick;
     use pxl_spec::share::{FILL_BITS, FULL};
     use pxl_spec::space::coord::world::SEA_LEVEL;
@@ -654,12 +654,12 @@ fn world_word() -> String {
         ("LOOKUP_FROM_SHIFT", U32(clip::LOOKUP_FROM_SHIFT)),
         ("LOOKUP_CELL_ZOOM_SHIFT", U32(clip::LOOKUP_CELL_ZOOM_SHIFT)),
         ("LOOKUP_AT", U32((1 << clip::LOOKUP_CELL_ZOOM_SHIFT) - 1)),
-        ("STRATA_SAND", U32(palette::sand as u32)),
-        ("STRATA_BEACH", U32(palette::beach as u32)),
-        ("STRATA_WATER", U32(palette::water as u32)),
-        ("STRATA_SOIL", U32(palette::soil as u32)),
-        ("STRATA_SANDSTONE", U32(palette::sandstone as u32)),
-        ("STRATA_STONE", U32(palette::stone as u32)),
+        ("STRATA_SAND", U32(Ground::sand as u32)),
+        ("STRATA_BEACH", U32(Ground::beach as u32)),
+        ("STRATA_WATER", U32(Ground::water as u32)),
+        ("STRATA_SOIL", U32(Ground::soil as u32)),
+        ("STRATA_SANDSTONE", U32(Ground::sandstone as u32)),
+        ("STRATA_STONE", U32(Ground::stone as u32)),
         ("CAVE_ROOT", U32(ROOT)),
         ("CAVE_PIPE", U32(PIPE)),
         ("CAVE_BLOCK", U32(BLOCK)),

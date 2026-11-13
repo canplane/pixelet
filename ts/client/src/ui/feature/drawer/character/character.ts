@@ -3,7 +3,12 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 
 import { SETTING } from "@/ui/shared/setting.ts";
-import { GENDER, Group, groups } from "@/ui/shared/asset/character.spec.ts";
+import {
+  Gender,
+  gender_of,
+  Group,
+  groups,
+} from "@/ui/shared/asset/character.spec.ts";
 
 export interface Character {
   group: u32;
@@ -25,12 +30,11 @@ export const PETS: readonly Pet[] = groups.pet.label.map((label, number) => ({
   label,
 }));
 
-export type Gender = number;
-export const GENDERS: readonly Gender[] = [GENDER.female, GENDER.male];
+export const GENDERS: readonly Gender[] = [Gender.female, Gender.male];
 
 export const GENDER_LABEL_KEY: Readonly<Record<Gender, string>> = {
-  [GENDER.female]: "drawer.character.female_label",
-  [GENDER.male]: "drawer.character.male_label",
+  [Gender.female]: "drawer.character.female_label",
+  [Gender.male]: "drawer.character.male_label",
 };
 
 export function personsOf(gender: Gender): readonly Character[] {
@@ -38,7 +42,10 @@ export function personsOf(gender: Gender): readonly Character[] {
 }
 
 export function genderOf(character: Character): Gender {
-  return groups.person.gender[character.number] ?? GENDERS[0];
+  return (
+    gender_of(groups.person.gender[character.number] ?? GENDERS[0]) ??
+    GENDERS[0]
+  );
 }
 
 /** The character a setting's number names; the setting's default for a

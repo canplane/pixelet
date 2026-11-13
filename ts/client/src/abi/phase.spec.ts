@@ -18,9 +18,9 @@ export type Phase = (typeof Phase)[keyof typeof Phase];
 /** The name of the `Phase` member numbered `n`, or undefined for a number
  * no member has. */
 export function phase_name(n: number): keyof typeof Phase | undefined {
-  return (Object.keys(Phase) as (keyof typeof Phase)[]).find(
-    (k) => Phase[k] === n,
-  );
+  for (const k in Phase)
+    if (Phase[k as keyof typeof Phase] === n) return k as keyof typeof Phase;
+  return undefined;
 }
 
 /** The `Phase` member `n` is, or null for a number no member has. */

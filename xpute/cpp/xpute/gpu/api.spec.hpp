@@ -22,6 +22,14 @@
 
 namespace xpute::gpu {
 
+// The URI the guest opens its GPU device by (gpu/wit/gpu.wit `device`), which the GPU's
+// hosts mount.
+inline constexpr std::array<std::string_view, 2> DEVICE_URI{"xpute:gpu", "device"};
+
+// The URI a guest that draws serves its surface under (gpu/wit/surface.wit `surface`),
+// which its host opens.
+inline constexpr std::array<std::string_view, 2> SURFACE_URI{"xpute:gpu", "surface"};
+
 // The value of an optional field that is unset, such as an absent index or handle.
 inline constexpr std::uint32_t NONE = 4294967295u;
 

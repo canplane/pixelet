@@ -26,9 +26,10 @@ export type HitKind = (typeof HitKind)[keyof typeof HitKind];
 /** The name of the `HitKind` member numbered `n`, or undefined for a number
  * no member has. */
 export function hit_kind_name(n: number): keyof typeof HitKind | undefined {
-  return (Object.keys(HitKind) as (keyof typeof HitKind)[]).find(
-    (k) => HitKind[k] === n,
-  );
+  for (const k in HitKind)
+    if (HitKind[k as keyof typeof HitKind] === n)
+      return k as keyof typeof HitKind;
+  return undefined;
 }
 
 /** The `HitKind` member `n` is, or null for a number no member has. */

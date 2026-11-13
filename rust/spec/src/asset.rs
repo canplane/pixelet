@@ -195,7 +195,7 @@ fn tile_of(cube: AssetId, face: CubeFace) -> Option<u32> {
 fn sentinel_tile_of(sentinel: u8) -> Option<u32> {
     PACK.sentinels
         .iter()
-        .find(|(s, _)| *s == sentinel)
+        .find(|(s, _)| *s as u16 == u16::from(sentinel))
         .map(|&(_, n)| n)
 }
 

@@ -16,6 +16,7 @@ use pxl_render::gpu::surface;
 use xpute_guest::link;
 use xpute_link::Handle;
 use xpute_gpu_guest::abi::surface as wit;
+use xpute_gpu_link::spec::SURFACE_URI;
 use xpute_kit::status::errno::Errno;
 
 /// The surface the link issued `.0`, closed as the UI drops it.
@@ -25,7 +26,7 @@ struct Surface(Handle);
 /// which draws nothing until SCENE_DRAW (scene.rs `draw`); ENFILE where every
 /// surface is taken.
 pub(super) fn mount() {
-    link::mount(xpute_link::uri(&wit::NAME), |_, h| {
+    link::mount(xpute_link::uri(SURFACE_URI), |_, h| {
         refuse_unless(surface::surface_open(h), Errno::ENFILE)?;
         invalidate();
         Ok(wit::surface(Rc::new(Surface(h))))

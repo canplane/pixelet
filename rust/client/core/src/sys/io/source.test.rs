@@ -9,7 +9,7 @@ fn tile(name: &str) -> Quadrant {
 /// The formats this client reads, by each kind's bake number, as the
 /// published table gives them (pxl-spec bake/publication.json `FORMAT`).
 fn formats() -> Vec<u32> {
-    BaseLayer::ALL.into_iter().map(|l| FORMAT.of(l)).collect()
+    BaseLayer::ALL.into_iter().map(BaseLayer::format).collect()
 }
 
 // The test reads a parsed source and never declares it. A declaration is

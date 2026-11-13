@@ -1,6 +1,7 @@
 // pxl-spec/route.spec.rs
 //
-// GENERATED from spec/spec/route.json (pxl-tool spec/route.rs)
+// GENERATED from spec/spec/route.json (xpute-gen data.rs)
+//
 // The address space, as four reserved roots and the branches under them,
 // and the two origins they are served from.
 //
@@ -13,6 +14,15 @@
 // is where all of them read it from: the client, the Worker and the
 // servers are written from it, and wrangler's and Caddy's configurations take
 // their part of it. The core names what it opens and never an address.
+
+// Names as the spec spells them, so one record has one name on every side.
+// A table is generated whole, whether or not this crate calls an entry.
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    dead_code,
+    reason = "generated from the spec"
+)]
 
 /// The world's data: what is baked from Overture and the elevation raster,
 /// and the one query over it that cannot be baked. pxl-geo answers what the
@@ -61,4 +71,16 @@ pub const TILE_PREFIX: &str = "/tile/";
 pub const ASSET_PREFIX: &str = "/asset/";
 
 /// Every root, as the edge claims them.
-pub const WORKER_FIRST: [&str; 4] = ["/geo/*", "/api/*", "/tile/*", "/asset/*"];
+pub const WORKER_FIRST: &[&str] = &["/geo/*", "/api/*", "/tile/*", "/asset/*"];
+
+/// The site: the custom domain the Worker answers on (wrangler.jsonc `routes`),
+/// the app's page and every root, the bucket's served at the edge and the
+/// servers' relayed to the origin. A device's app, which has no origin of its
+/// own, reads from it, and so does a dev server's published deployment.
+pub const SITE_URL: &str = "https://plei.me";
+
+/// The origin behind the edge: the VM, where Caddy sends the geo root to
+/// pxl-geo and the application's to pxl-api (infra/prod/Caddyfile). One host,
+/// two roots: a hostname is a box and a root a service. The Worker relays
+/// both roots here (wrangler.jsonc `GEO_ORIGIN`, `API_ORIGIN`).
+pub const ORIGIN_URL: &str = "https://api.plei.me";

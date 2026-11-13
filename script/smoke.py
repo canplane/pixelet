@@ -44,7 +44,7 @@ SEARCH_URL, GEO_INTERNAL, API_INTERNAL = branch("SEARCH_URL"), branch("GEO_INTER
 
 def tile_object(version, name):
     """A tile's object under its kind, publication.json's `OBJECT` filled in."""
-    return published["OBJECT"].replace("{version}", version).replace("{name}", name)
+    return published["OBJECT"]["$val"].replace("{version}", version).replace("{name}", name)
 
 
 # Any shipped asset's bucket key: the first ingest.json lists.

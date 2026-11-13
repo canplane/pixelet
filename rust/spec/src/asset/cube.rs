@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 
 #[path = "cube.spec.rs"]
 mod spec;
-pub use spec::{ground, object, sentinel, Ground, Object};
+pub use spec::{ground, pack, Ground, Object, Sentinel, BASE};
 
 use crate::asset::color;
 use crate::asset::id::AssetId;
@@ -19,9 +19,9 @@ use crate::value;
 // building, and the object's colors lie in their range.
 const _: () = {
     assert!(
-        sentinel::void as u32 == value::VOID
-            && sentinel::unknown as u32 == value::UNKNOWN
-            && object::air as u32 == value::AIR,
+        Sentinel::void as u32 == value::VOID
+            && Sentinel::unknown as u32 == value::UNKNOWN
+            && Sentinel::air as u32 == value::AIR,
         "the palette's sentinels and air are the value space's"
     );
     assert!(
@@ -36,7 +36,7 @@ const _: () = {
             "a ground entry in the ground's slots"
         );
         assert!(
-            value::transports(g as u32) == g.transport(),
+            value::transports(g as u32) == ground[k].transport,
             "a way's entry in the ways' slots, and no other"
         );
         k += 1;

@@ -24,7 +24,7 @@ import type { Declaration } from "@/service/sys/fs/source.ts";
  * declares a version of the Earth (pxl-geo-bake source.rs). */
 export function version_of(
   d: Declaration,
-  kind: BaseLayer,
+  kind: keyof typeof BaseLayer,
   name: string,
 ): string {
   let finest: [number, string] | null = null;
@@ -42,7 +42,7 @@ export function version_of(
 
 export function read_object(
   decl: Declaration,
-  kind: BaseLayer,
+  kind: keyof typeof BaseLayer,
   name: string,
   signal: AbortSignal,
 ): Promise<U8Array> {

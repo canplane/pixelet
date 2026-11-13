@@ -61,11 +61,11 @@ fn line_kept_by_width() {
 
 #[test]
 fn form_from_surface() {
-    use crate::asset::cube::ground as t;
+    use crate::asset::cube::Ground;
     let over = |form: Form, top: i32| Crossing {
         low: top,
         top,
-        asset_id: u32::from(t::primary),
+        asset_id: Ground::primary as u32,
         form: u32::from(form.byte()),
         pier: 0,
         clearance: 3,

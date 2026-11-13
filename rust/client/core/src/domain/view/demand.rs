@@ -93,7 +93,7 @@ pub struct Layer {
 
 const fn layer<L: ViewLayer>() -> Layer {
     Layer {
-        stream: Stream::of_layer(L::LAYER),
+        stream: const { Stream::of_layer(L::LAYER) },
         slot_cnt: TileCache::<L>::SLOTS,
         on_arrival: on_arrived::<L>,
     }
@@ -497,7 +497,7 @@ impl<L: ViewLayer> Demand<L> {
             return;
         }
         self.want(o, dst, pinned, min_zoom);
-        declare(Stream::of_layer(L::LAYER), &self.wants);
+        declare(const { Stream::of_layer(L::LAYER) }, &self.wants);
     }
 
     /// The body of `step` for the observation `o` and the layer's `top`. It
@@ -564,7 +564,7 @@ impl<L: ViewLayer> Demand<L> {
         }
         self.wants.clear();
         L::tile_cache().ask(&self.asks);
-        declare(Stream::of_layer(L::LAYER), &[]);
+        declare(const { Stream::of_layer(L::LAYER) }, &[]);
         self.last = None;
         self.idle_revision = Some(L::tile_cache().revision());
     }

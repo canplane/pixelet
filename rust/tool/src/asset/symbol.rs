@@ -14,12 +14,12 @@ use resvg::usvg::Node;
 use resvg::usvg::Tree;
 use std::path::Path;
 
-use crate::spec::mark;
+use xpute_gen::spec::data::{table_outputs, DataSpec};
+use xpute_gen::spec::{Node as SpecNode, Output};
 
-/// What the symbols are read from, the tool that writes them, and the files it
-/// writes, which `spec` leaves to it.
+/// What the symbols are read from, and the files written from them, which
+/// `spec` leaves to the asset tool.
 const SOURCE: &str = "asset/raw/place/symbol/";
-const TOOL: &str = "pxl-tool bin/asset.rs";
 pub const RS: &str = "rust/spec/src/asset/symbol.spec.rs";
 pub const TS: &str = "ts/client/src/ui/feature/search/place-symbol.ts";
 
@@ -140,24 +140,48 @@ fn mask(tree: &Tree) -> Result<Vec<u8>, String> {
     Ok(pixmap.pixels().iter().map(|p| p.alpha()).collect())
 }
 
-/// The table the spec crate compiles: the paths, and the masks it includes.
-pub fn render_rs(symbols: &[Symbol]) -> String {
-    let mut rs = format!(
-        "// pxl-spec/asset/symbol.spec.rs\n//\n// {}\n//\n// Carto's place symbols (openstreetmap-carto `symbols/`, CC0), each a mask\n// of its coverage, a byte a pixel, `SYMBOL_PX` a side, row by row, in\n// `symbol.mask`, symbol n the (n - 1)th, in spec/spec/asset/ingest.json's\n// `symbols` order.\n\n",
-        mark(SOURCE, TOOL)
-    );
-    rs.push_str(&format!(
-        "pub const SYMBOL_PX: u32 = {SYMBOL_PX};\n\n/// The device pixels a pixel the masks are rasterized at.\npub const SYMBOL_RATIO: u32 = {SYMBOL_RATIO};\n\n/// How many symbols there are.\npub const SYMBOL_CNT: usize = {};\n\npub static SYMBOL_MASKS: &[u8] = include_bytes!(\"symbol.mask\");\n",
-        symbols.len()
-    ));
-    rs
-}
-
-/// The UI's module: each symbol's box and shapes, by its number.
-pub fn render_ts(symbols: &[Symbol]) -> String {
-    let mut ts = format!(
-        "// @pxl/client/ui/feature/search/place-symbol.ts\n//\n// {}\n//\n// Carto's place symbols (openstreetmap-carto `symbols/`, CC0) as outlines,\n// symbol n at `PLACE_SYMBOLS[n - 1]` (place_theme.spec.ts `SYMBOL`): its box,\n// and each shape's path data and whether it fills even-odd.\n\nexport interface PlaceSymbol {{\n  box: readonly [number, number];\n  shapes: readonly (readonly [string, boolean])[];\n}}\n\nexport const PLACE_SYMBOLS: readonly PlaceSymbol[] = [\n",
-        mark(SOURCE, TOOL)
+/// The symbols' files, from a data spec built here and written by xpute's
+/// generator: their side, their scale and their count on both sides, then in
+/// Rust the masks the spec crate includes, and in TypeScript the UI's
+/// outlines, each symbol's box and shapes, by its number.
+pub fn outputs(root: &Path, symbols: &[Symbol]) -> Result<Vec<Output>, String> {
+    let lines =
+        |l: &[&str]| SpecNode::Arr(l.iter().map(|l| SpecNode::Str(l.to_string())).collect());
+    let entry = |doc: &[&str], ty: &str, n: usize| {
+        SpecNode::Obj(vec![
+            ("$doc".into(), lines(doc)),
+            ("$type".into(), SpecNode::Str(ty.into())),
+            ("$val".into(), SpecNode::Num(n as f64)),
+        ])
+    };
+    let table = SpecNode::Obj(vec![
+        (
+            "$doc".into(),
+            lines(&[
+                "Carto's place symbols (openstreetmap-carto `symbols/`, CC0), symbol n the (n - 1)th in",
+                "spec/spec/asset/ingest.json's `symbols` order: in Rust each a mask of its coverage, a",
+                "byte a pixel, `SYMBOL_PX` a side, row by row, in `symbol.mask`; in TypeScript its",
+                "outline at `PLACE_SYMBOLS[n - 1]` (place_theme.spec.ts `SYMBOL`), its box and each",
+                "shape's path data and whether it fills even-odd.",
+            ]),
+        ),
+        ("SYMBOL_PX".into(), entry(&["A mask's side, in device pixels."], "u32", SYMBOL_PX as usize)),
+        (
+            "SYMBOL_RATIO".into(),
+            entry(&["The device pixels a pixel the masks are rasterized at."], "u32", SYMBOL_RATIO as usize),
+        ),
+        ("SYMBOL_CNT".into(), entry(&["How many symbols there are."], "usize", symbols.len())),
+    ]);
+    let d = DataSpec {
+        json: SOURCE,
+        ts: Some(TS),
+        rs: Some(RS),
+        ..DataSpec::DEFAULT
+    };
+    let mut outs = table_outputs(root, &d, table)?;
+    let rs = "\npub static SYMBOL_MASKS: &[u8] = include_bytes!(\"symbol.mask\");\n".to_string();
+    let mut ts = String::from(
+        "\nexport interface PlaceSymbol {\n  box: readonly [number, number];\n  shapes: readonly (readonly [string, boolean])[];\n}\n\nexport const PLACE_SYMBOLS: readonly PlaceSymbol[] = [\n",
     );
     for s in symbols {
         let shapes: Vec<String> = s
@@ -173,5 +197,8 @@ pub fn render_ts(symbols: &[Symbol]) -> String {
         ));
     }
     ts.push_str("];\n");
-    ts
+    for o in &mut outs {
+        o.text.push_str(if o.path == RS { &rs } else { &ts });
+    }
+    Ok(outs)
 }

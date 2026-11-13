@@ -23,7 +23,7 @@ use crate::space::layer::quadrant::Quadrant;
 pub const GROUND_COLUMN: usize = (TILE_CELLS * TILE_CELLS) as usize;
 pub const FOLD_COLUMN: usize = 4 * GROUND_COLUMN;
 pub const ELE_COLUMN: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
-use crate::asset::cube::sentinel;
+use crate::asset::cube::Sentinel;
 use crate::brick::{
     lines_words, of_idx, Brick, BRICK, LINES_BINS_AT, LINES_ENTRIES_AT, WAYS_ACROSS, WAYS_BINS,
     WAYS_SHIFT,
@@ -283,7 +283,7 @@ pub fn drawn(tile: Quadrant, terrain: TerrainTile) -> TerrainTile {
 
 // Made on first use: a constant array of zeros would ship in the module's data.
 static VOID_CELLS: std::sync::LazyLock<Vec<GroundId>> =
-    std::sync::LazyLock::new(|| vec![sentinel::void; GROUND_COLUMN]);
+    std::sync::LazyLock::new(|| vec![Sentinel::void as GroundId; GROUND_COLUMN]);
 
 impl Tile for TerrainTile {
     const LAYER: BaseLayer = BaseLayer::terrain;

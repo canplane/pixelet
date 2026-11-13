@@ -240,7 +240,7 @@ pub fn serve(ask: Ask, cfg: Config, cache_dir: Option<PathBuf>) {
         cache_dir,
     });
     abi::gpu::mount(Rc::new(Gpu));
-    let device = xpute_link::uri(&xpute_gpu_link::DEVICE_URI);
+    let device = xpute_link::uri(xpute_gpu_link::spec::DEVICE_URI);
     link::mount(device, move |_: &[Token], _| {
         Ok(abi::gpu::device(Rc::new(GuestDevice(args.clone()))))
     });

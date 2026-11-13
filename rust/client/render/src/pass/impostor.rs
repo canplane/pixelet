@@ -279,10 +279,10 @@ impl ImpostorPass {
         frame: u32,
     ) {
         let Some(d) = generated else { return };
-        let step = if d.mask.is_none() {
-            &sequence::IMPOSTOR_LIT
+        let at = if d.mask.is_none() {
+            const { sequence::IMPOSTOR_LIT.at() }
         } else {
-            &sequence::IMPOSTOR_LIT_MASKED
+            const { sequence::IMPOSTOR_LIT_MASKED.at() }
         };
         pass.set_pipeline(self.draw.id);
         pass.set_bind_group(0, frame, &[]);
@@ -293,7 +293,7 @@ impl ImpostorPass {
                 continue;
             }
             pass.set_bind_group(1, d.uniform_group, &[d.uniform_at(2 * group + 1)]);
-            pass.draw_indirect(d.args, step.off(d.args_at(2 * group + 1)));
+            pass.draw_indirect(d.args, at + d.args_at(2 * group + 1));
         }
     }
 }

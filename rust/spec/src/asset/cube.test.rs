@@ -14,9 +14,9 @@ fn cube_round_trip() {
 #[test]
 fn non_cubes() {
     for val in [
-        sentinel::void as u32,
-        sentinel::unknown as u32,
-        object::air as u32,
+        Sentinel::void as u32,
+        Sentinel::unknown as u32,
+        Sentinel::air as u32,
     ] {
         assert_eq!(cube_of(val), None, "{val}");
     }

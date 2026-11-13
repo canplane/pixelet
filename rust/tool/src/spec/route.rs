@@ -7,7 +7,9 @@
 
 use regex::Regex;
 
-use super::{mark, json_str, line_comments, read, ts_doc, Node, Output};
+use xpute_gen::spec::data::{table_outputs, DataSpec};
+
+use super::{json_str, line_comments, mark, read, Node, Output};
 use crate::root;
 
 const JSON: &str = "spec/spec/route.json";
@@ -156,7 +158,46 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         )
     }));
 
+    // The client's and the servers' constants, written by xpute's generator
+    // from a table built here: each path, the roots as the edge claims them,
+    // and the site and the origin.
+    let lines = |l: &[String]| Node::Arr(l.iter().map(|l| Node::Str(l.clone())).collect());
+    let entry = |doc: Vec<String>, val: Node| {
+        if doc.is_empty() {
+            val
+        } else {
+            Node::Obj(vec![("$doc".into(), lines(&doc)), ("$val".into(), val)])
+        }
+    };
     let spec_doc = spec.lines_at("$doc").unwrap_or_default();
+    let mut table = vec![("$doc".to_string(), lines(&spec_doc))];
+    table.extend(all.iter().map(|(name, val)| {
+        (
+            name.clone(),
+            entry(doc(name).unwrap_or_default(), Node::Str(val.clone())),
+        )
+    }));
+    table.push((
+        "WORKER_FIRST".into(),
+        entry(
+            vec!["Every root, as the edge claims them.".into()],
+            Node::Arr(worker_first.iter().map(|w| Node::Str(w.clone())).collect()),
+        ),
+    ));
+    for (name, url, doc) in [
+        ("SITE_URL", &site, &site_doc),
+        ("ORIGIN_URL", &relay, &relay_doc),
+    ] {
+        table.push((name.into(), entry(doc.clone(), Node::Str(url.clone()))));
+    }
+    let d = DataSpec {
+        json: JSON,
+        ts: Some("ts/client/src/service/origin/route.spec.ts"),
+        rs: Some("rust/spec/src/route.spec.rs"),
+        ..DataSpec::DEFAULT
+    };
+    let mut outs = table_outputs(&root(), &d, Node::Obj(table))?;
+
     let head = |package_path: &str| {
         let mut h = vec![
             format!("// {package_path}"),
@@ -167,54 +208,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         h.push(String::new());
         h
     };
-
-    let mut rs = head("pxl-spec/route.spec.rs");
-    for (name, val) in &all {
-        rs.extend(doc(name).unwrap_or_default().iter().map(|l| {
-            if l.is_empty() {
-                "///".to_string()
-            } else {
-                format!("/// {l}")
-            }
-        }));
-        rs.extend([
-            format!("pub const {name}: &str = {};", json_str(val)),
-            String::new(),
-        ]);
-    }
-    rs.extend([
-        "/// Every root, as the edge claims them.".to_string(),
-        format!(
-            "pub const WORKER_FIRST: [&str; {}] = [{}];",
-            worker_first.len(),
-            worker_first
-                .iter()
-                .map(|w| json_str(w))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        String::new(),
-    ]);
-
-    let mut ts = head("@pxl/client/service/origin/route.spec.ts");
-    for (name, val) in &all {
-        ts.extend(ts_doc(&doc(name).unwrap_or_default(), ""));
-        ts.extend([
-            format!("export const {name} = {};", json_str(val)),
-            String::new(),
-        ]);
-    }
-
-    for (name, url, doc) in [
-        ("SITE_URL", &site, &site_doc),
-        ("ORIGIN_URL", &relay, &relay_doc),
-    ] {
-        ts.extend(ts_doc(doc, ""));
-        ts.extend([
-            format!("export const {name} = {};", json_str(url)),
-            String::new(),
-        ]);
-    }
 
     let mut worker = head("@pxl/edge/route.spec.ts");
     worker.extend(
@@ -233,11 +226,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             .map(|(n, v)| format!("export const {n} = {};", json_str(v))),
     );
     worker.push(String::new());
-    Ok(vec![
-        Output::new("rust/spec/src/route.spec.rs", rs.join("\n")),
-        Output::new("ts/client/src/service/origin/route.spec.ts", ts.join("\n")),
+    outs.extend([
         Output::new("ts/server/edge/route.spec.ts", worker.join("\n")),
         Output::new(wrangler_path, wrangler),
         Output::new(caddy_path, caddy),
-    ])
+    ]);
+    Ok(outs)
 }

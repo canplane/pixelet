@@ -7,7 +7,8 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import * as surface from "@xpute/gpu-link/abi/surface.ts";
-import { drop, open } from "@xpute/link";
+import { SURFACE_URI } from "@xpute/gpu-link/api.spec.ts";
+import { drop, open, uri } from "@xpute/link";
 import { type SurfaceDriver } from "@/service/platform/types.ts";
 import { ui } from "@/service/core/core.ts";
 
@@ -15,7 +16,7 @@ export function surface_driver(draw?: (surface: u32) => void): SurfaceDriver {
   return {
     open: async () => {
       // A surface refused is none.
-      const h = await open(ui, surface.NAME).catch(() => 0);
+      const h = await open(ui, uri(...SURFACE_URI)).catch(() => 0);
       if (h !== 0) draw?.(h);
       return h;
     },

@@ -30,9 +30,10 @@ export type StreamName = (typeof StreamName)[keyof typeof StreamName];
 export function stream_name_name(
   n: number,
 ): keyof typeof StreamName | undefined {
-  return (Object.keys(StreamName) as (keyof typeof StreamName)[]).find(
-    (k) => StreamName[k] === n,
-  );
+  for (const k in StreamName)
+    if (StreamName[k as keyof typeof StreamName] === n)
+      return k as keyof typeof StreamName;
+  return undefined;
 }
 
 /** The `StreamName` member `n` is, or null for a number no member has. */
@@ -54,9 +55,10 @@ export type OutcomeName = (typeof OutcomeName)[keyof typeof OutcomeName];
 export function outcome_name_name(
   n: number,
 ): keyof typeof OutcomeName | undefined {
-  return (Object.keys(OutcomeName) as (keyof typeof OutcomeName)[]).find(
-    (k) => OutcomeName[k] === n,
-  );
+  for (const k in OutcomeName)
+    if (OutcomeName[k as keyof typeof OutcomeName] === n)
+      return k as keyof typeof OutcomeName;
+  return undefined;
 }
 
 /** The `OutcomeName` member `n` is, or null for a number no member has. */
@@ -78,9 +80,10 @@ export type TaskPhaseName = (typeof TaskPhaseName)[keyof typeof TaskPhaseName];
 export function task_phase_name_name(
   n: number,
 ): keyof typeof TaskPhaseName | undefined {
-  return (Object.keys(TaskPhaseName) as (keyof typeof TaskPhaseName)[]).find(
-    (k) => TaskPhaseName[k] === n,
-  );
+  for (const k in TaskPhaseName)
+    if (TaskPhaseName[k as keyof typeof TaskPhaseName] === n)
+      return k as keyof typeof TaskPhaseName;
+  return undefined;
 }
 
 /** The `TaskPhaseName` member `n` is, or null for a number no member has. */

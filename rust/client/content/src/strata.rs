@@ -23,15 +23,15 @@ use pxl_spec::value::VOID;
 
 use crate::param::strata::{BEDROCK_DEPTH, FILLER_DEPTH, HEADROOM, SANDSTONE_DEPTH};
 use crate::Pixelet;
-use pxl_spec::asset::cube::ground;
+use pxl_spec::asset::cube::Ground;
 
 // The palette entries the strata name, read into a word.
-const SAND: u32 = ground::sand as u32;
-const BEACH: u32 = ground::beach as u32;
-const WATER: u32 = ground::water as u32;
-const SOIL: u32 = ground::soil as u32;
-const SANDSTONE: u32 = ground::sandstone as u32;
-const STONE: u32 = ground::stone as u32;
+const SAND: u32 = Ground::sand as u32;
+const BEACH: u32 = Ground::beach as u32;
+const WATER: u32 = Ground::water as u32;
+const SOIL: u32 = Ground::soil as u32;
+const SANDSTONE: u32 = Ground::sandstone as u32;
+const STONE: u32 = Ground::stone as u32;
 
 /// The top of the bedrock under a face `face` leaf cells high, in leaf cells: the lowest a
 /// cube may reach there, for every walk, edit and column.

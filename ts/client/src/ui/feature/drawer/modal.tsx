@@ -8,13 +8,13 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import {
   type AssetId,
   type Cube,
+  CUBES,
   cubeLabel,
   cubeSection,
   decorLabel,
   decorSection,
   MARKER,
 } from "@/ui/shared/asset/catalog.ts";
-import { CUBES } from "@/ui/shared/asset/cube.spec.ts";
 import { DECORS } from "@/ui/shared/asset/decor.spec.ts";
 import { PIN_LABEL } from "@/ui/shared/asset/marker.spec.ts";
 

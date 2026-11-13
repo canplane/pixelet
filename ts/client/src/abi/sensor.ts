@@ -2,24 +2,12 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import {
-  type Link,
-  type LinkObject,
-  type Method,
-  refusal_of,
-  type Sender,
-  type Handle,
-  uri,
-} from "@xpute/link/link.ts";
+import { type Method, type Sender, type Handle } from "@xpute/link/link.ts";
 import * as types from "./types.ts";
 
 /** The interface's handle, named by `pxl:core/sensor` (frame.json `NAMED`). */
 export const HANDLE: Handle = 0x5534df;
-
-/** The interface's qualified name: its package and its name. */
-export const NAME = uri("pxl:core", "sensor");
 
 /** `pos` */
 export const POS: Method = 0;
@@ -48,9 +36,10 @@ export type GeolocationErrorCode =
 export function geolocation_error_code_name(
   n: number,
 ): keyof typeof GeolocationErrorCode | undefined {
-  return (
-    Object.keys(GeolocationErrorCode) as (keyof typeof GeolocationErrorCode)[]
-  ).find((k) => GeolocationErrorCode[k] === n);
+  for (const k in GeolocationErrorCode)
+    if (GeolocationErrorCode[k as keyof typeof GeolocationErrorCode] === n)
+      return k as keyof typeof GeolocationErrorCode;
+  return undefined;
 }
 
 /** The `GeolocationErrorCode` member `n` is, or null for a number no member has. */
@@ -76,9 +65,10 @@ export type PermissionAnswer =
 export function permission_answer_name(
   n: number,
 ): keyof typeof PermissionAnswer | undefined {
-  return (
-    Object.keys(PermissionAnswer) as (keyof typeof PermissionAnswer)[]
-  ).find((k) => PermissionAnswer[k] === n);
+  for (const k in PermissionAnswer)
+    if (PermissionAnswer[k as keyof typeof PermissionAnswer] === n)
+      return k as keyof typeof PermissionAnswer;
+  return undefined;
 }
 
 /** The `PermissionAnswer` member `n` is, or null for a number no member has. */
@@ -88,172 +78,122 @@ export function permission_answer_of(n: number): PermissionAnswer | null {
     : (n as PermissionAnswer);
 }
 
-export interface Sensor {
-  pos(
-    lon: number,
-    lat: number,
-    alt: number | null,
-    accuracy: number | null,
-    course: number | null,
-  ): void;
-  orient(
-    webkit_compass_heading: number | null,
-    alpha: number | null,
-    beta: number | null,
-    gamma: number | null,
-  ): void;
-  err(
-    sensor: types.Sensor,
-    code: GeolocationErrorCode | null,
-    watching: boolean,
-  ): void;
-  permission(sensor: types.Sensor, answer: PermissionAnswer): void;
-  platform(
-    geolocation: boolean,
-    orient: boolean,
-    orient_permission: boolean,
-    orient_silence_is_loss: boolean,
-  ): void;
-  locate(): void;
-}
-
-/** The object over `imp`. */
-function object(imp: Sensor): LinkObject {
-  return {
-    call(m, tag, args) {
-      try {
-        switch (m) {
-          case POS: {
-            if (args === null) return Errno.EBADMSG;
-            imp.pos(
-              args.at(0).get_number(),
-              args.at(1).get_number(),
-              args.at(2).get_opt((c) => c.get_number()),
-              args.at(3).get_opt((c) => c.get_number()),
-              args.at(4).get_opt((c) => c.get_number()),
-            );
-            return 0;
-          }
-          case ORIENT: {
-            if (args === null) return Errno.EBADMSG;
-            imp.orient(
-              args.at(0).get_opt((c) => c.get_number()),
-              args.at(1).get_opt((c) => c.get_number()),
-              args.at(2).get_opt((c) => c.get_number()),
-              args.at(3).get_opt((c) => c.get_number()),
-            );
-            return 0;
-          }
-          case ERR: {
-            if (args === null) return Errno.EBADMSG;
-            imp.err(
-              args.at(0).get_number() as types.Sensor,
-              args.at(1).get_opt((c) => c.get_number() as GeolocationErrorCode),
-              args.at(2).get_bool(),
-            );
-            return 0;
-          }
-          case PERMISSION: {
-            if (args === null) return Errno.EBADMSG;
-            imp.permission(
-              args.at(0).get_number() as types.Sensor,
-              args.at(1).get_number() as PermissionAnswer,
-            );
-            return 0;
-          }
-          case PLATFORM: {
-            if (args === null) return Errno.EBADMSG;
-            imp.platform(
-              args.at(0).get_bool(),
-              args.at(1).get_bool(),
-              args.at(2).get_bool(),
-              args.at(3).get_bool(),
-            );
-            return 0;
-          }
-          case LOCATE: {
-            imp.locate();
-            return 0;
-          }
-          default:
-            return Errno.ENOSYS;
-        }
-      } catch (e) {
-        return refusal_of(e);
-      }
-    },
-  };
-}
-
-/** Serves `imp` under the interface's handle. */
-export function mount(l: Pick<Link, "mount_named">, imp: Sensor): void {
-  l.mount_named(HANDLE, object(imp));
-}
-
 export async function pos(
-  link: Sender,
+  link_: Sender,
   lon: number,
   lat: number,
   alt: number | null,
   accuracy: number | null,
   course: number | null,
 ): Promise<void> {
-  const a = await link.send(HANDLE, POS, [lon, lat, alt, accuracy, course]);
-  if (a.result < 0) throw new XputeError(a.result);
+  const a_ = await link_.send(HANDLE, POS, [
+    5,
+    (w_) => {
+      w_.f64(lon);
+      w_.f64(lat);
+      if (alt === null) w_.nil();
+      else {
+        w_.f64(alt);
+      }
+      if (accuracy === null) w_.nil();
+      else {
+        w_.f64(accuracy);
+      }
+      if (course === null) w_.nil();
+      else {
+        w_.f64(course);
+      }
+    },
+  ]);
+  if (a_.result < 0) throw new XputeError(a_.result);
 }
 
 export async function orient(
-  link: Sender,
+  link_: Sender,
   webkit_compass_heading: number | null,
   alpha: number | null,
   beta: number | null,
   gamma: number | null,
 ): Promise<void> {
-  const a = await link.send(HANDLE, ORIENT, [
-    webkit_compass_heading,
-    alpha,
-    beta,
-    gamma,
+  const a_ = await link_.send(HANDLE, ORIENT, [
+    4,
+    (w_) => {
+      if (webkit_compass_heading === null) w_.nil();
+      else {
+        w_.f64(webkit_compass_heading);
+      }
+      if (alpha === null) w_.nil();
+      else {
+        w_.f64(alpha);
+      }
+      if (beta === null) w_.nil();
+      else {
+        w_.f64(beta);
+      }
+      if (gamma === null) w_.nil();
+      else {
+        w_.f64(gamma);
+      }
+    },
   ]);
-  if (a.result < 0) throw new XputeError(a.result);
+  if (a_.result < 0) throw new XputeError(a_.result);
 }
 
 export async function err(
-  link: Sender,
+  link_: Sender,
   sensor: types.Sensor,
   code: GeolocationErrorCode | null,
   watching: boolean,
 ): Promise<void> {
-  const a = await link.send(HANDLE, ERR, [sensor, code, watching]);
-  if (a.result < 0) throw new XputeError(a.result);
+  const a_ = await link_.send(HANDLE, ERR, [
+    3,
+    (w_) => {
+      w_.u32(sensor);
+      if (code === null) w_.nil();
+      else {
+        w_.u32(code);
+      }
+      w_.bool(watching);
+    },
+  ]);
+  if (a_.result < 0) throw new XputeError(a_.result);
 }
 
 export async function permission(
-  link: Sender,
+  link_: Sender,
   sensor: types.Sensor,
   answer: PermissionAnswer,
 ): Promise<void> {
-  const a = await link.send(HANDLE, PERMISSION, [sensor, answer]);
-  if (a.result < 0) throw new XputeError(a.result);
+  const a_ = await link_.send(HANDLE, PERMISSION, [
+    2,
+    (w_) => {
+      w_.u32(sensor);
+      w_.u32(answer);
+    },
+  ]);
+  if (a_.result < 0) throw new XputeError(a_.result);
 }
 
 export async function platform(
-  link: Sender,
+  link_: Sender,
   geolocation: boolean,
   orient: boolean,
   orient_permission: boolean,
   orient_silence_is_loss: boolean,
 ): Promise<void> {
-  const a = await link.send(HANDLE, PLATFORM, [
-    geolocation,
-    orient,
-    orient_permission,
-    orient_silence_is_loss,
+  const a_ = await link_.send(HANDLE, PLATFORM, [
+    4,
+    (w_) => {
+      w_.bool(geolocation);
+      w_.bool(orient);
+      w_.bool(orient_permission);
+      w_.bool(orient_silence_is_loss);
+    },
   ]);
-  if (a.result < 0) throw new XputeError(a.result);
+  if (a_.result < 0) throw new XputeError(a_.result);
 }
 
-export async function locate(link: Sender): Promise<void> {
-  const a = await link.send(HANDLE, LOCATE, []);
-  if (a.result < 0) throw new XputeError(a.result);
+export async function locate(link_: Sender): Promise<void> {
+  const a_ = await link_.send(HANDLE, LOCATE, null);
+  if (a_.result < 0) throw new XputeError(a_.result);
 }

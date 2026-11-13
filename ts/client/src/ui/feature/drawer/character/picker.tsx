@@ -16,7 +16,6 @@ import { PickedCharacter } from "./picked.tsx";
 import { SETTING } from "@/ui/shared/setting.ts";
 import {
   type Character,
-  type Gender,
   genderOf,
   GENDER_LABEL_KEY,
   GENDERS,
@@ -25,6 +24,7 @@ import {
   PETS,
   petAt,
 } from "./character.ts";
+import type { Gender } from "@/ui/shared/asset/character.spec.ts";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import { PANEL_EDGE, PANEL_SECTION_GAP } from "@/ui/shared/component/panel.tsx";
 import { useCore } from "@/ui/shared/watch.ts";

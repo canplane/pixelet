@@ -1,0 +1,7 @@
+package xpute:fs@0.1.0;
+
+// The files a guest opens, which its host serves.
+
+world imports {
+  import file;
+}

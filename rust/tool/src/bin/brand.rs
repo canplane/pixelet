@@ -15,12 +15,13 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use image::codecs::ico::{IcoEncoder, IcoFrame};
-use pxl_tool::spec::mark;
 use image::imageops::FilterType;
 use image::{DynamicImage, ExtendedColorType, ImageFormat, Rgba, RgbaImage};
 
 use image::imageops;
+use pxl_tool::brand;
 use pxl_tool::root;
+use pxl_tool::spec::mark;
 
 const CLEAR: Rgba<u8> = Rgba([0, 0, 0, 0]);
 
@@ -193,7 +194,7 @@ fn run() -> Result<(), String> {
         &started.finish().map_err(|e| e.to_string())?,
     )?;
 
-    let symbol_path = root().join(pxl_tool::brand::SYMBOL_PATH);
+    let symbol_path = root().join(brand::TS);
     let module = symbol_module()?;
     if std::env::args().any(|a| a == "--symbol") {
         write(&symbol_path, module.as_bytes())?;

@@ -254,9 +254,9 @@ export type Errno = (typeof Errno)[keyof typeof Errno];
 /** The name of the `Errno` member numbered `n`, or undefined for a number
  * no member has. */
 export function errno_name(n: number): keyof typeof Errno | undefined {
-  return (Object.keys(Errno) as (keyof typeof Errno)[]).find(
-    (k) => Errno[k] === n,
-  );
+  for (const k in Errno)
+    if (Errno[k as keyof typeof Errno] === n) return k as keyof typeof Errno;
+  return undefined;
 }
 
 /** The `Errno` member `n` is, or null for a number no member has. */

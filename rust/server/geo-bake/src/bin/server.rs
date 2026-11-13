@@ -26,7 +26,7 @@ use pxl_geo_bake::oven::{
 use pxl_geo_bake::pyramid;
 use pxl_geo_bake::source::{self, OverrideMap};
 use pxl_geo_bake::util::CONTENT_ENCODING;
-use pxl_spec::bake::publication::{tile_object_parts, BaseLayer, FORMAT, TILE_SPHERE};
+use pxl_spec::bake::publication::{tile_object_parts, BaseLayer, TILE_SPHERE};
 use pxl_spec::bake::source::is_sharded;
 use pxl_spec::directory;
 use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
@@ -113,7 +113,7 @@ fn decl(app: &App) -> Result<String, String> {
                 )),
             },
             TileSource::Oven(_) => Ok(source::Kind {
-                format: FORMAT.of(l),
+                format: l.format(),
                 version,
                 shard: Some(source::tiles(app.coverage.iter().map(String::as_str))?),
             }),

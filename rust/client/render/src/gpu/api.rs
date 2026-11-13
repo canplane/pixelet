@@ -1229,7 +1229,6 @@ impl Gpu {
         let at = core::panic::Location::caller();
         s.split
             .note_buffer(buf, usage & buffer_usage::INDIRECT != 0, at.line());
-        self.label(buf, "buffer", core::panic::Location::caller());
         buf
     }
 
@@ -1639,16 +1638,6 @@ impl Gpu {
         None
     }
 
-    /// Labels `id` with `kind` and the source line that made it, so that a validation error
-    /// names a buffer, encoder or pass by where it was made.
-    fn label(&self, id: Id, kind: &str, at: &core::panic::Location) {
-        let mut name = Label::default();
-        let file = at.file().rsplit('/').next().unwrap_or(at.file());
-        let _ = core::fmt::write(&mut name, format_args!("{kind} {file}:{}", at.line()));
-        let s = self.s();
-        call::label(&mut s.stream, id, name.text());
-    }
-
     /// A command encoder. It is cut into several command buffers where its passes read args
     /// written earlier in it (gpu/split.rs), and it is submitted as those command buffers.
     #[track_caller]
@@ -1656,7 +1645,6 @@ impl Gpu {
         let s = self.s();
         let encoder = handle_of(s.encoder.encoder(&mut s.stream));
         s.split.begun(encoder);
-        self.label(encoder, "encoder", core::panic::Location::caller());
         encoder
     }
 
@@ -1666,7 +1654,6 @@ impl Gpu {
         let s = self.s();
         let next = handle_of(s.encoder.encoder(&mut s.stream));
         s.split.split(encoder, next);
-        self.label(next, "encoder split", core::panic::Location::caller());
     }
 
     /// The pass in which an indirect call on `pass` that reads `buf` is recorded. Where `buf`
@@ -1706,7 +1693,6 @@ impl Gpu {
             s.encoder
                 .compute_pass(&mut s.stream, s.split.at(encoder), &stamp),
         );
-        self.label(at, "compute indirect", core::panic::Location::caller());
         let s = self.s();
         if pipeline != 0 {
             call::set_pipeline(&mut s.stream, at, pipeline);
@@ -1778,7 +1764,6 @@ impl Gpu {
             },
         ));
         s.split.opened(pass, named, false, None);
-        self.label(pass, "render", core::panic::Location::caller());
         pass
     }
 
@@ -1795,7 +1780,6 @@ impl Gpu {
                 .compute_pass(&mut s.stream, s.split.at(encoder), &stamp),
         );
         s.split.opened(pass, encoder, true, span);
-        self.label(pass, "compute", core::panic::Location::caller());
         pass
     }
 
@@ -2137,36 +2121,3 @@ impl Gpu {
 #[cfg(test)]
 #[path = "api.test.rs"]
 mod test;
-
-/// A label's text. Text past its room is cut off, not refused.
-struct Label {
-    bytes: [u8; 64],
-    len: usize,
-}
-
-impl Default for Label {
-    fn default() -> Self {
-        Label {
-            bytes: [0; 64],
-            len: 0,
-        }
-    }
-}
-
-impl Label {
-    fn text(&self) -> &str {
-        core::str::from_utf8(&self.bytes[..self.len]).unwrap_or("")
-    }
-}
-
-impl core::fmt::Write for Label {
-    fn write_str(&mut self, text: &str) -> core::fmt::Result {
-        let mut take = text.len().min(self.bytes.len() - self.len);
-        while !text.is_char_boundary(take) {
-            take -= 1;
-        }
-        self.bytes[self.len..self.len + take].copy_from_slice(&text.as_bytes()[..take]);
-        self.len += take;
-        Ok(())
-    }
-}

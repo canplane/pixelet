@@ -12,7 +12,7 @@
 
 use std::rc::Rc;
 use xpute_guest::link;
-use xpute_guest::wait::wait;
+use xpute_guest::wait;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{
@@ -22,9 +22,6 @@ use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
 /// The interface's handle, named by `pxl:core/scene` (frame.json `NAMED`).
 pub const HANDLE: Handle = 0x7c289a;
-
-/// The interface's qualified name: its package and its name.
-pub const NAME: [&str; 2] = ["pxl:core", "scene"];
 
 /// `draw`
 pub const DRAW: Method = 0;
@@ -74,21 +71,21 @@ pub trait Scene {
 struct SceneObject(Rc<dyn Scene>);
 
 impl Object for SceneObject {
-    fn call(&self, m: Method, tag: Tag, args: Option<BranchCursor<'_>>) -> Reply {
+    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
         let run = || -> Result<Reply, MarshalError> {
-            Ok(match m {
+            Ok(match m_ {
                 DRAW => {
-                    let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let surface = b.at(0).and_then(|c| c.get_number().map(|v| v as u32))?;
-                    let content = b.at(1).and_then(|c| {
+                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
+                    let surface = b_.at(0).and_then(|c| c.get_number().map(|v| v as u32))?;
+                    let content = b_.at(1).and_then(|c| {
                         c.get_number().and_then(|v| {
                             SceneContent::of(v as u32).ok_or(MarshalError::new(Errno::EBADMSG))
                         })
                     })?;
-                    let group = b.at(2).and_then(|c| {
+                    let group = b_.at(2).and_then(|c| {
                         c.opt().map(|c| c.get_number().map(|v| v as u8)).transpose()
                     })?;
-                    let bg = b.at(3).and_then(|c| {
+                    let bg = b_.at(3).and_then(|c| {
                         c.opt()
                             .map(|c| c.get_number().map(|v| v as u32))
                             .transpose()
@@ -99,8 +96,8 @@ impl Object for SceneObject {
                     }
                 }
                 CHAT => {
-                    let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let text = b.at(0).and_then(|c| c.get_str_ref().map(str::to_owned))?;
+                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
+                    let text = b_.at(0).and_then(|c| c.get_str_ref().map(str::to_owned))?;
                     match self.0.chat(text) {
                         Ok(v) => Reply::from(0),
                         Err(e) => Reply::from(e as i32),
@@ -116,48 +113,4 @@ impl Object for SceneObject {
 /// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn Scene>) {
     link::mount_named(HANDLE, Rc::new(SceneObject(imp)));
-}
-
-pub fn draw(
-    surface: u32,
-    content: SceneContent,
-    group: Option<u8>,
-    bg: Option<u32>,
-) -> Result<(), Errno> {
-    let (r, data) = link::call(
-        HANDLE,
-        DRAW,
-        Some((4, &|w: &mut PacketWriter| {
-            w.u32(Some(surface as u32));
-            w.u32(Some(content as u32));
-            match &group {
-                Some(v) => {
-                    w.u8(Some(*v));
-                }
-                None => {
-                    w.nil();
-                }
-            }
-            match &bg {
-                Some(v) => {
-                    w.u32(Some(*v as u32));
-                }
-                None => {
-                    w.nil();
-                }
-            }
-        })),
-    );
-    xpute_link::answer(r).map(|_| ())
-}
-
-pub fn chat(text: &str) -> Result<(), Errno> {
-    let (r, data) = link::call(
-        HANDLE,
-        CHAT,
-        Some((1, &|w: &mut PacketWriter| {
-            w.str(Some(&*text));
-        })),
-    );
-    xpute_link::answer(r).map(|_| ())
 }

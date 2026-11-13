@@ -3,7 +3,7 @@
 // The query's laws, checked over a leaf tile's four children folded into
 // their parent as the bake folds them, and over objects written into a store.
 
-use pxl_spec::asset::cube::{self, ground, sentinel};
+use pxl_spec::asset::cube::{self, Ground, Sentinel};
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
 use pxl_spec::bake::tile::terrain::{GroundCells, GroundId, TerrainTile, GROUND_COLUMN};
@@ -139,7 +139,7 @@ fn no_surface_placed_stands() {
         let leaf = top().children()[0];
         let void = drawn(
             vec![0; CELLS],
-            vec![sentinel::void; SPAN * SPAN].into(),
+            vec![Sentinel::void as u8; SPAN * SPAN].into(),
             Default::default(),
         );
         let (x0, y0, _) = leaf.rect();
@@ -202,13 +202,13 @@ fn deck_over_void_met() {
         separation.push(
             [([0.0, 10.5], 10, 0), ([40.0, 10.5], 10, 0)],
             4 * POINT_SCALE as u8,
-            ground::residential_road,
+            Ground::residential_road as u8,
             Form::Bridge,
             0,
         );
         let void = drawn(
             vec![0; CELLS],
-            vec![sentinel::void; SPAN * SPAN].into(),
+            vec![Sentinel::void as u8; SPAN * SPAN].into(),
             separation.finish(),
         );
         let (x0, y0, _) = leaf.rect();
@@ -235,7 +235,7 @@ fn ray_across_antimeridian() {
     crate::on_core(|| {
         let n = 1i32 << LEAF_ZOOM;
         let flat = || {
-            let cells = vec![ground::land; SPAN * SPAN];
+            let cells = vec![Ground::land as u8; SPAN * SPAN];
             drawn(vec![5; CELLS], cells.into(), Default::default())
         };
         let tile = |x: i32| Quadrant::new(LEAF_ZOOM, [x, 0]);
@@ -292,7 +292,7 @@ pub(crate) fn flat_at_five() -> [f64; 2] {
     let leaf = top().children()[0];
     let flat = drawn(
         vec![5; CELLS],
-        vec![ground::land; SPAN * SPAN].into(),
+        vec![Ground::land as u8; SPAN * SPAN].into(),
         Default::default(),
     );
     let (x0, y0, _) = leaf.rect();
@@ -691,7 +691,7 @@ fn late_brick_spike() {
         ele[200 * SPAN + 300] = 400;
         let spiked = drawn(
             ele,
-            vec![ground::land; SPAN * SPAN].into(),
+            vec![Ground::land as u8; SPAN * SPAN].into(),
             Default::default(),
         );
         let (x0, y0, _) = leaf.rect();
@@ -1043,7 +1043,7 @@ fn area_edge_leaf_cell_thick() {
         let area = EastOf(5);
         let flat = drawn(
             vec![5; CELLS],
-            vec![ground::land; SPAN * SPAN].into(),
+            vec![Ground::land as u8; SPAN * SPAN].into(),
             Default::default(),
         );
         let (x0, y0, _) = leaf.rect();

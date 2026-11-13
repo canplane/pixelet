@@ -6,7 +6,7 @@
 //! names: a list of them is its count, and an enum where the spec asks for
 //! one, and a table's keys are not listed; the TypeScript keeps them for what
 //! a person reads. A `file` is a reference to an asset: the tool numbers each
-//! and hands the generator plain numbers (`numbered`).
+//! and hands the generator plain numbers (`with_numbers`).
 
 use xpute_gen::spec::data::{table_outputs, DataSpec};
 
@@ -15,7 +15,7 @@ use super::ingest::files;
 use super::{read, Node, Output};
 use crate::root;
 
-const DATA_SPECS: [DataSpec; 20] = [
+const DATA_SPECS: [DataSpec; 21] = [
     DataSpec {
         json: "spec/client/core/sys/manifest.json",
         ts: Some("ts/client/src/abi/manifest.spec.ts"),
@@ -71,6 +71,12 @@ const DATA_SPECS: [DataSpec; 20] = [
         json: "spec/spec/asset/character.json",
         ts: Some("ts/client/src/ui/shared/asset/character.spec.ts"),
         rs: Some("rust/spec/src/asset/character.spec.rs"),
+        ..DataSpec::DEFAULT
+    },
+    DataSpec {
+        json: "spec/spec/asset/cube.json",
+        ts: Some("ts/client/src/abi/cube.spec.ts"),
+        rs: Some("rust/spec/src/asset/cube.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -145,7 +151,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     for d in &DATA_SPECS {
         let spec = read(d.json)?;
         let mut refs = 0;
-        let ts = numbered(&spec, None, &mut |path| {
+        let ts = with_numbers(&spec, None, &mut |path| {
             refs += 1;
             let k = files.iter().position(|f| f == path);
             k.map(|k| k as u16 + 1).ok_or(format!("{}: {path} is no file the ingest lists", d.json))
@@ -156,7 +162,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         }
         let (first, cnt) = run_of(d.json)?;
         let mut next = first;
-        let rs = numbered(&spec, None, &mut |_| {
+        let rs = with_numbers(&spec, None, &mut |_| {
             next += 1;
             Ok(next - 1)
         })?;
@@ -172,7 +178,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 /// `n` with each `file` leaf under it replaced by its number, which `number`
 /// gives in document order, as catalog.rs `leaves` walks them, and its
 /// `$type` by `u16`.
-fn numbered(
+fn with_numbers(
     n: &Node,
     ty: Option<&str>,
     number: &mut impl FnMut(&str) -> Result<u16, String>,
@@ -180,15 +186,15 @@ fn numbered(
     let ty = n.str_at("$type").or(ty);
     Ok(match n {
         Node::Str(s) if ty == Some(FILE) => Node::Num(f64::from(number(s)?)),
-        Node::Arr(a) => Node::Arr(a.iter().map(|e| numbered(e, ty, number)).collect::<Result<_, _>>()?),
+        Node::Arr(a) => Node::Arr(a.iter().map(|e| with_numbers(e, ty, number)).collect::<Result<_, _>>()?),
         Node::Obj(entries) => Node::Obj(
             entries
                 .iter()
                 .map(|(k, v)| match k.as_str() {
                     "$type" if v.str() == Some(FILE) => Ok((k.clone(), Node::Str("u16".into()))),
-                    "$val" => Ok((k.clone(), numbered(v, ty, number)?)),
+                    "$val" => Ok((k.clone(), with_numbers(v, ty, number)?)),
                     k if k.starts_with('$') => Ok((k.to_string(), v.clone())),
-                    _ => Ok((k.clone(), numbered(v, ty, number)?)),
+                    _ => Ok((k.clone(), with_numbers(v, ty, number)?)),
                 })
                 .collect::<Result<_, String>>()?,
         ),

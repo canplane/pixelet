@@ -17,9 +17,6 @@ use xpute_kit::wire::xtp::{
     ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
 };
 
-/// The interface's qualified name: its package and its name.
-pub const NAME: [&str; 2] = ["pxl:core", "types"];
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum Sensor {

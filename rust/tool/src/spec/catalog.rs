@@ -1,16 +1,18 @@
 // pxl-tool/spec/catalog.rs
 
 //! The catalog: every `file` leaf of the asset specs, a slot each, numbered in
-//! document order, spec by spec in `SPECS`' order. The Rust names each slot;
-//! the catalog fills them with the file each names, by its number after
-//! ASSET, and its extent (pxl-spec asset/catalog.rs reads the layout).
-//! The host serves it, as hex in TypeScript.
+//! document order, spec by spec in `SPECS`' order, and the catalog that fills
+//! them with the file each names, by its number after ASSET, and its extent
+//! (pxl-spec asset/catalog.rs reads the layout), as hex, which the host serves.
+
+use xpute_gen::spec::data::{table_outputs, DataSpec};
 
 use super::ingest::{file_number, files};
-use super::{file, mark, read, Node, Output};
+use super::{read, Node, Output};
+use crate::root;
 
 /// A data spec's `$type` for a file reference: in Rust its slot, in
-/// TypeScript its number after ASSET (data.rs `numbered`).
+/// TypeScript its number after ASSET (data.rs `with_numbers`).
 pub(crate) const FILE: &str = "file";
 
 pub(crate) const CUBE_JSON: &str = "spec/spec/asset/cube.json";
@@ -89,40 +91,40 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }
     bytes.extend(extents);
     let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
-    let ts = [
-        "// @pxl/client/service/sys/fs/catalog.spec.ts",
-        "//",
-        format!("// {}", mark("the asset specs and ingest.json", "pxl-tool spec/catalog.rs")).as_str(),
-        "//",
-        "// The catalog the host plugs in, served at (ASSET, `CATALOG`)",
-        "// (ts/client/src/service/sys/fs/asset.ts): the file each of the core's slots names and its",
-        "// extent, laid out as pxl-spec asset/catalog.rs reads it, in hex.",
-        "",
-    ]
-    .map(String::from)
-    .into_iter()
-    .chain([format!("export const CATALOG_HEX = \"{hex}\";")])
-    .collect::<Vec<_>>();
-    let rs = [
-        "// pxl-spec/asset/catalog.spec.rs",
-        "//",
-        format!("// {}", mark("the asset specs", "pxl-tool spec/catalog.rs")).as_str(),
-        "",
-        "use super::Slot;",
-        "",
-        "/// Every file reference the asset specs make, a slot each.",
-    ]
-    .map(String::from)
-    .into_iter()
-    .chain([
-        format!("pub const SLOTS: usize = {};", slots.len()),
-        String::new(),
-        "/// The cube kind's texture pack (cube.json `pack`).".to_string(),
-        format!("pub const pack: Slot = {};", run_of(CUBE_JSON)?.0),
-    ])
-    .collect::<Vec<_>>();
-    Ok(vec![
-        Output::new("ts/client/src/service/sys/fs/catalog.spec.ts", file(&ts)),
-        Output::new("rust/spec/src/asset/catalog.spec.rs", file(&rs)),
-    ])
+    let lines = |l: &[&str]| Node::Arr(l.iter().map(|l| Node::Str(l.to_string())).collect());
+    let entry = |doc: &[&str], ty: Option<&str>, val: Node| {
+        let mut e = vec![("$doc".to_string(), lines(doc))];
+        e.extend(ty.map(|t| ("$type".to_string(), Node::Str(t.into()))));
+        e.push(("$val".into(), val));
+        Node::Obj(e)
+    };
+    let table = Node::Obj(vec![
+        (
+            "SLOTS".into(),
+            entry(
+                &["Every file reference the asset specs make, a slot each."],
+                Some("usize"),
+                Node::Num(slots.len() as f64),
+            ),
+        ),
+        (
+            "CATALOG_HEX".into(),
+            entry(
+                &[
+                    "The catalog the host plugs in, served at (ASSET, `CATALOG`)",
+                    "(ts/client/src/service/sys/fs/asset.ts): the file each slot names and its extent,",
+                    "laid out as pxl-spec asset/catalog.rs reads it, in hex.",
+                ],
+                None,
+                Node::Str(hex),
+            ),
+        ),
+    ]);
+    let d = DataSpec {
+        json: "the asset specs and spec/spec/asset/ingest.json",
+        ts: Some("ts/client/src/service/sys/fs/catalog.spec.ts"),
+        rs: Some("rust/spec/src/asset/catalog.spec.rs"),
+        ..DataSpec::DEFAULT
+    };
+    table_outputs(&root(), &d, table)
 }

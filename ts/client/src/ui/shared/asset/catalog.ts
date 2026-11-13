@@ -2,16 +2,16 @@
 
 import type { u16 } from "@xpute/kit/abi/word.ts";
 import { CUBE_HEX } from "./color.spec.ts";
-import { CUBE_LABEL, CUBE_SECTION, type CubeSection } from "./cube.spec.ts";
+import * as cube from "@/abi/cube.spec.ts";
 import { decor, DECOR_LABEL } from "./decor.spec.ts";
-import { IDX_BITS, KIND } from "./id.spec.ts";
+import { IDX_BITS, Kind } from "./id.spec.ts";
 
 /** An asset's number: its kind shifted left by IDX_BITS, with its index in
  * the low bits. */
 export type AssetId = u16;
 
 /** The marker's kind has no other index. */
-export const MARKER: AssetId = KIND.marker << IDX_BITS;
+export const MARKER: AssetId = Kind.marker << IDX_BITS;
 
 export function kindOf(id: AssetId): number {
   return id >> IDX_BITS;
@@ -21,8 +21,24 @@ export function kindOf(id: AssetId): number {
  * in one value space. */
 export type Cube = u16;
 
+/** The placeable cubes, each its number, its section and its label: the
+ * placed colors first, then the palette entries in paint order. */
+const CUBE_RECS = [
+  ...cube.object.map((c) => ({ ...c, number: cube.Object[c.name] as Cube })),
+  ...cube.ground.map((c) => ({ ...c, number: cube.Ground[c.name] as Cube })),
+];
+
+export const CUBES: readonly Cube[] = CUBE_RECS.map((c) => c.number);
+
+/** The catalog's section a placeable cube is listed under, as Carto groups the
+ * palette entries. */
+export type CubeSection = (typeof CUBE_RECS)[number]["section"];
+
+const CUBE_SECTION = new Map(CUBE_RECS.map((c) => [c.number, c.section]));
+const CUBE_LABEL = new Map(CUBE_RECS.map((c) => [c.number, c.label]));
+
 export function cubeSection(cube: Cube): CubeSection {
-  return CUBE_SECTION[cube];
+  return CUBE_SECTION.get(cube) as CubeSection;
 }
 
 export function cubeHex(cube: Cube): string | null {
@@ -31,7 +47,7 @@ export function cubeHex(cube: Cube): string | null {
 
 /** Names are not translated: every locale shows the same one. */
 export function cubeLabel(cube: Cube): string {
-  return CUBE_LABEL[cube] ?? "";
+  return CUBE_LABEL.get(cube) ?? "";
 }
 
 /** Names are not translated: every locale shows the same one. */

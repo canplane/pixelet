@@ -54,7 +54,7 @@ def die(message):
 
 def tile_object(version, name):
     """A tile's object under its kind, publication.json's `OBJECT` filled in."""
-    return PUBLISHED["OBJECT"].replace("{version}", version).replace("{name}", name)
+    return PUBLISHED["OBJECT"]["$val"].replace("{version}", version).replace("{name}", name)
 
 
 def endpoint():

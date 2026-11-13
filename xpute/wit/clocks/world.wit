@@ -1,0 +1,8 @@
+package xpute:clocks@0.1.0;
+
+// The clocks a guest reads, which its host serves.
+
+world imports {
+  import monotonic-clock;
+  import system-clock;
+}

@@ -4,24 +4,23 @@
 
 import type { U32Array } from "@xpute/kit/abi/array.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
-import { XputeError } from "@xpute/kit/status/error.ts";
-import { Branch, type NodeCursor } from "@xpute/kit/wire/xtp/mod.ts";
+import {
+  SequenceType,
+  type NodeCursor,
+  type PacketWriter,
+} from "@xpute/kit/wire/xtp/mod.ts";
 import {
   type Link,
   type LinkObject,
   type Method,
   refusal_of,
-  type Sender,
   type Handle,
-  uri,
+  get_as,
 } from "@xpute/link/link.ts";
 import * as types from "@xpute/link/abi/types.ts";
 
 /** The interface's handle, named by `pxl:core/overlay` (frame.json `NAMED`). */
 export const HANDLE: Handle = 0x7b1393;
-
-/** The interface's qualified name: its package and its name. */
-export const NAME = uri("pxl:core", "overlay");
 
 /** `show` */
 export const SHOW: Method = 0;
@@ -40,9 +39,10 @@ export type GroundStatus = (typeof GroundStatus)[keyof typeof GroundStatus];
 export function ground_status_name(
   n: number,
 ): keyof typeof GroundStatus | undefined {
-  return (Object.keys(GroundStatus) as (keyof typeof GroundStatus)[]).find(
-    (k) => GroundStatus[k] === n,
-  );
+  for (const k in GroundStatus)
+    if (GroundStatus[k as keyof typeof GroundStatus] === n)
+      return k as keyof typeof GroundStatus;
+  return undefined;
 }
 
 /** The `GroundStatus` member `n` is, or null for a number no member has. */
@@ -64,9 +64,10 @@ export type SensorStatus = (typeof SensorStatus)[keyof typeof SensorStatus];
 export function sensor_status_name(
   n: number,
 ): keyof typeof SensorStatus | undefined {
-  return (Object.keys(SensorStatus) as (keyof typeof SensorStatus)[]).find(
-    (k) => SensorStatus[k] === n,
-  );
+  for (const k in SensorStatus)
+    if (SensorStatus[k as keyof typeof SensorStatus] === n)
+      return k as keyof typeof SensorStatus;
+  return undefined;
 }
 
 /** The `SensorStatus` member `n` is, or null for a number no member has. */
@@ -80,7 +81,9 @@ export const Message = {
   GeolocationPositionUnavailable: 2,
   GeolocationTimeout: 3,
   GeolocationGenericError: 4,
+  /** Reads reach the server and fail; they are tried again. */
   WorldReadFailing: 5,
+  /** Reads failed past every retry; the world is not coming. */
   WorldUnavailable: 6,
 } as const;
 export type Message = (typeof Message)[keyof typeof Message];
@@ -88,9 +91,10 @@ export type Message = (typeof Message)[keyof typeof Message];
 /** The name of the `Message` member numbered `n`, or undefined for a number
  * no member has. */
 export function message_name(n: number): keyof typeof Message | undefined {
-  return (Object.keys(Message) as (keyof typeof Message)[]).find(
-    (k) => Message[k] === n,
-  );
+  for (const k in Message)
+    if (Message[k as keyof typeof Message] === n)
+      return k as keyof typeof Message;
+  return undefined;
 }
 
 /** The `Message` member `n` is, or null for a number no member has. */
@@ -103,8 +107,11 @@ export interface LonLat {
   lat: number;
 }
 
-export function write_LonLat(r: LonLat): Branch {
-  return new Branch([r.lon, r.lat]);
+export function write_LonLat(w: PacketWriter, r: LonLat): void {
+  w.branch(2, (w) => {
+    w.f64(r.lon);
+    w.f64(r.lat);
+  });
 }
 
 export function read_LonLat(c: NodeCursor): LonLat {
@@ -122,13 +129,16 @@ export interface PivotState {
   outside: boolean;
 }
 
-export function write_PivotState(r: PivotState): Branch {
-  return new Branch([
-    r.status,
-    r.is_off_center,
-    r.lon_lat === null ? null : write_LonLat(r.lon_lat),
-    r.outside,
-  ]);
+export function write_PivotState(w: PacketWriter, r: PivotState): void {
+  w.branch(4, (w) => {
+    w.u32(r.status);
+    w.bool(r.is_off_center);
+    if (r.lon_lat === null) w.nil();
+    else {
+      write_LonLat(w, r.lon_lat);
+    }
+    w.bool(r.outside);
+  });
 }
 
 export function read_PivotState(c: NodeCursor): PivotState {
@@ -148,8 +158,16 @@ export interface LocationState {
   err: Message | null;
 }
 
-export function write_LocationState(r: LocationState): Branch {
-  return new Branch([r.status, r.has_location, r.watching, r.err]);
+export function write_LocationState(w: PacketWriter, r: LocationState): void {
+  w.branch(4, (w) => {
+    w.u32(r.status);
+    w.bool(r.has_location);
+    w.bool(r.watching);
+    if (r.err === null) w.nil();
+    else {
+      w.u32(r.err);
+    }
+  });
 }
 
 export function read_LocationState(c: NodeCursor): LocationState {
@@ -167,8 +185,11 @@ export interface CompanionState {
   pet_ready: boolean;
 }
 
-export function write_CompanionState(r: CompanionState): Branch {
-  return new Branch([r.person_ready, r.pet_ready]);
+export function write_CompanionState(w: PacketWriter, r: CompanionState): void {
+  w.branch(2, (w) => {
+    w.bool(r.person_ready);
+    w.bool(r.pet_ready);
+  });
 }
 
 export function read_CompanionState(c: NodeCursor): CompanionState {
@@ -183,8 +204,13 @@ export interface OrientationState {
   status: SensorStatus;
 }
 
-export function write_OrientationState(r: OrientationState): Branch {
-  return new Branch([r.status]);
+export function write_OrientationState(
+  w: PacketWriter,
+  r: OrientationState,
+): void {
+  w.branch(1, (w) => {
+    w.u32(r.status);
+  });
 }
 
 export function read_OrientationState(c: NodeCursor): OrientationState {
@@ -201,8 +227,13 @@ export interface DivisionPart {
   area: boolean;
 }
 
-export function write_DivisionPart(r: DivisionPart): Branch {
-  return new Branch([r.subtype, r.name, r.shown, r.area]);
+export function write_DivisionPart(w: PacketWriter, r: DivisionPart): void {
+  w.branch(4, (w) => {
+    w.u8(r.subtype);
+    w.str(r.name);
+    w.bool(r.shown);
+    w.bool(r.area);
+  });
 }
 
 export function read_DivisionPart(c: NodeCursor): DivisionPart {
@@ -219,8 +250,14 @@ export interface RefusedFile {
   path: types.Token[];
 }
 
-export function write_RefusedFile(r: RefusedFile): Branch {
-  return new Branch([new Branch(r.path.map((x) => types.write_Token(x)))]);
+export function write_RefusedFile(w: PacketWriter, r: RefusedFile): void {
+  w.branch(1, (w) => {
+    w.branch(r.path.length, (w) =>
+      r.path.forEach((x) => {
+        types.write_Token(w, x);
+      }),
+    );
+  });
 }
 
 export function read_RefusedFile(c: NodeCursor): RefusedFile {
@@ -253,25 +290,39 @@ export interface Snapshot {
   area_progress: number;
 }
 
-export function write_Snapshot(r: Snapshot): Branch {
-  return new Branch([
-    write_PivotState(r.pivot),
-    write_LocationState(r.location),
-    write_CompanionState(r.companion),
-    r.draft,
-    write_OrientationState(r.orient),
-    r.is_follow_mode,
-    r.camera_busy,
-    r.zooming,
-    r.over_marker,
-    r.settings,
-    new Branch(r.division.map((x) => write_DivisionPart(x))),
-    r.character_surfaces,
-    new Branch(r.refused_files.map((x) => write_RefusedFile(x))),
-    r.stall,
-    r.renderer_progress,
-    r.area_progress,
-  ]);
+export function write_Snapshot(w: PacketWriter, r: Snapshot): void {
+  w.branch(16, (w) => {
+    write_PivotState(w, r.pivot);
+    write_LocationState(w, r.location);
+    write_CompanionState(w, r.companion);
+    if (r.draft === null) w.nil();
+    else {
+      w.str(r.draft);
+    }
+    write_OrientationState(w, r.orient);
+    w.bool(r.is_follow_mode);
+    w.bool(r.camera_busy);
+    w.bool(r.zooming);
+    w.bool(r.over_marker);
+    w.array(SequenceType.U32_ARRAY, r.settings);
+    w.branch(r.division.length, (w) =>
+      r.division.forEach((x) => {
+        write_DivisionPart(w, x);
+      }),
+    );
+    w.array(SequenceType.U32_ARRAY, r.character_surfaces);
+    w.branch(r.refused_files.length, (w) =>
+      r.refused_files.forEach((x) => {
+        write_RefusedFile(w, x);
+      }),
+    );
+    if (r.stall === null) w.nil();
+    else {
+      w.u32(r.stall);
+    }
+    w.f64(r.renderer_progress);
+    w.f64(r.area_progress);
+  });
 }
 
 export function read_Snapshot(c: NodeCursor): Snapshot {
@@ -286,13 +337,13 @@ export function read_Snapshot(c: NodeCursor): Snapshot {
     camera_busy: b.at(6).get_bool(),
     zooming: b.at(7).get_bool(),
     over_marker: b.at(8).get_bool(),
-    settings: b.at(9).get() as U32Array,
+    settings: get_as<U32Array>(b.at(9), SequenceType.U32_ARRAY),
     division: b
       .at(10)
       .as_branch()
       .children()
       .map((c) => read_DivisionPart(c)),
-    character_surfaces: b.at(11).get() as U32Array,
+    character_surfaces: get_as<U32Array>(b.at(11), SequenceType.U32_ARRAY),
     refused_files: b
       .at(12)
       .as_branch()
@@ -338,18 +389,4 @@ function object(imp: Overlay): LinkObject {
 /** Serves `imp` under the interface's handle. */
 export function mount(l: Pick<Link, "mount_named">, imp: Overlay): void {
   l.mount_named(HANDLE, object(imp));
-}
-
-export async function show(link: Sender, snapshot: Snapshot): Promise<void> {
-  const a = await link.send(HANDLE, SHOW, [write_Snapshot(snapshot)]);
-  if (a.result < 0) throw new XputeError(a.result);
-}
-
-export async function view(
-  link: Sender,
-  azimuth: number,
-  m_per_px: number,
-): Promise<void> {
-  const a = await link.send(HANDLE, VIEW, [azimuth, m_per_px]);
-  if (a.result < 0) throw new XputeError(a.result);
 }

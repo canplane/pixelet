@@ -43,7 +43,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     out.extend(cmd::outputs()?);
     out.extend(setting::outputs()?);
     out.extend(asset::color_outputs()?);
-    out.extend(asset::cube_outputs()?);
     out.extend(asset::decor_outputs()?);
     out.extend(bake::publication_outputs()?);
     out.extend(bake::place_theme_outputs()?);
@@ -57,7 +56,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 /// What another generator writes, which `spec` leaves be: xpute's tree, by
 /// xpute-tool, and the files bin/asset.rs and bin/brand.rs write from what
 /// they read outside spec/.
-const OTHERS: [&str; 4] = ["xpute/", symbol::RS, symbol::TS, brand::SYMBOL_PATH];
+const OTHERS: [&str; 4] = ["xpute/", symbol::RS, symbol::TS, brand::TS];
 
 /// Writes every generated file that differs from what its source writes and deletes every one
 /// that nothing writes any more; where `write` is false, it fails wherever it finds either

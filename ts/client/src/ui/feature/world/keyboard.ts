@@ -11,7 +11,7 @@
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
 import { Tool } from "@/abi/edit.ts";
-import { KIND } from "@/ui/shared/asset/id.spec.ts";
+import { Kind } from "@/ui/shared/asset/id.spec.ts";
 import { kindOf } from "@/ui/shared/asset/catalog.ts";
 import { closeModal, modalOpen, openModal } from "@/ui/shared/modal.ts";
 import {
@@ -69,7 +69,7 @@ function sendMove(): void {
 function pickSlot(slot: number): void {
   const id = recentPick(slot);
   selectAsset(id);
-  if (kindOf(id) === KIND.cube) flashSwatch(id, false);
+  if (kindOf(id) === Kind.cube) flashSwatch(id, false);
 }
 
 /** Returns whether the UI answers the key, so that the caller can leave every

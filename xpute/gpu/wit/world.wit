@@ -1,0 +1,10 @@
+package xpute:gpu@0.1.0;
+
+// The GPU a guest draws with, and the frames it is paced by, which its host
+// serves; and the surfaces it draws on, which it serves its host.
+
+world guest {
+  import gpu;
+  import vsync;
+  export surface;
+}

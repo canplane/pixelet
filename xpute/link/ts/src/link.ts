@@ -39,7 +39,7 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError, MarshalError, XputeError } from "@xpute/kit/status/error.ts";
-import { type Arg, Branch, type BranchCursor, PacketWriter, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
+import { type BranchCursor, type NodeCursor, type NodeType, PacketWriter, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
 import { read_Token, type Token, write_Token } from "./abi/types.ts";
 import { lay, read, WORD_BYTES } from "./frame.ts";
 import { CANCEL, DROP, NAMED, OPEN, ROOT } from "./frame.spec.ts";
@@ -60,11 +60,15 @@ export interface LinkObject {
 /** What opens the object a URI names, given the handle it is issued. */
 export type Opener = (uri: readonly Token[], h: Handle) => LinkObject;
 
+/** A method's args, or its return data: how many fields, and what writes
+ * them. Null, or no fields, is no packet (xpute-link link.rs `Args`). */
+export type Args = readonly [u32, (w: PacketWriter) => void] | null;
+
 /** What a method answers: its result, a status or a value, and its return
  * data, written once its args are read. */
 export interface Reply {
   result: i32;
-  data: readonly Arg[];
+  data: Args;
 }
 
 /** What hears a sent method's answer: its result, and a copy of its return
@@ -80,12 +84,19 @@ export interface Answered {
 
 /** A frame's packet: the args, written as the frame is laid, or a packet
  * written already, as one that crossed a port. */
-export type Packet = readonly Arg[] | U8Array;
+export type Packet = Args | U8Array;
 
 /** What sends a method to the other side and is answered by promise: a UI's
  * `Remote`, or a link through `wait`. */
 export interface Sender {
-  send(h: Handle, m: Method, args: readonly Arg[]): Promise<Answered>;
+  send(h: Handle, m: Method, args: Args): Promise<Answered>;
+}
+
+/** The node `c` as `T`, a node of `type`; any other refuses the packet with
+ * EBADMSG, as the kit's checked getters do. */
+export function get_as<T>(c: NodeCursor, type: NodeType): T {
+  if (c.type !== type) throw new MarshalError(Errno.EBADMSG);
+  return c.get() as T;
 }
 
 /** A reference to an object on the other side: the link it is reached
@@ -102,14 +113,14 @@ export function uri(...names: string[]): Token[] {
 
 /** Opens the object `uri` names on the other side, and answers its handle. */
 export async function open(link: Sender, uri: readonly Token[]): Promise<Handle> {
-  const a = await link.send(ROOT, OPEN, [new Branch(uri.map(write_Token))]);
+  const a = await link.send(ROOT, OPEN, [1, (w) => w.branch(uri.length, (w) => uri.forEach((t) => write_Token(w, t)))]);
   if (a.result < 0) throw new XputeError(a.result);
   return a.result;
 }
 
 /** Lets the object `h` names on the other side go. */
 export function drop(link: Sender, h: Handle): void {
-  void link.send(h, DROP, []);
+  void link.send(h, DROP, null);
 }
 
 /** The errno a method refuses with: an XputeError's. Anything else is a bug,
@@ -172,7 +183,7 @@ export class Link {
     this._mounts.push([prefix, open]);
   }
 
-  call(h: Handle, m: Method, args: Packet = []): Answered {
+  call(h: Handle, m: Method, args: Packet = null): Answered {
     const answered = this._out(this._tag(), h, m, false, 0, args);
     if (answered.result === Errno.EINPROGRESS) throw new InvariantError(Errno.EINPROGRESS);
     return answered;
@@ -180,7 +191,7 @@ export class Link {
 
   /** Sends `m` of `h`, its answer pending from before the crossing, so a
    * later answer the callee gives inside it finds its request. */
-  send(h: Handle, m: Method, args: Packet = [], answer?: Answer): void {
+  send(h: Handle, m: Method, args: Packet = null, answer?: Answer): void {
     const t = this._tag();
     if (answer !== undefined) this._pending.set(t, answer);
     let out: Answered;
@@ -199,7 +210,7 @@ export class Link {
   /** Answers the request `t`, whose method answered EINPROGRESS, with
    * `result` and its return data, as the component model's `task.return`. A
    * later answer is found by its tag alone. */
-  task_return(t: Tag, result: i32, data: readonly Arg[] = []): void {
+  task_return(t: Tag, result: i32, data: Args = null): void {
     this._cancels.delete(t);
     this._out(t, ROOT, 0, true, result, data);
   }
@@ -242,10 +253,10 @@ export class Link {
     const args = this._args(at, f.pkt_len);
     const reply = typeof args === "number" ? args : this._serve(f.handle, f.method, f.tag, args);
     // The args are read: the answer goes in the frame they came in.
-    const { result, data } = typeof reply === "number" ? { result: reply, data: [] } : reply;
+    const { result, data } = typeof reply === "number" ? { result: reply, data: null } : reply;
     // An answer past the room is refused as a later one is (`_out`).
     if (this._lay(at, f.tag, f.handle, f.method, true, result, data) !== 0) {
-      this._lay(at, f.tag, f.handle, f.method, true, Errno.EMSGSIZE, []);
+      this._lay(at, f.tag, f.handle, f.method, true, Errno.EMSGSIZE, null);
       return Errno.EMSGSIZE;
     }
     return result;
@@ -340,9 +351,9 @@ export class Link {
       if (WORD_BYTES + args.length > this._room) return Errno.EMSGSIZE;
       bytes.set(args, WORD_BYTES);
       pkt_len = args.length;
-    } else if (args.length > 0) {
-      const w = new PacketWriter().begin(bytes, view, WORD_BYTES, this._room - WORD_BYTES, args.length);
-      for (const a of args) w.arg(a);
+    } else if (args !== null && args[0] > 0) {
+      const w = new PacketWriter().begin(bytes, view, WORD_BYTES, this._room - WORD_BYTES, args[0]);
+      args[1](w);
       pkt_len = w.finish();
       if (pkt_len < 0) return Errno.EMSGSIZE;
     }
@@ -362,7 +373,7 @@ export class Link {
         if (!(args instanceof Uint8Array)) throw new InvariantError(Errno.EMSGSIZE);
         return { result: Errno.EMSGSIZE, data: null };
       }
-      this._lay(this._inbox, tag, h, m, res, Errno.EMSGSIZE, []);
+      this._lay(this._inbox, tag, h, m, res, Errno.EMSGSIZE, null);
     }
     const answered = this._guest.in();
     const f = read(new DataView(this._guest.mem), this._inbox);

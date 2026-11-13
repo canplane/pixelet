@@ -7,7 +7,10 @@ import { SITE_URL, TILE_ROOT } from "./route.spec.ts";
 /** The URL of a bake's object, `<tile root>/<layer>/<version>/<name>`. The
  * object carries the version the source declares for it
  * (service/sys/fs/tile.ts). */
-export function tile_url(layer: BaseLayer, object: string): string {
+export function tile_url(
+  layer: keyof typeof BaseLayer,
+  object: string,
+): string {
   return `${TILE_ROOT}/${layer}/${object}`;
 }
 

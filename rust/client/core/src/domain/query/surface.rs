@@ -23,7 +23,7 @@ use super::change;
 use super::world::World;
 use crate::domain::layer::terrain::clipmap::clip_read;
 use crate::domain::layer::Answer;
-use pxl_spec::asset::cube::sentinel;
+use pxl_spec::asset::cube::Sentinel;
 
 /// The ground's top in a cell, in units, and the asset of its face.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -40,7 +40,7 @@ impl World {
         if shard.past() {
             return Answer::Exact(Some(Surface {
                 top: f64::from(SEA_LEVEL),
-                asset_id: sentinel::unknown,
+                asset_id: Sentinel::unknown as u8,
             }));
         }
         let side = units(cell_zoom);

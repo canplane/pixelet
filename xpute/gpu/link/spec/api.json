@@ -14,6 +14,20 @@
     "handles they took, so the host never hears of those objects. The encoder's begin and",
     "commit open and close the transaction on both the stream and the handle table."
   ],
+  "DEVICE_URI": {
+    "$doc": [
+      "The URI the guest opens its GPU device by (gpu/wit/gpu.wit `device`), which the GPU's",
+      "hosts mount."
+    ],
+    "$val": ["xpute:gpu", "device"]
+  },
+  "SURFACE_URI": {
+    "$doc": [
+      "The URI a guest that draws serves its surface under (gpu/wit/surface.wit `surface`),",
+      "which its host opens."
+    ],
+    "$val": ["xpute:gpu", "surface"]
+  },
   "NONE": {
     "$val": 4294967295,
     "$type": "u32",

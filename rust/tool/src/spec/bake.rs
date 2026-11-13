@@ -1,37 +1,28 @@
 // pxl-tool/spec/bake.rs
 
 use super::ingest::symbol_number;
-use super::{file, mark, json_str, line_comments, read, rs_doc, ts_doc, Output};
+use xpute_gen::spec::data::{table_outputs, DataSpec};
 
+use super::{file, json_str, line_comments, mark, read, rs_doc, ts_doc, Node, Output};
+use crate::root;
+
+/// publication.json, written by xpute's generator as a data spec, with
+/// `BASE_LAYERS`, the enum of `FORMAT`'s kinds in their order, beside it. The
+/// tool keeps what is pixelet's own: the object a tile is published as, read
+/// and written by `OBJECT`, and the Worker's copy of the kinds, bundled apart
+/// from the client.
 pub fn publication_outputs() -> Result<Vec<Output>, String> {
-    let spec = read("spec/spec/bake/publication.json")?;
+    const JSON: &str = "spec/spec/bake/publication.json";
+    let spec = read(JSON)?;
     let format = spec.get("FORMAT").ok_or("publication.json: no FORMAT")?;
-    let format_doc = format.lines_at("$doc").unwrap_or_default();
-    let mut formats: Vec<(&str, u32)> = Vec::new();
-    for (k, n) in format.entries().iter().filter(|(k, _)| !k.starts_with('$')) {
-        let n = n
-            .num()
-            .ok_or(format!("publication.json: FORMAT.{k} is no number"))?;
-        if n < 1.0 || n.fract() != 0.0 {
-            return Err(format!(
-                "publication.json: FORMAT.{k} {n} is not a format number"
-            ));
-        }
-        formats.push((k, n as u32));
-    }
-    let version_bytes = spec
-        .get("VERSION_BYTES")
-        .and_then(|n| n.num())
-        .filter(|n| *n >= 1.0 && n.fract() == 0.0)
-        .ok_or("publication.json: VERSION_BYTES is no count")? as u32;
-    let version_doc = spec.lines_at("$VERSION_BYTES").unwrap_or_default();
-    let version_chars = spec
-        .str_at("VERSION_CHARS")
-        .ok_or("publication.json: no VERSION_CHARS")?;
-    let chars_doc = spec.lines_at("$VERSION_CHARS").unwrap_or_default();
+    let layers: Vec<&str> = format.named().map(|(k, _)| k).collect();
 
     // A kind's object in a set: the one place its segments are ordered.
-    let object = spec.str_at("OBJECT").ok_or("publication.json: no OBJECT")?;
+    let object_node = spec.get("OBJECT").ok_or("publication.json: no OBJECT")?;
+    let object = object_node
+        .val()
+        .str()
+        .ok_or("publication.json: OBJECT is no template")?;
     let segments: Vec<&str> = object
         .split('/')
         .map(|s| {
@@ -46,106 +37,59 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
             "publication.json: OBJECT {object:?} is not {{version}}/{{name}}"
         ));
     }
-    let object_doc = spec.lines_at("$OBJECT").unwrap_or_default();
-    let sphere = spec.str_at("SPHERE").ok_or("publication.json: no SPHERE")?;
+    let object_doc = object_node.lines_at("$doc").unwrap_or_default();
+    let sphere_node = spec
+        .get("TILE_SPHERE")
+        .ok_or("publication.json: no TILE_SPHERE")?;
+    let sphere = sphere_node.val().str().unwrap_or_default();
     if sphere.is_empty()
         || !sphere.bytes().all(|b| b.is_ascii_lowercase())
         || sphere.bytes().all(|b| (b'0'..=b'3').contains(&b))
     {
         return Err(format!(
-            "publication.json: SPHERE {sphere:?} is no name a tile could have"
+            "publication.json: TILE_SPHERE {sphere:?} is no name a tile could have"
         ));
     }
-    let sphere_doc = spec.lines_at("$SPHERE").unwrap_or_default();
-    let head = [
-        "//".to_string(),
-        format!("// {}", mark("spec/spec/bake/publication.json", "pxl-tool spec/bake.rs")),
-        "".into(),
-    ];
-    let list = |f: &dyn Fn(&str) -> String| {
-        formats
-            .iter()
-            .map(|(k, _)| f(k))
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
+    let sphere_doc = sphere_node.lines_at("$doc").unwrap_or_default();
 
-    let mut ts = vec!["// @pxl/client/service/origin/publication.spec.ts".to_string()];
-    ts.extend(head.iter().cloned());
-    ts.push("/** The base layers, each a bake's kind. */".into());
-    ts.push(format!(
-        "export const BASE_LAYERS = [{}] as const;",
-        list(&|k| json_str(k))
+    let mut table: Vec<(String, Node)> = spec
+        .entries()
+        .iter()
+        .filter(|(k, _)| k != "OBJECT")
+        .cloned()
+        .collect();
+    table.push((
+        "BASE_LAYERS".into(),
+        Node::Obj(vec![
+            ("$type".into(), Node::Str("enum".into())),
+            ("$repr".into(), Node::Str("u32".into())),
+            (
+                "$doc".into(),
+                Node::Arr(vec![Node::Str(
+                    "The base layers a version is published for: the kinds of `FORMAT`, numbered in their order.".into(),
+                )]),
+            ),
+            (
+                "$val".into(),
+                Node::Arr(layers.iter().map(|k| Node::Str(k.to_string())).collect()),
+            ),
+        ]),
     ));
-    ts.extend([
-        "".to_string(),
-        "export type BaseLayer = typeof BASE_LAYERS[number];".into(),
-        "".into(),
-        format!("/** {} */", version_doc.join(" ")),
-        format!("export const VERSION_BYTES = {version_bytes};"),
-        "".into(),
-        format!("/** {} */", chars_doc.join(" ")),
-        format!("export const VERSION_CHARS = \"{version_chars}\";"),
-        "".into(),
-    ]);
-    ts.extend(ts_doc(&object_doc, ""));
+    let d = DataSpec {
+        json: JSON,
+        ts: Some("ts/client/src/service/origin/publication.spec.ts"),
+        rs: Some("rust/spec/src/bake/publication.spec.rs"),
+        ..DataSpec::DEFAULT
+    };
+    let mut outs = table_outputs(&root(), &d, Node::Obj(table))?;
+
+    let mut ts = ts_doc(&object_doc, "");
     ts.extend([
         "export function tileObject(version: string, name: string): string {".to_string(),
         format!("  return `{}`;", object.replace('{', "${")),
         "}".into(),
-        "".into(),
     ]);
-    ts.extend(ts_doc(&sphere_doc, ""));
-    ts.push(format!("export const TILE_SPHERE = {};", json_str(sphere)));
-
-    // The Worker's own: it is bundled for the Workers runtime, apart from the
-    // client, so it reads a copy beside it written from the same JSON.
-    let mut edge = vec!["// @pxl/edge/publication.spec.ts".to_string()];
-    edge.extend(head.iter().cloned());
-    edge.push("/** The base layers, each a kind a baked page is published under. */".into());
-    edge.push(format!(
-        "export const BASE_LAYERS = [{}] as const;",
-        list(&|k| json_str(k))
-    ));
-    // A version is any one segment the declaration names. A name is digits from 0 to 3, one
-    // digit for each zoom (pxl-spec space/hierarchy/morton.rs).
-    let pattern = object
-        .replace("{version}", "[^/]+")
-        .replace("{name}", "[0-3]+")
-        .replace('/', "\\/");
-    edge.push("".into());
-    edge.extend(ts_doc(
-        &[format!(
-            "A tile's object under its kind, `{object}`, as a pattern."
-        )],
-        "",
-    ));
-    edge.push(format!("export const TILE_OBJECT = String.raw`{pattern}`;"));
-    edge.push("".into());
-    edge.extend(ts_doc(&sphere_doc, ""));
-    edge.push(format!("export const TILE_SPHERE = {};", json_str(sphere)));
-
-    let mut rs = vec!["// pxl-spec/bake/publication.spec.rs".to_string()];
-    rs.extend(head);
-    rs.extend(rs_doc(&format_doc, "", "///"));
-    rs.push("pub struct Format {".into());
-    rs.extend(formats.iter().map(|(k, _)| format!("    pub {k}: u32,")));
-    rs.extend([
-        "}".to_string(),
-        String::new(),
-        "pub const FORMAT: Format = Format {".into(),
-    ]);
-    rs.extend(formats.iter().map(|(k, n)| format!("    {k}: {n},")));
-    rs.extend(["};", ""].map(String::from));
-    rs.extend(rs_doc(&version_doc, "", "///"));
-    rs.push(format!("pub const VERSION_BYTES: usize = {version_bytes};"));
-    rs.push(String::new());
-    rs.extend(rs_doc(&chars_doc, "", "///"));
-    rs.push(format!(
-        "pub const VERSION_CHARS: &str = \"{version_chars}\";"
-    ));
-    rs.push(String::new());
-    rs.extend(rs_doc(&object_doc, "", "///"));
+    let mut rs = rs_doc(&object_doc, "", "///");
     rs.extend([
         "/// Written into `w`, so a key is made where it is wanted, not allocated.".to_string(),
         "pub fn tile_object(w: &mut impl core::fmt::Write, version: &str, name: impl core::fmt::Display) -> core::fmt::Result {".to_string(),
@@ -163,75 +107,61 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
         "    segment.next().is_none().then_some((version, name))".into(),
         "}".into(),
         String::new(),
-    ]);
-    rs.extend(rs_doc(&sphere_doc, "", "///"));
-    rs.push(format!(
-        "pub const TILE_SPHERE: &str = {};",
-        json_str(sphere)
-    ));
-    rs.push(String::new());
-    rs.extend(
-        [
-            "/// The base layers a version is published for: the kinds of `FORMAT`,",
-            "/// numbered in their order.",
-            "#[expect(non_camel_case_types, reason = \"generated from the spec\")]",
-            "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
-            "#[repr(u32)]",
-            "pub enum BaseLayer {",
-        ]
-        .map(String::from),
-    );
-    rs.extend(formats.iter().map(|(k, _)| format!("    {k},")));
-    rs.extend([
-        "}".to_string(),
-        String::new(),
         "impl BaseLayer {".into(),
-        format!(
-            "    pub const ALL: [BaseLayer; {}] = [{}];",
-            formats.len(),
-            list(&|k| format!("BaseLayer::{k}"))
-        ),
-        String::new(),
-        "    /// The layer a number names, or none for a number nobody gave out.".into(),
-        "    pub fn of(number: u32) -> Option<BaseLayer> {".into(),
-        "        BaseLayer::ALL.into_iter().find(|k| *k as u32 == number)".into(),
-        "    }".into(),
-        String::new(),
-        "    pub fn name(self) -> &'static str {".into(),
+        "    /// The format the layer is baked and read in, `FORMAT[layer]`.".into(),
+        "    pub const fn format(self) -> u32 {".into(),
         "        match self {".into(),
     ]);
     rs.extend(
-        formats
+        layers
             .iter()
-            .map(|(k, _)| format!("            BaseLayer::{k} => {},", json_str(k))),
-    );
-    rs.extend(
-        [
-            "        }",
-            "    }",
-            "}",
-            "",
-            "impl Format {",
-            "    /// `FORMAT[layer]`.",
-            "    pub fn of(&self, layer: BaseLayer) -> u32 {",
-            "        match layer {",
-        ]
-        .map(String::from),
-    );
-    rs.extend(
-        formats
-            .iter()
-            .map(|(k, _)| format!("            BaseLayer::{k} => self.{k},")),
+            .map(|k| format!("            BaseLayer::{k} => FORMAT::{k},")),
     );
     rs.extend(["        }", "    }", "}"].map(String::from));
-    Ok(vec![
-        Output::new(
-            "ts/client/src/service/origin/publication.spec.ts",
-            file(&ts),
+    for o in &mut outs {
+        let tail = if o.path.ends_with(".rs") { &rs } else { &ts };
+        o.text = format!("{}\n{}", o.text, file(tail));
+    }
+
+    // The Worker's own: it is bundled for the Workers runtime, apart from the
+    // client, so it reads a copy beside it written from the same JSON.
+    let mut edge = vec![
+        "// @pxl/edge/publication.spec.ts".to_string(),
+        "//".into(),
+        format!("// {}", mark(JSON, "pxl-tool spec/bake.rs")),
+        "".into(),
+        "/** The base layers, each a kind a baked page is published under. */".into(),
+        format!(
+            "export const BASE_LAYERS = [{}] as const;",
+            layers
+                .iter()
+                .map(|k| json_str(k))
+                .collect::<Vec<_>>()
+                .join(", ")
         ),
-        Output::new("ts/server/edge/publication.spec.ts", file(&edge)),
-        Output::new("rust/spec/src/bake/publication.spec.rs", file(&rs)),
-    ])
+    ];
+    // A version is any one segment the declaration names. A name is digits from 0 to 3, one
+    // digit for each zoom (pxl-spec space/hierarchy/morton.rs).
+    let pattern = object
+        .replace("{version}", "[^/]+")
+        .replace("{name}", "[0-3]+")
+        .replace('/', "\\/");
+    edge.push("".into());
+    edge.extend(ts_doc(
+        &[format!(
+            "A tile's object under its kind, `{object}`, as a pattern."
+        )],
+        "",
+    ));
+    edge.push(format!("export const TILE_OBJECT = String.raw`{pattern}`;"));
+    edge.push("".into());
+    edge.extend(ts_doc(&sphere_doc, ""));
+    edge.push(format!("export const TILE_SPHERE = {};", json_str(sphere)));
+    outs.push(Output::new(
+        "ts/server/edge/publication.spec.ts",
+        file(&edge),
+    ));
+    Ok(outs)
 }
 
 // The Rust reads a place's look by its category number: for each category, in lists the

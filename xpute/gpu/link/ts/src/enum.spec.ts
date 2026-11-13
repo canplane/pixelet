@@ -211,9 +211,10 @@ export type TextureFormat = (typeof TextureFormat)[keyof typeof TextureFormat];
 export function texture_format_name(
   n: number,
 ): keyof typeof TextureFormat | undefined {
-  return (Object.keys(TextureFormat) as (keyof typeof TextureFormat)[]).find(
-    (k) => TextureFormat[k] === n,
-  );
+  for (const k in TextureFormat)
+    if (TextureFormat[k as keyof typeof TextureFormat] === n)
+      return k as keyof typeof TextureFormat;
+  return undefined;
 }
 
 /** The `TextureFormat` member `n` is, or null for a number no member has. */
@@ -316,9 +317,10 @@ export type VertexFormat = (typeof VertexFormat)[keyof typeof VertexFormat];
 export function vertex_format_name(
   n: number,
 ): keyof typeof VertexFormat | undefined {
-  return (Object.keys(VertexFormat) as (keyof typeof VertexFormat)[]).find(
-    (k) => VertexFormat[k] === n,
-  );
+  for (const k in VertexFormat)
+    if (VertexFormat[k as keyof typeof VertexFormat] === n)
+      return k as keyof typeof VertexFormat;
+  return undefined;
 }
 
 /** The `VertexFormat` member `n` is, or null for a number no member has. */
@@ -349,9 +351,10 @@ export type PrimitiveTopology =
 export function primitive_topology_name(
   n: number,
 ): keyof typeof PrimitiveTopology | undefined {
-  return (
-    Object.keys(PrimitiveTopology) as (keyof typeof PrimitiveTopology)[]
-  ).find((k) => PrimitiveTopology[k] === n);
+  for (const k in PrimitiveTopology)
+    if (PrimitiveTopology[k as keyof typeof PrimitiveTopology] === n)
+      return k as keyof typeof PrimitiveTopology;
+  return undefined;
 }
 
 /** The `PrimitiveTopology` member `n` is, or null for a number no member has. */
@@ -374,9 +377,10 @@ export type IndexFormat = (typeof IndexFormat)[keyof typeof IndexFormat];
 export function index_format_name(
   n: number,
 ): keyof typeof IndexFormat | undefined {
-  return (Object.keys(IndexFormat) as (keyof typeof IndexFormat)[]).find(
-    (k) => IndexFormat[k] === n,
-  );
+  for (const k in IndexFormat)
+    if (IndexFormat[k as keyof typeof IndexFormat] === n)
+      return k as keyof typeof IndexFormat;
+  return undefined;
 }
 
 /** The `IndexFormat` member `n` is, or null for a number no member has. */
@@ -395,9 +399,10 @@ export type FrontFace = (typeof FrontFace)[keyof typeof FrontFace];
 /** The name of the `FrontFace` member numbered `n`, or undefined for a number
  * no member has. */
 export function front_face_name(n: number): keyof typeof FrontFace | undefined {
-  return (Object.keys(FrontFace) as (keyof typeof FrontFace)[]).find(
-    (k) => FrontFace[k] === n,
-  );
+  for (const k in FrontFace)
+    if (FrontFace[k as keyof typeof FrontFace] === n)
+      return k as keyof typeof FrontFace;
+  return undefined;
 }
 
 /** The `FrontFace` member `n` is, or null for a number no member has. */
@@ -417,9 +422,10 @@ export type CullMode = (typeof CullMode)[keyof typeof CullMode];
 /** The name of the `CullMode` member numbered `n`, or undefined for a number
  * no member has. */
 export function cull_mode_name(n: number): keyof typeof CullMode | undefined {
-  return (Object.keys(CullMode) as (keyof typeof CullMode)[]).find(
-    (k) => CullMode[k] === n,
-  );
+  for (const k in CullMode)
+    if (CullMode[k as keyof typeof CullMode] === n)
+      return k as keyof typeof CullMode;
+  return undefined;
 }
 
 /** The `CullMode` member `n` is, or null for a number no member has. */
@@ -456,9 +462,10 @@ export type CompareFunction =
 export function compare_function_name(
   n: number,
 ): keyof typeof CompareFunction | undefined {
-  return (
-    Object.keys(CompareFunction) as (keyof typeof CompareFunction)[]
-  ).find((k) => CompareFunction[k] === n);
+  for (const k in CompareFunction)
+    if (CompareFunction[k as keyof typeof CompareFunction] === n)
+      return k as keyof typeof CompareFunction;
+  return undefined;
 }
 
 /** The `CompareFunction` member `n` is, or null for a number no member has. */
@@ -495,9 +502,10 @@ export type StencilOperation =
 export function stencil_operation_name(
   n: number,
 ): keyof typeof StencilOperation | undefined {
-  return (
-    Object.keys(StencilOperation) as (keyof typeof StencilOperation)[]
-  ).find((k) => StencilOperation[k] === n);
+  for (const k in StencilOperation)
+    if (StencilOperation[k as keyof typeof StencilOperation] === n)
+      return k as keyof typeof StencilOperation;
+  return undefined;
 }
 
 /** The `StencilOperation` member `n` is, or null for a number no member has. */
@@ -530,9 +538,10 @@ export type BlendOperation =
 export function blend_operation_name(
   n: number,
 ): keyof typeof BlendOperation | undefined {
-  return (Object.keys(BlendOperation) as (keyof typeof BlendOperation)[]).find(
-    (k) => BlendOperation[k] === n,
-  );
+  for (const k in BlendOperation)
+    if (BlendOperation[k as keyof typeof BlendOperation] === n)
+      return k as keyof typeof BlendOperation;
+  return undefined;
 }
 
 /** The `BlendOperation` member `n` is, or null for a number no member has. */
@@ -586,9 +595,10 @@ export type BlendFactor = (typeof BlendFactor)[keyof typeof BlendFactor];
 export function blend_factor_name(
   n: number,
 ): keyof typeof BlendFactor | undefined {
-  return (Object.keys(BlendFactor) as (keyof typeof BlendFactor)[]).find(
-    (k) => BlendFactor[k] === n,
-  );
+  for (const k in BlendFactor)
+    if (BlendFactor[k as keyof typeof BlendFactor] === n)
+      return k as keyof typeof BlendFactor;
+  return undefined;
 }
 
 /** The `BlendFactor` member `n` is, or null for a number no member has. */
@@ -610,9 +620,10 @@ export type VertexStepMode =
 export function vertex_step_mode_name(
   n: number,
 ): keyof typeof VertexStepMode | undefined {
-  return (Object.keys(VertexStepMode) as (keyof typeof VertexStepMode)[]).find(
-    (k) => VertexStepMode[k] === n,
-  );
+  for (const k in VertexStepMode)
+    if (VertexStepMode[k as keyof typeof VertexStepMode] === n)
+      return k as keyof typeof VertexStepMode;
+  return undefined;
 }
 
 /** The `VertexStepMode` member `n` is, or null for a number no member has. */
@@ -638,9 +649,10 @@ export type AddressMode = (typeof AddressMode)[keyof typeof AddressMode];
 export function address_mode_name(
   n: number,
 ): keyof typeof AddressMode | undefined {
-  return (Object.keys(AddressMode) as (keyof typeof AddressMode)[]).find(
-    (k) => AddressMode[k] === n,
-  );
+  for (const k in AddressMode)
+    if (AddressMode[k as keyof typeof AddressMode] === n)
+      return k as keyof typeof AddressMode;
+  return undefined;
 }
 
 /** The `AddressMode` member `n` is, or null for a number no member has. */
@@ -661,9 +673,10 @@ export type FilterMode = (typeof FilterMode)[keyof typeof FilterMode];
 export function filter_mode_name(
   n: number,
 ): keyof typeof FilterMode | undefined {
-  return (Object.keys(FilterMode) as (keyof typeof FilterMode)[]).find(
-    (k) => FilterMode[k] === n,
-  );
+  for (const k in FilterMode)
+    if (FilterMode[k as keyof typeof FilterMode] === n)
+      return k as keyof typeof FilterMode;
+  return undefined;
 }
 
 /** The `FilterMode` member `n` is, or null for a number no member has. */
@@ -685,9 +698,10 @@ export type MipmapFilterMode =
 export function mipmap_filter_mode_name(
   n: number,
 ): keyof typeof MipmapFilterMode | undefined {
-  return (
-    Object.keys(MipmapFilterMode) as (keyof typeof MipmapFilterMode)[]
-  ).find((k) => MipmapFilterMode[k] === n);
+  for (const k in MipmapFilterMode)
+    if (MipmapFilterMode[k as keyof typeof MipmapFilterMode] === n)
+      return k as keyof typeof MipmapFilterMode;
+  return undefined;
 }
 
 /** The `MipmapFilterMode` member `n` is, or null for a number no member has. */
@@ -712,9 +726,10 @@ export type TextureDimension =
 export function texture_dimension_name(
   n: number,
 ): keyof typeof TextureDimension | undefined {
-  return (
-    Object.keys(TextureDimension) as (keyof typeof TextureDimension)[]
-  ).find((k) => TextureDimension[k] === n);
+  for (const k in TextureDimension)
+    if (TextureDimension[k as keyof typeof TextureDimension] === n)
+      return k as keyof typeof TextureDimension;
+  return undefined;
 }
 
 /** The `TextureDimension` member `n` is, or null for a number no member has. */
@@ -749,9 +764,10 @@ export type TextureViewDimension =
 export function texture_view_dimension_name(
   n: number,
 ): keyof typeof TextureViewDimension | undefined {
-  return (
-    Object.keys(TextureViewDimension) as (keyof typeof TextureViewDimension)[]
-  ).find((k) => TextureViewDimension[k] === n);
+  for (const k in TextureViewDimension)
+    if (TextureViewDimension[k as keyof typeof TextureViewDimension] === n)
+      return k as keyof typeof TextureViewDimension;
+  return undefined;
 }
 
 /** The `TextureViewDimension` member `n` is, or null for a number no member has. */
@@ -777,9 +793,10 @@ export type TextureAspect = (typeof TextureAspect)[keyof typeof TextureAspect];
 export function texture_aspect_name(
   n: number,
 ): keyof typeof TextureAspect | undefined {
-  return (Object.keys(TextureAspect) as (keyof typeof TextureAspect)[]).find(
-    (k) => TextureAspect[k] === n,
-  );
+  for (const k in TextureAspect)
+    if (TextureAspect[k as keyof typeof TextureAspect] === n)
+      return k as keyof typeof TextureAspect;
+  return undefined;
 }
 
 /** The `TextureAspect` member `n` is, or null for a number no member has. */
@@ -806,9 +823,10 @@ export type BufferBindingType =
 export function buffer_binding_type_name(
   n: number,
 ): keyof typeof BufferBindingType | undefined {
-  return (
-    Object.keys(BufferBindingType) as (keyof typeof BufferBindingType)[]
-  ).find((k) => BufferBindingType[k] === n);
+  for (const k in BufferBindingType)
+    if (BufferBindingType[k as keyof typeof BufferBindingType] === n)
+      return k as keyof typeof BufferBindingType;
+  return undefined;
 }
 
 /** The `BufferBindingType` member `n` is, or null for a number no member has. */
@@ -837,9 +855,10 @@ export type SamplerBindingType =
 export function sampler_binding_type_name(
   n: number,
 ): keyof typeof SamplerBindingType | undefined {
-  return (
-    Object.keys(SamplerBindingType) as (keyof typeof SamplerBindingType)[]
-  ).find((k) => SamplerBindingType[k] === n);
+  for (const k in SamplerBindingType)
+    if (SamplerBindingType[k as keyof typeof SamplerBindingType] === n)
+      return k as keyof typeof SamplerBindingType;
+  return undefined;
 }
 
 /** The `SamplerBindingType` member `n` is, or null for a number no member has. */
@@ -872,9 +891,10 @@ export type TextureSampleType =
 export function texture_sample_type_name(
   n: number,
 ): keyof typeof TextureSampleType | undefined {
-  return (
-    Object.keys(TextureSampleType) as (keyof typeof TextureSampleType)[]
-  ).find((k) => TextureSampleType[k] === n);
+  for (const k in TextureSampleType)
+    if (TextureSampleType[k as keyof typeof TextureSampleType] === n)
+      return k as keyof typeof TextureSampleType;
+  return undefined;
 }
 
 /** The `TextureSampleType` member `n` is, or null for a number no member has. */
@@ -903,9 +923,10 @@ export type StorageTextureAccess =
 export function storage_texture_access_name(
   n: number,
 ): keyof typeof StorageTextureAccess | undefined {
-  return (
-    Object.keys(StorageTextureAccess) as (keyof typeof StorageTextureAccess)[]
-  ).find((k) => StorageTextureAccess[k] === n);
+  for (const k in StorageTextureAccess)
+    if (StorageTextureAccess[k as keyof typeof StorageTextureAccess] === n)
+      return k as keyof typeof StorageTextureAccess;
+  return undefined;
 }
 
 /** The `StorageTextureAccess` member `n` is, or null for a number no member has. */
@@ -928,9 +949,9 @@ export type LoadOp = (typeof LoadOp)[keyof typeof LoadOp];
 /** The name of the `LoadOp` member numbered `n`, or undefined for a number
  * no member has. */
 export function load_op_name(n: number): keyof typeof LoadOp | undefined {
-  return (Object.keys(LoadOp) as (keyof typeof LoadOp)[]).find(
-    (k) => LoadOp[k] === n,
-  );
+  for (const k in LoadOp)
+    if (LoadOp[k as keyof typeof LoadOp] === n) return k as keyof typeof LoadOp;
+  return undefined;
 }
 
 /** The `LoadOp` member `n` is, or null for a number no member has. */
@@ -949,9 +970,10 @@ export type StoreOp = (typeof StoreOp)[keyof typeof StoreOp];
 /** The name of the `StoreOp` member numbered `n`, or undefined for a number
  * no member has. */
 export function store_op_name(n: number): keyof typeof StoreOp | undefined {
-  return (Object.keys(StoreOp) as (keyof typeof StoreOp)[]).find(
-    (k) => StoreOp[k] === n,
-  );
+  for (const k in StoreOp)
+    if (StoreOp[k as keyof typeof StoreOp] === n)
+      return k as keyof typeof StoreOp;
+  return undefined;
 }
 
 /** The `StoreOp` member `n` is, or null for a number no member has. */
@@ -970,9 +992,10 @@ export type QueryType = (typeof QueryType)[keyof typeof QueryType];
 /** The name of the `QueryType` member numbered `n`, or undefined for a number
  * no member has. */
 export function query_type_name(n: number): keyof typeof QueryType | undefined {
-  return (Object.keys(QueryType) as (keyof typeof QueryType)[]).find(
-    (k) => QueryType[k] === n,
-  );
+  for (const k in QueryType)
+    if (QueryType[k as keyof typeof QueryType] === n)
+      return k as keyof typeof QueryType;
+  return undefined;
 }
 
 /** The `QueryType` member `n` is, or null for a number no member has. */
@@ -994,9 +1017,10 @@ export type CanvasAlphaMode =
 export function canvas_alpha_mode_name(
   n: number,
 ): keyof typeof CanvasAlphaMode | undefined {
-  return (
-    Object.keys(CanvasAlphaMode) as (keyof typeof CanvasAlphaMode)[]
-  ).find((k) => CanvasAlphaMode[k] === n);
+  for (const k in CanvasAlphaMode)
+    if (CanvasAlphaMode[k as keyof typeof CanvasAlphaMode] === n)
+      return k as keyof typeof CanvasAlphaMode;
+  return undefined;
 }
 
 /** The `CanvasAlphaMode` member `n` is, or null for a number no member has. */
@@ -1054,9 +1078,10 @@ export type FeatureName = (typeof FeatureName)[keyof typeof FeatureName];
 export function feature_name_name(
   n: number,
 ): keyof typeof FeatureName | undefined {
-  return (Object.keys(FeatureName) as (keyof typeof FeatureName)[]).find(
-    (k) => FeatureName[k] === n,
-  );
+  for (const k in FeatureName)
+    if (FeatureName[k as keyof typeof FeatureName] === n)
+      return k as keyof typeof FeatureName;
+  return undefined;
 }
 
 /** The `FeatureName` member `n` is, or null for a number no member has. */
@@ -1138,9 +1163,10 @@ export type LimitName = (typeof LimitName)[keyof typeof LimitName];
 /** The name of the `LimitName` member numbered `n`, or undefined for a number
  * no member has. */
 export function limit_name_name(n: number): keyof typeof LimitName | undefined {
-  return (Object.keys(LimitName) as (keyof typeof LimitName)[]).find(
-    (k) => LimitName[k] === n,
-  );
+  for (const k in LimitName)
+    if (LimitName[k as keyof typeof LimitName] === n)
+      return k as keyof typeof LimitName;
+  return undefined;
 }
 
 /** The `LimitName` member `n` is, or null for a number no member has. */

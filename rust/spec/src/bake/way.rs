@@ -8,7 +8,7 @@ use fnv::FnvHashMap;
 
 use super::separation::{Form, Separation};
 use super::tile::terrain::GroundId;
-use crate::asset::cube::{sentinel, Ground};
+use crate::asset::cube::{Ground, Sentinel};
 use crate::procedural::Frame;
 use crate::space::layer::lattice::TILE_CELLS;
 
@@ -23,8 +23,8 @@ pub fn lay(sep: &Separation, frame: Frame, asset_ids: &mut [GroundId]) {
     sep.crossing_grid(frame, [0, 0], [n, n], |x, y, _, o| {
         let col = (y * n + x) as usize;
         if o.form != u32::from(Form::Approach.byte())
-            || asset_ids[col] == sentinel::unknown
-            || !Ground::grounds(o.asset_id)
+            || asset_ids[col] == Sentinel::unknown as GroundId
+            || u8::try_from(o.asset_id).ok().and_then(Ground::of).is_none()
         {
             return;
         }

@@ -28,7 +28,7 @@ import {
   useSwatchFlash,
 } from "./store.ts";
 import { Tool } from "@/abi/edit.ts";
-import { KIND } from "@/ui/shared/asset/id.spec.ts";
+import { Kind } from "@/ui/shared/asset/id.spec.ts";
 import {
   type AssetId,
   type Cube,
@@ -209,9 +209,9 @@ function PickButton({
   gesture: Omit<SizeGesture, "press">;
 }) {
   switch (kindOf(id)) {
-    case KIND.decor:
+    case Kind.decor:
       return <DecorIconButton id={id} />;
-    case KIND.marker:
+    case Kind.marker:
       return <MarkerButton />;
     default:
       return <SwatchButton cube={id} gesture={gesture} />;

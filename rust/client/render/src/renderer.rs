@@ -346,14 +346,26 @@ impl GpuRead {
     /// pixels (span.json `per_px`). It is the time a lower drawn resolution
     /// can buy back.
     pub fn px_ms(&self) -> f64 {
-        GPU_SPAN_NAMES
+        PER_PX
             .iter()
             .zip(self.spans)
-            .filter(|(span, _)| span.per_px)
+            .filter(|(per_px, _)| **per_px)
             .map(|(_, ms)| ms)
             .sum()
     }
 }
+
+/// Whether each span runs threads over the drawn pixels (span.json `per_px`), read off the
+/// records at compile time, so their names stay out of the binary.
+const PER_PX: [bool; GPU_SPAN_NAMES.len()] = {
+    let mut out = [false; GPU_SPAN_NAMES.len()];
+    let mut k = 0;
+    while k < out.len() {
+        out[k] = GPU_SPAN_NAMES[k].per_px;
+        k += 1;
+    }
+    out
+};
 
 #[derive(Clone, Copy)]
 pub struct FrameStat {

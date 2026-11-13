@@ -9,10 +9,10 @@
 
 pub mod ext;
 
-use crate::asset::cube::object;
+use crate::asset::cube::Sentinel;
 use crate::asset::id::AssetId;
 
 /// Whether `val` is explicit air, which keeps its leaf and erases the layers under it.
 pub fn is_air(val: AssetId) -> bool {
-    val == object::air as u32
+    val == Sentinel::air as u32
 }

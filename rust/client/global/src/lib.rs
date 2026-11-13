@@ -30,3 +30,10 @@ impl<T> Global<T> {
         unsafe { *self.0.get() = Some(val) }
     }
 }
+
+/// A global that holds nothing yet, as `new` makes it.
+impl<T> Default for Global<T> {
+    fn default() -> Self {
+        Global::new()
+    }
+}
