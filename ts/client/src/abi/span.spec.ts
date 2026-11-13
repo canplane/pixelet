@@ -208,9 +208,10 @@ export type GpuSpanName = (typeof GpuSpanName)[keyof typeof GpuSpanName];
 export function gpu_span_name_name(
   n: number,
 ): keyof typeof GpuSpanName | undefined {
-  return (Object.keys(GpuSpanName) as (keyof typeof GpuSpanName)[]).find(
-    (k) => GpuSpanName[k] === n,
-  );
+  for (const k in GpuSpanName)
+    if (GpuSpanName[k as keyof typeof GpuSpanName] === n)
+      return k as keyof typeof GpuSpanName;
+  return undefined;
 }
 
 /** The `GpuSpanName` member `n` is, or null for a number no member has. */
@@ -240,9 +241,10 @@ export type LightChanged = (typeof LightChanged)[keyof typeof LightChanged];
 export function light_changed_name(
   n: number,
 ): keyof typeof LightChanged | undefined {
-  return (Object.keys(LightChanged) as (keyof typeof LightChanged)[]).find(
-    (k) => LightChanged[k] === n,
-  );
+  for (const k in LightChanged)
+    if (LightChanged[k as keyof typeof LightChanged] === n)
+      return k as keyof typeof LightChanged;
+  return undefined;
 }
 
 /** The `LightChanged` member `n` is, or null for a number no member has. */
@@ -278,9 +280,10 @@ export type FrameKind = (typeof FrameKind)[keyof typeof FrameKind];
 /** The name of the `FrameKind` member numbered `n`, or undefined for a number
  * no member has. */
 export function frame_kind_name(n: number): keyof typeof FrameKind | undefined {
-  return (Object.keys(FrameKind) as (keyof typeof FrameKind)[]).find(
-    (k) => FrameKind[k] === n,
-  );
+  for (const k in FrameKind)
+    if (FrameKind[k as keyof typeof FrameKind] === n)
+      return k as keyof typeof FrameKind;
+  return undefined;
 }
 
 /** The `FrameKind` member `n` is, or null for a number no member has. */

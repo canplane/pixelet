@@ -7,12 +7,10 @@
 //! the `dev` settings so the bundler drops them.
 //! A setting whose `stored` is false the core's store neither keeps nor reads.
 
-use xpute_gen::spec::data::ts_literal;
+use xpute_gen::spec::data::{table_outputs, ts_literal, DataSpec};
 
-use super::{
-    casing_note, enum_name, file, mark, js_num, line_comments, pascal, read, rs_doc,
-    rs_ident, Node, Output,
-};
+use super::{enum_name, file, js_num, pascal, read, rs_ident, Node, Output};
+use crate::root;
 
 const JSON: &str = "spec/client/core/domain/setting/schema.json";
 
@@ -149,56 +147,57 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         }
     }
 
-    let mut rs = vec![
-        "// pxl-core/domain/setting/schema.spec.rs".to_string(),
-        "//".into(),
-        format!("// {}", mark(JSON, "pxl-tool spec/setting.rs")),
-        "//".into(),
-    ];
-    rs.extend(line_comments(
-        &spec.lines_at("$doc").unwrap_or_default(),
-        "",
-    ));
-    rs.push(String::new());
-    rs.extend(casing_note());
-    rs.push("// A table is generated whole, whether or not this crate calls an entry.".into());
-    rs.push(
-        "#![allow(non_camel_case_types, dead_code, reason = \"generated from the spec\")]".into(),
-    );
+    // The choices' options and the settings, each an enum by its numbers,
+    // written by xpute's generator from a table built here.
+    let lines = |l: &[String]| Node::Arr(l.iter().map(|l| Node::Str(l.clone())).collect());
+    let mut table = vec![(
+        "$doc".to_string(),
+        lines(&spec.lines_at("$doc").unwrap_or_default()),
+    )];
+    let enum_entry = |doc: &[String], members: Vec<(String, Node)>| {
+        let mut e = vec![
+            ("$type".to_string(), Node::Str("enum".into())),
+            ("$repr".to_string(), Node::Str("u32".into())),
+            ("$doc".to_string(), lines(doc)),
+        ];
+        e.extend(members);
+        Node::Obj(e)
+    };
     for name in &choices {
         let List { vals, doc, .. } = list(name).ok_or(format!("{JSON}: no list {name}"))?;
-        let e = enum_name(name);
-        rs.push(String::new());
-        rs.extend(rs_doc(doc.as_deref().unwrap_or_default(), "", "///"));
-        rs.extend([
-            "#[derive(Clone, Copy, Debug, PartialEq, Eq)]".to_string(),
-            "#[repr(u32)]".into(),
-            format!("pub enum {e} {{"),
-        ]);
-        rs.extend(
-            vals.iter()
-                .map(|(v, n)| format!("    {} = {n},", rs_ident(v))),
-        );
-        rs.extend(["}".to_string(), String::new()]);
-        rs.extend([
-            format!("impl {e} {{"),
-            format!(
-                "    pub const ALL: [{e}; {}] = [{}];",
-                vals.len(),
-                vals.iter()
-                    .map(|(v, _)| format!("{e}::{}", rs_ident(v)))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            String::new(),
-            "    /// The option a number names, or none for a number the list does not give out."
-                .into(),
-            format!("    pub fn of(number: u32) -> Option<{e}> {{"),
-            format!("        {e}::ALL.into_iter().find(|o| *o as u32 == number)"),
-            "    }".into(),
-            "}".into(),
-        ]);
+        let members = vals
+            .iter()
+            .map(|(o, n)| (o.clone(), Node::Num(f64::from(*n))))
+            .collect();
+        table.push((
+            name.to_string(),
+            enum_entry(doc.as_deref().unwrap_or_default(), members),
+        ));
     }
+    let members = settings
+        .iter()
+        .map(|s| {
+            let mut m = vec![("$number".to_string(), Node::Num(f64::from(number_of(s))))];
+            m.extend(s.spec.get("$doc").map(|d| ("$doc".to_string(), d.clone())));
+            (s.key.to_string(), Node::Obj(m))
+        })
+        .collect();
+    table.push((
+        "SETTING_KEY".into(),
+        enum_entry(
+            &["Every setting, by its number in schema.json's SETTING.".into()],
+            members,
+        ),
+    ));
+    let d = DataSpec {
+        json: JSON,
+        ts: Some("ts/client/src/abi/schema.spec.ts"),
+        rs: Some("rust/client/core/src/domain/setting/schema.spec.rs"),
+        ..DataSpec::DEFAULT
+    };
+    let mut outs = table_outputs(&root(), &d, Node::Obj(table))?;
+
+    let mut rs: Vec<String> = Vec::new();
     rs.extend(
         [
             "",
@@ -212,25 +211,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ]
         .map(String::from),
     );
-    rs.extend(
-        [
-            "",
-            "/// Every setting, by its number in schema.json's SETTING.",
-            "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
-            "#[repr(u32)]",
-            "pub enum SettingKey {",
-        ]
-        .map(String::from),
-    );
-    for s in &settings {
-        rs.extend(rs_doc(
-            &s.spec.lines_at("$doc").unwrap_or_default(),
-            "    ",
-            "///",
-        ));
-        rs.push(format!("    {} = {},", s.key, number_of(s)));
-    }
-    rs.extend(["}".to_string(), String::new()]);
+    rs.push(String::new());
     let keys_where = |test: &dyn Fn(&Setting) -> bool| {
         let keys: Vec<String> = settings
             .iter()
@@ -245,16 +226,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     };
     rs.extend([
         "impl SettingKey {".to_string(),
-        format!(
-            "    pub const ALL: [SettingKey; {}] = [{}];",
-            settings.len(),
-            settings
-                .iter()
-                .map(|s| format!("SettingKey::{}", s.key))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-        String::new(),
         "    /// One past the highest number: the length of a list of every".into(),
         "    /// setting's value at its number, where a number not given out stays 0.".into(),
         format!(
@@ -265,12 +236,6 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 .max()
                 .unwrap_or(0)
         ),
-        String::new(),
-        "    /// The setting a number names, or none for a number the table does not give out."
-            .into(),
-        "    pub fn of(number: u32) -> Option<SettingKey> {".into(),
-        "        SettingKey::ALL.into_iter().find(|key| *key as u32 == number)".into(),
-        "    }".into(),
         String::new(),
         "    pub fn kind(self) -> SettingKind {".into(),
         "        match self {".into(),
@@ -511,16 +476,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         }
         Ok(Node::Obj(out))
     };
-    let mut ts = vec![
-        "// @pxl/client/abi/schema.spec.ts".to_string(),
-        "//".into(),
-        format!("// {}", mark(JSON, "pxl-tool spec/setting.rs")),
-        "//".into(),
-    ];
-    ts.extend(line_comments(
-        &spec.lines_at("$doc").unwrap_or_default(),
-        "",
-    ));
+    let mut ts: Vec<String> = Vec::new();
     ts.extend([
         String::new(),
         format!(
@@ -538,11 +494,9 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ),
     ]);
 
-    Ok(vec![
-        Output::new(
-            "rust/client/core/src/domain/setting/schema.spec.rs",
-            file(&rs),
-        ),
-        Output::new("ts/client/src/abi/schema.spec.ts", file(&ts)),
-    ])
+    for o in &mut outs {
+        let tail = if o.path.ends_with(".rs") { &rs } else { &ts };
+        o.text = format!("{}{}", o.text, file(tail));
+    }
+    Ok(outs)
 }

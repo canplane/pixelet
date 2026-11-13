@@ -1,6 +1,7 @@
 // @pxl/client/service/origin/route.spec.ts
 //
-// GENERATED from spec/spec/route.json (pxl-tool spec/route.rs)
+// GENERATED from spec/spec/route.json (xpute-gen data.rs)
+//
 // The address space, as four reserved roots and the branches under them,
 // and the two origins they are served from.
 //
@@ -59,6 +60,14 @@ export const API_PREFIX = "/api/";
 export const TILE_PREFIX = "/tile/";
 
 export const ASSET_PREFIX = "/asset/";
+
+/** Every root, as the edge claims them. */
+export const WORKER_FIRST = [
+  "/geo/*",
+  "/api/*",
+  "/tile/*",
+  "/asset/*",
+] as const;
 
 /** The site: the custom domain the Worker answers on (wrangler.jsonc `routes`),
  * the app's page and every root, the bucket's served at the edge and the

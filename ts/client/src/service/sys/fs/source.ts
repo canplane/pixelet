@@ -30,9 +30,12 @@ import {
  * its own version of a kind. */
 export interface Declaration {
   min_zoom: number;
-  format: Record<BaseLayer, number>;
-  version: Record<BaseLayer, string>;
-  shard: Record<string, { version?: Partial<Record<BaseLayer, string>> }>;
+  format: Record<keyof typeof BaseLayer, number>;
+  version: Record<keyof typeof BaseLayer, string>;
+  shard: Record<
+    string,
+    { version?: Partial<Record<keyof typeof BaseLayer, string>> }
+  >;
 }
 
 /** A version must be one segment of a URL, so that a tile's path stays under

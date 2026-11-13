@@ -12,7 +12,7 @@
 
 use std::rc::Rc;
 use xpute_guest::link;
-use xpute_guest::wait::wait;
+use xpute_guest::wait;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{
@@ -22,9 +22,6 @@ use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
 /// The interface's handle, named by `pxl:core/sensor` (frame.json `NAMED`).
 pub const HANDLE: Handle = 0x5534df;
-
-/// The interface's qualified name: its package and its name.
-pub const NAME: [&str; 2] = ["pxl:core", "sensor"];
 
 /// `pos`
 pub const POS: Method = 0;
@@ -159,24 +156,24 @@ pub trait Sensor {
 struct SensorObject(Rc<dyn Sensor>);
 
 impl Object for SensorObject {
-    fn call(&self, m: Method, tag: Tag, args: Option<BranchCursor<'_>>) -> Reply {
+    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
         let run = || -> Result<Reply, MarshalError> {
-            Ok(match m {
+            Ok(match m_ {
                 POS => {
-                    let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let lon = b.at(0).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let lat = b.at(1).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let alt = b.at(2).and_then(|c| {
+                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
+                    let lon = b_.at(0).and_then(|c| c.get_number().map(|v| v as f64))?;
+                    let lat = b_.at(1).and_then(|c| c.get_number().map(|v| v as f64))?;
+                    let alt = b_.at(2).and_then(|c| {
                         c.opt()
                             .map(|c| c.get_number().map(|v| v as f64))
                             .transpose()
                     })?;
-                    let accuracy = b.at(3).and_then(|c| {
+                    let accuracy = b_.at(3).and_then(|c| {
                         c.opt()
                             .map(|c| c.get_number().map(|v| v as f64))
                             .transpose()
                     })?;
-                    let course = b.at(4).and_then(|c| {
+                    let course = b_.at(4).and_then(|c| {
                         c.opt()
                             .map(|c| c.get_number().map(|v| v as f64))
                             .transpose()
@@ -187,23 +184,23 @@ impl Object for SensorObject {
                     }
                 }
                 ORIENT => {
-                    let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let webkit_compass_heading = b.at(0).and_then(|c| {
+                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
+                    let webkit_compass_heading = b_.at(0).and_then(|c| {
                         c.opt()
                             .map(|c| c.get_number().map(|v| v as f64))
                             .transpose()
                     })?;
-                    let alpha = b.at(1).and_then(|c| {
+                    let alpha = b_.at(1).and_then(|c| {
                         c.opt()
                             .map(|c| c.get_number().map(|v| v as f64))
                             .transpose()
                     })?;
-                    let beta = b.at(2).and_then(|c| {
+                    let beta = b_.at(2).and_then(|c| {
                         c.opt()
                             .map(|c| c.get_number().map(|v| v as f64))
                             .transpose()
                     })?;
-                    let gamma = b.at(3).and_then(|c| {
+                    let gamma = b_.at(3).and_then(|c| {
                         c.opt()
                             .map(|c| c.get_number().map(|v| v as f64))
                             .transpose()
@@ -214,14 +211,14 @@ impl Object for SensorObject {
                     }
                 }
                 ERR => {
-                    let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let sensor = b.at(0).and_then(|c| {
+                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
+                    let sensor = b_.at(0).and_then(|c| {
                         c.get_number().and_then(|v| {
                             super::types::Sensor::of(v as u32)
                                 .ok_or(MarshalError::new(Errno::EBADMSG))
                         })
                     })?;
-                    let code = b.at(1).and_then(|c| {
+                    let code = b_.at(1).and_then(|c| {
                         c.opt()
                             .map(|c| {
                                 c.get_number().and_then(|v| {
@@ -231,21 +228,21 @@ impl Object for SensorObject {
                             })
                             .transpose()
                     })?;
-                    let watching = b.at(2).and_then(|c| c.get_bool())?;
+                    let watching = b_.at(2).and_then(|c| c.get_bool())?;
                     match self.0.err(sensor, code, watching) {
                         Ok(v) => Reply::from(0),
                         Err(e) => Reply::from(e as i32),
                     }
                 }
                 PERMISSION => {
-                    let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let sensor = b.at(0).and_then(|c| {
+                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
+                    let sensor = b_.at(0).and_then(|c| {
                         c.get_number().and_then(|v| {
                             super::types::Sensor::of(v as u32)
                                 .ok_or(MarshalError::new(Errno::EBADMSG))
                         })
                     })?;
-                    let answer = b.at(1).and_then(|c| {
+                    let answer = b_.at(1).and_then(|c| {
                         c.get_number().and_then(|v| {
                             PermissionAnswer::of(v as u32).ok_or(MarshalError::new(Errno::EBADMSG))
                         })
@@ -256,11 +253,11 @@ impl Object for SensorObject {
                     }
                 }
                 PLATFORM => {
-                    let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let geolocation = b.at(0).and_then(|c| c.get_bool())?;
-                    let orient = b.at(1).and_then(|c| c.get_bool())?;
-                    let orient_permission = b.at(2).and_then(|c| c.get_bool())?;
-                    let orient_silence_is_loss = b.at(3).and_then(|c| c.get_bool())?;
+                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
+                    let geolocation = b_.at(0).and_then(|c| c.get_bool())?;
+                    let orient = b_.at(1).and_then(|c| c.get_bool())?;
+                    let orient_permission = b_.at(2).and_then(|c| c.get_bool())?;
+                    let orient_silence_is_loss = b_.at(3).and_then(|c| c.get_bool())?;
                     match self.0.platform(
                         geolocation,
                         orient,
@@ -285,153 +282,4 @@ impl Object for SensorObject {
 /// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn Sensor>) {
     link::mount_named(HANDLE, Rc::new(SensorObject(imp)));
-}
-
-pub fn pos(
-    lon: f64,
-    lat: f64,
-    alt: Option<f64>,
-    accuracy: Option<f64>,
-    course: Option<f64>,
-) -> Result<(), Errno> {
-    let (r, data) = link::call(
-        HANDLE,
-        POS,
-        Some((5, &|w: &mut PacketWriter| {
-            w.f64(Some(lon as f64));
-            w.f64(Some(lat as f64));
-            match &alt {
-                Some(v) => {
-                    w.f64(Some(*v as f64));
-                }
-                None => {
-                    w.nil();
-                }
-            }
-            match &accuracy {
-                Some(v) => {
-                    w.f64(Some(*v as f64));
-                }
-                None => {
-                    w.nil();
-                }
-            }
-            match &course {
-                Some(v) => {
-                    w.f64(Some(*v as f64));
-                }
-                None => {
-                    w.nil();
-                }
-            }
-        })),
-    );
-    xpute_link::answer(r).map(|_| ())
-}
-
-pub fn orient(
-    webkit_compass_heading: Option<f64>,
-    alpha: Option<f64>,
-    beta: Option<f64>,
-    gamma: Option<f64>,
-) -> Result<(), Errno> {
-    let (r, data) = link::call(
-        HANDLE,
-        ORIENT,
-        Some((4, &|w: &mut PacketWriter| {
-            match &webkit_compass_heading {
-                Some(v) => {
-                    w.f64(Some(*v as f64));
-                }
-                None => {
-                    w.nil();
-                }
-            }
-            match &alpha {
-                Some(v) => {
-                    w.f64(Some(*v as f64));
-                }
-                None => {
-                    w.nil();
-                }
-            }
-            match &beta {
-                Some(v) => {
-                    w.f64(Some(*v as f64));
-                }
-                None => {
-                    w.nil();
-                }
-            }
-            match &gamma {
-                Some(v) => {
-                    w.f64(Some(*v as f64));
-                }
-                None => {
-                    w.nil();
-                }
-            }
-        })),
-    );
-    xpute_link::answer(r).map(|_| ())
-}
-
-pub fn err(
-    sensor: super::types::Sensor,
-    code: Option<GeolocationErrorCode>,
-    watching: bool,
-) -> Result<(), Errno> {
-    let (r, data) = link::call(
-        HANDLE,
-        ERR,
-        Some((3, &|w: &mut PacketWriter| {
-            w.u32(Some(sensor as u32));
-            match &code {
-                Some(v) => {
-                    w.u32(Some(*v as u32));
-                }
-                None => {
-                    w.nil();
-                }
-            }
-            w.bool(Some(watching));
-        })),
-    );
-    xpute_link::answer(r).map(|_| ())
-}
-
-pub fn permission(sensor: super::types::Sensor, answer: PermissionAnswer) -> Result<(), Errno> {
-    let (r, data) = link::call(
-        HANDLE,
-        PERMISSION,
-        Some((2, &|w: &mut PacketWriter| {
-            w.u32(Some(sensor as u32));
-            w.u32(Some(answer as u32));
-        })),
-    );
-    xpute_link::answer(r).map(|_| ())
-}
-
-pub fn platform(
-    geolocation: bool,
-    orient: bool,
-    orient_permission: bool,
-    orient_silence_is_loss: bool,
-) -> Result<(), Errno> {
-    let (r, data) = link::call(
-        HANDLE,
-        PLATFORM,
-        Some((4, &|w: &mut PacketWriter| {
-            w.bool(Some(geolocation));
-            w.bool(Some(orient));
-            w.bool(Some(orient_permission));
-            w.bool(Some(orient_silence_is_loss));
-        })),
-    );
-    xpute_link::answer(r).map(|_| ())
-}
-
-pub fn locate() -> Result<(), Errno> {
-    let (r, data) = link::call(HANDLE, LOCATE, None);
-    xpute_link::answer(r).map(|_| ())
 }

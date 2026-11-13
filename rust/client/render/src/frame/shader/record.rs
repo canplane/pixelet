@@ -99,7 +99,8 @@ pub const COMPUTE_QUEUE_LAST_LIGHT: u32 = 54;
 pub const COMPUTES: u32 = 55;
 
 /// Compute pipeline `id`'s shader and the entry point it runs, as the
-/// source names it.
+/// source names it. Every caller names a pipeline by its constant, so a
+/// number no pipeline has is unreachable.
 pub const fn compute(id: u32) -> (u32, &'static str) {
     match id {
         COMPUTE_ATMOS_EXPOSURE => (SHADER_ATMOS_EXPOSURE, "exposure_cs"),
@@ -157,7 +158,7 @@ pub const fn compute(id: u32) -> (u32, &'static str) {
         COMPUTE_QUEUE_LIGHT => (SHADER_QUEUE_LIGHT, "queue_cs"),
         COMPUTE_QUEUE_LIGHT_PARKED => (SHADER_QUEUE_LIGHT, "queue_parked_cs"),
         COMPUTE_QUEUE_LAST_LIGHT => (SHADER_QUEUE_LAST_LIGHT, "queue_last_cs"),
-        _ => panic!("a compute pipeline number with no shader"),
+        _ => unreachable!(),
     }
 }
 
@@ -307,6 +308,7 @@ pub const fn within<const N: usize, const M: usize>(a: [u32; N], b: [u32; M]) ->
     true
 }
 
+use crate::frame::shader::access::same;
 use crate::frame::shader::floor;
 use pxl_engine::param::light;
 
@@ -1157,12 +1159,28 @@ pub const fn lays_out_writable(id: u32) -> bool {
 }
 
 /// Whether render pipeline `id`'s shader reads the light's shadow map, that is, whether its
-/// parts include shadow.wgsl (`PARTS`); a record's first word is its shader. Whatever such a
-/// pipeline draws is a receiver of the map, and stands on the map's tiles (gpu/draw.rs
+/// parts include shadow.wgsl (`READS_SHADOW`); a record's first word is its shader. Whatever
+/// such a pipeline draws is a receiver of the map, and stands on the map's tiles (gpu/draw.rs
 /// `DrawList`).
 pub fn reads_shadow_map(id: u32) -> bool {
-    PARTS[pipeline(id)[0] as usize].contains(&"shadow")
+    READS_SHADOW[pipeline(id)[0] as usize]
 }
+
+/// Whether each shader's parts include shadow.wgsl (`PARTS`), read off them at compile time,
+/// so the parts' names stay out of the binary.
+const READS_SHADOW: [bool; SHADERS as usize] = {
+    let mut out = [false; SHADERS as usize];
+    let mut s = 0;
+    while s < out.len() {
+        let mut p = 0;
+        while p < PARTS[s].len() {
+            out[s] |= same(PARTS[s][p], "shadow");
+            p += 1;
+        }
+        s += 1;
+    }
+    out
+};
 
 /// Whether pipeline `id`'s layout, with its groups as its record lays them out, binds within
 /// what every WebGPU device binds (`floor::holds`).

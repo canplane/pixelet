@@ -20,8 +20,8 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import { type Arg, MAX_PKT_SZ, PacketWriter, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
-import { type Answered, type Handle, type Link, type LinkObject, type Method, DROP, type Sender } from "./link.ts";
+import { MAX_PKT_SZ, PacketWriter, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
+import { type Answered, type Args, type Handle, type Link, type LinkObject, type Method, DROP, type Sender } from "./link.ts";
 
 /** The least of a port the link's ends take: what posts a message, with the
  * things it transfers, and what hears one. A MessagePort is one. */
@@ -68,7 +68,7 @@ export function serve(port: Port, link: Link, named: readonly Handle[], taker: T
     if ("give" in m) return taker.give(m.give, m.thing);
     if (m.m === DROP) taker.take(m.h);
     // A packet past the room is refused whole, EMSGSIZE.
-    link.send(m.h, m.m, m.pkt ?? [], (result, data) => tell({ tag: m.tag, result, data }));
+    link.send(m.h, m.m, m.pkt, (result, data) => tell({ tag: m.tag, result, data }));
   };
 }
 
@@ -97,7 +97,7 @@ export class Remote implements Sender {
     };
   }
 
-  send(h: Handle, m: Method, args: readonly Arg[]): Promise<Answered> {
+  send(h: Handle, m: Method, args: Args): Promise<Answered> {
     const tag = this._next++;
     return new Promise((resolve) => {
       this._answers.set(tag, resolve);
@@ -121,12 +121,12 @@ export class Remote implements Sender {
 
 /** The packet `args` write, or none for no args. A packet past the largest
  * XTP takes is EOVERFLOW. */
-function packet(args: readonly Arg[]): U8Array | null {
-  if (args.length === 0) return null;
+function packet(args: Args): U8Array | null {
+  if (args === null || args[0] === 0) return null;
   for (let cap = 1 << 10; ; cap = Math.min(cap * 2, MAX_PKT_SZ)) {
     const buf = new Uint8Array(cap);
-    const w = new PacketWriter().begin(buf, new DataView(buf.buffer), 0, cap, args.length);
-    for (const a of args) w.arg(a);
+    const w = new PacketWriter().begin(buf, new DataView(buf.buffer), 0, cap, args[0]);
+    args[1](w);
     try {
       return buf.subarray(0, w.finish_or_throw());
     } catch (e) {

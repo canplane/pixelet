@@ -7,7 +7,7 @@
 //! `water.mss`, `buildings.mss`, `roads.mss`, `project.mml`); a class Carto
 //! draws no fill for paints nothing, and the land under it shows.
 
-use pxl_spec::asset::cube::ground as g;
+use pxl_spec::asset::cube::Ground;
 use pxl_spec::bake::tile::terrain::GroundId;
 use pxl_spec::space::coord::adapter::epsg3857::G3857;
 
@@ -26,26 +26,26 @@ pub(crate) fn segment_type(subtype: &str, class: Option<&str>) -> GroundId {
     let c = class.unwrap_or("");
     if subtype == "rail" {
         return match c {
-            "tram" => g::tram,
-            "light_rail" | "narrow_gauge" | "funicular" => g::light_rail,
-            "subway" => g::subway,
-            "monorail" => g::monorail,
-            _ => g::rail,
+            "tram" => Ground::tram as GroundId,
+            "light_rail" | "narrow_gauge" | "funicular" => Ground::light_rail as GroundId,
+            "subway" => Ground::subway as GroundId,
+            "monorail" => Ground::monorail as GroundId,
+            _ => Ground::rail as GroundId,
         };
     }
     match c {
-        "motorway" => g::motorway,
-        "trunk" => g::trunk,
-        "primary" => g::primary,
-        "secondary" => g::secondary,
-        "tertiary" | "residential" | "unclassified" | "service" => g::residential_road,
-        "living_street" => g::living_street,
-        "pedestrian" => g::pedestrian,
-        "track" => g::track,
-        "cycleway" => g::cycleway,
-        "bridleway" => g::bridleway,
-        "footway" | "path" | "steps" => g::footway,
-        _ => g::road,
+        "motorway" => Ground::motorway as GroundId,
+        "trunk" => Ground::trunk as GroundId,
+        "primary" => Ground::primary as GroundId,
+        "secondary" => Ground::secondary as GroundId,
+        "tertiary" | "residential" | "unclassified" | "service" => Ground::residential_road as GroundId,
+        "living_street" => Ground::living_street as GroundId,
+        "pedestrian" => Ground::pedestrian as GroundId,
+        "track" => Ground::track as GroundId,
+        "cycleway" => Ground::cycleway as GroundId,
+        "bridleway" => Ground::bridleway as GroundId,
+        "footway" | "path" | "steps" => Ground::footway as GroundId,
+        _ => Ground::road as GroundId,
     }
 }
 
@@ -71,47 +71,47 @@ type Paint = (GroundId, Layer, &'static str);
 fn land_use_paint(class: &str) -> Option<Paint> {
     use Layer::{Landcover as L, RoadArea};
     Some(match class {
-        "residential" => (g::residential, L, "landuse_residential"),
-        "garages" => (g::garages, L, "landuse_garages"),
-        "retail" => (g::retail, L, "landuse_retail"),
-        "commercial" => (g::commercial, L, "landuse_commercial"),
-        "industrial" => (g::industrial, L, "landuse_industrial"),
-        "works" => (g::industrial, L, "man_made_works"),
-        "landfill" => (g::landfill, L, "landuse_landfill"),
-        "quarry" => (g::quarry, L, "landuse_quarry"),
-        "farmland" => (g::farmland, L, "landuse_farmland"),
-        "greenhouse_horticulture" => (g::farmland, L, "landuse_greenhouse_horticulture"),
-        "farmyard" => (g::farmyard, L, "landuse_farmyard"),
-        "orchard" => (g::orchard, L, "landuse_orchard"),
-        "vineyard" => (g::orchard, L, "landuse_vineyard"),
-        "plant_nursery" => (g::orchard, L, "landuse_plant_nursery"),
-        "allotments" => (g::allotments, L, "landuse_allotments"),
-        "cemetery" => (g::cemetery, L, "landuse_cemetery"),
-        "grave_yard" => (g::cemetery, L, "amenity_grave_yard"),
-        "meadow" => (g::grass, L, "landuse_meadow"),
-        "grass" => (g::grass, L, "landuse_grass"),
-        "village_green" => (g::grass, L, "landuse_village_green"),
-        "flowerbed" => (g::grass, L, "landuse_flowerbed"),
-        "garden" => (g::grass, L, "leisure_garden"),
-        "park" => (g::park, L, "leisure_park"),
-        "recreation_ground" => (g::leisure, L, "landuse_recreation_ground"),
-        "playground" => (g::leisure, L, "leisure_playground"),
-        "dog_park" => (g::leisure, L, "leisure_dog_park"),
-        "stadium" => (g::leisure, L, "leisure_stadium"),
-        "water_park" => (g::leisure, L, "leisure_water_park"),
-        "pitch" => (g::pitch, L, "leisure_pitch"),
-        "track" => (g::pitch, L, "leisure_track"),
-        "golf_course" => (g::campsite, L, "leisure_golf_course"),
-        "camp_site" => (g::campsite, L, "tourism_camp_site"),
-        "religious" => (g::place_of_worship, L, "landuse_religious"),
-        "school" => (g::societal_amenities, L, "amenity_school"),
-        "college" => (g::societal_amenities, L, "amenity_college"),
-        "university" => (g::societal_amenities, L, "amenity_university"),
-        "kindergarten" => (g::societal_amenities, L, "amenity_kindergarten"),
-        "hospital" => (g::societal_amenities, L, "amenity_hospital"),
-        "clinic" => (g::societal_amenities, L, "amenity_clinic"),
-        "salt_pond" => (g::water, L, "landuse_salt_pond"),
-        "pedestrian" | "plaza" => (g::pedestrian, RoadArea, "highway_pedestrian"),
+        "residential" => (Ground::residential as GroundId, L, "landuse_residential"),
+        "garages" => (Ground::garages as GroundId, L, "landuse_garages"),
+        "retail" => (Ground::retail as GroundId, L, "landuse_retail"),
+        "commercial" => (Ground::commercial as GroundId, L, "landuse_commercial"),
+        "industrial" => (Ground::industrial as GroundId, L, "landuse_industrial"),
+        "works" => (Ground::industrial as GroundId, L, "man_made_works"),
+        "landfill" => (Ground::landfill as GroundId, L, "landuse_landfill"),
+        "quarry" => (Ground::quarry as GroundId, L, "landuse_quarry"),
+        "farmland" => (Ground::farmland as GroundId, L, "landuse_farmland"),
+        "greenhouse_horticulture" => (Ground::farmland as GroundId, L, "landuse_greenhouse_horticulture"),
+        "farmyard" => (Ground::farmyard as GroundId, L, "landuse_farmyard"),
+        "orchard" => (Ground::orchard as GroundId, L, "landuse_orchard"),
+        "vineyard" => (Ground::orchard as GroundId, L, "landuse_vineyard"),
+        "plant_nursery" => (Ground::orchard as GroundId, L, "landuse_plant_nursery"),
+        "allotments" => (Ground::allotments as GroundId, L, "landuse_allotments"),
+        "cemetery" => (Ground::cemetery as GroundId, L, "landuse_cemetery"),
+        "grave_yard" => (Ground::cemetery as GroundId, L, "amenity_grave_yard"),
+        "meadow" => (Ground::grass as GroundId, L, "landuse_meadow"),
+        "grass" => (Ground::grass as GroundId, L, "landuse_grass"),
+        "village_green" => (Ground::grass as GroundId, L, "landuse_village_green"),
+        "flowerbed" => (Ground::grass as GroundId, L, "landuse_flowerbed"),
+        "garden" => (Ground::grass as GroundId, L, "leisure_garden"),
+        "park" => (Ground::park as GroundId, L, "leisure_park"),
+        "recreation_ground" => (Ground::leisure as GroundId, L, "landuse_recreation_ground"),
+        "playground" => (Ground::leisure as GroundId, L, "leisure_playground"),
+        "dog_park" => (Ground::leisure as GroundId, L, "leisure_dog_park"),
+        "stadium" => (Ground::leisure as GroundId, L, "leisure_stadium"),
+        "water_park" => (Ground::leisure as GroundId, L, "leisure_water_park"),
+        "pitch" => (Ground::pitch as GroundId, L, "leisure_pitch"),
+        "track" => (Ground::pitch as GroundId, L, "leisure_track"),
+        "golf_course" => (Ground::campsite as GroundId, L, "leisure_golf_course"),
+        "camp_site" => (Ground::campsite as GroundId, L, "tourism_camp_site"),
+        "religious" => (Ground::place_of_worship as GroundId, L, "landuse_religious"),
+        "school" => (Ground::societal_amenities as GroundId, L, "amenity_school"),
+        "college" => (Ground::societal_amenities as GroundId, L, "amenity_college"),
+        "university" => (Ground::societal_amenities as GroundId, L, "amenity_university"),
+        "kindergarten" => (Ground::societal_amenities as GroundId, L, "amenity_kindergarten"),
+        "hospital" => (Ground::societal_amenities as GroundId, L, "amenity_hospital"),
+        "clinic" => (Ground::societal_amenities as GroundId, L, "amenity_clinic"),
+        "salt_pond" => (Ground::water as GroundId, L, "landuse_salt_pond"),
+        "pedestrian" | "plaza" => (Ground::pedestrian as GroundId, RoadArea, "highway_pedestrian"),
         _ => return None,
     })
 }
@@ -120,12 +120,12 @@ fn land_use_paint(class: &str) -> Option<Paint> {
 fn golf_paint(class: &str) -> Option<Paint> {
     use Layer::Landcover as L;
     Some(match class {
-        "tee" => (g::grass, L, "golf_tee"),
-        "fairway" => (g::grass, L, "golf_fairway"),
-        "rough" => (g::grass, L, "golf_rough"),
-        "driving_range" => (g::grass, L, "golf_driving_range"),
-        "green" => (g::pitch, L, "golf_green"),
-        "bunker" => (g::sand, L, "golf_bunker"),
+        "tee" => (Ground::grass as GroundId, L, "golf_tee"),
+        "fairway" => (Ground::grass as GroundId, L, "golf_fairway"),
+        "rough" => (Ground::grass as GroundId, L, "golf_rough"),
+        "driving_range" => (Ground::grass as GroundId, L, "golf_driving_range"),
+        "green" => (Ground::pitch as GroundId, L, "golf_green"),
+        "bunker" => (Ground::sand as GroundId, L, "golf_bunker"),
         _ => return None,
     })
 }
@@ -136,17 +136,17 @@ fn golf_paint(class: &str) -> Option<Paint> {
 pub(crate) const LAND: &[(&str, Paint)] = {
     use Layer::Landcover as L;
     &[
-        ("wood", (g::forest, L, "natural_wood")),
-        ("forest", (g::forest, L, "landuse_forest")),
-        ("bare_rock", (g::bare_ground, L, "natural_bare_rock")),
-        ("scree", (g::bare_ground, L, "natural_scree")),
-        ("shingle", (g::bare_ground, L, "natural_shingle")),
-        ("sand", (g::sand, L, "natural_sand")),
-        ("beach", (g::beach, L, "natural_beach")),
-        ("heath", (g::heath, L, "natural_heath")),
-        ("scrub", (g::scrub, L, "natural_scrub")),
-        ("grassland", (g::grass, L, "natural_grassland")),
-        ("glacier", (g::glacier, Layer::Water, "natural_glacier")),
+        ("wood", (Ground::forest as GroundId, L, "natural_wood")),
+        ("forest", (Ground::forest as GroundId, L, "landuse_forest")),
+        ("bare_rock", (Ground::bare_ground as GroundId, L, "natural_bare_rock")),
+        ("scree", (Ground::bare_ground as GroundId, L, "natural_scree")),
+        ("shingle", (Ground::bare_ground as GroundId, L, "natural_shingle")),
+        ("sand", (Ground::sand as GroundId, L, "natural_sand")),
+        ("beach", (Ground::beach as GroundId, L, "natural_beach")),
+        ("heath", (Ground::heath as GroundId, L, "natural_heath")),
+        ("scrub", (Ground::scrub as GroundId, L, "natural_scrub")),
+        ("grassland", (Ground::grass as GroundId, L, "natural_grassland")),
+        ("glacier", (Ground::glacier as GroundId, Layer::Water, "natural_glacier")),
     ]
 };
 
@@ -161,14 +161,14 @@ fn land_paint(class: &str) -> Option<Paint> {
 fn water_paint(subtype: &str, class: &str, closed: bool) -> Option<Paint> {
     use Layer::Landcover as L;
     if !closed {
-        return waterway_width(class).map(|_| (g::water, Layer::WaterLine, ""));
+        return waterway_width(class).map(|_| (Ground::water as GroundId, Layer::WaterLine, ""));
     }
     Some(match (subtype, class) {
-        (_, "shoal") => (g::beach, L, "natural_shoal"),
-        (_, "salt_pond") => (g::water, L, "landuse_salt_pond"),
-        (_, "swimming_pool") => (g::water, L, "leisure_swimming_pool"),
+        (_, "shoal") => (Ground::beach as GroundId, L, "natural_shoal"),
+        (_, "salt_pond") => (Ground::water as GroundId, L, "landuse_salt_pond"),
+        (_, "swimming_pool") => (Ground::water as GroundId, L, "leisure_swimming_pool"),
         ("physical" | "spring", _) => return None,
-        _ => (g::water, Layer::Water, ""),
+        _ => (Ground::water as GroundId, Layer::Water, ""),
     })
 }
 
@@ -177,71 +177,71 @@ fn water_paint(subtype: &str, class: &str, closed: bool) -> Option<Paint> {
 pub(crate) const INFRASTRUCTURE: &[(&str, Paint)] = {
     use Layer::{Landcover as L, RoadArea};
     &[
-        ("parking", (g::parking, L, "amenity_parking")),
+        ("parking", (Ground::parking as GroundId, L, "amenity_parking")),
         (
             "bicycle_parking",
-            (g::parking, L, "amenity_bicycle_parking"),
+            (Ground::parking as GroundId, L, "amenity_bicycle_parking"),
         ),
         (
             "motorcycle_parking",
-            (g::parking, L, "amenity_motorcycle_parking"),
+            (Ground::parking as GroundId, L, "amenity_motorcycle_parking"),
         ),
-        ("apron", (g::apron, L, "aeroway_apron")),
-        ("airport", (g::transportation_area, L, "aeroway_aerodrome")),
+        ("apron", (Ground::apron as GroundId, L, "aeroway_apron")),
+        ("airport", (Ground::transportation_area as GroundId, L, "aeroway_aerodrome")),
         (
             "international_airport",
-            (g::transportation_area, L, "aeroway_aerodrome"),
+            (Ground::transportation_area as GroundId, L, "aeroway_aerodrome"),
         ),
         (
             "municipal_airport",
-            (g::transportation_area, L, "aeroway_aerodrome"),
+            (Ground::transportation_area as GroundId, L, "aeroway_aerodrome"),
         ),
         (
             "regional_airport",
-            (g::transportation_area, L, "aeroway_aerodrome"),
+            (Ground::transportation_area as GroundId, L, "aeroway_aerodrome"),
         ),
         (
             "private_airport",
-            (g::transportation_area, L, "aeroway_aerodrome"),
+            (Ground::transportation_area as GroundId, L, "aeroway_aerodrome"),
         ),
         (
             "military_airport",
-            (g::transportation_area, L, "aeroway_aerodrome"),
+            (Ground::transportation_area as GroundId, L, "aeroway_aerodrome"),
         ),
         (
             "bus_station",
-            (g::transportation_area, L, "amenity_bus_station"),
+            (Ground::transportation_area as GroundId, L, "amenity_bus_station"),
         ),
         (
             "ferry_terminal",
-            (g::transportation_area, L, "amenity_ferry_terminal"),
+            (Ground::transportation_area as GroundId, L, "amenity_ferry_terminal"),
         ),
-        ("railway_station", (g::industrial, L, "railway_station")),
-        ("subway_station", (g::industrial, L, "railway_station")),
-        ("substation", (g::power, L, "power_substation")),
-        ("generator", (g::power, L, "power_generator")),
-        ("plant", (g::power, L, "power_plant")),
-        ("platform", (g::platform, RoadArea, "railway_platform")),
-        ("runway", (g::aeroway, RoadArea, "aeroway_runway")),
-        ("taxiway", (g::aeroway, RoadArea, "aeroway_taxiway")),
-        ("helipad", (g::aeroway, RoadArea, "aeroway_helipad")),
+        ("railway_station", (Ground::industrial as GroundId, L, "railway_station")),
+        ("subway_station", (Ground::industrial as GroundId, L, "railway_station")),
+        ("substation", (Ground::power as GroundId, L, "power_substation")),
+        ("generator", (Ground::power as GroundId, L, "power_generator")),
+        ("plant", (Ground::power as GroundId, L, "power_plant")),
+        ("platform", (Ground::platform as GroundId, RoadArea, "railway_platform")),
+        ("runway", (Ground::aeroway as GroundId, RoadArea, "aeroway_runway")),
+        ("taxiway", (Ground::aeroway as GroundId, RoadArea, "aeroway_taxiway")),
+        ("helipad", (Ground::aeroway as GroundId, RoadArea, "aeroway_helipad")),
         (
             "seaplane_airport",
-            (g::transportation_area, L, "aeroway_aerodrome"),
+            (Ground::transportation_area as GroundId, L, "aeroway_aerodrome"),
         ),
-        ("dam", (g::dam, Layer::WaterBarrier, "waterway_dam")),
+        ("dam", (Ground::dam as GroundId, Layer::WaterBarrier, "waterway_dam")),
         (
             "weir",
-            (g::breakwater, Layer::WaterBarrier, "waterway_weir"),
+            (Ground::breakwater as GroundId, Layer::WaterBarrier, "waterway_weir"),
         ),
         (
             "breakwater",
-            (g::breakwater, Layer::Pier, "man_made_breakwater"),
+            (Ground::breakwater as GroundId, Layer::Pier, "man_made_breakwater"),
         ),
-        ("pier", (g::land, Layer::Pier, "man_made_pier")),
+        ("pier", (Ground::land as GroundId, Layer::Pier, "man_made_pier")),
         (
             "cutline",
-            (g::grass, Layer::LandcoverLine, "man_made_cutline"),
+            (Ground::grass as GroundId, Layer::LandcoverLine, "man_made_cutline"),
         ),
     ]
 };
@@ -256,7 +256,7 @@ fn infrastructure_paint(class: &str, closed: bool) -> Option<Paint> {
     }
     Some((
         asset_id,
-        if asset_id == g::aeroway && !closed {
+        if asset_id == Ground::aeroway as GroundId && !closed {
             Layer::Aeroway
         } else {
             layer
@@ -294,9 +294,9 @@ pub(crate) fn buildings(row: &BuildingRow, tile_min: G3857) -> Vec<Feature> {
         .or(row.subtype.as_deref())
         .unwrap_or("");
     let asset_id = if MAJOR_BUILDING_CLASSES.contains(&kind) {
-        g::building_major
+        Ground::building_major as GroundId
     } else {
-        g::building
+        Ground::building as GroundId
     };
     let rank = Rank::by_area(Layer::Building, row.way_area, "", &row.gers_id);
     wkb_to_geometries(&row.geom_wkb)

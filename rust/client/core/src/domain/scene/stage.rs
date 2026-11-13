@@ -66,7 +66,8 @@ use crate::domain::view::frame::screen;
 use crate::domain::view::observation;
 use crate::sys::io::loader;
 use pxl_render::gpu::api;
-use pxl_spec::asset::catalog::{model_extent, pack};
+use pxl_spec::asset::catalog::model_extent;
+use pxl_spec::asset::cube::pack;
 use pxl_spec::asset::decor;
 use pxl_spec::asset::sky::moon;
 

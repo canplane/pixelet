@@ -10,6 +10,7 @@ use pxl_render::gpu::api;
 use xpute_guest::link;
 use xpute_link::Handle;
 use xpute_gpu_guest::abi::gpu;
+use xpute_gpu_link::spec::DEVICE_URI;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -18,7 +19,7 @@ use crate::sys::sched::{executor, invalidate};
 
 /// Opens the GPU's device and starts its tasks.
 pub(super) fn boot() {
-    let device = link::open(&xpute_link::uri(&xpute_gpu_link::DEVICE_URI)).or_bug(Errno::ENODEV);
+    let device = link::open(&xpute_link::uri(DEVICE_URI)).or_bug(Errno::ENODEV);
     executor::spawner().spawn(hold(device).or_bug(Errno::ENOSPC));
     executor::spawner().spawn(settle(device).or_bug(Errno::ENOSPC));
 }

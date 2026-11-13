@@ -118,7 +118,11 @@ export const groups = {
 } as const;
 
 export const Group = {
+  /** The people a player can be, each by its row, the number the settings store
+   * persists. One pack, so one colormap. */
   person: 0,
+  /** The pets a player's companion can be, each by its row, the number the settings store
+   * persists. One pack, so one colormap. */
   pet: 1,
 } as const;
 export type Group = (typeof Group)[keyof typeof Group];
@@ -126,9 +130,9 @@ export type Group = (typeof Group)[keyof typeof Group];
 /** The name of the `Group` member numbered `n`, or undefined for a number
  * no member has. */
 export function group_name(n: number): keyof typeof Group | undefined {
-  return (Object.keys(Group) as (keyof typeof Group)[]).find(
-    (k) => Group[k] === n,
-  );
+  for (const k in Group)
+    if (Group[k as keyof typeof Group] === n) return k as keyof typeof Group;
+  return undefined;
 }
 
 /** The `Group` member `n` is, or null for a number no member has. */
@@ -141,11 +145,6 @@ export const IDLE_CLIP = 1 as number;
 
 /** A person's gender, which splits the picker into two rows; a person is
  * shown by its place in its row. */
-export const GENDER = {
-  female: 0 as number,
-  male: 1 as number,
-} as const;
-
 export const Gender = {
   female: 0,
   male: 1,
@@ -155,9 +154,9 @@ export type Gender = (typeof Gender)[keyof typeof Gender];
 /** The name of the `Gender` member numbered `n`, or undefined for a number
  * no member has. */
 export function gender_name(n: number): keyof typeof Gender | undefined {
-  return (Object.keys(Gender) as (keyof typeof Gender)[]).find(
-    (k) => Gender[k] === n,
-  );
+  for (const k in Gender)
+    if (Gender[k as keyof typeof Gender] === n) return k as keyof typeof Gender;
+  return undefined;
 }
 
 /** The `Gender` member `n` is, or null for a number no member has. */

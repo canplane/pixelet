@@ -15,7 +15,7 @@
 //! damages. Both observers walk the world through one node cache (pxl-engine `node_cache`),
 //! whose nodes the cast forgets wherever the world beneath them changed.
 
-use crate::frame::shader::access::{Group, Step};
+use crate::frame::shader::access::Group;
 use crate::frame::shader::sequence;
 use pxl_content::generation::{self, GROUPS};
 use pxl_engine::clipmap;
@@ -1083,20 +1083,19 @@ impl RayPass {
                 }
             }
             g.write_buf(c.light_hdr, 0, bytes(&hdr));
-            let open = |s: &Step| s.to_at();
             g.write_buf(
                 c.light_misses,
-                open(&sequence::OPEN_LIGHT_MISSES),
+                const { sequence::OPEN_LIGHT_MISSES.to_at() },
                 bytes(&ray::MISS_ARGS_EMPTY),
             );
             g.write_buf(
                 c.queues,
-                open(&sequence::OPEN_LIGHT_QUEUE),
+                const { sequence::OPEN_LIGHT_QUEUE.to_at() },
                 bytes(&ray::QUEUE_EMPTY),
             );
             g.write_buf(
                 c.light_args,
-                open(&sequence::OPEN_LIGHT_ARGS),
+                const { sequence::OPEN_LIGHT_ARGS.to_at() },
                 bytes(&light_args()),
             );
             // Where the world's receivers are marked afresh, the stood list starts empty with
@@ -1104,15 +1103,20 @@ impl RayPass {
             // Otherwise `dispatch` copies back in what the casts since then left. The slide's
             // rows open where the cast owes one.
             let receiver_tiles = light_receiver_tiles(owes);
-            let open = if afresh {
-                &sequence::OPEN_LIGHT_RECEIVER_TILES_AFRESH
+            let (from, to_at) = if afresh {
+                const {
+                    let open = sequence::OPEN_LIGHT_RECEIVER_TILES_AFRESH;
+                    (open.to.at as usize, open.to_at())
+                }
             } else {
-                &sequence::OPEN_LIGHT_RECEIVER_TILES
+                const {
+                    let open = sequence::OPEN_LIGHT_RECEIVER_TILES;
+                    (open.to.at as usize, open.to_at())
+                }
             };
-            let from = open.to.at as usize;
             g.write_buf(
                 c.light_receiver_tiles,
-                open.to_at(),
+                to_at,
                 bytes(&receiver_tiles[from..]),
             );
             if afresh {
@@ -1464,18 +1468,22 @@ impl RayPass {
         // count, are copied back in (`light::carry_at`). This runs ahead of every pass that
         // marks a tile, the record's draw among the eye's passes.
         if lit.is_some_and(|l| !l.world || l.additive) {
-            let back = &sequence::RECEIVER_TILES_BACK;
             g.copy_buf(
                 encoder,
-                (c.light_list, back.from_at()),
-                (c.light_receiver_tiles, back.to_at()),
+                (
+                    c.light_list,
+                    const { sequence::RECEIVER_TILES_BACK.from_at() },
+                ),
+                (
+                    c.light_receiver_tiles,
+                    const { sequence::RECEIVER_TILES_BACK.to_at() },
+                ),
                 word_bytes(light::RECEIVER_TILES_CARRY as usize),
             );
-            let back = &sequence::READ_CNT_BACK;
             g.copy_buf(
                 encoder,
-                (c.light_list, back.from_at()),
-                (c.light_args, back.to_at()),
+                (c.light_list, const { sequence::READ_CNT_BACK.from_at() }),
+                (c.light_args, const { sequence::READ_CNT_BACK.to_at() }),
                 4,
             );
         }
@@ -1610,7 +1618,7 @@ impl RayPass {
                     groups: c.queue_groups.each_ref().map(api::Group::id),
                     queue: c.queues,
                     node_cache: c.node_cache,
-                    hits: Some(&sequence::HITS),
+                    hits: Some(const { (sequence::HITS.from_at(), sequence::HITS.to_at()) }),
                 },
             );
             g.end(pass);
@@ -1719,18 +1727,22 @@ impl RayPass {
             g.end(pass);
             // What this cast stood on and read is kept for the next, with the count it
             // propagated (`light::carry_at`).
-            let keep = &sequence::RECEIVER_TILES_KEEP;
             g.copy_buf(
                 encoder,
-                (c.light_receiver_tiles, keep.from_at()),
-                (c.light_list, keep.to_at()),
+                (
+                    c.light_receiver_tiles,
+                    const { sequence::RECEIVER_TILES_KEEP.from_at() },
+                ),
+                (
+                    c.light_list,
+                    const { sequence::RECEIVER_TILES_KEEP.to_at() },
+                ),
                 word_bytes(light::RECEIVER_TILES_CARRY as usize),
             );
-            let keep = &sequence::READ_CNT_KEEP;
             g.copy_buf(
                 encoder,
-                (c.light_args, keep.from_at()),
-                (c.light_list, keep.to_at()),
+                (c.light_args, const { sequence::READ_CNT_KEEP.from_at() }),
+                (c.light_list, const { sequence::READ_CNT_KEEP.to_at() }),
                 4,
             );
             // Then every tile read that its epoch has not cast is damaged, a thread a tile of the
@@ -1744,17 +1756,20 @@ impl RayPass {
             g.end(pass);
             // The counts of the lists the damage pass wrote are copied where the passes that take
             // them read them.
-            for step in [
-                &sequence::CORNERS_CNT,
-                &sequence::SOURCES_CNT,
-                &sequence::DAMAGE_CNT,
-            ] {
-                g.copy_buf(
-                    encoder,
-                    (c.light_args, step.from_at()),
-                    (c.light_list, step.to_at()),
-                    4,
-                );
+            for (from, to) in const {
+                [
+                    (
+                        sequence::CORNERS_CNT.from_at(),
+                        sequence::CORNERS_CNT.to_at(),
+                    ),
+                    (
+                        sequence::SOURCES_CNT.from_at(),
+                        sequence::SOURCES_CNT.to_at(),
+                    ),
+                    (sequence::DAMAGE_CNT.from_at(), sequence::DAMAGE_CNT.to_at()),
+                ]
+            } {
+                g.copy_buf(encoder, (c.light_args, from), (c.light_list, to), 4);
             }
             // The light's cast, a workgroup a tile (pxl-engine `light::TILE`): the beam rays,
             // the samples, their boxes drawn, the slots taking their visible voxel, and the rest
@@ -1840,7 +1855,9 @@ impl RayPass {
                     ],
                     queue: c.queues,
                     node_cache: c.node_cache,
-                    hits: Some(&sequence::LIGHT_HITS),
+                    hits: Some(
+                        const { (sequence::LIGHT_HITS.from_at(), sequence::LIGHT_HITS.to_at()) },
+                    ),
                 },
             );
             g.end(pass);
@@ -2207,14 +2224,14 @@ fn set_groups<const N: usize>(
 /// A run of the queue's passes (pxl-engine `ray::QUEUE_LANES`): the pipelines of its first
 /// walk, its asks, its second walk, their asks and its last walk; its groups
 /// (`queue_groups`); the queues' buffer, which holds its head; the node cache, whose head takes
-/// its stops' count; and, for a holes' run, the step by which that count is copied before the
-/// last walk (`sequence::HITS`).
+/// its stops' count; and, for a holes' run, where that count is copied from and to before the
+/// last walk, as bytes (`sequence::HITS`).
 struct Run<'a> {
     pipelines: [&'a Pipeline; 5],
     groups: [u32; 3],
     queue: u32,
     node_cache: u32,
-    hits: Option<&'a Step>,
+    hits: Option<(u32, u32)>,
 }
 
 /// Encodes a run's passes, each a fixed dispatch over what the one before wrote. The two walks
@@ -2238,13 +2255,8 @@ fn walk_run(ctx: &mut RenderContext, spans: [GpuSpanName; 2], r: &Run) -> Id {
         g.dispatch(pass, ray::QUEUE_GROUPS, 1, 1);
     }
     g.end(pass);
-    if let Some(hits) = r.hits {
-        g.copy_buf(
-            encoder,
-            (r.queue, hits.from_at()),
-            (r.node_cache, hits.to_at()),
-            word_bytes(4),
-        );
+    if let Some((from, to)) = r.hits {
+        g.copy_buf(encoder, (r.queue, from), (r.node_cache, to), word_bytes(4));
     }
     let pass = g.compute_pass(encoder, ctx.stamp(spans[1]).pass());
     g.set_bind_group(pass, 0, last_group, &[]);

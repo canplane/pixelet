@@ -17,9 +17,6 @@ use xpute_kit::wire::xtp::{
     ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
 };
 
-/// The interface's qualified name: its package and its name.
-pub const NAME: [&str; 2] = ["xpute:link", "types"];
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
     Int(i32),

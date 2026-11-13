@@ -18,9 +18,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::Path;
 
-use wit_parser::{Function, FunctionKind, InterfaceId, Param, Resolve, Type, TypeDefKind, TypeId, TypeOwner};
+use wit_parser::{Function, FunctionKind, IndexMap, InterfaceId, Param, Resolve, Type, TypeDefKind, TypeId, TypeOwner, WorldItem, WorldKey};
 
-use xpute_gen::spec::{mark, package, package_path, read, rs_enum, rs_ident, ts_enum, ts_ident, Output};
+use xpute_gen::spec::{mark, package, package_path, read, rs_enum, rs_ident, ts_enum, ts_ident, Member, Output};
 
 /// One package's bindings on one side, and where they go.
 pub struct WitTarget<'a> {
@@ -39,6 +39,12 @@ pub struct WitTarget<'a> {
     /// bindings.
     pub side: &'a str,
 }
+
+/// The guest's crate. A package's world is its guest's, which serves what
+/// the world exports and calls what it imports; every other
+/// side, the TypeScript too, serves the imports and calls the exports. A
+/// package whose interfaces have functions declares its world.
+const GUEST: &str = "xpute-guest";
 
 /// What a binding's header names as its writer.
 const TOOL: &str = "xpute-link-gen wit.rs";
@@ -78,21 +84,14 @@ fn objs<'a>(r: &'a Resolve, i: InterfaceId, at: &str, drop: u32) -> Result<Vec<O
         }
     }
     for f in &single.methods {
-        if ["open", "mount", "uri", "handle", "object"].contains(&method_name(f)) {
+        if ["mount", "object", "handle"].contains(&method_name(f)) {
             return Err(format!("{at}.{}: a name the bindings keep for the module", f.name));
         }
     }
-    // The names the generated code's own locals take, a lent span's among
-    // them; and an async call lends one buffer, which its answer hands back.
+    // An async call lends one buffer, which its answer hands back.
     for f in iface.functions.values() {
-        if let Some(p) = f.params.iter().find(|p| ["ref", "a", "b", "l", "w", "m", "r", "data", "tag", "args", "link", "handle", "lent", "stop", "signal"].contains(&p.name.as_str())) {
-            return Err(format!("{at}.{}: `{}`, a name the bindings keep for their own", f.name, p.name));
-        }
-        let lents: Vec<String> = f.params.iter().filter(|p| is_lent(r, &p.ty)).map(|p| rs_ident(&p.name)).collect();
-        if let Some(p) = f.params.iter().find(|p| lents.iter().any(|l| [format!("{l}_at"), format!("{l}_len")].contains(&rs_ident(&p.name)))) {
-            return Err(format!("{at}.{}: `{}`, a name the bindings keep for a lent span", f.name, p.name));
-        }
-        if lents.len() > 1 && is_async(f) {
+        let lents = f.params.iter().filter(|p| is_lent(r, &p.ty)).count();
+        if lents > 1 && is_async(f) {
             return Err(format!("{at}.{}: an async call lends one buffer", f.name));
         }
     }
@@ -194,14 +193,13 @@ enum Kind {
     Bool,
     Int { rs: &'static str, signed: bool },
     U64,
-    /// An s64, which crosses as the u64 of its bits: TypeScript writes every
-    /// bigint as a u64.
     S64,
     Float { rs: &'static str },
     Str,
     /// A list of fixed-size numbers, which crosses as XTP's packed array of
-    /// them: its element in Rust, and its typed array in TypeScript.
-    Array { rs: &'static str, ts: &'static str },
+    /// them: its element in Rust, its typed array in TypeScript, and its
+    /// sequence type.
+    Array { rs: &'static str, ts: &'static str, seq: &'static str },
     List(Box<Kind>),
     Option(Box<Kind>),
     Record(TypeId),
@@ -226,12 +224,19 @@ fn kind(r: &Resolve, ty: &Type) -> Kind {
         Type::Id(t) => match &r.types[*t].kind {
             TypeDefKind::Record(_) | TypeDefKind::Variant(_) => Kind::Record(*t),
             TypeDefKind::Enum(_) => Kind::Enum(*t),
-            // A list crosses as XTP's packed array where both sides' writers
-            // take one (kit's TypeScript `Arg` takes u8 and u32 arrays), and as
-            // a branch otherwise.
+            // A list of fixed-size numbers crosses as XTP's packed array of
+            // them, and any other as a branch.
             TypeDefKind::List(e) => match e {
-                Type::U8 => Kind::Array { rs: "u8", ts: "U8Array" },
-                Type::U32 => Kind::Array { rs: "u32", ts: "U32Array" },
+                Type::U8 => Kind::Array { rs: "u8", ts: "U8Array", seq: "U8_ARRAY" },
+                Type::S8 => Kind::Array { rs: "i8", ts: "I8Array", seq: "I8_ARRAY" },
+                Type::U16 => Kind::Array { rs: "u16", ts: "U16Array", seq: "U16_ARRAY" },
+                Type::S16 => Kind::Array { rs: "i16", ts: "I16Array", seq: "I16_ARRAY" },
+                Type::U32 => Kind::Array { rs: "u32", ts: "U32Array", seq: "U32_ARRAY" },
+                Type::S32 => Kind::Array { rs: "i32", ts: "I32Array", seq: "I32_ARRAY" },
+                Type::U64 => Kind::Array { rs: "u64", ts: "U64Array", seq: "U64_ARRAY" },
+                Type::S64 => Kind::Array { rs: "i64", ts: "I64Array", seq: "I64_ARRAY" },
+                Type::F32 => Kind::Array { rs: "f32", ts: "F32Array", seq: "F32_ARRAY" },
+                Type::F64 => Kind::Array { rs: "f64", ts: "F64Array", seq: "F64_ARRAY" },
                 e => Kind::List(Box::new(kind(r, e))),
             },
             TypeDefKind::Option(e) => Kind::Option(Box::new(kind(r, e))),
@@ -255,11 +260,16 @@ fn pascal(s: &str) -> String {
 /// `ts_enum`): each one's identifier, its name, and its place. Its name is its
 /// identifier, which is also its TypeScript key, so the Rust `name` and the
 /// TypeScript `<e>_name` answer one string.
-fn members(e: &wit_parser::Enum) -> Vec<(String, String, String)> {
+fn members(e: &wit_parser::Enum) -> Vec<Member> {
     e.cases
         .iter()
         .enumerate()
-        .map(|(k, c)| (pascal(&c.name), pascal(&c.name), k.to_string()))
+        .map(|(k, c)| Member {
+            ident: pascal(&c.name),
+            name: pascal(&c.name),
+            number: k.to_string(),
+            doc: c.docs.contents.as_deref().map_or(Vec::new(), |d| d.lines().map(str::to_string).collect()),
+        })
         .collect()
 }
 
@@ -318,7 +328,8 @@ impl Gen<'_> {
 
     /// The Rust of the args `ps`: none, or how many and what writes them,
     /// each of `lents` lending memory, written as the lent record of its
-    /// (at, len).
+    /// span. The names the bindings give beside a WIT name's end with `_`,
+    /// which none does, as a WIT label cannot end in `-`.
     fn rs_args(&self, ps: &[(String, Kind)], lents: &[String]) -> String {
         if ps.is_empty() {
             return "None".into();
@@ -327,13 +338,13 @@ impl Gen<'_> {
             .iter()
             .map(|(n, k)| {
                 if lents.contains(n) {
-                    format!("{} {{ at: {n}_at, len: {n}_len }}.write(w);", self.rs_ty(k, true))
+                    format!("{} {{ at: {n}_at_, len: {n}_len_ }}.write(w_);", self.rs_ty(k, true))
                 } else {
-                    self.rs_write(n, k)
+                    self.rs_write("w_", n, k)
                 }
             })
             .collect();
-        let w = format!("|w: &mut PacketWriter| {{ {} }}", writes.join(" "));
+        let w = format!("|w_: &mut PacketWriter| {{ {} }}", writes.join(" "));
         format!("Some(({}, &{w}))", ps.len())
     }
 
@@ -345,7 +356,7 @@ impl Gen<'_> {
             Some(k) if in_result(k) => "Reply::from(v as i32)".into(),
             Some(k) => format!(
                 "Reply {{ result: 0, data: Some((1, Box::new(move |w: &mut PacketWriter| {{ {} }}))) }}",
-                self.rs_write("v", k)
+                self.rs_write("w", "v", k)
             ),
         }
     }
@@ -378,22 +389,22 @@ impl Gen<'_> {
                 let _ = writeln!(out, "    fn {name}(&self, {}) -> Result<{ret}, Errno>;", ps.join(", "));
             }
         }
-        let _ = writeln!(out, "}}\n\nstruct {t}Object(Rc<dyn {t}>);\n\nimpl Object for {t}Object {{\n    fn call(&self, m: Method, tag: Tag, args: Option<BranchCursor<'_>>) -> Reply {{\n        let run = || -> Result<Reply, MarshalError> {{\n            Ok(match m {{");
+        let _ = writeln!(out, "}}\n\nstruct {t}Object(Rc<dyn {t}>);\n\nimpl Object for {t}Object {{\n    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {{\n        let run = || -> Result<Reply, MarshalError> {{\n            Ok(match m_ {{");
         for f in &o.methods {
             let ps = self.kinds(f);
             let _ = writeln!(out, "                {} => {{", screaming(o, f));
             if !ps.is_empty() {
-                let _ = writeln!(out, "                    let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;");
+                let _ = writeln!(out, "                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;");
             }
             for (k, (n, kd)) in ps.iter().enumerate() {
-                let _ = writeln!(out, "                    let {n} = b.at({k}).and_then(|c| {})?;", self.rs_read("c", kd, true));
+                let _ = writeln!(out, "                    let {n} = b_.at({k}).and_then(|c| {})?;", self.rs_read("c", kd, true));
             }
             let names: String = ps.iter().map(|(n, _)| format!("{n}, ")).collect();
             let name = rs_ident(method_name(f));
             let rk = self.ret(f);
             if is_async(f) {
                 let done = format!(
-                    "Return::new(tag, link::on_cancel, Box::new(move |got| {{ let reply = match got {{ Ok(v) => {}, Err(e) => Reply::from(e as i32) }}; link::task_return(tag, reply.result, reply.data.as_ref().map(|(n, w)| (*n, &**w as &dyn Fn(&mut PacketWriter)))) }}))",
+                    "Return::new(tag_, link::on_cancel, Box::new(move |got| {{ let reply = match got {{ Ok(v) => {}, Err(e) => Reply::from(e as i32) }}; link::task_return(tag_, reply.result, reply.data.as_ref().map(|(n, w)| (*n, &**w as &dyn Fn(&mut PacketWriter)))) }}))",
                     self.rs_reply(&rk)
                 );
                 let _ = writeln!(out, "                    self.0.{name}({names}{done});\n                    Reply::from(Errno::EINPROGRESS as i32)\n                }}");
@@ -429,12 +440,12 @@ impl Gen<'_> {
                 let ts: Vec<String> = (0..lents.len()).map(|k| format!("T{k}: Copy + Unpin + 'static")).collect();
                 format!("<{}>", ts.join(", "))
             };
-            let mut sig: Vec<String> = if o.resource { vec![format!("{}: Handle", rs_ident(&o.name))] } else { vec![] };
+            let mut sig: Vec<String> = if o.resource { vec![format!("{}_: Handle", rs_ident(&o.name))] } else { vec![] };
             sig.extend(ps.iter().map(|(n, k)| match lents.iter().position(|l| l == n) {
                 Some(j) => format!("{n}: {}", lent_ty(j)),
                 None => format!("{n}: {}", self.rs_ty(k, false)),
             }));
-            let h = if o.resource { rs_ident(&o.name) } else { "HANDLE".into() };
+            let h = if o.resource { format!("{}_", rs_ident(&o.name)) } else { "HANDLE".into() };
             let rk = self.ret(f);
             let ret = rk.as_ref().map_or("()".into(), |k| self.rs_ty(k, true));
             if !lents.is_empty() && !is_async(f) {
@@ -447,9 +458,9 @@ impl Gen<'_> {
                 .iter()
                 .map(|l| {
                     if is_async(f) {
-                        format!("let mut {l} = {l}; let ({l}_at, {l}_len) = Lend::span(&mut {l}); ")
+                        format!("let mut {l} = {l}; let ({l}_at_, {l}_len_) = Lend::span(&mut {l}); ")
                     } else {
-                        format!("let {l}_at = mem::off({l}.as_ptr().cast()); let {l}_len = size_of_val(&{l}[..]) as u32; ")
+                        format!("let {l}_at_ = mem::off({l}.as_ptr().cast()); let {l}_len_ = size_of_val(&{l}[..]) as u32; ")
                     }
                 })
                 .collect();
@@ -461,21 +472,20 @@ impl Gen<'_> {
                     None => (format!("Result<{ret}, Errno>"), "()".into(), self.rs_answer(&rk)),
                 };
                 // The call is sent here, and the future answers it.
-                let _ = writeln!(out, "pub fn {name}{generic}({}) -> impl Future<Output = {output}> {{\n    {lend}\n    let sent = wait({h}, {c}, {}, {kept});\n    async move {{\n        let (r, data, lent) = sent.await;\n        {give}\n    }}\n}}\n", sig.join(", "), self.rs_args(&ps, &lents));
+                let _ = writeln!(out, "pub fn {name}{generic}({}) -> impl Future<Output = {output}> {{\n    {lend}\n    let sent = wait::wait({h}, {c}, {}, {kept});\n    async move {{\n        let (r, data, lent) = sent.await;\n        {give}\n    }}\n}}\n", sig.join(", "), self.rs_args(&ps, &lents));
             } else {
                 let _ = writeln!(out, "pub fn {name}{generic}({}) -> Result<{ret}, Errno> {{\n    {lend}let (r, data) = link::call({h}, {c}, {});\n    {}\n}}\n", sig.join(", "), self.rs_args(&ps, &lents), self.rs_answer(&rk));
             }
         }
     }
 
-    fn rs_iface(&self, objs: &[Obj]) -> String {
+    fn rs_iface(&self, objs: &[Obj], (serve, call): (bool, bool)) -> String {
         let iname = self.iname();
         let side = self.side;
         let mut items = String::new();
         if objs.iter().any(|o| !o.resource) {
             let _ = writeln!(items, "/// The interface's handle, named by `{}/{iname}` (frame.json `NAMED`).\npub const HANDLE: Handle = {:#x};\n", self.pkg, self.handle());
         }
-        let _ = writeln!(items, "/// The interface's qualified name: its package and its name.\npub const NAME: [&str; 2] = [\"{}\", \"{iname}\"];\n", self.pkg);
         for o in objs {
             for (k, f) in o.methods.iter().enumerate() {
                 let _ = writeln!(items, "/// `{}`\npub const {}: Method = {k};", f.name, screaming(o, f));
@@ -484,15 +494,19 @@ impl Gen<'_> {
         items.push('\n');
         self.rs_types(&mut items);
         for o in objs {
-            self.rs_export(o, &mut items);
-            self.rs_import(o, &mut items);
+            if serve {
+                self.rs_export(o, &mut items);
+            }
+            if call {
+                self.rs_import(o, &mut items);
+            }
         }
         let mut body = String::new();
         let _ = writeln!(body, "use std::rc::Rc;\nuse xpute_kit::status::errno::Errno;\nuse xpute_kit::status::error::MarshalError;\nuse xpute_kit::wire::xtp::{{ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader}};");
         // An interface of types alone, as the link's own, takes nothing of
         // the link, which takes its types.
         if !objs.is_empty() {
-            let _ = writeln!(body, "use xpute_link::{{Handle, Method, Object, Reply, Return, Tag}};\nuse {side}::link;\nuse {side}::wait::wait;");
+            let _ = writeln!(body, "use xpute_link::{{Handle, Method, Object, Reply, Return, Tag}};\nuse {side}::link;\nuse {side}::wait;");
         }
         for u in self.rs_uses.borrow().iter() {
             let _ = writeln!(body, "use {u};");
@@ -519,10 +533,10 @@ impl Gen<'_> {
         for f in &o.methods {
             let mut sig: Vec<String> = self.ts_params(f).iter().map(|(n, k)| format!("{n}: {}", self.ts_ty(k))).collect();
             let r = self.ts_ret(f);
-            // An async method stops on `signal` where its caller cancels it
+            // An async method stops on `signal_` where its caller cancels it
             // and it can; one that can't leaves it unread.
             if is_async(f) {
-                sig.push("signal: AbortSignal".into());
+                sig.push("signal_: AbortSignal".into());
             }
             let r = if is_async(f) { format!("Promise<{r}>") } else { r };
             let _ = writeln!(out, "  {}({}): {r};", ts_ident(method_name(f)), sig.join(", "));
@@ -539,10 +553,10 @@ impl Gen<'_> {
             let call = format!("imp.{}({})", ts_ident(method_name(f)), decs.join(", "));
             let rk = self.ret(f);
             let (result, data) = match &rk {
-                None => ("0".to_string(), "[]".to_string()),
-                Some(Kind::Bool) => ("v ? 1 : 0".to_string(), "[]".to_string()),
-                Some(k) if in_result(k) => ("v".to_string(), "[]".to_string()),
-                Some(k) => ("0".to_string(), format!("[{}]", self.ts_enc("v", k))),
+                None => ("0".to_string(), "null".to_string()),
+                Some(Kind::Bool) => ("v ? 1 : 0".to_string(), "null".to_string()),
+                Some(k) if in_result(k) => ("v".to_string(), "null".to_string()),
+                Some(k) => ("0".to_string(), format!("[1, (w) => {{ {} }}]", self.ts_write("w", "v", k))),
             };
             let c = screaming(o, f);
             let _ = writeln!(out, "          case {c}: {{");
@@ -551,10 +565,11 @@ impl Gen<'_> {
             }
             if is_async(f) {
                 let bind = if rk.is_none() { "()" } else { "(v)" };
-                let _ = writeln!(out, "            const stop = new AbortController();\n            {call}.then(\n              {bind} => l.task_return(tag, {result}, {data}),\n              (e: unknown) => l.task_return(tag, refusal_of(e)),\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return Errno.EINPROGRESS;\n          }}");
+                let answer = if data == "null" { result.clone() } else { format!("{result}, {data}") };
+                let _ = writeln!(out, "            const stop = new AbortController();\n            {call}.then(\n              {bind} => l.task_return(tag, {answer}),\n              (e: unknown) => l.task_return(tag, refusal_of(e)),\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return Errno.EINPROGRESS;\n          }}");
             } else if rk.is_none() {
                 let _ = writeln!(out, "            {call};\n            return 0;\n          }}");
-            } else if data == "[]" {
+            } else if data == "null" {
                 let _ = writeln!(out, "            const v = {call};\n            return {result};\n          }}");
             } else {
                 let _ = writeln!(out, "            const v = {call};\n            return {{ result: {result}, data: {data} }};\n          }}");
@@ -571,35 +586,33 @@ impl Gen<'_> {
     /// The calling side of an object: its methods as functions, each taking
     /// first the link a singleton is called over, or a resource's reference.
     fn ts_import(&self, o: &Obj, out: &mut String) {
-        let (by, to) = if o.resource { ("ref: Ref", "ref.link.send(ref.handle") } else { ("link: Sender", "link.send(HANDLE") };
+        let (by, to) = if o.resource { ("ref_: Ref", "ref_.link.send(ref_.handle") } else { ("link_: Sender", "link_.send(HANDLE") };
         for f in &o.methods {
             let ps = self.ts_params(f);
             let mut sig = vec![by.to_string()];
             sig.extend(ps.iter().map(|(n, k)| format!("{n}: {}", self.ts_ty(k))));
-            let args: Vec<String> = ps.iter().map(|(n, k)| self.ts_enc(n, k)).collect();
             let rk = self.ret(f);
             let ret = self.ts_ret(f);
             let take = match &rk {
                 None => String::new(),
-                Some(Kind::Bool) => "\n  return a.result !== 0;".into(),
-                Some(k) if in_result(k) => "\n  return a.result;".into(),
+                Some(Kind::Bool) => "\n  return a_.result !== 0;".into(),
+                Some(k) if in_result(k) => "\n  return a_.result;".into(),
                 Some(k) => format!(
-                    "\n  if (a.data === null) throw new XputeError(Errno.EBADMSG);\n  return {};",
-                    self.ts_dec("new TreeReader(a.data).read_branch().at(0)", k)
+                    "\n  if (a_.data === null) throw new XputeError(Errno.EBADMSG);\n  return {};",
+                    self.ts_dec("new TreeReader(a_.data).read_branch().at(0)", k)
                 ),
             };
             let name = if o.resource { ts_ident(&format!("{}-{}", o.name, method_name(f))) } else { ts_ident(method_name(f)) };
-            let _ = writeln!(out, "export async function {name}({}): Promise<{ret}> {{\n  const a = await {to}, {}, [{}]);\n  if (a.result < 0) throw new XputeError(a.result);{take}\n}}\n", sig.join(", "), screaming(o, f), args.join(", "));
+            let _ = writeln!(out, "export async function {name}({}): Promise<{ret}> {{\n  const a_ = await {to}, {}, {});\n  if (a_.result < 0) throw new XputeError(a_.result);{take}\n}}\n", sig.join(", "), screaming(o, f), self.ts_args(&ps));
         }
     }
 
-    fn ts_iface(&self, objs: &[Obj]) -> String {
+    fn ts_iface(&self, objs: &[Obj], (serve, call): (bool, bool)) -> String {
         let iname = self.iname();
         let mut out = String::new();
         if objs.iter().any(|o| !o.resource) {
             let _ = writeln!(out, "/** The interface's handle, named by `{}/{iname}` (frame.json `NAMED`). */\nexport const HANDLE: Handle = {:#x};\n", self.pkg, self.handle());
         }
-        let _ = writeln!(out, "/** The interface's qualified name: its package and its name. */\nexport const NAME = uri(\"{}\", \"{iname}\");\n", self.pkg);
         for o in objs {
             for (k, f) in o.methods.iter().enumerate() {
                 let _ = writeln!(out, "/** `{}` */\nexport const {}: Method = {k};", f.name, screaming(o, f));
@@ -608,8 +621,12 @@ impl Gen<'_> {
         out.push('\n');
         self.ts_types(&mut out);
         for o in objs {
-            self.ts_export(o, &mut out);
-            self.ts_import(o, &mut out);
+            if serve {
+                self.ts_export(o, &mut out);
+            }
+            if call {
+                self.ts_import(o, &mut out);
+            }
         }
         out
     }
@@ -619,7 +636,7 @@ impl Gen<'_> {
     fn ts_uses(&self, body: &str, link: &str) -> String {
         let has = |t: &str| body.contains(t);
         let mut out = String::new();
-        let arrays: Vec<&str> = ["U32Array", "U8Array"]
+        let arrays: Vec<&str> = ["F32Array", "F64Array", "I16Array", "I32Array", "I64Array", "I8Array", "U16Array", "U32Array", "U64Array", "U8Array"]
             .into_iter()
             .filter(|a| has(a))
             .collect();
@@ -633,7 +650,7 @@ impl Gen<'_> {
         if !errs.is_empty() {
             let _ = writeln!(out, "import {{ {} }} from \"@xpute/kit/status/error.ts\";", errs.join(", "));
         }
-        let xtp: BTreeSet<&str> = [("): Arg", "type Arg"), ("new Branch(", "Branch"), ("): Branch", "Branch"), ("c: NodeCursor", "type NodeCursor"), ("new TreeReader(", "TreeReader")]
+        let xtp: BTreeSet<&str> = [("w: PacketWriter", "type PacketWriter"), ("ScalarType.", "ScalarType"), ("SequenceType.", "SequenceType"), ("c: NodeCursor", "type NodeCursor"), ("new TreeReader(", "TreeReader")]
             .iter()
             .filter(|(t, _)| has(t))
             .map(|(_, n)| *n)
@@ -641,7 +658,7 @@ impl Gen<'_> {
         if !xtp.is_empty() {
             let _ = writeln!(out, "import {{ {} }} from \"@xpute/kit/wire/xtp/mod.ts\";", xtp.into_iter().collect::<Vec<_>>().join(", "));
         }
-        let rt: Vec<&str> = [("Pick<Link", "type Link"), ("LinkObject", "type LinkObject"), (": Method", "type Method"), ("refusal_of(", "refusal_of"), ("ref: Ref", "type Ref"), ("Sender", "type Sender"), (": Handle", "type Handle"), ("NAME = uri(", "uri")]
+        let rt: Vec<&str> = [("Pick<Link", "type Link"), ("LinkObject", "type LinkObject"), (": Method", "type Method"), ("refusal_of(", "refusal_of"), ("ref_: Ref", "type Ref"), ("Sender", "type Sender"), (": Handle", "type Handle"), ("get_as<", "get_as")]
             .iter()
             .filter(|(t, _)| has(t))
             .map(|(_, n)| *n)
@@ -710,29 +727,29 @@ impl Gen<'_> {
         }
     }
 
-    /// Writes `e` into `w`. A deref (`*v`) is parenthesized only where a
-    /// method is called on it.
-    fn rs_write(&self, e: &str, k: &Kind) -> String {
+    /// Writes `e` into the writer `w`. A deref (`*v`) is parenthesized only
+    /// where a method is called on it.
+    fn rs_write(&self, w: &str, e: &str, k: &Kind) -> String {
         let place = if e.starts_with('*') { format!("({e})") } else { e.to_string() };
         match k {
-            Kind::Bool => format!("w.bool(Some({e}));"),
-            Kind::Int { signed: false, rs: "u8" } => format!("w.u8(Some({e}));"),
-            Kind::Int { signed: false, .. } | Kind::Handle => format!("w.u32(Some({e} as u32));"),
-            Kind::Int { signed: true, .. } => format!("w.i32(Some({e} as i32));"),
-            Kind::U64 => format!("w.u64(Some({e}));"),
-            Kind::S64 => format!("w.u64(Some({e} as u64));"),
-            Kind::Float { .. } => format!("w.f64(Some({e} as f64));"),
-            Kind::Str => format!("w.str(Some(&*{e}));"),
-            Kind::Array { rs, .. } => format!("w.array::<{rs}>(Some(&*{e}));"),
+            Kind::Bool => format!("{w}.bool(Some({e}));"),
+            Kind::Int { signed: false, rs: "u8" } => format!("{w}.u8(Some({e}));"),
+            Kind::Int { signed: false, .. } | Kind::Handle => format!("{w}.u32(Some({e} as u32));"),
+            Kind::Int { signed: true, .. } => format!("{w}.i32(Some({e} as i32));"),
+            Kind::U64 => format!("{w}.u64(Some({e}));"),
+            Kind::S64 => format!("{w}.i64(Some({e}));"),
+            Kind::Float { .. } => format!("{w}.f64(Some({e} as f64));"),
+            Kind::Str => format!("{w}.str(Some(&*{e}));"),
+            Kind::Array { rs, .. } => format!("{w}.array::<{rs}>(Some(&*{e}));"),
             Kind::List(el) => format!(
-                "w.branch({place}.len() as u32, |w| {{ for x in {place}.iter() {{ {} }} }});",
-                self.rs_write("*x", el)
+                "{w}.branch({place}.len() as u32, |{w}| {{ for x in {place}.iter() {{ {} }} }});",
+                self.rs_write(w, "*x", el)
             ),
-            Kind::Record(_) => format!("{place}.write(w);"),
-            Kind::Enum(_) => format!("w.u32(Some({e} as u32));"),
+            Kind::Record(_) => format!("{place}.write({w});"),
+            Kind::Enum(_) => format!("{w}.u32(Some({e} as u32));"),
             Kind::Option(el) => format!(
-                "match &{e} {{ Some(v) => {{ {} }} None => {{ w.nil(); }} }}",
-                self.rs_write("*v", el)
+                "match &{e} {{ Some(v) => {{ {} }} None => {{ {w}.nil(); }} }}",
+                self.rs_write(w, "*v", el)
             ),
         }
     }
@@ -744,7 +761,7 @@ impl Gen<'_> {
             Kind::Int { rs, .. } | Kind::Float { rs } => format!("{c}.get_number().map(|v| v as {rs})"),
             Kind::Handle => format!("{c}.get_number().map(|v| v as u32)"),
             Kind::U64 => format!("{c}.get_u64()"),
-            Kind::S64 => format!("{c}.get_u64().map(|v| v as i64)"),
+            Kind::S64 => format!("{c}.get_i64()"),
             Kind::Str if owned => format!("{c}.get_str_ref().map(str::to_owned)"),
             Kind::Str => format!("{c}.get_str_ref()"),
             Kind::Array { rs, .. } if owned => format!("{c}.get_array::<{rs}>().map(<[{rs}]>::to_vec)"),
@@ -780,7 +797,7 @@ impl Gen<'_> {
                     }
                     let _ = writeln!(out, "}}\n\nimpl {n} {{\n    pub fn write(&self, w: &mut PacketWriter) {{\n        w.branch({}, |w| {{", rec.fields.len());
                     for f in &rec.fields {
-                        let _ = writeln!(out, "            {}", self.rs_write(&format!("self.{}", rs_ident(&f.name)), &kind(self.r, &f.ty)));
+                        let _ = writeln!(out, "            {}", self.rs_write("w", &format!("self.{}", rs_ident(&f.name)), &kind(self.r, &f.ty)));
                     }
                     let _ = writeln!(out, "        }});\n    }}\n\n    pub fn read(c: Cursor<'_>) -> Result<{n}, MarshalError> {{\n        let b = c.as_branch()?;\n        Ok({n} {{");
                     for (k, f) in rec.fields.iter().enumerate() {
@@ -797,7 +814,7 @@ impl Gen<'_> {
                     let _ = writeln!(out, "}}\n\nimpl {n} {{\n    /// Writes its payload alone, whose node's type says its case.\n    pub fn write(&self, w: &mut PacketWriter) {{\n        match self {{");
                     for c in &v.cases {
                         let k = kind(self.r, c.ty.as_ref().unwrap_or(&Type::Bool));
-                        let _ = writeln!(out, "            {n}::{}(v) => {{ {} }}", pascal(&c.name), self.rs_write("(*v)", &k));
+                        let _ = writeln!(out, "            {n}::{}(v) => {{ {} }}", pascal(&c.name), self.rs_write("w", "(*v)", &k));
                     }
                     // A case is told by its node's class, as the TypeScript tells it.
                     let _ = writeln!(out, "        }}\n    }}\n\n    pub fn read(c: Cursor<'_>) -> Result<{n}, MarshalError> {{\n        let t = c.type_();");
@@ -843,16 +860,35 @@ impl Gen<'_> {
         }
     }
 
-    fn ts_enc(&self, e: &str, k: &Kind) -> String {
+    /// Writes `e` into the writer `w`, as `rs_write` does.
+    fn ts_write(&self, w: &str, e: &str, k: &Kind) -> String {
         match k {
-            Kind::S64 => format!("BigInt.asUintN(64, {e})"),
-            Kind::List(el) => format!("new Branch({e}.map((x) => {}))", self.ts_enc("x", el)),
-            Kind::Record(t) => format!("{}({e})", self.ts_path(*t, "write_")),
-            Kind::Option(el) if matches!(**el, Kind::List(_) | Kind::Record(_)) => {
-                format!("{e} === null ? null : {}", self.ts_enc(e, el))
-            }
-            _ => e.to_string(),
+            Kind::Bool => format!("{w}.bool({e});"),
+            Kind::Int { signed: false, rs: "u8" } => format!("{w}.u8({e});"),
+            Kind::Int { signed: false, .. } | Kind::Handle => format!("{w}.u32({e});"),
+            Kind::Int { signed: true, .. } => format!("{w}.i32({e});"),
+            Kind::U64 => format!("{w}.u64({e});"),
+            Kind::S64 => format!("{w}.i64({e});"),
+            Kind::Float { .. } => format!("{w}.f64({e});"),
+            Kind::Str => format!("{w}.str({e});"),
+            Kind::Array { seq, .. } => format!("{w}.array(SequenceType.{seq}, {e});"),
+            Kind::List(el) => format!(
+                "{w}.branch({e}.length, ({w}) => {e}.forEach((x) => {{ {} }}));",
+                self.ts_write(w, "x", el)
+            ),
+            Kind::Record(t) => format!("{}({w}, {e});", self.ts_path(*t, "write_")),
+            Kind::Enum(_) => format!("{w}.u32({e});"),
+            Kind::Option(el) => format!("if ({e} === null) {w}.nil(); else {{ {} }}", self.ts_write(w, e, el)),
         }
+    }
+
+    /// The fields `ps` as a packet's: none, or how many and what writes them.
+    fn ts_args(&self, ps: &[(String, Kind)]) -> String {
+        if ps.is_empty() {
+            return "null".into();
+        }
+        let writes: Vec<String> = ps.iter().map(|(n, k)| self.ts_write("w_", n, k)).collect();
+        format!("[{}, (w_) => {{ {} }}]", ps.len(), writes.join(" "))
     }
 
     fn ts_dec(&self, c: &str, k: &Kind) -> String {
@@ -860,10 +896,10 @@ impl Gen<'_> {
             Kind::Bool => format!("{c}.get_bool()"),
             Kind::Int { .. } | Kind::Float { .. } | Kind::Handle => format!("{c}.get_number()"),
             Kind::U64 => format!("{c}.get_u64()"),
-            Kind::S64 => format!("BigInt.asIntN(64, {c}.get_u64())"),
+            Kind::S64 => format!("get_as<bigint>({c}, ScalarType.I64)"),
             Kind::Enum(_) => format!("({c}.get_number() as {})", self.ts_ty(k)),
             Kind::Str => format!("{c}.get_str()"),
-            Kind::Array { ts, .. } => format!("({c}.get() as {ts})"),
+            Kind::Array { ts, seq, .. } => format!("get_as<{ts}>({c}, SequenceType.{seq})"),
             Kind::List(el) => format!("{c}.as_branch().children().map((c) => {})", self.ts_dec("c", el)),
             Kind::Record(t) => format!("{}({c})", self.ts_path(*t, "read_")),
             Kind::Option(el) => format!("{c}.get_opt((c) => {})", self.ts_dec("c", el)),
@@ -879,8 +915,7 @@ impl Gen<'_> {
             let n = pascal(name);
             match &td.kind {
                 TypeDefKind::Enum(e) => {
-                    let members: Vec<(String, String)> = members(e).into_iter().map(|(_, name, k)| (name, k)).collect();
-                    let _ = writeln!(out, "{}\n", ts_enum(&n, &members).join("\n"));
+                    let _ = writeln!(out, "{}\n", ts_enum(&n, &members(e)).join("\n"));
                 }
                 TypeDefKind::Record(rec) => {
                     let _ = writeln!(out, "export interface {n} {{");
@@ -890,9 +925,9 @@ impl Gen<'_> {
                     let fields: Vec<String> = rec
                         .fields
                         .iter()
-                        .map(|f| self.ts_enc(&format!("r.{}", ts_ident(&f.name)), &kind(self.r, &f.ty)))
+                        .map(|f| self.ts_write("w", &format!("r.{}", ts_ident(&f.name)), &kind(self.r, &f.ty)))
                         .collect();
-                    let _ = writeln!(out, "}}\n\nexport function write_{n}(r: {n}): Branch {{\n  return new Branch([{}]);\n}}\n\nexport function read_{n}(c: NodeCursor): {n} {{\n  const b = c.as_branch();\n  return {{", fields.join(", "));
+                    let _ = writeln!(out, "}}\n\nexport function write_{n}(w: PacketWriter, r: {n}): void {{\n  w.branch({}, (w) => {{ {} }});\n}}\n\nexport function read_{n}(c: NodeCursor): {n} {{\n  const b = c.as_branch();\n  return {{", rec.fields.len(), fields.join(" "));
                     for (k, f) in rec.fields.iter().enumerate() {
                         let _ = writeln!(out, "    {}: {},", ts_ident(&f.name), self.ts_dec(&format!("b.at({k})"), &kind(self.r, &f.ty)));
                     }
@@ -905,9 +940,9 @@ impl Gen<'_> {
                         .map(|c| (c.name.clone(), kind(self.r, c.ty.as_ref().unwrap_or(&Type::Bool))))
                         .collect();
                     let alts: Vec<String> = cases.iter().map(|(c, k)| format!("{{ tag: \"{c}\"; val: {} }}", self.ts_ty(k))).collect();
-                    let _ = writeln!(out, "export type {n} = {};\n\n/** Its payload alone, whose node's type says its case. */\nexport function write_{n}(v: {n}): Arg {{\n  switch (v.tag) {{", alts.join(" | "));
+                    let _ = writeln!(out, "export type {n} = {};\n\n/** Its payload alone, whose node's type says its case. */\nexport function write_{n}(w: PacketWriter, v: {n}): void {{\n  switch (v.tag) {{", alts.join(" | "));
                     for (c, k) in &cases {
-                        let _ = writeln!(out, "    case \"{c}\":\n      return {};", self.ts_enc("v.val", k));
+                        let _ = writeln!(out, "    case \"{c}\":\n      {}\n      return;", self.ts_write("w", "v.val", k));
                     }
                     let _ = writeln!(out, "  }}\n}}\n\nexport function read_{n}(c: NodeCursor): {n} {{");
                     let mut ordered: Vec<&(String, Kind)> = cases.iter().filter(|(_, k)| node_class(k) == Some("branch")).collect();
@@ -1113,6 +1148,20 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
             }
         }
     }
+    // What the package's world exports and imports, by interface: whether
+    // the guest serves it.
+    let world = match p.worlds.values().collect::<Vec<_>>()[..] {
+        [] => None,
+        [&w] => Some(&r.worlds[w]),
+        _ => return Err(format!("{pname}: more than one world")),
+    };
+    let has = |m: &IndexMap<WorldKey, WorldItem>, i: InterfaceId| {
+        m.values().any(|w| matches!(w, WorldItem::Interface { id, .. } if *id == i))
+    };
+    let guest = match t.rs {
+        Some(_) => package(root, &format!("{}/Cargo.toml", t.side))?.0 == GUEST,
+        None => false,
+    };
     let src = t.wit;
     let mut rs = String::new();
     let mut outs = Vec::new();
@@ -1138,16 +1187,24 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
             rs_uses: RefCell::default(),
             externs: &externs,
         };
+        // Each side's roles: whether it serves and calls the interface.
+        let (rs_roles, ts_roles) = match world {
+            _ if objs.is_empty() => ((false, false), (false, false)),
+            Some(w) if has(&w.exports, i) => ((guest, !guest), (false, true)),
+            Some(w) if has(&w.imports, i) => ((!guest, guest), (true, false)),
+            Some(_) => return Err(format!("{at}: in no world of its package")),
+            None => return Err(format!("{at}: its package has no world")),
+        };
         let m = rs_ident(iname);
         if let Some(dir) = rs_dir {
             let path = format!("{dir}/{m}.rs");
-            let text = format!("// {}\n//\n// {}\n\n{}", package_path(root, &path)?, mark(src, TOOL), g.rs_iface(&objs));
+            let text = format!("// {}\n//\n// {}\n\n{}", package_path(root, &path)?, mark(src, TOOL), g.rs_iface(&objs, rs_roles));
             outs.push(Output::new(&path, text));
             let _ = writeln!(rs, "pub mod {m};");
         }
         if let Some(dir) = t.ts {
             let path = format!("{dir}/{m}.ts");
-            let body = g.ts_iface(&objs);
+            let body = g.ts_iface(&objs, ts_roles);
             let imports = g.ts_uses(&body, &link_ts);
             let text = format!("// {}\n//\n// {}\n\n{imports}\n{body}", package_path(root, &path)?, mark(src, TOOL));
             outs.push(Output::new(&path, text));

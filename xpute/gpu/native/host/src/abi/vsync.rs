@@ -10,7 +10,6 @@
     reason = "generated from WIT"
 )]
 
-use core::future::Future;
 use std::rc::Rc;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -19,13 +18,10 @@ use xpute_kit::wire::xtp::{
 };
 use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 use xpute_native_host::link;
-use xpute_native_host::wait::wait;
+use xpute_native_host::wait;
 
 /// The interface's handle, named by `xpute:gpu/vsync` (frame.json `NAMED`).
 pub const HANDLE: Handle = 0x42eda6;
-
-/// The interface's qualified name: its package and its name.
-pub const NAME: [&str; 2] = ["xpute:gpu", "vsync"];
 
 /// `next`
 pub const NEXT: Method = 0;
@@ -37,12 +33,12 @@ pub trait Vsync {
 struct VsyncObject(Rc<dyn Vsync>);
 
 impl Object for VsyncObject {
-    fn call(&self, m: Method, tag: Tag, args: Option<BranchCursor<'_>>) -> Reply {
+    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
         let run = || -> Result<Reply, MarshalError> {
-            Ok(match m {
+            Ok(match m_ {
                 NEXT => {
                     self.0.next(Return::new(
-                        tag,
+                        tag_,
                         link::on_cancel,
                         Box::new(move |got| {
                             let reply = match got {
@@ -50,7 +46,7 @@ impl Object for VsyncObject {
                                 Err(e) => Reply::from(e as i32),
                             };
                             link::task_return(
-                                tag,
+                                tag_,
                                 reply.result,
                                 reply
                                     .data
@@ -71,12 +67,4 @@ impl Object for VsyncObject {
 /// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn Vsync>) {
     link::mount_named(HANDLE, Rc::new(VsyncObject(imp)));
-}
-
-pub fn next() -> impl Future<Output = Result<(), Errno>> {
-    let sent = wait(HANDLE, NEXT, None, ());
-    async move {
-        let (r, data, lent) = sent.await;
-        xpute_link::answer(r).map(|_| ())
-    }
 }

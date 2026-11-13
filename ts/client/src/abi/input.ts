@@ -2,23 +2,11 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import {
-  type Link,
-  type LinkObject,
-  type Method,
-  refusal_of,
-  type Sender,
-  type Handle,
-  uri,
-} from "@xpute/link/link.ts";
+import { type Method, type Sender, type Handle } from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `pxl:core/input` (frame.json `NAMED`). */
 export const HANDLE: Handle = 0x5ee0f8;
-
-/** The interface's qualified name: its package and its name. */
-export const NAME = uri("pxl:core", "input");
 
 /** `pointer` */
 export const POINTER: Method = 0;
@@ -40,6 +28,8 @@ export const PointerPhase = {
   Move: 1,
   Up: 2,
   Out: 3,
+  /** The pointer's gesture ends with no tap: the platform took it, or the UI
+   * spent it on something of its own. */
   Cancel: 4,
 } as const;
 export type PointerPhase = (typeof PointerPhase)[keyof typeof PointerPhase];
@@ -49,9 +39,10 @@ export type PointerPhase = (typeof PointerPhase)[keyof typeof PointerPhase];
 export function pointer_phase_name(
   n: number,
 ): keyof typeof PointerPhase | undefined {
-  return (Object.keys(PointerPhase) as (keyof typeof PointerPhase)[]).find(
-    (k) => PointerPhase[k] === n,
-  );
+  for (const k in PointerPhase)
+    if (PointerPhase[k as keyof typeof PointerPhase] === n)
+      return k as keyof typeof PointerPhase;
+  return undefined;
 }
 
 /** The `PointerPhase` member `n` is, or null for a number no member has. */
@@ -71,9 +62,10 @@ export type PointerType = (typeof PointerType)[keyof typeof PointerType];
 export function pointer_type_name(
   n: number,
 ): keyof typeof PointerType | undefined {
-  return (Object.keys(PointerType) as (keyof typeof PointerType)[]).find(
-    (k) => PointerType[k] === n,
-  );
+  for (const k in PointerType)
+    if (PointerType[k as keyof typeof PointerType] === n)
+      return k as keyof typeof PointerType;
+  return undefined;
 }
 
 /** The `PointerType` member `n` is, or null for a number no member has. */
@@ -81,103 +73,8 @@ export function pointer_type_of(n: number): PointerType | null {
   return pointer_type_name(n) === undefined ? null : (n as PointerType);
 }
 
-export interface Input {
-  pointer(
-    phase: PointerPhase,
-    pointer_type: PointerType,
-    id: number,
-    button: number,
-    x: number,
-    y: number,
-  ): void;
-  typing(typing: boolean): void;
-  wheel(delta_y: number): void;
-  pinch(scale: number): void;
-  move(x: number, y: number): void;
-  xr_pose(
-    x: number,
-    y: number,
-    z: number,
-    qx: number,
-    qy: number,
-    qz: number,
-    qw: number,
-  ): void;
-  xr_pose_end(): void;
-}
-
-/** The object over `imp`. */
-function object(imp: Input): LinkObject {
-  return {
-    call(m, tag, args) {
-      try {
-        switch (m) {
-          case POINTER: {
-            if (args === null) return Errno.EBADMSG;
-            imp.pointer(
-              args.at(0).get_number() as PointerPhase,
-              args.at(1).get_number() as PointerType,
-              args.at(2).get_number(),
-              args.at(3).get_number(),
-              args.at(4).get_number(),
-              args.at(5).get_number(),
-            );
-            return 0;
-          }
-          case TYPING: {
-            if (args === null) return Errno.EBADMSG;
-            imp.typing(args.at(0).get_bool());
-            return 0;
-          }
-          case WHEEL: {
-            if (args === null) return Errno.EBADMSG;
-            imp.wheel(args.at(0).get_number());
-            return 0;
-          }
-          case PINCH: {
-            if (args === null) return Errno.EBADMSG;
-            imp.pinch(args.at(0).get_number());
-            return 0;
-          }
-          case MOVE: {
-            if (args === null) return Errno.EBADMSG;
-            imp.move(args.at(0).get_number(), args.at(1).get_number());
-            return 0;
-          }
-          case XR_POSE: {
-            if (args === null) return Errno.EBADMSG;
-            imp.xr_pose(
-              args.at(0).get_number(),
-              args.at(1).get_number(),
-              args.at(2).get_number(),
-              args.at(3).get_number(),
-              args.at(4).get_number(),
-              args.at(5).get_number(),
-              args.at(6).get_number(),
-            );
-            return 0;
-          }
-          case XR_POSE_END: {
-            imp.xr_pose_end();
-            return 0;
-          }
-          default:
-            return Errno.ENOSYS;
-        }
-      } catch (e) {
-        return refusal_of(e);
-      }
-    },
-  };
-}
-
-/** Serves `imp` under the interface's handle. */
-export function mount(l: Pick<Link, "mount_named">, imp: Input): void {
-  l.mount_named(HANDLE, object(imp));
-}
-
 export async function pointer(
-  link: Sender,
+  link_: Sender,
   phase: PointerPhase,
   pointer_type: PointerType,
   id: number,
@@ -185,39 +82,63 @@ export async function pointer(
   x: number,
   y: number,
 ): Promise<void> {
-  const a = await link.send(HANDLE, POINTER, [
-    phase,
-    pointer_type,
-    id,
-    button,
-    x,
-    y,
+  const a_ = await link_.send(HANDLE, POINTER, [
+    6,
+    (w_) => {
+      w_.u32(phase);
+      w_.u32(pointer_type);
+      w_.i32(id);
+      w_.i32(button);
+      w_.f64(x);
+      w_.f64(y);
+    },
   ]);
-  if (a.result < 0) throw new XputeError(a.result);
+  if (a_.result < 0) throw new XputeError(a_.result);
 }
 
-export async function typing(link: Sender, typing: boolean): Promise<void> {
-  const a = await link.send(HANDLE, TYPING, [typing]);
-  if (a.result < 0) throw new XputeError(a.result);
+export async function typing(link_: Sender, typing: boolean): Promise<void> {
+  const a_ = await link_.send(HANDLE, TYPING, [
+    1,
+    (w_) => {
+      w_.bool(typing);
+    },
+  ]);
+  if (a_.result < 0) throw new XputeError(a_.result);
 }
 
-export async function wheel(link: Sender, delta_y: number): Promise<void> {
-  const a = await link.send(HANDLE, WHEEL, [delta_y]);
-  if (a.result < 0) throw new XputeError(a.result);
+export async function wheel(link_: Sender, delta_y: number): Promise<void> {
+  const a_ = await link_.send(HANDLE, WHEEL, [
+    1,
+    (w_) => {
+      w_.f64(delta_y);
+    },
+  ]);
+  if (a_.result < 0) throw new XputeError(a_.result);
 }
 
-export async function pinch(link: Sender, scale: number): Promise<void> {
-  const a = await link.send(HANDLE, PINCH, [scale]);
-  if (a.result < 0) throw new XputeError(a.result);
+export async function pinch(link_: Sender, scale: number): Promise<void> {
+  const a_ = await link_.send(HANDLE, PINCH, [
+    1,
+    (w_) => {
+      w_.f64(scale);
+    },
+  ]);
+  if (a_.result < 0) throw new XputeError(a_.result);
 }
 
-export async function move(link: Sender, x: number, y: number): Promise<void> {
-  const a = await link.send(HANDLE, MOVE, [x, y]);
-  if (a.result < 0) throw new XputeError(a.result);
+export async function move(link_: Sender, x: number, y: number): Promise<void> {
+  const a_ = await link_.send(HANDLE, MOVE, [
+    2,
+    (w_) => {
+      w_.i32(x);
+      w_.i32(y);
+    },
+  ]);
+  if (a_.result < 0) throw new XputeError(a_.result);
 }
 
 export async function xr_pose(
-  link: Sender,
+  link_: Sender,
   x: number,
   y: number,
   z: number,
@@ -226,11 +147,22 @@ export async function xr_pose(
   qz: number,
   qw: number,
 ): Promise<void> {
-  const a = await link.send(HANDLE, XR_POSE, [x, y, z, qx, qy, qz, qw]);
-  if (a.result < 0) throw new XputeError(a.result);
+  const a_ = await link_.send(HANDLE, XR_POSE, [
+    7,
+    (w_) => {
+      w_.f64(x);
+      w_.f64(y);
+      w_.f64(z);
+      w_.f64(qx);
+      w_.f64(qy);
+      w_.f64(qz);
+      w_.f64(qw);
+    },
+  ]);
+  if (a_.result < 0) throw new XputeError(a_.result);
 }
 
-export async function xr_pose_end(link: Sender): Promise<void> {
-  const a = await link.send(HANDLE, XR_POSE_END, []);
-  if (a.result < 0) throw new XputeError(a.result);
+export async function xr_pose_end(link_: Sender): Promise<void> {
+  const a_ = await link_.send(HANDLE, XR_POSE_END, null);
+  if (a_.result < 0) throw new XputeError(a_.result);
 }

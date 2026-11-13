@@ -25,7 +25,7 @@ use pxl_engine::ground;
 use pxl_engine::object::{self, Cut, Table};
 use pxl_engine::way;
 use pxl_engine::world::{self, Inheritance};
-use pxl_spec::asset::cube::ground as palette;
+use pxl_spec::asset::cube::Ground;
 use pxl_spec::brick::BRICK_SHIFT;
 use pxl_spec::space::layer::area;
 use pxl_spec::value;
@@ -346,9 +346,9 @@ fn tell(
         is_cell && answer::fill_eighths(got.asset[0]) < 8 && v != 0,
     );
     t.add("cell, a way's", is_cell && value::transports(v));
-    t.add("cell, stone", is_cell && v == palette::stone as u32);
-    t.add("cell, soil", is_cell && v == palette::soil as u32);
-    t.add("cell, sandstone", is_cell && v == palette::sandstone as u32);
+    t.add("cell, stone", is_cell && v == Ground::stone as u32);
+    t.add("cell, soil", is_cell && v == Ground::soil as u32);
+    t.add("cell, sandstone", is_cell && v == Ground::sandstone as u32);
     t.add("cell, unknown", is_cell && v == value::UNKNOWN);
     t.add(
         "cell, coarser than asked, past the leaves",

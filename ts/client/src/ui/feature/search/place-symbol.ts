@@ -1,10 +1,21 @@
 // @pxl/client/ui/feature/search/place-symbol.ts
 //
-// GENERATED from asset/raw/place/symbol/ (pxl-tool bin/asset.rs)
+// GENERATED from asset/raw/place/symbol/ (xpute-gen data.rs)
 //
-// Carto's place symbols (openstreetmap-carto `symbols/`, CC0) as outlines,
-// symbol n at `PLACE_SYMBOLS[n - 1]` (place_theme.spec.ts `SYMBOL`): its box,
-// and each shape's path data and whether it fills even-odd.
+// Carto's place symbols (openstreetmap-carto `symbols/`, CC0), symbol n the (n - 1)th in
+// spec/spec/asset/ingest.json's `symbols` order: in Rust each a mask of its coverage, a
+// byte a pixel, `SYMBOL_PX` a side, row by row, in `symbol.mask`; in TypeScript its
+// outline at `PLACE_SYMBOLS[n - 1]` (place_theme.spec.ts `SYMBOL`), its box and each
+// shape's path data and whether it fills even-odd.
+
+/** A mask's side, in device pixels. */
+export const SYMBOL_PX = 28 as number;
+
+/** The device pixels a pixel the masks are rasterized at. */
+export const SYMBOL_RATIO = 2 as number;
+
+/** How many symbols there are. */
+export const SYMBOL_CNT = 68 as number;
 
 export interface PlaceSymbol {
   box: readonly [number, number];

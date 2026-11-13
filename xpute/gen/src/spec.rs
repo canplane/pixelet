@@ -510,16 +510,28 @@ pub fn ts_ident(k: &str) -> String {
     }
 }
 
-/// An enum's Rust, as every enum has it: its members, each `(identifier,
-/// name as its source spells it, number)`, held in `repr`, with `ALL`, `of`
-/// (a number to its member) and `name` (a member to its name), at `indent`.
-pub fn rs_enum(e: &str, members: &[(String, String, String)], repr: &str, indent: &str) -> Vec<String> {
+/// An enum's member: its Rust identifier, its name as its source spells it,
+/// its number, and its doc.
+pub struct Member {
+    pub ident: String,
+    pub name: String,
+    pub number: String,
+    pub doc: Vec<String>,
+}
+
+/// An enum's Rust, as every enum has it: its members, held in `repr`, with
+/// `ALL`, `of` (a number to its member) and `name` (a member to its name), at
+/// `indent`.
+pub fn rs_enum(e: &str, members: &[Member], repr: &str, indent: &str) -> Vec<String> {
     let mut out = vec![
         format!("{indent}#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]"),
         format!("{indent}#[repr({repr})]"),
         format!("{indent}pub enum {e} {{"),
     ];
-    out.extend(members.iter().map(|(v, _, n)| format!("{indent}    {v} = {n},")));
+    for m in members {
+        out.extend(rs_doc(&m.doc, &format!("{indent}    "), "///"));
+        out.push(format!("{indent}    {} = {},", m.ident, m.number));
+    }
     out.extend([
         format!("{indent}}}"),
         String::new(),
@@ -527,7 +539,7 @@ pub fn rs_enum(e: &str, members: &[(String, String, String)], repr: &str, indent
         format!("{indent}    /// Every member, in its source's own order."),
         format!("{indent}    pub const ALL: [{e}; {}] = [", members.len()),
     ]);
-    out.extend(members.iter().map(|(v, _, _)| format!("{indent}        {e}::{v},")));
+    out.extend(members.iter().map(|m| format!("{indent}        {e}::{},", m.ident)));
     out.extend([
         format!("{indent}    ];"),
         String::new(),
@@ -535,7 +547,7 @@ pub fn rs_enum(e: &str, members: &[(String, String, String)], repr: &str, indent
         format!("{indent}    pub const fn of(val: {repr}) -> Option<{e}> {{"),
         format!("{indent}        match val {{"),
     ]);
-    out.extend(members.iter().map(|(v, _, n)| format!("{indent}            {n} => Some({e}::{v}),")));
+    out.extend(members.iter().map(|m| format!("{indent}            {} => Some({e}::{}),", m.number, m.ident)));
     out.extend([
         format!("{indent}            _ => None,"),
         format!("{indent}        }}"),
@@ -548,7 +560,7 @@ pub fn rs_enum(e: &str, members: &[(String, String, String)], repr: &str, indent
     out.extend(
         members
             .iter()
-            .map(|(v, name, _)| format!("{indent}            {e}::{v} => {},", json_str(name))),
+            .map(|m| format!("{indent}            {e}::{} => {},", m.ident, json_str(&m.name))),
     );
     out.extend([
         format!("{indent}        }}"),
@@ -559,16 +571,18 @@ pub fn rs_enum(e: &str, members: &[(String, String, String)], repr: &str, indent
 }
 
 /// An enum's TypeScript, as every enum has it: the object of its members,
-/// each `(name, number)`, as const; its type, the union of their numbers;
-/// `<e>_name`, a number to the name of the member it numbers; and `<e>_of`, a
-/// number to its member, or null for a number no member has.
-pub fn ts_enum(e: &str, members: &[(String, String)]) -> Vec<String> {
+/// each its name to its number, as const; its type, the union of their numbers;
+/// `<e>_name`, a number to the name of the member it numbers, which reads no
+/// global, so an enum may be named as one (`Object`); and `<e>_of`, a number
+/// to its member, or null for a number no member has.
+pub fn ts_enum(e: &str, members: &[Member]) -> Vec<String> {
     let f = snake(e);
     let mut out = vec![String::new(), format!("export const {e} = {{")];
-    out.extend(members.iter().map(|(name, n)| {
-        let key = if is_ts_ident(name) { name.clone() } else { json_str(name) };
-        format!("  {key}: {n},")
-    }));
+    for m in members {
+        let key = if is_ts_ident(&m.name) { m.name.clone() } else { json_str(&m.name) };
+        out.extend(ts_doc(&m.doc, "  "));
+        out.push(format!("  {key}: {},", m.number));
+    }
     out.extend([
         "} as const;".to_string(),
         format!("export type {e} = (typeof {e})[keyof typeof {e}];"),
@@ -576,7 +590,8 @@ pub fn ts_enum(e: &str, members: &[(String, String)]) -> Vec<String> {
         format!("/** The name of the `{e}` member numbered `n`, or undefined for a number"),
         " * no member has. */".to_string(),
         format!("export function {f}_name(n: number): keyof typeof {e} | undefined {{"),
-        format!("  return (Object.keys({e}) as (keyof typeof {e})[]).find((k) => {e}[k] === n);"),
+        format!("  for (const k in {e}) if ({e}[k as keyof typeof {e}] === n) return k as keyof typeof {e};"),
+        "  return undefined;".to_string(),
         "}".to_string(),
         String::new(),
         format!("/** The `{e}` member `n` is, or null for a number no member has. */"),

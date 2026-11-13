@@ -10,12 +10,6 @@
 
 export const IDX_BITS = 10 as number;
 
-export const KIND = {
-  cube: 0 as number,
-  decor: 1 as number,
-  marker: 2 as number,
-} as const;
-
 export const Kind = {
   cube: 0,
   decor: 1,
@@ -26,9 +20,9 @@ export type Kind = (typeof Kind)[keyof typeof Kind];
 /** The name of the `Kind` member numbered `n`, or undefined for a number
  * no member has. */
 export function kind_name(n: number): keyof typeof Kind | undefined {
-  return (Object.keys(Kind) as (keyof typeof Kind)[]).find(
-    (k) => Kind[k] === n,
-  );
+  for (const k in Kind)
+    if (Kind[k as keyof typeof Kind] === n) return k as keyof typeof Kind;
+  return undefined;
 }
 
 /** The `Kind` member `n` is, or null for a number no member has. */

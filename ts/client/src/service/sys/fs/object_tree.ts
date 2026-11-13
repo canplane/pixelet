@@ -13,14 +13,14 @@
  * an octkey's digits (pxl-spec space/hierarchy/morton.rs `name`), the nodes a
  * write reaches (pxl-core domain/layer/object/sparse_tree.rs `set`), and the fold
  * (pxl-engine object.rs `fold`, `share` and `voxel`, and pxl-spec share.rs `FULL`).
- * The values a fold counts as filling are generated (voxel.spec.ts).
+ * The values a fold counts as filling are the cube's (abi/cube.spec.ts).
  *
  * The backend stands in for a server. Its rules are a copy, never a second
  * owner: they change only to follow the store.
  */
 
 import { SHARD_ZOOM } from "@/abi/file.spec.ts";
-import { AIR, grounds, objects } from "./voxel.spec.ts";
+import { ground_of, object_of, Sentinel } from "@/abi/cube.spec.ts";
 
 /** A write, laid out as file.json's `write`. A leaf is kept as the write that
  * made it. `text` is a marker's words, the one record a leaf can carry. */
@@ -97,7 +97,9 @@ function fold_word(kind: number, share: number): number {
 
 /** Whether a value is drawn as a voxel (pxl-engine object.rs `voxel`). */
 function voxel(val: number): boolean {
-  return val === AIR || grounds(val) || objects(val);
+  return (
+    val === Sentinel.air || ground_of(val) !== null || object_of(val) !== null
+  );
 }
 
 /** The word a leaf of `id` gives its parent's fold (pxl-engine object.rs

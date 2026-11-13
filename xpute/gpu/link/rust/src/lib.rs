@@ -10,10 +10,6 @@
 #[path = "api.spec.rs"]
 pub mod spec;
 
-/// The URI the guest opens its GPU device by (gpu/wit/gpu.wit `device`),
-/// which the GPU's hosts mount.
-pub const DEVICE_URI: [&str; 2] = ["xpute:gpu", "device"];
-
 #[path = "enum.spec.rs"]
 pub mod enums;
 

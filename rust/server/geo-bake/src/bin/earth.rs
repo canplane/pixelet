@@ -364,7 +364,7 @@ fn run() -> Result<(), String> {
     write_manifest(
         &out.join(MANIFEST),
         git_sha().as_deref(),
-        serde_json::json!({ "objects": t.baked + 1, "z": EARTH_ZOOM, "format": FORMAT.earth }),
+        serde_json::json!({ "objects": t.baked + 1, "z": EARTH_ZOOM, "format": FORMAT::earth }),
     )?;
     // The copy an upload takes (script/publish.py), the global picture with the tiles.
     let copy = set.publish(|_| true)?;

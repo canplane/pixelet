@@ -23,6 +23,14 @@
     reason = "generated from the spec"
 )]
 
+/// The URI the guest opens its GPU device by (gpu/wit/gpu.wit `device`), which the GPU's
+/// hosts mount.
+pub const DEVICE_URI: &[&str] = &["xpute:gpu", "device"];
+
+/// The URI a guest that draws serves its surface under (gpu/wit/surface.wit `surface`),
+/// which its host opens.
+pub const SURFACE_URI: &[&str] = &["xpute:gpu", "surface"];
+
 /// The value of an optional field that is unset, such as an absent index or handle.
 pub const NONE: u32 = 4294967295;
 

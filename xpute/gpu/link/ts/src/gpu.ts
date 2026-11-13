@@ -7,11 +7,6 @@
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { uri } from "@xpute/link";
-
-/** The URI the guest opens its GPU device by (gpu/wit/gpu.wit `device`),
- * which the GPU's hosts mount (xpute-gpu-link lib.rs). */
-export const DEVICE_URI = uri("xpute:gpu", "device");
 
 /** This is what a guest asks of its GPU, as its program's data spec says, by
  * WebGPU's names: the power preference, the features the device must have,

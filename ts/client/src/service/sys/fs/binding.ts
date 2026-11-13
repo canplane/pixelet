@@ -69,7 +69,7 @@ function string_of(rest: Path, form: RegExp): string | undefined {
 }
 
 /** A bake's tiles, each by its quadkey. */
-function bake(kind: BaseLayer): Handler {
+function bake(kind: keyof typeof BaseLayer): Handler {
   return {
     open(rest, signal) {
       const key = string_of(rest, QUADKEY) ?? none();

@@ -1,67 +1,32 @@
 // pxl-tool/spec/asset.rs
 
+use xpute_gen::spec::data::enum_members;
+
 use super::catalog::{slots, CUBE_JSON, DECOR_JSON};
-use super::{
-    align_star, casing_note, file, mark, js_num, json_str, read, rs_doc, rs_ident, ts_doc,
-    Node, Output,
-};
+use super::{casing_note, file, js_num, json_str, mark, read, rs_ident, Node, Output};
 const ID_JSON: &str = "spec/spec/asset/id.json";
 const COLOR_JSON: &str = "spec/spec/asset/color.json";
 
-struct Entry<'a> {
-    name: &'a str,
-    /// The name every locale shows, for an item the UI lists.
-    label: Option<&'a str>,
-    val: u32,
-    transport: bool,
-    doc: Option<Vec<String>>,
-}
-
-/// A list's entries in order, a section heading as `Err(id)`.
-fn entries<'a>(list: &'a Node, what: &str) -> Result<Vec<Result<Entry<'a>, &'a str>>, String> {
-    let list = list
-        .get("entries")
-        .and_then(Node::arr)
-        .or_else(|| list.arr())
-        .ok_or(format!("{CUBE_JSON}: {what} has no entries"))?;
-    list.iter()
-        .map(|e| {
-            if let Some(section) = e.str_at("section") {
-                return Ok(Err(section));
-            }
-            let name = e
-                .str_at("name")
-                .ok_or(format!("{CUBE_JSON}: {what}: an entry with no name"))?;
-            let val = e
-                .get("val")
-                .and_then(Node::num)
-                .ok_or(format!("{CUBE_JSON}: {name} has no value"))? as u32;
-            Ok(Ok(Entry {
-                name,
-                label: e.str_at("label"),
-                val,
-                transport: matches!(e.get("transport"), Some(Node::Bool(true))),
-                doc: e.lines_at("$doc"),
-            }))
+/// A group's cubes (`sentinel`, `ground`, `object`), each its name and its
+/// number, as the generator numbers its enum.
+fn cubes(spec: &Node, group: &str) -> Result<Vec<(String, u32)>, String> {
+    let list = spec.get(group).ok_or(format!("{CUBE_JSON}: no {group}"))?;
+    enum_members(group, list)?
+        .into_iter()
+        .map(|m| {
+            let number = m.number.parse().map_err(|_| format!("{CUBE_JSON}: {} has no number", m.name))?;
+            Ok((m.name, number))
         })
         .collect()
-}
-
-fn cube_entries<'l, 'a>(
-    list: &'l [Result<Entry<'a>, &'a str>],
-) -> impl Iterator<Item = &'l Entry<'a>> {
-    list.iter().filter_map(|e| e.as_ref().ok())
 }
 
 /// A cube's number by its group (`sentinel`, `ground`, `object`) and name.
 pub(crate) fn cube_number(group: &str, name: &str) -> Result<u32, String> {
     let spec = read(CUBE_JSON)?;
-    let list = entries(
-        spec.get(group).ok_or(format!("{CUBE_JSON}: no {group}"))?,
-        group,
-    )?;
-    let val = cube_entries(&list).find(|e| e.name == name).map(|e| e.val);
-    val.ok_or(format!("{CUBE_JSON}: {group}.{name} is no cube"))
+    let number = cubes(&spec, group)?.into_iter().find(|(n, _)| *n == name);
+    number
+        .map(|(_, k)| k)
+        .ok_or(format!("{CUBE_JSON}: {group}.{name} is no cube"))
 }
 
 /// The path the cube kind's texture pack ships at (`cube.json` `pack`).
@@ -78,51 +43,13 @@ pub fn pack_path() -> Result<String, String> {
 /// object's colors, and the sentinels, of which the world draws the bedrock.
 pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
     let spec = read(CUBE_JSON)?;
-    let ground = entries(spec.get("ground").ok_or("no ground")?, "ground")?;
-    let object = entries(spec.get("object").ok_or("no object")?, "object")?;
-    let sentinel = entries(spec.get("sentinel").ok_or("no sentinel")?, "sentinel")?;
-    Ok(vec![
-        (
-            "ground".into(),
-            cube_entries(&ground).map(|e| e.name.to_string()).collect(),
-        ),
-        (
-            "object".into(),
-            cube_entries(&object)
-                .filter(|e| is_color(e))
-                .map(|e| e.name.to_string())
-                .collect(),
-        ),
-        (
-            "sentinel".into(),
-            cube_entries(&sentinel)
-                .map(|e| e.name.to_string())
-                .collect(),
-        ),
-    ])
-}
-
-/// Whether an object's entry is one of its colors, which the catalog gives out to be placed
-/// past a ground byte: every entry but air.
-fn is_color(e: &Entry) -> bool {
-    e.name != "air"
-}
-
-/// Each placeable cube with the section heading it is listed under.
-fn with_sections<'l, 'a>(
-    list: &'l [Result<Entry<'a>, &'a str>],
-) -> impl Iterator<Item = (&'a str, &'l Entry<'a>)> {
-    list.iter()
-        .scan("", |section, item| {
-            Some(match item {
-                Err(s) => {
-                    *section = s;
-                    None
-                }
-                Ok(e) => Some((*section, e)),
-            })
+    ["ground", "object", "sentinel"]
+        .into_iter()
+        .map(|group| {
+            let names = cubes(&spec, group)?.into_iter().map(|(n, _)| n);
+            Ok((group.to_string(), names.collect()))
         })
-        .flatten()
+        .collect()
 }
 
 /// Each ground palette entry's color by name, packed `0xRRGGBB`, as color.json gives it.
@@ -185,21 +112,22 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     rs.extend(head);
     rs.push(String::new());
     rs.extend(casing_note());
-    rs.extend(["", "use super::cube;", "use super::Swatch;", "use crate::color::rgb;"].map(String::from));
+    rs.extend(
+        [
+            "",
+            "use super::cube::{Ground, Object, Sentinel};",
+            "use super::Swatch;",
+            "use crate::color::rgb;",
+        ]
+        .map(String::from),
+    );
     let groups = [
-        ("sentinel", "sentinel", "u8"),
-        ("ground", "ground", "u8"),
-        ("object", "object", "u16"),
+        ("sentinel", "Sentinel", "u16"),
+        ("ground", "Ground", "u8"),
+        ("object", "Object", "u16"),
     ];
-    for (group, module, width) in groups {
-        let list = entries(
-            if group == "sentinel" {
-                types.get("sentinel").ok_or("no sentinel")?
-            } else {
-                types.get(group).ok_or(format!("no {group}"))?
-            },
-            group,
-        )?;
+    for (group, e, width) in groups {
+        let names: Vec<String> = cubes(&types, group)?.into_iter().map(|(n, _)| n).collect();
         let colors = spec
             .get(group)
             .ok_or(format!("color.json has no {group}"))?;
@@ -207,10 +135,10 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
             String::new(),
             format!("/// `{group}`'s color for a value."),
             format!("pub const fn {group}(t: {width}) -> Option<Swatch> {{"),
-            "    match t {".to_string(),
+            format!("    match {e}::of(t) {{"),
         ]);
         for (name, entry) in colors.entries() {
-            if !cube_entries(&list).any(|e| e.name == name.as_str()) {
+            if !names.contains(name) {
                 return Err(format!(
                     "color.json: {group}.{name} is nothing cube.json names"
                 ));
@@ -222,19 +150,17 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
                 .str_at("hex")
                 .ok_or(format!("color.json: {group}.{name} has no hex"))?;
             rs.push(format!(
-                "        cube::{module}::{} => Some(Swatch::new(rgb({}))),",
+                "        Some({e}::{}) => Some(const {{ Swatch::new(rgb({})) }}),",
                 rs_ident(name),
                 json_str(hex)
             ));
         }
         if group == "ground" {
-            for e in cube_entries(&list) {
-                if colors.get(e.name).is_none() {
-                    return Err(format!("color.json: ground.{} has no color", e.name));
-                }
+            if let Some(n) = names.iter().find(|n| colors.get(n).is_none()) {
+                return Err(format!("color.json: ground.{n} has no color"));
             }
             rs.push("        // A sentinel a baked cell can hold.".to_string());
-            rs.push("        _ => sentinel(t),".to_string());
+            rs.push("        None => sentinel(t as u16),".to_string());
         } else {
             rs.push("        _ => None,".to_string());
         }
@@ -255,447 +181,6 @@ fn kind_layout(name: &str) -> Result<(u32, u32), String> {
         number(id.get("KIND").and_then(|k| k.get(name)))
             .ok_or(format!("{ID_JSON}: no kind {name}"))?,
     ))
-}
-
-pub(crate) fn cube_outputs() -> Result<Vec<Output>, String> {
-    let spec = read(CUBE_JSON)?;
-    let sentinel = entries(spec.get("sentinel").ok_or("no sentinel")?, "sentinel")?;
-    let ground_node = spec.get("ground").ok_or("no ground")?;
-    let ground = entries(ground_node, "ground")?;
-    let object_node = spec.get("object").ok_or("no object")?;
-    let object = entries(object_node, "object")?;
-    let base = spec.get("base").ok_or(format!("{CUBE_JSON}: no base"))?;
-    let base_type = base.str_at("type").ok_or("base has no type")?;
-
-    // One value space: the sentinels and the palette entries within a byte, the object's own
-    // values past it.
-    let mut seen = std::collections::BTreeMap::new();
-    for e in cube_entries(&sentinel)
-        .chain(cube_entries(&ground))
-        .chain(cube_entries(&object))
-    {
-        if let Some(other) = seen.insert(e.val, e.name) {
-            return Err(format!(
-                "{CUBE_JSON}: {} and {other} are both {}",
-                e.name, e.val
-            ));
-        }
-    }
-    let (idx_bits, cube_kind) = kind_layout("cube")?;
-    for e in cube_entries(&ground) {
-        if e.val == 0 || e.val >= 255 {
-            return Err(format!(
-                "{CUBE_JSON}: ground.{} is {}, not within 1-254",
-                e.name, e.val
-            ));
-        }
-    }
-    for e in cube_entries(&object) {
-        if e.val <= 255 || e.val >> idx_bits != cube_kind {
-            return Err(format!(
-                "{CUBE_JSON}: object.{} is {}, not past a byte of the cube kind",
-                e.name, e.val
-            ));
-        }
-    }
-    for (group, vals) in [("ground", &ground), ("object", &object)] {
-        let vals: Vec<u32> = cube_entries(vals).map(|e| e.val).collect();
-        if vals.windows(2).any(|w| w[0] >= w[1]) {
-            return Err(format!(
-                "{CUBE_JSON}: {group} is numbered ascending, as its order is read"
-            ));
-        }
-    }
-
-    let head: Vec<String> = [
-        "//",
-        format!("// {}", mark("spec/spec/asset/cube.json", "pxl-tool spec/asset.rs")).as_str(),
-        "//",
-        "// One value space: a ground cell is a byte, a Carto palette entry numbered in the",
-        "// order Carto paints, and an object's value a u16 whose byte range is",
-        "// that palette and whose range past it is what only an object can be.",
-    ]
-    .map(String::from)
-    .to_vec();
-    let note = |n: &Node, indent: &str| {
-        n.lines_at("$doc")
-            .unwrap_or_default()
-            .iter()
-            .map(|l| {
-                if l.is_empty() {
-                    format!("{indent}//")
-                } else {
-                    format!("{indent}// {l}")
-                }
-            })
-            .collect::<Vec<_>>()
-    };
-
-    let mut ts = vec!["// @pxl/client/ui/shared/asset/cube.spec.ts".to_string()];
-    ts.extend(head.iter().cloned());
-    // Every placeable cube under its heading: the ground's palette entries, and the colors past a ground byte.
-    let cube_sections: Vec<(&str, &Entry)> = with_sections(&ground)
-        .chain(with_sections(&object).filter(|(_, e)| is_color(e)))
-        .collect();
-    let mut section_ids: Vec<&str> = Vec::new();
-    for (s, _) in &cube_sections {
-        if !section_ids.contains(s) {
-            section_ids.push(s);
-        }
-    }
-    ts.extend([
-        String::new(),
-        "/** The catalog's section a placeable cube is listed under, as Carto groups the palette entries. */"
-            .to_string(),
-        format!(
-            "export type CubeSection = {};",
-            section_ids
-                .iter()
-                .map(|s| format!("\"{s}\""))
-                .collect::<Vec<_>>()
-                .join(" | ")
-        ),
-    ]);
-    // The ground's and the object's cubes, each a module of constants read as
-    // a namespace, so a bundle inlines each cube it names.
-    let mut modules = Vec::new();
-    for (group, node, list) in [
-        ("ground", ground_node, &ground),
-        ("object", object_node, &object),
-    ] {
-        let package_path = format!("@pxl/client/ui/shared/asset/cube/{group}.spec.ts");
-        let mut m = vec![
-            format!("// {package_path}"),
-            "//".to_string(),
-            format!("// {}", mark("spec/spec/asset/cube.json", "pxl-tool spec/asset.rs")),
-        ];
-        m.extend(note(node, ""));
-        for item in list.iter() {
-            match item {
-                Err(section) => m.extend([String::new(), format!("// ---- {section} ----")]),
-                Ok(e) => {
-                    m.push(String::new());
-                    if let Some(doc) = &e.doc {
-                        m.extend(ts_doc(doc, "").into_iter().enumerate().map(|(i, l)| {
-                            if i == 0 {
-                                l
-                            } else {
-                                align_star(l, "")
-                            }
-                        }));
-                    }
-                    m.push(format!("export const {} = {};", e.name, e.val));
-                }
-            }
-        }
-        modules.push(Output::new(
-            &format!("ts/client/src/ui/shared/asset/cube/{group}.spec.ts"),
-            file(&m),
-        ));
-    }
-    ts.extend([
-        String::new(),
-        "import * as ground from \"./cube/ground.spec.ts\";".to_string(),
-        "import * as object from \"./cube/object.spec.ts\";".to_string(),
-        String::new(),
-        "export { ground, object };".to_string(),
-        String::new(),
-        "/** The placeable cubes: the placed colors first, then the palette entries in paint order. */"
-            .to_string(),
-        "export const CUBES: readonly number[] = [".to_string(),
-    ]);
-    ts.extend(
-        cube_entries(&object)
-            .filter(|e| is_color(e))
-            .chain(cube_entries(&ground))
-            .map(|e| format!("  {},", e.val)),
-    );
-    ts.extend([
-        "];".to_string(),
-        String::new(),
-        "/** Each placeable cube's section, by its number. */".to_string(),
-        "export const CUBE_SECTION: Readonly<Record<number, CubeSection>> = {".to_string(),
-    ]);
-    ts.extend(
-        cube_sections
-            .iter()
-            .map(|(s, e)| format!("  {}: \"{s}\",", e.val)),
-    );
-    ts.extend([
-        "};".to_string(),
-        String::new(),
-        "/** Each placeable cube's name, the one every locale shows: an item has one name. */"
-            .to_string(),
-        "export const CUBE_LABEL: Readonly<Record<number, string>> = {".to_string(),
-    ]);
-    for e in cube_entries(&object)
-        .filter(|e| is_color(e))
-        .chain(cube_entries(&ground))
-    {
-        let label = e
-            .label
-            .ok_or(format!("{CUBE_JSON}: {} has no label", e.name))?;
-        ts.push(format!("  {}: {},", e.val, json_str(label)));
-    }
-    ts.push("};".to_string());
-
-    // Which values a word names, for what folds the objects' tree beside the
-    // core: the client's source of placed objects
-    // (ts/client/src/service/sys/fs/object_tree.ts).
-    let air = cube_entries(&object)
-        .find(|e| e.name == "air")
-        .ok_or(format!("{CUBE_JSON}: no object.air"))?;
-    let mut voxel = vec!["// @pxl/client/service/sys/fs/voxel.spec.ts".to_string()];
-    voxel.extend(head.iter().cloned());
-    voxel.push(String::new());
-    if let Some(doc) = &air.doc {
-        voxel.extend(ts_doc(doc, ""));
-    }
-    voxel.extend([
-        format!("export const AIR = {};", air.val),
-        String::new(),
-        "/** Whether a value read into a word is a palette entry the palette gives out (pxl-spec `Ground::grounds`). */"
-            .to_string(),
-        "export function grounds(val: number): boolean {".to_string(),
-        format!("  return {};", ts_runs(cube_entries(&ground).map(|e| e.val))),
-        "}".to_string(),
-        String::new(),
-        "/** Whether a value read into a word is one of the object's colors (pxl-spec `Object::objects`). */"
-            .to_string(),
-        "export function objects(val: number): boolean {".to_string(),
-        format!(
-            "  return {};",
-            ts_runs(cube_entries(&object).filter(|e| is_color(e)).map(|e| e.val))
-        ),
-        "}".to_string(),
-    ]);
-
-    let mut rs = vec!["// pxl-spec/asset/cube.spec.rs".to_string()];
-    rs.extend(head);
-    rs.push(String::new());
-    rs.extend(casing_note());
-    rs.extend(
-        [
-            "#![allow(non_camel_case_types, non_upper_case_globals, reason = \"generated from the spec\")]",
-            "",
-        ]
-        .map(String::from),
-    );
-    rs.extend([
-        "pub mod cubes {".to_string(),
-        "    pub mod sentinel {".into(),
-    ]);
-    for e in cube_entries(&sentinel) {
-        if let Some(doc) = &e.doc {
-            rs.extend(rs_doc(doc, "        ", "///"));
-        }
-        rs.push(format!(
-            "        pub const {}: u8 = 0x{:02x};",
-            e.name, e.val
-        ));
-    }
-    rs.extend(["    }".to_string(), String::new()]);
-    rs.extend(note(ground_node, "    "));
-    rs.push("    pub mod ground {".into());
-    for item in &ground {
-        match item {
-            Err(section) => rs.extend([
-                String::new(),
-                format!("        // ---- {section} ----"),
-                String::new(),
-            ]),
-            Ok(e) => {
-                if let Some(doc) = &e.doc {
-                    rs.extend(rs_doc(doc, "        ", "///"));
-                }
-                rs.push(format!("        pub const {}: u8 = {};", e.name, e.val));
-            }
-        }
-    }
-    rs.extend([
-        String::new(),
-        "        pub const ENTRIES: &[(&str, u8)] = &[".to_string(),
-    ]);
-    rs.extend(
-        cube_entries(&ground).map(|e| format!("            ({}, {}),", json_str(e.name), e.name)),
-    );
-    rs.extend([
-        "        ];".to_string(),
-        String::new(),
-        "        /// What a cell nothing painted shows.".into(),
-        format!("        pub const BASE: u8 = {base_type};"),
-        "    }".into(),
-        String::new(),
-    ]);
-    rs.extend(note(object_node, "    "));
-    rs.push("    pub mod object {".into());
-    for item in &object {
-        match item {
-            Err(section) => rs.extend([
-                String::new(),
-                format!("        // ---- {section} ----"),
-                String::new(),
-            ]),
-            Ok(e) => {
-                if let Some(doc) = &e.doc {
-                    rs.extend(rs_doc(doc, "        ", "///"));
-                }
-                rs.push(format!("        pub const {}: u16 = {};", e.name, e.val));
-            }
-        }
-    }
-    rs.extend(["    }".to_string(), String::new()]);
-    rs.extend([
-        "    /// A palette entry, by its number.".to_string(),
-        "    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]".into(),
-        "    #[repr(u8)]".into(),
-        "    pub enum Ground {".into(),
-    ]);
-    rs.extend(cube_entries(&ground).map(|e| format!("        {} = {},", e.name, e.val)));
-    rs.extend([
-        "    }".to_string(),
-        String::new(),
-        "    impl Ground {".into(),
-        "        /// Every palette entry, in paint order.".into(),
-        format!(
-            "        pub const ALL: [Ground; {}] = [",
-            cube_entries(&ground).count()
-        ),
-    ]);
-    rs.extend(cube_entries(&ground).map(|e| format!("            Ground::{},", e.name)));
-    rs.extend([
-        "        ];".to_string(),
-        String::new(),
-        "        /// The palette entry a byte names; none for a sentinel or a number the palette does not give out.".into(),
-        "        pub const fn of(val: u8) -> Option<Ground> {".into(),
-        "            match val {".into(),
-    ]);
-    rs.extend(
-        cube_entries(&ground)
-            .map(|e| format!("                {} => Some(Ground::{}),", e.val, e.name)),
-    );
-    rs.extend([
-        "                _ => None,".to_string(),
-        "            }".into(),
-        "        }".into(),
-        String::new(),
-        "        /// Whether a palette entry read into a word, as a GPU has it with no byte, is one `of`"
-            .into(),
-        "        /// names.".into(),
-        format!(
-            "        pub const fn grounds(val: u32) -> bool {{ matches!(val, {}) }}",
-            rs_runs(cube_entries(&ground).map(|e| e.val))
-        ),
-        String::new(),
-        "        /// A way: decor faces along it and no pier stands on it.".into(),
-        "        pub const fn transport(self) -> bool { Ground::transports(self as u32) }".into(),
-        String::new(),
-        "        /// Whether a palette entry read into a word is a way (`transport`).".into(),
-        format!(
-            "        pub const fn transports(val: u32) -> bool {{ matches!(val, {}) }}",
-            rs_runs(cube_entries(&ground).filter(|e| e.transport).map(|e| e.val))
-        ),
-    ]);
-    rs.extend(["    }".to_string(), String::new()]);
-    let colors: Vec<&Entry> = cube_entries(&object).filter(|e| is_color(e)).collect();
-    rs.extend([
-        "    /// One of the object's colors, by its number.".to_string(),
-        "    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]".into(),
-        "    #[repr(u16)]".into(),
-        "    pub enum Object {".into(),
-    ]);
-    rs.extend(
-        colors
-            .iter()
-            .map(|e| format!("        {} = {},", e.name, e.val)),
-    );
-    rs.extend([
-        "    }".to_string(),
-        String::new(),
-        "    impl Object {".into(),
-        format!("        pub const ALL: [Object; {}] = [", colors.len()),
-    ]);
-    rs.extend(
-        colors
-            .iter()
-            .map(|e| format!("            Object::{},", e.name)),
-    );
-    rs.extend([
-        "        ];".to_string(),
-        String::new(),
-        "        pub const fn of(val: u16) -> Option<Object> {".into(),
-        "            match val {".into(),
-    ]);
-    rs.extend(
-        colors
-            .iter()
-            .map(|e| format!("                {} => Some(Object::{}),", e.val, e.name)),
-    );
-    rs.extend([
-        "                _ => None,".to_string(),
-        "            }".into(),
-        "        }".into(),
-        String::new(),
-        "        /// Whether a value read into a word, as a GPU has it, is one `of` names.".into(),
-        format!(
-            "        pub const fn objects(val: u32) -> bool {{ matches!(val, {}) }}",
-            rs_runs(colors.iter().map(|e| e.val))
-        ),
-        "    }".into(),
-        "}".into(),
-    ]);
-    let mut out = vec![
-        Output::new("ts/client/src/ui/shared/asset/cube.spec.ts", file(&ts)),
-        Output::new("ts/client/src/service/sys/fs/voxel.spec.ts", file(&voxel)),
-        Output::new(
-            "rust/spec/src/asset/cube.spec.rs",
-            file(&unwrapped(rs, "pub mod cubes {")),
-        ),
-    ];
-    out.extend(modules);
-    Ok(out)
-}
-
-/// Ascending values as a TypeScript test of `val`, each run a range.
-fn ts_runs(vals: impl Iterator<Item = u32>) -> String {
-    runs(vals)
-        .into_iter()
-        .map(|(lo, hi)| {
-            if lo == hi {
-                format!("val === {lo}")
-            } else {
-                format!("(val >= {lo} && val <= {hi})")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" || ")
-}
-
-/// Ascending values as Rust patterns, each run a range.
-fn rs_runs(vals: impl Iterator<Item = u32>) -> String {
-    runs(vals)
-        .into_iter()
-        .map(|(lo, hi)| {
-            if lo == hi {
-                lo.to_string()
-            } else {
-                format!("{lo}..={hi}")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" | ")
-}
-
-/// Ascending values grouped into runs of consecutive ones, each its first and last.
-fn runs(vals: impl Iterator<Item = u32>) -> Vec<(u32, u32)> {
-    let mut out: Vec<(u32, u32)> = Vec::new();
-    for v in vals {
-        match out.last_mut() {
-            Some((_, hi)) if *hi + 1 == v => *hi = v,
-            _ => out.push((v, v)),
-        }
-    }
-    out
 }
 
 pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
@@ -787,11 +272,7 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
 /// The ground's palette entries by name and number, what a decor may stand on.
 fn ground_palette() -> Result<Vec<(String, u32)>, String> {
     let spec = read(CUBE_JSON)?;
-    Ok(
-        cube_entries(&entries(spec.get("ground").ok_or("no ground")?, "ground")?)
-            .map(|e| (e.name.to_string(), e.val))
-            .collect(),
-    )
+    cubes(&spec, "ground")
 }
 
 /// The decors' table, in the catalog's order, which is the order their variants are numbered
@@ -1015,30 +496,4 @@ fn decor_table(
     }
     rs.push("];".into());
     Ok((portable, rs))
-}
-
-/// The lines of `rs` with the module `open` opens taken off, its body one
-/// indent out: the generated file is the module itself.
-fn unwrapped(rs: Vec<String>, open: &str) -> Vec<String> {
-    let Some(at) = rs.iter().position(|l| l == open) else {
-        return rs;
-    };
-    let mut depth = 0i32;
-    let mut close = at;
-    for (i, l) in rs.iter().enumerate().skip(at) {
-        depth += l.matches('{').count() as i32 - l.matches('}').count() as i32;
-        if depth == 0 {
-            close = i;
-            break;
-        }
-    }
-    let body = rs[at + 1..close]
-        .iter()
-        .map(|l| l.strip_prefix("    ").unwrap_or(l).to_string());
-    rs[..at]
-        .iter()
-        .cloned()
-        .chain(body)
-        .chain(rs[close + 1..].iter().cloned())
-        .collect()
 }

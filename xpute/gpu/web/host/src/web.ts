@@ -13,11 +13,11 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
-import type { Link } from "@xpute/link";
+import { type Link, uri } from "@xpute/link";
 import * as gpu from "@xpute/gpu-link/abi/gpu.ts";
-import { DEVICE_URI, type GpuAsk, type GpuConfig, type GpuState } from "@xpute/gpu-link";
+import { type GpuAsk, type GpuConfig, type GpuState } from "@xpute/gpu-link";
 import { GpuHost } from "./host.ts";
-import { STATUS } from "@xpute/gpu-link/api.spec.ts";
+import { DEVICE_URI, STATUS } from "@xpute/gpu-link/api.spec.ts";
 
 export class WebGpu {
   private host: GpuHost | null = null;
@@ -48,7 +48,7 @@ export class WebGpu {
         this.host?.run(new Uint32Array(this.link.mem, records.at, records.len / 4));
       },
     });
-    this.link.mount(DEVICE_URI, () =>
+    this.link.mount(uri(...DEVICE_URI), () =>
       gpu.device(this.link, {
         lost: (block, signal) => {
           this.block = block.at;

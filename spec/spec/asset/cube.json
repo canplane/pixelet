@@ -6,34 +6,49 @@
       "The texture pack, the file the cube kind's palette entry is drawn from: one image",
       "of every tile under asset/content/cube/, which the asset ingest composes",
       "and ships as the table's file at this path, with which tile each cube",
-      "wears on which face (pxl-tool bin/asset.rs, ingest.json); the",
-      "catalog names it as the cube kind's `pack` slot (pxl_spec::asset::catalog)."
+      "wears on which face (pxl-tool bin/asset.rs, ingest.json). In Rust it is",
+      "the slot the catalog fills with it."
     ]
   },
-  "base": {
-    "type": "land",
+  "BASE": {
     "$doc": [
       "What a cell shows when nothing painted it: a cell with nothing on it is",
       "still land, as Carto's background is."
+    ],
+    "$type": "Ground",
+    "$val": "land"
+  },
+  "sentinel": {
+    "$type": "enum",
+    "$repr": "u16",
+    "$doc": [
+      "The value space's own: what no palette entry or color is (pxl-spec value.rs)."
+    ],
+    "$val": [
+      {
+        "name": "void",
+        "$number": 0,
+        "$doc": [
+          "Nothing is painted: the ground before a bake writes it, and an object cell no leaf holds."
+        ]
+      },
+      {
+        "name": "unknown",
+        "$number": 255,
+        "$doc": [
+          "Bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-content strata.rs`). A cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, and so is a byte no bake wrote. The value is 0xFF so that memory filled with 0xFF reads as unknown. Nothing is placed on it or taken from it."
+        ]
+      },
+      {
+        "name": "air",
+        "$number": 256,
+        "$doc": ["Explicit air: the leaf stays and erases the layers under it."]
+      }
     ]
   },
-  "sentinel": [
-    {
-      "name": "void",
-      "val": 0,
-      "$doc": [
-        "Nothing is painted: the ground before a bake writes it, and an object cell no leaf holds."
-      ]
-    },
-    {
-      "name": "unknown",
-      "val": 255,
-      "$doc": [
-        "Bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-content strata.rs`). A cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, and so is a byte no bake wrote. The value is 0xFF so that memory filled with 0xFF reads as unknown. Nothing is placed on it or taken from it."
-      ]
-    }
-  ],
   "ground": {
+    "$type": "enum",
+    "$repr": "u8",
     "$doc": [
       "The ground: one byte a cell, a palette entry from OpenStreetMap Carto, numbered in",
       "the order Carto paints.",
@@ -43,315 +58,611 @@
       "are Carto's palette entries, in its paint order; from 64 on are pixelet's own,",
       "the underground, of which Carto paints nothing; 0 and 255 are the sentinels."
     ],
-    "entries": [
-      { "section": "landcover" },
+    "$val": [
       {
-        "name": "land", "label": "Land",
-        "val": 1,
+        "name": "land",
+        "$number": 1,
+        "label": "Land",
+        "section": "landcover",
+        "transport": false,
         "$doc": [
           "Land no feature covers, and what Carto draws no fill for, takes Carto's background, @land-color."
         ]
       },
       {
-        "name": "bare_ground", "label": "Bare Ground",
-        "val": 2,
+        "name": "bare_ground",
+        "$number": 2,
+        "label": "Bare Ground",
+        "section": "landcover",
+        "transport": false,
         "$doc": ["Bare rock, scree and shingle take Carto's @bare_ground."]
       },
-      { "name": "sand", "label": "Sand", "val": 3, "$doc": ["Sand takes Carto's @sand."] },
-      { "name": "beach", "label": "Beach", "val": 4, "$doc": ["Beach and shoal take Carto's @beach."] },
-      { "name": "heath", "label": "Heath", "val": 5, "$doc": ["Heath and bog take Carto's @heath."] },
-      { "name": "scrub", "label": "Scrub", "val": 6, "$doc": ["Scrub and mangrove take Carto's @scrub."] },
       {
-        "name": "grass", "label": "Grass",
-        "val": 7,
+        "name": "sand",
+        "$number": 3,
+        "label": "Sand",
+        "section": "landcover",
+        "transport": false,
+        "$doc": ["Sand takes Carto's @sand."]
+      },
+      {
+        "name": "beach",
+        "$number": 4,
+        "label": "Beach",
+        "section": "landcover",
+        "transport": false,
+        "$doc": ["Beach and shoal take Carto's @beach."]
+      },
+      {
+        "name": "heath",
+        "$number": 5,
+        "label": "Heath",
+        "section": "landcover",
+        "transport": false,
+        "$doc": ["Heath and bog take Carto's @heath."]
+      },
+      {
+        "name": "scrub",
+        "$number": 6,
+        "label": "Scrub",
+        "section": "landcover",
+        "transport": false,
+        "$doc": ["Scrub and mangrove take Carto's @scrub."]
+      },
+      {
+        "name": "grass",
+        "$number": 7,
+        "label": "Grass",
+        "section": "landcover",
+        "transport": false,
         "$doc": [
           "Grass, meadow, garden, village green, marsh and wet meadow take Carto's @grass."
         ]
       },
-      { "name": "park", "label": "Park", "val": 8, "$doc": ["A park takes Carto's @park."] },
       {
-        "name": "leisure", "label": "Leisure",
-        "val": 9,
+        "name": "park",
+        "$number": 8,
+        "label": "Park",
+        "section": "landcover",
+        "transport": false,
+        "$doc": ["A park takes Carto's @park."]
+      },
+      {
+        "name": "leisure",
+        "$number": 9,
+        "label": "Leisure",
+        "section": "landcover",
+        "transport": false,
         "$doc": [
           "A playground, recreation ground, stadium or sports center takes Carto's @leisure, lighten(@park, 5%)."
         ]
       },
-      { "name": "pitch", "label": "Pitch", "val": 10, "$doc": ["A pitch or a track takes Carto's @pitch."] },
       {
-        "name": "forest", "label": "Forest",
-        "val": 11,
+        "name": "pitch",
+        "$number": 10,
+        "label": "Pitch",
+        "section": "landcover",
+        "transport": false,
+        "$doc": ["A pitch or a track takes Carto's @pitch."]
+      },
+      {
+        "name": "forest",
+        "$number": 11,
+        "label": "Forest",
+        "section": "landcover",
+        "transport": false,
         "$doc": ["Forest, wood and swamp take Carto's @forest."]
       },
       {
-        "name": "orchard", "label": "Orchard",
-        "val": 12,
-        "$doc": ["An orchard, vineyard or plant nursery takes Carto's @orchard."]
+        "name": "orchard",
+        "$number": 12,
+        "label": "Orchard",
+        "section": "landcover",
+        "transport": false,
+        "$doc": [
+          "An orchard, vineyard or plant nursery takes Carto's @orchard."
+        ]
       },
       {
-        "name": "allotments", "label": "Allotments",
-        "val": 13,
+        "name": "allotments",
+        "$number": 13,
+        "label": "Allotments",
+        "section": "landcover",
+        "transport": false,
         "$doc": ["Allotments take Carto's @allotments."]
       },
       {
-        "name": "farmland", "label": "Farmland",
-        "val": 14,
+        "name": "farmland",
+        "$number": 14,
+        "label": "Farmland",
+        "section": "landcover",
+        "transport": false,
         "$doc": ["Farmland and greenhouses take Carto's @farmland."]
       },
-      { "name": "farmyard", "label": "Farmyard", "val": 15, "$doc": ["A farmyard takes Carto's @farmyard."] },
       {
-        "name": "campsite", "label": "Campsite",
-        "val": 16,
+        "name": "farmyard",
+        "$number": 15,
+        "label": "Farmyard",
+        "section": "landcover",
+        "transport": false,
+        "$doc": ["A farmyard takes Carto's @farmyard."]
+      },
+      {
+        "name": "campsite",
+        "$number": 16,
+        "label": "Campsite",
+        "section": "landcover",
+        "transport": false,
         "$doc": ["A campsite or golf course takes Carto's @campsite."]
       },
       {
-        "name": "cemetery", "label": "Cemetery",
-        "val": 17,
+        "name": "cemetery",
+        "$number": 17,
+        "label": "Cemetery",
+        "section": "landcover",
+        "transport": false,
         "$doc": ["A cemetery or grave yard takes Carto's @cemetery."]
       },
       {
-        "name": "residential", "label": "Residential",
-        "val": 18,
+        "name": "residential",
+        "$number": 18,
+        "label": "Residential",
+        "section": "landcover",
+        "transport": false,
         "$doc": ["Residential land takes Carto's @residential."]
       },
-      { "name": "garages", "label": "Garages", "val": 19, "$doc": ["Garages take Carto's @garages."] },
-      { "name": "retail", "label": "Retail", "val": 20, "$doc": ["Retail land takes Carto's @retail."] },
       {
-        "name": "commercial", "label": "Commercial",
-        "val": 21,
+        "name": "garages",
+        "$number": 19,
+        "label": "Garages",
+        "section": "landcover",
+        "transport": false,
+        "$doc": ["Garages take Carto's @garages."]
+      },
+      {
+        "name": "retail",
+        "$number": 20,
+        "label": "Retail",
+        "section": "landcover",
+        "transport": false,
+        "$doc": ["Retail land takes Carto's @retail."]
+      },
+      {
+        "name": "commercial",
+        "$number": 21,
+        "label": "Commercial",
+        "section": "landcover",
+        "transport": false,
         "$doc": ["Commercial land takes Carto's @commercial."]
       },
       {
-        "name": "industrial", "label": "Industrial",
-        "val": 22,
-        "$doc": ["Industrial land, railway land and works take Carto's @industrial."]
+        "name": "industrial",
+        "$number": 22,
+        "label": "Industrial",
+        "section": "landcover",
+        "transport": false,
+        "$doc": [
+          "Industrial land, railway land and works take Carto's @industrial."
+        ]
       },
       {
-        "name": "power", "label": "Power",
-        "val": 23,
-        "$doc": ["A power plant or substation takes Carto's @power, darken(@industrial, 5%)."]
+        "name": "power",
+        "$number": 23,
+        "label": "Power",
+        "section": "landcover",
+        "transport": false,
+        "$doc": [
+          "A power plant or substation takes Carto's @power, darken(@industrial, 5%)."
+        ]
       },
       {
-        "name": "landfill", "label": "Landfill",
-        "val": 24,
-        "$doc": ["Landfill takes Carto's landuse_landfill, a value with no name."]
+        "name": "landfill",
+        "$number": 24,
+        "label": "Landfill",
+        "section": "landcover",
+        "transport": false,
+        "$doc": [
+          "Landfill takes Carto's landuse_landfill, a value with no name."
+        ]
       },
-      { "name": "quarry", "label": "Quarry", "val": 25, "$doc": ["A quarry takes Carto's @quarry."] },
       {
-        "name": "societal_amenities", "label": "Societal Amenities",
-        "val": 26,
+        "name": "quarry",
+        "$number": 25,
+        "label": "Quarry",
+        "section": "landcover",
+        "transport": false,
+        "$doc": ["A quarry takes Carto's @quarry."]
+      },
+      {
+        "name": "societal_amenities",
+        "$number": 26,
+        "label": "Societal Amenities",
+        "section": "landcover",
+        "transport": false,
         "$doc": [
           "A school, college, university, hospital or clinic takes Carto's @societal_amenities."
         ]
       },
       {
-        "name": "place_of_worship", "label": "Place of Worship",
-        "val": 27,
+        "name": "place_of_worship",
+        "$number": 27,
+        "label": "Place of Worship",
+        "section": "landcover",
+        "transport": false,
         "$doc": ["A religious site takes Carto's @place_of_worship."]
       },
       {
-        "name": "transportation_area", "label": "Transportation Area",
-        "val": 28,
-        "$doc": ["An aerodrome, bus station or ferry terminal takes Carto's @transportation-area."]
+        "name": "transportation_area",
+        "$number": 28,
+        "label": "Transportation Area",
+        "section": "landcover",
+        "transport": false,
+        "$doc": [
+          "An aerodrome, bus station or ferry terminal takes Carto's @transportation-area."
+        ]
       },
-      { "name": "parking", "label": "Parking", "val": 29, "$doc": ["Parking takes Carto's @parking."] },
-      { "name": "apron", "label": "Apron", "val": 30, "$doc": ["An apron takes Carto's @apron."] },
-      { "section": "water" },
-      { "name": "glacier", "label": "Glacier", "val": 31, "$doc": ["A glacier takes Carto's @glacier; Carto draws it with the water areas."] },
       {
-        "name": "water", "label": "Water",
-        "val": 32,
-        "$doc": ["Sea, lake, river, canal and any other water take Carto's @water-color."]
+        "name": "parking",
+        "$number": 29,
+        "label": "Parking",
+        "section": "landcover",
+        "transport": false,
+        "$doc": ["Parking takes Carto's @parking."]
       },
-      { "section": "water_features" },
       {
-        "name": "dam", "label": "Dam",
-        "val": 33,
+        "name": "apron",
+        "$number": 30,
+        "label": "Apron",
+        "section": "landcover",
+        "transport": false,
+        "$doc": ["An apron takes Carto's @apron."]
+      },
+      {
+        "name": "glacier",
+        "$number": 31,
+        "label": "Glacier",
+        "section": "water",
+        "transport": false,
+        "$doc": [
+          "A glacier takes Carto's @glacier; Carto draws it with the water areas."
+        ]
+      },
+      {
+        "name": "water",
+        "$number": 32,
+        "label": "Water",
+        "section": "water",
+        "transport": false,
+        "$doc": [
+          "Sea, lake, river, canal and any other water take Carto's @water-color."
+        ]
+      },
+      {
+        "name": "dam",
+        "$number": 33,
+        "label": "Dam",
+        "section": "water_features",
+        "transport": false,
         "$doc": ["A dam takes Carto's @dam."]
       },
       {
-        "name": "breakwater", "label": "Breakwater",
-        "val": 34,
-        "$doc": ["A breakwater, groyne or weir takes Carto's @breakwater-color or @weir-line."]
+        "name": "breakwater",
+        "$number": 34,
+        "label": "Breakwater",
+        "section": "water_features",
+        "transport": false,
+        "$doc": [
+          "A breakwater, groyne or weir takes Carto's @breakwater-color or @weir-line."
+        ]
       },
-      { "section": "buildings" },
       {
-        "name": "building", "label": "Building",
-        "val": 35,
+        "name": "building",
+        "$number": 35,
+        "label": "Building",
+        "section": "buildings",
+        "transport": false,
         "$doc": ["A building takes Carto's @building-fill."]
       },
       {
-        "name": "building_major", "label": "Major Building",
-        "val": 36,
+        "name": "building_major",
+        "$number": 36,
+        "label": "Major Building",
+        "section": "buildings",
+        "transport": false,
         "$doc": [
           "A place of worship, a terminal or a station takes Carto's @building-major-fill at z16 and finer, as a cell is z16."
         ]
       },
-      { "section": "roads", "$doc": ["These are numbered by Carto's z-order."] },
       {
-        "name": "footway", "label": "Footway",
-        "val": 37,
+        "name": "footway",
+        "$number": 37,
+        "label": "Footway",
+        "section": "roads",
         "transport": true,
-        "$doc": ["Footways, steps and paths take Carto's @footway-fill or @steps-fill."]
+        "$doc": [
+          "Footways, steps and paths take Carto's @footway-fill or @steps-fill."
+        ]
       },
       {
-        "name": "cycleway", "label": "Cycleway",
-        "val": 38,
+        "name": "cycleway",
+        "$number": 38,
+        "label": "Cycleway",
+        "section": "roads",
         "transport": true,
         "$doc": ["A cycleway takes Carto's @cycleway-fill."]
       },
       {
-        "name": "bridleway", "label": "Bridleway",
-        "val": 39,
+        "name": "bridleway",
+        "$number": 39,
+        "label": "Bridleway",
+        "section": "roads",
         "transport": true,
         "$doc": ["A bridleway takes Carto's @bridleway-fill."]
       },
       {
-        "name": "track", "label": "Track",
-        "val": 40,
+        "name": "track",
+        "$number": 40,
+        "label": "Track",
+        "section": "roads",
         "transport": true,
-        "$doc": ["A track, an agricultural or forest way, takes Carto's @track-fill."]
+        "$doc": [
+          "A track, an agricultural or forest way, takes Carto's @track-fill."
+        ]
       },
       {
-        "name": "pedestrian", "label": "Pedestrian Street",
-        "val": 41,
+        "name": "pedestrian",
+        "$number": 41,
+        "label": "Pedestrian Street",
+        "section": "roads",
         "transport": true,
         "$doc": ["A pedestrian street takes Carto's @pedestrian-fill."]
       },
       {
-        "name": "living_street", "label": "Living Street",
-        "val": 42,
+        "name": "living_street",
+        "$number": 42,
+        "label": "Living Street",
+        "section": "roads",
         "transport": true,
         "$doc": ["A living street takes Carto's @living-street-fill."]
       },
       {
-        "name": "residential_road", "label": "Residential Road",
-        "val": 43,
+        "name": "residential_road",
+        "$number": 43,
+        "label": "Residential Road",
+        "section": "roads",
         "transport": true,
-        "$doc": ["A tertiary, residential, unclassified or service road takes Carto's @tertiary-fill, @residential-fill or @service-fill, told apart by width."]
+        "$doc": [
+          "A tertiary, residential, unclassified or service road takes Carto's @tertiary-fill, @residential-fill or @service-fill, told apart by width."
+        ]
       },
       {
-        "name": "road", "label": "Road",
-        "val": 44,
+        "name": "road",
+        "$number": 44,
+        "label": "Road",
+        "section": "roads",
         "transport": true,
         "$doc": ["A road of no known class takes Carto's @road-fill."]
       },
       {
-        "name": "secondary", "label": "Secondary Road",
-        "val": 45,
+        "name": "secondary",
+        "$number": 45,
+        "label": "Secondary Road",
+        "section": "roads",
         "transport": true,
         "$doc": ["A secondary road takes Carto's @secondary-fill."]
       },
       {
-        "name": "primary", "label": "Primary Road",
-        "val": 46,
+        "name": "primary",
+        "$number": 46,
+        "label": "Primary Road",
+        "section": "roads",
         "transport": true,
         "$doc": ["A primary road takes Carto's @primary-fill."]
       },
-      { "name": "trunk", "label": "Trunk Road", "val": 47, "transport": true, "$doc": ["A trunk road takes Carto's @trunk-fill."] },
       {
-        "name": "motorway", "label": "Motorway",
-        "val": 48,
+        "name": "trunk",
+        "$number": 47,
+        "label": "Trunk Road",
+        "section": "roads",
+        "transport": true,
+        "$doc": ["A trunk road takes Carto's @trunk-fill."]
+      },
+      {
+        "name": "motorway",
+        "$number": 48,
+        "label": "Motorway",
+        "section": "roads",
         "transport": true,
         "$doc": ["A motorway takes Carto's @motorway-fill."]
       },
       {
-        "name": "platform", "label": "Platform",
-        "val": 49,
+        "name": "platform",
+        "$number": 49,
+        "label": "Platform",
+        "section": "roads",
         "transport": true,
         "$doc": ["A platform takes Carto's @platform-fill."]
       },
       {
-        "name": "tram", "label": "Tram",
-        "val": 50,
+        "name": "tram",
+        "$number": 50,
+        "label": "Tram",
+        "section": "roads",
         "transport": true,
         "$doc": ["A tram takes Carto's railway_tram, a value with no name."]
       },
       {
-        "name": "light_rail", "label": "Light Rail",
-        "val": 51,
+        "name": "light_rail",
+        "$number": 51,
+        "label": "Light Rail",
+        "section": "roads",
         "transport": true,
-        "$doc": ["Light rail, narrow gauge and funicular take Carto's railway_light_rail, a value with no name."]
+        "$doc": [
+          "Light rail, narrow gauge and funicular take Carto's railway_light_rail, a value with no name."
+        ]
       },
       {
-        "name": "subway", "label": "Subway",
-        "val": 52,
+        "name": "subway",
+        "$number": 52,
+        "label": "Subway",
+        "section": "roads",
         "transport": true,
         "$doc": ["A subway takes Carto's railway_subway, a value with no name."]
       },
       {
-        "name": "monorail", "label": "Monorail",
-        "val": 53,
+        "name": "monorail",
+        "$number": 53,
+        "label": "Monorail",
+        "section": "roads",
         "transport": true,
-        "$doc": ["A monorail takes Carto's railway_monorail, a value with no name."]
+        "$doc": [
+          "A monorail takes Carto's railway_monorail, a value with no name."
+        ]
       },
       {
-        "name": "rail", "label": "Railway",
-        "val": 54,
+        "name": "rail",
+        "$number": 54,
+        "label": "Railway",
+        "section": "roads",
         "transport": true,
         "$doc": ["A railway takes Carto's railway_rail, a value with no name."]
       },
-      { "section": "aeroways" },
       {
-        "name": "aeroway", "label": "Runway",
-        "val": 55,
+        "name": "aeroway",
+        "$number": 55,
+        "label": "Runway",
+        "section": "aeroways",
         "transport": true,
         "$doc": [
           "A runway, taxiway or helipad takes Carto's @aeroway-fill, @runway-fill, @taxiway-fill or @helipad-fill."
         ]
       },
-      { "section": "underground" },
       {
-        "name": "soil", "label": "Dirt",
-        "val": 64,
+        "name": "soil",
+        "$number": 64,
+        "label": "Dirt",
+        "section": "underground",
+        "transport": false,
         "$doc": [
           "What lies under a face: Minecraft Beta's filler, dirt. Carto paints nothing under the ground, and no bake writes it."
         ]
       },
       {
-        "name": "sandstone", "label": "Sandstone",
-        "val": 65,
-        "$doc": [
-          "What lies under sand's filler: Minecraft Beta's sandstone."
-        ]
+        "name": "sandstone",
+        "$number": 65,
+        "label": "Sandstone",
+        "section": "underground",
+        "transport": false,
+        "$doc": ["What lies under sand's filler: Minecraft Beta's sandstone."]
       },
       {
-        "name": "stone", "label": "Stone",
-        "val": 66,
-        "$doc": [
-          "What lies under the filler: Minecraft Beta's stone."
-        ]
+        "name": "stone",
+        "$number": 66,
+        "label": "Stone",
+        "section": "underground",
+        "transport": false,
+        "$doc": ["What lies under the filler: Minecraft Beta's stone."]
       }
     ]
   },
   "object": {
+    "$type": "enum",
+    "$repr": "u16",
     "$doc": [
       "What only an object can be: past a byte, so no ground cell holds it. An",
       "object's value is a u16 whose byte range is the ground's palette."
     ],
-    "entries": [
+    "$val": [
       {
-        "name": "air",
-        "val": 256,
-        "$doc": [
-          "Explicit air: the leaf stays and erases the layers under it."
-        ]
+        "name": "white",
+        "$number": 257,
+        "label": "White",
+        "section": "colors"
       },
-      { "section": "colors" },
-      { "name": "white", "label": "White", "val": 257 },
-      { "name": "grey", "label": "Gray", "val": 258 },
-      { "name": "dark_grey", "label": "Dark Gray", "val": 259 },
-      { "name": "black", "label": "Black", "val": 260 },
-      { "name": "red", "label": "Red", "val": 261 },
-      { "name": "orange", "label": "Orange", "val": 262 },
-      { "name": "brown", "label": "Brown", "val": 263 },
-      { "name": "yellow", "label": "Yellow", "val": 264 },
-      { "name": "green", "label": "Green", "val": 265 },
-      { "name": "dark_green", "label": "Dark Green", "val": 266 },
-      { "name": "cyan", "label": "Cyan", "val": 267 },
-      { "name": "blue", "label": "Blue", "val": 268 },
-      { "name": "violet", "label": "Violet", "val": 269 },
-      { "name": "magenta", "label": "Magenta", "val": 270 },
-      { "name": "pink", "label": "Pink", "val": 271 }
+      {
+        "name": "grey",
+        "$number": 258,
+        "label": "Gray",
+        "section": "colors"
+      },
+      {
+        "name": "dark_grey",
+        "$number": 259,
+        "label": "Dark Gray",
+        "section": "colors"
+      },
+      {
+        "name": "black",
+        "$number": 260,
+        "label": "Black",
+        "section": "colors"
+      },
+      {
+        "name": "red",
+        "$number": 261,
+        "label": "Red",
+        "section": "colors"
+      },
+      {
+        "name": "orange",
+        "$number": 262,
+        "label": "Orange",
+        "section": "colors"
+      },
+      {
+        "name": "brown",
+        "$number": 263,
+        "label": "Brown",
+        "section": "colors"
+      },
+      {
+        "name": "yellow",
+        "$number": 264,
+        "label": "Yellow",
+        "section": "colors"
+      },
+      {
+        "name": "green",
+        "$number": 265,
+        "label": "Green",
+        "section": "colors"
+      },
+      {
+        "name": "dark_green",
+        "$number": 266,
+        "label": "Dark Green",
+        "section": "colors"
+      },
+      {
+        "name": "cyan",
+        "$number": 267,
+        "label": "Cyan",
+        "section": "colors"
+      },
+      {
+        "name": "blue",
+        "$number": 268,
+        "label": "Blue",
+        "section": "colors"
+      },
+      {
+        "name": "violet",
+        "$number": 269,
+        "label": "Violet",
+        "section": "colors"
+      },
+      {
+        "name": "magenta",
+        "$number": 270,
+        "label": "Magenta",
+        "section": "colors"
+      },
+      {
+        "name": "pink",
+        "$number": 271,
+        "label": "Pink",
+        "section": "colors"
+      }
     ]
   }
 }

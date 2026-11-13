@@ -1,6 +1,6 @@
 // pxl-core/domain/layer/object/asset.test.rs
 
-use pxl_spec::asset::cube::{object, sentinel, ALL_CUBES};
+use pxl_spec::asset::cube::{Sentinel, ALL_CUBES};
 use pxl_spec::asset::decor::DECORS;
 use pxl_spec::asset::id::{Kind, IDX_BITS};
 use pxl_spec::asset::marker::MARKER;
@@ -29,9 +29,9 @@ fn past_the_catalog() {
         let id_of = |kind: Kind, n: u32| (kind as u32) << IDX_BITS | n;
         let past = (1 << IDX_BITS) - 1;
         for id in [
-            sentinel::void as AssetId,
-            sentinel::unknown as AssetId,
-            object::air as AssetId,
+            Sentinel::void as AssetId,
+            Sentinel::unknown as AssetId,
+            Sentinel::air as AssetId,
             id_of(Kind::cube, past),
             id_of(Kind::decor, past),
             // A kind the layout does not give out.

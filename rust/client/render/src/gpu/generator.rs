@@ -588,13 +588,21 @@ impl Generator {
                 1,
             );
             let passes = [
-                (&self.thin, self.groups[1].id(), &sequence::THIN),
-                (&self.generate, self.groups[2].id(), &sequence::GENERATE),
+                (
+                    &self.thin,
+                    self.groups[1].id(),
+                    const { sequence::THIN.at() },
+                ),
+                (
+                    &self.generate,
+                    self.groups[2].id(),
+                    const { sequence::GENERATE.at() },
+                ),
             ];
-            for (pipeline, group, step) in passes {
+            for (pipeline, group, at) in passes {
                 g.set_pipeline(pass, pipeline.id);
                 g.set_bind_group(pass, 0, group, &[]);
-                g.dispatch_indirect(pass, self.list, step.at());
+                g.dispatch_indirect(pass, self.list, at);
             }
         }
         if !self.counting {

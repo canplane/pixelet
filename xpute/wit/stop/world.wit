@@ -1,0 +1,7 @@
+package xpute:stop@0.1.0;
+
+// How a guest stops, which its host hears.
+
+world imports {
+  import stop;
+}

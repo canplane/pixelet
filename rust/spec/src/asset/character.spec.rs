@@ -23,7 +23,11 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Group {
+    /// The people a player can be, each by its row, the number the settings store
+    /// persists. One pack, so one colormap.
     person = 0,
+    /// The pets a player's companion can be, each by its row, the number the settings store
+    /// persists. One pack, so one colormap.
     pet = 1,
 }
 

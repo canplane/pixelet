@@ -200,14 +200,9 @@ fn run() -> Result<(), String> {
         .collect();
     std::fs::write(root.join("rust/spec/src/asset/symbol.mask"), &masks)
         .map_err(|e| e.to_string())?;
-    write_formatted(
-        &root.join(symbol::RS),
-        &symbol::render_rs(&symbols),
-    )?;
-    write_formatted(
-        &root.join(symbol::TS),
-        &symbol::render_ts(&symbols),
-    )?;
+    for o in symbol::outputs(&root, &symbols)? {
+        write_formatted(&root.join(&o.path), &o.text)?;
+    }
 
     // What the code is generated from: the host's table, the pack's layout
     // and the catalog.

@@ -12,7 +12,7 @@
 
 use std::rc::Rc;
 use xpute_guest::link;
-use xpute_guest::wait::wait;
+use xpute_guest::wait;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{
@@ -23,9 +23,6 @@ use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
 /// The interface's handle, named by `pxl:core/overlay` (frame.json `NAMED`).
 pub const HANDLE: Handle = 0x7b1393;
-
-/// The interface's qualified name: its package and its name.
-pub const NAME: [&str; 2] = ["pxl:core", "overlay"];
 
 /// `show`
 pub const SHOW: Method = 0;
@@ -120,7 +117,9 @@ pub enum Message {
     GeolocationPositionUnavailable = 2,
     GeolocationTimeout = 3,
     GeolocationGenericError = 4,
+    /// Reads reach the server and fail; they are tried again.
     WorldReadFailing = 5,
+    /// Reads failed past every retry; the world is not coming.
     WorldUnavailable = 6,
 }
 
@@ -498,52 +497,12 @@ impl Snapshot {
     }
 }
 
-pub trait Overlay {
-    fn show(&self, snapshot: Snapshot) -> Result<(), Errno>;
-    fn view(&self, azimuth: f64, m_per_px: f64) -> Result<(), Errno>;
-}
-
-struct OverlayObject(Rc<dyn Overlay>);
-
-impl Object for OverlayObject {
-    fn call(&self, m: Method, tag: Tag, args: Option<BranchCursor<'_>>) -> Reply {
-        let run = || -> Result<Reply, MarshalError> {
-            Ok(match m {
-                SHOW => {
-                    let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let snapshot = b.at(0).and_then(|c| Snapshot::read(c))?;
-                    match self.0.show(snapshot) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
-                    }
-                }
-                VIEW => {
-                    let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let azimuth = b.at(0).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let m_per_px = b.at(1).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    match self.0.view(azimuth, m_per_px) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
-                    }
-                }
-                _ => Reply::from(Errno::ENOSYS as i32),
-            })
-        };
-        run().unwrap_or_else(|e| Reply::from(e.errnum as i32))
-    }
-}
-
-/// Serves `imp` under the interface's handle.
-pub fn mount(imp: Rc<dyn Overlay>) {
-    link::mount_named(HANDLE, Rc::new(OverlayObject(imp)));
-}
-
 pub fn show(snapshot: &Snapshot) -> Result<(), Errno> {
     let (r, data) = link::call(
         HANDLE,
         SHOW,
-        Some((1, &|w: &mut PacketWriter| {
-            snapshot.write(w);
+        Some((1, &|w_: &mut PacketWriter| {
+            snapshot.write(w_);
         })),
     );
     xpute_link::answer(r).map(|_| ())
@@ -553,9 +512,9 @@ pub fn view(azimuth: f64, m_per_px: f64) -> Result<(), Errno> {
     let (r, data) = link::call(
         HANDLE,
         VIEW,
-        Some((2, &|w: &mut PacketWriter| {
-            w.f64(Some(azimuth as f64));
-            w.f64(Some(m_per_px as f64));
+        Some((2, &|w_: &mut PacketWriter| {
+            w_.f64(Some(azimuth as f64));
+            w_.f64(Some(m_per_px as f64));
         })),
     );
     xpute_link::answer(r).map(|_| ())

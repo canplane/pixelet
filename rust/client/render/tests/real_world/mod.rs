@@ -18,7 +18,7 @@ use pxl_engine::fill;
 use pxl_engine::ground::{self, Resident};
 use pxl_engine::object::{self, Table, BRANCH};
 use pxl_engine::world::{self, Inheritance};
-use pxl_spec::asset::cube::ground as palette;
+use pxl_spec::asset::cube::Ground;
 use pxl_spec::asset::decor::DECORS;
 use pxl_spec::brick;
 use pxl_spec::brick::{BRICK_CELLS, BRICK_SHIFT, LINES_BINS_AT, LINES_ENTRIES_AT};
@@ -297,10 +297,10 @@ pub fn source(
         let four = if served(shard) {
             let region = mix(cell_zoom, [g[0] >> 3, g[1] >> 3]);
             let base = match region % 8 {
-                0 => palette::sand as u32,
-                1 => palette::beach as u32,
-                2 => palette::water as u32,
-                3 => palette::land as u32,
+                0 => Ground::sand as u32,
+                1 => Ground::beach as u32,
+                2 => Ground::water as u32,
+                3 => Ground::land as u32,
                 _ => 5 + (region >> 8) % 30,
             };
             let h = mix(i, g);

@@ -1,23 +1,22 @@
 // pxl-tool/spec/ingest.rs
 
 //! What the asset ingest wrote (`spec/spec/asset/ingest.json`), rendered:
-//! the host's table, which binds a file's number to its bucket key, and the
-//! texture pack's layout, which the renderer reads. A path is the specs' and
-//! the tools' name for a file; what is generated names it by its number
-//! (`file_number`), and Carto's symbols by theirs (`symbol_number`). Rust holds
-//! each file's path by its number as well, for what reads the files from the
-//! repository rather than the bucket.
+//! the files, each by its number with every field on both sides, which binds
+//! a file's number to its bucket key, and the texture pack's layout, which the
+//! renderer reads. A path is the specs' and the tools' name for a file; what
+//! is generated elsewhere names it by its number (`file_number`), and Carto's
+//! symbols by theirs (`symbol_number`).
 
 use std::fmt::Write;
 use std::sync::OnceLock;
 
+use xpute_gen::spec::data::{table_outputs, DataSpec};
+
 use super::asset::cube_number;
-use super::{file, mark, read, Node, Output};
+use super::{file, read, Node, Output};
+use crate::root;
 
 pub(crate) const INGEST_JSON: &str = "spec/spec/asset/ingest.json";
-
-/// What the ingest's generated files name as their writer.
-const TOOL: &str = "pxl-tool spec/ingest.rs";
 
 pub struct File {
     pub path: String,
@@ -152,56 +151,67 @@ fn pack() -> Result<Pack, String> {
     })
 }
 
+/// The files, written by xpute's generator as a data spec built here: every
+/// field of each file on both sides. The pack's layout follows, the tool's
+/// own, as each side reads it.
 pub fn outputs() -> Result<Vec<Output>, String> {
     let (rows, pack) = (files()?, pack()?);
-    Ok(vec![
-        Output::new(
-            "ts/client/src/service/origin/ingest.spec.ts",
-            render_ts(&rows, &pack)?,
-        ),
-        Output::new(
-            "rust/spec/src/asset/ingest.spec.rs",
-            render_rs(&rows, &pack)?,
-        ),
-    ])
-}
-
-fn render_ts(rows: &[File], pack: &Pack) -> Result<String, String> {
-    let mut out = String::with_capacity(rows.len() * 160);
-    out.push_str("// @pxl/client/service/origin/ingest.spec.ts\n//\n");
-    out.push_str(&format!("// {}\n", mark(INGEST_JSON, TOOL)));
-    out.push_str(
-        r#"// Every shipped asset by its number after ASSET, file n at
-// `ASSET_FILES[n - 1]` (ts/client/src/service/sys/fs/asset.ts): the bucket key
-// (the SHA-256 of its bytes, which where it lies does not change), its size,
-// and for a model its extent in ENU world units, measured from the glb. The
-// bytes themselves are in the bucket.
-
-export interface IngestedFile {
-  key: string;
-  bytes: number;
-  /** ENU (x, y, z-up); absent for an image. */
-  extent?: readonly [number, number, number];
-}
-
-export const ASSET_FILES: readonly IngestedFile[] = [
-"#,
-    );
-    for r in rows {
+    let record = |r: &File| {
         let extent = match r.extent {
-            Some(e) => format!(", extent: [{}, {}, {}]", e[0], e[1], e[2]),
-            None => String::new(),
+            Some(e) => Node::Arr(e.iter().map(|n| Node::Num(*n)).collect()),
+            None => Node::Null,
         };
-        let _ = writeln!(
-            out,
-            "  {{ key: \"{}\", bytes: {}{} }},",
-            r.key, r.bytes, extent
-        );
+        Node::Obj(vec![
+            ("path".into(), Node::Str(r.path.clone())),
+            ("key".into(), Node::Str(r.key.clone())),
+            ("bytes".into(), Node::Num(r.bytes as f64)),
+            ("extent".into(), extent),
+        ])
+    };
+    let doc = |lines: &[&str]| Node::Arr(lines.iter().map(|l| Node::Str(l.to_string())).collect());
+    let table = Node::Obj(vec![
+        (
+            "$doc".into(),
+            doc(&[
+                "Every shipped asset by its number after ASSET, file n at `ASSET_FILES[n - 1]`",
+                "(ts/client/src/service/sys/fs/asset.ts), and the texture pack as the asset ingest",
+                "composed it.",
+            ]),
+        ),
+        (
+            "ASSET_FILES".into(),
+            Node::Obj(vec![
+                (
+                    "$doc".into(),
+                    doc(&[
+                        "Each file: its path below asset/content/, the specs' and the tools' name for it;",
+                        "its bucket key, the SHA-256 of its bytes, which where it lies does not change;",
+                        "its size; and for a model its extent in ENU world units (x, y, z-up), measured",
+                        "from the glb, null for an image. The bytes themselves are in the bucket.",
+                    ]),
+                ),
+                ("$val".into(), Node::Arr(rows.iter().map(record).collect())),
+            ]),
+        ),
+    ]);
+    let d = DataSpec {
+        json: INGEST_JSON,
+        ts: Some("ts/client/src/service/origin/ingest.spec.ts"),
+        rs: Some("rust/spec/src/asset/ingest.spec.rs"),
+        ..DataSpec::DEFAULT
+    };
+    let mut outs = table_outputs(&root(), &d, table)?;
+    let (ts, rs) = (pack_ts(&pack)?, pack_rs(&pack)?);
+    for o in &mut outs {
+        let tail = if o.path.ends_with(".rs") { &rs } else { &ts };
+        o.text = format!("{}\n{tail}", o.text);
     }
-    out.push_str(
-        r#"];
+    Ok(outs)
+}
 
-/** The texture pack as one image, the file numbered `image`: `columns` tiles
+fn pack_ts(pack: &Pack) -> Result<String, String> {
+    let mut out = String::from(
+        r#"/** The texture pack as one image, the file numbered `image`: `columns` tiles
  * of `cell` pixels per row, tile n at column n % columns and row n / columns,
  * `tiles` the number of the file each holds, and `top` the tile each cube
  * wears on top, by the cube's number. */
@@ -223,17 +233,8 @@ export const PACK = {
     Ok(out)
 }
 
-fn render_rs(rows: &[File], pack: &Pack) -> Result<String, String> {
-    let mut out = vec![
-        "// pxl-spec/asset/ingest.spec.rs\n//".to_string(),
-        format!("// {}", mark(INGEST_JSON, TOOL)),
-        r##"// Every shipped asset's path below asset/content/ by its number after ASSET,
-// and the texture pack as the asset ingest composed it: which of its tiles
-// each cube wears on which face, and what each reads as from afar. Its image
-// is the file the catalog names for the cube kind's pack (catalog.spec.rs
-// `pack`).
-
-use crate::asset::cube;
+fn pack_rs(pack: &Pack) -> Result<String, String> {
+    let mut out = vec![r##"use crate::asset::cube;
 use crate::asset::id::AssetId;
 
 /// Which of a box's images a tile is, as Minecraft's `cube_bottom_top`
@@ -249,11 +250,13 @@ pub enum CubeFace {
 /// The texture pack as one image: `columns` tiles of `cell` pixels per row,
 /// tile n at column n % columns and row n / columns, `tiles` the cube face
 /// each tile is, and `sentinels` the tile a sentinel the world draws wears.
+/// Its image is the file the catalog names for the cube kind's pack
+/// (catalog.spec.rs `pack`).
 pub struct Pack {
     pub cell: u32,
     pub columns: u32,
     pub tiles: &'static [(AssetId, CubeFace, u32)],
-    pub sentinels: &'static [(u8, u32)],
+    pub sentinels: &'static [(cube::Sentinel, u32)],
     /// What each tile reads as from far enough away that the tile itself is
     /// gone: its own mean color, taken in linear light. A mesh that
     /// summarizes a patch of ground takes its color from here rather than
@@ -261,15 +264,9 @@ pub struct Pack {
     /// and not the color its material shows.
     pub means: &'static [[u8; 3]],
 }
-
-/// Each shipped asset's path below asset/content/, file n at `ASSET_PATHS[n -
-/// 1]`.
-pub const ASSET_PATHS: &[&str] = &["##
-        .to_string()];
-    out.extend(rows.iter().map(|r| format!("    {:?},", r.path)));
+"##
+    .to_string()];
     out.extend([
-        "];".to_string(),
-        String::new(),
         "pub const PACK: Pack = Pack {".to_string(),
         format!("    cell: {},", pack.cell),
         format!("    columns: {},", pack.columns),
@@ -297,7 +294,7 @@ pub const ASSET_PATHS: &[&str] = &["##
         pack.faces
             .iter()
             .filter(|f| f.0 == "sentinel")
-            .map(|(_, ty, _, tile)| format!("        (cube::sentinel::{ty}, {tile}),")),
+            .map(|(_, ty, _, tile)| format!("        (cube::Sentinel::{ty}, {tile}),")),
     );
     out.push("    ],".to_string());
     out.push("    means: &[".to_string());

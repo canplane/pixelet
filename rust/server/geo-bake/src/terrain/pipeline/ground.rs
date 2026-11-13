@@ -5,7 +5,7 @@
 //! `u32`.
 
 use crate::terrain::CELL_U;
-use pxl_spec::asset::cube::ground;
+use pxl_spec::asset::cube::{Ground, BASE};
 use pxl_spec::bake::tile::terrain::{GroundCells, GroundId};
 use pxl_spec::space::layer::lattice::{CELL_CENTER, GROUND, TILE_CELLS};
 use pxl_spec::way;
@@ -32,18 +32,18 @@ pub enum Coast {
 }
 
 pub fn bake_ground(feats: &[Feature], coast: &Coast) -> GroundCells {
-    let mut cells = vec![ground::water; TILE_AREA];
+    let mut cells = vec![Ground::water as GroundId; TILE_AREA];
     match coast {
         Coast::Sea => {}
-        Coast::Land => cells.fill(ground::BASE),
+        Coast::Land => cells.fill(BASE as GroundId),
         Coast::Shore(land) => {
             for (points, holes) in land {
-                render_polygon(points, ground::BASE, &mut cells, holes, None);
+                render_polygon(points, BASE as GroundId, &mut cells, holes, None);
             }
         }
     }
     let sea: Option<Vec<bool>> = (!matches!(coast, Coast::Land))
-        .then(|| cells.iter().map(|&c| c == ground::water).collect());
+        .then(|| cells.iter().map(|&c| c == Ground::water as GroundId).collect());
 
     let mut ordered: Vec<&Feature> = feats.iter().collect();
     ordered.sort_by(|a, b| a.rank.cmp(&b.rank));

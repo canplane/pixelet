@@ -4,21 +4,19 @@
 
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import { Branch, type Arg, type NodeCursor } from "@xpute/kit/wire/xtp/mod.ts";
-import { uri } from "../link.ts";
-
-/** The interface's qualified name: its package and its name. */
-export const NAME = uri("xpute:link", "types");
+import { type NodeCursor, type PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
 
 export type Token = { tag: "int"; val: number } | { tag: "str"; val: string };
 
 /** Its payload alone, whose node's type says its case. */
-export function write_Token(v: Token): Arg {
+export function write_Token(w: PacketWriter, v: Token): void {
   switch (v.tag) {
     case "int":
-      return v.val;
+      w.i32(v.val);
+      return;
     case "str":
-      return v.val;
+      w.str(v.val);
+      return;
   }
 }
 
@@ -33,8 +31,11 @@ export interface Lent {
   len: number;
 }
 
-export function write_Lent(r: Lent): Branch {
-  return new Branch([r.at, r.len]);
+export function write_Lent(w: PacketWriter, r: Lent): void {
+  w.branch(2, (w) => {
+    w.u32(r.at);
+    w.u32(r.len);
+  });
 }
 
 export function read_Lent(c: NodeCursor): Lent {

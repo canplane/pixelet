@@ -3,12 +3,13 @@
 import { create } from "zustand";
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
-import { CUBES, ground, object } from "@/ui/shared/asset/cube.spec.ts";
+import * as cube from "@/abi/cube.spec.ts";
 import { DECORS } from "@/ui/shared/asset/decor.spec.ts";
-import { KIND } from "@/ui/shared/asset/id.spec.ts";
+import { Kind } from "@/ui/shared/asset/id.spec.ts";
 import {
   type AssetId,
   type Cube,
+  CUBES,
   kindOf,
   MARKER,
 } from "@/ui/shared/asset/catalog.ts";
@@ -70,13 +71,13 @@ interface SwatchFlash {
 // One asset of each kind that can be placed, so that a fresh hotbar shows the
 // whole range. Its length sets the hotbar's size.
 const SEED: readonly AssetId[] = [
-  object.white,
-  ground.land,
-  ground.water,
-  ground.building,
-  ground.residential_road,
-  object.red,
-  object.blue,
+  cube.Object.white,
+  cube.Ground.land,
+  cube.Ground.water,
+  cube.Ground.building,
+  cube.Ground.residential_road,
+  cube.Object.red,
+  cube.Object.blue,
   DECORS[0],
 ];
 
@@ -226,7 +227,7 @@ export function flashSwatch(cube: Cube, open: boolean): void {
 /** A `delta` of 1 is one step coarser, and -1 one step finer. */
 export function stepScale(delta: i32): void {
   const { tool, id, scaleSteps } = store.getState();
-  if (tool !== Tool.Item || kindOf(id) !== KIND.cube) return;
+  if (tool !== Tool.Item || kindOf(id) !== Kind.cube) return;
   selectScale(Math.min(0, Math.max(1 - OBJECT_SCALES, scaleSteps + delta)));
   flashSwatch(id, true);
 }

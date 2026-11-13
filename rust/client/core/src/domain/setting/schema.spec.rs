@@ -1,6 +1,6 @@
 // pxl-core/domain/setting/schema.spec.rs
 //
-// GENERATED from spec/client/core/domain/setting/schema.json (pxl-tool spec/setting.rs)
+// GENERATED from spec/client/core/domain/setting/schema.json (xpute-gen data.rs)
 //
 // Every setting the app has, declared once: its default, its kind, and
 // where it is shown, its `section`: one of the settings sheet's, or
@@ -26,7 +26,13 @@
 
 // Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(non_camel_case_types, dead_code, reason = "generated from the spec")]
+#![allow(
+    non_upper_case_globals,
+    non_snake_case,
+    non_camel_case_types,
+    dead_code,
+    reason = "generated from the spec"
+)]
 
 /// Which controller makes the camera's pose.
 ///
@@ -35,7 +41,7 @@
 ///   first_person — the eye is the pivot and turns in place; a drag
 ///                  walks it as the orbit's pivot walks, the eye at its
 ///                  height over where the walk stands.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum CameraMode {
     orbit = 0,
@@ -43,11 +49,24 @@ pub enum CameraMode {
 }
 
 impl CameraMode {
+    /// Every member, in its source's own order.
     pub const ALL: [CameraMode; 2] = [CameraMode::orbit, CameraMode::first_person];
 
-    /// The option a number names, or none for a number the list does not give out.
-    pub fn of(number: u32) -> Option<CameraMode> {
-        CameraMode::ALL.into_iter().find(|o| *o as u32 == number)
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<CameraMode> {
+        match val {
+            0 => Some(CameraMode::orbit),
+            1 => Some(CameraMode::first_person),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            CameraMode::orbit => "orbit",
+            CameraMode::first_person => "first_person",
+        }
     }
 }
 
@@ -62,7 +81,7 @@ impl CameraMode {
 ///             as straight down, at the cost of an angle nobody asked for.
 ///             Where its way hits something all the same, a zoom in goes
 ///             through to the pivot's side and any other control stops.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum OrbitObstacleMode {
     through = 0,
@@ -71,17 +90,30 @@ pub enum OrbitObstacleMode {
 }
 
 impl OrbitObstacleMode {
+    /// Every member, in its source's own order.
     pub const ALL: [OrbitObstacleMode; 3] = [
         OrbitObstacleMode::through,
         OrbitObstacleMode::stop,
         OrbitObstacleMode::climb,
     ];
 
-    /// The option a number names, or none for a number the list does not give out.
-    pub fn of(number: u32) -> Option<OrbitObstacleMode> {
-        OrbitObstacleMode::ALL
-            .into_iter()
-            .find(|o| *o as u32 == number)
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<OrbitObstacleMode> {
+        match val {
+            0 => Some(OrbitObstacleMode::through),
+            1 => Some(OrbitObstacleMode::stop),
+            2 => Some(OrbitObstacleMode::climb),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            OrbitObstacleMode::through => "through",
+            OrbitObstacleMode::stop => "stop",
+            OrbitObstacleMode::climb => "climb",
+        }
     }
 }
 
@@ -103,7 +135,7 @@ impl OrbitObstacleMode {
 ///            bytes a pixel. The corners' too, the darker of the two where
 ///            both fall (screen_shade.wgsl), as N8AO reads a cube's corner
 ///            softer at half resolution.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum AoMode {
     off = 0,
@@ -112,11 +144,26 @@ pub enum AoMode {
 }
 
 impl AoMode {
+    /// Every member, in its source's own order.
     pub const ALL: [AoMode; 3] = [AoMode::off, AoMode::corner, AoMode::screen];
 
-    /// The option a number names, or none for a number the list does not give out.
-    pub fn of(number: u32) -> Option<AoMode> {
-        AoMode::ALL.into_iter().find(|o| *o as u32 == number)
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<AoMode> {
+        match val {
+            0 => Some(AoMode::off),
+            1 => Some(AoMode::corner),
+            2 => Some(AoMode::screen),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            AoMode::off => "off",
+            AoMode::corner => "corner",
+            AoMode::screen => "screen",
+        }
     }
 }
 
@@ -132,7 +179,7 @@ impl AoMode {
 ///   fixed — the display's, at its rate, whatever the frames cost.
 ///   low   — half the display's each way, auto's floor (RES_MIN), at the
 ///           display's rate.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum ResMode {
     auto = 0,
@@ -141,11 +188,26 @@ pub enum ResMode {
 }
 
 impl ResMode {
+    /// Every member, in its source's own order.
     pub const ALL: [ResMode; 3] = [ResMode::auto, ResMode::fixed, ResMode::low];
 
-    /// The option a number names, or none for a number the list does not give out.
-    pub fn of(number: u32) -> Option<ResMode> {
-        ResMode::ALL.into_iter().find(|o| *o as u32 == number)
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<ResMode> {
+        match val {
+            0 => Some(ResMode::auto),
+            1 => Some(ResMode::fixed),
+            2 => Some(ResMode::low),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            ResMode::auto => "auto",
+            ResMode::fixed => "fixed",
+            ResMode::low => "low",
+        }
     }
 }
 
@@ -161,7 +223,7 @@ impl ResMode {
 ///   noon      — 12:00, the sun highest.
 ///   afternoon — 15:00.
 ///   dusk      — 17:00, a low sun.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum SkyTime {
     real = 0,
@@ -173,6 +235,7 @@ pub enum SkyTime {
 }
 
 impl SkyTime {
+    /// Every member, in its source's own order.
     pub const ALL: [SkyTime; 6] = [
         SkyTime::real,
         SkyTime::dawn,
@@ -182,22 +245,34 @@ impl SkyTime {
         SkyTime::dusk,
     ];
 
-    /// The option a number names, or none for a number the list does not give out.
-    pub fn of(number: u32) -> Option<SkyTime> {
-        SkyTime::ALL.into_iter().find(|o| *o as u32 == number)
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<SkyTime> {
+        match val {
+            0 => Some(SkyTime::real),
+            1 => Some(SkyTime::dawn),
+            2 => Some(SkyTime::morning),
+            3 => Some(SkyTime::noon),
+            4 => Some(SkyTime::afternoon),
+            5 => Some(SkyTime::dusk),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            SkyTime::real => "real",
+            SkyTime::dawn => "dawn",
+            SkyTime::morning => "morning",
+            SkyTime::noon => "noon",
+            SkyTime::afternoon => "afternoon",
+            SkyTime::dusk => "dusk",
+        }
     }
 }
 
-/// How a setting is held.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SettingKind {
-    Toggle,
-    Choice,
-    Index,
-}
-
 /// Every setting, by its number in schema.json's SETTING.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum SettingKey {
     /// Ground color from the art pack (a tap of the layer array per
@@ -272,6 +347,7 @@ pub enum SettingKey {
 }
 
 impl SettingKey {
+    /// Every member, in its source's own order.
     pub const ALL: [SettingKey; 22] = [
         SettingKey::textures,
         SettingKey::decor,
@@ -297,16 +373,76 @@ impl SettingKey {
         SettingKey::sky_time,
     ];
 
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<SettingKey> {
+        match val {
+            0 => Some(SettingKey::textures),
+            1 => Some(SettingKey::decor),
+            2 => Some(SettingKey::clouds),
+            3 => Some(SettingKey::place),
+            4 => Some(SettingKey::tilt_lock),
+            5 => Some(SettingKey::camera_mode),
+            6 => Some(SettingKey::surface_follow),
+            7 => Some(SettingKey::orbit_obstacle),
+            8 => Some(SettingKey::edge_shade),
+            9 => Some(SettingKey::rim_light),
+            10 => Some(SettingKey::ao),
+            11 => Some(SettingKey::shadows),
+            12 => Some(SettingKey::res),
+            13 => Some(SettingKey::view),
+            14 => Some(SettingKey::perf),
+            15 => Some(SettingKey::world_gizmo),
+            16 => Some(SettingKey::camera_gizmo),
+            17 => Some(SettingKey::person),
+            18 => Some(SettingKey::pet),
+            19 => Some(SettingKey::ray_steps),
+            20 => Some(SettingKey::ray_cnts),
+            21 => Some(SettingKey::sky_time),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            SettingKey::textures => "textures",
+            SettingKey::decor => "decor",
+            SettingKey::clouds => "clouds",
+            SettingKey::place => "place",
+            SettingKey::tilt_lock => "tilt_lock",
+            SettingKey::camera_mode => "camera_mode",
+            SettingKey::surface_follow => "surface_follow",
+            SettingKey::orbit_obstacle => "orbit_obstacle",
+            SettingKey::edge_shade => "edge_shade",
+            SettingKey::rim_light => "rim_light",
+            SettingKey::ao => "ao",
+            SettingKey::shadows => "shadows",
+            SettingKey::res => "res",
+            SettingKey::view => "view",
+            SettingKey::perf => "perf",
+            SettingKey::world_gizmo => "world_gizmo",
+            SettingKey::camera_gizmo => "camera_gizmo",
+            SettingKey::person => "person",
+            SettingKey::pet => "pet",
+            SettingKey::ray_steps => "ray_steps",
+            SettingKey::ray_cnts => "ray_cnts",
+            SettingKey::sky_time => "sky_time",
+        }
+    }
+}
+
+/// How a setting is held.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SettingKind {
+    Toggle,
+    Choice,
+    Index,
+}
+
+impl SettingKey {
     /// One past the highest number: the length of a list of every
     /// setting's value at its number, where a number not given out stays 0.
     pub const SLOTS: usize = 22;
-
-    /// The setting a number names, or none for a number the table does not give out.
-    pub fn of(number: u32) -> Option<SettingKey> {
-        SettingKey::ALL
-            .into_iter()
-            .find(|key| *key as u32 == number)
-    }
 
     pub fn kind(self) -> SettingKind {
         match self {

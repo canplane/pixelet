@@ -3,22 +3,16 @@
 // GENERATED from wit/stop (xpute-link-gen wit.rs)
 
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
-import { XputeError } from "@xpute/kit/status/error.ts";
 import {
   type Link,
   type LinkObject,
   type Method,
   refusal_of,
-  type Sender,
   type Handle,
-  uri,
 } from "../../link.ts";
 
 /** The interface's handle, named by `xpute:stop/stop` (frame.json `NAMED`). */
 export const HANDLE: Handle = 0x4eccaa;
-
-/** The interface's qualified name: its package and its name. */
-export const NAME = uri("xpute:stop", "stop");
 
 /** `stopped` */
 export const STOPPED: Method = 0;
@@ -63,16 +57,4 @@ function object(imp: Stop): LinkObject {
 /** Serves `imp` under the interface's handle. */
 export function mount(l: Pick<Link, "mount_named">, imp: Stop): void {
   l.mount_named(HANDLE, object(imp));
-}
-
-export async function stopped(
-  link: Sender,
-  errnum: number,
-  file: string,
-  line: number,
-  n1: bigint,
-  n2: bigint,
-): Promise<void> {
-  const a = await link.send(HANDLE, STOPPED, [errnum, file, line, n1, n2]);
-  if (a.result < 0) throw new XputeError(a.result);
 }

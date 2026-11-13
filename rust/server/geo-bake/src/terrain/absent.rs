@@ -8,7 +8,7 @@
 
 use std::borrow::Cow;
 
-use pxl_spec::asset::cube::{ground, sentinel};
+use pxl_spec::asset::cube::{Ground, Sentinel};
 use pxl_spec::bake::tile::terrain::{TerrainTile, ELE_COLUMN};
 use pxl_spec::bake::tile::Occupancy;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
@@ -38,8 +38,8 @@ impl Absence {
     pub fn new(coverage: Coverage) -> Absence {
         Absence {
             coverage,
-            sea: uniform(ground::water),
-            unknown: uniform(sentinel::unknown),
+            sea: uniform(Ground::water as u8),
+            unknown: uniform(Sentinel::unknown as u8),
         }
     }
 }

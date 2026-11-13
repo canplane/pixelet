@@ -34,9 +34,10 @@ export type StepName = (typeof StepName)[keyof typeof StepName];
 /** The name of the `StepName` member numbered `n`, or undefined for a number
  * no member has. */
 export function step_name_name(n: number): keyof typeof StepName | undefined {
-  return (Object.keys(StepName) as (keyof typeof StepName)[]).find(
-    (k) => StepName[k] === n,
-  );
+  for (const k in StepName)
+    if (StepName[k as keyof typeof StepName] === n)
+      return k as keyof typeof StepName;
+  return undefined;
 }
 
 /** The `StepName` member `n` is, or null for a number no member has. */
@@ -74,9 +75,10 @@ export type EffectName = (typeof EffectName)[keyof typeof EffectName];
 export function effect_name_name(
   n: number,
 ): keyof typeof EffectName | undefined {
-  return (Object.keys(EffectName) as (keyof typeof EffectName)[]).find(
-    (k) => EffectName[k] === n,
-  );
+  for (const k in EffectName)
+    if (EffectName[k as keyof typeof EffectName] === n)
+      return k as keyof typeof EffectName;
+  return undefined;
 }
 
 /** The `EffectName` member `n` is, or null for a number no member has. */

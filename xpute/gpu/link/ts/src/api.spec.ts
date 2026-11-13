@@ -13,6 +13,14 @@
 // handles they took, so the host never hears of those objects. The encoder's begin and
 // commit open and close the transaction on both the stream and the handle table.
 
+/** The URI the guest opens its GPU device by (gpu/wit/gpu.wit `device`), which the GPU's
+ * hosts mount. */
+export const DEVICE_URI = ["xpute:gpu", "device"] as const;
+
+/** The URI a guest that draws serves its surface under (gpu/wit/surface.wit `surface`),
+ * which its host opens. */
+export const SURFACE_URI = ["xpute:gpu", "surface"] as const;
+
 /** The value of an optional field that is unset, such as an absent index or handle. */
 export const NONE = 4294967295 as number;
 
@@ -191,9 +199,10 @@ export type BindingKind = (typeof BindingKind)[keyof typeof BindingKind];
 export function binding_kind_name(
   n: number,
 ): keyof typeof BindingKind | undefined {
-  return (Object.keys(BindingKind) as (keyof typeof BindingKind)[]).find(
-    (k) => BindingKind[k] === n,
-  );
+  for (const k in BindingKind)
+    if (BindingKind[k as keyof typeof BindingKind] === n)
+      return k as keyof typeof BindingKind;
+  return undefined;
 }
 
 /** The `BindingKind` member `n` is, or null for a number no member has. */
@@ -215,9 +224,10 @@ export type ResourceKind = (typeof ResourceKind)[keyof typeof ResourceKind];
 export function resource_kind_name(
   n: number,
 ): keyof typeof ResourceKind | undefined {
-  return (Object.keys(ResourceKind) as (keyof typeof ResourceKind)[]).find(
-    (k) => ResourceKind[k] === n,
-  );
+  for (const k in ResourceKind)
+    if (ResourceKind[k as keyof typeof ResourceKind] === n)
+      return k as keyof typeof ResourceKind;
+  return undefined;
 }
 
 /** The `ResourceKind` member `n` is, or null for a number no member has. */

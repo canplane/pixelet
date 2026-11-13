@@ -5,8 +5,8 @@
 
 use pxl_spec::asset::color;
 use pxl_spec::asset::cube::cube_rgb;
-use pxl_spec::asset::cube::{sentinel, ALL_CUBES};
-use pxl_spec::asset::cube::{Ground, Object};
+use pxl_spec::asset::cube::ALL_CUBES;
+use pxl_spec::asset::cube::{Ground, Object, Sentinel};
 use pxl_spec::asset::ingest::CubeFace;
 use pxl_spec::asset::AssetId;
 use pxl_spec::asset::{shipped_sentinel_mean, shipped_tile_mean};
@@ -14,7 +14,7 @@ use std::sync::LazyLock;
 
 /// The sentinels the world draws, each with a layer after the cubes'. The only one is the
 /// bedrock's.
-pub const SENTINELS: [u8; 1] = [sentinel::unknown];
+pub const SENTINELS: [u8; 1] = [Sentinel::unknown as u8];
 
 /// The texture array's layers: one for each placeable cube, in the catalog's order, so a cube
 /// of a look is drawn as its ground is; then one for each drawn sentinel.
@@ -53,7 +53,7 @@ pub static LAYER_MEAN: LazyLock<Vec<[u8; 3]>> = LazyLock::new(|| {
         })
         .chain(SENTINELS.iter().map(|&s| {
             shipped_sentinel_mean(s)
-                .unwrap_or_else(|| color::sentinel(s).map_or([0; 3], |c| rgb255(c.rgb)))
+                .unwrap_or_else(|| color::sentinel(u16::from(s)).map_or([0; 3], |c| rgb255(c.rgb)))
         }))
         .collect()
 });

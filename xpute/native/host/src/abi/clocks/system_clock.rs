@@ -11,7 +11,7 @@
 )]
 
 use crate::link;
-use crate::wait::wait;
+use crate::wait;
 use std::rc::Rc;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -22,9 +22,6 @@ use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
 
 /// The interface's handle, named by `xpute:clocks/system-clock` (frame.json `NAMED`).
 pub const HANDLE: Handle = 0x7dfa61;
-
-/// The interface's qualified name: its package and its name.
-pub const NAME: [&str; 2] = ["xpute:clocks", "system-clock"];
 
 /// `now`
 pub const NOW: Method = 0;
@@ -38,7 +35,7 @@ pub struct Instant {
 impl Instant {
     pub fn write(&self, w: &mut PacketWriter) {
         w.branch(2, |w| {
-            w.u64(Some(self.seconds as u64));
+            w.i64(Some(self.seconds));
             w.u32(Some(self.nanoseconds as u32));
         });
     }
@@ -46,7 +43,7 @@ impl Instant {
     pub fn read(c: Cursor<'_>) -> Result<Instant, MarshalError> {
         let b = c.as_branch()?;
         Ok(Instant {
-            seconds: b.at(0).and_then(|c| c.get_u64().map(|v| v as i64))?,
+            seconds: b.at(0).and_then(|c| c.get_i64())?,
             nanoseconds: b.at(1).and_then(|c| c.get_number().map(|v| v as u32))?,
         })
     }
@@ -59,9 +56,9 @@ pub trait SystemClock {
 struct SystemClockObject(Rc<dyn SystemClock>);
 
 impl Object for SystemClockObject {
-    fn call(&self, m: Method, tag: Tag, args: Option<BranchCursor<'_>>) -> Reply {
+    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
         let run = || -> Result<Reply, MarshalError> {
-            Ok(match m {
+            Ok(match m_ {
                 NOW => match self.0.now() {
                     Ok(v) => Reply {
                         result: 0,
@@ -84,16 +81,4 @@ impl Object for SystemClockObject {
 /// Serves `imp` under the interface's handle.
 pub fn mount(imp: Rc<dyn SystemClock>) {
     link::mount_named(HANDLE, Rc::new(SystemClockObject(imp)));
-}
-
-pub fn now() -> Result<Instant, Errno> {
-    let (r, data) = link::call(HANDLE, NOW, None);
-    xpute_link::answer(r).and_then(|_| {
-        let p = data.as_deref().ok_or(Errno::EBADMSG)?;
-        TreeReader::new(p)
-            .and_then(|t| t.read_branch())
-            .and_then(|b| b.at(0))
-            .and_then(|c| Instant::read(c))
-            .map_err(|e| e.errnum)
-    })
 }

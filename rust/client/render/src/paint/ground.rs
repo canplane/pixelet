@@ -5,7 +5,7 @@
 //! look share one entry.
 
 use pxl_spec::asset::color;
-use pxl_spec::asset::cube::sentinel;
+use pxl_spec::asset::cube::Sentinel;
 
 use crate::frame::shader::word::NO_LAYER;
 use crate::look::color::linear;
@@ -25,8 +25,8 @@ const BYTES: usize = u8::MAX as usize + 1;
 /// bedrock's `unknown` or a byte no look names, is drawn as `unknown`.
 pub fn look_words() -> Vec<[u32; 4]> {
     let unknown = (
-        color::sentinel(sentinel::unknown).map_or([0; 3], |s| rgb255(s.rgb)),
-        sentinel_layer(sentinel::unknown).unwrap_or(NO_LAYER) as u8,
+        color::sentinel(Sentinel::unknown as u16).map_or([0; 3], |s| rgb255(s.rgb)),
+        sentinel_layer(Sentinel::unknown as u8).unwrap_or(NO_LAYER) as u8,
     );
     let unit = |v: u8| (linear(v) * f64::from(u16::MAX)).round_ties_even() as u32;
     let pair = |a: u8, b: u8| unit(a) | unit(b) << 16;

@@ -3,8 +3,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { cubeHex, cubeLabel } from "./catalog.ts";
-import { CUBES } from "./cube.spec.ts";
+import { cubeHex, cubeLabel, CUBES } from "./catalog.ts";
 import { decor } from "./decor.spec.ts";
 
 test("ALL_CUBES - every cube is listed once and has a color and a name", () => {

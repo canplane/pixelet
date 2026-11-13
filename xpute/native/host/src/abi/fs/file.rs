@@ -11,8 +11,7 @@
 )]
 
 use crate::link;
-use crate::wait::wait;
-use core::future::Future;
+use crate::wait;
 use std::rc::Rc;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -20,11 +19,7 @@ use xpute_kit::wire::xtp::{
     ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
 };
 use xpute_link::abi::types::Lent;
-use xpute_link::Lend;
 use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
-/// The interface's qualified name: its package and its name.
-pub const NAME: [&str; 2] = ["xpute:fs", "file"];
 
 /// `[method]file.size`
 pub const FILE_SIZE: Method = 0;
@@ -48,12 +43,12 @@ pub trait File {
 struct FileObject(Rc<dyn File>);
 
 impl Object for FileObject {
-    fn call(&self, m: Method, tag: Tag, args: Option<BranchCursor<'_>>) -> Reply {
+    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
         let run = || -> Result<Reply, MarshalError> {
-            Ok(match m {
+            Ok(match m_ {
                 FILE_SIZE => {
                     self.0.size(Return::new(
-                        tag,
+                        tag_,
                         link::on_cancel,
                         Box::new(move |got| {
                             let reply = match got {
@@ -61,7 +56,7 @@ impl Object for FileObject {
                                 Err(e) => Reply::from(e as i32),
                             };
                             link::task_return(
-                                tag,
+                                tag_,
                                 reply.result,
                                 reply
                                     .data
@@ -73,12 +68,12 @@ impl Object for FileObject {
                     Reply::from(Errno::EINPROGRESS as i32)
                 }
                 FILE_READ => {
-                    let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let buf = b.at(0).and_then(|c| Lent::read(c))?;
+                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
+                    let buf = b_.at(0).and_then(|c| Lent::read(c))?;
                     self.0.read(
                         buf,
                         Return::new(
-                            tag,
+                            tag_,
                             link::on_cancel,
                             Box::new(move |got| {
                                 let reply = match got {
@@ -86,7 +81,7 @@ impl Object for FileObject {
                                     Err(e) => Reply::from(e as i32),
                                 };
                                 link::task_return(
-                                    tag,
+                                    tag_,
                                     reply.result,
                                     reply
                                         .data
@@ -99,12 +94,12 @@ impl Object for FileObject {
                     Reply::from(Errno::EINPROGRESS as i32)
                 }
                 FILE_WRITE => {
-                    let b = args.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let buf = b.at(0).and_then(|c| Lent::read(c))?;
+                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
+                    let buf = b_.at(0).and_then(|c| Lent::read(c))?;
                     self.0.write(
                         buf,
                         Return::new(
-                            tag,
+                            tag_,
                             link::on_cancel,
                             Box::new(move |got| {
                                 let reply = match got {
@@ -112,7 +107,7 @@ impl Object for FileObject {
                                     Err(e) => Reply::from(e as i32),
                                 };
                                 link::task_return(
-                                    tag,
+                                    tag_,
                                     reply.result,
                                     reply
                                         .data
@@ -126,7 +121,7 @@ impl Object for FileObject {
                 }
                 FILE_CHANGED => {
                     self.0.changed(Return::new(
-                        tag,
+                        tag_,
                         link::on_cancel,
                         Box::new(move |got| {
                             let reply = match got {
@@ -134,7 +129,7 @@ impl Object for FileObject {
                                 Err(e) => Reply::from(e as i32),
                             };
                             link::task_return(
-                                tag,
+                                tag_,
                                 reply.result,
                                 reply
                                     .data
@@ -147,7 +142,7 @@ impl Object for FileObject {
                 }
                 FILE_CLOSE => {
                     self.0.close(Return::new(
-                        tag,
+                        tag_,
                         link::on_cancel,
                         Box::new(move |got| {
                             let reply = match got {
@@ -155,7 +150,7 @@ impl Object for FileObject {
                                 Err(e) => Reply::from(e as i32),
                             };
                             link::task_return(
-                                tag,
+                                tag_,
                                 reply.result,
                                 reply
                                     .data
@@ -176,70 +171,4 @@ impl Object for FileObject {
 /// The object over `imp`, for an opener to answer.
 pub fn file(imp: Rc<dyn File>) -> Rc<dyn Object> {
     Rc::new(FileObject(imp))
-}
-
-pub fn file_size(file: Handle) -> impl Future<Output = Result<u32, Errno>> {
-    let sent = wait(file, FILE_SIZE, None, ());
-    async move {
-        let (r, data, lent) = sent.await;
-        xpute_link::answer(r).map(|v| v as u32)
-    }
-}
-
-pub fn file_read<L: Lend>(file: Handle, buf: L) -> impl Future<Output = (L, Result<u32, Errno>)> {
-    let mut buf = buf;
-    let (buf_at, buf_len) = Lend::span(&mut buf);
-    let sent = wait(
-        file,
-        FILE_READ,
-        Some((1, &|w: &mut PacketWriter| {
-            Lent {
-                at: buf_at,
-                len: buf_len,
-            }
-            .write(w);
-        })),
-        buf,
-    );
-    async move {
-        let (r, data, lent) = sent.await;
-        (lent, xpute_link::answer(r).map(|v| v as u32))
-    }
-}
-
-pub fn file_write<L: Lend>(file: Handle, buf: L) -> impl Future<Output = (L, Result<(), Errno>)> {
-    let mut buf = buf;
-    let (buf_at, buf_len) = Lend::span(&mut buf);
-    let sent = wait(
-        file,
-        FILE_WRITE,
-        Some((1, &|w: &mut PacketWriter| {
-            Lent {
-                at: buf_at,
-                len: buf_len,
-            }
-            .write(w);
-        })),
-        buf,
-    );
-    async move {
-        let (r, data, lent) = sent.await;
-        (lent, xpute_link::answer(r).map(|_| ()))
-    }
-}
-
-pub fn file_changed(file: Handle) -> impl Future<Output = Result<(), Errno>> {
-    let sent = wait(file, FILE_CHANGED, None, ());
-    async move {
-        let (r, data, lent) = sent.await;
-        xpute_link::answer(r).map(|_| ())
-    }
-}
-
-pub fn file_close(file: Handle) -> impl Future<Output = Result<(), Errno>> {
-    let sent = wait(file, FILE_CLOSE, None, ());
-    async move {
-        let (r, data, lent) = sent.await;
-        xpute_link::answer(r).map(|_| ())
-    }
 }

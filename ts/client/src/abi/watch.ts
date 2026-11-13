@@ -3,23 +3,17 @@
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 import { Errno } from "@xpute/kit/status/errno.spec.ts";
-import { XputeError } from "@xpute/kit/status/error.ts";
 import {
   type Link,
   type LinkObject,
   type Method,
   refusal_of,
-  type Sender,
   type Handle,
-  uri,
 } from "@xpute/link/link.ts";
 import * as types from "./types.ts";
 
 /** The interface's handle, named by `pxl:core/watch` (frame.json `NAMED`). */
 export const HANDLE: Handle = 0x71919e;
-
-/** The interface's qualified name: its package and its name. */
-export const NAME = uri("pxl:core", "watch");
 
 /** `start` */
 export const START: Method = 0;
@@ -60,14 +54,4 @@ function object(imp: Watch): LinkObject {
 /** Serves `imp` under the interface's handle. */
 export function mount(l: Pick<Link, "mount_named">, imp: Watch): void {
   l.mount_named(HANDLE, object(imp));
-}
-
-export async function start(link: Sender, sensor: types.Sensor): Promise<void> {
-  const a = await link.send(HANDLE, START, [sensor]);
-  if (a.result < 0) throw new XputeError(a.result);
-}
-
-export async function stop(link: Sender, sensor: types.Sensor): Promise<void> {
-  const a = await link.send(HANDLE, STOP, [sensor]);
-  if (a.result < 0) throw new XputeError(a.result);
 }

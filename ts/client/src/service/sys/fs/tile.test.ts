@@ -16,7 +16,7 @@ const DECL = decl(JSON.stringify(FIXTURE.source))!;
 
 test("version_of - each kind's tile at each zoom, a shard's own version or not, is the object the core made", () => {
   for (const { kind, object } of FIXTURE.tiles) {
-    const k = kind as BaseLayer;
+    const k = kind as keyof typeof BaseLayer;
     const name = object.split("/")[1]!;
     assert.deepStrictEqual(
       tileObject(version_of(DECL, k, name), name),

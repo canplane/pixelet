@@ -1,0 +1,7 @@
+package xpute:life@0.1.0;
+
+// What a guest hears of its app's life, which its host tells it.
+
+world guest {
+  export life;
+}
