@@ -253,6 +253,10 @@ impl life::Guest for Core {
         super::life::on_shown();
         Ok(())
     }
+    fn attached(&self) -> Result<(), Errno> {
+        super::life::on_attached();
+        Ok(())
+    }
 }
 
 #[cfg(test)]

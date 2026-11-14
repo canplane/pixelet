@@ -1,15 +1,15 @@
 // @xpute/link/link.ts
 
 /**
- * The host's link to a guest, alike the guest's (xpute-link link.rs,
- * link/wit/types.wit). Whatever is called is an object, called by its methods
- * under a handle: an interface's named handle, the hash of its name (frame.json5
- * `NAMED`), or a resource's, named by a URI, a tuple of tokens, and opened by
- * the root's `open` to a handle the serving side issues, or answered by a
- * function that returns it. A frame is one method called: its tag the request,
- * unique among the sender's pending ones, its command the handle, the method
- * and a RES bit (frame.ts), its packet the args in the Canonical ABI's layout
- * (cabi.ts). A frame crosses one way
+ * The host's link to a guest, alike the guest's (xpute-link `link.rs`,
+ * `link/wit/types.wit`). Whatever is called is an object, called by its
+ * methods under a handle: an interface's named handle, the hash of its name
+ * (`frame.json5` `NAMED`), or a resource's, named by a URI, a tuple of
+ * tokens, and opened by the root's `open` to a handle the serving side
+ * issues, or answered by a function that returns it. A frame is one method
+ * called: its tag the request, unique among the sender's pending ones, its
+ * command the handle, the method and a `RES` bit (`frame.ts`), its packet the
+ * args in the Canonical ABI's layout (`cabi.ts`). A frame crosses one way
  * through one function, and each crossing returns at once what the method came
  * to: its result, or EINPROGRESS for one that answers later, by a frame marked
  * RES with the request's tag. `call` takes what the crossing returns, for a
@@ -67,7 +67,7 @@ export { CANCEL, DROP, NAMED, OPEN, ROOT };
 /** An object a side serves: given a method, the request's tag, for a
  * later answer (`task_return`), and the args, it answers; and it is told its
  * drop once the other side drops its handle, as a Rust object is dropped
- * (xpute-link link.rs `Object`). */
+ * (xpute-link `link.rs` `Object`). */
 export interface LinkObject {
   call(m: Method, tag: Tag, args: U8Array | null): i32 | Reply;
   drop(): void;
@@ -120,8 +120,8 @@ export function uri(...names: string[]): Token[] {
   return names.map((val) => ({ tag: "str", val }));
 }
 
-/** Writes `uri` at `at` as a `list<token>`, as ROOT OPEN's args hold it
- * (types.wit). */
+/** Writes `uri` at `at` as a `list<token>`, as `ROOT` `OPEN`'s args hold it
+ * (`types.wit`). */
 export function store_uri(w: Lower, at: number, uri: readonly Token[]): void {
   const b = w.list(at, uri.length, TOKEN_SZ, TOKEN_ALIGN);
   if (b !== null) uri.forEach((t, k) => store_Token(w, b + k * TOKEN_SZ, t));
@@ -178,9 +178,10 @@ export function refusal_of(e: unknown): i32 {
 }
 
 /** What the host holds of its guest: the guest's memory, its three exports
- * (link/wit/types.wit), and its platform's report of a trap (`trap`). An
+ * (`link/wit/types.wit`), and its platform's report of a trap (`trap`). An
  * export the guest traps in traps the link (`Side.trap`) and answers on,
- * throwing nothing: link_in EPIPE, as a trapped guest's request is answered. */
+ * throwing nothing: `link_in` EPIPE, as a trapped guest's request is
+ * answered. */
 export interface Guest {
   readonly mem: ArrayBuffer;
   /** link_init: where the link's layout lies, the inbox and a frame's room. */
@@ -195,9 +196,9 @@ export interface Guest {
 }
 
 /** What a side serves, alike on the host's link and on a UI across a port
- * (`Side`, `Remote`), as xpute-link link.rs `Side` serves beside its frames,
+ * (`Side`, `Remote`), as xpute-link `link.rs` `Side` serves beside its frames,
  * Rust naming this part apart nowhere: its interfaces by their named
- * handles, the objects under issued handles in a table (`Table`: a Side's,
+ * handles, the objects under issued handles in a table (`Table`: a `Side`'s,
  * which issues them, or a UI's, under those its link's side issued), the
  * openers by the URI's leading tokens, the longest matching winning, and how
  * each request it answers later stops if its caller cancels it. Only how an
@@ -230,7 +231,7 @@ export abstract class Server<O extends Pick<Table<LinkObject>, "get" | "put" | "
   }
 
   /** Puts `stop` as what runs if the caller cancels the request `t` this
-   * side serves (frame.json5 `CANCEL`): a method that can stop then answers
+   * side serves (`frame.json5` `CANCEL`): a method that can stop then answers
    * ECANCELED, and one that can't runs on. */
   on_cancel(t: Tag, stop: () => void): void {
     this._cancels.set(t, stop);
@@ -298,9 +299,9 @@ export abstract class Server<O extends Pick<Table<LinkObject>, "get" | "put" | "
   }
 }
 
-/** The host's side of the link, as xpute-link link.rs `Side` is either side:
- * what it serves (`Server`), and the frames it lays in the guest's inbox
- * and takes from its outbox. */
+/** The host's side of the link, as xpute-link `link.rs` `Side` is either
+ * side: what it serves (`Server`), and the frames it lays in the guest's
+ * inbox and takes from its outbox. */
 export class Side extends Server<Table<LinkObject>> {
   /** The answers of the sent requests that answer later, by tag. */
   private readonly _pending = new Map<Tag, Answer>();
@@ -312,10 +313,10 @@ export class Side extends Server<Table<LinkObject>> {
   private _room = 0;
 
   /** The guest's import, which a module takes under `env`
-   * (xpute-native-runtime link.rs `link_out`). A throw out of the host while
-   * it answers is a failure of its own: it is handed to the hook, the guest is
-   * trapped, and its call is answered ENOTRECOVERABLE, so nothing unwinds
-   * through it. Once trapped, a frame is not served: EPIPE. */
+   * (xpute-native-runtime `link.rs` `link_out`). A throw out of the host
+   * while it answers is a failure of its own: it is handed to the hook, the
+   * guest is trapped, and its call is answered ENOTRECOVERABLE, so nothing
+   * unwinds through it. Once trapped, a frame is not served: EPIPE. */
   static imports(link: () => Side) {
     return {
       link_out: (at: u32): i32 => {
@@ -335,7 +336,7 @@ export class Side extends Server<Table<LinkObject>> {
   /** Stops the guest for good, and answers whether it did just now, the guest
    * not having trapped already: it is entered no more, a frame sent to it or
    * laid by it answering EPIPE, and its platform is told (`Guest.trap`), as
-   * xpute-native-runtime link.rs `trap`. */
+   * xpute-native-runtime `link.rs` `trap`. */
   trap(e: unknown): boolean {
     if (this._trapped) return false;
     this._trapped = true;
@@ -351,8 +352,8 @@ export class Side extends Server<Table<LinkObject>> {
   /** Enters the guest first, once the host's own objects are mounted: the
    * guest lays its link, the host reads its layout, and then the guest
    * boots, and may open them. False where the link trapped meanwhile, the
-   * guest's trap or a failure of the host's (xpute-native-runtime link.rs
-   * `init`). */
+   * guest's trap or a failure of the host's (xpute-native-runtime
+   * `link.rs` `init`). */
   init(): boolean {
     const at = this._guest.init();
     if (this._trapped) return false;
@@ -514,7 +515,7 @@ export class Side extends Server<Table<LinkObject>> {
    * room is refused: a packet written elsewhere, as one from across a port,
    * is its sender's fault, answered EMSGSIZE; a later answer's is answered
    * EMSGSIZE with no data, so its request still hears; args this side
-   * writes past it are a bug (xpute-link link.rs `Side::out`). A trapped
+   * writes past it are a bug (xpute-link `link.rs` `Side::out`). A trapped
    * guest is sent nothing: EPIPE, its layout perhaps never read. */
   private _out(tag: Tag, h: Handle, m: Method, res: boolean, result: i32, args: Packet): Answered {
     if (this._trapped) return { result: ERRNO_EPIPE, data: null };

@@ -6,7 +6,7 @@
 
 use super::applied;
 use crate::abi::types::ErrorCode;
-use crate::domain::setting::store::settings;
+use crate::domain::setting::settings;
 use crate::perf::read;
 use crate::perf::record;
 use crate::perf::frame::{FrameSample, WorstFrame};

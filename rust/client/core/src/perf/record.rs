@@ -32,8 +32,8 @@ const TASK_CAP: usize = 2_048;
 const FRAME_CAP: usize = 4_096;
 const WORST_CAP: usize = 12;
 /// The bytes of the failures' file names, which are few.
-pub const STRTAB_CAP: usize = 8_192;
-pub const PERCENTILE_CAP: usize = if FRAME_CAP > TASK_CAP {
+pub(crate) const STRTAB_CAP: usize = 8_192;
+pub(crate) const PERCENTILE_CAP: usize = if FRAME_CAP > TASK_CAP {
     FRAME_CAP
 } else {
     TASK_CAP
@@ -89,7 +89,7 @@ const COLUMNS: [u32; 5] = [
 /// The heap the profiler holds while its setting is on. The buddy allocator
 /// gives each column a power-of-two block, so each column counts at its size
 /// rounded up (link/layout.rs `HEAP_FLOWS_BYTES`).
-pub const PERF_BYTES: u64 = {
+pub(crate) const PERF_BYTES: u64 = {
     let mut sum = 0;
     let mut k = 0;
     while k < COLUMNS.len() {
@@ -163,12 +163,12 @@ fn perf() -> &'static mut Perf {
     })
 }
 
-pub fn perf_recording() -> bool {
+pub(crate) fn perf_recording() -> bool {
     perf().recording
 }
 
 /// The recording as NOW's recording_state section holds it, each flag 0 or 1.
-pub fn perf_recording_state() -> RecordingStateSection {
+pub(crate) fn perf_recording_state() -> RecordingStateSection {
     let l = perf();
     RecordingStateSection {
         recording: l.recording as u8 as f64,
@@ -183,7 +183,7 @@ pub fn perf_recording_state() -> RecordingStateSection {
 /// Starts a recording from now, taking the columns from the heap if they are
 /// not held yet. Returns false, and records nothing, when the heap refuses
 /// them.
-pub fn perf_recording_start() -> bool {
+pub(crate) fn perf_recording_start() -> bool {
     let l = perf();
     if l.task_ring.is_empty() {
         let (Some(tasks), Some(frames), Some(worst), Some(scratch), Some(strtab)) = (
@@ -211,7 +211,7 @@ pub fn perf_recording_start() -> bool {
     true
 }
 
-pub fn perf_recording_stop() {
+pub(crate) fn perf_recording_stop() {
     let l = perf();
     if !l.recording {
         return;
@@ -222,7 +222,7 @@ pub fn perf_recording_stop() {
 
 /// Gives the columns, and what they hold, back to the heap. It runs when the
 /// profiler's setting goes off, after which nothing shows them.
-pub fn perf_release() {
+pub(crate) fn perf_release() {
     perf_recording_stop();
     let l = perf();
     (
@@ -250,7 +250,9 @@ pub(crate) fn perf_scratch() -> &'static mut [f64] {
 /// Records a settled task. `row` is built only while recording, and it names
 /// a failure's file through the string table it is handed. A name the table
 /// has no room for is lost, as a record a full column drops is (`truncated`).
-pub fn perf_record(row: impl FnOnce(&mut dyn FnMut(&'static str) -> Option<u32>) -> TaskRecord) {
+pub(crate) fn perf_record(
+    row: impl FnOnce(&mut dyn FnMut(&'static str) -> Option<u32>) -> TaskRecord,
+) {
     let l = perf();
     if !l.recording {
         return;
@@ -277,7 +279,7 @@ pub fn perf_record(row: impl FnOnce(&mut dyn FnMut(&'static str) -> Option<u32>)
 /// Records a frame whose record is `s`. It closes the interval in progress
 /// with `interval_ms`, the gap that just ended, and `settled`, whether that
 /// frame asked for no next one. It then lands that interval and opens `s`'s.
-pub fn perf_record_frame(s: FrameSample, interval_ms: f64, settled: bool) {
+pub(crate) fn perf_record_frame(s: FrameSample, interval_ms: f64, settled: bool) {
     let l = perf();
     if !l.recording {
         return;
@@ -324,7 +326,7 @@ fn at_frame(l: &mut Perf, frame: f64, write: impl Fn(&mut FrameSample)) {
 
 /// The GPU's read `r` of the frame the renderer numbered `r.frame`, written
 /// into that frame's record.
-pub fn perf_record_gpu(r: GpuRead) {
+pub(crate) fn perf_record_gpu(r: GpuRead) {
     let l = perf();
     if !l.recording {
         return;
@@ -337,14 +339,14 @@ pub fn perf_record_gpu(r: GpuRead) {
 /// A frame's ray counts as they land, with the renderer's number for the
 /// frame that counted them.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct RayRead {
+pub(crate) struct RayRead {
     pub frame: f64,
     pub sample: RaySample,
 }
 
 /// The ray counts `r` of the frame the renderer numbered `r.frame`, written
 /// into that frame's record.
-pub fn perf_record_rays(r: RayRead) {
+pub(crate) fn perf_record_rays(r: RayRead) {
     let l = perf();
     if !l.recording {
         return;
@@ -353,21 +355,21 @@ pub fn perf_record_rays(r: RayRead) {
 }
 
 /// Folds what a frame held, `section`, into the recording's extremes.
-pub fn perf_fold_recording(section: &RecordingSection) {
+pub(crate) fn perf_fold_recording(section: &RecordingSection) {
     let l = perf();
     if l.recording {
         l.extreme.fold(section);
     }
 }
 
-pub fn perf_recording_extremes() -> RecordingSection {
+pub(crate) fn perf_recording_extremes() -> RecordingSection {
     perf().extreme
 }
 
 /// Records that an entry served the UI's read of the profiler, which took
 /// `ms`. That time is the profiler's cost to the interval in progress
 /// (`perf_ms`).
-pub fn perf_record_read(ms: f64) {
+pub(crate) fn perf_record_read(ms: f64) {
     let l = perf();
     if let Some(f) = l.open.as_mut().filter(|_| l.recording) {
         f.perf_ms += ms;
@@ -418,7 +420,7 @@ fn name_at(t: &mut [u8], len: &mut usize, file: &str) -> Option<u32> {
 }
 
 /// The string table's names so far, empty while the columns are not held.
-pub fn perf_strtab() -> &'static [u8] {
+pub(crate) fn perf_strtab() -> &'static [u8] {
     let l = perf();
     &l.strtab[..l.strtab_len]
 }
@@ -427,28 +429,28 @@ fn first_at<T>(ring: &[T], t: f64, at: impl Fn(&T) -> f64) -> usize {
     ring.partition_point(|rec| at(rec) < t)
 }
 
-pub fn perf_frames() -> &'static [FrameSample] {
+pub(crate) fn perf_frames() -> &'static [FrameSample] {
     let l = perf();
     &l.frame_ring[l.frame_head..l.frame_len]
 }
 
 /// In `end_ms` order, since a task is recorded as it settles.
-pub fn perf_tasks() -> &'static [TaskRecord] {
+pub(crate) fn perf_tasks() -> &'static [TaskRecord] {
     let l = perf();
     &l.task_ring[l.task_head..l.task_len]
 }
 
-pub fn perf_worst() -> &'static [WorstFrame] {
+pub(crate) fn perf_worst() -> &'static [WorstFrame] {
     let l = perf();
     &l.worst[..l.worst_len]
 }
 
-pub fn perf_frames_since(t: f64) -> &'static [FrameSample] {
+pub(crate) fn perf_frames_since(t: f64) -> &'static [FrameSample] {
     let ring = perf_frames();
     &ring[first_at(ring, t, |f| f.t)..]
 }
 
-pub fn perf_tasks_since(t: f64) -> &'static [TaskRecord] {
+pub(crate) fn perf_tasks_since(t: f64) -> &'static [TaskRecord] {
     let ring = perf_tasks();
     &ring[first_at(ring, t, |r| r.end_ms)..]
 }
@@ -459,7 +461,7 @@ mod test;
 
 /// A step's time, summed while the profiler records.
 #[derive(Clone, Copy, Debug)]
-pub struct StepStat {
+pub(crate) struct StepStat {
     pub phase: Phase,
     pub ms: f64,
     pub cnt: u32,
@@ -483,7 +485,12 @@ fn step_stats_mut() -> &'static mut [StepStat; StepName::ALL.len()] {
 }
 
 /// Runs the step `name` of `phase`, timed while the profiler records.
-pub fn timed(ctx: &mut TickContext, phase: Phase, name: StepName, step: fn(&mut TickContext)) {
+pub(crate) fn timed(
+    ctx: &mut TickContext,
+    phase: Phase,
+    name: StepName,
+    step: fn(&mut TickContext),
+) {
     if !*STEP_TIMING.get(|| false) {
         return step(ctx);
     }
@@ -496,7 +503,7 @@ pub fn timed(ctx: &mut TickContext, phase: Phase, name: StepName, step: fn(&mut 
 
 /// Starts summing each step's time from zero, or stops summing it; what was
 /// summed stays to be read.
-pub fn set_step_timing(on: bool) {
+pub(crate) fn set_step_timing(on: bool) {
     if on {
         *step_stats_mut() = [STAT_NONE; StepName::ALL.len()];
     }
@@ -504,7 +511,7 @@ pub fn set_step_timing(on: bool) {
 }
 
 /// Each step that ran while the profiler recorded, by its name.
-pub fn step_stats() -> impl Iterator<Item = (StepName, StepStat)> {
+pub(crate) fn step_stats() -> impl Iterator<Item = (StepName, StepStat)> {
     let stats = *step_stats_mut();
     StepName::ALL
         .into_iter()

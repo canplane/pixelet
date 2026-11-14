@@ -6,4 +6,4 @@
 /// The rate at which an eased position approaches its target, per second
 /// (smooth.rs `smoothing_factor`). The camera and the characters ease at the
 /// same rate.
-pub const POS_DAMP: f64 = 10.0;
+pub(crate) const POS_DAMP: f64 = 10.0;

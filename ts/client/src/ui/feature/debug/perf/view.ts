@@ -48,7 +48,7 @@ export const moving_fps = (f: { moving: f64; moving_ms: f64 }): f64 | null =>
 
 /** The span the panel title's frame rate is taken over. It is short so that
  * a dip shows as it happens. */
-export const RECENT_MS = 1_000;
+const RECENT_MS = 1_000;
 
 export interface Gauge {
   rec: {

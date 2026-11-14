@@ -274,8 +274,8 @@ pub fn mount(implementation: _rt::Rc<dyn Guest>) {
 }
 
 mod _rt {
-    pub use std::rc::Rc;
-    pub use xpute_guest::link;
-    pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::{Handle, Lift, Method, Object, Reply, Tag};
+    pub(super) use std::rc::Rc;
+    pub(super) use xpute_guest::link;
+    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_link::{Handle, Lift, Method, Object, Reply, Tag};
 }

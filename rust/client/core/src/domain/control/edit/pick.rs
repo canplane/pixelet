@@ -16,7 +16,7 @@ use crate::domain::control::param::PICK_DIST_U;
 use crate::domain::layer::object::store::Entry;
 use crate::domain::query;
 use crate::domain::query::{finest, Hit, HitKind, Ray, World};
-use crate::domain::setting::store::settings;
+use crate::domain::setting::settings;
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::frame::pose::{eye, ray_of};
 use crate::domain::view::lens::{decor_zooms, leaf_decors};
@@ -50,7 +50,7 @@ pub(crate) struct Pick {
 /// What the pick struck, as a tool reads it: the cell an edit takes, and the
 /// decor the ground generated there, which has no entry in the store.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Target {
+pub(crate) struct Target {
     pub at: Octant,
     pub decor: Option<Instance>,
 }
@@ -182,7 +182,7 @@ pub(crate) fn pick_at(ndc_x: f64, ndc_y: f64) -> Option<Pick> {
 /// draws it (`World::first_visible`). The world asked is the stored one
 /// (`World::now`), not the one the eraser's preview draws, because what is
 /// erased is what is stored.
-pub fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
+pub(crate) fn ray_pick(origin: V3, dir: V3) -> Option<Hit> {
     let ray = Ray {
         origin,
         dir,

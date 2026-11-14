@@ -21,7 +21,7 @@ import { useCore } from "@/ui/shared/watch.ts";
 import { append_chat_line, DockMode, set_dock_mode } from "./store.ts";
 import { SLOT } from "./strip.tsx";
 import * as edit from "@/service/core/edit.ts";
-import * as snapshot from "@/service/core/snapshot.ts";
+import * as overlay from "@/service/core/overlay.ts";
 
 /** The dock holds this state, so that it is there whether or not the cards are
  * drawn yet. */
@@ -46,7 +46,7 @@ export function useMessage(mode: DockMode) {
   // draft's text. From then on the field owns the text and sends the core each
   // change. When the draft closes, the field is emptied for the chat.
   useEffect(() => {
-    set_message_text(drafting ? (snapshot.cur().draft ?? "") : "");
+    set_message_text(drafting ? (overlay.cur().draft ?? "") : "");
     set_marker_fits(true);
     if (drafting) set_dock_mode(DockMode.MESSAGE);
   }, [drafting]);

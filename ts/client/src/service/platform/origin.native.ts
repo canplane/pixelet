@@ -2,7 +2,7 @@
 
 import { td } from "@xpute/kit/codec/encoding.ts";
 
-import { PLATFORM } from "./pxl-platform.ts";
+import { PLATFORM } from "./pxl-platform.native.ts";
 
 /** A device's app has no origin of its own: it reads from the site's. */
 export const REMOTE: boolean = true;

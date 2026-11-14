@@ -20,7 +20,7 @@ use pxl_spec::space::layer::octant::Octant;
 /// fall into a hole not yet dug. The preview moves no revision, so saves
 /// never see a hover.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct RenderEdit {
+pub(crate) struct RenderEdit {
     /// The key of the placed object hidden, whatever its kind. The rays cut
     /// it and decor's records leave it out, each reader only where it holds
     /// that object.
@@ -37,7 +37,7 @@ pub struct RenderEdit {
 /// transparent, the way its kind is drawn (domain/scene/indicator/ghost.rs
 /// `GhostDraw::set`).
 #[derive(Clone, Copy)]
-pub enum Ghost {
+pub(crate) enum Ghost {
     None,
     /// A decor instance whose base stands at `at` in the world's frame.
     /// `stand_in` is the box a placement shows in its place, and is None for
@@ -57,7 +57,7 @@ pub enum Ghost {
 /// or carve, and is None where the box is not one cube. `erase` is set when
 /// the tool is the eraser.
 #[derive(Clone, Copy)]
-pub struct GhostBox {
+pub(crate) struct GhostBox {
     pub at: V3,
     pub zoom: Zoom,
     pub cube: Option<AssetId>,
@@ -67,7 +67,7 @@ pub struct GhostBox {
 /// A marker being written. Its place may be free or may already hold a
 /// marker. Once committed, the draft is the marker at that place.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Draft {
+pub(crate) struct Draft {
     pub at: Octant,
     pub text: String,
 }

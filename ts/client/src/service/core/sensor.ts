@@ -1,14 +1,9 @@
 // @pxl/client/service/core/sensor.ts
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import {
-  type Sensor,
-  SENSOR_GEOLOCATION,
-  SENSOR_ORIENT,
-} from "@/abi/types.enum.ts";
+import { SENSOR_GEOLOCATION, SENSOR_ORIENT } from "@/abi/types.enum.ts";
 import { type SensorListener } from "@/service/platform/types.ts";
 import * as platform from "@/service/platform/sensor.ts";
-import { geolocation_fix, MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
 import * as sensor from "@/abi/sensor.ts";
 import {
   GEOLOCATION_ERROR_CODE_PERMISSION_DENIED,
@@ -20,8 +15,6 @@ import {
   PERMISSION_ANSWER_DENIED,
   PERMISSION_ANSWER_FAILED,
 } from "@/abi/sensor.enum.ts";
-import * as watch from "@/abi/watch.ts";
-import type { Remote } from "@xpute/link";
 import { ui } from "@/service/core/core.ts";
 
 /** Called from the press that asks for the location, which raises the
@@ -100,28 +93,4 @@ export function tell_platform(): Promise<void> {
     platform.ORIENT.gated,
     platform.ORIENT.silence,
   );
-}
-
-/** Serves `watch` on `remote`, the core's start and stop of the device's
- * sensors, before the core boots. */
-export function serve_watch(remote: Remote): void {
-  watch.mount(remote, { start: sensor_start, stop: sensor_stop });
-}
-
-function sensor_start(s: Sensor): void {
-  // A build made for measuring has its place given and starts no sensor, so
-  // that no permission prompt holds it on any platform.
-  if (__PERF_DRIVE__) {
-    if (s === SENSOR_GEOLOCATION) geolocation_fix(MEASURE_PLACE);
-    return;
-  }
-  if (s === SENSOR_GEOLOCATION) {
-    platform.GEOLOCATION.start();
-  } else platform.ORIENT.start();
-}
-
-function sensor_stop(s: Sensor): void {
-  if (s === SENSOR_GEOLOCATION) {
-    platform.GEOLOCATION.stop();
-  } else platform.ORIENT.stop();
 }

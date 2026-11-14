@@ -1,11 +1,11 @@
 // pxl-spec/asset/catalog.rs
 
 //! The catalog: the one file the client plugs in, through which the core finds every other
-//! file (pxl-core sys/io/file.json5 `CATALOG`). Which assets exist, and each file reference a
+//! file (pxl-core `sys/io/file.json5` `CATALOG`). Which assets exist, and each file reference a
 //! definition makes, are compiled in as the world's rule (`spec/spec/asset/`): a reference is
 //! a `Slot`. Which file fills each slot, and what the ingest measured of it, are the catalog's.
 //!
-//! It is laid out little-endian, as pxl-tool spec/catalog.rs writes it: the slots' count as a
+//! It is laid out little-endian, as pxl-tool `spec/catalog.rs` writes it: the slots' count as a
 //! u32; each slot's file as a u32, its number below the asset root; then each slot's extent in
 //! ENU as three f64, zero for an image.
 

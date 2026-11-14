@@ -11,7 +11,7 @@ use crate::terrain::bake::Surface;
 use crate::terrain::pipeline::overture::policy::{INFRASTRUCTURE, LAND};
 use crate::terrain::repository::TerrainRepository;
 
-pub fn fetch_surface(
+pub(crate) fn fetch_surface(
     repo: &TerrainRepository,
     client: &mut Client,
     tile_idx: [i32; 2],

@@ -10,12 +10,12 @@ use pxl_render::gpu::draw::DrawList;
 
 use crate::domain::scene::model::registry::ModelTable;
 
-pub mod asset;
-pub mod registry;
+pub(crate) mod asset;
+pub(crate) mod registry;
 
 static MODELS: Global<ModelTable> = Global::new();
 
-pub fn models() -> &'static mut ModelTable {
+pub(crate) fn models() -> &'static mut ModelTable {
     MODELS.get(ModelTable::default)
 }
 
@@ -23,6 +23,6 @@ pub fn models() -> &'static mut ModelTable {
 /// to it.
 static DRAW_LIST: Global<DrawList> = Global::new();
 
-pub fn draw_list() -> &'static mut DrawList {
+pub(crate) fn draw_list() -> &'static mut DrawList {
     DRAW_LIST.get(DrawList::default)
 }

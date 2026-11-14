@@ -1,11 +1,12 @@
-// xpute-native-host/native.rs
+// xpute-native-runtime/native.rs
 
-//! The runtime and its host as a native device's app reaches them: xpute's
-//! module calls the program's start and the runtime's entries through the C
-//! ABI (xpute.h), which the program exports by `native_abi!` with its start,
-//! and on Android the same calls under JNI's names (jni.rs). What the app
-//! hears, a batch waiting, a stop and a trap, it hears through the functions
-//! it sets (`notify_on`, `stopped_on`, `trap_on`).
+//! The runtime as a native device's app reaches it, as @xpute/web-runtime is
+//! a page's: xpute's module calls the program's start and the runtime's
+//! entries through the C ABI (xpute.h), which the program exports by
+//! `native_abi!` with its start, and on Android the same calls under JNI's
+//! names (jni.rs). What the app hears, a batch waiting, a stop and a trap, it
+//! hears through the functions it sets (`notify_on`, `stopped_on`,
+//! `trap_on`).
 
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
@@ -14,15 +15,23 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Token;
 use xpute_link::{load_uri, mem, Handle, Lift};
-use xpute_native_runtime::remote;
+use crate::remote;
 
-use crate::stop::Stop;
+/// The guest's report before it stops (wit/stop/stop.wit), as the host that
+/// serves the stop hands it to the app (xpute-native-host stop.rs).
+pub struct Stop {
+    pub errnum: i32,
+    pub file: String,
+    pub line: u32,
+    pub n1: u64,
+    pub n2: u64,
+}
 
 /// The program's start, which `native_abi!` takes: the named handles of the
 /// interfaces the UI serves, the prefixes it opens at, the directory the
-/// platform's storage is kept under and the one it keeps the app's caches
-/// in, and what tells the app a batch waits, a stop and a trap.
-pub type Start = fn(Vec<Handle>, Vec<Vec<Token>>, PathBuf, PathBuf, fn(), fn(Stop), fn());
+/// platform keeps the app's caches in, and what tells the app a batch waits,
+/// a stop and a trap.
+pub type Start = fn(Vec<Handle>, Vec<Vec<Token>>, PathBuf, fn(), fn(Stop), fn());
 
 /// What tells the app a batch waits, or the guest's trap.
 pub type Tell = extern "C" fn();
@@ -105,12 +114,12 @@ fn prefixes(pkt: &[u8]) -> Result<Vec<Vec<Token>>, Errno> {
 static STARTED: std::sync::Once = std::sync::Once::new();
 
 /// Starts the program's runtime (`xpute_start`): `named` and `prefixes` the
-/// UI's, and the two directories. The runtime starts once a process, and
+/// UI's, and the caches' directory. The runtime starts once a process, and
 /// each call is a new UI on it (`remote::accept`), as a reload's, which
-/// serves what the first did and is told the guest's end where it came
-/// (`End`). It answers the new UI's generation, which the UI's posts, answers
-/// and takes carry.
-pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], files_dir: PathBuf, cache_dir: PathBuf) -> u32 {
+/// serves what the first did, whose attach the guest is told, and which is
+/// told the guest's end where it came (`End`). It answers the new UI's
+/// generation, which the UI's posts, answers and takes carry.
+pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], cache_dir: PathBuf) -> u32 {
     let prefixes = prefixes(prefixes_pkt).or_bug(Errno::EBADMSG);
     let generation = remote::accept();
     {
@@ -123,7 +132,7 @@ pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], files_dir: P
             tell_trap();
         }
     }
-    STARTED.call_once(|| start(named, prefixes, files_dir, cache_dir, notify, stopped, trap));
+    STARTED.call_once(|| start(named, prefixes, cache_dir, notify, stopped, trap));
     generation
 }
 
@@ -167,7 +176,7 @@ pub fn mem() -> (*mut u8, u32) {
     (r.base, r.len)
 }
 
-/// Exports the runtime and its host under xpute's names (xpute.h) for the
+/// Exports the runtime under xpute's names (xpute.h) for the
 /// program's `$start` ([`Start`]), and on Android under JNI's for the Kotlin
 /// class `xpute.Runtime` (`jni_abi!`).
 #[macro_export]
@@ -175,15 +184,13 @@ macro_rules! native_abi {
     ($start:path) => {
         /// # Safety
         /// `named` is `named_len` handles, `prefixes` `prefixes_len` bytes, and
-        /// each directory its length's bytes.
+        /// `cache_dir` `cache_dir_len` bytes.
         #[no_mangle]
         pub unsafe extern "C" fn xpute_start(
             named: *const u32,
             named_len: usize,
             prefixes: *const u8,
             prefixes_len: usize,
-            files_dir: *const u8,
-            files_dir_len: usize,
             cache_dir: *const u8,
             cache_dir_len: usize,
         ) -> u32 {
@@ -191,9 +198,8 @@ macro_rules! native_abi {
             unsafe {
                 let named = ::core::slice::from_raw_parts(named, named_len).to_vec();
                 let prefixes = ::core::slice::from_raw_parts(prefixes, prefixes_len);
-                let (files_dir, cache_dir) =
-                    ($crate::native::dir(files_dir, files_dir_len), $crate::native::dir(cache_dir, cache_dir_len));
-                $crate::native::start($start, named, prefixes, files_dir, cache_dir)
+                let cache_dir = $crate::native::dir(cache_dir, cache_dir_len);
+                $crate::native::start($start, named, prefixes, cache_dir)
             }
         }
 
@@ -218,7 +224,7 @@ macro_rules! native_abi {
         pub unsafe extern "C" fn xpute_post(generation: u32, tag: u32, h: u32, m: u32, pkt: *const u8, len: usize) {
             // SAFETY: the caller's.
             let pkt = unsafe { $crate::native::bytes(pkt, len) };
-            ::xpute_native_runtime::post(generation, tag, h, m, pkt);
+            $crate::post(generation, tag, h, m, pkt);
         }
 
         /// # Safety
@@ -227,7 +233,7 @@ macro_rules! native_abi {
         pub unsafe extern "C" fn xpute_answer(generation: u32, tag: u32, result: i32, data: *const u8, len: usize) {
             // SAFETY: the caller's.
             let data = unsafe { $crate::native::bytes(data, len) };
-            ::xpute_native_runtime::answer(generation, tag, result, data);
+            $crate::answer(generation, tag, result, data);
         }
 
         /// # Safety
@@ -262,7 +268,7 @@ macro_rules! native_abi {
 
         #[no_mangle]
         pub extern "C" fn xpute_life(shown: i32) {
-            ::xpute_native_runtime::life(shown != 0);
+            $crate::life(shown != 0);
         }
 
         #[cfg(target_os = "android")]

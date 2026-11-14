@@ -1,7 +1,7 @@
 // cpp/xpute/link/mem.hpp
 
 // The guest's memory, which every offset on the link names: offset `at` is
-// the byte `at` past the memory's base, as xpute-link's mem.rs reads it. A
+// the byte `at` past the memory's base, as xpute-link's `mem.rs` reads it. A
 // module's memory begins at 0. A native guest's is the one region it
 // reserves as it starts (`set`), which a host linked into the same process
 // reads as its own.
@@ -33,8 +33,8 @@ Region region() noexcept;
 // past it is a bug, as a module's memory traps past its end.
 std::span<std::uint8_t> bytes(std::uint32_t at, std::uint32_t len) noexcept;
 
-// The offset of `p` in the guest's memory; an address outside it is a bug,
-// never a truncated offset.
+// The offset of `p` in the guest's memory; an address whose offset does not
+// fit a u32 is a bug, never truncated.
 std::uint32_t off(const void *p) noexcept;
 
 // The little-endian word at `at`, aligned or not.

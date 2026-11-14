@@ -26,8 +26,8 @@ fn face_at(slot: u32, face: u32) -> u32 {
   return RECS_AT + slot * R_WORDS + R_FACES + face;
 }
 
-// How the world indexes a node, as pxl-spec space/coord states it: X wrapped about the world,
-// and Y and Z counted from its edge.
+// How a node's index is wrapped and counted, as pxl-spec space/coord states it: X wrapped
+// about the world, and Y and Z turned into counts from its edge.
 
 /// The port of pxl-spec `wrap_idx`.
 fn wrap_idx(zoom: u32, x: i32) -> i32 {

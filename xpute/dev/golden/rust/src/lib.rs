@@ -8,7 +8,6 @@
 //! every language at once.
 
 use std::collections::HashMap;
-use std::panic::{catch_unwind, AssertUnwindSafe};
 
 pub struct Golden {
     map: HashMap<&'static str, &'static str>,
@@ -111,18 +110,4 @@ impl Golden {
         self.each(base, |_| n += 1);
         n
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.map.is_empty()
-    }
-}
-
-/// Runs `f` and returns None if it panicked, for a record whose expected
-/// value is "throw". The panic hook is silenced while `f` runs.
-pub fn catch<T>(f: impl FnOnce() -> T) -> Option<T> {
-    let hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
-    let out = catch_unwind(AssertUnwindSafe(f)).ok();
-    std::panic::set_hook(hook);
-    out
 }

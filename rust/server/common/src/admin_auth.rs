@@ -6,7 +6,7 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 
 /// A shared-secret gate for internal routes, not real authentication.
-pub async fn admin_auth(State(token): State<String>, req: Request, next: Next) -> Response {
+pub(crate) async fn admin_auth(State(token): State<String>, req: Request, next: Next) -> Response {
     if req
         .headers()
         .get("x-admin-token")

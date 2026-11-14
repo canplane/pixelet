@@ -103,8 +103,8 @@ pub fn past(area: &impl Area, leaf: [i32; 2]) -> bool {
 ///
 /// It is one word: a known bit, then which of the nine shards are served, bit
 /// `(dy + 1)·3 + (dx + 1)` for the shard `dx, dy` from its own. The shard is past where its
-/// own bit is clear and `inside` where all nine are set, and from the bits a leaf tile in any
-/// of the nine is known past or not without asking the area again (`past_leaf`).
+/// own bit is clear and `inside` where all nine are set, and from the bits the wall among the
+/// leaf cells of the nine is known without asking the area again (`walls`, `is_wall`).
 #[derive(Clone, Copy)]
 pub struct Shard(u32);
 
@@ -151,23 +151,6 @@ impl Shard {
     /// Whether the shard, and every leaf cell around it, are known to lie inside the area.
     pub const fn inside(self) -> bool {
         self.served_bits() == SHARD_ALL
-    }
-    /// Whether the leaf tile `leaf` is past the area (`past`), read from the nine bits `self`
-    /// knows for the node `(zoom, c)`. Ask it only where `self` is known and the leaf lies in the
-    /// node's shard or the eight around it. Every asker's shape gives that: the node is no wider
-    /// than a shard, and the leaf is a cell of it or a node beside it. The area itself is searched
-    /// once a shard, where the shard is first known (`at`).
-    pub fn past_leaf(self, (zoom, c): (Zoom, [i32; 2]), leaf: [i32; 2]) -> bool {
-        let (s, t) = (zoom - SHARD_ZOOM, LEAF_ZOOM - SHARD_ZOOM);
-        let d = [
-            wrap(SHARD_ZOOM, (leaf[0] >> t) - (c[0] >> s)),
-            (leaf[1] >> t) - (c[1] >> s),
-        ];
-        debug_assert!(
-            self.is_known() && d[0].abs() <= 1 && d[1].abs() <= 1,
-            "a leaf in the node's shard's nine"
-        );
-        self.served_bits() >> ((d[1] + 1) * 3 + d[0] + 1) & 1 == 0
     }
     /// Whether any leaf column among the leaf cells `lo` to `hi`, both included, is the wall
     /// (`is_wall`), read from the nine bits `self` knows for the node `(zoom, c)`. None is in a

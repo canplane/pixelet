@@ -33,13 +33,13 @@ const FRAMES_TO_ASK: u32 = 64;
 
 /// Whether a mutant sweep runs this test. In a sweep, the file `MUT_WGSL` names stands in for
 /// the module that holds the entry, and the test stops at its first case that differs.
-pub fn mutant() -> bool {
+pub(crate) fn mutant() -> bool {
     std::env::var_os("MUT_WGSL").is_some()
 }
 
 /// The source of the module that holds `entry`. It is the file `MUT_WGSL` names where that
 /// file holds the entry, and `assembled` otherwise.
-pub fn source(assembled: &str, entry: &str) -> String {
+pub(crate) fn source(assembled: &str, entry: &str) -> String {
     if let Some(path) = std::env::var_os("MUT_WGSL") {
         let text = std::fs::read_to_string(&path).expect("the mutant's module");
         if text.contains(&format!("fn {entry}(")) {
@@ -49,12 +49,12 @@ pub fn source(assembled: &str, entry: &str) -> String {
     assembled.to_string()
 }
 
-pub fn bytes(words: &[u32]) -> &[u8] {
+pub(crate) fn bytes(words: &[u32]) -> &[u8] {
     // SAFETY: every u32's bytes are u8s, in the slice's own lifetime.
     unsafe { std::slice::from_raw_parts(words.as_ptr().cast(), words.len() * 4) }
 }
 
-pub struct Gpu {
+pub(crate) struct Gpu {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     /// Whether the next run starts with its frame's asks spent, so a ray goes only as deep as
@@ -65,7 +65,7 @@ pub struct Gpu {
 impl Gpu {
     /// A device with the adapter's own limits, or `None` where no adapter answers. The process
     /// holds the GPU from here on (`lock::hold`).
-    pub fn new() -> Option<Gpu> {
+    pub(crate) fn new() -> Option<Gpu> {
         lock::hold();
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
@@ -83,11 +83,11 @@ impl Gpu {
     }
 
     /// Waits until every submission is done, and fails the test past `WAIT`.
-    pub fn wait(&self) {
+    pub(crate) fn wait(&self) {
         wait(&self.device);
     }
 
-    pub fn buf(&self, words: &[u32], usage: wgpu::BufferUsages) -> wgpu::Buffer {
+    pub(crate) fn buf(&self, words: &[u32], usage: wgpu::BufferUsages) -> wgpu::Buffer {
         use wgpu::util::DeviceExt as _;
         self.device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -97,13 +97,13 @@ impl Gpu {
             })
     }
 
-    pub fn read(&self, from: &wgpu::Buffer) -> Vec<u32> {
+    pub(crate) fn read(&self, from: &wgpu::Buffer) -> Vec<u32> {
         read_buf(&self.device, &self.queue, from)
     }
 
     /// The pipeline of `entry` in `assembled`, or in the mutant's module (`source`). Its group's
     /// layout is the one the module's bindings imply. A module the device refuses fails the test.
-    pub fn pipeline(&self, assembled: &str, entry: &str) -> wgpu::ComputePipeline {
+    pub(crate) fn pipeline(&self, assembled: &str, entry: &str) -> wgpu::ComputePipeline {
         let scope = self.device.push_error_scope(wgpu::ErrorFilter::Validation);
         let module = self
             .device
@@ -129,7 +129,7 @@ impl Gpu {
 
     /// Dispatches `groups` workgroups of `p` over `binds` and waits for them. A command buffer
     /// the device stopped short fails the test.
-    pub fn dispatch(
+    pub(crate) fn dispatch(
         &self,
         p: &wgpu::ComputePipeline,
         binds: &[(u32, wgpu::BindingResource)],
@@ -189,7 +189,7 @@ impl Gpu {
     /// (light_list.wgsl `light_item_at`), then runs them through `corners`. `world` binds what
     /// the passes read, with the list at 8, `node_cache` at 9 and the light's header
     /// at 11.
-    pub fn light_beam(
+    pub(crate) fn light_beam(
         &self,
         world: &[(u32, wgpu::BindingResource)],
         list: &wgpu::Buffer,
@@ -209,7 +209,7 @@ impl Gpu {
     /// binds what any of the passes reads except the queue's words: the eye at 0, the world at
     /// 1, 2 and 4 to 7, the rays or the map at 3, the observer's list at 8, the node cache at 9
     /// and the light's header at 11. Each pass takes the bindings its entry reads.
-    pub fn holes(
+    pub(crate) fn holes(
         &self,
         light: bool,
         all: &[(u32, wgpu::BindingResource)],
@@ -249,7 +249,7 @@ impl Gpu {
     /// Runs an observer's beam rays as the cast runs them (ray/cast.rs `walk_run`), the
     /// light's where `light` is set and the eye's otherwise. The passes and bindings follow
     /// `samples`.
-    pub fn corners(
+    pub(crate) fn corners(
         &self,
         light: bool,
         all: &[(u32, wgpu::BindingResource)],
@@ -286,7 +286,7 @@ impl Gpu {
     /// passes reads except the queue's words: the eye at 0, the world at 1, 2 and 4 to 7, the
     /// observer's list at 8, the node cache at 9 and the light's header at 11. Each pass takes
     /// the bindings its entry reads.
-    pub fn samples(
+    pub(crate) fn samples(
         &self,
         light: bool,
         all: &[(u32, wgpu::BindingResource)],
@@ -298,7 +298,7 @@ impl Gpu {
     /// `samples`, with the last walk, which asks the world, over the node cache `last_cache` in place
     /// of `node_cache` where `last_cache` is given. The walks before it and their asks read and write
     /// `node_cache`.
-    pub fn samples_last_cache(
+    pub(crate) fn samples_last_cache(
         &self,
         light: bool,
         all: &[(u32, wgpu::BindingResource)],
@@ -468,7 +468,7 @@ impl Gpu {
 /// item of its level, as a cast that damages every tile lays it (light_enlist.wgsl `enlist`).
 /// Returns the workgroups a pass dispatches over that list when each entry is `per` items a
 /// side (light_list.wgsl `light_item`).
-pub fn list_every(words: &mut [u32], size: u32, which: u32, per: u32) -> [u32; 2] {
+pub(crate) fn list_every(words: &mut [u32], size: u32, which: u32, per: u32) -> [u32; 2] {
     let across = if which == light::LIST_CORNERS {
         light::beam_across(size)
     } else {
@@ -500,7 +500,7 @@ fn wait(device: &wgpu::Device) {
 /// `node_cache`, `record`). The entry holds the node `n` as a walk from the origin `o` holds it.
 /// A walk of frame 1 kept it at the node's own zoom, its answer is `kind` and `asset`, and
 /// `state` says what draws it.
-pub fn lay_entry(
+pub(crate) fn lay_entry(
     cache: &mut [u32],
     slot: u32,
     o: [i32; 3],
@@ -527,7 +527,7 @@ pub fn lay_entry(
 /// bucket in the node cache's words `cache`, as a walk that asked it keeps it (ask.wgsl `keep`).
 /// Its answer is `answer`, a kind and an asset, and nothing draws it yet. Returns the slot, or
 /// `None` where the node is kept already or its bucket is full.
-pub fn lay_kept(
+pub(crate) fn lay_kept(
     cache: &mut [u32],
     o: [i32; 3],
     n: &cast::Node,
@@ -553,20 +553,24 @@ pub fn lay_kept(
 
 /// The node of the entry at word `e` of the node cache's words `cache`, as a walk from the
 /// origin `o` holds it.
-pub fn entry_node(cache: &[u32], e: usize, o: [i32; 3]) -> cast::Node {
+pub(crate) fn entry_node(cache: &[u32], e: usize, o: [i32; 3]) -> cast::Node {
     let w = e + node_cache::W_NODE as usize;
     cast::Node::of_idx(o, cache[w], [1, 2, 3].map(|a| cache[w + a] as i32))
 }
 
 /// Whether slot `slot` of `cache` holds a node. It does when its key is neither empty nor a
 /// claim.
-pub fn holds_node(cache: &[u32], slot: u32) -> bool {
+pub(crate) fn holds_node(cache: &[u32], slot: u32) -> bool {
     let key = cache[node_cache::key_at(slot) as usize];
     key != 0 && key != node_cache::CLAIMED && key & node_cache::CLAIM_MASK != node_cache::CLAIM_FAR
 }
 
 /// Reads back the words of `from`, which must allow copies from it (`COPY_SRC`).
-pub fn read_buf(device: &wgpu::Device, queue: &wgpu::Queue, from: &wgpu::Buffer) -> Vec<u32> {
+pub(crate) fn read_buf(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    from: &wgpu::Buffer,
+) -> Vec<u32> {
     let staging = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: from.size(),
@@ -590,7 +594,7 @@ pub fn read_buf(device: &wgpu::Device, queue: &wgpu::Queue, from: &wgpu::Buffer)
 
 /// A texture of `layers` R32Uint layers at `size`, usable for `usage` and for copies both
 /// ways, filled from `words` one layer after another.
-pub fn texture(
+pub(crate) fn texture(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     size: [u32; 2],
@@ -627,7 +631,11 @@ pub fn texture(
 
 /// Reads back a texture's words whole, one layer after another, without the padding a copy
 /// adds to each row.
-pub fn read_texture(device: &wgpu::Device, queue: &wgpu::Queue, t: &wgpu::Texture) -> Vec<u32> {
+pub(crate) fn read_texture(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    t: &wgpu::Texture,
+) -> Vec<u32> {
     use wgpu::util::DeviceExt as _;
     let [w, h, layers] = [t.width(), t.height(), t.depth_or_array_layers()];
     let row = (w * 4).next_multiple_of(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT);
@@ -657,7 +665,7 @@ pub fn read_texture(device: &wgpu::Device, queue: &wgpu::Queue, t: &wgpu::Textur
 }
 
 /// A view of every layer of `t`, as a pass binds a texture array.
-pub fn array_view(t: &wgpu::Texture) -> wgpu::TextureView {
+pub(crate) fn array_view(t: &wgpu::Texture) -> wgpu::TextureView {
     t.create_view(&wgpu::TextureViewDescriptor {
         dimension: Some(wgpu::TextureViewDimension::D2Array),
         ..Default::default()
@@ -667,27 +675,27 @@ pub fn array_view(t: &wgpu::Texture) -> wgpu::TextureView {
 /// How many cases of each kind a test met. A test may claim a result only from the kinds it
 /// met, so a kind it needs and met too few times fails it.
 #[derive(Default, Debug)]
-pub struct KindCount(BTreeMap<&'static str, u64>);
+pub(crate) struct KindCount(BTreeMap<&'static str, u64>);
 
 impl KindCount {
-    pub fn new() -> KindCount {
+    pub(crate) fn new() -> KindCount {
         KindCount::default()
     }
 
-    pub fn add(&mut self, k: &'static str, yes: bool) {
+    pub(crate) fn add(&mut self, k: &'static str, yes: bool) {
         self.count(k, u64::from(yes));
     }
 
-    pub fn count(&mut self, k: &'static str, n: u64) {
+    pub(crate) fn count(&mut self, k: &'static str, n: u64) {
         *self.0.entry(k).or_default() += n;
     }
 
-    pub fn get(&self, k: &str) -> u64 {
+    pub(crate) fn get(&self, k: &str) -> u64 {
         self.0.get(k).copied().unwrap_or(0)
     }
 
     /// A message for each kind in `least` met fewer times than the count it asks for.
-    pub fn short(&self, least: &[(&str, u64)]) -> Vec<String> {
+    pub(crate) fn short(&self, least: &[(&str, u64)]) -> Vec<String> {
         least
             .iter()
             .filter(|(k, n)| self.get(k) < *n)
@@ -696,7 +704,7 @@ impl KindCount {
     }
 
     /// Fails the test unless each kind in `what` was met at least once.
-    pub fn hold(&self, what: &[&str]) {
+    pub(crate) fn hold(&self, what: &[&str]) {
         eprintln!("  KINDS {:?}", self.0);
         let short = self.short(&what.iter().map(|&k| (k, 1)).collect::<Vec<_>>());
         assert!(short.is_empty(), "{}", short.join("\n"));
@@ -708,7 +716,7 @@ impl KindCount {
 /// A texel is `side` units wide, the near plane lies `back` units back along the light, and the
 /// rays reach `t_max`. `corner` is the world texel index of the box's texel (0, 0), and
 /// `reach_ndc` is the share of the box's half-width a receiver reads the map within.
-pub struct LightBox {
+pub(crate) struct LightBox {
     pub size: u32,
     pub origin: [i32; 3],
     pub dir: [f32; 3],
@@ -722,7 +730,7 @@ pub struct LightBox {
 impl LightBox {
     /// The light, and where its texels' rays start. Each anchor lies where its texel lies off
     /// the box's middle, rounded to a Q3 step with ties to even.
-    pub fn lay(&self) -> (Light, StartGrid) {
+    pub(crate) fn lay(&self) -> (Light, StartGrid) {
         let dir = unit(self.dir);
         let a = cross(dir, [0.0, 0.0, 1.0]);
         let a = if a == [0.0; 3] {
@@ -778,7 +786,7 @@ impl LightBox {
 /// rounding. The engine rounds the product and then adds, and a device may fuse the two into
 /// one rounding (beam.light.wgsl `beam_hand`). The width comes from the host's word
 /// (`Light::width`), so no other step rounds apart.
-pub fn margins(width: f32) -> [(&'static str, f32); 2] {
+pub(crate) fn margins(width: f32) -> [(&'static str, f32); 2] {
     let fused = (2.0 * cast::SQRT_6).mul_add(width, light::margin(0.0));
     [
         ("the engine's", light::margin(width)),
@@ -786,12 +794,12 @@ pub fn margins(width: f32) -> [(&'static str, f32); 2] {
     ]
 }
 
-pub fn unit(v: [f32; 3]) -> [f32; 3] {
+pub(crate) fn unit(v: [f32; 3]) -> [f32; 3] {
     let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
     v.map(|x| x / l)
 }
 
-pub fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
+pub(crate) fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     [
         a[1] * b[2] - a[2] * b[1],
         a[2] * b[0] - a[0] * b[2],
@@ -800,7 +808,7 @@ pub fn cross(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
 }
 
 /// The ulps between `a` and `b`, by their order as floats.
-pub fn ulps(a: f32, b: f32) -> u32 {
+pub(crate) fn ulps(a: f32, b: f32) -> u32 {
     let key = |v: f32| {
         let i = v.to_bits() as i32;
         if i < 0 {
@@ -816,7 +824,7 @@ pub fn ulps(a: f32, b: f32) -> u32 {
 /// axis itself. The device sums terms near 1 and lands a few ulps of 1 off, which is a large
 /// share of a small `d`. Where `d` is so small that the share has no bound, the slack is as
 /// many as a u32 holds. An axis the ray does not move along has none.
-pub fn slack(d: f32) -> u32 {
+pub(crate) fn slack(d: f32) -> u32 {
     if d == 0.0 {
         0
     } else {
@@ -826,7 +834,7 @@ pub fn slack(d: f32) -> u32 {
 
 /// How many ulps of a device's rounding may carry a ray across an edge of a cell, beyond what
 /// the rounding of its direction adds (`slack`).
-pub const EDGE_ULPS: u32 = 16;
+pub(crate) const EDGE_ULPS: u32 = 16;
 
 /// How many ulps the device's rounding may take between the planes of axes `a` and `b` along
 /// the direction `dir`: `EDGE_ULPS` plus each axis's slack. A bound that the origin or the
@@ -840,7 +848,7 @@ fn edge_room(dir: [f32; 3], a: Option<usize>, b: Option<usize>) -> u32 {
 /// They are the entry's own axis, and each other axis the ray moves along whose near plane lies
 /// within `edge_room` of the plane the entry crosses. Such an entry lies at an edge between the
 /// two planes.
-pub fn edge_axes(e: &cast::Entry, dir: [f32; 3]) -> Vec<u32> {
+pub(crate) fn edge_axes(e: &cast::Entry, dir: [f32; 3]) -> Vec<u32> {
     let axis = e.axis as usize;
     (0..3)
         .filter(|&a| {
@@ -855,7 +863,7 @@ pub fn edge_axes(e: &cast::Entry, dir: [f32; 3]) -> Vec<u32> {
 /// Whether the device's rounding may decide entry `e` along `dir` otherwise than the engine
 /// does. It may where the entry's start lies within `edge_room` of its end, or where the plane
 /// it enters across lies within `edge_room` of another axis's near plane (`edge_axes`).
-pub fn at_edge(e: &cast::Entry, dir: [f32; 3]) -> bool {
+pub(crate) fn at_edge(e: &cast::Entry, dir: [f32; 3]) -> bool {
     let moves = |a: usize| dir[a] != 0.0;
     let enter = (0..3).find(|&a| moves(a) && e.near[a] == e.span[0]);
     let leave = (0..3).find(|&a| moves(a) && e.far[a] == e.span[1]);
@@ -864,12 +872,12 @@ pub fn at_edge(e: &cast::Entry, dir: [f32; 3]) -> bool {
 
 /// Whether the `edges` of a run's `rays` that the device may decide at an edge (`at_edge`)
 /// are few enough. A run may have one in a thousand at most.
-pub fn edges_within(edges: u64, rays: u64) -> bool {
+pub(crate) fn edges_within(edges: u64, rays: u64) -> bool {
     edges * 1000 <= rays
 }
 
 /// A hash of two words, for a case's choices.
-pub fn mix(a: u32, b: u32) -> u32 {
+pub(crate) fn mix(a: u32, b: u32) -> u32 {
     let mut h = a.wrapping_mul(0x9E37_79B1) ^ b.wrapping_mul(0x85EB_CA77);
     h ^= h >> 15;
     h = h.wrapping_mul(0x2C1B_3C6D);
@@ -880,7 +888,7 @@ pub fn mix(a: u32, b: u32) -> u32 {
 /// and count of differing words of each case that differs. Under a mutant sweep, the first
 /// case that differs stops the test.
 #[derive(Default)]
-pub struct Tally {
+pub(crate) struct Tally {
     pub cases: u32,
     pub words: u64,
     pub differ: Vec<(String, u64)>,
@@ -889,7 +897,7 @@ pub struct Tally {
 impl Tally {
     /// Compares `have` with `want` word for word as the case named `case`. Where word `k`
     /// differs, `what(k)` names it in the message.
-    pub fn compare(
+    pub(crate) fn compare(
         &mut self,
         case: &str,
         want: &[u32],
@@ -900,7 +908,7 @@ impl Tally {
     }
 
     /// `compare`, where word `k` counts as alike when `alike(k, want, have)` holds.
-    pub fn compare_by(
+    pub(crate) fn compare_by(
         &mut self,
         case: &str,
         want: &[u32],
@@ -929,7 +937,7 @@ impl Tally {
         }
     }
 
-    pub fn end(&self, what: &str) {
+    pub(crate) fn end(&self, what: &str) {
         eprintln!(
             "{what}: {} cases, {} words, {} cases differ",
             self.cases,

@@ -101,7 +101,7 @@ impl Plan {
         light: None,
     };
 
-    pub fn casts(&self) -> bool {
+    pub(super) fn casts(&self) -> bool {
         casts_px(self.kind)
     }
 }
@@ -137,7 +137,7 @@ pub(super) struct Schedule {
 }
 
 impl Schedule {
-    pub const fn new() -> Schedule {
+    pub(super) const fn new() -> Schedule {
         Schedule {
             read: false,
             jitter: [0; 2],
@@ -153,7 +153,7 @@ impl Schedule {
 
     /// Whether the view and the world stand: the cast's input is the last frame's
     /// (`CastRead::same`), and the rays hold what it read.
-    pub fn stands(&self, same: bool) -> bool {
+    pub(super) fn stands(&self, same: bool) -> bool {
         same && self.read
     }
 
@@ -165,7 +165,7 @@ impl Schedule {
     /// The light casts while shadows are on and its cast is made, where what a tile holds
     /// moved, the box slid, which tiles are read moved, the footprints are owed, or the world
     /// moved in columns.
-    pub fn plan(&mut self, r: CastRead) -> Plan {
+    pub(super) fn plan(&mut self, r: CastRead) -> Plan {
         let stands = self.stands(r.same);
         self.read = true;
         let jittered = r.jitter != self.jitter;
@@ -258,7 +258,7 @@ impl Schedule {
 
     /// The renderer draws this frame whole after all. Its samples' raster is then drawn whole,
     /// and where it casts the pixels, its walked bits cover every pixel.
-    pub fn whole(&mut self) {
+    pub(super) fn whole(&mut self) {
         if self.plan.casts() {
             self.walked_whole = true;
         }
@@ -266,25 +266,25 @@ impl Schedule {
 
     /// The frame was dropped with its cast: the rays and the map hold older ones, so the next
     /// frame casts both afresh.
-    pub fn dropped(&mut self) {
+    pub(super) fn dropped(&mut self) {
         (self.read, self.content) = (false, false);
     }
 
     /// There is no world to cast in. The frame casts nothing, and neither the rays nor the map
     /// hold what was read.
-    pub fn off(&mut self) {
+    pub(super) fn off(&mut self) {
         (self.read, self.content) = (false, false);
         self.plan = Plan::PLAIN;
     }
 
     /// The last frame's plan.
-    pub fn last(&self) -> &Plan {
+    pub(super) fn last(&self) -> &Plan {
         &self.plan
     }
 
     /// Whether the samples' raster is drawn through its gate, in the damaged tiles alone. It is
     /// where the frame casts the pixels and its walked bits cover those tiles alone.
-    pub fn masked(&self) -> bool {
+    pub(super) fn masked(&self) -> bool {
         self.plan.casts() && !self.walked_whole
     }
 }

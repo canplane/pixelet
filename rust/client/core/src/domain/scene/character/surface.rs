@@ -23,7 +23,7 @@ fn surfaces() -> &'static mut Vec<(u32, Group, u32)> {
 
 /// Makes surface `id` show the companion's character of `group` over `bg`,
 /// in place of whatever it showed.
-pub fn character_surface_open(id: u32, group: Group, bg: u32) {
+pub(crate) fn character_surface_open(id: u32, group: Group, bg: u32) {
     character_surface_close(id);
     surfaces().push((id, group, bg));
     invalidate();
@@ -31,7 +31,7 @@ pub fn character_surface_open(id: u32, group: Group, bg: u32) {
 
 /// Stops surface `id` showing a character, and returns whether it showed
 /// one.
-pub fn character_surface_close(id: u32) -> bool {
+pub(crate) fn character_surface_close(id: u32) -> bool {
     let s = surfaces();
     let Some(pos) = s.iter().position(|s| s.0 == id) else {
         return false;
@@ -41,14 +41,14 @@ pub fn character_surface_close(id: u32) -> bool {
 }
 
 /// Whether any surface shows the person, and whether any shows the pet.
-pub fn character_surface_shows() -> [bool; 2] {
+pub(crate) fn character_surface_shows() -> [bool; 2] {
     Group::ALL.map(|group| surfaces().iter().any(|s| s.1 == group))
 }
 
 /// For each surface whose character can be drawn: the surface's id, its
 /// character's draw there, the skin image as the loader has it now, and the
 /// color the surface clears to.
-pub fn character_surface_rows() -> impl Iterator<Item = (u32, Draw, Image, u32)> {
+pub(crate) fn character_surface_rows() -> impl Iterator<Item = (u32, Draw, Image, u32)> {
     let s: &'static _ = surfaces();
     s.iter().filter_map(|&(id, group, bg)| {
         let (draw, skin) = companion_surface_draw(group)?;

@@ -16,21 +16,21 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
 
 #[derive(Clone, Copy)]
-pub struct World {
+pub(crate) struct World {
     pub(super) object: &'static Store,
 }
 
 impl World {
     /// The world as stored. Every mechanic asks it: the pick, a walk, the
     /// camera's clearance, an edit's reads and decor's column surface.
-    pub fn now() -> World {
+    pub(crate) fn now() -> World {
         World {
             object: store::object(),
         }
     }
 
     /// The base: the world with nothing placed in it.
-    pub fn base() -> World {
+    pub(crate) fn base() -> World {
         World {
             object: store::empty(),
         }
@@ -42,7 +42,7 @@ impl World {
 /// down from where the last column left off. It stays valid only while
 /// neither the ground nor the objects move.
 #[derive(Default)]
-pub struct ColumnWalk {
+pub(crate) struct ColumnWalk {
     ground: Path,
     object: Walk,
 }
@@ -51,7 +51,7 @@ impl World {
     /// The box the ground and what is placed fill in the node, as its cells
     /// at `cell_zoom` are read. The walk steps on from where `walk` last
     /// went.
-    pub fn bounds(
+    pub(crate) fn bounds(
         &self,
         walk: &mut ColumnWalk,
         node: Node<2>,

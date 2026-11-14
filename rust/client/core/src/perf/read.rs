@@ -1,6 +1,6 @@
 // pxl-core/perf/read.rs
 
-//! What PERF_STATS reads. The profiler's window is reduced into perf.json5's
+//! What `perf.stats` reads. The profiler's window is reduced into perf.json5's
 //! STAT, and the state at the moment of the read into its NOW, which the
 //! reply hands over together (`perf_read`). A section is written only through
 //! `put` (perf/word.rs).
@@ -42,7 +42,7 @@ use xpute_guest::clock::now;
 const REASON_CAP: usize = limit::REASON_CAP as usize;
 const STEP_CAP: usize = limit::STEP_CAP as usize;
 
-/// STAT's words then NOW's, as PERF_STATS's reply names them. They live on
+/// STAT's words then NOW's, as `perf.stats`'s reply names them. They live on
 /// the heap, not in a static, because a native build's statics lie outside the
 /// core's memory, which is all a frame names.
 static READ: Global<Box<[f64; stat::WORDS + now::WORDS]>> = Global::new();
@@ -90,7 +90,7 @@ fn rank(sorted: &[f64], q: f64) -> f64 {
 /// The statistics over the last `window_ms`, or over the whole recording when
 /// no window is given, then the state at the moment of the read, apart from
 /// any window: STAT's words then NOW's.
-pub fn perf_read(window_ms: Option<f64>) -> &'static [f64] {
+pub(crate) fn perf_read(window_ms: Option<f64>) -> &'static [f64] {
     let words = read();
     stats(&mut words[..stat::WORDS], window_ms);
     state(&mut words[stat::WORDS..]);

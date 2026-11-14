@@ -34,7 +34,7 @@ pub(crate) struct RuleSet(Vec<(Range, Value)>);
 
 impl RuleSet {
     /// An unparseable column says nothing.
-    pub fn of(column: Option<&str>) -> RuleSet {
+    pub(crate) fn of(column: Option<&str>) -> RuleSet {
         let all = match column.map(serde_json::from_str::<Value>) {
             Some(Ok(Value::Array(all))) => all,
             _ => Vec::new(),
@@ -47,7 +47,7 @@ impl RuleSet {
     }
 
     /// Where a flag among `wanted` holds, ranges `cell` apart joined (`cell_of`).
-    pub fn flag_ranges(&self, wanted: &[&str], cell: f64) -> Vec<Range> {
+    pub(crate) fn flag_ranges(&self, wanted: &[&str], cell: f64) -> Vec<Range> {
         let has = |r: &Value| {
             r["values"].as_array().is_some_and(|v| {
                 v.iter()
@@ -65,12 +65,12 @@ impl RuleSet {
     }
 
     /// Where every rule begins and ends.
-    pub fn bounds(&self) -> impl Iterator<Item = f64> + '_ {
+    pub(crate) fn bounds(&self) -> impl Iterator<Item = f64> + '_ {
         self.0.iter().flat_map(|(range, _)| *range)
     }
 
     /// The value of the first rule that holds at `at`.
-    pub fn at(&self, at: f64) -> Option<&Value> {
+    pub(crate) fn at(&self, at: f64) -> Option<&Value> {
         self.0
             .iter()
             .find(|([a, b], _)| (*a..=*b).contains(&at))
@@ -114,7 +114,7 @@ pub(crate) struct Line<'a> {
 }
 
 impl<'a> Line<'a> {
-    pub fn of(points: &'a [G3857]) -> Option<Line<'a>> {
+    pub(crate) fn of(points: &'a [G3857]) -> Option<Line<'a>> {
         let mut cum = Vec::with_capacity(points.len());
         let mut len = 0.0;
         for (i, p) in points.iter().enumerate() {
@@ -127,11 +127,11 @@ impl<'a> Line<'a> {
         (points.len() >= 2 && len > 0.0).then_some(Line { points, cum })
     }
 
-    pub fn length(&self) -> f64 {
+    pub(crate) fn length(&self) -> f64 {
         *self.cum.last().unwrap()
     }
 
-    pub fn at(&self, d: f64) -> G3857 {
+    pub(crate) fn at(&self, d: f64) -> G3857 {
         // At its own ends, the line's points bit for bit, as the segments meeting there carry them.
         if d <= 0.0 {
             return self.points[0];
@@ -157,7 +157,7 @@ impl<'a> Line<'a> {
         ]
     }
 
-    pub fn between(&self, from: f64, to: f64) -> Vec<G3857> {
+    pub(crate) fn between(&self, from: f64, to: f64) -> Vec<G3857> {
         let (from, to) = (from * self.length(), to * self.length());
         let mut out = vec![self.at(from)];
         out.extend(

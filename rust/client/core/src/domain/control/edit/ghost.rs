@@ -26,7 +26,7 @@ use crate::domain::query::World;
 use crate::domain::view::frame::coord;
 use pxl_engine::answer;
 
-pub fn ghost() -> Ghost {
+pub(crate) fn ghost() -> Ghost {
     tool().ghost(&hover())
 }
 

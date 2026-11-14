@@ -139,7 +139,7 @@ struct Coverage {
 
 static COVERAGE: Global<Coverage> = Global::new();
 
-pub fn coverage_gizmo_draw(draw: &mut DrawList) {
+pub(crate) fn coverage_gizmo_draw(draw: &mut DrawList) {
     COVERAGE.get(Coverage::default).mesh.draw(draw);
 }
 
@@ -148,7 +148,7 @@ pub fn coverage_gizmo_draw(draw: &mut DrawList) {
 /// the ground under it changes with it. It must run before the frame's list
 /// begins (domain/scene/stage.rs), so the lines and the origin they are drawn
 /// about come from the same frame.
-pub fn coverage_gizmo_step(show: bool) {
+pub(crate) fn coverage_gizmo_step(show: bool) {
     let c = COVERAGE.get(Coverage::default);
     let draw = draw_list();
     let (Some(o), Some(top)) = (observation().filter(|_| show), TerrainTile::min_zoom()) else {

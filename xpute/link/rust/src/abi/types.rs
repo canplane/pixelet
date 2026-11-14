@@ -58,6 +58,6 @@ impl Lent {
 }
 
 mod _rt {
-    pub use crate::{Lift, Lower};
-    pub use xpute_kit::status::errno::Errno;
+    pub(super) use crate::{Lift, Lower};
+    pub(super) use xpute_kit::status::errno::Errno;
 }

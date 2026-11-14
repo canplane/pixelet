@@ -61,7 +61,7 @@ impl Wait {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Attempt {
+pub(crate) struct Attempt {
     pub stream: Stream,
     pub id: u64,
     pub rank: Rank,
@@ -77,7 +77,7 @@ struct Slot {
     out: Option<Attempt>,
 }
 
-pub enum Event {
+pub(crate) enum Event {
     /// An attempt started under its key, for its reader to open.
     Start(u64, Stream, u64),
     /// An attempt stopped under its key, for its reader to close.
@@ -133,7 +133,7 @@ fn sched() -> &'static mut Sched {
 
 /// Opens the scheduler once the core's memory is laid out. `frames` gives
 /// each layer's bound, the slots of its tile cache.
-pub fn open(frames: impl Fn(Stream) -> u32) {
+pub(crate) fn open(frames: impl Fn(Stream) -> u32) {
     let bounds = Stream::ALL.map(|s| match s.row().source {
         Source::Load => LOAD_FILE_CAP,
         Source::Base(_) | Source::Object => frames(s) as usize,
@@ -159,7 +159,7 @@ pub fn open(frames: impl Fn(Stream) -> u32) {
 /// repeated id, the last order counts. An id that stays keeps the time it was
 /// first wanted and its wait, so a producer declares everything it wants
 /// every frame.
-pub fn declare(stream: Stream, wanted: &[(u64, Order)]) {
+pub(crate) fn declare(stream: Stream, wanted: &[(u64, Order)]) {
     let (s, at) = (sched(), now());
     let i = stream as usize;
     xpute_kit::ensure!(
@@ -187,7 +187,7 @@ pub fn declare(stream: Stream, wanted: &[(u64, Order)]) {
     s.wants[i].extend_from_slice(&s.fresh);
 }
 
-pub fn set_credit_cnt(credit_cnt: u32) {
+pub(crate) fn set_credit_cnt(credit_cnt: u32) {
     let s = sched();
     s.credit_cnt = credit_cnt.min(CREDIT_CAP);
     s.credit_peak = s.credit_peak.max(s.credit_cnt);
@@ -195,7 +195,7 @@ pub fn set_credit_cnt(credit_cnt: u32) {
 
 /// Runs once a frame, after every producer has declared. A pump after only
 /// the first producer would fill every slot with that producer's wants.
-pub fn pump() {
+pub(crate) fn pump() {
     let (s, at) = (sched(), now());
     // Abandoned work stops in the frame it is abandoned. After a zoom out and
     // back in, the credits must not stay on the zoom passed through.
@@ -218,7 +218,7 @@ pub fn pump() {
 /// When a frame's pump is waited for at `at_ms`, if one is: the end of the
 /// hold on every start. Nothing else may come to wake the core then. It is
 /// asked every entry, since a timer lasts only until the next entry.
-pub fn next_pump_at(at_ms: f64) -> Option<f64> {
+pub(crate) fn next_pump_at(at_ms: f64) -> Option<f64> {
     let until = sched().outage.until;
     (until > at_ms).then_some(until)
 }
@@ -276,11 +276,11 @@ fn start_ready(s: &mut Sched, at: f64) {
 
 /// The next event. Events are taken one at a time, and the scheduler is not
 /// borrowed between them, so the reader handling one may call back into it.
-pub fn take_event() -> Option<Event> {
+pub(crate) fn take_event() -> Option<Event> {
     sched().events.pop_front()
 }
 
-pub fn attempt_of(key: u64) -> Option<(Stream, u64)> {
+pub(crate) fn attempt_of(key: u64) -> Option<(Stream, u64)> {
     let s = sched();
     let a = s.slots[slot_of(s, key)?].out?;
     Some((a.stream, a.id))
@@ -288,7 +288,7 @@ pub fn attempt_of(key: u64) -> Option<(Stream, u64)> {
 
 /// Ends `key`'s attempt. An answer ends its want, and a failure holds the
 /// want back.
-pub fn settle(key: u64, exit: Exit, phases: Option<PhaseList>) {
+pub(crate) fn settle(key: u64, exit: Exit, phases: Option<PhaseList>) {
     let (s, at) = (sched(), now());
     let Some(k) = slot_of(s, key) else { return };
     let a = end(s, k);
@@ -339,7 +339,7 @@ fn hold(s: &mut Sched, fault: Fault, f: Failure, started_ms: f64, at: f64) {
 }
 
 /// Whether `stream`'s want of `id` is held back because its object failed.
-pub fn has_object_failed(stream: Stream, id: u64) -> bool {
+pub(crate) fn has_object_failed(stream: Stream, id: u64) -> bool {
     let s = sched();
     find(s, stream, id).is_some_and(|i| matches!(s.wants[stream as usize][i].wait, Wait::Object))
 }
@@ -348,7 +348,7 @@ pub fn has_object_failed(stream: Stream, id: u64) -> bool {
 /// leaves out one slot for each of the most credits ever granted, because a
 /// body may still be out on each, and one for each Earth tile the Earth's
 /// bound holds, whose packet waits for a frame.
-pub fn spare_slot_cnt() -> u32 {
+pub(crate) fn spare_slot_cnt() -> u32 {
     let s = sched();
     let earth = s.bounds[Stream::Earth as usize] as u32;
     BODY_SLOT_CNT.saturating_sub(s.credit_peak.max(1) + earth)
@@ -356,11 +356,11 @@ pub fn spare_slot_cnt() -> u32 {
 
 /// Why the reads are failing, or None once an answer has come since the last
 /// failure.
-pub fn failing() -> Option<Errno> {
+pub(crate) fn failing() -> Option<Errno> {
     sched().outage.failing
 }
 
-pub fn given_up() -> bool {
+pub(crate) fn given_up() -> bool {
     sched().given_up
 }
 

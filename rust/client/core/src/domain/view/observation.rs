@@ -33,14 +33,14 @@ use pxl_spec::bake::tile::terrain::TerrainTile;
 /// clip levels hold. This reaches as far as the source's top zoom does, past
 /// the draw distance (`eye_draw_dist`) by the clip levels' margin. None until
 /// the source declares its top.
-pub fn eye_demand_dist() -> Option<f64> {
+pub(crate) fn eye_demand_dist() -> Option<f64> {
     source::min_zoom().map(|min| demand_dist(GROUND, min))
 }
 
 /// How far the eye draws, in world units. The rays and the clouds both stop
 /// here, short of `eye_demand_dist` by the margin the clip levels hold past
 /// it. None until the source declares its top.
-pub fn eye_draw_dist() -> Option<f64> {
+pub(crate) fn eye_draw_dist() -> Option<f64> {
     source::min_zoom().map(|min| draw_dist(GROUND, min))
 }
 
@@ -53,7 +53,7 @@ static OBSERVATION: Global<Option<Option<Observation>>> = Global::new();
 /// holds the eye's height over the ground under it, so it is dropped when a
 /// change touched that ground. It must run every frame, so that
 /// `change::within` sees each change once.
-pub fn forget_touched() {
+pub(crate) fn forget_touched() {
     let cached = OBSERVATION.get(|| None);
     if cached.is_some_and(|o| o.is_some_and(|o| change::within([[o.eye[0], o.eye[1]]; 2], &[]))) {
         *cached = None;
@@ -63,7 +63,7 @@ pub fn forget_touched() {
 /// The observation out to `eye_demand_dist`. It is made again when the eye,
 /// the frustum or the demand distance differs from what it was made of. None
 /// until the camera stands somewhere and the source declares its top.
-pub fn observation() -> Option<Observation> {
+pub(crate) fn observation() -> Option<Observation> {
     let (eye, frustum, demand_dist) = (eye(), view().frustum, eye_demand_dist());
     let cached = OBSERVATION.get(|| None);
     let stands = match *cached {
@@ -99,7 +99,7 @@ pub fn observation() -> Option<Observation> {
 /// The bricks depend on the eye and the world alone, never on what a ray
 /// met. A column the world knows nothing of yet gets no brick, since there is
 /// nothing in it for a brick to stand in.
-pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
+pub(crate) fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
     let (Some(min_zoom), Some(flat)) = (TerrainTile::min_zoom(), floor::ring(o)) else {
         return;
     };
@@ -153,7 +153,12 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
 /// A decor at a clip level is judged on the finest cells held under it
 /// (pxl-content `DecorQuery::finest`), so the ground's zooms finer than the
 /// coarsest a decor stands at are asked as far as their clip level holds them.
-pub fn demand_radius(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -> Option<f64> {
+pub(crate) fn demand_radius(
+    o: &Observation,
+    lattice: Lattice,
+    top: Zoom,
+    zoom: Zoom,
+) -> Option<f64> {
     if zoom == top {
         return floor::ring(o);
     }
@@ -179,7 +184,7 @@ pub fn demand_radius(o: &Observation, lattice: Lattice, top: Zoom, zoom: Zoom) -
 /// height. A ray picks a cell's zoom by its distance in 3D (pxl-engine
 /// `grid::cell_zoom_at`), which is never shorter than the distance across
 /// the ground, so the demand asks for at least what the rays read.
-pub struct ByEye {
+pub(crate) struct ByEye {
     /// The cells of the layer's tiles decide which zoom a distance asks for.
     pub lattice: Lattice,
     /// The coarsest zoom the source supplies whole. No tile is asked for at a
@@ -188,7 +193,7 @@ pub struct ByEye {
 }
 
 impl ByEye {
-    pub fn requirements(&self, o: &Observation, each: &mut dyn FnMut(Quadrant)) {
+    pub(crate) fn requirements(&self, o: &Observation, each: &mut dyn FnMut(Quadrant)) {
         for zoom in self.top + 1..=LEAF_ZOOM {
             if let Some(r) = demand_radius(o, self.lattice, self.top, zoom) {
                 tiles_within(zoom, [o.eye[0], o.eye[1]], r).for_each(&mut *each);
@@ -201,7 +206,7 @@ impl ByEye {
 /// in it. That box is the world's bounds over the tile at the grid zoom the
 /// tile's own cells fold into, walked on from where `walk` last stopped.
 /// Where nothing is known or nothing stands, the tile's whole region is used.
-pub fn order_of_tile(
+pub(crate) fn order_of_tile(
     o: &Observation,
     lattice: Lattice,
     p: Quadrant,
@@ -213,7 +218,7 @@ pub fn order_of_tile(
 
 /// Where the box `b` stands in the view of `o`: whether it is seen, and how
 /// near it is (`Order`).
-pub fn order_of(o: &Observation, b: &Aabb) -> Order {
+pub(crate) fn order_of(o: &Observation, b: &Aabb) -> Order {
     let m = o.measure(b);
     Order {
         seen: m.seen,

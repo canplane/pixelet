@@ -26,6 +26,7 @@
 //! (`heap`). Either lies in the core's memory, so its offset holds.
 
 use core::fmt;
+use core::future::Future;
 use std::collections::{BTreeMap, VecDeque};
 
 use pxl_global::Global;
@@ -47,7 +48,7 @@ use crate::spec::file::{format, path};
 use crate::spec::manifest::mem;
 use crate::sys::sched::{executor, invalidate};
 
-pub enum StorageRead {
+pub(crate) enum StorageRead {
     /// Nothing was kept, or the file was empty.
     None,
     /// What the owner kept, without the format byte.
@@ -62,10 +63,10 @@ pub enum StorageRead {
 }
 
 /// An open file, its handle let go as it drops.
-pub struct File(Handle);
+pub(crate) struct File(Handle);
 
 impl File {
-    pub fn open(path: &[Token]) -> Result<File, Errno> {
+    pub(crate) fn open(path: &[Token]) -> Result<File, Errno> {
         link::open(path).map(File)
     }
 }
@@ -77,18 +78,18 @@ impl Drop for File {
 }
 
 /// The longest quadkey, a leaf's.
-pub const KEY_BYTES: usize = LEAF_ZOOM as usize;
+pub(crate) const KEY_BYTES: usize = LEAF_ZOOM as usize;
 
 const _: () = assert!(spec::file::LEAF_ZOOM == LEAF_ZOOM);
 
 /// The id that names the objects' top among the object stream's ids. Every
 /// other id is a tile's, and no tile's id is 0.
-pub const TOP_ID: u64 = 0;
+pub(crate) const TOP_ID: u64 = 0;
 
 /// A refused file, which the core sets aside: the storage file, or an
 /// objects' file by its want's id.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Refused {
+pub(crate) enum Refused {
     Storage,
     Object(u64),
 }
@@ -96,7 +97,7 @@ pub enum Refused {
 /// The refused files set aside at once: the storage file, and an objects'
 /// file for each tile of the ground's demand, the most wanted at once
 /// (domain/layer/object/repository.rs `WANT_CAP`).
-pub const SET_ASIDE_CAP: usize = 1 + GROUND_DEMAND_TILE_CAP as usize;
+pub(crate) const SET_ASIDE_CAP: usize = 1 + GROUND_DEMAND_TILE_CAP as usize;
 
 #[derive(Default)]
 struct Files {
@@ -124,7 +125,7 @@ fn files() -> &'static mut Files {
 /// into the buffer `buf` makes for its size; `buf`'s refusal is the read's.
 /// An attempt's read, by its `key`, is closed by `stop`, which cancels it
 /// (ECANCELED).
-pub async fn read_whole<B: Lend>(
+pub(crate) async fn read_whole<B: Lend>(
     path: &[Token],
     most: u32,
     key: Option<u64>,
@@ -161,7 +162,7 @@ async fn read_open<B: Lend>(
 
 /// What an fs method came to as one errno, the number the core counts a
 /// read's failure by: the link's refusal, or the errno of the file's
-/// error-code.
+/// `error-code`.
 fn errno<T>(r: Result<Result<T, ErrorCode>, Errno>) -> Result<T, Errno> {
     r?.map_err(|e| match e {
         ErrorCode::NoEntry => Errno::ENOENT,
@@ -174,35 +175,39 @@ fn errno<T>(r: Result<Result<T, ErrorCode>, Errno>) -> Result<T, Errno> {
     })
 }
 
-/// Whether a call that failed with `e` ended aborted, as a device's host
-/// cancels what a reload of its UI leaves of the files the UI serves, so it
-/// is made again (`exit_of`). The storage file is the host's own on a device
-/// (pxl-runtime file.rs), and the worker's, which dies with the page, on a
-/// page, so none of its calls ends so.
-fn aborted(e: Errno) -> bool {
-    exit_of(Failure::from(e)) == Exit::Aborted
+/// What `attempt` comes to, made again each time it ends aborted
+/// (`exit_of`), as a device's runtime cancels what a reload of its UI leaves
+/// of the files the UI serves, the storage file among them. A page's worker
+/// dies with its page, so none of its methods ends so there.
+async fn redo<T, F: Future<Output = Result<T, Errno>>>(mut attempt: impl FnMut() -> F) -> Result<T, Errno> {
+    loop {
+        match attempt().await {
+            Err(e) if exit_of(Failure::from(e)) == Exit::Aborted => continue,
+            r => return r,
+        }
+    }
 }
 
 /// A heap buffer of `n` bytes, for a read.
-pub fn heap(n: u32) -> Result<Vec<u8>, Errno> {
+pub(crate) fn heap(n: u32) -> Result<Vec<u8>, Errno> {
     Ok(vec![0u8; n as usize])
 }
 
 /// Closes the file the attempt `key` reads, which cancels its read; what its
 /// reader hears of it afterwards is dropped.
-pub fn stop(key: u64) {
+pub(crate) fn stop(key: u64) {
     if let Some(h) = files().attempts.remove(&key) {
         drop(file::file_close(h));
     }
 }
 
 /// Lands the storage file's latest contents, until none waits, one write at
-/// a time. A write that fails is not tried again: the next keep writes what
-/// it held.
+/// a time. A write a reload aborted is made again (`redo`); one that fails
+/// otherwise is not: the next keep writes what it held.
 #[embassy_executor::task]
 async fn writer() {
     while let Some(bytes) = files().storage_write.take() {
-        let _ = write_whole(bytes).await;
+        let _ = redo(|| write_whole(bytes.clone())).await;
     }
     files().writing = false;
 }
@@ -222,14 +227,16 @@ fn storage_path() -> Vec<Token> {
     ]
 }
 
-/// Reads the storage file whole, for `take_storage`.
-pub fn open_storage() {
+/// Reads the storage file whole, for `take_storage`, again where a reload
+/// aborted it (`redo`).
+pub(crate) fn open_storage() {
     executor::spawner().spawn(storage_read().or_bug(Errno::ENOSPC));
 }
 
 #[embassy_executor::task]
 async fn storage_read() {
-    let read = match read_whole(&storage_path(), mem::MIN_HEAP_SZ, None, heap).await {
+    let path = storage_path();
+    let read = match redo(|| read_whole(&path, mem::MIN_HEAP_SZ, None, heap)).await {
         Ok(bytes) => storage_of(&bytes),
         // Only an absent file means nothing was kept.
         Err(Errno::ENOENT) => StorageRead::None,
@@ -243,7 +250,7 @@ async fn storage_read() {
 }
 
 /// What the storage file held, once it is read whole, or None until then.
-pub fn take_storage() -> Option<StorageRead> {
+pub(crate) fn take_storage() -> Option<StorageRead> {
     files().storage_read.take()
 }
 
@@ -259,8 +266,8 @@ fn storage_of(bytes: &[u8]) -> StorageRead {
 
 /// Writes `bytes` whole as the storage file's contents, after its format
 /// byte, in place of any write still waiting. Its owner writes only a file it
-/// read (domain/setting/store.rs `writes`).
-pub fn write_storage(bytes: &[u8]) {
+/// read (domain/setting.rs `writes`).
+pub(crate) fn write_storage(bytes: &[u8]) {
     let f = files();
     f.storage_write = Some([&[format::SETTINGS][..], bytes].concat().into_boxed_slice());
     if !core::mem::replace(&mut f.writing, true) {
@@ -280,9 +287,9 @@ impl Refused {
 /// Sets the refused file `r` aside, out of its path; then its owner takes it
 /// back (`take_set_aside`): the settings write it from their next keep on,
 /// the objects' repository reads it again. A set-aside that ended aborted is
-/// made again; one its backend cannot set aside, or one past the set-asides
+/// made again (`redo`); one its backend cannot set aside, or one past the set-asides
 /// that can wait at once, stays refused this session.
-pub fn set_aside(r: Refused) {
+pub(crate) fn set_aside(r: Refused) {
     if let Ok(task) = setting_aside(r) {
         executor::spawner().spawn(task);
     }
@@ -290,42 +297,39 @@ pub fn set_aside(r: Refused) {
 
 #[embassy_executor::task(pool_size = SET_ASIDE_CAP)]
 async fn setting_aside(r: Refused) {
-    loop {
-        let Ok(f) = File::open(&r.path()) else {
-            return;
-        };
-        match errno(file::file_set_aside(f.0).await) {
-            Ok(()) => break,
-            Err(e) if aborted(e) => continue,
-            Err(_) => return,
-        }
+    let set = redo(|| async {
+        let f = File::open(&r.path())?;
+        errno(file::file_set_aside(f.0).await)
+    });
+    if set.await.is_err() {
+        return;
     }
     files().set_aside.push_back(r);
     invalidate();
 }
 
-/// A refused file set aside since, for its owner to read again: the settings
+/// A refused file set aside since, for its owner to take back: the settings
 /// for the storage file, the objects' repository for theirs.
-pub fn take_set_aside() -> Option<Refused> {
+pub(crate) fn take_set_aside() -> Option<Refused> {
     files().set_aside.pop_front()
 }
 
 /// Text held inline, as a quadkey is written: the first `len` of `N` bytes,
 /// zero past them.
 #[derive(Clone, Copy, PartialEq)]
-pub struct Text<const N: usize> {
+pub(crate) struct Text<const N: usize> {
     pub bytes: [u8; N],
     len: usize,
 }
 
 
 impl<const N: usize> Text<N> {
-    pub const EMPTY: Text<N> = Text {
+    pub(crate) const EMPTY: Text<N> = Text {
         bytes: [0; N],
         len: 0,
     };
 
-    pub fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         core::str::from_utf8(&self.bytes[..self.len]).or_bug(Errno::ENOTRECOVERABLE)
     }
 }
@@ -347,7 +351,7 @@ impl<const N: usize> fmt::Write for Text<N> {
 /// (`BASE`), a shard by its quadkey after OBJECT, the objects' top as
 /// (OBJECT, TOP). A load opens through the loader (sys/io/loader.rs), so its
 /// stream has no path here.
-pub fn path_of(stream: Stream, id: u64) -> Option<Vec<Token>> {
+pub(crate) fn path_of(stream: Stream, id: u64) -> Option<Vec<Token>> {
     let head = match stream.row().source {
         Source::Load => return None,
         Source::Base(layer) => vec![Token::Int(layer as i32)],

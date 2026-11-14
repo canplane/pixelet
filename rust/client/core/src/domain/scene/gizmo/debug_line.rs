@@ -14,14 +14,14 @@ use pxl_spec::space::coord::v3::V3;
 /// (3), then its linear color and opacity (4). A segment takes two vertices.
 /// The layout is the renderer's (pxl-render frame/shader/record.rs
 /// `DEBUG_VERTEX_BYTES`).
-pub const DEBUG_VERTEX_FLOATS: usize = record::DEBUG_VERTEX_BYTES as usize / 4;
+pub(crate) const DEBUG_VERTEX_FLOATS: usize = record::DEBUG_VERTEX_BYTES as usize / 4;
 
 /// The floats of a face vertex: its position relative to the set's origin. A
 /// triangle takes three vertices.
-pub const DEBUG_FACE_FLOATS: usize = 3;
+pub(crate) const DEBUG_FACE_FLOATS: usize = 3;
 
 #[derive(Default)]
-pub struct DebugMesh {
+pub(crate) struct DebugMesh {
     block: MirroredBlock,
     line_cnt: u32,
     face_cnt: u32,
@@ -34,7 +34,7 @@ impl DebugMesh {
     /// vertices, `DEBUG_VERTEX_FLOATS` each, and the rest are face vertices,
     /// `DEBUG_FACE_FLOATS` each, all relative to `origin`. When the block
     /// cannot be written, nothing is drawn.
-    pub fn set(&mut self, draw: &mut DrawList, origin: V3, vertices: &[f32], lines: usize) {
+    pub(crate) fn set(&mut self, draw: &mut DrawList, origin: V3, vertices: &[f32], lines: usize) {
         let written = self.block.write(draw, bytes(vertices));
         (self.line_cnt, self.face_cnt) = match written {
             true => (
@@ -46,7 +46,7 @@ impl DebugMesh {
         self.origin = origin;
     }
 
-    pub fn draw(&self, draw: &mut DrawList) {
+    pub(crate) fn draw(&self, draw: &mut DrawList) {
         if self.line_cnt == 0 || self.block.handle == 0 {
             return;
         }

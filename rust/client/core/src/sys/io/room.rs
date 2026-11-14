@@ -12,7 +12,7 @@ use crate::sys::io::body;
 use pxl_global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Refusal(Room, u32);
+pub(crate) struct Refusal(Room, u32);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Room {
@@ -25,7 +25,7 @@ enum Room {
 static WAYS_GIVEN: Global<u32> = Global::new();
 
 /// Counts a run given back to the ways' pool (domain/layer/terrain/pool.rs `give`).
-pub fn way_given_back() {
+pub(crate) fn way_given_back() {
     let n = WAYS_GIVEN.get(|| 0);
     *n = n.wrapping_add(1);
 }
@@ -42,23 +42,23 @@ impl Room {
 
 impl Refusal {
     /// A refusal by the heap.
-    pub fn now() -> Refusal {
+    pub(crate) fn now() -> Refusal {
         Refusal(Room::Heap, Room::Heap.release_cnt())
     }
 
     /// A refusal by the body slots, when every slot is out.
-    pub fn bodies() -> Refusal {
+    pub(crate) fn bodies() -> Refusal {
         Refusal(Room::Bodies, Room::Bodies.release_cnt())
     }
 
     /// A refusal by the ways' pool, when its cap keeps it from holding a run.
-    pub fn ways() -> Refusal {
+    pub(crate) fn ways() -> Refusal {
         Refusal(Room::Ways, Room::Ways.release_cnt())
     }
 
     /// Whether room has been given back since the refusal, so that asking
     /// again may be served.
-    pub fn released(self) -> bool {
+    pub(crate) fn released(self) -> bool {
         self.0.release_cnt() != self.1
     }
 }

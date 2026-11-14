@@ -9,10 +9,13 @@ pub const HANDLE: _rt::Handle = 0x46edb9;
 pub const HIDDEN: _rt::Method = 0;
 /// `shown`
 pub const SHOWN: _rt::Method = 1;
+/// `attached`
+pub const ATTACHED: _rt::Method = 2;
 
 pub trait Guest {
     fn hidden(&self) -> Result<(), _rt::Errno>;
     fn shown(&self) -> Result<(), _rt::Errno>;
+    fn attached(&self) -> Result<(), _rt::Errno>;
 }
 
 struct _Object(_rt::Rc<dyn Guest>);
@@ -29,6 +32,10 @@ impl _rt::Object for _Object {
                     Ok(()) => _rt::Reply::from(0),
                     Err(e) => _rt::Reply::from(e as i32),
                 },
+                ATTACHED => match self.0.attached() {
+                    Ok(()) => _rt::Reply::from(0),
+                    Err(e) => _rt::Reply::from(e as i32),
+                },
                 _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
             })
         };
@@ -42,8 +49,8 @@ pub fn mount(implementation: _rt::Rc<dyn Guest>) {
 }
 
 mod _rt {
-    pub use crate::link;
-    pub use std::rc::Rc;
-    pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::{Handle, Method, Object, Reply, Tag};
+    pub(super) use crate::link;
+    pub(super) use std::rc::Rc;
+    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_link::{Handle, Method, Object, Reply, Tag};
 }

@@ -10,13 +10,13 @@ use xpute_guest::clock::now;
 use crate::spec::phase::Phase;
 use crate::sys::sched::param;
 
-pub struct TickContext {
+pub(crate) struct TickContext {
     pub delta: f64,
     phase_ms: [f64; Phase::ALL.len()],
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct TickReport {
+pub(crate) struct TickReport {
     pub budget_ms: f64,
     pub phase_ms: [f64; Phase::ALL.len()],
     pub total_ms: f64,
@@ -24,7 +24,7 @@ pub struct TickReport {
 
 impl TickContext {
     /// A tick stepping `delta` seconds.
-    pub fn new(delta: f64) -> TickContext {
+    pub(crate) fn new(delta: f64) -> TickContext {
         TickContext {
             delta,
             phase_ms: [0.0; Phase::ALL.len()],
@@ -32,14 +32,14 @@ impl TickContext {
     }
 
     /// Runs `phase`'s steps, and keeps their time.
-    pub fn phase(&mut self, phase: Phase, steps: impl FnOnce(&mut TickContext)) {
+    pub(crate) fn phase(&mut self, phase: Phase, steps: impl FnOnce(&mut TickContext)) {
         let start = now();
         steps(self);
         self.phase_ms[phase as usize] = now() - start;
     }
 
     /// What the tick that began at `start` came to.
-    pub fn report(&self, start: f64) -> TickReport {
+    pub(crate) fn report(&self, start: f64) -> TickReport {
         TickReport {
             budget_ms: param::BUDGET_MS,
             phase_ms: self.phase_ms,

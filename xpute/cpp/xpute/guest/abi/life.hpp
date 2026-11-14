@@ -34,12 +34,15 @@ inline constexpr _rt::Handle HANDLE = 0x46edb9;
 inline constexpr _rt::Method HIDDEN = 0;
 // `shown`
 inline constexpr _rt::Method SHOWN = 1;
+// `attached`
+inline constexpr _rt::Method ATTACHED = 2;
 
 class Guest {
   public:
     virtual ~Guest() = default;
     virtual _rt::Result<void> hidden() = 0;
     virtual _rt::Result<void> shown() = 0;
+    virtual _rt::Result<void> attached() = 0;
 };
 
 class Object_ final : public _rt::Object {
@@ -55,6 +58,11 @@ class Object_ final : public _rt::Object {
         }
         case SHOWN: {
             _rt::Result<void> x_ = implementation_->shown();
+            if (!x_) return _rt::Reply{static_cast<std::int32_t>(x_.error().errnum)};
+            return _rt::Reply{0};
+        }
+        case ATTACHED: {
+            _rt::Result<void> x_ = implementation_->attached();
             if (!x_) return _rt::Reply{static_cast<std::int32_t>(x_.error().errnum)};
             return _rt::Reply{0};
         }

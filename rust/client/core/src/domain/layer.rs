@@ -13,24 +13,24 @@ use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;
 use tile_cache::TileCache;
 
-pub mod division;
-pub mod earth;
-pub mod floor;
-pub mod instance;
-pub mod object;
-pub mod place;
+pub(crate) mod division;
+pub(crate) mod earth;
+pub(crate) mod floor;
+pub(crate) mod instance;
+pub(crate) mod object;
+pub(crate) mod place;
 // The query's files stand beside the layers', and it is a child here so that a
 // layer's reads, visible within this module alone, are its and no one else's.
 #[path = "query.rs"]
-pub mod query;
-pub mod terrain;
-pub mod tile_cache;
+pub(crate) mod query;
+pub(crate) mod terrain;
+pub(crate) mod tile_cache;
 
 use crate::sys::io::source;
-pub use answer::Answer;
+pub(crate) use answer::Answer;
 
 #[derive(Clone, Copy)]
-pub enum AskScope {
+pub(crate) enum AskScope {
     /// The floor alone (layer/floor.rs).
     Floor,
     /// One line alone: the tiles over the division layer's pivot
@@ -41,7 +41,7 @@ pub enum AskScope {
     View,
 }
 
-pub trait Base: Tile + Sized + 'static {
+pub(crate) trait Base: Tile + Sized + 'static {
     /// Which tiles the layer asks for. Its tile cache is sized from this.
     const ASK_SCOPE: AskScope = AskScope::View;
 

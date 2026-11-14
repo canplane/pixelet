@@ -1,6 +1,6 @@
 // pxl-tool/spec/setting.rs
 
-//! The settings, each by the number schema.json5 gives it, and a choice's
+//! The settings, each by the number `schema.json5` gives it, and a choice's
 //! options by theirs; a number is given out once in its table. The core's
 //! table carries the numbers and no names, which are the UI's, for its
 //! rows and the locale. The UI gets a separate production table without
@@ -45,7 +45,7 @@ struct List<'a> {
     doc: Option<Vec<String>>,
 }
 
-/// A number as schema.json5 gives one, a u32.
+/// A number as `schema.json5` gives one, a u32.
 fn number(n: Option<&Node>, what: &str) -> Result<u32, String> {
     n.and_then(u32_of).ok_or(format!("{JSON}: {what} has no number"))
 }
@@ -424,7 +424,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             if f == "$description" || f == "number" {
                 continue;
             }
-            // A field's value, its `$description` the schema's alone.
+            // A field's value without its `$description`, which stays the schema's.
             let v = match v {
                 Node::Obj(t) if v.is_wrapper() => Node::Obj(t.iter().filter(|(k, _)| k != "$description").cloned().collect()),
                 v => v.clone(),

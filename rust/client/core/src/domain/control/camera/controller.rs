@@ -18,7 +18,7 @@ use crate::domain::control::camera::state::{camera_state, camera_state_mut, Inte
 use crate::domain::control::camera::{camera, eye_world, facing_rot};
 use crate::domain::control::param::{DEFAULT_AZIMUTH, DEFAULT_DIST};
 use crate::domain::control::support::pan_to;
-use crate::domain::setting::store::{settings, CameraMode};
+use crate::domain::setting::{settings, CameraMode};
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::frame::pose::ObserverPose;
 use crate::domain::view::frame::screen::units_per_px_at;
@@ -26,14 +26,14 @@ use crate::sys::sched::invalidate;
 use crate::sys::sched::tick::TickContext;
 use pxl_global::Global;
 
-pub fn dist() -> f64 {
+pub(crate) fn dist() -> f64 {
     match active() {
         Active::Orbit => orbit().dist,
         Active::FirstPerson | Active::Tracked => 0.0,
     }
 }
 
-pub fn pivot_world() -> Option<V3> {
+pub(crate) fn pivot_world() -> Option<V3> {
     match active() {
         Active::Orbit => orbit::pivot_world(),
         Active::FirstPerson => eye_world(),
@@ -41,7 +41,7 @@ pub fn pivot_world() -> Option<V3> {
     }
 }
 
-pub fn pivot() -> Option<Q3> {
+pub(crate) fn pivot() -> Option<Q3> {
     pivot_world().map(|at| world_to_canonical(&at))
 }
 
@@ -49,14 +49,14 @@ pub fn pivot() -> Option<Q3> {
 /// a recenter, the start, a change of person) is snapped to. A place on the
 /// screen or a followed location fix is eased to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Motion {
+pub(crate) enum Motion {
     Snap,
     Smooth,
 }
 
 /// While a tracker holds the pose, this does nothing, and the controller
 /// under the tracker does not move in its place.
-pub fn put_pivot(to: Q3, motion: Motion) {
+pub(crate) fn put_pivot(to: Q3, motion: Motion) {
     if active() == Active::Tracked {
         return;
     }
@@ -78,7 +78,7 @@ fn snap() {
 
 /// Where the pivot is going to: the place last put, which a smooth move
 /// eases toward, or else where the pivot stands. None while tracked.
-pub fn pivot_to() -> Option<Q3> {
+pub(crate) fn pivot_to() -> Option<Q3> {
     match active() {
         Active::Tracked => None,
         Active::Orbit | Active::FirstPerson => camera_state().to.or_else(pivot),
@@ -95,14 +95,14 @@ fn across() -> f64 {
 }
 
 /// Pans by a drag of `dx`, `dy` pixels, so the ground follows the pointer.
-pub fn pan(dx: f64, dy: f64) {
+pub(crate) fn pan(dx: f64, dy: f64) {
     let upp = units_per_px_at(across());
     pan_by(-dx * upp, dy * upp);
 }
 
 /// Pans by `cx` and `cy` times the distance to the pivot, across and up the
 /// screen, so a held key keeps the same apparent speed at every zoom.
-pub fn pan_across(cx: f64, cy: f64) {
+pub(crate) fn pan_across(cx: f64, cy: f64) {
     let d = across();
     pan_by(cx * d, cy * d);
 }
@@ -113,7 +113,7 @@ fn pan_by(lx: f64, ly: f64) {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Active {
+pub(crate) enum Active {
     Orbit,
     FirstPerson,
     Tracked,
@@ -142,7 +142,7 @@ fn controller() -> &'static mut Controller {
     })
 }
 
-pub fn active() -> Active {
+pub(crate) fn active() -> Active {
     let c = controller();
     match (&c.tracker, c.base) {
         (Some(_), _) => Active::Tracked,
@@ -151,7 +151,7 @@ pub fn active() -> Active {
     }
 }
 
-pub fn pose() -> Option<ObserverPose> {
+pub(crate) fn pose() -> Option<ObserverPose> {
     camera().eye?;
     let c = controller();
     match (&c.tracker, c.base) {
@@ -177,7 +177,7 @@ pub fn pose() -> Option<ObserverPose> {
 
 /// Returns the intent the controller took, which a gesture continues from
 /// (gesture.rs `Anchor::settle`).
-pub fn set_intent(partial: IntentPatch) -> Intent {
+pub(crate) fn set_intent(partial: IntentPatch) -> Intent {
     match active() {
         Active::Orbit => orbit::ask(partial),
         Active::FirstPerson | Active::Tracked => {
@@ -190,14 +190,14 @@ pub fn set_intent(partial: IntentPatch) -> Intent {
 
 /// Turns the camera to north and keeps the tilt. That is what "align north"
 /// means both for the compass and at the end of follow mode.
-pub fn reset_azimuth() {
+pub(crate) fn reset_azimuth() {
     set_intent(IntentPatch {
         azimuth: Some(DEFAULT_AZIMUTH),
         ..Default::default()
     });
 }
 
-pub fn reset_dist() {
+pub(crate) fn reset_dist() {
     set_intent(IntentPatch {
         dist: Some(DEFAULT_DIST),
         ..Default::default()
@@ -206,7 +206,7 @@ pub fn reset_dist() {
 
 /// Used when going to a place. A view farther out than the default comes
 /// back in to it, and a view the user brought nearer stays.
-pub fn come_in_to_default() {
+pub(crate) fn come_in_to_default() {
     let default = DEFAULT_DIST;
     if camera_state().intent.dist > default {
         reset_dist();
@@ -215,7 +215,7 @@ pub fn come_in_to_default() {
 
 /// A wheel turn of `delta_y` CSS pixels. First person has no zoom, so it
 /// ignores the wheel.
-pub fn wheel(delta_y: f64) {
+pub(crate) fn wheel(delta_y: f64) {
     if active() == Active::Orbit {
         orbit::wheel(delta_y);
     }
@@ -223,11 +223,11 @@ pub fn wheel(delta_y: f64) {
 
 /// The pinch's start is the gesture's and is taken in every mode, so a pinch
 /// that the mode turns to orbit midway zooms on from where it began.
-pub fn pinch_begin(span: f64) {
+pub(crate) fn pinch_begin(span: f64) {
     orbit::pinch_begin(span);
 }
 
-pub fn pinch(span: f64) {
+pub(crate) fn pinch(span: f64) {
     if active() == Active::Orbit {
         orbit::pinch(span);
     }
@@ -236,19 +236,19 @@ pub fn pinch(span: f64) {
 /// A trackpad's pinch, its fingers' spread changed by `scale`. The camera's
 /// distance is divided by it, as a pinch of two touches divides it (gesture.rs
 /// `spread`). First person has no zoom, so it ignores the pinch.
-pub fn pinch_by(scale: f64) {
+pub(crate) fn pinch_by(scale: f64) {
     if active() == Active::Orbit {
         orbit::zoom_by(1.0 / scale);
     }
 }
 
-pub fn controller_step(ctx: &mut TickContext) {
+pub(crate) fn controller_step(_: &mut TickContext) {
     if switch() {
         invalidate();
     }
 }
 
-pub fn camera_step(ctx: &mut TickContext) {
+pub(crate) fn camera_step(ctx: &mut TickContext) {
     let moving = match active() {
         Active::Orbit => orbit::step(ctx.delta),
         Active::FirstPerson => first_person::step(ctx.delta),
@@ -298,7 +298,7 @@ fn take_mode(want: CameraMode) -> bool {
 /// tracker's. The first pose of a run places the tracker's space in the
 /// world so that the camera stays where it is. Before the camera has an
 /// eye, there is nowhere to place it, and the pose is dropped.
-pub fn tracked_pose(at: V3, q: [f64; 4]) {
+pub(crate) fn tracked_pose(at: V3, q: [f64; 4]) {
     let mut rot = mat4::new();
     mat4::rot_quat(&mut rot, q);
     let c = controller();
@@ -325,7 +325,7 @@ pub fn tracked_pose(at: V3, q: [f64; 4]) {
     invalidate();
 }
 
-pub fn tracked_end() {
+pub(crate) fn tracked_end() {
     if controller().tracker.take().is_some() {
         invalidate();
     }

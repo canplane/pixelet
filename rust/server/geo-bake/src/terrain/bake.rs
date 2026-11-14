@@ -23,8 +23,8 @@ pub(crate) struct Surface {
 }
 
 /// The tile from its surface and lines: the approaches' asset ids laid into its cells
-/// (pxl-spec bake/way.rs `lay`), then its lines cut to those it draws (pxl-spec
-/// bake/tile/terrain.rs `drawn`).
+/// (pxl-spec `bake/way.rs` `lay`), then its lines cut to those it draws (pxl-spec
+/// `bake/tile/terrain.rs` `drawn`).
 pub(crate) fn assemble(tile: [i32; 2], surface: Surface, separation: Separation) -> TerrainTile {
     let mut asset_ids = surface.cells.into_owned();
     let tile = Quadrant::new(LEAF_ZOOM, tile);

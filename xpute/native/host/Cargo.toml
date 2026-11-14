@@ -13,8 +13,8 @@ path = "src/lib.rs"
 
 [dependencies]
 xpute-kit.workspace = true
-# The contract's pure types, shared rather than copied: a URI's tokens and an
-# answer given later (disk.rs, clock.rs).
+# The contract's pure types, shared rather than copied: an answer given later
+# (clock.rs).
 xpute-link.workspace = true
 # The environment the host runs in: the guest's thread and its loop, the
 # link it serves on, and the bindings of what it serves.

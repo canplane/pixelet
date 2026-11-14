@@ -6,6 +6,6 @@
 //! frame keeps no origin of its own: each draw subtracts the eye in doubles
 //! before it is narrowed to f32.
 
-pub mod coord;
-pub mod pose;
-pub mod screen;
+pub(crate) mod coord;
+pub(crate) mod pose;
+pub(crate) mod screen;

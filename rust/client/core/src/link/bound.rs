@@ -12,7 +12,7 @@ use pxl_spec::asset::marker::MARKER_TEXT_CHARS;
 use pxl_spec::division::{Subtype, NAME_BYTES};
 
 use crate::abi::overlay::{DivisionPart, Snapshot};
-use crate::domain::setting::store::SettingKey;
+use crate::domain::setting::SettingKey;
 use crate::spec::perf::limit;
 
 /// A list of `cnt` elements of `bytes` each past what is laid, with the padding

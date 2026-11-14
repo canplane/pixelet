@@ -2,7 +2,8 @@
 
 // An error is its errno and the place in the source where it was made, and
 // what happened is the errno's kind. A fault from outside the program is
-// returned as a `Result`; a broken invariant is fatal and goes through bug.hpp.
+// returned as a `Result`; a broken invariant is fatal and goes through
+// `bug.hpp`.
 
 #pragma once
 

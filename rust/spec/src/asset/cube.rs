@@ -1,7 +1,7 @@
 // pxl-spec/asset/cube.rs
 
 //! The cube kind (`spec/spec/asset/cube.json5`): the ground and the cubes, in one table
-//! the GPU reads too, which the value space (value.rs) is laid over, a cube as the catalog
+//! the GPU reads too, which the value space (`value.rs`) is laid over, a cube as the catalog
 //! gives it out to be placed, and what has a cube's body.
 
 use std::sync::LazyLock;

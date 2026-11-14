@@ -23,7 +23,7 @@ use crate::domain::preview::{Ghost, GhostBox};
 use crate::domain::scene::column::GroupRange;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
 use crate::domain::scene::indicator::param::GHOST_OPACITY;
-use crate::domain::setting::store::settings;
+use crate::domain::setting::settings;
 use pxl_global::Global;
 
 #[derive(Clone, Copy, PartialEq)]
@@ -40,7 +40,7 @@ enum Shape {
 }
 
 #[derive(Default)]
-pub struct GhostDraw {
+pub(crate) struct GhostDraw {
     /// What is drawn, or None when nothing is.
     shape: Option<Shape>,
     /// A decor's one instance; a box has no block.
@@ -58,18 +58,18 @@ fn shown() -> &'static mut GhostDraw {
 
 /// Draws what the tool shows (`GhostDraw::set`). Returns whether what is
 /// drawn changed.
-pub fn ghost_set(draw: &mut DrawList, ghost: &Ghost) -> bool {
+pub(crate) fn ghost_set(draw: &mut DrawList, ghost: &Ghost) -> bool {
     shown().set(draw, ghost)
 }
 
-pub fn ghost_draw(draw: &mut DrawList) {
+pub(crate) fn ghost_draw(draw: &mut DrawList) {
     shown().draw(draw);
 }
 
 impl GhostDraw {
     /// Sets the ghost to what the tool shows, drawn as its kind is drawn.
     /// Returns whether what is drawn changed.
-    pub fn set(&mut self, draw: &mut DrawList, ghost: &Ghost) -> bool {
+    pub(crate) fn set(&mut self, draw: &mut DrawList, ghost: &Ghost) -> bool {
         match *ghost {
             Ghost::None => self.clear(draw),
             Ghost::Decor {
@@ -163,7 +163,7 @@ impl GhostDraw {
     }
 
     /// Removes the ghost. Returns whether there was one.
-    pub fn clear(&mut self, draw: &mut DrawList) -> bool {
+    pub(crate) fn clear(&mut self, draw: &mut DrawList) -> bool {
         self.block.free(draw);
         self.shape.take().is_some()
     }
@@ -177,7 +177,7 @@ impl GhostDraw {
     /// Lists the ghost's draw at a Q3 position: a box's min corner or a decor's stored
     /// position. Either may lie on any lap of X, since the renderer draws it the short way
     /// round from the eye (pxl-render gpu/draw.rs `Position`).
-    pub fn draw(&self, draw: &mut DrawList) {
+    pub(crate) fn draw(&self, draw: &mut DrawList) {
         let Some(shape) = self.shape else { return };
         match shape {
             Shape::Box {

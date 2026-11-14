@@ -34,7 +34,7 @@ struct Bootstrap {
 
 static BOOTSTRAP: Global<Bootstrap> = Global::new();
 
-pub fn map_bootstrap_step() {
+pub(crate) fn map_bootstrap_step() {
     let device_coord = off_center().device_coord;
     let at = pivot();
     let b = BOOTSTRAP.get(|| Bootstrap { last: None });

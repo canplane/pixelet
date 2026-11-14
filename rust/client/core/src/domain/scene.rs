@@ -4,22 +4,22 @@
 //! Each of its parts keeps its own state and adds its draws to the one draw
 //! list (domain/scene/model.rs `draw_list`), in the order `draw` calls them.
 
-pub mod animation;
-pub mod cast;
-pub mod character;
-pub mod column;
-pub mod decor;
-pub mod environment;
-pub mod frame;
-pub mod gizmo;
-pub mod indicator;
-pub mod marker;
-pub mod model;
-pub mod param;
-pub mod rate;
-pub mod resolution;
-pub mod stage;
-pub mod transform;
+pub(crate) mod animation;
+pub(crate) mod cast;
+pub(crate) mod character;
+pub(crate) mod column;
+pub(crate) mod decor;
+pub(crate) mod environment;
+pub(crate) mod frame;
+pub(crate) mod gizmo;
+pub(crate) mod indicator;
+pub(crate) mod marker;
+pub(crate) mod model;
+pub(crate) mod param;
+pub(crate) mod rate;
+pub(crate) mod resolution;
+pub(crate) mod stage;
+pub(crate) mod transform;
 
 use pxl_render::gpu::draw::DrawList;
 
@@ -35,13 +35,13 @@ use crate::domain::scene::model::registry::ModelTable;
 
 /// Returns whether anything is still moving, in which case the stage asks for
 /// another frame.
-pub fn animate(list: &mut DrawList, models: &ModelTable, frame: &Frame) -> bool {
+pub(crate) fn animate(list: &mut DrawList, models: &ModelTable, frame: &Frame) -> bool {
     companion_animate(list, models, frame, character_surface_shows())
         | location_animate(frame)
         | environment_animate(frame)
 }
 
-pub fn draw(list: &mut DrawList, models: &ModelTable) {
+pub(crate) fn draw(list: &mut DrawList, models: &ModelTable) {
     ghost_draw(list);
     companion_draw(list, models);
     location_draw(list);

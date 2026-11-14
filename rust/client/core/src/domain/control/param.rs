@@ -13,17 +13,17 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 /// The least height, in units, of the orbit eye over the floor under it. It
 /// is one cell, so the eye never sits in the cell that rests on the floor.
-pub const EYE_CLEARANCE_U: f64 = 1.0;
+pub(crate) const EYE_CLEARANCE_U: f64 = 1.0;
 
-pub const DEFAULT_DIST: f64 = 16.0;
-pub const DEFAULT_AZIMUTH: f64 = 0.0;
+pub(crate) const DEFAULT_DIST: f64 = 16.0;
+pub(crate) const DEFAULT_AZIMUTH: f64 = 0.0;
 /// 60° from straight down, which puts the eye 30° above the ground plane.
-pub const DEFAULT_POLAR: f64 = core::f64::consts::FRAC_PI_3;
+pub(crate) const DEFAULT_POLAR: f64 = core::f64::consts::FRAC_PI_3;
 /// The distance from the pivot to either end of the dolly, counted in sides
 /// of the camera grid cell drawn there. The grid draws a cell of side `s`
 /// from 48·s to 96·s away (pxl-spec space/camera/grid.rs `split_dist`), and
 /// 64·s lies a third of the way into that band.
-pub const DOLLY_END_CELLS: f64 = 64.0;
+pub(crate) const DOLLY_END_CELLS: f64 = 64.0;
 const _: () = assert!(
     DOLLY_END_CELLS >= grid::CELLS_A_RAD as f64 / 2.0 && DOLLY_END_CELLS < grid::CELLS_A_RAD as f64,
     "a dolly's limit lies in the band its end cell is drawn over"
@@ -31,14 +31,14 @@ const _: () = assert!(
 /// The orbit's nearest distance from the pivot, in units. It is
 /// `DOLLY_END_CELLS` sides of the 2^-5 cell the grid asks for there, about
 /// 3.8 m at Seoul's latitude.
-pub const MIN_DIST: f64 = 2.0;
+pub(crate) const MIN_DIST: f64 = 2.0;
 /// How far from the pivot the eye counts as at the nearest, where it may
 /// pass through what is there (camera/orbit.rs, the Nearest rule).
-pub const NEAREST_DIST: f64 = 1.25 * MIN_DIST;
+pub(crate) const NEAREST_DIST: f64 = 1.25 * MIN_DIST;
 /// The orbit's farthest distance: `DOLLY_END_CELLS` sides of the coarsest
 /// cell any zoom holds, the cell of the pyramid's top. Looking straight down
 /// from there, the grid never asks for a cell coarser than a zoom draws.
-pub const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(MIN_ZOOM));
+pub(crate) const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(MIN_ZOOM));
 
 // ---- how the camera settles and keeps out of the ground ----
 
@@ -46,56 +46,56 @@ pub const MAX_DIST: f64 = DOLLY_END_CELLS * units(GROUND.cell_zoom(MIN_ZOOM));
 /// easing: an eye, a pivot or a distance within `EASE_EPS_U`, a polar angle or
 /// an azimuth within `EASE_EPS_RAD`. Each gap is smaller than a pixel at any
 /// distance the view is seen across.
-pub const EASE_EPS_U: f64 = 0.001;
-pub const EASE_EPS_RAD: f64 = 0.0001;
+pub(crate) const EASE_EPS_U: f64 = 0.001;
+pub(crate) const EASE_EPS_RAD: f64 = 0.0001;
 /// The most samples a collision test takes along one step of the orbit
 /// (camera/orbit.rs `way_hit`). Testing only where a step lands would let
 /// the camera tunnel, because the easing carries it through everything in
 /// between.
-pub const COLLISION_STEP_SAMPLE_CNT: u32 = 16;
+pub(crate) const COLLISION_STEP_SAMPLE_CNT: u32 = 16;
 /// How many times a climb steepens the pitch (camera/orbit.rs
 /// `steepened`). Steepening moves the eye, so the ground under the eye
 /// changes too. Two passes leave less than a cell to go.
-pub const CLIMB_PASS_CNT: u32 = 2;
+pub(crate) const CLIMB_PASS_CNT: u32 = 2;
 
 // ---- input ----
 
 /// The share of the screen's height a drag crosses to tilt the camera by π.
 /// It is stated against the screen to match the azimuth's arcball, which
 /// turns one to one with the hand.
-pub const TILT_SWEEP_FRACTION: f64 = 0.5;
-pub const DOLLY_GAIN: f64 = 0.0022;
+pub(crate) const TILT_SWEEP_FRACTION: f64 = 0.5;
+pub(crate) const DOLLY_GAIN: f64 = 0.0022;
 /// Within this radius of the screen's center, a rotate drag does not turn
 /// the azimuth, because the hand's angle about the center (atan2) swings
 /// wildly there.
-pub const MIN_ROTATE_RADIUS_PX: f64 = 24.0;
-pub const MIN_TWIST_DIST_PX: f64 = 24.0;
+pub(crate) const MIN_ROTATE_RADIUS_PX: f64 = 24.0;
+pub(crate) const MIN_TWIST_DIST_PX: f64 = 24.0;
 /// Once a rotate drag moves this far, its dominant axis locks for the rest
 /// of the gesture. Without the lock, an off-center vertical drag would start
 /// to spin the camera once the tilt reaches its limit. It is smaller than
 /// `MIN_ROTATE_RADIUS_PX`, because it only has to tell vertical from
 /// horizontal.
-pub const AXIS_LOCK_THRESHOLD_PX: f64 = 12.0;
+pub(crate) const AXIS_LOCK_THRESHOLD_PX: f64 = 12.0;
 /// How far a pointer may move and still count as a tap. Real pointers
 /// jitter a pixel or two on a still click.
-pub const TAP_DRAG_THRESHOLD_PX: f64 = 4.0;
+pub(crate) const TAP_DRAG_THRESHOLD_PX: f64 = 4.0;
 /// The share of the distance to the pivot that a held movement key pans
 /// each second (`controller::pan_across`). It is a product decision. At any
 /// distance and pitch, the pan crosses the width of a 16:9 view at the
 /// pivot in about 3.4 s. Looking straight down, it crosses the view's height
 /// in about 2 s.
-pub const KEY_PAN_PER_S: f64 = 0.520_833_333_333_333_4;
+pub(crate) const KEY_PAN_PER_S: f64 = 0.520_833_333_333_333_4;
 
 // ---- smoothing ----
 
-pub const ROT_DAMP: f64 = 10.0;
-pub const CAM_DAMP: f64 = 10.0;
+pub(crate) const ROT_DAMP: f64 = 10.0;
+pub(crate) const CAM_DAMP: f64 = 10.0;
 /// The rate a climb's pitch rises at. It is faster than the controls ease,
 /// because a late rise leaves the eye briefly inside a hill.
-pub const CLIMB_RISE_DAMP: f64 = 20.0;
+pub(crate) const CLIMB_RISE_DAMP: f64 = 20.0;
 /// The rate a climb's pitch relaxes at. It is slower than the controls
 /// ease, so passing over a ridge does not bob the view.
-pub const CLIMB_RELAX_DAMP: f64 = 5.0;
+pub(crate) const CLIMB_RELAX_DAMP: f64 = 5.0;
 const _: () = assert!(
     CLIMB_RISE_DAMP > CAM_DAMP && CLIMB_RELAX_DAMP < CAM_DAMP,
     "the climb rises faster and relaxes slower than the controls ease"
@@ -105,19 +105,19 @@ const _: () = assert!(
 /// applies per sample, not per frame. Compass jitter, which is worse
 /// indoors, passes the store's 1.5° dead zone, and this smooths it before it
 /// reaches the azimuth.
-pub const HEADING_SMOOTH_ALPHA: f64 = 0.25;
+pub(crate) const HEADING_SMOOTH_ALPHA: f64 = 0.25;
 
 /// How long following outlasts a location that is not ready, in ms, set by
 /// eye. A gap the location recovers from, such as a fix lost indoors or the
 /// watch starting again, keeps following. A dead location lets following go
 /// before the camera looks frozen behind a disabled button.
-pub const SENSOR_GRACE_MS: f64 = 12000.0;
+pub(crate) const SENSOR_GRACE_MS: f64 = 12000.0;
 
 /// The pivot goes off the device past `OFF_CENTER_U` across the ground and
 /// comes back within `ON_CENTER_U`, so a pivot near the edge does not flicker
 /// between the two (navigation/off_center.rs).
-pub const OFF_CENTER_U: f64 = 10.0;
-pub const ON_CENTER_U: f64 = 3.0;
+pub(crate) const OFF_CENTER_U: f64 = 10.0;
+pub(crate) const ON_CENTER_U: f64 = 3.0;
 const _: () = assert!(
     ON_CENTER_U < OFF_CENTER_U,
     "the pivot comes back nearer than it goes off"
@@ -125,9 +125,9 @@ const _: () = assert!(
 
 /// How far from the eye the pointer can pick, in units. It is a product
 /// decision: what can be edited is a sphere about the observer.
-pub const PICK_DIST_U: f64 = 32.0;
+pub(crate) const PICK_DIST_U: f64 = 32.0;
 
 /// Orientation has no Permissions API, so a revoked permission is never
 /// reported. A gap this long while tracking is taken as a loss instead. This
 /// holds only where the sensor talks while still (`silence_is_loss`).
-pub const WATCHDOG_TIMEOUT_MS: f64 = 8000.0;
+pub(crate) const WATCHDOG_TIMEOUT_MS: f64 = 8000.0;

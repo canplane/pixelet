@@ -1,7 +1,7 @@
 // pxl-core/build.rs
 
 // Links the core as a WebAssembly module from its manifest (manifest.json5):
-// the module owns its memory and grows it, and its stack comes first in it,
+// the module owns its memory, and its stack comes first in it,
 // so that an overflow runs below address 0 and traps instead of writing over
 // the data above the stack. For any other target the script prints nothing,
 // and the platform links the core as it links any library.

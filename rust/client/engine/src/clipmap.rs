@@ -277,9 +277,9 @@ pub const fn column_top(w: u32) -> i32 {
     (w << 16) as i32 >> 16
 }
 
-/// A brick's cells as its fill lays them, `OWN_CELL_CNT` to a word, cell `i` in the
-/// `i % OWN_CELL_CNT`-th asset id (`own_at`): each cell's own asset id (pxl-spec `ground::own` of its four at the brick's
-/// zoom).
+/// A brick's cells as its fill lays them, `OWN_CELL_CNT` to a word, cell `i` in the word's
+/// `i % OWN_CELL_CNT`-th `GroundId` (`own_at`): each cell's own asset id (pxl-spec
+/// `ground::own` of its four at the brick's zoom).
 pub const OWN_WORDS: u32 = BRICK_CELL_CNT / OWN_CELL_CNT;
 /// The cells a laid word holds, an asset id each: in the cells' order
 /// (`idx_of`), a 2×2 square.

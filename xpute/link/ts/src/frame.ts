@@ -1,12 +1,12 @@
 // @xpute/link/frame.ts
 
 /**
- * A frame's words are laid out by link/spec/frame.json5: the request's tag, its
- * command, the result, and the packet's length. The command is the RES bit,
- * the handle the callee issued and the method's place among its object's.
- * The packet, the method's args or its answer's value in the Canonical ABI's
- * layout (cabi.ts), lies right past the words. The words
- * are little-endian (xpute-link frame.rs).
+ * A frame's words are laid out by `link/spec/frame.json5`: the request's tag,
+ * its command, the result, and the packet's length. The command is the `RES`
+ * bit, the handle the callee issued and the method's place among its
+ * object's. The packet, the method's args or its answer's value in the
+ * Canonical ABI's layout (`cabi.ts`), lies right past the words. The words
+ * are little-endian (xpute-link `frame.rs`).
  */
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
@@ -18,7 +18,7 @@ export const HDR_SZ: u32 = WORDS * 4;
 
 export interface Frame {
   tag: u32;
-  /** A later answer, to the receiver's request `tag`. */
+  /** An answer, to the receiver's request `tag`. */
   res: boolean;
   handle: u32;
   method: u32;

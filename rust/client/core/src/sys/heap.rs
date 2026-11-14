@@ -1,19 +1,18 @@
 // pxl-core/sys/heap.rs
 
-//! The core's memory and its heap. The memory is what the program's runtime
-//! sized it to before the core's first entry, never grown, so a full heap
-//! stops the core. In address
-//! order: the stack, the module's data, `.fixed` (sys/range.rs), then the
-//! heap to the memory's end. The heap is the global allocator: xpute-kit's
-//! slab of size classes over its buddy allocator of pages, whose blocks are
-//! aligned to their own size, which bounds fragmentation. The slab borrows
-//! and returns whole runs of pages, so neither level starves while the other
-//! has room. A native core's memory is the region the heap reserves at the
-//! process's first allocation (`given`), which it sets as the core's memory
-//! (`xpute_link::mem::set`) before `link_init` lays the link, so every
-//! allocation lies in it and every offset fits a u32. There the global
-//! allocator is the process's, every thread's, so the heap is taken under
-//! one lock.
+//! The core's memory and its heap. The memory is never grown, so a full heap
+//! stops the core. A module's memory is what its runtime sized it to before the
+//! core's first entry; in address order it holds the stack, the module's data,
+//! `.fixed` (sys/range.rs), then the heap to the memory's end. The heap is the
+//! global allocator: xpute-kit's slab of size classes over its buddy allocator
+//! of pages, whose blocks are aligned to their own size, which bounds
+//! fragmentation. The slab borrows and returns whole runs of pages, so neither
+//! level starves while the other has room. A native core's memory is the region
+//! the heap reserves at the process's first allocation (`given`), which it sets
+//! as the core's memory (`xpute_link::mem::set`) before `link_init` lays the
+//! link, so every allocation lies in it and every offset fits a u32. There the
+//! global allocator is the process's, every thread's, so the heap is taken
+//! under one lock.
 
 use core::marker::PhantomData;
 use core::sync::atomic::{AtomicUsize, Ordering::Relaxed};
@@ -26,7 +25,7 @@ use crate::spec::manifest::mem;
 
 /// The heap's counters, as its allocator reports them.
 #[derive(Clone, Copy, Default)]
-pub struct HeapStat {
+pub(crate) struct HeapStat {
     pub range: usize,
     /// The most ever live at once, not what is held now.
     pub peak: usize,
@@ -45,7 +44,7 @@ pub struct HeapStat {
 }
 
 /// Every fixed range begins on a page, and so does the heap after them.
-pub const PAGE_BYTES: u32 = 4096;
+pub(crate) const PAGE_BYTES: u32 = 4096;
 
 const fn page_up(at: usize) -> usize {
     at.next_multiple_of(PAGE_BYTES as usize)
@@ -72,7 +71,7 @@ fn region() -> (usize, usize) {
 }
 
 /// Where `.fixed` begins.
-pub fn fixed_at() -> usize {
+pub(crate) fn fixed_at() -> usize {
     region().0
 }
 
@@ -121,7 +120,7 @@ const SPAN_LOG2: usize = ADDR_BITS - 1;
 const SPLIT_BYTES: usize = (1 << (SPAN_LOG2 - PAGE_LOG2)) / 8;
 
 /// The heap's range: from the page past `.fixed` to the memory's end.
-pub struct Span(PhantomData<()>);
+pub(crate) struct Span(PhantomData<()>);
 
 impl Range for Span {
     const MIN_LOG2: usize = PAGE_LOG2;
@@ -207,7 +206,7 @@ unsafe impl core::alloc::GlobalAlloc for Locked {
     }
 }
 
-pub fn stat() -> HeapStat {
+pub(crate) fn stat() -> HeapStat {
     HeapStat {
         range: HEAP.range_sz(),
         peak: HEAP.peak(),
@@ -221,7 +220,7 @@ pub fn stat() -> HeapStat {
 }
 
 /// `n` zeroed `T`s, or None when the heap refuses them.
-pub fn zeroed<T: Copy + Default>(n: usize) -> Option<Box<[T]>> {
+pub(crate) fn zeroed<T: Copy + Default>(n: usize) -> Option<Box<[T]>> {
     let mut v = Vec::new();
     v.try_reserve_exact(n).ok()?;
     v.resize(n, T::default());

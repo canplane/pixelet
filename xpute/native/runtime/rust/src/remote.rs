@@ -1,9 +1,10 @@
 // xpute-native-runtime/remote.rs
 
-//! The link's side of remote.ts `serve`, for a UI on the JavaScript thread,
-//! and the link's serving half for what the UI serves across it. The UI's
-//! methods come through the queue (lib.rs `post`), and what the UI hears is
-//! batched and handed over on one notify (`take`), as a page's port posts.
+//! The link's side of a UI on the JavaScript thread, as @xpute/web-runtime
+//! remote.ts `serve` is a page's, and the link's serving half for what the UI
+//! serves across it. The UI's methods come through the queue (lib.rs `post`),
+//! and what the UI hears is batched and handed over on one notify (`take`), as
+//! a page's port posts.
 //!
 //! What the UI serves is mounted before the guest boots: its named
 //! interfaces under their handles, and an opener at each prefix it serves
@@ -35,7 +36,8 @@
 //! held answers ECANCELED, the requests it left pending and each method of
 //! the objects it serves the guest until the guest drops them, so the
 //! guest's load starts again; and the guest's objects it opened are dropped
-//! on the guest, so none is held for a UI that is gone. A start answers the
+//! on the guest, so none is held for a UI that is gone; then the guest is
+//! told the new UI attached (wit/life/life.wit `attached`). A start answers the
 //! UI its generation, which each of its posts, answers and takes carries, so
 //! nothing of an old UI's that the guest's thread has not run when a new one
 //! is taken reaches the guest, its methods and its answers alike, as an old
@@ -54,6 +56,7 @@ use xpute_link::abi::types::Token;
 use xpute_link::{store_uri, Handle, Lift, Lower, Method, Object, Packet, Reply, Tag, DROP, OPEN, ROOT};
 
 use crate::event_loop::post_task;
+use crate::life;
 use crate::link;
 
 /// What the runtime sends the UI: the batch it has not taken, whether it was
@@ -91,7 +94,8 @@ fn generation() -> u32 {
 /// Takes a new UI on the runtime, as a reload's: the batch the last UI did
 /// not take goes, the new UI is told its first, and on the guest's thread
 /// the requests the last left pending are answered ECANCELED and the guest's
-/// objects it opened dropped (`hang_up`).
+/// objects it opened dropped (`hang_up`), then the guest is told the new UI
+/// attached (life.rs `attached`).
 /// Called on the JavaScript thread, by each start; answers the new UI's
 /// generation.
 pub fn accept() -> u32 {
@@ -103,6 +107,7 @@ pub fn accept() -> u32 {
         out.generation
     };
     post_task(Box::new(hang_up));
+    post_task(Box::new(life::attached));
     generation
 }
 
@@ -230,8 +235,8 @@ fn lowered(uri: &[Token]) -> Vec<u8> {
 }
 
 /// Mounts what the UI serves: its named interfaces under their handles
-/// (remote.ts `Remote.named`), the methods `later` names answered later, and
-/// an opener at each of its `prefixes` (remote.ts `Remote.prefixes`).
+/// (@xpute/link remote.ts `Remote.named`), the methods `later` names answered
+/// later, and an opener at each of its `prefixes` (`Remote.prefixes`).
 pub fn serve(named: &[Handle], prefixes: Vec<Vec<Token>>, later: &'static [(Handle, Method)]) {
     for &h in named {
         link::mount_named(h, Rc::new(Named { h, later }));
@@ -249,11 +254,12 @@ pub fn serve(named: &[Handle], prefixes: Vec<Vec<Token>>, later: &'static [(Hand
 }
 
 /// Sends the method of the UI of `generation` on the link, its answer told
-/// back to that UI alone (remote.ts `port.onmessage`); a packet past the
-/// room is refused whole, EMSGSIZE (xpute-link link.rs `Side::send`). A
-/// method of a UI that is not the one now reaches nothing. The guest's
-/// object an open answers is held for that UI until it drops it, or dropped
-/// at once where a new UI has been taken since (`hang_up`).
+/// back to that UI alone, as @xpute/web-runtime remote.ts `serve` tells a
+/// page's; a packet past the room is refused whole, EMSGSIZE (xpute-link
+/// link.rs `Side::send`). A method of a UI that is not the one now reaches
+/// nothing. The guest's object an open answers is held for that UI until it
+/// drops it, or dropped at once where a new UI has been taken since
+/// (`hang_up`).
 pub(crate) fn recv(generation: u32, tag: Tag, h: u32, m: u32, pkt: Option<Vec<u8>>) {
     if generation != self::generation() {
         return;

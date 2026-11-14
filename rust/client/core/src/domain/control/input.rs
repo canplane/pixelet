@@ -25,7 +25,7 @@ use crate::domain::control::camera::orbit;
 use crate::domain::control::camera::state::{camera_state, IntentPatch};
 use crate::domain::control::navigation::destination::cancel as cancel_destination;
 use crate::domain::control::navigation::follow_mode::set_following;
-use crate::domain::setting::store::settings;
+use crate::domain::setting::settings;
 use crate::domain::view::frame::screen::size;
 use crate::sys::sched::invalidate;
 use xpute_guest::clock::now;
@@ -283,7 +283,7 @@ fn update_pinch(s: &mut Input) {
     }
 }
 
-pub fn camera_pointer_down(
+pub(crate) fn camera_pointer_down(
     pointer_type: PointerType,
     pointer_id: i32,
     button: i32,
@@ -341,7 +341,12 @@ pub fn camera_pointer_down(
     set_following(false);
 }
 
-pub fn camera_pointer_move(pointer_type: PointerType, pointer_id: i32, view_x: f64, view_y: f64) {
+pub(crate) fn camera_pointer_move(
+    pointer_type: PointerType,
+    pointer_id: i32,
+    view_x: f64,
+    view_y: f64,
+) {
     let s = input();
     if pointer_type == PointerType::Touch {
         if let Some(pt) = s.active_pointers.get_mut(&pointer_id) {
@@ -405,7 +410,7 @@ fn end_drag(s: &mut Input) {
 
 /// A pointer went up or was canceled. Returns where it tapped, if it was a
 /// tap.
-pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[f64; 2]> {
+pub(crate) fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[f64; 2]> {
     let s = input();
     if pointer_type == PointerType::Touch {
         s.active_pointers.remove(&pointer_id);
@@ -446,13 +451,13 @@ pub fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> Option<[
     tap_if_still(s, mode)
 }
 
-pub fn camera_pointer_out() {
+pub(crate) fn camera_pointer_out() {
     input().hovering = false;
 }
 
 /// Called when what the pointer holds changes. A hovering pointer picks
 /// again where it stands.
-pub fn camera_rehover() {
+pub(crate) fn camera_rehover() {
     let s = input();
     if s.hovering {
         s.hover_pending = true;
@@ -460,18 +465,18 @@ pub fn camera_rehover() {
 }
 
 /// A wheel turn of `delta_y` CSS pixels.
-pub fn camera_wheel(delta_y: f64) {
+pub(crate) fn camera_wheel(delta_y: f64) {
     *input().pending_wheel_delta_y.get_or_insert(0.0) += delta_y;
 }
 
 /// A trackpad's pinch, its fingers' spread changed by `scale`.
-pub fn camera_pinch(scale: f64) {
+pub(crate) fn camera_pinch(scale: f64) {
     *input().pending_pinch_scale.get_or_insert(1.0) *= scale;
 }
 
 /// The held movement keys. Each axis is -1, 0 or 1, with x to the right and
 /// y down.
-pub fn camera_keys(x: i32, y: i32) {
+pub(crate) fn camera_keys(x: i32, y: i32) {
     let s = input();
     let len = libm::hypot(x as f64, y as f64);
     let key_dir = if len > 0.0 {
@@ -488,7 +493,7 @@ pub fn camera_keys(x: i32, y: i32) {
 
 /// Writes into the camera what the pointer and the keys asked since the
 /// last step. It runs once a frame.
-pub fn camera_input_step() {
+pub(crate) fn camera_input_step() {
     let s = input();
     if s.key_dir != [0.0; 2] {
         let at = now();
@@ -532,30 +537,30 @@ pub fn camera_input_step() {
 /// hovers still and the view `moved` under it (a wheel's zoom, a glide, the
 /// keys). None while a drag is under way. pxl-core pointer.rs decides what
 /// the pointer is over.
-pub fn rehover_at(moved: bool) -> Option<[f64; 2]> {
+pub(crate) fn rehover_at(moved: bool) -> Option<[f64; 2]> {
     let s = input();
     let asked = core::mem::take(&mut s.hover_pending) || moved && s.hovering;
     (asked && s.drag_mode == DragMode::None).then_some([s.pointer_x, s.pointer_y])
 }
 
-pub fn pinching() -> bool {
+pub(crate) fn pinching() -> bool {
     input().drag_mode == DragMode::Pinch
 }
 
 /// Whether the orbit's distance is moving: it is being pinched, or it is
 /// settling after a wheel or a pinch.
-pub fn zooming() -> bool {
+pub(crate) fn zooming() -> bool {
     active() == Active::Orbit && (pinching() || orbit::zoom_settling())
 }
 
 /// Whether a pointer holds the camera: a pan, a rotate or a pinch is under
 /// way.
-pub fn dragging() -> bool {
+pub(crate) fn dragging() -> bool {
     input().drag_mode != DragMode::None
 }
 
 /// Whether movement keys are held, so the view is walked rather than
 /// dragged.
-pub fn steering() -> bool {
+pub(crate) fn steering() -> bool {
     input().key_dir != [0.0; 2]
 }

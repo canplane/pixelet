@@ -45,7 +45,7 @@ use crate::domain::scene::rate;
 use crate::domain::scene::resolution::Pace;
 use crate::domain::scene::stage;
 use crate::domain::scene::stage::scene_step;
-use crate::domain::setting::store;
+use crate::domain::setting;
 use crate::domain::view::demand;
 use crate::domain::view::demand::DemandedBase as _;
 use crate::domain::view::frame::coord;
@@ -119,7 +119,7 @@ fn companion_tick(ctx: &mut TickContext) {
 }
 
 /// Asks every tile pyramid for the tiles the eye needs now.
-fn demand_tick(ctx: &mut TickContext) {
+fn demand_tick(_: &mut TickContext) {
     // The ground's clip levels move to their new centers before arrived
     // tiles are admitted, so each arrival fills a level where it now stands.
     let at = |q: Q3| [q3::to_real(i64::from(q[0])), q3::to_real(i64::from(q[1]))];
@@ -138,7 +138,7 @@ fn demand_tick(ctx: &mut TickContext) {
     changes_step();
     TerrainTile::demand().step(destination::tile(), clipmap::pinned_tiles());
     // No place tile is fetched while places are hidden.
-    match store::settings().place {
+    match setting::settings().place {
         true => PlaceTile::demand().step(None, &[]),
         false => PlaceTile::demand().idle(),
     }
@@ -185,7 +185,7 @@ fn environment_tick(_: &mut TickContext) {
 
 /// Runs once, outside any frame. The frame task it spawns waits until a
 /// frame is asked for.
-pub fn boot() {
+pub(crate) fn boot() {
     start();
 }
 
@@ -253,14 +253,14 @@ macro_rules! effect {
 
 /// Runs the frame's effects, and returns how long they took and how long each
 /// took, indexed by `EffectName`, in milliseconds.
-pub fn effects() -> (f64, [f64; EFFECT_CNT]) {
+pub(crate) fn effects() -> (f64, [f64; EFFECT_CNT]) {
     let at = now();
     let mut times = perf_recording().then_some([0.0; EFFECT_CNT]);
     // Settings load first, so the frame that reads new settings is also the
     // first to act on them.
     effect!(times, Setting, {
-        if store::settings_load_step() {
-            perf_follow(store::settings().perf);
+        if setting::settings_load_step() {
+            perf_follow(setting::settings().perf);
         }
     });
     effect!(times, Navigation, off_center_step());
@@ -279,7 +279,7 @@ pub fn effects() -> (f64, [f64; EFFECT_CNT]) {
     // included. It keeps showing its last coordinate while the device briefly
     // reports none.
     effect!(times, Location, location_step(off_center().device_coord));
-    effect!(times, Setting, store::settings_keep_step());
+    effect!(times, Setting, setting::settings_keep_step());
     (now() - at, times.unwrap_or_default())
 }
 
@@ -290,12 +290,12 @@ static LAST: Global<Option<f64>> = Global::new();
 /// The frames that did not run since boot, by why (`frame_task`): the GPU
 /// admitted none, or the host still held the stream.
 #[derive(Clone, Copy, Default)]
-pub struct Refused {
+pub(crate) struct Refused {
     pub admit: f64,
     pub stream: f64,
 }
 
-pub fn refused_frames() -> Refused {
+pub(crate) fn refused_frames() -> Refused {
     *REFUSED.get(Refused::default)
 }
 

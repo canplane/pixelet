@@ -122,7 +122,7 @@ impl Query for Stand {
     ) -> In<[u32; 2]> {
         assert_eq!(*at, (zoom, c), "asked");
         let side = libm::ldexpf(1.0, UNIT_ZOOM as i32 - zoom as i32);
-        // Y and Z from the world's edge (`zoom::starts`).
+        // `c + s` counts Y and Z from the world's edge (`zoom::starts`).
         let s = starts(zoom);
         let lo = [
             c[0] as f32 * side,

@@ -22,7 +22,7 @@
 
 use crate::domain::scene::param;
 use crate::domain::scene::rate;
-use crate::domain::setting::store::{settings, ResMode};
+use crate::domain::setting::{settings, ResMode};
 use crate::sys::sched;
 use pxl_render::gpu::api;
 use pxl_render::gpu::surface::{surfaces, Surface};
@@ -32,7 +32,7 @@ use pxl_global::Global;
 
 /// How a frame was paced.
 #[derive(Clone, Copy)]
-pub struct Pace {
+pub(crate) struct Pace {
     /// The real time since the last frame, in ms.
     pub gap_ms: f64,
     /// The display's interval, in ms (sys/sched/display.rs).
@@ -261,7 +261,7 @@ fn scale() -> f64 {
 /// The share of the display's pixels on each axis that the world was last
 /// drawn at. It lags `scale` while a change waits to be drawn, and it is 1
 /// before the world has a surface.
-pub fn drawn_scale() -> f64 {
+pub(crate) fn drawn_scale() -> f64 {
     world()
         .filter(|s| s.width > 0 && s.px_w > 0)
         .map_or(1.0, |s| {
@@ -278,7 +278,7 @@ fn device(dpr: f64) -> f64 {
 
 /// Device pixels per CSS pixel of the display the world is shown on, as the
 /// world's surface reports it. It is 1 before there is a surface.
-pub fn dpr() -> f64 {
+pub(crate) fn dpr() -> f64 {
     world()
         .map(|s| s.dpr)
         .filter(|&dpr| dpr > 0.0)
@@ -293,7 +293,7 @@ fn world() -> Option<&'static mut Surface> {
 /// display's ratio, the world scales it as the setting says, and a character
 /// surface caps it so that the surface stays thumbnail size
 /// (`CHARACTER_LONG_SIDE_MAX`).
-pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
+pub(crate) fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
     let device = device(dpr);
     match role {
         surface_role::WORLD => device * scale(),
@@ -309,7 +309,7 @@ pub fn surface_ratio(role: u32, px: [u32; 2], dpr: f64) -> f64 {
 /// landed with the frame timed. A frame drawn at another size than the
 /// current one is not counted, and a read timed at another pixel count is not
 /// a sample.
-pub fn load(pace: Pace, gpu: Option<GpuRead>) {
+pub(crate) fn load(pace: Pace, gpu: Option<GpuRead>) {
     let Some(s) = world() else {
         return;
     };

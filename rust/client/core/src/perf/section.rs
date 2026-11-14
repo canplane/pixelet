@@ -15,12 +15,12 @@ use pxl_render::spec::span::FrameKind;
 const REASON_CAP: usize = limit::REASON_CAP as usize;
 const REASON_WORDS: usize = limit::REASON_WORDS as usize;
 const STEP_CAP: usize = limit::STEP_CAP as usize;
-pub const TASK_PHASE_CNT: usize = TaskPhaseName::ALL.len();
+pub(crate) const TASK_PHASE_CNT: usize = TaskPhaseName::ALL.len();
 const CATEGORY_CNT: usize = StreamName::ALL.len();
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Percentile {
+pub(crate) struct Percentile {
     pub p50: f64,
     pub p95: f64,
     pub max: f64,
@@ -30,7 +30,7 @@ words!(Percentile, percentile::WORDS, p50 => percentile::P50, p95 => percentile:
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct RecordingStateSection {
+pub(crate) struct RecordingStateSection {
     pub recording: f64,
     pub elapsed_ms: f64,
     pub truncated: f64,
@@ -47,7 +47,7 @@ words!(RecordingStateSection, now::recording_state::WORDS,
 /// Whether the core draws, as perf.json5's NOW `draw` says.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct DrawSection {
+pub(crate) struct DrawSection {
     pub frame_cnt: f64,
     pub refused_admit: f64,
     pub refused_stream: f64,
@@ -64,7 +64,7 @@ words!(DrawSection, now::draw::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct FrameSection {
+pub(crate) struct FrameSection {
     /// 0 for a window with no frames, where every other word is 0 too.
     pub present: f64,
     pub cnt: f64,
@@ -138,7 +138,7 @@ words!(FrameSection, stat::frames::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct StreamStat {
+pub(crate) struct StreamStat {
     pub cnt: f64,
     pub ok: f64,
     pub aborted: f64,
@@ -161,7 +161,7 @@ words!(StreamStat, stream_stat::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct TaskSection {
+pub(crate) struct TaskSection {
     pub slots: [StreamStat; CATEGORY_CNT],
 }
 
@@ -169,7 +169,7 @@ words!(TaskSection, stat::tasks::WORDS, slots => stat::tasks::SLOTS);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct ViewSection {
+pub(crate) struct ViewSection {
     pub eye_x: f64,
     pub eye_y: f64,
     pub eye_z: f64,
@@ -210,7 +210,7 @@ words!(ViewSection, now::view::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct StepStat {
+pub(crate) struct StepStat {
     /// Indices into `Phase::ALL` and `StepName::ALL`.
     pub phase: f64,
     pub name: f64,
@@ -225,7 +225,7 @@ words!(StepStat, step_stat::WORDS,
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct StepSection {
+pub(crate) struct StepSection {
     pub cnt: f64,
     pub slots: [StepStat; STEP_CAP],
 }
@@ -237,7 +237,7 @@ words!(StepSection, stat::steps::WORDS, cnt => stat::steps::CNT, slots => stat::
 /// in by `fold`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct RecordingSection {
+pub(crate) struct RecordingSection {
     pub frame_cnt: f64,
     pub heap_live_max_bytes: f64,
     pub heap_run_max_bytes: f64,
@@ -254,7 +254,7 @@ impl RecordingSection {
     /// value, except the largest free block, which keeps its smallest. The
     /// heap's refusals are taken as they stand, since the heap's count only
     /// grows, and the refused tiles are summed.
-    pub fn fold(&mut self, h: &RecordingSection) {
+    pub(crate) fn fold(&mut self, h: &RecordingSection) {
         let first = self.frame_cnt == 0.0;
         let max = |a: f64, b: f64| if first { b } else { a.max(b) };
         *self = RecordingSection {

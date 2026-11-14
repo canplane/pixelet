@@ -2,7 +2,7 @@
 
 //! The ground as a layer of the pyramid.
 
-pub mod clipmap;
-pub mod fixed;
-pub mod pool;
+pub(crate) mod clipmap;
+pub(crate) mod fixed;
+pub(crate) mod pool;
 mod query;

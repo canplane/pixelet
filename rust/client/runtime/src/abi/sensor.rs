@@ -219,7 +219,7 @@ pub fn locate() -> Result<(), _rt::Errno> {
 }
 
 mod _rt {
-    pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::{answer, Handle, Lower, Method};
-    pub use xpute_native_runtime::link;
+    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_link::{answer, Handle, Lower, Method};
+    pub(super) use xpute_native_runtime::link;
 }

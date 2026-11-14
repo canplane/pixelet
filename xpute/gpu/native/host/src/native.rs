@@ -136,7 +136,7 @@ static WORK: OnceLock<Sender<Job>> = OnceLock::new();
 
 /// This is the platform's function told what the host has of a GPU
 /// (`state_on`): the state's name, its UTF-8 bytes and their count, as the
-/// guest's stop crosses (xpute-native-host native.rs `Stopped`).
+/// guest's stop crosses (xpute-native-runtime native.rs `Stopped`).
 pub type State = extern "C" fn(state: *const u8, len: usize);
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);

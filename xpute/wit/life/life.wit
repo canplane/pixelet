@@ -7,4 +7,7 @@ interface life {
   hidden: func();
   // The app is shown again.
   shown: func();
+  // A UI attached: the first, or a new one on the same guest. The guest tells
+  // it where everything stands.
+  attached: func();
 }

@@ -56,7 +56,7 @@ use crate::domain::control::param::{CLIMB_PASS_CNT, COLLISION_STEP_SAMPLE_CNT};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST, NEAREST_DIST};
 use crate::domain::query::change::Memo;
 use crate::domain::query::{finest, Hit, Ray, World};
-use crate::domain::setting::store::{settings, OrbitObstacleMode};
+use crate::domain::setting::{settings, OrbitObstacleMode};
 use crate::domain::smooth::smooth_vec;
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::param::NEAR;
@@ -67,27 +67,27 @@ use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use xpute_kit::math::scalar::wrap;
 
-pub struct OrbitState {
+pub(crate) struct OrbitState {
     pub dist: f64,
     pinch_from: Anchor,
 }
 
 static ORBIT: Global<OrbitState> = Global::new();
 
-pub fn orbit() -> &'static mut OrbitState {
+pub(crate) fn orbit() -> &'static mut OrbitState {
     ORBIT.get(|| OrbitState {
         dist: param::DEFAULT_DIST,
         pinch_from: Anchor::new(param::DEFAULT_DIST, 1.0),
     })
 }
 
-pub fn orbit_eye_off(dist: f64, polar: f64, azimuth: f64) -> V3 {
+pub(crate) fn orbit_eye_off(dist: f64, polar: f64, azimuth: f64) -> V3 {
     facing_dir(polar, azimuth).map(|v| -v * dist)
 }
 
 /// The point the orbit turns about, the drawn distance ahead of the eye.
 /// None before the camera has an eye.
-pub fn pivot_world() -> Option<V3> {
+pub(crate) fn pivot_world() -> Option<V3> {
     let c = camera();
     let e = c.eye?;
     Some(v3::sub(
@@ -101,40 +101,40 @@ pub fn pivot_world() -> Option<V3> {
 /// turns back moves the camera at once. Under `climb`, the ground is answered
 /// by pitching the drawn facing in `step`, because a pitch written into the
 /// intent would stay after the ground no longer asks for it.
-pub fn ask(partial: IntentPatch) -> Intent {
+pub(crate) fn ask(partial: IntentPatch) -> Intent {
     let c = camera_state_mut();
     let asked = c.with_patch(partial);
     c.commit_intent(allowed_view(asked, c.intent));
     c.intent
 }
 
-pub fn zoom_settling() -> bool {
+pub(crate) fn zoom_settling() -> bool {
     (camera_state().intent.dist - orbit().dist).abs() > EASE_EPS_U
 }
 
 /// A wheel turn of `delta_y` CSS pixels.
-pub fn wheel(delta_y: f64) {
+pub(crate) fn wheel(delta_y: f64) {
     zoom_by(libm::exp(delta_y * DOLLY_GAIN));
 }
 
 /// A `factor` under one zooms closer.
-pub fn zoom_by(factor: f64) {
+pub(crate) fn zoom_by(factor: f64) {
     zoom_to(camera_state().intent.dist * factor);
 }
 
-pub fn pinch_begin(span: f64) {
+pub(crate) fn pinch_begin(span: f64) {
     orbit().pinch_from = Anchor::new(camera_state().intent.dist, span);
 }
 
 /// The fingers are `span` apart. Spreading them zooms in.
-pub fn pinch(span: f64) {
+pub(crate) fn pinch(span: f64) {
     let asked = orbit().pinch_from.ask(span, spread);
     let took = zoom_to(asked);
     orbit().pinch_from.settle(asked, took, span);
 }
 
 /// Returns the distance taken, which terrain may hold short of `dist`.
-pub fn zoom_to(dist: f64) -> f64 {
+pub(crate) fn zoom_to(dist: f64) -> f64 {
     ask(IntentPatch {
         dist: Some(dist),
         ..Default::default()
@@ -196,7 +196,7 @@ pub(crate) fn step(delta: f64) -> bool {
 /// is the pivot plus the offset, and a gate that read only the offset could
 /// be walked through by panning.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ViewPose {
+pub(crate) struct ViewPose {
     pub pivot: V3,
     pub dist: f64,
     pub polar: f64,
@@ -461,7 +461,7 @@ fn toward_eye(at: &ViewPose, t_max: f64, access: &Ground<'_>) -> Option<Hit> {
 
 /// The intent the orbit can take on its way from `from` toward `to`. Before
 /// the camera has a pivot, `to` is taken as asked.
-pub fn allowed_view(to: Intent, from: Intent) -> Intent {
+pub(crate) fn allowed_view(to: Intent, from: Intent) -> Intent {
     let (Some(from_pose), Some(to_pose)) = (pose(from), pose(to)) else {
         return to;
     };
@@ -478,7 +478,7 @@ pub fn allowed_view(to: Intent, from: Intent) -> Intent {
 ///
 /// The answer is kept while the pose and where its pivot is on the world
 /// stay the same and the ground it read does not change (`CLIMB_PITCH`).
-pub fn climb_polar(pivot: V3, dist: f64, polar: f64, azimuth: f64) -> f64 {
+pub(crate) fn climb_polar(pivot: V3, dist: f64, polar: f64, azimuth: f64) -> f64 {
     let at = ViewPose {
         pivot,
         dist,

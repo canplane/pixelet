@@ -13,30 +13,30 @@ use pxl_content::generation::drawing::COLUMN_CNT;
 /// (x, y, z, spin, scale), then one flag byte an instance, padded to a whole
 /// word.
 #[derive(Clone, Copy)]
-pub struct GroupRange {
+pub(crate) struct GroupRange {
     pub first: usize,
     pub cnt: usize,
 }
 
 impl GroupRange {
-    pub const fn word_cnt(cnt: usize) -> usize {
+    pub(crate) const fn word_cnt(cnt: usize) -> usize {
         COLUMN_CNT as usize * cnt + cnt.div_ceil(4)
     }
 
     /// The word of instance `i` in `column`, where column 0 is x, 1 y, 2 z,
     /// 3 spin and 4 scale.
-    pub const fn f32_at(self, column: usize, i: usize) -> usize {
+    pub(crate) const fn f32_at(self, column: usize, i: usize) -> usize {
         self.first + column * self.cnt + i
     }
 
-    pub const fn flags(self) -> usize {
+    pub(crate) const fn flags(self) -> usize {
         self.first + COLUMN_CNT as usize * self.cnt
     }
 }
 
 /// Each group's first column word and instance count, read from the
 /// buffer's header.
-pub fn groups(words: &[u32]) -> impl Iterator<Item = (u32, u32)> + '_ {
+pub(crate) fn groups(words: &[u32]) -> impl Iterator<Item = (u32, u32)> + '_ {
     let groups = words.first().map_or(0, |&g| g as usize);
     let mut at = 1 + groups;
     words

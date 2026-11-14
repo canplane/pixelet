@@ -19,7 +19,7 @@ use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use pxl_spec::space::layer::lattice::{Grid, GROUND};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum GeolocationCommand {
+pub(crate) enum GeolocationCommand {
     Start,
     Stop,
 }
@@ -45,20 +45,20 @@ fn geolocation() -> &'static mut Geolocation {
 /// The location as the UI reports it once the core is attached: whether the
 /// platform has one.
 #[derive(Clone, Copy, Default)]
-pub struct GeolocationPlatform {
+pub(crate) struct GeolocationPlatform {
     pub supported: bool,
 }
 
 static PLATFORM: Global<GeolocationPlatform> = Global::new();
 
 /// Until the UI reports it, the place has no location.
-pub fn platform() -> &'static mut GeolocationPlatform {
+pub(crate) fn platform() -> &'static mut GeolocationPlatform {
     PLATFORM.get(GeolocationPlatform::default)
 }
 
 /// A watch runs while the store tracks the location
 /// (`DeviceLocationStore::is_tracking_location`).
-pub fn start_watching() {
+pub(crate) fn start_watching() {
     let store = device_location_store_mut();
     if store.is_tracking_location {
         return;
@@ -77,7 +77,7 @@ pub fn start_watching() {
 /// The location is kept: a watch stopped while the app is hidden is not the
 /// location gone. It is dropped where the location ends (`geolocation_close`,
 /// `geolocation_err`).
-pub fn stop_watching() {
+pub(crate) fn stop_watching() {
     let store = device_location_store_mut();
     if store.is_tracking_location {
         store.is_tracking_location = false;
@@ -85,12 +85,12 @@ pub fn stop_watching() {
     }
 }
 
-pub fn geolocation_open() {
+pub(crate) fn geolocation_open() {
     geolocation().open = true;
     start_watching();
 }
 
-pub fn geolocation_close() {
+pub(crate) fn geolocation_close() {
     geolocation().open = false;
     stop_watching();
     let store = device_location_store_mut();
@@ -98,7 +98,7 @@ pub fn geolocation_close() {
     store.state = SensorState::of(SensorStatus::Idle);
 }
 
-pub fn geolocation_visibility(visible: bool) {
+pub(crate) fn geolocation_visibility(visible: bool) {
     if !visible {
         stop_watching();
     } else if geolocation().open {
@@ -108,7 +108,7 @@ pub fn geolocation_visibility(visible: bool) {
 
 /// A grant from outside the app, such as the device's settings, starts the
 /// watch again. Without it, a denial would stick until the page reloads.
-pub fn on_geolocation_permission_granted() {
+pub(crate) fn on_geolocation_permission_granted() {
     if !device_location_store().is_tracking_location {
         start_watching();
     }
@@ -117,7 +117,13 @@ pub fn on_geolocation_permission_granted() {
 /// A location fix. GPS gives `alt` over the ellipsoid. It is kept over sea
 /// level, the datum the terrain uses, by the geoid's height at the base
 /// corner of the leaf tile the fix falls in.
-pub fn geolocation_fix(lon: f64, lat: f64, alt: Option<f64>, accuracy: f64, course: Option<f64>) {
+pub(crate) fn geolocation_fix(
+    lon: f64,
+    lat: f64,
+    alt: Option<f64>,
+    accuracy: f64,
+    course: Option<f64>,
+) {
     let (x0, y0, _) = GROUND
         .cell_of(LEAF_ZOOM, &epsg4326::project(&[lon, lat, 0.0]))
         .tile()
@@ -133,7 +139,7 @@ pub fn geolocation_fix(lon: f64, lat: f64, alt: Option<f64>, accuracy: f64, cour
 /// failed until the next fix. One that ended it leaves nothing watching and no
 /// location, and a grant, a return to the foreground or a press starts the
 /// watch again.
-pub fn geolocation_err(code: GeolocationErrorCode, watching: bool) {
+pub(crate) fn geolocation_err(code: GeolocationErrorCode, watching: bool) {
     let store = device_location_store_mut();
     store.state = SensorState::failed(match code {
         GeolocationErrorCode::PermissionDenied => Message::GeolocationPermissionDenied,
@@ -147,7 +153,7 @@ pub fn geolocation_err(code: GeolocationErrorCode, watching: bool) {
     }
 }
 
-pub fn take_geolocation_cmd() -> Option<GeolocationCommand> {
+pub(crate) fn take_geolocation_cmd() -> Option<GeolocationCommand> {
     geolocation().cmd.take()
 }
 

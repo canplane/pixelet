@@ -36,12 +36,12 @@ fn raw() -> &'static Raw {
 }
 
 /// What spawns the core's tasks.
-pub fn spawner() -> Spawner {
+pub(crate) fn spawner() -> Spawner {
     raw().spawner()
 }
 
 /// Polls every task that is queued.
-pub fn poll() {
+pub(crate) fn poll() {
     PENDED.set(false);
     // SAFETY: called from an entry's end alone (link.rs `end`), which no entry
     // re-enters, and never from the pender.
@@ -49,6 +49,6 @@ pub fn poll() {
 }
 
 /// Whether a task has been queued since the last poll began.
-pub fn pending() -> bool {
+pub(crate) fn pending() -> bool {
     *PENDED.get(|| false)
 }

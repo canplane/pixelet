@@ -19,10 +19,10 @@ mod place;
 mod selection;
 mod set;
 
-pub use arrangement::{draw, on_changed, step, tap};
-pub use atlas::atlas;
-pub use chat::append_chat_line;
-pub use design::text_raster;
+pub(crate) use arrangement::{draw, on_changed, step, tap};
+pub(crate) use atlas::atlas;
+pub(crate) use chat::append_chat_line;
+pub(crate) use design::text_raster;
 
 use pxl_spec::brick::BRICK_SHIFT;
 use pxl_spec::space::coord::q3::{self, Q3};
@@ -74,7 +74,7 @@ struct Instance {
 /// What a tap on a scene marker hit: a place to go to, or a pin's entry,
 /// which the tool held decides what to do with.
 #[derive(Clone, Copy)]
-pub enum MarkerHit {
+pub(crate) enum MarkerHit {
     To(Q3),
     Pin(Octant, Q3),
 }

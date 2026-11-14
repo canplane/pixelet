@@ -21,12 +21,12 @@ use pxl_spec::space::coord::adapter::epsg3857::height_u_per_m;
 /// `rot` is a pure rotation: it turns the world's axes into the camera's
 /// right, up and back.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ObserverPose {
+pub(crate) struct ObserverPose {
     pub eye: V3,
     pub rot: Mat4,
 }
 
-pub struct View {
+pub(crate) struct View {
     /// The camera's pose as this frame composed it. None until the camera
     /// stands somewhere.
     pub pose: Option<ObserverPose>,
@@ -64,7 +64,7 @@ impl View {
     /// The pose the matrices are composed at. Until the camera stands
     /// somewhere, this is a rest pose one unit over the origin, and nothing
     /// is drawn from it.
-    pub fn at(&self) -> ObserverPose {
+    pub(crate) fn at(&self) -> ObserverPose {
         self.pose.unwrap_or(ObserverPose {
             eye: [0.0, 0.0, 1.0],
             rot: mat4::new(),
@@ -74,7 +74,7 @@ impl View {
     /// The view-projection and the rotation relative to the eye, as the GPU's
     /// points are (pxl-render gpu/draw.rs `Position`). Neither holds the
     /// eye's position, so no large values cancel in f32.
-    pub fn eye_frame(&self) -> (Mat4, Mat4) {
+    pub(crate) fn eye_frame(&self) -> (Mat4, Mat4) {
         let mut view_proj = mat4::new();
         let rot = self.at().rot;
         mat4::mul(&mut view_proj, &self.proj, &rot);
@@ -84,23 +84,23 @@ impl View {
 
 static VIEW: Global<View> = Global::new();
 
-pub fn view() -> &'static View {
+pub(crate) fn view() -> &'static View {
     view_mut()
 }
 
-pub fn view_mut() -> &'static mut View {
+pub(crate) fn view_mut() -> &'static mut View {
     VIEW.get(View::new)
 }
 
 /// Where the eye stands as the frame composed the view. None until the camera
 /// stands somewhere.
-pub fn eye() -> Option<V3> {
+pub(crate) fn eye() -> Option<V3> {
     Some(view().pose?.eye)
 }
 
 /// The point at sea level under the eye, which a frame is drawn about. What
 /// is drawn relative to it in f32 stays precise near the eye.
-pub fn sea_under_eye() -> V3 {
+pub(crate) fn sea_under_eye() -> V3 {
     let e = view().at().eye;
     [e[0], e[1], 0.0]
 }
@@ -108,7 +108,7 @@ pub fn sea_under_eye() -> V3 {
 /// The eye's longitude and latitude, read from the doubles: the lattice
 /// would hold an eye past the north or south edge at that edge. None until
 /// the camera stands somewhere.
-pub fn globe_anchor() -> Option<G4326> {
+pub(crate) fn globe_anchor() -> Option<G4326> {
     let [x, y, _] = view().pose?.eye;
     Some(epsg4326::from_mercator(&[
         epsg3857::merc_from_u(nearest(x, 0.0)),
@@ -120,14 +120,14 @@ pub fn globe_anchor() -> Option<G4326> {
 /// The longitude and latitude the sky is seen from: the eye's
 /// (`globe_anchor`), or the place the pivot starts from (`FALLBACK_G4326`)
 /// until the camera stands somewhere.
-pub fn anchor() -> G4326 {
+pub(crate) fn anchor() -> G4326 {
     globe_anchor().unwrap_or(FALLBACK_G4326)
 }
 
 /// How many kilometers one unit of height spans where the eye stands. A
 /// unit of height is scaled as the ground is at that latitude (pxl-spec
 /// 3857.rs `height_u_per_m`).
-pub fn km_per_u() -> f64 {
+pub(crate) fn km_per_u() -> f64 {
     let y_u = epsg3857::u_from_merc(epsg4326::to_mercator(&anchor())[1]);
     1.0 / height_u_per_m(y_u) / 1000.0
 }
@@ -137,7 +137,7 @@ pub fn km_per_u() -> f64 {
 /// when either changed. A pointer's place is read against this size. The
 /// pixels the surface is drawn with matter to the drawing alone, since the
 /// camera grid is an angle (lens.rs `CELL`).
-pub fn view_resize(width: f64, height: f64) {
+pub(crate) fn view_resize(width: f64, height: f64) {
     let v = view_mut();
     let (width, height) = (width.max(1.0), height.max(1.0));
     if width == v.width && height == v.height {
@@ -154,7 +154,7 @@ pub fn view_resize(width: f64, height: f64) {
 /// (pxl-spec `world::origin`). The world the rays draw and what is
 /// rasterized on its faces (the location indicator's zone, the ghosts, the
 /// markers' anchors) are then seen from the same eye.
-pub fn view_compose(pose: Option<ObserverPose>) -> bool {
+pub(crate) fn view_compose(pose: Option<ObserverPose>) -> bool {
     let pose = pose.map(|p| ObserverPose {
         eye: p.eye.map(|v| to_real(from_real(v))),
         ..p
@@ -195,7 +195,7 @@ fn compose() {
 /// A pick passes the pose its controller holds, which may have moved since
 /// the frame composed the view. The lens's tangents depend on the screen
 /// alone, so they hold for any pose.
-pub fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, dir: &mut V3) {
+pub(crate) fn ray_of(pose: ObserverPose, ndc_x: f64, ndc_y: f64, origin: &mut V3, dir: &mut V3) {
     let tan = view().frustum.lens().map_or([0.0; 2], |l| l.tan);
     // The rotation turns the world's axes to the camera's; a rotation's
     // transpose turns them back.

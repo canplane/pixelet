@@ -69,7 +69,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Center {
+pub(crate) enum Center {
     Eye,
     Pivot,
     Destination,
@@ -77,7 +77,7 @@ pub enum Center {
 
 /// The most tiles the clip levels other than the eye's want: each such clip
 /// level spans at most two tiles a side, so four tiles.
-pub const PINNED_TILE_CAP: u32 = (CLIP_LEVEL_CNT - EYE_CLIP_LEVEL_CNT) * 4;
+pub(crate) const PINNED_TILE_CAP: u32 = (CLIP_LEVEL_CNT - EYE_CLIP_LEVEL_CNT) * 4;
 const _: () = assert!(
     clipmap::CLIP_SIZE <= TILE_CELLS + 1,
     "a clip level spans two tiles a side"
@@ -385,7 +385,7 @@ fn fold(w: &mut Clipmap) {
 }
 
 /// The words the pool spans, which the GPU's copy of it holds.
-pub fn pool_top() -> u32 {
+pub(crate) fn pool_top() -> u32 {
     way_pool().top()
 }
 
@@ -426,7 +426,7 @@ fn in_flight(b: u32) -> bool {
 /// or a brick went absent again, so they are stepped only then. It runs
 /// before the frame's arrivals and its stage. Returns true where the tiles
 /// the clip levels other than the eye's want changed.
-pub fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
+pub(crate) fn step(at: [Option<[f64; 2]>; 3], on: u32) -> bool {
     let w = clipmap();
     let terrain = TerrainTile::tile_cache();
     let lost = core::mem::replace(&mut w.on, on) != on;
@@ -650,7 +650,7 @@ fn show(w: &mut Clipmap, i: u32) {
 /// read it. The clip levels are folded over the handed bricks once, after all
 /// of them (`fold`). This runs in a frame's stage, before the frame's cast
 /// reads the table. What `write` does not take asks for the next frame.
-pub fn upload(write: &mut TerrainWrite<'_>) {
+pub(crate) fn upload(write: &mut TerrainWrite<'_>) {
     let w = clipmap();
     let mut landed = false;
     for b in 0..SLOT_CNT {
@@ -740,7 +740,7 @@ fn far(cell_zoom: Zoom, first: [i32; 2], q: [i32; 2]) -> i64 {
 /// The tiles the pivot's and a destination's clip levels want, which the
 /// eye's demand need not name. They are held hard, as a destination's line
 /// is (domain/view/demand.rs `observe`).
-pub fn pinned_tiles() -> &'static [Quadrant] {
+pub(crate) fn pinned_tiles() -> &'static [Quadrant] {
     &clipmap().pinned
 }
 
@@ -807,7 +807,7 @@ pub(in crate::domain) fn eye_bricks(cell_zoom: Zoom) -> Option<[EyeBrick; ENTRY_
 /// `step_to`, `level_bound`): one row per entry (pxl-engine `clipmap::Entry`),
 /// one row per clip level (`clipmap::ORIGIN_AT`), then the mip levels folded
 /// over the eye's bricks (`clipmap::JOINED_AT`).
-pub fn table() -> &'static [i32] {
+pub(crate) fn table() -> &'static [i32] {
     let table = &clipmap().table;
     // SAFETY: the table is rows of four plain words end to end (`Table`), and
     // the GPU's are the first of them.
@@ -866,7 +866,7 @@ fn slot_wants(w: &Clipmap, tile: Quadrant, b: u32) -> bool {
 /// (its `separation` and `ele`), so the packet can be
 /// freed afterwards. A brick whose slot the host holds is left absent, and
 /// its tile is asked for again.
-pub fn cut(tile: Quadrant, pkt: &[u8]) {
+pub(crate) fn cut(tile: Quadrant, pkt: &[u8]) {
     let w = clipmap();
     if !(0..SLOT_CNT).any(|b| slot_wants(w, tile, b)) {
         return;
@@ -959,7 +959,7 @@ enum Poll {
 /// always at least one part, so an entry that spent its budget before this
 /// point still moves the fill. What is left, and a filled brick waiting to be
 /// handed over, ask for the next frame.
-pub fn fill_share() {
+pub(crate) fn fill_share() {
     let w = clipmap();
     if core::mem::take(&mut w.due_stale) {
         due(w);
@@ -1325,7 +1325,7 @@ impl Base for TerrainTile {
 /// How many tiles may be asked for their packets again now: the spare body
 /// slots (sys/io/request.rs `spare_slot_cnt`) less the tiles already asked
 /// again whose packets have not come (`step`).
-pub fn refetch_cap() -> u32 {
+pub(crate) fn refetch_cap() -> u32 {
     // A tile whose object failed is not counted, since it is not read again
     // while it is wanted.
     let coming = TerrainTile::tile_cache()

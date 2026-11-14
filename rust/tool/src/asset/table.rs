@@ -32,8 +32,8 @@ pub enum Face {
 }
 
 impl Face {
-    /// Every face, in the pack's order: the members of the CubeFace the
-    /// specs' ingest writes (spec/ingest.rs).
+    /// Every face, in the pack's order: the members of the `CubeFace` the
+    /// specs' ingest writes (`spec/ingest.rs`).
     pub const ALL: [Face; 3] = [Face::Top, Face::Side, Face::Bottom];
 
     pub fn name(self) -> &'static str {
@@ -91,7 +91,7 @@ pub fn faces(
 
 /// The table as `spec/spec/asset/ingest.json5`, laid out as prettier lays it
 /// out, which `cargo spec` renders into the host's table, the pack's layout
-/// and the catalog (pxl-tool spec/ingest.rs, spec/catalog.rs).
+/// and the catalog (pxl-tool `spec/ingest.rs`, `spec/catalog.rs`).
 pub fn render_json(rows: &[Row], pack: &Pack, symbols: &[String]) -> String {
     let string = |s: &str| format!("{s:?}");
     let doc = [

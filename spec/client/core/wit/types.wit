@@ -5,8 +5,8 @@ interface types {
   enum sensor { geolocation, orient }
 
   // Why the core refused what it was asked, as WASI's interfaces answer an
-  // error-code, each case named as WASI names the same error; `too-long` is
-  // the core's own. A caller's bug is refused instead, EINVAL in the
+  // `error-code`, each case named as WASI names the same error; `too-long` is
+  // the core's own. A caller's bug is refused instead, `EINVAL` in the
   // answer's status.
   enum error-code {
     // The settings are not read yet, and a change would be overwritten.

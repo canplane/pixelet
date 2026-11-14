@@ -3,7 +3,7 @@ package xpute:fs@0.1.0;
 // What xpute's files share, as wasi:filesystem's `types` holds them.
 interface types {
   // Why a file's method failed, each case named as wasi:filesystem's
-  // error-code, or wasi:sockets', names the same error; `bad-message` and
+  // `error-code`, or wasi:sockets', names the same error; `bad-message` and
   // `no-object` are xpute's own. A failure of the link, such as a canceled
   // method, is the frame's status instead.
   enum error-code {

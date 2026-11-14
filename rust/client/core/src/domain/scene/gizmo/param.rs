@@ -4,7 +4,7 @@
 //! rings about the pivot.
 
 /// Half the length of each arm of the cross a point is drawn as.
-pub const POINT_HALF: f64 = 0.15;
+pub(crate) const POINT_HALF: f64 = 0.15;
 
 /// The radius of the rings drawn about the pivot, in units.
-pub const RING_RADIUS: f64 = 4.0;
+pub(crate) const RING_RADIUS: f64 = 4.0;

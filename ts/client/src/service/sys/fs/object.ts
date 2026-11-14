@@ -107,7 +107,7 @@ export function decode_top(bytes: U8Array): TopRow[] {
   return shard.map((s, r) => ({ shard: s, fold: fold[r]! }));
 }
 
-export function encode_top(rows: readonly TopRow[]): U8Array {
+function encode_top(rows: readonly TopRow[]): U8Array {
   const tree = new TreeView();
   // The fields go in the order file.json5's `top` lists them.
   tree.branch((b) =>

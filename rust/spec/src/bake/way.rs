@@ -1,6 +1,6 @@
 // pxl-spec/bake/way.rs
 
-//! A way covers the cells along its line by way.rs's rule (`on_way`, `reach2`), on
+//! A way covers the cells along its line by `way.rs`'s rule (`on_way`, `reach2`), on
 //! the ground and on a deck alike. An approach's asset id is laid into a leaf's cells
 //! (`lay`), so every zoom folds it as the ground's; its embankment or cutting stays a line.
 
@@ -13,7 +13,7 @@ use crate::procedural::Frame;
 use crate::space::layer::lattice::TILE_CELLS;
 
 /// Lays an approach's lines into the asset ids of a leaf at `frame`: each cell a line
-/// crosses takes the way's asset_id, the highest way's where two cross one. Bedrock and kinds that
+/// crosses takes the way's asset id, the highest way's where two cross one. Bedrock and kinds that
 /// do not ground are left as they are, as the ground's face takes no way there; an
 /// embankment's or a cutting's height stays its line's.
 pub fn lay(sep: &Separation, frame: Frame, asset_ids: &mut [GroundId]) {

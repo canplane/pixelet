@@ -60,11 +60,11 @@ fn local_dir(ra: f64, dec: f64, lat: f64, lon: f64, d: f64) -> [f64; 3] {
 }
 
 /// Days since J2000.0 at Unix milliseconds `unix_ms`.
-pub fn j2000_days(unix_ms: f64) -> f64 {
+pub(crate) fn j2000_days(unix_ms: f64) -> f64 {
     unix_ms / 86_400_000.0 + 2_440_587.5 - 2_451_545.0
 }
 
-pub fn sun_pos(d: f64, lat: f64, lon: f64) -> [f64; 3] {
+pub(crate) fn sun_pos(d: f64, lat: f64, lon: f64) -> [f64; 3] {
     let (ra, dec, _) = sun_equatorial(d);
     local_dir(ra, dec, lat, lon, d)
 }
@@ -73,7 +73,7 @@ pub fn sun_pos(d: f64, lat: f64, lon: f64) -> [f64; 3] {
 /// the pole) to local axes (X east, Y north, Z up), as rows. The sun, the
 /// moon and the nine thousand stars all turn by this one rotation, so they
 /// stay in place against each other.
-pub fn equatorial_to_local(d: f64, lat: f64, lon: f64) -> [[f64; 3]; 3] {
+pub(crate) fn equatorial_to_local(d: f64, lat: f64, lon: f64) -> [[f64; 3]; 3] {
     let (sl, cl) = libm::sincos(local_sidereal(d, lon) * DEG);
     let (sp, cp) = libm::sincos(lat * DEG);
     [
@@ -83,7 +83,7 @@ pub fn equatorial_to_local(d: f64, lat: f64, lon: f64) -> [[f64; 3]; 3] {
     ]
 }
 
-pub fn moon_pos(d: f64, lat: f64, lon: f64) -> [f64; 3] {
+pub(crate) fn moon_pos(d: f64, lat: f64, lon: f64) -> [f64; 3] {
     let (_, _, obliquity) = sun_equatorial(d);
     let (ra, dec) = moon_equatorial(d, obliquity);
     local_dir(ra, dec, lat, lon, d)

@@ -27,7 +27,7 @@ pub const PKT: u32 = 3;
 /// The frame's length in words.
 pub const WORDS: u32 = 4;
 
-/// The bit of the command that marks a later answer.
+/// The bit of the command that marks an answer.
 pub const RES: u32 = 2147483648;
 
 /// The bits of the command below the handle, which hold the method.

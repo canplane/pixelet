@@ -126,9 +126,9 @@ pub fn device_settled(device_: _rt::Handle) -> impl _rt::Future<Output = Result<
 }
 
 mod _rt {
-    pub use core::future::Future;
-    pub use xpute_guest::{link, wait};
-    pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::abi::types::Lent;
-    pub use xpute_link::{answer, Handle, Lend, Lift, Lower, Method};
+    pub(super) use core::future::Future;
+    pub(super) use xpute_guest::{link, wait};
+    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_link::abi::types::Lent;
+    pub(super) use xpute_link::{answer, Handle, Lend, Lift, Lower, Method};
 }

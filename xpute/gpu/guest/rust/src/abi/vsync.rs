@@ -17,8 +17,8 @@ pub fn next() -> impl _rt::Future<Output = Result<(), _rt::Errno>> {
 }
 
 mod _rt {
-    pub use core::future::Future;
-    pub use xpute_guest::wait;
-    pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::{answer, Handle, Method};
+    pub(super) use core::future::Future;
+    pub(super) use xpute_guest::wait;
+    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_link::{answer, Handle, Method};
 }

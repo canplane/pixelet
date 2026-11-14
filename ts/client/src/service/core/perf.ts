@@ -64,7 +64,7 @@ const site = (strtab: U8Array, file: u32, bytes: u32, line: u32) =>
     : `${file === 0 ? "?" : td.decode(strtab.subarray(file, file + bytes))}:${line}`;
 
 /** The FRAME columns that are lists, one word for each name in the list. */
-export const LIST_COLUMNS = ["phases", "effects", "gpu_spans"] as const;
+const LIST_COLUMNS = ["phases", "effects", "gpu_spans"] as const;
 export type ListColumn = (typeof LIST_COLUMNS)[number];
 export type FrameColumn = Exclude<keyof typeof FRAME, "WORDS">;
 type ScalarColumn = Exclude<FrameColumn, ListColumn>;
@@ -197,17 +197,17 @@ export interface Worst {
   } | null;
 }
 
-export type Section<S> = { [K in Exclude<keyof S, "AT" | "WORDS">]: f64 };
+type Section<S> = { [K in Exclude<keyof S, "AT" | "WORDS">]: f64 };
 export type ViewSection = Section<typeof NOW.view>;
-export type DrawSection = Section<typeof NOW.draw>;
+type DrawSection = Section<typeof NOW.draw>;
 /** The highest or lowest values the frames held since the recording started
  * (STAT.recording). */
 export type RecordingSection = Section<typeof STAT.recording>;
 export type RayCount = { [K in (typeof FRAME_GROUP.rays)[number]]: f64 };
 
-/** What PERF_STATS sums over its window, section by section. `recording` and
+/** What `perf.stats` sums over its window, section by section. `recording` and
  * `steps` are over the whole recording instead, from when it started. */
-export interface Summary {
+interface Summary {
   recording_state: {
     recording: boolean;
     elapsed_ms: f64;
@@ -333,7 +333,7 @@ function section<S extends { AT: u32; WORDS: u32 }>(
   return out as Section<S>;
 }
 
-/** STAT's words over `window_ms` and NOW's, as PERF_STATS's reply names
+/** STAT's words over `window_ms` and NOW's, as `perf.stats`'s reply names
  * them. */
 async function stats_of(
   window_ms: f64 | null,
@@ -380,7 +380,7 @@ const RING_WORDS = [FRAME.WORDS, TASK.WORDS, WORST.WORDS] as const;
 
 /** The records of the ring `name`: the frames and the tasks oldest first,
  * the worst frames longest first, read a page at a time until a page comes
- * short (perf.json5 LIMIT.PAGE_BYTES). */
+ * short (`perf.json5` `LIMIT.PAGE_BYTES`). */
 async function ring(name: (typeof RING_NAMES)[number]): Promise<U8Array> {
   const k = RING_NAMES.indexOf(name);
   const record = 8 * RING_WORDS[k]!;

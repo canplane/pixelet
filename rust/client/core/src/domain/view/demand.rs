@@ -46,7 +46,7 @@ use pxl_spec::space::layer::demand::tiles_within;
 use pxl_spec::space::layer::lattice::{demand_dist, GROUND};
 
 /// A base layer whose demand the view holds, beside its tile cache.
-pub trait DemandedBase: Base {
+pub(crate) trait DemandedBase: Base {
     fn demand() -> &'static mut Demand<Self>;
 }
 
@@ -81,7 +81,7 @@ impl DemandedBase for EarthTile {
 
 /// What the fetch side needs of a layer, found by the stream its tiles come
 /// in (`Stream::of_layer`).
-pub struct Layer {
+pub(crate) struct Layer {
     pub stream: Stream,
     /// The most tiles the layer asks for at once: a base layer's tile cache
     /// slots, or for the objects the shards around the eye or their top.
@@ -137,7 +137,7 @@ const _: () = {
 };
 
 /// The layer whose tiles `stream` carries. None for a stream of assets.
-pub fn of_stream(stream: Stream) -> Option<&'static Layer> {
+pub(crate) fn of_stream(stream: Stream) -> Option<&'static Layer> {
     LAYERS.iter().find(|l| l.stream == stream)
 }
 
@@ -182,7 +182,7 @@ struct Key {
     dst: Option<Quadrant>,
 }
 
-pub struct Demand<L: DemandedBase> {
+pub(crate) struct Demand<L: DemandedBase> {
     layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
     wants: Vec<(u64, Order)>,
@@ -245,7 +245,7 @@ impl<L: DemandedBase> Default for Demand<L> {
 
 impl<L: DemandedBase> Demand<L> {
     /// The floor's tiles as last observed.
-    pub fn floor(&self) -> impl Iterator<Item = Quadrant> + Clone + '_ {
+    pub(crate) fn floor(&self) -> impl Iterator<Item = Quadrant> + Clone + '_ {
         self.floor.iter().copied()
     }
 
@@ -253,7 +253,7 @@ impl<L: DemandedBase> Demand<L> {
     /// zoom (`Base::min_zoom`) or coarser, `p` takes the layer's empty tile
     /// where it has one (`Base::empty`); otherwise the tile over `p` gives its
     /// ground.
-    pub fn absent(&mut self, p: Quadrant) {
+    pub(crate) fn absent(&mut self, p: Quadrant) {
         match L::empty() {
             Some(empty) if L::min_zoom().is_some_and(|min| p.zoom <= min) => {
                 L::tile_cache().set(p, empty);
@@ -262,7 +262,7 @@ impl<L: DemandedBase> Demand<L> {
         }
     }
 
-    pub fn admit(
+    pub(crate) fn admit(
         &mut self,
         p: Quadrant,
         receive: impl FnOnce(u32) -> Result<L, Exit>,
@@ -286,7 +286,7 @@ impl<L: DemandedBase> Demand<L> {
 
     /// Builds the asks for `o`: the estimator's demand, the floor, and the
     /// destination's line with the pinned tiles (`dst`).
-    pub fn observe(
+    pub(crate) fn observe(
         &mut self,
         o: Option<&Observation>,
         dst: impl Iterator<Item = Quadrant>,
@@ -483,7 +483,7 @@ impl<L: DemandedBase> Demand<L> {
     /// (`Base::PIN_CAP`), and they are asked for as the destination is. A
     /// layer with a top of its own (`Base::MIN_ZOOM`) is observed out to that
     /// top's reach.
-    pub fn step(&mut self, dst: Option<Quadrant>, pinned: &[Quadrant]) {
+    pub(crate) fn step(&mut self, dst: Option<Quadrant>, pinned: &[Quadrant]) {
         let Some(min_zoom) = L::min_zoom() else {
             return;
         };
@@ -549,14 +549,14 @@ impl<L: DemandedBase> Demand<L> {
 
     /// Marks that what the layer reads moved: its own tiles, the ground or
     /// the objects.
-    pub fn on_changed(&mut self) {
+    pub(crate) fn on_changed(&mut self) {
         self.changed = true;
     }
 
     /// Keeps what a layer the view does not show holds, and asks for nothing.
     /// Its tile cache drops its asks again only when what it holds moved
     /// since the last time (`TileCache::revision`).
-    pub fn idle(&mut self) {
+    pub(crate) fn idle(&mut self) {
         if self
             .idle_revision
             .is_some_and(|r| r == L::tile_cache().revision())
@@ -595,7 +595,7 @@ static OBJECT: Global<Option<ObjectKey>> = Global::new();
 /// and nearer ones first. The repository reads their top first, which a
 /// view from afar draws from. Then it reads the shards the top lists and it
 /// has not read, and places each in the view only once it is listed.
-pub fn object_step() {
+pub(crate) fn object_step() {
     let (o, top) = (observation(), source::min_zoom());
     let now = Some((o, top, repository::revision()));
     let last = OBJECT.get(|| None);
@@ -618,7 +618,7 @@ pub fn object_step() {
 /// (`LAYERS`), within the entry's budget, and at least one where any has
 /// arrived. Each fetch settles here. What the budget leaves stays queued, and
 /// a frame is asked for it.
-pub fn admit_arrived() {
+pub(crate) fn admit_arrived() {
     const OF: [Stream; LAYERS.len()] = {
         let mut of = [Stream::Asset; LAYERS.len()];
         let mut k = 0;

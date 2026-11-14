@@ -13,15 +13,7 @@ use std::sync::OnceLock;
 use xpute_kit::status::errno::Errno;
 use xpute_native_runtime::abi;
 use xpute_native_runtime::log;
-
-/// The guest's report.
-pub struct Stop {
-    pub errnum: i32,
-    pub file: String,
-    pub line: u32,
-    pub n1: u64,
-    pub n2: u64,
-}
+use xpute_native_runtime::native::Stop;
 
 struct Report(fn(Stop));
 

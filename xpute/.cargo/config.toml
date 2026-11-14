@@ -1,7 +1,6 @@
 # These are the workspace's own commands, run from xpute/ as the root's tasks
 # do: what a check holds a change to.
 [alias]
-lint = ["clippy", "--all-targets", "--", "-D", "warnings"]
 test-gpu = ["test", "-p", "xpute-gpu-native-host"]
 # `cargo spec` says which files generated from spec/ are stale, and
 # `cargo spec --write` writes them.

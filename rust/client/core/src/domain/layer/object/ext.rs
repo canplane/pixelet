@@ -1,21 +1,21 @@
 // pxl-core/domain/layer/object/ext.rs
 
 //! The records placed things carry beyond their ids, in one pool for each
-//! class of record (pxl-spec object/ext.rs). A leaf names its record by the
+//! class of record (pxl-spec object.rs). A leaf names its record by the
 //! record's place in its class's pool, so a record lives and goes with the
 //! leaf that names it. Records are allocated on the heap, whose slab keeps
 //! small ones together.
 
-use pxl_spec::object::ext::Class;
+use pxl_spec::object::Class;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Ext {
+pub(crate) enum Ext {
     /// A marker's text, at most `MARKER_TEXT_CHARS` long.
     MarkerText(String),
 }
 
 impl Ext {
-    pub fn class(&self) -> Class {
+    pub(crate) fn class(&self) -> Class {
         match self {
             Ext::MarkerText(_) => Class::MarkerText,
         }
@@ -23,7 +23,7 @@ impl Ext {
 }
 
 /// The handle of no record. Any other handle is its record's slot plus one.
-pub const NONE: u16 = 0;
+pub(crate) const NONE: u16 = 0;
 
 #[derive(Default)]
 struct ClassPool {
@@ -32,14 +32,14 @@ struct ClassPool {
 }
 
 #[derive(Default)]
-pub struct Pool {
+pub(crate) struct Pool {
     pools: [ClassPool; Class::ALL.len()],
 }
 
 impl Pool {
     /// Keeps `ext` in its class's pool and returns its handle. None when the
     /// pool already holds as many records as a handle can name.
-    pub fn keep(&mut self, ext: Ext) -> Option<u16> {
+    pub(crate) fn keep(&mut self, ext: Ext) -> Option<u16> {
         let pool = &mut self.pools[ext.class() as usize];
         if let Some(h) = pool.free.pop() {
             pool.slots[usize::from(h - 1)] = Some(ext);
@@ -50,12 +50,12 @@ impl Pool {
         Some(h)
     }
 
-    pub fn get(&self, class: Class, h: u16) -> Option<&Ext> {
+    pub(crate) fn get(&self, class: Class, h: u16) -> Option<&Ext> {
         let slot = usize::from(h.checked_sub(1)?);
         self.pools[class as usize].slots.get(slot)?.as_ref()
     }
 
-    pub fn free(&mut self, class: Class, h: u16) {
+    pub(crate) fn free(&mut self, class: Class, h: u16) {
         let pool = &mut self.pools[class as usize];
         if let Some(slot) = h
             .checked_sub(1)

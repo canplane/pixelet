@@ -139,9 +139,9 @@ pub fn file_close(
 }
 
 mod _rt {
-    pub use crate::wait;
-    pub use core::future::Future;
-    pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::abi::types::Lent;
-    pub use xpute_link::{answer, Handle, Lend, Lift, Lower, Method};
+    pub(super) use crate::wait;
+    pub(super) use core::future::Future;
+    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_link::abi::types::Lent;
+    pub(super) use xpute_link::{answer, Handle, Lend, Lift, Lower, Method};
 }

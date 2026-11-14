@@ -220,8 +220,8 @@ an eye sees and the pointer strikes include it; a body reads the layers alone.
 ### Honest answers, bounded holding
 
 An answer always says what it lacked: it is exact, or coarser along with the
-tile it needed, or nothing along with that tile (`domain/layer/answer.rs`
-`Answer`). Where the tile is missing, a coarser one answers in its place; where
+tile it needed, or a lack, which gives no value, along with that tile
+(`domain/layer/answer.rs` `Answer`). Where the tile is missing, a coarser one answers in its place; where
 none is held, the ray stops and says nothing past it. Nothing is invented.
 
 What the view fetches is **demand**: for each zoom, every tile within that
@@ -354,11 +354,11 @@ The renderer is centred on rays, and what the CPU and the GPU both decide, a
 ray's walk and the decor the ground grows, is written twice: in Rust
 (pxl-engine, pxl-content), and again by hand in WGSL. The two have to decide
 alike, or the world would be drawn where it cannot be walked, so that part of
-them is coupled: a test holds every compute pass over the world to the engine's
-Rust, word for word, over a real world's buffers (`rust/client/render/tests/`).
-Positions are integers on both sides, and any value a rule would divide by or
-take the root of is rounded once on the CPU and handed to the GPU, so the two
-never round differently.
+them is coupled: tests hold the compute passes over the world to the engine's
+Rust over a real world's buffers (`rust/client/render/tests/`).
+Positions are integers on both sides, and any value a rule of the world's state
+would divide by or take the root of is rounded once on the CPU and handed to the
+GPU. A drawing's floats may still part, and nothing reads them back.
 
 ### What is not a layer
 
@@ -436,8 +436,8 @@ noticing:
 - The UI computes no coordinate and no tile, and reaches the core only through
   `service/core/` and the bindings generated from WIT.
 - Nothing under `xpute/` knows pixelet: no tile, no world, no pixelet name.
-- The CPU and the GPU give the same answer to the same question, held by tests
-  word for word.
+- The CPU and the GPU decide the world's state alike, held by tests word for
+  word.
 - A tunable number is never a correctness bound: at its least the view still
   converges, only coarser or later.
 - Nothing is fetched on a guess, and nothing goes from fine back to coarse.
@@ -481,7 +481,7 @@ up, and the folders are that order. The check-rules tool holds it.
 
     scene/       what this frame draws          ┐ two heads; neither
     control/     moves the eye, asks the query  ┘ names the other
-    setting/     the settings both heads read
+    setting      the settings both heads read
     view/        the pose, the lens, demand     ┐
     query/       the only seam                  ├ the trunk
     layer/       the base and the objects       ┘

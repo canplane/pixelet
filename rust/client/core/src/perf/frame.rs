@@ -16,7 +16,7 @@ use pxl_render::spec::span::GpuSpanName;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct GpuSample {
+pub(crate) struct GpuSample {
     /// This frame's GPU timings. They land a frame or two later and are
     /// written back into this record (record.rs `perf_record_gpu`). `timed`
     /// is 1 when the frame was measured, and otherwise 0 with every field 0.
@@ -58,7 +58,7 @@ impl Default for GpuSample {
 /// renderer.rs `FrameStat`).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct DeviceSample {
+pub(crate) struct DeviceSample {
     pub upload_cnt: f64,
     pub upload_bytes: f64,
     pub pack_bytes: f64,
@@ -68,7 +68,7 @@ pub struct DeviceSample {
 /// lands when the next frame closes the interval.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct FrameSample {
+pub(crate) struct FrameSample {
     pub t: f64,
     /// The interval from this frame to the next. It is not the world's step,
     /// which is capped at MAX_STEP_S.
@@ -113,7 +113,7 @@ pub struct FrameSample {
 /// lanes divide up what an observer cast again of its pixels or slots.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct RaySample {
+pub(crate) struct RaySample {
     pub eye_cast: f64,
     pub eye_ray_cnt: f64,
     pub eye_beam: f64,
@@ -138,7 +138,7 @@ pub struct RaySample {
 
 impl RaySample {
     /// Reads the renderer's counts, laid out in `RAY_CNT_CNT` order.
-    pub fn of(c: [f64; ray::RAY_CNT_CNT]) -> RaySample {
+    pub(crate) fn of(c: [f64; ray::RAY_CNT_CNT]) -> RaySample {
         let at = |o: u32, k: usize| c[ray::cnt_at(o, k)];
         let lane = |o: u32, l: u32| at(o, ray::LANES_AT + l as usize);
         let (eye, light) = (count::EYE, count::LIGHT);
@@ -166,7 +166,7 @@ impl RaySample {
         }
     }
 
-    pub fn add(&mut self, o: &RaySample) {
+    pub(crate) fn add(&mut self, o: &RaySample) {
         let (to, from) = (as_words_mut(self), as_words(o));
         for (t, f) in to.iter_mut().zip(from) {
             *t += f;
@@ -178,7 +178,7 @@ impl RaySample {
 /// (perf.json5 WORST).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct WorstFrame {
+pub(crate) struct WorstFrame {
     pub sample: FrameSample,
     pub has_prev: f64,
     pub upload_cnt_delta: f64,
@@ -189,7 +189,7 @@ pub struct WorstFrame {
 impl WorstFrame {
     /// The worst frame `s`, with what changed since `prev`, the frame before
     /// it, when there was one.
-    pub fn of(s: FrameSample, prev: Option<&FrameSample>) -> WorstFrame {
+    pub(crate) fn of(s: FrameSample, prev: Option<&FrameSample>) -> WorstFrame {
         let Some(p) = prev else {
             return WorstFrame {
                 sample: s,
@@ -241,10 +241,10 @@ words!(WorstFrame, worst::WORDS,
     upload_delta_bytes => worst::UPLOAD_DELTA_BYTES, heap_used_delta_bytes => worst::HEAP_USED_DELTA_BYTES,
 );
 
-pub const GPU_SPAN_CNT: usize = GpuSpanName::ALL.len();
-pub const EFFECT_CNT: usize = EffectName::ALL.len();
+pub(crate) const GPU_SPAN_CNT: usize = GpuSpanName::ALL.len();
+pub(crate) const EFFECT_CNT: usize = EffectName::ALL.len();
 
 /// Whether the tick ran past the entry's budget.
-pub fn overran(f: &FrameSample) -> bool {
+pub(crate) fn overran(f: &FrameSample) -> bool {
     f.tick_ms > f.budget_ms
 }

@@ -45,7 +45,7 @@ fn declared_source() -> Option<&'static Source> {
 /// core cannot follow it: a zoom outside the pyramid, a name that is no shard
 /// or that names a node over shards (pxl-spec bake/source.rs), or a kind with
 /// no format or with a format the core does not read.
-pub fn declare<'a>(
+pub(crate) fn declare<'a>(
     min_zoom: u32,
     format: &[u32],
     shard: impl IntoIterator<Item = &'a str>,
@@ -157,25 +157,25 @@ fn node_of(zoom: Zoom, at: [i32; 2]) -> Option<usize> {
 }
 
 /// The coarsest zoom the source supplies whole; none until it is declared.
-pub fn min_zoom() -> Option<Zoom> {
+pub(crate) fn min_zoom() -> Option<Zoom> {
     declared_source().map(|s| s.min_zoom)
 }
 
 /// Whether a served shard is over or under `p`. A kind that shards do not
 /// hold is served everywhere.
-pub fn serves(layer: BaseKind, p: Quadrant) -> bool {
+pub(crate) fn serves(layer: BaseKind, p: Quadrant) -> bool {
     !is_sharded(layer) || declared_source().is_some_and(|s| s.covers(p))
 }
 
 /// The nine of each cell of the area, by key, as a GPU's area reads them.
 /// It is empty before a source is declared.
-pub fn nines() -> &'static [u16] {
+pub(crate) fn nines() -> &'static [u16] {
     declared_source().map_or(&[], |s| &s.nine)
 }
 
 /// The service area as pxl-engine's rules read it: the declared shards.
 /// Before they are declared, the area has no end.
-pub struct ServiceArea;
+pub(crate) struct ServiceArea;
 
 impl Area for ServiceArea {
     fn ends(&self) -> bool {

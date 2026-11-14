@@ -43,13 +43,13 @@ use crate::sys::sched::invalidate;
 use pxl_engine::object::{self, path, NodeSlot};
 use pxl_render::gpu::api;
 use pxl_render::ray::ObjectTable;
-use pxl_spec::object::ext::class_of;
+use pxl_spec::object::class_of;
 
 /// A leaf as an asker meets it: its cube, with its X index taken in the
 /// asker's frame since X wraps around the world, its asset id, and the
 /// handle of its record in its class's pool.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Entry {
+pub(crate) struct Entry {
     pub zoom: Zoom,
     pub at: [i32; 3],
     pub asset_id: AssetId,
@@ -57,23 +57,23 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn id(&self) -> Octant {
+    pub(crate) fn id(&self) -> Octant {
         Octant::new(self.zoom, self.at)
     }
 
-    pub fn size(&self) -> f64 {
+    pub(crate) fn size(&self) -> f64 {
         units(self.zoom)
     }
 
-    pub fn corner(&self) -> Q3 {
+    pub(crate) fn corner(&self) -> Q3 {
         base_of(self.zoom, self.at)
     }
 
-    pub fn cube(&self) -> Aabb {
+    pub(crate) fn cube(&self) -> Aabb {
         cube(self.zoom, self.at)
     }
 
-    pub fn asset(&self) -> Asset {
+    pub(crate) fn asset(&self) -> Asset {
         Asset::of(self.asset_id)
     }
 }
@@ -135,7 +135,7 @@ static UPLOAD: Global<Upload> = Global::new();
 /// live, and `cap` is the room each has before it grows. A GPU that holds the
 /// revision last handed copies again only the child groups written since that
 /// revision.
-pub fn objects() -> ObjectTable<'static> {
+pub(crate) fn objects() -> ObjectTable<'static> {
     let h = UPLOAD.get(|| Upload {
         since: 0,
         written: Vec::new(),
@@ -199,7 +199,7 @@ impl object::Table for Table<'_> {
 /// One leaf written, as `<key, asset_id, ext>`: its node's key, its asset id
 /// and the record it carries. An asset id of `Sentinel::Void` erases the leaf.
 #[derive(Clone, Debug)]
-pub struct Write {
+pub(crate) struct Write {
     pub at: u128,
     pub asset_id: AssetId,
     pub ext: Option<Ext>,
@@ -207,7 +207,7 @@ pub struct Write {
 
 impl Write {
     /// A write of `asset_id` at cube `at`, with no record.
-    pub fn at(at: Octant, asset_id: AssetId) -> Write {
+    pub(crate) fn at(at: Octant, asset_id: AssetId) -> Write {
         Write {
             at: at.id(),
             asset_id,
@@ -218,7 +218,7 @@ impl Write {
 
 /// The placed objects: one tree of leaves in which each branch holds its
 /// children folded, one word for each slot.
-pub struct Store {
+pub(crate) struct Store {
     tree: Tree,
     ext: Pool,
     /// A counter that advances with every write that changes the tree, so a
@@ -329,7 +329,7 @@ impl Store {
     /// same: the record it replaces is freed first, so the new record reuses
     /// that slot and handle, and new text under the old handle leaves the
     /// word as it was.
-    pub fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> Vec<Aabb> {
+    pub(crate) fn write(&mut self, writes: impl IntoIterator<Item = Write>) -> Vec<Aabb> {
         let mut changed = Vec::new();
         for Write {
             at: k,

@@ -28,7 +28,7 @@ const _: () = assert!((u32::MAX.ilog10() as usize) < TASK_PATH_BYTES);
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct TaskRecord {
+pub(crate) struct TaskRecord {
     pub stream: f64,
     /// The name of the path the task opened, as text, zero past its end.
     pub path: [u8; TASK_PATH_BYTES],
@@ -81,7 +81,7 @@ impl TaskRecord {
     /// The row of `a`, which ended at `at` with `exit`, and the phase timings
     /// its run reported. `name_at` gives a failure's file name its offset in
     /// the profiler's string table, or none where the table has no room.
-    pub fn of(
+    pub(crate) fn of(
         a: &Attempt,
         at: f64,
         exit: Exit,

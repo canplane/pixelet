@@ -1,7 +1,7 @@
 // cpp/xpute/link/cabi.hpp
 
 // A packet's values in the Component Model's Canonical ABI layout, as
-// xpute-link's cabi.rs lays them: each at its type's alignment,
+// xpute-link's `cabi.rs` lays them: each at its type's alignment,
 // little-endian, a record's fields in order, a variant its discriminant and
 // then its payload. A string's or a list's bytes lie past the packet's fixed
 // part, and their pointer is an offset from the packet's start. A packet past

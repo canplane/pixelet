@@ -4,7 +4,8 @@
 //! entry, which xpute's link runs (lib.rs `link!`). The boot mounts what the
 //! core serves and starts its tasks; the start begins the entry's budget;
 //! the end runs the core's tasks until none is ready and tells the UI what
-//! changed.
+//! changed, and the overlay whole to a UI that has just started
+//! (`tell_all`).
 
 pub mod bound;
 mod export;
@@ -16,7 +17,7 @@ use crate::abi;
 use crate::abi::types::Sensor;
 use crate::domain::layer::object::repository;
 use crate::domain::scene::character::surface::character_surface_close;
-use crate::domain::setting::store::{on_settings_set_aside, settings_open};
+use crate::domain::setting::{on_settings_set_aside, settings_open};
 use crate::domain::view::demand;
 use crate::frame;
 use crate::perf::record::perf_record;
@@ -42,7 +43,7 @@ use xpute_kit::status::errno::Errno;
 
 struct State {
     /// The UI snapshot and view last posted. Each is posted again only when
-    /// it changes.
+    /// it changes, or when a UI starts (`tell_all`).
     last_snapshot: SnapshotMemo,
 }
 
@@ -141,8 +142,8 @@ pub fn end() -> bool {
             }
         }
     }
-    // A refused file set aside goes back to its owner, which reads it
-    // again: the settings from their next keep on, the objects' file now.
+    // A refused file set aside goes back to its owner: the settings write
+    // theirs from their next keep on, and the objects' file is read again now.
     while let Some(r) = file::take_set_aside() {
         match r {
             file::Refused::Storage => on_settings_set_aside(),
@@ -155,6 +156,15 @@ pub fn end() -> bool {
     api::gpu_flush();
     post_ui(state());
     executor::pending()
+}
+
+/// Tells a UI that has just started where everything stands, at this
+/// entry's end: the snapshot and the view whole, as nothing was posted to
+/// it. The runtime tells the core each UI that attaches (xpute's
+/// `life.attached`), the first and one a reload makes on the same core alike;
+/// its sensors start with its world's surface (`sensors_open`).
+fn tell_all() {
+    state().last_snapshot = SnapshotMemo::default();
 }
 
 /// Tells the other side what changed: the sensors to watch or not, and what

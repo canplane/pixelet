@@ -6,18 +6,20 @@
     "node": ">=24"
   },
   "scripts": {
-    "check": "pnpm fmt:check && pnpm lint && pnpm typecheck",
+    "check": "pnpm fmt:check && pnpm lint && pnpm typecheck && pnpm knip",
     "typecheck": "tsc -p . && tsc -p client/tsconfig.native.json && tsc -p server/edge",
     "test": "vitest run --exclude 'tool/shader/**'",
     "fmt": "prettier --write .",
     "fmt:check": "prettier --check .",
-    "lint": "oxlint"
+    "lint": "oxlint",
+    "knip": "knip"
   },
   "devDependencies": {
     "@types/node": "^24",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@webgpu/types": "~0.1.74",
+    "knip": "^6.45.1",
     "oxlint": "^1.90.0",
     "prettier": "^3.9.10",
     "typescript": "^7.0.2",

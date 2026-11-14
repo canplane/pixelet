@@ -17,16 +17,16 @@
 //! the eye is the pivot. A character surface draws it whole, before the
 //! surface's own eye (`surface.rs`).
 
-pub mod companion;
-pub mod param;
-pub mod surface;
+pub(crate) mod companion;
+pub(crate) mod param;
+pub(crate) mod surface;
 
 use pxl_render::frame::shader::record::PIPELINE_SKINNED;
 use pxl_render::gpu::api::{word_bytes, Image};
 use pxl_render::gpu::draw::{scaled_draw, Draw, DrawId, DrawList, Position, ReceiverBox};
 use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::character::group::{person, pet};
-pub use pxl_spec::asset::character::Group;
+pub(crate) use pxl_spec::asset::character::Group;
 use pxl_spec::space::coord::v3;
 use xpute_guest::clock::now;
 use xpute_link::mem;
@@ -44,11 +44,11 @@ use crate::sys::heap;
 use crate::sys::io::loader::{load_image, load_of};
 use crate::sys::sched::invalidate_at;
 
-pub const CHARACTER_CNT: usize = person::MODELS.len() + pet::MODELS.len();
+pub(crate) const CHARACTER_CNT: usize = person::MODELS.len() + pet::MODELS.len();
 
 /// One model a character, registered once at the character's own height. A
 /// character surface's draw scales the model to one unit tall.
-pub const MODEL_CAP: usize = CHARACTER_CNT;
+pub(crate) const MODEL_CAP: usize = CHARACTER_CNT;
 
 /// The catalog row `number` of `group`: its model, its skin, its height in
 /// units and its walk clip. None past the group's last row.
@@ -71,7 +71,7 @@ struct ClipTime {
     time: f32,
 }
 
-pub struct Character {
+pub(crate) struct Character {
     group: Group,
     /// The character's row in its group, as the settings store holds it.
     pub number: u8,
@@ -116,7 +116,7 @@ impl Character {
     /// at its height, and its skin have loaded. Each call asks for both again.
     /// None while they load, past the group's last row, or when the heap
     /// refuses.
-    pub fn of(group: Group, number: u8) -> Option<Character> {
+    pub(crate) fn of(group: Group, number: u8) -> Option<Character> {
         let (slot, skin, height_u, _) = row(group, number)?;
         let (model, skin) = (
             model_of(slot, Some(height_u)),
@@ -175,18 +175,18 @@ impl Character {
     }
 
     /// The character's skin as the renderer takes it. None while it loads.
-    pub fn skin(&self) -> Option<Image> {
+    pub(crate) fn skin(&self) -> Option<Image> {
         load_of(self.row().1).and_then(load_image)
     }
 
     /// The character's height in units: a cell for the person, a quarter of
     /// one for the pet.
-    pub fn height_u(&self) -> f64 {
+    pub(crate) fn height_u(&self) -> f64 {
         self.row().2
     }
 
     /// The index of the character's walk clip among its model's animations.
-    pub fn move_clip(&self) -> u32 {
+    pub(crate) fn move_clip(&self) -> u32 {
         self.row().3
     }
 
@@ -197,7 +197,7 @@ impl Character {
     /// Fades from the clip playing into `clip` over `fade_s` seconds. With no
     /// clip playing, `clip` starts at once. A clip the model lacks, or the
     /// clip already playing, changes nothing.
-    pub fn play(&mut self, models: &ModelTable, clip: u32, fade_s: f32) {
+    pub(crate) fn play(&mut self, models: &ModelTable, clip: u32, fade_s: f32) {
         let lacks = models.get(self.model).is_none_or(|m| clip >= m.clip_cnt());
         if lacks || self.cur.is_some_and(|c| c.clip == clip) {
             return;
@@ -213,7 +213,7 @@ impl Character {
         };
     }
 
-    pub fn free(self, draw: &mut DrawList) {
+    pub(crate) fn free(self, draw: &mut DrawList) {
         draw.free(self.palette_handle);
     }
 
@@ -234,7 +234,7 @@ impl Character {
     /// A character surface that shows the character (`on_surface`) sees it
     /// whole, before the surface's own eye (`surface_draw`). There its clips
     /// run a frame a step, and every frame asks for a frame.
-    pub fn tick(
+    pub(crate) fn tick(
         &mut self,
         draw: &mut DrawList,
         models: &ModelTable,
@@ -369,7 +369,7 @@ impl Character {
     /// receiver box (`ReceiverBox::ball`) depends on the eye. Every character
     /// the world draws receives the sun's shadow map, and the map covers the
     /// receivers the eye sees.
-    pub fn draw(&self, draw: &mut DrawList, models: &ModelTable) {
+    pub(crate) fn draw(&self, draw: &mut DrawList, models: &ModelTable) {
         let Some(m) = models.get(self.model).filter(|m| m.handle() != 0) else {
             return;
         };
@@ -395,7 +395,7 @@ impl Character {
     /// The model is scaled to one unit tall, as the surface's eye frames it
     /// (pxl-render pass/character.rs), and turned by the clock so that
     /// every side shows. None while the model is not uploaded.
-    pub fn surface_draw(&self, models: &ModelTable) -> Option<Draw> {
+    pub(crate) fn surface_draw(&self, models: &ModelTable) -> Option<Draw> {
         let m = models.get(self.model).filter(|m| m.handle() != 0)?;
         let at = self.transform.map_or([0.0; 3], |t| t.at);
         let rot = (now() / 1000.0 * param::SURFACE_SPIN_RAD_S % core::f64::consts::TAU) as f32;

@@ -5,10 +5,10 @@
 //! location comes (`bootstrap`). Going to a named place ends following the
 //! device, so it is asked here, of both.
 
-pub mod bootstrap;
-pub mod destination;
-pub mod follow_mode;
-pub mod off_center;
+pub(crate) mod bootstrap;
+pub(crate) mod destination;
+pub(crate) mod follow_mode;
+pub(crate) mod off_center;
 
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3::Q3;
@@ -27,7 +27,7 @@ pub(crate) fn go_on_ground(to: Q3, motion: Motion) {
     destination::go_to_ground(unknown(&to), motion);
 }
 
-pub fn go_to_place(to: Q3) {
+pub(crate) fn go_to_place(to: Q3) {
     go_on_ground(to, Motion::Smooth);
     controller::come_in_to_default();
 }
@@ -36,7 +36,7 @@ pub fn go_to_place(to: Q3) {
 /// with it. A view far out comes in to the default distance, and then the
 /// view is asked, so a distance asked with the search wins over the coming
 /// in.
-pub fn go_to_deg(lon: f64, lat: f64, view: IntentPatch) {
+pub(crate) fn go_to_deg(lon: f64, lat: f64, view: IntentPatch) {
     go_on_ground(epsg4326::project(&[lon, lat, 0.0]), Motion::Snap);
     controller::come_in_to_default();
     controller::set_intent(view);

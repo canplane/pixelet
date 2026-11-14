@@ -7,7 +7,7 @@ use crate::status::errno::{Errno, Kind};
 
 /// This is an errno and the place in the source where the error was made, with
 /// no message. It is returned, never fatal: a broken invariant is a bug
-/// (status/bug.rs). What happened is the errno's `kind`.
+/// (`status/bug.rs`). What happened is the errno's `kind`.
 #[derive(Debug)]
 pub struct XputeError {
     pub errnum: Errno,

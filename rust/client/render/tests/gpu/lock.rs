@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 /// Waits until this process holds the GPU. It holds it until it ends.
-pub fn hold() {
+pub(super) fn hold() {
     static HELD: OnceLock<File> = OnceLock::new();
     HELD.get_or_init(|| {
         let path = lock_path();

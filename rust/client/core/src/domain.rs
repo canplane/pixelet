@@ -6,14 +6,14 @@
 //! query and the layers, and neither names the other. A module here uses
 //! only the modules below it in that order.
 
-pub mod control;
-pub mod layer;
-pub mod param;
-pub mod preview;
-pub mod scene;
-pub mod setting;
-pub mod smooth;
-pub mod view;
+pub(crate) mod control;
+pub(crate) mod layer;
+pub(crate) mod param;
+pub(crate) mod preview;
+pub(crate) mod scene;
+pub(crate) mod setting;
+pub(crate) mod smooth;
+pub(crate) mod view;
 
 // The query is a child of `layer` (layer.rs); every caller names it here.
-pub use layer::query;
+pub(crate) use layer::query;

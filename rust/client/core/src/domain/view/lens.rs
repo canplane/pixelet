@@ -24,12 +24,12 @@ use crate::sys::io::loader::catalog;
 
 /// The view's camera grid cell, an angle in radians, 1/`CELLS_A_RAD` in a double (pxl-spec
 /// space/camera/grid.rs `CELL`).
-pub const CELL: f64 = 1.0 / CELLS_A_RAD as f64;
+pub(crate) const CELL: f64 = 1.0 / CELLS_A_RAD as f64;
 
 /// The width, in world units, of one camera grid cell at `dist` from the
 /// eye. Something narrower than a cell is not observed at that distance, and
 /// a motion shorter than a cell is not seen.
-pub fn cell_there(dist: f64) -> f64 {
+pub(crate) fn cell_there(dist: f64) -> f64 {
     CELL * dist
 }
 
@@ -38,7 +38,7 @@ pub fn cell_there(dist: f64) -> f64 {
 /// `dist`). A clock that animates the motion is stepped by this time, and
 /// what it animates holds still between steps. The time is infinite where
 /// nothing is drawn (`dist` is infinite) or nothing moves.
-pub fn visible_step_s(dist: f64, speed: f64) -> f64 {
+pub(crate) fn visible_step_s(dist: f64, speed: f64) -> f64 {
     param::VISIBLE_STEP_CELLS * cell_there(dist) / speed
 }
 
@@ -48,13 +48,13 @@ pub fn visible_step_s(dist: f64, speed: f64) -> f64 {
 /// step, and at once when the source goes back or on its first reading. The
 /// caller passes the source's reading each time it reads the clock.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct StepClock(Option<f64>);
+pub(crate) struct StepClock(Option<f64>);
 
 impl StepClock {
     /// Reads the clock with its source at `t`; `next(at)` gives the reading
     /// of the step after a reading `at`. Returns what the clock shows, the
     /// reading it next steps at, and whether it stepped now.
-    pub fn at(&mut self, t: f64, next: impl Fn(f64) -> f64) -> (f64, f64, bool) {
+    pub(crate) fn at(&mut self, t: f64, next: impl Fn(f64) -> f64) -> (f64, f64, bool) {
         if let Some(at) = self.0 {
             let due = next(at);
             if !(t >= due || t < at) {
@@ -67,7 +67,7 @@ impl StepClock {
 
     /// What the clock shows: its source's reading at its last step, or 0
     /// before its first.
-    pub fn time(self) -> f64 {
+    pub(crate) fn time(self) -> f64 {
         self.0.unwrap_or(0.0)
     }
 }
@@ -76,13 +76,13 @@ impl StepClock {
 /// impostor instead of a model: `DECOR_MODEL_CELLS` camera grid cells
 /// (`CELL`). Being an angle, it does not change
 /// with the screen's size or aspect ratio.
-pub fn decor_model_angle() -> f64 {
+pub(crate) fn decor_model_angle() -> f64 {
     param::DECOR_MODEL_CELLS * CELL
 }
 
 /// The angle about the eye, in radians, below which a decor's impostor is
 /// culled: `DECOR_IMPOSTOR_CELLS` camera grid cells.
-pub fn decor_impostor_angle() -> f64 {
+pub(crate) fn decor_impostor_angle() -> f64 {
     param::DECOR_IMPOSTOR_CELLS * CELL
 }
 
@@ -93,7 +93,7 @@ pub fn decor_impostor_angle() -> f64 {
 /// the view culls it (`decor_impostor_angle`), an upper bound.
 /// `is_decor_shown` scales its other side by the same margin, so the zooms it
 /// picks are the ones the view would pick.
-pub const fn cull_dist_u(extent_u: f64) -> f64 {
+pub(crate) const fn cull_dist_u(extent_u: f64) -> f64 {
     extent_u * CLIP_CELLS_A_RAD as f64 / param::DECOR_IMPOSTOR_CELLS
 }
 
@@ -118,7 +118,7 @@ fn is_decor_shown(extent_u: f64, cell_zoom: Zoom) -> bool {
 /// (domain/scene/decor/gpu.rs `frame`) and the pointer's pick strikes by them
 /// (domain/control/edit/pick.rs `ray_pick`), so the pointer strikes only the
 /// ground's decor the frame generates.
-pub fn decor_zooms(on: bool) -> [u32; DECORS.len()] {
+pub(crate) fn decor_zooms(on: bool) -> [u32; DECORS.len()] {
     if !on {
         return [0; DECORS.len()];
     }
@@ -127,7 +127,7 @@ pub fn decor_zooms(on: bool) -> [u32; DECORS.len()] {
 
 /// Of `zooms`, the decors the frame generates at the leaves' clip level, one
 /// bit a decor in `DECORS`' order.
-pub fn leaf_decors(zooms: &[u32; DECORS.len()]) -> u32 {
+pub(crate) fn leaf_decors(zooms: &[u32; DECORS.len()]) -> u32 {
     let leaves = |z: u32| z >> (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) & 1;
     zooms
         .iter()
@@ -157,7 +157,7 @@ fn zooms_by(extent: impl Fn(&Decor) -> f64) -> [u32; DECORS.len()] {
 /// Q3 as the rays' origin, which may stand over the world (pxl-spec
 /// `world::origin`). The scene writes the preview's cuts (`object::CUTS`).
 /// None without a screen.
-pub fn gpu_cast(o: &Observation, words: &mut [u32; eye::WORDS]) -> Option<()> {
+pub(crate) fn gpu_cast(o: &Observation, words: &mut [u32; eye::WORDS]) -> Option<()> {
     let lens = o.frustum?.lens()?;
     let far = observation::eye_draw_dist()?;
     let q = origin(o.eye[0], o.eye[1], o.eye[2]);

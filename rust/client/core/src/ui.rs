@@ -24,7 +24,7 @@ use crate::domain::query::World;
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::surface::character_surface_rows;
 use crate::domain::scene::stage::screen_shows_world;
-use crate::domain::setting::store::{are_settings_loaded, settings, SettingKey};
+use crate::domain::setting::{are_settings_loaded, settings, SettingKey};
 use crate::domain::view::frame::pose;
 use crate::domain::view::frame::screen::units_per_px_at;
 use crate::abi::overlay::{
@@ -72,7 +72,7 @@ fn division_parts(at: Option<(Quadrant, u32)>, named_to: Option<Zoom>) -> Vec<Di
 /// names, and the zoom the names show down to rather than the view's scale.
 /// The marker draft's text is kept apart, in `SnapshotMemo`.
 #[derive(Clone, Copy, PartialEq)]
-pub struct SnapshotInput {
+pub(crate) struct SnapshotInput {
     status: GroundStatus,
     is_off_center: bool,
     pivot: Option<Q3>,
@@ -163,7 +163,7 @@ fn snapshot_input() -> SnapshotInput {
 /// draft's text, and the view's azimuth and meters per pixel. A new snapshot
 /// or view is sent only when it differs from these.
 #[derive(Default)]
-pub struct SnapshotMemo {
+pub(crate) struct SnapshotMemo {
     last_input: Option<SnapshotInput>,
     text: String,
     last_view: Option<(f64, f64)>,
@@ -172,7 +172,7 @@ pub struct SnapshotMemo {
 impl SnapshotMemo {
     /// The snapshot's inputs now, or None when they have not changed since
     /// they were last sent. What it returns counts as sent.
-    pub fn take_changed(&mut self) -> Option<SnapshotInput> {
+    pub(crate) fn take_changed(&mut self) -> Option<SnapshotInput> {
         let (now, text) = (snapshot_input(), write::marker_draft().unwrap_or_default());
         if self.last_input == Some(now) && self.text == text {
             return None;
@@ -185,7 +185,7 @@ impl SnapshotMemo {
 
     /// The view now, its azimuth and meters per pixel, or None when neither
     /// has changed since it was last sent. What it returns counts as sent.
-    pub fn take_view_changed(&mut self) -> Option<(f64, f64)> {
+    pub(crate) fn take_view_changed(&mut self) -> Option<(f64, f64)> {
         let now = (
             camera_state().intent.azimuth,
             m_per_px(units_per_px_at(dist()), controller::pivot()),
@@ -199,7 +199,7 @@ impl SnapshotMemo {
 }
 
 /// The snapshot built from `shown`.
-pub fn snapshot(shown: &SnapshotInput) -> Snapshot {
+pub(crate) fn snapshot(shown: &SnapshotInput) -> Snapshot {
     Snapshot {
         pivot: PivotState {
             status: shown.status,

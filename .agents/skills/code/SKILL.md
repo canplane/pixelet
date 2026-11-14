@@ -10,7 +10,11 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
 - Orthogonal. A concept says one thing; changing it reinterprets no other.
 - One owner. A fact has one definition; every other form derives from it. A
   fact held in several places is reviewed, and stays apart only where the CPU
-  and the GPU each hold it or joining it would add branches.
+  and the GPU each hold it or joining it would add branches. Where they each
+  hold it, the CPU's side stays even when no Rust reads it: a shader ports it, a
+  test compares against it, or it defines what a buffer holds. An orphan is
+  removed only once no caller, port, test or layout reaches it, and never from
+  the kit or another published API.
 - Before changing a structure, read the documents and the code it lives in and
   state which of its values are independent and which derive or repeat. The
   change follows from that.
@@ -33,4 +37,6 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
   number as `number` or `bigint`.
 - A comment holds what the code cannot say: the contract, the reason, the
   invariant. It reads on its own in whole sentences, never says how the code
-  came to be and never cites a minute under `doc/`.
+  came to be and never cites a minute under `doc/`. As style, not a rule a
+  review holds, it puts an identifier in backticks and writes a word as prose
+  (UI, GPU).

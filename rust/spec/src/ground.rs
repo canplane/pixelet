@@ -4,7 +4,7 @@
 //! which the bake and the client both run: a cell's elevation from the tile's samples
 //! (`ele_at`), its four asset ids and its own (`own`), and its top and face in cells of a
 //! zoom (`top`, `face_ele`). The ground's column as a descent asks it is pxl-engine's
-//! (ground.rs `node`).
+//! (`ground.rs` `node`).
 //!
 //! An asset id and an elevation are stored as a byte and an i16 and read into a word here,
 //! since WGSL has no narrower integer.

@@ -10,7 +10,7 @@ use pxl_engine::{light, ray};
 /// each of its first members begins at and its size in words: the raster's view (raster.wgsl
 /// `Raster`, ray/raster.rs) and the lists' argument structs (visible.wgsl `MissCount`,
 /// light_receiver_tile.wgsl `ReceiverDispatch`). Some shader declares each.
-pub const LAYOUTS: [(&str, &[u32], usize); 3] = [
+pub(crate) const LAYOUTS: [(&str, &[u32], usize); 3] = [
     ("Raster", &[], word::RASTER_FLOATS),
     (
         "MissCount",
@@ -29,7 +29,7 @@ pub const LAYOUTS: [(&str, &[u32], usize); 3] = [
 ];
 
 /// The structs of `LAYOUTS` that `module` declares, each asserted to lie as the Rust lays it.
-pub fn layouts(module: &naga::Module, name: &str) -> Vec<&'static str> {
+pub(crate) fn layouts(module: &naga::Module, name: &str) -> Vec<&'static str> {
     let mut met = Vec::new();
     for (ty, offs, words) in LAYOUTS {
         let Some((_, t)) = module
@@ -65,7 +65,7 @@ pub fn layouts(module: &naga::Module, name: &str) -> Vec<&'static str> {
 /// returns. Safari writes `i32::MIN`, written or folded, as a C++ `long` that no `select` with an
 /// `int` takes. Safari 27 writes the result of `atomicCompareExchangeWeak` as a struct with a
 /// `thread`-qualified field, which Metal refuses.
-pub fn refuse_faults(module: &naga::Module, name: &str) {
+pub(crate) fn refuse_faults(module: &naga::Module, name: &str) {
     use naga::TypeInner::{Array, BindingArray, Struct};
     let is_struct = |mut ty: naga::Handle<naga::Type>| loop {
         match module.types[ty].inner {

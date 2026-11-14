@@ -10,7 +10,7 @@ core tells it.
 
 ```text
   ui/         the UI: React Native, the same on every platform
-  runtime/    the core's runtime on a page, and the boot that opens it
+  runtime/    the core's runtime on a page, and each platform's boot
      │  each reaches below only through service/
      ▼
   service/    what answers the core and the UI on this platform
@@ -60,9 +60,8 @@ core and one in the services, named alike.
 
 The core names a file only by its path, a tuple of tokens, and the client
 decides, once at boot, what answers each path: the services
-(`service/sys/fs/`), and on a device `pxl-runtime` for the settings. So no URL,
-version or storage key reaches the core, and where the world is read from
-changes without it.
+(`service/sys/fs/`), on both platforms. So no URL, version or storage key
+reaches the core, and where the world is read from changes without it.
 
 ## Builds
 

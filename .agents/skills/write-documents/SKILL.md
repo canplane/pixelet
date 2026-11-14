@@ -36,6 +36,13 @@ what each part does not know, which the code shows only by its absence. Its
 length is what that argument needs; a detail laid in it that no argument
 needs is a detail nobody reads.
 
+It states its model as a textbook of computer architecture states a processor's:
+the contract the system keeps, at its own level, simple enough to carry the
+idea. Simplifying and leaving out is how it works; an exception, an edge case
+or a low bit is said where it lives, in the code and the module beside it, for
+the reader who goes down to look. What it must not do is say the system keeps
+a promise it does not.
+
 ## Rules
 
 - **One theme, carried through.** A document is written from its theme, not

@@ -2,8 +2,7 @@
 
 //! The guest thread's one queue and its loop, a plain task queue as a page's
 //! event loop is. Any thread pushes a task (`post_task`): the UI's methods
-//! (lib.rs `post`), the disk's results (xpute-native-host disk.rs), the app's
-//! lifecycle, the answers of a plugin's threads. The loop waits until a task
+//! (lib.rs `post`), the app's lifecycle, the answers of a plugin's threads. The loop waits until a task
 //! comes or its earliest timer is due and runs it on the guest's thread,
 //! entering the guest where it must (`turn`); the program runs the answers due
 //! and hands the UI its frames between turns (lib.rs), as a page's runs a

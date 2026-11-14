@@ -25,7 +25,7 @@
 //!
 //! The writes the store takes go up as edits in batches (pxl:core object
 //! `apply`), and the source applies them to its shards and its top; a batch
-//! stays until the source applied it. A file that does not decode is
+//! the source fails to apply stays (`save`). A file that does not decode is
 //! refused: the core sets it aside (sys/io/file.rs `set_aside`), and reads it
 //! again once it is (`on_set_aside`).
 
@@ -60,14 +60,14 @@ use crate::spec;
 use crate::spec::file::{format, top, write as column};
 use crate::sys::io::request::declare;
 use crate::sys::sched::{executor, invalidate};
-use pxl_spec::object::ext::{class_of, Class};
+use pxl_spec::object::{class_of, Class};
 
 /// The most files wanted at once. Before the top is read, only the top is
 /// wanted. After that, the wanted files are the shards within the ground's
 /// demand at the shard zoom around the eye (domain/view/demand.rs
 /// `object_step`), which are no more than one zoom's demand of ground tiles
 /// (pxl-spec layer/demand.rs `demand_tiles`).
-pub const WANT_CAP: u32 = GROUND_DEMAND_TILE_CAP;
+pub(crate) const WANT_CAP: u32 = GROUND_DEMAND_TILE_CAP;
 
 /// The id that names the top among the wanted files; every other wanted id
 /// is a shard's.
@@ -144,7 +144,7 @@ fn make(c: Change) {
 
 /// Applies an edit made on this device to the store (`change`), and sends it
 /// to the source when it changed what is placed.
-pub fn edit(write: Write) {
+pub(crate) fn edit(write: Write) {
     change(Change::Edit(write));
 }
 
@@ -175,7 +175,7 @@ fn shard_of(key: u128) -> Quadrant {
 /// Whether every shard under `space` was read. Only then is a write there
 /// made over what the shard's file holds (domain/query/limit.rs
 /// `editable`).
-pub fn holds(space: &Aabb) -> bool {
+pub(crate) fn holds(space: &Aabb) -> bool {
     let side = units(SHARD_ZOOM);
     let span = |k: usize| {
         let first = (space.min[k] / side).floor() as i32;
@@ -191,7 +191,7 @@ pub fn holds(space: &Aabb) -> bool {
 /// that, the wanted files are the asked shards that the top lists and that
 /// are not read yet, and they replace what was wanted before. A refused file
 /// is not wanted until it is set aside.
-pub fn want(asked: impl Iterator<Item = Quadrant>, order: impl Fn(Quadrant) -> Order) {
+pub(crate) fn want(asked: impl Iterator<Item = Quadrant>, order: impl Fn(Quadrant) -> Order) {
     let st = state();
     st.wants.clear();
     if st.top_shards.is_none() {
@@ -210,13 +210,13 @@ pub fn want(asked: impl Iterator<Item = Quadrant>, order: impl Fn(Quadrant) -> O
     declare(Stream::Object, &st.wants);
 }
 
-pub fn want_again() {
+pub(crate) fn want_again() {
     declare(Stream::Object, &state().wants);
 }
 
 /// The repository's revision for `want`. Two readings are equal only if no
 /// top or shard was read and no file was refused or set aside between them.
-pub fn revision() -> u32 {
+pub(crate) fn revision() -> u32 {
     state().revision
 }
 
@@ -227,7 +227,7 @@ fn changed() {
 
 /// Takes in a file after OBJECT that arrived, the top or a shard, or the
 /// news that it is absent (`admit`).
-pub fn on_arrived(id: u64, pkt: Option<Body>, phases: &mut PhaseList) -> Result<(), Exit> {
+pub(crate) fn on_arrived(id: u64, pkt: Option<Body>, phases: &mut PhaseList) -> Result<(), Exit> {
     let at = now();
     let result = admit(id, pkt.as_deref());
     phases.push(TaskPhaseName::DecodeMs, now() - at);
@@ -281,7 +281,7 @@ fn on_shard(id: u64, writes: Vec<Write>) {
 
 /// Refused file `id` was set aside, so it is wanted again as a new file.
 /// Returns false where the file was not refused.
-pub fn on_set_aside(id: u64) -> bool {
+pub(crate) fn on_set_aside(id: u64) -> bool {
     let st = state();
     let Some(i) = st.refused_files.iter().position(|&n| n == id) else {
         return false;
@@ -434,11 +434,11 @@ fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, XputeError> {
 
 /// Queues a write the store took, to go up as an edit with the frame's other
 /// writes (`step`).
-pub fn send(write: Write) {
+pub(crate) fn send(write: Write) {
     state().unsent.push(write);
 }
 
-pub fn step() {
+pub(crate) fn step() {
     // Make every change held while the host held the store's columns, now
     // that it holds none. The host cannot take them back during the loop.
     if !state().changes.is_empty() && !object().is_in_flight() {
@@ -456,7 +456,7 @@ pub fn step() {
 /// stays, and goes again with the next write; one the source keeps nothing
 /// of (`read-only`) or cannot read (`bad-message`), or that does not encode,
 /// is dropped.
-pub fn save() {
+pub(crate) fn save() {
     let st = state();
     if st.applying || st.unsent.len() <= st.failed_cnt {
         return;

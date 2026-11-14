@@ -44,7 +44,7 @@ pub(crate) fn take() -> bool {
 
 /// The damage: the boxes where objects were written, as the last take found
 /// them.
-pub fn damage() -> &'static [Aabb] {
+pub(crate) fn damage() -> &'static [Aabb] {
     &changes().damage
 }
 
@@ -57,7 +57,7 @@ pub fn damage() -> &'static [Aabb] {
 /// frames waits in the tile cache and the store for that take. So a
 /// reader that asks every frame, in its effects or its interaction
 /// phase, sees each change exactly once.
-pub fn within(xy: [[f64; 2]; 2], layer: &[Quadrant]) -> bool {
+pub(crate) fn within(xy: [[f64; 2]; 2], layer: &[Quadrant]) -> bool {
     touched(xy, layer, |_| true)
 }
 
@@ -135,7 +135,7 @@ fn join(cells: [[f64; 2]; 2]) {
 /// asked again only when the key changes, or when a change to the ground or
 /// the objects touched those columns (`forget_touched`). An answer that read
 /// nothing is not kept, since no change would ever tell it to go.
-pub struct Memo<K, A>(Option<(K, [[f64; 2]; 2], A)>);
+pub(crate) struct Memo<K, A>(Option<(K, [[f64; 2]; 2], A)>);
 
 impl<K, A> Default for Memo<K, A> {
     fn default() -> Self {
@@ -144,11 +144,11 @@ impl<K, A> Default for Memo<K, A> {
 }
 
 impl<K: PartialEq, A: Copy> Memo<K, A> {
-    pub const NONE: Memo<K, A> = Memo(None);
+    pub(crate) const NONE: Memo<K, A> = Memo(None);
 
     /// Drops the answer when a change touched its columns. The caller calls
     /// this every frame, so that it sees each change once (`within`).
-    pub fn forget_touched(&mut self) {
+    pub(crate) fn forget_touched(&mut self) {
         if self
             .0
             .as_ref()
@@ -164,7 +164,7 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
     /// answer changes only what is held, and only the leaf's own nodes and
     /// what objects wrote drop it. An answer not exact goes as in
     /// `forget_touched`, since a coarser node can be what answered it.
-    pub fn forget_touched_at_leaf(&mut self, exact: impl Fn(&A) -> bool) {
+    pub(crate) fn forget_touched_at_leaf(&mut self, exact: impl Fn(&A) -> bool) {
         if self
             .0
             .as_ref()
@@ -181,7 +181,7 @@ impl<K: PartialEq, A: Copy> Memo<K, A> {
     /// columns its queries read. What it read is reported
     /// as read here too, so a memo kept inside another memo's ask lets that
     /// one go with it.
-    pub fn of(&mut self, of: K, ask: impl FnOnce() -> A) -> A {
+    pub(crate) fn of(&mut self, of: K, ask: impl FnOnce() -> A) -> A {
         if let Some((k, columns, a)) = &self.0 {
             if *k == of {
                 join(*columns);

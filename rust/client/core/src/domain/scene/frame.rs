@@ -8,7 +8,7 @@ use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world;
 
 #[derive(Clone, Copy, Default)]
-pub struct Frame {
+pub(crate) struct Frame {
     /// The point at sea level under the eye, in world coordinates as f64.
     pub anchor: V3,
     /// The eye in world coordinates as f64. It decides what is listed, but no
@@ -30,13 +30,13 @@ impl Frame {
     /// Whether a sphere of `radius` about `at`, in world coordinates, may
     /// show. It serves a round bound, such as a model's about its origin or a
     /// mark's reach about its point; a box goes to `sees_box`.
-    pub fn sees(&self, at: V3, radius: f64) -> bool {
+    pub(crate) fn sees(&self, at: V3, radius: f64) -> bool {
         let p = self.world_of(at);
         self.holds_camera(p, radius) || self.frustum.sees(p, radius)
     }
 
     /// Whether the box from `min` to `max`, in world coordinates, may show.
-    pub fn sees_box(&self, min: V3, max: V3) -> bool {
+    pub(crate) fn sees_box(&self, min: V3, max: V3) -> bool {
         let lo = self.world_of(min);
         let hi: V3 = core::array::from_fn(|k| lo[k] + max[k] - min[k]);
         let middle: V3 = core::array::from_fn(|k| (lo[k] + hi[k]) / 2.0);
@@ -55,7 +55,7 @@ impl Frame {
     /// `at` measured about the anchor. X is taken on the anchor's lap of the
     /// world, which wraps in X, so a point across the seam comes out near
     /// the anchor.
-    pub fn world_of(&self, at: V3) -> V3 {
+    pub(crate) fn world_of(&self, at: V3) -> V3 {
         let x = world::nearest(at[0], self.anchor[0]);
         [
             x - self.anchor[0],

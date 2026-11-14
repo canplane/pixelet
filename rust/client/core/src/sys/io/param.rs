@@ -8,22 +8,19 @@
 /// than `RETRY_CAP_MS` (sys/io/policy.rs `backoff`). After `RETRY_ATTEMPT_CNT`
 /// waits, about a minute in all, the server is given up. A network that is
 /// down is waited on without end.
-pub const RETRY_BASE_MS: f64 = 1_000.0;
-pub const RETRY_CAP_MS: f64 = 30_000.0;
-pub const RETRY_ATTEMPT_CNT: u32 = 6;
+pub(crate) const RETRY_BASE_MS: f64 = 1_000.0;
+pub(crate) const RETRY_CAP_MS: f64 = 30_000.0;
+pub(crate) const RETRY_ATTEMPT_CNT: u32 = 6;
 
 /// The most reads out at once, however many credits are granted.
-pub const CREDIT_CAP: u32 = 16;
+pub(crate) const CREDIT_CAP: u32 = 16;
 
-/// How many reads a frame grants: what the platform's fetch runs at once. A
-/// browser opens six connections to a host over HTTP/1.1, and a fetch past them
-/// waits in the browser's pool, which knows nothing of what the core wants
-/// first. On Android, Expo's OkHttp client runs at most five calls to a host
-/// (`Dispatcher` `maxRequestsPerHost`, which React Native's OkHttpClientProvider
-/// leaves at its default). On iOS, the origin speaks HTTP/2 over one
-/// connection, so nothing caps the reads below the six `BODY_SLOT_CNT` is sized
-/// for.
-pub const CREDIT_CNT: u32 = if cfg!(target_os = "android") { 5 } else { 6 };
+/// How many reads a frame grants, the same on every platform: six, as a
+/// browser runs to a host over HTTP/1.1 and as `BODY_SLOT_CNT` is sized for.
+/// A read a platform's fetch cannot start at once waits in its pool, which
+/// knows nothing of what the core wants first, so the count is kept near what
+/// a platform runs.
+pub(crate) const CREDIT_CNT: u32 = 6;
 
 /// The body slots in `.fixed` (sys/io/body.rs), the most terrain and Earth
 /// bodies held at once. A body holds its slot while it is on a credit and
@@ -38,4 +35,4 @@ pub const CREDIT_CNT: u32 = if cfg!(target_os = "android") { 5 } else { 6 };
 /// jump or a zoom that empties every level wants all their tiles,
 /// `CLIP_LEVEL_CNT` × 4 = 60, and the tiles past the cap wait for a slot. The
 /// profiler's `body_slots_peak` measures the slots in use.
-pub const BODY_SLOT_CNT: u32 = 32;
+pub(crate) const BODY_SLOT_CNT: u32 = 32;

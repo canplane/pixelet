@@ -6,16 +6,16 @@
 //! and stops to `fetch` or `loader`, which read through `file` into memory
 //! from `body` and pass on what arrives.
 
-pub mod body;
-pub mod demand;
-pub mod dispatch;
-pub mod failure;
-pub mod fetch;
-pub mod file;
-pub mod loader;
-pub mod param;
-pub mod policy;
-pub mod request;
-pub mod room;
-pub mod source;
-pub mod text;
+pub(crate) mod body;
+pub(crate) mod demand;
+pub(crate) mod dispatch;
+pub(crate) mod failure;
+pub(crate) mod fetch;
+pub(crate) mod file;
+pub(crate) mod loader;
+pub(crate) mod param;
+pub(crate) mod policy;
+pub(crate) mod request;
+pub(crate) mod room;
+pub(crate) mod source;
+pub(crate) mod text;

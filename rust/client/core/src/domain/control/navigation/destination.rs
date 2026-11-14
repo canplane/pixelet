@@ -27,14 +27,14 @@ fn dst() -> &'static mut Option<(Q3, Motion)> {
 /// later destination or a `go_to` replaces this one. Where the Z of `at` is
 /// known, the pivot stands on the floor nearest that height. Where it is
 /// unknown, the pivot stands on the surface.
-pub fn go_to_ground(at: Q3, motion: Motion) {
+pub(crate) fn go_to_ground(at: Q3, motion: Motion) {
     *dst() = Some((at, motion));
     sched::invalidate();
 }
 
 /// Puts the pivot at `at` as it is. A pending destination is dropped,
 /// because this was asked last.
-pub fn go_to(at: Q3, motion: Motion) {
+pub(crate) fn go_to(at: Q3, motion: Motion) {
     cancel();
     put_pivot(at, motion);
 }
@@ -42,24 +42,24 @@ pub fn go_to(at: Q3, motion: Motion) {
 /// Drops the pending destination when the user puts the pivot by hand,
 /// since reaching it afterwards would undo the user's move. Turning or
 /// zooming keeps it.
-pub fn cancel() {
+pub(crate) fn cancel() {
     *dst() = None;
 }
 
-pub fn pending() -> Option<Q3> {
+pub(crate) fn pending() -> Option<Q3> {
     dst().map(|(at, _)| at)
 }
 
 /// The leaf tile under the pending destination. The terrain is asked for
 /// it, so the destination's ground arrives.
-pub fn tile() -> Option<Quadrant> {
+pub(crate) fn tile() -> Option<Quadrant> {
     dst().map(|(at, _)| GROUND.cell_of(LEAF_ZOOM, &at).tile())
 }
 
 /// Puts the pivot at the pending destination once the ground there is known
 /// exactly. A coarser tile's answer is not the destination's ground, so it
 /// puts nothing.
-pub fn dst_step() {
+pub(crate) fn dst_step() {
     let Some((at, motion)) = *dst() else {
         return;
     };

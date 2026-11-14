@@ -33,7 +33,7 @@ inline constexpr std::uint32_t PKT = 3u;
 // The frame's length in words.
 inline constexpr std::uint32_t WORDS = 4u;
 
-// The bit of the command that marks a later answer.
+// The bit of the command that marks an answer.
 inline constexpr std::uint32_t RES = 2147483648u;
 
 // The bits of the command below the handle, which hold the method.

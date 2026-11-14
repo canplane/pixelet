@@ -2,7 +2,10 @@
 
 //! The app's lifecycle, told to a guest that serves it (wit/life/life.wit), as
 //! life.ts tells a page's: the platform's hidden and shown come through the
-//! queue. A guest that serves none answers ENOENT, and is told nothing more.
+//! queue, and a UI attached at each start (remote.rs `accept`). The guest's
+//! answer is its own: no error it answers raises anything, ENOENT where it
+//! serves none and EPIPE where it trapped among them, as on a page (life.ts
+//! `take_answer`).
 
 use crate::abi;
 
@@ -14,4 +17,9 @@ pub(crate) fn tell(shown: bool) {
     } else {
         abi::life::hidden()
     };
+}
+
+/// Tells the guest a UI attached.
+pub(crate) fn attached() {
+    let _ = abi::life::attached();
 }

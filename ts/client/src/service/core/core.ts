@@ -1,21 +1,13 @@
 // @pxl/client/service/core/core.ts
 
 /** The core as the UI reaches it: the UI's remote end of the link (`ui`),
- * which the core's interfaces are called over by their named handles, and the
- * interfaces the UI serves, mounted for the core before it boots. */
+ * which the core's interfaces are called over by their named handles. */
 
 import type { Remote } from "@xpute/link";
-import { mount } from "@/abi/overlay.ts";
-import { set_snapshot, view_posted } from "@/service/core/snapshot.ts";
 
 export let ui: Remote;
 
-/** Mounts the interfaces the UI serves on `remote`, before the core boots. */
-export function serve_overlay(remote: Remote): void {
+/** Makes `remote` the UI's end of the link, before the core boots. */
+export function set_ui(remote: Remote): void {
   ui = remote;
-  mount(remote, {
-    show: set_snapshot,
-    view: (azimuth, m_per_px) => view_posted({ azimuth, m_per_px }),
-  });
 }
-

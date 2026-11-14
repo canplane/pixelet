@@ -1,4 +1,4 @@
-// @pxl/client/service/platform/pxl-platform.ts
+// @pxl/client/service/platform/pxl-platform.native.ts
 
 /** The app's own native module (PlatformModule.swift, PlatformModule.kt under
  * modules/platform/), beside xpute's (@xpute/native-runtime). */

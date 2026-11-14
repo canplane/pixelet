@@ -19,7 +19,10 @@ impl<T> Global<T> {
     }
 
     /// The value, made by `init` the first time it is asked for.
-    #[allow(clippy::mut_from_ref)]
+    #[expect(
+        clippy::mut_from_ref,
+        reason = "one reader and writer at once, the link's contract above"
+    )]
     pub fn get(&self, init: impl FnOnce() -> T) -> &mut T {
         // SAFETY: the link's contract above.
         unsafe { (*self.0.get()).get_or_insert_with(init) }

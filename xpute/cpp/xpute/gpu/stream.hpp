@@ -1,18 +1,18 @@
 // cpp/xpute/gpu/stream.hpp
 
 // A stream carries the guest's GPU calls to the host as records, as
-// xpute-gpu-guest's stream.rs carries them: op, n, then n words; bytes go as
-// their count, then the bytes padded to a word (gpu/link/spec/api.json5). The
-// guest writes the records into a buffer it owns and flushes them by lending
-// the buffer to the host's `gpu.run` (gpu/wit/gpu.wit), which answers once
-// they have run. From the flush to the answer the records, and any memory a
-// record names for the host to read (the bytes a buffer's or an image's
+// `xpute-gpu-guest`'s `stream.rs` carries them: op, n, then n words; bytes go
+// as their count, then the bytes padded to a word (`gpu/link/spec/api.json5`).
+// The guest writes the records into a buffer it owns and flushes them by
+// lending the buffer to the host's `gpu.run` (`gpu/wit/gpu.wit`), which answers
+// once they have run. From the flush to the answer the records, and any memory
+// a record names for the host to read (the bytes a buffer's or an image's
 // upload takes), are the host's: nothing in the guest rewrites or frees that
-// memory, and no copy of it is made. The host's last read of the guest's
-// memory is when it runs a record, and the write that runs it copies the
-// bytes before it returns, as WebGPU's `writeBuffer` and `writeTexture` do. A
-// host answers whether or not it ran the records, so one with nothing to run
-// them on never holds up the guest.
+// memory, and no copy of it is made. The host's last read of the guest's memory
+// is when it runs a record, and the write that runs it copies the bytes before
+// it returns, as WebGPU's `writeBuffer` and `writeTexture` do. A host answers
+// whether or not it ran the records, so one with nothing to run them on never
+// holds up the guest.
 //
 // A word that a record names for the host to answer later has one writer
 // for good. The ticket of a request is the guest's alone: a sequence the
@@ -62,7 +62,7 @@ class Stream {
     bool is_free();
 
     // Hands the records to the host's `gpu` by lending them to its `run`
-    // (gpu/wit/gpu.wit), called by its named handle. A stream that recorded
+    // (`gpu/wit/gpu.wit`), called by its named handle. A stream that recorded
     // none, or that a run still holds, sends nothing.
     void flush();
 

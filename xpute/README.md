@@ -51,14 +51,12 @@ A program built on xpute has three parts.
 - The **guest** is the program's compiled code, linked with xpute's guest
   library into one image. It runs only inside an entry, and everything it says
   to the world it writes into its memory.
-- The **host** serves the guest the clocks and the stop under their
-  interfaces' handles, `@xpute/web-host` on a page and `xpute-native-host` on a
-  device, and the GPU, which is a plugin. It runs in a runtime, the platform's
-  environment. On a page that is `@xpute/web-runtime`, which instantiates the
-  guest's module in a worker, grows its memory whole before its first entry
-  and lays the host's link over it; on a device it is `xpute-native-runtime`,
-  which runs the guest linked into the app on a thread of its own, and
-  `@xpute/native-runtime`, the Expo module that starts it.
+- The **host** serves the guest the clocks and the stop, `@xpute/web-host` on a
+  page and `xpute-native-host` on a device, and the GPU, which is a plugin. It
+  runs in a runtime, the platform's environment that runs the guest and enters
+  it: `@xpute/web-runtime` in a page's worker, and on a device
+  `xpute-native-runtime`, on a thread of its own, which the Expo module
+  `@xpute/native-runtime` starts.
 - The **program** is everything else the app decides: its interfaces and what
   their methods do, and its UI, which reaches the guest's link from another
   thread: over a port on a page (`Remote`), and through the native module on a
@@ -99,7 +97,8 @@ A program declares its interfaces in WIT, as xpute declares its own under
 in Rust, TypeScript and C++. The guest serves what its world exports and calls
 what it imports. A Rust guest defines its three exports with one macro, over
 frames of a room it chooses, and mounts what it serves as it boots; here it
-serves xpute's `life`, which is called as the app is hidden and shown:
+serves xpute's `life`, which is called as the app is hidden and shown and as
+a UI attaches:
 
 ```rust
 use std::rc::Rc;
@@ -111,6 +110,7 @@ struct Program;
 impl life::Guest for Program {
     fn hidden(&self) -> Result<(), Errno> { /* save */ Ok(()) }
     fn shown(&self) -> Result<(), Errno> { Ok(()) }
+    fn attached(&self) -> Result<(), Errno> { /* tell the UI where all stands */ Ok(()) }
 }
 
 xpute_guest::link!(4096, || life::mount(Rc::new(Program)), || {}, || false);
@@ -120,9 +120,10 @@ xpute_guest::link!(4096, || life::mount(Rc::new(Program)), || {}, || false);
 
 The page opens the guest's worker and sends it the module to instantiate. The
 worker instantiates it, mounts what the host serves and serves the link to the
-UI across the port, and only then enters the guest. `LATER` is generated with
-the program's bindings, the methods the UI serves that answer later, and
-`taker` takes what the UI gives beside the link, a canvas (see the GPU below):
+UI across the port, only then enters the guest, and tells it the UI attached.
+`LATER` is generated with the program's bindings, the methods the UI serves
+that answer later, and `taker` takes what the UI gives beside the link, a
+canvas (see the GPU below):
 
 ```ts
 // The worker, given the page's `Instantiate`, m.
@@ -133,6 +134,7 @@ hook(link);
 serve_clock(link);
 serve(m.port, link, m.named, m.prefixes, LATER, taker);
 link.init();
+tell_attached(link);
 
 // The page.
 const { worker, remote, port } = open_worker(WORKER_URL);
@@ -237,25 +239,8 @@ build.
 - [XTP's README](./kit/ts/src/wire/xtp/README.md) describes XTP, the tree
   format of the data a program stores and serves, and of the native
   runtime's batches to a UI on the JavaScript thread.
-
-## Running it
-
-xpute builds with Node at the version `.tool-versions` names, with pnpm; rustup,
-which installs the toolchain `rust-toolchain.toml` names; a C++20 compiler, as
-`c++` or `$CXX`; GNU Make; and the
-[WASI SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or
-`$WASI_SDK_PATH`, with which the C++ tests compile the library for wasm32.
-Each command runs from xpute's root.
-
-```sh
-pnpm install                        # the TypeScript packages
-cargo spec --write                  # the generated files, written
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace              # the GPU host's on a wgpu adapter too
-pnpm check && pnpm test
-make -C cpp -j8 check test          # the C++ compiled, its tests, wasm32
-pnpm test:gpu:web                   # the GPU host in Chrome ($CHROME)
-```
+- [CONTRIBUTING.md](./CONTRIBUTING.md) lists what xpute builds with and the
+  commands that build and check it.
 
 ## License
 

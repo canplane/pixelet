@@ -14,7 +14,7 @@ use word::screen;
 
 /// Every part the build writes, by its name. A part with a file of its own under
 /// src/frame/shader takes what is written here after that file.
-pub fn parts() -> [(&'static str, String); 11] {
+pub(crate) fn parts() -> [(&'static str, String); 11] {
     [
         ("constant", constant()),
         ("atmos_medium", atmos_medium()),
@@ -886,8 +886,8 @@ fn decor_word() -> String {
 /// What the screen pass reads off a ray's words (pxl-engine ray.rs), so every shader reads a
 /// field exactly as the cast writes it: where its faces word lies, the ground's leaf cell zoom
 /// its cell's zoom is painted against, and its first word's fields. A coarse cell's ray
-/// carries the cell's four asset ids in its third word, packed as pxl-spec ground.rs
-/// `asset_ids` packs them.
+/// carries the cell's four asset ids in its third word, packed as pxl-spec `ground::word`
+/// packs them.
 fn ray() -> String {
     use pxl_engine::ray::{
         FACE_BITS, FACE_SHIFT, FACE_WORD, FILL_SHIFT, VAL_BITS, ZOOM_BITS, ZOOM_SHIFT,
@@ -1038,7 +1038,7 @@ fn debug_look() -> String {
 /// which reads the field off the vec4s where the host wrote it. A uniform is never declared as
 /// a struct, as one crashed the GPU process of Safari's WebGPU. Each field is checked to lie
 /// within its vec4s and apart from the others.
-pub fn accessors(text: &str) -> String {
+pub(crate) fn accessors(text: &str) -> String {
     use word::{floats, Kind, UNIFORMS};
     let mut out = String::new();
     for (uniform, fields) in UNIFORMS {

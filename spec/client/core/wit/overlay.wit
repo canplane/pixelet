@@ -1,6 +1,7 @@
 package pxl:core@0.1.0;
 
-// What is drawn over the world: the core's state, told when it changes.
+// What is drawn over the world: the core's state, told when it changes and
+// whole to a UI that attaches (xpute's `life.attached`).
 interface overlay {
 
   enum ground-status { idle, loading, success }
