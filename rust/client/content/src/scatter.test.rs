@@ -3,7 +3,7 @@
 use super::*;
 use pxl_engine::clipmap::FIRST_CELL_ZOOM;
 use pxl_spec::share::{eighths, FULL};
-use pxl_spec::space::hierarchy::tree::child_of;
+use pxl_spec::space::hierarchy::tree::{child_idx, child_of};
 
 /// A decor's cells hold one at its chance: over a square of leaf cells, the
 /// share holding a candidate is its density, within what a fair coin would
@@ -125,7 +125,7 @@ fn counts_land_on_every_quarter() {
         for y in 0..256 {
             for x in 0..256 {
                 if cnt(k, LEAF_CELL_ZOOM, [x, y]) > 0 {
-                    by[(x & 1 | (y & 1) << 1) as usize] += 1;
+                    by[child_idx([x, y])] += 1;
                 }
             }
         }

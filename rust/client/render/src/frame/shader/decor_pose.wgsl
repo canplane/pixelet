@@ -283,7 +283,8 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         }
       }
     }
-    let v = world_cell(vec3<u32>(put, SHARD_UNKNOWN, LOOKUP_NONE), shard_at(SHARD_UNKNOWN, ask_zoom, c.xy), ask_zoom, c, carve, hide).asset.x;
+    let a = world_cell(vec3<u32>(put, SHARD_UNKNOWN, LOOKUP_NONE), shard_at(SHARD_UNKNOWN, ask_zoom, c.xy), ask_zoom, c, carve, hide);
+    let v = a.asset.x;
     if (stage == STAGE_WALK) {
       if (fills(v)) {
         // The eighths of its cube that the cell keeps, with 0 for all eight, which
@@ -298,6 +299,12 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         }
       }
       continue;
+    }
+    // A read of the vote or of the box that lacks keeps the candidate from generating
+    // (`generation::asks`).
+    if (!edited && a.kind == KIND_LACK) {
+      recs[r] = UNGENERATED;
+      return;
     }
     if (edited) {
       if ((v & PLACED_ASSET) != 0u) {

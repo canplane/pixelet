@@ -5,6 +5,7 @@
 pub mod camera;
 pub mod edit;
 pub mod input;
+pub mod object;
 pub mod overlay;
 pub mod perf;
 pub mod scene;

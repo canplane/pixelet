@@ -1,24 +1,27 @@
 package xpute:fs@0.1.0;
 
 // xpute's files, which the host serves, each opened by its path's URI.
-// An open answers at once; a file that turns out missing answers ENOENT on its
-// first size or read. Closing a file cancels what is in flight on it, as closing a
-// handle does: a pending method answers ECANCELED.
+// An open answers at once; a file that turns out missing answers `no-entry` on
+// its first size or read. Closing a file cancels what is in flight on it, as
+// closing a handle does: a pending method answers ECANCELED.
 interface file {
   use xpute:link/types@0.1.0.{lent};
+  use types.{error-code};
 
   resource file {
     // The file's size in bytes, as fstat answers it.
-    size: async func() -> u32;
+    size: async func() -> result<u32, error-code>;
     // Fills `buf` with the file's bytes from where the last read ended, and
     // answers how many it put there, 0 at the file's end.
-    read: async func(buf: lent) -> u32;
+    read: async func(buf: lent) -> result<u32, error-code>;
     // Writes `buf` past what was written before.
     write: async func(buf: lent);
-    // Answers when the file changes under its holder.
-    changed: async func();
-    // Ends the file: 0 where what was written was applied, EIO where it was
-    // not, which a release does not report.
-    close: async func();
+    // Moves the file out of its path, where its holder can no longer read
+    // it, to a place of its backend's naming that keeps it: its path then
+    // holds nothing of it, absent or empty.
+    set-aside: async func() -> result<_, error-code>;
+    // Ends the file, and applies what was written; a release does not
+    // report a failure.
+    close: async func() -> result<_, error-code>;
   }
 }

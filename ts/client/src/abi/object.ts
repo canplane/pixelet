@@ -1,0 +1,96 @@
+// @pxl/client/abi/object.ts
+//
+// GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
+
+import {
+  ERRNO_EBADMSG,
+  ERRNO_EINPROGRESS,
+  ERRNO_ENOSYS,
+} from "@xpute/kit/status/errno.spec.ts";
+import type { ErrorCode } from "@xpute/link/abi/fs/types.enum.ts";
+import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
+import { Lift } from "@xpute/link/cabi.ts";
+import {
+  ComponentError,
+  type Handle,
+  type Link,
+  type LinkObject,
+  type Method,
+  refusal_of,
+} from "@xpute/link/link.ts";
+
+/** The interface's handle, named by `pxl:core/object` (frame.json `NAMED`). */
+export const HANDLE: Handle = 0x4edab0;
+
+/** `apply` */
+export const APPLY: Method = 0;
+
+export interface Host {
+  apply(batch: Lent, signal_: AbortSignal): Promise<void>;
+}
+
+/** The object over `imp`. */
+function object(
+  l: Pick<Link, "task_return" | "on_cancel">,
+  imp: Host,
+): LinkObject {
+  return {
+    call(m, tag, args) {
+      try {
+        switch (m) {
+          case APPLY: {
+            if (args === null) return ERRNO_EBADMSG;
+            const r_ = new Lift(args);
+            const stop = new AbortController();
+            imp.apply(load_Lent(r_, 0), stop.signal).then(
+              () => {
+                const v = { tag: "ok" } as
+                  { tag: "ok" } | { tag: "err"; val: ErrorCode };
+                l.task_return(tag, 0, [
+                  2,
+                  (w) => {
+                    if (v.tag === "ok") {
+                    } else {
+                      w.u8(0, 1);
+                      w.u8(0 + 1, v.val);
+                    }
+                  },
+                ]);
+              },
+              (e: unknown) => {
+                if (!(e instanceof ComponentError))
+                  return l.task_return(tag, refusal_of(e));
+                const v = { tag: "err", val: e.payload as ErrorCode } as
+                  { tag: "ok" } | { tag: "err"; val: ErrorCode };
+                l.task_return(tag, 0, [
+                  2,
+                  (w) => {
+                    if (v.tag === "ok") {
+                    } else {
+                      w.u8(0, 1);
+                      w.u8(0 + 1, v.val);
+                    }
+                  },
+                ]);
+              },
+            );
+            l.on_cancel(tag, () => stop.abort());
+            return ERRNO_EINPROGRESS;
+          }
+          default:
+            return ERRNO_ENOSYS;
+        }
+      } catch (e) {
+        return refusal_of(e);
+      }
+    },
+  };
+}
+
+/** Serves `imp` under the interface's handle. */
+export function mount(
+  l: Pick<Link, "mount_named" | "task_return" | "on_cancel">,
+  imp: Host,
+): void {
+  l.mount_named(HANDLE, object(l, imp));
+}

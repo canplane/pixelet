@@ -4,7 +4,7 @@
  * The backend of the core's STORAGE files (file.json `storage`), which hold
  * the settings, in the platform's storage. The core hands and takes a file's
  * bytes, while the platform keeps text, so each file is kept as the base64url
- * of its bytes. Text that is not base64url reads as EBADMSG, which the core
+ * of its bytes. Text that is not base64url reads as `bad-message`, which the core
  * refuses. The core also refuses a file that is not in its slot's format, and
  * writes nothing over it. This module decides each slot's key and what becomes
  * of a refused file. Nothing kept is dropped: a refused file is set aside, and
@@ -18,8 +18,12 @@ import {
   bytes_to_b64url,
   is_b64url,
 } from "@xpute/kit/codec/encoding.ts";
-import { ERRNO_EBADMSG, ERRNO_ENOENT } from "@xpute/kit/status/errno.spec.ts";
-import { FaultError } from "@xpute/kit/status/error.ts";
+import { ComponentError } from "@xpute/link";
+import {
+  ERROR_CODE_BAD_MESSAGE,
+  ERROR_CODE_IO,
+  ERROR_CODE_NO_ENTRY,
+} from "@xpute/link/abi/fs/types.enum.ts";
 
 import { path } from "@/abi/file.spec.ts";
 import * as local from "@/service/platform/storage.ts";
@@ -39,11 +43,11 @@ export function set_storage(s: Storage): void {
 }
 
 function bytes_of(text: string): U8Array {
-  if (!is_b64url(text)) throw new FaultError(ERRNO_EBADMSG);
+  if (!is_b64url(text)) throw new ComponentError(ERROR_CODE_BAD_MESSAGE);
   try {
     return b64url_to_bytes(text);
   } catch {
-    throw new FaultError(ERRNO_EBADMSG);
+    throw new ComponentError(ERROR_CODE_BAD_MESSAGE);
   }
 }
 
@@ -63,9 +67,9 @@ export function is_storage_key(key: string): boolean {
 
 /** Copies what `key` holds to `<key>:aside:<now_ms>`, reads the copy back, and
  * then empties `key`. When the copy does not read back, the storage refused
- * the write, so `key` is left as it was and the answer is false: the file is
- * never emptied without a copy. */
-function set_aside_key(s: Storage, key: string, now_ms: number): boolean {
+ * the write, so `key` is left as it was and the set-aside fails `io`: the file
+ * is never emptied without a copy. */
+function set_aside_key(s: Storage, key: string, now_ms: number): void {
   const text = s.get(key);
   if (text !== null && text !== "") {
     let aside = `${key}:aside:${now_ms}`;
@@ -73,33 +77,36 @@ function set_aside_key(s: Storage, key: string, now_ms: number): boolean {
       aside = `${key}:aside:${now_ms}-${n}`;
     }
     s.set(aside, text);
-    if (s.get(aside) !== text) return false;
+    if (s.get(aside) !== text) throw new ComponentError(ERROR_CODE_IO);
   }
   s.set(key, "");
-  return true;
 }
 
-export function set_aside(s: Storage, slot: u32, now_ms: number): boolean {
-  const key = KEYS.get(slot);
-  return key !== undefined && set_aside_key(s, key, now_ms);
+export function set_aside(s: Storage, slot: u32, now_ms: number): void {
+  set_aside_key(s, key_of(slot), now_ms);
 }
 
 function key_of(slot: u32): string {
   const key = KEYS.get(slot);
-  if (key === undefined) throw new FaultError(ERRNO_ENOENT);
+  if (key === undefined) throw new ComponentError(ERROR_CODE_NO_ENTRY);
   return key;
 }
 
 export function open_storage(slot: u32, s: Storage = STORAGE): U8Array {
   const text = s.get(key_of(slot));
-  if (text === null) throw new FaultError(ERRNO_ENOENT);
+  if (text === null) throw new ComponentError(ERROR_CODE_NO_ENTRY);
   return bytes_of(text);
 }
 
+/** Writes `bytes` as the file in `slot`, and fails `io` where the platform
+ * refused the write: what it holds then does not read back. */
 export function commit_storage(
   slot: u32,
   bytes: U8Array,
   s: Storage = STORAGE,
 ): void {
-  s.set(key_of(slot), bytes_to_b64url(bytes));
+  const key = key_of(slot);
+  const text = bytes_to_b64url(bytes);
+  s.set(key, text);
+  if (s.get(key) !== text) throw new ComponentError(ERROR_CODE_IO);
 }

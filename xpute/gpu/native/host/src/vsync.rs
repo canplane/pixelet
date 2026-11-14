@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use xpute_link::Return;
-use xpute_native_host::post_task;
+use xpute_native_runtime::post_task;
 
 use super::abi;
 

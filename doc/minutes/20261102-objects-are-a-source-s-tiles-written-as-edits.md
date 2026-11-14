@@ -68,6 +68,11 @@ too.
   is decoded and applied in one step however large it is.
 - A shard file the kernel refuses is not reported or set aside, as a refused
   settings file is.
+
+  > Since 2026-11-14 (576cc7f057): a shard or top file the core refuses is set
+  > aside, as a refused settings file is: its owner asks for it (fs
+  > `set-aside`), and reads it again once it is.
+
 - One fact computed in several places: the shard over a node (the repository,
   `sys/io/source.rs`, the coverage gizmo, geo-bake's `coverage.rs`), and the
   storage's base64 (the kernel for the settings, the host for the objects).

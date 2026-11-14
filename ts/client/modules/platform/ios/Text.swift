@@ -4,7 +4,7 @@ import CoreText
 import UIKit
 
 // Text in the platform's own font, as the core asks for it
-// (pxl-core sys/io/text_device.rs), on the core's own thread: how wide a line runs, and a
+// (pxl-runtime text.rs), on the core's own thread: how wide a line runs, and a
 // line drawn. The font is the system's, which falls back through every script
 // and draws color emoji as the app's own text does.
 

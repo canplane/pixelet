@@ -9,6 +9,7 @@
 
 use pxl_engine::seed::node_seed;
 use pxl_spec::space::coord::zoom::{Zoom, UNIT_ZOOM};
+use pxl_spec::space::hierarchy::tree::child_idx;
 use xpute_kit::math::rng::seed_mix32;
 
 use crate::halve;
@@ -70,7 +71,7 @@ pub fn holds_cloud(cell: [i32; 2], mean: u32) -> bool {
         };
         let cap = 1u32 << (2 * (CELL_ZOOM - z - 1));
         let c = at(z + 1);
-        let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
+        let quarter = child_idx(c);
         n = halve::quarter(
             n,
             cap,

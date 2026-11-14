@@ -118,7 +118,7 @@ coarser tile it has, or nothing.
 
 The core keeps one file of its own, its settings, read and written whole. A
 file of another format, or one it cannot read, is refused, never written over,
-and named to the client, which sets it aside (`io/file.rs`).
+and set aside by the core, its backend keeping it elsewhere (`io/file.rs`).
 
 Text is the one thing the core asks of its platform and waits for. A layout or
 a raster is a call that the platform answers before it returns, writing the

@@ -12,16 +12,16 @@ export function of_Sensor(val: number): Sensor | null {
 }
 
 export type ErrorCode =
-  | typeof ERROR_CODE_NOT_LOADED
-  | typeof ERROR_CODE_NOT_OPEN
+  | typeof ERROR_CODE_WOULD_BLOCK
+  | typeof ERROR_CODE_BAD_DESCRIPTOR
   | typeof ERROR_CODE_BUSY
   | typeof ERROR_CODE_TOO_LONG
   | typeof ERROR_CODE_NOT_PERMITTED
   | typeof ERROR_CODE_INSUFFICIENT_MEMORY;
 /** The settings are not read yet, and a change would be overwritten. */
-export const ERROR_CODE_NOT_LOADED = 0;
+export const ERROR_CODE_WOULD_BLOCK = 0;
 /** No surface is open there. */
-export const ERROR_CODE_NOT_OPEN = 1;
+export const ERROR_CODE_BAD_DESCRIPTOR = 1;
 /** The surface draws something else. */
 export const ERROR_CODE_BUSY = 2;
 /** The text is longer than a marker holds. */
@@ -33,8 +33,8 @@ export const ERROR_CODE_INSUFFICIENT_MEMORY = 5;
 
 /** The member `val` is, or null for a number no member has. */
 export function of_ErrorCode(val: number): ErrorCode | null {
-  return val === ERROR_CODE_NOT_LOADED ||
-    val === ERROR_CODE_NOT_OPEN ||
+  return val === ERROR_CODE_WOULD_BLOCK ||
+    val === ERROR_CODE_BAD_DESCRIPTOR ||
     val === ERROR_CODE_BUSY ||
     val === ERROR_CODE_TOO_LONG ||
     val === ERROR_CODE_NOT_PERMITTED ||

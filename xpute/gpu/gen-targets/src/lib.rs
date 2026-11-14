@@ -18,13 +18,13 @@ pub const GUEST_TARGET: WitTarget<'static> = WitTarget {
 };
 
 /// The plugin's bindings on a native device's host's side, served on
-/// xpute-native-host's link.
+/// xpute-native-runtime's link.
 pub const NATIVE_HOST_TARGET: WitTarget<'static> = WitTarget {
     wit: "gpu/wit",
     rs: Some("gpu/native/host/src/abi.rs"),
     ts: None,
     cpp: None,
-    side: Some(Side::Host("native/host")),
+    side: Some(Side::Host("native/runtime/rust")),
 };
 
 /// The plugin's data specs: the GPU's calls and the enumerations they carry.

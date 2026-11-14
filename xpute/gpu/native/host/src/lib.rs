@@ -146,7 +146,7 @@ pub(crate) fn timed<R>(
     let r = f();
     let ms = t0.elapsed().as_millis();
     if ms > u128::from(slow) {
-        xpute_native_host::log(&format!("[gpu] {what} took {ms} ms"));
+        xpute_native_runtime::log(&format!("[gpu] {what} took {ms} ms"));
     }
     r
 }
@@ -176,7 +176,7 @@ impl GpuHost {
         let lost = device_lost.clone();
         device.set_device_lost_callback(move |reason, message| {
             if reason == wgpu::DeviceLostReason::Unknown {
-                xpute_native_host::log(&format!("[gpu] device lost ({reason:?}): {message}"));
+                xpute_native_runtime::log(&format!("[gpu] device lost ({reason:?}): {message}"));
                 lost.store(true, Ordering::Release);
                 wake();
             }
@@ -186,7 +186,7 @@ impl GpuHost {
         let error_cnt = Arc::new(AtomicU32::new(0));
         let errors = error_cnt.clone();
         device.on_uncaptured_error(Arc::new(move |e: wgpu::Error| {
-            xpute_native_host::log(&format!("[gpu] {e}"));
+            xpute_native_runtime::log(&format!("[gpu] {e}"));
             errors.fetch_add(1, Ordering::Relaxed);
         }));
         let cache = cache_dir.and_then(|dir| Cache::open(&adapter, &device, dir));

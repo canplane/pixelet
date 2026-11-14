@@ -12,7 +12,7 @@
 // on its own. A decor's `seed` names its scatter, so changing it reshuffles
 // every one the ground generates; `density` is the chance a cell of its holds
 // one, the mean of a tree of hashes of the cells (pxl-content scatter.rs);
-// `on` the palette entries it may stand on; `orient` a random heading, or
+// `on` the ground asset ids it may stand on; `orient` a random heading, or
 // along the road or rail its cell lies on. `packs` are the model packs it is
 // drawn from, in the order its variants are numbered: a pack's `skin` is its
 // one colormap, kept outside the glb, and its `variants` its models.
@@ -22,7 +22,7 @@
 // origin at the middle of the box's base, where it stands: no origin is
 // moved, and glTF fixes none, so a model must be made with it there. It may
 // reach a little past the box. A decor's cell is a unit, a z24 cell. The
-// ground generates a decor only on its own palette entries, and no two decors share one, so
+// ground generates a decor only on its own ground asset ids, and no two decors share one, so
 // two decors' boxes never meet.
 //
 // A decor thing carries `meta`, the fields its id gives it beside where it
@@ -32,9 +32,13 @@
 
 use crate::asset::catalog::Slot;
 use crate::asset::id::{asset_id, AssetId, Kind};
+use crate::ground::GroundId;
 
 /// The most variants a decor has.
 pub const VARIANT_CAP: usize = 9;
+
+/// The words of a row's `on`, a bit for each ground asset id.
+pub const ON_WORDS: usize = (GroundId::MAX as usize + 1) / u32::BITS as usize;
 
 /// How a decor the ground generates faces: any way, or along the road or rail its
 /// cell lies on.
@@ -78,8 +82,8 @@ pub struct Row {
     /// (pxl-content scatter.rs `cnt`).
     pub chance: u32,
     pub orient: Orientation,
-    /// The palette entries it may stand on, a bit each.
-    pub on: [u32; 8],
+    /// The ground asset ids it may stand on, a bit each.
+    pub on: [u32; ON_WORDS],
     pub variant_cnt: u32,
     /// Each variant's box, in its decor's cells; none past `variant_cnt`.
     pub sizes: [[u32; 3]; VARIANT_CAP],

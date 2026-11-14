@@ -228,28 +228,29 @@ fn top_folds_until_shard_read() {
     });
 }
 
-/// A file that does not decode is refused: it is named to the client, not
-/// wanted, and wanted again as new once the client empties it.
+/// A file that does not decode is refused: it is set aside, not wanted, and
+/// wanted again as new once it is.
 #[test]
-fn refused_file_named() {
+fn refused_file_set_aside() {
     crate::on_core(|| {
         fresh();
         let shard = shard_of(leaf(0, [5, 7, 2]));
         admit(TOP, Some(&top_file(&[(shard.id(), 0)]))).unwrap();
         let foreign = [format::SETTINGS, 1, 2, 3];
         assert!(admit(shard.id(), Some(&foreign)).is_err());
-        assert_eq!(refused_files(), &[shard.id()]);
+        assert_eq!(state().refused_files, [shard.id()]);
         assert!(!holds(&shard.region()));
         want([shard].into_iter(), |_| Order::LAST);
         assert!(state().wants.is_empty());
-        assert!(on_emptied(shard.id()));
-        assert!(refused_files().is_empty() && !on_emptied(shard.id()));
+        assert!(on_set_aside(shard.id()));
+        assert!(state().refused_files.is_empty() && !on_set_aside(shard.id()));
         want([shard].into_iter(), |_| Order::LAST);
         assert_eq!(state().wants.len(), 1);
     });
 }
 
-/// The writes since the last batch go up as one, and none is kept after.
+/// The writes not applied go up as one batch, and stay until the source
+/// applies it.
 #[test]
 fn save_sends_one_batch() {
     crate::on_core(|| {
@@ -259,7 +260,7 @@ fn save_sends_one_batch() {
         }
         assert_eq!(state().unsent.len(), 4);
         save();
-        assert!(state().unsent.is_empty());
+        assert!(state().applying && state().unsent.len() == 4);
     });
 }
 

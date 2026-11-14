@@ -19,5 +19,3 @@ pub mod request;
 pub mod room;
 pub mod source;
 pub mod text;
-#[cfg(not(target_arch = "wasm32"))]
-pub(crate) mod text_device;

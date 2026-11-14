@@ -5,26 +5,29 @@
  * world. It keeps them in the platform's database (service/platform/db.ts),
  * each under its key: a shard under its tile's quadkey, and the top of the
  * tree under `TOP_KEY`. The core reads those two kinds of file, (OBJECT,
- * quadkey) and (OBJECT, TOP), and writes one: a batch of edits, (OBJECT,
- * EDIT), which binding.ts maps here. In one transaction,
- * each batch is laid over the shards its writes fall in, and the top's rows
- * for those shards are rebuilt (object_tree.ts). A shard with no leaves has no
- * file, and neither has a top with no rows. A server can answer the same
- * `open` and `commit` instead, and the core cannot tell the two apart. A
- * batch the database fails to keep fails its commit, and so the file's
- * close.
+ * quadkey) and (OBJECT, TOP), which binding.ts maps here, and sends batches of
+ * edits through pxl:core object `apply` (`serve_objects`). In one
+ * transaction, each batch is laid over the shards its writes fall in, and the
+ * top's rows for those shards are rebuilt (object_tree.ts). A shard with no
+ * leaves has no file, and neither has a top with no rows. A server can answer
+ * the same `open` and `apply` instead, and the core cannot tell the two
+ * apart. A batch the database fails to keep answers `io`, and the core sends
+ * it again.
  */
 
 import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
-import {
-  ERRNO_EBADMSG,
-  ERRNO_EINVAL,
-  ERRNO_ENOENT,
-} from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_EBADMSG, ERRNO_EINVAL } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
+import { ComponentError, type Link } from "@xpute/link";
+import {
+  ERROR_CODE_BAD_MESSAGE,
+  ERROR_CODE_IO,
+  ERROR_CODE_NO_ENTRY,
+} from "@xpute/link/abi/fs/types.enum.ts";
 import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 
 import { format } from "@/abi/file.spec.ts";
+import * as object from "@/abi/object.ts";
 import {
   lay,
   shard_of,
@@ -201,13 +204,13 @@ async function apply_edits(tx: Tx, writes: readonly Leaf[]): Promise<void> {
 export function object_backend(db: Db = DB): {
   open(key: string): Promise<U8Array>;
   commit(bytes: U8Array): Promise<void>;
-  set_aside(key: string, now_ms: number): Promise<boolean>;
+  set_aside(key: string, now_ms: number): Promise<void>;
 } {
   return {
     open(key) {
       return db.transaction(async (tx) => {
         const bytes = await tx.get(key);
-        if (bytes === null) throw new FaultError(ERRNO_ENOENT);
+        if (bytes === null) throw new ComponentError(ERROR_CODE_NO_ENTRY);
         return bytes;
       });
     },
@@ -217,21 +220,36 @@ export function object_backend(db: Db = DB): {
       return db.transaction((tx) => apply_edits(tx, writes));
     },
     /** Sets aside a file the core refused, so that its key reads as empty.
-     * A shard's rows leave the top with it. Resolves false, with nothing
-     * changed, when the database fails. */
+     * A shard's rows leave the top with it. Rejects, with nothing changed,
+     * when the database fails. */
     set_aside(key, now_ms) {
-      return db
-        .transaction(async (tx) => {
-          await move_aside(tx, key, now_ms);
-          if (key !== TOP_KEY) {
-            const left = (await rows_of(tx)).filter((r) => r.shard !== key);
-            await put_top(tx, left);
-          }
-          return true;
-        })
-        .catch(() => false);
+      return db.transaction(async (tx) => {
+        await move_aside(tx, key, now_ms);
+        if (key !== TOP_KEY) {
+          const left = (await rows_of(tx)).filter((r) => r.shard !== key);
+          await put_top(tx, left);
+        }
+      });
     },
   };
 }
 
 export const OBJECTS = object_backend();
+
+/** Serves the core's objects (pxl:core object): each batch it lends is
+ * applied. One that does not decode answers `bad-message`, and one the
+ * database fails to keep `io`. */
+export function serve_objects(link: Link): void {
+  object.mount(link, {
+    async apply(batch) {
+      try {
+        await OBJECTS.commit(link.bytes(batch.at, batch.len).slice());
+      } catch (e) {
+        // Only the decode throws a FaultError; the database throws its own.
+        throw new ComponentError(
+          e instanceof FaultError ? ERROR_CODE_BAD_MESSAGE : ERROR_CODE_IO,
+        );
+      }
+    },
+  });
+}

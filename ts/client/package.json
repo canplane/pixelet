@@ -54,6 +54,7 @@
     "guest": {
       "workspace": "../../rust",
       "package": "pxl-core",
+      "native": "pxl-runtime",
       "profile": {
         "debug": "native-watch",
         "release": "native"

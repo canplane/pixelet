@@ -42,7 +42,7 @@ impl _rt::Object for _Object {
                                     .data
                                     .as_ref()
                                     .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
-                            )
+                            );
                         }),
                     ));
                     _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
@@ -63,5 +63,5 @@ mod _rt {
     pub use std::rc::Rc;
     pub use xpute_kit::status::errno::Errno;
     pub use xpute_link::{Handle, Lower, Method, Object, Reply, Return, Tag};
-    pub use xpute_native_host::link;
+    pub use xpute_native_runtime::link;
 }

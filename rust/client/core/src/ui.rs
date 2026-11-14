@@ -20,7 +20,6 @@ use crate::domain::control::sensor::reading::{
     device_location_store, device_orient_store, SensorState,
 };
 use crate::domain::layer::division::{each_division, naming};
-use crate::domain::layer::object::repository;
 use crate::domain::query::World;
 use crate::domain::scene::character::companion::companion_ready;
 use crate::domain::scene::character::surface::character_surface_rows;
@@ -30,11 +29,9 @@ use crate::domain::view::frame::pose;
 use crate::domain::view::frame::screen::units_per_px_at;
 use crate::abi::overlay::{
     CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
-    PivotState, RefusedFile, SensorStatus, Snapshot,
+    PivotState, SensorStatus, Snapshot,
 };
 use crate::pointer;
-use crate::sys::io::file;
-use crate::spec::file::path;
 use crate::sys::io::request;
 use crate::sys::io::source;
 use pxl_render::gpu::surface::SURFACE_CAP;
@@ -98,18 +95,9 @@ pub struct SnapshotInput {
     character_surfaces: ([u32; SURFACE_CAP], usize),
     stall: Option<Message>,
     declared: bool,
-    /// Whether the storage file is refused, and the refused objects' files
-    /// by their wants' ids, of which only the first `.1` are filled.
-    refused_storage: bool,
-    refused_objects: ([u64; REFUSED_OBJECT_CAP], usize),
     renderer_progress: f64,
     area_progress: f64,
 }
-
-/// How many refused objects' files one snapshot names besides the storage
-/// file: as many as the view asks for at once. The rest are named in later
-/// snapshots, as the client empties the ones already named.
-const REFUSED_OBJECT_CAP: usize = repository::WANT_CAP as usize;
 
 fn snapshot_input() -> SnapshotInput {
     let (location, settings) = (device_location_store(), settings());
@@ -161,15 +149,6 @@ fn snapshot_input() -> SnapshotInput {
         character_surfaces,
         stall: stall(),
         declared: source::min_zoom().is_some(),
-        refused_storage: file::is_storage_refused(),
-        refused_objects: {
-            let mut refused = ([0; REFUSED_OBJECT_CAP], 0);
-            for (at, &id) in refused.0.iter_mut().zip(repository::refused_files()) {
-                *at = id;
-                refused.1 += 1;
-            }
-            refused
-        },
         renderer_progress: renderer_progress(),
         // The share is read from every tile, so it is computed only while
         // the area loads.
@@ -221,13 +200,6 @@ impl SnapshotMemo {
 
 /// The snapshot built from `shown`.
 pub fn snapshot(shown: &SnapshotInput) -> Snapshot {
-    let mut refused_files = Vec::new();
-    if shown.refused_storage {
-        refused_files.push(RefusedFile { path: file::storage_path() });
-    }
-    for &id in &shown.refused_objects.0[..shown.refused_objects.1] {
-        refused_files.push(RefusedFile { path: file::quadrant_path(path::object::ID, id) });
-    }
     Snapshot {
         pivot: PivotState {
             status: shown.status,
@@ -262,7 +234,6 @@ pub fn snapshot(shown: &SnapshotInput) -> Snapshot {
         settings: shown.settings.map_or(Vec::new(), |s| s.to_vec()),
         division: division_parts(shown.division, shown.named_to),
         character_surfaces: shown.character_surfaces.0[..shown.character_surfaces.1].to_vec(),
-        refused_files,
         stall: shown.stall,
         renderer_progress: shown.renderer_progress,
         area_progress: shown.area_progress,

@@ -1,0 +1,25 @@
+package xpute:fs@0.1.0;
+
+// What xpute's files share, as wasi:filesystem's `types` holds them.
+interface types {
+  // Why a file's method failed, each case named as wasi:filesystem's
+  // error-code, or wasi:sockets', names the same error; `bad-message` and
+  // `no-object` are xpute's own. A failure of the link, such as a canceled
+  // method, is the frame's status instead.
+  enum error-code {
+    // No file is there.
+    no-entry,
+    // Its backend failed to read or write it.
+    io,
+    // Its backend keeps nothing written there.
+    read-only,
+    // Its backend refused access to it.
+    access,
+    // Its backend holds it in a form it cannot read as bytes.
+    bad-message,
+    // The network did not reach its server.
+    remote-unreachable,
+    // Its server holds no such object.
+    no-object,
+  }
+}

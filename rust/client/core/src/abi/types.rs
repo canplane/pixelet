@@ -43,9 +43,9 @@ impl Sensor {
 #[repr(u32)]
 pub enum ErrorCode {
     /// The settings are not read yet, and a change would be overwritten.
-    NotLoaded = 0,
+    WouldBlock = 0,
     /// No surface is open there.
-    NotOpen = 1,
+    BadDescriptor = 1,
     /// The surface draws something else.
     Busy = 2,
     /// The text is longer than a marker holds.
@@ -59,8 +59,8 @@ pub enum ErrorCode {
 impl ErrorCode {
     /// Every member, in its source's own order.
     pub const ALL: [ErrorCode; 6] = [
-        ErrorCode::NotLoaded,
-        ErrorCode::NotOpen,
+        ErrorCode::WouldBlock,
+        ErrorCode::BadDescriptor,
         ErrorCode::Busy,
         ErrorCode::TooLong,
         ErrorCode::NotPermitted,
@@ -70,8 +70,8 @@ impl ErrorCode {
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u32) -> Option<ErrorCode> {
         match val {
-            0 => Some(ErrorCode::NotLoaded),
-            1 => Some(ErrorCode::NotOpen),
+            0 => Some(ErrorCode::WouldBlock),
+            1 => Some(ErrorCode::BadDescriptor),
             2 => Some(ErrorCode::Busy),
             3 => Some(ErrorCode::TooLong),
             4 => Some(ErrorCode::NotPermitted),
@@ -83,8 +83,8 @@ impl ErrorCode {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            ErrorCode::NotLoaded => "NotLoaded",
-            ErrorCode::NotOpen => "NotOpen",
+            ErrorCode::WouldBlock => "WouldBlock",
+            ErrorCode::BadDescriptor => "BadDescriptor",
             ErrorCode::Busy => "Busy",
             ErrorCode::TooLong => "TooLong",
             ErrorCode::NotPermitted => "NotPermitted",

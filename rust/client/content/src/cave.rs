@@ -16,6 +16,7 @@
 use pxl_engine::seed::node_seed;
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::hierarchy::tree::child_idx;
 use xpute_kit::math::rng::seed_mix32;
 
 use crate::halve::{halve, weight};
@@ -102,7 +103,7 @@ fn manhattan(a: [i32; 3], b: [i32; 3]) -> u32 {
 }
 
 /// Which of a node's eight a pipe cell lies in, `dx + 2dy + 4dz`.
-fn octant_of(o: [i32; 3], half: i32, p: [i32; 3]) -> u32 {
+fn child_idx_of(o: [i32; 3], half: i32, p: [i32; 3]) -> u32 {
     (p[0] >= o[0] + half) as u32
         | ((p[1] >= o[1] + half) as u32) << 1
         | ((p[2] >= o[2] + half) as u32) << 2
@@ -225,8 +226,8 @@ fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
     let (o, s) = bounds(node);
     let half = s / 2;
     let (u, v, wh) = (
-        octant_of(o, half, p.enter),
-        octant_of(o, half, p.leave),
+        child_idx_of(o, half, p.enter),
+        child_idx_of(o, half, p.leave),
         node_seed(WALK_TAG, node),
     );
     let n = walk_len(u, v, wh);
@@ -384,7 +385,7 @@ fn holds(node: (Zoom, [i32; 3])) -> CaveNode {
             return h;
         }
         let next = at(z + 1);
-        let i = (next[0] & 1 | (next[1] & 1) << 1 | (next[2] & 1) << 2) as u32;
+        let i = child_idx(next) as u32;
         let (piece, on) = if h.piece.blocks == 0 {
             (NONE, 0)
         } else {

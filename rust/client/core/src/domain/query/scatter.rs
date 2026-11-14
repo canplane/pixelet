@@ -73,11 +73,10 @@ impl DecorQuery for DecorWorld<'_> {
         GROUND.leaf_cell_zoom()
     }
 
-    /// The asset of the cell `c` at `zoom` in the base, void where the world
-    /// holds nothing there.
-    fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3]) -> u32 {
-        let answer = World::base().asset_about(&f.line, zoom, c);
-        answer.val().unwrap_or(Sentinel::Void as u32)
+    /// The asset of the cell `c` at `zoom` in the base, none where the world
+    /// lacks it.
+    fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3]) -> Option<u32> {
+        World::base().asset_about(&f.line, zoom, c).val()
     }
 
     /// The asset of the cell `c` at `zoom` in the world as edited, so an edit
@@ -99,7 +98,8 @@ impl DecorQuery for DecorWorld<'_> {
 /// scatter, cell by cell, which a whole region generates the same way. With
 /// `boxed`, it also says whether the
 /// decor generates there, its box asked against the same column surface
-/// (pxl-content `generation::placement`); without `boxed` that is true.
+/// (pxl-content `generation::placement`); without `boxed`, whether no read
+/// of its vote lacks.
 pub(super) fn generated_at(
     world: &mut DecorWorld,
     decor: &Decor,

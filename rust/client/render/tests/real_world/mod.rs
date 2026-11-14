@@ -28,6 +28,7 @@ use pxl_spec::space::coord::adapter::epsg3857::cells_of_m;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::hierarchy::tree::child_idx;
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
@@ -438,10 +439,7 @@ impl Placing {
     /// Puts the leaf `word` at the node `c` of `zoom`, unless a coarser leaf covers it.
     fn put(&mut self, zoom: Zoom, c: [i32; 3], word: u32) {
         let p = object::path(zoom, c);
-        let idx = |d: Zoom| {
-            let v = [p[0] >> d, p[1] >> d, p[2] >> d];
-            (v[0] & 1 | (v[1] & 1) << 1 | (v[2] & 1) << 2) as usize
-        };
+        let idx = |d: Zoom| child_idx(p.map(|v| v >> d));
         let mut slot = idx(zoom);
         for z in 1..=zoom {
             if self.first[slot] == 0 {

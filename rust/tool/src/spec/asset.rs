@@ -58,7 +58,7 @@ pub fn pack_path() -> Result<String, String> {
         .ok_or(format!("{CUBE_JSON}: no pack"))
 }
 
-/// The catalog's groups a texture is filed under: the ground's palette entries, the
+/// The catalog's groups a texture is filed under: the ground's cubes, the
 /// object's colors, and the sentinels, of which the world draws the bedrock.
 pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
     let spec = read(CUBE_JSON)?;
@@ -71,7 +71,7 @@ pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
         .collect()
 }
 
-/// Each ground palette entry's color by name, packed `0xRRGGBB`, as color.json gives it.
+/// Each ground cube's color by name, packed `0xRRGGBB`, as color.json gives it.
 pub fn ground_colors() -> Result<std::collections::BTreeMap<String, u32>, String> {
     let spec = read(COLOR_JSON)?;
     let ground = spec.get("ground").ok_or("color.json has no ground")?;
@@ -96,7 +96,7 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
         "//",
         format!("// {}", mark("spec/spec/asset/color.json", "pxl-tool spec/asset.rs")).as_str(),
         "//",
-        "// The color of every palette entry and every placed color: what a cube *is* to",
+        "// The color of every ground cube and every placed color: what a cube *is* to",
         "// the eye when no texture is drawn over it — everything drawn with the",
         "// pack off reads this, the coarse cells included, which summarize it",
         "// the way they summarize the tiles with the pack on",
@@ -223,7 +223,7 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
         .enumerate()
         .map(|(i, (k, _))| (k.as_str(), decor_kind << idx_bits | i as u32))
         .collect();
-    let (rows, table) = decor_table(&spec, &ground_palette()?, &slots()?)?;
+    let (rows, table) = decor_table(&spec, &ground_asset_ids()?, &slots()?)?;
 
     let mut ts = vec!["// @pxl/client/ui/shared/asset/decor.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
@@ -270,6 +270,7 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
             "",
             "use crate::asset::catalog::Slot;",
             "use crate::asset::id::{asset_id, AssetId, Kind};",
+            "use crate::ground::GroundId;",
         ]
         .map(String::from),
     );
@@ -281,15 +282,21 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     ])
 }
 
-/// The ground's palette entries by name and number, what a decor may stand on.
-fn ground_palette() -> Result<Vec<(String, u32)>, String> {
+/// The ground's asset ids by name and number, what a decor may stand on.
+fn ground_asset_ids() -> Result<Vec<(String, u32)>, String> {
     let spec = read(CUBE_JSON)?;
     cubes(&spec, "ground")
 }
 
+/// The ground asset ids a decor's `on` holds a bit for, as many as pxl-spec ground.rs
+/// `GroundId` takes, in `ON_WORDS` words. The tool links no workspace crate, so it holds the
+/// count itself, and the generated `Row::on`, sized from `GroundId`, refuses a table of another.
+const GROUND_ID_CNT: u32 = 1 << u8::BITS;
+const ON_WORDS: usize = (GROUND_ID_CNT / u32::BITS) as usize;
+
 /// The decors' table, in the catalog's order, which is the order their variants are numbered
 /// in: the rows, every number the GPU reads too (how the ground generates each decor, its
-/// palette entries, its boxes), and each decor's models over its row. A model or a skin is its
+/// ground asset ids, its boxes), and each decor's models over its row. A model or a skin is its
 /// slot among `slots`, the catalog's numbering.
 fn decor_table(
     spec: &Node,
@@ -310,7 +317,7 @@ fn decor_table(
         seed: String,
         chance: u32,
         orient: String,
-        on: [u32; 8],
+        on: [u32; ON_WORDS],
         sizes: Vec<String>,
         models: Vec<String>,
     }
@@ -333,13 +340,13 @@ fn decor_table(
             .str_at("orient")
             .and_then(|o| orients.iter().find(|m| m.name == o))
             .ok_or(at("orient"))?;
-        let mut on = [0u32; 8];
+        let mut on = [0u32; ON_WORDS];
         for l in k.get("on").and_then(Node::arr).ok_or(at("on"))? {
             let v = l
                 .str()
                 .and_then(|l| asset_ids.iter().find(|(g, _)| g == l))
                 .map(|(_, v)| *v)
-                .filter(|v| *v < 256)
+                .filter(|v| *v < GROUND_ID_CNT)
                 .ok_or(format!("{}: {l:?} is no ground asset_id", at("on")))?;
             on[(v >> 5) as usize] |= 1 << (v & 31);
         }
@@ -397,6 +404,9 @@ fn decor_table(
     portable.extend([
         "/// The most variants a decor has.".into(),
         format!("pub const VARIANT_CAP: usize = {variant_cap};"),
+        String::new(),
+        "/// The words of a row's `on`, a bit for each ground asset id.".into(),
+        "pub const ON_WORDS: usize = (GroundId::MAX as usize + 1) / u32::BITS as usize;".into(),
     ]);
     portable.extend(
         [
@@ -421,8 +431,8 @@ fn decor_table(
             "    /// (pxl-content scatter.rs `cnt`).",
             "    pub chance: u32,",
             "    pub orient: Orientation,",
-            "    /// The palette entries it may stand on, a bit each.",
-            "    pub on: [u32; 8],",
+            "    /// The ground asset ids it may stand on, a bit each.",
+            "    pub on: [u32; ON_WORDS],",
             "    pub variant_cnt: u32,",
             "    /// Each variant's box, in its decor's cells; none past `variant_cnt`.",
             "    pub sizes: [[u32; 3]; VARIANT_CAP],",

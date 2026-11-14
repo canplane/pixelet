@@ -111,11 +111,38 @@ Open when native resumes:
 - The disk's own thread goes: the page's storage is synchronous on the worker's
   thread, and the files a device keeps are small (**the user** flagged it as an
   operating system's analogy).
+
+  > Since 2026-11-14 (64de3e409d): the disk keeps its own thread, in
+  > xpute-native-host (**the user**). A page's storage does its I/O off the
+  > worker's thread too, in IndexedDB and by message to the page, so the
+  > thread is that role on a device, and a sync stays off the core's thread.
+
 - The runtime's composition sits in pxl-core's `sys/`, which may not name the
   renderer.
+
+  > Since 2026-11-14 (88830d333a): the composition is pxl-runtime
+  > (`rust/client/runtime`), the device's counterpart of the page's worker,
+  > with the device's servers of pixelet's own interfaces, the text and the
+  > files, and their bindings; the device's library is built from it, and
+  > pxl-core is a guest that names no host (**the user**).
+
 - The runtime's environment (the event loop, threads, hooks, the log) and its
   host (the link and the interfaces it serves) are mixed in one crate.
+
+  > Since 2026-11-14 (64de3e409d): they split as the web's do (**the user**).
+  > xpute-native-runtime (`xpute/native/runtime/rust`) is the environment: the
+  > event loop, wait, the log, JNI, the lifecycle, the link that enters the
+  > guest, the UI's channel, and the host-side bindings beside the link.
+  > xpute-native-host keeps the clock, the stop and the disk over it.
+
 - The device's platform modules, and a source for the origin's paths on a device.
+
+  > Since 2026-11-14: no new platform module (**the user**). A device's origin
+  > paths are served by the UI's JavaScript over the remote, through
+  > `service/platform/origin.native.ts` `get`, so the Rust has no HTTP client:
+  > the worker fetches them on a page and the UI's thread on a device. The
+  > remote carries no answer from the UI yet, so a device's file server answers
+  > them, and the objects, `no-entry`.
 
 ## How the work is reviewed
 

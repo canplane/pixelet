@@ -4,12 +4,14 @@
 
 import { Lift } from "../../cabi.ts";
 import {
+  ComponentError,
   type Link,
   type LinkObject,
   type Method,
   refusal_of,
 } from "../../link.ts";
 import { type Lent, load_Lent } from "../types.ts";
+import type { ErrorCode } from "./types.enum.ts";
 import {
   ERRNO_EBADMSG,
   ERRNO_EINPROGRESS,
@@ -22,8 +24,8 @@ export const FILE_SIZE: Method = 0;
 export const FILE_READ: Method = 1;
 /** `[method]file.write` */
 export const FILE_WRITE: Method = 2;
-/** `[method]file.changed` */
-export const FILE_CHANGED: Method = 3;
+/** `[method]file.set-aside` */
+export const FILE_SET_ASIDE: Method = 3;
 /** `[method]file.close` */
 export const FILE_CLOSE: Method = 4;
 
@@ -31,7 +33,7 @@ export interface HostFile {
   size(signal_: AbortSignal): Promise<number>;
   read(buf: Lent, signal_: AbortSignal): Promise<number>;
   write(buf: Lent, signal_: AbortSignal): Promise<void>;
-  changed(signal_: AbortSignal): Promise<void>;
+  set_aside(signal_: AbortSignal): Promise<void>;
   close(signal_: AbortSignal): Promise<void>;
 }
 
@@ -47,14 +49,38 @@ export function file(
           case FILE_SIZE: {
             const stop = new AbortController();
             imp.size(stop.signal).then(
-              (v) =>
+              (x) => {
+                const v = { tag: "ok", val: x } as
+                  { tag: "ok"; val: number } | { tag: "err"; val: ErrorCode };
                 l.task_return(tag, 0, [
-                  4,
+                  8,
                   (w) => {
-                    w.u32(0, v);
+                    if (v.tag === "ok") {
+                      w.u32(0 + 4, v.val);
+                    } else {
+                      w.u8(0, 1);
+                      w.u8(0 + 4, v.val);
+                    }
                   },
-                ]),
-              (e: unknown) => l.task_return(tag, refusal_of(e)),
+                ]);
+              },
+              (e: unknown) => {
+                if (!(e instanceof ComponentError))
+                  return l.task_return(tag, refusal_of(e));
+                const v = { tag: "err", val: e.payload as ErrorCode } as
+                  { tag: "ok"; val: number } | { tag: "err"; val: ErrorCode };
+                l.task_return(tag, 0, [
+                  8,
+                  (w) => {
+                    if (v.tag === "ok") {
+                      w.u32(0 + 4, v.val);
+                    } else {
+                      w.u8(0, 1);
+                      w.u8(0 + 4, v.val);
+                    }
+                  },
+                ]);
+              },
             );
             l.on_cancel(tag, () => stop.abort());
             return ERRNO_EINPROGRESS;
@@ -64,14 +90,38 @@ export function file(
             const r_ = new Lift(args);
             const stop = new AbortController();
             imp.read(load_Lent(r_, 0), stop.signal).then(
-              (v) =>
+              (x) => {
+                const v = { tag: "ok", val: x } as
+                  { tag: "ok"; val: number } | { tag: "err"; val: ErrorCode };
                 l.task_return(tag, 0, [
-                  4,
+                  8,
                   (w) => {
-                    w.u32(0, v);
+                    if (v.tag === "ok") {
+                      w.u32(0 + 4, v.val);
+                    } else {
+                      w.u8(0, 1);
+                      w.u8(0 + 4, v.val);
+                    }
                   },
-                ]),
-              (e: unknown) => l.task_return(tag, refusal_of(e)),
+                ]);
+              },
+              (e: unknown) => {
+                if (!(e instanceof ComponentError))
+                  return l.task_return(tag, refusal_of(e));
+                const v = { tag: "err", val: e.payload as ErrorCode } as
+                  { tag: "ok"; val: number } | { tag: "err"; val: ErrorCode };
+                l.task_return(tag, 0, [
+                  8,
+                  (w) => {
+                    if (v.tag === "ok") {
+                      w.u32(0 + 4, v.val);
+                    } else {
+                      w.u8(0, 1);
+                      w.u8(0 + 4, v.val);
+                    }
+                  },
+                ]);
+              },
             );
             l.on_cancel(tag, () => stop.abort());
             return ERRNO_EINPROGRESS;
@@ -87,11 +137,39 @@ export function file(
             l.on_cancel(tag, () => stop.abort());
             return ERRNO_EINPROGRESS;
           }
-          case FILE_CHANGED: {
+          case FILE_SET_ASIDE: {
             const stop = new AbortController();
-            imp.changed(stop.signal).then(
-              () => l.task_return(tag, 0, null),
-              (e: unknown) => l.task_return(tag, refusal_of(e)),
+            imp.set_aside(stop.signal).then(
+              () => {
+                const v = { tag: "ok" } as
+                  { tag: "ok" } | { tag: "err"; val: ErrorCode };
+                l.task_return(tag, 0, [
+                  2,
+                  (w) => {
+                    if (v.tag === "ok") {
+                    } else {
+                      w.u8(0, 1);
+                      w.u8(0 + 1, v.val);
+                    }
+                  },
+                ]);
+              },
+              (e: unknown) => {
+                if (!(e instanceof ComponentError))
+                  return l.task_return(tag, refusal_of(e));
+                const v = { tag: "err", val: e.payload as ErrorCode } as
+                  { tag: "ok" } | { tag: "err"; val: ErrorCode };
+                l.task_return(tag, 0, [
+                  2,
+                  (w) => {
+                    if (v.tag === "ok") {
+                    } else {
+                      w.u8(0, 1);
+                      w.u8(0 + 1, v.val);
+                    }
+                  },
+                ]);
+              },
             );
             l.on_cancel(tag, () => stop.abort());
             return ERRNO_EINPROGRESS;
@@ -99,8 +177,36 @@ export function file(
           case FILE_CLOSE: {
             const stop = new AbortController();
             imp.close(stop.signal).then(
-              () => l.task_return(tag, 0, null),
-              (e: unknown) => l.task_return(tag, refusal_of(e)),
+              () => {
+                const v = { tag: "ok" } as
+                  { tag: "ok" } | { tag: "err"; val: ErrorCode };
+                l.task_return(tag, 0, [
+                  2,
+                  (w) => {
+                    if (v.tag === "ok") {
+                    } else {
+                      w.u8(0, 1);
+                      w.u8(0 + 1, v.val);
+                    }
+                  },
+                ]);
+              },
+              (e: unknown) => {
+                if (!(e instanceof ComponentError))
+                  return l.task_return(tag, refusal_of(e));
+                const v = { tag: "err", val: e.payload as ErrorCode } as
+                  { tag: "ok" } | { tag: "err"; val: ErrorCode };
+                l.task_return(tag, 0, [
+                  2,
+                  (w) => {
+                    if (v.tag === "ok") {
+                    } else {
+                      w.u8(0, 1);
+                      w.u8(0 + 1, v.val);
+                    }
+                  },
+                ]);
+              },
             );
             l.on_cancel(tag, () => stop.abort());
             return ERRNO_EINPROGRESS;

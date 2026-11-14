@@ -9,7 +9,7 @@ import android.graphics.Typeface
 import java.nio.ByteBuffer
 
 // Text in the platform's own font, as the core asks for it
-// (pxl-core sys/io/text_device.rs), on the core's own thread: how wide a line
+// (pxl-runtime text.rs), on the core's own thread: how wide a line
 // runs, and a line drawn. The font is the system's, which falls back through every script
 // and draws color emoji as the app's own text does. This file does on Android's
 // text engine what Text.swift does on the iPhone's.

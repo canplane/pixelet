@@ -332,34 +332,6 @@ impl DivisionPart {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct RefusedFile {
-    pub path: Vec<_rt::Token>,
-}
-
-impl RefusedFile {
-    pub const SZ: usize = 8;
-    pub const ALIGN: usize = 4;
-
-    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
-        if let Some(b) = w.list(at + 0, (&self.path).len(), 12, 4) {
-            for (i, x) in (&self.path).iter().enumerate() {
-                (x).store(w, b + i * 12);
-            }
-        }
-    }
-
-    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<RefusedFile, _rt::Errno> {
-        Ok(RefusedFile {
-            path: r.list(at + 0, 12, 4).and_then(|(b, n)| {
-                (0..n)
-                    .map(|i| _rt::Token::load(r, b + i * 12))
-                    .collect::<Result<Vec<_>, _rt::Errno>>()
-            })?,
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
 pub struct Snapshot {
     pub pivot: PivotState,
     pub location: LocationState,
@@ -373,14 +345,13 @@ pub struct Snapshot {
     pub settings: Vec<u32>,
     pub division: Vec<DivisionPart>,
     pub character_surfaces: Vec<u32>,
-    pub refused_files: Vec<RefusedFile>,
     pub stall: Option<Message>,
     pub renderer_progress: f64,
     pub area_progress: f64,
 }
 
 impl Snapshot {
-    pub const SZ: usize = 120;
+    pub const SZ: usize = 112;
     pub const ALIGN: usize = 8;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
@@ -397,23 +368,23 @@ impl Snapshot {
         w.bool(at + 63, *&self.zooming);
         w.bool(at + 64, *&self.over_marker);
         w.arr(at + 68, &self.settings);
-        if let Some(b) = w.list(at + 76, (&self.division).len(), 16, 4) {
+        if let Some(b) = w.list(
+            at + 76,
+            (&self.division).len(),
+            DivisionPart::SZ,
+            DivisionPart::ALIGN,
+        ) {
             for (i, x) in (&self.division).iter().enumerate() {
-                (x).store(w, b + i * 16);
+                (x).store(w, b + i * DivisionPart::SZ);
             }
         }
         w.arr(at + 84, &self.character_surfaces);
-        if let Some(b) = w.list(at + 92, (&self.refused_files).len(), 8, 4) {
-            for (i, x) in (&self.refused_files).iter().enumerate() {
-                (x).store(w, b + i * 8);
-            }
-        }
         if let Some(v) = &self.stall {
-            w.u8(at + 100, 1);
-            w.u8(at + 100 + 1, *v as u8);
+            w.u8(at + 92, 1);
+            w.u8(at + 92 + 1, *v as u8);
         }
-        w.f64(at + 104, *&self.renderer_progress);
-        w.f64(at + 112, *&self.area_progress);
+        w.f64(at + 96, *&self.renderer_progress);
+        w.f64(at + 104, *&self.area_progress);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Snapshot, _rt::Errno> {
@@ -434,28 +405,25 @@ impl Snapshot {
             zooming: r.bool(at + 63)?,
             over_marker: r.bool(at + 64)?,
             settings: r.arr::<u32>(at + 68)?,
-            division: r.list(at + 76, 16, 4).and_then(|(b, n)| {
-                (0..n)
-                    .map(|i| DivisionPart::load(r, b + i * 16))
-                    .collect::<Result<Vec<_>, _rt::Errno>>()
-            })?,
+            division: r
+                .list(at + 76, DivisionPart::SZ, DivisionPart::ALIGN)
+                .and_then(|(b, n)| {
+                    (0..n)
+                        .map(|i| DivisionPart::load(r, b + i * DivisionPart::SZ))
+                        .collect::<Result<Vec<_>, _rt::Errno>>()
+                })?,
             character_surfaces: r.arr::<u32>(at + 84)?,
-            refused_files: r.list(at + 92, 8, 4).and_then(|(b, n)| {
-                (0..n)
-                    .map(|i| RefusedFile::load(r, b + i * 8))
-                    .collect::<Result<Vec<_>, _rt::Errno>>()
-            })?,
-            stall: r.case(at + 100, 2).and_then(|d| {
+            stall: r.case(at + 92, 2).and_then(|d| {
                 if d == 0 {
                     Ok(None)
                 } else {
-                    r.case(at + 100 + 1, 7)
+                    r.case(at + 92 + 1, 7)
                         .and_then(|v| Message::of(v).ok_or(_rt::Errno::EBADMSG))
                         .map(Some)
                 }
             })?,
-            renderer_progress: r.f64(at + 104)?,
-            area_progress: r.f64(at + 112)?,
+            renderer_progress: r.f64(at + 96)?,
+            area_progress: r.f64(at + 104)?,
         })
     }
 }
@@ -464,7 +432,7 @@ pub fn show(snapshot: &Snapshot) -> Result<(), _rt::Errno> {
     let (r, data) = _rt::link::call(
         HANDLE,
         SHOW,
-        Some((120, &|w_: &mut _rt::Lower| {
+        Some((112, &|w_: &mut _rt::Lower| {
             (&snapshot).store(w_, 0);
         })),
     );
@@ -486,6 +454,5 @@ pub fn view(azimuth: f64, m_per_px: f64) -> Result<(), _rt::Errno> {
 mod _rt {
     pub use xpute_guest::link;
     pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::abi::types::Token;
     pub use xpute_link::{answer, Handle, Lift, Lower, Method};
 }

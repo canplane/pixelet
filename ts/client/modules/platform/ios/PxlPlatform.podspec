@@ -2,9 +2,10 @@
 #
 # The device's half of the client's services on iOS (the .native files in
 # ts/client/src/service/platform/). It answers what the UI asks of the system,
-# such as storage, the clipboard, text and the compass, and makes the core's own
-# calls besides xpute's (`import PxlNative`, the transport's decoder). It builds
-# the core (script/core-build.py), which xpute's pod links, and puts the core's
+# such as storage, the clipboard, text and the compass, and makes the native
+# library's own calls besides xpute's (`import PxlNative`, the transport's
+# decoder). It builds that library, the core with its runtime
+# (script/core-build.py), which xpute's pod links, and puts the library's
 # include/ beside xpute's headers.
 
 require 'json'

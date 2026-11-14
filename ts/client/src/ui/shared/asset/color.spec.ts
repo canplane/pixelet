@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/spec/asset/color.json (pxl-tool spec/asset.rs)
 //
-// The color of every palette entry and every placed color: what a cube *is* to
+// The color of every ground cube and every placed color: what a cube *is* to
 // the eye when no texture is drawn over it — everything drawn with the
 // pack off reads this, the coarse cells included, which summarize it
 // the way they summarize the tiles with the pack on

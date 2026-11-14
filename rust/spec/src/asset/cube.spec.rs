@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/spec/asset/cube.json (xpute-gen data.rs)
 
-/// The texture pack, the file the cube kind's palette entry is drawn from: one image
+/// The texture pack, the file the cube kind's cubes are drawn from: one image
 /// of every tile under asset/content/cube/, which the asset ingest composes
 /// and ships as the table's file at this path, with which tile each cube
 /// wears on which face (pxl-tool bin/asset.rs, ingest.json). In Rust it is
@@ -13,7 +13,7 @@ pub const PACK: u16 = 0;
 /// still land, as Carto's background is.
 pub const BASE: Ground = Ground::Land;
 
-/// The value space's own: what no palette entry or color is (pxl-spec value.rs).
+/// The value space's own: what no ground cube or placed color is (pxl-spec value.rs).
 #[derive(Clone, Copy, Debug)]
 pub struct SentinelRecord {
     pub name: &'static str,
@@ -60,12 +60,12 @@ impl Sentinel {
     }
 }
 
-/// The ground: one byte a cell, a palette entry from OpenStreetMap Carto, numbered in
-/// the order Carto paints.
+/// The ground: one byte a cell, its asset id, a ground cube numbered in
+/// the order OpenStreetMap Carto paints.
 /// `transport` marks a way: decor faces along it and no pier stands on it.
-/// Whatever the palette entry, a cell's top is the height sampled from the
-/// elevation; no entry raises or lowers it. The byte's values are these: 1 to 63
-/// are Carto's palette entries, in its paint order; from 64 on are pixelet's own,
+/// Whatever the cube, a cell's top is the height sampled from the
+/// elevation; no cube raises or lowers it. The byte's values are these: 1 to 63
+/// are cubes in Carto's colors, in its paint order; from 64 on are pixelet's own,
 /// the underground, of which Carto paints nothing; 0 and 255 are the sentinels.
 #[derive(Clone, Copy, Debug)]
 pub struct GroundRecord {
@@ -741,7 +741,7 @@ impl Ground {
 }
 
 /// What only an object can be: past a byte, so no ground cell holds it. An
-/// object's value is a u16 whose byte range is the ground's palette.
+/// object's value is a u16 whose byte range is the ground's.
 #[derive(Clone, Copy, Debug)]
 pub struct ObjectRecord {
     pub name: &'static str,

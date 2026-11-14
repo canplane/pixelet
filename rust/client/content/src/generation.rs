@@ -149,11 +149,11 @@ pub const fn generated_for(hdr: [u32; 3], q: [i32; 2]) -> bool {
 }
 
 /// The most boxes a frame's generation is asked over: the damage and cuts held
-/// (`object::DAMAGE_CAP`), and each brick handed over this frame, which reaches its clip level's
-/// zoom and every coarser one (`asks`'s vote).
+/// (`object::DAMAGE_CAP`), and each brick handed over this frame, which reaches the candidates
+/// whose reads it may answer at every clip level (`reaches`).
 pub const RECT_CAP: u32 = object::DAMAGE_CAP + clipmap::FRAME_BRICK_CAP;
-/// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the finest clip level
-/// zoom whose candidates it reaches, or `EVERY` for all.
+/// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the zoom it is filled at,
+/// or `EVERY`, the coarsest, for one read at every zoom (`reaches`).
 pub const RECT_WORDS: u32 = 5;
 pub const EVERY: u32 = 0;
 const _: () = assert!(FIRST_CELL_ZOOM > EVERY);
@@ -221,16 +221,14 @@ pub const fn brick_rect(cell_zoom: Zoom, q: [i32; 2]) -> [i32; 4] {
 /// Whether one of the frame's boxes, `b` of leaf cells at `zoom` (`RECT_WORDS`), reaches what a
 /// candidate in `at` reads, where `at` is leaf cells of the clip level at `cell_zoom`: a
 /// brick's (`brick_rect`), or one candidate's own. A candidate reads the world at its clip
-/// level's zoom and finer, each read a cell within `READ_REACH` of its own at that zoom. A
-/// brick filled at `zoom` answers only reads at `zoom` or finer (`clipmap::step`), so it
-/// reaches the clip levels at `zoom` and coarser, within `READ_REACH` of its own cells, not of
-/// theirs. A box of damage or a cut (`EVERY`) is read at every zoom, so it reaches within
-/// `READ_REACH` of the clip level's own cells.
+/// level's zoom and finer, each read a cell within `READ_REACH` of its own at that zoom, and a
+/// read a finer clip level does not hold falls to a coarser one (`clipmap::step`). So a brick
+/// filled at `zoom` may answer a read of a candidate at any clip level: it reaches within
+/// `READ_REACH` of the candidate's cells at `zoom` or at `cell_zoom`, whichever is finer. A
+/// box of damage or a cut is at `EVERY`, the coarsest, so it reaches within `READ_REACH` of
+/// the clip level's own cells.
 pub fn reaches(b: [i32; 4], zoom: Zoom, cell_zoom: Zoom, at: [i32; 4]) -> bool {
-    if zoom != EVERY && zoom < cell_zoom {
-        return false;
-    }
-    let s = LEAF_CELL_ZOOM - if zoom == EVERY { cell_zoom } else { zoom };
+    let s = LEAF_CELL_ZOOM - zoom.max(cell_zoom);
     let r = READ_REACH << s;
     // `at` widened to the cells it lies in at that zoom.
     let reads = [
@@ -375,8 +373,8 @@ pub trait DecorQuery {
     /// (`placement`), the same whatever clip level asks.
     fn finest(&mut self, cell_zoom: Zoom, g: [i32; 2]) -> Zoom;
     /// What is in the cell `c` of `zoom`: the base's answer near the column surface `f`
-    /// (`support::asset`), void or the ground's value.
-    fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3]) -> u32;
+    /// (`support::asset`), void or the ground's value; none where the read lacks.
+    fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3]) -> Option<u32>;
     /// What the edited world answers of the cell `c` of `zoom`, down the cell's own line, which
     /// tells an edit there, something placed or air (`answer::is_placed`).
     fn edited(&mut self, zoom: Zoom, c: [i32; 3]) -> u32;
@@ -399,17 +397,18 @@ pub struct Prop {
 
 /// Where candidate `c` of `decor` stands at `cell_zoom`. It stands on its column's surface in
 /// the base, the ground's alone, so no edit moves it or takes the ground from under
-/// it, and it faces as the cells beside it vote (`asks`). Then, where `boxed`, it says whether
-/// the candidate generates there: every cell of its box is void and every cell under its base
-/// is an asset id it generates on, as the ground holds them; no edit lies in its box, air
-/// included (`DecorQuery::edited`); and no placed decor's box overlaps its own
-/// (`overlaps_placed`). It stands at its clip level's column surface, while the vote and its
-/// box are asked at the finest zoom at which the world holds its leaf column
-/// (`DecorQuery::finest`), around that zoom's column surface, so a candidate faces and
-/// generates alike at every clip level it is generated at. Its pose stands as itself only at a
-/// clip level its size stands at (`stands_at`). It returns where it stands and whether it
-/// generates there, which is true where not `boxed` and it stands; none where its column
-/// surface is not found.
+/// it, and it faces as the cells beside it vote (`asks`). It does not generate where a read of
+/// its vote or its box lacks. Then, where `boxed`, it says whether the candidate generates
+/// there: every cell of its box is void and every cell under its base is an asset id it
+/// generates on, as the ground holds them; no edit lies in its box, air included
+/// (`DecorQuery::edited`); and no placed decor's box overlaps its own (`overlaps_placed`). It
+/// stands at its clip level's column surface, while the vote and its box are asked at the
+/// finest zoom at which the world holds its leaf column (`DecorQuery::finest`), around that
+/// zoom's column surface, so a candidate faces and generates alike at every clip level it is
+/// generated at. Its pose stands as itself only at a clip level its size stands at
+/// (`stands_at`). It returns where it stands and whether it generates there, which where not
+/// `boxed` is that it stands and no read of its vote lacks; none where its column surface is
+/// not found.
 pub fn placement(
     q: &mut impl DecorQuery,
     decor: &Row,
@@ -454,8 +453,8 @@ pub fn placement(
 /// horizontal wins, else none (a tie or an isolated cell has no real answer), and a half turn
 /// more on a draw, as two-way traffic faces both ways. Then, where `boxed`, whether it
 /// generates there (`placement`'s rule). Every cell is asked at `zoom` around the column surface
-/// `about`, whose top cell is `base`. It returns its variant, its heading, and whether it
-/// generates there.
+/// `about`, whose top cell is `base`, and a read that lacks keeps it from generating. It
+/// returns its variant, its heading, and whether it generates there.
 fn asks<Q: DecorQuery>(
     q: &mut Q,
     about: &Q::ColumnSurface,
@@ -470,11 +469,14 @@ fn asks<Q: DecorQuery>(
     let variant = draw_variant(decor, &mut draws);
     let [x0, y0, _] = at;
     let foot = [x0 >> s, y0 >> s];
+    let mut lacks = false;
     let turn = if decor.orient == Orientation::AlongTransport {
         let flip = draws.next_u32() >> 31;
         let mut way = |x: i32, y: i32| {
             let c = [foot[0] + x, foot[1] + y, base];
-            i32::from(value::is_transport(val(q.asset(about, zoom, c))))
+            let v = q.asset(about, zoom, c);
+            lacks |= v.is_none();
+            i32::from(v.is_some_and(|v| value::is_transport(val(v))))
         };
         let (mut horizontal, mut vertical) = (0, 0);
         for d in 1..=ALIGN_NEIGHBOR_RADIUS {
@@ -485,8 +487,8 @@ fn asks<Q: DecorQuery>(
     } else {
         draws.next_u32() >> (u32::BITS - TURN_BITS)
     };
-    if !boxed {
-        return (variant, turn, true);
+    if lacks || !boxed {
+        return (variant, turn, !lacks);
     }
     let [w, d, h] = decor.size(variant, turn).map(|v| v as i32);
     let top = ((base + 1) * (1 << s) + h - 1) >> s;
@@ -494,7 +496,9 @@ fn asks<Q: DecorQuery>(
         for x in foot[0]..=(x0 + w - 1) >> s {
             for z in base..=top {
                 let c = [x, y, z];
-                let v = q.asset(about, zoom, c);
+                let Some(v) = q.asset(about, zoom, c) else {
+                    return (variant, turn, false);
+                };
                 // Under its base an asset id it generates on; over it void, and no edit.
                 let holds = if z == base {
                     decor.allows(val(v))

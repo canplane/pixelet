@@ -117,9 +117,9 @@ enum Load {
     /// The slot was read, whether it held settings or nothing. The store is
     /// written to it from now on.
     Loaded,
-    /// The slot was refused (sys/io/file.rs `is_storage_refused`). The store
-    /// holds the defaults and does not write over the slot until the client
-    /// sets the file aside and empties the slot.
+    /// The slot was refused (sys/io/file.rs `StorageRead::Refused`). The
+    /// store holds the defaults, and does not write over the slot until its
+    /// file is set aside.
     Refused,
     /// The slot is there but cannot be read for another reason. The store
     /// holds the defaults and never writes over the slot this session.
@@ -157,7 +157,10 @@ pub fn settings_load_step() -> bool {
     let (s, now) = match file {
         StorageRead::Bytes(bytes) => (read_stored(&bytes), Load::Loaded),
         StorageRead::None => (Setting::DEFAULT, Load::Loaded),
-        StorageRead::Unreadable if file::is_storage_refused() => (Setting::DEFAULT, Load::Refused),
+        StorageRead::Refused => {
+            file::set_aside(file::Refused::Storage);
+            (Setting::DEFAULT, Load::Refused)
+        }
         StorageRead::Unreadable => (Setting::DEFAULT, Load::Unreadable),
     };
     SETTINGS_STORE.set(s);
@@ -166,10 +169,9 @@ pub fn settings_load_step() -> bool {
     true
 }
 
-/// Called once the client has set a refused slot's file aside and emptied
-/// the slot. The store, with what changed meanwhile, is written from the
-/// next keep on.
-pub fn on_settings_emptied() {
+/// Called once a refused slot's file is set aside. The store, with what
+/// changed meanwhile, is written from the next keep on.
+pub fn on_settings_set_aside() {
     if *load() == Load::Refused {
         *load() = Load::Loaded;
     }

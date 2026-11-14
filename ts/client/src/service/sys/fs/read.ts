@@ -1,16 +1,16 @@
 // @pxl/client/service/sys/fs/read.ts
 
-/** A 204 is a baked page that its version leaves out, and reads as ENOENT. */
+/** A 204 is a baked page that its version leaves out, and reads as `no-entry`. */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
+import { ComponentError } from "@xpute/link";
 import {
-  ERRNO_EACCES,
-  ERRNO_EIO,
-  ERRNO_ENETUNREACH,
-  ERRNO_ENOENT,
-  ERRNO_ENXIO,
-} from "@xpute/kit/status/errno.spec.ts";
-import { FaultError } from "@xpute/kit/status/error.ts";
+  ERROR_CODE_ACCESS,
+  ERROR_CODE_IO,
+  ERROR_CODE_NO_ENTRY,
+  ERROR_CODE_NO_OBJECT,
+  ERROR_CODE_REMOTE_UNREACHABLE,
+} from "@xpute/link/abi/fs/types.enum.ts";
 import { online } from "@/service/origin/online.ts";
 import * as origin from "@/service/origin/route.ts";
 
@@ -31,14 +31,18 @@ export async function get(url: string, signal: AbortSignal): Promise<U8Array> {
         }`,
       );
     }
-    throw new FaultError(online() ? ERRNO_EIO : ERRNO_ENETUNREACH);
+    throw new ComponentError(
+      online() ? ERROR_CODE_IO : ERROR_CODE_REMOTE_UNREACHABLE,
+    );
   }
-  if (res.status === 204) throw new FaultError(ERRNO_ENOENT);
+  if (res.status === 204) throw new ComponentError(ERROR_CODE_NO_ENTRY);
   if (!res.ok) {
     console.warn(`[read] ${url}: HTTP ${res.status}`);
     // A 404 is the object's failure: its key names nothing. Any other status
     // is the server's failure.
-    throw new FaultError(res.status === 404 ? ERRNO_ENXIO : ERRNO_EACCES);
+    throw new ComponentError(
+      res.status === 404 ? ERROR_CODE_NO_OBJECT : ERROR_CODE_ACCESS,
+    );
   }
   return body;
 }

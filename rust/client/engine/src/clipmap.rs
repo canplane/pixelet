@@ -22,6 +22,7 @@ use pxl_spec::ground::{asset_ids, top, GroundId};
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{idx_at, Zoom, LEAF_CELL_ZOOM, MIN_ZOOM};
+use pxl_spec::space::hierarchy::tree::child_of;
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::GROUND;
@@ -518,8 +519,9 @@ pub fn join(
     j: u32,
     [x, y]: [u32; 2],
 ) -> [i32; 2] {
-    let under = |q: u32| {
-        ground::extent_of(w.bound_mip(cell_zoom, slot, j - 1, [2 * x + q % 2, 2 * y + q / 2]))
+    let under = |q: usize| {
+        let [cx, cy] = child_of([x as i32, y as i32], q);
+        ground::extent_of(w.bound_mip(cell_zoom, slot, j - 1, [cx as u32, cy as u32]))
     };
     let mut b = under(0);
     let mut q = 1;

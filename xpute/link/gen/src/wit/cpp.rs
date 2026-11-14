@@ -168,6 +168,21 @@ impl Header<'_> {
         })
     }
 
+    /// The size and alignment of `k` as C++ writes them: a record's or a
+    /// variant's own constants, any other's numbers.
+    fn layout(&self, k: &Kind) -> Result<(String, String), String> {
+        Ok(match k {
+            Kind::Record(_) | Kind::Variant(_) => {
+                let t = self.ty(k)?;
+                (format!("{t}::SZ"), format!("{t}::ALIGN"))
+            }
+            _ => {
+                let (sz, align) = self.g.layout(k)?;
+                (sz.to_string(), align.to_string())
+            }
+        })
+    }
+
     /// Stores `e`, a value of `k`, at `at` with the writer `w`.
     fn store(&self, w: &str, at: &str, e: &str, k: &Kind) -> Result<String, String> {
         Ok(match k {
@@ -181,7 +196,7 @@ impl Header<'_> {
             Kind::Str => format!("{w}.str({at}, {e});"),
             Kind::Array(n) => format!("{w}.arr<{}>({at}, {e});", n.cpp),
             Kind::List(el) => {
-                let (sz, align) = self.g.layout(el)?;
+                let (sz, align) = self.layout(el)?;
                 // A list inside a list takes names of its own depth.
                 let d = self.g.depth.get();
                 self.g.depth.set(d + 1);
@@ -246,7 +261,7 @@ impl Header<'_> {
             Kind::Str => format!("std::string({r}.str({at}))"),
             Kind::Array(n) => format!("{r}.arr<{}>({at})", n.cpp),
             Kind::List(el) => {
-                let (sz, align) = self.g.layout(el)?;
+                let (sz, align) = self.layout(el)?;
                 // A list inside a list takes names of its own depth.
                 let d = self.g.depth.get();
                 self.g.depth.set(d + 1);

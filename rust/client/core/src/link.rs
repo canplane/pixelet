@@ -16,7 +16,7 @@ use crate::abi;
 use crate::abi::types::Sensor;
 use crate::domain::layer::object::repository;
 use crate::domain::scene::character::surface::character_surface_close;
-use crate::domain::setting::store::{on_settings_emptied as settings_emptied, settings_open};
+use crate::domain::setting::store::{on_settings_set_aside, settings_open};
 use crate::domain::view::demand;
 use crate::frame;
 use crate::perf::record::perf_record;
@@ -141,12 +141,12 @@ pub fn end() -> bool {
             }
         }
     }
-    // A refused file that changed goes back to its owner, which reads it
+    // A refused file set aside goes back to its owner, which reads it
     // again: the settings from their next keep on, the objects' file now.
-    while let Some(r) = file::take_changed() {
+    while let Some(r) = file::take_set_aside() {
         match r {
-            file::Refused::Storage => settings_emptied(),
-            file::Refused::Objects(id) => _ = repository::on_emptied(id),
+            file::Refused::Storage => on_settings_set_aside(),
+            file::Refused::Objects(id) => _ = repository::on_set_aside(id),
         }
     }
     if let Some(at) = request::next_pump_at(now()) {

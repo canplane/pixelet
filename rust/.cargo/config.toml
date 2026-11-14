@@ -10,9 +10,9 @@ lint-server = ["clippy", "--all-targets", "-p", "pxl-geo-spec", "-p", "pxl-serve
 # What runs here alone: the tests' code, the bakes (the tile server's feature
 # with them, which only adds) and the tools.
 lint-host = ["clippy", "--all-targets", "-p", "pxl-spec", "-p", "pxl-engine", "-p", "pxl-content", "-p", "pxl-render", "-p", "pxl-core", "-p", "pxl-geo-bake", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve,pxl-geo-bake/ingest", "--", "-D", "warnings"]
-# The core as a device's library, for an iPhone and an Android phone.
-lint-ios = ["clippy", "--target", "aarch64-apple-ios", "-p", "pxl-core", "--", "-D", "warnings"]
-lint-android = ["clippy", "--target", "aarch64-linux-android", "-p", "pxl-core", "--no-default-features", "--", "-D", "warnings"]
+# The device's library, the core with its runtime, for an iPhone and an Android phone.
+lint-ios = ["clippy", "--target", "aarch64-apple-ios", "-p", "pxl-runtime", "--", "-D", "warnings"]
+lint-android = ["clippy", "--target", "aarch64-linux-android", "-p", "pxl-runtime", "--no-default-features", "--", "-D", "warnings"]
 # pxl-tool holds every model to the committed table.
 test-host = ["test", "-p", "pxl-spec", "-p", "pxl-engine", "-p", "pxl-content", "-p", "pxl-geo-spec", "-p", "pxl-server", "-p", "pxl-geo", "-p", "pxl-geo-bake", "-p", "pxl-api", "-p", "pxl-tool", "--features", "pxl-geo-bake/serve"]
 # pxl-core's unit tests.

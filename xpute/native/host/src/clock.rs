@@ -10,9 +10,10 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use xpute_kit::status::errno::Errno;
 
-use crate::abi::clocks::monotonic_clock;
-use crate::abi::clocks::system_clock::{self, Instant as SystemInstant};
 use xpute_link::Return;
+use xpute_native_runtime::abi::clocks::monotonic_clock;
+use xpute_native_runtime::abi::clocks::system_clock::{self, Instant as SystemInstant};
+use xpute_native_runtime::event_loop;
 
 /// Where the monotonic time counts from, as a page's `performance.now()`
 /// counts from its time origin.
@@ -27,7 +28,7 @@ impl monotonic_clock::Host for Monotonic {
 
     /// Answers once `how_long` has passed; 0, at the loop's next pass.
     fn wait_for(&self, how_long: u64, task_return: Return<()>) {
-        crate::event_loop::after(Duration::from_nanos(how_long), task_return);
+        event_loop::after(Duration::from_nanos(how_long), task_return);
     }
 }
 

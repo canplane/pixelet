@@ -2,13 +2,15 @@
 # that links it may use. `link/rust` is the link, the protocol both sides run,
 # and its code. `guest/rust` asks to be run its way (an entry at a time, a
 # deadline measured from the frame, I/O asked of its host), and it depends on
-# `kit` and the link, never the reverse. `native/host` is the host on a
-# native device. The GPU plugin has the same shape: `gpu/link/rust` is
-# what both of its sides take, WebGPU's vocabulary among it, `gpu/guest/rust`
-# the guest's encoder of its calls to a device it cannot reach, and
-# `gpu/native/host` its host on a native device. `gen` is the generator, and
-# each part's `gen-targets` what the generator makes of it, which any
-# program's generating tool reads. `dev/` holds what develops them:
+# `kit` and the link, never the reverse. `native/runtime/rust` is the runtime
+# on a native device, the environment its host runs in: the guest's thread,
+# the host's link and the UI's channel; `native/host` is the host, what it
+# serves over that link. The GPU plugin has the same shape: `gpu/link/rust`
+# is what both of its sides take, WebGPU's vocabulary among it,
+# `gpu/guest/rust` the guest's encoder of its calls to a device it cannot
+# reach, and `gpu/native/host` its host on a native device. `gen` is the
+# generator, and each part's `gen-targets` what the generator makes of it,
+# which any program's generating tool reads. `dev/` holds what develops them:
 # `golden/rust`, the golden records' reader the tests take, and xpute's own
 # use of the generator (`tool`).
 
@@ -18,6 +20,7 @@ members = [
     "kit/rust",
     "link/rust",
     "guest/rust",
+    "native/runtime/rust",
     "native/host",
     "gpu/link/rust",
     "gpu/guest/rust",
@@ -36,6 +39,7 @@ members = [
 xpute-kit = { path = "kit/rust", version = "0.1.0" }
 xpute-link = { path = "link/rust", version = "0.1.0" }
 xpute-guest = { path = "guest/rust", version = "0.1.0" }
+xpute-native-runtime = { path = "native/runtime/rust", version = "0.1.0" }
 xpute-native-host = { path = "native/host", version = "0.1.0" }
 xpute-gpu-link = { path = "gpu/link/rust", version = "0.1.0" }
 xpute-gpu-guest = { path = "gpu/guest/rust", version = "0.1.0" }
@@ -52,8 +56,8 @@ hex = "0.4"
 edition = "2021"
 version = "0.1.0"
 publish = true
-# The library crates (kit, link, guest, native host, the GPU's link, guest
-# and native host, gen) carry these for a registry.
+# The library crates (kit, link, guest, native runtime and host, the GPU's
+# link, guest and native host, gen) carry these for a registry.
 license = "MIT"
 repository = "https://github.com/canplane/xpute"
 readme = "README.md"

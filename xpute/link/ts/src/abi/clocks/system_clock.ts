@@ -53,7 +53,7 @@ function object(imp: Host): LinkObject {
             return {
               result: 0,
               data: [
-                16,
+                INSTANT_SZ,
                 (w) => {
                   store_Instant(w, 0, v);
                 },

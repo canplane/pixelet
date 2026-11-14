@@ -806,7 +806,6 @@ fn decor_word() -> String {
         ("RECTS_AT", U32(g::RECTS_AT)),
         ("RECT_WORDS", U32(g::RECT_WORDS)),
         ("RECT_CAP", U32(g::RECT_CAP)),
-        ("EVERY", U32(g::EVERY)),
         ("LIST_EVERY", U32(g::LIST_EVERY)),
         ("LIST_PARTS", U32(g::LIST_PARTS)),
         ("GENERATE_ARGS", U32(g::GENERATE_ARGS)),
@@ -928,6 +927,7 @@ fn ray() -> String {
 /// finite, as Tint refuses a literal past f32's range.
 fn raster_box() -> String {
     use pxl_engine::raster::{corner, EYED, ID_MASK, LACK, NEAR, STALE, STALE_DEPTH};
+    use pxl_spec::space::hierarchy::tree::child_idx;
     let n = word::BOX_VERTEX_CNT;
     let per_word = 32 / 3;
     let bits: Vec<u32> = (0..2 * n)
@@ -937,7 +937,7 @@ fn raster_box() -> String {
                 c.iter().all(|&v| v == 0 || v == 1),
                 "a corner's a 0 or a 1 a lane"
             );
-            c[0] | c[1] << 1 | c[2] << 2
+            child_idx(c.map(|v| v as i32)) as u32
         })
         .collect();
     let corners = bits

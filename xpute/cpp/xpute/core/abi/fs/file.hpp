@@ -14,8 +14,8 @@ inline constexpr std::uint32_t FILE_SIZE = 0;
 inline constexpr std::uint32_t FILE_READ = 1;
 // `[method]file.write`
 inline constexpr std::uint32_t FILE_WRITE = 2;
-// `[method]file.changed`
-inline constexpr std::uint32_t FILE_CHANGED = 3;
+// `[method]file.set-aside`
+inline constexpr std::uint32_t FILE_SET_ASIDE = 3;
 // `[method]file.close`
 inline constexpr std::uint32_t FILE_CLOSE = 4;
 
