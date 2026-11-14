@@ -15,9 +15,6 @@
 // servers are written from it, and wrangler's and Caddy's configurations take
 // their part of it. The core names what it opens and never an address.
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 /// The world's data: what is baked from Overture and the elevation raster,
 /// and the one query over it that cannot be baked. pxl-geo answers what the
 /// bucket does not.

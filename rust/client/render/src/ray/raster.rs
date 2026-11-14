@@ -37,7 +37,7 @@ use crate::gpu::api::{
     word_bytes, Entry, Format, Gpu, Load, RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::gpu::span_spec::GpuSpanName;
+use crate::spec::span::GpuSpanName;
 use pxl_engine::param::raster::GROWTH;
 
 /// The eye's raster. Its targets are at the rays' size.

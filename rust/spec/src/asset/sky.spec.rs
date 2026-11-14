@@ -6,9 +6,6 @@
 // cell holds it. Each by its files' paths under asset/content/; what a
 // path is, its number and its extent, is the catalog's (pxl_spec::asset::catalog).
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 /// The cumulus, drawn on the wind's moving field as decor is drawn, each
 /// cloud one of its models (pxl-core domain/scene/environment/cloud.rs).
 /// Quaternius, CC0.

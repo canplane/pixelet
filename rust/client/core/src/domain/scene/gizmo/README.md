@@ -9,7 +9,7 @@ the core sees the world, each behind its setting, where an indicator
 - `coverage.rs`, behind the same setting: the eye's clip levels' bricks by
   how they stand, their tiles and shards, as translucent lines over the ground.
 
-The lines are `debug_line.rs`'s, and their colors `gizmo.spec.rs`'s, generated
+The lines are `debug_line.rs`'s, and their colors `crate::spec::gizmo`'s, generated
 from `spec/client/core/domain/scene/gizmo/gizmo.json`.
 
 Two views the renderer draws itself, from a word the core hands it, in the

@@ -1,12 +1,9 @@
-// pxl-core/sys/manifest.spec.rs
+// pxl-core/spec/manifest.spec.rs
 //
 // GENERATED from spec/client/core/sys/manifest.json (xpute-gen data.rs)
 //
 // The core's manifest (xpute link/spec/manifest.schema.json): its memory, its fixed ranges and
 // the heap it counts on, and its stacks.
-
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
 
 /// `bytes`: the core's memory, 512 MiB on every platform, the limit chosen for it. The
 /// page's worker grows the module's memory to it before the core's first entry, and the

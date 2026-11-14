@@ -24,7 +24,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::put_mat;
-use crate::gpu::span_spec::GpuSpanName;
+use crate::spec::span::GpuSpanName;
 
 /// N8AO's blue noise, `AO_NOISE_SIDE` texels a side, which a pixel reads tiled. Its four
 /// channels hold the spin of the hemisphere's samples, the offset of their distances along

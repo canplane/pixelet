@@ -9,8 +9,8 @@ use crate::domain::scene::marker;
 use crate::domain::scene::resolution;
 use crate::abi::scene::SceneContent;
 use pxl_spec::asset::character::Group;
-use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::surface;
+use pxl_render::spec::api::surface_role;
 use xpute_kit::status::errno::Errno;
 
 pub(super) fn chat(text: String) -> Result<(), Errno> {

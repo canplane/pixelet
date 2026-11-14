@@ -40,8 +40,9 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys::io::demand::{Source, Stream};
-use crate::sys::io::file_spec::{self, format, path};
-use crate::sys::manifest::mem;
+use crate::spec;
+use crate::spec::file::{format, path};
+use crate::spec::manifest::mem;
 use crate::sys::sched::{executor, invalidate};
 
 pub enum StorageRead {
@@ -73,7 +74,7 @@ impl Drop for File {
 /// The longest quadkey, a leaf's.
 pub const KEY_BYTES: usize = LEAF_ZOOM as usize;
 
-const _: () = assert!(file_spec::LEAF_ZOOM == LEAF_ZOOM);
+const _: () = assert!(spec::file::LEAF_ZOOM == LEAF_ZOOM);
 
 /// The id that names the objects' top among the object stream's ids. Every
 /// other id is a tile's, and no tile's id is 0.

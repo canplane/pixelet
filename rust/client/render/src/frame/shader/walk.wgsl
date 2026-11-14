@@ -114,8 +114,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
       visits += 1u;
       inheritance = a.inheritance;
       asset = a.asset;
-      let v = asset.x & VAL_MASK;
-      let clear = v == VAL_VOID || v == VAL_AIR;
+      let clear = !fills(asset.x);
       var near_at = s.near;
       if (a.kind == KIND_BLIND) {
         // A beam ray stops at a split too narrow to share where it meets the split's box, and

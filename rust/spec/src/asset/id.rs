@@ -3,7 +3,7 @@
 //! An asset's id: its kind over its index (`spec/spec/asset/id.json`).
 
 #[path = "id.spec.rs"]
-mod spec;
+pub mod spec;
 pub use spec::{Kind, IDX_BITS};
 
 /// An asset's id, `kind << IDX_BITS | idx`, as the code carries it: a

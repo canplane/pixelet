@@ -1,7 +1,7 @@
 // pxl-core/sys/io/demand.rs
 
 //! What a request is for: the stream it belongs to (demand.json
-//! `STREAM_NAMES`), which one row of a table describes (`Stream::row`), and
+//! `STREAM_NAME`), which one row of a table describes (`Stream::row`), and
 //! the order of its want in the view. The timings a run reports are here
 //! too.
 
@@ -9,10 +9,10 @@ use core::cmp::Ordering;
 
 use pxl_spec::bake::publication::BaseLayer;
 
-use crate::sys::io::demand_spec;
-pub use crate::sys::io::demand_spec::StreamName as Stream;
-pub use crate::sys::io::demand_spec::TaskPhaseName;
-use crate::sys::io::file_spec::path;
+use crate::spec;
+pub use crate::spec::demand::StreamName as Stream;
+pub use crate::spec::demand::TaskPhaseName;
+use crate::spec::file::path;
 
 /// Where a stream's wants come from. A `Load` want is an asset file by its
 /// id, which the loader opens (sys/io/loader.rs). A `Bake` want is a bake's
@@ -62,7 +62,7 @@ pub struct Order {
     pub near: f64,
 }
 
-pub const PHASE_CAP: usize = demand_spec::TASK_PHASE_CAP as usize;
+pub const PHASE_CAP: usize = spec::demand::TASK_PHASE_CAP as usize;
 
 /// The timings a run reports, each under the name the run gives it. A timing
 /// past `PHASE_CAP` is dropped.

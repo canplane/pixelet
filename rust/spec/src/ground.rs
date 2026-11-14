@@ -2,11 +2,11 @@
 
 //! wgsl-port: the ground's cells as a tile holds them and the rules a column reads them by,
 //! which the bake and the client both run: a cell's elevation from the tile's samples
-//! (`ele_at`), its four palette indices and its own (`own`), and its top and face in cells of a
+//! (`ele_at`), its four asset ids and its own (`own`), and its top and face in cells of a
 //! zoom (`top`, `face_ele`). The ground's column as a descent asks it is pxl-engine's
 //! (ground.rs `node`).
 //!
-//! A palette index and an elevation are stored as a byte and an i16 and read into a word here,
+//! An asset id and an elevation are stored as a byte and an i16 and read into a word here,
 //! since WGSL has no narrower integer.
 //!
 //! A cell's elevation from the samples (`ele_at`) is exact, in integers, so the CPU and a GPU
@@ -71,23 +71,24 @@ pub fn ele_at(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
     ((floor + i64::from(up)) as i32).clamp(lo, hi)
 }
 
-/// The bits a palette index takes in a cell's word, four to the word.
-pub const PALETTE_BITS: u32 = 8;
+/// What a ground cell holds: the asset id of one of the ground's cubes,
+/// which fits a byte (`asset/cube.json`). A cell's word holds four.
+pub type GroundId = u8;
 
-/// A cell's word's four palette indices, `dx + 2·dy`.
+/// A cell's word's four asset ids, `dx + 2·dy`.
 pub fn asset_ids(word: u32) -> [u32; 4] {
-    let m = (1 << PALETTE_BITS) - 1;
+    let m = u32::from(GroundId::MAX);
     [
         word & m,
-        word >> PALETTE_BITS & m,
-        word >> (2 * PALETTE_BITS) & m,
-        word >> (3 * PALETTE_BITS),
+        word >> GroundId::BITS & m,
+        word >> (2 * GroundId::BITS) & m,
+        word >> (3 * GroundId::BITS),
     ]
 }
 
-/// Four palette indices as a cell's word.
+/// Four asset ids as a cell's word.
 pub fn word([a, b, c, d]: [u32; 4]) -> u32 {
-    a | b << PALETTE_BITS | c << (2 * PALETTE_BITS) | d << (3 * PALETTE_BITS)
+    a | b << GroundId::BITS | c << (2 * GroundId::BITS) | d << (3 * GroundId::BITS)
 }
 
 /// A cell's own look at `cell_zoom`: the majority of the four it folds, as the

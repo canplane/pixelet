@@ -7,108 +7,8 @@
 // is, and a guest names a member by its generated constant. Nothing here belongs to any one
 // program. A value that WebGPU leaves optional is NONE (api.json) when it is unset.
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 /// GPUTextureFormat: the formats of the core WebGPU spec and of its texture-compression
 /// features.
-pub const TEXTURE_FORMATS: &[&str] = &[
-    "r8unorm",
-    "r8snorm",
-    "r8uint",
-    "r8sint",
-    "r16uint",
-    "r16sint",
-    "r16float",
-    "rg8unorm",
-    "rg8snorm",
-    "rg8uint",
-    "rg8sint",
-    "r32uint",
-    "r32sint",
-    "r32float",
-    "rg16uint",
-    "rg16sint",
-    "rg16float",
-    "rgba8unorm",
-    "rgba8unorm-srgb",
-    "rgba8snorm",
-    "rgba8uint",
-    "rgba8sint",
-    "bgra8unorm",
-    "bgra8unorm-srgb",
-    "rgb9e5ufloat",
-    "rgb10a2uint",
-    "rgb10a2unorm",
-    "rg11b10ufloat",
-    "rg32uint",
-    "rg32sint",
-    "rg32float",
-    "rgba16uint",
-    "rgba16sint",
-    "rgba16float",
-    "rgba32uint",
-    "rgba32sint",
-    "rgba32float",
-    "stencil8",
-    "depth16unorm",
-    "depth24plus",
-    "depth24plus-stencil8",
-    "depth32float",
-    "depth32float-stencil8",
-    "bc1-rgba-unorm",
-    "bc1-rgba-unorm-srgb",
-    "bc2-rgba-unorm",
-    "bc2-rgba-unorm-srgb",
-    "bc3-rgba-unorm",
-    "bc3-rgba-unorm-srgb",
-    "bc4-r-unorm",
-    "bc4-r-snorm",
-    "bc5-rg-unorm",
-    "bc5-rg-snorm",
-    "bc6h-rgb-ufloat",
-    "bc6h-rgb-float",
-    "bc7-rgba-unorm",
-    "bc7-rgba-unorm-srgb",
-    "etc2-rgb8unorm",
-    "etc2-rgb8unorm-srgb",
-    "etc2-rgb8a1unorm",
-    "etc2-rgb8a1unorm-srgb",
-    "etc2-rgba8unorm",
-    "etc2-rgba8unorm-srgb",
-    "eac-r11unorm",
-    "eac-r11snorm",
-    "eac-rg11unorm",
-    "eac-rg11snorm",
-    "astc-4x4-unorm",
-    "astc-4x4-unorm-srgb",
-    "astc-5x4-unorm",
-    "astc-5x4-unorm-srgb",
-    "astc-5x5-unorm",
-    "astc-5x5-unorm-srgb",
-    "astc-6x5-unorm",
-    "astc-6x5-unorm-srgb",
-    "astc-6x6-unorm",
-    "astc-6x6-unorm-srgb",
-    "astc-8x5-unorm",
-    "astc-8x5-unorm-srgb",
-    "astc-8x6-unorm",
-    "astc-8x6-unorm-srgb",
-    "astc-8x8-unorm",
-    "astc-8x8-unorm-srgb",
-    "astc-10x5-unorm",
-    "astc-10x5-unorm-srgb",
-    "astc-10x6-unorm",
-    "astc-10x6-unorm-srgb",
-    "astc-10x8-unorm",
-    "astc-10x8-unorm-srgb",
-    "astc-10x10-unorm",
-    "astc-10x10-unorm-srgb",
-    "astc-12x10-unorm",
-    "astc-12x10-unorm-srgb",
-    "astc-12x12-unorm",
-    "astc-12x12-unorm-srgb",
-];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TextureFormat {
@@ -514,49 +414,6 @@ impl TextureFormat {
 }
 
 /// These are the members of GPUVertexFormat.
-pub const VERTEX_FORMATS: &[&str] = &[
-    "uint8",
-    "uint8x2",
-    "uint8x4",
-    "sint8",
-    "sint8x2",
-    "sint8x4",
-    "unorm8",
-    "unorm8x2",
-    "unorm8x4",
-    "snorm8",
-    "snorm8x2",
-    "snorm8x4",
-    "uint16",
-    "uint16x2",
-    "uint16x4",
-    "sint16",
-    "sint16x2",
-    "sint16x4",
-    "unorm16",
-    "unorm16x2",
-    "unorm16x4",
-    "snorm16",
-    "snorm16x2",
-    "snorm16x4",
-    "float16",
-    "float16x2",
-    "float16x4",
-    "float32",
-    "float32x2",
-    "float32x3",
-    "float32x4",
-    "uint32",
-    "uint32x2",
-    "uint32x3",
-    "uint32x4",
-    "sint32",
-    "sint32x2",
-    "sint32x3",
-    "sint32x4",
-    "unorm10-10-10-2",
-    "unorm8x4-bgra",
-];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum VertexFormat {
@@ -745,13 +602,6 @@ impl VertexFormat {
     }
 }
 
-pub const PRIMITIVE_TOPOLOGIES: &[&str] = &[
-    "point-list",
-    "line-list",
-    "line-strip",
-    "triangle-list",
-    "triangle-strip",
-];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum PrimitiveTopology {
@@ -796,7 +646,6 @@ impl PrimitiveTopology {
     }
 }
 
-pub const INDEX_FORMATS: &[&str] = &["uint16", "uint32"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum IndexFormat {
@@ -826,7 +675,6 @@ impl IndexFormat {
     }
 }
 
-pub const FRONT_FACES: &[&str] = &["ccw", "cw"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum FrontFace {
@@ -856,7 +704,6 @@ impl FrontFace {
     }
 }
 
-pub const CULL_MODES: &[&str] = &["none", "front", "back"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum CullMode {
@@ -889,16 +736,6 @@ impl CullMode {
     }
 }
 
-pub const COMPARE_FUNCTIONS: &[&str] = &[
-    "never",
-    "less",
-    "equal",
-    "less-equal",
-    "greater",
-    "not-equal",
-    "greater-equal",
-    "always",
-];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum CompareFunction {
@@ -955,16 +792,6 @@ impl CompareFunction {
     }
 }
 
-pub const STENCIL_OPERATIONS: &[&str] = &[
-    "keep",
-    "zero",
-    "replace",
-    "invert",
-    "increment-clamp",
-    "decrement-clamp",
-    "increment-wrap",
-    "decrement-wrap",
-];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StencilOperation {
@@ -1021,7 +848,6 @@ impl StencilOperation {
     }
 }
 
-pub const BLEND_OPERATIONS: &[&str] = &["add", "subtract", "reverse-subtract", "min", "max"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum BlendOperation {
@@ -1066,25 +892,6 @@ impl BlendOperation {
     }
 }
 
-pub const BLEND_FACTORS: &[&str] = &[
-    "zero",
-    "one",
-    "src",
-    "one-minus-src",
-    "src-alpha",
-    "one-minus-src-alpha",
-    "dst",
-    "one-minus-dst",
-    "dst-alpha",
-    "one-minus-dst-alpha",
-    "src-alpha-saturated",
-    "constant",
-    "one-minus-constant",
-    "src1",
-    "one-minus-src1",
-    "src1-alpha",
-    "one-minus-src1-alpha",
-];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum BlendFactor {
@@ -1177,7 +984,6 @@ impl BlendFactor {
     }
 }
 
-pub const VERTEX_STEP_MODES: &[&str] = &["vertex", "instance"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum VertexStepMode {
@@ -1207,7 +1013,6 @@ impl VertexStepMode {
     }
 }
 
-pub const ADDRESS_MODES: &[&str] = &["clamp-to-edge", "repeat", "mirror-repeat"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum AddressMode {
@@ -1244,7 +1049,6 @@ impl AddressMode {
     }
 }
 
-pub const FILTER_MODES: &[&str] = &["nearest", "linear"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum FilterMode {
@@ -1274,7 +1078,6 @@ impl FilterMode {
     }
 }
 
-pub const MIPMAP_FILTER_MODES: &[&str] = &["nearest", "linear"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum MipmapFilterMode {
@@ -1304,7 +1107,6 @@ impl MipmapFilterMode {
     }
 }
 
-pub const TEXTURE_DIMENSIONS: &[&str] = &["1d", "2d", "3d"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TextureDimension {
@@ -1341,7 +1143,6 @@ impl TextureDimension {
     }
 }
 
-pub const TEXTURE_VIEW_DIMENSIONS: &[&str] = &["1d", "2d", "2d-array", "cube", "cube-array", "3d"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TextureViewDimension {
@@ -1390,7 +1191,6 @@ impl TextureViewDimension {
     }
 }
 
-pub const TEXTURE_ASPECTS: &[&str] = &["all", "stencil-only", "depth-only"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TextureAspect {
@@ -1427,7 +1227,6 @@ impl TextureAspect {
     }
 }
 
-pub const BUFFER_BINDING_TYPES: &[&str] = &["uniform", "storage", "read-only-storage"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum BufferBindingType {
@@ -1464,7 +1263,6 @@ impl BufferBindingType {
     }
 }
 
-pub const SAMPLER_BINDING_TYPES: &[&str] = &["filtering", "non-filtering", "comparison"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum SamplerBindingType {
@@ -1501,7 +1299,6 @@ impl SamplerBindingType {
     }
 }
 
-pub const TEXTURE_SAMPLE_TYPES: &[&str] = &["float", "unfilterable-float", "depth", "sint", "uint"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TextureSampleType {
@@ -1546,7 +1343,6 @@ impl TextureSampleType {
     }
 }
 
-pub const STORAGE_TEXTURE_ACCESSES: &[&str] = &["write-only", "read-only", "read-write"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StorageTextureAccess {
@@ -1583,7 +1379,6 @@ impl StorageTextureAccess {
     }
 }
 
-pub const LOAD_OPS: &[&str] = &["load", "clear"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum LoadOp {
@@ -1613,7 +1408,6 @@ impl LoadOp {
     }
 }
 
-pub const STORE_OPS: &[&str] = &["store", "discard"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StoreOp {
@@ -1643,7 +1437,6 @@ impl StoreOp {
     }
 }
 
-pub const QUERY_TYPES: &[&str] = &["occlusion", "timestamp"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum QueryType {
@@ -1673,7 +1466,6 @@ impl QueryType {
     }
 }
 
-pub const CANVAS_ALPHA_MODES: &[&str] = &["opaque", "premultiplied"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum CanvasAlphaMode {
@@ -1705,25 +1497,6 @@ impl CanvasAlphaMode {
 
 /// GPUFeatureName. The DEVICE record (api.json) reports a device's features as one bit each,
 /// at the member's place.
-pub const FEATURE_NAMES: &[&str] = &[
-    "depth-clip-control",
-    "depth32float-stencil8",
-    "texture-compression-bc",
-    "texture-compression-bc-sliced-3d",
-    "texture-compression-etc2",
-    "texture-compression-astc",
-    "texture-compression-astc-sliced-3d",
-    "timestamp-query",
-    "indirect-first-instance",
-    "shader-f16",
-    "rg11b10ufloat-renderable",
-    "bgra8unorm-storage",
-    "float32-filterable",
-    "float32-blendable",
-    "clip-distances",
-    "dual-source-blending",
-    "subgroups",
-];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum FeatureName {
@@ -1818,39 +1591,6 @@ impl FeatureName {
 
 /// The members of GPUSupportedLimits. The DEVICE record (api.json) reports a device's limits
 /// as one word each, at the member's place.
-pub const LIMIT_NAMES: &[&str] = &[
-    "maxTextureDimension1D",
-    "maxTextureDimension2D",
-    "maxTextureDimension3D",
-    "maxTextureArrayLayers",
-    "maxBindGroups",
-    "maxBindGroupsPlusVertexBuffers",
-    "maxBindingsPerBindGroup",
-    "maxDynamicUniformBuffersPerPipelineLayout",
-    "maxDynamicStorageBuffersPerPipelineLayout",
-    "maxSampledTexturesPerShaderStage",
-    "maxSamplersPerShaderStage",
-    "maxStorageBuffersPerShaderStage",
-    "maxStorageTexturesPerShaderStage",
-    "maxUniformBuffersPerShaderStage",
-    "maxUniformBufferBindingSize",
-    "maxStorageBufferBindingSize",
-    "minUniformBufferOffsetAlignment",
-    "minStorageBufferOffsetAlignment",
-    "maxVertexBuffers",
-    "maxBufferSize",
-    "maxVertexAttributes",
-    "maxVertexBufferArrayStride",
-    "maxInterStageShaderVariables",
-    "maxColorAttachments",
-    "maxColorAttachmentBytesPerSample",
-    "maxComputeWorkgroupStorageSize",
-    "maxComputeInvocationsPerWorkgroup",
-    "maxComputeWorkgroupSizeX",
-    "maxComputeWorkgroupSizeY",
-    "maxComputeWorkgroupSizeZ",
-    "maxComputeWorkgroupsPerDimension",
-];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum LimitName {

@@ -86,19 +86,19 @@ fn overlaps_placed(at: vec3<i32>, size: vec3<i32>) -> bool {
           continue;
         }
         for (var o1 = 0u; o1 < 8u; o1 += 1u) {
-          let c1 = child_at(node, o1);
+          let c1 = child_of(node, o1);
           let s1 = placed_child(slot, PLACED_FIRST + 1u, c1, lo, hi);
           if (!is_folded(s1)) {
             continue;
           }
           for (var o2 = 0u; o2 < 8u; o2 += 1u) {
-            let c2 = child_at(c1, o2);
+            let c2 = child_of(c1, o2);
             let s2 = placed_child(s1, PLACED_FIRST + 2u, c2, lo, hi);
             if (!is_folded(s2)) {
               continue;
             }
             for (var o3 = 0u; o3 < 8u; o3 += 1u) {
-              let c = child_at(c2, o3);
+              let c = child_of(c2, o3);
               if (leaf_overlaps(placed_child(s2, UNIT_ZOOM, c, lo, hi), c, at, size)) {
                 return true;
               }
@@ -111,9 +111,9 @@ fn overlaps_placed(at: vec3<i32>, size: vec3<i32>) -> bool {
   return false;
 }
 
-/// Child `o` of the node at `p`, whose bits from the lowest give X, Y and Z (`object::child`'s
-/// order).
-fn child_at(p: vec3<i32>, o: u32) -> vec3<i32> {
+/// The port of pxl-spec `tree::child_of` in three axes: child `o` of the node at `p`, whose bits
+/// from the lowest give X, Y and Z (`tree::child_idx`).
+fn child_of(p: vec3<i32>, o: u32) -> vec3<i32> {
   return 2i * p + vec3<i32>(vec3<u32>(o & 1u, (o >> 1u) & 1u, (o >> 2u) & 1u));
 }
 
@@ -306,7 +306,7 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       }
       edited = false;
     } else if (voted) {
-      // Under the base, the cell must be a palette entry the decor generates on. Over it,
+      // Under the base, the cell must be an asset id the decor generates on. Over it,
       // the cell must be void and hold no edit.
       let under = c.z == base;
       if (!(select(v == VAL_VOID, allows(j, v & VAL_MASK), under))) {
@@ -317,7 +317,7 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         edited = true;
         continue;
       }
-    } else if ((v & VAL_MASK) >= TRANSPORT_FIRST && (v & VAL_MASK) <= TRANSPORT_LAST) {
+    } else if (is_transport(v & VAL_MASK)) {
       if ((ask & 2i) == 0i) {
         horizontal += 1i;
       } else {

@@ -10,7 +10,6 @@
 //! no frame is drawn until every word says its pipeline is made (`made`). A pipeline asked for
 //! once the renderer draws must be found already made; anything else is a bug.
 
-use crate::api_spec::stream;
 use crate::frame::shader::floor::{BIND_GROUPS, VERTEX_BUFFERS};
 use crate::frame::shader::record::{
     compute, compute_layout, pipeline as rec_of, src, COMPUTE_CNT, HDR, PIPELINE_CNT, SHADER_CNT,
@@ -18,6 +17,7 @@ use crate::frame::shader::record::{
 use crate::gpu::api::{
     room, shader_bytes, signaled, Format, Gpu, Layout, Stencil, MASKED_DEPTH, WORLD_COLOR,
 };
+use crate::spec::api::stream;
 
 #[derive(Clone, Copy, Default)]
 pub struct Pipeline {
@@ -265,9 +265,10 @@ impl PipelineCache {
     /// Counts the pipelines whose word says they are made, and returns whether all are
     /// (`is_made`).
     pub fn poll(&mut self) -> bool {
-        self.made_cnt = self.words[..self.pipeline_len]
-            .iter()
-            .filter(|w| signaled(w, TICKET))
+        // SAFETY: each pipeline's word, boxed in place; the host stores into it only
+        // atomically.
+        self.made_cnt = (0..self.pipeline_len)
+            .filter(|&k| unsafe { signaled(core::ptr::addr_of!(self.words[k]), TICKET) })
             .count();
         self.is_made()
     }

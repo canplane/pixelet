@@ -7,9 +7,6 @@
 // how deep to read it. The numbers are stored, so a subtype is appended,
 // never inserted.
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 pub mod division_name {
     pub const BYTES: u32 = 128;
 }

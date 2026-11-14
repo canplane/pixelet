@@ -17,7 +17,8 @@ use crate::answer::{box_word, fills, PackedBox, BOX_NONE, BOX_STEPS, BOX_WHOLE};
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::share;
 use pxl_spec::share::FULL;
-use pxl_spec::space::coord::zoom::{y_start, z_start, Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::coord::zoom::{starts, Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::hierarchy::tree::{child_idx, child_of, children};
 use pxl_spec::value;
 
 /// The bit of a slot's child pointer that marks a branch; the bits under it hold the
@@ -224,40 +225,14 @@ impl Cut {
 pub fn path(zoom: Zoom, at: [i32; 3]) -> [i32; 3] {
     [
         at[0] & (1u32 << zoom).wrapping_sub(1) as i32,
-        at[1] + y_start(zoom),
-        at[2] + z_start(zoom),
+        at[1] + starts(zoom)[1],
+        at[2] + starts(zoom)[2],
     ]
 }
 
-/// The child at `slot` (`child_idx`) of the node `at` of `zoom`, with X in `at`'s frame.
-pub fn child_at(zoom: Zoom, at: [i32; 3], slot: u32) -> [i32; 3] {
-    let p = path(zoom, at);
-    [
-        2 * at[0] + (slot & 1) as i32,
-        2 * p[1] + (slot >> 1 & 1) as i32 - y_start(zoom + 1),
-        2 * p[2] + (slot >> 2) as i32 - z_start(zoom + 1),
-    ]
-}
-
-/// The node `step_cnt` zooms above the node `at` of `zoom`, with X in `at`'s frame.
-pub fn ancestor_at(zoom: Zoom, at: [i32; 3], step_cnt: Zoom) -> [i32; 3] {
-    let p = path(zoom, at);
-    [
-        at[0] >> step_cnt,
-        (p[1] >> step_cnt) - y_start(zoom - step_cnt),
-        (p[2] >> step_cnt) - z_start(zoom - step_cnt),
-    ]
-}
-
-/// A child group's slots, one for each of a node's children, child `child_idx` lying that
-/// many slots past the first.
-pub const CHILDREN: u32 = 8;
-
-/// A node's place in its parent's child group, a slot past the group's first: X's low
-/// bit, then Y's, then Z's.
-fn child_idx(at: [i32; 3]) -> u32 {
-    (at[0] & 1 | (at[1] & 1) << 1 | (at[2] & 1) << 2) as u32
-}
+/// A child group's slots, one for each of a node's children, child `child_idx` (pxl-spec
+/// tree.rs) lying that many slots past the first.
+pub const CHILDREN: u32 = children(3) as u32;
 
 fn of(columns: &impl Table, slot: u32, zoom: Zoom) -> NodeSlot {
     if columns.first_child(slot) != 0 {
@@ -277,7 +252,7 @@ pub fn cursor(columns: &impl Table, root: u32, zoom: Zoom, at: [i32; 3]) -> Node
     let p = path(zoom, at);
     down(
         columns,
-        root + child_idx([p[0] >> zoom, p[1] >> zoom, p[2] >> zoom]),
+        root + child_idx([p[0] >> zoom, p[1] >> zoom, p[2] >> zoom]) as u32,
         0,
         zoom,
         p,
@@ -304,7 +279,7 @@ pub fn child(columns: &impl Table, parent: NodeSlot, zoom: Zoom, at: [i32; 3]) -
     if parent.is_folded() {
         of(
             columns,
-            (columns.first_child(parent.slot()) & !BRANCH) + child_idx(at),
+            (columns.first_child(parent.slot()) & !BRANCH) + child_idx(at) as u32,
             zoom,
         )
     } else {
@@ -373,7 +348,7 @@ pub fn fill_share(columns: &impl Table, slot: NodeSlot) -> u32 {
     }
 }
 
-/// The four palette indices, in the order `dx + 2·dy`, that the node `at` of `zoom` holding
+/// The four asset ids, in the order `dx + 2·dy`, that the node `at` of `zoom` holding
 /// `slot`, a cell of value `v` (`val`), is drawn by. They are taken as the ground's cell takes
 /// the four of its fold (pxl-engine `ground::Cell::four`): the node's 2×2 seen from above one
 /// zoom finer, the same for every face, as the ground's are. A quarter shows its upper child
@@ -395,11 +370,7 @@ pub fn asset_ids(
     }
     let base = columns.first_child(slot.slot()) & !BRANCH;
     let shows = |k: u32| {
-        let child = [
-            2 * at[0] + (k & 1) as i32,
-            2 * at[1] + (k >> 1 & 1) as i32,
-            2 * at[2] + (k >> 2) as i32,
-        ];
+        let child = child_of(at, k as usize);
         let c = val(
             columns,
             of(columns, base + k, zoom + 1),

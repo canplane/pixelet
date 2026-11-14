@@ -7,6 +7,4 @@
 pub mod coverage;
 pub mod debug_line;
 pub mod frame;
-#[path = "gizmo/gizmo.spec.rs"]
-pub mod gizmo_spec;
 pub mod param;

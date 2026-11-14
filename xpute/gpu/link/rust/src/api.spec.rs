@@ -13,9 +13,6 @@
 // handles they took, so the host never hears of those objects. The encoder's begin and
 // commit open and close the transaction on both the stream and the handle table.
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 /// The URI the guest opens its GPU device by (gpu/wit/gpu.wit `device`), which the GPU's
 /// hosts mount.
 pub const DEVICE_URI: &[&str] = &["xpute:gpu", "device"];

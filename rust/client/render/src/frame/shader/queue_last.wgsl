@@ -29,8 +29,7 @@ fn shows(aim: Aim, w: WalkEnd) -> WalkEnd {
     let c = idx_of(corner, zoom, w.roots, r0);
     let a = world_answer(parent, top, zoom, c, zoom | (zoom << ZOOM_BITS), NONE);
     if (a.kind == KIND_CELL) {
-      let v = a.asset.x & VAL_MASK;
-      if (v == VAL_VOID || v == VAL_AIR) {
+      if (!fills(a.asset.x)) {
         return w;
       }
       return WalkEnd(ENDS_CELL, zoom, corner, w.roots, a.asset, w.axis, w.t, w.visits, w.parent, w.top, w.step);

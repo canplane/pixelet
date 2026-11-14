@@ -158,12 +158,8 @@ fn idx_of(corner: vec3<u32>, zoom: u32, roots: vec3<i32>, r0: vec3<i32>) -> vec3
   let high = select(vec3<u32>(root << vec3<u32>(zoom & 31u)), vec3<u32>(0u), zoom >= FINEST_ZOOM);
   let low = select(corner >> vec3<u32>((FINEST_ZOOM - zoom) & 31u), vec3<u32>(0u), zoom == 0u);
   let n = vec3<i32>(high + low);
-  let x = select((n.x << ((32u - zoom) & 31u)) >> ((32u - zoom) & 31u), 0i, zoom == 0u);
-  // Y counts from the world's south edge and Z from its floor (pxl-spec `zoom::y_start`,
-  // `zoom::z_start`).
-  let y_start = select(1i << ((zoom - 1u) & 31u), 0i, zoom == 0u);
-  let z_start = select(1i << ((zoom - SHARD_ZOOM - 1u) & 31u), 0i, zoom <= SHARD_ZOOM);
-  return vec3<i32>(x, n.y - y_start, n.z - z_start);
+  // Y counts from the world's south edge and Z from its floor.
+  return vec3<i32>(wrap_idx(zoom, n.x), n.y - y_start(zoom), n.z - z_start(zoom));
 }
 
 fn mix_hash(h: u32, v: u32) -> u32 {

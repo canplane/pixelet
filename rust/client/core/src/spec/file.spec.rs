@@ -1,12 +1,9 @@
-// pxl-core/sys/io/file.spec.rs
+// pxl-core/spec/file.spec.rs
 //
 // GENERATED from spec/client/core/sys/io/file.json (xpute-gen data.rs)
 //
 // The core's files: the tokens of their paths and what a file holds (pxl-core
 // sys/io/file.rs, ts/client/src/service/sys/fs/).
-
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
 
 /// The tree of the paths the core opens (xpute's FS_OPEN), as a URI's path is a
 /// tree: each node takes one token, its `ID`, distinct among its siblings, and hands the

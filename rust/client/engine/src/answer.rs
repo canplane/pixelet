@@ -6,7 +6,7 @@
 //! in the node's own steps, alike on every axis. The descent, the query and the sources all
 //! stand on this module.
 
-use pxl_spec::asset::cube::Sentinel;
+use pxl_spec::asset::cube::{is_matter, Sentinel};
 use pxl_spec::share::{EIGHTH_CNT, FILL_BITS, FULL};
 
 /// What a node is to a descent.
@@ -29,7 +29,7 @@ pub struct In<B> {
     pub asset: B,
 }
 
-/// A cell nothing fills: void, no palette indices.
+/// A cell nothing fills: void, no asset ids.
 pub const EMPTY: [u32; 2] = [Sentinel::Void as u32, 0];
 
 /// The low bits of an asset's word that hold its value.
@@ -40,7 +40,7 @@ pub const VAL_BITS: u32 = 16;
 /// above it (`FILL_SHIFT`).
 pub const PLACED_ASSET: u32 = 1 << VAL_BITS;
 
-/// An asset's value without the `PLACED_ASSET` bit or its fill share, so a palette index
+/// An asset's value without the `PLACED_ASSET` bit or its fill share, so an asset id
 /// reads the same whichever layer holds it.
 pub const fn val(asset: u32) -> u32 {
     asset & (PLACED_ASSET - 1)
@@ -137,22 +137,12 @@ pub(crate) const fn box_of(w: PackedBox) -> ([u32; 3], [u32; 3]) {
     ([f[0], f[2], f[4]], [f[1] + 1, f[3] + 1, f[5] + 1])
 }
 
-/// Whether an asset lets light through: a ray sees nothing there and passes on, whichever
-/// source holds it. Every ray sees by this (cast.rs `walk`), and it is the one place a value
-/// is said to be transparent: void, on which nothing is painted, and air, which is placed as
-/// nothing. It is a question of light, not of matter (`fills`): matter that a ray sees
-/// through would answer yes to both.
-pub fn transparent(asset: u32) -> bool {
-    let v = val(asset);
-    v == Sentinel::Void as u32 || v == Sentinel::Air as u32
-}
-
-/// Whether an asset is matter: it takes its share of its cell as the layers compose the
-/// cell's volume (`cover`), and it is drawn by its palette indices. Everything is matter but
-/// void and air. It is a question of matter, not of light (`transparent`).
+/// Whether an asset is matter (pxl-spec `cube::is_matter`), whichever source holds it: it
+/// takes its share of its cell as the layers compose the cell's volume (`cover`), it is drawn
+/// by its asset ids, and a ray stops at it; a ray sees through anything else and passes
+/// on (cast.rs `walk`).
 pub fn fills(asset: u32) -> bool {
-    let v = val(asset);
-    v != Sentinel::Void as u32 && v != Sentinel::Air as u32
+    is_matter(val(asset))
 }
 
 /// A cell's fill share, above its asset's value and `PLACED_ASSET`: the eighths of its cube
@@ -160,13 +150,13 @@ pub fn fills(asset: u32) -> bool {
 /// every whole cell's, sets none of its bits.
 pub const FILL_SHIFT: u32 = VAL_BITS + 1;
 
-/// How much of a cell's cube fills, and whether the overwrite's kind gives the palette index.
+/// How much of a cell's cube fills, and whether the overwrite's kind gives the asset id.
 /// The ground fills `ground` of the cube, and over it an overwrite (what is placed, or the
 /// ways) of `kind` fills `over`, each in `FULL`'s units. A kind that fills lies beside the
 /// ground, as a thing stands on it, so the two shares add. Air lies inside the ground, as a
 /// cut, a bore or a cave does, so it takes its share from the ground's, in whole eighths as a
-/// fill is kept (`eighths`): a trace too small to empty one child empties none. The palette
-/// index is the kind that makes up most of the fill: the overwrite's where it fills at least
+/// fill is kept (`eighths`): a trace too small to empty one child empties none. The asset id
+/// is the kind that makes up most of the fill: the overwrite's where it fills at least
 /// as much as the ground, and the ground's where air is written.
 pub fn cover(ground: u32, kind: u32, over: u32) -> (u32, bool) {
     if fills(kind) {
@@ -211,11 +201,11 @@ pub const fn side(k: u32) -> f32 {
     }
 }
 
-/// Whether an asset hides its cube whole: it is not transparent and keeps all of the cube
+/// Whether an asset hides its cube whole: it fills and keeps all of the cube
 /// (`fill_eighths`). A box filled short of its cube closes in none of the edges of a cell
 /// beside it.
 pub fn whole(asset: u32) -> bool {
-    !transparent(asset) && fill_eighths(asset) == EIGHTH_CNT
+    fills(asset) && fill_eighths(asset) == EIGHTH_CNT
 }
 
 /// Whether what is placed holds an asset's value (`PLACED_ASSET`).

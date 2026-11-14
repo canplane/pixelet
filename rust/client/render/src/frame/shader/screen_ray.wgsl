@@ -10,7 +10,7 @@
 // No pixel reads another pixel's ray, so every pixel of a cell is painted from the same bits.
 
 // The rays, one layer a word: what the ray met (its value, face and zoom), how far it went (f32
-// bits), the four palette indices a coarse ground cell is drawn by, and what lies around its
+// bits), the four asset ids a coarse ground cell is drawn by, and what lies around its
 // face's edges and corners (`RAY_FACE_WORD`). A pixel is painted from its own words alone.
 @group(0) @binding(3) var rays: texture_2d_array<u32>;
 // Each value's look, indexed by the value whichever source holds it: its swatch and texture
@@ -98,7 +98,7 @@ struct Appearance {
 
 // What the cell a pixel's ray met is drawn as, by its value, whichever source holds it. At the
 // ground's cell zoom or finer it is drawn with its swatch and texture layer. A coarser cell is
-// drawn in one color, as it reads from afar. Where its value is among the four palette indices
+// drawn in one color, as it reads from afar. Where its value is among the four asset ids
 // a coarse ground cell folds, that color is the mean of the four.
 fn appearance(c: vec3u) -> Appearance {
   let val = ray_val(c.x);

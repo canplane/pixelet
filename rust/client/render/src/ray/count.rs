@@ -177,7 +177,8 @@ impl Counter {
     /// last frame made. It runs once the frame that encoded that copy was
     /// submitted, as a buffer maps only what a submitted copy wrote into it.
     pub(super) fn back(&mut self, g: &Gpu) {
-        let signaled = signaled(&self.mapping[0], self.ticket);
+        // SAFETY: the mapping's fence, boxed in place; the host stores into it only atomically.
+        let signaled = unsafe { signaled(core::ptr::addr_of!(self.mapping[0]), self.ticket) };
         if self.mapped && signaled {
             self.mapped = false;
             if self.mapping[1] == result::OK {

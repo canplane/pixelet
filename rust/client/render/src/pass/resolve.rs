@@ -33,9 +33,9 @@ use crate::gpu::api::{
     RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
 use crate::gpu::tile::{TileGrid, SIDE};
+use crate::spec::span::GpuSpanName;
 
 /// The least share a frame takes where what the frames before left is held to this frame's
 /// pixels. It trades how long a trail a moving thing leaves against how still an edge stands.

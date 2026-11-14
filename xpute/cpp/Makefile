@@ -49,9 +49,10 @@ WASM_LINK := --target=wasm32-wasip1 -nostartfiles -Wl,--no-entry -Wl,--import-me
 	-Wl,-z,stack-size=$(CONFORMANCE_STACK_BYTES) -Wl,--export=xpute_conformance_boot -Wl,--export=run
 
 SOURCES := $(sort $(shell find xpute dev -name '*.cpp'))
-# The library is what the amalgamation holds: kit, then the core end over it,
-# then the GPU's calls over that, in the order the two files read.
-LAYERS := kit core gpu
+# The library is what the amalgamation holds: kit, then the link's packets
+# over it, then the core end, then the GPU's calls over that, in the order the
+# two files read.
+LAYERS := kit link core gpu
 LIBRARY_HEADERS := $(foreach d,$(LAYERS),$(sort $(shell find xpute/$(d) -name '*.hpp')))
 LIBRARY_SOURCES := $(filter-out %.test.cpp,$(foreach d,$(LAYERS),$(filter xpute/$(d)/%,$(SOURCES))))
 

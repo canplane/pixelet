@@ -17,7 +17,7 @@ use xpute_kit::alloc::buddy_tree::Range;
 use xpute_kit::alloc::slab::SlabMalloc;
 use xpute_kit::alloc::ADDR_BITS;
 
-use crate::sys::manifest::mem;
+use crate::spec::manifest::mem;
 
 /// The heap's counters, as its allocator reports them.
 #[derive(Clone, Copy, Default)]
@@ -56,8 +56,8 @@ fn region() -> (usize, usize) {
     match REGION[0].load(Relaxed) {
         0 => {
             let (fixed, end) = given();
-            let heap = page_up(fixed + mem::fixed_bytes as usize);
-            xpute_kit::ensure!(heap + mem::min_heap_bytes as usize <= end, ENOMEM, heap, end);
+            let heap = page_up(fixed + mem::FIXED_BYTES as usize);
+            xpute_kit::ensure!(heap + mem::MIN_HEAP_BYTES as usize <= end, ENOMEM, heap, end);
             REGION[1].store(end, Relaxed);
             REGION[0].store(fixed, Relaxed);
             (fixed, end)
@@ -110,7 +110,7 @@ impl Range for Span {
     const SPLIT_INIT: Self::Split = [0; SPLIT_BYTES];
 
     fn base() -> usize {
-        page_up(fixed_at() + mem::fixed_bytes as usize)
+        page_up(fixed_at() + mem::FIXED_BYTES as usize)
     }
 
     fn end() -> usize {

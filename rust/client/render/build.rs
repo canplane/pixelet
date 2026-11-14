@@ -32,7 +32,7 @@ mod color;
 #[path = "build/cut.rs"]
 mod cut;
 #[path = "src/frame/shader/debug_look.spec.rs"]
-mod debug_look;
+pub mod debug_look;
 #[path = "src/param.rs"]
 #[expect(
     dead_code,

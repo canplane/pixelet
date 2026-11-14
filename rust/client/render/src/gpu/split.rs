@@ -17,7 +17,7 @@
 //! whatever it writes and reads.
 
 use crate::frame::shader::floor::BIND_GROUPS as GROUPS;
-use crate::gpu::span_spec::GpuSpanName;
+use crate::spec::span::GpuSpanName;
 use xpute_gpu_guest::encode::Id;
 
 /// An encoder as its recorder names it, and the command buffers it is cut

@@ -23,7 +23,7 @@ use pxl_spec::asset::cube::{Ground, Sentinel};
 use pxl_spec::asset::decor::DECORS;
 use pxl_spec::brick;
 use pxl_spec::brick::{BRICK_CELL_CNT, BRICK_SHIFT, LINES_BINS_AT, LINES_ENTRIES_AT};
-use pxl_spec::ground::{ele_idx, word, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
+use pxl_spec::ground::{ele_idx, word, GroundId, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 use pxl_spec::space::coord::adapter::epsg3857::cells_of_m;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
@@ -263,7 +263,7 @@ impl Resident for World<'_> {
 /// place in leaf cells.
 pub type Point = (Zoom, u32, [i32; 3]);
 
-/// What a brick is filled from (pxl-engine `fill::Site`): four palette indices for each cell,
+/// What a brick is filled from (pxl-engine `fill::Site`): four asset ids for each cell,
 /// the samples of its tile, and its lines.
 pub struct Source {
     pub four: Vec<u32>,
@@ -671,7 +671,8 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
         for i in 0..BRICK_CELL_CNT {
             if mix(slot + 1000, [i as i32, 3]).is_multiple_of(29) {
                 let w = (slot * BRICK_WORDS + OWN_AT + i / OWN_CELL_CNT) as usize;
-                ground_words[w] &= !(0xff << (8 * (i % OWN_CELL_CNT)));
+                ground_words[w] &=
+                    !(u32::from(GroundId::MAX) << (GroundId::BITS * (i % OWN_CELL_CNT)));
             }
         }
     }
@@ -767,7 +768,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
                 }
                 folded.push([g[0], g[1], c[2] >> 1]);
             }
-            // Case 0 places an object's color and case 1 a ground's palette entry, each with
+            // Case 0 places an object's color and case 1 a ground's asset id, each with
             // its handle over its value.
             0 => lay(
                 leaf(LEAF_CELL_ZOOM, draw.within(0, 4)),

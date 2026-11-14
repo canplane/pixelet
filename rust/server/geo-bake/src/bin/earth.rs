@@ -32,6 +32,7 @@ use pxl_geo_bake::tile::walk::{self, Outcome};
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
 use pxl_spec::bake::publication::{format, TILE_SPHERE};
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
+use pxl_spec::color;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -96,24 +97,11 @@ fn reflectance() -> [f32; 256] {
 
 /// The Black Marble's grays are a picture's, so they are light as shown.
 fn gray_light() -> [f32; 256] {
-    core::array::from_fn(|b| {
-        let c = b as f64 / 255.0;
-        (if c <= 0.04045 {
-            c / 12.92
-        } else {
-            libm::pow((c + 0.055) / 1.055, 2.4)
-        }) as f32
-    })
+    core::array::from_fn(|b| color::linear(b as u8) as f32)
 }
 
 fn to_srgb(v: f32) -> u8 {
-    let v = (v as f64).clamp(0.0, 1.0);
-    let c = if v <= 0.0031308 {
-        12.92 * v
-    } else {
-        1.055 * libm::pow(v, 1.0 / 2.4) - 0.055
-    };
-    (c * 255.0).round_ties_even() as u8
+    color::srgb(f64::from(v))
 }
 
 /// Alpha is not decoded as sRGB, so it holds the lights' square root.

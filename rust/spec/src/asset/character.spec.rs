@@ -7,9 +7,6 @@
 // asset/content/, how tall it stands and which clip is its move. What a
 // path is, its number and its extent, is the catalog's (pxl_spec::asset::catalog).
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 /// The groups a character is of, each numbered, and in each its variants,
 /// each numbered by its row, row for row with its models, the colormap its pack
 /// shares, how tall it stands and which clip is its move.

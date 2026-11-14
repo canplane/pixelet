@@ -1,7 +1,7 @@
 // pxl-tool/bin/geoid.rs
 
 //! EGM2008's geoid heights over the WGS84 ellipsoid, every `STEP_DEG`, from
-//! GeographicLib's 5′ grid of it, into spec/spec/space/geoid.json. A GPS
+//! GeographicLib's 5′ grid of it, into pxl-spec's space/coord/geoid.rs. A GPS
 //! height is the ellipsoid's and the terrain's is EGM2008's (GEDTM30, EPSG:3855);
 //! the geoid is between them.
 //!
@@ -14,8 +14,9 @@
 use std::process::ExitCode;
 
 use pxl_tool::root;
+use xpute_gen::fmt::format_text;
 
-const OUT: &str = "spec/spec/space/geoid.json";
+const OUT: &str = "rust/spec/src/space/coord/geoid.rs";
 /// The grid's spacing in degrees, coarse beside GPS's vertical error. The world's worst error
 /// and its RMS are measured and written beside it.
 const STEP_DEG: usize = 5;
@@ -132,12 +133,22 @@ fn run() -> Result<(), String> {
         }
     }
     let rms = (bricks / (fine.width * fine.height) as f64).sqrt();
-    let vals: Vec<String> = m.iter().map(|v| format!("{v}")).collect();
-    let json = format!(
-        "{{\n  \"$doc\": [\n    \"EGM2008's geoid height over the WGS84 ellipsoid, in meters to a tenth: what a GPS height,\",\n    \"the ellipsoid's, is over the terrain's, EGM2008's (GEDTM30, EPSG:3855). From GeographicLib's\",\n    \"5' grid (egm2008-5) by pxl-tool/bin/geoid.rs; bilinear between these misses it by at\",\n    \"most {worst:.1} m, {rms:.1} m RMS.\"\n  ],\n  \"GEOID_STEP_DEG\": {{\n    \"$val\": {STEP_DEG},\n    \"$doc\": [\"The grid's spacing; rows from 90N down, {cols} columns from 0E east.\"]\n  }},\n  \"GEOID_M\": {{\n    \"$type\": \"f32\",\n    \"$val\": [\n      {}\n    ]\n  }}\n}}\n",
-        vals.join(",\n      ")
+    let vals: Vec<String> = m.iter().map(|v| format!("{v:?}")).collect();
+    let rs = format!(
+        "// pxl-spec/space/coord/geoid.rs\n\n\
+         //! EGM2008's geoid height over the WGS84 ellipsoid, in meters to a tenth: what\n\
+         //! a GPS height, the ellipsoid's, is over the terrain's, EGM2008's (GEDTM30,\n\
+         //! EPSG:3855). Written by pxl-tool bin/geoid.rs (`make bake-geoid`) from\n\
+         //! GeographicLib's 5' grid (egm2008-5); bilinear between these misses it by at\n\
+         //! most {worst:.1} m, {rms:.1} m RMS.\n\n\
+         /// The grid's spacing; rows from 90N down, {cols} columns from 0E east.\n\
+         pub const GEOID_STEP_DEG: f64 = {STEP_DEG}.0;\n\n\
+         pub const GEOID_M: [f32; {}] = [{}];\n",
+        m.len(),
+        vals.join(", ")
     );
-    std::fs::write(root().join(OUT), json).map_err(|e| format!("{OUT}: {e}"))?;
+    let rs = format_text(&root().join(OUT).to_string_lossy(), rs)?;
+    std::fs::write(root().join(OUT), rs).map_err(|e| format!("{OUT}: {e}"))?;
     println!("[geoid] {} points every {STEP_DEG}°, bilinear off the 5' grid by at most {worst:.2} m, {rms:.2} m RMS", m.len());
     Ok(())
 }

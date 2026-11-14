@@ -4,7 +4,7 @@ use super::*;
 use crate::domain::control::camera::state::{camera_state, Intent};
 use crate::domain::control::navigation::destination;
 use crate::domain::control::param;
-use crate::perf::spec::RING_NAMES;
+use crate::spec::perf::RING_NAMES;
 use xpute_gpu_guest::abi::GpuSurfaceClose;
 use xpute_kit::wire::xtp::PacketWriter;
 

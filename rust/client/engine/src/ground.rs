@@ -1,7 +1,7 @@
 // pxl-engine/ground.rs
 
 //! wgsl-port: the ground's column at a cell, the one rule by which a node's ground is
-//! answered (`node`) before what overwrites it. A cell's palette index and elevation come from
+//! answered (`node`) before what overwrites it. A cell's asset id and elevation come from
 //! the clip level that draws it (`clipmap::ground`), by the ground's rules for a cell (pxl-spec
 //! ground.rs). Its cells go by depth, with a cave's air where a cave may take them, by its
 //! content's strata and caves (`Resident::Content`).
@@ -147,7 +147,7 @@ pub trait Resident: Area {
 }
 
 /// What the ground answers of a node (`node`): its kind, and a cell's
-/// asset and palette index.
+/// asset and the share of it the caves take.
 pub type Answer = In<[u32; 2]>;
 
 /// The ground's answer for a node: the one way a descent asks the ground. `is_cell` says
@@ -156,7 +156,7 @@ pub type Answer = In<[u32; 2]>;
 /// (`Cell::asset`). Past the service area the answer is the Earth's. Otherwise the node's own
 /// bound comes first, from each zoom's tile its cells are read from (`Resident::relief`). At
 /// its own zoom, the node is air above the ground, and otherwise its column's asset
-/// (`Cell::asset`) with its palette index. A coarser node no part of which lies where the
+/// (`Cell::asset`) with the share the caves take. A coarser node no part of which lies where the
 /// ground may fill at the zooms asked (`slab`, `meets`) is a cube of air its size, and
 /// otherwise it is split. Where no tile over it is held, a node at its own zoom is the lack,
 /// and a coarser node is split, since it is not known to be empty.
@@ -266,9 +266,9 @@ pub fn node<H: Resident>(
     (answer, Cell::NONE, ways)
 }
 
-/// A cell's ground, as a column reads it: its palette index (`Sentinel::Unknown` for the service
+/// A cell's ground, as a column reads it: its asset id (`Sentinel::Unknown` for the service
 /// area's wall), its top in cells of its zoom and the share of its top cell it fills (`top`),
-/// and the four palette indices its fold took (`asset_ids`, `dx + 2·dy`).
+/// and the four asset ids its fold took (`asset_ids`, `dx + 2·dy`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub asset_id: u32,
@@ -296,7 +296,7 @@ impl Cell {
         }
     }
 
-    /// Whether it has ground at all: a palette index the catalog grounds, or the wall.
+    /// Whether it has ground at all: an asset id the catalog grounds, or the wall.
     pub fn is_grounded(&self) -> bool {
         self.asset_id == Sentinel::Unknown as u32 || value::is_ground(self.asset_id)
     }
@@ -312,11 +312,11 @@ impl Cell {
         self.asset_id != Sentinel::Unknown as u32 && z < under && z >= rock::<C>(cell_zoom, face)
     }
 
-    /// The four palette indices that asset `g` of the column at `cell_zoom` is drawn by. Where
+    /// The four asset ids that asset `g` of the column at `cell_zoom` is drawn by. Where
     /// `g` is the cell's own look at a cell coarser than the leaves', they are the four its fold
     /// took, whose mean it is drawn as, as the cell reads from afar. Otherwise, for a stratum
     /// under it or a leaf's cell, they are `g` four times. A way written over the cell gives its
-    /// own palette index four times (`world::node`).
+    /// own asset id four times (`world::node`).
     pub fn four(&self, cell_zoom: Zoom, g: u32) -> [u32; 4] {
         if cell_zoom >= LEAF_CELL_ZOOM || g != self.asset_id {
             [g; 4]
@@ -326,8 +326,8 @@ impl Cell {
     }
 
     /// The asset in cell `z` of the column at `cell_zoom`, before the caves take their share
-    /// (`opens`, `Content::hollow`), by `C`'s strata (`Content::by_depth`): the ground's palette
-    /// index, which at a coarser cell is its fold's majority, as what is placed is its fold's, or
+    /// (`opens`, `Content::hollow`), by `C`'s strata (`Content::by_depth`): the ground's asset id,
+    /// which at a coarser cell is its fold's majority, as what is placed is its fold's, or
     /// `Sentinel::Void` for air.
     pub fn asset<C: Content>(&self, cell_zoom: Zoom, z: i32) -> u32 {
         if !self.is_grounded() {

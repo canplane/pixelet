@@ -17,8 +17,6 @@
 pub mod display;
 pub mod executor;
 pub mod param;
-#[path = "sched/phase.spec.rs"]
-pub mod phase_spec;
 pub mod tick;
 
 use core::future::{poll_fn, Future};

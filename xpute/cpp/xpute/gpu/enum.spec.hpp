@@ -117,7 +117,7 @@ enum class TextureFormat : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<TextureFormat> texture_format_of(std::uint8_t val) noexcept {
+constexpr std::optional<TextureFormat> of_TextureFormat(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return TextureFormat::r8unorm;
     case 1: return TextureFormat::r8snorm;
@@ -266,7 +266,7 @@ enum class VertexFormat : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<VertexFormat> vertex_format_of(std::uint8_t val) noexcept {
+constexpr std::optional<VertexFormat> of_VertexFormat(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return VertexFormat::uint8;
     case 1: return VertexFormat::uint8x2;
@@ -324,7 +324,7 @@ enum class PrimitiveTopology : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<PrimitiveTopology> primitive_topology_of(std::uint8_t val) noexcept {
+constexpr std::optional<PrimitiveTopology> of_PrimitiveTopology(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return PrimitiveTopology::point_list;
     case 1: return PrimitiveTopology::line_list;
@@ -343,7 +343,7 @@ enum class IndexFormat : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<IndexFormat> index_format_of(std::uint8_t val) noexcept {
+constexpr std::optional<IndexFormat> of_IndexFormat(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return IndexFormat::uint16;
     case 1: return IndexFormat::uint32;
@@ -359,7 +359,7 @@ enum class FrontFace : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<FrontFace> front_face_of(std::uint8_t val) noexcept {
+constexpr std::optional<FrontFace> of_FrontFace(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return FrontFace::ccw;
     case 1: return FrontFace::cw;
@@ -376,7 +376,7 @@ enum class CullMode : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<CullMode> cull_mode_of(std::uint8_t val) noexcept {
+constexpr std::optional<CullMode> of_CullMode(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return CullMode::none;
     case 1: return CullMode::front;
@@ -399,7 +399,7 @@ enum class CompareFunction : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<CompareFunction> compare_function_of(std::uint8_t val) noexcept {
+constexpr std::optional<CompareFunction> of_CompareFunction(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return CompareFunction::never;
     case 1: return CompareFunction::less;
@@ -427,7 +427,7 @@ enum class StencilOperation : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<StencilOperation> stencil_operation_of(std::uint8_t val) noexcept {
+constexpr std::optional<StencilOperation> of_StencilOperation(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return StencilOperation::keep;
     case 1: return StencilOperation::zero;
@@ -452,7 +452,7 @@ enum class BlendOperation : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<BlendOperation> blend_operation_of(std::uint8_t val) noexcept {
+constexpr std::optional<BlendOperation> of_BlendOperation(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return BlendOperation::add;
     case 1: return BlendOperation::subtract;
@@ -486,7 +486,7 @@ enum class BlendFactor : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<BlendFactor> blend_factor_of(std::uint8_t val) noexcept {
+constexpr std::optional<BlendFactor> of_BlendFactor(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return BlendFactor::zero;
     case 1: return BlendFactor::one;
@@ -517,7 +517,7 @@ enum class VertexStepMode : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<VertexStepMode> vertex_step_mode_of(std::uint8_t val) noexcept {
+constexpr std::optional<VertexStepMode> of_VertexStepMode(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return VertexStepMode::vertex;
     case 1: return VertexStepMode::instance;
@@ -534,7 +534,7 @@ enum class AddressMode : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<AddressMode> address_mode_of(std::uint8_t val) noexcept {
+constexpr std::optional<AddressMode> of_AddressMode(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return AddressMode::clamp_to_edge;
     case 1: return AddressMode::repeat;
@@ -551,7 +551,7 @@ enum class FilterMode : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<FilterMode> filter_mode_of(std::uint8_t val) noexcept {
+constexpr std::optional<FilterMode> of_FilterMode(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return FilterMode::nearest;
     case 1: return FilterMode::linear;
@@ -567,7 +567,7 @@ enum class MipmapFilterMode : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<MipmapFilterMode> mipmap_filter_mode_of(std::uint8_t val) noexcept {
+constexpr std::optional<MipmapFilterMode> of_MipmapFilterMode(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return MipmapFilterMode::nearest;
     case 1: return MipmapFilterMode::linear;
@@ -584,7 +584,7 @@ enum class TextureDimension : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<TextureDimension> texture_dimension_of(std::uint8_t val) noexcept {
+constexpr std::optional<TextureDimension> of_TextureDimension(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return TextureDimension::_1d;
     case 1: return TextureDimension::_2d;
@@ -605,7 +605,7 @@ enum class TextureViewDimension : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<TextureViewDimension> texture_view_dimension_of(std::uint8_t val) noexcept {
+constexpr std::optional<TextureViewDimension> of_TextureViewDimension(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return TextureViewDimension::_1d;
     case 1: return TextureViewDimension::_2d;
@@ -626,7 +626,7 @@ enum class TextureAspect : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<TextureAspect> texture_aspect_of(std::uint8_t val) noexcept {
+constexpr std::optional<TextureAspect> of_TextureAspect(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return TextureAspect::all;
     case 1: return TextureAspect::stencil_only;
@@ -644,7 +644,7 @@ enum class BufferBindingType : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<BufferBindingType> buffer_binding_type_of(std::uint8_t val) noexcept {
+constexpr std::optional<BufferBindingType> of_BufferBindingType(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return BufferBindingType::uniform;
     case 1: return BufferBindingType::storage;
@@ -662,7 +662,7 @@ enum class SamplerBindingType : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<SamplerBindingType> sampler_binding_type_of(std::uint8_t val) noexcept {
+constexpr std::optional<SamplerBindingType> of_SamplerBindingType(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return SamplerBindingType::filtering;
     case 1: return SamplerBindingType::non_filtering;
@@ -682,7 +682,7 @@ enum class TextureSampleType : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<TextureSampleType> texture_sample_type_of(std::uint8_t val) noexcept {
+constexpr std::optional<TextureSampleType> of_TextureSampleType(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return TextureSampleType::float_;
     case 1: return TextureSampleType::unfilterable_float;
@@ -702,7 +702,7 @@ enum class StorageTextureAccess : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<StorageTextureAccess> storage_texture_access_of(std::uint8_t val) noexcept {
+constexpr std::optional<StorageTextureAccess> of_StorageTextureAccess(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return StorageTextureAccess::write_only;
     case 1: return StorageTextureAccess::read_only;
@@ -719,7 +719,7 @@ enum class LoadOp : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<LoadOp> load_op_of(std::uint8_t val) noexcept {
+constexpr std::optional<LoadOp> of_LoadOp(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return LoadOp::load;
     case 1: return LoadOp::clear;
@@ -735,7 +735,7 @@ enum class StoreOp : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<StoreOp> store_op_of(std::uint8_t val) noexcept {
+constexpr std::optional<StoreOp> of_StoreOp(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return StoreOp::store;
     case 1: return StoreOp::discard;
@@ -751,7 +751,7 @@ enum class QueryType : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<QueryType> query_type_of(std::uint8_t val) noexcept {
+constexpr std::optional<QueryType> of_QueryType(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return QueryType::occlusion;
     case 1: return QueryType::timestamp;
@@ -767,7 +767,7 @@ enum class CanvasAlphaMode : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<CanvasAlphaMode> canvas_alpha_mode_of(std::uint8_t val) noexcept {
+constexpr std::optional<CanvasAlphaMode> of_CanvasAlphaMode(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return CanvasAlphaMode::opaque;
     case 1: return CanvasAlphaMode::premultiplied;
@@ -800,7 +800,7 @@ enum class FeatureName : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<FeatureName> feature_name_of(std::uint8_t val) noexcept {
+constexpr std::optional<FeatureName> of_FeatureName(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return FeatureName::depth_clip_control;
     case 1: return FeatureName::depth32float_stencil8;
@@ -862,7 +862,7 @@ enum class LimitName : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<LimitName> limit_name_of(std::uint8_t val) noexcept {
+constexpr std::optional<LimitName> of_LimitName(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return LimitName::max_texture_dimension_1d;
     case 1: return LimitName::max_texture_dimension_2d;

@@ -19,17 +19,13 @@
 //! From a child it steps to the next child across the face it leaves by, so no frame holds
 //! its siblings.
 
-use crate::answer::{
-    box_of, fill_eighths, side, transparent, In, Kind, BOX_BITS, BOX_STEPS, EMPTY,
-};
+use crate::answer::{box_of, fill_eighths, fills, side, In, Kind, BOX_BITS, BOX_STEPS, EMPTY};
 use crate::axis;
 use pxl_spec::share::EIGHTH_CNT;
 use pxl_spec::space::camera::grid::cell_zoom_at;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
-use pxl_spec::space::coord::zoom::{
-    y_start, z_start, Zoom, FINEST_ZOOM, HEIGHT_BITS, MIN_ZOOM, UNIT_ZOOM,
-};
+use pxl_spec::space::coord::zoom::{starts, Zoom, FINEST_ZOOM, HEIGHT_BITS, MIN_ZOOM, UNIT_ZOOM};
 use pxl_spec::space::layer::lattice::{draw_dist, GROUND};
 
 /// The direction at the tangents `tx` across and `ty` up from the optical axis, as a
@@ -124,7 +120,7 @@ const _: () = assert!(
 /// spacings, corner to corner.
 pub const SQRT_6: f32 = 2.449_489_8;
 
-/// Which cell a ray stops at: the first it cannot see through (`answer::transparent`), as an
+/// Which cell a ray stops at: the first it cannot see through (`answer::fills`), as an
 /// eye sees (`Opaque`); the first it can see through, where what is climbed out of ends
 /// (`Transparent`); or, for a beam ray of the camera grid, the first it cannot see through or
 /// the first split too narrow to hold one of the grid's rays for certain (`narrow`), with the
@@ -275,9 +271,9 @@ impl Node {
                 idx_on(r0[0] + self.roots[0], self.corner[0], self.zoom),
             ),
             idx_on(r0[1] + self.roots[1], self.corner[1], self.zoom)
-                .wrapping_sub(y_start(self.zoom)),
+                .wrapping_sub(starts(self.zoom)[1]),
             idx_on(r0[2] + self.roots[2], self.corner[2], self.zoom)
-                .wrapping_sub(z_start(self.zoom)),
+                .wrapping_sub(starts(self.zoom)[2]),
         ]
     }
 
@@ -288,7 +284,7 @@ impl Node {
     /// the origin at zoom 1 or finer (pxl-render record.wgsl `node_of_idx`).
     pub fn of_idx(o: [i32; 3], zoom: Zoom, idx: [i32; 3]) -> Node {
         let og = grid_of(o);
-        let start = [0, y_start(zoom), z_start(zoom)];
+        let start = starts(zoom);
         let low = if zoom >= FINEST_ZOOM {
             u32::MAX
         } else {
@@ -952,8 +948,8 @@ pub fn walk_at_most<Q: Query>(
             };
             // Whether the cell is one `until` stops at.
             let stops = match until {
-                Until::Opaque | Until::Beam => !transparent(i.asset[0]),
-                Until::Transparent => transparent(i.asset[0]),
+                Until::Opaque | Until::Beam => fills(i.asset[0]),
+                Until::Transparent => !fills(i.asset[0]),
             };
             let end = match i.kind {
                 Kind::Lack => End::Lack,

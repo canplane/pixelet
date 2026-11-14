@@ -17,11 +17,6 @@
 
 // Values and fills, as pxl-spec value.rs and share.rs and pxl-engine answer.rs state them.
 
-fn fills(asset: u32) -> bool {
-  let v = asset & VAL_MASK;
-  return v != VAL_VOID && v != VAL_AIR;
-}
-
 struct Cover {
   fill: u32,
   theirs: bool,
@@ -36,10 +31,10 @@ fn cover(under_fill: u32, kind: u32, over: u32) -> Cover {
   return Cover(select(under_fill - over_eighths, 0u, over_eighths > under_fill), false);
 }
 
-/// The palette index `v` as all four of a cell word's palette indices, one a byte (pxl-spec
+/// The asset id `v` as all four of a cell word's asset ids, `GROUND_ID_BITS` each (pxl-spec
 /// `ground::word`).
 fn four_of(v: u32) -> u32 {
-  return v | (v << 8u) | (v << 16u) | (v << 24u);
+  return v | (v << GROUND_ID_BITS) | (v << (2u * GROUND_ID_BITS)) | (v << (3u * GROUND_ID_BITS));
 }
 
 // The tree of what is placed, read as pxl-engine object.rs reads it.
@@ -65,19 +60,6 @@ fn slot_at(slot: u32, zoom: u32) -> u32 {
     return SLOT_NOTHING;
   }
   return (slot << SLOT_SHIFT) | zoom;
-}
-
-fn y_start(zoom: u32) -> i32 {
-  return select(i32(1u << ((zoom - 1u) & 31u)), 0i, zoom == 0u);
-}
-
-fn z_start(zoom: u32) -> i32 {
-  return select(i32(1u << ((zoom - SHARD_ZOOM - 1u) & 31u)), 0i, zoom <= SHARD_ZOOM);
-}
-
-/// The port of pxl-engine `object::path`.
-fn path(zoom: u32, at: vec3<i32>) -> vec3<i32> {
-  return vec3<i32>(at.x & i32((1u << zoom) - 1u), at.y + y_start(zoom), at.z + z_start(zoom));
 }
 
 fn child_idx(at: vec3<i32>) -> u32 {
@@ -138,10 +120,10 @@ fn fill_share(s: u32) -> u32 {
 }
 
 /// The port of pxl-engine `object::asset_ids`, packed into the word `world::node` keeps
-/// of them, which is 0 where any index does not fit in a byte.
+/// of them, which is 0 where any is not a ground asset id (`GROUND_ID_MAX`).
 fn placed_four(s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>, v: u32) -> u32 {
   if (!is_folded(s)) {
-    return select(0u, four_of(v), v < 256u);
+    return select(0u, four_of(v), v <= GROUND_ID_MAX);
   }
   let base = first_child(s >> SLOT_SHIFT) & ~BRANCH;
   var word = 0u;
@@ -156,10 +138,10 @@ fn placed_four(s: u32, hide: vec4<i32>, zoom: u32, at: vec3<i32>, v: u32) -> u32
         c = v;
       }
     }
-    if (c >= 256u) {
+    if (c > GROUND_ID_MAX) {
       return 0u;
     }
-    word |= c << (8u * q);
+    word |= c << (GROUND_ID_BITS * q);
   }
   return word;
 }
@@ -230,7 +212,7 @@ fn ground_column(shard: u32, place: u32, zoom: u32, b: vec2<i32>) -> Cell {
     let base = brick_at(slot);
     fold = fold_at(slot * BRICK_CELL_CNT + i);
     column = ground[base + COLUMNS_AT + i];
-    own = (ground[base + OWN_AT + i / OWN_CELL_CNT] >> (8u * (i % OWN_CELL_CNT))) & 0xffu;
+    own = (ground[base + OWN_AT + i / OWN_CELL_CNT] >> (GROUND_ID_BITS * (i % OWN_CELL_CNT))) & GROUND_ID_MAX;
   }
   let t = top_of(zoom, column_top(column));
   return Cell(select(own, VAL_UNKNOWN, is_wall(shard, zoom, b)), t.cells, t.part, fold);
@@ -695,7 +677,7 @@ fn world_cell(above: vec3<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
   if (g.kind == KIND_LACK && over == VAL_VOID) {
     return Answer(g.kind, g.asset, at);
   }
-  // The ground's asset, its share less what its caves take, and its four palette indices;
+  // The ground's asset, its share less what its caves take, and its four asset ids;
   // then the ways and what is placed are written over it.
   var val = VAL_VOID;
   if (g.kind == KIND_CELL) {

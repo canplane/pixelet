@@ -89,7 +89,7 @@ pub const fn lines_words(entries: u32, segments: u32) -> u32 {
 /// where it lies in its tile, in bricks; its first cell as the world names it, with X wrapped
 /// there; what is known of the area at it (`area::Shard`), by which its columns are asked
 /// whether they are the wall (`area::is_wall`); word `k` of its lines (`LINES_ENTRIES_AT`);
-/// cell `i`'s own palette index as `columns` laid it (pxl-engine clipmap.rs `OWN_WORDS`); and
+/// cell `i`'s own asset id as `columns` laid it (pxl-engine clipmap.rs `OWN_WORDS`); and
 /// column `c`'s elevation from its tile's samples, with `c` counted from its first cell and the
 /// ring of columns around it included. Its columns are its cells and that ring. A ring column
 /// is read from the edge bin it borders, whose lines hold every line that reaches it
@@ -100,7 +100,7 @@ pub trait Brick {
     fn first(&self) -> [i32; 2];
     fn shard(&self) -> Shard;
     fn line(&self, k: u32) -> u32;
-    /// Cell `i`'s own palette index as its fill laid it (pxl-engine clipmap.rs `OWN_WORDS`).
+    /// Cell `i`'s own asset id as its fill laid it (pxl-engine clipmap.rs `OWN_WORDS`).
     fn own(&self, i: u32) -> u32;
     fn ele_at(&self, c: [i32; 2]) -> i32;
 }
@@ -193,7 +193,7 @@ impl<Q: Brick> ColumnGrid for Q {
     fn stations(&self) -> StationGrid {
         hdr_of(self).1
     }
-    /// Its own palette index as its fill laid it (pxl-engine clipmap.rs `OWN_WORDS`), the wall
+    /// Its own asset id as its fill laid it (pxl-engine clipmap.rs `OWN_WORDS`), the wall
     /// apart (`is_walled`).
     fn asset_id(&self, c: [i32; 2]) -> u32 {
         let i = cell_idx(c);

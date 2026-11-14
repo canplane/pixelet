@@ -14,7 +14,7 @@
 //! A setting that schema.json marks `stored` false lasts for the session
 //! alone: it is neither written nor read, so it starts at its default.
 
-pub use crate::domain::setting::schema_spec::{
+pub use crate::spec::schema::{
     AoMode, CameraMode, OrbitObstacleMode, ResMode, Setting, SettingKey,
 };
 use crate::sys::io::file::{self, StorageRead};

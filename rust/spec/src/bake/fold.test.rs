@@ -21,7 +21,7 @@ fn area_majority_fold() {
     assert_eq!(majority([7, 7, 1, 1], GROUND.leaf_cell_zoom() - 2), 1);
 }
 
-/// A leaf whose cell is `f` of it, its own four palette indices.
+/// A leaf whose cell is `f` of it, its own four asset ids.
 fn plane(f: impl Fn(usize, usize) -> u8) -> GroundCells {
     (0..SPAN * SPAN)
         .flat_map(|i| [f(i % SPAN, i / SPAN); 4])
@@ -29,7 +29,7 @@ fn plane(f: impl Fn(usize, usize) -> u8) -> GroundCells {
         .into()
 }
 
-/// Each parent cell's own palette index, as the zoom of the parent reads it.
+/// Each parent cell's own asset id, as the zoom of the parent reads it.
 fn fold(children: [&GroundCells; 4], zoom: Zoom) -> Vec<u8> {
     let four = fold_ground(children, zoom).to_vec();
     four.chunks(4)

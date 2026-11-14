@@ -30,12 +30,12 @@ and shows the deepest node held: the node it stands at as a cell of its own
 zoom, or the nearest over it that the world holds.
 
 A ray leaves four words: the asset with its face, zoom and fill eighths; the
-distance; the palette indices a coarse cell folds; and which edges and corners
+distance; the asset ids a coarse cell folds; and which edges and corners
 of the face meet the air. The screen pass paints them with the one function
 every lit face uses (`screen_ray.wgsl` `px_ray`, `paint.wgsl`).
 
 Two debug views read the cast. In the ray steps view (pxl-engine `eye::STEPS`)
-the third word holds, in place of the palette indices, the steps a ray took on
+the third word holds, in place of the asset ids, the steps a ray took on
 its way from the eye, which the screen pass paints on a log ramp: its beam ray's
 descent from the root and its own walk from the cell's start for a hole, and for
 a pixel that took a voxel or the sky without a walk, those of the sample before

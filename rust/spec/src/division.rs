@@ -6,7 +6,10 @@
 //! ancestors, broad to narrow; the client picks the depth, the order and the
 //! language. A provider maps its own areas onto these subtypes in its adapter.
 
-use crate::division_spec::{division_name, division_subtype};
+#[path = "division.spec.rs"]
+pub mod spec;
+
+use spec::{division_name, division_subtype};
 
 /// The most bytes a division's name takes (division.json `DIVISION_NAME`).
 pub const NAME_BYTES: usize = division_name::BYTES as usize;

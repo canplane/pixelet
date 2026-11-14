@@ -8,9 +8,6 @@
 // its own, a marker flat to the camera. What stands in a cell of the world's
 // grid is stored as its asset's id (pxl-spec object.rs).
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 pub const IDX_BITS: u32 = 10;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

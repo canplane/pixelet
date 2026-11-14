@@ -6,8 +6,8 @@
 
 use crate::sys::sched::tick::TickReport;
 use pxl_global::Global;
-use pxl_render::gpu::span_spec::FrameKind;
 use pxl_render::renderer::GpuRead;
+use pxl_render::spec::span::FrameKind;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use xpute_guest::clock::now;
 

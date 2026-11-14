@@ -9,14 +9,15 @@ use crate::domain::layer::terrain::pool::{exhaust, set_way_pool, WayPool};
 use pxl_engine::fill;
 use pxl_engine::way::way_cell;
 use pxl_spec::bake::separation::{self, Separation};
-use pxl_spec::bake::tile::terrain::{self, GroundId};
+use pxl_spec::bake::tile::terrain;
 use pxl_spec::brick;
 use pxl_spec::ground::word;
+use pxl_spec::ground::GroundId;
 use pxl_spec::value::TRANSPORT;
 use pxl_spec::way::BRIDGE;
 
 /// A tile as `hold` takes it: for each cell, row by row from the first, its
-/// own palette index and its elevation; then the tile's lines.
+/// own asset id and its elevation; then the tile's lines.
 pub(crate) type TileData = (Quadrant, Vec<GroundId>, Vec<i16>, Separation);
 
 /// What `hold` leaves held: the bricks' words up to the last nonzero one,
@@ -142,8 +143,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             continue;
         }
         let (t, place) = tile_of(cell_zoom, brick);
-        let Some((_, palette_of, ele, separation)) = tiles.iter().find(|(p, _, _, _)| *p == t)
-        else {
+        let Some((_, cells, ele, separation)) = tiles.iter().find(|(p, _, _, _)| *p == t) else {
             continue;
         };
         let side = GROUND.tile_cells();
@@ -163,7 +163,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
             place,
             first: terrain::first_cell(t, cell_zoom, place),
             lines: &lines,
-            fold_at: |k: u32| word([u32::from(palette_of[at(k)]); 4]),
+            fold_at: |k: u32| word([u32::from(cells[at(k)]); 4]),
             ele_at: |c: [i32; 2]| {
                 i32::from(
                     ele[at(brick::idx_of([
@@ -181,7 +181,7 @@ fn build(center: [f64; 2], tiles: &[TileData]) {
         let n = clipmap::OWN_CELL_CNT;
         for k in 0..clipmap::OWN_WORDS {
             back[(clipmap::OWN_AT + k) as usize] = (0..n)
-                .map(|j| u32::from(palette_of[at(n * k + j)]) << (8 * j))
+                .map(|j| u32::from(cells[at(n * k + j)]) << (GroundId::BITS * j))
                 .sum();
         }
         fill::mips(&mut back, &scratch, cell_zoom);
@@ -448,7 +448,7 @@ fn void_tile_bricks_filled_with_no_packet() {
         while !matches!(fill_stage(w), Poll::Done) {}
         assert!(
             w.slots.iter().any(|s| s.fill == Fill::Filled),
-            "filled off the void's palette index, over samples all zero"
+            "filled off the void's asset id, over samples all zero"
         );
     });
 }

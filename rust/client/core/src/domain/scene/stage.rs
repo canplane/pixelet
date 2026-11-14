@@ -8,11 +8,11 @@ use crate::domain::scene::frame::Frame;
 use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shader::word::{DECOR_GROUP_CNT, DRAW_FLOATS};
 use pxl_render::gpu::draw::DRAW_WORDS;
-use pxl_render::gpu::span_spec::FrameKind;
 use pxl_render::gpu::surface::SURFACE_CAP;
 use pxl_render::pass::atmosphere::EARTH_LAYER_CNT;
 use pxl_render::ray::{Cast, GroundInput};
 use pxl_render::renderer::{render_frame, EarthLayer, FrameInput, FrameStat};
+use pxl_render::spec::span::FrameKind;
 use pxl_spec::space::coord::{q3, v3};
 use pxl_global::Global;
 

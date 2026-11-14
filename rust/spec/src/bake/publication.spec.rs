@@ -6,9 +6,6 @@
 // each is served is the bucket's alone: its `source`, which the client reads
 // at boot and script/publish.py writes, so a publish changes nothing here.
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 /// The format each bake writes now, which a published name begins with.
 /// It is bumped by a change to how the client reads a tile, or to what a
 /// tile guarantees it.
@@ -32,7 +29,6 @@ pub const VERSION_BYTES: usize = 32;
 pub const TILE_SPHERE: &str = "sphere";
 
 /// The base layers a version is published for: the kinds of `FORMAT`, numbered in their order.
-pub const BASE_LAYERS: &[&str] = &["terrain", "place", "division", "earth"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum BaseLayer {

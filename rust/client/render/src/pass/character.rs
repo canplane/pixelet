@@ -24,7 +24,6 @@ use crate::gpu::draw::{Draw, Position};
 use crate::gpu::pipeline::PipelineCache;
 use crate::gpu::put::put_mat;
 use crate::gpu::read::Read;
-use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
 use crate::gpu::upload::uploads;
 use crate::look::color::linear_rgb;
@@ -33,6 +32,7 @@ use crate::pass::finish::Finish;
 use crate::pass::model::{frame_entries, frame_layout, Stage};
 use crate::pass::shadow::Shadow;
 use crate::pass::skinned_mesh::SkinnedPass;
+use crate::spec::span::GpuSpanName;
 
 pub struct CharacterPass {
     frame_buf: u32,

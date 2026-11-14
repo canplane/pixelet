@@ -401,7 +401,7 @@ pub struct Prop {
 /// the base, the ground's alone, so no edit moves it or takes the ground from under
 /// it, and it faces as the cells beside it vote (`asks`). Then, where `boxed`, it says whether
 /// the candidate generates there: every cell of its box is void and every cell under its base
-/// is a palette entry it generates on, as the ground holds them; no edit lies in its box, air
+/// is an asset id it generates on, as the ground holds them; no edit lies in its box, air
 /// included (`DecorQuery::edited`); and no placed decor's box overlaps its own
 /// (`overlaps_placed`). It stands at its clip level's column surface, while the vote and its
 /// box are asked at the finest zoom at which the world holds its leaf column
@@ -495,7 +495,7 @@ fn asks<Q: DecorQuery>(
             for z in base..=top {
                 let c = [x, y, z];
                 let v = q.asset(about, zoom, c);
-                // Under its base a palette entry it generates on; over it void, and no edit.
+                // Under its base an asset id it generates on; over it void, and no edit.
                 let holds = if z == base {
                     decor.allows(val(v))
                 } else {

@@ -38,6 +38,7 @@ use pxl_spec::brick::{BRICK, BRICK_CELL_CNT};
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::hierarchy::tree::ancestor_at;
 use pxl_spec::space::layer::area;
 use pxl_spec::value;
 use wgpu::util::DeviceExt;
@@ -129,7 +130,7 @@ impl Generating<'_, '_> {
         c: [i32; 3],
     ) -> u32 {
         let edited = f.is_none();
-        let root_at = object::ancestor_at(zoom, c, zoom);
+        let root_at = ancestor_at(zoom, c, zoom);
         let (cuts, root) = if edited {
             (self.cuts, Inheritance::of(&self.w, (0, root_at)))
         } else {
@@ -580,8 +581,8 @@ fn pipeline(
 /// Compute pipeline `id` as the renderer makes it, over its group as record.rs states it
 /// (`compute_layout`) and not one derived from the module.
 fn hand_pipeline(device: &wgpu::Device, id: u32) -> wgpu::ComputePipeline {
-    use pxl_render::api_spec::record::{STORAGE, STORAGE_RW, UNIFORM};
     use pxl_render::frame::shader::record::{compute, compute_layout, COMPUTE};
+    use pxl_render::spec::api::record::{STORAGE, STORAGE_RW, UNIFORM};
     let (shader, entry, _) = compute(id);
     let entries: Vec<_> = compute_layout(id)
         .chunks(3)
@@ -3318,7 +3319,7 @@ fn hand_frames_answer_as_the_rust() {
         );
         // A carve over a placed decor that took a record, with a box over the cut.
         let p = claims[0];
-        let cut_rect = object::cut_rect(20, object::ancestor_at(24, p, 4));
+        let cut_rect = object::cut_rect(20, ancestor_at(24, p, 4));
         step(
             &mut model,
             Frame {
@@ -3328,7 +3329,7 @@ fn hand_frames_answer_as_the_rust() {
                 cuts: [
                     Cut {
                         zoom: 20,
-                        at: object::ancestor_at(24, p, 4),
+                        at: ancestor_at(24, p, 4),
                     },
                     Cut::NONE,
                 ],
@@ -3494,6 +3495,7 @@ fn hand_halve_as_the_rust() {
     ]);
     let source = [
         include_str!(concat!(env!("OUT_DIR"), "/shader/constant.wgsl")),
+        include_str!(concat!(env!("OUT_DIR"), "/shader/walk_word.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/world_word.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/decor_word.wgsl")),
         include_str!(concat!(env!("OUT_DIR"), "/shader/seed.wgsl")),

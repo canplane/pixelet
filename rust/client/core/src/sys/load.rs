@@ -10,7 +10,7 @@ use pxl_spec::asset::catalog::SLOT_CNT;
 
 use xpute_link::abi::types::Token;
 
-use crate::sys::io::file_spec::path;
+use crate::spec::file::path;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LoadKind {

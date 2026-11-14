@@ -22,7 +22,7 @@ pub(crate) struct Surface {
     pub cells: GroundCells,
 }
 
-/// The tile from its surface and lines: the approaches' palette indices laid into its cells
+/// The tile from its surface and lines: the approaches' asset ids laid into its cells
 /// (pxl-spec bake/way.rs `lay`), then its lines cut to those it draws (pxl-spec
 /// bake/tile/terrain.rs `drawn`).
 pub(crate) fn assemble(tile: [i32; 2], surface: Surface, separation: Separation) -> TerrainTile {

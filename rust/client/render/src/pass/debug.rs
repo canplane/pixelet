@@ -12,9 +12,9 @@ use crate::gpu::api::{buf_entry, pass_desc, Gpu, Load, RenderContext};
 use crate::gpu::draw::uniform_of;
 use crate::gpu::draw::{DrawStat, DrawTable};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::upload::UploadTable;
 use crate::pass::model::{put_uniform, UniformBuffer, DRAW_BYTES};
+use crate::spec::span::GpuSpanName;
 
 /// The gizmos draw their faces into the world's depth at the canvas's size,
 /// cleared once everything drawn over the world is done with it. Their lines

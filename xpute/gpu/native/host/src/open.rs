@@ -1,6 +1,6 @@
 // xpute-gpu-native-host/open.rs
 
-use xpute_gpu_link::enums::{FEATURE_NAMES, LIMIT_NAMES};
+use xpute_gpu_link::enums::{FeatureName, LimitName};
 use xpute_gpu_link::GpuAsk;
 
 /// This says what a device is asked to be as it opens.
@@ -114,9 +114,9 @@ pub fn open(instance: &wgpu::Instance, ask: &Ask) -> Result<Wgpu, OpenError> {
 /// each feature FEATURE_NAME names.
 pub(super) fn block(device: &wgpu::Device) -> (Vec<u32>, Vec<u32>) {
     let (limits, features) = (device.limits(), device.features());
-    let words = LIMIT_NAMES.iter().map(|name| limit(&limits, name)).collect();
-    let mut bits = vec![0u32; FEATURE_NAMES.len().div_ceil(32)];
-    for (k, name) in FEATURE_NAMES.iter().enumerate() {
+    let words = LimitName::ALL.iter().map(|l| limit(&limits, l.name())).collect();
+    let mut bits = vec![0u32; FeatureName::ALL.len().div_ceil(32)];
+    for (k, name) in FeatureName::ALL.iter().map(|f| f.name()).enumerate() {
         if feature(name).is_some_and(|f| features.contains(f)) {
             bits[k >> 5] |= 1 << (k & 31);
         }

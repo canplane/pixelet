@@ -32,8 +32,8 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Gpu, Group, RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::tile::TileGrid;
+use crate::spec::span::GpuSpanName;
 
 const _: () = assert!(
     BOUND_SQUARES * BOUND_SQUARES <= MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP,

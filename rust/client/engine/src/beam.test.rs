@@ -6,12 +6,12 @@ use crate::answer::{
 };
 use crate::cast::{Detail, End, Node, Query, Ray, Spacing, Trace, Until, DEPTH};
 use crate::content::Sample;
-use crate::object::ancestor_at;
 use pxl_spec::share::EIGHTH_CNT;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::HEIGHT_BITS;
-use pxl_spec::space::coord::zoom::{y_start, z_start, Zoom, MIN_ZOOM, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{starts, Zoom, MIN_ZOOM, UNIT_ZOOM};
+use pxl_spec::space::hierarchy::tree::ancestor_at;
 
 #[test]
 fn largest_beam_fits_binding() {
@@ -122,11 +122,12 @@ impl Query for Stand {
     ) -> In<[u32; 2]> {
         assert_eq!(*at, (zoom, c), "asked");
         let side = libm::ldexpf(1.0, UNIT_ZOOM as i32 - zoom as i32);
-        // Y and Z from the world's edge (`object::path`).
+        // Y and Z from the world's edge (`zoom::starts`).
+        let s = starts(zoom);
         let lo = [
             c[0] as f32 * side,
-            (c[1] + y_start(zoom)) as f32 * side - (1u32 << (UNIT_ZOOM - 1)) as f32,
-            (c[2] + z_start(zoom)) as f32 * side - (1u32 << (HEIGHT_BITS - 1)) as f32,
+            (c[1] + s[1]) as f32 * side - (1u32 << (UNIT_ZOOM - 1)) as f32,
+            (c[2] + s[2]) as f32 * side - (1u32 << (HEIGHT_BITS - 1)) as f32,
         ];
         let hi = lo.map(|v| v + side);
         if zoom >= near {

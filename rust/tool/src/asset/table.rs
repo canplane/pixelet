@@ -32,7 +32,11 @@ pub enum Face {
 }
 
 impl Face {
-    fn name(self) -> &'static str {
+    /// Every face, in the pack's order: the members of the CubeFace the
+    /// specs' ingest writes (spec/ingest.rs).
+    pub const ALL: [Face; 3] = [Face::Top, Face::Side, Face::Bottom];
+
+    pub fn name(self) -> &'static str {
         match self {
             Face::Top => "top",
             Face::Side => "side",

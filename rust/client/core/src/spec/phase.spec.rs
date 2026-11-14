@@ -1,4 +1,4 @@
-// pxl-core/sys/sched/phase.spec.rs
+// pxl-core/spec/phase.spec.rs
 //
 // GENERATED from spec/client/core/sys/sched/phase.json (xpute-gen data.rs)
 //
@@ -7,10 +7,6 @@
 // phase's number is its place here, and a report of per-phase time is indexed
 // by it.
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
-pub const PHASES: &[&str] = &["interaction", "visible"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Phase {

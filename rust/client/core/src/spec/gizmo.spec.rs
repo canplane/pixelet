@@ -1,4 +1,4 @@
-// pxl-core/domain/scene/gizmo/gizmo.spec.rs
+// pxl-core/spec/gizmo.spec.rs
 //
 // GENERATED from spec/client/core/domain/scene/gizmo/gizmo.json (xpute-gen data.rs)
 //
@@ -8,9 +8,6 @@
 // (domain/scene/gizmo/coverage.rs). Each rgb is sRGB's #rrggbb, with its
 // opacity, and dashed where a dashed line draws it: a ring of the frame, a
 // stretch of the coverage.
-
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
 
 pub mod frame {
     pub mod pivot {

@@ -18,8 +18,7 @@ use super::timed;
 use super::word::WordCursor;
 use super::GpuHost;
 use xpute_gpu_link::enums::{
-    BUFFER_BINDING_TYPES, CANVAS_ALPHA_MODES, CULL_MODES, LOAD_OPS, QUERY_TYPES, STORE_OPS,
-    TEXTURE_SAMPLE_TYPES,
+    BufferBindingType, CanvasAlphaMode, CullMode, LoadOp, QueryType, StoreOp, TextureSampleType,
 };
 use xpute_gpu_link::spec::{device, op, status, NONE, SURFACE_PREFERRED};
 
@@ -345,12 +344,14 @@ impl GpuHost {
                             (r.u(), r.u(), r.u(), r.u(), r.u(), r.u());
                         let ty = match kind {
                             0 => wgpu::BindingType::Buffer {
-                                ty: match BUFFER_BINDING_TYPES.get(a as usize).copied() {
-                                    Some("uniform") => wgpu::BufferBindingType::Uniform,
-                                    Some("storage") => {
+                                ty: match u8::try_from(a).ok().and_then(BufferBindingType::of) {
+                                    Some(BufferBindingType::Uniform) => {
+                                        wgpu::BufferBindingType::Uniform
+                                    }
+                                    Some(BufferBindingType::Storage) => {
                                         wgpu::BufferBindingType::Storage { read_only: false }
                                     }
-                                    Some("read-only-storage") => {
+                                    Some(BufferBindingType::ReadOnlyStorage) => {
                                         wgpu::BufferBindingType::Storage { read_only: true }
                                     }
                                     _ => panic!("[gpu] buffer binding type {a}"),
@@ -364,16 +365,21 @@ impl GpuHost {
                                 "sampler binding type",
                             )),
                             2 => wgpu::BindingType::Texture {
-                                sample_type: match TEXTURE_SAMPLE_TYPES.get(a as usize).copied() {
-                                    Some("float") => {
+                                sample_type: match u8::try_from(a)
+                                    .ok()
+                                    .and_then(TextureSampleType::of)
+                                {
+                                    Some(TextureSampleType::Float) => {
                                         wgpu::TextureSampleType::Float { filterable: true }
                                     }
-                                    Some("unfilterable-float") => {
+                                    Some(TextureSampleType::UnfilterableFloat) => {
                                         wgpu::TextureSampleType::Float { filterable: false }
                                     }
-                                    Some("depth") => wgpu::TextureSampleType::Depth,
-                                    Some("sint") => wgpu::TextureSampleType::Sint,
-                                    Some("uint") => wgpu::TextureSampleType::Uint,
+                                    Some(TextureSampleType::Depth) => {
+                                        wgpu::TextureSampleType::Depth
+                                    }
+                                    Some(TextureSampleType::Sint) => wgpu::TextureSampleType::Sint,
+                                    Some(TextureSampleType::Uint) => wgpu::TextureSampleType::Uint,
                                     _ => panic!("[gpu] texture sample type {a}"),
                                 },
                                 view_dimension: of(&self.names.view_dimension, b, "view dimension"),
@@ -479,9 +485,9 @@ impl GpuHost {
             }
             op::QUERY_SET => {
                 let id = r.u();
-                let ty = match QUERY_TYPES.get(r.u() as usize).copied() {
-                    Some("occlusion") => wgpu::QueryType::Occlusion,
-                    Some("timestamp") => wgpu::QueryType::Timestamp,
+                let ty = match u8::try_from(r.u()).ok().and_then(QueryType::of) {
+                    Some(QueryType::Occlusion) => wgpu::QueryType::Occlusion,
+                    Some(QueryType::Timestamp) => wgpu::QueryType::Timestamp,
                     t => panic!("[gpu] query type {t:?}"),
                 };
                 let q = self.device.create_query_set(&wgpu::QuerySetDescriptor {
@@ -789,8 +795,8 @@ impl GpuHost {
                 } else {
                     of(&self.names.texture_format, format, "format")
                 };
-                let premultiplied =
-                    CANVAS_ALPHA_MODES.get(alpha as usize) == Some(&"premultiplied");
+                let premultiplied = u8::try_from(alpha).ok().and_then(CanvasAlphaMode::of)
+                    == Some(CanvasAlphaMode::Premultiplied);
                 self.surface(surface).cfg = Some((format, usage, premultiplied));
                 self.want_configured(surface);
             }
@@ -886,9 +892,9 @@ impl GpuHost {
             .opt()
             .map(|s| of(&self.names.index_format, s, "index format"));
         let front_face = of(&self.names.front_face, r.u(), "front face");
-        let cull_mode = match CULL_MODES.get(r.u() as usize).copied() {
-            Some("front") => Some(wgpu::Face::Front),
-            Some("back") => Some(wgpu::Face::Back),
+        let cull_mode = match u8::try_from(r.u()).ok().and_then(CullMode::of) {
+            Some(CullMode::Front) => Some(wgpu::Face::Front),
+            Some(CullMode::Back) => Some(wgpu::Face::Back),
             _ => None,
         };
         let unclipped_depth = r.flag();
@@ -1100,15 +1106,15 @@ impl GpuHost {
 const COLOR_CAP: usize = 8;
 
 fn load_op<V>(load: u32, clear: V) -> wgpu::LoadOp<V> {
-    match LOAD_OPS.get(load as usize).copied() {
-        Some("clear") => wgpu::LoadOp::Clear(clear),
+    match u8::try_from(load).ok().and_then(LoadOp::of) {
+        Some(LoadOp::Clear) => wgpu::LoadOp::Clear(clear),
         _ => wgpu::LoadOp::Load,
     }
 }
 
 fn store_op(store: u32) -> wgpu::StoreOp {
-    match STORE_OPS.get(store as usize).copied() {
-        Some("discard") => wgpu::StoreOp::Discard,
+    match u8::try_from(store).ok().and_then(StoreOp::of) {
+        Some(StoreOp::Discard) => wgpu::StoreOp::Discard,
         _ => wgpu::StoreOp::Store,
     }
 }

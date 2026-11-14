@@ -33,10 +33,8 @@ fn origin_roots(o: vec3<i32>) -> vec3<i32> {
 /// middle within half a root of the origin.
 fn node_of_idx(o: vec3<i32>, zoom: u32, c: vec3<i32>) -> Node {
   let og = vec3<u32>(u32(o.x), u32(o.y) + Y_START, u32(o.z) + Z_START);
-  let y_start = select(1u << ((zoom - 1u) & 31u), 0u, zoom == 0u);
-  let z_start = select(1u << ((zoom - SHARD_ZOOM - 1u) & 31u), 0u, zoom <= SHARD_ZOOM);
   let low = select((1u << (zoom & 31u)) - 1u, 0xffffffffu, zoom >= FINEST_ZOOM);
-  let n = (vec3<u32>(c) + vec3<u32>(0u, y_start, z_start)) & vec3<u32>(low);
+  let n = vec3<u32>(c + vec3<i32>(0i, y_start(zoom), z_start(zoom))) & vec3<u32>(low);
   let corner = select(n << vec3<u32>((FINEST_ZOOM - zoom) & 31u), vec3<u32>(0u), zoom == 0u);
   let mid = corner + vec3<u32>(under(zoom) >> 1u);
   let up = mid >= og;

@@ -24,15 +24,16 @@ use crate::perf::section::{
     DrawSection, FrameSection, Percentile, StepSection, StepStat, StreamStat, TaskSection,
     ViewSection,
 };
-use crate::perf::spec::{self, limit, now, stat};
 use crate::perf::task::TaskRecord;
 use crate::perf::word::put;
+use crate::spec;
+use crate::spec::perf::{limit, now, stat};
 use crate::sys::io::failure::Outcome;
 use crate::frame::refused_frames;
 use pxl_global::Global;
 use pxl_render::gpu::api;
-use pxl_render::gpu::span_spec::FRAME_KINDS;
 use pxl_render::renderer;
+use pxl_render::spec::span::FrameKind;
 use pxl_spec::space::coord::adapter::epsg4326;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
@@ -168,8 +169,8 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
         gpu_timed: cnt(&|f| f.gpu.timed != 0.0),
         gpu_busy: percentile(scratch, read().map(|f| f.gpu.busy_ms)),
         gpu_busy_kinds: {
-            let mut by = [0.0; 3 * FRAME_KINDS.len()];
-            for k in 0..FRAME_KINDS.len() {
+            let mut by = [0.0; 3 * FrameKind::ALL.len()];
+            for k in 0..FrameKind::ALL.len() {
                 let busy = read().filter(|f| f.kind == k as f64).map(|f| f.gpu.busy_ms);
                 let (s, n) = percentile_n(scratch, busy);
                 by[3 * k..3 * k + 3].copy_from_slice(&[s.p50, s.p95, n as f64]);
@@ -301,10 +302,10 @@ fn view() -> ViewSection {
     let picked = pointed.and_then(|[x, y]| edit::pick::pick_at(x, y));
     let hit_kind = picked.as_ref().map_or(f64::NAN, |p| {
         f64::from(match p.hit.kind {
-            HitKind::Ground => spec::HitKind::Ground,
-            HitKind::Object(_) => spec::HitKind::Object,
-            HitKind::Objects => spec::HitKind::Objects,
-            HitKind::Decor(_) => spec::HitKind::Decor,
+            HitKind::Ground => spec::perf::HitKind::Ground,
+            HitKind::Object(_) => spec::perf::HitKind::Object,
+            HitKind::Objects => spec::perf::HitKind::Objects,
+            HitKind::Decor(_) => spec::perf::HitKind::Decor,
         } as u8)
     });
     let asset = edit::tool().asset();

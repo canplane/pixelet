@@ -28,6 +28,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         wit: "spec/client/core/wit",
         rs: Some("rust/client/core/src/abi.rs"),
         ts: Some("ts/client/src/abi"),
+        cpp: None,
         side: Some(Side::Guest("xpute/guest/rust")),
     };
     wit_outputs(&root, &target, &guest)

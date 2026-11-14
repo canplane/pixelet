@@ -6,7 +6,8 @@
 use pxl_spec::asset::cube::{self, Ground, Sentinel};
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
-use pxl_spec::bake::tile::terrain::{GroundCells, GroundId, TerrainTile, GROUND_COLUMN};
+use pxl_spec::bake::tile::terrain::{GroundCells, TerrainTile, GROUND_COLUMN};
+use pxl_spec::ground::GroundId;
 use pxl_spec::space::coord::world::idx_of;
 use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, UNIT_ZOOM};
 use pxl_spec::space::layer::lattice::{Grid, GROUND, TILE_CELLS};
@@ -41,7 +42,7 @@ fn top() -> Quadrant {
 }
 
 /// A leaf as a client holds it: its tile with its lines, and each cell's
-/// palette index and elevation as the clip levels hold them.
+/// asset id and elevation as the clip levels hold them.
 #[derive(Clone)]
 struct Leaf {
     tile: TerrainTile,
@@ -96,7 +97,7 @@ fn resident(center: [f64; 2], tiles: &[(Quadrant, Leaf)]) {
 }
 
 /// A leaf as a client holds it once its cells are back, with each cell's
-/// elevation and palette index given.
+/// elevation and asset id given.
 fn drawn(ele: Vec<i16>, ground: GroundCells, separation: Separation) -> Leaf {
     Leaf {
         tile: TerrainTile::of(Vec::new(), Vec::new().into(), separation, Occupancy::LEAF),

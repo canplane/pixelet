@@ -8,9 +8,6 @@
 // outline at `PLACE_SYMBOLS[n - 1]` (place_theme.spec.ts `SYMBOL`), its box and each
 // shape's path data and whether it fills even-odd.
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 /// A mask's side, in device pixels.
 pub const SYMBOL_PX: u32 = 28;
 

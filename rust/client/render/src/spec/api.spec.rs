@@ -1,13 +1,10 @@
-// pxl-render/api.spec.rs
+// pxl-render/spec/api.spec.rs
 //
 // GENERATED from spec/client/render/api.json (xpute-gen data.rs)
 //
 // pixelet's conventions over xpute's GPU calls (xpute/gpu/link/spec/api.json), which
 // the renderer writes through xpute's encoder (gpu/api.rs): the stream it writes
 // them into, its pipeline records' codes, and what a surface shows.
-
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
 
 /// What a canvas the UI hands over shows (gpu/surface.rs): the world, a character alone, or
 /// nothing yet, as a canvas opens before the UI says what it draws.

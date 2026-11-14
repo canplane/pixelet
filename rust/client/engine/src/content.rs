@@ -21,7 +21,7 @@ pub trait Content {
     /// leaves, so a coarse cell holds what its leaves hold, and `FULL` is a cave all through.
     fn hollow(node: (Zoom, [i32; 3])) -> u32;
 
-    /// What the ground is in cell `z` of a column at `cell_zoom` whose palette index is
+    /// What the ground is in cell `z` of a column at `cell_zoom` whose asset id is
     /// `asset_id` and whose top is `top` cells. Under the top it goes by depth; above the top
     /// it is `Sentinel::Void`; under the bedrock, and all through the wall, it is
     /// `Sentinel::Unknown`.

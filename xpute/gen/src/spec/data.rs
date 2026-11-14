@@ -12,29 +12,29 @@
 //! C++ an enum class, numbered by place; a table whose `$type` is `enum` is one
 //! too, numbered by its members, each a number or a table that carries its
 //! `$number`. An enum is named as its key is, singular; one whose names a
-//! reader takes, marked `"$names": true`, has them written as a list under the
-//! key's plural (`STEP_NAMES` beside `STEP_NAME`). Every enum is held in its
-//! `$repr` (`u8` where it gives none); in Rust and C++ it has `of`, a number to
-//! its member, in Rust its members' names, and in TypeScript each member is a
-//! constant of its own (`ts_enum`), so no name reaches a bundle. A list of
-//! tables of the same fields is a list of records: an array of objects in
-//! TypeScript, and in Rust an array of a struct (`rs_recs`), its row named by
-//! the list's `$row` where its key is a plural (`"$row": "asset_file"`,
-//! `AssetFile`), whose `name`s are the enum where the list's `$type` is `enum`,
-//! numbered by their places or, where every record carries one, each by its
-//! `$number`; there the TypeScript rows carry each one's `number` and no
-//! `name`, and the records of an enum's table carry their `number` beside their
-//! key (`numbered`). A table a tool builds in memory is written as a read one
-//! is (`table_outputs`).
+//! reader takes, marked `"$names": true`, has them written in TypeScript and
+//! C++ as a list under the key's plural (`STEP_NAMES` beside `STEP_NAME`), as
+//! Rust's enum holds them in `name`. Every enum is held in its `$repr` (`u8`
+//! where it gives none); in Rust and C++ it has `of`, a number to its member,
+//! in Rust its members' names, and in TypeScript each member is a constant of
+//! its own (`ts_enum`), so no name reaches a bundle. A list of tables of the
+//! same fields is a list of records: an array of objects in TypeScript, and in
+//! Rust an array of a struct (`rs_recs`), its row named by the list's `$row`
+//! where its key is a plural (`"$row": "asset_file"`, `AssetFile`), whose
+//! `name`s are the enum where the list's `$type` is `enum`, numbered by their
+//! places or, where every record carries one, each by its `$number`; there the
+//! TypeScript rows carry each one's `number` and no `name`, and the records of
+//! an enum's table carry their `number` beside their key (`numbered`). A table
+//! a tool builds in memory is written as a read one is (`table_outputs`).
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::path::Path;
 
 use super::{
-    align_star, file, is_ts_ident, js_num, json_str, line_comments, mark,
-    package_path, pascal, plural, read, rs_const, rs_doc, rs_enum, rs_field, rs_ident, rs_member, snake, ts_doc,
-    ts_enum, Member, Node, Output,
+    align_star, cpp_enum, cpp_member, file, is_ts_ident, js_num, json_str, line_comments, mark,
+    package_path, pascal, plural, read, rs_const, rs_doc, rs_enum, rs_field, rs_ident, rs_member, ts_doc,
+    ts_enum, Includes, Member, Node, Output,
 };
 
 pub struct DataSpec {
@@ -260,21 +260,19 @@ fn casing(n: &Node) -> Casing {
 }
 
 /// Whether the enum `n`'s members are read by their names, which it marks
-/// `"$names": true`: its names are then written as a list of their own,
-/// under the plural of its name (`plural`).
+/// `"$names": true`: its names are then written in TypeScript and C++ as a
+/// list of their own, under the plural of its name (`plural`).
 fn names_read(n: &Node) -> bool {
     n.get("$names") == Some(&Node::Bool(true))
 }
 
 /// What a value's marks say of how it is written in Rust: an enum's `$repr`,
-/// the numbers it holds and how its members are named, whether its names are
-/// read (`names_read`), and the type a list of records' row takes, its
-/// `$row`, the singular its plural key does not give.
+/// the numbers it holds and how its members are named, and the type a list of
+/// records' row takes, its `$row`, the singular its plural key does not give.
 struct Marks<'a> {
     repr: &'static str,
     range: std::ops::RangeInclusive<f64>,
     casing: Casing,
-    names_read: bool,
     row: Option<&'a str>,
 }
 
@@ -285,7 +283,6 @@ impl<'a> Marks<'a> {
             repr,
             range,
             casing: casing(n),
-            names_read: names_read(n),
             row: n.str_at("$row"),
         })
     }
@@ -575,32 +572,6 @@ fn is_name(s: &str) -> bool {
         && c.all(|x| x.is_ascii_alphanumeric() || x == '_' || x == '-')
 }
 
-/// This makes a member's name a C++ enumerator: each `-` becomes `_`, a leading
-/// digit gets an `_` before it, and a keyword gets one after it.
-fn cpp_ident(k: &str) -> String {
-    const KEYWORDS: [&str; 12] = [
-        "float", "double", "int", "char", "bool", "default", "delete", "new", "and", "or", "not",
-        "xor",
-    ];
-    let id: String = k
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    if KEYWORDS.contains(&id.as_str()) {
-        format!("{id}_")
-    } else if id.starts_with(|c: char| c.is_ascii_digit()) {
-        format!("_{id}")
-    } else {
-        id
-    }
-}
-
 /// This writes a list of names in Rust, as a slice of the names.
 fn rs_names(name: &str, names: &[&str], indent: &str) -> String {
     let quoted: Vec<String> = names.iter().map(|n| json_str(n)).collect();
@@ -724,9 +695,6 @@ fn rs_leaf(
             }
             if !a.iter().all(|e| e.str().is_some_and(is_name)) {
                 return Err(format!("{name}: an enum's members are names"));
-            }
-            if marks.names_read {
-                out.push(rs_names(&plural(name), &names, indent));
             }
             let members = list_members(name, a, &marks.range, marks.casing)?;
             out.extend(rs_enum(&pascal(name), &members, marks.repr, indent));
@@ -1121,11 +1089,6 @@ fn rs_outputs(
 ) -> Result<(), String> {
     let shown = package_path(root, rs_path)?;
     let mut rs = head(&shown, d.json, spec);
-    rs.extend([
-        String::new(),
-        "// A table is generated whole, whether or not this crate calls an entry.".to_string(),
-        "#![allow(dead_code, reason = \"generated from the spec\")]".to_string(),
-    ]);
     let scope = Scope {
         uses: RefCell::default(),
         enums: enums(spec),
@@ -1164,46 +1127,6 @@ fn cpp_file(d: &DataSpec, spec: &Node, cpp_path: &str, namespace: &str) -> Resul
     Ok(file(&cpp))
 }
 
-/// The headers a C++ file includes, each added where its body names what the
-/// header declares, as Rust's `Scope` `use`s.
-type Includes = BTreeSet<&'static str>;
-
-/// An enum's member as C++ names it: in snake case, as the C++ here names
-/// its constants' members. An outside name too, since C++'s own headers
-/// define POSIX's errno names as macros.
-fn cpp_member(k: &str) -> String {
-    cpp_ident(&snake(k))
-}
-
-/// An enum's C++, as every enum has it: an enum class held in `held`, and the
-/// member a number is (`<enum>_of`), as Rust's `of`.
-fn cpp_enum(name: &str, members: &[Member], held: &str, out: &mut Vec<String>, inc: &mut Includes) {
-    let e = pascal(name);
-    inc.extend(["cstdint", "optional"]);
-    out.push(format!("enum class {e} : {held} {{"));
-    for m in members {
-        out.extend(line_comments(&m.doc, "    "));
-        out.push(format!("    {} = {},", m.ident, m.number));
-    }
-    out.extend([
-        "};".to_string(),
-        String::new(),
-        "// The member `val` is, or none for a number no member has.".into(),
-        format!("constexpr std::optional<{e}> {}_of({held} val) noexcept {{", snake(&e)),
-        "    switch (val) {".into(),
-    ]);
-    out.extend(
-        members
-            .iter()
-            .map(|m| format!("    case {}: return {e}::{};", m.number, m.ident)),
-    );
-    out.extend([
-        "    }".to_string(),
-        "    return std::nullopt;".into(),
-        "}".into(),
-    ]);
-}
-
 /// A table is a namespace, and one whose `$type` is `enum` also an enum
 /// (`cpp_enum`), its members' own values in the namespace, each under its
 /// member's name; a table that holds no value writes nothing. A list of names
@@ -1224,8 +1147,8 @@ fn cpp_items(
             .collect::<Result<Vec<_>, _>>()?;
         let enumed = type_of(n, ty) == "enum";
         if enumed {
-            let (_, range, held) = repr_of(n)?;
-            cpp_enum(name, &list_members(name, list, &range, cpp_member)?, held, &mut lines, inc);
+            let (_, range, repr) = repr_of(n)?;
+            cpp_enum(name, &list_members(name, list, &range, cpp_member)?, repr, &mut lines, inc);
         }
         if !enumed || names_read(n) {
             let key = if enumed { plural(name) } else { name.to_string() };
@@ -1250,9 +1173,9 @@ fn cpp_items(
             cpp_items(&k, v, t, &mut body, inc)?;
         }
         if enumed {
-            let (_, range, held) = repr_of(n)?;
+            let (_, range, repr) = repr_of(n)?;
             let keys: Vec<(&str, &Node)> = n.named().collect();
-            cpp_enum(name, &numbers(name, &keys, &range, cpp_member)?, held, &mut lines, inc);
+            cpp_enum(name, &numbers(name, &keys, &range, cpp_member)?, repr, &mut lines, inc);
         }
         if !body.is_empty() {
             if enumed {

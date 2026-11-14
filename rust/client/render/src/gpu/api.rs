@@ -5,7 +5,7 @@
 //! lends it each frame (xpute-gpu-guest `stream`). The page's host runs them on WebGPU
 //! (@xpute/gpu-web-host) and the device app's on wgpu (xpute-gpu-native-host), from the same
 //! records. What is pixelet's own stays here: the pipeline records expanded into descriptors, the
-//! shape of a pass, and the timing of the GPU spans a frame is timed in (gpu/span.spec.rs).
+//! shape of a pass, and the timing of the GPU spans a frame is timed in (spec/span.spec.rs).
 //!
 //! The head holds what the host writes back for the core, the spans' times; the device's
 //! block (its limits, features, timestamp period, preferred surface format and status) is lent
@@ -15,6 +15,7 @@ use pxl_global::Global;
 use xpute_gpu_guest::admit;
 use xpute_gpu_guest::device;
 use xpute_gpu_guest::encode::{self, call, Gpu as Encoder, Id};
+use xpute_gpu_guest::stream::{Stream, WORD};
 use xpute_gpu_link::enums::{
     AddressMode, BlendFactor, BlendOperation, BufferBindingType, CanvasAlphaMode, CompareFunction,
     CullMode, FeatureName, FilterMode, FrontFace, IndexFormat, LimitName, LoadOp, MipmapFilterMode,
@@ -23,7 +24,6 @@ use xpute_gpu_link::enums::{
     TextureViewDimension, VertexFormat, VertexStepMode,
 };
 use xpute_gpu_link::spec;
-use xpute_gpu_guest::stream::{Stream, WORD};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_link::mem;
@@ -33,13 +33,13 @@ pub use xpute_gpu_guest::encode::signaled;
 pub use xpute_gpu_link::enums::TextureFormat as Format;
 pub use xpute_gpu_link::spec::result;
 
-use crate::api_spec::{record, stream};
 use crate::frame::shader::access::{self, END};
 use crate::frame::shader::floor::{self, BIND_GROUPS, VERTEX_BUFFERS};
 use crate::frame::shader::group::BUFS;
 use crate::frame::shader::record::{FRAGMENT_ENTRY, VERTEX_ENTRY};
-use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::split::Split;
+use crate::spec::api::{record, stream};
+use crate::spec::span::GpuSpanName;
 
 pub use xpute_gpu_link::spec::{buffer_usage, texture_usage};
 
@@ -48,7 +48,7 @@ pub const OBJECT_CAP: usize = 1 << 15;
 
 use crate::frame::shader::record::GROUP_ENTRY_CAP;
 
-const SPAN_CNT: usize = GPU_SPAN_NAMES.len();
+const SPAN_CNT: usize = GpuSpanName::ALL.len();
 /// The most passes a frame times, each with a begin and an end of its own. A pass past them
 /// is not timed.
 const PASS_CAP: usize = 256;
@@ -688,18 +688,6 @@ fn state() -> &'static mut State {
     STATE.get(|| None).as_mut().or_bug(Errno::ENODEV)
 }
 
-fn hdr(k: usize) -> &'static mut u32 {
-    &mut state().head[k]
-}
-
-/// Read `r`'s fence and result, which only the host writes.
-fn read_fence(r: usize) -> &'static [u32; 2] {
-    let at = read_at(r);
-    (&state().head[at..at + 2])
-        .try_into()
-        .or_bug(Errno::ENOTRECOVERABLE)
-}
-
 /// Makes the calls' state: a stream of `bytes` bytes, at least `stream::RESERVE`, with its
 /// encoder and its head beside it.
 pub fn install(bytes: u32) {
@@ -798,7 +786,8 @@ pub fn device() -> Option<Device> {
     let s = STATE.get(|| None).as_mut()?;
     if s.device.is_none() && s.device_out {
         let block = admit::block()?;
-        let read = device::Device::read(block)?;
+        // SAFETY: the block lent the host (`lend_block`), in place while it is lent.
+        let read = unsafe { device::Device::read(block) }?;
         let align = read.limit(LimitName::MinUniformBufferOffsetAlignment);
         xpute_kit::ensure!(
             align.is_power_of_two() && align <= UNIFORM_ALIGN_MAX,
@@ -839,7 +828,8 @@ pub fn take_device_lost() -> bool {
     let Some(block) = admit::block() else {
         return false;
     };
-    let lost = load_acquire(&block[spec::device::STATUS_AT]) == spec::status::LOST;
+    // SAFETY: a word of the block lent the host (`lend_block`), in place while it is lent.
+    let lost = unsafe { load_acquire(block.add(spec::device::STATUS_AT)) } == spec::status::LOST;
     !core::mem::replace(&mut s.lost, lost) && lost
 }
 
@@ -862,7 +852,8 @@ pub fn device_block() -> DeviceBlock {
     let Some(block) = STATE.get(|| None).as_ref().and(admit::block()) else {
         return DeviceBlock::default();
     };
-    let word = |k: usize| load_acquire(&block[k]);
+    // SAFETY: a word of the block lent the host (`lend_block`), in place while it is lent.
+    let word = |k: usize| unsafe { load_acquire(block.add(k)) };
     DeviceBlock {
         status: word(spec::device::STATUS_AT),
         err_cnt: word(spec::device::ERRORS_AT),
@@ -878,18 +869,25 @@ fn take_stamps(s: &mut State) -> Option<usize> {
     let r = (0..READ_CAP)
         .filter(|&r| s.stamps_out[r] != 0)
         .min_by_key(|&r| s.stamps_out[r])?;
-    let fence = read_fence(r);
-    if !signaled(&fence[0], s.stamps_out[r]) {
+    // The read's fence, then its result, which only the host writes.
+    let fence = core::ptr::addr_of!(s.head[read_at(r)]);
+    // SAFETY: the read's fence, in the head, which stays in place; the host stores into it
+    // only atomically, and its result before the fence.
+    if !unsafe { signaled(fence, s.stamps_out[r]) } {
         return None;
     }
     s.stamps_out[r] = 0;
-    if fence[1] != result::OK {
+    // SAFETY: as the fence, its result seen since the fence was.
+    if unsafe { fence.add(1).read() } != result::OK {
         return None;
     }
     let (spans, cnt) = s.stamps_read[r];
     let period_ms = f64::from(s.device.map_or(1.0, |d| d.period_ns)) / 1e6;
     let ticks = read_at(r) + 2;
-    let tick = |k: usize| u64::from(*hdr(ticks + 2 * k)) | u64::from(*hdr(ticks + 2 * k + 1)) << 32;
+    // SAFETY: the read's ticks, in the head after its fence, which stays in place; the host
+    // wrote them before the fence and writes none since.
+    let word = |k: usize| u64::from(unsafe { core::ptr::addr_of!(s.head[k]).read() });
+    let tick = |k: usize| word(ticks + 2 * k) | word(ticks + 2 * k + 1) << 32;
     let mut ran = [(0u64, 0u64); PASS_CAP];
     for (k, r) in ran[..cnt].iter_mut().enumerate() {
         let (b, e) = (tick(2 * k), tick(2 * k + 1));
@@ -1002,7 +1000,10 @@ pub fn take_complete(mut complete: impl FnMut(u32)) {
 pub fn images_complete() -> bool {
     STATE.get(|| None).as_mut().is_some_and(|s| {
         s.images.iter_mut().fold(false, |any, a| {
-            let complete = !a.told && signaled(&a.fence[0], IMAGE_TICKET);
+            // SAFETY: the image's fence, boxed in place; the host stores into it only
+            // atomically.
+            let complete =
+                !a.told && unsafe { signaled(core::ptr::addr_of!(a.fence[0]), IMAGE_TICKET) };
             a.told |= complete;
             any | complete
         })
@@ -1605,7 +1606,11 @@ impl Gpu {
         let s = self.s();
         if let Some(k) = s.images.iter().position(|a| a.image == image) {
             let fence = &s.images[k].fence;
-            if !signaled(&fence[0], IMAGE_TICKET) || fence[1] != result::OK {
+            // SAFETY: the image's fence, boxed in place; the host stores into it only
+            // atomically.
+            if !unsafe { signaled(core::ptr::addr_of!(fence[0]), IMAGE_TICKET) }
+                || fence[1] != result::OK
+            {
                 return None;
             }
             s.complete.push(image);
@@ -1962,14 +1967,17 @@ impl Gpu {
         s.stamps_read[r] = (s.stamp_spans, passes);
         s.stamps_asked_cnt = s.stamps_asked_cnt.wrapping_add(1).max(1);
         s.stamps_out[r] = s.stamps_asked_cnt;
-        let at = read_at(r);
-        let (fence, ticks) = s.head[at..at + 2 + 4 * passes].split_at_mut(2);
-        // SAFETY: the head's read: its fence and result, then its ticks as bytes, the host's
-        // to write while the mapping is out, and the core's to read only by the fence (xpute-gpu-guest stream.rs).
+        xpute_kit::ensure!(passes <= PASS_CAP, ENOTRECOVERABLE, passes);
+        // The read's first word, reached with no reference made to the head, whose other reads'
+        // words the host may be writing.
+        let at = core::ptr::addr_of_mut!(s.head[read_at(r)]);
+        // SAFETY: the head's read, `READ_WORDS` in place: its fence and result, then its ticks
+        // as bytes, the host's to write while the mapping is out, and the core's to read only
+        // by the fence (xpute-gpu-guest stream.rs).
         let (fence, ticks) = unsafe {
             (
-                &*fence.as_ptr().cast::<[u32; 2]>(),
-                core::slice::from_raw_parts_mut(ticks.as_mut_ptr().cast::<u8>(), 2 * passes * 8),
+                &*at.cast::<[u32; 2]>(),
+                core::slice::from_raw_parts_mut(at.add(2).cast::<u8>(), 2 * passes * 8),
             )
         };
         call::map_async(&mut s.stream, mapped[r], 0, ticks, fence, s.stamps_out[r]);

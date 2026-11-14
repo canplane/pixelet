@@ -28,6 +28,7 @@ use pxl_spec::brick;
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::zoom::{Zoom, FINEST_ZOOM, LEAF_CELL_ZOOM, UNIT_ZOOM};
+use pxl_spec::space::hierarchy::tree::child_of;
 
 /// The light's cast as the eye's words hold it (`eye::LIGHT`): a frame's constants, worked
 /// out once from the light box (`Light::of`). Each takes a vec4's first three words: where
@@ -479,7 +480,7 @@ pub fn brick_columns(
     };
     let (mut lo, mut hi, mut absent) = ([i32::MAX; 2], [i32::MIN; 2], 0);
     for k in 0..4 {
-        let child = [2 * q[0] + (k & 1), 2 * q[1] + (k >> 1)];
+        let child = child_of(q, k);
         if cell_zoom >= LEAF_CELL_ZOOM || !present(child) {
             lo = [lo[0].min(child[0]), lo[1].min(child[1])];
             hi = [hi[0].max(child[0] + 1), hi[1].max(child[1] + 1)];

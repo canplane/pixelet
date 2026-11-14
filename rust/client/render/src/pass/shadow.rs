@@ -38,10 +38,10 @@ use crate::gpu::api::{
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::put_mat;
-use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::tile::TileGrid;
 use crate::param::shadow::DEPTH_STEP;
 use crate::ray::LightRead;
+use crate::spec::span::GpuSpanName;
 
 /// The light box's half width about its target for the effects' `reach`: the least power of
 /// two at or above `reach`, so the snap grid and the texel's size change only in steps.

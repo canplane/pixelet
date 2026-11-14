@@ -24,7 +24,7 @@ fn place_redundant_only_over_its_own_ground() {
         );
         let world = placed(store);
         let at = world::point(x, y, 4.0);
-        let redundant = |cube| place_val_is_redundant(world, &at, GROUND.leaf_cell_zoom(), cube);
+        let redundant = |cube| place_is_redundant(world, &at, GROUND.leaf_cell_zoom(), cube);
         assert!(redundant(catalog::Ground::Land as AssetId));
         assert!(!redundant(catalog::Ground::Water as AssetId));
         assert!(!redundant(catalog::Object::Red as AssetId));
@@ -38,7 +38,7 @@ fn place_not_redundant_uncarved() {
         let world = placed(Store::default());
         let at = world::point(x, y, 4.0);
         let cube = catalog::Ground::Land as AssetId;
-        assert!(!place_val_is_redundant(
+        assert!(!place_is_redundant(
             world,
             &at,
             GROUND.leaf_cell_zoom(),
@@ -64,7 +64,7 @@ fn place_written_over_a_placed_cube() {
         );
         let world = placed(store);
         let at = world::point(x, y, 5.0);
-        assert!(!place_val_is_redundant(
+        assert!(!place_is_redundant(
             world,
             &at,
             GROUND.leaf_cell_zoom(),
@@ -80,6 +80,6 @@ fn erase_finer_than_a_leaf_leaves_the_hole() {
     crate::on_core(|| {
         let [x, y] = flat_at_five();
         let entry = Octant::holding(GROUND.leaf_cell_zoom() + 1, &world::point(x, y, 4.0));
-        assert_eq!(erase_val(entry), Sentinel::Air as AssetId);
+        assert_eq!(erase_asset_id(entry), Sentinel::Air as AssetId);
     });
 }

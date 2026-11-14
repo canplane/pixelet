@@ -12,7 +12,7 @@ use xpute_link::abi::types::Token;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::perf::spec::task;
+use crate::spec::perf::task;
 use crate::perf::word::{words, AsWords};
 use crate::sys::io::demand::{PhaseList, Source, Stream, PHASE_CAP};
 use crate::sys::io::failure::Exit;

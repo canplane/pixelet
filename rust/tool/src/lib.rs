@@ -2,6 +2,10 @@
 
 pub mod asset;
 pub mod brand;
+/// pxl-spec's file, compiled here as `directory` is, so an image is decoded to linear light
+/// and encoded back by the client's own rule.
+#[path = "../../spec/src/color.rs"]
+pub mod color;
 /// pxl-spec's file, compiled here as well, because the tool depends on no workspace crate
 /// (Cargo.toml says why), so the project's folders are still named in one place.
 #[path = "../../spec/src/directory.rs"]

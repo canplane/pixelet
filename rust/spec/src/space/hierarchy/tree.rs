@@ -2,11 +2,14 @@
 
 //! What a node is to the one it lies in. In position, a parent is the
 //! coordinate halved and a child is told apart by each axis's low bit, in any
-//! number of axes; a node's size is its zoom (`zoom.rs`).
+//! number of axes; a node's size is its zoom (`zoom.rs`). That holds of an index counted
+//! from the world's edge, or from any corner a parent's index doubles to; `child_at` and
+//! `ancestor_at` take the world's own index, whose Y and Z are counted from its middle
+//! (`zoom::starts`).
 
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::world::{has_digit, BOUNDS};
-use crate::space::coord::zoom::{units, Zoom};
+use crate::space::coord::zoom::{starts, units, Zoom};
 
 /// A node of the hierarchy in `D` axes: its zoom and its index there.
 pub type Node<const D: usize> = (Zoom, [i32; D]);
@@ -49,6 +52,20 @@ pub fn child_of<const D: usize>(at: [i32; D], idx: usize) -> [i32; D] {
 
 pub fn ancestor_of<const D: usize>(at: [i32; D], step_cnt: u32) -> [i32; D] {
     at.map(|v| v >> step_cnt)
+}
+
+/// The child at `idx` (`child_idx`) of the node `at` of `zoom`, both as the world indexes
+/// them: `child_of` over the counts from the world's edge, with X in `at`'s frame.
+pub fn child_at(zoom: Zoom, at: [i32; 3], idx: usize) -> [i32; 3] {
+    let c: [i32; 3] = child_of(std::array::from_fn(|k| at[k] + starts(zoom)[k]), idx);
+    std::array::from_fn(|k| c[k] - starts(zoom + 1)[k])
+}
+
+/// The node `step_cnt` zooms above the node `at` of `zoom`, both as the world indexes them:
+/// `ancestor_of` over the counts from the world's edge, with X in `at`'s frame.
+pub fn ancestor_at(zoom: Zoom, at: [i32; 3], step_cnt: u32) -> [i32; 3] {
+    let a: [i32; 3] = ancestor_of(std::array::from_fn(|k| at[k] + starts(zoom)[k]), step_cnt);
+    std::array::from_fn(|k| a[k] - starts(zoom - step_cnt)[k])
 }
 
 /// Where `at` lies in its ancestor `step_cnt` up, from that ancestor's first

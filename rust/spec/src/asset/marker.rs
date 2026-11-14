@@ -5,7 +5,7 @@
 //! camera grid, and from which cell it shows.
 
 #[path = "marker.spec.rs"]
-mod spec;
+pub mod spec;
 pub use spec::{MARKER_SCALE_STEP, MARKER_SHOWN_FROM, MARKER_TEXT_CHARS};
 
 use crate::asset::id::{asset_id, AssetId, Kind};

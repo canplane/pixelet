@@ -12,7 +12,7 @@ use pxl_spec::division::{Subtype, NAME_BYTES};
 
 use crate::domain::layer::object::repository::WANT_CAP;
 use crate::domain::setting::store::SettingKey;
-use crate::perf::spec::limit;
+use crate::spec::perf::limit;
 use crate::sys::io::file::KEY_BYTES;
 
 /// A packet's header, and its root's table of `cnt` fields.

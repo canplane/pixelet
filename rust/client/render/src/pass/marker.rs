@@ -21,7 +21,6 @@ use crate::gpu::atlas::{AtlasPainter, DisplayList};
 use crate::gpu::draw::{DrawStat, DrawTable};
 use crate::gpu::mip::{mip_cnt, MipPass};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::UploadTable;
 use crate::look::marker::ATLAS_SCALE;
@@ -32,6 +31,7 @@ use crate::look::marker::{
     POINT_SHADOW_DY, POINT_SHADOW_FILL, POINT_TEXT_HALO, TAIL_H, TAIL_W, WHITE,
 };
 use crate::pass::model::UniformBuffer;
+use crate::spec::span::GpuSpanName;
 
 fn anchor_dot(p: &mut DisplayList, logical_w: f32) {
     p.circle(logical_w / 2.0, DOT_CY, DOT_DIAM / 2.0, DOT_FILL);

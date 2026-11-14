@@ -45,12 +45,12 @@ fn way_fills(cell: u32, run: vec2<i32>, z: i32) -> bool {
 
 /// What cell `z` of the column whose spans begin at `at` holds (`way::at`): a deck's slab or its
 /// pier, the higher keeping a shared cell, or else the first air over the cell (`WAY_AIR_OF`
-/// over its way's palette index), or `WAY_NOTHING`.
+/// over its way's asset id), or `WAY_NOTHING`.
 fn column_at(run: u32, at: u32, cell: u32, z: i32) -> u32 {
   let n = head_cnt(pool[run + at]);
   var has = false;
   var best = vec2<i32>(0i);
-  var palette = WAY_NOTHING;
+  var asset_id = WAY_NOTHING;
   var air = WAY_NOTHING;
   for (var j = 0u; j < n; j += 1u) {
     let w = run + at + 1u + 2u * j;
@@ -64,11 +64,11 @@ fn column_at(run: u32, at: u32, cell: u32, z: i32) -> u32 {
       } else if (!has || span.x > best.x || (span.x == best.x && span.y >= best.y)) {
         has = true;
         best = span;
-        palette = v;
+        asset_id = v;
       }
     }
   }
-  return select(air, palette, palette != WAY_NOTHING);
+  return select(air, asset_id, asset_id != WAY_NOTHING);
 }
 
 /// The `m`-th of the six cells about a cell, from the row under it (`way::near`).
@@ -83,8 +83,8 @@ fn way_near(m: u32) -> vec3<i32> {
 }
 
 /// What the ways write in cell `z` of column `c` of the run (`way::way_cell`): a deck's slab or
-/// its pier first, or else a bore's air (`VAL_VOID`); under its face cell, otherwise, the palette
-/// index of a bore's air beside it, the first of `way_near`; so a cave never opens into a way.
+/// its pier first, or else a bore's air (`VAL_VOID`); under its face cell, otherwise, the asset
+/// id of a bore's air beside it, the first of `way_near`; so a cave never opens into a way.
 fn way_value(run: u32, cell: u32, c: vec2<i32>, z: i32) -> u32 {
   let own = run_column(run, c);
   if (own == 0u) {

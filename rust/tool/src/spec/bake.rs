@@ -9,8 +9,8 @@ use super::{
 use crate::root;
 
 /// publication.json, written by xpute's generator as a data spec, with
-/// `BASE_LAYER`, the enum of `FORMAT`'s kinds in their order, its names
-/// `BASE_LAYERS`, beside it. The tool keeps what is pixelet's own: the object a
+/// `BASE_LAYER`, the enum of `FORMAT`'s kinds in their order, beside it,
+/// its names TypeScript's `BASE_LAYERS`. The tool keeps what is pixelet's own: the object a
 /// tile is published as, read and written by `OBJECT`, and the Worker's copy of
 /// the kinds, bundled apart from the client.
 pub fn publication_outputs() -> Result<Vec<Output>, String> {
