@@ -35,8 +35,8 @@ std::optional<std::vector<std::uint8_t>> copy(std::optional<std::span<const std:
 
 } // namespace
 
-void Side::mount(std::vector<Token> prefix, Opener open) {
-    mounts_.emplace_back(std::move(prefix), std::move(open));
+void Side::mount(Handle h, std::vector<Token> prefix, Opener open) {
+    mounts_.emplace_back(h, std::move(prefix), std::move(open));
 }
 
 void Side::mount_named(Handle h, std::unique_ptr<Object> o) {
@@ -160,7 +160,7 @@ Result<Handle> Side::opened(std::optional<std::span<const std::uint8_t>> args) {
     // The longest matching mount wins, the first mounted of those as long.
     const Opener *open = nullptr;
     std::size_t longest = 0;
-    for (const auto &[prefix, o] : mounts_) {
+    for (const auto &[i, prefix, o] : mounts_) {
         if (starts_with(uri, prefix) && (open == nullptr || prefix.size() > longest)) {
             open = &o;
             longest = prefix.size();

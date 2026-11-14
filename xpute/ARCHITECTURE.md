@@ -95,7 +95,9 @@ link traps, so no answer the host owed leaves the guest waiting. It is handed
 off one of two ways: synchronously, caught at `link_out` while the host
 answers the guest, or asynchronously, by the platform's listener for what the
 worker leaves uncaught, or by Rust's panic hook. A trapped guest is entered no
-more, and a frame to it answers EPIPE.
+more, and a frame to it answers EPIPE. The app hears the trap with what stopped
+it, alike on both platforms, the imports no server mounts among them where the
+runtime refused to start the guest.
 
 ## The device that lends the memory
 

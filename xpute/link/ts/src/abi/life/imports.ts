@@ -4,6 +4,7 @@
 
 import type { Handle } from "../../link.ts";
 
-/** The interfaces the world imports that the host serves under a named
- * handle, each `[name, handle]`, which are mounted before the guest boots. */
+/** The interfaces the world imports, each `[name, handle]`, which are
+ * mounted before the guest boots: one with functions of its own under its
+ * handle, one of resources alone by an opener at a prefix. */
 export const IMPORTS: readonly (readonly [string, Handle])[] = [];

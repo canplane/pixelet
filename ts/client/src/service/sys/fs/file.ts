@@ -108,6 +108,6 @@ export function serve_files(
   for (const node of Object.values(path)) {
     const id = (node as { ID?: number }).ID;
     if (id === undefined) continue;
-    link.mount([{ tag: "int", val: id }], (uri) => file.file(link, open(link, uri.map((t) => t.val))));
+    link.mount(file.HANDLE, [{ tag: "int", val: id }], (uri) => file.file(link, open(link, uri.map((t) => t.val))));
   }
 }

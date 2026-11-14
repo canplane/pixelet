@@ -22,6 +22,10 @@ object Gpu {
    * (xpute_gpu.h `xpute_gpu_state_on`). */
   external fun init()
 
+  /** What the host has of a GPU now, or null before the guest's first ask is
+   * answered (xpute_gpu.h `xpute_gpu_state`). */
+  external fun state(): String?
+
   /** Binds the guest's surface `handle` to `surface`, whose native window the
    * host holds until it is unbound. It binds on the GPU's thread and returns
    * at once: 0, or -EINVAL (-22) where the surface has no native window.
@@ -38,12 +42,12 @@ object Gpu {
 
   /** `onState` calls this, and it sends the module's event
    * (XputeGpuModule.kt `onState`). */
-  @Volatile var state: ((state: String) -> Unit)? = null
+  @Volatile var hear: ((state: String) -> Unit)? = null
 
   /** The GPU's host (xpute-gpu-native-host jni.rs `state`) calls this with
    * what it has of a GPU, as it changes, from the GPU's thread, which it
    * attached to the VM. */
   @JvmStatic fun onState(state: String) {
-    this.state?.invoke(state)
+    hear?.invoke(state)
   }
 }

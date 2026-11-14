@@ -14,7 +14,7 @@
 
 import type { GpuState } from "@xpute/gpu-link";
 import { type Side, sender } from "@xpute/link";
-import { hook, serve_clock, serve_stop } from "@xpute/web-host";
+import { serve_clock, serve_stop } from "@xpute/web-host";
 import {
   forward_console,
   type Instantiate,
@@ -103,10 +103,7 @@ async function boot(m: Instantiate): Promise<void> {
     link,
     {
       servers: [
-        () => {
-          serve_stop(link, (stop) => tell({ kind: "stopped", stop }));
-          hook(link);
-        },
+        (link) => serve_stop(link, (stop) => tell({ kind: "stopped", stop })),
         serve_clock,
         serve_vsync,
         () => gpu.serve(),

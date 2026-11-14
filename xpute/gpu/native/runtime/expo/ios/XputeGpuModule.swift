@@ -69,6 +69,14 @@ public class XputeGpuModule: Module {
       xpute_gpu_state_on(nil)
     }
 
+    /// What the host has of a GPU now, or nil before the guest's first ask is
+    /// answered (xpute_gpu.h `xpute_gpu_state`).
+    Function("state") { () -> String? in
+      var len = 0
+      guard let state = xpute_gpu_state(&len) else { return nil }
+      return String(decoding: UnsafeRawBufferPointer(start: state, count: len), as: UTF8.self)
+    }
+
     View(SurfaceView.self) {
       Events("onAttach", "onDetach")
       Prop("surface") { (view: SurfaceView, surface: UInt32) in

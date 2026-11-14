@@ -276,7 +276,7 @@ impl Gen<'_> {
         let link = self.link_ts;
         let mut out = String::new();
         let mut enums = String::new();
-        if objs.iter().any(|o| !o.resource) {
+        if !objs.is_empty() {
             let _ = writeln!(out, "/** The interface's handle, named by `{}` (frame.json5 `NAMED`). */\nexport const HANDLE: {} = {:#x};\n", self.at(), self.ts_use(link, "Handle", true), self.handle());
         }
         for o in objs {

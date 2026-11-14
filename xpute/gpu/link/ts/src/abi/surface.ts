@@ -3,7 +3,10 @@
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 
 import { XputeError } from "@xpute/kit/status/error.ts";
-import type { Method, Ref } from "@xpute/link/link.ts";
+import type { Handle, Method, Ref } from "@xpute/link/link.ts";
+
+/** The interface's handle, named by `xpute:gpu/surface` (frame.json5 `NAMED`). */
+export const HANDLE: Handle = 0x6e5265;
 
 /** `[method]surface.resize` */
 export const SURFACE_RESIZE: Method = 0;

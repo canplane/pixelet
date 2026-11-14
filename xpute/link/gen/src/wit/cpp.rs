@@ -392,7 +392,7 @@ impl Header<'_> {
     fn interface(&self, objs: &[Obj], role: Option<Role>) -> Result<String, String> {
         let g = self.g;
         let mut out = String::new();
-        if objs.iter().any(|o| !o.resource) {
+        if !objs.is_empty() {
             let _ = writeln!(out, "// The interface's handle, named by `{}` (frame.json5 `NAMED`).\ninline constexpr {} HANDLE = {:#x};\n", g.at(), self.rt_use(LINK, "Handle"), g.handle());
         }
         for o in objs {

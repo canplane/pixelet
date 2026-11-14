@@ -896,7 +896,6 @@ pub(crate) fn cut(tile: Quadrant, pkt: &[u8]) {
                     cells[4 * c + 3],
                 ])
             }),
-            1 => cut_into(b, place, &|_| word([u32::from(cells[0]); 4])),
             _ => cut_into(b, place, &|c: usize| word([u32::from(cells[c]); 4])),
         }
         w.slots[b as usize].fill = Fill::Cut;

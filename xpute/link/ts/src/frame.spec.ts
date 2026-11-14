@@ -48,8 +48,9 @@ export const CANCEL = 1 as number;
 export const DROP = 255 as number;
 
 /** The handle's top bit, which marks it named: an interface's, its bits below the hash of
- * the interface's name the generator writes (xpute-link-gen wit.rs), served with no open.
- * An issued handle has it clear. */
+ * the interface's name the generator writes (xpute-link-gen wit.rs). An interface with
+ * functions of its own is served under it with no open; one of resources alone names its
+ * openers by it. An issued handle has it clear. */
 export const NAMED = 4194304 as number;
 
 /** The bits of a handle that name its slot, below its generation. */

@@ -25,7 +25,8 @@ public class XputeModule: Module {
     Name("Xpute")
 
     /// `onNotify` fires when a batch waits for `take`, `onStopped` when the
-    /// guest stopped, with its report, and `onTrap` when it trapped.
+    /// guest stopped, with its report, and `onTrap` when it trapped, with what
+    /// stopped it.
     Events("onNotify", "onStopped", "onTrap")
 
     OnCreate {
@@ -49,7 +50,11 @@ public class XputeModule: Module {
             "n2": String(n2),
           ])
       }
-      xpute_trap_on { XputeModule.current?.sendEvent("onTrap") }
+      xpute_trap_on { err, errLen in
+        XputeModule.current?.sendEvent(
+          "onTrap",
+          ["err": String(decoding: UnsafeRawBufferPointer(start: err, count: errLen), as: UTF8.self)])
+      }
     }
     OnDestroy {
       XputeModule.lock.lock()

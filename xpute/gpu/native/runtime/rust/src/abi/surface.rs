@@ -2,6 +2,9 @@
 //
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 
+/// The interface's handle, named by `xpute:gpu/surface` (frame.json5 `NAMED`).
+pub const HANDLE: _rt::Handle = 0x6e5265;
+
 /// `[method]surface.resize`
 pub const SURFACE_RESIZE: _rt::Method = 0;
 

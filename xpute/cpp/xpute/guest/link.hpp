@@ -42,8 +42,9 @@ void boot(void (*boot)());
 // method, to its object, in an entry of its own.
 std::int32_t recv();
 
-// Puts `open` as the opener of the URIs that start with `prefix`.
-void mount(std::vector<link::Token> prefix, link::Opener open);
+// Puts `open` as the opener of the URIs that start with `prefix`, whose
+// objects are the resources of the interface of the named handle `h`.
+void mount(link::Handle h, std::vector<link::Token> prefix, link::Opener open);
 
 // Serves `o` under its interface's named handle `h`.
 void mount_named(link::Handle h, std::unique_ptr<link::Object> o);
@@ -86,28 +87,30 @@ bool in_guest() noexcept;
 
 // Defines the guest's three exports (`link/wit/types.wit`), over frames of
 // `room_` bytes, with `boot_` mounting what the guest serves and opening what
-// it calls, and `enter_` and `end_` starting and ending each entry; before its
-// boot the guest's failures are made its stop (`stop.hpp` `hook`). A module
+// it calls, and `enter_` and `end_` starting and ending each entry; from its
+// init on, the guest's failures are its own (`stop.hpp` `hook`). A module
 // exports them by name; a native guest as C symbols, which catch a bug
 // (kit `caught`) and answer a trap (`TRAP`, or `TRAP_AT` for init's
 // layout), as a Rust guest's catch its panic. A failed check of libc++'s own
 // still aborts a native guest's process, where a module traps.
 #ifdef __wasm__
 #define XPUTE_LINK(room_, boot_, enter_, end_)                                                                                                      \
-    extern "C" __attribute__((export_name("link_init"))) std::uint32_t link_init() { return ::xpute::guest::init((room_), (enter_), (end_)); }      \
-    extern "C" __attribute__((export_name("link_boot"))) void link_boot() {                                                                       \
-        ::xpute::guest::stop::hook();                                                                                                                     \
-        ::xpute::guest::boot(boot_);                                                                                                                \
+    extern "C" __attribute__((export_name("link_init"))) std::uint32_t link_init() {                                                              \
+        ::xpute::guest::stop::hook();                                                                                                               \
+        return ::xpute::guest::init((room_), (enter_), (end_));                                                                                     \
     }                                                                                                                                               \
+    extern "C" __attribute__((export_name("link_boot"))) void link_boot() { ::xpute::guest::boot(boot_); }                                        \
     extern "C" __attribute__((export_name("link_in"))) std::int32_t link_in() { return ::xpute::guest::recv(); }
 #else
 #define XPUTE_LINK(room_, boot_, enter_, end_)                                                                                                      \
     extern "C" __attribute__((visibility("default"))) std::uint32_t link_init() {                                                                 \
-        return ::xpute::caught(::xpute::link::TRAP_AT, [] { return ::xpute::guest::init((room_), (enter_), (end_)); });                             \
+        return ::xpute::caught(::xpute::link::TRAP_AT, [] {                                                                                         \
+            ::xpute::guest::stop::hook();                                                                                                           \
+            return ::xpute::guest::init((room_), (enter_), (end_));                                                                                 \
+        });                                                                                                                                         \
     }                                                                                                                                               \
     extern "C" __attribute__((visibility("default"))) std::int32_t link_boot() {                                                                  \
         return ::xpute::caught(::xpute::link::TRAP, [] {                                                                                            \
-            ::xpute::guest::stop::hook();                                                                                                                 \
             ::xpute::guest::boot(boot_);                                                                                                            \
             return 0;                                                                                                                               \
         });                                                                                                                                         \

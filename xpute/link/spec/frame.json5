@@ -58,7 +58,7 @@
   NAMED: {
     $value: 4194304,
     $type: "u32",
-    $description: "The handle's top bit, which marks it named: an interface's, its bits below the hash of\nthe interface's name the generator writes (xpute-link-gen wit.rs), served with no open.\nAn issued handle has it clear.",
+    $description: "The handle's top bit, which marks it named: an interface's, its bits below the hash of\nthe interface's name the generator writes (xpute-link-gen wit.rs). An interface with\nfunctions of its own is served under it with no open; one of resources alone names its\nopeners by it. An issued handle has it clear.",
   },
   SLOT_BITS: {
     $value: 20,

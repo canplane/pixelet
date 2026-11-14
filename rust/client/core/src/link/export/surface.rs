@@ -26,7 +26,7 @@ struct Surface(Handle);
 /// which draws nothing until scene.rs `draw` sets its content; ENFILE where
 /// every surface is taken.
 pub(super) fn mount() {
-    link::mount(xpute_link::uri(SURFACE_URI), |_, h| {
+    link::mount(wit::HANDLE, xpute_link::uri(SURFACE_URI), |_, h| {
         refuse_unless(surface::surface_open(h), Errno::ENFILE)?;
         invalidate();
         Ok(wit::surface(Rc::new(Surface(h))))

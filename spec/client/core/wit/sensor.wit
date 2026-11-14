@@ -11,6 +11,9 @@ interface sensor {
   // A heading reading, iOS's compass heading or the turn about the vertical it
   // is made from; a field is absent where the platform gave none.
   orient: func(webkit-compass-heading: option<f64>, alpha: option<f64>);
+  // The place has no compass, as a page's orientation event with every field
+  // null says.
+  orient-unavailable: func();
   // A watch's failure, geolocation's with its code, and whether the watch runs
   // on past it.
   err: func(sensor: sensor, code: option<geolocation-error-code>, watching: bool);

@@ -22,15 +22,17 @@ function stop_of(r: Report): Stop {
 }
 
 interface Xpute {
-  /** `onNotify` fires when a batch waits for `take`, and `onTrap` when the
-   * guest trapped. */
-  addListener(event: "onNotify" | "onTrap", listener: () => void): { remove(): void };
+  /** `onNotify` fires when a batch waits for `take`. */
+  addListener(event: "onNotify", listener: () => void): { remove(): void };
+  /** `onTrap` fires when the guest trapped, with what stopped it. */
+  addListener(event: "onTrap", listener: (r: { err: string }) => void): { remove(): void };
   /** `onStopped` fires when the guest stopped, with its report. */
   addListener(event: "onStopped", listener: (r: Report) => void): { remove(): void };
   /** Starts the runtime on the guest's thread (xpute.h `xpute_start`):
    * `named` the named handles of the interfaces the UI serves (@xpute/link remote.ts
-   * `Remote.named`), `prefixes` the prefixes the UI mounts openers at, a
-   * lowered `list<list<token>>` packet. */
+   * `Remote.named`), `prefixes` the prefixes the UI mounts openers at, each
+   * with its interface's named handle, a lowered
+   * `list<tuple<u32, list<token>>>` packet. */
   start(named: readonly u32[], prefixes: Uint8Array): void;
   /** Sends the UI's method `m` of the guest's object `h`, its request `tag`;
    * its answer comes in a batch. */
@@ -53,10 +55,11 @@ export function stopped_on(hear: (stop: Stop) => void): { remove(): void } {
   return XPUTE.addListener("onStopped", (r) => hear(stop_of(r)));
 }
 
-/** Adds `hear` to what is told that the guest trapped, over the module's
- * `onTrap`, which xpute.h `xpute_trap_on` sends. */
-export function trap_on(hear: () => void): { remove(): void } {
-  return XPUTE.addListener("onTrap", hear);
+/** Adds `hear` to what is told that the guest trapped, with what stopped it,
+ * as a page's trap carries its error, over the module's `onTrap`, which
+ * xpute.h `xpute_trap_on` sends. */
+export function trap_on(hear: (err: string) => void): { remove(): void } {
+  return XPUTE.addListener("onTrap", (r) => hear(r.err));
 }
 
 /** Writes `line` to the process's output: stdout on iOS, the log under the

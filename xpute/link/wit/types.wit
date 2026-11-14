@@ -18,7 +18,7 @@
 // The root, handle 0, has two methods. `open(uri) -> handle`, number 0, the
 // serving side answers at once from the opener mounted at the URI's longest
 // matching leading tokens. An open is pipelined, so a missing file opens, and
-// its first method answers `no-entry`. `cancel(tag)`, number 1, cancels a
+// its first method with a result answers `no-entry`. `cancel(tag)`, number 1, cancels a
 // call the sender has pending (`frame.json5` `CANCEL`). Every handle has a
 // drop, method 0xFF, as the component model's resource drop, which takes no
 // result and lets the object go; a

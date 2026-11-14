@@ -9,14 +9,16 @@ pub const HANDLE: _rt::Handle = 0x5534df;
 pub const POS: _rt::Method = 0;
 /// `orient`
 pub const ORIENT: _rt::Method = 1;
+/// `orient-unavailable`
+pub const ORIENT_UNAVAILABLE: _rt::Method = 2;
 /// `err`
-pub const ERR: _rt::Method = 2;
+pub const ERR: _rt::Method = 3;
 /// `permission`
-pub const PERMISSION: _rt::Method = 3;
+pub const PERMISSION: _rt::Method = 4;
 /// `platform`
-pub const PLATFORM: _rt::Method = 4;
+pub const PLATFORM: _rt::Method = 5;
 /// `locate`
-pub const LOCATE: _rt::Method = 5;
+pub const LOCATE: _rt::Method = 6;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -143,6 +145,11 @@ pub fn orient(webkit_compass_heading: Option<f64>, alpha: Option<f64>) -> Result
             }
         })),
     );
+    _rt::answer(r)
+}
+
+pub fn orient_unavailable() -> Result<(), _rt::Errno> {
+    let (r, _) = _rt::link::call(HANDLE, ORIENT_UNAVAILABLE, None);
     _rt::answer(r)
 }
 

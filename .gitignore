@@ -176,15 +176,5 @@ vite.config.ts.timestamp-*
 # Scratch: notes, diffs and logs a session keeps while it works.
 /tmp/
 
-# Backup files sometimes created by rustfmt/editor tooling
-**/*.rs.bk
-
-# A bake set kept beside the current one while the new one is made: `out` is
-# already ignored, and this is the same thing with a number on it.
-out[0-9]*/
-
-# Temporary folders (AGENTS.md).
-/cache/
-
 # What Python compiles of a script it imports.
 __pycache__/

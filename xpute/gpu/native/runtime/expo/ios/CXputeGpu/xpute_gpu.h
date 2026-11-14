@@ -22,6 +22,12 @@
 // hands the news to the app's thread.
 void xpute_gpu_state_on(void (*state)(const char *state, size_t len));
 
+// Answers what the host has of a GPU now, the state `xpute_gpu_state_on` last
+// told, its name's UTF-8 bytes, not NUL-terminated, their count put at `len`;
+// null before the guest's first ask is answered. A UI that starts after a
+// state was told reads it so.
+const char *xpute_gpu_state(size_t *len);
+
 // Binds the guest's surface `handle` to `window`: on an Apple platform a
 // view's CAMetalLayer, on Android a view's ANativeWindow, live at the call. The
 // host holds a reference of its own on the window, retained or acquired,

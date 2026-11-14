@@ -5,6 +5,7 @@
 import { Lift } from "../../cabi.ts";
 import {
   ComponentError,
+  type Handle,
   type LinkObject,
   type Method,
   type Side,
@@ -17,6 +18,9 @@ import {
   ERRNO_EINPROGRESS,
   ERRNO_ENOSYS,
 } from "@xpute/kit/status/errno.spec.ts";
+
+/** The interface's handle, named by `xpute:fs/file` (frame.json5 `NAMED`). */
+export const HANDLE: Handle = 0x5b6743;
 
 /** `[method]file.size` */
 export const FILE_SIZE: Method = 0;

@@ -25,10 +25,12 @@ xpute-gpu-link.workspace = true
 # The runtime the core runs in on a device, what its host serves, and the
 # GPU's host that runs the renderer's stream around each entry, as the page's
 # runs it on WebGPU. Metal on an iPhone, Vulkan on Android; each backend
-# compiles to nothing on the other's system.
+# compiles to nothing on the other's system. The GPU's bindings on the host's
+# side, whose handles the core's imports name (src/abi.rs `IMPORTS`).
 xpute-native-runtime.workspace = true
 xpute-native-host.workspace = true
 xpute-gpu-native-host.workspace = true
+xpute-gpu-native-runtime.workspace = true
 # The bodies the app's fetch hands over still zstd (src/unpack.rs), read by
 # libzstd, the format's reference implementation, as the bake writes them
 # (pxl-geo-bake). C, built by each target's own compiler

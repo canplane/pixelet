@@ -340,7 +340,7 @@ impl Gen<'_> {
     /// for an interface of types alone.
     pub(super) fn rs_interface(&self, objs: &[Obj], role: Option<(Role, &str, &str)>) -> Result<String, String> {
         let mut items = String::new();
-        if objs.iter().any(|o| !o.resource) {
+        if !objs.is_empty() {
             let _ = writeln!(items, "/// The interface's handle, named by `{}` (frame.json5 `NAMED`).\npub const HANDLE: {} = {:#x};\n", self.at(), self.rs_use(self.link_rs, "Handle"), self.handle());
         }
         for o in objs {

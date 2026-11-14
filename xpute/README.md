@@ -96,11 +96,11 @@ A program declares its interfaces in WIT, as xpute declares its own under
 `wit/` and `gpu/wit/`, and its guest's world says which the guest serves, its
 exports, and which it calls, its imports. `xpute-link-gen` writes their
 bindings for each side in Rust, TypeScript and C++, and for the host two lists
-from the world: `IMPORTS`, the interfaces the guest calls under a named handle,
-and `LATER`, the methods of the interfaces the UI serves that answer later. A
-Rust guest defines its three exports with one macro, over frames of a room it
-chooses, and mounts what it serves as it boots; the macro makes the guest's
-own bug or panic its stop, told to the host before it stops, as a C++ guest's
+from the world: `IMPORTS`, the interfaces the guest calls, and `LATER`, the
+methods of the interfaces the UI serves that answer later. A Rust guest
+defines its three exports with one macro, over frames of a room it chooses,
+and mounts what it serves as it boots; the macro makes the guest's own bug or
+panic its stop, told to the host before it stops, as a C++ guest's
 `XPUTE_LINK` makes its bug. Here it serves xpute's `life`, which is called as
 the app is hidden and shown and as a UI attaches:
 
@@ -142,8 +142,10 @@ it, here as on a device: the program's servers, each of which mounts on the
 link what it serves, with `IMPORTS` and `LATER`. The servers come in no order,
 since none depends on another, and the steps are the runtime's: it mounts each
 server, then the stand-ins of what the UI serves, and enters the guest only
-once every interface in `IMPORTS` is mounted; one that no server mounts traps
-the link before the guest's first entry, naming each.
+once every interface in `IMPORTS` is served, under its handle where it has
+functions of its own and by an opener at some prefix where the guest opens its
+resources by URI; which prefixes those are stays the program's. One that no
+server mounts traps the link before the guest's first entry, naming each.
 
 The worker instantiates the guest's module and starts it, and the runtime
 tells the guest the UI attached. The GPU's server takes what the guest
@@ -158,10 +160,7 @@ if (link === null) return;
 const gpu = new WebGpu(link, ASK, CFG, (state) => tell({ kind: "gpu", state }));
 start(link, {
   servers: [
-    () => {
-      serve_stop(link, (stop) => tell({ kind: "stopped", stop }));
-      hook(link);
-    },
+    (link) => serve_stop(link, (stop) => tell({ kind: "stopped", stop })),
     serve_clock,
     serve_vsync,
     () => gpu.serve(),
@@ -197,10 +196,7 @@ fn start(cache_dir: PathBuf, report: fn(Stop)) -> Boot {
     Boot {
         stack_sz: 8 << 20,
         servers: vec![
-            Box::new(move || {
-                stop::serve(report);
-                stop::hook();
-            }),
+            Box::new(move || stop::serve(report)),
             Box::new(clock::serve),
             Box::new(move || {
                 native::serve(Ask::of(ASK), native::config(CFG), Some(cache_dir));

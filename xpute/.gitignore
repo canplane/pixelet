@@ -24,15 +24,8 @@ jspm_packages/
 .continue/
 .aider*
 
-# Backup files sometimes created by rustfmt/editor tooling
-**/*.rs.bk
-
 # Build output: each language's own target/.
 target/
-
-# A library's locks are its consumer's to keep.
-Cargo.lock
-pnpm-lock.yaml
 
 # What a run keeps or leaves for itself: caches and temporary folders.
 /tmp/

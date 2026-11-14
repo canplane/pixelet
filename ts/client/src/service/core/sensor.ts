@@ -70,7 +70,7 @@ export const SENSOR_LISTENER: SensorListener = {
   pos_err: (err, watching) =>
     void sensor.err(ui, SENSOR_GEOLOCATION, ERR[err], watching),
   orient: core_orient,
-  orient_unavailable: () => void tell(false),
+  orient_unavailable: () => void sensor.orient_unavailable(ui),
   // The compass gives no code for its failure.
   orient_err: () => void sensor.err(ui, SENSOR_ORIENT, null, false),
   permission: (which, answer) =>
@@ -80,15 +80,10 @@ export const SENSOR_LISTENER: SensorListener = {
 /** Tells the core which sensors the device has, once its interfaces are
  * open. */
 export function tell_platform(): Promise<void> {
-  return tell(platform.ORIENT.has);
-}
-
-/** Tells the core the platform's sensors, with the compass as `orient` says. */
-function tell(orient: boolean): Promise<void> {
   return sensor.platform(
     ui,
     platform.GEOLOCATION.has,
-    orient,
+    platform.ORIENT.has,
     platform.ORIENT.gated,
     platform.ORIENT.silence,
   );

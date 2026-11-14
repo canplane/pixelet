@@ -85,8 +85,8 @@ std::int32_t recv() {
     return result;
 }
 
-void mount(std::vector<link::Token> prefix, link::Opener open) {
-    side().mount(std::move(prefix), std::move(open));
+void mount(link::Handle h, std::vector<link::Token> prefix, link::Opener open) {
+    side().mount(h, std::move(prefix), std::move(open));
 }
 
 void mount_named(link::Handle h, std::unique_ptr<link::Object> o) {

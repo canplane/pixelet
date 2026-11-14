@@ -2,6 +2,9 @@
 //
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 
+/// The interface's handle, named by `xpute:gpu/surface` (frame.json5 `NAMED`).
+pub const HANDLE: _rt::Handle = 0x6e5265;
+
 /// `[method]surface.resize`
 pub const SURFACE_RESIZE: _rt::Method = 0;
 
@@ -40,5 +43,5 @@ pub fn surface(implementation: _rt::Rc<dyn GuestSurface>) -> _rt::Rc<dyn _rt::Ob
 mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Lift, Method, Object, Reply, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Method, Object, Reply, Tag};
 }

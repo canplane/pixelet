@@ -6,10 +6,13 @@ pub mod gpu;
 pub mod surface;
 pub mod vsync;
 
-/// The interfaces the world imports that the host serves under a named
-/// handle, each `(name, handle)`, which are mounted before the guest boots.
-pub const IMPORTS: &[(&str, xpute_link::Handle)] =
-    &[("xpute:gpu/gpu", 0x79d455), ("xpute:gpu/vsync", 0x42eda6)];
+/// The interfaces the world imports, each `(name, handle)`, which are
+/// mounted before the guest boots: one with functions of its own under its
+/// handle, one of resources alone by an opener at a prefix.
+pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[
+    ("xpute:gpu/gpu", gpu::HANDLE),
+    ("xpute:gpu/vsync", vsync::HANDLE),
+];
 
 /// The methods of the named interfaces the host serves that answer
 /// later, each `(handle, method)`, as WIT's `async func` marks them.

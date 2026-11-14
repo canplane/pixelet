@@ -33,6 +33,9 @@ using ::xpute::link::answer;
 using ::xpute::link::span;
 } // namespace _rt
 
+// The interface's handle, named by `xpute:fs/file` (frame.json5 `NAMED`).
+inline constexpr _rt::Handle HANDLE = 0x5b6743;
+
 // `[method]file.size`
 inline constexpr _rt::Method FILE_SIZE = 0;
 // `[method]file.read`

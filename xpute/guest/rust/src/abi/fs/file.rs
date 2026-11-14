@@ -2,6 +2,9 @@
 //
 // GENERATED from wit/fs (xpute-link-gen wit.rs)
 
+/// The interface's handle, named by `xpute:fs/file` (frame.json5 `NAMED`).
+pub const HANDLE: _rt::Handle = 0x5b6743;
+
 /// `[method]file.size`
 pub const FILE_SIZE: _rt::Method = 0;
 /// `[method]file.read`

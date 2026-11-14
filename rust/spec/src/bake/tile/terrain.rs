@@ -329,7 +329,7 @@ impl TerrainTile {
 }
 
 /// Cell `c`'s four asset ids, however a tile holds them: four a cell
-/// (`FOLD_COLUMN`), one a cell, each its own four, or one for the whole tile.
+/// (`FOLD_COLUMN`), or one a cell, each its own four.
 fn four_asset_ids(cells: &[GroundId], c: usize) -> [GroundId; 4] {
     match cells.len() {
         FOLD_COLUMN => [
@@ -338,7 +338,6 @@ fn four_asset_ids(cells: &[GroundId], c: usize) -> [GroundId; 4] {
             cells[4 * c + 2],
             cells[4 * c + 3],
         ],
-        1 => [cells[0]; 4],
         _ => [cells[c]; 4],
     }
 }

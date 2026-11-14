@@ -2,6 +2,9 @@
 //
 // GENERATED from wit/fs (xpute-link-gen wit.rs)
 
+/// The interface's handle, named by `xpute:fs/file` (frame.json5 `NAMED`).
+pub const HANDLE: _rt::Handle = 0x5b6743;
+
 /// `[method]file.size`
 pub const FILE_SIZE: _rt::Method = 0;
 /// `[method]file.read`
@@ -211,5 +214,5 @@ mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
     pub(super) use xpute_link::abi::types::Lent;
-    pub(super) use xpute_link::{Lift, Lower, Method, Object, Reply, Return, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Return, Tag};
 }

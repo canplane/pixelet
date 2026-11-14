@@ -64,8 +64,8 @@ fn orient() -> &'static mut Orientation {
 /// the heading is derived from alpha.
 pub(crate) fn orient_event(webkit_compass_heading: Option<f64>, alpha: Option<f64>) {
     // An event with neither is a reading with no heading. One with no field at
-    // all is a page's word that it has no compass, which its reader tells as
-    // the platform's (`orient_unavailable`).
+    // all is a page's word that it has no compass, which its reader tells
+    // apart (`orient_unavailable`).
     let heading = webkit_compass_heading.or_else(|| alpha.map(|a| (360.0 - a) % 360.0));
     orient().last_event_at = now();
     // The heading turns the camera only while it follows the device, so a
@@ -75,8 +75,9 @@ pub(crate) fn orient_event(webkit_compass_heading: Option<f64>, alpha: Option<f6
     }
 }
 
-/// The place has no compass: its listener stops, and the compass reads
-/// unavailable, which `request_orient` keeps.
+/// The place has no compass, as a page's event with every field null says: its
+/// listener stops, and the compass reads unavailable, which `request_orient`
+/// keeps until the world's surface closes.
 pub(crate) fn orient_unavailable() {
     orient().cmd = Some(OrientationCommand::Stop);
     let store = device_orient_store_mut();

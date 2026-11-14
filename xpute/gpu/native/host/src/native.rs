@@ -142,6 +142,10 @@ pub type State = extern "C" fn(state: *const u8, len: usize);
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
 
+/// What the host has of a GPU now, the last state reported, none before the
+/// guest's first ask is answered (`state`).
+static CUR: Mutex<Option<&'static str>> = Mutex::new(None);
+
 /// A native guest's surfaces are configured on the main thread of an Apple
 /// platform, and elsewhere where the stream runs.
 #[cfg(target_vendor = "apple")]
@@ -185,9 +189,17 @@ pub fn state_on(state: Option<State>) {
     *STATE.lock().unwrap_or_else(PoisonError::into_inner) = state;
 }
 
+/// What the host has of a GPU now, as `state_on` last told it, or none
+/// before the guest's first ask is answered: a UI that starts after a state
+/// was told hears it so, as a reloaded page hears its new worker's host.
+pub fn state() -> Option<&'static str> {
+    *CUR.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 /// Reports the host's state to the platform (`state_on`), as web.ts
-/// `report` does.
-fn report(state: &str) {
+/// `report` does, and keeps it as the state now (`state`).
+fn report(state: &'static str) {
+    *CUR.lock().unwrap_or_else(PoisonError::into_inner) = Some(state);
     if let Some(f) = *STATE.lock().unwrap_or_else(PoisonError::into_inner) {
         f(state.as_ptr(), state.len());
     }
@@ -525,6 +537,9 @@ pub fn unbind(handle: u32) {
 /// - `xpute_gpu_state_on(void (*state)(const char *state, size_t len))`
 ///   makes `state` be told what the host has of a GPU as it changes, by its
 ///   name's UTF-8 bytes and their count (`state_on`); null sets none.
+/// - `xpute_gpu_state(size_t *len) -> const char *` answers what the host has
+///   of a GPU now, its name's UTF-8 bytes, their count put at `len`, or null
+///   before the guest's first ask is answered (`state`).
 /// - `xpute_gpu_surface_bind(uint32_t handle, void *window) -> int32_t`
 ///   binds the guest's surface `handle` to `window` (`bind`): 0, or EINVAL
 ///   for a null window. It exists on an Apple platform and on Android, whose
@@ -542,6 +557,18 @@ macro_rules! native_abi {
         #[no_mangle]
         pub extern "C" fn xpute_gpu_state_on(state: Option<$crate::native::State>) {
             $crate::native::state_on(state);
+        }
+
+        /// # Safety
+        /// `len` is a writable word.
+        #[no_mangle]
+        pub unsafe extern "C" fn xpute_gpu_state(len: *mut usize) -> *const u8 {
+            let Some(s) = $crate::native::state() else {
+                return ::core::ptr::null();
+            };
+            // SAFETY: the caller's word.
+            unsafe { *len = s.len() };
+            s.as_ptr()
         }
 
         /// # Safety

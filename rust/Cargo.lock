@@ -2221,6 +2221,7 @@ dependencies = [
  "pxl-spec",
  "xpute-gpu-link",
  "xpute-gpu-native-host",
+ "xpute-gpu-native-runtime",
  "xpute-kit",
  "xpute-link",
  "xpute-native-host",

@@ -21,14 +21,16 @@ export const HANDLE: Handle = 0x5534df;
 export const POS: Method = 0;
 /** `orient` */
 export const ORIENT: Method = 1;
+/** `orient-unavailable` */
+export const ORIENT_UNAVAILABLE: Method = 2;
 /** `err` */
-export const ERR: Method = 2;
+export const ERR: Method = 3;
 /** `permission` */
-export const PERMISSION: Method = 3;
+export const PERMISSION: Method = 4;
 /** `platform` */
-export const PLATFORM: Method = 4;
+export const PLATFORM: Method = 5;
 /** `locate` */
-export const LOCATE: Method = 5;
+export const LOCATE: Method = 6;
 
 export function load_GeolocationErrorCode(
   r: Lift,
@@ -93,6 +95,11 @@ export async function orient(
       }
     },
   ]);
+  if (a_.result !== 0) throw new XputeError(a_.result);
+}
+
+export async function orient_unavailable(link_: Sender): Promise<void> {
+  const a_ = await link_.send(HANDLE, ORIENT_UNAVAILABLE, null);
   if (a_.result !== 0) throw new XputeError(a_.result);
 }
 

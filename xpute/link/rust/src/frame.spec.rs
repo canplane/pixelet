@@ -48,8 +48,9 @@ pub const CANCEL: u32 = 1;
 pub const DROP: u32 = 255;
 
 /// The handle's top bit, which marks it named: an interface's, its bits below the hash of
-/// the interface's name the generator writes (xpute-link-gen wit.rs), served with no open.
-/// An issued handle has it clear.
+/// the interface's name the generator writes (xpute-link-gen wit.rs). An interface with
+/// functions of its own is served under it with no open; one of resources alone names its
+/// openers by it. An issued handle has it clear.
 pub const NAMED: u32 = 4194304;
 
 /// The bits of a handle that name its slot, below its generation.

@@ -50,7 +50,7 @@ object Runtime {
   /** These send the module's events (XputeModule.kt). */
   @Volatile var notify: (() -> Unit)? = null
   @Volatile var stopped: ((errnum: Int, file: String, line: Int, n1: Long, n2: Long) -> Unit)? = null
-  @Volatile var trap: (() -> Unit)? = null
+  @Volatile var trap: ((err: String) -> Unit)? = null
 
   /** A batch waits for `take`. */
   @JvmStatic fun onNotify() {
@@ -62,8 +62,8 @@ object Runtime {
     stopped?.invoke(errnum, file, line, n1, n2)
   }
 
-  /** The guest trapped. */
-  @JvmStatic fun onTrap() {
-    trap?.invoke()
+  /** The guest trapped, with what stopped it. */
+  @JvmStatic fun onTrap(err: String) {
+    trap?.invoke(err)
   }
 }

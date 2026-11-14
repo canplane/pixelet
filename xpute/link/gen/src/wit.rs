@@ -413,11 +413,36 @@ fn members(e: &wit_parser::Enum) -> Vec<Member> {
         .collect()
 }
 
-/// The interface a type of another one is reached through: its Rust module,
-/// and its TypeScript module's path with no extension.
+/// Where an interface's bindings are reached from another module, to name a
+/// type or a constant of its: its Rust module, and its TypeScript module's
+/// path with no extension.
 struct Owner {
     rs: String,
     ts: String,
+}
+
+/// Where the interface `i`'s bindings are reached from a module of the
+/// package `own`: its Rust module, `rs_up` and its name for one of `own`'s,
+/// and its TypeScript module, without its extension; another package's at
+/// its peer's (`externs`).
+fn owner(r: &Resolve, externs: &[(String, String, String)], own: &str, rs_up: &str, i: InterfaceId) -> Owner {
+    let alias = rs_name(r.interfaces[i].name.as_deref().unwrap_or_default());
+    let ts_alias = interface_ts_module(r, i);
+    let pkg = package_name(r, i);
+    if pkg == own {
+        return Owner { rs: format!("{rs_up}{alias}"), ts: format!("./{ts_alias}") };
+    }
+    let (rs, ts) = externs.iter().find(|(p, _, _)| *p == pkg).map_or(("", ""), |(_, rs, ts)| (rs.as_str(), ts.as_str()));
+    let module = rs.rsplit("::").next().unwrap_or_default();
+    Owner { rs: if folded(r, i, module) { rs.into() } else { format!("{rs}::{alias}") }, ts: format!("{ts}/{ts_alias}") }
+}
+
+/// The TypeScript imports of the interfaces' modules a table names, each
+/// module as its own name, one line a module; no two of the modules share a
+/// name (the world's imports are refused where they would).
+fn ts_namespaces<'a>(reaches: impl Iterator<Item = &'a (String, String, String)>) -> String {
+    let modules: BTreeMap<_, _> = reaches.map(|(_, ts, m)| (m.as_str(), ts.as_str())).collect();
+    modules.iter().map(|(m, ts)| format!("import * as {m} from \"{ts}.ts\";\n")).collect()
 }
 
 fn package_name(r: &Resolve, i: InterfaceId) -> String {
@@ -493,18 +518,8 @@ impl Gen<'_> {
         if i == self.here {
             return (None, name);
         }
-        let iname = self.r.interfaces[i].name.clone().unwrap_or_default();
-        let alias = rs_name(&iname);
-        let ts_alias = interface_ts_module(self.r, i);
-        let pkg = package_name(self.r, i);
-        let owner = if pkg == package_name(self.r, self.here) {
-            Owner { rs: format!("super::{alias}"), ts: format!("./{ts_alias}") }
-        } else {
-            let (rs, ts) = self.externs.iter().find(|(p, _, _)| *p == pkg).map_or(("", ""), |(_, rs, ts)| (rs.as_str(), ts.as_str()));
-            let module = rs.rsplit("::").next().unwrap_or_default();
-            Owner { rs: if folded(self.r, i, module) { rs.into() } else { format!("{rs}::{alias}") }, ts: format!("{ts}/{ts_alias}") }
-        };
-        (Some(owner), name)
+        let own = package_name(self.r, self.here);
+        (Some(owner(self.r, self.externs, &own, "super::", i)), name)
     }
 
     // ---- Layout ----
@@ -702,10 +717,18 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
     let rs_dir = t.rs.map(|path| path.trim_end_matches(".rs"));
     let package_rs = t.rs.and_then(|path| Path::new(path).file_stem()?.to_str()).unwrap_or_default();
     // The methods of the named interfaces the host serves that answer later,
-    // each its interface's Rust module, whether it is folded, and its
-    // method's Rust constant, then its TypeScript module and constant, from
-    // WIT's `async func`.
+    // from WIT's `async func`, each its interface's reach (`reach`) and its
+    // method's Rust and TypeScript constants.
     let mut later = Vec::new();
+    // Where the package's module, or a module beside it, reaches the
+    // interface `i`: its Rust module's prefix, none where `i` is folded into
+    // the package's module, and its TypeScript module and that module's name.
+    let reach = |i: InterfaceId| {
+        let o = owner(&r, &externs, &pname, "", i);
+        let own_folded = package_name(&r, i) == pname && folded(&r, i, package_rs);
+        let rs = if own_folded { String::new() } else { format!("{}::", o.rs) };
+        (rs, o.ts, interface_ts_module(&r, i))
+    };
     for (iname, &i) in &p.interfaces {
         let at = format!("{pname}/{iname}");
         let objs = objs(&r, i, &at, drop)?;
@@ -736,7 +759,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
         if guest_serves == Some(false) {
             for o in objs.iter().filter(|o| !o.resource) {
                 for f in o.methods.iter().filter(|f| is_async(f)) {
-                    later.push((m.clone(), folded(&r, i, package_rs), method_const(o, f, rs_given), interface_ts_module(&r, i), method_const(o, f, ts_given)));
+                    later.push((reach(i), method_const(o, f, rs_given), method_const(o, f, ts_given)));
                 }
             }
         }
@@ -777,33 +800,32 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
             outs.push(Output::new(&path, cpp::hdr(&g, &objs, cpp_role, &path, src, &cpp_externs)?));
         }
     }
-    // The interfaces the world imports that a host serves under a named
-    // handle, each its name and handle, in the world's order. One of types
-    // alone, and one of resources alone, which the guest opens by URI, has
-    // none.
-    let mut imports = Vec::new();
+    // The interfaces the world imports, in the world's order, each its name
+    // and its reach (`reach`); one of types alone has none. A world imports
+    // no two interfaces of one module's name from different packages, in any
+    // language: the TypeScript tables name each by its module.
+    let mut imports: Vec<(String, (String, String, String))> = Vec::new();
     for item in world.into_iter().flat_map(|w| w.imports.values()) {
         let WorldItem::Interface { id, .. } = *item else { continue };
         let Some(n) = &r.interfaces[id].name else { continue };
         let name = format!("{}/{n}", package_name(&r, id));
-        if objs(&r, id, &name, drop)?.iter().any(|o| !o.resource) {
-            imports.push((named(&name, named_bit), name));
+        if objs(&r, id, &name, drop)?.is_empty() {
+            continue;
         }
+        let reach = reach(id);
+        if let Some((other, _)) = imports.iter().find(|(_, o)| o.2 == reach.2) {
+            return Err(format!("{pname}: its world imports {other} and {name}, whose TypeScript modules are both {}, and the TypeScript tables name each by its module", reach.2));
+        }
+        imports.push((name, reach));
     }
     if let (Some((_, false)), Some(_)) = (&side, world) {
-        let pairs: Vec<_> = imports.iter().map(|(h, n)| format!("(\"{n}\", {h:#x})")).collect();
+        let pairs: Vec<_> = imports.iter().map(|(n, (rs, ..))| format!("(\"{n}\", {rs}HANDLE)")).collect();
         let _ = writeln!(
             rs,
-            "\n/// The interfaces the world imports that the host serves under a named\n/// handle, each `(name, handle)`, which are mounted before the guest boots.\npub const IMPORTS: &[(&str, {link_rs}::Handle)] = &[{}];",
+            "\n/// The interfaces the world imports, each `(name, handle)`, which are\n/// mounted before the guest boots: one with functions of its own under its\n/// handle, one of resources alone by an opener at a prefix.\npub const IMPORTS: &[(&str, {link_rs}::Handle)] = &[{}];",
             pairs.join(", ")
         );
-        let pairs: Vec<_> = later
-            .iter()
-            .map(|(m, folded, c, ..)| {
-                let module = if *folded { String::new() } else { format!("{m}::") };
-                format!("({module}HANDLE, {module}{c})")
-            })
-            .collect();
+        let pairs: Vec<_> = later.iter().map(|((rs, ..), c, _)| format!("({rs}HANDLE, {rs}{c})")).collect();
         let _ = writeln!(
             rs,
             "\n/// The methods of the named interfaces the host serves that answer\n/// later, each `(handle, method)`, as WIT's `async func` marks them.\npub const LATER: &[({link_rs}::Handle, {link_rs}::Method)] = &[{}];",
@@ -811,21 +833,21 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
         );
     }
     if let (Some(dir), Some(_)) = (t.ts, world) {
-        let pairs: Vec<_> = imports.iter().map(|(h, n)| format!("[\"{n}\", {h:#x}]")).collect();
+        let uses = ts_namespaces(imports.iter().map(|(_, reach)| reach));
+        let pairs: Vec<_> = imports.iter().map(|(n, (_, _, m))| format!("[\"{n}\", {m}.HANDLE]")).collect();
         let path = format!("{dir}/imports.ts");
         let text = format!(
-            "// {}\n//\n// {}\n\nimport type {{ Handle }} from \"{link_ts}\";\n\n/** The interfaces the world imports that the host serves under a named\n * handle, each `[name, handle]`, which are mounted before the guest boots. */\nexport const IMPORTS: readonly (readonly [string, Handle])[] = [{}];\n",
+            "// {}\n//\n// {}\n\nimport type {{ Handle }} from \"{link_ts}\";\n{uses}\n/** The interfaces the world imports, each `[name, handle]`, which are\n * mounted before the guest boots: one with functions of its own under its\n * handle, one of resources alone by an opener at a prefix. */\nexport const IMPORTS: readonly (readonly [string, Handle])[] = [{}];\n",
             package_path(root, &path)?,
             mark(src, TOOL),
             pairs.join(", ")
         );
         outs.push(Output::new(&path, text));
-        let modules: std::collections::BTreeSet<_> = later.iter().map(|(_, _, _, m, _)| m.as_str()).collect();
-        let imports: String = modules.iter().map(|m| format!("import * as {m} from \"./{m}.ts\";\n")).collect();
-        let pairs: Vec<_> = later.iter().map(|(_, _, _, m, c)| format!("[{m}.HANDLE, {m}.{c}]")).collect();
+        let uses = ts_namespaces(later.iter().map(|(reach, ..)| reach));
+        let pairs: Vec<_> = later.iter().map(|((_, _, m), _, c)| format!("[{m}.HANDLE, {m}.{c}]")).collect();
         let path = format!("{dir}/later.ts");
         let text = format!(
-            "// {}\n//\n// {}\n\nimport type {{ Handle, Method }} from \"{link_ts}\";\n{imports}\n/** The methods of the named interfaces the host serves that answer\n * later, each `[handle, method]`, as WIT's `async func` marks them. */\nexport const LATER: readonly (readonly [Handle, Method])[] = [{}];\n",
+            "// {}\n//\n// {}\n\nimport type {{ Handle, Method }} from \"{link_ts}\";\n{uses}\n/** The methods of the named interfaces the host serves that answer\n * later, each `[handle, method]`, as WIT's `async func` marks them. */\nexport const LATER: readonly (readonly [Handle, Method])[] = [{}];\n",
             package_path(root, &path)?,
             mark(src, TOOL),
             pairs.join(", ")

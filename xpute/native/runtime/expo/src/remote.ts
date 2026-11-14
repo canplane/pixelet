@@ -67,16 +67,20 @@ export function open_remote(): Remote {
 }
 
 /** Starts the runtime on the guest's thread with what the UI serves, once it
- * is mounted on `remote`: its named handles, and its prefixes lowered as a
- * `list<list<token>>`, the fixed part at 0 (xpute.h `xpute_start`). */
+ * is mounted on `remote`: its named handles, and its prefixes, each with its
+ * interface's named handle, lowered as a `list<tuple<u32, list<token>>>`,
+ * the fixed part at 0 (xpute.h `xpute_start`). */
 export function start(remote: Remote): void {
   const prefixes = remote.prefixes;
   const pkt = packet([
     8,
     (w) => {
-      const b = w.list(0, prefixes.length, 8, 4);
+      const b = w.list(0, prefixes.length, 12, 4);
       if (b === null) return;
-      prefixes.forEach((p, k) => store_uri(w, b + k * 8, p));
+      prefixes.forEach(([h, p], k) => {
+        w.u32(b + k * 12, h);
+        store_uri(w, b + k * 12 + 4, p);
+      });
     },
   ]);
   XPUTE.start(remote.named, pkt!);
