@@ -166,7 +166,10 @@ impl Guard {
     fn take() -> Guard {
         use core::sync::atomic::Ordering::Acquire;
         let mut spins = 0;
-        while LOCK.compare_exchange_weak(false, true, Acquire, Relaxed).is_err() {
+        while LOCK
+            .compare_exchange_weak(false, true, Acquire, Relaxed)
+            .is_err()
+        {
             if spins < SPINS {
                 spins += 1;
                 core::hint::spin_loop();

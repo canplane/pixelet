@@ -5,9 +5,9 @@
 // little-endian, a record's fields in order, a variant its discriminant and
 // then its payload. A string's or a list's bytes lie past the packet's fixed
 // part, and their pointer is an offset from the packet's start. A packet past
-// its room spoils, and `Lower::finish` answers EMSGSIZE. A packet that does
-// not hold what its type says spoils its reading, whose reads answer zero
-// from then on, and `Lift::finish` answers EBADMSG.
+// the bytes it is given spoils, and `Lower::finish` answers EMSGSIZE. A packet
+// that does not hold what its type says spoils its reading, whose reads answer
+// zero from then on, and `Lift::finish` answers EBADMSG.
 
 #pragma once
 
@@ -60,7 +60,7 @@ class Lower {
     // Takes `len` elements of `sz` bytes at `align` past what is written,
     // zeroed, and puts their offset and count at `at`: a list's or a
     // string's pointer and length. It answers where they begin, or none
-    // where the room is past.
+    // where they run past the bytes it is given.
     std::optional<std::size_t> list(std::size_t at, std::size_t len, std::size_t sz, std::size_t align) noexcept {
         std::size_t base = (end_ + align - 1) / align * align;
         std::size_t end = base + len * sz;
@@ -86,7 +86,7 @@ class Lower {
         arr<std::uint8_t>(at, {reinterpret_cast<const std::uint8_t *>(s.data()), s.size()});
     }
 
-    // The packet's length, or EMSGSIZE where it is past the room.
+    // The packet's length, or EMSGSIZE where it is past the bytes it is given.
     Result<std::size_t> finish() const noexcept {
         if (overflow_) return make_error(Errno::emsgsize);
         return end_;

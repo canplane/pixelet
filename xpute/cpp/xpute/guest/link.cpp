@@ -55,17 +55,17 @@ void leave() {
 
 } // namespace
 
-std::uint32_t init(std::uint32_t room, void (*enter)(), bool (*end)()) noexcept {
-    ensure(room % 8 == 0 && room >= link::HDR_SZ, Errno::einval, room);
-    if (the_side == nullptr) the_side = new link::Side([](link::Layout l) { return l.inbox + l.room; }, link_out);
+std::uint32_t init(std::uint32_t cap, void (*enter)(), bool (*end)()) noexcept {
+    ensure(cap % 8 == 0 && cap >= link::HDR_SZ, Errno::einval, cap);
+    if (the_side == nullptr) the_side = new link::Side([](link::Layout l) { return l.inbox + l.cap; }, link_out);
     // The layout's two words, then the inbox and the outbox, for as long as
     // the guest runs.
-    std::uint64_t *words = new std::uint64_t[1 + 2 * room / 8]();
+    std::uint64_t *words = new std::uint64_t[1 + 2 * cap / 8]();
     std::uint32_t at = link::mem::off(words);
     std::uint32_t inbox = at + 8;
     link::mem::set_word(at, inbox);
-    link::mem::set_word(at + 4, room);
-    side().set_layout(link::Layout{inbox, room});
+    link::mem::set_word(at + 4, cap);
+    side().set_layout(link::Layout{inbox, cap});
     enter_fn = enter;
     end_fn = end;
     return at;

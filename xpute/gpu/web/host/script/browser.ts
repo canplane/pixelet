@@ -69,8 +69,14 @@ async function main(): Promise<number> {
         .writeHead(200, { "content-type": "text/javascript" })
         .end(await readFile(BUNDLE));
     }
-    if (path.startsWith(GOLDEN_ROOT) && path.includes("/spec/golden/") && !path.includes("..")) {
-      return res.writeHead(200).end(await readFile(join(ROOT, path.slice(GOLDEN_ROOT.length))));
+    if (
+      path.startsWith(GOLDEN_ROOT) &&
+      path.includes("/spec/golden/") &&
+      !path.includes("..")
+    ) {
+      return res
+        .writeHead(200)
+        .end(await readFile(join(ROOT, path.slice(GOLDEN_ROOT.length))));
     }
     res.writeHead(404).end();
   });

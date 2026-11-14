@@ -61,20 +61,16 @@ impl Frame {
         set(PKT, self.pkt_len);
     }
 
-    /// The packet of the frame laid at `at` in a room of `room` bytes; a
-    /// packet past the room is EBADMSG.
-    pub fn pkt(&self, at: u32, room: u32) -> Result<Option<&'static [u8]>, Errno> {
+    /// The packet of the frame of `cap` bytes laid at `at`; a packet past
+    /// the cap is EBADMSG.
+    pub fn pkt(&self, at: u32, cap: u32) -> Result<Option<&'static [u8]>, Errno> {
         if self.pkt_len == 0 {
             return Ok(None);
         }
-        if u64::from(HDR_SZ) + u64::from(self.pkt_len) > u64::from(room) {
+        if u64::from(HDR_SZ) + u64::from(self.pkt_len) > u64::from(cap) {
             return Err(Errno::EBADMSG);
         }
-        // SAFETY: the frame's room in the guest's memory.
+        // SAFETY: the frame's bytes in the guest's memory.
         Ok(Some(unsafe { mem::bytes(at + HDR_SZ, self.pkt_len) }))
     }
 }
-
-#[cfg(test)]
-#[path = "frame.test.rs"]
-mod test;

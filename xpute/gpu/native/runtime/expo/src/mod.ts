@@ -22,7 +22,10 @@ interface XputeGpu {
    * `present` once the guest's ask finds a device open, `missing` once it
    * finds none opens, and `waiting` once a device is lost, as the guest asks
    * again; the surfaces bound stay bound to the next device. */
-  addListener(event: "onState", listener: (e: { state: GpuState }) => void): { remove(): void };
+  addListener(
+    event: "onState",
+    listener: (e: { state: GpuState }) => void,
+  ): { remove(): void };
   /** What the host has of a GPU now, or null before the guest's first ask is
    * answered (xpute_gpu.h `xpute_gpu_state`). */
   state(): GpuState | null;

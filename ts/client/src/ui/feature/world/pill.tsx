@@ -192,9 +192,7 @@ export function Pill({
                   transition={transition}
                   style={body}
                 >
-                  <View
-                    style={[edge, STYLE.fill, { backgroundColor: fill }]}
-                  />
+                  <View style={[edge, STYLE.fill, { backgroundColor: fill }]} />
                 </Motion>
               </View>
 

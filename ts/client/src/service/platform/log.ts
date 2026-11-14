@@ -5,6 +5,7 @@
  * (script/perf/). */
 
 export function log(line: string): void {
-  if (__PERF_DRIVE__) ((globalThis as { lines?: string[] }).lines ??= []).push(line);
+  if (__PERF_DRIVE__)
+    ((globalThis as { lines?: string[] }).lines ??= []).push(line);
   console.log(line);
 }

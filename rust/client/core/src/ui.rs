@@ -9,6 +9,10 @@ use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::{units, Zoom, FINEST_ZOOM};
 
+use crate::abi::overlay::{
+    CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
+    PivotState, SensorStatus, Snapshot,
+};
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::dist;
 use crate::domain::control::camera::state::camera_state;
@@ -27,10 +31,6 @@ use crate::domain::scene::stage::screen_shows_world;
 use crate::domain::setting::{are_settings_loaded, settings, SettingKey};
 use crate::domain::view::frame::pose;
 use crate::domain::view::frame::screen::units_per_px_at;
-use crate::abi::overlay::{
-    CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
-    PivotState, SensorStatus, Snapshot,
-};
 use crate::pointer;
 use crate::sys::io::request;
 use crate::sys::io::source;

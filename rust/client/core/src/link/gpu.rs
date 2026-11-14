@@ -7,10 +7,10 @@
 //! record asked for, and asks for a frame to take it in.
 
 use pxl_render::gpu::api;
-use xpute_link::Handle;
 use xpute_gpu_guest::abi::gpu;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+use xpute_link::Handle;
 
 use crate::link::life;
 use crate::sys::sched::{executor, invalidate};

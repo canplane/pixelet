@@ -7,8 +7,8 @@
 //! domain/layer/object/store.rs `objects`.
 
 use pxl_engine::{eye, object};
-use pxl_spec::space::camera::eye::Observation;
 use pxl_global::Global;
+use pxl_spec::space::camera::eye::Observation;
 
 use crate::domain::preview::RenderEdit;
 use crate::domain::view::lens;

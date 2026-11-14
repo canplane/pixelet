@@ -13,11 +13,11 @@ use crate::domain::view::frame::pose::view_resize;
 use crate::sys::sched::invalidate;
 use pxl_render::gpu::surface;
 use pxl_render::spec::api::surface_role;
-use xpute_guest::link;
-use xpute_link::Handle;
 use xpute_gpu_guest::abi::surface as wit;
 use xpute_gpu_link::spec::SURFACE_URI;
+use xpute_guest::link;
 use xpute_kit::status::errno::Errno;
+use xpute_link::Handle;
 
 /// The surface the link issued `.0`, closed as the UI drops it.
 struct Surface(Handle);
@@ -67,7 +67,10 @@ fn resize(h: Handle, width: u32, height: u32, dpr: f64) -> Result<(), Errno> {
     refuse_unless(dpr > 0.0, Errno::EINVAL)?;
     let role = surface::surface(h).map_or(0, |s| s.role);
     let ratio = resolution::surface_ratio(role, [width, height], dpr);
-    refuse_unless(surface::surface_resize(h, width, height, dpr, ratio), Errno::EBADF)?;
+    refuse_unless(
+        surface::surface_resize(h, width, height, dpr, ratio),
+        Errno::EBADF,
+    )?;
     // The world's view is its surface's layout box, in CSS pixels.
     if role == surface_role::WORLD {
         view_resize(f64::from(width) / dpr, f64::from(height) / dpr);
@@ -77,7 +80,9 @@ fn resize(h: Handle, width: u32, height: u32, dpr: f64) -> Result<(), Errno> {
 }
 
 fn close(h: Handle) {
-    let Some(role) = surface::surface(h).map(|s| s.role) else { return };
+    let Some(role) = surface::surface(h).map(|s| s.role) else {
+        return;
+    };
     super::super::close_surface(h);
     // A surface can close after the one replacing it has opened, so the
     // sensors stop with the last world's surface.

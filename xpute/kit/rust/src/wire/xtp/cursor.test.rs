@@ -122,8 +122,8 @@ impl Packet {
 #[test]
 fn matches_typescript() {
     let v = Golden::load(GOLDEN);
-    v.each("packets", |k| {
-        let pkt = Packet::new(v.s(&format!("{k}.packet")));
+    v.each("pkts", |k| {
+        let pkt = Packet::new(v.s(&format!("{k}.pkt")));
         let reader = TreeReader::new(pkt.as_slice()).unwrap();
         let root = reader.read();
         assert_eq!(root.type_() as u32, v.u32(&format!("{k}.type")), "{k}.type");
@@ -158,7 +158,7 @@ fn matches_typescript() {
             assert_eq!(got, want, "{k}.shallow");
         }
     });
-    let good = v.s("packets.0.packet");
+    let good = v.s("pkts.0.pkt");
     let refused = |hex: &str| {
         let pkt = Packet::new(hex);
         match TreeReader::new(pkt.as_slice()).and_then(|r| r.read().get_deep().map(|_| ())) {
@@ -174,7 +174,7 @@ fn matches_typescript() {
     assert_eq!(refused(&good[..40]), v.s("malformed.truncated_payload"));
     v.each("refused", |k| {
         assert_eq!(
-            refused(v.s(&format!("{k}.packet"))),
+            refused(v.s(&format!("{k}.pkt"))),
             v.s(&format!("{k}.read")),
             "{k}"
         )

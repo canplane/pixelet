@@ -43,20 +43,20 @@ impl ErrorCode {
     }
 }
 
-pub fn run<L: _rt::Lend>(records: L) -> impl _rt::Future<Output = (L, Result<(), _rt::Errno>)> {
-    let mut records = records;
-    let (records_at_, records_len_) = _rt::Lend::span(&mut records);
+pub fn run<L: _rt::Lend>(recs: L) -> impl _rt::Future<Output = (L, Result<(), _rt::Errno>)> {
+    let mut recs = recs;
+    let (recs_at_, recs_len_) = _rt::Lend::span(&mut recs);
     let sent = _rt::wait::wait(
         HANDLE,
         RUN,
         Some((8, &|w_: &mut _rt::Lower| {
             _rt::Lent {
-                at: records_at_,
-                len: records_len_,
+                at: recs_at_,
+                len: recs_len_,
             }
             .store(w_, 0);
         })),
-        records,
+        recs,
     );
     async move {
         let (r, _, lent) = sent.await;

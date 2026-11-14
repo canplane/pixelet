@@ -4,7 +4,10 @@ import { type Sensor, SENSOR_GEOLOCATION } from "@/abi/types.enum.ts";
 import * as watch from "@/abi/watch.ts";
 import type { Remote } from "@xpute/link";
 import * as platform from "@/service/platform/sensor.ts";
-import { geolocation_fix, MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
+import {
+  geolocation_fix,
+  MEASURE_PLACE,
+} from "@/service/platform/sensor-listener.ts";
 
 /** Serves `watch` on `remote`, the core's start and stop of the device's
  * sensors, before the core boots. */

@@ -66,13 +66,13 @@ use pxl_global::Global;
 use pxl_render::gpu::api;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_guest::clock::now;
 use xpute_gpu_guest::abi::vsync;
+use xpute_guest::clock::now;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::sys::sched::param::MAX_STEP_S;
 use crate::spec::phase::Phase;
+use crate::sys::sched::param::MAX_STEP_S;
 
 /// The camera as the companion's walk reads it. It is None in first person,
 /// where the eye stands at the pivot and the person is the one looking.

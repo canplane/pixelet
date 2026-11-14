@@ -212,7 +212,10 @@ fn ends(
 /// character, which starts at `line`.
 fn allowed_break(text: &str, line: usize, mut at: usize) -> usize {
     while let Some((before, ch)) = text[..at].char_indices().next_back() {
-        let starts = text[at..].chars().next().is_some_and(|c| NO_LINE_START.contains(c));
+        let starts = text[at..]
+            .chars()
+            .next()
+            .is_some_and(|c| NO_LINE_START.contains(c));
         if before <= line || !(starts || NO_LINE_END.contains(ch)) {
             break;
         }
@@ -248,11 +251,23 @@ pub(crate) fn text_pixels(
         Entry::Vacant(v) => {
             let mut image = vec![0u8; (size[0] * size[1] * 4) as usize].into_boxed_slice();
             let mut key = v.into_key();
-            let drawn = text::raster(weight, px, color, &mut image[..], size[0], size[1], x, &mut key.text[..]);
+            let drawn = text::raster(
+                weight,
+                px,
+                color,
+                &mut image[..],
+                size[0],
+                size[1],
+                x,
+                &mut key.text[..],
+            );
             if drawn.is_err() {
                 return None;
             }
-            c.rasters.entry(key).or_insert(Cached { read: false, buf: image })
+            c.rasters.entry(key).or_insert(Cached {
+                read: false,
+                buf: image,
+            })
         }
     };
     cached.read = true;

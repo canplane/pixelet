@@ -32,7 +32,11 @@ async function ready(nav: object): Promise<GpuReport[]> {
     on_cancel: () => {},
     mem: new ArrayBuffer(0),
   };
-  new WebGpu(link as unknown as Side, { power: "high-performance", required_feats: [], optional_feats: [] }, { upload_chunk_sz: 1 << 16, slow_ms: null }).serve();
+  new WebGpu(
+    link as unknown as Side,
+    { power: "high-performance", required_feats: [], optional_feats: [] },
+    { upload_chunk_sz: 1 << 16, slow_ms: null },
+  ).serve();
   const reply = named.get(HANDLE)!.call(GET_DEVICE, 0, null);
   assert.ok(typeof reply !== "number" && reply.data !== null);
   const out = new Uint8Array(4);
@@ -45,5 +49,7 @@ async function ready(nav: object): Promise<GpuReport[]> {
 
 test("the worker posts the page what its ask found of a GPU", async () => {
   assert.deepEqual(await ready({}), [{ kind: "gpu", state: "unsupported" }]);
-  assert.deepEqual(await ready({ gpu: { requestAdapter: async () => null } }), [{ kind: "gpu", state: "missing" }]);
+  assert.deepEqual(await ready({ gpu: { requestAdapter: async () => null } }), [
+    { kind: "gpu", state: "missing" },
+  ]);
 });

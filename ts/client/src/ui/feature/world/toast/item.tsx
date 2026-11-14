@@ -142,7 +142,8 @@ export function Toast({
           style={[
             STYLE.message,
             {
-              maxWidth: window_width - 2 * TOAST_SIDE - 2 * MESSAGE_PAD - 2 * EDGE,
+              maxWidth:
+                window_width - 2 * TOAST_SIDE - 2 * MESSAGE_PAD - 2 * EDGE,
             },
           ]}
         >

@@ -5,8 +5,15 @@
 
 import type { Answered, Args, Handle, Side, Method, Sender } from "./link.ts";
 
-export function wait(link: Side, h: Handle, m: Method, args: Args = null): Promise<Answered> {
-  return new Promise((resolve) => link.send(h, m, args, (result, data) => resolve({ result, data })));
+export function wait(
+  link: Side,
+  h: Handle,
+  m: Method,
+  args: Args = null,
+): Promise<Answered> {
+  return new Promise((resolve) =>
+    link.send(h, m, args, (result, data) => resolve({ result, data })),
+  );
 }
 
 /** `link` as a `Sender`, each method sent through `wait`. */

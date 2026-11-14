@@ -73,7 +73,8 @@ fn version_of(app: &App, layer: BaseKind) -> Result<String, String> {
     let read = |path: &FsPath| std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()));
     match &app.tile_source {
         _ if !is_sharded(layer) => {
-            read(&app.out.join(BaseKind::Earth.name()).join(pyramid::MANIFEST)).map(|b| bytes_version(&b))
+            read(&app.out.join(BaseKind::Earth.name()).join(pyramid::MANIFEST))
+                .map(|b| bytes_version(&b))
         }
         TileSource::Shelf(dir) => {
             read(&dir.join(layer.name()).join(pyramid::MANIFEST)).map(|b| bytes_version(&b))

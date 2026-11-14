@@ -26,13 +26,13 @@
 // file's `close`.
 //
 // A guest has three exports. `link_init` lays the link and answers its layout,
-// the inbox and a frame's room, and runs nothing of the program. `link_boot` is
+// the inbox and a frame's cap, and runs nothing of the program. `link_boot` is
 // the guest's first entry: the program's boot mounts what it serves, and only
 // then does the entry start. An interface is called by its named handle with no
 // open (`frame.json5` `NAMED`), so a bug in a boot is reported through the stop
 // at once. `link_in` enters the guest with the frame laid in its inbox. The
 // host calls init, reads the layout, then boot, so every entry comes from a
-// host that knows the room. A trap out of any export stops the guest for good.
+// host that knows the cap. A trap out of any export stops the guest for good.
 //
 // A method that may answer later is an `async func`, and is sent; any other
 // always answers at once. An `async func` always answers later, with

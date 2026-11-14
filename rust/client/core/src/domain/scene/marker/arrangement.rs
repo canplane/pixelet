@@ -21,10 +21,10 @@ use crate::domain::scene::marker::design::{self, Design};
 use crate::domain::scene::marker::set::{self, Set};
 use crate::domain::setting::settings;
 use crate::domain::view::frame::screen::{ndc_to_px, units_per_px_at};
+use pxl_global::Global;
 use pxl_render::frame::shelf::NO_SLOT;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::octant::Octant;
-use pxl_global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -253,17 +253,14 @@ pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
             }),
     );
     entering.sort_unstable_by(|a, b| a.0.total_cmp(&b.0));
-    let read = sched::run(
-            entering.iter(),
-            |&(_, brick, columns)| {
-                pin::read(brick, &columns, &mut pins);
-                if place_on {
-                    place::read(brick, &mut read_places);
-                }
-                true
-            },
-        )
-        .step_cnt as usize;
+    let read = sched::run(entering.iter(), |&(_, brick, columns)| {
+        pin::read(brick, &columns, &mut pins);
+        if place_on {
+            place::read(brick, &mut read_places);
+        }
+        true
+    })
+    .step_cnt as usize;
     let unread = entering.len() - read;
     // The bricks not read yet are not among those the markers were read
     // from.

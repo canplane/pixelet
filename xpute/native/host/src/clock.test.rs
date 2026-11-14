@@ -49,7 +49,10 @@ fn boot(_: std::path::PathBuf) -> Boot {
 fn cancel_stops_wait() {
     let ui = app::start(boot, &[]);
     app::until("the waits answered", || ANSWERS.lock().unwrap().len() == 2);
-    assert_eq!(*ANSWERS.lock().unwrap(), [(1, Errno::ECANCELED as i32), (2, 0)]);
+    assert_eq!(
+        *ANSWERS.lock().unwrap(),
+        [(1, Errno::ECANCELED as i32), (2, 0)]
+    );
     let mut messages = Vec::new();
     app::post(ui, 1, ROOT, OPEN, Some(app::lowered(&[])));
     assert_eq!(app::answer_to(ui, 1, &mut messages), Errno::ENOENT as i64);

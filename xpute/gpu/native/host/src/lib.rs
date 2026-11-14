@@ -43,8 +43,6 @@ use std::time::Instant;
 
 use xpute_link::mem;
 
-use xpute_gpu_link::spec::device;
-use xpute_gpu_link::spec::status;
 use belt::Belt;
 use cache::Cache;
 use image::{Decoder, Decoding};
@@ -53,6 +51,8 @@ use name::EnumTable;
 use object::Object;
 use pending::Pending;
 use surface::Surface;
+use xpute_gpu_link::spec::device;
+use xpute_gpu_link::spec::status;
 
 pub use configure::ConfigureAt;
 pub use open::{instance, open, Ask, OpenError, Wgpu};

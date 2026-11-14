@@ -39,4 +39,3 @@ pub fn hook() {
         let _ = stop::stopped(Errno::ENOTRECOVERABLE as i32, file, line, 0, 0);
     }));
 }
-

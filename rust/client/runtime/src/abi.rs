@@ -16,25 +16,23 @@ pub mod text;
 pub mod types;
 pub mod watch;
 
+use xpute_gpu_native_runtime::abi::gpu;
+use xpute_gpu_native_runtime::abi::vsync;
+use xpute_native_runtime::abi::clocks::monotonic_clock;
+use xpute_native_runtime::abi::clocks::system_clock;
+use xpute_native_runtime::abi::fs::file;
+use xpute_native_runtime::abi::stop;
+
 /// The interfaces the world imports, each `(name, handle)`, which are
 /// mounted before the guest boots: one with functions of its own under its
 /// handle, one of resources alone by an opener at a prefix.
 pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[
-    ("xpute:stop/stop", xpute_native_runtime::abi::stop::HANDLE),
-    (
-        "xpute:clocks/monotonic-clock",
-        xpute_native_runtime::abi::clocks::monotonic_clock::HANDLE,
-    ),
-    (
-        "xpute:clocks/system-clock",
-        xpute_native_runtime::abi::clocks::system_clock::HANDLE,
-    ),
-    ("xpute:fs/file", xpute_native_runtime::abi::fs::file::HANDLE),
-    ("xpute:gpu/gpu", xpute_gpu_native_runtime::abi::gpu::HANDLE),
-    (
-        "xpute:gpu/vsync",
-        xpute_gpu_native_runtime::abi::vsync::HANDLE,
-    ),
+    ("xpute:stop/stop", stop::HANDLE),
+    ("xpute:clocks/monotonic-clock", monotonic_clock::HANDLE),
+    ("xpute:clocks/system-clock", system_clock::HANDLE),
+    ("xpute:fs/file", file::HANDLE),
+    ("xpute:gpu/gpu", gpu::HANDLE),
+    ("xpute:gpu/vsync", vsync::HANDLE),
     ("pxl:core/object", object::HANDLE),
     ("pxl:core/overlay", overlay::HANDLE),
     ("pxl:core/watch", watch::HANDLE),

@@ -13,8 +13,8 @@ use pxl_spec::bake::tile::terrain::{TerrainTile, ELE_COLUMN};
 use pxl_spec::brick::BRICK_CELL_CNT;
 
 use crate::domain::layer::tile_cache::TileCache;
-use pxl_engine::clipmap::SLOT_CNT;
 use crate::sys::range::{arr_bytes, OwnedRange};
+use pxl_engine::clipmap::SLOT_CNT;
 
 /// The terrain's range in `.fixed`, which the boot hands in.
 pub(crate) static RANGE: OwnedRange = OwnedRange::new();

@@ -16,7 +16,11 @@ import {
   type TextStyle,
 } from "react-native";
 
-import { COLOR, TEXT_SCALE_CAP, TEXT_STYLE } from "@/ui/shared/component/theme.ts";
+import {
+  COLOR,
+  TEXT_SCALE_CAP,
+  TEXT_STYLE,
+} from "@/ui/shared/component/theme.ts";
 
 /** Whether the platform's field draws its own clear button: on a page and on
  * Android it does not, and the caller draws one; an iPhone's does

@@ -41,8 +41,14 @@ impl Range {
     /// and they are valid `T`s (zeroed, for plain numbers).
     pub(crate) unsafe fn arr<T>(self, off: u32, n: usize) -> &'static mut [T] {
         let end = (n * size_of::<T>()).checked_add(off as usize);
-        xpute_kit::ensure!(end.is_some_and(|e| e <= self.bytes as usize), ENOTRECOVERABLE, off);
-        let p = core::ptr::with_exposed_provenance_mut::<u8>(heap::fixed_at() + (self.off + off) as usize);
+        xpute_kit::ensure!(
+            end.is_some_and(|e| e <= self.bytes as usize),
+            ENOTRECOVERABLE,
+            off
+        );
+        let p = core::ptr::with_exposed_provenance_mut::<u8>(
+            heap::fixed_at() + (self.off + off) as usize,
+        );
         xpute_kit::ensure!(p.cast::<T>().is_aligned(), ENOTRECOVERABLE, off);
         // SAFETY: inside `.fixed`, which nothing but its owners writes,
         // aligned, and the caller's alone.

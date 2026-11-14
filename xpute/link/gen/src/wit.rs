@@ -22,9 +22,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::Path;
 
-use wit_parser::{Function, FunctionKind, IndexMap, InterfaceId, Param, Resolve, Type, TypeDefKind, TypeId, TypeOwner, WorldItem, WorldKey};
+use wit_parser::{
+    Function, FunctionKind, IndexMap, InterfaceId, Param, Resolve, Type, TypeDefKind, TypeId,
+    TypeOwner, WorldItem, WorldKey,
+};
 
-use xpute_gen::spec::{int_of, is_float, mark, package, package_path, pascal, read, rs_crate, rs_ident, rs_module, screaming, snake, ts_module, Member, Output};
+use xpute_gen::spec::{
+    int_of, is_float, mark, package, package_path, pascal, read, rs_crate, rs_ident, rs_module,
+    screaming, snake, ts_module, Member, Output,
+};
 
 mod cpp;
 mod rs;
@@ -84,19 +90,36 @@ fn objs<'a>(r: &'a Resolve, i: InterfaceId, at: &str, drop: u32) -> Result<Vec<O
     let mut res: BTreeMap<TypeId, Obj> = BTreeMap::new();
     let mut order = Vec::new();
     for &t in interface.types.values() {
-        if matches!(r.types[t].kind, TypeDefKind::Resource) && r.types[t].owner == TypeOwner::Interface(i) {
+        if matches!(r.types[t].kind, TypeDefKind::Resource)
+            && r.types[t].owner == TypeOwner::Interface(i)
+        {
             order.push(t);
             let name = r.types[t].name.clone().unwrap_or_default();
-            res.insert(t, Obj { name, resource: true, methods: Vec::new() });
+            res.insert(
+                t,
+                Obj {
+                    name,
+                    resource: true,
+                    methods: Vec::new(),
+                },
+            );
         }
     }
     for f in interface.functions.values() {
         match f.kind {
             FunctionKind::Freestanding | FunctionKind::AsyncFreestanding => single.methods.push(f),
             FunctionKind::Method(t) | FunctionKind::AsyncMethod(t) => {
-                res.get_mut(&t).ok_or(format!("{at}.{}: a method of no resource here", f.name))?.methods.push(f);
+                res.get_mut(&t)
+                    .ok_or(format!("{at}.{}: a method of no resource here", f.name))?
+                    .methods
+                    .push(f);
             }
-            _ => return Err(format!("{at}.{}: the link carries no constructor, static, getter or setter", f.name)),
+            _ => {
+                return Err(format!(
+                    "{at}.{}: the link carries no constructor, static, getter or setter",
+                    f.name
+                ))
+            }
         }
     }
     // An async call lends one buffer, which its answer hands back.
@@ -120,7 +143,10 @@ fn objs<'a>(r: &'a Resolve, i: InterfaceId, at: &str, drop: u32) -> Result<Vec<O
         }
         for f in &o.methods {
             if !joined.insert(snake(&object_method(o, f))) {
-                return Err(format!("{at}.{}: its name, joined, is another function's", f.name));
+                return Err(format!(
+                    "{at}.{}: its name, joined, is another function's",
+                    f.name
+                ));
             }
         }
     }
@@ -128,7 +154,10 @@ fn objs<'a>(r: &'a Resolve, i: InterfaceId, at: &str, drop: u32) -> Result<Vec<O
 }
 
 fn is_async(f: &Function) -> bool {
-    matches!(f.kind, FunctionKind::AsyncFreestanding | FunctionKind::AsyncMethod(_))
+    matches!(
+        f.kind,
+        FunctionKind::AsyncFreestanding | FunctionKind::AsyncMethod(_)
+    )
 }
 
 /// A method's own name, its resource's prefix dropped.
@@ -143,23 +172,61 @@ fn method_const(o: &Obj, f: &Function, given: fn(&str) -> bool) -> String {
 
 /// A method's name among its interface's: a resource's prefixed by it.
 fn object_method(o: &Obj, f: &Function) -> String {
-    if o.resource { format!("{}-{}", o.name, method_name(f)) } else { method_name(f).to_string() }
+    if o.resource {
+        format!("{}-{}", o.name, method_name(f))
+    } else {
+        method_name(f).to_string()
+    }
 }
 
 /// The trait or interface that serves an object, by the side that serves
 /// it (`Guest`, `Host`): a singleton's is the side's name, and a resource's
 /// the side's and the resource's, as wit-bindgen's and wasmtime's are.
 fn serving(o: &Obj, side: &str) -> String {
-    if o.resource { format!("{side}{}", pascal(&o.name)) } else { side.into() }
+    if o.resource {
+        format!("{side}{}", pascal(&o.name))
+    } else {
+        side.into()
+    }
 }
 
 /// The names the Rust bindings give beside WIT names, those the runtime
 /// module `_rt` holds, and the prelude's they name bare. A WIT name that
 /// meets one takes `_`, as wit-bindgen's `Guest_` does.
 const RS_GIVEN: [&str; 33] = [
-    "HANDLE", "IMPORTS", "LATER", "mount", "task_return", "Guest", "Host", "L", "Errno", "Future", "Handle", "Lend", "Lift", "Lower", "Method",
-    "Object", "Rc", "Reply", "Return", "Tag", "Box", "Copy", "Err", "Fn", "None", "Ok", "Option", "Result", "Some",
-    "String", "Unpin", "Vec", "size_of_val",
+    "HANDLE",
+    "IMPORTS",
+    "LATER",
+    "mount",
+    "task_return",
+    "Guest",
+    "Host",
+    "L",
+    "Errno",
+    "Future",
+    "Handle",
+    "Lend",
+    "Lift",
+    "Lower",
+    "Method",
+    "Object",
+    "Rc",
+    "Reply",
+    "Return",
+    "Tag",
+    "Box",
+    "Copy",
+    "Err",
+    "Fn",
+    "None",
+    "Ok",
+    "Option",
+    "Result",
+    "Some",
+    "String",
+    "Unpin",
+    "Vec",
+    "size_of_val",
 ];
 
 /// The names the TypeScript bindings give beside WIT names, those they
@@ -167,11 +234,39 @@ const RS_GIVEN: [&str; 33] = [
 /// that meets one takes `_`, as jco's names keep clear of its
 /// `exclude_globals`.
 const TS_GIVEN: [&str; 33] = [
-    "HANDLE", "mount", "object", "Host", "ERRNO_EBADMSG", "ERRNO_EINPROGRESS", "ERRNO_ENOSYS", "ComponentError",
-    "Handle", "Lift", "LinkObject", "Lower", "Method", "Ref", "Sender", "Side", "XputeError",
-    "refusal_of", "AbortController", "AbortSignal",
-    "ArrayBuffer", "BigInt64Array", "BigUint64Array", "Float32Array", "Float64Array", "Int16Array", "Int32Array",
-    "Int8Array", "Pick", "Promise", "Uint16Array", "Uint32Array", "Uint8Array",
+    "HANDLE",
+    "mount",
+    "object",
+    "Host",
+    "ERRNO_EBADMSG",
+    "ERRNO_EINPROGRESS",
+    "ERRNO_ENOSYS",
+    "ComponentError",
+    "Handle",
+    "Lift",
+    "LinkObject",
+    "Lower",
+    "Method",
+    "Ref",
+    "Sender",
+    "Side",
+    "XputeError",
+    "refusal_of",
+    "AbortController",
+    "AbortSignal",
+    "ArrayBuffer",
+    "BigInt64Array",
+    "BigUint64Array",
+    "Float32Array",
+    "Float64Array",
+    "Int16Array",
+    "Int32Array",
+    "Int8Array",
+    "Pick",
+    "Promise",
+    "Uint16Array",
+    "Uint32Array",
+    "Uint8Array",
 ];
 
 /// The modules the TypeScript bindings give beside interfaces' modules in a
@@ -184,22 +279,32 @@ const TS_GIVEN_MODULES: [&str; 2] = ["imports", "later"];
 /// (`TS_GIVEN_MODULES`).
 fn interface_ts_module(r: &Resolve, i: InterfaceId) -> String {
     let m = rs_name(r.interfaces[i].name.as_deref().unwrap_or_default());
-    let world = r.interfaces[i].package.is_some_and(|p| !r.packages[p].worlds.is_empty());
-    if world { escaped(m, |n| TS_GIVEN_MODULES.contains(&n)) } else { m }
+    let world = r.interfaces[i]
+        .package
+        .is_some_and(|p| !r.packages[p].worlds.is_empty());
+    if world {
+        escaped(m, |n| TS_GIVEN_MODULES.contains(&n))
+    } else {
+        m
+    }
 }
 
 /// Whether `n` is a resource's serving trait or interface's form, a side's
 /// name and then a word (`GuestDevice`, `HostDevice`), which any module may
 /// name.
 fn is_serving(n: &str) -> bool {
-    ["Guest", "Host"].iter().any(|s| n.strip_prefix(s).is_some_and(|r| r.starts_with(|c: char| c.is_ascii_uppercase())))
+    ["Guest", "Host"].iter().any(|s| {
+        n.strip_prefix(s)
+            .is_some_and(|r| r.starts_with(|c: char| c.is_ascii_uppercase()))
+    })
 }
 
 /// Whether the Rust bindings give `n`: one of `RS_GIVEN`, a lent buffer's
 /// generic (`T0`, …), or a resource's serving trait's form.
 fn rs_given(n: &str) -> bool {
     RS_GIVEN.contains(&n)
-        || n.strip_prefix('T').is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
+        || n.strip_prefix('T')
+            .is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
         || is_serving(n)
 }
 
@@ -217,7 +322,11 @@ fn type_name(r: &Resolve, t: TypeId, given: fn(&str) -> bool) -> String {
 
 /// `n`, a name made of a WIT name, with `_` where the bindings give it.
 fn escaped(n: String, given: fn(&str) -> bool) -> String {
-    if given(&n) { n + "_" } else { n }
+    if given(&n) {
+        n + "_"
+    } else {
+        n
+    }
 }
 
 /// A WIT name as a Rust identifier.
@@ -238,7 +347,9 @@ fn is_lent(r: &Resolve, ty: &Type) -> bool {
         t = n;
     }
     let td = &r.types[t];
-    let TypeOwner::Interface(i) = td.owner else { return false };
+    let TypeOwner::Interface(i) = td.owner else {
+        return false;
+    };
     td.name.as_deref() == Some("lent")
         && r.interfaces[i].name.as_deref() == Some("types")
         && package_name(r, i) == "xpute:link"
@@ -261,23 +372,79 @@ impl Number {
     /// integer's.
     pub(crate) fn cpp(&self) -> &'static str {
         match self.rs {
-            r if is_float(r) => if self.sz == 4 { "float" } else { "double" },
+            r if is_float(r) => {
+                if self.sz == 4 {
+                    "float"
+                } else {
+                    "double"
+                }
+            }
             r => int_of(r).map_or("", |i| i.cpp),
         }
     }
 }
 
 pub(crate) static NUMBERS: [Number; 10] = [
-    Number { wit: Type::U8, rs: "u8", sz: 1, arr: "Uint8Array" },
-    Number { wit: Type::S8, rs: "i8", sz: 1, arr: "Int8Array" },
-    Number { wit: Type::U16, rs: "u16", sz: 2, arr: "Uint16Array" },
-    Number { wit: Type::S16, rs: "i16", sz: 2, arr: "Int16Array" },
-    Number { wit: Type::U32, rs: "u32", sz: 4, arr: "Uint32Array" },
-    Number { wit: Type::S32, rs: "i32", sz: 4, arr: "Int32Array" },
-    Number { wit: Type::U64, rs: "u64", sz: 8, arr: "BigUint64Array" },
-    Number { wit: Type::S64, rs: "i64", sz: 8, arr: "BigInt64Array" },
-    Number { wit: Type::F32, rs: "f32", sz: 4, arr: "Float32Array" },
-    Number { wit: Type::F64, rs: "f64", sz: 8, arr: "Float64Array" },
+    Number {
+        wit: Type::U8,
+        rs: "u8",
+        sz: 1,
+        arr: "Uint8Array",
+    },
+    Number {
+        wit: Type::S8,
+        rs: "i8",
+        sz: 1,
+        arr: "Int8Array",
+    },
+    Number {
+        wit: Type::U16,
+        rs: "u16",
+        sz: 2,
+        arr: "Uint16Array",
+    },
+    Number {
+        wit: Type::S16,
+        rs: "i16",
+        sz: 2,
+        arr: "Int16Array",
+    },
+    Number {
+        wit: Type::U32,
+        rs: "u32",
+        sz: 4,
+        arr: "Uint32Array",
+    },
+    Number {
+        wit: Type::S32,
+        rs: "i32",
+        sz: 4,
+        arr: "Int32Array",
+    },
+    Number {
+        wit: Type::U64,
+        rs: "u64",
+        sz: 8,
+        arr: "BigUint64Array",
+    },
+    Number {
+        wit: Type::S64,
+        rs: "i64",
+        sz: 8,
+        arr: "BigInt64Array",
+    },
+    Number {
+        wit: Type::F32,
+        rs: "f32",
+        sz: 4,
+        arr: "Float32Array",
+    },
+    Number {
+        wit: Type::F64,
+        rs: "f64",
+        sz: 8,
+        arr: "Float64Array",
+    },
 ];
 
 pub(crate) fn number(ty: &Type) -> Option<&'static Number> {
@@ -325,7 +492,9 @@ pub(crate) fn kind(r: &Resolve, ty: &Type, at: &str) -> Result<Kind, String> {
         },
         // TypeScript's absent is one null, which an option inside it would share.
         TypeDefKind::Option(e) => match kind(r, e, at)? {
-            Kind::Option(_) => return Err(format!("{at}: the link carries no option of an option")),
+            Kind::Option(_) => {
+                return Err(format!("{at}: the link carries no option of an option"))
+            }
             k => Kind::Option(Box::new(k)),
         },
         TypeDefKind::Result(res) => Kind::Result(boxed(&res.ok)?, boxed(&res.err)?),
@@ -337,8 +506,20 @@ pub(crate) fn kind(r: &Resolve, ty: &Type, at: &str) -> Result<Kind, String> {
 
 /// A variant's cases, each its name and its payload's kind, if it carries
 /// one.
-fn cases(r: &Resolve, v: &wit_parser::Variant, at: &str) -> Result<Vec<(String, Option<Kind>)>, String> {
-    v.cases.iter().map(|c| Ok((c.name.clone(), c.ty.as_ref().map(|t| kind(r, t, at)).transpose()?))).collect()
+fn cases(
+    r: &Resolve,
+    v: &wit_parser::Variant,
+    at: &str,
+) -> Result<Vec<(String, Option<Kind>)>, String> {
+    v.cases
+        .iter()
+        .map(|c| {
+            Ok((
+                c.name.clone(),
+                c.ty.as_ref().map(|t| kind(r, t, at)).transpose()?,
+            ))
+        })
+        .collect()
 }
 
 /// The integer a discriminant of `n` cases is held in: the narrowest
@@ -357,7 +538,9 @@ pub(crate) fn discriminant(n: usize) -> Result<&'static Number, String> {
 /// Rust module and a C++ namespace fold so (cpp.rs `is_folded`).
 fn folded(r: &Resolve, i: InterfaceId, module: &str) -> bool {
     let iface = &r.interfaces[i];
-    let one = iface.package.is_some_and(|p| r.packages[p].interfaces.len() == 1);
+    let one = iface
+        .package
+        .is_some_and(|p| r.packages[p].interfaces.len() == 1);
     one && iface.name.as_deref().is_some_and(|n| rs_name(n) == module)
 }
 
@@ -389,11 +572,31 @@ pub(crate) fn rec_layout(layouts: &[(usize, usize)]) -> (Vec<usize>, usize, usiz
 
 /// A variant's layout from its cases' payloads' layouts: the payload's
 /// offset, and the variant's size and alignment.
-pub(crate) fn variant_layout(payloads: &[Option<(usize, usize)>]) -> Result<(usize, usize, usize), String> {
+pub(crate) fn variant_layout(
+    payloads: &[Option<(usize, usize)>],
+) -> Result<(usize, usize, usize), String> {
     let d = discriminant(payloads.len())?.sz;
-    let align = payloads.iter().flatten().map(|&(_, a)| a).max().unwrap_or(1).max(d);
-    let off = d.next_multiple_of(payloads.iter().flatten().map(|&(_, a)| a).max().unwrap_or(1));
-    let sz = payloads.iter().flatten().map(|&(s, _)| s).max().unwrap_or(0);
+    let align = payloads
+        .iter()
+        .flatten()
+        .map(|&(_, a)| a)
+        .max()
+        .unwrap_or(1)
+        .max(d);
+    let off = d.next_multiple_of(
+        payloads
+            .iter()
+            .flatten()
+            .map(|&(_, a)| a)
+            .max()
+            .unwrap_or(1),
+    );
+    let sz = payloads
+        .iter()
+        .flatten()
+        .map(|&(s, _)| s)
+        .max()
+        .unwrap_or(0);
     Ok((off, (off + sz).next_multiple_of(align), align))
 }
 
@@ -408,7 +611,11 @@ fn members(e: &wit_parser::Enum) -> Vec<Member> {
             ident: pascal(&c.name),
             name: pascal(&c.name),
             number: k.to_string(),
-            doc: c.docs.contents.as_deref().map_or(Vec::new(), |d| d.lines().map(str::to_string).collect()),
+            doc: c
+                .docs
+                .contents
+                .as_deref()
+                .map_or(Vec::new(), |d| d.lines().map(str::to_string).collect()),
         })
         .collect()
 }
@@ -425,30 +632,59 @@ struct Owner {
 /// package `own`: its Rust module, `rs_up` and its name for one of `own`'s,
 /// and its TypeScript module, without its extension; another package's at
 /// its peer's (`externs`).
-fn owner(r: &Resolve, externs: &[(String, String, String)], own: &str, rs_up: &str, i: InterfaceId) -> Owner {
+fn owner(
+    r: &Resolve,
+    externs: &[(String, String, String)],
+    own: &str,
+    rs_up: &str,
+    i: InterfaceId,
+) -> Owner {
     let alias = rs_name(r.interfaces[i].name.as_deref().unwrap_or_default());
     let ts_alias = interface_ts_module(r, i);
     let pkg = package_name(r, i);
     if pkg == own {
-        return Owner { rs: format!("{rs_up}{alias}"), ts: format!("./{ts_alias}") };
+        return Owner {
+            rs: format!("{rs_up}{alias}"),
+            ts: format!("./{ts_alias}"),
+        };
     }
-    let (rs, ts) = externs.iter().find(|(p, _, _)| *p == pkg).map_or(("", ""), |(_, rs, ts)| (rs.as_str(), ts.as_str()));
+    let (rs, ts) = externs
+        .iter()
+        .find(|(p, _, _)| *p == pkg)
+        .map_or(("", ""), |(_, rs, ts)| (rs.as_str(), ts.as_str()));
     let module = rs.rsplit("::").next().unwrap_or_default();
-    Owner { rs: if folded(r, i, module) { rs.into() } else { format!("{rs}::{alias}") }, ts: format!("{ts}/{ts_alias}") }
+    Owner {
+        rs: if folded(r, i, module) {
+            rs.into()
+        } else {
+            format!("{rs}::{alias}")
+        },
+        ts: format!("{ts}/{ts_alias}"),
+    }
 }
 
 /// The TypeScript imports of the interfaces' modules a table names, each
 /// module as its own name, one line a module; no two of the modules share a
 /// name (the world's imports are refused where they would).
 fn ts_namespaces<'a>(reaches: impl Iterator<Item = &'a (String, String, String)>) -> String {
-    let modules: BTreeMap<_, _> = reaches.map(|(_, ts, m)| (m.as_str(), ts.as_str())).collect();
-    modules.iter().map(|(m, ts)| format!("import * as {m} from \"{ts}.ts\";\n")).collect()
+    let modules: BTreeMap<_, _> = reaches
+        .map(|(_, ts, m)| (m.as_str(), ts.as_str()))
+        .collect();
+    modules
+        .iter()
+        .map(|(m, ts)| format!("import * as {m} from \"{ts}.ts\";\n"))
+        .collect()
 }
 
 fn package_name(r: &Resolve, i: InterfaceId) -> String {
     r.interfaces[i]
         .package
-        .map(|p| format!("{}:{}", r.packages[p].name.namespace, r.packages[p].name.name))
+        .map(|p| {
+            format!(
+                "{}:{}",
+                r.packages[p].name.namespace, r.packages[p].name.name
+            )
+        })
         .unwrap_or_default()
 }
 
@@ -487,7 +723,10 @@ pub(crate) struct Gen<'a> {
 
 impl Gen<'_> {
     fn iname(&self) -> String {
-        self.r.interfaces[self.here].name.clone().unwrap_or_default()
+        self.r.interfaces[self.here]
+            .name
+            .clone()
+            .unwrap_or_default()
     }
 
     /// The interface's TypeScript module's name (`interface_ts_module`).
@@ -514,7 +753,9 @@ impl Gen<'_> {
     fn type_path(&self, t: TypeId, given: fn(&str) -> bool) -> (Option<Owner>, String) {
         let td = &self.r.types[t];
         let name = type_name(self.r, t, given);
-        let TypeOwner::Interface(i) = td.owner else { return (None, name) };
+        let TypeOwner::Interface(i) = td.owner else {
+            return (None, name);
+        };
         if i == self.here {
             return (None, name);
         }
@@ -563,29 +804,49 @@ impl Gen<'_> {
 
     /// A record's fields: each its name and its kind.
     pub(crate) fn fields(&self, t: TypeId) -> Result<Vec<(String, Kind)>, String> {
-        let TypeDefKind::Record(rec) = &self.r.types[t].kind else { return Ok(Vec::new()) };
-        rec.fields.iter().map(|f| Ok((f.name.clone(), kind(self.r, &f.ty, &self.at())?))).collect()
+        let TypeDefKind::Record(rec) = &self.r.types[t].kind else {
+            return Ok(Vec::new());
+        };
+        rec.fields
+            .iter()
+            .map(|f| Ok((f.name.clone(), kind(self.r, &f.ty, &self.at())?)))
+            .collect()
     }
 
     pub(crate) fn field_layouts(&self, t: TypeId) -> Result<Vec<(usize, usize)>, String> {
-        self.fields(t)?.iter().map(|(_, k)| self.layout(k)).collect()
+        self.fields(t)?
+            .iter()
+            .map(|(_, k)| self.layout(k))
+            .collect()
     }
 
     /// A variant's cases' payloads' layouts, none for a case that carries
     /// nothing.
     pub(crate) fn payload_layouts(&self, t: TypeId) -> Result<Vec<Option<(usize, usize)>>, String> {
-        let TypeDefKind::Variant(v) = &self.r.types[t].kind else { return Ok(Vec::new()) };
-        cases(self.r, v, &self.at())?.iter().map(|(_, k)| k.as_ref().map(|k| self.layout(k)).transpose()).collect()
+        let TypeDefKind::Variant(v) = &self.r.types[t].kind else {
+            return Ok(Vec::new());
+        };
+        cases(self.r, v, &self.at())?
+            .iter()
+            .map(|(_, k)| k.as_ref().map(|k| self.layout(k)).transpose())
+            .collect()
     }
 
-    pub(crate) fn result_layout(&self, ok: &Option<Box<Kind>>, err: &Option<Box<Kind>>) -> Result<(usize, usize, usize), String> {
+    pub(crate) fn result_layout(
+        &self,
+        ok: &Option<Box<Kind>>,
+        err: &Option<Box<Kind>>,
+    ) -> Result<(usize, usize, usize), String> {
         let payload = |k: &Option<Box<Kind>>| k.as_ref().map(|k| self.layout(k)).transpose();
         variant_layout(&[payload(ok)?, payload(err)?])
     }
 
     /// Where the values `ks` lie as one tuple, and its size: a call's params.
     pub(crate) fn tuple_layout(&self, ks: &[&Kind]) -> Result<(Vec<usize>, usize), String> {
-        let layouts = ks.iter().map(|k| self.layout(k)).collect::<Result<Vec<_>, String>>()?;
+        let layouts = ks
+            .iter()
+            .map(|k| self.layout(k))
+            .collect::<Result<Vec<_>, String>>()?;
         let (offs, sz, _) = rec_layout(&layouts);
         Ok((offs, sz))
     }
@@ -597,10 +858,20 @@ pub fn abi_root(root: &Path, path: &str, targets: &[&WitTarget]) -> Result<Outpu
     let dir = Path::new(path.trim_end_matches(".rs"));
     let mods: String = targets
         .iter()
-        .filter_map(|t| Path::new(t.rs?).strip_prefix(dir).ok()?.file_stem()?.to_str())
+        .filter_map(|t| {
+            Path::new(t.rs?)
+                .strip_prefix(dir)
+                .ok()?
+                .file_stem()?
+                .to_str()
+        })
         .map(|m| format!("pub mod {m};\n"))
         .collect();
-    let text = format!("// {}\n//\n// {}\n\n{mods}", package_path(root, path)?, mark("wit", TOOL));
+    let text = format!(
+        "// {}\n//\n// {}\n\n{mods}",
+        package_path(root, path)?,
+        mark("wit", TOOL)
+    );
     Ok(Output::new(path, text))
 }
 
@@ -608,7 +879,9 @@ pub fn abi_root(root: &Path, path: &str, targets: &[&WitTarget]) -> Result<Outpu
 /// `named_bit`, frame.json5's `NAMED`, and below it the FNV-1a hash of the name
 /// folded to the bits under `named_bit`.
 fn named(name: &str, named_bit: u32) -> u32 {
-    let hash = name.bytes().fold(0x811c_9dc5_u32, |h, b| (h ^ b as u32).wrapping_mul(0x0100_0193));
+    let hash = name.bytes().fold(0x811c_9dc5_u32, |h, b| {
+        (h ^ b as u32).wrapping_mul(0x0100_0193)
+    });
     let below = named_bit - 1;
     named_bit | ((hash >> named_bit.trailing_zeros()) ^ hash) & below
 }
@@ -629,13 +902,19 @@ fn frame_val(link: &Path, name: &str) -> Result<u32, String> {
 /// with its root, xpute:link's first, then each before those that take its
 /// types: their WIT is read before its own, the first's names frame.json5, and
 /// each other package its types take is reached where its peer writes it.
-pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) -> Result<Vec<Output>, String> {
+pub fn wit_outputs(
+    root: &Path,
+    t: &WitTarget,
+    peers: &[(&Path, &WitTarget)],
+) -> Result<Vec<Output>, String> {
     let own = root.join(t.wit);
     let peers: Vec<_> = peers.iter().filter(|(r, p)| r.join(p.wit) != own).collect();
     let mut r = Resolve::default();
     let mut ids = Vec::new();
     for (pr, p) in &peers {
-        let (id, _) = r.push_dir(pr.join(p.wit)).map_err(|e| format!("{}: {e:?}", p.wit))?;
+        let (id, _) = r
+            .push_dir(pr.join(p.wit))
+            .map_err(|e| format!("{}: {e:?}", p.wit))?;
         ids.push(id);
     }
     let (pkg, _) = r.push_dir(&own).map_err(|e| format!("{}: {e:?}", t.wit))?;
@@ -644,9 +923,15 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
     let link = peers.first().map_or(own.clone(), |(pr, p)| pr.join(p.wit));
     let named_bit = frame_val(&link, "NAMED")?;
     let drop = frame_val(&link, "DROP")?;
-    let crate_dir = t.rs.map(|rs| package(root, rs).map(|(_, dir)| root.join(dir))).transpose()?;
+    let crate_dir =
+        t.rs.map(|rs| package(root, rs).map(|(_, dir)| root.join(dir)))
+            .transpose()?;
     let ts_dir = t.ts.map(|d| root.join(d));
-    let cpp_externs = t.cpp.map(|_| cpp::externs(&r, &ids, &peers)).transpose()?.unwrap_or_default();
+    let cpp_externs = t
+        .cpp
+        .map(|_| cpp::externs(&r, &ids, &peers))
+        .transpose()?
+        .unwrap_or_default();
     let mut externs = Vec::new();
     for (&id, (pr, p)) in ids.iter().zip(&peers) {
         let name = &r.packages[id].name;
@@ -662,8 +947,12 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
     }
     // The side's crate, as the Rust names it, and whether it is the guest.
     let side = match (&crate_dir, &t.side) {
-        (Some(here), Some(Side::Guest(dir))) => Some((rs_crate(here, root, &format!("{dir}/Cargo.toml"))?, true)),
-        (Some(here), Some(Side::Host(dir))) => Some((rs_crate(here, root, &format!("{dir}/Cargo.toml"))?, false)),
+        (Some(here), Some(Side::Guest(dir))) => {
+            Some((rs_crate(here, root, &format!("{dir}/Cargo.toml"))?, true))
+        }
+        (Some(here), Some(Side::Host(dir))) => {
+            Some((rs_crate(here, root, &format!("{dir}/Cargo.toml"))?, false))
+        }
         _ => None,
     };
     // The link's TypeScript module `file`, beside xpute:link's bindings.
@@ -693,11 +982,17 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
     }
     for &i in p.interfaces.values() {
         for &ty in r.interfaces[i].types.values() {
-            let TypeDefKind::Type(Type::Id(o)) = r.types[ty].kind else { continue };
-            let TypeOwner::Interface(oi) = r.types[o].owner else { continue };
+            let TypeDefKind::Type(Type::Id(o)) = r.types[ty].kind else {
+                continue;
+            };
+            let TypeOwner::Interface(oi) = r.types[o].owner else {
+                continue;
+            };
             let other = package_name(&r, oi);
             if other != pname && !externs.iter().any(|(e, _, _)| *e == other) {
-                return Err(format!("{pname} takes types of {other}, which no peer writes"));
+                return Err(format!(
+                    "{pname} takes types of {other}, which no peer writes"
+                ));
             }
         }
     }
@@ -709,13 +1004,16 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
         _ => return Err(format!("{pname}: more than one world")),
     };
     let has = |m: &IndexMap<WorldKey, WorldItem>, i: InterfaceId| {
-        m.values().any(|w| matches!(w, WorldItem::Interface { id, .. } if *id == i))
+        m.values()
+            .any(|w| matches!(w, WorldItem::Interface { id, .. } if *id == i))
     };
     let src = t.wit;
     let mut rs = String::new();
     let mut outs = Vec::new();
     let rs_dir = t.rs.map(|path| path.trim_end_matches(".rs"));
-    let package_rs = t.rs.and_then(|path| Path::new(path).file_stem()?.to_str()).unwrap_or_default();
+    let package_rs =
+        t.rs.and_then(|path| Path::new(path).file_stem()?.to_str())
+            .unwrap_or_default();
     // The methods of the named interfaces the host serves that answer later,
     // from WIT's `async func`, each its interface's reach (`reach`) and its
     // method's Rust and TypeScript constants.
@@ -726,7 +1024,11 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
     let reach = |i: InterfaceId| {
         let o = owner(&r, &externs, &pname, "", i);
         let own_folded = package_name(&r, i) == pname && folded(&r, i, package_rs);
-        let rs = if own_folded { String::new() } else { format!("{}::", o.rs) };
+        let rs = if own_folded {
+            String::new()
+        } else {
+            format!("{}::", o.rs)
+        };
         (rs, o.ts, interface_ts_module(&r, i))
     };
     for (iname, &i) in &p.interfaces {
@@ -759,21 +1061,34 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
         if guest_serves == Some(false) {
             for o in objs.iter().filter(|o| !o.resource) {
                 for f in o.methods.iter().filter(|f| is_async(f)) {
-                    later.push((reach(i), method_const(o, f, rs_given), method_const(o, f, ts_given)));
+                    later.push((
+                        reach(i),
+                        method_const(o, f, rs_given),
+                        method_const(o, f, ts_given),
+                    ));
                 }
             }
         }
         if let Some(dir) = rs_dir {
             let rs_role = match (guest_serves, &side) {
                 (None, _) => None,
-                (Some(g), Some((side, guest))) => Some((role(g == *guest), side.as_str(), if *guest { "Guest" } else { "Host" })),
+                (Some(g), Some((side, guest))) => Some((
+                    role(g == *guest),
+                    side.as_str(),
+                    if *guest { "Guest" } else { "Host" },
+                )),
                 (Some(_), None) => return Err(format!("{at}: its target names no side")),
             };
             if folded(&r, i, package_rs) {
                 rs.push_str(&g.rs_interface(&objs, rs_role)?);
             } else {
                 let path = format!("{dir}/{m}.rs");
-                let text = format!("// {}\n//\n// {}\n\n{}", package_path(root, &path)?, mark(src, TOOL), g.rs_interface(&objs, rs_role)?);
+                let text = format!(
+                    "// {}\n//\n// {}\n\n{}",
+                    package_path(root, &path)?,
+                    mark(src, TOOL),
+                    g.rs_interface(&objs, rs_role)?
+                );
                 outs.push(Output::new(&path, text));
                 let _ = writeln!(rs, "pub mod {m};");
             }
@@ -783,11 +1098,20 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
             let m = g.module_ts();
             if !enums.is_empty() {
                 let path = format!("{dir}/{m}.enum.ts");
-                let text = format!("// {}\n//\n// {}\n{enums}", package_path(root, &path)?, mark(src, TOOL));
+                let text = format!(
+                    "// {}\n//\n// {}\n{enums}",
+                    package_path(root, &path)?,
+                    mark(src, TOOL)
+                );
                 outs.push(Output::new(&path, text));
             }
             let path = format!("{dir}/{m}.ts");
-            let text = format!("// {}\n//\n// {}\n\n{}\n{body}", package_path(root, &path)?, mark(src, TOOL), g.ts_imports());
+            let text = format!(
+                "// {}\n//\n// {}\n\n{}\n{body}",
+                package_path(root, &path)?,
+                mark(src, TOOL),
+                g.ts_imports()
+            );
             outs.push(Output::new(&path, text));
         }
         if let Some(dir) = t.cpp {
@@ -796,36 +1120,79 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
                 (Some(g), Some(Side::Guest(_))) => Some(role(g)),
                 (Some(_), _) => return Err(format!("{at}: C++ is written for the guest alone")),
             };
-            let path = if cpp::is_folded(&r, i) { format!("{dir}.hpp") } else { format!("{dir}/{m}.hpp") };
-            outs.push(Output::new(&path, cpp::hdr(&g, &objs, cpp_role, &path, src, &cpp_externs)?));
+            let path = if cpp::is_folded(&r, i) {
+                format!("{dir}.hpp")
+            } else {
+                format!("{dir}/{m}.hpp")
+            };
+            outs.push(Output::new(
+                &path,
+                cpp::hdr(&g, &objs, cpp_role, &path, src, &cpp_externs)?,
+            ));
         }
     }
     // The interfaces the world imports, in the world's order, each its name
-    // and its reach (`reach`); one of types alone has none. A world imports
-    // no two interfaces of one module's name from different packages, in any
-    // language: the TypeScript tables name each by its module.
+    // and its reach (`reach`); one of types alone has none. The bindings name
+    // each by its module, in Rust beside the package's own modules and in
+    // TypeScript by the same name, so no other import, nor for one of
+    // another package any interface of this one, has its module's name.
     let mut imports: Vec<(String, (String, String, String))> = Vec::new();
     for item in world.into_iter().flat_map(|w| w.imports.values()) {
-        let WorldItem::Interface { id, .. } = *item else { continue };
-        let Some(n) = &r.interfaces[id].name else { continue };
+        let WorldItem::Interface { id, .. } = *item else {
+            continue;
+        };
+        let Some(n) = &r.interfaces[id].name else {
+            continue;
+        };
         let name = format!("{}/{n}", package_name(&r, id));
         if objs(&r, id, &name, drop)?.is_empty() {
             continue;
         }
-        let reach = reach(id);
-        if let Some((other, _)) = imports.iter().find(|(_, o)| o.2 == reach.2) {
-            return Err(format!("{pname}: its world imports {other} and {name}, whose TypeScript modules are both {}, and the TypeScript tables name each by its module", reach.2));
+        let module = rs_name(n);
+        let outside = package_name(&r, id) != pname;
+        let mut imported = imports.iter().map(|(o, _)| o.clone());
+        let mut own_names = p
+            .interfaces
+            .keys()
+            .filter(|_| outside)
+            .map(|i| format!("{pname}/{i}"));
+        let same_module = |o: &String| {
+            o.rsplit_once('/')
+                .is_some_and(|(_, i)| rs_name(i) == module)
+        };
+        if let Some(other) = imported
+            .find(same_module)
+            .or_else(|| own_names.find(same_module))
+        {
+            return Err(format!("{pname}: its world imports {name}, whose module {module} is {other}'s too, and the bindings name each import by its module"));
         }
-        imports.push((name, reach));
+        imports.push((name, reach(id)));
     }
     if let (Some((_, false)), Some(_)) = (&side, world) {
-        let pairs: Vec<_> = imports.iter().map(|(n, (rs, ..))| format!("(\"{n}\", {rs}HANDLE)")).collect();
+        // An interface of another package is brought in by a `use` of its
+        // module and named by that module (`imports`).
+        let mut uses = Vec::new();
+        let mut pairs = Vec::new();
+        for (n, (rs, ..)) in &imports {
+            let Some((_, module)) = rs.trim_end_matches("::").rsplit_once("::") else {
+                pairs.push(format!("(\"{n}\", {rs}HANDLE)"));
+                continue;
+            };
+            uses.push(format!("use {};", rs.trim_end_matches("::")));
+            pairs.push(format!("(\"{n}\", {module}::HANDLE)"));
+        }
+        if !uses.is_empty() {
+            let _ = write!(rs, "\n{}\n", uses.join("\n"));
+        }
         let _ = writeln!(
             rs,
             "\n/// The interfaces the world imports, each `(name, handle)`, which are\n/// mounted before the guest boots: one with functions of its own under its\n/// handle, one of resources alone by an opener at a prefix.\npub const IMPORTS: &[(&str, {link_rs}::Handle)] = &[{}];",
             pairs.join(", ")
         );
-        let pairs: Vec<_> = later.iter().map(|((rs, ..), c, _)| format!("({rs}HANDLE, {rs}{c})")).collect();
+        let pairs: Vec<_> = later
+            .iter()
+            .map(|((rs, ..), c, _)| format!("({rs}HANDLE, {rs}{c})"))
+            .collect();
         let _ = writeln!(
             rs,
             "\n/// The methods of the named interfaces the host serves that answer\n/// later, each `(handle, method)`, as WIT's `async func` marks them.\npub const LATER: &[({link_rs}::Handle, {link_rs}::Method)] = &[{}];",
@@ -834,7 +1201,10 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
     }
     if let (Some(dir), Some(_)) = (t.ts, world) {
         let uses = ts_namespaces(imports.iter().map(|(_, reach)| reach));
-        let pairs: Vec<_> = imports.iter().map(|(n, (_, _, m))| format!("[\"{n}\", {m}.HANDLE]")).collect();
+        let pairs: Vec<_> = imports
+            .iter()
+            .map(|(n, (_, _, m))| format!("[\"{n}\", {m}.HANDLE]"))
+            .collect();
         let path = format!("{dir}/imports.ts");
         let text = format!(
             "// {}\n//\n// {}\n\nimport type {{ Handle }} from \"{link_ts}\";\n{uses}\n/** The interfaces the world imports, each `[name, handle]`, which are\n * mounted before the guest boots: one with functions of its own under its\n * handle, one of resources alone by an opener at a prefix. */\nexport const IMPORTS: readonly (readonly [string, Handle])[] = [{}];\n",
@@ -844,7 +1214,10 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
         );
         outs.push(Output::new(&path, text));
         let uses = ts_namespaces(later.iter().map(|(reach, ..)| reach));
-        let pairs: Vec<_> = later.iter().map(|((_, _, m), _, c)| format!("[{m}.HANDLE, {m}.{c}]")).collect();
+        let pairs: Vec<_> = later
+            .iter()
+            .map(|((_, _, m), _, c)| format!("[{m}.HANDLE, {m}.{c}]"))
+            .collect();
         let path = format!("{dir}/later.ts");
         let text = format!(
             "// {}\n//\n// {}\n\nimport type {{ Handle, Method }} from \"{link_ts}\";\n{uses}\n/** The methods of the named interfaces the host serves that answer\n * later, each `[handle, method]`, as WIT's `async func` marks them. */\nexport const LATER: readonly (readonly [Handle, Method])[] = [{}];\n",
@@ -855,7 +1228,11 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
         outs.push(Output::new(&path, text));
     }
     if let Some(path) = t.rs {
-        let text = format!("// {}\n//\n// {}\n\n{rs}", package_path(root, path)?, mark(src, TOOL));
+        let text = format!(
+            "// {}\n//\n// {}\n\n{rs}",
+            package_path(root, path)?,
+            mark(src, TOOL)
+        );
         outs.push(Output::new(path, text));
     }
     Ok(outs)

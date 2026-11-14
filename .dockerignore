@@ -21,6 +21,7 @@
 !xpute/gen
 !xpute/gen-targets
 !xpute/dev/golden/rust
+!xpute/dev/mem/rust
 !xpute/dev/tool
 **/target
 **/.env

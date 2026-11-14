@@ -2,8 +2,8 @@
 
 use pxl_spec::space::coord::q3::Q3;
 
-use crate::abi::overlay::SensorStatus;
 use crate::abi::camera::Tracking;
+use crate::abi::overlay::SensorStatus;
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::camera::state::IntentPatch;
@@ -13,8 +13,8 @@ use crate::domain::control::param::SENSOR_GRACE_MS;
 use crate::domain::control::sensor::device_orientation::request_orient;
 use crate::domain::control::sensor::reading::{device_location_store, device_orient_store};
 use crate::sys::sched::invalidate_at;
-use xpute_guest::clock::now;
 use pxl_global::Global;
+use xpute_guest::clock::now;
 
 struct Follow {
     /// Whether the camera follows the device. The controls turn it on and

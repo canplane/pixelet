@@ -7,8 +7,8 @@
 
 pub mod data;
 
-use xpute_link_gen::wit::{abi_root, wit_outputs};
 use xpute_gen::spec::{generate_at, Output};
+use xpute_link_gen::wit::{abi_root, wit_outputs};
 
 use crate::root;
 
@@ -17,13 +17,20 @@ use crate::root;
 fn workspace_dirs() -> Result<Vec<String>, String> {
     let file = "pnpm-workspace.yaml";
     let text = std::fs::read_to_string(root().join(file)).map_err(|e| format!("{file}: {e}"))?;
-    let after = text.split_once("\npackages:\n").ok_or(format!("{file}: no `packages:`"))?.1;
+    let after = text
+        .split_once("\npackages:\n")
+        .ok_or(format!("{file}: no `packages:`"))?
+        .1;
     let dirs: Vec<String> = after
         .lines()
         .take_while(|l| !l.is_empty())
         .map(|l| {
             l.strip_prefix("  - ")
-                .filter(|d| !d.is_empty() && d.chars().all(|c| c.is_ascii_alphanumeric() || "_./-".contains(c)))
+                .filter(|d| {
+                    !d.is_empty()
+                        && d.chars()
+                            .all(|c| c.is_ascii_alphanumeric() || "_./-".contains(c))
+                })
                 .map(String::from)
                 .ok_or(format!("{file}: `{l}` is not `  - <dir>`"))
         })
@@ -70,12 +77,22 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let link = (root.as_path(), &xpute_gen_targets::LINK_TARGET);
     out.extend(wit_outputs(&root, link.1, &[])?);
     let sides = [
-        (xpute_gen_targets::GUEST_TARGETS, &xpute_gpu_gen_targets::GUEST_TARGET),
-        (xpute_gen_targets::NATIVE_HOST_TARGETS, &xpute_gpu_gen_targets::NATIVE_HOST_TARGET),
+        (
+            xpute_gen_targets::GUEST_TARGETS,
+            &xpute_gpu_gen_targets::GUEST_TARGET,
+        ),
+        (
+            xpute_gen_targets::NATIVE_HOST_TARGETS,
+            &xpute_gpu_gen_targets::NATIVE_HOST_TARGET,
+        ),
     ];
     let mut targets = Vec::new();
     for (xpute, gpu) in sides {
-        let side: Vec<_> = xpute.iter().chain([gpu]).map(|t| (root.as_path(), t)).collect();
+        let side: Vec<_> = xpute
+            .iter()
+            .chain([gpu])
+            .map(|t| (root.as_path(), t))
+            .collect();
         let peers: Vec<_> = [link].into_iter().chain(side.iter().copied()).collect();
         for (_, t) in &side {
             out.extend(wit_outputs(&root, t, &peers)?);

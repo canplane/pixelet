@@ -35,17 +35,17 @@ use pxl_spec::space::layer::demand::GROUND_DEMAND_TILE_CAP;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_guest::abi::fs::file;
 use xpute_guest::abi::fs::types::ErrorCode;
-use xpute_link::abi::types::Token;
 use xpute_guest::link;
-use xpute_link::{Handle, Lend};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+use xpute_link::abi::types::Token;
+use xpute_link::{Handle, Lend};
 
-use crate::sys::io::demand::{Source, Stream};
-use crate::sys::io::failure::{exit_of, Exit, Failure};
 use crate::spec;
 use crate::spec::file::{format, path};
 use crate::spec::manifest::mem;
+use crate::sys::io::demand::{Source, Stream};
+use crate::sys::io::failure::{exit_of, Exit, Failure};
 use crate::sys::sched::{executor, invalidate};
 
 pub(crate) enum StorageRead {
@@ -179,7 +179,9 @@ fn errno<T>(r: Result<Result<T, ErrorCode>, Errno>) -> Result<T, Errno> {
 /// (`exit_of`), as a device's runtime cancels what a reload of its UI leaves
 /// of the files the UI serves, the storage file among them. A page's worker
 /// dies with its page, so none of its methods ends so there.
-async fn redo<T, F: Future<Output = Result<T, Errno>>>(mut attempt: impl FnMut() -> F) -> Result<T, Errno> {
+async fn redo<T, F: Future<Output = Result<T, Errno>>>(
+    mut attempt: impl FnMut() -> F,
+) -> Result<T, Errno> {
     loop {
         match attempt().await {
             Err(e) if exit_of(Failure::from(e)) == Exit::Aborted => continue,
@@ -321,7 +323,6 @@ pub(crate) struct Text<const N: usize> {
     pub bytes: [u8; N],
     len: usize,
 }
-
 
 impl<const N: usize> Text<N> {
     pub(crate) const EMPTY: Text<N> = Text {

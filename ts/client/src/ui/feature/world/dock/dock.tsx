@@ -70,7 +70,11 @@ export function Dock() {
             spanPx={bar_width}
             onContentWidth={set_strip_width}
           >
-            <Strip spanPx={bar_width} scrolls={!popover?.open} gesture={gesture} />
+            <Strip
+              spanPx={bar_width}
+              scrolls={!popover?.open}
+              gesture={gesture}
+            />
           </Card>
 
           {shown_popover && <SizePopover popover={shown_popover} />}

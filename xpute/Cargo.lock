@@ -1223,6 +1223,7 @@ dependencies = [
  "hex",
  "xpute-golden",
  "xpute-kit",
+ "xpute-test-mem",
 ]
 
 [[package]]
@@ -1241,6 +1242,7 @@ dependencies = [
  "xpute-kit",
  "xpute-link",
  "xpute-native-runtime",
+ "xpute-test-mem",
 ]
 
 [[package]]
@@ -1251,6 +1253,14 @@ dependencies = [
  "ndk-sys",
  "xpute-guest",
  "xpute-kit",
+ "xpute-link",
+ "xpute-test-mem",
+]
+
+[[package]]
+name = "xpute-test-mem"
+version = "0.1.0"
+dependencies = [
  "xpute-link",
 ]
 

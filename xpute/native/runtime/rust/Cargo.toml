@@ -28,9 +28,10 @@ jni-sys = "0.3"
 ndk-sys = "0.6"
 
 [dev-dependencies]
-# Each process test links a guest beside the runtime, as an app does
-# (src/app.test.rs).
+# Each process test links a guest beside the runtime, as an app does, over a
+# test's guest memory (src/app.test.rs).
 xpute-guest.workspace = true
+xpute-test-mem.workspace = true
 
 # Each process test is a binary of its own, since a process starts one runtime
 # and links one guest.

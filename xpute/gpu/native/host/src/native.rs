@@ -35,10 +35,10 @@ use xpute_link::Return;
 use xpute_native_runtime::link;
 use xpute_native_runtime::{done, job};
 
-use xpute_gpu_native_runtime::abi;
 use super::vsync::Vsync;
 use super::{Ask, Config, ConfigureAt, GpuHost, OpenError, Wgpu};
 use xpute_gpu_link::GpuConfig;
+use xpute_gpu_native_runtime::abi;
 
 /// This is a platform's window, as `target` takes it, with a reference of the
 /// host's own on it from its bind until its unbind: on an Apple platform a
@@ -137,7 +137,7 @@ static WORK: OnceLock<Sender<Job>> = OnceLock::new();
 
 /// This is the platform's function told what the host has of a GPU
 /// (`state_on`): the state's name, its UTF-8 bytes and their count, as the
-/// guest's stop crosses (xpute-native-runtime native.rs `Stopped`).
+/// guest's stop crosses (xpute-native-runtime listener.rs `Stopped`).
 pub type State = extern "C" fn(state: *const u8, len: usize);
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -275,7 +275,7 @@ impl abi::gpu::Host for Gpu {
     /// submitted, as a page's run resolves once they have run; with no
     /// device, unrun, as a page's host does. The frames they drew are
     /// presented after the answer.
-    fn run(&self, records: Lent, task_return: Return<()>) {
+    fn run(&self, recs: Lent, task_return: Return<()>) {
         let id = job(Box::new(move |()| task_return.answer(Ok(()))));
         on_gpu(Box::new(move || {
             let mut guard = device();
@@ -285,7 +285,7 @@ impl abi::gpu::Host for Gpu {
             let Some(r) = d.host.as_mut() else {
                 return done(id, ());
             };
-            r.run(records.at, records.len);
+            r.run(recs.at, recs.len);
             done(id, ());
             r.present();
             if let Some(p) = &d.poller {
@@ -298,7 +298,9 @@ impl abi::gpu::Host for Gpu {
 
     /// The guest's device, served under a handle the link issues.
     fn get_device(&self) -> Result<u32, Errno> {
-        Ok(link::add(abi::gpu::device(Rc::new(GuestDevice(self.0.clone())))))
+        Ok(link::add(abi::gpu::device(Rc::new(GuestDevice(
+            self.0.clone(),
+        )))))
     }
 }
 
@@ -331,7 +333,9 @@ impl abi::gpu::HostDevice for GuestDevice {
     /// Opens a device as the guest asks, once (`open`), or answers
     /// `no-device` where none opens; the platform is told which.
     fn ready(&self, task_return: Return<Result<(), abi::gpu::ErrorCode>>) {
-        let id = job(Box::new(move |opened: Result<(), abi::gpu::ErrorCode>| task_return.answer(Ok(opened))));
+        let id = job(Box::new(move |opened: Result<(), abi::gpu::ErrorCode>| {
+            task_return.answer(Ok(opened))
+        }));
         let args = self.0.clone();
         on_gpu(Box::new(move || {
             let opened = open(args);
@@ -370,7 +374,9 @@ fn wait(task_return: Return<()>, cancel: fn(&mut Device, u64)) -> u64 {
             }));
         }
     });
-    id.set(job(Box::new(move |r: Result<(), Errno>| task_return.answer(r))));
+    id.set(job(Box::new(move |r: Result<(), Errno>| {
+        task_return.answer(r)
+    })));
     id.get()
 }
 
@@ -500,7 +506,9 @@ pub unsafe fn bind(handle: u32, window: NonNull<c_void>) {
         if let Some((d, h)) = d.and_then(|d| d.host.as_mut().map(|h| (&d.instance, h))) {
             // SAFETY: the window `Window` holds.
             let Ok(surface) = (unsafe { d.create_surface_unsafe(target(window.0)) }) else {
-                return xpute_native_runtime::log(&format!("[gpu] no surface of {handle:#x}'s window"));
+                return xpute_native_runtime::log(&format!(
+                    "[gpu] no surface of {handle:#x}'s window"
+                ));
             };
             if !h.bind(handle, surface) {
                 return xpute_native_runtime::log(&format!("[gpu] {handle:#x} is bound over"));

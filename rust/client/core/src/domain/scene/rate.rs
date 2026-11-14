@@ -33,7 +33,9 @@ pub(crate) fn judge(gap_ms: f64, cost_ms: f64, display_ms: f64) {
         return;
     }
     let n = *i;
-    let slowest = ((1000.0 / param::RATE_MIN_HZ) / display_ms + 0.5).floor().max(1.0) as u32;
+    let slowest = ((1000.0 / param::RATE_MIN_HZ) / display_ms + 0.5)
+        .floor()
+        .max(1.0) as u32;
     let next = if gap_ms > (f64::from(n) + 0.5) * display_ms {
         n + 1
     } else if n > 1 && cost_ms < f64::from(n - 1) * display_ms * (1.0 - param::RES_BAND) {

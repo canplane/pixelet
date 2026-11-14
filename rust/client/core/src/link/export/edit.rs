@@ -3,13 +3,13 @@
 //! The edit interface's methods: the tool held and what it places, and the
 //! marker draft it left waiting.
 
+use crate::abi::edit;
 use crate::abi::types::ErrorCode;
 use crate::domain::control::edit::set_tool;
 use crate::domain::control::edit::write;
 use crate::domain::control::edit::Tool;
 use crate::domain::control::input::camera_rehover;
 use crate::domain::layer::object::asset::Asset;
-use crate::abi::edit;
 use xpute_kit::status::errno::Errno;
 
 pub(super) fn hold(tool: edit::Tool, val: u32, scale_step: i32) -> Result<(), Errno> {

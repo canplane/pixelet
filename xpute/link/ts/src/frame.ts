@@ -11,7 +11,15 @@
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 
-import { CMD, METHOD_BITS, PKT, RES, RESULT, TAG, WORDS } from "./frame.spec.ts";
+import {
+  CMD,
+  METHOD_BITS,
+  PKT,
+  RES,
+  RESULT,
+  TAG,
+  WORDS,
+} from "./frame.spec.ts";
 
 /** The size of a frame's words, its header before its packet. */
 export const HDR_SZ: u32 = WORDS * 4;
@@ -43,7 +51,11 @@ export function read(v: DataView, at: u32): Frame {
 /** Lays the frame's words at `at`. */
 export function lay(v: DataView, at: u32, f: Frame): void {
   v.setUint32(at + 4 * TAG, f.tag, true);
-  v.setUint32(at + 4 * CMD, ((f.res ? RES : 0) | (f.handle << METHOD_BITS) | f.method) >>> 0, true);
+  v.setUint32(
+    at + 4 * CMD,
+    ((f.res ? RES : 0) | (f.handle << METHOD_BITS) | f.method) >>> 0,
+    true,
+  );
   v.setUint32(at + 4 * RESULT, f.result >>> 0, true);
   v.setUint32(at + 4 * PKT, f.pkt_len, true);
 }

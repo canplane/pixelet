@@ -53,11 +53,14 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::wire::xtp::{PacketWriter, MAX_PKT_SZ};
 use xpute_link::abi::types::Token;
-use xpute_link::{store_uri, Handle, Lift, Lower, Method, Object, Packet, Reply, Tag, DROP, OPEN, ROOT};
+use xpute_link::{
+    store_uri, Handle, Lift, Lower, Method, Object, Packet, Reply, Tag, DROP, OPEN, ROOT,
+};
 
 use crate::event_loop::post_task;
 use crate::life;
 use crate::link;
+use crate::listener;
 
 /// What the runtime sends the UI: the batch it has not taken, whether it was
 /// told of it, and the UI's generation, which each `accept` counts.
@@ -115,7 +118,8 @@ pub fn accept() -> u32 {
 /// drops on the guest each of its objects a UI before this one opened.
 fn hang_up() {
     let g = generation();
-    let old: Vec<Tag> = PENDING.with_borrow_mut(|l| l.extract_if(.., |_, ui| *ui != g).map(|(t, _)| t).collect());
+    let old: Vec<Tag> =
+        PENDING.with_borrow_mut(|l| l.extract_if(.., |_, ui| *ui != g).map(|(t, _)| t).collect());
     for t in old {
         link::task_return_pkt(t, Errno::ECANCELED as i32, None);
     }
@@ -143,7 +147,8 @@ fn tell(generation: u32, cnt: u32, write: impl Fn(&mut PacketWriter)) {
     if out.generation != generation {
         return;
     }
-    out.batch.extend_from_slice(&(pkt.len() as u32).to_le_bytes());
+    out.batch
+        .extend_from_slice(&(pkt.len() as u32).to_le_bytes());
     out.batch.extend_from_slice(&[0; 4]);
     out.batch.extend_from_slice(&pkt);
     let end = out.batch.len().next_multiple_of(8);
@@ -238,7 +243,11 @@ fn lowered(uri: &[Token]) -> Vec<u8> {
 /// (@xpute/link remote.ts `Remote.named`), the methods `later` names answered
 /// later, and an opener at each of its `prefixes`, for its interface
 /// (`Remote.prefixes`).
-pub(crate) fn serve(named: &[Handle], prefixes: Vec<(Handle, Vec<Token>)>, later: &'static [(Handle, Method)]) {
+pub(crate) fn serve(
+    named: &[Handle],
+    prefixes: Vec<(Handle, Vec<Token>)>,
+    later: &'static [(Handle, Method)],
+) {
     for &h in named {
         link::mount_named(h, Rc::new(Named { h, later }));
     }
@@ -256,7 +265,7 @@ pub(crate) fn serve(named: &[Handle], prefixes: Vec<(Handle, Vec<Token>)>, later
 
 /// Sends the method of the UI of `generation` on the link, its answer told
 /// back to that UI alone, as @xpute/web-runtime remote.ts `serve` tells a
-/// page's; a packet past the room is refused whole, EMSGSIZE (xpute-link
+/// page's; a packet past the cap is refused whole, EMSGSIZE (xpute-link
 /// link.rs `Side::send`). A method of a UI that is not the one now reaches
 /// nothing. The guest's object an open answers is held for that UI until it
 /// drops it, or dropped at once where a new UI has been taken since
@@ -270,7 +279,10 @@ pub(crate) fn recv(generation: u32, tag: Tag, h: u32, m: u32, pkt: Option<Vec<u8
     }
     let opens = h == ROOT && m == OPEN;
     let answer = move |result: i32, data: Option<Vec<u8>>| {
-        let opened = data.as_deref().filter(|_| opens && result == 0).and_then(|d| Lift::new(d).u32(0).ok());
+        let opened = data
+            .as_deref()
+            .filter(|_| opens && result == 0)
+            .and_then(|d| Lift::new(d).u32(0).ok());
         if let Some(o) = opened {
             if generation == self::generation() {
                 GUEST_OBJECTS.with_borrow_mut(|l| l.insert(o));
@@ -297,14 +309,16 @@ pub(crate) fn answer(generation: u32, tag: Tag, result: i32, data: Option<Vec<u8
     if generation != self::generation() {
         return;
     }
-    let pending = PENDING.with_borrow_mut(|l| l.get(&tag) == Some(&generation) && l.remove(&tag).is_some());
+    let pending =
+        PENDING.with_borrow_mut(|l| l.get(&tag) == Some(&generation) && l.remove(&tag).is_some());
     if pending {
         link::task_return_pkt(tag, result, data);
     }
 }
 
-/// Tells the UI once that a batch waits, after the work at hand.
-pub(crate) fn flush(notify: fn()) {
+/// Tells the UI once that a batch waits, after the work at hand (listener.rs
+/// `notify`).
+pub(crate) fn flush() {
     let tell = {
         let mut out = out();
         let tell = !out.batch.is_empty() && !out.told;
@@ -312,7 +326,7 @@ pub(crate) fn flush(notify: fn()) {
         tell
     };
     if tell {
-        notify();
+        listener::notify();
     }
 }
 

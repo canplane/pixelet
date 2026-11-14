@@ -20,3 +20,14 @@ xpute-kit.workspace = true
 # (link/spec/golden), the record's bytes read back as hex.
 xpute-golden.workspace = true
 hex.workspace = true
+# The frame's and the link's tests lay frames in a test process's guest
+# memory, each a binary of its own over that memory as its heap.
+xpute-test-mem.workspace = true
+
+[[test]]
+name = "frame"
+path = "src/frame.test.rs"
+
+[[test]]
+name = "link"
+path = "src/link.test.rs"

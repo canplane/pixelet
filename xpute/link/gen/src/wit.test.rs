@@ -25,21 +25,65 @@ impl Drop for Dir {
     }
 }
 
-/// A world that imports two interfaces whose TypeScript modules share a
-/// name is refused, as the TypeScript tables name each by its module.
+/// A world that imports an interface whose module another import, or for one
+/// of another package an interface of its own, already names is refused, as
+/// the bindings name each import by its module.
 #[test]
-fn imports_sharing_ts_module_refused() {
-    let dir = Dir::new(&[
-        ("b", "package b:y;\ninterface file { f: func(); }\n"),
-        ("a", "package a:x;\ninterface file { f: func(); }\nworld w { import file; import b:y/file; }\n"),
-    ]);
+fn imports_sharing_module_refused() {
     let xpute = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let link = WitTarget { wit: "link/wit", rs: None, ts: None, cpp: None, side: None };
-    let b = WitTarget { wit: "b", rs: None, ts: None, cpp: None, side: None };
-    let a = WitTarget { wit: "a", rs: None, ts: None, cpp: None, side: None };
-    let refused = wit_outputs(&dir.0, &a, &[(&xpute, &link), (&dir.0, &b)]).err();
-    assert_eq!(
-        refused.as_deref(),
-        Some("a:x: its world imports a:x/file and b:y/file, whose TypeScript modules are both file, and the TypeScript tables name each by its module")
-    );
+    let link = WitTarget {
+        wit: "link/wit",
+        rs: None,
+        ts: None,
+        cpp: None,
+        side: None,
+    };
+    let b = WitTarget {
+        wit: "b",
+        rs: None,
+        ts: None,
+        cpp: None,
+        side: None,
+    };
+    let c = WitTarget {
+        wit: "c",
+        rs: None,
+        ts: None,
+        cpp: None,
+        side: None,
+    };
+    let a = WitTarget {
+        wit: "a",
+        rs: None,
+        ts: None,
+        cpp: None,
+        side: None,
+    };
+    for (own, world, other) in [
+        (
+            "other",
+            "export other; import b:y/file; import c:z/file;",
+            "c:z/file, whose module file is b:y/file's",
+        ),
+        (
+            "file",
+            "export file; import b:y/file;",
+            "b:y/file, whose module file is a:x/file's",
+        ),
+    ] {
+        let dir = Dir::new(&[
+            ("b", "package b:y;\ninterface file { f: func(); }\n"),
+            ("c", "package c:z;\ninterface file { f: func(); }\n"),
+            (
+                "a",
+                &format!("package a:x;\ninterface {own} {{ f: func(); }}\nworld w {{ {world} }}\n"),
+            ),
+        ]);
+        let refused = wit_outputs(&dir.0, &a, &[(&xpute, &link), (&dir.0, &b), (&dir.0, &c)]).err();
+        assert_eq!(
+            refused,
+            Some(format!("a:x: its world imports {other} too, and the bindings name each import by its module")),
+            "{world}"
+        );
+    }
 }

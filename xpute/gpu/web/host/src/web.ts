@@ -53,8 +53,8 @@ export class WebGpu {
    * a handle the link issues. */
   serve(): void {
     gpu.mount(this.link, {
-      run: async (records) => {
-        this.host?.run(new Uint32Array(this.link.mem, records.at, records.len / 4));
+      run: async (recs) => {
+        this.host?.run(new Uint32Array(this.link.mem, recs.at, recs.len / 4));
       },
       get_device: () =>
         this.link.add(
@@ -103,29 +103,42 @@ export class WebGpu {
       this.report(why);
       throw new ComponentError(ERROR_CODE_NO_DEVICE);
     }
-    const adapter = await navigator.gpu.requestAdapter({ powerPreference: this.ask.power as GPUPowerPreference });
+    const adapter = await navigator.gpu.requestAdapter({
+      powerPreference: this.ask.power as GPUPowerPreference,
+    });
     if (!adapter) {
       console.warn("[gpu] cannot draw here: no adapter answered");
       this.report("missing");
       throw new ComponentError(ERROR_CODE_NO_DEVICE);
     }
     const { vendor, architecture, device, description } = adapter.info;
-    console.info(`[gpu] adapter: ${[vendor, architecture, device, description].filter(Boolean).join(" · ")}`);
+    console.info(
+      `[gpu] adapter: ${[vendor, architecture, device, description].filter(Boolean).join(" · ")}`,
+    );
     let d: GPUDevice;
     try {
       d = await adapter.requestDevice({
         requiredFeatures: [
           ...(this.ask.required_feats as GPUFeatureName[]),
-          ...(this.ask.optional_feats as GPUFeatureName[]).filter((f) => adapter.features.has(f)),
+          ...(this.ask.optional_feats as GPUFeatureName[]).filter((f) =>
+            adapter.features.has(f),
+          ),
         ],
       });
     } catch (e) {
       // A feature the guest requires is missing, or the adapter refused.
-      console.warn(`[gpu] no device: ${e instanceof Error ? e.message : String(e)}`);
+      console.warn(
+        `[gpu] no device: ${e instanceof Error ? e.message : String(e)}`,
+      );
       this.report("missing");
       throw new ComponentError(ERROR_CODE_NO_DEVICE);
     }
-    const r = new GpuHost(d, () => this.link.mem, () => this.tell(this.settled), this.cfg);
+    const r = new GpuHost(
+      d,
+      () => this.link.mem,
+      () => this.tell(this.settled),
+      this.cfg,
+    );
     d.lost.then((info) => {
       // Nothing here destroys the device, so every loss is the browser's;
       // the host has written LOST into the block.
@@ -137,7 +150,9 @@ export class WebGpu {
       this.tell(this.lost);
       this.report("waiting");
     });
-    this.canvases.forEach((canvas, handle) => r.bind(handle, canvas.getContext("webgpu")!));
+    this.canvases.forEach((canvas, handle) =>
+      r.bind(handle, canvas.getContext("webgpu")!),
+    );
     this.host = r;
     if (this.block !== null) r.attach(this.block);
     this.report("present");

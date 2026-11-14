@@ -6,6 +6,7 @@
 
 use crate::domain::scene::frame::Frame;
 use crate::sys::sched::tick::TickContext;
+use pxl_global::Global;
 use pxl_render::frame::shader::word::{DECOR_GROUP_CNT, DRAW_FLOATS};
 use pxl_render::gpu::draw::DRAW_WORDS;
 use pxl_render::gpu::surface::SURFACE_CAP;
@@ -14,7 +15,6 @@ use pxl_render::ray::{Cast, GroundInput};
 use pxl_render::renderer::{render_frame, EarthLayer, FrameInput, FrameStat};
 use pxl_render::spec::span::FrameKind;
 use pxl_spec::space::coord::{q3, v3};
-use pxl_global::Global;
 
 use crate::domain::layer::earth::{self, EarthTile, EARTH_SLOT_CNT};
 use crate::domain::scene::character::companion::companion_skins;

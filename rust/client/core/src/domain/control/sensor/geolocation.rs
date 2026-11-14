@@ -10,11 +10,9 @@
 use crate::abi::overlay::Message;
 use crate::abi::overlay::SensorStatus;
 use crate::abi::sensor::GeolocationErrorCode;
-use crate::domain::control::navigation::follow_mode::following;
 use crate::domain::control::sensor::reading::{
     device_location_store, device_location_store_mut, SensorState,
 };
-use crate::sys::sched::invalidate;
 use pxl_global::Global;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
@@ -116,16 +114,16 @@ pub(crate) fn on_geolocation_permission_granted() {
     }
 }
 
-/// A location fix. GPS gives `alt` over the ellipsoid. It is kept over sea
-/// level, the datum the terrain uses, by the geoid's height at the base
-/// corner of the leaf tile the fix falls in.
+/// A location fix, and whether it moved the position. GPS gives `alt` over
+/// the ellipsoid. It is kept over sea level, the datum the terrain uses, by
+/// the geoid's height at the base corner of the leaf tile the fix falls in.
 pub(crate) fn geolocation_fix(
     lon: f64,
     lat: f64,
     alt: Option<f64>,
     accuracy: f64,
     course: Option<f64>,
-) {
+) -> bool {
     let (x0, y0, _) = GROUND
         .cell_of(LEAF_ZOOM, &epsg4326::project(&[lon, lat, 0.0]))
         .tile()
@@ -133,19 +131,15 @@ pub(crate) fn geolocation_fix(
     let [base_lon, base_lat, _] =
         epsg4326::from_mercator(&[epsg3857::merc_from_u(x0), epsg3857::merc_from_u(y0), 0.0]);
     let alt = alt.map(|h| h - epsg4326::geoid_m(base_lon, base_lat));
-    // The location indicator stands at the position, so a fix that moves it
-    // asks for a frame.
-    if device_location_store_mut().set_location([lon, lat], alt, accuracy, course) {
-        invalidate();
-    }
+    device_location_store_mut().set_location([lon, lat], alt, accuracy, course)
 }
 
 /// A location error. Whether the watch runs on past it (`watching`) is the
 /// platform's to say. One it rides out leaves the watch running, and the location reads as
 /// failed until the next fix. One that ended it leaves nothing watching and no
 /// location, and a grant, a return to the foreground or a press starts the
-/// watch again.
-pub(crate) fn geolocation_err(code: GeolocationErrorCode, watching: bool) {
+/// watch again. Returns whether it cleared a location.
+pub(crate) fn geolocation_err(code: GeolocationErrorCode, watching: bool) -> bool {
     let store = device_location_store_mut();
     store.state = SensorState::failed(match code {
         GeolocationErrorCode::PermissionDenied => Message::GeolocationPermissionDenied,
@@ -156,13 +150,7 @@ pub(crate) fn geolocation_err(code: GeolocationErrorCode, watching: bool) {
     if !watching {
         store.is_tracking_location = false;
     }
-    let cleared = !watching && store.location.take().is_some();
-    // A cleared location moves the location indicator, and while following a
-    // failed one starts follow mode's grace (`follow_mode_step`), whose deadline
-    // then wakes its own frame.
-    if cleared || following() {
-        invalidate();
-    }
+    !watching && store.location.take().is_some()
 }
 
 pub(crate) fn take_geolocation_cmd() -> Option<GeolocationCommand> {

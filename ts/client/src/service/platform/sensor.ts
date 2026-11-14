@@ -28,7 +28,8 @@ function orient_gated(): boolean {
 let geolocation_watch: number | null = null;
 
 function geolocation_stop(): void {
-  if (geolocation_watch !== null) navigator.geolocation.clearWatch(geolocation_watch);
+  if (geolocation_watch !== null)
+    navigator.geolocation.clearWatch(geolocation_watch);
   geolocation_watch = null;
 }
 

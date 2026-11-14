@@ -33,7 +33,11 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import { ERRNO_EINPROGRESS, ERRNO_ENOENT, ERRNO_EOVERFLOW } from "@xpute/kit/status/errno.spec.ts";
+import {
+  ERRNO_EINPROGRESS,
+  ERRNO_ENOENT,
+  ERRNO_EOVERFLOW,
+} from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import type { Token } from "./abi/types.ts";
 import { Lower } from "./cabi.ts";
@@ -90,7 +94,10 @@ export type ToUi =
 
 /** The UI's end of a link a runtime serves across a port (@xpute/web-runtime
  * remote.ts `serve`). */
-export class Remote extends Server<ReturnType<typeof opened>> implements Sender {
+export class Remote
+  extends Server<ReturnType<typeof opened>>
+  implements Sender
+{
   private readonly _port: Port;
   private readonly _answers = new Map<Tag, (a: Answered) => void>();
   private _next = 0;
@@ -122,8 +129,10 @@ export class Remote extends Server<ReturnType<typeof opened>> implements Sender 
     }
     if ("open" in m) {
       const open = this._opener(m.uri);
-      const refused = open === undefined ? ERRNO_ENOENT : this._open(m.open, m.uri, open);
-      if (refused !== 0) this._objects.put(m.open, { call: () => refused, drop() {} });
+      const refused =
+        open === undefined ? ERRNO_ENOENT : this._open(m.open, m.uri, open);
+      if (refused !== 0)
+        this._objects.put(m.open, { call: () => refused, drop() {} });
       return;
     }
     if ("cancel" in m) return this._cancel(m.cancel);
@@ -131,7 +140,8 @@ export class Remote extends Server<ReturnType<typeof opened>> implements Sender 
     if (m.tag === null) return void this._call(m.h, m.m, 0, m.pkt);
     const reply = this._call(m.h, m.m, m.tag, m.pkt);
     if (reply === ERRNO_EINPROGRESS) return;
-    const { result, data } = typeof reply === "number" ? { result: reply, data: null } : reply;
+    const { result, data } =
+      typeof reply === "number" ? { result: reply, data: null } : reply;
     this.task_return(m.tag, result, data);
   }
 
@@ -151,7 +161,11 @@ export class Remote extends Server<ReturnType<typeof opened>> implements Sender 
 
   /** Posts the answer to the guest's request `t` across the port. */
   protected _answer(t: Tag, result: i32, data: Packet): void {
-    this._port.postMessage({ answer: t, result, data: packet(data) } satisfies ToLink);
+    this._port.postMessage({
+      answer: t,
+      result,
+      data: packet(data),
+    } satisfies ToLink);
   }
 }
 

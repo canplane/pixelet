@@ -272,7 +272,8 @@ impl Node {
 
     /// The node's `$description`, line by line.
     pub fn doc(&self) -> Option<Vec<String>> {
-        self.str_at("$description").map(|d| d.lines().map(String::from).collect())
+        self.str_at("$description")
+            .map(|d| d.lines().map(String::from).collect())
     }
 
     /// xpute's own mark `name`, under the node's `$extensions` (`MARKS`).
@@ -284,10 +285,13 @@ impl Node {
     /// that value, at every depth.
     pub fn folded(self) -> Node {
         match self {
-            Node::Obj(entries) if entries.len() == 1 && entries[0].0 == "$value" => {
-                entries.into_iter().next().map_or(Node::Null, |(_, v)| v.folded())
+            Node::Obj(entries) if entries.len() == 1 && entries[0].0 == "$value" => entries
+                .into_iter()
+                .next()
+                .map_or(Node::Null, |(_, v)| v.folded()),
+            Node::Obj(entries) => {
+                Node::Obj(entries.into_iter().map(|(k, v)| (k, v.folded())).collect())
             }
-            Node::Obj(entries) => Node::Obj(entries.into_iter().map(|(k, v)| (k, v.folded())).collect()),
             Node::Arr(a) => Node::Arr(a.into_iter().map(Node::folded).collect()),
             n => n,
         }
@@ -296,7 +300,6 @@ impl Node {
     pub fn str_at(&self, key: &str) -> Option<&str> {
         self.get(key).and_then(Node::str)
     }
-
 }
 
 /// The key under a node's `$extensions` that holds xpute's own marks; a spec
@@ -305,12 +308,21 @@ pub const MARKS: &str = "xpute";
 
 /// `lines` as a `$description` holds them, one string (`Node::doc`).
 pub fn description<S: AsRef<str>>(lines: &[S]) -> Node {
-    Node::Str(lines.iter().map(AsRef::as_ref).collect::<Vec<_>>().join("\n"))
+    Node::Str(
+        lines
+            .iter()
+            .map(AsRef::as_ref)
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
 }
 
 /// xpute's own marks, as a node's `$extensions` entry holds them.
 pub fn marks(marks: Vec<(String, Node)>) -> (String, Node) {
-    ("$extensions".into(), Node::Obj(vec![(MARKS.into(), Node::Obj(marks))]))
+    (
+        "$extensions".into(),
+        Node::Obj(vec![(MARKS.into(), Node::Obj(marks))]),
+    )
 }
 
 /// The spec at `path` (`typed`).
@@ -368,11 +380,27 @@ impl Int {
     }
 }
 
-const fn int(name: &'static str, bits: i32, signed: bool, cpp: &'static str, suffix: &'static str, repr: bool) -> Int {
+const fn int(
+    name: &'static str,
+    bits: i32,
+    signed: bool,
+    cpp: &'static str,
+    suffix: &'static str,
+    repr: bool,
+) -> Int {
     let width = bits - signed as i32;
     let end = (1u128 << width) as f64;
     let ts = if width > 53 { "bigint" } else { "number" };
-    Int { name, lo: if signed { -end } else { 0.0 }, end, cpp, header: "cstdint", suffix, ts, repr }
+    Int {
+        name,
+        lo: if signed { -end } else { 0.0 },
+        end,
+        cpp,
+        header: "cstdint",
+        suffix,
+        ts,
+        repr,
+    }
 }
 
 /// Every integer type a spec may name, the one table of them.
@@ -381,7 +409,10 @@ pub const INTS: [Int; 9] = [
     int("u16", 16, false, "std::uint16_t", "u", true),
     int("u32", 32, false, "std::uint32_t", "u", true),
     int("u64", 64, false, "std::uint64_t", "ull", false),
-    Int { header: "cstddef", ..int("usize", 32, false, "std::size_t", "u", false) },
+    Int {
+        header: "cstddef",
+        ..int("usize", 32, false, "std::size_t", "u", false)
+    },
     int("i8", 8, true, "std::int8_t", "", true),
     int("i16", 16, true, "std::int16_t", "", true),
     int("i32", 32, true, "std::int32_t", "", true),
@@ -420,11 +451,18 @@ fn check_widths(n: &Node, at: &str, ty: Option<&str>) -> Result<(), String> {
             Node::Num(x) => match ty.map(|t| (t, int_of(t))) {
                 None => Err(format!("{at}: {x} has no `$type`, its own or its group's")),
                 Some((t, Some(i))) if !i.holds(*x) => Err(format!("{at}: {x} is no {t}")),
-                Some((t, None)) if !is_float(t) => Err(format!("{at}: {x} is a number, and `{t}` no number's type")),
+                Some((t, None)) if !is_float(t) => {
+                    Err(format!("{at}: {x} is a number, and `{t}` no number's type"))
+                }
                 _ => Ok(()),
             },
-            Node::Arr(a) => a.iter().enumerate().try_for_each(|(i, e)| value(e, &format!("{at}[{i}]"), ty)),
-            o @ Node::Obj(_) => o.named().try_for_each(|(k, e)| value(e, &format!("{at}.{k}"), ty)),
+            Node::Arr(a) => a
+                .iter()
+                .enumerate()
+                .try_for_each(|(i, e)| value(e, &format!("{at}[{i}]"), ty)),
+            o @ Node::Obj(_) => o
+                .named()
+                .try_for_each(|(k, e)| value(e, &format!("{at}.{k}"), ty)),
             _ => Ok(()),
         }
     }
@@ -434,10 +472,16 @@ fn check_widths(n: &Node, at: &str, ty: Option<&str>) -> Result<(), String> {
     let own = n.str_at("$type");
     let top = at.is_empty();
     n.named().try_for_each(|(k, v)| {
-        let at = if top { k.to_string() } else { format!("{at}.{k}") };
+        let at = if top {
+            k.to_string()
+        } else {
+            format!("{at}.{k}")
+        };
         match (v, own) {
             (Node::Obj(_), _) if top && is_packed(v) => check_widths(v, &at, Some(PACKED_TYPE)),
-            (Node::Obj(_), _) if !v.is_wrapper() => check_widths(v, &at, own.filter(|t| *t != "enum").or(ty)),
+            (Node::Obj(_), _) if !v.is_wrapper() => {
+                check_widths(v, &at, own.filter(|t| *t != "enum").or(ty))
+            }
             (_, Some("enum")) => Ok(()),
             _ => value(v, &at, own.or(ty)),
         }
@@ -526,14 +570,11 @@ pub fn words(name: &str) -> Vec<String> {
     let mut word = String::new();
     let mut lower = false;
     for (i, &c) in chars.iter().enumerate() {
-        let leads = c.is_ascii_digit()
-            && i > 0
-            && chars[i - 1].is_ascii_lowercase()
-            && {
-                let mut rest = chars[i..].iter().skip_while(|d| d.is_ascii_digit());
-                rest.next().is_some_and(char::is_ascii_uppercase)
-                    && !rest.next().is_some_and(char::is_ascii_lowercase)
-            };
+        let leads = c.is_ascii_digit() && i > 0 && chars[i - 1].is_ascii_lowercase() && {
+            let mut rest = chars[i..].iter().skip_while(|d| d.is_ascii_digit());
+            rest.next().is_some_and(char::is_ascii_uppercase)
+                && !rest.next().is_some_and(char::is_ascii_lowercase)
+        };
         if !c.is_ascii_alphanumeric() || (c.is_ascii_uppercase() && lower) || leads {
             out.extend((!word.is_empty()).then(|| std::mem::take(&mut word)));
         }
@@ -551,7 +592,9 @@ pub fn words(name: &str) -> Vec<String> {
 /// A word with its first letter in upper case and the rest in lower case.
 fn title(w: &str) -> String {
     let mut c = w.chars();
-    c.next().map_or(String::new(), |f| f.to_ascii_uppercase().to_string() + &c.as_str().to_ascii_lowercase())
+    c.next().map_or(String::new(), |f| {
+        f.to_ascii_uppercase().to_string() + &c.as_str().to_ascii_lowercase()
+    })
 }
 
 /// A name in snake case (`tile_cells`).
@@ -576,20 +619,29 @@ pub fn plural(name: &str) -> String {
     let lower = name.to_ascii_lowercase();
     let (stem, end) = match lower.strip_suffix('y') {
         Some(rest) if !rest.ends_with(['a', 'e', 'i', 'o', 'u']) => (&name[..rest.len()], "ies"),
-        _ if ["s", "x", "z", "ch", "sh"].iter().any(|e| lower.ends_with(e)) => (name, "es"),
+        _ if ["s", "x", "z", "ch", "sh"]
+            .iter()
+            .any(|e| lower.ends_with(e)) =>
+        {
+            (name, "es")
+        }
         _ => (name, "s"),
     };
-    let end = if upper { end.to_ascii_uppercase() } else { end.to_string() };
+    let end = if upper {
+        end.to_ascii_uppercase()
+    } else {
+        end.to_string()
+    };
     format!("{stem}{end}")
 }
 
 /// Rust's keywords, strict and reserved, which an identifier takes as `r#`.
 const RS_KEYWORDS: [&str; 50] = [
     "abstract", "as", "async", "await", "become", "box", "break", "const", "continue", "crate",
-    "do", "dyn", "else", "enum", "extern", "false", "final", "fn", "for", "if",
-    "impl", "in", "let", "loop", "macro", "match", "mod", "move", "mut", "override",
-    "priv", "pub", "ref", "return", "self", "static", "struct", "super", "trait", "true",
-    "try", "type", "typeof", "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
+    "do", "dyn", "else", "enum", "extern", "false", "final", "fn", "for", "if", "impl", "in",
+    "let", "loop", "macro", "match", "mod", "move", "mut", "override", "priv", "pub", "ref",
+    "return", "self", "static", "struct", "super", "trait", "true", "try", "type", "typeof",
+    "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
 ];
 
 pub fn rs_ident(k: &str) -> String {
@@ -819,7 +871,11 @@ pub fn rs_enum(e: &str, members: &[Member], repr: &str, indent: &str) -> Vec<Str
         format!("{indent}    /// Every member, in its source's own order."),
         format!("{indent}    pub const ALL: [{e}; {}] = [", members.len()),
     ]);
-    out.extend(members.iter().map(|m| format!("{indent}        {e}::{},", m.ident)));
+    out.extend(
+        members
+            .iter()
+            .map(|m| format!("{indent}        {e}::{},", m.ident)),
+    );
     out.extend([
         format!("{indent}    ];"),
         String::new(),
@@ -827,7 +883,12 @@ pub fn rs_enum(e: &str, members: &[Member], repr: &str, indent: &str) -> Vec<Str
         format!("{indent}    pub const fn of(val: {repr}) -> Option<{e}> {{"),
         format!("{indent}        match val {{"),
     ]);
-    out.extend(members.iter().map(|m| format!("{indent}            {} => Some({e}::{}),", m.number, m.ident)));
+    out.extend(members.iter().map(|m| {
+        format!(
+            "{indent}            {} => Some({e}::{}),",
+            m.number, m.ident
+        )
+    }));
     out.extend([
         format!("{indent}            _ => None,"),
         format!("{indent}        }}"),
@@ -837,11 +898,13 @@ pub fn rs_enum(e: &str, members: &[Member], repr: &str, indent: &str) -> Vec<Str
         format!("{indent}    pub const fn name(self) -> &'static str {{"),
         format!("{indent}        match self {{"),
     ]);
-    out.extend(
-        members
-            .iter()
-            .map(|m| format!("{indent}            {e}::{} => {},", m.ident, json_str(&m.name))),
-    );
+    out.extend(members.iter().map(|m| {
+        format!(
+            "{indent}            {e}::{} => {},",
+            m.ident,
+            json_str(&m.name)
+        )
+    }));
     out.extend([
         format!("{indent}        }}"),
         format!("{indent}    }}"),
@@ -860,12 +923,18 @@ pub fn ts_enum(e: &str, members: &[Member]) -> Vec<String> {
         .iter()
         .map(|m| format!("typeof {}", ts_const(e, m)))
         .collect();
-    let mut out = vec![String::new(), format!("export type {e} = {};", union.join(" | "))];
+    let mut out = vec![
+        String::new(),
+        format!("export type {e} = {};", union.join(" | ")),
+    ];
     for m in members {
         out.extend(ts_doc(&m.doc, ""));
         out.push(format!("export const {} = {};", ts_const(e, m), m.number));
     }
-    let tests: Vec<String> = members.iter().map(|m| format!("val === {}", ts_const(e, m))).collect();
+    let tests: Vec<String> = members
+        .iter()
+        .map(|m| format!("val === {}", ts_const(e, m)))
+        .collect();
     out.extend([
         String::new(),
         "/** The member `val` is, or null for a number no member has. */".into(),
@@ -919,8 +988,8 @@ pub fn package<'p>(root: &Path, path: &'p str) -> Result<(String, &'p Path), Str
         let cargo = root.join(dir).join("Cargo.toml");
         let npm = root.join(dir).join("package.json");
         let name = if cargo.is_file() {
-            let text = std::fs::read_to_string(&cargo)
-                .map_err(|e| format!("{}: {e}", cargo.display()))?;
+            let text =
+                std::fs::read_to_string(&cargo).map_err(|e| format!("{}: {e}", cargo.display()))?;
             let package = text.split("[package]").nth(1).unwrap_or("");
             package
                 .lines()
@@ -931,7 +1000,8 @@ pub fn package<'p>(root: &Path, path: &'p str) -> Result<(String, &'p Path), Str
         } else if npm.is_file() {
             let json: serde_json::Value = read_as(&npm.to_string_lossy())?;
             let name = json["name"].as_str();
-            name.ok_or(format!("{}: no name", npm.display()))?.to_string()
+            name.ok_or(format!("{}: no name", npm.display()))?
+                .to_string()
         } else {
             continue;
         };
@@ -945,16 +1015,26 @@ pub fn relative(from: &Path, to: &Path) -> String {
     let (f, t): (Vec<_>, Vec<_>) = (from.components().collect(), to.components().collect());
     let common = f.iter().zip(&t).take_while(|(a, b)| a == b).count();
     let up = std::iter::repeat_n("..".to_string(), f.len() - common);
-    let down = t[common..].iter().map(|c| c.as_os_str().to_string_lossy().into_owned());
+    let down = t[common..]
+        .iter()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned());
     let path: Vec<String> = up.chain(down).collect();
-    if path.is_empty() { ".".into() } else { path.join("/") }
+    if path.is_empty() {
+        ".".into()
+    } else {
+        path.join("/")
+    }
 }
 
 /// How a Rust module in the crate at `here` names the crate of `path` from
 /// `root`: by its name, or `crate` for its own.
 pub fn rs_crate(here: &Path, root: &Path, path: &str) -> Result<String, String> {
     let (name, dir) = package(root, path)?;
-    Ok(if root.join(dir) == here { "crate".into() } else { snake(&name) })
+    Ok(if root.join(dir) == here {
+        "crate".into()
+    } else {
+        snake(&name)
+    })
 }
 
 /// How a Rust module in the crate at `here` names the module `path` from
@@ -962,10 +1042,19 @@ pub fn rs_crate(here: &Path, root: &Path, path: &str) -> Result<String, String> 
 /// `.spec` dropped as its mount drops it.
 pub fn rs_module(here: &Path, root: &Path, path: &str) -> Result<String, String> {
     let (_, dir) = package(root, path)?;
-    let under = Path::new(path).strip_prefix(dir.join("src")).map_err(|_| format!("{path}: not under src/"))?;
+    let under = Path::new(path)
+        .strip_prefix(dir.join("src"))
+        .map_err(|_| format!("{path}: not under src/"))?;
     let under = under.to_string_lossy();
-    let mods = under.trim_end_matches(".rs").trim_end_matches(".spec").split('/').map(String::from);
-    Ok(std::iter::once(rs_crate(here, root, path)?).chain(mods).collect::<Vec<_>>().join("::"))
+    let mods = under
+        .trim_end_matches(".rs")
+        .trim_end_matches(".spec")
+        .split('/')
+        .map(String::from);
+    Ok(std::iter::once(rs_crate(here, root, path)?)
+        .chain(mods)
+        .collect::<Vec<_>>()
+        .join("::"))
 }
 
 /// How a TypeScript module in the directory `here` names the path `path`
@@ -995,4 +1084,3 @@ pub fn package_path(root: &Path, path: &str) -> Result<String, String> {
         .unwrap_or(file);
     Ok(format!("{name}/{}", under.to_string_lossy()))
 }
-

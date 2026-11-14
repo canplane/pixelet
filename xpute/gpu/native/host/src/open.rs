@@ -25,7 +25,13 @@ pub struct Ask {
 impl Ask {
     /// This is the device the guest asks for (`GpuAsk`), with the adapter's
     /// own limits and the platform's primary backends.
-    pub fn of(GpuAsk { power, required_feats, optional_feats }: GpuAsk) -> Ask {
+    pub fn of(
+        GpuAsk {
+            power,
+            required_feats,
+            optional_feats,
+        }: GpuAsk,
+    ) -> Ask {
         Ask {
             backends: wgpu::Backends::PRIMARY,
             power_preference: match power {
@@ -114,7 +120,10 @@ pub fn open(instance: &wgpu::Instance, ask: &Ask) -> Result<Wgpu, OpenError> {
 /// for each feature `FEATURE_NAME` names.
 pub(super) fn block(device: &wgpu::Device) -> (Vec<u32>, Vec<u32>) {
     let (limits, features) = (device.limits(), device.features());
-    let words = LimitName::ALL.iter().map(|l| limit(&limits, l.name())).collect();
+    let words = LimitName::ALL
+        .iter()
+        .map(|l| limit(&limits, l.name()))
+        .collect();
     let mut bits = vec![0u32; FeatureName::ALL.len().div_ceil(32)];
     for (k, name) in FeatureName::ALL.iter().map(|f| f.name()).enumerate() {
         if feature(name).is_some_and(|f| features.contains(f)) {

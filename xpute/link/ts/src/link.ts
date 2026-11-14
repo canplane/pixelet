@@ -53,7 +53,13 @@ import {
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { bug } from "@xpute/kit/status/bug.ts";
 import { Lift, Lower } from "./cabi.ts";
-import { load_Token, store_Token, type Token, TOKEN_ALIGN, TOKEN_SZ } from "./abi/types.ts";
+import {
+  load_Token,
+  store_Token,
+  type Token,
+  TOKEN_ALIGN,
+  TOKEN_SZ,
+} from "./abi/types.ts";
 import { lay, read, HDR_SZ } from "./frame.ts";
 import { CANCEL, DROP, NAMED, OPEN, ROOT } from "./frame.spec.ts";
 import { type Handle, Table } from "./resource.ts";
@@ -137,7 +143,10 @@ export function load_uri(r: Lift, at: number): Token[] {
 }
 
 /** Opens the object `uri` names on the other side, and answers its handle. */
-export async function open(link: Sender, uri: readonly Token[]): Promise<Handle> {
+export async function open(
+  link: Sender,
+  uri: readonly Token[],
+): Promise<Handle> {
   const a = await link.send(ROOT, OPEN, [8, (w) => store_uri(w, 0, uri)]);
   if (a.result !== 0) throw new XputeError(a.result);
   if (a.data === null) throw new XputeError(ERRNO_EBADMSG);
@@ -190,7 +199,7 @@ export function refusal_of(e: unknown): i32 {
 export interface Guest {
   readonly mem: ArrayBuffer;
   /** Runs `link_init`, which answers where the link's layout lies, the inbox
-   * and a frame's room. */
+   * and a frame's cap. */
   init(): u32;
   /** Runs `link_boot`, the guest's first entry, which boots it. */
   boot(): void;
@@ -210,7 +219,9 @@ export interface Guest {
  * longest matching winning, and how
  * each request it answers later stops if its caller cancels it. Only how an
  * answer crosses differs (`_answer`). */
-export abstract class Server<O extends Pick<Table<LinkObject>, "get" | "put" | "remove">> {
+export abstract class Server<
+  O extends Pick<Table<LinkObject>, "get" | "put" | "remove">,
+> {
   /** The openers, each with the named handle of the interface whose
    * resources it opens, by the URI's leading tokens. */
   protected readonly _mounts: [Handle, readonly Token[], Opener][] = [];
@@ -266,7 +277,12 @@ export abstract class Server<O extends Pick<Table<LinkObject>, "get" | "put" | "
   /** Runs `m` of `h`, an interface's or an object's method. A named handle
    * no interface is mounted under is no object here; an issued one no longer
    * held is a bad handle. */
-  protected _call(h: Handle, m: Method, tag: Tag, args: U8Array | null): i32 | Reply {
+  protected _call(
+    h: Handle,
+    m: Method,
+    tag: Tag,
+    args: U8Array | null,
+  ): i32 | Reply {
     if ((h & NAMED) !== 0) {
       const o = this._named.get(h);
       return o === undefined ? ERRNO_ENOENT : o.call(m, tag, args);
@@ -280,7 +296,9 @@ export abstract class Server<O extends Pick<Table<LinkObject>, "get" | "put" | "
     let best: [Handle, readonly Token[], Opener] | undefined;
     for (const m of this._mounts) {
       const [, p] = m;
-      const leads = p.length <= uri.length && p.every((t, k) => t.tag === uri[k]!.tag && t.val === uri[k]!.val);
+      const leads =
+        p.length <= uri.length &&
+        p.every((t, k) => t.tag === uri[k]!.tag && t.val === uri[k]!.val);
       if (leads && (best === undefined || p.length > best[1].length)) best = m;
     }
     return best?.[2];
@@ -325,7 +343,7 @@ export class Side extends Server<Table<LinkObject>> {
   /** Whether the guest is trapped (`trap`). */
   private _trapped = false;
   private _inbox = 0;
-  private _room = 0;
+  private _cap = 0;
 
   /** The guest's import, which a module takes under `env`
    * (xpute-native-runtime `link.rs` `link_out`). A throw out of the host
@@ -382,7 +400,9 @@ export class Side extends Server<Table<LinkObject>> {
    * guest's trap or a failure of the host's (xpute-native-runtime
    * `link.rs` `init`). */
   init(imports: Imports): boolean {
-    const unserved = imports.filter(([, h]) => !this.serves(h)).map(([name]) => name);
+    const unserved = imports
+      .filter(([, h]) => !this.serves(h))
+      .map(([name]) => name);
     if (unserved.length > 0) {
       this.trap(`no server mounts ${unserved.join(", ")}`);
       return false;
@@ -391,7 +411,7 @@ export class Side extends Server<Table<LinkObject>> {
     if (this._trapped) return false;
     const layout = new DataView(this._guest.mem, at, 8);
     this._inbox = layout.getUint32(0, true);
-    this._room = layout.getUint32(4, true);
+    this._cap = layout.getUint32(4, true);
     this._guest.boot();
     return !this._trapped;
   }
@@ -415,7 +435,12 @@ export class Side extends Server<Table<LinkObject>> {
       throw e;
     }
     const { result, data } = out;
-    if (result === ERRNO_EINPROGRESS || !this._pending.delete(t) || answer === undefined) return;
+    if (
+      result === ERRNO_EINPROGRESS ||
+      !this._pending.delete(t) ||
+      answer === undefined
+    )
+      return;
     const copy = data && data.slice();
     queueMicrotask(() => answer(result, copy));
   }
@@ -448,15 +473,20 @@ export class Side extends Server<Table<LinkObject>> {
     if (f.res) {
       const a = this._pending.get(f.tag);
       this._pending.delete(f.tag);
-      const data = f.pkt_len > 0 ? this.bytes(at + HDR_SZ, f.pkt_len).slice() : null;
+      const data =
+        f.pkt_len > 0 ? this.bytes(at + HDR_SZ, f.pkt_len).slice() : null;
       if (a !== undefined) queueMicrotask(() => a(f.result, data));
       return 0;
     }
     const args = this._args(at, f.pkt_len);
-    const reply = typeof args === "number" ? args : this._serve(f.handle, f.method, f.tag, args);
+    const reply =
+      typeof args === "number"
+        ? args
+        : this._serve(f.handle, f.method, f.tag, args);
     // The args are read: the answer goes in the frame they came in.
-    const { result, data } = typeof reply === "number" ? { result: reply, data: null } : reply;
-    // An answer past the room is refused as a later one is (`_out`).
+    const { result, data } =
+      typeof reply === "number" ? { result: reply, data: null } : reply;
+    // An answer past the cap is refused as a later one is (`_out`).
     if (this._lay(at, f.tag, f.handle, f.method, true, result, data) !== 0) {
       this._lay(at, f.tag, f.handle, f.method, true, ERRNO_EMSGSIZE, null);
       return ERRNO_EMSGSIZE;
@@ -466,7 +496,12 @@ export class Side extends Server<Table<LinkObject>> {
 
   /** Runs `m` of `h`: the root's open or cancel, a drop, or an object's
    * method. */
-  private _serve(h: Handle, m: Method, tag: Tag, args: U8Array | null): i32 | Reply {
+  private _serve(
+    h: Handle,
+    m: Method,
+    tag: Tag,
+    args: U8Array | null,
+  ): i32 | Reply {
     if (h === ROOT && m === OPEN) return this._opened(args);
     if (h === ROOT && m === CANCEL) {
       try {
@@ -514,22 +549,30 @@ export class Side extends Server<Table<LinkObject>> {
     return t;
   }
 
-  /** The args of the frame at `at`, or EBADMSG for a packet past the room. */
+  /** The args of the frame at `at`, or EBADMSG for a packet past the cap. */
   private _args(at: u32, pkt_len: u32): U8Array | null | i32 {
     if (pkt_len === 0) return null;
-    if (HDR_SZ + pkt_len > this._room) return ERRNO_EBADMSG;
+    if (HDR_SZ + pkt_len > this._cap) return ERRNO_EBADMSG;
     return this.bytes(at + HDR_SZ, pkt_len);
   }
 
   /** Lays a frame at `at` in the guest's memory, with the packet `args`: 0,
-   * or EMSGSIZE, laying nothing, where the packet is past the room
+   * or EMSGSIZE, laying nothing, where the packet is past the cap
    * (xpute-link link.rs `Side::lay`). */
-  private _lay(at: u32, tag: Tag, handle: Handle, method: Method, res: boolean, result: i32, args: Packet): i32 {
-    const bytes = new Uint8Array(this._guest.mem, at, this._room);
-    const view = new DataView(this._guest.mem, at, this._room);
+  private _lay(
+    at: u32,
+    tag: Tag,
+    handle: Handle,
+    method: Method,
+    res: boolean,
+    result: i32,
+    args: Packet,
+  ): i32 {
+    const bytes = new Uint8Array(this._guest.mem, at, this._cap);
+    const view = new DataView(this._guest.mem, at, this._cap);
     let pkt_len = 0;
     if (args instanceof Uint8Array) {
-      if (HDR_SZ + args.length > this._room) return ERRNO_EMSGSIZE;
+      if (HDR_SZ + args.length > this._cap) return ERRNO_EMSGSIZE;
       bytes.set(args, HDR_SZ);
       pkt_len = args.length;
     } else if (args !== null) {
@@ -544,12 +587,19 @@ export class Side extends Server<Table<LinkObject>> {
 
   /** Lays a frame in the guest's inbox and crosses with it, and answers what
    * the guest laid there: its result, and its return data. A packet past the
-   * room is refused: a packet written elsewhere, as one from across a port,
+   * cap is refused: a packet written elsewhere, as one from across a port,
    * is its sender's fault, answered EMSGSIZE; a later answer's is answered
    * EMSGSIZE with no data, so its request still hears; args this side
    * writes past it are a bug (xpute-link `link.rs` `Side::out`). A trapped
    * guest is sent nothing: EPIPE, its layout perhaps never read. */
-  private _out(tag: Tag, h: Handle, m: Method, res: boolean, result: i32, args: Packet): Answered {
+  private _out(
+    tag: Tag,
+    h: Handle,
+    m: Method,
+    res: boolean,
+    result: i32,
+    args: Packet,
+  ): Answered {
     if (this._trapped) return { result: ERRNO_EPIPE, data: null };
     if (this._lay(this._inbox, tag, h, m, res, result, args) !== 0) {
       if (!res) {
@@ -560,7 +610,10 @@ export class Side extends Server<Table<LinkObject>> {
     }
     const answered = this._guest.in();
     const f = read(new DataView(this._guest.mem), this._inbox);
-    const data = f.res && !res && f.pkt_len > 0 ? this.bytes(this._inbox + HDR_SZ, f.pkt_len) : null;
+    const data =
+      f.res && !res && f.pkt_len > 0
+        ? this.bytes(this._inbox + HDR_SZ, f.pkt_len)
+        : null;
     return { result: answered, data };
   }
 }

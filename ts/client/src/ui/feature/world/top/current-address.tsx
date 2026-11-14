@@ -34,11 +34,7 @@ export function CurrentAddress() {
       style={STYLE.shrink}
     >
       <HaloText
-        style={[
-          STYLE.label,
-          !label && STYLE.numbers,
-          !text && STYLE.locating,
-        ]}
+        style={[STYLE.label, !label && STYLE.numbers, !text && STYLE.locating]}
       >
         {text ?? t("world.search.locating")}
       </HaloText>

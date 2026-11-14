@@ -7,14 +7,14 @@
 
 use pxl_spec::bake::tile::place::{self, PlaceTile, PLACE_LATTICE};
 
-use crate::sys::io::body::Body;
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::Base;
+use crate::sys::io::body::Body;
 use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;
+use pxl_global::Global;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use pxl_global::Global;
 
 static PLACE: Global<TileCache<PlaceTile>> = Global::new();
 

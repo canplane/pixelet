@@ -278,7 +278,9 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
         from={away}
         to={open ? { translateY: offset } : away}
         transition={drag !== null ? FOLLOW : open ? SLIDE : SLIDE_AWAY}
-        onSettled={open ? () => drag === null && set_body_full(full) : on_exited}
+        onSettled={
+          open ? () => drag === null && set_body_full(full) : on_exited
+        }
         style={[
           SHEET_STYLE.sheet,
           {

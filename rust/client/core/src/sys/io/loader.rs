@@ -14,17 +14,17 @@
 //! texture lands (pxl-render `Gpu::image`), and they are read again if the
 //! device is lost.
 
+use pxl_global::Global;
 use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};
-use pxl_global::Global;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use crate::spec::file::CATALOG;
+use crate::spec::manifest::mem;
 use crate::sys::io::demand::Order;
 use crate::sys::io::failure::{exit_of, Exit, Failure};
 use crate::sys::io::file;
-use crate::spec::file::CATALOG;
-use crate::spec::manifest::mem;
 use crate::sys::io::request::{attempt_of, settle};
 use crate::sys::io::source;
 use crate::sys::load::{id_of, of_id, Load, LoadKind, LOAD_FILE_CAP};
@@ -148,7 +148,9 @@ pub(crate) fn load_wants() -> &'static [(u64, Order)] {
 /// model and an image of one load are the same file, and the attempt's id
 /// says which it is read as.
 pub(crate) fn open_asset(key: u64, load: Load) {
-    let Some((_, id)) = attempt_of(key) else { return };
+    let Some((_, id)) = attempt_of(key) else {
+        return;
+    };
     let Some((kind, _)) = of_id(id) else { return };
     // The task's pool has room for one for each file in flight
     // (sys/load.rs `LOAD_FILE_CAP`), so the spawn cannot fail.
@@ -176,7 +178,11 @@ async fn arrival(key: u64, kind: LoadKind, load: Load) {
         Err(errnum) => {
             let exit = exit_of(Failure::from(errnum));
             settle(key, exit, None);
-            *l.at(kind, load) = if exit == Exit::Aborted { None } else { Some(Entry::Failed) };
+            *l.at(kind, load) = if exit == Exit::Aborted {
+                None
+            } else {
+                Some(Entry::Failed)
+            };
             invalidate();
             return;
         }

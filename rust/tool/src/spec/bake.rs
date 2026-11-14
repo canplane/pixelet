@@ -5,7 +5,7 @@ use xpute_gen::spec::data::{enum_members, table_outputs, DataSpec};
 use xpute_gen::spec::ts_enum;
 
 use super::{
-    file, json_str, line_comments, mark, pascal, read, plural, u32_of, rs_doc, ts_doc, Node, Output,
+    file, json_str, line_comments, mark, pascal, plural, read, rs_doc, ts_doc, u32_of, Node, Output,
 };
 use crate::root;
 
@@ -30,7 +30,13 @@ pub(crate) fn publication_outputs() -> Result<Vec<Output>, String> {
     const KIND: &str = "BASE_KIND";
     let spec = read(JSON)?;
     let layer = spec.get(KIND).ok_or("publication.json5: no BASE_KIND")?;
-    let layers: Vec<&str> = layer.val().arr().unwrap_or_default().iter().filter_map(Node::str).collect();
+    let layers: Vec<&str> = layer
+        .val()
+        .arr()
+        .unwrap_or_default()
+        .iter()
+        .filter_map(Node::str)
+        .collect();
 
     // A kind's object in a set: the one place its segments are ordered.
     let object_node = spec.get("OBJECT").ok_or("publication.json5: no OBJECT")?;
@@ -188,21 +194,26 @@ pub(crate) fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let color = |k: &str, f: &str| -> Result<String, String> {
         match rows.get(k).and_then(|r| r.get(f)) {
             None => Ok("0".into()),
-            Some(c) => u32_of(c).map(|c| format!("{c} << 8 | 0xff")).ok_or(format!("{theme_json}: {k}.{f} is no color")),
+            Some(c) => u32_of(c)
+                .map(|c| format!("{:#010x}", c << 8 | 0xff))
+                .ok_or(format!("{theme_json}: {k}.{f} is no color")),
         }
     };
     let mut rs = vec![
         "// pxl-spec/bake/place_theme.spec.rs".to_string(),
         "//".into(),
-        format!("// {}", mark("spec/spec/bake/place_category.json5 and spec/spec/bake/place_theme.json5", "pxl-tool spec/bake.rs")),
+        format!(
+            "// {}",
+            mark(
+                "spec/spec/bake/place_category.json5 and spec/spec/bake/place_theme.json5",
+                "pxl-tool spec/bake.rs"
+            )
+        ),
         "//".into(),
     ];
     rs.extend(line_comments(&cat.doc().unwrap_or_default(), ""));
     rs.push("//".into());
-    rs.extend(line_comments(
-        &theme.doc().unwrap_or_default(),
-        "",
-    ));
+    rs.extend(line_comments(&theme.doc().unwrap_or_default(), ""));
     rs.extend([String::new(), "use crate::color::Rgba;".into()]);
     let mut list = |doc: &str,
                     ty: &str,
@@ -244,18 +255,12 @@ pub(crate) fn place_theme_outputs() -> Result<Vec<Output>, String> {
         "LABEL_ZOOM",
         &|k| zoom(k, "label"),
     )?;
-    list(
-        "A category's icon or dot fill",
-        "Rgba",
-        "FILL",
-        &|k| color(k, "fill"),
-    )?;
-    list(
-        "A category's label fill, its ink",
-        "Rgba",
-        "INK",
-        &|k| color(k, "text"),
-    )?;
+    list("A category's icon or dot fill", "Rgba", "FILL", &|k| {
+        color(k, "fill")
+    })?;
+    list("A category's label fill, its ink", "Rgba", "INK", &|k| {
+        color(k, "text")
+    })?;
     let symbol = |k: &str| -> Result<String, String> {
         match rows.get(k).and_then(|r| r.str_at("symbol")) {
             None | Some("") => Ok("0".into()),
@@ -272,17 +277,22 @@ pub(crate) fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let mut ts = vec![
         "// @pxl/client/ui/feature/search/place_theme.spec.ts".to_string(),
         "//".into(),
-        format!("// {}", mark("spec/spec/bake/place_category.json5 and spec/spec/bake/place_theme.json5", "pxl-tool spec/bake.rs")),
+        format!(
+            "// {}",
+            mark(
+                "spec/spec/bake/place_category.json5 and spec/spec/bake/place_theme.json5",
+                "pxl-tool spec/bake.rs"
+            )
+        ),
         "//".into(),
     ];
-    ts.extend(line_comments(
-        &theme.doc().unwrap_or_default(),
-        "",
-    ));
+    ts.extend(line_comments(&theme.doc().unwrap_or_default(), ""));
     let fill = |k: &str| -> Result<String, String> {
         match rows.get(k).and_then(|r| r.get("fill")) {
             None => Ok("null".into()),
-            Some(c) => u32_of(c).map(|c| format!("{c}")).ok_or(format!("{theme_json}: {k}.fill is no color")),
+            Some(c) => u32_of(c)
+                .map(|c| format!("{c}"))
+                .ok_or(format!("{theme_json}: {k}.fill is no color")),
         }
     };
     for (doc, name, ty, each) in [

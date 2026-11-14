@@ -33,6 +33,7 @@ pub mod event_loop;
 pub mod jni;
 mod life;
 pub mod link;
+pub mod listener;
 mod log;
 pub mod native;
 pub mod remote;
@@ -52,7 +53,9 @@ pub fn post(generation: u32, tag: u32, h: u32, m: u32, pkt: Option<Vec<u8>>) {
 /// that it serves later, for the guest's thread. Called on the JavaScript
 /// thread.
 pub fn answer(generation: u32, tag: u32, result: i32, data: Option<Vec<u8>>) {
-    event_loop::post_task(Box::new(move || remote::answer(generation, tag, result, data)));
+    event_loop::post_task(Box::new(move || {
+        remote::answer(generation, tag, result, data)
+    }));
 }
 
 /// The app was hidden or shown again, from the platform's lifecycle.

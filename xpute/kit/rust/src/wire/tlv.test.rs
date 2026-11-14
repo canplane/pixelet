@@ -68,7 +68,7 @@ fn matches_typescript() {
     ])
     .unwrap();
     let pkt = w.finish();
-    assert_eq!(hex::encode(pkt), v.s("packet"));
+    assert_eq!(hex::encode(pkt), v.s("pkt"));
     let read: Vec<String> = TlvReader::new(pkt)
         .read_all()
         .unwrap()
@@ -81,7 +81,7 @@ fn matches_typescript() {
     assert_eq!(read, want);
 
     v.each("end", |k| {
-        let pkt = hex::decode(v.s(&format!("{k}.packet"))).unwrap();
+        let pkt = hex::decode(v.s(&format!("{k}.pkt"))).unwrap();
         let mut r = TlvReader::new(&pkt);
         let mut n = 0;
         let stop = loop {
@@ -100,7 +100,7 @@ fn matches_typescript() {
         assert_eq!(format!("{n}:{stop}"), v.s(&format!("{k}.read")), "{k}");
     });
 
-    let huge_pkt = hex::decode(v.s("huge.packet")).unwrap();
+    let huge_pkt = hex::decode(v.s("huge.pkt")).unwrap();
     let huge = TlvReader::new(&huge_pkt).read_all();
     assert_eq!(
         huge.map(|_| "ok".to_string())

@@ -15,21 +15,36 @@ import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import { bug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
 import { type BranchCursor, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
-import { Lift, load_uri, packet, type Port, Remote, type Stop, store_uri } from "@xpute/link";
+import {
+  Lift,
+  load_uri,
+  packet,
+  type Port,
+  Remote,
+  type Stop,
+  store_uri,
+} from "@xpute/link";
 import type { ToLink, ToUi } from "@xpute/link/remote.ts";
 import { stopped_on, trap_on, XPUTE } from "./xpute.ts";
 
 /** Each message of a batch by its kind, its first field, read into what a
  * port carries to the Remote. A method told (`later` 0) has no tag. */
 const TO_UI: Readonly<Record<u32, (f: BranchCursor) => ToUi>> = {
-  0: (f) => ({ tag: f.get<u32>(1), result: f.get<i32>(2), data: f.get<U8Array | null>(3) }),
+  0: (f) => ({
+    tag: f.get<u32>(1),
+    result: f.get<i32>(2),
+    data: f.get<U8Array | null>(3),
+  }),
   2: (f) => ({
     h: f.get<u32>(1),
     m: f.get<u32>(2),
     tag: f.get<u32>(3) === 1 ? f.get<u32>(4) : null,
     pkt: f.get<U8Array | null>(5),
   }),
-  3: (f) => ({ open: f.get<u32>(1), uri: load_uri(new Lift(f.get<U8Array>(2)), 0) }),
+  3: (f) => ({
+    open: f.get<u32>(1),
+    uri: load_uri(new Lift(f.get<U8Array>(2)), 0),
+  }),
   4: (f) => ({ cancel: f.get<u32>(1) }),
   5: (f) => ({ drop: f.get<u32>(1) }),
 };
@@ -41,9 +56,11 @@ const HDR_SZ = 8;
 /** Hears each message of `batch`. */
 function read(batch: ArrayBuffer, hear: (m: ToUi) => void): void {
   const view = new DataView(batch);
-  for (let at = 0; at < batch.byteLength; ) {
+  for (let at = 0; at < batch.byteLength;) {
     const len = view.getUint32(at, true);
-    const f = new TreeReader(new Uint8Array(batch, at + HDR_SZ, len)).read_branch();
+    const f = new TreeReader(
+      new Uint8Array(batch, at + HDR_SZ, len),
+    ).read_branch();
     hear((TO_UI[f.get<u32>(0)] ?? bug(ERRNO_EBADMSG))(f));
     at += (HDR_SZ + len + 7) & ~7;
   }
@@ -62,7 +79,9 @@ export function open_remote(): Remote {
     },
     onmessage: null,
   };
-  XPUTE.addListener("onNotify", () => read(XPUTE.take(), (m) => port.onmessage?.({ data: m })));
+  XPUTE.addListener("onNotify", () =>
+    read(XPUTE.take(), (m) => port.onmessage?.({ data: m })),
+  );
   return new Remote(port);
 }
 

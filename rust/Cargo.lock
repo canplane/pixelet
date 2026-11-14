@@ -2210,6 +2210,7 @@ dependencies = [
  "xpute-gpu-link",
  "xpute-kit",
  "xpute-link",
+ "xpute-test-mem",
 ]
 
 [[package]]
@@ -3789,6 +3790,13 @@ dependencies = [
  "jni-sys 0.3.1",
  "ndk-sys",
  "xpute-kit",
+ "xpute-link",
+]
+
+[[package]]
+name = "xpute-test-mem"
+version = "0.1.0"
+dependencies = [
  "xpute-link",
 ]
 

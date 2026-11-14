@@ -7,15 +7,15 @@
 use super::applied;
 use crate::abi::types::ErrorCode;
 use crate::domain::setting::settings;
+use crate::perf::frame::{FrameSample, WorstFrame};
 use crate::perf::read;
 use crate::perf::record;
-use crate::perf::frame::{FrameSample, WorstFrame};
 use crate::perf::record::{perf_frames, perf_strtab, perf_tasks, perf_worst, STRTAB_CAP};
-use crate::spec::perf::{limit, now, stat, RING_NAMES};
 use crate::perf::task::TaskRecord;
 use crate::perf::window::perf_window_start;
 use crate::perf::window::perf_window_stop;
-use std::cell::RefCell;
+use crate::spec::perf::{limit, now, stat, RING_NAMES};
+use pxl_global::Global;
 
 use xpute_guest::clock::now;
 use xpute_kit::status::errno::Errno;
@@ -41,9 +41,11 @@ pub(super) fn stats(window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
     Ok(read_timed(|| bytes_of(read::perf_read(window_ms))))
 }
 
-/// Each ring's records, in `RING_NAMES`' order: frames, tasks, worst, and the
-/// bytes a record takes.
-const RINGS: [(fn() -> &'static [u8], usize); RING_NAMES.len()] = [
+/// A ring's records as bytes, and the bytes a record takes.
+type Ring = (fn() -> &'static [u8], usize);
+
+/// Each ring, in `RING_NAMES`' order: frames, tasks, worst.
+const RINGS: [Ring; RING_NAMES.len()] = [
     (|| bytes_of(perf_frames()), size_of::<FrameSample>()),
     (|| bytes_of(perf_tasks()), size_of::<TaskRecord>()),
     (|| bytes_of(perf_worst()), size_of::<WorstFrame>()),
@@ -53,12 +55,10 @@ const RINGS: [(fn() -> &'static [u8], usize); RING_NAMES.len()] = [
 const _: () = assert!(STRTAB_CAP <= limit::PAGE_BYTES as usize);
 const _: () = assert!(8 * (stat::WORDS + now::WORDS) <= limit::PAGE_BYTES as usize);
 
-thread_local! {
-    /// The ring being read, by its number, as it stood at its first page, so
-    /// that the records landing between pages move none of its pages. It goes
-    /// with its last page, the one that comes short.
-    static READING: RefCell<Option<(u32, Vec<u8>)>> = const { RefCell::new(None) };
-}
+/// The ring being read, by its number, as it stood at its first page, so that
+/// the records landing between pages move none of its pages. It goes with its
+/// last page, the one that comes short.
+static READING: Global<Option<(u32, Vec<u8>)>> = Global::new();
 
 /// Answers up to `cnt` records of ring `ring` from its record `from`, no more
 /// than a page holds (`limit::PAGE_BYTES`), as the ring stood at its first
@@ -68,20 +68,19 @@ pub(super) fn ring(ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, Errno> {
     if from == 0 {
         READING.set(Some((ring, read_timed(read))));
     }
-    READING.with_borrow_mut(|held| {
-        let Some((_, b)) = held.as_ref().filter(|(r, _)| *r == ring) else {
-            return Err(Errno::EINVAL);
-        };
-        let page = limit::PAGE_BYTES as usize / record;
-        let n = b.len() / record;
-        let from = (from as usize).min(n);
-        let to = from + (cnt as usize).min(page).min(n - from);
-        let out = b[from * record..to * record].to_vec();
-        if to - from < page {
-            *held = None;
-        }
-        Ok(out)
-    })
+    let reading = READING.get(|| None);
+    let Some((_, b)) = reading.as_ref().filter(|(r, _)| *r == ring) else {
+        return Err(Errno::EINVAL);
+    };
+    let page = limit::PAGE_BYTES as usize / record;
+    let n = b.len() / record;
+    let from = (from as usize).min(n);
+    let to = from + (cnt as usize).min(page).min(n - from);
+    let out = b[from * record..to * record].to_vec();
+    if to - from < page {
+        *reading = None;
+    }
+    Ok(out)
 }
 
 /// Answers the string table the tasks' `at_file` names point into.

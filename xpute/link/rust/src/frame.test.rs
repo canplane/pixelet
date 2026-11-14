@@ -1,8 +1,12 @@
 // xpute-link/frame.test.rs
 
-use super::*;
-use crate::mem::test::alloc;
 use xpute_golden::Golden;
+use xpute_link::frame::{Frame, HDR_SZ};
+use xpute_link::mem;
+use xpute_test_mem::{alloc, Heap};
+
+#[global_allocator]
+static HEAP: Heap = Heap;
 
 const GOLDEN: &str = include_str!("../../spec/golden/frame.tsv");
 

@@ -88,9 +88,9 @@ void Side::task_return(Tag t, std::int32_t result, const Data &data) {
 }
 
 std::int32_t Side::recv(std::uint32_t at) {
-    std::uint32_t room = layout().room;
+    std::uint32_t cap = layout().cap;
     Frame f = Frame::at(at);
-    Result<std::optional<std::span<const std::uint8_t>>> pkt = f.pkt(at, room);
+    Result<std::optional<std::span<const std::uint8_t>>> pkt = f.pkt(at, cap);
     if (f.res) {
         if (auto it = pending_.find(f.tag); it != pending_.end()) {
             Answer a = std::move(it->second);
@@ -104,7 +104,7 @@ std::int32_t Side::recv(std::uint32_t at) {
     Frame words = f;
     words.res = true;
     words.result = reply.result;
-    // An answer past the room is refused as a later one is (`out`).
+    // An answer past the cap is refused as a later one is (`out`).
     if (Result<void> laid = lay(at, words, reply.data); !laid) {
         words.result = status(laid.error().errnum);
         ensure(lay(at, words, std::nullopt).ok(), Errno::emsgsize);
@@ -187,10 +187,10 @@ Tag Side::tag() noexcept {
 }
 
 Result<void> Side::lay(std::uint32_t at, Frame words, const Args &pkt) {
-    std::uint32_t room = layout().room;
+    std::uint32_t cap = layout().cap;
     words.pkt_len = 0;
     if (pkt) {
-        Lower w(mem::bytes(at + HDR_SZ, room - HDR_SZ), pkt->fixed_sz);
+        Lower w(mem::bytes(at + HDR_SZ, cap - HDR_SZ), pkt->fixed_sz);
         pkt->write(w);
         Result<std::size_t> n = w.finish();
         if (!n) return n.error();
@@ -202,7 +202,7 @@ Result<void> Side::lay(std::uint32_t at, Frame words, const Args &pkt) {
 
 // Lays a frame in this side's box and crosses with it, and answers what the
 // callee laid there: its result, and its return data. A later answer past
-// the room is answered EMSGSIZE with no data, so its request still hears;
+// the cap is answered EMSGSIZE with no data, so its request still hears;
 // args this side writes past it are a bug.
 std::pair<std::int32_t, std::optional<std::span<const std::uint8_t>>> Side::out(Tag tag, Handle h, Method m, bool res, std::int32_t result, const Args &pkt) {
     Layout l = layout();
@@ -217,7 +217,7 @@ std::pair<std::int32_t, std::optional<std::span<const std::uint8_t>>> Side::out(
     Frame f = Frame::at(at);
     std::optional<std::span<const std::uint8_t>> data;
     if (f.res && !res) {
-        if (auto p = f.pkt(at, l.room); p) data = *p;
+        if (auto p = f.pkt(at, l.cap); p) data = *p;
     }
     return {r, data};
 }

@@ -165,7 +165,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         if doc.is_empty() {
             val
         } else {
-            Node::Obj(vec![("$description".into(), description(&doc)), ("$value".into(), val)])
+            Node::Obj(vec![
+                ("$description".into(), description(&doc)),
+                ("$value".into(), val),
+            ])
         }
     };
     let spec_doc = spec.doc().unwrap_or_default();

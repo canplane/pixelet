@@ -41,7 +41,7 @@ export function load_ErrorCode(r: Lift, at: number): ErrorCode {
 }
 
 export interface Host {
-  run(records: Lent, signal_: AbortSignal): Promise<void>;
+  run(recs: Lent, signal_: AbortSignal): Promise<void>;
   get_device(): number;
 }
 

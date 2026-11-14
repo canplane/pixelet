@@ -13,10 +13,10 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::query::World;
 use crate::domain::scene::gizmo::debug_line::DebugMesh;
-use crate::spec::gizmo::frame;
 use crate::domain::scene::gizmo::param::{POINT_HALF, RING_RADIUS};
 use crate::domain::scene::model::draw_list;
 use crate::domain::view::frame::coord::to_world;
+use crate::spec::gizmo::frame;
 use crate::sys::sched::invalidate;
 use pxl_global::Global;
 use pxl_render::gpu::draw::DrawList;
@@ -60,11 +60,7 @@ impl Sketch {
         for i in 0..8 {
             for k in 0..3 {
                 if i & (1 << k) == 0 {
-                    self.line(
-                        corner(i),
-                        corner(i | 1 << k),
-                        linear_rgb(frame::pivot::RGB),
-                    );
+                    self.line(corner(i), corner(i | 1 << k), linear_rgb(frame::pivot::RGB));
                 }
             }
         }

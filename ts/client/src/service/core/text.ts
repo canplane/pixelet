@@ -20,7 +20,8 @@ import * as platform from "@/service/platform/text.ts";
 export function serve_text(link: Side): void {
   /** The text a call lends, which the core holds only until the call
    * returns. */
-  const text_of = (span: Lent): string => td.decode(link.bytes(span.at, span.len));
+  const text_of = (span: Lent): string =>
+    td.decode(link.bytes(span.at, span.len));
 
   text.mount(link, {
     width(weight, px, text) {
@@ -29,7 +30,16 @@ export function serve_text(link: Side): void {
     raster(weight, px, color, image, width, height, x, text) {
       const len = width * height * 4;
       if (len > image.len) throw new XputeError(ERRNO_EINVAL);
-      platform.raster(weight, px, color, text_of(text), x, width, height, link.bytes(image.at, len));
+      platform.raster(
+        weight,
+        px,
+        color,
+        text_of(text),
+        x,
+        width,
+        height,
+        link.bytes(image.at, len),
+      );
       return 0;
     },
   });

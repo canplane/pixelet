@@ -73,10 +73,7 @@ fn host_paces_frames() {
     assert!(busy.admit_frame());
     busy.count_frame();
     assert!(!busy.admit_frame(), "its one frame is unfinished");
-    assert!(
-        other.admit_frame(),
-        "another host's frames are not its own"
-    );
+    assert!(other.admit_frame(), "another host's frames are not its own");
     let _ = device.poll(wgpu::PollType::wait_indefinitely());
     assert!(busy.admit_frame(), "its frame ended with the queue's work");
 }
@@ -154,7 +151,7 @@ fn stale_handle_inert() {
 /// the bytes the record holds. Turn K's ticket is K + 1, and the next turn
 /// waits until the host has stored it at the fence.
 #[test]
-fn records_read_back() {
+fn recs_read_back() {
     let g = Golden::load(GOLDEN);
     let instance =
         wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
@@ -166,8 +163,8 @@ fn records_read_back() {
         ..Default::default()
     }))
     .expect("a device with timestamp queries");
-    let [region_sz, records_at, input_at, done_at, readback_at] =
-        ["region", "records.at", "input.at", "done.at", "readback.at"].map(|k| g.u32(k));
+    let [region_sz, recs_at, input_at, done_at, readback_at] =
+        ["region", "recs.at", "input.at", "done.at", "readback.at"].map(|k| g.u32(k));
     assert!(
         region_sz <= SPARE_AT,
         "the golden region fits before the spare room"
@@ -192,10 +189,10 @@ fn records_read_back() {
             || {},
         );
         g.each(&format!("{p}.turn"), |turn| {
-            let records = g.bytes(turn);
-            write(records_at, &records);
+            let recs = g.bytes(turn);
+            write(recs_at, &recs);
             let ticket = turn.rsplit('.').next().unwrap().parse::<u32>().unwrap() + 1;
-            host.run(records_at, records.len() as u32);
+            host.run(recs_at, recs.len() as u32);
             while xpute_link::mem::load_acquire(done_at) != ticket {
                 let _ = device.poll(wgpu::PollType::wait_indefinitely());
                 host.poll();

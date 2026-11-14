@@ -98,7 +98,7 @@ exports, and which it calls, its imports. `xpute-link-gen` writes their
 bindings for each side in Rust, TypeScript and C++, and for the host two lists
 from the world: `IMPORTS`, the interfaces the guest calls, and `LATER`, the
 methods of the interfaces the UI serves that answer later. A Rust guest
-defines its three exports with one macro, over frames of a room it chooses,
+defines its three exports with one macro, over frames of a cap it chooses,
 and mounts what it serves as it boots; the macro makes the guest's own bug or
 panic its stop, told to the host before it stops, as a C++ guest's
 `XPUTE_LINK` makes its bug. Here it serves xpute's `life`, which is called as

@@ -30,7 +30,11 @@ impl Gen<'_> {
     /// its name, as a type alone where `is_type`.
     fn ts_use(&self, module: &str, name: &str, is_type: bool) -> String {
         let mut uses = self.ts_uses.borrow_mut();
-        let t = uses.entry(module.into()).or_default().entry(name.into()).or_insert(is_type);
+        let t = uses
+            .entry(module.into())
+            .or_default()
+            .entry(name.into())
+            .or_insert(is_type);
         *t &= is_type;
         name.into()
     }
@@ -39,7 +43,9 @@ impl Gen<'_> {
     /// a variant's own constants, any other's numbers.
     fn ts_layout(&self, k: &Kind) -> Result<(String, String), String> {
         Ok(match k {
-            Kind::Record(t) | Kind::Variant(t) => (self.ts_const(*t, "SZ"), self.ts_const(*t, "ALIGN")),
+            Kind::Record(t) | Kind::Variant(t) => {
+                (self.ts_const(*t, "SZ"), self.ts_const(*t, "ALIGN"))
+            }
             _ => {
                 let (sz, align) = self.layout(k)?;
                 (sz.to_string(), align.to_string())
@@ -49,7 +55,9 @@ impl Gen<'_> {
 
     fn ts_params(&self, f: &Function) -> Result<Vec<(String, Kind)>, String> {
         let at = format!("{}.{}", self.at(), f.name);
-        params(f).map(|p| Ok((ts_name(&p.name), kind(self.r, &p.ty, &at)?))).collect()
+        params(f)
+            .map(|p| Ok((ts_name(&p.name), kind(self.r, &p.ty, &at)?)))
+            .collect()
     }
 
     /// A function's `result` returns its ok value and throws its error case,
@@ -64,7 +72,13 @@ impl Gen<'_> {
 
     /// A `result` of `ok` and `err`, tagged as it is stored, from `x`, an ok
     /// value, and from `e`, a `ComponentError`.
-    fn ts_tagged(&self, ok: &Option<Box<Kind>>, err: &Option<Box<Kind>>, x: &str, e: &str) -> (String, String) {
+    fn ts_tagged(
+        &self,
+        ok: &Option<Box<Kind>>,
+        err: &Option<Box<Kind>>,
+        x: &str,
+        e: &str,
+    ) -> (String, String) {
         let ok = match ok {
             Some(_) => format!("{{ tag: \"ok\", val: {x} }}"),
             None => "{ tag: \"ok\" }".into(),
@@ -94,10 +108,15 @@ impl Gen<'_> {
                 self.depth.set(d);
                 format!("{{ const b{d} = {w}.list({at}, {e}.length, {sz}, {align}); if (b{d} !== null) {e}.forEach((x{d}, i{d}) => {{ {} }}); }}", inner?)
             }
-            Kind::Record(t) | Kind::Variant(t) => format!("{}({w}, {at}, {e});", self.ts_path(*t, "store_")),
+            Kind::Record(t) | Kind::Variant(t) => {
+                format!("{}({w}, {at}, {e});", self.ts_path(*t, "store_"))
+            }
             Kind::Option(el) => {
                 let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)])?;
-                format!("if ({e} !== null) {{ {w}.u8({at}, 1); {} }}", self.ts_store(w, &plus(at, off), e, el)?)
+                format!(
+                    "if ({e} !== null) {{ {w}.u8({at}, 1); {} }}",
+                    self.ts_store(w, &plus(at, off), e, el)?
+                )
             }
             Kind::Result(ok, err) => {
                 let (off, _, _) = self.result_layout(ok, err)?;
@@ -105,7 +124,11 @@ impl Gen<'_> {
                     Some(k) => self.ts_store(w, &plus(at, off), &format!("{e}.val"), k),
                     None => Ok(String::new()),
                 };
-                format!("if ({e}.tag === \"ok\") {{ {} }} else {{ {w}.u8({at}, 1); {} }}", case(ok)?, case(err)?)
+                format!(
+                    "if ({e}.tag === \"ok\") {{ {} }} else {{ {w}.u8({at}, 1); {} }}",
+                    case(ok)?,
+                    case(err)?
+                )
             }
         })
     }
@@ -120,22 +143,37 @@ impl Gen<'_> {
             Kind::Array(n) => format!("{r}.arr({at}, {})", n.arr),
             Kind::List(el) => {
                 let (sz, align) = self.ts_layout(el)?;
-                format!("{r}.map({at}, {sz}, {align}, (at) => {})", self.ts_load(r, "at", el)?)
+                format!(
+                    "{r}.map({at}, {sz}, {align}, (at) => {})",
+                    self.ts_load(r, "at", el)?
+                )
             }
-            Kind::Record(t) | Kind::Variant(t) | Kind::Enum(t) => format!("{}({r}, {at})", self.ts_path(*t, "load_")),
+            Kind::Record(t) | Kind::Variant(t) | Kind::Enum(t) => {
+                format!("{}({r}, {at})", self.ts_path(*t, "load_"))
+            }
             Kind::Option(el) => {
                 let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)])?;
-                format!("({r}.case({at}, 2) === 0 ? null : {})", self.ts_load(r, &plus(at, off), el)?)
+                format!(
+                    "({r}.case({at}, 2) === 0 ? null : {})",
+                    self.ts_load(r, &plus(at, off), el)?
+                )
             }
             Kind::Result(ok, err) => {
                 let (off, _, _) = self.result_layout(ok, err)?;
                 let case = |tag: &str, k: &Option<Box<Kind>>| -> Result<String, String> {
                     Ok(match k {
-                        Some(k) => format!("{{ tag: \"{tag}\" as const, val: {} }}", self.ts_load(r, &plus(at, off), k)?),
+                        Some(k) => format!(
+                            "{{ tag: \"{tag}\" as const, val: {} }}",
+                            self.ts_load(r, &plus(at, off), k)?
+                        ),
                         None => format!("{{ tag: \"{tag}\" as const }}"),
                     })
                 };
-                format!("({r}.case({at}, 2) === 0 ? {} : {})", case("ok", ok)?, case("err", err)?)
+                format!(
+                    "({r}.case({at}, 2) === 0 ? {} : {})",
+                    case("ok", ok)?,
+                    case("err", err)?
+                )
             }
         })
     }
@@ -147,7 +185,11 @@ impl Gen<'_> {
             return Ok("null".into());
         }
         let (offs, sz) = self.tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
-        let writes = ps.iter().zip(&offs).map(|((n, k), at)| self.ts_store("w_", &at.to_string(), n, k)).collect::<Result<Vec<_>, String>>()?;
+        let writes = ps
+            .iter()
+            .zip(&offs)
+            .map(|((n, k), at)| self.ts_store("w_", &at.to_string(), n, k))
+            .collect::<Result<Vec<_>, String>>()?;
         Ok(format!("[{sz}, (w_) => {{ {} }}]", writes.join(" ")))
     }
 
@@ -157,38 +199,74 @@ impl Gen<'_> {
         let t = serving(o, "Host");
         let _ = writeln!(out, "export interface {t} {{");
         for f in &o.methods {
-            let mut sig: Vec<String> = self.ts_params(f)?.iter().map(|(n, k)| format!("{n}: {}", self.ts_ty(k))).collect();
+            let mut sig: Vec<String> = self
+                .ts_params(f)?
+                .iter()
+                .map(|(n, k)| format!("{n}: {}", self.ts_ty(k)))
+                .collect();
             let r = self.ts_ret(f)?;
             // An async method stops on `signal_` where its caller cancels it
             // and it can; one that can't leaves it unread.
             if is_async(f) {
                 sig.push("signal_: AbortSignal".into());
             }
-            let r = if is_async(f) { format!("Promise<{r}>") } else { r };
-            let _ = writeln!(out, "  {}({}): {r};", ts_name(method_name(f)), sig.join(", "));
+            let r = if is_async(f) {
+                format!("Promise<{r}>")
+            } else {
+                r
+            };
+            let _ = writeln!(
+                out,
+                "  {}({}): {r};",
+                ts_name(method_name(f)),
+                sig.join(", ")
+            );
         }
         // A resource's implementation is told its drop, as Rust's is by its
         // Drop; an interface is never dropped.
         if o.resource {
             let _ = writeln!(out, "  drop(): void;");
         }
-        let fname = if o.resource { ts_name(&o.name) } else { "object".into() };
-        let pick = if o.methods.iter().any(|f| is_async(f)) { format!("l: Pick<{}, \"task_return\" | \"on_cancel\">, ", self.ts_use(link, "Side", true)) } else { String::new() };
+        let fname = if o.resource {
+            ts_name(&o.name)
+        } else {
+            "object".into()
+        };
+        let pick = if o.methods.iter().any(|f| is_async(f)) {
+            format!(
+                "l: Pick<{}, \"task_return\" | \"on_cancel\">, ",
+                self.ts_use(link, "Side", true)
+            )
+        } else {
+            String::new()
+        };
         let refusal_of = self.ts_use(link, "refusal_of", false);
         let _ = writeln!(out, "}}\n\n/** The object over `implementation`. */\n{}function {fname}({pick}implementation: {t}): {} {{\n  return {{\n    call(m, tag, args) {{\n      try {{\n        switch (m) {{", if o.resource { "export " } else { "" }, self.ts_use(link, "LinkObject", true));
         for f in &o.methods {
             let ps = self.ts_params(f)?;
             let (offs, _) = self.tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
-            let mut loads = ps.iter().zip(&offs).map(|((_, kd), at)| self.ts_load("r_", &at.to_string(), kd)).collect::<Result<Vec<_>, String>>()?;
+            let mut loads = ps
+                .iter()
+                .zip(&offs)
+                .map(|((_, kd), at)| self.ts_load("r_", &at.to_string(), kd))
+                .collect::<Result<Vec<_>, String>>()?;
             let takes_args = !loads.is_empty();
             if is_async(f) {
                 loads.push("stop.signal".into());
             }
-            let call = format!("implementation.{}({})", ts_name(method_name(f)), loads.join(", "));
+            let call = format!(
+                "implementation.{}({})",
+                ts_name(method_name(f)),
+                loads.join(", ")
+            );
             let rk = self.ret(f)?;
             let data = match &rk {
                 None => "null".to_string(),
-                Some(k) => format!("[{}, (w) => {{ {} }}]", self.ts_layout(k)?.0, self.ts_store("w", "0", "v", k)?),
+                Some(k) => format!(
+                    "[{}, (w) => {{ {} }}]",
+                    self.ts_layout(k)?.0,
+                    self.ts_store("w", "0", "v", k)?
+                ),
             };
             let c = method_const(o, f, ts_given);
             let _ = writeln!(out, "          case {c}: {{");
@@ -203,24 +281,43 @@ impl Gen<'_> {
                 if is_async(f) {
                     let _ = writeln!(out, "            const stop = new AbortController();\n            {call}.then(\n              {bind} => {{\n                const v = {tag_ok} as {ty};\n                l.task_return(tag, 0, {data});\n              }},\n              (e: unknown) => {{\n                if (!(e instanceof {ce})) return l.task_return(tag, {refusal_of}(e));\n                const v = {tag_err} as {ty};\n                l.task_return(tag, 0, {data});\n              }},\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return {};\n          }}", self.ts_use(TS_ERRNO, "ERRNO_EINPROGRESS", false));
                 } else {
-                    let set = if ok.is_some() { format!("const x = {call};\n              v = {tag_ok};") } else { format!("{call};\n              v = {tag_ok};") };
+                    let set = if ok.is_some() {
+                        format!("const x = {call};\n              v = {tag_ok};")
+                    } else {
+                        format!("{call};\n              v = {tag_ok};")
+                    };
                     let _ = writeln!(out, "            let v: {ty};\n            try {{\n              {set}\n            }} catch (e) {{\n              if (!(e instanceof {ce})) throw e;\n              v = {tag_err};\n            }}\n            return {{ result: 0, data: {data} }};\n          }}");
                 }
             } else if is_async(f) {
                 let bind = if rk.is_none() { "()" } else { "(v)" };
                 let _ = writeln!(out, "            const stop = new AbortController();\n            {call}.then(\n              {bind} => l.task_return(tag, 0, {data}),\n              (e: unknown) => l.task_return(tag, {refusal_of}(e)),\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return {};\n          }}", self.ts_use(TS_ERRNO, "ERRNO_EINPROGRESS", false));
             } else if rk.is_none() {
-                let _ = writeln!(out, "            {call};\n            return 0;\n          }}");
+                let _ = writeln!(
+                    out,
+                    "            {call};\n            return 0;\n          }}"
+                );
             } else {
                 let _ = writeln!(out, "            const v = {call};\n            return {{ result: 0, data: {data} }};\n          }}");
             }
         }
-        let drop = if o.resource { "drop() {\n      implementation.drop();\n    }" } else { "drop() {}" };
+        let drop = if o.resource {
+            "drop() {\n      implementation.drop();\n    }"
+        } else {
+            "drop() {}"
+        };
         let _ = writeln!(out, "          default:\n            return {};\n        }}\n      }} catch (e) {{\n        return {refusal_of}(e);\n      }}\n    }},\n    {drop},\n  }};\n}}\n", self.ts_use(TS_ERRNO, "ERRNO_ENOSYS", false));
         if !o.resource {
             let ln = self.ts_use(link, "Side", true);
-            let pick = if pick.is_empty() { format!("l: Pick<{ln}, \"mount_named\">") } else { format!("l: Pick<{ln}, \"mount_named\" | \"task_return\" | \"on_cancel\">") };
-            let pass = if o.methods.iter().any(|f| is_async(f)) { "l, " } else { "" };
+            let pick = if pick.is_empty() {
+                format!("l: Pick<{ln}, \"mount_named\">")
+            } else {
+                format!("l: Pick<{ln}, \"mount_named\" | \"task_return\" | \"on_cancel\">")
+            };
+            let pass = if o.methods.iter().any(|f| is_async(f)) {
+                "l, "
+            } else {
+                ""
+            };
             let _ = writeln!(out, "/** Serves `implementation` under the interface's handle. */\nexport function mount({pick}, implementation: {t}): void {{\n  l.mount_named(HANDLE, object({pass}implementation));\n}}\n");
         }
         Ok(())
@@ -231,9 +328,15 @@ impl Gen<'_> {
     fn ts_import(&self, o: &Obj, out: &mut String) -> Result<(), String> {
         let link = self.link_ts;
         let (by, to) = if o.resource {
-            (format!("ref_: {}", self.ts_use(link, "Ref", true)), "ref_.link.send(ref_.handle")
+            (
+                format!("ref_: {}", self.ts_use(link, "Ref", true)),
+                "ref_.link.send(ref_.handle",
+            )
         } else {
-            (format!("link_: {}", self.ts_use(link, "Sender", true)), "link_.send(HANDLE")
+            (
+                format!("link_: {}", self.ts_use(link, "Sender", true)),
+                "link_.send(HANDLE",
+            )
         };
         let err = self.ts_use(TS_ERROR, "XputeError", false);
         for f in &o.methods {
@@ -272,7 +375,11 @@ impl Gen<'_> {
     /// The interface's TypeScript modules, by `role`, none for an interface
     /// of types alone: its functions' module, and its enums' module, empty
     /// where it has none.
-    pub(super) fn ts_interface(&self, objs: &[Obj], role: Option<Role>) -> Result<(String, String), String> {
+    pub(super) fn ts_interface(
+        &self,
+        objs: &[Obj],
+        role: Option<Role>,
+    ) -> Result<(String, String), String> {
         let link = self.link_ts;
         let mut out = String::new();
         let mut enums = String::new();
@@ -281,7 +388,13 @@ impl Gen<'_> {
         }
         for o in objs {
             for (k, f) in o.methods.iter().enumerate() {
-                let _ = writeln!(out, "/** `{}` */\nexport const {}: {} = {k};", f.name, method_const(o, f, ts_given), self.ts_use(link, "Method", true));
+                let _ = writeln!(
+                    out,
+                    "/** `{}` */\nexport const {}: {} = {k};",
+                    f.name,
+                    method_const(o, f, ts_given),
+                    self.ts_use(link, "Method", true)
+                );
             }
         }
         out.push('\n');
@@ -302,9 +415,16 @@ impl Gen<'_> {
         let mut out = String::new();
         for (from, names) in self.ts_uses.borrow().iter() {
             if names.values().all(|t| *t) {
-                let _ = writeln!(out, "import type {{ {} }} from \"{from}\";", names.keys().cloned().collect::<Vec<_>>().join(", "));
+                let _ = writeln!(
+                    out,
+                    "import type {{ {} }} from \"{from}\";",
+                    names.keys().cloned().collect::<Vec<_>>().join(", ")
+                );
             } else {
-                let names: Vec<String> = names.iter().map(|(n, t)| if *t { format!("type {n}") } else { n.clone() }).collect();
+                let names: Vec<String> = names
+                    .iter()
+                    .map(|(n, t)| if *t { format!("type {n}") } else { n.clone() })
+                    .collect();
                 let _ = writeln!(out, "import {{ {} }} from \"{from}\";", names.join(", "));
             }
         }
@@ -394,10 +514,21 @@ impl Gen<'_> {
                     for (f, k) in &fields {
                         let _ = writeln!(out, "  {}: {};", ts_name(f), self.ts_ty(k));
                     }
-                    let writes = fields.iter().zip(&offs).map(|((f, k), &off)| self.ts_store("w", &plus("at", off), &format!("v.{}", ts_name(f)), k)).collect::<Result<Vec<_>, String>>()?;
+                    let writes = fields
+                        .iter()
+                        .zip(&offs)
+                        .map(|((f, k), &off)| {
+                            self.ts_store("w", &plus("at", off), &format!("v.{}", ts_name(f)), k)
+                        })
+                        .collect::<Result<Vec<_>, String>>()?;
                     let _ = writeln!(out, "}}\n\nexport const {up}_SZ = {sz};\nexport const {up}_ALIGN = {align};\n\nexport function store_{n}(w: {}, at: number, v: {n}): void {{\n  {}\n}}\n\nexport function load_{n}(r: {}, at: number): {n} {{\n  return {{", self.ts_use(self.cabi_ts, "Lower", true), writes.join("\n  "), self.ts_use(self.cabi_ts, "Lift", true));
                     for ((f, k), &off) in fields.iter().zip(&offs) {
-                        let _ = writeln!(out, "    {}: {},", ts_name(f), self.ts_load("r", &plus("at", off), k)?);
+                        let _ = writeln!(
+                            out,
+                            "    {}: {},",
+                            ts_name(f),
+                            self.ts_load("r", &plus("at", off), k)?
+                        );
                     }
                     let _ = writeln!(out, "  }};\n}}\n");
                 }
@@ -424,18 +555,34 @@ impl Gen<'_> {
                     for (k, (c, kd)) in cases.iter().enumerate() {
                         match kd {
                             Some(kd) => {
-                                let _ = writeln!(out, "    case {k}:\n      return {{ tag: \"{c}\", val: {} }};", self.ts_load("r", &plus("at", off), kd)?);
+                                let _ = writeln!(
+                                    out,
+                                    "    case {k}:\n      return {{ tag: \"{c}\", val: {} }};",
+                                    self.ts_load("r", &plus("at", off), kd)?
+                                );
                             }
                             None => {
-                                let _ = writeln!(out, "    case {k}:\n      return {{ tag: \"{c}\" }};");
+                                let _ = writeln!(
+                                    out,
+                                    "    case {k}:\n      return {{ tag: \"{c}\" }};"
+                                );
                             }
                         }
                     }
-                    let _ = writeln!(out, "  }}\n  throw new {}({});\n}}\n", self.ts_use(TS_ERROR, "XputeError", false), self.ts_use(TS_ERRNO, "ERRNO_EBADMSG", false));
+                    let _ = writeln!(
+                        out,
+                        "  }}\n  throw new {}({});\n}}\n",
+                        self.ts_use(TS_ERROR, "XputeError", false),
+                        self.ts_use(TS_ERRNO, "ERRNO_EBADMSG", false)
+                    );
                 }
                 // A type `use`d from another interface is reached by its owner's path.
                 TypeDefKind::Type(ty) if !matches!(ty, Type::Id(_)) => {
-                    let _ = writeln!(out, "export type {n} = {};\n", self.ts_ty(&kind(self.r, ty, &at)?));
+                    let _ = writeln!(
+                        out,
+                        "export type {n} = {};\n",
+                        self.ts_ty(&kind(self.r, ty, &at)?)
+                    );
                 }
                 _ => {
                     kind(self.r, &Type::Id(t), &at)?;

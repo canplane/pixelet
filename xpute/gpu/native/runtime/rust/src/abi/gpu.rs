@@ -44,7 +44,7 @@ impl ErrorCode {
 }
 
 pub trait Host {
-    fn run(&self, records: _rt::Lent, task_return: _rt::Return<()>);
+    fn run(&self, recs: _rt::Lent, task_return: _rt::Return<()>);
     fn get_device(&self) -> Result<u32, _rt::Errno>;
 }
 
@@ -56,9 +56,9 @@ impl _rt::Object for _Object {
             Ok(match m_ {
                 RUN => {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let records = _rt::Lent::load(r_, 0)?;
+                    let recs = _rt::Lent::load(r_, 0)?;
                     self.0.run(
-                        records,
+                        recs,
                         _rt::Return::new(
                             tag_,
                             _rt::link::on_cancel,

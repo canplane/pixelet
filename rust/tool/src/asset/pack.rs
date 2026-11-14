@@ -68,8 +68,7 @@ pub struct Item {
 pub fn load(raw: &Path, content: &Path) -> Result<Vec<Item>, String> {
     let text = std::fs::read_to_string(raw.join("manifest.json5"))
         .map_err(|e| format!("manifest.json5: {e}"))?;
-    let manifest: Manifest =
-        json5::from_str(&text).map_err(|e| format!("manifest.json5: {e}"))?;
+    let manifest: Manifest = json5::from_str(&text).map_err(|e| format!("manifest.json5: {e}"))?;
 
     let mut items = Vec::new();
     let mut push = |label: String, slot: Slot, e: &Entry| {
@@ -168,18 +167,20 @@ pub fn looks_like_sprite_sheet(w: u32, h: u32) -> bool {
 /// Makes every alpha 255, flattening over the manifest's `palette`,
 /// `0xRRGGBB`, or the opaque-pixel average where none is given.
 pub fn flatten_alpha(data: &mut [u8], palette: Option<u32>) {
-    let bg = palette.map(|c| [c >> 16, c >> 8, c].map(|v| v as u8)).unwrap_or_else(|| {
-        let (mut r, mut g, mut b, mut n) = (0u64, 0u64, 0u64, 0u64);
-        for px in data.as_chunks::<4>().0 {
-            if px[3] == 255 {
-                r += px[0] as u64;
-                g += px[1] as u64;
-                b += px[2] as u64;
-                n += 1;
+    let bg = palette
+        .map(|c| [c >> 16, c >> 8, c].map(|v| v as u8))
+        .unwrap_or_else(|| {
+            let (mut r, mut g, mut b, mut n) = (0u64, 0u64, 0u64, 0u64);
+            for px in data.as_chunks::<4>().0 {
+                if px[3] == 255 {
+                    r += px[0] as u64;
+                    g += px[1] as u64;
+                    b += px[2] as u64;
+                    n += 1;
+                }
             }
-        }
-        [r, g, b].map(|sum| sum.checked_div(n).map_or(200, |mean| mean as u8))
-    });
+            [r, g, b].map(|sum| sum.checked_div(n).map_or(200, |mean| mean as u8))
+        });
 
     for px in data.as_chunks_mut::<4>().0 {
         if px[3] == 255 {

@@ -13,7 +13,7 @@ interface gpu {
 
   // Runs the records lent on the device, where one is held, and answers once
   // done: until then the records, and the memory they name, are the host's.
-  run: async func(records: lent);
+  run: async func(recs: lent);
 
   // The device, a handle the host issues, which the guest lets go of as it
   // drops; named in WASI's `get-` form, as a resource holds the plain name.

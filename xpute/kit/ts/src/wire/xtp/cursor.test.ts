@@ -49,8 +49,8 @@ function refused(hex: string): string {
 test("the cursor reads what the typescript reads", async () => {
   const v = await Golden.load("kit/spec/golden/wire/xtp/cursor.tsv");
 
-  v.each("packets", (k) => {
-    const root = new TreeReader(hex_to_bytes(v.s(`${k}.packet`))).root;
+  v.each("pkts", (k) => {
+    const root = new TreeReader(hex_to_bytes(v.s(`${k}.pkt`))).root;
     assert.deepStrictEqual(root.type, v.u32(`${k}.type`), `${k}.type`);
     assert.deepStrictEqual(show(deep(root)), v.s(`${k}.deep`), `${k}.deep`);
     if (root.is_branch()) {
@@ -65,7 +65,7 @@ test("the cursor reads what the typescript reads", async () => {
     }
   });
 
-  const good = v.s("packets.0.packet");
+  const good = v.s("pkts.0.pkt");
   assert.deepStrictEqual(
     refused(good.slice(0, 20)),
     v.s("malformed.truncated_hdr"),
@@ -79,7 +79,7 @@ test("the cursor reads what the typescript reads", async () => {
     v.s("malformed.truncated_payload"),
   );
   v.each("refused", (k) =>
-    assert.deepStrictEqual(refused(v.s(`${k}.packet`)), v.s(`${k}.read`), k),
+    assert.deepStrictEqual(refused(v.s(`${k}.pkt`)), v.s(`${k}.read`), k),
   );
 
   [0x7ffffff9, 0xfffffff8, 0xfffffff9].forEach((n, j) => {

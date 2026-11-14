@@ -72,12 +72,7 @@ pub(crate) trait Base: Tile + Sized + 'static {
     /// the tile's. The tile owns what it decoded and takes the packet, or
     /// drops it, as its layer decides. An `Exit` of `Refused` waits on what
     /// refused it (sys/io/room.rs).
-    fn receive(
-        tile: Quadrant,
-        slot: u32,
-        pkt: Body,
-        phases: &mut PhaseList,
-    ) -> Result<Self, Exit>;
+    fn receive(tile: Quadrant, slot: u32, pkt: Body, phases: &mut PhaseList) -> Result<Self, Exit>;
 
     /// The tile with nothing in it, which stands for an absent tile at the
     /// layer's top. None for a layer whose absent tiles are answered by the

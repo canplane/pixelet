@@ -139,7 +139,7 @@ impl Staging {
 }
 
 impl Runner {
-    pub fn new(worker_cnt: usize, limit: Limit) -> Result<Self, String> {
+    pub(crate) fn new(worker_cnt: usize, limit: Limit) -> Result<Self, String> {
         if worker_cnt == 0
             || limit.seconds == 0
             || worker_cnt

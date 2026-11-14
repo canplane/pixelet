@@ -48,7 +48,7 @@ XPUTE_TEST(xtp_writer_matches_other_languages) {
             if (v.s(j + ".name") == name) k = j;
         });
         XPUTE_CHECK(!k.empty());
-        XPUTE_CHECK_EQ(encode(build), v.s(k + ".packet"), name);
+        XPUTE_CHECK_EQ(encode(build), v.s(k + ".pkt"), name);
     };
     check("nil", [](PacketWriter &w) { w.nil(); });
     check("i32", [](PacketWriter &w) { w.i32(42); });

@@ -12,7 +12,7 @@ mod app;
 
 use app::End;
 
-// A room that is no multiple of 8 is the guest's bug in `link_init`.
+// A cap that is no multiple of 8 is the guest's bug in `link_init`.
 xpute_guest::link!(4097, || {}, || {}, || false);
 
 fn boot(_: std::path::PathBuf) -> Boot {

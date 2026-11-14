@@ -40,10 +40,10 @@ XPUTE_TEST(xtp_tree_matches_other_languages) {
             if (v.s(j + ".name") == name) k = j;
         });
         XPUTE_CHECK(!k.empty());
-        XPUTE_CHECK_EQ(encoded(build), v.s(k + ".packet"), name);
+        XPUTE_CHECK_EQ(encoded(build), v.s(k + ".pkt"), name);
         // A first buffer too small for the packet must give the same bytes
         // once it has grown.
-        XPUTE_CHECK_EQ(encoded(build, 16), v.s(k + ".packet"), name);
+        XPUTE_CHECK_EQ(encoded(build, 16), v.s(k + ".pkt"), name);
     };
     check("nil", [](TreeView<> &t) { t.nil(); });
     check("i32", [](TreeView<> &t) { (void)t.set({std::int32_t{42}}); });

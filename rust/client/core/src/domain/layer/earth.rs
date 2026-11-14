@@ -6,17 +6,17 @@
 //! then the device generation that does, and nothing in the core after a
 //! frame takes them. Wherever no tile is held, the global picture answers.
 
+use pxl_global::Global;
 use pxl_spec::bake::publication::BaseKind;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::bake::tile::{Occupancy, Tile};
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILE_CAP};
 use pxl_spec::space::layer::quadrant::Quadrant;
-use pxl_global::Global;
 
-use crate::sys::io::body::Body;
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
+use crate::sys::io::body::Body;
 use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;
 use crate::sys::io::param::{BODY_SLOT_CNT, CREDIT_CAP};

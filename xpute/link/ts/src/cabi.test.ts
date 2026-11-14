@@ -44,7 +44,7 @@ function lower(buf: U8Array): number {
   return w.finish();
 }
 
-test("the packet lowers as the record holds it, and only into a room that holds it whole", async () => {
+test("the packet lowers as the record holds it, and only into a buffer that holds it whole", async () => {
   const want = (await Golden.load("link/spec/golden/cabi.tsv")).bytes("pkt");
   const buf = new Uint8Array(want.length).fill(0xaa);
   assert.equal(lower(buf), want.length);
@@ -53,7 +53,9 @@ test("the packet lowers as the record holds it, and only into a room that holds 
 });
 
 test("the record's packet lifts as the values it was lowered from", async () => {
-  const r = new Lift((await Golden.load("link/spec/golden/cabi.tsv")).bytes("pkt"));
+  const r = new Lift(
+    (await Golden.load("link/spec/golden/cabi.tsv")).bytes("pkt"),
+  );
   assert.equal(r.bool(0), true);
   assert.equal(r.i8(1), -3);
   assert.equal(r.u16(2), 65535);

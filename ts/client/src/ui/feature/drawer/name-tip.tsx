@@ -40,7 +40,13 @@ interface Named {
   y: f64;
 }
 
-function NameTip({ named, sheetHeightPx }: { named: Named; sheetHeightPx: f64 }) {
+function NameTip({
+  named,
+  sheetHeightPx,
+}: {
+  named: Named;
+  sheetHeightPx: f64;
+}) {
   return (
     <View
       pointerEvents="none"
