@@ -238,3 +238,7 @@ impl<'a> Lift<'a> {
         core::str::from_utf8(self.bytes(at)?).map_err(|_| Errno::EBADMSG)
     }
 }
+
+#[cfg(test)]
+#[path = "cabi.test.rs"]
+mod test;

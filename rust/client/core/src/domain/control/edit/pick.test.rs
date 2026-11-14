@@ -49,27 +49,23 @@ fn lattice(p: &Q3) -> (i32, i32, i32) {
 
 #[test]
 fn struck_corner_lands_on_cell() {
-    crate::on_core(|| {
-        for (name, hit) in cases() {
-            let p = pick(hit).struck_corner(GROUND.leaf_cell_zoom());
-            assert_eq!(lattice(&p), (3, 5, 2), "{name}");
-            assert_eq!(p.map(|v| v.rem_euclid(1 << FRAC_W)), [0, 0, 0], "{name}");
-        }
-    });
+    for (name, hit) in cases() {
+        let p = pick(hit).struck_corner(GROUND.leaf_cell_zoom());
+        assert_eq!(lattice(&p), (3, 5, 2), "{name}");
+        assert_eq!(p.map(|v| v.rem_euclid(1 << FRAC_W)), [0, 0, 0], "{name}");
+    }
 }
 
 #[test]
 fn struck_corner_names_cell() {
-    crate::on_core(|| {
-        for (name, hit) in cases() {
-            let cell = lattice(&pick(hit).struck_corner(GROUND.leaf_cell_zoom()));
-            for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
-                assert_eq!(
-                    lattice(&pick(hit).struck_corner(zoom)),
-                    cell,
-                    "{name} at zoom {zoom}"
-                );
-            }
+    for (name, hit) in cases() {
+        let cell = lattice(&pick(hit).struck_corner(GROUND.leaf_cell_zoom()));
+        for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
+            assert_eq!(
+                lattice(&pick(hit).struck_corner(zoom)),
+                cell,
+                "{name} at zoom {zoom}"
+            );
         }
-    });
+    }
 }

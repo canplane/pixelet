@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@xpute/link": "workspace:*",
-    "@xpute/kit": "workspace:*"
+    "@xpute/kit": "workspace:*",
+    "@xpute/web-runtime": "workspace:*"
   }
 }

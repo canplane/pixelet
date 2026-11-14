@@ -29,7 +29,7 @@ use pxl_render::spec::api::device;
 use xpute_gpu_link::{GpuAsk, GpuConfig};
 use xpute_gpu_native_host::{native, Ask};
 use xpute_native_host::{clock, stop};
-use xpute_native_runtime::native::{Boot, Stop};
+use xpute_native_runtime::native::Boot;
 
 // The GPU's host under xpute's names, which the platform's GPU module calls
 // (xpute_gpu.h, and on Android the Kotlin class `xpute.Gpu`).
@@ -54,12 +54,12 @@ const GPU: GpuConfig = GpuConfig {
 };
 
 /// What the runtime starts the core with: `cache_dir` is the directory the
-/// platform keeps the app's caches in, and `report` hears a stop.
-fn start(cache_dir: PathBuf, report: fn(Stop)) -> Boot {
+/// platform keeps the app's caches in.
+fn start(cache_dir: PathBuf) -> Boot {
     Boot {
         stack_sz: stack::THREAD_SZ as usize,
         servers: vec![
-            Box::new(move || stop::serve(report)),
+            Box::new(stop::serve),
             Box::new(clock::serve),
             Box::new(text::serve),
             Box::new(move || {

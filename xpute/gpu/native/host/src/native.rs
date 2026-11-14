@@ -601,3 +601,7 @@ macro_rules! native_abi {
         $crate::jni_abi!();
     };
 }
+
+#[cfg(test)]
+#[path = "native.test.rs"]
+mod test;

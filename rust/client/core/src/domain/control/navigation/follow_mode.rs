@@ -130,3 +130,7 @@ pub(crate) fn tracking_action(tracking: Tracking) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "follow_mode.test.rs"]
+mod test;

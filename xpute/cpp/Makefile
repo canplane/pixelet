@@ -3,9 +3,9 @@
 # xpute's C++ is built with the platform's compiler ($CXX, or c++), and for
 # a WebAssembly module with the WASI SDK's clang ($WASI_SDK_PATH, or
 # /opt/wasi-sdk). The library is xpute/, included from this directory by its
-# root ("xpute/kit/status/bug.hpp"); dev/test/ is the tests' runner and golden
-# reader, beside it and never shipped. The amalgamation is the library in two
-# files, xpute.hpp and xpute.cpp (amalgamation.awk), under
+# root ("xpute/kit/status/bug.hpp"); dev/test/ is the tests' runner, golden
+# reader and memory, beside it and never shipped. The amalgamation is the
+# library in two files, xpute.hpp and xpute.cpp (amalgamation.awk), under
 # target/amalgamation/.
 #
 #   make -C cpp check | test | wasm | amalgamation       (-j for parallel compiles)

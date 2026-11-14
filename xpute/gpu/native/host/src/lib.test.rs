@@ -149,9 +149,10 @@ fn stale_handle_inert() {
     assert!(!h.unbind(0), "0 is never a handle");
 }
 
-/// Each program's recorded runs (the golden's `turn` records), run as they
-/// were written, read back the bytes the record holds. Run K's ticket is
-/// K + 1, and the next run waits until the host has stored it at the fence.
+/// Each program's recorded turns, each the records `gpu.run` is lent, run
+/// and polled as the GPU's thread runs and polls them (native.rs), read back
+/// the bytes the record holds. Turn K's ticket is K + 1, and the next turn
+/// waits until the host has stored it at the fence.
 #[test]
 fn records_read_back() {
     let g = Golden::load(GOLDEN);
@@ -165,20 +166,19 @@ fn records_read_back() {
         ..Default::default()
     }))
     .expect("a device with timestamp queries");
-    let [size, input_at, done, readback] =
-        ["region", "input.at", "done.at", "readback.at"].map(|k| g.u32(k));
+    let [region_sz, records_at, input_at, done_at, readback_at] =
+        ["region", "records.at", "input.at", "done.at", "readback.at"].map(|k| g.u32(k));
     assert!(
-        size <= SPARE_AT,
+        region_sz <= SPARE_AT,
         "the golden region fits before the spare room"
     );
     region();
     // SAFETY: the test's own region, which the host touches only inside
     // `run` and `poll`.
     let write = |at, from: &[u8]| unsafe { xpute_link::mem::write(at, from) };
-    let word = |at| unsafe { xpute_link::mem::word(at) };
     g.each("program", |name| {
         let p = g.s(name);
-        write(0, &vec![0u8; size as usize]);
+        write(0, &vec![0u8; region_sz as usize]);
         let key = format!("{p}.input");
         if g.has(&key) {
             write(input_at, &g.bytes(&key));
@@ -191,15 +191,12 @@ fn records_read_back() {
             None,
             || {},
         );
-        // A recorded turn is a stream: its record words' count, its head's
-        // length in words, then the records the host is lent.
         g.each(&format!("{p}.turn"), |turn| {
-            let words = g.bytes(turn);
-            write(0, &words);
-            let (end, head) = (word(0), word(4));
+            let records = g.bytes(turn);
+            write(records_at, &records);
             let ticket = turn.rsplit('.').next().unwrap().parse::<u32>().unwrap() + 1;
-            host.run(4 * head, 4 * end);
-            while xpute_link::mem::load_acquire(done) != ticket {
+            host.run(records_at, records.len() as u32);
+            while xpute_link::mem::load_acquire(done_at) != ticket {
                 let _ = device.poll(wgpu::PollType::wait_indefinitely());
                 host.poll();
             }
@@ -207,7 +204,7 @@ fn records_read_back() {
         let want = g.bytes(&format!("{p}.readback"));
         assert_eq!(
             // SAFETY: as `write`.
-            unsafe { xpute_link::mem::read(readback, want.len() as u32) },
+            unsafe { xpute_link::mem::read(readback_at, want.len() as u32) },
             &want[..],
             "{p}.readback"
         );

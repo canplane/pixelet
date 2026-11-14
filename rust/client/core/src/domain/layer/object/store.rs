@@ -454,7 +454,7 @@ impl Store {
 
     #[cfg(test)]
     /// Empties the store and returns the cubes that held anything.
-    pub fn clear(&mut self) -> Vec<Aabb> {
+    pub(crate) fn clear(&mut self) -> Vec<Aabb> {
         let mut cubes = Vec::new();
         self.each(&mut |e| cubes.push(e.cube()));
         self.tree = Tree::new(EMPTY.word());

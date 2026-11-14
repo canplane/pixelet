@@ -129,6 +129,9 @@ importers:
       '@xpute/link':
         specifier: workspace:*
         version: link:../../link/ts
+      '@xpute/web-runtime':
+        specifier: workspace:*
+        version: link:../runtime
 
   ../xpute/web/runtime:
     dependencies:

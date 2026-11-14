@@ -123,3 +123,7 @@ pub fn get_tile_bbox(zoom: Zoom, tile: [i32; 2]) -> BBox4326 {
 
     [min, max]
 }
+
+#[cfg(test)]
+#[path = "4326.test.rs"]
+mod test;

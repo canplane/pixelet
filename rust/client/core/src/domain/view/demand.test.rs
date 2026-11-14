@@ -34,7 +34,7 @@ impl Base for Probe {
         PROBE_TILES.get(TileCache::default)
     }
 
-    fn receive(_: Quadrant, _: u32, _: Box<[u8]>, _: &mut PhaseList) -> Result<Probe, Exit> {
+    fn receive(_: Quadrant, _: u32, _: Body, _: &mut PhaseList) -> Result<Probe, Exit> {
         Err(Failure::from(Errno::ENOTRECOVERABLE).into())
     }
 }
@@ -66,61 +66,59 @@ fn at(eye: [f64; 3], east: Option<f64>, top: Zoom) -> Observation {
 /// demand observing the same eye finds.
 #[test]
 fn frames_ask_what_a_fresh_observation_asks() {
-    crate::on_core(|| {
-        let top = LEAF_ZOOM - 6;
-        let (x0, y0, side) = Quadrant::new(top, [3, -2]).rect();
-        let leaf = units(LEAF_ZOOM);
-        let mut eyes = Vec::new();
-        for k in 0..40 {
-            let k = f64::from(k);
-            // The eye steps within a leaf, then across leaves, then across the
-            // top's tiles.
-            let step = if k < 10.0 {
-                leaf / 64.0
-            } else if k < 25.0 {
-                leaf / 3.0
-            } else {
-                side / 5.0
-            };
-            let at_k = [x0 + side / 2.0 + k * step, y0 + side / 3.0 - k * step / 2.0];
-            let height = if (30.0..35.0).contains(&k) {
-                side * (k - 29.0)
-            } else {
-                2.0
-            };
-            eyes.push([at_k[0], at_k[1], height]);
-            eyes.push([at_k[0], at_k[1], height]);
+    let top = LEAF_ZOOM - 6;
+    let (x0, y0, side) = Quadrant::new(top, [3, -2]).rect();
+    let leaf = units(LEAF_ZOOM);
+    let mut eyes = Vec::new();
+    for k in 0..40 {
+        let k = f64::from(k);
+        // The eye steps within a leaf, then across leaves, then across the
+        // top's tiles.
+        let step = if k < 10.0 {
+            leaf / 64.0
+        } else if k < 25.0 {
+            leaf / 3.0
+        } else {
+            side / 5.0
+        };
+        let at_k = [x0 + side / 2.0 + k * step, y0 + side / 3.0 - k * step / 2.0];
+        let height = if (30.0..35.0).contains(&k) {
+            side * (k - 29.0)
+        } else {
+            2.0
+        };
+        eyes.push([at_k[0], at_k[1], height]);
+        eyes.push([at_k[0], at_k[1], height]);
+    }
+    let mut frames = Vec::new();
+    for (k, eye) in eyes.iter().enumerate() {
+        let east = (k % 3 != 0).then_some(eye[0] - k as f64 * leaf);
+        frames.push(at(*eye, east, top));
+    }
+    let dst = Quadrant::new(LEAF_ZOOM, [0, 0]);
+    let reused = Probe::demand();
+    let mut changed = Vec::new();
+    for (k, o) in frames.iter().enumerate() {
+        let dst = (k >= 20).then_some(dst);
+        reused.want(Some(*o), dst, &[], top);
+        let mut fresh = Demand::<Probe>::default();
+        fresh.want(Some(*o), dst, &[], top);
+        assert_eq!(
+            reused.wants, fresh.wants,
+            "frame {k}: the wants and their order"
+        );
+        assert_eq!(reused.floor, fresh.floor, "frame {k}: the floor");
+        assert_eq!(reused.observation, fresh.observation, "frame {k}");
+        // A tile arrives, as one would between frames.
+        if k == 50 {
+            let p = Quadrant::of_id(reused.wants[reused.wants.len() / 2].0);
+            Probe::tile_cache().set(p, Probe);
         }
-        let mut frames = Vec::new();
-        for (k, eye) in eyes.iter().enumerate() {
-            let east = (k % 3 != 0).then_some(eye[0] - k as f64 * leaf);
-            frames.push(at(*eye, east, top));
+        // The demand is told what moved, as the frame tells it (frame.rs
+        // `changes_step`).
+        Probe::tile_cache().take_changed(&mut changed);
+        if !changed.is_empty() {
+            reused.on_changed();
         }
-        let dst = Quadrant::new(LEAF_ZOOM, [0, 0]);
-        let reused = Probe::demand();
-        let mut changed = Vec::new();
-        for (k, o) in frames.iter().enumerate() {
-            let dst = (k >= 20).then_some(dst);
-            reused.want(Some(*o), dst, &[], top);
-            let mut fresh = Demand::<Probe>::default();
-            fresh.want(Some(*o), dst, &[], top);
-            assert_eq!(
-                reused.wants, fresh.wants,
-                "frame {k}: the wants and their order"
-            );
-            assert_eq!(reused.floor, fresh.floor, "frame {k}: the floor");
-            assert_eq!(reused.observation, fresh.observation, "frame {k}");
-            // A tile arrives, as one would between frames.
-            if k == 50 {
-                let p = Quadrant::of_id(reused.wants[reused.wants.len() / 2].0);
-                Probe::tile_cache().set(p, Probe);
-            }
-            // The demand is told what moved, as the frame tells it (frame.rs
-            // `changes_step`).
-            Probe::tile_cache().take_changed(&mut changed);
-            if !changed.is_empty() {
-                reused.on_changed();
-            }
-        }
-    });
+    }
 }

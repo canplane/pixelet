@@ -7,7 +7,11 @@
  * under their surface's handle (gpu/wit/surface.wit). The device is asked for
  * when the guest asks it ready, and a refusal is answered, not retried: the
  * guest asks again when it sees fit. A WebAssembly module reaches
- * WebGPU no other way.
+ * WebGPU no other way. What the page has of a GPU this server tells the page
+ * itself as that changes, posted from the worker (`GpuReport`), as a device's
+ * GPU host tells its app through its own module (xpute-gpu-native-host
+ * native.rs `state_on`) and as the page's runtime posts its own
+ * (@xpute/web-runtime worker.ts `tell`).
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
@@ -18,6 +22,13 @@ import * as gpu from "@xpute/gpu-link/abi/gpu.ts";
 import { ERROR_CODE_NO_DEVICE } from "@xpute/gpu-link/abi/gpu.enum.ts";
 import { type GpuAsk, type GpuConfig, type GpuState } from "@xpute/gpu-link";
 import { GpuHost } from "./host.ts";
+
+/** What the worker posts the page as what it has of a GPU changes: an ask's
+ * finding, or a device lost. */
+export interface GpuReport {
+  kind: "gpu";
+  state: GpuState;
+}
 
 export class WebGpu {
   private host: GpuHost | null = null;
@@ -31,14 +42,11 @@ export class WebGpu {
   private readonly link: Side;
   private readonly ask: GpuAsk;
   private readonly cfg: GpuConfig;
-  private readonly report: (state: GpuState) => void;
 
-  /** `report` hears what the page has of a GPU, as each ask finds it. */
-  constructor(link: Side, ask: GpuAsk, cfg: GpuConfig, report: (state: GpuState) => void) {
+  constructor(link: Side, ask: GpuAsk, cfg: GpuConfig) {
     this.link = link;
     this.ask = ask;
     this.cfg = cfg;
-    this.report = report;
   }
 
   /** Mounts `gpu` on the link, whose `get_device` serves the device under
@@ -133,6 +141,11 @@ export class WebGpu {
     this.host = r;
     if (this.block !== null) r.attach(this.block);
     this.report("present");
+  }
+
+  /** Posts the page what it has of a GPU (`GpuReport`). */
+  private report(state: GpuState): void {
+    postMessage({ kind: "gpu", state } satisfies GpuReport);
   }
 
   private tell(waiting: (() => void)[]): void {

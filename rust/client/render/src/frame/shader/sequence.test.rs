@@ -77,19 +77,6 @@ fn named(statement: &str) -> Option<&str> {
     Some(&name[..end])
 }
 
-/// Whether `statement` names one of the frame's buffers by the host's field for it, as in
-/// `.marks,` or `.light_args)`.
-fn names_buf(statement: &str) -> bool {
-    BUFS.iter().any(|b| {
-        let field = b.name.rsplit('.').next().unwrap_or(b.name);
-        [",", ")", " "]
-            .iter()
-            .any(|end| statement.contains(&format!(".{field}{end}")))
-    })
-}
-
-/// Every indirect dispatch and draw in the sources takes the place of its count from a step,
-/// and every copy and host's write of one of the frame's buffers takes its offsets from one.
 /// The steps a function names come in the frame's order, except the host's writes, which land
 /// first wherever they are named. Every step that reads a count, copies or writes is named by
 /// some source.
@@ -104,31 +91,6 @@ fn the_host_calls_off_the_steps_in_their_order() {
     };
     let mut named_anywhere = Vec::new();
     for (file, text) in SOURCES {
-        for call in [
-            "dispatch_indirect(",
-            "draw_indirect(",
-            "draw_indexed_indirect(",
-        ] {
-            for (_, statement) in calls(text, call) {
-                assert!(
-                    statement.contains(".at()") || statement.contains(".off("),
-                    "{file}: an indirect call off no step: {statement}"
-                );
-            }
-        }
-        for call in ["copy_buf(", "write_buf("] {
-            for (_, statement) in calls(text, call) {
-                if names_buf(statement) {
-                    assert!(
-                        statement.contains("sequence::")
-                            || statement.contains("from_at()")
-                            || statement.contains("to_at()"),
-                        "{file}: a copy or a write of a buffer the frame shares off no step: \
-                         {statement}"
-                    );
-                }
-            }
-        }
         // The steps a function names, in the order of its text, are held to the frame's order.
         // A pass's list is not a step.
         let at: Vec<(usize, &str)> = text

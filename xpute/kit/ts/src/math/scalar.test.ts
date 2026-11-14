@@ -27,7 +27,7 @@ const bits = (x: number): bigint => {
 };
 
 test("scalar computes what the record holds", async () => {
-  const v = await Golden.load("golden/math/scalar.tsv");
+  const v = await Golden.load("kit/spec/golden/math/scalar.tsv");
   v.each("", (k) => {
     const x = v.f64(`${k}.x`);
     const s = v.f64(`${k}.s`);
@@ -55,6 +55,6 @@ test("scalar computes what the record holds", async () => {
 });
 
 test("the tolerance is the record's", async () => {
-  const v = await Golden.load("golden/math/scalar.tsv");
+  const v = await Golden.load("kit/spec/golden/math/scalar.tsv");
   assert.deepStrictEqual(bits(EPS), bits(v.f64("eps")));
 });

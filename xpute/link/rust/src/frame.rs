@@ -74,3 +74,7 @@ impl Frame {
         Ok(Some(unsafe { mem::bytes(at + HDR_SZ, self.pkt_len) }))
     }
 }
+
+#[cfg(test)]
+#[path = "frame.test.rs"]
+mod test;

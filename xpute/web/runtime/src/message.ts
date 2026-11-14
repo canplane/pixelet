@@ -39,9 +39,9 @@ export interface Trap {
 }
 
 /** The guest stopped, with the report of the broken invariant: the guest's,
- * which the program sends as the host hands it the report (@xpute/web-host
- * `serve_stop`), or the host's own failure, which the runtime sends
- * (worker.ts `hook`). */
+ * as the host that serves the stop hands it (@xpute/web-host `serve_stop`),
+ * or the host's own failure (worker.ts `hook`), which the runtime sends
+ * (worker.ts `tell_stop`). */
 export interface Stopped {
   kind: "stopped";
   stop: Stop;

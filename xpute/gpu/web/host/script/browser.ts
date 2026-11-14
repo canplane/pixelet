@@ -1,8 +1,8 @@
-// Runs gpu/web/host/src/runtime.test.ts where the web runtime runs: in Chrome, on
-// its WebGPU. The test is bundled for the browser and served beside the tree's
-// spec/, whose root the bundle's golden reader is handed. Chrome is started
-// headless on the page, and the page posts its outcome back. Without Chrome,
-// or without WebGPU in it, the run fails.
+// Runs gpu/web/host/src/host.test.ts where the page's GPU host runs: in
+// Chrome, on its WebGPU. The test is bundled for the browser and served beside
+// the tree's golden records, whose root the bundle's golden reader is handed.
+// Chrome is started headless on the page, and the page posts its outcome back.
+// Without Chrome, or without WebGPU in it, the run fails.
 //
 //   pnpm --dir xpute test:gpu:web          ($CHROME names the browser's binary)
 
@@ -14,20 +14,20 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "vite";
 
-/** This is xpute's root, four directories up. It holds the spec the server
- * serves and target/, which the test is bundled into. */
+/** This is xpute's root, four directories up. It holds the golden records the
+ * server serves and target/, which the test is bundled into. */
 const ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
-const TEST = "gpu/web/host/src/runtime.test.ts";
-const BUNDLE = join(ROOT, "target/browser/runtime.test.js");
+const TEST = "gpu/web/host/src/host.test.ts";
+const BUNDLE = join(ROOT, "target/browser/host.test.js");
 const CHROME =
   process.env.CHROME ??
   (process.platform === "darwin"
     ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
     : "google-chrome");
 const SECONDS = 60;
-/** Where the page serves the tree's spec/, which the bundle's golden reader
- * takes as its root (`GOLDEN_ROOT`). */
-const SPEC = "/spec/";
+/** Where the page serves xpute's root, which the bundle's golden reader takes
+ * as its root (`GOLDEN_ROOT`): its golden records alone. */
+const GOLDEN_ROOT = "/golden/";
 
 async function main(): Promise<number> {
   // vite bundles the test and all it imports into one ES module, as a
@@ -36,7 +36,7 @@ async function main(): Promise<number> {
     configFile: false,
     root: ROOT,
     logLevel: "warn",
-    define: { GOLDEN_ROOT: JSON.stringify(SPEC) },
+    define: { GOLDEN_ROOT: JSON.stringify(GOLDEN_ROOT) },
     build: {
       outDir: dirname(BUNDLE),
       emptyOutDir: false,
@@ -69,8 +69,8 @@ async function main(): Promise<number> {
         .writeHead(200, { "content-type": "text/javascript" })
         .end(await readFile(BUNDLE));
     }
-    if (path.startsWith(SPEC) && !path.includes("..")) {
-      return res.writeHead(200).end(await readFile(join(ROOT, path)));
+    if (path.startsWith(GOLDEN_ROOT) && path.includes("/spec/golden/") && !path.includes("..")) {
+      return res.writeHead(200).end(await readFile(join(ROOT, path.slice(GOLDEN_ROOT.length))));
     }
     res.writeHead(404).end();
   });

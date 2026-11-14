@@ -7,6 +7,7 @@ publish.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
+exclude = ["src/**/*.test.rs"]
 
 [lib]
 path = "src/lib.rs"
@@ -25,3 +26,30 @@ xpute-link.workspace = true
 [target.'cfg(target_os = "android")'.dependencies]
 jni-sys = "0.3"
 ndk-sys = "0.6"
+
+[dev-dependencies]
+# Each process test links a guest beside the runtime, as an app does
+# (src/app.test.rs).
+xpute-guest.workspace = true
+
+# Each process test is a binary of its own, since a process starts one runtime
+# and links one guest.
+[[test]]
+name = "remote"
+path = "src/remote.test.rs"
+
+[[test]]
+name = "native"
+path = "src/native.test.rs"
+
+[[test]]
+name = "native-boot"
+path = "src/native.boot.test.rs"
+
+[[test]]
+name = "link"
+path = "src/link.test.rs"
+
+[[test]]
+name = "link-init"
+path = "src/link.init.test.rs"

@@ -18,9 +18,9 @@ use xpute_link::{load_uri, mem, Handle, Lift, Method};
 use crate::{event_loop, link, remote};
 
 /// The report of a broken invariant before the guest stops: the guest's
-/// (wit/stop/stop.wit), as the host that serves the stop hands it to the app
-/// (xpute-native-host stop.rs), or the host's own failure, which the runtime
-/// tells (`hook`).
+/// (wit/stop/stop.wit), which the host that serves the stop hands the runtime
+/// (xpute-native-host stop.rs), or the host's own failure (`hook`), which the
+/// runtime tells the app (`tell_stop`).
 pub struct Stop {
     pub errnum: i32,
     pub file: String,
@@ -46,9 +46,8 @@ pub struct Boot {
 }
 
 /// The program's start, which `native_abi!` takes: given the directory the
-/// platform keeps the app's caches in and what tells the app a stop, what
-/// it starts its guest with.
-pub type Start = fn(PathBuf, fn(Stop)) -> Boot;
+/// platform keeps the app's caches in, what it starts its guest with.
+pub type Start = fn(PathBuf) -> Boot;
 
 /// What tells the app a batch waits.
 pub type Tell = extern "C" fn();
@@ -100,28 +99,32 @@ fn end() -> MutexGuard<'static, End> {
     END.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-fn tell_stop(s: &Stop) {
+fn call_stopped(s: &Stop) {
     if let Some(f) = *STOPPED.lock().unwrap_or_else(|e| e.into_inner()) {
         f(s.errnum, s.file.as_ptr(), s.file.len(), s.line, s.n1, s.n2);
     }
 }
 
-fn tell_trap(err: &str) {
+fn call_trapped(err: &str) {
     if let Some(f) = *TRAP.lock().unwrap_or_else(|e| e.into_inner()) {
         f(err.as_ptr(), err.len());
     }
 }
 
-fn stopped(s: Stop) {
+/// Tells the app the guest stopped, with the report of the broken
+/// invariant: the guest's, which the host that serves the stop hands it
+/// (xpute-native-host stop.rs), or the host's own failure (`hook`), as
+/// @xpute/web-runtime worker.ts `tell_stop` tells a page.
+pub fn tell_stop(s: Stop) {
     let mut end = end();
-    tell_stop(&s);
+    call_stopped(&s);
     end.stop = Some(s);
 }
 
 /// Tells the app the guest trapped, with what stopped it (link.rs `trap`).
-pub(crate) fn trap(err: &str) {
+pub(crate) fn tell_trap(err: &str) {
     let mut end = end();
-    tell_trap(err);
+    call_trapped(err);
     end.trap = Some(err.to_owned());
 }
 
@@ -150,13 +153,13 @@ pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], cache_dir: P
         // A stop told again lands before a trap told meanwhile.
         let end = end();
         if let Some(s) = &end.stop {
-            tell_stop(s);
+            call_stopped(s);
         }
         if let Some(err) = &end.trap {
-            tell_trap(err);
+            call_trapped(err);
         }
     }
-    STARTED.call_once(|| run(start(cache_dir, stopped), named, prefixes));
+    STARTED.call_once(|| run(start(cache_dir), named, prefixes));
     generation
 }
 
@@ -201,11 +204,12 @@ fn caught(f: impl FnOnce()) {
 }
 
 /// Makes a panic of the host's own, on any thread, a stop, as @xpute/web-runtime
-/// worker.ts `hook` makes a throw one: the link is trapped, so that no answer
-/// the dead thread owed leaves the guest waiting, and where it traps just now,
-/// the failure is logged and told the app as a stop, with its errno, a bug's or
-/// ENOTRECOVERABLE, and where it was raised, before the app hears the trap. A
-/// panic after the guest trapped is no failure of the host's. The link's state
+/// worker.ts `hook` makes a throw one: where the guest has not trapped
+/// already, the failure is logged and told the app as a stop, with its errno,
+/// a bug's or ENOTRECOVERABLE, and where it was raised; then the link is
+/// trapped, so that no answer the dead thread owed leaves the guest waiting,
+/// and the app hears the trap after the stop. A panic after the guest trapped
+/// is no failure of the host's. The link's state
 /// is the guest thread's: a panic there is told at once, before it unwinds,
 /// and one on another thread is posted to it. A guest installs its own hook
 /// over this one and hands back what is not its own (xpute-guest link.rs
@@ -223,7 +227,7 @@ fn hook() {
         let fail = move || {
             if !link::trapped() {
                 crate::log(&format!("[host] stopped: {errnum} at {file}:{line}"));
-                stopped(Stop {
+                tell_stop(Stop {
                     errnum,
                     file: file.clone(),
                     line,

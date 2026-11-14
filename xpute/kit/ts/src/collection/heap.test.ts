@@ -20,7 +20,7 @@ const show = (e: Element<number, number> | undefined): string =>
   e === undefined ? "none" : `${e.key}:${e.val}`;
 
 test("heaps pop what the record holds", async () => {
-  const v = await Golden.load("golden/collection/heap.tsv");
+  const v = await Golden.load("kit/spec/golden/collection/heap.tsv");
   const min = new MinHeap<number, number>([]);
   const max = new MaxHeap<number, number>([]);
   v.each("steps", (k) => {

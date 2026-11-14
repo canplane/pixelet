@@ -1,18 +1,18 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  // Where kit's spec/ is, which the golden reader takes as its root
-  // (@xpute/golden): only kit's tests read golden records.
+  // xpute's root, which the golden reader reads each part's records under
+  // (@xpute/golden), as the C++ tests do.
   define: {
-    GOLDEN_ROOT: JSON.stringify(new URL("./kit/spec/", import.meta.url).href),
+    GOLDEN_ROOT: JSON.stringify(new URL("./", import.meta.url).href),
   },
   test: {
     include: [
       "kit/ts/src/**/*.test.ts",
       "link/ts/src/**/*.test.ts",
       "web/host/src/**/*.test.ts",
-      "gpu/web/host/src/runtime.frame.test.ts",
       "gpu/web/host/src/web.test.ts",
+      "gpu/native/runtime/expo/src/**/*.test.ts",
     ],
     testTimeout: 0,
     setupFiles: ["vitest.setup.ts"],

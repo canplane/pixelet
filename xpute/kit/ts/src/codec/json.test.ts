@@ -17,7 +17,7 @@ const utf8 = (hex: string): string =>
   );
 
 test("the runtime's JSON.parse takes what the record says is JSON", async () => {
-  const v = await Golden.load("golden/codec/json.tsv");
+  const v = await Golden.load("kit/spec/golden/codec/json.tsv");
   for (let k = 0; v.has(`grammar.${k}.text`); k++) {
     let got = "json";
     try {
@@ -30,7 +30,7 @@ test("the runtime's JSON.parse takes what the record says is JSON", async () => 
 });
 
 test("the runtime's JSON.parse reads a number past the doubles as an infinity or a zero", async () => {
-  const v = await Golden.load("golden/codec/json.tsv");
+  const v = await Golden.load("kit/spec/golden/codec/json.tsv");
   for (let k = 0; v.has(`number.${k}.text`); k++) {
     const bits = new BigUint64Array(
       new Float64Array([JSON.parse(v.s(`number.${k}.text`))]).buffer,

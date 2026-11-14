@@ -1,0 +1,130 @@
+// xpute-native-runtime/remote.test.rs
+
+//! A reload on a device is a new UI on the same runtime (remote.rs `accept`).
+
+use std::rc::Rc;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Mutex;
+
+use xpute_guest::abi::life;
+use xpute_kit::status::errno::Errno;
+use xpute_link::{uri, Handle, Method, Object, Reply, Tag, NAMED, OPEN, ROOT};
+use xpute_native_runtime::native::Boot;
+
+#[path = "app.test.rs"]
+mod app;
+
+/// The UI's interface, whose method 0 it answers later.
+const UI: Handle = NAMED | 0x10;
+/// The guest's interface, whose objects the UI opens at `obj`.
+const OBJ: Handle = NAMED | 0x11;
+
+static ATTACH_CNT: AtomicU32 = AtomicU32::new(0);
+static DROP_CNT: AtomicU32 = AtomicU32::new(0);
+/// How many times the runtime told the app a batch waits.
+static NOTIFY_CNT: AtomicU32 = AtomicU32::new(0);
+/// The answers to the guest's requests of the UI, in the order heard.
+static ANSWERS: Mutex<Vec<i32>> = Mutex::new(Vec::new());
+
+/// At each attach the guest sends the UI a request it answers later.
+struct Guest;
+
+impl life::Guest for Guest {
+    fn hidden(&self) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn shown(&self) -> Result<(), Errno> {
+        Ok(())
+    }
+
+    fn attached(&self) -> Result<(), Errno> {
+        ATTACH_CNT.fetch_add(1, Ordering::Relaxed);
+        xpute_guest::link::send(UI, 0, None, Some(Box::new(|r, _| ANSWERS.lock().unwrap().push(r))));
+        Ok(())
+    }
+}
+
+struct Obj;
+
+impl Object for Obj {
+    fn call(&self, _: Method, _: Tag, _: Option<&[u8]>) -> Reply {
+        Reply::from(0)
+    }
+}
+
+impl Drop for Obj {
+    fn drop(&mut self) {
+        DROP_CNT.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+xpute_guest::link!(
+    4096,
+    || {
+        life::mount(Rc::new(Guest));
+        xpute_guest::link::mount(OBJ, uri(&["obj"]), |_, _| Ok(Rc::new(Obj) as Rc<dyn Object>));
+    },
+    || {},
+    || false
+);
+
+fn boot(_: std::path::PathBuf) -> Boot {
+    Boot {
+        stack_sz: 1 << 20,
+        servers: Vec::new(),
+        imports: &[("ui", UI)],
+        later: &[(UI, 0)],
+    }
+}
+
+extern "C" fn notified() {
+    NOTIFY_CNT.fetch_add(1, Ordering::Relaxed);
+}
+
+/// The tag of the request the guest sent the UI of `generation` to answer
+/// later, among what that UI heard.
+fn request(generation: u32, messages: &mut Vec<app::Message>) -> i64 {
+    let mut tag = None;
+    app::until("the guest's request", || {
+        messages.extend(app::take(generation));
+        tag = messages.iter().find(|m| m[..4] == [2, i64::from(UI), 0, 1]).map(|m| m[4]);
+        tag.is_some()
+    });
+    tag.unwrap()
+}
+
+/// A new UI is told the guest attached; each request the old UI left pending
+/// is answered ECANCELED, once; the guest's objects it opened are dropped; and
+/// the old UI's take, and its answer to the new UI's request, reach nothing.
+#[test]
+fn reload() {
+    xpute_native_runtime::native::notify_on(Some(notified));
+    let old = app::start(boot, &[UI]);
+    let mut messages = Vec::new();
+    let pending = request(old, &mut messages) as Tag;
+    app::post(old, 1, ROOT, OPEN, Some(app::lowered(&uri(&["obj"]))));
+    assert_eq!(app::answer_to(old, 1, &mut messages), 0);
+
+    let notify_cnt = NOTIFY_CNT.load(Ordering::Relaxed);
+    let new = app::start(boot, &[UI]);
+    app::until("the new UI attached", || ATTACH_CNT.load(Ordering::Relaxed) == 2);
+    app::until("the old request canceled", || *ANSWERS.lock().unwrap() == [Errno::ECANCELED as i32]);
+    app::until("the old UI's object dropped", || DROP_CNT.load(Ordering::Relaxed) == 1);
+    app::until("a batch waits for the new UI", || NOTIFY_CNT.load(Ordering::Relaxed) > notify_cnt);
+    assert!(app::take(old).is_empty(), "the old UI takes nothing of it");
+
+    let mut messages = Vec::new();
+    let again = request(new, &mut messages) as Tag;
+    xpute_native_runtime::answer(old, pending, 0, None);
+    xpute_native_runtime::answer(new, pending, 0, None);
+    xpute_native_runtime::answer(old, again, 0, None);
+    // A round trip after them, which the guest's thread runs in turn.
+    app::post(new, 2, ROOT, OPEN, Some(app::lowered(&uri(&["none"]))));
+    assert_eq!(app::answer_to(new, 2, &mut messages), Errno::ENOENT as i64);
+    assert_eq!(*ANSWERS.lock().unwrap(), [Errno::ECANCELED as i32]);
+
+    xpute_native_runtime::answer(new, again, 0, None);
+    app::until("the new UI's answer heard", || *ANSWERS.lock().unwrap() == [Errno::ECANCELED as i32, 0]);
+    assert_eq!(app::ends(), []);
+}

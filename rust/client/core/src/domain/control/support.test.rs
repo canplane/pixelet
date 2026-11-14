@@ -18,36 +18,34 @@ fn height(at: &Q3) -> f64 {
 /// onto what is placed where it stands.
 #[test]
 fn the_pivot_follows_its_floor() {
-    crate::on_core(|| {
-        let ground = flat_at_five();
-        let at = world::point(ground[0] + 0.5, ground[1] + 0.5, over(5.0));
-        let on = |store: Store| {
-            stand_memo().forget_touched();
-            *stand_memo() = Memo::NONE;
-            let w = placed(store);
-            standing(w, &at).exact().flatten().unwrap()
-        };
-        let store = Store::default();
-        assert_eq!(height(&on(store)), over(5.0));
+    let ground = flat_at_five();
+    let at = world::point(ground[0] + 0.5, ground[1] + 0.5, over(5.0));
+    let on = |store: Store| {
+        stand_memo().forget_touched();
+        *stand_memo() = Memo::NONE;
+        let w = placed(store);
+        standing(w, &at).exact().flatten().unwrap()
+    };
+    let store = Store::default();
+    assert_eq!(height(&on(store)), over(5.0));
 
-        let mut dug = Store::default();
-        write(
-            &mut dug,
-            [ground[0], ground[1], 4.0],
-            OBJECT_COARSEST,
-            Sentinel::Air as AssetId,
-        );
-        let dug = height(&on(dug));
-        assert!(dug < over(5.0), "{dug}");
+    let mut dug = Store::default();
+    write(
+        &mut dug,
+        [ground[0], ground[1], 4.0],
+        OBJECT_COARSEST,
+        Sentinel::Air as AssetId,
+    );
+    let dug = height(&on(dug));
+    assert!(dug < over(5.0), "{dug}");
 
-        let mut built = Store::default();
-        let red = cube::Object::Red as AssetId;
-        write(
-            &mut built,
-            [ground[0], ground[1], 5.0],
-            OBJECT_COARSEST,
-            red,
-        );
-        assert_eq!(height(&on(built)), over(6.0));
-    });
+    let mut built = Store::default();
+    let red = cube::Object::Red as AssetId;
+    write(
+        &mut built,
+        [ground[0], ground[1], 5.0],
+        OBJECT_COARSEST,
+        red,
+    );
+    assert_eq!(height(&on(built)), over(6.0));
 }

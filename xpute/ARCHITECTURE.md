@@ -95,9 +95,10 @@ link traps, so no answer the host owed leaves the guest waiting. It is handed
 off one of two ways: synchronously, caught at `link_out` while the host
 answers the guest, or asynchronously, by the platform's listener for what the
 worker leaves uncaught, or by Rust's panic hook. A trapped guest is entered no
-more, and a frame to it answers EPIPE. The app hears the trap with what stopped
-it, alike on both platforms, the imports no server mounts among them where the
-runtime refused to start the guest.
+more, and a frame to it answers EPIPE, a request already pending on it too,
+once. The app hears the trap with what stopped it, alike on both platforms,
+the imports no server mounts among them where the runtime refused to start
+the guest.
 
 ## The device that lends the memory
 
@@ -187,8 +188,8 @@ word; and a rule the GPU alone decides is one function every pass calls.
 ## Codemap
 
 - `link/spec/`, `gpu/link/spec/` and `kit/spec/` hold the frame, the GPU
-  stream and the errno table, the last two with golden records; `link/wit/`,
-  `wit/` and `gpu/wit/` the interfaces.
+  stream and the errno table, each with golden records, the link's of its
+  frames and packets; `link/wit/`, `wit/` and `gpu/wit/` the interfaces.
 - `gen` (`xpute-gen`) and `link/gen` (`xpute-link-gen`) are the generators,
   `gen-targets` what they write, and `dev/tool` the `cargo spec` that checks
   and writes it.

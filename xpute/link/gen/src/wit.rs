@@ -860,3 +860,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
     }
     Ok(outs)
 }
+
+#[cfg(test)]
+#[path = "wit.test.rs"]
+mod test;

@@ -16,13 +16,7 @@
 
 import { state_on } from "@xpute/gpu-native-runtime";
 import type { Side } from "@xpute/link";
-import {
-  bytes,
-  open_remote,
-  start,
-  stopped_on,
-  trap_on,
-} from "@xpute/native-runtime";
+import { bytes, open_remote, start } from "@xpute/native-runtime";
 import { stopped } from "@/service/sys/abort.ts";
 import { GPU_STATE, set_gpu } from "@/service/sys/gpu.ts";
 import { serve_files } from "@/service/sys/fs/file.ts";
@@ -42,13 +36,11 @@ export function boot(): void {
     task_return: (t, result, data) => remote.task_return(t, result, data),
     on_cancel: (t, stop) => remote.on_cancel(t, stop),
   };
-  stopped_on(stopped);
-  trap_on(trapped);
   state_on((state) => set_gpu(GPU_STATE[state]));
   serve_ui(remote);
   serve_files(link);
   serve_objects(link);
-  start(remote);
+  start(remote, { stopped, trapped });
   start_client();
   void declare_source(remote);
 }

@@ -80,11 +80,11 @@ pub(crate) const HOST_STOPPED: &str = "the host stopped";
 
 /// Marks the link trapped, and tells the platform the first time, with
 /// `err`, what stopped it, as a page's worker tells its trap with its error
-/// (native.rs `trap`). On the guest's thread.
+/// (native.rs `tell_trap`). On the guest's thread.
 pub(crate) fn trap(err: &str) {
     if SIDE.with(Side::trap) {
         crate::log(&format!("[link] trapped: {err}"));
-        crate::native::trap(err);
+        crate::native::tell_trap(err);
     }
 }
 

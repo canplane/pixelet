@@ -200,3 +200,7 @@ pub(crate) fn device_orient_store() -> &'static DeviceOrientationStore {
 pub(crate) fn device_orient_store_mut() -> &'static mut DeviceOrientationStore {
     ORIENT.get(DeviceOrientationStore::default)
 }
+
+#[cfg(test)]
+#[path = "reading.test.rs"]
+mod test;

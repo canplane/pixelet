@@ -15,9 +15,9 @@ import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import { bug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
 import { type BranchCursor, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
-import { Lift, load_uri, packet, type Port, Remote, store_uri } from "@xpute/link";
+import { Lift, load_uri, packet, type Port, Remote, type Stop, store_uri } from "@xpute/link";
 import type { ToLink, ToUi } from "@xpute/link/remote.ts";
-import { XPUTE } from "./xpute.ts";
+import { stopped_on, trap_on, XPUTE } from "./xpute.ts";
 
 /** Each message of a batch by its kind, its first field, read into what a
  * port carries to the Remote. A method told (`later` 0) has no tag. */
@@ -66,11 +66,22 @@ export function open_remote(): Remote {
   return new Remote(port);
 }
 
+/** What hears the guest's end: its stop, with the report, and its trap, with
+ * what stopped it. */
+export interface Listener {
+  stopped: (stop: Stop) => void;
+  trapped: (err: string) => void;
+}
+
 /** Starts the runtime on the guest's thread with what the UI serves, once it
  * is mounted on `remote`: its named handles, and its prefixes, each with its
  * interface's named handle, lowered as a `list<tuple<u32, list<token>>>`,
- * the fixed part at 0 (xpute.h `xpute_start`). */
-export function start(remote: Remote): void {
+ * the fixed part at 0 (xpute.h `xpute_start`). `listener` hears the guest's
+ * stop and trap from before the start, so that one the runtime tells again
+ * at the start, from before a reload, reaches them. */
+export function start(remote: Remote, listener: Listener): void {
+  stopped_on(listener.stopped);
+  trap_on(listener.trapped);
   const prefixes = remote.prefixes;
   const pkt = packet([
     8,

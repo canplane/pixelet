@@ -15,7 +15,7 @@ const show = (x: number | undefined): string =>
   x === undefined ? "none" : `${x}`;
 
 test("deque holds what the record holds", async () => {
-  const v = await Golden.load("golden/collection/deque.tsv");
+  const v = await Golden.load("kit/spec/golden/collection/deque.tsv");
   const d = new Deque<number>(Array.from({ length: 8 }));
   v.each("", (k) => {
     const step = Number(k);

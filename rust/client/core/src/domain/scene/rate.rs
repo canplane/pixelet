@@ -43,3 +43,7 @@ pub(crate) fn judge(gap_ms: f64, cost_ms: f64, display_ms: f64) {
     };
     *i = next.min(slowest);
 }
+
+#[cfg(test)]
+#[path = "rate.test.rs"]
+mod test;
