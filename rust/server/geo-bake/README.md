@@ -24,7 +24,7 @@ Every step names its work by shards, the coarsest cubes of the world, each by
 its Morton key. A shard holds everything its leaves read, so a leaf can be baked
 from its shard alone, and baking shards one at a time gives the same result as
 baking them together. What a bake reads past a leaf stays within a fixed
-distance of it (pxl-geo-spec `BAKE_READ_DIST`); that distance is the shard's
+distance of it (`coverage.rs` `BAKE_READ_DIST`); that distance is the shard's
 apron, the margin it holds past its edges. Which shards are published is the
 coverage, `infra/geo/coverage.json`.
 

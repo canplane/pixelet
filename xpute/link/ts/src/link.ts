@@ -386,6 +386,12 @@ export class Side extends Server<Table<LinkObject>> {
     return this._trapped;
   }
 
+  /** The bytes a frame takes, header and packet, which the guest laid its
+   * link with (`init`); 0 before. */
+  get cap(): u32 {
+    return this._cap;
+  }
+
   constructor(guest: Guest) {
     super(new Table<LinkObject>());
     this._guest = guest;

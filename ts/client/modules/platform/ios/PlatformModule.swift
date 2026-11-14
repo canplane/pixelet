@@ -12,9 +12,6 @@ import UIKit
 /// (@xpute/native-runtime), and the view it draws into in
 /// @xpute/gpu-native-runtime's.
 public class PlatformModule: Module {
-  private static let suite = "pxl"
-  private static let storage = UserDefaults(suiteName: suite)!
-
   public func definition() -> ModuleDefinition {
     Name("PxlPlatform")
 
@@ -59,20 +56,20 @@ public class PlatformModule: Module {
     // ---- storage (service/platform/storage.native.ts) ----
     //
     // UserDefaults is the system's store for an app's small values, as
-    // localStorage is the browser's for a page. They are kept in a suite of
-    // their own, "pxl", which nothing else in the app writes, as Android keeps
-    // them in its "pxl" preferences.
+    // localStorage is the browser's for a page. They are kept in the app's own
+    // defaults, `.standard`, whose domain holds React Native's keys too, as a
+    // page's localStorage may hold others' beside the client's.
 
     Function("storage_get") { (key: String) -> String? in
-      PlatformModule.storage.string(forKey: key)
+      UserDefaults.standard.string(forKey: key)
     }
 
     Function("storage_keys") { () -> [String] in
-      PlatformModule.storage.persistentDomain(forName: PlatformModule.suite).map { Array($0.keys) } ?? []
+      Bundle.main.bundleIdentifier.flatMap { UserDefaults.standard.persistentDomain(forName: $0) }.map { Array($0.keys) } ?? []
     }
 
     Function("storage_set") { (key: String, value: String) in
-      PlatformModule.storage.set(value, forKey: key)
+      UserDefaults.standard.set(value, forKey: key)
     }
 
     // ---- the clipboard (service/platform/share.native.ts) ----

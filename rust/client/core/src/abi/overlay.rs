@@ -7,8 +7,10 @@ pub const HANDLE: _rt::Handle = 0x7b1393;
 
 /// `show`
 pub const SHOW: _rt::Method = 0;
+/// `source`
+pub const SOURCE: _rt::Method = 1;
 /// `view`
-pub const VIEW: _rt::Method = 1;
+pub const VIEW: _rt::Method = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -340,10 +342,11 @@ pub struct Snapshot {
     pub stall: Option<Message>,
     pub renderer_progress: f64,
     pub area_progress: f64,
+    pub declared: bool,
 }
 
 impl Snapshot {
-    pub const SZ: usize = 112;
+    pub const SZ: usize = 120;
     pub const ALIGN: usize = 8;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
@@ -377,6 +380,7 @@ impl Snapshot {
         }
         w.f64(at + 96, self.renderer_progress);
         w.f64(at + 104, self.area_progress);
+        w.bool(at + 112, self.declared);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Snapshot, _rt::Errno> {
@@ -416,6 +420,7 @@ impl Snapshot {
             })?,
             renderer_progress: r.f64(at + 96)?,
             area_progress: r.f64(at + 104)?,
+            declared: r.bool(at + 112)?,
         })
     }
 }
@@ -424,8 +429,19 @@ pub fn show(snapshot: &Snapshot) -> Result<(), _rt::Errno> {
     let (r, _) = _rt::link::call(
         HANDLE,
         SHOW,
-        Some((112, &|w_: &mut _rt::Lower| {
+        Some((120, &|w_: &mut _rt::Lower| {
             (snapshot).store(w_, 0);
+        })),
+    );
+    _rt::answer(r)
+}
+
+pub fn source(decl: &super::types::Declaration) -> Result<(), _rt::Errno> {
+    let (r, _) = _rt::link::call(
+        HANDLE,
+        SOURCE,
+        Some((28, &|w_: &mut _rt::Lower| {
+            (decl).store(w_, 0);
         })),
     );
     _rt::answer(r)

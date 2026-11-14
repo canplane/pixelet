@@ -218,8 +218,8 @@ impl abi::edit::Guest for Core {
 }
 
 impl abi::source::Guest for Core {
-    fn declare(&self, min_zoom: u32, format: Vec<u32>, shard: Vec<String>) -> Result<(), Errno> {
-        source::declare(min_zoom, format, shard)
+    fn declare(&self, decl: abi::types::Declaration) -> Result<(), Errno> {
+        source::declare(decl)
     }
 }
 
@@ -250,8 +250,13 @@ impl life::Guest for Core {
         super::life::on_shown();
         Ok(())
     }
+    /// A UI attached, the first or one a reload makes on the same core: it is
+    /// told the tile source at once and posted the overlay whole at the
+    /// entry's end (link.rs `tell_all`), and
+    /// starts with no pointer pressed and no text taken.
     fn attached(&self) -> Result<(), Errno> {
-        super::life::on_attached();
+        super::tell_all();
+        input::forget_pointers();
         Ok(())
     }
 }

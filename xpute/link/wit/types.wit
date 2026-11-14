@@ -42,12 +42,13 @@
 //
 // Raw memory enters WIT in one place, `xpute:link/types.lent`: a borrow, in the
 // component model's sense, of a span of the caller's memory, (at, len), valid
-// until the answer. The data stays where it is and only its place crosses; the
-// callee reads or writes it there. The caller's binding takes a buffer it owns,
-// lends it with the call and hands it back with the answer, so the borrow lasts
-// as long as the ownership. A call dropped before its answer is canceled
-// (`frame.json5` `CANCEL`), as the component model cancels a dropped subtask,
-// and keeps the buffer alive until its answer, ECANCELED or its own, comes.
+// until the answer; an empty span has no address, and is (0, 0). The data stays
+// where it is and only its place crosses; the callee reads or writes it there.
+// The caller's binding takes a buffer it owns, lends it with the call and hands
+// it back with the answer, so the borrow lasts as long as the ownership. A call
+// dropped before its answer is canceled (`frame.json5` `CANCEL`), as the
+// component model cancels a dropped subtask, and keeps the buffer alive until
+// its answer, ECANCELED or its own, comes.
 //
 // A packet lays its values out as the Component Model's Canonical ABI does
 // (xpute-link cabi.rs): a call's args as one tuple, an answer's value alone,

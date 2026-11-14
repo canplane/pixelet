@@ -66,10 +66,7 @@ pub trait Lend: Unpin + 'static {
 
 impl<T: Copy + Unpin + 'static> Lend for Vec<T> {
     fn span(&mut self) -> (u32, u32) {
-        (
-            mem::off(self.as_ptr().cast()),
-            core::mem::size_of_val(&self[..]) as u32,
-        )
+        mem::span(self)
     }
 }
 

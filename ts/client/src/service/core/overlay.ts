@@ -4,6 +4,7 @@ import type { Remote } from "@xpute/link";
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import { mount, type Snapshot } from "@/abi/overlay.ts";
 import { GROUND_STATUS_IDLE, SENSOR_STATUS_IDLE } from "@/abi/overlay.enum.ts";
+import { take_source } from "@/service/sys/fs/source.ts";
 
 const INIT: Snapshot = {
   pivot: {
@@ -31,6 +32,7 @@ const INIT: Snapshot = {
   stall: null,
   renderer_progress: 0,
   area_progress: 0,
+  declared: false,
 };
 
 let snapshot: Snapshot = INIT;
@@ -71,11 +73,12 @@ export function cur_view(): UiView {
   return view;
 }
 
-/** Serves `overlay` on `remote`, the core's snapshot and view, before the
- * core boots. */
+/** Serves `overlay` on `remote`, the core's snapshot, view and tile source,
+ * before the core boots. */
 export function serve_overlay(remote: Remote): void {
   mount(remote, {
     show: set_snapshot,
     view: (azimuth, m_per_px) => view_posted({ azimuth, m_per_px }),
+    source: take_source,
   });
 }

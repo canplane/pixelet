@@ -22,6 +22,7 @@ import { append_chat_line, DockMode, set_dock_mode } from "./store.ts";
 import { SLOT } from "./strip.tsx";
 import * as edit from "@/service/core/edit.ts";
 import * as overlay from "@/service/core/overlay.ts";
+import * as scene from "@/service/core/scene.ts";
 
 /** The dock holds this state, so that it is there whether or not the cards are
  * drawn yet. */
@@ -66,22 +67,27 @@ export function useMessage(mode: DockMode) {
     if (!can_send || !fits || is_sending) return;
     set_is_sending(true);
     setTimeout(() => {
-      set_message_text("");
-      set_is_sending(false);
       if (!drafting) {
-        append_chat_line(text);
-        input_ref.current?.focus();
+        // The line stays in the field where the core refuses it.
+        void append_chat_line(text).then((taken) => {
+          set_is_sending(false);
+          if (!taken) return;
+          set_message_text("");
+          input_ref.current?.focus();
+        });
         return;
       }
+      set_message_text("");
+      set_is_sending(false);
       edit.marker_commit();
       set_dock_mode(DockMode.PALETTE);
     }, FADE.duration_ms);
   }
 
   const can_send = message_text.trim() !== "";
-  // A marker's text the core refused cannot be committed. A chat line too
-  // long for the link is refused whole, never cut short.
-  const fits = drafting ? marker_fits : true;
+  // A marker's text the core refused cannot be committed, and a chat line the
+  // core finds too long cannot be said: it is refused whole, never cut short.
+  const fits = drafting ? marker_fits : scene.chat_fits(message_text.trim());
 
   return {
     drafting,

@@ -9,12 +9,7 @@ pub const HANDLE: _rt::Handle = 0x6a88bf;
 pub const DECLARE: _rt::Method = 0;
 
 pub trait Guest {
-    fn declare(
-        &self,
-        min_zoom: u32,
-        format: Vec<u32>,
-        shard: Vec<String>,
-    ) -> Result<(), _rt::Errno>;
+    fn declare(&self, decl: super::types::Declaration) -> Result<(), _rt::Errno>;
 }
 
 struct _Object(_rt::Rc<dyn Guest>);
@@ -25,14 +20,8 @@ impl _rt::Object for _Object {
             Ok(match m_ {
                 DECLARE => {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let min_zoom = r_.u32(0)?;
-                    let format = r_.arr::<u32>(4)?;
-                    let shard = r_.list(12, 8, 4).and_then(|(b, n)| {
-                        (0..n)
-                            .map(|i| r_.str(b + i * 8).map(str::to_owned))
-                            .collect::<Result<Vec<_>, _rt::Errno>>()
-                    })?;
-                    match self.0.declare(min_zoom, format, shard) {
+                    let decl = super::types::Declaration::load(r_, 0)?;
+                    match self.0.declare(decl) {
                         Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }

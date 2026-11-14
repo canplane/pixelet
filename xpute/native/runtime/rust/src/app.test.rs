@@ -12,10 +12,10 @@ use std::time::{Duration, Instant};
 
 use xpute_kit::wire::xtp::cursor::TreeReader;
 use xpute_link::abi::types::Token;
-use xpute_test_mem::Heap;
 use xpute_link::{store_uri, Handle, Lower};
 use xpute_native_runtime::listener;
 use xpute_native_runtime::native::{self, Start};
+use xpute_test_mem::Heap;
 
 #[global_allocator]
 static HEAP: Heap = Heap;
@@ -80,9 +80,17 @@ pub type Message = Vec<i64>;
 /// The messages of the batch the UI of `generation` takes now.
 pub fn take(generation: u32) -> Vec<Message> {
     let batch = xpute_native_runtime::native::take(generation);
-    // SAFETY: what `take` handed over, freed once.
-    let bytes = unsafe { core::slice::from_raw_parts(batch.0, batch.1) }.to_vec();
-    unsafe { xpute_native_runtime::native::taken_free(batch.0, batch.1) };
+    // The batch is read from a copy laid on words, as XTP reads a packet
+    // where it starts on a word.
+    let mut words = vec![0u64; batch.1.div_ceil(8)];
+    // SAFETY: what `take` handed over, freed once, copied into `words`, which
+    // holds as many bytes and more.
+    unsafe {
+        core::ptr::copy_nonoverlapping(batch.0, words.as_mut_ptr().cast::<u8>(), batch.1);
+        xpute_native_runtime::native::taken_free(batch.0, batch.1);
+    }
+    // SAFETY: `words`' bytes, every one set.
+    let bytes = unsafe { core::slice::from_raw_parts(words.as_ptr().cast::<u8>(), batch.1) };
     let mut out = Vec::new();
     let mut at = 0;
     while at < bytes.len() {

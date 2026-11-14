@@ -5,7 +5,9 @@
 //! carries has a cap, each laid past the fixed part at its alignment (the
 //! Canonical ABI's layout, xpute-link cabi.rs). The link's frames are as large
 //! as the largest (lib.rs `link!`). What the UI sends in past them is refused
-//! with EMSGSIZE.
+//! with EMSGSIZE. One packet the core lays has no cap of its own: the tile
+//! source it tells (overlay `source`), the very packet the UI declared it in,
+//! which fit a frame.
 
 use pxl_render::gpu::surface::SURFACE_CAP;
 use pxl_spec::asset::marker::MARKER_TEXT_CHARS;

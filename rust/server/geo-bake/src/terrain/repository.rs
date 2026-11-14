@@ -7,6 +7,7 @@ use postgres::{Client, Statement};
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, BBox3857};
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
+use crate::coverage::BAKE_READ_DIST;
 use crate::elevation::Raster;
 use crate::segment::Part;
 use crate::terrain::pipeline::overture::width::{carto_u, WIDEST_LINE};
@@ -34,7 +35,7 @@ WHERE t.geom && env.e"
 /// How far past a tile what is drawn on it can come from: half the widest line.
 pub(crate) const HALF_WIDEST_U: f64 = carto_u(WIDEST_LINE) / 2.0;
 const _: () = assert!(
-    HALF_WIDEST_U <= pxl_geo_spec::BAKE_READ_DIST,
+    HALF_WIDEST_U <= BAKE_READ_DIST,
     "a tile's rows come from past the bakes' read distance"
 );
 

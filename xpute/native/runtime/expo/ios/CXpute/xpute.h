@@ -23,12 +23,13 @@
 // Canonical ABI, xpute:link/types `token`); `cache_dir`, `cache_dir_len` the directory the
 // app keeps its caches in, its UTF-8 bytes and their count.
 // Each call, the first too, is a new UI on the runtime, as a reload's, which
-// serves what the first did: the requests the last UI answers later are
-// answered ECANCELED, as is each method of the objects it serves the guest,
-// the guest's objects it opened are dropped on the guest, the answer to a
-// request it sent reaches no new UI, and the batch it did not take goes; the
-// guest is then told the new UI attached (xpute:life `attached`), and a new
-// UI is told the guest's last stop and its trap where they came. It
+// serves what the first did: the batch the last UI did not take goes, and
+// the answer to a request it sent reaches no new UI; the guest is told the
+// new UI attached (xpute:life `attached`); then the requests the last UI
+// answers later are answered ECANCELED, as is each method of the objects it
+// serves the guest, and the guest's objects it opened are dropped on the
+// guest; and a new UI is told the guest's last stop and its trap where they
+// came. It
 // returns the new UI's generation, which each of its `xpute_post`,
 // `xpute_answer` and `xpute_take` carries, so nothing an old UI sent that
 // has not reached the guest when a new one starts reaches it: a method is

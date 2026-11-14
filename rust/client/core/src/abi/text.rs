@@ -15,8 +15,7 @@ pub fn width<T0: Copy + Unpin + 'static>(
     px: f64,
     text: &mut [T0],
 ) -> Result<f64, _rt::Errno> {
-    let text_at_ = _rt::mem::off(text.as_ptr().cast());
-    let text_len_ = size_of_val(&text[..]) as u32;
+    let (text_at_, text_len_) = _rt::mem::span(&text[..]);
     let (r, data) = _rt::link::call(
         HANDLE,
         WIDTH,
@@ -50,10 +49,8 @@ pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
     x: f64,
     text: &mut [T1],
 ) -> Result<u32, _rt::Errno> {
-    let image_at_ = _rt::mem::off(image.as_ptr().cast());
-    let image_len_ = size_of_val(&image[..]) as u32;
-    let text_at_ = _rt::mem::off(text.as_ptr().cast());
-    let text_len_ = size_of_val(&text[..]) as u32;
+    let (image_at_, image_len_) = _rt::mem::span(&image[..]);
+    let (text_at_, text_len_) = _rt::mem::span(&text[..]);
     let (r, data) = _rt::link::call(
         HANDLE,
         RASTER,

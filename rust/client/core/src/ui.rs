@@ -5,6 +5,7 @@
 //! was last sent.
 
 use crate::domain::layer::Base as _;
+use pxl_spec::division::{Subtype, NAME_BYTES};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::{units, Zoom, FINEST_ZOOM};
@@ -50,19 +51,23 @@ fn named_to(u_per_px: f64) -> Option<Zoom> {
 }
 
 /// The pivot's division and every division above it, from the broadest to
-/// the narrowest. A division is shown when the view names down to its zoom
-/// (`named_to`).
+/// the narrowest, within the snapshot's bound (link/bound.rs): the narrowest
+/// of them, one a subtype's worth, each name cut at a character to
+/// `NAME_BYTES`, as a tile holds them whole. A division is shown when the
+/// view names down to its zoom (`named_to`).
 fn division_parts(at: Option<(Quadrant, u32)>, named_to: Option<Zoom>) -> Vec<DivisionPart> {
     let mut parts = Vec::new();
     let Some(at) = at else { return parts };
     each_division(at, |part| {
+        let name = part.name;
         parts.push(DivisionPart {
             subtype: part.kind as u8,
-            name: part.name.to_string(),
+            name: name[..name.floor_char_boundary(NAME_BYTES)].to_string(),
             shown: named_to.is_some_and(|z| part.shown_from() <= z),
             area: part.area,
         });
     });
+    parts.drain(..parts.len().saturating_sub(Subtype::ALL.len()));
     parts
 }
 
@@ -237,6 +242,7 @@ pub(crate) fn snapshot(shown: &SnapshotInput) -> Snapshot {
         stall: shown.stall,
         renderer_progress: shown.renderer_progress,
         area_progress: shown.area_progress,
+        declared: shown.declared,
     }
 }
 

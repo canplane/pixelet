@@ -22,7 +22,7 @@ pub(crate) mod param;
 pub(crate) mod surface;
 
 use pxl_render::frame::shader::record::PIPELINE_SKINNED;
-use pxl_render::gpu::api::{word_bytes, Image};
+use pxl_render::gpu::api::Image;
 use pxl_render::gpu::draw::{scaled_draw, Draw, DrawId, DrawList, Position, ReceiverBox};
 use pxl_spec::asset::catalog::Slot;
 use pxl_spec::asset::character::group::{person, pet};
@@ -144,12 +144,8 @@ impl Character {
                 palette[j * 16 + d * 5] = 1.0;
             }
         }
-        let palette_handle = draw.upload(
-            mem::off(palette.as_ptr().cast()),
-            word_bytes(palette.len()),
-            0,
-            0,
-        );
+        let (palette_at, palette_bytes) = mem::span(&palette[..]);
+        let palette_handle = draw.upload(palette_at, palette_bytes, 0, 0);
         Some(Character {
             group,
             number,
@@ -356,11 +352,8 @@ impl Character {
             &mut self.global,
             &mut self.palette[..joint_cnt * 16],
         );
-        draw.rewrite(
-            self.palette_handle,
-            mem::off(self.palette.as_ptr().cast()),
-            word_bytes(self.palette.len()),
-        );
+        let (palette_at, palette_bytes) = mem::span(&self.palette[..]);
+        draw.rewrite(self.palette_handle, palette_at, palette_bytes);
         asks
     }
 

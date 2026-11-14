@@ -3,6 +3,7 @@
 //! The edit interface's methods: the tool held and what it places, and the
 //! marker draft it left waiting.
 
+use super::applied;
 use crate::abi::edit;
 use crate::abi::types::ErrorCode;
 use crate::domain::control::edit::set_tool;
@@ -24,8 +25,10 @@ pub(super) fn hold(tool: edit::Tool, val: u32, scale_step: i32) -> Result<(), Er
             },
         },
     });
+    // The tool's preview stands where the pointer hovers, which a frame
+    // shows.
     camera_rehover();
-    Ok(())
+    applied()
 }
 
 pub(super) fn marker_text(text: String) -> Result<Result<(), ErrorCode>, Errno> {

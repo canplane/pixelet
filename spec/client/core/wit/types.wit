@@ -22,4 +22,24 @@ interface types {
     // The profiler's window could not be had.
     insufficient-memory,
   }
+
+  // A shard by its name, with the version of each kind it declares of its own,
+  // a kind to an entry in publication.json5's order, none where it takes the
+  // source's.
+  record shard {
+    name: string,
+    versions: list<option<string>>,
+  }
+
+  // What the tile source declares of itself: the coarsest zoom it supplies
+  // whole, each kind's format by its bake's number and its version, a kind to
+  // an entry in publication.json5's order, and its shards. The core keeps it
+  // for its life (source `declare`) and tells it to the UI (overlay
+  // `source`).
+  record declaration {
+    min-zoom: u32,
+    formats: list<u32>,
+    versions: list<string>,
+    shards: list<shard>,
+  }
 }

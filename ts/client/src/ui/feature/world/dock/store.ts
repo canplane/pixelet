@@ -247,17 +247,19 @@ export function step_scale(delta: i32): void {
 }
 
 /** The line joins the chat once the core takes it, and a line it refuses
- * whole does not. */
-export function append_chat_line(text: string): void {
-  scene.chat(text).then(
-    () =>
-      store.setState((s) => ({
-        chat_lines: [...s.chat_lines, { id: next_chat_line_id++, text }].slice(
-          -MAX_CHAT_LINES,
-        ),
-      })),
-    () => {},
-  );
+ * whole does not: it answers whether the core took it. */
+export async function append_chat_line(text: string): Promise<boolean> {
+  try {
+    await scene.chat(text);
+  } catch {
+    return false;
+  }
+  store.setState((s) => ({
+    chat_lines: [...s.chat_lines, { id: next_chat_line_id++, text }].slice(
+      -MAX_CHAT_LINES,
+    ),
+  }));
+  return true;
 }
 
 export function useInHand(id: AssetId): boolean {

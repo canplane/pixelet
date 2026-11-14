@@ -65,24 +65,49 @@ fn base() -> usize {
 /// # Safety
 /// Nothing else writes them while the slice lives.
 pub unsafe fn bytes<'a>(at: u32, len: u32) -> &'a mut [u8] {
-    #[cfg(not(target_arch = "wasm32"))]
+    held(at, len);
+    let p = core::ptr::with_exposed_provenance_mut::<u8>(base() + at as usize);
+    // SAFETY: the caller's.
+    unsafe { core::slice::from_raw_parts_mut(p, len as usize) }
+}
+
+/// The offset of the value `v` in the guest's memory, such as a word the
+/// guest lends its host to store into; an address whose offset does not fit
+/// a u32 is a bug, never truncated.
+pub fn off<T>(v: &T) -> u32 {
+    let off = core::ptr::from_ref(v)
+        .expose_provenance()
+        .wrapping_sub(base());
+    u32::try_from(off).ok().or_bug(Errno::EFAULT)
+}
+
+/// Where the range `s` lies in the guest's memory and how many bytes it
+/// takes, as a lent span (link/wit/types.wit `lent`). An empty range has no
+/// address, and lends (0, 0), on a page and on a device alike; any other lies
+/// whole in the memory, a native guest's in its region (`bytes`).
+pub fn span<T>(s: &[T]) -> (u32, u32) {
+    let Some(first) = s.first() else {
+        return (0, 0);
+    };
+    let (at, len) = (off(first), size_of_val(s) as u32);
+    held(at, len);
+    (at, len)
+}
+
+/// Holds the `len` bytes at `at` to a native guest's region: a range past it
+/// is a bug, as a module's memory traps past its end, which holds a module's.
+#[cfg(not(target_arch = "wasm32"))]
+fn held(at: u32, len: u32) {
     xpute_kit::ensure!(
         u64::from(at) + u64::from(len) <= u64::from(region().len),
         EFAULT,
         at,
         len
     );
-    let p = core::ptr::with_exposed_provenance_mut::<u8>(base() + at as usize);
-    // SAFETY: the caller's.
-    unsafe { core::slice::from_raw_parts_mut(p, len as usize) }
 }
 
-/// The offset of `p` in the guest's memory; an address whose offset does not
-/// fit a u32 is a bug, never truncated.
-pub fn off(p: *const u8) -> u32 {
-    let off = p.expose_provenance().wrapping_sub(base());
-    u32::try_from(off).ok().or_bug(Errno::EFAULT)
-}
+#[cfg(target_arch = "wasm32")]
+fn held(_: u32, _: u32) {}
 
 /// The `len` bytes at `at`.
 ///

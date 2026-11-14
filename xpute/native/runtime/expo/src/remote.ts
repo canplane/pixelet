@@ -47,6 +47,7 @@ const TO_UI: Readonly<Record<u32, (f: BranchCursor) => ToUi>> = {
   }),
   4: (f) => ({ cancel: f.get<u32>(1) }),
   5: (f) => ({ drop: f.get<u32>(1) }),
+  6: (f) => ({ cap: f.get<u32>(1) }),
 };
 
 /** A message's header: its packet's length, a u32, and four bytes more, so

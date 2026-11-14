@@ -49,7 +49,7 @@ pub fn init(cap: u32, enter: fn(), end: fn() -> bool) -> u32 {
     INIT.set(true);
     xpute_kit::ensure!(cap.is_multiple_of(8) && cap >= HDR_SZ, EINVAL, cap);
     let words: &'static mut [u64] = Vec::leak(vec![0; 1 + 2 * cap as usize / 8]);
-    let at = mem::off(words.as_ptr().cast());
+    let at = mem::span(words).0;
     let inbox = at + 8;
     // SAFETY: the layout's two words, which only `init` writes.
     let layout = unsafe { mem::bytes(at, 8) };

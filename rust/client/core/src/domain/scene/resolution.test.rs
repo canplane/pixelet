@@ -18,7 +18,7 @@ fn pace(ms: f64) -> Pace {
     Pace {
         gap_ms: ms,
         display_ms: ms,
-        moving: true,
+        motion: Motion::Moving,
     }
 }
 

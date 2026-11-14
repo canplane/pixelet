@@ -60,8 +60,9 @@ std::uint32_t init(std::uint32_t cap, void (*enter)(), bool (*end)()) noexcept {
     if (the_side == nullptr) the_side = new link::Side([](link::Layout l) { return l.inbox + l.cap; }, link_out);
     // The layout's two words, then the inbox and the outbox, for as long as
     // the guest runs.
-    std::uint64_t *words = new std::uint64_t[1 + 2 * cap / 8]();
-    std::uint32_t at = link::mem::off(words);
+    std::size_t n = 1 + 2 * cap / 8;
+    std::uint64_t *words = new std::uint64_t[n]();
+    std::uint32_t at = link::mem::span(std::span<const std::uint64_t>(words, n)).first;
     std::uint32_t inbox = at + 8;
     link::mem::set_word(at, inbox);
     link::mem::set_word(at + 4, cap);

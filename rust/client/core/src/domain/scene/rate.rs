@@ -2,16 +2,42 @@
 
 //! `auto`'s frame rate: a frame every `interval` of the display's measured
 //! intervals (sys/sched/display.rs), which the frame task keeps by skipping
-//! vsyncs (frame.rs `frame_task`). A drawn frame that came more than half an
-//! interval later than its target adds an interval; one whose cost, the GPU's
-//! busy time where a read timed it and the frame task's own, would fit one
-//! interval fewer by `RES_BAND` takes one off. It never paces slower than
-//! `RATE_MIN_HZ`. Any other setting draws at every vsync.
+//! vsyncs (frame.rs `frame_task`). It judges moving frames only, and not the
+//! first after the view stood still, as resolution.rs does
+//! (`Motion::Start`). A
+//! judged frame that came more than half an interval later than its target
+//! adds an interval; one whose cost, the GPU's busy time where a read timed it
+//! and the frame task's own, would fit one interval fewer by `RES_BAND` takes
+//! one off. It never paces slower than `RATE_MIN_HZ`. Any other setting draws
+//! at every vsync.
 
 use pxl_global::Global;
 
 use crate::domain::scene::param;
 use crate::domain::setting::{settings, ResMode};
+
+/// How a frame was paced.
+#[derive(Clone, Copy)]
+pub(crate) struct Pace {
+    /// The real time since the last frame, in ms.
+    pub gap_ms: f64,
+    /// The display's interval, in ms (sys/sched/display.rs).
+    pub display_ms: f64,
+    pub motion: Motion,
+}
+
+/// Whether a frame moved: whether it asked for the next (sys/sched.rs
+/// `invalidate`), and whether the last frame did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Motion {
+    /// The frame asked for no next.
+    Still,
+    /// It moved and the last frame did not. A judge counts moving frames
+    /// only, and not this one: its gap is how long the view stood still.
+    Start,
+    /// It moved, and so did the last.
+    Moving,
+}
 
 /// The frame's target interval, in display intervals.
 static INTERVAL: Global<u32> = Global::new();
@@ -24,12 +50,15 @@ pub(crate) fn interval() -> u32 {
     *interval_mut()
 }
 
-/// Judges a drawn frame that came `gap_ms` after the last and cost
-/// `cost_ms`, on a display of `display_ms`.
-pub(crate) fn judge(gap_ms: f64, cost_ms: f64, display_ms: f64) {
+/// Judges a drawn frame paced as `pace` that cost `cost_ms`.
+pub(crate) fn judge(pace: Pace, cost_ms: f64) {
     let i = interval_mut();
+    let (gap_ms, display_ms) = (pace.gap_ms, pace.display_ms);
     if settings().res != ResMode::Auto || display_ms <= 0.0 {
         *i = 1;
+        return;
+    }
+    if pace.motion != Motion::Moving {
         return;
     }
     let n = *i;

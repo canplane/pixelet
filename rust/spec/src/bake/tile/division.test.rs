@@ -35,3 +35,25 @@ fn subtype_zoom() {
     assert_eq!(division(Subtype::County, 0).shown_from(), web(8));
     assert_eq!(division(Subtype::Neighborhood, 0).shown_from(), web(10));
 }
+
+/// A tile holds every name whole and every chain however long, as the bake
+/// writes them: one with a name past `NAME_BYTES` and a chain longer than
+/// there are subtypes reads back as written. A cycle is refused.
+#[test]
+fn long_name_and_chain_read() {
+    use crate::division::NAME_BYTES;
+    let long = "가".repeat(NAME_BYTES);
+    let depth = 2 * Subtype::ALL.len() as u32;
+    let chain = (0..depth).map(|k| Division {
+        name: &long,
+        parent: if k == 0 { NONE } else { k - 1 },
+        ..division(Subtype::Locality, 0)
+    });
+    let tile = DivisionTile::of(vec![depth - 1; CELL_CNT].into(), chain, Occupancy::LEAF);
+    let read = decode(&encode(&tile).unwrap()).unwrap();
+    assert_eq!(read.name_at(0).count(), depth as usize);
+    assert!(read.name_at(0).all(|d| d.name == long));
+    let mut cycle = tile;
+    cycle.parents[0] = depth - 1;
+    assert!(encode(&cycle).is_err());
+}

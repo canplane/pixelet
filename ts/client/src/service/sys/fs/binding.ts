@@ -22,7 +22,7 @@ import { LEAF_ZOOM, path, SHARD_ZOOM } from "@/abi/file.spec.ts";
 import { BASE_KINDS, TILE_SPHERE } from "@/abi/publication.spec.ts";
 import { read_asset } from "@/service/sys/fs/asset.ts";
 import { OBJECTS, TOP_KEY } from "@/service/sys/fs/object.ts";
-import { source_decl } from "@/service/sys/fs/source.ts";
+import { when_source_declared } from "@/service/sys/fs/source.ts";
 import {
   commit_storage,
   open_storage,
@@ -81,7 +81,9 @@ function base(layer: (typeof BASE_KINDS)[number]): Handler {
     open(rest, signal) {
       const key = string_of(rest, QUADKEY);
       if (key === undefined) return none();
-      return read_object(source_decl()!, layer, key, signal);
+      return when_source_declared().then((d) =>
+        read_object(d, layer, key, signal),
+      );
     },
   };
 }
@@ -98,11 +100,8 @@ const HANDLERS: ReadonlyMap<Node, Handler> = new Map<Node, Handler>([
     {
       open: (rest, signal) =>
         rest.length === 0
-          ? read_object(
-              source_decl()!,
-              BASE_KINDS[path.EARTH.ID],
-              TILE_SPHERE,
-              signal,
+          ? when_source_declared().then((d) =>
+              read_object(d, BASE_KINDS[path.EARTH.ID], TILE_SPHERE, signal),
             )
           : none(),
     },

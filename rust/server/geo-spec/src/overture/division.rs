@@ -8,12 +8,23 @@
 //! id at one depth; under that, in the child with no area whose point is
 //! nearest, and so on down (`steps`). Each reader gathers the areas and the
 //! children its own way and runs the statements with its own client: the bake
-//! a leaf tile's, the children within `BAKE_READ_DIST` of the tile, and the
-//! search a point's, the children within `BAKE_READ_DIST` of the point.
+//! a leaf tile's, the children within its read distance of the tile
+//! (pxl-geo-bake `coverage.rs` `BAKE_READ_DIST`), and the search a point's,
+//! the children within `radius_merc_at` of the point.
 
 use fnv::FnvHashMap;
 
 use pxl_spec::division::{DivisionPart, Subtype};
+use pxl_spec::space::coord::adapter::epsg3857::{merc_from_u, u_from_merc, u_per_m};
+
+/// How far the search looks from a point for a division with no area, on the
+/// ground.
+const SEARCH_RADIUS_M: f64 = 2048.0;
+
+/// [`SEARCH_RADIUS_M`] at the DB's `y`, in the DB's coordinates.
+pub fn radius_merc_at(y: f64) -> f64 {
+    merc_from_u(SEARCH_RADIUS_M * u_per_m(u_from_merc(y)))
+}
 
 /// The divisions `$1` names and every parent of each.
 pub const LINEAGE_SQL: &str = "WITH RECURSIVE up AS (

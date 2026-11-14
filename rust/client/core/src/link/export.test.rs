@@ -4,6 +4,7 @@ use super::*;
 use crate::abi::edit::Tool;
 use crate::abi::overlay::SensorStatus;
 use crate::abi::scene::SceneContent;
+use crate::abi::types::Declaration;
 use crate::domain::control::camera::state::{camera_state, Intent};
 use crate::domain::control::navigation::destination;
 use crate::domain::control::param;
@@ -24,7 +25,12 @@ fn a_refused_argument_answers_its_errno() {
         input::pinch(0.0),
         input::xr_pose(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
         edit::hold(Tool::Item, u32::MAX, 0),
-        source::declare(0, Vec::new(), Vec::new()),
+        source::declare(Declaration {
+            min_zoom: 0,
+            formats: Vec::new(),
+            versions: Vec::new(),
+            shards: Vec::new(),
+        }),
         sensor::pos(0.0, off_earth, None, None, None),
         sensor::pos(0.0, 0.0, None, Some(-1.0), None),
         sensor::pos(0.0, 0.0, None, None, Some(361.0)),
@@ -98,4 +104,43 @@ fn goto_asks_after() {
     );
     assert_eq!(goto(100.0, None, None, Some(-1.0)).polar, 0.0, "clamped");
     assert_eq!(goto(10.0, None, None, None).dist, 10.0, "nearer stays");
+}
+
+/// Whether a frame was asked for, which this takes.
+fn take_invalid() -> bool {
+    use crate::sys::sched::invalidated;
+    use core::future::Future;
+    use core::task::{Context, Waker};
+    let mut wait = core::pin::pin!(invalidated());
+    wait.as_mut()
+        .poll(&mut Context::from_waker(Waker::noop()))
+        .is_ready()
+}
+
+/// An input that moves the view, what the pointer hovers or the tool asks for
+/// its frame, as the core's other methods do, so a still world shows it at
+/// once.
+/// An input the UI sends, called as the link calls it.
+type Input<'a> = &'a dyn Fn() -> Result<(), Errno>;
+
+#[test]
+fn an_input_asks_for_its_frame() {
+    use crate::abi::input::{PointerPhase, PointerType};
+    use crate::domain::control::camera::fixture::place;
+    place([0.0, 0.0, 0.0], 100.0, 1.0, 0.5);
+    let pointer = |phase| input::pointer(phase, PointerType::Mouse, 1, 0, 10.0, 10.0);
+    let inputs: [(&str, Input); 7] = [
+        ("hover", &|| pointer(PointerPhase::Move)),
+        ("pointer down", &|| pointer(PointerPhase::Down)),
+        ("pressed move", &|| pointer(PointerPhase::Move)),
+        ("pointer up", &|| pointer(PointerPhase::Up)),
+        ("wheel", &|| input::wheel(1.0)),
+        ("pinch", &|| input::pinch(1.1)),
+        ("tool", &|| edit::hold(Tool::Pointer, 0, 0)),
+    ];
+    for (name, input) in inputs {
+        take_invalid();
+        assert_eq!(input(), Ok(()), "{name}");
+        assert!(take_invalid(), "{name} asks for no frame");
+    }
 }
