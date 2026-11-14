@@ -11,7 +11,7 @@
 //! index it by word, and the GPU is handed its words piece by piece (`pieces`). Only the pool's
 //! cap or the heap refuses. Word 0 is never handed out: a brick's `ROOT_AT` of 0 names no run.
 
-use pxl_engine::clipmap::{Pool, RUN_WORDS_MOST, SLOTS, WAYS_POOL_WORDS};
+use pxl_engine::clipmap::{Pool, RUN_WORDS_MOST, SLOT_CNT, WAYS_POOL_WORDS};
 use pxl_global::Global;
 use pxl_render::gpu::api;
 use xpute_kit::collection::list::List;
@@ -32,7 +32,8 @@ pub const POOL_BYTES: u64 = (CHUNK_CNT as u64) * (CHUNK_WORDS as u64 * 4).next_p
 pub(in crate::domain::layer) type Run = [u32; 2];
 
 /// The most pieces a run lies in, one a chunk it reaches.
-pub(in crate::domain::layer) const RUN_PIECES: usize = (RUN_WORDS_MOST / CHUNK_WORDS) as usize + 2;
+pub(in crate::domain::layer) const RUN_PIECE_CAP: usize =
+    (RUN_WORDS_MOST / CHUNK_WORDS) as usize + 2;
 
 /// The runs given back below `top` are in `free`, lowest first, and no two of them touch, so
 /// each lies between two held runs and there is at most one more of them than there are
@@ -40,7 +41,7 @@ pub(in crate::domain::layer) const RUN_PIECES: usize = (RUN_WORDS_MOST / CHUNK_W
 pub(in crate::domain::layer) struct WayPool {
     chunks: Vec<Box<[u32]>>,
     top: u32,
-    free: List<Run, { SLOTS as usize + 2 }>,
+    free: List<Run, { SLOT_CNT as usize + 2 }>,
 }
 
 impl Default for WayPool {
@@ -136,7 +137,7 @@ impl WayPool {
 
     /// `run` in place, one piece for each chunk it reaches, each piece with its first word in
     /// the pool and its words.
-    pub fn pieces(&self, [first, cnt]: Run) -> List<(u32, &[u32]), RUN_PIECES> {
+    pub fn pieces(&self, [first, cnt]: Run) -> List<(u32, &[u32]), RUN_PIECE_CAP> {
         let mut pieces = List::new();
         let (mut at, end) = (first, first + cnt);
         while at < end {

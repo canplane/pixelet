@@ -6,13 +6,13 @@
 //! The link's frames are as large as the largest (lib.rs `link!`). What the
 //! UI sends in past them is refused with EMSGSIZE.
 
-use pxl_render::gpu::surface::SURFACES;
+use pxl_render::gpu::surface::SURFACE_CAP;
 use pxl_spec::asset::marker::MARKER_TEXT_CHARS;
 use pxl_spec::division::{Subtype, NAME_BYTES};
 
-use crate::domain::layer::object::repository::WANTS;
+use crate::domain::layer::object::repository::WANT_CAP;
 use crate::domain::setting::store::SettingKey;
-use crate::perf::spec::LIMIT;
+use crate::perf::spec::limit;
 use crate::sys::io::file::KEY_BYTES;
 
 /// A packet's header, and its root's table of `cnt` fields.
@@ -47,12 +47,12 @@ const SNAPSHOT: usize = {
     let companion = branch(2, 2 * SCALAR);
     let draft = str(4 * MARKER_TEXT_CHARS as usize);
     let orient = branch(1, SCALAR);
-    let settings = branch(SettingKey::SLOTS, SettingKey::SLOTS * SCALAR);
+    let settings = branch(SettingKey::SLOT_CNT, SettingKey::SLOT_CNT * SCALAR);
     let part = branch(4, 3 * SCALAR + str(NAME_BYTES));
     let division = branch(Subtype::ALL.len(), Subtype::ALL.len() * part);
-    let surfaces = branch(SURFACES, SURFACES * SCALAR);
+    let surfaces = branch(SURFACE_CAP, SURFACE_CAP * SCALAR);
     let path = branch(2, SCALAR + str(KEY_BYTES));
-    let refused = 1 + WANTS as usize;
+    let refused = 1 + WANT_CAP as usize;
     let refused_files = branch(refused, refused * branch(1, path));
     let fields = pivot + location + companion + draft + orient + 4 * SCALAR + settings + division
         + surfaces + refused_files + 3 * SCALAR;
@@ -60,7 +60,7 @@ const SNAPSHOT: usize = {
 };
 
 /// A perf read's return data: one page (perf.json LIMIT.PAGE_BYTES).
-const PERF_PAGE: usize = packet(1, seq(LIMIT::PAGE_BYTES as usize));
+const PERF_PAGE: usize = packet(1, seq(limit::PAGE_BYTES as usize));
 
 /// The largest packet the core lays, a multiple of 8.
 pub const PKT_CAP: u32 = {

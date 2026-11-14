@@ -7,6 +7,7 @@
   ],
   "TEXTURE_FORMAT": {
     "$type": "enum",
+    "$names": true,
     "$doc": [
       "GPUTextureFormat: the formats of the core WebGPU spec and of its texture-compression",
       "features."
@@ -111,6 +112,7 @@
   },
   "VERTEX_FORMAT": {
     "$type": "enum",
+    "$names": true,
     "$doc": [
       "These are the members of GPUVertexFormat."
     ],
@@ -160,6 +162,7 @@
   },
   "PRIMITIVE_TOPOLOGY": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "point-list",
       "line-list",
@@ -170,6 +173,7 @@
   },
   "INDEX_FORMAT": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "uint16",
       "uint32"
@@ -177,6 +181,7 @@
   },
   "FRONT_FACE": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "ccw",
       "cw"
@@ -184,6 +189,7 @@
   },
   "CULL_MODE": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "none",
       "front",
@@ -192,6 +198,7 @@
   },
   "COMPARE_FUNCTION": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "never",
       "less",
@@ -205,6 +212,7 @@
   },
   "STENCIL_OPERATION": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "keep",
       "zero",
@@ -218,6 +226,7 @@
   },
   "BLEND_OPERATION": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "add",
       "subtract",
@@ -228,6 +237,7 @@
   },
   "BLEND_FACTOR": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "zero",
       "one",
@@ -250,6 +260,7 @@
   },
   "VERTEX_STEP_MODE": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "vertex",
       "instance"
@@ -257,6 +268,7 @@
   },
   "ADDRESS_MODE": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "clamp-to-edge",
       "repeat",
@@ -265,6 +277,7 @@
   },
   "FILTER_MODE": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "nearest",
       "linear"
@@ -272,6 +285,7 @@
   },
   "MIPMAP_FILTER_MODE": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "nearest",
       "linear"
@@ -279,6 +293,7 @@
   },
   "TEXTURE_DIMENSION": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "1d",
       "2d",
@@ -287,6 +302,7 @@
   },
   "TEXTURE_VIEW_DIMENSION": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "1d",
       "2d",
@@ -298,6 +314,7 @@
   },
   "TEXTURE_ASPECT": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "all",
       "stencil-only",
@@ -306,6 +323,7 @@
   },
   "BUFFER_BINDING_TYPE": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "uniform",
       "storage",
@@ -314,6 +332,7 @@
   },
   "SAMPLER_BINDING_TYPE": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "filtering",
       "non-filtering",
@@ -322,6 +341,7 @@
   },
   "TEXTURE_SAMPLE_TYPE": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "float",
       "unfilterable-float",
@@ -332,6 +352,7 @@
   },
   "STORAGE_TEXTURE_ACCESS": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "write-only",
       "read-only",
@@ -340,6 +361,7 @@
   },
   "LOAD_OP": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "load",
       "clear"
@@ -347,6 +369,7 @@
   },
   "STORE_OP": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "store",
       "discard"
@@ -354,6 +377,7 @@
   },
   "QUERY_TYPE": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "occlusion",
       "timestamp"
@@ -361,6 +385,7 @@
   },
   "CANVAS_ALPHA_MODE": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "opaque",
       "premultiplied"
@@ -368,6 +393,7 @@
   },
   "FEATURE_NAME": {
     "$type": "enum",
+    "$names": true,
     "$doc": [
       "GPUFeatureName. The DEVICE record (api.json) reports a device's features as one bit each,",
       "at the member's place."
@@ -394,6 +420,7 @@
   },
   "LIMIT_NAME": {
     "$type": "enum",
+    "$names": true,
     "$doc": [
       "The members of GPUSupportedLimits. The DEVICE record (api.json) reports a device's limits",
       "as one word each, at the member's place."

@@ -13,7 +13,8 @@
   their word.
 - `doc/` is notes, not rules: a minute or an experiment is what was said or
   measured then, and no renaming reaches it. Read what it holds on the subject
-  before proposing, to know what was tried and why it was dropped.
+  before proposing, to know what was tried and why it was dropped. A deferral
+  found settled gets a note beneath it, as `doc/README.md` says.
 - The user's machine is theirs: ask before taking its screen, a browser or a
   device, and never raise a window by force. Work goes to another session only
   on the user's word.
@@ -21,8 +22,11 @@
   before, or what it adds is justified by what it buys and why less would not
   do. Report the state removed, or the state added and what it buys.
 - Before a commit, the review agent (`.claude/agents/review.md`) reads the
-  change. Each finding is checked against the code or its source before it is
-  acted on or passed on, and a fix is no larger than its finding.
+  change, briefed with its goal and its code, not its author's conclusions.
+  Each finding is checked against the code or its source before it is acted on
+  or passed on, and a fix is no larger than its finding. A fixed finding goes
+  back to a review until one finds nothing; the report says how many rounds it
+  took. Whoever hands work to an agent runs this loop on what comes back, unasked.
 
 ## The system
 
@@ -58,6 +62,10 @@
   of what the change since `base` reaches (default HEAD and the uncommitted). `make check`
   and `make test` whole are a deploy's. A passed check is not run again over
   unchanged code, and a long run shows its progress.
+- A test that blocks a change is suspected first: `git blame` its lines and read
+  the commits that brought them in. One patched on to hold a case rather than a
+  contract is replaced by a test of the contract, or deleted where it is needless
+  or holds more than the contract does; it is not patched to pass.
 
 ## Instructions
 

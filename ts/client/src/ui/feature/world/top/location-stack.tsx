@@ -5,8 +5,16 @@ import { useTranslation } from "react-i18next";
 import { type GlyphName, Spinner } from "@/ui/shared/component/icon.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { LABEL } from "@/ui/shared/component/palette.ts";
-import { Tracking } from "@/abi/camera.ts";
-import { SensorStatus } from "@/abi/overlay.ts";
+import {
+  type Tracking,
+  TRACKING_FOLLOW,
+  TRACKING_RECENTER,
+  TRACKING_UNFOLLOW,
+} from "@/abi/camera.enum.ts";
+import {
+  SENSOR_STATUS_LOADING,
+  SENSOR_STATUS_READY,
+} from "@/abi/overlay.enum.ts";
 import { CompassFace } from "./compass.tsx";
 import { ButtonStack } from "./button-stack.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
@@ -17,15 +25,15 @@ import * as camera from "@/service/core/camera.ts";
 
 /** The glyphs follow MapKit's MKUserTrackingButton. */
 const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
-  [Tracking.Recenter]: {
+  [TRACKING_RECENTER]: {
     glyph: "location",
     label: "world.controls.move_to_location",
   },
-  [Tracking.Follow]: {
+  [TRACKING_FOLLOW]: {
     glyph: "location.fill",
     label: "world.controls.start_compass_mode",
   },
-  [Tracking.Unfollow]: {
+  [TRACKING_UNFOLLOW]: {
     glyph: "location.north.line.fill",
     label: "world.controls.exit_compass_mode",
   },
@@ -39,10 +47,10 @@ export function LocationStack() {
   const offCenter = useCore((s) => s.pivot.is_off_center);
 
   const press = following
-    ? Tracking.Unfollow
+    ? TRACKING_UNFOLLOW
     : offCenter
-      ? Tracking.Recenter
-      : Tracking.Follow;
+      ? TRACKING_RECENTER
+      : TRACKING_FOLLOW;
   const { glyph, label } = PRESS[press];
 
   return (
@@ -53,9 +61,9 @@ export function LocationStack() {
           label: t(label),
           onPress: () => void camera.tracking(press),
           isActive: following,
-          disabled: status !== SensorStatus.Ready || !hasLocation,
+          disabled: status !== SENSOR_STATUS_READY || !hasLocation,
           face:
-            status === SensorStatus.Loading ? (
+            status === SENSOR_STATUS_LOADING ? (
               <Spinner size={chrome.glyph} color={LABEL.primary} />
             ) : (
               <Motion

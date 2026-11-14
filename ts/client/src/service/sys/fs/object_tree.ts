@@ -20,7 +20,12 @@
  */
 
 import { SHARD_ZOOM } from "@/abi/file.spec.ts";
-import { ground_of, object_of, Sentinel } from "@/abi/cube.spec.ts";
+import {
+  ground,
+  object,
+  SENTINEL_AIR,
+  SENTINEL_VOID,
+} from "@/abi/cube.spec.ts";
 
 /** A write, laid out as file.json's `write`. A leaf is kept as the write that
  * made it. `text` is a marker's words, the one record a leaf can carry. */
@@ -36,10 +41,6 @@ export interface TopRow {
   shard: string;
   fold: number;
 }
-
-/** The value an erase writes. It is also the word of an empty node
- * (pxl-spec `value::VOID`). */
-export const VOID = 0;
 
 export function shard_of(key: string): string {
   return key.slice(0, SHARD_ZOOM);
@@ -64,7 +65,7 @@ function slot(key: string, j: number): number {
 /** Lays the write `w` over `leaves`, the leaves of `w`'s shard by key, as the
  * store's tree takes a write. The write replaces everything at or under its
  * node. A leaf above its node is split, so that the rest of that leaf keeps
- * its value. A write of VOID leaves no leaf. */
+ * its value. A write of `SENTINEL_VOID` leaves no leaf. */
 export function lay(leaves: Map<string, Leaf>, w: Leaf): void {
   for (const [k, l] of leaves) {
     if (k.startsWith(w.key)) {
@@ -82,7 +83,7 @@ export function lay(leaves: Map<string, Leaf>, w: Leaf): void {
       }
     }
   }
-  if (w.asset_id !== VOID) leaves.set(w.key, w);
+  if (w.asset_id !== SENTINEL_VOID) leaves.set(w.key, w);
 }
 
 /** A share is how much of a cube is filled, and this is a whole cube
@@ -95,11 +96,14 @@ function fold_word(kind: number, share: number): number {
   return ((kind & 0xffff) | (share << 16)) >>> 0;
 }
 
+/** The ground's and the objects' numbers, the cube catalog's rows. */
+const CUBES: ReadonlySet<number> = new Set(
+  [...ground, ...object].map((c) => c.number),
+);
+
 /** Whether a value is drawn as a voxel (pxl-engine object.rs `voxel`). */
 function voxel(val: number): boolean {
-  return (
-    val === Sentinel.air || ground_of(val) !== null || object_of(val) !== null
-  );
+  return val === SENTINEL_AIR || CUBES.has(val);
 }
 
 /** The word a leaf of `id` gives its parent's fold (pxl-engine object.rs
@@ -119,7 +123,7 @@ export function fold(children: readonly number[], zoom: number): number {
   const fill = (w: number): number => w >>> 16;
   let sum = 0;
   for (const c of children) sum += fill(c);
-  let best = 0;
+  let best: number = SENTINEL_VOID;
   let most = 0;
   for (let j = 0; j < 8; j++) {
     const c = children[(zoom & 1) === 0 ? 7 - j : j]!;

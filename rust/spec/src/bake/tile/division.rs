@@ -34,7 +34,7 @@ pub(crate) const MAX_PKT_BYTES: usize = 4 << 20;
 pub const NONE: u32 = u32::MAX;
 
 /// A tile's cells, and so the room a client decodes them into.
-pub const CELLS: usize = (TILE_CELLS * TILE_CELLS) as usize;
+pub const CELL_CNT: usize = (TILE_CELLS * TILE_CELLS) as usize;
 
 /// The cells; the occupancy; per division its id, kind, parent, prominence
 /// and whether an area holds it; its name.
@@ -79,7 +79,7 @@ pub struct DivisionTile {
 }
 
 impl Tile for DivisionTile {
-    const LAYER: BaseLayer = BaseLayer::division;
+    const LAYER: BaseLayer = BaseLayer::Division;
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy
@@ -177,7 +177,7 @@ impl DivisionTile {
 impl Default for DivisionTile {
     /// A tile in no division, which is what a tile the set holds no object for is.
     fn default() -> DivisionTile {
-        DivisionTile::of(vec![NONE; CELLS].into(), [], Occupancy::ZERO)
+        DivisionTile::of(vec![NONE; CELL_CNT].into(), [], Occupancy::ZERO)
     }
 }
 
@@ -219,7 +219,9 @@ fn check(cells: &[u32], parents: &[u32]) -> Result<(), MarshalError> {
         return Err(malformed());
     }
     let fits = |i: u32| i == NONE || (i as usize) < n;
-    if cells.len() != CELLS || !cells.iter().all(|&c| fits(c)) || !parents.iter().all(|&p| fits(p))
+    if cells.len() != CELL_CNT
+        || !cells.iter().all(|&c| fits(c))
+        || !parents.iter().all(|&p| fits(p))
     {
         return Err(malformed());
     }
@@ -288,11 +290,11 @@ pub fn decode(pkt: &[u8]) -> Result<DivisionTile, MarshalError> {
     })
 }
 
-/// Decoded straight into its resident room, `CELLS` long: its cells; its
+/// Decoded straight into its resident room, `CELL_CNT` long: its cells; its
 /// divisions, a handful, on the heap.
 pub fn decode_into(pkt: &[u8], room: &'static mut [u32]) -> Result<DivisionTile, MarshalError> {
     let v = read_tile(pkt)?;
-    if room.len() != CELLS {
+    if room.len() != CELL_CNT {
         return Err(malformed());
     }
     let tile = tile_of(&v);
@@ -360,7 +362,7 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
         }
     };
 
-    let cells: Vec<u32> = (0..CELLS as u32)
+    let cells: Vec<u32> = (0..CELL_CNT as u32)
         .map(|idx| {
             let (q, block) = GROUND.child_cells(idx);
             majority(
@@ -372,7 +374,7 @@ pub fn fold(children: [&DivisionTile; 4], zoom: Zoom) -> DivisionTile {
     let has_child: [bool; 4] = std::array::from_fn(|q| {
         let child = children[q];
         child.occupancy.bits() != 0
-            || (0..CELLS as u32).any(|c| {
+            || (0..CELL_CNT as u32).any(|c| {
                 global(q, child.cells[c as usize]) != cells[GROUND.parent_cell(q, c) as usize]
             })
     });

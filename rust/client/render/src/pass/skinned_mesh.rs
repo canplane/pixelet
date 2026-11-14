@@ -37,7 +37,7 @@ impl SkinnedPass {
             depth: pipelines.build_masked(
                 g,
                 PIPELINE_SKINNED_DEPTH,
-                Format::depth32float,
+                Format::Depth32float,
                 Stencil::Masked,
             ),
             draws: [0; 2],

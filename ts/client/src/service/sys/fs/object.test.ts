@@ -2,7 +2,7 @@
 
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_EBADMSG, ERRNO_ENOENT } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -78,13 +78,13 @@ test("encode_writes - a batch reads back as written, in order, texts and all", a
   assert.deepStrictEqual(decode_writes(format.OBJECT_EDIT, file), writes);
   assert.deepStrictEqual(
     await errno(() => decode_writes(format.OBJECT, file)),
-    Errno.EBADMSG,
+    ERRNO_EBADMSG,
   );
 });
 
 test("object_backend - an edit batch is kept in its shard, and the top lists it", async () => {
   const b = object_backend(database());
-  assert.deepStrictEqual(await errno(() => b.open(TOP)), Errno.ENOENT);
+  assert.deepStrictEqual(await errno(() => b.open(TOP)), ERRNO_ENOENT);
   b.commit(encode_writes(format.OBJECT_EDIT, [CUBE, MARKER]));
   const own = decode_writes(format.OBJECT, await b.open(SHARD));
   assert.deepStrictEqual(own, [CUBE, MARKER]);
@@ -109,8 +109,8 @@ test("object_backend - a shard emptied by its edits has no file, nor a row", asy
   const b = object_backend(db);
   b.commit(encode_writes(format.OBJECT_EDIT, [CUBE]));
   b.commit(encode_writes(format.OBJECT_EDIT, [{ ...CUBE, asset_id: 0 }]));
-  assert.deepStrictEqual(await errno(() => b.open(SHARD)), Errno.ENOENT);
-  assert.deepStrictEqual(await errno(() => b.open(TOP)), Errno.ENOENT);
+  assert.deepStrictEqual(await errno(() => b.open(SHARD)), ERRNO_ENOENT);
+  assert.deepStrictEqual(await errno(() => b.open(TOP)), ERRNO_ENOENT);
   assert.deepStrictEqual(db.map.size, 0);
 });
 
@@ -118,7 +118,7 @@ test("object_backend - a file not an edit batch is refused", async () => {
   const b = object_backend(database());
   assert.deepStrictEqual(
     await errno(() => b.commit(new Uint8Array([format.OBJECT]))),
-    Errno.EBADMSG,
+    ERRNO_EBADMSG,
   );
 });
 
@@ -142,8 +142,8 @@ test("object_backend - a refused shard is set aside, its rows of the top with it
   const file = await b.open(SHARD);
   assert.ok(await b.set_aside(SHARD, 7));
   assert.deepStrictEqual(db.map.get(`${SHARD}:aside:7`), file);
-  assert.deepStrictEqual(await errno(() => b.open(SHARD)), Errno.ENOENT);
-  assert.deepStrictEqual(await errno(() => b.open(TOP)), Errno.ENOENT);
+  assert.deepStrictEqual(await errno(() => b.open(SHARD)), ERRNO_ENOENT);
+  assert.deepStrictEqual(await errno(() => b.open(TOP)), ERRNO_ENOENT);
 });
 
 test("object_backend - a database that refuses sets nothing aside, and throws at no commit", async () => {

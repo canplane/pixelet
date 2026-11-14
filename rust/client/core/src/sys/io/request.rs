@@ -18,10 +18,10 @@ use std::collections::VecDeque;
 
 use crate::sys::io::demand::{Order, PhaseList, Source, Stream};
 use crate::sys::io::failure::{Exit, Failure};
-use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
+use crate::sys::io::param::{BODY_SLOT_CNT, CREDIT_CAP};
 use crate::sys::io::policy::{self, Fault, Rank};
 use crate::sys::io::room::Refusal;
-use crate::sys::load::LOAD_FILES;
+use crate::sys::load::LOAD_FILE_CAP;
 use crate::sys::sched;
 use pxl_global::Global;
 use xpute_guest::clock::now;
@@ -29,8 +29,8 @@ use xpute_kit::math::rng::seed_mix64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-const STREAMS: usize = Stream::ALL.len();
-const SLOTS: usize = MAX_CREDITS as usize;
+const STREAM_CNT: usize = Stream::ALL.len();
+const SLOT_CNT: usize = CREDIT_CAP as usize;
 
 #[derive(Clone, Copy)]
 struct Want {
@@ -108,12 +108,12 @@ struct Sched {
     /// Each stream's wants, sorted by id, at most its bound in `bounds`. A
     /// layer's bound is its tile cache's slots, because a layer asks only for
     /// what it can hold. The assets' bound is the files that may be in flight
-    /// at once (`LOAD_FILES`).
-    wants: [Vec<Want>; STREAMS],
-    bounds: [usize; STREAMS],
-    slots: [Slot; SLOTS],
-    credits: u32,
-    most_credits: u32,
+    /// at once (`LOAD_FILE_CAP`).
+    wants: [Vec<Want>; STREAM_CNT],
+    bounds: [usize; STREAM_CNT],
+    slots: [Slot; SLOT_CNT],
+    credit_cnt: u32,
+    credit_peak: u32,
     events: VecDeque<Event>,
     /// Scratch for `declare` and `pump`, so that a frame allocates nothing.
     fresh: Vec<Want>,
@@ -135,15 +135,15 @@ fn sched() -> &'static mut Sched {
 /// each layer's bound, the slots of its tile cache.
 pub fn open(frames: impl Fn(Stream) -> u32) {
     let bounds = Stream::ALL.map(|s| match s.row().source {
-        Source::Load => LOAD_FILES,
+        Source::Load => LOAD_FILE_CAP,
         Source::Bake(_) | Source::Objects => frames(s) as usize,
     });
     SCHED.set(Sched {
         wants: bounds.map(Vec::with_capacity),
         bounds,
-        slots: [Slot { gen: 0, out: None }; SLOTS],
-        credits: 0,
-        most_credits: 0,
+        slots: [Slot { gen: 0, out: None }; SLOT_CNT],
+        credit_cnt: 0,
+        credit_peak: 0,
         events: VecDeque::new(),
         fresh: Vec::with_capacity(bounds.iter().copied().max().unwrap_or(0)),
         ready: Vec::with_capacity(bounds.iter().sum()),
@@ -184,10 +184,10 @@ pub fn declare(stream: Stream, wanted: &[(u64, Order)]) {
     s.wants[i].extend_from_slice(&s.fresh);
 }
 
-pub fn set_credits(credits: u32) {
+pub fn set_credit_cnt(credit_cnt: u32) {
     let s = sched();
-    s.credits = credits.min(MAX_CREDITS);
-    s.most_credits = s.most_credits.max(s.credits);
+    s.credit_cnt = credit_cnt.min(CREDIT_CAP);
+    s.credit_peak = s.credit_peak.max(s.credit_cnt);
 }
 
 /// Runs once a frame, after every producer has declared. A pump after only
@@ -196,7 +196,7 @@ pub fn pump() {
     let (s, at) = (sched(), now());
     // Abandoned work stops in the frame it is abandoned. After a zoom out and
     // back in, the credits must not stay on the zoom passed through.
-    for k in 0..SLOTS {
+    for k in 0..SLOT_CNT {
         if s.slots[k]
             .out
             .is_some_and(|a| find(s, a.stream, a.id).is_none())
@@ -223,16 +223,16 @@ pub fn next_pump_at(at_ms: f64) -> Option<f64> {
 /// Starts the best ranked of the ready wants on the free credits. A failing
 /// server gets one probe at a time.
 fn start_ready(s: &mut Sched, at: f64) {
-    let credits = s.credits as usize;
+    let credit_cnt = s.credit_cnt as usize;
     let out = s.slots.iter().filter(|c| c.out.is_some()).count();
-    let free = s.slots[..credits]
+    let free = s.slots[..credit_cnt]
         .iter()
         .filter(|c| c.out.is_none())
         .count();
     let room = if s.outage.failing.is_some() {
         1
     } else {
-        credits
+        credit_cnt
     };
     let n = free.min(room.saturating_sub(out));
     if n == 0 {
@@ -254,7 +254,7 @@ fn start_ready(s: &mut Sched, at: f64) {
         a.0.cmp(&b.0).then(tie(a).cmp(&tie(b)))
     });
     for &(rank, stream, w) in ready.iter().take(n) {
-        let k = s.slots[..credits]
+        let k = s.slots[..credit_cnt]
             .iter()
             .position(|c| c.out.is_none())
             .or_bug(Errno::ENOTRECOVERABLE);
@@ -345,10 +345,10 @@ pub fn has_object_failed(stream: Stream, id: u64) -> bool {
 /// leaves out one slot for each of the most credits ever granted, because a
 /// body may still be out on each, and one for each Earth tile the Earth's
 /// bound holds, whose packet waits for a frame.
-pub fn spare_slots() -> u32 {
+pub fn spare_slot_cnt() -> u32 {
     let s = sched();
-    let earth = s.bounds[Stream::earth as usize] as u32;
-    BODY_SLOTS.saturating_sub(s.most_credits.max(1) + earth)
+    let earth = s.bounds[Stream::Earth as usize] as u32;
+    BODY_SLOT_CNT.saturating_sub(s.credit_peak.max(1) + earth)
 }
 
 /// Why the reads are failing, or None once an answer has come since the last

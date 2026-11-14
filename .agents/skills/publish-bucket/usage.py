@@ -7,6 +7,7 @@
 
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -15,11 +16,14 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "script"))
+import r2
+
 # Its output piped into a pager or head ends quietly when the reader stops.
 signal.signal(signal.SIGPIPE, signal.SIG_DFL)
 
-WORKER = "pixelet"
-BUCKET = "pixelet-bucket"
+with open(os.path.join(r2.REPO, "ts/server/edge/wrangler.jsonc")) as f:
+    WORKER = re.search(r'"name":\s*"([^"]+)"', f.read())[1]
 SERVER = "pixelet-prod"
 # Cloudflare's CLI, a program on the PATH as git and aws are.
 WRANGLER = ["wrangler"]
@@ -144,7 +148,7 @@ def cloudflare_usage() -> None:
         "/graphql",
         {
             "query": QUERY,
-            "variables": {"account": account_id, "worker": WORKER, "bucket": BUCKET, "monthStart": month_start, "weekStart": week_start, "today": today},
+            "variables": {"account": account_id, "worker": WORKER, "bucket": r2.BUCKET, "monthStart": month_start, "weekStart": week_start, "today": today},
         },
     )
     accounts = got["data"]["viewer"]["accounts"]
@@ -167,7 +171,7 @@ def cloudflare_usage() -> None:
             class_a += r["sum"]["requests"]
             if action not in CLASS_A:
                 unknown.append(action)
-    print(f"\nR2 '{BUCKET}' — this month since {month_start}")
+    print(f"\nR2 '{r2.BUCKET}' — this month since {month_start}")
     print(f"  Class A  {count(class_a):>11}  {share(class_a, R2_CLASS_A_PER_MONTH):>6} of {count(R2_CLASS_A_PER_MONTH)}")
     print(f"  Class B  {count(class_b):>11}  {share(class_b, R2_CLASS_B_PER_MONTH):>6} of {count(R2_CLASS_B_PER_MONTH)}")
     print(f"  free     {count(free):>11}")

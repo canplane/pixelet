@@ -16,29 +16,29 @@ use crate::ground;
 use crate::ground::Cell;
 use crate::ground::Extent;
 use crate::way;
-use pxl_spec::brick::{bricks_zoom, idx_of, of_idx, BRICK, BRICK_CELLS, BRICK_SHIFT};
-use pxl_spec::ground::{asset_ids, top, UNKNOWN};
+use pxl_spec::asset::cube::Sentinel;
+use pxl_spec::brick::{bricks_zoom, idx_of, of_idx, BRICK, BRICK_CELL_CNT, BRICK_SHIFT};
+use pxl_spec::ground::{asset_ids, top};
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{idx_at, Zoom, LEAF_CELL_ZOOM, MIN_ZOOM};
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::value::VOID;
-use pxl_spec::way::{NOTHING, SPANS};
+use pxl_spec::way::{NOTHING, SPAN_CAP};
 
-/// The bricks a clip level holds a side (`ACROSS`) and in all (`ENTRIES`): enough to hold
+/// The bricks a clip level holds a side (`ACROSS`) and in all (`ENTRY_CNT`): enough to hold
 /// `RADIUS` around a center anywhere in a brick, rounded up to a power of two, since `entry`
 /// masks by it.
 pub const ACROSS: u32 = ((2 * RADIUS + BRICK).div_ceil(BRICK)).next_power_of_two();
-pub const ENTRIES: u32 = ACROSS * ACROSS;
+pub const ENTRY_CNT: u32 = ACROSS * ACROSS;
 /// A clip level's side, counted in cells.
 pub const CLIP_SIZE: u32 = ACROSS * BRICK;
 /// The eye's coarsest clip level's cells' zoom: the top's.
 pub const FIRST_CELL_ZOOM: Zoom = GROUND.cell_zoom(MIN_ZOOM);
 /// The eye's clip levels, one for every zoom the pyramid draws, coarsest first, which the
 /// GPU's cast reads; the one at `cell_zoom` is number `cell_zoom − FIRST_CELL_ZOOM`.
-pub const EYE_CLIP_LEVELS: u32 = LEAF_CELL_ZOOM - FIRST_CELL_ZOOM + 1;
+pub const EYE_CLIP_LEVEL_CNT: u32 = LEAF_CELL_ZOOM - FIRST_CELL_ZOOM + 1;
 
 /// The cells' zoom of the eye's clip level `w`, counting coarsest first: the zoom the layout
 /// lays the level at, and the zoom at which the GPU's decor reads a brick's clip level.
@@ -48,18 +48,18 @@ pub const fn eye_cell_zoom(w: u32) -> Zoom {
 /// Every clip level: the eye's; the pivot's two, at the leaves' zoom and the one above, which
 /// walking and editing read; and one for a destination, at the zoom its line reads the ground
 /// at, found exactly (pxl-core domain/layer/terrain/clipmap.rs).
-pub const CLIP_LEVELS: u32 = EYE_CLIP_LEVELS + 3;
-/// The slots every clip level's bricks are held in, `CLIP_LEVELS` to an entry, slot
-/// `k × ENTRIES + s` being entry `s`'s `k`-th (pxl-core domain/layer/terrain/clipmap.rs
+pub const CLIP_LEVEL_CNT: u32 = EYE_CLIP_LEVEL_CNT + 3;
+/// The slots every clip level's bricks are held in, `CLIP_LEVEL_CNT` to an entry, slot
+/// `k × ENTRY_CNT + s` being entry `s`'s `k`-th (pxl-core domain/layer/terrain/clipmap.rs
 /// `Slot`). No more bricks want an entry than there are clip levels, so this is the most held
 /// at once, reached where no two clip levels at a zoom overlap. A brick that two of them want
 /// takes one slot.
-pub const SLOTS: u32 = CLIP_LEVELS * ENTRIES;
+pub const SLOT_CNT: u32 = CLIP_LEVEL_CNT * ENTRY_CNT;
 /// The most bricks a frame hands the GPU once the core's fill has filled them (pxl-core
 /// domain/layer/terrain/clipmap.rs `upload`). Each brick is a box of decor's generation
 /// (pxl-content `generation::RECT_CAP`), and bricks past this many are handed over in later
 /// frames.
-pub const FRAME_BRICKS: u32 = 9;
+pub const FRAME_BRICK_CAP: u32 = 9;
 
 /// How far from its center a clip level holds every cell, in its own cells. A zoom's band
 /// ends `CELLS_A_RAD` of its cells from the eye, and the clip level holds `CLIP_MARGIN` times
@@ -96,7 +96,7 @@ pub fn brick_of(g: [i32; 2]) -> ([i32; 2], [u32; 2]) {
 /// ground's and the ways' apart (`ground::Extent`); level 0 is each cell's own column
 /// (`fill::mip`).
 pub const fn bound_mip_at(j: u32) -> u32 {
-    (4 * BRICK_CELLS - ((4 * BRICK_CELLS) >> (2 * j))) / 3
+    (4 * BRICK_CELL_CNT - ((4 * BRICK_CELL_CNT) >> (2 * j))) / 3
 }
 
 /// Entry `[x, y]` of level `j` among a brick's levels, each level laid as
@@ -105,10 +105,10 @@ pub(crate) const fn mip_idx(j: u32, at: [u32; 2]) -> u32 {
     bound_mip_at(j) + idx_of(at)
 }
 
-pub const BRICK_MIPS: u32 = BRICK_SHIFT;
+pub const BRICK_MIP_LAST: u32 = BRICK_SHIFT;
 /// A level entry's words: its bounds (`ground::Extent`), each as a bound word.
 pub const BOUND_ENTRY_WORDS: u32 = 2;
-pub const BOUND_WORDS: u32 = BOUND_ENTRY_WORDS * bound_mip_at(BRICK_MIPS + 1);
+pub const BOUND_WORDS: u32 = BOUND_ENTRY_WORDS * bound_mip_at(BRICK_MIP_LAST + 1);
 
 /// The words of the ways' pool, each brick's run of kept spans among them, as one side holds
 /// them: the core's (pxl-core domain/layer/terrain/pool.rs) or a test's. A word past the store
@@ -129,7 +129,7 @@ pub const WAYS_POOL_WORDS: u32 = 1 << 24;
 
 /// A brick's kept spans, a run of the ways' pool its fill writes (fill.rs `lay_spans`), read in
 /// constant time with plain loads (`KeptSpans`): a bit per column of the brick and its ring
-/// (`SPANS_COLUMNS`, row by row from the ring's first, `SPANS_ACROSS` a row), set where the
+/// (`SPANS_COLUMN_CNT`, row by row from the ring's first, `SPANS_ACROSS` a row), set where the
 /// column is kept; the columns set before each pair of bitmap words, an `i16` each, two to a
 /// word, so a column's rank is that count and at most two words' bits; then, by rank, the word
 /// its column begins at in the run. A column there is `SPANS_COLUMN_WORDS`' words for its
@@ -137,17 +137,17 @@ pub const WAYS_POOL_WORDS: u32 = 1 << 24;
 /// value. A column with no span is kept only where a bore's air beside it may line it (it
 /// needs its face). A brick with no span takes no run.
 pub const RUN_BITS_AT: u32 = 0;
-pub const RUN_BITS_WORDS: u32 = SPANS_COLUMNS.div_ceil(32);
+pub const RUN_BITS_WORDS: u32 = SPANS_COLUMN_CNT.div_ceil(32);
 pub const RUN_RANK_AT: u32 = RUN_BITS_AT + RUN_BITS_WORDS;
 pub const RUN_RANK_WORDS: u32 = RUN_BITS_WORDS.div_ceil(2).div_ceil(2);
 pub const RUN_OFFS_AT: u32 = RUN_RANK_AT + RUN_RANK_WORDS;
 /// The most words a run takes: its index, and a word and a full column for each column.
-pub const RUN_WORDS_MOST: u32 = RUN_OFFS_AT + SPANS_COLUMNS * (1 + SPANS_COLUMN_WORDS);
+pub const RUN_WORDS_MOST: u32 = RUN_OFFS_AT + SPANS_COLUMN_CNT * (1 + SPANS_COLUMN_WORDS);
 
 /// The bits of a head word that hold a column's spans' count (`SPANS_COLUMN_WORDS`).
 pub const SPANS_CNT: u32 = 0xffff;
 
-/// A head word's face cell (`i32::MIN` for none) and spans' count, held to pxl-spec `way::SPANS` so
+/// A head word's face cell (`i32::MIN` for none) and spans' count, held to pxl-spec `way::SPAN_CAP` so
 /// that a loop over them stays bounded whatever the word.
 pub const fn head_of(w: u32) -> (i32, u32) {
     let face = w as i32 >> 16;
@@ -157,10 +157,10 @@ pub const fn head_of(w: u32) -> (i32, u32) {
         } else {
             face
         },
-        if w & SPANS_CNT < SPANS as u32 {
+        if w & SPANS_CNT < SPAN_CAP as u32 {
             w & SPANS_CNT
         } else {
-            SPANS as u32
+            SPAN_CAP as u32
         },
     )
 }
@@ -259,17 +259,17 @@ pub const SPANS_AT: u32 = 0;
 /// The columns whose spans a brick's cells read: the brick's and a ring of one around it,
 /// `SPANS_ACROSS` a side, row by row from the ring's first.
 pub const SPANS_ACROSS: u32 = BRICK + 2;
-pub const SPANS_COLUMNS: u32 = SPANS_ACROSS * SPANS_ACROSS;
+pub const SPANS_COLUMN_CNT: u32 = SPANS_ACROSS * SPANS_ACROSS;
 /// A column's spans in words (pxl-spec `way::SpanList`). The head word holds the count
 /// (`SPANS_CNT`) and, above it, the face cell as an `i16`, `i16::MIN` for none (fill.rs
 /// `hdr_word`). Then each span holds its lowest and past its highest, an `i16` each as the
 /// world's z is and held to that range (`answer::bound_word`), and its value.
-pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * SPANS as u32;
-pub const SPANS_WORDS: u32 = SPANS_AT + SPANS_COLUMNS * SPANS_COLUMN_WORDS;
+pub const SPANS_COLUMN_WORDS: u32 = 1 + 2 * SPAN_CAP as u32;
+pub const SPANS_WORDS: u32 = SPANS_AT + SPANS_COLUMN_CNT * SPANS_COLUMN_WORDS;
 
 /// A brick's columns, one word a cell, row by row: a cell's ground top in leaf cells, an
 /// `i16` in the low half (`column_top`).
-pub(crate) const COLUMN_WORDS: u32 = BRICK_CELLS;
+pub(crate) const COLUMN_WORDS: u32 = BRICK_CELL_CNT;
 
 /// The ground top held in a column word: a signed 16-bit value in the word's low half.
 pub const fn column_top(w: u32) -> i32 {
@@ -279,15 +279,15 @@ pub const fn column_top(w: u32) -> i32 {
 /// A brick's cells as its fill lays them, four to a word, cell `i` in the `i % 4`-th byte
 /// (`own_at`): each cell's own palette index (pxl-spec `ground::own` of its four at the brick's
 /// zoom).
-pub const OWN_WORDS: u32 = BRICK_CELLS / OWN_CELLS;
+pub const OWN_WORDS: u32 = BRICK_CELL_CNT / OWN_CELL_CNT;
 /// The cells a laid word holds, a byte each: in the cells' order
 /// (`idx_of`), a 2×2 square.
-pub const OWN_CELLS: u32 = 4;
-const _: () = assert!(BRICK_CELLS.is_multiple_of(OWN_CELLS));
+pub const OWN_CELL_CNT: u32 = 4;
+const _: () = assert!(BRICK_CELL_CNT.is_multiple_of(OWN_CELL_CNT));
 
 /// Cell `i`'s palette index in a laid word `w`.
 pub(crate) const fn own_at(w: u32, i: u32) -> u32 {
-    (w >> (8 * (i % OWN_CELLS))) & 0xff
+    (w >> (8 * (i % OWN_CELL_CNT))) & 0xff
 }
 
 /// A brick's words, the part that outlives its fill, the same on the CPU and on a GPU, in
@@ -314,7 +314,7 @@ pub trait BrickSource {
     /// The four palette indices of cell `i` of the brick in `slot` (`asset_ids`).
     fn fold_at(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
     /// Column word `i` of the brick in `slot` (`COLUMN_WORDS`), `i` to
-    /// `BRICK_CELLS`.
+    /// `BRICK_CELL_CNT`.
     fn column(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
     /// Entry `at` of level `j` of the brick in `slot`: its bounds (`ground::Extent`) as bound
     /// words (`answer::bound_word`), its columns' bounds joined (`join`), level 0 being one
@@ -344,8 +344,8 @@ pub trait BrickSource {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Lookup(u32);
 
-/// The bits of a slot (`SLOTS`), which a GPU and the CPU name alike.
-pub const LOOKUP_SLOT_BITS: u32 = SLOTS.next_power_of_two().trailing_zeros();
+/// The bits of a slot (`SLOT_CNT`), which a GPU and the CPU name alike.
+pub const LOOKUP_SLOT_BITS: u32 = SLOT_CNT.next_power_of_two().trailing_zeros();
 const LOOKUP_HERE: u32 = 1 << LOOKUP_SLOT_BITS;
 pub const LOOKUP_FROM_SHIFT: u32 = LOOKUP_SLOT_BITS + 1;
 pub const LOOKUP_CELL_ZOOM_SHIFT: u32 = LOOKUP_FROM_SHIFT + crate::ZOOM_BITS;
@@ -467,7 +467,7 @@ pub fn cell(
 ) -> (u32, u32, u32, Lookup) {
     let (f, at) = step(w, place, cell_zoom, g);
     if !f.here() {
-        return (VOID, 0, VOID, f);
+        return (Sentinel::Void as u32, 0, Sentinel::Void as u32, f);
     }
     let (from, slot, i) = (f.from(), f.slot(), idx_of(at));
     (
@@ -480,7 +480,7 @@ pub fn cell(
 
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it (a leaf's, finer than the
 /// leaves), stepped from `place`, where the column's own cells were found (`step`), with its
-/// own palette index as laid, or the wall's (`UNKNOWN`) where it is the wall
+/// own palette index as laid, or the wall's (`Sentinel::Unknown`) where it is the wall
 /// (`area::is_wall`); and where it is held. The wall is read from `shard`, what is known of
 /// the area there, or else asked of `w` (`Shard::at`).
 pub fn ground(
@@ -493,7 +493,7 @@ pub fn ground(
     let read = clip_zoom(zoom);
     let (word, column, own, f) = cell(w, place, read, cell_at(zoom, read, b));
     let asset_id = if area::is_wall(shard.at(w, (zoom, b)), zoom, b) {
-        UNKNOWN
+        Sentinel::Unknown as u32
     } else {
         own
     };
@@ -531,16 +531,16 @@ pub fn join(
 
 /// The levels over which a clip level bounds a node: its bricks' own levels, then the levels
 /// joining bricks, up to the whole clip level.
-pub(crate) const BOUND_MIPS: u32 = BRICK_MIPS + ACROSS.trailing_zeros();
+pub(crate) const BOUND_MIP_LAST: u32 = BRICK_MIP_LAST + ACROSS.trailing_zeros();
 
-/// The levels over a clip level's bricks, from one level over a brick (`BRICK_MIPS + 1`) to
+/// The levels over a clip level's bricks, from one level over a brick (`BRICK_MIP_LAST + 1`) to
 /// the whole clip level. A node wider than a brick is bounded by the join of the bricks it
 /// covers, folded where the clip levels' entries are written (`fold`) and read as one entry
 /// (`bounded`).
-pub const JOINED_MIPS: u32 = BOUND_MIPS - BRICK_MIPS;
+pub const JOINED_MIP_CNT: u32 = BOUND_MIP_LAST - BRICK_MIP_LAST;
 /// A clip level's entries: level `l` over a brick has `(ACROSS >> l)²`, an
 /// aligned block of `2^l` bricks a side each.
-pub const JOINED_ENTRIES: u32 = joined_idx(JOINED_MIPS + 1, [0, 0]);
+pub const JOINED_ENTRY_CNT: u32 = joined_idx(JOINED_MIP_CNT + 1, [0, 0]);
 /// An entry's words: its key, the block's first brick at its cells' zoom, X then Y, each with
 /// its sign flipped (`key_word`) so that the zero entry, as fresh memory holds it, names no
 /// brick; then the join's bounds, the ground's and the ways' (`ground::extent_word`). Each
@@ -617,13 +617,13 @@ impl Entry {
 /// every clip level's entries, one row a clip level, shaped as an entry (`Entry`), with the
 /// clip level's first brick as its brick and `present` 1 while the level is laid out
 /// (`BrickSource::origin`).
-pub const ORIGIN_AT: u32 = SLOTS;
+pub const ORIGIN_AT: u32 = SLOT_CNT;
 /// The row of the clip levels' buffer the eye's clip levels' entries begin at:
 /// past their entries and their first bricks.
-pub const JOINED_AT: u32 = ORIGIN_AT + CLIP_LEVELS;
+pub const JOINED_AT: u32 = ORIGIN_AT + CLIP_LEVEL_CNT;
 /// The eye's clip levels' entries, as the GPU lays them: clip level `cell_zoom −
-/// FIRST_CELL_ZOOM` a run of `JOINED_ENTRIES`.
-pub const EYE_JOINED_WORDS: u32 = JOINED_ENTRIES * JOINED_WORDS * EYE_CLIP_LEVELS;
+/// FIRST_CELL_ZOOM` a run of `JOINED_ENTRY_CNT`.
+pub const EYE_JOINED_WORDS: u32 = JOINED_ENTRY_CNT * JOINED_WORDS * EYE_CLIP_LEVEL_CNT;
 /// The clip levels' buffer in words: its entries, its first bricks and the eye's clip levels'
 /// joined levels, all of it written by the core (pxl-core domain/layer/terrain/clipmap.rs
 /// `table`).
@@ -639,7 +639,7 @@ pub const fn joined_idx(l: u32, at: [u32; 2]) -> u32 {
     let under = ACROSS >> (l - 1);
     (ACROSS * ACROSS - under * under) / 3 + idx_of(at)
 }
-const _: () = assert!(ACROSS.is_power_of_two() && JOINED_MIPS < ACROSS.trailing_zeros() + 1);
+const _: () = assert!(ACROSS.is_power_of_two() && JOINED_MIP_CNT < ACROSS.trailing_zeros() + 1);
 
 /// A key's word: `v` with its sign flipped, so no brick's is 0.
 const fn key_word(v: i32) -> u32 {
@@ -651,7 +651,7 @@ const fn key_word(v: i32) -> u32 {
 /// `cell_zoom` in the block of `2^l` entries a side at `b`, aligned as the entries are
 /// (`ACROSS` is a multiple of the block's side): the join of its four children's joins, each
 /// read once where the level under it laid it (`BrickSource::joined`; at level 1, a brick's own,
-/// `brick_bounds`). It is keyed by the clip level's first brick (`BrickSource::origin`), so an entry
+/// `brick_bound`). It is keyed by the clip level's first brick (`BrickSource::origin`), so an entry
 /// of a clip level that has since moved names another brick. A block within the clip level's
 /// range is a node's bricks; one across its seam, where the entries wrap, holds what the clip
 /// level holds of the two nodes on either side, which bounds either from above. It is the
@@ -671,7 +671,7 @@ pub fn fold(w: &impl BrickSource, cell_zoom: Zoom, l: u32, b: u32) -> [u32; JOIN
                 cell_zoom,
                 entry([((x << l) + dx) as i32, ((y << l) + dy) as i32]),
             );
-            brick_bounds(w, cell_zoom, q)
+            brick_bound(w, cell_zoom, q)
         } else {
             unfold(
                 w.joined(cell_zoom, joined_idx(l - 1, [0, 0]) + 4 * b + k),
@@ -698,9 +698,9 @@ pub fn fold(w: &impl BrickSource, cell_zoom: Zoom, l: u32, b: u32) -> [u32; JOIN
 /// a brick this clip level has yet to hold is bounded by the cells read in its place; none
 /// (`ground::UNBOUNDED`) where no clip level holds it, a lack. Only the bricks' own levels are
 /// read, never another clip level's entries, so the clip levels may be folded in any order.
-fn brick_bounds(w: &impl BrickSource, cell_zoom: Zoom, q: [i32; 2]) -> Extent {
+fn brick_bound(w: &impl BrickSource, cell_zoom: Zoom, q: [i32; 2]) -> Extent {
     let mut place = Lookup::NONE;
-    let (b, _, here, _) = bounded(w, &mut place, cell_zoom, (cell_zoom - BRICK_MIPS, q));
+    let (b, _, here, _) = bounded(w, &mut place, cell_zoom, (cell_zoom - BRICK_MIP_LAST, q));
     if here {
         b
     } else {
@@ -708,8 +708,8 @@ fn brick_bounds(w: &impl BrickSource, cell_zoom: Zoom, q: [i32; 2]) -> Extent {
     }
 }
 const _: () = assert!(
-    FIRST_CELL_ZOOM >= BRICK_MIPS,
-    "a brick is a node at its cells' zoom less `BRICK_MIPS`"
+    FIRST_CELL_ZOOM >= BRICK_MIP_LAST,
+    "a brick is a node at its cells' zoom less `BRICK_MIP_LAST`"
 );
 
 /// The joins that entry `e` holds for a clip level whose first brick is `q` (`fold`): its
@@ -732,7 +732,7 @@ fn unfold(e: [u32; JOINED_WORDS as usize], q: [i32; 2]) -> Extent {
 /// its block is held by no clip level, so nothing bounds the node, which only splits more.
 /// What the clip level does not reach of the node, a coarser clip level holds, as for a cell
 /// (`step`). This is the one reader of every entry.
-fn level_bounds(w: &impl BrickSource, cell_zoom: Zoom, g: [i32; 2], l: u32) -> (Extent, bool) {
+fn level_bound(w: &impl BrickSource, cell_zoom: Zoom, g: [i32; 2], l: u32) -> (Extent, bool) {
     let (first, laid) = w.origin(cell_zoom);
     if !laid {
         return ([ground::EMPTY; 2], false);
@@ -747,13 +747,17 @@ fn level_bounds(w: &impl BrickSource, cell_zoom: Zoom, g: [i32; 2], l: u32) -> (
     if d[0] >= across || d[1] >= across || d[0] + side <= 0 || d[1] + side <= 0 {
         return ([ground::EMPTY; 2], false);
     }
-    let all = l <= JOINED_MIPS
+    let all = l <= JOINED_MIP_CNT
         && d[0] >= 0
         && d[1] >= 0
         && d[0] + side <= across
         && d[1] + side <= across;
     let (mip, m) = (
-        if l > JOINED_MIPS { JOINED_MIPS } else { l },
+        if l > JOINED_MIP_CNT {
+            JOINED_MIP_CNT
+        } else {
+            l
+        },
         (ACROSS - 1) as i32,
     );
     let at = [((q[0] & m) as u32) >> mip, ((q[1] & m) as u32) >> mip];
@@ -817,7 +821,7 @@ pub fn bound_over(
 /// stepped from `place`, which becomes where they are held (`step`): one entry of its brick's
 /// levels, level 0 being the column holding a node no wider than a cell, with that clip
 /// level's zoom. For a node wider than a brick, it reads what the clip level at `cell_zoom`
-/// holds of it (`level_bounds`), and whether it holds all of it (`bound_over` reads on where it
+/// holds of it (`level_bound`), and whether it holds all of it (`bound_over` reads on where it
 /// does not). It is false where no clip level holds the node, a lack.
 fn bounded(
     w: &impl BrickSource,
@@ -827,8 +831,8 @@ fn bounded(
 ) -> (Extent, Zoom, bool, bool) {
     // The node's first cell at `cell_zoom`, or the cell holding it.
     let g = [idx_at(zoom, c[0], cell_zoom), idx_at(zoom, c[1], cell_zoom)];
-    if cell_zoom > zoom + BRICK_MIPS {
-        let (b, all) = level_bounds(w, cell_zoom, g, cell_zoom - zoom - BRICK_MIPS);
+    if cell_zoom > zoom + BRICK_MIP_LAST {
+        let (b, all) = level_bound(w, cell_zoom, g, cell_zoom - zoom - BRICK_MIP_LAST);
         return (b, cell_zoom, true, all);
     }
     let (f, p) = step(w, *place, cell_zoom, g);

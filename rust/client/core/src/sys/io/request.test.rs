@@ -8,7 +8,7 @@ use core::cell::Cell;
 use xpute_guest::clock;
 use xpute_kit::status::errno::Errno;
 
-use crate::sys::io::param::RETRY_ATTEMPTS;
+use crate::sys::io::param::RETRY_ATTEMPT_CNT;
 
 thread_local! {
     static NOW: Cell<f64> = const { Cell::new(0.0) };
@@ -24,7 +24,7 @@ fn at(t: f64) {
 fn begin() {
     at(0.0);
     open(|_| 64);
-    set_credits(2);
+    set_credit_cnt(2);
 }
 
 fn seen(near: f64) -> Order {
@@ -208,7 +208,7 @@ fn failing_server_probe() {
             1,
             "out before the failure, so the same outage"
         );
-        for n in 2..=RETRY_ATTEMPTS + 1 {
+        for n in 2..=RETRY_ATTEMPT_CNT + 1 {
             at(until());
             pump();
             let probe = take_events().0;
@@ -275,7 +275,7 @@ fn cur_demand_said() {
 fn running_attempt_kept() {
     crate::on_core(|| {
         begin();
-        set_credits(1);
+        set_credit_cnt(1);
         declare(Stream::terrain, &[(1, unseen(5.0))]);
         pump();
         let _ = take_events();
@@ -329,7 +329,7 @@ fn wants_served_at_rest() {
 fn asset_shares_credits() {
     crate::on_core(|| {
         begin();
-        set_credits(1);
+        set_credit_cnt(1);
         at(0.0);
         declare(Stream::terrain, &[(1, seen(0.0))]);
         at(0.0);

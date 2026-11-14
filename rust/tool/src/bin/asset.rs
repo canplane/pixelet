@@ -186,7 +186,7 @@ fn run() -> Result<(), String> {
     let packed = Pack {
         image,
         cell: pack::TILE_SIZE,
-        columns: pack::COLUMNS,
+        columns: pack::COLUMN_CNT,
         tiles: composed.tiles,
         means: composed.means,
         faces,

@@ -206,12 +206,12 @@ impl Keep<At> for KeepDescent<'_> {
 
 impl CastWorld<'_> {
     /// `v`, what the walk met or none, as what the walk held says: exact where
-    /// it lacked nothing, nothing with the first tile lacked where it met
+    /// it lacked nothing, a lack with the first tile lacked where it met
     /// nothing and no node answered, and otherwise coarser with that tile.
     fn answer<T>(&self, v: Option<T>) -> Answer<Option<T>> {
         match (v, self.lack, self.answered) {
             (v, None, _) => Answer::Exact(v),
-            (None, Some(l), false) => Answer::Nothing(l),
+            (None, Some(l), false) => Answer::Lack(l),
             (v, Some(l), _) => Answer::Coarser(v, l),
         }
     }
@@ -240,21 +240,21 @@ impl Query for CastWorld<'_> {
         at: &mut At,
         _: Zoom,
         _: [i32; 3],
-        zooms: [Zoom; 2],
+        range: [Zoom; 2],
         _: f32,
     ) -> In<[u32; 2]> {
         let answer = match &mut self.viewer {
             Some(v) => self
                 .world
-                .node(at, zooms, &mut self.path, &mut |i| v.sees(i)),
-            None => self.world.layer_node(at, zooms, &mut self.path),
+                .node(at, range, &mut self.path, &mut |i| v.sees(i)),
+            None => self.world.layer_node(at, range, &mut self.path),
         };
-        self.answered |= !matches!(answer, Answer::Nothing(_));
+        self.answered |= !matches!(answer, Answer::Lack(_));
         match answer {
-            Answer::Nothing(l) => {
+            Answer::Lack(l) => {
                 self.lack.get_or_insert(l);
                 In {
-                    kind: Kind::Lacks,
+                    kind: Kind::Lack,
                     asset: answer::EMPTY,
                 }
             }
@@ -338,7 +338,7 @@ impl World {
         };
         *path = query.path;
         let met = query.viewer.as_ref().and_then(|v| v.met);
-        let is_decor = kind_of(answer::val(trace.hit.asset[0])) == Some(id::Kind::decor);
+        let is_decor = kind_of(answer::val(trace.hit.asset[0])) == Some(id::Kind::Decor);
         let hit = (trace.end == End::Hit).then(|| {
             met.filter(|_| is_decor)
                 .unwrap_or_else(|| self.hit(ray, q, trace.hit))
@@ -368,13 +368,13 @@ impl World {
     /// What is in the cell `c` at `zoom`, asked off the line `l`
     /// (pxl-engine `support::asset`). The descent starts from the deepest node
     /// on the line that holds the cell, never again from the top. Where the
-    /// world lacks the cell, the answer is nothing with the missing tile.
+    /// world lacks the cell, the answer is a lack with the missing tile.
     pub(super) fn asset_about(&self, l: &Line<At>, zoom: Zoom, c: [i32; 3]) -> Answer<u32> {
         let mut query = self.cast_world();
         let val = support::asset(&mut query, l, zoom, c);
         match query.lack {
             None => Answer::Exact(val),
-            Some(t) => Answer::Nothing(t),
+            Some(t) => Answer::Lack(t),
         }
     }
 
@@ -417,8 +417,8 @@ impl World {
             false => HitKind::Ground,
         };
         // A cell filled short of its cube is hit as the box it is drawn as,
-        // laid about its cube's center (pxl-engine `cast::fill_bounds`).
-        let (lo, hi) = cast::fill_bounds(([0.0; 3], [1.0; 3]), s.asset[0]);
+        // laid about its cube's center (pxl-engine `cast::fill_bound`).
+        let (lo, hi) = cast::fill_bound(([0.0; 3], [1.0; 3]), s.asset[0]);
         let t = f64::from(s.t);
         Hit {
             t,

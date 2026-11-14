@@ -10,24 +10,13 @@
     reason = "generated from WIT"
 )]
 
-use std::rc::Rc;
-use xpute_guest::link;
-use xpute_guest::wait;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::abi::types::Token;
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
 /// The interface's handle, named by `pxl:core/overlay` (frame.json `NAMED`).
-pub const HANDLE: Handle = 0x7b1393;
+pub const HANDLE: _rt::Handle = 0x7b1393;
 
 /// `show`
-pub const SHOW: Method = 0;
+pub const SHOW: _rt::Method = 0;
 /// `view`
-pub const VIEW: Method = 1;
+pub const VIEW: _rt::Method = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -170,18 +159,18 @@ pub struct LonLat {
 }
 
 impl LonLat {
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.branch(2, |w| {
-            w.f64(Some(self.lon as f64));
-            w.f64(Some(self.lat as f64));
-        });
+    pub const SZ: usize = 16;
+    pub const ALIGN: usize = 8;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        w.f64(at + 0, *&self.lon);
+        w.f64(at + 8, *&self.lat);
     }
 
-    pub fn read(c: Cursor<'_>) -> Result<LonLat, MarshalError> {
-        let b = c.as_branch()?;
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<LonLat, _rt::Errno> {
         Ok(LonLat {
-            lon: b.at(0).and_then(|c| c.get_number().map(|v| v as f64))?,
-            lat: b.at(1).and_then(|c| c.get_number().map(|v| v as f64))?,
+            lon: r.f64(at + 0)?,
+            lat: r.f64(at + 8)?,
         })
     }
 }
@@ -195,35 +184,33 @@ pub struct PivotState {
 }
 
 impl PivotState {
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.branch(4, |w| {
-            w.u32(Some(self.status as u32));
-            w.bool(Some(self.is_off_center));
-            match &self.lon_lat {
-                Some(v) => {
-                    (*v).write(w);
-                }
-                None => {
-                    w.nil();
-                }
-            }
-            w.bool(Some(self.outside));
-        });
+    pub const SZ: usize = 40;
+    pub const ALIGN: usize = 8;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        w.u8(at + 0, *&self.status as u8);
+        w.bool(at + 1, *&self.is_off_center);
+        if let Some(v) = &self.lon_lat {
+            w.u8(at + 8, 1);
+            (v).store(w, at + 8 + 8);
+        }
+        w.bool(at + 32, *&self.outside);
     }
 
-    pub fn read(c: Cursor<'_>) -> Result<PivotState, MarshalError> {
-        let b = c.as_branch()?;
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<PivotState, _rt::Errno> {
         Ok(PivotState {
-            status: b.at(0).and_then(|c| {
-                c.get_number().and_then(|v| {
-                    GroundStatus::of(v as u32).ok_or(MarshalError::new(Errno::EBADMSG))
-                })
+            status: r
+                .case(at + 0, 3)
+                .and_then(|v| GroundStatus::of(v).ok_or(_rt::Errno::EBADMSG))?,
+            is_off_center: r.bool(at + 1)?,
+            lon_lat: r.case(at + 8, 2).and_then(|d| {
+                if d == 0 {
+                    Ok(None)
+                } else {
+                    LonLat::load(r, at + 8 + 8).map(Some)
+                }
             })?,
-            is_off_center: b.at(1).and_then(|c| c.get_bool())?,
-            lon_lat: b
-                .at(2)
-                .and_then(|c| c.opt().map(|c| LonLat::read(c)).transpose())?,
-            outside: b.at(3).and_then(|c| c.get_bool())?,
+            outside: r.bool(at + 32)?,
         })
     }
 }
@@ -237,40 +224,34 @@ pub struct LocationState {
 }
 
 impl LocationState {
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.branch(4, |w| {
-            w.u32(Some(self.status as u32));
-            w.bool(Some(self.has_location));
-            w.bool(Some(self.watching));
-            match &self.err {
-                Some(v) => {
-                    w.u32(Some(*v as u32));
-                }
-                None => {
-                    w.nil();
-                }
-            }
-        });
+    pub const SZ: usize = 5;
+    pub const ALIGN: usize = 1;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        w.u8(at + 0, *&self.status as u8);
+        w.bool(at + 1, *&self.has_location);
+        w.bool(at + 2, *&self.watching);
+        if let Some(v) = &self.err {
+            w.u8(at + 3, 1);
+            w.u8(at + 3 + 1, *v as u8);
+        }
     }
 
-    pub fn read(c: Cursor<'_>) -> Result<LocationState, MarshalError> {
-        let b = c.as_branch()?;
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<LocationState, _rt::Errno> {
         Ok(LocationState {
-            status: b.at(0).and_then(|c| {
-                c.get_number().and_then(|v| {
-                    SensorStatus::of(v as u32).ok_or(MarshalError::new(Errno::EBADMSG))
-                })
-            })?,
-            has_location: b.at(1).and_then(|c| c.get_bool())?,
-            watching: b.at(2).and_then(|c| c.get_bool())?,
-            err: b.at(3).and_then(|c| {
-                c.opt()
-                    .map(|c| {
-                        c.get_number().and_then(|v| {
-                            Message::of(v as u32).ok_or(MarshalError::new(Errno::EBADMSG))
-                        })
-                    })
-                    .transpose()
+            status: r
+                .case(at + 0, 5)
+                .and_then(|v| SensorStatus::of(v).ok_or(_rt::Errno::EBADMSG))?,
+            has_location: r.bool(at + 1)?,
+            watching: r.bool(at + 2)?,
+            err: r.case(at + 3, 2).and_then(|d| {
+                if d == 0 {
+                    Ok(None)
+                } else {
+                    r.case(at + 3 + 1, 7)
+                        .and_then(|v| Message::of(v).ok_or(_rt::Errno::EBADMSG))
+                        .map(Some)
+                }
             })?,
         })
     }
@@ -283,18 +264,18 @@ pub struct CompanionState {
 }
 
 impl CompanionState {
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.branch(2, |w| {
-            w.bool(Some(self.person_ready));
-            w.bool(Some(self.pet_ready));
-        });
+    pub const SZ: usize = 2;
+    pub const ALIGN: usize = 1;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        w.bool(at + 0, *&self.person_ready);
+        w.bool(at + 1, *&self.pet_ready);
     }
 
-    pub fn read(c: Cursor<'_>) -> Result<CompanionState, MarshalError> {
-        let b = c.as_branch()?;
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<CompanionState, _rt::Errno> {
         Ok(CompanionState {
-            person_ready: b.at(0).and_then(|c| c.get_bool())?,
-            pet_ready: b.at(1).and_then(|c| c.get_bool())?,
+            person_ready: r.bool(at + 0)?,
+            pet_ready: r.bool(at + 1)?,
         })
     }
 }
@@ -305,20 +286,18 @@ pub struct OrientationState {
 }
 
 impl OrientationState {
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.branch(1, |w| {
-            w.u32(Some(self.status as u32));
-        });
+    pub const SZ: usize = 1;
+    pub const ALIGN: usize = 1;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        w.u8(at + 0, *&self.status as u8);
     }
 
-    pub fn read(c: Cursor<'_>) -> Result<OrientationState, MarshalError> {
-        let b = c.as_branch()?;
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<OrientationState, _rt::Errno> {
         Ok(OrientationState {
-            status: b.at(0).and_then(|c| {
-                c.get_number().and_then(|v| {
-                    SensorStatus::of(v as u32).ok_or(MarshalError::new(Errno::EBADMSG))
-                })
-            })?,
+            status: r
+                .case(at + 0, 5)
+                .and_then(|v| SensorStatus::of(v).ok_or(_rt::Errno::EBADMSG))?,
         })
     }
 }
@@ -332,51 +311,49 @@ pub struct DivisionPart {
 }
 
 impl DivisionPart {
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.branch(4, |w| {
-            w.u8(Some(self.subtype));
-            w.str(Some(&*self.name));
-            w.bool(Some(self.shown));
-            w.bool(Some(self.area));
-        });
+    pub const SZ: usize = 16;
+    pub const ALIGN: usize = 4;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        w.u8(at + 0, *&self.subtype);
+        w.str(at + 4, &self.name);
+        w.bool(at + 12, *&self.shown);
+        w.bool(at + 13, *&self.area);
     }
 
-    pub fn read(c: Cursor<'_>) -> Result<DivisionPart, MarshalError> {
-        let b = c.as_branch()?;
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<DivisionPart, _rt::Errno> {
         Ok(DivisionPart {
-            subtype: b.at(0).and_then(|c| c.get_number().map(|v| v as u8))?,
-            name: b.at(1).and_then(|c| c.get_str_ref().map(str::to_owned))?,
-            shown: b.at(2).and_then(|c| c.get_bool())?,
-            area: b.at(3).and_then(|c| c.get_bool())?,
+            subtype: r.u8(at + 0)?,
+            name: r.str(at + 4).map(str::to_owned)?,
+            shown: r.bool(at + 12)?,
+            area: r.bool(at + 13)?,
         })
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RefusedFile {
-    pub path: Vec<Token>,
+    pub path: Vec<_rt::Token>,
 }
 
 impl RefusedFile {
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.branch(1, |w| {
-            w.branch(self.path.len() as u32, |w| {
-                for x in self.path.iter() {
-                    (*x).write(w);
-                }
-            });
-        });
+    pub const SZ: usize = 8;
+    pub const ALIGN: usize = 4;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        if let Some(b) = w.list(at + 0, (&self.path).len(), 12, 4) {
+            for (i, x) in (&self.path).iter().enumerate() {
+                (x).store(w, b + i * 12);
+            }
+        }
     }
 
-    pub fn read(c: Cursor<'_>) -> Result<RefusedFile, MarshalError> {
-        let b = c.as_branch()?;
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<RefusedFile, _rt::Errno> {
         Ok(RefusedFile {
-            path: b.at(0).and_then(|c| {
-                c.as_branch().and_then(|b| {
-                    (0..b.len)
-                        .map(|i| b.at(i).and_then(|c| Token::read(c)))
-                        .collect::<Result<Vec<_>, MarshalError>>()
-                })
+            path: r.list(at + 0, 12, 4).and_then(|(b, n)| {
+                (0..n)
+                    .map(|i| _rt::Token::load(r, b + i * 12))
+                    .collect::<Result<Vec<_>, _rt::Errno>>()
             })?,
         })
     }
@@ -403,119 +380,112 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.branch(16, |w| {
-            self.pivot.write(w);
-            self.location.write(w);
-            self.companion.write(w);
-            match &self.draft {
-                Some(v) => {
-                    w.str(Some(&**v));
-                }
-                None => {
-                    w.nil();
-                }
+    pub const SZ: usize = 120;
+    pub const ALIGN: usize = 8;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        (&self.pivot).store(w, at + 0);
+        (&self.location).store(w, at + 40);
+        (&self.companion).store(w, at + 45);
+        if let Some(v) = &self.draft {
+            w.u8(at + 48, 1);
+            w.str(at + 48 + 4, v);
+        }
+        (&self.orient).store(w, at + 60);
+        w.bool(at + 61, *&self.is_follow_mode);
+        w.bool(at + 62, *&self.camera_busy);
+        w.bool(at + 63, *&self.zooming);
+        w.bool(at + 64, *&self.over_marker);
+        w.arr(at + 68, &self.settings);
+        if let Some(b) = w.list(at + 76, (&self.division).len(), 16, 4) {
+            for (i, x) in (&self.division).iter().enumerate() {
+                (x).store(w, b + i * 16);
             }
-            self.orient.write(w);
-            w.bool(Some(self.is_follow_mode));
-            w.bool(Some(self.camera_busy));
-            w.bool(Some(self.zooming));
-            w.bool(Some(self.over_marker));
-            w.array::<u32>(Some(&*self.settings));
-            w.branch(self.division.len() as u32, |w| {
-                for x in self.division.iter() {
-                    (*x).write(w);
-                }
-            });
-            w.array::<u32>(Some(&*self.character_surfaces));
-            w.branch(self.refused_files.len() as u32, |w| {
-                for x in self.refused_files.iter() {
-                    (*x).write(w);
-                }
-            });
-            match &self.stall {
-                Some(v) => {
-                    w.u32(Some(*v as u32));
-                }
-                None => {
-                    w.nil();
-                }
+        }
+        w.arr(at + 84, &self.character_surfaces);
+        if let Some(b) = w.list(at + 92, (&self.refused_files).len(), 8, 4) {
+            for (i, x) in (&self.refused_files).iter().enumerate() {
+                (x).store(w, b + i * 8);
             }
-            w.f64(Some(self.renderer_progress as f64));
-            w.f64(Some(self.area_progress as f64));
-        });
+        }
+        if let Some(v) = &self.stall {
+            w.u8(at + 100, 1);
+            w.u8(at + 100 + 1, *v as u8);
+        }
+        w.f64(at + 104, *&self.renderer_progress);
+        w.f64(at + 112, *&self.area_progress);
     }
 
-    pub fn read(c: Cursor<'_>) -> Result<Snapshot, MarshalError> {
-        let b = c.as_branch()?;
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Snapshot, _rt::Errno> {
         Ok(Snapshot {
-            pivot: b.at(0).and_then(|c| PivotState::read(c))?,
-            location: b.at(1).and_then(|c| LocationState::read(c))?,
-            companion: b.at(2).and_then(|c| CompanionState::read(c))?,
-            draft: b.at(3).and_then(|c| {
-                c.opt()
-                    .map(|c| c.get_str_ref().map(str::to_owned))
-                    .transpose()
+            pivot: PivotState::load(r, at + 0)?,
+            location: LocationState::load(r, at + 40)?,
+            companion: CompanionState::load(r, at + 45)?,
+            draft: r.case(at + 48, 2).and_then(|d| {
+                if d == 0 {
+                    Ok(None)
+                } else {
+                    r.str(at + 48 + 4).map(str::to_owned).map(Some)
+                }
             })?,
-            orient: b.at(4).and_then(|c| OrientationState::read(c))?,
-            is_follow_mode: b.at(5).and_then(|c| c.get_bool())?,
-            camera_busy: b.at(6).and_then(|c| c.get_bool())?,
-            zooming: b.at(7).and_then(|c| c.get_bool())?,
-            over_marker: b.at(8).and_then(|c| c.get_bool())?,
-            settings: b
-                .at(9)
-                .and_then(|c| c.get_array::<u32>().map(<[u32]>::to_vec))?,
-            division: b.at(10).and_then(|c| {
-                c.as_branch().and_then(|b| {
-                    (0..b.len)
-                        .map(|i| b.at(i).and_then(|c| DivisionPart::read(c)))
-                        .collect::<Result<Vec<_>, MarshalError>>()
-                })
+            orient: OrientationState::load(r, at + 60)?,
+            is_follow_mode: r.bool(at + 61)?,
+            camera_busy: r.bool(at + 62)?,
+            zooming: r.bool(at + 63)?,
+            over_marker: r.bool(at + 64)?,
+            settings: r.arr::<u32>(at + 68)?,
+            division: r.list(at + 76, 16, 4).and_then(|(b, n)| {
+                (0..n)
+                    .map(|i| DivisionPart::load(r, b + i * 16))
+                    .collect::<Result<Vec<_>, _rt::Errno>>()
             })?,
-            character_surfaces: b
-                .at(11)
-                .and_then(|c| c.get_array::<u32>().map(<[u32]>::to_vec))?,
-            refused_files: b.at(12).and_then(|c| {
-                c.as_branch().and_then(|b| {
-                    (0..b.len)
-                        .map(|i| b.at(i).and_then(|c| RefusedFile::read(c)))
-                        .collect::<Result<Vec<_>, MarshalError>>()
-                })
+            character_surfaces: r.arr::<u32>(at + 84)?,
+            refused_files: r.list(at + 92, 8, 4).and_then(|(b, n)| {
+                (0..n)
+                    .map(|i| RefusedFile::load(r, b + i * 8))
+                    .collect::<Result<Vec<_>, _rt::Errno>>()
             })?,
-            stall: b.at(13).and_then(|c| {
-                c.opt()
-                    .map(|c| {
-                        c.get_number().and_then(|v| {
-                            Message::of(v as u32).ok_or(MarshalError::new(Errno::EBADMSG))
-                        })
-                    })
-                    .transpose()
+            stall: r.case(at + 100, 2).and_then(|d| {
+                if d == 0 {
+                    Ok(None)
+                } else {
+                    r.case(at + 100 + 1, 7)
+                        .and_then(|v| Message::of(v).ok_or(_rt::Errno::EBADMSG))
+                        .map(Some)
+                }
             })?,
-            renderer_progress: b.at(14).and_then(|c| c.get_number().map(|v| v as f64))?,
-            area_progress: b.at(15).and_then(|c| c.get_number().map(|v| v as f64))?,
+            renderer_progress: r.f64(at + 104)?,
+            area_progress: r.f64(at + 112)?,
         })
     }
 }
 
-pub fn show(snapshot: &Snapshot) -> Result<(), Errno> {
-    let (r, data) = link::call(
+pub fn show(snapshot: &Snapshot) -> Result<(), _rt::Errno> {
+    let (r, data) = _rt::link::call(
         HANDLE,
         SHOW,
-        Some((1, &|w_: &mut PacketWriter| {
-            snapshot.write(w_);
+        Some((120, &|w_: &mut _rt::Lower| {
+            (&snapshot).store(w_, 0);
         })),
     );
-    xpute_link::answer(r).map(|_| ())
+    _rt::answer(r)
 }
 
-pub fn view(azimuth: f64, m_per_px: f64) -> Result<(), Errno> {
-    let (r, data) = link::call(
+pub fn view(azimuth: f64, m_per_px: f64) -> Result<(), _rt::Errno> {
+    let (r, data) = _rt::link::call(
         HANDLE,
         VIEW,
-        Some((2, &|w_: &mut PacketWriter| {
-            w_.f64(Some(azimuth as f64));
-            w_.f64(Some(m_per_px as f64));
+        Some((16, &|w_: &mut _rt::Lower| {
+            w_.f64(0, *&azimuth);
+            w_.f64(8, *&m_per_px);
         })),
     );
-    xpute_link::answer(r).map(|_| ())
+    _rt::answer(r)
+}
+
+mod _rt {
+    pub use xpute_guest::link;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::abi::types::Token;
+    pub use xpute_link::{answer, Handle, Lift, Lower, Method};
 }

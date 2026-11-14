@@ -95,7 +95,7 @@ fn decor_clip_levels_by_size() {
                     "{:?} {extent} u: {bits:#b}",
                     d.id
                 );
-                let volume = (0..d.row.variants as usize)
+                let volume = (0..d.row.variant_cnt as usize)
                     .map(|v| {
                         d.row.sizes[v]
                             .iter()

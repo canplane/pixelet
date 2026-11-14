@@ -15,81 +15,69 @@ export const STREAM_NAMES = [
   "object",
 ] as const;
 
-export const StreamName = {
-  terrain: 0,
-  place: 1,
-  division: 2,
-  asset: 3,
-  earth: 4,
-  object: 5,
-} as const;
-export type StreamName = (typeof StreamName)[keyof typeof StreamName];
+export type StreamName =
+  | typeof STREAM_NAME_TERRAIN
+  | typeof STREAM_NAME_PLACE
+  | typeof STREAM_NAME_DIVISION
+  | typeof STREAM_NAME_ASSET
+  | typeof STREAM_NAME_EARTH
+  | typeof STREAM_NAME_OBJECT;
+export const STREAM_NAME_TERRAIN = 0;
+export const STREAM_NAME_PLACE = 1;
+export const STREAM_NAME_DIVISION = 2;
+export const STREAM_NAME_ASSET = 3;
+export const STREAM_NAME_EARTH = 4;
+export const STREAM_NAME_OBJECT = 5;
 
-/** The name of the `StreamName` member numbered `n`, or undefined for a number
- * no member has. */
-export function stream_name_name(
-  n: number,
-): keyof typeof StreamName | undefined {
-  for (const k in StreamName)
-    if (StreamName[k as keyof typeof StreamName] === n)
-      return k as keyof typeof StreamName;
-  return undefined;
-}
-
-/** The `StreamName` member `n` is, or null for a number no member has. */
-export function stream_name_of(n: number): StreamName | null {
-  return stream_name_name(n) === undefined ? null : (n as StreamName);
+/** The member `val` is, or null for a number no member has. */
+export function of_StreamName(val: number): StreamName | null {
+  return val === STREAM_NAME_TERRAIN ||
+    val === STREAM_NAME_PLACE ||
+    val === STREAM_NAME_DIVISION ||
+    val === STREAM_NAME_ASSET ||
+    val === STREAM_NAME_EARTH ||
+    val === STREAM_NAME_OBJECT
+    ? val
+    : null;
 }
 
 export const OUTCOME_NAMES = ["ok", "aborted", "err"] as const;
 
-export const OutcomeName = {
-  ok: 0,
-  aborted: 1,
-  err: 2,
-} as const;
-export type OutcomeName = (typeof OutcomeName)[keyof typeof OutcomeName];
+export type OutcomeName =
+  | typeof OUTCOME_NAME_OK
+  | typeof OUTCOME_NAME_ABORTED
+  | typeof OUTCOME_NAME_ERR;
+export const OUTCOME_NAME_OK = 0;
+export const OUTCOME_NAME_ABORTED = 1;
+export const OUTCOME_NAME_ERR = 2;
 
-/** The name of the `OutcomeName` member numbered `n`, or undefined for a number
- * no member has. */
-export function outcome_name_name(
-  n: number,
-): keyof typeof OutcomeName | undefined {
-  for (const k in OutcomeName)
-    if (OutcomeName[k as keyof typeof OutcomeName] === n)
-      return k as keyof typeof OutcomeName;
-  return undefined;
-}
-
-/** The `OutcomeName` member `n` is, or null for a number no member has. */
-export function outcome_name_of(n: number): OutcomeName | null {
-  return outcome_name_name(n) === undefined ? null : (n as OutcomeName);
+/** The member `val` is, or null for a number no member has. */
+export function of_OutcomeName(val: number): OutcomeName | null {
+  return val === OUTCOME_NAME_OK ||
+    val === OUTCOME_NAME_ABORTED ||
+    val === OUTCOME_NAME_ERR
+    ? val
+    : null;
 }
 
 export const TASK_PHASE_NAMES = ["net_ms", "bytes", "decode_ms"] as const;
 
-export const TaskPhaseName = {
-  net_ms: 0,
-  bytes: 1,
-  decode_ms: 2,
-} as const;
-export type TaskPhaseName = (typeof TaskPhaseName)[keyof typeof TaskPhaseName];
+export type TaskPhaseName =
+  | typeof TASK_PHASE_NAME_NET_MS
+  | typeof TASK_PHASE_NAME_BYTES
+  | typeof TASK_PHASE_NAME_DECODE_MS;
+export const TASK_PHASE_NAME_NET_MS = 0;
+export const TASK_PHASE_NAME_BYTES = 1;
+export const TASK_PHASE_NAME_DECODE_MS = 2;
 
-/** The name of the `TaskPhaseName` member numbered `n`, or undefined for a number
- * no member has. */
-export function task_phase_name_name(
-  n: number,
-): keyof typeof TaskPhaseName | undefined {
-  for (const k in TaskPhaseName)
-    if (TaskPhaseName[k as keyof typeof TaskPhaseName] === n)
-      return k as keyof typeof TaskPhaseName;
-  return undefined;
-}
-
-/** The `TaskPhaseName` member `n` is, or null for a number no member has. */
-export function task_phase_name_of(n: number): TaskPhaseName | null {
-  return task_phase_name_name(n) === undefined ? null : (n as TaskPhaseName);
+/** The member `val` is, or null for a number no member has. */
+export function of_TaskPhaseName(val: number): TaskPhaseName | null {
+  return val === TASK_PHASE_NAME_NET_MS ||
+    val === TASK_PHASE_NAME_BYTES ||
+    val === TASK_PHASE_NAME_DECODE_MS
+    ? val
+    : null;
 }
 
 /** A run's timings past this many are dropped. */
-export const TASK_PHASES_MAX = 6 as number;
+export const TASK_PHASE_CAP = 6 as number;

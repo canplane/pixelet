@@ -7,249 +7,202 @@
 // them by these names.
 
 export const GPU_SPAN_NAMES = [
-  {
-    name: "air",
-    per_px: false,
-  },
-  {
-    name: "exposure",
-    per_px: false,
-  },
-  {
-    name: "ao",
-    per_px: true,
-  },
-  {
-    name: "world",
-    per_px: true,
-  },
-  {
-    name: "world_rest",
-    per_px: true,
-  },
-  {
-    name: "resolve",
-    per_px: true,
-  },
-  {
-    name: "finish",
-    per_px: false,
-  },
-  {
-    name: "marker",
-    per_px: false,
-  },
-  {
-    name: "debug",
-    per_px: false,
-  },
-  {
-    name: "character",
-    per_px: false,
-  },
-  {
-    name: "cast",
-    per_px: false,
-  },
-  {
-    name: "beam_hit",
-    per_px: false,
-  },
-  {
-    name: "beam",
-    per_px: false,
-  },
-  {
-    name: "grid_cell",
-    per_px: false,
-  },
-  {
-    name: "sample_hit",
-    per_px: false,
-  },
-  {
-    name: "sample",
-    per_px: false,
-  },
-  {
-    name: "raster_box",
-    per_px: false,
-  },
-  {
-    name: "sraster",
-    per_px: true,
-  },
-  {
-    name: "px",
-    per_px: true,
-  },
-  {
-    name: "hole",
-    per_px: true,
-  },
-  {
-    name: "light_world_receivers",
-    per_px: true,
-  },
-  {
-    name: "light_draws",
-    per_px: false,
-  },
-  {
-    name: "light_slide",
-    per_px: false,
-  },
-  {
-    name: "light_propagate",
-    per_px: false,
-  },
-  {
-    name: "light_damage",
-    per_px: false,
-  },
-  {
-    name: "light_beam_hit",
-    per_px: false,
-  },
-  {
-    name: "light_beam",
-    per_px: false,
-  },
-  {
-    name: "light_sample",
-    per_px: false,
-  },
-  {
-    name: "light_raster",
-    per_px: false,
-  },
-  {
-    name: "light_slot",
-    per_px: false,
-  },
-  {
-    name: "light_hit",
-    per_px: false,
-  },
-  {
-    name: "light_walk",
-    per_px: false,
-  },
-  {
-    name: "generate",
-    per_px: false,
-  },
-  {
-    name: "shadow",
-    per_px: false,
-  },
-  {
-    name: "face",
-    per_px: false,
-  },
-  {
-    name: "damage",
-    per_px: true,
-  },
-  {
-    name: "shadow_damage",
-    per_px: false,
-  },
-  {
-    name: "propagate",
-    per_px: true,
-  },
-] as const;
-
-export const GpuSpanName = {
-  air: 0,
-  exposure: 1,
-  ao: 2,
-  world: 3,
-  world_rest: 4,
-  resolve: 5,
-  finish: 6,
-  marker: 7,
-  debug: 8,
-  character: 9,
-  cast: 10,
-  beam_hit: 11,
-  beam: 12,
-  grid_cell: 13,
-  sample_hit: 14,
-  sample: 15,
-  raster_box: 16,
-  sraster: 17,
-  px: 18,
-  hole: 19,
-  light_world_receivers: 20,
-  light_draws: 21,
-  light_slide: 22,
-  light_propagate: 23,
-  light_damage: 24,
-  light_beam_hit: 25,
-  light_beam: 26,
-  light_sample: 27,
-  light_raster: 28,
-  light_slot: 29,
-  light_hit: 30,
-  light_walk: 31,
-  generate: 32,
-  shadow: 33,
-  face: 34,
-  damage: 35,
-  shadow_damage: 36,
-  propagate: 37,
-} as const;
-export type GpuSpanName = (typeof GpuSpanName)[keyof typeof GpuSpanName];
-
-/** The name of the `GpuSpanName` member numbered `n`, or undefined for a number
- * no member has. */
-export function gpu_span_name_name(
-  n: number,
-): keyof typeof GpuSpanName | undefined {
-  for (const k in GpuSpanName)
-    if (GpuSpanName[k as keyof typeof GpuSpanName] === n)
-      return k as keyof typeof GpuSpanName;
-  return undefined;
-}
-
-/** The `GpuSpanName` member `n` is, or null for a number no member has. */
-export function gpu_span_name_of(n: number): GpuSpanName | null {
-  return gpu_span_name_name(n) === undefined ? null : (n as GpuSpanName);
-}
-
-export const LIGHT_CHANGED = [
-  "content",
-  "slide",
-  "receivers",
-  "footprint",
+  "air",
+  "exposure",
+  "ao",
   "world",
+  "world_rest",
+  "resolve",
+  "finish",
+  "marker",
+  "debug",
+  "character",
+  "cast",
+  "beam_hit",
+  "beam",
+  "grid_cell",
+  "sample_hit",
+  "sample",
+  "raster_box",
+  "sraster",
+  "px",
+  "hole",
+  "light_world_receivers",
+  "light_draws",
+  "light_slide",
+  "light_propagate",
+  "light_damage",
+  "light_beam_hit",
+  "light_beam",
+  "light_sample",
+  "light_raster",
+  "light_slot",
+  "light_hit",
+  "light_walk",
+  "generate",
+  "shadow",
+  "face",
+  "damage",
+  "shadow_damage",
+  "propagate",
 ] as const;
 
-export const LightChanged = {
-  content: 0,
-  slide: 1,
-  receivers: 2,
-  footprint: 3,
-  world: 4,
-} as const;
-export type LightChanged = (typeof LightChanged)[keyof typeof LightChanged];
+export type GpuSpanName =
+  | typeof GPU_SPAN_NAME_AIR
+  | typeof GPU_SPAN_NAME_EXPOSURE
+  | typeof GPU_SPAN_NAME_AO
+  | typeof GPU_SPAN_NAME_WORLD
+  | typeof GPU_SPAN_NAME_WORLD_REST
+  | typeof GPU_SPAN_NAME_RESOLVE
+  | typeof GPU_SPAN_NAME_FINISH
+  | typeof GPU_SPAN_NAME_MARKER
+  | typeof GPU_SPAN_NAME_DEBUG
+  | typeof GPU_SPAN_NAME_CHARACTER
+  | typeof GPU_SPAN_NAME_CAST
+  | typeof GPU_SPAN_NAME_BEAM_HIT
+  | typeof GPU_SPAN_NAME_BEAM
+  | typeof GPU_SPAN_NAME_GRID_CELL
+  | typeof GPU_SPAN_NAME_SAMPLE_HIT
+  | typeof GPU_SPAN_NAME_SAMPLE
+  | typeof GPU_SPAN_NAME_RASTER_BOX
+  | typeof GPU_SPAN_NAME_SRASTER
+  | typeof GPU_SPAN_NAME_PX
+  | typeof GPU_SPAN_NAME_HOLE
+  | typeof GPU_SPAN_NAME_LIGHT_WORLD_RECEIVERS
+  | typeof GPU_SPAN_NAME_LIGHT_DRAWS
+  | typeof GPU_SPAN_NAME_LIGHT_SLIDE
+  | typeof GPU_SPAN_NAME_LIGHT_PROPAGATE
+  | typeof GPU_SPAN_NAME_LIGHT_DAMAGE
+  | typeof GPU_SPAN_NAME_LIGHT_BEAM_HIT
+  | typeof GPU_SPAN_NAME_LIGHT_BEAM
+  | typeof GPU_SPAN_NAME_LIGHT_SAMPLE
+  | typeof GPU_SPAN_NAME_LIGHT_RASTER
+  | typeof GPU_SPAN_NAME_LIGHT_SLOT
+  | typeof GPU_SPAN_NAME_LIGHT_HIT
+  | typeof GPU_SPAN_NAME_LIGHT_WALK
+  | typeof GPU_SPAN_NAME_GENERATE
+  | typeof GPU_SPAN_NAME_SHADOW
+  | typeof GPU_SPAN_NAME_FACE
+  | typeof GPU_SPAN_NAME_DAMAGE
+  | typeof GPU_SPAN_NAME_SHADOW_DAMAGE
+  | typeof GPU_SPAN_NAME_PROPAGATE;
+export const GPU_SPAN_NAME_AIR = 0;
+export const GPU_SPAN_NAME_EXPOSURE = 1;
+export const GPU_SPAN_NAME_AO = 2;
+export const GPU_SPAN_NAME_WORLD = 3;
+export const GPU_SPAN_NAME_WORLD_REST = 4;
+export const GPU_SPAN_NAME_RESOLVE = 5;
+export const GPU_SPAN_NAME_FINISH = 6;
+export const GPU_SPAN_NAME_MARKER = 7;
+export const GPU_SPAN_NAME_DEBUG = 8;
+export const GPU_SPAN_NAME_CHARACTER = 9;
+export const GPU_SPAN_NAME_CAST = 10;
+export const GPU_SPAN_NAME_BEAM_HIT = 11;
+export const GPU_SPAN_NAME_BEAM = 12;
+export const GPU_SPAN_NAME_GRID_CELL = 13;
+export const GPU_SPAN_NAME_SAMPLE_HIT = 14;
+export const GPU_SPAN_NAME_SAMPLE = 15;
+export const GPU_SPAN_NAME_RASTER_BOX = 16;
+export const GPU_SPAN_NAME_SRASTER = 17;
+export const GPU_SPAN_NAME_PX = 18;
+export const GPU_SPAN_NAME_HOLE = 19;
+export const GPU_SPAN_NAME_LIGHT_WORLD_RECEIVERS = 20;
+export const GPU_SPAN_NAME_LIGHT_DRAWS = 21;
+export const GPU_SPAN_NAME_LIGHT_SLIDE = 22;
+export const GPU_SPAN_NAME_LIGHT_PROPAGATE = 23;
+export const GPU_SPAN_NAME_LIGHT_DAMAGE = 24;
+export const GPU_SPAN_NAME_LIGHT_BEAM_HIT = 25;
+export const GPU_SPAN_NAME_LIGHT_BEAM = 26;
+export const GPU_SPAN_NAME_LIGHT_SAMPLE = 27;
+export const GPU_SPAN_NAME_LIGHT_RASTER = 28;
+export const GPU_SPAN_NAME_LIGHT_SLOT = 29;
+export const GPU_SPAN_NAME_LIGHT_HIT = 30;
+export const GPU_SPAN_NAME_LIGHT_WALK = 31;
+export const GPU_SPAN_NAME_GENERATE = 32;
+export const GPU_SPAN_NAME_SHADOW = 33;
+export const GPU_SPAN_NAME_FACE = 34;
+export const GPU_SPAN_NAME_DAMAGE = 35;
+export const GPU_SPAN_NAME_SHADOW_DAMAGE = 36;
+export const GPU_SPAN_NAME_PROPAGATE = 37;
 
-/** The name of the `LightChanged` member numbered `n`, or undefined for a number
- * no member has. */
-export function light_changed_name(
-  n: number,
-): keyof typeof LightChanged | undefined {
-  for (const k in LightChanged)
-    if (LightChanged[k as keyof typeof LightChanged] === n)
-      return k as keyof typeof LightChanged;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_GpuSpanName(val: number): GpuSpanName | null {
+  return val === GPU_SPAN_NAME_AIR ||
+    val === GPU_SPAN_NAME_EXPOSURE ||
+    val === GPU_SPAN_NAME_AO ||
+    val === GPU_SPAN_NAME_WORLD ||
+    val === GPU_SPAN_NAME_WORLD_REST ||
+    val === GPU_SPAN_NAME_RESOLVE ||
+    val === GPU_SPAN_NAME_FINISH ||
+    val === GPU_SPAN_NAME_MARKER ||
+    val === GPU_SPAN_NAME_DEBUG ||
+    val === GPU_SPAN_NAME_CHARACTER ||
+    val === GPU_SPAN_NAME_CAST ||
+    val === GPU_SPAN_NAME_BEAM_HIT ||
+    val === GPU_SPAN_NAME_BEAM ||
+    val === GPU_SPAN_NAME_GRID_CELL ||
+    val === GPU_SPAN_NAME_SAMPLE_HIT ||
+    val === GPU_SPAN_NAME_SAMPLE ||
+    val === GPU_SPAN_NAME_RASTER_BOX ||
+    val === GPU_SPAN_NAME_SRASTER ||
+    val === GPU_SPAN_NAME_PX ||
+    val === GPU_SPAN_NAME_HOLE ||
+    val === GPU_SPAN_NAME_LIGHT_WORLD_RECEIVERS ||
+    val === GPU_SPAN_NAME_LIGHT_DRAWS ||
+    val === GPU_SPAN_NAME_LIGHT_SLIDE ||
+    val === GPU_SPAN_NAME_LIGHT_PROPAGATE ||
+    val === GPU_SPAN_NAME_LIGHT_DAMAGE ||
+    val === GPU_SPAN_NAME_LIGHT_BEAM_HIT ||
+    val === GPU_SPAN_NAME_LIGHT_BEAM ||
+    val === GPU_SPAN_NAME_LIGHT_SAMPLE ||
+    val === GPU_SPAN_NAME_LIGHT_RASTER ||
+    val === GPU_SPAN_NAME_LIGHT_SLOT ||
+    val === GPU_SPAN_NAME_LIGHT_HIT ||
+    val === GPU_SPAN_NAME_LIGHT_WALK ||
+    val === GPU_SPAN_NAME_GENERATE ||
+    val === GPU_SPAN_NAME_SHADOW ||
+    val === GPU_SPAN_NAME_FACE ||
+    val === GPU_SPAN_NAME_DAMAGE ||
+    val === GPU_SPAN_NAME_SHADOW_DAMAGE ||
+    val === GPU_SPAN_NAME_PROPAGATE
+    ? val
+    : null;
 }
 
-/** The `LightChanged` member `n` is, or null for a number no member has. */
-export function light_changed_of(n: number): LightChanged | null {
-  return light_changed_name(n) === undefined ? null : (n as LightChanged);
+export const GPU_SPAN_PER_PX = [
+  2 as GpuSpanName,
+  3 as GpuSpanName,
+  4 as GpuSpanName,
+  5 as GpuSpanName,
+  17 as GpuSpanName,
+  18 as GpuSpanName,
+  19 as GpuSpanName,
+  20 as GpuSpanName,
+  35 as GpuSpanName,
+  37 as GpuSpanName,
+] as const;
+
+export type LightChanged =
+  | typeof LIGHT_CHANGED_CONTENT
+  | typeof LIGHT_CHANGED_SLIDE
+  | typeof LIGHT_CHANGED_RECEIVERS
+  | typeof LIGHT_CHANGED_FOOTPRINT
+  | typeof LIGHT_CHANGED_WORLD;
+export const LIGHT_CHANGED_CONTENT = 0;
+export const LIGHT_CHANGED_SLIDE = 1;
+export const LIGHT_CHANGED_RECEIVERS = 2;
+export const LIGHT_CHANGED_FOOTPRINT = 3;
+export const LIGHT_CHANGED_WORLD = 4;
+
+/** The member `val` is, or null for a number no member has. */
+export function of_LightChanged(val: number): LightChanged | null {
+  return val === LIGHT_CHANGED_CONTENT ||
+    val === LIGHT_CHANGED_SLIDE ||
+    val === LIGHT_CHANGED_RECEIVERS ||
+    val === LIGHT_CHANGED_FOOTPRINT ||
+    val === LIGHT_CHANGED_WORLD
+    ? val
+    : null;
 }
 
 export const FRAME_KINDS = [
@@ -264,29 +217,37 @@ export const FRAME_KINDS = [
   "masked",
 ] as const;
 
-export const FrameKind = {
-  none: 0,
-  unready: 1,
-  dropped: 2,
-  plain: 3,
-  still: 4,
-  cast: 5,
-  unchanged: 6,
-  px: 7,
-  masked: 8,
-} as const;
-export type FrameKind = (typeof FrameKind)[keyof typeof FrameKind];
+export type FrameKind =
+  | typeof FRAME_KIND_NONE
+  | typeof FRAME_KIND_UNREADY
+  | typeof FRAME_KIND_DROPPED
+  | typeof FRAME_KIND_PLAIN
+  | typeof FRAME_KIND_STILL
+  | typeof FRAME_KIND_CAST
+  | typeof FRAME_KIND_UNCHANGED
+  | typeof FRAME_KIND_PX
+  | typeof FRAME_KIND_MASKED;
+export const FRAME_KIND_NONE = 0;
+export const FRAME_KIND_UNREADY = 1;
+export const FRAME_KIND_DROPPED = 2;
+export const FRAME_KIND_PLAIN = 3;
+export const FRAME_KIND_STILL = 4;
+export const FRAME_KIND_CAST = 5;
+export const FRAME_KIND_UNCHANGED = 6;
+export const FRAME_KIND_PX = 7;
+export const FRAME_KIND_MASKED = 8;
 
-/** The name of the `FrameKind` member numbered `n`, or undefined for a number
- * no member has. */
-export function frame_kind_name(n: number): keyof typeof FrameKind | undefined {
-  for (const k in FrameKind)
-    if (FrameKind[k as keyof typeof FrameKind] === n)
-      return k as keyof typeof FrameKind;
-  return undefined;
-}
-
-/** The `FrameKind` member `n` is, or null for a number no member has. */
-export function frame_kind_of(n: number): FrameKind | null {
-  return frame_kind_name(n) === undefined ? null : (n as FrameKind);
+/** The member `val` is, or null for a number no member has. */
+export function of_FrameKind(val: number): FrameKind | null {
+  return val === FRAME_KIND_NONE ||
+    val === FRAME_KIND_UNREADY ||
+    val === FRAME_KIND_DROPPED ||
+    val === FRAME_KIND_PLAIN ||
+    val === FRAME_KIND_STILL ||
+    val === FRAME_KIND_CAST ||
+    val === FRAME_KIND_UNCHANGED ||
+    val === FRAME_KIND_PX ||
+    val === FRAME_KIND_MASKED
+    ? val
+    : null;
 }

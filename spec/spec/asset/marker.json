@@ -30,7 +30,7 @@
       "domain/scene/character/companion.rs `line_hangs`)."
     ]
   },
-  "MARKER_SCALE_STEPS": {
+  "MARKER_SCALE_STEP": {
     "$val": -1,
     "$type": "i8",
     "$doc": [

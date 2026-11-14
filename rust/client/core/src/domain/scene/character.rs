@@ -25,7 +25,7 @@ use pxl_render::frame::shader::record::PIPELINE_SKINNED;
 use pxl_render::gpu::api::{word_bytes, Image};
 use pxl_render::gpu::draw::{scaled_draw, Draw, DrawId, DrawList, Position, ReceiverBox};
 use pxl_spec::asset::catalog::Slot;
-use pxl_spec::asset::character::groups::{person, pet};
+use pxl_spec::asset::character::group::{person, pet};
 pub use pxl_spec::asset::character::Group;
 use pxl_spec::space::coord::v3;
 use xpute_guest::clock::now;
@@ -44,24 +44,24 @@ use crate::sys::heap;
 use crate::sys::io::loader::{load_image, load_of};
 use crate::sys::sched::invalidate_at;
 
-pub const CHARACTERS: usize = person::models.len() + pet::models.len();
+pub const CHARACTER_CNT: usize = person::MODELS.len() + pet::MODELS.len();
 
 /// One model a character, registered once at the character's own height. A
 /// character surface's draw scales the model to one unit tall.
-pub const MODELS_MAX: usize = CHARACTERS;
+pub const MODEL_CAP: usize = CHARACTER_CNT;
 
 /// The catalog row `number` of `group`: its model, its skin, its height in
 /// units and its walk clip. None past the group's last row.
 fn row(group: Group, number: u8) -> Option<(Slot, Slot, f64, u32)> {
     let n = usize::from(number);
     Some(match group {
-        Group::person => (
-            *person::models.get(n)?,
-            person::skin,
-            person::size,
-            person::move_clip,
+        Group::Person => (
+            *person::MODELS.get(n)?,
+            person::SKIN,
+            person::SIZE,
+            person::MOVE_CLIP,
         ),
-        Group::pet => (*pet::models.get(n)?, pet::skin, pet::size, pet::move_clip),
+        Group::Pet => (*pet::MODELS.get(n)?, pet::SKIN, pet::SIZE, pet::MOVE_CLIP),
     })
 }
 
@@ -136,10 +136,10 @@ impl Character {
         group: Group,
         number: u8,
     ) -> Option<Character> {
-        let joints = models.get(model)?.joints();
+        let joint_cnt = models.get(model)?.joint_cnt();
         // Identity joints until the first tick.
-        let mut palette = heap::zeroed::<f32>(joints.max(1) * 16)?;
-        for j in 0..joints.max(1) {
+        let mut palette = heap::zeroed::<f32>(joint_cnt.max(1) * 16)?;
+        for j in 0..joint_cnt.max(1) {
             for d in 0..4 {
                 palette[j * 16 + d * 5] = 1.0;
             }
@@ -160,8 +160,8 @@ impl Character {
             fade_len: 0.0,
             palette,
             palette_handle,
-            local: vec![[0.0; 10]; joints],
-            global: vec![[0.0; 16]; joints],
+            local: vec![[0.0; 10]; joint_cnt],
+            global: vec![[0.0; 16]; joint_cnt],
             from: Vec::new(),
             posed: false,
             visible: false,
@@ -327,8 +327,8 @@ impl Character {
                 }
             }
         }
-        let joints = m.joints();
-        if joints == 0 {
+        let joint_cnt = m.joint_cnt();
+        if joint_cnt == 0 {
             return asks;
         }
         // An unseen character's clocks run on while its palette waits until
@@ -340,7 +340,7 @@ impl Character {
         self.posed = true;
         m.pose(self.cur.map(|p| (p.clip, p.time)), &mut self.local);
         if let Some(prev) = self.previous {
-            self.from.resize(joints, [0.0; 10]);
+            self.from.resize(joint_cnt, [0.0; 10]);
             m.pose(Some((prev.clip, prev.time)), &mut self.from);
             let w = if self.fade_len > 0.0 {
                 (self.fade / self.fade_len).clamp(0.0, 1.0)
@@ -354,7 +354,7 @@ impl Character {
         m.palette(
             &self.local,
             &mut self.global,
-            &mut self.palette[..joints * 16],
+            &mut self.palette[..joint_cnt * 16],
         );
         draw.rewrite(
             self.palette_handle,

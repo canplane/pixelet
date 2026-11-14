@@ -15,7 +15,7 @@ fn queue_recs_at() -> u32 {
 }
 
 /// The lane in which the run's walks count the nodes they visit (pxl-engine `count::HOLE_WALK`).
-/// `asked_at` is the lane in which they count the nodes they ask (`count::ASKS`).
+/// `asked_at` is the lane in which they count the nodes they ask (`count::ASK`).
 fn visits_at() -> u32 {
   return EYE_MISS_CNT;
 }

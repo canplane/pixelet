@@ -34,7 +34,7 @@ use xpute_kit::math::rng::{u32_to_unit, SplitMix64};
 use xpute_kit::status::errno::Errno;
 
 /// The shells of a layer, seen and unseen, each a class of its own.
-const SHELLS: u8 = 2;
+const SHELL_CNT: u8 = 2;
 /// Terrain and the objects interleave by shell: the terrain of one shell,
 /// then the objects of the same shell. The classes of one shell are
 /// `GROUND_SHELL` from those of the next.
@@ -44,10 +44,10 @@ const GROUND_SHELL: u8 = 2;
 /// The pictures, and the Earth's tiles seen then unseen. A file ranks here or
 /// at `ASSET` by whether it is a picture or a model, never by which file it
 /// is.
-const PICTURE: u8 = TERRAIN + SHELLS * GROUND_SHELL;
-const ASSET: u8 = PICTURE + SHELLS;
+const PICTURE: u8 = TERRAIN + SHELL_CNT * GROUND_SHELL;
+const ASSET: u8 = PICTURE + SHELL_CNT;
 const PLACE: u8 = ASSET + 1;
-const ASIDE: u8 = PLACE + SHELLS;
+const ASIDE: u8 = PLACE + SHELL_CNT;
 
 /// The rank of a want. Wants start in order of a lower `class`, then a lower
 /// `dist`, then a higher `detail`.
@@ -138,7 +138,7 @@ pub fn fault(failure: Failure) -> Fault {
 /// drawn uniformly up to the capped exponential, so clients that one outage
 /// failed together do not return together.
 pub fn backoff(fail_cnt: u32, seed: u64) -> Option<f64> {
-    if fail_cnt > param::RETRY_ATTEMPTS {
+    if fail_cnt > param::RETRY_ATTEMPT_CNT {
         return None;
     }
     let ceiling =

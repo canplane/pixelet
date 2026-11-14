@@ -75,17 +75,17 @@
 //! another walk may be taking the slot over while it reads.
 
 use crate::answer::Kind;
-use crate::clipmap::{self, EYE_CLIP_LEVELS};
+use crate::clipmap::{self, EYE_CLIP_LEVEL_CNT};
 use crate::count;
 use crate::object::DAMAGE_CAP;
 use crate::world::INHERITANCE_WORDS;
 use crate::ZOOM_BITS;
+use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::space::coord::zoom::Zoom;
-use pxl_spec::value::VOID;
 
 /// The head's words. `FRAME` is the frame's number. `FORGETS` says what this frame forgets
 /// (`FORGETS_NONE`, `FORGETS_ALL`, `FORGETS_CHANGED`). From `CHANGED_AT` comes one bit for
-/// each entry of the eye's clip levels, a clip level's `clipmap::ENTRIES` bits in turn, set
+/// each entry of the eye's clip levels, a clip level's `clipmap::ENTRY_CNT` bits in turn, set
 /// where the brick it holds moved or was handed over since the last cast, and then, a clip
 /// level each, the box those bricks lie in (`CHANGED_BRICKS_AT`). From `RECTS_AT` come the
 /// boxes of leaf cells whose columns what is placed or a preview's cuts changed since the last
@@ -98,22 +98,22 @@ use pxl_spec::value::VOID;
 pub const FRAME: u32 = 0;
 pub const FORGETS: u32 = 1;
 pub const CHANGED_AT: u32 = 2;
-pub const CHANGED_WORDS: u32 = (EYE_CLIP_LEVELS * clipmap::ENTRIES).div_ceil(32);
+pub const CHANGED_WORDS: u32 = (EYE_CLIP_LEVEL_CNT * clipmap::ENTRY_CNT).div_ceil(32);
 /// For each of the eye's clip levels, the box in which its bricks that moved and are held
 /// present lie (`Entry::present_changed_from`), as `[x0, y0, x1, y1]` from first to last, or
 /// `NO_BRICKS` where none moved. An entry's bit stands for any brick at its place modulo
 /// `clipmap::ACROSS`, so the box tells the moved bricks from those of other places, for the
 /// nodes that read only bricks held present (pxl-render forget.wgsl `forgets`).
 pub const CHANGED_BRICKS_AT: u32 = CHANGED_AT + CHANGED_WORDS;
-pub const RECTS_AT: u32 = CHANGED_BRICKS_AT + 4 * EYE_CLIP_LEVELS;
+pub const RECTS_AT: u32 = CHANGED_BRICKS_AT + 4 * EYE_CLIP_LEVEL_CNT;
 pub const WRITTEN_AT: u32 = RECTS_AT + 1 + 4 * DAMAGE_CAP;
 pub const WRITTEN_CAP: u32 = 32;
 /// Which observers' walks and pixels count what they ask, one bit an observer (`count::EYE`,
-/// `count::LIGHT`), set while the `ray_cnts` setting is on and the observer casts; then the
+/// `count::LIGHT`), set while the `ray_cnt` setting is on and the observer casts; then the
 /// words they count into, each observer's walk counters (`lane_at`).
 pub const CNT_ON: u32 = WRITTEN_AT + 1 + WRITTEN_CAP;
 pub(crate) const CNT_AT: u32 = CNT_ON + 1;
-pub(crate) const CNT_WORDS: u32 = count::OBSERVERS * count::WALKS;
+pub(crate) const CNT_WORDS: u32 = count::OBSERVER_CNT * count::WALK_CNT;
 /// The hits of the missed pixels kept for their faces (`beam::HIT_WORDS`): the dispatch over
 /// them, which the second walks raise, and their count (`HITS_ARGS`, `HITS_CNT`). They are
 /// set each frame the cast runs, with the rest of the head; the passes they dispatch read
@@ -133,10 +133,10 @@ pub const HDR_WORDS: u32 = ASKED + 1;
 /// are those of the entries it marked then (`record::drawn`). It lies past the head that the
 /// host writes each frame.
 pub const DRAWN: u32 = HDR_WORDS;
-/// Where `observer`'s walks keep counter `lane` (`count::BEAM` to `count::ASKS`) in the
+/// Where `observer`'s walks keep counter `lane` (`count::BEAM` to `count::ASK`) in the
 /// head.
 pub const fn lane_at(observer: u32, lane: u32) -> u32 {
-    CNT_AT + observer * count::WALKS + lane
+    CNT_AT + observer * count::WALK_CNT + lane
 }
 
 /// A clip level's box of moved bricks where none moved (`CHANGED_BRICKS_AT`).
@@ -197,14 +197,14 @@ pub const R_WORDS: u32 = R_FACES + 6;
 /// The slots, a power of two so that a key's hash masks to one. The count is what the table
 /// must hold, derived in the record that draws its entries (`record::entries_for`, which
 /// asserts it).
-pub const ENTRIES: u32 = 1 << 20;
+pub const ENTRY_CNT: u32 = 1 << 20;
 pub const KEYS_AT: u32 = DRAWN + 1;
-pub const STATES_AT: u32 = KEYS_AT + ENTRIES;
-pub const ENTRIES_AT: u32 = STATES_AT + ENTRIES;
-pub const RECS_AT: u32 = ENTRIES_AT + ENTRIES * ENTRY_WORDS;
+pub const STATES_AT: u32 = KEYS_AT + ENTRY_CNT;
+pub const ENTRIES_AT: u32 = STATES_AT + ENTRY_CNT;
+pub const RECS_AT: u32 = ENTRIES_AT + ENTRY_CNT * ENTRY_WORDS;
 /// The buffer's words. Their count does not depend on what is drawn: none of them is a
 /// pixel's.
-pub const WORDS: u32 = RECS_AT + ENTRIES * R_WORDS;
+pub const WORDS: u32 = RECS_AT + ENTRY_CNT * R_WORDS;
 const _: () = assert!(
     (WORDS as u64) * 4 <= 134_217_728,
     "the node cache binds whole as storage on every device"
@@ -239,7 +239,7 @@ pub const CLAIM_MASK: u32 = CLAIM_FAR | 1 << 31;
 pub const CLAIM_FAR: u32 = ((1 << ZOOM_BITS) - 1) << TAG_BITS;
 
 /// A key that one walk has claimed and not yet named. No zoom pair a key holds reads as it,
-/// and no tag that `FRAMES` leaves reads as a forgotten split's.
+/// and no tag that `FRAME_CNT` leaves reads as a forgotten split's.
 pub const CLAIMED: u32 = u32::MAX;
 
 /// The far zoom in the key of a cell kept by its node alone; the near zoom field holds the
@@ -262,7 +262,7 @@ pub const fn key_zooms(zoom: Zoom, zooms: u32, kind: Kind, asset: [u32; 2]) -> u
     if zoom >= zooms >> ZOOM_BITS {
         return CELL_FAR;
     }
-    if matches!(kind, Kind::Lacks) || asset[0] != VOID || asset[1] != 0 {
+    if matches!(kind, Kind::Lack) || asset[0] != Sentinel::Void as u32 || asset[1] != 0 {
         return CELL_FAR | 1 << ZOOM_BITS;
     }
     zooms
@@ -279,7 +279,8 @@ pub const fn holds_for(key: u32, zoom: Zoom, zooms: u32) -> bool {
             && (zooms >> ZOOM_BITS <= zoom || kz >> ZOOM_BITS != 0)
 }
 const _: () = assert!(
-    crate::FINEST_ZOOM < (1 << ZOOM_BITS) - 1 && PASSES * FRAMES + PASSES - 1 < (1 << TAG_BITS) - 1,
+    crate::FINEST_ZOOM < (1 << ZOOM_BITS) - 1
+        && PASS_CNT * FRAME_CNT + PASS_CNT - 1 < (1 << TAG_BITS) - 1,
     "a claim holds no zoom a walk asks, and is no key"
 );
 
@@ -287,7 +288,7 @@ const _: () = assert!(
 /// rays and the samples; the holes' queue, for the eye's pixels and the light's slots alike
 /// (pxl-render queue_ask.wgsl, queue_last.wgsl); then the light's beam rays and samples, which
 /// ask the same nodes at the zooms the eye asks them.
-pub const PASSES: u32 = 5;
+pub const PASS_CNT: u32 = 5;
 pub const BEAM_PASS: u32 = 0;
 pub const SAMPLES_PASS: u32 = 1;
 pub const MISSED_PASS: u32 = 2;
@@ -302,8 +303,8 @@ const _: () = assert!(
 );
 
 /// The frames that keys can tell apart between one clearing and the next: as many as
-/// `TAG_BITS` bits hold `PASSES` tags for.
-pub const FRAMES: u32 = (1 << TAG_BITS) / PASSES - 1;
+/// `TAG_BITS` bits hold `PASS_CNT` tags for.
+pub const FRAME_CNT: u32 = (1 << TAG_BITS) / PASS_CNT - 1;
 
 /// The slots a bucket holds: a node is kept in any of its bucket's, so two
 /// nodes asked every frame whose hashes meet are both kept.
@@ -315,7 +316,7 @@ pub const KIND_MASK: u32 = 3;
 const _: () = assert!(
     Kind::Split as u32 <= KIND_MASK
         && Kind::Cell as u32 <= KIND_MASK
-        && Kind::Lacks as u32 <= KIND_MASK,
+        && Kind::Lack as u32 <= KIND_MASK,
     "a kind fits under the stamp"
 );
 
@@ -357,7 +358,7 @@ pub const fn node_hash(zoom: Zoom, c: [i32; 3]) -> u32 {
 /// The first slot of the bucket that keeps the node `c` of `zoom` (pxl-render walk_node.wgsl
 /// `bucket_of`).
 pub const fn bucket_of(zoom: Zoom, c: [i32; 3]) -> u32 {
-    node_hash(zoom, c) & (ENTRIES - 1) & !(BUCKET - 1)
+    node_hash(zoom, c) & (ENTRY_CNT - 1) & !(BUCKET - 1)
 }
 
 #[cfg(test)]
@@ -371,8 +372,8 @@ mod tests {
     #[test]
     fn a_cell_key_holds_for_every_pair_that_stops_there() {
         let pair = |far: Zoom, near: Zoom| far | near << ZOOM_BITS;
-        let cell = [VOID + 1, 0];
-        let tag = PASSES * 7 + 1;
+        let cell = [Sentinel::Void as u32 + 1, 0];
+        let tag = PASS_CNT * 7 + 1;
         for zoom in 0..=crate::FINEST_ZOOM {
             for near in 0..=crate::FINEST_ZOOM {
                 for far in [0, near / 2, near] {

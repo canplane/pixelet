@@ -2,16 +2,22 @@
 
 import type { u16 } from "@xpute/kit/abi/word.ts";
 import { CUBE_HEX } from "./color.spec.ts";
-import * as cube from "@/abi/cube.spec.ts";
-import { decor, DECOR_LABEL } from "./decor.spec.ts";
-import { IDX_BITS, Kind } from "./id.spec.ts";
+import { ground, object } from "@/abi/cube.spec.ts";
+import {
+  DECOR_BOAT,
+  DECOR_CAR,
+  DECOR_LABEL,
+  DECOR_TRAIN,
+  DECOR_TREE,
+} from "./decor.spec.ts";
+import { IDX_BITS, KIND_MARKER } from "./id.spec.ts";
 
 /** An asset's number: its kind shifted left by IDX_BITS, with its index in
  * the low bits. */
 export type AssetId = u16;
 
 /** The marker's kind has no other index. */
-export const MARKER: AssetId = Kind.marker << IDX_BITS;
+export const MARKER: AssetId = KIND_MARKER << IDX_BITS;
 
 export function kindOf(id: AssetId): number {
   return id >> IDX_BITS;
@@ -23,10 +29,7 @@ export type Cube = u16;
 
 /** The placeable cubes, each its number, its section and its label: the
  * placed colors first, then the palette entries in paint order. */
-const CUBE_RECS = [
-  ...cube.object.map((c) => ({ ...c, number: cube.Object[c.name] as Cube })),
-  ...cube.ground.map((c) => ({ ...c, number: cube.Ground[c.name] as Cube })),
-];
+const CUBE_RECS = [...object, ...ground];
 
 export const CUBES: readonly Cube[] = CUBE_RECS.map((c) => c.number);
 
@@ -60,10 +63,10 @@ export function decorLabel(id: AssetId): string {
 export type DecorSection = "nature" | "vehicle";
 
 const DECOR_SECTION: Readonly<Record<number, DecorSection>> = {
-  [decor.tree]: "nature",
-  [decor.boat]: "vehicle",
-  [decor.car]: "vehicle",
-  [decor.train]: "vehicle",
+  [DECOR_TREE]: "nature",
+  [DECOR_BOAT]: "vehicle",
+  [DECOR_CAR]: "vehicle",
+  [DECOR_TRAIN]: "vehicle",
 };
 
 export function decorSection(id: AssetId): DecorSection {

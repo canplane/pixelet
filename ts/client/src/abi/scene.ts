@@ -2,8 +2,17 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import { XputeError } from "@xpute/kit/status/error.ts";
-import { type Method, type Sender, type Handle } from "@xpute/link/link.ts";
+import { type SceneContent, of_SceneContent } from "./scene.enum.ts";
+import { load_ErrorCode } from "./types.ts";
+import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
+import { MarshalError, XputeError } from "@xpute/kit/status/error.ts";
+import { Lift } from "@xpute/link/cabi.ts";
+import {
+  ComponentError,
+  type Handle,
+  type Method,
+  type Sender,
+} from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `pxl:core/scene` (frame.json `NAMED`). */
 export const HANDLE: Handle = 0x7c289a;
@@ -13,26 +22,10 @@ export const DRAW: Method = 0;
 /** `chat` */
 export const CHAT: Method = 1;
 
-export const SceneContent = {
-  World: 0,
-  Character: 1,
-} as const;
-export type SceneContent = (typeof SceneContent)[keyof typeof SceneContent];
-
-/** The name of the `SceneContent` member numbered `n`, or undefined for a number
- * no member has. */
-export function scene_content_name(
-  n: number,
-): keyof typeof SceneContent | undefined {
-  for (const k in SceneContent)
-    if (SceneContent[k as keyof typeof SceneContent] === n)
-      return k as keyof typeof SceneContent;
-  return undefined;
-}
-
-/** The `SceneContent` member `n` is, or null for a number no member has. */
-export function scene_content_of(n: number): SceneContent | null {
-  return scene_content_name(n) === undefined ? null : (n as SceneContent);
+export function load_SceneContent(r: Lift, at: number): SceneContent {
+  const v = of_SceneContent(r.case(at, 2));
+  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  return v;
 }
 
 export async function draw(
@@ -43,29 +36,37 @@ export async function draw(
   bg: number | null,
 ): Promise<void> {
   const a_ = await link_.send(HANDLE, DRAW, [
-    4,
+    16,
     (w_) => {
-      w_.u32(surface);
-      w_.u32(content);
-      if (group === null) w_.nil();
-      else {
-        w_.u8(group);
+      w_.u32(0, surface);
+      w_.u8(4, content);
+      if (group !== null) {
+        w_.u8(5, 1);
+        w_.u8(5 + 1, group);
       }
-      if (bg === null) w_.nil();
-      else {
-        w_.u32(bg);
+      if (bg !== null) {
+        w_.u8(8, 1);
+        w_.u32(8 + 4, bg);
       }
     },
   ]);
-  if (a_.result < 0) throw new XputeError(a_.result);
+  if (a_.result !== 0) throw new XputeError(a_.result);
+  if (a_.data === null) throw new MarshalError(ERRNO_EBADMSG);
+  const r_ = new Lift(a_.data);
+  const v_ =
+    r_.case(0, 2) === 0
+      ? { tag: "ok" as const }
+      : { tag: "err" as const, val: load_ErrorCode(r_, 0 + 1) };
+  if (v_.tag === "err") throw new ComponentError(v_.val);
+  return;
 }
 
 export async function chat(link_: Sender, text: string): Promise<void> {
   const a_ = await link_.send(HANDLE, CHAT, [
-    1,
+    8,
     (w_) => {
-      w_.str(text);
+      w_.str(0, text);
     },
   ]);
-  if (a_.result < 0) throw new XputeError(a_.result);
+  if (a_.result !== 0) throw new XputeError(a_.result);
 }

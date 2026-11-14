@@ -35,8 +35,8 @@ fn placed(rng: &mut Rng) -> V3 {
 
 fn third_person() {
     tracked_end();
-    controller().base = CameraMode::orbit;
-    settings_mut().camera_mode = CameraMode::orbit;
+    controller().base = CameraMode::Orbit;
+    settings_mut().camera_mode = CameraMode::Orbit;
 }
 
 /// The pivot lies the orbit's distance ahead of the eye in third person,
@@ -49,12 +49,12 @@ fn pivot_along_facing() {
         for n in 0..200 {
             let at = placed(&mut rng);
             assert!(near(pivot_world().unwrap(), at, 1e-9), "{n}: third person");
-            controller().base = CameraMode::first_person;
+            controller().base = CameraMode::FirstPerson;
             assert!(
                 near(pivot_world().unwrap(), eye_world().unwrap(), 1e-12),
                 "{n}: first person"
             );
-            controller().base = CameraMode::orbit;
+            controller().base = CameraMode::Orbit;
         }
     });
 }
@@ -66,7 +66,7 @@ fn a_trackpad_pinch_zooms_as_two_touches() {
     crate::on_core(|| {
         third_person();
         let was = settings().orbit_obstacle;
-        settings_mut().orbit_obstacle = OrbitObstacleMode::through;
+        settings_mut().orbit_obstacle = OrbitObstacleMode::Through;
         let at = [0.0, 0.0, 10.0];
         place(at, 400.0, 1.0, 0.0);
         pinch_by(2.0);
@@ -76,10 +76,10 @@ fn a_trackpad_pinch_zooms_as_two_touches() {
         pinch(200.0);
         assert_eq!(by_trackpad, camera_state().intent.dist);
         assert!((by_trackpad - 200.0).abs() < 1e-9, "{by_trackpad}");
-        controller().base = CameraMode::first_person;
+        controller().base = CameraMode::FirstPerson;
         pinch_by(2.0);
         assert_eq!(camera_state().intent.dist, 200.0, "first person zoomed");
-        controller().base = CameraMode::orbit;
+        controller().base = CameraMode::Orbit;
         settings_mut().orbit_obstacle = was;
     });
 }
@@ -98,10 +98,10 @@ fn person_change_keeps_pivot() {
             let at = placed(&mut rng);
             let mut first: Option<V3> = None;
             for mode in [
-                CameraMode::first_person,
-                CameraMode::orbit,
-                CameraMode::first_person,
-                CameraMode::orbit,
+                CameraMode::FirstPerson,
+                CameraMode::Orbit,
+                CameraMode::FirstPerson,
+                CameraMode::Orbit,
             ] {
                 assert!(take_mode(mode), "{n}: the change to {mode:?} taken");
                 let got = pivot_world().unwrap();
@@ -129,17 +129,17 @@ fn person_change_keeps_pivot() {
             at: [0.0; 3],
         });
         assert!(
-            !take_mode(CameraMode::first_person),
+            !take_mode(CameraMode::FirstPerson),
             "taken under a tracker"
         );
         assert_eq!(
             controller().base,
-            CameraMode::orbit,
+            CameraMode::Orbit,
             "the base changed under a tracker"
         );
         controller().tracker = None;
         assert!(
-            take_mode(CameraMode::first_person),
+            take_mode(CameraMode::FirstPerson),
             "not taken once the tracker let go"
         );
         third_person();

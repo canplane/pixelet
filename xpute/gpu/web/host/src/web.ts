@@ -11,13 +11,14 @@
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
-import { type Link, uri } from "@xpute/link";
+import { ComponentError, type Link, uri } from "@xpute/link";
 import * as gpu from "@xpute/gpu-link/abi/gpu.ts";
+import { ERROR_CODE_NO_DEVICE } from "@xpute/gpu-link/abi/gpu.enum.ts";
 import { type GpuAsk, type GpuConfig, type GpuState } from "@xpute/gpu-link";
 import { GpuHost } from "./host.ts";
-import { DEVICE_URI, STATUS } from "@xpute/gpu-link/api.spec.ts";
+import { DEVICE_URI } from "@xpute/gpu-link/api.spec.ts";
 
 export class WebGpu {
   private host: GpuHost | null = null;
@@ -79,23 +80,23 @@ export class WebGpu {
     this.host?.unbind(handle);
   }
 
-  /** Asks for a device as the guest asks, and answers the block's STATUS once
-   * it is written. A page with no WebGPU, or no adapter, answers ENODEV.
+  /** Asks for a device as the guest asks, and answers once its block is
+   * written; a page with no WebGPU, or no adapter, answers `no-device`.
    * `navigator.gpu` exists only in a secure context, so a LAN address over
    * http has none while localhost has it. */
-  private async acquire(): Promise<u32> {
-    if (this.host !== null) return STATUS.READY;
+  private async acquire(): Promise<void> {
+    if (this.host !== null) return;
     if (!("gpu" in navigator)) {
       const why = isSecureContext ? "unsupported" : "insecure";
       console.warn(`[gpu] cannot draw here: ${why}`);
       this.report(why);
-      throw new FaultError(Errno.ENODEV);
+      throw new ComponentError(ERROR_CODE_NO_DEVICE);
     }
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: this.ask.power as GPUPowerPreference });
     if (!adapter) {
       console.warn("[gpu] cannot draw here: no adapter answered");
       this.report("missing");
-      throw new FaultError(Errno.ENODEV);
+      throw new ComponentError(ERROR_CODE_NO_DEVICE);
     }
     const { vendor, architecture, device, description } = adapter.info;
     console.info(`[gpu] adapter: ${[vendor, architecture, device, description].filter(Boolean).join(" · ")}`);
@@ -111,7 +112,7 @@ export class WebGpu {
       // A feature the guest requires is missing, or the adapter refused.
       console.warn(`[gpu] no device: ${e instanceof Error ? e.message : String(e)}`);
       this.report("missing");
-      throw new FaultError(Errno.ENODEV);
+      throw new ComponentError(ERROR_CODE_NO_DEVICE);
     }
     const r = new GpuHost(d, () => this.link.mem, () => this.tell(this.settled), this.cfg);
     d.lost.then((info) => {
@@ -129,7 +130,6 @@ export class WebGpu {
     this.host = r;
     if (this.block !== null) r.attach(this.block);
     this.report("present");
-    return STATUS.READY;
   }
 
   private tell(waiting: (() => void)[]): void {
@@ -143,7 +143,7 @@ export class WebGpu {
       waiting.push(done);
       signal.addEventListener("abort", () => {
         waiting.splice(waiting.indexOf(done) >>> 0, 1);
-        fail(new FaultError(Errno.ECANCELED));
+        fail(new FaultError(ERRNO_ECANCELED));
       });
     });
   }

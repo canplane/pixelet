@@ -21,13 +21,14 @@ use gpu::{array_view, read_texture, texture, Gpu};
 
 use pxl_engine::answer;
 use pxl_engine::cast::{self, Detail, End, Ray, Until};
-use pxl_engine::clipmap::{self, Entry, ENTRIES, FIRST_CELL_ZOOM};
+use pxl_engine::clipmap::{self, Entry, ENTRY_CNT, FIRST_CELL_ZOOM};
 use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::node_cache::{self, CHANGED_WORDS};
 use pxl_engine::object::Cut;
 use pxl_engine::{beam, eye, object, ray};
 use pxl_render::frame::shader::record::{src, SHADER_FORGET, SHADER_LIGHT_CELL};
-use pxl_render::frame::shader::word::ROW_LANES;
+use pxl_render::frame::shader::word::ROW_LANE_CNT;
+use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
 use pxl_spec::value;
@@ -53,7 +54,7 @@ const WITHIN: u32 = 2;
 const FRAME: u32 = 9;
 /// How many differing slots of a case are told in full. A wrong shader differs in nearly
 /// every slot, so the rest are only counted.
-const TELLS: u32 = 4;
+const TELL_CAP: u32 = 4;
 
 /// The light box of case `c` and where its rays start, laid as the host lays them (pxl-engine
 /// light.rs `StartGrid`).
@@ -160,7 +161,7 @@ fn cases(b: &Built) -> Vec<Case> {
         let of_way = |p: [i32; 3]| {
             let c = [real_world::wrap(p[0]), p[1], p[2]];
             let zooms = [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM];
-            value::transports(answer::val(
+            value::is_transport(answer::val(
                 truth(b.world(), none, LEAF_CELL_ZOOM, c, zooms).0.asset[0],
             ))
         };
@@ -593,7 +594,7 @@ struct Edited<'a> {
     b: &'a WorldBuffer,
     w: World<'a>,
     changed: [u32; CHANGED_WORDS as usize],
-    changed_bricks: [[i32; 4]; clipmap::EYE_CLIP_LEVELS as usize],
+    changed_bricks: [[i32; 4]; clipmap::EYE_CLIP_LEVEL_CNT as usize],
     forget: &'a wgpu::ComputePipeline,
 }
 
@@ -658,7 +659,7 @@ fn run_case(
             add("slots", true);
             add("hit", t.end == End::Hit);
             add("past its reach", t.end == End::Miss);
-            add("lacks", t.end == End::Lacks);
+            add("lacks", t.end == End::Lack);
             let a = t.hit.asset[0];
             let hits = t.end == End::Hit;
             add("hit, placed", hits && answer::is_placed(a));
@@ -666,9 +667,12 @@ fn run_case(
                 "hit, short of its cube",
                 hits && answer::fill_eighths(a) < 8,
             );
-            add("hit, a way's", hits && value::transports(answer::val(a)));
+            add("hit, a way's", hits && value::is_transport(answer::val(a)));
             add("ended in another root", t.hit.node.roots != [0; 3]);
-            add("hit, the wall's", hits && answer::val(a) == value::UNKNOWN);
+            add(
+                "hit, the wall's",
+                hits && answer::val(a) == Sentinel::Unknown as u32,
+            );
             add("hit, on z", hits && t.hit.axis == 2);
             add("hit, on x", hits && t.hit.axis == 0);
             add("hit, on y", hits && t.hit.axis == 1);
@@ -714,7 +718,7 @@ fn run_case(
         } else {
             differ += 1;
             first_differ.get_or_insert((k, got[k], want[k]));
-            if differ <= TELLS {
+            if differ <= TELL_CAP {
                 tell_slot(w, case, &s, &starts, k as u32, [got[k], want[k]]);
             }
         }
@@ -737,7 +741,7 @@ fn run_case(
         gpu.dispatch(
             e.forget,
             &[(9, next_buf.as_entire_binding())],
-            [node_cache::ENTRIES.div_ceil(ROW_LANES), 1, 1],
+            [node_cache::ENTRY_CNT.div_ceil(ROW_LANE_CNT), 1, 1],
         );
     }
     // Where the world changed, the next frame must answer as the changed world.
@@ -784,7 +788,7 @@ fn run_case(
             } else {
                 next_differ += 1;
                 first_next.get_or_insert((k, got2[k], want[k]));
-                if next_differ <= TELLS {
+                if next_differ <= TELL_CAP {
                     tell_slot(w, case, &s, &starts, k as u32, [got2[k], want[k]]);
                 }
             }
@@ -960,8 +964,8 @@ fn handed_between_frames(eye: [i32; 2], cell_zoom: Zoom, by: [i32; 2], name: &'s
     // Before the change, the clip level's entries are wanted and not yet filled, and the
     // clipmap is folded again over them.
     let mut was = built.clipmap.clone();
-    let level = ((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES) as usize;
-    let rows = level..level + ENTRIES as usize;
+    let level = ((cell_zoom - FIRST_CELL_ZOOM) * ENTRY_CNT) as usize;
+    let rows = level..level + ENTRY_CNT as usize;
     if eye == EYE_SEAM {
         let x = |west: bool| {
             was[rows.clone()]
@@ -987,15 +991,15 @@ fn handed_between_frames(eye: [i32; 2], cell_zoom: Zoom, by: [i32; 2], name: &'s
     // The host marks an eye's entry as moved where its brick changed, and joins each level's
     // changed bricks (ray/cast.rs).
     let mut changed = [0u32; CHANGED_WORDS as usize];
-    let mut changed_bricks = [node_cache::NO_BRICKS; clipmap::EYE_CLIP_LEVELS as usize];
-    for k in 0..(clipmap::EYE_CLIP_LEVELS * ENTRIES) as usize {
+    let mut changed_bricks = [node_cache::NO_BRICKS; clipmap::EYE_CLIP_LEVEL_CNT as usize];
+    for k in 0..(clipmap::EYE_CLIP_LEVEL_CNT * ENTRY_CNT) as usize {
         if Entry::of(now[k]).changed_from(Entry::of(was[k])) {
             changed[k / 32] |= 1 << (k % 32);
         }
         if Entry::of(now[k]).present_changed_from(Entry::of(was[k])) {
             for q in [Entry::of(now[k]).brick, Entry::of(was[k]).brick] {
                 if q != [i32::MIN; 2] {
-                    let level = &mut changed_bricks[k / ENTRIES as usize];
+                    let level = &mut changed_bricks[k / ENTRY_CNT as usize];
                     *level = node_cache::bricks_joined(*level, [q[0], q[1], q[0], q[1]]);
                 }
             }
@@ -1161,7 +1165,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
         cuts: [Cut::NONE; 2],
         least: &[],
     };
-    let leaf = ((LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) * ENTRIES) as usize;
+    let leaf = ((LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) * ENTRY_CNT) as usize;
     let s = brick::BRICK_SHIFT;
     let mut was = now.clone();
     let mut brick_columns = Vec::new();
@@ -1196,7 +1200,7 @@ fn a_world_change_keeps_the_tiles_it_does_not_reach() {
         ..bricks_case
     };
     let row_of = |cell_zoom: Zoom, q: [i32; 2]| {
-        ((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES) as usize + clipmap::entry(q) as usize
+        ((cell_zoom - FIRST_CELL_ZOOM) * ENTRY_CNT) as usize + clipmap::entry(q) as usize
     };
     let (coarser, q) = (FIRST_CELL_ZOOM..LEAF_CELL_ZOOM)
         .rev()

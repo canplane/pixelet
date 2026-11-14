@@ -3,26 +3,38 @@
 //! A data spec is a JSON file of named values, written into the files each spec
 //! names as TypeScript `as const` values, Rust constants and C++ constants. A
 //! number is an f64 unless a `$type` says otherwise. A value wrapped as `{
-//! "$val", "$doc" }` carries its reason in `$doc`. A table may be laid out in
-//! words (`laid_out`), with its widths read from the specs it uses. A list of
-//! names whose `$type` is `enum` is also a Rust enum and a C++ enum class,
-//! numbered by place; a table whose `$type` is `enum` is a Rust enum, numbered
-//! by its members, each a number or a table that carries its `$number`. Every
-//! enum is held in its `$repr` (`u8` where it gives none), and has `of`, a
-//! number to its member, and its members' names, in Rust and in TypeScript
-//! alike. A list of tables of the same fields is a list of records: an array of
-//! objects in TypeScript, and in Rust an array of a struct (`rs_recs`), whose
-//! `name`s are the enum where the list's `$type` is `enum`, numbered by their
-//! places or, where every record carries one, each by its `$number`. A table a tool
-//! builds in memory is written as a read one is (`table_outputs`).
+//! "$val", "$doc" }` carries its reason in `$doc`. Each language names a value
+//! in its own case (in Rust an enum's member Pascal, a constant SCREAMING, a
+//! module or a field snake), save an enum whose names are copied from outside,
+//! marked `"$outside": true`, whose Rust members keep their spelling. A table
+//! may be laid out in words (`laid_out`), with its widths read from the specs
+//! it uses. A list of names whose `$type` is `enum` is an enum, in Rust and in
+//! C++ an enum class, numbered by place; a table whose `$type` is `enum` is one
+//! too, numbered by its members, each a number or a table that carries its
+//! `$number`. An enum is named as its key is, singular; one whose names a
+//! reader takes, marked `"$names": true`, has them written as a list under the
+//! key's plural (`STEP_NAMES` beside `STEP_NAME`). Every enum is held in its
+//! `$repr` (`u8` where it gives none); in Rust and C++ it has `of`, a number to
+//! its member, in Rust its members' names, and in TypeScript each member is a
+//! constant of its own (`ts_enum`), so no name reaches a bundle. A list of
+//! tables of the same fields is a list of records: an array of objects in
+//! TypeScript, and in Rust an array of a struct (`rs_recs`), its row named by
+//! the list's `$row` where its key is a plural (`"$row": "asset_file"`,
+//! `AssetFile`), whose `name`s are the enum where the list's `$type` is `enum`,
+//! numbered by their places or, where every record carries one, each by its
+//! `$number`; there the TypeScript rows carry each one's `number` and no
+//! `name`, and the records of an enum's table carry their `number` beside their
+//! key (`numbered`). A table a tool builds in memory is written as a read one
+//! is (`table_outputs`).
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::path::Path;
 
 use super::{
-    align_star, casing_note, enum_name, file, is_ts_ident, js_num, json_str, line_comments, mark,
-    package_path, read, rs_doc, rs_enum, rs_ident, ts_doc, ts_enum, Member, Node, Output,
+    align_star, file, is_ts_ident, js_num, json_str, line_comments, mark,
+    package_path, pascal, plural, read, rs_const, rs_doc, rs_enum, rs_field, rs_ident, rs_member, snake, ts_doc,
+    ts_enum, Member, Node, Output,
 };
 
 pub struct DataSpec {
@@ -202,8 +214,9 @@ struct Scope {
     /// The items the module takes from elsewhere, each `use`d at its head so
     /// the body names it by its name.
     uses: RefCell<BTreeSet<String>>,
-    /// The enums the spec declares, which a `$type` names by their name alone.
-    enums: Vec<String>,
+    /// The enums the spec declares, which a `$type` names by their name alone,
+    /// each with how its members are named (`casing`).
+    enums: Vec<(String, Casing)>,
 }
 
 impl Scope {
@@ -223,12 +236,64 @@ fn is_primitive(ty: &str) -> bool {
     )
 }
 
-/// The enums `spec` declares, each by its name.
-fn enums(spec: &Node) -> Vec<String> {
+/// The enums `spec` declares, each by its name, with how its members are
+/// named.
+fn enums(spec: &Node) -> Vec<(String, Casing)> {
     spec.named()
         .filter(|(_, n)| n.str_at("$type") == Some("enum"))
-        .map(|(k, _)| enum_name(k))
+        .map(|(k, n)| (pascal(k), casing(n)))
         .collect()
+}
+
+/// A member's name in the language written, made from its name in the spec.
+type Casing = fn(&str) -> String;
+
+/// How the enum `n`'s members are named in Rust: in Pascal case, or as their
+/// source spells them where the enum says `"$outside": true`, its names being
+/// copied from outside (POSIX's `EBADMSG`).
+fn casing(n: &Node) -> Casing {
+    if n.get("$outside") == Some(&Node::Bool(true)) {
+        rs_ident
+    } else {
+        rs_member
+    }
+}
+
+/// Whether the enum `n`'s members are read by their names, which it marks
+/// `"$names": true`: its names are then written as a list of their own,
+/// under the plural of its name (`plural`).
+fn names_read(n: &Node) -> bool {
+    n.get("$names") == Some(&Node::Bool(true))
+}
+
+/// What a value's marks say of how it is written in Rust: an enum's `$repr`,
+/// the numbers it holds and how its members are named, whether its names are
+/// read (`names_read`), and the type a list of records' row takes, its
+/// `$row`, the singular its plural key does not give.
+struct Marks<'a> {
+    repr: &'static str,
+    range: std::ops::RangeInclusive<f64>,
+    casing: Casing,
+    names_read: bool,
+    row: Option<&'a str>,
+}
+
+impl<'a> Marks<'a> {
+    fn of(n: &'a Node) -> Result<Marks<'a>, String> {
+        let (repr, range, _) = repr_of(n)?;
+        Ok(Marks {
+            repr,
+            range,
+            casing: casing(n),
+            names_read: names_read(n),
+            row: n.str_at("$row"),
+        })
+    }
+}
+
+/// Whether `n`'s value is a list of names.
+fn is_names(n: &Node) -> bool {
+    n.val().arr().is_some_and(|a| a.iter().all(|e| e.str().is_some()))
 }
 
 /// Refuses a `$type` that names no primitive, no enum the spec declares and
@@ -241,6 +306,21 @@ fn check_types(spec: &Node) -> Result<(), String> {
                 return Err(format!("{at}: `$repr` holds an enum, beside `$type` enum"));
             }
             repr_of(n).map_err(|e| format!("{at}: {e}"))?;
+        }
+        if let Some(r) = n.get("$row") {
+            if r.str().is_none() || n.val().arr().and_then(|a| fields(a).ok().flatten()).is_none() {
+                return Err(format!("{at}: `$row` names the row of a list of records"));
+            }
+        }
+        if let Some(o) = n.get("$names") {
+            if n.str_at("$type") != Some("enum") || !is_names(n) || *o != Node::Bool(true) {
+                return Err(format!("{at}: `$names` is true, beside `$type` enum on a list of names"));
+            }
+        }
+        if let Some(o) = n.get("$outside") {
+            if n.str_at("$type") != Some("enum") || *o != Node::Bool(true) {
+                return Err(format!("{at}: `$outside` is true, beside `$type` enum"));
+            }
         }
         if let (Some("enum"), Node::Arr(a)) = (n.str_at("$type"), n.val()) {
             let (r, range, _) = repr_of(n).map_err(|e| format!("{at}: {e}"))?;
@@ -286,15 +366,17 @@ fn check_types(spec: &Node) -> Result<(), String> {
         }
         Ok(())
     }
-    let enums = enums(spec);
+    let enums: Vec<String> = enums(spec).into_iter().map(|(e, _)| e).collect();
     spec.named().try_for_each(|(k, v)| walk(v, k, &enums))
 }
 
-fn enum_path(ty: &str, scope: &Scope) -> Option<String> {
-    if scope.enums.iter().any(|e| e == ty) {
-        return Some(ty.to_string());
+/// The enum `ty` names, and how its members are named: one the spec declares,
+/// or one by its path, whose members are in Pascal case.
+fn enum_path(ty: &str, scope: &Scope) -> Option<(String, Casing)> {
+    if let Some((e, v)) = scope.enums.iter().find(|(e, _)| e == ty) {
+        return Some((e.clone(), *v));
     }
-    (!is_primitive(ty) && ty.contains("::")).then(|| scope.name_of(ty))
+    (!is_primitive(ty) && ty.contains("::")).then(|| (scope.name_of(ty), rs_member as Casing))
 }
 
 fn rs_scalar(n: &Node, ty: &str, scope: &Scope) -> Result<(String, String), String> {
@@ -302,7 +384,7 @@ fn rs_scalar(n: &Node, ty: &str, scope: &Scope) -> Result<(String, String), Stri
         Node::Bool(b) => ("bool".to_string(), b.to_string()),
         Node::Str(s) => match enum_path(ty, scope) {
             None => ("&str".to_string(), json_str(s)),
-            Some(path) => (path.clone(), format!("{path}::{}", rs_ident(s))),
+            Some((path, casing)) => (path.clone(), format!("{path}::{}", casing(s))),
         },
         Node::Num(v) if ty == "f64" || ty == "f32" => (
             ty.to_string(),
@@ -349,10 +431,10 @@ fn repr_named(r: &str) -> Result<Repr, String> {
 pub fn enum_members(name: &str, n: &Node) -> Result<Vec<Member>, String> {
     let range = repr_of(n)?.1;
     if n.is_wrapper() {
-        return list_members(name, n.val().arr().unwrap_or_default(), &range);
+        return list_members(name, n.val().arr().unwrap_or_default(), &range, casing(n));
     }
     let entries: Vec<(&str, &Node)> = n.named().collect();
-    numbers(name, &entries, &range)
+    numbers(name, &entries, &range, casing(n))
 }
 
 /// A list's members: its names, or its records' `name`s, numbered by their
@@ -362,6 +444,7 @@ fn list_members(
     name: &str,
     a: &[Node],
     range: &std::ops::RangeInclusive<f64>,
+    casing: Casing,
 ) -> Result<Vec<Member>, String> {
     let numbered = a.iter().filter(|e| e.get("$number").is_some()).count();
     if numbered != 0 && numbered != a.len() {
@@ -380,7 +463,7 @@ fn list_members(
         })
         .collect();
     let keys: Vec<(&str, &Node)> = keys.iter().map(|(k, v)| (*k, v)).collect();
-    numbers(name, &keys, range)
+    numbers(name, &keys, range, casing)
 }
 
 /// An enum table's members: each is a number, or a table that carries its
@@ -390,6 +473,7 @@ fn numbers(
     name: &str,
     keys: &[(&str, &Node)],
     range: &std::ops::RangeInclusive<f64>,
+    casing: Casing,
 ) -> Result<Vec<Member>, String> {
     let numbers: Vec<Option<f64>> = keys
         .iter()
@@ -416,7 +500,7 @@ fn numbers(
         .iter()
         .zip(numbers)
         .map(|((k, v), n)| Member {
-            ident: rs_ident(k),
+            ident: casing(k),
             name: k.to_string(),
             number: js_num(n.unwrap_or_default()),
             doc: v.is_obj().then(|| v.lines_at("$doc")).flatten().unwrap_or_default(),
@@ -435,18 +519,17 @@ fn rs_items(
     let doc = if n.is_obj() { n.lines_at("$doc") } else { None };
     let mut lines: Vec<String> = Vec::new();
     if n.is_wrapper() {
-        let (val, t, repr) = (n.val(), type_of(n, ty), repr_of(n)?.0);
-        rs_leaf(name, val, t, repr, indent, &mut lines, scope)?;
+        rs_leaf(name, n.val(), type_of(n, ty), &Marks::of(n)?, indent, &mut lines, scope)?;
     } else if !n.is_obj() {
-        rs_leaf(name, n, ty, repr_of(n)?.0, indent, &mut lines, scope)?;
+        rs_leaf(name, n, ty, &Marks::of(n)?, indent, &mut lines, scope)?;
     } else {
         let enumed = type_of(n, ty) == "enum";
         let t = members_type(n, ty);
         let keys: Vec<(&str, &Node)> = n.named().collect();
         if enumed {
             let (repr, range, _) = repr_of(n)?;
-            let variants = numbers(name, &keys, &range)?;
-            lines.extend(rs_enum(&enum_name(name), &variants, repr, indent));
+            let variants = numbers(name, &keys, &range, casing(n))?;
+            lines.extend(rs_enum(&pascal(name), &variants, repr, indent));
             lines.push(String::new());
         }
         let mut body: Vec<String> = Vec::new();
@@ -462,7 +545,7 @@ fn rs_items(
         }
         let uses = scope.uses.replace(outer);
         if !body.is_empty() {
-            lines.push(format!("{indent}pub mod {} {{", rs_ident(name)));
+            lines.push(format!("{indent}pub mod {} {{", rs_field(name)));
             if !uses.is_empty() {
                 lines.extend(uses.iter().map(|u| format!("{inner}use {u};")));
                 lines.push(String::new());
@@ -484,7 +567,7 @@ fn rs_items(
 /// `is_name` says whether `s` can name an enum member once it is made an
 /// identifier: a letter, a digit or `_`, followed by those or `-`. `-` is
 /// allowed past the first character because WebGPU's names hold it
-/// ("2d-array"), and an identifier made from such a name spells it `_`.
+/// ("2d-array"), and an identifier made from such a name breaks a word there.
 fn is_name(s: &str) -> bool {
     let mut c = s.chars();
     c.next()
@@ -523,7 +606,7 @@ fn rs_names(name: &str, names: &[&str], indent: &str) -> String {
     let quoted: Vec<String> = names.iter().map(|n| json_str(n)).collect();
     format!(
         "{indent}pub const {}: &[&str] = &[{}];",
-        rs_ident(name),
+        rs_const(name),
         quoted.join(", ")
     )
 }
@@ -534,13 +617,13 @@ fn rs_recs(
     name: &str,
     a: &[Node],
     ty: &str,
-    repr: &str,
+    marks: &Marks,
     indent: &str,
     out: &mut Vec<String>,
     scope: &Scope,
 ) -> Result<(), String> {
     let fields = fields(a)?.unwrap_or_default();
-    let r = format!("{}Record", enum_name(name));
+    let r = marks.row.map_or(format!("{}Record", pascal(name)), pascal);
     let num = if is_primitive(ty) { ty } else { "f64" };
     let base = |f: &Field| match f.kind {
         0 => "&'static str".to_string(),
@@ -586,7 +669,7 @@ fn rs_recs(
         let row = e
             .named()
             .zip(&fields)
-            .map(|((k, v), (_, f))| Ok(format!("{}: {}", rs_ident(k), lit(v, f)?)))
+            .map(|((k, v), (_, f))| Ok(format!("{}: {}", rs_field(k), lit(v, f)?)))
             .collect::<Result<Vec<_>, String>>()?;
         rows.push(format!("{r} {{ {} }}", row.join(", ")));
     }
@@ -598,12 +681,12 @@ fn rs_recs(
     out.extend(
         keys.iter()
             .zip(&tys)
-            .map(|(k, t)| format!("{indent}    pub {}: {t},", rs_ident(k))),
+            .map(|(k, t)| format!("{indent}    pub {}: {t},", rs_field(k))),
     );
     out.extend([format!("{indent}}}"), String::new()]);
     out.push(format!(
         "{indent}pub const {}: [{r}; {}] = [{}];",
-        rs_ident(name),
+        rs_const(name),
         a.len(),
         rows.join(", ")
     ));
@@ -613,8 +696,8 @@ fn rs_recs(
             return Err(format!("{name}: an enum's members are names"));
         }
         out.push(String::new());
-        let members = list_members(name, a, &repr_named(repr)?.1)?;
-        out.extend(rs_enum(&enum_name(name), &members, repr, indent));
+        let members = list_members(name, a, &marks.range, marks.casing)?;
+        out.extend(rs_enum(&pascal(name), &members, marks.repr, indent));
     }
     Ok(())
 }
@@ -623,26 +706,30 @@ fn rs_leaf(
     name: &str,
     v: &Node,
     ty: &str,
-    repr: &str,
+    marks: &Marks,
     indent: &str,
     out: &mut Vec<String>,
     scope: &Scope,
 ) -> Result<(), String> {
     if let Node::Arr(a) = v {
         if fields(a)?.is_some() {
-            return rs_recs(name, a, ty, repr, indent, out, scope);
+            return rs_recs(name, a, ty, marks, indent, out, scope);
         }
         let strings = matches!(a.first(), Some(Node::Str(_)));
         if strings && enum_path(ty, scope).is_none() {
             let names: Vec<&str> = a.iter().map(|e| e.str().unwrap_or_default()).collect();
-            out.push(rs_names(name, &names, indent));
-            if ty == "enum" {
-                if !a.iter().all(|e| e.str().is_some_and(is_name)) {
-                    return Err(format!("{name}: an enum's members are names"));
-                }
-                let members = list_members(name, a, &repr_named(repr)?.1)?;
-                out.extend(rs_enum(&enum_name(name), &members, repr, indent));
+            if ty != "enum" {
+                out.push(rs_names(name, &names, indent));
+                return Ok(());
             }
+            if !a.iter().all(|e| e.str().is_some_and(is_name)) {
+                return Err(format!("{name}: an enum's members are names"));
+            }
+            if marks.names_read {
+                out.push(rs_names(&plural(name), &names, indent));
+            }
+            let members = list_members(name, a, &marks.range, marks.casing)?;
+            out.extend(rs_enum(&pascal(name), &members, marks.repr, indent));
             return Ok(());
         }
         let items = a
@@ -658,7 +745,7 @@ fn rs_leaf(
         });
         out.push(format!(
             "{indent}pub const {}: [{item_ty}; {}] = [{}];",
-            rs_ident(name),
+            rs_const(name),
             a.len(),
             items
                 .iter()
@@ -671,7 +758,7 @@ fn rs_leaf(
     let (t, lit) = rs_scalar(v, ty, scope)?;
     out.push(format!(
         "{indent}pub const {}: {t} = {lit};",
-        rs_ident(name)
+        rs_const(name)
     ));
     Ok(())
 }
@@ -922,7 +1009,7 @@ fn ts_outputs(
     let enums = spec
         .named()
         .filter(|(_, n)| n.str_at("$type") == Some("enum"))
-        .map(|(k, n)| Ok((enum_name(k), enum_members(k, n)?)))
+        .map(|(k, n)| Ok((pascal(k), enum_members(k, n)?)))
         .collect::<Result<Vec<_>, String>>()?;
     let mut body: Vec<String> = Vec::new();
     for (name, n) in spec.named() {
@@ -938,40 +1025,91 @@ fn ts_outputs(
         }
         // A value is written as a constant, a table or a list as one too,
         // `as const`. An enum table whose members carry nothing past their
-        // numbers is its members' object alone.
+        // numbers is its members' constants alone.
         let enumed = type_of(n, "f64") == "enum";
+        let names = enumed && is_names(n);
         let bare = enumed
-            && !n.is_wrapper()
-            && n.named().all(|(_, v)| !v.is_obj() || v.named().next().is_none());
+            && (names
+                || !n.is_wrapper() && n.named().all(|(_, v)| !v.is_obj() || v.named().next().is_none()));
+        let members = if enumed {
+            enum_members(name, n)?
+        } else {
+            Vec::new()
+        };
+        if names && names_read(n) {
+            body.push(format!(
+                "export const {} = {} as const;",
+                plural(name),
+                ts_value(n.val(), "f64", "", &enums)?
+            ));
+            body.push(String::new());
+        }
         if !bare {
             let whole = matches!(n.val(), Node::Arr(_) | Node::Obj(_));
             body.push(format!(
                 "export const {name} = {}{};",
-                ts_value(n, "f64", "", &enums)?,
+                ts_value(&numbered(n, &members), "f64", "", &enums)?,
                 if whole { " as const" } else { "" }
             ));
         }
         if !enumed {
             continue;
         }
-        let members = enum_members(name, n)?;
-        // Its object follows the doc where it stands for the table.
-        let object = ts_enum(&enum_name(name), &members);
-        body.extend(object.into_iter().skip(usize::from(bare)));
+        // Its constants follow the doc where it stands for the table.
+        let consts = ts_enum(&pascal(name), &members);
+        body.extend(consts.into_iter().skip(usize::from(bare)));
     }
     ts.extend(body);
     outputs.push(Output::new(ts_path, file(&ts)));
     Ok(())
 }
 
-/// Whether `n` holds a list or a table whose `$type` is `enum`.
-fn has_enum(n: &Node) -> bool {
-    n.str_at("$type") == Some("enum")
-        || match n {
-            Node::Obj(entries) => entries.iter().any(|(_, v)| has_enum(v)),
-            Node::Arr(a) => a.iter().any(has_enum),
-            _ => false,
+/// `n` as TypeScript writes it: an enum's list of records with each record's
+/// member number in place of its name, which TypeScript does not write; an
+/// enum's table of records with each record's member number beside its key;
+/// any other value as it is.
+fn numbered(n: &Node, members: &[Member]) -> Node {
+    let number = |m: &Member| Node::Num(m.number.parse().unwrap_or_default());
+    let rows = match n.val() {
+        Node::Arr(rows) if !members.is_empty() && rows.iter().all(Node::is_obj) => Node::Arr(
+            rows.iter()
+                .zip(members)
+                .map(|(row, m)| {
+                    let mut out = vec![("number".to_string(), number(m))];
+                    out.extend(row.entries().iter().filter(|(k, _)| k != "name").cloned());
+                    Node::Obj(out)
+                })
+                .collect(),
+        ),
+        Node::Obj(entries) if !members.is_empty() && n.named().all(|(_, v)| v.is_obj()) => {
+            Node::Obj(
+                entries
+                    .iter()
+                    .map(|(k, v)| match members.iter().find(|m| m.name == *k) {
+                        Some(m) => {
+                            let mut out = vec![("number".to_string(), number(m))];
+                            out.extend(v.entries().iter().cloned());
+                            (k.clone(), Node::Obj(out))
+                        }
+                        None => (k.clone(), v.clone()),
+                    })
+                    .collect(),
+            )
         }
+        _ => return n.clone(),
+    };
+    match n {
+        Node::Obj(entries) if n.is_wrapper() => Node::Obj(
+            entries
+                .iter()
+                .map(|(k, v)| {
+                    let v = if k == "$val" { rows.clone() } else { v.clone() };
+                    (k.clone(), v)
+                })
+                .collect(),
+        ),
+        _ => rows,
+    }
 }
 
 fn rs_outputs(
@@ -983,14 +1121,10 @@ fn rs_outputs(
 ) -> Result<(), String> {
     let shown = package_path(root, rs_path)?;
     let mut rs = head(&shown, d.json, spec);
-    rs.push(String::new());
-    rs.extend(casing_note());
     rs.extend([
+        String::new(),
         "// A table is generated whole, whether or not this crate calls an entry.".to_string(),
-        format!(
-            "#![allow(non_upper_case_globals, non_snake_case, {}dead_code, reason = \"generated from the spec\")]",
-            if has_enum(spec) { "non_camel_case_types, " } else { "" }
-        ),
+        "#![allow(dead_code, reason = \"generated from the spec\")]".to_string(),
     ]);
     let scope = Scope {
         uses: RefCell::default(),
@@ -1016,99 +1150,155 @@ fn rs_outputs(
 }
 
 fn cpp_file(d: &DataSpec, spec: &Node, cpp_path: &str, namespace: &str) -> Result<String, String> {
-    let mut cpp = head(cpp_path, d.json, spec);
-    let lists = spec.named().any(|(_, n)| matches!(n.val(), Node::Arr(_)));
-    let packed = spec.named().any(|(_, n)| match n {
-        Node::Obj(t) => t
-            .iter()
-            .any(|(f, x)| f == "$packed" && *x == Node::Bool(true)),
-        _ => false,
-    });
-    cpp.extend([String::new(), "#pragma once".into(), String::new()]);
-    if lists {
-        cpp.push("#include <array>".into());
-    }
-    if packed {
-        cpp.push("#include <cstddef>".into());
-    }
-    cpp.push("#include <cstdint>".into());
-    if lists {
-        cpp.push("#include <string_view>".into());
-    }
-    cpp.extend([String::new(), format!("namespace {namespace} {{")]);
+    let mut body = Vec::new();
+    let mut includes = BTreeSet::new();
     for (name, n) in spec.named() {
-        cpp_items(name, n, "f64", &mut cpp)?;
+        cpp_items(name, n, "f64", &mut body, &mut includes)?;
     }
+    let mut cpp = head(cpp_path, d.json, spec);
+    cpp.extend([String::new(), "#pragma once".into(), String::new()]);
+    cpp.extend(includes.iter().map(|h| format!("#include <{h}>")));
+    cpp.extend([String::new(), format!("namespace {namespace} {{")]);
+    cpp.extend(body);
     cpp.extend([String::new(), format!("}} // namespace {namespace}")]);
     Ok(file(&cpp))
 }
 
-/// A list of names is written as a `string_view` array, and one whose `$type`
-/// is `enum` also as an enum class numbered by place. Any other value that is
-/// not a number is refused.
-fn cpp_items(name: &str, n: &Node, ty: &str, out: &mut Vec<String>) -> Result<(), String> {
-    let doc = if n.is_obj() { n.lines_at("$doc") } else { None };
-    out.push(String::new());
-    if let Some(doc) = doc {
-        out.extend(line_comments(&doc, ""));
+/// The headers a C++ file includes, each added where its body names what the
+/// header declares, as Rust's `Scope` `use`s.
+type Includes = BTreeSet<&'static str>;
+
+/// An enum's member as C++ names it: in snake case, as the C++ here names
+/// its constants' members. An outside name too, since C++'s own headers
+/// define POSIX's errno names as macros.
+fn cpp_member(k: &str) -> String {
+    cpp_ident(&snake(k))
+}
+
+/// An enum's C++, as every enum has it: an enum class held in `held`, and the
+/// member a number is (`<enum>_of`), as Rust's `of`.
+fn cpp_enum(name: &str, members: &[Member], held: &str, out: &mut Vec<String>, inc: &mut Includes) {
+    let e = pascal(name);
+    inc.extend(["cstdint", "optional"]);
+    out.push(format!("enum class {e} : {held} {{"));
+    for m in members {
+        out.extend(line_comments(&m.doc, "    "));
+        out.push(format!("    {} = {},", m.ident, m.number));
     }
-    if n.is_obj() && !n.is_wrapper() {
-        let t = members_type(n, ty);
-        out.push(format!("namespace {name} {{"));
-        for (k, v) in n.named() {
-            cpp_items(k, v, t, out)?;
-        }
-        out.push(format!("}} // namespace {name}"));
-        return Ok(());
-    }
-    if let Node::Arr(list) = if n.is_wrapper() { n.val() } else { n } {
+    out.extend([
+        "};".to_string(),
+        String::new(),
+        "// The member `val` is, or none for a number no member has.".into(),
+        format!("constexpr std::optional<{e}> {}_of({held} val) noexcept {{", snake(&e)),
+        "    switch (val) {".into(),
+    ]);
+    out.extend(
+        members
+            .iter()
+            .map(|m| format!("    case {}: return {e}::{};", m.number, m.ident)),
+    );
+    out.extend([
+        "    }".to_string(),
+        "    return std::nullopt;".into(),
+        "}".into(),
+    ]);
+}
+
+/// A table is a namespace, and one whose `$type` is `enum` also an enum
+/// (`cpp_enum`), its members' own values in the namespace, each under its
+/// member's name; a table that holds no value writes nothing. A list of names
+/// is written as a `string_view` array, and one whose `$type` is `enum` also
+/// as an enum. Any other value is a leaf (`cpp_leaf`).
+fn cpp_items(
+    name: &str,
+    n: &Node,
+    ty: &str,
+    out: &mut Vec<String>,
+    inc: &mut Includes,
+) -> Result<(), String> {
+    let mut lines: Vec<String> = Vec::new();
+    if let Node::Arr(list) = n.val() {
         let names = list
             .iter()
-            .map(|v| {
-                v.str()
-                    .ok_or(format!("{name}: a C++ list takes names only"))
-            })
+            .map(|v| v.str().ok_or(format!("{name}: a C++ list takes names only")))
             .collect::<Result<Vec<_>, _>>()?;
-        if type_of(n, ty) == "enum" {
-            let held = repr_of(n)?.2;
-            out.push(format!("enum class {} : {held} {{", enum_name(name)));
-            out.extend(
-                names
-                    .iter()
-                    .enumerate()
-                    .map(|(k, v)| format!("    {} = {k},", cpp_ident(v))),
-            );
-            out.extend(["};".to_string(), String::new()]);
+        let enumed = type_of(n, ty) == "enum";
+        if enumed {
+            let (_, range, held) = repr_of(n)?;
+            cpp_enum(name, &list_members(name, list, &range, cpp_member)?, held, &mut lines, inc);
         }
-        let quoted: Vec<String> = names.iter().map(|v| json_str(v)).collect();
-        out.push(format!(
-            "inline constexpr std::array<std::string_view, {}> {name}{{{}}};",
-            names.len(),
-            quoted.join(", ")
-        ));
+        if !enumed || names_read(n) {
+            let key = if enumed { plural(name) } else { name.to_string() };
+            inc.extend(["array", "string_view"]);
+            let quoted: Vec<String> = names.iter().map(|v| json_str(v)).collect();
+            lines.extend(enumed.then(String::new));
+            lines.push(format!(
+                "inline constexpr std::array<std::string_view, {}> {key}{{{}}};",
+                names.len(),
+                quoted.join(", ")
+            ));
+        }
+    } else if n.is_obj() && !n.is_wrapper() {
+        let enumed = type_of(n, ty) == "enum";
+        let t = members_type(n, ty);
+        let mut body = Vec::new();
+        for (k, v) in n.named() {
+            if enumed && (!v.is_obj() || v.is_wrapper()) {
+                continue;
+            }
+            let k = if enumed { cpp_member(k) } else { k.to_string() };
+            cpp_items(&k, v, t, &mut body, inc)?;
+        }
+        if enumed {
+            let (_, range, held) = repr_of(n)?;
+            let keys: Vec<(&str, &Node)> = n.named().collect();
+            cpp_enum(name, &numbers(name, &keys, &range, cpp_member)?, held, &mut lines, inc);
+        }
+        if !body.is_empty() {
+            if enumed {
+                lines.push(String::new());
+            }
+            lines.push(format!("namespace {name} {{"));
+            lines.extend(body);
+            lines.push(format!("}} // namespace {name}"));
+        }
+    } else {
+        lines.push(cpp_leaf(name, n.val(), type_of(n, ty), inc)?);
+    }
+    if lines.is_empty() {
         return Ok(());
     }
-    let (val, t) = if n.is_wrapper() {
-        (n.val(), type_of(n, ty))
-    } else {
-        (n, ty)
-    };
-    let number = val
+    out.push(String::new());
+    if let Some(doc) = n.is_obj().then(|| n.lines_at("$doc")).flatten() {
+        out.extend(line_comments(&doc, ""));
+    }
+    out.extend(lines);
+    Ok(())
+}
+
+/// A string is a `string_view`, and a number a constant of its `$type`, u32,
+/// i32 or usize. Any other value is refused.
+fn cpp_leaf(name: &str, v: &Node, t: &str, inc: &mut Includes) -> Result<String, String> {
+    if let Node::Str(s) = v {
+        if !is_primitive(t) {
+            return Err(format!("{name}: a C++ header takes no string typed {t}"));
+        }
+        inc.insert("string_view");
+        return Ok(format!("inline constexpr std::string_view {name} = {};", json_str(s)));
+    }
+    let number = v
         .num()
-        .ok_or(format!("{name}: a C++ header takes numbers only"))?;
-    let (ty, suffix) = match t {
-        "u32" => ("std::uint32_t", "u"),
-        "i32" => ("std::int32_t", ""),
-        "usize" => ("std::size_t", "u"),
+        .ok_or(format!("{name}: a C++ header takes numbers and strings only"))?;
+    let (ty, header, suffix) = match t {
+        "u32" => ("std::uint32_t", "cstdint", "u"),
+        "i32" => ("std::int32_t", "cstdint", ""),
+        "usize" => ("std::size_t", "cstddef", "u"),
         other => {
             return Err(format!(
                 "{name}: a C++ header takes u32, i32 and usize, not {other}"
             ))
         }
     };
-    out.push(format!(
-        "inline constexpr {ty} {name} = {}{suffix};",
-        js_num(number)
-    ));
-    Ok(())
+    inc.insert(header);
+    Ok(format!("inline constexpr {ty} {name} = {}{suffix};", js_num(number)))
 }

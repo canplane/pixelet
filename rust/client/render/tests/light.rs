@@ -271,14 +271,14 @@ fn run_slots(
             };
             list[k + beam::SAMPLE_ASSET as usize] = trace.hit.asset[0];
             list[k + beam::SAMPLE_ASSET as usize + 1] = trace.hit.asset[1];
-            list[k + beam::SAMPLE_LACKS as usize] = u32::from(trace.end == End::Lacks);
+            list[k + beam::SAMPLE_LACK_WORD as usize] = u32::from(trace.end == End::Lack);
             list[k + beam::SAMPLE_AXIS as usize] = trace.hit.axis;
             kind_cnt.add("samples gone on", gone);
             kind_cnt.add("samples hit", !gone);
             origins[(j * n + i) as usize] = o;
             if !gone {
-                let kind = if trace.end == End::Lacks {
-                    Kind::Lacks
+                let kind = if trace.end == End::Lack {
+                    Kind::Lack
                 } else {
                     Kind::Cell
                 };
@@ -333,7 +333,8 @@ fn run_slots(
                     let (node, asset, axis) = cell_of(&list, k);
                     let (t, e, enters) = cast::entry(o, &r, &node, asset[0]);
                     if enters && e == axis && best.is_none_or(|b| t < b.0) {
-                        let lacks = list[k + beam::SAMPLE_LACKS as usize] & beam::SAMPLE_LACK != 0;
+                        let lacks =
+                            list[k + beam::SAMPLE_LACK_WORD as usize] & beam::SAMPLE_LACK != 0;
                         best = Some((t, raster::id_of(idx, lacks)));
                     }
                 }
@@ -901,7 +902,7 @@ fn hand_light_marks_answer_as_the_rust() {
     let mut tally = Tally::default();
     let mut kind_cnt = KindCount::default();
     for c in &looks {
-        for by in [MarkSource::Walked, MarkSource::Voxels] {
+        for by in [MarkSource::Walked, MarkSource::Voxel] {
             run_marks(
                 &gpu,
                 &pipes,
@@ -931,7 +932,7 @@ fn hand_light_marks_answer_as_the_rust() {
 #[derive(Clone, Copy, PartialEq)]
 enum MarkSource {
     Walked,
-    Voxels,
+    Voxel,
 }
 
 fn run_marks(
@@ -1008,8 +1009,8 @@ fn run_marks(
     // The raster's draw arguments as the draw begins, room for the draws, and the node cache,
     // where every slot is free but those that hold the samples' nodes.
     let mut raster_args = vec![0u32; raster::ARGS_WORDS as usize];
-    raster_args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
-    let boxes = vec![0u32; record::EYE_DRAWS as usize];
+    raster_args[raster::ARGS_VERTEX_CNT as usize] = raster::VERTEX_CNT;
+    let boxes = vec![0u32; record::EYE_DRAW_CAP as usize];
     let mut rec = vec![0u32; node_cache::WORDS as usize];
     match by {
         MarkSource::Walked => {
@@ -1061,14 +1062,14 @@ fn run_marks(
                 beams[walked_at + w as usize] |= 1 << bit;
             }
         }
-        MarkSource::Voxels => {
+        MarkSource::Voxel => {
             // Each node a sample hit on becomes one held voxel of the record, as the samples
             // write it (sample_hit.wgsl). The draw writes each voxel in view as a box and stands
             // it.
             let mut slot = 0u32;
             let mut laid = BTreeSet::new();
-            for j in 0..grid.samples[1] {
-                for i in 0..grid.samples[0] {
+            for j in 0..grid.sample_lattice[1] {
+                for i in 0..grid.sample_lattice[0] {
                     let t = grid.sample([i, j]);
                     let dir = cast::through(forward, right, up, t[0], t[1]);
                     let r = Ray::new(dir, c.far);
@@ -1080,8 +1081,8 @@ fn run_marks(
                     // The face the sample's ray entered is set both as entered and as asked
                     // about by an eye's ray (`record::ASKED`).
                     let face = 1 << m.hit.axis;
-                    let kind = if m.end == End::Lacks {
-                        Kind::Lacks
+                    let kind = if m.end == End::Lack {
+                        Kind::Lack
                     } else {
                         Kind::Cell
                     };
@@ -1201,15 +1202,15 @@ fn run_marks(
             binds.push((3, wgpu::BindingResource::TextureView(&view)));
             binds.push((23, beams_buf.as_entire_binding()));
             let words = ray::walked_words([wd, ht]);
-            let per = ray::MISS_LANES * ray::MISS_ACROSS;
+            let per = ray::MISS_LANE_CNT * ray::MISS_ACROSS;
             (&pipes[0], [ray::MISS_ACROSS, words.div_ceil(per).max(1), 1])
         }
-        MarkSource::Voxels => {
+        MarkSource::Voxel => {
             binds.push((14, boxes_buf.as_entire_binding()));
             binds.push((16, raster_buf.as_entire_binding()));
             binds.push((9, rec_buf.as_entire_binding()));
-            let per = record::DRAW_LANES;
-            (&pipes[1], [node_cache::ENTRIES / per, 1, 1])
+            let per = record::DRAW_LANE_CNT;
+            (&pipes[1], [node_cache::ENTRY_CNT / per, 1, 1])
         }
     };
     gpu.dispatch(pipe, &binds, groups);
@@ -1368,7 +1369,7 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         COMPUTE_LIGHT_SLIDE,
     ]
     .map(|id| {
-        let (shader, entry) = compute(id);
+        let (shader, entry, _) = compute(id);
         let module = format!(
             "{}\nconst PROBE_LEAD: u32 = {LEAD}u;\n{PROBE}",
             gpu::source(src(shader), entry)

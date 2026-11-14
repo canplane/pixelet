@@ -66,12 +66,12 @@ fn cnt_one(i: u32) {
   }
 }
 
-@compute @workgroup_size(LANES)
+@compute @workgroup_size(LANE_CNT)
 fn decor_cnt_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocation_id) lane: vec3<u32>) {
   if (!holds_recs(group.x)) {
     return;
   }
-  for (var k = lane.x; k < RUNS; k += LANES) {
+  for (var k = lane.x; k < RUN_CNT; k += LANE_CNT) {
     let run = run_of(group.x, k);
     for (var n = 0u; n < run.y; n += 1u) {
       cnt_one(rec_at(run.x + n));

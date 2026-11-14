@@ -54,8 +54,8 @@ export interface Gauge {
   rec: {
     recording: boolean;
     elapsed_ms: f64;
-    tasks: u32;
-    frames: u32;
+    task_cnt: u32;
+    frame_cnt: u32;
     truncated: boolean;
   };
   frames: FrameSummary | null;
@@ -73,8 +73,8 @@ export async function perfGaugeRead(windowMs: f64): Promise<Gauge> {
     rec: {
       recording: s.recording_state.recording,
       elapsed_ms: s.recording_state.elapsed_ms,
-      tasks: s.recording_state.tasks,
-      frames: s.recording_state.frames,
+      task_cnt: s.recording_state.task_cnt,
+      frame_cnt: s.recording_state.frame_cnt,
       truncated: s.recording_state.truncated,
     },
     frames: s.frames,

@@ -23,7 +23,7 @@ struct TileList {
 @group(0) @binding(30) var<storage, read> changed_at: array<u32>;
 @group(0) @binding(31) var<uniform> tiles: TileGrid;
 
-@compute @workgroup_size(CAST_TILES_LANES, 1, 1)
+@compute @workgroup_size(CAST_TILES_LANE_CNT, 1, 1)
 fn cast_tiles_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let across = tiles.cnt.x;
   // The list holds a place for each tile.
@@ -35,6 +35,6 @@ fn cast_tiles_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (place >= cap) {
     return;
   }
-  atomicMax(&list.count, workgroups(place + 1u, cap, 1u));
+  atomicMax(&list.count, workgroup_cnt(place + 1u, cap, 1u));
   list.at[place] = ((id.x / across) << 16u) | (id.x % across);
 }

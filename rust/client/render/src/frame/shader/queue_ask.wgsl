@@ -2,7 +2,7 @@
 
 // Asks the world once for each node a run's walk was parked at (queue_walk.wgsl, `ask_once`).
 // A lane takes one listed node at a time. The lanes are a fixed dispatch (pxl-engine
-// `ray::QUEUE_GROUPS`) that takes the list in strides. What the pass keeps is in the node
+// `ray::QUEUE_GROUP_CNT`) that takes the list in strides. What the pass keeps is in the node
 // cache when the next walk goes on from the parked states, after this dispatch ends.
 
 /// The run's queue, bound from its head (pxl-engine `ray::QUEUE_WORDS`, `ray::queue_at`). Past
@@ -50,7 +50,7 @@ fn ask_once(parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32) {
 /// Asks once for each node that the first walk listed, or the `parked`.
 fn queue_ask(parked: bool, id: u32) {
   let n = in_cap(atomicLoad(&queue[select(QUEUE_ASKS, QUEUE_ASKS_PARKED, parked)]), QUEUE_RECS_CAP);
-  for (var k = id; k < n; k += QUEUE_GROUPS * QUEUE_LANES) {
+  for (var k = id; k < n; k += QUEUE_GROUP_CNT * QUEUE_LANE_CNT) {
     let at = queue_recs_at() + k * QUEUE_REC_WORDS;
     let c = vec3<i32>(
       i32(atomicLoad(&queue[at + 1u])),
@@ -62,14 +62,14 @@ fn queue_ask(parked: bool, id: u32) {
   }
 }
 
-@compute @workgroup_size(QUEUE_LANES)
+@compute @workgroup_size(QUEUE_LANE_CNT)
 fn queue_ask_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   queue_ask(false, id.x);
 }
 
 /// Asks for the second walk's nodes. It also sets the counter and the count of the last walk's
 /// rays, as that walk runs next and binds no queue (queue_last.wgsl).
-@compute @workgroup_size(QUEUE_LANES)
+@compute @workgroup_size(QUEUE_LANE_CNT)
 fn queue_ask_parked_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x == 0u) {
     atomicStore(&node_cache[LAST_NEXT], 0u);

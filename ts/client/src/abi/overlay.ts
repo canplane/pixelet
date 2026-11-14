@@ -2,22 +2,25 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import type { U32Array } from "@xpute/kit/abi/array.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import {
-  SequenceType,
-  type NodeCursor,
-  type PacketWriter,
-} from "@xpute/kit/wire/xtp/mod.ts";
+  type GroundStatus,
+  type Message,
+  type SensorStatus,
+  of_GroundStatus,
+  of_Message,
+  of_SensorStatus,
+} from "./overlay.enum.ts";
+import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
+import { MarshalError } from "@xpute/kit/status/error.ts";
+import { type Token, load_Token, store_Token } from "@xpute/link/abi/types.ts";
+import { Lift, type Lower } from "@xpute/link/cabi.ts";
 import {
+  type Handle,
   type Link,
   type LinkObject,
   type Method,
   refusal_of,
-  type Handle,
-  get_as,
 } from "@xpute/link/link.ts";
-import * as types from "@xpute/link/abi/types.ts";
 
 /** The interface's handle, named by `pxl:core/overlay` (frame.json `NAMED`). */
 export const HANDLE: Handle = 0x7b1393;
@@ -27,79 +30,22 @@ export const SHOW: Method = 0;
 /** `view` */
 export const VIEW: Method = 1;
 
-export const GroundStatus = {
-  Idle: 0,
-  Loading: 1,
-  Success: 2,
-} as const;
-export type GroundStatus = (typeof GroundStatus)[keyof typeof GroundStatus];
-
-/** The name of the `GroundStatus` member numbered `n`, or undefined for a number
- * no member has. */
-export function ground_status_name(
-  n: number,
-): keyof typeof GroundStatus | undefined {
-  for (const k in GroundStatus)
-    if (GroundStatus[k as keyof typeof GroundStatus] === n)
-      return k as keyof typeof GroundStatus;
-  return undefined;
+export function load_GroundStatus(r: Lift, at: number): GroundStatus {
+  const v = of_GroundStatus(r.case(at, 3));
+  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  return v;
 }
 
-/** The `GroundStatus` member `n` is, or null for a number no member has. */
-export function ground_status_of(n: number): GroundStatus | null {
-  return ground_status_name(n) === undefined ? null : (n as GroundStatus);
+export function load_SensorStatus(r: Lift, at: number): SensorStatus {
+  const v = of_SensorStatus(r.case(at, 5));
+  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  return v;
 }
 
-export const SensorStatus = {
-  Idle: 0,
-  Loading: 1,
-  Ready: 2,
-  Error: 3,
-  Unavailable: 4,
-} as const;
-export type SensorStatus = (typeof SensorStatus)[keyof typeof SensorStatus];
-
-/** The name of the `SensorStatus` member numbered `n`, or undefined for a number
- * no member has. */
-export function sensor_status_name(
-  n: number,
-): keyof typeof SensorStatus | undefined {
-  for (const k in SensorStatus)
-    if (SensorStatus[k as keyof typeof SensorStatus] === n)
-      return k as keyof typeof SensorStatus;
-  return undefined;
-}
-
-/** The `SensorStatus` member `n` is, or null for a number no member has. */
-export function sensor_status_of(n: number): SensorStatus | null {
-  return sensor_status_name(n) === undefined ? null : (n as SensorStatus);
-}
-
-export const Message = {
-  GeolocationUnsupported: 0,
-  GeolocationPermissionDenied: 1,
-  GeolocationPositionUnavailable: 2,
-  GeolocationTimeout: 3,
-  GeolocationGenericError: 4,
-  /** Reads reach the server and fail; they are tried again. */
-  WorldReadFailing: 5,
-  /** Reads failed past every retry; the world is not coming. */
-  WorldUnavailable: 6,
-} as const;
-export type Message = (typeof Message)[keyof typeof Message];
-
-/** The name of the `Message` member numbered `n`, or undefined for a number
- * no member has. */
-export function message_name(n: number): keyof typeof Message | undefined {
-  for (const k in Message)
-    if (Message[k as keyof typeof Message] === n)
-      return k as keyof typeof Message;
-  return undefined;
-}
-
-/** The `Message` member `n` is, or null for a number no member has. */
-export function message_of(n: number): Message | null {
-  return message_name(n) === undefined ? null : (n as Message);
+export function load_Message(r: Lift, at: number): Message {
+  const v = of_Message(r.case(at, 7));
+  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  return v;
 }
 
 export interface LonLat {
@@ -107,18 +53,18 @@ export interface LonLat {
   lat: number;
 }
 
-export function write_LonLat(w: PacketWriter, r: LonLat): void {
-  w.branch(2, (w) => {
-    w.f64(r.lon);
-    w.f64(r.lat);
-  });
+export const LON_LAT_SZ = 16;
+export const LON_LAT_ALIGN = 8;
+
+export function store_LonLat(w: Lower, at: number, v: LonLat): void {
+  w.f64(at + 0, v.lon);
+  w.f64(at + 8, v.lat);
 }
 
-export function read_LonLat(c: NodeCursor): LonLat {
-  const b = c.as_branch();
+export function load_LonLat(r: Lift, at: number): LonLat {
   return {
-    lon: b.at(0).get_number(),
-    lat: b.at(1).get_number(),
+    lon: r.f64(at + 0),
+    lat: r.f64(at + 8),
   };
 }
 
@@ -129,25 +75,25 @@ export interface PivotState {
   outside: boolean;
 }
 
-export function write_PivotState(w: PacketWriter, r: PivotState): void {
-  w.branch(4, (w) => {
-    w.u32(r.status);
-    w.bool(r.is_off_center);
-    if (r.lon_lat === null) w.nil();
-    else {
-      write_LonLat(w, r.lon_lat);
-    }
-    w.bool(r.outside);
-  });
+export const PIVOT_STATE_SZ = 40;
+export const PIVOT_STATE_ALIGN = 8;
+
+export function store_PivotState(w: Lower, at: number, v: PivotState): void {
+  w.u8(at + 0, v.status);
+  w.bool(at + 1, v.is_off_center);
+  if (v.lon_lat !== null) {
+    w.u8(at + 8, 1);
+    store_LonLat(w, at + 8 + 8, v.lon_lat);
+  }
+  w.bool(at + 32, v.outside);
 }
 
-export function read_PivotState(c: NodeCursor): PivotState {
-  const b = c.as_branch();
+export function load_PivotState(r: Lift, at: number): PivotState {
   return {
-    status: b.at(0).get_number() as GroundStatus,
-    is_off_center: b.at(1).get_bool(),
-    lon_lat: b.at(2).get_opt((c) => read_LonLat(c)),
-    outside: b.at(3).get_bool(),
+    status: load_GroundStatus(r, at + 0),
+    is_off_center: r.bool(at + 1),
+    lon_lat: r.case(at + 8, 2) === 0 ? null : load_LonLat(r, at + 8 + 8),
+    outside: r.bool(at + 32),
   };
 }
 
@@ -158,25 +104,29 @@ export interface LocationState {
   err: Message | null;
 }
 
-export function write_LocationState(w: PacketWriter, r: LocationState): void {
-  w.branch(4, (w) => {
-    w.u32(r.status);
-    w.bool(r.has_location);
-    w.bool(r.watching);
-    if (r.err === null) w.nil();
-    else {
-      w.u32(r.err);
-    }
-  });
+export const LOCATION_STATE_SZ = 5;
+export const LOCATION_STATE_ALIGN = 1;
+
+export function store_LocationState(
+  w: Lower,
+  at: number,
+  v: LocationState,
+): void {
+  w.u8(at + 0, v.status);
+  w.bool(at + 1, v.has_location);
+  w.bool(at + 2, v.watching);
+  if (v.err !== null) {
+    w.u8(at + 3, 1);
+    w.u8(at + 3 + 1, v.err);
+  }
 }
 
-export function read_LocationState(c: NodeCursor): LocationState {
-  const b = c.as_branch();
+export function load_LocationState(r: Lift, at: number): LocationState {
   return {
-    status: b.at(0).get_number() as SensorStatus,
-    has_location: b.at(1).get_bool(),
-    watching: b.at(2).get_bool(),
-    err: b.at(3).get_opt((c) => c.get_number() as Message),
+    status: load_SensorStatus(r, at + 0),
+    has_location: r.bool(at + 1),
+    watching: r.bool(at + 2),
+    err: r.case(at + 3, 2) === 0 ? null : load_Message(r, at + 3 + 1),
   };
 }
 
@@ -185,18 +135,22 @@ export interface CompanionState {
   pet_ready: boolean;
 }
 
-export function write_CompanionState(w: PacketWriter, r: CompanionState): void {
-  w.branch(2, (w) => {
-    w.bool(r.person_ready);
-    w.bool(r.pet_ready);
-  });
+export const COMPANION_STATE_SZ = 2;
+export const COMPANION_STATE_ALIGN = 1;
+
+export function store_CompanionState(
+  w: Lower,
+  at: number,
+  v: CompanionState,
+): void {
+  w.bool(at + 0, v.person_ready);
+  w.bool(at + 1, v.pet_ready);
 }
 
-export function read_CompanionState(c: NodeCursor): CompanionState {
-  const b = c.as_branch();
+export function load_CompanionState(r: Lift, at: number): CompanionState {
   return {
-    person_ready: b.at(0).get_bool(),
-    pet_ready: b.at(1).get_bool(),
+    person_ready: r.bool(at + 0),
+    pet_ready: r.bool(at + 1),
   };
 }
 
@@ -204,19 +158,20 @@ export interface OrientationState {
   status: SensorStatus;
 }
 
-export function write_OrientationState(
-  w: PacketWriter,
-  r: OrientationState,
+export const ORIENTATION_STATE_SZ = 1;
+export const ORIENTATION_STATE_ALIGN = 1;
+
+export function store_OrientationState(
+  w: Lower,
+  at: number,
+  v: OrientationState,
 ): void {
-  w.branch(1, (w) => {
-    w.u32(r.status);
-  });
+  w.u8(at + 0, v.status);
 }
 
-export function read_OrientationState(c: NodeCursor): OrientationState {
-  const b = c.as_branch();
+export function load_OrientationState(r: Lift, at: number): OrientationState {
   return {
-    status: b.at(0).get_number() as SensorStatus,
+    status: load_SensorStatus(r, at + 0),
   };
 }
 
@@ -227,47 +182,49 @@ export interface DivisionPart {
   area: boolean;
 }
 
-export function write_DivisionPart(w: PacketWriter, r: DivisionPart): void {
-  w.branch(4, (w) => {
-    w.u8(r.subtype);
-    w.str(r.name);
-    w.bool(r.shown);
-    w.bool(r.area);
-  });
+export const DIVISION_PART_SZ = 16;
+export const DIVISION_PART_ALIGN = 4;
+
+export function store_DivisionPart(
+  w: Lower,
+  at: number,
+  v: DivisionPart,
+): void {
+  w.u8(at + 0, v.subtype);
+  w.str(at + 4, v.name);
+  w.bool(at + 12, v.shown);
+  w.bool(at + 13, v.area);
 }
 
-export function read_DivisionPart(c: NodeCursor): DivisionPart {
-  const b = c.as_branch();
+export function load_DivisionPart(r: Lift, at: number): DivisionPart {
   return {
-    subtype: b.at(0).get_number(),
-    name: b.at(1).get_str(),
-    shown: b.at(2).get_bool(),
-    area: b.at(3).get_bool(),
+    subtype: r.u8(at + 0),
+    name: r.str(at + 4),
+    shown: r.bool(at + 12),
+    area: r.bool(at + 13),
   };
 }
 
 export interface RefusedFile {
-  path: types.Token[];
+  path: Token[];
 }
 
-export function write_RefusedFile(w: PacketWriter, r: RefusedFile): void {
-  w.branch(1, (w) => {
-    w.branch(r.path.length, (w) =>
-      r.path.forEach((x) => {
-        types.write_Token(w, x);
-      }),
-    );
-  });
+export const REFUSED_FILE_SZ = 8;
+export const REFUSED_FILE_ALIGN = 4;
+
+export function store_RefusedFile(w: Lower, at: number, v: RefusedFile): void {
+  {
+    const b0 = w.list(at + 0, v.path.length, 12, 4);
+    if (b0 !== null)
+      v.path.forEach((x0, i0) => {
+        store_Token(w, b0 + i0 * 12, x0);
+      });
+  }
 }
 
-export function read_RefusedFile(c: NodeCursor): RefusedFile {
-  const b = c.as_branch();
+export function load_RefusedFile(r: Lift, at: number): RefusedFile {
   return {
-    path: b
-      .at(0)
-      .as_branch()
-      .children()
-      .map((c) => types.read_Token(c)),
+    path: r.map(at + 0, 12, 4, (at) => load_Token(r, at)),
   };
 }
 
@@ -281,103 +238,101 @@ export interface Snapshot {
   camera_busy: boolean;
   zooming: boolean;
   over_marker: boolean;
-  settings: U32Array;
+  settings: Uint32Array<ArrayBuffer>;
   division: DivisionPart[];
-  character_surfaces: U32Array;
+  character_surfaces: Uint32Array<ArrayBuffer>;
   refused_files: RefusedFile[];
   stall: Message | null;
   renderer_progress: number;
   area_progress: number;
 }
 
-export function write_Snapshot(w: PacketWriter, r: Snapshot): void {
-  w.branch(16, (w) => {
-    write_PivotState(w, r.pivot);
-    write_LocationState(w, r.location);
-    write_CompanionState(w, r.companion);
-    if (r.draft === null) w.nil();
-    else {
-      w.str(r.draft);
-    }
-    write_OrientationState(w, r.orient);
-    w.bool(r.is_follow_mode);
-    w.bool(r.camera_busy);
-    w.bool(r.zooming);
-    w.bool(r.over_marker);
-    w.array(SequenceType.U32_ARRAY, r.settings);
-    w.branch(r.division.length, (w) =>
-      r.division.forEach((x) => {
-        write_DivisionPart(w, x);
-      }),
-    );
-    w.array(SequenceType.U32_ARRAY, r.character_surfaces);
-    w.branch(r.refused_files.length, (w) =>
-      r.refused_files.forEach((x) => {
-        write_RefusedFile(w, x);
-      }),
-    );
-    if (r.stall === null) w.nil();
-    else {
-      w.u32(r.stall);
-    }
-    w.f64(r.renderer_progress);
-    w.f64(r.area_progress);
-  });
+export const SNAPSHOT_SZ = 120;
+export const SNAPSHOT_ALIGN = 8;
+
+export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
+  store_PivotState(w, at + 0, v.pivot);
+  store_LocationState(w, at + 40, v.location);
+  store_CompanionState(w, at + 45, v.companion);
+  if (v.draft !== null) {
+    w.u8(at + 48, 1);
+    w.str(at + 48 + 4, v.draft);
+  }
+  store_OrientationState(w, at + 60, v.orient);
+  w.bool(at + 61, v.is_follow_mode);
+  w.bool(at + 62, v.camera_busy);
+  w.bool(at + 63, v.zooming);
+  w.bool(at + 64, v.over_marker);
+  w.arr(at + 68, v.settings);
+  {
+    const b0 = w.list(at + 76, v.division.length, 16, 4);
+    if (b0 !== null)
+      v.division.forEach((x0, i0) => {
+        store_DivisionPart(w, b0 + i0 * 16, x0);
+      });
+  }
+  w.arr(at + 84, v.character_surfaces);
+  {
+    const b0 = w.list(at + 92, v.refused_files.length, 8, 4);
+    if (b0 !== null)
+      v.refused_files.forEach((x0, i0) => {
+        store_RefusedFile(w, b0 + i0 * 8, x0);
+      });
+  }
+  if (v.stall !== null) {
+    w.u8(at + 100, 1);
+    w.u8(at + 100 + 1, v.stall);
+  }
+  w.f64(at + 104, v.renderer_progress);
+  w.f64(at + 112, v.area_progress);
 }
 
-export function read_Snapshot(c: NodeCursor): Snapshot {
-  const b = c.as_branch();
+export function load_Snapshot(r: Lift, at: number): Snapshot {
   return {
-    pivot: read_PivotState(b.at(0)),
-    location: read_LocationState(b.at(1)),
-    companion: read_CompanionState(b.at(2)),
-    draft: b.at(3).get_opt((c) => c.get_str()),
-    orient: read_OrientationState(b.at(4)),
-    is_follow_mode: b.at(5).get_bool(),
-    camera_busy: b.at(6).get_bool(),
-    zooming: b.at(7).get_bool(),
-    over_marker: b.at(8).get_bool(),
-    settings: get_as<U32Array>(b.at(9), SequenceType.U32_ARRAY),
-    division: b
-      .at(10)
-      .as_branch()
-      .children()
-      .map((c) => read_DivisionPart(c)),
-    character_surfaces: get_as<U32Array>(b.at(11), SequenceType.U32_ARRAY),
-    refused_files: b
-      .at(12)
-      .as_branch()
-      .children()
-      .map((c) => read_RefusedFile(c)),
-    stall: b.at(13).get_opt((c) => c.get_number() as Message),
-    renderer_progress: b.at(14).get_number(),
-    area_progress: b.at(15).get_number(),
+    pivot: load_PivotState(r, at + 0),
+    location: load_LocationState(r, at + 40),
+    companion: load_CompanionState(r, at + 45),
+    draft: r.case(at + 48, 2) === 0 ? null : r.str(at + 48 + 4),
+    orient: load_OrientationState(r, at + 60),
+    is_follow_mode: r.bool(at + 61),
+    camera_busy: r.bool(at + 62),
+    zooming: r.bool(at + 63),
+    over_marker: r.bool(at + 64),
+    settings: r.arr(at + 68, Uint32Array),
+    division: r.map(at + 76, 16, 4, (at) => load_DivisionPart(r, at)),
+    character_surfaces: r.arr(at + 84, Uint32Array),
+    refused_files: r.map(at + 92, 8, 4, (at) => load_RefusedFile(r, at)),
+    stall: r.case(at + 100, 2) === 0 ? null : load_Message(r, at + 100 + 1),
+    renderer_progress: r.f64(at + 104),
+    area_progress: r.f64(at + 112),
   };
 }
 
-export interface Overlay {
+export interface Host {
   show(snapshot: Snapshot): void;
   view(azimuth: number, m_per_px: number): void;
 }
 
 /** The object over `imp`. */
-function object(imp: Overlay): LinkObject {
+function object(imp: Host): LinkObject {
   return {
     call(m, tag, args) {
       try {
         switch (m) {
           case SHOW: {
-            if (args === null) return Errno.EBADMSG;
-            imp.show(read_Snapshot(args.at(0)));
+            if (args === null) return ERRNO_EBADMSG;
+            const r_ = new Lift(args);
+            imp.show(load_Snapshot(r_, 0));
             return 0;
           }
           case VIEW: {
-            if (args === null) return Errno.EBADMSG;
-            imp.view(args.at(0).get_number(), args.at(1).get_number());
+            if (args === null) return ERRNO_EBADMSG;
+            const r_ = new Lift(args);
+            imp.view(r_.f64(0), r_.f64(8));
             return 0;
           }
           default:
-            return Errno.ENOSYS;
+            return ERRNO_ENOSYS;
         }
       } catch (e) {
         return refusal_of(e);
@@ -387,6 +342,6 @@ function object(imp: Overlay): LinkObject {
 }
 
 /** Serves `imp` under the interface's handle. */
-export function mount(l: Pick<Link, "mount_named">, imp: Overlay): void {
+export function mount(l: Pick<Link, "mount_named">, imp: Host): void {
   l.mount_named(HANDLE, object(imp));
 }

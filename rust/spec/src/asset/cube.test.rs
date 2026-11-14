@@ -14,13 +14,35 @@ fn cube_round_trip() {
 #[test]
 fn non_cubes() {
     for val in [
-        Sentinel::void as u32,
-        Sentinel::unknown as u32,
-        Sentinel::air as u32,
+        Sentinel::Void as u32,
+        Sentinel::Unknown as u32,
+        Sentinel::Air as u32,
     ] {
         assert_eq!(cube_of(val), None, "{val}");
     }
     for d in DECORS.iter() {
         assert_eq!(cube_of(d.id), None, "{}", d.id);
+    }
+}
+
+/// A body is stopped by what is a cube, in the catalog or not, and by
+/// nothing else.
+#[test]
+fn what_blocks_a_body() {
+    for id in [
+        Sentinel::Void as u32,
+        Sentinel::Air as u32,
+        1 << IDX_BITS,
+        2 << IDX_BITS,
+    ] {
+        assert!(!solid(id), "{id}");
+    }
+    for id in [
+        1,
+        Sentinel::Unknown as u32,
+        Sentinel::Air as u32 + 1,
+        (1 << IDX_BITS) - 1,
+    ] {
+        assert!(solid(id), "{id}");
     }
 }

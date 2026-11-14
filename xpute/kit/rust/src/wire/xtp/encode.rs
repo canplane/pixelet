@@ -378,28 +378,6 @@ impl<'a> PacketWriter<'a> {
         }
     }
 
-    pub fn str_display(&mut self, v: impl core::fmt::Display) -> &mut Self {
-        struct Room<'b> {
-            buf: &'b mut [u8],
-            len: usize,
-        }
-        impl core::fmt::Write for Room<'_> {
-            fn write_str(&mut self, s: &str) -> core::fmt::Result {
-                let end = self.len + s.len();
-                let out = self.buf.get_mut(self.len..end).ok_or(core::fmt::Error)?;
-                out.copy_from_slice(s.as_bytes());
-                self.len = end;
-                Ok(())
-            }
-        }
-        self.str_with(|buf| {
-            let mut room = Room { buf, len: 0 };
-            core::fmt::Write::write_fmt(&mut room, format_args!("{v}"))
-                .ok()
-                .map(|()| room.len)
-        })
-    }
-
     /// Writes a STR whose bytes `write` puts into the room after the len slot.
     /// `write` returns how many bytes it wrote, or `None` when they did not
     /// fit, which spoils the packet.
@@ -445,58 +423,6 @@ impl<'a> PacketWriter<'a> {
 
     pub fn array<T: ArrayElem>(&mut self, a: Option<&[T]>) -> &mut Self {
         self.array_bytes(T::TYPE, a.map(bytes_of))
-    }
-
-    pub fn u8_array(&mut self, a: Option<&[u8]>) -> &mut Self {
-        self.array_bytes(SequenceType::U8_ARRAY, a)
-    }
-
-    fn array_with<const N: usize>(
-        &mut self,
-        type_: SequenceType,
-        len: u32,
-        mut val: impl FnMut(u32) -> [u8; N],
-    ) -> &mut Self {
-        self.seq(type_, len, u64::from(len) * N as u64, |out| {
-            for (i, o) in out.as_chunks_mut::<N>().0.iter_mut().enumerate() {
-                *o = val(i as u32);
-            }
-        })
-    }
-
-    pub fn u32_array(&mut self, a: Option<&[u32]>) -> &mut Self {
-        match a {
-            Some(a) => self.array_with(SequenceType::U32_ARRAY, a.len() as u32, |i| {
-                a[i as usize].to_le_bytes()
-            }),
-            None => self.entry(None, SequenceType::U32_ARRAY as u8),
-        }
-    }
-
-    pub fn u64_array(&mut self, a: Option<&[u64]>) -> &mut Self {
-        match a {
-            Some(a) => self.array_with(SequenceType::U64_ARRAY, a.len() as u32, |i| {
-                a[i as usize].to_le_bytes()
-            }),
-            None => self.entry(None, SequenceType::U64_ARRAY as u8),
-        }
-    }
-
-    pub fn f64_array(&mut self, a: Option<&[f64]>) -> &mut Self {
-        match a {
-            Some(a) => self.array_with(SequenceType::F64_ARRAY, a.len() as u32, |i| {
-                a[i as usize].to_le_bytes()
-            }),
-            None => self.entry(None, SequenceType::F64_ARRAY as u8),
-        }
-    }
-
-    pub fn u32_array_with(&mut self, len: u32, mut val: impl FnMut(u32) -> u32) -> &mut Self {
-        self.array_with(SequenceType::U32_ARRAY, len, |i| val(i).to_le_bytes())
-    }
-
-    pub fn u64_array_with(&mut self, len: u32, mut val: impl FnMut(u32) -> u64) -> &mut Self {
-        self.array_with(SequenceType::U64_ARRAY, len, |i| val(i).to_le_bytes())
     }
 
     /// `bits` holds one byte for each bit, nonzero for set. They are packed

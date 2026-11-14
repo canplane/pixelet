@@ -10,58 +10,56 @@
     reason = "generated from WIT"
 )]
 
-use std::rc::Rc;
-use xpute_guest::link;
-use xpute_guest::wait;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
 /// The interface's handle, named by `pxl:core/source` (frame.json `NAMED`).
-pub const HANDLE: Handle = 0x6a88bf;
+pub const HANDLE: _rt::Handle = 0x6a88bf;
 
 /// `declare`
-pub const DECLARE: Method = 0;
+pub const DECLARE: _rt::Method = 0;
 
-pub trait Source {
-    fn declare(&self, min_zoom: u32, format: Vec<u32>, shard: Vec<String>) -> Result<(), Errno>;
+pub trait Guest {
+    fn declare(
+        &self,
+        min_zoom: u32,
+        format: Vec<u32>,
+        shard: Vec<String>,
+    ) -> Result<(), _rt::Errno>;
 }
 
-struct SourceObject(Rc<dyn Source>);
+struct _Object(_rt::Rc<dyn Guest>);
 
-impl Object for SourceObject {
-    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
-        let run = || -> Result<Reply, MarshalError> {
+impl _rt::Object for _Object {
+    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+        let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 DECLARE => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let min_zoom = b_.at(0).and_then(|c| c.get_number().map(|v| v as u32))?;
-                    let format = b_
-                        .at(1)
-                        .and_then(|c| c.get_array::<u32>().map(<[u32]>::to_vec))?;
-                    let shard = b_.at(2).and_then(|c| {
-                        c.as_branch().and_then(|b| {
-                            (0..b.len)
-                                .map(|i| b.at(i).and_then(|c| c.get_str_ref().map(str::to_owned)))
-                                .collect::<Result<Vec<_>, MarshalError>>()
-                        })
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let min_zoom = r_.u32(0)?;
+                    let format = r_.arr::<u32>(4)?;
+                    let shard = r_.list(12, 8, 4).and_then(|(b, n)| {
+                        (0..n)
+                            .map(|i| r_.str(b + i * 8).map(str::to_owned))
+                            .collect::<Result<Vec<_>, _rt::Errno>>()
                     })?;
                     match self.0.declare(min_zoom, format, shard) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                        Ok(v) => _rt::Reply::from(0),
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
-                _ => Reply::from(Errno::ENOSYS as i32),
+                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
             })
         };
-        run().unwrap_or_else(|e| Reply::from(e.errnum as i32))
+        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
     }
 }
 
 /// Serves `imp` under the interface's handle.
-pub fn mount(imp: Rc<dyn Source>) {
-    link::mount_named(HANDLE, Rc::new(SourceObject(imp)));
+pub fn mount(imp: _rt::Rc<dyn Guest>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+}
+
+mod _rt {
+    pub use std::rc::Rc;
+    pub use xpute_guest::link;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::{Handle, Lift, Method, Object, Reply, Tag};
 }

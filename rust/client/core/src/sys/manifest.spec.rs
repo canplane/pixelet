@@ -5,14 +5,8 @@
 // The core's manifest (xpute link/spec/manifest.schema.json): its memory, its fixed ranges and
 // the heap it counts on, and its stacks.
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 /// `bytes`: the core's memory, 512 MiB on every platform, the limit chosen for it. The
 /// page's worker grows the module's memory to it before the core's first entry, and the
@@ -27,9 +21,9 @@
 /// and the caps of the heap's bounded flows, added up in the buddy's blocks, are held under
 /// it at compile time (link/layout.rs `HEAP_FLOWS_BYTES`).
 pub mod mem {
-    pub const bytes: u32 = 536870912;
-    pub const fixed_bytes: u32 = 154800128;
-    pub const min_heap_bytes: u32 = 268435456;
+    pub const BYTES: u32 = 536870912;
+    pub const FIXED_BYTES: u32 = 154800128;
+    pub const MIN_HEAP_BYTES: u32 = 268435456;
 }
 
 /// `module_bytes`: the stack, at the bottom of the memory, first so that an overflow
@@ -42,6 +36,6 @@ pub mod mem {
 /// on a thread of its own: a main thread's 8 MiB, since React Native's JavaScript thread
 /// has 1 MiB and wgpu's depth has no bound to state.
 pub mod stack {
-    pub const module_bytes: u32 = 1048576;
-    pub const thread_bytes: u32 = 8388608;
+    pub const MODULE_BYTES: u32 = 1048576;
+    pub const THREAD_BYTES: u32 = 8388608;
 }

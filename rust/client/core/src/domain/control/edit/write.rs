@@ -12,7 +12,7 @@ use crate::domain::preview::{Draft, RenderEdit};
 use crate::sys::sched::invalidate;
 use pxl_engine::answer::{self, PLACED_ASSET};
 use pxl_global::Global;
-use pxl_spec::asset::id::solid;
+use pxl_spec::asset::cube::solid;
 use pxl_spec::asset::marker::{MARKER, MARKER_TEXT_CHARS};
 use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::q3::{self, Q3};
@@ -27,18 +27,18 @@ use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::repository;
 use crate::domain::layer::object::store::Write;
 use crate::domain::query::World;
+use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::asset::decor::Decor;
 use pxl_spec::space::hierarchy::morton;
 use pxl_spec::space::layer::octant::Octant;
-use pxl_spec::value::{AIR, VOID};
 
-/// Whether AIR is written at `at`: the ground was carved there, or
+/// Whether air is written at `at`: the ground was carved there, or
 /// something placed there was taken back.
 fn is_carved(world: &World, at: &Q3) -> bool {
-    world.asset_of(at).val() == Some(PLACED_ASSET | AIR)
+    world.asset_of(at).val() == Some(PLACED_ASSET | Sentinel::Air as u32)
 }
 
-/// A write of VOID collapses its path in the octree, so a redundant record
+/// A write of void collapses its path in the octree, so a redundant record
 /// never stays in a save.
 fn write_object_val(at: Octant, val: u32) {
     submit(Write::at(at, val));
@@ -56,7 +56,7 @@ fn submit(write: Write) {
 }
 
 /// Whether placing `cube` over a whole cell only undoes a carve. That holds
-/// when the cell holds an AIR leaf and the ground there without the leaf is
+/// when the cell holds an air leaf and the ground there without the leaf is
 /// that cube, the stratum's cube at that depth.
 fn place_val_is_redundant(world: World, at: &Q3, zoom: Zoom, cube: AssetId) -> bool {
     if zoom > GROUND.leaf_cell_zoom() || !is_carved(&world, at) {
@@ -92,10 +92,10 @@ impl Asset {
     }
 }
 
-/// Placing a cube that only undoes a carve writes VOID, as `remove` does.
+/// Placing a cube that only undoes a carve writes void, as `remove` does.
 fn place_cube(at: &Q3, zoom: Zoom, cube: AssetId) {
     let val = if place_val_is_redundant(World::now(), at, zoom, cube) {
-        VOID
+        Sentinel::Void as u32
     } else {
         cube
     };
@@ -103,11 +103,11 @@ fn place_cube(at: &Q3, zoom: Zoom, cube: AssetId) {
 }
 
 /// Where an erase emptied a cell of the decor the scatter stands there,
-/// placing that decor back writes VOID, so the scattered instance returns as
+/// placing that decor back writes void, so the scattered instance returns as
 /// it was.
 fn place_decor(at: &Q3, zoom: Zoom, id: AssetId) {
     let val = if restores_scattered(at, id).is_some() {
-        VOID
+        Sentinel::Void as u32
     } else {
         id
     };
@@ -202,26 +202,26 @@ pub fn commit_draft() {
     }
 }
 
-/// Writes an AIR leaf, which means "nothing here, on purpose". It hides what
+/// Writes an air leaf, which means "nothing here, on purpose". It hides what
 /// the base holds there, which has no leaf of its own to delete.
 pub fn place_air(at: Octant) {
-    write_object_val(at, AIR);
+    write_object_val(at, Sentinel::Air as u32);
 }
 
-/// What erasing the entry at `at` writes: VOID where the base holds nothing
-/// there that blocks a body, and AIR where it would fill the cell, which
+/// What erasing the entry at `at` writes: void where the base holds nothing
+/// there that blocks a body, and air where it would fill the cell, which
 /// would hide a decor the ground grows there. Only the resident finest leaf
 /// can tell, as in `place_val_is_redundant`; where no such leaf is resident,
-/// the cube is emptied with AIR.
+/// the cube is emptied with air.
 fn erase_val(at: Octant) -> u32 {
     match World::base().asset_of(&middle(at)).exact() {
-        Some(v) if !solid(answer::val(v)) => VOID,
-        _ => AIR,
+        Some(v) if !solid(answer::val(v)) => Sentinel::Void as u32,
+        _ => Sentinel::Air as u32,
     }
 }
 
 /// Erases what is placed at `at` and leaves the cell empty. Where the ground
-/// would fill the cell once the asset is gone, AIR is written, so an asset
+/// would fill the cell once the asset is gone, air is written, so an asset
 /// taken out of a hole leaves the hole. A generated decor that shared the
 /// asset's box comes back, because its erase is undone too.
 pub fn remove(at: Octant) {
@@ -238,7 +238,10 @@ pub fn remove(at: Octant) {
         ext: None,
     });
     for c in erased {
-        write_object_val(Octant::new(GROUND.leaf_cell_zoom(), c), VOID);
+        write_object_val(
+            Octant::new(GROUND.leaf_cell_zoom(), c),
+            Sentinel::Void as u32,
+        );
     }
 }
 

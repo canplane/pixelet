@@ -2,15 +2,23 @@
 //
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { type ErrorCode, of_ErrorCode } from "./gpu.enum.ts";
 import {
+  ERRNO_EBADMSG,
+  ERRNO_EINPROGRESS,
+  ERRNO_ENOSYS,
+} from "@xpute/kit/status/errno.spec.ts";
+import { MarshalError } from "@xpute/kit/status/error.ts";
+import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
+import { Lift } from "@xpute/link/cabi.ts";
+import {
+  ComponentError,
+  type Handle,
   type Link,
   type LinkObject,
   type Method,
   refusal_of,
-  type Handle,
 } from "@xpute/link/link.ts";
-import * as types from "@xpute/link/abi/types.ts";
 
 /** The interface's handle, named by `xpute:gpu/gpu` (frame.json `NAMED`). */
 export const HANDLE: Handle = 0x79d455;
@@ -24,31 +32,38 @@ export const DEVICE_READY: Method = 1;
 /** `[method]device.settled` */
 export const DEVICE_SETTLED: Method = 2;
 
-export interface Gpu {
-  run(records: types.Lent, signal_: AbortSignal): Promise<void>;
+export function load_ErrorCode(r: Lift, at: number): ErrorCode {
+  const v = of_ErrorCode(r.case(at, 1));
+  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  return v;
+}
+
+export interface Host {
+  run(records: Lent, signal_: AbortSignal): Promise<void>;
 }
 
 /** The object over `imp`. */
 function object(
   l: Pick<Link, "task_return" | "on_cancel">,
-  imp: Gpu,
+  imp: Host,
 ): LinkObject {
   return {
     call(m, tag, args) {
       try {
         switch (m) {
           case RUN: {
-            if (args === null) return Errno.EBADMSG;
+            if (args === null) return ERRNO_EBADMSG;
+            const r_ = new Lift(args);
             const stop = new AbortController();
-            imp.run(types.read_Lent(args.at(0)), stop.signal).then(
-              () => l.task_return(tag, 0),
+            imp.run(load_Lent(r_, 0), stop.signal).then(
+              () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());
-            return Errno.EINPROGRESS;
+            return ERRNO_EINPROGRESS;
           }
           default:
-            return Errno.ENOSYS;
+            return ERRNO_ENOSYS;
         }
       } catch (e) {
         return refusal_of(e);
@@ -60,56 +75,85 @@ function object(
 /** Serves `imp` under the interface's handle. */
 export function mount(
   l: Pick<Link, "mount_named" | "task_return" | "on_cancel">,
-  imp: Gpu,
+  imp: Host,
 ): void {
   l.mount_named(HANDLE, object(l, imp));
 }
 
-export interface Device {
-  lost(block: types.Lent, signal_: AbortSignal): Promise<void>;
-  ready(signal_: AbortSignal): Promise<number>;
+export interface HostDevice {
+  lost(block: Lent, signal_: AbortSignal): Promise<void>;
+  ready(signal_: AbortSignal): Promise<void>;
   settled(signal_: AbortSignal): Promise<void>;
 }
 
 /** The object over `imp`. */
 export function device(
   l: Pick<Link, "task_return" | "on_cancel">,
-  imp: Device,
+  imp: HostDevice,
 ): LinkObject {
   return {
     call(m, tag, args) {
       try {
         switch (m) {
           case DEVICE_LOST: {
-            if (args === null) return Errno.EBADMSG;
+            if (args === null) return ERRNO_EBADMSG;
+            const r_ = new Lift(args);
             const stop = new AbortController();
-            imp.lost(types.read_Lent(args.at(0)), stop.signal).then(
-              () => l.task_return(tag, 0),
+            imp.lost(load_Lent(r_, 0), stop.signal).then(
+              () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());
-            return Errno.EINPROGRESS;
+            return ERRNO_EINPROGRESS;
           }
           case DEVICE_READY: {
             const stop = new AbortController();
             imp.ready(stop.signal).then(
-              (v) => l.task_return(tag, v),
-              (e: unknown) => l.task_return(tag, refusal_of(e)),
+              () => {
+                const v = { tag: "ok" } as
+                  { tag: "ok" } | { tag: "err"; val: ErrorCode };
+                l.task_return(tag, 0, [
+                  2,
+                  (w) => {
+                    if (v.tag === "ok") {
+                    } else {
+                      w.u8(0, 1);
+                      w.u8(0 + 1, v.val);
+                    }
+                  },
+                ]);
+              },
+              (e: unknown) => {
+                if (!(e instanceof ComponentError))
+                  return l.task_return(tag, refusal_of(e));
+                const v = { tag: "err", val: e.payload as ErrorCode } as
+                  { tag: "ok" } | { tag: "err"; val: ErrorCode };
+                l.task_return(tag, 0, [
+                  2,
+                  (w) => {
+                    if (v.tag === "ok") {
+                    } else {
+                      w.u8(0, 1);
+                      w.u8(0 + 1, v.val);
+                    }
+                  },
+                ]);
+              },
             );
             l.on_cancel(tag, () => stop.abort());
-            return Errno.EINPROGRESS;
+            return ERRNO_EINPROGRESS;
           }
           case DEVICE_SETTLED: {
             const stop = new AbortController();
             imp.settled(stop.signal).then(
-              () => l.task_return(tag, 0),
+              () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());
-            return Errno.EINPROGRESS;
+            return ERRNO_EINPROGRESS;
           }
           default:
-            return Errno.ENOSYS;
+            return ERRNO_ENOSYS;
         }
       } catch (e) {
         return refusal_of(e);

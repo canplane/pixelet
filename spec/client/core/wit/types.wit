@@ -3,4 +3,22 @@ package pxl:core@0.1.0;
 // The types more than one interface takes.
 interface types {
   enum sensor { geolocation, orientation }
+
+  // Why the core refused what it was asked, as WASI's interfaces answer an
+  // error-code. A caller's bug is refused instead, EINVAL in the answer's
+  // status.
+  enum error-code {
+    // The settings are not read yet, and a change would be overwritten.
+    not-loaded,
+    // No surface is open there.
+    not-open,
+    // The surface draws something else.
+    busy,
+    // The text is longer than a marker holds.
+    too-long,
+    // The profiler's setting is off.
+    not-permitted,
+    // The profiler's window could not be had.
+    insufficient-memory,
+  }
 }

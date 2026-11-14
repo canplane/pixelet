@@ -18,11 +18,11 @@
         "label": "Decor",
         "description": "Shows the trees, cars and other decor placed on the terrain. Objects you placed are not affected."
       },
-      "clouds": {
+      "cloud": {
         "label": "Clouds",
         "description": "Shows the puffy clouds in the sky and the thin cloud layers above them. They fade out as the camera climbs high."
       },
-      "textures": {
+      "texture": {
         "label": "Textures",
         "description": "Textures cube faces instead of a flat color."
       },
@@ -72,7 +72,7 @@
           "description": "Adds soft shading to decor, characters and wider gaps on top of the corners for greater depth. This is the most demanding option because it processes the entire screen."
         }
       },
-      "shadows": {
+      "shadow": {
         "label": "Shadows",
         "description": "The sun casts shadows from the terrain, objects and characters onto the ground."
       },
@@ -100,7 +100,7 @@
         "label": "Camera gizmo",
         "description": "Overlays the grid the screen is cut into for drawing and colors cubes by how large they appear on screen against a grid cell. The legend shown with it explains the colors."
       },
-      "ray_steps": {
+      "ray_step": {
         "label": "Ray steps",
         "description": "Colors each point on screen by how much work it took to draw. Points that borrowed a nearby result show what finding that result took. The legend shown with it explains the colors."
       }

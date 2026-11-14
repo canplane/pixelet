@@ -7,9 +7,9 @@
 //! group count, then each group's instance count, then each group's columns,
 //! then the index list.
 
-use pxl_content::generation::drawing::COLUMNS;
+use pxl_content::generation::drawing::COLUMN_CNT;
 
-/// Where one group's columns lie in a buffer: `drawing::COLUMNS` f32 columns
+/// Where one group's columns lie in a buffer: `drawing::COLUMN_CNT` f32 columns
 /// (x, y, z, spin, scale), then one flag byte an instance, padded to a whole
 /// word.
 #[derive(Clone, Copy)]
@@ -19,8 +19,8 @@ pub struct GroupRange {
 }
 
 impl GroupRange {
-    pub const fn words(cnt: usize) -> usize {
-        COLUMNS as usize * cnt + cnt.div_ceil(4)
+    pub const fn word_cnt(cnt: usize) -> usize {
+        COLUMN_CNT as usize * cnt + cnt.div_ceil(4)
     }
 
     /// The word of instance `i` in `column`, where column 0 is x, 1 y, 2 z,
@@ -30,7 +30,7 @@ impl GroupRange {
     }
 
     pub const fn flags(self) -> usize {
-        self.first + COLUMNS as usize * self.cnt
+        self.first + COLUMN_CNT as usize * self.cnt
     }
 }
 
@@ -45,7 +45,7 @@ pub fn groups(words: &[u32]) -> impl Iterator<Item = (u32, u32)> + '_ {
         .iter()
         .map(move |&n| {
             let (first, n) = (at, n as usize);
-            at += GroupRange::words(n);
+            at += GroupRange::word_cnt(n);
             (first as u32, n as u32)
         })
 }

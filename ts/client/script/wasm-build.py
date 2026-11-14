@@ -3,8 +3,12 @@
 # where the page fetches it as /core.wasm
 # (ts/client/src/service/platform/core.ts).
 #
-#   ./script/wasm-build.py [--published]
+#   ./script/wasm-build.py [--published | --check]
+#
+# `--check` builds the published module beside cargo's build of it, where the
+# dev server does not read it, and puts nothing in public/.
 
+import json
 import os
 import shutil
 import subprocess
@@ -13,40 +17,35 @@ import tempfile
 from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent
-
-
-def repo_of(start):
-    """The repository that holds `start`: the nearest directory up that holds
-    the TypeScript workspace's manifest, ts/pnpm-workspace.yaml. pxl-tool finds
-    the repository the same way, by its own manifest. This works in a tree
-    copied without .git."""
-    for d in [start, *start.parents]:
-        if (d / "ts" / "pnpm-workspace.yaml").is_file():
-            return d
-    sys.exit(f"no repository over {start}")
-
-
-REPO = repo_of(APP)
-RUST = REPO / "rust"
+# The guest, as the device's build reads it too (core-build.py): its cargo
+# workspace, its crate, and cargo's arguments for a debug and a release build.
+GUEST = json.loads((APP / "package.json").read_text()).get("xpute", {}).get("guest") or sys.exit(f"[wasm-build] {APP}/package.json names no xpute.guest")
+RUST = (APP / GUEST["workspace"]).resolve()
+PACKAGE = GUEST["package"]
 NUMBER_PATHS = APP / "script/number-paths.py"
+STRINGS = APP / "script/strings.py"
 TARGET = "wasm32-unknown-unknown"
 # Cargo's own rule for its target directory: CARGO_TARGET_DIR, or else the
 # workspace's target/.
 TARGET_DIR = Path(os.environ["CARGO_TARGET_DIR"]) if os.environ.get("CARGO_TARGET_DIR") else RUST / "target"
-OUT = APP / "public/core.wasm"
-# The source path that each number in a published module's panics stands for.
-# The deploy keeps this file, and it is never bundled.
-PATHS = APP / "core.paths.json"
 
-# `pnpm build:web` asks for the published module: no dev features, and
+# `pnpm build:web` asks for the published module: a release build, with
 # numbered panic paths.
-PUBLISHED = "--published" in sys.argv[1:]
+CHECK = "--check" in sys.argv[1:]
+PUBLISHED = CHECK or "--published" in sys.argv[1:]
 # The published module is built with the release profile, and the dev
 # server's with the watch profile, which a change rebuilds only in part
 # (rust/Cargo.toml). Each profile builds into its own directory, so building
 # one never starts the other over.
 PROFILE = "release" if PUBLISHED else "watch"
-BUILT = TARGET_DIR / TARGET / PROFILE / "pxl_core.wasm"
+EXTRA = GUEST.get("args", {}).get("release" if PUBLISHED else "debug", [])
+BUILT = TARGET_DIR / TARGET / PROFILE / (PACKAGE.replace("-", "_") + ".wasm")
+OUT = BUILT.with_name("core.wasm") if CHECK else APP / "public/core.wasm"
+# The source path that each number in a published module's panics stands for.
+# The deploy keeps this file, and it is never bundled.
+PATHS = BUILT.with_name("core.paths.json") if CHECK else APP / "core.paths.json"
+# What finishes and checks a published module.
+SCRIPTS = [Path(__file__).resolve(), NUMBER_PATHS, STRINGS]
 
 # The strips run here rather than in Cargo, so that the target features are
 # still declared while wasm-opt runs.
@@ -77,10 +76,9 @@ class Failed(Exception):
 
 def remapped():
     """Panic locations survive `strip` and carry the home directory, so the
-    prefixes are remapped. The repo goes first since it lies under home."""
-    prefixes = [p for p in (str(REPO), os.environ.get("HOME")) if p]
-    flags = [f"--remap-path-prefix={p}=" for p in prefixes]
-    return " ".join(f for f in [os.environ.get("RUSTFLAGS"), *flags] if f)
+    prefixes are remapped (number-paths.py `prefixes`)."""
+    flags = subprocess.run([sys.executable, str(NUMBER_PATHS), "--remaps", str(RUST)], check=True, stdout=subprocess.PIPE, text=True).stdout.strip()
+    return " ".join(f for f in [os.environ.get("RUSTFLAGS"), flags] if f)
 
 
 def optimized(src, out):
@@ -109,6 +107,14 @@ def number_paths(module, table):
     return int(proc.stdout)
 
 
+def strings(module):
+    """The step that refuses a string of our sources the published module may
+    not hold."""
+    proc = subprocess.run([sys.executable, str(STRINGS), str(module), str(BUILT), TARGET, str(RUST)])
+    if proc.returncode != 0:
+        raise Failed(proc.returncode)
+
+
 def mtime(path):
     return path.stat().st_mtime_ns if path.is_file() else None
 
@@ -119,7 +125,7 @@ def main():
         status = subprocess.run(
             # The core declares several crate types. This asks cargo for the
             # module's alone, by name.
-            ["cargo", "rustc", "--crate-type", "cdylib", "--profile", PROFILE, "--package", "pxl-core", "--target", TARGET, *(["--no-default-features"] if PUBLISHED else [])],
+            ["cargo", "rustc", "--crate-type", "cdylib", "--profile", PROFILE, "--package", PACKAGE, "--target", TARGET, *EXTRA],
             cwd=RUST,
             env={**os.environ, "RUSTFLAGS": remapped()},
         )
@@ -134,8 +140,12 @@ def main():
     # build it was finished from, so it is this build's only when the two times
     # are equal. The dev server's build and the published one are separate
     # files, and either may have been finished last.
-    if before is not None and mtime(BUILT) == before and mtime(OUT) == before:
-        print("[wasm-build] up to date -> public/core.wasm")
+    # A published module is also finished again where a script that finishes
+    # or checks it changed after it was last finished, when its paths' table
+    # was written.
+    checked = not PUBLISHED or max(map(mtime, SCRIPTS)) < (mtime(PATHS) or 0)
+    if before is not None and mtime(BUILT) == before and mtime(OUT) == before and checked:
+        print(f"[wasm-build] up to date -> {OUT}")
         return 0
 
     # Each run works in its own directory under cargo's target, removed whole
@@ -154,12 +164,13 @@ def main():
         paths = number_paths(opt_file, numbered) if PUBLISHED else 0
         # The module is moved into place last, because a reader keys on it.
         if PUBLISHED:
+            strings(opt_file)
             os.replace(numbered, PATHS)
         built = mtime(BUILT)
         os.utime(opt_file, ns=(built, built))
         os.replace(opt_file, OUT)
-        note = (", without the dev-only settings" if PUBLISHED else "") + (f", and {paths} source paths numbered" if paths > 0 else "")
-        print(f"[wasm-build] {linked} -> {OUT.stat().st_size} bytes, stripped{note} -> public/core.wasm")
+        note = "".join(f", {a}" for a in EXTRA) + (f", and {paths} source paths numbered" if paths > 0 else "")
+        print(f"[wasm-build] {linked} -> {OUT.stat().st_size} bytes, stripped{note} -> {OUT}")
         return 0
     except Failed as err:
         if str(err):

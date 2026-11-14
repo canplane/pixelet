@@ -15,9 +15,9 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
     word_bytes, Entry, Format, Gpu, Load, TrackedRenderPass,
 };
-use crate::gpu::mip::{mip_levels, MipPass};
+use crate::gpu::mip::{mip_cnt, MipPass};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::pass::atmosphere::AIR_ENTRIES;
+use crate::pass::atmosphere::AIR_ENTRY_CNT;
 use pxl_content::cloud::LATTICE_CNT;
 use pxl_content::param::cloud::LATTICE_SHAMT;
 use pxl_spec::space::coord::zoom::{EXTENT, UNIT_ZOOM};
@@ -47,31 +47,31 @@ impl CloudPass {
         g: &Gpu,
         pipelines: &mut PipelineCache,
         frame_buf: u32,
-        air: [Entry; AIR_ENTRIES],
+        air: [Entry; AIR_ENTRY_CNT],
     ) -> CloudPass {
         let pipeline = pipelines.build_world(g, PIPELINE_CLOUD);
         let tile = g.texture(
             CLOUD_TILE_TEXELS,
             CLOUD_TILE_TEXELS,
             1,
-            Format::r8unorm,
-            mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
+            Format::R8unorm,
+            mip_cnt(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
             texture_usage::TEXTURE_BINDING | texture_usage::RENDER_ATTACHMENT,
         );
         let tile_view = g.view(
             tile,
             false,
             0,
-            mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
+            mip_cnt(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
             0,
             1,
         );
         // The sampler repeats, as the tile is seamless: each edge meets the opposite one.
         let tile_sampler = g.sampler(
-            FilterMode::linear,
-            FilterMode::linear,
-            MipmapFilterMode::linear,
-            AddressMode::repeat,
+            FilterMode::Linear,
+            FilterMode::Linear,
+            MipmapFilterMode::Linear,
+            AddressMode::Repeat,
             None,
             1,
         );
@@ -87,8 +87,8 @@ impl CloudPass {
         ];
         e.extend(air);
         let group = g.bind_group(pipeline.layouts[0], &e);
-        let field = pipelines.build(g, PIPELINE_CLOUD_FIELD, Format::r8unorm);
-        let mips = MipPass::new(g, pipelines, Format::r8unorm);
+        let field = pipelines.build(g, PIPELINE_CLOUD_FIELD, Format::R8unorm);
+        let mips = MipPass::new(g, pipelines, Format::R8unorm);
         CloudPass {
             pipeline,
             uniform,
@@ -116,13 +116,7 @@ impl CloudPass {
         pass.end();
         release(level);
         g.submit(encoder);
-        mips.build(
-            g,
-            tile,
-            mip_levels(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS),
-            0,
-            1,
-        );
+        mips.build(g, tile, mip_cnt(CLOUD_TILE_TEXELS, CLOUD_TILE_TEXELS), 0, 1);
         mips.release();
     }
 

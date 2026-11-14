@@ -17,7 +17,7 @@ const PANEL = {
   perf: PerfPanel,
   world_gizmo: WorldGizmoLegend,
   camera_gizmo: CameraGizmoLegend,
-  ray_steps: RayStepsLegend,
+  ray_step: RayStepsLegend,
 } satisfies Partial<Record<SettingName, ComponentType>>;
 
 export type PanelName = keyof typeof PANEL;

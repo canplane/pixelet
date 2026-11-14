@@ -30,7 +30,7 @@ pub struct UploadTable {
     idx_cnt: &'static mut [u32],
     buf: &'static mut [u32],
     group: &'static mut [u32],
-    /// The most the owners can hold live (pxl-core link/layout.rs `MAX_LIVE_UPLOADS`).
+    /// The most the owners can hold live (pxl-core link/layout.rs `LIVE_UPLOAD_CAP`).
     live: u32,
     pub(crate) cnt: u32,
     pub(crate) bytes: u64,
@@ -50,11 +50,11 @@ fn mem(at: u32, n: u32) -> &'static [u8] {
 }
 
 /// The table's columns: handle, address, length, the vertex and index counts, buffer and group.
-const UPLOAD_COLUMNS: usize = 7;
+const UPLOAD_COLUMN_CNT: usize = 7;
 
 /// The table's columns for `live` uploads, then the draw list's (gpu/draw.rs `lists_bytes`).
 pub const fn uploads_bytes(live: usize) -> u32 {
-    (UPLOAD_COLUMNS * slots_of(live) * 4) as u32 + draw::lists_bytes(live)
+    (UPLOAD_COLUMN_CNT * slots_of(live) * 4) as u32 + draw::lists_bytes(live)
 }
 
 /// Lays the table for `live` uploads, then the draw list's, in `room`, `uploads_bytes(live)`

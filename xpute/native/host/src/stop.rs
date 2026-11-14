@@ -25,7 +25,7 @@ pub struct Stop {
 
 struct Report(fn(Stop));
 
-impl abi::stop::stop::Stop for Report {
+impl abi::stop::stop::Host for Report {
     fn stopped(&self, errnum: i32, file: String, line: u32, n1: u64, n2: u64) -> Result<(), Errno> {
         crate::log(&format!(
             "[guest] stopped: {errnum} at {file}:{line} ({n1}, {n2})"

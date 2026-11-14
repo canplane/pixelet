@@ -32,26 +32,24 @@ export const TILE_SPHERE = "sphere";
 /** The base layers a version is published for: the kinds of `FORMAT`, numbered in their order. */
 export const BASE_LAYERS = ["terrain", "place", "division", "earth"] as const;
 
-export const BaseLayer = {
-  terrain: 0,
-  place: 1,
-  division: 2,
-  earth: 3,
-} as const;
-export type BaseLayer = (typeof BaseLayer)[keyof typeof BaseLayer];
+export type BaseLayer =
+  | typeof BASE_LAYER_TERRAIN
+  | typeof BASE_LAYER_PLACE
+  | typeof BASE_LAYER_DIVISION
+  | typeof BASE_LAYER_EARTH;
+export const BASE_LAYER_TERRAIN = 0;
+export const BASE_LAYER_PLACE = 1;
+export const BASE_LAYER_DIVISION = 2;
+export const BASE_LAYER_EARTH = 3;
 
-/** The name of the `BaseLayer` member numbered `n`, or undefined for a number
- * no member has. */
-export function base_layer_name(n: number): keyof typeof BaseLayer | undefined {
-  for (const k in BaseLayer)
-    if (BaseLayer[k as keyof typeof BaseLayer] === n)
-      return k as keyof typeof BaseLayer;
-  return undefined;
-}
-
-/** The `BaseLayer` member `n` is, or null for a number no member has. */
-export function base_layer_of(n: number): BaseLayer | null {
-  return base_layer_name(n) === undefined ? null : (n as BaseLayer);
+/** The member `val` is, or null for a number no member has. */
+export function of_BaseLayer(val: number): BaseLayer | null {
+  return val === BASE_LAYER_TERRAIN ||
+    val === BASE_LAYER_PLACE ||
+    val === BASE_LAYER_DIVISION ||
+    val === BASE_LAYER_EARTH
+    ? val
+    : null;
 }
 
 /** A kind's object in a published set, the one place its segments are

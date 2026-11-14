@@ -9,21 +9,11 @@
 
 export const PHASES = ["interaction", "visible"] as const;
 
-export const Phase = {
-  interaction: 0,
-  visible: 1,
-} as const;
-export type Phase = (typeof Phase)[keyof typeof Phase];
+export type Phase = typeof PHASE_INTERACTION | typeof PHASE_VISIBLE;
+export const PHASE_INTERACTION = 0;
+export const PHASE_VISIBLE = 1;
 
-/** The name of the `Phase` member numbered `n`, or undefined for a number
- * no member has. */
-export function phase_name(n: number): keyof typeof Phase | undefined {
-  for (const k in Phase)
-    if (Phase[k as keyof typeof Phase] === n) return k as keyof typeof Phase;
-  return undefined;
-}
-
-/** The `Phase` member `n` is, or null for a number no member has. */
-export function phase_of(n: number): Phase | null {
-  return phase_name(n) === undefined ? null : (n as Phase);
+/** The member `val` is, or null for a number no member has. */
+export function of_Phase(val: number): Phase | null {
+  return val === PHASE_INTERACTION || val === PHASE_VISIBLE ? val : null;
 }

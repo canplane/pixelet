@@ -1,6 +1,6 @@
 // cpp/xpute/kit/status/errno.spec.hpp
 //
-// GENERATED from kit/spec/errno.json
+// GENERATED from kit/spec/errno.json (xpute-gen data.rs)
 //
 // POSIX/Linux-aligned negative errno
 
@@ -9,153 +9,75 @@
 #include <cstdint>
 #include <optional>
 #include <string_view>
-#include <utility>
 
 namespace xpute {
 
 enum class Errno : std::int32_t {
-    ok = 0, // Success
-
-    // ---- Generic ----
-    eperm = -1, // Operation not permitted
-    enoent = -2, // No such file or directory / entry not found
-    esrch = -3, // No such process
-    eintr = -4, // Interrupted system call
-    eio = -5, // I/O error
-    enxio = -6, // No such device or address
-    e2big = -7, // Argument list too long / object too large for fixed local cap
-    enoexec = -8, // Exec format error
-    ebadf = -9, // Bad file descriptor / bad handle
-    echild = -10, // No child processes
-    eagain = -11, // Try again / Resource temporarily unavailable
-    enomem = -12, // Out of memory
-    eacces = -13, // Permission denied
-    efault = -14, // Bad address
-    ebusy = -16, // Device or resource busy
-    eexist = -17, // File exists / duplicate bind
-    exdev = -18, // Cross-device link
-    enodev = -19, // No such device
-    enotdir = -20, // Not a directory
-    eisdir = -21, // Is a directory
-    einval = -22, // Invalid argument
-    enfile = -23, // File table overflow (system-wide)
-    emfile = -24, // Too many open files (process)
-    enotty = -25, // Not a tty
-    efbig = -27, // File too large / payload too large
-    enospc = -28, // No space left on device / local mailbox full
-    espipe = -29, // Illegal seek
-    erofs = -30, // Read-only file system
-    emlink = -31, // Too many links
-    epipe = -32, // Broken pipe
-    edom = -33, // Math argument out of domain
-    erange = -34, // Math result not representable
-    enosys = -38, // Function not implemented
-
-    // ---- Protocol / Message / Encoding ----
-    eproto = -71, // Protocol error
-    ebadmsg = -74, // Bad message (protocol/frame/payload invalid)
-    eoverflow = -75, // Value too large for target type / overflow
-    emsgsize = -90, // Message too long / packet too large
-    enotsup = -95, // Operation not supported
-    eilseq = -84, // Illegal byte sequence (decode/encoding failure)
-
-    // ---- Endpoint / Addressing ----
-    eaddrinuse = -98, // Address already in use
-    eaddrnotavail = -99, // Cannot assign requested address
-
-    // ---- Network / Transport (Linux asm-generic/errno.h aligned) ----
-    enetdown = -100, // Network is down
-    enetunreach = -101, // Network is unreachable
-    enetreset = -102, // Network dropped connection because of reset
-    econnaborted = -103, // Software caused connection abort
-    econnreset = -104, // Connection reset by peer
-    enobufs = -105, // No buffer space available
-    eisconn = -106, // Transport endpoint is already connected
-    enotconn = -107, // Transport endpoint is not connected
-    eshutdown = -108, // Cannot send after transport endpoint shutdown
-    etoomanyrefs = -109, // Too many references
-    etimedout = -110, // Connection timed out
-    econnrefused = -111, // Connection refused
-    ehostdown = -112, // Runtime is down
-    ehostunreach = -113, // No route to runtime
-    ealready = -114, // Operation already in progress
-    einprogress = -115, // Operation now in progress
-
-    // ---- Lifecycle / Cancellation ----
-    ecanceled = -125, // Operation canceled
-    enotrecoverable = -131, // State not recoverable: an invariant the code stands on does not hold
+    ok = 0,
+    eperm = -1,
+    enoent = -2,
+    esrch = -3,
+    eintr = -4,
+    eio = -5,
+    enxio = -6,
+    e2big = -7,
+    enoexec = -8,
+    ebadf = -9,
+    echild = -10,
+    eagain = -11,
+    enomem = -12,
+    eacces = -13,
+    efault = -14,
+    ebusy = -16,
+    eexist = -17,
+    exdev = -18,
+    enodev = -19,
+    enotdir = -20,
+    eisdir = -21,
+    einval = -22,
+    enfile = -23,
+    emfile = -24,
+    enotty = -25,
+    efbig = -27,
+    enospc = -28,
+    espipe = -29,
+    erofs = -30,
+    emlink = -31,
+    epipe = -32,
+    edom = -33,
+    erange = -34,
+    enosys = -38,
+    eproto = -71,
+    ebadmsg = -74,
+    eoverflow = -75,
+    emsgsize = -90,
+    enotsup = -95,
+    eilseq = -84,
+    eaddrinuse = -98,
+    eaddrnotavail = -99,
+    enetdown = -100,
+    enetunreach = -101,
+    enetreset = -102,
+    econnaborted = -103,
+    econnreset = -104,
+    enobufs = -105,
+    eisconn = -106,
+    enotconn = -107,
+    eshutdown = -108,
+    etoomanyrefs = -109,
+    etimedout = -110,
+    econnrefused = -111,
+    ehostdown = -112,
+    ehostunreach = -113,
+    ealready = -114,
+    einprogress = -115,
+    ecanceled = -125,
+    enotrecoverable = -131,
 };
 
-// An errno's name, as Rust's Display prints an error's.
-constexpr std::string_view errno_name(Errno e) noexcept {
-    switch (e) {
-    case Errno::ok: return "OK";
-    case Errno::eperm: return "EPERM";
-    case Errno::enoent: return "ENOENT";
-    case Errno::esrch: return "ESRCH";
-    case Errno::eintr: return "EINTR";
-    case Errno::eio: return "EIO";
-    case Errno::enxio: return "ENXIO";
-    case Errno::e2big: return "E2BIG";
-    case Errno::enoexec: return "ENOEXEC";
-    case Errno::ebadf: return "EBADF";
-    case Errno::echild: return "ECHILD";
-    case Errno::eagain: return "EAGAIN";
-    case Errno::enomem: return "ENOMEM";
-    case Errno::eacces: return "EACCES";
-    case Errno::efault: return "EFAULT";
-    case Errno::ebusy: return "EBUSY";
-    case Errno::eexist: return "EEXIST";
-    case Errno::exdev: return "EXDEV";
-    case Errno::enodev: return "ENODEV";
-    case Errno::enotdir: return "ENOTDIR";
-    case Errno::eisdir: return "EISDIR";
-    case Errno::einval: return "EINVAL";
-    case Errno::enfile: return "ENFILE";
-    case Errno::emfile: return "EMFILE";
-    case Errno::enotty: return "ENOTTY";
-    case Errno::efbig: return "EFBIG";
-    case Errno::enospc: return "ENOSPC";
-    case Errno::espipe: return "ESPIPE";
-    case Errno::erofs: return "EROFS";
-    case Errno::emlink: return "EMLINK";
-    case Errno::epipe: return "EPIPE";
-    case Errno::edom: return "EDOM";
-    case Errno::erange: return "ERANGE";
-    case Errno::enosys: return "ENOSYS";
-    case Errno::eproto: return "EPROTO";
-    case Errno::ebadmsg: return "EBADMSG";
-    case Errno::eoverflow: return "EOVERFLOW";
-    case Errno::emsgsize: return "EMSGSIZE";
-    case Errno::enotsup: return "ENOTSUP";
-    case Errno::eilseq: return "EILSEQ";
-    case Errno::eaddrinuse: return "EADDRINUSE";
-    case Errno::eaddrnotavail: return "EADDRNOTAVAIL";
-    case Errno::enetdown: return "ENETDOWN";
-    case Errno::enetunreach: return "ENETUNREACH";
-    case Errno::enetreset: return "ENETRESET";
-    case Errno::econnaborted: return "ECONNABORTED";
-    case Errno::econnreset: return "ECONNRESET";
-    case Errno::enobufs: return "ENOBUFS";
-    case Errno::eisconn: return "EISCONN";
-    case Errno::enotconn: return "ENOTCONN";
-    case Errno::eshutdown: return "ESHUTDOWN";
-    case Errno::etoomanyrefs: return "ETOOMANYREFS";
-    case Errno::etimedout: return "ETIMEDOUT";
-    case Errno::econnrefused: return "ECONNREFUSED";
-    case Errno::ehostdown: return "EHOSTDOWN";
-    case Errno::ehostunreach: return "EHOSTUNREACH";
-    case Errno::ealready: return "EALREADY";
-    case Errno::einprogress: return "EINPROGRESS";
-    case Errno::ecanceled: return "ECANCELED";
-    case Errno::enotrecoverable: return "ENOTRECOVERABLE";
-    }
-    return "errno";
-}
-
-// The member `code` is, none for a number no member has.
-constexpr std::optional<Errno> errno_of(std::int32_t code) noexcept {
-    switch (code) {
+// The member `val` is, or none for a number no member has.
+constexpr std::optional<Errno> errno_of(std::int32_t val) noexcept {
+    switch (val) {
     case 0: return Errno::ok;
     case -1: return Errno::eperm;
     case -2: return Errno::enoent;
@@ -220,8 +142,307 @@ constexpr std::optional<Errno> errno_of(std::int32_t code) noexcept {
     return std::nullopt;
 }
 
-// A result as a pair, as Rust's ErrnoResult is: the errno, and the value
-// where there is one.
-template <class T> using ErrnoResult = std::pair<Errno, std::optional<T>>;
+namespace ERRNO {
+
+namespace ok {
+
+inline constexpr std::string_view text = "Success";
+} // namespace ok
+
+namespace eperm {
+
+inline constexpr std::string_view text = "Operation not permitted";
+} // namespace eperm
+
+namespace enoent {
+
+inline constexpr std::string_view text = "No such file or directory / entry not found";
+} // namespace enoent
+
+namespace esrch {
+
+inline constexpr std::string_view text = "No such process";
+} // namespace esrch
+
+namespace eintr {
+
+inline constexpr std::string_view text = "Interrupted system call";
+} // namespace eintr
+
+namespace eio {
+
+inline constexpr std::string_view text = "I/O error";
+} // namespace eio
+
+namespace enxio {
+
+inline constexpr std::string_view text = "No such device or address";
+} // namespace enxio
+
+namespace e2big {
+
+inline constexpr std::string_view text = "Argument list too long / object too large for fixed local cap";
+} // namespace e2big
+
+namespace enoexec {
+
+inline constexpr std::string_view text = "Exec format error";
+} // namespace enoexec
+
+namespace ebadf {
+
+inline constexpr std::string_view text = "Bad file descriptor / bad handle";
+} // namespace ebadf
+
+namespace echild {
+
+inline constexpr std::string_view text = "No child processes";
+} // namespace echild
+
+namespace eagain {
+
+inline constexpr std::string_view text = "Try again / Resource temporarily unavailable";
+} // namespace eagain
+
+namespace enomem {
+
+inline constexpr std::string_view text = "Out of memory";
+} // namespace enomem
+
+namespace eacces {
+
+inline constexpr std::string_view text = "Permission denied";
+} // namespace eacces
+
+namespace efault {
+
+inline constexpr std::string_view text = "Bad address";
+} // namespace efault
+
+namespace ebusy {
+
+inline constexpr std::string_view text = "Device or resource busy";
+} // namespace ebusy
+
+namespace eexist {
+
+inline constexpr std::string_view text = "File exists / duplicate bind";
+} // namespace eexist
+
+namespace exdev {
+
+inline constexpr std::string_view text = "Cross-device link";
+} // namespace exdev
+
+namespace enodev {
+
+inline constexpr std::string_view text = "No such device";
+} // namespace enodev
+
+namespace enotdir {
+
+inline constexpr std::string_view text = "Not a directory";
+} // namespace enotdir
+
+namespace eisdir {
+
+inline constexpr std::string_view text = "Is a directory";
+} // namespace eisdir
+
+namespace einval {
+
+inline constexpr std::string_view text = "Invalid argument";
+} // namespace einval
+
+namespace enfile {
+
+inline constexpr std::string_view text = "File table overflow (system-wide)";
+} // namespace enfile
+
+namespace emfile {
+
+inline constexpr std::string_view text = "Too many open files (process)";
+} // namespace emfile
+
+namespace enotty {
+
+inline constexpr std::string_view text = "Not a tty";
+} // namespace enotty
+
+namespace efbig {
+
+inline constexpr std::string_view text = "File too large / payload too large";
+} // namespace efbig
+
+namespace enospc {
+
+inline constexpr std::string_view text = "No space left on device / local mailbox full";
+} // namespace enospc
+
+namespace espipe {
+
+inline constexpr std::string_view text = "Illegal seek";
+} // namespace espipe
+
+namespace erofs {
+
+inline constexpr std::string_view text = "Read-only file system";
+} // namespace erofs
+
+namespace emlink {
+
+inline constexpr std::string_view text = "Too many links";
+} // namespace emlink
+
+namespace epipe {
+
+inline constexpr std::string_view text = "Broken pipe";
+} // namespace epipe
+
+namespace edom {
+
+inline constexpr std::string_view text = "Math argument out of domain";
+} // namespace edom
+
+namespace erange {
+
+inline constexpr std::string_view text = "Math result not representable";
+} // namespace erange
+
+namespace enosys {
+
+inline constexpr std::string_view text = "Function not implemented";
+} // namespace enosys
+
+namespace eproto {
+
+inline constexpr std::string_view text = "Protocol error";
+} // namespace eproto
+
+namespace ebadmsg {
+
+inline constexpr std::string_view text = "Bad message (protocol/frame/payload invalid)";
+} // namespace ebadmsg
+
+namespace eoverflow {
+
+inline constexpr std::string_view text = "Value too large for target type / overflow";
+} // namespace eoverflow
+
+namespace emsgsize {
+
+inline constexpr std::string_view text = "Message too long / packet too large";
+} // namespace emsgsize
+
+namespace enotsup {
+
+inline constexpr std::string_view text = "Operation not supported";
+} // namespace enotsup
+
+namespace eilseq {
+
+inline constexpr std::string_view text = "Illegal byte sequence (decode/encoding failure)";
+} // namespace eilseq
+
+namespace eaddrinuse {
+
+inline constexpr std::string_view text = "Address already in use";
+} // namespace eaddrinuse
+
+namespace eaddrnotavail {
+
+inline constexpr std::string_view text = "Cannot assign requested address";
+} // namespace eaddrnotavail
+
+namespace enetdown {
+
+inline constexpr std::string_view text = "Network is down";
+} // namespace enetdown
+
+namespace enetunreach {
+
+inline constexpr std::string_view text = "Network is unreachable";
+} // namespace enetunreach
+
+namespace enetreset {
+
+inline constexpr std::string_view text = "Network dropped connection because of reset";
+} // namespace enetreset
+
+namespace econnaborted {
+
+inline constexpr std::string_view text = "Software caused connection abort";
+} // namespace econnaborted
+
+namespace econnreset {
+
+inline constexpr std::string_view text = "Connection reset by peer";
+} // namespace econnreset
+
+namespace enobufs {
+
+inline constexpr std::string_view text = "No buffer space available";
+} // namespace enobufs
+
+namespace eisconn {
+
+inline constexpr std::string_view text = "Transport endpoint is already connected";
+} // namespace eisconn
+
+namespace enotconn {
+
+inline constexpr std::string_view text = "Transport endpoint is not connected";
+} // namespace enotconn
+
+namespace eshutdown {
+
+inline constexpr std::string_view text = "Cannot send after transport endpoint shutdown";
+} // namespace eshutdown
+
+namespace etoomanyrefs {
+
+inline constexpr std::string_view text = "Too many references";
+} // namespace etoomanyrefs
+
+namespace etimedout {
+
+inline constexpr std::string_view text = "Connection timed out";
+} // namespace etimedout
+
+namespace econnrefused {
+
+inline constexpr std::string_view text = "Connection refused";
+} // namespace econnrefused
+
+namespace ehostdown {
+
+inline constexpr std::string_view text = "Runtime is down";
+} // namespace ehostdown
+
+namespace ehostunreach {
+
+inline constexpr std::string_view text = "No route to runtime";
+} // namespace ehostunreach
+
+namespace ealready {
+
+inline constexpr std::string_view text = "Operation already in progress";
+} // namespace ealready
+
+namespace einprogress {
+
+inline constexpr std::string_view text = "Operation now in progress";
+} // namespace einprogress
+
+namespace ecanceled {
+
+inline constexpr std::string_view text = "Operation canceled";
+} // namespace ecanceled
+
+namespace enotrecoverable {
+
+inline constexpr std::string_view text = "State not recoverable: an invariant the code stands on does not hold";
+} // namespace enotrecoverable
+} // namespace ERRNO
 
 } // namespace xpute

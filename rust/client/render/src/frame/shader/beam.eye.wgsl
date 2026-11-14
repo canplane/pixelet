@@ -1,27 +1,27 @@
 // pxl-render/beam.eye.wgsl
 
-// The eye's beam rays, as the beam rays' walks read them (corner.wgsl, eye_bind.wgsl). A beam
-// ray goes through each corner of the camera grid (pxl-engine `beam::Grid::corners`), and every
+// The eye's beam rays, as the beam rays' walks read them (corner.wgsl, eye_bind.wgsl). A beam ray
+// goes through each corner of the camera grid (pxl-engine `beam::Grid::corner_lattice`), and every
 // corner is walked, one thread a corner. A ray keeps its line in the eye's beam rays' buffer.
 
-fn beam_lattice() -> vec2<u32> {
-  return vec2<u32>(eye_word(EYE_GRID + GRID_CORNERS), eye_word(EYE_GRID + GRID_CORNERS + 1u));
+fn corner_lattice() -> vec2<u32> {
+  return vec2<u32>(eye_word(EYE_GRID + GRID_CORNER_LATTICE), eye_word(EYE_GRID + GRID_CORNER_LATTICE + 1u));
 }
 
 /// How many beam rays a run takes: every corner of the grid. A corner's place in the run is
 /// its index, row by row.
 fn corner_cnt() -> u32 {
-  let n = beam_lattice();
+  let n = corner_lattice();
   return n.x * n.y;
 }
 
 fn corner_queued(k: u32) -> vec2<u32> {
-  let n = beam_lattice();
+  let n = corner_lattice();
   return vec2<u32>(k % n.x, k / n.x);
 }
 
 fn beam_idx(c: vec2<u32>) -> u32 {
-  return c.y * beam_lattice().x + c.x;
+  return c.y * corner_lattice().x + c.x;
 }
 
 fn beam_line(c: vec2<u32>) -> u32 {

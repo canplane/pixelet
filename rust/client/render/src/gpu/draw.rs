@@ -147,7 +147,7 @@ impl Position {
 pub const MODEL_VERTEX_WORDS: u32 = 16;
 
 /// Every pipeline a draw record may name, in the order a frame's draw stats count them
-/// (renderer.rs `FrameStat::draws`). The list draws with these alone.
+/// (renderer.rs `FrameStat::draw_stat`). The list draws with these alone.
 pub const DRAW_PIPELINES: [u32; 9] = [
     PIPELINE_DECOR,
     PIPELINE_GHOST_BOX,
@@ -666,7 +666,7 @@ impl DrawList {
 
     /// Records where the draw of `pipeline` stands, the box `receiver`. Every draw whose shader
     /// reads the shadow map gives a box and no other draw does (record.rs `reads_shadow_map`),
-    /// so whatever reads the map stands somewhere. Past `light::RECEIVER_BOXES` boxes, the box
+    /// so whatever reads the map stands somewhere. Past `light::RECEIVER_BOX_CAP` boxes, the box
     /// is taken into the last one.
     fn stand(&mut self, pipeline: u32, receiver: Option<ReceiverBox>) {
         xpute_kit::ensure!(
@@ -675,7 +675,7 @@ impl DrawList {
             pipeline
         );
         let Some(b) = receiver else { return };
-        let full = self.receivers.len() == light::RECEIVER_BOXES;
+        let full = self.receivers.len() == light::RECEIVER_BOX_CAP;
         match self.receivers.last_mut() {
             Some(last) if full => last.hold(&b),
             _ => self.receivers.push(b),

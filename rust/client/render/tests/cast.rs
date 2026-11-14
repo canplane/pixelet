@@ -44,7 +44,7 @@ use pxl_render::frame::shader::record::{
     src, SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE_HIT,
 };
 use pxl_render::frame::shader::word::{screen, SQUARE_SIDE};
-use pxl_spec::share::EIGHTHS;
+use pxl_spec::share::EIGHTH_CNT;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
 
 use real_world::{q8, Asking, Built, WorldBuffer, FINEST};
@@ -238,12 +238,12 @@ fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeli
         &world_binds(b, &eye_buf, &beams, &node_cache),
         &node_cache,
     );
-    let samples = grid.samples[0] * grid.samples[1];
+    let samples = grid.sample_lattice[0] * grid.sample_lattice[1];
     // The buffer holds the draw's arguments first, and the arguments of the faces' asks at
     // `raster::ASKED_AT`.
     let asked_at = raster::ASKED_AT as usize;
     let mut laid = vec![0u32; asked_at + raster::ARGS_WORDS as usize];
-    laid[raster::ARGS_VERTICES as usize] = raster::VERTICES;
+    laid[raster::ARGS_VERTEX_CNT as usize] = raster::VERTEX_CNT;
     laid[asked_at + raster::ARGS_FACES as usize + 1] = 1;
     laid[asked_at + raster::ARGS_FACES as usize + 2] = 1;
     laid[asked_at + raster::ARGS_ASKS as usize] = grid.asks_at;
@@ -258,26 +258,26 @@ fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeli
             (16, rect_args.as_entire_binding()),
         ],
         [
-            grid.samples[0].div_ceil(SQUARE_SIDE),
-            grid.samples[1].div_ceil(SQUARE_SIDE),
+            grid.sample_lattice[0].div_ceil(SQUARE_SIDE),
+            grid.sample_lattice[1].div_ceil(SQUARE_SIDE),
             1,
         ],
     );
     let asked = gpu.read(&beams);
     let laid = gpu.read(&rect_args);
     let (mut hit, mut lacks) = (0, 0);
-    for j in 0..grid.samples[1] {
-        for i in 0..grid.samples[0] {
+    for j in 0..grid.sample_lattice[1] {
+        for i in 0..grid.sample_lattice[0] {
             let k = grid.sample_at([i, j]) as usize;
             hit += u32::from(asked[k + beam::NODE_ZOOM as usize] != beam::SAMPLE_NONE);
-            lacks += u32::from(asked[k + beam::SAMPLE_LACKS as usize] & beam::SAMPLE_LACK != 0);
+            lacks += u32::from(asked[k + beam::SAMPLE_LACK_WORD as usize] & beam::SAMPLE_LACK != 0);
         }
     }
     eprintln!(
         "{}: {} samples, {hit} hit, {lacks} lack, {} asks",
         c.name,
         samples,
-        laid[asked_at + raster::ARGS_INSTANCES as usize],
+        laid[asked_at + raster::ARGS_INSTANCE_CNT as usize],
     );
 
     let mut binds = face_binds(b, &eye_buf, &beams, &rect_args, raster::ASKED_AT);
@@ -297,7 +297,7 @@ fn cast_of(gpu: &Gpu, b: &WorldBuffer, c: &EyeCase, face_p: &wgpu::ComputePipeli
         asked,
         beams: gpu.read(&beams),
         node_cache: gpu.read(&node_cache),
-        asks: laid[asked_at + raster::ARGS_INSTANCES as usize],
+        asks: laid[asked_at + raster::ARGS_INSTANCE_CNT as usize],
     }
 }
 
@@ -331,7 +331,7 @@ fn face_binds<'a>(
 /// by its node's zoom and index. Where two slots hold one node, the map keeps the first.
 fn drawable_at(node_cache: &[u32]) -> std::collections::BTreeMap<(u32, [i32; 3]), u32> {
     let mut at = std::collections::BTreeMap::new();
-    for slot in (0..node_cache::ENTRIES).rev() {
+    for slot in (0..node_cache::ENTRY_CNT).rev() {
         let e = node_cache::entry_at(slot) as usize;
         let kind = node_cache[e + node_cache::W_KIND as usize] & node_cache::KIND_MASK;
         let state = node_cache[node_cache::state_at(slot) as usize];
@@ -752,14 +752,14 @@ fn hand_pixels_answer_as_cast_entry() {
         // Lays at each pixel a visible voxel as the raster could leave it. Most pixels take the
         // voxel of one of the four samples about them. Some take none, some a lack, and some
         // the voxel of a sample far off.
-        let n = g.samples[0];
+        let n = g.sample_lattice[0];
         let voxel_at = drawable_at(&cast.node_cache);
         let voxel_of = |i: u32| -> Option<u32> {
             let k = g.sample_at([i % n, i / n]);
             let node = node_at(&cast.beams, k + beam::SAMPLE_NODE);
             voxel_at.get(&(node.zoom, node.idx(cast.origin))).copied()
         };
-        let hit: Vec<u32> = (0..n * g.samples[1])
+        let hit: Vec<u32> = (0..n * g.sample_lattice[1])
             .filter(|&i| {
                 let k = g.sample_at([i % n, i / n]);
                 cast.beams[(k + beam::SAMPLE_NODE + beam::NODE_ZOOM) as usize] != beam::SAMPLE_NONE
@@ -785,7 +785,7 @@ fn hand_pixels_answer_as_cast_entry() {
                 };
                 raster::id_of(
                     v,
-                    w(beam::SAMPLE_LACKS) & beam::SAMPLE_LACK != 0 || h % 16 == 2,
+                    w(beam::SAMPLE_LACK_WORD) & beam::SAMPLE_LACK != 0 || h % 16 == 2,
                 )
             })
             .collect();
@@ -799,21 +799,21 @@ fn hand_pixels_answer_as_cast_entry() {
         );
         let vis_view = array_view(&vis);
 
-        // A tile is damaged when it changed within the last `screen::DAMAGE_FRAMES` frames. One
+        // A tile is damaged when it changed within the last `screen::DAMAGE_FRAME_CNT` frames. One
         // tile in `undamaged_in` last changed just outside that window.
         let now = 77u32;
         let tiles = [wd.div_ceil(screen::TILE), ht.div_ceil(screen::TILE)];
         let changed: Vec<u32> = (0..tiles[0] * tiles[1])
             .map(|t| {
                 if s.undamaged_in != 0 && mix(t, 5).is_multiple_of(s.undamaged_in) {
-                    now - screen::DAMAGE_FRAMES
+                    now - screen::DAMAGE_FRAME_CNT
                 } else {
-                    now - mix(t, 6) % screen::DAMAGE_FRAMES
+                    now - mix(t, 6) % screen::DAMAGE_FRAME_CNT
                 }
             })
             .collect();
         let mut uniform = [0u32; screen::TILES_WORDS];
-        uniform[..4].copy_from_slice(&[tiles[0], tiles[1], screen::DAMAGE_FRAMES, now]);
+        uniform[..4].copy_from_slice(&[tiles[0], tiles[1], screen::DAMAGE_FRAME_CNT, now]);
         let changed_buf = gpu.buf(&changed, store());
         let tiles_buf = gpu.buf(&uniform, wgpu::BufferUsages::UNIFORM);
         let mut list_words = vec![0u32; 4 + (tiles[0] * tiles[1]) as usize];
@@ -828,7 +828,7 @@ fn hand_pixels_answer_as_cast_entry() {
                 (31, tiles_buf.as_entire_binding()),
             ],
             [
-                (tiles[0] * tiles[1]).div_ceil(screen::CAST_TILES_LANES),
+                (tiles[0] * tiles[1]).div_ceil(screen::CAST_TILES_LANE_CNT),
                 1,
                 1,
             ],
@@ -911,7 +911,7 @@ fn hand_pixels_answer_as_cast_entry() {
                     ]);
                     kind_cnt.add(
                         "enters its sample, short of its cube",
-                        answer::fill_eighths(asset[0]) != EIGHTHS,
+                        answer::fill_eighths(asset[0]) != EIGHTH_CNT,
                     );
                 } else if !lacks && drew && at_edge(&e, at.dir) {
                     edges += 1;

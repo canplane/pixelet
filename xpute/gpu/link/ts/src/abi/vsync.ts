@@ -2,13 +2,16 @@
 //
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
 import {
+  ERRNO_EINPROGRESS,
+  ERRNO_ENOSYS,
+} from "@xpute/kit/status/errno.spec.ts";
+import {
+  type Handle,
   type Link,
   type LinkObject,
   type Method,
   refusal_of,
-  type Handle,
 } from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `xpute:gpu/vsync` (frame.json `NAMED`). */
@@ -17,14 +20,14 @@ export const HANDLE: Handle = 0x42eda6;
 /** `next` */
 export const NEXT: Method = 0;
 
-export interface Vsync {
+export interface Host {
   next(signal_: AbortSignal): Promise<void>;
 }
 
 /** The object over `imp`. */
 function object(
   l: Pick<Link, "task_return" | "on_cancel">,
-  imp: Vsync,
+  imp: Host,
 ): LinkObject {
   return {
     call(m, tag, args) {
@@ -33,14 +36,14 @@ function object(
           case NEXT: {
             const stop = new AbortController();
             imp.next(stop.signal).then(
-              () => l.task_return(tag, 0),
+              () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());
-            return Errno.EINPROGRESS;
+            return ERRNO_EINPROGRESS;
           }
           default:
-            return Errno.ENOSYS;
+            return ERRNO_ENOSYS;
         }
       } catch (e) {
         return refusal_of(e);
@@ -52,7 +55,7 @@ function object(
 /** Serves `imp` under the interface's handle. */
 export function mount(
   l: Pick<Link, "mount_named" | "task_return" | "on_cancel">,
-  imp: Vsync,
+  imp: Host,
 ): void {
   l.mount_named(HANDLE, object(l, imp));
 }

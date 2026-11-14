@@ -7,19 +7,12 @@
 // is, and a guest names a member by its generated constant. Nothing here belongs to any one
 // program. A value that WebGPU leaves optional is NONE (api.json) when it is unset.
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    non_camel_case_types,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 /// GPUTextureFormat: the formats of the core WebGPU spec and of its texture-compression
 /// features.
-pub const TEXTURE_FORMAT: &[&str] = &[
+pub const TEXTURE_FORMATS: &[&str] = &[
     "r8unorm",
     "r8snorm",
     "r8uint",
@@ -119,301 +112,301 @@ pub const TEXTURE_FORMAT: &[&str] = &[
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TextureFormat {
-    r8unorm = 0,
-    r8snorm = 1,
-    r8uint = 2,
-    r8sint = 3,
-    r16uint = 4,
-    r16sint = 5,
-    r16float = 6,
-    rg8unorm = 7,
-    rg8snorm = 8,
-    rg8uint = 9,
-    rg8sint = 10,
-    r32uint = 11,
-    r32sint = 12,
-    r32float = 13,
-    rg16uint = 14,
-    rg16sint = 15,
-    rg16float = 16,
-    rgba8unorm = 17,
-    rgba8unorm_srgb = 18,
-    rgba8snorm = 19,
-    rgba8uint = 20,
-    rgba8sint = 21,
-    bgra8unorm = 22,
-    bgra8unorm_srgb = 23,
-    rgb9e5ufloat = 24,
-    rgb10a2uint = 25,
-    rgb10a2unorm = 26,
-    rg11b10ufloat = 27,
-    rg32uint = 28,
-    rg32sint = 29,
-    rg32float = 30,
-    rgba16uint = 31,
-    rgba16sint = 32,
-    rgba16float = 33,
-    rgba32uint = 34,
-    rgba32sint = 35,
-    rgba32float = 36,
-    stencil8 = 37,
-    depth16unorm = 38,
-    depth24plus = 39,
-    depth24plus_stencil8 = 40,
-    depth32float = 41,
-    depth32float_stencil8 = 42,
-    bc1_rgba_unorm = 43,
-    bc1_rgba_unorm_srgb = 44,
-    bc2_rgba_unorm = 45,
-    bc2_rgba_unorm_srgb = 46,
-    bc3_rgba_unorm = 47,
-    bc3_rgba_unorm_srgb = 48,
-    bc4_r_unorm = 49,
-    bc4_r_snorm = 50,
-    bc5_rg_unorm = 51,
-    bc5_rg_snorm = 52,
-    bc6h_rgb_ufloat = 53,
-    bc6h_rgb_float = 54,
-    bc7_rgba_unorm = 55,
-    bc7_rgba_unorm_srgb = 56,
-    etc2_rgb8unorm = 57,
-    etc2_rgb8unorm_srgb = 58,
-    etc2_rgb8a1unorm = 59,
-    etc2_rgb8a1unorm_srgb = 60,
-    etc2_rgba8unorm = 61,
-    etc2_rgba8unorm_srgb = 62,
-    eac_r11unorm = 63,
-    eac_r11snorm = 64,
-    eac_rg11unorm = 65,
-    eac_rg11snorm = 66,
-    astc_4x4_unorm = 67,
-    astc_4x4_unorm_srgb = 68,
-    astc_5x4_unorm = 69,
-    astc_5x4_unorm_srgb = 70,
-    astc_5x5_unorm = 71,
-    astc_5x5_unorm_srgb = 72,
-    astc_6x5_unorm = 73,
-    astc_6x5_unorm_srgb = 74,
-    astc_6x6_unorm = 75,
-    astc_6x6_unorm_srgb = 76,
-    astc_8x5_unorm = 77,
-    astc_8x5_unorm_srgb = 78,
-    astc_8x6_unorm = 79,
-    astc_8x6_unorm_srgb = 80,
-    astc_8x8_unorm = 81,
-    astc_8x8_unorm_srgb = 82,
-    astc_10x5_unorm = 83,
-    astc_10x5_unorm_srgb = 84,
-    astc_10x6_unorm = 85,
-    astc_10x6_unorm_srgb = 86,
-    astc_10x8_unorm = 87,
-    astc_10x8_unorm_srgb = 88,
-    astc_10x10_unorm = 89,
-    astc_10x10_unorm_srgb = 90,
-    astc_12x10_unorm = 91,
-    astc_12x10_unorm_srgb = 92,
-    astc_12x12_unorm = 93,
-    astc_12x12_unorm_srgb = 94,
+    R8unorm = 0,
+    R8snorm = 1,
+    R8uint = 2,
+    R8sint = 3,
+    R16uint = 4,
+    R16sint = 5,
+    R16float = 6,
+    Rg8unorm = 7,
+    Rg8snorm = 8,
+    Rg8uint = 9,
+    Rg8sint = 10,
+    R32uint = 11,
+    R32sint = 12,
+    R32float = 13,
+    Rg16uint = 14,
+    Rg16sint = 15,
+    Rg16float = 16,
+    Rgba8unorm = 17,
+    Rgba8unormSrgb = 18,
+    Rgba8snorm = 19,
+    Rgba8uint = 20,
+    Rgba8sint = 21,
+    Bgra8unorm = 22,
+    Bgra8unormSrgb = 23,
+    Rgb9e5ufloat = 24,
+    Rgb10a2uint = 25,
+    Rgb10a2unorm = 26,
+    Rg11b10ufloat = 27,
+    Rg32uint = 28,
+    Rg32sint = 29,
+    Rg32float = 30,
+    Rgba16uint = 31,
+    Rgba16sint = 32,
+    Rgba16float = 33,
+    Rgba32uint = 34,
+    Rgba32sint = 35,
+    Rgba32float = 36,
+    Stencil8 = 37,
+    Depth16unorm = 38,
+    Depth24plus = 39,
+    Depth24plusStencil8 = 40,
+    Depth32float = 41,
+    Depth32floatStencil8 = 42,
+    Bc1RgbaUnorm = 43,
+    Bc1RgbaUnormSrgb = 44,
+    Bc2RgbaUnorm = 45,
+    Bc2RgbaUnormSrgb = 46,
+    Bc3RgbaUnorm = 47,
+    Bc3RgbaUnormSrgb = 48,
+    Bc4RUnorm = 49,
+    Bc4RSnorm = 50,
+    Bc5RgUnorm = 51,
+    Bc5RgSnorm = 52,
+    Bc6hRgbUfloat = 53,
+    Bc6hRgbFloat = 54,
+    Bc7RgbaUnorm = 55,
+    Bc7RgbaUnormSrgb = 56,
+    Etc2Rgb8unorm = 57,
+    Etc2Rgb8unormSrgb = 58,
+    Etc2Rgb8a1unorm = 59,
+    Etc2Rgb8a1unormSrgb = 60,
+    Etc2Rgba8unorm = 61,
+    Etc2Rgba8unormSrgb = 62,
+    EacR11unorm = 63,
+    EacR11snorm = 64,
+    EacRg11unorm = 65,
+    EacRg11snorm = 66,
+    Astc4x4Unorm = 67,
+    Astc4x4UnormSrgb = 68,
+    Astc5x4Unorm = 69,
+    Astc5x4UnormSrgb = 70,
+    Astc5x5Unorm = 71,
+    Astc5x5UnormSrgb = 72,
+    Astc6x5Unorm = 73,
+    Astc6x5UnormSrgb = 74,
+    Astc6x6Unorm = 75,
+    Astc6x6UnormSrgb = 76,
+    Astc8x5Unorm = 77,
+    Astc8x5UnormSrgb = 78,
+    Astc8x6Unorm = 79,
+    Astc8x6UnormSrgb = 80,
+    Astc8x8Unorm = 81,
+    Astc8x8UnormSrgb = 82,
+    Astc10x5Unorm = 83,
+    Astc10x5UnormSrgb = 84,
+    Astc10x6Unorm = 85,
+    Astc10x6UnormSrgb = 86,
+    Astc10x8Unorm = 87,
+    Astc10x8UnormSrgb = 88,
+    Astc10x10Unorm = 89,
+    Astc10x10UnormSrgb = 90,
+    Astc12x10Unorm = 91,
+    Astc12x10UnormSrgb = 92,
+    Astc12x12Unorm = 93,
+    Astc12x12UnormSrgb = 94,
 }
 
 impl TextureFormat {
     /// Every member, in its source's own order.
     pub const ALL: [TextureFormat; 95] = [
-        TextureFormat::r8unorm,
-        TextureFormat::r8snorm,
-        TextureFormat::r8uint,
-        TextureFormat::r8sint,
-        TextureFormat::r16uint,
-        TextureFormat::r16sint,
-        TextureFormat::r16float,
-        TextureFormat::rg8unorm,
-        TextureFormat::rg8snorm,
-        TextureFormat::rg8uint,
-        TextureFormat::rg8sint,
-        TextureFormat::r32uint,
-        TextureFormat::r32sint,
-        TextureFormat::r32float,
-        TextureFormat::rg16uint,
-        TextureFormat::rg16sint,
-        TextureFormat::rg16float,
-        TextureFormat::rgba8unorm,
-        TextureFormat::rgba8unorm_srgb,
-        TextureFormat::rgba8snorm,
-        TextureFormat::rgba8uint,
-        TextureFormat::rgba8sint,
-        TextureFormat::bgra8unorm,
-        TextureFormat::bgra8unorm_srgb,
-        TextureFormat::rgb9e5ufloat,
-        TextureFormat::rgb10a2uint,
-        TextureFormat::rgb10a2unorm,
-        TextureFormat::rg11b10ufloat,
-        TextureFormat::rg32uint,
-        TextureFormat::rg32sint,
-        TextureFormat::rg32float,
-        TextureFormat::rgba16uint,
-        TextureFormat::rgba16sint,
-        TextureFormat::rgba16float,
-        TextureFormat::rgba32uint,
-        TextureFormat::rgba32sint,
-        TextureFormat::rgba32float,
-        TextureFormat::stencil8,
-        TextureFormat::depth16unorm,
-        TextureFormat::depth24plus,
-        TextureFormat::depth24plus_stencil8,
-        TextureFormat::depth32float,
-        TextureFormat::depth32float_stencil8,
-        TextureFormat::bc1_rgba_unorm,
-        TextureFormat::bc1_rgba_unorm_srgb,
-        TextureFormat::bc2_rgba_unorm,
-        TextureFormat::bc2_rgba_unorm_srgb,
-        TextureFormat::bc3_rgba_unorm,
-        TextureFormat::bc3_rgba_unorm_srgb,
-        TextureFormat::bc4_r_unorm,
-        TextureFormat::bc4_r_snorm,
-        TextureFormat::bc5_rg_unorm,
-        TextureFormat::bc5_rg_snorm,
-        TextureFormat::bc6h_rgb_ufloat,
-        TextureFormat::bc6h_rgb_float,
-        TextureFormat::bc7_rgba_unorm,
-        TextureFormat::bc7_rgba_unorm_srgb,
-        TextureFormat::etc2_rgb8unorm,
-        TextureFormat::etc2_rgb8unorm_srgb,
-        TextureFormat::etc2_rgb8a1unorm,
-        TextureFormat::etc2_rgb8a1unorm_srgb,
-        TextureFormat::etc2_rgba8unorm,
-        TextureFormat::etc2_rgba8unorm_srgb,
-        TextureFormat::eac_r11unorm,
-        TextureFormat::eac_r11snorm,
-        TextureFormat::eac_rg11unorm,
-        TextureFormat::eac_rg11snorm,
-        TextureFormat::astc_4x4_unorm,
-        TextureFormat::astc_4x4_unorm_srgb,
-        TextureFormat::astc_5x4_unorm,
-        TextureFormat::astc_5x4_unorm_srgb,
-        TextureFormat::astc_5x5_unorm,
-        TextureFormat::astc_5x5_unorm_srgb,
-        TextureFormat::astc_6x5_unorm,
-        TextureFormat::astc_6x5_unorm_srgb,
-        TextureFormat::astc_6x6_unorm,
-        TextureFormat::astc_6x6_unorm_srgb,
-        TextureFormat::astc_8x5_unorm,
-        TextureFormat::astc_8x5_unorm_srgb,
-        TextureFormat::astc_8x6_unorm,
-        TextureFormat::astc_8x6_unorm_srgb,
-        TextureFormat::astc_8x8_unorm,
-        TextureFormat::astc_8x8_unorm_srgb,
-        TextureFormat::astc_10x5_unorm,
-        TextureFormat::astc_10x5_unorm_srgb,
-        TextureFormat::astc_10x6_unorm,
-        TextureFormat::astc_10x6_unorm_srgb,
-        TextureFormat::astc_10x8_unorm,
-        TextureFormat::astc_10x8_unorm_srgb,
-        TextureFormat::astc_10x10_unorm,
-        TextureFormat::astc_10x10_unorm_srgb,
-        TextureFormat::astc_12x10_unorm,
-        TextureFormat::astc_12x10_unorm_srgb,
-        TextureFormat::astc_12x12_unorm,
-        TextureFormat::astc_12x12_unorm_srgb,
+        TextureFormat::R8unorm,
+        TextureFormat::R8snorm,
+        TextureFormat::R8uint,
+        TextureFormat::R8sint,
+        TextureFormat::R16uint,
+        TextureFormat::R16sint,
+        TextureFormat::R16float,
+        TextureFormat::Rg8unorm,
+        TextureFormat::Rg8snorm,
+        TextureFormat::Rg8uint,
+        TextureFormat::Rg8sint,
+        TextureFormat::R32uint,
+        TextureFormat::R32sint,
+        TextureFormat::R32float,
+        TextureFormat::Rg16uint,
+        TextureFormat::Rg16sint,
+        TextureFormat::Rg16float,
+        TextureFormat::Rgba8unorm,
+        TextureFormat::Rgba8unormSrgb,
+        TextureFormat::Rgba8snorm,
+        TextureFormat::Rgba8uint,
+        TextureFormat::Rgba8sint,
+        TextureFormat::Bgra8unorm,
+        TextureFormat::Bgra8unormSrgb,
+        TextureFormat::Rgb9e5ufloat,
+        TextureFormat::Rgb10a2uint,
+        TextureFormat::Rgb10a2unorm,
+        TextureFormat::Rg11b10ufloat,
+        TextureFormat::Rg32uint,
+        TextureFormat::Rg32sint,
+        TextureFormat::Rg32float,
+        TextureFormat::Rgba16uint,
+        TextureFormat::Rgba16sint,
+        TextureFormat::Rgba16float,
+        TextureFormat::Rgba32uint,
+        TextureFormat::Rgba32sint,
+        TextureFormat::Rgba32float,
+        TextureFormat::Stencil8,
+        TextureFormat::Depth16unorm,
+        TextureFormat::Depth24plus,
+        TextureFormat::Depth24plusStencil8,
+        TextureFormat::Depth32float,
+        TextureFormat::Depth32floatStencil8,
+        TextureFormat::Bc1RgbaUnorm,
+        TextureFormat::Bc1RgbaUnormSrgb,
+        TextureFormat::Bc2RgbaUnorm,
+        TextureFormat::Bc2RgbaUnormSrgb,
+        TextureFormat::Bc3RgbaUnorm,
+        TextureFormat::Bc3RgbaUnormSrgb,
+        TextureFormat::Bc4RUnorm,
+        TextureFormat::Bc4RSnorm,
+        TextureFormat::Bc5RgUnorm,
+        TextureFormat::Bc5RgSnorm,
+        TextureFormat::Bc6hRgbUfloat,
+        TextureFormat::Bc6hRgbFloat,
+        TextureFormat::Bc7RgbaUnorm,
+        TextureFormat::Bc7RgbaUnormSrgb,
+        TextureFormat::Etc2Rgb8unorm,
+        TextureFormat::Etc2Rgb8unormSrgb,
+        TextureFormat::Etc2Rgb8a1unorm,
+        TextureFormat::Etc2Rgb8a1unormSrgb,
+        TextureFormat::Etc2Rgba8unorm,
+        TextureFormat::Etc2Rgba8unormSrgb,
+        TextureFormat::EacR11unorm,
+        TextureFormat::EacR11snorm,
+        TextureFormat::EacRg11unorm,
+        TextureFormat::EacRg11snorm,
+        TextureFormat::Astc4x4Unorm,
+        TextureFormat::Astc4x4UnormSrgb,
+        TextureFormat::Astc5x4Unorm,
+        TextureFormat::Astc5x4UnormSrgb,
+        TextureFormat::Astc5x5Unorm,
+        TextureFormat::Astc5x5UnormSrgb,
+        TextureFormat::Astc6x5Unorm,
+        TextureFormat::Astc6x5UnormSrgb,
+        TextureFormat::Astc6x6Unorm,
+        TextureFormat::Astc6x6UnormSrgb,
+        TextureFormat::Astc8x5Unorm,
+        TextureFormat::Astc8x5UnormSrgb,
+        TextureFormat::Astc8x6Unorm,
+        TextureFormat::Astc8x6UnormSrgb,
+        TextureFormat::Astc8x8Unorm,
+        TextureFormat::Astc8x8UnormSrgb,
+        TextureFormat::Astc10x5Unorm,
+        TextureFormat::Astc10x5UnormSrgb,
+        TextureFormat::Astc10x6Unorm,
+        TextureFormat::Astc10x6UnormSrgb,
+        TextureFormat::Astc10x8Unorm,
+        TextureFormat::Astc10x8UnormSrgb,
+        TextureFormat::Astc10x10Unorm,
+        TextureFormat::Astc10x10UnormSrgb,
+        TextureFormat::Astc12x10Unorm,
+        TextureFormat::Astc12x10UnormSrgb,
+        TextureFormat::Astc12x12Unorm,
+        TextureFormat::Astc12x12UnormSrgb,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<TextureFormat> {
         match val {
-            0 => Some(TextureFormat::r8unorm),
-            1 => Some(TextureFormat::r8snorm),
-            2 => Some(TextureFormat::r8uint),
-            3 => Some(TextureFormat::r8sint),
-            4 => Some(TextureFormat::r16uint),
-            5 => Some(TextureFormat::r16sint),
-            6 => Some(TextureFormat::r16float),
-            7 => Some(TextureFormat::rg8unorm),
-            8 => Some(TextureFormat::rg8snorm),
-            9 => Some(TextureFormat::rg8uint),
-            10 => Some(TextureFormat::rg8sint),
-            11 => Some(TextureFormat::r32uint),
-            12 => Some(TextureFormat::r32sint),
-            13 => Some(TextureFormat::r32float),
-            14 => Some(TextureFormat::rg16uint),
-            15 => Some(TextureFormat::rg16sint),
-            16 => Some(TextureFormat::rg16float),
-            17 => Some(TextureFormat::rgba8unorm),
-            18 => Some(TextureFormat::rgba8unorm_srgb),
-            19 => Some(TextureFormat::rgba8snorm),
-            20 => Some(TextureFormat::rgba8uint),
-            21 => Some(TextureFormat::rgba8sint),
-            22 => Some(TextureFormat::bgra8unorm),
-            23 => Some(TextureFormat::bgra8unorm_srgb),
-            24 => Some(TextureFormat::rgb9e5ufloat),
-            25 => Some(TextureFormat::rgb10a2uint),
-            26 => Some(TextureFormat::rgb10a2unorm),
-            27 => Some(TextureFormat::rg11b10ufloat),
-            28 => Some(TextureFormat::rg32uint),
-            29 => Some(TextureFormat::rg32sint),
-            30 => Some(TextureFormat::rg32float),
-            31 => Some(TextureFormat::rgba16uint),
-            32 => Some(TextureFormat::rgba16sint),
-            33 => Some(TextureFormat::rgba16float),
-            34 => Some(TextureFormat::rgba32uint),
-            35 => Some(TextureFormat::rgba32sint),
-            36 => Some(TextureFormat::rgba32float),
-            37 => Some(TextureFormat::stencil8),
-            38 => Some(TextureFormat::depth16unorm),
-            39 => Some(TextureFormat::depth24plus),
-            40 => Some(TextureFormat::depth24plus_stencil8),
-            41 => Some(TextureFormat::depth32float),
-            42 => Some(TextureFormat::depth32float_stencil8),
-            43 => Some(TextureFormat::bc1_rgba_unorm),
-            44 => Some(TextureFormat::bc1_rgba_unorm_srgb),
-            45 => Some(TextureFormat::bc2_rgba_unorm),
-            46 => Some(TextureFormat::bc2_rgba_unorm_srgb),
-            47 => Some(TextureFormat::bc3_rgba_unorm),
-            48 => Some(TextureFormat::bc3_rgba_unorm_srgb),
-            49 => Some(TextureFormat::bc4_r_unorm),
-            50 => Some(TextureFormat::bc4_r_snorm),
-            51 => Some(TextureFormat::bc5_rg_unorm),
-            52 => Some(TextureFormat::bc5_rg_snorm),
-            53 => Some(TextureFormat::bc6h_rgb_ufloat),
-            54 => Some(TextureFormat::bc6h_rgb_float),
-            55 => Some(TextureFormat::bc7_rgba_unorm),
-            56 => Some(TextureFormat::bc7_rgba_unorm_srgb),
-            57 => Some(TextureFormat::etc2_rgb8unorm),
-            58 => Some(TextureFormat::etc2_rgb8unorm_srgb),
-            59 => Some(TextureFormat::etc2_rgb8a1unorm),
-            60 => Some(TextureFormat::etc2_rgb8a1unorm_srgb),
-            61 => Some(TextureFormat::etc2_rgba8unorm),
-            62 => Some(TextureFormat::etc2_rgba8unorm_srgb),
-            63 => Some(TextureFormat::eac_r11unorm),
-            64 => Some(TextureFormat::eac_r11snorm),
-            65 => Some(TextureFormat::eac_rg11unorm),
-            66 => Some(TextureFormat::eac_rg11snorm),
-            67 => Some(TextureFormat::astc_4x4_unorm),
-            68 => Some(TextureFormat::astc_4x4_unorm_srgb),
-            69 => Some(TextureFormat::astc_5x4_unorm),
-            70 => Some(TextureFormat::astc_5x4_unorm_srgb),
-            71 => Some(TextureFormat::astc_5x5_unorm),
-            72 => Some(TextureFormat::astc_5x5_unorm_srgb),
-            73 => Some(TextureFormat::astc_6x5_unorm),
-            74 => Some(TextureFormat::astc_6x5_unorm_srgb),
-            75 => Some(TextureFormat::astc_6x6_unorm),
-            76 => Some(TextureFormat::astc_6x6_unorm_srgb),
-            77 => Some(TextureFormat::astc_8x5_unorm),
-            78 => Some(TextureFormat::astc_8x5_unorm_srgb),
-            79 => Some(TextureFormat::astc_8x6_unorm),
-            80 => Some(TextureFormat::astc_8x6_unorm_srgb),
-            81 => Some(TextureFormat::astc_8x8_unorm),
-            82 => Some(TextureFormat::astc_8x8_unorm_srgb),
-            83 => Some(TextureFormat::astc_10x5_unorm),
-            84 => Some(TextureFormat::astc_10x5_unorm_srgb),
-            85 => Some(TextureFormat::astc_10x6_unorm),
-            86 => Some(TextureFormat::astc_10x6_unorm_srgb),
-            87 => Some(TextureFormat::astc_10x8_unorm),
-            88 => Some(TextureFormat::astc_10x8_unorm_srgb),
-            89 => Some(TextureFormat::astc_10x10_unorm),
-            90 => Some(TextureFormat::astc_10x10_unorm_srgb),
-            91 => Some(TextureFormat::astc_12x10_unorm),
-            92 => Some(TextureFormat::astc_12x10_unorm_srgb),
-            93 => Some(TextureFormat::astc_12x12_unorm),
-            94 => Some(TextureFormat::astc_12x12_unorm_srgb),
+            0 => Some(TextureFormat::R8unorm),
+            1 => Some(TextureFormat::R8snorm),
+            2 => Some(TextureFormat::R8uint),
+            3 => Some(TextureFormat::R8sint),
+            4 => Some(TextureFormat::R16uint),
+            5 => Some(TextureFormat::R16sint),
+            6 => Some(TextureFormat::R16float),
+            7 => Some(TextureFormat::Rg8unorm),
+            8 => Some(TextureFormat::Rg8snorm),
+            9 => Some(TextureFormat::Rg8uint),
+            10 => Some(TextureFormat::Rg8sint),
+            11 => Some(TextureFormat::R32uint),
+            12 => Some(TextureFormat::R32sint),
+            13 => Some(TextureFormat::R32float),
+            14 => Some(TextureFormat::Rg16uint),
+            15 => Some(TextureFormat::Rg16sint),
+            16 => Some(TextureFormat::Rg16float),
+            17 => Some(TextureFormat::Rgba8unorm),
+            18 => Some(TextureFormat::Rgba8unormSrgb),
+            19 => Some(TextureFormat::Rgba8snorm),
+            20 => Some(TextureFormat::Rgba8uint),
+            21 => Some(TextureFormat::Rgba8sint),
+            22 => Some(TextureFormat::Bgra8unorm),
+            23 => Some(TextureFormat::Bgra8unormSrgb),
+            24 => Some(TextureFormat::Rgb9e5ufloat),
+            25 => Some(TextureFormat::Rgb10a2uint),
+            26 => Some(TextureFormat::Rgb10a2unorm),
+            27 => Some(TextureFormat::Rg11b10ufloat),
+            28 => Some(TextureFormat::Rg32uint),
+            29 => Some(TextureFormat::Rg32sint),
+            30 => Some(TextureFormat::Rg32float),
+            31 => Some(TextureFormat::Rgba16uint),
+            32 => Some(TextureFormat::Rgba16sint),
+            33 => Some(TextureFormat::Rgba16float),
+            34 => Some(TextureFormat::Rgba32uint),
+            35 => Some(TextureFormat::Rgba32sint),
+            36 => Some(TextureFormat::Rgba32float),
+            37 => Some(TextureFormat::Stencil8),
+            38 => Some(TextureFormat::Depth16unorm),
+            39 => Some(TextureFormat::Depth24plus),
+            40 => Some(TextureFormat::Depth24plusStencil8),
+            41 => Some(TextureFormat::Depth32float),
+            42 => Some(TextureFormat::Depth32floatStencil8),
+            43 => Some(TextureFormat::Bc1RgbaUnorm),
+            44 => Some(TextureFormat::Bc1RgbaUnormSrgb),
+            45 => Some(TextureFormat::Bc2RgbaUnorm),
+            46 => Some(TextureFormat::Bc2RgbaUnormSrgb),
+            47 => Some(TextureFormat::Bc3RgbaUnorm),
+            48 => Some(TextureFormat::Bc3RgbaUnormSrgb),
+            49 => Some(TextureFormat::Bc4RUnorm),
+            50 => Some(TextureFormat::Bc4RSnorm),
+            51 => Some(TextureFormat::Bc5RgUnorm),
+            52 => Some(TextureFormat::Bc5RgSnorm),
+            53 => Some(TextureFormat::Bc6hRgbUfloat),
+            54 => Some(TextureFormat::Bc6hRgbFloat),
+            55 => Some(TextureFormat::Bc7RgbaUnorm),
+            56 => Some(TextureFormat::Bc7RgbaUnormSrgb),
+            57 => Some(TextureFormat::Etc2Rgb8unorm),
+            58 => Some(TextureFormat::Etc2Rgb8unormSrgb),
+            59 => Some(TextureFormat::Etc2Rgb8a1unorm),
+            60 => Some(TextureFormat::Etc2Rgb8a1unormSrgb),
+            61 => Some(TextureFormat::Etc2Rgba8unorm),
+            62 => Some(TextureFormat::Etc2Rgba8unormSrgb),
+            63 => Some(TextureFormat::EacR11unorm),
+            64 => Some(TextureFormat::EacR11snorm),
+            65 => Some(TextureFormat::EacRg11unorm),
+            66 => Some(TextureFormat::EacRg11snorm),
+            67 => Some(TextureFormat::Astc4x4Unorm),
+            68 => Some(TextureFormat::Astc4x4UnormSrgb),
+            69 => Some(TextureFormat::Astc5x4Unorm),
+            70 => Some(TextureFormat::Astc5x4UnormSrgb),
+            71 => Some(TextureFormat::Astc5x5Unorm),
+            72 => Some(TextureFormat::Astc5x5UnormSrgb),
+            73 => Some(TextureFormat::Astc6x5Unorm),
+            74 => Some(TextureFormat::Astc6x5UnormSrgb),
+            75 => Some(TextureFormat::Astc6x6Unorm),
+            76 => Some(TextureFormat::Astc6x6UnormSrgb),
+            77 => Some(TextureFormat::Astc8x5Unorm),
+            78 => Some(TextureFormat::Astc8x5UnormSrgb),
+            79 => Some(TextureFormat::Astc8x6Unorm),
+            80 => Some(TextureFormat::Astc8x6UnormSrgb),
+            81 => Some(TextureFormat::Astc8x8Unorm),
+            82 => Some(TextureFormat::Astc8x8UnormSrgb),
+            83 => Some(TextureFormat::Astc10x5Unorm),
+            84 => Some(TextureFormat::Astc10x5UnormSrgb),
+            85 => Some(TextureFormat::Astc10x6Unorm),
+            86 => Some(TextureFormat::Astc10x6UnormSrgb),
+            87 => Some(TextureFormat::Astc10x8Unorm),
+            88 => Some(TextureFormat::Astc10x8UnormSrgb),
+            89 => Some(TextureFormat::Astc10x10Unorm),
+            90 => Some(TextureFormat::Astc10x10UnormSrgb),
+            91 => Some(TextureFormat::Astc12x10Unorm),
+            92 => Some(TextureFormat::Astc12x10UnormSrgb),
+            93 => Some(TextureFormat::Astc12x12Unorm),
+            94 => Some(TextureFormat::Astc12x12UnormSrgb),
             _ => None,
         }
     }
@@ -421,107 +414,107 @@ impl TextureFormat {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            TextureFormat::r8unorm => "r8unorm",
-            TextureFormat::r8snorm => "r8snorm",
-            TextureFormat::r8uint => "r8uint",
-            TextureFormat::r8sint => "r8sint",
-            TextureFormat::r16uint => "r16uint",
-            TextureFormat::r16sint => "r16sint",
-            TextureFormat::r16float => "r16float",
-            TextureFormat::rg8unorm => "rg8unorm",
-            TextureFormat::rg8snorm => "rg8snorm",
-            TextureFormat::rg8uint => "rg8uint",
-            TextureFormat::rg8sint => "rg8sint",
-            TextureFormat::r32uint => "r32uint",
-            TextureFormat::r32sint => "r32sint",
-            TextureFormat::r32float => "r32float",
-            TextureFormat::rg16uint => "rg16uint",
-            TextureFormat::rg16sint => "rg16sint",
-            TextureFormat::rg16float => "rg16float",
-            TextureFormat::rgba8unorm => "rgba8unorm",
-            TextureFormat::rgba8unorm_srgb => "rgba8unorm-srgb",
-            TextureFormat::rgba8snorm => "rgba8snorm",
-            TextureFormat::rgba8uint => "rgba8uint",
-            TextureFormat::rgba8sint => "rgba8sint",
-            TextureFormat::bgra8unorm => "bgra8unorm",
-            TextureFormat::bgra8unorm_srgb => "bgra8unorm-srgb",
-            TextureFormat::rgb9e5ufloat => "rgb9e5ufloat",
-            TextureFormat::rgb10a2uint => "rgb10a2uint",
-            TextureFormat::rgb10a2unorm => "rgb10a2unorm",
-            TextureFormat::rg11b10ufloat => "rg11b10ufloat",
-            TextureFormat::rg32uint => "rg32uint",
-            TextureFormat::rg32sint => "rg32sint",
-            TextureFormat::rg32float => "rg32float",
-            TextureFormat::rgba16uint => "rgba16uint",
-            TextureFormat::rgba16sint => "rgba16sint",
-            TextureFormat::rgba16float => "rgba16float",
-            TextureFormat::rgba32uint => "rgba32uint",
-            TextureFormat::rgba32sint => "rgba32sint",
-            TextureFormat::rgba32float => "rgba32float",
-            TextureFormat::stencil8 => "stencil8",
-            TextureFormat::depth16unorm => "depth16unorm",
-            TextureFormat::depth24plus => "depth24plus",
-            TextureFormat::depth24plus_stencil8 => "depth24plus-stencil8",
-            TextureFormat::depth32float => "depth32float",
-            TextureFormat::depth32float_stencil8 => "depth32float-stencil8",
-            TextureFormat::bc1_rgba_unorm => "bc1-rgba-unorm",
-            TextureFormat::bc1_rgba_unorm_srgb => "bc1-rgba-unorm-srgb",
-            TextureFormat::bc2_rgba_unorm => "bc2-rgba-unorm",
-            TextureFormat::bc2_rgba_unorm_srgb => "bc2-rgba-unorm-srgb",
-            TextureFormat::bc3_rgba_unorm => "bc3-rgba-unorm",
-            TextureFormat::bc3_rgba_unorm_srgb => "bc3-rgba-unorm-srgb",
-            TextureFormat::bc4_r_unorm => "bc4-r-unorm",
-            TextureFormat::bc4_r_snorm => "bc4-r-snorm",
-            TextureFormat::bc5_rg_unorm => "bc5-rg-unorm",
-            TextureFormat::bc5_rg_snorm => "bc5-rg-snorm",
-            TextureFormat::bc6h_rgb_ufloat => "bc6h-rgb-ufloat",
-            TextureFormat::bc6h_rgb_float => "bc6h-rgb-float",
-            TextureFormat::bc7_rgba_unorm => "bc7-rgba-unorm",
-            TextureFormat::bc7_rgba_unorm_srgb => "bc7-rgba-unorm-srgb",
-            TextureFormat::etc2_rgb8unorm => "etc2-rgb8unorm",
-            TextureFormat::etc2_rgb8unorm_srgb => "etc2-rgb8unorm-srgb",
-            TextureFormat::etc2_rgb8a1unorm => "etc2-rgb8a1unorm",
-            TextureFormat::etc2_rgb8a1unorm_srgb => "etc2-rgb8a1unorm-srgb",
-            TextureFormat::etc2_rgba8unorm => "etc2-rgba8unorm",
-            TextureFormat::etc2_rgba8unorm_srgb => "etc2-rgba8unorm-srgb",
-            TextureFormat::eac_r11unorm => "eac-r11unorm",
-            TextureFormat::eac_r11snorm => "eac-r11snorm",
-            TextureFormat::eac_rg11unorm => "eac-rg11unorm",
-            TextureFormat::eac_rg11snorm => "eac-rg11snorm",
-            TextureFormat::astc_4x4_unorm => "astc-4x4-unorm",
-            TextureFormat::astc_4x4_unorm_srgb => "astc-4x4-unorm-srgb",
-            TextureFormat::astc_5x4_unorm => "astc-5x4-unorm",
-            TextureFormat::astc_5x4_unorm_srgb => "astc-5x4-unorm-srgb",
-            TextureFormat::astc_5x5_unorm => "astc-5x5-unorm",
-            TextureFormat::astc_5x5_unorm_srgb => "astc-5x5-unorm-srgb",
-            TextureFormat::astc_6x5_unorm => "astc-6x5-unorm",
-            TextureFormat::astc_6x5_unorm_srgb => "astc-6x5-unorm-srgb",
-            TextureFormat::astc_6x6_unorm => "astc-6x6-unorm",
-            TextureFormat::astc_6x6_unorm_srgb => "astc-6x6-unorm-srgb",
-            TextureFormat::astc_8x5_unorm => "astc-8x5-unorm",
-            TextureFormat::astc_8x5_unorm_srgb => "astc-8x5-unorm-srgb",
-            TextureFormat::astc_8x6_unorm => "astc-8x6-unorm",
-            TextureFormat::astc_8x6_unorm_srgb => "astc-8x6-unorm-srgb",
-            TextureFormat::astc_8x8_unorm => "astc-8x8-unorm",
-            TextureFormat::astc_8x8_unorm_srgb => "astc-8x8-unorm-srgb",
-            TextureFormat::astc_10x5_unorm => "astc-10x5-unorm",
-            TextureFormat::astc_10x5_unorm_srgb => "astc-10x5-unorm-srgb",
-            TextureFormat::astc_10x6_unorm => "astc-10x6-unorm",
-            TextureFormat::astc_10x6_unorm_srgb => "astc-10x6-unorm-srgb",
-            TextureFormat::astc_10x8_unorm => "astc-10x8-unorm",
-            TextureFormat::astc_10x8_unorm_srgb => "astc-10x8-unorm-srgb",
-            TextureFormat::astc_10x10_unorm => "astc-10x10-unorm",
-            TextureFormat::astc_10x10_unorm_srgb => "astc-10x10-unorm-srgb",
-            TextureFormat::astc_12x10_unorm => "astc-12x10-unorm",
-            TextureFormat::astc_12x10_unorm_srgb => "astc-12x10-unorm-srgb",
-            TextureFormat::astc_12x12_unorm => "astc-12x12-unorm",
-            TextureFormat::astc_12x12_unorm_srgb => "astc-12x12-unorm-srgb",
+            TextureFormat::R8unorm => "r8unorm",
+            TextureFormat::R8snorm => "r8snorm",
+            TextureFormat::R8uint => "r8uint",
+            TextureFormat::R8sint => "r8sint",
+            TextureFormat::R16uint => "r16uint",
+            TextureFormat::R16sint => "r16sint",
+            TextureFormat::R16float => "r16float",
+            TextureFormat::Rg8unorm => "rg8unorm",
+            TextureFormat::Rg8snorm => "rg8snorm",
+            TextureFormat::Rg8uint => "rg8uint",
+            TextureFormat::Rg8sint => "rg8sint",
+            TextureFormat::R32uint => "r32uint",
+            TextureFormat::R32sint => "r32sint",
+            TextureFormat::R32float => "r32float",
+            TextureFormat::Rg16uint => "rg16uint",
+            TextureFormat::Rg16sint => "rg16sint",
+            TextureFormat::Rg16float => "rg16float",
+            TextureFormat::Rgba8unorm => "rgba8unorm",
+            TextureFormat::Rgba8unormSrgb => "rgba8unorm-srgb",
+            TextureFormat::Rgba8snorm => "rgba8snorm",
+            TextureFormat::Rgba8uint => "rgba8uint",
+            TextureFormat::Rgba8sint => "rgba8sint",
+            TextureFormat::Bgra8unorm => "bgra8unorm",
+            TextureFormat::Bgra8unormSrgb => "bgra8unorm-srgb",
+            TextureFormat::Rgb9e5ufloat => "rgb9e5ufloat",
+            TextureFormat::Rgb10a2uint => "rgb10a2uint",
+            TextureFormat::Rgb10a2unorm => "rgb10a2unorm",
+            TextureFormat::Rg11b10ufloat => "rg11b10ufloat",
+            TextureFormat::Rg32uint => "rg32uint",
+            TextureFormat::Rg32sint => "rg32sint",
+            TextureFormat::Rg32float => "rg32float",
+            TextureFormat::Rgba16uint => "rgba16uint",
+            TextureFormat::Rgba16sint => "rgba16sint",
+            TextureFormat::Rgba16float => "rgba16float",
+            TextureFormat::Rgba32uint => "rgba32uint",
+            TextureFormat::Rgba32sint => "rgba32sint",
+            TextureFormat::Rgba32float => "rgba32float",
+            TextureFormat::Stencil8 => "stencil8",
+            TextureFormat::Depth16unorm => "depth16unorm",
+            TextureFormat::Depth24plus => "depth24plus",
+            TextureFormat::Depth24plusStencil8 => "depth24plus-stencil8",
+            TextureFormat::Depth32float => "depth32float",
+            TextureFormat::Depth32floatStencil8 => "depth32float-stencil8",
+            TextureFormat::Bc1RgbaUnorm => "bc1-rgba-unorm",
+            TextureFormat::Bc1RgbaUnormSrgb => "bc1-rgba-unorm-srgb",
+            TextureFormat::Bc2RgbaUnorm => "bc2-rgba-unorm",
+            TextureFormat::Bc2RgbaUnormSrgb => "bc2-rgba-unorm-srgb",
+            TextureFormat::Bc3RgbaUnorm => "bc3-rgba-unorm",
+            TextureFormat::Bc3RgbaUnormSrgb => "bc3-rgba-unorm-srgb",
+            TextureFormat::Bc4RUnorm => "bc4-r-unorm",
+            TextureFormat::Bc4RSnorm => "bc4-r-snorm",
+            TextureFormat::Bc5RgUnorm => "bc5-rg-unorm",
+            TextureFormat::Bc5RgSnorm => "bc5-rg-snorm",
+            TextureFormat::Bc6hRgbUfloat => "bc6h-rgb-ufloat",
+            TextureFormat::Bc6hRgbFloat => "bc6h-rgb-float",
+            TextureFormat::Bc7RgbaUnorm => "bc7-rgba-unorm",
+            TextureFormat::Bc7RgbaUnormSrgb => "bc7-rgba-unorm-srgb",
+            TextureFormat::Etc2Rgb8unorm => "etc2-rgb8unorm",
+            TextureFormat::Etc2Rgb8unormSrgb => "etc2-rgb8unorm-srgb",
+            TextureFormat::Etc2Rgb8a1unorm => "etc2-rgb8a1unorm",
+            TextureFormat::Etc2Rgb8a1unormSrgb => "etc2-rgb8a1unorm-srgb",
+            TextureFormat::Etc2Rgba8unorm => "etc2-rgba8unorm",
+            TextureFormat::Etc2Rgba8unormSrgb => "etc2-rgba8unorm-srgb",
+            TextureFormat::EacR11unorm => "eac-r11unorm",
+            TextureFormat::EacR11snorm => "eac-r11snorm",
+            TextureFormat::EacRg11unorm => "eac-rg11unorm",
+            TextureFormat::EacRg11snorm => "eac-rg11snorm",
+            TextureFormat::Astc4x4Unorm => "astc-4x4-unorm",
+            TextureFormat::Astc4x4UnormSrgb => "astc-4x4-unorm-srgb",
+            TextureFormat::Astc5x4Unorm => "astc-5x4-unorm",
+            TextureFormat::Astc5x4UnormSrgb => "astc-5x4-unorm-srgb",
+            TextureFormat::Astc5x5Unorm => "astc-5x5-unorm",
+            TextureFormat::Astc5x5UnormSrgb => "astc-5x5-unorm-srgb",
+            TextureFormat::Astc6x5Unorm => "astc-6x5-unorm",
+            TextureFormat::Astc6x5UnormSrgb => "astc-6x5-unorm-srgb",
+            TextureFormat::Astc6x6Unorm => "astc-6x6-unorm",
+            TextureFormat::Astc6x6UnormSrgb => "astc-6x6-unorm-srgb",
+            TextureFormat::Astc8x5Unorm => "astc-8x5-unorm",
+            TextureFormat::Astc8x5UnormSrgb => "astc-8x5-unorm-srgb",
+            TextureFormat::Astc8x6Unorm => "astc-8x6-unorm",
+            TextureFormat::Astc8x6UnormSrgb => "astc-8x6-unorm-srgb",
+            TextureFormat::Astc8x8Unorm => "astc-8x8-unorm",
+            TextureFormat::Astc8x8UnormSrgb => "astc-8x8-unorm-srgb",
+            TextureFormat::Astc10x5Unorm => "astc-10x5-unorm",
+            TextureFormat::Astc10x5UnormSrgb => "astc-10x5-unorm-srgb",
+            TextureFormat::Astc10x6Unorm => "astc-10x6-unorm",
+            TextureFormat::Astc10x6UnormSrgb => "astc-10x6-unorm-srgb",
+            TextureFormat::Astc10x8Unorm => "astc-10x8-unorm",
+            TextureFormat::Astc10x8UnormSrgb => "astc-10x8-unorm-srgb",
+            TextureFormat::Astc10x10Unorm => "astc-10x10-unorm",
+            TextureFormat::Astc10x10UnormSrgb => "astc-10x10-unorm-srgb",
+            TextureFormat::Astc12x10Unorm => "astc-12x10-unorm",
+            TextureFormat::Astc12x10UnormSrgb => "astc-12x10-unorm-srgb",
+            TextureFormat::Astc12x12Unorm => "astc-12x12-unorm",
+            TextureFormat::Astc12x12UnormSrgb => "astc-12x12-unorm-srgb",
         }
     }
 }
 
 /// These are the members of GPUVertexFormat.
-pub const VERTEX_FORMAT: &[&str] = &[
+pub const VERTEX_FORMATS: &[&str] = &[
     "uint8",
     "uint8x2",
     "uint8x4",
@@ -567,139 +560,139 @@ pub const VERTEX_FORMAT: &[&str] = &[
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum VertexFormat {
-    uint8 = 0,
-    uint8x2 = 1,
-    uint8x4 = 2,
-    sint8 = 3,
-    sint8x2 = 4,
-    sint8x4 = 5,
-    unorm8 = 6,
-    unorm8x2 = 7,
-    unorm8x4 = 8,
-    snorm8 = 9,
-    snorm8x2 = 10,
-    snorm8x4 = 11,
-    uint16 = 12,
-    uint16x2 = 13,
-    uint16x4 = 14,
-    sint16 = 15,
-    sint16x2 = 16,
-    sint16x4 = 17,
-    unorm16 = 18,
-    unorm16x2 = 19,
-    unorm16x4 = 20,
-    snorm16 = 21,
-    snorm16x2 = 22,
-    snorm16x4 = 23,
-    float16 = 24,
-    float16x2 = 25,
-    float16x4 = 26,
-    float32 = 27,
-    float32x2 = 28,
-    float32x3 = 29,
-    float32x4 = 30,
-    uint32 = 31,
-    uint32x2 = 32,
-    uint32x3 = 33,
-    uint32x4 = 34,
-    sint32 = 35,
-    sint32x2 = 36,
-    sint32x3 = 37,
-    sint32x4 = 38,
-    unorm10_10_10_2 = 39,
-    unorm8x4_bgra = 40,
+    Uint8 = 0,
+    Uint8x2 = 1,
+    Uint8x4 = 2,
+    Sint8 = 3,
+    Sint8x2 = 4,
+    Sint8x4 = 5,
+    Unorm8 = 6,
+    Unorm8x2 = 7,
+    Unorm8x4 = 8,
+    Snorm8 = 9,
+    Snorm8x2 = 10,
+    Snorm8x4 = 11,
+    Uint16 = 12,
+    Uint16x2 = 13,
+    Uint16x4 = 14,
+    Sint16 = 15,
+    Sint16x2 = 16,
+    Sint16x4 = 17,
+    Unorm16 = 18,
+    Unorm16x2 = 19,
+    Unorm16x4 = 20,
+    Snorm16 = 21,
+    Snorm16x2 = 22,
+    Snorm16x4 = 23,
+    Float16 = 24,
+    Float16x2 = 25,
+    Float16x4 = 26,
+    Float32 = 27,
+    Float32x2 = 28,
+    Float32x3 = 29,
+    Float32x4 = 30,
+    Uint32 = 31,
+    Uint32x2 = 32,
+    Uint32x3 = 33,
+    Uint32x4 = 34,
+    Sint32 = 35,
+    Sint32x2 = 36,
+    Sint32x3 = 37,
+    Sint32x4 = 38,
+    Unorm1010102 = 39,
+    Unorm8x4Bgra = 40,
 }
 
 impl VertexFormat {
     /// Every member, in its source's own order.
     pub const ALL: [VertexFormat; 41] = [
-        VertexFormat::uint8,
-        VertexFormat::uint8x2,
-        VertexFormat::uint8x4,
-        VertexFormat::sint8,
-        VertexFormat::sint8x2,
-        VertexFormat::sint8x4,
-        VertexFormat::unorm8,
-        VertexFormat::unorm8x2,
-        VertexFormat::unorm8x4,
-        VertexFormat::snorm8,
-        VertexFormat::snorm8x2,
-        VertexFormat::snorm8x4,
-        VertexFormat::uint16,
-        VertexFormat::uint16x2,
-        VertexFormat::uint16x4,
-        VertexFormat::sint16,
-        VertexFormat::sint16x2,
-        VertexFormat::sint16x4,
-        VertexFormat::unorm16,
-        VertexFormat::unorm16x2,
-        VertexFormat::unorm16x4,
-        VertexFormat::snorm16,
-        VertexFormat::snorm16x2,
-        VertexFormat::snorm16x4,
-        VertexFormat::float16,
-        VertexFormat::float16x2,
-        VertexFormat::float16x4,
-        VertexFormat::float32,
-        VertexFormat::float32x2,
-        VertexFormat::float32x3,
-        VertexFormat::float32x4,
-        VertexFormat::uint32,
-        VertexFormat::uint32x2,
-        VertexFormat::uint32x3,
-        VertexFormat::uint32x4,
-        VertexFormat::sint32,
-        VertexFormat::sint32x2,
-        VertexFormat::sint32x3,
-        VertexFormat::sint32x4,
-        VertexFormat::unorm10_10_10_2,
-        VertexFormat::unorm8x4_bgra,
+        VertexFormat::Uint8,
+        VertexFormat::Uint8x2,
+        VertexFormat::Uint8x4,
+        VertexFormat::Sint8,
+        VertexFormat::Sint8x2,
+        VertexFormat::Sint8x4,
+        VertexFormat::Unorm8,
+        VertexFormat::Unorm8x2,
+        VertexFormat::Unorm8x4,
+        VertexFormat::Snorm8,
+        VertexFormat::Snorm8x2,
+        VertexFormat::Snorm8x4,
+        VertexFormat::Uint16,
+        VertexFormat::Uint16x2,
+        VertexFormat::Uint16x4,
+        VertexFormat::Sint16,
+        VertexFormat::Sint16x2,
+        VertexFormat::Sint16x4,
+        VertexFormat::Unorm16,
+        VertexFormat::Unorm16x2,
+        VertexFormat::Unorm16x4,
+        VertexFormat::Snorm16,
+        VertexFormat::Snorm16x2,
+        VertexFormat::Snorm16x4,
+        VertexFormat::Float16,
+        VertexFormat::Float16x2,
+        VertexFormat::Float16x4,
+        VertexFormat::Float32,
+        VertexFormat::Float32x2,
+        VertexFormat::Float32x3,
+        VertexFormat::Float32x4,
+        VertexFormat::Uint32,
+        VertexFormat::Uint32x2,
+        VertexFormat::Uint32x3,
+        VertexFormat::Uint32x4,
+        VertexFormat::Sint32,
+        VertexFormat::Sint32x2,
+        VertexFormat::Sint32x3,
+        VertexFormat::Sint32x4,
+        VertexFormat::Unorm1010102,
+        VertexFormat::Unorm8x4Bgra,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<VertexFormat> {
         match val {
-            0 => Some(VertexFormat::uint8),
-            1 => Some(VertexFormat::uint8x2),
-            2 => Some(VertexFormat::uint8x4),
-            3 => Some(VertexFormat::sint8),
-            4 => Some(VertexFormat::sint8x2),
-            5 => Some(VertexFormat::sint8x4),
-            6 => Some(VertexFormat::unorm8),
-            7 => Some(VertexFormat::unorm8x2),
-            8 => Some(VertexFormat::unorm8x4),
-            9 => Some(VertexFormat::snorm8),
-            10 => Some(VertexFormat::snorm8x2),
-            11 => Some(VertexFormat::snorm8x4),
-            12 => Some(VertexFormat::uint16),
-            13 => Some(VertexFormat::uint16x2),
-            14 => Some(VertexFormat::uint16x4),
-            15 => Some(VertexFormat::sint16),
-            16 => Some(VertexFormat::sint16x2),
-            17 => Some(VertexFormat::sint16x4),
-            18 => Some(VertexFormat::unorm16),
-            19 => Some(VertexFormat::unorm16x2),
-            20 => Some(VertexFormat::unorm16x4),
-            21 => Some(VertexFormat::snorm16),
-            22 => Some(VertexFormat::snorm16x2),
-            23 => Some(VertexFormat::snorm16x4),
-            24 => Some(VertexFormat::float16),
-            25 => Some(VertexFormat::float16x2),
-            26 => Some(VertexFormat::float16x4),
-            27 => Some(VertexFormat::float32),
-            28 => Some(VertexFormat::float32x2),
-            29 => Some(VertexFormat::float32x3),
-            30 => Some(VertexFormat::float32x4),
-            31 => Some(VertexFormat::uint32),
-            32 => Some(VertexFormat::uint32x2),
-            33 => Some(VertexFormat::uint32x3),
-            34 => Some(VertexFormat::uint32x4),
-            35 => Some(VertexFormat::sint32),
-            36 => Some(VertexFormat::sint32x2),
-            37 => Some(VertexFormat::sint32x3),
-            38 => Some(VertexFormat::sint32x4),
-            39 => Some(VertexFormat::unorm10_10_10_2),
-            40 => Some(VertexFormat::unorm8x4_bgra),
+            0 => Some(VertexFormat::Uint8),
+            1 => Some(VertexFormat::Uint8x2),
+            2 => Some(VertexFormat::Uint8x4),
+            3 => Some(VertexFormat::Sint8),
+            4 => Some(VertexFormat::Sint8x2),
+            5 => Some(VertexFormat::Sint8x4),
+            6 => Some(VertexFormat::Unorm8),
+            7 => Some(VertexFormat::Unorm8x2),
+            8 => Some(VertexFormat::Unorm8x4),
+            9 => Some(VertexFormat::Snorm8),
+            10 => Some(VertexFormat::Snorm8x2),
+            11 => Some(VertexFormat::Snorm8x4),
+            12 => Some(VertexFormat::Uint16),
+            13 => Some(VertexFormat::Uint16x2),
+            14 => Some(VertexFormat::Uint16x4),
+            15 => Some(VertexFormat::Sint16),
+            16 => Some(VertexFormat::Sint16x2),
+            17 => Some(VertexFormat::Sint16x4),
+            18 => Some(VertexFormat::Unorm16),
+            19 => Some(VertexFormat::Unorm16x2),
+            20 => Some(VertexFormat::Unorm16x4),
+            21 => Some(VertexFormat::Snorm16),
+            22 => Some(VertexFormat::Snorm16x2),
+            23 => Some(VertexFormat::Snorm16x4),
+            24 => Some(VertexFormat::Float16),
+            25 => Some(VertexFormat::Float16x2),
+            26 => Some(VertexFormat::Float16x4),
+            27 => Some(VertexFormat::Float32),
+            28 => Some(VertexFormat::Float32x2),
+            29 => Some(VertexFormat::Float32x3),
+            30 => Some(VertexFormat::Float32x4),
+            31 => Some(VertexFormat::Uint32),
+            32 => Some(VertexFormat::Uint32x2),
+            33 => Some(VertexFormat::Uint32x3),
+            34 => Some(VertexFormat::Uint32x4),
+            35 => Some(VertexFormat::Sint32),
+            36 => Some(VertexFormat::Sint32x2),
+            37 => Some(VertexFormat::Sint32x3),
+            38 => Some(VertexFormat::Sint32x4),
+            39 => Some(VertexFormat::Unorm1010102),
+            40 => Some(VertexFormat::Unorm8x4Bgra),
             _ => None,
         }
     }
@@ -707,52 +700,52 @@ impl VertexFormat {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            VertexFormat::uint8 => "uint8",
-            VertexFormat::uint8x2 => "uint8x2",
-            VertexFormat::uint8x4 => "uint8x4",
-            VertexFormat::sint8 => "sint8",
-            VertexFormat::sint8x2 => "sint8x2",
-            VertexFormat::sint8x4 => "sint8x4",
-            VertexFormat::unorm8 => "unorm8",
-            VertexFormat::unorm8x2 => "unorm8x2",
-            VertexFormat::unorm8x4 => "unorm8x4",
-            VertexFormat::snorm8 => "snorm8",
-            VertexFormat::snorm8x2 => "snorm8x2",
-            VertexFormat::snorm8x4 => "snorm8x4",
-            VertexFormat::uint16 => "uint16",
-            VertexFormat::uint16x2 => "uint16x2",
-            VertexFormat::uint16x4 => "uint16x4",
-            VertexFormat::sint16 => "sint16",
-            VertexFormat::sint16x2 => "sint16x2",
-            VertexFormat::sint16x4 => "sint16x4",
-            VertexFormat::unorm16 => "unorm16",
-            VertexFormat::unorm16x2 => "unorm16x2",
-            VertexFormat::unorm16x4 => "unorm16x4",
-            VertexFormat::snorm16 => "snorm16",
-            VertexFormat::snorm16x2 => "snorm16x2",
-            VertexFormat::snorm16x4 => "snorm16x4",
-            VertexFormat::float16 => "float16",
-            VertexFormat::float16x2 => "float16x2",
-            VertexFormat::float16x4 => "float16x4",
-            VertexFormat::float32 => "float32",
-            VertexFormat::float32x2 => "float32x2",
-            VertexFormat::float32x3 => "float32x3",
-            VertexFormat::float32x4 => "float32x4",
-            VertexFormat::uint32 => "uint32",
-            VertexFormat::uint32x2 => "uint32x2",
-            VertexFormat::uint32x3 => "uint32x3",
-            VertexFormat::uint32x4 => "uint32x4",
-            VertexFormat::sint32 => "sint32",
-            VertexFormat::sint32x2 => "sint32x2",
-            VertexFormat::sint32x3 => "sint32x3",
-            VertexFormat::sint32x4 => "sint32x4",
-            VertexFormat::unorm10_10_10_2 => "unorm10-10-10-2",
-            VertexFormat::unorm8x4_bgra => "unorm8x4-bgra",
+            VertexFormat::Uint8 => "uint8",
+            VertexFormat::Uint8x2 => "uint8x2",
+            VertexFormat::Uint8x4 => "uint8x4",
+            VertexFormat::Sint8 => "sint8",
+            VertexFormat::Sint8x2 => "sint8x2",
+            VertexFormat::Sint8x4 => "sint8x4",
+            VertexFormat::Unorm8 => "unorm8",
+            VertexFormat::Unorm8x2 => "unorm8x2",
+            VertexFormat::Unorm8x4 => "unorm8x4",
+            VertexFormat::Snorm8 => "snorm8",
+            VertexFormat::Snorm8x2 => "snorm8x2",
+            VertexFormat::Snorm8x4 => "snorm8x4",
+            VertexFormat::Uint16 => "uint16",
+            VertexFormat::Uint16x2 => "uint16x2",
+            VertexFormat::Uint16x4 => "uint16x4",
+            VertexFormat::Sint16 => "sint16",
+            VertexFormat::Sint16x2 => "sint16x2",
+            VertexFormat::Sint16x4 => "sint16x4",
+            VertexFormat::Unorm16 => "unorm16",
+            VertexFormat::Unorm16x2 => "unorm16x2",
+            VertexFormat::Unorm16x4 => "unorm16x4",
+            VertexFormat::Snorm16 => "snorm16",
+            VertexFormat::Snorm16x2 => "snorm16x2",
+            VertexFormat::Snorm16x4 => "snorm16x4",
+            VertexFormat::Float16 => "float16",
+            VertexFormat::Float16x2 => "float16x2",
+            VertexFormat::Float16x4 => "float16x4",
+            VertexFormat::Float32 => "float32",
+            VertexFormat::Float32x2 => "float32x2",
+            VertexFormat::Float32x3 => "float32x3",
+            VertexFormat::Float32x4 => "float32x4",
+            VertexFormat::Uint32 => "uint32",
+            VertexFormat::Uint32x2 => "uint32x2",
+            VertexFormat::Uint32x3 => "uint32x3",
+            VertexFormat::Uint32x4 => "uint32x4",
+            VertexFormat::Sint32 => "sint32",
+            VertexFormat::Sint32x2 => "sint32x2",
+            VertexFormat::Sint32x3 => "sint32x3",
+            VertexFormat::Sint32x4 => "sint32x4",
+            VertexFormat::Unorm1010102 => "unorm10-10-10-2",
+            VertexFormat::Unorm8x4Bgra => "unorm8x4-bgra",
         }
     }
 }
 
-pub const PRIMITIVE_TOPOLOGY: &[&str] = &[
+pub const PRIMITIVE_TOPOLOGIES: &[&str] = &[
     "point-list",
     "line-list",
     "line-strip",
@@ -762,31 +755,31 @@ pub const PRIMITIVE_TOPOLOGY: &[&str] = &[
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum PrimitiveTopology {
-    point_list = 0,
-    line_list = 1,
-    line_strip = 2,
-    triangle_list = 3,
-    triangle_strip = 4,
+    PointList = 0,
+    LineList = 1,
+    LineStrip = 2,
+    TriangleList = 3,
+    TriangleStrip = 4,
 }
 
 impl PrimitiveTopology {
     /// Every member, in its source's own order.
     pub const ALL: [PrimitiveTopology; 5] = [
-        PrimitiveTopology::point_list,
-        PrimitiveTopology::line_list,
-        PrimitiveTopology::line_strip,
-        PrimitiveTopology::triangle_list,
-        PrimitiveTopology::triangle_strip,
+        PrimitiveTopology::PointList,
+        PrimitiveTopology::LineList,
+        PrimitiveTopology::LineStrip,
+        PrimitiveTopology::TriangleList,
+        PrimitiveTopology::TriangleStrip,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<PrimitiveTopology> {
         match val {
-            0 => Some(PrimitiveTopology::point_list),
-            1 => Some(PrimitiveTopology::line_list),
-            2 => Some(PrimitiveTopology::line_strip),
-            3 => Some(PrimitiveTopology::triangle_list),
-            4 => Some(PrimitiveTopology::triangle_strip),
+            0 => Some(PrimitiveTopology::PointList),
+            1 => Some(PrimitiveTopology::LineList),
+            2 => Some(PrimitiveTopology::LineStrip),
+            3 => Some(PrimitiveTopology::TriangleList),
+            4 => Some(PrimitiveTopology::TriangleStrip),
             _ => None,
         }
     }
@@ -794,32 +787,32 @@ impl PrimitiveTopology {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            PrimitiveTopology::point_list => "point-list",
-            PrimitiveTopology::line_list => "line-list",
-            PrimitiveTopology::line_strip => "line-strip",
-            PrimitiveTopology::triangle_list => "triangle-list",
-            PrimitiveTopology::triangle_strip => "triangle-strip",
+            PrimitiveTopology::PointList => "point-list",
+            PrimitiveTopology::LineList => "line-list",
+            PrimitiveTopology::LineStrip => "line-strip",
+            PrimitiveTopology::TriangleList => "triangle-list",
+            PrimitiveTopology::TriangleStrip => "triangle-strip",
         }
     }
 }
 
-pub const INDEX_FORMAT: &[&str] = &["uint16", "uint32"];
+pub const INDEX_FORMATS: &[&str] = &["uint16", "uint32"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum IndexFormat {
-    uint16 = 0,
-    uint32 = 1,
+    Uint16 = 0,
+    Uint32 = 1,
 }
 
 impl IndexFormat {
     /// Every member, in its source's own order.
-    pub const ALL: [IndexFormat; 2] = [IndexFormat::uint16, IndexFormat::uint32];
+    pub const ALL: [IndexFormat; 2] = [IndexFormat::Uint16, IndexFormat::Uint32];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<IndexFormat> {
         match val {
-            0 => Some(IndexFormat::uint16),
-            1 => Some(IndexFormat::uint32),
+            0 => Some(IndexFormat::Uint16),
+            1 => Some(IndexFormat::Uint32),
             _ => None,
         }
     }
@@ -827,29 +820,29 @@ impl IndexFormat {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            IndexFormat::uint16 => "uint16",
-            IndexFormat::uint32 => "uint32",
+            IndexFormat::Uint16 => "uint16",
+            IndexFormat::Uint32 => "uint32",
         }
     }
 }
 
-pub const FRONT_FACE: &[&str] = &["ccw", "cw"];
+pub const FRONT_FACES: &[&str] = &["ccw", "cw"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum FrontFace {
-    ccw = 0,
-    cw = 1,
+    Ccw = 0,
+    Cw = 1,
 }
 
 impl FrontFace {
     /// Every member, in its source's own order.
-    pub const ALL: [FrontFace; 2] = [FrontFace::ccw, FrontFace::cw];
+    pub const ALL: [FrontFace; 2] = [FrontFace::Ccw, FrontFace::Cw];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<FrontFace> {
         match val {
-            0 => Some(FrontFace::ccw),
-            1 => Some(FrontFace::cw),
+            0 => Some(FrontFace::Ccw),
+            1 => Some(FrontFace::Cw),
             _ => None,
         }
     }
@@ -857,31 +850,31 @@ impl FrontFace {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            FrontFace::ccw => "ccw",
-            FrontFace::cw => "cw",
+            FrontFace::Ccw => "ccw",
+            FrontFace::Cw => "cw",
         }
     }
 }
 
-pub const CULL_MODE: &[&str] = &["none", "front", "back"];
+pub const CULL_MODES: &[&str] = &["none", "front", "back"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum CullMode {
-    none = 0,
-    front = 1,
-    back = 2,
+    None = 0,
+    Front = 1,
+    Back = 2,
 }
 
 impl CullMode {
     /// Every member, in its source's own order.
-    pub const ALL: [CullMode; 3] = [CullMode::none, CullMode::front, CullMode::back];
+    pub const ALL: [CullMode; 3] = [CullMode::None, CullMode::Front, CullMode::Back];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<CullMode> {
         match val {
-            0 => Some(CullMode::none),
-            1 => Some(CullMode::front),
-            2 => Some(CullMode::back),
+            0 => Some(CullMode::None),
+            1 => Some(CullMode::Front),
+            2 => Some(CullMode::Back),
             _ => None,
         }
     }
@@ -889,14 +882,14 @@ impl CullMode {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            CullMode::none => "none",
-            CullMode::front => "front",
-            CullMode::back => "back",
+            CullMode::None => "none",
+            CullMode::Front => "front",
+            CullMode::Back => "back",
         }
     }
 }
 
-pub const COMPARE_FUNCTION: &[&str] = &[
+pub const COMPARE_FUNCTIONS: &[&str] = &[
     "never",
     "less",
     "equal",
@@ -909,40 +902,40 @@ pub const COMPARE_FUNCTION: &[&str] = &[
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum CompareFunction {
-    never = 0,
-    less = 1,
-    equal = 2,
-    less_equal = 3,
-    greater = 4,
-    not_equal = 5,
-    greater_equal = 6,
-    always = 7,
+    Never = 0,
+    Less = 1,
+    Equal = 2,
+    LessEqual = 3,
+    Greater = 4,
+    NotEqual = 5,
+    GreaterEqual = 6,
+    Always = 7,
 }
 
 impl CompareFunction {
     /// Every member, in its source's own order.
     pub const ALL: [CompareFunction; 8] = [
-        CompareFunction::never,
-        CompareFunction::less,
-        CompareFunction::equal,
-        CompareFunction::less_equal,
-        CompareFunction::greater,
-        CompareFunction::not_equal,
-        CompareFunction::greater_equal,
-        CompareFunction::always,
+        CompareFunction::Never,
+        CompareFunction::Less,
+        CompareFunction::Equal,
+        CompareFunction::LessEqual,
+        CompareFunction::Greater,
+        CompareFunction::NotEqual,
+        CompareFunction::GreaterEqual,
+        CompareFunction::Always,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<CompareFunction> {
         match val {
-            0 => Some(CompareFunction::never),
-            1 => Some(CompareFunction::less),
-            2 => Some(CompareFunction::equal),
-            3 => Some(CompareFunction::less_equal),
-            4 => Some(CompareFunction::greater),
-            5 => Some(CompareFunction::not_equal),
-            6 => Some(CompareFunction::greater_equal),
-            7 => Some(CompareFunction::always),
+            0 => Some(CompareFunction::Never),
+            1 => Some(CompareFunction::Less),
+            2 => Some(CompareFunction::Equal),
+            3 => Some(CompareFunction::LessEqual),
+            4 => Some(CompareFunction::Greater),
+            5 => Some(CompareFunction::NotEqual),
+            6 => Some(CompareFunction::GreaterEqual),
+            7 => Some(CompareFunction::Always),
             _ => None,
         }
     }
@@ -950,19 +943,19 @@ impl CompareFunction {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            CompareFunction::never => "never",
-            CompareFunction::less => "less",
-            CompareFunction::equal => "equal",
-            CompareFunction::less_equal => "less-equal",
-            CompareFunction::greater => "greater",
-            CompareFunction::not_equal => "not-equal",
-            CompareFunction::greater_equal => "greater-equal",
-            CompareFunction::always => "always",
+            CompareFunction::Never => "never",
+            CompareFunction::Less => "less",
+            CompareFunction::Equal => "equal",
+            CompareFunction::LessEqual => "less-equal",
+            CompareFunction::Greater => "greater",
+            CompareFunction::NotEqual => "not-equal",
+            CompareFunction::GreaterEqual => "greater-equal",
+            CompareFunction::Always => "always",
         }
     }
 }
 
-pub const STENCIL_OPERATION: &[&str] = &[
+pub const STENCIL_OPERATIONS: &[&str] = &[
     "keep",
     "zero",
     "replace",
@@ -975,40 +968,40 @@ pub const STENCIL_OPERATION: &[&str] = &[
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StencilOperation {
-    keep = 0,
-    zero = 1,
-    replace = 2,
-    invert = 3,
-    increment_clamp = 4,
-    decrement_clamp = 5,
-    increment_wrap = 6,
-    decrement_wrap = 7,
+    Keep = 0,
+    Zero = 1,
+    Replace = 2,
+    Invert = 3,
+    IncrementClamp = 4,
+    DecrementClamp = 5,
+    IncrementWrap = 6,
+    DecrementWrap = 7,
 }
 
 impl StencilOperation {
     /// Every member, in its source's own order.
     pub const ALL: [StencilOperation; 8] = [
-        StencilOperation::keep,
-        StencilOperation::zero,
-        StencilOperation::replace,
-        StencilOperation::invert,
-        StencilOperation::increment_clamp,
-        StencilOperation::decrement_clamp,
-        StencilOperation::increment_wrap,
-        StencilOperation::decrement_wrap,
+        StencilOperation::Keep,
+        StencilOperation::Zero,
+        StencilOperation::Replace,
+        StencilOperation::Invert,
+        StencilOperation::IncrementClamp,
+        StencilOperation::DecrementClamp,
+        StencilOperation::IncrementWrap,
+        StencilOperation::DecrementWrap,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<StencilOperation> {
         match val {
-            0 => Some(StencilOperation::keep),
-            1 => Some(StencilOperation::zero),
-            2 => Some(StencilOperation::replace),
-            3 => Some(StencilOperation::invert),
-            4 => Some(StencilOperation::increment_clamp),
-            5 => Some(StencilOperation::decrement_clamp),
-            6 => Some(StencilOperation::increment_wrap),
-            7 => Some(StencilOperation::decrement_wrap),
+            0 => Some(StencilOperation::Keep),
+            1 => Some(StencilOperation::Zero),
+            2 => Some(StencilOperation::Replace),
+            3 => Some(StencilOperation::Invert),
+            4 => Some(StencilOperation::IncrementClamp),
+            5 => Some(StencilOperation::DecrementClamp),
+            6 => Some(StencilOperation::IncrementWrap),
+            7 => Some(StencilOperation::DecrementWrap),
             _ => None,
         }
     }
@@ -1016,47 +1009,47 @@ impl StencilOperation {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            StencilOperation::keep => "keep",
-            StencilOperation::zero => "zero",
-            StencilOperation::replace => "replace",
-            StencilOperation::invert => "invert",
-            StencilOperation::increment_clamp => "increment-clamp",
-            StencilOperation::decrement_clamp => "decrement-clamp",
-            StencilOperation::increment_wrap => "increment-wrap",
-            StencilOperation::decrement_wrap => "decrement-wrap",
+            StencilOperation::Keep => "keep",
+            StencilOperation::Zero => "zero",
+            StencilOperation::Replace => "replace",
+            StencilOperation::Invert => "invert",
+            StencilOperation::IncrementClamp => "increment-clamp",
+            StencilOperation::DecrementClamp => "decrement-clamp",
+            StencilOperation::IncrementWrap => "increment-wrap",
+            StencilOperation::DecrementWrap => "decrement-wrap",
         }
     }
 }
 
-pub const BLEND_OPERATION: &[&str] = &["add", "subtract", "reverse-subtract", "min", "max"];
+pub const BLEND_OPERATIONS: &[&str] = &["add", "subtract", "reverse-subtract", "min", "max"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum BlendOperation {
-    add = 0,
-    subtract = 1,
-    reverse_subtract = 2,
-    min = 3,
-    max = 4,
+    Add = 0,
+    Subtract = 1,
+    ReverseSubtract = 2,
+    Min = 3,
+    Max = 4,
 }
 
 impl BlendOperation {
     /// Every member, in its source's own order.
     pub const ALL: [BlendOperation; 5] = [
-        BlendOperation::add,
-        BlendOperation::subtract,
-        BlendOperation::reverse_subtract,
-        BlendOperation::min,
-        BlendOperation::max,
+        BlendOperation::Add,
+        BlendOperation::Subtract,
+        BlendOperation::ReverseSubtract,
+        BlendOperation::Min,
+        BlendOperation::Max,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<BlendOperation> {
         match val {
-            0 => Some(BlendOperation::add),
-            1 => Some(BlendOperation::subtract),
-            2 => Some(BlendOperation::reverse_subtract),
-            3 => Some(BlendOperation::min),
-            4 => Some(BlendOperation::max),
+            0 => Some(BlendOperation::Add),
+            1 => Some(BlendOperation::Subtract),
+            2 => Some(BlendOperation::ReverseSubtract),
+            3 => Some(BlendOperation::Min),
+            4 => Some(BlendOperation::Max),
             _ => None,
         }
     }
@@ -1064,16 +1057,16 @@ impl BlendOperation {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            BlendOperation::add => "add",
-            BlendOperation::subtract => "subtract",
-            BlendOperation::reverse_subtract => "reverse-subtract",
-            BlendOperation::min => "min",
-            BlendOperation::max => "max",
+            BlendOperation::Add => "add",
+            BlendOperation::Subtract => "subtract",
+            BlendOperation::ReverseSubtract => "reverse-subtract",
+            BlendOperation::Min => "min",
+            BlendOperation::Max => "max",
         }
     }
 }
 
-pub const BLEND_FACTOR: &[&str] = &[
+pub const BLEND_FACTORS: &[&str] = &[
     "zero",
     "one",
     "src",
@@ -1095,67 +1088,67 @@ pub const BLEND_FACTOR: &[&str] = &[
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum BlendFactor {
-    zero = 0,
-    one = 1,
-    src = 2,
-    one_minus_src = 3,
-    src_alpha = 4,
-    one_minus_src_alpha = 5,
-    dst = 6,
-    one_minus_dst = 7,
-    dst_alpha = 8,
-    one_minus_dst_alpha = 9,
-    src_alpha_saturated = 10,
-    constant = 11,
-    one_minus_constant = 12,
-    src1 = 13,
-    one_minus_src1 = 14,
-    src1_alpha = 15,
-    one_minus_src1_alpha = 16,
+    Zero = 0,
+    One = 1,
+    Src = 2,
+    OneMinusSrc = 3,
+    SrcAlpha = 4,
+    OneMinusSrcAlpha = 5,
+    Dst = 6,
+    OneMinusDst = 7,
+    DstAlpha = 8,
+    OneMinusDstAlpha = 9,
+    SrcAlphaSaturated = 10,
+    Constant = 11,
+    OneMinusConstant = 12,
+    Src1 = 13,
+    OneMinusSrc1 = 14,
+    Src1Alpha = 15,
+    OneMinusSrc1Alpha = 16,
 }
 
 impl BlendFactor {
     /// Every member, in its source's own order.
     pub const ALL: [BlendFactor; 17] = [
-        BlendFactor::zero,
-        BlendFactor::one,
-        BlendFactor::src,
-        BlendFactor::one_minus_src,
-        BlendFactor::src_alpha,
-        BlendFactor::one_minus_src_alpha,
-        BlendFactor::dst,
-        BlendFactor::one_minus_dst,
-        BlendFactor::dst_alpha,
-        BlendFactor::one_minus_dst_alpha,
-        BlendFactor::src_alpha_saturated,
-        BlendFactor::constant,
-        BlendFactor::one_minus_constant,
-        BlendFactor::src1,
-        BlendFactor::one_minus_src1,
-        BlendFactor::src1_alpha,
-        BlendFactor::one_minus_src1_alpha,
+        BlendFactor::Zero,
+        BlendFactor::One,
+        BlendFactor::Src,
+        BlendFactor::OneMinusSrc,
+        BlendFactor::SrcAlpha,
+        BlendFactor::OneMinusSrcAlpha,
+        BlendFactor::Dst,
+        BlendFactor::OneMinusDst,
+        BlendFactor::DstAlpha,
+        BlendFactor::OneMinusDstAlpha,
+        BlendFactor::SrcAlphaSaturated,
+        BlendFactor::Constant,
+        BlendFactor::OneMinusConstant,
+        BlendFactor::Src1,
+        BlendFactor::OneMinusSrc1,
+        BlendFactor::Src1Alpha,
+        BlendFactor::OneMinusSrc1Alpha,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<BlendFactor> {
         match val {
-            0 => Some(BlendFactor::zero),
-            1 => Some(BlendFactor::one),
-            2 => Some(BlendFactor::src),
-            3 => Some(BlendFactor::one_minus_src),
-            4 => Some(BlendFactor::src_alpha),
-            5 => Some(BlendFactor::one_minus_src_alpha),
-            6 => Some(BlendFactor::dst),
-            7 => Some(BlendFactor::one_minus_dst),
-            8 => Some(BlendFactor::dst_alpha),
-            9 => Some(BlendFactor::one_minus_dst_alpha),
-            10 => Some(BlendFactor::src_alpha_saturated),
-            11 => Some(BlendFactor::constant),
-            12 => Some(BlendFactor::one_minus_constant),
-            13 => Some(BlendFactor::src1),
-            14 => Some(BlendFactor::one_minus_src1),
-            15 => Some(BlendFactor::src1_alpha),
-            16 => Some(BlendFactor::one_minus_src1_alpha),
+            0 => Some(BlendFactor::Zero),
+            1 => Some(BlendFactor::One),
+            2 => Some(BlendFactor::Src),
+            3 => Some(BlendFactor::OneMinusSrc),
+            4 => Some(BlendFactor::SrcAlpha),
+            5 => Some(BlendFactor::OneMinusSrcAlpha),
+            6 => Some(BlendFactor::Dst),
+            7 => Some(BlendFactor::OneMinusDst),
+            8 => Some(BlendFactor::DstAlpha),
+            9 => Some(BlendFactor::OneMinusDstAlpha),
+            10 => Some(BlendFactor::SrcAlphaSaturated),
+            11 => Some(BlendFactor::Constant),
+            12 => Some(BlendFactor::OneMinusConstant),
+            13 => Some(BlendFactor::Src1),
+            14 => Some(BlendFactor::OneMinusSrc1),
+            15 => Some(BlendFactor::Src1Alpha),
+            16 => Some(BlendFactor::OneMinusSrc1Alpha),
             _ => None,
         }
     }
@@ -1163,44 +1156,44 @@ impl BlendFactor {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            BlendFactor::zero => "zero",
-            BlendFactor::one => "one",
-            BlendFactor::src => "src",
-            BlendFactor::one_minus_src => "one-minus-src",
-            BlendFactor::src_alpha => "src-alpha",
-            BlendFactor::one_minus_src_alpha => "one-minus-src-alpha",
-            BlendFactor::dst => "dst",
-            BlendFactor::one_minus_dst => "one-minus-dst",
-            BlendFactor::dst_alpha => "dst-alpha",
-            BlendFactor::one_minus_dst_alpha => "one-minus-dst-alpha",
-            BlendFactor::src_alpha_saturated => "src-alpha-saturated",
-            BlendFactor::constant => "constant",
-            BlendFactor::one_minus_constant => "one-minus-constant",
-            BlendFactor::src1 => "src1",
-            BlendFactor::one_minus_src1 => "one-minus-src1",
-            BlendFactor::src1_alpha => "src1-alpha",
-            BlendFactor::one_minus_src1_alpha => "one-minus-src1-alpha",
+            BlendFactor::Zero => "zero",
+            BlendFactor::One => "one",
+            BlendFactor::Src => "src",
+            BlendFactor::OneMinusSrc => "one-minus-src",
+            BlendFactor::SrcAlpha => "src-alpha",
+            BlendFactor::OneMinusSrcAlpha => "one-minus-src-alpha",
+            BlendFactor::Dst => "dst",
+            BlendFactor::OneMinusDst => "one-minus-dst",
+            BlendFactor::DstAlpha => "dst-alpha",
+            BlendFactor::OneMinusDstAlpha => "one-minus-dst-alpha",
+            BlendFactor::SrcAlphaSaturated => "src-alpha-saturated",
+            BlendFactor::Constant => "constant",
+            BlendFactor::OneMinusConstant => "one-minus-constant",
+            BlendFactor::Src1 => "src1",
+            BlendFactor::OneMinusSrc1 => "one-minus-src1",
+            BlendFactor::Src1Alpha => "src1-alpha",
+            BlendFactor::OneMinusSrc1Alpha => "one-minus-src1-alpha",
         }
     }
 }
 
-pub const VERTEX_STEP_MODE: &[&str] = &["vertex", "instance"];
+pub const VERTEX_STEP_MODES: &[&str] = &["vertex", "instance"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum VertexStepMode {
-    vertex = 0,
-    instance = 1,
+    Vertex = 0,
+    Instance = 1,
 }
 
 impl VertexStepMode {
     /// Every member, in its source's own order.
-    pub const ALL: [VertexStepMode; 2] = [VertexStepMode::vertex, VertexStepMode::instance];
+    pub const ALL: [VertexStepMode; 2] = [VertexStepMode::Vertex, VertexStepMode::Instance];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<VertexStepMode> {
         match val {
-            0 => Some(VertexStepMode::vertex),
-            1 => Some(VertexStepMode::instance),
+            0 => Some(VertexStepMode::Vertex),
+            1 => Some(VertexStepMode::Instance),
             _ => None,
         }
     }
@@ -1208,35 +1201,35 @@ impl VertexStepMode {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            VertexStepMode::vertex => "vertex",
-            VertexStepMode::instance => "instance",
+            VertexStepMode::Vertex => "vertex",
+            VertexStepMode::Instance => "instance",
         }
     }
 }
 
-pub const ADDRESS_MODE: &[&str] = &["clamp-to-edge", "repeat", "mirror-repeat"];
+pub const ADDRESS_MODES: &[&str] = &["clamp-to-edge", "repeat", "mirror-repeat"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum AddressMode {
-    clamp_to_edge = 0,
-    repeat = 1,
-    mirror_repeat = 2,
+    ClampToEdge = 0,
+    Repeat = 1,
+    MirrorRepeat = 2,
 }
 
 impl AddressMode {
     /// Every member, in its source's own order.
     pub const ALL: [AddressMode; 3] = [
-        AddressMode::clamp_to_edge,
-        AddressMode::repeat,
-        AddressMode::mirror_repeat,
+        AddressMode::ClampToEdge,
+        AddressMode::Repeat,
+        AddressMode::MirrorRepeat,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<AddressMode> {
         match val {
-            0 => Some(AddressMode::clamp_to_edge),
-            1 => Some(AddressMode::repeat),
-            2 => Some(AddressMode::mirror_repeat),
+            0 => Some(AddressMode::ClampToEdge),
+            1 => Some(AddressMode::Repeat),
+            2 => Some(AddressMode::MirrorRepeat),
             _ => None,
         }
     }
@@ -1244,30 +1237,30 @@ impl AddressMode {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            AddressMode::clamp_to_edge => "clamp-to-edge",
-            AddressMode::repeat => "repeat",
-            AddressMode::mirror_repeat => "mirror-repeat",
+            AddressMode::ClampToEdge => "clamp-to-edge",
+            AddressMode::Repeat => "repeat",
+            AddressMode::MirrorRepeat => "mirror-repeat",
         }
     }
 }
 
-pub const FILTER_MODE: &[&str] = &["nearest", "linear"];
+pub const FILTER_MODES: &[&str] = &["nearest", "linear"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum FilterMode {
-    nearest = 0,
-    linear = 1,
+    Nearest = 0,
+    Linear = 1,
 }
 
 impl FilterMode {
     /// Every member, in its source's own order.
-    pub const ALL: [FilterMode; 2] = [FilterMode::nearest, FilterMode::linear];
+    pub const ALL: [FilterMode; 2] = [FilterMode::Nearest, FilterMode::Linear];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<FilterMode> {
         match val {
-            0 => Some(FilterMode::nearest),
-            1 => Some(FilterMode::linear),
+            0 => Some(FilterMode::Nearest),
+            1 => Some(FilterMode::Linear),
             _ => None,
         }
     }
@@ -1275,29 +1268,29 @@ impl FilterMode {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            FilterMode::nearest => "nearest",
-            FilterMode::linear => "linear",
+            FilterMode::Nearest => "nearest",
+            FilterMode::Linear => "linear",
         }
     }
 }
 
-pub const MIPMAP_FILTER_MODE: &[&str] = &["nearest", "linear"];
+pub const MIPMAP_FILTER_MODES: &[&str] = &["nearest", "linear"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum MipmapFilterMode {
-    nearest = 0,
-    linear = 1,
+    Nearest = 0,
+    Linear = 1,
 }
 
 impl MipmapFilterMode {
     /// Every member, in its source's own order.
-    pub const ALL: [MipmapFilterMode; 2] = [MipmapFilterMode::nearest, MipmapFilterMode::linear];
+    pub const ALL: [MipmapFilterMode; 2] = [MipmapFilterMode::Nearest, MipmapFilterMode::Linear];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<MipmapFilterMode> {
         match val {
-            0 => Some(MipmapFilterMode::nearest),
-            1 => Some(MipmapFilterMode::linear),
+            0 => Some(MipmapFilterMode::Nearest),
+            1 => Some(MipmapFilterMode::Linear),
             _ => None,
         }
     }
@@ -1305,13 +1298,13 @@ impl MipmapFilterMode {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            MipmapFilterMode::nearest => "nearest",
-            MipmapFilterMode::linear => "linear",
+            MipmapFilterMode::Nearest => "nearest",
+            MipmapFilterMode::Linear => "linear",
         }
     }
 }
 
-pub const TEXTURE_DIMENSION: &[&str] = &["1d", "2d", "3d"];
+pub const TEXTURE_DIMENSIONS: &[&str] = &["1d", "2d", "3d"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TextureDimension {
@@ -1348,15 +1341,15 @@ impl TextureDimension {
     }
 }
 
-pub const TEXTURE_VIEW_DIMENSION: &[&str] = &["1d", "2d", "2d-array", "cube", "cube-array", "3d"];
+pub const TEXTURE_VIEW_DIMENSIONS: &[&str] = &["1d", "2d", "2d-array", "cube", "cube-array", "3d"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TextureViewDimension {
     _1d = 0,
     _2d = 1,
-    _2d_array = 2,
-    cube = 3,
-    cube_array = 4,
+    _2dArray = 2,
+    Cube = 3,
+    CubeArray = 4,
     _3d = 5,
 }
 
@@ -1365,9 +1358,9 @@ impl TextureViewDimension {
     pub const ALL: [TextureViewDimension; 6] = [
         TextureViewDimension::_1d,
         TextureViewDimension::_2d,
-        TextureViewDimension::_2d_array,
-        TextureViewDimension::cube,
-        TextureViewDimension::cube_array,
+        TextureViewDimension::_2dArray,
+        TextureViewDimension::Cube,
+        TextureViewDimension::CubeArray,
         TextureViewDimension::_3d,
     ];
 
@@ -1376,9 +1369,9 @@ impl TextureViewDimension {
         match val {
             0 => Some(TextureViewDimension::_1d),
             1 => Some(TextureViewDimension::_2d),
-            2 => Some(TextureViewDimension::_2d_array),
-            3 => Some(TextureViewDimension::cube),
-            4 => Some(TextureViewDimension::cube_array),
+            2 => Some(TextureViewDimension::_2dArray),
+            3 => Some(TextureViewDimension::Cube),
+            4 => Some(TextureViewDimension::CubeArray),
             5 => Some(TextureViewDimension::_3d),
             _ => None,
         }
@@ -1389,37 +1382,37 @@ impl TextureViewDimension {
         match self {
             TextureViewDimension::_1d => "1d",
             TextureViewDimension::_2d => "2d",
-            TextureViewDimension::_2d_array => "2d-array",
-            TextureViewDimension::cube => "cube",
-            TextureViewDimension::cube_array => "cube-array",
+            TextureViewDimension::_2dArray => "2d-array",
+            TextureViewDimension::Cube => "cube",
+            TextureViewDimension::CubeArray => "cube-array",
             TextureViewDimension::_3d => "3d",
         }
     }
 }
 
-pub const TEXTURE_ASPECT: &[&str] = &["all", "stencil-only", "depth-only"];
+pub const TEXTURE_ASPECTS: &[&str] = &["all", "stencil-only", "depth-only"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TextureAspect {
-    all = 0,
-    stencil_only = 1,
-    depth_only = 2,
+    All = 0,
+    StencilOnly = 1,
+    DepthOnly = 2,
 }
 
 impl TextureAspect {
     /// Every member, in its source's own order.
     pub const ALL: [TextureAspect; 3] = [
-        TextureAspect::all,
-        TextureAspect::stencil_only,
-        TextureAspect::depth_only,
+        TextureAspect::All,
+        TextureAspect::StencilOnly,
+        TextureAspect::DepthOnly,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<TextureAspect> {
         match val {
-            0 => Some(TextureAspect::all),
-            1 => Some(TextureAspect::stencil_only),
-            2 => Some(TextureAspect::depth_only),
+            0 => Some(TextureAspect::All),
+            1 => Some(TextureAspect::StencilOnly),
+            2 => Some(TextureAspect::DepthOnly),
             _ => None,
         }
     }
@@ -1427,36 +1420,36 @@ impl TextureAspect {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            TextureAspect::all => "all",
-            TextureAspect::stencil_only => "stencil-only",
-            TextureAspect::depth_only => "depth-only",
+            TextureAspect::All => "all",
+            TextureAspect::StencilOnly => "stencil-only",
+            TextureAspect::DepthOnly => "depth-only",
         }
     }
 }
 
-pub const BUFFER_BINDING_TYPE: &[&str] = &["uniform", "storage", "read-only-storage"];
+pub const BUFFER_BINDING_TYPES: &[&str] = &["uniform", "storage", "read-only-storage"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum BufferBindingType {
-    uniform = 0,
-    storage = 1,
-    read_only_storage = 2,
+    Uniform = 0,
+    Storage = 1,
+    ReadOnlyStorage = 2,
 }
 
 impl BufferBindingType {
     /// Every member, in its source's own order.
     pub const ALL: [BufferBindingType; 3] = [
-        BufferBindingType::uniform,
-        BufferBindingType::storage,
-        BufferBindingType::read_only_storage,
+        BufferBindingType::Uniform,
+        BufferBindingType::Storage,
+        BufferBindingType::ReadOnlyStorage,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<BufferBindingType> {
         match val {
-            0 => Some(BufferBindingType::uniform),
-            1 => Some(BufferBindingType::storage),
-            2 => Some(BufferBindingType::read_only_storage),
+            0 => Some(BufferBindingType::Uniform),
+            1 => Some(BufferBindingType::Storage),
+            2 => Some(BufferBindingType::ReadOnlyStorage),
             _ => None,
         }
     }
@@ -1464,36 +1457,36 @@ impl BufferBindingType {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            BufferBindingType::uniform => "uniform",
-            BufferBindingType::storage => "storage",
-            BufferBindingType::read_only_storage => "read-only-storage",
+            BufferBindingType::Uniform => "uniform",
+            BufferBindingType::Storage => "storage",
+            BufferBindingType::ReadOnlyStorage => "read-only-storage",
         }
     }
 }
 
-pub const SAMPLER_BINDING_TYPE: &[&str] = &["filtering", "non-filtering", "comparison"];
+pub const SAMPLER_BINDING_TYPES: &[&str] = &["filtering", "non-filtering", "comparison"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum SamplerBindingType {
-    filtering = 0,
-    non_filtering = 1,
-    comparison = 2,
+    Filtering = 0,
+    NonFiltering = 1,
+    Comparison = 2,
 }
 
 impl SamplerBindingType {
     /// Every member, in its source's own order.
     pub const ALL: [SamplerBindingType; 3] = [
-        SamplerBindingType::filtering,
-        SamplerBindingType::non_filtering,
-        SamplerBindingType::comparison,
+        SamplerBindingType::Filtering,
+        SamplerBindingType::NonFiltering,
+        SamplerBindingType::Comparison,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<SamplerBindingType> {
         match val {
-            0 => Some(SamplerBindingType::filtering),
-            1 => Some(SamplerBindingType::non_filtering),
-            2 => Some(SamplerBindingType::comparison),
+            0 => Some(SamplerBindingType::Filtering),
+            1 => Some(SamplerBindingType::NonFiltering),
+            2 => Some(SamplerBindingType::Comparison),
             _ => None,
         }
     }
@@ -1501,42 +1494,42 @@ impl SamplerBindingType {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            SamplerBindingType::filtering => "filtering",
-            SamplerBindingType::non_filtering => "non-filtering",
-            SamplerBindingType::comparison => "comparison",
+            SamplerBindingType::Filtering => "filtering",
+            SamplerBindingType::NonFiltering => "non-filtering",
+            SamplerBindingType::Comparison => "comparison",
         }
     }
 }
 
-pub const TEXTURE_SAMPLE_TYPE: &[&str] = &["float", "unfilterable-float", "depth", "sint", "uint"];
+pub const TEXTURE_SAMPLE_TYPES: &[&str] = &["float", "unfilterable-float", "depth", "sint", "uint"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TextureSampleType {
-    float = 0,
-    unfilterable_float = 1,
-    depth = 2,
-    sint = 3,
-    uint = 4,
+    Float = 0,
+    UnfilterableFloat = 1,
+    Depth = 2,
+    Sint = 3,
+    Uint = 4,
 }
 
 impl TextureSampleType {
     /// Every member, in its source's own order.
     pub const ALL: [TextureSampleType; 5] = [
-        TextureSampleType::float,
-        TextureSampleType::unfilterable_float,
-        TextureSampleType::depth,
-        TextureSampleType::sint,
-        TextureSampleType::uint,
+        TextureSampleType::Float,
+        TextureSampleType::UnfilterableFloat,
+        TextureSampleType::Depth,
+        TextureSampleType::Sint,
+        TextureSampleType::Uint,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<TextureSampleType> {
         match val {
-            0 => Some(TextureSampleType::float),
-            1 => Some(TextureSampleType::unfilterable_float),
-            2 => Some(TextureSampleType::depth),
-            3 => Some(TextureSampleType::sint),
-            4 => Some(TextureSampleType::uint),
+            0 => Some(TextureSampleType::Float),
+            1 => Some(TextureSampleType::UnfilterableFloat),
+            2 => Some(TextureSampleType::Depth),
+            3 => Some(TextureSampleType::Sint),
+            4 => Some(TextureSampleType::Uint),
             _ => None,
         }
     }
@@ -1544,38 +1537,38 @@ impl TextureSampleType {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            TextureSampleType::float => "float",
-            TextureSampleType::unfilterable_float => "unfilterable-float",
-            TextureSampleType::depth => "depth",
-            TextureSampleType::sint => "sint",
-            TextureSampleType::uint => "uint",
+            TextureSampleType::Float => "float",
+            TextureSampleType::UnfilterableFloat => "unfilterable-float",
+            TextureSampleType::Depth => "depth",
+            TextureSampleType::Sint => "sint",
+            TextureSampleType::Uint => "uint",
         }
     }
 }
 
-pub const STORAGE_TEXTURE_ACCESS: &[&str] = &["write-only", "read-only", "read-write"];
+pub const STORAGE_TEXTURE_ACCESSES: &[&str] = &["write-only", "read-only", "read-write"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StorageTextureAccess {
-    write_only = 0,
-    read_only = 1,
-    read_write = 2,
+    WriteOnly = 0,
+    ReadOnly = 1,
+    ReadWrite = 2,
 }
 
 impl StorageTextureAccess {
     /// Every member, in its source's own order.
     pub const ALL: [StorageTextureAccess; 3] = [
-        StorageTextureAccess::write_only,
-        StorageTextureAccess::read_only,
-        StorageTextureAccess::read_write,
+        StorageTextureAccess::WriteOnly,
+        StorageTextureAccess::ReadOnly,
+        StorageTextureAccess::ReadWrite,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<StorageTextureAccess> {
         match val {
-            0 => Some(StorageTextureAccess::write_only),
-            1 => Some(StorageTextureAccess::read_only),
-            2 => Some(StorageTextureAccess::read_write),
+            0 => Some(StorageTextureAccess::WriteOnly),
+            1 => Some(StorageTextureAccess::ReadOnly),
+            2 => Some(StorageTextureAccess::ReadWrite),
             _ => None,
         }
     }
@@ -1583,30 +1576,30 @@ impl StorageTextureAccess {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            StorageTextureAccess::write_only => "write-only",
-            StorageTextureAccess::read_only => "read-only",
-            StorageTextureAccess::read_write => "read-write",
+            StorageTextureAccess::WriteOnly => "write-only",
+            StorageTextureAccess::ReadOnly => "read-only",
+            StorageTextureAccess::ReadWrite => "read-write",
         }
     }
 }
 
-pub const LOAD_OP: &[&str] = &["load", "clear"];
+pub const LOAD_OPS: &[&str] = &["load", "clear"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum LoadOp {
-    load = 0,
-    clear = 1,
+    Load = 0,
+    Clear = 1,
 }
 
 impl LoadOp {
     /// Every member, in its source's own order.
-    pub const ALL: [LoadOp; 2] = [LoadOp::load, LoadOp::clear];
+    pub const ALL: [LoadOp; 2] = [LoadOp::Load, LoadOp::Clear];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<LoadOp> {
         match val {
-            0 => Some(LoadOp::load),
-            1 => Some(LoadOp::clear),
+            0 => Some(LoadOp::Load),
+            1 => Some(LoadOp::Clear),
             _ => None,
         }
     }
@@ -1614,29 +1607,29 @@ impl LoadOp {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            LoadOp::load => "load",
-            LoadOp::clear => "clear",
+            LoadOp::Load => "load",
+            LoadOp::Clear => "clear",
         }
     }
 }
 
-pub const STORE_OP: &[&str] = &["store", "discard"];
+pub const STORE_OPS: &[&str] = &["store", "discard"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StoreOp {
-    store = 0,
-    discard = 1,
+    Store = 0,
+    Discard = 1,
 }
 
 impl StoreOp {
     /// Every member, in its source's own order.
-    pub const ALL: [StoreOp; 2] = [StoreOp::store, StoreOp::discard];
+    pub const ALL: [StoreOp; 2] = [StoreOp::Store, StoreOp::Discard];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<StoreOp> {
         match val {
-            0 => Some(StoreOp::store),
-            1 => Some(StoreOp::discard),
+            0 => Some(StoreOp::Store),
+            1 => Some(StoreOp::Discard),
             _ => None,
         }
     }
@@ -1644,29 +1637,29 @@ impl StoreOp {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            StoreOp::store => "store",
-            StoreOp::discard => "discard",
+            StoreOp::Store => "store",
+            StoreOp::Discard => "discard",
         }
     }
 }
 
-pub const QUERY_TYPE: &[&str] = &["occlusion", "timestamp"];
+pub const QUERY_TYPES: &[&str] = &["occlusion", "timestamp"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum QueryType {
-    occlusion = 0,
-    timestamp = 1,
+    Occlusion = 0,
+    Timestamp = 1,
 }
 
 impl QueryType {
     /// Every member, in its source's own order.
-    pub const ALL: [QueryType; 2] = [QueryType::occlusion, QueryType::timestamp];
+    pub const ALL: [QueryType; 2] = [QueryType::Occlusion, QueryType::Timestamp];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<QueryType> {
         match val {
-            0 => Some(QueryType::occlusion),
-            1 => Some(QueryType::timestamp),
+            0 => Some(QueryType::Occlusion),
+            1 => Some(QueryType::Timestamp),
             _ => None,
         }
     }
@@ -1674,29 +1667,29 @@ impl QueryType {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            QueryType::occlusion => "occlusion",
-            QueryType::timestamp => "timestamp",
+            QueryType::Occlusion => "occlusion",
+            QueryType::Timestamp => "timestamp",
         }
     }
 }
 
-pub const CANVAS_ALPHA_MODE: &[&str] = &["opaque", "premultiplied"];
+pub const CANVAS_ALPHA_MODES: &[&str] = &["opaque", "premultiplied"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum CanvasAlphaMode {
-    opaque = 0,
-    premultiplied = 1,
+    Opaque = 0,
+    Premultiplied = 1,
 }
 
 impl CanvasAlphaMode {
     /// Every member, in its source's own order.
-    pub const ALL: [CanvasAlphaMode; 2] = [CanvasAlphaMode::opaque, CanvasAlphaMode::premultiplied];
+    pub const ALL: [CanvasAlphaMode; 2] = [CanvasAlphaMode::Opaque, CanvasAlphaMode::Premultiplied];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<CanvasAlphaMode> {
         match val {
-            0 => Some(CanvasAlphaMode::opaque),
-            1 => Some(CanvasAlphaMode::premultiplied),
+            0 => Some(CanvasAlphaMode::Opaque),
+            1 => Some(CanvasAlphaMode::Premultiplied),
             _ => None,
         }
     }
@@ -1704,15 +1697,15 @@ impl CanvasAlphaMode {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            CanvasAlphaMode::opaque => "opaque",
-            CanvasAlphaMode::premultiplied => "premultiplied",
+            CanvasAlphaMode::Opaque => "opaque",
+            CanvasAlphaMode::Premultiplied => "premultiplied",
         }
     }
 }
 
 /// GPUFeatureName. The DEVICE record (api.json) reports a device's features as one bit each,
 /// at the member's place.
-pub const FEATURE_NAME: &[&str] = &[
+pub const FEATURE_NAMES: &[&str] = &[
     "depth-clip-control",
     "depth32float-stencil8",
     "texture-compression-bc",
@@ -1734,67 +1727,67 @@ pub const FEATURE_NAME: &[&str] = &[
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum FeatureName {
-    depth_clip_control = 0,
-    depth32float_stencil8 = 1,
-    texture_compression_bc = 2,
-    texture_compression_bc_sliced_3d = 3,
-    texture_compression_etc2 = 4,
-    texture_compression_astc = 5,
-    texture_compression_astc_sliced_3d = 6,
-    timestamp_query = 7,
-    indirect_first_instance = 8,
-    shader_f16 = 9,
-    rg11b10ufloat_renderable = 10,
-    bgra8unorm_storage = 11,
-    float32_filterable = 12,
-    float32_blendable = 13,
-    clip_distances = 14,
-    dual_source_blending = 15,
-    subgroups = 16,
+    DepthClipControl = 0,
+    Depth32floatStencil8 = 1,
+    TextureCompressionBc = 2,
+    TextureCompressionBcSliced3d = 3,
+    TextureCompressionEtc2 = 4,
+    TextureCompressionAstc = 5,
+    TextureCompressionAstcSliced3d = 6,
+    TimestampQuery = 7,
+    IndirectFirstInstance = 8,
+    ShaderF16 = 9,
+    Rg11b10ufloatRenderable = 10,
+    Bgra8unormStorage = 11,
+    Float32Filterable = 12,
+    Float32Blendable = 13,
+    ClipDistances = 14,
+    DualSourceBlending = 15,
+    Subgroups = 16,
 }
 
 impl FeatureName {
     /// Every member, in its source's own order.
     pub const ALL: [FeatureName; 17] = [
-        FeatureName::depth_clip_control,
-        FeatureName::depth32float_stencil8,
-        FeatureName::texture_compression_bc,
-        FeatureName::texture_compression_bc_sliced_3d,
-        FeatureName::texture_compression_etc2,
-        FeatureName::texture_compression_astc,
-        FeatureName::texture_compression_astc_sliced_3d,
-        FeatureName::timestamp_query,
-        FeatureName::indirect_first_instance,
-        FeatureName::shader_f16,
-        FeatureName::rg11b10ufloat_renderable,
-        FeatureName::bgra8unorm_storage,
-        FeatureName::float32_filterable,
-        FeatureName::float32_blendable,
-        FeatureName::clip_distances,
-        FeatureName::dual_source_blending,
-        FeatureName::subgroups,
+        FeatureName::DepthClipControl,
+        FeatureName::Depth32floatStencil8,
+        FeatureName::TextureCompressionBc,
+        FeatureName::TextureCompressionBcSliced3d,
+        FeatureName::TextureCompressionEtc2,
+        FeatureName::TextureCompressionAstc,
+        FeatureName::TextureCompressionAstcSliced3d,
+        FeatureName::TimestampQuery,
+        FeatureName::IndirectFirstInstance,
+        FeatureName::ShaderF16,
+        FeatureName::Rg11b10ufloatRenderable,
+        FeatureName::Bgra8unormStorage,
+        FeatureName::Float32Filterable,
+        FeatureName::Float32Blendable,
+        FeatureName::ClipDistances,
+        FeatureName::DualSourceBlending,
+        FeatureName::Subgroups,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<FeatureName> {
         match val {
-            0 => Some(FeatureName::depth_clip_control),
-            1 => Some(FeatureName::depth32float_stencil8),
-            2 => Some(FeatureName::texture_compression_bc),
-            3 => Some(FeatureName::texture_compression_bc_sliced_3d),
-            4 => Some(FeatureName::texture_compression_etc2),
-            5 => Some(FeatureName::texture_compression_astc),
-            6 => Some(FeatureName::texture_compression_astc_sliced_3d),
-            7 => Some(FeatureName::timestamp_query),
-            8 => Some(FeatureName::indirect_first_instance),
-            9 => Some(FeatureName::shader_f16),
-            10 => Some(FeatureName::rg11b10ufloat_renderable),
-            11 => Some(FeatureName::bgra8unorm_storage),
-            12 => Some(FeatureName::float32_filterable),
-            13 => Some(FeatureName::float32_blendable),
-            14 => Some(FeatureName::clip_distances),
-            15 => Some(FeatureName::dual_source_blending),
-            16 => Some(FeatureName::subgroups),
+            0 => Some(FeatureName::DepthClipControl),
+            1 => Some(FeatureName::Depth32floatStencil8),
+            2 => Some(FeatureName::TextureCompressionBc),
+            3 => Some(FeatureName::TextureCompressionBcSliced3d),
+            4 => Some(FeatureName::TextureCompressionEtc2),
+            5 => Some(FeatureName::TextureCompressionAstc),
+            6 => Some(FeatureName::TextureCompressionAstcSliced3d),
+            7 => Some(FeatureName::TimestampQuery),
+            8 => Some(FeatureName::IndirectFirstInstance),
+            9 => Some(FeatureName::ShaderF16),
+            10 => Some(FeatureName::Rg11b10ufloatRenderable),
+            11 => Some(FeatureName::Bgra8unormStorage),
+            12 => Some(FeatureName::Float32Filterable),
+            13 => Some(FeatureName::Float32Blendable),
+            14 => Some(FeatureName::ClipDistances),
+            15 => Some(FeatureName::DualSourceBlending),
+            16 => Some(FeatureName::Subgroups),
             _ => None,
         }
     }
@@ -1802,30 +1795,30 @@ impl FeatureName {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            FeatureName::depth_clip_control => "depth-clip-control",
-            FeatureName::depth32float_stencil8 => "depth32float-stencil8",
-            FeatureName::texture_compression_bc => "texture-compression-bc",
-            FeatureName::texture_compression_bc_sliced_3d => "texture-compression-bc-sliced-3d",
-            FeatureName::texture_compression_etc2 => "texture-compression-etc2",
-            FeatureName::texture_compression_astc => "texture-compression-astc",
-            FeatureName::texture_compression_astc_sliced_3d => "texture-compression-astc-sliced-3d",
-            FeatureName::timestamp_query => "timestamp-query",
-            FeatureName::indirect_first_instance => "indirect-first-instance",
-            FeatureName::shader_f16 => "shader-f16",
-            FeatureName::rg11b10ufloat_renderable => "rg11b10ufloat-renderable",
-            FeatureName::bgra8unorm_storage => "bgra8unorm-storage",
-            FeatureName::float32_filterable => "float32-filterable",
-            FeatureName::float32_blendable => "float32-blendable",
-            FeatureName::clip_distances => "clip-distances",
-            FeatureName::dual_source_blending => "dual-source-blending",
-            FeatureName::subgroups => "subgroups",
+            FeatureName::DepthClipControl => "depth-clip-control",
+            FeatureName::Depth32floatStencil8 => "depth32float-stencil8",
+            FeatureName::TextureCompressionBc => "texture-compression-bc",
+            FeatureName::TextureCompressionBcSliced3d => "texture-compression-bc-sliced-3d",
+            FeatureName::TextureCompressionEtc2 => "texture-compression-etc2",
+            FeatureName::TextureCompressionAstc => "texture-compression-astc",
+            FeatureName::TextureCompressionAstcSliced3d => "texture-compression-astc-sliced-3d",
+            FeatureName::TimestampQuery => "timestamp-query",
+            FeatureName::IndirectFirstInstance => "indirect-first-instance",
+            FeatureName::ShaderF16 => "shader-f16",
+            FeatureName::Rg11b10ufloatRenderable => "rg11b10ufloat-renderable",
+            FeatureName::Bgra8unormStorage => "bgra8unorm-storage",
+            FeatureName::Float32Filterable => "float32-filterable",
+            FeatureName::Float32Blendable => "float32-blendable",
+            FeatureName::ClipDistances => "clip-distances",
+            FeatureName::DualSourceBlending => "dual-source-blending",
+            FeatureName::Subgroups => "subgroups",
         }
     }
 }
 
 /// The members of GPUSupportedLimits. The DEVICE record (api.json) reports a device's limits
 /// as one word each, at the member's place.
-pub const LIMIT_NAME: &[&str] = &[
+pub const LIMIT_NAMES: &[&str] = &[
     "maxTextureDimension1D",
     "maxTextureDimension2D",
     "maxTextureDimension3D",
@@ -1861,109 +1854,109 @@ pub const LIMIT_NAME: &[&str] = &[
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum LimitName {
-    maxTextureDimension1D = 0,
-    maxTextureDimension2D = 1,
-    maxTextureDimension3D = 2,
-    maxTextureArrayLayers = 3,
-    maxBindGroups = 4,
-    maxBindGroupsPlusVertexBuffers = 5,
-    maxBindingsPerBindGroup = 6,
-    maxDynamicUniformBuffersPerPipelineLayout = 7,
-    maxDynamicStorageBuffersPerPipelineLayout = 8,
-    maxSampledTexturesPerShaderStage = 9,
-    maxSamplersPerShaderStage = 10,
-    maxStorageBuffersPerShaderStage = 11,
-    maxStorageTexturesPerShaderStage = 12,
-    maxUniformBuffersPerShaderStage = 13,
-    maxUniformBufferBindingSize = 14,
-    maxStorageBufferBindingSize = 15,
-    minUniformBufferOffsetAlignment = 16,
-    minStorageBufferOffsetAlignment = 17,
-    maxVertexBuffers = 18,
-    maxBufferSize = 19,
-    maxVertexAttributes = 20,
-    maxVertexBufferArrayStride = 21,
-    maxInterStageShaderVariables = 22,
-    maxColorAttachments = 23,
-    maxColorAttachmentBytesPerSample = 24,
-    maxComputeWorkgroupStorageSize = 25,
-    maxComputeInvocationsPerWorkgroup = 26,
-    maxComputeWorkgroupSizeX = 27,
-    maxComputeWorkgroupSizeY = 28,
-    maxComputeWorkgroupSizeZ = 29,
-    maxComputeWorkgroupsPerDimension = 30,
+    MaxTextureDimension1d = 0,
+    MaxTextureDimension2d = 1,
+    MaxTextureDimension3d = 2,
+    MaxTextureArrayLayers = 3,
+    MaxBindGroups = 4,
+    MaxBindGroupsPlusVertexBuffers = 5,
+    MaxBindingsPerBindGroup = 6,
+    MaxDynamicUniformBuffersPerPipelineLayout = 7,
+    MaxDynamicStorageBuffersPerPipelineLayout = 8,
+    MaxSampledTexturesPerShaderStage = 9,
+    MaxSamplersPerShaderStage = 10,
+    MaxStorageBuffersPerShaderStage = 11,
+    MaxStorageTexturesPerShaderStage = 12,
+    MaxUniformBuffersPerShaderStage = 13,
+    MaxUniformBufferBindingSize = 14,
+    MaxStorageBufferBindingSize = 15,
+    MinUniformBufferOffsetAlignment = 16,
+    MinStorageBufferOffsetAlignment = 17,
+    MaxVertexBuffers = 18,
+    MaxBufferSize = 19,
+    MaxVertexAttributes = 20,
+    MaxVertexBufferArrayStride = 21,
+    MaxInterStageShaderVariables = 22,
+    MaxColorAttachments = 23,
+    MaxColorAttachmentBytesPerSample = 24,
+    MaxComputeWorkgroupStorageSize = 25,
+    MaxComputeInvocationsPerWorkgroup = 26,
+    MaxComputeWorkgroupSizeX = 27,
+    MaxComputeWorkgroupSizeY = 28,
+    MaxComputeWorkgroupSizeZ = 29,
+    MaxComputeWorkgroupsPerDimension = 30,
 }
 
 impl LimitName {
     /// Every member, in its source's own order.
     pub const ALL: [LimitName; 31] = [
-        LimitName::maxTextureDimension1D,
-        LimitName::maxTextureDimension2D,
-        LimitName::maxTextureDimension3D,
-        LimitName::maxTextureArrayLayers,
-        LimitName::maxBindGroups,
-        LimitName::maxBindGroupsPlusVertexBuffers,
-        LimitName::maxBindingsPerBindGroup,
-        LimitName::maxDynamicUniformBuffersPerPipelineLayout,
-        LimitName::maxDynamicStorageBuffersPerPipelineLayout,
-        LimitName::maxSampledTexturesPerShaderStage,
-        LimitName::maxSamplersPerShaderStage,
-        LimitName::maxStorageBuffersPerShaderStage,
-        LimitName::maxStorageTexturesPerShaderStage,
-        LimitName::maxUniformBuffersPerShaderStage,
-        LimitName::maxUniformBufferBindingSize,
-        LimitName::maxStorageBufferBindingSize,
-        LimitName::minUniformBufferOffsetAlignment,
-        LimitName::minStorageBufferOffsetAlignment,
-        LimitName::maxVertexBuffers,
-        LimitName::maxBufferSize,
-        LimitName::maxVertexAttributes,
-        LimitName::maxVertexBufferArrayStride,
-        LimitName::maxInterStageShaderVariables,
-        LimitName::maxColorAttachments,
-        LimitName::maxColorAttachmentBytesPerSample,
-        LimitName::maxComputeWorkgroupStorageSize,
-        LimitName::maxComputeInvocationsPerWorkgroup,
-        LimitName::maxComputeWorkgroupSizeX,
-        LimitName::maxComputeWorkgroupSizeY,
-        LimitName::maxComputeWorkgroupSizeZ,
-        LimitName::maxComputeWorkgroupsPerDimension,
+        LimitName::MaxTextureDimension1d,
+        LimitName::MaxTextureDimension2d,
+        LimitName::MaxTextureDimension3d,
+        LimitName::MaxTextureArrayLayers,
+        LimitName::MaxBindGroups,
+        LimitName::MaxBindGroupsPlusVertexBuffers,
+        LimitName::MaxBindingsPerBindGroup,
+        LimitName::MaxDynamicUniformBuffersPerPipelineLayout,
+        LimitName::MaxDynamicStorageBuffersPerPipelineLayout,
+        LimitName::MaxSampledTexturesPerShaderStage,
+        LimitName::MaxSamplersPerShaderStage,
+        LimitName::MaxStorageBuffersPerShaderStage,
+        LimitName::MaxStorageTexturesPerShaderStage,
+        LimitName::MaxUniformBuffersPerShaderStage,
+        LimitName::MaxUniformBufferBindingSize,
+        LimitName::MaxStorageBufferBindingSize,
+        LimitName::MinUniformBufferOffsetAlignment,
+        LimitName::MinStorageBufferOffsetAlignment,
+        LimitName::MaxVertexBuffers,
+        LimitName::MaxBufferSize,
+        LimitName::MaxVertexAttributes,
+        LimitName::MaxVertexBufferArrayStride,
+        LimitName::MaxInterStageShaderVariables,
+        LimitName::MaxColorAttachments,
+        LimitName::MaxColorAttachmentBytesPerSample,
+        LimitName::MaxComputeWorkgroupStorageSize,
+        LimitName::MaxComputeInvocationsPerWorkgroup,
+        LimitName::MaxComputeWorkgroupSizeX,
+        LimitName::MaxComputeWorkgroupSizeY,
+        LimitName::MaxComputeWorkgroupSizeZ,
+        LimitName::MaxComputeWorkgroupsPerDimension,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<LimitName> {
         match val {
-            0 => Some(LimitName::maxTextureDimension1D),
-            1 => Some(LimitName::maxTextureDimension2D),
-            2 => Some(LimitName::maxTextureDimension3D),
-            3 => Some(LimitName::maxTextureArrayLayers),
-            4 => Some(LimitName::maxBindGroups),
-            5 => Some(LimitName::maxBindGroupsPlusVertexBuffers),
-            6 => Some(LimitName::maxBindingsPerBindGroup),
-            7 => Some(LimitName::maxDynamicUniformBuffersPerPipelineLayout),
-            8 => Some(LimitName::maxDynamicStorageBuffersPerPipelineLayout),
-            9 => Some(LimitName::maxSampledTexturesPerShaderStage),
-            10 => Some(LimitName::maxSamplersPerShaderStage),
-            11 => Some(LimitName::maxStorageBuffersPerShaderStage),
-            12 => Some(LimitName::maxStorageTexturesPerShaderStage),
-            13 => Some(LimitName::maxUniformBuffersPerShaderStage),
-            14 => Some(LimitName::maxUniformBufferBindingSize),
-            15 => Some(LimitName::maxStorageBufferBindingSize),
-            16 => Some(LimitName::minUniformBufferOffsetAlignment),
-            17 => Some(LimitName::minStorageBufferOffsetAlignment),
-            18 => Some(LimitName::maxVertexBuffers),
-            19 => Some(LimitName::maxBufferSize),
-            20 => Some(LimitName::maxVertexAttributes),
-            21 => Some(LimitName::maxVertexBufferArrayStride),
-            22 => Some(LimitName::maxInterStageShaderVariables),
-            23 => Some(LimitName::maxColorAttachments),
-            24 => Some(LimitName::maxColorAttachmentBytesPerSample),
-            25 => Some(LimitName::maxComputeWorkgroupStorageSize),
-            26 => Some(LimitName::maxComputeInvocationsPerWorkgroup),
-            27 => Some(LimitName::maxComputeWorkgroupSizeX),
-            28 => Some(LimitName::maxComputeWorkgroupSizeY),
-            29 => Some(LimitName::maxComputeWorkgroupSizeZ),
-            30 => Some(LimitName::maxComputeWorkgroupsPerDimension),
+            0 => Some(LimitName::MaxTextureDimension1d),
+            1 => Some(LimitName::MaxTextureDimension2d),
+            2 => Some(LimitName::MaxTextureDimension3d),
+            3 => Some(LimitName::MaxTextureArrayLayers),
+            4 => Some(LimitName::MaxBindGroups),
+            5 => Some(LimitName::MaxBindGroupsPlusVertexBuffers),
+            6 => Some(LimitName::MaxBindingsPerBindGroup),
+            7 => Some(LimitName::MaxDynamicUniformBuffersPerPipelineLayout),
+            8 => Some(LimitName::MaxDynamicStorageBuffersPerPipelineLayout),
+            9 => Some(LimitName::MaxSampledTexturesPerShaderStage),
+            10 => Some(LimitName::MaxSamplersPerShaderStage),
+            11 => Some(LimitName::MaxStorageBuffersPerShaderStage),
+            12 => Some(LimitName::MaxStorageTexturesPerShaderStage),
+            13 => Some(LimitName::MaxUniformBuffersPerShaderStage),
+            14 => Some(LimitName::MaxUniformBufferBindingSize),
+            15 => Some(LimitName::MaxStorageBufferBindingSize),
+            16 => Some(LimitName::MinUniformBufferOffsetAlignment),
+            17 => Some(LimitName::MinStorageBufferOffsetAlignment),
+            18 => Some(LimitName::MaxVertexBuffers),
+            19 => Some(LimitName::MaxBufferSize),
+            20 => Some(LimitName::MaxVertexAttributes),
+            21 => Some(LimitName::MaxVertexBufferArrayStride),
+            22 => Some(LimitName::MaxInterStageShaderVariables),
+            23 => Some(LimitName::MaxColorAttachments),
+            24 => Some(LimitName::MaxColorAttachmentBytesPerSample),
+            25 => Some(LimitName::MaxComputeWorkgroupStorageSize),
+            26 => Some(LimitName::MaxComputeInvocationsPerWorkgroup),
+            27 => Some(LimitName::MaxComputeWorkgroupSizeX),
+            28 => Some(LimitName::MaxComputeWorkgroupSizeY),
+            29 => Some(LimitName::MaxComputeWorkgroupSizeZ),
+            30 => Some(LimitName::MaxComputeWorkgroupsPerDimension),
             _ => None,
         }
     }
@@ -1971,41 +1964,41 @@ impl LimitName {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            LimitName::maxTextureDimension1D => "maxTextureDimension1D",
-            LimitName::maxTextureDimension2D => "maxTextureDimension2D",
-            LimitName::maxTextureDimension3D => "maxTextureDimension3D",
-            LimitName::maxTextureArrayLayers => "maxTextureArrayLayers",
-            LimitName::maxBindGroups => "maxBindGroups",
-            LimitName::maxBindGroupsPlusVertexBuffers => "maxBindGroupsPlusVertexBuffers",
-            LimitName::maxBindingsPerBindGroup => "maxBindingsPerBindGroup",
-            LimitName::maxDynamicUniformBuffersPerPipelineLayout => {
+            LimitName::MaxTextureDimension1d => "maxTextureDimension1D",
+            LimitName::MaxTextureDimension2d => "maxTextureDimension2D",
+            LimitName::MaxTextureDimension3d => "maxTextureDimension3D",
+            LimitName::MaxTextureArrayLayers => "maxTextureArrayLayers",
+            LimitName::MaxBindGroups => "maxBindGroups",
+            LimitName::MaxBindGroupsPlusVertexBuffers => "maxBindGroupsPlusVertexBuffers",
+            LimitName::MaxBindingsPerBindGroup => "maxBindingsPerBindGroup",
+            LimitName::MaxDynamicUniformBuffersPerPipelineLayout => {
                 "maxDynamicUniformBuffersPerPipelineLayout"
             }
-            LimitName::maxDynamicStorageBuffersPerPipelineLayout => {
+            LimitName::MaxDynamicStorageBuffersPerPipelineLayout => {
                 "maxDynamicStorageBuffersPerPipelineLayout"
             }
-            LimitName::maxSampledTexturesPerShaderStage => "maxSampledTexturesPerShaderStage",
-            LimitName::maxSamplersPerShaderStage => "maxSamplersPerShaderStage",
-            LimitName::maxStorageBuffersPerShaderStage => "maxStorageBuffersPerShaderStage",
-            LimitName::maxStorageTexturesPerShaderStage => "maxStorageTexturesPerShaderStage",
-            LimitName::maxUniformBuffersPerShaderStage => "maxUniformBuffersPerShaderStage",
-            LimitName::maxUniformBufferBindingSize => "maxUniformBufferBindingSize",
-            LimitName::maxStorageBufferBindingSize => "maxStorageBufferBindingSize",
-            LimitName::minUniformBufferOffsetAlignment => "minUniformBufferOffsetAlignment",
-            LimitName::minStorageBufferOffsetAlignment => "minStorageBufferOffsetAlignment",
-            LimitName::maxVertexBuffers => "maxVertexBuffers",
-            LimitName::maxBufferSize => "maxBufferSize",
-            LimitName::maxVertexAttributes => "maxVertexAttributes",
-            LimitName::maxVertexBufferArrayStride => "maxVertexBufferArrayStride",
-            LimitName::maxInterStageShaderVariables => "maxInterStageShaderVariables",
-            LimitName::maxColorAttachments => "maxColorAttachments",
-            LimitName::maxColorAttachmentBytesPerSample => "maxColorAttachmentBytesPerSample",
-            LimitName::maxComputeWorkgroupStorageSize => "maxComputeWorkgroupStorageSize",
-            LimitName::maxComputeInvocationsPerWorkgroup => "maxComputeInvocationsPerWorkgroup",
-            LimitName::maxComputeWorkgroupSizeX => "maxComputeWorkgroupSizeX",
-            LimitName::maxComputeWorkgroupSizeY => "maxComputeWorkgroupSizeY",
-            LimitName::maxComputeWorkgroupSizeZ => "maxComputeWorkgroupSizeZ",
-            LimitName::maxComputeWorkgroupsPerDimension => "maxComputeWorkgroupsPerDimension",
+            LimitName::MaxSampledTexturesPerShaderStage => "maxSampledTexturesPerShaderStage",
+            LimitName::MaxSamplersPerShaderStage => "maxSamplersPerShaderStage",
+            LimitName::MaxStorageBuffersPerShaderStage => "maxStorageBuffersPerShaderStage",
+            LimitName::MaxStorageTexturesPerShaderStage => "maxStorageTexturesPerShaderStage",
+            LimitName::MaxUniformBuffersPerShaderStage => "maxUniformBuffersPerShaderStage",
+            LimitName::MaxUniformBufferBindingSize => "maxUniformBufferBindingSize",
+            LimitName::MaxStorageBufferBindingSize => "maxStorageBufferBindingSize",
+            LimitName::MinUniformBufferOffsetAlignment => "minUniformBufferOffsetAlignment",
+            LimitName::MinStorageBufferOffsetAlignment => "minStorageBufferOffsetAlignment",
+            LimitName::MaxVertexBuffers => "maxVertexBuffers",
+            LimitName::MaxBufferSize => "maxBufferSize",
+            LimitName::MaxVertexAttributes => "maxVertexAttributes",
+            LimitName::MaxVertexBufferArrayStride => "maxVertexBufferArrayStride",
+            LimitName::MaxInterStageShaderVariables => "maxInterStageShaderVariables",
+            LimitName::MaxColorAttachments => "maxColorAttachments",
+            LimitName::MaxColorAttachmentBytesPerSample => "maxColorAttachmentBytesPerSample",
+            LimitName::MaxComputeWorkgroupStorageSize => "maxComputeWorkgroupStorageSize",
+            LimitName::MaxComputeInvocationsPerWorkgroup => "maxComputeInvocationsPerWorkgroup",
+            LimitName::MaxComputeWorkgroupSizeX => "maxComputeWorkgroupSizeX",
+            LimitName::MaxComputeWorkgroupSizeY => "maxComputeWorkgroupSizeY",
+            LimitName::MaxComputeWorkgroupSizeZ => "maxComputeWorkgroupSizeZ",
+            LimitName::MaxComputeWorkgroupsPerDimension => "maxComputeWorkgroupsPerDimension",
         }
     }
 }

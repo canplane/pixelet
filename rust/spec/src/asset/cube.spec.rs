@@ -2,26 +2,19 @@
 //
 // GENERATED from spec/spec/asset/cube.json (xpute-gen data.rs)
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    non_camel_case_types,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 /// The texture pack, the file the cube kind's palette entry is drawn from: one image
 /// of every tile under asset/content/cube/, which the asset ingest composes
 /// and ships as the table's file at this path, with which tile each cube
 /// wears on which face (pxl-tool bin/asset.rs, ingest.json). In Rust it is
 /// the slot the catalog fills with it.
-pub const pack: u16 = 0;
+pub const PACK: u16 = 0;
 
 /// What a cell shows when nothing painted it: a cell with nothing on it is
 /// still land, as Carto's background is.
-pub const BASE: Ground = Ground::land;
+pub const BASE: Ground = Ground::Land;
 
 /// The value space's own: what no palette entry or color is (pxl-spec value.rs).
 #[derive(Clone, Copy, Debug)]
@@ -29,7 +22,7 @@ pub struct SentinelRecord {
     pub name: &'static str,
 }
 
-pub const sentinel: [SentinelRecord; 3] = [
+pub const SENTINEL: [SentinelRecord; 3] = [
     SentinelRecord { name: "void" },
     SentinelRecord { name: "unknown" },
     SentinelRecord { name: "air" },
@@ -39,23 +32,23 @@ pub const sentinel: [SentinelRecord; 3] = [
 #[repr(u16)]
 pub enum Sentinel {
     /// Nothing is painted: the ground before a bake writes it, and an object cell no leaf holds.
-    void = 0,
-    /// Bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-content strata.rs`). A cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, and so is a byte no bake wrote. The value is 0xFF so that memory filled with 0xFF reads as unknown. Nothing is placed on it or taken from it.
-    unknown = 255,
+    Void = 0,
+    /// Bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-content strata.rs`). A cell past the area or the coverage, which no source here describes, reads as it. It is solid and drawn as the bedrock's layer (pxl-render paint/palette.rs `SENTINELS`). Nothing is placed on it or taken from it.
+    Unknown = 255,
     /// Explicit air: the leaf stays and erases the layers under it.
-    air = 256,
+    Air = 256,
 }
 
 impl Sentinel {
     /// Every member, in its source's own order.
-    pub const ALL: [Sentinel; 3] = [Sentinel::void, Sentinel::unknown, Sentinel::air];
+    pub const ALL: [Sentinel; 3] = [Sentinel::Void, Sentinel::Unknown, Sentinel::Air];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u16) -> Option<Sentinel> {
         match val {
-            0 => Some(Sentinel::void),
-            255 => Some(Sentinel::unknown),
-            256 => Some(Sentinel::air),
+            0 => Some(Sentinel::Void),
+            255 => Some(Sentinel::Unknown),
+            256 => Some(Sentinel::Air),
             _ => None,
         }
     }
@@ -63,9 +56,9 @@ impl Sentinel {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            Sentinel::void => "void",
-            Sentinel::unknown => "unknown",
-            Sentinel::air => "air",
+            Sentinel::Void => "void",
+            Sentinel::Unknown => "unknown",
+            Sentinel::Air => "air",
         }
     }
 }
@@ -85,7 +78,7 @@ pub struct GroundRecord {
     pub transport: bool,
 }
 
-pub const ground: [GroundRecord; 58] = [
+pub const GROUND: [GroundRecord; 58] = [
     GroundRecord {
         name: "land",
         label: "Land",
@@ -440,247 +433,247 @@ pub const ground: [GroundRecord; 58] = [
 #[repr(u8)]
 pub enum Ground {
     /// Land no feature covers, and what Carto draws no fill for, takes Carto's background, @land-color.
-    land = 1,
+    Land = 1,
     /// Bare rock, scree and shingle take Carto's @bare_ground.
-    bare_ground = 2,
+    BareGround = 2,
     /// Sand takes Carto's @sand.
-    sand = 3,
+    Sand = 3,
     /// Beach and shoal take Carto's @beach.
-    beach = 4,
+    Beach = 4,
     /// Heath and bog take Carto's @heath.
-    heath = 5,
+    Heath = 5,
     /// Scrub and mangrove take Carto's @scrub.
-    scrub = 6,
+    Scrub = 6,
     /// Grass, meadow, garden, village green, marsh and wet meadow take Carto's @grass.
-    grass = 7,
+    Grass = 7,
     /// A park takes Carto's @park.
-    park = 8,
+    Park = 8,
     /// A playground, recreation ground, stadium or sports center takes Carto's @leisure, lighten(@park, 5%).
-    leisure = 9,
+    Leisure = 9,
     /// A pitch or a track takes Carto's @pitch.
-    pitch = 10,
+    Pitch = 10,
     /// Forest, wood and swamp take Carto's @forest.
-    forest = 11,
+    Forest = 11,
     /// An orchard, vineyard or plant nursery takes Carto's @orchard.
-    orchard = 12,
+    Orchard = 12,
     /// Allotments take Carto's @allotments.
-    allotments = 13,
+    Allotments = 13,
     /// Farmland and greenhouses take Carto's @farmland.
-    farmland = 14,
+    Farmland = 14,
     /// A farmyard takes Carto's @farmyard.
-    farmyard = 15,
+    Farmyard = 15,
     /// A campsite or golf course takes Carto's @campsite.
-    campsite = 16,
+    Campsite = 16,
     /// A cemetery or grave yard takes Carto's @cemetery.
-    cemetery = 17,
+    Cemetery = 17,
     /// Residential land takes Carto's @residential.
-    residential = 18,
+    Residential = 18,
     /// Garages take Carto's @garages.
-    garages = 19,
+    Garages = 19,
     /// Retail land takes Carto's @retail.
-    retail = 20,
+    Retail = 20,
     /// Commercial land takes Carto's @commercial.
-    commercial = 21,
+    Commercial = 21,
     /// Industrial land, railway land and works take Carto's @industrial.
-    industrial = 22,
+    Industrial = 22,
     /// A power plant or substation takes Carto's @power, darken(@industrial, 5%).
-    power = 23,
+    Power = 23,
     /// Landfill takes Carto's landuse_landfill, a value with no name.
-    landfill = 24,
+    Landfill = 24,
     /// A quarry takes Carto's @quarry.
-    quarry = 25,
+    Quarry = 25,
     /// A school, college, university, hospital or clinic takes Carto's @societal_amenities.
-    societal_amenities = 26,
+    SocietalAmenities = 26,
     /// A religious site takes Carto's @place_of_worship.
-    place_of_worship = 27,
+    PlaceOfWorship = 27,
     /// An aerodrome, bus station or ferry terminal takes Carto's @transportation-area.
-    transportation_area = 28,
+    TransportationArea = 28,
     /// Parking takes Carto's @parking.
-    parking = 29,
+    Parking = 29,
     /// An apron takes Carto's @apron.
-    apron = 30,
+    Apron = 30,
     /// A glacier takes Carto's @glacier; Carto draws it with the water areas.
-    glacier = 31,
+    Glacier = 31,
     /// Sea, lake, river, canal and any other water take Carto's @water-color.
-    water = 32,
+    Water = 32,
     /// A dam takes Carto's @dam.
-    dam = 33,
+    Dam = 33,
     /// A breakwater, groyne or weir takes Carto's @breakwater-color or @weir-line.
-    breakwater = 34,
+    Breakwater = 34,
     /// A building takes Carto's @building-fill.
-    building = 35,
+    Building = 35,
     /// A place of worship, a terminal or a station takes Carto's @building-major-fill at z16 and finer, as a cell is z16.
-    building_major = 36,
+    BuildingMajor = 36,
     /// Footways, steps and paths take Carto's @footway-fill or @steps-fill.
-    footway = 37,
+    Footway = 37,
     /// A cycleway takes Carto's @cycleway-fill.
-    cycleway = 38,
+    Cycleway = 38,
     /// A bridleway takes Carto's @bridleway-fill.
-    bridleway = 39,
+    Bridleway = 39,
     /// A track, an agricultural or forest way, takes Carto's @track-fill.
-    track = 40,
+    Track = 40,
     /// A pedestrian street takes Carto's @pedestrian-fill.
-    pedestrian = 41,
+    Pedestrian = 41,
     /// A living street takes Carto's @living-street-fill.
-    living_street = 42,
+    LivingStreet = 42,
     /// A tertiary, residential, unclassified or service road takes Carto's @tertiary-fill, @residential-fill or @service-fill, told apart by width.
-    residential_road = 43,
+    ResidentialRoad = 43,
     /// A road of no known class takes Carto's @road-fill.
-    road = 44,
+    Road = 44,
     /// A secondary road takes Carto's @secondary-fill.
-    secondary = 45,
+    Secondary = 45,
     /// A primary road takes Carto's @primary-fill.
-    primary = 46,
+    Primary = 46,
     /// A trunk road takes Carto's @trunk-fill.
-    trunk = 47,
+    Trunk = 47,
     /// A motorway takes Carto's @motorway-fill.
-    motorway = 48,
+    Motorway = 48,
     /// A platform takes Carto's @platform-fill.
-    platform = 49,
+    Platform = 49,
     /// A tram takes Carto's railway_tram, a value with no name.
-    tram = 50,
+    Tram = 50,
     /// Light rail, narrow gauge and funicular take Carto's railway_light_rail, a value with no name.
-    light_rail = 51,
+    LightRail = 51,
     /// A subway takes Carto's railway_subway, a value with no name.
-    subway = 52,
+    Subway = 52,
     /// A monorail takes Carto's railway_monorail, a value with no name.
-    monorail = 53,
+    Monorail = 53,
     /// A railway takes Carto's railway_rail, a value with no name.
-    rail = 54,
+    Rail = 54,
     /// A runway, taxiway or helipad takes Carto's @aeroway-fill, @runway-fill, @taxiway-fill or @helipad-fill.
-    aeroway = 55,
+    Aeroway = 55,
     /// What lies under a face: Minecraft Beta's filler, dirt. Carto paints nothing under the ground, and no bake writes it.
-    soil = 64,
+    Soil = 64,
     /// What lies under sand's filler: Minecraft Beta's sandstone.
-    sandstone = 65,
+    Sandstone = 65,
     /// What lies under the filler: Minecraft Beta's stone.
-    stone = 66,
+    Stone = 66,
 }
 
 impl Ground {
     /// Every member, in its source's own order.
     pub const ALL: [Ground; 58] = [
-        Ground::land,
-        Ground::bare_ground,
-        Ground::sand,
-        Ground::beach,
-        Ground::heath,
-        Ground::scrub,
-        Ground::grass,
-        Ground::park,
-        Ground::leisure,
-        Ground::pitch,
-        Ground::forest,
-        Ground::orchard,
-        Ground::allotments,
-        Ground::farmland,
-        Ground::farmyard,
-        Ground::campsite,
-        Ground::cemetery,
-        Ground::residential,
-        Ground::garages,
-        Ground::retail,
-        Ground::commercial,
-        Ground::industrial,
-        Ground::power,
-        Ground::landfill,
-        Ground::quarry,
-        Ground::societal_amenities,
-        Ground::place_of_worship,
-        Ground::transportation_area,
-        Ground::parking,
-        Ground::apron,
-        Ground::glacier,
-        Ground::water,
-        Ground::dam,
-        Ground::breakwater,
-        Ground::building,
-        Ground::building_major,
-        Ground::footway,
-        Ground::cycleway,
-        Ground::bridleway,
-        Ground::track,
-        Ground::pedestrian,
-        Ground::living_street,
-        Ground::residential_road,
-        Ground::road,
-        Ground::secondary,
-        Ground::primary,
-        Ground::trunk,
-        Ground::motorway,
-        Ground::platform,
-        Ground::tram,
-        Ground::light_rail,
-        Ground::subway,
-        Ground::monorail,
-        Ground::rail,
-        Ground::aeroway,
-        Ground::soil,
-        Ground::sandstone,
-        Ground::stone,
+        Ground::Land,
+        Ground::BareGround,
+        Ground::Sand,
+        Ground::Beach,
+        Ground::Heath,
+        Ground::Scrub,
+        Ground::Grass,
+        Ground::Park,
+        Ground::Leisure,
+        Ground::Pitch,
+        Ground::Forest,
+        Ground::Orchard,
+        Ground::Allotments,
+        Ground::Farmland,
+        Ground::Farmyard,
+        Ground::Campsite,
+        Ground::Cemetery,
+        Ground::Residential,
+        Ground::Garages,
+        Ground::Retail,
+        Ground::Commercial,
+        Ground::Industrial,
+        Ground::Power,
+        Ground::Landfill,
+        Ground::Quarry,
+        Ground::SocietalAmenities,
+        Ground::PlaceOfWorship,
+        Ground::TransportationArea,
+        Ground::Parking,
+        Ground::Apron,
+        Ground::Glacier,
+        Ground::Water,
+        Ground::Dam,
+        Ground::Breakwater,
+        Ground::Building,
+        Ground::BuildingMajor,
+        Ground::Footway,
+        Ground::Cycleway,
+        Ground::Bridleway,
+        Ground::Track,
+        Ground::Pedestrian,
+        Ground::LivingStreet,
+        Ground::ResidentialRoad,
+        Ground::Road,
+        Ground::Secondary,
+        Ground::Primary,
+        Ground::Trunk,
+        Ground::Motorway,
+        Ground::Platform,
+        Ground::Tram,
+        Ground::LightRail,
+        Ground::Subway,
+        Ground::Monorail,
+        Ground::Rail,
+        Ground::Aeroway,
+        Ground::Soil,
+        Ground::Sandstone,
+        Ground::Stone,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<Ground> {
         match val {
-            1 => Some(Ground::land),
-            2 => Some(Ground::bare_ground),
-            3 => Some(Ground::sand),
-            4 => Some(Ground::beach),
-            5 => Some(Ground::heath),
-            6 => Some(Ground::scrub),
-            7 => Some(Ground::grass),
-            8 => Some(Ground::park),
-            9 => Some(Ground::leisure),
-            10 => Some(Ground::pitch),
-            11 => Some(Ground::forest),
-            12 => Some(Ground::orchard),
-            13 => Some(Ground::allotments),
-            14 => Some(Ground::farmland),
-            15 => Some(Ground::farmyard),
-            16 => Some(Ground::campsite),
-            17 => Some(Ground::cemetery),
-            18 => Some(Ground::residential),
-            19 => Some(Ground::garages),
-            20 => Some(Ground::retail),
-            21 => Some(Ground::commercial),
-            22 => Some(Ground::industrial),
-            23 => Some(Ground::power),
-            24 => Some(Ground::landfill),
-            25 => Some(Ground::quarry),
-            26 => Some(Ground::societal_amenities),
-            27 => Some(Ground::place_of_worship),
-            28 => Some(Ground::transportation_area),
-            29 => Some(Ground::parking),
-            30 => Some(Ground::apron),
-            31 => Some(Ground::glacier),
-            32 => Some(Ground::water),
-            33 => Some(Ground::dam),
-            34 => Some(Ground::breakwater),
-            35 => Some(Ground::building),
-            36 => Some(Ground::building_major),
-            37 => Some(Ground::footway),
-            38 => Some(Ground::cycleway),
-            39 => Some(Ground::bridleway),
-            40 => Some(Ground::track),
-            41 => Some(Ground::pedestrian),
-            42 => Some(Ground::living_street),
-            43 => Some(Ground::residential_road),
-            44 => Some(Ground::road),
-            45 => Some(Ground::secondary),
-            46 => Some(Ground::primary),
-            47 => Some(Ground::trunk),
-            48 => Some(Ground::motorway),
-            49 => Some(Ground::platform),
-            50 => Some(Ground::tram),
-            51 => Some(Ground::light_rail),
-            52 => Some(Ground::subway),
-            53 => Some(Ground::monorail),
-            54 => Some(Ground::rail),
-            55 => Some(Ground::aeroway),
-            64 => Some(Ground::soil),
-            65 => Some(Ground::sandstone),
-            66 => Some(Ground::stone),
+            1 => Some(Ground::Land),
+            2 => Some(Ground::BareGround),
+            3 => Some(Ground::Sand),
+            4 => Some(Ground::Beach),
+            5 => Some(Ground::Heath),
+            6 => Some(Ground::Scrub),
+            7 => Some(Ground::Grass),
+            8 => Some(Ground::Park),
+            9 => Some(Ground::Leisure),
+            10 => Some(Ground::Pitch),
+            11 => Some(Ground::Forest),
+            12 => Some(Ground::Orchard),
+            13 => Some(Ground::Allotments),
+            14 => Some(Ground::Farmland),
+            15 => Some(Ground::Farmyard),
+            16 => Some(Ground::Campsite),
+            17 => Some(Ground::Cemetery),
+            18 => Some(Ground::Residential),
+            19 => Some(Ground::Garages),
+            20 => Some(Ground::Retail),
+            21 => Some(Ground::Commercial),
+            22 => Some(Ground::Industrial),
+            23 => Some(Ground::Power),
+            24 => Some(Ground::Landfill),
+            25 => Some(Ground::Quarry),
+            26 => Some(Ground::SocietalAmenities),
+            27 => Some(Ground::PlaceOfWorship),
+            28 => Some(Ground::TransportationArea),
+            29 => Some(Ground::Parking),
+            30 => Some(Ground::Apron),
+            31 => Some(Ground::Glacier),
+            32 => Some(Ground::Water),
+            33 => Some(Ground::Dam),
+            34 => Some(Ground::Breakwater),
+            35 => Some(Ground::Building),
+            36 => Some(Ground::BuildingMajor),
+            37 => Some(Ground::Footway),
+            38 => Some(Ground::Cycleway),
+            39 => Some(Ground::Bridleway),
+            40 => Some(Ground::Track),
+            41 => Some(Ground::Pedestrian),
+            42 => Some(Ground::LivingStreet),
+            43 => Some(Ground::ResidentialRoad),
+            44 => Some(Ground::Road),
+            45 => Some(Ground::Secondary),
+            46 => Some(Ground::Primary),
+            47 => Some(Ground::Trunk),
+            48 => Some(Ground::Motorway),
+            49 => Some(Ground::Platform),
+            50 => Some(Ground::Tram),
+            51 => Some(Ground::LightRail),
+            52 => Some(Ground::Subway),
+            53 => Some(Ground::Monorail),
+            54 => Some(Ground::Rail),
+            55 => Some(Ground::Aeroway),
+            64 => Some(Ground::Soil),
+            65 => Some(Ground::Sandstone),
+            66 => Some(Ground::Stone),
             _ => None,
         }
     }
@@ -688,64 +681,64 @@ impl Ground {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            Ground::land => "land",
-            Ground::bare_ground => "bare_ground",
-            Ground::sand => "sand",
-            Ground::beach => "beach",
-            Ground::heath => "heath",
-            Ground::scrub => "scrub",
-            Ground::grass => "grass",
-            Ground::park => "park",
-            Ground::leisure => "leisure",
-            Ground::pitch => "pitch",
-            Ground::forest => "forest",
-            Ground::orchard => "orchard",
-            Ground::allotments => "allotments",
-            Ground::farmland => "farmland",
-            Ground::farmyard => "farmyard",
-            Ground::campsite => "campsite",
-            Ground::cemetery => "cemetery",
-            Ground::residential => "residential",
-            Ground::garages => "garages",
-            Ground::retail => "retail",
-            Ground::commercial => "commercial",
-            Ground::industrial => "industrial",
-            Ground::power => "power",
-            Ground::landfill => "landfill",
-            Ground::quarry => "quarry",
-            Ground::societal_amenities => "societal_amenities",
-            Ground::place_of_worship => "place_of_worship",
-            Ground::transportation_area => "transportation_area",
-            Ground::parking => "parking",
-            Ground::apron => "apron",
-            Ground::glacier => "glacier",
-            Ground::water => "water",
-            Ground::dam => "dam",
-            Ground::breakwater => "breakwater",
-            Ground::building => "building",
-            Ground::building_major => "building_major",
-            Ground::footway => "footway",
-            Ground::cycleway => "cycleway",
-            Ground::bridleway => "bridleway",
-            Ground::track => "track",
-            Ground::pedestrian => "pedestrian",
-            Ground::living_street => "living_street",
-            Ground::residential_road => "residential_road",
-            Ground::road => "road",
-            Ground::secondary => "secondary",
-            Ground::primary => "primary",
-            Ground::trunk => "trunk",
-            Ground::motorway => "motorway",
-            Ground::platform => "platform",
-            Ground::tram => "tram",
-            Ground::light_rail => "light_rail",
-            Ground::subway => "subway",
-            Ground::monorail => "monorail",
-            Ground::rail => "rail",
-            Ground::aeroway => "aeroway",
-            Ground::soil => "soil",
-            Ground::sandstone => "sandstone",
-            Ground::stone => "stone",
+            Ground::Land => "land",
+            Ground::BareGround => "bare_ground",
+            Ground::Sand => "sand",
+            Ground::Beach => "beach",
+            Ground::Heath => "heath",
+            Ground::Scrub => "scrub",
+            Ground::Grass => "grass",
+            Ground::Park => "park",
+            Ground::Leisure => "leisure",
+            Ground::Pitch => "pitch",
+            Ground::Forest => "forest",
+            Ground::Orchard => "orchard",
+            Ground::Allotments => "allotments",
+            Ground::Farmland => "farmland",
+            Ground::Farmyard => "farmyard",
+            Ground::Campsite => "campsite",
+            Ground::Cemetery => "cemetery",
+            Ground::Residential => "residential",
+            Ground::Garages => "garages",
+            Ground::Retail => "retail",
+            Ground::Commercial => "commercial",
+            Ground::Industrial => "industrial",
+            Ground::Power => "power",
+            Ground::Landfill => "landfill",
+            Ground::Quarry => "quarry",
+            Ground::SocietalAmenities => "societal_amenities",
+            Ground::PlaceOfWorship => "place_of_worship",
+            Ground::TransportationArea => "transportation_area",
+            Ground::Parking => "parking",
+            Ground::Apron => "apron",
+            Ground::Glacier => "glacier",
+            Ground::Water => "water",
+            Ground::Dam => "dam",
+            Ground::Breakwater => "breakwater",
+            Ground::Building => "building",
+            Ground::BuildingMajor => "building_major",
+            Ground::Footway => "footway",
+            Ground::Cycleway => "cycleway",
+            Ground::Bridleway => "bridleway",
+            Ground::Track => "track",
+            Ground::Pedestrian => "pedestrian",
+            Ground::LivingStreet => "living_street",
+            Ground::ResidentialRoad => "residential_road",
+            Ground::Road => "road",
+            Ground::Secondary => "secondary",
+            Ground::Primary => "primary",
+            Ground::Trunk => "trunk",
+            Ground::Motorway => "motorway",
+            Ground::Platform => "platform",
+            Ground::Tram => "tram",
+            Ground::LightRail => "light_rail",
+            Ground::Subway => "subway",
+            Ground::Monorail => "monorail",
+            Ground::Rail => "rail",
+            Ground::Aeroway => "aeroway",
+            Ground::Soil => "soil",
+            Ground::Sandstone => "sandstone",
+            Ground::Stone => "stone",
         }
     }
 }
@@ -759,7 +752,7 @@ pub struct ObjectRecord {
     pub section: &'static str,
 }
 
-pub const object: [ObjectRecord; 15] = [
+pub const OBJECT: [ObjectRecord; 15] = [
     ObjectRecord {
         name: "white",
         label: "White",
@@ -840,61 +833,61 @@ pub const object: [ObjectRecord; 15] = [
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u16)]
 pub enum Object {
-    white = 257,
-    grey = 258,
-    dark_grey = 259,
-    black = 260,
-    red = 261,
-    orange = 262,
-    brown = 263,
-    yellow = 264,
-    green = 265,
-    dark_green = 266,
-    cyan = 267,
-    blue = 268,
-    violet = 269,
-    magenta = 270,
-    pink = 271,
+    White = 257,
+    Grey = 258,
+    DarkGrey = 259,
+    Black = 260,
+    Red = 261,
+    Orange = 262,
+    Brown = 263,
+    Yellow = 264,
+    Green = 265,
+    DarkGreen = 266,
+    Cyan = 267,
+    Blue = 268,
+    Violet = 269,
+    Magenta = 270,
+    Pink = 271,
 }
 
 impl Object {
     /// Every member, in its source's own order.
     pub const ALL: [Object; 15] = [
-        Object::white,
-        Object::grey,
-        Object::dark_grey,
-        Object::black,
-        Object::red,
-        Object::orange,
-        Object::brown,
-        Object::yellow,
-        Object::green,
-        Object::dark_green,
-        Object::cyan,
-        Object::blue,
-        Object::violet,
-        Object::magenta,
-        Object::pink,
+        Object::White,
+        Object::Grey,
+        Object::DarkGrey,
+        Object::Black,
+        Object::Red,
+        Object::Orange,
+        Object::Brown,
+        Object::Yellow,
+        Object::Green,
+        Object::DarkGreen,
+        Object::Cyan,
+        Object::Blue,
+        Object::Violet,
+        Object::Magenta,
+        Object::Pink,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u16) -> Option<Object> {
         match val {
-            257 => Some(Object::white),
-            258 => Some(Object::grey),
-            259 => Some(Object::dark_grey),
-            260 => Some(Object::black),
-            261 => Some(Object::red),
-            262 => Some(Object::orange),
-            263 => Some(Object::brown),
-            264 => Some(Object::yellow),
-            265 => Some(Object::green),
-            266 => Some(Object::dark_green),
-            267 => Some(Object::cyan),
-            268 => Some(Object::blue),
-            269 => Some(Object::violet),
-            270 => Some(Object::magenta),
-            271 => Some(Object::pink),
+            257 => Some(Object::White),
+            258 => Some(Object::Grey),
+            259 => Some(Object::DarkGrey),
+            260 => Some(Object::Black),
+            261 => Some(Object::Red),
+            262 => Some(Object::Orange),
+            263 => Some(Object::Brown),
+            264 => Some(Object::Yellow),
+            265 => Some(Object::Green),
+            266 => Some(Object::DarkGreen),
+            267 => Some(Object::Cyan),
+            268 => Some(Object::Blue),
+            269 => Some(Object::Violet),
+            270 => Some(Object::Magenta),
+            271 => Some(Object::Pink),
             _ => None,
         }
     }
@@ -902,21 +895,21 @@ impl Object {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            Object::white => "white",
-            Object::grey => "grey",
-            Object::dark_grey => "dark_grey",
-            Object::black => "black",
-            Object::red => "red",
-            Object::orange => "orange",
-            Object::brown => "brown",
-            Object::yellow => "yellow",
-            Object::green => "green",
-            Object::dark_green => "dark_green",
-            Object::cyan => "cyan",
-            Object::blue => "blue",
-            Object::violet => "violet",
-            Object::magenta => "magenta",
-            Object::pink => "pink",
+            Object::White => "white",
+            Object::Grey => "grey",
+            Object::DarkGrey => "dark_grey",
+            Object::Black => "black",
+            Object::Red => "red",
+            Object::Orange => "orange",
+            Object::Brown => "brown",
+            Object::Yellow => "yellow",
+            Object::Green => "green",
+            Object::DarkGreen => "dark_green",
+            Object::Cyan => "cyan",
+            Object::Blue => "blue",
+            Object::Violet => "violet",
+            Object::Magenta => "magenta",
+            Object::Pink => "pink",
         }
     }
 }

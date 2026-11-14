@@ -3,7 +3,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_ENOENT, ERRNO_EROFS } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 
 import { LEAF_ZOOM, path as tree } from "@/abi/file.spec.ts";
@@ -52,7 +52,7 @@ test("binding - a path that leads to no node, or whose data its node does not ta
   for (const p of none) {
     assert.deepStrictEqual(
       errnum(() => b.open(p, signal)),
-      Errno.ENOENT,
+      ERRNO_ENOENT,
       JSON.stringify(p),
     );
   }
@@ -72,7 +72,7 @@ test("binding - only the settings and the objects' edits are written", () => {
   for (const p of read_only) {
     assert.deepStrictEqual(
       errnum(() => b.commit!(p, new Uint8Array())),
-      Errno.EROFS,
+      ERRNO_EROFS,
       JSON.stringify(p),
     );
   }

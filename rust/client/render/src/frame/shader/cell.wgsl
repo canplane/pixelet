@@ -38,7 +38,7 @@ fn cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let first = id.xy + vec2<u32>(eye_word(EYE_GRID + GRID_PAST)) - vec2<u32>(k);
   // How far each corner's rays start lies in one word a corner, past the lines
   // (`Grid::hand_at`).
-  let least = window_least(eye_word(EYE_GRID + GRID_HANDS_AT), eye_word(EYE_GRID + GRID_CORNERS), first, 2u + 2u * k);
+  let least = window_least(eye_word(EYE_GRID + GRID_HANDS_AT), eye_word(EYE_GRID + GRID_CORNER_LATTICE), first, 2u + 2u * k);
   let at = cell_start(id.xy);
   beams[at + CELL_T] = least.x;
   beams[at + CELL_CORNER] = least.y;

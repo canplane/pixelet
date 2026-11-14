@@ -18,31 +18,39 @@ export const STEP_NAMES = [
   "scene",
 ] as const;
 
-export const StepName = {
-  controller: 0,
-  input: 1,
-  camera: 2,
-  edit: 3,
-  ghost: 4,
-  environment: 5,
-  companion: 6,
-  demand: 7,
-  scene: 8,
-} as const;
-export type StepName = (typeof StepName)[keyof typeof StepName];
+export type StepName =
+  | typeof STEP_NAME_CONTROLLER
+  | typeof STEP_NAME_INPUT
+  | typeof STEP_NAME_CAMERA
+  | typeof STEP_NAME_EDIT
+  | typeof STEP_NAME_GHOST
+  | typeof STEP_NAME_ENVIRONMENT
+  | typeof STEP_NAME_COMPANION
+  | typeof STEP_NAME_DEMAND
+  | typeof STEP_NAME_SCENE;
+export const STEP_NAME_CONTROLLER = 0;
+export const STEP_NAME_INPUT = 1;
+export const STEP_NAME_CAMERA = 2;
+export const STEP_NAME_EDIT = 3;
+export const STEP_NAME_GHOST = 4;
+export const STEP_NAME_ENVIRONMENT = 5;
+export const STEP_NAME_COMPANION = 6;
+export const STEP_NAME_DEMAND = 7;
+export const STEP_NAME_SCENE = 8;
 
-/** The name of the `StepName` member numbered `n`, or undefined for a number
- * no member has. */
-export function step_name_name(n: number): keyof typeof StepName | undefined {
-  for (const k in StepName)
-    if (StepName[k as keyof typeof StepName] === n)
-      return k as keyof typeof StepName;
-  return undefined;
-}
-
-/** The `StepName` member `n` is, or null for a number no member has. */
-export function step_name_of(n: number): StepName | null {
-  return step_name_name(n) === undefined ? null : (n as StepName);
+/** The member `val` is, or null for a number no member has. */
+export function of_StepName(val: number): StepName | null {
+  return val === STEP_NAME_CONTROLLER ||
+    val === STEP_NAME_INPUT ||
+    val === STEP_NAME_CAMERA ||
+    val === STEP_NAME_EDIT ||
+    val === STEP_NAME_GHOST ||
+    val === STEP_NAME_ENVIRONMENT ||
+    val === STEP_NAME_COMPANION ||
+    val === STEP_NAME_DEMAND ||
+    val === STEP_NAME_SCENE
+    ? val
+    : null;
 }
 
 export const EFFECT_NAMES = [
@@ -52,36 +60,42 @@ export const EFFECT_NAMES = [
   "follow",
   "dst",
   "decor",
-  "objects",
+  "object",
   "location",
-  "settings",
+  "setting",
 ] as const;
 
-export const EffectName = {
-  navigation: 0,
-  bootstrap: 1,
-  orient: 2,
-  follow: 3,
-  dst: 4,
-  decor: 5,
-  objects: 6,
-  location: 7,
-  settings: 8,
-} as const;
-export type EffectName = (typeof EffectName)[keyof typeof EffectName];
+export type EffectName =
+  | typeof EFFECT_NAME_NAVIGATION
+  | typeof EFFECT_NAME_BOOTSTRAP
+  | typeof EFFECT_NAME_ORIENT
+  | typeof EFFECT_NAME_FOLLOW
+  | typeof EFFECT_NAME_DST
+  | typeof EFFECT_NAME_DECOR
+  | typeof EFFECT_NAME_OBJECT
+  | typeof EFFECT_NAME_LOCATION
+  | typeof EFFECT_NAME_SETTING;
+export const EFFECT_NAME_NAVIGATION = 0;
+export const EFFECT_NAME_BOOTSTRAP = 1;
+export const EFFECT_NAME_ORIENT = 2;
+export const EFFECT_NAME_FOLLOW = 3;
+export const EFFECT_NAME_DST = 4;
+export const EFFECT_NAME_DECOR = 5;
+export const EFFECT_NAME_OBJECT = 6;
+export const EFFECT_NAME_LOCATION = 7;
+export const EFFECT_NAME_SETTING = 8;
 
-/** The name of the `EffectName` member numbered `n`, or undefined for a number
- * no member has. */
-export function effect_name_name(
-  n: number,
-): keyof typeof EffectName | undefined {
-  for (const k in EffectName)
-    if (EffectName[k as keyof typeof EffectName] === n)
-      return k as keyof typeof EffectName;
-  return undefined;
-}
-
-/** The `EffectName` member `n` is, or null for a number no member has. */
-export function effect_name_of(n: number): EffectName | null {
-  return effect_name_name(n) === undefined ? null : (n as EffectName);
+/** The member `val` is, or null for a number no member has. */
+export function of_EffectName(val: number): EffectName | null {
+  return val === EFFECT_NAME_NAVIGATION ||
+    val === EFFECT_NAME_BOOTSTRAP ||
+    val === EFFECT_NAME_ORIENT ||
+    val === EFFECT_NAME_FOLLOW ||
+    val === EFFECT_NAME_DST ||
+    val === EFFECT_NAME_DECOR ||
+    val === EFFECT_NAME_OBJECT ||
+    val === EFFECT_NAME_LOCATION ||
+    val === EFFECT_NAME_SETTING
+    ? val
+    : null;
 }

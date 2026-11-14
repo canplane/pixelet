@@ -8,7 +8,7 @@
 // (`UNTIL_OPAQUE`, `UNTIL_BEAM`) and a beam ray's line.
 //
 // A node is answered at the zooms asked, a pair that depends on the node and the origin alone
-// (pxl-engine `cast::ask_zooms`), as pxl-engine's `Query` answers it. A walk that meets a node
+// (pxl-engine `cast::ask_range`), as pxl-engine's `Query` answers it. A walk that meets a node
 // no slot keeps at that pair is left there (`KIND_LEFT`). The exception is a split that a slot
 // keeps at other zooms, or forgot: the walk goes into it without taking its box (`KIND_BLIND`).
 // A split asked finer than itself is a split or air, and its children answer the ray either
@@ -104,7 +104,7 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
     // A node the ray only touches, at a face or an edge, is not entered, and nothing in it is
     // met.
     if (t1 > t0) {
-      let zooms = asked_zooms(lo, hi, range);
+      let zooms = ask_range(lo, hi, range);
       let a = node_answer(parent, top, zoom, idx_of(corner, zoom, roots, r0), zooms, line != NONE);
       if (a.kind == KIND_LEFT) {
         ends = ENDS_LEFT;
@@ -157,8 +157,8 @@ fn walk(aim: Aim, start: Start, steps: u32) -> WalkEnd {
           }
         } else if (!clear && !inside) {
           // A ray does not stop at the cell it starts inside. A cell that keeps less than its
-          // cube is the box its share fills (pxl-engine `fill_bounds`).
-          let k = (asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
+          // cube is the box its share fills (pxl-engine `fill_bound`).
+          let k = (asset.x >> FILL_SHIFT) & (EIGHTH_CNT - 1u);
           if (k == 0u) {
             ends = ENDS_CELL;
             hit = true;
@@ -265,8 +265,8 @@ fn to_lack(w: WalkEnd) -> WalkEnd {
 }
 
 /// The zooms at which the ray `aim` asks the node at `corner`, `zoom` and `roots`, as its walk
-/// asks them (`asked_zooms`).
-fn node_zooms(aim: Aim, corner: vec3<u32>, zoom: u32, roots: vec3<i32>) -> u32 {
+/// asks them (`ask_range`).
+fn node_range(aim: Aim, corner: vec3<u32>, zoom: u32, roots: vec3<i32>) -> u32 {
   let og = vec3<u32>(aim.origin) + vec3<u32>(0u, Y_START, Z_START);
-  return asked_zooms(units(corner, og, roots), far_of(corner, under(zoom), og, roots), aim.range);
+  return ask_range(units(corner, og, roots), far_of(corner, under(zoom), og, roots), aim.range);
 }

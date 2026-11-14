@@ -29,24 +29,18 @@
 // stands: which variant of its decor and its heading in quarter turns (an
 // odd one swaps its box's sides). The ground evaluates them from its cell; a
 // placed one's are the placement's.
-//
-// Names as the spec spells them, so one record has one name on every side.
-#![allow(
-    non_camel_case_types,
-    clippy::absolute_paths,
-    reason = "generated from the spec"
-)]
+#![allow(clippy::absolute_paths, reason = "generated from the spec")]
 
 /// The most variants a decor has.
-pub const VARIANTS: usize = 9;
+pub const VARIANT_CAP: usize = 9;
 
 /// How a decor the ground generates faces: any way, or along the road or rail its
 /// cell lies on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Orientation {
-    random,
-    along_transport,
+    Random,
+    AlongTransport,
 }
 
 /// A decor as the ground generates it, in 32-bit words alone, laid out as a
@@ -62,9 +56,9 @@ pub struct Row {
     pub orient: Orientation,
     /// The palette entries it may stand on, a bit each.
     pub on: [u32; 8],
-    pub variants: u32,
-    /// Each variant's box, in its decor's cells; none past `variants`.
-    pub sizes: [[u32; 3]; VARIANTS],
+    pub variant_cnt: u32,
+    /// Each variant's box, in its decor's cells; none past `variant_cnt`.
+    pub sizes: [[u32; 3]; VARIANT_CAP],
 }
 
 #[rustfmt::skip]
@@ -73,36 +67,36 @@ pub const ROWS: [Row; 4] = [
     Row {
         seed: 0x7902530c,
         chance: 107374182,
-        orient: Orientation::random,
+        orient: Orientation::Random,
         on: [0x00000902, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
-        variants: 9,
+        variant_cnt: 9,
         sizes: [[1, 1, 3], [1, 1, 3], [1, 1, 3], [1, 1, 3], [1, 1, 3], [1, 1, 2], [1, 1, 2], [1, 1, 2], [1, 1, 2]],
     },
     // boat
     Row {
         seed: 0xb0a5802d,
         chance: 4294967,
-        orient: Orientation::random,
+        orient: Orientation::Random,
         on: [0x00000000, 0x00000001, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
-        variants: 4,
+        variant_cnt: 4,
         sizes: [[3, 2, 1], [2, 4, 3], [2, 4, 5], [2, 3, 2], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
     },
     // car
     Row {
         seed: 0x0ca63010,
         chance: 12884902,
-        orient: Orientation::along_transport,
+        orient: Orientation::AlongTransport,
         on: [0x00000000, 0x0001e800, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
-        variants: 5,
+        variant_cnt: 5,
         sizes: [[1, 3, 1], [1, 3, 1], [1, 3, 1], [1, 3, 1], [1, 3, 1], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
     },
     // train
     Row {
         seed: 0x7ba5802d,
         chance: 6442451,
-        orient: Orientation::along_transport,
+        orient: Orientation::AlongTransport,
         on: [0x00000000, 0x007c0000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000, 0x00000000],
-        variants: 4,
+        variant_cnt: 4,
         sizes: [[1, 3, 2], [1, 3, 2], [1, 3, 2], [1, 3, 2], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]],
     },
 ];
@@ -137,7 +131,7 @@ pub const DECORS: [Decor; 4] = [
     // not natural, ground. Sparse: a hillside with some trees, not a forest wall
     // at 1u spacing.
     Decor {
-        id: crate::asset::id::asset_id(crate::asset::id::Kind::decor, 0),
+        id: crate::asset::id::asset_id(crate::asset::id::Kind::Decor, 0),
         row: &ROWS[0],
         variants: &[
             Variant { model: 2, skin: 1 },
@@ -159,7 +153,7 @@ pub const DECORS: [Decor; 4] = [
     // the tiles a coast crosses. Rivers are a few cells wide, so the same per-cell
     // rate reads far denser than on land.
     Decor {
-        id: crate::asset::id::asset_id(crate::asset::id::Kind::decor, 1),
+        id: crate::asset::id::asset_id(crate::asset::id::Kind::Decor, 1),
         row: &ROWS[1],
         variants: &[
             Variant {
@@ -185,7 +179,7 @@ pub const DECORS: [Decor; 4] = [
     // road, since a random heading reads as a crash. Sparse: a car every couple
     // of cells reads as gridlock.
     Decor {
-        id: crate::asset::id::asset_id(crate::asset::id::Kind::decor, 2),
+        id: crate::asset::id::asset_id(crate::asset::id::Kind::Decor, 2),
         row: &ROWS[2],
         variants: &[
             Variant {
@@ -214,7 +208,7 @@ pub const DECORS: [Decor; 4] = [
     // to the rail, since one lying across it reads as derailed. Very sparse:
     // trains should read as occasional.
     Decor {
-        id: crate::asset::id::asset_id(crate::asset::id::Kind::decor, 3),
+        id: crate::asset::id::asset_id(crate::asset::id::Kind::Decor, 3),
         row: &ROWS[3],
         variants: &[
             Variant {

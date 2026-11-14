@@ -1,6 +1,6 @@
 [package]
 name = "xpute-link"
-description = "xpute's link, the protocol both its sides run, and its code: the frame, the link machine, the handle table, a sent method as a future, and the memory a method lends"
+description = "xpute's link, the protocol both its sides run, and its code: the frame, the link machine, the handle table, a sent method as a future, the memory a method lends, and a packet's values in the Canonical ABI's layout"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true

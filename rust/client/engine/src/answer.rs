@@ -6,8 +6,8 @@
 //! in the node's own steps, alike on every axis. The descent, the query and the sources all
 //! stand on this module.
 
-use pxl_spec::share::{EIGHTHS, FILL_BITS, FULL};
-use pxl_spec::value;
+use pxl_spec::asset::cube::Sentinel;
+use pxl_spec::share::{EIGHTH_CNT, FILL_BITS, FULL};
 
 /// What a node is to a descent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -15,11 +15,11 @@ use pxl_spec::value;
 pub enum Kind {
     /// Coarser than asked, and something under it may fill.
     Split,
-    /// A cell. At the zoom asked it holds its asset. Coarser than asked, it is air (`EMPTY`), a
-    /// cell of air its whole size, where nothing under it fills at the zooms asked.
+    /// A cell. At the zoom asked it holds its asset. Coarser than asked, it is `EMPTY`, a void
+    /// cell its whole size, where nothing under it fills at the zooms asked.
     Cell,
     /// Not held, a lack: past it the ray can tell nothing.
-    Lacks,
+    Lack,
 }
 
 /// What is in a node: its kind, and its asset where it is a cell.
@@ -30,7 +30,7 @@ pub struct In<B> {
 }
 
 /// A cell nothing fills: void, no palette indices.
-pub const EMPTY: [u32; 2] = [value::VOID, 0];
+pub const EMPTY: [u32; 2] = [Sentinel::Void as u32, 0];
 
 /// The low bits of an asset's word that hold its value.
 pub const VAL_BITS: u32 = 16;
@@ -100,10 +100,10 @@ pub(crate) const fn box_word(lo: [u32; 3], hi: [u32; 3]) -> PackedBox {
 
 /// The least box holding boxes `a` and `b`, each a `box_word` or none.
 pub(crate) const fn box_join(a: PackedBox, b: PackedBox) -> PackedBox {
-    if a[0] == BOX_NONE[0] && a[1] == BOX_NONE[1] {
+    if box_none(a) {
         return b;
     }
-    if b[0] == BOX_NONE[0] && b[1] == BOX_NONE[1] {
+    if box_none(b) {
         return a;
     }
     let (al, ah) = box_of(a);
@@ -140,18 +140,19 @@ pub(crate) const fn box_of(w: PackedBox) -> ([u32; 3], [u32; 3]) {
 /// Whether an asset lets light through: a ray sees nothing there and passes on, whichever
 /// source holds it. Every ray sees by this (cast.rs `walk`), and it is the one place a value
 /// is said to be transparent: void, on which nothing is painted, and air, which is placed as
-/// nothing. It is a question of light, not of matter (`fills`): matter that a ray sees through would answer yes to both.
-pub fn transparent(val: u32) -> bool {
-    let v = self::val(val);
-    v == value::VOID || v == value::AIR
+/// nothing. It is a question of light, not of matter (`fills`): matter that a ray sees
+/// through would answer yes to both.
+pub fn transparent(asset: u32) -> bool {
+    let v = val(asset);
+    v == Sentinel::Void as u32 || v == Sentinel::Air as u32
 }
 
 /// Whether an asset is matter: it takes its share of its cell as the layers compose the
 /// cell's volume (`cover`), and it is drawn by its palette indices. Everything is matter but
 /// void and air. It is a question of matter, not of light (`transparent`).
-pub fn fills(val: u32) -> bool {
-    let v = self::val(val);
-    v != value::VOID && v != value::AIR
+pub fn fills(asset: u32) -> bool {
+    let v = val(asset);
+    v != Sentinel::Void as u32 && v != Sentinel::Air as u32
 }
 
 /// A cell's fill share, above its asset's value and `PLACED_ASSET`: the eighths of its cube
@@ -172,14 +173,14 @@ pub fn cover(ground: u32, kind: u32, over: u32) -> (u32, bool) {
         let sum = ground + over;
         (if sum > FULL { FULL } else { sum }, over >= ground)
     } else {
-        let over = over / (FULL / EIGHTHS) * (FULL / EIGHTHS);
+        let over = over / (FULL / EIGHTH_CNT) * (FULL / EIGHTH_CNT);
         (ground.saturating_sub(over), false)
     }
 }
 
 /// `asset` set to keep `k` eighths of its cube (`FILL_SHIFT`).
 pub(crate) const fn fill_word(asset: u32, k: u32) -> u32 {
-    asset & !(((1 << FILL_BITS) - 1) << FILL_SHIFT) | (k % EIGHTHS) << FILL_SHIFT
+    asset & !(((1 << FILL_BITS) - 1) << FILL_SHIFT) | (k % EIGHTH_CNT) << FILL_SHIFT
 }
 
 /// The eighths of its cube an asset's word keeps; all eight where it sets none
@@ -187,7 +188,7 @@ pub(crate) const fn fill_word(asset: u32, k: u32) -> u32 {
 pub const fn fill_eighths(asset: u32) -> u32 {
     let k = asset >> FILL_SHIFT & ((1 << FILL_BITS) - 1);
     if k == 0 {
-        EIGHTHS
+        EIGHTH_CNT
     } else {
         k
     }
@@ -214,12 +215,12 @@ pub const fn side(k: u32) -> f32 {
 /// (`fill_eighths`). A box filled short of its cube closes in none of the edges of a cell
 /// beside it.
 pub fn whole(asset: u32) -> bool {
-    !transparent(asset) && fill_eighths(asset) == EIGHTHS
+    !transparent(asset) && fill_eighths(asset) == EIGHTH_CNT
 }
 
 /// Whether what is placed holds an asset's value (`PLACED_ASSET`).
-pub fn is_placed(val: u32) -> bool {
-    val & PLACED_ASSET != 0
+pub fn is_placed(asset: u32) -> bool {
+    asset & PLACED_ASSET != 0
 }
 
 #[cfg(test)]
@@ -241,12 +242,12 @@ mod tests {
     /// under one keeps none (`eighths`).
     #[test]
     fn carve_takes_whole_eighths() {
-        let air = value::AIR;
-        let eighth = FULL / EIGHTHS;
+        let air = Sentinel::Air as u32;
+        let eighth = FULL / EIGHTH_CNT;
         assert_eq!(cover(FULL, air, eighth - 1), (FULL, false));
         assert_eq!(cover(FULL, air, eighth + 5), (FULL - eighth, false));
         assert_eq!(cover(FULL, air, 3 * eighth), (FULL - 3 * eighth, false));
         assert_eq!(cover(eighth, air, FULL), (0, false));
-        assert_eq!(eighths(cover(FULL, air, 300).0), EIGHTHS);
+        assert_eq!(eighths(cover(FULL, air, 300).0), EIGHTH_CNT);
     }
 }

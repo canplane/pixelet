@@ -59,7 +59,7 @@ fn hole_write(at: vec2<u32>, w: WalkEnd, shown: WalkEnd, face: u32, faces: u32) 
   var word = ray_word(shown, face, around);
   // In the ray steps view, the steps of its beam ray and of its own walk.
   if (eye_word(EYE_STEPS) != 0u) {
-    word.z = beam_steps(grid_cell(px_tan(at, eye_size()))) + w.step;
+    word.z = beam_step_cnt(grid_cell(px_tan(at, eye_size()))) + w.step;
   }
   write_ray(at, word);
 }

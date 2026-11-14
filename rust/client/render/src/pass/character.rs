@@ -28,7 +28,7 @@ use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
 use crate::gpu::upload::uploads;
 use crate::look::color::linear_rgb;
-use crate::pass::atmosphere::AIR_ENTRIES;
+use crate::pass::atmosphere::AIR_ENTRY_CNT;
 use crate::pass::finish::Finish;
 use crate::pass::model::{frame_entries, frame_layout, Stage};
 use crate::pass::shadow::Shadow;
@@ -71,7 +71,7 @@ impl CharacterPass {
         g: &Gpu,
         pipelines: &mut PipelineCache,
         shadow: &Shadow,
-        air: [Entry; AIR_ENTRIES],
+        air: [Entry; AIR_ENTRY_CNT],
         align: u32,
     ) -> CharacterPass {
         let frame_buf = g.buf(
@@ -135,7 +135,7 @@ impl CharacterPass {
         changed: bool,
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::character);
+        let stamp = ctx.stamp(GpuSpanName::Character);
         // The frame's eye is set to the character's Q3 (gpu/draw.rs
         // `Position`), so the character sits at its remainder from the eye.
         let at = Position::in_uniform(uniform);
@@ -215,7 +215,7 @@ impl CharacterPass {
         // pass's own frame words, whose vignette is zero.
         let view_id = g.cur(s.handle);
         self.finish
-            .draw(ctx, GpuSpanName::character, s, s.color_view, view_id, None);
+            .draw(ctx, GpuSpanName::Character, s, s.color_view, view_id, None);
         release(view_id);
     }
 }

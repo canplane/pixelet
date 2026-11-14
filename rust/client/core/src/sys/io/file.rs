@@ -26,11 +26,11 @@
 //! (`heap`). Either lies in the core's memory, so its offset holds.
 
 use core::fmt;
-use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, VecDeque};
 
+use pxl_global::Global;
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
-use pxl_spec::space::layer::demand::GROUND_DEMAND_TILES;
+use pxl_spec::space::layer::demand::GROUND_DEMAND_TILE_CAP;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_guest::abi::fs::file;
 use xpute_link::abi::types::Token;
@@ -91,24 +91,31 @@ pub enum Refused {
 /// files a snapshot names, one for each tile of the ground's demand
 /// (domain/layer/object/repository.rs `watch_named`). A watch that ends has
 /// left its slot before its owner names the next (`take_changed`).
-pub const WATCHED: usize = 1 + GROUND_DEMAND_TILES as usize;
+pub const WATCHED: usize = 1 + GROUND_DEMAND_TILE_CAP as usize;
 
-thread_local! {
+#[derive(Default)]
+struct Files {
     /// The files the request scheduler's attempts read, by the attempt's key,
     /// for a stop to close.
-    static ATTEMPTS: RefCell<BTreeMap<u64, Handle>> = const { RefCell::new(BTreeMap::new()) };
+    attempts: BTreeMap<u64, Handle>,
     /// The storage file as it was read, until its owner takes it.
-    static STORAGE_READ: RefCell<Option<StorageRead>> = const { RefCell::new(None) };
+    storage_read: Option<StorageRead>,
     /// Whether the storage file has been refused since the client last
     /// emptied its slot.
-    static STORAGE_REFUSED: Cell<bool> = const { Cell::new(false) };
+    storage_refused: bool,
     /// The writes not yet landed, in the order sent, and whether the writer
     /// runs.
-    static WRITES: RefCell<VecDeque<(Vec<Token>, Box<[u8]>)>> = const { RefCell::new(VecDeque::new()) };
-    static WRITING: Cell<bool> = const { Cell::new(false) };
+    writes: VecDeque<(Vec<Token>, Box<[u8]>)>,
+    writing: bool,
     /// The refused files that changed, until their owners take them
     /// (`take_changed`).
-    static CHANGED: RefCell<VecDeque<Refused>> = const { RefCell::new(VecDeque::new()) };
+    changed: VecDeque<Refused>,
+}
+
+static FILES: Global<Files> = Global::new();
+
+fn files() -> &'static mut Files {
+    FILES.get(Files::default)
 }
 
 /// Reads the file at `path` whole, at most `most` bytes (EFBIG past them),
@@ -123,11 +130,11 @@ pub async fn read_whole<B: Lend>(
 ) -> Result<B, Errno> {
     let f = File::open(path)?;
     if let Some(k) = key {
-        ATTEMPTS.with_borrow_mut(|a| a.insert(k, f.0));
+        files().attempts.insert(k, f.0);
     }
     let read = read_open(&f, most, buf).await;
     if let Some(k) = key {
-        ATTEMPTS.with_borrow_mut(|a| a.remove(&k));
+        files().attempts.remove(&k);
     }
     read
 }
@@ -158,7 +165,7 @@ pub fn heap(n: u32) -> Result<Vec<u8>, Errno> {
 /// Closes the file the attempt `key` reads, which cancels its read; what its
 /// reader hears of it afterwards is dropped.
 pub fn stop(key: u64) {
-    if let Some(h) = ATTEMPTS.with_borrow_mut(|a| a.remove(&key)) {
+    if let Some(h) = files().attempts.remove(&key) {
         drop(file::file_close(h));
     }
 }
@@ -166,8 +173,9 @@ pub fn stop(key: u64) {
 /// Replaces the file at `path` with `bytes`. Writes land in the order sent,
 /// one at a time, by one writer task.
 pub fn write(path: Vec<Token>, bytes: Box<[u8]>) {
-    WRITES.with_borrow_mut(|w| w.push_back((path, bytes)));
-    if !WRITING.replace(true) {
+    let f = files();
+    f.writes.push_back((path, bytes));
+    if !core::mem::replace(&mut f.writing, true) {
         executor::spawner().spawn(writer().or_bug(Errno::ENOSPC));
     }
 }
@@ -176,10 +184,10 @@ pub fn write(path: Vec<Token>, bytes: Box<[u8]>) {
 /// tried again: what it held is written again by the next.
 #[embassy_executor::task]
 async fn writer() {
-    while let Some((path, bytes)) = WRITES.with_borrow_mut(VecDeque::pop_front) {
+    while let Some((path, bytes)) = files().writes.pop_front() {
         let _ = write_whole(&path, bytes).await;
     }
-    WRITING.set(false);
+    files().writing = false;
 }
 
 async fn write_whole(path: &[Token], bytes: Box<[u8]>) -> Result<(), Errno> {
@@ -192,8 +200,8 @@ async fn write_whole(path: &[Token], bytes: Box<[u8]>) -> Result<(), Errno> {
 /// The storage file's path, its slot after STORAGE.
 pub fn storage_path() -> Vec<Token> {
     vec![
-        Token::Int(path::STORAGE::ID),
-        Token::Int(path::STORAGE::SETTINGS::ID),
+        Token::Int(path::storage::ID),
+        Token::Int(path::storage::settings::ID),
     ]
 }
 
@@ -204,7 +212,7 @@ pub fn open_storage() {
 
 #[embassy_executor::task]
 async fn storage_read() {
-    let read = match read_whole(&storage_path(), mem::min_heap_bytes, None, heap).await {
+    let read = match read_whole(&storage_path(), mem::MIN_HEAP_BYTES, None, heap).await {
         Ok(bytes) => storage_of(&bytes),
         // Only an absent file means nothing was kept.
         Err(Errno::ENOENT) => StorageRead::None,
@@ -213,13 +221,13 @@ async fn storage_read() {
         Err(Errno::EFBIG | Errno::EBADMSG) => refuse(),
         Err(_) => StorageRead::Unreadable,
     };
-    STORAGE_READ.set(Some(read));
+    files().storage_read = Some(read);
     invalidate();
 }
 
 /// What the storage file held, once it is read whole, or None until then.
 pub fn take_storage() -> Option<StorageRead> {
-    STORAGE_READ.take()
+    files().storage_read.take()
 }
 
 /// The storage file's bytes as its backend read them: the settings' bytes
@@ -235,14 +243,14 @@ fn storage_of(bytes: &[u8]) -> StorageRead {
 /// Refuses the storage file. The next snapshot names the refusal to the
 /// client, which sets the file aside, and the file is watched until it does.
 fn refuse() -> StorageRead {
-    STORAGE_REFUSED.set(true);
+    files().storage_refused = true;
     watch(Refused::Storage);
     invalidate();
     StorageRead::Unreadable
 }
 
 pub fn is_storage_refused() -> bool {
-    STORAGE_REFUSED.get()
+    files().storage_refused
 }
 
 /// Writes `bytes` whole as the storage file's contents, after its format
@@ -258,7 +266,7 @@ impl Refused {
     pub fn path(self) -> Vec<Token> {
         match self {
             Refused::Storage => storage_path(),
-            Refused::Objects(id) => quadrant_path(path::OBJECT::ID, id),
+            Refused::Objects(id) => quadrant_path(path::object::ID, id),
         }
     }
 }
@@ -279,16 +287,16 @@ async fn watched(r: Refused) {
         return;
     }
     if let Refused::Storage = r {
-        STORAGE_REFUSED.set(false);
+        files().storage_refused = false;
     }
-    CHANGED.with_borrow_mut(|c| c.push_back(r));
+    files().changed.push_back(r);
     invalidate();
 }
 
 /// A refused file that has changed since, for its owner to read again: the
 /// settings for the storage file, the objects' repository for theirs.
 pub fn take_changed() -> Option<Refused> {
-    CHANGED.with_borrow_mut(VecDeque::pop_front)
+    files().changed.pop_front()
 }
 
 /// Text held inline, as a quadkey is written: the first `len` of `N` bytes,
@@ -338,7 +346,7 @@ pub fn path_of(stream: Stream, id: u64) -> Option<Vec<Token>> {
 /// `TOP_ID`, the objects' top.
 pub fn quadrant_path(head: i32, id: u64) -> Vec<Token> {
     if id == TOP_ID {
-        return vec![Token::Int(head), Token::Int(path::OBJECT::TOP::ID)];
+        return vec![Token::Int(head), Token::Int(path::object::top::ID)];
     }
     let mut key = Text::<KEY_BYTES>::EMPTY;
     Quadrant::of_id(id)

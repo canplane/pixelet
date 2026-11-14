@@ -8,7 +8,7 @@ fn still() -> CastRead {
         same: true,
         jitter: [0; 2],
         partial: false,
-        shadows: true,
+        shadow: true,
         light_made: true,
         content_same: true,
         world_columns: false,
@@ -31,7 +31,7 @@ fn stood() -> Schedule {
 fn nothing_moved_casts_nothing() {
     let mut s = stood();
     let plan = s.plan(still());
-    assert_eq!(plan.kind, FrameKind::still);
+    assert_eq!(plan.kind, FrameKind::Still);
     assert!(plan.light.is_none());
 }
 
@@ -42,7 +42,7 @@ fn a_moved_view_casts_the_rays() {
         same: false,
         ..still()
     });
-    assert_eq!(plan.kind, FrameKind::cast);
+    assert_eq!(plan.kind, FrameKind::Cast);
 }
 
 #[test]
@@ -52,14 +52,14 @@ fn the_jitter_casts_the_pixels_alone() {
         jitter: [1, 0],
         ..still()
     });
-    assert_eq!(plan.kind, FrameKind::px);
+    assert_eq!(plan.kind, FrameKind::Px);
 }
 
 #[test]
 fn a_dropped_frame_casts_again() {
     let mut s = stood();
     s.dropped();
-    assert_eq!(s.plan(still()).kind, FrameKind::cast);
+    assert_eq!(s.plan(still()).kind, FrameKind::Cast);
 }
 
 #[test]
@@ -91,7 +91,7 @@ fn the_light_casts_where_it_moved() {
 fn no_shadows_no_light() {
     let mut s = stood();
     let plan = s.plan(CastRead {
-        shadows: false,
+        shadow: false,
         receivers_same: false,
         ..still()
     });
@@ -107,6 +107,6 @@ fn a_stopped_view_rests() {
         ..still()
     });
     s.plan(still());
-    assert_eq!(s.plan(still()).kind, FrameKind::still);
-    assert_eq!(s.plan(still()).kind, FrameKind::still);
+    assert_eq!(s.plan(still()).kind, FrameKind::Still);
+    assert_eq!(s.plan(still()).kind, FrameKind::Still);
 }

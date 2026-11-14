@@ -6,7 +6,7 @@ use std::sync::Arc;
 use xpute_link::mem;
 
 use super::timed;
-use xpute_gpu_link::spec::RESULT;
+use xpute_gpu_link::spec::result;
 
 /// A `Pending` is a request the device answers at a later poll: a MAP_ASYNC
 /// read, or a QUEUE_DONE.
@@ -48,7 +48,7 @@ impl Pending {
         }
         let result = self.read.as_ref().map(|(buffer, offset, size, addr)| {
             if state != ANSWERED {
-                return RESULT::REFUSED;
+                return result::REFUSED;
             }
             let copied = timed(slow, "map", || {
                 let slice = buffer.slice(*offset..*offset + *size);
@@ -61,9 +61,9 @@ impl Pending {
                 copied
             });
             if copied.is_ok() {
-                RESULT::OK
+                result::OK
             } else {
-                RESULT::REFUSED
+                result::REFUSED
             }
         });
         signal(self.word, self.ticket, result);

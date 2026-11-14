@@ -52,7 +52,7 @@ fn air_before(dir: vec3f, d: f32) -> vec4f {
   let mu = dot(frame_up(), dir);
   let end = short_of_ground(r, mu, d * km);
   let low = ray_low(r, mu, end);
-  let a = min(to_sphere(r, mu, atmos_top_radius()), end);
+  let a = min(to_sphere(r, mu, TOP_RADIUS_KM), end);
   let transmittance = exp(-max(depth_along(r, mu, low, end) - depth_along(r, mu, low, a), vec3f(0.0)));
   return vec4f(scatter * (vec3f(1.0) - transmittance), dot(transmittance, LUMA));
 }
@@ -95,11 +95,11 @@ fn earth_face(mercator: vec2f, octaves: f32) -> vec4f {
     return global;
   }
   let w = atmos_earth_window();
-  let at = mercator / TAU * f32(w.w);
+  let at = mercator / TAU * f32(EARTH_AROUND);
   let tile = vec2i(floor(at));
-  let d = vec2i(((tile.x - w.x) % w.w + w.w) % w.w, tile.y - w.y);
-  if (all(d >= vec2i(0)) && all(d < vec2i(w.z))) {
-    let k = u32(d.y * w.z + d.x);
+  let d = vec2i(((tile.x - w.x) % EARTH_AROUND + EARTH_AROUND) % EARTH_AROUND, tile.y - w.y);
+  if (all(d >= vec2i(0)) && all(d < vec2i(EARTH_ACROSS))) {
+    let k = u32(d.y * EARTH_ACROSS + d.x);
     let per_word = 32u / EARTH_TILE_BITS;
     let layer = (atmos_earth_tiles()[k / per_word] >> (EARTH_TILE_BITS * (k % per_word))) & ((1u << EARTH_TILE_BITS) - 1u);
     if (layer > 0u) {
@@ -113,7 +113,7 @@ fn earth_face(mercator: vec2f, octaves: f32) -> vec4f {
 // holds. They come on as night falls on them, over the same heights of the
 // sun as everywhere night is shown (pxl-content param.rs `night::FALL`).
 fn city_shown(lights: f32, up: vec3f) -> vec3f {
-  return atmos_city_light() * atmos_white() * lights * lights * exposure() * (1.0 - smoothstep(NIGHT_FALL.x, NIGHT_FALL.y, dot(up, atmos_sun_dir())));
+  return CITY_LIGHT * atmos_white() * lights * lights * exposure() * (1.0 - smoothstep(NIGHT_FALL.x, NIGHT_FALL.y, dot(up, atmos_sun_dir())));
 }
 
 // What the eye sees along `dir` where nothing was drawn. A direction that
@@ -138,7 +138,7 @@ fn beyond(dir: vec3f) -> vec3f {
   let d = to_land(dir);
   let p = dir * d;
   let seen = seen_from_eye(p);
-  let octaves = log2(d / atmos_earth_dist());
+  let octaves = log2(d / EARTH_DIST);
   let n = frame_up();
   let face = earth_face(map_of(p), octaves);
   let lit = LIGHT_EARTH_GAIN * face.rgb * surface_light(n, n, light_of(p)) + city_shown(face.a, n);

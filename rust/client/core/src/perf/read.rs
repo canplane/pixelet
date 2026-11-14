@@ -14,17 +14,17 @@ use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
 use crate::perf::frame::overran;
-use crate::perf::frame::{FrameSample, RaySample, GPU_SPANS};
+use crate::perf::frame::{FrameSample, RaySample, GPU_SPAN_CNT};
 use crate::perf::record::{
     perf_frames_since, perf_recording_extremes, perf_recording_state, perf_scratch,
     perf_tasks_since, step_stats,
 };
-use crate::perf::section::TASK_PHASES;
+use crate::perf::section::TASK_PHASE_CNT;
 use crate::perf::section::{
     DrawSection, FrameSection, Percentile, StepSection, StepStat, StreamStat, TaskSection,
     ViewSection,
 };
-use crate::perf::spec::{self, LIMIT, NOW, STAT};
+use crate::perf::spec::{self, limit, now, stat};
 use crate::perf::task::TaskRecord;
 use crate::perf::word::put;
 use crate::sys::io::failure::Outcome;
@@ -38,21 +38,21 @@ use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_guest::clock::now;
 
-const REASONS: usize = LIMIT::REASONS as usize;
-const STEP_CAP: usize = LIMIT::STEP_CAP as usize;
+const REASON_CAP: usize = limit::REASON_CAP as usize;
+const STEP_CAP: usize = limit::STEP_CAP as usize;
 
 /// STAT's words then NOW's, as PERF_STATS's reply names them. They live on
 /// the heap, not in a static, because a native build's statics lie outside the
 /// core's memory, which is all a frame names.
-static READ: Global<Box<[f64; STAT::WORDS + NOW::WORDS]>> = Global::new();
+static READ: Global<Box<[f64; stat::WORDS + now::WORDS]>> = Global::new();
 
-fn read() -> &'static mut [f64; STAT::WORDS + NOW::WORDS] {
-    READ.get(|| Box::new([0.0; STAT::WORDS + NOW::WORDS]))
+fn read() -> &'static mut [f64; stat::WORDS + now::WORDS] {
+    READ.get(|| Box::new([0.0; stat::WORDS + now::WORDS]))
 }
 
 /// The percentiles of `vals` (perf.json PERCENTILE) and how many values
 /// they cover. Only as many values as `scratch` holds are taken.
-fn percentiles_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Percentile, usize) {
+fn percentile_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Percentile, usize) {
     let mut n = 0;
     for v in vals.take(scratch.len()) {
         scratch[n] = v;
@@ -70,8 +70,8 @@ fn percentiles_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Perce
     )
 }
 
-fn percentiles(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> Percentile {
-    percentiles_n(scratch, vals).0
+fn percentile(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> Percentile {
+    percentile_n(scratch, vals).0
 }
 
 /// The nearest-rank percentile `q` of `sorted`: the value at index
@@ -91,8 +91,8 @@ fn rank(sorted: &[f64], q: f64) -> f64 {
 /// any window: STAT's words then NOW's.
 pub fn perf_read(window_ms: Option<f64>) -> &'static [f64] {
     let words = read();
-    stats(&mut words[..STAT::WORDS], window_ms);
-    state(&mut words[STAT::WORDS..]);
+    stats(&mut words[..stat::WORDS], window_ms);
+    state(&mut words[stat::WORDS..]);
     words
 }
 
@@ -102,35 +102,35 @@ fn stats(out: &mut [f64], window_ms: Option<f64>) {
     let since = window_ms.map_or(f64::NEG_INFINITY, |w| now() - w);
     put(
         out,
-        STAT::frames::AT,
+        stat::frames::AT,
         &frames(scratch, perf_frames_since(since)),
     );
     put(
         out,
-        STAT::tasks::AT,
+        stat::tasks::AT,
         &tasks(scratch, perf_tasks_since(since)),
     );
-    put(out, STAT::steps::AT, &steps());
-    put(out, STAT::recording::AT, &perf_recording_extremes());
+    put(out, stat::steps::AT, &steps());
+    put(out, stat::recording::AT, &perf_recording_extremes());
 }
 
 fn state(out: &mut [f64]) {
     out.fill(0.0);
-    put(out, NOW::recording_state::AT, &perf_recording_state());
-    put(out, NOW::draw::AT, &draw());
-    put(out, NOW::view::AT, &view());
+    put(out, now::recording_state::AT, &perf_recording_state());
+    put(out, now::draw::AT, &draw());
+    put(out, now::view::AT, &view());
 }
 
 fn draw() -> DrawSection {
     let refused = refused_frames();
     let block = api::device_block();
     DrawSection {
-        frames: renderer::drawn_frames(),
+        frame_cnt: renderer::drawn_frame_cnt(),
         refused_admit: refused.admit,
         refused_stream: refused.stream,
         generation: f64::from(api::device_generation()),
         status: f64::from(block.status),
-        errors: f64::from(block.errors),
+        err_cnt: f64::from(block.err_cnt),
         unfinished: f64::from(block.unfinished),
     }
 }
@@ -145,9 +145,9 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
     // The GPU's figures cover only the frames a read timed, each counted
     // once. A span the frame did not run reads 0 and is left out.
     let read = || frames.iter().filter(|f| f.gpu.timed != 0.0);
-    let spans: [(f64, f64); GPU_SPANS] = core::array::from_fn(|k| {
+    let spans: [(f64, f64); GPU_SPAN_CNT] = core::array::from_fn(|k| {
         let ran = read().map(|f| f.gpu.spans[k]).filter(|&ms| ms > 0.0);
-        let (s, n) = percentiles_n(scratch, ran);
+        let (s, n) = percentile_n(scratch, ran);
         (s.p95, n as f64)
     });
     FrameSection {
@@ -157,27 +157,27 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
         moving: moving().count() as f64,
         moving_ms: moving().map(|f| f.interval_ms).sum(),
         overran: cnt(&overran),
-        interval: percentiles(scratch, moving().map(|f| f.interval_ms)),
-        tick: percentiles(scratch, frames.iter().map(|f| f.tick_ms)),
-        effect: percentiles(scratch, frames.iter().map(|f| f.effects_ms)),
-        stage: percentiles(scratch, frames.iter().map(|f| f.stage_ms)),
-        perf: percentiles(scratch, frames.iter().map(|f| f.perf_ms)),
+        interval: percentile(scratch, moving().map(|f| f.interval_ms)),
+        tick: percentile(scratch, frames.iter().map(|f| f.tick_ms)),
+        effect: percentile(scratch, frames.iter().map(|f| f.effects_ms)),
+        stage: percentile(scratch, frames.iter().map(|f| f.stage_ms)),
+        perf: percentile(scratch, frames.iter().map(|f| f.perf_ms)),
         effects_p95: core::array::from_fn(|k| {
-            percentiles(scratch, frames.iter().map(|f| f.effects[k])).p95
+            percentile(scratch, frames.iter().map(|f| f.effects[k])).p95
         }),
         gpu_timed: cnt(&|f| f.gpu.timed != 0.0),
-        gpu_busy: percentiles(scratch, read().map(|f| f.gpu.busy_ms)),
+        gpu_busy: percentile(scratch, read().map(|f| f.gpu.busy_ms)),
         gpu_busy_kinds: {
             let mut by = [0.0; 3 * FRAME_KINDS.len()];
             for k in 0..FRAME_KINDS.len() {
                 let busy = read().filter(|f| f.kind == k as f64).map(|f| f.gpu.busy_ms);
-                let (s, n) = percentiles_n(scratch, busy);
+                let (s, n) = percentile_n(scratch, busy);
                 by[3 * k..3 * k + 3].copy_from_slice(&[s.p50, s.p95, n as f64]);
             }
             by
         },
         phases_p95: core::array::from_fn(|k| {
-            percentiles(scratch, frames.iter().map(|f| f.phases[k])).p95
+            percentile(scratch, frames.iter().map(|f| f.phases[k])).p95
         }),
         gpu_spans_p95: spans.map(|(p95, _)| p95),
         gpu_spans_cnt: spans.map(|(_, n)| n),
@@ -194,9 +194,9 @@ fn frames(scratch: &mut [f64], frames: &[FrameSample]) -> FrameSection {
 
 fn tasks(scratch: &mut [f64], tasks: &[TaskRecord]) -> TaskSection {
     let (ok, aborted, err) = (
-        Outcome::ok as u32 as f64,
-        Outcome::aborted as u32 as f64,
-        Outcome::err as u32 as f64,
+        Outcome::Ok as u32 as f64,
+        Outcome::Aborted as u32 as f64,
+        Outcome::Err as u32 as f64,
     );
     let mut section = TaskSection::default();
     for (c, slot) in section.slots.iter_mut().enumerate() {
@@ -222,10 +222,10 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRecord]) -> TaskSection {
             }
         }
         counted[..kinds].sort_by(|x, y| y.2.total_cmp(&x.2));
-        let shown = kinds.min(REASONS);
+        let shown = kinds.min(REASON_CAP);
 
-        let mut sums = [0.0f64; TASK_PHASES];
-        let mut seen = [false; TASK_PHASES];
+        let mut sums = [0.0f64; TASK_PHASE_CNT];
+        let mut seen = [false; TASK_PHASE_CNT];
         let mut phase_n = 0;
         for r in mine().filter(|r| r.phase_cnt > 0.0) {
             phase_n += 1;
@@ -238,7 +238,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRecord]) -> TaskSection {
             }
         }
 
-        let lat = percentiles(
+        let lat = percentile(
             scratch,
             mine()
                 .filter(|r| r.outcome == ok)
@@ -256,7 +256,7 @@ fn tasks(scratch: &mut [f64], tasks: &[TaskRecord]) -> TaskSection {
                 if i < shown {
                     [counted[i].0, counted[i].1, counted[i].2]
                 } else {
-                    [0.0; LIMIT::REASON_WORDS as usize]
+                    [0.0; limit::REASON_WORDS as usize]
                 }
             }),
             phase_n: phase_n as f64,
@@ -301,10 +301,10 @@ fn view() -> ViewSection {
     let picked = pointed.and_then(|[x, y]| edit::pick::pick_at(x, y));
     let hit_kind = picked.as_ref().map_or(f64::NAN, |p| {
         f64::from(match p.hit.kind {
-            HitKind::Ground => spec::HitKind::ground,
-            HitKind::Object(_) => spec::HitKind::object,
-            HitKind::Objects => spec::HitKind::objects,
-            HitKind::Decor(_) => spec::HitKind::decor,
+            HitKind::Ground => spec::HitKind::Ground,
+            HitKind::Object(_) => spec::HitKind::Object,
+            HitKind::Objects => spec::HitKind::Objects,
+            HitKind::Decor(_) => spec::HitKind::Decor,
         } as u8)
     });
     let asset = edit::tool().asset();

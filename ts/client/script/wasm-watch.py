@@ -8,6 +8,7 @@
 #   ./script/wasm-watch.py [--interval SECONDS]
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -17,7 +18,9 @@ from pathlib import Path
 APP = Path(__file__).resolve().parent.parent
 BUILD = APP / "script/wasm-build.py"
 OUT = APP / "public/core.wasm"
-RUST = APP.parent.parent / "rust"
+# The guest (package.json `xpute.guest`), and its cargo workspace.
+GUEST = json.loads((APP / "package.json").read_text()).get("xpute", {}).get("guest") or sys.exit(f"[wasm-watch] {APP}/package.json names no xpute.guest")
+RUST = (APP / GUEST["workspace"]).resolve()
 
 
 def tree():

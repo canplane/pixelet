@@ -3,9 +3,9 @@
 //! The object layer's store: placed objects, kept as their one record. Each
 //! leaf holds its catalog value at its node and the handle of the record it
 //! carries beyond that value (ext.rs). The leaves live in one sparse tree
-//! over the world (sparse_tree.rs), whose root is
-//! the world, a node of zoom 0. A write arrives as `<key, asset_id, ext>`, keyed by
-//! its node's Morton key (pxl-spec `morton::key_of`).
+//! over the world (sparse_tree.rs), whose root is the world, a node of zoom
+//! 0. A write arrives as `<key, asset_id, ext>`, keyed by its node's Morton
+//! key (pxl-spec `morton::key_of`).
 //!
 //! Each branch's slot holds its children folded into one word
 //! (volume.rs `fold`), and every write folds again up its path, so a
@@ -21,8 +21,8 @@
 //! take its place.
 
 use pxl_global::Global;
+use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::space::coord::zoom::{units, y_start, z_start, Zoom, CUBE_ZOOM, SHARD_ZOOM};
-use pxl_spec::value;
 
 use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::AssetId;
@@ -160,7 +160,7 @@ pub(in crate::domain::layer) struct Leaf {
 }
 
 pub(super) const EMPTY: Leaf = Leaf {
-    asset_id: value::VOID as u16,
+    asset_id: Sentinel::Void as u16,
     ext: NONE,
 };
 
@@ -197,7 +197,7 @@ impl object::Table for Table<'_> {
 }
 
 /// One leaf written, as `<key, asset_id, ext>`: its node's key, its catalog value
-/// and the record it carries. An id of `VOID` erases the leaf.
+/// and the record it carries. An id of `Sentinel::Void` erases the leaf.
 #[derive(Clone, Debug)]
 pub struct Write {
     pub at: u128,
@@ -358,14 +358,14 @@ impl Store {
                 },
                 None => NONE,
             };
-            let val = Leaf {
+            let word = Leaf {
                 asset_id: id16,
                 ext: handle,
             }
             .word();
             let set = self
                 .tree
-                .set(depth(zoom), path(zoom, at), val, |tree, child_group, d| {
+                .set(depth(zoom), path(zoom, at), word, |tree, child_group, d| {
                     fold(tree, child_group, d - 1)
                 });
             if set || handle != NONE {

@@ -122,7 +122,7 @@ fn rec_size(put: &dyn Fn(&mut dyn Sink)) -> usize {
 
 pub struct BufferDescriptor {
     pub size: u32,
-    /// These are `spec::BUFFER_USAGE` bits.
+    /// These are `spec::buffer_usage` bits.
     pub usage: u32,
     pub mapped_at_creation: bool,
 }
@@ -130,11 +130,11 @@ pub struct BufferDescriptor {
 pub struct TextureDescriptor<'a> {
     /// This holds the width, the height, and the depth or layers.
     pub size: [u32; 3],
-    pub mip_levels: u32,
-    pub samples: u32,
+    pub mip_cnt: u32,
+    pub sample_cnt: u32,
     pub dimension: TextureDimension,
     pub format: TextureFormat,
-    /// These are `spec::TEXTURE_USAGE` bits.
+    /// These are `spec::texture_usage` bits.
     pub usage: u32,
     pub view_formats: &'a [TextureFormat],
 }
@@ -145,9 +145,9 @@ pub struct ViewDescriptor {
     pub dimension: Option<TextureViewDimension>,
     pub aspect: Option<TextureAspect>,
     pub base_mip: u32,
-    pub mips: Option<u32>,
+    pub mip_cnt: Option<u32>,
     pub base_layer: u32,
-    pub layers: Option<u32>,
+    pub layer_cnt: Option<u32>,
 }
 
 pub struct SamplerDescriptor {
@@ -181,7 +181,7 @@ pub enum BindingLayout {
 
 pub struct BindGroupLayoutEntry {
     pub binding: u32,
-    /// These are `spec::SHADER_STAGE` bits.
+    /// These are `spec::shader_stage` bits.
     pub visibility: u32,
     pub layout: BindingLayout,
 }
@@ -238,10 +238,10 @@ pub struct StencilFaceState {
 
 /// This is WebGPU's default for a stencil face.
 pub const STENCIL_UNUSED: StencilFaceState = StencilFaceState {
-    compare: CompareFunction::always,
-    fail: StencilOperation::keep,
-    depth_fail: StencilOperation::keep,
-    pass: StencilOperation::keep,
+    compare: CompareFunction::Always,
+    fail: StencilOperation::Keep,
+    depth_fail: StencilOperation::Keep,
+    pass: StencilOperation::Keep,
 };
 
 pub struct DepthStencilState {
@@ -284,7 +284,7 @@ pub struct BlendState {
 pub struct ColorTargetState {
     pub format: TextureFormat,
     pub blend: Option<BlendState>,
-    /// These are `spec::COLOR_WRITE` bits.
+    /// These are `spec::color_write` bits.
     pub write_mask: u32,
 }
 
@@ -509,19 +509,19 @@ fn compute_pipeline_words(s: &mut dyn Sink, d: &ComputePipelineDescriptor) {
 /// The ops numbered below DESTROY make objects that last until the guest
 /// destroys them. The ops past it make what an entry lets go: an encoder, a
 /// pass, a surface's current texture.
-pub const OBJECT_OPS: usize = op::DESTROY as usize;
+pub const OBJECT_OP_CNT: usize = op::DESTROY as usize;
 
 /// These are the calls that make objects, over a table of `N` handles. Each
 /// handle holds the op that made its object where the object lasts
-/// (`OBJECT_OPS`), and 0 where an entry lets it go. A `Gpu` whose bytes are all
+/// (`OBJECT_OP_CNT`), and 0 where an entry lets it go. A `Gpu` whose bytes are all
 /// zero holds no object, as `new` makes it.
 pub struct Gpu<const N: usize> {
     handles: Table<u8, N>,
     /// This counts how many live objects each op has made, indexed by the op.
-    objects: [u32; OBJECT_OPS],
+    objects: [u32; OBJECT_OP_CNT],
 }
 
-fn forget(objects: &mut [u32; OBJECT_OPS], op: u8) {
+fn forget(objects: &mut [u32; OBJECT_OP_CNT], op: u8) {
     if op != 0 {
         objects[op as usize] -= 1;
     }
@@ -537,7 +537,7 @@ impl<const N: usize> Gpu<N> {
     pub const fn new() -> Self {
         Gpu {
             handles: Table::new(),
-            objects: [0; OBJECT_OPS],
+            objects: [0; OBJECT_OP_CNT],
         }
     }
 
@@ -557,7 +557,7 @@ impl<const N: usize> Gpu<N> {
         kind: u32,
         put: &dyn Fn(&mut dyn Sink),
     ) -> Option<Id> {
-        let lasts = (kind as usize) < OBJECT_OPS;
+        let lasts = (kind as usize) < OBJECT_OP_CNT;
         let id = self.handles.insert(if lasts { kind as u8 } else { 0 })?;
         if !emit(stream, op, &|s| {
             s.word(id);
@@ -595,8 +595,8 @@ impl<const N: usize> Gpu<N> {
                 d.size[0],
                 d.size[1],
                 d.size[2],
-                d.mip_levels,
-                d.samples,
+                d.mip_cnt,
+                d.sample_cnt,
                 d.dimension as u32,
                 d.format as u32,
                 d.usage,
@@ -614,11 +614,11 @@ impl<const N: usize> Gpu<N> {
                 texture,
                 opt(d.format.map(|f| f as u32)),
                 opt(d.dimension.map(|v| v as u32)),
-                d.aspect.unwrap_or(TextureAspect::all) as u32,
+                d.aspect.unwrap_or(TextureAspect::All) as u32,
                 d.base_mip,
-                opt(d.mips),
+                opt(d.mip_cnt),
                 d.base_layer,
-                opt(d.layers),
+                opt(d.layer_cnt),
             ]
             .into_iter()
             .for_each(|w| s.word(w))
@@ -671,18 +671,18 @@ impl<const N: usize> Gpu<N> {
                         dynamic_offset,
                         min_binding_size,
                     } => (
-                        BindingKind::buffer,
+                        BindingKind::Buffer,
                         ty as u32,
                         flag(dynamic_offset),
                         min_binding_size,
                     ),
-                    BindingLayout::Sampler(ty) => (BindingKind::sampler, ty as u32, 0, 0),
+                    BindingLayout::Sampler(ty) => (BindingKind::Sampler, ty as u32, 0, 0),
                     BindingLayout::Texture {
                         sample,
                         dimension,
                         multisampled,
                     } => (
-                        BindingKind::texture,
+                        BindingKind::Texture,
                         sample as u32,
                         dimension as u32,
                         flag(multisampled),
@@ -692,7 +692,7 @@ impl<const N: usize> Gpu<N> {
                         format,
                         dimension,
                     } => (
-                        BindingKind::storage_texture,
+                        BindingKind::StorageTexture,
                         access as u32,
                         format as u32,
                         dimension as u32,
@@ -728,9 +728,9 @@ impl<const N: usize> Gpu<N> {
                         buffer,
                         offset,
                         size,
-                    } => (ResourceKind::buffer, buffer, offset, opt(size)),
-                    Resource::Sampler(id) => (ResourceKind::sampler, id, 0, 0),
-                    Resource::View(id) => (ResourceKind::texture_view, id, 0, 0),
+                    } => (ResourceKind::Buffer, buffer, offset, opt(size)),
+                    Resource::Sampler(id) => (ResourceKind::Sampler, id, 0, 0),
+                    Resource::View(id) => (ResourceKind::TextureView, id, 0, 0),
                 };
                 [e.binding, kind as u32, id, offset, size]
                     .into_iter()
@@ -930,7 +930,7 @@ impl<const N: usize> Gpu<N> {
         self.handles.live(id)
     }
 
-    pub fn objects(&self) -> &[u32; OBJECT_OPS] {
+    pub fn objects(&self) -> &[u32; OBJECT_OP_CNT] {
         &self.objects
     }
 }
@@ -1005,7 +1005,7 @@ pub mod call {
             texture: 0,
             mip: 0,
             origin: [0; 3],
-            aspect: TextureAspect::all,
+            aspect: TextureAspect::All,
         };
         rec_size(&|s| {
             texture_write(s, &place, [0; 2], [0; 3]);

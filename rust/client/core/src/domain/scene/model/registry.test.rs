@@ -5,8 +5,8 @@ use std::task::{Context, Poll, Waker};
 
 use super::*;
 
-/// The swaying clip has a key every 1/`SWAY_KEYS` of its one-second loop.
-const SWAY_KEYS: usize = 40;
+/// The swaying clip has a key every 1/`SWAY_KEY_CNT` of its one-second loop.
+const SWAY_KEY_CNT: usize = 40;
 
 /// How far the swaying clip turns its joint either way, in radians.
 const SWAY_RAD: f32 = 0.3;
@@ -42,8 +42,8 @@ pub(crate) fn swaying() -> Model {
     ];
     m.joint(0, -1, rest, identity, identity);
     let clip = m.clip(1.0);
-    let times: Vec<f32> = (0..=SWAY_KEYS)
-        .map(|k| k as f32 / SWAY_KEYS as f32)
+    let times: Vec<f32> = (0..=SWAY_KEY_CNT)
+        .map(|k| k as f32 / SWAY_KEY_CNT as f32)
         .collect();
     let vals = times
         .iter()
@@ -78,7 +78,7 @@ pub(crate) fn swaying() -> Model {
 
 /// The model's vertices as its clip skins them at `time`.
 fn drawn(m: &Model, time: f32) -> Vec<[f32; 3]> {
-    let n = m.joints();
+    let n = m.joint_cnt();
     let (mut local, mut global) = (vec![[0.0; 10]; n], vec![[0.0; 16]; n]);
     let mut palette = vec![0.0; n * 16];
     m.pose(Some((0, time)), &mut local);

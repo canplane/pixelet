@@ -18,11 +18,11 @@ use crate::gpu::api::{
 };
 use crate::gpu::draw::{Block, DRAW_WORDS, MODEL_VERTEX_WORDS};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::pass::atmosphere::AIR_ENTRIES;
+use crate::pass::atmosphere::AIR_ENTRY_CNT;
 
 /// The model passes' group 0 entries: the frame words, the light's shadow map
 /// and the air.
-pub fn frame_entries(frame: u32, shadow: [Entry; 2], air: [Entry; AIR_ENTRIES]) -> Vec<Entry> {
+pub fn frame_entries(frame: u32, shadow: [Entry; 2], air: [Entry; AIR_ENTRY_CNT]) -> Vec<Entry> {
     let mut e = vec![buf_entry(0, frame), shadow[0], shadow[1]];
     e.extend(air);
     e
@@ -56,10 +56,10 @@ pub fn skin_group(g: &Gpu, layout: Layout, (image, file): Image) -> Option<u32> 
     let texture = g.image(image, file)?;
     if skins.sampler == 0 {
         skins.sampler = g.sampler(
-            FilterMode::linear,
-            FilterMode::linear,
-            MipmapFilterMode::nearest,
-            AddressMode::repeat,
+            FilterMode::Linear,
+            FilterMode::Linear,
+            MipmapFilterMode::Nearest,
+            AddressMode::Repeat,
             None,
             1,
         );

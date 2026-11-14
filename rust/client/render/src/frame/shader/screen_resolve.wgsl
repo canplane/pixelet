@@ -27,8 +27,8 @@ struct Resolve {
 // `resolve.blend.x`. Past 0 only the jitter has moved there since, and each frame takes its
 // even share of the sequence counted from the frame the tile changed in, so the first still
 // frame takes half. A frame takes all of it where the last frame's view did not hold the
-// place. The tile stays damaged for the frame it changed in and `TILE_JITTERS - 1` still
-// frames (word.rs `screen::DAMAGE_FRAMES`).
+// place. The tile stays damaged for the frame it changed in and `TILE_JITTER_CNT - 1` still
+// frames (word.rs `screen::DAMAGE_FRAME_CNT`).
 
 // How far what the frames before left may lie from the mean of this frame's pixels around it,
 // in standard deviations of those pixels.
@@ -76,7 +76,7 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let tile = vec2u(p) / tile_side();
   let age = tile_age(tile.y * tiles.cnt.x + tile.x);
   let still = age > 0u;
-  var blend = select(resolve.blend.x, 1.0 / f32(min(age - 1u, TILE_JITTERS - 2u) + 2u), still);
+  var blend = select(resolve.blend.x, 1.0 / f32(min(age - 1u, TILE_JITTER_CNT - 2u) + 2u), still);
   if (!(was.w > 0.0) || any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) {
     blend = 1.0;
   }

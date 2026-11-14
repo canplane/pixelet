@@ -27,7 +27,7 @@ import type {
   U64Array,
   U8Array,
 } from "@xpute/kit/abi/array.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_EBADMSG, ERRNO_EFAULT } from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
 import type { AlignUnit, NodeType, NodeValue } from "./spec.ts";
@@ -63,16 +63,16 @@ const utf8 = (bytes: U8Array): string => {
   try {
     return UTF8.decode(bytes);
   } catch {
-    throw new MarshalError(Errno.EBADMSG);
+    throw new MarshalError(ERRNO_EBADMSG);
   }
 };
 
 const CURSOR = (pkt: U8Array, base: u32, type: NodeType): NodeCursor => {
   const align_sz: AlignUnit = ALIGN_SZ(type);
-  if (base % align_sz) throw new MarshalError(Errno.EBADMSG);
+  if (base % align_sz) throw new MarshalError(ERRNO_EBADMSG);
   if (type === SpecialType.BRANCH) return new BranchCursorImpl(pkt, base);
   if (TYPE_IS_LEAF(type)) return new NodeCursorImpl(pkt, base, type);
-  throw new MarshalError(Errno.EBADMSG);
+  throw new MarshalError(ERRNO_EBADMSG);
 };
 
 const ENTRY_OFF = (base: u32, idx: u32) => base + WORD_SZ + idx * WORD_SZ;
@@ -94,20 +94,20 @@ export class TreeReader {
   readonly root: NodeCursor;
 
   constructor(pkt: U8Array) {
-    if (pkt.byteOffset % WORD_SZ) throw new MarshalError(Errno.EBADMSG);
+    if (pkt.byteOffset % WORD_SZ) throw new MarshalError(ERRNO_EBADMSG);
 
     this.pkt = new Uint8Array(pkt.buffer, pkt.byteOffset, pkt.byteLength);
 
-    if (this.pkt.byteLength < HDR_SZ) throw new MarshalError(Errno.EBADMSG);
+    if (this.pkt.byteLength < HDR_SZ) throw new MarshalError(ERRNO_EBADMSG);
     const hdr_view = new DataView(this.pkt.buffer, this.pkt.byteOffset, HDR_SZ);
 
     // packet header
-    if (GET_LEN(hdr_view, 0) !== MAGIC) throw new MarshalError(Errno.EBADMSG);
+    if (GET_LEN(hdr_view, 0) !== MAGIC) throw new MarshalError(ERRNO_EBADMSG);
 
     const [payload_sz, type] = GET_DESC(hdr_view, WORD_SZ, DESC_REG);
     // root header stores payload byte size, not a relative offset
     if (payload_sz > pkt.byteLength - HDR_SZ) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
 
     this.root = payload_sz
@@ -159,7 +159,7 @@ export abstract class NodeCursor {
    * Fails if the current node is not a branch.
    */
   as_branch(): BranchCursor {
-    if (this.type !== SpecialType.BRANCH) throw new MarshalError(Errno.EBADMSG);
+    if (this.type !== SpecialType.BRANCH) throw new MarshalError(ERRNO_EBADMSG);
     return this as unknown as BranchCursor;
   }
 
@@ -172,50 +172,6 @@ export abstract class NodeCursor {
    */
   opt(): this | undefined {
     return this;
-  }
-
-  // ---- Checked Getters ----
-  //
-  // Each reads the node as one kind, as xpute-kit's cursor does
-  // (`get_number`, `get_bool`, `get_str_ref`, `get_array`): a node of another
-  // kind, an absent one among them, refuses the packet with EBADMSG.
-
-  /** Any number type an f64 holds exactly; a 64-bit integer is refused. */
-  get_number(): f64 {
-    const v = this.get();
-    if (typeof v !== "number") throw new MarshalError(Errno.EBADMSG);
-    return v;
-  }
-
-  get_u64(): u64 {
-    if (this.type !== ScalarType.U64) throw new MarshalError(Errno.EBADMSG);
-    return this._u64();
-  }
-
-  get_bool(): boolean {
-    const v = this.get();
-    if (typeof v !== "boolean") throw new MarshalError(Errno.EBADMSG);
-    return v;
-  }
-
-  get_str(): string {
-    const v = this.get();
-    if (typeof v !== "string") throw new MarshalError(Errno.EBADMSG);
-    return v;
-  }
-
-  /** A packed array of u32. */
-  get_u32s(): U32Array {
-    const v = this.get();
-    if (!(v instanceof Uint32Array)) throw new MarshalError(Errno.EBADMSG);
-    return v;
-  }
-
-  /** The node read by `get` where it is present, and null where it is
-   * absent. */
-  get_opt<T>(get: (c: this) => T): T | null {
-    const present = this.opt();
-    return present === undefined ? null : get(present);
   }
 
   // ---- Shallow Getter ----
@@ -287,7 +243,7 @@ export abstract class NodeCursor {
         return this._strs() as T;
 
       default:
-        throw new MarshalError(Errno.EBADMSG);
+        throw new MarshalError(ERRNO_EBADMSG);
     }
   }
 
@@ -295,67 +251,67 @@ export abstract class NodeCursor {
 
   protected _u8(): u8 {
     if (this.base + 1 > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     return this.pkt_view.getUint8(this.base);
   }
   protected _i8(): i8 {
     if (this.base + 1 > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     return this.pkt_view.getInt8(this.base);
   }
   protected _u16(): u16 {
     if (this.base + 2 > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     return this.pkt_view.getUint16(this.base, LE);
   }
   protected _i16(): i16 {
     if (this.base + 2 > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     return this.pkt_view.getInt16(this.base, LE);
   }
   protected _u32(): u32 {
     if (this.base + 4 > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     return this.pkt_view.getUint32(this.base, LE);
   }
   protected _i32(): i32 {
     if (this.base + 4 > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     return this.pkt_view.getInt32(this.base, LE);
   }
   protected _u64(): u64 {
     if (this.base + 8 > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     return this.pkt_view.getBigUint64(this.base, LE);
   }
   protected _i64(): i64 {
     if (this.base + 8 > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     return this.pkt_view.getBigInt64(this.base, LE);
   }
   protected _f32(): f32 {
     if (this.base + 4 > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     return this.pkt_view.getFloat32(this.base, LE);
   }
   protected _f64(): f64 {
     if (this.base + 8 > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     return this.pkt_view.getFloat64(this.base, LE);
   }
   protected _bool(): boolean {
     if (this.base + 1 > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     return this.pkt_view.getUint8(this.base) !== 0;
   }
@@ -372,7 +328,7 @@ export abstract class NodeCursor {
    */
   protected _array<T extends AnyTypedArray>(ctor: AnyTypedArrayCtor<T>): T {
     if (this.base + WORD_SZ > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     const len = GET_LEN(this.pkt_view, this.base);
     const payload_start: u32 = this.base + WORD_SZ;
@@ -381,10 +337,10 @@ export abstract class NodeCursor {
     const payload_sz: u32 = len * elem_sz;
 
     if (payload_start > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     if (payload_sz > this.pkt.byteLength - payload_start) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
 
     return new ctor(
@@ -427,7 +383,7 @@ export abstract class NodeCursor {
 
   protected _bitset(): U8Array {
     if (this.base + WORD_SZ > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     const len = GET_LEN(this.pkt_view, this.base);
     const payload_start: u32 = this.base + WORD_SZ;
@@ -436,10 +392,10 @@ export abstract class NodeCursor {
     // would wrap past 2^32 to a size of 0 and pass the bounds check.
     const payload_sz: u32 = Math.floor((len + 7) / 8);
     if (payload_start > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     if (payload_sz > this.pkt.byteLength - payload_start) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
 
     const arr: U8Array = new Uint8Array(len);
@@ -454,21 +410,21 @@ export abstract class NodeCursor {
    * and the end, before the strings are returned. */
   protected _strs(): string[] {
     if (this.base + WORD_SZ > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     const n = GET_LEN(this.pkt_view, this.base);
     const start: u32 = this.base + WORD_SZ;
     const blob: u32 = start + 4 * (n + 1);
-    if (blob > this.pkt.byteLength) throw new MarshalError(Errno.EBADMSG);
+    if (blob > this.pkt.byteLength) throw new MarshalError(ERRNO_EBADMSG);
     const off = (i: u32): u32 => this.pkt_view.getUint32(start + 4 * i, true);
     const total = off(n);
     if (total > this.pkt.byteLength - blob) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     const out: string[] = [];
     for (let i = 0; i < n; i++) {
       const [a, b] = [off(i), off(i + 1)];
-      if (a > b || b > total) throw new MarshalError(Errno.EBADMSG);
+      if (a > b || b > total) throw new MarshalError(ERRNO_EBADMSG);
       out.push(utf8(this.pkt.subarray(blob + a, blob + b)));
     }
     return out;
@@ -477,19 +433,19 @@ export abstract class NodeCursor {
   // STR stores UTF-8 bytes with a trailing NUL on wire, while len excludes that terminator.
   protected _str(): string {
     if (this.base + WORD_SZ > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     const nbyte = GET_LEN(this.pkt_view, this.base);
     const payload_start: u32 = this.base + WORD_SZ;
 
     if (payload_start > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     if (nbyte + 1 > this.pkt.byteLength - payload_start) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     if (this.pkt[payload_start + nbyte] !== 0) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
 
     return utf8(this.pkt.subarray(payload_start, payload_start + nbyte));
@@ -513,7 +469,7 @@ export abstract class NullCursor extends NodeCursor {
 
   /** An absent node has no branch to read, whatever its type: always EFAULT. */
   override as_branch(): BranchCursor {
-    throw new MarshalError(Errno.EFAULT);
+    throw new MarshalError(ERRNO_EFAULT);
   }
 
   // ---- Nullable Guard ----
@@ -546,13 +502,13 @@ export abstract class BranchCursor extends NodeCursor {
     super(pkt, base, SpecialType.BRANCH);
 
     if (base + WORD_SZ > this.pkt.byteLength) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     const len = GET_LEN(this.pkt_view, this.base);
 
     const table_off = base + WORD_SZ;
     if (len > (pkt.byteLength - table_off) / WORD_SZ) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
 
     this.len = len;
@@ -609,19 +565,19 @@ export abstract class BranchCursor extends NodeCursor {
    * - validates child offset bounds against the enclosing branch table
    */
   at(idx: u32): NodeCursor {
-    if (idx >= this.len) throw new MarshalError(Errno.EFAULT);
+    if (idx >= this.len) throw new MarshalError(ERRNO_EFAULT);
     const entry_off: u32 = ENTRY_OFF(this.base, idx);
 
     const [rel_off, type] = GET_DESC(this.pkt_view, entry_off, DESC_REG);
 
     if (rel_off === 0) return new NullCursorImpl(this.pkt, type);
     if (rel_off > this.pkt.byteLength - this.base) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     const base: u32 = this.base + rel_off;
     const end: u32 = this.end_of(idx);
     if (base < this.child_start || base >= end) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
     return CURSOR(this.pkt.subarray(0, end), base, type);
   }

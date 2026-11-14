@@ -1,6 +1,10 @@
 // @pxl/client/ui/feature/cover/cover.ts
 
-import { Message } from "@/abi/overlay.ts";
+import {
+  type Message,
+  MESSAGE_WORLD_READ_FAILING,
+  MESSAGE_WORLD_UNAVAILABLE,
+} from "@/abi/overlay.enum.ts";
 import {
   BOOT_FAILED,
   BOOT_LOADING,
@@ -9,16 +13,20 @@ import {
   BOOT_STARTING,
   BOOT_TERMINATED,
   type Boot,
+} from "@/service/sys/boot.ts";
+import {
   GPU_ASKING,
   GPU_INSECURE,
   GPU_MISSING,
   GPU_UNSUPPORTED,
   GPU_WAITING,
   type Gpu,
+} from "@/service/sys/gpu.ts";
+import {
   SOURCE_FAILING,
   SOURCE_REFUSED,
   type Source,
-} from "@/abi/state.ts";
+} from "@/service/sys/fs/source.ts";
 import { messageKey } from "@/ui/shared/locale/message-key.ts";
 
 export interface Standing {
@@ -63,7 +71,7 @@ export const UI_PANIC = panic("panic.app", "UI_ERROR");
 /** The panic for what breaks the world once it is made, or while it is being
  * made. */
 function panicOf(s: Standing): Cover | null {
-  if (s.stall === Message.WorldUnavailable) {
+  if (s.stall === MESSAGE_WORLD_UNAVAILABLE) {
     return panic(messageKey(s.stall), "WORLD_UNAVAILABLE");
   }
   return null;
@@ -82,7 +90,7 @@ function blockOf(s: Standing): Cover | null {
   }
   if (s.source === SOURCE_REFUSED) return failed("failed.source");
   if (!s.online) return progress(s, "progress.offline");
-  if (s.source === SOURCE_FAILING || s.stall === Message.WorldReadFailing) {
+  if (s.source === SOURCE_FAILING || s.stall === MESSAGE_WORLD_READ_FAILING) {
     return progress(s, "progress.server");
   }
   if (s.gpu === GPU_ASKING || s.gpu === GPU_WAITING) {

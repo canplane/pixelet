@@ -45,3 +45,13 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   would let an existing program in. Not without one to build it against; guests
   stay `wasm32-unknown-unknown` meanwhile —
   [20260930-wasi-and-the-boundary.md](./minutes/20260930-wasi-and-the-boundary.md).
+- **pxl-core's test build.** Tests are off for now, and the core's test
+  build does not compile; when tests resume, these are rewritten or removed:
+  - `rust/client/core/src/link/export.test.rs`, which writes an f64 for a u32
+    reader and names `GpuSurfaceClose`, `ui::apply`,
+    `abi::Command::CAMERA_GOTO` and `State`, none of which exist.
+- **C++'s core, which does not build.** `xpute/cpp`'s io and conformance
+  include headers its removed core wrote (`xpute/core/abi/`, gone since
+  00503422be); they are written again with the C++ core. One file says it
+  is generated though nothing writes it: `dev/conformance/core.spec.mk`,
+  which the Makefile includes.

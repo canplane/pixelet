@@ -10,25 +10,15 @@
     reason = "generated from WIT"
 )]
 
-use std::rc::Rc;
-use xpute_guest::link;
-use xpute_guest::wait;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
 /// The interface's handle, named by `pxl:core/camera` (frame.json `NAMED`).
-pub const HANDLE: Handle = 0x5a7108;
+pub const HANDLE: _rt::Handle = 0x5a7108;
 
 /// `track`
-pub const TRACK: Method = 0;
+pub const TRACK: _rt::Method = 0;
 /// `north-up`
-pub const NORTH_UP: Method = 1;
+pub const NORTH_UP: _rt::Method = 1;
 /// `goto`
-pub const GOTO: Method = 2;
+pub const GOTO: _rt::Method = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -62,9 +52,9 @@ impl Tracking {
     }
 }
 
-pub trait Camera {
-    fn track(&self, tracking: Tracking) -> Result<(), Errno>;
-    fn north_up(&self) -> Result<(), Errno>;
+pub trait Guest {
+    fn track(&self, tracking: Tracking) -> Result<(), _rt::Errno>;
+    fn north_up(&self) -> Result<(), _rt::Errno>;
     fn goto(
         &self,
         lon: f64,
@@ -72,63 +62,74 @@ pub trait Camera {
         dist: Option<f64>,
         azimuth: Option<f64>,
         polar: Option<f64>,
-    ) -> Result<(), Errno>;
+    ) -> Result<(), _rt::Errno>;
 }
 
-struct CameraObject(Rc<dyn Camera>);
+struct _Object(_rt::Rc<dyn Guest>);
 
-impl Object for CameraObject {
-    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
-        let run = || -> Result<Reply, MarshalError> {
+impl _rt::Object for _Object {
+    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+        let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 TRACK => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let tracking = b_.at(0).and_then(|c| {
-                        c.get_number().and_then(|v| {
-                            Tracking::of(v as u32).ok_or(MarshalError::new(Errno::EBADMSG))
-                        })
-                    })?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let tracking = r_
+                        .case(0, 3)
+                        .and_then(|v| Tracking::of(v).ok_or(_rt::Errno::EBADMSG))?;
                     match self.0.track(tracking) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                        Ok(v) => _rt::Reply::from(0),
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
                 NORTH_UP => match self.0.north_up() {
-                    Ok(v) => Reply::from(0),
-                    Err(e) => Reply::from(e as i32),
+                    Ok(v) => _rt::Reply::from(0),
+                    Err(e) => _rt::Reply::from(e as i32),
                 },
                 GOTO => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let lon = b_.at(0).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let lat = b_.at(1).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let dist = b_.at(2).and_then(|c| {
-                        c.opt()
-                            .map(|c| c.get_number().map(|v| v as f64))
-                            .transpose()
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let lon = r_.f64(0)?;
+                    let lat = r_.f64(8)?;
+                    let dist = r_.case(16, 2).and_then(|d| {
+                        if d == 0 {
+                            Ok(None)
+                        } else {
+                            r_.f64(16 + 8).map(Some)
+                        }
                     })?;
-                    let azimuth = b_.at(3).and_then(|c| {
-                        c.opt()
-                            .map(|c| c.get_number().map(|v| v as f64))
-                            .transpose()
+                    let azimuth = r_.case(32, 2).and_then(|d| {
+                        if d == 0 {
+                            Ok(None)
+                        } else {
+                            r_.f64(32 + 8).map(Some)
+                        }
                     })?;
-                    let polar = b_.at(4).and_then(|c| {
-                        c.opt()
-                            .map(|c| c.get_number().map(|v| v as f64))
-                            .transpose()
+                    let polar = r_.case(48, 2).and_then(|d| {
+                        if d == 0 {
+                            Ok(None)
+                        } else {
+                            r_.f64(48 + 8).map(Some)
+                        }
                     })?;
                     match self.0.goto(lon, lat, dist, azimuth, polar) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                        Ok(v) => _rt::Reply::from(0),
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
-                _ => Reply::from(Errno::ENOSYS as i32),
+                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
             })
         };
-        run().unwrap_or_else(|e| Reply::from(e.errnum as i32))
+        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
     }
 }
 
 /// Serves `imp` under the interface's handle.
-pub fn mount(imp: Rc<dyn Camera>) {
-    link::mount_named(HANDLE, Rc::new(CameraObject(imp)));
+pub fn mount(imp: _rt::Rc<dyn Guest>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+}
+
+mod _rt {
+    pub use std::rc::Rc;
+    pub use xpute_guest::link;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::{Handle, Lift, Method, Object, Reply, Tag};
 }

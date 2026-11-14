@@ -10,15 +10,15 @@ use xpute_kit::math::scalar::round;
 use crate::api_spec::surface_role;
 use crate::frame::shader::floor;
 use crate::frame::shader::word::screen::TILE;
-use pxl_engine::{ray, WORKGROUPS_CAP};
+use pxl_engine::{ray, WORKGROUP_CAP};
 
 /// The surface table's slots: at most this many surfaces are open at once.
-pub const SURFACES: usize = 9;
+pub const SURFACE_CAP: usize = 9;
 
 /// The frames a new size must hold before the targets are made at it. A box being animated
 /// passes through a new size each frame, and each size would otherwise make new depth and
 /// color targets.
-pub const SETTLE_FRAMES: u32 = 4;
+pub const SETTLE_FRAME_CNT: u32 = 4;
 
 /// The most pixels the world is drawn at along each side: the largest texture side of the
 /// floor, the limits every WebGPU device meets (frame/shader/floor.rs). Every size that
@@ -36,11 +36,11 @@ pub const DRAWN_AREA: u32 =
 /// Whether every device draws the world at `size` pixels (`render_px`). No side may pass
 /// `DRAWN_CAP`, and the area may not pass `DRAWN_AREA`. The pixels' cast (cast.wgsl `cast_cs`)
 /// dispatches a workgroup for each screen tile along one side of its dispatch, so the tiles
-/// may not pass the floor's workgroups a side (`WORKGROUPS_CAP`).
+/// may not pass the floor's workgroups a side (`WORKGROUP_CAP`).
 pub const fn drawn_fits(size: [u32; 2]) -> bool {
     size[0] <= DRAWN_CAP[0]
         && size[1] <= DRAWN_CAP[1]
-        && size[0].div_ceil(TILE) * size[1].div_ceil(TILE) <= WORKGROUPS_CAP
+        && size[0].div_ceil(TILE) * size[1].div_ceil(TILE) <= WORKGROUP_CAP
         && size[0] * size[1] <= DRAWN_AREA
 }
 
@@ -60,9 +60,9 @@ pub struct Surface {
     pub width: u32,
     pub height: u32,
     /// The world's size and the canvas's size as last asked. They must hold for
-    /// `SETTLE_FRAMES` frames before the targets are made at them.
+    /// `SETTLE_FRAME_CNT` frames before the targets are made at them.
     pub wanted_sizes: ((u32, u32), (u32, u32)),
-    pub waited_frames: u32,
+    pub waited_frame_cnt: u32,
     /// The frame's depth, with a stencil (`MASKED_DEPTH`). The world draws into it, and then
     /// what moves on its own draws over the world (renderer.rs, stage 2). A pass draws
     /// into it through `depth_view`, and a binding reads it through `depth_only_view`.
@@ -149,7 +149,7 @@ impl Surface {
             // the square root of the tighter of the two ratios, and a step more, so that each
             // pass of the loop takes some off.
             let tiles = [0, 1].map(|a| f64::from(size[a].div_ceil(TILE)));
-            let tile_share = f64::from(WORKGROUPS_CAP) / (tiles[0] * tiles[1]);
+            let tile_share = f64::from(WORKGROUP_CAP) / (tiles[0] * tiles[1]);
             let area = f64::from(DRAWN_AREA) / (f64::from(size[0]) * f64::from(size[1]));
             k *= libm::sqrt(tile_share.min(area)) * (1.0 - 1.0 / cap);
         }
@@ -159,14 +159,14 @@ impl Surface {
 /// The surfaces open, each by the handle the link issued it (xpute gpu/wit
 /// surface.wit); a free slot's handle is 0, which the link never issues.
 struct Table {
-    surfaces: [Surface; SURFACES],
+    surfaces: [Surface; SURFACE_CAP],
 }
 
 static TABLE: Global<Table> = Global::new();
 
 fn table() -> &'static mut Table {
     TABLE.get(|| Table {
-        surfaces: [Surface::default(); SURFACES],
+        surfaces: [Surface::default(); SURFACE_CAP],
     })
 }
 

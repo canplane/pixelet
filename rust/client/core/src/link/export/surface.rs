@@ -33,9 +33,9 @@ pub(super) fn mount() {
     });
 }
 
-impl wit::Surface for Surface {
-    fn resize(&self, width: u32, height: u32, dpr: f32) -> Result<(), Errno> {
-        resize(self.0, width, height, f64::from(dpr))
+impl wit::GuestSurface for Surface {
+    fn resize(&self, width: u32, height: u32, dpr: f64) -> Result<(), Errno> {
+        resize(self.0, width, height, dpr)
     }
 }
 

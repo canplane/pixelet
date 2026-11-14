@@ -10,8 +10,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use xpute_kit::status::errno::Errno;
 
-use crate::abi::clocks::monotonic_clock::{self, MonotonicClock};
-use crate::abi::clocks::system_clock::{self, Instant as SystemInstant, SystemClock};
+use crate::abi::clocks::monotonic_clock;
+use crate::abi::clocks::system_clock::{self, Instant as SystemInstant};
 use xpute_link::Return;
 
 /// Where the monotonic time counts from, as a page's `performance.now()`
@@ -20,7 +20,7 @@ struct Monotonic {
     origin: Instant,
 }
 
-impl MonotonicClock for Monotonic {
+impl monotonic_clock::Host for Monotonic {
     fn now(&self) -> Result<u64, Errno> {
         Ok(self.origin.elapsed().as_nanos() as u64)
     }
@@ -33,7 +33,7 @@ impl MonotonicClock for Monotonic {
 
 struct System;
 
-impl SystemClock for System {
+impl system_clock::Host for System {
     fn now(&self) -> Result<SystemInstant, Errno> {
         let t = SystemTime::now()
             .duration_since(UNIX_EPOCH)

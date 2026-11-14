@@ -13,7 +13,7 @@
 
 /// The words of one clip level's moved bits, which hold one bit for each of its entries, in
 /// rows of `ACROSS` bits (pxl-engine `node_cache::CHANGED_AT`).
-const LEVEL_WORDS: u32 = CLIP_ENTRIES / 32u;
+const LEVEL_WORDS: u32 = CLIP_ENTRY_CNT / 32u;
 const ROWS_A_WORD: u32 = 32u / ACROSS;
 
 /// Word `k` of the bits of the clip level's entries that hold the bricks from `q0` to `q1`,
@@ -44,7 +44,7 @@ fn entries_word(q0: vec2<i32>, q1: vec2<i32>, k: u32) -> u32 {
 /// (clip.wgsl `step_to`, `clip_zoom`). A node no wider than a brick's levels reads only the
 /// bricks held present (`step_to`). It reads a moved brick where one lies in the box of the
 /// clip level's moved bricks that are held (`CHANGED_BRICKS_AT`), and its entry's bit is set
-/// among the moved bits at `CHANGED_AT`. A wider node reads the clip level's fold (`level_bounds`),
+/// among the moved bits at `CHANGED_AT`. A wider node reads the clip level's fold (`level_bound`),
 /// which bounds every brick wanted, held or not, so any moved entry under it counts. A node
 /// coarser than `MIN_ZOOM` reads no brick: its ground is a split whatever the clip levels hold
 /// (world_split.wgsl `ground_split`, world.wgsl `ground_cell`).
@@ -52,7 +52,7 @@ fn forgets(zoom: u32, finest: u32, c: vec2<i32>) -> bool {
   if (zoom < MIN_ZOOM) {
     return false;
   }
-  for (var w = 0u; w < EYE_CLIP_LEVELS && FIRST_CELL_ZOOM + w <= max(finest, FIRST_CELL_ZOOM); w += 1u) {
+  for (var w = 0u; w < EYE_CLIP_LEVEL_CNT && FIRST_CELL_ZOOM + w <= max(finest, FIRST_CELL_ZOOM); w += 1u) {
     let cell_zoom = FIRST_CELL_ZOOM + w;
     // The first and last of the node's cells at the clip level's zoom, then the bricks that
     // hold them.
@@ -72,7 +72,7 @@ fn forgets(zoom: u32, finest: u32, c: vec2<i32>) -> bool {
     let b = NODE_CACHE_CHANGED_BRICKS_AT + 4u * w;
     let first = vec2<i32>(i32(node_cache[b]), i32(node_cache[b + 1u]));
     let last = vec2<i32>(i32(node_cache[b + 2u]), i32(node_cache[b + 3u]));
-    if (cell_zoom <= zoom + BRICK_MIPS && (any(q1 < first) || any(q0 > last))) {
+    if (cell_zoom <= zoom + BRICK_MIP_LAST && (any(q1 < first) || any(q0 > last))) {
       continue;
     }
     let at = NODE_CACHE_CHANGED_AT + w * LEVEL_WORDS;
@@ -126,9 +126,9 @@ fn forgotten_split(key: u32) -> u32 {
   return (key & ((1u << TAG_BITS) - 1u)) | (zooms << TAG_BITS) | (zooms << (TAG_BITS + ZOOM_BITS));
 }
 
-@compute @workgroup_size(ROW_LANES, 1, 1)
+@compute @workgroup_size(ROW_LANE_CNT, 1, 1)
 fn forget_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x >= ENTRIES) {
+  if (id.x >= ENTRY_CNT) {
     return;
   }
   let key_idx = key_at(id.x);

@@ -23,7 +23,7 @@ pub fn lay(sep: &Separation, frame: Frame, asset_ids: &mut [GroundId]) {
     sep.crossing_grid(frame, [0, 0], [n, n], |x, y, _, o| {
         let col = (y * n + x) as usize;
         if o.form != u32::from(Form::Approach.byte())
-            || asset_ids[col] == Sentinel::unknown as GroundId
+            || asset_ids[col] == Sentinel::Unknown as GroundId
             || u8::try_from(o.asset_id).ok().and_then(Ground::of).is_none()
         {
             return;

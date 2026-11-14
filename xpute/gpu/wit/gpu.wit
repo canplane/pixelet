@@ -5,6 +5,12 @@ package xpute:gpu@0.1.0;
 interface gpu {
   use xpute:link/types@0.1.0.{lent};
 
+  // Why a device is not ready.
+  enum error-code {
+    // The host has no device to give.
+    no-device,
+  }
+
   // Runs the records lent, and answers once they have run: until then the
   // records, and the memory they name, are the host's.
   run: async func(records: lent);
@@ -15,9 +21,8 @@ interface gpu {
     // STATUS, each a word of one writer, which the guest loads with acquire.
     // It answers when the device is lost, and the block is the guest's again.
     lost: async func(block: lent);
-    // Asks for a device, and answers once it is ready, its block written,
-    // with the block's STATUS.
-    ready: async func() -> u32;
+    // Asks for a device, and answers once it is ready, its block written.
+    ready: async func() -> result<_, error-code>;
     // Answers once a completion a record asked for has landed: a fence, a
     // read or a pipeline the host stored into the guest's memory.
     settled: async func();

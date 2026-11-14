@@ -6,7 +6,7 @@
 fn fs(v: TableOut) -> @location(0) vec4f {
   let uv = v.clip.xy / MULTISCATTER_SIZE;
   let mu_s = unit_of(uv.x, MULTISCATTER_SIZE.x) * 2.0 - 1.0;
-  let r = atmos_bottom_radius() + unit_of(uv.y, MULTISCATTER_SIZE.y) * (atmos_top_radius() - atmos_bottom_radius());
+  let r = BOTTOM_RADIUS_KM + unit_of(uv.y, MULTISCATTER_SIZE.y) * (TOP_RADIUS_KM - BOTTOM_RADIUS_KM);
   let sun = vec3f(sqrt(max(1.0 - mu_s * mu_s, 0.0)), 0.0, mu_s);
   let origin = vec3f(0.0, 0.0, r);
 
@@ -27,7 +27,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
       for (var i = 0; i < ATMOS_MULTISCATTER_STEPS; i++) {
         let p = origin + dir * ((f32(i) + 0.5) * dt);
         let pr = length(p);
-        let m = medium_at(pr - atmos_bottom_radius());
+        let m = medium_at(pr - BOTTOM_RADIUS_KM);
         let step = exp(-m.extinction * dt);
         // The integral of a source held constant over the step, in closed form.
         let fill = (vec3f(1.0) - step) / max(m.extinction, vec3f(1e-7));
@@ -40,7 +40,7 @@ fn fs(v: TableOut) -> @location(0) vec4f {
         let p = origin + dir * d;
         let n = normalize(p);
         let lit = sun_transmittance(length(p), dot(n, sun));
-        second += transmittance * lit * max(dot(n, sun), 0.0) * atmos_ground_albedo() / PI;
+        second += transmittance * lit * max(dot(n, sun), 0.0) * GROUND_ALBEDO / PI;
       }
     }
   }

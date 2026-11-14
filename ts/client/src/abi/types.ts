@@ -2,21 +2,24 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-export const Sensor = {
-  Geolocation: 0,
-  Orientation: 1,
-} as const;
-export type Sensor = (typeof Sensor)[keyof typeof Sensor];
+import {
+  type ErrorCode,
+  type Sensor,
+  of_ErrorCode,
+  of_Sensor,
+} from "./types.enum.ts";
+import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
+import { MarshalError } from "@xpute/kit/status/error.ts";
+import type { Lift } from "@xpute/link/cabi.ts";
 
-/** The name of the `Sensor` member numbered `n`, or undefined for a number
- * no member has. */
-export function sensor_name(n: number): keyof typeof Sensor | undefined {
-  for (const k in Sensor)
-    if (Sensor[k as keyof typeof Sensor] === n) return k as keyof typeof Sensor;
-  return undefined;
+export function load_Sensor(r: Lift, at: number): Sensor {
+  const v = of_Sensor(r.case(at, 2));
+  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  return v;
 }
 
-/** The `Sensor` member `n` is, or null for a number no member has. */
-export function sensor_of(n: number): Sensor | null {
-  return sensor_name(n) === undefined ? null : (n as Sensor);
+export function load_ErrorCode(r: Lift, at: number): ErrorCode {
+  const v = of_ErrorCode(r.case(at, 6));
+  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  return v;
 }

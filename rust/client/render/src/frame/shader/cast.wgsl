@@ -47,7 +47,7 @@ fn taken_word(px: vec2<f32>, ground: u32) -> u32 {
   if (eye_word(EYE_STEPS) == 0u) {
     return ground;
   }
-  return beam_steps(grid_cell(px)) + (beams[sample_word(sample_before(px)) + SAMPLE_LACKS] >> SAMPLE_STEPS_SHIFT);
+  return beam_step_cnt(grid_cell(px)) + (beams[sample_word(sample_before(px)) + SAMPLE_LACK_WORD] >> SAMPLE_STEPS_SHIFT);
 }
 
 fn write_ray(p: vec2<u32>, w: vec4<u32>) {
@@ -80,7 +80,7 @@ fn cast_px(p: vec2<u32>, size: vec2<u32>) -> bool {
     let state = node_cache_word(state_at(slot));
     if (entry_kind(slot) != KIND_SPLIT && (state & REC_ASKED) != 0u) {
       let k = entry_node(slot, vec3<i32>(aim.origin));
-      let fill = (node_cache_word(e + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
+      let fill = (node_cache_word(e + W_ASSET) >> FILL_SHIFT) & (EIGHTH_CNT - 1u);
       let faces = (state & REC_ASKED) >> REC_ASKED_SHIFT;
       let entry = visible_cell(aim, k.zoom, k.corner, k.roots - origin_roots(aim.origin), fill, faces);
       if (entry.enters) {

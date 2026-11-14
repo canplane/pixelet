@@ -176,7 +176,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
     // The regions hold different counts of instances, some none, laid end to end in the slots.
     // Each region's list names its slots in reverse, so the shader must read each slot from the
     // list.
-    let regions = drawing::REGIONS as usize;
+    let regions = drawing::REGION_CNT as usize;
     let cnts: Vec<u32> = (0..regions as u32)
         .map(|r| match r % 5 {
             0 => 0,
@@ -188,7 +188,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         .collect();
     let total: u32 = cnts.iter().sum();
     assert!(total <= CAP, "the regions hold {total}, past the slots");
-    let columns = drawing::COLUMNS;
+    let columns = drawing::COLUMN_CNT;
     let mut instances = vec![0u32; ((columns + 1) * CAP) as usize];
     let mut noise = 0x9e37_79b9u32;
     let mut next = || {
@@ -263,7 +263,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
         (31, tiles_buf.as_entire_binding()),
     ];
     let pipeline = |id| {
-        let (shader, entry) = compute(id);
+        let (shader, entry, _) = compute(id);
         gpu.pipeline(src(shader), entry)
     };
     gpu.dispatch(
@@ -272,7 +272,7 @@ fn lists_what_meets(gpu: &Gpu, t: &Target, m: &M4) {
             (2, args_buf.as_entire_binding()),
             (5, culled_args.as_entire_binding()),
         ],
-        [drawing::REGIONS.div_ceil(64), 1, 1],
+        [drawing::REGION_CNT.div_ceil(64), 1, 1],
     );
     gpu.dispatch(
         &pipeline(COMPUTE_DECOR_CULL),

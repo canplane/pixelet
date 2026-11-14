@@ -10,42 +10,38 @@
     reason = "generated from WIT"
 )]
 
-use std::rc::Rc;
-use xpute_guest::link;
-use xpute_guest::wait;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
 /// The interface's handle, named by `pxl:core/watch` (frame.json `NAMED`).
-pub const HANDLE: Handle = 0x71919e;
+pub const HANDLE: _rt::Handle = 0x71919e;
 
 /// `start`
-pub const START: Method = 0;
+pub const START: _rt::Method = 0;
 /// `stop`
-pub const STOP: Method = 1;
+pub const STOP: _rt::Method = 1;
 
-pub fn start(sensor: super::types::Sensor) -> Result<(), Errno> {
-    let (r, data) = link::call(
+pub fn start(sensor: super::types::Sensor) -> Result<(), _rt::Errno> {
+    let (r, data) = _rt::link::call(
         HANDLE,
         START,
-        Some((1, &|w_: &mut PacketWriter| {
-            w_.u32(Some(sensor as u32));
+        Some((1, &|w_: &mut _rt::Lower| {
+            w_.u8(0, *&sensor as u8);
         })),
     );
-    xpute_link::answer(r).map(|_| ())
+    _rt::answer(r)
 }
 
-pub fn stop(sensor: super::types::Sensor) -> Result<(), Errno> {
-    let (r, data) = link::call(
+pub fn stop(sensor: super::types::Sensor) -> Result<(), _rt::Errno> {
+    let (r, data) = _rt::link::call(
         HANDLE,
         STOP,
-        Some((1, &|w_: &mut PacketWriter| {
-            w_.u32(Some(sensor as u32));
+        Some((1, &|w_: &mut _rt::Lower| {
+            w_.u8(0, *&sensor as u8);
         })),
     );
-    xpute_link::answer(r).map(|_| ())
+    _rt::answer(r)
+}
+
+mod _rt {
+    pub use xpute_guest::link;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::{answer, Handle, Lower, Method};
 }

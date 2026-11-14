@@ -8,14 +8,16 @@
 
 use crate::wgsl::Val::{self, *};
 use crate::wgsl::{consts, table};
-use crate::{color, debug_look, param, word};
+use crate::{atmosphere, color, debug_look, param, word};
+use pxl_spec::asset::cube::Sentinel;
 use word::screen;
 
 /// Every part the build writes, by its name. A part with a file of its own under
 /// src/frame/shader takes what is written here after that file.
-pub fn parts() -> [(&'static str, String); 10] {
+pub fn parts() -> [(&'static str, String); 11] {
     [
         ("constant", constant()),
+        ("atmos_medium", atmos_medium()),
         ("walk_word", walk_word()),
         ("world_word", world_word()),
         ("decor_word", decor_word()),
@@ -35,8 +37,8 @@ pub fn parts() -> [(&'static str, String); 10] {
 fn constant() -> String {
     use pxl_content::param::night;
     use pxl_engine::answer::side;
-    use pxl_engine::{eye, face, light, param, WORKGROUPS_CAP};
-    use pxl_spec::share::EIGHTHS;
+    use pxl_engine::{eye, face, light, param, WORKGROUP_CAP};
+    use pxl_spec::share::EIGHTH_CNT;
     use pxl_spec::space::camera::grid;
     use pxl_spec::space::coord::q3::FRAC_W;
     use pxl_spec::space::coord::zoom::{HEIGHT_BITS, UNIT_ZOOM};
@@ -71,15 +73,15 @@ fn constant() -> String {
         ),
         ("AO_DOWNSCALE", U32(AO_DOWNSCALE)),
         ("AO_NOISE_SIDE", U32(AO_NOISE_SIDE)),
-        ("DECOR_GROUPS", U32(DECOR_GROUPS as u32)),
+        ("DECOR_GROUP_CNT", U32(DECOR_GROUP_CNT as u32)),
         // The side of a square of the depth bound, and the squares on a side of a screen
         // tile; the bound's passes take a tile as one workgroup (screen_bound.wgsl,
         // screen_propagate.wgsl). Then the number of frames the jitter sequence takes to cover
-        // a pixel, over which each still frame adds an even share (`screen::JITTERS`,
+        // a pixel, over which each still frame adds an even share (`screen::JITTER_CNT`,
         // screen_resolve.wgsl).
         ("BOUND_STEP", U32(BOUND_STEP)),
         ("BOUND_SQUARES", U32(BOUND_SQUARES)),
-        ("TILE_JITTERS", U32(screen::JITTERS)),
+        ("TILE_JITTER_CNT", U32(screen::JITTER_CNT)),
         ("TRANSMITTANCE_SIZE", size(TRANSMITTANCE_SIZE)),
         ("MULTISCATTER_SIZE", size(MULTISCATTER_SIZE)),
         ("SKY_VIEW_SIZE", size(SKY_VIEW_SIZE)),
@@ -89,7 +91,7 @@ fn constant() -> String {
         ("ATLAS_TRIANGLE", U32(ATLAS_TRIANGLE)),
         ("ATLAS_TEXT", U32(ATLAS_TEXT)),
         ("ATLAS_HALO", U32(ATLAS_HALO)),
-        ("BOX_VERTICES", U32(BOX_VERTICES)),
+        ("BOX_VERTEX_CNT", U32(BOX_VERTEX_CNT)),
         ("MOON_TEXELS", U32(MOON_TEXELS)),
         ("NO_LAYER", F32(NO_LAYER as f32)),
         ("HALF_STEP", F32(HALF_STEP)),
@@ -102,10 +104,10 @@ fn constant() -> String {
         ("IMAGE_SIDE", U32(IMAGE_SIDE)),
         ("IMAGE_BOTTOM", U32(IMAGE_BOTTOM)),
         ("EARTH_TILE_BITS", U32(EARTH_TILE_BITS)),
-        ("WORKGROUPS_CAP", U32(WORKGROUPS_CAP)),
+        ("WORKGROUP_CAP", U32(WORKGROUP_CAP)),
         ("AIR_FROXELS", U32(AIR_FROXELS)),
         ("SQUARE_SIDE", U32(SQUARE_SIDE)),
-        ("ROW_LANES", U32(ROW_LANES)),
+        ("ROW_LANE_CNT", U32(ROW_LANE_CNT)),
         ("CELL_SIDE", U32(CELL_SIDE)),
         ("LIGHT_SLOPES", U32(LIGHT_SLOPES)),
         ("GROUND_SLOPES", U32(GROUND_SLOPES)),
@@ -157,10 +159,59 @@ fn constant() -> String {
     // are kept.
     out += &table(
         "fill_side",
-        (1..EIGHTHS).map(|k| (k, F32(side(k)))),
-        F32(side(EIGHTHS)),
+        (1..EIGHTH_CNT).map(|k| (k, F32(side(k)))),
+        F32(side(EIGHTH_CNT)),
     );
     out + &consts(params())
+}
+
+/// The air's numbers (look/atmosphere.rs) and the Earth's window's size, which no setting, time
+/// or frame moves, for atmos_medium.wgsl, which every shader that reads the air holds. The air's
+/// uniform holds what moves (frame/shader/word.rs `atmos`).
+fn atmos_medium() -> String {
+    use atmosphere::*;
+    use pxl_spec::bake::tile::earth::{EARTH_DIST, EARTH_ZOOM};
+    use pxl_spec::space::coord::world::around;
+    use pxl_spec::space::layer::demand::GROUND_DEMAND_ACROSS;
+    let f = |v: f64| F32(v as f32);
+    let rgb = |v: [f64; 3]| Vec3f(v.map(|c| c as f32));
+    consts([
+        ("BOTTOM_RADIUS_KM", f(BOTTOM_RADIUS_KM)),
+        ("TOP_RADIUS_KM", f(TOP_RADIUS_KM)),
+        // How far a level ray from the ground runs to the top of the air: the leg of the right
+        // triangle whose hypotenuse is the top's radius and whose other leg is the ground's
+        // (atmos_medium.wgsl `transmittance_uv`).
+        (
+            "HORIZON_TO_TOP_KM",
+            f(libm::sqrt(
+                TOP_RADIUS_KM * TOP_RADIUS_KM - BOTTOM_RADIUS_KM * BOTTOM_RADIUS_KM,
+            )),
+        ),
+        ("RAYLEIGH_SCATTERING", rgb(RAYLEIGH_SCATTERING)),
+        ("RAYLEIGH_SCALE_HEIGHT_KM", f(RAYLEIGH_SCALE_HEIGHT_KM)),
+        ("MIE_SCATTERING", f(MIE_SCATTERING)),
+        ("MIE_EXTINCTION", f(MIE_EXTINCTION)),
+        ("MIE_SCALE_HEIGHT_KM", f(MIE_SCALE_HEIGHT_KM)),
+        ("MIE_G", f(MIE_G)),
+        ("OZONE_ABSORPTION", rgb(OZONE_ABSORPTION)),
+        ("OZONE_CENTER_KM", f(OZONE_CENTER_KM)),
+        ("OZONE_HALF_WIDTH_KM", f(OZONE_HALF_WIDTH_KM)),
+        ("GROUND_ALBEDO", f(GROUND_ALBEDO)),
+        ("SUN_ANGULAR_RADIUS", f(SUN_ANGULAR_RADIUS)),
+        ("EXPOSURE", f(EXPOSURE)),
+        ("NIGHT_STOPS", f(NIGHT_STOPS)),
+        ("SHOWN_FALL", f(SHOWN_FALL)),
+        // The night sky's light, which lights the ground and is never drawn itself, and a lit
+        // city's radiance where the Earth's picture shows city lights at full strength.
+        ("NIGHT_SKY", rgb(NIGHT_COLOR.map(|c| c * NIGHT_SKY))),
+        ("CITY_LIGHT", rgb(CITY_COLOR.map(|c| c * CITY_LIGHT))),
+        // How far from the eye the Earth's tiles are drawn before the global picture takes
+        // over, in units (pxl-spec bake/tile/earth.rs), and the window's tiles across and the
+        // tiles around the world at the Earth's zoom.
+        ("EARTH_DIST", f(EARTH_DIST)),
+        ("EARTH_ACROSS", I32(GROUND_DEMAND_ACROSS as i32)),
+        ("EARTH_AROUND", I32(around(EARTH_ZOOM) as i32)),
+    ])
 }
 
 /// Every setting in src/param.rs, named by its path under `param`: `LIMB` in `sky::sun`
@@ -195,11 +246,10 @@ fn walk_word() -> String {
     use pxl_engine::{
         answer, beam, cast, count, face, light, node_cache, param, raster, ray, record,
     };
-    use pxl_spec::share::EIGHTHS;
+    use pxl_spec::share::EIGHTH_CNT;
     use pxl_spec::space::camera::grid;
     use pxl_spec::space::coord::zoom::{FINEST_ZOOM, SHARD_ZOOM};
     use pxl_spec::space::layer::area::Shard;
-    use pxl_spec::value;
     const {
         // `light_item` (light_list.wgsl) reads a workgroup's lanes as a `SAMPLE_SIDE` by
         // `SAMPLE_SIDE` square over one entry of the list. Each pass that calls it declares its
@@ -261,7 +311,7 @@ fn walk_word() -> String {
         ("SAMPLE_PARKED", U32(beam::SAMPLE_PARKED)),
         ("SAMPLE_PARKED_T", U32(beam::SAMPLE_PARKED_T)),
         ("SAMPLE_PARKED_STATE", U32(beam::SAMPLE_PARKED_STATE)),
-        ("SAMPLE_LACKS", U32(beam::SAMPLE_LACKS)),
+        ("SAMPLE_LACK_WORD", U32(beam::SAMPLE_LACK_WORD)),
         ("SAMPLE_AXIS", U32(beam::SAMPLE_AXIS)),
         ("SAMPLE_LACK", U32(beam::SAMPLE_LACK)),
         ("SAMPLE_STEPS_SHIFT", U32(beam::SAMPLE_STEPS_SHIFT)),
@@ -269,7 +319,7 @@ fn walk_word() -> String {
         ("SAMPLE_WORDS", U32(beam::SAMPLE_WORDS)),
         ("SAMPLE_NONE", U32(beam::SAMPLE_NONE)),
         ("SAMPLE_SIDE", U32(SAMPLE_SIDE)),
-        ("ENTRIES", U32(node_cache::ENTRIES)),
+        ("ENTRY_CNT", U32(node_cache::ENTRY_CNT)),
         ("ENTRIES_AT", U32(node_cache::ENTRIES_AT)),
         ("ENTRY_WORDS", U32(node_cache::ENTRY_WORDS)),
         ("BUCKET", U32(node_cache::BUCKET)),
@@ -286,12 +336,12 @@ fn walk_word() -> String {
         ("KEY_ZOOMS", U32(!((1u32 << node_cache::TAG_BITS) - 1))),
         ("KIND_SPLIT", U32(answer::Kind::Split as u32)),
         ("KIND_CELL", U32(answer::Kind::Cell as u32)),
-        ("KIND_LACKS", U32(answer::Kind::Lacks as u32)),
+        ("KIND_LACK", U32(answer::Kind::Lack as u32)),
         ("VAL_MASK", U32(answer::PLACED_ASSET - 1)),
-        ("VAL_VOID", U32(value::VOID)),
-        ("VAL_AIR", U32(value::AIR)),
+        ("VAL_VOID", U32(Sentinel::Void as u32)),
+        ("VAL_AIR", U32(Sentinel::Air as u32)),
         ("FILL_SHIFT", U32(answer::FILL_SHIFT)),
-        ("EIGHTHS", U32(EIGHTHS)),
+        ("EIGHTH_CNT", U32(EIGHTH_CNT)),
         ("BOX_BITS", U32(answer::BOX_BITS)),
         ("BOX_STEPS", U32(answer::BOX_STEPS)),
         ("STEPS_CAP", U32(cast::STEPS_CAP)),
@@ -311,7 +361,7 @@ fn walk_word() -> String {
         ("HITS_CNT", U32(node_cache::HITS_CNT)),
         (
             "LIGHT_ASKED_CNT",
-            U32(node_cache::lane_at(count::LIGHT, count::ASKS)),
+            U32(node_cache::lane_at(count::LIGHT, count::ASK)),
         ),
         ("LIGHT_T_MAX", U32(light::W_T_MAX as u32)),
         ("LIGHT_ACROSS", U32(light::W_ACROSS as u32)),
@@ -369,7 +419,7 @@ fn walk_word() -> String {
         ("LIGHT_HDR_MARKS", U32(light::HDR_MARKS as u32)),
         ("LIGHT_HDR_LISTS", U32(light::HDR_LISTS as u32)),
         ("LIGHT_LIST_ACROSS", U32(light::LIST_ACROSS)),
-        ("LIGHT_LIST_LANES", U32(light::LIST_LANES)),
+        ("LIGHT_LIST_LANE_CNT", U32(light::LIST_LANE_CNT)),
         ("LIGHT_BEAM", U32(light::BEAM)),
         ("LIGHT_SAMPLE", U32(param::light::SAMPLE)),
         ("LIGHT_LINE_WORDS", U32(light::LINE_WORDS)),
@@ -386,7 +436,7 @@ fn walk_word() -> String {
             "LIGHT_BEAM_CNT",
             U32(node_cache::lane_at(count::LIGHT, count::BEAM)),
         ),
-        ("CNT_RAYS", U32(count::RAYS)),
+        ("CNT_RAY_CNT", U32(count::RAY_CNT)),
         ("CNT_VOXEL", U32(count::VOXEL)),
         ("CNT_SKY", U32(count::SKY)),
         ("CNT_HOLE", U32(count::HOLE)),
@@ -398,7 +448,7 @@ fn walk_word() -> String {
         ),
         (
             "EYE_ASKED_CNT",
-            U32(node_cache::lane_at(count::EYE, count::ASKS)),
+            U32(node_cache::lane_at(count::EYE, count::ASK)),
         ),
         (
             "LIGHT_SAMPLE_CNT",
@@ -409,8 +459,8 @@ fn walk_word() -> String {
         ("GRID_RADIUS_TAN", U32(beam::GRID_RADIUS_TAN as u32)),
         ("GRID_PAST", U32(beam::GRID_PAST as u32)),
         ("GRID_SPAN", U32(beam::GRID_SPAN as u32)),
-        ("GRID_CORNERS", U32(beam::GRID_CORNERS as u32)),
-        ("GRID_SAMPLES", U32(beam::GRID_SAMPLES as u32)),
+        ("GRID_CORNER_LATTICE", U32(beam::GRID_CORNER_LATTICE as u32)),
+        ("GRID_SAMPLE_LATTICE", U32(beam::GRID_SAMPLE_LATTICE as u32)),
         ("GRID_CELLS_AT", U32(beam::GRID_CELLS_AT as u32)),
         ("GRID_SAMPLES_AT", U32(beam::GRID_SAMPLES_AT as u32)),
         ("GRID_HITS_AT", U32(beam::GRID_HITS_AT as u32)),
@@ -432,10 +482,10 @@ fn walk_word() -> String {
             U32(node_cache::lane_at(count::LIGHT, count::HOLE_WALK)),
         ),
         ("FRAME", U32(node_cache::FRAME)),
-        ("PASSES", U32(node_cache::PASSES)),
+        ("PASS_CNT", U32(node_cache::PASS_CNT)),
         ("CNT_ON", U32(node_cache::CNT_ON)),
         ("CNT_EYE", U32(count::EYE)),
-        ("CNT_WALKS", U32(count::WALKS)),
+        ("CNT_WALK_CNT", U32(count::WALK_CNT)),
         ("Y_START", U32(cast::Y_START)),
         ("Z_START", U32(cast::Z_START)),
         ("SHARD_ZOOM", U32(SHARD_ZOOM)),
@@ -447,22 +497,22 @@ fn walk_word() -> String {
         ("LINE_STEP", U32(beam::LINE_STEP)),
         ("W_INHERITANCE", U32(node_cache::W_INHERITANCE)),
         ("MISS_ACROSS", U32(ray::MISS_ACROSS)),
-        ("MISS_LANES", U32(ray::MISS_LANES)),
+        ("MISS_LANE_CNT", U32(ray::MISS_LANE_CNT)),
         ("SQUARE_WORDS", U32(ray::SQUARE_WORDS)),
         ("POOL_CAP", U32(ray::POOL_CAP)),
         ("PARK_HOLE", U32(ray::PARK_HOLE)),
         ("PARK_WORDS", U32(ray::PARK_WORDS)),
         ("HITS_A_FRAME", U32(ray::HITS_A_FRAME)),
-        ("HIT_LANES", U32(beam::HIT_LANES)),
+        ("HIT_LANE_CNT", U32(beam::HIT_LANE_CNT)),
         ("HIT_WORDS", U32(beam::HIT_WORDS)),
         ("HIT_NODE", U32(beam::HIT_NODE)),
         ("HIT_FACE", U32(beam::HIT_FACE)),
         ("HIT_PX", U32(beam::HIT_PX)),
-        ("HIT_WAITS", U32(beam::HIT_WAITS)),
-        ("HIT_LACKS", U32(beam::HIT_LACKS)),
-        ("QUEUE_LANES", U32(ray::QUEUE_LANES)),
-        ("QUEUE_GROUPS", U32(ray::QUEUE_GROUPS)),
-        ("QUEUE_STEPS", U32(ray::QUEUE_STEPS)),
+        ("HIT_WAIT", U32(beam::HIT_WAIT)),
+        ("HIT_LACK", U32(beam::HIT_LACK)),
+        ("QUEUE_LANE_CNT", U32(ray::QUEUE_LANE_CNT)),
+        ("QUEUE_GROUP_CNT", U32(ray::QUEUE_GROUP_CNT)),
+        ("QUEUE_STEP_CNT", U32(ray::QUEUE_STEP_CNT)),
         ("QUEUE_NEXT", U32(ray::QUEUE_NEXT)),
         ("QUEUE_NEXT_PARKED", U32(ray::QUEUE_NEXT_PARKED)),
         ("QUEUE_ASKS", U32(ray::QUEUE_ASKS)),
@@ -520,19 +570,22 @@ fn walk_word() -> String {
             "EYE_BEAM_CNT",
             U32(node_cache::lane_at(count::EYE, count::BEAM)),
         ),
-        ("RASTER_ARGS_INSTANCES", U32(raster::ARGS_INSTANCES)),
+        ("RASTER_ARGS_INSTANCE_CNT", U32(raster::ARGS_INSTANCE_CNT)),
         ("RASTER_ARGS_ASKS", U32(raster::ARGS_ASKS)),
         ("RASTER_ARGS_CNT", U32(raster::ARGS_CNT)),
-        ("RASTER_FACES_LANES", U32(raster::FACES_LANES)),
+        ("RASTER_FACES_LANE_CNT", U32(raster::FACES_LANE_CNT)),
         ("LIGHT_HDR_LAST_CORNER", U32(light::HDR_LAST_CORNER as u32)),
         ("LIGHT_HDR_FOOTPRINT", U32(light::HDR_FOOTPRINT as u32)),
         (
             "LIGHT_RECEIVER_BOXES_AT",
             U32(light::RECEIVER_BOXES_AT as u32),
         ),
-        ("LIGHT_RECEIVER_BOXES", U32(light::RECEIVER_BOXES as u32)),
+        (
+            "LIGHT_RECEIVER_BOX_CAP",
+            U32(light::RECEIVER_BOX_CAP as u32),
+        ),
         ("LIGHT_COLUMNS_AT", U32(light::COLUMNS_AT as u32)),
-        ("LIGHT_COLUMNS", U32(light::COLUMNS as u32)),
+        ("LIGHT_COLUMN_CAP", U32(light::COLUMN_CAP as u32)),
         ("LIGHT_REACH_NDC", U32(light::REACH_NDC as u32)),
         ("LIGHT_ARGS_CELLS", U32(light::ARGS_CELLS)),
         ("LIGHT_ARGS_SAMPLE_HIT", U32(light::ARGS_SAMPLE_HIT)),
@@ -540,7 +593,7 @@ fn walk_word() -> String {
         ("LIGHT_RECEIVER_TILES_CNT", U32(light::RECEIVER_TILES_CNT)),
         ("LIGHT_ARGS_LAY", U32(light::ARGS_LAY)),
         ("LIGHT_ARGS_PASSES", U32(light::ARGS_PASSES)),
-        ("LIGHT_LISTS", U32(light::LISTS)),
+        ("LIGHT_LIST_CNT", U32(light::LIST_CNT)),
         ("ASK_NODE", U32(beam::ASK_NODE)),
         ("ASK_FACE", U32(beam::ASK_FACE)),
         ("ASK_LINE", U32(beam::ASK_LINE)),
@@ -548,7 +601,7 @@ fn walk_word() -> String {
         ("ASK_WORDS", U32(beam::ASK_WORDS)),
         ("ASK_NONE", U32(beam::ASK_NONE)),
         ("FACE_WORD_BITS", U32(face::BITS)),
-        ("FACE_EDGES", U32(face::EDGES)),
+        ("FACE_EDGE_CNT", U32(face::EDGE_CNT)),
         ("RASTER_ARGS_FACES", U32(raster::ARGS_FACES)),
         ("NODE_CACHE_FORGETS", U32(node_cache::FORGETS)),
         ("FORGETS_ALL", U32(node_cache::FORGETS_ALL)),
@@ -568,11 +621,11 @@ fn walk_word() -> String {
         ("R_DRAWN", U32(node_cache::R_DRAWN)),
         ("R_FACES", U32(node_cache::R_FACES)),
         ("W_PLACED", U32(node_cache::W_PLACED)),
-        ("EYE_CLIP_LEVELS", U32(clipmap::EYE_CLIP_LEVELS)),
+        ("EYE_CLIP_LEVEL_CNT", U32(clipmap::EYE_CLIP_LEVEL_CNT)),
         ("NODE_CACHE_DRAWN", U32(node_cache::DRAWN)),
-        ("REC_EYE_DRAWS", U32(record::EYE_DRAWS)),
-        ("REC_LIGHT_DRAWS", U32(record::LIGHT_DRAWS)),
-        ("REC_DRAW_LANES", U32(record::DRAW_LANES)),
+        ("REC_EYE_DRAW_CAP", U32(record::EYE_DRAW_CAP)),
+        ("REC_LIGHT_DRAW_CAP", U32(record::LIGHT_DRAW_CAP)),
+        ("REC_DRAW_LANE_CNT", U32(record::DRAW_LANE_CNT)),
         ("REC_FACES", U32(record::FACES)),
         ("REC_ASKED", U32(record::ASKED)),
         ("REC_ASKED_SHIFT", U32(record::ASKED_SHIFT)),
@@ -585,7 +638,7 @@ fn walk_word() -> String {
 /// pxl-engine or pxl-content layout or rule that defines it.
 fn world_word() -> String {
     use pxl_content::cave::{
-        BLOCK, BLOCKS_TAG, CELL_BLOCKS, CROSS_TAG, NO_SIDE, PIPE, ROOT, ROOT_BLOCKS, SPAWN_TAG,
+        BLOCK, BLOCKS_TAG, CELL_BLOCK_CNT, CROSS_TAG, NO_SIDE, PIPE, ROOT, ROOT_BLOCKS, SPAWN_TAG,
         SPLIT_TAG, WALK_TAG,
     };
     use pxl_content::param::{cave, strata};
@@ -599,18 +652,18 @@ fn world_word() -> String {
     use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, MIN_ZOOM};
     use pxl_spec::space::layer::area;
     use pxl_spec::value;
-    use pxl_spec::way::{AIR_OF, NOTHING, SPANS};
+    use pxl_spec::way::{AIR_OF, NOTHING, SPAN_CAP};
     use xpute_kit::math::rng;
     let [a, b, c, d, _] = cave::ROOT_TUNNELS;
     let none = Cut::NONE;
     let mut out = consts([
         ("LEAF_CELL_ZOOM", U32(LEAF_CELL_ZOOM)),
         ("MIN_ZOOM", U32(MIN_ZOOM)),
-        ("VAL_UNKNOWN", U32(value::UNKNOWN)),
-        ("GROUNDS_FIRST", U32(value::GROUNDS[0])),
-        ("GROUNDS_LAST", U32(value::GROUNDS[1])),
-        ("OBJECTS_FIRST", U32(value::OBJECTS[0])),
-        ("OBJECTS_LAST", U32(value::OBJECTS[1])),
+        ("VAL_UNKNOWN", U32(Sentinel::Unknown as u32)),
+        ("GROUND_FIRST", U32(value::GROUND[0])),
+        ("GROUND_LAST", U32(value::GROUND[1])),
+        ("OBJECT_FIRST", U32(value::OBJECT[0])),
+        ("OBJECT_LAST", U32(value::OBJECT[1])),
         ("PLACED_ASSET", U32(answer::PLACED_ASSET)),
         ("FULL", U32(FULL)),
         ("FULL_BITS", U32(FULL.trailing_zeros())),
@@ -626,21 +679,21 @@ fn world_word() -> String {
         ("SHARD_OWN", U32(area::OWN)),
         ("BRICK", U32(brick::BRICK)),
         ("BRICK_SHIFT", U32(brick::BRICK_SHIFT)),
-        ("BRICK_CELLS", U32(brick::BRICK_CELLS)),
+        ("BRICK_CELL_CNT", U32(brick::BRICK_CELL_CNT)),
         ("BRICK_WORDS", U32(clip::BRICK_WORDS)),
-        ("BRICK_MIPS", U32(clip::BRICK_MIPS)),
+        ("BRICK_MIP_LAST", U32(clip::BRICK_MIP_LAST)),
         ("ACROSS", U32(clip::ACROSS)),
-        ("CLIP_ENTRIES", U32(clip::ENTRIES)),
+        ("CLIP_ENTRY_CNT", U32(clip::ENTRY_CNT)),
         ("FIRST_CELL_ZOOM", U32(clip::FIRST_CELL_ZOOM)),
         ("ORIGIN_AT", U32(clip::ORIGIN_AT)),
         ("JOINED_AT", U32(clip::JOINED_AT)),
-        ("JOINED_ENTRIES", U32(clip::JOINED_ENTRIES)),
-        ("JOINED_MIPS", U32(clip::JOINED_MIPS)),
+        ("JOINED_ENTRY_CNT", U32(clip::JOINED_ENTRY_CNT)),
+        ("JOINED_MIP_CNT", U32(clip::JOINED_MIP_CNT)),
         ("COLUMNS_AT", U32(clip::COLUMNS_AT)),
         ("BOUNDS_AT", U32(clip::BOUNDS_AT)),
         ("BOUND_ENTRY_WORDS", U32(clip::BOUND_ENTRY_WORDS)),
         ("OWN_AT", U32(clip::OWN_AT)),
-        ("OWN_CELLS", U32(clip::OWN_CELLS)),
+        ("OWN_CELL_CNT", U32(clip::OWN_CELL_CNT)),
         ("ROOT_AT", U32(clip::ROOT_AT)),
         ("RUN_BITS_AT", U32(clip::RUN_BITS_AT)),
         ("RUN_RANK_AT", U32(clip::RUN_RANK_AT)),
@@ -649,21 +702,21 @@ fn world_word() -> String {
         ("SPANS_CNT", U32(clip::SPANS_CNT)),
         ("WAY_NOTHING", U32(NOTHING)),
         ("WAY_AIR_OF", U32(AIR_OF)),
-        ("WAY_SPANS", U32(SPANS as u32)),
+        ("WAY_SPAN_CAP", U32(SPAN_CAP as u32)),
         ("LOOKUP_SLOT_BITS", U32(clip::LOOKUP_SLOT_BITS)),
         ("LOOKUP_FROM_SHIFT", U32(clip::LOOKUP_FROM_SHIFT)),
         ("LOOKUP_CELL_ZOOM_SHIFT", U32(clip::LOOKUP_CELL_ZOOM_SHIFT)),
         ("LOOKUP_AT", U32((1 << clip::LOOKUP_CELL_ZOOM_SHIFT) - 1)),
-        ("STRATA_SAND", U32(Ground::sand as u32)),
-        ("STRATA_BEACH", U32(Ground::beach as u32)),
-        ("STRATA_WATER", U32(Ground::water as u32)),
-        ("STRATA_SOIL", U32(Ground::soil as u32)),
-        ("STRATA_SANDSTONE", U32(Ground::sandstone as u32)),
-        ("STRATA_STONE", U32(Ground::stone as u32)),
+        ("STRATA_SAND", U32(Ground::Sand as u32)),
+        ("STRATA_BEACH", U32(Ground::Beach as u32)),
+        ("STRATA_WATER", U32(Ground::Water as u32)),
+        ("STRATA_SOIL", U32(Ground::Soil as u32)),
+        ("STRATA_SANDSTONE", U32(Ground::Sandstone as u32)),
+        ("STRATA_STONE", U32(Ground::Stone as u32)),
         ("CAVE_ROOT", U32(ROOT)),
         ("CAVE_PIPE", U32(PIPE)),
         ("CAVE_BLOCK", U32(BLOCK)),
-        ("CELL_BLOCKS", U32(CELL_BLOCKS)),
+        ("CELL_BLOCK_CNT", U32(CELL_BLOCK_CNT)),
         ("ROOT_BLOCKS", U32(ROOT_BLOCKS)),
         ("CAVE_NUDGE", U32(cave::NUDGE)),
         ("CAVE_NO_SIDE", U32(NO_SIDE)),
@@ -678,7 +731,7 @@ fn world_word() -> String {
         ("MIX32_LAST", U32(rng::MIX32_LAST)),
         ("TUNNELS_LAST", U32(cave::ROOT_TUNNELS[4])),
         ("SEA_LEVEL", I32(SEA_LEVEL)),
-        ("SEA_CELLS", I32(ground::SEA_CELLS)),
+        ("SEA_CELL", I32(ground::SEA_CELL)),
         ("FACE_NONE", I32(i16::MIN as i32)),
         ("EMPTY_LO", I32(ground::EMPTY[0])),
         ("EMPTY_HI", I32(ground::EMPTY[1])),
@@ -702,8 +755,8 @@ fn world_word() -> String {
     );
     out + &table(
         "bound_mip_at",
-        (0..=clip::BRICK_MIPS).map(|j| (j, U32(clip::bound_mip_at(j)))),
-        U32(clip::bound_mip_at(clip::BRICK_MIPS + 1)),
+        (0..=clip::BRICK_MIP_LAST).map(|j| (j, U32(clip::bound_mip_at(j)))),
+        U32(clip::bound_mip_at(clip::BRICK_MIP_LAST + 1)),
     )
 }
 
@@ -717,7 +770,7 @@ fn decor_word() -> String {
     use pxl_engine::{answer, cast, world};
     use pxl_spec::asset::decor::{Orientation, Row, DECORS, ROWS};
     use pxl_spec::asset::id::{Kind, IDX_BITS};
-    use pxl_spec::share::EIGHTHS;
+    use pxl_spec::share::EIGHTH_CNT;
     use pxl_spec::space::coord::zoom::UNIT_ZOOM;
     use pxl_spec::value;
     const {
@@ -732,7 +785,7 @@ fn decor_word() -> String {
     }
     let row = |at: usize| (at / size_of::<u32>()) as u32;
     let mut out = consts([
-        ("LANES", U32(g::LANES)),
+        ("LANE_CNT", U32(g::LANE_CNT)),
         ("REC_WORDS", U32(g::REC_WORDS)),
         ("HDR_WORDS", U32(g::HDR_WORDS)),
         ("CNT_AT", U32(g::CNT_AT)),
@@ -754,16 +807,16 @@ fn decor_word() -> String {
         ("LIST_EVERY", U32(g::LIST_EVERY)),
         ("LIST_PARTS", U32(g::LIST_PARTS)),
         ("GENERATE_ARGS", U32(g::GENERATE_ARGS)),
-        ("ENTRY_RECS", U32(g::ENTRY_RECS)),
+        ("ENTRY_REC_CAP", U32(g::ENTRY_REC_CAP)),
         ("PLACED_HDR", U32(g::PLACED_HDR)),
         ("PLACED_HDR_WORDS", U32(g::PLACED_HDR_WORDS)),
         ("RUN", U32(g::RUN)),
-        ("RUNS", U32(g::RUNS)),
-        ("EYE_ENTRIES", U32(g::EYE_ENTRIES)),
+        ("RUN_CNT", U32(g::RUN_CNT)),
+        ("EYE_ENTRY_CNT", U32(g::EYE_ENTRY_CNT)),
         ("ROW_CHANCE", U32(row(offset_of!(Row, chance)))),
         ("DRAWING_NONE", U32(drawing::NONE)),
         ("DRAWING_REGION_SHIFT", U32(drawing::REGION_SHIFT)),
-        ("DRAWING_COLUMNS", U32(drawing::COLUMNS)),
+        ("DRAWING_COLUMN_CNT", U32(drawing::COLUMN_CNT)),
         ("DRAWING_MODEL_ANGLE", U32(drawing::MODEL_ANGLE)),
         ("DRAWING_IMPOSTOR_ANGLE", U32(drawing::IMPOSTOR_ANGLE)),
         ("DRAWING_ANCHOR", U32(drawing::ANCHOR)),
@@ -781,19 +834,19 @@ fn decor_word() -> String {
         ("SCATTER_SPLIT_TAG", U32(scatter::SPLIT_TAG)),
         ("DECORS", U32(ROWS.len() as u32)),
         ("IDX_BITS", U32(IDX_BITS)),
-        ("DECOR_KIND", U32(Kind::decor as u32)),
+        ("DECOR_KIND", U32(Kind::Decor as u32)),
         ("ROW_WORDS", U32(row(size_of::<Row>()))),
         ("ROW_SEED", U32(row(offset_of!(Row, seed)))),
         ("ROW_ORIENT", U32(row(offset_of!(Row, orient)))),
         ("ROW_ON", U32(row(offset_of!(Row, on)))),
-        ("ROW_VARIANTS", U32(row(offset_of!(Row, variants)))),
+        ("ROW_VARIANT_CNT", U32(row(offset_of!(Row, variant_cnt)))),
         ("ROW_SIZES", U32(row(offset_of!(Row, sizes)))),
-        ("ALONG_TRANSPORT", U32(Orientation::along_transport as u32)),
-        ("TRANSPORTS_FIRST", U32(value::TRANSPORTS[0])),
-        ("TRANSPORTS_LAST", U32(value::TRANSPORTS[1])),
-        ("REGIONS", U32(drawing::REGIONS)),
+        ("ALONG_TRANSPORT", U32(Orientation::AlongTransport as u32)),
+        ("TRANSPORT_FIRST", U32(value::TRANSPORT[0])),
+        ("TRANSPORT_LAST", U32(value::TRANSPORT[1])),
+        ("REGION_CNT", U32(drawing::REGION_CNT)),
         ("ARGS_WORDS", U32(drawing::ARGS_WORDS)),
-        ("IMPOSTOR_CORNERS", U32(drawing::IMPOSTOR_CORNERS)),
+        ("IMPOSTOR_CORNER_CNT", U32(drawing::IMPOSTOR_CORNER_CNT)),
         ("UNIFORM_WORDS", U32(drawing::UNIFORM_WORDS)),
         ("UNIFORM_IDX", U32(word::instance::IDX as u32)),
         ("TALLEST", U32(g::TALLEST as u32)),
@@ -819,13 +872,13 @@ fn decor_word() -> String {
     // How far below its box's top a cell keeping `k` eighths leaves its own top, as a share of
     // the cell's side (`cast::top`, `generation::footing`), read as the Rust's float.
     let sink = |k: u32| {
-        let asset = (k % EIGHTHS) << answer::FILL_SHIFT;
-        Bits(1.0 - cast::fill_bounds(([0.0; 3], [1.0; 3]), asset).1[2])
+        let asset = (k % EIGHTH_CNT) << answer::FILL_SHIFT;
+        Bits(1.0 - cast::fill_bound(([0.0; 3], [1.0; 3]), asset).1[2])
     };
     out + &table(
         "sink_share",
-        (1..EIGHTHS).map(|k| (k, sink(k))),
-        sink(EIGHTHS),
+        (1..EIGHTH_CNT).map(|k| (k, sink(k))),
+        sink(EIGHTH_CNT),
     )
 }
 
@@ -836,13 +889,13 @@ fn decor_word() -> String {
 /// `asset_ids` packs them.
 fn ray() -> String {
     use pxl_engine::ray::{
-        FACES, FACE_BITS, FACE_SHIFT, FILL_SHIFT, VAL_BITS, ZOOM_BITS, ZOOM_SHIFT,
+        FACE_BITS, FACE_SHIFT, FACE_WORD, FILL_SHIFT, VAL_BITS, ZOOM_BITS, ZOOM_SHIFT,
     };
     use pxl_spec::ground::PALETTE_BITS;
     use pxl_spec::share::FILL_BITS;
     use pxl_spec::space::layer::lattice;
     let mut out = consts([
-        ("RAY_FACES", U32(FACES)),
+        ("RAY_FACE_WORD", U32(FACE_WORD)),
         ("GROUND_CELL_ZOOM", U32(lattice::GROUND.leaf_cell_zoom())),
     ]);
     for (name, shift, bits) in [
@@ -873,7 +926,7 @@ fn ray() -> String {
 /// finite, as Tint refuses a literal past f32's range.
 fn raster_box() -> String {
     use pxl_engine::raster::{corner, EYED, ID_MASK, LACK, NEAR, STALE, STALE_DEPTH};
-    let n = word::BOX_VERTICES;
+    let n = word::BOX_VERTEX_CNT;
     let per_word = 32 / 3;
     let bits: Vec<u32> = (0..2 * n)
         .map(|k| corner(k % n, k >= n))
@@ -907,20 +960,20 @@ fn raster_box() -> String {
 /// box's depth, as pxl-engine light.rs `word` lays it out. Every shader reads a depth through
 /// `light_depth`.
 fn light_word() -> String {
-    use pxl_engine::light::{DEPTH_ONE, LAY_VERTICES};
-    consts([("LAY_VERTICES", U32(LAY_VERTICES))])
+    use pxl_engine::light::{DEPTH_ONE, LAY_VERTEX_CNT};
+    consts([("LAY_VERTEX_CNT", U32(LAY_VERTEX_CNT))])
         + &format!("fn light_depth(w: u32) -> f32 {{ return f32(w) / {DEPTH_ONE}.0; }}\n")
 }
 
 /// The threads of the pass that lists the damaged tiles, beside the tiles' rule in
 /// tile_word.wgsl, which the Rust's rule (word.rs `screen::age`, `screen::in_damage`) must be:
-/// the age is a wrapping u32 difference, and damage ends at `damage_frames`.
+/// the age is a wrapping u32 difference, and damage ends at `damage_frame_cnt`.
 fn tile_word() -> String {
     assert_eq!(screen::age(0, u32::MAX), 1);
     assert_eq!(screen::age(5, 5), 0);
     assert!(screen::in_damage(0, 1) && !screen::in_damage(1, 1));
     assert!(screen::in_damage(u32::MAX - 1, u32::MAX) && !screen::in_damage(u32::MAX, u32::MAX));
-    consts([("CAST_TILES_LANES", U32(screen::CAST_TILES_LANES))])
+    consts([("CAST_TILES_LANE_CNT", U32(screen::CAST_TILES_LANE_CNT))])
 }
 
 /// The cloud lattice's cells, and the sheets' noise hash from pxl-content cloud.rs's
@@ -953,25 +1006,25 @@ fn debug_look() -> String {
     // (1, `SPANS`²]: the tints' bounds are those.
     const {
         assert!(
-            share::finer::most == 1.0 && share::within::most == SPANS * SPANS,
+            share::finer::MOST == 1.0 && share::within::MOST == SPANS * SPANS,
             "debug_look.json's share bounds are the split's"
         );
     }
     let light = |c: &str| color::linear_rgb(rgb(c)).map(|v| v as f32);
-    let [r, g, b] = light(grid::rgb);
-    let last = steps::ramp.len() - 1;
+    let [r, g, b] = light(grid::RGB);
+    let last = steps::RAMP.len() - 1;
     consts([
-        ("GRID_COLOR", Vec4f([r, g, b, grid::alpha])),
-        ("SHARE_FINER", Vec3f(light(share::finer::rgb))),
-        ("SHARE_FINER_MOST", F32(share::finer::most)),
-        ("SHARE_WITHIN", Vec3f(light(share::within::rgb))),
-        ("SHARE_WITHIN_MOST", F32(share::within::most)),
-        ("SHARE_COARSER", Vec3f(light(share::coarser::rgb))),
-        ("STEPS_MOST", F32(steps::most)),
-        ("STEPS_NONE", Vec3f(light(steps::none))),
+        ("GRID_COLOR", Vec4f([r, g, b, grid::ALPHA])),
+        ("SHARE_FINER", Vec3f(light(share::finer::RGB))),
+        ("SHARE_FINER_MOST", F32(share::finer::MOST)),
+        ("SHARE_WITHIN", Vec3f(light(share::within::RGB))),
+        ("SHARE_WITHIN_MOST", F32(share::within::MOST)),
+        ("SHARE_COARSER", Vec3f(light(share::coarser::RGB))),
+        ("STEPS_MOST", F32(steps::MOST)),
+        ("STEPS_NONE", Vec3f(light(steps::NONE))),
         (
             "STEPS_RAMP",
-            Array(steps::ramp.iter().map(|&c| Vec3f(light(c))).collect()),
+            Array(steps::RAMP.iter().map(|&c| Vec3f(light(c))).collect()),
         ),
     ]) + &format!(
         "fn steps_ramp(x: f32) -> vec3f {{ let f = clamp(x, 0.0, 1.0) * {last}.0; let i = min(u32(f), {}u); return mix(STEPS_RAMP[i], STEPS_RAMP[i + 1u], f - f32(i)); }}\n",
@@ -1013,6 +1066,7 @@ pub fn accessors(text: &str) -> String {
                 Kind::U32 => ("u32", format!("bitcast<u32>({lanes})")),
                 Kind::Vec2 => ("vec2f", lanes),
                 Kind::Vec2u => ("vec2u", format!("bitcast<vec2u>({lanes})")),
+                Kind::Vec2i => ("vec2i", format!("bitcast<vec2i>({lanes})")),
                 Kind::Vec3 => ("vec3f", lanes),
                 Kind::Vec3i => ("vec3i", format!("bitcast<vec3i>({lanes})")),
                 Kind::Vec4i => ("vec4i", format!("bitcast<vec4i>({})", at(row))),

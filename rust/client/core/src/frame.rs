@@ -14,8 +14,8 @@ use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
 use crate::domain::control::navigation::off_center::{off_center, off_center_step};
 use crate::domain::control::sensor::device_orientation::orient_watchdog_step;
-use crate::sys::io::param::CREDITS;
-use crate::sys::io::request::{pump, set_credits};
+use crate::sys::io::param::CREDIT_CNT;
+use crate::sys::io::request::{pump, set_credit_cnt};
 use crate::sys::io::text::text_drop_unread;
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::bake::tile::terrain::TerrainTile;
@@ -51,7 +51,7 @@ use crate::domain::view::demand::ViewLayer as _;
 use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
-use crate::perf::frame::EFFECTS;
+use crate::perf::frame::EFFECT_CNT;
 use crate::perf::record::{perf_recording, timed};
 use crate::perf::report::{perf_frame, set_renderer_frame, CpuSample};
 use crate::perf::window::perf_follow;
@@ -194,24 +194,24 @@ type Step = (StepName, fn(&mut TickContext));
 /// The tick's steps, phase by phase, in the order they run.
 const STEPS: [(Phase, &[Step]); 2] = [
     (
-        Phase::interaction,
+        Phase::Interaction,
         &[
-            (StepName::controller, controller::controller_step),
-            (StepName::input, camera_input_tick),
-            (StepName::camera, camera_tick),
-            (StepName::edit, edit_tick),
-            (StepName::ghost, ghost_tick),
+            (StepName::Controller, controller::controller_step),
+            (StepName::Input, camera_input_tick),
+            (StepName::Camera, camera_tick),
+            (StepName::Edit, edit_tick),
+            (StepName::Ghost, ghost_tick),
             // The environment runs after the camera, so it sees this tick's
             // camera.
-            (StepName::environment, environment_tick),
-            (StepName::companion, companion_tick),
+            (StepName::Environment, environment_tick),
+            (StepName::Companion, companion_tick),
         ],
     ),
     (
-        Phase::visible,
+        Phase::Visible,
         &[
-            (StepName::demand, demand_tick),
-            (StepName::scene, scene_tick),
+            (StepName::Demand, demand_tick),
+            (StepName::Scene, scene_tick),
         ],
     ),
 ];
@@ -253,33 +253,33 @@ macro_rules! effect {
 
 /// Runs the frame's effects, and returns how long they took and how long each
 /// took, indexed by `EffectName`, in milliseconds.
-pub fn effects() -> (f64, [f64; EFFECTS]) {
+pub fn effects() -> (f64, [f64; EFFECT_CNT]) {
     let at = now();
-    let mut times = perf_recording().then_some([0.0; EFFECTS]);
+    let mut times = perf_recording().then_some([0.0; EFFECT_CNT]);
     // Settings load first, so the frame that reads new settings is also the
     // first to act on them.
-    effect!(times, settings, {
+    effect!(times, Setting, {
         if store::settings_load_step() {
             perf_follow(store::settings().perf);
         }
     });
-    effect!(times, navigation, off_center_step());
-    effect!(times, bootstrap, map_bootstrap_step());
-    effect!(times, orient, orient_watchdog_step());
-    effect!(times, follow, follow_mode_step());
-    effect!(times, dst, {
+    effect!(times, Navigation, off_center_step());
+    effect!(times, Bootstrap, map_bootstrap_step());
+    effect!(times, Orient, orient_watchdog_step());
+    effect!(times, Follow, follow_mode_step());
+    effect!(times, Dst, {
         // The floors the walker found under a position of unknown height
         // are dropped where the ground changed under them.
         support::support_step();
         destination::dst_step();
     });
-    effect!(times, decor, decor_models_step());
-    effect!(times, objects, repository::step());
+    effect!(times, Decor, decor_models_step());
+    effect!(times, Object, repository::step());
     // The indicator is handed the device's coordinate as reported, None
     // included. It keeps showing its last coordinate while the device briefly
     // reports none.
-    effect!(times, location, location_step(off_center().device_coord));
-    effect!(times, settings, store::settings_keep_step());
+    effect!(times, Location, location_step(off_center().device_coord));
+    effect!(times, Setting, store::settings_keep_step());
     (now() - at, times.unwrap_or_default())
 }
 
@@ -317,7 +317,7 @@ async fn frame_task() {
             let at = now();
             display::answered(at);
             let display_ms = display::interval_ms();
-            let target_ms = f64::from(rate::intervals()) * display_ms;
+            let target_ms = f64::from(rate::interval()) * display_ms;
             if LAST
                 .get(|| None)
                 .is_none_or(|last| at - last >= target_ms - display_ms / 2.0)
@@ -356,7 +356,7 @@ fn run() -> TickReport {
     let t0 = now();
     let gap_ms = LAST.get(|| None).map_or(0.0, |at| t0 - at);
     let delta = gap_ms / 1000.0;
-    set_credits(CREDITS);
+    set_credit_cnt(CREDIT_CNT);
     text_drop_unread();
     let (effects_ms, effects) = effects();
     // A step longer than MAX_STEP_S would carry a character through a wall
@@ -367,7 +367,7 @@ fn run() -> TickReport {
     // Requests are pumped once a frame, after every producer has declared its
     // wants: the effects, the tick's tile streams (`demand_tick`), and the
     // assets either of them asked for.
-    request::declare(Stream::asset, loader::load_wants());
+    request::declare(Stream::Asset, loader::load_wants());
     pump();
     let moving = sched::is_invalid();
     let display_ms = display::interval_ms();

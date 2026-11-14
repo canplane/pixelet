@@ -183,7 +183,7 @@ fn node_hash(zoom: u32, c: vec3<i32>) -> u32 {
 
 /// The first slot of the bucket that may keep the node `c` at `zoom`.
 fn bucket_of(zoom: u32, c: vec3<i32>) -> u32 {
-  return node_hash(zoom, c) & (ENTRIES - 1u) & ~(BUCKET - 1u);
+  return node_hash(zoom, c) & (ENTRY_CNT - 1u) & ~(BUCKET - 1u);
 }
 
 /// Whether the held key `key` keeps its node, at `zoom`, for a walk asking it at `zooms`, the
@@ -219,9 +219,9 @@ fn squared(v: vec3<f32>) -> f32 {
 
 /// The zooms at which a node whose planes lie at `lo` and `hi` from the origin is asked: the
 /// zoom at its farthest corner, and `ZOOM_BITS` above it the zoom at its nearest point
-/// (pxl-engine `cast::ask_zooms`, `node_dist_sq`). A range of one zoom, as the light's is, gives
+/// (pxl-engine `cast::ask_range`, `node_dist_sq`). A range of one zoom, as the light's is, gives
 /// that zoom for both.
-fn asked_zooms(lo: vec3<f32>, hi: vec3<f32>, range: vec2<u32>) -> u32 {
+fn ask_range(lo: vec3<f32>, hi: vec3<f32>, range: vec2<u32>) -> u32 {
   if (range.x == range.y) {
     return range.x | (range.x << ZOOM_BITS);
   }
@@ -271,7 +271,7 @@ fn past_origin(t: f32) -> f32 {
   return select(0.0, t, t > 0.0);
 }
 
-/// The ray's t at the near and the far plane on each axis (pxl-engine cast.rs `planes`), found
+/// The ray's t at the near and the far plane on each axis (pxl-engine cast.rs `plane_range`), found
 /// without branches. On an axis the ray runs along, the span is the whole of `t` to `t_max`
 /// where the ray lies inside the slab, and empty where it lies outside.
 struct Span {

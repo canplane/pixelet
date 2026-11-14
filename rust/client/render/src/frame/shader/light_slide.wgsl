@@ -15,15 +15,15 @@
 // world changed, and a receiver stands (`light::RECEIVER_TILES_SLIDE`). It runs after the
 // receivers stood, and before the propagation.
 
-/// Whether the rays of box tile `tile`, asking at its band, may meet a cell over the world's
-/// column `c`, `[x0, y0, x1, y1]` in units from the eye (`Light::reaches`). Only a band from
-/// the first to the last of `bands` reads the change. Seen from above, the tile's rays sweep a
-/// hexagon as its texels move along the light. The column, grown by a cell of the band and a
-/// texel, misses that hexagon where one of five axes parts them: X, Y, and the axis across each
-/// of the hexagon's three edges.
-fn reaches(tile: vec2<u32>, c: vec4<f32>, bands: vec2<u32>) -> bool {
+/// Whether the rays of box tile `tile`, asking at its band, may meet a cell over the world's column
+/// `c`, `[x0, y0, x1, y1]` in units from the eye (`Light::reaches`). Only a band from the first to
+/// the last of `band_range` reads the change. Seen from above, the tile's rays sweep a hexagon as
+/// its texels move along the light. The column, grown by a cell of the band and a texel, misses
+/// that hexagon where one of five axes parts them: X, Y, and the axis across each of the hexagon's
+/// three edges.
+fn reaches(tile: vec2<u32>, c: vec4<f32>, band_range: vec2<u32>) -> bool {
   let band = tile_band(vec2<i32>(tile));
-  if (band < bands.x || band > bands.y) {
+  if (band < band_range.x || band > band_range.y) {
     return false;
   }
   let grow = ldexp(1.0, i32(UNIT_ZOOM) - i32(band)) + eye_f32(EYE_LIGHT + LIGHT_WIDTH);
@@ -66,8 +66,8 @@ fn light_slide_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   }
   let was = vec2<i32>(i32(hdr_word(LIGHT_HDR_LAST_CORNER)), i32(hdr_word(LIGHT_HDR_LAST_CORNER + 1u)));
   var reached = !keeps_tile(id.xy, was);
-  // The head holds `LIGHT_COLUMNS` columns at most (pxl-engine `light::COLUMNS`).
-  let columns = min(u32(hdr[LIGHT_COLUMNS_AT].x), LIGHT_COLUMNS);
+  // The head holds `LIGHT_COLUMN_CAP` columns at most (pxl-engine `light::COLUMN_CAP`).
+  let columns = min(u32(hdr[LIGHT_COLUMNS_AT].x), LIGHT_COLUMN_CAP);
   for (var k = 0u; k < columns && !reached; k += 1u) {
     let at = LIGHT_COLUMNS_AT + 1u + 2u * k;
     reached = reaches(id.xy, bitcast<vec4<f32>>(hdr[at]), bitcast<vec2<u32>>(hdr[at + 1u].xy));

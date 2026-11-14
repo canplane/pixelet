@@ -40,7 +40,7 @@ impl World {
         if shard.past() {
             return Answer::Exact(Some(Surface {
                 top: f64::from(SEA_LEVEL),
-                asset_id: Sentinel::unknown as u8,
+                asset_id: Sentinel::Unknown as u8,
             }));
         }
         let side = units(cell_zoom);

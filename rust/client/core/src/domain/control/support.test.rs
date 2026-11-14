@@ -4,11 +4,10 @@ use super::*;
 use crate::domain::layer::object::store::Store;
 use crate::domain::query::over;
 use crate::domain::query::test::{flat_at_five, placed, write};
-use pxl_spec::asset::cube::{self};
+use pxl_spec::asset::cube::{self, Sentinel};
 use pxl_spec::asset::AssetId;
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::space::coord::{q3, world};
-use pxl_spec::value::AIR;
 
 fn height(at: &Q3) -> f64 {
     q3::to_real(i64::from(at[2]))
@@ -32,12 +31,17 @@ fn the_pivot_follows_its_floor() {
         assert_eq!(height(&on(store)), over(5.0));
 
         let mut dug = Store::default();
-        write(&mut dug, [ground[0], ground[1], 4.0], OBJECT_COARSEST, AIR);
+        write(
+            &mut dug,
+            [ground[0], ground[1], 4.0],
+            OBJECT_COARSEST,
+            Sentinel::Air as AssetId,
+        );
         let dug = height(&on(dug));
         assert!(dug < over(5.0), "{dug}");
 
         let mut built = Store::default();
-        let red = cube::Object::red as AssetId;
+        let red = cube::Object::Red as AssetId;
         write(
             &mut built,
             [ground[0], ground[1], 5.0],

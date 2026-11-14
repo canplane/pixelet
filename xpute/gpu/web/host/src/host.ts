@@ -27,33 +27,33 @@ import { handle_slot } from "@xpute/gpu-link/handle.ts";
 import { Belt } from "./belt.ts";
 import { timed } from "./timed.ts";
 import {
-  ADDRESS_MODE,
-  BLEND_FACTOR,
-  BLEND_OPERATION,
-  BUFFER_BINDING_TYPE,
-  CANVAS_ALPHA_MODE,
-  COMPARE_FUNCTION,
-  CULL_MODE,
-  FEATURE_NAME,
-  FILTER_MODE,
-  FRONT_FACE,
-  INDEX_FORMAT,
-  LIMIT_NAME,
-  LOAD_OP,
-  MIPMAP_FILTER_MODE,
-  PRIMITIVE_TOPOLOGY,
-  QUERY_TYPE,
-  SAMPLER_BINDING_TYPE,
-  STENCIL_OPERATION,
-  STORAGE_TEXTURE_ACCESS,
-  STORE_OP,
-  TEXTURE_ASPECT,
-  TEXTURE_DIMENSION,
-  TEXTURE_FORMAT,
-  TEXTURE_SAMPLE_TYPE,
-  TEXTURE_VIEW_DIMENSION,
-  VERTEX_FORMAT,
-  VERTEX_STEP_MODE,
+  ADDRESS_MODES,
+  BLEND_FACTORS,
+  BLEND_OPERATIONS,
+  BUFFER_BINDING_TYPES,
+  CANVAS_ALPHA_MODES,
+  COMPARE_FUNCTIONS,
+  CULL_MODES,
+  FEATURE_NAMES,
+  FILTER_MODES,
+  FRONT_FACES,
+  INDEX_FORMATS,
+  LIMIT_NAMES,
+  LOAD_OPS,
+  MIPMAP_FILTER_MODES,
+  PRIMITIVE_TOPOLOGIES,
+  QUERY_TYPES,
+  SAMPLER_BINDING_TYPES,
+  STENCIL_OPERATIONS,
+  STORAGE_TEXTURE_ACCESSES,
+  STORE_OPS,
+  TEXTURE_ASPECTS,
+  TEXTURE_DIMENSIONS,
+  TEXTURE_FORMATS,
+  TEXTURE_SAMPLE_TYPES,
+  TEXTURE_VIEW_DIMENSIONS,
+  VERTEX_FORMATS,
+  VERTEX_STEP_MODES,
 } from "@xpute/gpu-link/enum.spec.ts";
 
 type GpuObject =
@@ -369,17 +369,17 @@ export class GpuHost {
     const out = new Uint32Array(this._mem(), at, DEVICE.WORDS);
     // A block lent again holds the last device's words.
     out.fill(0);
-    LIMIT_NAME.forEach(
+    LIMIT_NAMES.forEach(
       (name, k) => (out[k] = Math.min(d.limits[name], 0xffffffff)),
     );
-    FEATURE_NAME.forEach((name, k) => {
+    FEATURE_NAMES.forEach((name, k) => {
       if (d.features.has(name as GPUFeatureName)) {
         out[DEVICE.FEATS_AT + (k >> 5)] |= 1 << (k & 31);
       }
     });
     // WebGPU resolves timestamps in nanoseconds, so the period is 1.
     new Float32Array(this._mem(), at, DEVICE.WORDS)[DEVICE.PERIOD_AT] = 1;
-    out[DEVICE.FORMAT_AT] = (TEXTURE_FORMAT as readonly string[]).indexOf(
+    out[DEVICE.FORMAT_AT] = (TEXTURE_FORMATS as readonly string[]).indexOf(
       navigator.gpu.getPreferredCanvasFormat(),
     );
     out[DEVICE.ERRORS_AT] = this._error_cnt;
@@ -466,7 +466,7 @@ export class GpuHost {
     p.origin[0] = r.u();
     p.origin[1] = r.u();
     p.origin[2] = r.u();
-    p.aspect = TEXTURE_ASPECT[r.u()];
+    p.aspect = TEXTURE_ASPECTS[r.u()];
     return p;
   }
 
@@ -499,10 +499,10 @@ export class GpuHost {
 
   private _stencilFace(r: WordCursor): GPUStencilFaceState {
     return {
-      compare: COMPARE_FUNCTION[r.u()],
-      failOp: STENCIL_OPERATION[r.u()],
-      depthFailOp: STENCIL_OPERATION[r.u()],
-      passOp: STENCIL_OPERATION[r.u()],
+      compare: COMPARE_FUNCTIONS[r.u()],
+      failOp: STENCIL_OPERATIONS[r.u()],
+      depthFailOp: STENCIL_OPERATIONS[r.u()],
+      passOp: STENCIL_OPERATIONS[r.u()],
     };
   }
 
@@ -527,13 +527,13 @@ export class GpuHost {
         const [mipLevelCount, sampleCount, dimension, format, usage] = [
           r.u(),
           r.u(),
-          TEXTURE_DIMENSION[r.u()],
-          TEXTURE_FORMAT[r.u()],
+          TEXTURE_DIMENSIONS[r.u()],
+          TEXTURE_FORMATS[r.u()],
           r.u(),
         ];
         const viewFormats = Array.from(
           { length: r.u() },
-          () => TEXTURE_FORMAT[r.u()],
+          () => TEXTURE_FORMATS[r.u()],
         );
         this._put(
           id,
@@ -553,19 +553,19 @@ export class GpuHost {
         const id = r.u();
         const texture = this._get<GPUTexture>(r.u());
         const [f, dim] = [r.opt(), r.opt()];
-        const aspect = TEXTURE_ASPECT[r.u()];
+        const aspect = TEXTURE_ASPECTS[r.u()];
         const [baseMipLevel, mipLevelCount, baseArrayLayer, arrayLayerCount] = [
           r.u(),
           r.opt(),
           r.u(),
           r.opt(),
         ];
-        const format = f === undefined ? undefined : TEXTURE_FORMAT[f];
+        const format = f === undefined ? undefined : TEXTURE_FORMATS[f];
         this._put(id, {
           view: texture.createView({
             format,
             dimension:
-              dim === undefined ? undefined : TEXTURE_VIEW_DIMENSION[dim],
+              dim === undefined ? undefined : TEXTURE_VIEW_DIMENSIONS[dim],
             aspect,
             baseMipLevel,
             mipLevelCount,
@@ -592,16 +592,16 @@ export class GpuHost {
         this._put(
           id,
           d.createSampler({
-            addressModeU: ADDRESS_MODE[u],
-            addressModeV: ADDRESS_MODE[v],
-            addressModeW: ADDRESS_MODE[w],
-            magFilter: FILTER_MODE[mag],
-            minFilter: FILTER_MODE[min],
-            mipmapFilter: MIPMAP_FILTER_MODE[mip],
+            addressModeU: ADDRESS_MODES[u],
+            addressModeV: ADDRESS_MODES[v],
+            addressModeW: ADDRESS_MODES[w],
+            magFilter: FILTER_MODES[mag],
+            minFilter: FILTER_MODES[min],
+            mipmapFilter: MIPMAP_FILTER_MODES[mip],
             lodMinClamp,
             lodMaxClamp,
             compare:
-              compare === undefined ? undefined : COMPARE_FUNCTION[compare],
+              compare === undefined ? undefined : COMPARE_FUNCTIONS[compare],
             maxAnisotropy: r.u(),
           }),
         );
@@ -631,7 +631,7 @@ export class GpuHost {
                   binding,
                   visibility,
                   buffer: {
-                    type: BUFFER_BINDING_TYPE[a],
+                    type: BUFFER_BINDING_TYPES[a],
                     hasDynamicOffset: b !== 0,
                     minBindingSize: c,
                   },
@@ -640,15 +640,15 @@ export class GpuHost {
                 return {
                   binding,
                   visibility,
-                  sampler: { type: SAMPLER_BINDING_TYPE[a] },
+                  sampler: { type: SAMPLER_BINDING_TYPES[a] },
                 };
               case 2:
                 return {
                   binding,
                   visibility,
                   texture: {
-                    sampleType: TEXTURE_SAMPLE_TYPE[a],
-                    viewDimension: TEXTURE_VIEW_DIMENSION[b],
+                    sampleType: TEXTURE_SAMPLE_TYPES[a],
+                    viewDimension: TEXTURE_VIEW_DIMENSIONS[b],
                     multisampled: c !== 0,
                   },
                 };
@@ -657,9 +657,9 @@ export class GpuHost {
                   binding,
                   visibility,
                   storageTexture: {
-                    access: STORAGE_TEXTURE_ACCESS[a],
-                    format: TEXTURE_FORMAT[b],
-                    viewDimension: TEXTURE_VIEW_DIMENSION[c],
+                    access: STORAGE_TEXTURE_ACCESSES[a],
+                    format: TEXTURE_FORMATS[b],
+                    viewDimension: TEXTURE_VIEW_DIMENSIONS[c],
                   },
                 };
             }
@@ -721,13 +721,13 @@ export class GpuHost {
           entryPoint: r.text(),
           buffers: Array.from({ length: r.u() }, (): GPUVertexBufferLayout => ({
             arrayStride: r.u(),
-            stepMode: VERTEX_STEP_MODE[r.u()],
+            stepMode: VERTEX_STEP_MODES[r.u()],
             // WebGPU's newer vertex formats are missing from the lib's type,
             // hence the cast.
             attributes: Array.from(
               { length: r.u() },
               (): GPUVertexAttribute => ({
-                format: VERTEX_FORMAT[r.u()] as GPUVertexFormat,
+                format: VERTEX_FORMATS[r.u()] as GPUVertexFormat,
                 offset: r.u(),
                 shaderLocation: r.u(),
               }),
@@ -735,20 +735,20 @@ export class GpuHost {
           })),
         };
         const strip = (topology: u32, s: u32 | undefined) => ({
-          topology: PRIMITIVE_TOPOLOGY[topology],
-          stripIndexFormat: s === undefined ? undefined : INDEX_FORMAT[s],
+          topology: PRIMITIVE_TOPOLOGIES[topology],
+          stripIndexFormat: s === undefined ? undefined : INDEX_FORMATS[s],
         });
         const primitive: GPUPrimitiveState = {
           ...strip(r.u(), r.opt()),
-          frontFace: FRONT_FACE[r.u()],
-          cullMode: CULL_MODE[r.u()],
+          frontFace: FRONT_FACES[r.u()],
+          cullMode: CULL_MODES[r.u()],
           unclippedDepth: r.flag(),
         };
         const depthFormat = r.opt();
         const depth: GPUDepthStencilState = {
-          format: TEXTURE_FORMAT[depthFormat ?? 0],
+          format: TEXTURE_FORMATS[depthFormat ?? 0],
           depthWriteEnabled: r.flag(),
-          depthCompare: COMPARE_FUNCTION[r.u()],
+          depthCompare: COMPARE_FUNCTIONS[r.u()],
           stencilFront: this._stencilFace(r),
           stencilBack: this._stencilFace(r),
           stencilReadMask: r.u(),
@@ -767,7 +767,7 @@ export class GpuHost {
         const targets = Array.from(
           { length: r.u() },
           (): GPUColorTargetState => {
-            const format = TEXTURE_FORMAT[r.u()];
+            const format = TEXTURE_FORMATS[r.u()];
             const [cop, csrc, cdst, aop, asrc, adst] = [
               r.u(),
               r.u(),
@@ -778,18 +778,18 @@ export class GpuHost {
             ];
             // WebGPU's newer blend factors are missing from the lib's type
             // too, hence the cast.
-            const factor = (k: u32) => BLEND_FACTOR[k] as GPUBlendFactor;
+            const factor = (k: u32) => BLEND_FACTORS[k] as GPUBlendFactor;
             const blend =
               cop === NONE
                 ? undefined
                 : {
                     color: {
-                      operation: BLEND_OPERATION[cop],
+                      operation: BLEND_OPERATIONS[cop],
                       srcFactor: factor(csrc),
                       dstFactor: factor(cdst),
                     },
                     alpha: {
-                      operation: BLEND_OPERATION[aop],
+                      operation: BLEND_OPERATIONS[aop],
                       srcFactor: factor(asrc),
                       dstFactor: factor(adst),
                     },
@@ -867,7 +867,7 @@ export class GpuHost {
         const id = r.u();
         this._put(
           id,
-          d.createQuerySet({ type: QUERY_TYPE[r.u()], count: r.u() }),
+          d.createQuerySet({ type: QUERY_TYPES[r.u()], count: r.u() }),
         );
         return;
       }
@@ -1042,8 +1042,8 @@ export class GpuHost {
           const resolve = r.opt();
           c.resolveTarget =
             resolve === undefined ? undefined : this._get<View>(resolve).view;
-          c.loadOp = LOAD_OP[r.u()];
-          c.storeOp = STORE_OP[r.u()];
+          c.loadOp = LOAD_OPS[r.u()];
+          c.storeOp = STORE_OPS[r.u()];
           const clear = c.clearValue as number[];
           for (let i = 0; i < 4; i++) clear[i] = r.f32();
           colors.push(c);
@@ -1065,13 +1065,13 @@ export class GpuHost {
           const a = this._depth;
           a.view = view;
           const ops = format.startsWith("depth") && !dro;
-          a.depthLoadOp = ops ? LOAD_OP[dload] : undefined;
-          a.depthStoreOp = ops ? STORE_OP[dstore] : undefined;
+          a.depthLoadOp = ops ? LOAD_OPS[dload] : undefined;
+          a.depthStoreOp = ops ? STORE_OPS[dstore] : undefined;
           a.depthClearValue = ops ? dclear : undefined;
           a.depthReadOnly = ops ? undefined : dro;
           const stencil = format.includes("stencil") && !sro;
-          a.stencilLoadOp = stencil ? LOAD_OP[sload] : undefined;
-          a.stencilStoreOp = stencil ? STORE_OP[sstore] : undefined;
+          a.stencilLoadOp = stencil ? LOAD_OPS[sload] : undefined;
+          a.stencilStoreOp = stencil ? STORE_OPS[sstore] : undefined;
           a.stencilClearValue = stencil ? sclear : undefined;
           a.stencilReadOnly = stencil ? undefined : sro;
           this._pass.depthStencilAttachment = a;
@@ -1131,7 +1131,7 @@ export class GpuHost {
         const pass = this._get<GPURenderPassEncoder>(r.u());
         pass.setIndexBuffer(
           this._get<GPUBuffer>(r.u()),
-          INDEX_FORMAT[r.u()],
+          INDEX_FORMATS[r.u()],
           r.u(),
           r.opt(),
         );
@@ -1265,13 +1265,13 @@ export class GpuHost {
       case op.CONFIGURE: {
         const s = this._surface(r.u());
         const format = r.u();
-        const [usage, alphaMode] = [r.u(), CANVAS_ALPHA_MODE[r.u()]];
+        const [usage, alphaMode] = [r.u(), CANVAS_ALPHA_MODES[r.u()]];
         const cfg: GPUCanvasConfiguration = {
           device: d,
           format:
             format === SURFACE_PREFERRED
               ? navigator.gpu.getPreferredCanvasFormat()
-              : TEXTURE_FORMAT[format],
+              : TEXTURE_FORMATS[format],
           usage,
           alphaMode,
         };

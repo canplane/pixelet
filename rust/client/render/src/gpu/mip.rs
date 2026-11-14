@@ -9,7 +9,7 @@ use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use crate::gpu::api::{pass_desc, release, sampler_entry, view_entry, Format, Gpu, Layout, Load};
 use crate::gpu::pipeline::PipelineCache;
 
-pub fn mip_levels(width: u32, height: u32) -> u32 {
+pub fn mip_cnt(width: u32, height: u32) -> u32 {
     32 - width.max(height).max(1).leading_zeros()
 }
 
@@ -24,10 +24,10 @@ impl MipPass {
     pub fn new(g: &Gpu, pipelines: &mut PipelineCache, format: Format) -> MipPass {
         let pipeline = pipelines.build(g, PIPELINE_MIP, format);
         let sampler = g.sampler(
-            FilterMode::linear,
-            FilterMode::linear,
-            MipmapFilterMode::nearest,
-            AddressMode::clamp_to_edge,
+            FilterMode::Linear,
+            FilterMode::Linear,
+            MipmapFilterMode::Nearest,
+            AddressMode::ClampToEdge,
             None,
             1,
         );
@@ -38,10 +38,10 @@ impl MipPass {
         }
     }
 
-    pub fn build(&self, g: &Gpu, texture: u32, levels: u32, first_layer: u32, layer_cnt: u32) {
+    pub fn build(&self, g: &Gpu, texture: u32, mip_cnt: u32, first_layer: u32, layer_cnt: u32) {
         let encoder = g.encoder();
         for layer in first_layer..first_layer + layer_cnt {
-            for level in 1..levels {
+            for level in 1..mip_cnt {
                 let above = g.view(texture, false, level - 1, 1, layer, 1);
                 let target = g.view(texture, false, level, 1, layer, 1);
                 let group = g.bind_group(

@@ -1,24 +1,25 @@
 // @pxl/client/service/core/snapshot.ts
 
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
-import { GroundStatus, SensorStatus, type Snapshot } from "@/abi/overlay.ts";
+import { type Snapshot } from "@/abi/overlay.ts";
+import { GROUND_STATUS_IDLE, SENSOR_STATUS_IDLE } from "@/abi/overlay.enum.ts";
 
 const INIT: Snapshot = {
   pivot: {
-    status: GroundStatus.Idle,
+    status: GROUND_STATUS_IDLE,
     is_off_center: false,
     lon_lat: null,
     outside: false,
   },
   location: {
-    status: SensorStatus.Idle,
+    status: SENSOR_STATUS_IDLE,
     has_location: false,
     watching: false,
     err: null,
   },
   companion: { person_ready: false, pet_ready: false },
   draft: null,
-  orient: { status: SensorStatus.Idle },
+  orient: { status: SENSOR_STATUS_IDLE },
   is_follow_mode: false,
   camera_busy: false,
   zooming: false,

@@ -2,6 +2,7 @@
 # Numbers the source paths a published core holds, in the built file.
 #
 #   number-paths.py <core> <paths.json> <cargo workspace>
+#   number-paths.py --remaps <cargo workspace>
 #
 # Rust embeds a caller's path for a `#[track_caller]` panic, with no stable way
 # out. Each is overwritten in place, same length, as `...#n`: a `&'static str`
@@ -10,6 +11,9 @@
 #
 # A `.rs` under no known source root stops the build, since it could be a format
 # string. So does the home directory left anywhere in the file.
+#
+# The second form prints the flags a build passes rustc, so a path outside the
+# workspace reaches the file without the directory it was built in.
 #
 # Xcode names no Python of its own, so this keeps to what macOS's 3.9 reads.
 
@@ -24,6 +28,13 @@ PATH = re.compile(rb"[A-Za-z0-9_/.+-]*\.rs\b")
 # `src/` is a crate's own path, as the standard library's line tables hold it in
 # a static library.
 SOURCE_ROOT = re.compile(rb"/library/|^/rustc/|^/rust/deps/|\.rustup/|^src/")
+
+
+def prefixes(workspace):
+    """The directories a build's paths are remapped from. rustc
+    applies the last prefix that matches, so the repo, which lies under home,
+    goes last."""
+    return (Path(os.environ["HOME"]), Path(workspace).resolve().parent)
 
 
 def package_roots(workspace):
@@ -41,13 +52,16 @@ def package_roots(workspace):
     found = []
     for package in meta["packages"]:
         at = Path(package["manifest_path"]).parent
-        for base in (root, root.parent, Path(os.environ["HOME"])):
+        for base in (root, *prefixes(root)):
             if base in at.parents:
                 found.append(f"{at.relative_to(base)}/".encode())
     return tuple(found)
 
 
 def main():
+    if sys.argv[1] == "--remaps":
+        print(" ".join(f"--remap-path-prefix={p}=" for p in prefixes(sys.argv[2])))
+        return
     core, table, workspace = sys.argv[1:]
     bytes_of = bytearray(Path(core).read_bytes())
     roots = package_roots(workspace)

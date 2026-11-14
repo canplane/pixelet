@@ -12,7 +12,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> @buil
   // The quad's two triangles. Each corner's step across and down is worked out from the
   // vertex's number. A phone's driver refuses a table of vectors read at a place found as the
   // shader runs.
-  let k = vi % LAY_VERTICES;
+  let k = vi % LAY_VERTEX_CNT;
   let step = vec2f(f32(k == 1u || k == 2u || k == 4u), f32(k == 2u || k == 4u || k == 5u));
   let side = vec2f(textureDimensions(world_depth));
   let p = (tile + step) * f32(LIGHT_TILE) / side;

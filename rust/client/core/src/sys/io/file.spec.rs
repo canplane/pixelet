@@ -5,14 +5,8 @@
 // The core's files: the tokens of their paths and what a file holds (pxl-core
 // sys/io/file.rs, ts/client/src/service/sys/fs/).
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 /// The tree of the paths the core opens (xpute's FS_OPEN), as a URI's path is a
 /// tree: each node takes one token, its `ID`, distinct among its siblings, and hands the
@@ -22,36 +16,36 @@
 /// binding (ts/client/src/service/sys/fs/).
 pub mod path {
     /// The terrain bake: (TERRAIN, quadkey).
-    pub mod TERRAIN {
+    pub mod terrain {
         pub const ID: i32 = 0;
     }
     /// The places bake: (PLACE, quadkey).
-    pub mod PLACE {
+    pub mod place {
         pub const ID: i32 = 1;
     }
     /// The divisions bake: (DIVISION, quadkey).
-    pub mod DIVISION {
+    pub mod division {
         pub const ID: i32 = 2;
     }
     /// The Earth bake: (EARTH, quadkey), and the picture of the whole Earth, (EARTH, SPHERE).
-    pub mod EARTH {
+    pub mod earth {
         pub const ID: i32 = 3;
         /// The picture of the whole Earth, served under the Earth bake's version as its
         /// `SPHERE` (spec/spec/bake/publication.json).
-        pub mod SPHERE {
+        pub mod sphere {
             pub const ID: i32 = 0;
         }
     }
     /// The platform's storage, where the platform holds a file being the client's choice. What a file holds is its owner's, written whole, its `format` first (pxl-core sys/io/file.rs).
-    pub mod STORAGE {
+    pub mod storage {
         pub const ID: i32 = 4;
         /// The settings' overrides, in the platform's storage (domain/setting/store.rs).
-        pub mod SETTINGS {
+        pub mod settings {
             pub const ID: i32 = 0;
         }
     }
     /// The shipped assets: (ASSET, id), a load's id, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs).
-    pub mod ASSET {
+    pub mod asset {
         pub const ID: i32 = 5;
     }
     /// The placed objects, their source's: a shard, read, (OBJECT, quadkey), its
@@ -59,17 +53,17 @@ pub mod path {
     /// written, (OBJECT, EDIT) (domain/layer/object/repository.rs). A shard with none has no
     /// file. The source keeps the shards and the top and applies the edits; which source, a
     /// mock or a server, is the client's.
-    pub mod OBJECT {
+    pub mod object {
         pub const ID: i32 = 6;
         /// The top of the tree, read: what each node at `SHARD_ZOOM` holding objects folds to
         /// (`top`), so which shards hold any, its `format.OBJECT_TOP` first. Its source rebuilds
         /// it from the shards as an edit lands; none is no shard holding any.
-        pub mod TOP {
+        pub mod top {
             pub const ID: i32 = 0;
         }
         /// Edits, written, never read: a batch of writes in the order they were made (`write`),
         /// its `format.OBJECT_EDIT` first, which the source applies to its shards.
-        pub mod EDIT {
+        pub mod edit {
             pub const ID: i32 = 1;
         }
     }
@@ -92,7 +86,7 @@ pub const SHARD_ZOOM: u32 = 8;
 
 /// The children of the tree packet a shard's file and an edit batch hold after their
 /// format byte, by index: each row a write `<key, asset_id, ext>`, a leaf as the write that made
-/// it in a shard's file, in the order made in a batch, where VOID erases (pxl-core
+/// it in a shard's file, in the order made in a batch, where void erases (pxl-core
 /// domain/layer/object/store.rs `Write`). A record a class's (pxl-spec object/ext.rs),
 /// its row and its fields as columns.
 pub mod write {

@@ -14,8 +14,8 @@
 # uploads and serves it. `serve <kind> <version>` serves a version the bucket
 # holds, as a new format's is with the client that reads it, and going back
 # is. `override <shard> <kind> <version>` serves that version for a shard
-# and the tiles under it, `-` dropping it. Uses the AWS CLI's `r2` profile,
-# its endpoint_url or `$R2` the bucket's S3 endpoint (publish-bucket).
+# and the tiles under it, `-` dropping it. It reaches the bucket through
+# r2.py.
 #
 #   ./script/publish.py <terrain|place|division|earth>…
 #   ./script/publish.py upload <terrain|place|division|earth>…
@@ -24,19 +24,16 @@
 
 import datetime
 import json
-import os
 import re
 import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
+
+import r2
 
 
 REPO = Path(__file__).resolve().parent.parent
-# Where a file made for one upload lies until the upload ends (AGENTS.md).
-TMP = REPO / "tmp"
-BUCKET = "pixelet-bucket"
 SOURCE = "source"
 # Beside a copy's tiles, what it is: never uploaded.
 MANIFEST = "manifest.json"
@@ -57,18 +54,8 @@ def tile_object(version, name):
     return PUBLISHED["OBJECT"]["$val"].replace("{version}", version).replace("{name}", name)
 
 
-def endpoint():
-    """The bucket's S3 endpoint: `$R2` where it is set, else the `r2` profile's own `endpoint_url`."""
-    if os.environ.get("R2"):
-        return os.environ["R2"]
-    got = subprocess.run(["aws", "configure", "get", "endpoint_url", "--profile", "r2"], capture_output=True, text=True)
-    return got.stdout.strip() or die("no endpoint for the `r2` profile: set its endpoint_url, or export $R2 (publish-bucket)")
-
-
 def aws(args, inherit=False, none=False):
-    # AWS CLI v2 sends checksum headers R2 refuses.
-    env = {**os.environ, "AWS_REQUEST_CHECKSUM_CALCULATION": "when_required"}
-    out = subprocess.run(["aws", *args, "--profile", "r2", "--endpoint-url", endpoint()], env=env, capture_output=not inherit)
+    out = r2.aws(*args, capture=not inherit)
     # `s3 ls` exits 1, silent, on a prefix that holds nothing.
     if none and out.returncode == 1 and not out.stderr:
         return ""
@@ -84,7 +71,7 @@ def files(directory):
 
 def versions(kind):
     """The versions the bucket holds under `kind`."""
-    listed = aws(["s3", "ls", f"s3://{BUCKET}/{kind}/"], none=True)
+    listed = aws(["s3", "ls", f"s3://{r2.BUCKET}/{kind}/"], none=True)
     return [m.group(1) for line in listed.splitlines() if (m := re.match(r"^PRE (.+)/$", line.strip()))]
 
 
@@ -97,13 +84,14 @@ def next_name(kind, fmt, day):
 
 def manifest_of(kind, version):
     """The manifest a version holds beside its tiles."""
-    m = json.loads(aws(["s3", "cp", f"s3://{BUCKET}/{kind}/{tile_object(version, MANIFEST)}", "-"]))
+    key = f"{kind}/{tile_object(version, MANIFEST)}"
+    m = json.loads(r2.get(key) or die(f"no {key}"))
     return {"version": version, "format": m["format"], **({"shard": m["shard"]} if m.get("shard") else {})}
 
 
 def served_now():
     """What the bucket serves now, out of its `source` and the manifests of the versions it names."""
-    declared_ = json.loads(aws(["s3", "cp", f"s3://{BUCKET}/{SOURCE}", "-"]))
+    declared_ = json.loads(r2.get(SOURCE) or die(f"no {SOURCE}"))
     kind = {k: manifest_of(k, declared_["version"].get(k) or die(f"{SOURCE} serves no {k}")) for k in KINDS}
     override = {key: s["version"] for key, s in declared_["shard"].items() if s.get("version")}
     return {"kind": kind, "override": override}
@@ -122,11 +110,7 @@ def declared(record):
 
 def serve(declaration):
     """Revalidated on every boot, so a publish is seen at once."""
-    TMP.mkdir(exist_ok=True)
-    with tempfile.NamedTemporaryFile(suffix=".json", dir=TMP) as f:
-        f.write(declaration)
-        f.flush()
-        aws(["s3", "cp", f.name, f"s3://{BUCKET}/{SOURCE}", "--content-type", "application/json", "--cache-control", "no-cache"], inherit=True)
+    r2.put(SOURCE, declaration, "application/json", "no-cache")
     print(f"[publish] {SOURCE} uploaded")
 
 
@@ -147,7 +131,7 @@ def upload(record, kind):
     declared({**record, "kind": {**record["kind"], kind: version}})
 
     objects = files(directory)
-    at = f"s3://{BUCKET}/{kind}/{tile_object(name, '')}"
+    at = f"s3://{r2.BUCKET}/{kind}/{tile_object(name, '')}"
     print(f"[publish/{kind}] {objects} objects to {kind}/{name}")
     # Packed already: the encoding goes with each object (publish-bucket "Upload").
     aws(
@@ -164,7 +148,7 @@ def upload(record, kind):
     if stored != objects:
         die(f"{kind}/{name}: {stored} objects stored of {objects}; re-run the sync by hand before serving it")
     # Last, so a version with a manifest is one whole.
-    aws(["s3", "cp", str(directory / MANIFEST), f"{at}{MANIFEST}", "--content-type", "application/json"], inherit=True)
+    r2.put(f"{kind}/{tile_object(name, MANIFEST)}", (directory / MANIFEST).read_bytes(), "application/json")
 
     shutil.rmtree(directory)
     print(f"[publish/{kind}] {kind}/{name} uploaded")
@@ -213,11 +197,10 @@ def cmd(record, args):
 
 def main():
     try:
-        endpoint()
         served = cmd(served_now(), sys.argv[1:])
         if served:
             serve(declared(served))
-    except Refused as e:
+    except (Refused, r2.Unreachable) as e:
         print(f"[publish] {e}", file=sys.stderr)
         return 1
     return 0

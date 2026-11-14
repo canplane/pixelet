@@ -4,7 +4,7 @@
 //! xpute-link-gen, over xpute's WIT and the GPU plugin's, as their targets
 //! declare them (xpute-gen-targets, xpute-gpu-gen-targets).
 
-use xpute_link_gen::wit::{wit_outputs, WitTarget};
+use xpute_link_gen::wit::{wit_outputs, Side, WitTarget};
 
 use super::Output;
 use crate::root;
@@ -28,7 +28,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         wit: "spec/client/core/wit",
         rs: Some("rust/client/core/src/abi.rs"),
         ts: Some("ts/client/src/abi"),
-        side: "xpute/guest/rust",
+        side: Some(Side::Guest("xpute/guest/rust")),
     };
     wit_outputs(&root, &target, &guest)
 }

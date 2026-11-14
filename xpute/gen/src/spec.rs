@@ -356,49 +356,72 @@ pub fn line_comments(doc: &[String], indent: &str) -> Vec<String> {
         .collect()
 }
 
-pub const RS_CASING_NOTE: [&str; 1] =
-    ["// Names as the spec spells them, so one record has one name on every side."];
-
-pub fn casing_note() -> Vec<String> {
-    RS_CASING_NOTE.iter().map(|l| l.to_string()).collect()
-}
-
-pub fn snake(name: &str) -> String {
-    let mut out = String::new();
-    let mut prev: Option<char> = None;
-    for c in name.chars() {
-        if c.is_ascii_uppercase()
-            && prev.is_some_and(|p| p.is_ascii_lowercase() || p.is_ascii_digit())
-        {
-            out.push('_');
+/// A name's words, which every casing joins. A word breaks where a lower case
+/// letter, or a digit after one, meets an upper case one, and at any mark
+/// between words; a word written in upper case (`E2BIG`) stays whole. A number
+/// after a lower case letter and one upper case letter that ends a word are a
+/// word of their own (`maxTextureDimension1D`, `max_texture_dimension_1d`).
+pub fn words(name: &str) -> Vec<String> {
+    let chars: Vec<char> = name.chars().collect();
+    let mut out: Vec<String> = Vec::new();
+    let mut word = String::new();
+    let mut lower = false;
+    for (i, &c) in chars.iter().enumerate() {
+        let leads = c.is_ascii_digit()
+            && i > 0
+            && chars[i - 1].is_ascii_lowercase()
+            && {
+                let mut rest = chars[i..].iter().skip_while(|d| d.is_ascii_digit());
+                rest.next().is_some_and(char::is_ascii_uppercase)
+                    && !rest.next().is_some_and(char::is_ascii_lowercase)
+            };
+        if !c.is_ascii_alphanumeric() || (c.is_ascii_uppercase() && lower) || leads {
+            out.extend((!word.is_empty()).then(|| std::mem::take(&mut word)));
         }
-        out.push(c);
-        prev = Some(c);
+        if c.is_ascii_alphanumeric() {
+            lower = !leads && (c.is_ascii_lowercase() || (c.is_ascii_digit() && lower));
+            word.push(c);
+        } else {
+            lower = false;
+        }
     }
-    out.to_lowercase()
+    out.extend((!word.is_empty()).then_some(word));
+    out
 }
 
+/// A word with its first letter in upper case and the rest in lower case.
+fn title(w: &str) -> String {
+    let mut c = w.chars();
+    c.next().map_or(String::new(), |f| f.to_ascii_uppercase().to_string() + &c.as_str().to_ascii_lowercase())
+}
+
+/// A name in snake case (`tile_cells`).
+pub fn snake(name: &str) -> String {
+    words(name).join("_").to_ascii_lowercase()
+}
+
+/// A name in SCREAMING snake case (`TILE_CELLS`).
+pub fn screaming(name: &str) -> String {
+    words(name).join("_").to_ascii_uppercase()
+}
+
+/// A name in Pascal case (`TileCells`).
 pub fn pascal(name: &str) -> String {
-    name.to_lowercase()
-        .split('_')
-        .map(|w| {
-            let mut c = w.chars();
-            c.next()
-                .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
-                .unwrap_or_default()
-        })
-        .collect()
+    words(name).iter().map(|w| title(w)).collect()
 }
 
-pub fn enum_name(name: &str) -> String {
-    let e = pascal(name);
-    if let Some(stem) = e.strip_suffix("ies") {
-        format!("{stem}y")
-    } else if e.ends_with('s') && !e.ends_with("ss") {
-        e[..e.len() - 1].to_string()
-    } else {
-        e
-    }
+/// A name's plural, as English forms it and in the name's own case
+/// (`STEP_NAMES`, `PRIMITIVE_TOPOLOGIES`, `STORAGE_TEXTURE_ACCESSES`).
+pub fn plural(name: &str) -> String {
+    let upper = name.ends_with(|c: char| c.is_ascii_uppercase());
+    let lower = name.to_ascii_lowercase();
+    let (stem, end) = match lower.strip_suffix('y') {
+        Some(rest) if !rest.ends_with(['a', 'e', 'i', 'o', 'u']) => (&name[..rest.len()], "ies"),
+        _ if ["s", "x", "z", "ch", "sh"].iter().any(|e| lower.ends_with(e)) => (name, "es"),
+        _ => (name, "s"),
+    };
+    let end = if upper { end.to_ascii_uppercase() } else { end.to_string() };
+    format!("{stem}{end}")
 }
 
 /// Rust's keywords, strict and reserved, which an identifier takes as `r#`.
@@ -428,6 +451,21 @@ pub fn rs_ident(k: &str) -> String {
     } else {
         id
     }
+}
+
+/// A record's field or a module as Rust names it: its name in snake case.
+pub fn rs_field(k: &str) -> String {
+    rs_ident(&snake(k))
+}
+
+/// A constant as Rust names it: its name in SCREAMING snake case.
+pub fn rs_const(k: &str) -> String {
+    rs_ident(&screaming(k))
+}
+
+/// An enum's member as Rust names it: its name in Pascal case.
+pub fn rs_member(k: &str) -> String {
+    rs_ident(&pascal(k))
 }
 
 /// Whether `k` is a TypeScript identifier as it is written.
@@ -510,7 +548,7 @@ pub fn ts_ident(k: &str) -> String {
     }
 }
 
-/// An enum's member: its Rust identifier, its name as its source spells it,
+/// An enum's member: its identifier in the language written, its name as its source spells it,
 /// its number, and its doc.
 pub struct Member {
     pub ident: String,
@@ -570,36 +608,42 @@ pub fn rs_enum(e: &str, members: &[Member], repr: &str, indent: &str) -> Vec<Str
     out
 }
 
-/// An enum's TypeScript, as every enum has it: the object of its members,
-/// each its name to its number, as const; its type, the union of their numbers;
-/// `<e>_name`, a number to the name of the member it numbers, which reads no
-/// global, so an enum may be named as one (`Object`); and `<e>_of`, a number
-/// to its member, or null for a number no member has.
+/// An enum's TypeScript, as every enum has it: its type, the union of its
+/// members' numbers, then each member as a constant of its own, named by the
+/// enum and the member in SCREAMING snake case, which a reader imports by
+/// name, and the member a number is (`ts_of`), as Rust's `of`. No object holds
+/// them, so a bundle's tree shaking keeps no name.
 pub fn ts_enum(e: &str, members: &[Member]) -> Vec<String> {
-    let f = snake(e);
-    let mut out = vec![String::new(), format!("export const {e} = {{")];
+    let union: Vec<String> = members
+        .iter()
+        .map(|m| format!("typeof {}", ts_const(e, m)))
+        .collect();
+    let mut out = vec![String::new(), format!("export type {e} = {};", union.join(" | "))];
     for m in members {
-        let key = if is_ts_ident(&m.name) { m.name.clone() } else { json_str(&m.name) };
-        out.extend(ts_doc(&m.doc, "  "));
-        out.push(format!("  {key}: {},", m.number));
+        out.extend(ts_doc(&m.doc, ""));
+        out.push(format!("export const {} = {};", ts_const(e, m), m.number));
     }
+    let tests: Vec<String> = members.iter().map(|m| format!("val === {}", ts_const(e, m))).collect();
     out.extend([
-        "} as const;".to_string(),
-        format!("export type {e} = (typeof {e})[keyof typeof {e}];"),
         String::new(),
-        format!("/** The name of the `{e}` member numbered `n`, or undefined for a number"),
-        " * no member has. */".to_string(),
-        format!("export function {f}_name(n: number): keyof typeof {e} | undefined {{"),
-        format!("  for (const k in {e}) if ({e}[k as keyof typeof {e}] === n) return k as keyof typeof {e};"),
-        "  return undefined;".to_string(),
-        "}".to_string(),
-        String::new(),
-        format!("/** The `{e}` member `n` is, or null for a number no member has. */"),
-        format!("export function {f}_of(n: number): {e} | null {{"),
-        format!("  return {f}_name(n) === undefined ? null : (n as {e});"),
-        "}".to_string(),
+        "/** The member `val` is, or null for a number no member has. */".into(),
+        format!("export function {}(val: number): {e} | null {{", ts_of(e)),
+        format!("  return {} ? val : null;", tests.join(" || ")),
+        "}".into(),
     ]);
     out
+}
+
+/// The TypeScript twin of a Rust enum's `of`, of the enum `e`: the member a
+/// number is (`of_Tool`).
+pub fn ts_of(e: &str) -> String {
+    format!("of_{}", pascal(e))
+}
+
+/// The TypeScript constant of the enum `e`'s member `m`: both their names in
+/// SCREAMING snake case (`TOOL_ITEM`).
+pub fn ts_const(e: &str, m: &Member) -> String {
+    format!("{}_{}", screaming(e), screaming(&m.name))
 }
 
 pub fn align_star(line: String, indent: &str) -> String {

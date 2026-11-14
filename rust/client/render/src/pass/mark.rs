@@ -123,7 +123,7 @@ impl MarkPass {
         (read, put): (UploadOf, PutMark),
     ) -> MarkPass {
         MarkPass {
-            pipeline: pipelines.build_masked(g, id, Format::depth32float, Stencil::Unused),
+            pipeline: pipelines.build_masked(g, id, Format::Depth32float, Stencil::Unused),
             marks_of,
             read,
             put,

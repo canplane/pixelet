@@ -62,13 +62,13 @@ pub struct Order {
     pub near: f64,
 }
 
-pub const PHASES_MAX: usize = demand_spec::TASK_PHASES_MAX as usize;
+pub const PHASE_CAP: usize = demand_spec::TASK_PHASE_CAP as usize;
 
 /// The timings a run reports, each under the name the run gives it. A timing
-/// past `PHASES_MAX` is dropped.
+/// past `PHASE_CAP` is dropped.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct PhaseList {
-    items: [(TaskPhaseName, f64); PHASES_MAX],
+    items: [(TaskPhaseName, f64); PHASE_CAP],
     len: usize,
 }
 
@@ -76,12 +76,12 @@ impl Stream {
     /// The one table of what each stream is.
     pub const fn row(self) -> Row {
         let (source, slotted, class) = match self {
-            Stream::terrain => (Source::Bake(BaseLayer::terrain), true, Class::Ground),
-            Stream::place => (Source::Bake(BaseLayer::place), false, Class::Place),
-            Stream::division => (Source::Bake(BaseLayer::division), false, Class::Aside),
-            Stream::asset => (Source::Load, false, Class::File),
-            Stream::earth => (Source::Bake(BaseLayer::earth), true, Class::Picture),
-            Stream::object => (Source::Objects, false, Class::OnGround),
+            Stream::Terrain => (Source::Bake(BaseLayer::Terrain), true, Class::Ground),
+            Stream::Place => (Source::Bake(BaseLayer::Place), false, Class::Place),
+            Stream::Division => (Source::Bake(BaseLayer::Division), false, Class::Aside),
+            Stream::Asset => (Source::Load, false, Class::File),
+            Stream::Earth => (Source::Bake(BaseLayer::Earth), true, Class::Picture),
+            Stream::Object => (Source::Objects, false, Class::OnGround),
         };
         Row {
             source,
@@ -102,11 +102,11 @@ impl Stream {
     /// because the loader makes its own paths.
     pub const fn token(self) -> Option<i32> {
         match self.row().source {
-            Source::Bake(BaseLayer::terrain) => Some(path::TERRAIN::ID),
-            Source::Bake(BaseLayer::place) => Some(path::PLACE::ID),
-            Source::Bake(BaseLayer::division) => Some(path::DIVISION::ID),
-            Source::Bake(BaseLayer::earth) => Some(path::EARTH::ID),
-            Source::Objects => Some(path::OBJECT::ID),
+            Source::Bake(BaseLayer::Terrain) => Some(path::terrain::ID),
+            Source::Bake(BaseLayer::Place) => Some(path::place::ID),
+            Source::Bake(BaseLayer::Division) => Some(path::division::ID),
+            Source::Bake(BaseLayer::Earth) => Some(path::earth::ID),
+            Source::Objects => Some(path::object::ID),
             Source::Load => None,
         }
     }
@@ -175,7 +175,7 @@ impl Eq for Order {}
 impl Default for PhaseList {
     fn default() -> PhaseList {
         PhaseList {
-            items: [(TaskPhaseName::net_ms, 0.0); PHASES_MAX],
+            items: [(TaskPhaseName::NetMs, 0.0); PHASE_CAP],
             len: 0,
         }
     }
@@ -183,7 +183,7 @@ impl Default for PhaseList {
 
 impl PhaseList {
     pub fn push(&mut self, name: TaskPhaseName, val: f64) {
-        if self.len < PHASES_MAX {
+        if self.len < PHASE_CAP {
             self.items[self.len] = (name, val);
             self.len += 1;
         }

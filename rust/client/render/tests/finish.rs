@@ -184,14 +184,14 @@ impl<'a> Finish<'a> {
     }
 
     /// Writes the tiles' uniform for frame 9. The finish then draws the tiles that changed
-    /// fewer than `damage_frames` frames before it, so `u32::MAX` damages every tile.
-    fn damage(&self, damage_frames: u32) {
+    /// fewer than `damage_frame_cnt` frames before it, so `u32::MAX` damages every tile.
+    fn damage(&self, damage_frame_cnt: u32) {
         let across = WORLD.map(|v| v.div_ceil(SIDE));
         let grow = WORLD[0] as f32 / CANVAS[0] as f32;
         let words = [
             across[0],
             across[1],
-            damage_frames,
+            damage_frame_cnt,
             9,
             (WORLD[0] as f32).to_bits(),
             (WORLD[1] as f32).to_bits(),

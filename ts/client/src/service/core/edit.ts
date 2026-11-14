@@ -1,7 +1,8 @@
 // @pxl/client/service/core/edit.ts
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
-import type { Tool } from "@/abi/edit.ts";
+import { ComponentError } from "@xpute/link";
+import type { Tool } from "@/abi/edit.enum.ts";
 import * as edit from "@/abi/edit.ts";
 import { ui } from "@/service/core/core.ts";
 
@@ -10,15 +11,22 @@ import { ui } from "@/service/core/core.ts";
 export async function tool(
   tool: Tool,
   val: u32,
-  scale_steps: i32,
+  scale_step: i32,
 ): Promise<void> {
-  await edit.hold(ui, tool, val, scale_steps);
+  await edit.hold(ui, tool, val, scale_step);
 }
 
-/** Resolves once the core takes the text, and rejects when it refuses the
- * text whole, in which case the marker keeps the text it had. */
-export async function marker_text(text: string): Promise<void> {
-  await edit.marker_text(ui, text);
+/** Resolves whether the core took the text: false where it is longer than a
+ * marker holds, and the marker keeps the text it had. It rejects where the
+ * link refuses the text whole. */
+export async function marker_text(text: string): Promise<boolean> {
+  return edit.marker_text(ui, text).then(
+    () => true,
+    (e: unknown) => {
+      if (!(e instanceof ComponentError)) throw e;
+      return false;
+    },
+  );
 }
 
 export function marker_commit(): void {

@@ -89,7 +89,7 @@ impl DebugPass {
         grid: bool,
     ) -> bool {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::debug);
+        let stamp = ctx.stamp(GpuSpanName::Debug);
         let uniform_slots = self
             .uniforms
             .slots()

@@ -34,10 +34,10 @@ function deepMerge(base: Catalog, extra: Catalog): Catalog {
   return out;
 }
 
-/** The dev catalogs are merged behind `__IS_DEV__` tested at the top level, so
+/** The dev catalogs are merged behind `__DEV__` tested at the top level, so
  * that a release bundle drops them. Tree shaking does not drop an argument
  * passed to a helper that tests the flag. */
-const catalog = __IS_DEV__
+const catalog = __DEV__
   ? {
       en: deepMerge(en, enDev) as typeof en,
       ko: deepMerge(ko, koDev) as typeof ko,

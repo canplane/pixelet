@@ -30,7 +30,7 @@ use pxl_geo_bake::cli;
 use pxl_geo_bake::pyramid::{TileSet, MANIFEST};
 use pxl_geo_bake::tile::walk::{self, Outcome};
 use pxl_geo_bake::util::{git_sha, pack, write_atomic, write_manifest, Level};
-use pxl_spec::bake::publication::{FORMAT, TILE_SPHERE};
+use pxl_spec::bake::publication::{format, TILE_SPHERE};
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::q3;
@@ -364,7 +364,7 @@ fn run() -> Result<(), String> {
     write_manifest(
         &out.join(MANIFEST),
         git_sha().as_deref(),
-        serde_json::json!({ "objects": t.baked + 1, "z": EARTH_ZOOM, "format": FORMAT::earth }),
+        serde_json::json!({ "objects": t.baked + 1, "z": EARTH_ZOOM, "format": format::EARTH }),
     )?;
     // The copy an upload takes (script/publish.py), the global picture with the tiles.
     let copy = set.publish(|_| true)?;

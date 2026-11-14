@@ -11,7 +11,7 @@
 
 // The rays, one layer a word: what the ray met (its value, face and zoom), how far it went (f32
 // bits), the four palette indices a coarse ground cell is drawn by, and what lies around its
-// face's edges and corners (`RAY_FACES`). A pixel is painted from its own words alone.
+// face's edges and corners (`RAY_FACE_WORD`). A pixel is painted from its own words alone.
 @group(0) @binding(3) var rays: texture_2d_array<u32>;
 // Each value's look, indexed by the value whichever source holds it: its swatch and texture
 // layer, then the color it reads as from afar, in linear light (paint/ground.rs
@@ -154,7 +154,7 @@ fn hit_of(c: vec2u, d: vec3f) -> Hit {
   let t = bitcast<f32>(c.y);
   let node = floor((e + d * t - n * (0.5 * fill_side(ray_fill(c.x)) * side)) / side) * side - e;
   // A cell that fills less than its cube is the box its share fills, inset about the cube's
-  // center (pxl-engine cast.rs `fill_bounds`).
+  // center (pxl-engine cast.rs `fill_bound`).
   let box = side * fill_side(ray_fill(c.x));
   let corner = node + vec3f(0.5 * (side - box));
   let plane = corner[axis] + select(0.0, box, n[axis] > 0.0);
@@ -281,6 +281,6 @@ fn px_ray(clip: vec2f) -> Pixel {
   let d = through(a);
   let at = vec2i(clip);
   let c = vec3u(textureLoad(rays, at, 0, 0).x, textureLoad(rays, at, 1, 0).x, textureLoad(rays, at, 2, 0).x);
-  let faces = textureLoad(rays, at, RAY_FACES, 0).x;
+  let faces = textureLoad(rays, at, RAY_FACE_WORD, 0).x;
   return Pixel(a, size, d, c, faces, c.x != 0u);
 }

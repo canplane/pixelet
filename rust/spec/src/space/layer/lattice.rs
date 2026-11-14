@@ -25,13 +25,13 @@ pub const CELL_CENTER: f32 = 0.5;
 
 /// A layer's lattice. Its cell is its tile's side divided by its own count of cells a side,
 /// at every zoom, and it is stored as the zoom of the cells on a leaf tile. Its scale on the
-/// camera grid is `scale_steps` zooms: the grid's cell is that many zooms coarser than the
-/// layer's, so a grid cell folds that many zooms of the layer's cells. Where `scale_steps` is
+/// camera grid is `scale_step` zooms: the grid's cell is that many zooms coarser than the
+/// layer's, so a grid cell folds that many zooms of the layer's cells. Where `scale_step` is
 /// negative, the grid's cell is that many zooms finer, and a layer cell spans the grid cells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Lattice {
     leaf_cell_zoom: Zoom,
-    scale_steps: i32,
+    scale_step: i32,
 }
 
 impl Lattice {
@@ -43,17 +43,14 @@ impl Lattice {
         }
         Lattice {
             leaf_cell_zoom,
-            scale_steps: 0,
+            scale_step: 0,
         }
     }
 
-    /// The lattice drawn in camera grid cells `steps` zooms coarser than its own cells, or finer
-    /// where `steps` is negative.
-    pub const fn scaled(self, steps: i32) -> Lattice {
-        Lattice {
-            scale_steps: steps,
-            ..self
-        }
+    /// The lattice drawn in camera grid cells `scale_step` zooms coarser than its own cells, or
+    /// finer where `scale_step` is negative.
+    pub const fn scaled(self, scale_step: i32) -> Lattice {
+        Lattice { scale_step, ..self }
     }
 
     // What a layer reads for a node of the view, given the node's zoom, its column and the cell
@@ -79,13 +76,13 @@ impl Lattice {
 
     /// The zoom of the camera grid cell that a tile at `zoom` is drawn in.
     pub const fn grid_zoom(self, zoom: Zoom) -> Zoom {
-        (self.cell_zoom(zoom) as i32 - self.scale_steps) as Zoom
+        (self.cell_zoom(zoom) as i32 - self.scale_step) as Zoom
     }
 
     /// The zoom of the tile whose cells fold into a grid cell at `cell_zoom`, not held to the
     /// pyramid's ends.
     pub const fn tile_zoom_of_grid(self, cell_zoom: Zoom) -> i32 {
-        self.tile_zoom(cell_zoom) + self.scale_steps
+        self.tile_zoom(cell_zoom) + self.scale_step
     }
 
     /// The zoom of the cells on a tile at `zoom`.
@@ -102,11 +99,6 @@ impl Lattice {
     /// The base-2 logarithm of `tile_cells`.
     pub const fn tile_cell_shamt(self) -> u32 {
         self.leaf_cell_zoom - LEAF_ZOOM
-    }
-
-    /// How many of the finest cells lie across one cell of a tile at `zoom`.
-    pub const fn finest_in(self, zoom: Zoom) -> u32 {
-        cnt(self.leaf_cell_zoom, self.cell_zoom(zoom))
     }
 
     pub const fn tile_cells(self) -> u32 {

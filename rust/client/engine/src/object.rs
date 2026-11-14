@@ -13,7 +13,10 @@
 //! where it holds a value, air included, that value is the cell's asset, whatever lies under
 //! it.
 
+use crate::answer::{box_word, fills, PackedBox, BOX_NONE, BOX_STEPS, BOX_WHOLE};
+use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::share;
+use pxl_spec::share::FULL;
 use pxl_spec::space::coord::zoom::{y_start, z_start, Zoom, LEAF_CELL_ZOOM};
 use pxl_spec::value;
 
@@ -23,9 +26,6 @@ pub const BRANCH: u32 = 1 << 31;
 
 /// The child group of the root that everything placed lies under.
 pub const ROOT: u32 = 0;
-
-use crate::answer::PackedBox;
-use pxl_spec::share::FULL;
 
 /// The bits of `FULL`; a share shifted down past them is none.
 const FULL_BITS: u32 = FULL.trailing_zeros();
@@ -102,7 +102,7 @@ pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
         sum += fill(child(k));
         k += 1;
     }
-    let (mut best, mut most) = (0, 0);
+    let (mut best, mut most) = (Sentinel::Void as u32, 0);
     let mut j = 0;
     while j < 8 {
         // The corner order alternates with the zoom, as `majority`'s.
@@ -128,7 +128,7 @@ pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
 /// builds a tree of what is placed (the objects' store, pxl-core domain/layer/object/volume.rs).
 pub fn share(word: u32) -> u32 {
     let id = low(word);
-    if word != 0 && voxel(id) {
+    if voxel(id) {
         fold_word(id, FULL)
     } else {
         0
@@ -170,6 +170,11 @@ impl NodeSlot {
     /// The branch at `slot` of `zoom`.
     pub const fn branch(slot: u32, zoom: Zoom) -> NodeSlot {
         NodeSlot(slot << SLOT_SHIFT | FOLDED | zoom)
+    }
+
+    /// The leaf at `slot` of `zoom`.
+    pub const fn leaf(slot: u32, zoom: Zoom) -> NodeSlot {
+        NodeSlot(slot << SLOT_SHIFT | zoom)
     }
 
     /// Something is placed under the node.
@@ -256,11 +261,11 @@ fn child_idx(at: [i32; 3]) -> u32 {
 
 fn of(columns: &impl Table, slot: u32, zoom: Zoom) -> NodeSlot {
     if columns.first_child(slot) != 0 {
-        NodeSlot(slot << SLOT_SHIFT | FOLDED | zoom)
-    } else if columns.data(slot) == value::VOID {
+        NodeSlot::branch(slot, zoom)
+    } else if columns.data(slot) == Sentinel::Void as u32 {
         NodeSlot::NOTHING
     } else {
-        NodeSlot(slot << SLOT_SHIFT | zoom)
+        NodeSlot::leaf(slot, zoom)
     }
 }
 
@@ -310,7 +315,7 @@ pub fn child(columns: &impl Table, parent: NodeSlot, zoom: Zoom, at: [i32; 3]) -
 /// Whether a value is drawn as a voxel, a placeable cube or air, rather than
 /// an instance or nothing.
 pub const fn voxel(val: u32) -> bool {
-    val == value::AIR || value::grounds(val) || value::objects(val)
+    val == Sentinel::Air as u32 || value::is_ground(val) || value::is_object(val)
 }
 
 /// Whether `cut` is at `zoom` or coarser and its cube holds the node `at`.
@@ -328,33 +333,33 @@ fn holds(cut: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
 
 /// What the node `at` of `zoom` holding `slot` folds to, as a cell of its zoom is drawn: the
 /// leaf's value, or the fold's kind wherever any of it is filled, filling the share of its
-/// cube that `fill_share` gives; `VOID` where nothing there is a voxel. How much of the cell
-/// is kept is decided for the cell, over every layer together (`answer::cover`,
+/// cube that `fill_share` gives; `Sentinel::Void` where nothing there is a voxel. How much of
+/// the cell is kept is decided for the cell, over every layer together (`answer::cover`,
 /// `share::eighths`). `hide`, a preview's left-out leaf, is left out where it is the leaf
 /// itself.
 pub fn val(columns: &impl Table, slot: NodeSlot, hide: Cut, zoom: Zoom, at: [i32; 3]) -> u32 {
     let word = if slot.holds() {
         columns.data(slot.slot())
     } else {
-        value::VOID
+        Sentinel::Void as u32
     };
     let v = if !slot.holds() {
-        value::VOID
+        Sentinel::Void as u32
     } else if !slot.is_folded() {
         if hide.zoom == slot.zoom() && holds(hide, zoom, at) {
-            value::VOID
+            Sentinel::Void as u32
         } else {
             low(word)
         }
     } else if high(word) > 0 {
         low(word)
     } else {
-        value::VOID
+        Sentinel::Void as u32
     };
     if voxel(v) {
         v
     } else {
-        value::VOID
+        Sentinel::Void as u32
     }
 }
 
@@ -402,12 +407,12 @@ pub fn asset_ids(
             zoom + 1,
             child,
         );
-        (c, c != value::VOID && c != value::AIR)
+        (c, fills(c))
     };
     // Each quarter's upper child, then its lower one, one child a step, so each child is asked
     // once.
     let mut four = [v; 4];
-    let mut upper = (value::VOID, false);
+    let mut upper = (Sentinel::Void as u32, false);
     let mut i = 0;
     while i < 2 * 4 {
         let j = i / 2;
@@ -471,17 +476,21 @@ pub fn over(
         };
         return Over {
             answer,
-            asset: value::VOID,
+            asset: Sentinel::Void as u32,
             fill: 0,
         };
     }
     let carved = holds(carve, zoom, at);
     let v = if carved {
-        value::AIR
+        Sentinel::Air as u32
     } else {
         val(columns, slot, hide, zoom, at)
     };
-    let answer = if v == value::VOID { UNDER } else { CELL };
+    let answer = if v == Sentinel::Void as u32 {
+        UNDER
+    } else {
+        CELL
+    };
     Over {
         answer,
         asset: v,
@@ -499,7 +508,6 @@ pub fn over(
 /// where the children are one (not folded). It is `answer::BOX_NONE` where nothing is placed.
 /// A preview's cut only makes air, so what is placed under the cut still lies in the box.
 pub fn object_box(columns: &impl Table, slot: NodeSlot, zoom: Zoom) -> PackedBox {
-    use crate::answer::{box_word, BOX_NONE, BOX_STEPS, BOX_WHOLE};
     if !slot.holds() {
         return BOX_NONE;
     }
@@ -574,7 +582,7 @@ pub fn whole(slot: NodeSlot, carve: Cut, zoom: Zoom, at: [i32; 3]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::answer::{box_of, BOX_NONE, BOX_WHOLE};
+    use crate::answer::box_of;
 
     /// A child group at slot 8: the children `held` names hold a voxel, the rest
     /// nothing.
@@ -592,7 +600,7 @@ mod tests {
             if slot >= 8 && self.0.contains(&(slot - 8)) {
                 1
             } else {
-                value::VOID
+                Sentinel::Void as u32
             }
         }
     }
@@ -623,7 +631,7 @@ mod tests {
             BOX_NONE
         );
         assert_eq!(
-            object_box(&ChildGroup(&[]), NodeSlot(1 << SLOT_SHIFT | zoom), zoom),
+            object_box(&ChildGroup(&[]), NodeSlot::leaf(1, zoom), zoom),
             BOX_WHOLE
         );
     }

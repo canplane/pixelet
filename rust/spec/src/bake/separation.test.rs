@@ -65,7 +65,7 @@ fn form_from_surface() {
     let over = |form: Form, top: i32| Crossing {
         low: top,
         top,
-        asset_id: Ground::primary as u32,
+        asset_id: Ground::Primary as u32,
         form: u32::from(form.byte()),
         pier: 0,
         clearance: 3,

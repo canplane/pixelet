@@ -16,18 +16,18 @@ fn storage_of(pairs: &[(u32, u32)]) -> Vec<u8> {
 fn stored_round_trip() {
     crate::on_core(|| {
         let mut s = Setting::DEFAULT;
-        let tilt = 1 - Setting::DEFAULT.get(SettingKey::tilt_lock);
+        let tilt = 1 - Setting::DEFAULT.get(SettingKey::TiltLock);
         let ao = AoMode::ALL
             .into_iter()
             .map(|o| o as u32)
-            .find(|&o| o != Setting::DEFAULT.get(SettingKey::ao))
+            .find(|&o| o != Setting::DEFAULT.get(SettingKey::Ao))
             .expect("a second option");
         // The value is past 127, so its LEB128 takes two bytes.
-        let person = Setting::DEFAULT.get(SettingKey::person) + 200;
+        let person = Setting::DEFAULT.get(SettingKey::Person) + 200;
         assert!(
-            s.set(SettingKey::tilt_lock, tilt)
-                && s.set(SettingKey::ao, ao)
-                && s.set(SettingKey::person, person)
+            s.set(SettingKey::TiltLock, tilt)
+                && s.set(SettingKey::Ao, ao)
+                && s.set(SettingKey::Person, person)
         );
         let bytes = s.storage_bytes();
         let back = read_stored(&bytes);
@@ -50,13 +50,13 @@ fn stored_pair_format() {
     crate::on_core(|| {
         let ao = AoMode::ALL
             .into_iter()
-            .find(|&o| o as u32 != Setting::DEFAULT.get(SettingKey::ao))
+            .find(|&o| o as u32 != Setting::DEFAULT.get(SettingKey::Ao))
             .expect("a second option");
         let mut s = Setting::DEFAULT;
-        assert!(s.set(SettingKey::ao, ao as u32));
+        assert!(s.set(SettingKey::Ao, ao as u32));
         assert_eq!(
             s.storage_bytes(),
-            storage_of(&[(SettingKey::ao as u32, ao as u32)])
+            storage_of(&[(SettingKey::Ao as u32, ao as u32)])
         );
     });
 }
@@ -64,13 +64,13 @@ fn stored_pair_format() {
 #[test]
 fn unknown_stays_default() {
     crate::on_core(|| {
-        let unknown = SettingKey::SLOTS as u32 + 1000;
+        let unknown = SettingKey::SLOT_CNT as u32 + 1000;
         for bytes in [
-            storage_of(&[(SettingKey::ao as u32, 99)]),
-            storage_of(&[(SettingKey::tilt_lock as u32, 2)]),
+            storage_of(&[(SettingKey::Ao as u32, 99)]),
+            storage_of(&[(SettingKey::TiltLock as u32, 2)]),
             storage_of(&[(unknown, 1)]),
             // A pair cut short after its number, and a number cut short.
-            vec![SettingKey::tilt_lock as u8],
+            vec![SettingKey::TiltLock as u8],
             vec![0x80],
         ] {
             let back = read_stored(&bytes);
@@ -84,16 +84,16 @@ fn unknown_stays_default() {
 #[test]
 fn reads_past_unknown_pair() {
     crate::on_core(|| {
-        let tilt = 1 - Setting::DEFAULT.get(SettingKey::tilt_lock);
+        let tilt = 1 - Setting::DEFAULT.get(SettingKey::TiltLock);
         let back = read_stored(&storage_of(&[
-            (SettingKey::SLOTS as u32 + 1000, 1),
-            (SettingKey::ao as u32, 99),
-            (SettingKey::tilt_lock as u32, tilt),
+            (SettingKey::SLOT_CNT as u32 + 1000, 1),
+            (SettingKey::Ao as u32, 99),
+            (SettingKey::TiltLock as u32, tilt),
         ]));
-        assert_eq!(back.get(SettingKey::tilt_lock), tilt);
+        assert_eq!(back.get(SettingKey::TiltLock), tilt);
         assert_eq!(
-            back.get(SettingKey::ao),
-            Setting::DEFAULT.get(SettingKey::ao)
+            back.get(SettingKey::Ao),
+            Setting::DEFAULT.get(SettingKey::Ao)
         );
     });
 }

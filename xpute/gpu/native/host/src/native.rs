@@ -29,7 +29,6 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use xpute_link::abi::types::{Lent, Token};
-use xpute_kit::status::errno::Errno;
 use xpute_link::{answer, Return};
 use xpute_native_host::link;
 use xpute_native_host::{done, job};
@@ -37,7 +36,6 @@ use xpute_native_host::{done, job};
 use super::abi;
 use super::vsync::Vsync;
 use super::{Ask, Config, ConfigureAt, GpuHost, OpenError, Wgpu};
-use xpute_gpu_link::spec::STATUS;
 use xpute_gpu_link::GpuConfig;
 
 /// This is a platform's window, as `target` takes it, with a reference of the
@@ -249,13 +247,13 @@ pub fn serve(ask: Ask, cfg: Config, cache_dir: Option<PathBuf>) {
 
 struct Gpu;
 
-impl abi::gpu::Gpu for Gpu {
+impl abi::gpu::Host for Gpu {
     /// Runs the lent records on the GPU's thread, and answers once they are
     /// submitted, as a page's run resolves once they have run; with no
     /// device, unrun, as a page's host does. The frames they drew are
     /// presented after the answer.
     fn run(&self, records: Lent, task_return: Return<()>) {
-        let id = job(Box::new(move |r| task_return.answer(answer(r).map(drop))));
+        let id = job(Box::new(move |r| task_return.answer(answer(r))));
         on_gpu(Box::new(move || {
             let mut guard = device();
             let Some(d) = guard.as_mut() else {
@@ -278,11 +276,11 @@ impl abi::gpu::Gpu for Gpu {
 
 struct GuestDevice(Arc<OpenArgs>);
 
-impl abi::gpu::Device for GuestDevice {
+impl abi::gpu::HostDevice for GuestDevice {
     /// The block lent until the device is lost: written now where a device is
     /// open, and by each device opened while it is lent.
     fn lost(&self, block: Lent, task_return: Return<()>) {
-        let id = job(Box::new(move |r| task_return.answer(answer(r).map(drop))));
+        let id = job(Box::new(move |r| task_return.answer(answer(r))));
         let args = self.0.clone();
         on_gpu(Box::new(move || {
             let mut guard = device();
@@ -295,22 +293,18 @@ impl abi::gpu::Device for GuestDevice {
         }));
     }
 
-    /// Opens a device as the guest asks, once (`open`): READY, or ENODEV where
-    /// none opens.
-    fn ready(&self, task_return: Return<u32>) {
-        let id = job(Box::new(move |r| task_return.answer(answer(r))));
+    /// Opens a device as the guest asks, once (`open`), or answers
+    /// `no-device` where none opens.
+    fn ready(&self, task_return: Return<Result<(), abi::gpu::ErrorCode>>) {
+        let id = job(Box::new(move |opened: Result<(), abi::gpu::ErrorCode>| task_return.answer(Ok(opened))));
         let args = self.0.clone();
         on_gpu(Box::new(move || {
-            let result = open(args);
-            done(
-                id,
-                result.map_or(Errno::ENODEV as i32, |()| STATUS::READY as i32),
-            );
+            done(id, open(args).map_err(|_| abi::gpu::ErrorCode::NoDevice));
         }));
     }
 
     fn settled(&self, task_return: Return<()>) {
-        let id = job(Box::new(move |r| task_return.answer(answer(r).map(drop))));
+        let id = job(Box::new(move |r| task_return.answer(answer(r))));
         let args = self.0.clone();
         on_gpu(Box::new(move || {
             device()

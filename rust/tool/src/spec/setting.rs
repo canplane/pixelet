@@ -9,7 +9,7 @@
 
 use xpute_gen::spec::data::{table_outputs, ts_literal, DataSpec};
 
-use super::{enum_name, file, js_num, pascal, read, rs_ident, Node, Output};
+use super::{file, js_num, pascal, read, rs_field, rs_member, Node, Output};
 use crate::root;
 
 const JSON: &str = "spec/client/core/domain/setting/schema.json";
@@ -216,7 +216,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         let keys: Vec<String> = settings
             .iter()
             .filter(|s| test(s))
-            .map(|s| format!("SettingKey::{}", s.key))
+            .map(|s| format!("SettingKey::{}", rs_member(s.key)))
             .collect();
         if keys.is_empty() {
             "false".to_string()
@@ -229,7 +229,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         "    /// One past the highest number: the length of a list of every".into(),
         "    /// setting's value at its number, where a number not given out stays 0.".into(),
         format!(
-            "    pub const SLOTS: usize = {};",
+            "    pub const SLOT_CNT: usize = {};",
             numbers
                 .iter()
                 .map(|(_, n)| *n as usize + 1)
@@ -243,14 +243,14 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     rs.extend(settings.iter().map(|s| {
         format!(
             "            SettingKey::{} => SettingKind::{},",
-            s.key,
-            pascal(s.kind())
+            rs_member(s.key),
+            rs_member(s.kind())
         )
     }));
     let session: Vec<String> = settings
         .iter()
         .filter(|s| !s.stored)
-        .map(|s| format!("SettingKey::{}", s.key))
+        .map(|s| format!("SettingKey::{}", rs_member(s.key)))
         .collect();
     rs.extend([
         "        }".to_string(),
@@ -299,7 +299,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             .collect::<Result<_, _>>()?;
         dev_arms.push(format!(
             "            SettingKey::{} => matches!(val, {}),",
-            s.key,
+            rs_member(s.key),
             dev.join(" | ")
         ));
     }
@@ -320,7 +320,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let field_type = |s: &Setting| -> Result<String, String> {
         match s.kind() {
             "toggle" => Ok("bool".to_string()),
-            "choice" => Ok(enum_name(s.options().unwrap_or_default())),
+            "choice" => Ok(pascal(s.options().unwrap_or_default())),
             "index" => {
                 let d = s
                     .spec
@@ -349,8 +349,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             }
             return Ok(format!(
                 "{}::{}",
-                enum_name(s.options().unwrap_or_default()),
-                rs_ident(name)
+                pascal(s.options().unwrap_or_default()),
+                rs_member(name)
             ));
         }
         Ok(match d {
@@ -370,7 +370,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         .map(String::from),
     );
     for s in &settings {
-        rs.push(format!("    pub {}: {},", s.key, field_type(s)?));
+        rs.push(format!("    pub {}: {},", rs_field(s.key), field_type(s)?));
     }
     rs.extend(
         [
@@ -383,7 +383,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         .map(String::from),
     );
     for s in &settings {
-        rs.push(format!("        {}: {},", s.key, default_lit(s)?));
+        rs.push(format!("        {}: {},", rs_field(s.key), default_lit(s)?));
     }
     rs.extend(["    };".to_string(), String::new()]);
     rs.extend(
@@ -395,11 +395,13 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ]
         .map(String::from),
     );
-    rs.extend(
-        settings
-            .iter()
-            .map(|s| format!("            SettingKey::{0} => self.{0} as u32,", s.key)),
-    );
+    rs.extend(settings.iter().map(|s| {
+        format!(
+            "            SettingKey::{} => self.{} as u32,",
+            rs_member(s.key),
+            rs_field(s.key)
+        )
+    }));
     rs.extend(
         [
             "        }",
@@ -413,15 +415,15 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         .map(String::from),
     );
     for s in &settings {
-        let k = s.key;
+        let (k, v) = (rs_field(s.key), rs_member(s.key));
         rs.push(match s.kind() {
-            "toggle" => format!("            SettingKey::{k} if val <= 1 => self.{k} = val == 1,"),
+            "toggle" => format!("            SettingKey::{v} if val <= 1 => self.{k} = val == 1,"),
             "choice" => format!(
-                "            SettingKey::{k} => match {}::of(val) {{ Some(o) => self.{k} = o, None => return false }},",
-                enum_name(s.options().unwrap_or_default())
+                "            SettingKey::{v} => match {}::of(val) {{ Some(o) => self.{k} = o, None => return false }},",
+                pascal(s.options().unwrap_or_default())
             ),
             _ => format!(
-                "            SettingKey::{k} => match {}::try_from(val) {{ Ok(n) => self.{k} = n, Err(_) => return false }},",
+                "            SettingKey::{v} => match {}::try_from(val) {{ Ok(n) => self.{k} = n, Err(_) => return false }},",
                 field_type(s)?
             ),
         });

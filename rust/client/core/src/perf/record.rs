@@ -17,7 +17,7 @@ use xpute_guest::clock::now;
 
 use crate::perf::frame::{FrameSample, RaySample, WorstFrame};
 use crate::perf::section::{RecordingSection, RecordingStateSection};
-use crate::perf::spec::LIMIT;
+use crate::perf::spec::limit;
 use crate::perf::step::{self, StepName};
 use crate::perf::task::TaskRecord;
 use crate::sys::sched::phase_spec::Phase;
@@ -27,13 +27,13 @@ use crate::sys::sched::tick::TickContext;
 /// long frames do. At 60 Hz that is 3,600 frames. A faster display or a busy
 /// minute fills a column early, and the column then drops its oldest records
 /// and sets `truncated`.
-const WINDOW_MS: f64 = LIMIT::WINDOW_MS as f64;
+const WINDOW_MS: f64 = limit::WINDOW_MS as f64;
 const TASK_CAP: usize = 2_048;
 const FRAME_CAP: usize = 4_096;
 const WORST_CAP: usize = 12;
 /// The bytes of the failures' file names, which are few.
 pub const STRTAB_CAP: usize = 8_192;
-pub const PERCENTILES_CAP: usize = if FRAME_CAP > TASK_CAP {
+pub const PERCENTILE_CAP: usize = if FRAME_CAP > TASK_CAP {
     FRAME_CAP
 } else {
     TASK_CAP
@@ -82,7 +82,7 @@ const COLUMNS: [u32; 5] = [
     (TASK_CAP * size_of::<TaskRecord>()) as u32,
     (FRAME_CAP * size_of::<FrameSample>()) as u32,
     (WORST_CAP * size_of::<WorstFrame>()) as u32,
-    (PERCENTILES_CAP * size_of::<f64>()) as u32,
+    (PERCENTILE_CAP * size_of::<f64>()) as u32,
     STRTAB_CAP as u32,
 ];
 
@@ -174,9 +174,9 @@ pub fn perf_recording_state() -> RecordingStateSection {
         recording: l.recording as u8 as f64,
         elapsed_ms: l.stopped_at.unwrap_or_else(now) - l.started_at,
         truncated: l.truncated as u8 as f64,
-        frames: perf_frames().len() as f64,
-        tasks: perf_tasks().len() as f64,
-        worst: perf_worst().len() as f64,
+        frame_cnt: perf_frames().len() as f64,
+        task_cnt: perf_tasks().len() as f64,
+        worst_cnt: perf_worst().len() as f64,
     }
 }
 
@@ -190,7 +190,7 @@ pub fn perf_recording_start() -> bool {
             heap_column(TASK_CAP),
             heap_column(FRAME_CAP),
             heap_column(WORST_CAP),
-            heap_column(PERCENTILES_CAP),
+            heap_column(PERCENTILE_CAP),
             heap_column(STRTAB_CAP),
         ) else {
             return false;

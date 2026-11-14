@@ -36,9 +36,9 @@ pub struct Failure {
 impl Exit {
     pub fn outcome(&self) -> Outcome {
         match self {
-            Exit::Ok => Outcome::ok,
-            Exit::Aborted => Outcome::aborted,
-            Exit::Failed(_) | Exit::Refused(_) => Outcome::err,
+            Exit::Ok => Outcome::Ok,
+            Exit::Aborted => Outcome::Aborted,
+            Exit::Failed(_) | Exit::Refused(_) => Outcome::Err,
         }
     }
 }

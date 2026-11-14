@@ -94,7 +94,7 @@ pub struct Layer {
 const fn layer<L: ViewLayer>() -> Layer {
     Layer {
         stream: const { Stream::of_layer(L::LAYER) },
-        slot_cnt: TileCache::<L>::SLOTS,
+        slot_cnt: TileCache::<L>::SLOT_CNT,
         on_arrival: on_arrived::<L>,
     }
 }
@@ -109,8 +109,8 @@ const LAYERS: [Layer; 5] = [
     layer::<EarthTile>(),
     layer::<DivisionTile>(),
     Layer {
-        stream: Stream::object,
-        slot_cnt: repository::WANTS,
+        stream: Stream::Object,
+        slot_cnt: repository::WANT_CAP,
         on_arrival: repository::on_arrived,
     },
 ];
@@ -234,7 +234,7 @@ impl<L: ViewLayer> Default for Demand<L> {
             absent_tiles: Vec::new(),
             changed: false,
             asks: FnvHashMap::with_capacity_and_hasher(
-                TileCache::<L>::SLOTS as usize,
+                TileCache::<L>::SLOT_CNT as usize,
                 Default::default(),
             ),
             ask_tiles: Vec::new(),
@@ -337,7 +337,7 @@ impl<L: ViewLayer> Demand<L> {
                     ask(&mut asks, q, Priority::Ancestor, q);
                 }
             }
-            // The tile cache is sized for at most `ZOOM_DEMAND_TILES` asks at
+            // The tile cache is sized for at most `ZOOM_DEMAND_TILE_CAP` asks at
             // each zoom, so more means that sizing is broken. The ancestors of
             // a missing tile hold ground within its reach, so they stay inside
             // each zoom's ring and the bound covers them too.
@@ -346,7 +346,8 @@ impl<L: ViewLayer> Demand<L> {
                 read[p.zoom as usize] += 1;
             }
             xpute_kit::ensure!(
-                read.iter().all(|&n| n <= TileCache::<L>::ZOOM_DEMAND_TILES),
+                read.iter()
+                    .all(|&n| n <= TileCache::<L>::ZOOM_DEMAND_TILE_CAP),
                 ENOTRECOVERABLE,
                 *read.iter().max().unwrap_or(&0)
             );
@@ -357,7 +358,7 @@ impl<L: ViewLayer> Demand<L> {
                     ask(&mut asks, p, Priority::Floor, p);
                 });
                 xpute_kit::ensure!(
-                    self.floor.len() <= floor::tiles(L::LATTICE) as usize,
+                    self.floor.len() <= floor::tile_cap(L::LATTICE) as usize,
                     ENOTRECOVERABLE,
                     self.floor.len()
                 );
@@ -380,7 +381,7 @@ impl<L: ViewLayer> Demand<L> {
                 <= if matches!(L::ASK_SCOPE, AskScope::Floor) {
                     0
                 } else {
-                    TileCache::<L>::ZOOMS + L::PIN_CAP
+                    TileCache::<L>::ZOOM_CNT + L::PIN_CAP
                 },
             ENOTRECOVERABLE,
             named
@@ -590,7 +591,7 @@ static OBJECT: Global<Option<ObjectKey>> = Global::new();
 
 /// Asks for the object layer's tiles, its shards, from the eye: every
 /// shard within the radius the view asks the ground for at the shard's zoom
-/// (`observation::demand_radius`), at most `repository::WANTS` of them, seen
+/// (`observation::demand_radius`), at most `repository::WANT_CAP` of them, seen
 /// and nearer ones first. The repository reads their top first, which a
 /// view from afar draws from. Then it reads the shards the top lists and it
 /// has not read, and places each in the view only once it is listed.
@@ -619,7 +620,7 @@ pub fn object_step() {
 /// a frame is asked for it.
 pub fn admit_arrived() {
     const OF: [Stream; LAYERS.len()] = {
-        let mut of = [Stream::asset; LAYERS.len()];
+        let mut of = [Stream::Asset; LAYERS.len()];
         let mut k = 0;
         while k < of.len() {
             of[k] = LAYERS[k].stream;

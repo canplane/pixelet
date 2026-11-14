@@ -85,7 +85,7 @@ fn parse<'a>(
 /// count as one cell, which is served where any covered cell is off the
 /// world.
 fn nines_of(shard: &[Quadrant]) -> Vec<u16> {
-    let cells = area::SHARD_CELLS as usize;
+    let cells = area::SHARD_CELL_CNT as usize;
     let (mut served, mut off, mut covered) = (vec![false; cells], false, Vec::new());
     for k in shard {
         let d = SHARD_ZOOM - k.zoom;

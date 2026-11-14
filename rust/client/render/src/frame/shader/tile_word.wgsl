@@ -3,7 +3,7 @@
 // The tiles' uniform as every pass reads it (word.rs `screen::TILES_WORDS`, gpu/tile.rs
 // `TileGrid::words`), and the rule a tile's word is read by, word.rs `screen::age` and
 // `screen::in_damage`: a tile's age is the frames since it changed, which wraps, and a tile is
-// damaged while its age is below the uniform's `damage_frames`. Every pass that reads the tiles
+// damaged while its age is below the uniform's `damage_frame_cnt`. Every pass that reads the tiles
 // (screen_tile.wgsl, screen_propagate.wgsl, cast_tile.wgsl) uses this one rule, and build.rs
 // holds the Rust's rule to it.
 

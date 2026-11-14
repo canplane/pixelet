@@ -4,15 +4,8 @@
 //
 // POSIX/Linux-aligned negative errno
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    non_camel_case_types,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(i32)]
@@ -278,186 +271,186 @@ impl Errno {
     }
 }
 
-pub mod ERRNO {
-    pub mod OK {
-        pub const text: &str = "Success";
+pub mod errno {
+    pub mod ok {
+        pub const TEXT: &str = "Success";
     }
-    pub mod EPERM {
-        pub const text: &str = "Operation not permitted";
+    pub mod eperm {
+        pub const TEXT: &str = "Operation not permitted";
     }
-    pub mod ENOENT {
-        pub const text: &str = "No such file or directory / entry not found";
+    pub mod enoent {
+        pub const TEXT: &str = "No such file or directory / entry not found";
     }
-    pub mod ESRCH {
-        pub const text: &str = "No such process";
+    pub mod esrch {
+        pub const TEXT: &str = "No such process";
     }
-    pub mod EINTR {
-        pub const text: &str = "Interrupted system call";
+    pub mod eintr {
+        pub const TEXT: &str = "Interrupted system call";
     }
-    pub mod EIO {
-        pub const text: &str = "I/O error";
+    pub mod eio {
+        pub const TEXT: &str = "I/O error";
     }
-    pub mod ENXIO {
-        pub const text: &str = "No such device or address";
+    pub mod enxio {
+        pub const TEXT: &str = "No such device or address";
     }
-    pub mod E2BIG {
-        pub const text: &str = "Argument list too long / object too large for fixed local cap";
+    pub mod e2big {
+        pub const TEXT: &str = "Argument list too long / object too large for fixed local cap";
     }
-    pub mod ENOEXEC {
-        pub const text: &str = "Exec format error";
+    pub mod enoexec {
+        pub const TEXT: &str = "Exec format error";
     }
-    pub mod EBADF {
-        pub const text: &str = "Bad file descriptor / bad handle";
+    pub mod ebadf {
+        pub const TEXT: &str = "Bad file descriptor / bad handle";
     }
-    pub mod ECHILD {
-        pub const text: &str = "No child processes";
+    pub mod echild {
+        pub const TEXT: &str = "No child processes";
     }
-    pub mod EAGAIN {
-        pub const text: &str = "Try again / Resource temporarily unavailable";
+    pub mod eagain {
+        pub const TEXT: &str = "Try again / Resource temporarily unavailable";
     }
-    pub mod ENOMEM {
-        pub const text: &str = "Out of memory";
+    pub mod enomem {
+        pub const TEXT: &str = "Out of memory";
     }
-    pub mod EACCES {
-        pub const text: &str = "Permission denied";
+    pub mod eacces {
+        pub const TEXT: &str = "Permission denied";
     }
-    pub mod EFAULT {
-        pub const text: &str = "Bad address";
+    pub mod efault {
+        pub const TEXT: &str = "Bad address";
     }
-    pub mod EBUSY {
-        pub const text: &str = "Device or resource busy";
+    pub mod ebusy {
+        pub const TEXT: &str = "Device or resource busy";
     }
-    pub mod EEXIST {
-        pub const text: &str = "File exists / duplicate bind";
+    pub mod eexist {
+        pub const TEXT: &str = "File exists / duplicate bind";
     }
-    pub mod EXDEV {
-        pub const text: &str = "Cross-device link";
+    pub mod exdev {
+        pub const TEXT: &str = "Cross-device link";
     }
-    pub mod ENODEV {
-        pub const text: &str = "No such device";
+    pub mod enodev {
+        pub const TEXT: &str = "No such device";
     }
-    pub mod ENOTDIR {
-        pub const text: &str = "Not a directory";
+    pub mod enotdir {
+        pub const TEXT: &str = "Not a directory";
     }
-    pub mod EISDIR {
-        pub const text: &str = "Is a directory";
+    pub mod eisdir {
+        pub const TEXT: &str = "Is a directory";
     }
-    pub mod EINVAL {
-        pub const text: &str = "Invalid argument";
+    pub mod einval {
+        pub const TEXT: &str = "Invalid argument";
     }
-    pub mod ENFILE {
-        pub const text: &str = "File table overflow (system-wide)";
+    pub mod enfile {
+        pub const TEXT: &str = "File table overflow (system-wide)";
     }
-    pub mod EMFILE {
-        pub const text: &str = "Too many open files (process)";
+    pub mod emfile {
+        pub const TEXT: &str = "Too many open files (process)";
     }
-    pub mod ENOTTY {
-        pub const text: &str = "Not a tty";
+    pub mod enotty {
+        pub const TEXT: &str = "Not a tty";
     }
-    pub mod EFBIG {
-        pub const text: &str = "File too large / payload too large";
+    pub mod efbig {
+        pub const TEXT: &str = "File too large / payload too large";
     }
-    pub mod ENOSPC {
-        pub const text: &str = "No space left on device / local mailbox full";
+    pub mod enospc {
+        pub const TEXT: &str = "No space left on device / local mailbox full";
     }
-    pub mod ESPIPE {
-        pub const text: &str = "Illegal seek";
+    pub mod espipe {
+        pub const TEXT: &str = "Illegal seek";
     }
-    pub mod EROFS {
-        pub const text: &str = "Read-only file system";
+    pub mod erofs {
+        pub const TEXT: &str = "Read-only file system";
     }
-    pub mod EMLINK {
-        pub const text: &str = "Too many links";
+    pub mod emlink {
+        pub const TEXT: &str = "Too many links";
     }
-    pub mod EPIPE {
-        pub const text: &str = "Broken pipe";
+    pub mod epipe {
+        pub const TEXT: &str = "Broken pipe";
     }
-    pub mod EDOM {
-        pub const text: &str = "Math argument out of domain";
+    pub mod edom {
+        pub const TEXT: &str = "Math argument out of domain";
     }
-    pub mod ERANGE {
-        pub const text: &str = "Math result not representable";
+    pub mod erange {
+        pub const TEXT: &str = "Math result not representable";
     }
-    pub mod ENOSYS {
-        pub const text: &str = "Function not implemented";
+    pub mod enosys {
+        pub const TEXT: &str = "Function not implemented";
     }
-    pub mod EPROTO {
-        pub const text: &str = "Protocol error";
+    pub mod eproto {
+        pub const TEXT: &str = "Protocol error";
     }
-    pub mod EBADMSG {
-        pub const text: &str = "Bad message (protocol/frame/payload invalid)";
+    pub mod ebadmsg {
+        pub const TEXT: &str = "Bad message (protocol/frame/payload invalid)";
     }
-    pub mod EOVERFLOW {
-        pub const text: &str = "Value too large for target type / overflow";
+    pub mod eoverflow {
+        pub const TEXT: &str = "Value too large for target type / overflow";
     }
-    pub mod EMSGSIZE {
-        pub const text: &str = "Message too long / packet too large";
+    pub mod emsgsize {
+        pub const TEXT: &str = "Message too long / packet too large";
     }
-    pub mod ENOTSUP {
-        pub const text: &str = "Operation not supported";
+    pub mod enotsup {
+        pub const TEXT: &str = "Operation not supported";
     }
-    pub mod EILSEQ {
-        pub const text: &str = "Illegal byte sequence (decode/encoding failure)";
+    pub mod eilseq {
+        pub const TEXT: &str = "Illegal byte sequence (decode/encoding failure)";
     }
-    pub mod EADDRINUSE {
-        pub const text: &str = "Address already in use";
+    pub mod eaddrinuse {
+        pub const TEXT: &str = "Address already in use";
     }
-    pub mod EADDRNOTAVAIL {
-        pub const text: &str = "Cannot assign requested address";
+    pub mod eaddrnotavail {
+        pub const TEXT: &str = "Cannot assign requested address";
     }
-    pub mod ENETDOWN {
-        pub const text: &str = "Network is down";
+    pub mod enetdown {
+        pub const TEXT: &str = "Network is down";
     }
-    pub mod ENETUNREACH {
-        pub const text: &str = "Network is unreachable";
+    pub mod enetunreach {
+        pub const TEXT: &str = "Network is unreachable";
     }
-    pub mod ENETRESET {
-        pub const text: &str = "Network dropped connection because of reset";
+    pub mod enetreset {
+        pub const TEXT: &str = "Network dropped connection because of reset";
     }
-    pub mod ECONNABORTED {
-        pub const text: &str = "Software caused connection abort";
+    pub mod econnaborted {
+        pub const TEXT: &str = "Software caused connection abort";
     }
-    pub mod ECONNRESET {
-        pub const text: &str = "Connection reset by peer";
+    pub mod econnreset {
+        pub const TEXT: &str = "Connection reset by peer";
     }
-    pub mod ENOBUFS {
-        pub const text: &str = "No buffer space available";
+    pub mod enobufs {
+        pub const TEXT: &str = "No buffer space available";
     }
-    pub mod EISCONN {
-        pub const text: &str = "Transport endpoint is already connected";
+    pub mod eisconn {
+        pub const TEXT: &str = "Transport endpoint is already connected";
     }
-    pub mod ENOTCONN {
-        pub const text: &str = "Transport endpoint is not connected";
+    pub mod enotconn {
+        pub const TEXT: &str = "Transport endpoint is not connected";
     }
-    pub mod ESHUTDOWN {
-        pub const text: &str = "Cannot send after transport endpoint shutdown";
+    pub mod eshutdown {
+        pub const TEXT: &str = "Cannot send after transport endpoint shutdown";
     }
-    pub mod ETOOMANYREFS {
-        pub const text: &str = "Too many references";
+    pub mod etoomanyrefs {
+        pub const TEXT: &str = "Too many references";
     }
-    pub mod ETIMEDOUT {
-        pub const text: &str = "Connection timed out";
+    pub mod etimedout {
+        pub const TEXT: &str = "Connection timed out";
     }
-    pub mod ECONNREFUSED {
-        pub const text: &str = "Connection refused";
+    pub mod econnrefused {
+        pub const TEXT: &str = "Connection refused";
     }
-    pub mod EHOSTDOWN {
-        pub const text: &str = "Runtime is down";
+    pub mod ehostdown {
+        pub const TEXT: &str = "Runtime is down";
     }
-    pub mod EHOSTUNREACH {
-        pub const text: &str = "No route to runtime";
+    pub mod ehostunreach {
+        pub const TEXT: &str = "No route to runtime";
     }
-    pub mod EALREADY {
-        pub const text: &str = "Operation already in progress";
+    pub mod ealready {
+        pub const TEXT: &str = "Operation already in progress";
     }
-    pub mod EINPROGRESS {
-        pub const text: &str = "Operation now in progress";
+    pub mod einprogress {
+        pub const TEXT: &str = "Operation now in progress";
     }
-    pub mod ECANCELED {
-        pub const text: &str = "Operation canceled";
+    pub mod ecanceled {
+        pub const TEXT: &str = "Operation canceled";
     }
-    pub mod ENOTRECOVERABLE {
-        pub const text: &str =
+    pub mod enotrecoverable {
+        pub const TEXT: &str =
             "State not recoverable: an invariant the code stands on does not hold";
     }
 }

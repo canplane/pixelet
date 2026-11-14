@@ -10,21 +10,11 @@
     reason = "generated from WIT"
 )]
 
-use crate::link;
-use crate::wait;
-use std::rc::Rc;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
 /// The interface's handle, named by `xpute:clocks/system-clock` (frame.json `NAMED`).
-pub const HANDLE: Handle = 0x7dfa61;
+pub const HANDLE: _rt::Handle = 0x7dfa61;
 
 /// `now`
-pub const NOW: Method = 0;
+pub const NOW: _rt::Method = 0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Instant {
@@ -33,52 +23,59 @@ pub struct Instant {
 }
 
 impl Instant {
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.branch(2, |w| {
-            w.i64(Some(self.seconds));
-            w.u32(Some(self.nanoseconds as u32));
-        });
+    pub const SZ: usize = 16;
+    pub const ALIGN: usize = 8;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        w.i64(at + 0, *&self.seconds);
+        w.u32(at + 8, *&self.nanoseconds);
     }
 
-    pub fn read(c: Cursor<'_>) -> Result<Instant, MarshalError> {
-        let b = c.as_branch()?;
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Instant, _rt::Errno> {
         Ok(Instant {
-            seconds: b.at(0).and_then(|c| c.get_i64())?,
-            nanoseconds: b.at(1).and_then(|c| c.get_number().map(|v| v as u32))?,
+            seconds: r.i64(at + 0)?,
+            nanoseconds: r.u32(at + 8)?,
         })
     }
 }
 
-pub trait SystemClock {
-    fn now(&self) -> Result<Instant, Errno>;
+pub trait Host {
+    fn now(&self) -> Result<Instant, _rt::Errno>;
 }
 
-struct SystemClockObject(Rc<dyn SystemClock>);
+struct _Object(_rt::Rc<dyn Host>);
 
-impl Object for SystemClockObject {
-    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
-        let run = || -> Result<Reply, MarshalError> {
+impl _rt::Object for _Object {
+    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+        let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 NOW => match self.0.now() {
-                    Ok(v) => Reply {
+                    Ok(v) => _rt::Reply {
                         result: 0,
                         data: Some((
-                            1,
-                            Box::new(move |w: &mut PacketWriter| {
-                                v.write(w);
+                            16,
+                            Box::new(move |w: &mut _rt::Lower| {
+                                (&v).store(w, 0);
                             }),
                         )),
                     },
-                    Err(e) => Reply::from(e as i32),
+                    Err(e) => _rt::Reply::from(e as i32),
                 },
-                _ => Reply::from(Errno::ENOSYS as i32),
+                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
             })
         };
-        run().unwrap_or_else(|e| Reply::from(e.errnum as i32))
+        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
     }
 }
 
 /// Serves `imp` under the interface's handle.
-pub fn mount(imp: Rc<dyn SystemClock>) {
-    link::mount_named(HANDLE, Rc::new(SystemClockObject(imp)));
+pub fn mount(imp: _rt::Rc<dyn Host>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+}
+
+mod _rt {
+    pub use crate::link;
+    pub use std::rc::Rc;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Tag};
 }

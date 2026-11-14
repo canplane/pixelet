@@ -1,7 +1,7 @@
 // pxl-core/sys/io/body.rs
 
 //! The memory a body is read into. Terrain's and the Earth's bodies, the
-//! largest flow, take slots in `.fixed`: `BODY_SLOTS` of them (sys/io/param.rs),
+//! largest flow, take slots in `.fixed`: `BODY_SLOT_CNT` of them (sys/io/param.rs),
 //! each as long as the longest such body, so that flow's memory is fixed and
 //! takes nothing of the heap. Every other stream's body is a heap buffer of
 //! its own.
@@ -22,7 +22,7 @@ use xpute_link::mem;
 
 use crate::sys::heap::PAGE_BYTES;
 use crate::sys::io::demand::Stream;
-use crate::sys::io::param::BODY_SLOTS;
+use crate::sys::io::param::BODY_SLOT_CNT;
 use crate::sys::range::OwnedRange;
 use crate::sys::sched;
 
@@ -47,7 +47,7 @@ pub const SLOT_BYTES: u32 = longest().next_multiple_of(PAGE_BYTES);
 /// The slots' range in `.fixed`, which the boot hands in.
 pub static RANGE: OwnedRange = OwnedRange::new();
 
-const _: () = assert!(BODY_SLOTS <= u32::BITS, "a slot is a bit of `out`");
+const _: () = assert!(BODY_SLOT_CNT <= u32::BITS, "a slot is a bit of `out`");
 
 #[derive(Default)]
 struct Slots {
@@ -55,7 +55,7 @@ struct Slots {
     out: u32,
     /// A count that moves with every slot given back. A refusal by the slots
     /// waits on it (`Refusal::bodies`).
-    releases: u32,
+    release_cnt: u32,
     /// The most slots out at once since the profiler last took the peak.
     peak: u32,
     /// A take found every slot out, so the next slot given back asks for a
@@ -79,7 +79,7 @@ pub struct Slot {
 pub fn take() -> Option<Slot> {
     let s = slots();
     let idx = (!s.out).trailing_zeros();
-    if idx >= BODY_SLOTS {
+    if idx >= BODY_SLOT_CNT {
         s.waited = true;
         return None;
     }
@@ -126,7 +126,7 @@ impl Drop for Slot {
     fn drop(&mut self) {
         let s = slots();
         s.out &= !(1 << self.idx);
-        s.releases = s.releases.wrapping_add(1);
+        s.release_cnt = s.release_cnt.wrapping_add(1);
         if core::mem::take(&mut s.waited) {
             sched::invalidate();
         }
@@ -150,12 +150,12 @@ impl Deref for Body {
     }
 }
 
-pub fn releases() -> u32 {
-    slots().releases
+pub fn release_cnt() -> u32 {
+    slots().release_cnt
 }
 
 /// The most slots out at once since the last call. The profiler takes it
-/// (perf/report.rs `perf_frame`), and `BODY_SLOTS` is judged against it.
+/// (perf/report.rs `perf_frame`), and `BODY_SLOT_CNT` is judged against it.
 pub fn take_peak() -> u32 {
     let s = slots();
     core::mem::replace(&mut s.peak, s.out.count_ones())

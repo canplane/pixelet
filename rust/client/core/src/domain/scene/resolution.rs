@@ -9,14 +9,14 @@
 //! a screen with more pixels than its GPU can fill.
 //!
 //! `fixed` draws the world whole and `low` draws it at `RES_MIN`. `auto`
-//! chooses one of `RES_STEPS` steps between whole and `RES_MIN`, each the same
+//! chooses one of `RES_STEP_CNT` steps between whole and `RES_MIN`, each the same
 //! fraction of the one before, so the pixels lie on one of a few grids.
 //!
 //! `auto` is a budget controller, in the manner of congestion control. Its
 //! budget is the frame's target interval, a whole number of the display's
 //! measured intervals, which `auto`'s frame rate sets apart (rate.rs). Its
 //! knob, the scale, saves only the work done once for each drawn pixel
-//! (span.json `per_px`). The camera grid's cells, the samples, the light's
+//! (span.json `GPU_SPAN_PER_PX`). The camera grid's cells, the samples, the light's
 //! passes over its map's texels, the finish and the markers cost the same at
 //! every scale.
 
@@ -43,7 +43,7 @@ pub struct Pace {
 
 /// The budget, in ms, of a frame at the frame rate's target interval.
 fn budget(display_ms: f64) -> f64 {
-    f64::from(rate::intervals()) * display_ms
+    f64::from(rate::interval()) * display_ms
 }
 
 /// The judge's sample of a frame's cost, in ms. `px_ms` is the time the scale
@@ -77,7 +77,7 @@ impl Cost {
 /// `GpuRead::px_ms`), and F, the rest of the GPU's busy time. A window in
 /// which no read landed is not judged. A window whose load F + P is over its
 /// budget by more than `RES_BAND` steps down at once. The judge steps up after
-/// `RES_UP_WINDOWS` windows in a row in which the step above would fit under
+/// `RES_UP_WINDOW_CNT` windows in a row in which the step above would fit under
 /// its budget by `RES_BAND` as well; the band keeps the scale from swinging
 /// between two steps. The load predicted at the step above keeps F and takes P
 /// times the square of that step's share over this one's.
@@ -85,17 +85,17 @@ impl Cost {
 /// Where the device keeps no timestamps, a sample is the frame's gap. A gap
 /// never falls below the budget, so the room a step up would have cannot be
 /// foreseen. A window whose gaps average more than `SCALE_MISSED` budgets
-/// steps down, and a step up waits for `SCALE_PROBE_WINDOWS` quiet windows.
+/// steps down, and a step up waits for `SCALE_PROBE_WINDOW_CNT` quiet windows.
 ///
 /// Either way, a step up is on trial. One that goes over within
-/// `RES_TRUST_WINDOWS` steps back down and doubles the wait for the next step
-/// up, to at most `RES_UP_WINDOWS_MAX`; this stops two steps swinging where a
+/// `RES_TRUST_WINDOW_CNT` steps back down and doubles the wait for the next step
+/// up, to at most `RES_UP_WINDOW_CAP`; this stops two steps swinging where a
 /// prediction falls a little short. A step that outlasts its trial stands, and
 /// the wait returns to its first length.
 ///
 /// A change moves the scale by one step. It rebuilds the render targets, so
 /// no frame is counted until one is drawn at the new size, and it asks for
-/// that frame. The `RES_SETTLE_WINDOWS` windows after a change are not
+/// that frame. The `RES_SETTLE_WINDOW_CNT` windows after a change are not
 /// judged.
 struct Judge {
     step: i32,
@@ -144,7 +144,7 @@ impl Judge {
 
     /// The step down, or None at `RES_MIN`.
     fn down(&self) -> Option<i32> {
-        (self.step < param::RES_STEPS).then_some(self.step + 1)
+        (self.step < param::RES_STEP_CNT).then_some(self.step + 1)
     }
 
     /// The step up, or None when the world is drawn whole.
@@ -155,11 +155,11 @@ impl Judge {
     /// The number of windows with room that a step up waits for.
     fn hold(&self, timed: bool) -> u32 {
         let wait = if timed {
-            param::RES_UP_WINDOWS
+            param::RES_UP_WINDOW_CNT
         } else {
-            param::SCALE_PROBE_WINDOWS
+            param::SCALE_PROBE_WINDOW_CNT
         };
-        (wait * self.backoff).min(param::RES_UP_WINDOWS_MAX)
+        (wait * self.backoff).min(param::RES_UP_WINDOW_CAP)
     }
 
     /// The load that frames which cost `cost` over budgets summing to
@@ -190,10 +190,10 @@ impl Judge {
             return;
         }
         let load = self.predicted(cost, sampled, self.step);
-        if self.since <= param::RES_SETTLE_WINDOWS {
+        if self.since <= param::RES_SETTLE_WINDOW_CNT {
             return;
         }
-        if self.on_trial && self.since > param::RES_TRUST_WINDOWS {
+        if self.on_trial && self.since > param::RES_TRUST_WINDOW_CNT {
             self.on_trial = false;
             self.backoff = 1;
         }
@@ -244,7 +244,7 @@ fn state() -> &'static mut Judge {
 fn share(step: i32) -> f64 {
     libm::pow(
         param::RES_MIN,
-        f64::from(step) / f64::from(param::RES_STEPS),
+        f64::from(step) / f64::from(param::RES_STEP_CNT),
     )
 }
 
@@ -252,9 +252,9 @@ fn share(step: i32) -> f64 {
 /// under `auto` the judge's step, asks the world to be drawn at.
 fn scale() -> f64 {
     match settings().res {
-        ResMode::auto => share(state().step),
-        ResMode::fixed => 1.0,
-        ResMode::low => param::RES_MIN,
+        ResMode::Auto => share(state().step),
+        ResMode::Fixed => 1.0,
+        ResMode::Low => param::RES_MIN,
     }
 }
 
@@ -316,7 +316,7 @@ pub fn load(pace: Pace, gpu: Option<GpuRead>) {
     let k = state();
     let started = pace.moving && !k.moving;
     k.moving = pace.moving;
-    if settings().res != ResMode::auto {
+    if settings().res != ResMode::Auto {
         (k.step, k.quiet) = (0, 0);
         k.restart();
     } else if started {

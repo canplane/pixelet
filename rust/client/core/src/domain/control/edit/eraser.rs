@@ -24,7 +24,7 @@ pub(super) fn tap(hover: &Hover) {
         .target
         .map_or(Octant::holding(GROUND.leaf_cell_zoom(), &h), |t| t.at);
     // Only what is placed has an entry to take. Over what the base holds,
-    // AIR hides it, and a marker sharing a generated decor's cell goes with it.
+    // Air hides it, and a marker sharing a generated decor's cell goes with it.
     match hover.object().0 {
         Some(_) => remove(at),
         None => place_air(at),
@@ -36,7 +36,7 @@ pub(super) fn render_edit(hover: &Hover) -> RenderEdit {
     let generated = hover.decor();
     RenderEdit {
         hide: object.map(|o| o.id()),
-        // Over bare terrain, an AIR entry that is never written goes into the
+        // Over bare terrain, an air entry that is never written goes into the
         // drawn build, so what lies one voxel below shows through the ghost.
         carve: hover
             .coord

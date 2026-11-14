@@ -21,17 +21,16 @@ use crate::frame::shader::sequence;
 use pxl_engine::{beam, eye, light, node_cache, raster, record};
 
 use crate::frame::shader::group::{
-    BEAMS, FACES_BINDS, FACE_GROUP, HDR_BINDING, HIT_FACES_OF_BINDS, LIGHT_ARGS, LIGHT_LIST,
-    LIGHT_RASTER_ARGS, LIGHT_RECEIVER_TILES, LIGHT_REC_BINDS, LIGHT_REC_HITS_BINDS,
-    LIGHT_REC_HITS_GROUP, LIGHT_SAMPLE_HIT_GROUP, NODE_CACHE, RASTER_ARGS, REC_BINDS, REC_GROUP,
-    REC_HITS_GROUP, REC_HITS_OF_BINDS, SAMPLE_HIT_BINDS, SAMPLE_HIT_GROUP,
+    BEAMS, FACES_BINDS, HIT_FACES_OF_BINDS, LIGHT_ARGS, LIGHT_LIST, LIGHT_RASTER_ARGS,
+    LIGHT_RECEIVER_TILES, LIGHT_REC_BINDS, LIGHT_REC_HITS_BINDS, NODE_CACHE, RASTER_ARGS,
+    REC_BINDS, REC_HITS_OF_BINDS, SAMPLE_HIT_BINDS,
 };
 use crate::frame::shader::record::{
     COMPUTE_FACE, COMPUTE_LIGHT_REC_DRAW, COMPUTE_LIGHT_REC_HITS, COMPUTE_LIGHT_SAMPLE_HIT,
-    COMPUTE_REC_DRAW, COMPUTE_REC_FACES, COMPUTE_REC_HITS, COMPUTE_SAMPLE_HIT, PIPELINE_RASTER,
-    PIPELINE_RASTER_MASK,
+    COMPUTE_REC_DRAW, COMPUTE_REC_FACES, COMPUTE_REC_HITS, COMPUTE_SAMPLE_HIT, LIGHT_HDR_BINDING,
+    PIPELINE_RASTER, PIPELINE_RASTER_MASK,
 };
-use crate::frame::shader::word::{BOX_VERTICES, RASTER_FLOATS, SQUARE_SIDE};
+use crate::frame::shader::word::{BOX_VERTEX_CNT, RASTER_FLOATS, SQUARE_SIDE};
 use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, frame_entries, pass_desc, release, texture_usage, view_entry,
@@ -98,7 +97,7 @@ pub(super) struct LightRaster {
     pub(super) targets: Targets,
     group: api::Group,
     rec_group: api::Group,
-    /// The group of its holes' stops (`LIGHT_REC_HITS_GROUP`), set with the record's draw
+    /// The group of its holes' stops (`LIGHT_REC_HITS_LAYOUT`), set with the record's draw
     /// group.
     rec_hits_group: api::Group,
 }
@@ -118,8 +117,8 @@ pub(super) struct Targets {
 impl Targets {
     fn new(g: &Gpu, [w, h]: [u32; 2]) -> Targets {
         let usage = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-        let visibility = g.texture(w, h, 1, Format::r32uint, 1, usage);
-        let depth = g.texture(w, h, 1, Format::depth32float, 1, usage);
+        let visibility = g.texture(w, h, 1, Format::R32uint, 1, usage);
+        let depth = g.texture(w, h, 1, Format::Depth32float, 1, usage);
         Targets {
             visibility,
             visibility_view: g.view(visibility, false, 0, 1, 0, 1),
@@ -177,24 +176,16 @@ impl View {
 impl Raster {
     pub(super) fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Raster {
         Raster {
-            sample_hit: pipelines.build_compute(g, COMPUTE_SAMPLE_HIT, &SAMPLE_HIT_GROUP),
-            light_sample_hit: pipelines.build_compute(
-                g,
-                COMPUTE_LIGHT_SAMPLE_HIT,
-                &LIGHT_SAMPLE_HIT_GROUP,
-            ),
-            rec_draw_pipeline: pipelines.build_compute(g, COMPUTE_REC_DRAW, &REC_GROUP),
-            light_rec_draw: pipelines.build_compute(g, COMPUTE_LIGHT_REC_DRAW, &REC_GROUP),
-            rec_hit: pipelines.build_compute(g, COMPUTE_REC_HITS, &REC_HITS_GROUP),
-            face_put: pipelines.build_compute(g, COMPUTE_REC_FACES, &REC_HITS_GROUP),
-            light_rec_hit: pipelines.build_compute(
-                g,
-                COMPUTE_LIGHT_REC_HITS,
-                &LIGHT_REC_HITS_GROUP,
-            ),
-            face: pipelines.build_compute(g, COMPUTE_FACE, &FACE_GROUP),
-            draw_pipeline: pipelines.build(g, PIPELINE_RASTER, Format::r32uint),
-            mask: pipelines.build(g, PIPELINE_RASTER_MASK, Format::r32uint),
+            sample_hit: pipelines.build_compute(g, COMPUTE_SAMPLE_HIT),
+            light_sample_hit: pipelines.build_compute(g, COMPUTE_LIGHT_SAMPLE_HIT),
+            rec_draw_pipeline: pipelines.build_compute(g, COMPUTE_REC_DRAW),
+            light_rec_draw: pipelines.build_compute(g, COMPUTE_LIGHT_REC_DRAW),
+            rec_hit: pipelines.build_compute(g, COMPUTE_REC_HITS),
+            face_put: pipelines.build_compute(g, COMPUTE_REC_FACES),
+            light_rec_hit: pipelines.build_compute(g, COMPUTE_LIGHT_REC_HITS),
+            face: pipelines.build_compute(g, COMPUTE_FACE),
+            draw_pipeline: pipelines.build(g, PIPELINE_RASTER, Format::R32uint),
+            mask: pipelines.build(g, PIPELINE_RASTER_MASK, Format::R32uint),
             args: g.buf(
                 word_bytes(raster::WORDS as usize),
                 buffer_usage::STORAGE
@@ -207,7 +198,7 @@ impl Raster {
                 buffer_usage::COPY_DST | buffer_usage::INDIRECT,
             ),
             draws: g.buf(
-                word_bytes(record::EYE_DRAWS as usize),
+                word_bytes(record::EYE_DRAW_CAP as usize),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
             ),
             uniform: g.buf(
@@ -254,7 +245,7 @@ impl Raster {
             right: [r[0], r[1], r[2], tan[0]],
             up: [u[0], u[1], u[2], tan[1]],
             forward: [f[0], f[1], f[2], raster::NEAR],
-            turn: BOX_VERTICES * u32::from(raster::is_flipped(r, u, f)),
+            turn: BOX_VERTEX_CNT * u32::from(raster::is_flipped(r, u, f)),
             light: false,
             screen: [GROWTH * px, w, h, far],
             first: [e[eye::JITTER], e[eye::JITTER + 1]].map(f32::from_bits),
@@ -329,7 +320,7 @@ impl Raster {
         }
     }
 
-    /// Sets the record's draw group (`REC_GROUP`) over the cast's `eye` and `node_cache`, and
+    /// Sets the record's draw group (`REC_LAYOUT`) over the cast's `eye` and `node_cache`, and
     /// `light`, the light's head, list, args and stood list's args (light_receiver_tile.wgsl),
     /// by which the draw marks the tiles its boxes stand on. It is set apart from `prepare`, in
     /// every frame the cast prepares, as it binds the light's buffers too.
@@ -346,7 +337,7 @@ impl Raster {
         let rest = [
             buf_entry(0, eye),
             buf_entry(14, self.draws),
-            buf_entry(HDR_BINDING, hdr),
+            buf_entry(LIGHT_HDR_BINDING, hdr),
         ];
         let layout = self.rec_draw_pipeline.layouts[0];
         self.groups[3].set(g, layout, &frame_entries(layout, &REC_BINDS, buf, &rest));
@@ -391,8 +382,8 @@ impl Raster {
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         if samples_cast {
-            let [x, y] = grid.samples;
-            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::raster_box).pass());
+            let [x, y] = grid.sample_lattice;
+            let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::RasterBox).pass());
             g.set_bind_group(pass, 0, self.groups[0].id(), &[]);
             g.set_pipeline(pass, self.sample_hit.id);
             g.dispatch(pass, x.div_ceil(SQUARE_SIDE), y.div_ceil(SQUARE_SIDE), 1);
@@ -412,7 +403,7 @@ impl Raster {
                 self.targets.depth_view,
                 Load::Clear,
                 if damage.is_some() { 1.0 } else { 0.0 },
-                ctx.stamp(GpuSpanName::sraster).pass(),
+                ctx.stamp(GpuSpanName::Sraster).pass(),
             ),
         );
         g.declare_pass(pass, sequence::RASTER_PASS);
@@ -435,7 +426,7 @@ impl Raster {
         if !samples_cast {
             return;
         }
-        let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::face).pass());
+        let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::Face).pass());
         g.set_bind_group(pass, 0, self.groups[2].id(), &[]);
         g.set_pipeline(pass, self.face.id);
         g.dispatch_indirect(pass, self.args, sequence::FACE.at());
@@ -450,10 +441,10 @@ impl Raster {
     /// (ray/cast.rs).
     pub(super) fn rec_draw(&self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::raster_box).pass());
+        let pass = g.compute_pass(encoder, ctx.stamp(GpuSpanName::RasterBox).pass());
         g.set_bind_group(pass, 0, self.groups[3].id(), &[]);
         g.set_pipeline(pass, self.rec_draw_pipeline.id);
-        g.dispatch(pass, node_cache::ENTRIES / record::DRAW_LANES, 1, 1);
+        g.dispatch(pass, node_cache::ENTRY_CNT / record::DRAW_LANE_CNT, 1, 1);
         g.end(pass);
     }
 
@@ -472,7 +463,7 @@ impl Raster {
 /// (pxl-engine `raster::ARGS_WORDS`).
 fn draw_args() -> [u32; raster::ARGS_WORDS as usize] {
     let mut args = [0; raster::ARGS_WORDS as usize];
-    args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
+    args[raster::ARGS_VERTEX_CNT as usize] = raster::VERTEX_CNT;
     args
 }
 
@@ -493,7 +484,7 @@ impl Raster {
         let s = &mut self.light;
         if s.uniform == 0 {
             let storage = buffer_usage::STORAGE | buffer_usage::COPY_DST;
-            s.draws = g.buf(word_bytes(record::LIGHT_DRAWS as usize), storage);
+            s.draws = g.buf(word_bytes(record::LIGHT_DRAW_CAP as usize), storage);
             s.args = g.buf(
                 word_bytes(raster::WORDS as usize),
                 storage | buffer_usage::INDIRECT | buffer_usage::COPY_SRC,
@@ -551,7 +542,7 @@ impl Raster {
             right: [r[0], r[1], r[2], length(v.across)],
             up: [d[0], d[1], d[2], length(v.down)],
             forward: [v.dir[0], v.dir[1], v.dir[2], 0.0],
-            turn: BOX_VERTICES * u32::from(raster::is_flipped(r, up, v.dir)),
+            turn: BOX_VERTEX_CNT * u32::from(raster::is_flipped(r, up, v.dir)),
             light: true,
             screen: [GROWTH * length(v.across), n, n, v.t_max],
             // No jitter. The origin is where box texel (0, 0)'s ray starts, which the light's
@@ -569,7 +560,7 @@ impl Raster {
 
     /// Sets the light's draw groups over the cast's `eye` and `node_cache`, and `light`, the
     /// light's head, list, args, stood list's args and map, while the light's raster exists.
-    /// Only the holes' stops' group binds the map (`LIGHT_REC_HITS_GROUP`).
+    /// Only the holes' stops' group binds the map (`LIGHT_REC_HITS_LAYOUT`).
     pub(super) fn light_rec_group(
         &mut self,
         g: &Gpu,
@@ -602,7 +593,7 @@ impl Raster {
         let rest = [
             buf_entry(0, eye),
             buf_entry(14, s.draws),
-            buf_entry(HDR_BINDING, hdr),
+            buf_entry(LIGHT_HDR_BINDING, hdr),
         ];
         let layout = self.light_rec_draw.layouts[0];
         s.rec_group.set(
@@ -613,7 +604,7 @@ impl Raster {
         let rest = [
             buf_entry(0, eye),
             view_entry(3, map),
-            buf_entry(HDR_BINDING, hdr),
+            buf_entry(LIGHT_HDR_BINDING, hdr),
         ];
         let layout = self.light_rec_hit.layouts[0];
         s.rec_hits_group.set(
@@ -657,14 +648,14 @@ impl Raster {
     /// targets.
     pub(super) fn light_draw(&self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::light_raster);
+        let stamp = ctx.stamp(GpuSpanName::LightRaster);
         let s = &self.light;
         let pass = g.compute_pass(encoder, stamp.pass());
         g.set_bind_group(pass, 0, s.rec_group.id(), &[]);
         g.set_pipeline(pass, self.light_rec_draw.id);
-        g.dispatch(pass, node_cache::ENTRIES / record::DRAW_LANES, 1, 1);
+        g.dispatch(pass, node_cache::ENTRY_CNT / record::DRAW_LANE_CNT, 1, 1);
         g.end(pass);
-        let stamp = ctx.stamp(GpuSpanName::light_raster);
+        let stamp = ctx.stamp(GpuSpanName::LightRaster);
         let pass = g.pass(
             encoder,
             &pass_desc(

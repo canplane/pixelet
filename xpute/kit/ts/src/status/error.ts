@@ -1,16 +1,14 @@
 // @xpute/kit/status/error.ts
 
-import { ERRNO, errno_name } from "./errno.spec.ts";
+import { ERRNO } from "./errno.spec.ts";
 import type { i32 } from "../abi/word.ts";
 
 /** An errno as a reader is shown it: its name and what it means
  * (errno.json). The strings are for a person to read; an error carries the
  * number alone. */
 export function strerror(errnum: i32): string {
-  const name = errno_name(errnum);
-  return name === undefined
-    ? `errno ${errnum}`
-    : `${name}: ${ERRNO[name].text}`;
+  const e = Object.entries(ERRNO).find(([, v]) => v.number === errnum);
+  return e === undefined ? `errno ${errnum}` : `${e[0]}: ${e[1].text}`;
 }
 
 /**

@@ -3,8 +3,7 @@
 import { Component, type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { Message } from "@/abi/overlay.ts";
-import { BOOT_LOADING, BOOT_STARTED } from "@/abi/state.ts";
+import { BOOT_LOADING, BOOT_STARTED } from "@/service/sys/boot.ts";
 import { installConsole } from "@/ui/feature/debug/console.ts";
 import { useStanding } from "./feature/cover/standing.ts";
 import { coverOf, UI_PANIC } from "./feature/cover/cover.ts";
@@ -12,6 +11,7 @@ import { ModalHost } from "./modal.tsx";
 import { Screen } from "./feature/cover/screen.tsx";
 import { KeyboardAway } from "@/ui/shared/component/keyboard.tsx";
 import { DockMode, setDockMode } from "@/ui/feature/world/dock/store.ts";
+import { MESSAGE_WORLD_UNAVAILABLE } from "@/abi/overlay.enum.ts";
 
 /** The world mounts once the core runs, and goes at a panic, because nothing
  * can be drawn or read behind one. */
@@ -23,7 +23,7 @@ function AppBody({ children }: { children: ReactNode }) {
     if (standing.boot === BOOT_LOADING) installConsole();
   }, [standing.boot]);
   useEffect(() => {
-    if (standing.stall === Message.WorldUnavailable) {
+    if (standing.stall === MESSAGE_WORLD_UNAVAILABLE) {
       console.error(
         "[read] a read failed past every retry; the space is given up",
       );

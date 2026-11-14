@@ -3,7 +3,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 
 import { path } from "@/abi/file.spec.ts";
@@ -64,7 +64,7 @@ test("open_storage - text that keeps no bytes is no file of bytes", () => {
   } catch (err) {
     errnum = err instanceof FaultError ? err.errnum : undefined;
   }
-  assert.deepStrictEqual(errnum, Errno.EBADMSG);
+  assert.deepStrictEqual(errnum, ERRNO_EBADMSG);
 });
 
 test("follow_refused_files - each refused file is set aside and emptied once", async () => {

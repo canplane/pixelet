@@ -10,11 +10,4 @@
     reason = "generated from WIT"
 )]
 
-use std::rc::Rc;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-
 pub type Duration = u64;

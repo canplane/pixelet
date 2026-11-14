@@ -10,165 +10,201 @@
     reason = "generated from WIT"
 )]
 
-use std::rc::Rc;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::abi::types::Lent;
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-use xpute_native_host::link;
-use xpute_native_host::wait;
-
 /// The interface's handle, named by `xpute:gpu/gpu` (frame.json `NAMED`).
-pub const HANDLE: Handle = 0x79d455;
+pub const HANDLE: _rt::Handle = 0x79d455;
 
 /// `run`
-pub const RUN: Method = 0;
+pub const RUN: _rt::Method = 0;
 /// `[method]device.lost`
-pub const DEVICE_LOST: Method = 0;
+pub const DEVICE_LOST: _rt::Method = 0;
 /// `[method]device.ready`
-pub const DEVICE_READY: Method = 1;
+pub const DEVICE_READY: _rt::Method = 1;
 /// `[method]device.settled`
-pub const DEVICE_SETTLED: Method = 2;
+pub const DEVICE_SETTLED: _rt::Method = 2;
 
-pub trait Gpu {
-    fn run(&self, records: Lent, task_return: Return<()>);
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u32)]
+pub enum ErrorCode {
+    /// The host has no device to give.
+    NoDevice = 0,
 }
 
-struct GpuObject(Rc<dyn Gpu>);
+impl ErrorCode {
+    /// Every member, in its source's own order.
+    pub const ALL: [ErrorCode; 1] = [ErrorCode::NoDevice];
 
-impl Object for GpuObject {
-    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
-        let run = || -> Result<Reply, MarshalError> {
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<ErrorCode> {
+        match val {
+            0 => Some(ErrorCode::NoDevice),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            ErrorCode::NoDevice => "NoDevice",
+        }
+    }
+}
+
+pub trait Host {
+    fn run(&self, records: _rt::Lent, task_return: _rt::Return<()>);
+}
+
+struct _Object(_rt::Rc<dyn Host>);
+
+impl _rt::Object for _Object {
+    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+        let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 RUN => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let records = b_.at(0).and_then(|c| Lent::read(c))?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let records = _rt::Lent::load(r_, 0)?;
                     self.0.run(
                         records,
-                        Return::new(
+                        _rt::Return::new(
                             tag_,
-                            link::on_cancel,
+                            _rt::link::on_cancel,
                             Box::new(move |got| {
                                 let reply = match got {
-                                    Ok(v) => Reply::from(0),
-                                    Err(e) => Reply::from(e as i32),
+                                    Ok(v) => _rt::Reply::from(0),
+                                    Err(e) => _rt::Reply::from(e as i32),
                                 };
-                                link::task_return(
+                                _rt::link::task_return(
                                     tag_,
                                     reply.result,
                                     reply
                                         .data
                                         .as_ref()
-                                        .map(|(n, w)| (*n, &**w as &dyn Fn(&mut PacketWriter))),
+                                        .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
                                 )
                             }),
                         ),
                     );
-                    Reply::from(Errno::EINPROGRESS as i32)
+                    _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
                 }
-                _ => Reply::from(Errno::ENOSYS as i32),
+                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
             })
         };
-        run().unwrap_or_else(|e| Reply::from(e.errnum as i32))
+        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
     }
 }
 
 /// Serves `imp` under the interface's handle.
-pub fn mount(imp: Rc<dyn Gpu>) {
-    link::mount_named(HANDLE, Rc::new(GpuObject(imp)));
+pub fn mount(imp: _rt::Rc<dyn Host>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
 }
 
-pub trait Device {
-    fn lost(&self, block: Lent, task_return: Return<()>);
-    fn ready(&self, task_return: Return<u32>);
-    fn settled(&self, task_return: Return<()>);
+pub trait HostDevice {
+    fn lost(&self, block: _rt::Lent, task_return: _rt::Return<()>);
+    fn ready(&self, task_return: _rt::Return<Result<(), ErrorCode>>);
+    fn settled(&self, task_return: _rt::Return<()>);
 }
 
-struct DeviceObject(Rc<dyn Device>);
+struct _DeviceObject(_rt::Rc<dyn HostDevice>);
 
-impl Object for DeviceObject {
-    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
-        let run = || -> Result<Reply, MarshalError> {
+impl _rt::Object for _DeviceObject {
+    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+        let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 DEVICE_LOST => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let block = b_.at(0).and_then(|c| Lent::read(c))?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let block = _rt::Lent::load(r_, 0)?;
                     self.0.lost(
                         block,
-                        Return::new(
+                        _rt::Return::new(
                             tag_,
-                            link::on_cancel,
+                            _rt::link::on_cancel,
                             Box::new(move |got| {
                                 let reply = match got {
-                                    Ok(v) => Reply::from(0),
-                                    Err(e) => Reply::from(e as i32),
+                                    Ok(v) => _rt::Reply::from(0),
+                                    Err(e) => _rt::Reply::from(e as i32),
                                 };
-                                link::task_return(
+                                _rt::link::task_return(
                                     tag_,
                                     reply.result,
                                     reply
                                         .data
                                         .as_ref()
-                                        .map(|(n, w)| (*n, &**w as &dyn Fn(&mut PacketWriter))),
+                                        .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
                                 )
                             }),
                         ),
                     );
-                    Reply::from(Errno::EINPROGRESS as i32)
+                    _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
                 }
                 DEVICE_READY => {
-                    self.0.ready(Return::new(
+                    self.0.ready(_rt::Return::new(
                         tag_,
-                        link::on_cancel,
+                        _rt::link::on_cancel,
                         Box::new(move |got| {
                             let reply = match got {
-                                Ok(v) => Reply::from(v as i32),
-                                Err(e) => Reply::from(e as i32),
+                                Ok(v) => _rt::Reply {
+                                    result: 0,
+                                    data: Some((
+                                        2,
+                                        Box::new(move |w: &mut _rt::Lower| match &v {
+                                            Ok(v) => {}
+                                            Err(v) => {
+                                                w.u8(0, 1);
+                                                w.u8(0 + 1, *v as u8);
+                                            }
+                                        }),
+                                    )),
+                                },
+                                Err(e) => _rt::Reply::from(e as i32),
                             };
-                            link::task_return(
+                            _rt::link::task_return(
                                 tag_,
                                 reply.result,
                                 reply
                                     .data
                                     .as_ref()
-                                    .map(|(n, w)| (*n, &**w as &dyn Fn(&mut PacketWriter))),
+                                    .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
                             )
                         }),
                     ));
-                    Reply::from(Errno::EINPROGRESS as i32)
+                    _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
                 }
                 DEVICE_SETTLED => {
-                    self.0.settled(Return::new(
+                    self.0.settled(_rt::Return::new(
                         tag_,
-                        link::on_cancel,
+                        _rt::link::on_cancel,
                         Box::new(move |got| {
                             let reply = match got {
-                                Ok(v) => Reply::from(0),
-                                Err(e) => Reply::from(e as i32),
+                                Ok(v) => _rt::Reply::from(0),
+                                Err(e) => _rt::Reply::from(e as i32),
                             };
-                            link::task_return(
+                            _rt::link::task_return(
                                 tag_,
                                 reply.result,
                                 reply
                                     .data
                                     .as_ref()
-                                    .map(|(n, w)| (*n, &**w as &dyn Fn(&mut PacketWriter))),
+                                    .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
                             )
                         }),
                     ));
-                    Reply::from(Errno::EINPROGRESS as i32)
+                    _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
                 }
-                _ => Reply::from(Errno::ENOSYS as i32),
+                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
             })
         };
-        run().unwrap_or_else(|e| Reply::from(e.errnum as i32))
+        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
     }
 }
 
 /// The object over `imp`, for an opener to answer.
-pub fn device(imp: Rc<dyn Device>) -> Rc<dyn Object> {
-    Rc::new(DeviceObject(imp))
+pub fn device(imp: _rt::Rc<dyn HostDevice>) -> _rt::Rc<dyn _rt::Object> {
+    _rt::Rc::new(_DeviceObject(imp))
+}
+
+mod _rt {
+    pub use std::rc::Rc;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::abi::types::Lent;
+    pub use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Return, Tag};
+    pub use xpute_native_host::link;
 }

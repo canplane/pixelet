@@ -1,8 +1,8 @@
 // xpute's link in WIT's shape; the execution meaning is xpute's (xpute-guest
 // link.rs). WIT's grammar is used as far as xpute needs it: interfaces, `func`
-// and `async func`, resources and their methods, records, enums, variants
-// whose cases carry one payload each, lists, options, bool, the integers to
-// 32 bits, f32, f64 and strings.
+// and `async func`, resources and their methods, records, enums, variants,
+// lists, options, results, bool, the integers of every width, f32, f64 and
+// strings.
 //
 // Whatever is called is an object, under a handle. A singleton interface's is
 // named: frame.json's NAMED bit and the hash of its package and its name,
@@ -49,10 +49,17 @@
 // (frame.json `CANCEL`), as the component model cancels a dropped subtask, and
 // keeps the buffer alive until its answer, ECANCELED or its own, comes.
 //
-// A bool, an unsigned integer or a handle returns in the answer's result,
-// below 2^31; any other return, in its packet. A variant crosses as its
-// payload alone, whose node's type tells its case, so no two cases cross as
-// one type; an option's none is a nil node.
+// A packet lays its values out as the Component Model's Canonical ABI does
+// (xpute-link cabi.rs): a call's args as one tuple, an answer's value alone,
+// each value at its type's alignment, an enum, an option or a result as a
+// variant, its discriminant first. A string's or a list's bytes lie past the
+// packet's fixed part, its pointer an offset from the packet's start, where
+// the ABI copies them into the callee's memory; a lent buffer stays where it
+// is. The answer's result is a status: 0, EINPROGRESS, the errno the call
+// was refused with, by the link or by the method as a caller's bug (EINVAL,
+// where the ABI traps), or a method's errno where its WIT has no `result`; a
+// method with a `result` answers any other failure as its error case.
+// TypeScript's null is an option's none, so no option holds an option.
 //
 // The link's crossings (xpute-guest link.rs) are no world's: a world holds
 // only interfaces, and a program's world only those it uses.

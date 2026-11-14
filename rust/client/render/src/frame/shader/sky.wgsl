@@ -77,7 +77,7 @@ fn fs(v: VertexOut) -> @location(0) vec4f {
   let dir = normalize(sky_ray() * vec3f(v.ndc + frame_jitter(), 1.0));
   let r = camera_r();
   // These feed derivatives, so every pixel takes them before any branch.
-  let sun_a = length(cross(dir, atmos_sun_dir())) / (atmos_sun_angular_radius() * SKY_DISC_SCALE);
+  let sun_a = length(cross(dir, atmos_sun_dir())) / (SUN_ANGULAR_RADIUS * SKY_DISC_SCALE);
   let sun_w = max(fwidth(sun_a), 1e-4);
   let across = (dir - dot(dir, atmos_moon_dir()) * atmos_moon_dir()) / (MOON_ANGULAR_RADIUS * SKY_DISC_SCALE);
   let moon_a = length(across);

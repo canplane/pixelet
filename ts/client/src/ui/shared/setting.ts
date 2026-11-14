@@ -10,7 +10,7 @@ type Spec = typeof EVERY;
 /** The table is chosen by a constant that the build folds, rather than
  * filtered, so that the dev rows are absent from a production bundle instead
  * of hidden. */
-export const SETTING = (__IS_DEV__ ? EVERY : PROD) as Spec;
+export const SETTING = (__DEV__ ? EVERY : PROD) as Spec;
 
 export type SettingName = keyof Spec;
 

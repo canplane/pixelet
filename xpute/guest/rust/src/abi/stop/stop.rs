@@ -10,33 +10,29 @@
     reason = "generated from WIT"
 )]
 
-use crate::link;
-use crate::wait;
-use std::rc::Rc;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
 /// The interface's handle, named by `xpute:stop/stop` (frame.json `NAMED`).
-pub const HANDLE: Handle = 0x4eccaa;
+pub const HANDLE: _rt::Handle = 0x4eccaa;
 
 /// `stopped`
-pub const STOPPED: Method = 0;
+pub const STOPPED: _rt::Method = 0;
 
-pub fn stopped(errnum: i32, file: &str, line: u32, n1: u64, n2: u64) -> Result<(), Errno> {
-    let (r, data) = link::call(
+pub fn stopped(errnum: i32, file: &str, line: u32, n1: u64, n2: u64) -> Result<(), _rt::Errno> {
+    let (r, data) = _rt::link::call(
         HANDLE,
         STOPPED,
-        Some((5, &|w_: &mut PacketWriter| {
-            w_.i32(Some(errnum as i32));
-            w_.str(Some(&*file));
-            w_.u32(Some(line as u32));
-            w_.u64(Some(n1));
-            w_.u64(Some(n2));
+        Some((32, &|w_: &mut _rt::Lower| {
+            w_.i32(0, *&errnum);
+            w_.str(4, &file);
+            w_.u32(12, *&line);
+            w_.u64(16, *&n1);
+            w_.u64(24, *&n2);
         })),
     );
-    xpute_link::answer(r).map(|_| ())
+    _rt::answer(r)
+}
+
+mod _rt {
+    pub use crate::link;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::{answer, Handle, Lower, Method};
 }

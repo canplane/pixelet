@@ -13,6 +13,12 @@ use naga::valid::{Capabilities, ValidationFlags, Validator};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+#[path = "src/look/atmosphere.rs"]
+#[expect(
+    dead_code,
+    reason = "the build reads part of what the crate shares with it"
+)]
+mod atmosphere;
 #[path = "build/bind.rs"]
 mod bind;
 #[path = "build/check.rs"]
@@ -86,8 +92,8 @@ fn main() {
 /// Assembles every shader from its parts (part.rs `PARTS`), and the world's query alone
 /// (`WORLD_ASKED`), and writes each where record.rs includes it. For each shader it also
 /// writes which stages read each binding (`STAGES`, in OUT_DIR), from which every pipeline's
-/// groups take their visibility (record.rs `pipeline`), and what each compute entry point does
-/// with each binding (`ACCESS`).
+/// groups, render and compute, take their visibility (record.rs `stages_reading`), and what
+/// each compute entry point does with each binding (`ACCESS`).
 fn assemble(out: &Path) {
     let read = |name: &str| {
         std::fs::read_to_string(out.join(format!("{name}.wgsl")))
@@ -138,7 +144,7 @@ fn assemble(out: &Path) {
     .expect("the shaders' sources");
     std::fs::write(
         root.join("stages.rs"),
-        format!("/// Each shader's bindings, [group, binding, the stages that read it, a bit a layout kind\n/// that takes it as declared, a bit a vertex entry that reads it (`VERTEX_ENTRY`)], read off it\n/// by build.rs.\npub const STAGES: [&[[u32; 5]]; SHADERS as usize] = [\n{stages}];\n/// Each shader's compute entry points, each with the bindings it uses, [group, binding, its\n/// access (access.rs `READ`, `WRITE`, `ATOMIC`)], read off it by build.rs.\npub const ACCESS: [&[EntryAccess]; SHADERS as usize] = [\n{access}];\n/// A compute entry point's name and its bindings' access, as `ACCESS` holds them.\npub type EntryAccess = (&'static str, &'static [[u32; 3]]);\n{}", bind::BINDS),
+        format!("/// Each shader's bindings, [group, binding, the stages that read it, a bit a layout kind\n/// that takes it as declared, a bit a vertex entry that reads it (`VERTEX_ENTRY`)], read off it\n/// by build.rs.\npub const STAGES: [&[[u32; 5]]; SHADER_CNT as usize] = [\n{stages}];\n/// Each shader's compute entry points, each with the bindings it uses, [group, binding, its\n/// access (access.rs `READ`, `WRITE`, `ATOMIC`)], read off it by build.rs.\npub const ACCESS: [&[EntryAccess]; SHADER_CNT as usize] = [\n{access}];\n/// A compute entry point's name and its bindings' access, as `ACCESS` holds them.\npub type EntryAccess = (&'static str, &'static [[u32; 3]]);\n"),
     )
     .expect("the shaders' stages");
 }

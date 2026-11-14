@@ -9,7 +9,7 @@ use tokio_postgres::Row;
 
 use pxl_spec::bake::tile::place::category_of;
 use pxl_spec::division::{DivisionPart, Subtype};
-use pxl_spec::search::SEARCH_KIND;
+use pxl_spec::search::search_kind;
 use pxl_spec::space::coord::adapter::epsg4326;
 
 use crate::division;
@@ -99,7 +99,7 @@ LIMIT $2"
 #[derive(Serialize)]
 pub(crate) struct SearchResult {
     pub gers_id: String,
-    /// `SEARCH_KIND`.
+    /// `search_kind`.
     pub kind: u8,
     pub name: String,
     /// A place's category (`category_of`), a division's subtype.
@@ -204,7 +204,7 @@ pub(crate) async fn search(
         let context = division::ancestors(pool, &r.gers_id).await?;
         division_results.push(SearchResult {
             gers_id: r.gers_id,
-            kind: SEARCH_KIND::DIVISION,
+            kind: search_kind::DIVISION,
             name: r.name,
             category: u16::from(subtype as u8),
             context,
@@ -226,7 +226,7 @@ pub(crate) async fn search(
         .map(|(r, context)| SearchResult {
             gers_id: r.gers_id,
             name: r.name,
-            kind: SEARCH_KIND::PLACE,
+            kind: search_kind::PLACE,
             category: category_of(&properties::category_of(&r.properties)),
             context,
             lon: r.lon,

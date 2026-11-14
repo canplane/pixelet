@@ -23,7 +23,7 @@ use crate::answer::{
     box_of, fill_eighths, side, transparent, In, Kind, BOX_BITS, BOX_STEPS, EMPTY,
 };
 use crate::axis;
-use pxl_spec::share::EIGHTHS;
+use pxl_spec::share::EIGHTH_CNT;
 use pxl_spec::space::camera::grid::cell_zoom_at;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
@@ -153,7 +153,7 @@ impl Ray {
     /// as 0: the ray does not move along that axis. So every reciprocal is finite (1 / 2^-126
     /// is), a plane's offset times it is a finite number or an infinity, never inf · 0, and no
     /// number the walk compares is NaN, which is what lets `greater` and `lesser` be one
-    /// comparison each. The component and its reciprocal are zeroed together, because `planes`
+    /// comparison each. The component and its reciprocal are zeroed together, because `plane_range`
     /// and `past` branch on the one and multiply by the other.
     pub fn new(dir: [f32; 3], t_max: f32) -> Ray {
         let moves = |d: f32| {
@@ -415,7 +415,7 @@ fn idx_on(root: i32, c: u32, z: Zoom) -> i32 {
 /// (Revelles, Ureña & Lastra 2000). On an axis the ray runs beside, it is the walk's whole
 /// span inside the slab (from `t` to `t_max`), and none outside it, so no extreme value is
 /// needed that a float literal could name past a shader's range.
-fn planes(d: f32, inv: f32, lo: f32, hi: f32, (t, t_max): (f32, f32)) -> (f32, f32) {
+fn plane_range(d: f32, inv: f32, lo: f32, hi: f32, (t, t_max): (f32, f32)) -> (f32, f32) {
     if d > 0.0 {
         (lo * inv, hi * inv)
     } else if d < 0.0 {
@@ -430,7 +430,7 @@ fn planes(d: f32, inv: f32, lo: f32, hi: f32, (t, t_max): (f32, f32)) -> (f32, f
 /// A node's planes, in units from the origin at `og` on the finest grid, each a corner's
 /// (`units`). The far plane is the next node's corner, in the next root where the corner goes
 /// past its own.
-fn bounds(n: &Node, og: [u32; 3]) -> ([f32; 3], [f32; 3]) {
+fn bound(n: &Node, og: [u32; 3]) -> ([f32; 3], [f32; 3]) {
     let u = under(n.zoom);
     let far = |c: u32, og: u32, roots: i32| {
         let last = c.wrapping_add(u);
@@ -449,7 +449,7 @@ fn bounds(n: &Node, og: [u32; 3]) -> ([f32; 3], [f32; 3]) {
     (lo, hi)
 }
 
-/// The ray's t at each axis's near and far planes of a node (`planes`),
+/// The ray's t at each axis's near and far planes of a node (`plane_range`),
 /// from `t`.
 fn spans(
     ray: &Ray,
@@ -457,20 +457,20 @@ fn spans(
     t: f32,
 ) -> ((f32, f32), (f32, f32), (f32, f32)) {
     (
-        planes(ray.dir[0], ray.inverse[0], lo[0], hi[0], (t, ray.t_max)),
-        planes(ray.dir[1], ray.inverse[1], lo[1], hi[1], (t, ray.t_max)),
-        planes(ray.dir[2], ray.inverse[2], lo[2], hi[2], (t, ray.t_max)),
+        plane_range(ray.dir[0], ray.inverse[0], lo[0], hi[0], (t, ray.t_max)),
+        plane_range(ray.dir[1], ray.inverse[1], lo[1], hi[1], (t, ray.t_max)),
+        plane_range(ray.dir[2], ray.inverse[2], lo[2], hi[2], (t, ray.t_max)),
     )
 }
 
 /// The node above `n`, or `n` itself, that holds where `ray` from `o` is at `t`, as the walk's
-/// own planes say (`bounds`, `spans`): the node a walk resumed at `t` starts in. `n` was found
+/// own planes say (`bound`, `spans`): the node a walk resumed at `t` starts in. `n` was found
 /// from a point the float put on the ray, which may lie a step outside the node the ray is in.
 /// It is the root where no node above `n` holds it.
 pub fn holding(o: [i32; 3], ray: &Ray, mut n: Node, t: f32) -> Node {
     let og = grid_of(o);
     loop {
-        let (x, y, z) = spans(ray, bounds(&n, og), t);
+        let (x, y, z) = spans(ray, bound(&n, og), t);
         let (t0, t1) = (
             greater(greater(greater(t, x.0), y.0), z.0),
             lesser(lesser(lesser(ray.t_max, x.1), y.1), z.1),
@@ -495,13 +495,13 @@ fn entry_plane(ray: &Ray, near: [f32; 3]) -> (f32, u32) {
     (greater(axis(near, e), 0.0), e)
 }
 
-/// A cell's planes as it is drawn: its node's planes `(lo, hi)` (`bounds`) inset about their
+/// A cell's planes as it is drawn: its node's planes `(lo, hi)` (`bound`) inset about their
 /// center alike on every axis by the share of its cube that its word `asset` keeps
 /// (`answer::fill_eighths`, `answer::side`). It is a box of that share's volume, the node
 /// itself where it keeps it whole.
-pub fn fill_bounds((lo, hi): ([f32; 3], [f32; 3]), asset: u32) -> ([f32; 3], [f32; 3]) {
+pub fn fill_bound((lo, hi): ([f32; 3], [f32; 3]), asset: u32) -> ([f32; 3], [f32; 3]) {
     let k = fill_eighths(asset);
-    if k == EIGHTHS {
+    if k == EIGHTH_CNT {
         return (lo, hi);
     }
     let by = 0.5 * (1.0 - side(k));
@@ -516,20 +516,20 @@ pub fn fill_bounds((lo, hi): ([f32; 3], [f32; 3]), asset: u32) -> ([f32; 3], [f3
     )
 }
 
-/// The top of the cell a hit met, as it is drawn (`fill_bounds`): the floor of its node `n`
+/// The top of the cell a hit met, as it is drawn (`fill_bound`): the floor of its node `n`
 /// on its grid from the origin `o`, and the share of the node's side by which its top lies
 /// over that floor. The top is its cube's where its word `asset` keeps the cube whole, and its
 /// fill box's otherwise. A walker and decor stand on it (pxl-core domain/query/ray.rs `hit`,
 /// `support::column_surface`).
 pub fn top(o: [i32; 3], n: &Node, asset: u32) -> (i32, f32) {
-    (n.idx(o)[2], fill_bounds(([0.0; 3], [1.0; 3]), asset).1[2])
+    (n.idx(o)[2], fill_bound(([0.0; 3], [1.0; 3]), asset).1[2])
 }
 
 /// The asset `asset` at the node `n` as drawn from the origin `o`, in units from it
-/// (`bounds`, `fill_bounds`): the box that `entry` asks a ray into, as the samples' boxes are
+/// (`bound`, `fill_bound`): the box that `entry` asks a ray into, as the samples' boxes are
 /// drawn (`raster`).
 pub fn asset_box(o: [i32; 3], n: &Node, asset: u32) -> ([f32; 3], [f32; 3]) {
-    fill_bounds(bounds(n, grid_of(o)), asset)
+    fill_bound(bound(n, grid_of(o)), asset)
 }
 
 /// Where `ray` from the origin `o` enters the cell of `asset` (an asset's word, `answer`) at
@@ -549,7 +549,7 @@ pub struct Entry {
     pub axis: u32,
     /// Whether it enters within its interval, `span[1] > span[0]`.
     pub enters: bool,
-    /// The t at each axis's near plane and far plane (`planes`).
+    /// The t at each axis's near plane and far plane (`plane_range`).
     pub near: [f32; 3],
     pub far: [f32; 3],
     /// Where its interval in the cell begins and ends.
@@ -630,7 +630,7 @@ pub trait Query {
         at: &mut Self::At,
         zoom: Zoom,
         node: [i32; 3],
-        zooms: [Zoom; 2],
+        range: [Zoom; 2],
         t0: f32,
     ) -> In<[u32; 2]>;
 }
@@ -656,7 +656,7 @@ pub struct Hit<A> {
 pub enum End {
     Hit,
     Miss,
-    Lacks,
+    Lack,
 }
 
 /// What the walk met: how it ended, and where it stopped when it did.
@@ -700,15 +700,15 @@ fn node_dist_sq(lo: [f32; 3], hi: [f32; 3]) -> [f32; 2] {
 /// alone, so a node has one answer for every ray through it. A ray asks no coarser within the
 /// node than at its farthest corner, so this only adds zooms coarser than the ray's own, which
 /// splits more and stops on the same cell.
-fn ask_zooms(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
+fn ask_range(detail: Detail, [far, near]: [f32; 2]) -> [Zoom; 2] {
     [detail.at(far), detail.at(near)]
 }
 
-/// The zooms every ray from the origin `o` asks the node `n` at (`ask_zooms`), as the walk
+/// The zooms every ray from the origin `o` asks the node `n` at (`ask_range`), as the walk
 /// asks them: far, then near.
-pub fn node_zooms(o: [i32; 3], n: &Node, detail: Detail) -> [Zoom; 2] {
-    let (lo, hi) = bounds(n, grid_of(o));
-    ask_zooms(detail, node_dist_sq(lo, hi))
+pub fn node_range(o: [i32; 3], n: &Node, detail: Detail) -> [Zoom; 2] {
+    let (lo, hi) = bound(n, grid_of(o));
+    ask_range(detail, node_dist_sq(lo, hi))
 }
 
 fn squared(v: [f32; 3]) -> f32 {
@@ -834,11 +834,11 @@ impl<A: Copy> Keep<A> for () {
 /// The walk holds its node, each axis an integer in its root (`Node`), and where the ray is,
 /// `t`; the planes, the span and the axis entered across are worked out from those where
 /// asked. A node is entered once and asked whether anything under it may stop the ray at
-/// the zooms every ray from the origin asks within it (`zooms`). A cell, the asset at that
+/// the zooms every ray from the origin asks within it (`node_range`). A cell, the asset at that
 /// zoom or air where everything under it is air, is where the walk stops or goes on past. For
 /// an eye or a body it stops where the cell is one `until` stops at, except in the cell it
 /// starts in, and where the ray enters the box of a cell keeping less than its cube
-/// (`fill_bounds`); for what a body climbs out of, it stops where the cell is transparent.
+/// (`fill_bound`); for what a body climbs out of, it stops where the cell is transparent.
 /// Otherwise the walk enters the child the ray is in (PUSH, Laine & Karras 2010 §3). Past a
 /// node, the corner steps on the axis the ray leaves by (Amanatides & Woo 1987), and the walk
 /// moves to the child, holding the next node, of the nearest ancestor that holds it, found by
@@ -887,7 +887,7 @@ pub fn walk_at_most<Q: Query>(
     while step < step_cap {
         step += 1;
         let u = under(n.zoom);
-        let (lo, hi) = bounds(&n, og);
+        let (lo, hi) = bound(&n, og);
         // The ray's span in it.
         let (x, y, z) = spans(ray, (lo, hi), t);
         let (t0, t1) = (
@@ -898,7 +898,7 @@ pub fn walk_at_most<Q: Query>(
         let mut into = false;
         if t1 > t0 {
             let dist_sq = node_dist_sq(lo, hi);
-            let i = q.node(&mut at, n.zoom, n.idx(o), ask_zooms(detail, dist_sq), t0);
+            let i = q.node(&mut at, n.zoom, n.idx(o), ask_range(detail, dist_sq), t0);
             let inside = lo[0] <= 0.0
                 && 0.0 < hi[0]
                 && lo[1] <= 0.0
@@ -956,17 +956,17 @@ pub fn walk_at_most<Q: Query>(
                 Until::Transparent => transparent(i.asset[0]),
             };
             let end = match i.kind {
-                Kind::Lacks => End::Lacks,
-                // A cell keeping less than its cube is the box its share fills (`fill_bounds`): an eye's or
+                Kind::Lack => End::Lack,
+                // A cell keeping less than its cube is the box its share fills (`fill_bound`): an eye's or
                 // a body's ray stops where it enters the box and passes it as air where it misses; a beam
                 // ray stops at its node, since the samples it hands on may meet the box.
                 Kind::Cell
                     if until == Until::Opaque
                         && stops
                         && !inside
-                        && fill_eighths(i.asset[0]) < EIGHTHS =>
+                        && fill_eighths(i.asset[0]) < EIGHTH_CNT =>
                 {
-                    let (bx, by, bz) = spans(ray, fill_bounds((lo, hi), i.asset[0]), t);
+                    let (bx, by, bz) = spans(ray, fill_bound((lo, hi), i.asset[0]), t);
                     let (b0, b1) = (
                         greater(greater(greater(t, bx.0), by.0), bz.0),
                         lesser(lesser(lesser(ray.t_max, bx.1), by.1), bz.1),
@@ -1255,8 +1255,8 @@ pub(crate) mod tests {
     }
     use crate::answer::{fill_word, BOX_WHOLE};
     use crate::content::Sample;
-    use pxl_spec::share::{eighths, EIGHTHS, FULL};
-    use pxl_spec::value::AIR;
+    use pxl_spec::asset::cube::Sentinel;
+    use pxl_spec::share::{eighths, EIGHTH_CNT, FULL};
 
     /// One cell of stone at `TARGET`, a unit cell, keeping `fill` eighths of its cube, with air
     /// around it.
@@ -1291,7 +1291,7 @@ pub(crate) mod tests {
                 },
                 _ => In {
                     kind: Kind::Cell,
-                    asset: [AIR, 0],
+                    asset: [Sentinel::Air as u32, 0],
                 },
             }
         }
@@ -1312,18 +1312,18 @@ pub(crate) mod tests {
 
     #[test]
     fn share_box_volume() {
-        for k in 1..=EIGHTHS {
-            let (lo, hi) = fill_bounds(([0.0; 3], [1.0; 3]), fill_word(0, k));
+        for k in 1..=EIGHTH_CNT {
+            let (lo, hi) = fill_bound(([0.0; 3], [1.0; 3]), fill_word(0, k));
             let volume = (hi[0] - lo[0]) * (hi[1] - lo[1]) * (hi[2] - lo[2]);
             assert!(
-                (volume - k as f32 / EIGHTHS as f32).abs() < 1e-6,
+                (volume - k as f32 / EIGHTH_CNT as f32).abs() < 1e-6,
                 "{k}: {volume}"
             );
             // Centered on the cube's center.
             assert!((lo[0] + hi[0] - 1.0).abs() < 1e-6);
         }
         // What fills a share keeps its eighths, floored.
-        assert_eq!(eighths(FULL), EIGHTHS);
+        assert_eq!(eighths(FULL), EIGHTH_CNT);
         assert_eq!(eighths(FULL / 8 - 1), 0);
         assert_eq!(eighths(3 * FULL / 8), 3);
     }
@@ -1336,7 +1336,7 @@ pub(crate) mod tests {
         assert!((trace.hit.t - 5.25).abs() < 1e-5, "{}", trace.hit.t);
         assert_eq!(trace.hit.axis, 0);
         // Whole, the cube's face.
-        let trace = along(EIGHTHS, 0.5, 0.5);
+        let trace = along(EIGHTH_CNT, 0.5, 0.5);
         assert!((trace.hit.t - 5.0).abs() < 1e-5, "{}", trace.hit.t);
     }
 
@@ -1360,6 +1360,6 @@ pub(crate) mod tests {
         let trace = along(4, 0.5, 0.05);
         assert_eq!(trace.end, End::Miss);
         // The whole cube stops it there.
-        assert_eq!(along(EIGHTHS, 0.1, 0.5).end, End::Hit);
+        assert_eq!(along(EIGHTH_CNT, 0.1, 0.5).end, End::Hit);
     }
 }

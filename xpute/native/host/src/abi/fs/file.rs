@@ -10,165 +10,178 @@
     reason = "generated from WIT"
 )]
 
-use crate::link;
-use crate::wait;
-use std::rc::Rc;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::abi::types::Lent;
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
 /// `[method]file.size`
-pub const FILE_SIZE: Method = 0;
+pub const FILE_SIZE: _rt::Method = 0;
 /// `[method]file.read`
-pub const FILE_READ: Method = 1;
+pub const FILE_READ: _rt::Method = 1;
 /// `[method]file.write`
-pub const FILE_WRITE: Method = 2;
+pub const FILE_WRITE: _rt::Method = 2;
 /// `[method]file.changed`
-pub const FILE_CHANGED: Method = 3;
+pub const FILE_CHANGED: _rt::Method = 3;
 /// `[method]file.close`
-pub const FILE_CLOSE: Method = 4;
+pub const FILE_CLOSE: _rt::Method = 4;
 
-pub trait File {
-    fn size(&self, task_return: Return<u32>);
-    fn read(&self, buf: Lent, task_return: Return<u32>);
-    fn write(&self, buf: Lent, task_return: Return<()>);
-    fn changed(&self, task_return: Return<()>);
-    fn close(&self, task_return: Return<()>);
+pub trait HostFile {
+    fn size(&self, task_return: _rt::Return<u32>);
+    fn read(&self, buf: _rt::Lent, task_return: _rt::Return<u32>);
+    fn write(&self, buf: _rt::Lent, task_return: _rt::Return<()>);
+    fn changed(&self, task_return: _rt::Return<()>);
+    fn close(&self, task_return: _rt::Return<()>);
 }
 
-struct FileObject(Rc<dyn File>);
+struct _FileObject(_rt::Rc<dyn HostFile>);
 
-impl Object for FileObject {
-    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
-        let run = || -> Result<Reply, MarshalError> {
+impl _rt::Object for _FileObject {
+    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+        let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 FILE_SIZE => {
-                    self.0.size(Return::new(
+                    self.0.size(_rt::Return::new(
                         tag_,
-                        link::on_cancel,
+                        _rt::link::on_cancel,
                         Box::new(move |got| {
                             let reply = match got {
-                                Ok(v) => Reply::from(v as i32),
-                                Err(e) => Reply::from(e as i32),
+                                Ok(v) => _rt::Reply {
+                                    result: 0,
+                                    data: Some((
+                                        4,
+                                        Box::new(move |w: &mut _rt::Lower| {
+                                            w.u32(0, *&v);
+                                        }),
+                                    )),
+                                },
+                                Err(e) => _rt::Reply::from(e as i32),
                             };
-                            link::task_return(
+                            _rt::link::task_return(
                                 tag_,
                                 reply.result,
                                 reply
                                     .data
                                     .as_ref()
-                                    .map(|(n, w)| (*n, &**w as &dyn Fn(&mut PacketWriter))),
+                                    .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
                             )
                         }),
                     ));
-                    Reply::from(Errno::EINPROGRESS as i32)
+                    _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
                 }
                 FILE_READ => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let buf = b_.at(0).and_then(|c| Lent::read(c))?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let buf = _rt::Lent::load(r_, 0)?;
                     self.0.read(
                         buf,
-                        Return::new(
+                        _rt::Return::new(
                             tag_,
-                            link::on_cancel,
+                            _rt::link::on_cancel,
                             Box::new(move |got| {
                                 let reply = match got {
-                                    Ok(v) => Reply::from(v as i32),
-                                    Err(e) => Reply::from(e as i32),
+                                    Ok(v) => _rt::Reply {
+                                        result: 0,
+                                        data: Some((
+                                            4,
+                                            Box::new(move |w: &mut _rt::Lower| {
+                                                w.u32(0, *&v);
+                                            }),
+                                        )),
+                                    },
+                                    Err(e) => _rt::Reply::from(e as i32),
                                 };
-                                link::task_return(
+                                _rt::link::task_return(
                                     tag_,
                                     reply.result,
                                     reply
                                         .data
                                         .as_ref()
-                                        .map(|(n, w)| (*n, &**w as &dyn Fn(&mut PacketWriter))),
+                                        .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
                                 )
                             }),
                         ),
                     );
-                    Reply::from(Errno::EINPROGRESS as i32)
+                    _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
                 }
                 FILE_WRITE => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let buf = b_.at(0).and_then(|c| Lent::read(c))?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let buf = _rt::Lent::load(r_, 0)?;
                     self.0.write(
                         buf,
-                        Return::new(
+                        _rt::Return::new(
                             tag_,
-                            link::on_cancel,
+                            _rt::link::on_cancel,
                             Box::new(move |got| {
                                 let reply = match got {
-                                    Ok(v) => Reply::from(0),
-                                    Err(e) => Reply::from(e as i32),
+                                    Ok(v) => _rt::Reply::from(0),
+                                    Err(e) => _rt::Reply::from(e as i32),
                                 };
-                                link::task_return(
+                                _rt::link::task_return(
                                     tag_,
                                     reply.result,
                                     reply
                                         .data
                                         .as_ref()
-                                        .map(|(n, w)| (*n, &**w as &dyn Fn(&mut PacketWriter))),
+                                        .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
                                 )
                             }),
                         ),
                     );
-                    Reply::from(Errno::EINPROGRESS as i32)
+                    _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
                 }
                 FILE_CHANGED => {
-                    self.0.changed(Return::new(
+                    self.0.changed(_rt::Return::new(
                         tag_,
-                        link::on_cancel,
+                        _rt::link::on_cancel,
                         Box::new(move |got| {
                             let reply = match got {
-                                Ok(v) => Reply::from(0),
-                                Err(e) => Reply::from(e as i32),
+                                Ok(v) => _rt::Reply::from(0),
+                                Err(e) => _rt::Reply::from(e as i32),
                             };
-                            link::task_return(
+                            _rt::link::task_return(
                                 tag_,
                                 reply.result,
                                 reply
                                     .data
                                     .as_ref()
-                                    .map(|(n, w)| (*n, &**w as &dyn Fn(&mut PacketWriter))),
+                                    .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
                             )
                         }),
                     ));
-                    Reply::from(Errno::EINPROGRESS as i32)
+                    _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
                 }
                 FILE_CLOSE => {
-                    self.0.close(Return::new(
+                    self.0.close(_rt::Return::new(
                         tag_,
-                        link::on_cancel,
+                        _rt::link::on_cancel,
                         Box::new(move |got| {
                             let reply = match got {
-                                Ok(v) => Reply::from(0),
-                                Err(e) => Reply::from(e as i32),
+                                Ok(v) => _rt::Reply::from(0),
+                                Err(e) => _rt::Reply::from(e as i32),
                             };
-                            link::task_return(
+                            _rt::link::task_return(
                                 tag_,
                                 reply.result,
                                 reply
                                     .data
                                     .as_ref()
-                                    .map(|(n, w)| (*n, &**w as &dyn Fn(&mut PacketWriter))),
+                                    .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
                             )
                         }),
                     ));
-                    Reply::from(Errno::EINPROGRESS as i32)
+                    _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
                 }
-                _ => Reply::from(Errno::ENOSYS as i32),
+                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
             })
         };
-        run().unwrap_or_else(|e| Reply::from(e.errnum as i32))
+        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
     }
 }
 
 /// The object over `imp`, for an opener to answer.
-pub fn file(imp: Rc<dyn File>) -> Rc<dyn Object> {
-    Rc::new(FileObject(imp))
+pub fn file(imp: _rt::Rc<dyn HostFile>) -> _rt::Rc<dyn _rt::Object> {
+    _rt::Rc::new(_FileObject(imp))
+}
+
+mod _rt {
+    pub use crate::link;
+    pub use std::rc::Rc;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::abi::types::Lent;
+    pub use xpute_link::{Lift, Lower, Method, Object, Reply, Return, Tag};
 }

@@ -7,11 +7,11 @@
 //! compiles them in ts/tool/shader/probe.html.
 
 use pxl_render::frame::shader::record::{
-    self, compute, COMPUTES, FRAGMENT_ENTRY, HDR, NO_DEPTH, PARTS, PER_INSTANCE, PIPELINES, STRIP,
-    VERTEX_ENTRY,
+    self, compute, COMPUTE_CNT, FRAGMENT_ENTRY, HDR, NO_DEPTH, PARTS, PER_INSTANCE, PIPELINE_CNT,
+    STRIP, VERTEX_ENTRY,
 };
 use pxl_render::gpu::api::vertex_format;
-use xpute_gpu_link::enums::VERTEX_FORMAT;
+use xpute_gpu_link::enums::VERTEX_FORMATS;
 
 fn main() {
     let dir = std::env::args()
@@ -31,7 +31,7 @@ fn main() {
     }
     write("world_asked.wgsl", record::WORLD_ASKED);
     let mut pipelines: Vec<String> = Vec::new();
-    for id in 0..PIPELINES {
+    for id in 0..PIPELINE_CNT {
         let words = record::pipeline(id);
         let mut at = HDR as usize;
         let mut next = || {
@@ -49,7 +49,7 @@ fn main() {
                 let attributes: Vec<String> = (0..next())
                     .map(|_| {
                         let (location, off) = (next(), next());
-                        let format = VERTEX_FORMAT[vertex_format(next()) as usize];
+                        let format = VERTEX_FORMATS[vertex_format(next()) as usize];
                         format!(
                             r#"{{"shaderLocation":{location},"offset":{off},"format":"{format}"}}"#
                         )
@@ -79,8 +79,8 @@ fn main() {
             words[5] != NO_DEPTH
         ));
     }
-    for id in 0..COMPUTES {
-        let (shader, entry) = compute(id);
+    for id in 0..COMPUTE_CNT {
+        let (shader, entry, _) = compute(id);
         pipelines.push(format!(
             r#"{{"module":"{}","compute":"{entry}"}}"#,
             names[shader as usize]

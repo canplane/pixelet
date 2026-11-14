@@ -32,7 +32,7 @@ fn cover(under_fill: u32, kind: u32, over: u32) -> Cover {
   if (fills(kind)) {
     return Cover(min(under_fill + over, FULL), over >= under_fill);
   }
-  let over_eighths = (over / (FULL / EIGHTHS)) * (FULL / EIGHTHS);
+  let over_eighths = (over / (FULL / EIGHTH_CNT)) * (FULL / EIGHTH_CNT);
   return Cover(select(under_fill - over_eighths, 0u, over_eighths > under_fill), false);
 }
 
@@ -228,9 +228,9 @@ fn ground_column(shard: u32, place: u32, zoom: u32, b: vec2<i32>) -> Cell {
     let slot = lookup_slot(s.place);
     let i = cell_id(s.at);
     let base = brick_at(slot);
-    fold = fold_at(slot * BRICK_CELLS + i);
+    fold = fold_at(slot * BRICK_CELL_CNT + i);
     column = ground[base + COLUMNS_AT + i];
-    own = (ground[base + OWN_AT + i / OWN_CELLS] >> (8u * (i % OWN_CELLS))) & 0xffu;
+    own = (ground[base + OWN_AT + i / OWN_CELL_CNT] >> (8u * (i % OWN_CELL_CNT))) & 0xffu;
   }
   let t = top_of(zoom, column_top(column));
   return Cell(select(own, VAL_UNKNOWN, is_wall(shard, zoom, b)), t.cells, t.part, fold);
@@ -311,11 +311,11 @@ fn ground_cell(shard: u32, place: u32, zoom: u32, c: vec3<i32>) -> GroundCell {
   }
   let r = bound_over(place, zoom, zoom, zoom, c.xy);
   if (!r.here) {
-    return ground_none(KIND_LACKS, vec2<u32>(VAL_VOID, 0u), r.place);
+    return ground_none(KIND_LACK, vec2<u32>(VAL_VOID, 0u), r.place);
   }
   let col = ground_column(shard, r.place, zoom, c.xy);
   var asset = VAL_VOID;
-  if (col.asset_id == VAL_UNKNOWN || grounds(col.asset_id)) {
+  if (col.asset_id == VAL_UNKNOWN || is_ground(col.asset_id)) {
     asset = by_depth(zoom, col.asset_id, col.top, c.z);
   }
   var cave = 0u;
@@ -462,7 +462,7 @@ fn hand_down(zoom: u32, c: vec3<i32>, p: Piece, want: u32) -> Piece {
     let cnt = cells[i];
     rest -= cnt;
     let share = min((cnt << 16u) / max(cnt + rest, 1u), 0xffffu);
-    let got = halve(left, vec2<u32>(cnt * CELL_BLOCKS, rest * CELL_BLOCKS), weight(share, rotl(wh, 7u * i + 3u)));
+    let got = halve(left, vec2<u32>(cnt * CELL_BLOCK_CNT, rest * CELL_BLOCK_CNT), weight(share, rotl(wh, 7u * i + 3u)));
     if (i == at) {
       want_blocks = got;
     }
@@ -588,7 +588,7 @@ fn cave_key(a: vec3<i32>, ab: vec3<i32>, l: i32, h: u32, b: u32) -> i32 {
 /// lane past the cube's blocks starts ranked past every hollow block.
 fn hollow_from(h: u32, blocks: u32, side_in: u32, side_out: u32, lo: vec3<u32>, t: u32) -> u32 {
   let n = 1u << (3u * t);
-  if (blocks >= CELL_BLOCKS) {
+  if (blocks >= CELL_BLOCK_CNT) {
     return n;
   }
   let a = side_middle(side_in);
@@ -608,7 +608,7 @@ fn hollow_from(h: u32, blocks: u32, side_in: u32, side_out: u32, lo: vec3<u32>, 
   let most = vec4<u32>(blocks);
   var b0 = select(most, vec4<u32>(0u), vec4<u32>(0u, 1u, 2u, 3u) < vec4<u32>(n));
   var b1 = select(most, vec4<u32>(0u), vec4<bool>(n > 4u));
-  for (var o = 0u; o < CELL_BLOCKS && !(all(b0 >= most) && all(b1 >= most)); o += 1u) {
+  for (var o = 0u; o < CELL_BLOCK_CNT && !(all(b0 >= most) && all(b1 >= most)); o += 1u) {
     let k = vec4<i32>(cave_key(a, ab, l, h, o));
     let ov = vec4<u32>(o);
     b0 += select(vec4<u32>(0u), vec4<u32>(1u), (b0 < most) & ((k < m0) | ((k == m0) & (ov < ids0))));
@@ -692,7 +692,7 @@ fn world_cell(above: vec3<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
   }
   let g = ground_cell(shard, above.z, zoom, c);
   let at = vec3<u32>(put, shard, g.place);
-  if (g.kind == KIND_LACKS && over == VAL_VOID) {
+  if (g.kind == KIND_LACK && over == VAL_VOID) {
     return Answer(g.kind, g.asset, at);
   }
   // The ground's asset, its share less what its caves take, and its four palette indices;
@@ -729,12 +729,12 @@ fn world_cell(above: vec3<u32>, shard: u32, zoom: u32, c: vec3<i32>, carve: vec4
   }
   let filled = eighths(fill);
   if (filled == 0u) {
-    if (g.kind == KIND_LACKS) {
+    if (g.kind == KIND_LACK) {
       return Answer(g.kind, g.asset, at);
     }
     return Answer(KIND_CELL, vec2<u32>(select(VAL_VOID, PLACED_ASSET | VAL_AIR, over == VAL_AIR), 0u), at);
   }
-  let asset = val | ((filled % EIGHTHS) << FILL_SHIFT);
+  let asset = val | ((filled % EIGHTH_CNT) << FILL_SHIFT);
   return Answer(KIND_CELL, vec2<u32>(asset, four), at);
 }
 

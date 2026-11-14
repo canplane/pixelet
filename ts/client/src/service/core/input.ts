@@ -1,7 +1,18 @@
 // @pxl/client/service/core/input.ts
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
-import { PointerPhase, PointerType } from "@/abi/input.ts";
+import {
+  type PointerPhase,
+  type PointerType,
+  POINTER_PHASE_DOWN,
+  POINTER_PHASE_MOVE,
+  POINTER_PHASE_UP,
+  POINTER_PHASE_CANCEL,
+  POINTER_PHASE_OUT,
+  POINTER_TYPE_MOUSE,
+  POINTER_TYPE_TOUCH,
+  POINTER_TYPE_PEN,
+} from "@/abi/input.enum.ts";
 import {
   type PointerKind,
   type PointerPhase as PlacePhase,
@@ -33,7 +44,7 @@ export function pinch(scale: f64): void {
   void input.pinch(ui, scale);
 }
 
-export function keys(x: i32, y: i32): void {
+export function move(x: i32, y: i32): void {
   void input.move(ui, x, y);
 }
 
@@ -44,15 +55,15 @@ export function open(): () => void {
 }
 
 export const POINTER_PHASE: Readonly<Record<PlacePhase, PointerPhase>> = {
-  down: PointerPhase.Down,
-  move: PointerPhase.Move,
-  up: PointerPhase.Up,
-  cancel: PointerPhase.Cancel,
-  out: PointerPhase.Out,
+  down: POINTER_PHASE_DOWN,
+  move: POINTER_PHASE_MOVE,
+  up: POINTER_PHASE_UP,
+  cancel: POINTER_PHASE_CANCEL,
+  out: POINTER_PHASE_OUT,
 };
 
 export const POINTER_KIND: Readonly<Record<PointerKind, PointerType>> = {
-  mouse: PointerType.Mouse,
-  touch: PointerType.Touch,
-  pen: PointerType.Pen,
+  mouse: POINTER_TYPE_MOUSE,
+  touch: POINTER_TYPE_TOUCH,
+  pen: POINTER_TYPE_PEN,
 };

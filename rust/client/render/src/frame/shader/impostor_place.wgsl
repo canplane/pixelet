@@ -5,7 +5,7 @@
 // (impostor.wgsl) and the mark (tile_mark.wgsl) both place the quad here, so
 // the mark covers the pixels the impostor draws.
 
-@group(2) @binding(2) var<uniform> fits: array<vec4f, DECOR_GROUPS>;
+@group(2) @binding(2) var<uniform> fits: array<vec4f, DECOR_GROUP_CNT>;
 
 struct VertexIn {
   @builtin(instance_index) i: u32,

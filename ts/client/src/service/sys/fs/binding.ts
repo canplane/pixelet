@@ -11,13 +11,13 @@
  * settings and the objects' edits are written. */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_ENOENT, ERRNO_EROFS } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 
 import { LEAF_ZOOM, path, SHARD_ZOOM } from "@/abi/file.spec.ts";
 import {
-  type BaseLayer,
   TILE_SPHERE,
+  type BASE_LAYERS,
 } from "@/service/origin/publication.spec.ts";
 import { read_asset } from "@/service/sys/fs/asset.ts";
 import { OBJECTS, TOP_KEY } from "@/service/sys/fs/object.ts";
@@ -53,11 +53,11 @@ const QUADKEY = new RegExp(`^[0-3]{1,${LEAF_ZOOM}}$`);
 const SHARD = new RegExp(`^[0-3]{${SHARD_ZOOM}}$`);
 
 const none = (): never => {
-  throw new FaultError(Errno.ENOENT);
+  throw new FaultError(ERRNO_ENOENT);
 };
 
 const read_only = (): never => {
-  throw new FaultError(Errno.EROFS);
+  throw new FaultError(ERRNO_EROFS);
 };
 
 /** The one string left, where `form` matches it. */
@@ -69,7 +69,7 @@ function string_of(rest: Path, form: RegExp): string | undefined {
 }
 
 /** A bake's tiles, each by its quadkey. */
-function bake(kind: keyof typeof BaseLayer): Handler {
+function bake(kind: (typeof BASE_LAYERS)[number]): Handler {
   return {
     open(rest, signal) {
       const key = string_of(rest, QUADKEY) ?? none();

@@ -2,14 +2,16 @@
 // are in km. A point on a ray is (r, mu), as Bruneton writes it: its radius from the
 // planet's center and the cosine of the ray's angle from the zenith there.
 
-// The atmosphere's words. Their fields are frame/shader/word.rs `atmos`'s, and
-// build.rs writes their accessors here.
+// The atmosphere's words: what of the air moves. Their fields are
+// frame/shader/word.rs `atmos`'s, and build.rs writes their accessors here, with
+// the air's numbers, which never move, as constants (build/shared.rs
+// `atmos_medium`).
 @group(0) @binding(8) var<uniform> atmos_words: array<vec4f, ATMOS_VEC4S>;
 
 // The eye's radius, held a meter above the ground. It may lie above the top of
 // the atmosphere, for an eye in space.
 fn camera_r() -> f32 {
-  return atmos_bottom_radius() + max(atmos_camera_alt(), 0.001);
+  return BOTTOM_RADIUS_KM + max(atmos_camera_alt(), 0.001);
 }
 
 struct Medium {
@@ -20,12 +22,12 @@ struct Medium {
 };
 
 fn medium_at(h: f32) -> Medium {
-  let r = exp(-h / atmos_rayleigh_scale_height());
-  let m = exp(-h / atmos_mie_scale_height());
-  let o = max(0.0, 1.0 - abs(h - atmos_ozone_center()) / atmos_ozone_half_width());
-  let rayleigh = atmos_rayleigh_scattering() * r;
-  let mie = vec3f(atmos_mie_scattering() * m);
-  return Medium(rayleigh, mie, rayleigh + mie, rayleigh + vec3f(atmos_mie_extinction() * m) + atmos_ozone_absorption() * o);
+  let r = exp(-h / RAYLEIGH_SCALE_HEIGHT_KM);
+  let m = exp(-h / MIE_SCALE_HEIGHT_KM);
+  let o = max(0.0, 1.0 - abs(h - OZONE_CENTER_KM) / OZONE_HALF_WIDTH_KM);
+  let rayleigh = RAYLEIGH_SCATTERING * r;
+  let mie = vec3f(MIE_SCATTERING * m);
+  return Medium(rayleigh, mie, rayleigh + mie, rayleigh + vec3f(MIE_EXTINCTION * m) + OZONE_ABSORPTION * o);
 }
 
 fn rayleigh_phase(c: f32) -> f32 {
@@ -34,7 +36,7 @@ fn rayleigh_phase(c: f32) -> f32 {
 
 // Cornette-Shanks's phase, which keeps a hazy sky bright opposite the sun.
 fn mie_phase(c: f32) -> f32 {
-  let g = atmos_mie_g();
+  let g = MIE_G;
   let k = 3.0 * INV_4PI / 2.0 * (1.0 - g * g) / (2.0 + g * g);
   return k * (1.0 + c * c) / pow(max(1.0 + g * g - 2.0 * g * c, 1e-4), 1.5);
 }
@@ -48,7 +50,7 @@ fn to_sphere(r: f32, mu: f32, radius: f32) -> f32 {
 }
 
 fn meets_ground(r: f32, mu: f32) -> bool {
-  return meets_sphere(r, mu, atmos_bottom_radius());
+  return meets_sphere(r, mu, BOTTOM_RADIUS_KM);
 }
 
 // The radius `t` km along a ray from radius `r` at cosine `mu`.
@@ -60,15 +62,15 @@ fn radius_along(r: f32, mu: f32, t: f32) -> f32 {
 // there. It is not taken as the difference of two radii, which rounds a short
 // step near the ground away.
 fn height_along(r: f32, mu: f32, t: f32, rt: f32) -> f32 {
-  return max(r - atmos_bottom_radius() + t * (2.0 * r * mu + t) / (rt + r), 0.0);
+  return max(r - BOTTOM_RADIUS_KM + t * (2.0 * r * mu + t) / (rt + r), 0.0);
 }
 
 fn to_top(r: f32, mu: f32) -> f32 {
-  return max(-r * mu + sqrt(max(r * r * (mu * mu - 1.0) + atmos_top_radius() * atmos_top_radius(), 0.0)), 0.0);
+  return max(-r * mu + sqrt(max(r * r * (mu * mu - 1.0) + TOP_RADIUS_KM * TOP_RADIUS_KM, 0.0)), 0.0);
 }
 
 fn to_ground(r: f32, mu: f32) -> f32 {
-  return to_sphere(r, mu, atmos_bottom_radius());
+  return to_sphere(r, mu, BOTTOM_RADIUS_KM);
 }
 
 fn air_path(r: f32, mu: f32) -> f32 {
@@ -95,7 +97,7 @@ fn to_land(dir: vec3f) -> f32 {
 }
 
 fn land_radius() -> f32 {
-  return atmos_bottom_radius() + atmos_land_alt_km();
+  return BOTTOM_RADIUS_KM + atmos_land_alt_km();
 }
 
 // How light `k`'s sky view and its share of the air's volume were laid
@@ -158,10 +160,10 @@ fn mu_step(r: f32, mu: f32) -> f32 {
 // Bruneton's mapping of (r, mu) into the transmittance table, which spends its
 // rows where transmittance changes.
 fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {
-  let bottom = atmos_bottom_radius();
-  let top = atmos_top_radius();
+  let bottom = BOTTOM_RADIUS_KM;
+  let top = TOP_RADIUS_KM;
   let r = min(r_in, top);
-  let h = atmos_horizon_to_top();
+  let h = HORIZON_TO_TOP_KM;
   let rho = sqrt(max(r * r - bottom * bottom, 0.0));
   let d = to_top(r, mu);
   let d_min = top - r;
@@ -172,11 +174,11 @@ fn transmittance_uv(r_in: f32, mu: f32) -> vec2f {
 }
 
 fn transmittance_r_mu(uv: vec2f) -> vec2f {
-  let bottom = atmos_bottom_radius();
-  let top = atmos_top_radius();
+  let bottom = BOTTOM_RADIUS_KM;
+  let top = TOP_RADIUS_KM;
   let x_mu = unit_of(uv.x, TRANSMITTANCE_SIZE.x);
   let x_r = unit_of(uv.y, TRANSMITTANCE_SIZE.y);
-  let h = atmos_horizon_to_top();
+  let h = HORIZON_TO_TOP_KM;
   let rho = h * x_r;
   let r = sqrt(rho * rho + bottom * bottom);
   let d_min = top - r;
@@ -191,7 +193,7 @@ fn transmittance_r_mu(uv: vec2f) -> vec2f {
 
 fn multiscatter_uv(r: f32, mu_s: f32) -> vec2f {
   let x = mu_s * 0.5 + 0.5;
-  let y = (r - atmos_bottom_radius()) / (atmos_top_radius() - atmos_bottom_radius());
+  let y = (r - BOTTOM_RADIUS_KM) / (TOP_RADIUS_KM - BOTTOM_RADIUS_KM);
   return vec2f(coord_of(clamp(x, 0.0, 1.0), MULTISCATTER_SIZE.x), coord_of(clamp(y, 0.0, 1.0), MULTISCATTER_SIZE.y));
 }
 

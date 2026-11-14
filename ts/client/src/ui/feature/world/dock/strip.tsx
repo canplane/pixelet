@@ -27,8 +27,8 @@ import {
   useRecentPicks,
   useSwatchFlash,
 } from "./store.ts";
-import { Tool } from "@/abi/edit.ts";
-import { Kind } from "@/ui/shared/asset/id.spec.ts";
+import { TOOL_ERASER, TOOL_POINTER } from "@/abi/edit.enum.ts";
+import { KIND_DECOR, KIND_MARKER } from "@/ui/shared/asset/id.spec.ts";
 import {
   type AssetId,
   type Cube,
@@ -209,9 +209,9 @@ function PickButton({
   gesture: Omit<SizeGesture, "press">;
 }) {
   switch (kindOf(id)) {
-    case Kind.decor:
+    case KIND_DECOR:
       return <DecorIconButton id={id} />;
-    case Kind.marker:
+    case KIND_MARKER:
       return <MarkerButton />;
     default:
       return <SwatchButton cube={id} gesture={gesture} />;
@@ -302,14 +302,14 @@ export function Strip({
         <ToolButton
           label={t("world.dock.pointer")}
           glyph="hand.point.up.left"
-          active={activeTool === Tool.Pointer}
-          onPress={() => selectTool(Tool.Pointer)}
+          active={activeTool === TOOL_POINTER}
+          onPress={() => selectTool(TOOL_POINTER)}
         />
         <ToolButton
           label={t("world.dock.eraser")}
           glyph="eraser"
-          active={activeTool === Tool.Eraser}
-          onPress={() => selectTool(Tool.Eraser)}
+          active={activeTool === TOOL_ERASER}
+          onPress={() => selectTool(TOOL_ERASER)}
         />
       </View>
 

@@ -16,7 +16,12 @@ import { REPO, treeFile, WORKSPACE } from "@pxl/build/path.ts";
 import { CONSOLE_PATH, consoleHandler } from "@pxl/build/console.ts";
 import { digest } from "@pxl/build/constant.ts";
 import { stamp } from "@pxl/build/stamp.ts";
-import { forward, type Middleware, route_target } from "./script/proxy.ts";
+import {
+  forward,
+  type Middleware,
+  route_target,
+  tile_source,
+} from "./script/proxy.ts";
 
 // The app's directory is found from the workspace that the aliases are read
 // under, because Expo loads this file through its own transform, which does
@@ -157,9 +162,10 @@ export default {
   // directory. The bundle reads nothing outside these folders.
   watchFolders: [WORKSPACE, ...XPUTE],
   cacheStores: [new Store({ root: CACHE })],
-  // A build made for measuring differs in what its modules compile to
-  // (babel.config.ts), so it shares no transform with any other.
-  cacheVersion: `${base.cacheVersion ?? ""}${process.env.PXL_PERF_DRIVE ?? ""}${LITERALS}`,
+  // A build made for measuring, or for another tile source, differs in what
+  // its modules compile to (babel.config.ts's defines), so it shares no
+  // transform with any other.
+  cacheVersion: `${base.cacheVersion ?? ""}${process.env.PXL_PERF_DRIVE ?? ""}${tile_source()}${LITERALS}`,
   fileMapCacheDirectory: CACHE,
   resolver: { ...base.resolver, resolveRequest },
   server: {

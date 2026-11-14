@@ -10,21 +10,11 @@
     reason = "generated from WIT"
 )]
 
-use crate::link;
-use crate::wait;
-use std::rc::Rc;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
 /// The interface's handle, named by `xpute:clocks/system-clock` (frame.json `NAMED`).
-pub const HANDLE: Handle = 0x7dfa61;
+pub const HANDLE: _rt::Handle = 0x7dfa61;
 
 /// `now`
-pub const NOW: Method = 0;
+pub const NOW: _rt::Method = 0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Instant {
@@ -33,30 +23,32 @@ pub struct Instant {
 }
 
 impl Instant {
-    pub fn write(&self, w: &mut PacketWriter) {
-        w.branch(2, |w| {
-            w.i64(Some(self.seconds));
-            w.u32(Some(self.nanoseconds as u32));
-        });
+    pub const SZ: usize = 16;
+    pub const ALIGN: usize = 8;
+
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        w.i64(at + 0, *&self.seconds);
+        w.u32(at + 8, *&self.nanoseconds);
     }
 
-    pub fn read(c: Cursor<'_>) -> Result<Instant, MarshalError> {
-        let b = c.as_branch()?;
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Instant, _rt::Errno> {
         Ok(Instant {
-            seconds: b.at(0).and_then(|c| c.get_i64())?,
-            nanoseconds: b.at(1).and_then(|c| c.get_number().map(|v| v as u32))?,
+            seconds: r.i64(at + 0)?,
+            nanoseconds: r.u32(at + 8)?,
         })
     }
 }
 
-pub fn now() -> Result<Instant, Errno> {
-    let (r, data) = link::call(HANDLE, NOW, None);
-    xpute_link::answer(r).and_then(|_| {
-        let p = data.as_deref().ok_or(Errno::EBADMSG)?;
-        TreeReader::new(p)
-            .and_then(|t| t.read_branch())
-            .and_then(|b| b.at(0))
-            .and_then(|c| Instant::read(c))
-            .map_err(|e| e.errnum)
+pub fn now() -> Result<Instant, _rt::Errno> {
+    let (r, data) = _rt::link::call(HANDLE, NOW, None);
+    _rt::answer(r).and_then(|_| {
+        let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
+        Instant::load(r_, 0)
     })
+}
+
+mod _rt {
+    pub use crate::link;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::{answer, Handle, Lift, Lower, Method};
 }

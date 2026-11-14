@@ -25,7 +25,7 @@ pub struct RenderEdit {
     /// it and decor's records leave it out, each reader only where it holds
     /// that object.
     pub hide: Option<Octant>,
-    /// Where the eraser over bare terrain draws AIR, because bare terrain
+    /// Where the eraser over bare terrain draws air, because bare terrain
     /// has no leaf to hide.
     pub carve: Option<Octant>,
     /// The cell whose scattered decor is hidden.

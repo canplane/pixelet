@@ -26,7 +26,6 @@ use pxl_engine::param::light;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 
 use crate::frame::shader::floor::MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP;
-use crate::frame::shader::record::{binds, COMPUTE, DEPTH, STORAGE, STORAGE_RW, UNIFORM};
 use crate::frame::shader::record::{COMPUTE_SCREEN_BOUND, COMPUTE_SCREEN_PROPAGATE};
 use crate::frame::shader::word::{BOUND_SQUARES, BOUND_STEP};
 use crate::gpu::api::{
@@ -35,27 +34,6 @@ use crate::gpu::api::{
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::tile::TileGrid;
-
-/// What the propagate pass binds (screen_propagate.wgsl): the world's depth, the pass's
-/// uniform, the map's tile words and uniform, the screen's tile words and uniform, the depth's
-/// bound, and the map's tiles the frame's marks cover.
-const GROUP: [u32; 24] = [
-    0, COMPUTE, DEPTH, 1, COMPUTE, UNIFORM, 2, COMPUTE, STORAGE, 3, COMPUTE, UNIFORM, 4, COMPUTE,
-    STORAGE_RW, 5, COMPUTE, UNIFORM, 6, COMPUTE, STORAGE, 7, COMPUTE, STORAGE,
-];
-
-/// What the bound's pass binds (screen_bound.wgsl): the world's depth, the
-/// bound, the screen's words and the uniform it draws by.
-const BOUNDS_GROUP: [u32; 12] = [
-    0, COMPUTE, DEPTH, 1, COMPUTE, STORAGE_RW, 30, COMPUTE, STORAGE, 31, COMPUTE, UNIFORM,
-];
-
-// Each compute group here must lay out what its shader reads, as the shader declares it
-// (build/bind.rs `BINDS`).
-const _: () = assert!(
-    binds(&[COMPUTE_SCREEN_PROPAGATE], &GROUP) && binds(&[COMPUTE_SCREEN_BOUND], &BOUNDS_GROUP),
-    "a compute group lays out other than its shader reads (record.rs `binds`)"
-);
 
 const _: () = assert!(
     BOUND_SQUARES * BOUND_SQUARES <= MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP,
@@ -81,14 +59,14 @@ pub struct Propagate {
 impl Propagate {
     pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Propagate {
         Propagate {
-            pipeline: pipelines.build_compute(g, COMPUTE_SCREEN_PROPAGATE, &GROUP),
+            pipeline: pipelines.build_compute(g, COMPUTE_SCREEN_PROPAGATE),
             uniform: g.buf(
                 word_bytes(UNIFORM_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             bounds: 0,
             bounds_size: [0; 2],
-            bounds_pipeline: pipelines.build_compute(g, COMPUTE_SCREEN_BOUND, &BOUNDS_GROUP),
+            bounds_pipeline: pipelines.build_compute(g, COMPUTE_SCREEN_BOUND),
             group: Group::default(),
             bounds_group: Group::default(),
         }
@@ -171,7 +149,7 @@ impl Propagate {
     /// the resolve, which follows it.
     pub fn set_bounds(&self, ctx: &mut RenderContext, tiles: [u32; 2]) {
         let g = ctx.g;
-        let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::resolve).pass());
+        let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::Resolve).pass());
         g.set_bind_group(pass, 0, self.bounds_group.id(), &[]);
         g.set_pipeline(pass, self.bounds_pipeline.id);
         g.dispatch(pass, tiles[0], tiles[1], 1);
@@ -185,7 +163,7 @@ impl Propagate {
     /// marks cover (`TileGrid::new_damage_rect`).
     pub fn dispatch(&self, ctx: &mut RenderContext, tiles: [u32; 2]) {
         let g = ctx.g;
-        let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::propagate).pass());
+        let pass = g.compute_pass(ctx.encoder, ctx.stamp(GpuSpanName::Propagate).pass());
         g.set_bind_group(pass, 0, self.group.id(), &[]);
         g.set_pipeline(pass, self.pipeline.id);
         g.dispatch(pass, tiles[0], tiles[1], 1);

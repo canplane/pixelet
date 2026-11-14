@@ -10,8 +10,8 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   takes its word from Unix, Linux or Wayland; a device outside them keeps its
   platform's word. The application takes its field's word (graphics, cartography,
   games). A metaphor no field uses is no name.
-- In snake_case and SCREAMING, a word on this list is abbreviated and any other
-  stays whole: index `idx`, value `val`, buffer `buf`, source `src`, destination `dst`,
+- A word on this list is abbreviated, in every casing (`asset_cnt`,
+  `assetCnt`), and any other stays whole: index `idx`, value `val`, buffer `buf`, source `src`, destination `dst`,
   offset `off`, count `cnt`, current `cur` (not `curr`), position `pos`,
   direction `dir`, directory `dir`, pixel `px`, resolution `res`, distance
   `dist`, address `addr`, capacity `cap`, dimension `dim`, memory `mem`,
@@ -21,8 +21,9 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   matrix `mat`, configuration or config `cfg`, descriptor `desc`, context `ctx`,
   coordinate `coord`, declaration `decl`, definition `def`, sequence `seq`,
   atmosphere `atmos`, record `rec`, header `hdr`, command `cmd`, vector `vec`,
-  condition `cond`, resource `resrc`. A plural is `vals`, `bufs`, `offs`, `cnts`,
-  `idxs`, `recs`, `hdrs`, `cmds`, `vecs`, `conds` or `resrcs`, and whole otherwise. `pkt` is only a wire
+  condition `cond`, resource `resrc`, array `arr`, constructor `ctor`. A plural
+  is `vals`, `bufs`, `offs`, `cnts`, `idxs`, `recs`, `hdrs`, `cmds`, `vecs`,
+  `conds`, `resrcs`, `arrs` or `ctors`, and whole otherwise. `pkt` is only a wire
   packet; `rec` only the noun, and to record stays whole. A condition variable
   is `cv`.
 - Whole, though they look short: `zoom`; `size` in pixelet, GPU texture sizes
@@ -41,20 +42,17 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   what the thing is, not to keep words apart.
 - The same thing has the same name in every type, whatever its source calls
   it: a row's class is its `kind`, the coarsest zoom it shows at its
-  `first_zoom`, a grid with a value a cell its `cells`. A column holds many and
-  is plural; the row read from it is singular.
+  `first_zoom`, a grid with a value a cell its `cells`.
 - Spelling is American (`color`, `behavior`, `center`). A word copied from
   outside keeps its own (OpenStreetMap's `community_centre`).
-- PascalCase types, camelCase and the React UI's own names stay whole (`let
-  cfg: Config`). A name that comes up from the core or xpute keeps its spelling
-  in the UI (`cnt`, `lat`), and a name copied from an outside API keeps that
-  API's (`with_capacity`, `memory_hints`).
+- Each language takes its own casing, generated names too: Rust's snake_case
+  and Pascal types, TypeScript's camelCase and Pascal types, SCREAMING for a
+  constant in both. Only the casing changes, never the word. A type and the
+  React UI's own names spell their words whole (`let cfg: Config`). A name
+  copied from an outside API keeps that API's (`with_capacity`, `memory_hints`).
 - A file or module is named for its layer: a system one takes its field's short
   word (`sys`, `io`, `mem`, `abi`), a domain one the whole word (`scene`,
   `query`, `count`), and this list alone renames neither.
-- Use a unit suffix on a length (`_u` the world's units, `_merc` a meter on
-  the EPSG:3857 plane, `_m` a meter on the ground), on the value where a
-  person sees it (`29.0 m`).
 - A symmetric pair's part is the base, a dot and its side (`x.native.ts`,
   `sample.eye.wgsl` beside `sample.wgsl`); a stand-in replacing a part at
   assembly is the part, a dot and what it stands in as (`fold.none.wgsl`).
@@ -70,10 +68,9 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | the camera modes | `orbit`, `first_person` (the UI says 1인칭/3인칭) | free |
   | what a mouse, touch or controller points with | `pointer` | cursor |
   | the raster's nearest sample at each pixel | the visibility buffer | pick |
-  | a frame's number between xpute's guest and host, its meaning the program's | a `cmd`, a `Command` | vec, vector, opcode |
-  | what the UI asks of the core | a command | |
-  | a guest's command to its host, a frame it sends | an import | hostcall, system call, hypercall |
-  | an import answered before it returns | a call | hostcall |
+  | a frame's word naming its target handle and method | its `cmd` | vec, vector, opcode |
+  | a function of an interface the other side serves (the UI calls the core's exports, the guest its imports) | a method | command, hostcall, system call, hypercall |
+  | a method answered before it returns | a call | hostcall |
   | a node of the plane at a zoom | `Quadrant`, `quad_at` | Tile |
   | a node under a shard, through the height as well | `Octant` | EntryAt |
   | a quadrant fetched and stored as one, and what it holds | a tile (`TerrainTile`, `TileCache`) | |
@@ -105,5 +102,15 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   `gpu/native/host` and `gpu/native/runtime`. pixelet's core is its guest.
   pixelet names its parts by the side of xpute they sit on, the owner in the
   prefix (`pxl_core`, `xpute_guest`, `@xpute/web-host`).
-- A file, folder or type name is singular (`service/`, `remote.ts`,
-  `component/`).
+- A name is singular: a file, a folder, a type, an enum and its members, a
+  function, a variable and a constant (`service/`, `remote.ts`, `component/`).
+  It is plural only when the thing holds many of what it names, read by
+  meaning, not by type: a column is plural, the row read from it singular, and
+  one range's first and last is a `range` or singular (`GROUND`).
+- A quantity is named by its form: a count ends in `_cnt` (`LAYER_CNT`), a cap
+  in `_cap` (`CREDIT_CAP`), and a size or length in its unit (`HDR_WORDS`,
+  `PAGE_BYTES`, `_ms`, `_px`; `_u` the world's units, `_merc` a meter on the
+  EPSG:3857 plane, `_m` a meter on the ground), the unit shown where a person
+  reads the value (`29.0 m`).
+- A predicate's call reads as a yes-or-no assertion about its subject
+  (`v.is_ground()`, `pool.fits(n)`, `list.contains(x)`).

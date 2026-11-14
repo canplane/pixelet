@@ -33,7 +33,7 @@ fn decor_size(k: u32, variant: u32, turn: u32) -> vec3<i32> {
 
 /// This is the port of pxl-content `scatter::variant_of`.
 fn variant_of(k: u32, seed: u32) -> u32 {
-  return mul_hi(draw(seed, 0u), row_word(k, ROW_VARIANTS));
+  return mul_hi(draw(seed, 0u), row_word(k, ROW_VARIANT_CNT));
 }
 
 /// This is the port of pxl-content `Decor::allows`.

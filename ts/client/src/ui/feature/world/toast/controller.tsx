@@ -4,9 +4,15 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 
 import { messageKey } from "@/ui/shared/locale/message-key.ts";
-import { GroundStatus, Message, SensorStatus } from "@/abi/overlay.ts";
-import { BOOT_STARTED, GPU_WAITING, type Gpu } from "@/abi/state.ts";
-import { boot_state, watch_boot } from "@/service/sys/boot.ts";
+import {
+  type Message,
+  type SensorStatus,
+  GROUND_STATUS_SUCCESS,
+  MESSAGE_WORLD_READ_FAILING,
+  SENSOR_STATUS_LOADING,
+} from "@/abi/overlay.enum.ts";
+import { GPU_WAITING, type Gpu } from "@/service/sys/gpu.ts";
+import { boot_state, watch_boot, BOOT_STARTED } from "@/service/sys/boot.ts";
 
 import { dismissToast, showToast, ToastTone } from "./store.ts";
 import { useGpu, useCore, useOnline } from "@/ui/shared/watch.ts";
@@ -78,7 +84,7 @@ function location(
   failure: Message | null,
 ): Notice | null {
   if (failure !== null) return error(messageKey(failure));
-  return status === SensorStatus.Loading
+  return status === SENSOR_STATUS_LOADING
     ? loading("toast.location_checking")
     : null;
 }
@@ -90,7 +96,7 @@ function gpuError(gpu: Gpu): Notice | null {
 }
 
 function serverError(stall: Message | null): Notice | null {
-  return stall === Message.WorldReadFailing ? error(messageKey(stall)) : null;
+  return stall === MESSAGE_WORLD_READ_FAILING ? error(messageKey(stall)) : null;
 }
 
 function world(
@@ -121,7 +127,7 @@ export function ToastController() {
   useNotice(SERVER, serverError(stall), SERVER_HOLD_MS);
 
   const outside = useCore((s) => s.pivot.outside);
-  const shown = useCore((s) => s.pivot.status === GroundStatus.Success);
+  const shown = useCore((s) => s.pivot.status === GROUND_STATUS_SUCCESS);
   const companionLoading = useCore(
     (s) => !s.companion.person_ready || !s.companion.pet_ready,
   );

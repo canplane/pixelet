@@ -19,7 +19,7 @@ use crate::gpu::api::{
 };
 use crate::gpu::atlas::{AtlasPainter, DisplayList};
 use crate::gpu::draw::{DrawStat, DrawTable};
-use crate::gpu::mip::{mip_levels, MipPass};
+use crate::gpu::mip::{mip_cnt, MipPass};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::text::TextOf;
@@ -154,7 +154,7 @@ pub struct MarkerPass {
     atlas: u32,
     atlas_view: u32,
     atlas_group: u32,
-    levels: u32,
+    mip_cnt: u32,
     generation: u32,
     groups: Groups,
     dirty: SlotSet,
@@ -169,10 +169,10 @@ pub struct MarkerPass {
 impl MarkerPass {
     pub fn new(g: &Gpu, pipelines: &mut PipelineCache, frame_buf: u32, align: u32) -> MarkerPass {
         let sampler = g.sampler(
-            FilterMode::nearest,
-            FilterMode::linear,
-            MipmapFilterMode::linear,
-            AddressMode::clamp_to_edge,
+            FilterMode::Nearest,
+            FilterMode::Linear,
+            MipmapFilterMode::Linear,
+            AddressMode::ClampToEdge,
             None,
             1,
         );
@@ -180,7 +180,7 @@ impl MarkerPass {
         let frame_group = g.bind_group(pipeline.layouts[0], &[buf_entry(0, frame_buf)]);
         MarkerPass {
             pipeline,
-            region_pipeline: pipelines.build(g, PIPELINE_MARKER_REGION, Format::rgba8unorm),
+            region_pipeline: pipelines.build(g, PIPELINE_MARKER_REGION, Format::Rgba8unorm),
             numbers: 0,
             numbers_view: 0,
             regions: 0,
@@ -192,7 +192,7 @@ impl MarkerPass {
             atlas: 0,
             atlas_view: 0,
             atlas_group: 0,
-            levels: 1,
+            mip_cnt: 1,
             generation: u32::MAX,
             groups: Groups::default(),
             dirty: SlotSet::default(),
@@ -217,18 +217,18 @@ impl MarkerPass {
             for id in [self.atlas_group, self.atlas_view, self.atlas] {
                 release(id);
             }
-            self.levels = mip_levels(flush.size, flush.size);
+            self.mip_cnt = mip_cnt(flush.size, flush.size);
             self.atlas = g.texture(
                 flush.size,
                 flush.size,
                 1,
-                Format::rgba8unorm_srgb,
-                self.levels,
+                Format::Rgba8unormSrgb,
+                self.mip_cnt,
                 texture_usage::TEXTURE_BINDING
                     | texture_usage::COPY_DST
                     | texture_usage::RENDER_ATTACHMENT,
             );
-            self.atlas_view = g.view(self.atlas, false, 0, self.levels, 0, 1);
+            self.atlas_view = g.view(self.atlas, false, 0, self.mip_cnt, 0, 1);
             self.atlas_group = g.bind_group(
                 self.pipeline.layouts[3],
                 &[
@@ -304,7 +304,7 @@ impl MarkerPass {
             release(id);
         }
         if drawn {
-            mip.build(g, self.atlas, self.levels, 0, 1);
+            mip.build(g, self.atlas, self.mip_cnt, 0, 1);
         }
         flush.whole || drawn
     }
@@ -336,7 +336,7 @@ impl MarkerPass {
                 size.0,
                 size.1,
                 1,
-                Format::rgba8unorm,
+                Format::Rgba8unorm,
                 1,
                 texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
             );
@@ -345,7 +345,7 @@ impl MarkerPass {
                 size.0,
                 size.1,
                 1,
-                Format::depth32float,
+                Format::Depth32float,
                 1,
                 texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
             );
@@ -392,7 +392,7 @@ impl MarkerPass {
         uploads: &UploadTable,
     ) {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::marker);
+        let stamp = ctx.stamp(GpuSpanName::Marker);
         if self.atlas_group == 0 {
             return;
         }

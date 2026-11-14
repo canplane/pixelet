@@ -35,7 +35,7 @@ fn shows(aim: Aim, w: WalkEnd) -> WalkEnd {
       }
       return WalkEnd(ENDS_CELL, zoom, corner, w.roots, a.asset, w.axis, w.t, w.visits, w.parent, w.top, w.step);
     }
-    if (a.kind != KIND_LACKS || zoom == 0u) {
+    if (a.kind != KIND_LACK || zoom == 0u) {
       break;
     }
     // What is over a node is found from the top (`world_root`), as nothing holds what it inherits.
@@ -68,7 +68,7 @@ fn hit_rows(rows: u32) {
   atomicMax(&node_cache[HITS_ARGS], rows);
 }
 
-@compute @workgroup_size(QUEUE_LANES)
+@compute @workgroup_size(QUEUE_LANE_CNT)
 fn queue_last_cs() {
   var visits = 0u;
   loop {
@@ -90,7 +90,7 @@ fn queue_last_cs() {
     var parent = vec3<u32>(0u);
     var top = true;
     loop {
-      let w = walk(aim, Start(t, corner, zoom, roots, parent, top, step), QUEUE_STEPS);
+      let w = walk(aim, Start(t, corner, zoom, roots, parent, top, step), QUEUE_STEP_CNT);
       visits += w.visits;
       // Out of its steps, or where it may ask no more (walk.wgsl `walk`).
       if (w.ends == ENDS_OUT) {

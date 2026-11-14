@@ -3,10 +3,10 @@
 //! The files the core loads: the asset catalog, the files the catalog names
 //! by their numbers after ASSET, and the picture of the whole Earth.
 //! Each is read as a catalog, a glTF model or an image. sys/io/loader.rs
-//! loads them with one task for each file in flight, and `LOAD_FILES` bounds
+//! loads them with one task for each file in flight, and `LOAD_FILE_CAP` bounds
 //! how many are in flight at once.
 
-use pxl_spec::asset::catalog::SLOTS;
+use pxl_spec::asset::catalog::SLOT_CNT;
 
 use xpute_link::abi::types::Token;
 
@@ -35,7 +35,7 @@ const SPHERE: u32 = 1 << 16;
 
 /// The most files in flight at once: one for each catalog slot, since a slot
 /// is wanted as one kind only, plus the catalog and the sphere.
-pub const LOAD_FILES: usize = SLOTS + 2;
+pub const LOAD_FILE_CAP: usize = SLOT_CNT + 2;
 
 impl LoadKind {
     /// Every kind, each at the index of its number.
@@ -47,10 +47,10 @@ impl Load {
     /// below SPHERE, so it is an i32 as it is.
     pub fn path(self) -> Vec<Token> {
         match self {
-            Load::File(n) => vec![Token::Int(path::ASSET::ID), Token::Int(n as i32)],
+            Load::File(n) => vec![Token::Int(path::asset::ID), Token::Int(n as i32)],
             Load::Sphere => vec![
-                Token::Int(path::EARTH::ID),
-                Token::Int(path::EARTH::SPHERE::ID),
+                Token::Int(path::earth::ID),
+                Token::Int(path::earth::sphere::ID),
             ],
         }
     }

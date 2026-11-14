@@ -25,7 +25,7 @@ pub const FOLD_COLUMN: usize = 4 * GROUND_COLUMN;
 pub const ELE_COLUMN: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
 use crate::asset::cube::Sentinel;
 use crate::brick::{
-    lines_words, of_idx, Brick, BRICK, LINES_BINS_AT, LINES_ENTRIES_AT, WAYS_ACROSS, WAYS_BINS,
+    lines_words, of_idx, Brick, BRICK, LINES_BINS_AT, LINES_ENTRIES_AT, WAYS_ACROSS, WAYS_BIN_CNT,
     WAYS_SHIFT,
 };
 use crate::ground;
@@ -128,11 +128,11 @@ pub fn brick_lines(
     // bin's, how many there are.
     pairs.sort_unstable();
     let mut first = 0;
-    for b in 0..WAYS_BINS {
+    for b in 0..WAYS_BIN_CNT {
         out[(LINES_BINS_AT + b) as usize] = first as u32;
         first += pairs[first..].iter().take_while(|e| e.0 == b).count();
     }
-    out[(LINES_BINS_AT + WAYS_BINS) as usize] = first as u32;
+    out[(LINES_BINS_AT + WAYS_BIN_CNT) as usize] = first as u32;
     for (k, e) in pairs.iter().enumerate() {
         out[LINES_ENTRIES_AT as usize + k] = e.1;
     }
@@ -283,10 +283,10 @@ pub fn drawn(tile: Quadrant, terrain: TerrainTile) -> TerrainTile {
 
 // Made on first use: a constant array of zeros would ship in the module's data.
 static VOID_CELLS: std::sync::LazyLock<Vec<GroundId>> =
-    std::sync::LazyLock::new(|| vec![Sentinel::void as GroundId; GROUND_COLUMN]);
+    std::sync::LazyLock::new(|| vec![Sentinel::Void as GroundId; GROUND_COLUMN]);
 
 impl Tile for TerrainTile {
-    const LAYER: BaseLayer = BaseLayer::terrain;
+    const LAYER: BaseLayer = BaseLayer::Terrain;
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy

@@ -77,7 +77,7 @@ fn find(zoom: u32, c: vec3<i32>, asset: vec2<u32>, lacks: bool) -> u32 {
     return NO_ENTRY;
   }
   let first = bucket_of(zoom, c);
-  let kind = select(KIND_CELL, KIND_LACKS, lacks);
+  let kind = select(KIND_CELL, KIND_LACK, lacks);
   var found = NO_ENTRY;
   for (var k = 0u; k < BUCKET; k += 1u) {
     let slot = first + k;
@@ -100,7 +100,7 @@ fn find(zoom: u32, c: vec3<i32>, asset: vec2<u32>, lacks: bool) -> u32 {
   return found;
 }
 
-/// A box's low and high planes, in units from an origin (pxl-engine cast.rs `bounds`).
+/// A box's low and high planes, in units from an origin (pxl-engine cast.rs `bound`).
 struct Aabb {
   lo: vec3<f32>,
   hi: vec3<f32>,
@@ -113,7 +113,7 @@ fn node_planes(k: Node, o: vec3<i32>) -> Aabb {
 }
 
 /// The zoom at which the eye's walk asks a node with planes `p`, at the node's nearest point,
-/// as walk.wgsl asks it (pxl-engine `cast::node_zooms`).
+/// as walk.wgsl asks it (pxl-engine `cast::node_range`).
 fn asked_near(p: Aabb) -> u32 {
   let range = vec2<u32>(eye_word(EYE_RANGE), eye_word(EYE_RANGE + 1u));
   if (range.x == range.y) {

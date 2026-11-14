@@ -19,7 +19,7 @@ use pxl_spec::space::coord::zoom::{Zoom, FINEST_ZOOM};
 
 /// A ray's words, and the index of the word that says what lies around its face.
 pub const WORDS: u32 = 4;
-pub const FACES: u32 = 3;
+pub const FACE_WORD: u32 = 3;
 
 /// The first word's fields, from the low bits: the value, a catalog value whichever source
 /// holds it; the face the ray entered through, 2·axis plus one where its outward normal
@@ -39,18 +39,18 @@ pub const ZOOM_SHIFT: u32 = FACE_SHIFT + FACE_BITS;
 pub const FILL_SHIFT: u32 = ZOOM_SHIFT + ZOOM_BITS;
 const _: () = assert!(FILL_SHIFT + FILL_BITS < 32);
 
-/// The shape of a pass over a list walked apart, or over the walked bits: `MISS_LANES` lanes
+/// The shape of a pass over a list walked apart, or over the walked bits: `MISS_LANE_CNT` lanes
 /// a workgroup and `MISS_ACROSS` workgroups a row (pxl-render list.wgsl `list_place`).
-pub const MISS_LANES: u32 = 64;
+pub const MISS_LANE_CNT: u32 = 64;
 pub const MISS_ACROSS: u32 = 64;
 
 /// What the pixels' cast counts, and the light slots' cast alike (pxl-render visible.wgsl
 /// `MissCount`): first the holes it listed (`MISS_ARGS_CNT`, `list_hole`), then, while the
-/// `ray_cnts` setting is on, what its pixels or slots took (`MISS_ARGS_CNTS`: the
-/// `count::RAYS` counters from `count::VOXEL`). Each frame starts from `MISS_ARGS_EMPTY`.
+/// `ray_cnt` setting is on, what its pixels or slots took (`MISS_ARGS_CNTS`: the
+/// `count::RAY_CNT` counters from `count::VOXEL`). Each frame starts from `MISS_ARGS_EMPTY`.
 pub const MISS_ARGS_CNT: u32 = 0;
 pub const MISS_ARGS_CNTS: u32 = 1;
-pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_CNTS + count::RAYS) as usize;
+pub const MISS_ARGS_WORDS: usize = (MISS_ARGS_CNTS + count::RAY_CNT) as usize;
 pub const MISS_ARGS_EMPTY: [u32; MISS_ARGS_WORDS] = [0; MISS_ARGS_WORDS];
 
 /// The eye's holes, past the camera grid's words in the beam rays' buffer
@@ -69,20 +69,20 @@ const _: () = assert!(
 );
 
 /// The squares across and down of a target `size` drawn pixels each way.
-pub const fn squares(size: [u32; 2]) -> [u32; 2] {
+pub const fn square_cnt(size: [u32; 2]) -> [u32; 2] {
     [size[0].div_ceil(CAST_SIDE), size[1].div_ceil(CAST_SIDE)]
 }
 
 /// The words of the walked bits for a target of `size`.
 pub const fn walked_words(size: [u32; 2]) -> u32 {
-    let [across, down] = squares(size);
+    let [across, down] = square_cnt(size);
     across * down * SQUARE_WORDS
 }
 
 /// Pixel `p`'s word within one set of hole bits of a target of `size`, and its bit in that
 /// word.
 pub const fn hole_bit(p: [u32; 2], size: [u32; 2]) -> (u32, u32) {
-    let across = squares(size)[0];
+    let across = square_cnt(size)[0];
     let square = (p[1] / CAST_SIDE) * across + p[0] / CAST_SIDE;
     let bit = (p[1] % CAST_SIDE) * CAST_SIDE + p[0] % CAST_SIDE;
     (square * SQUARE_WORDS + bit / 32, bit % 32)
@@ -123,15 +123,15 @@ pub const fn holes_words(size: [u32; 2]) -> u32 {
 pub const LEFT_EMPTY: [u32; 4] = [MISS_ACROSS, 0, 1, 0];
 
 /// A run's walks (pxl-render queue_walk.wgsl, queue_ask.wgsl, queue_last.wgsl) are a fixed
-/// dispatch of `QUEUE_GROUPS` workgroups of `QUEUE_LANES` lanes. Each lane takes the next ray
-/// when its own ends or is parked, and walks it `QUEUE_STEPS` steps at a time. The passes run
+/// dispatch of `QUEUE_GROUP_CNT` workgroups of `QUEUE_LANE_CNT` lanes. Each lane takes the next ray
+/// when its own ends or is parked, and walks it `QUEUE_STEP_CNT` steps at a time. The passes run
 /// in this order: the first walk, over the node cache alone; the asks, one lane for each node
 /// a walk was parked at, each node once; the second walk, over the rays the first parked; the
 /// asks again; and the last walk, which asks the world where no slot keeps a node. Every ray
 /// ends within its run.
-pub const QUEUE_LANES: u32 = 64;
-pub const QUEUE_STEPS: u32 = 16;
-pub const QUEUE_GROUPS: u32 = 256;
+pub const QUEUE_LANE_CNT: u32 = 64;
+pub const QUEUE_STEP_CNT: u32 = 16;
+pub const QUEUE_GROUP_CNT: u32 = 256;
 
 /// The most nodes a frame asks of the world, all runs together (`node_cache::ASKED`). What a
 /// frame defers is only detail: a ray that may ask no more ends as a lack at the deepest node
@@ -144,7 +144,7 @@ pub const ASKS_A_FRAME: u32 = 1 << 21;
 pub const HITS_A_FRAME: u32 = 1 << 18;
 
 /// The queues' words, all in one buffer (pxl-render queue_walk.wgsl `queue`,
-/// queue_ask.wgsl). First comes a head for each run's queue (`QUEUES`), each
+/// queue_ask.wgsl). First comes a head for each run's queue (`QUEUE_CNT`), each
 /// `QUEUE_HDR_STRIDE` words after the last, from which the run's passes bind their view
 /// (`queue_at`). Then come the asks' records, one region that every queue's view reaches
 /// (`queue_recs_at`). One region is enough because the runs of a frame, and the two walks
@@ -171,7 +171,7 @@ pub const QUEUE_EYE_HOLES: u32 = 2;
 pub const QUEUE_LIGHT_CORNERS: u32 = 3;
 pub const QUEUE_LIGHT_SAMPLES: u32 = 4;
 pub const QUEUE_LIGHT_HOLES: u32 = 5;
-pub const QUEUES: u32 = 6;
+pub const QUEUE_CNT: u32 = 6;
 /// The words from one head to the next: the alignment a storage buffer's view is bound at
 /// (`STORAGE_ALIGN_WORDS`).
 pub const QUEUE_HDR_STRIDE: u32 = crate::STORAGE_ALIGN_WORDS;
@@ -188,7 +188,7 @@ pub const fn queue_at(queue: u32) -> u32 {
 /// The first word of the asks' records, counted from the first word of queue `queue`'s view:
 /// past every head.
 pub const fn queue_recs_at(queue: u32) -> u32 {
-    queue_at(QUEUES) - queue_at(queue)
+    queue_at(QUEUE_CNT) - queue_at(queue)
 }
 
 /// An ask's record: the node's zoom, the three words of its index, the zooms it is asked at
@@ -198,7 +198,7 @@ pub const QUEUE_REC_WORDS: u32 = 9;
 /// The most nodes one walk lists for the asks after it. A ray parked at a node listed past
 /// it is asked by the last walk instead.
 pub const QUEUE_RECS_CAP: u32 = 1 << 17;
-pub const QUEUE_WORDS: u32 = queue_at(QUEUES) + QUEUE_RECS_CAP * QUEUE_REC_WORDS;
+pub const QUEUE_WORDS: u32 = queue_at(QUEUE_CNT) + QUEUE_RECS_CAP * QUEUE_REC_WORDS;
 pub const QUEUE_EMPTY: [u32; QUEUE_HDR_WORDS as usize] = [0, 0, 0, 0, 0, 1, 1, 0, 0];
 
 /// A parked ray's state as the queue keeps it, the same for every kind of item (pxl-render

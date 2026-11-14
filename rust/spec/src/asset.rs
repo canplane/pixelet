@@ -111,7 +111,7 @@ impl decor::Decor {
     pub fn first_group(&self) -> u32 {
         decor::ROWS[..idx_of(self.id) as usize]
             .iter()
-            .map(|r| r.variants)
+            .map(|r| r.variant_cnt)
             .sum()
     }
 
@@ -119,7 +119,7 @@ impl decor::Decor {
     pub fn find(id: AssetId) -> Option<&'static decor::Decor> {
         decor::DECORS
             .get(idx_of(id) as usize)
-            .filter(|_| kind_of(id) == Some(Kind::decor))
+            .filter(|_| kind_of(id) == Some(Kind::Decor))
     }
 
     /// The decor of an id known to be one, as a tool holds it.
@@ -150,7 +150,7 @@ impl decor::Row {
     pub const fn widest(&self) -> u32 {
         let mut widest = 1;
         let mut v = 0;
-        while v < self.variants as usize {
+        while v < self.variant_cnt as usize {
             let [x, y, _] = self.sizes[v];
             widest = if x > widest { x } else { widest };
             widest = if y > widest { y } else { widest };

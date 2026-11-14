@@ -99,7 +99,7 @@ impl GhostDraw {
         }: GhostBox,
     ) -> bool {
         let side = units(zoom);
-        let state = cube.filter(|_| settings().textures).unwrap_or(0);
+        let state = cube.filter(|_| settings().texture).unwrap_or(0);
         let rgb = cube.and_then(cube_rgb).unwrap_or(if erase {
             indicator::ERASE
         } else {
@@ -156,7 +156,7 @@ impl GhostDraw {
         // The block is one group of one instance, with no header: its
         // columns, its flags, and the index list.
         let column = GroupRange { first: 0, cnt: 1 };
-        let mut m = [0u32; GroupRange::words(1) + 1];
+        let mut m = [0u32; GroupRange::word_cnt(1) + 1];
         (m[column.f32_at(3, 0)], m[column.f32_at(4, 0)]) = (rot.to_bits(), 1.0f32.to_bits());
         self.write(draw, shape, bytes(&m));
         true
@@ -202,7 +202,7 @@ impl GhostDraw {
                 );
             }
             Shape::Decor { group, .. } => {
-                let idx = GroupRange::words(1) as u32;
+                let idx = GroupRange::word_cnt(1) as u32;
                 draw.draw_instances(
                     &self.id,
                     PIPELINE_GHOST_DECOR,

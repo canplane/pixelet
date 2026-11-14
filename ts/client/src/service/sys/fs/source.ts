@@ -14,27 +14,36 @@ import { get, TILE_SOURCE_ROUTE } from "@/service/origin/route.ts";
 import { online, when_online } from "@/service/origin/online.ts";
 import {
   BASE_LAYERS,
-  type BaseLayer,
   VERSION_BYTES,
   VERSION_CHARS,
 } from "@/service/origin/publication.spec.ts";
-import {
-  SOURCE_ASKING,
-  SOURCE_DECLARED,
-  SOURCE_FAILING,
-  SOURCE_REFUSED,
-  type Source,
-} from "@/abi/state.ts";
+
+/**
+ * Where the world's source declaration stands:
+ * - asking: it is asked for;
+ * - failing: an ask was refused or went unanswered, and it is asked again;
+ * - refused: it is refused for good, as one this client cannot read;
+ * - declared: it is declared.
+ */
+export const SOURCE_ASKING = 0;
+export const SOURCE_FAILING = 1;
+export const SOURCE_REFUSED = 2;
+export const SOURCE_DECLARED = 3;
+export type Source =
+  | typeof SOURCE_ASKING
+  | typeof SOURCE_FAILING
+  | typeof SOURCE_REFUSED
+  | typeof SOURCE_DECLARED;
 
 /** The fields of a declaration that this client reads. A shard may declare
  * its own version of a kind. */
 export interface Declaration {
   min_zoom: number;
-  format: Record<keyof typeof BaseLayer, number>;
-  version: Record<keyof typeof BaseLayer, string>;
+  format: Record<(typeof BASE_LAYERS)[number], number>;
+  version: Record<(typeof BASE_LAYERS)[number], string>;
   shard: Record<
     string,
-    { version?: Partial<Record<keyof typeof BaseLayer, string>> }
+    { version?: Partial<Record<(typeof BASE_LAYERS)[number], string>> }
   >;
 }
 

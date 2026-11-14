@@ -3,7 +3,7 @@
 //! The EDIT major's commands: the tool held and what it places, and the
 //! marker draft it left waiting.
 
-use super::or_refuse;
+use crate::abi::types::ErrorCode;
 use crate::domain::control::edit::set_tool;
 use crate::domain::control::edit::write;
 use crate::domain::control::edit::Tool;
@@ -12,7 +12,7 @@ use crate::domain::layer::object::asset::Asset;
 use crate::abi::edit;
 use xpute_kit::status::errno::Errno;
 
-pub(super) fn hold(tool: edit::Tool, val: u32, scale_steps: i32) -> Result<(), Errno> {
+pub(super) fn hold(tool: edit::Tool, val: u32, scale_step: i32) -> Result<(), Errno> {
     set_tool(match tool {
         edit::Tool::Pointer => Tool::Pointer,
         edit::Tool::Eraser => Tool::Eraser,
@@ -20,7 +20,7 @@ pub(super) fn hold(tool: edit::Tool, val: u32, scale_steps: i32) -> Result<(), E
             Asset::Unknown => return Err(Errno::EINVAL),
             asset => Tool::Item {
                 asset,
-                zoom: asset.zoom(scale_steps),
+                zoom: asset.zoom(scale_step),
             },
         },
     });
@@ -28,9 +28,8 @@ pub(super) fn hold(tool: edit::Tool, val: u32, scale_steps: i32) -> Result<(), E
     Ok(())
 }
 
-pub(super) fn marker_text(text: String) -> Result<(), Errno> {
-    or_refuse(write::set_draft_text(&text).ok(), Errno::EMSGSIZE)?;
-    Ok(())
+pub(super) fn marker_text(text: String) -> Result<Result<(), ErrorCode>, Errno> {
+    Ok(write::set_draft_text(&text).map_err(|_| ErrorCode::TooLong))
 }
 
 pub(super) fn marker_commit() -> Result<(), Errno> {

@@ -32,7 +32,7 @@ pub enum Coast {
 }
 
 pub fn bake_ground(feats: &[Feature], coast: &Coast) -> GroundCells {
-    let mut cells = vec![Ground::water as GroundId; TILE_AREA];
+    let mut cells = vec![Ground::Water as GroundId; TILE_AREA];
     match coast {
         Coast::Sea => {}
         Coast::Land => cells.fill(BASE as GroundId),
@@ -43,7 +43,7 @@ pub fn bake_ground(feats: &[Feature], coast: &Coast) -> GroundCells {
         }
     }
     let sea: Option<Vec<bool>> = (!matches!(coast, Coast::Land))
-        .then(|| cells.iter().map(|&c| c == Ground::water as GroundId).collect());
+        .then(|| cells.iter().map(|&c| c == Ground::Water as GroundId).collect());
 
     let mut ordered: Vec<&Feature> = feats.iter().collect();
     ordered.sort_by(|a, b| a.rank.cmp(&b.rank));

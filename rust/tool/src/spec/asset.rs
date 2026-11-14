@@ -1,17 +1,17 @@
 // pxl-tool/spec/asset.rs
 
 use xpute_gen::spec::data::enum_members;
+use xpute_gen::spec::{ts_enum, Member};
 
 use super::catalog::{slots, CUBE_JSON, DECOR_JSON};
-use super::{casing_note, file, js_num, json_str, mark, read, rs_ident, Node, Output};
+use super::{file, js_num, json_str, mark, read, rs_field, rs_member, Node, Output};
 const ID_JSON: &str = "spec/spec/asset/id.json";
 const COLOR_JSON: &str = "spec/spec/asset/color.json";
 
 /// A group's cubes (`sentinel`, `ground`, `object`), each its name and its
 /// number, as the generator numbers its enum.
 fn cubes(spec: &Node, group: &str) -> Result<Vec<(String, u32)>, String> {
-    let list = spec.get(group).ok_or(format!("{CUBE_JSON}: no {group}"))?;
-    enum_members(group, list)?
+    enum_members(group, spec.get(group).ok_or(format!("{CUBE_JSON}: no {group}"))?)?
         .into_iter()
         .map(|m| {
             let number = m.number.parse().map_err(|_| format!("{CUBE_JSON}: {} has no number", m.name))?;
@@ -20,13 +20,21 @@ fn cubes(spec: &Node, group: &str) -> Result<Vec<(String, u32)>, String> {
         .collect()
 }
 
+/// A cube's member of its group's enum (`sentinel`, `ground`, `object`), by
+/// its name.
+pub(crate) fn cube_member(group: &str, name: &str) -> Result<Member, String> {
+    let spec = read(CUBE_JSON)?;
+    let list = spec.get(group).ok_or(format!("{CUBE_JSON}: no {group}"))?;
+    enum_members(group, list)?
+        .into_iter()
+        .find(|m| m.name == name)
+        .ok_or(format!("{CUBE_JSON}: {group}.{name} is no cube"))
+}
+
 /// A cube's number by its group (`sentinel`, `ground`, `object`) and name.
 pub(crate) fn cube_number(group: &str, name: &str) -> Result<u32, String> {
-    let spec = read(CUBE_JSON)?;
-    let number = cubes(&spec, group)?.into_iter().find(|(n, _)| *n == name);
-    number
-        .map(|(_, k)| k)
-        .ok_or(format!("{CUBE_JSON}: {group}.{name} is no cube"))
+    let m = cube_member(group, name)?;
+    m.number.parse().map_err(|_| format!("{CUBE_JSON}: {} has no number", m.name))
 }
 
 /// The path the cube kind's texture pack ships at (`cube.json` `pack`).
@@ -110,8 +118,6 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     let types = read(CUBE_JSON)?;
     let mut rs = vec!["// pxl-spec/asset/color.spec.rs".to_string()];
     rs.extend(head);
-    rs.push(String::new());
-    rs.extend(casing_note());
     rs.extend(
         [
             "",
@@ -151,7 +157,7 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
                 .ok_or(format!("color.json: {group}.{name} has no hex"))?;
             rs.push(format!(
                 "        Some({e}::{}) => Some(const {{ Swatch::new(rgb({})) }}),",
-                rs_ident(name),
+                cube_member(group, name)?.ident,
                 json_str(hex)
             ));
         }
@@ -211,15 +217,15 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     let mut ts = vec!["// @pxl/client/ui/shared/asset/decor.spec.ts".to_string()];
     ts.extend(head.iter().cloned());
     ts.extend(doc.iter().map(|l| format!("// {l}")));
-    let mut constants = vec![
-        "// @pxl/client/ui/shared/asset/decor/decor.spec.ts".to_string(),
-        "//".to_string(),
-        format!("// {}", mark("spec/spec/asset/decor.json", "pxl-tool spec/asset.rs")),
-    ];
-    constants.extend(
-        ids.iter()
-            .flat_map(|(k, id)| [String::new(), format!("export const {k} = {id};")]),
-    );
+    let members: Vec<Member> = ids
+        .iter()
+        .map(|(k, id)| Member {
+            ident: k.to_string(),
+            name: k.to_string(),
+            number: id.to_string(),
+            doc: Vec::new(),
+        })
+        .collect();
     let mut labels = Vec::new();
     for ((k, v), (_, id)) in decors.iter().zip(&ids) {
         let label = v
@@ -227,11 +233,8 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
             .ok_or(format!("{DECOR_JSON}: {k} has no label"))?;
         labels.push(format!("  {id}: {},", json_str(label)));
     }
+    ts.extend(ts_enum("Decor", &members));
     ts.extend([
-        String::new(),
-        "import * as decor from \"./decor/decor.spec.ts\";".to_string(),
-        String::new(),
-        "export { decor };".to_string(),
         String::new(),
         "/** The decors' ids, in the table's order. */".to_string(),
         format!(
@@ -251,20 +254,13 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     let mut rs = vec!["// pxl-spec/asset/decor.spec.rs".to_string()];
     rs.extend(head.iter().cloned());
     rs.extend(doc.iter().map(|l| format!("// {l}")));
-    rs.push("//".into());
-    rs.extend(casing_note());
     rs.push(
-        "#![allow(non_camel_case_types, clippy::absolute_paths, reason = \"generated from the spec\")]"
-            .to_string(),
+        "#![allow(clippy::absolute_paths, reason = \"generated from the spec\")]".to_string(),
     );
     rs.extend(rows);
     rs.extend(table);
     Ok(vec![
         Output::new("ts/client/src/ui/shared/asset/decor.spec.ts", file(&ts)),
-        Output::new(
-            "ts/client/src/ui/shared/asset/decor/decor.spec.ts",
-            file(&constants),
-        ),
         Output::new("rust/spec/src/asset/decor.spec.rs", file(&rs)),
     ])
 }
@@ -378,11 +374,11 @@ fn decor_table(
             models,
         });
     }
-    let variants_max = rows.iter().map(|r| r.sizes.len()).max().unwrap_or(1);
+    let variant_cap = rows.iter().map(|r| r.sizes.len()).max().unwrap_or(1);
     let mut portable: Vec<String> = vec![String::new()];
     portable.extend([
         "/// The most variants a decor has.".into(),
-        format!("pub const VARIANTS: usize = {variants_max};"),
+        format!("pub const VARIANT_CAP: usize = {variant_cap};"),
     ]);
     portable.extend(
         [
@@ -392,8 +388,8 @@ fn decor_table(
             "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
             "#[repr(u32)]",
             "pub enum Orientation {",
-            "    random,",
-            "    along_transport,",
+            "    Random,",
+            "    AlongTransport,",
             "}",
             "",
             "/// A decor as the ground generates it, in 32-bit words alone, laid out as a",
@@ -409,9 +405,9 @@ fn decor_table(
             "    pub orient: Orientation,",
             "    /// The palette entries it may stand on, a bit each.",
             "    pub on: [u32; 8],",
-            "    pub variants: u32,",
-            "    /// Each variant's box, in its decor's cells; none past `variants`.",
-            "    pub sizes: [[u32; 3]; VARIANTS],",
+            "    pub variant_cnt: u32,",
+            "    /// Each variant's box, in its decor's cells; none past `variant_cnt`.",
+            "    pub sizes: [[u32; 3]; VARIANT_CAP],",
             "}",
             "",
             "#[rustfmt::skip]",
@@ -422,17 +418,17 @@ fn decor_table(
     for r in &rows {
         portable.push(format!("    // {}", r.name));
         let mut sizes = r.sizes.clone();
-        sizes.resize(variants_max, "[0, 0, 0]".into());
+        sizes.resize(variant_cap, "[0, 0, 0]".into());
         portable.extend([
             "    Row {".to_string(),
             format!("        seed: {},", r.seed),
             format!("        chance: {},", r.chance),
-            format!("        orient: Orientation::{},", r.orient),
+            format!("        orient: Orientation::{},", rs_member(&r.orient)),
             format!(
                 "        on: [{}],",
                 r.on.map(|w| format!("{w:#010x}")).join(", ")
             ),
-            format!("        variants: {},", r.models.len()),
+            format!("        variant_cnt: {},", r.models.len()),
             format!("        sizes: [{}],", sizes.join(", ")),
             "    },".to_string(),
         ]);
@@ -475,7 +471,7 @@ fn decor_table(
             .str()
             .filter(|t| *t == "u32")
             .ok_or(format!("{DECOR_JSON}: meta.{field} is no u32"))?;
-        rs.push(format!("    pub {field}: {ty},"));
+        rs.push(format!("    pub {}: {ty},", rs_field(field)));
     }
     rs.extend(["}".to_string(), String::new()]);
     rs.push(format!("pub const DECORS: [Decor; {}] = [", rows.len()));
@@ -487,7 +483,7 @@ fn decor_table(
         );
         rs.extend([
             "    Decor {".to_string(),
-            format!("        id: crate::asset::id::asset_id(crate::asset::id::Kind::decor, {i}),"),
+            format!("        id: crate::asset::id::asset_id(crate::asset::id::Kind::Decor, {i}),"),
             format!("        row: &ROWS[{i}],"),
             "        variants: &[".to_string(),
         ]);

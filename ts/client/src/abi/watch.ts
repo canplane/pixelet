@@ -2,15 +2,17 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import type { Sensor } from "./types.enum.ts";
+import { load_Sensor } from "./types.ts";
+import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
+import { Lift } from "@xpute/link/cabi.ts";
 import {
+  type Handle,
   type Link,
   type LinkObject,
   type Method,
   refusal_of,
-  type Handle,
 } from "@xpute/link/link.ts";
-import * as types from "./types.ts";
 
 /** The interface's handle, named by `pxl:core/watch` (frame.json `NAMED`). */
 export const HANDLE: Handle = 0x71919e;
@@ -20,29 +22,31 @@ export const START: Method = 0;
 /** `stop` */
 export const STOP: Method = 1;
 
-export interface Watch {
-  start(sensor: types.Sensor): void;
-  stop(sensor: types.Sensor): void;
+export interface Host {
+  start(sensor: Sensor): void;
+  stop(sensor: Sensor): void;
 }
 
 /** The object over `imp`. */
-function object(imp: Watch): LinkObject {
+function object(imp: Host): LinkObject {
   return {
     call(m, tag, args) {
       try {
         switch (m) {
           case START: {
-            if (args === null) return Errno.EBADMSG;
-            imp.start(args.at(0).get_number() as types.Sensor);
+            if (args === null) return ERRNO_EBADMSG;
+            const r_ = new Lift(args);
+            imp.start(load_Sensor(r_, 0));
             return 0;
           }
           case STOP: {
-            if (args === null) return Errno.EBADMSG;
-            imp.stop(args.at(0).get_number() as types.Sensor);
+            if (args === null) return ERRNO_EBADMSG;
+            const r_ = new Lift(args);
+            imp.stop(load_Sensor(r_, 0));
             return 0;
           }
           default:
-            return Errno.ENOSYS;
+            return ERRNO_ENOSYS;
         }
       } catch (e) {
         return refusal_of(e);
@@ -52,6 +56,6 @@ function object(imp: Watch): LinkObject {
 }
 
 /** Serves `imp` under the interface's handle. */
-export function mount(l: Pick<Link, "mount_named">, imp: Watch): void {
+export function mount(l: Pick<Link, "mount_named">, imp: Host): void {
   l.mount_named(HANDLE, object(imp));
 }

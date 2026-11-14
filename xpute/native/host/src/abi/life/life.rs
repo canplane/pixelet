@@ -10,30 +10,26 @@
     reason = "generated from WIT"
 )]
 
-use crate::link;
-use crate::wait;
-use std::rc::Rc;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
 /// The interface's handle, named by `xpute:life/life` (frame.json `NAMED`).
-pub const HANDLE: Handle = 0x46edb9;
+pub const HANDLE: _rt::Handle = 0x46edb9;
 
 /// `hidden`
-pub const HIDDEN: Method = 0;
+pub const HIDDEN: _rt::Method = 0;
 /// `shown`
-pub const SHOWN: Method = 1;
+pub const SHOWN: _rt::Method = 1;
 
-pub fn hidden() -> Result<(), Errno> {
-    let (r, data) = link::call(HANDLE, HIDDEN, None);
-    xpute_link::answer(r).map(|_| ())
+pub fn hidden() -> Result<(), _rt::Errno> {
+    let (r, data) = _rt::link::call(HANDLE, HIDDEN, None);
+    _rt::answer(r)
 }
 
-pub fn shown() -> Result<(), Errno> {
-    let (r, data) = link::call(HANDLE, SHOWN, None);
-    xpute_link::answer(r).map(|_| ())
+pub fn shown() -> Result<(), _rt::Errno> {
+    let (r, data) = _rt::link::call(HANDLE, SHOWN, None);
+    _rt::answer(r)
+}
+
+mod _rt {
+    pub use crate::link;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::{answer, Handle, Method};
 }

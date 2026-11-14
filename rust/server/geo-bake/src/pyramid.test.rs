@@ -13,9 +13,9 @@ struct Count<const PLACE: bool>(u32);
 
 impl<const PLACE: bool> Tile for Count<PLACE> {
     const LAYER: BaseLayer = if PLACE {
-        BaseLayer::place
+        BaseLayer::Place
     } else {
-        BaseLayer::terrain
+        BaseLayer::Terrain
     };
 
     fn occupancy(&self) -> Occupancy {
@@ -99,7 +99,7 @@ fn fold_to_coarsest() {
 struct Unencodable(u32);
 
 impl Tile for Unencodable {
-    const LAYER: BaseLayer = BaseLayer::place;
+    const LAYER: BaseLayer = BaseLayer::Place;
 
     fn occupancy(&self) -> Occupancy {
         Occupancy::of_slots([true; 4])

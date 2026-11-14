@@ -14,7 +14,7 @@
 use pxl_engine::clipmap::FIRST_CELL_ZOOM;
 use pxl_engine::seed::node_seed;
 use pxl_spec::brick::BRICK_SHIFT;
-use pxl_spec::share::EIGHTHS;
+use pxl_spec::share::EIGHTH_CNT;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, UNIT_ZOOM};
 use xpute_kit::math::rng::SplitMix32;
 
@@ -130,7 +130,7 @@ pub(crate) const fn mul_hi(a: u32, b: u32) -> u32 {
 /// The variant a candidate draws, its seed's first draw: uniform over the
 /// decor's.
 pub(crate) fn draw_variant(decor: &Row, draws: &mut SplitMix32) -> u32 {
-    mul_hi(draws.next_u32(), decor.variants)
+    mul_hi(draws.next_u32(), decor.variant_cnt)
 }
 
 /// The variant a candidate of `seed` draws (`draw_variant`), the first of its draws.
@@ -190,7 +190,7 @@ pub const fn stands_at(decor: &Row, variant: u32, cell_zoom: Zoom) -> bool {
 /// cell at `cell_zoom` that its volume fills, floored (`share::eighths`), are one or more.
 const fn stands([x, y, z]: [u32; 3], own: Zoom, cell_zoom: Zoom) -> bool {
     let steps = 3 * (own - if own < cell_zoom { own } else { cell_zoom });
-    cell_zoom >= LEAF_CELL_ZOOM || (steps < u32::BITS && (EIGHTHS * x * y * z) >> steps >= 1)
+    cell_zoom >= LEAF_CELL_ZOOM || (steps < u32::BITS && (EIGHTH_CNT * x * y * z) >> steps >= 1)
 }
 
 /// The coarsest clip level zoom `variant` of `decor` stands at (`stands_at`).
@@ -206,7 +206,7 @@ pub const fn coarsest_stand(decor: &Row, variant: u32) -> Zoom {
 /// at this zoom and every finer one.
 pub const fn first_cell_zoom(decor: &Row) -> Zoom {
     let (mut first, mut v) = (LEAF_CELL_ZOOM, 0);
-    while v < decor.variants {
+    while v < decor.variant_cnt {
         let z = coarsest_stand(decor, v);
         first = if z < first { z } else { first };
         v += 1;

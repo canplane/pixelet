@@ -11,9 +11,9 @@ use pxl_content::generation;
 use pxl_spec::asset::decor::{Decor, DECORS};
 
 /// The most models decor registers: one for each variant, and each variant is
-/// a draw group (pxl-content generation.rs `GROUPS`). Two variants that name
+/// a draw group (pxl-content generation.rs `GROUP_CNT`). Two variants that name
 /// one model share it (`model_of`), so fewer may be registered.
-pub const MODELS_MAX: usize = generation::GROUPS as usize;
+pub const MODEL_CAP: usize = generation::GROUP_CNT as usize;
 
 /// Asks for every variant's model, as one of a frame's effects. Each model
 /// registers in a task of its own, whose work is spread over entries by each

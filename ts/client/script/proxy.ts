@@ -3,7 +3,8 @@
 /**
  * What a dev server and the page's preview (script/web.ts `serve`) answer
  * besides the bundle: the routes the page asks of its own origin, forwarded
- * to wherever the tiles come from. A device's console is answered by
+ * to wherever the tiles come from, which the build's define names too
+ * (`tile_source`, babel.config.ts). A device's console is answered by
  * @pxl/build/console.ts instead. Expo's transform loads this file for
  * metro.config.ts, and Node loads it too, so it must not read `import.meta`.
  */
@@ -20,15 +21,20 @@ import {
   TILE_PREFIX,
 } from "@pxl/client/service/origin/route.spec.ts";
 
+/** Where the tiles come from, PXL_TILE_SOURCE, or `delivery` where it names
+ * none. */
+export function tile_source(): string {
+  return process.env.PXL_TILE_SOURCE || "delivery";
+}
+
 /**
  * Where a dev server forwards a route the page asks of its own origin. The
  * routes split as the Worker splits them, and where they go depends on the
- * source the tiles come from, PXL_TILE_SOURCE, which the Makefile's `dev`,
- * `dev-oven` and `dev-shelf` set. Under `delivery`, every route goes to the
- * published deployment (PXL_REMOTE_ORIGIN, or else the site). Under `oven` and
- * `shelf`, the routes go to the local servers: the tiles and the assets to
- * the tile server, the API to the API server, and the rest to the search
- * server.
+ * source the tiles come from (`tile_source`). Under `delivery`, every route
+ * goes to the published deployment (PXL_REMOTE_ORIGIN, or else the site).
+ * Under `oven` and `shelf`, the routes go to the local servers: the tiles and
+ * the assets to the tile server, the API to the API server, and the rest to
+ * the search server.
  */
 export function route_target(url: string): string | null {
   const local = {
@@ -36,7 +42,7 @@ export function route_target(url: string): string | null {
     tile: process.env.PXL_TILE_BASE_URL || "http://127.0.0.1:3001",
     api: process.env.PXL_API_BASE_URL || "http://127.0.0.1:3002",
   };
-  const delivery = (process.env.PXL_TILE_SOURCE || "delivery") === "delivery";
+  const delivery = tile_source() === "delivery";
   const routes: [string, string][] = [
     [TILE_PREFIX, local.tile],
     [ASSET_PREFIX, local.tile],

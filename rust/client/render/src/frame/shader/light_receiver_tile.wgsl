@@ -26,7 +26,7 @@ struct ReceiverDispatch {
 @group(0) @binding(21) var<storage, read_write> light_args: array<atomic<u32>>;
 
 /// Where the marks begin among the light's args, past the passes' words and the lists' counts.
-const MARKS_FIRST: u32 = LIGHT_ARGS_PASSES + LIGHT_LISTS;
+const MARKS_FIRST: u32 = LIGHT_ARGS_PASSES + LIGHT_LIST_CNT;
 
 /// What the one thread that lists the cast's first stood tile does. It opens the slide's
 /// workgroups across, so a cast that owes a slide runs it once a receiver stands. Where the
@@ -34,7 +34,7 @@ const MARKS_FIRST: u32 = LIGHT_ARGS_PASSES + LIGHT_LISTS;
 /// slide, and the thread begins the reads' epoch anew (`light::READS_FROM`).
 fn receiver_tiles_first() {
   let n = light_tiles();
-  atomicStore(&args.slide[0], workgroups(n, n, SQUARE_SIDE));
+  atomicStore(&args.slide[0], workgroup_cnt(n, n, SQUARE_SIDE));
   let at = hdr_word(LIGHT_HDR_SLIDE);
   if (list_at(at + LIGHT_SLIDE_RAN) < hdr_word(LIGHT_HDR_SLIDE_CAST)) {
     list_put(at + LIGHT_READS_FROM, cast_number());

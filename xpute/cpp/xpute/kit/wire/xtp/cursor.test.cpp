@@ -186,7 +186,7 @@ XPUTE_TEST(xtp_pkt_round_trip) {
     w.branch(6, [&](PacketWriter &b) {
         b.i32(42).str("hello").boolean(true).nil();
         b.branch(2, [](PacketWriter &b) { b.i32(1).i64(-2); });
-        b.i32_array(ints);
+        b.array<std::int32_t>(ints);
     });
     std::span<const std::uint8_t> pkt = std::span(buf).first(w.finish().value());
     BranchCursor root = TreeReader::make(pkt)->read_branch().value();
@@ -196,7 +196,7 @@ XPUTE_TEST(xtp_pkt_round_trip) {
     XPUTE_CHECK_EQ(root.at(5)->get_array<std::int32_t>().value()[1], 8, "an element");
     XPUTE_CHECK(!root.at(5)->get_array<std::uint32_t>().ok());
     XPUTE_CHECK(!root.at_branch(4)->at(1)->get_number().ok());
-    XPUTE_CHECK_EQ(root.at_branch(4)->at(1)->get_i64().value(), -2, "a 64-bit integer");
+    XPUTE_CHECK_EQ(std::get<std::int64_t>(root.at_branch(4)->at(1)->get().value()), -2, "a 64-bit integer");
     XPUTE_CHECK_EQ(root.at(6).error().errnum, Errno::efault, "past the last child");
 
     std::array<std::uint8_t, 64> one{};
@@ -213,7 +213,7 @@ XPUTE_TEST(xtp_pkt_reads_anywhere) {
     std::array<std::uint8_t, 64> buf{};
     PacketWriter w{std::span(buf).subspan(1)};
     const std::array<double, 2> xs{0.5, -4.0};
-    w.f64_array(xs);
+    w.array<double>(xs);
     std::span<const std::uint8_t> pkt = std::span(buf).subspan(1, w.finish().value());
     ArrayView<double> e = TreeReader::make(pkt)->read().get_array<double>().value();
     XPUTE_CHECK(e.size() == 2 && e[0] == 0.5 && e[1] == -4.0);

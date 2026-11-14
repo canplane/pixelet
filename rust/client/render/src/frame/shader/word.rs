@@ -15,6 +15,7 @@ pub enum Kind {
     U32,
     Vec2,
     Vec2u,
+    Vec2i,
     Vec3,
     Vec3i,
     Vec4i,
@@ -30,7 +31,7 @@ impl Kind {
     pub const fn floats(self) -> usize {
         match self {
             Kind::F32 | Kind::U32 => 1,
-            Kind::Vec2 | Kind::Vec2u => 2,
+            Kind::Vec2 | Kind::Vec2u | Kind::Vec2i => 2,
             Kind::Vec3 | Kind::Vec3i => 3,
             Kind::Vec4i | Kind::Vec4u => 4,
             Kind::Mat3 => 11,
@@ -228,60 +229,31 @@ uniform! {
 pub const SKY_FLOATS: usize = floats(sky::FIELDS);
 
 uniform! {
-    /// The air's uniform (atmos_medium.wgsl, pass/atmosphere.rs). Floats 9
-    /// and 10 are unused.
+    /// The air's uniform (atmos_medium.wgsl, pass/atmosphere.rs): what of the air moves as
+    /// the renderer runs. The air's own numbers are the shaders' constants
+    /// (look/atmosphere.rs, build/shared.rs `atmos_medium`).
     atmos {
-        RAYLEIGH_SCATTERING: Vec3 = 0,
-        BOTTOM_RADIUS: F32 = 3,
-        OZONE_ABSORPTION: Vec3 = 4,
-        TOP_RADIUS: F32 = 7,
-        /// How far a level ray from the ground runs to the top of the air, in
-        /// km. It is the leg of the right triangle whose hypotenuse is
-        /// `TOP_RADIUS` and whose other leg is `BOTTOM_RADIUS`
-        /// (atmos_medium.wgsl `transmittance_uv`).
-        HORIZON_TO_TOP: F32 = 8,
-        RAYLEIGH_SCALE_HEIGHT: F32 = 11,
-        SUN_DIR: Vec3 = 12,
-        MIE_SCATTERING: F32 = 15,
-        CAMERA_ALT: F32 = 16,
-        KM_PER_U: F32 = 17,
-        MIE_EXTINCTION: F32 = 18,
-        MIE_SCALE_HEIGHT: F32 = 19,
-        MIE_G: F32 = 20,
-        OZONE_CENTER: F32 = 21,
-        OZONE_HALF_WIDTH: F32 = 22,
-        GROUND_ALBEDO: F32 = 23,
-        SUN_ANGULAR_RADIUS: F32 = 24,
-        EXPOSURE: F32 = 25,
-        NIGHT_STOPS: F32 = 26,
-        SHOWN_FALL: F32 = 27,
-        MOON_DIR: Vec3 = 28,
-        MOON_LIGHT: F32 = 31,
+        SUN_DIR: Vec3 = 0,
+        MOON_LIGHT: F32 = 3,
+        MOON_DIR: Vec3 = 4,
+        CAMERA_ALT: F32 = 7,
         /// The moon's light as it reaches the air, relative to the sun's,
         /// which is taken as white.
-        MOON_COLOR: Vec3 = 32,
+        MOON_COLOR: Vec3 = 8,
+        KM_PER_U: F32 = 11,
         /// How far the eye's rays run, in units (pxl-engine `eye::FAR`).
         /// Past it the land is drawn from the Earth's picture alone.
-        DRAWN: F32 = 35,
-        /// The night sky's light. It lights the ground and is never drawn
-        /// itself.
-        NIGHT_SKY: Vec3 = 36,
+        DRAWN: F32 = 12,
         /// The altitude of the land under the eye, in km.
-        LAND_ALT_KM: F32 = 39,
-        /// A lit city's radiance where the Earth's picture shows city
-        /// lights at full strength.
-        CITY_LIGHT: Vec3 = 40,
-        /// How far from the eye the Earth's tiles are drawn before the global
-        /// picture takes over, in units (pxl-spec bake/tile/earth.rs
-        /// `EARTH_DIST`).
-        EARTH_DIST: F32 = 43,
+        LAND_ALT_KM: F32 = 13,
         /// The window of Earth tiles the air reads. `EARTH_WINDOW` holds the
-        /// south-west tile's column and row, the tiles across the window, and
-        /// the tiles around the world. `EARTH_TILES` holds each tile's layer
-        /// plus one in `EARTH_TILE_BITS` bits, row by row, and zero where the
-        /// global picture stands in for the tile.
-        EARTH_WINDOW: Vec4i = 44,
-        EARTH_TILES: Vec4u = 48,
+        /// south-west tile's column and row; the tiles across the window and
+        /// around the world are the shaders' `EARTH_ACROSS` and `EARTH_AROUND`.
+        /// `EARTH_TILES` holds each tile's layer plus one in `EARTH_TILE_BITS`
+        /// bits, row by row, and zero where the global picture stands in for
+        /// the tile.
+        EARTH_WINDOW: Vec2i = 14,
+        EARTH_TILES: Vec4u = 16,
         /// How each light's sky view and its share of the air's volume were
         /// laid out (pass/atmosphere.rs `prepare`), the sun's and then the
         /// moon's. A layout holds how far the horizon dips below the level,
@@ -291,10 +263,10 @@ uniform! {
         /// `MOON_REACHES` are 1 when the light reaches the air by at least
         /// half a display level, and only then are the light's view and air
         /// drawn and read (`reaches`).
-        SUN_LAYOUT: Vec3 = 52,
-        SUN_REACHES: F32 = 55,
-        MOON_LAYOUT: Vec3 = 56,
-        MOON_REACHES: F32 = 59,
+        SUN_LAYOUT: Vec3 = 20,
+        SUN_REACHES: F32 = 23,
+        MOON_LAYOUT: Vec3 = 24,
+        MOON_REACHES: F32 = 27,
     }
 }
 pub const ATMOS_FLOATS: usize = floats(atmos::FIELDS);
@@ -389,28 +361,28 @@ pub const AO_NOISE_SIDE: u32 = 128;
 /// words live on the GPU, as the light's do, because passes on the GPU mark
 /// the tiles that changed, and words the CPU wrote each frame would undo
 /// those marks. A tile stays damaged until its history has run through the
-/// jitter's `JITTERS` frames (`DAMAGE_FRAMES`, pass/resolve.rs).
+/// jitter's `JITTER_CNT` frames (`DAMAGE_FRAME_CNT`, pass/resolve.rs).
 pub mod screen {
     /// A tile's side in drawn pixels.
     pub const TILE: u32 = 32;
     /// The threads of a workgroup of the pass that lists the damaged tiles.
-    pub const CAST_TILES_LANES: u32 = 64;
+    pub const CAST_TILES_LANE_CNT: u32 = 64;
     /// The number of frames in which the jitter's sequence covers a pixel.
-    pub const JITTERS: u32 = 8;
+    pub const JITTER_CNT: u32 = 8;
 
     /// The frames a screen tile stays damaged once it changes, the uniform's
-    /// `damage_frames`. In the frame it changes, what earlier frames left is
+    /// `damage_frame_cnt`. In the frame it changes, what earlier frames left is
     /// held within the colors this frame's pixels show. Then come
-    /// `JITTERS - 1` still frames: the first one's color takes half of the
+    /// `JITTER_CNT - 1` still frames: the first one's color takes half of the
     /// result, and each after it takes its even share (screen_resolve.wgsl).
     /// Each of these frames samples at its own place in the jitter's
     /// sequence.
-    pub const DAMAGE_FRAMES: u32 = JITTERS;
+    pub const DAMAGE_FRAME_CNT: u32 = JITTER_CNT;
 
     /// The words of the uniform the passes over the tiles read
     /// (gpu/tile.rs `TileGrid::words`). The first four are u32s: the tiles
-    /// across and down, `damage_frames`, and this frame's number. When the
-    /// frame is drawn whole, `damage_frames` is u32::MAX, so every tile is
+    /// across and down, `damage_frame_cnt`, and this frame's number. When the
+    /// frame is drawn whole, `damage_frame_cnt` is u32::MAX, so every tile is
     /// damaged. The last four are f32 bits: the target's pixels across and
     /// down, how far a quad is grown past its tile, and a tile's side.
     pub const TILES_WORDS: usize = 8;
@@ -425,9 +397,9 @@ pub mod screen {
     }
 
     /// Whether a tile `age` frames old is damaged, where a tile stays damaged
-    /// `damage_frames` frames once changed.
-    pub const fn in_damage(age: u32, damage_frames: u32) -> bool {
-        age < damage_frames
+    /// `damage_frame_cnt` frames once changed.
+    pub const fn in_damage(age: u32, damage_frame_cnt: u32) -> bool {
+        age < damage_frame_cnt
     }
 }
 
@@ -463,7 +435,7 @@ pub const SHADOW_SIZE: u32 = 2048;
 /// The decor's draw groups, one a decor variant (pass/decor.rs). Each
 /// group's impostor takes one layer of the impostor atlas and one fit in
 /// impostor_place.wgsl's `fits`.
-pub const DECOR_GROUPS: usize = 64;
+pub const DECOR_GROUP_CNT: usize = 64;
 
 /// The kinds of shape the atlas painter draws, by which atlas.wgsl `fs`
 /// tells them apart (gpu/atlas.rs).
@@ -475,7 +447,7 @@ pub const ATLAS_HALO: u32 = 4;
 
 /// The vertices of a box: two triangles on each of its six faces
 /// (pxl-engine raster.rs `corner`, box.wgsl).
-pub const BOX_VERTICES: u32 = 36;
+pub const BOX_VERTEX_CNT: u32 = 36;
 
 /// Every uniform stated in this file, each of which build.rs writes
 /// accessors for.
@@ -528,7 +500,7 @@ pub const AIR_FROXELS: u32 = 32;
 pub const SQUARE_SIDE: u32 = 8;
 /// The threads of a workgroup over a row, one thread an entry
 /// (light_mark_draws.wgsl, forget.wgsl).
-pub const ROW_LANES: u32 = 64;
+pub const ROW_LANE_CNT: u32 = 64;
 
 /// The words the sky views and the exposure measure into (pass/atmosphere.rs
 /// `plan`, atmos_skyview.wgsl `slopes`). Each light takes `LIGHT_SLOPES`

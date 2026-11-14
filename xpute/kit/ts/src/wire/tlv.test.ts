@@ -7,7 +7,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import { Golden } from "@xpute/golden";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_OK } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 import { bytes_to_hex, hex_to_bytes } from "@xpute/kit/codec/encoding.ts";
 import { TlvReader, type TlvValue, TlvWriter } from "@xpute/kit/wire/tlv.ts";
@@ -59,7 +59,7 @@ test("tlv computes what the typescript computes", async () => {
       for (const _ of r) n++;
       stop = r.end() ?? "none";
     } catch (err) {
-      stop = `errno:${(err as FaultError).errnum ?? Errno.OK}`;
+      stop = `errno:${(err as FaultError).errnum ?? ERRNO_OK}`;
     }
     assert.deepStrictEqual(`${n}:${stop}`, v.s(`end.${k}.read`), `end.${k}`);
   }
@@ -70,7 +70,7 @@ test("tlv computes what the typescript computes", async () => {
   try {
     new TlvReader(hex_to_bytes(v.s("huge.packet"))).read_all();
   } catch (err) {
-    huge = `errno:${(err as FaultError).errnum ?? Errno.OK}`;
+    huge = `errno:${(err as FaultError).errnum ?? ERRNO_OK}`;
   }
   assert.deepStrictEqual(huge, v.s("huge.read"));
 });

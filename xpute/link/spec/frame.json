@@ -4,7 +4,7 @@
     "PKT are their indices, little-endian. The tag is the request, unique among the sender's",
     "pending ones, and a later answer carries it back. The command is the RES bit, the handle",
     "the callee issued above METHOD_BITS, and the method's place among its object's below",
-    "them. An answer carries a value or a negative errno. The method's args, an XTP packet,",
+    "them. An answer carries 0 or a negative errno, its value in its packet. The method's args, a packet in the Canonical ABI's layout,",
     "lie right past the words, and PKT says how long they are (link/wit/types.wit). ROOT",
     "is the handle every side serves, OPEN and CANCEL its methods, DROP the method every handle",
     "has, NAMED marks an interface's handle, and SLOT_BITS splits an issued handle into its",
@@ -26,7 +26,7 @@
   "RESULT": {
     "$val": 2,
     "$type": "u32",
-    "$doc": ["On an answer, a value or a negative errno; on a request, 0."]
+    "$doc": ["On an answer, 0 or a negative errno: the call refused, by the link or by the method as a caller's bug (EINVAL), or a method's failure where its WIT has no result; on a request, 0."]
   },
 
   "PKT": {

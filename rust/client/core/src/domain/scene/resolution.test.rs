@@ -60,7 +60,7 @@ fn until_changed(k: &mut Judge, p: &mut Pace, load: f64, n: u32) -> Option<Setpo
 
 /// Runs the windows after a change and asserts that none of them is judged.
 fn settle(k: &mut Judge, p: &mut Pace, load: f64, timed: bool) {
-    for _ in 0..param::RES_SETTLE_WINDOWS {
+    for _ in 0..param::RES_SETTLE_WINDOW_CNT {
         assert_eq!(window(k, p, load, timed), None, "settling");
     }
 }
@@ -88,7 +88,7 @@ fn windows_of(k: &mut Judge, s: Cost, n: u32, timed: bool) -> u32 {
 
 /// With timestamps, a window over its budget steps down at once. The settling
 /// windows after a change are not judged. The step above is taken again only
-/// after `RES_UP_WINDOWS` windows in which it would fit.
+/// after `RES_UP_WINDOW_CNT` windows in which it would fit.
 #[test]
 fn timed_steps() {
     crate::on_core(|| {
@@ -96,7 +96,7 @@ fn timed_steps() {
         assert_eq!(windows(&mut k, 1.5, 1, true), 1);
         assert_eq!(k.step, 1);
         assert_eq!(
-            windows(&mut k, 1.5, param::RES_SETTLE_WINDOWS, true),
+            windows(&mut k, 1.5, param::RES_SETTLE_WINDOW_CNT, true),
             0,
             "settling"
         );
@@ -104,7 +104,7 @@ fn timed_steps() {
         assert_eq!(k.step, 2);
         // Fits at this step, but the step above would not.
         assert_eq!(windows(&mut k, 0.8, 20, true), 0);
-        assert_eq!(windows(&mut k, 0.3, param::RES_UP_WINDOWS - 1, true), 0);
+        assert_eq!(windows(&mut k, 0.3, param::RES_UP_WINDOW_CNT - 1, true), 0);
         assert_eq!(windows(&mut k, 0.3, 1, true), 1);
         assert_eq!(k.step, 1);
     });
@@ -152,9 +152,14 @@ fn untimed_probe_backoff() {
         let mut k = Judge::NEW;
         assert_eq!(windows(&mut k, param::SCALE_MISSED + 0.5, 1, false), 1);
         assert_eq!(k.step, 1);
-        let settle = param::RES_SETTLE_WINDOWS;
+        let settle = param::RES_SETTLE_WINDOW_CNT;
         assert_eq!(
-            windows(&mut k, 1.0, settle + param::SCALE_PROBE_WINDOWS - 1, false),
+            windows(
+                &mut k,
+                1.0,
+                settle + param::SCALE_PROBE_WINDOW_CNT - 1,
+                false
+            ),
             0
         );
         assert_eq!(windows(&mut k, 1.0, 1, false), 1);
@@ -167,16 +172,24 @@ fn untimed_probe_backoff() {
         );
         assert_eq!(
             (k.step, k.on_trial, k.hold(false)),
-            (1, false, 2 * param::SCALE_PROBE_WINDOWS)
+            (1, false, 2 * param::SCALE_PROBE_WINDOW_CNT)
         );
         assert_eq!(
-            windows(&mut k, 1.0, settle + 2 * param::SCALE_PROBE_WINDOWS, false),
+            windows(
+                &mut k,
+                1.0,
+                settle + 2 * param::SCALE_PROBE_WINDOW_CNT,
+                false
+            ),
             1
         );
-        assert_eq!(windows(&mut k, 1.0, param::RES_TRUST_WINDOWS + 1, false), 0);
+        assert_eq!(
+            windows(&mut k, 1.0, param::RES_TRUST_WINDOW_CNT + 1, false),
+            0
+        );
         assert_eq!(
             (k.step, k.on_trial, k.hold(false)),
-            (0, false, param::SCALE_PROBE_WINDOWS),
+            (0, false, param::SCALE_PROBE_WINDOW_CNT),
             "the probe outlasted its trust"
         );
     });
@@ -184,17 +197,17 @@ fn untimed_probe_backoff() {
 
 /// With timestamps, two steps do not swing when the step above is predicted
 /// to fit and does not. Each fall back within the trial doubles the windows
-/// before the next step up, up to `RES_UP_WINDOWS_MAX`. A step up that
+/// before the next step up, up to `RES_UP_WINDOW_CAP`. A step up that
 /// outlasts its trial stands, and the wait returns to its first length.
 #[test]
 fn timed_up_backoff() {
     crate::on_core(|| {
-        let settle = param::RES_SETTLE_WINDOWS;
+        let settle = param::RES_SETTLE_WINDOW_CNT;
         let mut k = Judge::NEW;
         k.step = 1;
         // Each round steps up after its wait, goes over within the trial and
         // falls back, so the wait doubles and then doubles again.
-        let mut wait = param::RES_UP_WINDOWS;
+        let mut wait = param::RES_UP_WINDOW_CNT;
         for _ in 0..2 {
             assert_eq!(windows(&mut k, 0.3, wait - 1, true), 0);
             assert_eq!(windows(&mut k, 0.3, 1, true), 1);
@@ -208,16 +221,19 @@ fn timed_up_backoff() {
         }
         // The wait has a cap.
         k.backoff = 1 << 20;
-        assert_eq!(k.hold(true), param::RES_UP_WINDOWS_MAX);
+        assert_eq!(k.hold(true), param::RES_UP_WINDOW_CAP);
         // A step up that outlasts its trial stands, and the wait returns to its
         // first length.
         k.backoff = 2;
-        assert_eq!(windows(&mut k, 0.3, 2 * param::RES_UP_WINDOWS, true), 1);
+        assert_eq!(windows(&mut k, 0.3, 2 * param::RES_UP_WINDOW_CNT, true), 1);
         assert_eq!(k.step, 0);
-        assert_eq!(windows(&mut k, 0.3, param::RES_TRUST_WINDOWS + 1, true), 0);
+        assert_eq!(
+            windows(&mut k, 0.3, param::RES_TRUST_WINDOW_CNT + 1, true),
+            0
+        );
         assert_eq!(
             (k.step, k.on_trial, k.hold(true)),
-            (0, false, param::RES_UP_WINDOWS)
+            (0, false, param::RES_UP_WINDOW_CNT)
         );
     });
 }
@@ -228,11 +244,11 @@ fn timed_up_backoff() {
 #[test]
 fn pause_keeps_windows() {
     crate::on_core(|| {
-        let settle = param::RES_SETTLE_WINDOWS;
+        let settle = param::RES_SETTLE_WINDOW_CNT;
         let mut k = Judge::NEW;
         assert_eq!(windows(&mut k, 1.5, 1, true), 1);
         assert_eq!(
-            windows(&mut k, 0.3, settle + param::RES_UP_WINDOWS - 1, true),
+            windows(&mut k, 0.3, settle + param::RES_UP_WINDOW_CNT - 1, true),
             0
         );
         k.judge(
@@ -251,7 +267,12 @@ fn pause_keeps_windows() {
         let mut k = Judge::NEW;
         assert_eq!(windows(&mut k, param::SCALE_MISSED + 0.5, 1, false), 1);
         assert_eq!(
-            windows(&mut k, 1.0, settle + param::SCALE_PROBE_WINDOWS - 1, false),
+            windows(
+                &mut k,
+                1.0,
+                settle + param::SCALE_PROBE_WINDOW_CNT - 1,
+                false
+            ),
             0
         );
         k.restart();
@@ -270,9 +291,9 @@ fn pause_keeps_windows() {
 #[test]
 fn down_scale_to_its_floor() {
     crate::on_core(|| {
-        let (over, settle) = (cost(0.6, 0.9), param::RES_SETTLE_WINDOWS);
+        let (over, settle) = (cost(0.6, 0.9), param::RES_SETTLE_WINDOW_CNT);
         let mut k = Judge::NEW;
-        for step in 1..=param::RES_STEPS {
+        for step in 1..=param::RES_STEP_CNT {
             assert_eq!(windows_of(&mut k, over, 1, true), 1);
             assert_eq!(k.step, step);
             assert_eq!(windows_of(&mut k, over, settle, true), 0, "settling");
@@ -281,7 +302,7 @@ fn down_scale_to_its_floor() {
     });
 }
 
-/// With timestamps, the scale steps up after `RES_UP_WINDOWS` windows in
+/// With timestamps, the scale steps up after `RES_UP_WINDOW_CNT` windows in
 /// which the step above fits.
 #[test]
 fn up_scale() {
@@ -291,7 +312,10 @@ fn up_scale() {
             ..Judge::NEW
         };
         let room = cost(0.1, 0.25);
-        assert_eq!(windows_of(&mut k, room, param::RES_UP_WINDOWS - 1, true), 0);
+        assert_eq!(
+            windows_of(&mut k, room, param::RES_UP_WINDOW_CNT - 1, true),
+            0
+        );
         assert_eq!(windows_of(&mut k, room, 1, true), 1);
         assert_eq!(k.step, 1);
     });
@@ -322,7 +346,7 @@ fn step_up_judges_total() {
 fn predicted_by_part() {
     crate::on_core(|| {
         let k = Judge {
-            step: param::RES_STEPS,
+            step: param::RES_STEP_CNT,
             ..Judge::NEW
         };
         let (s, w) = (cost(0.2, 0.4), param::RES_WINDOW_MS);
@@ -392,7 +416,7 @@ fn up_rate_last() {
             ..Judge::NEW
         };
         let mut p = on(120.0, 3.0);
-        let wait = param::RES_SETTLE_WINDOWS + param::RES_UP_WINDOWS + 1;
+        let wait = param::RES_SETTLE_WINDOW_CNT + param::RES_UP_WINDOW_CNT + 1;
         assert!(until_changed(&mut k, &mut p, 0.1, wait).is_some());
         assert_eq!(k.step, 0, "the scale first");
         assert!(near(p.paced_ms, on(120.0, 3.0).paced_ms));
@@ -425,7 +449,7 @@ fn rate_up_judges_its_budget() {
 fn rate_up_backoff() {
     crate::on_core(|| {
         let (mut k, mut p) = (Judge::NEW, on(120.0, 3.0));
-        let wait = param::RES_UP_WINDOWS;
+        let wait = param::RES_UP_WINDOW_CNT;
         assert!(until_changed(&mut k, &mut p, 0.3, wait).is_some());
         assert!(k.on_trial && near(p.paced_ms, on(120.0, 2.0).paced_ms));
         settle(&mut k, &mut p, 0.3, true);
@@ -453,13 +477,13 @@ fn untimed_rate_stays() {
 #[test]
 fn untimed_scale_alone() {
     crate::on_core(|| {
-        let (over, settle) = (param::SCALE_MISSED + 0.5, param::RES_SETTLE_WINDOWS);
+        let (over, settle) = (param::SCALE_MISSED + 0.5, param::RES_SETTLE_WINDOW_CNT);
         let mut k = Judge::NEW;
-        for _ in 0..param::RES_STEPS {
+        for _ in 0..param::RES_STEP_CNT {
             assert_eq!(windows(&mut k, over, 1, false), 1);
             assert_eq!(windows(&mut k, over, settle, false), 0);
         }
         assert_eq!(windows(&mut k, over, settle + 10, false), 0);
-        assert_eq!(k.step, param::RES_STEPS);
+        assert_eq!(k.step, param::RES_STEP_CNT);
     });
 }

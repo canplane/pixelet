@@ -10,47 +10,43 @@
     reason = "generated from WIT"
 )]
 
-use std::rc::Rc;
-use xpute_guest::link;
-use xpute_guest::wait;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
 /// `[method]surface.resize`
-pub const SURFACE_RESIZE: Method = 0;
+pub const SURFACE_RESIZE: _rt::Method = 0;
 
-pub trait Surface {
-    fn resize(&self, width: u32, height: u32, dpr: f32) -> Result<(), Errno>;
+pub trait GuestSurface {
+    fn resize(&self, width: u32, height: u32, dpr: f64) -> Result<(), _rt::Errno>;
 }
 
-struct SurfaceObject(Rc<dyn Surface>);
+struct _SurfaceObject(_rt::Rc<dyn GuestSurface>);
 
-impl Object for SurfaceObject {
-    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
-        let run = || -> Result<Reply, MarshalError> {
+impl _rt::Object for _SurfaceObject {
+    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+        let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 SURFACE_RESIZE => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let width = b_.at(0).and_then(|c| c.get_number().map(|v| v as u32))?;
-                    let height = b_.at(1).and_then(|c| c.get_number().map(|v| v as u32))?;
-                    let dpr = b_.at(2).and_then(|c| c.get_number().map(|v| v as f32))?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let width = r_.u32(0)?;
+                    let height = r_.u32(4)?;
+                    let dpr = r_.f64(8)?;
                     match self.0.resize(width, height, dpr) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                        Ok(v) => _rt::Reply::from(0),
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
-                _ => Reply::from(Errno::ENOSYS as i32),
+                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
             })
         };
-        run().unwrap_or_else(|e| Reply::from(e.errnum as i32))
+        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
     }
 }
 
 /// The object over `imp`, for an opener to answer.
-pub fn surface(imp: Rc<dyn Surface>) -> Rc<dyn Object> {
-    Rc::new(SurfaceObject(imp))
+pub fn surface(imp: _rt::Rc<dyn GuestSurface>) -> _rt::Rc<dyn _rt::Object> {
+    _rt::Rc::new(_SurfaceObject(imp))
+}
+
+mod _rt {
+    pub use std::rc::Rc;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::{Lift, Method, Object, Reply, Tag};
 }

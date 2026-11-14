@@ -6,24 +6,17 @@
 // each is served is the bucket's alone: its `source`, which the client reads
 // at boot and script/publish.py writes, so a publish changes nothing here.
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    non_camel_case_types,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 /// The format each bake writes now, which a published name begins with.
 /// It is bumped by a change to how the client reads a tile, or to what a
 /// tile guarantees it.
-pub mod FORMAT {
-    pub const terrain: u32 = 12;
-    pub const place: u32 = 10;
-    pub const division: u32 = 9;
-    pub const earth: u32 = 2;
+pub mod format {
+    pub const TERRAIN: u32 = 12;
+    pub const PLACE: u32 = 10;
+    pub const DIVISION: u32 = 9;
+    pub const EARTH: u32 = 2;
 }
 
 /// What a version is written in: one segment of a tile's URL, with no character it would
@@ -43,28 +36,28 @@ pub const BASE_LAYERS: &[&str] = &["terrain", "place", "division", "earth"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum BaseLayer {
-    terrain = 0,
-    place = 1,
-    division = 2,
-    earth = 3,
+    Terrain = 0,
+    Place = 1,
+    Division = 2,
+    Earth = 3,
 }
 
 impl BaseLayer {
     /// Every member, in its source's own order.
     pub const ALL: [BaseLayer; 4] = [
-        BaseLayer::terrain,
-        BaseLayer::place,
-        BaseLayer::division,
-        BaseLayer::earth,
+        BaseLayer::Terrain,
+        BaseLayer::Place,
+        BaseLayer::Division,
+        BaseLayer::Earth,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u32) -> Option<BaseLayer> {
         match val {
-            0 => Some(BaseLayer::terrain),
-            1 => Some(BaseLayer::place),
-            2 => Some(BaseLayer::division),
-            3 => Some(BaseLayer::earth),
+            0 => Some(BaseLayer::Terrain),
+            1 => Some(BaseLayer::Place),
+            2 => Some(BaseLayer::Division),
+            3 => Some(BaseLayer::Earth),
             _ => None,
         }
     }
@@ -72,10 +65,10 @@ impl BaseLayer {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            BaseLayer::terrain => "terrain",
-            BaseLayer::place => "place",
-            BaseLayer::division => "division",
-            BaseLayer::earth => "earth",
+            BaseLayer::Terrain => "terrain",
+            BaseLayer::Place => "place",
+            BaseLayer::Division => "division",
+            BaseLayer::Earth => "earth",
         }
     }
 }
@@ -105,10 +98,10 @@ impl BaseLayer {
     /// The format the layer is baked and read in, `FORMAT[layer]`.
     pub const fn format(self) -> u32 {
         match self {
-            BaseLayer::terrain => FORMAT::terrain,
-            BaseLayer::place => FORMAT::place,
-            BaseLayer::division => FORMAT::division,
-            BaseLayer::earth => FORMAT::earth,
+            BaseLayer::Terrain => format::TERRAIN,
+            BaseLayer::Place => format::PLACE,
+            BaseLayer::Division => format::DIVISION,
+            BaseLayer::Earth => format::EARTH,
         }
     }
 }

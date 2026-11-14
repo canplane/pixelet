@@ -3,16 +3,20 @@
 use super::ingest::symbol_number;
 use xpute_gen::spec::data::{table_outputs, DataSpec};
 
-use super::{file, json_str, line_comments, mark, read, rs_doc, ts_doc, Node, Output};
+use super::{
+    file, json_str, line_comments, mark, read, plural, rs_const, rs_doc, rs_member, ts_doc, Node, Output,
+};
 use crate::root;
 
 /// publication.json, written by xpute's generator as a data spec, with
-/// `BASE_LAYERS`, the enum of `FORMAT`'s kinds in their order, beside it. The
-/// tool keeps what is pixelet's own: the object a tile is published as, read
-/// and written by `OBJECT`, and the Worker's copy of the kinds, bundled apart
-/// from the client.
+/// `BASE_LAYER`, the enum of `FORMAT`'s kinds in their order, its names
+/// `BASE_LAYERS`, beside it. The tool keeps what is pixelet's own: the object a
+/// tile is published as, read and written by `OBJECT`, and the Worker's copy of
+/// the kinds, bundled apart from the client.
 pub fn publication_outputs() -> Result<Vec<Output>, String> {
     const JSON: &str = "spec/spec/bake/publication.json";
+    // The enum of the layers, whose names the Worker's copy takes too.
+    const LAYER: &str = "BASE_LAYER";
     let spec = read(JSON)?;
     let format = spec.get("FORMAT").ok_or("publication.json: no FORMAT")?;
     let layers: Vec<&str> = format.named().map(|(k, _)| k).collect();
@@ -59,9 +63,10 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
         .cloned()
         .collect();
     table.push((
-        "BASE_LAYERS".into(),
+        LAYER.into(),
         Node::Obj(vec![
             ("$type".into(), Node::Str("enum".into())),
+            ("$names".into(), Node::Bool(true)),
             ("$repr".into(), Node::Str("u32".into())),
             (
                 "$doc".into(),
@@ -115,7 +120,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     rs.extend(
         layers
             .iter()
-            .map(|k| format!("            BaseLayer::{k} => FORMAT::{k},")),
+            .map(|k| format!("            BaseLayer::{} => format::{},", rs_member(k), rs_const(k))),
     );
     rs.extend(["        }", "    }", "}"].map(String::from));
     for o in &mut outs {
@@ -132,7 +137,8 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
         "".into(),
         "/** The base layers, each a kind a baked page is published under. */".into(),
         format!(
-            "export const BASE_LAYERS = [{}] as const;",
+            "export const {} = [{}] as const;",
+            plural(LAYER),
             layers
                 .iter()
                 .map(|k| json_str(k))

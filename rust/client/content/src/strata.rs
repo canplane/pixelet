@@ -16,22 +16,22 @@
 //! by the rule the wall is laid by (pxl-core domain/query/limit.rs `within`, `editable`).
 
 use pxl_engine::ground::rock;
-use pxl_spec::ground::{face_ele, leaf_cells, UNKNOWN};
+use pxl_spec::asset::cube::Sentinel;
+use pxl_spec::ground::{face_ele, leaf_cells};
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
-use pxl_spec::value::VOID;
 
 use crate::param::strata::{BEDROCK_DEPTH, FILLER_DEPTH, HEADROOM, SANDSTONE_DEPTH};
 use crate::Pixelet;
 use pxl_spec::asset::cube::Ground;
 
 // The palette entries the strata name, read into a word.
-const SAND: u32 = Ground::sand as u32;
-const BEACH: u32 = Ground::beach as u32;
-const WATER: u32 = Ground::water as u32;
-const SOIL: u32 = Ground::soil as u32;
-const SANDSTONE: u32 = Ground::sandstone as u32;
-const STONE: u32 = Ground::stone as u32;
+const SAND: u32 = Ground::Sand as u32;
+const BEACH: u32 = Ground::Beach as u32;
+const WATER: u32 = Ground::Water as u32;
+const SOIL: u32 = Ground::Soil as u32;
+const SANDSTONE: u32 = Ground::Sandstone as u32;
+const STONE: u32 = Ground::Stone as u32;
 
 /// The top of the bedrock under a face `face` leaf cells high, in leaf cells: the lowest a
 /// cube may reach there, for every walk, edit and column.
@@ -49,9 +49,9 @@ pub fn ceiling(face: i32) -> i32 {
 /// all through; the wall (`unknown`) is itself all through.
 pub fn by_depth(cell_zoom: Zoom, asset_id: u32, top: i32, z: i32) -> u32 {
     if z >= top {
-        return VOID;
+        return Sentinel::Void as u32;
     }
-    if cell_zoom < LEAF_CELL_ZOOM || asset_id == UNKNOWN {
+    if cell_zoom < LEAF_CELL_ZOOM || asset_id == Sentinel::Unknown as u32 {
         return asset_id;
     }
     let s = leaf_cells(cell_zoom);
@@ -73,7 +73,7 @@ pub fn by_depth(cell_zoom: Zoom, asset_id: u32, top: i32, z: i32) -> u32 {
     } else if z >= rock::<Pixelet>(cell_zoom, face_ele(cell_zoom, top)) {
         STONE
     } else {
-        UNKNOWN
+        Sentinel::Unknown as u32
     }
 }
 
@@ -81,8 +81,8 @@ pub fn by_depth(cell_zoom: Zoom, asset_id: u32, top: i32, z: i32) -> u32 {
 /// air above it.
 pub fn earth(z: i32) -> u32 {
     if z < SEA_LEVEL {
-        UNKNOWN
+        Sentinel::Unknown as u32
     } else {
-        VOID
+        Sentinel::Void as u32
     }
 }

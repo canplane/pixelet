@@ -21,7 +21,7 @@ use crate::gpu::span_spec::FrameKind;
 use crate::paint::ground::look_words;
 use cast::CastBuffer;
 pub use cast::{Cast, LightRead, ObjectTable};
-pub use count::{cnt_at, RayCount, CAST, LANES_AT, RAYS, RAY_CNTS};
+pub use count::{cnt_at, RayCount, CAST, LANES_AT, RAYS, RAY_CNT_CNT};
 use ground::GroundBuffer;
 pub use ground::{BrickWrite, GroundInput, TerrainUpload, TerrainWrite};
 
@@ -29,7 +29,7 @@ pub use ground::{BrickWrite, GroundInput, TerrainUpload, TerrainWrite};
 /// casts them whole; a `px` frame casts them again over the samples the
 /// last cast left.
 fn casts_px(kind: FrameKind) -> bool {
-    kind == FrameKind::cast || kind == FrameKind::px
+    kind == FrameKind::Cast || kind == FrameKind::Px
 }
 
 pub struct RayPass {
@@ -109,7 +109,7 @@ impl RayPass {
     }
 
     pub fn draw(&self, pass: &mut TrackedRenderPass) {
-        if self.kind() == FrameKind::plain || self.group.id() == 0 {
+        if self.kind() == FrameKind::Plain || self.group.id() == 0 {
             return;
         }
         pass.set_pipeline(self.pipeline.id);

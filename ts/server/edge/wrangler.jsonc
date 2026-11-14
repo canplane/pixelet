@@ -74,7 +74,8 @@
       // name is in kebab case because R2 bucket names accept only lowercase
       // letters, digits and hyphens. The bucket holds the baked pages, the
       // assets and `source` (index.ts `KEY_RE`), so it is named for being the
-      // bucket rather than for one of them.
+      // bucket rather than for one of them. The scripts take it from here
+      // (script/r2.py `BUCKET`).
       "bucket_name": "pixelet-bucket",
     },
   ],

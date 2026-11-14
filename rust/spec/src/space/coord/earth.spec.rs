@@ -5,14 +5,8 @@
 // The Earth as the map takes it: Web Mercator's sphere, which every meter the
 // map measures is a meter of (pxl-spec space/coord/adapter/4326.rs).
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 /// WGS84's semi-major axis, the sphere EPSG:3857 projects.
 pub const EARTH_RADIUS_M: f64 = 6378137.0;

@@ -7,7 +7,8 @@
  * `NAMED`), or a resource's, named by a URI, a tuple of tokens, and opened by
  * the root's `open` to a handle the serving side issues. A frame is one method called: its tag the request,
  * unique among the sender's pending ones, its command the handle, the method
- * and a RES bit (frame.ts), its packet the args in XTP. A frame crosses one way
+ * and a RES bit (frame.ts), its packet the args in the Canonical ABI's layout
+ * (cabi.ts). A frame crosses one way
  * through one function, and each crossing returns at once what the method came
  * to: its result, or EINPROGRESS for one that answers later, by a frame marked
  * RES with the request's tag. `call` takes what the crossing returns, for a
@@ -37,10 +38,17 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import {
+  ERRNO_EBADF,
+  ERRNO_EBADMSG,
+  ERRNO_EEXIST,
+  ERRNO_EINPROGRESS,
+  ERRNO_EMSGSIZE,
+  ERRNO_ENOENT,
+} from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError, MarshalError, XputeError } from "@xpute/kit/status/error.ts";
-import { type BranchCursor, type NodeCursor, type NodeType, PacketWriter, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
-import { read_Token, type Token, write_Token } from "./abi/types.ts";
+import { Lift, Lower } from "./cabi.ts";
+import { load_Token, store_Token, type Token, TOKEN_ALIGN, TOKEN_SZ } from "./abi/types.ts";
 import { lay, read, WORD_BYTES } from "./frame.ts";
 import { CANCEL, DROP, NAMED, OPEN, ROOT } from "./frame.spec.ts";
 import { type Handle, Table } from "./resource.ts";
@@ -54,18 +62,18 @@ export { CANCEL, DROP, NAMED, OPEN, ROOT };
 /** An object the host serves: given a method, the request's tag, for a
  * later answer (`task_return`), and the args, it answers. */
 export interface LinkObject {
-  call(m: Method, tag: Tag, args: BranchCursor | null): i32 | Reply;
+  call(m: Method, tag: Tag, args: U8Array | null): i32 | Reply;
 }
 
 /** What opens the object a URI names, given the handle it is issued. */
 export type Opener = (uri: readonly Token[], h: Handle) => LinkObject;
 
-/** A method's args, or its return data: how many fields, and what writes
- * them. Null, or no fields, is no packet (xpute-link link.rs `Args`). */
-export type Args = readonly [u32, (w: PacketWriter) => void] | null;
+/** A method's args, or its return data: its fixed part's size, and what
+ * writes it (`Lower`). Null is no packet (xpute-link link.rs `Args`). */
+export type Args = readonly [u32, (w: Lower) => void] | null;
 
-/** What a method answers: its result, a status or a value, and its return
- * data, written once its args are read. */
+/** What a method answers: its result, a status, and its return data, its
+ * value, written once its args are read. */
 export interface Reply {
   result: i32;
   data: Args;
@@ -92,13 +100,6 @@ export interface Sender {
   send(h: Handle, m: Method, args: Args): Promise<Answered>;
 }
 
-/** The node `c` as `T`, a node of `type`; any other refuses the packet with
- * EBADMSG, as the kit's checked getters do. */
-export function get_as<T>(c: NodeCursor, type: NodeType): T {
-  if (c.type !== type) throw new MarshalError(Errno.EBADMSG);
-  return c.get() as T;
-}
-
 /** A reference to an object on the other side: the link it is reached
  * over, and the handle that side issued. */
 export interface Ref {
@@ -113,14 +114,33 @@ export function uri(...names: string[]): Token[] {
 
 /** Opens the object `uri` names on the other side, and answers its handle. */
 export async function open(link: Sender, uri: readonly Token[]): Promise<Handle> {
-  const a = await link.send(ROOT, OPEN, [1, (w) => w.branch(uri.length, (w) => uri.forEach((t) => write_Token(w, t)))]);
-  if (a.result < 0) throw new XputeError(a.result);
-  return a.result;
+  const a = await link.send(ROOT, OPEN, [
+    8,
+    (w) => {
+      const b = w.list(0, uri.length, TOKEN_SZ, TOKEN_ALIGN);
+      if (b !== null) uri.forEach((t, k) => store_Token(w, b + k * TOKEN_SZ, t));
+    },
+  ]);
+  if (a.result !== 0) throw new XputeError(a.result);
+  if (a.data === null) throw new MarshalError(ERRNO_EBADMSG);
+  return new Lift(a.data).u32(0);
 }
 
 /** Lets the object `h` names on the other side go. */
 export function drop(link: Sender, h: Handle): void {
   void link.send(h, DROP, null);
+}
+
+/** A function's `result` error case, as jco's bindings carry it: its caller
+ * is thrown it, and its implementation throws it. `payload` is the case's
+ * value. */
+export class ComponentError<P = unknown> extends Error {
+  readonly payload: P;
+
+  constructor(payload: P) {
+    super(`component error: ${String(payload)}`);
+    this.payload = payload;
+  }
 }
 
 /** The errno a method refuses with: an XputeError's. Anything else is a bug,
@@ -185,7 +205,7 @@ export class Link {
 
   call(h: Handle, m: Method, args: Packet = null): Answered {
     const answered = this._out(this._tag(), h, m, false, 0, args);
-    if (answered.result === Errno.EINPROGRESS) throw new InvariantError(Errno.EINPROGRESS);
+    if (answered.result === ERRNO_EINPROGRESS) throw new InvariantError(ERRNO_EINPROGRESS);
     return answered;
   }
 
@@ -202,7 +222,7 @@ export class Link {
       throw e;
     }
     const { result, data } = out;
-    if (result === Errno.EINPROGRESS || !this._pending.delete(t) || answer === undefined) return;
+    if (result === ERRNO_EINPROGRESS || !this._pending.delete(t) || answer === undefined) return;
     const copy = data && data.slice();
     queueMicrotask(() => answer(result, copy));
   }
@@ -218,7 +238,7 @@ export class Link {
   /** Serves `o` under its interface's named handle `h`, which the guest
    * calls with no open. */
   mount_named(h: Handle, o: LinkObject): void {
-    if (this._named.has(h)) throw new InvariantError(Errno.EEXIST);
+    if (this._named.has(h)) throw new InvariantError(ERRNO_EEXIST);
     this._named.set(h, o);
   }
 
@@ -256,26 +276,27 @@ export class Link {
     const { result, data } = typeof reply === "number" ? { result: reply, data: null } : reply;
     // An answer past the room is refused as a later one is (`_out`).
     if (this._lay(at, f.tag, f.handle, f.method, true, result, data) !== 0) {
-      this._lay(at, f.tag, f.handle, f.method, true, Errno.EMSGSIZE, null);
-      return Errno.EMSGSIZE;
+      this._lay(at, f.tag, f.handle, f.method, true, ERRNO_EMSGSIZE, null);
+      return ERRNO_EMSGSIZE;
     }
     return result;
   }
 
   /** Runs `m` of `h`: the root's open or cancel, a drop, or an object's
    * method. */
-  private _serve(h: Handle, m: Method, tag: Tag, args: BranchCursor | null): i32 | Reply {
+  private _serve(h: Handle, m: Method, tag: Tag, args: U8Array | null): i32 | Reply {
     if (h === ROOT && m === OPEN) {
       try {
-        return this._opened(args);
+        const opened = this._opened(args);
+        return { result: 0, data: [4, (w) => w.u32(0, opened)] };
       } catch (e) {
         return refusal_of(e);
       }
     }
     if (h === ROOT && m === CANCEL) {
       try {
-        if (args === null) return Errno.EBADMSG;
-        const t = args.at(0).get_number();
+        if (args === null) return ERRNO_EBADMSG;
+        const t = new Lift(args).u32(0);
         const stop = this._cancels.get(t);
         this._cancels.delete(t);
         stop?.();
@@ -284,29 +305,30 @@ export class Link {
         return refusal_of(e);
       }
     }
-    if (m === DROP) return this._objects.remove(h) === undefined ? Errno.EBADF : 0;
+    if (m === DROP) return this._objects.remove(h) === undefined ? ERRNO_EBADF : 0;
     // A named handle no interface is mounted under is no object here; an
     // issued one no longer held is a bad handle.
     if ((h & NAMED) !== 0) {
       const o = this._named.get(h);
-      return o === undefined ? Errno.ENOENT : o.call(m, tag, args);
+      return o === undefined ? ERRNO_ENOENT : o.call(m, tag, args);
     }
     const o = this._objects.get(h);
-    return o === undefined ? Errno.EBADF : o.call(m, tag, args);
+    return o === undefined ? ERRNO_EBADF : o.call(m, tag, args);
   }
 
   /** Opens the object the args' URI names, by the opener of its longest
    * matching mount, and issues its handle. */
-  private _opened(args: BranchCursor | null): Handle {
-    if (args === null) throw new MarshalError(Errno.EBADMSG);
-    const uri = args.at_branch(0).children().map(read_Token);
+  private _opened(args: U8Array | null): Handle {
+    if (args === null) throw new MarshalError(ERRNO_EBADMSG);
+    const r = new Lift(args);
+    const uri = r.map(0, TOKEN_SZ, TOKEN_ALIGN, (at) => load_Token(r, at));
     let best: [readonly Token[], Opener] | undefined;
     for (const m of this._mounts) {
       const [p] = m;
       const leads = p.length <= uri.length && p.every((t, k) => t.tag === uri[k]!.tag && t.val === uri[k]!.val);
       if (leads && (best === undefined || p.length > best[0].length)) best = m;
     }
-    if (best === undefined) throw new XputeError(Errno.ENOENT);
+    if (best === undefined) throw new XputeError(ERRNO_ENOENT);
     const h = this._objects.issue();
     try {
       this._objects.put(h, best[1](uri, h));
@@ -327,17 +349,11 @@ export class Link {
     return t;
   }
 
-  /** The args of the frame at `at`, or the errno they fail to decode with: a
-   * packet past the room is EBADMSG. */
-  private _args(at: u32, pkt_len: u32): BranchCursor | null | i32 {
+  /** The args of the frame at `at`, or EBADMSG for a packet past the room. */
+  private _args(at: u32, pkt_len: u32): U8Array | null | i32 {
     if (pkt_len === 0) return null;
-    if (WORD_BYTES + pkt_len > this._room) return Errno.EBADMSG;
-    try {
-      return new TreeReader(this.bytes(at + WORD_BYTES, pkt_len)).read_branch();
-    } catch (e) {
-      if (!(e instanceof MarshalError)) throw e;
-      return e.errnum;
-    }
+    if (WORD_BYTES + pkt_len > this._room) return ERRNO_EBADMSG;
+    return this.bytes(at + WORD_BYTES, pkt_len);
   }
 
   /** Lays a frame at `at` in the guest's memory, with the packet `args`: 0,
@@ -348,14 +364,14 @@ export class Link {
     const view = new DataView(this._guest.mem, at, this._room);
     let pkt_len = 0;
     if (args instanceof Uint8Array) {
-      if (WORD_BYTES + args.length > this._room) return Errno.EMSGSIZE;
+      if (WORD_BYTES + args.length > this._room) return ERRNO_EMSGSIZE;
       bytes.set(args, WORD_BYTES);
       pkt_len = args.length;
-    } else if (args !== null && args[0] > 0) {
-      const w = new PacketWriter().begin(bytes, view, WORD_BYTES, this._room - WORD_BYTES, args[0]);
+    } else if (args !== null) {
+      const w = new Lower(bytes.subarray(WORD_BYTES), args[0]);
       args[1](w);
       pkt_len = w.finish();
-      if (pkt_len < 0) return Errno.EMSGSIZE;
+      if (pkt_len < 0) return ERRNO_EMSGSIZE;
     }
     lay(view, 0, { tag, res, handle, method, result, pkt_len });
     return 0;
@@ -370,10 +386,10 @@ export class Link {
   private _out(tag: Tag, h: Handle, m: Method, res: boolean, result: i32, args: Packet): Answered {
     if (this._lay(this._inbox, tag, h, m, res, result, args) !== 0) {
       if (!res) {
-        if (!(args instanceof Uint8Array)) throw new InvariantError(Errno.EMSGSIZE);
-        return { result: Errno.EMSGSIZE, data: null };
+        if (!(args instanceof Uint8Array)) throw new InvariantError(ERRNO_EMSGSIZE);
+        return { result: ERRNO_EMSGSIZE, data: null };
       }
-      this._lay(this._inbox, tag, h, m, res, Errno.EMSGSIZE, null);
+      this._lay(this._inbox, tag, h, m, res, ERRNO_EMSGSIZE, null);
     }
     const answered = this._guest.in();
     const f = read(new DataView(this._guest.mem), this._inbox);

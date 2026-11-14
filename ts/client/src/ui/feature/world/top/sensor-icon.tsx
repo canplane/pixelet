@@ -4,7 +4,14 @@ import { StyleSheet, View } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
-import { SensorStatus } from "@/abi/overlay.ts";
+import {
+  type SensorStatus,
+  SENSOR_STATUS_ERROR,
+  SENSOR_STATUS_IDLE,
+  SENSOR_STATUS_LOADING,
+  SENSOR_STATUS_READY,
+  SENSOR_STATUS_UNAVAILABLE,
+} from "@/abi/overlay.enum.ts";
 
 import type { GlyphName } from "@/ui/shared/component/icon.tsx";
 import { haloGap, HaloIcon } from "./halo.tsx";
@@ -20,9 +27,9 @@ export function statusColor(
   tone: { pending: string; failed: string },
 ): string {
   switch (status) {
-    case SensorStatus.Loading:
+    case SENSOR_STATUS_LOADING:
       return tone.pending;
-    case SensorStatus.Error:
+    case SENSOR_STATUS_ERROR:
       return tone.failed;
     default:
       return base;
@@ -32,11 +39,11 @@ export function statusColor(
 const GLYPH_TONE = { pending: color.pendingGlyph, failed: color.alarmGlyph };
 
 const PRESENCE: Record<SensorStatus, f64> = {
-  [SensorStatus.Idle]: 0.35,
-  [SensorStatus.Loading]: 1,
-  [SensorStatus.Ready]: 0.7,
-  [SensorStatus.Error]: 1,
-  [SensorStatus.Unavailable]: 0.7,
+  [SENSOR_STATUS_IDLE]: 0.35,
+  [SENSOR_STATUS_LOADING]: 1,
+  [SENSOR_STATUS_READY]: 0.7,
+  [SENSOR_STATUS_ERROR]: 1,
+  [SENSOR_STATUS_UNAVAILABLE]: 0.7,
 };
 
 export function SensorIcons() {
@@ -51,7 +58,7 @@ export function SensorIcons() {
         glyph={glyph}
         size={12}
         color={statusColor(status, color.white, GLYPH_TONE)}
-        struck={status === SensorStatus.Error}
+        struck={status === SENSOR_STATUS_ERROR}
       />
     </View>
   );
@@ -60,7 +67,7 @@ export function SensorIcons() {
     <View style={styles.row}>
       {icon("location", location)}
       {device.handheld &&
-        orientation !== SensorStatus.Unavailable &&
+        orientation !== SENSOR_STATUS_UNAVAILABLE &&
         icon("location.north.circle", orientation)}
     </View>
   );

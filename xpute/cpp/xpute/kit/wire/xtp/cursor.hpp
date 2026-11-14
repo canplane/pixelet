@@ -114,14 +114,8 @@ class Cursor {
     }
 
     Result<std::uint64_t> get_u64() const noexcept;
-    Result<std::int64_t> get_i64() const noexcept;
     Result<bool> get_bool() const noexcept;
     Result<std::string_view> get_str_ref() const noexcept;
-    template <class Alloc = std::allocator<char>> Result<std::basic_string<char, std::char_traits<char>, Alloc>> get_str(const Alloc &alloc = Alloc()) const {
-        Result<std::string_view> s = get_str_ref();
-        if (!s) return s.error();
-        return std::basic_string<char, std::char_traits<char>, Alloc>(*s, alloc);
-    }
     Result<StrList> get_strs() const noexcept;
     template <class Alloc = std::allocator<std::byte>> Result<DeepValue<Alloc>> get_deep(const Alloc &alloc = Alloc()) const;
 

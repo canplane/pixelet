@@ -179,60 +179,41 @@ export const op = {
   LABEL: 51 as number,
 } as const;
 
-export const BINDING_KIND = [
-  "buffer",
-  "sampler",
-  "texture",
-  "storage-texture",
-] as const;
+export type BindingKind =
+  | typeof BINDING_KIND_BUFFER
+  | typeof BINDING_KIND_SAMPLER
+  | typeof BINDING_KIND_TEXTURE
+  | typeof BINDING_KIND_STORAGE_TEXTURE;
+export const BINDING_KIND_BUFFER = 0;
+export const BINDING_KIND_SAMPLER = 1;
+export const BINDING_KIND_TEXTURE = 2;
+export const BINDING_KIND_STORAGE_TEXTURE = 3;
 
-export const BindingKind = {
-  buffer: 0,
-  sampler: 1,
-  texture: 2,
-  "storage-texture": 3,
-} as const;
-export type BindingKind = (typeof BindingKind)[keyof typeof BindingKind];
-
-/** The name of the `BindingKind` member numbered `n`, or undefined for a number
- * no member has. */
-export function binding_kind_name(
-  n: number,
-): keyof typeof BindingKind | undefined {
-  for (const k in BindingKind)
-    if (BindingKind[k as keyof typeof BindingKind] === n)
-      return k as keyof typeof BindingKind;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_BindingKind(val: number): BindingKind | null {
+  return val === BINDING_KIND_BUFFER ||
+    val === BINDING_KIND_SAMPLER ||
+    val === BINDING_KIND_TEXTURE ||
+    val === BINDING_KIND_STORAGE_TEXTURE
+    ? val
+    : null;
 }
 
-/** The `BindingKind` member `n` is, or null for a number no member has. */
-export function binding_kind_of(n: number): BindingKind | null {
-  return binding_kind_name(n) === undefined ? null : (n as BindingKind);
-}
+export type ResourceKind =
+  | typeof RESOURCE_KIND_BUFFER
+  | typeof RESOURCE_KIND_SAMPLER
+  | typeof RESOURCE_KIND_TEXTURE_VIEW;
+export const RESOURCE_KIND_BUFFER = 0;
+export const RESOURCE_KIND_SAMPLER = 1;
+export const RESOURCE_KIND_TEXTURE_VIEW = 2;
 
-export const RESOURCE_KIND = ["buffer", "sampler", "texture-view"] as const;
-
-export const ResourceKind = {
-  buffer: 0,
-  sampler: 1,
-  "texture-view": 2,
-} as const;
-export type ResourceKind = (typeof ResourceKind)[keyof typeof ResourceKind];
-
-/** The name of the `ResourceKind` member numbered `n`, or undefined for a number
- * no member has. */
-export function resource_kind_name(
-  n: number,
-): keyof typeof ResourceKind | undefined {
-  for (const k in ResourceKind)
-    if (ResourceKind[k as keyof typeof ResourceKind] === n)
-      return k as keyof typeof ResourceKind;
-  return undefined;
-}
-
-/** The `ResourceKind` member `n` is, or null for a number no member has. */
-export function resource_kind_of(n: number): ResourceKind | null {
-  return resource_kind_name(n) === undefined ? null : (n as ResourceKind);
+/** The member `val` is, or null for a number no member has. */
+export function of_ResourceKind(val: number): ResourceKind | null {
+  return val === RESOURCE_KIND_BUFFER ||
+    val === RESOURCE_KIND_SAMPLER ||
+    val === RESOURCE_KIND_TEXTURE_VIEW
+    ? val
+    : null;
 }
 
 /** GPUBufferUsage, its bits as WebGPU numbers them. */

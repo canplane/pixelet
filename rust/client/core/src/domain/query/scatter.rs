@@ -77,7 +77,7 @@ impl DecorQuery for DecorWorld<'_> {
     /// holds nothing there.
     fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3]) -> u32 {
         let answer = World::base().asset_about(&f.line, zoom, c);
-        answer.val().unwrap_or(Sentinel::void as u32)
+        answer.val().unwrap_or(Sentinel::Void as u32)
     }
 
     /// The asset of the cell `c` at `zoom` in the world as edited, so an edit
@@ -86,7 +86,7 @@ impl DecorQuery for DecorWorld<'_> {
         let answer = self.world.asset_at((zoom, c), |at, zooms, path| {
             self.world.layer_node(at, zooms, path)
         });
-        answer.val().unwrap_or(Sentinel::void as u32)
+        answer.val().unwrap_or(Sentinel::Void as u32)
     }
 
     fn next_placed(&self, p: &mut PlacedCursor) -> ([i32; 3], u32, bool) {

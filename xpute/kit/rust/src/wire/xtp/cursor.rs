@@ -96,23 +96,9 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    pub fn get_i64(&self) -> Result<i64, MarshalError> {
-        match self.get()? {
-            NodeValue::I64(x) => Ok(x),
-            _ => Err(MarshalError::new(Errno::EBADMSG)),
-        }
-    }
-
     pub fn get_bool(&self) -> Result<bool, MarshalError> {
         match self.get()? {
             NodeValue::Bool(b) => Ok(b),
-            _ => Err(MarshalError::new(Errno::EBADMSG)),
-        }
-    }
-
-    pub fn get_str(&self) -> Result<String, MarshalError> {
-        match self.get()? {
-            NodeValue::Str(s) => Ok(s),
             _ => Err(MarshalError::new(Errno::EBADMSG)),
         }
     }

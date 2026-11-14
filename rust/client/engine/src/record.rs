@@ -125,21 +125,21 @@
 
 use crate::cast::{self, Detail, Node, Spacing};
 use crate::light::{Light, BEAM, TILE};
-use crate::node_cache::{self, ENTRIES};
+use crate::node_cache::{self, ENTRY_CNT};
 use crate::ray::QUEUE_RECS_CAP;
 use pxl_spec::space::camera::grid;
 
-use crate::WORKGROUPS_CAP;
+use crate::WORKGROUP_CAP;
 use pxl_spec::space::coord::zoom::Zoom;
 
 /// The threads in a workgroup of each pass over every slot (pxl-render record_draw.wgsl).
-pub const DRAW_LANES: u32 = 64;
+pub const DRAW_LANE_CNT: u32 = 64;
 const _: () = assert!(
-    ENTRIES.is_multiple_of(DRAW_LANES) && ENTRIES / DRAW_LANES <= WORKGROUPS_CAP,
+    ENTRY_CNT.is_multiple_of(DRAW_LANE_CNT) && ENTRY_CNT / DRAW_LANE_CNT <= WORKGROUP_CAP,
     "the passes over every slot take each once in one dimension of one dispatch"
 );
 
-/// The node cache's slots (`node_cache::ENTRIES`): what the table must hold, divided by its
+/// The node cache's slots (`node_cache::ENTRY_CNT`): what the table must hold, divided by its
 /// load (`LOAD_PER_8` eighths of the slots in use), rounded up to a power of two
 /// (`entries_for`).
 ///
@@ -147,25 +147,25 @@ const _: () = assert!(
 /// frame's asks keep. A node is drawn only where it spans at least one camera cell (grid.rs),
 /// so the cells bound the voxels drawn: the eye's cells at the widest view (`EYE_CELLS_CAP`),
 /// and the light's damaged tiles at one cell a tile (`LIGHT_CELLS_CAP`). Each cell's count is
-/// multiplied by the factors of `CELL_NODES`. The asks keep as many nodes a frame as a walk
+/// multiplied by the factors of `CELL_NODE_CAP`. The asks keep as many nodes a frame as a walk
 /// lists for them (`ray::QUEUE_RECS_CAP`), for the two frames an entry is spared
 /// (`ASKS_KEPT`).
 const _: () = assert!(
-    ENTRIES == entries_for(EYE_CELLS_CAP + LIGHT_CELLS_CAP),
+    ENTRY_CNT == entries_for(EYE_CELLS_CAP + LIGHT_CELLS_CAP),
     "the slots are what the table must hold"
 );
 
 /// The nodes one camera cell may draw, as factors. A node spanning a cell overlaps up to four
 /// cells at their edges (`CELL_OVERLAP`). A place holds a fresh voxel and the stale one it
 /// replaces (`raster::STALE`, `CELL_STALE`). An entry is spared for two frames after it is
-/// drawn (`drawn`, `CELL_FRAMES`).
+/// drawn (`drawn`, `CELL_FRAME_CNT`).
 pub const CELL_OVERLAP: u32 = 4;
 pub const CELL_STALE: u32 = 2;
-pub const CELL_FRAMES: u32 = 2;
-pub const CELL_NODES: u32 = CELL_OVERLAP * CELL_STALE * CELL_FRAMES;
+pub const CELL_FRAME_CNT: u32 = 2;
+pub const CELL_NODE_CAP: u32 = CELL_OVERLAP * CELL_STALE * CELL_FRAME_CNT;
 
 /// The nodes the asks keep: one frame's worth for each of the two frames an entry is spared.
-pub const ASKS_KEPT: u32 = CELL_FRAMES * QUEUE_RECS_CAP;
+pub const ASKS_KEPT: u32 = CELL_FRAME_CNT * QUEUE_RECS_CAP;
 
 /// The eye's camera cells at the widest view (`grid::ASPECT_MOST`) across the vertical field
 /// of view (`grid::HALF_TAN`), at `grid::CELLS_A_RAD` cells a radian, as `beam::Grid::of` lays
@@ -183,7 +183,7 @@ pub const LOAD_PER_8: u32 = 6;
 
 /// The slots needed for `cells` camera cells and for the nodes the asks keep.
 pub const fn entries_for(cells: u32) -> u32 {
-    let nodes = cells * CELL_NODES + ASKS_KEPT;
+    let nodes = cells * CELL_NODE_CAP + ASKS_KEPT;
     (nodes * 8).div_ceil(LOAD_PER_8).next_power_of_two()
 }
 
@@ -196,10 +196,10 @@ const fn ceil(v: f32) -> u32 {
     }
 }
 /// The most boxes an observer's draw writes, one word for each drawable entry
-/// (`raster::draw_word`): `CELL_NODES` for each of its cells (`EYE_CELLS_CAP`,
+/// (`raster::draw_word`): `CELL_NODE_CAP` for each of its cells (`EYE_CELLS_CAP`,
 /// `LIGHT_CELLS_CAP`), but for the stale ones, which the eye does not draw.
-pub const EYE_DRAWS: u32 = EYE_CELLS_CAP * CELL_NODES / CELL_STALE;
-pub const LIGHT_DRAWS: u32 = LIGHT_CELLS_CAP * CELL_NODES;
+pub const EYE_DRAW_CAP: u32 = EYE_CELLS_CAP * CELL_NODE_CAP / CELL_STALE;
+pub const LIGHT_DRAW_CAP: u32 = LIGHT_CELLS_CAP * CELL_NODE_CAP;
 
 /// The bits of an entry's state word (`node_cache::STATES_AT`). `FACES` holds a bit for each
 /// side some ray entered (`raster::faces`). `WHOLE` is set where some ray stopped on the node
@@ -237,14 +237,14 @@ pub const fn drawn(seen: u32, frame: u32, drawn: u32) -> bool {
     seen + 2 > frame || seen == drawn
 }
 const _: () = assert!(
-    node_cache::FRAMES + 2 < u32::MAX,
+    node_cache::FRAME_CNT + 2 < u32::MAX,
     "a frame two past any a key tells apart is a u32"
 );
 
 /// The zoom that a walk from the origin `o` asks at the point of the node `n` nearest to `o`,
 /// within the eye's zooms `range`.
 fn near(o: [i32; 3], n: &Node, range: [Zoom; 2]) -> Zoom {
-    cast::node_zooms(
+    cast::node_range(
         o,
         n,
         Detail {

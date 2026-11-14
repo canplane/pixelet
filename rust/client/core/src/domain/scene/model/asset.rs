@@ -37,7 +37,7 @@ use crate::sys::io::room::Refusal;
 use crate::sys::load::Load;
 use crate::sys::sched::executor;
 use crate::sys::sched::{self, invalidate};
-use pxl_spec::asset::catalog::{Slot, SLOTS};
+use pxl_spec::asset::catalog::{Slot, SLOT_CNT};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
@@ -48,7 +48,7 @@ const IDENTITY: [f32; 16] = [
 
 /// How many models may parse or register at once, each in its own task: one a
 /// catalog slot, the most `model_of` can start.
-pub const REGISTRATIONS: usize = SLOTS;
+pub const REGISTRATION_CAP: usize = SLOT_CNT;
 
 /// None while the registration's task runs. Then either the registered
 /// model's number, or the heap's refusal of room.
@@ -81,7 +81,7 @@ fn running() -> usize {
 /// model. None while the file loads, parses or registers, while the heap refuses it
 /// room, and for good when its bytes do not parse. A refusal is a wait, not a
 /// failure: the registration is tried again once the heap gives room back. No
-/// more than `REGISTRATIONS` run at once, and a model past them waits its
+/// more than `REGISTRATION_CAP` run at once, and a model past them waits its
 /// turn here.
 pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<u32> {
     let load = load_of(slot)?;
@@ -98,7 +98,7 @@ pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<u32> {
         _ => {}
     }
     let gltf = gltf_of(load)?;
-    if running() >= REGISTRATIONS {
+    if running() >= REGISTRATION_CAP {
         return None;
     }
     let registered = REGISTRY.get(Vec::new);
@@ -120,7 +120,7 @@ fn gltf_of(load: Load) -> Option<Rc<Gltf>> {
         Some(_) => return None,
         None => {}
     }
-    if running() >= REGISTRATIONS {
+    if running() >= REGISTRATION_CAP {
         return None;
     }
     let bytes = take_gltf(load)?;
@@ -132,7 +132,7 @@ fn gltf_of(load: Load) -> Option<Rc<Gltf>> {
 /// The file numbered `file` parsed off `bytes`, which go once it is. `gltf_of`
 /// left its entry as parsing, and this sets it once it is parsed or refused,
 /// then wakes a frame.
-#[embassy_executor::task(pool_size = REGISTRATIONS)]
+#[embassy_executor::task(pool_size = REGISTRATION_CAP)]
 async fn parse(file: u32, bytes: Box<[u8]>) {
     let parsed = parse_gltf(&bytes, &[], || sched::yield_if_spent()).await;
     if let Some((_, entry)) = PARSED.get(Vec::new).iter_mut().find(|(a, _)| *a == file) {
@@ -157,7 +157,7 @@ pub fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<u32> {
 /// Registers `gltf`, the file numbered `file`, at `height_u`. `model_of` left
 /// the file's entry as registering, and this sets it once the model is whole
 /// or refused, then wakes a frame.
-#[embassy_executor::task(pool_size = REGISTRATIONS)]
+#[embassy_executor::task(pool_size = REGISTRATION_CAP)]
 async fn registration(file: u32, height_u: Option<f64>, gltf: Rc<Gltf>) {
     let entry = register_model(&gltf, height_u, || sched::yield_if_spent())
         .await

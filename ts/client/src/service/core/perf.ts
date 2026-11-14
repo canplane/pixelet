@@ -11,6 +11,7 @@
 import type { F64Array, U8Array } from "@xpute/kit/abi/array.ts";
 import type { f64, u32 } from "@xpute/kit/abi/word.ts";
 import { td } from "@xpute/kit/codec/encoding.ts";
+import { ComponentError } from "@xpute/link";
 import { PHASES } from "@/abi/phase.spec.ts";
 import {
   OUTCOME_NAMES,
@@ -40,7 +41,10 @@ const WORD = 8;
 const PATH_BYTES = 3 * WORD;
 
 export function start(): void {
-  void perf.start(ui);
+  void perf.start(ui).catch((e: unknown) => {
+    if (!(e instanceof ComponentError)) throw e;
+    console.warn(`[perf] not started: ${e.payload}`);
+  });
 }
 
 /** Freezes the recording window, so that what is exported holds still. */
@@ -187,8 +191,8 @@ export interface Step {
 export interface Worst {
   sample: Frame;
   delta: {
-    uploads: f64;
-    uploads_bytes: f64;
+    upload_cnt: f64;
+    upload_bytes: f64;
     heap_used_bytes: f64;
   } | null;
 }
@@ -208,9 +212,9 @@ export interface Summary {
     recording: boolean;
     elapsed_ms: f64;
     truncated: boolean;
-    frames: u32;
-    tasks: u32;
-    worst: u32;
+    frame_cnt: u32;
+    task_cnt: u32;
+    worst_cnt: u32;
   };
   frames: FrameSummary | null;
   tasks: TaskSummary[];
@@ -219,7 +223,7 @@ export interface Summary {
   view: ViewSection;
 }
 
-const percentiles_at = (s: F64Array, at: u32): Percentile => ({
+const percentile_at = (s: F64Array, at: u32): Percentile => ({
   p50: s[at + PERCENTILE.p50],
   p95: s[at + PERCENTILE.p95],
   max: s[at + PERCENTILE.max],
@@ -238,12 +242,12 @@ function frame_summary(s: F64Array): FrameSummary | null {
     moving_ms: s[a + F.moving_ms],
     overran: s[a + F.overran],
     gpu_timed: s[a + F.gpu_timed],
-    interval: percentiles_at(s, a + F.interval),
-    tick: percentiles_at(s, a + F.tick),
-    effect: percentiles_at(s, a + F.effect),
-    stage: percentiles_at(s, a + F.stage),
-    perf: percentiles_at(s, a + F.perf),
-    gpu_busy: percentiles_at(s, a + F.gpu_busy),
+    interval: percentile_at(s, a + F.interval),
+    tick: percentile_at(s, a + F.tick),
+    effect: percentile_at(s, a + F.effect),
+    stage: percentile_at(s, a + F.stage),
+    perf: percentile_at(s, a + F.perf),
+    gpu_busy: percentile_at(s, a + F.gpu_busy),
     gpu_busy_kinds: FRAME_KINDS.map((name, k) => ({
       name,
       p50: s[a + F.gpu_busy_kinds + 3 * k],
@@ -255,7 +259,7 @@ function frame_summary(s: F64Array): FrameSummary | null {
       name,
       p95: s[a + F.effects_p95 + k],
     })),
-    gpu_spans: GPU_SPAN_NAMES.map(({ name }, k) => ({
+    gpu_spans: GPU_SPAN_NAMES.map((name, k) => ({
       name,
       p95: s[a + F.gpu_spans_p95 + k],
       n: s[a + F.gpu_spans_cnt + k],
@@ -348,9 +352,9 @@ async function perf_summary(window_ms: f64 | null): Promise<Summary> {
       recording: n[R.AT + R.recording] !== 0,
       elapsed_ms: n[R.AT + R.elapsed_ms],
       truncated: n[R.AT + R.truncated] !== 0,
-      frames: n[R.AT + R.frames],
-      tasks: n[R.AT + R.tasks],
-      worst: n[R.AT + R.worst],
+      frame_cnt: n[R.AT + R.frame_cnt],
+      task_cnt: n[R.AT + R.task_cnt],
+      worst_cnt: n[R.AT + R.worst_cnt],
     },
     frames: frame_summary(s),
     tasks: task_summaries(s),
@@ -383,10 +387,12 @@ async function ring(name: (typeof RING_NAMES)[number]): Promise<U8Array> {
   const full = Math.floor(LIMIT.PAGE_BYTES / record) * record;
   const pages: U8Array[] = [];
   let bytes = 0;
+  let from = 0;
   for (;;) {
-    const page = await perf.rings(ui, k, bytes / record, 0xffff_ffff);
+    const page = await perf.ring(ui, k, from, 0xffff_ffff);
     pages.push(page);
     bytes += page.length;
+    from += page.length / record;
     if (page.length < full) break;
   }
   const out = new Uint8Array(bytes);
@@ -464,8 +470,8 @@ async function perf_worst(): Promise<Worst[]> {
         w[o + WORST.has_prev] === 0
           ? null
           : {
-              uploads: w[o + WORST.uploads_delta],
-              uploads_bytes: w[o + WORST.uploads_delta_bytes],
+              upload_cnt: w[o + WORST.upload_cnt_delta],
+              upload_bytes: w[o + WORST.upload_delta_bytes],
               heap_used_bytes: w[o + WORST.heap_used_delta_bytes],
             },
     };

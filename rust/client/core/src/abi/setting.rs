@@ -10,60 +10,69 @@
     reason = "generated from WIT"
 )]
 
-use std::rc::Rc;
-use xpute_guest::link;
-use xpute_guest::wait;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
 /// The interface's handle, named by `pxl:core/setting` (frame.json `NAMED`).
-pub const HANDLE: Handle = 0x6f63cb;
+pub const HANDLE: _rt::Handle = 0x6f63cb;
 
 /// `dev`
-pub const DEV: Method = 0;
+pub const DEV: _rt::Method = 0;
 /// `set`
-pub const SET: Method = 1;
+pub const SET: _rt::Method = 1;
 
-pub trait Setting {
-    fn dev(&self, dev: bool) -> Result<(), Errno>;
-    fn set(&self, key: u32, val: u32) -> Result<(), Errno>;
+pub trait Guest {
+    fn dev(&self, dev: bool) -> Result<(), _rt::Errno>;
+    fn set(&self, key: u32, val: u32) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno>;
 }
 
-struct SettingObject(Rc<dyn Setting>);
+struct _Object(_rt::Rc<dyn Guest>);
 
-impl Object for SettingObject {
-    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
-        let run = || -> Result<Reply, MarshalError> {
+impl _rt::Object for _Object {
+    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+        let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 DEV => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let dev = b_.at(0).and_then(|c| c.get_bool())?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let dev = r_.bool(0)?;
                     match self.0.dev(dev) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                        Ok(v) => _rt::Reply::from(0),
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
                 SET => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let key = b_.at(0).and_then(|c| c.get_number().map(|v| v as u32))?;
-                    let val = b_.at(1).and_then(|c| c.get_number().map(|v| v as u32))?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let key = r_.u32(0)?;
+                    let val = r_.u32(4)?;
                     match self.0.set(key, val) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                        Ok(v) => _rt::Reply {
+                            result: 0,
+                            data: Some((
+                                2,
+                                Box::new(move |w: &mut _rt::Lower| match &v {
+                                    Ok(v) => {}
+                                    Err(v) => {
+                                        w.u8(0, 1);
+                                        w.u8(0 + 1, *v as u8);
+                                    }
+                                }),
+                            )),
+                        },
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
-                _ => Reply::from(Errno::ENOSYS as i32),
+                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
             })
         };
-        run().unwrap_or_else(|e| Reply::from(e.errnum as i32))
+        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
     }
 }
 
 /// Serves `imp` under the interface's handle.
-pub fn mount(imp: Rc<dyn Setting>) {
-    link::mount_named(HANDLE, Rc::new(SettingObject(imp)));
+pub fn mount(imp: _rt::Rc<dyn Guest>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+}
+
+mod _rt {
+    pub use std::rc::Rc;
+    pub use xpute_guest::link;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Tag};
 }

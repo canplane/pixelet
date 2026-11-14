@@ -10,27 +10,17 @@
     reason = "generated from WIT"
 )]
 
-use std::rc::Rc;
-use xpute_guest::link;
-use xpute_guest::wait;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
 /// The interface's handle, named by `pxl:core/edit` (frame.json `NAMED`).
-pub const HANDLE: Handle = 0x453522;
+pub const HANDLE: _rt::Handle = 0x453522;
 
 /// `hold`
-pub const HOLD: Method = 0;
+pub const HOLD: _rt::Method = 0;
 /// `marker-text`
-pub const MARKER_TEXT: Method = 1;
+pub const MARKER_TEXT: _rt::Method = 1;
 /// `marker-cancel`
-pub const MARKER_CANCEL: Method = 2;
+pub const MARKER_CANCEL: _rt::Method = 2;
 /// `marker-commit`
-pub const MARKER_COMMIT: Method = 3;
+pub const MARKER_COMMIT: _rt::Method = 3;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -64,57 +54,74 @@ impl Tool {
     }
 }
 
-pub trait Edit {
-    fn hold(&self, tool: Tool, val: u32, scale_steps: i32) -> Result<(), Errno>;
-    fn marker_text(&self, text: String) -> Result<(), Errno>;
-    fn marker_cancel(&self) -> Result<(), Errno>;
-    fn marker_commit(&self) -> Result<(), Errno>;
+pub trait Guest {
+    fn hold(&self, tool: Tool, val: u32, scale_step: i32) -> Result<(), _rt::Errno>;
+    fn marker_text(&self, text: String) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno>;
+    fn marker_cancel(&self) -> Result<(), _rt::Errno>;
+    fn marker_commit(&self) -> Result<(), _rt::Errno>;
 }
 
-struct EditObject(Rc<dyn Edit>);
+struct _Object(_rt::Rc<dyn Guest>);
 
-impl Object for EditObject {
-    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
-        let run = || -> Result<Reply, MarshalError> {
+impl _rt::Object for _Object {
+    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+        let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 HOLD => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let tool = b_.at(0).and_then(|c| {
-                        c.get_number().and_then(|v| {
-                            Tool::of(v as u32).ok_or(MarshalError::new(Errno::EBADMSG))
-                        })
-                    })?;
-                    let val = b_.at(1).and_then(|c| c.get_number().map(|v| v as u32))?;
-                    let scale_steps = b_.at(2).and_then(|c| c.get_number().map(|v| v as i32))?;
-                    match self.0.hold(tool, val, scale_steps) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let tool = r_
+                        .case(0, 3)
+                        .and_then(|v| Tool::of(v).ok_or(_rt::Errno::EBADMSG))?;
+                    let val = r_.u32(4)?;
+                    let scale_step = r_.i32(8)?;
+                    match self.0.hold(tool, val, scale_step) {
+                        Ok(v) => _rt::Reply::from(0),
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
                 MARKER_TEXT => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let text = b_.at(0).and_then(|c| c.get_str_ref().map(str::to_owned))?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let text = r_.str(0).map(str::to_owned)?;
                     match self.0.marker_text(text) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                        Ok(v) => _rt::Reply {
+                            result: 0,
+                            data: Some((
+                                2,
+                                Box::new(move |w: &mut _rt::Lower| match &v {
+                                    Ok(v) => {}
+                                    Err(v) => {
+                                        w.u8(0, 1);
+                                        w.u8(0 + 1, *v as u8);
+                                    }
+                                }),
+                            )),
+                        },
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
                 MARKER_CANCEL => match self.0.marker_cancel() {
-                    Ok(v) => Reply::from(0),
-                    Err(e) => Reply::from(e as i32),
+                    Ok(v) => _rt::Reply::from(0),
+                    Err(e) => _rt::Reply::from(e as i32),
                 },
                 MARKER_COMMIT => match self.0.marker_commit() {
-                    Ok(v) => Reply::from(0),
-                    Err(e) => Reply::from(e as i32),
+                    Ok(v) => _rt::Reply::from(0),
+                    Err(e) => _rt::Reply::from(e as i32),
                 },
-                _ => Reply::from(Errno::ENOSYS as i32),
+                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
             })
         };
-        run().unwrap_or_else(|e| Reply::from(e.errnum as i32))
+        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
     }
 }
 
 /// Serves `imp` under the interface's handle.
-pub fn mount(imp: Rc<dyn Edit>) {
-    link::mount_named(HANDLE, Rc::new(EditObject(imp)));
+pub fn mount(imp: _rt::Rc<dyn Guest>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+}
+
+mod _rt {
+    pub use std::rc::Rc;
+    pub use xpute_guest::link;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Tag};
 }

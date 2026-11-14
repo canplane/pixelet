@@ -30,7 +30,7 @@ fn leaf(x: i32, at: [i32; 3]) -> u128 {
 fn fresh() {
     object_mut().clear();
     *state() = State::default();
-    request::open(|_| WANTS);
+    request::open(|_| WANT_CAP);
 }
 
 /// Every leaf the store holds, by key, with its text.

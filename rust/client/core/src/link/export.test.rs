@@ -97,7 +97,7 @@ fn ring_past_the_names_refused() {
     crate::on_core(|| {
         let ring = RING_NAMES.len() as u32;
         assert_eq!(
-            perf::rings(abi::PerfRings { ring })
+            perf::ring(abi::PerfRings { ring })
                 .map_err(|e| e.errnum)
                 .err(),
             Some(Errno::EINVAL)

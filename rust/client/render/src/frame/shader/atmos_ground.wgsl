@@ -6,6 +6,6 @@
 
 fn sky_ground(r: f32, mu_s: f32) -> vec4f {
   let x = coord_of(clamp(mu_s, -1.0, 1.0) * 0.5 + 0.5, IRRADIANCE_SIZE.x);
-  let y = coord_of(clamp((r - atmos_bottom_radius()) / (atmos_top_radius() - atmos_bottom_radius()), 0.0, 1.0), IRRADIANCE_SIZE.y);
+  let y = coord_of(clamp((r - BOTTOM_RADIUS_KM) / (TOP_RADIUS_KM - BOTTOM_RADIUS_KM), 0.0, 1.0), IRRADIANCE_SIZE.y);
   return textureSampleLevel(irradiance_lut, atmos_sampler, vec2f(x, y), 0.0);
 }

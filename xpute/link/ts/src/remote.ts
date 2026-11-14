@@ -18,9 +18,9 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_EOVERFLOW } from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import { MAX_PKT_SZ, PacketWriter, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
+import { Lower } from "./cabi.ts";
 import { type Answered, type Args, type Handle, type Link, type LinkObject, type Method, DROP, type Sender } from "./link.ts";
 
 /** The least of a port the link's ends take: what posts a message, with the
@@ -58,7 +58,7 @@ export function serve(port: Port, link: Link, named: readonly Handle[], taker: T
   for (const h of named) {
     link.mount_named(h, {
       call(m, _tag, args) {
-        tell({ h, m, pkt: args === null ? null : args.pkt.slice() });
+        tell({ h, m, pkt: args === null ? null : args.slice() });
         return 0;
       },
     });
@@ -92,7 +92,7 @@ export class Remote implements Sender {
         this._answers.delete(m.tag);
         a?.({ result: m.result, data: m.data });
       } else {
-        this._objects.get(m.h)?.call(m.m, 0, m.pkt === null ? null : new TreeReader(m.pkt).read_branch());
+        this._objects.get(m.h)?.call(m.m, 0, m.pkt);
       }
     };
   }
@@ -119,18 +119,19 @@ export class Remote implements Sender {
   }
 }
 
+/** The most bytes a packet holds, the Canonical ABI's largest list. */
+const PKT_CAP = (1 << 28) - 1;
+
 /** The packet `args` write, or none for no args. A packet past the largest
- * XTP takes is EOVERFLOW. */
+ * is EOVERFLOW. */
 function packet(args: Args): U8Array | null {
-  if (args === null || args[0] === 0) return null;
-  for (let cap = 1 << 10; ; cap = Math.min(cap * 2, MAX_PKT_SZ)) {
+  if (args === null) return null;
+  for (let cap = 1 << 10; ; cap = Math.min(cap * 2, PKT_CAP)) {
     const buf = new Uint8Array(cap);
-    const w = new PacketWriter().begin(buf, new DataView(buf.buffer), 0, cap, args[0]);
+    const w = new Lower(buf, args[0]);
     args[1](w);
-    try {
-      return buf.subarray(0, w.finish_or_throw());
-    } catch (e) {
-      if (!(e instanceof MarshalError) || e.errnum !== Errno.EOVERFLOW || cap === MAX_PKT_SZ) throw e;
-    }
+    const n = w.finish();
+    if (n >= 0) return buf.subarray(0, n);
+    if (cap === PKT_CAP) throw new MarshalError(ERRNO_EOVERFLOW);
   }
 }

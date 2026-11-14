@@ -33,7 +33,7 @@ use pxl_spec::space::hierarchy::morton;
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::Area;
 
-const CELLS: usize = GROUND_COLUMN;
+const CELL_CNT: usize = GROUND_COLUMN;
 const SPAN: usize = TILE_CELLS as usize;
 
 fn top() -> Quadrant {
@@ -138,8 +138,8 @@ fn no_surface_placed_stands() {
     crate::on_core(|| {
         let leaf = top().children()[0];
         let void = drawn(
-            vec![0; CELLS],
-            vec![Sentinel::void as u8; SPAN * SPAN].into(),
+            vec![0; CELL_CNT],
+            vec![Sentinel::Void as u8; SPAN * SPAN].into(),
             Default::default(),
         );
         let (x0, y0, _) = leaf.rect();
@@ -170,7 +170,7 @@ fn no_surface_placed_stands() {
         );
 
         let mut store = Store::default();
-        let red = cube::Object::red as AssetId;
+        let red = cube::Object::Red as AssetId;
         write(
             &mut store,
             [x0 + 10.0, y0 + 10.0, 5.0],
@@ -202,13 +202,13 @@ fn deck_over_void_met() {
         separation.push(
             [([0.0, 10.5], 10, 0), ([40.0, 10.5], 10, 0)],
             4 * POINT_SCALE as u8,
-            Ground::residential_road as u8,
+            Ground::ResidentialRoad as u8,
             Form::Bridge,
             0,
         );
         let void = drawn(
-            vec![0; CELLS],
-            vec![Sentinel::void as u8; SPAN * SPAN].into(),
+            vec![0; CELL_CNT],
+            vec![Sentinel::Void as u8; SPAN * SPAN].into(),
             separation.finish(),
         );
         let (x0, y0, _) = leaf.rect();
@@ -235,8 +235,8 @@ fn ray_across_antimeridian() {
     crate::on_core(|| {
         let n = 1i32 << LEAF_ZOOM;
         let flat = || {
-            let cells = vec![Ground::land as u8; SPAN * SPAN];
-            drawn(vec![5; CELLS], cells.into(), Default::default())
+            let cells = vec![Ground::Land as u8; SPAN * SPAN];
+            drawn(vec![5; CELL_CNT], cells.into(), Default::default())
         };
         let tile = |x: i32| Quadrant::new(LEAF_ZOOM, [x, 0]);
         let seam = world::ROUND / 2.0;
@@ -258,7 +258,7 @@ fn ray_across_antimeridian() {
             .top;
 
         let mut store = Store::default();
-        let red = cube::Object::red as AssetId;
+        let red = cube::Object::Red as AssetId;
         write(&mut store, [-seam + 40.0, 100.0, top], OBJECT_COARSEST, red);
         let access = placed(store);
 
@@ -291,8 +291,8 @@ fn ray_across_antimeridian() {
 pub(crate) fn flat_at_five() -> [f64; 2] {
     let leaf = top().children()[0];
     let flat = drawn(
-        vec![5; CELLS],
-        vec![Ground::land as u8; SPAN * SPAN].into(),
+        vec![5; CELL_CNT],
+        vec![Ground::Land as u8; SPAN * SPAN].into(),
         Default::default(),
     );
     let (x0, y0, _) = leaf.rect();
@@ -339,8 +339,7 @@ fn dig_met_as_folded() {
     crate::on_core(|| {
         use pxl_content::cave::hollow;
         use pxl_engine::answer::side;
-        use pxl_spec::share::EIGHTHS;
-        use pxl_spec::value::AIR;
+        use pxl_spec::share::EIGHTH_CNT;
         let [x, y] = flat_at_five();
         // A column with no cave under the dig, so the ground under it is met.
         let clear =
@@ -355,13 +354,13 @@ fn dig_met_as_folded() {
                     &mut store,
                     [x + dx, y + dy, 4.0 + dz],
                     OBJECT_COARSEST + 1,
-                    AIR,
+                    Sentinel::Air as AssetId,
                 );
             }
             store
         };
         for (n, stands) in [(1, 5.0), (3, 5.0), (4, 5.0), (8, 4.0)] {
-            let left = EIGHTHS - n as u32;
+            let left = EIGHTH_CNT - n as u32;
             let top = if left == 0 {
                 4.0
             } else {
@@ -399,7 +398,7 @@ fn half_cube_met() {
         let [x, y] = flat_at_five();
         let half = units(OBJECT_COARSEST + 1);
         let mut store = Store::default();
-        let red = cube::Object::red as AssetId;
+        let red = cube::Object::Red as AssetId;
         write(&mut store, [x, y, 5.0], OBJECT_COARSEST + 1, red);
         let access = placed(store);
         let at = [x + half / 2.0, y + half / 2.0];
@@ -424,7 +423,7 @@ fn half_cube_met() {
 fn walker_stands_any_tier() {
     crate::on_core(|| {
         let [x, y] = flat_at_five();
-        let red = cube::Object::red as AssetId;
+        let red = cube::Object::Red as AssetId;
         for zoom in OBJECT_COARSEST..=OBJECT_FINEST {
             let (cell, side) = (units(GROUND.leaf_cell_zoom()), units(zoom));
             let mut store = Store::default();
@@ -453,7 +452,7 @@ fn stack_gap_floored() {
     crate::on_core(|| {
         let [x, y] = flat_at_five();
         let mut store = Store::default();
-        let red = cube::Object::red as AssetId;
+        let red = cube::Object::Red as AssetId;
         for z in [5.0, 7.0] {
             write(&mut store, [x, y, z], OBJECT_COARSEST, red);
         }
@@ -477,7 +476,7 @@ fn ray_goes_on_from_the_last() {
 
         let [x, y] = flat_at_five();
         let mut store = Store::default();
-        let red = cube::Object::red as AssetId;
+        let red = cube::Object::Red as AssetId;
         for z in [5.0, 7.0] {
             write(&mut store, [x, y, z], OBJECT_COARSEST, red);
         }
@@ -530,7 +529,7 @@ fn coarse_cell_floored_as_drawn() {
     crate::on_core(|| {
         let [x, y] = flat_at_five();
         let mut store = Store::default();
-        let red = cube::Object::red as AssetId;
+        let red = cube::Object::Red as AssetId;
         write(&mut store, [x, y, 5.0], OBJECT_COARSEST, red);
         write(&mut store, [x + 1.0, y, 5.0], OBJECT_FINEST, red);
         let access = placed(store);
@@ -562,7 +561,7 @@ fn walker_climbs_or_slides() {
     crate::on_core(|| {
         let [x, y] = flat_at_five();
         let mut store = Store::default();
-        let red = cube::Object::red as AssetId;
+        let red = cube::Object::Red as AssetId;
         // A wall three cubes high stands in the column east of the walker's.
         for z in [5.0, 6.0, 7.0] {
             write(&mut store, [x + 1.0, y, z], OBJECT_COARSEST, red);
@@ -603,7 +602,7 @@ fn height_nearest_floor() {
     crate::on_core(|| {
         let [x, y] = flat_at_five();
         let mut store = Store::default();
-        let red = cube::Object::red as AssetId;
+        let red = cube::Object::Red as AssetId;
         // A deck a cube thick has its top at 10, with the ground at 5 under it.
         write(&mut store, [x, y, 9.0], OBJECT_COARSEST, red);
         let access = placed(store);
@@ -683,15 +682,15 @@ fn late_brick_spike() {
         use crate::domain::layer::terrain::clipmap::clip_read;
         use crate::domain::layer::terrain::clipmap::test::{hand, unland};
         use pxl_engine::clipmap as cells;
-        use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIPS, CLIP_SIZE};
+        use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIP_LAST, CLIP_SIZE};
         use pxl_spec::brick::BRICK;
         use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
         let leaf = top().children()[0];
-        let mut ele = vec![5; CELLS];
+        let mut ele = vec![5; CELL_CNT];
         ele[200 * SPAN + 300] = 400;
         let spiked = drawn(
             ele,
-            vec![Ground::land as u8; SPAN * SPAN].into(),
+            vec![Ground::Land as u8; SPAN * SPAN].into(),
             Default::default(),
         );
         let (x0, y0, _) = leaf.rect();
@@ -737,7 +736,7 @@ fn late_brick_spike() {
                 q[1] * BRICK as i32 + (k / BRICK) as i32,
             ];
             let h = top(g);
-            for zoom in MIN_ZOOM..LEAF_CELL_ZOOM - BRICK_MIPS {
+            for zoom in MIN_ZOOM..LEAF_CELL_ZOOM - BRICK_MIP_LAST {
                 let s = LEAF_CELL_ZOOM - zoom;
                 let (b, _, _) = cells::bound_over(
                     &clip_read(),
@@ -762,13 +761,13 @@ fn device_loss_drops_bounds() {
     crate::on_core(|| {
         use crate::domain::layer::terrain::clipmap::{clip_read, test::lose};
         use pxl_engine::clipmap as cells;
-        use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIPS};
+        use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIP_LAST};
         use pxl_engine::ground::UNBOUNDED;
         use pxl_spec::brick::BRICK;
         use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
         flat_at_five();
         let (first, _) = clip_read().origin(LEAF_CELL_ZOOM);
-        let zoom = LEAF_CELL_ZOOM - BRICK_MIPS - 1;
+        let zoom = LEAF_CELL_ZOOM - BRICK_MIP_LAST - 1;
         let over = || {
             let s = LEAF_CELL_ZOOM - zoom;
             let g = [
@@ -796,7 +795,6 @@ fn device_loss_drops_bounds() {
 #[test]
 fn generated_decor_stays() {
     crate::on_core(|| {
-        use pxl_spec::value::AIR;
         let [x, y] = flat_at_five();
         let near = |store: Store| {
             let world = placed(store);
@@ -812,11 +810,11 @@ fn generated_decor_stays() {
         let column = |dz: i32| [f64::from(cx), f64::from(cy), f64::from(cz + dz)];
 
         let mut store = Store::default();
-        let red = cube::Object::red as AssetId;
+        let red = cube::Object::Red as AssetId;
         write(&mut store, column(6), OBJECT_COARSEST, red);
         assert_eq!(near(store), bare, "a cube over it moves nothing");
 
-        for (under, what) in [(AIR, "a carve"), (red, "a cube")] {
+        for (under, what) in [(Sentinel::Air as AssetId, "a carve"), (red, "a cube")] {
             let mut store = Store::default();
             write(&mut store, column(-1), OBJECT_COARSEST, under);
             assert_eq!(near(store), bare, "{what} under it moves nothing");
@@ -830,7 +828,6 @@ fn generated_decor_stays() {
 #[test]
 fn generated_decor_edit_removes() {
     crate::on_core(|| {
-        use pxl_spec::value::AIR;
         let [x, y] = flat_at_five();
         let world = placed(Store::default());
         let space = Aabb {
@@ -854,11 +851,11 @@ fn generated_decor_edit_removes() {
             .find(|(d, c)| generates_on(Store::default(), d, *c) == Some(true))
             .expect("a decor generates about the eye");
         let generates = |store: Store| generates_on(store, decor, [cx, cy, cz]);
-        let red = cube::Object::red as AssetId;
+        let red = cube::Object::Red as AssetId;
         for (dz, val, what, still) in [
-            (0, AIR, "air in its box", false),
+            (0, Sentinel::Air as AssetId, "air in its box", false),
             (0, red, "a cube in its box", false),
-            (-1, AIR, "air under it", true),
+            (-1, Sentinel::Air as AssetId, "air under it", true),
             (-1, red, "a cube under it", true),
             (6, red, "a cube over it", true),
         ] {
@@ -1042,8 +1039,8 @@ fn area_edge_leaf_cell_thick() {
         let leaf = Quadrant::new(LEAF_ZOOM, [5 << s, 3 << s]);
         let area = EastOf(5);
         let flat = drawn(
-            vec![5; CELLS],
-            vec![Ground::land as u8; SPAN * SPAN].into(),
+            vec![5; CELL_CNT],
+            vec![Ground::Land as u8; SPAN * SPAN].into(),
             Default::default(),
         );
         let (x0, y0, _) = leaf.rect();

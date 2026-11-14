@@ -1,10 +1,12 @@
 package pxl:core@0.1.0;
 
 interface scene {
+  use types.{error-code};
+
   enum scene-content { %world, character }
 
   // Draws `content` on the surface the UI lent; a character takes its group,
   // and a background color where it is given.
-  draw: func(surface: u32, content: scene-content, group: option<u8>, bg: option<u32>);
+  draw: func(surface: u32, content: scene-content, group: option<u8>, bg: option<u32>) -> result<_, error-code>;
   chat: func(text: string);
 }

@@ -27,7 +27,7 @@ pub(super) struct CastRead {
     pub partial: bool,
     /// Whether shadows are cast, and whether the light's cast has its buffers (cast.rs
     /// `light_made`).
-    pub shadows: bool,
+    pub shadow: bool,
     pub light_made: bool,
     /// Whether what decides a shadow map tile's content reads as the light's last cast read it
     /// (cast.rs `light_content`): the light's frame, whether shadows are on, and whether the
@@ -96,7 +96,7 @@ pub(super) struct Plan {
 
 impl Plan {
     const PLAIN: Plan = Plan {
-        kind: FrameKind::plain,
+        kind: FrameKind::Plain,
         unmasked: false,
         light: None,
     };
@@ -171,11 +171,11 @@ impl Schedule {
         let jittered = r.jitter != self.jitter;
         self.jitter = r.jitter;
         let mut kind = match (stands, jittered) {
-            (true, false) => FrameKind::still,
-            (true, true) => FrameKind::px,
-            (false, _) => FrameKind::cast,
+            (true, false) => FrameKind::Still,
+            (true, true) => FrameKind::Px,
+            (false, _) => FrameKind::Cast,
         };
-        let light_on = r.shadows && r.light_made;
+        let light_on = r.shadow && r.light_made;
         let unchanged = r.content_same && self.content;
         self.content = r.light_made;
         // A step of the eye's zooms changes what a tile holds only where it moves the tile's
@@ -193,24 +193,24 @@ impl Schedule {
         // where they cover every pixel, and is added to the marks already made otherwise, the
         // light and the box being as they were.
         let partial = if casts_px(kind) {
-            r.partial && kind == FrameKind::px
+            r.partial && kind == FrameKind::Px
         } else {
             !self.walked_whole
         };
         let unmasked = light_on && (!unchanged || slid || footprint_owed) && partial;
-        if unmasked && kind == FrameKind::still {
-            kind = FrameKind::px;
+        if unmasked && kind == FrameKind::Still {
+            kind = FrameKind::Px;
         }
         let casts = casts_px(kind);
         let walked_whole = !partial || unmasked;
         let changed = LightChanged::ALL
             .into_iter()
             .filter(|m| match m {
-                LightChanged::content => !unchanged,
-                LightChanged::slide => slid,
-                LightChanged::receivers => !r.receivers_same,
-                LightChanged::footprint => footprint_owed,
-                LightChanged::world => r.world_columns,
+                LightChanged::Content => !unchanged,
+                LightChanged::Slide => slid,
+                LightChanged::Receivers => !r.receivers_same,
+                LightChanged::Footprint => footprint_owed,
+                LightChanged::World => r.world_columns,
             })
             .fold(0, |bits, m| bits | 1 << m as u32);
         // The world's receivers stand where the eye's rays hit. The next light cast marks them
@@ -218,7 +218,7 @@ impl Schedule {
         // owed, or where the box slid, which moves the tiles under them. Otherwise they stand
         // on the tiles they last marked: a jittered cast moves a ray only within its footprint,
         // which those marks took where the eye stood.
-        self.world |= kind == FrameKind::cast || !unchanged || footprint_owed || slid;
+        self.world |= kind == FrameKind::Cast || !unchanged || footprint_owed || slid;
         let light = (light_on && changed != 0).then(|| {
             let last_corner = core::mem::replace(&mut self.corner, r.corner);
             let last_range = core::mem::replace(&mut self.range, r.range);
@@ -246,7 +246,7 @@ impl Schedule {
             }
         });
         if casts {
-            self.walked_whole = !(r.partial && kind == FrameKind::px && !unmasked);
+            self.walked_whole = !(r.partial && kind == FrameKind::Px && !unmasked);
         }
         self.plan = Plan {
             kind,

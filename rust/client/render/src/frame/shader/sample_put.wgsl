@@ -16,7 +16,7 @@ fn sample_put(base: u32, w: WalkEnd) {
   beams[at + NODE_ROOTS] = u32(w.roots.x);
   beams[at + NODE_ROOTS + 1u] = u32(w.roots.y);
   beams[at + NODE_ROOTS + 2u] = u32(w.roots.z);
-  beams[base + SAMPLE_LACKS] = select(0u, SAMPLE_LACK, w.ends == ENDS_LACK) | (w.step << SAMPLE_STEPS_SHIFT);
+  beams[base + SAMPLE_LACK_WORD] = select(0u, SAMPLE_LACK, w.ends == ENDS_LACK) | (w.step << SAMPLE_STEPS_SHIFT);
   beams[base + SAMPLE_ASSET] = select(w.asset.x, 0u, w.ends == ENDS_REACH);
   beams[base + SAMPLE_ASSET + 1u] = select(w.asset.y, 0u, w.ends == ENDS_REACH);
   beams[base + SAMPLE_AXIS] = select(w.axis, 0u, w.ends == ENDS_REACH);

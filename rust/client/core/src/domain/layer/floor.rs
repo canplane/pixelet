@@ -31,7 +31,7 @@ pub fn floor(o: &Observation, top: Zoom, each: impl FnMut(Quadrant)) {
 /// no farther than the top's demand, and the ground's cut through a sphere
 /// of that radius is no wider, so the floor names no more tiles than one
 /// zoom's demand does.
-pub const fn tiles(lattice: Lattice) -> u32 {
+pub const fn tile_cap(lattice: Lattice) -> u32 {
     demand_tiles(lattice)
 }
 

@@ -88,9 +88,9 @@ pub struct TileCache<L: Base> {
     /// The last `count_shown` and the two revisions it was counted at. Read it
     /// only through `shown`, which counts again once either revision moved.
     shown: core::cell::Cell<Option<([u32; 2], [u32; 2])>>,
-    refusals: u32,
-    /// The tiles taken in since the last `take_loads`, for the profiler.
-    loads: u32,
+    refusal_cnt: u32,
+    /// The tiles taken in since the last `take_load_cnt`, for the profiler.
+    load_cnt: u32,
 }
 
 /// The cache's capacity, derived from what the layer asks for
@@ -98,22 +98,22 @@ pub struct TileCache<L: Base> {
 impl<L: Base> TileCache<L> {
     /// The number of zooms in the layer's pyramid, from its leaves up to the
     /// coarsest zoom it is read at.
-    pub const ZOOMS: u32 = (L::LEAF - L::COARSEST + 1);
+    pub const ZOOM_CNT: u32 = (L::LEAF - L::COARSEST + 1);
 
     /// The most tiles the demand at one zoom names, as the layer's lattice
     /// bounds it.
-    pub const ZOOM_DEMAND_TILES: u32 = demand_tiles(L::LATTICE);
+    pub const ZOOM_DEMAND_TILE_CAP: u32 = demand_tiles(L::LATTICE);
 
-    const DEMAND_TILES: u32 = if matches!(L::ASK_SCOPE, AskScope::View) {
-        Self::ZOOM_DEMAND_TILES * Self::ZOOMS
+    const DEMAND_TILE_CAP: u32 = if matches!(L::ASK_SCOPE, AskScope::View) {
+        Self::ZOOM_DEMAND_TILE_CAP * Self::ZOOM_CNT
     } else {
         0
     };
 
     /// The most tiles held hard on the lines over the misses: up to one zoom's
     /// demand at every zoom but the finest.
-    const ANCESTOR_TILES: u32 = if matches!(L::ASK_SCOPE, AskScope::View) {
-        Self::ZOOM_DEMAND_TILES * (Self::ZOOMS - 1)
+    const ANCESTOR_TILE_CAP: u32 = if matches!(L::ASK_SCOPE, AskScope::View) {
+        Self::ZOOM_DEMAND_TILE_CAP * (Self::ZOOM_CNT - 1)
     } else {
         0
     };
@@ -122,32 +122,32 @@ impl<L: Base> TileCache<L> {
     /// (layer/floor.rs), a destination's line, one at each zoom from its leaf
     /// to the top, and the tiles a reader that cannot take a coarser answer
     /// declares (`Base::PIN_CAP`).
-    const PINNED_TILES: u32 = match L::ASK_SCOPE {
-        AskScope::Floor => floor::tiles(L::LATTICE),
-        AskScope::Line => Self::ZOOMS + L::PIN_CAP,
-        AskScope::View => floor::tiles(L::LATTICE) + Self::ZOOMS + L::PIN_CAP,
+    const PINNED_TILE_CAP: u32 = match L::ASK_SCOPE {
+        AskScope::Floor => floor::tile_cap(L::LATTICE),
+        AskScope::Line => Self::ZOOM_CNT + L::PIN_CAP,
+        AskScope::View => floor::tile_cap(L::LATTICE) + Self::ZOOM_CNT + L::PIN_CAP,
     };
 
     /// The most tiles held hard at once.
-    const HARD_TILES: u32 = Self::PINNED_TILES + Self::ANCESTOR_TILES;
+    const HARD_TILE_CAP: u32 = Self::PINNED_TILE_CAP + Self::ANCESTOR_TILE_CAP;
 
     /// One spare slot, so that a tile nothing holds hard still has a slot to
     /// land in. A layer that asks for the floor alone needs none: it holds
-    /// hard every tile it asks for and asks for at most `floor::tiles`, so
+    /// hard every tile it asks for and asks for at most `floor::tile_cap`, so
     /// each of them finds a slot that is free or held only as cache.
     const WORKSPACE: u32 = matches!(L::ASK_SCOPE, AskScope::View) as u32;
 
     /// The misses and the lines over them share each zoom's demand, so a
     /// tile the view reads never takes the slot of another tile the view
     /// reads, and the view converges.
-    pub const SLOTS: u32 = Self::PINNED_TILES + Self::DEMAND_TILES;
+    pub const SLOT_CNT: u32 = Self::PINNED_TILE_CAP + Self::DEMAND_TILE_CAP;
 
     /// The most tiles the cache keeps an entry for: every slotted tile and
     /// every asked one. No more tiles are asked for than there are slots.
-    const ENTRIES: u32 = 2 * Self::SLOTS;
+    const ENTRY_CAP: u32 = 2 * Self::SLOT_CNT;
 
     const SAFE: () = assert!(
-        Self::SLOTS >= Self::HARD_TILES + Self::WORKSPACE,
+        Self::SLOT_CNT >= Self::HARD_TILE_CAP + Self::WORKSPACE,
         "safety: no slot for a tile nothing holds hard to land in"
     );
 }
@@ -156,17 +156,20 @@ impl<L: Base> Default for TileCache<L> {
     fn default() -> Self {
         let () = Self::SAFE;
         TileCache {
-            tiles: FnvHashMap::with_capacity_and_hasher(Self::ENTRIES as usize, Default::default()),
-            in_slot: vec![None; Self::SLOTS as usize],
+            tiles: FnvHashMap::with_capacity_and_hasher(
+                Self::ENTRY_CAP as usize,
+                Default::default(),
+            ),
+            in_slot: vec![None; Self::SLOT_CNT as usize],
             // Reversed, so that `pop` hands out the lowest slot first.
-            free: (0..Self::SLOTS).rev().collect(),
-            going: Vec::with_capacity(Self::ENTRIES as usize),
+            free: (0..Self::SLOT_CNT).rev().collect(),
+            going: Vec::with_capacity(Self::ENTRY_CAP as usize),
             changed: Vec::new(),
             revision: 0,
             ask_revision: 0,
             shown: core::cell::Cell::new(None),
-            refusals: 0,
-            loads: 0,
+            refusal_cnt: 0,
+            load_cnt: 0,
         }
     }
 }
@@ -241,10 +244,10 @@ impl<L: Base> TileCache<L> {
         self.tiles.get(&p)
     }
 
-    /// A new entry past `ENTRIES` means a tile is kept for a reason the
+    /// A new entry past `ENTRY_CAP` means a tile is kept for a reason the
     /// capacity bound does not count, and the core stops as unrecoverable.
     fn entry_mut(&mut self, p: Quadrant) -> &mut Entry<L> {
-        let full = self.tiles.len() >= Self::ENTRIES as usize;
+        let full = self.tiles.len() >= Self::ENTRY_CAP as usize;
         self.tiles.entry(p).or_insert_with(|| {
             xpute_kit::ensure!(!full, ENOTRECOVERABLE, p.zoom);
             Entry::NONE
@@ -353,7 +356,7 @@ impl<L: Base> TileCache<L> {
     /// needed.
     pub fn ask<A>(&mut self, asks: &FnvHashMap<Quadrant, A>) {
         xpute_kit::ensure!(
-            asks.len() <= Self::SLOTS as usize,
+            asks.len() <= Self::SLOT_CNT as usize,
             ENOTRECOVERABLE,
             asks.len()
         );
@@ -417,20 +420,20 @@ impl<L: Base> TileCache<L> {
                 .map(|(&q, _)| q),
         ) else {
             xpute_kit::ensure!(unasked, ENOTRECOVERABLE, p.zoom);
-            self.refusals += 1;
+            self.refusal_cnt += 1;
             return None;
         };
         self.remove(q)
     }
 
-    pub fn take_refusals(&mut self) -> u32 {
-        core::mem::take(&mut self.refusals)
+    pub fn take_refusal_cnt(&mut self) -> u32 {
+        core::mem::take(&mut self.refusal_cnt)
     }
 
     /// The number of tiles taken in since the last call, in a slot or as an
     /// empty tile, for the profiler (perf/report.rs `perf_frame`).
-    pub fn take_loads(&mut self) -> u32 {
-        core::mem::take(&mut self.loads)
+    pub fn take_load_cnt(&mut self) -> u32 {
+        core::mem::take(&mut self.load_cnt)
     }
 
     /// Takes arriving tile `p` into a slot that `receive` fills. The slot is
@@ -567,7 +570,7 @@ impl<L: Base> TileCache<L> {
         }
         self.changed.push(p);
         self.revision = self.revision.wrapping_add(1);
-        self.loads = self.loads.wrapping_add(1);
+        self.load_cnt = self.load_cnt.wrapping_add(1);
     }
 
     /// Marks held slotted tile `p` to be fetched once more; it stays readable

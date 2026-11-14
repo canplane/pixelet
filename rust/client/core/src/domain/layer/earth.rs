@@ -10,7 +10,7 @@ use pxl_spec::bake::publication::BaseLayer;
 use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
 use pxl_spec::bake::tile::{Occupancy, Tile};
 use pxl_spec::space::coord::world::wrap_idx;
-use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILES};
+use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILE_CAP};
 use pxl_spec::space::layer::quadrant::Quadrant;
 use pxl_global::Global;
 
@@ -19,7 +19,7 @@ use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;
-use crate::sys::io::param::{BODY_SLOTS, MAX_CREDITS};
+use crate::sys::io::param::{BODY_SLOT_CNT, CREDIT_CAP};
 use pxl_spec::space::coord::zoom::Zoom;
 
 /// A held Earth tile: its packet until the GPU has its texels, whose words
@@ -27,7 +27,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 pub enum EarthTile {
     /// The packet the GPU does not have yet. The tile owns the packet and
     /// lets it go with itself. Every slot may hold one, and the request
-    /// scheduler leaves body slots for them (sys/io/request.rs `spare_slots`).
+    /// scheduler leaves body slots for them (sys/io/request.rs `spare_slot_cnt`).
     Waiting(Body),
     /// Sent to the device of this generation (`device_generation`).
     Sent(u32),
@@ -36,7 +36,7 @@ pub enum EarthTile {
 static EARTH: Global<TileCache<EarthTile>> = Global::new();
 
 impl Tile for EarthTile {
-    const LAYER: BaseLayer = BaseLayer::earth;
+    const LAYER: BaseLayer = BaseLayer::Earth;
 
     /// Only the top zoom is baked, so no child has a tile.
     fn occupancy(&self) -> Occupancy {
@@ -69,7 +69,7 @@ impl Base for EarthTile {
 /// went to an earlier device is fetched again, since its packet is gone.
 pub fn upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
     let cache = EarthTile::tile_cache();
-    for slot in 0..EARTH_SLOTS {
+    for slot in 0..EARTH_SLOT_CNT {
         let Some((p, tile)) = cache.in_slot(slot) else {
             continue;
         };
@@ -77,7 +77,7 @@ pub fn upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
             cache.refetch(p);
         }
     }
-    for slot in 0..EARTH_SLOTS {
+    for slot in 0..EARTH_SLOT_CNT {
         let Some((_, tile)) = cache.in_slot(slot) else {
             continue;
         };
@@ -101,8 +101,8 @@ pub fn upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
 pub fn window(
     floor: impl Iterator<Item = Quadrant> + Clone,
     on: u32,
-) -> ([i32; 2], [u32; GROUND_DEMAND_TILES as usize]) {
-    let mut layers = [0; GROUND_DEMAND_TILES as usize];
+) -> ([i32; 2], [u32; GROUND_DEMAND_TILE_CAP as usize]) {
+    let mut layers = [0; GROUND_DEMAND_TILE_CAP as usize];
     let at = |p: Quadrant| p.at;
     let Some([first, _]) = floor.clone().next().map(at) else {
         return ([0; 2], layers);
@@ -128,10 +128,10 @@ pub fn window(
 }
 
 /// The Earth tiles held at once, each in a GPU layer of its own.
-pub const EARTH_SLOTS: u32 = TileCache::<EarthTile>::SLOTS;
+pub const EARTH_SLOT_CNT: u32 = TileCache::<EarthTile>::SLOT_CNT;
 
 const _: () = assert!(
-    BODY_SLOTS > MAX_CREDITS + EARTH_SLOTS,
+    BODY_SLOT_CNT > CREDIT_CAP + EARTH_SLOT_CNT,
     "the body slots keep a body on every credit and one more beside the Earth's frames"
 );
 

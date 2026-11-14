@@ -7,30 +7,30 @@ use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{place, release, texture_usage, Format, Gpu, Image};
 
-use crate::gpu::mip::{mip_levels, MipPass};
+use crate::gpu::mip::{mip_cnt, MipPass};
 
 pub struct ImageMap {
     texture: u32,
     pub view: u32,
     pub sampler: u32,
     size: (u32, u32),
-    levels: u32,
+    mip_cnt: u32,
     pub loaded: bool,
 }
 
 impl ImageMap {
     pub fn new(g: &Gpu, width: u32, height: u32) -> ImageMap {
-        let levels = mip_levels(width, height);
+        let mip_cnt = mip_cnt(width, height);
         let usage = texture_usage::TEXTURE_BINDING
             | texture_usage::COPY_DST
             | texture_usage::RENDER_ATTACHMENT;
-        let texture = g.texture(width, height, 1, Format::rgba8unorm_srgb, levels, usage);
-        let view = g.view(texture, true, 0, levels, 0, 1);
+        let texture = g.texture(width, height, 1, Format::Rgba8unormSrgb, mip_cnt, usage);
+        let view = g.view(texture, true, 0, mip_cnt, 0, 1);
         let sampler = g.sampler(
-            FilterMode::linear,
-            FilterMode::linear,
-            MipmapFilterMode::linear,
-            AddressMode::clamp_to_edge,
+            FilterMode::Linear,
+            FilterMode::Linear,
+            MipmapFilterMode::Linear,
+            AddressMode::ClampToEdge,
             None,
             1,
         );
@@ -39,7 +39,7 @@ impl ImageMap {
             view,
             sampler,
             size: (width, height),
-            levels,
+            mip_cnt,
             loaded: false,
         }
     }
@@ -62,7 +62,7 @@ impl ImageMap {
         );
         g.submit(encoder);
         release(face);
-        mip.build(g, self.texture, self.levels, 0, 1);
+        mip.build(g, self.texture, self.mip_cnt, 0, 1);
         self.loaded = true;
         true
     }

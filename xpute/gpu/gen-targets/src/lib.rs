@@ -5,7 +5,7 @@
 //! host's, and its data specs. Paths are from xpute's root.
 
 use xpute_gen::spec::data::DataSpec;
-use xpute_link_gen::wit::WitTarget;
+use xpute_link_gen::wit::{Side, WitTarget};
 
 /// The plugin's bindings on the guest's side, with the TypeScript in the
 /// plugin's link.
@@ -13,7 +13,7 @@ pub const GUEST_TARGET: WitTarget<'static> = WitTarget {
     wit: "gpu/wit",
     rs: Some("gpu/guest/rust/src/abi.rs"),
     ts: Some("gpu/link/ts/src/abi"),
-    side: "guest/rust",
+    side: Some(Side::Guest("guest/rust")),
 };
 
 /// The plugin's bindings on a native device's host's side, served on
@@ -22,7 +22,7 @@ pub const NATIVE_HOST_TARGET: WitTarget<'static> = WitTarget {
     wit: "gpu/wit",
     rs: Some("gpu/native/host/src/abi.rs"),
     ts: None,
-    side: "native/host",
+    side: Some(Side::Host("native/host")),
 };
 
 /// The plugin's data specs: the GPU's calls and the enumerations they carry.

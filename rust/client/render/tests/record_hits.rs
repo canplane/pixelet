@@ -24,7 +24,7 @@
 mod gpu;
 mod real_world;
 
-use pxl_spec::share::EIGHTHS;
+use pxl_spec::share::EIGHTH_CNT;
 use std::collections::{BTreeMap, BTreeSet};
 
 use gpu::{
@@ -36,7 +36,7 @@ use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::Node;
 use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::object::Cut;
-use pxl_engine::{eye, face, node_cache, raster, ray, record, WORKGROUPS_CAP};
+use pxl_engine::{eye, face, node_cache, raster, ray, record, WORKGROUP_CAP};
 use pxl_render::frame::shader::record::{
     compute, src, COMPUTE_FACE, COMPUTE_LIGHT_REC_HITS, COMPUTE_REC_FACES, COMPUTE_REC_HITS,
     SHADER_CELL, SHADER_LIGHT_CELL, SHADER_SAMPLE_HIT,
@@ -133,7 +133,7 @@ fn face_binds<'a>(
 
 /// The pipeline the renderer builds for the compute pass `id`.
 fn pipeline(gpu: &Gpu, id: u32) -> wgpu::ComputePipeline {
-    let (shader, entry) = compute(id);
+    let (shader, entry, _) = compute(id);
     gpu.pipeline(src(shader), entry)
 }
 
@@ -329,8 +329,8 @@ fn hits_of(
             Hit {
                 node,
                 origin,
-                face: w(beam::HIT_FACE) & !beam::HIT_LACKS,
-                lacks: w(beam::HIT_FACE) & beam::HIT_LACKS != 0,
+                face: w(beam::HIT_FACE) & !beam::HIT_LACK,
+                lacks: w(beam::HIT_FACE) & beam::HIT_LACK != 0,
                 asset: [w(beam::HIT_ASSET), w(beam::HIT_ASSET + 1)],
                 line: w(beam::HIT_LINE),
                 px,
@@ -348,7 +348,7 @@ fn entries_of(cache: &[u32], h: &Hit) -> Vec<u32> {
     if !node_cache::keeps(zoom, idx) {
         return Vec::new();
     }
-    let kind = if h.lacks { Kind::Lacks } else { Kind::Cell } as u32;
+    let kind = if h.lacks { Kind::Lack } else { Kind::Cell } as u32;
     let first = node_cache::bucket_of(zoom, idx);
     (first..first + node_cache::BUCKET)
         .filter(|&slot| {
@@ -469,7 +469,7 @@ struct Ask {
 /// asked bit (`record::ASKED`). Where `reads`, the first hit to ask a face settles its word: none
 /// for a lack, `face::BOX` for a cell short of its cube, and otherwise none until an ask it opens
 /// answers, whose target is the entry's word (`record::TO_REC`), counted in the args at
-/// `raster::HIT_ASKED_AT` as a dispatch of `raster::FACES_LANES` asks a workgroup. Returns the
+/// `raster::HIT_ASKED_AT` as a dispatch of `raster::FACES_LANE_CNT` asks a workgroup. Returns the
 /// asks by their targets.
 fn rec_want(
     cache: &mut [u32],
@@ -494,7 +494,7 @@ fn rec_want(
         kind_cnt.add("hits, whole", h.whole);
         kind_cnt.add(
             "hits, short of its cube",
-            !h.lacks && answer::fill_eighths(h.asset[0]) < EIGHTHS,
+            !h.lacks && answer::fill_eighths(h.asset[0]) < EIGHTH_CNT,
         );
         let Some(slot) = *slot else {
             kind_cnt.add("hits, no slot keeps the node", true);
@@ -536,7 +536,7 @@ fn rec_want(
             continue;
         }
         let to = node_cache::face_at(slot, h.face);
-        let short = !h.lacks && answer::fill_eighths(h.asset[0]) < EIGHTHS;
+        let short = !h.lacks && answer::fill_eighths(h.asset[0]) < EIGHTH_CNT;
         cache[to as usize] = if short { face::BOX } else { 0 };
         if h.lacks || short {
             continue;
@@ -546,13 +546,13 @@ fn rec_want(
         if idx >= cap {
             continue;
         }
-        let instances = &mut args[at + raster::ARGS_INSTANCES as usize];
+        let instances = &mut args[at + raster::ARGS_INSTANCE_CNT as usize];
         *instances = (*instances).max((idx + 1).min(cap));
-        if idx.is_multiple_of(raster::FACES_LANES) {
+        if idx.is_multiple_of(raster::FACES_LANE_CNT) {
             let groups = (idx + 1)
                 .min(cap)
-                .div_ceil(raster::FACES_LANES)
-                .min(WORKGROUPS_CAP);
+                .div_ceil(raster::FACES_LANE_CNT)
+                .min(WORKGROUP_CAP);
             let faces = &mut args[at + raster::ARGS_FACES as usize];
             *faces = (*faces).max(groups);
         }
@@ -585,7 +585,7 @@ fn rec_want(
 /// What `rec_faces_cs` leaves in the rays `rays`, laid out as `read_texture` reads them,
 /// `size` pixels a layer. `hits` are the eye's hits, and `cache` is the node cache once the
 /// faces' pass has answered their asks, whose targets are `asked`. A pixel whose last ray word
-/// (`ray::FACES`) holds `beam::HIT_WAITS` and the number of its hit takes the word its hit's
+/// (`ray::FACE_WORD`) holds `beam::HIT_WAIT` and the number of its hit takes the word its hit's
 /// entry holds for the hit's face (`node_cache::face_at`), or 0 where no slot keeps the node.
 /// No other word changes.
 fn faces_want(
@@ -597,8 +597,8 @@ fn faces_want(
 ) {
     let texels = (size[0] * size[1]) as usize;
     for (r, h) in hits.iter().enumerate() {
-        let k = ray::FACES as usize * texels + (h.px[1] * size[0] + h.px[0]) as usize;
-        let waits = rays[k] == beam::HIT_WAITS | r as u32;
+        let k = ray::FACE_WORD as usize * texels + (h.px[1] * size[0] + h.px[0]) as usize;
+        let waits = rays[k] == beam::HIT_WAIT | r as u32;
         kind_cnt.add("hits, their pixel waits", waits);
         kind_cnt.add("hits, their pixel waits no longer", !waits);
         if !waits {
@@ -712,7 +712,7 @@ fn eye_of(c: &EyeCase) -> (Vec<u32>, Grid) {
 /// yet.
 fn args_of(grid: &Grid) -> Vec<u32> {
     let mut args = vec![0u32; raster::WORDS as usize];
-    args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
+    args[raster::ARGS_VERTEX_CNT as usize] = raster::VERTEX_CNT;
     for (at, asks) in [
         (raster::ASKED_AT, grid.asks_at),
         (raster::HIT_ASKED_AT, grid.hit_asks_at),
@@ -773,8 +773,8 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
                 (16, args_buf.as_entire_binding()),
             ],
             [
-                grid.samples[0].div_ceil(SQUARE_SIDE),
-                grid.samples[1].div_ceil(SQUARE_SIDE),
+                grid.sample_lattice[0].div_ceil(SQUARE_SIDE),
+                grid.sample_lattice[1].div_ceil(SQUARE_SIDE),
                 1,
             ],
         );
@@ -795,7 +795,7 @@ fn eye_run(gpu: &Gpu, b: &WorldBuffer, (c, s): (&EyeCase, &Screen)) -> Run {
     for (k, &p) in marked.iter().enumerate() {
         words[holes + 1 + k] = (p % wd) | ((p / wd) << 16);
     }
-    // No word laid sets `beam::HIT_WAITS`, so a pixel waits for a hit only where the queue
+    // No word laid sets `beam::HIT_WAIT`, so a pixel waits for a hit only where the queue
     // says so.
     let mut ray_words: Vec<u32> = (0..ray::WORDS as usize * texels)
         .map(|k| (k as u32).wrapping_mul(0x2c1b_3c6d) >> 2)
@@ -941,7 +941,7 @@ fn light_run(gpu: &Gpu, b: &WorldBuffer, c: &LightCase) -> Run {
     node_cache[node_cache::FRAME as usize] = FRAME;
     // The light's raster's args, as the renderer lays them (ray/raster.rs `light_prepare`).
     let mut args = vec![0u32; raster::ARGS_WORDS as usize];
-    args[raster::ARGS_VERTICES as usize] = raster::VERTICES;
+    args[raster::ARGS_VERTEX_CNT as usize] = raster::VERTEX_CNT;
     let run = Run {
         name: c.name.to_string(),
         reads: false,
@@ -1018,7 +1018,7 @@ fn rec_case(
     gpu.dispatch(
         p,
         &run.rec_binds(),
-        [ray::HITS_A_FRAME.div_ceil(beam::HIT_LANES), 1, 1],
+        [ray::HITS_A_FRAME.div_ceil(beam::HIT_LANE_CNT), 1, 1],
     );
     let name = &run.name;
     eprintln!("{name}: {} hits, {} asks", run.hits.len(), asks.len());
@@ -1151,7 +1151,7 @@ fn hand_hit_faces_answer_as_rec() {
         gpu.dispatch(
             &hits_p,
             &run.rec_binds(),
-            [ray::HITS_A_FRAME.div_ceil(beam::HIT_LANES), 1, 1],
+            [ray::HITS_A_FRAME.div_ceil(beam::HIT_LANE_CNT), 1, 1],
         );
         let args = gpu.read(&run.args_buf);
         let at = raster::HIT_ASKED_AT as usize;
@@ -1162,7 +1162,7 @@ fn hand_hit_faces_answer_as_rec() {
         );
         let cache = gpu.read(&run.node_cache_buf);
         let words = gpu.read(&run.words_buf);
-        let asked: BTreeSet<u32> = (0..args[at + raster::ARGS_INSTANCES as usize])
+        let asked: BTreeSet<u32> = (0..args[at + raster::ARGS_INSTANCE_CNT as usize])
             .map(|place| {
                 let k = (run.asks_at + place * beam::ASK_WORDS + beam::ASK_TO) as usize;
                 words[k] & !record::TO_REC
@@ -1185,7 +1185,7 @@ fn hand_hit_faces_answer_as_rec() {
                 (8, run.words_buf.as_entire_binding()),
                 (9, run.node_cache_buf.as_entire_binding()),
             ],
-            [ray::HITS_A_FRAME.div_ceil(beam::HIT_LANES), 1, 1],
+            [ray::HITS_A_FRAME.div_ceil(beam::HIT_LANE_CNT), 1, 1],
         );
         let name = &run.name;
         let texels = (run.size[0] * run.size[1]) as usize;

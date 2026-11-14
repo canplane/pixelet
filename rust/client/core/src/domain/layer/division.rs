@@ -10,7 +10,7 @@
 //! are decoded into it straight from the packet. The tile's divisions, a
 //! handful, live on the heap.
 
-use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELLS};
+use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELL_CNT};
 use pxl_spec::bake::tile::Tile;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
@@ -33,11 +33,11 @@ pub static RANGE: OwnedRange = OwnedRange::new();
 
 /// The bytes of one slot's room: a word for each cell, rounded up to whole cache
 /// lines.
-const ROOM_BYTES: u32 = arr_bytes(CELLS, 4);
+const ROOM_BYTES: u32 = arr_bytes(CELL_CNT, 4);
 
 /// The size of the division's range: one room for each slot of the tile
 /// cache, end to end.
-pub const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOTS * ROOM_BYTES;
+pub const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOT_CNT * ROOM_BYTES;
 
 impl Base for DivisionTile {
     const ASK_SCOPE: AskScope = AskScope::Line;
@@ -53,7 +53,7 @@ impl Base for DivisionTile {
         _phases: &mut PhaseList,
     ) -> Result<DivisionTile, Exit> {
         // SAFETY: the slot is this tile's, and nothing reads it until the tile is set.
-        let room = unsafe { RANGE.arr::<u32>(slot * ROOM_BYTES, CELLS) };
+        let room = unsafe { RANGE.arr::<u32>(slot * ROOM_BYTES, CELL_CNT) };
         Ok(division::decode_into(&pkt, room)?)
     }
 }

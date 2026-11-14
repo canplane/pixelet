@@ -198,7 +198,7 @@ const SRC: &str = "./infra/geo/overture/source.json";
 /// How long the swap waits for the live table's readers, and how often it
 /// tries: waiting longer would queue every new reader behind it.
 const SWAP_WAIT: &str = "5s";
-const SWAP_TRIES: u32 = 12;
+const SWAP_TRY_CNT: u32 = 12;
 
 /// The CLI's bbox test is strict, so the shards are asked for this much wider.
 const SLACK_DEG: f64 = 1e-4;
@@ -652,7 +652,7 @@ fn build_and_swap(
         .execute(&feats(ty, &next, release), &[])
         .map_err(db)? as i64;
     client.batch_execute(&idxs(ty, &next)).map_err(db)?;
-    for attempt in 1..=SWAP_TRIES {
+    for attempt in 1..=SWAP_TRY_CNT {
         let mut tx = client.transaction().map_err(db)?;
         tx.batch_execute(&format!("SET LOCAL lock_timeout = '{SWAP_WAIT}'"))
             .map_err(db)?;
@@ -660,7 +660,7 @@ fn build_and_swap(
             "DROP TABLE IF EXISTS {t}; ALTER TABLE {next} RENAME TO {t}"
         )) {
             Err(e) if e.code() == Some(&SqlState::LOCK_NOT_AVAILABLE) => {
-                println!("[ingest/{t}] a reader holds it; swap {attempt} of {SWAP_TRIES} waits");
+                println!("[ingest/{t}] a reader holds it; swap {attempt} of {SWAP_TRY_CNT} waits");
                 continue;
             }
             r => r.map_err(db)?,
@@ -686,7 +686,7 @@ fn build_and_swap(
         return Ok(rows);
     }
     Err(format!(
-        "{t}: its readers held it through {SWAP_TRIES} tries; {next} is built and left beside it"
+        "{t}: its readers held it through {SWAP_TRY_CNT} tries; {next} is built and left beside it"
     ))
 }
 

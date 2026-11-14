@@ -9,7 +9,7 @@
  */
 
 import { td } from "@xpute/kit/codec/encoding.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_EINVAL } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import type { Link } from "@xpute/link";
 import type { Lent } from "@xpute/link/abi/types.ts";
@@ -28,7 +28,7 @@ export function serve_text(link: Link): void {
     },
     raster(weight, px, color, image, width, height, x, text) {
       const len = width * height * 4;
-      if (len > image.len) throw new XputeError(Errno.EINVAL);
+      if (len > image.len) throw new XputeError(ERRNO_EINVAL);
       platform.raster(weight, px, color, text_of(text), x, width, height, link.bytes(image.at, len));
       return 0;
     },

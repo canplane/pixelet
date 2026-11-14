@@ -28,7 +28,7 @@ fn may_ask() -> bool {
 }
 
 fn walk_tag() -> u32 {
-  return PASSES * node_cache_word(FRAME) + walk_pass();
+  return PASS_CNT * node_cache_word(FRAME) + walk_pass();
 }
 
 /// Whether slot `slot`'s entry is the node. The zoom is compared first, and the corner's three
@@ -172,7 +172,7 @@ fn key_zooms(zoom: u32, zooms: u32, a: Answer) -> u32 {
   if (zoom >= (zooms >> ZOOM_BITS)) {
     return CELL_FAR;
   }
-  if (a.kind == KIND_LACKS || a.asset.x != VAL_VOID || a.asset.y != 0u) {
+  if (a.kind == KIND_LACK || a.asset.x != VAL_VOID || a.asset.y != 0u) {
     return CELL_FAR | (1u << ZOOM_BITS);
   }
   return zooms;
@@ -242,7 +242,7 @@ fn claim_slot(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> vec2
   let mine = (h & ~CLAIM_MASK) | CLAIM_FAR;
   let probe = h & (BUCKET - 1u);
   let victim = (node_hash(zoom, c) >> 28u) & (BUCKET - 1u);
-  let frame = tag / PASSES;
+  let frame = tag / PASS_CNT;
   for (var tries = 0u; tries < BUCKET; tries += 1u) {
     // The slot to claim and the key read there. Every free slot comes before every slot of an
     // earlier frame.
@@ -261,7 +261,7 @@ fn claim_slot(first: u32, zoom: u32, c: vec3<i32>, zooms: u32, tag: u32) -> vec2
       var turn = 2u * BUCKET;
       if (slot_key == 0u) {
         turn = (k - probe) & (BUCKET - 1u);
-      } else if (!is_claim(slot_key) && (slot_key & ~KEY_ZOOMS) / PASSES < frame && !drawn(slot, frame)) {
+      } else if (!is_claim(slot_key) && (slot_key & ~KEY_ZOOMS) / PASS_CNT < frame && !drawn(slot, frame)) {
         turn = BUCKET + ((k - victim) & (BUCKET - 1u));
       }
       if (turn < best) {
@@ -361,10 +361,10 @@ fn hand_end(line: u32, parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>) ->
 }
 
 /// Whether the observer whose walks count into lane word `at` counts this frame
-/// (`node_cache::CNT_ON`, `node_cache::lane_at`). Each observer's lanes lie `CNT_WALKS`
+/// (`node_cache::CNT_ON`, `node_cache::lane_at`). Each observer's lanes lie `CNT_WALK_CNT`
 /// words after the previous observer's, starting from the eye's.
 fn counts(at: u32) -> bool {
-  let observer = (at - EYE_BEAM_CNT) / CNT_WALKS;
+  let observer = (at - EYE_BEAM_CNT) / CNT_WALK_CNT;
   return ((node_cache_word(CNT_ON) >> observer) & 1u) != 0u;
 }
 

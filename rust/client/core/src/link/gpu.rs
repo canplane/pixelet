@@ -31,8 +31,8 @@ async fn hold(device: Handle) {
         // The block is lent before the device is asked ready.
         let lost = gpu::device_lost(device, api::lend_block(block.take()));
         loop {
-            let since = life::shows();
-            if gpu::device_ready(device).await.is_ok() {
+            let since = life::show_cnt();
+            if matches!(gpu::device_ready(device).await, Ok(Ok(()))) {
                 break;
             }
             life::shown_after(since).await;

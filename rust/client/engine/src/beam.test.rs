@@ -7,7 +7,7 @@ use crate::answer::{
 use crate::cast::{Detail, End, Node, Query, Ray, Spacing, Trace, Until, DEPTH};
 use crate::content::Sample;
 use crate::object::ancestor_at;
-use pxl_spec::share::EIGHTHS;
+use pxl_spec::share::EIGHTH_CNT;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::HEIGHT_BITS;
@@ -34,8 +34,11 @@ const VIEWS: [[f32; 2]; 3] = [
 fn parked_items_fit_the_asks() {
     for tan in VIEWS {
         let g = Grid::of(tan);
-        let asks = g.samples[0] * g.samples[1] * ASK_WORDS;
-        assert!(g.corners[0] * g.corners[1] <= asks && g.samples[0] * g.samples[1] <= asks);
+        let asks = g.sample_lattice[0] * g.sample_lattice[1] * ASK_WORDS;
+        assert!(
+            g.corner_lattice[0] * g.corner_lattice[1] <= asks
+                && g.sample_lattice[0] * g.sample_lattice[1] <= asks
+        );
     }
 }
 
@@ -59,12 +62,12 @@ const THINGS: [Thing; 5] = [
     Thing {
         lo: [994.0, 30.0, -8.0],
         hi: [998.0, 34.0, 20.0],
-        eighths: EIGHTHS,
+        eighths: EIGHTH_CNT,
     },
     Thing {
         lo: [1002.0, 45.0, 8.0],
         hi: [1014.0, 52.0, 9.0],
-        eighths: EIGHTHS,
+        eighths: EIGHTH_CNT,
     },
     Thing {
         lo: [1000.5, 0.0, -8.0],
@@ -79,7 +82,7 @@ const THINGS: [Thing; 5] = [
     Thing {
         lo: [1000.0, -31.0, 9.5],
         hi: [1000.25, -30.75, 9.75],
-        eighths: EIGHTHS,
+        eighths: EIGHTH_CNT,
     },
 ];
 
@@ -321,7 +324,7 @@ fn cast_view(view: &View) -> Vec<Cast> {
     let g = Grid::of(view.tan);
     let detail = view.detail();
     let o = view.origin;
-    let [across, down] = g.corners;
+    let [across, down] = g.corner_lattice;
     let corners = each((across * down) as usize, |k| {
         let c = [k as u32 % across, k as u32 / across];
         let mut line = Line {
@@ -355,7 +358,7 @@ fn cast_view(view: &View) -> Vec<Cast> {
         }
         (least, from, alike)
     });
-    let [n, m] = g.samples;
+    let [n, m] = g.sample_lattice;
     each((n * m) as usize, |k| {
         let s = [k as u32 % n, k as u32 / n];
         let ray = view.ray(g.sample(s));
@@ -402,7 +405,7 @@ fn sample_hit_is_the_walks_from_the_eye() {
         let view = View::of(tan);
         let g = Grid::of(tan);
         let detail = view.detail();
-        let [n, m] = g.samples;
+        let [n, m] = g.sample_lattice;
         let fresh = each((n * m) as usize, |k| {
             let ray = view.ray(g.sample([k as u32 % n, k as u32 / n]));
             Hit::of(&cast::first(
@@ -414,7 +417,7 @@ fn sample_hit_is_the_walks_from_the_eye() {
             ))
         });
         let cast = cast_view(&view);
-        let (mut met, mut misses) = ([0; EIGHTHS as usize + 1], 0);
+        let (mut met, mut misses) = ([0; EIGHTH_CNT as usize + 1], 0);
         for (k, f) in fresh.iter().enumerate() {
             let s = [k as u32 % n, k as u32 / n];
             let a = &cast[k];
@@ -434,7 +437,7 @@ fn sample_hit_is_the_walks_from_the_eye() {
         // The ground and the whole things, the pole and the far block are
         // met, and something gone on past.
         assert!(
-            [EIGHTHS, 4, 6].iter().all(|&k| met[k as usize] > 0) && misses > 0,
+            [EIGHTH_CNT, 4, 6].iter().all(|&k| met[k as usize] > 0) && misses > 0,
             "{tan:?}: {met:?} by the eighths met, {misses} gone on"
         );
     }

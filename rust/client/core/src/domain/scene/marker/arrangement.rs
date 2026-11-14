@@ -110,13 +110,13 @@ struct Arrangement {
 }
 
 /// Everything `step` reads, compared by value, as the demand's `Key` is: the
-/// eye and its view (the observation holds its frustum), the places setting,
+/// eye and its view (the observation holds its frustum), the place setting,
 /// the pin being written, and the chat's line with where it hangs. An input
 /// the step reads must be added here, or the step never sees it change.
 #[derive(Clone, PartialEq)]
 struct Input {
     o: Observation,
-    places: bool,
+    place: bool,
     drafted: Option<(Octant, u64)>,
     bubble: line::Bubble,
 }
@@ -130,7 +130,7 @@ static ARRANGEMENT: Global<Arrangement> = Global::new();
 #[derive(Default, PartialEq)]
 struct Read {
     bricks: Vec<Brick>,
-    places: bool,
+    place: bool,
 }
 
 /// The farthest a marker is drawn past where it stands, in pixels, which the
@@ -173,7 +173,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     };
     let seen = Input {
         o,
-        places: settings().place,
+        place: settings().place,
         drafted: pin::draft_key(draft),
         bubble: line::bubble(o.eye),
     };
@@ -205,8 +205,8 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     });
     now.bricks.sort_unstable();
     // Places are a setting, while what someone placed always shows.
-    now.places = settings().place;
-    let places = now.places;
+    now.place = settings().place;
+    let place_on = now.place;
     // What was read stays for a brick that is still drawn and whose columns
     // no change touches (domain/query/change.rs), as long as the places
     // setting did not turn. A brick left or touched drops what was read from
@@ -215,7 +215,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     // The rest are not read yet, so a later frame reads them.
     p.changed = false;
     let last_bricks = match &p.found_for {
-        Some(f) if f.places == places => f.bricks.as_slice(),
+        Some(f) if f.place == place_on => f.bricks.as_slice(),
         _ => &[],
     };
     let changed_places = &p.changed_places;
@@ -258,7 +258,7 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
             entering.iter(),
             |&(_, brick, columns)| {
                 pin::read(brick, &columns, &mut pins);
-                if places {
+                if place_on {
                     place::read(brick, &mut read_places);
                 }
                 true

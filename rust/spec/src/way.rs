@@ -26,6 +26,7 @@
 //! floor, and the one root, a segment's direction, is rounded once by the CPU and handed to a
 //! GPU in a word (`Segment::dir`).
 
+use crate::asset::cube::{Ground, Sentinel};
 use crate::ground;
 use crate::param::way::BEAM_PILLAR_INTERVAL_M;
 use crate::param::way::DECK_THICKNESS_M;
@@ -47,9 +48,6 @@ pub const POINT_SCALE: f32 = 8.0;
 /// A deck at least this far under a pier blocks it: one cell short of the stacked headroom
 /// (Arnis's `LOWER_DECK_GAP`).
 pub const LOWER_DECK_GAP_M: f32 = STACKED_DECK_HEADROOM_M - 1.0;
-
-/// What a pier is drawn as.
-pub(crate) const PIER: u32 = value::PIER;
 
 /// A line's form, as its byte on the wire.
 pub const BRIDGE: u32 = 0;
@@ -667,7 +665,7 @@ fn pier_stands<C: ColumnGrid>(
     per_m: f32,
 ) -> [i32; 2] {
     let (none, asset_id) = ([0, 0], cols.asset_id(c));
-    if !value::grounds(asset_id) || value::transports(asset_id) {
+    if !value::is_ground(asset_id) || value::is_transport(asset_id) {
         return none;
     }
     let surface = pier[1] + slab_depth(per_m);
@@ -694,8 +692,8 @@ pub const AIR_OF: u32 = 0x80;
 
 /// What one visit writes in its column, in leaf cells: a deck's slab or an embankment (its
 /// way's palette index), or a bore's or a cutting's air (`AIR_OF` over its way's palette
-/// index), over `run`; and a pier (`PIER`) over `pier`, which is empty where none stands.
-/// `NOTHING` where it writes none.
+/// index), over `run`; and a pier (`Ground::Building`) over `pier`, which is empty where none
+/// stands. `NOTHING` where it writes none.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Write {
     run: [i32; 2],
@@ -716,7 +714,7 @@ impl Write {
 /// `face`, where `per_m` is the leaf cells a meter, and its pier where one stands.
 fn writes<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) -> (Write, u32) {
     let (x, next) = visit(cols, c, k);
-    if !x.is() || !value::grounds(x.asset_id) {
+    if !x.is() || !value::is_ground(x.asset_id) {
         return (Write::NONE, next);
     }
     let o = occupies(&x, face, per_m);
@@ -744,21 +742,21 @@ fn writes<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32
 
 /// The most spans a column keeps (`column`): one past it is no column a brick holds, and the
 /// brick is refused for it and reads the coarser clip level (`SpanList::past`).
-pub const SPANS: usize = 10;
+pub const SPAN_CAP: usize = 10;
 
 /// A column's spans, in leaf cells, in the order its visits come, `n` of them: each a deck's
-/// slab or an embankment (its way's palette index), a pier (`PIER`), or a bore's or a
+/// slab or an embankment (its way's palette index), a pier (`Ground::Building`), or a bore's or a
 /// cutting's air (`AIR_OF` over its way's palette index). With them, its face cell
 /// (`ground::face_cell`), under which a bore's air beside the column lines it (pxl-engine
 /// `way_cell`); it is `i32::MIN` where the area's edge walls the column or the column is past
-/// the area, where nothing lines it. `past` says a visit made more spans than `SPANS`, so these
+/// the area, where nothing lines it. `past` says a visit made more spans than `SPAN_CAP`, so these
 /// are not all the column's. The column's cells are read from these, so its visits are found
 /// once: a brick's fill keeps them (pxl-engine fill.rs `spans`, read through `way::SpanTable`
 /// there).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpanList {
-    pub run: [[i32; 2]; SPANS],
-    pub val: [u32; SPANS],
+    pub run: [[i32; 2]; SPAN_CAP],
+    pub val: [u32; SPAN_CAP],
     pub n: u32,
     pub face: i32,
     pub past: bool,
@@ -766,16 +764,16 @@ pub struct SpanList {
 
 impl SpanList {
     pub const NONE: SpanList = SpanList {
-        run: [[0, 0]; SPANS],
-        val: [0; SPANS],
+        run: [[0, 0]; SPAN_CAP],
+        val: [0; SPAN_CAP],
         n: 0,
         face: i32::MIN,
         past: false,
     };
 
-    /// Span `v` over `run`, where there is room; a span past `SPANS` marks the list `past`.
+    /// Span `v` over `run`, where there is room; a span past `SPAN_CAP` marks the list `past`.
     fn push(&mut self, run: [i32; 2], v: u32) {
-        if (self.n as usize) < SPANS {
+        if (self.n as usize) < SPAN_CAP {
             self.run[self.n as usize] = run;
             self.val[self.n as usize] = v;
             self.n += 1;
@@ -791,7 +789,7 @@ impl SpanList {
 /// no spans and no face, because bedrock wins over a way as it does over the ground's face.
 pub fn column<C: ColumnGrid>(cols: &C, c: [i32; 2]) -> SpanList {
     let mut spans = SpanList::NONE;
-    if cols.asset_id(c) == ground::UNKNOWN || cols.is_walled(c) {
+    if cols.asset_id(c) == Sentinel::Unknown as u32 || cols.is_walled(c) {
         return spans;
     }
     // The column's face and the tile's scale, read once for all its visits.
@@ -806,7 +804,7 @@ pub fn column<C: ColumnGrid>(cols: &C, c: [i32; 2]) -> SpanList {
             spans.push(w.run, w.val);
         }
         if w.val != NOTHING && fills_any(cell_zoom, w.pier) {
-            spans.push(w.pier, PIER);
+            spans.push(w.pier, Ground::Building as u32);
         }
     }
     spans
@@ -816,17 +814,20 @@ pub fn column<C: ColumnGrid>(cols: &C, c: [i32; 2]) -> SpanList {
 mod tests {
     use super::*;
 
-    /// A column past `SPANS` says so, and a brick that holds it is refused rather than drawn
+    /// A column past `SPAN_CAP` says so, and a brick that holds it is refused rather than drawn
     /// with spans dropped (pxl-core `Fill::Refused`).
     #[test]
     fn past_spans_says_so() {
         let mut s = SpanList::NONE;
-        for k in 0..SPANS as i32 {
+        for k in 0..SPAN_CAP as i32 {
             s.push([k, k + 1], 1);
         }
         assert!(!s.past);
         s.push([20, 21], 1);
         assert!(s.past);
-        assert_eq!(s.n as usize, SPANS, "the first ones kept, the list marked");
+        assert_eq!(
+            s.n as usize, SPAN_CAP,
+            "the first ones kept, the list marked"
+        );
     }
 }

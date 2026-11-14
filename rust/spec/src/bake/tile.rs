@@ -75,10 +75,10 @@ pub struct Row {
 impl BaseLayer {
     pub const fn row(self) -> Row {
         let (lattice, leaf, pkt_cap) = match self {
-            BaseLayer::terrain => (GROUND, LEAF_ZOOM, terrain::MAX_PKT_BYTES),
-            BaseLayer::place => (place::PLACE_LATTICE, LEAF_ZOOM, place::MAX_PKT_BYTES),
-            BaseLayer::division => (GROUND, division::DIVISION_LEAF, division::MAX_PKT_BYTES),
-            BaseLayer::earth => (GROUND, earth::EARTH_ZOOM, earth::PKT_BYTES),
+            BaseLayer::Terrain => (GROUND, LEAF_ZOOM, terrain::MAX_PKT_BYTES),
+            BaseLayer::Place => (place::PLACE_LATTICE, LEAF_ZOOM, place::MAX_PKT_BYTES),
+            BaseLayer::Division => (GROUND, division::DIVISION_LEAF, division::MAX_PKT_BYTES),
+            BaseLayer::Earth => (GROUND, earth::EARTH_ZOOM, earth::PKT_BYTES),
         };
         Row {
             lattice,

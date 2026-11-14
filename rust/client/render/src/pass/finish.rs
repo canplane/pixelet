@@ -13,7 +13,7 @@
 use crate::frame::shader::record::{PIPELINE_SCREEN_FINISH, PIPELINE_SCREEN_SHOW};
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, release, view_entry, word_bytes, Gpu, Group, Load,
-    RenderContext, TARGETS,
+    RenderContext, TARGET_CAP,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::span_spec::GpuSpanName;
@@ -41,7 +41,7 @@ impl Finish {
     pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Finish {
         Finish {
             pipeline: pipelines.build(g, PIPELINE_SCREEN_FINISH, g.canvas()),
-            picture: pipelines.build_targets(g, PIPELINE_SCREEN_FINISH, g.canvas(), TARGETS),
+            picture: pipelines.build_targets(g, PIPELINE_SCREEN_FINISH, g.canvas(), TARGET_CAP),
             tiles: g.buf(
                 word_bytes(8),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -123,12 +123,12 @@ impl Finish {
         // A tile's quad is grown by one canvas pixel each way, measured in the world's pixels,
         // to cover the world texels that a pixel at its edge reads.
         let grow = s.width as f32 / s.screen.0.max(1) as f32;
-        let squares = [s.width, s.height].map(|v| v.div_ceil(SIDE));
+        let square_cnt = [s.width, s.height].map(|v| v.div_ceil(SIDE));
         let t = match tiles {
-            Some((t, _)) => t.words(grow, damage.map_or(u32::MAX, TileGrid::damage_frames)),
+            Some((t, _)) => t.words(grow, damage.map_or(u32::MAX, TileGrid::damage_frame_cnt)),
             None => [
-                squares[0],
-                squares[1],
+                square_cnt[0],
+                square_cnt[1],
                 u32::MAX,
                 0,
                 (s.width as f32).to_bits(),
@@ -162,7 +162,7 @@ impl Finish {
         let pass = g.pass(encoder, &desc);
         g.set_pipeline(pass, pipeline);
         g.set_bind_group(pass, 0, group, &[]);
-        g.draw(pass, 6, squares[0] * squares[1], 0, 0);
+        g.draw(pass, 6, square_cnt[0] * square_cnt[1], 0, 0);
         g.end(pass);
     }
 }

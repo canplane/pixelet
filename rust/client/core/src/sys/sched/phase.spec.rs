@@ -7,33 +7,26 @@
 // phase's number is its place here, and a report of per-phase time is indexed
 // by it.
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    non_camel_case_types,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 pub const PHASES: &[&str] = &["interaction", "visible"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Phase {
-    interaction = 0,
-    visible = 1,
+    Interaction = 0,
+    Visible = 1,
 }
 
 impl Phase {
     /// Every member, in its source's own order.
-    pub const ALL: [Phase; 2] = [Phase::interaction, Phase::visible];
+    pub const ALL: [Phase; 2] = [Phase::Interaction, Phase::Visible];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<Phase> {
         match val {
-            0 => Some(Phase::interaction),
-            1 => Some(Phase::visible),
+            0 => Some(Phase::Interaction),
+            1 => Some(Phase::Visible),
             _ => None,
         }
     }
@@ -41,8 +34,8 @@ impl Phase {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            Phase::interaction => "interaction",
-            Phase::visible => "visible",
+            Phase::Interaction => "interaction",
+            Phase::Visible => "visible",
         }
     }
 }

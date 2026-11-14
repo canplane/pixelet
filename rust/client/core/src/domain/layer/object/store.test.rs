@@ -1,11 +1,10 @@
 // pxl-core/domain/layer/object/store.test.rs
 
-use pxl_spec::asset::cube::Object;
+use pxl_spec::asset::cube::{Object, Sentinel};
 use pxl_spec::share::eighths;
 use pxl_spec::space::coord::zoom::{LEAF_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::lattice::GROUND;
-use pxl_spec::value::{AIR, VOID};
 
 use fnv::FnvHashMap;
 
@@ -59,7 +58,7 @@ fn write_undo_round_trip() {
             );
             store.write([Write {
                 at: id_of(OBJECT_COARSEST, at),
-                asset_id: VOID,
+                asset_id: Sentinel::Void as u32,
                 ext: None,
             }]);
             let mut left = 0;
@@ -69,7 +68,7 @@ fn write_undo_round_trip() {
                 store
                     .write([Write {
                         at: id_of(OBJECT_COARSEST, at),
-                        asset_id: VOID,
+                        asset_id: Sentinel::Void as u32,
                         ext: None,
                     }])
                     .is_empty(),
@@ -126,7 +125,7 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Content, [i32; 2]) {
                 let slot = store.cursor((target, [x, y, z]));
                 let v = object::val(&store.columns(), slot, Cut::NONE, target, [x, y, z]);
                 let eighths = eighths(object::fill_share(&store.columns(), slot));
-                if v != VOID && eighths > 0 {
+                if v != Sentinel::Void as u32 && eighths > 0 {
                     out.insert([x, y, z], (v, eighths));
                 }
             }
@@ -136,7 +135,7 @@ fn folded(cells: &[(i32, i32, i32, u32)], zoom: Zoom) -> (Content, [i32; 2]) {
 }
 
 fn red() -> u32 {
-    Object::red as AssetId
+    Object::Red as AssetId
 }
 
 #[test]
@@ -180,17 +179,18 @@ fn solid_block_folds() {
 #[test]
 fn air_folds_as_val() {
     crate::on_core(|| {
+        let air = Sentinel::Air as u32;
         let (out, [x, y]) = folded(
             &[
-                (0, 0, 0, AIR),
-                (1, 0, 0, AIR),
-                (0, 1, 0, AIR),
-                (1, 1, 0, AIR),
-                (0, 0, 1, AIR),
+                (0, 0, 0, air),
+                (1, 0, 0, air),
+                (0, 1, 0, air),
+                (1, 1, 0, air),
+                (0, 0, 1, air),
             ],
             LEAF_ZOOM - 1,
         );
-        assert_eq!(out.get(&[x, y, 0]), Some(&(AIR, 5)));
+        assert_eq!(out.get(&[x, y, 0]), Some(&(air, 5)));
     });
 }
 
@@ -202,7 +202,7 @@ fn cube_at(store: &mut Store, [x, y, z]: [i32; 3], state: u32) {
 fn axis_turn() {
     crate::on_core(|| {
         let mut rng = Rng(SplitMix64::new(0x2c1b_3c6d_a5b4_9f1e));
-        let red = Object::red as AssetId;
+        let red = Object::Red as AssetId;
         let turn = |[x, y, z]: [i32; 3]| [y, z, x];
         let turn_box = |b: Aabb| Aabb {
             min: [b.min[1], b.min[2], b.min[0]],
@@ -211,7 +211,7 @@ fn axis_turn() {
         let mut stores = [Store::default(), Store::default(), Store::default()];
         for _ in 0..300 {
             let at = [0, 1, 2].map(|_| (rng.next() % 300) as i32 - 150);
-            let state = rng.pick(&[red, red, AIR, VOID]);
+            let state = rng.pick(&[red, red, Sentinel::Air as u32, Sentinel::Void as u32]);
             cube_at(&mut stores[0], at, state);
             cube_at(&mut stores[1], turn(at), state);
             cube_at(&mut stores[2], turn(turn(at)), state);
@@ -238,7 +238,7 @@ fn axis_turn() {
 fn column_extent() {
     crate::on_core(|| {
         let mut rng = Rng(SplitMix64::new(0x7d3a_51e9_c2b4_0f86));
-        let red = Object::red as AssetId;
+        let red = Object::Red as AssetId;
         let mut store = Store::default();
         for _ in 0..300 {
             let at = [
@@ -246,7 +246,7 @@ fn column_extent() {
                 (rng.next() % 64) as i32,
                 (rng.next() % 300) as i32 - 150,
             ];
-            cube_at(&mut store, at, rng.pick(&[red, red, AIR]));
+            cube_at(&mut store, at, rng.pick(&[red, red, Sentinel::Air as u32]));
         }
         // Each leaf's extent along z in the column. A leaf finer than the
         // column's zoom counts as the whole cube of that zoom it lies in.
@@ -306,7 +306,7 @@ fn leaf_words_freed_on_erase() {
         assert_eq!(store.ext(&e), Some(&Ext::MarkerText("cafe".into())));
         store.write([Write {
             at: id_of(zoom, at),
-            asset_id: VOID,
+            asset_id: Sentinel::Void as u32,
             ext: None,
         }]);
         assert!(entry(&store, zoom, at).is_none());

@@ -11,7 +11,7 @@
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { hex_to_bytes } from "@xpute/kit/codec/encoding.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_ENOENT } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 import { CATALOG } from "@/abi/file.spec.ts";
 import { CATALOG_HEX } from "@/service/sys/fs/catalog.spec.ts";
@@ -22,6 +22,6 @@ import { get } from "@/service/sys/fs/read.ts";
 export function read_asset(id: u32, signal: AbortSignal): Promise<U8Array> {
   if (id === CATALOG) return Promise.resolve(hex_to_bytes(CATALOG_HEX));
   const key = ASSET_FILES[id - 1]?.key;
-  if (key === undefined) return Promise.reject(new FaultError(Errno.ENOENT));
+  if (key === undefined) return Promise.reject(new FaultError(ERRNO_ENOENT));
   return get(asset_url(key), signal);
 }

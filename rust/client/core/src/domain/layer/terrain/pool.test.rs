@@ -65,7 +65,7 @@ fn take_passes_over_a_free_run_the_runtime_holds() {
 fn free_list_holds_every_gap_of_every_brick() {
     crate::on_core(|| {
         let mut m = WayPool::default();
-        let runs: Vec<Run> = (0..SLOTS).map(|_| m.take(1).unwrap()).collect();
+        let runs: Vec<Run> = (0..SLOT_CNT).map(|_| m.take(1).unwrap()).collect();
         // Every other run given back: the most holes held runs can leave.
         for r in runs.iter().step_by(2) {
             m.give(*r);

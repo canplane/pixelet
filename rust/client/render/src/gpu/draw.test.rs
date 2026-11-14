@@ -1,7 +1,7 @@
 // pxl-render/gpu/draw.test.rs
 
 use super::*;
-use crate::frame::shader::record::PIPELINES;
+use crate::frame::shader::record::PIPELINE_CNT;
 use pxl_spec::space::coord::q3;
 use pxl_spec::space::coord::world::{nearest, ROUND};
 
@@ -276,15 +276,15 @@ fn lit_draws_read_the_map() {
     for p in [PIPELINE_LOCATION_ZONE, PIPELINE_MARKER, PIPELINE_DEBUG] {
         assert!(!reads_shadow_map(p), "{p}");
     }
-    assert!((0..PIPELINES).any(|p| !reads_shadow_map(p)));
+    assert!((0..PIPELINE_CNT).any(|p| !reads_shadow_map(p)));
 }
 
-/// A draw that reads the map stands its box. Past `light::RECEIVER_BOXES` boxes, the rest are
+/// A draw that reads the map stands its box. Past `light::RECEIVER_BOX_CAP` boxes, the rest are
 /// taken into the last box, which then holds every one of them.
 #[test]
 fn every_lit_draw_stands_its_box() {
     let mut d = DrawList::default();
-    let n = light::RECEIVER_BOXES + 5;
+    let n = light::RECEIVER_BOX_CAP + 5;
     let unit = |v: usize| (v as i64 * ONE) as i32;
     let ids: Vec<DrawId> = (0..=n).map(|_| DrawId::default()).collect();
     for (k, id) in ids.iter().enumerate().take(n) {
@@ -300,13 +300,16 @@ fn every_lit_draw_stands_its_box() {
         );
     }
     d.draw_as(&ids[n], PIPELINE_MARKER, 0, 0, 0, Position::NONE, None);
-    assert_eq!(d.receivers.len(), light::RECEIVER_BOXES);
-    let last = d.receivers[light::RECEIVER_BOXES - 1];
+    assert_eq!(d.receivers.len(), light::RECEIVER_BOX_CAP);
+    let last = d.receivers[light::RECEIVER_BOX_CAP - 1];
     assert_eq!(
         last,
-        ReceiverBox([[unit(light::RECEIVER_BOXES - 1); 3], [unit(n); 3]])
+        ReceiverBox([[unit(light::RECEIVER_BOX_CAP - 1); 3], [unit(n); 3]])
     );
-    for (k, b) in d.receivers[..light::RECEIVER_BOXES - 1].iter().enumerate() {
+    for (k, b) in d.receivers[..light::RECEIVER_BOX_CAP - 1]
+        .iter()
+        .enumerate()
+    {
         assert_eq!(*b, ReceiverBox([[unit(k); 3], [unit(k + 1); 3]]));
     }
 }

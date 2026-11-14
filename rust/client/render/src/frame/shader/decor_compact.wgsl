@@ -22,7 +22,7 @@ fn compact_one(i: u32) {
   if (region == DRAWING_NONE) {
     return;
   }
-  let slot = atomicAdd(&regions[REGIONS + region], 1u);
+  let slot = atomicAdd(&regions[REGION_CNT + region], 1u);
   let cap = instance_cap();
   if (slot >= cap) {
     return;
@@ -35,15 +35,15 @@ fn compact_one(i: u32) {
   instances[2u * cap + slot] = bitcast<u32>(from_anchor(i, 2u) - f32(recs[i + 4u]) * (1.0 / f32(1u << FRAC_W)));
   instances[3u * cap + slot] = turn_spin(turn);
   instances[4u * cap + slot] = bitcast<u32>(1.0f);
-  instances[DRAWING_COLUMNS * cap + slot] = slot;
+  instances[DRAWING_COLUMN_CNT * cap + slot] = slot;
 }
 
-@compute @workgroup_size(LANES)
+@compute @workgroup_size(LANE_CNT)
 fn decor_compact_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocation_id) lane: vec3<u32>) {
   if (!holds_recs(group.x)) {
     return;
   }
-  for (var k = lane.x; k < RUNS; k += LANES) {
+  for (var k = lane.x; k < RUN_CNT; k += LANE_CNT) {
     let run = run_of(group.x, k);
     for (var n = 0u; n < run.y; n += 1u) {
       compact_one(rec_at(run.x + n));

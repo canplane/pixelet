@@ -8,14 +8,8 @@
 // pin is drawn as its own design (pxl-spec asset/marker.rs
 // `marker_cell_zoom`).
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 /// The pin's name, the one every locale shows: an item has one name.
 pub const PIN_LABEL: &str = "Pin";
@@ -37,4 +31,4 @@ pub const MARKER_SHOWN_FROM: u8 = 19;
 /// one stands in it, they are one, their count on a pin's pill in its
 /// colors turned over, at the cell's middle over what is drawn there
 /// (pxl-core domain/scene/marker/pin.rs).
-pub const MARKER_SCALE_STEPS: i8 = -1;
+pub const MARKER_SCALE_STEP: i8 = -1;

@@ -6,17 +6,17 @@
 
 use crate::domain::scene::frame::Frame;
 use crate::sys::sched::tick::TickContext;
-use pxl_render::frame::shader::word::{DECOR_GROUPS, DRAW_FLOATS};
+use pxl_render::frame::shader::word::{DECOR_GROUP_CNT, DRAW_FLOATS};
 use pxl_render::gpu::draw::DRAW_WORDS;
 use pxl_render::gpu::span_spec::FrameKind;
-use pxl_render::gpu::surface::SURFACES;
-use pxl_render::pass::atmosphere::EARTH_LAYERS;
+use pxl_render::gpu::surface::SURFACE_CAP;
+use pxl_render::pass::atmosphere::EARTH_LAYER_CNT;
 use pxl_render::ray::{Cast, GroundInput};
 use pxl_render::renderer::{render_frame, EarthLayer, FrameInput, FrameStat};
 use pxl_spec::space::coord::{q3, v3};
 use pxl_global::Global;
 
-use crate::domain::layer::earth::{self, EarthTile, EARTH_SLOTS};
+use crate::domain::layer::earth::{self, EarthTile, EARTH_SLOT_CNT};
 use crate::domain::scene::character::companion::companion_skins;
 use crate::domain::scene::character::surface::character_surface_rows;
 use crate::domain::scene::decor::asset::{decor_model, decor_skin};
@@ -67,12 +67,12 @@ use crate::domain::view::observation;
 use crate::sys::io::loader;
 use pxl_render::gpu::api;
 use pxl_spec::asset::catalog::model_extent;
-use pxl_spec::asset::cube::pack;
+use pxl_spec::asset::cube::PACK;
 use pxl_spec::asset::decor;
 use pxl_spec::asset::sky::moon;
 
 const _: () = assert!(
-    EARTH_SLOTS == EARTH_LAYERS,
+    EARTH_SLOT_CNT == EARTH_LAYER_CNT,
     "a GPU layer for each frame the earth layer holds"
 );
 
@@ -99,7 +99,7 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
     let receivers = update.receivers;
     let models = model::models();
     // Each decor variant takes the slot of its draw group (`Decor::first_group`).
-    let mut decor = [(0u32, None, [0.0f32; 3]); DECOR_GROUPS];
+    let mut decor = [(0u32, None, [0.0f32; 3]); DECOR_GROUP_CNT];
     for d in &decor::DECORS {
         for (v, variant) in d.variants.iter().enumerate() {
             let extent = model_extent(catalog(), variant.model).map(|e| e as f32);
@@ -120,7 +120,7 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
         skin_cnt += 1;
     }
     let mut character_surfaces =
-        [(0u32, ([0; DRAW_WORDS], [0.0; DRAW_FLOATS]), none, 0u32); SURFACES];
+        [(0u32, ([0; DRAW_WORDS], [0.0; DRAW_FLOATS]), none, 0u32); SURFACE_CAP];
     let mut surface_cnt = 0;
     for (slot, row) in character_surfaces.iter_mut().zip(character_surface_rows()) {
         *slot = row;
@@ -133,7 +133,7 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
     let o = observation::observation();
     let eye = o
         .as_ref()
-        .and_then(|o| cast::eye(o, edit, settings.ray_steps));
+        .and_then(|o| cast::eye(o, edit, settings.ray_step));
     let mut terrain_upload = clipmap::upload;
     let animated = animation::take();
     let out = render_frame(FrameInput {
@@ -156,14 +156,14 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
         },
         // Screen occlusion also takes the corners' occlusion, and reads it
         // softer.
-        corner_ao: if matches!(settings.ao, AoMode::corner | AoMode::screen) {
+        corner_ao: if matches!(settings.ao, AoMode::Corner | AoMode::Screen) {
             param::AO_STRENGTH
         } else {
             0.0
         },
-        screen_ao: settings.ao == AoMode::screen,
-        low_spec: !settings.textures,
-        shadows: settings.shadows,
+        screen_ao: settings.ao == AoMode::Screen,
+        low_spec: !settings.texture,
+        shadow: settings.shadow,
         camera_gizmo: settings.camera_gizmo,
         clouds: cloud::clouds_shown(),
         drift: environment_drift(),
@@ -172,8 +172,8 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
         decor: &decor,
         skins: &skins[..skin_cnt],
         character_surfaces: &character_surfaces[..surface_cnt],
-        pack: load_of(pack).and_then(load_image),
-        moon: load_of(moon::picture).and_then(load_image),
+        pack: load_of(PACK).and_then(load_image),
+        moon: load_of(moon::PICTURE).and_then(load_image),
         earth: load_image(EARTH),
         earth_layer: EarthLayer {
             window,
@@ -191,7 +191,7 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
             objects: store::objects(),
             decor: gpu::frame(),
             receivers,
-            ray_cnts: settings.ray_cnts,
+            ray_cnt: settings.ray_cnt,
         }),
         text: marker::text_raster,
         atlas: atlas(),

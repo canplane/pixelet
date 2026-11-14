@@ -39,7 +39,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{units, CUBE_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{key_of_name, name, node_of};
 use pxl_spec::space::layer::area::shard_over;
-use pxl_spec::space::layer::demand::GROUND_DEMAND_TILES;
+use pxl_spec::space::layer::demand::GROUND_DEMAND_TILE_CAP;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_link::abi::types::Token;
 use xpute_guest::clock::now;
@@ -64,11 +64,11 @@ use pxl_spec::object::ext::{class_of, Class};
 /// demand at the shard zoom around the eye (domain/view/demand.rs
 /// `object_step`), which are no more than one zoom's demand of ground tiles
 /// (pxl-spec layer/demand.rs `demand_tiles`).
-pub const WANTS: u32 = GROUND_DEMAND_TILES;
+pub const WANT_CAP: u32 = GROUND_DEMAND_TILE_CAP;
 
 // Every objects' file a snapshot names can be watched beside the storage
 // file (sys/io/file.rs `WATCHED`).
-const _: () = assert!(WANTS as usize + 1 <= file::WATCHED);
+const _: () = assert!(WANT_CAP as usize + 1 <= file::WATCHED);
 
 /// The id that names the top among the wanted files; every other wanted id
 /// is a shard's.
@@ -182,7 +182,7 @@ pub fn holds(space: &Aabb) -> bool {
 }
 
 /// Declares the files wanted for `asked`, the shards the view asks for
-/// (domain/view/demand.rs `object_step`), at most `WANTS` of them and each in
+/// (domain/view/demand.rs `object_step`), at most `WANT_CAP` of them and each in
 /// its `order`. Before the top is read, only the top is wanted, first. After
 /// that, the wanted files are the asked shards that the top lists and that
 /// are not read yet, and they replace what was wanted before. A refused file
@@ -203,11 +203,11 @@ pub fn want(asked: impl Iterator<Item = Quadrant>, order: impl Fn(Quadrant) -> O
         }
         st.wants.sort_unstable_by_key(|&(id, _)| id);
     }
-    declare(Stream::object, &st.wants);
+    declare(Stream::Object, &st.wants);
 }
 
 pub fn want_again() {
-    declare(Stream::object, &state().wants);
+    declare(Stream::Object, &state().wants);
 }
 
 /// The repository's revision for `want`. Two readings are equal only if no
@@ -226,7 +226,7 @@ fn changed() {
 pub fn on_arrived(id: u64, pkt: Option<Body>, phases: &mut PhaseList) -> Result<(), Exit> {
     let at = now();
     let result = admit(id, pkt.as_deref());
-    phases.push(TaskPhaseName::decode_ms, now() - at);
+    phases.push(TaskPhaseName::DecodeMs, now() - at);
     result.map_err(|e| Exit::Failed(Failure::from(e)))
 }
 
@@ -276,10 +276,10 @@ fn on_shard(id: u64, writes: Vec<Write>) {
 }
 
 /// Watches the refused file at `at` among the refused, where a snapshot names
-/// it: the first WANTS are named (ui.rs), and the client sets aside only
+/// it: the first WANT_CAP are named (ui.rs), and the client sets aside only
 /// those, so a file is watched from when it is named until it changes.
 fn watch_named(at: usize) {
-    if at < WANTS as usize {
+    if at < WANT_CAP as usize {
         if let Some(&id) = state().refused_files.get(at) {
             file::watch(file::Refused::Objects(id));
         }
@@ -298,13 +298,13 @@ pub fn on_emptied(id: u64) -> bool {
         return false;
     };
     st.refused_files.remove(i);
-    if i < WANTS as usize {
-        watch_named(WANTS as usize - 1);
+    if i < WANT_CAP as usize {
+        watch_named(WANT_CAP as usize - 1);
     }
     st.revision = st.revision.wrapping_add(1);
     // Drop the failed want, so that the next declaration starts a new one.
     st.wants.retain(|&(n, _)| n != id);
-    declare(Stream::object, &st.wants);
+    declare(Stream::Object, &st.wants);
     invalidate();
     true
 }
@@ -385,7 +385,7 @@ fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
         let r = *r as usize;
         // A record of a class other than its leaf's means the file is not in
         // this layout.
-        if asset_ids.get(r).and_then(|&v| class_of(v)) != Some(Class::marker_text) {
+        if asset_ids.get(r).and_then(|&v| class_of(v)) != Some(Class::MarkerText) {
             return Err(MarshalError::new(Errno::EINVAL));
         }
         // A marker's text past its cap means the same.
@@ -473,8 +473,8 @@ pub fn save() {
         return;
     }
     let edit = vec![
-        Token::Int(path::OBJECT::ID),
-        Token::Int(path::OBJECT::EDIT::ID),
+        Token::Int(path::object::ID),
+        Token::Int(path::object::edit::ID),
     ];
     if let Ok(batch) = encode_writes(format::OBJECT_EDIT, &st.unsent) {
         file::write(edit, batch.into_boxed_slice());

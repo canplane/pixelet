@@ -28,4 +28,4 @@ export const MARKER_SHOWN_FROM = 19 as number;
  * one stands in it, they are one, their count on a pin's pill in its
  * colors turned over, at the cell's middle over what is drawn there
  * (pxl-core domain/scene/marker/pin.rs). */
-export const MARKER_SCALE_STEPS = -1 as number;
+export const MARKER_SCALE_STEP = -1 as number;

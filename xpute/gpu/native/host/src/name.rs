@@ -8,12 +8,12 @@ use serde::de::value::{Error as NameError, StrDeserializer};
 use serde::de::{DeserializeOwned, IntoDeserializer};
 
 use xpute_gpu_link::enums::{
-    ADDRESS_MODE, BLEND_FACTOR, BLEND_OPERATION, COMPARE_FUNCTION, FILTER_MODE, FRONT_FACE,
-    INDEX_FORMAT, MIPMAP_FILTER_MODE, PRIMITIVE_TOPOLOGY, SAMPLER_BINDING_TYPE, STENCIL_OPERATION,
-    STORAGE_TEXTURE_ACCESS, TEXTURE_ASPECT, TEXTURE_DIMENSION, TEXTURE_FORMAT,
-    TEXTURE_VIEW_DIMENSION, VERTEX_FORMAT, VERTEX_STEP_MODE,
+    ADDRESS_MODES, BLEND_FACTORS, BLEND_OPERATIONS, COMPARE_FUNCTIONS, FILTER_MODES, FRONT_FACES,
+    INDEX_FORMATS, MIPMAP_FILTER_MODES, PRIMITIVE_TOPOLOGIES, SAMPLER_BINDING_TYPES,
+    STENCIL_OPERATIONS, STORAGE_TEXTURE_ACCESSES, TEXTURE_ASPECTS, TEXTURE_DIMENSIONS,
+    TEXTURE_FORMATS, TEXTURE_VIEW_DIMENSIONS, VERTEX_FORMATS, VERTEX_STEP_MODES,
 };
-use xpute_gpu_link::spec::{BUFFER_USAGE, COLOR_WRITE, SHADER_STAGE, TEXTURE_USAGE};
+use xpute_gpu_link::spec::{buffer_usage, color_write, shader_stage, texture_usage};
 
 /// These are each enumeration's wgpu values, indexed by place in the spec's
 /// list. A name wgpu has no value for is None.
@@ -51,24 +51,24 @@ fn named<T: DeserializeOwned>(names: &[&str]) -> Vec<Option<T>> {
 impl EnumTable {
     pub(super) fn new() -> EnumTable {
         EnumTable {
-            texture_format: named(TEXTURE_FORMAT),
-            vertex_format: named(VERTEX_FORMAT),
-            topology: named(PRIMITIVE_TOPOLOGY),
-            index_format: named(INDEX_FORMAT),
-            front_face: named(FRONT_FACE),
-            compare: named(COMPARE_FUNCTION),
-            stencil: named(STENCIL_OPERATION),
-            blend_operation: named(BLEND_OPERATION),
-            blend_factor: named(BLEND_FACTOR),
-            step: named(VERTEX_STEP_MODE),
-            addr: named(ADDRESS_MODE),
-            filter: named(FILTER_MODE),
-            mipmap: named(MIPMAP_FILTER_MODE),
-            dimension: named(TEXTURE_DIMENSION),
-            view_dimension: named(TEXTURE_VIEW_DIMENSION),
-            aspect: named(TEXTURE_ASPECT),
-            sampler_binding: named(SAMPLER_BINDING_TYPE),
-            storage_access: named(STORAGE_TEXTURE_ACCESS),
+            texture_format: named(TEXTURE_FORMATS),
+            vertex_format: named(VERTEX_FORMATS),
+            topology: named(PRIMITIVE_TOPOLOGIES),
+            index_format: named(INDEX_FORMATS),
+            front_face: named(FRONT_FACES),
+            compare: named(COMPARE_FUNCTIONS),
+            stencil: named(STENCIL_OPERATIONS),
+            blend_operation: named(BLEND_OPERATIONS),
+            blend_factor: named(BLEND_FACTORS),
+            step: named(VERTEX_STEP_MODES),
+            addr: named(ADDRESS_MODES),
+            filter: named(FILTER_MODES),
+            mipmap: named(MIPMAP_FILTER_MODES),
+            dimension: named(TEXTURE_DIMENSIONS),
+            view_dimension: named(TEXTURE_VIEW_DIMENSIONS),
+            aspect: named(TEXTURE_ASPECTS),
+            sampler_binding: named(SAMPLER_BINDING_TYPES),
+            storage_access: named(STORAGE_TEXTURE_ACCESSES),
         }
     }
 }
@@ -77,47 +77,47 @@ impl EnumTable {
 /// sets. Each flag is mapped by name rather than by bit, since wgpu's bits
 /// need not be WebGPU's: wgpu's trunk splits them over two words.
 pub(super) const BUFFER_USAGES: [(u32, wgpu::BufferUsages); 10] = [
-    (BUFFER_USAGE::MAP_READ, wgpu::BufferUsages::MAP_READ),
-    (BUFFER_USAGE::MAP_WRITE, wgpu::BufferUsages::MAP_WRITE),
-    (BUFFER_USAGE::COPY_SRC, wgpu::BufferUsages::COPY_SRC),
-    (BUFFER_USAGE::COPY_DST, wgpu::BufferUsages::COPY_DST),
-    (BUFFER_USAGE::INDEX, wgpu::BufferUsages::INDEX),
-    (BUFFER_USAGE::VERTEX, wgpu::BufferUsages::VERTEX),
-    (BUFFER_USAGE::UNIFORM, wgpu::BufferUsages::UNIFORM),
-    (BUFFER_USAGE::STORAGE, wgpu::BufferUsages::STORAGE),
-    (BUFFER_USAGE::INDIRECT, wgpu::BufferUsages::INDIRECT),
+    (buffer_usage::MAP_READ, wgpu::BufferUsages::MAP_READ),
+    (buffer_usage::MAP_WRITE, wgpu::BufferUsages::MAP_WRITE),
+    (buffer_usage::COPY_SRC, wgpu::BufferUsages::COPY_SRC),
+    (buffer_usage::COPY_DST, wgpu::BufferUsages::COPY_DST),
+    (buffer_usage::INDEX, wgpu::BufferUsages::INDEX),
+    (buffer_usage::VERTEX, wgpu::BufferUsages::VERTEX),
+    (buffer_usage::UNIFORM, wgpu::BufferUsages::UNIFORM),
+    (buffer_usage::STORAGE, wgpu::BufferUsages::STORAGE),
+    (buffer_usage::INDIRECT, wgpu::BufferUsages::INDIRECT),
     (
-        BUFFER_USAGE::QUERY_RESOLVE,
+        buffer_usage::QUERY_RESOLVE,
         wgpu::BufferUsages::QUERY_RESOLVE,
     ),
 ];
 pub(super) const TEXTURE_USAGES: [(u32, wgpu::TextureUsages); 5] = [
-    (TEXTURE_USAGE::COPY_SRC, wgpu::TextureUsages::COPY_SRC),
-    (TEXTURE_USAGE::COPY_DST, wgpu::TextureUsages::COPY_DST),
+    (texture_usage::COPY_SRC, wgpu::TextureUsages::COPY_SRC),
+    (texture_usage::COPY_DST, wgpu::TextureUsages::COPY_DST),
     (
-        TEXTURE_USAGE::TEXTURE_BINDING,
+        texture_usage::TEXTURE_BINDING,
         wgpu::TextureUsages::TEXTURE_BINDING,
     ),
     (
-        TEXTURE_USAGE::STORAGE_BINDING,
+        texture_usage::STORAGE_BINDING,
         wgpu::TextureUsages::STORAGE_BINDING,
     ),
     (
-        TEXTURE_USAGE::RENDER_ATTACHMENT,
+        texture_usage::RENDER_ATTACHMENT,
         wgpu::TextureUsages::RENDER_ATTACHMENT,
     ),
 ];
 pub(super) const SHADER_STAGES: [(u32, wgpu::ShaderStages); 3] = [
-    (SHADER_STAGE::VERTEX, wgpu::ShaderStages::VERTEX),
-    (SHADER_STAGE::FRAGMENT, wgpu::ShaderStages::FRAGMENT),
-    (SHADER_STAGE::COMPUTE, wgpu::ShaderStages::COMPUTE),
+    (shader_stage::VERTEX, wgpu::ShaderStages::VERTEX),
+    (shader_stage::FRAGMENT, wgpu::ShaderStages::FRAGMENT),
+    (shader_stage::COMPUTE, wgpu::ShaderStages::COMPUTE),
 ];
 pub(super) const COLOR_WRITES: [(u32, wgpu::ColorWrites); 5] = [
-    (COLOR_WRITE::RED, wgpu::ColorWrites::RED),
-    (COLOR_WRITE::GREEN, wgpu::ColorWrites::GREEN),
-    (COLOR_WRITE::BLUE, wgpu::ColorWrites::BLUE),
-    (COLOR_WRITE::ALPHA, wgpu::ColorWrites::ALPHA),
-    (COLOR_WRITE::ALL, wgpu::ColorWrites::ALL),
+    (color_write::RED, wgpu::ColorWrites::RED),
+    (color_write::GREEN, wgpu::ColorWrites::GREEN),
+    (color_write::BLUE, wgpu::ColorWrites::BLUE),
+    (color_write::ALPHA, wgpu::ColorWrites::ALPHA),
+    (color_write::ALL, wgpu::ColorWrites::ALL),
 ];
 
 pub(super) fn flags<F: Copy + core::ops::BitOr<Output = F>>(

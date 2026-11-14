@@ -44,7 +44,7 @@ fn drawn_within_the_floor() {
                 let tiles = [w, h].map(|v| v.div_ceil(TILE) + 1);
                 let area = f64::from(w) * f64::from(h) > 0.99 * f64::from(DRAWN_AREA);
                 assert!(
-                    side || area || tiles[0] * tiles[1] > WORKGROUPS_CAP,
+                    side || area || tiles[0] * tiles[1] > WORKGROUP_CAP,
                     "{px:?} at {share}: {w}x{h} short of the most"
                 );
             }

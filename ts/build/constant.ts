@@ -2,12 +2,12 @@
 
 /**
  * What a release build writes as values: each `export const` that is a
- * literal or an expression of literals, read through an import, so that the
- * bundle holds the number and not its name. Metro compiles one file at a time
- * and keeps every export by name, so a use is resolved here, through the
- * import that names it. A file with a
- * platform's own variant beside it is not read, since which one a build takes
- * is the resolver's to say.
+ * literal or an expression of literals, read through an import or in its own
+ * module, so that the bundle holds the number and not its name. Metro compiles
+ * one file at a time, so a use is resolved here, through the import that names
+ * it or the module's own binding, and an export no read names any more is left
+ * for tree shaking to drop. A file with a platform's own variant beside it is
+ * not read, since which one a build takes is the resolver's to say.
  */
 
 import { createHash } from "node:crypto";
@@ -134,6 +134,28 @@ function literal_of(e: Init | Node | undefined, names: Names): Literal | null {
   }
 }
 
+type Pattern = Declaration["declarations"][number]["id"];
+
+/** The names a declaration's pattern binds. */
+function names_in(p: Pattern | null): string[] {
+  switch (p?.type) {
+    case "Identifier":
+      return [p.name];
+    case "ObjectPattern":
+      return p.properties.flatMap((q) =>
+        names_in(q.type === "RestElement" ? q.argument : (q.value as Pattern)),
+      );
+    case "ArrayPattern":
+      return p.elements.flatMap((q) => names_in(q as Pattern | null));
+    case "AssignmentPattern":
+      return names_in(p.left);
+    case "RestElement":
+      return names_in(p.argument as Pattern);
+    default:
+      return [];
+  }
+}
+
 function read(file: string, m: Module): void {
   const { body } = parse(fs.readFileSync(file, "utf8"), {
     sourceType: "module",
@@ -171,6 +193,8 @@ function read(file: string, m: Module): void {
 
   let literals = 0;
   let others = 0;
+  // Every name the file exports itself.
+  const own = new Set<string>();
   for (const s of body) {
     if (s.type === "ExportDefaultDeclaration") others++;
     if (s.type !== "ExportNamedDeclaration" || s.exportKind === "type") {
@@ -179,6 +203,7 @@ function read(file: string, m: Module): void {
     const d = s.declaration;
     if (d?.type === "VariableDeclaration") {
       for (const v of d.declarations) {
+        for (const name of names_in(v.id)) own.add(name);
         const at =
           v.id.type === "Identifier" ? bound.get(v.id.name) : undefined;
         if (
@@ -191,9 +216,13 @@ function read(file: string, m: Module): void {
           literals++;
         } else others++;
       }
-    } else if (d) others++;
+    } else if (d) {
+      if ("id" in d && d.id?.type === "Identifier") own.add(d.id.name);
+      others++;
+    }
     const to = s.source ? near(s.source.value) : null;
     for (const e of s.specifiers) {
+      own.add(name_of(e.exported));
       others++;
       if (e.type === "ExportNamespaceSpecifier") {
         if (to) exports.set(e.exported.name, { file: to });
@@ -203,14 +232,15 @@ function read(file: string, m: Module): void {
       }
     }
   }
-  // A name a file exports itself comes before one it forwards whole.
+  // A name a file exports itself, whatever its value, hides one it forwards
+  // whole.
   for (const s of body) {
     if (s.type !== "ExportAllDeclaration" || s.exportKind === "type") continue;
     others++;
     const to = near(s.source.value);
     if (!to) continue;
     for (const [name, found] of module_of(to).exports) {
-      if (!exports.has(name)) exports.set(name, found);
+      if (!own.has(name) && !exports.has(name)) exports.set(name, found);
     }
   }
   m.pure = literals > 0 && others === 0;

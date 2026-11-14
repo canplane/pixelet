@@ -3,7 +3,9 @@
 //! Writes the TypeScript and Rust generated from `spec/` JSON: its data
 //! specs (data.rs) and its command table (cmd.rs) through xpute's generator,
 //! and what else it generates beside them. It links none of the crates it
-//! writes into, so it builds when their generated code is broken.
+//! writes into, so it builds when their generated code is broken. Its
+//! generators write through xpute-gen's writer and follow the code and naming
+//! skills.
 
 pub mod asset;
 pub(crate) mod bake;
@@ -17,8 +19,8 @@ pub mod setting;
 /// What xpute's generator writes and reads with, shared: the generated file,
 /// the JSON's tree, and the text helpers.
 pub use xpute_gen::spec::{
-    align_star, casing_note, enum_name, file, mark, js_num, json_str, line_comments, pascal,
-    rs_doc, rs_ident, snake, ts_doc, Node, Output,
+    align_star, file, mark, js_num, json_str, line_comments, pascal, plural, rs_doc, rs_field,
+    rs_const, rs_member, ts_doc, Node, Output,
 };
 
 /// `#rrggbb`, a color as the specs write one, as one number, `0xRRGGBB`, for

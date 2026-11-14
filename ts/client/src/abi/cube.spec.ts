@@ -16,38 +16,32 @@ export const BASE = 1 as Ground;
 /** The value space's own: what no palette entry or color is (pxl-spec value.rs). */
 export const sentinel = [
   {
-    name: "void",
+    number: 0 as number,
   },
   {
-    name: "unknown",
+    number: 255 as number,
   },
   {
-    name: "air",
+    number: 256 as number,
   },
 ] as const;
 
-export const Sentinel = {
-  /** Nothing is painted: the ground before a bake writes it, and an object cell no leaf holds. */
-  void: 0,
-  /** Bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-content strata.rs`). A cell past the area or the coverage, which no source here describes, reads as it and is drawn as nothing, and so is a byte no bake wrote. The value is 0xFF so that memory filled with 0xFF reads as unknown. Nothing is placed on it or taken from it. */
-  unknown: 255,
-  /** Explicit air: the leaf stays and erases the layers under it. */
-  air: 256,
-} as const;
-export type Sentinel = (typeof Sentinel)[keyof typeof Sentinel];
+export type Sentinel =
+  typeof SENTINEL_VOID | typeof SENTINEL_UNKNOWN | typeof SENTINEL_AIR;
+/** Nothing is painted: the ground before a bake writes it, and an object cell no leaf holds. */
+export const SENTINEL_VOID = 0;
+/** Bedrock, where the world holds no more: the floor under the ground and the wall just inside the service area (`pxl-content strata.rs`). A cell past the area or the coverage, which no source here describes, reads as it. It is solid and drawn as the bedrock's layer (pxl-render paint/palette.rs `SENTINELS`). Nothing is placed on it or taken from it. */
+export const SENTINEL_UNKNOWN = 255;
+/** Explicit air: the leaf stays and erases the layers under it. */
+export const SENTINEL_AIR = 256;
 
-/** The name of the `Sentinel` member numbered `n`, or undefined for a number
- * no member has. */
-export function sentinel_name(n: number): keyof typeof Sentinel | undefined {
-  for (const k in Sentinel)
-    if (Sentinel[k as keyof typeof Sentinel] === n)
-      return k as keyof typeof Sentinel;
-  return undefined;
-}
-
-/** The `Sentinel` member `n` is, or null for a number no member has. */
-export function sentinel_of(n: number): Sentinel | null {
-  return sentinel_name(n) === undefined ? null : (n as Sentinel);
+/** The member `val` is, or null for a number no member has. */
+export function of_Sentinel(val: number): Sentinel | null {
+  return val === SENTINEL_VOID ||
+    val === SENTINEL_UNKNOWN ||
+    val === SENTINEL_AIR
+    ? val
+    : null;
 }
 
 /** The ground: one byte a cell, a palette entry from OpenStreetMap Carto, numbered in
@@ -59,596 +53,724 @@ export function sentinel_of(n: number): Sentinel | null {
  * the underground, of which Carto paints nothing; 0 and 255 are the sentinels. */
 export const ground = [
   {
-    name: "land",
+    number: 1 as number,
     label: "Land",
     section: "landcover",
     transport: false,
   },
   {
-    name: "bare_ground",
+    number: 2 as number,
     label: "Bare Ground",
     section: "landcover",
     transport: false,
   },
   {
-    name: "sand",
+    number: 3 as number,
     label: "Sand",
     section: "landcover",
     transport: false,
   },
   {
-    name: "beach",
+    number: 4 as number,
     label: "Beach",
     section: "landcover",
     transport: false,
   },
   {
-    name: "heath",
+    number: 5 as number,
     label: "Heath",
     section: "landcover",
     transport: false,
   },
   {
-    name: "scrub",
+    number: 6 as number,
     label: "Scrub",
     section: "landcover",
     transport: false,
   },
   {
-    name: "grass",
+    number: 7 as number,
     label: "Grass",
     section: "landcover",
     transport: false,
   },
   {
-    name: "park",
+    number: 8 as number,
     label: "Park",
     section: "landcover",
     transport: false,
   },
   {
-    name: "leisure",
+    number: 9 as number,
     label: "Leisure",
     section: "landcover",
     transport: false,
   },
   {
-    name: "pitch",
+    number: 10 as number,
     label: "Pitch",
     section: "landcover",
     transport: false,
   },
   {
-    name: "forest",
+    number: 11 as number,
     label: "Forest",
     section: "landcover",
     transport: false,
   },
   {
-    name: "orchard",
+    number: 12 as number,
     label: "Orchard",
     section: "landcover",
     transport: false,
   },
   {
-    name: "allotments",
+    number: 13 as number,
     label: "Allotments",
     section: "landcover",
     transport: false,
   },
   {
-    name: "farmland",
+    number: 14 as number,
     label: "Farmland",
     section: "landcover",
     transport: false,
   },
   {
-    name: "farmyard",
+    number: 15 as number,
     label: "Farmyard",
     section: "landcover",
     transport: false,
   },
   {
-    name: "campsite",
+    number: 16 as number,
     label: "Campsite",
     section: "landcover",
     transport: false,
   },
   {
-    name: "cemetery",
+    number: 17 as number,
     label: "Cemetery",
     section: "landcover",
     transport: false,
   },
   {
-    name: "residential",
+    number: 18 as number,
     label: "Residential",
     section: "landcover",
     transport: false,
   },
   {
-    name: "garages",
+    number: 19 as number,
     label: "Garages",
     section: "landcover",
     transport: false,
   },
   {
-    name: "retail",
+    number: 20 as number,
     label: "Retail",
     section: "landcover",
     transport: false,
   },
   {
-    name: "commercial",
+    number: 21 as number,
     label: "Commercial",
     section: "landcover",
     transport: false,
   },
   {
-    name: "industrial",
+    number: 22 as number,
     label: "Industrial",
     section: "landcover",
     transport: false,
   },
   {
-    name: "power",
+    number: 23 as number,
     label: "Power",
     section: "landcover",
     transport: false,
   },
   {
-    name: "landfill",
+    number: 24 as number,
     label: "Landfill",
     section: "landcover",
     transport: false,
   },
   {
-    name: "quarry",
+    number: 25 as number,
     label: "Quarry",
     section: "landcover",
     transport: false,
   },
   {
-    name: "societal_amenities",
+    number: 26 as number,
     label: "Societal Amenities",
     section: "landcover",
     transport: false,
   },
   {
-    name: "place_of_worship",
+    number: 27 as number,
     label: "Place of Worship",
     section: "landcover",
     transport: false,
   },
   {
-    name: "transportation_area",
+    number: 28 as number,
     label: "Transportation Area",
     section: "landcover",
     transport: false,
   },
   {
-    name: "parking",
+    number: 29 as number,
     label: "Parking",
     section: "landcover",
     transport: false,
   },
   {
-    name: "apron",
+    number: 30 as number,
     label: "Apron",
     section: "landcover",
     transport: false,
   },
   {
-    name: "glacier",
+    number: 31 as number,
     label: "Glacier",
     section: "water",
     transport: false,
   },
   {
-    name: "water",
+    number: 32 as number,
     label: "Water",
     section: "water",
     transport: false,
   },
   {
-    name: "dam",
+    number: 33 as number,
     label: "Dam",
     section: "water_features",
     transport: false,
   },
   {
-    name: "breakwater",
+    number: 34 as number,
     label: "Breakwater",
     section: "water_features",
     transport: false,
   },
   {
-    name: "building",
+    number: 35 as number,
     label: "Building",
     section: "buildings",
     transport: false,
   },
   {
-    name: "building_major",
+    number: 36 as number,
     label: "Major Building",
     section: "buildings",
     transport: false,
   },
   {
-    name: "footway",
+    number: 37 as number,
     label: "Footway",
     section: "roads",
     transport: true,
   },
   {
-    name: "cycleway",
+    number: 38 as number,
     label: "Cycleway",
     section: "roads",
     transport: true,
   },
   {
-    name: "bridleway",
+    number: 39 as number,
     label: "Bridleway",
     section: "roads",
     transport: true,
   },
   {
-    name: "track",
+    number: 40 as number,
     label: "Track",
     section: "roads",
     transport: true,
   },
   {
-    name: "pedestrian",
+    number: 41 as number,
     label: "Pedestrian Street",
     section: "roads",
     transport: true,
   },
   {
-    name: "living_street",
+    number: 42 as number,
     label: "Living Street",
     section: "roads",
     transport: true,
   },
   {
-    name: "residential_road",
+    number: 43 as number,
     label: "Residential Road",
     section: "roads",
     transport: true,
   },
   {
-    name: "road",
+    number: 44 as number,
     label: "Road",
     section: "roads",
     transport: true,
   },
   {
-    name: "secondary",
+    number: 45 as number,
     label: "Secondary Road",
     section: "roads",
     transport: true,
   },
   {
-    name: "primary",
+    number: 46 as number,
     label: "Primary Road",
     section: "roads",
     transport: true,
   },
   {
-    name: "trunk",
+    number: 47 as number,
     label: "Trunk Road",
     section: "roads",
     transport: true,
   },
   {
-    name: "motorway",
+    number: 48 as number,
     label: "Motorway",
     section: "roads",
     transport: true,
   },
   {
-    name: "platform",
+    number: 49 as number,
     label: "Platform",
     section: "roads",
     transport: true,
   },
   {
-    name: "tram",
+    number: 50 as number,
     label: "Tram",
     section: "roads",
     transport: true,
   },
   {
-    name: "light_rail",
+    number: 51 as number,
     label: "Light Rail",
     section: "roads",
     transport: true,
   },
   {
-    name: "subway",
+    number: 52 as number,
     label: "Subway",
     section: "roads",
     transport: true,
   },
   {
-    name: "monorail",
+    number: 53 as number,
     label: "Monorail",
     section: "roads",
     transport: true,
   },
   {
-    name: "rail",
+    number: 54 as number,
     label: "Railway",
     section: "roads",
     transport: true,
   },
   {
-    name: "aeroway",
+    number: 55 as number,
     label: "Runway",
     section: "aeroways",
     transport: true,
   },
   {
-    name: "soil",
+    number: 64 as number,
     label: "Dirt",
     section: "underground",
     transport: false,
   },
   {
-    name: "sandstone",
+    number: 65 as number,
     label: "Sandstone",
     section: "underground",
     transport: false,
   },
   {
-    name: "stone",
+    number: 66 as number,
     label: "Stone",
     section: "underground",
     transport: false,
   },
 ] as const;
 
-export const Ground = {
-  /** Land no feature covers, and what Carto draws no fill for, takes Carto's background, @land-color. */
-  land: 1,
-  /** Bare rock, scree and shingle take Carto's @bare_ground. */
-  bare_ground: 2,
-  /** Sand takes Carto's @sand. */
-  sand: 3,
-  /** Beach and shoal take Carto's @beach. */
-  beach: 4,
-  /** Heath and bog take Carto's @heath. */
-  heath: 5,
-  /** Scrub and mangrove take Carto's @scrub. */
-  scrub: 6,
-  /** Grass, meadow, garden, village green, marsh and wet meadow take Carto's @grass. */
-  grass: 7,
-  /** A park takes Carto's @park. */
-  park: 8,
-  /** A playground, recreation ground, stadium or sports center takes Carto's @leisure, lighten(@park, 5%). */
-  leisure: 9,
-  /** A pitch or a track takes Carto's @pitch. */
-  pitch: 10,
-  /** Forest, wood and swamp take Carto's @forest. */
-  forest: 11,
-  /** An orchard, vineyard or plant nursery takes Carto's @orchard. */
-  orchard: 12,
-  /** Allotments take Carto's @allotments. */
-  allotments: 13,
-  /** Farmland and greenhouses take Carto's @farmland. */
-  farmland: 14,
-  /** A farmyard takes Carto's @farmyard. */
-  farmyard: 15,
-  /** A campsite or golf course takes Carto's @campsite. */
-  campsite: 16,
-  /** A cemetery or grave yard takes Carto's @cemetery. */
-  cemetery: 17,
-  /** Residential land takes Carto's @residential. */
-  residential: 18,
-  /** Garages take Carto's @garages. */
-  garages: 19,
-  /** Retail land takes Carto's @retail. */
-  retail: 20,
-  /** Commercial land takes Carto's @commercial. */
-  commercial: 21,
-  /** Industrial land, railway land and works take Carto's @industrial. */
-  industrial: 22,
-  /** A power plant or substation takes Carto's @power, darken(@industrial, 5%). */
-  power: 23,
-  /** Landfill takes Carto's landuse_landfill, a value with no name. */
-  landfill: 24,
-  /** A quarry takes Carto's @quarry. */
-  quarry: 25,
-  /** A school, college, university, hospital or clinic takes Carto's @societal_amenities. */
-  societal_amenities: 26,
-  /** A religious site takes Carto's @place_of_worship. */
-  place_of_worship: 27,
-  /** An aerodrome, bus station or ferry terminal takes Carto's @transportation-area. */
-  transportation_area: 28,
-  /** Parking takes Carto's @parking. */
-  parking: 29,
-  /** An apron takes Carto's @apron. */
-  apron: 30,
-  /** A glacier takes Carto's @glacier; Carto draws it with the water areas. */
-  glacier: 31,
-  /** Sea, lake, river, canal and any other water take Carto's @water-color. */
-  water: 32,
-  /** A dam takes Carto's @dam. */
-  dam: 33,
-  /** A breakwater, groyne or weir takes Carto's @breakwater-color or @weir-line. */
-  breakwater: 34,
-  /** A building takes Carto's @building-fill. */
-  building: 35,
-  /** A place of worship, a terminal or a station takes Carto's @building-major-fill at z16 and finer, as a cell is z16. */
-  building_major: 36,
-  /** Footways, steps and paths take Carto's @footway-fill or @steps-fill. */
-  footway: 37,
-  /** A cycleway takes Carto's @cycleway-fill. */
-  cycleway: 38,
-  /** A bridleway takes Carto's @bridleway-fill. */
-  bridleway: 39,
-  /** A track, an agricultural or forest way, takes Carto's @track-fill. */
-  track: 40,
-  /** A pedestrian street takes Carto's @pedestrian-fill. */
-  pedestrian: 41,
-  /** A living street takes Carto's @living-street-fill. */
-  living_street: 42,
-  /** A tertiary, residential, unclassified or service road takes Carto's @tertiary-fill, @residential-fill or @service-fill, told apart by width. */
-  residential_road: 43,
-  /** A road of no known class takes Carto's @road-fill. */
-  road: 44,
-  /** A secondary road takes Carto's @secondary-fill. */
-  secondary: 45,
-  /** A primary road takes Carto's @primary-fill. */
-  primary: 46,
-  /** A trunk road takes Carto's @trunk-fill. */
-  trunk: 47,
-  /** A motorway takes Carto's @motorway-fill. */
-  motorway: 48,
-  /** A platform takes Carto's @platform-fill. */
-  platform: 49,
-  /** A tram takes Carto's railway_tram, a value with no name. */
-  tram: 50,
-  /** Light rail, narrow gauge and funicular take Carto's railway_light_rail, a value with no name. */
-  light_rail: 51,
-  /** A subway takes Carto's railway_subway, a value with no name. */
-  subway: 52,
-  /** A monorail takes Carto's railway_monorail, a value with no name. */
-  monorail: 53,
-  /** A railway takes Carto's railway_rail, a value with no name. */
-  rail: 54,
-  /** A runway, taxiway or helipad takes Carto's @aeroway-fill, @runway-fill, @taxiway-fill or @helipad-fill. */
-  aeroway: 55,
-  /** What lies under a face: Minecraft Beta's filler, dirt. Carto paints nothing under the ground, and no bake writes it. */
-  soil: 64,
-  /** What lies under sand's filler: Minecraft Beta's sandstone. */
-  sandstone: 65,
-  /** What lies under the filler: Minecraft Beta's stone. */
-  stone: 66,
-} as const;
-export type Ground = (typeof Ground)[keyof typeof Ground];
+export type Ground =
+  | typeof GROUND_LAND
+  | typeof GROUND_BARE_GROUND
+  | typeof GROUND_SAND
+  | typeof GROUND_BEACH
+  | typeof GROUND_HEATH
+  | typeof GROUND_SCRUB
+  | typeof GROUND_GRASS
+  | typeof GROUND_PARK
+  | typeof GROUND_LEISURE
+  | typeof GROUND_PITCH
+  | typeof GROUND_FOREST
+  | typeof GROUND_ORCHARD
+  | typeof GROUND_ALLOTMENTS
+  | typeof GROUND_FARMLAND
+  | typeof GROUND_FARMYARD
+  | typeof GROUND_CAMPSITE
+  | typeof GROUND_CEMETERY
+  | typeof GROUND_RESIDENTIAL
+  | typeof GROUND_GARAGES
+  | typeof GROUND_RETAIL
+  | typeof GROUND_COMMERCIAL
+  | typeof GROUND_INDUSTRIAL
+  | typeof GROUND_POWER
+  | typeof GROUND_LANDFILL
+  | typeof GROUND_QUARRY
+  | typeof GROUND_SOCIETAL_AMENITIES
+  | typeof GROUND_PLACE_OF_WORSHIP
+  | typeof GROUND_TRANSPORTATION_AREA
+  | typeof GROUND_PARKING
+  | typeof GROUND_APRON
+  | typeof GROUND_GLACIER
+  | typeof GROUND_WATER
+  | typeof GROUND_DAM
+  | typeof GROUND_BREAKWATER
+  | typeof GROUND_BUILDING
+  | typeof GROUND_BUILDING_MAJOR
+  | typeof GROUND_FOOTWAY
+  | typeof GROUND_CYCLEWAY
+  | typeof GROUND_BRIDLEWAY
+  | typeof GROUND_TRACK
+  | typeof GROUND_PEDESTRIAN
+  | typeof GROUND_LIVING_STREET
+  | typeof GROUND_RESIDENTIAL_ROAD
+  | typeof GROUND_ROAD
+  | typeof GROUND_SECONDARY
+  | typeof GROUND_PRIMARY
+  | typeof GROUND_TRUNK
+  | typeof GROUND_MOTORWAY
+  | typeof GROUND_PLATFORM
+  | typeof GROUND_TRAM
+  | typeof GROUND_LIGHT_RAIL
+  | typeof GROUND_SUBWAY
+  | typeof GROUND_MONORAIL
+  | typeof GROUND_RAIL
+  | typeof GROUND_AEROWAY
+  | typeof GROUND_SOIL
+  | typeof GROUND_SANDSTONE
+  | typeof GROUND_STONE;
+/** Land no feature covers, and what Carto draws no fill for, takes Carto's background, @land-color. */
+export const GROUND_LAND = 1;
+/** Bare rock, scree and shingle take Carto's @bare_ground. */
+export const GROUND_BARE_GROUND = 2;
+/** Sand takes Carto's @sand. */
+export const GROUND_SAND = 3;
+/** Beach and shoal take Carto's @beach. */
+export const GROUND_BEACH = 4;
+/** Heath and bog take Carto's @heath. */
+export const GROUND_HEATH = 5;
+/** Scrub and mangrove take Carto's @scrub. */
+export const GROUND_SCRUB = 6;
+/** Grass, meadow, garden, village green, marsh and wet meadow take Carto's @grass. */
+export const GROUND_GRASS = 7;
+/** A park takes Carto's @park. */
+export const GROUND_PARK = 8;
+/** A playground, recreation ground, stadium or sports center takes Carto's @leisure, lighten(@park, 5%). */
+export const GROUND_LEISURE = 9;
+/** A pitch or a track takes Carto's @pitch. */
+export const GROUND_PITCH = 10;
+/** Forest, wood and swamp take Carto's @forest. */
+export const GROUND_FOREST = 11;
+/** An orchard, vineyard or plant nursery takes Carto's @orchard. */
+export const GROUND_ORCHARD = 12;
+/** Allotments take Carto's @allotments. */
+export const GROUND_ALLOTMENTS = 13;
+/** Farmland and greenhouses take Carto's @farmland. */
+export const GROUND_FARMLAND = 14;
+/** A farmyard takes Carto's @farmyard. */
+export const GROUND_FARMYARD = 15;
+/** A campsite or golf course takes Carto's @campsite. */
+export const GROUND_CAMPSITE = 16;
+/** A cemetery or grave yard takes Carto's @cemetery. */
+export const GROUND_CEMETERY = 17;
+/** Residential land takes Carto's @residential. */
+export const GROUND_RESIDENTIAL = 18;
+/** Garages take Carto's @garages. */
+export const GROUND_GARAGES = 19;
+/** Retail land takes Carto's @retail. */
+export const GROUND_RETAIL = 20;
+/** Commercial land takes Carto's @commercial. */
+export const GROUND_COMMERCIAL = 21;
+/** Industrial land, railway land and works take Carto's @industrial. */
+export const GROUND_INDUSTRIAL = 22;
+/** A power plant or substation takes Carto's @power, darken(@industrial, 5%). */
+export const GROUND_POWER = 23;
+/** Landfill takes Carto's landuse_landfill, a value with no name. */
+export const GROUND_LANDFILL = 24;
+/** A quarry takes Carto's @quarry. */
+export const GROUND_QUARRY = 25;
+/** A school, college, university, hospital or clinic takes Carto's @societal_amenities. */
+export const GROUND_SOCIETAL_AMENITIES = 26;
+/** A religious site takes Carto's @place_of_worship. */
+export const GROUND_PLACE_OF_WORSHIP = 27;
+/** An aerodrome, bus station or ferry terminal takes Carto's @transportation-area. */
+export const GROUND_TRANSPORTATION_AREA = 28;
+/** Parking takes Carto's @parking. */
+export const GROUND_PARKING = 29;
+/** An apron takes Carto's @apron. */
+export const GROUND_APRON = 30;
+/** A glacier takes Carto's @glacier; Carto draws it with the water areas. */
+export const GROUND_GLACIER = 31;
+/** Sea, lake, river, canal and any other water take Carto's @water-color. */
+export const GROUND_WATER = 32;
+/** A dam takes Carto's @dam. */
+export const GROUND_DAM = 33;
+/** A breakwater, groyne or weir takes Carto's @breakwater-color or @weir-line. */
+export const GROUND_BREAKWATER = 34;
+/** A building takes Carto's @building-fill. */
+export const GROUND_BUILDING = 35;
+/** A place of worship, a terminal or a station takes Carto's @building-major-fill at z16 and finer, as a cell is z16. */
+export const GROUND_BUILDING_MAJOR = 36;
+/** Footways, steps and paths take Carto's @footway-fill or @steps-fill. */
+export const GROUND_FOOTWAY = 37;
+/** A cycleway takes Carto's @cycleway-fill. */
+export const GROUND_CYCLEWAY = 38;
+/** A bridleway takes Carto's @bridleway-fill. */
+export const GROUND_BRIDLEWAY = 39;
+/** A track, an agricultural or forest way, takes Carto's @track-fill. */
+export const GROUND_TRACK = 40;
+/** A pedestrian street takes Carto's @pedestrian-fill. */
+export const GROUND_PEDESTRIAN = 41;
+/** A living street takes Carto's @living-street-fill. */
+export const GROUND_LIVING_STREET = 42;
+/** A tertiary, residential, unclassified or service road takes Carto's @tertiary-fill, @residential-fill or @service-fill, told apart by width. */
+export const GROUND_RESIDENTIAL_ROAD = 43;
+/** A road of no known class takes Carto's @road-fill. */
+export const GROUND_ROAD = 44;
+/** A secondary road takes Carto's @secondary-fill. */
+export const GROUND_SECONDARY = 45;
+/** A primary road takes Carto's @primary-fill. */
+export const GROUND_PRIMARY = 46;
+/** A trunk road takes Carto's @trunk-fill. */
+export const GROUND_TRUNK = 47;
+/** A motorway takes Carto's @motorway-fill. */
+export const GROUND_MOTORWAY = 48;
+/** A platform takes Carto's @platform-fill. */
+export const GROUND_PLATFORM = 49;
+/** A tram takes Carto's railway_tram, a value with no name. */
+export const GROUND_TRAM = 50;
+/** Light rail, narrow gauge and funicular take Carto's railway_light_rail, a value with no name. */
+export const GROUND_LIGHT_RAIL = 51;
+/** A subway takes Carto's railway_subway, a value with no name. */
+export const GROUND_SUBWAY = 52;
+/** A monorail takes Carto's railway_monorail, a value with no name. */
+export const GROUND_MONORAIL = 53;
+/** A railway takes Carto's railway_rail, a value with no name. */
+export const GROUND_RAIL = 54;
+/** A runway, taxiway or helipad takes Carto's @aeroway-fill, @runway-fill, @taxiway-fill or @helipad-fill. */
+export const GROUND_AEROWAY = 55;
+/** What lies under a face: Minecraft Beta's filler, dirt. Carto paints nothing under the ground, and no bake writes it. */
+export const GROUND_SOIL = 64;
+/** What lies under sand's filler: Minecraft Beta's sandstone. */
+export const GROUND_SANDSTONE = 65;
+/** What lies under the filler: Minecraft Beta's stone. */
+export const GROUND_STONE = 66;
 
-/** The name of the `Ground` member numbered `n`, or undefined for a number
- * no member has. */
-export function ground_name(n: number): keyof typeof Ground | undefined {
-  for (const k in Ground)
-    if (Ground[k as keyof typeof Ground] === n) return k as keyof typeof Ground;
-  return undefined;
-}
-
-/** The `Ground` member `n` is, or null for a number no member has. */
-export function ground_of(n: number): Ground | null {
-  return ground_name(n) === undefined ? null : (n as Ground);
+/** The member `val` is, or null for a number no member has. */
+export function of_Ground(val: number): Ground | null {
+  return val === GROUND_LAND ||
+    val === GROUND_BARE_GROUND ||
+    val === GROUND_SAND ||
+    val === GROUND_BEACH ||
+    val === GROUND_HEATH ||
+    val === GROUND_SCRUB ||
+    val === GROUND_GRASS ||
+    val === GROUND_PARK ||
+    val === GROUND_LEISURE ||
+    val === GROUND_PITCH ||
+    val === GROUND_FOREST ||
+    val === GROUND_ORCHARD ||
+    val === GROUND_ALLOTMENTS ||
+    val === GROUND_FARMLAND ||
+    val === GROUND_FARMYARD ||
+    val === GROUND_CAMPSITE ||
+    val === GROUND_CEMETERY ||
+    val === GROUND_RESIDENTIAL ||
+    val === GROUND_GARAGES ||
+    val === GROUND_RETAIL ||
+    val === GROUND_COMMERCIAL ||
+    val === GROUND_INDUSTRIAL ||
+    val === GROUND_POWER ||
+    val === GROUND_LANDFILL ||
+    val === GROUND_QUARRY ||
+    val === GROUND_SOCIETAL_AMENITIES ||
+    val === GROUND_PLACE_OF_WORSHIP ||
+    val === GROUND_TRANSPORTATION_AREA ||
+    val === GROUND_PARKING ||
+    val === GROUND_APRON ||
+    val === GROUND_GLACIER ||
+    val === GROUND_WATER ||
+    val === GROUND_DAM ||
+    val === GROUND_BREAKWATER ||
+    val === GROUND_BUILDING ||
+    val === GROUND_BUILDING_MAJOR ||
+    val === GROUND_FOOTWAY ||
+    val === GROUND_CYCLEWAY ||
+    val === GROUND_BRIDLEWAY ||
+    val === GROUND_TRACK ||
+    val === GROUND_PEDESTRIAN ||
+    val === GROUND_LIVING_STREET ||
+    val === GROUND_RESIDENTIAL_ROAD ||
+    val === GROUND_ROAD ||
+    val === GROUND_SECONDARY ||
+    val === GROUND_PRIMARY ||
+    val === GROUND_TRUNK ||
+    val === GROUND_MOTORWAY ||
+    val === GROUND_PLATFORM ||
+    val === GROUND_TRAM ||
+    val === GROUND_LIGHT_RAIL ||
+    val === GROUND_SUBWAY ||
+    val === GROUND_MONORAIL ||
+    val === GROUND_RAIL ||
+    val === GROUND_AEROWAY ||
+    val === GROUND_SOIL ||
+    val === GROUND_SANDSTONE ||
+    val === GROUND_STONE
+    ? val
+    : null;
 }
 
 /** What only an object can be: past a byte, so no ground cell holds it. An
  * object's value is a u16 whose byte range is the ground's palette. */
 export const object = [
   {
-    name: "white",
+    number: 257 as number,
     label: "White",
     section: "colors",
   },
   {
-    name: "grey",
+    number: 258 as number,
     label: "Gray",
     section: "colors",
   },
   {
-    name: "dark_grey",
+    number: 259 as number,
     label: "Dark Gray",
     section: "colors",
   },
   {
-    name: "black",
+    number: 260 as number,
     label: "Black",
     section: "colors",
   },
   {
-    name: "red",
+    number: 261 as number,
     label: "Red",
     section: "colors",
   },
   {
-    name: "orange",
+    number: 262 as number,
     label: "Orange",
     section: "colors",
   },
   {
-    name: "brown",
+    number: 263 as number,
     label: "Brown",
     section: "colors",
   },
   {
-    name: "yellow",
+    number: 264 as number,
     label: "Yellow",
     section: "colors",
   },
   {
-    name: "green",
+    number: 265 as number,
     label: "Green",
     section: "colors",
   },
   {
-    name: "dark_green",
+    number: 266 as number,
     label: "Dark Green",
     section: "colors",
   },
   {
-    name: "cyan",
+    number: 267 as number,
     label: "Cyan",
     section: "colors",
   },
   {
-    name: "blue",
+    number: 268 as number,
     label: "Blue",
     section: "colors",
   },
   {
-    name: "violet",
+    number: 269 as number,
     label: "Violet",
     section: "colors",
   },
   {
-    name: "magenta",
+    number: 270 as number,
     label: "Magenta",
     section: "colors",
   },
   {
-    name: "pink",
+    number: 271 as number,
     label: "Pink",
     section: "colors",
   },
 ] as const;
 
-export const Object = {
-  white: 257,
-  grey: 258,
-  dark_grey: 259,
-  black: 260,
-  red: 261,
-  orange: 262,
-  brown: 263,
-  yellow: 264,
-  green: 265,
-  dark_green: 266,
-  cyan: 267,
-  blue: 268,
-  violet: 269,
-  magenta: 270,
-  pink: 271,
-} as const;
-export type Object = (typeof Object)[keyof typeof Object];
+export type Object =
+  | typeof OBJECT_WHITE
+  | typeof OBJECT_GREY
+  | typeof OBJECT_DARK_GREY
+  | typeof OBJECT_BLACK
+  | typeof OBJECT_RED
+  | typeof OBJECT_ORANGE
+  | typeof OBJECT_BROWN
+  | typeof OBJECT_YELLOW
+  | typeof OBJECT_GREEN
+  | typeof OBJECT_DARK_GREEN
+  | typeof OBJECT_CYAN
+  | typeof OBJECT_BLUE
+  | typeof OBJECT_VIOLET
+  | typeof OBJECT_MAGENTA
+  | typeof OBJECT_PINK;
+export const OBJECT_WHITE = 257;
+export const OBJECT_GREY = 258;
+export const OBJECT_DARK_GREY = 259;
+export const OBJECT_BLACK = 260;
+export const OBJECT_RED = 261;
+export const OBJECT_ORANGE = 262;
+export const OBJECT_BROWN = 263;
+export const OBJECT_YELLOW = 264;
+export const OBJECT_GREEN = 265;
+export const OBJECT_DARK_GREEN = 266;
+export const OBJECT_CYAN = 267;
+export const OBJECT_BLUE = 268;
+export const OBJECT_VIOLET = 269;
+export const OBJECT_MAGENTA = 270;
+export const OBJECT_PINK = 271;
 
-/** The name of the `Object` member numbered `n`, or undefined for a number
- * no member has. */
-export function object_name(n: number): keyof typeof Object | undefined {
-  for (const k in Object)
-    if (Object[k as keyof typeof Object] === n) return k as keyof typeof Object;
-  return undefined;
-}
-
-/** The `Object` member `n` is, or null for a number no member has. */
-export function object_of(n: number): Object | null {
-  return object_name(n) === undefined ? null : (n as Object);
+/** The member `val` is, or null for a number no member has. */
+export function of_Object(val: number): Object | null {
+  return val === OBJECT_WHITE ||
+    val === OBJECT_GREY ||
+    val === OBJECT_DARK_GREY ||
+    val === OBJECT_BLACK ||
+    val === OBJECT_RED ||
+    val === OBJECT_ORANGE ||
+    val === OBJECT_BROWN ||
+    val === OBJECT_YELLOW ||
+    val === OBJECT_GREEN ||
+    val === OBJECT_DARK_GREEN ||
+    val === OBJECT_CYAN ||
+    val === OBJECT_BLUE ||
+    val === OBJECT_VIOLET ||
+    val === OBJECT_MAGENTA ||
+    val === OBJECT_PINK
+    ? val
+    : null;
 }

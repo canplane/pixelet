@@ -6,20 +6,14 @@
 // PKT are their indices, little-endian. The tag is the request, unique among the sender's
 // pending ones, and a later answer carries it back. The command is the RES bit, the handle
 // the callee issued above METHOD_BITS, and the method's place among its object's below
-// them. An answer carries a value or a negative errno. The method's args, an XTP packet,
+// them. An answer carries 0 or a negative errno, its value in its packet. The method's args, a packet in the Canonical ABI's layout,
 // lie right past the words, and PKT says how long they are (link/wit/types.wit). ROOT
 // is the handle every side serves, OPEN and CANCEL its methods, DROP the method every handle
 // has, NAMED marks an interface's handle, and SLOT_BITS splits an issued handle into its
 // slot and its generation.
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 /// The request, which a later answer carries back.
 pub const TAG: u32 = 0;
@@ -27,7 +21,7 @@ pub const TAG: u32 = 0;
 /// RES, the handle and the method.
 pub const CMD: u32 = 1;
 
-/// On an answer, a value or a negative errno; on a request, 0.
+/// On an answer, 0 or a negative errno: the call refused, by the link or by the method as a caller's bug (EINVAL), or a method's failure where its WIT has no result; on a request, 0.
 pub const RESULT: u32 = 2;
 
 /// The length in bytes of the frame's packet, which lies right past its words; 0 when it has none.

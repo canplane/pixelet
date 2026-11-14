@@ -2,15 +2,16 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
+import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
+import { Lift } from "@xpute/link/cabi.ts";
 import {
+  type Handle,
   type Link,
   type LinkObject,
   type Method,
   refusal_of,
-  type Handle,
 } from "@xpute/link/link.ts";
-import * as types from "@xpute/link/abi/types.ts";
 
 /** The interface's handle, named by `pxl:core/text` (frame.json `NAMED`). */
 export const HANDLE: Handle = 0x61d944;
@@ -20,59 +21,65 @@ export const WIDTH: Method = 0;
 /** `raster` */
 export const RASTER: Method = 1;
 
-export interface Text {
-  width(weight: number, px: number, text: types.Lent): number;
+export interface Host {
+  width(weight: number, px: number, text: Lent): number;
   raster(
     weight: number,
     px: number,
     color: number,
-    image: types.Lent,
+    image: Lent,
     width: number,
     height: number,
     x: number,
-    text: types.Lent,
+    text: Lent,
   ): number;
 }
 
 /** The object over `imp`. */
-function object(imp: Text): LinkObject {
+function object(imp: Host): LinkObject {
   return {
     call(m, tag, args) {
       try {
         switch (m) {
           case WIDTH: {
-            if (args === null) return Errno.EBADMSG;
-            const v = imp.width(
-              args.at(0).get_number(),
-              args.at(1).get_number(),
-              types.read_Lent(args.at(2)),
-            );
+            if (args === null) return ERRNO_EBADMSG;
+            const r_ = new Lift(args);
+            const v = imp.width(r_.u32(0), r_.f64(8), load_Lent(r_, 16));
             return {
               result: 0,
               data: [
-                1,
+                8,
                 (w) => {
-                  w.f64(v);
+                  w.f64(0, v);
                 },
               ],
             };
           }
           case RASTER: {
-            if (args === null) return Errno.EBADMSG;
+            if (args === null) return ERRNO_EBADMSG;
+            const r_ = new Lift(args);
             const v = imp.raster(
-              args.at(0).get_number(),
-              args.at(1).get_number(),
-              args.at(2).get_number(),
-              types.read_Lent(args.at(3)),
-              args.at(4).get_number(),
-              args.at(5).get_number(),
-              args.at(6).get_number(),
-              types.read_Lent(args.at(7)),
+              r_.u32(0),
+              r_.f64(8),
+              r_.u32(16),
+              load_Lent(r_, 20),
+              r_.u32(28),
+              r_.u32(32),
+              r_.f64(40),
+              load_Lent(r_, 48),
             );
-            return v;
+            return {
+              result: 0,
+              data: [
+                4,
+                (w) => {
+                  w.u32(0, v);
+                },
+              ],
+            };
           }
           default:
-            return Errno.ENOSYS;
+            return ERRNO_ENOSYS;
         }
       } catch (e) {
         return refusal_of(e);
@@ -82,6 +89,6 @@ function object(imp: Text): LinkObject {
 }
 
 /** Serves `imp` under the interface's handle. */
-export function mount(l: Pick<Link, "mount_named">, imp: Text): void {
+export function mount(l: Pick<Link, "mount_named">, imp: Host): void {
   l.mount_named(HANDLE, object(imp));
 }

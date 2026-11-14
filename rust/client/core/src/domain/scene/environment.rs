@@ -89,12 +89,12 @@ fn mus(days: f64, [lon, lat]: [f64; 2]) -> [f64; 2] {
 fn sky_clock(time: SkyTime, unix_ms: f64, lon: f64) -> (f64, bool) {
     const HOUR_MS: f64 = 3_600_000.0;
     let hour = match time {
-        SkyTime::real => return (unix_ms, false),
-        SkyTime::dawn => 7.0,
-        SkyTime::morning => 9.0,
-        SkyTime::noon => 12.0,
-        SkyTime::afternoon => 15.0,
-        SkyTime::dusk => 17.0,
+        SkyTime::Real => return (unix_ms, false),
+        SkyTime::Dawn => 7.0,
+        SkyTime::Morning => 9.0,
+        SkyTime::Noon => 12.0,
+        SkyTime::Afternoon => 15.0,
+        SkyTime::Dusk => 17.0,
     };
     // The place's solar time runs ahead of UTC by its longitude, 15° an hour.
     let ahead = lon / 15.0 * HOUR_MS;

@@ -15,8 +15,8 @@ export {
   open,
   type Opener,
   type Packet,
-  get_as,
   refusal_of,
+  ComponentError,
   type Ref,
   type Reply,
   ROOT,
@@ -24,6 +24,7 @@ export {
   type Tag,
   uri,
 } from "./link.ts";
+export { Lift, Lower } from "./cabi.ts";
 export { type Port, Remote, serve, type Taker } from "./remote.ts";
 export { Table } from "./resource.ts";
 export { type Stop } from "./stop.ts";

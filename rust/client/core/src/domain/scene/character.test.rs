@@ -26,7 +26,7 @@ fn idle(dist: f64) -> Vec<(bool, bool)> {
     let mut draw = DrawList::default();
     let mut models = ModelTable::default();
     let model = models.add(&mut draw, swaying());
-    let mut character = Character::new(&mut draw, &models, model, Group::person, 0).unwrap();
+    let mut character = Character::new(&mut draw, &models, model, Group::Person, 0).unwrap();
     character.play(&models, 0, 0.0);
     let frame = Frame {
         camera: [dist, 0.0, 0.0],
@@ -135,7 +135,7 @@ fn a_body_is_held_off_a_wall_by_the_width_of_a_cell() {
         use pxl_spec::space::coord::world;
         let [x, y] = flat_at_five();
         let mut store = Store::default();
-        let wall = cube::Object::red as AssetId;
+        let wall = cube::Object::Red as AssetId;
         write(&mut store, [x + 1.0, y, 5.0], OBJECT_COARSEST, wall);
         placed(store);
         let at = [x + 0.9, y + 0.5];

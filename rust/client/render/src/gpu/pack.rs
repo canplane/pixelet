@@ -13,8 +13,8 @@ use pxl_spec::asset::{shipped_sentinel_tile, shipped_texture_tile, TileOrigin};
 use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{buffer_usage, bytes, place, release, texture_usage, Format, Gpu, Image};
-use crate::gpu::mip::{mip_levels, MipPass};
-use crate::paint::palette::{LAYERS, SENTINELS};
+use crate::gpu::mip::{mip_cnt, MipPass};
+use crate::paint::palette::{LAYER_CNT, SENTINELS};
 
 pub const LAYER_TEX_SIZE: u32 = PACK.cell;
 
@@ -24,7 +24,7 @@ const fn slot_word(top: u32, side: u32, bottom: u32) -> u32 {
         | bottom << (IMAGE_BOTTOM * SLOT_BITS)
 }
 
-const NO_SLOTS: u32 = slot_word(NO_SLOT, NO_SLOT, NO_SLOT);
+const NO_SLOT_WORD: u32 = slot_word(NO_SLOT, NO_SLOT, NO_SLOT);
 
 fn layout() -> (Vec<TileOrigin>, Vec<u32>) {
     fn slot_of(slots: &mut Vec<TileOrigin>, tile: Option<TileOrigin>) -> u32 {
@@ -73,7 +73,7 @@ pub struct Pack {
     pub sampler: u32,
     pub bytes: u32,
     slot_cnt: u32,
-    levels: u32,
+    mip_cnt: u32,
     loaded: bool,
 }
 
@@ -82,7 +82,7 @@ impl Pack {
     pub fn new(g: &Gpu) -> Pack {
         let (tiles, _) = layout();
         let slot_cnt = tiles.len() as u32;
-        let levels = mip_levels(LAYER_TEX_SIZE, LAYER_TEX_SIZE);
+        let mip_cnt = mip_cnt(LAYER_TEX_SIZE, LAYER_TEX_SIZE);
         let usage = texture_usage::TEXTURE_BINDING
             | texture_usage::COPY_DST
             | texture_usage::RENDER_ATTACHMENT;
@@ -90,28 +90,28 @@ impl Pack {
             LAYER_TEX_SIZE,
             LAYER_TEX_SIZE,
             slot_cnt,
-            Format::rgba8unorm_srgb,
-            levels,
+            Format::Rgba8unormSrgb,
+            mip_cnt,
             usage,
         );
-        let view = g.view(tex, true, 0, levels, 0, slot_cnt);
+        let view = g.view(tex, true, 0, mip_cnt, 0, slot_cnt);
         // The sampler filters anisotropically, at 4x, as the ground is mostly seen at a
         // grazing angle, where an isotropic mip blurs the tile along the view.
         let sampler = g.sampler(
-            FilterMode::linear,
-            FilterMode::linear,
-            MipmapFilterMode::linear,
-            AddressMode::repeat,
+            FilterMode::Linear,
+            FilterMode::Linear,
+            MipmapFilterMode::Linear,
+            AddressMode::Repeat,
             None,
             4,
         );
-        let blank: Vec<u32> = vec![NO_SLOTS; LAYERS];
+        let blank: Vec<u32> = vec![NO_SLOT_WORD; LAYER_CNT];
         let table = g.buf(
             (blank.len() * 4) as u32,
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
         g.write_buf(table, 0, bytes(&blank));
-        let bytes = (0..levels)
+        let bytes = (0..mip_cnt)
             .map(|level| (LAYER_TEX_SIZE >> level).pow(2) * 4 * slot_cnt)
             .sum();
         Pack {
@@ -121,7 +121,7 @@ impl Pack {
             sampler,
             bytes,
             slot_cnt,
-            levels,
+            mip_cnt,
             loaded: false,
         }
     }
@@ -147,7 +147,7 @@ impl Pack {
         }
         g.submit(encoder);
         release(texture);
-        mip.build(g, self.tex, self.levels, 0, self.slot_cnt);
+        mip.build(g, self.tex, self.mip_cnt, 0, self.slot_cnt);
         g.write_buf(self.table, 0, bytes(&table));
         self.loaded = true;
         true

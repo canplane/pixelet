@@ -13,22 +13,22 @@ fn walked_at() -> u32 {
 }
 
 /// How many squares a target of `size` pixels holds across and down (pxl-engine
-/// `ray::squares`).
-fn squares(size: vec2<u32>) -> vec2<u32> {
+/// `ray::square_cnt`).
+fn square_cnt(size: vec2<u32>) -> vec2<u32> {
   return (size + vec2<u32>(CAST_SIDE - 1u)) / CAST_SIDE;
 }
 
 /// How many words the walked bits of a target of `size` pixels take (pxl-engine
 /// `ray::walked_words`).
 fn walked_words(size: vec2<u32>) -> u32 {
-  let s = squares(size);
+  let s = square_cnt(size);
   return s.x * s.y * SQUARE_WORDS;
 }
 
 /// The word of pixel `p` in one set of hole bits for a target of `size` pixels, and its bit in
 /// that word (pxl-engine `ray::hole_bit`).
 fn hole_bit(p: vec2<u32>, size: vec2<u32>) -> vec2<u32> {
-  let square = (p.y / CAST_SIDE) * squares(size).x + p.x / CAST_SIDE;
+  let square = (p.y / CAST_SIDE) * square_cnt(size).x + p.x / CAST_SIDE;
   let bit = (p.y % CAST_SIDE) * CAST_SIDE + p.x % CAST_SIDE;
   return vec2<u32>(square * SQUARE_WORDS + bit / 32u, bit % 32u);
 }
@@ -38,7 +38,7 @@ fn hole_bit(p: vec2<u32>, size: vec2<u32>) -> vec2<u32> {
 fn bit_px(word: u32, bit: u32, size: vec2<u32>) -> vec2<u32> {
   let square = word / SQUARE_WORDS;
   let k = (word % SQUARE_WORDS) * 32u + bit;
-  let across = squares(size).x;
+  let across = square_cnt(size).x;
   return vec2<u32>((square % across) * CAST_SIDE + k % CAST_SIDE, (square / across) * CAST_SIDE + k / CAST_SIDE);
 }
 

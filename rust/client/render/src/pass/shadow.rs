@@ -19,7 +19,7 @@ use crate::frame::shader::sequence;
 use pxl_engine::cast::REACH;
 use pxl_engine::eye;
 use pxl_engine::light::{self, Light, StartGrid, ANCHOR};
-use pxl_engine::WORKGROUPS_CAP;
+use pxl_engine::WORKGROUP_CAP;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::v3::{self, V3};
@@ -72,8 +72,8 @@ const _: () = assert!(
     "the box lies in the four anchors about its corner (`Shadow::starts`)"
 );
 const _: () = {
-    let cap = WORKGROUPS_CAP;
-    let per = light::LIST_ACROSS * light::LIST_LANES;
+    let cap = WORKGROUP_CAP;
+    let per = light::LIST_ACROSS * light::LIST_LANE_CNT;
     let corners = light::beam_across(SHADOW_SIZE) * light::beam_across(SHADOW_SIZE);
     assert!(
         (SHADOW_SIZE * SHADOW_SIZE).div_ceil(per) <= cap && corners.div_ceil(per) <= cap,
@@ -156,31 +156,31 @@ pub struct Shadow {
 impl Shadow {
     pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Shadow {
         let sampler = g.sampler(
-            FilterMode::linear,
-            FilterMode::linear,
-            MipmapFilterMode::nearest,
-            AddressMode::clamp_to_edge,
-            Some(CompareFunction::less_equal),
+            FilterMode::Linear,
+            FilterMode::Linear,
+            MipmapFilterMode::Nearest,
+            AddressMode::ClampToEdge,
+            Some(CompareFunction::LessEqual),
             1,
         );
         let blank = g.texture(
             1,
             1,
             1,
-            Format::depth32float,
+            Format::Depth32float,
             1,
             texture_usage::TEXTURE_BINDING,
         );
         let blank_view = g.view(blank, false, 0, 1, 0, 1);
         let blank_sampler = g.sampler(
-            FilterMode::nearest,
-            FilterMode::nearest,
-            MipmapFilterMode::nearest,
-            AddressMode::clamp_to_edge,
-            Some(CompareFunction::less_equal),
+            FilterMode::Nearest,
+            FilterMode::Nearest,
+            MipmapFilterMode::Nearest,
+            AddressMode::ClampToEdge,
+            Some(CompareFunction::LessEqual),
             1,
         );
-        let depth = Format::depth32float;
+        let depth = Format::Depth32float;
         let lay = pipelines.build_masked(g, PIPELINE_LIGHT_MAP, depth, Stencil::Unused);
         let mask = pipelines.build_masked(g, PIPELINE_LIGHT_MASK, depth, Stencil::Mask);
         let corner = g.buf(
@@ -221,7 +221,7 @@ impl Shadow {
         }
     }
 
-    /// Makes the map and the world where `on`, the shadows' setting (`FrameInput::shadows`),
+    /// Makes the map and the world where `on`, the shadows' setting (`FrameInput::shadow`),
     /// and releases them where not. The first map cast after they are made is cast whole, as
     /// the light's cast is (ray/cast.rs `light_made`). It returns whether they were made or
     /// released, so the lit passes' groups are made again over the map or the blank one
@@ -249,7 +249,7 @@ impl Shadow {
                     SHADOW_SIZE,
                     SHADOW_SIZE,
                     1,
-                    Format::r32uint,
+                    Format::R32uint,
                     1,
                     texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING,
                 );
@@ -538,7 +538,7 @@ impl Shadow {
             0,
         ];
         g.write_buf(self.corner, 0, bytes(&corner));
-        let stamp = ctx.stamp(GpuSpanName::shadow);
+        let stamp = ctx.stamp(GpuSpanName::Shadow);
         let load = if masked { Load::Load } else { Load::Clear };
         let desc = pass_desc(0, Load::Clear, t.map_view, load, 1.0, stamp.pass());
         let (desc, number) = tiles.mask(desc, masked);

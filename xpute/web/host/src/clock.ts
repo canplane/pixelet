@@ -6,7 +6,7 @@
  * timers, and the system clock on `Date.now()`. */
 
 import { round } from "@xpute/kit/math/scalar.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 
 import * as monotonic_clock from "@xpute/link/abi/clocks/monotonic_clock.ts";
@@ -24,7 +24,7 @@ export function serve_clock(link: Link): void {
         const timer = setTimeout(done, Number(how_long) / NS_PER_MS);
         signal.addEventListener("abort", () => {
           clearTimeout(timer);
-          fail(new FaultError(Errno.ECANCELED));
+          fail(new FaultError(ERRNO_ECANCELED));
         });
       }),
   });

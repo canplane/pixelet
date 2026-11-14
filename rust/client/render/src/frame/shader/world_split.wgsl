@@ -105,14 +105,14 @@ fn slab_over(zoom: u32, relief_hi: i32, far: u32, near: u32) -> i32 {
 fn meets(span: vec2<i32>, zoom: u32, z: i32, near: u32) -> bool {
   let e = max(near, LEAF_CELL_ZOOM) - LEAF_CELL_ZOOM;
   let s = LEAF_CELL_ZOOM + e - zoom;
-  let first = ((z + z_start(zoom)) << s) - (SEA_CELLS << e);
+  let first = ((z + z_start(zoom)) << s) - (SEA_CELL << e);
   return first < (span.y << e) && first + (1i << s) > (span.x << e);
 }
 
 /// The box step that the leaf cell `v` lies in, within the node at height `z` that is `shift`
 /// zooms coarser than the leaves (pxl-engine `ground::box_along_z`).
 fn z_step(v: i32, z: i32, shift: u32) -> i32 {
-  let first = v + SEA_CELLS;
+  let first = v + SEA_CELL;
   let scaled = select(first << ((BOX_BITS - shift) & 31u), first >> ((shift - BOX_BITS) & 31u), shift >= BOX_BITS);
   return scaled - (z << BOX_BITS);
 }
@@ -214,7 +214,7 @@ fn world_split(above: vec3<u32>, shard: u32, zoom: u32, c: vec3<i32>, far: u32, 
   var own = BOX_NONE;
   if (g.kind == KIND_SPLIT) {
     own = g.asset;
-  } else if (g.kind == KIND_LACKS) {
+  } else if (g.kind == KIND_LACK) {
     own = BOX_WHOLE;
   }
   let joined = box_join(box_join(own, box_along_z(ways, zoom, c.z)), placed);

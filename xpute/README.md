@@ -70,7 +70,8 @@ A program built on xpute has three parts.
                                             does not read
 ```
 
-Each frame carries a command and a packet, the command's data in
+Each frame carries a command and a packet: the link's in the Component
+Model's Canonical ABI layout (`link/rust/src/cabi.rs`), the C++ core's in
 XTP, xpute's tree format. The high byte of a command's number is its major, and
 xpute delivers a program's frame by that major and reads nothing of what it
 says.
@@ -191,8 +192,9 @@ bundler or Node's type stripping takes them with no build.
   with the invariants every end keeps and a map of the code.
 - `spec/` is the contract itself: the header, the frame and the stream,
   from which every language's numbers are generated.
-- [XTP's README](./ts/kit/src/wire/xtp/README.md) describes the packet format
-  that every frame carries.
+- [XTP's README](./ts/kit/src/wire/xtp/README.md) describes XTP, the tree
+  format of files, tiles, the C++ core's frames, and the native host's
+  batches to a UI on the JavaScript thread.
 
 ## Running it
 

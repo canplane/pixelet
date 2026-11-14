@@ -24,7 +24,7 @@ fn eye_beam(i: u32) -> u32 {
 /// Stands the hit of each pixel whose bit is set in the word of walked bits at the thread's
 /// place, as a box of one point. A pixel whose ray met nothing has a first word of 0 and stands
 /// on nothing (pxl-engine `ray::first_word`).
-@compute @workgroup_size(MISS_LANES, 1, 1)
+@compute @workgroup_size(MISS_LANE_CNT, 1, 1)
 fn light_mark_walked_cs(
   @builtin(workgroup_id) group: vec3<u32>,
   @builtin(local_invocation_id) lane: vec3<u32>,

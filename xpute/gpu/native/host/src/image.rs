@@ -14,7 +14,7 @@ use super::run::OwnedTexture;
 use super::timed;
 use super::worker::Worker;
 use super::GpuHost;
-use xpute_gpu_link::spec::RESULT;
+use xpute_gpu_link::spec::result;
 
 /// A `Decoding` is an image sent to the decoder. It lands in its texture at the
 /// first poll after its decode comes back.
@@ -92,7 +92,7 @@ impl GpuHost {
                 continue;
             }
             let Some(image) = image else {
-                signal(d.word, d.ticket, Some(RESULT::REFUSED));
+                signal(d.word, d.ticket, Some(result::REFUSED));
                 continue;
             };
             let layout = wgpu::TexelCopyBufferLayout {
@@ -110,7 +110,7 @@ impl GpuHost {
                 self.queue
                     .write_texture(d.to.info(), &image.rgba, layout, size)
             });
-            signal(d.word, d.ticket, Some(RESULT::OK));
+            signal(d.word, d.ticket, Some(result::OK));
         }
     }
 }

@@ -8,7 +8,7 @@ use core::mem::{offset_of, size_of};
 use crate::sys::sched::phase_spec::PHASES;
 use pxl_engine::count;
 
-use crate::perf::spec::{FRAME, FRAME_GROUP, WORST};
+use crate::perf::spec::{frame, frame_group, worst};
 use crate::perf::step;
 use crate::perf::word::{as_words, as_words_mut, words, zeroed, AsWords};
 use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
@@ -25,26 +25,26 @@ pub struct GpuSample {
     /// the number of world pixels the frame drew, which the spans were
     /// measured over.
     pub timed: f64,
-    pub spans: [f64; GPU_SPANS],
+    pub spans: [f64; GPU_SPAN_CNT],
     pub busy_ms: f64,
     pub px: f64,
     /// The fraction of the display's resolution, along each axis, at which
     /// the world was drawn (domain/scene/resolution.rs).
     pub scale: f64,
     /// The frame's draws and their triangles, summed over every pipeline
-    /// (pxl-render renderer.rs `FrameStat::draws`).
-    pub draws: f64,
-    pub triangles: f64,
+    /// (pxl-render renderer.rs `FrameStat::draw_stat`).
+    pub draw_cnt: f64,
+    pub triangle_cnt: f64,
     /// The renderer's number for this frame (pxl-render renderer.rs
     /// `FrameStat::frame`). A GPU read names this number when it lands, so
     /// the read finds its frame. It is 0 when the renderer drew no frame.
     pub frame: f64,
     /// What changed that cast the light's map, one bit each in LIGHT_CHANGED's
-    /// order, and 0 when it was not cast. `decor_rects` counts the rects that
+    /// order, and 0 when it was not cast. `decor_rect_cnt` counts the rects that
     /// marked decor's slots to be generated again (pxl-render renderer.rs
     /// `FrameStat`).
     pub light_changed: f64,
-    pub decor_rects: f64,
+    pub decor_rect_cnt: f64,
 }
 
 impl Default for GpuSample {
@@ -59,8 +59,8 @@ impl Default for GpuSample {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DeviceSample {
-    pub uploads: f64,
-    pub uploads_bytes: f64,
+    pub upload_cnt: f64,
+    pub upload_bytes: f64,
     pub pack_bytes: f64,
 }
 
@@ -90,7 +90,7 @@ pub struct FrameSample {
     /// the UI's reads of the records.
     pub perf_ms: f64,
     /// The time of each effect in the frame, indexed by `EffectName`.
-    pub effects: [f64; EFFECTS],
+    pub effects: [f64; EFFECT_CNT],
     /// The frame's kind, an index into the renderer's FRAME_KINDS.
     pub kind: f64,
     pub gpu: GpuSample,
@@ -98,13 +98,13 @@ pub struct FrameSample {
     /// `perf_record_rays`).
     pub ray_sample: RaySample,
     /// The terrain tiles the tile cache took in during the frame.
-    pub terrain_loads: f64,
+    pub terrain_load_cnt: f64,
     pub device: DeviceSample,
     /// The heap's high-water mark (sys/heap.rs `HeapStat`).
     pub heap_used_bytes: f64,
 }
 
-/// One frame's ray counts, which the renderer gathers while the `ray_cnts`
+/// One frame's ray counts, which the renderer gathers while the `ray_cnt`
 /// setting is on (pxl-render ray/count.rs `RayCount`). The fields
 /// follow the order of perf.json FRAME's `rays` group. For the eye they say
 /// whether it cast in full, how many pixels it cast, and its lane counts.
@@ -115,54 +115,54 @@ pub struct FrameSample {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RaySample {
     pub eye_cast: f64,
-    pub eye_rays: f64,
+    pub eye_ray_cnt: f64,
     pub eye_beam: f64,
     pub eye_sample: f64,
     pub eye_hole_walk: f64,
-    pub eye_asks: f64,
+    pub eye_ask_cnt: f64,
     pub eye_voxel: f64,
     pub eye_hole: f64,
     pub eye_sky: f64,
-    pub eye_boxes: f64,
+    pub eye_box_cnt: f64,
     pub light_cast: f64,
-    pub light_rays: f64,
+    pub light_ray_cnt: f64,
     pub light_beam: f64,
     pub light_sample: f64,
     pub light_hole_walk: f64,
-    pub light_asks: f64,
+    pub light_ask_cnt: f64,
     pub light_voxel: f64,
     pub light_hole: f64,
     pub light_sky: f64,
-    pub light_boxes: f64,
+    pub light_box_cnt: f64,
 }
 
 impl RaySample {
-    /// Reads the renderer's counts, laid out in `RAY_CNTS` order.
-    pub fn of(c: [f64; ray::RAY_CNTS]) -> RaySample {
+    /// Reads the renderer's counts, laid out in `RAY_CNT_CNT` order.
+    pub fn of(c: [f64; ray::RAY_CNT_CNT]) -> RaySample {
         let at = |o: u32, k: usize| c[ray::cnt_at(o, k)];
         let lane = |o: u32, l: u32| at(o, ray::LANES_AT + l as usize);
         let (eye, light) = (count::EYE, count::LIGHT);
         RaySample {
             eye_cast: at(eye, ray::CAST),
-            eye_rays: at(eye, ray::RAYS),
+            eye_ray_cnt: at(eye, ray::RAYS),
             eye_beam: lane(eye, count::BEAM),
             eye_sample: lane(eye, count::SAMPLE),
             eye_hole_walk: lane(eye, count::HOLE_WALK),
-            eye_asks: lane(eye, count::ASKS),
+            eye_ask_cnt: lane(eye, count::ASK),
             eye_voxel: lane(eye, count::VOXEL),
             eye_hole: lane(eye, count::HOLE),
             eye_sky: lane(eye, count::SKY),
-            eye_boxes: lane(eye, count::BOXES),
+            eye_box_cnt: lane(eye, count::BOX),
             light_cast: at(light, ray::CAST),
-            light_rays: at(light, ray::RAYS),
+            light_ray_cnt: at(light, ray::RAYS),
             light_beam: lane(light, count::BEAM),
             light_sample: lane(light, count::SAMPLE),
             light_hole_walk: lane(light, count::HOLE_WALK),
-            light_asks: lane(light, count::ASKS),
+            light_ask_cnt: lane(light, count::ASK),
             light_voxel: lane(light, count::VOXEL),
             light_hole: lane(light, count::HOLE),
             light_sky: lane(light, count::SKY),
-            light_boxes: lane(light, count::BOXES),
+            light_box_cnt: lane(light, count::BOX),
         }
     }
 
@@ -181,8 +181,8 @@ impl RaySample {
 pub struct WorstFrame {
     pub sample: FrameSample,
     pub has_prev: f64,
-    pub uploads_delta: f64,
-    pub uploads_delta_bytes: f64,
+    pub upload_cnt_delta: f64,
+    pub upload_delta_bytes: f64,
     pub heap_used_delta_bytes: f64,
 }
 
@@ -199,50 +199,50 @@ impl WorstFrame {
         WorstFrame {
             sample: s,
             has_prev: 1.0,
-            uploads_delta: s.device.uploads - p.device.uploads,
-            uploads_delta_bytes: s.device.uploads_bytes - p.device.uploads_bytes,
+            upload_cnt_delta: s.device.upload_cnt - p.device.upload_cnt,
+            upload_delta_bytes: s.device.upload_bytes - p.device.upload_bytes,
             heap_used_delta_bytes: s.heap_used_bytes - p.heap_used_bytes,
         }
     }
 }
 
-words!(FrameSample, FRAME::WORDS,
-    t => FRAME::t, interval_ms => FRAME::interval_ms, refresh_ms => FRAME::refresh_ms, paced_ms => FRAME::paced_ms, settled => FRAME::settled,
-    budget_ms => FRAME::budget_ms, effects_ms => FRAME::effects_ms, tick_ms => FRAME::tick_ms,
-    phases => FRAME::phases, stage_ms => FRAME::stage_ms,
-    perf_ms => FRAME::perf_ms, effects => FRAME::effects,
-    kind => FRAME::kind_name,
-    gpu.timed => FRAME::gpu_timed, gpu.spans => FRAME::gpu_spans, gpu.busy_ms => FRAME::gpu_busy_ms, gpu.px => FRAME::gpu_px, gpu.scale => FRAME::scale,
-    gpu.draws => FRAME::draws, gpu.triangles => FRAME::triangles, gpu.frame => FRAME::gpu_frame,
-    gpu.light_changed => FRAME::light_changed, gpu.decor_rects => FRAME::decor_rects,
-    ray_sample => FRAME::eye_cast,
-    terrain_loads => FRAME::terrain_loads,
-    device.uploads => FRAME::uploads, device.uploads_bytes => FRAME::uploads_bytes, device.pack_bytes => FRAME::pack_bytes,
-    heap_used_bytes => FRAME::heap_used_bytes,
+words!(FrameSample, frame::WORDS,
+    t => frame::T, interval_ms => frame::INTERVAL_MS, refresh_ms => frame::REFRESH_MS, paced_ms => frame::PACED_MS, settled => frame::SETTLED,
+    budget_ms => frame::BUDGET_MS, effects_ms => frame::EFFECTS_MS, tick_ms => frame::TICK_MS,
+    phases => frame::PHASES, stage_ms => frame::STAGE_MS,
+    perf_ms => frame::PERF_MS, effects => frame::EFFECTS,
+    kind => frame::KIND_NAME,
+    gpu.timed => frame::GPU_TIMED, gpu.spans => frame::GPU_SPANS, gpu.busy_ms => frame::GPU_BUSY_MS, gpu.px => frame::GPU_PX, gpu.scale => frame::SCALE,
+    gpu.draw_cnt => frame::DRAW_CNT, gpu.triangle_cnt => frame::TRIANGLE_CNT, gpu.frame => frame::GPU_FRAME,
+    gpu.light_changed => frame::LIGHT_CHANGED, gpu.decor_rect_cnt => frame::DECOR_RECT_CNT,
+    ray_sample => frame::EYE_CAST,
+    terrain_load_cnt => frame::TERRAIN_LOAD_CNT,
+    device.upload_cnt => frame::UPLOAD_CNT, device.upload_bytes => frame::UPLOAD_BYTES, device.pack_bytes => frame::PACK_BYTES,
+    heap_used_bytes => frame::HEAP_USED_BYTES,
 );
 
 // The `rays` group's columns, each at its offset in FRAME counted from the
 // group's first column.
-words!(RaySample, FRAME_GROUP::rays.len(),
-    eye_cast => 0, eye_rays => FRAME::eye_rays - FRAME::eye_cast,
-    eye_beam => FRAME::eye_beam - FRAME::eye_cast, eye_sample => FRAME::eye_sample - FRAME::eye_cast,
-    eye_hole_walk => FRAME::eye_hole_walk - FRAME::eye_cast, eye_asks => FRAME::eye_asks - FRAME::eye_cast, eye_voxel => FRAME::eye_voxel - FRAME::eye_cast,
-    eye_hole => FRAME::eye_hole - FRAME::eye_cast, eye_sky => FRAME::eye_sky - FRAME::eye_cast,
-    eye_boxes => FRAME::eye_boxes - FRAME::eye_cast,
-    light_cast => FRAME::light_cast - FRAME::eye_cast, light_rays => FRAME::light_rays - FRAME::eye_cast,
-    light_beam => FRAME::light_beam - FRAME::eye_cast,
-    light_sample => FRAME::light_sample - FRAME::eye_cast, light_hole_walk => FRAME::light_hole_walk - FRAME::eye_cast, light_asks => FRAME::light_asks - FRAME::eye_cast,
-    light_voxel => FRAME::light_voxel - FRAME::eye_cast, light_hole => FRAME::light_hole - FRAME::eye_cast,
-    light_sky => FRAME::light_sky - FRAME::eye_cast, light_boxes => FRAME::light_boxes - FRAME::eye_cast,
+words!(RaySample, frame_group::RAYS.len(),
+    eye_cast => 0, eye_ray_cnt => frame::EYE_RAY_CNT - frame::EYE_CAST,
+    eye_beam => frame::EYE_BEAM - frame::EYE_CAST, eye_sample => frame::EYE_SAMPLE - frame::EYE_CAST,
+    eye_hole_walk => frame::EYE_HOLE_WALK - frame::EYE_CAST, eye_ask_cnt => frame::EYE_ASK_CNT - frame::EYE_CAST, eye_voxel => frame::EYE_VOXEL - frame::EYE_CAST,
+    eye_hole => frame::EYE_HOLE - frame::EYE_CAST, eye_sky => frame::EYE_SKY - frame::EYE_CAST,
+    eye_box_cnt => frame::EYE_BOX_CNT - frame::EYE_CAST,
+    light_cast => frame::LIGHT_CAST - frame::EYE_CAST, light_ray_cnt => frame::LIGHT_RAY_CNT - frame::EYE_CAST,
+    light_beam => frame::LIGHT_BEAM - frame::EYE_CAST,
+    light_sample => frame::LIGHT_SAMPLE - frame::EYE_CAST, light_hole_walk => frame::LIGHT_HOLE_WALK - frame::EYE_CAST, light_ask_cnt => frame::LIGHT_ASK_CNT - frame::EYE_CAST,
+    light_voxel => frame::LIGHT_VOXEL - frame::EYE_CAST, light_hole => frame::LIGHT_HOLE - frame::EYE_CAST,
+    light_sky => frame::LIGHT_SKY - frame::EYE_CAST, light_box_cnt => frame::LIGHT_BOX_CNT - frame::EYE_CAST,
 );
 
-words!(WorstFrame, WORST::WORDS,
-    sample => WORST::sample, has_prev => WORST::has_prev, uploads_delta => WORST::uploads_delta,
-    uploads_delta_bytes => WORST::uploads_delta_bytes, heap_used_delta_bytes => WORST::heap_used_delta_bytes,
+words!(WorstFrame, worst::WORDS,
+    sample => worst::SAMPLE, has_prev => worst::HAS_PREV, upload_cnt_delta => worst::UPLOAD_CNT_DELTA,
+    upload_delta_bytes => worst::UPLOAD_DELTA_BYTES, heap_used_delta_bytes => worst::HEAP_USED_DELTA_BYTES,
 );
 
-pub const GPU_SPANS: usize = GPU_SPAN_NAMES.len();
-pub const EFFECTS: usize = step::EFFECT_NAMES.len();
+pub const GPU_SPAN_CNT: usize = GPU_SPAN_NAMES.len();
+pub const EFFECT_CNT: usize = step::EFFECT_NAMES.len();
 
 /// Whether the tick ran past the entry's budget.
 pub fn overran(f: &FrameSample) -> bool {

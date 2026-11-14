@@ -11,7 +11,7 @@
 use crate::space::layer::lattice::{Cell, Grid, Lattice, GROUND};
 use fnv::FnvHashSet;
 
-use crate::asset::marker::MARK_STEPS;
+use crate::asset::marker::MARK_STEP_CNT;
 use crate::bake::place_theme::{CATEGORIES, DOT_ZOOM, ICON_ZOOM, SYMBOL};
 use crate::bake::publication::BaseLayer;
 use crate::bake::tile::{occupancy_of, Occupancy, StringTable, Tile};
@@ -22,22 +22,22 @@ use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::shape;
 
 use crate::bake::malformed;
-use crate::param::place::SPREAD_STEPS;
+use crate::param::place::SPREAD_STEP_CNT;
 
 /// Carto's last zoom, openstreetmap.org's: the leaf places through it.
 pub(crate) const PLACE_LAST: Zoom = 19;
 
 /// An icon's cell: a mark's, which a power of two makes nest.
-const ICON_STEPS: Zoom = MARK_STEPS;
+const ICON_STEP_CNT: Zoom = MARK_STEP_CNT;
 
-/// A cell an icon wide at its tile's Carto zoom, `SPREAD_STEPS` coarser than the camera grid.
+/// A cell an icon wide at its tile's Carto zoom, `SPREAD_STEP_CNT` coarser than the camera grid.
 /// The Carto zoom at which a place is drawn there, and so which categories show, is the tile
 /// zoom of the grid's cell (`Lattice::tile_zoom_of_grid`), past the leaf too.
 pub const PLACE_LATTICE: Lattice =
-    Lattice::new(LEAF_ZOOM + ICON_STEPS).scaled(-(SPREAD_STEPS as i32));
+    Lattice::new(LEAF_ZOOM + ICON_STEP_CNT).scaled(-(SPREAD_STEP_CNT as i32));
 
 /// The cell a place keeps to itself, as a zoom under the tile.
-const SPACING_STEPS: Zoom = ICON_STEPS - SPREAD_STEPS;
+const SPACING_STEP_CNT: Zoom = ICON_STEP_CNT - SPREAD_STEP_CNT;
 
 /// The coarsest zoom any category is shown from; no tile coarser holds a place.
 pub const PLACE_FIRST: Zoom = {
@@ -114,7 +114,7 @@ pub struct SourcePlace<'a> {
 }
 
 impl Tile for PlaceTile {
-    const LAYER: BaseLayer = BaseLayer::place;
+    const LAYER: BaseLayer = BaseLayer::Place;
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy
@@ -246,7 +246,9 @@ impl PlaceTile {
 /// The cell a place keeps at Carto's `zoom`, above the ground leaf cell it stands in; finer
 /// than the ground's own cell, it is that leaf cell.
 fn place_cell(cell: Cell, zoom: Zoom) -> Cell {
-    cell.up(GROUND.leaf_cell_zoom().saturating_sub(zoom + SPACING_STEPS))
+    cell.up(GROUND
+        .leaf_cell_zoom()
+        .saturating_sub(zoom + SPACING_STEP_CNT))
 }
 
 /// The ground leaf cell a place a tile holds stands in.

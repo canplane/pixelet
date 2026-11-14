@@ -13,7 +13,9 @@
 #   } }
 #
 # `profile` defaults to cargo's dev and release, `args` (more of cargo's
-# arguments, features among them) to none.
+# arguments, features among them) to none. The page's build (wasm-build.py)
+# reads the same `workspace`, `package` and `args`, and keeps profiles of its
+# own.
 #
 # Two builds run it. Xcode, before it compiles the platform module
 # (modules/platform/ios/PxlPlatform.podspec's script phase), with every input in its environment:
@@ -126,21 +128,22 @@ def main():
         else:
             i += 1
     app = Path(args.get("app") or fail("--app is not given"))
-    core = json.loads((app / "package.json").read_text()).get("xpute", {}).get("guest") or fail(f"{app}/package.json names no xpute.guest")
-    workspace = (app / core["workspace"]).resolve()
-    package = core["package"]
+    guest = json.loads((app / "package.json").read_text()).get("xpute", {}).get("guest") or fail(f"{app}/package.json names no xpute.guest")
+    workspace = (app / guest["workspace"]).resolve()
+    package = guest["package"]
     lib = package.replace("-", "_")
     build = gradle(args, lib) if "--android" in argv else xcode(lib)
     which = "release" if build["release"] else "debug"
     if build["release"]:
-        # A panic's location carries the directories it was built in. The
-        # target's own variable, as RUSTFLAGS would replace what Gradle sets.
+        # A panic's location carries the directories it was built in, which
+        # are remapped (number-paths.py `prefixes`). The target's own
+        # variable, as RUSTFLAGS would replace what Gradle sets.
         env = build["env"]
         key = "CARGO_TARGET_" + build["target"].upper().replace("-", "_") + "_RUSTFLAGS"
-        remaps = [f"--remap-path-prefix={p}=" for p in (workspace.parent, os.environ["HOME"])]
-        env[key] = " ".join(f for f in [env.pop("RUSTFLAGS", None), env.get(key), *remaps] if f)
-    profile = core.get("profile", {}).get(which, "release" if build["release"] else "dev")
-    extra = core.get("args", {}).get(which, [])
+        remaps = subprocess.run([sys.executable, str(NUMBER_PATHS), "--remaps", str(workspace)], check=True, stdout=subprocess.PIPE, text=True).stdout.strip()
+        env[key] = " ".join(f for f in [env.pop("RUSTFLAGS", None), env.get(key), remaps] if f)
+    profile = guest.get("profile", {}).get(which, "release" if build["release"] else "dev")
+    extra = guest.get("args", {}).get(which, [])
 
     code = subprocess.run(
         ["cargo", *build["cargo"], "--profile", profile, "--package", package, "--target", build["target"], *extra],
