@@ -5,12 +5,12 @@
 //! ts/client/src/runtime/worker.ts is a page's. `start` lists the servers of
 //! what the host serves, the stop, the clocks, the text and the GPU, and the
 //! runtime mounts them, then what the UI serves, enters the core once every
-//! import of its world under a named handle is mounted, and runs the loop for
-//! the core's life (xpute-native-runtime native.rs `Boot`). The text is
-//! pixelet's own, served on the host's side as ts/client/src/service serves
-//! it on a page (text.rs); the UI serves the files, the settings among them,
-//! and the objects over the remote, as the page's worker does. Beside them is
-//! the decoder the app's fetch calls (unpack.rs).
+//! import of its world is served, and runs the loop for the core's life
+//! (xpute-native-runtime native.rs `Boot`). The text is pixelet's own, served
+//! on the host's side as ts/client/src/service serves it on a page (text.rs);
+//! the UI serves the files, the settings among them, and the objects over the
+//! remote, as the page's worker does. Beside them is the decoder the app's
+//! fetch calls (unpack.rs).
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -59,10 +59,7 @@ fn start(cache_dir: PathBuf, report: fn(Stop)) -> Boot {
     Boot {
         stack_sz: stack::THREAD_SZ as usize,
         servers: vec![
-            Box::new(move || {
-                stop::serve(report);
-                stop::hook();
-            }),
+            Box::new(move || stop::serve(report)),
             Box::new(clock::serve),
             Box::new(text::serve),
             Box::new(move || {

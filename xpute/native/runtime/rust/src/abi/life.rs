@@ -33,8 +33,9 @@ mod _rt {
     pub(super) use xpute_link::{answer, Handle, Method};
 }
 
-/// The interfaces the world imports that the host serves under a named
-/// handle, each `(name, handle)`, which are mounted before the guest boots.
+/// The interfaces the world imports, each `(name, handle)`, which are
+/// mounted before the guest boots: one with functions of its own under its
+/// handle, one of resources alone by an opener at a prefix.
 pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[];
 
 /// The methods of the named interfaces the host serves that answer

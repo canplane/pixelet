@@ -7,7 +7,8 @@ import type { Remote, Stop } from "@xpute/link";
 
 /** What the page sends the worker to instantiate the guest: the module, how
  * to fetch it, the UI's port, the named handles of the interfaces the UI
- * serves, and the prefixes it opens the objects under. */
+ * serves, and the prefixes it opens the objects under, each with its
+ * interface. */
 export interface Instantiate {
   kind: "instantiate";
   module: string;
@@ -37,9 +38,10 @@ export interface Trap {
   err: string;
 }
 
-/** The guest stopped, with its report of the broken invariant, which the
- * program sends as the host hands it the report (@xpute/web-host
- * `serve_stop`). */
+/** The guest stopped, with the report of the broken invariant: the guest's,
+ * which the program sends as the host hands it the report (@xpute/web-host
+ * `serve_stop`), or the host's own failure, which the runtime sends
+ * (worker.ts `hook`). */
 export interface Stopped {
   kind: "stopped";
   stop: Stop;

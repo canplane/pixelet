@@ -17,7 +17,7 @@ class XputeGpuModule : Module() {
 
   /** This sends the module's event from the GPU's thread, and Expo carries
    * it to the JavaScript thread. */
-  private val state = { s: String -> sendEvent("onState", mapOf("state" to s)) }
+  private val hear = { s: String -> sendEvent("onState", mapOf("state" to s)) }
 
   /** This tells the GPU's host of each display frame (`Gpu.vsync`), from the
    * main thread's Choreographer. */
@@ -39,15 +39,19 @@ class XputeGpuModule : Module() {
     // callback only while it is its own, under the lock of `Gpu`, as on iOS,
     // where a reload may make the new module before the old one is destroyed.
     OnCreate {
-      synchronized(Gpu) { Gpu.state = state }
+      synchronized(Gpu) { Gpu.hear = hear }
       Gpu.init()
       main.post { Choreographer.getInstance().postFrameCallback(vsync) }
     }
 
     OnDestroy {
       main.post { Choreographer.getInstance().removeFrameCallback(vsync) }
-      synchronized(Gpu) { if (Gpu.state === state) Gpu.state = null }
+      synchronized(Gpu) { if (Gpu.hear === hear) Gpu.hear = null }
     }
+
+    /** What the host has of a GPU now, or null before the guest's first ask
+     * is answered (`Gpu.state()`). */
+    Function("state") { Gpu.state() }
 
     View(SurfaceView::class) {
       Events("onAttach", "onDetach")

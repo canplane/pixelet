@@ -18,8 +18,8 @@
 //! - `send` hands it to its answer, and an `async func` is sent;
 //! - `mount_named` serves an interface under its named handle, `add` an
 //!   object under a handle issued for a function to answer, and `mount`
-//!   puts the opener of the resources the side serves under a URI's leading
-//!   tokens, the longest matching winning; `open` and `drop` reach the root's
+//!   puts the opener of an interface's resources the side serves under a
+//!   URI's leading tokens, the longest matching winning; `open` and `drop` reach the root's
 //!   open and a handle's drop on the other side;
 //! - `cancel` cancels a request sent and pending (the root's `CANCEL`), and
 //!   `on_cancel` puts what runs if a request the side serves is canceled.
@@ -190,8 +190,9 @@ pub struct Side {
     crossing: Cell<bool>,
     /// Where the next request's tag is sought.
     next: Cell<Tag>,
-    /// The openers, by the URI's leading tokens.
-    mounts: RefCell<Vec<(Vec<Token>, Rc<Opener>)>>,
+    /// The openers, each with the named handle of the interface whose
+    /// resources it opens, by the URI's leading tokens.
+    mounts: RefCell<Vec<(Handle, Vec<Token>, Rc<Opener>)>>,
     /// The objects this side serves, by the handles it issued.
     objects: RefCell<Table<Rc<dyn Object>>>,
     /// The interfaces this side serves, by their named handles (`NAMED`).
@@ -259,13 +260,15 @@ impl Side {
         v
     }
 
-    /// Puts `open` as the opener of the URIs that start with `prefix`.
+    /// Puts `open` as the opener of the URIs that start with `prefix`, whose
+    /// objects are the resources of the interface of the named handle `h`.
     pub fn mount(
         &self,
+        h: Handle,
         prefix: Vec<Token>,
         open: impl Fn(&[Token], Handle) -> Result<Rc<dyn Object>, Errno> + 'static,
     ) {
-        self.mounts.borrow_mut().push((prefix, Rc::new(open)));
+        self.mounts.borrow_mut().push((h, prefix, Rc::new(open)));
     }
 
     /// Serves `o` under its interface's named handle `h`, which the other
@@ -275,9 +278,10 @@ impl Side {
         xpute_kit::ensure!(was.is_none(), EEXIST, h);
     }
 
-    /// Whether this side serves an interface under the named handle `h`.
+    /// Whether this side serves the interface of the named handle `h`: under
+    /// that handle, or by an opener of its resources.
     pub fn serves(&self, h: Handle) -> bool {
-        self.named.borrow().contains_key(&h)
+        self.named.borrow().contains_key(&h) || self.mounts.borrow().iter().any(|(i, ..)| *i == h)
     }
 
     /// Serves `o` under a handle issued for it, which a method answers for
@@ -452,10 +456,10 @@ impl Side {
             .mounts
             .borrow()
             .iter()
-            .filter(|(p, _)| uri.starts_with(p))
+            .filter(|(_, p, _)| uri.starts_with(p))
             .rev()
-            .max_by_key(|(p, _)| p.len())
-            .map(|(_, o)| o.clone())
+            .max_by_key(|(_, p, _)| p.len())
+            .map(|(.., o)| o.clone())
             .ok_or(Errno::ENOENT)?;
         let h = self.objects.borrow_mut().issue();
         let o = open(&uri, h).inspect_err(|_| {

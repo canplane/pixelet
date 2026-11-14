@@ -16,7 +16,7 @@
  * method that always answers at once, and stops as a bug on EINPROGRESS; `send`
  * hands it to its answer, and an `async func` is sent; `mount_named` serves an
  * interface under its named handle, `add` an object under a handle issued for
- * a function to answer, and `mount` puts the opener of the
+ * a function to answer, and `mount` puts the opener of an interface's
  * resources the host serves under a URI's leading tokens, the longest matching
  * winning; `on_cancel` puts what runs if a request it serves is
  * canceled.
@@ -62,8 +62,8 @@ export type Tag = u32;
 export type Method = u32;
 export type { Handle } from "./resource.ts";
 
-/** The interfaces a guest's world imports that a host serves under a named
- * handle, each `[name, handle]` (the bindings' `IMPORTS`). */
+/** The interfaces a guest's world imports, each `[name, handle]` (the
+ * bindings' `IMPORTS`). */
 export type Imports = readonly (readonly [string, Handle])[];
 
 export { CANCEL, DROP, NAMED, OPEN, ROOT };
@@ -166,7 +166,8 @@ let hook: ((e: unknown) => void) | null = null;
 
 /** Installs what a failure of the serving side's own, a throw out of its
  * answer to the guest's import (`imports`), is handed, as Rust's panic hook
- * is (a host's `hook`). Only the first call takes effect. */
+ * is (@xpute/web-runtime worker.ts `hook`). Only the first call takes
+ * effect. */
 export function set_hook(h: (e: unknown) => void): void {
   hook ??= h;
 }
@@ -205,12 +206,14 @@ export interface Guest {
  * Rust naming this part apart nowhere: its interfaces by their named
  * handles, the objects under issued handles in a table (`Table`: a `Side`'s,
  * which issues them, or a UI's, under those its link's side issued), the
- * openers by the URI's leading tokens, the longest matching winning, and how
+ * openers of an interface's resources by the URI's leading tokens, the
+ * longest matching winning, and how
  * each request it answers later stops if its caller cancels it. Only how an
  * answer crosses differs (`_answer`). */
 export abstract class Server<O extends Pick<Table<LinkObject>, "get" | "put" | "remove">> {
-  /** The openers, by the URI's leading tokens. */
-  protected readonly _mounts: [readonly Token[], Opener][] = [];
+  /** The openers, each with the named handle of the interface whose
+   * resources it opens, by the URI's leading tokens. */
+  protected readonly _mounts: [Handle, readonly Token[], Opener][] = [];
   /** The interfaces this side serves, by their named handles (`NAMED`). */
   protected readonly _named = new Map<Handle, LinkObject>();
   /** The objects this side serves, by the handles issued for them. */
@@ -223,9 +226,16 @@ export abstract class Server<O extends Pick<Table<LinkObject>, "get" | "put" | "
     this._objects = objects;
   }
 
-  /** Puts `open` as the opener of the URIs that start with `prefix`. */
-  mount(prefix: readonly Token[], open: Opener): void {
-    this._mounts.push([prefix, open]);
+  /** Puts `open` as the opener of the URIs that start with `prefix`, whose
+   * objects are the resources of the interface of the named handle `h`. */
+  mount(h: Handle, prefix: readonly Token[], open: Opener): void {
+    this._mounts.push([h, prefix, open]);
+  }
+
+  /** Whether this side serves the interface of the named handle `h`: under
+   * that handle, or by an opener of its resources. */
+  serves(h: Handle): boolean {
+    return this._named.has(h) || this._mounts.some(([i]) => i === h);
   }
 
   /** Serves `o` under its interface's named handle `h`, which the other
@@ -267,13 +277,13 @@ export abstract class Server<O extends Pick<Table<LinkObject>, "get" | "put" | "
 
   /** The opener of `uri`'s longest matching mount, if one matches. */
   protected _opener(uri: readonly Token[]): Opener | undefined {
-    let best: [readonly Token[], Opener] | undefined;
+    let best: [Handle, readonly Token[], Opener] | undefined;
     for (const m of this._mounts) {
-      const [p] = m;
+      const [, p] = m;
       const leads = p.length <= uri.length && p.every((t, k) => t.tag === uri[k]!.tag && t.val === uri[k]!.val);
-      if (leads && (best === undefined || p.length > best[0].length)) best = m;
+      if (leads && (best === undefined || p.length > best[1].length)) best = m;
     }
-    return best?.[1];
+    return best?.[2];
   }
 
   /** Opens the object at `uri` under `h` by `open`: 0, or the opener's
@@ -356,13 +366,14 @@ export class Side extends Server<Table<LinkObject>> {
 
   /** Enters the guest first, once the host's own objects are mounted: the
    * guest lays its link, the host reads its layout, and then the guest
-   * boots, and may open them. Where an interface of `imports` is not
-   * mounted under its named handle, the link traps, naming each, and the
-   * guest is never entered. False where the link trapped meanwhile, the
+   * boots, and may open them. Where an interface of `imports` is served by
+   * nothing mounted, under its named handle or by an opener of its
+   * resources (`serves`), the link traps, naming each, and the guest is
+   * never entered. False where the link trapped meanwhile, the
    * guest's trap or a failure of the host's (xpute-native-runtime
    * `link.rs` `init`). */
   init(imports: Imports): boolean {
-    const unserved = imports.filter(([, h]) => !this._named.has(h)).map(([name]) => name);
+    const unserved = imports.filter(([, h]) => !this.serves(h)).map(([name]) => name);
     if (unserved.length > 0) {
       this.trap(`no server mounts ${unserved.join(", ")}`);
       return false;

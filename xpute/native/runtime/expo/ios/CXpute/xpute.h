@@ -18,8 +18,9 @@
 // Starts the runtime on the guest's thread, once a process. `named`,
 // `named_len` are the named handles of the interfaces the UI serves (remote.ts
 // `Remote.named`); `prefixes`, `prefixes_len` the prefixes the UI mounts
-// openers at, as a lowered `list<list<token>>` packet (the Canonical ABI,
-// xpute:link/types `token`); `cache_dir`, `cache_dir_len` the directory the
+// openers at, each with the named handle of the interface whose resources
+// they open, as a lowered `list<tuple<u32, list<token>>>` packet (the
+// Canonical ABI, xpute:link/types `token`); `cache_dir`, `cache_dir_len` the directory the
 // app keeps its caches in, its UTF-8 bytes and their count.
 // Each call, the first too, is a new UI on the runtime, as a reload's, which
 // serves what the first did: the requests the last UI answers later are
@@ -50,11 +51,13 @@ void xpute_notify_on(void (*notify)(void));
 void xpute_stopped_on(void (*stopped)(int32_t errnum, const char *file, size_t file_len,
                                       uint32_t line, uint64_t n1, uint64_t n2));
 
-// Makes `trap` be told that the guest trapped; null sets none. It is
-// called on the guest's thread, and on the thread of each `xpute_start` after
-// the guest trapped, and hands the news to the JavaScript thread. Set before
-// `xpute_start`.
-void xpute_trap_on(void (*trap)(void));
+// Makes `trap` be told that the guest trapped, with what stopped it, `err`
+// of `err_len` UTF-8 bytes, not NUL-terminated, the imports no server mounts
+// among them where the runtime refused to start the guest. Null sets none. It
+// is called on the guest's thread, and on the thread of each `xpute_start`
+// after the guest trapped, and hands the news to the JavaScript thread. Set
+// before `xpute_start`.
+void xpute_trap_on(void (*trap)(const char *err, size_t err_len));
 
 // Sends the method `m` of the guest's object `h` of the UI of `generation`,
 // its request `tag` the UI's (remote.ts `Remote.send`), with the packet `pkt`

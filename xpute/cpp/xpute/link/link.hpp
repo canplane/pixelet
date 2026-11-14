@@ -17,8 +17,8 @@
 //   at once, and stops as a bug on EINPROGRESS;
 // - `send` hands it to its answer, and an `async func` is sent;
 // - `mount_named` serves an interface under its named handle, and `mount`
-//   puts the opener of the resources the side serves under a URI's leading
-//   tokens, the longest matching winning; `open` and `drop` reach the root's
+//   puts the opener of an interface's resources the side serves under a
+//   URI's leading tokens, the longest matching winning; `open` and `drop` reach the root's
 //   open and a handle's drop on the other side;
 // - `cancel` cancels a request sent and pending (the root's `CANCEL`), and
 //   `on_cancel` puts what runs if a request the side serves is canceled.
@@ -56,6 +56,7 @@
 #include <optional>
 #include <span>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -200,8 +201,9 @@ class Side {
         }
     }
 
-    // Puts `open` as the opener of the URIs that start with `prefix`.
-    void mount(std::vector<Token> prefix, Opener open);
+    // Puts `open` as the opener of the URIs that start with `prefix`, whose
+    // objects are the resources of the interface of the named handle `h`.
+    void mount(Handle h, std::vector<Token> prefix, Opener open);
 
     // Serves `o` under its interface's named handle `h`, which the other
     // side calls with no open.
@@ -274,8 +276,9 @@ class Side {
     bool crossing_ = false;
     // Where the next request's tag is sought.
     Tag next_ = 0;
-    // The openers, by the URI's leading tokens.
-    std::vector<std::pair<std::vector<Token>, Opener>> mounts_;
+    // The openers, each with the named handle of the interface whose
+    // resources it opens, by the URI's leading tokens.
+    std::vector<std::tuple<Handle, std::vector<Token>, Opener>> mounts_;
     // The objects this side serves, by the handles it issued.
     Table<std::unique_ptr<Object>> objects_;
     // The interfaces this side serves, by their named handles (`NAMED`).

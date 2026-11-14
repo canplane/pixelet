@@ -98,15 +98,14 @@ pub fn done<T: Send + 'static>(id: u64, result: T) {
 }
 
 /// One turn of the guest thread's loop: the next task, or the earliest timer
-/// due, waited for, the timers due answered and the task run. A task's panic,
-/// which the host's hook has reported and turned into a trap
-/// (xpute-native-host stop.rs `hook`), ends the task and not the loop.
+/// due, waited for, the task run and the timers due answered. A panic ends
+/// the turn alone (native.rs `run`): the task taken has run by then, and a
+/// timer not yet answered stays for the next turn.
 pub(crate) fn turn() {
-    let task = wait();
-    answer_timers();
-    if let Some(task) = task {
-        let _ = std::panic::catch_unwind(core::panic::AssertUnwindSafe(task));
+    if let Some(task) = wait() {
+        task();
     }
+    answer_timers();
 }
 
 /// The next task, waited for until the earliest timer is due: None when that

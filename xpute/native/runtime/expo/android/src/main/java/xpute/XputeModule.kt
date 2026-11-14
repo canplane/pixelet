@@ -42,13 +42,14 @@ class XputeModule : Module() {
       ),
     )
   }
-  private val trap = { sendEvent("onTrap") }
+  private val trap = { err: String -> sendEvent("onTrap", mapOf("err" to err)) }
 
   override fun definition() = ModuleDefinition {
     Name("Xpute")
 
     /** `onNotify` fires when a batch waits for `take`, `onStopped` when the
-     * guest stopped, with its report, and `onTrap` when it trapped. */
+     * guest stopped, with its report, and `onTrap` when it trapped, with what
+     * stopped it. */
     Events("onNotify", "onStopped", "onTrap")
 
     // The runtime tells the newest module made, and a module clears the

@@ -236,13 +236,14 @@ fn lowered(uri: &[Token]) -> Vec<u8> {
 
 /// Mounts what the UI serves: its named interfaces under their handles
 /// (@xpute/link remote.ts `Remote.named`), the methods `later` names answered
-/// later, and an opener at each of its `prefixes` (`Remote.prefixes`).
-pub(crate) fn serve(named: &[Handle], prefixes: Vec<Vec<Token>>, later: &'static [(Handle, Method)]) {
+/// later, and an opener at each of its `prefixes`, for its interface
+/// (`Remote.prefixes`).
+pub(crate) fn serve(named: &[Handle], prefixes: Vec<(Handle, Vec<Token>)>, later: &'static [(Handle, Method)]) {
     for &h in named {
         link::mount_named(h, Rc::new(Named { h, later }));
     }
-    for p in prefixes {
-        link::mount(p, |uri, h| {
+    for (i, p) in prefixes {
+        link::mount(i, p, |uri, h| {
             let uri = lowered(uri);
             let generation = generation();
             tell(generation, 3, |w| {

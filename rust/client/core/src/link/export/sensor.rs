@@ -27,6 +27,11 @@ pub(super) fn pos(lon: f64, lat: f64, alt: Option<f64>, accuracy: Option<f64>, c
     Ok(())
 }
 
+pub(super) fn orient_unavailable() -> Result<(), Errno> {
+    device_orientation::orient_unavailable();
+    Ok(())
+}
+
 pub(super) fn err(sensor: Sensor, code: Option<GeolocationErrorCode>, watching: bool) -> Result<(), Errno> {
     match sensor {
         // A failure the platform gave no cause for counts as `Other`.
@@ -73,8 +78,5 @@ pub(super) fn platform(geolocation: bool, orient: bool, orient_permission: bool,
         needs_permission: orient_permission,
         silence_is_loss: orient_silence_is_loss,
     };
-    if !orient {
-        device_orientation::orient_unavailable();
-    }
     Ok(())
 }

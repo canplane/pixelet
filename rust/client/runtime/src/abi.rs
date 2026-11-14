@@ -16,18 +16,29 @@ pub mod text;
 pub mod types;
 pub mod watch;
 
-/// The interfaces the world imports that the host serves under a named
-/// handle, each `(name, handle)`, which are mounted before the guest boots.
+/// The interfaces the world imports, each `(name, handle)`, which are
+/// mounted before the guest boots: one with functions of its own under its
+/// handle, one of resources alone by an opener at a prefix.
 pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[
-    ("xpute:stop/stop", 0x4eccaa),
-    ("xpute:clocks/monotonic-clock", 0x73f703),
-    ("xpute:clocks/system-clock", 0x7dfa61),
-    ("xpute:gpu/gpu", 0x79d455),
-    ("xpute:gpu/vsync", 0x42eda6),
-    ("pxl:core/object", 0x4edab0),
-    ("pxl:core/overlay", 0x7b1393),
-    ("pxl:core/watch", 0x71919e),
-    ("pxl:core/text", 0x61d944),
+    ("xpute:stop/stop", xpute_native_runtime::abi::stop::HANDLE),
+    (
+        "xpute:clocks/monotonic-clock",
+        xpute_native_runtime::abi::clocks::monotonic_clock::HANDLE,
+    ),
+    (
+        "xpute:clocks/system-clock",
+        xpute_native_runtime::abi::clocks::system_clock::HANDLE,
+    ),
+    ("xpute:fs/file", xpute_native_runtime::abi::fs::file::HANDLE),
+    ("xpute:gpu/gpu", xpute_gpu_native_runtime::abi::gpu::HANDLE),
+    (
+        "xpute:gpu/vsync",
+        xpute_gpu_native_runtime::abi::vsync::HANDLE,
+    ),
+    ("pxl:core/object", object::HANDLE),
+    ("pxl:core/overlay", overlay::HANDLE),
+    ("pxl:core/watch", watch::HANDLE),
+    ("pxl:core/text", text::HANDLE),
 ];
 
 /// The methods of the named interfaces the host serves that answer

@@ -85,7 +85,8 @@ pub unsafe fn bind(
 
 /// Exports the GPU's host to JNI for the Kotlin class `xpute.Gpu`, which
 /// `native_abi!` expands on Android: `init()`, which makes its static
-/// `onState(state: String)` hear the host's state (`init`), `surfaceBind(handle: Int,
+/// `onState(state: String)` hear the host's state (`init`), `state(): String?`,
+/// the host's state now (`native::state`), `surfaceBind(handle: Int,
 /// surface: Surface): Int`, `surfaceUnbind(handle: Int)` and `vsync()`.
 #[macro_export]
 macro_rules! jni_abi {
@@ -99,6 +100,20 @@ macro_rules! jni_abi {
         ) {
             // SAFETY: the environment and the `xpute.Gpu` JNI called with.
             unsafe { $crate::jni::init(env, this) }
+        }
+
+        /// # Safety
+        /// Only JNI calls this, on a thread Java made.
+        #[no_mangle]
+        unsafe extern "system" fn Java_xpute_Gpu_state(
+            env: *mut ::xpute_native_runtime::jni::sys::JNIEnv,
+            _this: ::xpute_native_runtime::jni::sys::jobject,
+        ) -> ::xpute_native_runtime::jni::sys::jstring {
+            let Some(s) = $crate::native::state() else {
+                return ::core::ptr::null_mut();
+            };
+            // SAFETY: the environment JNI called with, and the name's UTF-8.
+            unsafe { ::xpute_native_runtime::jni::string(env, s.as_ptr(), s.len()) }
         }
 
         /// # Safety

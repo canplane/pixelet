@@ -6,11 +6,12 @@ pub mod monotonic_clock;
 pub mod system_clock;
 pub mod types;
 
-/// The interfaces the world imports that the host serves under a named
-/// handle, each `(name, handle)`, which are mounted before the guest boots.
+/// The interfaces the world imports, each `(name, handle)`, which are
+/// mounted before the guest boots: one with functions of its own under its
+/// handle, one of resources alone by an opener at a prefix.
 pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[
-    ("xpute:clocks/monotonic-clock", 0x73f703),
-    ("xpute:clocks/system-clock", 0x7dfa61),
+    ("xpute:clocks/monotonic-clock", monotonic_clock::HANDLE),
+    ("xpute:clocks/system-clock", system_clock::HANDLE),
 ];
 
 /// The methods of the named interfaces the host serves that answer

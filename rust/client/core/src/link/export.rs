@@ -156,6 +156,9 @@ impl abi::sensor::Guest for Core {
     fn orient(&self, webkit_compass_heading: Option<f64>, alpha: Option<f64>) -> Result<(), Errno> {
         sensor::orient(webkit_compass_heading, alpha)
     }
+    fn orient_unavailable(&self) -> Result<(), Errno> {
+        sensor::orient_unavailable()
+    }
     fn err(
         &self,
         sensor: abi::types::Sensor,

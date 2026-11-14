@@ -16,20 +16,20 @@ pub mod wait;
 
 /// Defines the guest's three exports (link/wit/types.wit), over frames of
 /// `room` bytes, with `boot` mounting what the guest serves and opening what it
-/// calls, and `enter` and `end` starting and ending each entry. Before its
-/// boot the guest's failures are made its stop (stop.rs `hook`).
+/// calls, and `enter` and `end` starting and ending each entry. From its init
+/// on, the guest's failures are its own (stop.rs `hook`).
 #[macro_export]
 macro_rules! link {
     ($room:expr, $boot:expr, $enter:expr, $end:expr) => {
         #[cfg(target_arch = "wasm32")]
         #[unsafe(no_mangle)]
         pub extern "C" fn link_init() -> u32 {
+            $crate::stop::hook();
             $crate::link::init($room, $enter, $end)
         }
         #[cfg(target_arch = "wasm32")]
         #[unsafe(no_mangle)]
         pub extern "C" fn link_boot() {
-            $crate::stop::hook();
             $crate::link::boot($boot)
         }
         #[cfg(target_arch = "wasm32")]
@@ -42,13 +42,15 @@ macro_rules! link {
         #[cfg(not(target_arch = "wasm32"))]
         #[unsafe(no_mangle)]
         pub extern "C" fn link_init() -> u32 {
-            $crate::link::caught($crate::xpute_link::TRAP_AT, || $crate::link::init($room, $enter, $end))
+            $crate::link::caught($crate::xpute_link::TRAP_AT, || {
+                $crate::stop::hook();
+                $crate::link::init($room, $enter, $end)
+            })
         }
         #[cfg(not(target_arch = "wasm32"))]
         #[unsafe(no_mangle)]
         pub extern "C" fn link_boot() -> i32 {
             $crate::link::caught($crate::xpute_link::TRAP, || {
-                $crate::stop::hook();
                 $crate::link::boot($boot);
                 0
             })

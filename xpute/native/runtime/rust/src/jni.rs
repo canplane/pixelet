@@ -8,7 +8,7 @@
 //! runtime itself reaches the app through them: the C ABI's calls under the
 //! names JNI looks for, as the `external` functions of the Kotlin class
 //! `xpute.Runtime` (`jni_abi!`), and what the app hears as calls of its
-//! static `onNotify()`, `onStopped(…)` and `onTrap()`, from the threads that
+//! static `onNotify()`, `onStopped(…)` and `onTrap(…)`, from the threads that
 //! tell it, a thread the runtime made attached to the VM for good as a
 //! daemon, and a stop and a trap again from the Java thread of a start after
 //! them (native.rs `start`).
@@ -192,7 +192,7 @@ pub unsafe fn init(e: *mut JNIEnv, this: jobject) {
     let mut methods = [(c"", c""); 3];
     methods[ON_NOTIFY] = (c"onNotify", c"()V");
     methods[ON_STOPPED] = (c"onStopped", c"(ILjava/lang/String;IJJ)V");
-    methods[ON_TRAP] = (c"onTrap", c"()V");
+    methods[ON_TRAP] = (c"onTrap", c"(Ljava/lang/String;)V");
     // SAFETY: what JNI called with, on a thread Java made.
     let Some(c) = (unsafe { class(e, this, methods) }) else {
         return;
@@ -209,10 +209,16 @@ extern "C" fn notify() {
     unsafe { call(c, ON_NOTIFY, |_| Vec::new()) }
 }
 
-extern "C" fn trap() {
+extern "C" fn trap(err: *const u8, len: usize) {
     let Some(c) = CLASS.get() else { return };
-    // SAFETY: `onTrap()V`, at its index.
-    unsafe { call(c, ON_TRAP, |_| Vec::new()) }
+    let args = |e| {
+        // SAFETY: this thread's environment, and the trap's UTF-8, the
+        // trap's for the call.
+        let s = unsafe { string(e, err, len) };
+        vec![jvalue { l: s }]
+    };
+    // SAFETY: `onTrap(Ljava/lang/String;)V`, at its index, and its one value.
+    unsafe { call(c, ON_TRAP, args) }
 }
 
 extern "C" fn stopped(errnum: i32, file: *const u8, len: usize, line: u32, n1: u64, n2: u64) {

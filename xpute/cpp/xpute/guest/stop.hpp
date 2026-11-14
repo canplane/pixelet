@@ -9,8 +9,10 @@
 namespace xpute::guest::stop {
 
 // Tells the host a bug in the guest's own code, by its stop, before the guest
-// stops; `XPUTE_LINK` runs it before the guest's boot. A bug outside an entry,
-// or while the guest is out on `link_out`, is not told (`in_guest`).
+// stops; `XPUTE_LINK` runs it as the guest's first export starts, so that it
+// covers the guest's whole run. A bug outside an entry, in `init` before the
+// host can hear a stop, or while the guest is out on `link_out`, is not told
+// (`in_guest`): the trap tells it.
 void hook() noexcept;
 
 } // namespace xpute::guest::stop

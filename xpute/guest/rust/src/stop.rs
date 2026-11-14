@@ -7,14 +7,16 @@ use xpute_kit::status::bug;
 use xpute_kit::status::errno::Errno;
 
 use crate::abi::stop;
-use crate::link::in_guest;
+use crate::link::{in_guest, in_init};
 
 /// Tells the host a bug or a panic in the guest's own code, by its stop,
-/// before the guest stops; `link!` runs it before the guest's boot. Both
-/// hooks are the process's on a device, so what is not the guest's own
-/// (another thread's, or the host's while the guest is out on `link_out`)
-/// goes on to the hook before, the host's (xpute-native-host stop.rs
-/// `hook`), as it would have.
+/// before the guest stops; `link!` runs it as the guest's first export
+/// starts, so that it covers the guest's whole run, `init` too, where the
+/// failure is told by the trap alone, as on a page. Both hooks are the
+/// process's on a device, so what is not the guest's own (another thread's,
+/// or the host's while the guest is out on `link_out`) goes on to the hook
+/// before, its runtime's (xpute-native-runtime native.rs `hook`), as it
+/// would have.
 pub fn hook() {
     bug::set_report(|errnum, at, n1, n2| {
         if in_guest() {
@@ -23,6 +25,9 @@ pub fn hook() {
     });
     let prev = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
+        if in_init() {
+            return;
+        }
         if !in_guest() {
             return prev(info);
         }

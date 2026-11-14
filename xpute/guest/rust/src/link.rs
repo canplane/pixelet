@@ -31,6 +31,10 @@ thread_local! {
     static SIDE: Side = const { Side::new(|l| l.inbox + l.room, cross_out) };
     /// Whether the guest is in an entry.
     static ENTERED: Cell<bool> = const { Cell::new(false) };
+    /// Whether the guest is laying its link (`init`), before the host can
+    /// hear anything over it. A thread's own, it reads clear on any other
+    /// thread, where the guest's layout reads unset as it does in `init`.
+    static INIT: Cell<bool> = const { Cell::new(false) };
     /// The program's start and end of an entry (`init`).
     static ENTER: Cell<fn()> = const { Cell::new(|| {}) };
     static END: Cell<fn() -> bool> = const { Cell::new(|| false) };
@@ -42,6 +46,7 @@ thread_local! {
 /// the link's layout lies: two words, the inbox and a frame's room, then the
 /// inbox and the outbox.
 pub fn init(room: u32, enter: fn(), end: fn() -> bool) -> u32 {
+    INIT.set(true);
     xpute_kit::ensure!(room.is_multiple_of(8) && room >= HDR_SZ, EINVAL, room);
     let words: &'static mut [u64] = Vec::leak(vec![0; 1 + 2 * room as usize / 8]);
     let at = mem::off(words.as_ptr().cast());
@@ -53,7 +58,15 @@ pub fn init(room: u32, enter: fn(), end: fn() -> bool) -> u32 {
     SIDE.with(|s| s.set_layout(Layout { inbox, room }));
     ENTER.set(enter);
     END.set(end);
+    INIT.set(false);
     at
+}
+
+/// Whether the guest is laying its link on this thread (`init`): its own code
+/// runs, and its failure is told by its trap alone, as the host cannot hear a
+/// stop yet. A failed init leaves it set, the guest entered no more.
+pub fn in_init() -> bool {
+    INIT.get()
 }
 
 /// The guest's first entry, once the host has read the layout. Unlike every
@@ -66,12 +79,14 @@ pub fn boot(boot: impl FnOnce()) {
     leave();
 }
 
-/// Puts `open` as the opener of the URIs that start with `prefix`.
+/// Puts `open` as the opener of the URIs that start with `prefix`, whose
+/// objects are the resources of the interface of the named handle `h`.
 pub fn mount(
+    h: Handle,
     prefix: Vec<Token>,
     open: impl Fn(&[Token], Handle) -> Result<Rc<dyn Object>, Errno> + 'static,
 ) {
-    SIDE.with(|s| s.mount(prefix, open));
+    SIDE.with(|s| s.mount(h, prefix, open));
 }
 
 /// Serves `o` under its interface's named handle `h`.

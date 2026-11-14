@@ -23,14 +23,23 @@ interface XputeGpu {
    * finds none opens, and `waiting` once a device is lost, as the guest asks
    * again; the surfaces bound stay bound to the next device. */
   addListener(event: "onState", listener: (e: { state: GpuState }) => void): { remove(): void };
+  /** What the host has of a GPU now, or null before the guest's first ask is
+   * answered (xpute_gpu.h `xpute_gpu_state`). */
+  state(): GpuState | null;
 }
 
 const XPUTE_GPU: XputeGpu = requireNativeModule<XputeGpu>("XputeGpu");
 
 /** Adds `hear` to what is told what the host has of a GPU, as it changes,
- * over the module's `onState`, which xpute_gpu.h `xpute_gpu_state_on` sends. */
+ * over the module's `onState`, which xpute_gpu.h `xpute_gpu_state_on` sends,
+ * and tells it the state now, which a UI started after the host told one has
+ * not heard, as a reloaded page hears its new worker's host. A change between
+ * the two is heard after the state now. */
 export function state_on(hear: (state: GpuState) => void): { remove(): void } {
-  return XPUTE_GPU.addListener("onState", ({ state }) => hear(state));
+  const sub = XPUTE_GPU.addListener("onState", ({ state }) => hear(state));
+  const cur = XPUTE_GPU.state();
+  if (cur !== null) hear(cur);
+  return sub;
 }
 
 /** The guest's surface `surface` draws into this view, and 0 names no surface.

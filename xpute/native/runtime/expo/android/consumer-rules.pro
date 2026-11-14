@@ -3,5 +3,5 @@
 -keep class xpute.Runtime {
     public static void onNotify();
     public static void onStopped(int, java.lang.String, int, long, long);
-    public static void onTrap();
+    public static void onTrap(java.lang.String);
 }

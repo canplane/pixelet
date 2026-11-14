@@ -11,14 +11,16 @@
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
-use xpute_kit::status::bug::OrBug;
+use xpute_kit::status::bug::{Bug, OrBug};
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Token;
 use xpute_link::{load_uri, mem, Handle, Lift, Method};
 use crate::{event_loop, link, remote};
 
-/// The guest's report before it stops (wit/stop/stop.wit), as the host that
-/// serves the stop hands it to the app (xpute-native-host stop.rs).
+/// The report of a broken invariant before the guest stops: the guest's
+/// (wit/stop/stop.wit), as the host that serves the stop hands it to the app
+/// (xpute-native-host stop.rs), or the host's own failure, which the runtime
+/// tells (`hook`).
 pub struct Stop {
     pub errnum: i32,
     pub file: String,
@@ -33,7 +35,7 @@ pub type Server = Box<dyn FnOnce() + Send>;
 
 /// What a program starts its guest with: the stack its thread takes, its
 /// servers, in no order, since none depends on another; the interfaces its
-/// guest's world imports under a named handle (the bindings' `IMPORTS`);
+/// guest's world imports (the bindings' `IMPORTS`);
 /// and the methods of the UI's named interfaces that answer later (the
 /// bindings' `LATER`).
 pub struct Boot {
@@ -48,16 +50,20 @@ pub struct Boot {
 /// it starts its guest with.
 pub type Start = fn(PathBuf, fn(Stop)) -> Boot;
 
-/// What tells the app a batch waits, or the guest's trap.
+/// What tells the app a batch waits.
 pub type Tell = extern "C" fn();
 
 /// What tells the app the guest stopped: its errno, its file's UTF-8 and
 /// length, its line and its two numbers.
 pub type Stopped = extern "C" fn(i32, *const u8, usize, u32, u64, u64);
 
+/// What tells the app the guest trapped: what stopped it, its UTF-8 and
+/// length, as a page's trap carries its error (@xpute/web-runtime `Trap`).
+pub type Trapped = extern "C" fn(*const u8, usize);
+
 static NOTIFY: Mutex<Option<Tell>> = Mutex::new(None);
 static STOPPED: Mutex<Option<Stopped>> = Mutex::new(None);
-static TRAP: Mutex<Option<Tell>> = Mutex::new(None);
+static TRAP: Mutex<Option<Trapped>> = Mutex::new(None);
 
 pub fn notify_on(f: Option<Tell>) {
     *NOTIFY.lock().unwrap_or_else(|e| e.into_inner()) = f;
@@ -67,7 +73,7 @@ pub fn stopped_on(f: Option<Stopped>) {
     *STOPPED.lock().unwrap_or_else(|e| e.into_inner()) = f;
 }
 
-pub fn trap_on(f: Option<Tell>) {
+pub fn trap_on(f: Option<Trapped>) {
     *TRAP.lock().unwrap_or_else(|e| e.into_inner()) = f;
 }
 
@@ -78,16 +84,16 @@ fn notify() {
 }
 
 /// What the app was told of the guest's end: the last stop reported, as the
-/// UI keeps it, and whether the guest trapped, told again to each new UI
+/// UI keeps it, and what trapped the guest, told again to each new UI
 /// (`start`).
 struct End {
     stop: Option<Stop>,
-    trapped: bool,
+    trap: Option<String>,
 }
 
 static END: Mutex<End> = Mutex::new(End {
     stop: None,
-    trapped: false,
+    trap: None,
 });
 
 fn end() -> MutexGuard<'static, End> {
@@ -100,9 +106,9 @@ fn tell_stop(s: &Stop) {
     }
 }
 
-fn tell_trap() {
+fn tell_trap(err: &str) {
     if let Some(f) = *TRAP.lock().unwrap_or_else(|e| e.into_inner()) {
-        f();
+        f(err.as_ptr(), err.len());
     }
 }
 
@@ -112,17 +118,19 @@ fn stopped(s: Stop) {
     end.stop = Some(s);
 }
 
-fn trap() {
+/// Tells the app the guest trapped, with what stopped it (link.rs `trap`).
+pub(crate) fn trap(err: &str) {
     let mut end = end();
-    tell_trap();
-    end.trapped = true;
+    tell_trap(err);
+    end.trap = Some(err.to_owned());
 }
 
-/// The prefixes the UI opens at, from a lowered `list<list<token>>`.
-fn prefixes(pkt: &[u8]) -> Result<Vec<Vec<Token>>, Errno> {
+/// The prefixes the UI opens at, each with the named handle of the interface
+/// whose resources they are, from a lowered `list<tuple<u32, list<token>>>`.
+fn prefixes(pkt: &[u8]) -> Result<Vec<(Handle, Vec<Token>)>, Errno> {
     let r = Lift::new(pkt);
-    let (base, len) = r.list(0, 8, 4)?;
-    (0..len).map(|k| load_uri(r, base + k * 8)).collect()
+    let (base, len) = r.list(0, 12, 4)?;
+    (0..len).map(|k| Ok((r.u32(base + k * 12)?, load_uri(r, base + k * 12 + 4)?))).collect()
 }
 
 /// Whether the runtime has started, which it does once a process.
@@ -144,8 +152,8 @@ pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], cache_dir: P
         if let Some(s) = &end.stop {
             tell_stop(s);
         }
-        if end.trapped {
-            tell_trap();
+        if let Some(err) = &end.trap {
+            tell_trap(err);
         }
     }
     STARTED.call_once(|| run(start(cache_dir, stopped), named, prefixes));
@@ -153,29 +161,84 @@ pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], cache_dir: P
 }
 
 /// Starts the guest on a thread of its own, as @xpute/web-runtime worker.ts
-/// `start` does on a page: mounts each server, then what the UI serves
-/// (`remote::serve`), enters the guest, which an import no server mounts
-/// refuses (`link::init`), and runs the loop for the guest's life. The guest
-/// is told each UI attached by `remote::accept`. A trapped guest is entered
-/// no more, and the UI's methods are answered EPIPE; what boot made due or
-/// completed is not left waiting.
-fn run(boot: Boot, named: Vec<Handle>, prefixes: Vec<Vec<Token>>) {
+/// `start` does on a page: once a failure of the host's is a trap (`hook`),
+/// mounts each server, then what the UI serves (`remote::serve`), enters the
+/// guest, which an import no server mounts refuses (`link::init`), and runs
+/// the loop for the guest's life. The guest is told each UI attached by
+/// `remote::accept`. A failure of the host's anywhere on this thread traps
+/// the link and ends only the step it was in, boot's or the loop's turn: a
+/// trapped guest is entered no more, and the UI's methods are answered
+/// EPIPE; what boot made due or completed is not left waiting.
+fn run(boot: Boot, named: Vec<Handle>, prefixes: Vec<(Handle, Vec<Token>)>) {
     let spawned = std::thread::Builder::new()
         .name("xpute guest".into())
         .stack_size(boot.stack_sz)
         .spawn(move || {
-            for s in boot.servers {
-                s();
-            }
-            remote::serve(&named, prefixes, boot.later);
-            link::init(trap, boot.imports);
+            link::record_guest_thread();
+            hook();
+            caught(|| {
+                for s in boot.servers {
+                    s();
+                }
+                remote::serve(&named, prefixes, boot.later);
+                link::init(boot.imports);
+            });
             loop {
-                link::run_due();
-                remote::flush(notify);
-                event_loop::turn();
+                caught(|| {
+                    link::run_due();
+                    remote::flush(notify);
+                    event_loop::turn();
+                });
             }
         });
     spawned.or_bug(Errno::EAGAIN);
+}
+
+/// Runs `f`, a step of the guest's thread, a panic in it ending the step
+/// alone, which `hook` has made a trap.
+fn caught(f: impl FnOnce()) {
+    let _ = std::panic::catch_unwind(core::panic::AssertUnwindSafe(f));
+}
+
+/// Makes a panic of the host's own, on any thread, a stop, as @xpute/web-runtime
+/// worker.ts `hook` makes a throw one: the link is trapped, so that no answer
+/// the dead thread owed leaves the guest waiting, and where it traps just now,
+/// the failure is logged and told the app as a stop, with its errno, a bug's or
+/// ENOTRECOVERABLE, and where it was raised, before the app hears the trap. A
+/// panic after the guest trapped is no failure of the host's. The link's state
+/// is the guest thread's: a panic there is told at once, before it unwinds,
+/// and one on another thread is posted to it. A guest installs its own hook
+/// over this one and hands back what is not its own (xpute-guest link.rs
+/// `in_guest`). A bug panics with itself, which no report outside the guest
+/// took.
+fn hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let (errnum, file, line) = match info.payload().downcast_ref::<Bug>() {
+            Some(b) => (b.errnum as i32, b.file.to_owned(), b.line),
+            None => {
+                let (file, line) = info.location().map_or(("", 0), |at| (at.file(), at.line()));
+                (Errno::ENOTRECOVERABLE as i32, file.to_owned(), line)
+            }
+        };
+        let fail = move || {
+            if !link::trapped() {
+                crate::log(&format!("[host] stopped: {errnum} at {file}:{line}"));
+                stopped(Stop {
+                    errnum,
+                    file: file.clone(),
+                    line,
+                    n1: 0,
+                    n2: 0,
+                });
+            }
+            link::trap(&format!("{} at {file}:{line}", link::HOST_STOPPED));
+        };
+        if link::on_guest_thread() {
+            fail();
+        } else {
+            event_loop::post_task(Box::new(fail));
+        }
+    }));
 }
 
 /// A directory the app names by the `len` bytes of UTF-8 at `at`.
@@ -256,7 +319,7 @@ macro_rules! native_abi {
         }
 
         #[no_mangle]
-        pub extern "C" fn xpute_trap_on(f: Option<$crate::native::Tell>) {
+        pub extern "C" fn xpute_trap_on(f: Option<$crate::native::Trapped>) {
             $crate::native::trap_on(f);
         }
 

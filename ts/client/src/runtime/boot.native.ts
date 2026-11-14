@@ -37,13 +37,13 @@ export function boot(): void {
     "bytes" | "mount" | "mount_named" | "task_return" | "on_cancel"
   > = {
     bytes,
-    mount: (prefix, o) => remote.mount(prefix, o),
+    mount: (h, prefix, o) => remote.mount(h, prefix, o),
     mount_named: (h, o) => remote.mount_named(h, o),
     task_return: (t, result, data) => remote.task_return(t, result, data),
     on_cancel: (t, stop) => remote.on_cancel(t, stop),
   };
   stopped_on(stopped);
-  trap_on(() => trapped("the guest trapped"));
+  trap_on(trapped);
   state_on((state) => set_gpu(GPU_STATE[state]));
   serve_ui(remote);
   serve_files(link);

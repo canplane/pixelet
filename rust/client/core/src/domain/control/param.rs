@@ -101,12 +101,6 @@ const _: () = assert!(
     "the climb rises faster and relaxes slower than the controls ease"
 );
 
-/// The share of each new heading sample the followed azimuth takes. It
-/// applies per sample, not per frame. Compass jitter, which is worse
-/// indoors, passes the store's 1.5° dead zone, and this smooths it before it
-/// reaches the azimuth.
-pub(crate) const HEADING_SMOOTH_ALPHA: f64 = 0.25;
-
 /// How long following outlasts a location that is not ready, in ms, set by
 /// eye. A gap the location recovers from, such as a fix lost indoors or the
 /// watch starting again, keeps following. A dead location lets following go

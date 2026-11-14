@@ -19,12 +19,16 @@ namespace xpute::abi::gpu::surface {
 namespace _rt {
 using ::xpute::Errno;
 using ::xpute::Result;
+using ::xpute::link::Handle;
 using ::xpute::link::Lift;
 using ::xpute::link::Method;
 using ::xpute::link::Object;
 using ::xpute::link::Reply;
 using ::xpute::link::Tag;
 } // namespace _rt
+
+// The interface's handle, named by `xpute:gpu/surface` (frame.json5 `NAMED`).
+inline constexpr _rt::Handle HANDLE = 0x6e5265;
 
 // `[method]surface.resize`
 inline constexpr _rt::Method SURFACE_RESIZE = 0;

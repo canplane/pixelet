@@ -6,7 +6,7 @@
 //! the same credits, and it stays wanted until it arrives. A slot names no
 //! file until the catalog lands, and its reader treats it as still loading.
 //!
-//! A read the host canceled leaves its asset unasked, so that it is asked
+//! A canceled read leaves its asset unasked, so that it is asked
 //! again (`arrival`); any other failed read is final. Bytes that do not read
 //! are final, because asking again brings the same bytes. A model's bytes are
 //! handed once to the scene, which parses them (`take_gltf`). An image's

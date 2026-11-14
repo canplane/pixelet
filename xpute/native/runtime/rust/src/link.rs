@@ -17,7 +17,7 @@
 //! an entry, or the guest's init and boot), a completion given by an object
 //! it serves waits for the work at hand to end.
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
 use std::sync::OnceLock;
@@ -44,7 +44,7 @@ fn cross_in(_at: u32) -> i32 {
     // SAFETY: the guest's export, on its thread, one entry at a time.
     match unsafe { link_in() } {
         TRAP => {
-            trap();
+            trap(GUEST_TRAPPED);
             Errno::EPIPE as i32
         }
         result => result,
@@ -52,31 +52,39 @@ fn cross_in(_at: u32) -> i32 {
 }
 
 /// Whether the link is trapped (`trap`). On the guest's thread.
-pub fn trapped() -> bool {
+pub(crate) fn trapped() -> bool {
     SIDE.with(Side::trapped)
 }
 
 /// The guest's thread, the one that mounts what the host serves and enters
-/// the guest (`mount_named`, `mount`, `init`).
+/// the guest, which the runtime names as it starts it (native.rs `run`).
 static GUEST_THREAD: OnceLock<ThreadId> = OnceLock::new();
 
-fn record_guest_thread() {
+/// Names this thread the guest's.
+pub(crate) fn record_guest_thread() {
     GUEST_THREAD.get_or_init(|| std::thread::current().id());
 }
 
 /// Whether this is the guest's thread, where the link's state is.
-pub fn on_guest_thread() -> bool {
+pub(crate) fn on_guest_thread() -> bool {
     GUEST_THREAD.get() == Some(&std::thread::current().id())
 }
 
-/// Marks the link trapped, and tells the platform the first time, as a
-/// page's worker tells its trap. On the guest's thread.
-pub fn trap() {
+/// What a trap out of the guest's export says: the guest told its failure
+/// by its stop already, if it could.
+const GUEST_TRAPPED: &str = "the guest trapped";
+
+/// What a trap from a panic of the host's says, which its hook follows with
+/// where it stopped (native.rs `hook`).
+pub(crate) const HOST_STOPPED: &str = "the host stopped";
+
+/// Marks the link trapped, and tells the platform the first time, with
+/// `err`, what stopped it, as a page's worker tells its trap with its error
+/// (native.rs `trap`). On the guest's thread.
+pub(crate) fn trap(err: &str) {
     if SIDE.with(Side::trap) {
-        crate::log("[guest] trapped");
-        if let Some(report) = REPORT.get() {
-            report();
-        }
+        crate::log(&format!("[link] trapped: {err}"));
+        crate::native::trap(err);
     }
 }
 
@@ -89,50 +97,45 @@ thread_local! {
     /// The completions given while control is in the guest, with their
     /// packets written.
     static COMPLETIONS: RefCell<VecDeque<Completion>> = const { RefCell::new(VecDeque::new()) };
-    /// The platform's report of a trap, given with the guest's first entry.
-    static REPORT: Cell<Option<fn()>> = const { Cell::new(None) };
 }
 
 /// Enters the guest first, once the host's own objects are mounted: the
 /// guest lays its link, the host reads its layout, then the guest boots and
 /// may open them (link.ts `init`). Where an interface of `imports` (the
-/// bindings' `IMPORTS`) is not mounted under its named handle, the link
-/// traps, naming each, and the guest is never entered. `report` hears a
-/// trap, from then on. False where the link trapped, whichever side failed.
-pub(crate) fn init(report: fn(), imports: &[(&str, Handle)]) -> bool {
-    record_guest_thread();
-    REPORT.set(Some(report));
+/// bindings' `IMPORTS`) is served by nothing mounted, under its named handle
+/// or by an opener of its resources (xpute-link `Side::serves`), the link
+/// traps, naming each, and the guest is never entered. False where the link
+/// trapped, whichever side failed.
+pub(crate) fn init(imports: &[(&str, Handle)]) -> bool {
     let unserved: Vec<&str> = imports.iter().filter(|&&(_, h)| !SIDE.with(|s| s.serves(h))).map(|&(name, _)| name).collect();
     if !unserved.is_empty() {
-        crate::log(&format!("[host] no server mounts {}", unserved.join(", ")));
-        trap();
+        trap(&format!("no server mounts {}", unserved.join(", ")));
         return false;
     }
     // SAFETY: the guest's export, called once, before any other.
     let at = SIDE.with(|s| s.crossed(|| unsafe { link_init() }));
     if at == TRAP_AT {
-        trap();
+        trap(GUEST_TRAPPED);
         return false;
     }
     SIDE.with(|s| s.set_layout(Layout::at(at)));
     // SAFETY: the guest's export, called once, right after `link_init`.
     if SIDE.with(|s| s.crossed(|| unsafe { link_boot() })) == TRAP {
-        trap();
+        trap(GUEST_TRAPPED);
     }
     !trapped()
 }
 
 pub fn mount(
+    h: Handle,
     prefix: Vec<Token>,
     open: impl Fn(&[Token], Handle) -> Result<Rc<dyn Object>, Errno> + 'static,
 ) {
-    record_guest_thread();
-    SIDE.with(|s| s.mount(prefix, open));
+    SIDE.with(|s| s.mount(h, prefix, open));
 }
 
 /// Serves `o` under its interface's named handle `h`.
 pub fn mount_named(h: Handle, o: Rc<dyn Object>) {
-    record_guest_thread();
     SIDE.with(|s| s.mount_named(h, o));
 }
 
@@ -221,7 +224,7 @@ pub extern "C" fn link_out(at: u32) -> i32 {
         return Errno::EPIPE as i32;
     }
     std::panic::catch_unwind(|| SIDE.with(|s| s.recv(at))).unwrap_or_else(|_| {
-        trap();
+        trap(HOST_STOPPED);
         Errno::ENOTRECOVERABLE as i32
     })
 }

@@ -11,8 +11,7 @@
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { ERRNO_EINPROGRESS } from "@xpute/kit/status/errno.spec.ts";
 import { DROP, type Handle, type Method, type Port, type Side, type Tag } from "@xpute/link";
-import type { Token } from "@xpute/link/abi/types.ts";
-import type { Later, ToLink, ToUi } from "@xpute/link/remote.ts";
+import type { Later, Prefixes, ToLink, ToUi } from "@xpute/link/remote.ts";
 
 /** What takes the things the UI gives beside the link, by the handle it
  * gives each under, and hears the handle dropped. */
@@ -23,13 +22,14 @@ export interface Taker {
 
 /** Serves `link` to the UI across `port`: the interfaces the UI serves
  * mounted under their named handles (`Remote.named`), the methods `later`
- * names answered later, an opener at each of its `prefixes`
- * (`Remote.prefixes`), and what the UI gives beside the link to `taker`. */
+ * names answered later, an opener at each of its `prefixes`, for its
+ * interface (`Remote.prefixes`), and what the UI gives beside the link to
+ * `taker`. */
 export function serve(
   port: Port,
   link: Side,
   named: readonly Handle[],
-  prefixes: readonly (readonly Token[])[],
+  prefixes: Prefixes,
   later: Later,
   taker: Taker,
 ): void {
@@ -50,8 +50,8 @@ export function serve(
       drop() {},
     });
   }
-  for (const p of prefixes) {
-    link.mount(p, (uri, h) => {
+  for (const [i, p] of prefixes) {
+    link.mount(i, p, (uri, h) => {
       tell({ open: h, uri });
       return {
         call: (m, tag, args) => forward(h, m, tag, args),

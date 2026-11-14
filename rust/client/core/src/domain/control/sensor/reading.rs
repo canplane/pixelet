@@ -6,6 +6,7 @@
 use crate::abi::overlay::Message;
 use crate::abi::overlay::SensorStatus;
 use pxl_global::Global;
+use xpute_kit::math::scalar::wrap;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct DeviceLocation {
@@ -41,12 +42,7 @@ fn plain_delta(a: f64, b: f64) -> f64 {
 /// How far apart two headings lie on the circle: 359° and 1° are 2° apart,
 /// where a plain difference would make them 358°.
 fn heading_delta(a: f64, b: f64) -> f64 {
-    let raw = (a - b).abs() % 360.0;
-    if raw > 180.0 {
-        360.0 - raw
-    } else {
-        raw
-    }
+    wrap(a - b, -180.0, 180.0).abs()
 }
 
 /// The location's state as the snapshot carries it: its status, and what

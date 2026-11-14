@@ -6,6 +6,3 @@
 # The page's icons and link preview, made from ../brand by each web build
 # (pxl-tool/bin/brand.rs).
 /brand/
-
-# A standalone WebGPU repro page is dev-only and not part of the app.
-/repro-*.html

@@ -117,6 +117,12 @@ decided before the pause:
   > every import under a named handle is mounted, tells it the UI attached,
   > and on a device runs the loop (**the user**).
 
+  > Since 2026-11-15 (5ee892cc51): an import is checked by interface, an
+  > opened one included: `IMPORTS` lists every interface the world imports,
+  > and the runtime refuses to start where no server serves one, under its
+  > named handle or by an opener mounted for it at some prefix; which
+  > prefixes the guest opens stays the program's (**the agents**).
+
 - What a path is bound to is the program's on both platforms; xpute offers only
   the platform's storage (**the agents**).
 

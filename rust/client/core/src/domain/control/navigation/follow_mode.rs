@@ -1,7 +1,6 @@
 // pxl-core/domain/control/navigation/follow_mode.rs
 
 use pxl_spec::space::coord::q3::Q3;
-use xpute_kit::math::scalar::wrap;
 
 use crate::abi::overlay::SensorStatus;
 use crate::abi::camera::Tracking;
@@ -10,7 +9,7 @@ use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::destination::go_to_ground;
 use crate::domain::control::navigation::off_center::off_center;
-use crate::domain::control::param::{HEADING_SMOOTH_ALPHA, SENSOR_GRACE_MS};
+use crate::domain::control::param::SENSOR_GRACE_MS;
 use crate::domain::control::sensor::device_orientation::request_orient;
 use crate::domain::control::sensor::reading::{device_location_store, device_orient_store};
 use crate::sys::sched::invalidate_at;
@@ -21,10 +20,9 @@ struct Follow {
     /// Whether the camera follows the device. The controls turn it on and
     /// off, and a dead location turns it off.
     on: bool,
-    /// The azimuth, the device's place and its heading as following last
-    /// took them. Each is None while the camera does not follow, so following
-    /// again snaps to the device and its heading.
-    smoothed_azimuth: Option<f64>,
+    /// The device's place and its heading as following last took them. Each
+    /// is None while the camera does not follow, so following again turns to
+    /// the device and its heading.
     last_device: Option<Q3>,
     last_heading: Option<f64>,
     /// The location status a not-ready location's deadline was set for, and
@@ -37,7 +35,6 @@ static FOLLOW: Global<Follow> = Global::new();
 fn follow() -> &'static mut Follow {
     FOLLOW.get(|| Follow {
         on: false,
-        smoothed_azimuth: None,
         last_device: None,
         last_heading: None,
         grace: None,
@@ -85,7 +82,6 @@ pub(crate) fn follow_mode_step() {
     }
 
     if !is_follow_mode {
-        f.smoothed_azimuth = None;
         f.last_device = None;
         f.last_heading = None;
         return;
@@ -98,21 +94,11 @@ pub(crate) fn follow_mode_step() {
     }
     f.last_device = device_coord;
 
+    // The heading is the camera's azimuth to reach; the camera eases to it
+    // and asks its own frames while it turns (`camera_step`).
     if let Some(heading) = heading.filter(|h| Some(*h) != f.last_heading) {
-        let raw_azimuth = heading * (core::f64::consts::PI / 180.0);
-        let smoothed = match f.smoothed_azimuth {
-            None => raw_azimuth,
-            Some(s) => {
-                s + wrap(
-                    raw_azimuth - s,
-                    -core::f64::consts::PI,
-                    core::f64::consts::PI,
-                ) * HEADING_SMOOTH_ALPHA
-            }
-        };
-        f.smoothed_azimuth = Some(smoothed);
         controller::set_intent(IntentPatch {
-            azimuth: Some(smoothed),
+            azimuth: Some(heading.to_radians()),
             ..Default::default()
         });
     }

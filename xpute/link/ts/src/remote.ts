@@ -66,6 +66,10 @@ interface Hear {
  * `[handle, method]` (the bindings' `LATER`). */
 export type Later = readonly (readonly [Handle, Method])[];
 
+/** The prefixes a UI opens objects under, each `[handle, prefix]`, the named
+ * handle of the interface whose resources they are (`Remote.prefixes`). */
+export type Prefixes = readonly (readonly [Handle, readonly Token[]])[];
+
 /** What the UI sends the link's side: a method of the guest's, a thing
  * given beside the link, or its answer to a method it serves later. */
 export type ToLink =
@@ -104,9 +108,10 @@ export class Remote extends Server<ReturnType<typeof opened>> implements Sender 
     return [...this._named.keys()];
   }
 
-  /** The prefixes the UI opens the objects under (`mount`). */
-  get prefixes(): (readonly Token[])[] {
-    return this._mounts.map(([p]) => p);
+  /** The prefixes the UI opens the objects under (`mount`), each with the
+   * named handle of the interface whose resources they are. */
+  get prefixes(): Prefixes {
+    return this._mounts.map(([h, p]) => [h, p]);
   }
 
   private _hear(m: ToUi): void {

@@ -11,6 +11,7 @@ use crate::space::coord::q3::Q3;
 use crate::space::coord::world::BOUNDS;
 use crate::space::coord::world::ROUND;
 use crate::space::coord::zoom::Zoom;
+use xpute_kit::math::scalar::wrap;
 
 use super::epsg3857::{self, G3857};
 
@@ -27,7 +28,7 @@ const RAD_TO_DEG: f64 = 180.0 / core::f64::consts::PI;
 
 /// Into [-180, 180).
 fn NORMALIZE_LON(lon: f64) -> f64 {
-    ((((lon + 180.0) % 360.0) + 360.0) % 360.0) - 180.0
+    wrap(lon, -180.0, 180.0)
 }
 
 /// Into the Mercator square's latitudes: its Y edge is half a world from
