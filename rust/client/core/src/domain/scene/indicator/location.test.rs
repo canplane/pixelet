@@ -1,8 +1,8 @@
 // pxl-core/domain/scene/indicator/location.test.rs
 
 use super::*;
+use crate::sys::host::set_clock;
 use pxl_spec::space::coord::q3;
-use xpute_guest::clock;
 
 /// The zone laid the plain way, asking the ground again for every box and for
 /// each of its four sides. `lay_zone` must lay the same bytes while asking
@@ -52,71 +52,66 @@ fn rough(at: &Q3) -> Option<f64> {
 
 #[test]
 fn zone_cells_once() {
-    crate::on_core(|| {
-        let cell = units(GROUND.leaf_cell_zoom());
-        for center in [[0.0, 0.0, 3.0], [10.0, -7.0, 5.0], [-123.0, 456.0, -2.0]] {
-            let center = center.map(|v| v * cell);
-            let mut asked = 0;
-            let instances = lay_zone(center, |at| {
-                asked += 1;
-                rough(at)
-            });
-            let before = laid_asking_each(center, rough);
-            assert_eq!(
-                instances.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
-                before.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
-                "about {center:?}"
-            );
-            let mut cells: Vec<[i32; 2]> = zone_samples()
-                .flat_map(|s| {
-                    [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]
-                        .map(|d| [s.at[0] + d[0], s.at[1] + d[1]])
-                })
-                .collect();
-            cells.sort_unstable();
-            cells.dedup();
-            assert_eq!(asked, cells.len(), "a cell asked more than once");
-            assert!(
-                zone_samples().any(|s| {
-                    let at = [0, 1].map(|k| center[k] + f64::from(s.at[k]) * cell);
-                    rough(&world::point(at[0], at[1], center[2])).is_none()
-                }),
-                "a column not known lies in the zone about {center:?}"
-            );
-        }
-    });
+    let cell = units(GROUND.leaf_cell_zoom());
+    for center in [[0.0, 0.0, 3.0], [10.0, -7.0, 5.0], [-123.0, 456.0, -2.0]] {
+        let center = center.map(|v| v * cell);
+        let mut asked = 0;
+        let instances = lay_zone(center, |at| {
+            asked += 1;
+            rough(at)
+        });
+        let before = laid_asking_each(center, rough);
+        assert_eq!(
+            instances.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            before.iter().map(|v| v.to_bits()).collect::<Vec<_>>(),
+            "about {center:?}"
+        );
+        let mut cells: Vec<[i32; 2]> = zone_samples()
+            .flat_map(|s| {
+                [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].map(|d| [s.at[0] + d[0], s.at[1] + d[1]])
+            })
+            .collect();
+        cells.sort_unstable();
+        cells.dedup();
+        assert_eq!(asked, cells.len(), "a cell asked more than once");
+        assert!(
+            zone_samples().any(|s| {
+                let at = [0, 1].map(|k| center[k] + f64::from(s.at[k]) * cell);
+                rough(&world::point(at[0], at[1], center[2])).is_none()
+            }),
+            "a column not known lies in the zone about {center:?}"
+        );
+    }
 }
 
 #[test]
 fn beacon_holds_on_stall() {
-    crate::on_core(|| {
-        let mut location = LocationIndicator {
-            zone: Some(Zone {
-                center: [0.0; 3],
-                beacon_to: [0.0; 2],
-                beacon_at: None,
-                run: 0.0,
-                clock: StepClock::default(),
-                visible: false,
-                zone_drawn: false,
-            }),
-            ..Default::default()
-        };
-        // The eye stands at the zone's center, so the zone is seen and the bob
-        // spans a camera cell there.
-        location.tick(&Frame {
-            delta_s: 0.05,
-            ..Frame::default()
-        });
-        // A minute passes, as in a hidden tab. The frame's step is capped as
-        // frame.rs caps it (`MAX_STEP_S`), so the bob must not leap.
-        clock::set(|| 60_000.0);
-        location.tick(&Frame {
-            delta_s: 0.1,
-            ..Frame::default()
-        });
-        clock::set(|| 0.0);
-        let time = location.zone.as_ref().map_or(f64::NAN, |z| z.clock.time());
-        assert!(time > 0.0 && time < 0.2, "the bob leapt to {time} s");
+    let mut location = LocationIndicator {
+        zone: Some(Zone {
+            center: [0.0; 3],
+            beacon_to: [0.0; 2],
+            beacon_at: None,
+            run: 0.0,
+            clock: StepClock::default(),
+            visible: false,
+            zone_drawn: false,
+        }),
+        ..Default::default()
+    };
+    // The eye stands at the zone's center, so the zone is seen and the bob
+    // spans a camera cell there.
+    set_clock(0.0);
+    location.tick(&Frame {
+        delta_s: 0.05,
+        ..Frame::default()
     });
+    // A minute passes, as in a hidden tab. The frame's step is capped as
+    // frame.rs caps it (`MAX_STEP_S`), so the bob must not leap.
+    set_clock(60_000.0);
+    location.tick(&Frame {
+        delta_s: 0.1,
+        ..Frame::default()
+    });
+    let time = location.zone.as_ref().map_or(f64::NAN, |z| z.clock.time());
+    assert!(time > 0.0 && time < 0.2, "the bob leapt to {time} s");
 }

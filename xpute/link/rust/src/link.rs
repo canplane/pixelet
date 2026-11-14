@@ -172,6 +172,10 @@ impl Layout {
 /// An answer due: what hears it, its result and its return data.
 type Due = (Answer, i32, Option<Vec<u8>>);
 
+/// An opener mounted: the named handle of the interface whose resources it
+/// opens, the URI's leading tokens it opens under, and the opener.
+type Mount = (Handle, Vec<Token>, Rc<Opener>);
+
 /// One side of the link: what both sides do, once. A side lays its frames in
 /// its own box and crosses by its own function: the guest lays in its outbox
 /// and crosses by `link_out`, and the host lays in the guest's inbox and
@@ -190,9 +194,8 @@ pub struct Side {
     crossing: Cell<bool>,
     /// Where the next request's tag is sought.
     next: Cell<Tag>,
-    /// The openers, each with the named handle of the interface whose
-    /// resources it opens, by the URI's leading tokens.
-    mounts: RefCell<Vec<(Handle, Vec<Token>, Rc<Opener>)>>,
+    /// The openers mounted.
+    mounts: RefCell<Vec<Mount>>,
     /// The objects this side serves, by the handles it issued.
     objects: RefCell<Table<Rc<dyn Object>>>,
     /// The interfaces this side serves, by their named handles (`NAMED`).
@@ -228,9 +231,17 @@ impl Side {
     }
 
     /// Stops the link for good, and answers whether it did just now, the link
-    /// not having trapped already (`link.ts` `trap`).
+    /// not having trapped already (`link.ts` `trap`). Each request this side
+    /// sent that is still pending is answered EPIPE, once, among the answers
+    /// due (`run_due`), as a frame to the trapped link is; none is pending
+    /// after, so a late answer to one finds nothing to answer.
     pub fn trap(&self) -> bool {
-        !self.trapped.replace(true)
+        if self.trapped.replace(true) {
+            return false;
+        }
+        let pending = core::mem::take(&mut *self.pending.borrow_mut());
+        self.due.borrow_mut().extend(pending.into_values().map(|a| (a, Errno::EPIPE as i32, None)));
+        true
     }
 
     /// Whether the link is trapped (`trap`).
@@ -589,3 +600,7 @@ pub fn answer(result: i32) -> Result<(), Errno> {
         _ => Err(Errno::of(result).or_bug(Errno::EPROTO)),
     }
 }
+
+#[cfg(test)]
+#[path = "link.test.rs"]
+mod test;

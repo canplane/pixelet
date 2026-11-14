@@ -1,13 +1,16 @@
 // @xpute/web-runtime/worker.ts
 
 /** The worker's end: the guest's module instantiated with a link laid over
- * it, the guest started on it from the program's servers, and the worker's
- * console carried to the page. */
+ * it, the guest started on it from the program's servers, and what the
+ * runtime tells the page, the worker's console, a failed instantiation, the
+ * guest's stop and its trap, each posted to the page (`tell`), as a device's
+ * runtime tells its app through the functions the app sets
+ * (xpute-native-runtime native.rs). */
 
 import { Bug, frames } from "@xpute/kit/status/bug.ts";
 import { ERRNO_ENOTRECOVERABLE, ERRNO_EPIPE } from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/error.ts";
-import { type Imports, set_hook, Side } from "@xpute/link";
+import { type Imports, set_hook, Side, type Stop } from "@xpute/link";
 import type { Later } from "@xpute/link/remote.ts";
 import { tell_attached } from "./life.ts";
 import type { Instantiate, InstantiateError, Log, Stopped, Trap } from "./message.ts";
@@ -30,9 +33,22 @@ function line(a: unknown): string {
   }
 }
 
+/** Posts `m` to the page, whose worker this is. */
+function tell(m: InstantiateError | Trap | Stopped | Log): void {
+  postMessage(m);
+}
+
+/** Tells the page the guest stopped, with the report of the broken
+ * invariant: the guest's, which the host that serves the stop hands it
+ * (@xpute/web-host `serve_stop`), or the host's own failure (`hook`), as
+ * xpute-native-runtime native.rs `tell_stop` tells a device's app. */
+export function tell_stop(stop: Stop): void {
+  tell({ kind: "stopped", stop });
+}
+
 /** What the worker writes to its console goes to the page's lines too, where
  * a tool driving the page reads them. */
-export function forward_console(tell: (m: Log) => void): void {
+export function forward_console(): void {
   for (const level of ["log", "info", "warn", "error"] as const) {
     const write = console[level].bind(console);
     console[level] = (...args: unknown[]) => {
@@ -47,15 +63,14 @@ export function forward_console(tell: (m: Log) => void): void {
  * instantiation that fails tells its error and answers null. A trap out of
  * any export stops the guest for good (`Side.trap`), as does a failure of the
  * host's own (`hook`), from before any server is mounted: the page hears it,
- * with the error, and the worker closes, once the current turn is over, as a
- * native host posts its trap. The trapped export answers as
- * xpute-native-runtime link.rs `cross_in` does, a request EPIPE, and nothing
- * is thrown on to the host's caller. */
+ * with the error, as a native host tells its trap. The trapped export
+ * answers as xpute-native-runtime link.rs `cross_in` does, a request EPIPE,
+ * and nothing is thrown on to the host's caller. The worker lives on after a trap, as a device's guest thread
+ * does. */
 export async function instantiate(
   module: string,
   init: RequestInit | undefined,
   mem_sz: number,
-  tell: (m: InstantiateError | Trap | Stopped) => void,
 ): Promise<Side | null> {
   let link!: Side;
   let x: Exports;
@@ -89,13 +104,9 @@ export async function instantiate(
     init: entry(x.link_init, 0),
     boot: entry(x.link_boot, undefined),
     in: entry(x.link_in, ERRNO_EPIPE),
-    trap: (e) =>
-      queueMicrotask(() => {
-        tell({ kind: "trap", err: line(e) });
-        close();
-      }),
+    trap: (e) => tell({ kind: "trap", err: line(e) }),
   });
-  hook(link, tell);
+  hook(link);
   return link;
 }
 
@@ -103,19 +114,21 @@ export async function instantiate(
  * native.rs `hook` makes a panic one: a throw out of its answer to the
  * guest's import, which the link hands it (@xpute/link `set_hook`), and any
  * the worker leaves unhandled or uncaught, as a method answered later throws
- * one. The link's `trap` stops the guest, so that no answer the failed host
- * owed leaves the guest waiting, and where it did just now, the failure is
- * logged and told the page as a stop, with its errno, a bug's or
- * ENOTRECOVERABLE, and where it was thrown, before the page hears the trap.
- * A throw after the guest trapped is no failure of the host's. */
-function hook(link: Side, tell: (m: Stopped) => void): void {
+ * one. Where the guest has not trapped already, the failure is logged and
+ * told the page as a stop, with its errno, a bug's or ENOTRECOVERABLE, and
+ * where it was thrown; then the link's `trap` stops the guest, so that no
+ * answer the failed host owed leaves the guest waiting, and the page hears
+ * the trap after the stop, as on a device. A throw after the guest trapped
+ * is no failure of the host's. */
+function hook(link: Side): void {
   const fail = (e: unknown) => {
-    if (!link.trap(e)) return;
+    if (link.trapped()) return;
     const stack = e instanceof Error ? (e.stack ?? "") : "";
     const errnum = e instanceof Bug ? e.errnum : ERRNO_ENOTRECOVERABLE;
     const [file, line] = e instanceof Bug ? [e.file, e.line] : (frames(stack)[0] ?? ["", 0]);
     console.error(`[host] stopped: ${strerror(errnum)} at ${file}:${line}`);
-    tell({ kind: "stopped", stop: { errnum, file, line, n1: 0n, n2: 0n } });
+    tell_stop({ errnum, file, line, n1: 0n, n2: 0n });
+    link.trap(e);
   };
   set_hook(fail);
   addEventListener("error", (ev) => fail(ev.error));

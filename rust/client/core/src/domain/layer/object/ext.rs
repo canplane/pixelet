@@ -68,7 +68,7 @@ impl Pool {
     }
 
     #[cfg(test)]
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         *self = Pool::default();
     }
 }

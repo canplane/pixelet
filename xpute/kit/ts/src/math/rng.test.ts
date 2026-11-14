@@ -25,7 +25,7 @@ import {
 // ---- the 32-bit family ----
 
 test("rng32 computes what the record holds", async () => {
-  const v = await Golden.load("golden/math/rng.32.tsv");
+  const v = await Golden.load("kit/spec/golden/math/rng.32.tsv");
   v.each("", (k) => {
     const seed = v.u32(`${k}.seed`);
     assert.deepStrictEqual(mix32(seed), v.u32(`${k}.mix32`), `${k}.mix32`);
@@ -51,7 +51,7 @@ test("rng32 computes what the record holds", async () => {
 // ---- the 64-bit family ----
 
 test("rng computes what the record holds", async () => {
-  const v = await Golden.load("golden/math/rng.64.tsv");
+  const v = await Golden.load("kit/spec/golden/math/rng.64.tsv");
   v.each("", (k) => {
     const seed = v.u64(`${k}.seed`);
     assert.deepStrictEqual(mix64(seed), v.u64(`${k}.mix64`), `${k}.mix64`);

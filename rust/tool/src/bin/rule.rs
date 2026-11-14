@@ -1795,6 +1795,40 @@ mod spec;"
         assert_eq!(at(&parts), ["ts/c/src/service/platform/db.ts:1"]);
     }
 
+    /// The entries a device's host may not name are the functions its runtime's C header
+    /// declares, a declaration's first name whatever its lines, and no name a comment gives.
+    #[test]
+    fn runtime_entries_are_its_header_declarations() {
+        let header = "// Starts it (`xpute_take`).\nuint32_t xpute_start(const uint32_t *named,\n    size_t named_len);\nvoid xpute_notify_on(void (*notify)(void));\n";
+        assert_eq!(declared(header), ["xpute_start", "xpute_notify_on"]);
+    }
+
+    /// The two workspaces agree on one `[patch.crates-io]` table entry for entry, its comments,
+    /// its blank lines and what follows it aside, or on none.
+    #[test]
+    fn patch_tables_agree_entry_for_entry() {
+        let table = |rev: &str| {
+            Some(format!(
+                "[workspace]\n\n[patch.crates-io]\n# The fork.\nwgpu = {{ rev = \"{rev}\" }}\n\nnaga = {{ rev = \"{rev}\" }}\n\n[profile.dev]\nopt-level = 1\n"
+            ))
+        };
+        let none = || Some("[workspace]\n".to_string());
+        let agree = |rust: Option<String>, xpute: Option<String>| {
+            patches_agree(&|f| match f {
+                RUST_CARGO => rust.clone(),
+                XPUTE_CARGO => xpute.clone(),
+                _ => None,
+            })
+            .is_ok()
+        };
+        let bare = table("a").map(|t| t.replace("# The fork.\n", "").replace("\n\nnaga", "\nnaga"));
+        assert!(agree(table("a"), bare));
+        assert!(agree(none(), none()));
+        assert!(!agree(table("a"), table("b")));
+        assert!(!agree(table("a"), none()));
+        assert!(!agree(none(), table("a")));
+    }
+
     #[test]
     fn sys_refuses_renderer() {
         assert_eq!(

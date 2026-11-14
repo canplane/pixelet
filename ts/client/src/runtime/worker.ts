@@ -12,7 +12,6 @@
  * GPU. The files are here, so the source is declared here too.
  */
 
-import type { GpuState } from "@xpute/gpu-link";
 import { type Side, sender } from "@xpute/link";
 import { serve_clock, serve_stop } from "@xpute/web-host";
 import {
@@ -25,7 +24,7 @@ import {
   type Stopped,
   type Trap,
 } from "@xpute/web-runtime";
-import { serve_vsync, WebGpu } from "@xpute/gpu-web-host";
+import { type GpuReport, serve_vsync, WebGpu } from "@xpute/gpu-web-host";
 import { device } from "@/abi/gpu.spec.ts";
 import { IMPORTS } from "@/abi/imports.ts";
 import { LATER } from "@/abi/later.ts";
@@ -57,7 +56,7 @@ export type ToWorker = Instantiate & { entries: [string, string][] };
 export type ToPage =
   | { kind: "source"; state: Source; decl: Declaration | null }
   | { kind: "keep"; key: string; val: string }
-  | { kind: "gpu"; state: GpuState }
+  | GpuReport
   | Stopped
   | InstantiateError
   | Trap
@@ -67,7 +66,7 @@ const tell = (m: ToPage) => postMessage(m);
 
 // What the worker writes to its console goes to the page's lines too, where a
 // tool driving the page reads them (service/platform/log.ts).
-forward_console(tell);
+forward_console();
 
 onmessage = ({ data: m }: MessageEvent<ToWorker>) => {
   keep(m.entries);
@@ -88,7 +87,7 @@ function keep(entries: [string, string][]): void {
 
 async function boot(m: Instantiate): Promise<void> {
   online.watch(set_online);
-  const link = await instantiate(m.module, m.init, mem.sz, tell);
+  const link = await instantiate(m.module, m.init, mem.sz);
   if (link === null) return;
   // The page's host stages its writes in the chunks a device's does
   // (spec/client/render/api.json5 `device`), and in a build made for
@@ -97,13 +96,12 @@ async function boot(m: Instantiate): Promise<void> {
     link,
     { power: device.POWER, required_feats: device.REQUIRED_FEATURES, optional_feats: device.OPTIONAL_FEATURES },
     { upload_chunk_sz: device.UPLOAD_CHUNK_BYTES, slow_ms: __PERF_DRIVE__ ? LIMIT.SLOW_MS : null },
-    (state) => tell({ kind: "gpu", state }),
   );
   start(
     link,
     {
       servers: [
-        (link) => serve_stop(link, (stop) => tell({ kind: "stopped", stop })),
+        serve_stop,
         serve_clock,
         serve_vsync,
         () => gpu.serve(),

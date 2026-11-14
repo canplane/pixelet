@@ -47,6 +47,12 @@ The user holds every change to these:
   convention. When it is unclear, it stays out.
 - **No tests or conformance at this stage.** A plausible skeleton, close to
   pseudocode, comes first. A hook blocks running tests.
+
+  > Since 2026-11-15 (655f07025e): the structure has settled, and tests and
+  > conformance are back: the link's frames and packets held to golden
+  > records in Rust, TypeScript and C++, and a contract test where each
+  > contract is owned.
+
 - **No ad hoc pieces.** Cut them on sight, in the same step.
 - **Convention, checked against its source.** Each source is verified before it
   is relied on.

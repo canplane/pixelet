@@ -155,12 +155,12 @@ beside the link under a surface's handle goes to it:
 
 ```ts
 // The worker, given the page's `Instantiate`, m.
-const link = await instantiate(m.module, m.init, MEM_SZ, tell);
+const link = await instantiate(m.module, m.init, MEM_SZ);
 if (link === null) return;
-const gpu = new WebGpu(link, ASK, CFG, (state) => tell({ kind: "gpu", state }));
+const gpu = new WebGpu(link, ASK, CFG);
 start(link, {
   servers: [
-    (link) => serve_stop(link, (stop) => tell({ kind: "stopped", stop })),
+    serve_stop,
     serve_clock,
     serve_vsync,
     () => gpu.serve(),
@@ -182,21 +182,27 @@ const surface = await open(remote, uri("xpute:gpu", "surface"));
 remote.give(surface, canvas.transferControlToOffscreen());
 ```
 
+The GPU's server posts the page what it has of a GPU as that changes
+(`GpuReport`), as the device's GPU host tells its app.
+
 ### On a device
 
 A native app installs `@xpute/native-runtime`, the React Native module, which
 Expo autolinks, and names in its `package.json` under `xpute.guest.runtime` the
 crate a device links: its guest, and the function that gives the runtime its
-list, which the crate exports the runtime over. The runtime starts the guest
-on a thread of its own, with the stack the list asks, and runs the loop for
-the guest's life; each start of a UI tells the guest it attached:
+list, which the crate exports the runtime over. The UI starts it with
+`start(remote, { stopped, trapped })`, whose listener of the guest's stop and
+trap is subscribed first, so that one told again to a reloaded UI reaches
+it. The runtime starts the guest on a thread of its own, with the stack the
+list asks, and runs the loop for the guest's life; each start of a UI tells
+the guest it attached:
 
 ```rust
-fn start(cache_dir: PathBuf, report: fn(Stop)) -> Boot {
+fn start(cache_dir: PathBuf) -> Boot {
     Boot {
         stack_sz: 8 << 20,
         servers: vec![
-            Box::new(move || stop::serve(report)),
+            Box::new(stop::serve),
             Box::new(clock::serve),
             Box::new(move || {
                 native::serve(Ask::of(ASK), native::config(CFG), Some(cache_dir));
@@ -218,7 +224,9 @@ bundler takes each `x.native.ts` in place of `x.ts`. `xpute-gpu-native-host`
 opens the device when the guest asks, with the program's `GpuConfig`, its
 frame latency among it, and keeps its compiled pipelines in `cache_dir`;
 `@xpute/gpu-native-runtime`'s module gives the view a guest's surface draws
-into (`SurfaceView`) and drives the display's frames. The host draws with a
+into (`SurfaceView`), drives the display's frames, and tells the UI what the
+host has of a GPU as that changes, the state now first to a UI that starts
+later (`state_on`). The host draws with a
 fork of wgpu, which a program's workspace patches in as xpute's does
 ([wgpu-fork.md](wgpu-fork.md)).
 

@@ -7,9 +7,16 @@ publish.workspace = true
 license.workspace = true
 repository.workspace = true
 readme.workspace = true
+exclude = ["src/**/*.test.rs"]
 
 [lib]
 path = "src/lib.rs"
 
 [dependencies]
 xpute-kit.workspace = true
+
+[dev-dependencies]
+# The tests hold the frame and the packet to the golden records
+# (link/spec/golden), the record's bytes read back as hex.
+xpute-golden.workspace = true
+hex.workspace = true

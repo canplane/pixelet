@@ -25,7 +25,7 @@ function encode(build: (t: TreeView) => void): U8Array {
 }
 
 test("the encoder writes the bytes the typescript writes", async () => {
-  const v = await Golden.load("golden/wire/xtp/encode.tsv");
+  const v = await Golden.load("kit/spec/golden/wire/xtp/encode.tsv");
   const check = (name: string, build: (t: TreeView) => void) =>
     assert.deepStrictEqual(
       bytes_to_hex(encode(build)),

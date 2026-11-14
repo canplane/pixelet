@@ -348,15 +348,24 @@ export class Side extends Server<Table<LinkObject>> {
     };
   }
 
-  /** Stops the guest for good, and answers whether it did just now, the guest
-   * not having trapped already: it is entered no more, a frame sent to it or
-   * laid by it answering EPIPE, and its platform is told (`Guest.trap`), as
-   * xpute-native-runtime `link.rs` `trap`. */
-  trap(e: unknown): boolean {
-    if (this._trapped) return false;
+  /** Stops the guest for good, where it has not trapped already: it is
+   * entered no more, a frame sent to it or laid by it answering EPIPE, and
+   * its platform is told (`Guest.trap`), as xpute-native-runtime `link.rs`
+   * `trap`. Each request this side sent that is still pending is answered
+   * EPIPE, once, as xpute-link `link.rs` `Side::trap` answers it; none is
+   * pending after, so a late answer to one finds nothing to answer. */
+  trap(e: unknown): void {
+    if (this._trapped) return;
     this._trapped = true;
+    const pending = [...this._pending.values()];
+    this._pending.clear();
+    for (const a of pending) queueMicrotask(() => a(ERRNO_EPIPE, null));
     this._guest.trap(e);
-    return true;
+  }
+
+  /** Whether the guest is trapped (`trap`). */
+  trapped(): boolean {
+    return this._trapped;
   }
 
   constructor(guest: Guest) {

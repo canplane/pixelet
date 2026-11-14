@@ -6,6 +6,9 @@
 //! rule.rs).
 
 pub(crate) mod heap;
+#[cfg(test)]
+#[path = "sys/host.test.rs"]
+pub(crate) mod host;
 pub(crate) mod io;
 pub(crate) mod load;
 pub(crate) mod range;

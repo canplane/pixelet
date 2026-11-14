@@ -124,3 +124,31 @@ fn occupancy_vals() {
             && !some.has_child(3)
     );
 }
+
+/// A packet's cells are one asset id a cell or four, and one whose cells
+/// column holds any other count is refused.
+#[test]
+fn cells_of_any_other_count_refused() {
+    let t = tile(1);
+    let pkt = |n: usize| {
+        let cells: Vec<GroundId> = vec![0; n];
+        shape::encode::<Packet>(
+            (&t.ele, &cells[..], t.occupancy.bits(), t.separation.pkt()),
+            MAX_PKT_SZ,
+        )
+        .unwrap()
+    };
+    for n in [GROUND_COLUMN, FOLD_COLUMN] {
+        assert_eq!(cells_of(&pkt(n)).ok().map(<[GroundId]>::len), Some(n));
+    }
+    for n in [
+        0,
+        1,
+        GROUND_COLUMN - 1,
+        GROUND_COLUMN + 1,
+        2 * GROUND_COLUMN,
+        FOLD_COLUMN + 1,
+    ] {
+        assert!(cells_of(&pkt(n)).is_err(), "{n} cells");
+    }
+}
