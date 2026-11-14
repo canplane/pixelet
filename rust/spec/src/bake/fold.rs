@@ -1,7 +1,7 @@
 // pxl-spec/bake/fold.rs
 
-//! One zoom coarser: a parent tile from the tiles under it. A cell holds the four palette
-//! indices under it, each child cell's own (`ground::own`, their majority, as
+//! One zoom coarser: a parent tile from the tiles under it. A cell holds the four asset
+//! ids under it, each child cell's own (`ground::own`, their majority, as
 //! Earth Engine's `MODE` pyramiding takes it, so a feature narrower than half a cell rounds
 //! away at the zoom that reads it). Elevation is the box average of the samples, which keeps a
 //! column's volume; a parent's surface is its own bicubic of its own samples. The mean is the
@@ -17,7 +17,7 @@ use super::tile::Occupancy;
 use crate::ground::{ele_idx, own, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
 use crate::space::coord::zoom::Zoom;
 
-/// The four palette indices of each parent cell: the own palette index of each child cell
+/// The four asset ids of each parent cell: the own asset id of each child cell
 /// under it, `dx + 2·dy`, as the zoom under the parent's reads it.
 pub(crate) fn fold_ground(children: [&GroundCells; 4], zoom: Zoom) -> GroundCells {
     let under = GROUND.cell_zoom(zoom) + 1;

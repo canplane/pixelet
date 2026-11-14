@@ -102,7 +102,7 @@ fn manhattan(a: [i32; 3], b: [i32; 3]) -> u32 {
 }
 
 /// Which of a node's eight a pipe cell lies in, `dx + 2dy + 4dz`.
-fn child_of(o: [i32; 3], half: i32, p: [i32; 3]) -> u32 {
+fn octant_of(o: [i32; 3], half: i32, p: [i32; 3]) -> u32 {
     (p[0] >= o[0] + half) as u32
         | ((p[1] >= o[1] + half) as u32) << 1
         | ((p[2] >= o[2] + half) as u32) << 2
@@ -225,8 +225,8 @@ fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
     let (o, s) = bounds(node);
     let half = s / 2;
     let (u, v, wh) = (
-        child_of(o, half, p.enter),
-        child_of(o, half, p.leave),
+        octant_of(o, half, p.enter),
+        octant_of(o, half, p.leave),
         node_seed(WALK_TAG, node),
     );
     let n = walk_len(u, v, wh);

@@ -6,12 +6,12 @@
 // the data above the stack. For any other target the script prints nothing,
 // and the platform links the core as it links any library.
 
-#[path = "src/sys/manifest.spec.rs"]
-mod manifest;
+#[path = "src/spec/manifest.spec.rs"]
+pub mod manifest;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=src/sys/manifest.spec.rs");
+    println!("cargo:rerun-if-changed=src/spec/manifest.spec.rs");
     if std::env::var("CARGO_CFG_TARGET_ARCH").as_deref() != Ok("wasm32") {
         return;
     }

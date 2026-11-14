@@ -4,7 +4,7 @@
 //! lines. It marks the pivot and the ground cell under it. Around the pivot
 //! it draws a level ring, an upright ring facing the screen and an upright
 //! ring through north. The view's forward, its up and north are told apart by
-//! the spec's colors (`gizmo_spec::frame`), which the UI's legend reads too.
+//! the spec's colors (`spec::gizmo::frame`), which the UI's legend reads too.
 
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::{self, V3};
@@ -13,7 +13,7 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::query::World;
 use crate::domain::scene::gizmo::debug_line::DebugMesh;
-use crate::domain::scene::gizmo::gizmo_spec::frame;
+use crate::spec::gizmo::frame;
 use crate::domain::scene::gizmo::param::{POINT_HALF, RING_RADIUS};
 use crate::domain::scene::model::draw_list;
 use crate::domain::view::frame::coord::to_world;

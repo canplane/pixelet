@@ -46,7 +46,7 @@ std::int32_t call(std::uint32_t at) noexcept;
 // negative code that names no errno means the runtime broke the protocol,
 // and reads as EPROTO.
 inline Result<std::uint32_t> answer_of(std::int32_t res) noexcept {
-    if (res < 0) return make_error(ErrorClass::fault, errno_of(res).value_or(Errno::eproto));
+    if (res < 0) return make_error(ErrorClass::fault, of_Errno(res).value_or(Errno::eproto));
     return static_cast<std::uint32_t>(res);
 }
 

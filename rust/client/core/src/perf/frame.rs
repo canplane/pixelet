@@ -5,14 +5,14 @@
 
 use core::mem::{offset_of, size_of};
 
-use crate::sys::sched::phase_spec::PHASES;
+use crate::spec::phase::Phase;
 use pxl_engine::count;
 
-use crate::perf::spec::{frame, frame_group, worst};
-use crate::perf::step;
 use crate::perf::word::{as_words, as_words_mut, words, zeroed, AsWords};
-use pxl_render::gpu::span_spec::GPU_SPAN_NAMES;
+use crate::spec::perf::{frame, frame_group, worst};
+use crate::spec::step::EffectName;
 use pxl_render::ray;
+use pxl_render::spec::span::GpuSpanName;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -84,14 +84,14 @@ pub struct FrameSample {
     /// The frame's measured parts.
     pub effects_ms: f64,
     pub tick_ms: f64,
-    pub phases: [f64; PHASES.len()],
+    pub phases: [f64; Phase::ALL.len()],
     pub stage_ms: f64,
     /// What the profiler itself cost the interval: recording the frame, and
     /// the UI's reads of the records.
     pub perf_ms: f64,
     /// The time of each effect in the frame, indexed by `EffectName`.
     pub effects: [f64; EFFECT_CNT],
-    /// The frame's kind, an index into the renderer's FRAME_KINDS.
+    /// The frame's kind, its renderer's `FrameKind`'s number.
     pub kind: f64,
     pub gpu: GpuSample,
     /// This frame's ray counts, written back when they land (record.rs
@@ -241,8 +241,8 @@ words!(WorstFrame, worst::WORDS,
     upload_delta_bytes => worst::UPLOAD_DELTA_BYTES, heap_used_delta_bytes => worst::HEAP_USED_DELTA_BYTES,
 );
 
-pub const GPU_SPAN_CNT: usize = GPU_SPAN_NAMES.len();
-pub const EFFECT_CNT: usize = step::EFFECT_NAMES.len();
+pub const GPU_SPAN_CNT: usize = GpuSpanName::ALL.len();
+pub const EFFECT_CNT: usize = EffectName::ALL.len();
 
 /// Whether the tick ran past the entry's budget.
 pub fn overran(f: &FrameSample) -> bool {

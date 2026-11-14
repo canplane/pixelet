@@ -16,7 +16,7 @@ use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::split_dist;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_ZOOM};
-use pxl_spec::space::hierarchy::tree::Node;
+use pxl_spec::space::hierarchy::tree::{child_of, Node};
 use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
@@ -131,7 +131,7 @@ pub fn bricks(o: &Observation, each: &mut dyn FnMut(Node<2>, [f64; 2])) {
             continue;
         }
         if cell_zoom < GROUND.leaf_cell_zoom() && d < split_dist(cell_zoom) {
-            stack.extend((0..4).map(|k| (zoom + 1, [2 * xy[0] + (k & 1), 2 * xy[1] + (k >> 1)])));
+            stack.extend((0..4).map(|k| (zoom + 1, child_of(xy, k))));
             continue;
         }
         let Some(b) = world

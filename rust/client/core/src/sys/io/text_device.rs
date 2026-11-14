@@ -17,7 +17,7 @@ use xpute_native_host::native;
 
 use crate::sys::io::text_answer_spec::{LAYOUT_ANSWER, LINE};
 use crate::sys::io::text_runtime_spec::{self as text, TextLayout, TextRaster};
-use crate::sys::manifest::MANIFEST;
+use crate::spec::manifest::MANIFEST;
 use pxl_spec::color::Rgba;
 
 /// The system's text: how wide a line of UTF-8 runs at a CSS weight and a size,

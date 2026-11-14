@@ -1,4 +1,4 @@
-// pxl-core/sys/io/demand.spec.rs
+// pxl-core/spec/demand.spec.rs
 //
 // GENERATED from spec/client/core/sys/io/demand.json (xpute-gen data.rs)
 //
@@ -6,10 +6,6 @@
 // its run came to an end, and the phases a run reports its time in. The profiler
 // records and reports them by these names (spec/client/core/perf/perf.json).
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
-pub const STREAM_NAMES: &[&str] = &["terrain", "place", "division", "asset", "earth", "object"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StreamName {
@@ -58,7 +54,6 @@ impl StreamName {
     }
 }
 
-pub const OUTCOME_NAMES: &[&str] = &["ok", "aborted", "err"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum OutcomeName {
@@ -91,7 +86,6 @@ impl OutcomeName {
     }
 }
 
-pub const TASK_PHASE_NAMES: &[&str] = &["net_ms", "bytes", "decode_ms"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum TaskPhaseName {

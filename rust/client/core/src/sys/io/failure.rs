@@ -8,7 +8,7 @@ use std::collections::TryReserveError;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 
-pub use crate::sys::io::demand_spec::OutcomeName as Outcome;
+pub use crate::spec::demand::OutcomeName as Outcome;
 use crate::sys::io::room::Refusal;
 
 /// How an attempt ended, as one value, so an attempt that ended well cannot

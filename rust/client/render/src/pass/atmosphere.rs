@@ -42,10 +42,10 @@ use crate::gpu::api::{
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::read::Read;
-use crate::gpu::span_spec::GpuSpanName;
 use crate::look::atmosphere as model;
 use crate::look::environment;
 use crate::param::atmos::{ALT_SAMPLE, ALT_SAMPLE_LEAST_KM};
+use crate::spec::span::GpuSpanName;
 
 /// Hands each waiting earth tile's layer and texels to the writer, until the writer refuses
 /// one by returning false.
@@ -674,7 +674,10 @@ impl Atmosphere {
     /// Whether measures have landed for a frame to take (`take_slopes`). A refused mapping
     /// asks for no frame; what it carried is copied again with the next frame drawn.
     pub fn complete(&self) -> bool {
-        self.mapped && signaled(&self.mapping[0], self.ticket) && self.mapping[1] == result::OK
+        // SAFETY: the mapping's fence, boxed in place; the host stores into it only atomically.
+        self.mapped
+            && unsafe { signaled(core::ptr::addr_of!(self.mapping[0]), self.ticket) }
+            && self.mapping[1] == result::OK
     }
 
     /// Takes the measures that landed. Each slope becomes a step: how far its quantity moves
@@ -682,7 +685,8 @@ impl Atmosphere {
     /// was taken over is kept with it, and the reach measures say whether each light reaches
     /// the air.
     fn take_slopes(&mut self) {
-        if !self.mapped || !signaled(&self.mapping[0], self.ticket) {
+        // SAFETY: the mapping's fence, boxed in place; the host stores into it only atomically.
+        if !self.mapped || !unsafe { signaled(core::ptr::addr_of!(self.mapping[0]), self.ticket) } {
             return;
         }
         self.mapped = false;

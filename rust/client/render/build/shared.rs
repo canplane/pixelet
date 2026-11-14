@@ -7,7 +7,7 @@
 //! shaders hold no other part in common.
 
 use crate::wgsl::Val::{self, *};
-use crate::wgsl::{consts, table};
+use crate::wgsl::{consts, predicate, table};
 use crate::{atmosphere, color, debug_look, param, word};
 use pxl_spec::asset::cube::Sentinel;
 use word::screen;
@@ -238,7 +238,7 @@ fn params() -> Vec<(String, Val)> {
 }
 
 /// The constants the walks read (walk_word.wgsl), each written from the pxl-engine layout or
-/// rule that defines it.
+/// rule that defines it, and pxl-spec `cube::is_matter`.
 fn walk_word() -> String {
     use pxl_engine::beam::SAMPLE_SIDE;
     use pxl_engine::clipmap::{self, Lookup};
@@ -246,6 +246,7 @@ fn walk_word() -> String {
     use pxl_engine::{
         answer, beam, cast, count, face, light, node_cache, param, raster, ray, record,
     };
+    use pxl_spec::asset::cube::is_matter;
     use pxl_spec::share::EIGHTH_CNT;
     use pxl_spec::space::camera::grid;
     use pxl_spec::space::coord::zoom::{FINEST_ZOOM, SHARD_ZOOM};
@@ -631,11 +632,12 @@ fn walk_word() -> String {
         ("REC_ASKED_SHIFT", U32(record::ASKED_SHIFT)),
         ("REC_WHOLE", U32(record::WHOLE)),
         ("REC_TO", U32(record::TO_REC)),
-    ])
+    ]) + &predicate("is_matter", answer::PLACED_ASSET, is_matter)
 }
 
 /// The constants and tables the world's query reads (world.wgsl), each written from the
-/// pxl-engine or pxl-content layout or rule that defines it.
+/// pxl-engine or pxl-content layout or rule that defines it, and a value's kind, pxl-spec
+/// `value::is_ground` and pxl-engine `object::voxel`.
 fn world_word() -> String {
     use pxl_content::cave::{
         BLOCK, BLOCKS_TAG, CELL_BLOCK_CNT, CROSS_TAG, NO_SIDE, PIPE, ROOT, ROOT_BLOCKS, SPAWN_TAG,
@@ -647,6 +649,7 @@ fn world_word() -> String {
     use pxl_engine::{answer, ground, seed};
     use pxl_spec::asset::cube::Ground;
     use pxl_spec::brick;
+    use pxl_spec::ground::GroundId;
     use pxl_spec::share::{FILL_BITS, FULL};
     use pxl_spec::space::coord::world::SEA_LEVEL;
     use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, MIN_ZOOM};
@@ -658,12 +661,10 @@ fn world_word() -> String {
     let none = Cut::NONE;
     let mut out = consts([
         ("LEAF_CELL_ZOOM", U32(LEAF_CELL_ZOOM)),
+        ("GROUND_ID_BITS", U32(GroundId::BITS)),
+        ("GROUND_ID_MAX", U32(u32::from(GroundId::MAX))),
         ("MIN_ZOOM", U32(MIN_ZOOM)),
         ("VAL_UNKNOWN", U32(Sentinel::Unknown as u32)),
-        ("GROUND_FIRST", U32(value::GROUND[0])),
-        ("GROUND_LAST", U32(value::GROUND[1])),
-        ("OBJECT_FIRST", U32(value::OBJECT[0])),
-        ("OBJECT_LAST", U32(value::OBJECT[1])),
         ("PLACED_ASSET", U32(answer::PLACED_ASSET)),
         ("FULL", U32(FULL)),
         ("FULL_BITS", U32(FULL.trailing_zeros())),
@@ -753,15 +754,17 @@ fn world_word() -> String {
         (0..4).map(|k| (k, U32(cave::BLOCKS_A_TUNNEL[k as usize]))),
         U32(cave::BLOCKS_A_TUNNEL[4]),
     );
-    out + &table(
+    out += &table(
         "bound_mip_at",
         (0..=clip::BRICK_MIP_LAST).map(|j| (j, U32(clip::bound_mip_at(j)))),
         U32(clip::bound_mip_at(clip::BRICK_MIP_LAST + 1)),
-    )
+    );
+    out + &predicate("is_ground", answer::PLACED_ASSET, value::is_ground)
+        + &predicate("voxel", answer::PLACED_ASSET, object::voxel)
 }
 
 /// The constants and tables decor's passes read beyond the world's words, each written from
-/// the pxl-content layout or rule that defines it.
+/// the pxl-content layout or rule that defines it, and pxl-spec `value::is_transport`.
 fn decor_word() -> String {
     use core::mem::{offset_of, size_of};
     use pxl_content::generation::{self as g, drawing};
@@ -842,8 +845,6 @@ fn decor_word() -> String {
         ("ROW_VARIANT_CNT", U32(row(offset_of!(Row, variant_cnt)))),
         ("ROW_SIZES", U32(row(offset_of!(Row, sizes)))),
         ("ALONG_TRANSPORT", U32(Orientation::AlongTransport as u32)),
-        ("TRANSPORT_FIRST", U32(value::TRANSPORT[0])),
-        ("TRANSPORT_LAST", U32(value::TRANSPORT[1])),
         ("REGION_CNT", U32(drawing::REGION_CNT)),
         ("ARGS_WORDS", U32(drawing::ARGS_WORDS)),
         ("IMPOSTOR_CORNER_CNT", U32(drawing::IMPOSTOR_CORNER_CNT)),
@@ -875,23 +876,24 @@ fn decor_word() -> String {
         let asset = (k % EIGHTH_CNT) << answer::FILL_SHIFT;
         Bits(1.0 - cast::fill_bound(([0.0; 3], [1.0; 3]), asset).1[2])
     };
-    out + &table(
+    out += &table(
         "sink_share",
         (1..EIGHTH_CNT).map(|k| (k, sink(k))),
         sink(EIGHTH_CNT),
-    )
+    );
+    out + &predicate("is_transport", answer::PLACED_ASSET, value::is_transport)
 }
 
 /// What the screen pass reads off a ray's words (pxl-engine ray.rs), so every shader reads a
 /// field exactly as the cast writes it: where its faces word lies, the ground's leaf cell zoom
 /// its cell's zoom is painted against, and its first word's fields. A coarse cell's ray
-/// carries the cell's four palette indices in its third word, packed as pxl-spec ground.rs
+/// carries the cell's four asset ids in its third word, packed as pxl-spec ground.rs
 /// `asset_ids` packs them.
 fn ray() -> String {
     use pxl_engine::ray::{
         FACE_BITS, FACE_SHIFT, FACE_WORD, FILL_SHIFT, VAL_BITS, ZOOM_BITS, ZOOM_SHIFT,
     };
-    use pxl_spec::ground::PALETTE_BITS;
+    use pxl_spec::ground::GroundId;
     use pxl_spec::share::FILL_BITS;
     use pxl_spec::space::layer::lattice;
     let mut out = consts([
@@ -909,7 +911,7 @@ fn ray() -> String {
             (1u32 << bits) - 1
         );
     }
-    let (b, m) = (PALETTE_BITS, (1u32 << PALETTE_BITS) - 1);
+    let (b, m) = (GroundId::BITS, u32::from(GroundId::MAX));
     out + &format!(
         "fn ray_asset_ids(w: u32) -> vec4u {{ return vec4u(w & {m}u, (w >> {b}u) & {m}u, (w >> {}u) & {m}u, w >> {}u); }}\n",
         2 * b,

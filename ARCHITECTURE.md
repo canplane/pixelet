@@ -59,9 +59,9 @@ its height has no digit until the zoom below.
 The world is stored as **layers**, and they split on who changes them.
 
 The **base** is baked from the map sources and never changes within a version.
-Its main layer is **terrain**: a ground cell is one byte, an index into
-OpenStreetMap Carto's palette, beside elevation samples from which the client
-works out each cell's elevation, so those are never sent. Bridges and tunnels come along as
+Its main layer is **terrain**: a ground cell is one byte, its asset id, a
+ground cube of OpenStreetMap Carto's palette or pixelet's own, beside elevation
+samples from which the client works out each cell's elevation, so those are never sent. Bridges and tunnels come along as
 lines with a top and a width. Beside terrain are the **places** Carto would
 label, the administrative **divisions**, and a picture of the **earth** seen
 from orbit. Every base layer but the earth is a **pyramid**: a tile at one zoom
@@ -460,7 +460,7 @@ every observer. The machinery under it is earlier work:
 | --- | --- |
 | Google Earth and the web map's tile pyramid | The pyramid: a tile at one zoom folded from the four under it, so a view from afar reads a handful of tiles |
 | Morton order | Tile and shard names, each a prefix of its children's |
-| Earth Engine's `MODE` pyramiding | The ground's fold: a parent's palette index is the majority of the four under it |
+| Earth Engine's `MODE` pyramiding | The ground's fold: a parent's asset id is the majority of the four under it |
 | Cesium 3D Tiles' `preloadAncestors` | Demand: the tiles on the line over a missing one are asked for, so a coarser answer is held wherever the view looks |
 | Web Mercator (EPSG:3857), WGS 84 | The plane a position follows, one lap of X its whole width, and the Earth's radius |
 | Quake III's `PM_StepSlideMove` ([bg_slidemove.c](https://github.com/id-Software/Quake-III-Arena/blob/master/code/game/bg_slidemove.c)) | The walker: blocked, it steps up and slides along the wall as `PM_ClipVelocity` clips the velocity, with no step height but the ceiling's, and settles on the floor |

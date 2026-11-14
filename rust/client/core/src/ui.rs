@@ -34,7 +34,7 @@ use crate::abi::overlay::{
 };
 use crate::pointer;
 use crate::sys::io::file;
-use crate::sys::io::file_spec::path;
+use crate::spec::file::path;
 use crate::sys::io::request;
 use crate::sys::io::source;
 use pxl_render::gpu::surface::SURFACE_CAP;

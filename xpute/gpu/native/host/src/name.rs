@@ -8,10 +8,10 @@ use serde::de::value::{Error as NameError, StrDeserializer};
 use serde::de::{DeserializeOwned, IntoDeserializer};
 
 use xpute_gpu_link::enums::{
-    ADDRESS_MODES, BLEND_FACTORS, BLEND_OPERATIONS, COMPARE_FUNCTIONS, FILTER_MODES, FRONT_FACES,
-    INDEX_FORMATS, MIPMAP_FILTER_MODES, PRIMITIVE_TOPOLOGIES, SAMPLER_BINDING_TYPES,
-    STENCIL_OPERATIONS, STORAGE_TEXTURE_ACCESSES, TEXTURE_ASPECTS, TEXTURE_DIMENSIONS,
-    TEXTURE_FORMATS, TEXTURE_VIEW_DIMENSIONS, VERTEX_FORMATS, VERTEX_STEP_MODES,
+    AddressMode, BlendFactor, BlendOperation, CompareFunction, FilterMode, FrontFace, IndexFormat,
+    MipmapFilterMode, PrimitiveTopology, SamplerBindingType, StencilOperation,
+    StorageTextureAccess, TextureAspect, TextureDimension, TextureFormat, TextureViewDimension,
+    VertexFormat, VertexStepMode,
 };
 use xpute_gpu_link::spec::{buffer_usage, color_write, shader_stage, texture_usage};
 
@@ -51,24 +51,24 @@ fn named<T: DeserializeOwned>(names: &[&str]) -> Vec<Option<T>> {
 impl EnumTable {
     pub(super) fn new() -> EnumTable {
         EnumTable {
-            texture_format: named(TEXTURE_FORMATS),
-            vertex_format: named(VERTEX_FORMATS),
-            topology: named(PRIMITIVE_TOPOLOGIES),
-            index_format: named(INDEX_FORMATS),
-            front_face: named(FRONT_FACES),
-            compare: named(COMPARE_FUNCTIONS),
-            stencil: named(STENCIL_OPERATIONS),
-            blend_operation: named(BLEND_OPERATIONS),
-            blend_factor: named(BLEND_FACTORS),
-            step: named(VERTEX_STEP_MODES),
-            addr: named(ADDRESS_MODES),
-            filter: named(FILTER_MODES),
-            mipmap: named(MIPMAP_FILTER_MODES),
-            dimension: named(TEXTURE_DIMENSIONS),
-            view_dimension: named(TEXTURE_VIEW_DIMENSIONS),
-            aspect: named(TEXTURE_ASPECTS),
-            sampler_binding: named(SAMPLER_BINDING_TYPES),
-            storage_access: named(STORAGE_TEXTURE_ACCESSES),
+            texture_format: named(&TextureFormat::ALL.map(TextureFormat::name)),
+            vertex_format: named(&VertexFormat::ALL.map(VertexFormat::name)),
+            topology: named(&PrimitiveTopology::ALL.map(PrimitiveTopology::name)),
+            index_format: named(&IndexFormat::ALL.map(IndexFormat::name)),
+            front_face: named(&FrontFace::ALL.map(FrontFace::name)),
+            compare: named(&CompareFunction::ALL.map(CompareFunction::name)),
+            stencil: named(&StencilOperation::ALL.map(StencilOperation::name)),
+            blend_operation: named(&BlendOperation::ALL.map(BlendOperation::name)),
+            blend_factor: named(&BlendFactor::ALL.map(BlendFactor::name)),
+            step: named(&VertexStepMode::ALL.map(VertexStepMode::name)),
+            addr: named(&AddressMode::ALL.map(AddressMode::name)),
+            filter: named(&FilterMode::ALL.map(FilterMode::name)),
+            mipmap: named(&MipmapFilterMode::ALL.map(MipmapFilterMode::name)),
+            dimension: named(&TextureDimension::ALL.map(TextureDimension::name)),
+            view_dimension: named(&TextureViewDimension::ALL.map(TextureViewDimension::name)),
+            aspect: named(&TextureAspect::ALL.map(TextureAspect::name)),
+            sampler_binding: named(&SamplerBindingType::ALL.map(SamplerBindingType::name)),
+            storage_access: named(&StorageTextureAccess::ALL.map(StorageTextureAccess::name)),
         }
     }
 }

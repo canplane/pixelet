@@ -12,9 +12,6 @@
 // has, NAMED marks an interface's handle, and SLOT_BITS splits an issued handle into its
 // slot and its generation.
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 /// The request, which a later answer carries back.
 pub const TAG: u32 = 0;
 

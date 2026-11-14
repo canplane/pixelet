@@ -4,6 +4,7 @@ use pxl_spec::asset::cube::{Object, Sentinel};
 use pxl_spec::share::eighths;
 use pxl_spec::space::coord::zoom::{LEAF_ZOOM, SHARD_ZOOM, UNIT_ZOOM};
 use pxl_spec::space::hierarchy::morton::key_of;
+use pxl_spec::space::hierarchy::tree::child_at;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use fnv::FnvHashMap;
@@ -352,10 +353,7 @@ fn eight_markers_stay() {
         let parent = [4, 4, 2];
         let writes: Vec<Write> = (0..8)
             .map(|k| Write {
-                at: id_of(
-                    OBJECT_COARSEST + 1,
-                    object::child_at(OBJECT_COARSEST, parent, k),
-                ),
+                at: id_of(OBJECT_COARSEST + 1, child_at(OBJECT_COARSEST, parent, k)),
                 asset_id: MARKER,
                 ext: marker_text(&format!("m{k}")),
             })

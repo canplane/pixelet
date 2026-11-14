@@ -6,17 +6,17 @@
 use core::mem::{offset_of, size_of};
 
 use crate::perf::frame::{FrameSample, RaySample, EFFECT_CNT, GPU_SPAN_CNT};
-use crate::perf::spec::{frame, limit, now, percentile, stat, step_stat, stream_stat};
 use crate::perf::word::{words, zeroed, AsWords};
-use crate::sys::io::demand_spec::{STREAM_NAMES, TASK_PHASE_NAMES};
-use crate::sys::sched::phase_spec::PHASES;
-use pxl_render::gpu::span_spec::FRAME_KINDS;
+use crate::spec::demand::{StreamName, TaskPhaseName};
+use crate::spec::perf::{frame, limit, now, percentile, stat, step_stat, stream_stat};
+use crate::spec::phase::Phase;
+use pxl_render::spec::span::FrameKind;
 
 const REASON_CAP: usize = limit::REASON_CAP as usize;
 const REASON_WORDS: usize = limit::REASON_WORDS as usize;
 const STEP_CAP: usize = limit::STEP_CAP as usize;
-pub const TASK_PHASE_CNT: usize = TASK_PHASE_NAMES.len();
-const CATEGORY_CNT: usize = STREAM_NAMES.len();
+pub const TASK_PHASE_CNT: usize = TaskPhaseName::ALL.len();
+const CATEGORY_CNT: usize = StreamName::ALL.len();
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -87,18 +87,18 @@ pub struct FrameSection {
     pub effects_p95: [f64; EFFECT_CNT],
     /// The GPU's time, with overlapping spans counted once.
     pub gpu_busy: Percentile,
-    /// Three words for each of the renderer's FRAME_KINDS: the p50 and p95 of
+    /// Three words for each of the renderer's `FrameKind`s: the p50 and p95 of
     /// the GPU's busy time over that kind's timed frames, and how many there
     /// were. All three are 0 for a kind no timed frame had.
-    pub gpu_busy_kinds: [f64; 3 * FRAME_KINDS.len()],
+    pub gpu_busy_kinds: [f64; 3 * FrameKind::ALL.len()],
     /// Only the p95 of each phase and each GPU span is kept, because only it
     /// is read. A span's p95 covers the timed frames that ran the span, and
     /// `gpu_spans_cnt` counts those frames.
-    pub phases_p95: [f64; PHASES.len()],
+    pub phases_p95: [f64; Phase::ALL.len()],
     pub gpu_spans_p95: [f64; GPU_SPAN_CNT],
     pub gpu_spans_cnt: [f64; GPU_SPAN_CNT],
-    /// How many frames fell in each of the renderer's FRAME_KINDS.
-    pub kinds: [f64; FRAME_KINDS.len()],
+    /// How many frames fell in each of the renderer's `FrameKind`s.
+    pub kinds: [f64; FrameKind::ALL.len()],
     /// The world's pixel count in the last frame a read timed.
     pub gpu_px: f64,
     /// The ray counts of the window's frames, summed field by field.
@@ -211,7 +211,7 @@ words!(ViewSection, now::view::WORDS,
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct StepStat {
-    /// Indices into PHASES and STEP_NAMES.
+    /// Indices into `Phase::ALL` and `StepName::ALL`.
     pub phase: f64,
     pub name: f64,
     pub ms: f64,

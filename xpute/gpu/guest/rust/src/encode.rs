@@ -32,18 +32,27 @@ pub type Id = u32;
 
 /// Loads a word that a record named for the host to answer, such as a
 /// fence or the device block's STATUS. The load is an acquire, so whatever the
-/// host wrote before it stored the word is seen (stream.rs).
-pub fn load_acquire(word: &u32) -> u32 {
-    // SAFETY: a live, aligned word, which the host stores into only
-    // atomically; nothing here writes through it.
-    unsafe { AtomicU32::from_ptr(core::ptr::from_ref(word).cast_mut()) }.load(Ordering::Acquire)
+/// host wrote before it stored the word is seen (stream.rs). The word is
+/// reached through a raw pointer (`AtomicU32::from_ptr`), so no reference is
+/// made to a word the host writes.
+///
+/// # Safety
+/// `word` is live and aligned, the host stores into it only atomically, and
+/// nothing here writes through it.
+pub unsafe fn load_acquire(word: *const u32) -> u32 {
+    // SAFETY: the caller's.
+    unsafe { AtomicU32::from_ptr(word.cast_mut()) }.load(Ordering::Acquire)
 }
 
 /// Whether the host has answered the request asked with `ticket` on
 /// `fence` (spec RESULT). A late answer to an older request stores another
 /// ticket, so it never counts.
-pub fn signaled(fence: &u32, ticket: u32) -> bool {
-    load_acquire(fence) == ticket
+///
+/// # Safety
+/// As `load_acquire`.
+pub unsafe fn signaled(fence: *const u32, ticket: u32) -> bool {
+    // SAFETY: the caller's.
+    unsafe { load_acquire(fence) == ticket }
 }
 
 trait Sink {

@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use super::*;
-use crate::look::color::linear;
+use pxl_spec::color::linear;
 
 #[test]
 fn moon_map_width() {

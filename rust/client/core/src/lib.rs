@@ -16,11 +16,12 @@ pub(crate) mod frame;
 pub mod link;
 pub(crate) mod perf;
 pub(crate) mod pointer;
+pub mod spec;
 pub mod sys;
 pub(crate) mod ui;
 
-use perf::spec::LIMIT;
-use pxl_render::api_spec::device;
+use spec::perf::limit;
+use pxl_render::spec::api::device;
 use xpute_gpu_guest::admit;
 use xpute_gpu_link::GpuConfig;
 use xpute_link::frame::WORD_BYTES;
@@ -35,13 +36,13 @@ pub const MEASURING: bool = match option_env!("PXL_PERF_DRIVE") {
 /// How a device's GPU host paces the renderer's stream, as
 /// spec/client/render/api.json `device` sets it. A build made for measuring
 /// has it, and the host that runs the core's entries, log a record, a run or
-/// an entry slower than perf.json's `LIMIT::SLOW_MS`, as the page's worker has
+/// an entry slower than perf.json's `limit::SLOW_MS`, as the page's worker has
 /// the page's hosts log.
 const GPU: GpuConfig = GpuConfig {
     frame_latency: device::FRAME_LATENCY,
     upload_chunk_bytes: device::UPLOAD_CHUNK_BYTES as u64,
     slow_ms: if MEASURING {
-        Some(LIMIT::SLOW_MS)
+        Some(limit::SLOW_MS)
     } else {
         None
     },

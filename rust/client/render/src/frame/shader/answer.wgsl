@@ -12,6 +12,11 @@ struct Answer {
   inheritance: vec3<u32>,
 }
 
+/// The port of pxl-engine `answer::fills`, over pxl-spec `cube::is_matter` (walk_word).
+fn fills(asset: u32) -> bool {
+  return is_matter(asset & VAL_MASK);
+}
+
 /// A split's asset words `w` hold its box, the steps its content may lie in (pxl-engine
 /// `answer::box_of`). `box_first` reads the box's first step on each axis, and `box_past` the
 /// step past its last.

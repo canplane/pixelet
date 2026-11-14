@@ -1,6 +1,6 @@
 // pxl-engine/fill.rs
 
-//! A brick's fill: from its tile's samples, its lines and the four palette indices of each
+//! A brick's fill: from its tile's samples, its lines and the four asset ids of each
 //! cell (`Site`), it writes the brick's words (`clipmap::BRICK_WORDS`). It writes each
 //! column's ground top and its cell as laid (`columns`); the ways' spans, worked out once a
 //! column from its lines into the brick's scratch (`spans`, `clipmap::SPANS_AT`); from them
@@ -20,7 +20,7 @@ use crate::{at, ground, way};
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::brick;
 use pxl_spec::brick::{BRICK, BRICK_CELL_CNT};
-use pxl_spec::ground::{ele_at, own, word};
+use pxl_spec::ground::{ele_at, own, word, GroundId};
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::area::Shard;
@@ -47,7 +47,7 @@ pub fn mip_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
     [at(ground, e) as i32, at(ground, e + 1) as i32]
 }
 
-/// Cell `i`'s own palette index as laid, in the brick at `base` (`clipmap::OWN_WORDS`).
+/// Cell `i`'s own asset id as laid, in the brick at `base` (`clipmap::OWN_WORDS`).
 pub fn own_of(ground: &[u32], base: u32, i: u32) -> u32 {
     clipmap::own_at(at(ground, base + OWN_AT + i / OWN_CELL_CNT), i)
 }
@@ -78,7 +78,7 @@ impl BrickSource for LoneBrick<'_> {
     fn origin(&self, _: u32) -> ([i32; 2], bool) {
         ([0; 2], false)
     }
-    /// Its own palette index four times; what `mip` folds reads no palette index.
+    /// Its own asset id four times; what `mip` folds reads no asset id.
     fn fold_at(&self, _: u32, _: u32, i: u32) -> u32 {
         word([own_of(self.ground, self.base, i); 4])
     }
@@ -135,8 +135,8 @@ fn hdr_word(s: &SpanList) -> u32 {
     s.n | (face as u32) << 16
 }
 
-/// Where a brick being filled lies, and what it is filled from besides the four palette
-/// indices of each cell (`columns`): its cells' zoom, its place in its tile, its first cell as
+/// Where a brick being filled lies, and what it is filled from besides the four asset
+/// ids of each cell (`columns`): its cells' zoom, its place in its tile, its first cell as
 /// the world names it, what is known of the area there, its tile's padded samples
 /// (pxl-spec `ground::ele_idx`) and its lines (`brick::LINES_ENTRIES_AT`).
 #[derive(Clone, Copy)]
@@ -201,9 +201,9 @@ impl brick::Brick for LaneBrick<'_> {
 }
 
 /// Writes a brick's columns and its cells as laid into `lane`, where `four(i)` gives cell `i`'s
-/// four palette indices (pxl-spec `ground::asset_ids`). Each column gets its ground top
-/// (pxl-spec `ground::ele_at`); a gone cell, whose own palette index is `Sentinel::Unknown`
-/// past the area, gets the Earth's top at sea level. Each cell gets its own palette index
+/// four asset ids (pxl-spec `ground::asset_ids`). Each column gets its ground top
+/// (pxl-spec `ground::ele_at`); a gone cell, whose own asset id is `Sentinel::Unknown`
+/// past the area, gets the Earth's top at sea level. Each cell gets its own asset id
 /// (pxl-spec `ground::own` of its four at the brick's zoom), four to a word
 /// (`clipmap::OWN_WORDS`).
 pub fn columns(lane: &mut [u32], four: impl Fn(u32) -> u32, site: &Site) {
@@ -218,8 +218,12 @@ pub fn columns(lane: &mut [u32], four: impl Fn(u32) -> u32, site: &Site) {
         };
         put(lane, COLUMNS_AT + i, top as u32 & 0xffff);
         let w = OWN_AT + i / OWN_CELL_CNT;
-        let k = 8 * (i % OWN_CELL_CNT);
-        put(lane, w, (at(lane, w) & !(0xff << k)) | own << k);
+        let k = GroundId::BITS * (i % OWN_CELL_CNT);
+        put(
+            lane,
+            w,
+            (at(lane, w) & !(u32::from(GroundId::MAX) << k)) | own << k,
+        );
         i += 1;
     }
 }
@@ -316,7 +320,7 @@ pub fn mips(lane: &mut [u32], scratch: &[u32], cell_zoom: Zoom) {
 }
 
 /// Fills a brick whole into `lane`, with `scratch` for its spans (`clipmap::SPANS_WORDS`)
-/// and `four` giving each cell's four palette indices (`columns`): its columns, its spans and
+/// and `four` giving each cell's four asset ids (`columns`): its columns, its spans and
 /// its levels. It says whether a column made more spans than pxl-spec `way::SPAN_CAP` (`keep`).
 pub fn brick(
     lane: &mut [u32],

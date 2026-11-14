@@ -4,19 +4,14 @@
 //! one authority over which reads are out: the streams of `demand` say what
 //! is wanted, and `policy` ranks it. `dispatch` hands what `request` starts
 //! and stops to `fetch` or `loader`, which read through `file` into memory
-//! from `body` and pass on what arrives. Each `_spec` module is generated
-//! from the JSON its header names.
+//! from `body` and pass on what arrives.
 
 pub mod body;
 pub mod demand;
-#[path = "io/demand.spec.rs"]
-pub mod demand_spec;
 pub mod dispatch;
 pub mod failure;
 pub mod fetch;
 pub mod file;
-#[path = "io/file.spec.rs"]
-pub mod file_spec;
 pub mod loader;
 pub mod param;
 pub mod policy;

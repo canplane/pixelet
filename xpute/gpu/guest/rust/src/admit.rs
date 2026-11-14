@@ -27,10 +27,10 @@ pub fn ask(block: &[u32]) {
     BLOCK.set(Some(block.as_ptr()));
 }
 
-/// The block `ask` kept, its words to load with acquire.
-pub fn block() -> Option<&'static [u32]> {
-    // SAFETY: the block `ask` kept, in place while it is lent.
-    BLOCK.get().map(|at| unsafe { core::slice::from_raw_parts(at, device::WORDS) })
+/// The first word of the block `ask` kept, `device::WORDS` long and in place
+/// while it is lent, its words to load with acquire (`load_acquire`).
+pub fn block() -> Option<*const u32> {
+    BLOCK.get()
 }
 
 /// This is the admission of a guest that has the GPU, where `LATENCY` is the
@@ -39,8 +39,10 @@ pub fn block() -> Option<&'static [u32]> {
 /// unfinished frames. It admits none before the guest has asked for the block,
 /// and none once the device is lost.
 pub fn frame<const LATENCY: u32>() -> bool {
-    block().is_some_and(|b| {
-        let word = |k: usize| load_acquire(&b[k]);
+    block().is_some_and(|at| {
+        // SAFETY: a word of the block `ask` kept, which stays live and in
+        // place; the host stores into it only atomically.
+        let word = |k: usize| unsafe { load_acquire(at.add(k)) };
         word(device::STATUS_AT) == status::READY && admits(word(device::UNFINISHED_AT), LATENCY)
     })
 }

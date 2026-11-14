@@ -6,9 +6,6 @@
 // (ts/client/src/service/sys/fs/asset.ts), and the texture pack as the asset ingest
 // composed it.
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 /// Each file: its path below asset/content/, the specs' and the tools' name for it;
 /// its bucket key, the SHA-256 of its bytes, which where it lies does not change;
 /// its size; and for a model its extent in ENU world units (x, y, z-up), measured
@@ -996,11 +993,36 @@ use crate::asset::id::AssetId;
 /// Which of a box's images a tile is, as Minecraft's `cube_bottom_top`
 /// names them. Which face of a box wears which is the renderer's
 /// (paint.wgsl): a cell below the surface wears its bottom on every side.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum CubeFace {
-    Top,
-    Side,
-    Bottom,
+    Top = 0,
+    Side = 1,
+    Bottom = 2,
+}
+
+impl CubeFace {
+    /// Every member, in its source's own order.
+    pub const ALL: [CubeFace; 3] = [CubeFace::Top, CubeFace::Side, CubeFace::Bottom];
+
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u8) -> Option<CubeFace> {
+        match val {
+            0 => Some(CubeFace::Top),
+            1 => Some(CubeFace::Side),
+            2 => Some(CubeFace::Bottom),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            CubeFace::Top => "top",
+            CubeFace::Side => "side",
+            CubeFace::Bottom => "bottom",
+        }
+    }
 }
 
 /// The texture pack as one image: `columns` tiles of `cell` pixels per row,

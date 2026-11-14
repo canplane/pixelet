@@ -1,7 +1,7 @@
 // pxl-render/build/wgsl.rs
 
-//! How the build writes a value the Rust holds for the shaders: as a constant, or as a table a
-//! function reads by a switch.
+//! How the build writes a value the Rust holds for the shaders: as a constant, as a table a
+//! function reads by a switch, or as a predicate over a value.
 
 use std::fmt::Display;
 
@@ -82,4 +82,32 @@ pub fn table(name: &str, cases: impl IntoIterator<Item = (u32, Val)>, default: V
         default.ty(),
         default.lit()
     )
+}
+
+/// The WGSL predicate `name` over a value, true where `rule` holds: written as the runs of
+/// values under `cnt` that it holds, a run that reaches either end of them open there, so a
+/// value past them answers as the last one does. Every shader that calls it passes a value
+/// under `cnt`.
+pub fn predicate(name: &str, cnt: u32, rule: impl Fn(u32) -> bool) -> String {
+    let last = cnt - 1;
+    let mut runs: Vec<[u32; 2]> = Vec::new();
+    for v in (0..=last).filter(|&v| rule(v)) {
+        match runs.last_mut() {
+            Some(r) if r[1] + 1 == v => r[1] = v,
+            _ => runs.push([v, v]),
+        }
+    }
+    let run = |&[lo, hi]: &[u32; 2]| match (lo == 0, hi == last) {
+        (true, true) => "true".to_owned(),
+        (true, false) => format!("v <= {hi}u"),
+        (false, true) => format!("v >= {lo}u"),
+        (false, false) if runs.len() == 1 => format!("v >= {lo}u && v <= {hi}u"),
+        (false, false) => format!("(v >= {lo}u && v <= {hi}u)"),
+    };
+    let body = if runs.is_empty() {
+        "false".to_owned()
+    } else {
+        runs.iter().map(run).collect::<Vec<_>>().join(" || ")
+    };
+    format!("fn {name}(v: u32) -> bool {{ return {body}; }}\n")
 }

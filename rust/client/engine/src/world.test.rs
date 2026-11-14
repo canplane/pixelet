@@ -14,8 +14,9 @@ use crate::fill::{column_of, mip_of, own_of, put, root_of, LoneBrick};
 use crate::ground::Extent;
 use crate::support::{asset, column_surface};
 use pxl_spec::brick::{of_idx, BRICK, BRICK_CELL_CNT, BRICK_SHIFT};
-use pxl_spec::ground::word;
+use pxl_spec::ground::{word, GroundId};
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
+use pxl_spec::space::hierarchy::tree::{ancestor_at, child_of};
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::{Area, Shard};
 use xpute_kit::math::rng::mix64;
@@ -200,7 +201,7 @@ fn clipmap() -> (Vec<Entry>, Vec<u32>) {
                 let top = ele_at(leaf);
                 put(&mut ground, base + COLUMNS_AT + i, top as u32 & 0xffff);
                 let w = &mut ground[(base + OWN_AT + i / OWN_CELL_CNT) as usize];
-                *w |= (Sample::GROUND) << (8 * (i % OWN_CELL_CNT));
+                *w |= (Sample::GROUND) << (GroundId::BITS * (i % OWN_CELL_CNT));
                 let e = base + BOUNDS_AT + BOUND_ENTRY_WORDS * mip_idx(0, [x, y]);
                 let b = ground::extent_word([[top, top], ground::EMPTY]);
                 put(&mut ground, e, b[0] as u32);
@@ -248,7 +249,7 @@ fn folded(rows: &[Entry], ground: &[u32], zero: bool) -> Vec<[u32; JOINED_WORDS 
                 .map(|b| {
                     let [x, y] = of_idx(b);
                     let unheld = (0..4).any(|k| {
-                        let s = entry([(2 * x + k % 2) as i32, (2 * y + k / 2) as i32]);
+                        let s = entry(child_of([x as i32, y as i32], k));
                         !w.brick(cell_zoom, s).1
                     });
                     if zero && l == 1 && unheld {
@@ -288,8 +289,7 @@ fn partial_block_bounded() {
             (first[0] >> 1) + (k % (ACROSS / 2)) as i32,
             (first[1] >> 1) + (k / (ACROSS / 2)) as i32,
         ];
-        let q = |d: i32| [2 * c[0] + d % 2, 2 * c[1] + d / 2];
-        if (0..4).all(|d| w.present(CELL_ZOOM, q(d)).1) {
+        if (0..4).all(|d| w.present(CELL_ZOOM, child_of(c, d)).1) {
             continue;
         }
         unheld += 1;
@@ -515,7 +515,7 @@ fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
         for dz in -2..=1 {
             let leaf = [g[0], g[1], top + dz];
             for zoom in FIRST_CELL_ZOOM..=CELL_ZOOM {
-                let c = object::ancestor_at(CELL_ZOOM, leaf, CELL_ZOOM - zoom);
+                let c = ancestor_at(CELL_ZOOM, leaf, CELL_ZOOM - zoom);
                 let mut alone = Inheritance::of(&Nothing, (zoom, c));
                 let base = node(
                     &mut resident,
@@ -538,10 +538,10 @@ fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
                     };
                     // Every node over it is asked at zooms that split it, each at zooms of its own, as a
                     // walk's nodes are.
-                    let mut at = Inheritance::of(&Nothing, (0, object::ancestor_at(zoom, c, zoom)));
+                    let mut at = Inheritance::of(&Nothing, (0, ancestor_at(zoom, c, zoom)));
                     let mut reached = true;
                     for z in 0..zoom {
-                        let a = object::ancestor_at(zoom, c, zoom - z);
+                        let a = ancestor_at(zoom, c, zoom - z);
                         let near = z + 1 + take(CELL_ZOOM + 2 - z);
                         let far = take(near + 1);
                         let got = node(
@@ -558,7 +558,7 @@ fn answers_take_no_zooms(w: Clipmap<'_>) -> [u32; 3] {
                             reached = false;
                             break;
                         }
-                        let child = object::ancestor_at(zoom, c, zoom - z - 1);
+                        let child = ancestor_at(zoom, c, zoom - z - 1);
                         at = at.child(&Nothing, (z + 1, child));
                     }
                     if !reached {

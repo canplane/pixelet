@@ -11,7 +11,7 @@ use crate::perf::read;
 use crate::perf::record;
 use crate::perf::frame::{FrameSample, WorstFrame};
 use crate::perf::record::{perf_frames, perf_strtab, perf_tasks, perf_worst, STRTAB_CAP};
-use crate::perf::spec::{limit, now, stat, RING_NAMES};
+use crate::spec::perf::{limit, now, stat, RING_NAMES};
 use crate::perf::task::TaskRecord;
 use crate::perf::window::perf_window_start;
 use crate::perf::window::perf_window_stop;

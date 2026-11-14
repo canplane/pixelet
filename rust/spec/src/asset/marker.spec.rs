@@ -8,9 +8,6 @@
 // pin is drawn as its own design (pxl-spec asset/marker.rs
 // `marker_cell_zoom`).
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 /// The pin's name, the one every locale shows: an item has one name.
 pub const PIN_LABEL: &str = "Pin";
 

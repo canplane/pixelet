@@ -14,7 +14,8 @@ use pxl_spec::ground::asset_ids;
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::world::{wrap_idx, SEA_LEVEL};
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, MIN_ZOOM, SHARD_ZOOM};
-use pxl_spec::way::NOTHING;
+use pxl_spec::space::hierarchy::tree::ancestor_at;
+use pxl_spec::way::{NOTHING, PIER};
 use std::collections::BTreeMap;
 
 use pxl_content::cave;
@@ -105,7 +106,7 @@ fn descend(
     seen: &mut Lookup,
 ) {
     let idx = |z: Zoom| {
-        let a = object::ancestor_at(FINEST, point, FINEST - z);
+        let a = ancestor_at(FINEST, point, FINEST - z);
         [wrap_idx(z, a[0]), a[1], a[2]]
     };
     let root = idx(start);
@@ -189,7 +190,7 @@ fn tell_way(w: World, (z, c): (Zoom, [i32; 3]), seen: &mut BTreeMap<[i32; 2], u3
     let under = (c[2] + 1) * s <= clip::column_top(column);
     let kind = if v == Sentinel::Void as u32 {
         1
-    } else if v == Ground::Building as u32 {
+    } else if v == PIER {
         2
     } else if under {
         3
@@ -738,7 +739,7 @@ fn hand_world_answers_as_the_rust() {
             (p[2] << 3) + draw.within(0, 8),
         ];
         let ancestor = |z: Zoom| {
-            let a = object::ancestor_at(FINEST, point, FINEST - z);
+            let a = ancestor_at(FINEST, point, FINEST - z);
             [wrap_idx(z, a[0]), a[1], a[2]]
         };
         let carve = match i % 6 {

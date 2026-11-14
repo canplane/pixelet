@@ -10,7 +10,7 @@
 //! ENU as three f64, zero for an image.
 
 #[path = "catalog.spec.rs"]
-mod spec;
+pub mod spec;
 pub use spec::*;
 
 /// A file reference a definition makes, numbered in the asset specs' order

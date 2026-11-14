@@ -3,6 +3,7 @@
 use super::*;
 use pxl_engine::clipmap::FIRST_CELL_ZOOM;
 use pxl_spec::share::{eighths, FULL};
+use pxl_spec::space::hierarchy::tree::child_of;
 
 /// A decor's cells hold one at its chance: over a square of leaf cells, the
 /// share holding a candidate is its density, within what a fair coin would
@@ -76,7 +77,7 @@ fn counts_hand_down_whole() {
                 let parent = cnt(k, z, b);
                 let mut children = 0;
                 for q in 0..4 {
-                    children += cnt(k, z + 1, [2 * b[0] + (q & 1), 2 * b[1] + (q >> 1)]);
+                    children += cnt(k, z + 1, child_of(b, q));
                 }
                 assert!(children <= parent, "{k} at z{z} {b:?}");
                 assert!(

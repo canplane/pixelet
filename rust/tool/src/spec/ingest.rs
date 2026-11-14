@@ -11,9 +11,11 @@ use std::fmt::Write;
 use std::sync::OnceLock;
 
 use xpute_gen::spec::data::{table_outputs, DataSpec};
+use xpute_gen::spec::rs_enum;
 
-use super::asset::{cube_member, cube_number};
+use super::asset::{cube_member, cube_number, members};
 use super::{file, read, Node, Output};
+use crate::asset::table::Face;
 use crate::root;
 
 pub(crate) const INGEST_JSON: &str = "spec/spec/asset/ingest.json";
@@ -227,7 +229,7 @@ export const PACK = {
         let _ = writeln!(out, "    {},", file_number(t)?);
     }
     out.push_str("  ],\n  top: {\n");
-    for (group, ty, _, tile) in pack.faces.iter().filter(|f| f.2 == "top") {
+    for (group, ty, _, tile) in pack.faces.iter().filter(|f| f.2 == Face::Top.name()) {
         let _ = writeln!(out, "    {}: {tile},", cube_number(group, ty)?);
     }
     out.push_str("  } as Readonly<Record<number, number>>,\n} as const;\n");
@@ -235,18 +237,14 @@ export const PACK = {
 }
 
 fn pack_rs(pack: &Pack) -> Result<String, String> {
+    let faces = members("face", &Face::ALL.map(Face::name))?;
     let mut out = vec![r##"use crate::asset::cube;
 use crate::asset::id::AssetId;
 
 /// Which of a box's images a tile is, as Minecraft's `cube_bottom_top`
 /// names them. Which face of a box wears which is the renderer's
 /// (paint.wgsl): a cell below the surface wears its bottom on every side.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum CubeFace {
-    Top,
-    Side,
-    Bottom,
-}
+{CUBE_FACE}
 
 /// The texture pack as one image: `columns` tiles of `cell` pixels per row,
 /// tile n at column n % columns and row n / columns, `tiles` the cube face
@@ -266,7 +264,10 @@ pub struct Pack {
     pub means: &'static [[u8; 3]],
 }
 "##
-    .to_string()];
+    .replace(
+        "{CUBE_FACE}",
+        &rs_enum("CubeFace", &faces, "u8", "").join("\n"),
+    )];
     out.extend([
         "pub const PACK: Pack = Pack {".to_string(),
         format!("    cell: {},", pack.cell),
@@ -279,12 +280,11 @@ pub struct Pack {
         } else {
             "Ground"
         };
-        let face = match face.as_str() {
-            "top" => "Top",
-            "side" => "Side",
-            "bottom" => "Bottom",
-            _ => return Err(format!("{INGEST_JSON}: pack.faces: {face} is no face")),
-        };
+        let face = &faces
+            .iter()
+            .find(|m| m.name == *face)
+            .ok_or(format!("{INGEST_JSON}: pack.faces: {face} is no face"))?
+            .ident;
         out.push(format!(
             "        (cube::{variant}::{} as AssetId, CubeFace::{face}, {tile}),",
             cube_member(group, ty)?.ident

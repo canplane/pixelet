@@ -7,7 +7,7 @@
 //! FNV-1a hash of `package/interface` folded below frame.json's `NAMED`, and
 //! each resource's methods another's. A method's number is its place among its
 //! object's, in declaration order. No two interfaces a target reaches share a
-//! named handle.
+//! named handle. In C++ it writes the numbers and the types alone (cpp.rs).
 //!
 //! A packet lays its values out as the Component Model's Canonical ABI does
 //! (xpute-link cabi.rs): a call's params as one tuple, an answer's value
@@ -22,7 +22,9 @@ use std::path::Path;
 
 use wit_parser::{Function, FunctionKind, IndexMap, InterfaceId, Param, Resolve, Type, TypeDefKind, TypeId, TypeOwner, WorldItem, WorldKey};
 
-use xpute_gen::spec::{mark, package, package_path, pascal, read, rs_enum, rs_ident, screaming, snake, ts_enum, ts_ident, ts_of, Member, Output};
+use xpute_gen::spec::{mark, of_ident, package, package_path, pascal, read, rs_enum, rs_ident, screaming, snake, ts_enum, ts_ident, Member, Output};
+
+mod cpp;
 
 /// One package's bindings on one side, and where they go.
 pub struct WitTarget<'a> {
@@ -33,6 +35,9 @@ pub struct WitTarget<'a> {
     pub rs: Option<&'a str>,
     /// The TypeScript directory, a module per interface.
     pub ts: Option<&'a str>,
+    /// The C++ directory, a header per interface, under the library whose
+    /// root holds `compile_flags.txt`.
+    pub cpp: Option<&'a str>,
     /// The side the Rust runs on, or none for a package of types alone,
     /// which takes nothing of a side. The Rust is written per side, as two
     /// Rust sides share one process on a device; the TypeScript is
@@ -65,22 +70,22 @@ struct Obj<'a> {
 }
 
 fn objs<'a>(r: &'a Resolve, i: InterfaceId, at: &str, drop: u32) -> Result<Vec<Obj<'a>>, String> {
-    let iface = &r.interfaces[i];
+    let interface = &r.interfaces[i];
     let mut single = Obj {
-        name: iface.name.clone().unwrap_or_default(),
+        name: interface.name.clone().unwrap_or_default(),
         resource: false,
         methods: Vec::new(),
     };
     let mut res: BTreeMap<TypeId, Obj> = BTreeMap::new();
     let mut order = Vec::new();
-    for &t in iface.types.values() {
+    for &t in interface.types.values() {
         if matches!(r.types[t].kind, TypeDefKind::Resource) && r.types[t].owner == TypeOwner::Interface(i) {
             order.push(t);
             let name = r.types[t].name.clone().unwrap_or_default();
             res.insert(t, Obj { name, resource: true, methods: Vec::new() });
         }
     }
-    for f in iface.functions.values() {
+    for f in interface.functions.values() {
         match f.kind {
             FunctionKind::Freestanding | FunctionKind::AsyncFreestanding => single.methods.push(f),
             FunctionKind::Method(t) | FunctionKind::AsyncMethod(t) => {
@@ -90,7 +95,7 @@ fn objs<'a>(r: &'a Resolve, i: InterfaceId, at: &str, drop: u32) -> Result<Vec<O
         }
     }
     // An async call lends one buffer, which its answer hands back.
-    for f in iface.functions.values() {
+    for f in interface.functions.values() {
         let lents = f.params.iter().filter(|p| is_lent(r, &p.ty)).count();
         if lents > 1 && is_async(f) {
             return Err(format!("{at}.{}: an async call lends one buffer", f.name));
@@ -243,19 +248,21 @@ pub(crate) struct Number {
     pub(crate) in_f64: bool,
     /// Its list's TypeScript typed array, as type and as constructor.
     pub(crate) arr: &'static str,
+    /// Its C++ type.
+    pub(crate) cpp: &'static str,
 }
 
 pub(crate) static NUMBERS: [Number; 10] = [
-    Number { wit: Type::U8, rs: "u8", sz: 1, in_f64: true, arr: "Uint8Array" },
-    Number { wit: Type::S8, rs: "i8", sz: 1, in_f64: true, arr: "Int8Array" },
-    Number { wit: Type::U16, rs: "u16", sz: 2, in_f64: true, arr: "Uint16Array" },
-    Number { wit: Type::S16, rs: "i16", sz: 2, in_f64: true, arr: "Int16Array" },
-    Number { wit: Type::U32, rs: "u32", sz: 4, in_f64: true, arr: "Uint32Array" },
-    Number { wit: Type::S32, rs: "i32", sz: 4, in_f64: true, arr: "Int32Array" },
-    Number { wit: Type::U64, rs: "u64", sz: 8, in_f64: false, arr: "BigUint64Array" },
-    Number { wit: Type::S64, rs: "i64", sz: 8, in_f64: false, arr: "BigInt64Array" },
-    Number { wit: Type::F32, rs: "f32", sz: 4, in_f64: true, arr: "Float32Array" },
-    Number { wit: Type::F64, rs: "f64", sz: 8, in_f64: true, arr: "Float64Array" },
+    Number { wit: Type::U8, rs: "u8", sz: 1, in_f64: true, arr: "Uint8Array", cpp: "std::uint8_t" },
+    Number { wit: Type::S8, rs: "i8", sz: 1, in_f64: true, arr: "Int8Array", cpp: "std::int8_t" },
+    Number { wit: Type::U16, rs: "u16", sz: 2, in_f64: true, arr: "Uint16Array", cpp: "std::uint16_t" },
+    Number { wit: Type::S16, rs: "i16", sz: 2, in_f64: true, arr: "Int16Array", cpp: "std::int16_t" },
+    Number { wit: Type::U32, rs: "u32", sz: 4, in_f64: true, arr: "Uint32Array", cpp: "std::uint32_t" },
+    Number { wit: Type::S32, rs: "i32", sz: 4, in_f64: true, arr: "Int32Array", cpp: "std::int32_t" },
+    Number { wit: Type::U64, rs: "u64", sz: 8, in_f64: false, arr: "BigUint64Array", cpp: "std::uint64_t" },
+    Number { wit: Type::S64, rs: "i64", sz: 8, in_f64: false, arr: "BigInt64Array", cpp: "std::int64_t" },
+    Number { wit: Type::F32, rs: "f32", sz: 4, in_f64: true, arr: "Float32Array", cpp: "float" },
+    Number { wit: Type::F64, rs: "f64", sz: 8, in_f64: true, arr: "Float64Array", cpp: "double" },
 ];
 
 pub(crate) fn number(ty: &Type) -> Option<&'static Number> {
@@ -360,8 +367,8 @@ pub(crate) fn variant_layout(payloads: &[Option<(usize, usize)>]) -> (usize, usi
 }
 
 /// An enum's members as the enum writers take them (xpute-gen `rs_enum`,
-/// `ts_enum`): each one's identifier, its name and its number, its place. Its
-/// name is its identifier.
+/// `ts_enum`, `cpp_enum`): each one's identifier, its name and its number,
+/// its place. Its name is its identifier.
 fn members(e: &wit_parser::Enum) -> Vec<Member> {
     e.cases
         .iter()
@@ -418,8 +425,8 @@ pub(crate) struct Gen<'a> {
     /// What a Rust module takes from other modules, by module, which its
     /// runtime module `_rt` re-exports.
     rs_uses: RefCell<BTreeMap<String, BTreeSet<String>>>,
-    /// How deep in lists the TypeScript being written is, which names its
-    /// lists' locals.
+    /// How deep in lists the TypeScript or the C++ being written is, which
+    /// names its lists' locals.
     depth: std::cell::Cell<u32>,
     /// What a TypeScript module imports, by module: each name, and whether
     /// it is named as a type alone.
@@ -812,7 +819,7 @@ impl Gen<'_> {
 
     /// The interface's Rust module, by `role` on the side of its crate, none
     /// for an interface of types alone.
-    fn rs_iface(&self, objs: &[Obj], role: Option<(Role, &str, &str)>) -> Result<String, String> {
+    fn rs_interface(&self, objs: &[Obj], role: Option<(Role, &str, &str)>) -> Result<String, String> {
         let mut items = String::new();
         if objs.iter().any(|o| !o.resource) {
             let _ = writeln!(items, "/// The interface's handle, named by `{}` (frame.json `NAMED`).\npub const HANDLE: {} = {:#x};\n", self.at(), self.rs_use(self.link_rs, "Handle"), self.handle());
@@ -1067,7 +1074,7 @@ impl Gen<'_> {
     /// The interface's TypeScript modules, by `role`, none for an interface
     /// of types alone: its functions' module, and its enums' module, empty
     /// where it has none.
-    fn ts_iface(&self, objs: &[Obj], role: Option<Role>) -> Result<(String, String), String> {
+    fn ts_interface(&self, objs: &[Obj], role: Option<Role>) -> Result<(String, String), String> {
         let link = self.link_ts;
         let mut out = String::new();
         let mut enums = String::new();
@@ -1281,7 +1288,7 @@ impl Gen<'_> {
                         "export function load_{n}(r: {}, at: number): {} {{\n  const v = {}(r.case(at, {}));\n  if (v === null) throw new {}({});\n  return v;\n}}\n",
                         self.ts_use(self.cabi_ts, "Lift", true),
                         self.ts_path(t, ""),
-                        self.ts_use(&own, &ts_of(&n), false),
+                        self.ts_use(&own, &of_ident(&n), false),
                         e.cases.len(),
                         self.ts_use(TS_ERROR, "MarshalError", false),
                         self.ts_use(TS_ERRNO, "ERRNO_EBADMSG", false)
@@ -1438,6 +1445,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
     let drop = frame_val(&link, "DROP")?;
     let crate_dir = t.rs.map(|rs| package(root, rs).map(|(_, dir)| root.join(dir))).transpose()?;
     let ts_dir = t.ts.map(|d| root.join(d));
+    let cpp_externs = t.cpp.map(|_| cpp::externs(&r, &ids, &peers)).transpose()?.unwrap_or_default();
     let mut externs = Vec::new();
     for (&id, (pr, p)) in ids.iter().zip(&peers) {
         let name = &r.packages[id].name;
@@ -1475,8 +1483,8 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
     };
     // No two interfaces the target reaches share a named handle.
     let mut handles: BTreeMap<u32, String> = BTreeMap::new();
-    for (i, iface) in r.interfaces.iter() {
-        let Some(n) = &iface.name else { continue };
+    for (i, interface) in r.interfaces.iter() {
+        let Some(n) = &interface.name else { continue };
         let name = format!("{}/{n}", package_name(&r, i));
         if let Some(other) = handles.insert(named(&name, named_bit), name.clone()) {
             return Err(format!("{name} and {other} fold to one named handle"));
@@ -1540,12 +1548,12 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
                 (Some(_), None) => return Err(format!("{at}: its target names no side")),
             };
             let path = format!("{dir}/{m}.rs");
-            let text = format!("// {}\n//\n// {}\n\n{}", package_path(root, &path)?, mark(src, TOOL), g.rs_iface(&objs, rs_role)?);
+            let text = format!("// {}\n//\n// {}\n\n{}", package_path(root, &path)?, mark(src, TOOL), g.rs_interface(&objs, rs_role)?);
             outs.push(Output::new(&path, text));
             let _ = writeln!(rs, "pub mod {m};");
         }
         if let Some(dir) = t.ts {
-            let (body, enums) = g.ts_iface(&objs, guest_serves.map(|g| role(!g)))?;
+            let (body, enums) = g.ts_interface(&objs, guest_serves.map(|g| role(!g)))?;
             if !enums.is_empty() {
                 let path = format!("{dir}/{m}.enum.ts");
                 let text = format!("// {}\n//\n// {}\n{enums}", package_path(root, &path)?, mark(src, TOOL));
@@ -1554,6 +1562,10 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
             let path = format!("{dir}/{m}.ts");
             let text = format!("// {}\n//\n// {}\n\n{}\n{body}", package_path(root, &path)?, mark(src, TOOL), g.ts_imports());
             outs.push(Output::new(&path, text));
+        }
+        if let Some(dir) = t.cpp {
+            let path = format!("{dir}/{m}.hpp");
+            outs.push(Output::new(&path, cpp::hdr(&g, &objs, &path, src, &cpp_externs)?));
         }
     }
     if let Some(path) = t.rs {

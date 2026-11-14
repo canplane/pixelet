@@ -1,4 +1,4 @@
-// pxl-render/gpu/span.spec.rs
+// pxl-render/spec/span.spec.rs
 //
 // GENERATED from spec/client/render/gpu/span.json (xpute-gen data.rs)
 //
@@ -6,49 +6,6 @@
 // in the order the renderer encodes them, and the kind of frame it made; the profiler records and reports
 // them by these names.
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
-pub const GPU_SPAN_NAMES: &[&str] = &[
-    "air",
-    "exposure",
-    "ao",
-    "world",
-    "world_rest",
-    "resolve",
-    "finish",
-    "marker",
-    "debug",
-    "character",
-    "cast",
-    "beam_hit",
-    "beam",
-    "grid_cell",
-    "sample_hit",
-    "sample",
-    "raster_box",
-    "sraster",
-    "px",
-    "hole",
-    "light_world_receivers",
-    "light_draws",
-    "light_slide",
-    "light_propagate",
-    "light_damage",
-    "light_beam_hit",
-    "light_beam",
-    "light_sample",
-    "light_raster",
-    "light_slot",
-    "light_hit",
-    "light_walk",
-    "generate",
-    "shadow",
-    "face",
-    "damage",
-    "shadow_damage",
-    "propagate",
-];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum GpuSpanName {
@@ -282,17 +239,6 @@ impl LightChanged {
     }
 }
 
-pub const FRAME_KINDS: &[&str] = &[
-    "none",
-    "unready",
-    "dropped",
-    "plain",
-    "still",
-    "cast",
-    "unchanged",
-    "px",
-    "masked",
-];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum FrameKind {

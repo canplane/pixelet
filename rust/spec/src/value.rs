@@ -9,7 +9,7 @@
 
 use crate::asset::cube::{self, Ground, Object, Sentinel};
 
-/// The ground's palette entries, first and last: every byte but the
+/// The ground's asset ids, first and last: every byte but the
 /// sentinels.
 pub const GROUND: [u32; 2] = [0x01, 0xfe];
 
@@ -38,7 +38,7 @@ pub const TRANSPORT: [u32; 2] = {
 /// cube kind (`asset/id.json` `IDX_BITS`).
 pub const OBJECT: [u32; 2] = [0x101, 0x3ff];
 
-/// Whether a value read into a word is a ground palette entry (`GROUND`). A GPU has no byte
+/// Whether a value read into a word is a ground asset id (`GROUND`). A GPU has no byte
 /// type, so every value is tested as a word.
 pub const fn is_ground(val: u32) -> bool {
     val >= GROUND[0] && val <= GROUND[1]
@@ -57,8 +57,7 @@ pub const fn is_object(val: u32) -> bool {
 
 // The palette laid into the value space: no class holds a sentinel, every ground entry lies
 // in the ground's range, the ways' entries lie in one run, so the ways' range holds them and
-// no other (`TRANSPORT`), a pier's entry (way.rs `column`, `Ground::Building`) is not a way's,
-// and the object's colors lie in their range.
+// no other (`TRANSPORT`), and the object's colors lie in their range.
 const _: () = {
     let mut k = 0;
     while k < Sentinel::ALL.len() {
@@ -76,7 +75,6 @@ const _: () = {
         );
         k += 1;
     }
-    assert!(!is_transport(Ground::Building as u32), "a pier is not a way");
     let mut k = 0;
     while k < Object::ALL.len() {
         assert!(

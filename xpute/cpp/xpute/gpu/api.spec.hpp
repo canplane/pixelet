@@ -248,7 +248,7 @@ enum class BindingKind : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<BindingKind> binding_kind_of(std::uint8_t val) noexcept {
+constexpr std::optional<BindingKind> of_BindingKind(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return BindingKind::buffer;
     case 1: return BindingKind::sampler;
@@ -265,7 +265,7 @@ enum class ResourceKind : std::uint8_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<ResourceKind> resource_kind_of(std::uint8_t val) noexcept {
+constexpr std::optional<ResourceKind> of_ResourceKind(std::uint8_t val) noexcept {
     switch (val) {
     case 0: return ResourceKind::buffer;
     case 1: return ResourceKind::sampler;

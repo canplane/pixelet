@@ -1,10 +1,10 @@
 // pxl-tool/spec/asset.rs
 
 use xpute_gen::spec::data::enum_members;
-use xpute_gen::spec::{ts_enum, Member};
+use xpute_gen::spec::{rs_enum, ts_enum, Member};
 
 use super::catalog::{slots, CUBE_JSON, DECOR_JSON};
-use super::{file, js_num, json_str, mark, read, rs_field, rs_member, Node, Output};
+use super::{file, js_num, json_str, mark, read, rs_field, Node, Output};
 const ID_JSON: &str = "spec/spec/asset/id.json";
 const COLOR_JSON: &str = "spec/spec/asset/color.json";
 
@@ -29,6 +29,17 @@ pub(crate) fn cube_member(group: &str, name: &str) -> Result<Member, String> {
         .into_iter()
         .find(|m| m.name == name)
         .ok_or(format!("{CUBE_JSON}: {group}.{name} is no cube"))
+}
+
+/// An enum's members, `names` in their order, as the generator numbers and
+/// names a list of them (`enum_members`).
+pub(crate) fn members(name: &str, names: &[&str]) -> Result<Vec<Member>, String> {
+    let names = Node::Arr(names.iter().map(|n| Node::Str(n.to_string())).collect());
+    let list = Node::Obj(vec![
+        ("$type".into(), Node::Str("enum".into())),
+        ("$val".into(), names),
+    ]);
+    enum_members(name, &list)
 }
 
 /// A cube's number by its group (`sentinel`, `ground`, `object`) and name.
@@ -254,8 +265,13 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     let mut rs = vec!["// pxl-spec/asset/decor.spec.rs".to_string()];
     rs.extend(head.iter().cloned());
     rs.extend(doc.iter().map(|l| format!("// {l}")));
-    rs.push(
-        "#![allow(clippy::absolute_paths, reason = \"generated from the spec\")]".to_string(),
+    rs.extend(
+        [
+            "",
+            "use crate::asset::catalog::Slot;",
+            "use crate::asset::id::{asset_id, AssetId, Kind};",
+        ]
+        .map(String::from),
     );
     rs.extend(rows);
     rs.extend(table);
@@ -280,6 +296,8 @@ fn decor_table(
     asset_ids: &[(String, u32)],
     slots: &[String],
 ) -> Result<(Vec<String>, Vec<String>), String> {
+    // How a decor faces, Orientation's members.
+    let orients = members("orient", &["random", "along_transport"])?;
     let slot_of = |path: &str| {
         slots
             .iter()
@@ -313,7 +331,7 @@ fn decor_table(
             .ok_or(at("density"))?;
         let orient = k
             .str_at("orient")
-            .filter(|o| matches!(*o, "random" | "along_transport"))
+            .and_then(|o| orients.iter().find(|m| m.name == o))
             .ok_or(at("orient"))?;
         let mut on = [0u32; 8];
         for l in k.get("on").and_then(Node::arr).ok_or(at("on"))? {
@@ -368,7 +386,7 @@ fn decor_table(
             doc: k.lines_at("$doc").unwrap_or_default(),
             seed: seed.to_string(),
             chance: libm::rint(density * 4_294_967_296.0).min(f64::from(u32::MAX)) as u32,
-            orient: orient.to_string(),
+            orient: orient.ident.clone(),
             on,
             sizes,
             models,
@@ -385,12 +403,12 @@ fn decor_table(
             "",
             "/// How a decor the ground generates faces: any way, or along the road or rail its",
             "/// cell lies on.",
-            "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
-            "#[repr(u32)]",
-            "pub enum Orientation {",
-            "    Random,",
-            "    AlongTransport,",
-            "}",
+        ]
+        .map(String::from),
+    );
+    portable.extend(rs_enum("Orientation", &orients, "u32", ""));
+    portable.extend(
+        [
             "",
             "/// A decor as the ground generates it, in 32-bit words alone, laid out as a",
             "/// GPU reads the table from a buffer of these words.",
@@ -423,7 +441,7 @@ fn decor_table(
             "    Row {".to_string(),
             format!("        seed: {},", r.seed),
             format!("        chance: {},", r.chance),
-            format!("        orient: Orientation::{},", rs_member(&r.orient)),
+            format!("        orient: Orientation::{},", r.orient),
             format!(
                 "        on: [{}],",
                 r.on.map(|w| format!("{w:#010x}")).join(", ")
@@ -440,8 +458,8 @@ fn decor_table(
         "/// A model and its pack's colormap, each a slot the catalog fills.",
         "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
         "pub struct Variant {",
-        "    pub model: crate::asset::catalog::Slot,",
-        "    pub skin: crate::asset::catalog::Slot,",
+        "    pub model: Slot,",
+        "    pub skin: Slot,",
         "}",
         "",
         "/// A decor: its id, which is its place in `DECORS` over the decor kind, its row",
@@ -449,7 +467,7 @@ fn decor_table(
         "/// variants' models, in the row's order.",
         "#[derive(Clone, Copy, Debug, PartialEq)]",
         "pub struct Decor {",
-        "    pub id: crate::asset::id::AssetId,",
+        "    pub id: AssetId,",
         "    pub row: &'static Row,",
         "    pub variants: &'static [Variant],",
         "}",
@@ -483,7 +501,7 @@ fn decor_table(
         );
         rs.extend([
             "    Decor {".to_string(),
-            format!("        id: crate::asset::id::asset_id(crate::asset::id::Kind::Decor, {i}),"),
+            format!("        id: asset_id(Kind::Decor, {i}),"),
             format!("        row: &ROWS[{i}],"),
             "        variants: &[".to_string(),
         ]);

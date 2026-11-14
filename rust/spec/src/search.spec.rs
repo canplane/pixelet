@@ -8,9 +8,6 @@
 // 1, 0 for none); a division's is its subtype (division.json), as each part
 // of a result's `context` gives its own.
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 pub mod search_kind {
     pub const PLACE: u8 = 0;
     pub const DIVISION: u8 = 1;

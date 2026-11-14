@@ -20,7 +20,7 @@ use crate::sys::io::file;
 use crate::sys::io::param::CREDIT_CAP;
 use crate::sys::io::request::{attempt_of, settle};
 use crate::sys::io::room::Refusal;
-use crate::sys::manifest::mem;
+use crate::spec::manifest::mem;
 use crate::sys::sched::{executor, invalidate};
 
 pub struct Response {

@@ -18,7 +18,7 @@ use crate::space::coord::zoom::Zoom;
 use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use crate::space::layer::quadrant::Quadrant;
 
-/// A tile's column lengths: one a cell, four palette indices a cell, and its padded samples.
+/// A tile's column lengths: one a cell, four asset ids a cell, and its padded samples.
 /// A tile is these sizes and no other.
 pub const GROUND_COLUMN: usize = (TILE_CELLS * TILE_CELLS) as usize;
 pub const FOLD_COLUMN: usize = 4 * GROUND_COLUMN;
@@ -29,7 +29,7 @@ use crate::brick::{
     WAYS_SHIFT,
 };
 use crate::ground;
-use crate::ground::ELE_PADDED_SPAN;
+use crate::ground::{GroundId, ELE_PADDED_SPAN};
 use crate::space::coord::world::wrap_idx;
 use crate::space::layer::area::Shard;
 use crate::way;
@@ -39,16 +39,12 @@ use crate::way::{hdr, HDR_WORDS, SEGMENT_WORDS};
 /// past, and where a bake refuses a tile.
 pub(crate) const MAX_PKT_BYTES: usize = 2 << 20;
 
-/// What a ground cell holds: the id of a cube of the ground's palette, a
-/// Carto palette index, which fits a byte (`asset/cube.json`).
-pub type GroundId = u8;
-
-/// The samples, the palette indices, the occupancy, the separation.
+/// The samples, the asset ids, the occupancy, the separation.
 type Packet = (Vec<i16>, Vec<GroundId>, u8, separation::Packet);
 
-/// A tile's ground. In the bake it holds the four palette indices each cell folds,
+/// A tile's ground. In the bake it holds the four asset ids each cell folds,
 /// `dx + 2·dy`, as a GPU holds them, a leaf's cell holding its own four; on the wire, one a
-/// cell where every cell's four are one; on the CPU, each cell's own palette index
+/// cell where every cell's four are one; on the CPU, each cell's own asset id
 /// (`decode_into`).
 pub type GroundCells = Cow<'static, [GroundId]>;
 
@@ -140,7 +136,7 @@ pub fn brick_lines(
 
 /// A clip level's brick as its fill reads it (`brick::Brick`): its cells' zoom,
 /// its place in its tile and its first cell (`first_cell`), inside the area; its lines as
-/// `brick_lines` lays them; cell `i`'s own palette index from its four (`fold_at`);
+/// `brick_lines` lays them; cell `i`'s own asset id from its four (`fold_at`);
 /// and column `c`'s elevation, counted from its first cell, its ring included (`ele_at`).
 pub struct TileBrick<'a, L, H> {
     pub cell_zoom: Zoom,
@@ -184,8 +180,8 @@ fn brick_cell(place: [u32; 2], i: u32) -> [u32; 2] {
 }
 
 /// The clip level's brick at `place` (in bricks) of `tile` as its fill reads it, with its
-/// lines `lines` (`brick_lines`): its palette indices, four a cell, as a client cuts them
-/// (`palette_cells`), and its elevations from the tile's samples `ele` (`ground::ele_at`), ring
+/// lines `lines` (`brick_lines`): its asset ids, four a cell, as a client cuts them
+/// (`cells_of`), and its elevations from the tile's samples `ele` (`ground::ele_at`), ring
 /// included.
 fn laid<'a>(
     tile: Quadrant,
@@ -310,7 +306,7 @@ impl Default for TerrainTile {
 }
 
 impl TerrainTile {
-    /// A leaf as the bake makes it: its padded samples, a palette index a cell, each
+    /// A leaf as the bake makes it: its padded samples, an asset id a cell, each
     /// its own four, and its separation.
     pub fn leaf(ele: Vec<i16>, cells: GroundCells, separation: Separation) -> TerrainTile {
         TerrainTile::of(ele, expand(&cells).into(), separation, Occupancy::LEAF)
@@ -332,7 +328,7 @@ impl TerrainTile {
     }
 }
 
-/// Cell `c`'s four palette indices, however a tile holds them: four a cell
+/// Cell `c`'s four asset ids, however a tile holds them: four a cell
 /// (`FOLD_COLUMN`), one a cell, each its own four, or one for the whole tile.
 fn four_asset_ids(cells: &[GroundId], c: usize) -> [GroundId; 4] {
     match cells.len() {
@@ -347,15 +343,15 @@ fn four_asset_ids(cells: &[GroundId], c: usize) -> [GroundId; 4] {
     }
 }
 
-/// The tile's four palette indices a cell, however it holds them (`four_asset_ids`).
+/// The tile's four asset ids a cell, however it holds them (`four_asset_ids`).
 fn expand(cells: &[GroundId]) -> Vec<GroundId> {
     (0..GROUND_COLUMN)
         .flat_map(|c| four_asset_ids(cells, c))
         .collect()
 }
 
-// A tile whose every cell's four palette indices are one, as a leaf's are, goes out with one
-// palette index a cell, expanded on decode.
+// A tile whose every cell's four asset ids are one, as a leaf's are, goes out with one
+// asset id a cell, expanded on decode.
 pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
     let four = &tile.cells;
     let one: Option<Vec<GroundId>> = four
@@ -397,17 +393,17 @@ fn read_tile(pkt: &[u8]) -> Result<Table<'_>, MarshalError> {
     })
 }
 
-/// A packet's palette indices as it holds them, four a cell (`FOLD_COLUMN`), one a
+/// A packet's asset ids as it holds them, four a cell (`FOLD_COLUMN`), one a
 /// cell, each its own four, or one for the whole tile: which a client's clip levels cut
 /// their bricks' from.
-pub fn palette_cells(pkt: &[u8]) -> Result<&[GroundId], MarshalError> {
+pub fn cells_of(pkt: &[u8]) -> Result<&[GroundId], MarshalError> {
     Ok(read_tile(pkt)?.cells)
 }
 
 /// Decodes a tile as a client holds it: its padded samples straight into `ele`, in
 /// the terrain's fixed range, and its lines onto the heap, owned by the tile, as large as the bake's limit
 /// on a tile's bytes lets them be (`MAX_PKT_BYTES`); a heap that refuses them answers for
-/// itself. Its cells go to its clip levels (`palette_cells`).
+/// itself. Its cells go to its clip levels (`cells_of`).
 pub fn decode_into<E: From<MarshalError> + From<TryReserveError>>(
     pkt: &[u8],
     ele: &'static mut [i16],

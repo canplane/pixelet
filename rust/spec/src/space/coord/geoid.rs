@@ -1,14 +1,10 @@
-// pxl-spec/space/coord/geoid.spec.rs
-//
-// GENERATED from spec/spec/space/geoid.json (xpute-gen data.rs)
-//
-// EGM2008's geoid height over the WGS84 ellipsoid, in meters to a tenth: what a GPS height,
-// the ellipsoid's, is over the terrain's, EGM2008's (GEDTM30, EPSG:3855). From GeographicLib's
-// 5' grid (egm2008-5) by pxl-tool/bin/geoid.rs; bilinear between these misses it by at
-// most 23.1 m, 1.9 m RMS.
+// pxl-spec/space/coord/geoid.rs
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
+//! EGM2008's geoid height over the WGS84 ellipsoid, in meters to a tenth: what
+//! a GPS height, the ellipsoid's, is over the terrain's, EGM2008's (GEDTM30,
+//! EPSG:3855). Written by pxl-tool bin/geoid.rs (`make bake-geoid`) from
+//! GeographicLib's 5' grid (egm2008-5); bilinear between these misses it by at
+//! most 23.1 m, 1.9 m RMS.
 
 /// The grid's spacing; rows from 90N down, 72 columns from 0E east.
 pub const GEOID_STEP_DEG: f64 = 5.0;
@@ -132,7 +128,7 @@ pub const GEOID_M: [f32; 2664] = [
     13.7, 19.4, 14.7, 14.9, 15.0, 10.5, 6.1, 0.3, -9.0, -17.6, -25.1, -31.9, -37.5, -39.4, -39.4,
     -29.0, -22.2, -17.7, -14.4, 0.7, 12.6, 22.3, 31.9, 29.1, 33.7, 36.1, 43.8, 45.2, 47.7, 30.9,
     22.6, 13.8, 5.7, 0.6, -1.4, -6.1, -8.7, -11.9, -13.1, -11.3, -10.3, -9.0, -7.8, -6.2, -4.4,
-    -2.4, 1.0, 2.7, 8.1, 14.9, 36.3, 24.2, 18.1, 11.4, 3.0, -7.2, -8.5, 0.0, 3.5, 5.8, 10.2, 14.1,
+    -2.4, 1.0, 2.7, 8.1, 14.9, 36.3, 24.2, 18.1, 11.4, 3.0, -7.2, -8.5, -0.0, 3.5, 5.8, 10.2, 14.1,
     15.0, 16.9, 17.9, 20.3, 24.0, 25.6, 31.9, 26.3, 26.1, 29.0, 25.6, 33.4, 31.2, 31.2, 22.4, 21.0,
     15.3, 9.9, 3.9, -5.6, -14.6, -23.8, -31.4, -40.0, -39.0, -34.5, -34.7, -33.0, -28.2, -10.4,
     1.4, 9.7, 20.6, 15.6, 19.4, 26.2, 31.5, 38.4, 28.3, 25.6, 17.0, 10.6, 5.0, -0.2, -3.7, -7.5,

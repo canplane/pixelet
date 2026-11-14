@@ -1,7 +1,7 @@
 // pxl-core/domain/layer/object/store.rs
 
 //! The object layer's store: placed objects, kept as their one record. Each
-//! leaf holds its catalog value at its node and the handle of the record it
+//! leaf holds its asset id at its node and the handle of the record it
 //! carries beyond that value (ext.rs). The leaves live in one sparse tree
 //! over the world (sparse_tree.rs), whose root is the world, a node of zoom
 //! 0. A write arrives as `<key, asset_id, ext>`, keyed by its node's Morton
@@ -22,7 +22,7 @@
 
 use pxl_global::Global;
 use pxl_spec::asset::cube::Sentinel;
-use pxl_spec::space::coord::zoom::{units, y_start, z_start, Zoom, CUBE_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{units, Zoom, CUBE_ZOOM, SHARD_ZOOM};
 
 use crate::domain::layer::object::asset::Asset;
 use pxl_spec::asset::AssetId;
@@ -31,7 +31,7 @@ use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::{base_of, cube, node_near, wrap_cell};
 use pxl_spec::space::hierarchy::morton::node_of;
-use pxl_spec::space::hierarchy::tree::{region, Node};
+use pxl_spec::space::hierarchy::tree::{ancestor_at, child_at, child_idx, region, Node};
 use pxl_spec::space::layer::octant::Octant;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -46,7 +46,7 @@ use pxl_render::ray::ObjectTable;
 use pxl_spec::object::ext::class_of;
 
 /// A leaf as an asker meets it: its cube, with its X index taken in the
-/// asker's frame since X wraps around the world, its catalog value, and the
+/// asker's frame since X wraps around the world, its asset id, and the
 /// handle of its record in its class's pool.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Entry {
@@ -152,7 +152,7 @@ pub fn objects() -> ObjectTable<'static> {
     }
 }
 
-/// What a leaf of the tree holds: its catalog value and its record's handle.
+/// What a leaf of the tree holds: its asset id and its record's handle.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(in crate::domain::layer) struct Leaf {
     pub asset_id: u16,
@@ -196,8 +196,8 @@ impl object::Table for Table<'_> {
     }
 }
 
-/// One leaf written, as `<key, asset_id, ext>`: its node's key, its catalog value
-/// and the record it carries. An id of `Sentinel::Void` erases the leaf.
+/// One leaf written, as `<key, asset_id, ext>`: its node's key, its asset id
+/// and the record it carries. An asset id of `Sentinel::Void` erases the leaf.
 #[derive(Clone, Debug)]
 pub struct Write {
     pub at: u128,
@@ -206,11 +206,11 @@ pub struct Write {
 }
 
 impl Write {
-    /// A write of `id` at cube `at`, with no record.
-    pub fn at(at: Octant, id: AssetId) -> Write {
+    /// A write of `asset_id` at cube `at`, with no record.
+    pub fn at(at: Octant, asset_id: AssetId) -> Write {
         Write {
             at: at.id(),
-            asset_id: id,
+            asset_id,
             ext: None,
         }
     }
@@ -280,7 +280,7 @@ impl Store {
             return;
         }
         for k in 0..8 {
-            let child = wrap_cell(zoom + 1, object::child_at(zoom, at, k));
+            let child = wrap_cell(zoom + 1, child_at(zoom, at, k));
             self.walk(
                 self.child(&slot, (zoom + 1, child)),
                 zoom + 1,
@@ -312,7 +312,7 @@ impl Store {
         self.walk(
             slot,
             z,
-            object::ancestor_at(zoom, at, zoom - z),
+            ancestor_at(zoom, at, zoom - z),
             about(&cube(zoom, at)),
             &mut |zoom, at, _, leaf| {
                 if let Some(v) = leaf {
@@ -614,9 +614,8 @@ impl Store {
                 Some(o) => {
                     for i in walk.start(o)..walk.at[o].end {
                         let (at, h) = walk.slots[i];
-                        let z = 2 * (at[2] + z_start(k as Zoom - 1)) - z_start(k as Zoom);
-                        let y = c[1] - y_start(k as Zoom);
-                        for child in [z, z + 1].map(|z| [c[0], y, z]) {
+                        for z in 0..2 {
+                            let child = child_at(o as Zoom, at, child_idx([c[0], c[1], z]));
                             visit(&mut walk.slots, child, self.child(&h, (k as Zoom, child)));
                         }
                     }

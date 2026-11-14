@@ -170,7 +170,7 @@ impl decor::Row {
         }
     }
 
-    /// Whether the ground generates it on a cell of `value`: a palette entry it stands on.
+    /// Whether the ground generates it on a cell of `value`: an asset id it stands on.
     pub const fn allows(&self, val: u32) -> bool {
         val < 256 && self.on[(val >> 5) as usize] >> (val & 31) & 1 == 1
     }

@@ -16,9 +16,9 @@ use crate::gpu::api::{
     RenderContext, TARGET_CAP,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::gpu::span_spec::GpuSpanName;
 use crate::gpu::surface::Surface;
 use crate::gpu::tile::{TileGrid, SIDE};
+use crate::spec::span::GpuSpanName;
 
 pub struct Finish {
     /// `pipeline` finishes onto the canvas alone, for a character surface. `picture` finishes

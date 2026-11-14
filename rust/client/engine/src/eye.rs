@@ -11,7 +11,7 @@ use crate::object::{Cut, CUT_WORDS};
 /// The eye's position in Q3 steps, X, Y and Z.
 pub const ORIGIN: usize = 0;
 /// 1 where the frame shows the ray steps view: each ray's third word then holds the steps taken
-/// on its way from the eye, not its palette indices (`ray`).
+/// on its way from the eye, not its asset ids (`ray`).
 pub const STEPS: usize = 3;
 /// The unit forward vector, X, Y and Z, then how far every ray goes (`FAR`), as f32 bits.
 pub const FORWARD: usize = 4;

@@ -15,12 +15,6 @@ pub mod read;
 pub mod record;
 pub mod report;
 pub mod section;
-#[path = "perf/perf.spec.rs"]
-pub mod spec;
-/// The frame's steps and effects by name, generated from spec/client/core/perf/step.json:
-/// the frame times them and the profiler records them.
-#[path = "perf/step.spec.rs"]
-pub mod step;
 pub mod task;
 pub mod window;
 pub mod word;

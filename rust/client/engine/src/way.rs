@@ -4,7 +4,7 @@
 //! column's spans once, on the CPU, and keeps them (pxl-spec way.rs `column`); the query, on
 //! the CPU and on the GPU, reads a cell off those spans (`way_cell`, clipmap.rs `way_at`,
 //! pxl-render way.wgsl). A cell holds what its own spans write there (`at`); ground beside the
-//! air the spans leave takes that way's palette index, read from the spans of the columns
+//! air the spans leave takes that way's asset id, read from the spans of the columns
 //! beside it (`way_cell`), so a brick's fill and a reader read its ring alike.
 
 use crate::ground;
@@ -28,7 +28,7 @@ pub trait SpanTable {
 /// What the ways write in cell `z` at zoom `cell_zoom` of column `c`, whose `n` spans are
 /// kept in `k`. A deck's slab or its pier comes first: where two share the cell, the higher
 /// keeps it, and a slab goes before its pier. Otherwise it is the first air over the cell
-/// (`AIR_OF` over its way's palette index), or else `NOTHING`.
+/// (`AIR_OF` over its way's asset id), or else `NOTHING`.
 fn at(k: &impl SpanTable, c: [i32; 2], n: u32, cell_zoom: Zoom, z: i32) -> u32 {
     let (mut best, mut asset_id, mut air) = ([i32::MIN, i32::MIN], NOTHING, NOTHING);
     let mut j = 0;
@@ -109,7 +109,7 @@ fn beside(c: [i32; 2], m: u32, z: i32) -> ([i32; 2], i32) {
 /// What the ways write in cell `z` of column `c` at zoom `cell_zoom`, where its spans and those
 /// beside it are kept in `k` (`at` of its own). A deck's slab or its pier comes first, or else a
 /// bore's air (`Sentinel::Void`). Under its face cell, where a cave may take it (pxl-spec
-/// `ground::face_cell`), it is otherwise the way's palette index wherever a bore's air lies beside
+/// `ground::face_cell`), it is otherwise the way's asset id wherever a bore's air lies beside
 /// it, under or over it or across one of its four faces, the first in `near`'s order; so a cave
 /// never opens into a way, whatever carves the ground. Otherwise it is `NOTHING`. It is read from
 /// the spans in place, the column's own first, and a cell the column writes reads nothing beside
@@ -218,8 +218,8 @@ fn bare(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pxl_spec::asset::cube::Ground;
     use pxl_spec::ground::{cells, face_cell, face_ele};
+    use pxl_spec::way::PIER;
 
     /// A column: its face cell, its spans and how many it holds.
     type Column = (i32, [([i32; 2], u32); 4], u32);
@@ -275,7 +275,7 @@ mod tests {
                     let v = match next(3) {
                         0 => AIR_OF | 3,
                         1 => 7,
-                        _ => Ground::Building as u32,
+                        _ => PIER,
                     };
                     col.1[j] = ([lo, lo + 1 + next(30) as i32], v);
                 }

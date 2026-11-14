@@ -6,7 +6,7 @@
 //! apart from the frame.
 
 use crate::domain::layer::Base as _;
-use crate::perf::step::{EffectName, StepName};
+use crate::spec::step::{EffectName, StepName};
 use pxl_spec::space::coord::q3::{self, Q3};
 
 use crate::domain::control::input::{camera_input_step, rehover_at};
@@ -72,7 +72,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys::sched::param::MAX_STEP_S;
-use crate::sys::sched::phase_spec::Phase;
+use crate::spec::phase::Phase;
 
 /// The camera as the companion's walk reads it. It is None in first person,
 /// where the eye stands at the pivot and the person is the one looking.

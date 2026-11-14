@@ -368,7 +368,7 @@ impl World {
     /// What is in the cell `c` at `zoom`, asked off the line `l`
     /// (pxl-engine `support::asset`). The descent starts from the deepest node
     /// on the line that holds the cell, never again from the top. Where the
-    /// world lacks the cell, the answer is a lack with the missing tile.
+    /// world lacks the cell, the answer is a lack with the tile it lacked.
     pub(super) fn asset_about(&self, l: &Line<At>, zoom: Zoom, c: [i32; 3]) -> Answer<u32> {
         let mut query = self.cast_world();
         let val = support::asset(&mut query, l, zoom, c);

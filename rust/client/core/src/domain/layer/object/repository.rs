@@ -54,7 +54,8 @@ use crate::sys::io::body::Body;
 use crate::sys::io::demand::{Order, PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::file;
-use crate::sys::io::file_spec::{self, format, path, top, write as column};
+use crate::spec;
+use crate::spec::file::{format, path, top, write as column};
 use crate::sys::io::request::declare;
 use crate::sys::sched::invalidate;
 use pxl_spec::object::ext::{class_of, Class};
@@ -76,7 +77,7 @@ const TOP: u64 = file::TOP_ID;
 
 // The source and the core must agree on the shard zoom (file.json
 // `SHARD_ZOOM`).
-const _: () = assert!(file_spec::SHARD_ZOOM == SHARD_ZOOM);
+const _: () = assert!(spec::file::SHARD_ZOOM == SHARD_ZOOM);
 
 #[derive(Default)]
 struct State {

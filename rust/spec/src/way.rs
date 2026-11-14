@@ -12,7 +12,7 @@
 //! the run of the line's segments, one after another, that lie over the column. A column's
 //! visits make its spans once (`column`), and what a cell of the column holds is read from
 //! them (pxl-engine way.rs `at`). Ground beside the air the spans leave takes that way's
-//! palette index, read from the spans of the columns beside it (pxl-engine `way_cell`), so a
+//! asset id, read from the spans of the columns beside it (pxl-engine `way_cell`), so a
 //! brick's fill and a reader read its ring alike. Whatever is under half a cell in any
 //! dimension at a zoom is absent at that zoom, as the bake drops a line under half a cell
 //! wide: a slab or a bore fills a cell where it holds half the cell's height or more, and a
@@ -126,7 +126,7 @@ pub(crate) fn slab_depth(per_m: f32) -> i32 {
 
 /// One segment of a line, in eighths of its tile's cell (`POINT_SCALE`):
 /// from `a` to `b`, its road surface `heights` there in leaf cells, its width,
-/// the palette index it shows, its form, its tunnel's clear height in leaf
+/// the asset id it shows, its form, its tunnel's clear height in leaf
 /// cells, whether it is its line's first or last, where the line ends
 /// square, and whether the one stored before it is its line's one before
 /// it; and its direction (`dir`).
@@ -553,7 +553,7 @@ pub fn occupies(c: &Crossing, ground: i32, per_m: f32) -> Occupancy {
 
 /// The columns a brick's fill reads its ways from (`brick::Brick`): each column's segments,
 /// in its own tile's cells, with its center there and the tile's stations, and its ground,
-/// which is its palette index as read and its face's height in leaf cells. A column the brick
+/// which is its asset id as read and its face's height in leaf cells. A column the brick
 /// does not hold has no segment.
 pub trait ColumnGrid {
     /// The cells' zoom, and leaf cells a ground meter over the ground.
@@ -687,12 +687,16 @@ fn pier_stands<C: ColumnGrid>(
     pier
 }
 
-/// What a span's value marks as a bore's air, over the palette index of its way.
+/// What a span's value marks as a bore's air, over the asset id of its way.
 pub const AIR_OF: u32 = 0x80;
 
+/// The asset id a pier's cells take: a building's, which no way's is.
+pub const PIER: u32 = Ground::Building as u32;
+const _: () = assert!(!value::is_transport(PIER), "a pier is not a way");
+
 /// What one visit writes in its column, in leaf cells: a deck's slab or an embankment (its
-/// way's palette index), or a bore's or a cutting's air (`AIR_OF` over its way's palette
-/// index), over `run`; and a pier (`Ground::Building`) over `pier`, which is empty where none
+/// way's asset id), or a bore's or a cutting's air (`AIR_OF` over its way's asset
+/// id), over `run`; and a pier (`PIER`) over `pier`, which is empty where none
 /// stands. `NOTHING` where it writes none.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct Write {
@@ -710,7 +714,7 @@ impl Write {
 }
 
 /// What the visit from the `k`-th segment over column `c` writes, and where the next visit
-/// starts. A visit whose palette index grounds writes what it occupies over the column's face
+/// starts. A visit whose asset id grounds writes what it occupies over the column's face
 /// `face`, where `per_m` is the leaf cells a meter, and its pier where one stands.
 fn writes<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32)) -> (Write, u32) {
     let (x, next) = visit(cols, c, k);
@@ -733,7 +737,7 @@ fn writes<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32
                 pier_stands(cols, c, o.pier, face, per_m)
             },
         },
-        // An approach's palette index is laid into the cells by the bake (bake/way.rs
+        // An approach's asset id is laid into the cells by the bake (bake/way.rs
         // `lay`), so the way writes nothing here.
         Occupy::Grade => Write::NONE,
     };
@@ -745,8 +749,8 @@ fn writes<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32
 pub const SPAN_CAP: usize = 10;
 
 /// A column's spans, in leaf cells, in the order its visits come, `n` of them: each a deck's
-/// slab or an embankment (its way's palette index), a pier (`Ground::Building`), or a bore's or a
-/// cutting's air (`AIR_OF` over its way's palette index). With them, its face cell
+/// slab or an embankment (its way's asset id), a pier (`PIER`), or a bore's or a
+/// cutting's air (`AIR_OF` over its way's asset id). With them, its face cell
 /// (`ground::face_cell`), under which a bore's air beside the column lines it (pxl-engine
 /// `way_cell`); it is `i32::MIN` where the area's edge walls the column or the column is past
 /// the area, where nothing lines it. `past` says a visit made more spans than `SPAN_CAP`, so these
@@ -804,7 +808,7 @@ pub fn column<C: ColumnGrid>(cols: &C, c: [i32; 2]) -> SpanList {
             spans.push(w.run, w.val);
         }
         if w.val != NOTHING && fills_any(cell_zoom, w.pier) {
-            spans.push(w.pier, Ground::Building as u32);
+            spans.push(w.pier, PIER);
         }
     }
     spans

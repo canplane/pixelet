@@ -20,7 +20,6 @@ use pxl_spec::space::layer::lattice::EFFECT_REACH;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::api_spec::surface_role;
 use crate::frame::shader::record::PIPELINE_SCREEN_MASK;
 use crate::frame::shader::record::{
     PIPELINE_DECOR, PIPELINE_GHOST_BOX, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR, PIPELINE_SKINNED,
@@ -51,7 +50,6 @@ use crate::gpu::pack::Pack;
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::{put_mat, put_steps};
 use crate::gpu::read::{Read, SlotMirror};
-use crate::gpu::span_spec::{FrameKind, GpuSpanName, GPU_SPAN_NAMES, GPU_SPAN_PER_PX};
 use crate::gpu::surface::{
     on_surfaces_lost, slot_of, surface, surfaces, Surface, SETTLE_FRAME_CNT, SURFACE_CAP,
 };
@@ -80,11 +78,13 @@ use crate::pass::skinned_mesh::SkinnedPass;
 use crate::pass::sky::SkyPass;
 use crate::pass::star::StarPass;
 use crate::ray::{Cast, GroundInput, RayCount, RayPass};
+use crate::spec::api::surface_role;
+use crate::spec::span::{FrameKind, GpuSpanName, GPU_SPAN_PER_PX};
 
 const DRAWS_INIT: u32 = 256 * DRAW_FLOATS as u32;
 
 const _: () = assert!(
-    GPU_SPAN_NAMES.len() <= 64,
+    GpuSpanName::ALL.len() <= 64,
     "a span a bit of the mask of the spans a frame wrote (`Gpu::submit_frame`)"
 );
 
@@ -336,7 +336,7 @@ pub struct FrameOutput {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct GpuRead {
     pub frame: f64,
-    pub spans: [f64; GPU_SPAN_NAMES.len()],
+    pub spans: [f64; GpuSpanName::ALL.len()],
     pub busy_ms: f64,
     pub px: f64,
 }

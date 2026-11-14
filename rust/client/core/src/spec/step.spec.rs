@@ -1,4 +1,4 @@
-// pxl-core/perf/step.spec.rs
+// pxl-core/spec/step.spec.rs
 //
 // GENERATED from spec/client/core/perf/step.json (xpute-gen data.rs)
 //
@@ -6,20 +6,6 @@
 // registers them, and the effects a frame runs around them. The profiler records and
 // reports them by these names (spec/client/core/perf/perf.json).
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
-pub const STEP_NAMES: &[&str] = &[
-    "controller",
-    "input",
-    "camera",
-    "edit",
-    "ghost",
-    "environment",
-    "companion",
-    "demand",
-    "scene",
-];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StepName {
@@ -80,17 +66,6 @@ impl StepName {
     }
 }
 
-pub const EFFECT_NAMES: &[&str] = &[
-    "navigation",
-    "bootstrap",
-    "orient",
-    "follow",
-    "dst",
-    "decor",
-    "object",
-    "location",
-    "setting",
-];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum EffectName {

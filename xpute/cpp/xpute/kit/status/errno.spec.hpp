@@ -76,7 +76,7 @@ enum class Errno : std::int32_t {
 };
 
 // The member `val` is, or none for a number no member has.
-constexpr std::optional<Errno> errno_of(std::int32_t val) noexcept {
+constexpr std::optional<Errno> of_Errno(std::int32_t val) noexcept {
     switch (val) {
     case 0: return Errno::ok;
     case -1: return Errno::eperm;

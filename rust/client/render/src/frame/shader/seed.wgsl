@@ -5,14 +5,6 @@
 // the GPU draws what the CPU draws (pxl-engine seed.rs, xpute-kit `seed_mix32`,
 // pxl-content halve.rs).
 
-/// The port of pxl-spec `wrap_idx`.
-fn wrap_idx(zoom: u32, x: i32) -> i32 {
-  if (zoom == 0u) {
-    return 0i;
-  }
-  return (x << (32u - zoom)) >> (32u - zoom);
-}
-
 /// The port of `xpute_kit::seed_mix32`.
 fn seed_mix32(base: u32, tag: u32) -> u32 {
   var z = (base ^ tag) + SEED_SALT_32;

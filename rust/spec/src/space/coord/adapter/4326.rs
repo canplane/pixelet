@@ -17,7 +17,10 @@ use super::epsg3857::{self, G3857};
 /// lon, lat, alt (meters above sea level).
 pub type G4326 = [f64; 3];
 
-pub use crate::space::coord::earth::EARTH_RADIUS_M;
+/// The Earth's radius as the map takes it: WGS84's semi-major axis, the
+/// sphere EPSG:3857 projects, which every meter the map measures is a meter
+/// of.
+pub const EARTH_RADIUS_M: f64 = 6378137.0;
 
 const DEG_TO_RAD: f64 = core::f64::consts::PI / 180.0;
 const RAD_TO_DEG: f64 = 180.0 / core::f64::consts::PI;
@@ -54,7 +57,7 @@ pub fn Y_TO_LAT(y: f64) -> f64 {
 }
 
 /// The geoid's height over the WGS84 ellipsoid at `lon`, `lat` (EGM2008,
-/// `geoid.spec.rs`), bilinear: what a GPS height, the ellipsoid's, is over
+/// `geoid.rs`), bilinear: what a GPS height, the ellipsoid's, is over
 /// sea level, the terrain's. One value for a whole tile is its base's, as
 /// the Mercator scale is.
 pub fn geoid_m(lon: f64, lat: f64) -> f64 {

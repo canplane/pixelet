@@ -36,7 +36,7 @@ use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
 use pxl_engine::cast::Line;
 use pxl_engine::cast::{self, Node, Ray};
-use pxl_engine::object::{ancestor_at, Cut};
+use pxl_engine::object::Cut;
 use pxl_engine::support;
 use pxl_engine::world::Inheritance;
 use pxl_engine::{eye, face, node_cache, raster, ray, record};
@@ -46,6 +46,7 @@ use pxl_render::frame::shader::record::{
 use pxl_render::frame::shader::word::{screen, SQUARE_SIDE};
 use pxl_spec::share::EIGHTH_CNT;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::hierarchy::tree::ancestor_at;
 
 use real_world::{q8, Asking, Built, WorldBuffer, FINEST};
 

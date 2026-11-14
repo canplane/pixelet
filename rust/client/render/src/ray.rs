@@ -17,8 +17,8 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, view_entry, word_bytes, Entry, Gpu, Group, TrackedRenderPass,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::gpu::span_spec::FrameKind;
 use crate::paint::ground::look_words;
+use crate::spec::span::FrameKind;
 use cast::CastBuffer;
 pub use cast::{Cast, LightRead, ObjectTable};
 pub use count::{cnt_at, RayCount, CAST, LANES_AT, RAYS, RAY_CNT_CNT};

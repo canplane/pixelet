@@ -52,12 +52,12 @@ use pxl_content::Pixelet;
 use pxl_engine::answer::{In, Kind};
 use pxl_engine::clipmap::{self, Lookup};
 use pxl_engine::ground::{self, Cell};
-use pxl_engine::object::{child_at, Cut};
+use pxl_engine::object::Cut;
 use pxl_engine::world;
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{units, Zoom, MIN_ZOOM};
-use pxl_spec::space::hierarchy::tree::Node;
+use pxl_spec::space::hierarchy::tree::{child_at, Node};
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -123,7 +123,7 @@ impl World {
     /// down to it.
     pub(super) fn child(&self, at: &At, k: usize) -> At {
         let (zoom, c) = at.node;
-        let node = (zoom + 1, child_at(zoom, c, k as u32));
+        let node = (zoom + 1, child_at(zoom, c, k));
         At {
             node,
             inheritance: at.inheritance.child(&self.object.columns(), node),
@@ -152,7 +152,7 @@ impl World {
     /// box in its own steps; the asset of a cell at the zoom asked, void for
     /// air; or, for a node coarser than asked with nothing under it filling,
     /// air of the node's size, which its zoom against `range` tells apart.
-    /// The four palette indices a cell is drawn by are left to the GPU.
+    /// The four asset ids a cell is drawn by are left to the GPU.
     /// `path` are the ground's lines the asking walk read, and the node's
     /// line steps on from them (`walk_line`).
     pub(super) fn layers(
@@ -179,12 +179,12 @@ impl World {
 
 /// The ground as a node's reading holds it (pxl-engine `ground::Resident`):
 /// the world's tile cache down the node's line, the lines its walk read, and
-/// the first tile the reading found missing (`missing`) or held only through
+/// the first tile the reading lacked (`lack`) or held only through
 /// a coarser tile standing in for it (`coarser`), and the bound it read over
 /// the node (`relief`).
 struct GroundRead<'r> {
     path: &'r mut Path,
-    missing: Option<Quadrant>,
+    lack: Option<Quadrant>,
     coarser: Option<Quadrant>,
     relief: Option<ground::Extent>,
 }
@@ -193,7 +193,7 @@ impl<'r> GroundRead<'r> {
     fn new(path: &'r mut Path) -> GroundRead<'r> {
         GroundRead {
             path,
-            missing: None,
+            lack: None,
             coarser: None,
             relief: None,
         }
@@ -201,9 +201,9 @@ impl<'r> GroundRead<'r> {
 
     /// `of` as the reading went. Where `found`, it is exact, or coarser with
     /// the first tile that only a coarser one stood in for. Otherwise the
-    /// answer is the missing tile.
+    /// answer is a lack of the tile the reading lacked.
     fn answer<T>(&self, found: bool, of: impl FnOnce() -> T) -> Answer<T> {
-        match (found, self.missing, self.coarser) {
+        match (found, self.lack, self.coarser) {
             (false, Some(l), _) => Answer::Lack(l),
             (_, _, Some(l)) => Answer::Coarser(of(), l),
             _ => Answer::Exact(of()),
@@ -219,7 +219,7 @@ impl<'r> GroundRead<'r> {
                 Some(v)
             }
             Answer::Lack(l) => {
-                self.missing = Some(l);
+                self.lack = Some(l);
                 None
             }
         }

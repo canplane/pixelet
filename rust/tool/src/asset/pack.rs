@@ -11,6 +11,8 @@ use image::imageops;
 use image::RgbaImage;
 use serde::Deserialize;
 
+use crate::color::{linear, srgb};
+
 /// One size for every layer of the shared array texture.
 pub const TILE_SIZE: u32 = 256;
 /// Tiles a row of the laid-out image.
@@ -213,7 +215,7 @@ pub(crate) const TOWARD_CARTO: f64 = 20.0;
 
 /// sRGB bytes to CIE L*a*b* (D65), through linear light.
 fn lab_of(rgb: [u8; 3]) -> [f64; 3] {
-    let [r, g, b] = rgb.map(srgb_to_linear);
+    let [r, g, b] = rgb.map(linear);
     let x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.950_47;
     let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
     let z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.088_83;
@@ -247,7 +249,7 @@ fn rgb_of([l, a, b]: [f64; 3]) -> [u8; 3] {
         -0.9689 * x + 1.8758 * y + 0.0415 * z,
         0.0557 * x - 0.2040 * y + 1.0570 * z,
     ]
-    .map(|c| linear_to_srgb(c.clamp(0.0, 1.0)))
+    .map(srgb)
 }
 
 /// A top as it ships: its PNG with its colors drawn toward its palette entry's, so the
@@ -303,29 +305,11 @@ fn mean_of(img: &RgbaImage) -> [u8; 3] {
     let mut sum = [0.0f64; 3];
     for px in img.pixels() {
         for (s, c) in sum.iter_mut().zip(px.0) {
-            *s += srgb_to_linear(c);
+            *s += linear(c);
         }
     }
     let n = (img.width() * img.height()) as f64;
-    core::array::from_fn(|k| linear_to_srgb(sum[k] / n))
-}
-
-fn srgb_to_linear(v: u8) -> f64 {
-    let c = v as f64 / 255.0;
-    if c <= 0.04045 {
-        c / 12.92
-    } else {
-        libm::pow((c + 0.055) / 1.055, 2.4)
-    }
-}
-
-fn linear_to_srgb(c: f64) -> u8 {
-    let s = if c <= 0.003_130_8 {
-        c * 12.92
-    } else {
-        1.055 * libm::pow(c, 1.0 / 2.4) - 0.055
-    };
-    (s * 255.0).round_ties_even().clamp(0.0, 255.0) as u8
+    core::array::from_fn(|k| srgb(sum[k] / n))
 }
 
 /// Every tile must be exactly `TILE_SIZE` square; a wrong size is an upstream mistake

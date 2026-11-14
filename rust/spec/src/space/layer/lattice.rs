@@ -117,7 +117,7 @@ impl Lattice {
 
 /// The ground's lattice: 512 cells on a tile's side, the ground's one knob, from which every
 /// length the ground keeps in cells follows. A grid cell is drawn from its own record. Its
-/// height is its tile's own surface there, and its four palette indices are those of the four
+/// height is its tile's own surface there, and its four asset ids are those of the four
 /// cells a zoom finer (bake/fold.rs).
 pub const GROUND: Lattice = Lattice::new(LEAF_CELL_ZOOM).scaled(0);
 

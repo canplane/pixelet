@@ -9,8 +9,6 @@ pub mod brick;
 pub mod color;
 pub mod directory;
 pub mod division;
-#[path = "division.spec.rs"]
-mod division_spec;
 pub mod ground;
 pub mod object;
 pub mod param;

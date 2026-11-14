@@ -15,9 +15,10 @@ use crate::ground;
 use crate::object::{self, Cut, Table, CELL, ROOT, SPLIT};
 use crate::way;
 use pxl_spec::asset::cube::Sentinel;
-use pxl_spec::ground::word;
+use pxl_spec::ground::{word, GroundId};
 use pxl_spec::share::{eighths, FULL};
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, UNIT_ZOOM};
+use pxl_spec::space::hierarchy::tree::child_of;
 use pxl_spec::space::layer::area::Shard;
 use pxl_spec::way::NOTHING;
 
@@ -87,7 +88,7 @@ impl Inheritance {
 /// the eighths of its cube that they fill together (`answer::cover`, `share::eighths`,
 /// `answer::FILL_SHIFT`), and is air where that is none. `PLACED_ASSET` is set over a placed
 /// value; control tells an edit by it, and nothing drawn reads it. The second word holds the
-/// four palette indices the ground's asset is drawn by (`ground::Cell::four`,
+/// four asset ids the ground's asset is drawn by (`ground::Cell::four`,
 /// pxl-spec `ground::word`), and is zero for any other asset.
 ///
 /// A coarser node is a split where any layer may fill under it at a zoom asked, each layer
@@ -126,17 +127,17 @@ pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Po
         c,
         if is_cell { zoom } else { near },
     );
-    // Where what is placed is a cell: its asset, and the four palette indices a filling one is
-    // drawn by, a byte each (pxl-spec `ground::word`). Only the ground's palette indices, as in a
-    // placed cube of a palette index, fit in a byte; an object's value lies past a byte and is
-    // drawn by its value. It is read once, here, for both uses below.
+    // Where what is placed is a cell: its asset, and the four asset ids a filling one is
+    // drawn by, a byte each (pxl-spec `ground::word`). Only the ground's asset ids, a placed
+    // ground cube's included, fit in a byte; a placed color's asset id lies past a byte
+    // and is drawn by itself. It is read once, here, for both uses below.
     let laid = if over.answer == CELL {
         let four = if fills(over.asset) {
             object::asset_ids(columns, put, hide, zoom, c, over.asset)
         } else {
             [0; 4]
         };
-        let bytes = four[0] < 256 && four[1] < 256 && four[2] < 256 && four[3] < 256;
+        let bytes = four.iter().all(|&v| v <= u32::from(GroundId::MAX));
         [
             PLACED_ASSET | over.asset,
             if bytes { word(four) } else { 0 },
@@ -174,10 +175,10 @@ pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Po
         if i.kind == Kind::Lack && over.answer != CELL {
             return lacks;
         }
-        // Start from the ground's asset, the share of its cube it fills and its four palette
-        // indices. Then each layer that writes over it, the ways and then what is placed, adds its
+        // Start from the ground's asset, the share of its cube it fills and its four asset
+        // ids. Then each layer that writes over it, the ways and then what is placed, adds its
         // share to the ground's (`answer::cover`). The cell keeps the eighths of its cube that all
-        // of them fill (`share::eighths`), and its palette index is the kind that makes up most of
+        // of them fill (`share::eighths`), and its asset id is the kind that makes up most of
         // that.
         let mut val = if i.kind == Kind::Cell {
             i.asset[0]
@@ -198,7 +199,7 @@ pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Po
             0
         };
         if way != NOTHING {
-            // Where a way wrote the cell, its palette index four times, whatever its value.
+            // Where a way wrote the cell, its asset id four times, whatever its value.
             let (f, theirs) = cover(fill, way, FULL);
             if theirs {
                 (val, four) = (way, word([way; 4]));
@@ -345,11 +346,7 @@ impl PlacedCursor {
                 continue;
             }
             let (o, p) = (self.next[d], self.idx[d - 1]);
-            let c = [
-                2 * p[0] + (o & 1) as i32,
-                2 * p[1] + (o >> 1 & 1) as i32,
-                2 * p[2] + (o >> 2 & 1) as i32,
-            ];
+            let c = child_of(p, o as usize);
             let z = PLACED_FIRST + d as Zoom;
             let t = UNIT_ZOOM - z;
             let meets = c[0] << t <= self.hi[0]

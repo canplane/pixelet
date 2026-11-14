@@ -15,32 +15,17 @@ use super::ingest::files;
 use super::{read, Node, Output};
 use crate::root;
 
-const DATA_SPECS: [DataSpec; 21] = [
+const DATA_SPECS: [DataSpec; 18] = [
     DataSpec {
         json: "spec/client/core/sys/manifest.json",
         ts: Some("ts/client/src/abi/manifest.spec.ts"),
-        rs: Some("rust/client/core/src/sys/manifest.spec.rs"),
+        rs: Some("rust/client/core/src/spec/manifest.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/spec/bake/object.json",
         ts: Some("ts/client/src/ui/feature/world/object.spec.ts"),
         rs: Some("rust/spec/src/bake/object.spec.rs"),
-        ..DataSpec::DEFAULT
-    },
-    DataSpec {
-        json: "spec/spec/space/earth.json",
-        rs: Some("rust/spec/src/space/coord/earth.spec.rs"),
-        ..DataSpec::DEFAULT
-    },
-    DataSpec {
-        json: "spec/spec/space/geoid.json",
-        rs: Some("rust/spec/src/space/coord/geoid.spec.rs"),
-        ..DataSpec::DEFAULT
-    },
-    DataSpec {
-        json: "spec/spec/object/ext.json",
-        rs: Some("rust/spec/src/object/ext.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -87,13 +72,13 @@ const DATA_SPECS: [DataSpec; 21] = [
     DataSpec {
         json: "spec/client/core/domain/scene/gizmo/gizmo.json",
         ts: Some("ts/client/src/abi/gizmo.spec.ts"),
-        rs: Some("rust/client/core/src/domain/scene/gizmo/gizmo.spec.rs"),
+        rs: Some("rust/client/core/src/spec/gizmo.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/render/api.json",
         ts: Some("ts/client/src/abi/gpu.spec.ts"),
-        rs: Some("rust/client/render/src/api.spec.rs"),
+        rs: Some("rust/client/render/src/spec/api.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
@@ -105,37 +90,37 @@ const DATA_SPECS: [DataSpec; 21] = [
     DataSpec {
         json: "spec/client/core/sys/io/file.json",
         ts: Some("ts/client/src/abi/file.spec.ts"),
-        rs: Some("rust/client/core/src/sys/io/file.spec.rs"),
+        rs: Some("rust/client/core/src/spec/file.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/core/sys/io/demand.json",
         ts: Some("ts/client/src/abi/demand.spec.ts"),
-        rs: Some("rust/client/core/src/sys/io/demand.spec.rs"),
+        rs: Some("rust/client/core/src/spec/demand.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/core/sys/sched/phase.json",
         ts: Some("ts/client/src/abi/phase.spec.ts"),
-        rs: Some("rust/client/core/src/sys/sched/phase.spec.rs"),
+        rs: Some("rust/client/core/src/spec/phase.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/core/perf/step.json",
         ts: Some("ts/client/src/abi/step.spec.ts"),
-        rs: Some("rust/client/core/src/perf/step.spec.rs"),
+        rs: Some("rust/client/core/src/spec/step.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/render/gpu/span.json",
         ts: Some("ts/client/src/abi/span.spec.ts"),
-        rs: Some("rust/client/render/src/gpu/span.spec.rs"),
+        rs: Some("rust/client/render/src/spec/span.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
         json: "spec/client/core/perf/perf.json",
         ts: Some("ts/client/src/abi/perf.spec.ts"),
-        rs: Some("rust/client/core/src/perf/perf.spec.rs"),
+        rs: Some("rust/client/core/src/spec/perf.spec.rs"),
         ..DataSpec::DEFAULT
     },
 ];

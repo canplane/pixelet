@@ -16,7 +16,7 @@ use crate::perf::record;
 use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param;
-use crate::sys::manifest;
+use crate::spec::manifest;
 use crate::sys::heap::PAGE_BYTES;
 use crate::sys::range;
 use pxl_render::gpu::upload;

@@ -192,26 +192,12 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let d = DataSpec {
         json: JSON,
         ts: Some("ts/client/src/abi/schema.spec.ts"),
-        rs: Some("rust/client/core/src/domain/setting/schema.spec.rs"),
+        rs: Some("rust/client/core/src/spec/schema.spec.rs"),
         ..DataSpec::DEFAULT
     };
     let mut outs = table_outputs(&root(), &d, Node::Obj(table))?;
 
-    let mut rs: Vec<String> = Vec::new();
-    rs.extend(
-        [
-            "",
-            "/// How a setting is held.",
-            "#[derive(Clone, Copy, Debug, PartialEq, Eq)]",
-            "pub enum SettingKind {",
-            "    Toggle,",
-            "    Choice,",
-            "    Index,",
-            "}",
-        ]
-        .map(String::from),
-    );
-    rs.push(String::new());
+    let mut rs: Vec<String> = vec![String::new()];
     let keys_where = |test: &dyn Fn(&Setting) -> bool| {
         let keys: Vec<String> = settings
             .iter()
@@ -236,25 +222,13 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                 .max()
                 .unwrap_or(0)
         ),
-        String::new(),
-        "    pub fn kind(self) -> SettingKind {".into(),
-        "        match self {".into(),
     ]);
-    rs.extend(settings.iter().map(|s| {
-        format!(
-            "            SettingKey::{} => SettingKind::{},",
-            rs_member(s.key),
-            rs_member(s.kind())
-        )
-    }));
     let session: Vec<String> = settings
         .iter()
         .filter(|s| !s.stored)
         .map(|s| format!("SettingKey::{}", rs_member(s.key)))
         .collect();
     rs.extend([
-        "        }".to_string(),
-        "    }".into(),
         String::new(),
         "    /// Written to the settings' storage file and read from it; one schema.json".into(),
         "    /// marks `stored` false is held for the session alone.".into(),

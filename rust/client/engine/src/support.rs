@@ -11,9 +11,9 @@
 //! (`cast::Query`).
 
 use crate::cast::{self, Detail, End, Keep, Line, Node, Query, Ray, Trace, Until, DEPTH};
-use crate::object::ancestor_at;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::zoom::{Zoom, FINEST_ZOOM, HEIGHT_BITS};
+use pxl_spec::space::hierarchy::tree::ancestor_at;
 
 /// A column's surface: its top as drawn at its cell zoom (`cast::top`), how the ray down it
 /// ended (it met a cell, `End::Hit`; it met nothing it cannot see through, `Miss`; or it met

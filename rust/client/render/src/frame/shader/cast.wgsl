@@ -39,8 +39,8 @@ fn sample_before(at: vec2<f32>) -> vec2<u32> {
   return vec2<u32>(max(floor(v * SAMPLE_SPACING_INVERSE), vec2<f32>(0.0))) + vec2<u32>(NEAR_SAMPLES);
 }
 
-/// The third word of the ray at the tangents `px` taken without a walk of its own, whose palette
-/// indices are `ground`. In the ray steps view (pxl-engine `eye::STEPS`) it is the steps of the
+/// The third word of the ray at the tangents `px` taken without a walk of its own, whose four asset
+/// ids are `ground`. In the ray steps view (pxl-engine `eye::STEPS`) it is the steps of the
 /// grid's ray nearest it, the sample before it on the lattice: its beam ray's and its own
 /// (`beam::SAMPLE_STEPS_SHIFT`).
 fn taken_word(px: vec2<f32>, ground: u32) -> u32 {

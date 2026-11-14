@@ -5,7 +5,7 @@
 //! the bricks of the eye's clip levels (domain/layer/terrain/clipmap.rs)
 //! where the eye reads each at its zoom, each marked by its state, and the
 //! tiles and shards of the drawn bricks. Each outline is colored as its
-//! `Mark` says (`gizmo_spec::coverage`). Every line is cut at the ends of
+//! `Mark` says (`spec::gizmo::coverage`). Every line is cut at the ends of
 //! every edge on it, and each stretch between cuts is drawn once, in the
 //! highest mark over it, straight between its ends on the ground.
 
@@ -25,6 +25,7 @@ use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::base_of;
 use pxl_spec::space::coord::zoom::{units, within, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM};
 use pxl_spec::space::coord::{q3, world};
+use pxl_spec::space::hierarchy::tree::child_of;
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -33,14 +34,14 @@ use crate::domain::layer::terrain::clipmap::{eye_bricks, BrickCover, EyeBrick};
 use crate::domain::layer::Base as _;
 use crate::domain::query::World;
 use crate::domain::scene::gizmo::debug_line::DebugMesh;
-use crate::domain::scene::gizmo::gizmo_spec;
 use crate::domain::scene::model::draw_list;
 use crate::domain::view::frame::pose::view;
 use crate::domain::view::observation::{observation, ByEye};
+use crate::spec::gizmo;
 use crate::sys::sched::invalidate;
 
 /// What an edge marks. The variants follow the spec's order
-/// (`gizmo_spec::coverage`), and that order is their rank: a stretch takes
+/// (`spec::gizmo::coverage`), and that order is their rank: a stretch takes
 /// the highest-ranked mark over it. The spec also gives each mark's look.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Mark {
@@ -68,7 +69,7 @@ impl Mark {
 
     /// The mark's color, its opacity, and whether it is dashed.
     fn look(self) -> (Rgb, f32, bool) {
-        use gizmo_spec::coverage::*;
+        use gizmo::coverage::*;
         match self {
             Mark::Drawn => (const { rgb(drawn::RGB) }, drawn::ALPHA, drawn::DASHED),
             Mark::DrawnFromFloor => (
@@ -253,7 +254,7 @@ fn outline(o: &Observation, top: Zoom) -> Outline {
                 continue;
             }
             read.insert((pz, p));
-            if (0..4).all(|c| read.contains(&(pz + 1, [2 * p[0] + (c & 1), 2 * p[1] + (c >> 1)]))) {
+            if (0..4).all(|c| read.contains(&(pz + 1, child_of(p, c)))) {
                 continue;
             }
             let mark = match cover {

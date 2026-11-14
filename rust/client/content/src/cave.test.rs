@@ -3,18 +3,10 @@ use pxl_engine::seed::node_seed;
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
+use pxl_spec::space::hierarchy::tree::child_of;
 
 fn children(zoom: u32, c: [i32; 3]) -> impl Iterator<Item = (u32, [i32; 3])> {
-    (0..8).map(move |k| {
-        (
-            zoom + 1,
-            [
-                2 * c[0] + (k & 1),
-                2 * c[1] + (k >> 1 & 1),
-                2 * c[2] + (k >> 2 & 1),
-            ],
-        )
-    })
+    (0..8).map(move |k| (zoom + 1, child_of(c, k)))
 }
 
 /// Every node holds exactly what its eight do, from a root to the leaves.

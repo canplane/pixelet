@@ -8,9 +8,6 @@
 // `cell_share`), and the ray steps' ramp (screen_shade.wgsl). Each #rrggbb in
 // sRGB.
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 /// The camera grid's lines.
 pub mod grid {
     pub const RGB: &str = "#ffffff";

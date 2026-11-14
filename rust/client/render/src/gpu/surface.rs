@@ -7,9 +7,9 @@
 use pxl_global::Global;
 use xpute_kit::math::scalar::round;
 
-use crate::api_spec::surface_role;
 use crate::frame::shader::floor;
 use crate::frame::shader::word::screen::TILE;
+use crate::spec::api::surface_role;
 use pxl_engine::{ray, WORKGROUP_CAP};
 
 /// The surface table's slots: at most this many surfaces are open at once.

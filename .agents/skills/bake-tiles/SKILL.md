@@ -13,7 +13,7 @@ make bake-place      # Overture places
 make bake-division   # Overture divisions, leaves at z12
 make download-earth && make bake-earth   # the Earth's picture, out/earth/
 make bake-star       # the Yale catalog's stars (make download-star first)
-make bake-geoid ARGS=egm2008-5.pgm   # EGM2008, into spec/spec/space/geoid.json
+make bake-geoid ARGS=egm2008-5.pgm   # EGM2008, into rust/spec/src/space/coord/geoid.rs
 ```
 
 The first four write a tile set to `out/<kind>/`; star and geoid are not tile

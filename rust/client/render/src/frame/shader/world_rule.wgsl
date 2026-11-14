@@ -1,19 +1,11 @@
 // pxl-render/world_rule.wgsl
 
 // The world's rules that read no buffer, written by hand as twins of their pxl-engine
-// functions: a value's kind, the service area's wall, a bound word, the bounds a clip level's
-// entry holds, and a column's top in cells. The world's query (world.wgsl) reads them.
+// functions: a fill's eighths, the service area's wall, a bound word, the bounds a clip level's
+// entry holds, and a column's top in cells. The world's query (world.wgsl) reads them, and a
+// value's kind, which build.rs writes into world_word (`is_ground`, `voxel`).
 
-// A value's kind and a fill's eighths, as pxl-spec value.rs and share.rs and pxl-engine answer.rs
-// state them.
-
-fn is_ground(v: u32) -> bool {
-  return v >= GROUND_FIRST && v <= GROUND_LAST;
-}
-
-fn voxel(v: u32) -> bool {
-  return v == VAL_AIR || is_ground(v) || (v >= OBJECT_FIRST && v <= OBJECT_LAST);
-}
+// A fill's eighths, as pxl-spec share.rs and pxl-engine answer.rs state them.
 
 fn eighths(fill: u32) -> u32 {
   return min(fill / (FULL / EIGHTH_CNT), EIGHTH_CNT);

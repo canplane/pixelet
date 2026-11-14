@@ -362,7 +362,7 @@ pub const PIPELINE_CNT: u32 = 44;
 // their count, then for each its stride, its step, its attribute count, and a (location,
 // offset, format) for each attribute. The bind groups come last: their count, then for each
 // its entry count and a (binding, visibility, kind) for each entry.
-pub use crate::api_spec::record::*;
+pub use crate::spec::api::record::*;
 /// A binding's stages are xpute's own bits (SHADER_STAGE), and `NONE` is no stage.
 pub use xpute_gpu_link::spec::shader_stage::{COMPUTE, FRAGMENT, VERTEX};
 pub const NONE: u32 = 0;

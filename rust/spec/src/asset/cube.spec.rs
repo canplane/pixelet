@@ -2,9 +2,6 @@
 //
 // GENERATED from spec/spec/asset/cube.json (xpute-gen data.rs)
 
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
-
 /// The texture pack, the file the cube kind's palette entry is drawn from: one image
 /// of every tile under asset/content/cube/, which the asset ingest composes
 /// and ships as the table's file at this path, with which tile each cube

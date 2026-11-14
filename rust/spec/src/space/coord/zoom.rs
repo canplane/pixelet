@@ -109,6 +109,12 @@ pub const fn z_start(zoom: Zoom) -> i32 {
     }
 }
 
+/// What turns a node's index at `zoom` into a count from the world's edge on each axis:
+/// nothing on X, which wraps, and `y_start` and `z_start` on Y and Z.
+pub const fn starts(zoom: Zoom) -> [i32; 3] {
+    [0, y_start(zoom), z_start(zoom)]
+}
+
 /// The zoom whose side is `units`, a power of two.
 pub fn of_side(units: f64) -> Zoom {
     (UNIT_ZOOM as i32 - round(libm::log2(units)) as i32) as Zoom

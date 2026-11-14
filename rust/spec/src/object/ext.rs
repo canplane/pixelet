@@ -4,9 +4,19 @@
 //! and so the pool the extension is kept in. The class goes by kind: a marker carries its
 //! text.
 
-#[path = "ext.spec.rs"]
-mod spec;
-pub use spec::Class;
+/// What a placed thing may carry beyond its id: its extension. Things whose
+/// extensions have one shape are a class, and each class keeps its
+/// extensions in a pool of its own; a leaf names its record by its place
+/// there, or none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Class {
+    MarkerText,
+}
+
+impl Class {
+    /// Every class, each a pool.
+    pub const ALL: [Class; 1] = [Class::MarkerText];
+}
 
 use crate::asset::id::{kind_of, AssetId, Kind};
 

@@ -17,10 +17,10 @@ use xpute_guest::clock::now;
 
 use crate::perf::frame::{FrameSample, RaySample, WorstFrame};
 use crate::perf::section::{RecordingSection, RecordingStateSection};
-use crate::perf::spec::limit;
-use crate::perf::step::{self, StepName};
 use crate::perf::task::TaskRecord;
-use crate::sys::sched::phase_spec::Phase;
+use crate::spec::perf::limit;
+use crate::spec::phase::Phase;
+use crate::spec::step::StepName;
 use crate::sys::sched::tick::TickContext;
 
 /// The rings keep the last minute (perf.json `LIMIT.WINDOW_MS`), as the UI's
@@ -474,12 +474,12 @@ const STAT_NONE: StepStat = StepStat {
 };
 
 /// Each step's time by its name, since the profiler last began to record.
-static STEP_STATS: Global<[StepStat; step::STEP_NAMES.len()]> = Global::new();
+static STEP_STATS: Global<[StepStat; StepName::ALL.len()]> = Global::new();
 /// Whether the profiler records, and the steps are timed.
 static STEP_TIMING: Global<bool> = Global::new();
 
-fn step_stats_mut() -> &'static mut [StepStat; step::STEP_NAMES.len()] {
-    STEP_STATS.get(|| [STAT_NONE; step::STEP_NAMES.len()])
+fn step_stats_mut() -> &'static mut [StepStat; StepName::ALL.len()] {
+    STEP_STATS.get(|| [STAT_NONE; StepName::ALL.len()])
 }
 
 /// Runs the step `name` of `phase`, timed while the profiler records.
@@ -498,7 +498,7 @@ pub fn timed(ctx: &mut TickContext, phase: Phase, name: StepName, step: fn(&mut 
 /// summed stays to be read.
 pub fn set_step_timing(on: bool) {
     if on {
-        *step_stats_mut() = [STAT_NONE; step::STEP_NAMES.len()];
+        *step_stats_mut() = [STAT_NONE; StepName::ALL.len()];
     }
     STEP_TIMING.set(on);
 }

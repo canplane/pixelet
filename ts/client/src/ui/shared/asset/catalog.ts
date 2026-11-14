@@ -23,18 +23,18 @@ export function kindOf(id: AssetId): number {
   return id >> IDX_BITS;
 }
 
-/** A cube is a ground palette entry or a placed color, and both are numbered
- * in one value space. */
+/** A cube is a ground cube or a placed color by its asset id, and both are
+ * numbered in one value space. */
 export type Cube = u16;
 
 /** The placeable cubes, each its number, its section and its label: the
- * placed colors first, then the palette entries in paint order. */
+ * placed colors first, then the ground's cubes in paint order. */
 const CUBE_RECS = [...object, ...ground];
 
 export const CUBES: readonly Cube[] = CUBE_RECS.map((c) => c.number);
 
 /** The catalog's section a placeable cube is listed under, as Carto groups the
- * palette entries. */
+ * ground's cubes. */
 export type CubeSection = (typeof CUBE_RECS)[number]["section"];
 
 const CUBE_SECTION = new Map(CUBE_RECS.map((c) => [c.number, c.section]));

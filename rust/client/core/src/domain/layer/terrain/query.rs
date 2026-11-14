@@ -47,7 +47,7 @@ impl TileCache<TerrainTile> {
     /// The bound joins the clip levels' relief of the ground and of the ways
     /// over the node's own cells (`relief`), reaches one cell at `cell_zoom`
     /// below the lowest, and is cut to the node. A node past the service area
-    /// has no palette index in it and holds nothing. For a node of a shard or
+    /// has no asset id in it and holds nothing. For a node of a shard or
     /// finer, that is known before any of its ground arrives, the same way
     /// every reader knows it (pxl-spec `area::Shard`). A coarser node may
     /// straddle the area's edge, so it is read.

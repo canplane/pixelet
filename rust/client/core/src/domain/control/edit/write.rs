@@ -40,8 +40,8 @@ fn is_carved(world: &World, at: &Q3) -> bool {
 
 /// A write of void collapses its path in the octree, so a redundant record
 /// never stays in a save.
-fn write_object_val(at: Octant, val: u32) {
-    submit(Write::at(at, val));
+fn write_object(at: Octant, asset_id: AssetId) {
+    submit(Write::at(at, asset_id));
 }
 
 /// Makes a write at once and, when it changed what is placed, sends it to
@@ -58,7 +58,7 @@ fn submit(write: Write) {
 /// Whether placing `cube` over a whole cell only undoes a carve. That holds
 /// when the cell holds an air leaf and the ground there without the leaf is
 /// that cube, the stratum's cube at that depth.
-fn place_val_is_redundant(world: World, at: &Q3, zoom: Zoom, cube: AssetId) -> bool {
+fn place_is_redundant(world: World, at: &Q3, zoom: Zoom, cube: AssetId) -> bool {
     if zoom > GROUND.leaf_cell_zoom() || !is_carved(&world, at) {
         return false;
     }
@@ -94,24 +94,24 @@ impl Asset {
 
 /// Placing a cube that only undoes a carve writes void, as `remove` does.
 fn place_cube(at: &Q3, zoom: Zoom, cube: AssetId) {
-    let val = if place_val_is_redundant(World::now(), at, zoom, cube) {
+    let asset_id = if place_is_redundant(World::now(), at, zoom, cube) {
         Sentinel::Void as u32
     } else {
         cube
     };
-    write_object_val(Octant::holding(zoom, at), val);
+    write_object(Octant::holding(zoom, at), asset_id);
 }
 
 /// Where an erase emptied a cell of the decor the scatter stands there,
 /// placing that decor back writes void, so the scattered instance returns as
 /// it was.
 fn place_decor(at: &Q3, zoom: Zoom, id: AssetId) {
-    let val = if restores_scattered(at, id).is_some() {
+    let asset_id = if restores_scattered(at, id).is_some() {
         Sentinel::Void as u32
     } else {
         id
     };
-    write_object_val(Octant::holding(zoom, at), val);
+    write_object(Octant::holding(zoom, at), asset_id);
 }
 
 /// The decor the ground generates at `at` that placing `id` would bring back
@@ -205,18 +205,18 @@ pub fn commit_draft() {
 /// Writes an air leaf, which means "nothing here, on purpose". It hides what
 /// the base holds there, which has no leaf of its own to delete.
 pub fn place_air(at: Octant) {
-    write_object_val(at, Sentinel::Air as u32);
+    write_object(at, Sentinel::Air as u32);
 }
 
 /// What erasing the entry at `at` writes: void where the base holds nothing
 /// there that blocks a body, and air where it would fill the cell, which
 /// would hide a decor the ground grows there. Only the resident finest leaf
-/// can tell, as in `place_val_is_redundant`; where no such leaf is resident,
+/// can tell, as in `place_is_redundant`; where no such leaf is resident,
 /// the cube is emptied with air.
-fn erase_val(at: Octant) -> u32 {
+fn erase_asset_id(at: Octant) -> AssetId {
     match World::base().asset_of(&middle(at)).exact() {
-        Some(v) if !solid(answer::val(v)) => Sentinel::Void as u32,
-        _ => Sentinel::Air as u32,
+        Some(v) if !solid(answer::val(v)) => Sentinel::Void as AssetId,
+        _ => Sentinel::Air as AssetId,
     }
 }
 
@@ -234,11 +234,11 @@ pub fn remove(at: Octant) {
         .collect();
     submit(Write {
         at: key_of::<3>(at.zoom(), at.at()),
-        asset_id: erase_val(at),
+        asset_id: erase_asset_id(at),
         ext: None,
     });
     for c in erased {
-        write_object_val(
+        write_object(
             Octant::new(GROUND.leaf_cell_zoom(), c),
             Sentinel::Void as u32,
         );

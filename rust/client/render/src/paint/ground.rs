@@ -6,9 +6,9 @@
 
 use pxl_spec::asset::color;
 use pxl_spec::asset::cube::Sentinel;
+use pxl_spec::color::linear;
 
 use crate::frame::shader::word::NO_LAYER;
-use crate::look::color::linear;
 use crate::paint::object::PAINTER;
 use crate::paint::palette::{layer_mean, rgb255, sentinel_layer};
 

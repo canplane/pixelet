@@ -18,7 +18,7 @@
 @group(0) @binding(16) var<storage, read> args: array<u32>;
 
 /// The node at zoom `z` over node `c` of `zoom`, where `z` is no finer than `zoom`
-/// (`object::ancestor_at`).
+/// (pxl-spec `tree::ancestor_at`).
 fn over(c: vec3<i32>, zoom: u32, z: u32) -> vec3<i32> {
   let steps = zoom - z;
   let p = path(zoom, c);

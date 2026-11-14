@@ -25,7 +25,7 @@ use crate::param::strata::{BEDROCK_DEPTH, FILLER_DEPTH, HEADROOM, SANDSTONE_DEPT
 use crate::Pixelet;
 use pxl_spec::asset::cube::Ground;
 
-// The palette entries the strata name, read into a word.
+// The asset ids the strata name, read into a word.
 const SAND: u32 = Ground::Sand as u32;
 const BEACH: u32 = Ground::Beach as u32;
 const WATER: u32 = Ground::Water as u32;
@@ -43,7 +43,7 @@ pub fn ceiling(face: i32) -> i32 {
     face.max(SEA_LEVEL) + HEADROOM
 }
 
-/// What the ground is in cell `z` of a column at `cell_zoom` whose palette index is
+/// What the ground is in cell `z` of a column at `cell_zoom` whose asset id is
 /// `asset_id` and whose top is `top` cells: by depth under its top, and void above it. A
 /// column coarser than the leaves' summarizes the faces under it, so its ground is its face
 /// all through; the wall (`unknown`) is itself all through.

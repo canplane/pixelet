@@ -53,7 +53,7 @@ use pxl_render::gpu::api;
 use pxl_render::ray::{BrickWrite, TerrainWrite};
 use pxl_spec::bake::separation::Separation;
 use pxl_spec::bake::tile::terrain::{
-    brick_lines, brick_pairs, decode_into, palette_cells, TerrainTile, ELE_COLUMN, FOLD_COLUMN,
+    brick_lines, brick_pairs, cells_of, decode_into, TerrainTile, ELE_COLUMN, FOLD_COLUMN,
 };
 use pxl_spec::brick;
 use pxl_spec::brick::{BRICK, BRICK_CELL_CNT, BRICK_SHIFT};
@@ -871,7 +871,7 @@ pub fn cut(tile: Quadrant, pkt: &[u8]) {
     if !(0..SLOT_CNT).any(|b| slot_wants(w, tile, b)) {
         return;
     }
-    let Ok(cells) = palette_cells(pkt) else {
+    let Ok(cells) = cells_of(pkt) else {
         w.went_absent = true;
         return;
     };
@@ -1203,7 +1203,7 @@ impl BrickSource for ClipRead<'_> {
         self.0.table.entries[(self.level(cell_zoom) * ENTRY_CNT + entry) as usize].brick()
     }
 
-    /// The CPU reads only a cell's own palette index, as laid, so the word
+    /// The CPU reads only a cell's own asset id, as laid, so the word
     /// repeats it four times.
     fn fold_at(&self, cell_zoom: Zoom, b: u32, i: u32) -> u32 {
         word([self.own(cell_zoom, b, i); 4])

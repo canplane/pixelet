@@ -28,8 +28,9 @@ xpute-gpu-guest.workspace = true
 xpute-gpu-link.workspace = true
 
 [build-dependencies]
-# The light a debug view's color decodes to, the same bits on every machine
-# (build/shared.rs `debug_look`), as the crate's own is.
+# The root a shader constant takes, the same bits on every machine (build/shared.rs
+# `HORIZON_TO_TOP_KM`), as the crate's own is; look/atmosphere.rs, which build.rs
+# compiles, calls it too.
 libm.workspace = true
 # The values and small functions the shaders share with the engine, pixelet's
 # content and the world (build/shared.rs): the values every shader may name

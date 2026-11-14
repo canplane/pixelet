@@ -354,21 +354,23 @@ export class GpuHost {
     this._belt.recall();
   }
 
-  /** Writes the device's block (spec DEVICE) into the guest's memory at
-   * `at`, which the guest lent (gpu/wit/gpu.wit `device.lost`), STATUS last,
-   * READY, with release; its counts are written there from then on. */
   /** Lets the block go: the guest has it back, and nothing more is written
    * there. */
   detach(): void {
     this._block = undefined;
   }
 
+  /** Writes the device's block (spec DEVICE) into the guest's memory at
+   * `at`, which the guest lent (gpu/wit/gpu.wit `device.lost`), STATUS last,
+   * READY, with release; its counts are written there from then on. */
   attach(at: u32): void {
     const d = this._device;
     this._block = at;
     const out = new Uint32Array(this._mem(), at, DEVICE.WORDS);
-    // A block lent again holds the last device's words.
-    out.fill(0);
+    // A block lent again holds the last device's words. The guest reads those before
+    // the counts only once STATUS is READY, and the counts and STATUS, which it loads
+    // at any time, are stored atomically.
+    out.fill(0, 0, DEVICE.ERRORS_AT);
     LIMIT_NAMES.forEach(
       (name, k) => (out[k] = Math.min(d.limits[name], 0xffffffff)),
     );
@@ -382,8 +384,7 @@ export class GpuHost {
     out[DEVICE.FORMAT_AT] = (TEXTURE_FORMATS as readonly string[]).indexOf(
       navigator.gpu.getPreferredCanvasFormat(),
     );
-    out[DEVICE.ERRORS_AT] = this._error_cnt;
-    out[DEVICE.UNFINISHED_AT] = this._unfinished_cnt;
+    this._tell_counts();
     Atomics.store(out, DEVICE.STATUS_AT, STATUS.READY);
   }
 

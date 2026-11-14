@@ -468,6 +468,88 @@ pub fn rs_member(k: &str) -> String {
     rs_ident(&pascal(k))
 }
 
+/// C++'s keywords and alternative tokens, which an identifier takes `_` after.
+const CPP_KEYWORDS: &str =
+    "alignas alignof and and_eq asm auto bitand bitor bool break case catch \
+    char char8_t char16_t char32_t class compl concept const consteval constexpr constinit \
+    const_cast continue co_await co_return co_yield decltype default delete do double \
+    dynamic_cast else enum explicit export extern false float for friend goto if inline int \
+    long mutable namespace new noexcept not not_eq nullptr operator or or_eq private \
+    protected public register reinterpret_cast requires return short signed sizeof static \
+    static_assert static_cast struct switch template this thread_local throw true try typedef \
+    typeid typename union unsigned using virtual void volatile wchar_t while xor xor_eq";
+
+/// A name as a C++ identifier: each `-` becomes `_`, a leading digit gets an
+/// `_` before it, and a keyword gets one after it.
+pub fn cpp_ident(k: &str) -> String {
+    let id: String = k
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    if CPP_KEYWORDS.split_whitespace().any(|w| w == id) {
+        format!("{id}_")
+    } else if id.starts_with(|c: char| c.is_ascii_digit()) {
+        format!("_{id}")
+    } else {
+        id
+    }
+}
+
+/// An enum's member as C++ names it: in snake case, as the C++ here names
+/// its constants' members. An outside name too, since C++'s own headers
+/// define POSIX's errno names as macros.
+pub fn cpp_member(k: &str) -> String {
+    cpp_ident(&snake(k))
+}
+
+/// The headers a C++ file includes, each added where its body names what the
+/// header declares, as Rust's `Scope` `use`s.
+pub type Includes = BTreeSet<&'static str>;
+
+/// An enum's C++, as every enum has it: an enum class held in `repr`, and the
+/// member a number is (`of_ident`), as Rust's `of`.
+pub fn cpp_enum(
+    name: &str,
+    members: &[Member],
+    repr: &str,
+    out: &mut Vec<String>,
+    inc: &mut Includes,
+) {
+    let e = pascal(name);
+    inc.extend(["cstdint", "optional"]);
+    out.push(format!("enum class {e} : {repr} {{"));
+    for m in members {
+        out.extend(line_comments(&m.doc, "    "));
+        out.push(format!("    {} = {},", m.ident, m.number));
+    }
+    out.extend([
+        "};".to_string(),
+        String::new(),
+        "// The member `val` is, or none for a number no member has.".into(),
+        format!(
+            "constexpr std::optional<{e}> {}({repr} val) noexcept {{",
+            of_ident(&e)
+        ),
+        "    switch (val) {".into(),
+    ]);
+    out.extend(
+        members
+            .iter()
+            .map(|m| format!("    case {}: return {e}::{};", m.number, m.ident)),
+    );
+    out.extend([
+        "    }".to_string(),
+        "    return std::nullopt;".into(),
+        "}".into(),
+    ]);
+}
+
 /// Whether `k` is a TypeScript identifier as it is written.
 pub fn is_ts_ident(k: &str) -> bool {
     let mut c = k.chars();
@@ -611,7 +693,7 @@ pub fn rs_enum(e: &str, members: &[Member], repr: &str, indent: &str) -> Vec<Str
 /// An enum's TypeScript, as every enum has it: its type, the union of its
 /// members' numbers, then each member as a constant of its own, named by the
 /// enum and the member in SCREAMING snake case, which a reader imports by
-/// name, and the member a number is (`ts_of`), as Rust's `of`. No object holds
+/// name, and the member a number is (`of_ident`), as Rust's `of`. No object holds
 /// them, so a bundle's tree shaking keeps no name.
 pub fn ts_enum(e: &str, members: &[Member]) -> Vec<String> {
     let union: Vec<String> = members
@@ -627,16 +709,19 @@ pub fn ts_enum(e: &str, members: &[Member]) -> Vec<String> {
     out.extend([
         String::new(),
         "/** The member `val` is, or null for a number no member has. */".into(),
-        format!("export function {}(val: number): {e} | null {{", ts_of(e)),
+        format!(
+            "export function {}(val: number): {e} | null {{",
+            of_ident(e)
+        ),
         format!("  return {} ? val : null;", tests.join(" || ")),
         "}".into(),
     ]);
     out
 }
 
-/// The TypeScript twin of a Rust enum's `of`, of the enum `e`: the member a
-/// number is (`of_Tool`).
-pub fn ts_of(e: &str) -> String {
+/// The name TypeScript and C++ give a Rust enum's `of`, of the enum `e`: the
+/// member a number is (`of_Tool`).
+pub fn of_ident(e: &str) -> String {
     format!("of_{}", pascal(e))
 }
 

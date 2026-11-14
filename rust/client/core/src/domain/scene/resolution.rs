@@ -24,10 +24,10 @@ use crate::domain::scene::param;
 use crate::domain::scene::rate;
 use crate::domain::setting::store::{settings, ResMode};
 use crate::sys::sched;
-use pxl_render::api_spec::surface_role;
 use pxl_render::gpu::api;
 use pxl_render::gpu::surface::{surfaces, Surface};
 use pxl_render::renderer::GpuRead;
+use pxl_render::spec::api::surface_role;
 use pxl_global::Global;
 
 /// How a frame was paced.

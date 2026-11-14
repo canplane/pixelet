@@ -29,18 +29,42 @@
 // stands: which variant of its decor and its heading in quarter turns (an
 // odd one swaps its box's sides). The ground evaluates them from its cell; a
 // placed one's are the placement's.
-#![allow(clippy::absolute_paths, reason = "generated from the spec")]
+
+use crate::asset::catalog::Slot;
+use crate::asset::id::{asset_id, AssetId, Kind};
 
 /// The most variants a decor has.
 pub const VARIANT_CAP: usize = 9;
 
 /// How a decor the ground generates faces: any way, or along the road or rail its
 /// cell lies on.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum Orientation {
-    Random,
-    AlongTransport,
+    Random = 0,
+    AlongTransport = 1,
+}
+
+impl Orientation {
+    /// Every member, in its source's own order.
+    pub const ALL: [Orientation; 2] = [Orientation::Random, Orientation::AlongTransport];
+
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<Orientation> {
+        match val {
+            0 => Some(Orientation::Random),
+            1 => Some(Orientation::AlongTransport),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Orientation::Random => "random",
+            Orientation::AlongTransport => "along_transport",
+        }
+    }
 }
 
 /// A decor as the ground generates it, in 32-bit words alone, laid out as a
@@ -104,8 +128,8 @@ pub const ROWS: [Row; 4] = [
 /// A model and its pack's colormap, each a slot the catalog fills.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Variant {
-    pub model: crate::asset::catalog::Slot,
-    pub skin: crate::asset::catalog::Slot,
+    pub model: Slot,
+    pub skin: Slot,
 }
 
 /// A decor: its id, which is its place in `DECORS` over the decor kind, its row
@@ -113,7 +137,7 @@ pub struct Variant {
 /// variants' models, in the row's order.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Decor {
-    pub id: crate::asset::id::AssetId,
+    pub id: AssetId,
     pub row: &'static Row,
     pub variants: &'static [Variant],
 }
@@ -131,7 +155,7 @@ pub const DECORS: [Decor; 4] = [
     // not natural, ground. Sparse: a hillside with some trees, not a forest wall
     // at 1u spacing.
     Decor {
-        id: crate::asset::id::asset_id(crate::asset::id::Kind::Decor, 0),
+        id: asset_id(Kind::Decor, 0),
         row: &ROWS[0],
         variants: &[
             Variant { model: 2, skin: 1 },
@@ -153,7 +177,7 @@ pub const DECORS: [Decor; 4] = [
     // the tiles a coast crosses. Rivers are a few cells wide, so the same per-cell
     // rate reads far denser than on land.
     Decor {
-        id: crate::asset::id::asset_id(crate::asset::id::Kind::Decor, 1),
+        id: asset_id(Kind::Decor, 1),
         row: &ROWS[1],
         variants: &[
             Variant {
@@ -179,7 +203,7 @@ pub const DECORS: [Decor; 4] = [
     // road, since a random heading reads as a crash. Sparse: a car every couple
     // of cells reads as gridlock.
     Decor {
-        id: crate::asset::id::asset_id(crate::asset::id::Kind::Decor, 2),
+        id: asset_id(Kind::Decor, 2),
         row: &ROWS[2],
         variants: &[
             Variant {
@@ -208,7 +232,7 @@ pub const DECORS: [Decor; 4] = [
     // to the rail, since one lying across it reads as derailed. Very sparse:
     // trains should read as occasional.
     Decor {
-        id: crate::asset::id::asset_id(crate::asset::id::Kind::Decor, 3),
+        id: asset_id(Kind::Decor, 3),
         row: &ROWS[3],
         variants: &[
             Variant {

@@ -7,7 +7,7 @@
 //! `prepare`) reads the frame, asks for a plan and encodes what the plan says.
 
 use super::casts_px;
-use crate::gpu::span_spec::{FrameKind, LightChanged};
+use crate::spec::span::{FrameKind, LightChanged};
 
 /// What a frame read that decides what the eye and the light cast.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

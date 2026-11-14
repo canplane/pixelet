@@ -11,7 +11,6 @@ use pxl_render::frame::shader::record::{
     STRIP, VERTEX_ENTRY,
 };
 use pxl_render::gpu::api::vertex_format;
-use xpute_gpu_link::enums::VERTEX_FORMATS;
 
 fn main() {
     let dir = std::env::args()
@@ -49,7 +48,7 @@ fn main() {
                 let attributes: Vec<String> = (0..next())
                     .map(|_| {
                         let (location, off) = (next(), next());
-                        let format = VERTEX_FORMATS[vertex_format(next()) as usize];
+                        let format = vertex_format(next()).name();
                         format!(
                             r#"{{"shaderLocation":{location},"offset":{off},"format":"{format}"}}"#
                         )

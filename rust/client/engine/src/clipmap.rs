@@ -18,7 +18,7 @@ use crate::ground::Extent;
 use crate::way;
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::brick::{bricks_zoom, idx_of, of_idx, BRICK, BRICK_CELL_CNT, BRICK_SHIFT};
-use pxl_spec::ground::{asset_ids, top};
+use pxl_spec::ground::{asset_ids, top, GroundId};
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{idx_at, Zoom, LEAF_CELL_ZOOM, MIN_ZOOM};
@@ -276,18 +276,19 @@ pub const fn column_top(w: u32) -> i32 {
     (w << 16) as i32 >> 16
 }
 
-/// A brick's cells as its fill lays them, four to a word, cell `i` in the `i % 4`-th byte
-/// (`own_at`): each cell's own palette index (pxl-spec `ground::own` of its four at the brick's
+/// A brick's cells as its fill lays them, `OWN_CELL_CNT` to a word, cell `i` in the
+/// `i % OWN_CELL_CNT`-th asset id (`own_at`): each cell's own asset id (pxl-spec `ground::own` of its four at the brick's
 /// zoom).
 pub const OWN_WORDS: u32 = BRICK_CELL_CNT / OWN_CELL_CNT;
-/// The cells a laid word holds, a byte each: in the cells' order
+/// The cells a laid word holds, an asset id each: in the cells' order
 /// (`idx_of`), a 2×2 square.
 pub const OWN_CELL_CNT: u32 = 4;
 const _: () = assert!(BRICK_CELL_CNT.is_multiple_of(OWN_CELL_CNT));
+const _: () = assert!(OWN_CELL_CNT * GroundId::BITS == u32::BITS);
 
-/// Cell `i`'s palette index in a laid word `w`.
+/// Cell `i`'s asset id in a laid word `w`.
 pub(crate) const fn own_at(w: u32, i: u32) -> u32 {
-    (w >> (8 * (i % OWN_CELL_CNT))) & 0xff
+    (w >> (GroundId::BITS * (i % OWN_CELL_CNT))) & GroundId::MAX as u32
 }
 
 /// A brick's words, the part that outlives its fill, the same on the CPU and on a GPU, in
@@ -311,7 +312,7 @@ pub trait BrickSource {
     /// The brick the clip level read at `cell_zoom` wants in `entry`, and whether it is present;
     /// the inverse of `present`.
     fn brick(&self, cell_zoom: Zoom, entry: u32) -> ([i32; 2], bool);
-    /// The four palette indices of cell `i` of the brick in `slot` (`asset_ids`).
+    /// The four asset ids of cell `i` of the brick in `slot` (`asset_ids`).
     fn fold_at(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
     /// Column word `i` of the brick in `slot` (`COLUMN_WORDS`), `i` to
     /// `BRICK_CELL_CNT`.
@@ -320,7 +321,7 @@ pub trait BrickSource {
     /// words (`answer::bound_word`), its columns' bounds joined (`join`), level 0 being one
     /// column's.
     fn bound_mip(&self, cell_zoom: Zoom, slot: u32, j: u32, at: [u32; 2]) -> [i32; 2];
-    /// Cell `i`'s own palette index as its fill laid it (`OWN_WORDS`,
+    /// Cell `i`'s own asset id as its fill laid it (`OWN_WORDS`,
     /// `own_at`).
     fn own(&self, cell_zoom: Zoom, slot: u32, i: u32) -> u32;
     /// Entry `e` of the levels over the bricks of the clip level read at `cell_zoom`
@@ -456,8 +457,8 @@ pub const fn clip_zoom(cell_zoom: Zoom) -> Zoom {
 }
 
 /// The ground's cell `g` at `cell_zoom`, read from the finest clip level holding it present,
-/// stepped from `place` (`step`): its four palette indices, its column's word (its elevation),
-/// its own palette index as laid, and where it is held; void at sea level where none holds
+/// stepped from `place` (`step`): its four asset ids, its column's word (its elevation),
+/// its own asset id as laid, and where it is held; void at sea level where none holds
 /// it.
 pub fn cell(
     w: &impl BrickSource,
@@ -480,7 +481,7 @@ pub fn cell(
 
 /// Column `b` at `zoom` as a reader reads it: the cell drawing it (a leaf's, finer than the
 /// leaves), stepped from `place`, where the column's own cells were found (`step`), with its
-/// own palette index as laid, or the wall's (`Sentinel::Unknown`) where it is the wall
+/// own asset id as laid, or the wall's (`Sentinel::Unknown`) where it is the wall
 /// (`area::is_wall`); and where it is held. The wall is read from `shard`, what is known of
 /// the area there, or else asked of `w` (`Shard::at`).
 pub fn ground(

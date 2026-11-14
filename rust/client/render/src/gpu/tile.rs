@@ -22,7 +22,7 @@ use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, release, word_bytes, Gpu, Group, PassDesc, RenderContext,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::gpu::span_spec::GpuSpanName;
+use crate::spec::span::GpuSpanName;
 
 /// How many pixels a mark on the screen is grown by each way. The margin covers the pixels
 /// beside the mark that the resolve reads and a face's growth (pxl-engine param.rs

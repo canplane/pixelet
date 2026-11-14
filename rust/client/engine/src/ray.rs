@@ -4,7 +4,7 @@
 //! screen pass reads them there (pxl-render frame/shader/screen_ray.wgsl). Each word is a layer of
 //! the world surface's rays. The first says what the ray stopped on, through which face, at which
 //! zoom, and the share of its cube the cell keeps (`first_word`). The second is how far the ray
-//! went, as f32 bits. The third holds the four palette indices the ground's asset is drawn by
+//! went, as f32 bits. The third holds the four asset ids the ground's asset is drawn by
 //! (pxl-spec `ground::word`), and is zero for any other asset; in the ray steps view (`eye::STEPS`)
 //! it holds the steps taken on the ray's way from the eye instead, whatever the ray met: its beam
 //! ray's and its own walk's, or a sample's where it took no walk (pxl-render cast.wgsl
@@ -21,7 +21,7 @@ use pxl_spec::space::coord::zoom::{Zoom, FINEST_ZOOM};
 pub const WORDS: u32 = 4;
 pub const FACE_WORD: u32 = 3;
 
-/// The first word's fields, from the low bits: the value, a catalog value whichever source
+/// The first word's fields, from the low bits: the value, an asset id whichever source
 /// holds it; the face the ray entered through, 2·axis plus one where its outward normal
 /// points down the axis; the zoom of the cell it stopped on, in six bits; and the eighths of
 /// its cube the cell keeps, 0 for all eight (`answer::fill_eighths`), so the screen pass draws

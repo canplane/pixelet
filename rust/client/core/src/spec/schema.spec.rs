@@ -1,4 +1,4 @@
-// pxl-core/domain/setting/schema.spec.rs
+// pxl-core/spec/schema.spec.rs
 //
 // GENERATED from spec/client/core/domain/setting/schema.json (xpute-gen data.rs)
 //
@@ -23,9 +23,6 @@
 // the generator refuses one given twice. An `index` is a place in a list
 // kept elsewhere — the person and the pet are by theirs in character.json — and
 // crosses as itself.
-
-// A table is generated whole, whether or not this crate calls an entry.
-#![allow(dead_code, reason = "generated from the spec")]
 
 /// Which controller makes the camera's pose.
 ///
@@ -424,45 +421,10 @@ impl SettingKey {
     }
 }
 
-/// How a setting is held.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum SettingKind {
-    Toggle,
-    Choice,
-    Index,
-}
-
 impl SettingKey {
     /// One past the highest number: the length of a list of every
     /// setting's value at its number, where a number not given out stays 0.
     pub const SLOT_CNT: usize = 22;
-
-    pub fn kind(self) -> SettingKind {
-        match self {
-            SettingKey::Texture => SettingKind::Toggle,
-            SettingKey::Decor => SettingKind::Toggle,
-            SettingKey::Cloud => SettingKind::Toggle,
-            SettingKey::Place => SettingKind::Toggle,
-            SettingKey::TiltLock => SettingKind::Toggle,
-            SettingKey::CameraMode => SettingKind::Choice,
-            SettingKey::SurfaceFollow => SettingKind::Toggle,
-            SettingKey::OrbitObstacle => SettingKind::Choice,
-            SettingKey::EdgeShade => SettingKind::Toggle,
-            SettingKey::RimLight => SettingKind::Toggle,
-            SettingKey::Ao => SettingKind::Choice,
-            SettingKey::Shadow => SettingKind::Toggle,
-            SettingKey::Res => SettingKind::Choice,
-            SettingKey::View => SettingKind::Toggle,
-            SettingKey::Perf => SettingKind::Toggle,
-            SettingKey::WorldGizmo => SettingKind::Toggle,
-            SettingKey::CameraGizmo => SettingKind::Toggle,
-            SettingKey::Person => SettingKind::Index,
-            SettingKey::Pet => SettingKind::Index,
-            SettingKey::RayStep => SettingKind::Toggle,
-            SettingKey::RayCnt => SettingKind::Toggle,
-            SettingKey::SkyTime => SettingKind::Choice,
-        }
-    }
 
     /// Written to the settings' storage file and read from it; one schema.json
     /// marks `stored` false is held for the session alone.

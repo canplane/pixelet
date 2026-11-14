@@ -76,10 +76,11 @@ struct Order {
 /// the UI's protocol among it. The protocol's enums, which the domain reads, the settings,
 /// and an edit not yet made, which the top hands from control to the scene, stand where both
 /// heads may name them. The profiler reads anything and stands beside the order, in none of its steps, and
-/// only the top, which records into it, names it. The link's bindings, which name nothing of
-/// the core, stand under everything that calls or serves through them.
+/// only the top, which records into it, names it. The link's bindings and the values the
+/// specs hold (`spec`), which name nothing of the core, stand under everything that reads
+/// them.
 const CORE: &str = "rust/client/core/src/";
-const CORE_ORDER: [(&str, u8); 16] = [
+const CORE_ORDER: [(&str, u8); 17] = [
     ("frame", 7),
     ("link", 7),
     ("ui", 7),
@@ -96,6 +97,7 @@ const CORE_ORDER: [(&str, u8); 16] = [
     ("layer", 2),
     ("sys", 1),
     ("abi", 0),
+    ("spec", 0),
 ];
 const CORE_HEADS: [&[&str]; 2] = [&["scene"], &["control"]];
 const CORE_BESIDE: [&str; 1] = ["perf"];
@@ -196,12 +198,11 @@ const ENGINE_ORDER: [(&str, u8); 21] = [
 /// catalog is; the value space laid over the catalog's palette, and the ways a column makes
 /// over them; a brick over the ways, and a tile's place; and the bake's formats on top.
 const SPEC: &str = "rust/spec/src/";
-const SPEC_ORDER: [(&str, u8); 17] = [
+const SPEC_ORDER: [(&str, u8); 16] = [
     ("color", 0),
     ("share", 0),
     ("directory", 0),
     ("division", 0),
-    ("division_spec", 0),
     ("route", 0),
     ("search", 0),
     ("space", 1),
@@ -243,14 +244,15 @@ const CONTENT_ORDER: [(&str, u8); 7] = [
     ("generation", 2),
 ];
 
-/// pxl-render's order: what names no device, the look, the parameters and the words of the
-/// protocol, under a frame's data, which the paints stand on, under
-/// the device, the rays over it, what is drawn over them, and the renderer on top.
+/// pxl-render's order: what names no device, the look, the parameters and the values its
+/// specs hold (the protocol's words, the GPU spans), under a frame's data, which the paints
+/// stand on, under the device, the rays over it, what is drawn over them, and the renderer
+/// on top.
 const RENDER: &str = "rust/client/render/src/";
 const RENDER_ORDER: [(&str, u8); 10] = [
     ("param", 0),
     ("look", 0),
-    ("api_spec", 0),
+    ("spec", 0),
     ("asset", 0),
     ("frame", 1),
     ("paint", 2),
@@ -281,9 +283,8 @@ const SHADER_ORDER: [(&str, u8); 8] = [
 /// The device's own order (gpu.rs): what speaks no WebGPU, under the calls themselves, under
 /// the draw lists, the pipelines and the surfaces, under the tiles, the atlas and what uploads,
 /// under what is made with them: the decor's generation and the images.
-const GPU_ORDER: [(&str, u8); 16] = [
+const GPU_ORDER: [(&str, u8); 15] = [
     ("put", 0),
-    ("span_spec", 0),
     ("split", 0),
     ("text", 0),
     ("api", 1),
@@ -737,28 +738,6 @@ fn imported(text: &str, f: &str, aliases: &[(String, String)]) -> Vec<(usize, St
         .collect()
 }
 
-/// Each file the folder's own file (`root`'s `lib.rs` or `domain.rs`, or the file named as
-/// the folder) declares by `#[path]`, with the module it declares, by which the file stands
-/// in the order (`api.spec.rs` as `api_spec`).
-fn declared(read: &dyn Fn(&str) -> Option<String>, root: &str) -> Vec<(String, String)> {
-    let decl = Regex::new(r#"#\[path\s*=\s*"([^"]+)"\]\s*(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)"#)
-        .expect("a declared module's pattern");
-    let folder = root.trim_end_matches('/');
-    [
-        format!("{root}lib.rs"),
-        format!("{root}domain.rs"),
-        format!("{folder}.rs"),
-    ]
-    .iter()
-    .flat_map(|parent| {
-        let dir = parent.rsplit_once('/').map_or("", |(d, _)| d);
-        decl.captures_iter(&read(parent).unwrap_or_default())
-            .map(|c| (format!("{dir}/{}", &c[1]), c[2].to_string()))
-            .collect::<Vec<_>>()
-    })
-    .collect()
-}
-
 /// Where `f` stands in `order` under `root`: its first step past `root`, or
 /// past `domain/` for the core's heads and trunk.
 fn standing(f: &str, root: &str) -> String {
@@ -781,15 +760,11 @@ fn folder_uses(
     o: &Order,
 ) -> Vec<(String, String, Vec<(usize, String)>)> {
     let aliases = ts_aliases(read);
-    let declared = declared(read, o.root);
     files
         .iter()
         .filter(|f| f.starts_with(o.root) && [".rs", ".ts", ".tsx"].iter().any(|e| f.ends_with(e)))
         .map(|f| {
-            let me = declared
-                .iter()
-                .find(|(p, _)| p == f)
-                .map_or_else(|| standing(f, o.root), |(_, m)| m.clone());
+            let me = standing(f, o.root);
             let text = read(f).unwrap_or_default();
             let names = match f.ends_with(".rs") {
                 true => named(&text, o.path),
@@ -1678,45 +1653,6 @@ mod spec;"
         let names = "use crate::gpu::draw::x;\nuse crate::pass::mark::y;\nuse crate::ray::z;";
         let found = out_of_order(down, folder_uses(&[f.as_str()], &|_| Some(names.to_string()), down));
         assert!(found.is_empty(), "{found:?}");
-    }
-
-    /// A file its folder's own file declares by `#[path]` stands as the module it declares, so
-    /// a generated file that names a module up the order is refused at its module's level.
-    #[test]
-    fn declared_file_stands_as_its_module() {
-        const LEVELS: [(&str, u8); 2] = [("top", 1), ("gen_spec", 0)];
-        let order = Order {
-            root: "rust/k/src/",
-            path: "crate",
-            levels: &LEVELS,
-            heads: &[],
-            beside: &[],
-            own: None,
-        };
-        let files = [
-            "rust/k/src/lib.rs",
-            "rust/k/src/top.rs",
-            "rust/k/src/gen.spec.rs",
-        ];
-        let read = |f: &str| {
-            Some(
-                match f {
-                    "rust/k/src/lib.rs" => {
-                        "#[path = \"gen.spec.rs\"]\npub mod gen_spec;\npub mod top;"
-                    }
-                    "rust/k/src/top.rs" => "use crate::gen_spec::x;",
-                    "rust/k/src/gen.spec.rs" => "use crate::top::y;",
-                    _ => "",
-                }
-                .to_string(),
-            )
-        };
-        let found = out_of_order(&order, folder_uses(&files, &read, &order));
-        assert_eq!(found.len(), 1, "{found:?}");
-        assert!(
-            found[0].starts_with("rust/k/src/gen.spec.rs:1:"),
-            "{found:?}"
-        );
     }
 
     #[test]

@@ -27,22 +27,28 @@ pub struct Device {
 }
 
 impl Device {
-    /// Reads the device's `block`, once the host has stored its STATUS as
-    /// READY, which this loads with acquire so the whole block is seen; none
-    /// before then, and none where its format names no texture format.
-    pub fn read(block: &[u32]) -> Option<Device> {
-        if load_acquire(&block[device::STATUS_AT]) != status::READY {
+    /// Reads the device's block, whose first word is `block`, once the host
+    /// has stored its STATUS as READY, which this loads with acquire so the
+    /// whole block is seen; none before then, and none where its format names
+    /// no texture format. The host writes the limits, the features, the period
+    /// and the format before READY and none of them after.
+    ///
+    /// # Safety
+    /// `block` is the first of `device::WORDS` live, aligned words, whose
+    /// STATUS the host stores into only atomically.
+    pub unsafe fn read(block: *const u32) -> Option<Device> {
+        // SAFETY: the caller's; a word before STATUS is read only once STATUS
+        // is READY, after which the host writes none of those read.
+        let word = |k: usize| unsafe { block.add(k).read() };
+        // SAFETY: the caller's.
+        if unsafe { load_acquire(block.add(device::STATUS_AT)) } != status::READY {
             return None;
         }
-        let mut limits = [0; device::FEATS_AT];
-        limits.copy_from_slice(&block[..device::FEATS_AT]);
-        let mut feats = [0; device::PERIOD_AT - device::FEATS_AT];
-        feats.copy_from_slice(&block[device::FEATS_AT..device::PERIOD_AT]);
         Some(Device {
-            limits,
-            feats,
-            period_ns: f32::from_bits(block[device::PERIOD_AT]),
-            format: *TextureFormat::ALL.get(block[device::FORMAT_AT] as usize)?,
+            limits: core::array::from_fn(word),
+            feats: core::array::from_fn(|k| word(device::FEATS_AT + k)),
+            period_ns: f32::from_bits(word(device::PERIOD_AT)),
+            format: *TextureFormat::ALL.get(word(device::FORMAT_AT) as usize)?,
         })
     }
 

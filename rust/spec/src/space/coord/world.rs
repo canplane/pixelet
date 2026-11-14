@@ -7,7 +7,7 @@
 use super::aabb::Aabb;
 use super::q3::{from_real, FRAC_W, ONE, Q3};
 use super::v3::V3;
-use super::zoom::{shamt, units, y_start, z_start, Zoom, EXTENT, UNIT_ZOOM};
+use super::zoom::{shamt, starts, units, Zoom, EXTENT, UNIT_ZOOM};
 
 /// Sea level, in leaf cells: the elevation elevations are counted from, where the water stands and
 /// under which the Earth past the service area is rock.
@@ -126,7 +126,7 @@ pub fn node_near(zoom: Zoom, at: [i32; 3], about: f64) -> [i32; 3] {
 }
 
 /// The cell at `zoom` a position stands in, a floor on each axis, Y and Z's
-/// from the world's edge (`y_start`, `z_start`): one above where an axis has no digit.
+/// from the world's edge (`zoom::starts`): one above where an axis has no digit.
 pub fn idx_of(zoom: Zoom, at: &Q3) -> [i32; 3] {
     let shift = FRAC_W as i32 + shamt(zoom);
     // Shifted as an i64, as wide as zoom 0's 32 bits; the index is no wider
@@ -137,8 +137,8 @@ pub fn idx_of(zoom: Zoom, at: &Q3) -> [i32; 3] {
     };
     [
         (i64::from(at[0]) >> shift) as i32,
-        floor(1, y_start(zoom)),
-        floor(2, z_start(zoom)),
+        floor(1, starts(zoom)[1]),
+        floor(2, starts(zoom)[2]),
     ]
 }
 
