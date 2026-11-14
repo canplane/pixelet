@@ -12,23 +12,27 @@
  * What a file is past its path, a tile's version and URL, a storage key, is the client's
  * binding (ts/client/src/service/sys/fs/). */
 export const path = {
-  /** The terrain bake: (TERRAIN, quadkey). */
+  /** A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json
+   * `BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number. */
   TERRAIN: {
     ID: 0 as number,
   },
-  /** The places bake: (PLACE, quadkey). */
+  /** A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json
+   * `BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number. */
   PLACE: {
     ID: 1 as number,
   },
-  /** The divisions bake: (DIVISION, quadkey). */
+  /** A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json
+   * `BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number. */
   DIVISION: {
     ID: 2 as number,
   },
-  /** The Earth bake: (EARTH, quadkey), and the picture of the whole Earth, (EARTH, SPHERE). */
+  /** A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json
+   * `BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number. */
   EARTH: {
     ID: 3 as number,
-    /** The picture of the whole Earth, served under the Earth bake's version as its
-     * `SPHERE` (spec/spec/bake/publication.json). */
+    /** The picture of the whole Earth, (EARTH, SPHERE), served under the Earth layer's
+     * version as its `TILE_SPHERE` (spec/spec/bake/publication.json). */
     SPHERE: {
       ID: 0 as number,
     },

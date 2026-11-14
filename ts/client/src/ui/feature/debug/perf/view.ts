@@ -13,7 +13,7 @@ import {
   type Worst,
 } from "@/service/core/perf.ts";
 import type { LongFrame } from "@/service/platform/types.ts";
-import { longFramesSince } from "./long-frame.ts";
+import { long_frames_since } from "./long-frame.ts";
 
 const RECENT_TASKS = 20;
 
@@ -43,7 +43,7 @@ export const fps = (f: { n: f64; seconds: f64 }): f64 | null =>
  * frames not drawn, and the median interval stays at the display's refresh
  * until half the frames miss it, so neither shows this rate.
  */
-export const movingFps = (f: { moving: f64; moving_ms: f64 }): f64 | null =>
+export const moving_fps = (f: { moving: f64; moving_ms: f64 }): f64 | null =>
   f.moving >= 1 && f.moving_ms > 0 ? (1000 * f.moving) / f.moving_ms : null;
 
 /** The span the panel title's frame rate is taken over. It is short so that
@@ -64,9 +64,9 @@ export interface Gauge {
   view: ViewSection;
 }
 
-export async function perfGaugeRead(windowMs: f64): Promise<Gauge> {
+export async function perf_gauge_read(window_ms: f64): Promise<Gauge> {
   const [s, recent] = await Promise.all([
-    read("summary", windowMs),
+    read("summary", window_ms),
     read("summary", RECENT_MS),
   ]);
   return {
@@ -84,7 +84,7 @@ export async function perfGaugeRead(windowMs: f64): Promise<Gauge> {
   };
 }
 
-export async function perfReportRead(): Promise<PerfReport> {
+export async function perf_report_read(): Promise<PerfReport> {
   const [s, recent, worst] = await Promise.all([
     read("summary", null),
     read("tasks", RECENT_TASKS),
@@ -98,7 +98,7 @@ export async function perfReportRead(): Promise<PerfReport> {
     tasks: s.tasks,
     recent,
     worst,
-    longs: longFramesSince(-Infinity),
+    longs: long_frames_since(-Infinity),
     recording: s.recording,
     view: s.view,
   };

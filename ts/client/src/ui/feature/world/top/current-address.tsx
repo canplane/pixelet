@@ -14,7 +14,7 @@ import {
   alpha,
   color,
   SECONDARY,
-  textStyle,
+  text_style,
   weight,
 } from "@/ui/shared/component/theme.ts";
 
@@ -48,7 +48,11 @@ export function CurrentAddress() {
 
 const styles = StyleSheet.create({
   shrink: { flexShrink: 1, minWidth: 0 },
-  label: { ...textStyle.body, fontWeight: weight.semibold, color: color.white },
+  label: {
+    ...text_style.body,
+    fontWeight: weight.semibold,
+    color: color.white,
+  },
   numbers: { fontVariant: ["tabular-nums"] },
   locating: { color: alpha(color.white, SECONDARY) },
 });

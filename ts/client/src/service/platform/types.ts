@@ -145,10 +145,10 @@ export interface InputDriver {
   pinch(scale: f64): void;
   /** Returns whether the core took the key, in which case the page's default
    * action is prevented. */
-  keyDown(code: string, at: { inField: boolean }): boolean;
-  keyUp(code: string): void;
-  releaseKeys(): void;
-  releasePointers(): void;
+  key_down(code: string, at: { in_field: boolean }): boolean;
+  key_up(code: string): void;
+  release_keys(): void;
+  release_pointers(): void;
 }
 
 export interface WorldSurfaceProps {
@@ -172,10 +172,10 @@ export type LongFrameSource = "loaf" | "longtask";
 export interface LongFrame {
   source: LongFrameSource;
   t: f64;
-  durationMs: f64;
-  blockingMs: f64;
-  scriptMs: f64;
-  renderMs: f64;
+  duration_ms: f64;
+  blocking_ms: f64;
+  script_ms: f64;
+  render_ms: f64;
 }
 
 /** The CSS variable that a page's `useVisualViewport` keeps on its root on

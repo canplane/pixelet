@@ -3,10 +3,10 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { type FrameGroup, GROUPS, n1, valueText, zoomName } from "./column.ts";
+import { type FrameGroup, GROUPS, n1, val_text, zoom_name } from "./column.ts";
 
-const bytes = (b: number) => valueText("_bytes", b);
-import { failText } from "./report.ts";
+const bytes = (b: number) => val_text("_bytes", b);
+import { fail_text } from "./report.ts";
 import { fps, type Gauge } from "./view.ts";
 import { alpha, color } from "@/ui/shared/component/theme.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
@@ -35,8 +35,8 @@ export const Head = ({
   end?: ReactNode;
 }) => (
   <View style={gauge.head}>
-    <Text style={[gauge.text, gauge.headText]}>{children}</Text>
-    <View style={gauge.headLine} />
+    <Text style={[gauge.text, gauge.head_text]}>{children}</Text>
+    <View style={gauge.head_line} />
     {end}
   </View>
 );
@@ -53,7 +53,7 @@ const HIT_KIND_TEXT: Record<(typeof HIT_KINDS)[number], string> = {
   objects: "cubes, folded",
   decor: "decor",
 };
-const hitKindText = (k: number) => {
+const hit_kind_text = (k: number) => {
   const kind = HIT_KINDS[k];
   return kind === undefined ? "-" : HIT_KIND_TEXT[kind];
 };
@@ -89,12 +89,12 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
       <Row k="alt" v={meters(v.pivot_alt)} />
       <Head>Pointer</Head>
       <Row k="coord" v={coordinate(v.hover_x, v.hover_y, v.hover_z)} />
-      <Row k="drawn at" v={zoomName(v.cell_zoom)} />
+      <Row k="drawn at" v={zoom_name(v.cell_zoom)} />
       <Row
         k="hit"
         v={
           picked
-            ? hitKindText(v.hit_kind)
+            ? hit_kind_text(v.hit_kind)
             : Number.isNaN(v.hover_x)
               ? "-"
               : "nothing in reach"
@@ -104,7 +104,7 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
         k="hit/drawn at"
         v={
           picked
-            ? `${zoomName(v.pick_zoom)}/${zoomName(v.ray_zoom)}${folded ? " folded" : ""}`
+            ? `${zoom_name(v.pick_zoom)}/${zoom_name(v.ray_zoom)}${folded ? " folded" : ""}`
             : "-"
         }
         warn={folded}
@@ -115,7 +115,7 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
         v={
           Number.isNaN(v.place_zoom)
             ? "-"
-            : `${zoomName(v.place_zoom)}${v.blocked === 1 ? " blocked" : ""}`
+            : `${zoom_name(v.place_zoom)}${v.blocked === 1 ? " blocked" : ""}`
         }
         warn={v.blocked === 1}
       />
@@ -127,8 +127,8 @@ export function PerfRec({ rec }: { rec: Gauge["rec"] }) {
   return (
     <View style={gauge.rec}>
       <View style={gauge.row}>
-        <View style={gauge.recState}>
-          <View style={[gauge.recDot, rec.recording && gauge.recDotOn]} />
+        <View style={gauge.rec_state}>
+          <View style={[gauge.rec_dot, rec.recording && gauge.rec_dot_on]} />
           <Text style={[gauge.text, rec.recording && gauge.warn]}>
             {rec.recording ? "Recording" : "Stopped"}
           </Text>
@@ -195,7 +195,7 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
         <Row
           k="scale/drawn"
           v={`${fixed(f.last.scale, 2)}/${
-            f.gpu_px > 0 ? valueText("gpu_px", f.gpu_px) : "-"
+            f.gpu_px > 0 ? val_text("gpu_px", f.gpu_px) : "-"
           }`}
           warn={f.last.scale < 1}
         />
@@ -232,7 +232,7 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
               k={`${t.stream} failed`}
               v={`${t.err} of ${t.n}${
                 t.reasons.length > 0
-                  ? ` ${failText(t.reasons[0].fail, t.reasons[0].detail)}`
+                  ? ` ${fail_text(t.reasons[0].fail, t.reasons[0].detail)}`
                   : ""
               }`}
               warn
@@ -253,7 +253,7 @@ export const gauge = StyleSheet.create({
     color: alpha(color.white, 0.9),
   },
   key: { color: alpha(color.white, 0.45) },
-  warn: { color: color.perfHalt },
+  warn: { color: color.perf_halt },
   row: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   head: {
     flexDirection: "row",
@@ -264,17 +264,17 @@ export const gauge = StyleSheet.create({
   },
   // 10 is macOS's smallest text style: smaller text does not render on a 1x
   // screen.
-  headText: { fontSize: 10, color: alpha(color.white, 0.3) },
+  head_text: { fontSize: 10, color: alpha(color.white, 0.3) },
   rec: { marginTop: 8 },
-  recState: { flexDirection: "row", alignItems: "center", gap: 6 },
-  recDot: {
+  rec_state: { flexDirection: "row", alignItems: "center", gap: 6 },
+  rec_dot: {
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: alpha(color.white, 0.25),
   },
-  recDotOn: { backgroundColor: color.perfHalt },
-  headLine: {
+  rec_dot_on: { backgroundColor: color.perf_halt },
+  head_line: {
     flex: 1,
     borderTopWidth: 1,
     borderTopColor: alpha(color.white, 0.1),

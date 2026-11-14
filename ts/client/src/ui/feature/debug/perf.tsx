@@ -7,19 +7,19 @@ import { CheckSquareIcon, SquareIcon } from "phosphor-react-native";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { alpha, color, disabledContent } from "@/ui/shared/component/theme.ts";
+import { alpha, color, disabled_content } from "@/ui/shared/component/theme.ts";
 import { gauge, PerfGauge, PerfRec } from "./perf/gauge.tsx";
 import { Accordion, HINT_INK } from "./accordion.tsx";
 import { n1 } from "./perf/column.ts";
-import { perfReportCopy, perfReportText } from "./perf/report.ts";
-import { movingFps, perfReportRead } from "./perf/view.ts";
+import { perf_report_copy, perf_report_text } from "./perf/report.ts";
+import { moving_fps, perf_report_read } from "./perf/view.ts";
 import { LIVE_WINDOW_MS, usePerfGauge } from "./perf/poll.ts";
 import {
-  installLongFrameObservers,
-  longFramesClear,
+  install_long_frame_observers,
+  long_frames_clear,
 } from "./perf/long-frame.ts";
-import { perfTraceSave } from "./perf/trace.ts";
-import { SETTING, type SettingName, settingsIn } from "@/ui/shared/setting.ts";
+import { perf_trace_save } from "./perf/trace.ts";
+import { SETTING, type SettingName, settings_in } from "@/ui/shared/setting.ts";
 import { useCore } from "@/ui/shared/watch.ts";
 import * as perf from "@/service/core/perf.ts";
 import * as setting from "@/service/core/setting.ts";
@@ -35,7 +35,7 @@ interface TintLook {
   ground: string;
   ink: string;
   lit: string;
-  litInk: string;
+  lit_ink: string;
 }
 
 function hued(hue: string): TintLook {
@@ -44,7 +44,7 @@ function hued(hue: string): TintLook {
     ground: alpha(hue, 0.1),
     ink: hue,
     lit: alpha(hue, 0.2),
-    litInk: hue,
+    lit_ink: hue,
   };
 }
 
@@ -54,16 +54,16 @@ const TINT: Record<Tint, TintLook> = {
     ground: alpha(color.white, 0.05),
     ink: alpha(color.white, 0.6),
     lit: alpha(color.white, 0.1),
-    litInk: alpha(color.white, 0.9),
+    lit_ink: alpha(color.white, 0.9),
   },
-  [GO]: hued(color.perfGo),
-  [HALT]: hued(color.perfHalt),
+  [GO]: hued(color.perf_go),
+  [HALT]: hued(color.perf_halt),
   [OFF]: {
     border: alpha(color.white, 0.1),
     ground: alpha(color.white, 0.05),
     ink: alpha(color.white, 0.25),
     lit: alpha(color.white, 0.05),
-    litInk: alpha(color.white, 0.25),
+    lit_ink: alpha(color.white, 0.25),
   },
 };
 
@@ -116,8 +116,8 @@ function PanelButton({
         <Text
           style={[
             gauge.text,
-            { color: hovered || pressed ? t.litInk : t.ink },
-            disabled && { opacity: disabledContent },
+            { color: hovered || pressed ? t.lit_ink : t.ink },
+            disabled && { opacity: disabled_content },
           ]}
         >
           {label}
@@ -136,7 +136,7 @@ type Own = {
 /** Each own setting is a checkbox under the buttons. It can change only while
  * the window is stopped, because a change in the middle of a window would
  * leave the window's frames counted in two ways. A setting that exists only
- * in development is missing from a production build (`settingsIn`), and so
+ * in development is missing from a production build (`settings_in`), and so
  * is its box. */
 const OWN: Record<Own, { label: string; note: string }> = {
   ray_cnt: { label: "Ray counts", note: "into the report; slows the casts" },
@@ -156,10 +156,10 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
       style={[
         gauge.row,
         styles.check,
-        disabled && { opacity: disabledContent },
+        disabled && { opacity: disabled_content },
       ]}
     >
-      <View style={styles.checkLabel}>
+      <View style={styles.check_label}>
         <Box
           size={18}
           color={gauge.text.color}
@@ -174,9 +174,9 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
   );
 }
 
-function restartWindow(): void {
+function restart_window(): void {
   perf.start();
-  longFramesClear();
+  long_frames_clear();
 }
 
 export function PerfPanel() {
@@ -198,14 +198,14 @@ export function PerfPanel() {
     // The ring is cleared before the observers are installed. The observers
     // replay the long frames the page has buffered since it loaded, so a
     // panel that is on from boot shows the boot's long frames.
-    longFramesClear();
-    installLongFrameObservers();
+    long_frames_clear();
+    install_long_frame_observers();
   }, [show]);
 
   if (!show) return null;
   const recording = g?.rec.recording === true;
   const r = g?.recent ?? null;
-  const rate = r === null ? null : movingFps(r);
+  const rate = r === null ? null : moving_fps(r);
   const note =
     rate !== null ? `${n1(rate)} fps` : recording ? "idle" : undefined;
 
@@ -229,7 +229,7 @@ export function PerfPanel() {
           label={recording ? "Restart" : "Start"}
           hint="clear everything and begin a fresh window"
           tint={recording ? PLAIN : GO}
-          onPress={restartWindow}
+          onPress={restart_window}
         />
         <PanelButton
           onHint={setHint}
@@ -244,8 +244,8 @@ export function PerfPanel() {
           label="Report"
           hint="copy the window's summary as text"
           onPress={() =>
-            void perfReportRead()
-              .then((r) => perfReportCopy(perfReportText(r)))
+            void perf_report_read()
+              .then((r) => perf_report_copy(perf_report_text(r)))
               .then(setSaid)
           }
         />
@@ -253,10 +253,10 @@ export function PerfPanel() {
           onHint={setHint}
           label="Trace"
           hint="save the window as a timeline for ui.perfetto.dev"
-          onPress={() => void perfTraceSave().then(setSaid)}
+          onPress={() => void perf_trace_save().then(setSaid)}
         />
       </View>
-      {(settingsIn("perf") as Own[]).map((name) => (
+      {(settings_in("perf") as Own[]).map((name) => (
         <OwnCheck key={name} name={name} disabled={recording} />
       ))}
       {/* The hint shows under the buttons. Above them, a hint that wraps to two
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
   },
   body: { flexShrink: 1 },
   check: { alignItems: "center", marginTop: 6 },
-  checkLabel: { flexDirection: "row", alignItems: "center", gap: 6 },
+  check_label: { flexDirection: "row", alignItems: "center", gap: 6 },
   note: { flexShrink: 1, textAlign: "right" },
   buttons: { flexDirection: "row", gap: 4, marginTop: 8 },
   button: {

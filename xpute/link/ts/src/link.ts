@@ -5,7 +5,8 @@
  * link/wit/types.wit). Whatever is called is an object, called by its methods
  * under a handle: an interface's named handle, the hash of its name (frame.json
  * `NAMED`), or a resource's, named by a URI, a tuple of tokens, and opened by
- * the root's `open` to a handle the serving side issues. A frame is one method called: its tag the request,
+ * the root's `open` to a handle the serving side issues, or answered by a
+ * function that returns it. A frame is one method called: its tag the request,
  * unique among the sender's pending ones, its command the handle, the method
  * and a RES bit (frame.ts), its packet the args in the Canonical ABI's layout
  * (cabi.ts). A frame crosses one way
@@ -14,7 +15,8 @@
  * RES with the request's tag. `call` takes what the crossing returns, for a
  * method that always answers at once, and stops as a bug on EINPROGRESS; `send`
  * hands it to its answer, and an `async func` is sent; `mount_named` serves an
- * interface under its named handle, and `mount` puts the opener of the
+ * interface under its named handle, `add` an object under a handle issued for
+ * a function to answer, and `mount` puts the opener of the
  * resources the host serves under a URI's leading tokens, the longest matching
  * winning; `on_cancel` puts what runs if a request it serves is
  * canceled.
@@ -45,11 +47,14 @@ import {
   ERRNO_EINPROGRESS,
   ERRNO_EMSGSIZE,
   ERRNO_ENOENT,
+  ERRNO_ENOTRECOVERABLE,
+  ERRNO_EPIPE,
 } from "@xpute/kit/status/errno.spec.ts";
-import { InvariantError, MarshalError, XputeError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
+import { bug } from "@xpute/kit/status/bug.ts";
 import { Lift, Lower } from "./cabi.ts";
 import { load_Token, store_Token, type Token, TOKEN_ALIGN, TOKEN_SZ } from "./abi/types.ts";
-import { lay, read, WORD_BYTES } from "./frame.ts";
+import { lay, read, WORD_SZ } from "./frame.ts";
 import { CANCEL, DROP, NAMED, OPEN, ROOT } from "./frame.spec.ts";
 import { type Handle, Table } from "./resource.ts";
 
@@ -122,7 +127,7 @@ export async function open(link: Sender, uri: readonly Token[]): Promise<Handle>
     },
   ]);
   if (a.result !== 0) throw new XputeError(a.result);
-  if (a.data === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (a.data === null) throw new XputeError(ERRNO_EBADMSG);
   return new Lift(a.data).u32(0);
 }
 
@@ -143,15 +148,30 @@ export class ComponentError<P = unknown> extends Error {
   }
 }
 
-/** The errno a method refuses with: an XputeError's. Anything else is a bug,
- * thrown on. */
+/** What a failure of the serving side's own is handed (`set_hook`). */
+let hook: ((e: unknown) => void) | null = null;
+
+/** Installs what a failure of the serving side's own, a throw out of its
+ * answer to the guest's import (`imports`), is handed, as Rust's panic hook
+ * is (a host's `hook`). Only the first call takes effect. */
+export function set_hook(h: (e: unknown) => void): void {
+  hook ??= h;
+}
+
+/** The errno a method refuses with: an XputeError's. Anything else, a `Bug`
+ * or any other throw, is a failure of the serving side's own, thrown on: out
+ * of a method answered at once, to what called it (on the host, the guest's
+ * import, `imports`; on the UI, its port's message handler, `Remote`); out of
+ * one answered later, on either side, as a rejection no one handles. */
 export function refusal_of(e: unknown): i32 {
-  if (e instanceof XputeError && !(e instanceof InvariantError)) return e.errnum;
+  if (e instanceof XputeError) return e.errnum;
   throw e;
 }
 
-/** What the host holds of its guest: the guest's memory, and its three
- * exports (link/wit/types.wit). */
+/** What the host holds of its guest: the guest's memory, its three exports
+ * (link/wit/types.wit), and its platform's report of a trap (`trap`). An
+ * export the guest traps in traps the link (`Link.trap`) and answers on,
+ * throwing nothing: link_in EPIPE, as a trapped guest's request is answered. */
 export interface Guest {
   readonly mem: ArrayBuffer;
   /** link_init: where the link's layout lies, the inbox and a frame's room. */
@@ -160,6 +180,9 @@ export interface Guest {
   boot(): void;
   /** link_in: the frame laid in the inbox. */
   in(): i32;
+  /** Tells the guest's platform the guest trapped, with the error `e`
+   * (`Link.trap`). */
+  trap(e: unknown): void;
 }
 
 export class Link {
@@ -176,12 +199,41 @@ export class Link {
   private readonly _cancels = new Map<Tag, () => void>();
   private _next: Tag = 0;
   private readonly _guest: Guest;
+  /** Whether the guest is trapped (`trap`). */
+  private _trapped = false;
   private _inbox = 0;
   private _room = 0;
 
-  /** The guest's import, which a module takes under `env`. */
+  /** The guest's import, which a module takes under `env`
+   * (xpute-native-runtime link.rs `link_out`). A throw out of the host while
+   * it answers is a failure of its own: it is handed to the hook, the guest is
+   * trapped, and its call is answered ENOTRECOVERABLE, so nothing unwinds
+   * through it. Once trapped, a frame is not served: EPIPE. */
   static imports(link: () => Link) {
-    return { link_out: (at: u32): i32 => link()._recv(at) };
+    return {
+      link_out: (at: u32): i32 => {
+        const l = link();
+        if (l._trapped) return ERRNO_EPIPE;
+        try {
+          return l._recv(at);
+        } catch (e) {
+          hook?.(e);
+          l.trap(e);
+          return ERRNO_ENOTRECOVERABLE;
+        }
+      },
+    };
+  }
+
+  /** Stops the guest for good, and answers whether it did just now, the guest
+   * not having trapped already: it is entered no more, a frame sent to it or
+   * laid by it answering EPIPE, and its platform is told (`Guest.trap`), as
+   * xpute-native-runtime link.rs `trap`. */
+  trap(e: unknown): boolean {
+    if (this._trapped) return false;
+    this._trapped = true;
+    this._guest.trap(e);
+    return true;
   }
 
   constructor(guest: Guest) {
@@ -190,13 +242,17 @@ export class Link {
 
   /** Enters the guest first, once the host's own objects are mounted: the
    * guest lays its link, the host reads its layout, and then the guest
-   * boots, and may open them. */
-  init(): void {
+   * boots, and may open them. False where the link trapped meanwhile, the
+   * guest's trap or a failure of the host's (xpute-native-runtime link.rs
+   * `init`). */
+  init(): boolean {
     const at = this._guest.init();
+    if (this._trapped) return false;
     const layout = new DataView(this._guest.mem, at, 8);
     this._inbox = layout.getUint32(0, true);
     this._room = layout.getUint32(4, true);
     this._guest.boot();
+    return !this._trapped;
   }
 
   mount(prefix: readonly Token[], open: Opener): void {
@@ -205,7 +261,7 @@ export class Link {
 
   call(h: Handle, m: Method, args: Packet = null): Answered {
     const answered = this._out(this._tag(), h, m, false, 0, args);
-    if (answered.result === ERRNO_EINPROGRESS) throw new InvariantError(ERRNO_EINPROGRESS);
+    if (answered.result === ERRNO_EINPROGRESS) bug(ERRNO_EINPROGRESS);
     return answered;
   }
 
@@ -238,8 +294,14 @@ export class Link {
   /** Serves `o` under its interface's named handle `h`, which the guest
    * calls with no open. */
   mount_named(h: Handle, o: LinkObject): void {
-    if (this._named.has(h)) throw new InvariantError(ERRNO_EEXIST);
+    if (this._named.has(h)) bug(ERRNO_EEXIST);
     this._named.set(h, o);
+  }
+
+  /** Serves `o` under a handle issued for it, which a method answers for the
+   * other side to call `o` by: a resource a function returns. */
+  add(o: LinkObject): Handle {
+    return this._objects.add(o);
   }
 
   /** Puts `stop` as what runs if the caller cancels the request `t` the host
@@ -266,7 +328,7 @@ export class Link {
     if (f.res) {
       const a = this._pending.get(f.tag);
       this._pending.delete(f.tag);
-      const data = f.pkt_len > 0 ? this.bytes(at + WORD_BYTES, f.pkt_len).slice() : null;
+      const data = f.pkt_len > 0 ? this.bytes(at + WORD_SZ, f.pkt_len).slice() : null;
       if (a !== undefined) queueMicrotask(() => a(f.result, data));
       return 0;
     }
@@ -319,7 +381,7 @@ export class Link {
   /** Opens the object the args' URI names, by the opener of its longest
    * matching mount, and issues its handle. */
   private _opened(args: U8Array | null): Handle {
-    if (args === null) throw new MarshalError(ERRNO_EBADMSG);
+    if (args === null) throw new XputeError(ERRNO_EBADMSG);
     const r = new Lift(args);
     const uri = r.map(0, TOKEN_SZ, TOKEN_ALIGN, (at) => load_Token(r, at));
     let best: [readonly Token[], Opener] | undefined;
@@ -352,8 +414,8 @@ export class Link {
   /** The args of the frame at `at`, or EBADMSG for a packet past the room. */
   private _args(at: u32, pkt_len: u32): U8Array | null | i32 {
     if (pkt_len === 0) return null;
-    if (WORD_BYTES + pkt_len > this._room) return ERRNO_EBADMSG;
-    return this.bytes(at + WORD_BYTES, pkt_len);
+    if (WORD_SZ + pkt_len > this._room) return ERRNO_EBADMSG;
+    return this.bytes(at + WORD_SZ, pkt_len);
   }
 
   /** Lays a frame at `at` in the guest's memory, with the packet `args`: 0,
@@ -364,11 +426,11 @@ export class Link {
     const view = new DataView(this._guest.mem, at, this._room);
     let pkt_len = 0;
     if (args instanceof Uint8Array) {
-      if (WORD_BYTES + args.length > this._room) return ERRNO_EMSGSIZE;
-      bytes.set(args, WORD_BYTES);
+      if (WORD_SZ + args.length > this._room) return ERRNO_EMSGSIZE;
+      bytes.set(args, WORD_SZ);
       pkt_len = args.length;
     } else if (args !== null) {
-      const w = new Lower(bytes.subarray(WORD_BYTES), args[0]);
+      const w = new Lower(bytes.subarray(WORD_SZ), args[0]);
       args[1](w);
       pkt_len = w.finish();
       if (pkt_len < 0) return ERRNO_EMSGSIZE;
@@ -382,18 +444,20 @@ export class Link {
    * room is refused: a packet written elsewhere, as one from across a port,
    * is its sender's fault, answered EMSGSIZE; a later answer's is answered
    * EMSGSIZE with no data, so its request still hears; args this side
-   * writes past it are a bug (xpute-link link.rs `Side::out`). */
+   * writes past it are a bug (xpute-link link.rs `Side::out`). A trapped
+   * guest is sent nothing: EPIPE, its layout perhaps never read. */
   private _out(tag: Tag, h: Handle, m: Method, res: boolean, result: i32, args: Packet): Answered {
+    if (this._trapped) return { result: ERRNO_EPIPE, data: null };
     if (this._lay(this._inbox, tag, h, m, res, result, args) !== 0) {
       if (!res) {
-        if (!(args instanceof Uint8Array)) throw new InvariantError(ERRNO_EMSGSIZE);
+        if (!(args instanceof Uint8Array)) bug(ERRNO_EMSGSIZE);
         return { result: ERRNO_EMSGSIZE, data: null };
       }
       this._lay(this._inbox, tag, h, m, res, ERRNO_EMSGSIZE, null);
     }
     const answered = this._guest.in();
     const f = read(new DataView(this._guest.mem), this._inbox);
-    const data = f.res && !res && f.pkt_len > 0 ? this.bytes(this._inbox + WORD_BYTES, f.pkt_len) : null;
+    const data = f.res && !res && f.pkt_len > 0 ? this.bytes(this._inbox + WORD_SZ, f.pkt_len) : null;
     return { result: answered, data };
   }
 }

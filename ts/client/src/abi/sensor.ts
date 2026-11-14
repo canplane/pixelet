@@ -10,7 +10,7 @@ import {
 } from "./sensor.enum.ts";
 import type { Sensor } from "./types.enum.ts";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError, XputeError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import type { Lift } from "@xpute/link/cabi.ts";
 import type { Handle, Method, Sender } from "@xpute/link/link.ts";
 
@@ -35,13 +35,13 @@ export function load_GeolocationErrorCode(
   at: number,
 ): GeolocationErrorCode {
   const v = of_GeolocationErrorCode(r.case(at, 4));
-  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (v === null) throw new XputeError(ERRNO_EBADMSG);
   return v;
 }
 
 export function load_PermissionAnswer(r: Lift, at: number): PermissionAnswer {
   const v = of_PermissionAnswer(r.case(at, 4));
-  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (v === null) throw new XputeError(ERRNO_EBADMSG);
   return v;
 }
 
@@ -60,15 +60,15 @@ export async function pos(
       w_.f64(8, lat);
       if (alt !== null) {
         w_.u8(16, 1);
-        w_.f64(16 + 8, alt);
+        w_.f64(24, alt);
       }
       if (accuracy !== null) {
         w_.u8(32, 1);
-        w_.f64(32 + 8, accuracy);
+        w_.f64(40, accuracy);
       }
       if (course !== null) {
         w_.u8(48, 1);
-        w_.f64(48 + 8, course);
+        w_.f64(56, course);
       }
     },
   ]);
@@ -87,19 +87,19 @@ export async function orient(
     (w_) => {
       if (webkit_compass_heading !== null) {
         w_.u8(0, 1);
-        w_.f64(0 + 8, webkit_compass_heading);
+        w_.f64(8, webkit_compass_heading);
       }
       if (alpha !== null) {
         w_.u8(16, 1);
-        w_.f64(16 + 8, alpha);
+        w_.f64(24, alpha);
       }
       if (beta !== null) {
         w_.u8(32, 1);
-        w_.f64(32 + 8, beta);
+        w_.f64(40, beta);
       }
       if (gamma !== null) {
         w_.u8(48, 1);
-        w_.f64(48 + 8, gamma);
+        w_.f64(56, gamma);
       }
     },
   ]);
@@ -118,7 +118,7 @@ export async function err(
       w_.u8(0, sensor);
       if (code !== null) {
         w_.u8(1, 1);
-        w_.u8(1 + 1, code);
+        w_.u8(2, code);
       }
       w_.bool(3, watching);
     },

@@ -27,7 +27,7 @@ use crate::domain::scene::gizmo::frame::frame_gizmo_step;
 use crate::domain::scene::marker::atlas;
 use crate::domain::scene::model::draw_list;
 use crate::domain::setting::store::{settings, AoMode};
-use crate::domain::view::demand::ViewLayer as _;
+use crate::domain::view::demand::DemandedBase as _;
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::load::Load;
 use crate::sys::sched::invalidate;

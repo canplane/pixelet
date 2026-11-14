@@ -22,7 +22,7 @@ import {
   material,
   shadow,
 } from "@/ui/shared/component/theme.ts";
-import { selectScale, useScale } from "./store.ts";
+import { select_scale, useScale } from "./store.ts";
 import { OBJECT_SCALE_CNT } from "@/ui/feature/world/object.spec.ts";
 import { DOCK_HEIGHT } from "./card.tsx";
 import { type SizeGesture, STRIP } from "./strip.tsx";
@@ -37,8 +37,8 @@ const POPOVER_PITCH = chrome.target + POPOVER_GAP_PX;
  * mark's area rather than its width, so that the finest mark stays visible:
  * 28, 20, 14 and 10 pixels. */
 const MARK_COARSEST = 28;
-function sizeMark(scaleStep: i32): f64 {
-  return round(MARK_COARSEST * Math.SQRT2 ** scaleStep);
+function size_mark(scale_step: i32): f64 {
+  return round(MARK_COARSEST * Math.SQRT2 ** scale_step);
 }
 
 /** The scales from top to bottom. The finest comes first, so that the
@@ -55,11 +55,11 @@ const SEED = 10;
  * which size is held. */
 const FLASH_MS = 900;
 
-/** `centerX` is the swatch's center, measured from the bar's left edge. `bar`
+/** `center_x` is the swatch's center, measured from the bar's left edge. `bar`
  * is the bar's top-left corner in the window, and the bar's top is the
  * card's. */
 export interface Popover {
-  centerX: f64;
+  center_x: f64;
   bar: [f64, f64];
   highlighted: i32 | null;
   /** Whether the sizes are open. Otherwise only the seed shows. */
@@ -68,8 +68,8 @@ export interface Popover {
 
 /** The scale whose mark lies under `x` and `y`, which are in the window's
  * coordinates, as the responder gives them. */
-function scaleAt(at: Popover, x: f64, y: f64): i32 | null {
-  if (Math.abs(x - at.bar[0] - at.centerX) > POPOVER_WIDTH / 2) return null;
+function scale_at(at: Popover, x: f64, y: f64): i32 | null {
+  if (Math.abs(x - at.bar[0] - at.center_x) > POPOVER_WIDTH / 2) return null;
   const top =
     at.bar[1] -
     POPOVER_LIFT_PX -
@@ -91,18 +91,18 @@ export function usePopover(bar: React.RefObject<View | null>): {
   // Measuring the swatch takes a moment, and the finger can lift before the
   // measurement arrives. A measurement that arrives after the lift is dropped.
   const pressing = useRef(false);
-  const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+  const flash_timer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
 
   const gesture: Omit<SizeGesture, "press"> = {
-    pressIn: (swatch) => {
+    press_in: (swatch) => {
       pressing.current = true;
       swatch.measureInWindow((sx, _sy, sw) => {
         bar.current?.measureInWindow((bx, by) => {
           if (!pressing.current) return;
           setPopover({
-            centerX: sx + sw / 2 - bx,
+            center_x: sx + sw / 2 - bx,
             bar: [bx, by],
             highlighted: null,
             open: false,
@@ -111,30 +111,30 @@ export function usePopover(bar: React.RefObject<View | null>): {
       });
     },
     flash: (swatch, open) => {
-      clearTimeout(flashTimer.current);
+      clearTimeout(flash_timer.current);
       swatch.measureInWindow((sx, _sy, sw) => {
         bar.current?.measureInWindow((bx, by) =>
           setPopover({
-            centerX: sx + sw / 2 - bx,
+            center_x: sx + sw / 2 - bx,
             bar: [bx, by],
             highlighted: null,
             open,
           }),
         );
       });
-      flashTimer.current = setTimeout(() => setPopover(null), FLASH_MS);
+      flash_timer.current = setTimeout(() => setPopover(null), FLASH_MS);
     },
-    longPress: () => setPopover((f) => f && { ...f, open: true }),
+    long_press: () => setPopover((f) => f && { ...f, open: true }),
     move: (x, y) => {
       if (!popover?.open) return;
-      const highlighted = scaleAt(popover, x, y);
+      const highlighted = scale_at(popover, x, y);
       if (highlighted !== popover.highlighted) {
         setPopover({ ...popover, highlighted });
       }
     },
     release: (x, y) => {
-      const scaleStep = popover?.open ? scaleAt(popover, x, y) : null;
-      if (scaleStep !== null) selectScale(scaleStep);
+      const scale_step = popover?.open ? scale_at(popover, x, y) : null;
+      if (scale_step !== null) select_scale(scale_step);
     },
     end: () => {
       pressing.current = false;
@@ -151,9 +151,9 @@ export function SizePopover({ popover }: { popover: Popover }) {
   return (
     <View
       style={[
-        styles.popoverAt,
-        popover.open ? styles.popoverTakes : touches.block,
-        { left: popover.centerX - POPOVER_WIDTH / 2 },
+        styles.popover_at,
+        popover.open ? styles.popover_takes : touches.block,
+        { left: popover.center_x - POPOVER_WIDTH / 2 },
       ]}
     >
       {popover.open ? (
@@ -181,28 +181,28 @@ function SizeMarks({ highlighted }: { highlighted: i32 | null }) {
       place={BackingPlace.OverMap}
       style={styles.popover}
     >
-      {SCALES.map((scaleStep) => {
-        const mark = sizeMark(scaleStep);
+      {SCALES.map((scale_step) => {
+        const mark = size_mark(scale_step);
         return (
           <View
-            key={scaleStep}
+            key={scale_step}
             accessibilityLabel={t("world.dock.object_size", {
-              n: OBJECT_SCALE_CNT + scaleStep,
+              n: OBJECT_SCALE_CNT + scale_step,
             })}
-            style={styles.popoverItem}
+            style={styles.popover_item}
           >
             <Motion
-              to={{ scale: highlighted === scaleStep ? 1.25 : 1 }}
+              to={{ scale: highlighted === scale_step ? 1.25 : 1 }}
               transition={SNAP}
             >
               <View
                 style={[
                   { width: mark, height: mark, borderRadius: mark / 2 },
-                  highlighted === scaleStep
-                    ? styles.markHighlighted
-                    : scale === scaleStep
-                      ? styles.markCurrent
-                      : styles.markIdle,
+                  highlighted === scale_step
+                    ? styles.mark_highlighted
+                    : scale === scale_step
+                      ? styles.mark_cur
+                      : styles.mark_idle,
                 ]}
               />
             </Motion>
@@ -214,7 +214,7 @@ function SizeMarks({ highlighted }: { highlighted: i32 | null }) {
 }
 
 const styles = StyleSheet.create({
-  popoverAt: {
+  popover_at: {
     position: "absolute",
     bottom: DOCK_HEIGHT + POPOVER_LIFT_PX,
     width: POPOVER_WIDTH,
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
   },
   // The open sizes take every pointer event, so that the world under them
   // shows no hover.
-  popoverTakes: { pointerEvents: "box-only" },
+  popover_takes: { pointerEvents: "box-only" },
   seed: {
     alignSelf: "center",
     width: SEED,
@@ -237,15 +237,15 @@ const styles = StyleSheet.create({
     borderRadius: POPOVER_WIDTH / 2,
     boxShadow: shadow.lift,
   },
-  popoverItem: {
+  popover_item: {
     width: chrome.target,
     height: chrome.target,
     alignItems: "center",
     justifyContent: "center",
   },
-  markIdle: { backgroundColor: alpha(STRIP.mark, 0.4) },
-  markCurrent: { backgroundColor: alpha(STRIP.mark, 0.8) },
-  markHighlighted: {
+  mark_idle: { backgroundColor: alpha(STRIP.mark, 0.4) },
+  mark_cur: { backgroundColor: alpha(STRIP.mark, 0.8) },
+  mark_highlighted: {
     backgroundColor: STRIP.mark,
     boxShadow: `0 0 0 1px ${STRIP.mark}`,
   },

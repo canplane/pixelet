@@ -62,7 +62,7 @@ export const color = {
   panic: "#0069DC",
 
   /** iOS's label gray in light mode. */
-  labelGray: "#3C3C43",
+  label_gray: "#3C3C43",
   band: SYSTEM.dark,
   send: CORAL.base,
   /** The send button takes this color when it sets a marker's words, so that
@@ -74,8 +74,8 @@ export const color = {
   self: CORAL.mark,
   /** The status colors mixed toward white, for a sensor glyph drawn over the
    * world. */
-  pendingGlyph: tint(SYSTEM.orange, 0.6),
-  alarmGlyph: tint(SYSTEM.red, 0.6),
+  pending_glyph: tint(SYSTEM.orange, 0.6),
+  alarm_glyph: tint(SYSTEM.red, 0.6),
 
   fill: FILL,
   /** iOS's tertiary system fill. */
@@ -87,12 +87,12 @@ export const color = {
   /** The backdrop behind a character drawn on its own surface. */
   backdrop: tint(FILL, 0.4, GROUND),
 
-  costLow: SYSTEM.green,
-  costMedium: SYSTEM.orange,
-  costHigh: SYSTEM.red,
+  cost_low: SYSTEM.green,
+  cost_medium: SYSTEM.orange,
+  cost_high: SYSTEM.red,
   dev: SYSTEM.purple,
-  perfGo: SYSTEM.green,
-  perfHalt: SYSTEM.yellow,
+  perf_go: SYSTEM.green,
+  perf_halt: SYSTEM.yellow,
 } as const;
 
 /** Colors of a surface that an iPhone draws as system glass and the other
@@ -128,7 +128,7 @@ export const material = {
 
 /** The opacity of a disabled button's content. As on iOS, only the content
  * dims, never the glass under it. */
-export const disabledContent = 0.4;
+export const disabled_content = 0.4;
 
 export const shadow = { lift: "0 6px 20px rgba(0, 0, 0, 0.25)" } as const;
 
@@ -137,12 +137,12 @@ export const shadow = { lift: "0 6px 20px rgba(0, 0, 0, 0.25)" } as const;
  * opacity `ring`. */
 export const halo = { width: 2, ring: 0.3 } as const;
 
-export const haloRings: readonly number[] = Array.from(
+export const halo_rings: readonly number[] = Array.from(
   { length: halo.width },
   (_, i) => halo.width - i,
 );
 
-export const hairline = alpha(color.labelGray, 0.1);
+export const hairline = alpha(color.label_gray, 0.1);
 
 export const weight = {
   regular: "400",
@@ -152,7 +152,7 @@ export const weight = {
 
 /** Apple's text styles, each a step smaller, because the chrome floats over
  * the world. */
-export const textStyle = {
+export const text_style = {
   title2: {
     fontSize: 20,
     lineHeight: 25,
@@ -199,10 +199,10 @@ export const textStyle = {
  * to 1.2×. A mark, such as a setting's badge, does not grow, because its size
  * is its shape. Running text has no entry here and follows the setting in
  * full. */
-export const textScale = { chrome: 1.2, mark: 1 } as const;
+export const text_scale = { chrome: 1.2, mark: 1 } as const;
 
-export const sectionTitle = {
-  ...textStyle.caption,
+export const section_title = {
+  ...text_style.caption,
   fontWeight: weight.medium,
   letterSpacing: 0.6,
   textTransform: "uppercase",
@@ -221,7 +221,7 @@ export const layer = {
 export const chrome = {
   inset: 16,
   control: 48,
-  controlGap: 8,
+  control_gap: 8,
   /** The smallest touch target Apple's guidelines allow. */
   target: 44,
   glyph: 20,

@@ -28,8 +28,8 @@ export interface Host {
   ): void;
 }
 
-/** The object over `imp`. */
-function object(imp: Host): LinkObject {
+/** The object over `implementation`. */
+function object(implementation: Host): LinkObject {
   return {
     call(m, tag, args) {
       try {
@@ -37,7 +37,7 @@ function object(imp: Host): LinkObject {
           case STOPPED: {
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
-            imp.stopped(
+            implementation.stopped(
               r_.i32(0),
               r_.str(4),
               r_.u32(12),
@@ -56,7 +56,10 @@ function object(imp: Host): LinkObject {
   };
 }
 
-/** Serves `imp` under the interface's handle. */
-export function mount(l: Pick<Link, "mount_named">, imp: Host): void {
-  l.mount_named(HANDLE, object(imp));
+/** Serves `implementation` under the interface's handle. */
+export function mount(
+  l: Pick<Link, "mount_named">,
+  implementation: Host,
+): void {
+  l.mount_named(HANDLE, object(implementation));
 }

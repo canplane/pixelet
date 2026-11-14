@@ -6,29 +6,7 @@
 // each is served is the bucket's alone: its `source`, which the client reads
 // at boot and script/publish.py writes, so a publish changes nothing here.
 
-/// The format each bake writes now, which a published name begins with.
-/// It is bumped by a change to how the client reads a tile, or to what a
-/// tile guarantees it.
-pub mod format {
-    pub const TERRAIN: u32 = 12;
-    pub const PLACE: u32 = 10;
-    pub const DIVISION: u32 = 9;
-    pub const EARTH: u32 = 2;
-}
-
-/// What a version is written in: one segment of a tile's URL, with no character it would
-/// have to escape.
-pub const VERSION_CHARS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-";
-
-/// The longest version a declaration may name, in bytes: one segment of a tile's URL,
-/// before its name (pxl-spec bake/source.rs `is_version`).
-pub const VERSION_BYTES: usize = 32;
-
-/// The Earth's picture whole, in place of a tile's name under the earth
-/// layer's version: the sphere's, no tile of the pyramid.
-pub const TILE_SPHERE: &str = "sphere";
-
-/// The base layers a version is published for: the kinds of `FORMAT`, numbered in their order.
+/// The base layers a version is published for, each a kind a baked page is published under.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum BaseLayer {
@@ -69,6 +47,24 @@ impl BaseLayer {
     }
 }
 
+/// The format each bake writes now, which a published name begins with.
+/// It is bumped by a change to how the client reads a tile, or to what a
+/// tile guarantees it.
+/// By `BaseLayer`'s number.
+pub const FORMAT: [u32; 4] = [12, 10, 9, 2];
+
+/// What a version is written in: one segment of a tile's URL, with no character it would
+/// have to escape.
+pub const VERSION_CHARS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-";
+
+/// The longest version a declaration may name, in bytes: one segment of a tile's URL,
+/// before its name (pxl-spec bake/source.rs `is_version`).
+pub const VERSION_BYTES: usize = 32;
+
+/// The Earth's picture whole, in place of a tile's name under the earth
+/// layer's version: the sphere's, no tile of the pyramid.
+pub const TILE_SPHERE: &str = "sphere";
+
 /// A kind's object in a published set, the one place its segments are
 /// ordered: the version its source declares, then the tile's name. A version
 /// is a folder its tiles go up in whole (script/publish.py), so it comes
@@ -88,16 +84,4 @@ pub fn tile_object_parts(object: &str) -> Option<(&str, &str)> {
     let mut segment = object.split('/');
     let (version, name) = (segment.next()?, segment.next()?);
     segment.next().is_none().then_some((version, name))
-}
-
-impl BaseLayer {
-    /// The format the layer is baked and read in, `FORMAT[layer]`.
-    pub const fn format(self) -> u32 {
-        match self {
-            BaseLayer::Terrain => format::TERRAIN,
-            BaseLayer::Place => format::PLACE,
-            BaseLayer::Division => format::DIVISION,
-            BaseLayer::Earth => format::EARTH,
-        }
-    }
 }

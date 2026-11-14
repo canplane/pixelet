@@ -30,8 +30,8 @@ import {
   type Transition,
 } from "@/ui/shared/component/motion/transition.ts";
 import { useDim } from "@/ui/shared/component/motion/dim.ts";
-import { touchOutset } from "@/ui/shared/component/touch.ts";
-import { pillStyles } from "./pill-style.ts";
+import { touch_outset } from "@/ui/shared/component/touch.ts";
+import { pill_styles } from "./pill-style.ts";
 
 export interface PillProps {
   x: f64;
@@ -81,13 +81,13 @@ export function Pill({
     borderRadius: r,
     ...(border && { borderWidth: border.width, borderColor: border.color }),
   };
-  const clipLeft = {
+  const clip_left = {
     left: -SHADOW_ROOM,
     top: -SHADOW_ROOM,
     width: SHADOW_ROOM + r,
     height: height + 2 * SHADOW_ROOM,
   };
-  const clipRight = {
+  const clip_right = {
     left: r,
     top: -SHADOW_ROOM,
     width: span - r + SHADOW_ROOM,
@@ -100,7 +100,7 @@ export function Pill({
     width: span,
     height,
   };
-  const outset = touch ? touchOutset(height) : 0;
+  const outset = touch ? touch_outset(height) : 0;
 
   return (
     <Motion to={{ translateX: x }} transition={transition} style={styles.at}>
@@ -124,7 +124,7 @@ export function Pill({
             collapsable={false}
             {...touch}
             style={[
-              touch ? pillStyles.target : pillStyles.box,
+              touch ? pill_styles.target : pill_styles.box,
               {
                 left: -outset,
                 top: -outset,
@@ -136,13 +136,13 @@ export function Pill({
             <View
               collapsable={false}
               style={[
-                pillStyles.box,
+                pill_styles.box,
                 { left: outset, top: outset, width, height },
               ]}
             >
               {shadow && (
                 <>
-                  <View style={[styles.clip, clipLeft]}>
+                  <View style={[styles.clip, clip_left]}>
                     <View
                       style={{
                         position: "absolute",
@@ -155,7 +155,7 @@ export function Pill({
                       }}
                     />
                   </View>
-                  <View style={[styles.clip, clipRight]}>
+                  <View style={[styles.clip, clip_right]}>
                     <Motion
                       to={{ translateX: slide }}
                       transition={transition}
@@ -186,7 +186,7 @@ export function Pill({
                   },
                 ]}
               />
-              <View style={[styles.clip, clipRight]}>
+              <View style={[styles.clip, clip_right]}>
                 <Motion
                   to={{ translateX: slide }}
                   transition={transition}
@@ -210,7 +210,7 @@ export function Pill({
                     onContentWidth &&
                     ((e) => onContentWidth(e.nativeEvent.layout.width))
                   }
-                  style={[pillStyles.content, { height }]}
+                  style={[pill_styles.content, { height }]}
                 >
                   {children}
                 </Motion>

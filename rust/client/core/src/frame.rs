@@ -47,7 +47,7 @@ use crate::domain::scene::stage;
 use crate::domain::scene::stage::scene_step;
 use crate::domain::setting::store;
 use crate::domain::view::demand;
-use crate::domain::view::demand::ViewLayer as _;
+use crate::domain::view::demand::DemandedBase as _;
 use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;

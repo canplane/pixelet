@@ -2,7 +2,7 @@
 
 import { StyleSheet } from "react-native";
 
-export const pillStyles = StyleSheet.create({
+export const pill_styles = StyleSheet.create({
   // `box-none` must come from a style sheet. React Native for Web draws an
   // inline `box-none` as `none`, which the content then inherits.
   box: { position: "absolute", pointerEvents: "box-none" },

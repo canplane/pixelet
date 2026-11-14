@@ -2,14 +2,6 @@
 //
 // GENERATED from wit/clocks (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `xpute:clocks/system-clock` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x7dfa61;
 
@@ -27,13 +19,13 @@ impl Instant {
     pub const ALIGN: usize = 8;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
-        w.i64(at + 0, *&self.seconds);
-        w.u32(at + 8, *&self.nanoseconds);
+        w.i64(at, self.seconds);
+        w.u32(at + 8, self.nanoseconds);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Instant, _rt::Errno> {
         Ok(Instant {
-            seconds: r.i64(at + 0)?,
+            seconds: r.i64(at)?,
             nanoseconds: r.u32(at + 8)?,
         })
     }
@@ -42,7 +34,7 @@ impl Instant {
 pub fn now() -> Result<Instant, _rt::Errno> {
     let (r, data) = _rt::link::call(HANDLE, NOW, None);
     _rt::answer(r).and_then(|_| {
-        let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
+        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
         Instant::load(r_, 0)
     })
 }

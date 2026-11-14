@@ -5,4 +5,4 @@
 
 #[path = "errno.spec.rs"]
 pub mod spec;
-pub use spec::Errno;
+pub use spec::{Errno, Kind};

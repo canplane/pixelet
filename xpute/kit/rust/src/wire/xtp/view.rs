@@ -6,7 +6,7 @@
 
 #![allow(non_snake_case)]
 
-use crate::status::error::MarshalError;
+use crate::status::error::XputeError;
 
 use super::spec::{
     Array, BranchNode, GraftNode, Node, NodeValue, Numeric, ScalarNode, ScalarType, SequenceNode,
@@ -68,7 +68,7 @@ fn STRS_NODE<'a, S: AsRef<str>>(items: Option<&[S]>) -> Node<'a> {
 
 pub type ViewValue<'a> = NodeValue<'a, Node<'a>>;
 
-fn val_to_node<'a>(val: ViewValue<'a>) -> Result<Node<'a>, MarshalError> {
+fn val_to_node<'a>(val: ViewValue<'a>) -> Result<Node<'a>, XputeError> {
     Ok(match val {
         NodeValue::Extra(node) => node,
 
@@ -200,7 +200,7 @@ pub trait NodeView<'a> {
 
     /// `pkt` must be an encoded packet. It is checked when the tree is
     /// encoded, not here.
-    fn graft(&mut self, pkt: &'a [u8]) -> Result<&mut Self, MarshalError> {
+    fn graft(&mut self, pkt: &'a [u8]) -> Result<&mut Self, XputeError> {
         Ok(self.write(Node::Graft(GraftNode { val: pkt })))
     }
 }
@@ -225,7 +225,7 @@ impl<'a> TreeView<'a> {
         self
     }
 
-    pub fn set(&mut self, val: ViewValue<'a>) -> Result<&mut Self, MarshalError> {
+    pub fn set(&mut self, val: ViewValue<'a>) -> Result<&mut Self, XputeError> {
         let node = val_to_node(val)?;
         Ok(self.set_node(node))
     }
@@ -242,9 +242,9 @@ impl<'a> NodeView<'a> for TreeView<'a> {
 }
 
 pub trait BranchView<'a>: NodeView<'a> {
-    fn set(&mut self, vals: Vec<ViewValue<'a>>) -> Result<&mut Self, MarshalError>;
+    fn set(&mut self, vals: Vec<ViewValue<'a>>) -> Result<&mut Self, XputeError>;
 
-    fn put(&mut self, val: ViewValue<'a>) -> Result<&mut Self, MarshalError>;
+    fn put(&mut self, val: ViewValue<'a>) -> Result<&mut Self, XputeError>;
 
     fn subtree<V: NodeView<'a>>(&mut self, subtree: &V) -> &mut Self;
 }
@@ -294,7 +294,7 @@ impl<'a> NodeView<'a> for BranchViewImpl<'a> {
 }
 
 impl<'a> BranchView<'a> for BranchViewImpl<'a> {
-    fn set(&mut self, vals: Vec<ViewValue<'a>>) -> Result<&mut Self, MarshalError> {
+    fn set(&mut self, vals: Vec<ViewValue<'a>>) -> Result<&mut Self, XputeError> {
         self.children().clear();
         for val in vals {
             self.put(val)?;
@@ -302,7 +302,7 @@ impl<'a> BranchView<'a> for BranchViewImpl<'a> {
         Ok(self)
     }
 
-    fn put(&mut self, val: ViewValue<'a>) -> Result<&mut Self, MarshalError> {
+    fn put(&mut self, val: ViewValue<'a>) -> Result<&mut Self, XputeError> {
         let node = val_to_node(val)?;
         Ok(self.put_node(node))
     }

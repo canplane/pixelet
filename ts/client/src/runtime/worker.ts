@@ -13,10 +13,11 @@
  */
 
 import { type Link, type Sender, serve, wait } from "@xpute/link";
-import { serve_clock, serve_stop } from "@xpute/web-host";
+import { hook, serve_clock, serve_stop } from "@xpute/web-host";
 import { forward_console, type Instantiate, instantiate } from "@xpute/web-runtime";
 import { serve_vsync, WebGpu } from "@xpute/gpu-web-host";
 import { device } from "@/abi/gpu.spec.ts";
+import { LATER } from "@/abi/later.ts";
 import { mem } from "@/abi/manifest.spec.ts";
 import { LIMIT } from "@/abi/perf.spec.ts";
 import * as source from "@/abi/source.ts";
@@ -61,6 +62,7 @@ async function start(m: Instantiate): Promise<void> {
   const link = await instantiate(m.module, m.init, mem.bytes, tell);
   if (link === null) return;
   serve_stop(link, (stop) => tell({ kind: "stopped", stop }));
+  hook(link);
   serve_clock(link);
   serve_vsync(link);
   serve_text(link);
@@ -76,7 +78,7 @@ async function start(m: Instantiate): Promise<void> {
     (state) => tell({ kind: "gpu", state }),
   );
   gpu.serve();
-  serve(m.port, link, m.named, {
+  serve(m.port, link, m.named, LATER, {
     give: (h, canvas) => gpu.bind(h, canvas as OffscreenCanvas),
     take: (h) => gpu.unbind(h),
   });

@@ -45,7 +45,7 @@ use xpute_guest::abi::fs::types::ErrorCode;
 use xpute_guest::clock::now;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
+use xpute_kit::status::error::XputeError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderConfig, TreeReader, TreeView};
 
 use super::store::{object, object_mut};
@@ -238,7 +238,7 @@ pub fn on_arrived(id: u64, pkt: Option<Body>, phases: &mut PhaseList) -> Result<
 /// absent. The top's folds are held for the shards not read yet, and a
 /// shard's leaves go into the store in place of its fold. A file that does
 /// not decode leaves the store as it was and is refused.
-fn admit(id: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
+fn admit(id: u64, bytes: Option<&[u8]>) -> Result<(), XputeError> {
     let result = match bytes {
         // An absent top means that no shard holds any object.
         None if id == TOP => {
@@ -254,7 +254,7 @@ fn admit(id: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
     };
     if result.is_err() && !state().refused_files.contains(&id) {
         state().refused_files.push(id);
-        file::set_aside(file::Refused::Objects(id));
+        file::set_aside(file::Refused::Object(id));
         changed();
         invalidate();
     }
@@ -301,7 +301,7 @@ pub fn on_set_aside(id: u64) -> bool {
 // write that made it; a batch holds its writes in the order they were made.
 // A file of any other format is never read.
 
-fn encode_writes(format: u8, writes: &[Write]) -> Result<Vec<u8>, MarshalError> {
+fn encode_writes(format: u8, writes: &[Write]) -> Result<Vec<u8>, XputeError> {
     let (mut keys, mut asset_ids) = (Vec::new(), Vec::new());
     let (mut text_rows, mut texts) = (Vec::new(), Vec::new());
     for w in writes {
@@ -341,18 +341,18 @@ fn encode_writes(format: u8, writes: &[Write]) -> Result<Vec<u8>, MarshalError> 
 
 /// The tree packet inside file `bytes` of `format`. A file of another format
 /// is an error.
-fn pkt(format: u8, bytes: &[u8]) -> Result<Vec<u8>, MarshalError> {
+fn pkt(format: u8, bytes: &[u8]) -> Result<Vec<u8>, XputeError> {
     match bytes.split_first() {
         // The packet is copied because `TreeReader` needs it to start on a
         // word, and an allocation of its own does.
         Some((&f, pkt)) if f == format => Ok(pkt.to_vec()),
-        _ => Err(MarshalError::new(Errno::EBADMSG)),
+        _ => Err(XputeError::new(Errno::EBADMSG)),
     }
 }
 
 /// The writes that file `bytes` of `format` holds. Each record must be of
 /// its leaf's class.
-fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
+fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, XputeError> {
     let pkt = pkt(format, bytes)?;
     let root = TreeReader::new(&pkt)?.read_branch()?;
     let (keys, asset_ids) = (
@@ -364,7 +364,7 @@ fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
         root.at(column::TEXT)?.get_strs()?,
     );
     if keys.len() as usize != asset_ids.len() || text_rows.len() != texts.len() as usize {
-        return Err(MarshalError::new(Errno::EINVAL));
+        return Err(XputeError::new(Errno::EINVAL));
     }
     let mut ext: Vec<Option<Ext>> = vec![None; asset_ids.len()];
     for (r, t) in text_rows.iter().zip(texts.iter()) {
@@ -372,11 +372,11 @@ fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
         // A record of a class other than its leaf's means the file is not in
         // this layout.
         if asset_ids.get(r).and_then(|&v| class_of(v)) != Some(Class::MarkerText) {
-            return Err(MarshalError::new(Errno::EINVAL));
+            return Err(XputeError::new(Errno::EINVAL));
         }
         // A marker's text past its cap means the same.
         if t.chars().count() > MARKER_TEXT_CHARS as usize {
-            return Err(MarshalError::new(Errno::EINVAL));
+            return Err(XputeError::new(Errno::EINVAL));
         }
         ext[r] = Some(Ext::MarkerText(t.to_string()));
     }
@@ -384,7 +384,7 @@ fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
         .enumerate()
         .map(|(r, key)| {
             Ok(Write {
-                at: key_of_name::<3>(key).ok_or(MarshalError::new(Errno::EINVAL))?,
+                at: key_of_name::<3>(key).ok_or(XputeError::new(Errno::EINVAL))?,
                 asset_id: asset_ids[r],
                 ext: ext[r].take(),
             })
@@ -394,7 +394,7 @@ fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
 
 /// The leaves in `bytes`, the file of `shard`, all or none. Each leaf must
 /// lie in `shard`, at a zoom the store holds, with an id that fits a leaf.
-fn decode_shard(shard: Quadrant, bytes: &[u8]) -> Result<Vec<Write>, MarshalError> {
+fn decode_shard(shard: Quadrant, bytes: &[u8]) -> Result<Vec<Write>, XputeError> {
     let writes = decode_writes(format::OBJECT, bytes)?;
     let fits = |w: &Write| {
         (CUBE_ZOOM..=OBJECT_FINEST).contains(&node_of::<3>(w.at).0)
@@ -402,7 +402,7 @@ fn decode_shard(shard: Quadrant, bytes: &[u8]) -> Result<Vec<Write>, MarshalErro
             && u16::try_from(w.asset_id).is_ok()
     };
     if !writes.iter().all(fits) {
-        return Err(MarshalError::new(Errno::EINVAL));
+        return Err(XputeError::new(Errno::EINVAL));
     }
     Ok(writes)
 }
@@ -410,7 +410,7 @@ fn decode_shard(shard: Quadrant, bytes: &[u8]) -> Result<Vec<Write>, MarshalErro
 /// The top's rows `<shard, fold>`, as file.json `top` lays them out, all or
 /// none. Each shard must be a tile at `SHARD_ZOOM`, and the filled share of
 /// its cube that its fold gives must be at most the whole.
-fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, MarshalError> {
+fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, XputeError> {
     let pkt = pkt(format::OBJECT_TOP, bytes)?;
     let root = TreeReader::new(&pkt)?.read_branch()?;
     let (shard, fold) = (
@@ -418,7 +418,7 @@ fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, MarshalError> {
         root.at(top::FOLD)?.get_array::<u32>()?,
     );
     if shard.len() as usize != fold.len() {
-        return Err(MarshalError::new(Errno::EINVAL));
+        return Err(XputeError::new(Errno::EINVAL));
     }
     shard
         .iter()
@@ -427,7 +427,7 @@ fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, MarshalError> {
             Quadrant::of_key(quadkey)
                 .filter(|t| t.zoom == SHARD_ZOOM && high(fold[r]) <= FULL)
                 .map(|t| (t.id(), fold[r]))
-                .ok_or(MarshalError::new(Errno::EINVAL))
+                .ok_or(XputeError::new(Errno::EINVAL))
         })
         .collect()
 }

@@ -34,7 +34,7 @@ use pxl_render::gpu::api;
 use pxl_render::gpu::surface;
 use pxl_render::renderer;
 use pxl_render::spec::api::stream;
-use xpute_guest::abi::stop::stop;
+use xpute_guest::abi::stop;
 use xpute_guest::clock::now;
 use xpute_guest::link::in_guest;
 use xpute_kit::status::bug::{self, OrBug};
@@ -146,7 +146,7 @@ pub fn end() -> bool {
     while let Some(r) = file::take_set_aside() {
         match r {
             file::Refused::Storage => on_settings_set_aside(),
-            file::Refused::Objects(id) => _ = repository::on_set_aside(id),
+            file::Refused::Object(id) => _ = repository::on_set_aside(id),
         }
     }
     if let Some(at) = request::next_pump_at(now()) {

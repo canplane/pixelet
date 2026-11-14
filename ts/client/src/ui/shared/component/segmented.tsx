@@ -6,8 +6,8 @@ import { PANEL_CONTROL } from "@/ui/shared/component/panel.tsx";
 import {
   chrome,
   color,
-  textScale,
-  textStyle,
+  text_scale,
+  text_style,
   weight,
 } from "@/ui/shared/component/theme.ts";
 import { LABEL } from "@/ui/shared/component/palette.ts";
@@ -40,8 +40,8 @@ export function Segmented<T extends string | number>({
                 drawn without its rounded corners. */}
             <View collapsable={false} style={[styles.segment, on && styles.on]}>
               <Text
-                maxFontSizeMultiplier={textScale.chrome}
-                style={[styles.label, on && styles.labelOn]}
+                maxFontSizeMultiplier={text_scale.chrome}
+                style={[styles.label, on && styles.label_on]}
               >
                 {s.label}
               </Text>
@@ -75,9 +75,9 @@ const styles = StyleSheet.create({
     boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)",
   },
   label: {
-    ...textStyle.footnote,
+    ...text_style.footnote,
     fontWeight: weight.medium,
     color: LABEL.secondary,
   },
-  labelOn: { color: LABEL.primary },
+  label_on: { color: LABEL.primary },
 });

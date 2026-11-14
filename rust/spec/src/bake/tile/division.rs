@@ -11,7 +11,7 @@ use crate::space::layer::lattice::{Grid, GROUND, TILE_CELLS};
 use fnv::FnvHashMap;
 use std::borrow::Cow;
 
-use xpute_kit::status::error::MarshalError;
+use xpute_kit::status::error::XputeError;
 use xpute_kit::wire::xtp::shape;
 
 use crate::bake::malformed;
@@ -181,7 +181,7 @@ impl Default for DivisionTile {
     }
 }
 
-pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
+pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, XputeError> {
     check(&tile.cells, &tile.parents)?;
     let ids: Vec<&str> = tile.iter().map(|d| d.id).collect();
     let kinds: Vec<u8> = tile.kinds.iter().map(|&k| k as u8).collect();
@@ -204,7 +204,7 @@ pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, MarshalError> {
 }
 
 /// Every name within NAME_BYTES.
-fn check_names<'a>(mut names: impl Iterator<Item = &'a str>) -> Result<(), MarshalError> {
+fn check_names<'a>(mut names: impl Iterator<Item = &'a str>) -> Result<(), XputeError> {
     if names.any(|n| n.len() > NAME_BYTES) {
         return Err(malformed());
     }
@@ -213,7 +213,7 @@ fn check_names<'a>(mut names: impl Iterator<Item = &'a str>) -> Result<(), Marsh
 
 /// Every cell a division of the tile or none, every parent one or none, and
 /// no walk up the parents a cycle or longer than a division of each subtype.
-fn check(cells: &[u32], parents: &[u32]) -> Result<(), MarshalError> {
+fn check(cells: &[u32], parents: &[u32]) -> Result<(), XputeError> {
     let n = parents.len();
     if n >= NONE as usize {
         return Err(malformed());
@@ -253,7 +253,7 @@ struct Table<'a> {
     names: StrList<'a>,
 }
 
-fn read_tile(pkt: &[u8]) -> Result<Table<'_>, MarshalError> {
+fn read_tile(pkt: &[u8]) -> Result<Table<'_>, XputeError> {
     let (cells, occupancy, ids, kinds, parents, prominences, areas, names) =
         shape::get_deep::<Packet>(pkt)?;
     let occupancy = occupancy_of(occupancy)?;
@@ -282,7 +282,7 @@ fn read_tile(pkt: &[u8]) -> Result<Table<'_>, MarshalError> {
 }
 
 /// Decodes a tile into a copy, as the bake holds it.
-pub fn decode(pkt: &[u8]) -> Result<DivisionTile, MarshalError> {
+pub fn decode(pkt: &[u8]) -> Result<DivisionTile, XputeError> {
     let v = read_tile(pkt)?;
     Ok(DivisionTile {
         cells: v.cells.to_vec().into(),
@@ -292,7 +292,7 @@ pub fn decode(pkt: &[u8]) -> Result<DivisionTile, MarshalError> {
 
 /// Decoded straight into its resident room, `CELL_CNT` long: its cells; its
 /// divisions, a handful, on the heap.
-pub fn decode_into(pkt: &[u8], room: &'static mut [u32]) -> Result<DivisionTile, MarshalError> {
+pub fn decode_into(pkt: &[u8], room: &'static mut [u32]) -> Result<DivisionTile, XputeError> {
     let v = read_tile(pkt)?;
     if room.len() != CELL_CNT {
         return Err(malformed());

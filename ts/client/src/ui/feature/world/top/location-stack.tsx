@@ -42,13 +42,13 @@ const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
 export function LocationStack() {
   const { t } = useTranslation();
   const status = useCore((s) => s.location.status);
-  const hasLocation = useCore((s) => s.location.has_location);
+  const has_location = useCore((s) => s.location.has_location);
   const following = useCore((s) => s.is_follow_mode);
-  const offCenter = useCore((s) => s.pivot.is_off_center);
+  const is_off_center = useCore((s) => s.pivot.is_off_center);
 
   const press = following
     ? TRACKING_UNFOLLOW
-    : offCenter
+    : is_off_center
       ? TRACKING_RECENTER
       : TRACKING_FOLLOW;
   const { glyph, label } = PRESS[press];
@@ -59,9 +59,9 @@ export function LocationStack() {
       items={[
         {
           label: t(label),
-          onPress: () => void camera.tracking(press),
-          isActive: following,
-          disabled: status !== SENSOR_STATUS_READY || !hasLocation,
+          on_press: () => void camera.tracking(press),
+          is_active: following,
+          disabled: status !== SENSOR_STATUS_READY || !has_location,
           face:
             status === SENSOR_STATUS_LOADING ? (
               <Spinner size={chrome.glyph} color={LABEL.primary} />
@@ -82,7 +82,7 @@ export function LocationStack() {
         },
         {
           label: t("world.controls.reset_orientation"),
-          onPress: camera.north_up,
+          on_press: camera.north_up,
           disabled: following,
           face: <CompassFace />,
         },

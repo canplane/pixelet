@@ -4,6 +4,95 @@
 //
 // POSIX/Linux-aligned negative errno
 
+/// What an errno says happened: the canonical status code of gRPC and Abseil
+/// (absl::StatusCode), by its number there, each errno's as Abseil's
+/// ErrnoToStatusCode maps it, save that ENOTRECOVERABLE is internal, and
+/// EBADMSG and EILSEQ data_loss. It says nothing of whether the error is
+/// fatal: a broken invariant is a bug, which stops the program.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum Kind {
+    Ok = 0,
+    Cancelled = 1,
+    Unknown = 2,
+    InvalidArgument = 3,
+    DeadlineExceeded = 4,
+    NotFound = 5,
+    AlreadyExists = 6,
+    PermissionDenied = 7,
+    ResourceExhausted = 8,
+    FailedPrecondition = 9,
+    OutOfRange = 11,
+    Unimplemented = 12,
+    Internal = 13,
+    Unavailable = 14,
+    DataLoss = 15,
+}
+
+impl Kind {
+    /// Every member, in its source's own order.
+    pub const ALL: [Kind; 15] = [
+        Kind::Ok,
+        Kind::Cancelled,
+        Kind::Unknown,
+        Kind::InvalidArgument,
+        Kind::DeadlineExceeded,
+        Kind::NotFound,
+        Kind::AlreadyExists,
+        Kind::PermissionDenied,
+        Kind::ResourceExhausted,
+        Kind::FailedPrecondition,
+        Kind::OutOfRange,
+        Kind::Unimplemented,
+        Kind::Internal,
+        Kind::Unavailable,
+        Kind::DataLoss,
+    ];
+
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u8) -> Option<Kind> {
+        match val {
+            0 => Some(Kind::Ok),
+            1 => Some(Kind::Cancelled),
+            2 => Some(Kind::Unknown),
+            3 => Some(Kind::InvalidArgument),
+            4 => Some(Kind::DeadlineExceeded),
+            5 => Some(Kind::NotFound),
+            6 => Some(Kind::AlreadyExists),
+            7 => Some(Kind::PermissionDenied),
+            8 => Some(Kind::ResourceExhausted),
+            9 => Some(Kind::FailedPrecondition),
+            11 => Some(Kind::OutOfRange),
+            12 => Some(Kind::Unimplemented),
+            13 => Some(Kind::Internal),
+            14 => Some(Kind::Unavailable),
+            15 => Some(Kind::DataLoss),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            Kind::Ok => "ok",
+            Kind::Cancelled => "cancelled",
+            Kind::Unknown => "unknown",
+            Kind::InvalidArgument => "invalid_argument",
+            Kind::DeadlineExceeded => "deadline_exceeded",
+            Kind::NotFound => "not_found",
+            Kind::AlreadyExists => "already_exists",
+            Kind::PermissionDenied => "permission_denied",
+            Kind::ResourceExhausted => "resource_exhausted",
+            Kind::FailedPrecondition => "failed_precondition",
+            Kind::OutOfRange => "out_of_range",
+            Kind::Unimplemented => "unimplemented",
+            Kind::Internal => "internal",
+            Kind::Unavailable => "unavailable",
+            Kind::DataLoss => "data_loss",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(i32)]
 pub enum Errno {
@@ -264,6 +353,74 @@ impl Errno {
             Errno::EINPROGRESS => "EINPROGRESS",
             Errno::ECANCELED => "ECANCELED",
             Errno::ENOTRECOVERABLE => "ENOTRECOVERABLE",
+        }
+    }
+}
+
+impl Errno {
+    /// The member's `kind`.
+    pub const fn kind(self) -> Kind {
+        match self {
+            Errno::OK => Kind::Ok,
+            Errno::EPERM => Kind::PermissionDenied,
+            Errno::ENOENT => Kind::NotFound,
+            Errno::ESRCH => Kind::NotFound,
+            Errno::EINTR => Kind::Unavailable,
+            Errno::EIO => Kind::Unknown,
+            Errno::ENXIO => Kind::NotFound,
+            Errno::E2BIG => Kind::InvalidArgument,
+            Errno::ENOEXEC => Kind::Unknown,
+            Errno::EBADF => Kind::FailedPrecondition,
+            Errno::ECHILD => Kind::FailedPrecondition,
+            Errno::EAGAIN => Kind::Unavailable,
+            Errno::ENOMEM => Kind::ResourceExhausted,
+            Errno::EACCES => Kind::PermissionDenied,
+            Errno::EFAULT => Kind::InvalidArgument,
+            Errno::EBUSY => Kind::FailedPrecondition,
+            Errno::EEXIST => Kind::AlreadyExists,
+            Errno::EXDEV => Kind::Unimplemented,
+            Errno::ENODEV => Kind::NotFound,
+            Errno::ENOTDIR => Kind::FailedPrecondition,
+            Errno::EISDIR => Kind::FailedPrecondition,
+            Errno::EINVAL => Kind::InvalidArgument,
+            Errno::ENFILE => Kind::ResourceExhausted,
+            Errno::EMFILE => Kind::ResourceExhausted,
+            Errno::ENOTTY => Kind::InvalidArgument,
+            Errno::EFBIG => Kind::OutOfRange,
+            Errno::ENOSPC => Kind::ResourceExhausted,
+            Errno::ESPIPE => Kind::InvalidArgument,
+            Errno::EROFS => Kind::PermissionDenied,
+            Errno::EMLINK => Kind::ResourceExhausted,
+            Errno::EPIPE => Kind::FailedPrecondition,
+            Errno::EDOM => Kind::InvalidArgument,
+            Errno::ERANGE => Kind::OutOfRange,
+            Errno::ENOSYS => Kind::Unimplemented,
+            Errno::EPROTO => Kind::Unknown,
+            Errno::EBADMSG => Kind::DataLoss,
+            Errno::EOVERFLOW => Kind::OutOfRange,
+            Errno::EMSGSIZE => Kind::Unknown,
+            Errno::ENOTSUP => Kind::Unimplemented,
+            Errno::EILSEQ => Kind::DataLoss,
+            Errno::EADDRINUSE => Kind::FailedPrecondition,
+            Errno::EADDRNOTAVAIL => Kind::AlreadyExists,
+            Errno::ENETDOWN => Kind::Unavailable,
+            Errno::ENETUNREACH => Kind::Unavailable,
+            Errno::ENETRESET => Kind::Unavailable,
+            Errno::ECONNABORTED => Kind::Unavailable,
+            Errno::ECONNRESET => Kind::Unavailable,
+            Errno::ENOBUFS => Kind::ResourceExhausted,
+            Errno::EISCONN => Kind::FailedPrecondition,
+            Errno::ENOTCONN => Kind::FailedPrecondition,
+            Errno::ESHUTDOWN => Kind::FailedPrecondition,
+            Errno::ETOOMANYREFS => Kind::Unknown,
+            Errno::ETIMEDOUT => Kind::DeadlineExceeded,
+            Errno::ECONNREFUSED => Kind::Unavailable,
+            Errno::EHOSTDOWN => Kind::Unavailable,
+            Errno::EHOSTUNREACH => Kind::Unavailable,
+            Errno::EALREADY => Kind::AlreadyExists,
+            Errno::EINPROGRESS => Kind::Unknown,
+            Errno::ECANCELED => Kind::Cancelled,
+            Errno::ENOTRECOVERABLE => Kind::Internal,
         }
     }
 }

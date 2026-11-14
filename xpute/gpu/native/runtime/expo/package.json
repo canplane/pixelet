@@ -15,6 +15,7 @@
     "src",
     "ios",
     "android/build.gradle",
+    "android/consumer-rules.pro",
     "android/src",
     "expo-module.config.json"
   ],

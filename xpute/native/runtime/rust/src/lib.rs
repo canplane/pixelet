@@ -8,8 +8,8 @@
 //! into the queue.
 //!
 //! It offers pieces, which the program composes on the guest's thread in the
-//! order they run, as a page's worker composes @xpute/web-runtime's: the
-//! UI's stand-ins (`remote`), the guest's first entry (`link::init`), then
+//! order they run, as a page's worker composes @xpute/web-runtime's: what
+//! the UI serves (`remote`), the guest's first entry (`link::init`), then
 //! the answers due, the UI's batch and the loop (`link::run_due`,
 //! `remote::flush`, `event_loop::run`). What the host serves is mounted on
 //! its link (xpute-native-host).
@@ -42,6 +42,12 @@ pub use log::log;
 /// JavaScript thread.
 pub fn post(tag: u32, h: u32, m: u32, pkt: Option<Vec<u8>>) {
     event_loop::post_task(Box::new(move || remote::recv(tag, h, m, pkt)));
+}
+
+/// The UI's answer to the request `tag` of the guest's that it serves later
+/// (remote.rs), for the guest's thread. Called on the JavaScript thread.
+pub fn answer(tag: u32, result: i32, data: Option<Vec<u8>>) {
+    event_loop::post_task(Box::new(move || remote::answer(tag, result, data)));
 }
 
 /// The app was hidden or shown again, from the platform's lifecycle.

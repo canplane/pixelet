@@ -9,44 +9,44 @@ import {
   type AssetId,
   type Cube,
   CUBES,
-  cubeLabel,
-  cubeSection,
-  decorLabel,
-  decorSection,
+  cube_label,
+  cube_section,
+  decor_label,
+  decor_section,
   MARKER,
 } from "@/ui/shared/asset/catalog.ts";
 import { DECORS } from "@/ui/shared/asset/decor.spec.ts";
 import { PIN_LABEL } from "@/ui/shared/asset/marker.spec.ts";
 
-import { selectAsset, useInHand } from "@/ui/feature/world/dock/store.ts";
+import { select_asset, useInHand } from "@/ui/feature/world/dock/store.ts";
 import { Panel } from "@/ui/shared/component/panel.tsx";
 import { Tabbed } from "@/ui/shared/component/tabbed.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { chrome, color } from "@/ui/shared/component/theme.ts";
 import { SectionTitle } from "@/ui/shared/component/section-title.tsx";
 import { CharacterPicker } from "@/ui/feature/drawer/character/picker.tsx";
-import { CubeSwatch, decorGlyph } from "@/ui/shared/asset/swatch.tsx";
+import { CubeSwatch, decor_glyph } from "@/ui/shared/asset/swatch.tsx";
 import type { GlyphName } from "@/ui/shared/component/icon.tsx";
 import { LABEL } from "@/ui/shared/component/palette.ts";
-import { Grid, Item, itemOf, mark } from "./grid.tsx";
+import { Grid, Item, item_of, mark } from "./grid.tsx";
 import { NameTipLayer } from "./name-tip.tsx";
 
 /** The sections, and the items in each, keep the catalog's order. */
 function sectioned<S, T>(
   items: readonly T[],
-  sectionOf: (item: T) => S,
+  section_of: (item: T) => S,
 ): Map<S, T[]> {
   const sections = new Map<S, T[]>();
   for (const item of items) {
-    sections.set(sectionOf(item), [
-      ...(sections.get(sectionOf(item)) ?? []),
+    sections.set(section_of(item), [
+      ...(sections.get(section_of(item)) ?? []),
       item,
     ]);
   }
   return sections;
 }
-const SECTIONS = sectioned(CUBES, cubeSection);
-const DECOR_SECTIONS = sectioned(DECORS, decorSection);
+const SECTIONS = sectioned(CUBES, cube_section);
+const DECOR_SECTIONS = sectioned(DECORS, decor_section);
 
 // An item is a rounded square: a circle would cut away too much of a block's
 // texture.
@@ -65,14 +65,14 @@ function CubeItem({
 
   return (
     <Item
-      label={cubeLabel(cube)}
+      label={cube_label(cube)}
       active={active}
       cell={cell}
       onPress={() => onPick(cube)}
     >
       <CubeSwatch
         cube={cube}
-        size={itemOf(cell)}
+        size={item_of(cell)}
         radius={ITEM_RADIUS}
         style={active ? mark.on : mark.off}
       />
@@ -100,8 +100,8 @@ function GlyphItem({
       <View
         style={[
           styles.decor,
-          { width: itemOf(cell), height: itemOf(cell) },
-          active ? [mark.on, styles.decorOn] : mark.off,
+          { width: item_of(cell), height: item_of(cell) },
+          active ? [mark.on, styles.decor_on] : mark.off,
         ]}
       >
         <Glyph glyph={glyph} size={chrome.glyph} color={LABEL.primary} />
@@ -141,7 +141,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
 
   function pick(id: AssetId): void {
-    selectAsset(id);
+    select_asset(id);
     onClose();
   }
 
@@ -182,8 +182,8 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
                     <GlyphItem
                       key={id}
                       id={id}
-                      label={decorLabel(id)}
-                      glyph={decorGlyph(id)}
+                      label={decor_label(id)}
+                      glyph={decor_glyph(id)}
                       cell={cell}
                       onPick={pick}
                     />
@@ -222,5 +222,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  decorOn: { backgroundColor: color.faint },
+  decor_on: { backgroundColor: color.faint },
 });

@@ -7,7 +7,7 @@
 #![allow(non_snake_case)]
 
 use crate::status::errno::Errno;
-use crate::status::error::MarshalError;
+use crate::status::error::XputeError;
 
 use super::spec::{
     AlignUnit, Array, NodeType, NodeValue, ScalarType, SequenceType, SpecialType, ALIGN_SZ,
@@ -18,10 +18,10 @@ pub type ShallowNodeValue<'a> = NodeValue<'a, BranchCursor<'a>>;
 
 const WORD_REG: [u32; 2] = [NONE, NONE];
 
-fn CURSOR(pkt: &[u8], base: u32, type_: NodeType) -> Result<Cursor<'_>, MarshalError> {
+fn CURSOR(pkt: &[u8], base: u32, type_: NodeType) -> Result<Cursor<'_>, XputeError> {
     let align_sz: AlignUnit = ALIGN_SZ(type_)?;
     if !base.is_multiple_of(align_sz) {
-        return Err(MarshalError::new(Errno::EBADMSG));
+        return Err(XputeError::new(Errno::EBADMSG));
     }
     if type_ == SpecialType::BRANCH as u8 {
         return Ok(Cursor::Branch(BranchCursor::new(pkt, base)?));
@@ -29,7 +29,7 @@ fn CURSOR(pkt: &[u8], base: u32, type_: NodeType) -> Result<Cursor<'_>, MarshalE
     if TYPE_IS_LEAF(type_) {
         return Ok(Cursor::Node(NodeCursor::new(pkt, base, type_)));
     }
-    Err(MarshalError::new(Errno::EBADMSG))
+    Err(XputeError::new(Errno::EBADMSG))
 }
 
 fn ENTRY_OFF(base: u32, idx: u32) -> u32 {
@@ -58,7 +58,7 @@ impl<'a> Cursor<'a> {
         matches!(self, Cursor::Branch(_))
     }
 
-    pub fn as_branch(self) -> Result<BranchCursor<'a>, MarshalError> {
+    pub fn as_branch(self) -> Result<BranchCursor<'a>, XputeError> {
         match self {
             Cursor::Branch(b) => Ok(b),
             Cursor::Null(n) => n.as_branch(),
@@ -73,7 +73,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    pub fn get(&self) -> Result<ShallowNodeValue<'a>, MarshalError> {
+    pub fn get(&self) -> Result<ShallowNodeValue<'a>, XputeError> {
         match self {
             Cursor::Node(c) => c.get(),
             Cursor::Null(c) => Ok(c.get()),
@@ -82,44 +82,44 @@ impl<'a> Cursor<'a> {
     }
 
     /// An array of another element type is EBADMSG, never reinterpreted.
-    pub fn get_array<T: ArrayElem>(&self) -> Result<&'a [T], MarshalError> {
+    pub fn get_array<T: ArrayElem>(&self) -> Result<&'a [T], XputeError> {
         match self {
             Cursor::Node(c) if c.type_ == T::TYPE as u8 => c.array::<T>(),
-            _ => Err(MarshalError::new(Errno::EBADMSG)),
+            _ => Err(XputeError::new(Errno::EBADMSG)),
         }
     }
 
-    pub fn get_u64(&self) -> Result<u64, MarshalError> {
+    pub fn get_u64(&self) -> Result<u64, XputeError> {
         match self.get()? {
             NodeValue::U64(x) => Ok(x),
-            _ => Err(MarshalError::new(Errno::EBADMSG)),
+            _ => Err(XputeError::new(Errno::EBADMSG)),
         }
     }
 
-    pub fn get_bool(&self) -> Result<bool, MarshalError> {
+    pub fn get_bool(&self) -> Result<bool, XputeError> {
         match self.get()? {
             NodeValue::Bool(b) => Ok(b),
-            _ => Err(MarshalError::new(Errno::EBADMSG)),
+            _ => Err(XputeError::new(Errno::EBADMSG)),
         }
     }
 
-    pub fn get_strs(&self) -> Result<StrList<'a>, MarshalError> {
+    pub fn get_strs(&self) -> Result<StrList<'a>, XputeError> {
         match self {
             Cursor::Node(c) if c.type_ == SequenceType::STRS as u8 => c.strs(),
-            _ => Err(MarshalError::new(Errno::EBADMSG)),
+            _ => Err(XputeError::new(Errno::EBADMSG)),
         }
     }
 
-    pub fn get_str_ref(&self) -> Result<&'a str, MarshalError> {
+    pub fn get_str_ref(&self) -> Result<&'a str, XputeError> {
         match self {
             Cursor::Node(c) if c.type_ == SequenceType::STR as u8 => c.str_ref(),
-            _ => Err(MarshalError::new(Errno::EBADMSG)),
+            _ => Err(XputeError::new(Errno::EBADMSG)),
         }
     }
 
     /// Any number type an f64 holds exactly. A 64-bit integer is refused
     /// (EBADMSG), even when its value would fit.
-    pub fn get_number(&self) -> Result<f64, MarshalError> {
+    pub fn get_number(&self) -> Result<f64, XputeError> {
         Ok(match self.get()? {
             NodeValue::U8(v) => v as f64,
             NodeValue::I8(v) => v as f64,
@@ -129,11 +129,11 @@ impl<'a> Cursor<'a> {
             NodeValue::I32(v) => v as f64,
             NodeValue::F32(v) => v as f64,
             NodeValue::F64(v) => v,
-            _ => return Err(MarshalError::new(Errno::EBADMSG)),
+            _ => return Err(XputeError::new(Errno::EBADMSG)),
         })
     }
 
-    pub fn get_deep(&self) -> Result<NodeValue<'a>, MarshalError> {
+    pub fn get_deep(&self) -> Result<NodeValue<'a>, XputeError> {
         match self {
             Cursor::Node(c) => Ok(deepen(c.get()?)),
             Cursor::Null(c) => Ok(deepen(c.get())),
@@ -172,26 +172,26 @@ pub struct TreeReader<'a> {
 }
 
 impl<'a> TreeReader<'a> {
-    pub fn new(pkt: &'a [u8]) -> Result<TreeReader<'a>, MarshalError> {
+    pub fn new(pkt: &'a [u8]) -> Result<TreeReader<'a>, XputeError> {
         let base = pkt.as_ptr() as usize;
         if !base.is_multiple_of(WORD_SZ as usize) {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
 
         if (pkt.len() as u32) < HDR_SZ {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         let hdr_view = &pkt[..HDR_SZ as usize];
 
         if GET_LEN(hdr_view, 0)? != MAGIC {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
 
         // In the header's root word, the low half is the root's payload size,
         // not an offset.
         let (payload_sz, type_) = GET_DESC(hdr_view, WORD_SZ)?;
         if payload_sz > pkt.len() as u32 - HDR_SZ {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
 
         let root = if payload_sz != 0 {
@@ -206,7 +206,7 @@ impl<'a> TreeReader<'a> {
         self.root.clone()
     }
 
-    pub fn read_branch(&self) -> Result<BranchCursor<'a>, MarshalError> {
+    pub fn read_branch(&self) -> Result<BranchCursor<'a>, XputeError> {
         self.root.clone().as_branch()
     }
 }
@@ -228,9 +228,9 @@ impl<'a> NodeCursor<'a> {
         self.type_ == SpecialType::BRANCH as u8
     }
 
-    pub fn as_branch(self) -> Result<BranchCursor<'a>, MarshalError> {
+    pub fn as_branch(self) -> Result<BranchCursor<'a>, XputeError> {
         if self.type_ != SpecialType::BRANCH as u8 {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         BranchCursor::new(self.pkt, self.base)
     }
@@ -239,7 +239,7 @@ impl<'a> NodeCursor<'a> {
         Some(self)
     }
 
-    pub fn get(&self) -> Result<ShallowNodeValue<'a>, MarshalError> {
+    pub fn get(&self) -> Result<ShallowNodeValue<'a>, XputeError> {
         let t = self.type_;
         Ok(match t {
             t if t == ScalarType::U8 as u8 => NodeValue::U8(self.u8_of()?),
@@ -306,58 +306,58 @@ impl<'a> NodeCursor<'a> {
                     .collect(),
             ),
 
-            _ => return Err(MarshalError::new(Errno::EBADMSG)),
+            _ => return Err(XputeError::new(Errno::EBADMSG)),
         })
     }
 
-    fn scalar<const N: usize>(&self) -> Result<[u8; N], MarshalError> {
+    fn scalar<const N: usize>(&self) -> Result<[u8; N], XputeError> {
         if self.base as usize + N > self.pkt.len() {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         Ok(self.pkt[self.base as usize..self.base as usize + N]
             .try_into()
             .unwrap())
     }
 
-    fn u8_of(&self) -> Result<u8, MarshalError> {
+    fn u8_of(&self) -> Result<u8, XputeError> {
         Ok(u8::from_le_bytes(self.scalar()?))
     }
-    fn i8_of(&self) -> Result<i8, MarshalError> {
+    fn i8_of(&self) -> Result<i8, XputeError> {
         Ok(i8::from_le_bytes(self.scalar()?))
     }
-    fn u16_of(&self) -> Result<u16, MarshalError> {
+    fn u16_of(&self) -> Result<u16, XputeError> {
         Ok(u16::from_le_bytes(self.scalar()?))
     }
-    fn i16_of(&self) -> Result<i16, MarshalError> {
+    fn i16_of(&self) -> Result<i16, XputeError> {
         Ok(i16::from_le_bytes(self.scalar()?))
     }
-    fn u32_of(&self) -> Result<u32, MarshalError> {
+    fn u32_of(&self) -> Result<u32, XputeError> {
         Ok(u32::from_le_bytes(self.scalar()?))
     }
-    fn i32_of(&self) -> Result<i32, MarshalError> {
+    fn i32_of(&self) -> Result<i32, XputeError> {
         Ok(i32::from_le_bytes(self.scalar()?))
     }
-    fn u64_of(&self) -> Result<u64, MarshalError> {
+    fn u64_of(&self) -> Result<u64, XputeError> {
         Ok(u64::from_le_bytes(self.scalar()?))
     }
-    fn i64_of(&self) -> Result<i64, MarshalError> {
+    fn i64_of(&self) -> Result<i64, XputeError> {
         Ok(i64::from_le_bytes(self.scalar()?))
     }
-    fn f32_of(&self) -> Result<f32, MarshalError> {
+    fn f32_of(&self) -> Result<f32, XputeError> {
         Ok(f32::from_le_bytes(self.scalar()?))
     }
-    fn f64_of(&self) -> Result<f64, MarshalError> {
+    fn f64_of(&self) -> Result<f64, XputeError> {
         Ok(f64::from_le_bytes(self.scalar()?))
     }
-    fn bool_of(&self) -> Result<bool, MarshalError> {
+    fn bool_of(&self) -> Result<bool, XputeError> {
         Ok(u8::from_le_bytes(self.scalar()?) != 0)
     }
 
     /// Returned in place, without a copy, which is sound because `TreeReader`
     /// checked the packet's alignment and `CURSOR` the node's.
-    fn array<T: Copy>(&self) -> Result<&'a [T], MarshalError> {
+    fn array<T: Copy>(&self) -> Result<&'a [T], XputeError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         let len = GET_LEN(self.pkt, self.base)?;
         let payload_start = self.base + WORD_SZ;
@@ -366,14 +366,14 @@ impl<'a> NodeCursor<'a> {
         let payload_sz = len.wrapping_mul(elem_sz);
 
         if len != 0 && payload_sz / elem_sz != len {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
 
         if payload_start > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         if payload_sz > self.pkt.len() as u32 - payload_start {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
 
         let at = payload_start as usize;
@@ -384,40 +384,40 @@ impl<'a> NodeCursor<'a> {
         })
     }
 
-    fn u8_array(&self) -> Result<&'a [u8], MarshalError> {
+    fn u8_array(&self) -> Result<&'a [u8], XputeError> {
         self.array()
     }
-    fn i8_array(&self) -> Result<&'a [i8], MarshalError> {
+    fn i8_array(&self) -> Result<&'a [i8], XputeError> {
         self.array()
     }
-    fn u16_array(&self) -> Result<&'a [u16], MarshalError> {
+    fn u16_array(&self) -> Result<&'a [u16], XputeError> {
         self.array()
     }
-    fn i16_array(&self) -> Result<&'a [i16], MarshalError> {
+    fn i16_array(&self) -> Result<&'a [i16], XputeError> {
         self.array()
     }
-    fn u32_array(&self) -> Result<&'a [u32], MarshalError> {
+    fn u32_array(&self) -> Result<&'a [u32], XputeError> {
         self.array()
     }
-    fn i32_array(&self) -> Result<&'a [i32], MarshalError> {
+    fn i32_array(&self) -> Result<&'a [i32], XputeError> {
         self.array()
     }
-    fn u64_array(&self) -> Result<&'a [u64], MarshalError> {
+    fn u64_array(&self) -> Result<&'a [u64], XputeError> {
         self.array()
     }
-    fn i64_array(&self) -> Result<&'a [i64], MarshalError> {
+    fn i64_array(&self) -> Result<&'a [i64], XputeError> {
         self.array()
     }
-    fn f32_array(&self) -> Result<&'a [f32], MarshalError> {
+    fn f32_array(&self) -> Result<&'a [f32], XputeError> {
         self.array()
     }
-    fn f64_array(&self) -> Result<&'a [f64], MarshalError> {
+    fn f64_array(&self) -> Result<&'a [f64], XputeError> {
         self.array()
     }
 
-    fn bitset(&self) -> Result<Vec<u8>, MarshalError> {
+    fn bitset(&self) -> Result<Vec<u8>, XputeError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         let len = GET_LEN(self.pkt, self.base)?;
         let payload_start = self.base + WORD_SZ;
@@ -426,10 +426,10 @@ impl<'a> NodeCursor<'a> {
         // size.
         let payload_sz = (len as u64 + 7) >> 3;
         if payload_start > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         if payload_sz > (self.pkt.len() as u32 - payload_start) as u64 {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
 
         let mut arr = vec![0u8; len as usize];
@@ -442,29 +442,29 @@ impl<'a> NodeCursor<'a> {
 
     // A STR must end with the NUL that `len` does not count, and its bytes
     // must be UTF-8.
-    fn str_ref(&self) -> Result<&'a str, MarshalError> {
+    fn str_ref(&self) -> Result<&'a str, XputeError> {
         if self.base + WORD_SZ > self.pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         let nbyte = GET_LEN(self.pkt, self.base)?;
         let payload_start = self.base + WORD_SZ;
         if payload_start > self.pkt.len() as u32
             || nbyte as u64 + 1 > (self.pkt.len() as u32 - payload_start) as u64
         {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         let bytes = self.pkt;
         if bytes[(payload_start + nbyte) as usize] != 0 {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         core::str::from_utf8(&bytes[payload_start as usize..(payload_start + nbyte) as usize])
-            .map_err(|_| MarshalError::new(Errno::EBADMSG))
+            .map_err(|_| XputeError::new(Errno::EBADMSG))
     }
 
     /// Every string is checked as UTF-8, and every offset against the next one
     /// and the end, before any string is returned.
-    fn strs(&self) -> Result<StrList<'a>, MarshalError> {
-        let bad = || MarshalError::new(Errno::EBADMSG);
+    fn strs(&self) -> Result<StrList<'a>, XputeError> {
+        let bad = || XputeError::new(Errno::EBADMSG);
         if self.base + WORD_SZ > self.pkt.len() as u32 {
             return Err(bad());
         }
@@ -513,8 +513,8 @@ impl<'a> NullCursor<'a> {
         false
     }
 
-    pub fn as_branch(self) -> Result<BranchCursor<'a>, MarshalError> {
-        Err(MarshalError::new(Errno::EFAULT))
+    pub fn as_branch(self) -> Result<BranchCursor<'a>, XputeError> {
+        Err(XputeError::new(Errno::EFAULT))
     }
 
     pub fn opt(self) -> Option<NullCursor<'a>> {
@@ -542,18 +542,18 @@ impl PartialEq for BranchCursor<'_> {
 }
 
 impl<'a> BranchCursor<'a> {
-    pub fn new(pkt: &'a [u8], base: u32) -> Result<BranchCursor<'a>, MarshalError> {
+    pub fn new(pkt: &'a [u8], base: u32) -> Result<BranchCursor<'a>, XputeError> {
         let cursor = NodeCursor::new(pkt, base, SpecialType::BRANCH as u8);
         let pkt = &cursor.pkt;
 
         if base + WORD_SZ > pkt.len() as u32 {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         let len = GET_LEN(pkt, base)?;
 
         let table_off = base + WORD_SZ;
         if len > (pkt.len() as u32 - table_off) / WORD_SZ {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
 
         let child_start = ENTRY_OFF(base, len);
@@ -572,7 +572,7 @@ impl<'a> BranchCursor<'a> {
         true
     }
 
-    pub fn as_branch(self) -> Result<BranchCursor<'a>, MarshalError> {
+    pub fn as_branch(self) -> Result<BranchCursor<'a>, XputeError> {
         Ok(self)
     }
 
@@ -581,7 +581,7 @@ impl<'a> BranchCursor<'a> {
     }
 
     /// A shallow read: a child branch is returned as its cursor, unread.
-    pub fn get(&self) -> Result<ShallowNodeValue<'a>, MarshalError> {
+    pub fn get(&self) -> Result<ShallowNodeValue<'a>, XputeError> {
         let mut arr = Vec::with_capacity(self.len as usize);
         for i in 0..self.len {
             let cur = self.at(i)?;
@@ -593,11 +593,11 @@ impl<'a> BranchCursor<'a> {
         Ok(NodeValue::List(arr))
     }
 
-    pub fn get_at(&self, idx: u32) -> Result<ShallowNodeValue<'a>, MarshalError> {
+    pub fn get_at(&self, idx: u32) -> Result<ShallowNodeValue<'a>, XputeError> {
         self.at(idx)?.get()
     }
 
-    pub fn get_deep(&self) -> Result<NodeValue<'a>, MarshalError> {
+    pub fn get_deep(&self) -> Result<NodeValue<'a>, XputeError> {
         let mut arr = Vec::with_capacity(self.len as usize);
         for i in 0..self.len {
             let cur = self.at(i)?;
@@ -608,9 +608,9 @@ impl<'a> BranchCursor<'a> {
 
     /// A child with a zero offset is absent and comes back as a `Null` cursor
     /// of its type. An index past the branch is EFAULT.
-    pub fn at(&self, idx: u32) -> Result<Cursor<'a>, MarshalError> {
+    pub fn at(&self, idx: u32) -> Result<Cursor<'a>, XputeError> {
         if idx >= self.len {
-            return Err(MarshalError::new(Errno::EFAULT));
+            return Err(XputeError::new(Errno::EFAULT));
         }
         let entry_off = ENTRY_OFF(self.cursor.base, idx);
 
@@ -620,12 +620,12 @@ impl<'a> BranchCursor<'a> {
             return Ok(Cursor::Null(NullCursor::new(self.cursor.pkt, type_)));
         }
         if rel_off > self.cursor.pkt.len() as u32 - self.cursor.base {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         let base = self.cursor.base + rel_off;
         let end = self.end_of(idx);
         if base < self.child_start || base >= end {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         CURSOR(&self.cursor.pkt[..end as usize], base, type_)
     }
@@ -642,15 +642,15 @@ impl<'a> BranchCursor<'a> {
             .map_or(end, |rel_off| base.saturating_add(rel_off).min(end))
     }
 
-    pub fn at_branch(&self, idx: u32) -> Result<BranchCursor<'a>, MarshalError> {
+    pub fn at_branch(&self, idx: u32) -> Result<BranchCursor<'a>, XputeError> {
         self.at(idx)?.as_branch()
     }
 
-    pub fn children(&self) -> Result<Vec<Cursor<'a>>, MarshalError> {
+    pub fn children(&self) -> Result<Vec<Cursor<'a>>, XputeError> {
         (0..self.len).map(|i| self.at(i)).collect()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = Result<Cursor<'a>, MarshalError>> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = Result<Cursor<'a>, XputeError>> + '_ {
         (0..self.len).map(move |i| self.at(i))
     }
 }

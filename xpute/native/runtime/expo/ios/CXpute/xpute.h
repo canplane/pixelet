@@ -1,85 +1,67 @@
 // @xpute/native-runtime/ios/CXpute/xpute.h
 
-// This is the C ABI of a guest linked into its host's own process, for an app
-// in C, Objective-C or Swift. The guest runs on its own thread, which begins a
-// wanted entry at a display frame (`xpute_vsync`; xpute-native-host
-// native/thread.rs). The app's thread waits on the guest only for an entry it
-// runs, and it answers the guest's calls.
+// This is the C ABI of xpute's runtime linked into the app beside its guest,
+// for an app in C, Objective-C or Swift; the app's native library exports it
+// (xpute-native-host `native_abi!`). The runtime runs on the core's thread,
+// its event loop serving the guest's link, and carries the UI's link to it:
+// the UI's methods on the guest's objects (`xpute_post`), its answers to the
+// methods of the objects it serves (`xpute_answer`), and a batch of what the
+// runtime sends the UI, handed over on a notify (`xpute_take`). Every call
+// that reaches the runtime posts a task onto the core's thread's queue and
+// returns.
 
 #pragma once
 
-#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-// Runs an entry that ends no sooner than deadline_ms after it starts, and waits
-// until an entry begun after this call has ended, answering the guest's calls
-// meanwhile. Returns when the guest wants the next entry, in ms: 0 for at
-// once, -1 for never. The first call boots the guest, and its first entry
-// checks the front the host laid against the guest's manifest. Returns NaN
-// once the guest has stopped: its thread is gone, and no later entry runs.
-double xpute_run(double deadline_ms);
+// Starts the runtime on the core's thread, once. `named`, `named_len` are the
+// named handles of the interfaces the UI serves (remote.ts `Remote.named`);
+// `prefixes`, `prefixes_len` the prefixes the UI mounts openers at, as a
+// lowered `list<list<token>>` packet (the Canonical ABI, xpute:link/types
+// `token`); `files_dir` the directory the app keeps its files in and
+// `cache_dir` the one it keeps its caches in, UTF-8 and NUL-terminated.
+void xpute_start(const uint32_t *named, size_t named_len, const uint8_t *prefixes,
+                 size_t prefixes_len, const char *files_dir, const char *cache_dir);
 
-// Asks for an entry at the next display frame, after something came that the
-// guest has to take.
-void xpute_wake(void);
+// Makes `notify` be told that a batch waits for `xpute_take`; null sets none.
+// It is called on the core's thread, and hands the news to the JavaScript
+// thread. Set before `xpute_start`.
+void xpute_notify_on(void (*notify)(void));
 
-// Says that an input came now, so the entries are interactive for a while.
-void xpute_input(void);
+// Makes `stopped` be told that the guest stopped, with its report: the errno,
+// the file of `file_len` UTF-8 bytes, not NUL-terminated, the line, and two
+// numbers of the guest's. Null sets none. It is called on the core's thread,
+// or on any thread for a failure of the host's own, and hands the report to
+// the JavaScript thread. Set before `xpute_start`.
+void xpute_stopped_on(void (*stopped)(int32_t errnum, const char *file, size_t file_len,
+                                      uint32_t line, uint64_t n1, uint64_t n2));
 
-// The platform's display link calls this at each display frame, age_ms after
-// that frame's time. A frame begins an entry when one is wanted and the pacing
-// admits it.
-void xpute_vsync(double age_ms);
+// Makes `trap` be told that the guest trapped; null sets none. It is
+// called on the core's thread, and hands the news to the JavaScript thread.
+// Set before `xpute_start`.
+void xpute_trap_on(void (*trap)(void));
 
-// From now on, only an entry `xpute_run` runs may begin. An app calls this
-// while it is hidden.
-void xpute_pause(void);
+// Sends the UI's method `m` of the guest's object `h`, its request `tag` the
+// UI's (remote.ts `Remote.send`), with the packet `pkt` of `len` bytes, or
+// with none where `pkt` is null and `len` 0. Its answer comes in a batch.
+void xpute_post(uint32_t tag, uint32_t h, uint32_t m, const uint8_t *pkt, size_t len);
 
-// Entries begin again at the display's frames.
-void xpute_resume(void);
+// Answers the request `tag` the runtime sent the UI, a method of an object
+// the UI serves that it answers later, with `result` and the data `data` of
+// `len` bytes, or none where `data` is null and `len` 0.
+void xpute_answer(uint32_t tag, int32_t result, const uint8_t *data, size_t len);
 
-// Returns the first byte of the guest's memory, and writes its size through
-// `bytes`, which may be null. The host lays the front's header in this
-// memory, and a call's frame lies in it.
-uint8_t *xpute_mem(uint32_t *bytes);
-
-// Makes `answer` answer the guest's calls; null sets none. Each call is a frame
-// laid at an offset of the memory, and it is answered with a value or -errno on
-// the thread waiting in `xpute_run` or on the thread calling `xpute_answer`.
-// `answer` must not call into the guest.
-void xpute_call_on(int32_t (*answer)(uint32_t at));
-
-// Makes `f` be called from the guest's thread with news; null sets none. The
-// news is that frames wait for `xpute_take`, that a call waits for `xpute_answer`, or that the guest
-// has stopped. `f` must not call into the guest: it hands the news to the app's
-// thread, which then calls `xpute_answer` and `xpute_take`.
-void xpute_notify_on(void (*f)(void));
-
-// Answers, on this thread, the call that waits for its answer, if one does.
-void xpute_answer(void);
-
-// Starts the host's own thread, the app having laid the front's header, and
-// forgets what an earlier app attached left; what the guest sent is still
-// served. `fs` says whether the manifest asks for the file device.
-void xpute_attach(bool fs);
-
-// The program's numbers for frame pacing (@xpute/web-host sched/frame_pacing.ts
-// `FramePacingConfig`), given before the entries run.
-void xpute_pace(double pace_hz, double margin_share, double batch_frames, double settle_ms);
-
-// Queues a frame for the guest.
-void xpute_post(uint32_t tag, uint32_t cmd, uint32_t flags, int32_t result, const uint8_t *pkt,
-                size_t len);
-
-// Hands over what the app has not heard from the guest, a batch of
-// frames: six little-endian u32s (tag, command, flags, result, the packet's
-// length, the named memory's length), then each of those bytes padded to 8.
-// The bytes are the app's until `xpute_taken_free`.
+// Hands over the batch the UI has not taken, and writes its length through
+// `len`: each message an XTP packet laid after its length (a u32, then four
+// zero bytes, so the packet starts on a word), padded to 8 bytes. The bytes
+// are the caller's until `xpute_taken_free(at, len)`.
 uint8_t *xpute_take(size_t *len);
 void xpute_taken_free(uint8_t *at, size_t len);
 
-// Completes the open of `fd` with the file's bytes, or with a negative result
-// and the number the store refused with.
-void xpute_fs_complete_open(uint32_t fd, int32_t result, uint32_t detail, const uint8_t *bytes,
-                     size_t len);
+// Returns the first byte of the core's memory, and writes its size through
+// `len`. The UI reads and writes there the buffers the guest lends it.
+uint8_t *xpute_mem(uint32_t *len);
+
+// Tells the runtime that the app was hidden (0) or shown (1).
+void xpute_life(int32_t shown);

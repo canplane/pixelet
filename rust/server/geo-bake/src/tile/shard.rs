@@ -26,6 +26,7 @@ use crate::pyramid::{fold, orphan_tiles, write_manifest, Absent, Base, Staged, T
 use crate::source;
 use crate::util;
 use crate::util::git_sha;
+use pxl_spec::bake::publication::FORMAT;
 use pxl_spec::space::coord::zoom::{Zoom, SHARD_ZOOM};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
@@ -402,7 +403,7 @@ impl Run {
         if self.commit {
             self.stage.commit::<L>()?;
             let mut fields =
-                serde_json::json!({ "source": src_of(reads)?, "format": L::LAYER.format() });
+                serde_json::json!({ "source": src_of(reads)?, "format": FORMAT[L::LAYER as usize] });
             // The commit wrote them before it moved anything.
             if let Some(shards) = source::manifest(&self.stage.set.root)?
                 .as_ref()

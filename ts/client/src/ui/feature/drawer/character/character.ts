@@ -39,18 +39,18 @@ export const GENDER_LABEL_KEY: Readonly<Record<Gender, string>> = {
   [GENDER_MALE]: "drawer.character.male_label",
 };
 
-export function personsOf(gender: Gender): readonly Character[] {
+export function persons_of(gender: Gender): readonly Character[] {
   return PERSONS.filter((v) => group.person.gender[v.number] === gender);
 }
 
-export function genderOf(character: Character): Gender {
+export function gender_of(character: Character): Gender {
   const n = group.person.gender[character.number];
   return GENDERS.find((g) => g === n) ?? GENDERS[0];
 }
 
 /** The character a setting's number names; the setting's default for a
  * number that names none, or before the core has given one. */
-function characterAt<V extends Character>(
+function character_at<V extends Character>(
   characters: readonly V[],
   number: number | undefined,
   fallback: number,
@@ -61,10 +61,10 @@ function characterAt<V extends Character>(
   );
 }
 
-export function personAt(number: number | undefined): Character {
-  return characterAt(PERSONS, number, SETTING.person.default);
+export function person_at(number: number | undefined): Character {
+  return character_at(PERSONS, number, SETTING.person.default);
 }
 
-export function petAt(number: number | undefined): Pet {
-  return characterAt(PETS, number, SETTING.pet.default);
+export function pet_at(number: number | undefined): Pet {
+  return character_at(PETS, number, SETTING.pet.default);
 }

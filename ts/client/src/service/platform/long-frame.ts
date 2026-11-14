@@ -37,19 +37,19 @@ export function watch(heard: (frame: LongFrame) => void): void {
     new PerformanceObserver((list) => {
       for (const raw of list.getEntries()) {
         const e = raw as LoafEntry;
-        const scriptMs =
+        const script_ms =
           e.scripts?.reduce((sum, s) => sum + s.duration, 0) ?? 0;
-        const renderMs =
+        const render_ms =
           e.renderStart > 0
             ? Math.max(0, e.startTime + e.duration - e.renderStart)
             : 0;
         heard({
           source: "loaf",
           t: e.startTime,
-          durationMs: e.duration,
-          blockingMs: e.blockingDuration ?? 0,
-          scriptMs,
-          renderMs,
+          duration_ms: e.duration,
+          blocking_ms: e.blockingDuration ?? 0,
+          script_ms,
+          render_ms,
         });
       }
     }).observe({ type: ENTRY.loaf, buffered: true });
@@ -60,10 +60,10 @@ export function watch(heard: (frame: LongFrame) => void): void {
         heard({
           source: "longtask",
           t: e.startTime,
-          durationMs: e.duration,
-          blockingMs: Math.max(0, e.duration - LONG_TASK_MS),
-          scriptMs: 0,
-          renderMs: 0,
+          duration_ms: e.duration,
+          blocking_ms: Math.max(0, e.duration - LONG_TASK_MS),
+          script_ms: 0,
+          render_ms: 0,
         });
       }
     }).observe({ type: ENTRY.longtask, buffered: true });

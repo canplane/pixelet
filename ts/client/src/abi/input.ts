@@ -9,7 +9,7 @@ import {
   of_PointerType,
 } from "./input.enum.ts";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError, XputeError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import type { Lift } from "@xpute/link/cabi.ts";
 import type { Handle, Method, Sender } from "@xpute/link/link.ts";
 
@@ -33,13 +33,13 @@ export const XR_POSE_END: Method = 6;
 
 export function load_PointerPhase(r: Lift, at: number): PointerPhase {
   const v = of_PointerPhase(r.case(at, 5));
-  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (v === null) throw new XputeError(ERRNO_EBADMSG);
   return v;
 }
 
 export function load_PointerType(r: Lift, at: number): PointerType {
   const v = of_PointerType(r.case(at, 3));
-  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (v === null) throw new XputeError(ERRNO_EBADMSG);
   return v;
 }
 

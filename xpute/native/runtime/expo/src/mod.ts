@@ -2,47 +2,49 @@
 
 /**
  * This is xpute's native module, which an Expo app autolinks (ios/, android/).
- * It gives the core linked into the app, which xpute's native host opens.
- * The core is the app's core crate, named by `xpute.guest` in the app's
- * package.json and built along with the app (the app's script/core-build.py).
- *
- * The core's memory is one ArrayBuffer over the region the core took, with
- * no copy. The core runs on its own thread, which begins its entries at the
- * display's frames, and the runtime on another (xpute-native-host native/thread.rs,
- * serve.rs). The JavaScript thread holds the UI, which posts frames and hears a
- * batch of them when told (`onNotify`, `take`).
+ * It starts the runtime linked into the app beside the core, on the core's
+ * own thread (ios/CXpute/xpute.h `xpute_start`), and carries the UI's link to
+ * it and back, as a page's port carries it to its worker (remote.ts
+ * `Remote`): the UI sends its methods on the guest's objects (`post`) and
+ * answers the methods of its own objects that the runtime sent it later
+ * (`answer`), and takes what the runtime sends it in a batch on one notify
+ * (`onNotify`, `take`). The core's memory is one ArrayBuffer over its region,
+ * with no copy (`mem`). The module tells the runtime of the app's lifecycle
+ * itself (Swift, Kotlin), not through JavaScript.
  */
 
-import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import { requireNativeModule } from "expo";
 
+/** The guest's stop, as its host reports it (xpute-native-host stop.rs
+ * `Stop`): `n1` and `n2`, u64s, in their decimal digits. */
+export interface Stop {
+  errnum: i32;
+  file: string;
+  line: u32;
+  n1: string;
+  n2: string;
+}
+
 interface Xpute {
-  /** `onNotify` fires when frames wait for `take`, or a call for `answer`. */
-  addListener(event: "onNotify", listener: () => void): { remove(): void };
-  mem(): ArrayBuffer;
-  /** Asks for an entry at the next display frame. */
-  wake(): void;
-  /** Says that an input came now, so the entries are interactive for a while. */
-  input(): void;
-  /** From now on only an entry `run` runs may begin. */
-  pause(): void;
-  /** Entries begin again at the display's frames. */
-  resume(): void;
-  /** Answers here the call that waits, if one does. */
-  answer(): void;
-  /** Starts the runtime's own thread; `fs` says whether the manifest asks for
-   * the file device. */
-  attach(fs: boolean): void;
-  /** The program's numbers for frame pacing, given before the entries run. */
-  pace(paceHz: f64, marginShare: f64, batchFrames: f64, settleMs: f64): void;
-  /** Queues a frame for the core. */
-  post(tag: u32, cmd: u32, flags: u32, result: i32, pkt: Uint8Array): void;
-  /** Hands over what the UI has not heard (xpute.h `xpute_take`). */
+  /** `onNotify` fires when a batch waits for `take`, and `onTrap` when the
+   * guest trapped. */
+  addListener(event: "onNotify" | "onTrap", listener: () => void): { remove(): void };
+  /** `onStopped` fires when the guest stopped, with its report. */
+  addListener(event: "onStopped", listener: (stop: Stop) => void): { remove(): void };
+  /** Starts the runtime on the core's thread, once: `named` the named handles
+   * of the interfaces the UI serves (remote.ts `Remote.named`), `prefixes` the
+   * prefixes the UI mounts openers at, a lowered `list<list<token>>` packet. */
+  start(named: readonly u32[], prefixes: Uint8Array): void;
+  /** Sends the UI's method `m` of the guest's object `h`, its request `tag`;
+   * its answer comes in a batch. */
+  post(tag: u32, h: u32, m: u32, pkt: Uint8Array | null): void;
+  /** Answers the request `tag` the runtime sent the UI to answer later. */
+  answer(tag: u32, result: i32, data: Uint8Array | null): void;
+  /** Hands over the batch the UI has not taken (xpute.h `xpute_take`). */
   take(): ArrayBuffer;
-  /** Completes the open of `fd`, with its bytes or a negative result. */
-  fsCompleteOpen(fd: u32, result: i32, detail: u32, bytes: Uint8Array): void;
-  /** Makes `answer` answer the core's calls from here on. */
-  callOn(answer: (at: u32) => i32): void;
+  /** The core's memory, where the guest lends the UI its buffers. */
+  mem(): ArrayBuffer;
   /** Writes a line to the process's output: stdout on iOS, the log under the
    * tag `xpute` on Android. */
   log(line: string): void;

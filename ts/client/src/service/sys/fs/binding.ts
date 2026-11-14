@@ -19,10 +19,7 @@ import {
 } from "@xpute/link/abi/fs/types.enum.ts";
 
 import { LEAF_ZOOM, path, SHARD_ZOOM } from "@/abi/file.spec.ts";
-import {
-  BASE_LAYERS,
-  TILE_SPHERE,
-} from "@/service/origin/publication.spec.ts";
+import { BASE_LAYERS, TILE_SPHERE } from "@/abi/publication.spec.ts";
 import { read_asset } from "@/service/sys/fs/asset.ts";
 import { OBJECTS, TOP_KEY } from "@/service/sys/fs/object.ts";
 import { source_decl } from "@/service/sys/fs/source.ts";
@@ -78,27 +75,32 @@ function string_of(rest: Path, form: RegExp): string | undefined {
     : undefined;
 }
 
-/** The base layers' tiles, each by its layer's number and its quadkey. */
-const LAYER: Handler = {
-  open([n, ...rest], signal) {
-    const layer = typeof n === "number" ? BASE_LAYERS[n] : undefined;
-    const key = string_of(rest, QUADKEY);
-    if (layer === undefined || key === undefined) return none();
-    return read_object(source_decl()!, layer, key, signal);
-  },
-};
+/** A base layer's tiles, each by its quadkey. */
+function base(layer: (typeof BASE_LAYERS)[number]): Handler {
+  return {
+    open(rest, signal) {
+      const key = string_of(rest, QUADKEY);
+      if (key === undefined) return none();
+      return read_object(source_decl()!, layer, key, signal);
+    },
+  };
+}
 
-/** Each node's handler, beside the generated node it belongs to. */
+/** Each node's handler, beside the generated node it belongs to: each base
+ * layer's at the node numbered as the layer is (file.json `BASE`). */
 const HANDLERS: ReadonlyMap<Node, Handler> = new Map<Node, Handler>([
-  [path.LAYER, LAYER],
+  ...BASE_LAYERS.map((layer, n): [Node, Handler] => [
+    walk([n])![0],
+    base(layer),
+  ]),
   [
-    path.SPHERE,
+    path.EARTH.SPHERE,
     {
       open: (rest, signal) =>
         rest.length === 0
           ? read_object(
               source_decl()!,
-              BASE_LAYERS[path.SPHERE.LAYER],
+              BASE_LAYERS[path.EARTH.ID],
               TILE_SPHERE,
               signal,
             )

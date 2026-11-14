@@ -90,6 +90,12 @@ wait for the catalog's redesign.
 Native work stops here; neither it nor C++ is widened now (**the user**). What was
 decided before the pause:
 
+> Since 2026-11-14 (8a9b0eabe9): the C++ guest runs on the link as the
+> Rust guest does: `xpute/cpp/xpute/link` holds the link machine,
+> `xpute/cpp/xpute/guest` the guest's end, and xpute-link-gen writes its calls
+> and serves. The old core, the conformance core and their tests are gone, and
+> the C++ builds natively and for wasm32.
+
 - The runtime runs on the core's thread, as the page's worker holds the runtime
   and the core together (**the user**, on the agents' proposal). The core thread
   waits on one task queue, and other threads only push to it.

@@ -5,75 +5,61 @@ package xpute
 import java.nio.ByteBuffer
 
 /**
- * This is xpute's runtime on a device: its JNI bridge to the host linked into
- * the app with the guest. These are the same calls that the iOS module's Swift
- * makes through the C ABI (xpute.h). The guest is the shared library that the
- * module's build makes of the app's guest crate (build.gradle). The guest runs
- * on its own thread, which begins its entries at the display's frames; the
- * app's thread asks for entries, waits on it only for an entry it runs, and
- * answers its calls.
+ * This is xpute's runtime on Android as JNI reaches it: the calls the iOS
+ * module's Swift makes through the C ABI (xpute.h), exported by the app's
+ * native library, which the module's build names (build.gradle). The runtime
+ * runs on the core's thread; each call posts its task there and returns. It
+ * tells of a batch, a stop and a trap through the static callbacks below,
+ * which it calls from its threads, attached to the VM as daemons.
  * It takes nothing of React Native's; the Expo module (XputeModule.kt) is one
  * app's way to reach it.
  */
 object Runtime {
   init {
-    System.loadLibrary(BuildConfig.GUEST)
+    System.loadLibrary(BuildConfig.RUNTIME)
   }
 
-  /** Asks for an entry at the next display frame. */
-  external fun wake()
+  /** Makes the runtime reach this class's static callbacks. Called before
+   * `start`. */
+  external fun init()
 
-  /** Says that an input came now. */
-  external fun input()
+  /** Starts the runtime on the core's thread, once (xpute.h `xpute_start`). */
+  external fun start(named: IntArray, prefixes: ByteArray, filesDir: String, cacheDir: String)
 
-  /** Tells the guest's thread of a display frame, `ageMs` after its time. */
-  external fun vsync(ageMs: Double)
+  /** Sends the UI's method `m` of the guest's object `h` (xpute.h
+   * `xpute_post`); null `pkt` for none. */
+  external fun post(tag: Int, h: Int, m: Int, pkt: ByteArray?)
 
-  /** From now on only an entry `run` runs may begin. */
-  external fun pause()
+  /** Answers the request `tag` the runtime sent the UI (xpute.h
+   * `xpute_answer`); null `data` for none. */
+  external fun answer(tag: Int, result: Int, data: ByteArray?)
 
-  /** Entries begin again at the display's frames. */
-  external fun resume()
-
-  /** Answers on this thread the call that waits, if one does. */
-  external fun answer()
-
-  /** Starts the host's own thread (xpute.h `xpute_attach`). */
-  external fun attach(fs: Boolean)
-
-  /** The program's numbers for frame pacing, given before the entries run. */
-  external fun pace(paceHz: Double, marginShare: Double, batchFrames: Double, settleMs: Double)
-
-  /** Queues a frame for the guest. */
-  external fun post(tag: Int, cmd: Int, flags: Int, result: Int, pkt: ByteArray)
-
-  /** Hands over what the UI has not heard (xpute.h `xpute_take`). */
+  /** Hands over the batch the UI has not taken (xpute.h `xpute_take`). */
   external fun take(): ByteArray
 
-  /** Completes the open of `fd`. */
-  external fun fsCompleteOpen(fd: Int, result: Int, detail: Int, bytes: ByteArray)
+  /** The core's memory, a direct buffer over its whole region. */
+  external fun mem(): ByteBuffer
 
-  /** The function that answers the guest's call laid at the byte it is given,
-   * on the app's thread. */
-  @Volatile var answer: ((Int) -> Int)? = null
+  /** Tells the runtime that the app was hidden or shown. */
+  external fun life(shown: Boolean)
 
-  /** `onNotify` calls this, and it sends the module's event (XputeModule.kt
-   * `onNotify`). */
+  /** These send the module's events (XputeModule.kt). */
   @Volatile var notify: (() -> Unit)? = null
+  @Volatile var stopped: ((errnum: Int, file: String, line: Int, n1: Long, n2: Long) -> Unit)? = null
+  @Volatile var trap: (() -> Unit)? = null
 
-  /** The guest's host (xpute-native-host src/jni.rs `call`) calls this on the
-   * app's thread, inside `run` or `answer`, for the call laid at `at`.
-   * The call is answered before the entry goes on, with ENOSYS (-38) when
-   * nothing answers. */
-  @JvmStatic fun call(at: Int): Int = answer?.invoke(at) ?: -38
-
-  /** The guest's host (xpute-native-host src/jni.rs `notify`) calls this from
-   * the guest's thread, which it attached to the VM, when an entry has ended,
-   * when a call waits, or when the guest has stopped. */
+  /** A batch waits for `take`. */
   @JvmStatic fun onNotify() {
     notify?.invoke()
   }
 
-  /** The memory, a direct buffer over the whole region the guest took. */
-  external fun mem(): ByteBuffer
+  /** The guest stopped, with its report; `line`, `n1` and `n2` are unsigned. */
+  @JvmStatic fun onStopped(errnum: Int, file: String, line: Int, n1: Long, n2: Long) {
+    stopped?.invoke(errnum, file, line, n1, n2)
+  }
+
+  /** The guest trapped. */
+  @JvmStatic fun onTrap() {
+    trap?.invoke()
+  }
 }

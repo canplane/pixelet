@@ -2,14 +2,6 @@
 //
 // GENERATED from link/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Token {
     Int(i32),
@@ -53,13 +45,13 @@ impl Lent {
     pub const ALIGN: usize = 4;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
-        w.u32(at + 0, *&self.at);
-        w.u32(at + 4, *&self.len);
+        w.u32(at, self.at);
+        w.u32(at + 4, self.len);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Lent, _rt::Errno> {
         Ok(Lent {
-            at: r.u32(at + 0)?,
+            at: r.u32(at)?,
             len: r.u32(at + 4)?,
         })
     }

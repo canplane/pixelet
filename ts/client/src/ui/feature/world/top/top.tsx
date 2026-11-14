@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Defs, LinearGradient, Mask, Rect, Stop, Svg } from "react-native-svg";
 
-import { openModal } from "@/ui/shared/modal.ts";
+import { open_modal } from "@/ui/shared/modal.ts";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { Presence } from "@/ui/shared/component/motion/presence.tsx";
 import {
@@ -13,7 +13,7 @@ import {
   SNAP,
 } from "@/ui/shared/component/motion/transition.ts";
 import { useDim } from "@/ui/shared/component/motion/dim.ts";
-import { haloGap, HaloIcon } from "./halo.tsx";
+import { halo_gap, HaloIcon } from "./halo.tsx";
 import { chrome, color, layer } from "@/ui/shared/component/theme.ts";
 import { CurrentAddress } from "./current-address.tsx";
 import { SensorIcons } from "./sensor-icon.tsx";
@@ -31,13 +31,13 @@ export function TopOverlays() {
   const top = useChromeTop();
 
   const { width } = useWindowSize();
-  const scrimDepth = top + chrome.control + SCRIM_TAIL;
+  const scrim_depth = top + chrome.control + SCRIM_TAIL;
   const from = (width - Math.min(width, SCRIM_WIDTH)) / 2 - SCRIM_FADE;
   const ramp = SCRIM_FADE / (width - 2 * from);
 
   return (
     <>
-      <View style={[styles.scrim, { height: scrimDepth }]}>
+      <View style={[styles.scrim, { height: scrim_depth }]}>
         <Svg width="100%" height="100%">
           <Defs>
             <LinearGradient id="scrim-down" x1="0" y1="0" x2="0" y2="1">
@@ -88,7 +88,7 @@ export function TopOverlays() {
       <BusyDim style={[styles.left, { top }]}>
         <CircularButton
           glyph="line.3.horizontal"
-          onPress={() => openModal("settings")}
+          onPress={() => open_modal("settings")}
           label={t("settings.trigger_aria_label")}
         />
       </BusyDim>
@@ -112,7 +112,7 @@ function SearchStrip() {
   return (
     <Motion {...dim.motion} style={styles.fill}>
       <Pressable
-        onPress={() => openModal("search")}
+        onPress={() => open_modal("search")}
         accessibilityRole="button"
         accessibilityLabel={t("world.search.trigger_aria_label")}
         style={styles.strip}
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    paddingHorizontal: chrome.inset + chrome.control + chrome.controlGap,
+    paddingHorizontal: chrome.inset + chrome.control + chrome.control_gap,
     minHeight: chrome.control,
     zIndex: layer.chrome,
     alignItems: "center",
@@ -189,19 +189,19 @@ const styles = StyleSheet.create({
     right: chrome.inset,
     zIndex: layer.chrome,
     alignItems: "center",
-    gap: chrome.controlGap,
+    gap: chrome.control_gap,
   },
   fill: { alignSelf: "stretch", flex: 1 },
   // The whole strip takes the press, whether the scale or the address shows.
   strip: { flex: 1, alignItems: "center", justifyContent: "center" },
   place: { maxWidth: "100%" },
-  title: { alignItems: "center", gap: haloGap(8) },
+  title: { alignItems: "center", gap: halo_gap(8) },
   // The row is bounded, because a page lays out a row that does not wrap at
   // its content's width, and a long address would run over the buttons.
   search: {
     flexDirection: "row",
     alignItems: "center",
-    gap: haloGap(8),
+    gap: halo_gap(8),
     minWidth: 0,
     maxWidth: "100%",
     flexShrink: 1,

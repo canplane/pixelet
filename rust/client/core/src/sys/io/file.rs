@@ -89,7 +89,7 @@ pub const TOP_ID: u64 = 0;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Refused {
     Storage,
-    Objects(u64),
+    Object(u64),
 }
 
 /// The refused files set aside at once: the storage file, and an objects'
@@ -262,7 +262,7 @@ impl Refused {
     fn path(self) -> Vec<Token> {
         match self {
             Refused::Storage => storage_path(),
-            Refused::Objects(id) => quadrant_path(path::object::ID, id),
+            Refused::Object(id) => quadrant_path(vec![Token::Int(path::object::ID)], id),
         }
     }
 }
@@ -328,26 +328,31 @@ impl<const N: usize> fmt::Write for Text<N> {
     }
 }
 
-/// The path that `stream`'s want `id` opens, built at the length its branch
-/// takes: a tile or a shard by its quadkey after its stream's token, the
-/// objects' top as (OBJECT, TOP). A load opens through the loader
-/// (sys/io/loader.rs), so its stream has no path here.
+/// The path that `stream`'s want `id` opens (file.json `path`): a layer's
+/// tile by its quadkey after the layer's node, numbered as the layer is
+/// (`BASE`), a shard by its quadkey after OBJECT, the objects' top as
+/// (OBJECT, TOP). A load opens through the loader (sys/io/loader.rs), so its
+/// stream has no path here.
 pub fn path_of(stream: Stream, id: u64) -> Option<Vec<Token>> {
-    match stream.row().source {
-        Source::Load => None,
-        Source::Bake(_) | Source::Objects => Some(quadrant_path(stream.token()?, id)),
-    }
+    let head = match stream.row().source {
+        Source::Load => return None,
+        Source::Base(layer) => vec![Token::Int(layer as i32)],
+        Source::Object => vec![Token::Int(path::object::ID)],
+    };
+    Some(quadrant_path(head, id))
 }
 
 /// The path of the tile or shard `id` after `head`: its quadkey, or, for
 /// `TOP_ID`, the objects' top.
-fn quadrant_path(head: i32, id: u64) -> Vec<Token> {
+fn quadrant_path(mut head: Vec<Token>, id: u64) -> Vec<Token> {
     if id == TOP_ID {
-        return vec![Token::Int(head), Token::Int(path::object::top::ID)];
+        head.push(Token::Int(path::object::top::ID));
+        return head;
     }
     let mut key = Text::<KEY_BYTES>::EMPTY;
     Quadrant::of_id(id)
         .write_key(&mut key)
         .or_bug(Errno::EOVERFLOW);
-    vec![Token::Int(head), Token::Str(key.as_str().to_owned())]
+    head.push(Token::Str(key.as_str().to_owned()));
+    head
 }

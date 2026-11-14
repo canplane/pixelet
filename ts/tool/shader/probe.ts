@@ -139,14 +139,14 @@ function cuts(
   for (let i = best.from + 1; i < best.to; i++) {
     const t = lines[i].trim();
     const prev = lines[i - 1].trim();
-    const inContinuing = stack.includes(true);
+    const in_continuing = stack.includes(true);
     if (range && i === range[0] - 1) depth = stack.length;
-    const inRange =
+    const in_range =
       !range ||
       (i >= range[0] - 1 && i <= range[1] - 1 && stack.length === depth);
     if (
-      inRange &&
-      !inContinuing &&
+      in_range &&
+      !in_continuing &&
       !t.startsWith("}") &&
       !t.startsWith("var ") &&
       /[;{}]$/.test(prev)

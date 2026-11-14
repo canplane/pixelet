@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { parse } from "@babel/parser";
-import { treeFile } from "./path.ts";
+import { tree_file } from "./path.ts";
 
 export type Literal = number | string | boolean;
 
@@ -43,7 +43,7 @@ const modules = new Map<string, Module>();
 export function file_of(from: string, spec: string): string | null {
   const base = spec.startsWith(".")
     ? path.resolve(path.dirname(from), spec)
-    : treeFile(from, spec);
+    : tree_file(from, spec);
   if (base === null) return null;
   for (const at of [base, `${base}.ts`, `${base}.tsx`]) {
     if (fs.existsSync(at) && fs.statSync(at).isFile()) return at;

@@ -126,5 +126,5 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         rs: Some("rust/spec/src/asset/catalog.spec.rs"),
         ..DataSpec::DEFAULT
     };
-    table_outputs(&root(), &d, table)
+    table_outputs(&root(), &d, table, &[])
 }

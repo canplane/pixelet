@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/text` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x61d944;
 
@@ -20,6 +12,10 @@ pub const RASTER: _rt::Method = 1;
 
 pub trait Host {
     fn width(&self, weight: u32, px: f64, text: _rt::Lent) -> Result<f64, _rt::Errno>;
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the WIT function's parameters, each its own"
+    )]
     fn raster(
         &self,
         weight: u32,
@@ -36,7 +32,7 @@ pub trait Host {
 struct _Object(_rt::Rc<dyn Host>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
         let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 WIDTH => {
@@ -50,7 +46,7 @@ impl _rt::Object for _Object {
                             data: Some((
                                 8,
                                 Box::new(move |w: &mut _rt::Lower| {
-                                    w.f64(0, *&v);
+                                    w.f64(0, v);
                                 }),
                             )),
                         },
@@ -76,7 +72,7 @@ impl _rt::Object for _Object {
                             data: Some((
                                 4,
                                 Box::new(move |w: &mut _rt::Lower| {
-                                    w.u32(0, *&v);
+                                    w.u32(0, v);
                                 }),
                             )),
                         },
@@ -90,9 +86,9 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `imp` under the interface's handle.
-pub fn mount(imp: _rt::Rc<dyn Host>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+/// Serves `implementation` under the interface's handle.
+pub fn mount(implementation: _rt::Rc<dyn Host>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 mod _rt {

@@ -23,10 +23,6 @@
 
 namespace xpute::gpu {
 
-// The URI the guest opens its GPU device by (gpu/wit/gpu.wit `device`), which the GPU's
-// hosts mount.
-inline constexpr std::array<std::string_view, 2> DEVICE_URI{"xpute:gpu", "device"};
-
 // The URI a guest that draws serves its surface under (gpu/wit/surface.wit `surface`),
 // which its host opens.
 inline constexpr std::array<std::string_view, 2> SURFACE_URI{"xpute:gpu", "surface"};
@@ -206,21 +202,6 @@ inline constexpr std::uint32_t RESIZE = 46u;
 // id, surface. The id names a view of the surface's texture for this entry.
 inline constexpr std::uint32_t CURRENT = 47u;
 
-// address, words. The host writes the device block there: the device's limits
-// (LIMIT_NAME, one word each), then its features (FEATURE_NAME, one bit each, packed in
-// words), then its timestamp period (f32 bits: how many nanoseconds one unit of a resolved
-// timestamp is, 1 when the units are nanoseconds as WebGPU's are), then the surface format
-// it prefers (TEXTURE_FORMAT: the format SURFACE_PREFERRED stands for, as the web's
-// getPreferredCanvasFormat gives it), then the count of uncaptured errors, then the count
-// of unfinished frames, then STATUS. The uncaptured errors are the errors the device raised
-// that no error scope caught, each logged where the host logs. The unfinished frames are
-// the frames the guest has drawn whose work the queue has not yet done. Only the host
-// writes the two counts: first before STATUS, as it writes the rest of the block, and
-// afterwards with release each time a count changes. The guest loads them with acquire once
-// STATUS reads READY, and draws a frame only while the unfinished frames are below its
-// frame latency; both hosts hold a frame to that rule (xpute-gpu-link `admits`).
-inline constexpr std::uint32_t DEVICE = 48u;
-
 // RENDER_PIPELINE's words, then word, ticket. WebGPU's createRenderPipelineAsync; the word
 // is the request's fence (RESULT), answered once the pipeline is made, and until then the
 // guest names the pipeline in no other record. When the device refuses the pipeline, the
@@ -336,10 +317,21 @@ inline constexpr std::uint32_t ALPHA = 8u;
 inline constexpr std::uint32_t ALL = 15u;
 } // namespace COLOR_WRITE
 
-// The words of the device block, in order (op DEVICE): one a limit (LIMIT_NAME), the words
-// that hold a bit a feature (FEATURE_NAME), the timestamp period, the surface format, the
-// uncaptured errors, the unfinished frames and STATUS, the last, which the host stores
-// with release after the rest.
+// The words of the device block, which the guest lends the host to write (gpu/wit/gpu.wit
+// `device.lost`), in order: the device's limits (LIMIT_NAME, one word each), then its
+// features (FEATURE_NAME, one bit each, packed in words), then its timestamp period (f32
+// bits: how many nanoseconds one unit of a resolved timestamp is, 1 when the units are
+// nanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: the
+// format SURFACE_PREFERRED stands for, as the web's getPreferredCanvasFormat gives it), then
+// the count of uncaptured errors, then the count of unfinished frames, then STATUS, the
+// last, which the host stores with release after the rest. The uncaptured errors are the
+// errors the device raised that no error scope caught, each logged where the host logs.
+// The unfinished frames are the frames the guest has drawn whose work the queue has not
+// yet done. Only the host writes the two counts: first before STATUS, as it writes the
+// rest of the block, and afterwards with release each time a count changes. The guest
+// loads them with acquire once STATUS reads READY, and draws a frame only while the
+// unfinished frames are below its frame latency; both hosts hold a frame to that rule
+// (xpute-gpu-link `admits`).
 namespace DEVICE {
 
 inline constexpr std::size_t LIMITS_AT = 0u;

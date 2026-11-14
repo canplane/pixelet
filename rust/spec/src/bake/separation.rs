@@ -7,7 +7,7 @@
 
 use std::collections::TryReserveError;
 
-use xpute_kit::status::error::MarshalError;
+use xpute_kit::status::error::XputeError;
 use xpute_kit::wire::xtp::shape::Shape;
 
 use super::malformed;
@@ -572,7 +572,7 @@ impl<'a> Table<'a> {
         (starts, points, heights, widths, asset_ids, forms, clearances, first_zooms): <Packet as Shape>::Read<
             'a,
         >,
-    ) -> Result<Table<'a>, MarshalError> {
+    ) -> Result<Table<'a>, XputeError> {
         let (points, []) = points.as_chunks::<2>() else {
             return Err(malformed());
         };

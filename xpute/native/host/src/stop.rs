@@ -4,7 +4,7 @@
 //! of a broken invariant, logged and handed to the platform, before the guest
 //! stops (stop.ts). The host's own failures take the same path, and then trap
 //! the link (lib.rs `hook`), as a page's worker that dies is over; a guest's
-//! trap is told by its runtime (xpute-native-runtime link.rs `trapped`), as a
+//! trap is told by its runtime (xpute-native-runtime link.rs `trap`), as a
 //! page's stop and trap are two messages.
 
 use std::rc::Rc;
@@ -25,7 +25,7 @@ pub struct Stop {
 
 struct Report(fn(Stop));
 
-impl abi::stop::stop::Host for Report {
+impl abi::stop::Host for Report {
     fn stopped(&self, errnum: i32, file: String, line: u32, n1: u64, n2: u64) -> Result<(), Errno> {
         log(&format!(
             "[guest] stopped: {errnum} at {file}:{line} ({n1}, {n2})"
@@ -48,7 +48,7 @@ static REPORT: OnceLock<fn(Stop)> = OnceLock::new();
 /// Mounts the stop, `report` hearing it.
 pub fn serve(report: fn(Stop)) {
     let _ = REPORT.set(report);
-    abi::stop::stop::mount(Rc::new(Report(report)));
+    abi::stop::mount(Rc::new(Report(report)));
 }
 
 /// Logs a failure of the host's own and hands it to the platform: from

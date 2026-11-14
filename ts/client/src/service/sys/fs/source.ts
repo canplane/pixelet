@@ -16,7 +16,7 @@ import {
   BASE_LAYERS,
   VERSION_BYTES,
   VERSION_CHARS,
-} from "@/service/origin/publication.spec.ts";
+} from "@/abi/publication.spec.ts";
 
 /**
  * Where the world's source declaration stands:

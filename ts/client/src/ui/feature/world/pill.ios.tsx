@@ -17,9 +17,9 @@ import {
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Backing } from "@/ui/shared/component/backing.tsx";
 import { SNAP } from "@/ui/shared/component/motion/transition.ts";
-import { pillStyles } from "./pill-style.ts";
+import { pill_styles } from "./pill-style.ts";
 import type { PillProps } from "./pill.tsx";
-import { touchOutset } from "@/ui/shared/component/touch.ts";
+import { touch_outset } from "@/ui/shared/component/touch.ts";
 
 // This file exports everything pill.tsx does, with its own `Pill` in place of
 // that one.
@@ -60,14 +60,14 @@ export function Pill({
   last.current = [x, width];
 
   const r = height / 2;
-  const outset = touch ? touchOutset(height) : 0;
+  const outset = touch ? touch_outset(height) : 0;
   // The content stands inside the glass, because interactive glass answers
   // only the touches that reach it through its own content.
   return (
     <View
       {...touch}
       style={[
-        touch ? pillStyles.target : pillStyles.box,
+        touch ? pill_styles.target : pill_styles.box,
         {
           left: x - outset,
           top: -outset,
@@ -101,7 +101,7 @@ export function Pill({
               onContentWidth &&
               ((e) => onContentWidth(e.nativeEvent.layout.width))
             }
-            style={[pillStyles.content, { height }]}
+            style={[pill_styles.content, { height }]}
           >
             {children}
           </View>

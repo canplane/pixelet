@@ -14,16 +14,16 @@ import { SNAP } from "@/ui/shared/component/motion/transition.ts";
 import {
   chrome,
   color,
-  disabledContent,
+  disabled_content,
   surface,
 } from "@/ui/shared/component/theme.ts";
 
 interface StackItem {
   label: string;
-  onPress: () => void;
+  on_press: () => void;
   glyph?: GlyphName;
   face?: ReactNode;
-  isActive?: boolean;
+  is_active?: boolean;
   disabled?: boolean;
 }
 
@@ -49,7 +49,7 @@ export function ButtonStack({
           key={item.label}
           // A disabled button still takes the touch, so that a tap on it does
           // not reach the world.
-          onPress={item.disabled ? undefined : item.onPress}
+          onPress={item.disabled ? undefined : item.on_press}
           accessibilityRole="button"
           accessibilityLabel={item.label}
           accessibilityState={{ disabled: item.disabled }}
@@ -59,7 +59,7 @@ export function ButtonStack({
             <Motion
               to={{
                 opacity: item.disabled
-                  ? disabledContent
+                  ? disabled_content
                   : pressed && !SYSTEM_BACKING
                     ? 0.5
                     : 1,
@@ -71,7 +71,7 @@ export function ButtonStack({
                   <Glyph
                     glyph={item.glyph}
                     size={chrome.glyph}
-                    color={item.isActive ? color.action : LABEL.primary}
+                    color={item.is_active ? color.action : LABEL.primary}
                   />
                 ))}
             </Motion>

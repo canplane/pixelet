@@ -4,7 +4,7 @@
 
 import { type Tracking, of_Tracking } from "./camera.enum.ts";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError, XputeError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import type { Lift } from "@xpute/link/cabi.ts";
 import type { Handle, Method, Sender } from "@xpute/link/link.ts";
 
@@ -20,7 +20,7 @@ export const GOTO: Method = 2;
 
 export function load_Tracking(r: Lift, at: number): Tracking {
   const v = of_Tracking(r.case(at, 3));
-  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (v === null) throw new XputeError(ERRNO_EBADMSG);
   return v;
 }
 
@@ -54,15 +54,15 @@ export async function goto(
       w_.f64(8, lat);
       if (dist !== null) {
         w_.u8(16, 1);
-        w_.f64(16 + 8, dist);
+        w_.f64(24, dist);
       }
       if (azimuth !== null) {
         w_.u8(32, 1);
-        w_.f64(32 + 8, azimuth);
+        w_.f64(40, azimuth);
       }
       if (polar !== null) {
         w_.u8(48, 1);
-        w_.f64(48 + 8, polar);
+        w_.f64(56, polar);
       }
     },
   ]);

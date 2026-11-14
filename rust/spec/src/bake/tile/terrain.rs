@@ -2,7 +2,7 @@
 
 //! A baked terrain tile and its wire: `[samples, ground, occupancy, separation]`.
 
-use xpute_kit::status::error::MarshalError;
+use xpute_kit::status::error::XputeError;
 use xpute_kit::wire::xtp::shape;
 use xpute_kit::wire::xtp::MAX_PKT_SZ;
 
@@ -352,7 +352,7 @@ fn expand(cells: &[GroundId]) -> Vec<GroundId> {
 
 // A tile whose every cell's four asset ids are one, as a leaf's are, goes out with one
 // asset id a cell, expanded on decode.
-pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, MarshalError> {
+pub fn encode(tile: &TerrainTile) -> Result<Vec<u8>, XputeError> {
     let four = &tile.cells;
     let one: Option<Vec<GroundId>> = four
         .chunks(4)
@@ -378,7 +378,7 @@ struct Table<'a> {
 }
 
 /// Refused unless every column is a tile's length.
-fn read_tile(pkt: &[u8]) -> Result<Table<'_>, MarshalError> {
+fn read_tile(pkt: &[u8]) -> Result<Table<'_>, XputeError> {
     let (ele, cells, occupancy, separation) = shape::get_deep::<Packet>(pkt)?;
     let occupancy = occupancy_of(occupancy)?;
     let separation = separation::Table::of(separation)?;
@@ -396,7 +396,7 @@ fn read_tile(pkt: &[u8]) -> Result<Table<'_>, MarshalError> {
 /// A packet's asset ids as it holds them, four a cell (`FOLD_COLUMN`), one a
 /// cell, each its own four, or one for the whole tile: which a client's clip levels cut
 /// their bricks' from.
-pub fn cells_of(pkt: &[u8]) -> Result<&[GroundId], MarshalError> {
+pub fn cells_of(pkt: &[u8]) -> Result<&[GroundId], XputeError> {
     Ok(read_tile(pkt)?.cells)
 }
 
@@ -404,7 +404,7 @@ pub fn cells_of(pkt: &[u8]) -> Result<&[GroundId], MarshalError> {
 /// the terrain's fixed range, and its lines onto the heap, owned by the tile, as large as the bake's limit
 /// on a tile's bytes lets them be (`MAX_PKT_BYTES`); a heap that refuses them answers for
 /// itself. Its cells go to its clip levels (`cells_of`).
-pub fn decode_into<E: From<MarshalError> + From<TryReserveError>>(
+pub fn decode_into<E: From<XputeError> + From<TryReserveError>>(
     pkt: &[u8],
     ele: &'static mut [i16],
 ) -> Result<TerrainTile, E> {
@@ -425,7 +425,7 @@ pub fn decode_into<E: From<MarshalError> + From<TryReserveError>>(
 }
 
 // Copied out as the bake holds it, for a tile that outlives its packet.
-pub fn decode(pkt: &[u8]) -> Result<TerrainTile, MarshalError> {
+pub fn decode(pkt: &[u8]) -> Result<TerrainTile, XputeError> {
     let Table {
         ele,
         cells,

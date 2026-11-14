@@ -17,7 +17,7 @@ pub(crate) mod spec;
 use spec::{CMD, METHOD_BITS, NAMED, PKT, RES, RESULT, TAG, WORDS};
 
 /// The bytes a frame's words take, before its packet.
-pub const WORD_BYTES: u32 = WORDS * 4;
+pub const WORD_SZ: u32 = WORDS * 4;
 
 // NAMED is a handle's top bit.
 const _: () = assert!(NAMED == RES >> METHOD_BITS >> 1);
@@ -67,10 +67,10 @@ impl Frame {
         if self.pkt_len == 0 {
             return Ok(None);
         }
-        if u64::from(WORD_BYTES) + u64::from(self.pkt_len) > u64::from(room) {
+        if u64::from(WORD_SZ) + u64::from(self.pkt_len) > u64::from(room) {
             return Err(Errno::EBADMSG);
         }
         // SAFETY: the frame's room in the guest's memory.
-        Ok(Some(unsafe { mem::bytes(at + WORD_BYTES, self.pkt_len) }))
+        Ok(Some(unsafe { mem::bytes(at + WORD_SZ, self.pkt_len) }))
     }
 }

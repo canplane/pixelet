@@ -2,14 +2,6 @@
 //
 // GENERATED from wit/clocks (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `xpute:clocks/monotonic-clock` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x73f703;
 
@@ -23,7 +15,7 @@ pub type Mark = u64;
 pub fn now() -> Result<u64, _rt::Errno> {
     let (r, data) = _rt::link::call(HANDLE, NOW, None);
     _rt::answer(r).and_then(|_| {
-        let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
+        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
         r_.u64(0)
     })
 }
@@ -33,12 +25,12 @@ pub fn wait_for(how_long: u64) -> impl _rt::Future<Output = Result<(), _rt::Errn
         HANDLE,
         WAIT_FOR,
         Some((8, &|w_: &mut _rt::Lower| {
-            w_.u64(0, *&how_long);
+            w_.u64(0, how_long);
         })),
         (),
     );
     async move {
-        let (r, data, lent) = sent.await;
+        let (r, _, _) = sent.await;
         _rt::answer(r)
     }
 }

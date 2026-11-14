@@ -1,8 +1,8 @@
 // xpute-gpu-guest/device.rs
 
 //! This reads the device's block, laid out by gpu/link/spec/api.json's DEVICE
-//! (`spec::device`). The host writes the block where the guest asks for it
-//! (`call::device`), and the guest reads it. The limits come first, one word
+//! (`spec::device`). The host writes the block the guest lends it
+//! (gpu/wit/gpu.wit `device.lost`), and the guest reads it. The limits come first, one word
 //! for each name in LIMIT_NAME; the features take one bit for each name in
 //! FEATURE_NAME; the timestamp period is in nanoseconds per tick, as f32 bits;
 //! the surface format the host prefers is an index into TEXTURE_FORMAT; the

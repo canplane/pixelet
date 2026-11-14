@@ -8,7 +8,7 @@ import {
   ERRNO_EINPROGRESS,
   ERRNO_ENOSYS,
 } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
 import { Lift } from "@xpute/link/cabi.ts";
 import {
@@ -25,6 +25,8 @@ export const HANDLE: Handle = 0x79d455;
 
 /** `run` */
 export const RUN: Method = 0;
+/** `get-device` */
+export const GET_DEVICE: Method = 1;
 /** `[method]device.lost` */
 export const DEVICE_LOST: Method = 0;
 /** `[method]device.ready` */
@@ -34,18 +36,19 @@ export const DEVICE_SETTLED: Method = 2;
 
 export function load_ErrorCode(r: Lift, at: number): ErrorCode {
   const v = of_ErrorCode(r.case(at, 1));
-  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (v === null) throw new XputeError(ERRNO_EBADMSG);
   return v;
 }
 
 export interface Host {
   run(records: Lent, signal_: AbortSignal): Promise<void>;
+  get_device(): number;
 }
 
-/** The object over `imp`. */
+/** The object over `implementation`. */
 function object(
   l: Pick<Link, "task_return" | "on_cancel">,
-  imp: Host,
+  implementation: Host,
 ): LinkObject {
   return {
     call(m, tag, args) {
@@ -55,12 +58,24 @@ function object(
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
             const stop = new AbortController();
-            imp.run(load_Lent(r_, 0), stop.signal).then(
+            implementation.run(load_Lent(r_, 0), stop.signal).then(
               () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());
             return ERRNO_EINPROGRESS;
+          }
+          case GET_DEVICE: {
+            const v = implementation.get_device();
+            return {
+              result: 0,
+              data: [
+                4,
+                (w) => {
+                  w.u32(0, v);
+                },
+              ],
+            };
           }
           default:
             return ERRNO_ENOSYS;
@@ -72,12 +87,12 @@ function object(
   };
 }
 
-/** Serves `imp` under the interface's handle. */
+/** Serves `implementation` under the interface's handle. */
 export function mount(
   l: Pick<Link, "mount_named" | "task_return" | "on_cancel">,
-  imp: Host,
+  implementation: Host,
 ): void {
-  l.mount_named(HANDLE, object(l, imp));
+  l.mount_named(HANDLE, object(l, implementation));
 }
 
 export interface HostDevice {
@@ -86,10 +101,10 @@ export interface HostDevice {
   settled(signal_: AbortSignal): Promise<void>;
 }
 
-/** The object over `imp`. */
+/** The object over `implementation`. */
 export function device(
   l: Pick<Link, "task_return" | "on_cancel">,
-  imp: HostDevice,
+  implementation: HostDevice,
 ): LinkObject {
   return {
     call(m, tag, args) {
@@ -99,7 +114,7 @@ export function device(
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
             const stop = new AbortController();
-            imp.lost(load_Lent(r_, 0), stop.signal).then(
+            implementation.lost(load_Lent(r_, 0), stop.signal).then(
               () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
@@ -108,7 +123,7 @@ export function device(
           }
           case DEVICE_READY: {
             const stop = new AbortController();
-            imp.ready(stop.signal).then(
+            implementation.ready(stop.signal).then(
               () => {
                 const v = { tag: "ok" } as
                   { tag: "ok" } | { tag: "err"; val: ErrorCode };
@@ -118,7 +133,7 @@ export function device(
                     if (v.tag === "ok") {
                     } else {
                       w.u8(0, 1);
-                      w.u8(0 + 1, v.val);
+                      w.u8(1, v.val);
                     }
                   },
                 ]);
@@ -134,7 +149,7 @@ export function device(
                     if (v.tag === "ok") {
                     } else {
                       w.u8(0, 1);
-                      w.u8(0 + 1, v.val);
+                      w.u8(1, v.val);
                     }
                   },
                 ]);
@@ -145,7 +160,7 @@ export function device(
           }
           case DEVICE_SETTLED: {
             const stop = new AbortController();
-            imp.settled(stop.signal).then(
+            implementation.settled(stop.signal).then(
               () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );

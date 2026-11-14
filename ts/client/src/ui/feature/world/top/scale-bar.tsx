@@ -9,7 +9,12 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { Presence } from "@/ui/shared/component/motion/presence.tsx";
 import { LEAVE, SETTLE } from "@/ui/shared/component/motion/transition.ts";
 import { HaloPath, HaloText } from "./halo.tsx";
-import { color, halo, textStyle, weight } from "@/ui/shared/component/theme.ts";
+import {
+  color,
+  halo,
+  text_style,
+  weight,
+} from "@/ui/shared/component/theme.ts";
 import { useView } from "@/ui/shared/watch.ts";
 
 const TICK_PX = 5;
@@ -20,7 +25,7 @@ const LABEL_GAP_PX = 8;
 const BAR_MAX_PX = 80;
 
 /** The length nearest to `m` of the form 1, 2 or 5 × 10ⁿ. */
-function niceLength(m: f64): f64 {
+function nice_length(m: f64): f64 {
   if (!(m > 0)) return 0;
   const base = 10 ** Math.floor(Math.log10(m));
   const f = m / base;
@@ -30,17 +35,16 @@ function niceLength(m: f64): f64 {
 /** The line and its ticks are one path under one halo, so that the halo is no
  * darker where they meet. */
 export function MapScaleBar({ show }: { show: boolean }) {
-  const mPerPx = useView((v) => v.m_per_px);
-  const totalMeters = niceLength(BAR_MAX_PX * mPerPx);
-  const barWidthPx = mPerPx > 0 ? totalMeters / mPerPx : 0;
+  const m_per_px = useView((v) => v.m_per_px);
+  const total_m = nice_length(BAR_MAX_PX * m_per_px);
+  const bar_width_px = m_per_px > 0 ? total_m / m_per_px : 0;
 
   // SI units are case-sensitive: never upper-case the label.
-  const label: string =
-    totalMeters >= 1000 ? `${totalMeters / 1000}km` : `${totalMeters}m`;
+  const label: string = total_m >= 1000 ? `${total_m / 1000}km` : `${total_m}m`;
 
-  const width = barWidthPx + PAD_PX * 2;
+  const width = bar_width_px + PAD_PX * 2;
   const left = PAD_PX + 0.5;
-  const right = left + barWidthPx - 1;
+  const right = left + bar_width_px - 1;
   const at = (f: f64) => round(left + (right - left) * f - 0.5) + 0.5;
   const tick = (f: f64, px: f64) => `M${at(f)} ${PAD_PX}V${PAD_PX + px}`;
   const d =
@@ -48,7 +52,7 @@ export function MapScaleBar({ show }: { show: boolean }) {
     tick(0.5, TICK_PX) +
     tick(0.25, QUARTER_TICK_PX) +
     tick(0.75, QUARTER_TICK_PX);
-  const svgHeight = PAD_PX + TICK_PX + PAD_PX;
+  const svg_height_px = PAD_PX + TICK_PX + PAD_PX;
 
   return (
     <Presence
@@ -60,12 +64,12 @@ export function MapScaleBar({ show }: { show: boolean }) {
       style={styles.root}
     >
       <View style={styles.above}>
-        <HaloText style={scaleLabel}>{label}</HaloText>
+        <HaloText style={scale_label}>{label}</HaloText>
       </View>
       <Svg
         width={width}
-        height={svgHeight}
-        viewBox={`0 0 ${width} ${svgHeight}`}
+        height={svg_height_px}
+        viewBox={`0 0 ${width} ${svg_height_px}`}
       >
         <HaloPath d={d} width={LINE_PX} />
       </Svg>
@@ -86,9 +90,9 @@ const styles = StyleSheet.create({
   },
 });
 
-const scaleLabel = StyleSheet.create({
+const scale_label = StyleSheet.create({
   label: {
-    ...textStyle.caption2,
+    ...text_style.caption2,
     fontWeight: weight.semibold,
     letterSpacing: 0.8,
     fontVariant: ["tabular-nums"],

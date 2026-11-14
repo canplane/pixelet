@@ -202,7 +202,7 @@ constexpr bool type_is_known(NodeType t) noexcept {
 // zero makes the packet malformed (EBADMSG).
 inline Result<std::uint32_t> get_len(std::span<const std::uint8_t> buf, std::uint32_t off) noexcept {
     auto [lo, hi] = get_word(buf, off);
-    if (hi != RESERVED) return marshal_error(Errno::ebadmsg);
+    if (hi != RESERVED) return make_error(Errno::ebadmsg);
     return lo;
 }
 
@@ -216,15 +216,15 @@ struct Desc {
 inline Result<Desc> get_desc(std::span<const std::uint8_t> buf, std::uint32_t off) noexcept {
     auto [lo, desc] = get_word(buf, off);
     auto type = static_cast<NodeType>(desc & DESC_TYPE_MASK);
-    if (desc != type || !type_is_known(type)) return marshal_error(Errno::ebadmsg);
+    if (desc != type || !type_is_known(type)) return make_error(Errno::ebadmsg);
     return Desc{lo, type};
 }
 
 // `unit` must be a power of two no larger than WORD_SZ, or EINVAL.
 inline Result<std::uint32_t> align(std::uint32_t nbyte, std::uint32_t unit) noexcept {
-    if (unit == 0 || (unit & (unit - 1)) != 0 || unit > WORD_SZ) return marshal_error(Errno::einval);
+    if (unit == 0 || (unit & (unit - 1)) != 0 || unit > WORD_SZ) return make_error(Errno::einval);
     std::uint32_t mask = unit - 1;
-    if (nbyte > UINT32_MAX - mask) return marshal_error(Errno::eoverflow);
+    if (nbyte > UINT32_MAX - mask) return make_error(Errno::eoverflow);
     return (nbyte + mask) & ~mask;
 }
 
@@ -248,7 +248,7 @@ inline Result<std::uint32_t> align_sz(NodeType t) noexcept {
     case ScalarType::f64:
         return 8u;
     }
-    return marshal_error(Errno::ebadmsg);
+    return make_error(Errno::ebadmsg);
 }
 
 // One element's size. A strs's element is a u32 offset, and a bitset's is a

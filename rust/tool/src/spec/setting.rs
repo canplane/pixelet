@@ -195,7 +195,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         rs: Some("rust/client/core/src/spec/schema.spec.rs"),
         ..DataSpec::DEFAULT
     };
-    let mut outs = table_outputs(&root(), &d, Node::Obj(table))?;
+    let mut outs = table_outputs(&root(), &d, Node::Obj(table), &[])?;
 
     let mut rs: Vec<String> = vec![String::new()];
     let keys_where = |test: &dyn Fn(&Setting) -> bool| {

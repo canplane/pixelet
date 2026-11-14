@@ -12,18 +12,16 @@ use pxl_spec::bake::publication::BaseLayer;
 use crate::spec;
 pub use crate::spec::demand::StreamName as Stream;
 pub use crate::spec::demand::TaskPhaseName;
-use crate::spec::file::path;
 
 /// Where a stream's wants come from. A `Load` want is an asset file by its
-/// id, which the loader opens (sys/io/loader.rs). A `Bake` want is a bake's
-/// tile by its quadrant, after the bake's id. An `Objects` want
-/// is a shard's objects or the objects' top, which no bake makes, after
-/// OBJECT.
+/// id, which the loader opens (sys/io/loader.rs). A `Base` want is a base
+/// layer's tile by its quadrant. An `Object` want is a shard's objects or the
+/// objects' top.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Source {
     Load,
-    Bake(BaseLayer),
-    Objects,
+    Base(BaseLayer),
+    Object,
 }
 
 /// Where a stream's wants stand in the order a view builds up. The policy
@@ -76,12 +74,12 @@ impl Stream {
     /// The one table of what each stream is.
     pub const fn row(self) -> Row {
         let (source, slotted, class) = match self {
-            Stream::Terrain => (Source::Bake(BaseLayer::Terrain), true, Class::Ground),
-            Stream::Place => (Source::Bake(BaseLayer::Place), false, Class::Place),
-            Stream::Division => (Source::Bake(BaseLayer::Division), false, Class::Aside),
+            Stream::Terrain => (Source::Base(BaseLayer::Terrain), true, Class::Ground),
+            Stream::Place => (Source::Base(BaseLayer::Place), false, Class::Place),
+            Stream::Division => (Source::Base(BaseLayer::Division), false, Class::Aside),
             Stream::Asset => (Source::Load, false, Class::File),
-            Stream::Earth => (Source::Bake(BaseLayer::Earth), true, Class::Picture),
-            Stream::Object => (Source::Objects, false, Class::OnGround),
+            Stream::Earth => (Source::Base(BaseLayer::Earth), true, Class::Picture),
+            Stream::Object => (Source::Object, false, Class::OnGround),
         };
         Row {
             source,
@@ -90,24 +88,10 @@ impl Stream {
         }
     }
 
-    pub const fn bake(self) -> Option<BaseLayer> {
+    pub const fn layer(self) -> Option<BaseLayer> {
         match self.row().source {
-            Source::Bake(layer) => Some(layer),
-            Source::Load | Source::Objects => None,
-        }
-    }
-
-    /// The id the stream's files' paths begin with (file.json `path`), a
-    /// want's id naming the file after it. A load has none,
-    /// because the loader makes its own paths.
-    pub const fn token(self) -> Option<i32> {
-        match self.row().source {
-            Source::Bake(BaseLayer::Terrain) => Some(path::terrain::ID),
-            Source::Bake(BaseLayer::Place) => Some(path::place::ID),
-            Source::Bake(BaseLayer::Division) => Some(path::division::ID),
-            Source::Bake(BaseLayer::Earth) => Some(path::earth::ID),
-            Source::Objects => Some(path::object::ID),
-            Source::Load => None,
+            Source::Base(layer) => Some(layer),
+            Source::Load | Source::Object => None,
         }
     }
 
@@ -115,7 +99,7 @@ impl Stream {
     /// its kind (pxl-spec `BaseLayer::row`). A load and a shard's objects
     /// have none, because only the heap bounds them.
     pub const fn max_body(self) -> Option<u32> {
-        match self.bake() {
+        match self.layer() {
             Some(layer) => Some(layer.row().pkt_cap as u32),
             None => None,
         }
@@ -125,7 +109,7 @@ impl Stream {
     pub const fn of_layer(layer: BaseLayer) -> Stream {
         let mut s = 0;
         while s < Stream::ALL.len() {
-            if let Source::Bake(l) = Stream::ALL[s].row().source {
+            if let Source::Base(l) = Stream::ALL[s].row().source {
                 if l as u32 == layer as u32 {
                     return Stream::ALL[s];
                 }

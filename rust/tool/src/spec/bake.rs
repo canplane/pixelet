@@ -1,25 +1,36 @@
 // pxl-tool/spec/bake.rs
 
 use super::ingest::symbol_number;
-use xpute_gen::spec::data::{table_outputs, DataSpec};
+use xpute_gen::spec::data::{enum_members, table_outputs, DataSpec};
+use xpute_gen::spec::ts_enum;
 
 use super::{
-    file, json_str, line_comments, mark, read, plural, rs_const, rs_doc, rs_member, ts_doc, Node, Output,
+    file, json_str, line_comments, mark, pascal, read, plural, rs_doc, ts_doc, Node, Output,
 };
 use crate::root;
 
-/// publication.json, written by xpute's generator as a data spec, with
-/// `BASE_LAYER`, the enum of `FORMAT`'s kinds in their order, beside it,
-/// its names TypeScript's `BASE_LAYERS`. The tool keeps what is pixelet's own: the object a
-/// tile is published as, read and written by `OBJECT`, and the Worker's copy of
-/// the kinds, bundled apart from the client.
+/// publication.json's outputs, by which a spec that names its enums reaches
+/// them.
+pub(crate) const PUBLICATION: DataSpec = DataSpec {
+    json: "spec/spec/bake/publication.json",
+    ts: Some("ts/client/src/abi/publication.spec.ts"),
+    rs: Some("rust/spec/src/bake/publication.spec.rs"),
+    ..DataSpec::DEFAULT
+};
+
+/// publication.json, written by xpute's generator as a data spec: its
+/// `BASE_LAYER` enum and `FORMAT` keyed on it among the rest. The tool keeps
+/// what is pixelet's own: the object a tile is published as, read and written
+/// by `OBJECT`, and the Worker's copy of the layers' names, bundled apart from
+/// the client.
 pub fn publication_outputs() -> Result<Vec<Output>, String> {
-    const JSON: &str = "spec/spec/bake/publication.json";
-    // The enum of the layers, whose names the Worker's copy takes too.
+    const JSON: &str = PUBLICATION.json;
+    // The enum of the layers, which the spec declares and whose names the
+    // Worker's copy takes too.
     const LAYER: &str = "BASE_LAYER";
     let spec = read(JSON)?;
-    let format = spec.get("FORMAT").ok_or("publication.json: no FORMAT")?;
-    let layers: Vec<&str> = format.named().map(|(k, _)| k).collect();
+    let layer = spec.get(LAYER).ok_or("publication.json: no BASE_LAYER")?;
+    let layers: Vec<&str> = layer.val().arr().unwrap_or_default().iter().filter_map(Node::str).collect();
 
     // A kind's object in a set: the one place its segments are ordered.
     let object_node = spec.get("OBJECT").ok_or("publication.json: no OBJECT")?;
@@ -56,41 +67,17 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     }
     let sphere_doc = sphere_node.lines_at("$doc").unwrap_or_default();
 
-    let mut table: Vec<(String, Node)> = spec
+    let table: Vec<(String, Node)> = spec
         .entries()
         .iter()
         .filter(|(k, _)| k != "OBJECT")
         .cloned()
         .collect();
-    table.push((
-        LAYER.into(),
-        Node::Obj(vec![
-            ("$type".into(), Node::Str("enum".into())),
-            ("$names".into(), Node::Bool(true)),
-            ("$repr".into(), Node::Str("u32".into())),
-            (
-                "$doc".into(),
-                Node::Arr(vec![Node::Str(
-                    "The base layers a version is published for: the kinds of `FORMAT`, numbered in their order.".into(),
-                )]),
-            ),
-            (
-                "$val".into(),
-                Node::Arr(layers.iter().map(|k| Node::Str(k.to_string())).collect()),
-            ),
-        ]),
-    ));
-    let d = DataSpec {
-        json: JSON,
-        ts: Some("ts/client/src/service/origin/publication.spec.ts"),
-        rs: Some("rust/spec/src/bake/publication.spec.rs"),
-        ..DataSpec::DEFAULT
-    };
-    let mut outs = table_outputs(&root(), &d, Node::Obj(table))?;
+    let mut outs = table_outputs(&root(), &PUBLICATION, Node::Obj(table), &[])?;
 
     let mut ts = ts_doc(&object_doc, "");
     ts.extend([
-        "export function tileObject(version: string, name: string): string {".to_string(),
+        "export function tile_object(version: string, name: string): string {".to_string(),
         format!("  return `{}`;", object.replace('{', "${")),
         "}".into(),
     ]);
@@ -111,18 +98,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
         ),
         "    segment.next().is_none().then_some((version, name))".into(),
         "}".into(),
-        String::new(),
-        "impl BaseLayer {".into(),
-        "    /// The format the layer is baked and read in, `FORMAT[layer]`.".into(),
-        "    pub const fn format(self) -> u32 {".into(),
-        "        match self {".into(),
     ]);
-    rs.extend(
-        layers
-            .iter()
-            .map(|k| format!("            BaseLayer::{} => format::{},", rs_member(k), rs_const(k))),
-    );
-    rs.extend(["        }", "    }", "}"].map(String::from));
     for o in &mut outs {
         let tail = if o.path.ends_with(".rs") { &rs } else { &ts };
         o.text = format!("{}\n{}", o.text, file(tail));
@@ -146,6 +122,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
                 .join(", ")
         ),
     ];
+    edge.extend(ts_enum(&pascal(LAYER), &enum_members(LAYER, layer)?));
     // A version is any one segment the declaration names. A name is digits from 0 to 3, one
     // digit for each zoom (pxl-spec space/hierarchy/morton.rs).
     let pattern = object

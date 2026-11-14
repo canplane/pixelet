@@ -8,23 +8,18 @@
 #
 #   awk -f amalgamation.awk -v part=hpp <headers>             > xpute.hpp
 #   awk -f amalgamation.awk -v part=cpp <headers> <sources>   > xpute.cpp
-#   awk -f amalgamation.awk -v part=program <headers> <file>  > file
 #
-# `program` is a program of the library's own written against the two files: its
-# includes of the library become one of xpute.hpp, and its other includes are
-# left as they are. A header is found as the compiler finds it under -I cpp:
+# A header is found as the compiler finds it under -I cpp:
 # beside the file that names it ("frame.hpp"), or from cpp/
 # ("xpute/kit/status/bug.hpp"). A quoted include that the library names and no
 # file given answers is an error, so a header left out of the list fails here
 # and not in a program that includes xpute.hpp.
 
 BEGIN {
-    if (part != "hpp" && part != "cpp" && part != "program") fail("part is hpp, cpp or program, not '" part "'")
-    last = ARGC - 1
+    if (part != "hpp" && part != "cpp") fail("part is hpp or cpp, not '" part "'")
     for (i = 1; i < ARGC; i++) {
         f = ARGV[i]
-        if (part == "program" && i == last) program = f
-        else library[f] = 1
+        library[f] = 1
         n[f] = 0
         while ((got = (getline l < f)) > 0) line[f, ++n[f]] = l
         if (got < 0) fail(f ": cannot be read")
@@ -40,7 +35,7 @@ BEGIN {
         print ""
         print "#pragma once"
         for (i = 1; i < ARGC; i++) emit(ARGV[i])
-    } else if (part == "cpp") {
+    } else {
         print "// xpute.cpp"
         print "//"
         print "// GENERATED from cpp/xpute/ by `make -C cpp amalgamation` (cpp/amalgamation.awk) — do not edit."
@@ -51,8 +46,6 @@ BEGIN {
         # A source need not include again what the header already includes.
         for (i = 1; i < ARGC; i++) if (ARGV[i] ~ /\.hpp$/) scan(ARGV[i])
         for (i = 1; i < ARGC; i++) if (ARGV[i] !~ /\.hpp$/) body(ARGV[i])
-    } else {
-        body(program)
     }
     exit 0
 }
@@ -121,12 +114,10 @@ function body(f, k, l, p, r, depth, blank) {
         if (l ~ /^[ \t]*#[ \t]*pragma[ \t]+once/) continue
         p = quoted(l)
         r = p != "" ? resolve(f, p) : ""
-        if (p != "" && f != program && r == "") fail(f ":" k ": \"" p "\" is not a header of the library")
+        if (p != "" && r == "") fail(f ":" k ": \"" p "\" is not a header of the library")
         if (r != "") {
             if (depth != 0) fail(f ":" k ": the library is included under a conditional, which one file cannot keep")
-            if (f != program || swapped) continue
-            swapped = 1
-            l = "#include \"xpute.hpp\""
+            continue
         } else if (depth == 0 && system_include(l)) {
             if (l in seen) continue
             seen[l] = 1

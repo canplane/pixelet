@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { type StyleProp, StyleSheet, Text, type TextStyle } from "react-native";
 
 import { LABEL } from "@/ui/shared/component/palette.ts";
-import { sectionTitle } from "@/ui/shared/component/theme.ts";
+import { section_title } from "@/ui/shared/component/theme.ts";
 
 export function SectionTitle({
   style,
@@ -21,5 +21,5 @@ export function SectionTitle({
 }
 
 const styles = StyleSheet.create({
-  title: { ...sectionTitle, color: LABEL.secondary },
+  title: { ...section_title, color: LABEL.secondary },
 });

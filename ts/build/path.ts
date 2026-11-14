@@ -66,7 +66,7 @@ const MODULES = `${path.sep}node_modules${path.sep}`;
  * package.json `exports` maps it to, as Node resolves it, including a
  * package's import of its own name. It is null for a relative specifier, for
  * an installed package, and for an import made from an installed package. */
-export function treeFile(from: string, spec: string): string | null {
+export function tree_file(from: string, spec: string): string | null {
   const hit = PREFIXES.find(([prefix]) => spec.startsWith(prefix));
   if (hit) return hit[1] + spec.slice(hit[0].length);
   if (spec.startsWith(".") || path.isAbsolute(spec) || from.includes(MODULES)) {

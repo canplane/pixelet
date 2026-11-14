@@ -8,7 +8,7 @@
 //! is over or under is never asked for. The versions the source names stay
 //! with the client.
 
-use pxl_spec::bake::publication::BaseLayer;
+use pxl_spec::bake::publication::{BaseLayer, FORMAT};
 use pxl_spec::bake::source::{is_sharded, key};
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM, MIN_ZOOM, SHARD_ZOOM};
@@ -67,7 +67,7 @@ fn parse<'a>(
     let read = format.len() == BaseLayer::ALL.len()
         && BaseLayer::ALL
             .into_iter()
-            .all(|l| format[l as usize] == l.format());
+            .all(|l| format[l as usize] == FORMAT[l as usize]);
     if !read {
         return None;
     }

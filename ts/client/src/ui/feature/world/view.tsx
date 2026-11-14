@@ -10,8 +10,8 @@ import { useSafeArea } from "@/service/platform/safe-area.ts";
 import { useVisualViewport } from "@/service/platform/viewport.ts";
 import { POINTER_KIND, POINTER_PHASE } from "@/service/core/input.ts";
 import { surface_driver } from "@/service/core/surface.ts";
-import { keyDown, keyUp, releaseKeys } from "./keyboard.ts";
-import { releasePointers, worldPointer } from "./pointer.ts";
+import { key_down, key_up, release_keys } from "./keyboard.ts";
+import { release_pointers, world_pointer } from "./pointer.ts";
 import { Corner } from "./corner.tsx";
 import { bottomRest } from "@/ui/shared/component/bottom-rest.ts";
 import { Toaster } from "@/ui/feature/world/toast/stack.tsx";
@@ -37,21 +37,21 @@ const WORLD = surface_driver(scene.draw_world);
 const INPUT: InputDriver = {
   open: input.open,
   pointer: (phase, kind, id, button, x, y) =>
-    worldPointer(POINTER_PHASE[phase], POINTER_KIND[kind], id, button, x, y),
+    world_pointer(POINTER_PHASE[phase], POINTER_KIND[kind], id, button, x, y),
   wheel: input.wheel,
   pinch: input.pinch,
-  keyDown,
-  keyUp,
-  releaseKeys,
-  releasePointers,
+  key_down,
+  key_up,
+  release_keys,
+  release_pointers,
 };
 
 /** A component of its own, so that a change of the marker under the pointer
  * re-renders only the surface. */
 function World() {
-  const overMarker = useCore((s) => s.over_marker);
+  const over_marker = useCore((s) => s.over_marker);
   return (
-    <surface.World surface={WORLD} input={INPUT} overMarker={overMarker} />
+    <surface.World surface={WORLD} input={INPUT} overMarker={over_marker} />
   );
 }
 
@@ -85,7 +85,7 @@ export function WorldView() {
         <Corner />
       </BetweenChrome>
 
-      {/* The world puts the keyboard away itself (`worldPointer`), so the
+      {/* The world puts the keyboard away itself (`world_pointer`), so the
           shared dismissal leaves its touches alone. */}
       <View {...KEEPS_KEYBOARD} style={StyleSheet.absoluteFill}>
         <World />

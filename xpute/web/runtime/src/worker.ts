@@ -3,6 +3,7 @@
 /** The worker's end: the guest's module instantiated with a link laid over
  * it, and the worker's console carried to the page. */
 
+import { ERRNO_EPIPE } from "@xpute/kit/status/errno.spec.ts";
 import { Link } from "@xpute/link";
 import type { InstantiateError, Log, Trap } from "./message.ts";
 
@@ -37,9 +38,12 @@ export function forward_console(tell: (m: Log) => void): void {
 
 /** Instantiates the guest's `module` and lays a link over it: its memory
  * grown whole to `mem_bytes` before its first entry, and never after. An
- * instantiation that fails tells its error and answers null. A trap out of any export stops the guest
- * for good: the page hears it, with the error, and the worker closes, so
- * nothing enters the guest again. */
+ * instantiation that fails tells its error and answers null. A trap out of
+ * any export stops the guest for good (`Link.trap`), as does a failure of the
+ * host's own: the page hears it, with the error, and the worker closes, once
+ * the current turn is over, as a native host posts its trap. The trapped
+ * export answers as xpute-native-runtime link.rs `cross_in` does, a request
+ * EPIPE, and nothing is thrown on to the host's caller. */
 export async function instantiate(
   module: string,
   init: RequestInit | undefined,
@@ -62,23 +66,27 @@ export async function instantiate(
     return null;
   }
   const entry =
-    <T>(f: () => T) =>
+    <T>(f: () => T, trapped: T) =>
     (): T => {
       try {
         return f();
       } catch (e) {
-        tell({ kind: "trap", err: line(e) });
-        close();
-        throw e;
+        link.trap(e);
+        return trapped;
       }
     };
   link = new Link({
     get mem() {
       return x.memory.buffer;
     },
-    init: entry(x.link_init),
-    boot: entry(x.link_boot),
-    in: entry(x.link_in),
+    init: entry(x.link_init, 0),
+    boot: entry(x.link_boot, undefined),
+    in: entry(x.link_in, ERRNO_EPIPE),
+    trap: (e) =>
+      queueMicrotask(() => {
+        tell({ kind: "trap", err: line(e) });
+        close();
+      }),
   });
   return link;
 }

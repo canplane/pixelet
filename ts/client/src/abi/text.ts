@@ -35,8 +35,8 @@ export interface Host {
   ): number;
 }
 
-/** The object over `imp`. */
-function object(imp: Host): LinkObject {
+/** The object over `implementation`. */
+function object(implementation: Host): LinkObject {
   return {
     call(m, tag, args) {
       try {
@@ -44,7 +44,11 @@ function object(imp: Host): LinkObject {
           case WIDTH: {
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
-            const v = imp.width(r_.u32(0), r_.f64(8), load_Lent(r_, 16));
+            const v = implementation.width(
+              r_.u32(0),
+              r_.f64(8),
+              load_Lent(r_, 16),
+            );
             return {
               result: 0,
               data: [
@@ -58,7 +62,7 @@ function object(imp: Host): LinkObject {
           case RASTER: {
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
-            const v = imp.raster(
+            const v = implementation.raster(
               r_.u32(0),
               r_.f64(8),
               r_.u32(16),
@@ -88,7 +92,10 @@ function object(imp: Host): LinkObject {
   };
 }
 
-/** Serves `imp` under the interface's handle. */
-export function mount(l: Pick<Link, "mount_named">, imp: Host): void {
-  l.mount_named(HANDLE, object(imp));
+/** Serves `implementation` under the interface's handle. */
+export function mount(
+  l: Pick<Link, "mount_named">,
+  implementation: Host,
+): void {
+  l.mount_named(HANDLE, object(implementation));
 }

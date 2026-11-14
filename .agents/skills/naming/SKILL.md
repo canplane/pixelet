@@ -45,11 +45,15 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   `first_zoom`, a grid with a value a cell its `cells`.
 - Spelling is American (`color`, `behavior`, `center`). A word copied from
   outside keeps its own (OpenStreetMap's `community_centre`).
-- Each language takes its own casing, generated names too: Rust's snake_case
-  and Pascal types, TypeScript's camelCase and Pascal types, SCREAMING for a
-  constant in both. Only the casing changes, never the word. A type and the
-  React UI's own names spell their words whole (`let cfg: Config`). A name
-  copied from an outside API keeps that API's (`with_capacity`, `memory_hints`).
+- Casing, generated names too: functions, variables and fields in snake_case,
+  types in Pascal, constants in SCREAMING, in Rust and in TypeScript alike, as
+  Svelte writes its own code; so a spec's name is one spelling in JSON, Rust and
+  TypeScript. Only what React requires takes React's form: a hook's `use`
+  prefix, a component, a prop. A type and the React UI's own names spell their
+  words whole (`let cfg: Config`). A generated helper of a type is its verb, an
+  underscore and the type's own spelling (`store_LonLat`, `of_Tool`), so the
+  type's name finds it. A name copied from an outside API keeps that API's
+  (`with_capacity`, `memory_hints`, `devicePixelRatio`).
 - A file or module is named for its layer: a system one takes its field's short
   word (`sys`, `io`, `mem`, `abi`), a domain one the whole word (`scene`,
   `query`, `count`), and this list alone renames neither.
@@ -108,8 +112,8 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   meaning, not by type: a column is plural, the row read from it singular, and
   one range's first and last is a `range` or singular (`GROUND`).
 - A quantity is named by its form: a count ends in `_cnt` (`LAYER_CNT`), a cap
-  in `_cap` (`CREDIT_CAP`), and a size or length in its unit (`HDR_WORDS`,
-  `PAGE_BYTES`, `_ms`, `_px`; `_u` the world's units, `_merc` a meter on the
+  in `_cap` (`CREDIT_CAP`), a size in bytes in `_sz` in xpute (`HDR_SZ`), and
+  any other size or length in its unit (`HDR_WORDS`, `PAGE_BYTES`, `_ms`, `_px`; `_u` the world's units, `_merc` a meter on the
   EPSG:3857 plane, `_m` a meter on the ground), the unit shown where a person
   reads the value (`29.0 m`).
 - A predicate's call reads as a yes-or-no assertion about its subject

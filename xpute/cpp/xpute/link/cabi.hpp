@@ -42,10 +42,10 @@ concept Scalar = Number<T> || std::same_as<T, bool>;
 // bytes of its strings and lists past it.
 class Lower {
   public:
-    // A packet of a fixed part `fixed_bytes` long, zeroed, in `buf`.
-    Lower(std::span<std::uint8_t> buf, std::size_t fixed_bytes) noexcept
-        : buf_(buf), end_(fixed_bytes), overflow_(fixed_bytes > buf.size()) {
-        if (!overflow_) std::memset(buf_.data(), 0, fixed_bytes);
+    // A packet of a fixed part `fixed_sz` long, zeroed, in `buf`.
+    Lower(std::span<std::uint8_t> buf, std::size_t fixed_sz) noexcept
+        : buf_(buf), end_(fixed_sz), overflow_(fixed_sz > buf.size()) {
+        if (!overflow_) std::memset(buf_.data(), 0, fixed_sz);
     }
 
     template <Scalar T> void put(std::size_t at, T v) noexcept {
@@ -88,7 +88,7 @@ class Lower {
 
     // The packet's length, or EMSGSIZE where it is past the room.
     Result<std::size_t> finish() const noexcept {
-        if (overflow_) return marshal_error(Errno::emsgsize);
+        if (overflow_) return make_error(Errno::emsgsize);
         return end_;
     }
 
@@ -156,7 +156,7 @@ class Lift {
 
     // Nothing, or EBADMSG where the packet did not hold what was read.
     Result<void> finish() const noexcept {
-        if (malformed_) return marshal_error(Errno::ebadmsg);
+        if (malformed_) return make_error(Errno::ebadmsg);
         return {};
     }
 

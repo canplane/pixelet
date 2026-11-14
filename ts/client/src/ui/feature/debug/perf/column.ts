@@ -20,7 +20,7 @@ import { fixed } from "@/ui/shared/fixed.ts";
 
 const MIB = 1048576;
 
-export const zoomName = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
+export const zoom_name = (z: number) => (Number.isNaN(z) ? "-" : `z${z}`);
 
 /** The names of each list column's slots, in slot order. */
 export const LIST_NAMES: Record<ListColumn, readonly string[]> = {
@@ -39,7 +39,7 @@ export const n1 = (n: number) => fixed(n ?? 0, 1);
 const UNIT = /_(ms|bytes|px)$/;
 
 /** The `bytes` phase is a count, and every other phase is in milliseconds. */
-export const phaseText = ([k, v]: [string, f64]) =>
+export const phase_text = ([k, v]: [string, f64]) =>
   `${k.replace(UNIT, "")} ${k === "bytes" ? round(v) : n1(v)}`;
 
 export const tris = (t: number) =>
@@ -50,11 +50,11 @@ type NameColumn = Extract<FrameColumn, `${string}_name`>;
 const NAME_TABLES: { readonly [K in NameColumn]: readonly string[] } = {
   kind_name: FRAME_KINDS,
 };
-const isNameColumn = (name: string): name is NameColumn =>
+const is_name_column = (name: string): name is NameColumn =>
   Object.hasOwn(NAME_TABLES, name);
 
-export function valueText(name: string, v: f64): string {
-  if (isNameColumn(name)) return NAME_TABLES[name][v] ?? "-";
+export function val_text(name: string, v: f64): string {
+  if (is_name_column(name)) return NAME_TABLES[name][v] ?? "-";
   if (name.endsWith("_ms")) return `${n1(v)} ms`;
   if (name.endsWith("_bytes")) return `${+fixed(v / MIB, 1)} MiB`;
   if (name.endsWith("_px")) return `${fixed(v / 1e6, 1)} Mpx`;

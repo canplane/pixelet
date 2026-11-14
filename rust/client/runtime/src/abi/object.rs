@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/object` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x4edab0;
 
@@ -41,10 +33,10 @@ impl _rt::Object for _Object {
                                         data: Some((
                                             2,
                                             Box::new(move |w: &mut _rt::Lower| match &v {
-                                                Ok(v) => {}
+                                                Ok(_) => {}
                                                 Err(v) => {
                                                     w.u8(0, 1);
-                                                    w.u8(0 + 1, *v as u8);
+                                                    w.u8(1, *v as u8);
                                                 }
                                             }),
                                         )),
@@ -71,9 +63,9 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `imp` under the interface's handle.
-pub fn mount(imp: _rt::Rc<dyn Host>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+/// Serves `implementation` under the interface's handle.
+pub fn mount(implementation: _rt::Rc<dyn Host>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 mod _rt {

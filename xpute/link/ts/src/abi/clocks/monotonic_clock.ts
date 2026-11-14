@@ -31,17 +31,17 @@ export interface Host {
   wait_for(how_long: bigint, signal_: AbortSignal): Promise<void>;
 }
 
-/** The object over `imp`. */
+/** The object over `implementation`. */
 function object(
   l: Pick<Link, "task_return" | "on_cancel">,
-  imp: Host,
+  implementation: Host,
 ): LinkObject {
   return {
     call(m, tag, args) {
       try {
         switch (m) {
           case NOW: {
-            const v = imp.now();
+            const v = implementation.now();
             return {
               result: 0,
               data: [
@@ -56,7 +56,7 @@ function object(
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
             const stop = new AbortController();
-            imp.wait_for(r_.u64(0), stop.signal).then(
+            implementation.wait_for(r_.u64(0), stop.signal).then(
               () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
@@ -73,10 +73,10 @@ function object(
   };
 }
 
-/** Serves `imp` under the interface's handle. */
+/** Serves `implementation` under the interface's handle. */
 export function mount(
   l: Pick<Link, "mount_named" | "task_return" | "on_cancel">,
-  imp: Host,
+  implementation: Host,
 ): void {
-  l.mount_named(HANDLE, object(l, imp));
+  l.mount_named(HANDLE, object(l, implementation));
 }

@@ -28,8 +28,9 @@ use std::rc::Rc;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
-use xpute_link::abi::types::{Lent, Token};
-use xpute_link::{answer, Return};
+use xpute_kit::status::errno::Errno;
+use xpute_link::abi::types::Lent;
+use xpute_link::Return;
 use xpute_native_runtime::link;
 use xpute_native_runtime::{done, job};
 
@@ -210,7 +211,7 @@ fn poll() {
     let answered = r.poll();
     if answered || lost {
         for id in d.settled.drain(..) {
-            done(id, 0);
+            done(id, ());
         }
     }
     if lost {
@@ -218,7 +219,7 @@ fn poll() {
         d.poller = None;
         d.block = None;
         for id in d.lost.drain(..) {
-            done(id, 0);
+            done(id, ());
         }
         drop(guard);
         if let Some(f) = *LOST.lock().unwrap_or_else(PoisonError::into_inner) {
@@ -227,25 +228,21 @@ fn poll() {
     }
 }
 
-/// Mounts `gpu`, the guest's device and `vsync` on the host's link, on the
-/// guest's thread before it boots (the program composes it), a device to
-/// be opened as `ask` and `cfg` say, its compiled pipelines kept in
-/// `cache_dir`, the directory the platform keeps the app's caches in.
+/// Mounts `gpu` and `vsync` on the host's link, on the guest's thread before
+/// it boots (the program composes it), the device `gpu` gives to be opened
+/// as `ask` and `cfg` say, its compiled pipelines kept in `cache_dir`, the
+/// directory the platform keeps the app's caches in.
 pub fn serve(ask: Ask, cfg: Config, cache_dir: Option<PathBuf>) {
     let args = Arc::new(OpenArgs {
         ask,
         cfg,
         cache_dir,
     });
-    abi::gpu::mount(Rc::new(Gpu));
-    let device = xpute_link::uri(xpute_gpu_link::spec::DEVICE_URI);
-    link::mount(device, move |_: &[Token], _| {
-        Ok(abi::gpu::device(Rc::new(GuestDevice(args.clone()))))
-    });
+    abi::gpu::mount(Rc::new(Gpu(args)));
     abi::vsync::mount(Rc::new(Vsync));
 }
 
-struct Gpu;
+struct Gpu(Arc<OpenArgs>);
 
 impl abi::gpu::Host for Gpu {
     /// Runs the lent records on the GPU's thread, and answers once they are
@@ -253,17 +250,17 @@ impl abi::gpu::Host for Gpu {
     /// device, unrun, as a page's host does. The frames they drew are
     /// presented after the answer.
     fn run(&self, records: Lent, task_return: Return<()>) {
-        let id = job(Box::new(move |r| task_return.answer(answer(r))));
+        let id = job(Box::new(move |()| task_return.answer(Ok(()))));
         on_gpu(Box::new(move || {
             let mut guard = device();
             let Some(d) = guard.as_mut() else {
-                return done(id, 0);
+                return done(id, ());
             };
             let Some(r) = d.host.as_mut() else {
-                return done(id, 0);
+                return done(id, ());
             };
             r.run(records.at, records.len);
-            done(id, 0);
+            done(id, ());
             r.present();
             if let Some(p) = &d.poller {
                 let _ = p.send(());
@@ -271,6 +268,11 @@ impl abi::gpu::Host for Gpu {
             drop(guard);
             poll();
         }));
+    }
+
+    /// The guest's device, served under a handle the link issues.
+    fn get_device(&self) -> Result<u32, Errno> {
+        Ok(link::add(abi::gpu::device(Rc::new(GuestDevice(self.0.clone())))))
     }
 }
 
@@ -280,7 +282,7 @@ impl abi::gpu::HostDevice for GuestDevice {
     /// The block lent until the device is lost: written now where a device is
     /// open, and by each device opened while it is lent.
     fn lost(&self, block: Lent, task_return: Return<()>) {
-        let id = job(Box::new(move |r| task_return.answer(answer(r))));
+        let id = job(Box::new(move |()| task_return.answer(Ok(()))));
         let args = self.0.clone();
         on_gpu(Box::new(move || {
             let mut guard = device();
@@ -304,7 +306,7 @@ impl abi::gpu::HostDevice for GuestDevice {
     }
 
     fn settled(&self, task_return: Return<()>) {
-        let id = job(Box::new(move |r| task_return.answer(answer(r))));
+        let id = job(Box::new(move |()| task_return.answer(Ok(()))));
         let args = self.0.clone();
         on_gpu(Box::new(move || {
             device()

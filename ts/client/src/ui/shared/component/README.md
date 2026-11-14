@@ -4,7 +4,7 @@ A piece the platforms draw differently is one file and its overrides beside it,
 as React Native names them: `segmented.tsx` is the page's and Android's,
 `segmented.ios.tsx` an iPhone's; `motion/motion.native.tsx` both devices'. Metro
 takes the file of the platform it builds for, the page the default
-(`ts/client/metro.config.ts` `ownPlatform`), and every import names the default.
+(`ts/client/metro.config.ts` `own_platform`), and every import names the default.
 An override re-exports the default and replaces only what it draws itself, and
 `ts/client/src/ui/conform.ts` holds each to its default's exports.
 What only the place gives — the core's memory, the GPU, storage, text, the

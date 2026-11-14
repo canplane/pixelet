@@ -3,142 +3,103 @@
 import CXpute
 import ExpoModulesCore
 import Foundation
-import QuartzCore
 
-/// This tells the guest's thread each display frame (`xpute_vsync`), which
-/// begins the entries. A display link calls it on the main thread.
-final class DisplayFrames: NSObject {
-  private var link: CADisplayLink?
-
-  func start() {
-    DispatchQueue.main.async {
-      self.link = CADisplayLink(target: self, selector: #selector(self.frame))
-      self.link?.add(to: .main, forMode: .common)
-    }
-  }
-
-  func stop() {
-    DispatchQueue.main.async {
-      self.link?.invalidate()
-      self.link = nil
-    }
-  }
-
-  @objc private func frame(link: CADisplayLink) {
-    xpute_vsync((CACurrentMediaTime() - link.timestamp) * 1000)
-  }
-}
-
-/// This is xpute's native module on iOS (src/mod.ts). It reaches the guest through
-/// xpute's C ABI (xpute.h). android/'s XputeModule.kt is the same module under the same names.
+/// This is xpute's native module on iOS (src/mod.ts), over xpute's C ABI
+/// (xpute.h): it starts the runtime on the core's thread, carries the UI's
+/// link to it and back, and tells it of the app's lifecycle itself.
+/// android/'s XputeModule.kt is the same module under the same names.
 public class XputeModule: Module {
-  /// The function given to `xpute_notify_on` sends its event through this
-  /// module.
+  /// The functions given to `xpute_notify_on`, `xpute_stopped_on` and
+  /// `xpute_trap_on` send their events through this module.
   nonisolated(unsafe) static weak var current: XputeModule?
-  /// The JavaScript function that answers the guest's calls. It is called on
-  /// the JavaScript thread, inside `run` or `answer`.
-  nonisolated(unsafe) static var answer: JavaScriptValue?
-  private let frames = DisplayFrames()
 
   public func definition() -> ModuleDefinition {
     Name("Xpute")
 
-    /// Fires when frames wait for `take`, or when a call waits for `answer`.
-    Events("onNotify")
+    /// `onNotify` fires when a batch waits for `take`, `onStopped` when the
+    /// guest stopped, with its report, and `onTrap` when it trapped.
+    Events("onNotify", "onStopped", "onTrap")
 
     OnCreate {
       XputeModule.current = self
-      self.frames.start()
       // A C function captures nothing, so it reaches the module through the
-      // static. It is called from the guest's thread, and Expo's sendEvent
-      // itself schedules the event onto the JavaScript thread.
+      // static. Expo's sendEvent carries the event to the JavaScript thread
+      // from any thread.
       xpute_notify_on { XputeModule.current?.sendEvent("onNotify") }
-      // This runs on the JavaScript thread, inside `run` or `answer`, so it
-      // may call into JavaScript. Without an answer it returns ENOSYS (-38),
-      // and when the JavaScript answer throws, EIO (-5).
-      xpute_call_on { at in
-        guard let answer = XputeModule.answer else { return -38 }
-        guard let res = try? answer.getFunction().call(arguments: Int(at)) else { return -5 }
-        return Int32(truncatingIfNeeded: res.getInt())
+      xpute_stopped_on { errnum, file, fileLen, line, n1, n2 in
+        XputeModule.current?.sendEvent(
+          "onStopped",
+          [
+            "errnum": Int(errnum),
+            "file": String(decoding: UnsafeRawBufferPointer(start: file, count: fileLen), as: UTF8.self),
+            "line": Int(line),
+            // A JavaScript number holds no u64 whole, so each crosses as its
+            // decimal digits.
+            "n1": String(n1),
+            "n2": String(n2),
+          ])
       }
+      xpute_trap_on { XputeModule.current?.sendEvent("onTrap") }
     }
     OnDestroy {
-      self.frames.stop()
       XputeModule.current = nil
-      XputeModule.answer = nil
-      xpute_call_on(nil)
       xpute_notify_on(nil)
+      xpute_stopped_on(nil)
+      xpute_trap_on(nil)
     }
 
-    Function("mem") { () throws -> NativeArrayBuffer in
-      var bytes: UInt32 = 0
-      guard let at = xpute_mem(&bytes) else { throw MemoryException() }
-      // The region belongs to the guest for the app's whole life, so nothing
-      // is freed when the buffer is.
-      return try NativeArrayBuffer.wrap(dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: Int(bytes)), cleanup: {})
+    OnAppEntersBackground {
+      xpute_life(0)
     }
 
-    Function("wake") {
-      xpute_wake()
+    OnAppEntersForeground {
+      xpute_life(1)
     }
 
-    Function("input") {
-      xpute_input()
+    /// The app's files are kept in Application Support, which holds what the
+    /// app makes for itself, out of the user's sight in Files, and is backed
+    /// up, as Android's files directory is.
+    Function("start") { (named: [UInt32], prefixes: Uint8Array) throws in
+      let files = try FileManager.default.url(
+        for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+      let caches = try FileManager.default.url(
+        for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+      named.withUnsafeBufferPointer { buf in
+        xpute_start(
+          buf.baseAddress, buf.count,
+          prefixes.rawPointer.assumingMemoryBound(to: UInt8.self), prefixes.byteLength,
+          files.path, caches.path)
+      }
     }
 
-    Function("pause") {
-      xpute_pause()
+    Function("post") { (tag: UInt32, h: UInt32, m: UInt32, pkt: Uint8Array?) in
+      xpute_post(tag, h, m, pkt?.rawPointer.assumingMemoryBound(to: UInt8.self), pkt?.byteLength ?? 0)
     }
 
-    Function("resume") {
-      xpute_resume()
+    Function("answer") { (tag: UInt32, result: Int32, data: Uint8Array?) in
+      xpute_answer(tag, result, data?.rawPointer.assumingMemoryBound(to: UInt8.self), data?.byteLength ?? 0)
     }
 
-    Function("answer") {
-      xpute_answer()
-    }
-
-    Function("attach") { (fs: Bool) in
-      xpute_attach(fs)
-    }
-
-    Function("pace") { (paceHz: Double, marginShare: Double, batchFrames: Double, settleMs: Double) in
-      xpute_pace(paceHz, marginShare, batchFrames, settleMs)
-    }
-
-    Function("post") { (tag: Double, cmd: Double, flags: Double, result: Double, pkt: Uint8Array) in
-      xpute_post(
-        UInt32(tag), UInt32(cmd), UInt32(flags), Int32(result),
-        pkt.rawPointer.assumingMemoryBound(to: UInt8.self), pkt.byteLength)
-    }
-
+    /// The batch is JavaScript's without a copy, and freed when the buffer is.
     Function("take") { () throws -> NativeArrayBuffer in
-      var bytes = 0
-      let at = xpute_take(&bytes)!
+      var len = 0
+      let at = xpute_take(&len)
       return try NativeArrayBuffer.wrap(
-        dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: bytes),
-        cleanup: { xpute_taken_free(at, bytes) })
+        dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: len),
+        cleanup: { xpute_taken_free(at, len) })
     }
 
-    Function("fsCompleteOpen") { (fd: Double, result: Double, detail: Double, bytes: Uint8Array) in
-      xpute_fs_complete_open(
-        UInt32(fd), Int32(result), UInt32(detail),
-        bytes.rawPointer.assumingMemoryBound(to: UInt8.self), bytes.byteLength)
-    }
-
-    /// The answer is kept past the call, so a copy of the value is stored.
-    Function("callOn") { (answer: JavaScriptValue) in
-      XputeModule.answer = answer.copy()
+    /// The region is the core's for the app's whole life, so nothing is freed
+    /// when the buffer is.
+    Function("mem") { () throws -> NativeArrayBuffer in
+      var len: UInt32 = 0
+      let at = xpute_mem(&len)
+      return try NativeArrayBuffer.wrap(
+        dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: Int(len)), cleanup: {})
     }
 
     Function("log") { (line: String) in
       FileHandle.standardOutput.write(Data((line + "\n").utf8))
     }
-  }
-}
-
-internal final class MemoryException: Exception, @unchecked Sendable {
-  override var reason: String {
-    "the guest has no memory"
   }
 }

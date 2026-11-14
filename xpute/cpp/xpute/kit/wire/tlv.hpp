@@ -84,7 +84,7 @@ template <class Buf> class Writer {
     }
 
     Result<void> write(const Value &v) {
-        if (sealed_) return marshal_error(Errno::ebadmsg);
+        if (sealed_) return make_error(Errno::ebadmsg);
         std::visit([this](const auto &x) { this->put(x); }, v);
         return {};
     }

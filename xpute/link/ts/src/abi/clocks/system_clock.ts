@@ -27,13 +27,13 @@ export const INSTANT_SZ = 16;
 export const INSTANT_ALIGN = 8;
 
 export function store_Instant(w: Lower, at: number, v: Instant): void {
-  w.i64(at + 0, v.seconds);
+  w.i64(at, v.seconds);
   w.u32(at + 8, v.nanoseconds);
 }
 
 export function load_Instant(r: Lift, at: number): Instant {
   return {
-    seconds: r.i64(at + 0),
+    seconds: r.i64(at),
     nanoseconds: r.u32(at + 8),
   };
 }
@@ -42,14 +42,14 @@ export interface Host {
   now(): Instant;
 }
 
-/** The object over `imp`. */
-function object(imp: Host): LinkObject {
+/** The object over `implementation`. */
+function object(implementation: Host): LinkObject {
   return {
     call(m, tag, args) {
       try {
         switch (m) {
           case NOW: {
-            const v = imp.now();
+            const v = implementation.now();
             return {
               result: 0,
               data: [
@@ -70,7 +70,10 @@ function object(imp: Host): LinkObject {
   };
 }
 
-/** Serves `imp` under the interface's handle. */
-export function mount(l: Pick<Link, "mount_named">, imp: Host): void {
-  l.mount_named(HANDLE, object(imp));
+/** Serves `implementation` under the interface's handle. */
+export function mount(
+  l: Pick<Link, "mount_named">,
+  implementation: Host,
+): void {
+  l.mount_named(HANDLE, object(implementation));
 }

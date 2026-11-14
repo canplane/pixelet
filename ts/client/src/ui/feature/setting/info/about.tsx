@@ -3,9 +3,9 @@
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
-import { Prose, Section, settingText } from "@/ui/feature/setting/row.tsx";
+import { Prose, Section, setting_text } from "@/ui/feature/setting/row.tsx";
 import { BrandSymbol } from "./brand-symbol.tsx";
-import { textStyle } from "@/ui/shared/component/theme.ts";
+import { text_style } from "@/ui/shared/component/theme.ts";
 import { BUILD_NUMBER, BUILD_TIME, TILE_SOURCE } from "@/build.ts";
 import { format } from "@/abi/file.spec.ts";
 import { LABEL } from "@/ui/shared/component/palette.ts";
@@ -13,23 +13,23 @@ import { useSourceVersions } from "@/ui/shared/watch.ts";
 
 /** Shown in the settings in a dev build, because a phone has no URL bar to
  * tell which build is on screen. */
-function devLabel(): string {
+function dev_label(): string {
   return TILE_SOURCE === "delivery" ? "dev" : `dev:${TILE_SOURCE}`;
 }
 
-function bakeLines(source: Readonly<Record<string, string>> | null): string[] {
+function bake_lines(source: Readonly<Record<string, string>> | null): string[] {
   return Object.entries(source ?? {}).map(
     ([kind, version]) => `${kind}/${version}`,
   );
 }
 
-function objectLabel(): string {
+function object_label(): string {
   return `objects · format ${format.OBJECT}`;
 }
 
 /** The build time is shown in UTC, because a time in the viewer's zone reads
  * differently on two phones. */
-function buildLabel(): string {
+function build_label(): string {
   const d = new Date(BUILD_TIME);
   if (Number.isNaN(d.getTime())) return BUILD_TIME;
   const s = d.toISOString();
@@ -46,27 +46,27 @@ export function AboutSection() {
       <Prose>
         <View style={styles.name}>
           <BrandSymbol size={20} color={LABEL.primary} />
-          <Text style={styles.nameText}>pixelet</Text>
+          <Text style={styles.name_text}>pixelet</Text>
         </View>
 
-        <Text style={settingText.small}>{t("settings.about.tagline")}</Text>
+        <Text style={setting_text.small}>{t("settings.about.tagline")}</Text>
 
-        <Text style={settingText.small}>
+        <Text style={setting_text.small}>
           © 2025 pixelet. All rights reserved.
         </Text>
 
         <View>
-          <Text style={settingText.faint}>
+          <Text style={setting_text.faint}>
             {BUILD_NUMBER}
-            {__DEV__ && ` (${devLabel()})`}
-            {` · ${buildLabel()}`}
+            {__DEV__ && ` (${dev_label()})`}
+            {` · ${build_label()}`}
           </Text>
-          {bakeLines(source).map((line) => (
-            <Text key={line} style={settingText.faint}>
+          {bake_lines(source).map((line) => (
+            <Text key={line} style={setting_text.faint}>
               {line}
             </Text>
           ))}
-          <Text style={settingText.faint}>{objectLabel()}</Text>
+          <Text style={setting_text.faint}>{object_label()}</Text>
         </View>
       </Prose>
     </Section>
@@ -75,5 +75,5 @@ export function AboutSection() {
 
 const styles = StyleSheet.create({
   name: { flexDirection: "row", alignItems: "center", gap: 8 },
-  nameText: { ...textStyle.title, color: LABEL.primary },
+  name_text: { ...text_style.title, color: LABEL.primary },
 });

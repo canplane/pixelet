@@ -15,7 +15,7 @@ import type {
   ViewSection,
   Worst,
 } from "@/service/core/perf.ts";
-import { n1, phaseText, tris, valueText } from "./column.ts";
+import { n1, phase_text, tris, val_text } from "./column.ts";
 import { fps, type PerfReport } from "./view.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
@@ -24,9 +24,9 @@ import * as long_frame from "@/service/platform/long-frame.ts";
 import * as share from "@/service/platform/share.ts";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
-const signedBytes = (b: number) =>
-  `${b >= 0 ? "+" : ""}${valueText("_bytes", b)}`;
-const bytes = (b: number) => valueText("_bytes", b);
+const signed_bytes = (b: number) =>
+  `${b >= 0 ? "+" : ""}${val_text("_bytes", b)}`;
+const bytes = (b: number) => val_text("_bytes", b);
 const percentile = (s: Percentile) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 type RayColumn<K = keyof RayCount> = K extends `eye_${infer C}` ? C : never;
@@ -39,28 +39,28 @@ type RayColumn<K = keyof RayCount> = K extends `eye_${infer C}` ? C : never;
  * `hole` and `sky` count the pixels or map slots cast again that took the
  * visible voxel, walked on their own, or took the sky, each shown as a share
  * of all its pixels or slots (`ray_cnt`). */
-const raysText = (f: RayCount) => {
+const rays_text = (f: RayCount) => {
   const observer = (name: "eye" | "light") => {
     const at = (column: RayColumn) => f[`${name}_${column}`];
     const casts = at("cast");
     if (casts === 0) return [];
-    const perCast = (n: number) => n1(n / casts);
-    const rayCount = at("ray_cnt");
+    const per_cast = (n: number) => n1(n / casts);
+    const ray_cnt = at("ray_cnt");
     const part = (n: number) =>
-      rayCount > 0
-        ? `${fixed((100 * n) / rayCount, 2)}%`
-        : `${perCast(n)} a cast`;
+      ray_cnt > 0
+        ? `${fixed((100 * n) / ray_cnt, 2)}%`
+        : `${per_cast(n)} a cast`;
     const again = at("voxel") + at("hole") + at("sky");
     return [
-      `  ${name.padEnd(7)} cast in ${casts} frames   nodes a cast: beam ${perCast(
+      `  ${name.padEnd(7)} cast in ${casts} frames   nodes a cast: beam ${per_cast(
         at("beam"),
-      )}  sample ${perCast(at("sample"))}  hole walk ${perCast(
+      )}  sample ${per_cast(at("sample"))}  hole walk ${per_cast(
         at("hole_walk"),
-      )} (${perCast(at("ask_cnt"))} asked of the world)   cast again ${part(again)}: voxel ${part(at("voxel"))}  hole ${part(
+      )} (${per_cast(at("ask_cnt"))} asked of the world)   cast again ${part(again)}: voxel ${part(at("voxel"))}  hole ${part(
         at("hole"),
       )} (${n1(
         at("hole_walk") / Math.max(1, at("hole")),
-      )} nodes each)  sky ${part(at("sky"))}   boxes ${perCast(at("box_cnt"))} a cast`,
+      )} nodes each)  sky ${part(at("sky"))}   boxes ${per_cast(at("box_cnt"))} a cast`,
     ];
   };
   return [...observer("eye"), ...observer("light")];
@@ -68,18 +68,18 @@ const raysText = (f: RayCount) => {
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
 
-function viewText(v: ViewSection, gpuPx: f64): string {
+function view_text(v: ViewSection, gpu_px: f64): string {
   const pivot = Number.isNaN(v.pivot_lat)
     ? "-"
     : `${fixed(v.pivot_lat, 5)}°, ${fixed(v.pivot_lon, 5)}° ${n1(v.pivot_alt)} m`;
   return `  view    pivot ${pivot}  distance ${n1(v.dist)} u  polar ${n1(
     deg(v.polar),
   )}°  azimuth ${n1(deg(v.azimuth))}°   drawn ${
-    gpuPx > 0 ? valueText("gpu_px", gpuPx) : "-"
+    gpu_px > 0 ? val_text("gpu_px", gpu_px) : "-"
   }`;
 }
 
-function recordingText(r: RecordingSection): string {
+function recording_text(r: RecordingSection): string {
   if (!r.frame_cnt) return "  since   no frame folded";
   return `  since   heap max live ${bytes(r.heap_live_max_bytes)}  run ${bytes(
     r.heap_run_max_bytes,
@@ -94,7 +94,7 @@ function recordingText(r: RecordingSection): string {
   } frames since the recording started)`;
 }
 
-export function failText(fail: u32, detail: u32): string {
+export function fail_text(fail: u32, detail: u32): string {
   const name = strerror(fail as i32).split(":")[0];
   return detail === 0 ? name : `${name} ${detail}`;
 }
@@ -106,10 +106,10 @@ export const BOUND: Record<string, string> = {
   division: "network",
 };
 
-const phasesText = (p: [string, f64][]) =>
-  p.length === 0 ? "" : `  [${p.map(phaseText).join(" ")}]`;
+const phases_text = (p: [string, f64][]) =>
+  p.length === 0 ? "" : `  [${p.map(phase_text).join(" ")}]`;
 
-export function taskLine(r: TaskRecord): string {
+export function task_line(r: TaskRecord): string {
   const total = r.end_ms - r.enqueue_ms;
   const timing =
     r.start_ms === null
@@ -118,15 +118,15 @@ export function taskLine(r: TaskRecord): string {
   const why =
     r.fail === 0
       ? ""
-      : `  [${failText(r.fail, r.detail)}${r.at === null ? "" : ` at ${r.at}`}]`;
+      : `  [${fail_text(r.fail, r.detail)}${r.at === null ? "" : ` at ${r.at}`}]`;
   return `[${n1(r.enqueue_ms).padStart(9)}] ${`${r.stream}:${r.path}`.padEnd(
     34,
-  )}${r.outcome.padEnd(7)}${n1(total).padStart(8)}ms${timing} p${r.priority}${phasesText(
+  )}${r.outcome.padEnd(7)}${n1(total).padStart(8)}ms${timing} p${r.priority}${phases_text(
     r.phases,
   )}${why}`;
 }
 
-const worstEffectText = (f: Frame) => {
+const worst_effect_text = (f: Frame) => {
   const k = f.effects.reduce((w, ms, i) => (ms > f.effects[w] ? i : w), 0);
   return f.effects_ms > 0
     ? `  worst ${EFFECT_NAMES[k] ?? "-"} ${n1(f.effects[k])}`
@@ -135,17 +135,17 @@ const worstEffectText = (f: Frame) => {
 
 /** For one frame, the uploads and the heap mean something only as a change
  * from the frame before, so the line adds their deltas (`Δ`). */
-export function frameLine({ sample: s, delta }: Worst): string {
+export function frame_line({ sample: s, delta }: Worst): string {
   const d =
     delta === null
       ? ""
-      : `  Δuploads ${signed(delta.upload_cnt)} Δuploads bytes ${signedBytes(
+      : `  Δuploads ${signed(delta.upload_cnt)} Δuploads bytes ${signed_bytes(
           delta.upload_bytes,
-        )} Δheap used ${signedBytes(delta.heap_used_bytes)}`;
-  return `[${n1(s.t).padStart(9)}] ${valueText(
+        )} Δheap used ${signed_bytes(delta.heap_used_bytes)}`;
+  return `[${n1(s.t).padStart(9)}] ${val_text(
     "kind_name",
     s.kind_name,
-  )}  interval ${n1(s.interval_ms)}  effects ${n1(s.effects_ms)}${worstEffectText(s)}  tick ${n1(s.tick_ms)}/${n1(
+  )}  interval ${n1(s.interval_ms)}  effects ${n1(s.effects_ms)}${worst_effect_text(s)}  tick ${n1(s.tick_ms)}/${n1(
     s.budget_ms,
   )}${s.settled ? " (still)" : ""}  stage ${n1(s.stage_ms)}  perf ${n1(s.perf_ms)}  gpu busy ${
     s.gpu_timed ? n1(s.gpu_busy_ms) : "-"
@@ -154,7 +154,7 @@ export function frameLine({ sample: s, delta }: Worst): string {
   )}${d}`;
 }
 
-function longSourcesText(): string {
+function long_sources_text(): string {
   const sources = long_frame.sources();
   if (sources.includes("loaf")) return "";
   return sources.includes("longtask")
@@ -162,14 +162,14 @@ function longSourcesText(): string {
     : " (none reported here)";
 }
 
-export const longFrameLine = (l: LongFrame) =>
+export const long_frame_line = (l: LongFrame) =>
   `[${n1(l.t).padStart(9)}] ${l.source.padEnd(8)} ${n1(
-    l.durationMs,
-  )} ms  blocking ${n1(l.blockingMs)}  script ${n1(l.scriptMs)}  render ${n1(
-    l.renderMs,
+    l.duration_ms,
+  )} ms  blocking ${n1(l.blocking_ms)}  script ${n1(l.script_ms)}  render ${n1(
+    l.render_ms,
   )}`;
 
-function windowSection(r: PerfReport): string[] {
+function window_section(r: PerfReport): string[] {
   const f = r.frames;
   if (f === null) return ["frames n=0"];
   const last = f.last;
@@ -226,19 +226,19 @@ function windowSection(r: PerfReport): string[] {
         .join("  ") || "-"
     } ms   (n: the kind's frames a read timed)`,
     `  spans   p95 ${spans || "-"} ms   (n: the frames a read timed that ran each)`,
-    ...raysText(f.ray_cnt),
-    viewText(r.view, f.gpu_px),
+    ...rays_text(f.ray_cnt),
+    view_text(r.view, f.gpu_px),
     // Steps are listed one by one, because a cooperative scheduler is only as
     // cooperative as its longest step.
     `  steps   ${steps}   (ms a run and max, since the recording started)`,
-    `  heap used Δ ${signedBytes(
+    `  heap used Δ ${signed_bytes(
       f.heap_used_delta_bytes,
     )}   (the high-water mark)`,
-    recordingText(r.recording),
+    recording_text(r.recording),
   ];
 }
 
-function tasksSection(tasks: TaskSummary[]): string[] {
+function tasks_section(tasks: TaskSummary[]): string[] {
   const n = tasks.reduce((sum, t) => sum + t.n, 0);
   if (n === 0) return ["tasks n=0"];
   const lines = [`tasks n=${n}`];
@@ -248,7 +248,7 @@ function tasksSection(tasks: TaskSummary[]): string[] {
       t.reasons.length === 0
         ? ""
         : ` (${t.reasons
-            .map((x) => `${failText(x.fail, x.detail)} x${x.n}`)
+            .map((x) => `${fail_text(x.fail, x.detail)} x${x.n}`)
             .join(", ")})`;
     lines.push(
       `  ${t.stream.padEnd(9)}${bound.padEnd(9)}n=${t.n}   p50 ${n1(
@@ -258,39 +258,39 @@ function tasksSection(tasks: TaskSummary[]): string[] {
       )} ms   ok ${t.ok}  ab ${t.aborted}  err ${t.err}${reasons}`,
     );
     if (t.phase_mean !== null) {
-      const means = t.phase_mean.map(phaseText).join("  ");
+      const means = t.phase_mean.map(phase_text).join("  ");
       lines.push(`  ${"".padEnd(18)}mean ${means}`);
     }
   }
   return lines;
 }
 
-export function perfReportText(r: PerfReport): string {
+export function perf_report_text(r: PerfReport): string {
   const out = [
     `=== perf @ t=${n1(
       r.t,
     )}ms  build ${r.build.number} ${r.build.id} (${r.build.time}) ===`,
   ];
-  out.push(...windowSection(r));
-  out.push(...tasksSection(r.tasks));
-  out.push(`long frames n=${r.longs.length}${longSourcesText()}`);
+  out.push(...window_section(r));
+  out.push(...tasks_section(r.tasks));
+  out.push(`long frames n=${r.longs.length}${long_sources_text()}`);
 
   if (r.recent.length > 0) {
     out.push(`--- last ${r.recent.length} tasks ---`);
-    for (const rec of r.recent) out.push(taskLine(rec));
+    for (const rec of r.recent) out.push(task_line(rec));
   }
   if (r.worst.length > 0) {
     out.push(`--- worst ${r.worst.length} moving frames since recording ---`);
-    for (const w of r.worst) out.push(frameLine(w));
+    for (const w of r.worst) out.push(frame_line(w));
   }
   if (r.longs.length > 0) {
     out.push("--- long frames ---");
-    for (const l of r.longs) out.push(longFrameLine(l));
+    for (const l of r.longs) out.push(long_frame_line(l));
   }
   return out.join("\n");
 }
 
-export async function perfReportCopy(text: string): Promise<string> {
+export async function perf_report_copy(text: string): Promise<string> {
   console.log(text);
   const kb = `${Math.max(1, round(text.length / 1024))} KiB`;
   let said: string;

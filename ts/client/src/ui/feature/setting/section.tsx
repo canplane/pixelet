@@ -8,7 +8,7 @@ import {
   type Setting,
   type SettingName,
   type SettingSection,
-  settingsIn,
+  settings_in,
 } from "@/ui/shared/setting.ts";
 import { Section, SettingChoiceRow, SettingGroup, SettingRow } from "./row.tsx";
 import { useCore } from "@/ui/shared/watch.ts";
@@ -24,7 +24,7 @@ const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
 /** Whether `option` is shown only in development. The table may hold no
  * setting with dev options, and then its type has no `dev_options`, so the
  * field is read this way. */
-function devOption(setting: Setting, option: string): boolean {
+function is_dev_option(setting: Setting, option: string): boolean {
   const options =
     "dev_options" in setting ? (setting.dev_options as readonly string[]) : [];
   return options.includes(option);
@@ -33,7 +33,7 @@ function devOption(setting: Setting, option: string): boolean {
 export function SettingsSection(props: { section: SettingSection }) {
   const { section } = props;
   const { t } = useTranslation();
-  const keys = settingsIn(section);
+  const keys = settings_in(section);
   if (keys.length === 0) return null;
 
   return (
@@ -84,9 +84,9 @@ function SettingControl(props: { name: SettingName }) {
           dev={dev}
         >
           {Object.entries(setting.options).map(([option, number], i) => {
-            const devOnly = devOption(setting, option);
+            const dev_only = is_dev_option(setting, option);
             return (
-              (__DEV__ || !devOnly) && (
+              (__DEV__ || !dev_only) && (
                 <SettingChoiceRow
                   key={option}
                   label={t(`${base}.${option}.label`)}
@@ -94,7 +94,7 @@ function SettingControl(props: { name: SettingName }) {
                   selected={value === number}
                   onSelect={() => setSetting(key, number)}
                   cost={("costs" in setting ? setting.costs[i] : "") || cost}
-                  dev={devOnly}
+                  dev={dev_only}
                 />
               )
             );

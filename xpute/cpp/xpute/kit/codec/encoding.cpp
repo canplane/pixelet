@@ -40,12 +40,12 @@ std::size_t hex_encode(std::span<const std::uint8_t> in, std::span<char> out) no
 }
 
 Result<std::size_t> hex_decode(std::string_view in, std::span<std::uint8_t> out) noexcept {
-    if (in.size() % 2 != 0) return marshal_error(Errno::ebadmsg);
+    if (in.size() % 2 != 0) return make_error(Errno::ebadmsg);
     ensure(out.size() >= in.size() / 2, Errno::enospc, out.size(), in.size());
     for (std::size_t i = 0; i < in.size(); i += 2) {
         int hi = hex_val(in[i]);
         int lo = hex_val(in[i + 1]);
-        if (hi < 0 || lo < 0) return marshal_error(Errno::ebadmsg);
+        if (hi < 0 || lo < 0) return make_error(Errno::ebadmsg);
         out[i / 2] = static_cast<std::uint8_t>(hi << 4 | lo);
     }
     return in.size() / 2;
@@ -75,7 +75,7 @@ std::size_t base64url_encode(std::span<const std::uint8_t> in, std::span<char> o
 Result<std::size_t> base64url_decode(std::string_view in, std::span<std::uint8_t> out) noexcept {
     // A final group of one character carries only six bits, less than a
     // byte, so no encoding ends that way.
-    if (in.size() % 4 == 1) return marshal_error(Errno::ebadmsg);
+    if (in.size() % 4 == 1) return make_error(Errno::ebadmsg);
     std::size_t bytes = in.size() / 4 * 3 + (in.size() % 4 == 0 ? 0 : in.size() % 4 - 1);
     ensure(out.size() >= bytes, Errno::enospc, out.size(), bytes);
     std::size_t at = 0;
@@ -84,11 +84,11 @@ Result<std::size_t> base64url_decode(std::string_view in, std::span<std::uint8_t
         std::uint32_t w = 0;
         for (std::size_t k = 0; k < 4; k++) {
             int v = k < n ? b64url_val(in[i + k]) : 0;
-            if (v < 0) return marshal_error(Errno::ebadmsg);
+            if (v < 0) return make_error(Errno::ebadmsg);
             w = w << 6 | static_cast<std::uint32_t>(v);
         }
         // Bits past the last byte are zero in any canonical encoding.
-        if ((n == 2 && (w & 0xffff) != 0) || (n == 3 && (w & 0xff) != 0)) return marshal_error(Errno::ebadmsg);
+        if ((n == 2 && (w & 0xffff) != 0) || (n == 3 && (w & 0xff) != 0)) return make_error(Errno::ebadmsg);
         out[at++] = static_cast<std::uint8_t>(w >> 16);
         if (n > 2) out[at++] = static_cast<std::uint8_t>(w >> 8);
         if (n > 3) out[at++] = static_cast<std::uint8_t>(w);

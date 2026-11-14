@@ -12,17 +12,17 @@ let keep = false;
  * position, because a transform can lift a view where no measurement sees it.
  */
 export const KEEPS_KEYBOARD: ViewProps = {
-  onStartShouldSetResponderCapture: () => keepKeyboard(),
+  onStartShouldSetResponderCapture: () => keep_keyboard(),
 };
 
-export function putKeyboardAway(): void {
+export function put_keyboard_away(): void {
   Keyboard.dismiss();
 }
 
 /** Marks the current touch as one that keeps the keyboard. A view whose
  * capture handler is already a PanResponder's calls this from that handler
  * instead of spreading KEEPS_KEYBOARD. */
-export function keepKeyboard(): false {
+export function keep_keyboard(): false {
   keep = true;
   return false;
 }
@@ -36,20 +36,20 @@ export function KeyboardAway({
   children: ReactNode;
   onAway?: () => void;
 }) {
-  const onTouch = () => {
+  const on_touch = () => {
     // Capture runs from the outside in, so this handler runs before any inner
     // view can mark the touch. The decision waits for a microtask, by which
     // time every inner view has had its turn.
     keep = false;
     queueMicrotask(() => {
       if (keep) return;
-      putKeyboardAway();
+      put_keyboard_away();
       onAway?.();
     });
     return false;
   };
   return (
-    <View onStartShouldSetResponderCapture={onTouch} style={styles.fill}>
+    <View onStartShouldSetResponderCapture={on_touch} style={styles.fill}>
       {children}
     </View>
   );

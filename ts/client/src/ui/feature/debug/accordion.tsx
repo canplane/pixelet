@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { create } from "zustand";
 
-import { cornerPanel } from "@/ui/shared/component/corner-card.ts";
+import { corner_panel } from "@/ui/shared/component/corner-card.ts";
 import { alpha, color } from "@/ui/shared/component/theme.ts";
 import { gauge } from "./perf/gauge.tsx";
 import type { SettingName } from "@/ui/shared/setting.ts";
@@ -47,10 +47,10 @@ export function Accordion({
         aria-expanded={open}
       >
         <View style={styles.title}>
-          <Text style={[gauge.text, styles.titleText]}>
+          <Text style={[gauge.text, styles.title_text]}>
             {title}
             {note !== undefined && (
-              <Text style={styles.noteText}>{` · ${note}`}</Text>
+              <Text style={styles.note_text}>{` · ${note}`}</Text>
             )}
           </Text>
           <View style={styles.end}>
@@ -70,7 +70,7 @@ export function Accordion({
 
 const styles = StyleSheet.create({
   panel: {
-    ...cornerPanel,
+    ...corner_panel,
     flexShrink: 1,
     overflow: "hidden",
     pointerEvents: "box-none",
@@ -80,13 +80,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  titleText: {
+  title_text: {
     fontSize: 11,
     fontWeight: "600",
     letterSpacing: 0.6,
     textTransform: "uppercase",
     color: alpha(color.white, 0.75),
   },
-  noteText: { fontWeight: "400" },
+  note_text: { fontWeight: "400" },
   end: { flexDirection: "row", alignItems: "center", gap: 6 },
 });

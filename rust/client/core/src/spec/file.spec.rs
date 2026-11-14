@@ -12,23 +12,27 @@
 /// What a file is past its path, a tile's version and URL, a storage key, is the client's
 /// binding (ts/client/src/service/sys/fs/).
 pub mod path {
-    /// The terrain bake: (TERRAIN, quadkey).
+    /// A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json
+    /// `BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number.
     pub mod terrain {
         pub const ID: i32 = 0;
     }
-    /// The places bake: (PLACE, quadkey).
+    /// A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json
+    /// `BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number.
     pub mod place {
         pub const ID: i32 = 1;
     }
-    /// The divisions bake: (DIVISION, quadkey).
+    /// A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json
+    /// `BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number.
     pub mod division {
         pub const ID: i32 = 2;
     }
-    /// The Earth bake: (EARTH, quadkey), and the picture of the whole Earth, (EARTH, SPHERE).
+    /// A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json
+    /// `BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number.
     pub mod earth {
         pub const ID: i32 = 3;
-        /// The picture of the whole Earth, served under the Earth bake's version as its
-        /// `SPHERE` (spec/spec/bake/publication.json).
+        /// The picture of the whole Earth, (EARTH, SPHERE), served under the Earth layer's
+        /// version as its `TILE_SPHERE` (spec/spec/bake/publication.json).
         pub mod sphere {
             pub const ID: i32 = 0;
         }

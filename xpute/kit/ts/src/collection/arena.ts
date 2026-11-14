@@ -12,7 +12,8 @@ import type {
   AnyTypedArray,
   AnyTypedArrayCtor,
 } from "../abi/array.ts";
-import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
+import { bug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_EINVAL, ERRNO_EOVERFLOW } from "@xpute/kit/status/errno.spec.ts";
 
 export interface ArenaConfig {
@@ -80,7 +81,7 @@ export class Arena<T extends object> {
    */
   truncate(new_len: u32): void {
     if (new_len > this._len) {
-      throw new InvariantError(ERRNO_EINVAL);
+      bug(ERRNO_EINVAL);
     }
     this._len = new_len;
   }
@@ -90,7 +91,7 @@ export class Arena<T extends object> {
   private _grow(req: u32): void {
     const cap = this.cap;
     if (req <= cap) return;
-    if (req > this.max_cap) throw new MarshalError(ERRNO_EOVERFLOW);
+    if (req > this.max_cap) throw new XputeError(ERRNO_EOVERFLOW);
     const new_cap = Math.min(Math.max(cap * 2, req), this.max_cap);
 
     this.mem.length = new_cap; // V8 Array pre-allocation hint
@@ -168,7 +169,7 @@ export class Vector<T extends AnyTypedArray> {
    * truncate left behind.
    */
   set(idx: u32, v: AnyElementOf<T>): void {
-    if (idx > this._len) throw new InvariantError(ERRNO_EINVAL);
+    if (idx > this._len) bug(ERRNO_EINVAL);
     if (idx === this._len) this.push(v);
     else this.mem[idx] = v;
   }
@@ -192,7 +193,7 @@ export class Vector<T extends AnyTypedArray> {
    * A `new_len` above the current length is a bug, not a way to grow.
    */
   truncate(new_len: u32): void {
-    if (new_len > this._len) throw new InvariantError(ERRNO_EINVAL);
+    if (new_len > this._len) bug(ERRNO_EINVAL);
     this._len = new_len;
   }
 
@@ -207,7 +208,7 @@ export class Vector<T extends AnyTypedArray> {
    */
   private _grow(req: u32): void {
     if (req <= this.cap) return;
-    if (req > this.max_cap) throw new MarshalError(ERRNO_EOVERFLOW);
+    if (req > this.max_cap) throw new XputeError(ERRNO_EOVERFLOW);
     const new_cap = Math.min(Math.max(this.cap * 2, req), this.max_cap);
 
     const new_mem: T = new this.ctor(new_cap);

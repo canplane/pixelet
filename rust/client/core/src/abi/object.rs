@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/object` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x4edab0;
 
@@ -41,9 +33,9 @@ pub fn apply<L: _rt::Lend>(
                 let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
                 r_.case(0, 2).and_then(|d| {
                     if d == 0 {
-                        Ok(()).map(Ok)
+                        Ok(Ok(()))
                     } else {
-                        r_.case(0 + 1, 7)
+                        r_.case(1, 7)
                             .and_then(|v| _rt::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                             .map(Err)
                     }

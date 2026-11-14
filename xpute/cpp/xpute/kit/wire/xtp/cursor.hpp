@@ -107,7 +107,7 @@ class Cursor {
     Result<Value> get() const noexcept;
 
     template <class T> Result<ArrayView<T>> get_array() const noexcept {
-        if (is_null() || type_ != type_of(ARRAY_OF<T>)) return marshal_error(Errno::ebadmsg);
+        if (is_null() || type_ != type_of(ARRAY_OF<T>)) return make_error(Errno::ebadmsg);
         Result<Array> a = array(sizeof(T));
         if (!a) return a.error();
         return ArrayView<T>(a->bytes);

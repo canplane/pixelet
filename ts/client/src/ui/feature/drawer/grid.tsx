@@ -9,7 +9,7 @@ import {
 } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { selectionRing } from "@/ui/shared/asset/swatch.tsx";
+import { selection_ring } from "@/ui/shared/asset/swatch.tsx";
 import { chrome, color, hairline } from "@/ui/shared/component/theme.ts";
 import { NamingContext } from "./name-tip.tsx";
 
@@ -26,11 +26,11 @@ const LIT_INK = 2;
  */
 const ITEM_SLOPE = 1 / LIT_SCALE;
 const ITEM_BASE = (GRID_GAP - 2 * (1 + LIT_INK)) / LIT_SCALE;
-export function itemOf(cell: f64): f64 {
+export function item_of(cell: f64): f64 {
   return ITEM_SLOPE * cell + ITEM_BASE;
 }
 
-function columnsOf(width: f64): f64 {
+function column_cnt(width: f64): f64 {
   return Math.max(
     1,
     Math.floor((width + GRID_GAP) / (chrome.target + GRID_GAP)),
@@ -51,7 +51,7 @@ export function Grid({
   children: (cell: f64) => React.ReactNode;
 }) {
   const [width, setWidth] = useState(0);
-  const columns = columnsOf(width);
+  const columns = column_cnt(width);
   const cell =
     width > 0
       ? (width - (columns - 1) * GRID_GAP - ITEM_BASE) /
@@ -64,7 +64,7 @@ export function Grid({
     >
       {head}
       <View
-        style={[styles.grid, { marginHorizontal: -(cell - itemOf(cell)) / 2 }]}
+        style={[styles.grid, { marginHorizontal: -(cell - item_of(cell)) / 2 }]}
       >
         {children(cell)}
       </View>
@@ -106,7 +106,7 @@ export function Item({
 export const mark = StyleSheet.create({
   off: { boxShadow: `0 0 0 1px ${hairline}` },
   on: {
-    boxShadow: selectionRing(color.ground, color.black, LIT_INK),
+    boxShadow: selection_ring(color.ground, color.black, LIT_INK),
     transform: [{ scale: LIT_SCALE }],
   },
 });

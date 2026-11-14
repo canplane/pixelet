@@ -40,7 +40,7 @@ use crate::sys::sched::{self, invalidate};
 use pxl_spec::asset::catalog::{Slot, SLOT_CNT};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
+use xpute_kit::status::error::XputeError;
 
 const IDENTITY: [f32; 16] = [
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
@@ -60,7 +60,7 @@ static REGISTRY: Global<Vec<(u32, Option<u64>, Registration)>> = Global::new();
 
 /// None while its task runs. Then the file as parsed, or why its bytes do not
 /// parse. A failed parse is final.
-type Parse = Option<Result<Rc<Gltf>, MarshalError>>;
+type Parse = Option<Result<Rc<Gltf>, XputeError>>;
 
 /// Each file's parse, keyed by its number after ASSET.
 static PARSED: Global<Vec<(u32, Parse)>> = Global::new();

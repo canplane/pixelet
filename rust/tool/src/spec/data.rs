@@ -10,6 +10,7 @@
 
 use xpute_gen::spec::data::{table_outputs, DataSpec};
 
+use super::bake::PUBLICATION;
 use super::catalog::{run_of, FILE};
 use super::ingest::files;
 use super::{read, Node, Output};
@@ -132,6 +133,8 @@ const DATA_SPECS: [DataSpec; 18] = [
 /// from 1.
 pub fn outputs() -> Result<Vec<Output>, String> {
     let files: Vec<String> = files()?.into_iter().map(|f| f.path).collect();
+    // The specs whose enums a spec may name by `$uses`.
+    let peers: Vec<DataSpec> = DATA_SPECS.into_iter().chain([PUBLICATION]).collect();
     let mut out = Vec::new();
     for d in &DATA_SPECS {
         let spec = read(d.json)?;
@@ -142,7 +145,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             k.map(|k| k as u16 + 1).ok_or(format!("{}: {path} is no file the ingest lists", d.json))
         })?;
         if refs == 0 {
-            out.extend(table_outputs(&root(), d, spec)?);
+            out.extend(table_outputs(&root(), d, spec, &peers)?);
             continue;
         }
         let (first, cnt) = run_of(d.json)?;
@@ -154,8 +157,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         if next != first + cnt {
             return Err(format!("{}: its references are not the {cnt} of its run", d.json));
         }
-        out.extend(table_outputs(&root(), &DataSpec { ts: None, ..*d }, rs)?);
-        out.extend(table_outputs(&root(), &DataSpec { rs: None, ..*d }, ts)?);
+        out.extend(table_outputs(&root(), &DataSpec { ts: None, ..*d }, rs, &peers)?);
+        out.extend(table_outputs(&root(), &DataSpec { rs: None, ..*d }, ts, &peers)?);
     }
     Ok(out)
 }

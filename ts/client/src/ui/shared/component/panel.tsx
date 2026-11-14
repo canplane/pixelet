@@ -60,12 +60,12 @@ export interface PanelProps {
   children: ReactNode;
 }
 
-/** The panel's host tells it whether it is open. The panel calls `onExited` once
+/** The panel's host tells it whether it is open. The panel calls `on_exited` once
  * it has slid away, and only then does the host stop drawing it. */
 export const PanelPresence = createContext<{
   open: boolean;
-  onExited: () => void;
-}>({ open: true, onExited: () => {} });
+  on_exited: () => void;
+}>({ open: true, on_exited: () => {} });
 
 /** The row shows no title: the panel's `label` names the sheet to assistive
  * technology. */
@@ -79,7 +79,7 @@ export function PanelBar({
 }) {
   return (
     <View {...rest} style={styles.bar}>
-      <View style={styles.barMain}>{children}</View>
+      <View style={styles.bar_main}>{children}</View>
       <PanelClose onClose={onClose} />
     </View>
   );
@@ -127,9 +127,9 @@ export function PanelScroll({ children }: { children: ReactNode }) {
   const { bottom } = useSafeArea();
   return (
     <ScrollView
-      style={styles.tabScroll}
+      style={styles.tab_scroll}
       contentContainerStyle={[
-        styles.tabContent,
+        styles.tab_content,
         {
           paddingBottom: bottom + PANEL_EDGE,
         },
@@ -147,9 +147,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: PANEL_EDGE,
     flexDirection: "row",
     alignItems: "center",
-    gap: chrome.controlGap,
+    gap: chrome.control_gap,
   },
-  barMain: { flex: 1, height: PANEL_CONTROL, justifyContent: "center" },
+  bar_main: { flex: 1, height: PANEL_CONTROL, justifyContent: "center" },
   body: { flex: 1 },
   head: {
     position: "absolute",
@@ -158,8 +158,8 @@ const styles = StyleSheet.create({
     right: 0,
     height: PANEL_HEAD_HEIGHT,
   },
-  tabScroll: { flex: 1 },
-  tabContent: {
+  tab_scroll: { flex: 1 },
+  tab_content: {
     paddingHorizontal: PANEL_EDGE,
     paddingTop: PANEL_CONTENT_TOP,
     gap: PANEL_SECTION_GAP,
@@ -185,10 +185,10 @@ const TAP_SLOP = 8;
 export function Panel({ label, onClose, half, children }: PanelProps) {
   const window = useWindowSize();
   const { top } = useSafeArea();
-  const { open, onExited } = useContext(PanelPresence);
+  const { open, on_exited } = useContext(PanelPresence);
   const width = Math.min(window.width, MAX_WIDTH);
-  const fullHeight = window.height - top - WHOLE_GAP;
-  const halfHeight = window.height / 2;
+  const full_height = window.height - top - WHOLE_GAP;
+  const half_height = window.height / 2;
 
   const [full, setFull] = useState(!half);
   // The body is as tall as the part of the sheet in view, so that its scroll
@@ -196,16 +196,16 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
   // once the sheet has slid down to half.
   const [bodyFull, setBodyFull] = useState(full);
   const [drag, setDrag] = useState<f64 | null>(null);
-  const shown = full ? fullHeight : halfHeight;
+  const shown = full ? full_height : half_height;
 
-  const detent = (toFull: boolean) => {
-    setFull(toFull);
-    if (toFull) setBodyFull(true);
+  const detent = (to_full: boolean) => {
+    setFull(to_full);
+    if (to_full) setBodyFull(true);
   };
   const stops = [
     { height: 0, settle: onClose },
-    ...(half ? [{ height: halfHeight, settle: () => detent(false) }] : []),
-    { height: fullHeight, settle: () => detent(true) },
+    ...(half ? [{ height: half_height, settle: () => detent(false) }] : []),
+    { height: full_height, settle: () => detent(true) },
   ];
 
   const now = {
@@ -233,10 +233,10 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
         const { top, center, shown, full, half, stops } = live.current;
         const tap = Math.abs(g.dx) < TAP_SLOP && Math.abs(g.dy) < TAP_SLOP;
         if (tap) {
-          const onHandle =
+          const on_handle =
             g.y0 - top < chrome.target &&
             Math.abs(g.x0 - center) < chrome.target / 2;
-          if (half && onHandle) detent(!full);
+          if (half && on_handle) detent(!full);
           return;
         }
         const height = shown - g.dy;
@@ -256,12 +256,12 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
     }),
   ).current;
 
-  const rest = fullHeight - shown;
+  const rest = full_height - shown;
   const offset = drag === null ? rest : Math.max(0, rest + drag);
-  const away = { translateY: fullHeight + 16 };
+  const away = { translateY: full_height + 16 };
 
   return (
-    <View style={[sheetStyles.layer, open ? touches.pass : touches.block]}>
+    <View style={[sheet_styles.layer, open ? touches.pass : touches.block]}>
       <Motion
         from={{ opacity: 0 }}
         to={{ opacity: open ? 1 : 0 }}
@@ -271,19 +271,19 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
         <Pressable
           accessible={false}
           onPress={onClose}
-          style={sheetStyles.dim}
+          style={sheet_styles.dim}
         />
       </Motion>
       <Motion
         from={away}
         to={open ? { translateY: offset } : away}
         transition={drag !== null ? FOLLOW : open ? SLIDE : SLIDE_AWAY}
-        onSettled={open ? () => drag === null && setBodyFull(full) : onExited}
+        onSettled={open ? () => drag === null && setBodyFull(full) : on_exited}
         style={[
-          sheetStyles.sheet,
+          sheet_styles.sheet,
           {
             width,
-            height: fullHeight,
+            height: full_height,
             left: (window.width - width) / 2,
           },
         ]}
@@ -293,21 +293,21 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
           accessibilityViewIsModal
           accessibilityLabel={label}
           style={[
-            sheetStyles.body,
+            sheet_styles.body,
             {
-              height: bodyFull ? fullHeight : halfHeight,
+              height: bodyFull ? full_height : half_height,
             },
           ]}
         >
           {children}
-          <View style={sheetStyles.handle} />
+          <View style={sheet_styles.handle} />
         </View>
       </Motion>
     </View>
   );
 }
 
-const sheetStyles = StyleSheet.create({
+const sheet_styles = StyleSheet.create({
   layer: { ...StyleSheet.absoluteFill, zIndex: layer.sheet },
   body: { width: "100%" },
   dim: { flex: 1, backgroundColor: alpha(color.black, 0.2) },

@@ -9,12 +9,16 @@ import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { Presence } from "@/ui/shared/component/motion/presence.tsx";
 import { FADE, SNAP } from "@/ui/shared/component/motion/transition.ts";
-import { putKeyboardAway } from "@/ui/shared/component/keyboard.tsx";
+import { put_keyboard_away } from "@/ui/shared/component/keyboard.tsx";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import { TextField } from "@/ui/shared/component/text-field.tsx";
-import { chrome, color, disabledContent } from "@/ui/shared/component/theme.ts";
+import {
+  chrome,
+  color,
+  disabled_content,
+} from "@/ui/shared/component/theme.ts";
 import { useCore } from "@/ui/shared/watch.ts";
-import { appendChatLine, DockMode, setDockMode } from "./store.ts";
+import { append_chat_line, DockMode, set_dock_mode } from "./store.ts";
 import { SLOT } from "./strip.tsx";
 import * as edit from "@/service/core/edit.ts";
 import * as snapshot from "@/service/core/snapshot.ts";
@@ -23,17 +27,17 @@ import * as snapshot from "@/service/core/snapshot.ts";
  * drawn yet. */
 export function useMessage(mode: DockMode) {
   const drafting = useCore((s) => s.draft !== null);
-  const [messageText, setMessageText] = useState("");
+  const [message_text, set_message_text] = useState("");
   const [markerFits, setMarkerFits] = useState(true);
-  const [isSending, setIsSending] = useState(false);
-  const inputRef = useRef<TextInput | null>(null);
+  const [is_sending, set_is_sending] = useState(false);
+  const input_ref = useRef<TextInput | null>(null);
 
   // The keyboard is up exactly while the dock is in message mode. A marker's
   // draft exists only in message mode, so leaving the mode cancels it.
   useEffect(() => {
-    if (mode === DockMode.Message) inputRef.current?.focus();
+    if (mode === DockMode.Message) input_ref.current?.focus();
     else {
-      putKeyboardAway();
+      put_keyboard_away();
       if (drafting) edit.marker_cancel();
     }
   }, [mode]);
@@ -42,13 +46,13 @@ export function useMessage(mode: DockMode) {
   // draft's text. From then on the field owns the text and sends the core each
   // change. When the draft closes, the field is emptied for the chat.
   useEffect(() => {
-    setMessageText(drafting ? (snapshot.cur().draft ?? "") : "");
+    set_message_text(drafting ? (snapshot.cur().draft ?? "") : "");
     setMarkerFits(true);
-    if (drafting) setDockMode(DockMode.Message);
+    if (drafting) set_dock_mode(DockMode.Message);
   }, [drafting]);
 
-  function changeText(text: string) {
-    setMessageText(text);
+  function change_text(text: string) {
+    set_message_text(text);
     if (drafting) {
       void edit.marker_text(text.trim()).then(
         (fits) => setMarkerFits(fits),
@@ -57,36 +61,36 @@ export function useMessage(mode: DockMode) {
     }
   }
 
-  function sendMessage() {
-    const text = messageText.trim();
-    if (!canSend || !fits || isSending) return;
-    setIsSending(true);
+  function send_message() {
+    const text = message_text.trim();
+    if (!can_send || !fits || is_sending) return;
+    set_is_sending(true);
     setTimeout(() => {
-      setMessageText("");
-      setIsSending(false);
+      set_message_text("");
+      set_is_sending(false);
       if (!drafting) {
-        appendChatLine(text);
-        inputRef.current?.focus();
+        append_chat_line(text);
+        input_ref.current?.focus();
         return;
       }
       edit.marker_commit();
-      setDockMode(DockMode.Palette);
+      set_dock_mode(DockMode.Palette);
     }, FADE.durationMs);
   }
 
-  const canSend = messageText.trim() !== "";
+  const can_send = message_text.trim() !== "";
   // A marker's text the core refused cannot be committed. A chat line too
   // long for the link is refused whole, never cut short.
   const fits = drafting ? markerFits : true;
 
   return {
     drafting,
-    messageText,
-    isSending,
-    inputRef,
-    changeText,
-    sendMessage,
-    canSend,
+    message_text,
+    is_sending,
+    input_ref,
+    change_text,
+    send_message,
+    can_send,
     fits,
   };
 }
@@ -101,49 +105,49 @@ export function Message({
   const { t } = useTranslation();
   const {
     drafting,
-    messageText,
-    isSending,
-    inputRef,
-    changeText,
-    sendMessage,
-    canSend,
+    message_text,
+    is_sending,
+    input_ref,
+    change_text,
+    send_message,
+    can_send,
     fits,
   } = message;
 
   return (
     <View style={[styles.message, { width }]}>
-      <View style={styles.messageIcon}>
+      <View style={styles.message_icon}>
         <Glyph glyph="bubble.left" size={chrome.glyph} color={LABEL.primary} />
       </View>
       <Motion
-        to={{ opacity: isSending ? 0 : 1 }}
+        to={{ opacity: is_sending ? 0 : 1 }}
         transition={FADE}
-        style={styles.fieldFill}
+        style={styles.field_fill}
       >
         <TextField
-          ref={inputRef}
-          value={messageText}
-          onChangeText={changeText}
-          onSubmit={sendMessage}
+          ref={input_ref}
+          value={message_text}
+          onChangeText={change_text}
+          onSubmit={send_message}
           placeholder={
             drafting
               ? t("world.dock.pin_placeholder")
               : t("world.dock.message_placeholder")
           }
           placeholderTextColor={LABEL.placeholder}
-          style={styles.messageInput}
+          style={styles.message_input}
         />
       </Motion>
       <Presence
-        show={canSend}
+        show={can_send}
         from={{ opacity: 0, scale: 0.5 }}
         exit={{ opacity: 0 }}
         transition={SNAP}
         style={styles.slot}
       >
         <Pressable
-          onPress={sendMessage}
-          disabled={isSending || !fits}
+          onPress={send_message}
+          disabled={is_sending || !fits}
           accessibilityRole="button"
           accessibilityLabel={
             drafting ? t("world.dock.put_pin") : t("world.dock.send")
@@ -151,8 +155,8 @@ export function Message({
           style={({ pressed }) => [
             styles.send,
             drafting && styles.confirm,
-            pressed && styles.sendPressed,
-            !fits && styles.sendRefused,
+            pressed && styles.send_pressed,
+            !fits && styles.send_refused,
           ]}
         >
           <Glyph
@@ -174,14 +178,14 @@ const styles = StyleSheet.create({
     height: chrome.control,
     paddingRight: (chrome.control - chrome.target) / 2,
   },
-  messageIcon: {
+  message_icon: {
     width: chrome.control,
     height: chrome.control,
     alignItems: "center",
     justifyContent: "center",
   },
-  fieldFill: { flex: 1, minWidth: 0 },
-  messageInput: { width: "100%", color: LABEL.primary },
+  field_fill: { flex: 1, minWidth: 0 },
+  message_input: { width: "100%", color: LABEL.primary },
   send: {
     width: chrome.selection,
     height: chrome.selection,
@@ -191,7 +195,7 @@ const styles = StyleSheet.create({
     backgroundColor: color.send,
   },
   confirm: { backgroundColor: color.confirm },
-  sendPressed: { opacity: 0.7 },
-  sendRefused: { opacity: disabledContent },
+  send_pressed: { opacity: 0.7 },
+  send_refused: { opacity: disabled_content },
   slot: SLOT,
 });

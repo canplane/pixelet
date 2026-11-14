@@ -30,8 +30,8 @@ import {
   shadow,
   surface,
   SYSTEM,
-  textScale,
-  textStyle,
+  text_scale,
+  text_style,
 } from "@/ui/shared/component/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
 import { useWindowSize } from "@/service/platform/viewport.ts";
@@ -138,7 +138,7 @@ export function Toast({
       >
         <Text
           numberOfLines={1}
-          maxFontSizeMultiplier={textScale.chrome}
+          maxFontSizeMultiplier={text_scale.chrome}
           style={[
             styles.message,
             {
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   message: {
-    ...textStyle.notice,
+    ...text_style.notice,
     color: LABEL.primary,
     paddingHorizontal: MESSAGE_PAD,
   },

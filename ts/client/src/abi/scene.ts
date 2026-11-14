@@ -5,7 +5,7 @@
 import { type SceneContent, of_SceneContent } from "./scene.enum.ts";
 import { load_ErrorCode } from "./types.ts";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError, XputeError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import { Lift } from "@xpute/link/cabi.ts";
 import {
   ComponentError,
@@ -24,7 +24,7 @@ export const CHAT: Method = 1;
 
 export function load_SceneContent(r: Lift, at: number): SceneContent {
   const v = of_SceneContent(r.case(at, 2));
-  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (v === null) throw new XputeError(ERRNO_EBADMSG);
   return v;
 }
 
@@ -42,21 +42,21 @@ export async function draw(
       w_.u8(4, content);
       if (group !== null) {
         w_.u8(5, 1);
-        w_.u8(5 + 1, group);
+        w_.u8(6, group);
       }
       if (bg !== null) {
         w_.u8(8, 1);
-        w_.u32(8 + 4, bg);
+        w_.u32(12, bg);
       }
     },
   ]);
   if (a_.result !== 0) throw new XputeError(a_.result);
-  if (a_.data === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (a_.data === null) throw new XputeError(ERRNO_EBADMSG);
   const r_ = new Lift(a_.data);
   const v_ =
     r_.case(0, 2) === 0
       ? { tag: "ok" as const }
-      : { tag: "err" as const, val: load_ErrorCode(r_, 0 + 1) };
+      : { tag: "err" as const, val: load_ErrorCode(r_, 1) };
   if (v_.tag === "err") throw new ComponentError(v_.val);
   return;
 }

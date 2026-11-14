@@ -4,7 +4,7 @@
 //! handed out in order and taken back by rewinding to an earlier length.
 
 use crate::status::errno::Errno;
-use crate::status::error::MarshalError;
+use crate::status::error::XputeError;
 
 pub struct ArenaConfig {
     pub init_cap: u32,
@@ -22,7 +22,7 @@ pub struct Arena<T: Default> {
 }
 
 impl<T: Default> Arena<T> {
-    pub fn new(cfg: ArenaConfig) -> Result<Arena<T>, MarshalError> {
+    pub fn new(cfg: ArenaConfig) -> Result<Arena<T>, XputeError> {
         let mut arena = Arena {
             mem: Vec::new(),
             max_cap: cfg.max_cap,
@@ -48,7 +48,7 @@ impl<T: Default> Arena<T> {
         &mut self.mem[idx as usize]
     }
 
-    pub fn alloc(&mut self) -> Result<&mut T, MarshalError> {
+    pub fn alloc(&mut self) -> Result<&mut T, XputeError> {
         if self.len >= self.cap() {
             self.grow(self.len.saturating_add(1))?;
         }
@@ -58,7 +58,7 @@ impl<T: Default> Arena<T> {
         Ok(&mut self.mem[i])
     }
 
-    pub fn reserve(&mut self, cnt: u32) -> Result<(), MarshalError> {
+    pub fn reserve(&mut self, cnt: u32) -> Result<(), XputeError> {
         self.grow(self.len.saturating_add(cnt))
     }
 
@@ -71,13 +71,13 @@ impl<T: Default> Arena<T> {
 
     /// The capacity doubles but stops at `max_cap`, so a request is refused
     /// only when it does not fit under `max_cap`.
-    fn grow(&mut self, req: u32) -> Result<(), MarshalError> {
+    fn grow(&mut self, req: u32) -> Result<(), XputeError> {
         let cap = self.cap();
         if req <= cap {
             return Ok(());
         }
         if req > self.max_cap {
-            return Err(MarshalError::new(Errno::EOVERFLOW));
+            return Err(XputeError::new(Errno::EOVERFLOW));
         }
         let new_cap = cap.saturating_mul(2).clamp(req, self.max_cap);
         self.mem.resize_with(new_cap as usize, T::default);

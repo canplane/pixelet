@@ -9,7 +9,7 @@
 #   "xpute": { "guest": {
 #     "workspace": "<the cargo workspace, from the app>",
 #     "package": "<the guest's crate>",
-#     "native": "<the crate a device links>",
+#     "runtime": "<the crate a device links>",
 #     "profile": { "debug": "<cargo profile>", "release": "<cargo profile>" },
 #     "args": { "debug": [...], "release": [...] }
 #   } }
@@ -132,7 +132,7 @@ def main():
     app = Path(args.get("app") or fail("--app is not given"))
     guest = json.loads((app / "package.json").read_text()).get("xpute", {}).get("guest") or fail(f"{app}/package.json names no xpute.guest")
     workspace = (app / guest["workspace"]).resolve()
-    package = guest["native"]
+    package = guest["runtime"]
     lib = package.replace("-", "_")
     build = gradle(args, lib) if "--android" in argv else xcode(lib)
     which = "release" if build["release"] else "debug"

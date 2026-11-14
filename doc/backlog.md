@@ -14,19 +14,6 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
 
 ## P2
 
-- **The data-spec generator, by one convention.** xpute-gen's data specs
-  follow no single rule: a table's TypeScript shape turns on its content (an
-  all-number table goes to a file of its own), and enums, flags, slot numbers
-  and `laid_out` offsets are inferred or set by the caller's options. The
-  direction discussed: DTCG's structure (`$value`, a `$type` inherited from the
-  group, `$description`, a tool's data in `$extensions`) with our own scalar
-  types; one fixed form per language (Rust modules, TypeScript ES modules,
-  arrays for lists) so that no key survives the build; names only where a spec
-  declares them, and an ordered table written as an array; each transform
-  declared in `$extensions`; the generator a crate of its own outside xpute,
-  which runs it only at development time. Open: the shape of the
-  `$extensions` declarations.
-
 ## Parked, with the reason on file
 
 - **A query over what is drawn, for an agent to read.** An agent debugging the
@@ -40,18 +27,3 @@ is not rediscovered, **parked** decided-not-now with the reason on file.
   the samples miss a thin face
   ([20261024-a-proxy-only-starts-the-ray.md](./minutes/20261024-a-proxy-only-starts-the-ray.md)).
   Not urgent: no debugging under way needs it.
-- **WASI, as a subsystem over the contract.** An adapter that offers a WASI
-  program WASI's calls translated into the contract's requests, which is what
-  would let an existing program in. Not without one to build it against; guests
-  stay `wasm32-unknown-unknown` meanwhile —
-  [20260930-wasi-and-the-boundary.md](./minutes/20260930-wasi-and-the-boundary.md).
-- **pxl-core's test build.** Tests are off for now, and the core's test
-  build does not compile; when tests resume, these are rewritten or removed:
-  - `rust/client/core/src/link/export.test.rs`, which writes an f64 for a u32
-    reader and names `GpuSurfaceClose`, `ui::apply`,
-    `abi::Command::CAMERA_GOTO` and `State`, none of which exist.
-- **C++'s core, which does not build.** `xpute/cpp`'s io and conformance
-  include headers its removed core wrote (`xpute/core/abi/`, gone since
-  00503422be); they are written again with the C++ core. One file says it
-  is generated though nothing writes it: `dev/conformance/core.spec.mk`,
-  which the Makefile includes.

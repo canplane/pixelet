@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/edit` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x453522;
 
@@ -55,13 +47,13 @@ impl Tool {
 }
 
 pub fn hold(tool: Tool, val: u32, scale_step: i32) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         HOLD,
         Some((12, &|w_: &mut _rt::Lower| {
-            w_.u8(0, *&tool as u8);
-            w_.u32(4, *&val);
-            w_.i32(8, *&scale_step);
+            w_.u8(0, tool as u8);
+            w_.u32(4, val);
+            w_.i32(8, scale_step);
         })),
     );
     _rt::answer(r)
@@ -72,16 +64,16 @@ pub fn marker_text(text: &str) -> Result<Result<(), super::types::ErrorCode>, _r
         HANDLE,
         MARKER_TEXT,
         Some((8, &|w_: &mut _rt::Lower| {
-            w_.str(0, &text);
+            w_.str(0, text);
         })),
     );
     _rt::answer(r).and_then(|_| {
-        let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
+        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
         r_.case(0, 2).and_then(|d| {
             if d == 0 {
-                Ok(()).map(Ok)
+                Ok(Ok(()))
             } else {
-                r_.case(0 + 1, 6)
+                r_.case(1, 6)
                     .and_then(|v| super::types::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                     .map(Err)
             }
@@ -90,12 +82,12 @@ pub fn marker_text(text: &str) -> Result<Result<(), super::types::ErrorCode>, _r
 }
 
 pub fn marker_cancel() -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(HANDLE, MARKER_CANCEL, None);
+    let (r, _) = _rt::link::call(HANDLE, MARKER_CANCEL, None);
     _rt::answer(r)
 }
 
 pub fn marker_commit() -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(HANDLE, MARKER_COMMIT, None);
+    let (r, _) = _rt::link::call(HANDLE, MARKER_COMMIT, None);
     _rt::answer(r)
 }
 

@@ -45,8 +45,8 @@ use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::demand::tiles_within;
 use pxl_spec::space::layer::lattice::{demand_dist, GROUND};
 
-/// A layer the view asks tiles of. Its demand is held beside its tile cache.
-pub trait ViewLayer: Base {
+/// A base layer whose demand the view holds, beside its tile cache.
+pub trait DemandedBase: Base {
     fn demand() -> &'static mut Demand<Self>;
 }
 
@@ -55,25 +55,25 @@ static PLACE: Global<Demand<PlaceTile>> = Global::new();
 static EARTH: Global<Demand<EarthTile>> = Global::new();
 static DIVISION: Global<Demand<DivisionTile>> = Global::new();
 
-impl ViewLayer for TerrainTile {
+impl DemandedBase for TerrainTile {
     fn demand() -> &'static mut Demand<TerrainTile> {
         TERRAIN.get(Demand::default)
     }
 }
 
-impl ViewLayer for PlaceTile {
+impl DemandedBase for PlaceTile {
     fn demand() -> &'static mut Demand<PlaceTile> {
         PLACE.get(Demand::default)
     }
 }
 
-impl ViewLayer for DivisionTile {
+impl DemandedBase for DivisionTile {
     fn demand() -> &'static mut Demand<DivisionTile> {
         DIVISION.get(Demand::default)
     }
 }
 
-impl ViewLayer for EarthTile {
+impl DemandedBase for EarthTile {
     fn demand() -> &'static mut Demand<EarthTile> {
         EARTH.get(Demand::default)
     }
@@ -91,7 +91,7 @@ pub struct Layer {
     on_arrival: fn(u64, Option<Body>, &mut PhaseList) -> Result<(), Exit>,
 }
 
-const fn layer<L: ViewLayer>() -> Layer {
+const fn layer<L: DemandedBase>() -> Layer {
     Layer {
         stream: const { Stream::of_layer(L::LAYER) },
         slot_cnt: TileCache::<L>::SLOT_CNT,
@@ -182,7 +182,7 @@ struct Key {
     dst: Option<Quadrant>,
 }
 
-pub struct Demand<L: ViewLayer> {
+pub struct Demand<L: DemandedBase> {
     layer: core::marker::PhantomData<L>,
     observation: Option<Observation>,
     wants: Vec<(u64, Order)>,
@@ -220,7 +220,7 @@ pub struct Demand<L: ViewLayer> {
     idle_revision: Option<u32>,
 }
 
-impl<L: ViewLayer> Default for Demand<L> {
+impl<L: DemandedBase> Default for Demand<L> {
     fn default() -> Self {
         Demand {
             layer: core::marker::PhantomData,
@@ -243,7 +243,7 @@ impl<L: ViewLayer> Default for Demand<L> {
     }
 }
 
-impl<L: ViewLayer> Demand<L> {
+impl<L: DemandedBase> Demand<L> {
     /// The floor's tiles as last observed.
     pub fn floor(&self) -> impl Iterator<Item = Quadrant> + Clone + '_ {
         self.floor.iter().copied()
@@ -659,7 +659,7 @@ pub fn admit_arrived() {
 /// Admits the file for the tile `id` names. A `pkt` of None means the source
 /// has no object for that tile. A packet no slot took goes back with the
 /// closure that held it.
-fn on_arrived<L: ViewLayer>(
+fn on_arrived<L: DemandedBase>(
     id: u64,
     pkt: Option<Body>,
     phases: &mut PhaseList,

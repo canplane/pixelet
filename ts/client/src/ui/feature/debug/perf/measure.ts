@@ -24,9 +24,9 @@ import { log } from "@/service/platform/log.ts";
 import * as visibility from "@/service/platform/visibility.ts";
 import * as snapshot from "@/service/core/snapshot.ts";
 import { MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
-import { DRIVE_SETTINGS, perfDrive } from "./drive.ts";
-import { perfTrace } from "./trace.ts";
-import { perfReportRead } from "./view.ts";
+import { DRIVE_SETTINGS, perf_drive } from "./drive.ts";
+import { perf_trace } from "./trace.ts";
+import { perf_report_read } from "./view.ts";
 
 /** What a load is given to settle before the drive. */
 const SETTLE_MS = 35_000;
@@ -107,7 +107,7 @@ function started(): Promise<void> {
  * its core waits for it to be shown again, or where the core stops, whose
  * reason the host says. */
 export async function measure(): Promise<void> {
-  const stopProgress = progress();
+  const stop_progress = progress();
   const unwatch: (() => void)[] = [];
   const ended = new Promise<never>((_, fail) => {
     const hidden = () =>
@@ -128,7 +128,7 @@ export async function measure(): Promise<void> {
     await tell(JSON.stringify({ error: String(e) }));
   } finally {
     unwatch.forEach((w) => w());
-    stopProgress();
+    stop_progress();
   }
 }
 
@@ -140,9 +140,9 @@ async function run(): Promise<string> {
   const before = DRIVE_SETTINGS.map(
     ([key]) => [key, snapshot.cur().settings[key]] as const,
   );
-  const report = await perfDrive();
-  const r = await perfReportRead();
-  const trace = await perfTrace();
+  const report = await perf_drive();
+  const r = await perf_report_read();
+  const trace = await perf_trace();
   for (const [key, value] of before) setting.set(key, value);
   const [lat, lon] = [r.view.pivot_lat, r.view.pivot_lon];
   if (off(lat, MEASURE_PLACE.lat) || off(lon, MEASURE_PLACE.lon)) {
@@ -151,7 +151,7 @@ async function run(): Promise<string> {
   const f = r.frames;
   return JSON.stringify({
     build: __DEV__ ? "dev" : "release",
-    longest: Math.max(0, ...r.longs.map((l) => l.durationMs)),
+    longest: Math.max(0, ...r.longs.map((l) => l.duration_ms)),
     gpu: f
       ? [f.gpu_busy.p50, f.gpu_busy.p95, f.n, f.gpu_timed]
       : [null, null, 0, 0],

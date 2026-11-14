@@ -2,14 +2,6 @@
 //
 // GENERATED from wit/fs (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// `[method]file.size`
 pub const FILE_SIZE: _rt::Method = 0;
 /// `[method]file.read`
@@ -47,11 +39,11 @@ impl _rt::Object for _FileObject {
                                         8,
                                         Box::new(move |w: &mut _rt::Lower| match &v {
                                             Ok(v) => {
-                                                w.u32(0 + 4, *v);
+                                                w.u32(4, *v);
                                             }
                                             Err(v) => {
                                                 w.u8(0, 1);
-                                                w.u8(0 + 4, *v as u8);
+                                                w.u8(4, *v as u8);
                                             }
                                         }),
                                     )),
@@ -86,11 +78,11 @@ impl _rt::Object for _FileObject {
                                             8,
                                             Box::new(move |w: &mut _rt::Lower| match &v {
                                                 Ok(v) => {
-                                                    w.u32(0 + 4, *v);
+                                                    w.u32(4, *v);
                                                 }
                                                 Err(v) => {
                                                     w.u8(0, 1);
-                                                    w.u8(0 + 4, *v as u8);
+                                                    w.u8(4, *v as u8);
                                                 }
                                             }),
                                         )),
@@ -120,7 +112,7 @@ impl _rt::Object for _FileObject {
                             _rt::link::on_cancel,
                             Box::new(move |got| {
                                 let reply = match got {
-                                    Ok(v) => _rt::Reply::from(0),
+                                    Ok(()) => _rt::Reply::from(0),
                                     Err(e) => _rt::Reply::from(e as i32),
                                 };
                                 _rt::link::task_return(
@@ -147,10 +139,10 @@ impl _rt::Object for _FileObject {
                                     data: Some((
                                         2,
                                         Box::new(move |w: &mut _rt::Lower| match &v {
-                                            Ok(v) => {}
+                                            Ok(_) => {}
                                             Err(v) => {
                                                 w.u8(0, 1);
-                                                w.u8(0 + 1, *v as u8);
+                                                w.u8(1, *v as u8);
                                             }
                                         }),
                                     )),
@@ -180,10 +172,10 @@ impl _rt::Object for _FileObject {
                                     data: Some((
                                         2,
                                         Box::new(move |w: &mut _rt::Lower| match &v {
-                                            Ok(v) => {}
+                                            Ok(_) => {}
                                             Err(v) => {
                                                 w.u8(0, 1);
-                                                w.u8(0 + 1, *v as u8);
+                                                w.u8(1, *v as u8);
                                             }
                                         }),
                                     )),
@@ -209,9 +201,9 @@ impl _rt::Object for _FileObject {
     }
 }
 
-/// The object over `imp`, for an opener to answer.
-pub fn file(imp: _rt::Rc<dyn HostFile>) -> _rt::Rc<dyn _rt::Object> {
-    _rt::Rc::new(_FileObject(imp))
+/// The object over `implementation`, for an opener or a function to answer.
+pub fn file(implementation: _rt::Rc<dyn HostFile>) -> _rt::Rc<dyn _rt::Object> {
+    _rt::Rc::new(_FileObject(implementation))
 }
 
 mod _rt {

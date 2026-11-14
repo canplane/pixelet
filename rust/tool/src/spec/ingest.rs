@@ -203,7 +203,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         rs: Some("rust/spec/src/asset/ingest.spec.rs"),
         ..DataSpec::DEFAULT
     };
-    let mut outs = table_outputs(&root(), &d, table)?;
+    let mut outs = table_outputs(&root(), &d, table, &[])?;
     let (ts, rs) = (pack_ts(&pack)?, pack_rs(&pack)?);
     for o in &mut outs {
         let tail = if o.path.ends_with(".rs") { &rs } else { &ts };

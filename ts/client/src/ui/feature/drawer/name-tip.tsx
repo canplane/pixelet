@@ -10,7 +10,7 @@ import {
 import { type LayoutChangeEvent, StyleSheet, Text, View } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { color, textStyle } from "@/ui/shared/component/theme.ts";
+import { color, text_style } from "@/ui/shared/component/theme.ts";
 
 const TIP_POINT = 5;
 /** The width of the box the tip is centered in, over the item. It must hold
@@ -24,7 +24,7 @@ const TIP_SPAN = 240;
 const TIP_FILL = color.black;
 const TIP_OPACITY = 0.72;
 const TIP_PAD_Y = 5;
-const TIP_RADIUS = (textStyle.notice.lineHeight + 2 * TIP_PAD_Y) / 2;
+const TIP_RADIUS = (text_style.notice.lineHeight + 2 * TIP_PAD_Y) / 2;
 
 /** The name is drawn in the sheet's top layer, over its bar: a name drawn
  * inside the scrolling content could not reach over the bar. */
@@ -45,20 +45,20 @@ function NameTip({ named, sheetHeight }: { named: Named; sheetHeight: f64 }) {
     <View
       pointerEvents="none"
       style={[
-        styles.tipAnchor,
+        styles.tip_anchor,
         {
           left: named.x - TIP_SPAN / 2,
           bottom: sheetHeight - named.y,
         },
       ]}
     >
-      <View style={styles.tipShape}>
+      <View style={styles.tip_shape}>
         <View
           needsOffscreenAlphaCompositing
-          style={[StyleSheet.absoluteFill, styles.tipFill]}
+          style={[StyleSheet.absoluteFill, styles.tip_fill]}
         >
-          <View style={styles.tipPill} />
-          <View style={styles.tipPoint} />
+          <View style={styles.tip_pill} />
+          <View style={styles.tip_point} />
         </View>
         <Text numberOfLines={1} style={styles.tip}>
           {named.label}
@@ -113,27 +113,27 @@ export function NameTipLayer({ children }: { children: ReactNode }) {
 
 const styles = StyleSheet.create({
   sheet: { flex: 1 },
-  tipAnchor: {
+  tip_anchor: {
     position: "absolute",
     width: TIP_SPAN,
     alignItems: "center",
     paddingBottom: 2,
   },
-  tipShape: { alignItems: "center", paddingBottom: TIP_POINT },
-  tipFill: { opacity: TIP_OPACITY, alignItems: "center" },
-  tipPill: {
+  tip_shape: { alignItems: "center", paddingBottom: TIP_POINT },
+  tip_fill: { opacity: TIP_OPACITY, alignItems: "center" },
+  tip_pill: {
     alignSelf: "stretch",
     flex: 1,
     backgroundColor: TIP_FILL,
     borderRadius: TIP_RADIUS,
   },
   tip: {
-    ...textStyle.notice,
+    ...text_style.notice,
     color: color.white,
     paddingHorizontal: 12,
     paddingVertical: TIP_PAD_Y,
   },
-  tipPoint: {
+  tip_point: {
     // The point overlaps the pill by a pixel, so that no rounding opens a gap
     // between them. They are faded as one layer, so the overlap does not show.
     marginTop: -1,

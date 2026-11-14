@@ -176,8 +176,8 @@ inherits = "release"
 opt-level = 3
 panic = "unwind"
 
-# What the device app links (pxl-core, as ts/client/package.json names
-# it). The release profile's `z` is for a download, and an app is installed
+# What the device app links (pxl-runtime, the core with its runtime, as
+# ts/client/package.json `xpute.guest.runtime` names it). The release profile's `z` is for a download, and an app is installed
 # once and then runs every frame on a phone's battery, so it takes the faster
 # code. It unwinds: the core's exports catch its panic as a trap, which ends
 # the core and leaves the app (xpute-guest link.rs `caught`).

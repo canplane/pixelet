@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/scene` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x7c289a;
 
@@ -57,25 +49,25 @@ pub fn draw(
         HANDLE,
         DRAW,
         Some((16, &|w_: &mut _rt::Lower| {
-            w_.u32(0, *&surface);
-            w_.u8(4, *&content as u8);
+            w_.u32(0, surface);
+            w_.u8(4, content as u8);
             if let Some(v) = &group {
                 w_.u8(5, 1);
-                w_.u8(5 + 1, *v);
+                w_.u8(6, *v);
             }
             if let Some(v) = &bg {
                 w_.u8(8, 1);
-                w_.u32(8 + 4, *v);
+                w_.u32(12, *v);
             }
         })),
     );
     _rt::answer(r).and_then(|_| {
-        let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
+        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
         r_.case(0, 2).and_then(|d| {
             if d == 0 {
-                Ok(()).map(Ok)
+                Ok(Ok(()))
             } else {
-                r_.case(0 + 1, 6)
+                r_.case(1, 6)
                     .and_then(|v| super::types::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                     .map(Err)
             }
@@ -84,11 +76,11 @@ pub fn draw(
 }
 
 pub fn chat(text: &str) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         CHAT,
         Some((8, &|w_: &mut _rt::Lower| {
-            w_.str(0, &text);
+            w_.str(0, text);
         })),
     );
     _rt::answer(r)

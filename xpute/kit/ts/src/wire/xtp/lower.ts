@@ -5,7 +5,7 @@
 // object this way. A missing key, or a tuple of the wrong length, is EINVAL.
 
 import { ERRNO_EINVAL } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 
 // ---- Tuple ----
 
@@ -16,7 +16,7 @@ export function to_tuple<T extends Record<PropertyKey, unknown>>(
 ): T[keyof T][] {
   return Array.from({ length: keys.length }, (_, i) => {
     const key = keys[i];
-    if (!(key in obj)) throw new MarshalError(ERRNO_EINVAL);
+    if (!(key in obj)) throw new XputeError(ERRNO_EINVAL);
     return obj[key];
   });
 }
@@ -27,7 +27,7 @@ export function from_tuple<T extends Record<PropertyKey, unknown>>(
   keys: readonly (keyof T)[],
 ): T {
   if (vals.length !== keys.length) {
-    throw new MarshalError(ERRNO_EINVAL);
+    throw new XputeError(ERRNO_EINVAL);
   }
 
   const out = {} as T;

@@ -3,7 +3,7 @@
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
-import { color, textStyle } from "@/ui/shared/component/theme.ts";
+import { color, text_style } from "@/ui/shared/component/theme.ts";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import type { Cover } from "./cover.ts";
 import { ProgressBar } from "./progress-bar.tsx";
@@ -46,10 +46,10 @@ function Panic({ of, code }: { of: string; code: string | null }) {
     <View style={[styles.cover, styles.panic]}>
       <View style={styles.column}>
         <Text style={styles.face}>:(</Text>
-        <Text accessibilityRole="header" style={styles.panicTitle}>
+        <Text accessibilityRole="header" style={styles.panic_title}>
           {t(`${of}.title`)}
         </Text>
-        <Text style={styles.panicBody}>{t(`${of}.body`)}</Text>
+        <Text style={styles.panic_body}>{t(`${of}.body`)}</Text>
         {code !== null && (
           <Text selectable style={styles.code}>
             {t("panic.stop_code", { code })}
@@ -87,14 +87,14 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     marginTop: 12,
-    ...textStyle.footnote,
+    ...text_style.footnote,
     textAlign: "center",
     color: LABEL.secondary,
   },
-  title: { ...textStyle.title2, textAlign: "center", color: LABEL.primary },
+  title: { ...text_style.title2, textAlign: "center", color: LABEL.primary },
   body: {
     maxWidth: 384,
-    ...textStyle.body,
+    ...text_style.body,
     textAlign: "center",
     color: LABEL.secondary,
   },
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     lineHeight: 112,
     color: color.white,
   },
-  panicTitle: { ...textStyle.title2, color: color.white },
-  panicBody: { ...textStyle.body, color: color.white },
-  code: { ...textStyle.footnote, marginTop: 16, color: color.white },
+  panic_title: { ...text_style.title2, color: color.white },
+  panic_body: { ...text_style.body, color: color.white },
+  code: { ...text_style.footnote, marginTop: 16, color: color.white },
 });

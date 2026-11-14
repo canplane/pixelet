@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/scene` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x7c289a;
 
@@ -61,7 +53,7 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
         let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 DRAW => {
@@ -74,14 +66,14 @@ impl _rt::Object for _Object {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.u8(5 + 1).map(Some)
+                            r_.u8(6).map(Some)
                         }
                     })?;
                     let bg = r_.case(8, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.u32(8 + 4).map(Some)
+                            r_.u32(12).map(Some)
                         }
                     })?;
                     match self.0.draw(surface, content, group, bg) {
@@ -90,10 +82,10 @@ impl _rt::Object for _Object {
                             data: Some((
                                 2,
                                 Box::new(move |w: &mut _rt::Lower| match &v {
-                                    Ok(v) => {}
+                                    Ok(_) => {}
                                     Err(v) => {
                                         w.u8(0, 1);
-                                        w.u8(0 + 1, *v as u8);
+                                        w.u8(1, *v as u8);
                                     }
                                 }),
                             )),
@@ -105,7 +97,7 @@ impl _rt::Object for _Object {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
                     let text = r_.str(0).map(str::to_owned)?;
                     match self.0.chat(text) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -116,9 +108,9 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `imp` under the interface's handle.
-pub fn mount(imp: _rt::Rc<dyn Guest>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+/// Serves `implementation` under the interface's handle.
+pub fn mount(implementation: _rt::Rc<dyn Guest>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 mod _rt {

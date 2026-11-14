@@ -27,7 +27,8 @@ import {
   ERRNO_ENOTRECOVERABLE,
   ERRNO_EOVERFLOW,
 } from "@xpute/kit/status/errno.spec.ts";
-import { InvariantError, MarshalError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
+import { bug } from "@xpute/kit/status/bug.ts";
 
 import type {
   AlignUnit,
@@ -81,7 +82,7 @@ export class TreeEncoder {
   encode(view: NodeView, cfg: TreeEncoderConfig = {}): U8Array {
     const { init_cap = 1 << 10, max_cap = MAX_PKT_SZ } = cfg;
     if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) {
-      throw new MarshalError(ERRNO_EINVAL);
+      throw new XputeError(ERRNO_EINVAL);
     }
     let cap: u32 = Math.max(HDR_SZ, Math.min(init_cap, max_cap));
     for (;;) {
@@ -92,7 +93,7 @@ export class TreeEncoder {
         return buf.subarray(0, w.finish_or_throw());
       } catch (e) {
         if (
-          !(e instanceof MarshalError) ||
+          !(e instanceof XputeError) ||
           e.errnum !== ERRNO_EOVERFLOW ||
           cap === max_cap
         )
@@ -121,7 +122,7 @@ function walk(w: PacketWriter, node: Node): void {
   } else if (NODE_IS_SCALAR(node)) {
     scalar_into(w, node);
   } else {
-    throw new MarshalError(ERRNO_EBADMSG);
+    throw new XputeError(ERRNO_EBADMSG);
   }
 }
 
@@ -164,7 +165,7 @@ function scalar_into(w: PacketWriter, node: ScalarNode): void {
       w.bool(v === null ? null : BOOL(v) === 1);
       return;
     default:
-      throw new MarshalError(ERRNO_EBADMSG);
+      throw new XputeError(ERRNO_EBADMSG);
   }
 }
 
@@ -193,7 +194,7 @@ function seq_into(w: PacketWriter, node: SequenceNode): void {
       w.array(node.type, v as TypedArray | BigTypedArray | null);
       return;
     default:
-      throw new MarshalError(ERRNO_EBADMSG);
+      throw new XputeError(ERRNO_EBADMSG);
   }
 }
 
@@ -278,7 +279,7 @@ export class PacketWriter {
 
   private entry(at: number, type: NodeType): this {
     const f = this.table;
-    if (f.written >= f.cnt) throw new InvariantError(ERRNO_ENOSPC);
+    if (f.written >= f.cnt) bug(ERRNO_ENOSPC);
     if (f.root) this.root_type = type;
     else if (this.err === null) {
       // child node kind is preserved even when rel_off == 0
@@ -530,7 +531,7 @@ export class PacketWriter {
   //   and an offset's high half holds the type
   // - each child offset is relative to the enclosing branch node base
   // - branch alignment is WORD_SZ
-  // - writing a number of children other than `cnt` is a bug and throws InvariantError
+  // - writing a number of children other than `cnt` is a bug
   branch(cnt: u32, fill: (w: this) => void): this {
     // empty branch (len = 0) is valid — analogous to [] or {} in JSON
     const at = this.branch_open(cnt);
@@ -541,7 +542,7 @@ export class PacketWriter {
     this.table = { base: at < 0 ? HDR_SZ : at, cnt, written: 0, root: false };
     fill(this);
     if (this.table.written !== this.table.cnt) {
-      throw new InvariantError(ERRNO_ENOTRECOVERABLE);
+      bug(ERRNO_ENOTRECOVERABLE);
     }
     this.table = outer;
     return this.entry(this.branch_close(at), SpecialType.BRANCH);
@@ -564,13 +565,13 @@ export class PacketWriter {
   graft(pkt: U8Array): this {
     let payload_sz: u32, type: NodeType;
     try {
-      if (pkt.byteLength < HDR_SZ) throw new MarshalError(ERRNO_EBADMSG);
+      if (pkt.byteLength < HDR_SZ) throw new XputeError(ERRNO_EBADMSG);
       const hdr = new DataView(pkt.buffer, pkt.byteOffset, HDR_SZ);
       // packet header fallback
-      if (GET_LEN(hdr, 0) !== MAGIC) throw new MarshalError(ERRNO_EBADMSG);
+      if (GET_LEN(hdr, 0) !== MAGIC) throw new XputeError(ERRNO_EBADMSG);
       [payload_sz, type] = GET_DESC(hdr, WORD_SZ, DESC_REG);
     } catch (e) {
-      if (!(e instanceof MarshalError)) throw e;
+      if (!(e instanceof XputeError)) throw e;
       return this.entry(this.spoil(ERRNO_EBADMSG), SpecialType.NIL);
     }
     if (payload_sz > pkt.byteLength - HDR_SZ) {
@@ -581,7 +582,7 @@ export class PacketWriter {
     try {
       unit = ALIGN_SZ(type);
     } catch (e) {
-      if (!(e instanceof MarshalError)) throw e;
+      if (!(e instanceof XputeError)) throw e;
       return this.entry(this.spoil(ERRNO_EBADMSG), type);
     }
     if (payload_sz % unit) return this.entry(this.spoil(ERRNO_EBADMSG), type);
@@ -599,13 +600,13 @@ export class PacketWriter {
    * padded to a word, or throws the first error that spoiled the packet. */
   finish_or_throw(): u32 {
     const f = this.table;
-    if (f.written !== f.cnt) throw new InvariantError(ERRNO_ENOTRECOVERABLE);
+    if (f.written !== f.cnt) bug(ERRNO_ENOTRECOVERABLE);
     // The root branch that `begin` opened is closed here, padded as `branch`
     // pads one.
     if (!f.root) this.branch_close(f.base);
-    if (this.err !== null) throw new MarshalError(this.err);
+    if (this.err !== null) throw new XputeError(this.err);
     const end: u32 = ALIGN(this.lim, WORD_SZ);
-    if (end > this.cap) throw new MarshalError(ERRNO_EOVERFLOW);
+    if (end > this.cap) throw new XputeError(ERRNO_EOVERFLOW);
     this.bytes.fill(0, this.start + this.lim, this.start + end);
     SET_WORD(this.view, this.start, MAGIC, RESERVED); // word0
     // root node kind is preserved even when payload_sz == 0
@@ -624,7 +625,7 @@ export class PacketWriter {
     try {
       return this.finish_or_throw();
     } catch (e) {
-      if (e instanceof MarshalError) return -1;
+      if (e instanceof XputeError) return -1;
       throw e;
     }
   }

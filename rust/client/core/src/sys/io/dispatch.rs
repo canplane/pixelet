@@ -17,7 +17,7 @@ pub fn start(key: u64, stream: Stream, id: u64) {
                 loader::open_asset(key, load);
             }
         }
-        Source::Bake(_) | Source::Objects => fetch::start(key, stream, id),
+        Source::Base(_) | Source::Object => fetch::start(key, stream, id),
     }
 }
 

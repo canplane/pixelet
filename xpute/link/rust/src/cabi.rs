@@ -32,13 +32,13 @@ pub struct Lower<'a> {
 }
 
 impl<'a> Lower<'a> {
-    /// A packet of a fixed part `fixed_bytes` long, zeroed, in `buf`.
-    pub fn new(buf: &'a mut [u8], fixed_bytes: usize) -> Lower<'a> {
-        let overflow = fixed_bytes > buf.len();
+    /// A packet of a fixed part `fixed_sz` long, zeroed, in `buf`.
+    pub fn new(buf: &'a mut [u8], fixed_sz: usize) -> Lower<'a> {
+        let overflow = fixed_sz > buf.len();
         if !overflow {
-            buf[..fixed_bytes].fill(0);
+            buf[..fixed_sz].fill(0);
         }
-        Lower { buf, end: fixed_bytes, overflow }
+        Lower { buf, end: fixed_sz, overflow }
     }
 
     fn put<const N: usize>(&mut self, at: usize, b: [u8; N]) {

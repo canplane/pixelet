@@ -4,7 +4,7 @@
 
 import type { Lift, Lower } from "../cabi.ts";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 
 export type Token = { tag: "int"; val: number } | { tag: "str"; val: string };
 
@@ -31,7 +31,7 @@ export function load_Token(r: Lift, at: number): Token {
     case 1:
       return { tag: "str", val: r.str(at + 4) };
   }
-  throw new MarshalError(ERRNO_EBADMSG);
+  throw new XputeError(ERRNO_EBADMSG);
 }
 
 export interface Lent {
@@ -43,13 +43,13 @@ export const LENT_SZ = 8;
 export const LENT_ALIGN = 4;
 
 export function store_Lent(w: Lower, at: number, v: Lent): void {
-  w.u32(at + 0, v.at);
+  w.u32(at, v.at);
   w.u32(at + 4, v.len);
 }
 
 export function load_Lent(r: Lift, at: number): Lent {
   return {
-    at: r.u32(at + 0),
+    at: r.u32(at),
     len: r.u32(at + 4),
   };
 }

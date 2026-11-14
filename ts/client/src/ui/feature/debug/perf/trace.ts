@@ -14,8 +14,8 @@ import { BUILD_ID, BUILD_NUMBER, BUILD_TIME } from "@/build.ts";
 
 import { type Frame, is_list, COLUMNS, read } from "@/service/core/perf.ts";
 import { LIST_NAMES } from "./column.ts";
-import { failText } from "./report.ts";
-import { longFramesSince } from "./long-frame.ts";
+import { fail_text } from "./report.ts";
+import { long_frames_since } from "./long-frame.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
 import * as share from "@/service/platform/share.ts";
 
@@ -37,7 +37,7 @@ interface TraceEvent {
 }
 
 const us = (ms: f64) => round(ms * 1000);
-const fixedN = (n: number, d: number) => +fixed(n, d);
+const fixed_n = (n: number, d: number) => +fixed(n, d);
 
 function event(
   name: string,
@@ -60,55 +60,55 @@ function event(
   };
 }
 
-const threadName = (tid: u32, name: string) =>
+const thread_name = (tid: u32, name: string) =>
   event("thread_name", "__metadata", "M", 0, null, tid, { name });
 
-function frameArgs(f: Frame): ArgMap {
+function frame_args(f: Frame): ArgMap {
   const args: ArgMap = {};
   for (const { name } of COLUMNS) {
     if (!is_list(name)) {
-      args[name] = fixedN(f[name], 2);
+      args[name] = fixed_n(f[name], 2);
       continue;
     }
     const names = LIST_NAMES[name];
-    f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixedN(v, 2)));
+    f[name].forEach((v, i) => (args[`${name}_${names[i]}`] = fixed_n(v, 2)));
   }
   return args;
 }
 
 /** The profiler's window as a trace, whole. */
-export async function perfTrace(): Promise<object> {
+export async function perf_trace(): Promise<object> {
   const [frames, tasks] = await Promise.all([read("frames"), read("tasks")]);
-  const longs = longFramesSince(-Infinity);
+  const longs = long_frames_since(-Infinity);
   const events: TraceEvent[] = [];
 
   // Perfetto draws spans that overlap on one thread as nested. So each stream
   // has rows, and a task goes on the first of its stream's rows that is free
   // when the task is enqueued.
   const rows = new Map<string, f64[]>();
-  const rowTid = new Map<string, u32>();
-  const byEnqueue = [...tasks].sort((a, b) => a.enqueue_ms - b.enqueue_ms);
-  for (const r of byEnqueue) {
+  const row_tid = new Map<string, u32>();
+  const by_enqueue = [...tasks].sort((a, b) => a.enqueue_ms - b.enqueue_ms);
+  for (const r of by_enqueue) {
     const ends = rows.get(r.stream) ?? [];
     rows.set(r.stream, ends);
     let k = ends.findIndex((end) => end <= r.enqueue_ms);
     if (k < 0) k = ends.push(r.end_ms) - 1;
     else ends[k] = r.end_ms;
     const row = `${r.stream} ${k + 1}`;
-    let tid = rowTid.get(row);
+    let tid = row_tid.get(row);
     if (tid === undefined) {
-      tid = TID_TASK_BASE + rowTid.size;
-      rowTid.set(row, tid);
-      events.push(threadName(tid, `task: ${row}`));
+      tid = TID_TASK_BASE + row_tid.size;
+      row_tid.set(row, tid);
+      events.push(thread_name(tid, `task: ${row}`));
     }
     const args: ArgMap = {
       priority: r.priority,
-      queuedMs:
-        r.start_ms === null ? null : fixedN(r.start_ms - r.enqueue_ms, 1),
-      ranMs: r.start_ms === null ? null : fixedN(r.end_ms - r.start_ms, 1),
+      queued_ms:
+        r.start_ms === null ? null : fixed_n(r.start_ms - r.enqueue_ms, 1),
+      ran_ms: r.start_ms === null ? null : fixed_n(r.end_ms - r.start_ms, 1),
     };
     if (r.fail !== 0) {
-      args.fail = failText(r.fail, r.detail);
+      args.fail = fail_text(r.fail, r.detail);
       if (r.at !== null) args.at = r.at;
     }
     for (const [k, v] of r.phases) args[k] = v;
@@ -139,11 +139,11 @@ export async function perfTrace(): Promise<object> {
   }
 
   if (frames.length > 0) {
-    events.push(threadName(TID_FRAMES, "frames"));
+    events.push(thread_name(TID_FRAMES, "frames"));
     for (const f of frames) {
       const ts = us(f.t);
       events.push(
-        event("frame", "frame", "C", ts, null, TID_FRAMES, frameArgs(f)),
+        event("frame", "frame", "C", ts, null, TID_FRAMES, frame_args(f)),
       );
       // A frame's record is taken as its stage ends, at `t`. So the stage
       // ends at `t`, the tick ends where the stage starts, and the effects
@@ -159,20 +159,20 @@ export async function perfTrace(): Promise<object> {
   }
 
   if (longs.length > 0) {
-    events.push(threadName(TID_LONG, "long frames"));
+    events.push(thread_name(TID_LONG, "long frames"));
     for (const l of longs) {
       const args = {
-        blockingMs: fixedN(l.blockingMs, 1),
-        scriptMs: fixedN(l.scriptMs, 1),
-        renderMs: fixedN(l.renderMs, 1),
+        blocking_ms: fixed_n(l.blocking_ms, 1),
+        script_ms: fixed_n(l.script_ms, 1),
+        render_ms: fixed_n(l.render_ms, 1),
       };
       events.push(
         event(
-          `${l.source} ${fixed(l.durationMs, 0)}ms`,
+          `${l.source} ${fixed(l.duration_ms, 0)}ms`,
           l.source,
           "X",
           us(l.t),
-          us(l.durationMs),
+          us(l.duration_ms),
           TID_LONG,
           args,
         ),
@@ -191,8 +191,8 @@ export async function perfTrace(): Promise<object> {
   };
 }
 
-export async function perfTraceSave(): Promise<string> {
-  const json = JSON.stringify(await perfTrace());
+export async function perf_trace_save(): Promise<string> {
+  const json = JSON.stringify(await perf_trace());
   const mb = `${fixed(json.length / 1e6, 1)} MB`;
   const name = `perf-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
   try {

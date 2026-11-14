@@ -8,7 +8,7 @@ import {
   Link,
   Prose,
   Section,
-  settingText,
+  setting_text,
 } from "@/ui/feature/setting/row.tsx";
 import { weight } from "@/ui/shared/component/theme.ts";
 
@@ -29,7 +29,7 @@ export function AttributionSection() {
       Open Database License
     </Link>
   );
-  const ccBy = (
+  const cc_by = (
     <Link href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</Link>
   );
   return (
@@ -68,7 +68,7 @@ export function AttributionSection() {
               <Link href="https://doi.org/10.5281/zenodo.18887460">
                 GEDTM30
               </Link>{" "}
-              by Yufeng Ho and Tom Hengl (OpenGeoHub), licensed under {ccBy}
+              by Yufeng Ho and Tom Hengl (OpenGeoHub), licensed under {cc_by}
             </Line>
           </Provider>
           <Provider name="Arnis">
@@ -98,11 +98,11 @@ function Provider({ name, children }: { name: string; children: ReactNode }) {
 }
 
 function Line({ children }: { children: ReactNode }) {
-  return <Text style={settingText.small}>{children}</Text>;
+  return <Text style={setting_text.small}>{children}</Text>;
 }
 
 const styles = StyleSheet.create({
   providers: { gap: 16 },
   provider: { gap: 4 },
-  name: { ...settingText.small, fontWeight: weight.medium },
+  name: { ...setting_text.small, fontWeight: weight.medium },
 });

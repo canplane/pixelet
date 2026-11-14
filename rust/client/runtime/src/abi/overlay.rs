@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/overlay` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x7b1393;
 
@@ -163,13 +155,13 @@ impl LonLat {
     pub const ALIGN: usize = 8;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
-        w.f64(at + 0, *&self.lon);
-        w.f64(at + 8, *&self.lat);
+        w.f64(at, self.lon);
+        w.f64(at + 8, self.lat);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<LonLat, _rt::Errno> {
         Ok(LonLat {
-            lon: r.f64(at + 0)?,
+            lon: r.f64(at)?,
             lat: r.f64(at + 8)?,
         })
     }
@@ -188,19 +180,19 @@ impl PivotState {
     pub const ALIGN: usize = 8;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
-        w.u8(at + 0, *&self.status as u8);
-        w.bool(at + 1, *&self.is_off_center);
+        w.u8(at, self.status as u8);
+        w.bool(at + 1, self.is_off_center);
         if let Some(v) = &self.lon_lat {
             w.u8(at + 8, 1);
             (v).store(w, at + 8 + 8);
         }
-        w.bool(at + 32, *&self.outside);
+        w.bool(at + 32, self.outside);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<PivotState, _rt::Errno> {
         Ok(PivotState {
             status: r
-                .case(at + 0, 3)
+                .case(at, 3)
                 .and_then(|v| GroundStatus::of(v).ok_or(_rt::Errno::EBADMSG))?,
             is_off_center: r.bool(at + 1)?,
             lon_lat: r.case(at + 8, 2).and_then(|d| {
@@ -228,9 +220,9 @@ impl LocationState {
     pub const ALIGN: usize = 1;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
-        w.u8(at + 0, *&self.status as u8);
-        w.bool(at + 1, *&self.has_location);
-        w.bool(at + 2, *&self.watching);
+        w.u8(at, self.status as u8);
+        w.bool(at + 1, self.has_location);
+        w.bool(at + 2, self.watching);
         if let Some(v) = &self.err {
             w.u8(at + 3, 1);
             w.u8(at + 3 + 1, *v as u8);
@@ -240,7 +232,7 @@ impl LocationState {
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<LocationState, _rt::Errno> {
         Ok(LocationState {
             status: r
-                .case(at + 0, 5)
+                .case(at, 5)
                 .and_then(|v| SensorStatus::of(v).ok_or(_rt::Errno::EBADMSG))?,
             has_location: r.bool(at + 1)?,
             watching: r.bool(at + 2)?,
@@ -268,13 +260,13 @@ impl CompanionState {
     pub const ALIGN: usize = 1;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
-        w.bool(at + 0, *&self.person_ready);
-        w.bool(at + 1, *&self.pet_ready);
+        w.bool(at, self.person_ready);
+        w.bool(at + 1, self.pet_ready);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<CompanionState, _rt::Errno> {
         Ok(CompanionState {
-            person_ready: r.bool(at + 0)?,
+            person_ready: r.bool(at)?,
             pet_ready: r.bool(at + 1)?,
         })
     }
@@ -290,13 +282,13 @@ impl OrientationState {
     pub const ALIGN: usize = 1;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
-        w.u8(at + 0, *&self.status as u8);
+        w.u8(at, self.status as u8);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<OrientationState, _rt::Errno> {
         Ok(OrientationState {
             status: r
-                .case(at + 0, 5)
+                .case(at, 5)
                 .and_then(|v| SensorStatus::of(v).ok_or(_rt::Errno::EBADMSG))?,
         })
     }
@@ -315,15 +307,15 @@ impl DivisionPart {
     pub const ALIGN: usize = 4;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
-        w.u8(at + 0, *&self.subtype);
+        w.u8(at, self.subtype);
         w.str(at + 4, &self.name);
-        w.bool(at + 12, *&self.shown);
-        w.bool(at + 13, *&self.area);
+        w.bool(at + 12, self.shown);
+        w.bool(at + 13, self.area);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<DivisionPart, _rt::Errno> {
         Ok(DivisionPart {
-            subtype: r.u8(at + 0)?,
+            subtype: r.u8(at)?,
             name: r.str(at + 4).map(str::to_owned)?,
             shown: r.bool(at + 12)?,
             area: r.bool(at + 13)?,
@@ -355,26 +347,26 @@ impl Snapshot {
     pub const ALIGN: usize = 8;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
-        (&self.pivot).store(w, at + 0);
-        (&self.location).store(w, at + 40);
-        (&self.companion).store(w, at + 45);
+        self.pivot.store(w, at);
+        self.location.store(w, at + 40);
+        self.companion.store(w, at + 45);
         if let Some(v) = &self.draft {
             w.u8(at + 48, 1);
             w.str(at + 48 + 4, v);
         }
-        (&self.orient).store(w, at + 60);
-        w.bool(at + 61, *&self.is_follow_mode);
-        w.bool(at + 62, *&self.camera_busy);
-        w.bool(at + 63, *&self.zooming);
-        w.bool(at + 64, *&self.over_marker);
+        self.orient.store(w, at + 60);
+        w.bool(at + 61, self.is_follow_mode);
+        w.bool(at + 62, self.camera_busy);
+        w.bool(at + 63, self.zooming);
+        w.bool(at + 64, self.over_marker);
         w.arr(at + 68, &self.settings);
         if let Some(b) = w.list(
             at + 76,
-            (&self.division).len(),
+            self.division.len(),
             DivisionPart::SZ,
             DivisionPart::ALIGN,
         ) {
-            for (i, x) in (&self.division).iter().enumerate() {
+            for (i, x) in self.division.iter().enumerate() {
                 (x).store(w, b + i * DivisionPart::SZ);
             }
         }
@@ -383,13 +375,13 @@ impl Snapshot {
             w.u8(at + 92, 1);
             w.u8(at + 92 + 1, *v as u8);
         }
-        w.f64(at + 96, *&self.renderer_progress);
-        w.f64(at + 104, *&self.area_progress);
+        w.f64(at + 96, self.renderer_progress);
+        w.f64(at + 104, self.area_progress);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Snapshot, _rt::Errno> {
         Ok(Snapshot {
-            pivot: PivotState::load(r, at + 0)?,
+            pivot: PivotState::load(r, at)?,
             location: LocationState::load(r, at + 40)?,
             companion: CompanionState::load(r, at + 45)?,
             draft: r.case(at + 48, 2).and_then(|d| {
@@ -436,14 +428,14 @@ pub trait Host {
 struct _Object(_rt::Rc<dyn Host>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
         let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 SHOW => {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
                     let snapshot = Snapshot::load(r_, 0)?;
                     match self.0.show(snapshot) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -452,7 +444,7 @@ impl _rt::Object for _Object {
                     let azimuth = r_.f64(0)?;
                     let m_per_px = r_.f64(8)?;
                     match self.0.view(azimuth, m_per_px) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -463,9 +455,9 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `imp` under the interface's handle.
-pub fn mount(imp: _rt::Rc<dyn Host>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+/// Serves `implementation` under the interface's handle.
+pub fn mount(implementation: _rt::Rc<dyn Host>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 mod _rt {

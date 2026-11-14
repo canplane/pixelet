@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/watch` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x71919e;
 
@@ -19,22 +11,22 @@ pub const START: _rt::Method = 0;
 pub const STOP: _rt::Method = 1;
 
 pub fn start(sensor: super::types::Sensor) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         START,
         Some((1, &|w_: &mut _rt::Lower| {
-            w_.u8(0, *&sensor as u8);
+            w_.u8(0, sensor as u8);
         })),
     );
     _rt::answer(r)
 }
 
 pub fn stop(sensor: super::types::Sensor) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         STOP,
         Some((1, &|w_: &mut _rt::Lower| {
-            w_.u8(0, *&sensor as u8);
+            w_.u8(0, sensor as u8);
         })),
     );
     _rt::answer(r)

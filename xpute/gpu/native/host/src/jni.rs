@@ -111,7 +111,7 @@ pub unsafe fn bind(
     e: *mut JNIEnv,
     handle: u32,
     surface: jobject,
-    bind: unsafe fn(u32, *mut core::ffi::c_void) -> i32,
+    bind: unsafe extern "C" fn(u32, *mut core::ffi::c_void) -> i32,
 ) -> jint {
     // SAFETY: the environment and the surface the call was given; the window
     // made this way is this call's until released below.

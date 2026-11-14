@@ -196,7 +196,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         rs: Some("rust/spec/src/route.spec.rs"),
         ..DataSpec::DEFAULT
     };
-    let mut outs = table_outputs(&root(), &d, Node::Obj(table))?;
+    let mut outs = table_outputs(&root(), &d, Node::Obj(table), &[])?;
 
     let head = |package_path: &str| {
         let mut h = vec![

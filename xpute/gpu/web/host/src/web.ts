@@ -12,13 +12,12 @@
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
-import { FaultError } from "@xpute/kit/status/error.ts";
-import { ComponentError, type Link, uri } from "@xpute/link";
+import { XputeError } from "@xpute/kit/status/error.ts";
+import { ComponentError, type Link } from "@xpute/link";
 import * as gpu from "@xpute/gpu-link/abi/gpu.ts";
 import { ERROR_CODE_NO_DEVICE } from "@xpute/gpu-link/abi/gpu.enum.ts";
 import { type GpuAsk, type GpuConfig, type GpuState } from "@xpute/gpu-link";
 import { GpuHost } from "./host.ts";
-import { DEVICE_URI } from "@xpute/gpu-link/api.spec.ts";
 
 export class WebGpu {
   private host: GpuHost | null = null;
@@ -42,30 +41,32 @@ export class WebGpu {
     this.report = report;
   }
 
-  /** Mounts `gpu` and the device's opener on the link. */
+  /** Mounts `gpu` on the link, whose `get_device` serves the device under
+   * a handle the link issues. */
   serve(): void {
     gpu.mount(this.link, {
       run: async (records) => {
         this.host?.run(new Uint32Array(this.link.mem, records.at, records.len / 4));
       },
+      get_device: () =>
+        this.link.add(
+          gpu.device(this.link, {
+            lost: (block, signal) => {
+              this.block = block.at;
+              this.host?.attach(block.at);
+              // A loss its caller cancels hands the block back, and the host
+              // writes it no more.
+              signal.addEventListener("abort", () => {
+                this.block = null;
+                this.host?.detach();
+              });
+              return this.wait(this.lost, signal);
+            },
+            ready: () => this.acquire(),
+            settled: (signal) => this.wait(this.settled, signal),
+          }),
+        ),
     });
-    this.link.mount(uri(...DEVICE_URI), () =>
-      gpu.device(this.link, {
-        lost: (block, signal) => {
-          this.block = block.at;
-          this.host?.attach(block.at);
-          // A loss its caller cancels hands the block back, and the host
-          // writes it no more.
-          signal.addEventListener("abort", () => {
-            this.block = null;
-            this.host?.detach();
-          });
-          return this.wait(this.lost, signal);
-        },
-        ready: () => this.acquire(),
-        settled: (signal) => this.wait(this.settled, signal),
-      }),
-    );
   }
 
   /** The canvas given under the surface `handle` (remote.ts `give`). */
@@ -143,7 +144,7 @@ export class WebGpu {
       waiting.push(done);
       signal.addEventListener("abort", () => {
         waiting.splice(waiting.indexOf(done) >>> 0, 1);
-        fail(new FaultError(ERRNO_ECANCELED));
+        fail(new XputeError(ERRNO_ECANCELED));
       });
     });
   }

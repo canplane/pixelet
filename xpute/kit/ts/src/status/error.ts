@@ -1,6 +1,12 @@
 // @xpute/kit/status/error.ts
 
-import { ERRNO } from "./errno.spec.ts";
+import {
+  ERRNO,
+  KIND_UNKNOWN,
+  kind_Errno,
+  of_Errno,
+  type Kind,
+} from "./errno.spec.ts";
 import type { i32 } from "../abi/word.ts";
 
 /** An errno as a reader is shown it: its name and what it means
@@ -11,47 +17,23 @@ export function strerror(errnum: i32): string {
   return e === undefined ? `errno ${errnum}` : `${e[0]}: ${e[1].text}`;
 }
 
-/**
- * Error policy:
- * - Internal invariant violation (our bug / impossible state) => FATAL (the core is ended; never caught to carry on).
- * - External fault (peer/network/remote/env/input) => NON-FATAL (catch, isolate, degrade, drop).
- *
- * Notes:
- * - Errno describes the error code, not fatality.
- * - Fatal vs non-fatal is determined by error class (and catch boundary policy).
- * - Origin/context should be attached at catch/log boundary, not encoded in message prefixes.
- */
+/** An errno a fault from outside the program raised: its input, its peer,
+ * the network or the environment. It is caught, and what it stops is
+ * isolated, degraded or dropped; a broken invariant is a `Bug` (bug.ts)
+ * instead. What happened is its `kind`. */
 export class XputeError extends Error {
   readonly errnum: i32;
 
   constructor(errnum: i32) {
     super(strerror(errnum));
-
-    // subclass-safe
-    Object.setPrototypeOf(this, new.target.prototype);
-    this.name = new.target.name;
-
+    this.name = "XputeError";
     this.errnum = errnum;
+  }
 
-    try {
-      (
-        Error as ErrorConstructor & {
-          captureStackTrace?: (target: object, ctor?: Function) => void;
-        }
-      ).captureStackTrace?.(this, new.target);
-    } catch {
-      // A polyfilled `captureStackTrace` may throw; the stack is then left
-      // as it is.
-    }
+  /** What happened: the errno's kind (errno.json), or unknown for a number
+   * no errno has, as Abseil's ErrnoToStatusCode answers one. */
+  kind(): Kind {
+    const e = of_Errno(this.errnum);
+    return e === null ? KIND_UNKNOWN : kind_Errno(e);
   }
 }
-/** A broken invariant is fatal. */
-export class InvariantError extends XputeError {}
-/** A fault comes from outside the program, such as untrusted input, and is not
- * fatal. */
-export class FaultError extends XputeError {}
-/** A payload does not decode where it crosses the wire. This is a fault of the
- * input, not of the program's logic, and is not fatal. */
-export class MarshalError extends FaultError {}
-/** A fault of the network, its transport or its protocol is not fatal. */
-export class NetworkFaultError extends FaultError {}

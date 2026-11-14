@@ -43,8 +43,8 @@ impl LoadKind {
 }
 
 impl Load {
-    /// The file's path: (ASSET, id), or the sphere's after EARTH. A file's id is
-    /// below SPHERE, so it is an i32 as it is.
+    /// The file's path: (ASSET, id), or (EARTH, SPHERE). A file's id is an i32 as it
+    /// is.
     pub fn path(self) -> Vec<Token> {
         match self {
             Load::File(n) => vec![Token::Int(path::asset::ID), Token::Int(n as i32)],

@@ -10,8 +10,8 @@ use crate::abi;
 pub(crate) fn tell(shown: bool) {
     // The guest's answer is its own, as a page's is (life.ts).
     let _ = if shown {
-        abi::life::life::shown()
+        abi::life::shown()
     } else {
-        abi::life::life::hidden()
+        abi::life::hidden()
     };
 }
