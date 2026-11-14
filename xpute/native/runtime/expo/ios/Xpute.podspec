@@ -50,7 +50,7 @@ Pod::Spec.new do |s|
     'SWIFT_INCLUDE_PATHS' => include,
   }
   # The simulator the guest is built for is an Apple silicon Mac's, arm64
-  # alone (core-build.py); a Release build makes every architecture it is not
+  # alone; a Release build makes every architecture it is not
   # told otherwise, and an Intel slice would link no guest.
   s.user_target_xcconfig = {
     # Xcode's scan of the app's modules resolves CXpute from here too.

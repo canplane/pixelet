@@ -1,0 +1,10 @@
+{
+  $description: "An asset's id is a u16: its kind over its index within that kind.\n`id >> IDX_BITS` is the kind, the low bits the index. The kind is what an\nasset is as a shape: a cube is the cell itself, decor a model with a size of\nits own, a marker flat to the camera. What stands in a cell of the world's\ngrid is stored as its asset's id (pxl-spec object.rs).",
+  IDX_BITS: { $value: 10, $type: "u32" },
+  KIND: {
+    $type: "enum",
+    cube: { $value: 0 },
+    decor: { $value: 1 },
+    marker: { $value: 2 },
+  },
+}

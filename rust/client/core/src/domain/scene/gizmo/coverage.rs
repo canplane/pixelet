@@ -18,7 +18,7 @@ use pxl_render::gpu::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::bake::tile::Tile as _;
-use pxl_spec::color::{rgb, Rgb};
+use pxl_spec::color::Rgb;
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::cell_zoom_at;
 use pxl_spec::space::coord::v3::V3;
@@ -71,21 +71,21 @@ impl Mark {
     fn look(self) -> (Rgb, f32, bool) {
         use gizmo::coverage::*;
         match self {
-            Mark::Drawn => (const { rgb(drawn::RGB) }, drawn::ALPHA, drawn::DASHED),
+            Mark::Drawn => (drawn::RGB, drawn::ALPHA, drawn::DASHED),
             Mark::DrawnFromFloor => (
-                const { rgb(drawn_from_floor::RGB) },
+                drawn_from_floor::RGB,
                 drawn_from_floor::ALPHA,
                 drawn_from_floor::DASHED,
             ),
-            Mark::Unbuilt => (const { rgb(unbuilt::RGB) }, unbuilt::ALPHA, unbuilt::DASHED),
+            Mark::Unbuilt => (unbuilt::RGB, unbuilt::ALPHA, unbuilt::DASHED),
             Mark::FloorOnly => (
-                const { rgb(floor_only::RGB) },
+                floor_only::RGB,
                 floor_only::ALPHA,
                 floor_only::DASHED,
             ),
-            Mark::NoTile => (const { rgb(no_tile::RGB) }, no_tile::ALPHA, no_tile::DASHED),
-            Mark::Quadrant => (const { rgb(tile::RGB) }, tile::ALPHA, tile::DASHED),
-            Mark::Shard => (const { rgb(shard::RGB) }, shard::ALPHA, shard::DASHED),
+            Mark::NoTile => (no_tile::RGB, no_tile::ALPHA, no_tile::DASHED),
+            Mark::Quadrant => (tile::RGB, tile::ALPHA, tile::DASHED),
+            Mark::Shard => (shard::RGB, shard::ALPHA, shard::DASHED),
         }
     }
 

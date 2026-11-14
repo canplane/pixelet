@@ -3,7 +3,7 @@
 // The camera grid fixed to the screen, drawn over the canvas: the cells the rays are spaced by,
 // squares of the screen's tangent plane a cell (`GRID_CELL`, pxl-spec grid.rs `CELL`) a side,
 // counted from the screen's left and top (pxl-engine `beam::Grid::cell`). Its lines are
-// `GRID_COLOR` (debug_look.json).
+// `GRID_COLOR` (debug_look.json5).
 
 struct VertexOut {
   @builtin(position) clip: vec4f,

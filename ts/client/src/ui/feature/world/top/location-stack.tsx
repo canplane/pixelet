@@ -19,7 +19,7 @@ import { CompassFace } from "./compass.tsx";
 import { ButtonStack } from "./button-stack.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { SETTLE } from "@/ui/shared/component/motion/transition.ts";
-import { chrome, color } from "@/ui/shared/component/theme.ts";
+import { CHROME, COLOR } from "@/ui/shared/component/theme.ts";
 import { useCore } from "@/ui/shared/watch.ts";
 import * as camera from "@/service/core/camera.ts";
 
@@ -64,7 +64,7 @@ export function LocationStack() {
           disabled: status !== SENSOR_STATUS_READY || !has_location,
           face:
             status === SENSOR_STATUS_LOADING ? (
-              <Spinner size={chrome.glyph} color={LABEL.primary} />
+              <Spinner size={CHROME.glyph} color={LABEL.primary} />
             ) : (
               <Motion
                 to={{ rotate: 0 }}
@@ -74,8 +74,8 @@ export function LocationStack() {
               >
                 <Glyph
                   glyph={glyph}
-                  size={chrome.glyph}
-                  color={following ? color.action : LABEL.primary}
+                  size={CHROME.glyph}
+                  color={following ? COLOR.action : LABEL.primary}
                 />
               </Motion>
             ),

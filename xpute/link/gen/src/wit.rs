@@ -4,7 +4,7 @@
 //! and in TypeScript. For each interface it writes its methods' numbers, its
 //! types, the side that serves it and the side that calls it: a singleton
 //! interface's functions are one object's methods, under its named handle, the
-//! FNV-1a hash of `package/interface` folded below frame.json's `NAMED`, and
+//! FNV-1a hash of `package/interface` folded below frame.json5's `NAMED`, and
 //! each resource's methods another's. A method's number is its place among its
 //! object's, in declaration order. No two interfaces a target reaches share a
 //! named handle. In C++ it writes the guest's side alone (cpp.rs).
@@ -458,7 +458,7 @@ pub(crate) struct Gen<'a> {
     here: InterfaceId,
     /// The package's `namespace:package`.
     pkg: String,
-    /// The bit that marks a named handle (frame.json `NAMED`).
+    /// The bit that marks a named handle (frame.json5 `NAMED`).
     named_bit: u32,
     /// The link's TypeScript modules, `link.ts` and `cabi.ts`, and its Rust
     /// crate.
@@ -908,7 +908,7 @@ impl Gen<'_> {
     fn rs_interface(&self, objs: &[Obj], role: Option<(Role, &str, &str)>) -> Result<String, String> {
         let mut items = String::new();
         if objs.iter().any(|o| !o.resource) {
-            let _ = writeln!(items, "/// The interface's handle, named by `{}` (frame.json `NAMED`).\npub const HANDLE: {} = {:#x};\n", self.at(), self.rs_use(self.link_rs, "Handle"), self.handle());
+            let _ = writeln!(items, "/// The interface's handle, named by `{}` (frame.json5 `NAMED`).\npub const HANDLE: {} = {:#x};\n", self.at(), self.rs_use(self.link_rs, "Handle"), self.handle());
         }
         for o in objs {
             for (k, f) in o.methods.iter().enumerate() {
@@ -1061,6 +1061,11 @@ impl Gen<'_> {
             let r = if is_async(f) { format!("Promise<{r}>") } else { r };
             let _ = writeln!(out, "  {}({}): {r};", ts_name(method_name(f)), sig.join(", "));
         }
+        // A resource's implementation is told its drop, as Rust's is by its
+        // Drop; an interface is never dropped.
+        if o.resource {
+            let _ = writeln!(out, "  drop(): void;");
+        }
         let fname = if o.resource { ts_name(&o.name) } else { "object".into() };
         let pick = if o.methods.iter().any(|f| is_async(f)) { format!("l: Pick<{}, \"task_return\" | \"on_cancel\">, ", self.ts_use(link, "Link", true)) } else { String::new() };
         let refusal_of = self.ts_use(link, "refusal_of", false);
@@ -1104,7 +1109,8 @@ impl Gen<'_> {
                 let _ = writeln!(out, "            const v = {call};\n            return {{ result: 0, data: {data} }};\n          }}");
             }
         }
-        let _ = writeln!(out, "          default:\n            return {};\n        }}\n      }} catch (e) {{\n        return {refusal_of}(e);\n      }}\n    }},\n  }};\n}}\n", self.ts_use(TS_ERRNO, "ERRNO_ENOSYS", false));
+        let drop = if o.resource { "drop() {\n      implementation.drop();\n    }" } else { "drop() {}" };
+        let _ = writeln!(out, "          default:\n            return {};\n        }}\n      }} catch (e) {{\n        return {refusal_of}(e);\n      }}\n    }},\n    {drop},\n  }};\n}}\n", self.ts_use(TS_ERRNO, "ERRNO_ENOSYS", false));
         if !o.resource {
             let ln = self.ts_use(link, "Link", true);
             let pick = if pick.is_empty() { format!("l: Pick<{ln}, \"mount_named\">") } else { format!("l: Pick<{ln}, \"mount_named\" | \"task_return\" | \"on_cancel\">") };
@@ -1165,7 +1171,7 @@ impl Gen<'_> {
         let mut out = String::new();
         let mut enums = String::new();
         if objs.iter().any(|o| !o.resource) {
-            let _ = writeln!(out, "/** The interface's handle, named by `{}` (frame.json `NAMED`). */\nexport const HANDLE: {} = {:#x};\n", self.at(), self.ts_use(link, "Handle", true), self.handle());
+            let _ = writeln!(out, "/** The interface's handle, named by `{}` (frame.json5 `NAMED`). */\nexport const HANDLE: {} = {:#x};\n", self.at(), self.ts_use(link, "Handle", true), self.handle());
         }
         for o in objs {
             for (k, f) in o.methods.iter().enumerate() {
@@ -1464,7 +1470,7 @@ pub fn abi_root(root: &Path, path: &str, targets: &[&WitTarget]) -> Result<Outpu
 }
 
 /// The named handle of the interface `name` (`namespace:package/interface`):
-/// `named_bit`, frame.json's `NAMED`, and below it the FNV-1a hash of the name
+/// `named_bit`, frame.json5's `NAMED`, and below it the FNV-1a hash of the name
 /// folded to the bits under `named_bit`.
 fn named(name: &str, named_bit: u32) -> u32 {
     let hash = name.bytes().fold(0x811c_9dc5_u32, |h, b| (h ^ b as u32).wrapping_mul(0x0100_0193));
@@ -1472,11 +1478,11 @@ fn named(name: &str, named_bit: u32) -> u32 {
     named_bit | ((hash >> named_bit.trailing_zeros()) ^ hash) & below
 }
 
-/// The value of frame.json's `name`, beside xpute:link's WIT, `link`:
+/// The value of frame.json5's `name`, beside xpute:link's WIT, `link`:
 /// `NAMED`, the bit of a named handle, or `DROP`, the drop's method, the bound
 /// of an object's methods, which none takes.
 fn frame_val(link: &Path, name: &str) -> Result<u32, String> {
-    let frame = link.join("../spec/frame.json");
+    let frame = link.join("../spec/frame.json5");
     let spec = read(&frame.to_string_lossy())?;
     spec.get(name)
         .and_then(|n| n.val().num())
@@ -1486,7 +1492,7 @@ fn frame_val(link: &Path, name: &str) -> Result<u32, String> {
 
 /// The bindings of `t`'s package. `peers` are the targets of its side, each
 /// with its root, xpute:link's first, then each before those that take its
-/// types: their WIT is read before its own, the first's names frame.json, and
+/// types: their WIT is read before its own, the first's names frame.json5, and
 /// each other package its types take is reached where its peer writes it.
 pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) -> Result<Vec<Output>, String> {
     let own = root.join(t.wit);
@@ -1635,6 +1641,10 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
                 let text = format!("// {}\n//\n// {}\n{enums}", package_path(root, &path)?, mark(src, TOOL));
                 outs.push(Output::new(&path, text));
             }
+            // The package's later.ts is its table of methods answered later.
+            if m == "later" {
+                return Err(format!("{at}: its TypeScript would be the package's later.ts"));
+            }
             let path = format!("{dir}/{m}.ts");
             let text = format!("// {}\n//\n// {}\n\n{}\n{body}", package_path(root, &path)?, mark(src, TOOL), g.ts_imports());
             outs.push(Output::new(&path, text));
@@ -1652,8 +1662,8 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
     if let (Some((_, false)), Some(_)) = (&side, world) {
         let pairs: Vec<_> = later
             .iter()
-            .map(|(m, folded, c, _)| {
-                let module = if *folded { String::new() } else { format!("{m}::") };
+            .map(|(m, in_root, c, _)| {
+                let module = if *in_root { String::new() } else { format!("{m}::") };
                 format!("({module}HANDLE, {module}{c})")
             })
             .collect();

@@ -24,7 +24,7 @@ using ::xpute::link::Task;
 using ::xpute::link::answer;
 } // namespace _rt
 
-// The interface's handle, named by `xpute:gpu/vsync` (frame.json `NAMED`).
+// The interface's handle, named by `xpute:gpu/vsync` (frame.json5 `NAMED`).
 inline constexpr _rt::Handle HANDLE = 0x42eda6;
 
 // `next`

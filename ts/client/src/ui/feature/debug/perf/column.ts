@@ -4,7 +4,7 @@
  * How the report, the panel and the trace show a frame's columns, as
  * service/core/perf.ts decodes them. A column's name ends in its unit: `_ms`,
  * `_bytes`, `_px`, or `_name` for an index into a list of names, as FRAME in
- * perf.json defines. So a column the core adds needs nothing here. Only the
+ * perf.json5 defines. So a column the core adds needs nothing here. Only the
  * names of a list column's slots are spelled out.
  */
 
@@ -29,10 +29,8 @@ export const LIST_NAMES: Record<ListColumn, readonly string[]> = {
   gpu_spans: GPU_SPAN_NAMES,
 };
 
-export type FrameGroup = Exclude<keyof typeof FRAME_GROUP, "$doc">;
-export const GROUPS = Object.keys(FRAME_GROUP).filter(
-  (g) => !g.startsWith("$"),
-) as FrameGroup[];
+export type FrameGroup = keyof typeof FRAME_GROUP;
+export const GROUPS = Object.keys(FRAME_GROUP) as FrameGroup[];
 
 export const n1 = (n: number) => fixed(n ?? 0, 1);
 

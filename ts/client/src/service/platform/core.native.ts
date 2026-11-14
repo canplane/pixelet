@@ -1,13 +1,29 @@
 // @pxl/client/service/platform/core.native.ts
 
-/** The core is linked into the app, and xpute's native host opens it
- * through xpute's module (@xpute/native-runtime), so the app gives no
- * source. Rust gives the core its memory and runs its GPU stream (pxl-core
- * lib.rs `link!`). */
+/** The core and xpute's runtime are linked into the app, and the runtime
+ * runs the core on a thread of its own, reached through xpute's module
+ * (@xpute/native-runtime) as a page's worker is across a port. The UI serves
+ * the core the files and the objects here, over the core's memory, where the
+ * guest lends their buffers (`link`). */
 
-import type { ModuleSource } from "@xpute/link";
-import type { Config } from "./types.ts";
+import type { Link, Remote } from "@xpute/link";
+import { bytes, start } from "@xpute/native-runtime";
+import type { Core } from "./types.ts";
 
-export function source(_cfg: Config): ModuleSource | undefined {
-  return undefined;
+/** The core in the runtime the boot opened, reached through `remote`;
+ * `start` starts the runtime with what is mounted on `remote`. */
+export function core_of(remote: Remote): Core & {
+  link: Pick<Link, "bytes" | "mount" | "mount_named" | "task_return" | "on_cancel">;
+} {
+  return {
+    remote,
+    start: () => start(remote),
+    link: {
+      bytes,
+      mount: (prefix, o) => remote.mount(prefix, o),
+      mount_named: (h, o) => remote.mount_named(h, o),
+      task_return: (t, result, data) => remote.task_return(t, result, data),
+      on_cancel: (t, stop) => remote.on_cancel(t, stop),
+    },
+  };
 }

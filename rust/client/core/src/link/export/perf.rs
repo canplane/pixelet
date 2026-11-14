@@ -36,7 +36,7 @@ pub(super) fn stop() -> Result<(), Errno> {
     applied()
 }
 
-/// Answers STAT's words over `window_ms` and NOW's (perf.json).
+/// Answers STAT's words over `window_ms` and NOW's (perf.json5).
 pub(super) fn stats(window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
     Ok(read_timed(|| bytes_of(read::perf_read(window_ms))))
 }

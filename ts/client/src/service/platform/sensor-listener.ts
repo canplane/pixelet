@@ -44,7 +44,7 @@ export function coords_fix(c: Coords): Fix {
 /** An altitude without an accuracy was not measured, so it is passed on as
  * null. A desktop's location gives 0 for it. */
 export function geo_fix(fix: Fix): void {
-  listener.position(
+  listener.pos(
     fix.lon,
     fix.lat,
     null_if_negative(fix.alt_accuracy) === null ? null : fix.alt,

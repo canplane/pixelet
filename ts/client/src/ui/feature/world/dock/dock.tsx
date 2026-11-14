@@ -5,7 +5,7 @@ import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { keep_keyboard } from "@/ui/shared/component/keyboard.tsx";
-import { chrome, color } from "@/ui/shared/component/theme.ts";
+import { CHROME, COLOR } from "@/ui/shared/component/theme.ts";
 import { DockMode, switch_dock_mode, useDockMode } from "./store.ts";
 import { deck_swipe } from "@/ui/feature/world/deck.ts";
 import { Card, DOCK_HEIGHT } from "./card.tsx";
@@ -27,34 +27,34 @@ export function Dock() {
     }),
   ).current;
   const message = useMessage(mode);
-  const [barWidth, setBarWidth] = useState<f64>(0);
-  const [stripWidth, setStripWidth] = useState<f64>(chrome.control);
+  const [bar_width, set_bar_width] = useState<f64>(0);
+  const [strip_width, set_strip_width] = useState<f64>(CHROME.control);
   const bar = useRef<View | null>(null);
   const { popover, gesture } = usePopover(bar);
 
   const shown_popover = mode === DockMode.Palette ? popover : null;
   // Every card is as wide as the palette's strip. The cards stand on whole
   // pixels, because only there does a pill on a page cut its shadow cleanly.
-  const width = Math.min(stripWidth, barWidth);
-  const x = PixelRatio.roundToNearestPixel((barWidth - width) / 2);
+  const width = Math.min(strip_width, bar_width);
+  const x = PixelRatio.roundToNearestPixel((bar_width - width) / 2);
 
   return (
     <View
       ref={bar}
       {...swipe.panHandlers}
-      onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
+      onLayout={(e) => set_bar_width(e.nativeEvent.layout.width)}
       style={styles.bar}
     >
-      {barWidth > 0 && (
+      {bar_width > 0 && (
         <>
           <Card
             key={DockMode.Message}
             pane={DockMode.Message}
             mode={mode}
-            fill={color.ground}
+            fill={COLOR.ground}
             x={x}
             width={width}
-            span={barWidth}
+            span={bar_width}
           >
             <Message message={message} width={width} />
           </Card>
@@ -67,10 +67,10 @@ export function Dock() {
             tint={STRIP.ground}
             x={x}
             width={width}
-            span={barWidth}
-            onContentWidth={setStripWidth}
+            span={bar_width}
+            onContentWidth={set_strip_width}
           >
-            <Strip span={barWidth} scrolls={!popover?.open} gesture={gesture} />
+            <Strip span={bar_width} scrolls={!popover?.open} gesture={gesture} />
           </Card>
 
           {shown_popover && <SizePopover popover={shown_popover} />}

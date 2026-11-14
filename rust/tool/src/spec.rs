@@ -19,22 +19,17 @@ pub mod setting;
 /// What xpute's generator writes and reads with, shared: the generated file,
 /// the JSON's tree, and the text helpers.
 pub use xpute_gen::spec::{
-    align_star, file, mark, js_num, json_str, line_comments, pascal, plural, rs_doc, rs_field,
-    rs_const, rs_member, ts_doc, Node, Output,
+    align_star, description, file, mark, marks, js_num, json_str, line_comments, pascal, plural, rs_doc,
+    rs_field, rs_const, rs_member, ts_doc, Node, Output,
 };
 
-/// `#rrggbb`, a color as the specs write one, as one number, `0xRRGGBB`, for
-/// the tool's own work on it (the texture pack's ground); the generated code
-/// writes the string, which pxl-spec's `rgb` reads.
-pub fn rgb(hex: &str) -> Result<u32, String> {
-    hex.strip_prefix('#')
-        .filter(|d| d.len() == 6 && d.chars().all(|c| c.is_ascii_hexdigit()))
-        .and_then(|d| u32::from_str_radix(d, 16).ok())
-        .ok_or(format!("color JSON: \"{hex}\" is not #rrggbb"))
+/// The u32 a token holds, its `$type` checked as it was read (xpute-gen
+/// `read`), or none.
+pub fn u32_of(n: &Node) -> Option<u32> {
+    n.val().num().map(|v| v as u32)
 }
 
-use serde::Deserialize;
-use xpute_gen::spec::generate_at;
+use xpute_gen::spec::{generate_at, read as read_at};
 
 use crate::asset::symbol;
 use crate::brand;
@@ -67,11 +62,7 @@ pub fn generate(write: bool) -> Result<(), String> {
     generate_at(&root(), outputs()?, &OTHERS, write)
 }
 
+/// The spec at `path` from the root (xpute-gen `read`).
 pub fn read(path: &str) -> Result<Node, String> {
-    read_as(path)
-}
-
-pub(crate) fn read_as<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {
-    let text = std::fs::read_to_string(root().join(path)).map_err(|e| format!("{path}: {e}"))?;
-    serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))
+    read_at(&root().join(path).to_string_lossy())
 }

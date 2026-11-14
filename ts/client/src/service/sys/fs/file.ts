@@ -2,13 +2,13 @@
 
 /**
  * The core's files (xpute wit/fs/file.wit), served from the binding behind
- * their paths (binding.ts), one opener mounted at each node atop file.json's
+ * their paths (binding.ts), one opener mounted at each node atop file.json5's
  * `path` tree. An open answers at once and starts the file's read; what the
  * read comes to, its bytes or its error, waits in the file, and each `size`
  * and `read` answers from it. What is written is committed at the file's
  * close; and the close cancels what is in flight on the file: a method waiting
  * on it answers ECANCELED. A size or a read its caller cancels answers
- * ECANCELED too (frame.json `CANCEL`). A set-aside goes to the backend the
+ * ECANCELED too (frame.json5 `CANCEL`). A set-aside goes to the backend the
  * path names (binding.ts). A backend fails with the file's error-code, and a
  * failure that carries none answers `io`, save a bug, which passes on as
  * itself (`failure`).
@@ -41,7 +41,7 @@ function aborted(signal: AbortSignal): Promise<never> {
 }
 
 /** The file at `p`, over the core's memory `link` lends. */
-function open(link: Link, p: Path): file.HostFile {
+function open(link: Pick<Link, "bytes">, p: Path): file.HostFile {
   const b = binding();
   const abort = new AbortController();
   const opened = Promise.resolve().then(() => b.open(p, abort.signal));
@@ -94,11 +94,17 @@ function open(link: Link, p: Path): file.HostFile {
         throw failure(e);
       }
     },
+    // A file dropped unclosed lets its bytes go and commits nothing.
+    drop() {
+      abort.abort();
+    },
   };
 }
 
-/** Mounts an opener at each node atop file.json's `path` tree. */
-export function serve_files(link: Link): void {
+/** Mounts an opener at each node atop file.json5's `path` tree. */
+export function serve_files(
+  link: Pick<Link, "bytes" | "mount" | "task_return" | "on_cancel">,
+): void {
   for (const node of Object.values(path)) {
     const id = (node as { ID?: number }).ID;
     if (id === undefined) continue;

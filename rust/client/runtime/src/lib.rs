@@ -46,8 +46,8 @@ xpute_gpu_native_host::native_abi!();
 xpute_native_host::native_abi!(start);
 
 /// How a device's GPU host paces the renderer's stream, as
-/// spec/client/render/api.json `device` sets it. A build made for measuring
-/// has the host log a record, a run or an entry slower than perf.json's
+/// spec/client/render/api.json5 `device` sets it. A build made for measuring
+/// has the host log a record, a run or an entry slower than perf.json5's
 /// `limit::SLOW_MS`, as the page's worker has the page's hosts log.
 const GPU: GpuConfig = GpuConfig {
     frame_latency: device::FRAME_LATENCY,
@@ -77,7 +77,7 @@ pub fn start(
     hook();
     let spawned = std::thread::Builder::new()
         .name("xpute core".into())
-        .stack_size(stack::THREAD_BYTES as usize)
+        .stack_size(stack::THREAD_SZ as usize)
         .spawn(move || {
             stop::serve(report_stop);
             clock::serve();

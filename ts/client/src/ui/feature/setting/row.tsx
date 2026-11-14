@@ -10,12 +10,12 @@ import type { SettingCost } from "@/ui/shared/setting.ts";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import {
   alpha,
-  chrome,
-  color,
-  hairline,
-  text_scale,
-  text_style,
-  weight,
+  CHROME,
+  COLOR,
+  HAIRLINE,
+  TEXT_SCALE_CAP,
+  TEXT_STYLE,
+  WEIGHT,
 } from "@/ui/shared/component/theme.ts";
 import { SectionTitle } from "@/ui/shared/component/section-title.tsx";
 import { LABEL } from "@/ui/shared/component/palette.ts";
@@ -24,16 +24,16 @@ const INSET = 12;
 const GROUP_BORDER = 1;
 
 const COST_COLOR: Record<SettingCost, string> = {
-  low: color.cost_low,
-  med: color.cost_medium,
-  high: color.cost_high,
+  low: COLOR.cost_low,
+  med: COLOR.cost_medium,
+  high: COLOR.cost_high,
 };
 
 function Badge({ text, tint }: { text: string; tint: string }) {
   return (
     <View style={[styles.badge, { backgroundColor: alpha(tint, 0.15) }]}>
       <Text
-        maxFontSizeMultiplier={text_scale.mark}
+        maxFontSizeMultiplier={TEXT_SCALE_CAP.mark}
         style={[styles.badge_text, { color: tint }]}
       >
         {text}
@@ -45,7 +45,7 @@ function Badge({ text, tint }: { text: string; tint: string }) {
 function Badges({ cost, dev }: { cost?: SettingCost; dev?: boolean }) {
   return (
     <>
-      {dev && <Badge text="DEV" tint={color.dev} />}
+      {dev && <Badge text="DEV" tint={COLOR.dev} />}
       {cost && <Badge text={cost.toUpperCase()} tint={COST_COLOR[cost]} />}
     </>
   );
@@ -68,7 +68,7 @@ function Described({
         <Text style={styles.name}>{label}</Text>
         <Badges cost={cost} dev={dev} />
       </View>
-      {description && <Text style={setting_text.small}>{description}</Text>}
+      {description && <Text style={SETTING_TEXT.small}>{description}</Text>}
     </View>
   );
 }
@@ -120,7 +120,7 @@ export function SettingGroup(props: SettingGroupProps) {
     >
       <View style={styles.legend}>
         <Text
-          maxFontSizeMultiplier={text_scale.chrome}
+          maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
           style={styles.legend_text}
         >
           {label}
@@ -128,7 +128,7 @@ export function SettingGroup(props: SettingGroupProps) {
         <Badges cost={cost} dev={dev} />
       </View>
       {description && (
-        <Text style={[setting_text.small, styles.group_description]}>
+        <Text style={[SETTING_TEXT.small, styles.group_description]}>
           {description}
         </Text>
       )}
@@ -167,9 +167,9 @@ export function SettingChoiceRow(props: SettingChoiceRowProps) {
         {selected && (
           <Glyph
             glyph="checkmark"
-            size={chrome.glyph}
+            size={CHROME.glyph}
             weight="semibold"
-            color={color.chosen}
+            color={COLOR.chosen}
           />
         )}
       </View>
@@ -197,7 +197,7 @@ export function Section(props: SectionProps) {
           {icon && <Glyph glyph={icon} size={16} color={LABEL.secondary} />}
           <SectionTitle>{title}</SectionTitle>
         </View>
-        {caption && <Text style={setting_text.faint}>{caption}</Text>}
+        {caption && <Text style={SETTING_TEXT.faint}>{caption}</Text>}
       </View>
       {children}
     </View>
@@ -222,11 +222,11 @@ export function Link({
   );
 }
 
-export const setting_text = StyleSheet.create({
-  small: { ...text_style.caption, color: LABEL.secondary },
+export const SETTING_TEXT = StyleSheet.create({
+  small: { ...TEXT_STYLE.caption, color: LABEL.secondary },
   faint: {
-    ...text_style.caption2,
-    fontWeight: weight.regular,
+    ...TEXT_STYLE.caption2,
+    fontWeight: WEIGHT.regular,
     color: LABEL.secondary,
   },
 });
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   bleed: { marginHorizontal: -INSET },
   described: { flexShrink: 1, minWidth: 0, gap: 4 },
   name_line: { flexDirection: "row", alignItems: "center", gap: 8 },
-  name: { ...text_style.body, color: LABEL.primary },
+  name: { ...TEXT_STYLE.body, color: LABEL.primary },
 
   badge: {
     height: 16,
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   badge_text: {
-    ...text_style.caption2,
+    ...TEXT_STYLE.caption2,
     fontSize: 9,
     lineHeight: 10,
     letterSpacing: 0.4,
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 12,
     borderWidth: GROUP_BORDER,
-    borderColor: hairline,
+    borderColor: HAIRLINE,
     borderRadius: 12,
     padding: 4,
     paddingTop: 12,
@@ -279,11 +279,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     paddingHorizontal: 8,
-    backgroundColor: color.ground,
+    backgroundColor: COLOR.ground,
   },
   legend_text: {
-    ...text_style.caption,
-    fontWeight: weight.medium,
+    ...TEXT_STYLE.caption,
+    fontWeight: WEIGHT.medium,
     color: LABEL.primary,
   },
   group_description: {
@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
   },
   answers: { gap: 4 },
 
-  check: { width: chrome.glyph, height: chrome.glyph, flexShrink: 0 },
+  check: { width: CHROME.glyph, height: CHROME.glyph, flexShrink: 0 },
 
   section: { gap: 4 },
   prose: { gap: 8, paddingVertical: 4 },

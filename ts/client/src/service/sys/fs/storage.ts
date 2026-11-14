@@ -1,7 +1,7 @@
 // @pxl/client/service/sys/fs/storage.ts
 
 /**
- * The backend of the core's STORAGE files (file.json `storage`), which hold
+ * The backend of the core's STORAGE files (file.json5 `storage`), which hold
  * the settings, in the platform's storage. The core hands and takes a file's
  * bytes, while the platform keeps text, so each file is kept as the base64url
  * of its bytes. Text that is not base64url reads as `bad-message`, which the core
@@ -51,7 +51,7 @@ function bytes_of(text: string): U8Array {
   }
 }
 
-/** Each stored file's key, by its id under STORAGE (file.json `path`). */
+/** Each stored file's key, by its id under STORAGE (file.json5 `path`). */
 const KEYS: ReadonlyMap<u32, string> = new Map([
   [path.STORAGE.SETTINGS.ID, "pxl:settings"],
 ]);

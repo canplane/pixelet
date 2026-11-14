@@ -5,7 +5,7 @@
  * and forwards search's own live API, all from one origin.
  *
  * The platform serves static assets before this script runs (wrangler.jsonc).
- * What reaches this script is the roots of spec/spec/route.json. `/tile/*` and
+ * What reaches this script is the roots of spec/spec/route.json5. `/tile/*` and
  * `/asset/*` come straight out of the R2 bucket. `/geo/*` and `/api/*` are
  * reverse-proxied as they are to GEO_ORIGIN and API_ORIGIN (infra/README.md),
  * so that they stay same-origin with the app.
@@ -73,7 +73,7 @@ import {
  * The object keys this Worker asks R2 for, told apart by their shape alone.
  *
  * - `<kind>/<object>`: a baked page. The kind is one of `BASE_KINDS`, and the
- *   object is laid out under it as spec/spec/bake/publication.json says
+ *   object is laid out under it as spec/spec/bake/publication.json5 says
  *   (`TILE_OBJECT`). The Earth's picture lies whole beside its tiles
  *   (`TILE_SPHERE`).
  * - `asset/<sha256>.<ext>`: a model or an image, named by its bytes alone

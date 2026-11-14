@@ -8,6 +8,12 @@
 import { GROUND } from "@/ui/shared/component/ground.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
 
+/** The CSS color `#rrggbb` of `rgb`, a color as the specs give one,
+ * `0xRRGGBB`. */
+export function hex(rgb: number): string {
+  return `#${rgb.toString(16).padStart(6, "0")}`;
+}
+
 export function alpha(hex: string, a: number): string {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
@@ -53,7 +59,7 @@ const CORAL = {
 /** iOS's fill gray, warmed to match the ground. */
 const FILL = "#7d766c";
 
-export const color = {
+export const COLOR = {
   white: "#ffffff",
   black: "#000000",
   ground: GROUND,
@@ -98,7 +104,7 @@ export const color = {
 /** Colors of a surface that an iPhone draws as system glass and the other
  * platforms draw solid. `glass` tints the glass; `fill` and the rest make up
  * the solid surface. */
-export const surface = {
+export const SURFACE = {
   chosen: {
     glass: alpha(CORAL.base, 0.25),
     fill: tint(CORAL.base, 0.1),
@@ -120,7 +126,7 @@ export interface Material {
   system: number;
 }
 
-export const material = {
+export const MATERIAL = {
   popover: { opacity: 0.6, blur: 8, system: 0.6 },
   /** iOS's bar, as Apple's own web pages draw it. */
   bar: { opacity: 0.72, blur: 20, system: 0.5 },
@@ -128,23 +134,23 @@ export const material = {
 
 /** The opacity of a disabled button's content. As on iOS, only the content
  * dims, never the glass under it. */
-export const disabled_content = 0.4;
+export const DISABLED_CONTENT = 0.4;
 
-export const shadow = { lift: "0 6px 20px rgba(0, 0, 0, 0.25)" } as const;
+export const SHADOW = { lift: "0 6px 20px rgba(0, 0, 0, 0.25)" } as const;
 
 /** A dark halo that lets white text read over any ground. It is drawn as
  * black copies of the text, grown by 1 to `width` pixels on each side, each at
  * opacity `ring`. */
-export const halo = { width: 2, ring: 0.3 } as const;
+export const HALO = { width: 2, ring: 0.3 } as const;
 
-export const halo_rings: readonly number[] = Array.from(
-  { length: halo.width },
-  (_, i) => halo.width - i,
+export const HALO_RINGS: readonly number[] = Array.from(
+  { length: HALO.width },
+  (_, i) => HALO.width - i,
 );
 
-export const hairline = alpha(color.label_gray, 0.1);
+export const HAIRLINE = alpha(COLOR.label_gray, 0.1);
 
-export const weight = {
+export const WEIGHT = {
   regular: "400",
   medium: "500",
   semibold: "600",
@@ -152,46 +158,46 @@ export const weight = {
 
 /** Apple's text styles, each a step smaller, because the chrome floats over
  * the world. */
-export const text_style = {
+export const TEXT_STYLE = {
   title2: {
     fontSize: 20,
     lineHeight: 25,
-    fontWeight: weight.semibold,
+    fontWeight: WEIGHT.semibold,
   },
   title: {
     fontSize: 15,
     lineHeight: 20,
-    fontWeight: weight.semibold,
+    fontWeight: WEIGHT.semibold,
   },
   body: {
     fontSize: 15,
     lineHeight: 20,
-    fontWeight: weight.regular,
+    fontWeight: WEIGHT.regular,
   },
   /** 16 rather than 15: iOS Safari zooms in on a focused field whose text is
    * smaller than 16. */
-  input: { fontSize: 16, fontWeight: weight.regular },
+  input: { fontSize: 16, fontWeight: WEIGHT.regular },
   footnote: {
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: weight.regular,
+    fontWeight: WEIGHT.regular,
   },
   notice: {
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: weight.semibold,
+    fontWeight: WEIGHT.semibold,
     letterSpacing: -0.3,
   },
   caption: {
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: weight.regular,
+    fontWeight: WEIGHT.regular,
   },
   /** 11 is the smallest size iOS sets text in. */
   caption2: {
     fontSize: 11,
     lineHeight: 13,
-    fontWeight: weight.medium,
+    fontWeight: WEIGHT.medium,
   },
 } as const;
 
@@ -199,18 +205,18 @@ export const text_style = {
  * to 1.2×. A mark, such as a setting's badge, does not grow, because its size
  * is its shape. Running text has no entry here and follows the setting in
  * full. */
-export const text_scale = { chrome: 1.2, mark: 1 } as const;
+export const TEXT_SCALE_CAP = { chrome: 1.2, mark: 1 } as const;
 
-export const section_title = {
-  ...text_style.caption,
-  fontWeight: weight.medium,
+export const SECTION_TITLE = {
+  ...TEXT_STYLE.caption,
+  fontWeight: WEIGHT.medium,
   letterSpacing: 0.6,
   textTransform: "uppercase",
 } as const;
 
 /** The world screen's layers, back to front. `bottom` holds the dock and the
  * toasts, and `chrome` the controls along the top. */
-export const layer = {
+export const LAYER = {
   bottom: 40,
   scrim: 49,
   chrome: 50,
@@ -218,7 +224,7 @@ export const layer = {
   sheet: 70,
 } as const;
 
-export const chrome = {
+export const CHROME = {
   inset: 16,
   control: 48,
   control_gap: 8,

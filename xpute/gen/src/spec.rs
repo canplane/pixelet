@@ -260,29 +260,117 @@ impl Node {
         }
     }
 
+    /// Whether the node is a token (DTCG): a value with its `$value`.
     pub fn is_wrapper(&self) -> bool {
-        self.get("$val").is_some()
+        self.get("$value").is_some()
     }
 
+    /// A token's `$value`, or the node itself where it is a value as it is.
     pub fn val(&self) -> &Node {
-        self.get("$val").unwrap_or(self)
+        self.get("$value").unwrap_or(self)
+    }
+
+    /// The node's `$description`, line by line.
+    pub fn doc(&self) -> Option<Vec<String>> {
+        self.str_at("$description").map(|d| d.lines().map(String::from).collect())
+    }
+
+    /// xpute's own mark `name`, under the node's `$extensions` (`MARKS`).
+    pub fn mark(&self, name: &str) -> Option<&Node> {
+        self.get("$extensions")?.get(MARKS)?.get(name)
+    }
+
+    /// The node, each token that carries nothing past its `$value` read as
+    /// that value, at every depth.
+    pub fn folded(self) -> Node {
+        match self {
+            Node::Obj(entries) if entries.len() == 1 && entries[0].0 == "$value" => {
+                entries.into_iter().next().map_or(Node::Null, |(_, v)| v.folded())
+            }
+            Node::Obj(entries) => Node::Obj(entries.into_iter().map(|(k, v)| (k, v.folded())).collect()),
+            Node::Arr(a) => Node::Arr(a.into_iter().map(Node::folded).collect()),
+            n => n,
+        }
     }
 
     pub fn str_at(&self, key: &str) -> Option<&str> {
         self.get(key).and_then(Node::str)
     }
 
-    pub fn lines_at(&self, key: &str) -> Option<Vec<String>> {
-        self.get(key)?.arr().map(|a| {
-            a.iter()
-                .filter_map(|l| l.str().map(str::to_string))
-                .collect()
-        })
-    }
 }
 
+/// The key under a node's `$extensions` that holds xpute's own marks; a spec
+/// is otherwise written in DTCG's format (`Node::mark`).
+pub const MARKS: &str = "xpute";
+
+/// `lines` as a `$description` holds them, one string (`Node::doc`).
+pub fn description<S: AsRef<str>>(lines: &[S]) -> Node {
+    Node::Str(lines.iter().map(AsRef::as_ref).collect::<Vec<_>>().join("\n"))
+}
+
+/// xpute's own marks, as a node's `$extensions` entry holds them.
+pub fn marks(marks: Vec<(String, Node)>) -> (String, Node) {
+    ("$extensions".into(), Node::Obj(vec![(MARKS.into(), Node::Obj(marks))]))
+}
+
+/// The spec at `path`, JSON5, its tokens folded (`Node::folded`), each
+/// number an integer `$type` gives whole and within its width (`check_widths`).
 pub fn read(path: &str) -> Result<Node, String> {
-    read_as(path)
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+    let spec = json5::from_str::<Node>(&text).map(Node::folded).map_err(|e| format!("{path}: {e}"))?;
+    check_widths(&spec, "", None).map_err(|e| format!("{path}: {e}"))?;
+    Ok(spec)
+}
+
+/// The numbers an integer type holds, from `lo` up to and not reaching `end`,
+/// none for any other type. A `usize` holds what a 32-bit target's does, the
+/// narrowest a spec is written for.
+pub fn int_range(ty: &str) -> Option<(f64, f64)> {
+    let bits = |b: i32| 2f64.powi(b);
+    Some(match ty {
+        "u8" => (0.0, bits(8)),
+        "u16" => (0.0, bits(16)),
+        "u32" | "usize" => (0.0, bits(32)),
+        "u64" => (0.0, bits(64)),
+        "i8" => (-bits(7), bits(7)),
+        "i16" => (-bits(15), bits(15)),
+        "i32" => (-bits(31), bits(31)),
+        "i64" => (-bits(63), bits(63)),
+        _ => return None,
+    })
+}
+
+/// Refuses a number under `n` whose type, its token's `$type` or its
+/// group's (`ty`), is an integer it is not: not whole, or past its width. A
+/// token's value is checked whole: a number, a list, a table or a record,
+/// each number of it typed by the token. A group's `enum` is its own mark: its
+/// members are numbered by their `repr` (data.rs `numbers`), not typed by it,
+/// and its tables take the type around it.
+fn check_widths(n: &Node, at: &str, ty: Option<&str>) -> Result<(), String> {
+    fn value(v: &Node, at: &str, ty: Option<&str>) -> Result<(), String> {
+        let ty = v.str_at("$type").or(ty);
+        match v.val() {
+            Node::Num(x) => match ty.and_then(|t| int_range(t).map(|w| (t, w))) {
+                Some((t, (lo, end))) if x.fract() != 0.0 || *x < lo || *x >= end => Err(format!("{at}: {x} is no {t}")),
+                _ => Ok(()),
+            },
+            Node::Arr(a) => a.iter().enumerate().try_for_each(|(i, e)| value(e, &format!("{at}[{i}]"), ty)),
+            o @ Node::Obj(_) => o.named().try_for_each(|(k, e)| value(e, &format!("{at}.{k}"), ty)),
+            _ => Ok(()),
+        }
+    }
+    if n.is_wrapper() {
+        return value(n, at, ty);
+    }
+    let own = n.str_at("$type");
+    n.named().try_for_each(|(k, v)| {
+        let at = if at.is_empty() { k.to_string() } else { format!("{at}.{k}") };
+        match (v, own) {
+            (Node::Obj(_), _) if !v.is_wrapper() => check_widths(v, &at, own.filter(|t| *t != "enum").or(ty)),
+            (_, Some("enum")) => Ok(()),
+            _ => value(v, &at, own.or(ty)),
+        }
+    })
 }
 
 pub fn read_as<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, String> {

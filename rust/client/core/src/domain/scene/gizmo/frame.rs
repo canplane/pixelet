@@ -21,7 +21,7 @@ use crate::sys::sched::invalidate;
 use pxl_global::Global;
 use pxl_render::gpu::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
-use pxl_spec::color::{rgb, Rgb};
+use pxl_spec::color::Rgb;
 
 const RING_SEGMENT_CNT: u32 = 64;
 
@@ -63,7 +63,7 @@ impl Sketch {
                     self.line(
                         corner(i),
                         corner(i | 1 << k),
-                        linear_rgb(const { rgb(frame::pivot::RGB) }),
+                        linear_rgb(frame::pivot::RGB),
                     );
                 }
             }
@@ -95,7 +95,7 @@ fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
         units(GROUND.leaf_cell_zoom()),
     );
     s.cube(cell, units(GROUND.leaf_cell_zoom()));
-    s.point(at, linear_rgb(const { rgb(frame::pivot::RGB) }));
+    s.point(at, linear_rgb(frame::pivot::RGB));
     // In first person the eye is at the pivot, so nothing drawn about it
     // would be seen.
     let Some(azimuth) = heading else { return };
@@ -103,12 +103,12 @@ fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
     let (east, north, up) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]);
     let (right, forward) = ([cos, -sin, 0.0], [sin, cos, 0.0]);
     let tip = |d: V3| -> V3 { core::array::from_fn(|k| at[k] + d[k] * RING_RADIUS) };
-    s.ring(at, east, north, (const { rgb(frame::level::RGB) }, frame::level::DASHED));
-    s.ring(at, right, up, (const { rgb(frame::forward::RGB) }, frame::forward::DASHED));
-    s.ring(at, north, up, (const { rgb(frame::north::RGB) }, frame::north::DASHED));
-    s.point(tip(forward), linear_rgb(const { rgb(frame::forward::RGB) }));
-    s.point(tip(north), linear_rgb(const { rgb(frame::north::RGB) }));
-    s.point(tip(up), linear_rgb(const { rgb(frame::up::RGB) }));
+    s.ring(at, east, north, (frame::level::RGB, frame::level::DASHED));
+    s.ring(at, right, up, (frame::forward::RGB, frame::forward::DASHED));
+    s.ring(at, north, up, (frame::north::RGB, frame::north::DASHED));
+    s.point(tip(forward), linear_rgb(frame::forward::RGB));
+    s.point(tip(north), linear_rgb(frame::north::RGB));
+    s.point(tip(up), linear_rgb(frame::up::RGB));
 }
 
 struct Gizmo {

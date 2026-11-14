@@ -1,0 +1,47 @@
+{
+  $description: "What the renderer's two debug views are drawn in, so the screen and the\nUI's legend of them read one look: the camera gizmo's grid and the tints\nof the cells the rays stop on (camera_grid.wgsl, screen_shade.wgsl\n`cell_share`), and the ray steps' ramp (screen_shade.wgsl). Each 0xrrggbb in\nsRGB.",
+  grid: {
+    $description: "The camera grid's lines.",
+    rgb: { $value: 0xffffff, $type: "u32" },
+    alpha: { $type: "f32", $value: 0.25 },
+  },
+  share: {
+    $description: "The tint on a cell the rays stop on, by the solid angle its face shows the\neye over a grid cell's, in this order, each up to its `most`.",
+    finer: {
+      $description: "Within one grid cell.",
+      rgb: { $value: 0x5995ff, $type: "u32" },
+      most: { $type: "f32", $value: 1.0 },
+    },
+    within: {
+      $description: "Within one to four.",
+      rgb: { $value: 0x59f37c, $type: "u32" },
+      most: { $type: "f32", $value: 4.0 },
+    },
+    coarser: {
+      $description: "Past four.",
+      rgb: { $value: 0xff6c59, $type: "u32" },
+    },
+  },
+  steps: {
+    $description: "The steps a pixel's ray took on its way from the eye, on a log scale.",
+    most: {
+      $type: "f32",
+      $value: 1024,
+      $description: "The steps the ramp runs up to, the same on every screen so two compare.",
+    },
+    none: {
+      $value: 0x808080,
+      $description: "A pixel that walked nothing, apart from the ramp's every color.",
+      $type: "u32",
+    },
+    ramp: {
+      $value: [
+        0x23171b, 0x493eaf, 0x446aee, 0x3295f7, 0x26bde1, 0x29ddbb, 0x40f392,
+        0x66fd6d, 0x96fa50, 0xc6eb3b, 0xeed02d, 0xffab24, 0xff801d, 0xee5415,
+        0xc92d0c, 0xa11202, 0x900d00,
+      ],
+      $description: "Google's Turbo, dark blue at none through green and yellow to dark red at\n`most`, at even stops a pixel's color runs straight between.",
+      $type: "u32",
+    },
+  },
+}

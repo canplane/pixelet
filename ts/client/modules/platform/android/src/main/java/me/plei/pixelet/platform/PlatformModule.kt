@@ -50,15 +50,15 @@ class PlatformModule : Module() {
     // SharedPreferences is the system's store for an app's small values, as
     // localStorage is the browser's for a page.
 
-    Function("storageGet") { key: String -> preferences().getString(key, null) }
+    Function("storage_get") { key: String -> preferences().getString(key, null) }
 
-    Function("storageSet") { key: String, value: String ->
+    Function("storage_set") { key: String, value: String ->
       preferences().edit().putString(key, value).apply()
     }
 
     // ---- the clipboard (service/platform/share.native.ts) ----
 
-    Function("clipboardSet") { text: String ->
+    Function("clipboard_set") { text: String ->
       val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
       clipboard.setPrimaryClip(ClipData.newPlainText("pixelet", text))
     }
@@ -68,7 +68,7 @@ class PlatformModule : Module() {
     /** Whether the device has a compass at all. expo-location tells
      * that only by failing a watch, and a failed watch reads as a compass lost
      * rather than one that was never there. */
-    Function("headingAvailable") {
+    Function("has_heading") {
       val sensors = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
       sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null || sensors.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD) != null
     }
@@ -80,7 +80,7 @@ class PlatformModule : Module() {
      * nothing under gesture navigation, whose handle takes only a swipe. The
      * UI rests its bottom chrome clear of it
      * (ts/client/src/ui/shared/component/bottom-rest.ts). */
-    Function("tappableBottom") {
+    Function("tappable_bottom") {
       val view = appContext.currentActivity?.window?.decorView ?: return@Function 0.0
       val insets = ViewCompat.getRootWindowInsets(view) ?: return@Function 0.0
       insets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom / view.resources.displayMetrics.density.toDouble()

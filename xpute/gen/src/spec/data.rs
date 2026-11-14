@@ -1,42 +1,42 @@
 // xpute-gen/spec/data.rs
 
-//! A data spec is a JSON file of named values, written into the files each spec
+//! A data spec is a JSON5 file of named values in DTCG's format, its own marks
+//! under a node's `$extensions` (`MARKS`), written into the files each spec
 //! names as TypeScript `as const` values, Rust constants and C++ constants. A
-//! number is an f64 unless a `$type` says otherwise. A value wrapped as `{
-//! "$val", "$doc" }` carries its reason in `$doc`. Each language names a value
-//! in its own case (in Rust an enum's member Pascal, a constant SCREAMING, a
-//! module or a field snake), save an enum whose names are copied from outside,
-//! marked `"$outside": true`, whose Rust members keep their spelling. A table
-//! may be laid out in words (`laid_out`), with its widths read from the specs
-//! it uses; a `$type` may name an enum a spec it uses declares, which Rust and
+//! number is an f64 unless a `$type`, its own or its group's, says otherwise. A
+//! token's `$description` is its reason. Each language names a value in its own
+//! case (in Rust an enum's member Pascal, a constant SCREAMING, a module or a
+//! field snake), save an enum whose names are copied from outside, marked
+//! `"outside": true`, whose Rust members keep their spelling. A table may be
+//! laid out in words (`laid_out`), with its widths read from the specs it uses;
+//! a `$type` may name an enum a spec it uses declares, which Rust and
 //! TypeScript reach where that spec's own output is (`Foreign`), and C++
-//! refuses. A table with `"$keys": "<Enum>"` holds a value for each of the
+//! refuses. A table with `"keys": "<Enum>"` holds a value for each of the
 //! enum's members and is written as a list by the member's number (`keyed`); a
-//! table with `"$each": "<Enum>"` is one table for each member, named as the
-//! member is (`expanded`). Under a table with `"$distinct": "<field>"`, no two
+//! table with `"each": "<Enum>"` is one table for each member, named as the
+//! member is (`expanded`). Under a table with `"distinct": "<field>"`, no two
 //! sibling tables hold the same `<field>` (`check_distinct`). A list of names
 //! whose `$type` is `enum` is an enum, in Rust and in C++ an enum class,
 //! numbered by place; a table whose `$type` is `enum` is one too, numbered by
-//! its members, each a number or a table that carries its `$number`. An enum is
+//! its members, each a number or a table that carries its `number`. An enum is
 //! named as its key is, singular; one whose names a reader takes, marked
-//! `"$names": true`, has them written in TypeScript and C++ as a list under the
+//! `"names": true`, has them written in TypeScript and C++ as a list under the
 //! key's plural (`STEP_NAMES` beside `STEP_NAME`), as Rust's enum holds them in
-//! `name`. Every enum is held in its `$repr` (`u8` where it gives none); in
-//! Rust and C++ it has `of`, a number to its member, in Rust its members'
-//! names, and in TypeScript each member is a constant of its own (`ts_enum`),
-//! so no name reaches a bundle. A list of tables of the same fields is a list
-//! of records: an array of objects in TypeScript, and in Rust an array of a
-//! struct (`rs_recs`), its row named by the list's `$row` where its key is a
-//! plural (`"$row": "asset_file"`, `AssetFile`), whose `name`s are the enum
-//! where the list's `$type` is `enum`, numbered by their places or, where every
-//! record carries one, each by its `$number`; there the TypeScript rows carry
-//! each one's `number` and no `name`, and the records of an enum's table carry
-//! their `number` beside their key (`numbered`). An enum table's records carry
-//! the same fields, and one whose `$type` names another enum of the spec maps
-//! each member to that enum's, written as a function of the member in every
-//! language (`mapped`: `Errno::kind` in Rust, `kind_Errno` in TypeScript and
-//! C++). A table a tool builds in memory is written as a read one is
-//! (`table_outputs`).
+//! `name`. Every enum is held in its `repr` (`u8` where it gives none); in Rust
+//! and C++ it has `of`, a number to its member, in Rust its members' names, and
+//! in TypeScript each member is a constant of its own (`ts_enum`), so no name
+//! reaches a bundle. A list of tables of the same fields is a list of records:
+//! an array of objects in TypeScript, and in Rust an array of a struct
+//! (`rs_recs`), its row named by the list's `row` where its key is a plural
+//! (`"row": "asset_file"`, `AssetFile`), whose `name`s are the enum where the
+//! list's `$type` is `enum`, numbered by their places or, where every record
+//! carries one, each by its `number`; there the TypeScript rows carry each
+//! one's `number` and no `name`, and the records of an enum's table carry their
+//! `number` beside their key (`numbered`). An enum table's records carry the
+//! same fields, and one whose `$type` names another enum of the spec maps each
+//! member to that enum's, written as a function of the member in every language
+//! (`mapped`: `Errno::kind` in Rust, `kind_Errno` in TypeScript and C++). A
+//! table a tool builds in memory is written as a read one is (`table_outputs`).
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -44,8 +44,8 @@ use std::path::Path;
 
 use super::{
     align_star, cpp_enum, cpp_member, file, is_ts_ident, js_num, json_str, line_comments, mark,
-    package, package_path, pascal, plural, read, rs_const, rs_doc, rs_enum, rs_field, rs_ident, rs_member, rs_module, screaming, snake,
-    ts_const, ts_doc, ts_enum, ts_module, Includes, Member, Node, Output,
+    marks, package, package_path, pascal, plural, read, rs_const, rs_doc, rs_enum, rs_field, rs_ident, rs_member, rs_module, screaming, snake, int_range,
+    ts_const, ts_doc, ts_enum, ts_module, Includes, Member, Node, Output, MARKS,
 };
 
 pub struct DataSpec {
@@ -196,7 +196,7 @@ fn ts_value(n: &Node, ty: &str, indent: &str, enums: &[(String, Vec<Member>)]) -
             let t = members_type(n, ty);
             let mut lines = vec!["{".to_string()];
             for (k, v) in n.named() {
-                if let Some(doc) = v.is_obj().then(|| v.lines_at("$doc")).flatten() {
+                if let Some(doc) = v.is_obj().then(|| v.doc()).flatten() {
                     lines.extend(ts_doc(&doc, &inner).into_iter().enumerate().map(|(i, l)| {
                         if i == 0 {
                             l
@@ -254,10 +254,10 @@ fn is_primitive(ty: &str) -> bool {
 type Casing = fn(&str) -> String;
 
 /// How the enum `n`'s members are named in Rust: in Pascal case, or as their
-/// source spells them where the enum says `"$outside": true`, its names being
+/// source spells them where the enum says `"outside": true`, its names being
 /// copied from outside (POSIX's `EBADMSG`).
 fn casing(n: &Node) -> Casing {
-    if n.get("$outside") == Some(&Node::Bool(true)) {
+    if n.mark("outside") == Some(&Node::Bool(true)) {
         rs_ident
     } else {
         rs_member
@@ -265,15 +265,15 @@ fn casing(n: &Node) -> Casing {
 }
 
 /// Whether the enum `n`'s members are read by their names, which it marks
-/// `"$names": true`: its names are then written in TypeScript and C++ as a
+/// `"names": true`: its names are then written in TypeScript and C++ as a
 /// list of their own, under the plural of its name (`plural`).
 fn names_read(n: &Node) -> bool {
-    n.get("$names") == Some(&Node::Bool(true))
+    n.mark("names") == Some(&Node::Bool(true))
 }
 
-/// What a value's marks say of how it is written in Rust: an enum's `$repr`,
+/// What a value's marks say of how it is written in Rust: an enum's `repr`,
 /// the numbers it holds and how its members are named, and the type a list of
-/// records' row takes, its `$row`, the singular its plural key does not give.
+/// records' row takes, its `row`, the singular its plural key does not give.
 struct Marks<'a> {
     repr: &'static str,
     range: std::ops::RangeInclusive<f64>,
@@ -288,7 +288,7 @@ impl<'a> Marks<'a> {
             repr,
             range,
             casing: casing(n),
-            row: n.str_at("$row"),
+            row: n.mark("row").and_then(Node::str),
         })
     }
 }
@@ -303,30 +303,30 @@ fn is_names(n: &Node) -> bool {
 /// a table.
 fn check_types(spec: &Node, declared: &[(String, Node)]) -> Result<(), String> {
     fn walk(n: &Node, at: &str, enums: &[String]) -> Result<(), String> {
-        if n.get("$repr").is_some() {
+        if n.mark("repr").is_some() {
             if n.str_at("$type") != Some("enum") {
-                return Err(format!("{at}: `$repr` holds an enum, beside `$type` enum"));
+                return Err(format!("{at}: `repr` holds an enum, beside `$type` enum"));
             }
             repr_of(n).map_err(|e| format!("{at}: {e}"))?;
         }
-        if let Some(r) = n.get("$row") {
+        if let Some(r) = n.mark("row") {
             if r.str().is_none() || n.val().arr().and_then(|a| fields(a).ok().flatten()).is_none() {
-                return Err(format!("{at}: `$row` names the row of a list of records"));
+                return Err(format!("{at}: `row` names the row of a list of records"));
             }
         }
-        if let Some(o) = n.get("$names") {
+        if let Some(o) = n.mark("names") {
             if n.str_at("$type") != Some("enum") || !is_names(n) || *o != Node::Bool(true) {
-                return Err(format!("{at}: `$names` is true, beside `$type` enum on a list of names"));
+                return Err(format!("{at}: `names` is true, beside `$type` enum on a list of names"));
             }
         }
-        if let Some(f) = n.get("$distinct") {
+        if let Some(f) = n.mark("distinct") {
             if f.str().is_none() || !n.is_obj() || n.is_wrapper() {
-                return Err(format!("{at}: `$distinct` names a field, on a table"));
+                return Err(format!("{at}: `distinct` names a field, on a table"));
             }
         }
-        if let Some(o) = n.get("$outside") {
+        if let Some(o) = n.mark("outside") {
             if n.str_at("$type") != Some("enum") || *o != Node::Bool(true) {
-                return Err(format!("{at}: `$outside` is true, beside `$type` enum"));
+                return Err(format!("{at}: `outside` is true, beside `$type` enum"));
             }
         }
         if let (Some("enum"), Node::Arr(a)) = (n.str_at("$type"), n.val()) {
@@ -360,7 +360,7 @@ fn check_types(spec: &Node, declared: &[(String, Node)]) -> Result<(), String> {
         }
         match n {
             Node::Obj(entries) => {
-                for (k, v) in entries.iter().filter(|(k, _)| !k.starts_with('$') || k == "$val") {
+                for (k, v) in entries.iter().filter(|(k, _)| !k.starts_with('$') || k == "$value") {
                     walk(v, &format!("{at}.{k}"), enums)?;
                 }
             }
@@ -409,31 +409,31 @@ fn rs_scalar(n: &Node, ty: &str, scope: &Scope) -> Result<(String, String), Stri
     })
 }
 
-/// The integers an enum may be held in: each `$repr`, the numbers it holds,
-/// and its C++ type.
-const REPRS: [(&str, f64, f64, &str); 6] = [
-    ("u8", 0.0, u8::MAX as f64, "std::uint8_t"),
-    ("u16", 0.0, u16::MAX as f64, "std::uint16_t"),
-    ("u32", 0.0, u32::MAX as f64, "std::uint32_t"),
-    ("i8", i8::MIN as f64, i8::MAX as f64, "std::int8_t"),
-    ("i16", i16::MIN as f64, i16::MAX as f64, "std::int16_t"),
-    ("i32", i32::MIN as f64, i32::MAX as f64, "std::int32_t"),
+/// The integers an enum may be held in: each `repr` and its C++ type, the
+/// numbers it holds its `int_range`.
+const REPRS: [(&str, &str); 6] = [
+    ("u8", "std::uint8_t"),
+    ("u16", "std::uint16_t"),
+    ("u32", "std::uint32_t"),
+    ("i8", "std::int8_t"),
+    ("i16", "std::int16_t"),
+    ("i32", "std::int32_t"),
 ];
 
-/// An enum's representation, its `$repr` as written, or `u8`: its name, the
+/// An enum's representation, its `repr` as written, or `u8`: its name, the
 /// numbers it holds and its C++ type.
 type Repr = (&'static str, std::ops::RangeInclusive<f64>, &'static str);
 
 fn repr_of(n: &Node) -> Result<Repr, String> {
-    repr_named(n.str_at("$repr").unwrap_or("u8"))
+    repr_named(n.mark("repr").and_then(Node::str).unwrap_or("u8"))
 }
 
 fn repr_named(r: &str) -> Result<Repr, String> {
     REPRS
         .iter()
-        .find(|(name, ..)| *name == r)
-        .map(|&(name, lo, hi, cpp)| (name, lo..=hi, cpp))
-        .ok_or(format!("`$repr` {r} is no integer an enum is held in"))
+        .find(|(name, _)| *name == r)
+        .and_then(|&(name, cpp)| int_range(name).map(|(lo, end)| (name, lo..=end - 1.0, cpp)))
+        .ok_or(format!("`repr` {r} is no integer an enum is held in"))
 }
 
 /// The members of `n`, the enum `name`, as every writer numbers them: a
@@ -448,27 +448,27 @@ pub fn enum_members(name: &str, n: &Node) -> Result<Vec<Member>, String> {
 }
 
 /// A list's members: its names, or its records' `name`s, numbered by their
-/// places, or each by the `$number` its record carries where every one
-/// carries one, and documented by its record's `$doc`.
+/// places, or each by the `number` its record carries where every one
+/// carries one, and documented by its record's `$description`.
 fn list_members(
     name: &str,
     a: &[Node],
     range: &std::ops::RangeInclusive<f64>,
     casing: Casing,
 ) -> Result<Vec<Member>, String> {
-    let numbered = a.iter().filter(|e| e.get("$number").is_some()).count();
+    let numbered = a.iter().filter(|e| e.mark("number").is_some()).count();
     if numbered != 0 && numbered != a.len() {
         return Err(format!(
-            "{name}: a list's members are numbered by their places, or each by its `$number`"
+            "{name}: a list's members are numbered by their places, or each by its `number`"
         ));
     }
     let keys: Vec<(&str, Node)> = a
         .iter()
         .enumerate()
         .map(|(k, e)| {
-            let number = e.get("$number").cloned().unwrap_or(Node::Num(k as f64));
-            let mut m = vec![("$number".to_string(), number)];
-            m.extend(e.get("$doc").map(|d| ("$doc".to_string(), d.clone())));
+            let number = e.mark("number").cloned().unwrap_or(Node::Num(k as f64));
+            let mut m = vec![marks(vec![("number".to_string(), number)])];
+            m.extend(e.get("$description").map(|d| ("$description".to_string(), d.clone())));
             (e.str().or(e.str_at("name")).unwrap_or_default(), Node::Obj(m))
         })
         .collect();
@@ -477,8 +477,8 @@ fn list_members(
 }
 
 /// An enum table's members: each is a number, or a table that carries its
-/// `$number` and may carry its `$doc`; the numbers are distinct whole numbers
-/// that `range`, the enum's `$repr`, holds.
+/// `number` and may carry its `$description`; the numbers are distinct whole numbers
+/// that `range`, the enum's `repr`, holds.
 fn numbers(
     name: &str,
     keys: &[(&str, &Node)],
@@ -487,7 +487,7 @@ fn numbers(
 ) -> Result<Vec<Member>, String> {
     let numbers: Vec<Option<f64>> = keys
         .iter()
-        .map(|(_, v)| match v.get("$number") {
+        .map(|(_, v)| match v.mark("number") {
             Some(n) if v.is_obj() => n.num(),
             _ => v.val().num(),
         })
@@ -503,7 +503,7 @@ fn numbers(
             .all(|v| v.is_some_and(|v| range.contains(&v) && v.fract() == 0.0))
     {
         return Err(format!(
-            "{name}: an enum's members are distinct numbers its `$repr` holds, or tables that carry one as `$number`"
+            "{name}: an enum's members are distinct numbers its `repr` holds, or tables that carry one as `number`"
         ));
     }
     Ok(keys
@@ -513,7 +513,7 @@ fn numbers(
             ident: casing(k),
             name: k.to_string(),
             number: js_num(n.unwrap_or_default()),
-            doc: v.is_obj().then(|| v.lines_at("$doc")).flatten().unwrap_or_default(),
+            doc: v.is_obj().then(|| v.doc()).flatten().unwrap_or_default(),
         })
         .collect())
 }
@@ -526,7 +526,7 @@ fn rs_items(
     out: &mut Vec<String>,
     scope: &Scope,
 ) -> Result<(), String> {
-    let doc = if n.is_obj() { n.lines_at("$doc") } else { None };
+    let doc = if n.is_obj() { n.doc() } else { None };
     let mut lines: Vec<String> = Vec::new();
     if n.is_wrapper() {
         rs_leaf(name, n.val(), type_of(n, ty), &Marks::of(n)?, indent, &mut lines, scope)?;
@@ -810,7 +810,7 @@ fn map_table(name: &str, n: Node, enums: &[(String, Node)]) -> Result<Node, Stri
             f.to_string(),
             Node::Obj(vec![
                 ("$type".into(), Node::Str(e.clone())),
-                ("$val".into(), Node::Arr(names)),
+                ("$value".into(), Node::Arr(names)),
             ]),
         ));
     }
@@ -948,7 +948,7 @@ fn cpp_map(e: &str, members: &[Member], map: &Node, out: &mut Vec<String>) {
     }
 }
 
-/// A table with `"$packed": true` is laid out end to end. Each field gives its
+/// A table with `"packed": true` is laid out end to end. Each field gives its
 /// width in words, and the generator writes where the field begins, and the
 /// table's `WORDS` where the last field ends. What it writes are indices, so a
 /// packed table declares no `$type`: its numbers are a `usize` in Rust, a
@@ -967,11 +967,9 @@ fn laid_out(node: Node, used: &[(String, Node)]) -> Result<Node, String> {
     let mut above: Vec<(String, Node)> = Vec::with_capacity(entries.len());
     for (k, v) in entries {
         let v = match v {
-            Node::Obj(ref t)
-                if t.iter()
-                    .any(|(f, x)| f == "$packed" && *x == Node::Bool(true)) =>
+            Node::Obj(_) if v.mark("packed") == Some(&Node::Bool(true)) =>
             {
-                Node::Obj(lay(t.clone(), &above, used).map_err(|e| format!("{k}.{e}"))?)
+                Node::Obj(lay(v.entries().to_vec(), &above, used).map_err(|e| format!("{k}.{e}"))?)
             }
             v => v,
         };
@@ -1089,7 +1087,7 @@ fn width(v: &Node, above: &[(String, Node)], used: &[(String, Node)]) -> Result<
 /// The bits of a word a packed table counts in, which "bit" rounds up to.
 const WORD_BITS: f64 = 32.0;
 
-/// A table with `"$keys": "<Enum>"` holds one value for each of the enum's
+/// A table with `"keys": "<Enum>"` holds one value for each of the enum's
 /// members, keyed by its name in the member's order: the enum this spec or a
 /// spec it uses declares, its members numbered from 0 by place. It is written
 /// as a list laid out by number, the member's number its index, in every
@@ -1100,11 +1098,11 @@ fn keyed(spec: Node, declared: &[(String, Node)]) -> Result<Node, String> {
     };
     let mut out = Vec::with_capacity(entries.len());
     for (k, v) in entries {
-        let Some(e) = v.str_at("$keys") else {
+        let Some(e) = v.mark("keys").and_then(Node::str) else {
             out.push((k, v));
             continue;
         };
-        let members = declared_members(declared, e).map_err(|err| format!("{k}: `$keys` {err}"))?;
+        let members = declared_members(declared, e).map_err(|err| format!("{k}: `keys` {err}"))?;
         let names: Vec<&str> = v.named().map(|(n, _)| n).collect();
         let by_place = members.iter().enumerate().all(|(i, m)| m.number == i.to_string());
         if !by_place || names != members.iter().map(|m| m.name.as_str()).collect::<Vec<_>>() {
@@ -1113,13 +1111,13 @@ fn keyed(spec: Node, declared: &[(String, Node)]) -> Result<Node, String> {
         let mut list: Vec<(String, Node)> = v
             .entries()
             .iter()
-            .filter(|(f, _)| f.starts_with('$') && f != "$keys" && f != "$doc")
-            .cloned()
+            .filter(|(f, _)| f.starts_with('$') && f != "$description")
+            .map(|(f, x)| (f.clone(), if f == "$extensions" { without(x, "keys") } else { x.clone() }))
             .collect();
-        let mut doc = v.lines_at("$doc").unwrap_or_default();
+        let mut doc = v.doc().unwrap_or_default();
         doc.push(format!("By `{e}`'s number."));
-        list.push(("$doc".into(), Node::Arr(doc.into_iter().map(Node::Str).collect())));
-        list.push(("$val".into(), Node::Arr(v.named().map(|(_, x)| x.clone()).collect())));
+        list.push(("$description".into(), Node::Str(doc.join("\n"))));
+        list.push(("$value".into(), Node::Arr(v.named().map(|(_, x)| x.clone()).collect())));
         out.push((k, Node::Obj(list)));
     }
     Ok(Node::Obj(out))
@@ -1130,6 +1128,21 @@ fn declared_enums(declared: &[(String, Node)]) -> impl Iterator<Item = (&str, &N
     declared.iter().filter(|(_, n)| n.str_at("$type") == Some("enum")).map(|(k, n)| (k.as_str(), n))
 }
 
+/// `extensions`, a node's `$extensions`, without xpute's mark `name`; none
+/// where nothing is left.
+fn without(extensions: &Node, name: &str) -> Node {
+    let entries = extensions
+        .entries()
+        .iter()
+        .map(|(k, x)| match x {
+            Node::Obj(m) if k == MARKS => (k.clone(), Node::Obj(m.iter().filter(|(f, _)| f != name).cloned().collect())),
+            x => (k.clone(), x.clone()),
+        })
+        .filter(|(_, x)| *x != Node::Obj(Vec::new()))
+        .collect();
+    Node::Obj(entries)
+}
+
 /// The members of `e`, an enum this spec or a spec it uses declares.
 fn declared_members(declared: &[(String, Node)], e: &str) -> Result<Vec<Member>, String> {
     let (key, list) = declared_enums(declared)
@@ -1138,12 +1151,12 @@ fn declared_members(declared: &[(String, Node)], e: &str) -> Result<Vec<Member>,
     enum_members(key, list)
 }
 
-/// A table with `"$each": "<Enum>"` stands, among its siblings, for one table
-/// of each of the enum's members, named as the member is: each holds the
-/// table's own fields, a field whose value is `"$number"` taking the member's
-/// number, and the fields of the table under the member's name where it has
-/// one. A table under it names a member, and a member's name a table. The
-/// enum is this spec's or a spec it uses'. A name is distinct among its
+/// A table marked `"each": { "enum": "<Enum>", "number": "<field>" }` stands,
+/// among its siblings, for one table of each of the enum's members, named as
+/// the member is: each holds the table's own fields, then `<field>`, the
+/// member's number, then the fields of the table under the member's name where
+/// it has one. A table under it names a member, and a member's name a table.
+/// The enum is this spec's or a spec it uses'. A name is distinct among its
 /// siblings.
 fn expanded(n: Node, declared: &[(String, Node)]) -> Result<Node, String> {
     let Node::Obj(entries) = n else {
@@ -1151,14 +1164,18 @@ fn expanded(n: Node, declared: &[(String, Node)]) -> Result<Node, String> {
     };
     let mut out: Vec<(String, Node)> = Vec::with_capacity(entries.len());
     for (k, v) in entries {
-        let Some(e) = v.str_at("$each") else {
+        let Some(each) = v.mark("each") else {
             out.push((k, expanded(v, declared)?));
             continue;
         };
-        let members = declared_members(declared, e).map_err(|err| format!("{k}: `$each` {err}"))?;
+        let (Some(e), Some(numbered)) = (each.str_at("enum"), each.str_at("number")) else {
+            return Err(format!("{k}: `each` names an enum and the field its number takes"));
+        };
+        let members = declared_members(declared, e).map_err(|err| format!("{k}: `each` {err}"))?;
         let names: Vec<String> = members.iter().map(|m| screaming(&m.name)).collect();
         let mut own: Vec<&(String, Node)> = Vec::new();
-        for field @ (f, x) in v.entries().iter().filter(|(f, _)| f != "$each") {
+        let stripped = v.get("$extensions").map(|x| ("$extensions".to_string(), without(x, "each")));
+        for field @ (f, x) in v.entries().iter().filter(|(f, _)| f != "$extensions").chain(&stripped) {
             let table = x.is_obj() && !x.is_wrapper();
             match (names.contains(f), table) {
                 (true, true) => {}
@@ -1170,10 +1187,8 @@ fn expanded(n: Node, declared: &[(String, Node)]) -> Result<Node, String> {
         for m in &members {
             let name = screaming(&m.name);
             let number: f64 = m.number.parse().map_err(|_| format!("{k}: {e}'s {} has no number", m.name))?;
-            let mut fields: Vec<(String, Node)> = own
-                .iter()
-                .map(|(f, x)| (f.clone(), if x.str() == Some("$number") { Node::Num(number) } else { x.clone() }))
-                .collect();
+            let mut fields: Vec<(String, Node)> = own.iter().map(|&f| f.clone()).collect();
+            fields.push((numbered.to_string(), Node::Num(number)));
             for (f, x) in v.get(&name).map(Node::entries).unwrap_or_default() {
                 if fields.iter().any(|(g, _)| g == f) {
                     return Err(format!("{k}.{name}: `{f}` is the table's own field too"));
@@ -1189,10 +1204,10 @@ fn expanded(n: Node, declared: &[(String, Node)]) -> Result<Node, String> {
     Ok(Node::Obj(out))
 }
 
-/// Refuses, under a table with `"$distinct": "<field>"` (the path tree's
+/// Refuses, under a table with `"distinct": "<field>"` (the path tree's
 /// `ID`), two sibling tables at any depth that hold the same `<field>`.
 fn check_distinct(n: &Node, at: &str, field: Option<&str>) -> Result<(), String> {
-    let field = n.str_at("$distinct").or(field);
+    let field = n.mark("distinct").and_then(Node::str).or(field);
     if let Some(f) = field {
         let held: Vec<(&str, &Node)> = n.named().filter_map(|(k, v)| Some((k, v.get(f)?.val()))).collect();
         if let Some(i) = (1..held.len()).find(|&i| held[..i].iter().any(|(_, x)| *x == held[i].1)) {
@@ -1204,7 +1219,7 @@ fn check_distinct(n: &Node, at: &str, field: Option<&str>) -> Result<(), String>
         .try_for_each(|(k, v)| check_distinct(v, &format!("{at}.{k}"), field))
 }
 
-/// An enum another spec declares, which a spec names by `$uses` and a `$type`:
+/// An enum another spec declares, which a spec names by `uses` and a `$type`:
 /// its name, how its members are named, and the outputs Rust and TypeScript
 /// read it from.
 struct Foreign {
@@ -1223,7 +1238,7 @@ fn foreign(used: &[Used], peers: &[DataSpec]) -> Result<Vec<Foreign>, String> {
         let p = peers
             .iter()
             .find(|p| p.json == u)
-            .ok_or(format!("`$uses` {u}: no spec beside this one writes it"))?;
+            .ok_or(format!("`uses` {u}: no spec beside this one writes it"))?;
         for (k, n) in declared_enums(names) {
             out.push(Foreign {
                 name: pascal(k),
@@ -1242,7 +1257,7 @@ fn types(n: &Node) -> BTreeSet<String> {
     fn walk(n: &Node, out: &mut BTreeSet<String>) {
         out.extend(n.str_at("$type").map(String::from));
         match n {
-            Node::Obj(entries) => entries.iter().filter(|(k, _)| !k.starts_with('$') || k == "$val").for_each(|(_, v)| walk(v, out)),
+            Node::Obj(entries) => entries.iter().filter(|(k, _)| !k.starts_with('$') || k == "$value").for_each(|(_, v)| walk(v, out)),
             Node::Arr(a) => a.iter().for_each(|v| walk(v, out)),
             _ => {}
         }
@@ -1256,7 +1271,7 @@ fn read_at(root: &Path, json: &str) -> Result<Node, String> {
 }
 
 /// This answers the names `spec` may read beyond its own, taken from the
-/// specs its `$uses` names, by their paths from `root`, each with the names it
+/// specs its `uses` names, by their paths from `root`, each with the names it
 /// gives. Each used spec is laid out over its own uses, each name must be owned
 /// by one file, and no chain of uses may be circular; `json` is where `spec`
 /// comes from.
@@ -1271,7 +1286,7 @@ fn uses_of(
     }
     path.push(json.to_string());
     let uses: Vec<String> = spec
-        .get("$uses")
+        .mark("uses")
         .and_then(Node::arr)
         .map(|a| a.iter().filter_map(|u| u.str().map(String::from)).collect())
         .unwrap_or_default();
@@ -1363,7 +1378,7 @@ pub fn table_outputs(
 
 fn head(shown: &str, json: &str, spec: &Node) -> Vec<String> {
     let mut out = vec![format!("// {shown}"), "//".into(), format!("// {}", mark(json, "xpute-gen data.rs"))];
-    if let Some(doc) = spec.lines_at("$doc") {
+    if let Some(doc) = spec.doc() {
         out.push("//".into());
         out.extend(line_comments(&doc, ""));
     }
@@ -1399,7 +1414,7 @@ fn ts_outputs(
     let mut body: Vec<String> = Vec::new();
     for (name, n) in spec.named() {
         body.push(String::new());
-        if let Some(doc) = n.is_obj().then(|| n.lines_at("$doc")).flatten() {
+        if let Some(doc) = n.is_obj().then(|| n.doc()).flatten() {
             body.extend(ts_doc(&doc, "").into_iter().enumerate().map(|(i, l)| {
                 if i == 0 {
                     l
@@ -1491,7 +1506,7 @@ fn numbered(n: &Node, members: &[Member]) -> Node {
             entries
                 .iter()
                 .map(|(k, v)| {
-                    let v = if k == "$val" { rows.clone() } else { v.clone() };
+                    let v = if k == "$value" { rows.clone() } else { v.clone() };
                     (k.clone(), v)
                 })
                 .collect(),
@@ -1642,7 +1657,7 @@ fn cpp_items(
         return Ok(());
     }
     out.push(String::new());
-    if let Some(doc) = n.is_obj().then(|| n.lines_at("$doc")).flatten() {
+    if let Some(doc) = n.is_obj().then(|| n.doc()).flatten() {
         out.extend(line_comments(&doc, ""));
     }
     out.extend(lines);

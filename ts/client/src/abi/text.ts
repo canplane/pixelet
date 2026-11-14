@@ -13,7 +13,7 @@ import {
   refusal_of,
 } from "@xpute/link/link.ts";
 
-/** The interface's handle, named by `pxl:core/text` (frame.json `NAMED`). */
+/** The interface's handle, named by `pxl:core/text` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x61d944;
 
 /** `width` */
@@ -89,6 +89,7 @@ function object(implementation: Host): LinkObject {
         return refusal_of(e);
       }
     },
+    drop() {},
   };
 }
 

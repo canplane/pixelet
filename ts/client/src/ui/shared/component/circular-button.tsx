@@ -10,7 +10,7 @@ import { BackingPlace } from "@/ui/shared/component/backing.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { SNAP } from "@/ui/shared/component/motion/transition.ts";
-import { chrome, color } from "@/ui/shared/component/theme.ts";
+import { CHROME, COLOR } from "@/ui/shared/component/theme.ts";
 
 interface CircularButtonProps {
   glyph: GlyphName;
@@ -22,7 +22,7 @@ interface CircularButtonProps {
 
 export function CircularButton({
   glyph,
-  size = chrome.control,
+  size = CHROME.control,
   place = BackingPlace.OverMap,
   onPress,
   label,
@@ -42,12 +42,12 @@ export function CircularButton({
           style={[styles.press, { borderRadius: size / 2 }]}
         >
           <Backing
-            fill={place === BackingPlace.OnSheet ? color.faint : color.ground}
+            fill={place === BackingPlace.OnSheet ? COLOR.faint : COLOR.ground}
             place={place}
             interactive
             style={[styles.face, { borderRadius: size / 2 }]}
           >
-            <Glyph glyph={glyph} size={chrome.glyph} color={LABEL.primary} />
+            <Glyph glyph={glyph} size={CHROME.glyph} color={LABEL.primary} />
           </Backing>
         </Motion>
       )}

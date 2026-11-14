@@ -88,7 +88,7 @@ The client and servers are already out, and `record` has logged what the smoke
 found. Run it again:
 
 ```bash
-./script/smoke.py                # the site (spec/spec/route.json `origins`)
+./script/smoke.py                # the site (spec/spec/route.json5 `origins`)
 ./script/smoke.py --origin       # the VM only, bypassing the edge
 ```
 

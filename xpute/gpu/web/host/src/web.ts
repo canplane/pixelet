@@ -64,6 +64,8 @@ export class WebGpu {
             },
             ready: () => this.acquire(),
             settled: (signal) => this.wait(this.settled, signal),
+            // The device is the host's, and outlives the guest's handle.
+            drop: () => {},
           }),
         ),
     });

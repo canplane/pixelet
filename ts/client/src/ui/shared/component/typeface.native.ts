@@ -2,7 +2,7 @@
 
 import type { TextStyle } from "react-native";
 
-export function textEdge(tint: string): TextStyle {
+export function text_halo(tint: string): TextStyle {
   return {
     textShadowColor: tint,
     textShadowOffset: { width: 0, height: 0 },

@@ -1,0 +1,94 @@
+{
+  $description: "The core's files: the tokens of their paths and what a file holds (pxl-core\nsys/io/file.rs, ts/client/src/service/sys/fs/).",
+  $extensions: { xpute: { uses: ["spec/spec/bake/publication.json5"] } },
+  path: {
+    $type: "i32",
+    $description: "The tree of the paths the core opens (xpute's FS_OPEN), as a URI's path is a\ntree: each node takes one token, its `ID`, distinct among its siblings, and hands the\nrest of the path to the child it names. A node that holds data takes the tokens left as\nthat data: a tile's quadkey (pxl-spec space/layer/quadrant.rs) as a string, or a load's id.\nWhat a file is past its path, a tile's version and URL, a storage key, is the client's\nbinding (ts/client/src/service/sys/fs/).",
+    $extensions: { xpute: { distinct: "ID" } },
+    BASE: {
+      $description: "A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json5\n`BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number.",
+      $extensions: { xpute: { each: { enum: "BaseKind", number: "ID" } } },
+      EARTH: {
+        SPHERE: {
+          $description: "The picture of the whole Earth, (EARTH, SPHERE), served under the Earth layer's\nversion as its `TILE_SPHERE` (spec/spec/bake/publication.json5).",
+          ID: { $value: 0 },
+        },
+      },
+    },
+    STORAGE: {
+      $description: "The platform's storage, where the platform holds a file being the client's choice. What a file holds is its owner's, written whole, its `format` first (pxl-core sys/io/file.rs).",
+      ID: { $value: 4 },
+      SETTINGS: {
+        $description: "The settings' overrides, in the platform's storage (domain/setting/store.rs).",
+        ID: { $value: 0 },
+      },
+    },
+    ASSET: {
+      $description: "The shipped assets: (ASSET, id), a load's id, the catalog's (`CATALOG`) or a file it names (sys/io/loader.rs).",
+      ID: { $value: 5 },
+    },
+    OBJECT: {
+      $description: "The placed objects, their source's: a shard, read, (OBJECT, quadkey), its\n`format.OBJECT` first; and the top of their tree, read, (OBJECT, TOP)\n(domain/layer/object/repository.rs). A shard with none has no file. The source keeps\nthe shards and the top and applies the edits the core sends it (pxl:core object\n`apply`); which source, a mock or a server, is the client's.",
+      ID: { $value: 6 },
+      TOP: {
+        $description: "The top of the tree, read: what each node at `SHARD_ZOOM` holding objects folds to\n(`top`), so which shards hold any, its `format.OBJECT_TOP` first. Its source rebuilds\nit from the shards as an edit lands; none is no shard holding any.",
+        ID: { $value: 0 },
+      },
+    },
+  },
+  CATALOG: {
+    $type: "u32",
+    $value: 0,
+    $description: "The load id of the catalog the client plugs in, (ASSET, CATALOG) (pxl-spec asset/catalog.rs):\nthe file each of the asset specs' references names. Any other id is a file,\nits row in the asset ingest's table counted from 1 (spec/spec/asset/ingest.json5).",
+  },
+  LEAF_ZOOM: {
+    $type: "u32",
+    $value: 15,
+    $description: "The finest zoom a tile's quadkey in a path is at, so the most digits it has:\npxl-spec's `LEAF_ZOOM`, which the core holds this to (sys/io/file.rs).",
+  },
+  SHARD_ZOOM: {
+    $type: "u32",
+    $value: 8,
+    $description: "The zoom of the tile a shard, (OBJECT, quadkey), is: pxl-engine's `SHARD_ZOOM`, which the\ncore holds this to (domain/layer/object/repository.rs). A key's first digits to it name\nthe shard, and each past it is a zoom's 0 to 7, on three axes (pxl-spec\nspace/hierarchy/morton.rs).",
+  },
+  write: {
+    $type: "u32",
+    $description: "The children of the tree packet a shard's file and an edit batch hold after their\nformat byte, by index: each row a write `<key, asset_id, ext>`, a leaf as the write that made\nit in a shard's file, in the order made in a batch, where void erases (pxl-core\ndomain/layer/object/store.rs `Write`). A record a class's (pxl-spec object/ext.rs),\nits row and its fields as columns.",
+    KEY: {
+      $value: 0,
+      $description: "A `strs` column holding each key as an octkey (pxl-spec space/hierarchy/morton.rs `name`, 3D): the shard's quadkey, then a digit 0 to 7 a zoom.",
+    },
+    ASSET_ID: {
+      $value: 1,
+      $description: "A `u32[]` column holding each row's catalog value.",
+    },
+    TEXT_ROW: {
+      $value: 2,
+      $description: "A `u32[]` column holding, for each marker with a text, the row that text is for.",
+    },
+    TEXT: {
+      $value: 3,
+      $description: "A `strs` column holding those markers' texts.",
+    },
+  },
+  top: {
+    $type: "u32",
+    $description: "The children of the tree packet the top, (OBJECT, TOP), holds after its format byte, by index:\neach row a shard holding objects, which only its leaves are under.",
+    SHARD: {
+      $value: 0,
+      $description: "A `strs` column holding each row's shard by its quadkey.",
+    },
+    FOLD: {
+      $value: 1,
+      $description: "A `u32[]` column holding what each row's leaves fold to, its word in the objects' tree\n(pxl-engine object.rs `fold`, `fold_word`): the kind most of its fill is and its share filled.",
+    },
+  },
+  format: {
+    $type: "u8",
+    $description: "Each kept file's format, the first byte of what it holds: a stored file's by its\nname, a shard's file as OBJECT, the top as its own; and an edit batch's, sent rather\nthan kept, as its own. The core reads a file of its format and refuses any other,\nreading none of it and never writing over it, as a driver refuses a volume whose\nsuperblock it does not know, and sets it aside (fs `set-aside`). Bump one whenever a\nchange makes an older file mean something other than it meant when it was written.",
+    SETTINGS: { $value: 1 },
+    OBJECT: { $value: 19 },
+    OBJECT_TOP: { $value: 22 },
+    OBJECT_EDIT: { $value: 21 },
+  },
+}

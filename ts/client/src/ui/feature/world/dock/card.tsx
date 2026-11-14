@@ -7,15 +7,15 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import { BackingPlace } from "@/ui/shared/component/backing.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { SETTLE } from "@/ui/shared/component/motion/transition.ts";
-import { touches } from "@/ui/shared/component/touch.ts";
-import { chrome, shadow } from "@/ui/shared/component/theme.ts";
+import { TOUCH } from "@/ui/shared/component/touch.ts";
+import { CHROME, SHADOW } from "@/ui/shared/component/theme.ts";
 import type { DockMode } from "./store.ts";
 import { Pill } from "@/ui/feature/world/pill.tsx";
 import { card_pose, peek_below } from "@/ui/feature/world/deck.ts";
 
 const PEEK_PX = 10;
 
-export const DOCK_HEIGHT = chrome.control + PEEK_PX;
+export const DOCK_HEIGHT = CHROME.control + PEEK_PX;
 
 /** Handlers that do nothing. The bar's swipe handles the drags on a card;
  * these only make the front card take its touches, so that none reaches the
@@ -58,7 +58,7 @@ export function Card({
       transition={SETTLE}
       style={[
         styles.card,
-        depth === 0 ? touches.pass : touches.block,
+        depth === 0 ? TOUCH.pass : TOUCH.block,
         {
           zIndex: pose.z_idx,
         },
@@ -67,12 +67,12 @@ export function Card({
       <Pill
         x={x}
         width={width}
-        height={chrome.control}
+        height={CHROME.control}
         span={span}
         fill={fill}
         tint={tint}
         place={BackingPlace.OverMap}
-        shadow={shadow.lift}
+        shadow={SHADOW.lift}
         fade={pose.fade}
         fadeTransition={SETTLE}
         touch={depth === 0 ? BAR_TOUCH : undefined}
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     left: 0,
     top: 0,
     right: 0,
-    height: chrome.control,
+    height: CHROME.control,
     transformOrigin: "center bottom",
   },
 });

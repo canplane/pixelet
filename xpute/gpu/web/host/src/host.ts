@@ -3,7 +3,7 @@
 /**
  * This is the host's end of a guest's GPU calls on the web, as
  * gpu/native/host/src/run.rs is on a native device. It runs a stream's records
- * (gpu/link/spec/api.json) on a WebGPU device, and keeps each object the guest
+ * (gpu/link/spec/api.json5) on a WebGPU device, and keeps each object the guest
  * made at its handle's slot. An enumeration's number is its place in the
  * spec's list, which gives WebGPU's string. The host is told the guest's
  * memory, the device and the surfaces the program binds, and nothing of what
@@ -1301,7 +1301,7 @@ export class GpuHost {
         return;
       }
       default:
-        throw new Error(`[gpu] op ${code} is no op of gpu/link/spec/api.json`);
+        throw new Error(`[gpu] op ${code} is no op of gpu/link/spec/api.json5`);
     }
   }
 }

@@ -1,0 +1,23 @@
+{
+  $description: "A request's vocabulary, the core's and the UI's: what stream it is in, how\nits run came to an end, and the phases a run reports its time in. The profiler\nrecords and reports them by these names (spec/client/core/perf/perf.json5).",
+  STREAM_NAME: {
+    $type: "enum",
+    $value: ["terrain", "place", "division", "asset", "earth", "object"],
+    $extensions: { xpute: { names: true } },
+  },
+  OUTCOME_NAME: {
+    $type: "enum",
+    $value: ["ok", "aborted", "err"],
+    $extensions: { xpute: { names: true } },
+  },
+  TASK_PHASE_NAME: {
+    $type: "enum",
+    $value: ["net_ms", "bytes", "decode_ms"],
+    $extensions: { xpute: { names: true } },
+  },
+  TASK_PHASE_CAP: {
+    $value: 6,
+    $type: "u32",
+    $description: "A run's timings past this many are dropped.",
+  },
+}

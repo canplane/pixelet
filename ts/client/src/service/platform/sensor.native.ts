@@ -129,7 +129,7 @@ let geolocation: Watch | null = null;
 function geo_fail(watch: Watch, err: "denied" | "unavailable" | "other"): void {
   if (geolocation !== watch) return;
   geo_stop();
-  listener.positionError(err, false);
+  listener.pos_err(err, false);
 }
 
 function geo_start(): void {
@@ -180,7 +180,7 @@ function orient_fail(watch: Watch, refused: boolean): void {
   if (orientation !== watch) return;
   orient_stop();
   if (refused) listener.permission("orientation", "denied");
-  else listener.orientationLost();
+  else listener.orient_err();
 }
 
 function orient_start(): void {
@@ -197,7 +197,7 @@ function orient_start(): void {
           told === null ? 360 : 180 - Math.abs(Math.abs(heading - told) - 180);
         if (moved < HEADING_STEP_DEG) return;
         told = heading;
-        listener.orientation(heading, null, null, null);
+        listener.orient(heading, null, null, null);
       },
       (reason) => {
         console.error("[sensor] heading:", reason);
@@ -217,14 +217,14 @@ function orient_stop(): void {
   orientation = null;
 }
 
-export const geo: GeolocationSensor = {
+export const GEOLOCATION: GeolocationSensor = {
   has: true,
   permit: geo_permit,
   start: geo_start,
   stop: geo_stop,
 };
-export const orient: OrientationSensor = {
-  has: PLATFORM.headingAvailable(),
+export const ORIENT: OrientationSensor = {
+  has: PLATFORM.has_heading(),
   gated: false,
   silence: false,
   // The compass is granted with the location, which is asked for when the

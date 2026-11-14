@@ -9,12 +9,12 @@
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 
-/** A motion's progress, sampled at evenly spaced moments over `durationMs`.
+/** A motion's progress, sampled at evenly spaced moments over `duration_ms`.
  * The samples run from 0 to 1, and past 1 where a spring overshoots. */
 export interface Transition {
-  durationMs: f64;
+  duration_ms: f64;
   samples: readonly f64[];
-  delayMs?: f64;
+  delay_ms?: f64;
 }
 
 /** A spring counts as settled once it stays this close to its target, as a
@@ -61,7 +61,7 @@ export function spring(s: Spring): Transition {
   const samples = Array.from({ length: SAMPLES + 1 }, (_, i) =>
     i === SAMPLES ? 1 : position(s, (duration_ms * i) / SAMPLES / 1000),
   );
-  return { durationMs: duration_ms, samples };
+  return { duration_ms, samples };
 }
 
 /** Finds the curve's y at `x` by bisection on the curve's parameter. Bisection
@@ -87,14 +87,14 @@ export function ease(
   bezier: readonly [f64, f64, f64, f64],
 ): Transition {
   return {
-    durationMs: duration_ms,
+    duration_ms,
     samples: Array.from({ length: SAMPLES + 1 }, (_, i) =>
       bezier_at(bezier, i / SAMPLES),
     ),
   };
 }
 
-export function curveAt(t: Transition, p: f64): f64 {
+export function curve_at(t: Transition, p: f64): f64 {
   const at = Math.min(1, Math.max(0, p)) * (t.samples.length - 1);
   const i = Math.floor(at);
   if (i >= t.samples.length - 1) return t.samples[t.samples.length - 1];
@@ -129,5 +129,5 @@ export const SLIDE_AWAY: Transition = ease(200, [0.3, 0, 0.8, 0.15]);
 export const DIM: Transition = ease(500, [0.42, 0, 0.58, 1]);
 
 export function after(t: Transition, delay_ms: f64): Transition {
-  return { ...t, delayMs: delay_ms };
+  return { ...t, delay_ms };
 }

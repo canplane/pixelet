@@ -1,9 +1,9 @@
 // pxl-spec/asset/marker.spec.rs
 //
-// GENERATED from spec/spec/asset/marker.json (xpute-gen data.rs)
+// GENERATED from spec/spec/asset/marker.json5 (xpute-gen data.rs)
 //
 // How the marker kind is shown: its one shape, the pin, the marker someone
-// puts up at a place (id.json). A pin's cell is the camera grid's at its
+// puts up at a place (id.json5). A pin's cell is the camera grid's at its
 // scale, as a place's icon is, its own apart from the places' since a
 // pin is drawn as its own design (pxl-spec asset/marker.rs
 // `marker_cell_zoom`).

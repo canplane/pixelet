@@ -37,7 +37,7 @@ make ingest-asset
 
 It copies every file to `./out/asset/<sha256>.<ext>`, composes the texture tiles
 into one WebP sheet, measures every model's extent out of its glTF, and writes
-the table that names them, `spec/spec/asset/ingest.json`, and draws
+the table that names them, `spec/spec/asset/ingest.json5`, and draws
 `raw/place/symbol/` into the code that carries the place icons. Then it writes
 what the spec generates from the table.
 
@@ -62,7 +62,7 @@ done
 make download-pack
 ```
 
-It fetches each entry of `raw/cube/manifest.json` into `raw/cube/` at source
+It fetches each entry of `raw/cube/manifest.json5` into `raw/cube/` at source
 size, resizes it to 256², flattens alpha and writes it into `content/cube/`. The
 sheet is composed from those.
 

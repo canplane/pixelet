@@ -6,14 +6,15 @@
 import type { Remote, Stop } from "@xpute/link";
 
 /** What the page sends the worker to instantiate the guest: the module, how
- * to fetch it, the UI's port, and the named handles of the interfaces the UI
- * serves. */
+ * to fetch it, the UI's port, the named handles of the interfaces the UI
+ * serves, and the prefixes it opens the objects under. */
 export interface Instantiate {
   kind: "instantiate";
   module: string;
   init: RequestInit | undefined;
   port: MessagePort;
   named: Remote["named"];
+  prefixes: Remote["prefixes"];
 }
 
 /** A line of the worker's console. */

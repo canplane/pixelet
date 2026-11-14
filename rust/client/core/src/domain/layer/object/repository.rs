@@ -5,13 +5,13 @@
 //! written. What the view asks for arrives here, and each edit leaves from
 //! here, every write as `<key, asset_id, ext>`. The objects are kept by their
 //! source, a mock or a server (ts/client/src/service/sys/fs/object.ts), after OBJECT
-//! (file.json `path`); this file reads what the source serves and sends it
+//! (file.json5 `path`); this file reads what the source serves and sends it
 //! the edits.
 //!
 //! The source keeps the objects one shard at a time (pxl-spec
 //! `SHARD_ZOOM`), in one file for each shard named by the shard's quadkey,
 //! as a baked tile is named by its own. It also keeps the top of their tree
-//! (file.json `path`, (OBJECT, TOP)): the fold of each node at `SHARD_ZOOM` that holds
+//! (file.json5 `path`, (OBJECT, TOP)): the fold of each node at `SHARD_ZOOM` that holds
 //! objects. The top is read first, and its folds stand in the store for the
 //! shards not read yet (store.rs `Store::set_fold`), so a view from afar
 //! draws from them.
@@ -73,7 +73,7 @@ pub const WANT_CAP: u32 = GROUND_DEMAND_TILE_CAP;
 /// is a shard's.
 const TOP: u64 = file::TOP_ID;
 
-// The source and the core must agree on the shard zoom (file.json
+// The source and the core must agree on the shard zoom (file.json5
 // `SHARD_ZOOM`).
 const _: () = assert!(spec::file::SHARD_ZOOM == SHARD_ZOOM);
 
@@ -296,7 +296,7 @@ pub fn on_set_aside(id: u64) -> bool {
 }
 
 // A shard's file and an edit batch share one layout: the format byte
-// (file.json `format`), then rows of writes `<key, asset_id, ext>` as file.json
+// (file.json5 `format`), then rows of writes `<key, asset_id, ext>` as file.json5
 // `write` lays them out. A shard's file holds each of its leaves as the
 // write that made it; a batch holds its writes in the order they were made.
 // A file of any other format is never read.
@@ -407,7 +407,7 @@ fn decode_shard(shard: Quadrant, bytes: &[u8]) -> Result<Vec<Write>, XputeError>
     Ok(writes)
 }
 
-/// The top's rows `<shard, fold>`, as file.json `top` lays them out, all or
+/// The top's rows `<shard, fold>`, as file.json5 `top` lays them out, all or
 /// none. Each shard must be a tile at `SHARD_ZOOM`, and the filled share of
 /// its cube that its fold gives must be at most the whole.
 fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, XputeError> {

@@ -16,6 +16,6 @@ export interface AboveKeyboardProps {
  * kept only for gestures, such as the home indicator, it stands `inset` above
  * the bottom, or on top of the area where the area is taller than `inset`.
  */
-export function bottomRest(area: SafeArea, inset: number): number {
+export function bottom_rest(area: SafeArea, inset: number): number {
   return area.tappable + Math.max(inset, area.bottom - area.tappable);
 }

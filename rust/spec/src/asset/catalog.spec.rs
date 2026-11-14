@@ -1,6 +1,6 @@
 // pxl-spec/asset/catalog.spec.rs
 //
-// GENERATED from the asset specs and spec/spec/asset/ingest.json (xpute-gen data.rs)
+// GENERATED from the asset specs and spec/spec/asset/ingest.json5 (xpute-gen data.rs)
 
 /// Every file reference the asset specs make, a slot each.
 pub const SLOT_CNT: usize = 71;

@@ -1,7 +1,7 @@
 // xpute-gpu-guest/device.rs
 
 //! This reads the device's block, which the guest lends the host to write
-//! (gpu/wit/gpu.wit `device.lost`), laid out by gpu/link/spec/api.json's
+//! (gpu/wit/gpu.wit `device.lost`), laid out by gpu/link/spec/api.json5's
 //! DEVICE (`spec::device`).
 
 use crate::encode::load_acquire;

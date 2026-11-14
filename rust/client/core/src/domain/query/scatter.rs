@@ -1,7 +1,7 @@
 // pxl-core/domain/query/scatter.rs
 
 //! How the ground generates decor on its own. Generated decor is never stored:
-//! it is a pure function of each decor's seed (spec/spec/asset/decor.json) and
+//! it is a pure function of each decor's seed (spec/spec/asset/decor.json5) and
 //! of the world as its one query answers it, so a cell generates the same decor
 //! wherever it is read. Where a decor stands, which way it faces and whether it
 //! generates at all depend on the base, what the world is without what is

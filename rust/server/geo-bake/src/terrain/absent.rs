@@ -3,7 +3,7 @@
 //! What a terrain tile the set holds no object for is. A leaf inside a shard the set holds
 //! (`Run::read_baked`) is left unbaked only when nothing is drawn in it, so it is open sea.
 //! Past those shards nothing is known, sea or land, so such a leaf is unknown: bedrock up to
-//! sea level, drawn as the bedrock's layer (`spec/spec/asset/cube.json` `unknown`). A coarser
+//! sea level, drawn as the bedrock's layer (`spec/spec/asset/cube.json5` `unknown`). A coarser
 //! tile is the fold of the four under it, as every stored tile is.
 
 use std::borrow::Cow;

@@ -1,0 +1,19 @@
+{
+  $description: "The sky: what hangs in the sky, claiming no cell, so no\ncell holds it. Each by its files' paths under asset/content/; what a\npath is, its number and its extent, is the catalog's (pxl_spec::asset::catalog).",
+  cumulus: {
+    $description: "The cumulus, drawn on the wind's moving field as decor is drawn, each\ncloud one of its models (pxl-core domain/scene/environment/cloud.rs).\nQuaternius, CC0.",
+    models: {
+      $type: "file",
+      $value: [
+        "sky/cloud/cumulus_1.glb",
+        "sky/cloud/cumulus_2.glb",
+        "sky/cloud/stratus.glb",
+      ],
+    },
+    skin: { $type: "file", $value: "sky/cloud/white.png" },
+  },
+  moon: {
+    $description: "The moon's near side, the picture the sky draws it with (NASA).",
+    picture: { $type: "file", $value: "sky/moon.png" },
+  },
+}

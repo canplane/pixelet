@@ -1,6 +1,6 @@
 // cpp/xpute/kit/status/errno.spec.hpp
 //
-// GENERATED from kit/spec/errno.json (xpute-gen data.rs)
+// GENERATED from kit/spec/errno.json5 (xpute-gen data.rs)
 //
 // POSIX/Linux-aligned negative errno
 
@@ -528,12 +528,12 @@ inline constexpr std::string_view text = "Connection refused";
 
 namespace ehostdown {
 
-inline constexpr std::string_view text = "Runtime is down";
+inline constexpr std::string_view text = "Host is down";
 } // namespace ehostdown
 
 namespace ehostunreach {
 
-inline constexpr std::string_view text = "No route to runtime";
+inline constexpr std::string_view text = "No route to host";
 } // namespace ehostunreach
 
 namespace ealready {

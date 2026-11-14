@@ -1,0 +1,330 @@
+{
+  $description: "POSIX/Linux-aligned negative errno",
+  KIND: {
+    $type: "enum",
+    $description: "What an errno says happened: the canonical status code of gRPC and Abseil\n(absl::StatusCode), by its number there, each errno's as Abseil's\nErrnoToStatusCode maps it, save that ENOTRECOVERABLE is internal, and\nEBADMSG and EILSEQ data_loss. It says nothing of whether the error is\nfatal: a broken invariant is a bug, which stops the program.",
+    ok: { $value: 0 },
+    cancelled: { $value: 1 },
+    unknown: { $value: 2 },
+    invalid_argument: { $value: 3 },
+    deadline_exceeded: { $value: 4 },
+    not_found: { $value: 5 },
+    already_exists: { $value: 6 },
+    permission_denied: { $value: 7 },
+    resource_exhausted: { $value: 8 },
+    failed_precondition: { $value: 9 },
+    out_of_range: { $value: 11 },
+    unimplemented: { $value: 12 },
+    internal: { $value: 13 },
+    unavailable: { $value: 14 },
+    data_loss: { $value: 15 },
+  },
+  ERRNO: {
+    $type: "enum",
+    $extensions: { xpute: { repr: "i32", outside: true } },
+    OK: {
+      $extensions: { xpute: { number: 0 } },
+      text: { $value: "Success" },
+      kind: { $type: "Kind", $value: "ok" },
+    },
+    EPERM: {
+      $extensions: { xpute: { number: -1 } },
+      text: { $value: "Operation not permitted" },
+      kind: { $type: "Kind", $value: "permission_denied" },
+    },
+    ENOENT: {
+      $extensions: { xpute: { number: -2 } },
+      text: { $value: "No such file or directory / entry not found" },
+      kind: { $type: "Kind", $value: "not_found" },
+    },
+    ESRCH: {
+      $extensions: { xpute: { number: -3 } },
+      text: { $value: "No such process" },
+      kind: { $type: "Kind", $value: "not_found" },
+    },
+    EINTR: {
+      $extensions: { xpute: { number: -4 } },
+      text: { $value: "Interrupted system call" },
+      kind: { $type: "Kind", $value: "unavailable" },
+    },
+    EIO: {
+      $extensions: { xpute: { number: -5 } },
+      text: { $value: "I/O error" },
+      kind: { $type: "Kind", $value: "unknown" },
+    },
+    ENXIO: {
+      $extensions: { xpute: { number: -6 } },
+      text: { $value: "No such device or address" },
+      kind: { $type: "Kind", $value: "not_found" },
+    },
+    E2BIG: {
+      $extensions: { xpute: { number: -7 } },
+      text: {
+        $value: "Argument list too long / object too large for fixed local cap",
+      },
+      kind: { $type: "Kind", $value: "invalid_argument" },
+    },
+    ENOEXEC: {
+      $extensions: { xpute: { number: -8 } },
+      text: { $value: "Exec format error" },
+      kind: { $type: "Kind", $value: "unknown" },
+    },
+    EBADF: {
+      $extensions: { xpute: { number: -9 } },
+      text: { $value: "Bad file descriptor / bad handle" },
+      kind: { $type: "Kind", $value: "failed_precondition" },
+    },
+    ECHILD: {
+      $extensions: { xpute: { number: -10 } },
+      text: { $value: "No child processes" },
+      kind: { $type: "Kind", $value: "failed_precondition" },
+    },
+    EAGAIN: {
+      $extensions: { xpute: { number: -11 } },
+      text: { $value: "Try again / Resource temporarily unavailable" },
+      kind: { $type: "Kind", $value: "unavailable" },
+    },
+    ENOMEM: {
+      $extensions: { xpute: { number: -12 } },
+      text: { $value: "Out of memory" },
+      kind: { $type: "Kind", $value: "resource_exhausted" },
+    },
+    EACCES: {
+      $extensions: { xpute: { number: -13 } },
+      text: { $value: "Permission denied" },
+      kind: { $type: "Kind", $value: "permission_denied" },
+    },
+    EFAULT: {
+      $extensions: { xpute: { number: -14 } },
+      text: { $value: "Bad address" },
+      kind: { $type: "Kind", $value: "invalid_argument" },
+    },
+    EBUSY: {
+      $extensions: { xpute: { number: -16 } },
+      text: { $value: "Device or resource busy" },
+      kind: { $type: "Kind", $value: "failed_precondition" },
+    },
+    EEXIST: {
+      $extensions: { xpute: { number: -17 } },
+      text: { $value: "File exists / duplicate bind" },
+      kind: { $type: "Kind", $value: "already_exists" },
+    },
+    EXDEV: {
+      $extensions: { xpute: { number: -18 } },
+      text: { $value: "Cross-device link" },
+      kind: { $type: "Kind", $value: "unimplemented" },
+    },
+    ENODEV: {
+      $extensions: { xpute: { number: -19 } },
+      text: { $value: "No such device" },
+      kind: { $type: "Kind", $value: "not_found" },
+    },
+    ENOTDIR: {
+      $extensions: { xpute: { number: -20 } },
+      text: { $value: "Not a directory" },
+      kind: { $type: "Kind", $value: "failed_precondition" },
+    },
+    EISDIR: {
+      $extensions: { xpute: { number: -21 } },
+      text: { $value: "Is a directory" },
+      kind: { $type: "Kind", $value: "failed_precondition" },
+    },
+    EINVAL: {
+      $extensions: { xpute: { number: -22 } },
+      text: { $value: "Invalid argument" },
+      kind: { $type: "Kind", $value: "invalid_argument" },
+    },
+    ENFILE: {
+      $extensions: { xpute: { number: -23 } },
+      text: { $value: "File table overflow (system-wide)" },
+      kind: { $type: "Kind", $value: "resource_exhausted" },
+    },
+    EMFILE: {
+      $extensions: { xpute: { number: -24 } },
+      text: { $value: "Too many open files (process)" },
+      kind: { $type: "Kind", $value: "resource_exhausted" },
+    },
+    ENOTTY: {
+      $extensions: { xpute: { number: -25 } },
+      text: { $value: "Not a tty" },
+      kind: { $type: "Kind", $value: "invalid_argument" },
+    },
+    EFBIG: {
+      $extensions: { xpute: { number: -27 } },
+      text: { $value: "File too large / payload too large" },
+      kind: { $type: "Kind", $value: "out_of_range" },
+    },
+    ENOSPC: {
+      $extensions: { xpute: { number: -28 } },
+      text: { $value: "No space left on device / local mailbox full" },
+      kind: { $type: "Kind", $value: "resource_exhausted" },
+    },
+    ESPIPE: {
+      $extensions: { xpute: { number: -29 } },
+      text: { $value: "Illegal seek" },
+      kind: { $type: "Kind", $value: "invalid_argument" },
+    },
+    EROFS: {
+      $extensions: { xpute: { number: -30 } },
+      text: { $value: "Read-only file system" },
+      kind: { $type: "Kind", $value: "permission_denied" },
+    },
+    EMLINK: {
+      $extensions: { xpute: { number: -31 } },
+      text: { $value: "Too many links" },
+      kind: { $type: "Kind", $value: "resource_exhausted" },
+    },
+    EPIPE: {
+      $extensions: { xpute: { number: -32 } },
+      text: { $value: "Broken pipe" },
+      kind: { $type: "Kind", $value: "failed_precondition" },
+    },
+    EDOM: {
+      $extensions: { xpute: { number: -33 } },
+      text: { $value: "Math argument out of domain" },
+      kind: { $type: "Kind", $value: "invalid_argument" },
+    },
+    ERANGE: {
+      $extensions: { xpute: { number: -34 } },
+      text: { $value: "Math result not representable" },
+      kind: { $type: "Kind", $value: "out_of_range" },
+    },
+    ENOSYS: {
+      $extensions: { xpute: { number: -38 } },
+      text: { $value: "Function not implemented" },
+      kind: { $type: "Kind", $value: "unimplemented" },
+    },
+    EPROTO: {
+      $extensions: { xpute: { number: -71 } },
+      text: { $value: "Protocol error" },
+      kind: { $type: "Kind", $value: "unknown" },
+    },
+    EBADMSG: {
+      $extensions: { xpute: { number: -74 } },
+      text: { $value: "Bad message (protocol/frame/payload invalid)" },
+      kind: { $type: "Kind", $value: "data_loss" },
+    },
+    EOVERFLOW: {
+      $extensions: { xpute: { number: -75 } },
+      text: { $value: "Value too large for target type / overflow" },
+      kind: { $type: "Kind", $value: "out_of_range" },
+    },
+    EMSGSIZE: {
+      $extensions: { xpute: { number: -90 } },
+      text: { $value: "Message too long / packet too large" },
+      kind: { $type: "Kind", $value: "unknown" },
+    },
+    ENOTSUP: {
+      $extensions: { xpute: { number: -95 } },
+      text: { $value: "Operation not supported" },
+      kind: { $type: "Kind", $value: "unimplemented" },
+    },
+    EILSEQ: {
+      $extensions: { xpute: { number: -84 } },
+      text: { $value: "Illegal byte sequence (decode/encoding failure)" },
+      kind: { $type: "Kind", $value: "data_loss" },
+    },
+    EADDRINUSE: {
+      $extensions: { xpute: { number: -98 } },
+      text: { $value: "Address already in use" },
+      kind: { $type: "Kind", $value: "failed_precondition" },
+    },
+    EADDRNOTAVAIL: {
+      $extensions: { xpute: { number: -99 } },
+      text: { $value: "Cannot assign requested address" },
+      kind: { $type: "Kind", $value: "already_exists" },
+    },
+    ENETDOWN: {
+      $extensions: { xpute: { number: -100 } },
+      text: { $value: "Network is down" },
+      kind: { $type: "Kind", $value: "unavailable" },
+    },
+    ENETUNREACH: {
+      $extensions: { xpute: { number: -101 } },
+      text: { $value: "Network is unreachable" },
+      kind: { $type: "Kind", $value: "unavailable" },
+    },
+    ENETRESET: {
+      $extensions: { xpute: { number: -102 } },
+      text: { $value: "Network dropped connection because of reset" },
+      kind: { $type: "Kind", $value: "unavailable" },
+    },
+    ECONNABORTED: {
+      $extensions: { xpute: { number: -103 } },
+      text: { $value: "Software caused connection abort" },
+      kind: { $type: "Kind", $value: "unavailable" },
+    },
+    ECONNRESET: {
+      $extensions: { xpute: { number: -104 } },
+      text: { $value: "Connection reset by peer" },
+      kind: { $type: "Kind", $value: "unavailable" },
+    },
+    ENOBUFS: {
+      $extensions: { xpute: { number: -105 } },
+      text: { $value: "No buffer space available" },
+      kind: { $type: "Kind", $value: "resource_exhausted" },
+    },
+    EISCONN: {
+      $extensions: { xpute: { number: -106 } },
+      text: { $value: "Transport endpoint is already connected" },
+      kind: { $type: "Kind", $value: "failed_precondition" },
+    },
+    ENOTCONN: {
+      $extensions: { xpute: { number: -107 } },
+      text: { $value: "Transport endpoint is not connected" },
+      kind: { $type: "Kind", $value: "failed_precondition" },
+    },
+    ESHUTDOWN: {
+      $extensions: { xpute: { number: -108 } },
+      text: { $value: "Cannot send after transport endpoint shutdown" },
+      kind: { $type: "Kind", $value: "failed_precondition" },
+    },
+    ETOOMANYREFS: {
+      $extensions: { xpute: { number: -109 } },
+      text: { $value: "Too many references" },
+      kind: { $type: "Kind", $value: "unknown" },
+    },
+    ETIMEDOUT: {
+      $extensions: { xpute: { number: -110 } },
+      text: { $value: "Connection timed out" },
+      kind: { $type: "Kind", $value: "deadline_exceeded" },
+    },
+    ECONNREFUSED: {
+      $extensions: { xpute: { number: -111 } },
+      text: { $value: "Connection refused" },
+      kind: { $type: "Kind", $value: "unavailable" },
+    },
+    EHOSTDOWN: {
+      $extensions: { xpute: { number: -112 } },
+      text: { $value: "Host is down" },
+      kind: { $type: "Kind", $value: "unavailable" },
+    },
+    EHOSTUNREACH: {
+      $extensions: { xpute: { number: -113 } },
+      text: { $value: "No route to host" },
+      kind: { $type: "Kind", $value: "unavailable" },
+    },
+    EALREADY: {
+      $extensions: { xpute: { number: -114 } },
+      text: { $value: "Operation already in progress" },
+      kind: { $type: "Kind", $value: "already_exists" },
+    },
+    EINPROGRESS: {
+      $extensions: { xpute: { number: -115 } },
+      text: { $value: "Operation now in progress" },
+      kind: { $type: "Kind", $value: "unknown" },
+    },
+    ECANCELED: {
+      $extensions: { xpute: { number: -125 } },
+      text: { $value: "Operation canceled" },
+      kind: { $type: "Kind", $value: "cancelled" },
+    },
+    ENOTRECOVERABLE: {
+      $extensions: { xpute: { number: -131 } },
+      text: {
+        $value: "State not recoverable: an invariant the code stands on does not hold",
+      },
+      kind: { $type: "Kind", $value: "internal" },
+    },
+  },
+}

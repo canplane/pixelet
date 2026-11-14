@@ -15,10 +15,10 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import type { IconProps } from "@/ui/shared/component/icon.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import {
-  color as theme,
-  halo,
-  halo_rings,
-  text_scale,
+  COLOR as theme,
+  HALO,
+  HALO_RINGS,
+  TEXT_SCALE_CAP,
 } from "@/ui/shared/component/theme.ts";
 
 /**
@@ -37,12 +37,12 @@ function Halo({
 }) {
   return (
     <View style={[style, styles.rings]}>
-      {halo_rings.map((px) => (
+      {HALO_RINGS.map((px) => (
         <View
           key={px}
           aria-hidden
           needsOffscreenAlphaCompositing
-          style={[StyleSheet.absoluteFill, { opacity: halo.ring }]}
+          style={[StyleSheet.absoluteFill, { opacity: HALO.ring }]}
         >
           {around(px).map(([x, y], i) => (
             <View
@@ -69,7 +69,7 @@ function Halo({
 }
 
 export function halo_gap(gap: f64): f64 {
-  return gap - 2 * halo.width;
+  return gap - 2 * HALO.width;
 }
 
 export function HaloIcon({
@@ -79,8 +79,8 @@ export function HaloIcon({
   return (
     <Halo
       style={{
-        width: icon.size + 2 * halo.width,
-        height: icon.size + 2 * halo.width,
+        width: icon.size + 2 * HALO.width,
+        height: icon.size + 2 * HALO.width,
       }}
       draw={(ink) => (
         <Glyph {...icon} color={ink ?? icon.color} struck={struck} />
@@ -104,8 +104,8 @@ export function HaloPath({
 }) {
   return (
     <>
-      {halo_rings.map((px) => (
-        <G key={px} opacity={halo.ring}>
+      {HALO_RINGS.map((px) => (
+        <G key={px} opacity={HALO.ring}>
           <Path
             d={under}
             stroke={theme.black}
@@ -139,7 +139,7 @@ export function HaloText({
       draw={(ink) => (
         <Text
           numberOfLines={1}
-          maxFontSizeMultiplier={text_scale.chrome}
+          maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
           style={[style, ink !== undefined && { color: ink }]}
         >
           {children}
@@ -159,12 +159,12 @@ function around(px: f64): [f64, f64][] {
 
 const styles = StyleSheet.create({
   shrink: { flexShrink: 1, minWidth: 0 },
-  rings: { padding: halo.width },
+  rings: { padding: HALO.width },
   copy: {
     position: "absolute",
-    top: halo.width,
-    right: halo.width,
-    bottom: halo.width,
-    left: halo.width,
+    top: HALO.width,
+    right: HALO.width,
+    bottom: HALO.width,
+    left: HALO.width,
   },
 });

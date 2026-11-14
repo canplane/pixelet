@@ -27,7 +27,7 @@ import { ui } from "@/service/core/core.ts";
 /** Called from the press that asks for the location, which raises the
  * permission's prompt or its settings. */
 export async function locate(): Promise<void> {
-  if (await platform.geo.permit()) void sensor.locate(ui);
+  if (await platform.GEOLOCATION.permit()) void sensor.locate(ui);
 }
 
 /** A reading the device could not give, such as NaN or an infinity, is sent
@@ -80,12 +80,12 @@ const ANSWER = {
 } as const;
 
 export const SENSOR_LISTENER: SensorListener = {
-  position: core_pos,
-  positionError: (err, watching) =>
+  pos: core_pos,
+  pos_err: (err, watching) =>
     void sensor.err(ui, SENSOR_GEOLOCATION, ERR[err], watching),
-  orientation: core_orient,
+  orient: core_orient,
   // The compass gives no code for its failure.
-  orientationLost: () => void sensor.err(ui, SENSOR_ORIENTATION, null, false),
+  orient_err: () => void sensor.err(ui, SENSOR_ORIENTATION, null, false),
   permission: (which, answer) =>
     void sensor.permission(ui, SENSOR[which], ANSWER[answer]),
 };
@@ -93,8 +93,13 @@ export const SENSOR_LISTENER: SensorListener = {
 /** Tells the core which sensors the device has, once its interfaces are
  * open. */
 export function tell_platform(): Promise<void> {
-  const { geo, orient } = platform;
-  return sensor.platform(ui, geo.has, orient.has, orient.gated, orient.silence);
+  return sensor.platform(
+    ui,
+    platform.GEOLOCATION.has,
+    platform.ORIENT.has,
+    platform.ORIENT.gated,
+    platform.ORIENT.silence,
+  );
 }
 
 /** Serves `watch` on `remote`, the core's start and stop of the device's
@@ -111,12 +116,12 @@ function sensor_start(s: Sensor): void {
     return;
   }
   if (s === SENSOR_GEOLOCATION) {
-    platform.geo.start();
-  } else platform.orient.start();
+    platform.GEOLOCATION.start();
+  } else platform.ORIENT.start();
 }
 
 function sensor_stop(s: Sensor): void {
   if (s === SENSOR_GEOLOCATION) {
-    platform.geo.stop();
-  } else platform.orient.stop();
+    platform.GEOLOCATION.stop();
+  } else platform.ORIENT.stop();
 }

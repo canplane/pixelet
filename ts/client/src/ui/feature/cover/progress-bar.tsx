@@ -6,7 +6,7 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { SETTLE } from "@/ui/shared/component/motion/transition.ts";
-import { color } from "@/ui/shared/component/theme.ts";
+import { COLOR } from "@/ui/shared/component/theme.ts";
 
 const WIDTH_PX = 160;
 const HEIGHT_PX = 4;
@@ -36,11 +36,11 @@ const styles = StyleSheet.create({
     width: WIDTH_PX,
     height: HEIGHT_PX,
     overflow: "hidden",
-    backgroundColor: color.track,
+    backgroundColor: COLOR.track,
   },
   fill: {
     width: WIDTH_PX,
     height: HEIGHT_PX,
-    backgroundColor: color.chosen,
+    backgroundColor: COLOR.chosen,
   },
 });

@@ -15,6 +15,10 @@ import expo.modules.kotlin.modules.ModuleDefinition
 class XputeGpuModule : Module() {
   private val main = Handler(Looper.getMainLooper())
 
+  /** This sends the module's event from the GPU's thread, and Expo carries
+   * it to the JavaScript thread. */
+  private val state = { s: String -> sendEvent("onState", mapOf("state" to s)) }
+
   /** This tells the GPU's host of each display frame (`Gpu.vsync`), from the
    * main thread's Choreographer. */
   private val vsync = object : Choreographer.FrameCallback {
@@ -27,19 +31,22 @@ class XputeGpuModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("XputeGpu")
 
-    /** Fires once each time a device is lost and let go. It is sent from the
-     * GPU's thread, and Expo carries the event to the JavaScript thread. */
-    Events("onLost")
+    /** Fires with what the host has of a GPU, as it changes. It is sent from
+     * the GPU's thread, and Expo carries the event to the JavaScript thread. */
+    Events("onState")
 
+    // The host tells the newest module made, and a module clears the host's
+    // callback only while it is its own, under the lock of `Gpu`, as on iOS,
+    // where a reload may make the new module before the old one is destroyed.
     OnCreate {
-      Gpu.lost = { sendEvent("onLost") }
+      synchronized(Gpu) { Gpu.state = state }
       Gpu.init()
       main.post { Choreographer.getInstance().postFrameCallback(vsync) }
     }
 
     OnDestroy {
       main.post { Choreographer.getInstance().removeFrameCallback(vsync) }
-      Gpu.lost = null
+      synchronized(Gpu) { if (Gpu.state === state) Gpu.state = null }
     }
 
     View(SurfaceView::class) {

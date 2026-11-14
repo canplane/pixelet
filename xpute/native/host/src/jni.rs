@@ -12,7 +12,7 @@ use std::sync::OnceLock;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_native_runtime::jni::sys::{jbyteArray, jint, jintArray, jobject, jstring, jvalue, JNIEnv};
-use xpute_native_runtime::jni::{call, class, env, Class};
+use xpute_native_runtime::jni::{call, class, env, string, Class};
 
 use crate::native::{notify_on, stopped_on, trap_on};
 
@@ -50,23 +50,21 @@ pub unsafe fn init(e: *mut JNIEnv, this: jobject) {
 extern "C" fn notify() {
     let Some(c) = CLASS.get() else { return };
     // SAFETY: `onNotify()V`, at its index.
-    unsafe { call(c, ON_NOTIFY, |_| Vec::new()) };
+    unsafe { call(c, ON_NOTIFY, |_| Vec::new()) }
 }
 
 extern "C" fn trap() {
     let Some(c) = CLASS.get() else { return };
     // SAFETY: `onTrap()V`, at its index.
-    unsafe { call(c, ON_TRAP, |_| Vec::new()) };
+    unsafe { call(c, ON_TRAP, |_| Vec::new()) }
 }
 
 extern "C" fn stopped(errnum: i32, file: *const u8, len: usize, line: u32, n1: u64, n2: u64) {
     let Some(c) = CLASS.get() else { return };
-    // SAFETY: the file's UTF-8, the stop's for the call.
-    let file = String::from_utf8_lossy(unsafe { core::slice::from_raw_parts(file, len) }).into_owned();
-    let file = std::ffi::CString::new(file.replace('\0', " ")).unwrap_or_default();
     let args = |e| {
-        // SAFETY: this thread's environment, and a NUL-terminated string.
-        let s = unsafe { env(e).NewStringUTF.or_bug(Errno::ENOSYS)(e, file.as_ptr()) };
+        // SAFETY: this thread's environment, and the file's UTF-8, the stop's
+        // for the call.
+        let s = unsafe { string(e, file, len) };
         vec![
             jvalue { i: errnum },
             jvalue { l: s },
@@ -77,7 +75,7 @@ extern "C" fn stopped(errnum: i32, file: *const u8, len: usize, line: u32, n1: u
     };
     // SAFETY: `onStopped(ILjava/lang/String;IJJ)V`, at its index, and its
     // five values in order.
-    unsafe { call(c, ON_STOPPED, args) };
+    unsafe { call(c, ON_STOPPED, args) }
 }
 
 /// The bytes of a Java `byte[]`, or none for null.
@@ -143,7 +141,7 @@ pub unsafe fn take(e: *mut JNIEnv) -> jbyteArray {
     }
 }
 
-/// The core's memory as a direct `ByteBuffer`, with no copy.
+/// The guest's memory as a direct `ByteBuffer`, with no copy.
 ///
 /// # Safety
 /// `e` is what JNI called with.

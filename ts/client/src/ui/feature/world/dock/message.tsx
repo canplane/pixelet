@@ -13,9 +13,9 @@ import { put_keyboard_away } from "@/ui/shared/component/keyboard.tsx";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import { TextField } from "@/ui/shared/component/text-field.tsx";
 import {
-  chrome,
-  color,
-  disabled_content,
+  CHROME,
+  COLOR,
+  DISABLED_CONTENT,
 } from "@/ui/shared/component/theme.ts";
 import { useCore } from "@/ui/shared/watch.ts";
 import { append_chat_line, DockMode, set_dock_mode } from "./store.ts";
@@ -28,7 +28,7 @@ import * as snapshot from "@/service/core/snapshot.ts";
 export function useMessage(mode: DockMode) {
   const drafting = useCore((s) => s.draft !== null);
   const [message_text, set_message_text] = useState("");
-  const [markerFits, setMarkerFits] = useState(true);
+  const [marker_fits, set_marker_fits] = useState(true);
   const [is_sending, set_is_sending] = useState(false);
   const input_ref = useRef<TextInput | null>(null);
 
@@ -47,7 +47,7 @@ export function useMessage(mode: DockMode) {
   // change. When the draft closes, the field is emptied for the chat.
   useEffect(() => {
     set_message_text(drafting ? (snapshot.cur().draft ?? "") : "");
-    setMarkerFits(true);
+    set_marker_fits(true);
     if (drafting) set_dock_mode(DockMode.Message);
   }, [drafting]);
 
@@ -55,8 +55,8 @@ export function useMessage(mode: DockMode) {
     set_message_text(text);
     if (drafting) {
       void edit.marker_text(text.trim()).then(
-        (fits) => setMarkerFits(fits),
-        () => setMarkerFits(false),
+        (fits) => set_marker_fits(fits),
+        () => set_marker_fits(false),
       );
     }
   }
@@ -75,13 +75,13 @@ export function useMessage(mode: DockMode) {
       }
       edit.marker_commit();
       set_dock_mode(DockMode.Palette);
-    }, FADE.durationMs);
+    }, FADE.duration_ms);
   }
 
   const can_send = message_text.trim() !== "";
   // A marker's text the core refused cannot be committed. A chat line too
   // long for the link is refused whole, never cut short.
-  const fits = drafting ? markerFits : true;
+  const fits = drafting ? marker_fits : true;
 
   return {
     drafting,
@@ -117,7 +117,7 @@ export function Message({
   return (
     <View style={[styles.message, { width }]}>
       <View style={styles.message_icon}>
-        <Glyph glyph="bubble.left" size={chrome.glyph} color={LABEL.primary} />
+        <Glyph glyph="bubble.left" size={CHROME.glyph} color={LABEL.primary} />
       </View>
       <Motion
         to={{ opacity: is_sending ? 0 : 1 }}
@@ -161,9 +161,9 @@ export function Message({
         >
           <Glyph
             glyph={drafting ? "checkmark" : "arrow.up"}
-            size={chrome.glyph}
+            size={CHROME.glyph}
             weight="bold"
-            color={color.white}
+            color={COLOR.white}
           />
         </Pressable>
       </Presence>
@@ -175,27 +175,27 @@ const styles = StyleSheet.create({
   message: {
     flexDirection: "row",
     alignItems: "center",
-    height: chrome.control,
-    paddingRight: (chrome.control - chrome.target) / 2,
+    height: CHROME.control,
+    paddingRight: (CHROME.control - CHROME.target) / 2,
   },
   message_icon: {
-    width: chrome.control,
-    height: chrome.control,
+    width: CHROME.control,
+    height: CHROME.control,
     alignItems: "center",
     justifyContent: "center",
   },
   field_fill: { flex: 1, minWidth: 0 },
   message_input: { width: "100%", color: LABEL.primary },
   send: {
-    width: chrome.selection,
-    height: chrome.selection,
-    borderRadius: chrome.selection / 2,
+    width: CHROME.selection,
+    height: CHROME.selection,
+    borderRadius: CHROME.selection / 2,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: color.send,
+    backgroundColor: COLOR.send,
   },
-  confirm: { backgroundColor: color.confirm },
+  confirm: { backgroundColor: COLOR.confirm },
   send_pressed: { opacity: 0.7 },
-  send_refused: { opacity: disabled_content },
+  send_refused: { opacity: DISABLED_CONTENT },
   slot: SLOT,
 });

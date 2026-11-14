@@ -11,14 +11,15 @@ import { StyleSheet, Text, View } from "react-native";
 import { Defs, LinearGradient, Rect, Stop, Svg } from "react-native-svg";
 
 import { SETTING } from "@/ui/shared/setting.ts";
-import { gauge, Head } from "./perf/gauge.tsx";
+import { GAUGE, Head } from "./perf/gauge.tsx";
 import { Accordion } from "./accordion.tsx";
 import { coverage, frame } from "@/abi/gizmo.spec.ts";
 import { grid, share, steps } from "@/abi/debug_look.spec.ts";
 import { useCore } from "@/ui/shared/watch.ts";
+import { hex } from "@/ui/shared/component/theme.ts";
 
 interface Look {
-  rgb: string;
+  rgb: number;
   alpha?: number;
   dashed?: boolean;
 }
@@ -86,11 +87,11 @@ function Row({
         <View
           style={
             filled
-              ? [styles.patch, { backgroundColor: look.rgb }]
+              ? [styles.patch, { backgroundColor: hex(look.rgb) }]
               : [
                   styles.stroke,
                   {
-                    borderColor: look.rgb,
+                    borderColor: hex(look.rgb),
                     borderStyle: look.dashed ? "dashed" : "solid",
                     opacity: look.alpha ?? 1,
                   },
@@ -98,7 +99,7 @@ function Row({
           }
         />
       </View>
-      <Text style={gauge.text}>{children}</Text>
+      <Text style={GAUGE.text}>{children}</Text>
     </View>
   );
 }
@@ -142,7 +143,7 @@ export function RayStepsLegend() {
           <Defs>
             <LinearGradient id="steps-ramp" x1="0" y1="0" x2="1" y2="0">
               {steps.ramp.map((rgb, i) => (
-                <Stop key={i} offset={i / last} stopColor={rgb} />
+                <Stop key={i} offset={i / last} stopColor={hex(rgb)} />
               ))}
             </LinearGradient>
           </Defs>
@@ -152,7 +153,7 @@ export function RayStepsLegend() {
           {TICKS.map((n) => (
             <Text
               key={n}
-              style={[gauge.text, styles.tick, { left: `${along(n) * 100}%` }]}
+              style={[GAUGE.text, styles.tick, { left: `${along(n) * 100}%` }]}
             >
               {n}
             </Text>

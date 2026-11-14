@@ -1,6 +1,6 @@
 // pxl-core/perf/section.rs
 
-//! Every STAT and NOW section of perf.json as a record, each held to its
+//! Every STAT and NOW section of perf.json5 as a record, each held to its
 //! layout by `words!`.
 
 use core::mem::{offset_of, size_of};
@@ -44,7 +44,7 @@ words!(RecordingStateSection, now::recording_state::WORDS,
     frame_cnt => now::recording_state::FRAME_CNT, task_cnt => now::recording_state::TASK_CNT, worst_cnt => now::recording_state::WORST_CNT,
 );
 
-/// Whether the core draws, as perf.json's NOW `draw` says.
+/// Whether the core draws, as perf.json5's NOW `draw` says.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct DrawSection {
@@ -233,7 +233,7 @@ pub struct StepSection {
 words!(StepSection, stat::steps::WORDS, cnt => stat::steps::CNT, slots => stat::steps::SLOTS);
 
 /// The largest and smallest values the frames held since the recording
-/// started (perf.json STAT.recording). Each frame's figures are folded
+/// started (perf.json5 STAT.recording). Each frame's figures are folded
 /// in by `fold`.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

@@ -10,7 +10,7 @@ import {
 import { type LayoutChangeEvent, StyleSheet, Text, View } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { color, text_style } from "@/ui/shared/component/theme.ts";
+import { COLOR, TEXT_STYLE } from "@/ui/shared/component/theme.ts";
 
 const TIP_POINT = 5;
 /** The width of the box the tip is centered in, over the item. It must hold
@@ -21,10 +21,10 @@ const TIP_SPAN = 240;
  * Faded apart, they would overlap where a device rounds their pixels together
  * and show a darker line there.
  */
-const TIP_FILL = color.black;
+const TIP_FILL = COLOR.black;
 const TIP_OPACITY = 0.72;
 const TIP_PAD_Y = 5;
-const TIP_RADIUS = (text_style.notice.lineHeight + 2 * TIP_PAD_Y) / 2;
+const TIP_RADIUS = (TEXT_STYLE.notice.lineHeight + 2 * TIP_PAD_Y) / 2;
 
 /** The name is drawn in the sheet's top layer, over its bar: a name drawn
  * inside the scrolling content could not reach over the bar. */
@@ -70,8 +70,8 @@ function NameTip({ named, sheetHeight }: { named: Named; sheetHeight: f64 }) {
 
 export function NameTipLayer({ children }: { children: ReactNode }) {
   const sheet = useRef<View>(null);
-  const [sheetHeight, setSheetHeight] = useState(0);
-  const [named, setNamed] = useState<Named | null>(null);
+  const [sheet_height, set_sheet_height] = useState(0);
+  const [named, set_named] = useState<Named | null>(null);
   // The sheet and the item are both measured in the window. On a device,
   // measureLayout against the sheet leaves out how far the content scrolled.
   // Each press takes a new number, so a measurement that answers after its
@@ -84,14 +84,14 @@ export function NameTipLayer({ children }: { children: ReactNode }) {
         sheet.current?.measureInWindow((sx, sy) =>
           item.measureInWindow((x, y, w) => {
             if (press.current === at) {
-              setNamed({ label, x: x - sx + w / 2, y: y - sy });
+              set_named({ label, x: x - sx + w / 2, y: y - sy });
             }
           }),
         );
       },
       hide: () => {
         press.current++;
-        setNamed(null);
+        set_named(null);
       },
     }),
     [],
@@ -102,11 +102,11 @@ export function NameTipLayer({ children }: { children: ReactNode }) {
       ref={sheet}
       style={styles.sheet}
       onLayout={(e: LayoutChangeEvent) =>
-        setSheetHeight(e.nativeEvent.layout.height)
+        set_sheet_height(e.nativeEvent.layout.height)
       }
     >
       <NamingContext.Provider value={naming}>{children}</NamingContext.Provider>
-      {named && <NameTip named={named} sheetHeight={sheetHeight} />}
+      {named && <NameTip named={named} sheetHeight={sheet_height} />}
     </View>
   );
 }
@@ -128,8 +128,8 @@ const styles = StyleSheet.create({
     borderRadius: TIP_RADIUS,
   },
   tip: {
-    ...text_style.notice,
-    color: color.white,
+    ...TEXT_STYLE.notice,
+    color: COLOR.white,
     paddingHorizontal: 12,
     paddingVertical: TIP_PAD_Y,
   },

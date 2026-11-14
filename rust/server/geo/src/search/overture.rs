@@ -95,7 +95,7 @@ const DIVISION_SEARCH_NEAR_SQL: &str = concat!(
 LIMIT $2"
 );
 
-/// Its kind and category by number (spec/spec/search.json).
+/// Its kind and category by number (spec/spec/search.json5).
 #[derive(Serialize)]
 pub(crate) struct SearchResult {
     pub gers_id: String,

@@ -1,6 +1,6 @@
 // pxl-core/domain/setting/store.rs
 
-//! The one settings store: schema.json's defaults with the user's choices
+//! The one settings store: schema.json5's defaults with the user's choices
 //! over them.
 //!
 //! Storage keeps only the settings that differ from their defaults. A stored
@@ -9,9 +9,9 @@
 //!
 //! The storage file (sys/io/file.rs `open_storage`, which checks the slot's
 //! format) holds two unsigned LEB128s for each kept setting: the setting's
-//! number and its value, a choice by its option's number. schema.json never
+//! number and its value, a choice by its option's number. schema.json5 never
 //! gives a number out twice, so a kept pair never reads as another setting.
-//! A setting that schema.json marks `stored` false lasts for the session
+//! A setting that schema.json5 marks `stored` false lasts for the session
 //! alone: it is neither written nor read, so it starts at its default.
 
 pub use crate::spec::schema::{
@@ -24,7 +24,7 @@ static DEV: Global<bool> = Global::new();
 
 /// Whether this is a development build, as the UI's boot reports it
 /// (`SETTING_DEV`). Only a development build offers the settings
-/// schema.json marks `dev`.
+/// schema.json5 marks `dev`.
 pub fn set_dev(dev: bool) {
     DEV.set(dev);
 }

@@ -5,7 +5,7 @@
 //! around the cell, and what objects place. Whatever fills a cell is an asset,
 //! so a leaf cell the layers leave void is the decor whose box claims it
 //! (`World::with_decor`), among those the asker sees. A decor stands in the leaf cells alone: a fold holds none of it. The catalog
-//! is spec/spec/asset/decor.json. The scene draws the decor's models as they
+//! is spec/spec/asset/decor.json5. The scene draws the decor's models as they
 //! arrive (domain/scene/decor/asset.rs).
 
 use pxl_content::generation::{CLAIM_EXTENT, TALLEST};
@@ -30,7 +30,7 @@ use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::meta::decor_instance;
 
-/// The farthest any decor's box in decor.json reaches from its min corner,
+/// The farthest any decor's box in decor.json5 reaches from its min corner,
 /// however it turns. It is computed once.
 pub fn box_extent() -> f64 {
     static EXTENT: Global<f64> = Global::new();
@@ -254,7 +254,7 @@ pub(super) fn claim(i: &Instance) -> Option<Aabb> {
     Some(Asset::of(i.id).decor()?.claim(i.at, &i.meta))
 }
 
-/// The box `i` claims as cells (decor.json), every cell of it the decor's:
+/// The box `i` claims as cells (decor.json5), every cell of it the decor's:
 /// `claim` raised to the cell it stands in, where a generated one's base sinks
 /// into the cell under it as its model is drawn on a top kept short of its
 /// cube.

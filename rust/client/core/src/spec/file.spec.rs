@@ -1,6 +1,6 @@
 // pxl-core/spec/file.spec.rs
 //
-// GENERATED from spec/client/core/sys/io/file.json (xpute-gen data.rs)
+// GENERATED from spec/client/core/sys/io/file.json5 (xpute-gen data.rs)
 //
 // The core's files: the tokens of their paths and what a file holds (pxl-core
 // sys/io/file.rs, ts/client/src/service/sys/fs/).
@@ -12,27 +12,27 @@
 /// What a file is past its path, a tile's version and URL, a storage key, is the client's
 /// binding (ts/client/src/service/sys/fs/).
 pub mod path {
-    /// A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json
+    /// A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json5
     /// `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number.
     pub mod terrain {
         pub const ID: i32 = 0;
     }
-    /// A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json
+    /// A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json5
     /// `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number.
     pub mod place {
         pub const ID: i32 = 1;
     }
-    /// A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json
+    /// A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json5
     /// `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number.
     pub mod division {
         pub const ID: i32 = 2;
     }
-    /// A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json
+    /// A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json5
     /// `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number.
     pub mod earth {
         pub const ID: i32 = 3;
         /// The picture of the whole Earth, (EARTH, SPHERE), served under the Earth layer's
-        /// version as its `TILE_SPHERE` (spec/spec/bake/publication.json).
+        /// version as its `TILE_SPHERE` (spec/spec/bake/publication.json5).
         pub mod sphere {
             pub const ID: i32 = 0;
         }
@@ -67,7 +67,7 @@ pub mod path {
 
 /// The load id of the catalog the client plugs in, (ASSET, CATALOG) (pxl-spec asset/catalog.rs):
 /// the file each of the asset specs' references names. Any other id is a file,
-/// its row in the asset ingest's table counted from 1 (spec/spec/asset/ingest.json).
+/// its row in the asset ingest's table counted from 1 (spec/spec/asset/ingest.json5).
 pub const CATALOG: u32 = 0;
 
 /// The finest zoom a tile's quadkey in a path is at, so the most digits it has:

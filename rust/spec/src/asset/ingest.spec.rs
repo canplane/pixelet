@@ -1,6 +1,6 @@
 // pxl-spec/asset/ingest.spec.rs
 //
-// GENERATED from spec/spec/asset/ingest.json (xpute-gen data.rs)
+// GENERATED from spec/spec/asset/ingest.json5 (xpute-gen data.rs)
 //
 // Every shipped asset by its number after ASSET, file n at `ASSET_FILES[n - 1]`
 // (ts/client/src/service/sys/fs/asset.ts), and the texture pack as the asset ingest

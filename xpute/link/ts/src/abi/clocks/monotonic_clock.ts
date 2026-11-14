@@ -16,7 +16,7 @@ import {
   ERRNO_ENOSYS,
 } from "@xpute/kit/status/errno.spec.ts";
 
-/** The interface's handle, named by `xpute:clocks/monotonic-clock` (frame.json `NAMED`). */
+/** The interface's handle, named by `xpute:clocks/monotonic-clock` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x73f703;
 
 /** `now` */
@@ -70,6 +70,7 @@ function object(
         return refusal_of(e);
       }
     },
+    drop() {},
   };
 }
 

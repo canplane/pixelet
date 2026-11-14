@@ -1,0 +1,8 @@
+{
+  $description: "The core's tick phases, in the order they run (pxl-core sys/sched/tick.rs):\nwhat moves the eye first, unbudgeted and O(1); then what is visible. A\nphase's number is its place here, and a report of per-phase time is indexed\nby it.",
+  PHASE: {
+    $type: "enum",
+    $value: ["interaction", "visible"],
+    $extensions: { xpute: { names: true } },
+  },
+}

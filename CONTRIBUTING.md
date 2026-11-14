@@ -12,7 +12,8 @@ You need GNU Make, Python 3.11 or newer, [Node](https://nodejs.org/) at the
 version `ts/.tool-versions` pins with pnpm (`corepack enable`), Rust through
 [rustup](https://rustup.rs/) (the toolchain is pinned in
 `rust/rust-toolchain.toml`), Binaryen's `wasm-opt`, Docker for the local
-databases. `make install` brings [cargo-nextest](https://nexte.st/), which runs
+databases. `make install` brings the package the Python scripts read the specs
+with (`script/requirements.txt`) and [cargo-nextest](https://nexte.st/), which runs
 pxl-core's unit tests one to a process, since each boots a core of its own. The
 checks and the tests also need
 what [xpute/README.md](./xpute/README.md#running-it) lists.

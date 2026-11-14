@@ -4,14 +4,14 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
 import { useChatLines } from "@/ui/feature/world/dock/store.ts";
-import { corner_card } from "@/ui/shared/component/corner-card.ts";
+import { CORNER_CARD } from "@/ui/shared/component/corner-card.ts";
 import {
   alpha,
-  color,
-  text_style,
-  weight,
+  COLOR,
+  TEXT_STYLE,
+  WEIGHT,
 } from "@/ui/shared/component/theme.ts";
-import { textEdge } from "@/ui/shared/component/typeface.ts";
+import { text_halo } from "@/ui/shared/component/typeface.ts";
 
 export function ChatLog() {
   const { t } = useTranslation();
@@ -42,7 +42,7 @@ export function ChatLog() {
 }
 
 const styles = StyleSheet.create({
-  lines: { ...corner_card, alignItems: "flex-start", gap: 4 },
+  lines: { ...CORNER_CARD, alignItems: "flex-start", gap: 4 },
   line: {
     flexDirection: "row",
     alignItems: "baseline",
@@ -50,10 +50,10 @@ const styles = StyleSheet.create({
     maxWidth: "100%",
   },
   text: {
-    ...text_style.caption,
-    fontWeight: weight.semibold,
-    ...textEdge(alpha(color.black, 0.9)),
+    ...TEXT_STYLE.caption,
+    fontWeight: WEIGHT.semibold,
+    ...text_halo(alpha(COLOR.black, 0.9)),
   },
-  self: { flexShrink: 0, color: color.self },
-  said: { flexShrink: 1, color: color.white },
+  self: { flexShrink: 0, color: COLOR.self },
+  said: { flexShrink: 1, color: COLOR.white },
 });

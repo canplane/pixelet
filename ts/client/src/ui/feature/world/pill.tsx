@@ -31,7 +31,7 @@ import {
 } from "@/ui/shared/component/motion/transition.ts";
 import { useDim } from "@/ui/shared/component/motion/dim.ts";
 import { touch_outset } from "@/ui/shared/component/touch.ts";
-import { pill_styles } from "./pill-style.ts";
+import { PILL_STYLE } from "./pill-style.ts";
 
 export interface PillProps {
   x: f64;
@@ -124,7 +124,7 @@ export function Pill({
             collapsable={false}
             {...touch}
             style={[
-              touch ? pill_styles.target : pill_styles.box,
+              touch ? PILL_STYLE.target : PILL_STYLE.box,
               {
                 left: -outset,
                 top: -outset,
@@ -136,7 +136,7 @@ export function Pill({
             <View
               collapsable={false}
               style={[
-                pill_styles.box,
+                PILL_STYLE.box,
                 { left: outset, top: outset, width, height },
               ]}
             >
@@ -210,7 +210,7 @@ export function Pill({
                     onContentWidth &&
                     ((e) => onContentWidth(e.nativeEvent.layout.width))
                   }
-                  style={[pill_styles.content, { height }]}
+                  style={[PILL_STYLE.content, { height }]}
                 >
                   {children}
                 </Motion>

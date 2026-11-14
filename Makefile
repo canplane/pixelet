@@ -19,7 +19,7 @@
 # With -j the trees run in parallel; xpute's make and cargo share its job
 # slots ($(MAKE), and + before cargo).
 
-.PHONY: install install-ts install-xpute install-rust \
+.PHONY: install install-ts install-xpute install-rust install-py \
 	check check-ts check-rust check-rules check-spec check-build check-xpute \
 	test test-ts test-rust test-xpute test-gpu \
 	fmt fmt-ts fmt-rust \
@@ -29,13 +29,15 @@
 
 # Each tree's packages, by its own manager: ts/'s here, xpute's by its make,
 # and the cargo tools the tests run under.
-install: install-ts install-xpute install-rust
+install: install-ts install-xpute install-rust install-py
 install-ts:
 	pnpm --dir ts install
 install-xpute:
 	pnpm --dir xpute install
 install-rust:
 	cargo install cargo-nextest --locked
+install-py:
+	python3 -m pip install --user --break-system-packages -r script/requirements.txt
 
 # `check` and `test` hold pixelet's code. What a deploy adds before its push,
 # since CI checks nothing (.agents/skills/deploy/SKILL.md): `check-build`, the

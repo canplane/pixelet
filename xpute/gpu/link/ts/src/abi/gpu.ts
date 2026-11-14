@@ -20,7 +20,7 @@ import {
   refusal_of,
 } from "@xpute/link/link.ts";
 
-/** The interface's handle, named by `xpute:gpu/gpu` (frame.json `NAMED`). */
+/** The interface's handle, named by `xpute:gpu/gpu` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x79d455;
 
 /** `run` */
@@ -84,6 +84,7 @@ function object(
         return refusal_of(e);
       }
     },
+    drop() {},
   };
 }
 
@@ -99,6 +100,7 @@ export interface HostDevice {
   lost(block: Lent, signal_: AbortSignal): Promise<void>;
   ready(signal_: AbortSignal): Promise<void>;
   settled(signal_: AbortSignal): Promise<void>;
+  drop(): void;
 }
 
 /** The object over `implementation`. */
@@ -173,6 +175,9 @@ export function device(
       } catch (e) {
         return refusal_of(e);
       }
+    },
+    drop() {
+      implementation.drop();
     },
   };
 }

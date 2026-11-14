@@ -1,7 +1,7 @@
 // @xpute/link/frame.ts
 
 /**
- * A frame's words are laid out by link/spec/frame.json: the request's tag, its
+ * A frame's words are laid out by link/spec/frame.json5: the request's tag, its
  * command, the result, and the packet's length. The command is the RES bit,
  * the handle the callee issued and the method's place among its object's.
  * The packet, the method's args or its answer's value in the Canonical ABI's

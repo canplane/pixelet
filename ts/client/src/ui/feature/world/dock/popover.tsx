@@ -15,12 +15,12 @@ import { round } from "@xpute/kit/math/scalar.ts";
 import { Backing, BackingPlace } from "@/ui/shared/component/backing.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { SNAP } from "@/ui/shared/component/motion/transition.ts";
-import { touches } from "@/ui/shared/component/touch.ts";
+import { TOUCH } from "@/ui/shared/component/touch.ts";
 import {
   alpha,
-  chrome,
-  material,
-  shadow,
+  CHROME,
+  MATERIAL,
+  SHADOW,
 } from "@/ui/shared/component/theme.ts";
 import { select_scale, useScale } from "./store.ts";
 import { OBJECT_SCALE_CNT } from "@/ui/feature/world/object.spec.ts";
@@ -30,8 +30,8 @@ import { type SizeGesture, STRIP } from "./strip.tsx";
 const POPOVER_LIFT_PX = 6;
 const POPOVER_GAP_PX = 8;
 const POPOVER_PAD_Y = 8;
-const POPOVER_WIDTH = chrome.target + 12;
-const POPOVER_PITCH = chrome.target + POPOVER_GAP_PX;
+const POPOVER_WIDTH = CHROME.target + 12;
+const POPOVER_PITCH = CHROME.target + POPOVER_GAP_PX;
 
 /** The diameter of the coarsest scale's mark. Each step finer halves the
  * mark's area rather than its width, so that the finest mark stays visible:
@@ -77,7 +77,7 @@ function scale_at(at: Popover, x: f64, y: f64): i32 | null {
   const along = y - top - POPOVER_PAD_Y;
   if (along < 0) return null;
   const row = Math.floor(along / POPOVER_PITCH);
-  if (row >= OBJECT_SCALE_CNT || along - row * POPOVER_PITCH > chrome.target) {
+  if (row >= OBJECT_SCALE_CNT || along - row * POPOVER_PITCH > CHROME.target) {
     return null;
   }
   return SCALES[row];
@@ -87,7 +87,7 @@ export function usePopover(bar: React.RefObject<View | null>): {
   popover: Popover | null;
   gesture: Omit<SizeGesture, "press">;
 } {
-  const [popover, setPopover] = useState<Popover | null>(null);
+  const [popover, set_popover] = useState<Popover | null>(null);
   // Measuring the swatch takes a moment, and the finger can lift before the
   // measurement arrives. A measurement that arrives after the lift is dropped.
   const pressing = useRef(false);
@@ -101,7 +101,7 @@ export function usePopover(bar: React.RefObject<View | null>): {
       swatch.measureInWindow((sx, _sy, sw) => {
         bar.current?.measureInWindow((bx, by) => {
           if (!pressing.current) return;
-          setPopover({
+          set_popover({
             center_x: sx + sw / 2 - bx,
             bar: [bx, by],
             highlighted: null,
@@ -114,7 +114,7 @@ export function usePopover(bar: React.RefObject<View | null>): {
       clearTimeout(flash_timer.current);
       swatch.measureInWindow((sx, _sy, sw) => {
         bar.current?.measureInWindow((bx, by) =>
-          setPopover({
+          set_popover({
             center_x: sx + sw / 2 - bx,
             bar: [bx, by],
             highlighted: null,
@@ -122,14 +122,14 @@ export function usePopover(bar: React.RefObject<View | null>): {
           }),
         );
       });
-      flash_timer.current = setTimeout(() => setPopover(null), FLASH_MS);
+      flash_timer.current = setTimeout(() => set_popover(null), FLASH_MS);
     },
-    long_press: () => setPopover((f) => f && { ...f, open: true }),
+    long_press: () => set_popover((f) => f && { ...f, open: true }),
     move: (x, y) => {
       if (!popover?.open) return;
       const highlighted = scale_at(popover, x, y);
       if (highlighted !== popover.highlighted) {
-        setPopover({ ...popover, highlighted });
+        set_popover({ ...popover, highlighted });
       }
     },
     release: (x, y) => {
@@ -138,7 +138,7 @@ export function usePopover(bar: React.RefObject<View | null>): {
     },
     end: () => {
       pressing.current = false;
-      setPopover(null);
+      set_popover(null);
     },
   };
 
@@ -152,7 +152,7 @@ export function SizePopover({ popover }: { popover: Popover }) {
     <View
       style={[
         styles.popover_at,
-        popover.open ? styles.popover_takes : touches.block,
+        popover.open ? styles.popover_takes : TOUCH.block,
         { left: popover.center_x - POPOVER_WIDTH / 2 },
       ]}
     >
@@ -161,7 +161,7 @@ export function SizePopover({ popover }: { popover: Popover }) {
       ) : (
         <Backing
           fill={STRIP.ground}
-          material={material.popover}
+          material={MATERIAL.popover}
           place={BackingPlace.OverMap}
           style={styles.seed}
         />
@@ -177,7 +177,7 @@ function SizeMarks({ highlighted }: { highlighted: i32 | null }) {
   return (
     <Backing
       fill={STRIP.ground}
-      material={material.popover}
+      material={MATERIAL.popover}
       place={BackingPlace.OverMap}
       style={styles.popover}
     >
@@ -228,18 +228,18 @@ const styles = StyleSheet.create({
     width: SEED,
     height: SEED,
     borderRadius: SEED / 2,
-    boxShadow: shadow.lift,
+    boxShadow: SHADOW.lift,
   },
   popover: {
     alignItems: "center",
     gap: POPOVER_GAP_PX,
     paddingVertical: POPOVER_PAD_Y,
     borderRadius: POPOVER_WIDTH / 2,
-    boxShadow: shadow.lift,
+    boxShadow: SHADOW.lift,
   },
   popover_item: {
-    width: chrome.target,
-    height: chrome.target,
+    width: CHROME.target,
+    height: CHROME.target,
     alignItems: "center",
     justifyContent: "center",
   },

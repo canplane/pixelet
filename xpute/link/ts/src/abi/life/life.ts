@@ -5,7 +5,7 @@
 import type { Handle, Method, Sender } from "../../link.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 
-/** The interface's handle, named by `xpute:life/life` (frame.json `NAMED`). */
+/** The interface's handle, named by `xpute:life/life` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x46edb9;
 
 /** `hidden` */

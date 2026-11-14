@@ -1,0 +1,8 @@
+{
+  $description: "The objects a player places, as the bake and the UI count them.",
+  OBJECT_SCALE_CNT: {
+    $value: 4,
+    $type: "u32",
+    $description: "How many scales an object places at: a unit and its halvings, as a decor's\n`scale_step`, 0, -1, -2 and -3. There are four so that the smallest is 0.125u, an\neighth of the 1u cell. The UI names a size by its scale, never by a length.",
+  },
+}

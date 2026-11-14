@@ -30,6 +30,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import json5
+
 import r2
 
 
@@ -37,8 +39,8 @@ REPO = Path(__file__).resolve().parent.parent
 SOURCE = "source"
 # Beside a copy's tiles, what it is: never uploaded.
 MANIFEST = "manifest.json"
-PUBLISHED = json.loads((REPO / "spec/spec/bake/publication.json").read_text())
-KINDS = PUBLISHED["BASE_KIND"]["$val"]
+PUBLISHED = json5.loads((REPO / "spec/spec/bake/publication.json5").read_text())
+KINDS = PUBLISHED["BASE_KIND"]["$value"]
 
 
 class Refused(Exception):
@@ -50,8 +52,8 @@ def die(message):
 
 
 def tile_object(version, name):
-    """A tile's object under its kind, publication.json's `OBJECT` filled in."""
-    return PUBLISHED["OBJECT"]["$val"].replace("{version}", version).replace("{name}", name)
+    """A tile's object under its kind, publication.json5's `OBJECT` filled in."""
+    return PUBLISHED["OBJECT"]["$value"].replace("{version}", version).replace("{name}", name)
 
 
 def aws(args, inherit=False, none=False):

@@ -1,6 +1,6 @@
 // pxl-spec/asset/id.rs
 
-//! An asset's id: its kind over its index (`spec/spec/asset/id.json`).
+//! An asset's id: its kind over its index (`spec/spec/asset/id.json5`).
 
 #[path = "id.spec.rs"]
 pub mod spec;

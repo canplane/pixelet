@@ -1,6 +1,6 @@
 // pxl-tool/download/pack.rs
 
-//! Fetches each `asset/raw/cube/manifest.json` entry not already cached there
+//! Fetches each `asset/raw/cube/manifest.json5` entry not already cached there
 //! and normalizes it to a `TILE_SIZE` opaque PNG in `asset/content/cube/`.
 //! Follow with `make ingest-asset`.
 //!
@@ -55,7 +55,7 @@ fn process(item: &Item, state: &mut pack::State) -> Result<Outcome, String> {
         img = imageops::resize(&img, TILE_SIZE, TILE_SIZE, FilterType::Lanczos3);
     }
 
-    pack::flatten_alpha(img.as_mut(), item.palette_hex.as_deref());
+    pack::flatten_alpha(img.as_mut(), item.palette);
 
     std::fs::create_dir_all(item.dest.parent().ok_or("no parent")?).map_err(|e| e.to_string())?;
     img.save_with_format(&item.dest, ImageFormat::Png)

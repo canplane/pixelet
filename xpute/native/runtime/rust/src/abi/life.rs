@@ -2,7 +2,7 @@
 //
 // GENERATED from wit/life (xpute-link-gen wit.rs)
 
-/// The interface's handle, named by `xpute:life/life` (frame.json `NAMED`).
+/// The interface's handle, named by `xpute:life/life` (frame.json5 `NAMED`).
 pub const HANDLE: _rt::Handle = 0x46edb9;
 
 /// `hidden`

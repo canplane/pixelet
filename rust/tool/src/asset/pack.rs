@@ -22,8 +22,7 @@ pub const COLUMN_CNT: u32 = 8;
 struct Entry {
     url: String,
     file: String,
-    #[serde(rename = "paletteHex")]
-    palette_hex: Option<String>,
+    palette: Option<u32>,
 }
 
 /// The ground's cubes: each a top, and some a side and a bottom.
@@ -63,14 +62,14 @@ pub struct Item {
     pub file: String,
     pub dest: PathBuf,
     pub original: PathBuf,
-    pub palette_hex: Option<String>,
+    pub palette: Option<u32>,
 }
 
 pub fn load(raw: &Path, content: &Path) -> Result<Vec<Item>, String> {
-    let text = std::fs::read_to_string(raw.join("manifest.json"))
-        .map_err(|e| format!("manifest.json: {e}"))?;
+    let text = std::fs::read_to_string(raw.join("manifest.json5"))
+        .map_err(|e| format!("manifest.json5: {e}"))?;
     let manifest: Manifest =
-        serde_json::from_str(&text).map_err(|e| format!("manifest.json: {e}"))?;
+        json5::from_str(&text).map_err(|e| format!("manifest.json5: {e}"))?;
 
     let mut items = Vec::new();
     let mut push = |label: String, slot: Slot, e: &Entry| {
@@ -81,7 +80,7 @@ pub fn load(raw: &Path, content: &Path) -> Result<Vec<Item>, String> {
             file: e.file.clone(),
             dest: content.join(&e.file),
             original: raw.join(&e.file),
-            palette_hex: e.palette_hex.clone(),
+            palette: e.palette,
         });
     };
 
@@ -104,7 +103,7 @@ pub fn load(raw: &Path, content: &Path) -> Result<Vec<Item>, String> {
         .find(|ty| !manifest.ground.bottom.contains_key(*ty))
     {
         return Err(format!(
-            "manifest.json: ground.side.{ty} has no ground.bottom.{ty}"
+            "manifest.json5: ground.side.{ty} has no ground.bottom.{ty}"
         ));
     }
     for (ty, entry) in &manifest.ground.side {
@@ -166,22 +165,10 @@ pub fn looks_like_sprite_sheet(w: u32, h: u32) -> bool {
     w != h && w.max(h) as f64 / w.min(h) as f64 >= 1.2
 }
 
-fn hex_to_rgb(hex: &str) -> Option<[u8; 3]> {
-    let h = hex.trim_start_matches('#');
-    if h.len() < 6 {
-        return None;
-    }
-    Some([
-        u8::from_str_radix(&h[0..2], 16).ok()?,
-        u8::from_str_radix(&h[2..4], 16).ok()?,
-        u8::from_str_radix(&h[4..6], 16).ok()?,
-    ])
-}
-
-/// Makes every alpha 255, flattening over the manifest's `paletteHex`, or the
-/// opaque-pixel average where none is given.
-pub fn flatten_alpha(data: &mut [u8], palette_hex: Option<&str>) {
-    let bg = palette_hex.and_then(hex_to_rgb).unwrap_or_else(|| {
+/// Makes every alpha 255, flattening over the manifest's `palette`,
+/// `0xRRGGBB`, or the opaque-pixel average where none is given.
+pub fn flatten_alpha(data: &mut [u8], palette: Option<u32>) {
+    let bg = palette.map(|c| [c >> 16, c >> 8, c].map(|v| v as u8)).unwrap_or_else(|| {
         let (mut r, mut g, mut b, mut n) = (0u64, 0u64, 0u64, 0u64);
         for px in data.as_chunks::<4>().0 {
             if px[3] == 255 {

@@ -1,7 +1,7 @@
 // cpp/xpute/gpu/encode.hpp
 
 // The encoder writes a guest's GPU calls as records of a stream (stream.hpp) in
-// the words gpu/link/spec/api.json gives each op, as gpu/guest/rust/src/encode.rs writes
+// the words gpu/link/spec/api.json5 gives each op, as gpu/guest/rust/src/encode.rs writes
 // them. An object the guest makes is named by a handle from one table (`Gpu`).
 // A record that does not fit an open transaction is not written, and the
 // handle of the object it would have made is given back. One function gives

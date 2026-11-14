@@ -25,13 +25,13 @@ import {
 } from "@/ui/shared/component/motion/transition.ts";
 import {
   alpha,
-  chrome,
-  color,
-  shadow,
-  surface,
+  CHROME,
+  COLOR,
+  SHADOW,
+  SURFACE,
   SYSTEM,
-  text_scale,
-  text_style,
+  TEXT_SCALE_CAP,
+  TEXT_STYLE,
 } from "@/ui/shared/component/theme.ts";
 import { type ToastSpec, ToastTone } from "./store.ts";
 import { useWindowSize } from "@/service/platform/viewport.ts";
@@ -60,10 +60,10 @@ const TONE: Record<
 
 function ToneGlyph({ tone }: { tone: ToastTone }) {
   const { mark, status } = TONE[tone];
-  if (!mark) return <Spinner size={chrome.glyph} color={LABEL.primary} />;
+  if (!mark) return <Spinner size={CHROME.glyph} color={LABEL.primary} />;
   return (
     <View style={[styles.disc, { backgroundColor: status }]}>
-      <Glyph glyph={mark} size={12} weight="black" color={color.white} />
+      <Glyph glyph={mark} size={12} weight="black" color={COLOR.white} />
     </View>
   );
 }
@@ -85,11 +85,11 @@ export function Toast({
 }: ToastProps) {
   const error = tone === ToastTone.Error;
   const span = useWindowSize().width;
-  const [open, setOpen] = useState(false);
-  const [content, setContent] = useState<f64>(TOAST_SIDE);
+  const [open, set_open] = useState(false);
+  const [content, set_content] = useState<f64>(TOAST_SIDE);
 
   useEffect(() => {
-    const timer = setTimeout(() => setOpen(true), OPEN_AFTER_MS);
+    const timer = setTimeout(() => set_open(true), OPEN_AFTER_MS);
     return () => clearTimeout(timer);
   }, []);
 
@@ -101,20 +101,20 @@ export function Toast({
       width={width}
       height={TOAST_SIDE}
       span={span}
-      fill={error ? surface.alarm.fill : color.ground}
-      tint={error ? surface.alarm.glass : undefined}
+      fill={error ? SURFACE.alarm.fill : COLOR.ground}
+      tint={error ? SURFACE.alarm.glass : undefined}
       place={BackingPlace.OverMap}
       border={{
         width: 2,
-        color: error ? surface.alarm.edge : alpha(color.white, 0.9),
+        color: error ? SURFACE.alarm.edge : alpha(COLOR.white, 0.9),
       }}
-      shadow={error ? `0 6px 20px ${surface.alarm.shadow}` : shadow.lift}
+      shadow={error ? `0 6px 20px ${SURFACE.alarm.shadow}` : SHADOW.lift}
       fade={fade}
       fadeFrom={0}
       fadeTransition={fadeTransition}
       touch={touch}
       touchBelow={touchBelow}
-      onContentWidth={setContent}
+      onContentWidth={set_content}
     >
       <View style={styles.slot}>
         <Swap
@@ -138,7 +138,7 @@ export function Toast({
       >
         <Text
           numberOfLines={1}
-          maxFontSizeMultiplier={text_scale.chrome}
+          maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
           style={[
             styles.message,
             {
@@ -167,14 +167,14 @@ const styles = StyleSheet.create({
   },
   glyph: { position: "absolute" },
   disc: {
-    width: chrome.glyph,
-    height: chrome.glyph,
-    borderRadius: chrome.glyph / 2,
+    width: CHROME.glyph,
+    height: CHROME.glyph,
+    borderRadius: CHROME.glyph / 2,
     alignItems: "center",
     justifyContent: "center",
   },
   message: {
-    ...text_style.notice,
+    ...TEXT_STYLE.notice,
     color: LABEL.primary,
     paddingHorizontal: MESSAGE_PAD,
   },

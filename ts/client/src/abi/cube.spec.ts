@@ -1,11 +1,11 @@
 // @pxl/client/abi/cube.spec.ts
 //
-// GENERATED from spec/spec/asset/cube.json (xpute-gen data.rs)
+// GENERATED from spec/spec/asset/cube.json5 (xpute-gen data.rs)
 
 /** The texture pack, the file the cube kind's cubes are drawn from: one image
  * of every tile under asset/content/cube/, which the asset ingest composes
  * and ships as the table's file at this path, with which tile each cube
- * wears on which face (pxl-tool bin/asset.rs, ingest.json). In Rust it is
+ * wears on which face (pxl-tool bin/asset.rs, ingest.json5). In Rust it is
  * the slot the catalog fills with it. */
 export const pack = 54 as number;
 

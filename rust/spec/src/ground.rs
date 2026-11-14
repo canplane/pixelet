@@ -72,7 +72,7 @@ pub fn ele_at(ele: impl Fn(usize) -> i32, [x, y]: [i32; 2]) -> i32 {
 }
 
 /// What a ground cell holds: the asset id of one of the ground's cubes,
-/// which fits a byte (`asset/cube.json`). A cell's word holds four.
+/// which fits a byte (`asset/cube.json5`). A cell's word holds four.
 pub type GroundId = u8;
 
 /// A cell's word's four asset ids, `dx + 2·dy`.

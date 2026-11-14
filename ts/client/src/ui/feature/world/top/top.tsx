@@ -14,7 +14,7 @@ import {
 } from "@/ui/shared/component/motion/transition.ts";
 import { useDim } from "@/ui/shared/component/motion/dim.ts";
 import { halo_gap, HaloIcon } from "./halo.tsx";
-import { chrome, color, layer } from "@/ui/shared/component/theme.ts";
+import { CHROME, COLOR, LAYER } from "@/ui/shared/component/theme.ts";
 import { CurrentAddress } from "./current-address.tsx";
 import { SensorIcons } from "./sensor-icon.tsx";
 import { MapScaleBar } from "./scale-bar.tsx";
@@ -31,7 +31,7 @@ export function TopOverlays() {
   const top = useChromeTop();
 
   const { width } = useWindowSize();
-  const scrim_depth = top + chrome.control + SCRIM_TAIL;
+  const scrim_depth = top + CHROME.control + SCRIM_TAIL;
   const from = (width - Math.min(width, SCRIM_WIDTH)) / 2 - SCRIM_FADE;
   const ramp = SCRIM_FADE / (width - 2 * from);
 
@@ -45,7 +45,7 @@ export function TopOverlays() {
                 <Stop
                   key={at}
                   offset={at}
-                  stopColor={color.black}
+                  stopColor={COLOR.black}
                   stopOpacity={SCRIM_OPACITY * (1 - k)}
                 />
               ))}
@@ -67,7 +67,7 @@ export function TopOverlays() {
                 <Stop
                   key={i}
                   offset={at}
-                  stopColor={color.white}
+                  stopColor={COLOR.white}
                   stopOpacity={k}
                 />
               ))}
@@ -131,7 +131,7 @@ function SearchStrip() {
                 glyph="magnifyingglass"
                 size={12}
                 weight="semibold"
-                color={color.white}
+                color={COLOR.white}
               />
               <CurrentAddress />
             </View>
@@ -164,13 +164,13 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    zIndex: layer.scrim,
+    zIndex: LAYER.scrim,
     pointerEvents: "none",
   },
   left: {
     position: "absolute",
-    left: chrome.inset,
-    zIndex: layer.chrome,
+    left: CHROME.inset,
+    zIndex: LAYER.chrome,
     alignItems: "flex-start",
     gap: 12,
   },
@@ -178,18 +178,18 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    paddingHorizontal: chrome.inset + chrome.control + chrome.control_gap,
-    minHeight: chrome.control,
-    zIndex: layer.chrome,
+    paddingHorizontal: CHROME.inset + CHROME.control + CHROME.control_gap,
+    minHeight: CHROME.control,
+    zIndex: LAYER.chrome,
     alignItems: "center",
     justifyContent: "center",
   },
   right: {
     position: "absolute",
-    right: chrome.inset,
-    zIndex: layer.chrome,
+    right: CHROME.inset,
+    zIndex: LAYER.chrome,
     alignItems: "center",
-    gap: chrome.control_gap,
+    gap: CHROME.control_gap,
   },
   fill: { alignSelf: "stretch", flex: 1 },
   // The whole strip takes the press, whether the scale or the address shows.

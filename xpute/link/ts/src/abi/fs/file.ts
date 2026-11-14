@@ -35,6 +35,7 @@ export interface HostFile {
   write(buf: Lent, signal_: AbortSignal): Promise<void>;
   set_aside(signal_: AbortSignal): Promise<void>;
   close(signal_: AbortSignal): Promise<void>;
+  drop(): void;
 }
 
 /** The object over `implementation`. */
@@ -217,6 +218,9 @@ export function file(
       } catch (e) {
         return refusal_of(e);
       }
+    },
+    drop() {
+      implementation.drop();
     },
   };
 }

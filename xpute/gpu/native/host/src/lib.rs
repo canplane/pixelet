@@ -2,7 +2,7 @@
 
 //! This is the host's end of a guest's GPU calls on a native device, as
 //! gpu/web/host/src/host.ts is on the web. It runs a stream's records
-//! (gpu/link/spec/api.json) on a wgpu device, and keeps each object the guest
+//! (gpu/link/spec/api.json5) on a wgpu device, and keeps each object the guest
 //! made at its handle's slot. It knows nothing of what the guest draws.
 //!
 //! A request that finishes after its run, such as a read back, the queue's

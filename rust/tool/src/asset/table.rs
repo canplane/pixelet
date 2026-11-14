@@ -15,7 +15,7 @@ pub struct Row {
 }
 
 pub struct Pack {
-    /// The path its image ships at, a row of the table (`cube.json` `pack`).
+    /// The path its image ships at, a row of the table (`cube.json5` `pack`).
     pub image: String,
     pub cell: u32,
     pub columns: u32,
@@ -82,89 +82,66 @@ pub fn faces(
         }
         if out.len() == before {
             return Err(format!(
-                "the manifest's {slot:?} is no cube in spec/spec/asset/cube.json"
+                "the manifest's {slot:?} is no cube in spec/spec/asset/cube.json5"
             ));
         }
     }
     Ok(out)
 }
 
-/// The table as `spec/spec/asset/ingest.json`, which `cargo spec`
-/// renders into the host's table, the pack's layout and the catalog
-/// (pxl-tool spec/ingest.rs, spec/catalog.rs).
+/// The table as `spec/spec/asset/ingest.json5`, laid out as prettier lays it
+/// out, which `cargo spec` renders into the host's table, the pack's layout
+/// and the catalog (pxl-tool spec/ingest.rs, spec/catalog.rs).
 pub fn render_json(rows: &[Row], pack: &Pack, symbols: &[String]) -> String {
     let string = |s: &str| format!("{s:?}");
-    let mut out = String::with_capacity(rows.len() * 160);
-    out.push_str(&format!(
-        "{{\n  \"$doc\": [\n    {},\n",
-        string(&mark("asset/content/", "pxl-tool bin/asset.rs"))
-    ));
-    out.push_str(
-        r#"    "Every shipped file by its path under asset/content/, in the ingest's sorted",
-    "order, which numbers it after ASSET from 1: its bucket key (the",
-    "SHA-256 of its bytes, which where it lies does not change), its size, and for",
-    "a model its extent in ENU world units, measured from the glb. Then the",
-    "texture pack, a file of the table: `columns` tiles of `cell` pixels per row,",
-    "tile n at column n % columns and row n / columns, `tiles` the path each",
-    "holds, `means` each one's mean color in linear light, and `faces` the cube",
-    "face — group, type, face — each tile is. Then Carto's place symbols, which",
-    "the client carries in its binary: each by its path as Carto gives it, in the",
-    "order of their masks, which numbers each from 1."
-  ],
-  "files": [
-"#,
+    let doc = [
+        mark("asset/content/", "pxl-tool bin/asset.rs").as_str(),
+        "Every shipped file by its path under asset/content/, in the ingest's sorted",
+        "order, which numbers it after ASSET from 1: its bucket key (the",
+        "SHA-256 of its bytes, which where it lies does not change), its size, and for",
+        "a model its extent in ENU world units, measured from the glb. Then the",
+        "texture pack, a file of the table: `columns` tiles of `cell` pixels per row,",
+        "tile n at column n % columns and row n / columns, `tiles` the path each",
+        "holds, `means` each one's mean color in linear light, and `faces` the cube",
+        "face — group, type, face — each tile is. Then Carto's place symbols, which",
+        "the client carries in its binary: each by its path as Carto gives it, in the",
+        "order of their masks, which numbers each from 1.",
+    ]
+    .join("\n");
+    // A token whose value is a list, one item a line, under `key`, at `pad`.
+    let list = |out: &mut String, pad: &str, key: &str, items: Vec<String>| {
+        let _ = writeln!(out, "{pad}{key}: {{\n{pad}  $value: [");
+        for i in items {
+            let _ = writeln!(out, "{pad}    {i},");
+        }
+        let _ = writeln!(out, "{pad}  ],\n{pad}}},");
+    };
+    let mut out = String::with_capacity(rows.len() * 200);
+    let _ = writeln!(out, "{{\n  $description: {},\n  files: {{\n    $value: [", string(&doc));
+    for r in rows {
+        let _ = writeln!(out, "      {{\n        path: {},\n        key: {},\n        bytes: {},", string(&r.path), string(&r.key), r.bytes);
+        if let Some(e) = r.extent {
+            let _ = writeln!(out, "        extent: [{}, {}, {}],", e[0], e[1], e[2]);
+        }
+        out.push_str("      },\n");
+    }
+    out.push_str("    ],\n  },\n  pack: {\n");
+    let _ = writeln!(out, "    image: {{ $value: {} }},", string(&pack.image));
+    let _ = writeln!(out, "    cell: {{ $value: {} }},", pack.cell);
+    let _ = writeln!(out, "    columns: {{ $value: {} }},", pack.columns);
+    list(&mut out, "    ", "tiles", pack.tiles.iter().map(|t| string(t)).collect());
+    list(&mut out, "    ", "means", pack.means.iter().map(|m| format!("[{}, {}, {}]", m[0], m[1], m[2])).collect());
+    list(
+        &mut out,
+        "    ",
+        "faces",
+        pack.faces
+            .iter()
+            .map(|f| format!("[{}, {}, {}, {}]", string(&f.group), string(&f.ty), string(f.face.name()), f.tile))
+            .collect(),
     );
-    let files: Vec<String> = rows
-        .iter()
-        .map(|r| {
-            let extent = r.extent.map_or(String::new(), |e| {
-                format!(", \"extent\": [{}, {}, {}]", e[0], e[1], e[2])
-            });
-            format!(
-                "    {{ \"path\": {}, \"key\": {}, \"bytes\": {}{extent} }}",
-                string(&r.path),
-                string(&r.key),
-                r.bytes
-            )
-        })
-        .collect();
-    out.push_str(&files.join(",\n"));
-    out.push_str("\n  ],\n  \"pack\": {\n");
-    let _ = writeln!(out, "    \"image\": {},", string(&pack.image));
-    let _ = writeln!(out, "    \"cell\": {},", pack.cell);
-    let _ = writeln!(out, "    \"columns\": {},", pack.columns);
-    let tiles: Vec<String> = pack
-        .tiles
-        .iter()
-        .map(|t| format!("      {}", string(t)))
-        .collect();
-    let _ = writeln!(out, "    \"tiles\": [\n{}\n    ],", tiles.join(",\n"));
-    let means: Vec<String> = pack
-        .means
-        .iter()
-        .map(|m| format!("      [{}, {}, {}]", m[0], m[1], m[2]))
-        .collect();
-    let _ = writeln!(out, "    \"means\": [\n{}\n    ],", means.join(",\n"));
-    let faces: Vec<String> = pack
-        .faces
-        .iter()
-        .map(|f| {
-            format!(
-                "      [{}, {}, {}, {}]",
-                string(&f.group),
-                string(&f.ty),
-                string(f.face.name()),
-                f.tile
-            )
-        })
-        .collect();
-    let _ = writeln!(out, "    \"faces\": [\n{}\n    ]", faces.join(",\n"));
-    out.push_str("  },\n  \"symbols\": [\n");
-    let symbols: Vec<String> = symbols
-        .iter()
-        .map(|s| format!("    {}", string(s)))
-        .collect();
-    out.push_str(&symbols.join(",\n"));
-    out.push_str("\n  ]\n}\n");
+    out.push_str("  },\n");
+    list(&mut out, "  ", "symbols", symbols.iter().map(|s| string(s)).collect());
+    out.push_str("}\n");
     out
 }

@@ -77,7 +77,7 @@ make bake-earth
 
 ```bash
 make ingest-asset
-# -> ./out/asset/<sha256>.<ext>, and regenerates spec/spec/asset/ingest.json and
+# -> ./out/asset/<sha256>.<ext>, and regenerates spec/spec/asset/ingest.json5 and
 #    what the spec generates from it (the host's table, the catalog, the pack's layout)
 
 for t in glb:model/gltf-binary png:image/png webp:image/webp; do
@@ -134,7 +134,7 @@ curl -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache
 # or by URL, up to 30 per call
 curl -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
   -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
-  --data '{"files":["<site>/tile/place/<version>/<name>"]}'   # the site: route.json `origins`
+  --data '{"files":["<site>/tile/place/<version>/<name>"]}'   # the site: route.json5 `origins`
 ```
 
 The token needs `Zone → Cache Purge`. Not `cache.delete(request)` in the

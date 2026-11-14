@@ -13,7 +13,7 @@ import {
   type Sender,
 } from "@xpute/link/link.ts";
 
-/** The interface's handle, named by `pxl:core/setting` (frame.json `NAMED`). */
+/** The interface's handle, named by `pxl:core/setting` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x6f63cb;
 
 /** `dev` */

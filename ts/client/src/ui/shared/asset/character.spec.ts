@@ -1,6 +1,6 @@
 // @pxl/client/ui/shared/asset/character.spec.ts
 //
-// GENERATED from spec/spec/asset/character.json (xpute-gen data.rs)
+// GENERATED from spec/spec/asset/character.json5 (xpute-gen data.rs)
 //
 // The characters: a person or a pet, a model with clips, the
 // characters a player can be. Each group's models by their path under

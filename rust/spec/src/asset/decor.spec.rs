@@ -1,10 +1,10 @@
 // pxl-spec/asset/decor.spec.rs
 //
-// GENERATED from spec/spec/asset/decor.json (pxl-tool spec/asset.rs)
+// GENERATED from spec/spec/asset/decor.json5 (pxl-tool spec/asset.rs)
 //
 // The decors, the cube catalog's sibling: drawn as a model, not a cell the rays meet.
 //
-// A decor's id is its place in `decors`, over the decor kind (id.json). A
+// A decor's id is its place in `decors`, over the decor kind (id.json5). A
 // placed one is stored as that id, so a decor already here keeps its place
 // and a new one goes at the end.
 //

@@ -13,7 +13,6 @@
 #
 #   ./script/deploy.py
 
-import json
 import os
 import re
 import secrets
@@ -22,6 +21,8 @@ import subprocess
 import sys
 import urllib.request
 from pathlib import Path
+
+import json5
 
 import r2
 
@@ -35,8 +36,8 @@ NUMBER = os.environ.get("PXL_BUILD_NUMBER")
 # The panics' `#n` → path table the page's build wrote beside its core.
 PATHS = APP / "core.paths.json"
 BUILT = EDGE / "dist/index.html"
-# The custom domain the Worker answers on (spec/spec/route.json `origins`).
-SITE = json.loads((REPO / "spec/spec/route.json").read_text())["origins"]["SITE"]["url"]
+# The custom domain the Worker answers on (spec/spec/route.json5 `origins`).
+SITE = json5.loads((REPO / "spec/spec/route.json5").read_text())["origins"]["SITE"]["url"]["$value"]
 
 
 def loads(html):

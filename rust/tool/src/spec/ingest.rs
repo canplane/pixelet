@@ -1,6 +1,6 @@
 // pxl-tool/spec/ingest.rs
 
-//! What the asset ingest wrote (`spec/spec/asset/ingest.json`), rendered:
+//! What the asset ingest wrote (`spec/spec/asset/ingest.json5`), rendered:
 //! the files, each by its number with every field on both sides, which binds
 //! a file's number to its bucket key, and the texture pack's layout, which the
 //! renderer reads. A path is the specs' and the tools' name for a file; what
@@ -14,11 +14,11 @@ use xpute_gen::spec::data::{table_outputs, DataSpec};
 use xpute_gen::spec::rs_enum;
 
 use super::asset::{cube_member, cube_number, members};
-use super::{file, read, Node, Output};
+use super::{description, file, marks, read, Node, Output};
 use crate::asset::table::Face;
 use crate::root;
 
-pub(crate) const INGEST_JSON: &str = "spec/spec/asset/ingest.json";
+pub(crate) const INGEST_JSON: &str = "spec/spec/asset/ingest.json5";
 
 pub struct File {
     pub path: String,
@@ -170,11 +170,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             ("extent".into(), extent),
         ])
     };
-    let doc = |lines: &[&str]| Node::Arr(lines.iter().map(|l| Node::Str(l.to_string())).collect());
     let table = Node::Obj(vec![
         (
-            "$doc".into(),
-            doc(&[
+            "$description".into(),
+            description(&[
                 "Every shipped asset by its number after ASSET, file n at `ASSET_FILES[n - 1]`",
                 "(ts/client/src/service/sys/fs/asset.ts), and the texture pack as the asset ingest",
                 "composed it.",
@@ -184,16 +183,16 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             "ASSET_FILES".into(),
             Node::Obj(vec![
                 (
-                    "$doc".into(),
-                    doc(&[
+                    "$description".into(),
+                    description(&[
                         "Each file: its path below asset/content/, the specs' and the tools' name for it;",
                         "its bucket key, the SHA-256 of its bytes, which where it lies does not change;",
                         "its size; and for a model its extent in ENU world units (x, y, z-up), measured",
                         "from the glb, null for an image. The bytes themselves are in the bucket.",
                     ]),
                 ),
-                ("$row".into(), Node::Str("asset_file".into())),
-                ("$val".into(), Node::Arr(rows.iter().map(record).collect())),
+                marks(vec![("row".into(), Node::Str("asset_file".into()))]),
+                ("$value".into(), Node::Arr(rows.iter().map(record).collect())),
             ]),
         ),
     ]);

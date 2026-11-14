@@ -1,0 +1,4 @@
+{
+  $description: "What the search endpoint (route.json5 `SEARCH_URL`) answers, by number: a\nresult's kind, which says what its `category` numbers. A place's is its\ncategory as a place tile carries it (bake/place_category.json5, counted from\n1, 0 for none); a division's is its subtype (division.json5), as each part\nof a result's `context` gives its own.",
+  SEARCH_KIND: { $type: "u8", PLACE: { $value: 0 }, DIVISION: { $value: 1 } },
+}

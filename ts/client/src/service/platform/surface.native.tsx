@@ -45,7 +45,7 @@ function useSurface(
   key: string,
   opened?: (surface: u32) => () => void,
 ) {
-  const [handle, setHandle] = useState<u32>(0);
+  const [handle, set_handle] = useState<u32>(0);
   const size = useRef<Viewport>({ width: 0, height: 0, dpr: PixelRatio.get() });
   const attached = useRef<u32>(0);
   const open = useRef(opened);
@@ -68,13 +68,13 @@ function useSurface(
       // at once.
       if (closed) return driver.close(opened);
       surface = opened;
-      setHandle(surface);
+      set_handle(surface);
       if (open.current) close = open.current(surface);
     });
     return () => {
       closed = true;
       close();
-      setHandle(0);
+      set_handle(0);
       if (surface !== 0) driver.close(surface);
     };
   }, [key]);
@@ -97,23 +97,18 @@ function useSurface(
       attached.current = 0;
     },
   };
-  return { size, props };
+  return props;
 }
 
 export function World({ surface: driver, input }: WorldSurfaceProps) {
-  const { props } = useSurface(driver, "world");
+  const props = useSurface(driver, "world");
 
   useEffect(() => input.open(), []);
-
-  const onLayout = (e: LayoutChangeEvent) => {
-    props.onLayout?.(e);
-  };
 
   return (
     <WorldView
       {...props}
       style={StyleSheet.absoluteFill}
-      onLayout={onLayout}
       onPointer={(e) => {
         const { phase, id, x, y } = e.nativeEvent;
         input.pointer(phase, "touch", id, 0, x, y);
@@ -127,6 +122,6 @@ export function CharacterSurface({
   onOpen,
   openKey,
 }: CharacterSurfaceProps) {
-  const { props } = useSurface(driver, openKey, onOpen);
+  const props = useSurface(driver, openKey, onOpen);
   return <SurfaceView {...props} style={StyleSheet.absoluteFill} />;
 }

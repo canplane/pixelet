@@ -2,7 +2,7 @@
 //
 // GENERATED from wit/stop (xpute-link-gen wit.rs)
 
-/// The interface's handle, named by `xpute:stop/stop` (frame.json `NAMED`).
+/// The interface's handle, named by `xpute:stop/stop` (frame.json5 `NAMED`).
 pub const HANDLE: _rt::Handle = 0x4eccaa;
 
 /// `stopped`

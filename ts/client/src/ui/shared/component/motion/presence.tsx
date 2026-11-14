@@ -33,15 +33,15 @@ export function Presence({
   style,
   children,
 }: PresenceProps) {
-  const [mounted, setMounted] = useState(show);
-  if (show && !mounted) setMounted(true);
+  const [mounted, set_mounted] = useState(show);
+  if (show && !mounted) set_mounted(true);
   if (!show && !mounted) return null;
   return (
     <Motion
       from={from}
       to={show ? to : exit}
       transition={show ? transition : exitTransition}
-      onSettled={show ? undefined : () => setMounted(false)}
+      onSettled={show ? undefined : () => set_mounted(false)}
       style={style}
     >
       {children}
@@ -69,8 +69,8 @@ export function usePresent<T>(
   items: readonly T[],
   key_of: (item: T) => Key,
 ): { list: Present<T>[]; on_exited: (key: Key) => void } {
-  const [prev, setPrev] = useState(items);
-  const [leaving, setLeaving] = useState<Leaving<T>[]>([]);
+  const [prev, set_prev] = useState(items);
+  const [leaving, set_leaving] = useState<Leaving<T>[]>([]);
 
   let current = leaving;
   if (prev !== items) {
@@ -80,8 +80,8 @@ export function usePresent<T>(
       .map((item) => ({ item, key: key_of(item) }))
       .filter((l) => !keys.has(l.key) && !leaving_keys.has(l.key));
     current = [...leaving.filter((l) => !keys.has(l.key)), ...left];
-    setLeaving(current);
-    setPrev(items);
+    set_leaving(current);
+    set_prev(items);
   }
 
   return {
@@ -89,7 +89,7 @@ export function usePresent<T>(
       ...items.map((item) => ({ item, key: key_of(item), present: true })),
       ...current.map((l) => ({ ...l, present: false })),
     ],
-    on_exited: (key) => setLeaving((l) => l.filter((x) => x.key !== key)),
+    on_exited: (key) => set_leaving((l) => l.filter((x) => x.key !== key)),
   };
 }
 
@@ -119,8 +119,8 @@ export function Swap({
   // What each id drew last, so that a leaving id keeps drawing it.
   const nodes = useRef(new Map<Key, ReactNode>());
   nodes.current.set(id, children);
-  const [init, setInit] = useState<Key | null>(id);
-  if (init !== null && init !== id) setInit(null);
+  const [init, set_init] = useState<Key | null>(id);
+  if (init !== null && init !== id) set_init(null);
   const { list, on_exited } = usePresent(ids, (k) => k);
   const leaving = list.some((p) => !p.present);
   return list

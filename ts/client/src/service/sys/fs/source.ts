@@ -10,6 +10,8 @@
  */
 
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
+import type { Sender } from "@xpute/link";
+import { declare } from "@/abi/source.ts";
 import { get, TILE_SOURCE_ROUTE } from "@/service/origin/route.ts";
 import { online, when_online } from "@/service/origin/online.ts";
 import {
@@ -183,19 +185,12 @@ async function ask_decl(): Promise<string | null> {
   }
 }
 
-/** Hands the core its part of the declaration (SOURCE_DECLARE). It resolves
- * false when that part is more than one command can carry, or when the core
- * refuses it. The core refuses, among others, a format this build cannot
- * read. */
-export type SendSource = (
-  min_zoom: number,
-  formats: number[],
-  shards: string[],
-) => Promise<boolean>;
-
-/** Resolves once the source is declared or refused. `source_state` then says
- * which. */
-export async function declare_source(send: SendSource): Promise<void> {
+/** Resolves once the source is declared or refused, `source_state` then
+ * saying which. The core is handed its part of the declaration over `link`
+ * (SOURCE_DECLARE). It is refused when that part is more than one command
+ * can carry, or when the core refuses it, as it does, among others, a format
+ * this build cannot read. */
+export async function declare_source(link: Sender): Promise<void> {
   let source = await ask_decl();
   let wait_ms = ASK_AGAIN_MS;
   while (source === null) {
@@ -220,13 +215,10 @@ export async function declare_source(send: SendSource): Promise<void> {
   // This is set before SOURCE_DECLARE is sent, because the frame that takes
   // it already opens tiles under the declaration.
   cur_decl = read;
-  if (
-    !(await send(
-      read.min_zoom,
-      BASE_KINDS.map((kind) => read.format[kind]),
-      shards,
-    ))
-  ) {
+  const formats = Uint32Array.from(BASE_KINDS, (kind) => read.format[kind]);
+  try {
+    await declare(link, read.min_zoom, formats, shards);
+  } catch {
     console.error(
       `[source] the core took no declaration of formats ${JSON.stringify(read.format)} and ${shards.length} shards`,
     );

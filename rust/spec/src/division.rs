@@ -11,10 +11,10 @@ pub mod spec;
 
 use spec::{division_name, division_subtype};
 
-/// The most bytes a division's name takes (division.json `DIVISION_NAME`).
+/// The most bytes a division's name takes (division.json5 `DIVISION_NAME`).
 pub const NAME_BYTES: usize = division_name::BYTES as usize;
 
-/// Overture's subtypes, broadest first, numbered as spec/spec/division.json numbers them,
+/// Overture's subtypes, broadest first, numbered as spec/spec/division.json5 numbers them,
 /// which is also how a subtype crosses as JSON.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]

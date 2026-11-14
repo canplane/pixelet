@@ -1,6 +1,6 @@
 // @pxl/client/service/sys/fs/catalog.spec.ts
 //
-// GENERATED from the asset specs and spec/spec/asset/ingest.json (xpute-gen data.rs)
+// GENERATED from the asset specs and spec/spec/asset/ingest.json5 (xpute-gen data.rs)
 
 /** Every file reference the asset specs make, a slot each. */
 export const SLOT_CNT = 71 as number;

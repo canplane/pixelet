@@ -8,13 +8,13 @@ import { Spinner } from "@/ui/shared/component/icon.tsx";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import { surface_driver } from "@/service/core/surface.ts";
 import type { Character } from "./character.ts";
-import { chrome, color } from "@/ui/shared/component/theme.ts";
+import { CHROME, COLOR } from "@/ui/shared/component/theme.ts";
 import { CharacterSurface } from "@/service/platform/surface.tsx";
 import { useCore } from "@/ui/shared/watch.ts";
 import * as scene from "@/service/core/scene.ts";
 
 const SURFACE = surface_driver();
-const BACKDROP = parseInt(color.backdrop.slice(1), 16);
+const BACKDROP = parseInt(COLOR.backdrop.slice(1), 16);
 
 interface PickedCharacterProps {
   character: Character;
@@ -23,7 +23,7 @@ interface PickedCharacterProps {
 
 export function PickedCharacter(props: PickedCharacterProps) {
   const { character, style } = props;
-  const [surface, setSurface] = useState<u32>(0);
+  const [surface, set_surface] = useState<u32>(0);
   const drawn = useCore(
     (s) => surface !== 0 && s.character_surfaces.includes(surface),
   );
@@ -39,7 +39,7 @@ export function PickedCharacter(props: PickedCharacterProps) {
           surface={SURFACE}
           openKey={`${character.group}:${character.number}`}
           onOpen={(surface) => {
-            setSurface(surface);
+            set_surface(surface);
             scene.draw_character(surface, character.group, BACKDROP);
             return () => {};
           }}
@@ -47,7 +47,7 @@ export function PickedCharacter(props: PickedCharacterProps) {
       </View>
       {!drawn && (
         <View style={styles.loading}>
-          <Spinner size={chrome.glyph} color={LABEL.secondary} />
+          <Spinner size={CHROME.glyph} color={LABEL.secondary} />
         </View>
       )}
     </View>

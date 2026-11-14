@@ -8,7 +8,7 @@ import java.nio.ByteBuffer
  * This is xpute's runtime on Android as JNI reaches it: the calls the iOS
  * module's Swift makes through the C ABI (xpute.h), exported by the app's
  * native library, which the module's build names (build.gradle). The runtime
- * runs on the core's thread; each call posts its task there and returns. It
+ * runs on the guest's thread; each call posts its task there and returns. It
  * tells of a batch, a stop and a trap through the static callbacks below,
  * which it calls from its threads, attached to the VM as daemons.
  * It takes nothing of React Native's; the Expo module (XputeModule.kt) is one
@@ -23,7 +23,8 @@ object Runtime {
    * `start`. */
   external fun init()
 
-  /** Starts the runtime on the core's thread, once (xpute.h `xpute_start`). */
+  /** Starts the runtime on the guest's thread, once a process; each call is a
+   * new UI on it, as a reload's (xpute.h `xpute_start`). */
   external fun start(named: IntArray, prefixes: ByteArray, filesDir: String, cacheDir: String)
 
   /** Sends the UI's method `m` of the guest's object `h` (xpute.h
@@ -37,7 +38,7 @@ object Runtime {
   /** Hands over the batch the UI has not taken (xpute.h `xpute_take`). */
   external fun take(): ByteArray
 
-  /** The core's memory, a direct buffer over its whole region. */
+  /** The guest's memory, a direct buffer over its whole region. */
   external fun mem(): ByteBuffer
 
   /** Tells the runtime that the app was hidden or shown. */

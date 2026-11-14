@@ -12,7 +12,7 @@ import {
 } from "../../link.ts";
 import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
 
-/** The interface's handle, named by `xpute:stop/stop` (frame.json `NAMED`). */
+/** The interface's handle, named by `xpute:stop/stop` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x4eccaa;
 
 /** `stopped` */
@@ -53,6 +53,7 @@ function object(implementation: Host): LinkObject {
         return refusal_of(e);
       }
     },
+    drop() {},
   };
 }
 

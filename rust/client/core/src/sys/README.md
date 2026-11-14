@@ -12,7 +12,7 @@ the rest of the core can rely on.
 
 ## The memory, laid out once
 
-The core's memory is the manifest's `mem.bytes`, whole before its first entry and never
+The core's memory is the manifest's `mem.sz`, whole before its first entry and never
 grown, so a full heap stops the core. Its sections never move.
 
 ```text

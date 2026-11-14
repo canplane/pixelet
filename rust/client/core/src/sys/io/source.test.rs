@@ -7,7 +7,7 @@ fn tile(name: &str) -> Quadrant {
 }
 
 /// The formats this client reads, by each kind's bake number, as the
-/// published table gives them (pxl-spec bake/publication.json `FORMAT`).
+/// published table gives them (pxl-spec bake/publication.json5 `FORMAT`).
 fn formats() -> Vec<u32> {
     FORMAT.to_vec()
 }

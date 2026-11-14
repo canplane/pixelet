@@ -15,18 +15,26 @@
  *
  * Beside them, a UI may serve the objects at the URIs under a prefix
  * (`mount`), opened across the port and answered later in all their methods,
- * as a device's UI serves the guest's files: the runtime's side mounts their
- * openers (xpute-native-runtime remote.rs `serve`).
+ * as a device's UI serves the guest's files: the link's side mounts their
+ * openers (`serve`, and xpute-native-runtime remote.rs `serve`), and tells
+ * the UI each object's drop. The UI serves as the link does (link.ts
+ * `Side`): only how an answer crosses differs. Its open was answered across
+ * the port already, so an opener's refusal answers each method of what it
+ * would have opened.
  *
  * Beside the link the UI gives a transferable, a canvas, under a handle the
  * worker's side issued, on the same port, so that it lands before what the
  * UI sends after it; it is taken back when the UI drops the handle.
+ *
+ * A port is one UI's for its whole life. A page's worker dies with the page,
+ * so a reloaded page meets a new worker and link over a new port, and no
+ * generation is counted here: a device's runtime outlives its UI and counts
+ * them (xpute-native-runtime remote.rs `accept`).
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import { ERRNO_EINPROGRESS, ERRNO_EOVERFLOW, ERRNO_EPROTO } from "@xpute/kit/status/errno.spec.ts";
-import { bug } from "@xpute/kit/status/bug.ts";
+import { ERRNO_EINPROGRESS, ERRNO_ENOENT, ERRNO_EOVERFLOW } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import type { Token } from "./abi/types.ts";
 import { Lower } from "./cabi.ts";
@@ -38,9 +46,9 @@ import {
   type Link,
   type LinkObject,
   type Method,
-  type Opener,
-  refusal_of,
+  type Packet,
   type Sender,
+  Side,
   type Tag,
 } from "./link.ts";
 
@@ -88,21 +96,40 @@ export type ToUi =
 
 /** Serves `link` to the UI across `port`: the interfaces the UI serves
  * mounted under their named handles (`Remote.named`), the methods `later`
- * names answered later, and what the UI gives beside the link to `taker`. */
-export function serve(port: Port, link: Link, named: readonly Handle[], later: Later, taker: Taker): void {
+ * names answered later, an opener at each of its `prefixes`
+ * (`Remote.prefixes`), and what the UI gives beside the link to `taker`. */
+export function serve(
+  port: Port,
+  link: Link,
+  named: readonly Handle[],
+  prefixes: readonly (readonly Token[])[],
+  later: Later,
+  taker: Taker,
+): void {
   const tell = (m: ToUi) => port.postMessage(m);
+  // Tells the UI a method it answers later, and the guest's cancel of it.
+  const forward = (h: Handle, m: Method, tag: Tag, args: U8Array | null) => {
+    tell({ h, m, tag, pkt: args === null ? null : args.slice() });
+    link.on_cancel(tag, () => tell({ cancel: tag }));
+    return ERRNO_EINPROGRESS;
+  };
   for (const h of named) {
     link.mount_named(h, {
       call(m, tag, args) {
-        const pkt = args === null ? null : args.slice();
-        if (!later.some(([lh, lm]) => lh === h && lm === m)) {
-          tell({ h, m, tag: null, pkt });
-          return 0;
-        }
-        tell({ h, m, tag, pkt });
-        link.on_cancel(tag, () => tell({ cancel: tag }));
-        return ERRNO_EINPROGRESS;
+        if (later.some(([lh, lm]) => lh === h && lm === m)) return forward(h, m, tag, args);
+        tell({ h, m, tag: null, pkt: args === null ? null : args.slice() });
+        return 0;
       },
+      drop() {},
+    });
+  }
+  for (const p of prefixes) {
+    link.mount(p, (uri, h) => {
+      tell({ open: h, uri });
+      return {
+        call: (m, tag, args) => forward(h, m, tag, args),
+        drop: () => tell({ drop: h }),
+      };
     });
   }
   port.onmessage = (e) => {
@@ -116,25 +143,26 @@ export function serve(port: Port, link: Link, named: readonly Handle[], later: L
 }
 
 /** The UI's end of a link `serve` serves across a port. */
-export class Remote implements Sender {
-  /** The named handles of the interfaces the UI serves, which `serve`
-   * mounts. */
-  readonly named: Handle[] = [];
-  /** The prefixes the UI opens the objects under (`mount`). */
-  readonly prefixes: (readonly Token[])[] = [];
+export class Remote extends Side<ReturnType<typeof opened>> implements Sender {
   private readonly _port: Port;
   private readonly _answers = new Map<Tag, (a: Answered) => void>();
-  /** The objects the UI serves: its interfaces by their named handles, and
-   * those it opened by theirs. */
-  private readonly _objects = new Map<Handle, LinkObject>();
-  private readonly _mounts: [readonly Token[], Opener][] = [];
-  /** How each method the UI answers later stops if the guest cancels it. */
-  private readonly _cancels = new Map<Tag, () => void>();
   private _next = 0;
 
   constructor(port: Port) {
+    super(opened());
     this._port = port;
     port.onmessage = (e) => this._hear(e.data as ToUi);
+  }
+
+  /** The named handles of the interfaces the UI serves, which `serve`
+   * mounts. */
+  get named(): Handle[] {
+    return [...this._named.keys()];
+  }
+
+  /** The prefixes the UI opens the objects under (`mount`). */
+  get prefixes(): (readonly Token[])[] {
+    return this._mounts.map(([p]) => p);
   }
 
   private _hear(m: ToUi): void {
@@ -143,39 +171,19 @@ export class Remote implements Sender {
       this._answers.delete(m.tag);
       return a?.({ result: m.result, data: m.data });
     }
-    if ("open" in m) return this._open(m.open, m.uri);
-    if ("cancel" in m) {
-      const stop = this._cancels.get(m.cancel);
-      this._cancels.delete(m.cancel);
-      return stop?.();
+    if ("open" in m) {
+      const open = this._opener(m.uri);
+      const refused = open === undefined ? ERRNO_ENOENT : this._open(m.open, m.uri, open);
+      if (refused !== 0) this._objects.put(m.open, { call: () => refused, drop() {} });
+      return;
     }
-    if ("drop" in m) return void this._objects.delete(m.drop);
-    const o = this._objects.get(m.h);
-    if (m.tag === null) return void o?.call(m.m, 0, m.pkt);
-    const reply = o === undefined ? ERRNO_EPROTO : o.call(m.m, m.tag, m.pkt);
+    if ("cancel" in m) return this._cancel(m.cancel);
+    if ("drop" in m) return void this._drop(m.drop);
+    if (m.tag === null) return void this._call(m.h, m.m, 0, m.pkt);
+    const reply = this._call(m.h, m.m, m.tag, m.pkt);
     if (reply === ERRNO_EINPROGRESS) return;
     const { result, data } = typeof reply === "number" ? { result: reply, data: null } : reply;
     this.task_return(m.tag, result, data);
-  }
-
-  /** Opens the object at `uri` under `h`, with the opener of the longest
-   * prefix it starts with. */
-  private _open(h: Handle, uri: readonly Token[]): void {
-    const starts = (p: readonly Token[]) => p.every((t, k) => t.tag === uri[k]?.tag && t.val === uri[k]?.val);
-    const opener = this._mounts
-      .filter(([p]) => starts(p))
-      .reduce<[readonly Token[], Opener] | undefined>((a, b) => (a === undefined || b[0].length > a[0].length ? b : a), undefined);
-    if (opener === undefined) bug(ERRNO_EPROTO);
-    // The guest's open was answered across the port already, so an opener's
-    // refusal is the answer to each method of what it would have opened.
-    let o: LinkObject;
-    try {
-      o = opener[1](uri, h);
-    } catch (e) {
-      const refused = refusal_of(e);
-      o = { call: () => refused };
-    }
-    this._objects.set(h, o);
   }
 
   send(h: Handle, m: Method, args: Args): Promise<Answered> {
@@ -192,41 +200,34 @@ export class Remote implements Sender {
     this._port.postMessage({ give: h, thing } satisfies ToLink, [thing]);
   }
 
-  /** Serves `o` under its interface's named handle `h`, before the guest
-   * boots. */
-  mount_named(h: Handle, o: LinkObject): void {
-    this._objects.set(h, o);
-    this.named.push(h);
-  }
-
-  /** Serves the objects at the URIs that start with `prefix`, each opened by
-   * `open`, before the guest boots. */
-  mount(prefix: readonly Token[], open: Opener): void {
-    this._mounts.push([prefix, open]);
-    this.prefixes.push(prefix);
-  }
-
-  /** Answers the guest's request `t`, whose method the UI answers later,
-   * with `result` and its return data (Link `task_return`). */
-  task_return(t: Tag, result: i32, data: Args = null): void {
-    this._cancels.delete(t);
+  /** Posts the answer to the guest's request `t` across the port. */
+  protected _answer(t: Tag, result: i32, data: Packet): void {
     this._port.postMessage({ answer: t, result, data: packet(data) } satisfies ToLink);
   }
+}
 
-  /** Puts `stop` as how the request `t` the UI answers later stops if the
-   * guest cancels it (Link `on_cancel`). */
-  on_cancel(t: Tag, stop: () => void): void {
-    this._cancels.set(t, stop);
-  }
+/** The objects the UI serves, under the handles the link's side issued as it
+ * opened them. */
+function opened() {
+  const objects = new Map<Handle, LinkObject>();
+  return {
+    get: (h: Handle) => objects.get(h),
+    put: (h: Handle, o: LinkObject) => void objects.set(h, o),
+    remove: (h: Handle) => {
+      const o = objects.get(h);
+      objects.delete(h);
+      return o;
+    },
+  };
 }
 
 /** The most bytes a packet holds, the Canonical ABI's largest list. */
 const PKT_CAP = (1 << 28) - 1;
 
-/** The packet `args` write, or none for no args. A packet past the largest
- * is EOVERFLOW. */
-function packet(args: Args): U8Array | null {
-  if (args === null) return null;
+/** The bytes of the packet `args`: those `args` write, those it is, or none
+ * for no args. A packet past the largest is EOVERFLOW. */
+export function packet(args: Packet): U8Array | null {
+  if (args === null || args instanceof Uint8Array) return args;
   for (let cap = 1 << 10; ; cap = Math.min(cap * 2, PKT_CAP)) {
     const buf = new Uint8Array(cap);
     const w = new Lower(buf, args[0]);

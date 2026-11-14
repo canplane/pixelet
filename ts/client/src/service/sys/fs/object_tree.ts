@@ -27,7 +27,7 @@ import {
   SENTINEL_VOID,
 } from "@/abi/cube.spec.ts";
 
-/** A write, laid out as file.json's `write`. A leaf is kept as the write that
+/** A write, laid out as file.json5's `write`. A leaf is kept as the write that
  * made it. `text` is a marker's words, the one record a leaf can carry. */
 export interface Leaf {
   key: string;
@@ -35,7 +35,7 @@ export interface Leaf {
   text: string | null;
 }
 
-/** A row of the top, laid out as file.json's `top`. Only a shard that holds
+/** A row of the top, laid out as file.json5's `top`. Only a shard that holds
  * objects has a row, which gives the shard's quadkey and what it folds to. */
 export interface TopRow {
   shard: string;

@@ -5,20 +5,20 @@ use xpute_gen::spec::data::{enum_members, table_outputs, DataSpec};
 use xpute_gen::spec::ts_enum;
 
 use super::{
-    file, json_str, line_comments, mark, pascal, read, plural, rs_doc, ts_doc, Node, Output,
+    file, json_str, line_comments, mark, pascal, read, plural, u32_of, rs_doc, ts_doc, Node, Output,
 };
 use crate::root;
 
-/// publication.json's outputs, by which a spec that names its enums reaches
+/// publication.json5's outputs, by which a spec that names its enums reaches
 /// them.
 pub(crate) const PUBLICATION: DataSpec = DataSpec {
-    json: "spec/spec/bake/publication.json",
+    json: "spec/spec/bake/publication.json5",
     ts: Some("ts/client/src/abi/publication.spec.ts"),
     rs: Some("rust/spec/src/bake/publication.spec.rs"),
     ..DataSpec::DEFAULT
 };
 
-/// publication.json, written by xpute's generator as a data spec: its
+/// publication.json5, written by xpute's generator as a data spec: its
 /// `BASE_KIND` enum and `FORMAT` keyed on it among the rest. The tool keeps
 /// what is pixelet's own: the object a tile is published as, read and written
 /// by `OBJECT`, and the Worker's copy of the layers' names, bundled apart from
@@ -29,15 +29,15 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     // Worker's copy takes too.
     const KIND: &str = "BASE_KIND";
     let spec = read(JSON)?;
-    let layer = spec.get(KIND).ok_or("publication.json: no BASE_KIND")?;
+    let layer = spec.get(KIND).ok_or("publication.json5: no BASE_KIND")?;
     let layers: Vec<&str> = layer.val().arr().unwrap_or_default().iter().filter_map(Node::str).collect();
 
     // A kind's object in a set: the one place its segments are ordered.
-    let object_node = spec.get("OBJECT").ok_or("publication.json: no OBJECT")?;
+    let object_node = spec.get("OBJECT").ok_or("publication.json5: no OBJECT")?;
     let object = object_node
         .val()
         .str()
-        .ok_or("publication.json: OBJECT is no template")?;
+        .ok_or("publication.json5: OBJECT is no template")?;
     let segments: Vec<&str> = object
         .split('/')
         .map(|s| {
@@ -49,23 +49,23 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     // A version is a folder its tiles go up in whole (script/publish.py), so it comes first.
     if segments != ["version", "name"] {
         return Err(format!(
-            "publication.json: OBJECT {object:?} is not {{version}}/{{name}}"
+            "publication.json5: OBJECT {object:?} is not {{version}}/{{name}}"
         ));
     }
-    let object_doc = object_node.lines_at("$doc").unwrap_or_default();
+    let object_doc = object_node.doc().unwrap_or_default();
     let sphere_node = spec
         .get("TILE_SPHERE")
-        .ok_or("publication.json: no TILE_SPHERE")?;
+        .ok_or("publication.json5: no TILE_SPHERE")?;
     let sphere = sphere_node.val().str().unwrap_or_default();
     if sphere.is_empty()
         || !sphere.bytes().all(|b| b.is_ascii_lowercase())
         || sphere.bytes().all(|b| (b'0'..=b'3').contains(&b))
     {
         return Err(format!(
-            "publication.json: TILE_SPHERE {sphere:?} is no name a tile could have"
+            "publication.json5: TILE_SPHERE {sphere:?} is no name a tile could have"
         ));
     }
-    let sphere_doc = sphere_node.lines_at("$doc").unwrap_or_default();
+    let sphere_doc = sphere_node.doc().unwrap_or_default();
 
     let table: Vec<(String, Node)> = spec
         .entries()
@@ -152,8 +152,8 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
 
 pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let (cat_json, theme_json) = (
-        "spec/spec/bake/place_category.json",
-        "spec/spec/bake/place_theme.json",
+        "spec/spec/bake/place_category.json5",
+        "spec/spec/bake/place_theme.json5",
     );
     let (cat, theme) = (read(cat_json)?, read(theme_json)?);
     let categories: Vec<&str> = cat
@@ -187,24 +187,24 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
         }
     };
     let color = |k: &str, f: &str| -> Result<String, String> {
-        match rows.get(k).and_then(|r| r.str_at(f)) {
+        match rows.get(k).and_then(|r| r.get(f)) {
             None => Ok("0".into()),
-            Some(c) => Ok(format!("rgb({}) << 8 | 0xff", json_str(c))),
+            Some(c) => u32_of(c).map(|c| format!("{c} << 8 | 0xff")).ok_or(format!("{theme_json}: {k}.{f} is no color")),
         }
     };
     let mut rs = vec![
         "// pxl-spec/bake/place_theme.spec.rs".to_string(),
         "//".into(),
-        format!("// {}", mark("spec/spec/bake/place_category.json and spec/spec/bake/place_theme.json", "pxl-tool spec/bake.rs")),
+        format!("// {}", mark("spec/spec/bake/place_category.json5 and spec/spec/bake/place_theme.json5", "pxl-tool spec/bake.rs")),
         "//".into(),
     ];
-    rs.extend(line_comments(&cat.lines_at("$doc").unwrap_or_default(), ""));
+    rs.extend(line_comments(&cat.doc().unwrap_or_default(), ""));
     rs.push("//".into());
     rs.extend(line_comments(
-        &theme.lines_at("$doc").unwrap_or_default(),
+        &theme.doc().unwrap_or_default(),
         "",
     ));
-    rs.extend([String::new(), "use crate::color::{rgb, Rgba};".into()]);
+    rs.extend([String::new(), "use crate::color::Rgba;".into()]);
     let mut list = |doc: &str,
                     ty: &str,
                     name: &str,
@@ -273,24 +273,24 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let mut ts = vec![
         "// @pxl/client/ui/feature/search/place_theme.spec.ts".to_string(),
         "//".into(),
-        format!("// {}", mark("spec/spec/bake/place_category.json and spec/spec/bake/place_theme.json", "pxl-tool spec/bake.rs")),
+        format!("// {}", mark("spec/spec/bake/place_category.json5 and spec/spec/bake/place_theme.json5", "pxl-tool spec/bake.rs")),
         "//".into(),
     ];
     ts.extend(line_comments(
-        &theme.lines_at("$doc").unwrap_or_default(),
+        &theme.doc().unwrap_or_default(),
         "",
     ));
     let fill = |k: &str| -> Result<String, String> {
-        match rows.get(k).and_then(|r| r.str_at("fill")) {
-            None => Ok(json_str("")),
-            Some(c) => Ok(json_str(c)),
+        match rows.get(k).and_then(|r| r.get("fill")) {
+            None => Ok("null".into()),
+            Some(c) => u32_of(c).map(|c| format!("{c}")).ok_or(format!("{theme_json}: {k}.fill is no color")),
         }
     };
     for (doc, name, ty, each) in [
         (
-            "A category's icon or dot fill as `#rrggbb`, \"\" where Carto draws no point for it",
+            "A category's icon or dot fill, `0xRRGGBB`, null where Carto draws no point for it",
             "FILL",
-            "string",
+            "(number | null)",
             &fill as &dyn Fn(&str) -> Result<String, String>,
         ),
         (

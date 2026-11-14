@@ -5,13 +5,17 @@ import ExpoModulesCore
 import Foundation
 
 /// This is xpute's native module on iOS (src/mod.ts), over xpute's C ABI
-/// (xpute.h): it starts the runtime on the core's thread, carries the UI's
+/// (xpute.h): it starts the runtime on the guest's thread, carries the UI's
 /// link to it and back, and tells it of the app's lifecycle itself.
 /// android/'s XputeModule.kt is the same module under the same names.
 public class XputeModule: Module {
   /// The functions given to `xpute_notify_on`, `xpute_stopped_on` and
-  /// `xpute_trap_on` send their events through this module.
+  /// `xpute_trap_on` send their events through this module, the newest made.
+  /// A reload may make the new module before the old one is destroyed, so a
+  /// module clears the functions only while it is the current one, under
+  /// `lock`.
   nonisolated(unsafe) static weak var current: XputeModule?
+  private static let lock = NSLock()
 
   public func definition() -> ModuleDefinition {
     Name("Xpute")
@@ -21,6 +25,8 @@ public class XputeModule: Module {
     Events("onNotify", "onStopped", "onTrap")
 
     OnCreate {
+      XputeModule.lock.lock()
+      defer { XputeModule.lock.unlock() }
       XputeModule.current = self
       // A C function captures nothing, so it reaches the module through the
       // static. Expo's sendEvent carries the event to the JavaScript thread
@@ -42,6 +48,9 @@ public class XputeModule: Module {
       xpute_trap_on { XputeModule.current?.sendEvent("onTrap") }
     }
     OnDestroy {
+      XputeModule.lock.lock()
+      defer { XputeModule.lock.unlock() }
+      guard XputeModule.current === self else { return }
       XputeModule.current = nil
       xpute_notify_on(nil)
       xpute_stopped_on(nil)
@@ -60,15 +69,18 @@ public class XputeModule: Module {
     /// app makes for itself, out of the user's sight in Files, and is backed
     /// up, as Android's files directory is.
     Function("start") { (named: [UInt32], prefixes: Uint8Array) throws in
-      let files = try FileManager.default.url(
-        for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-      let caches = try FileManager.default.url(
-        for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+      // Each directory crosses as its UTF-8 bytes, without the NUL.
+      let files = Array(try FileManager.default.url(
+        for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+      ).path.utf8CString.dropLast())
+      let caches = Array(try FileManager.default.url(
+        for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true
+      ).path.utf8CString.dropLast())
       named.withUnsafeBufferPointer { buf in
         xpute_start(
           buf.baseAddress, buf.count,
           prefixes.rawPointer.assumingMemoryBound(to: UInt8.self), prefixes.byteLength,
-          files.path, caches.path)
+          files, files.count, caches, caches.count)
       }
     }
 
@@ -89,7 +101,7 @@ public class XputeModule: Module {
         cleanup: { xpute_taken_free(at, len) })
     }
 
-    /// The region is the core's for the app's whole life, so nothing is freed
+    /// The region is the guest's for the app's whole life, so nothing is freed
     /// when the buffer is.
     Function("mem") { () throws -> NativeArrayBuffer in
       var len: UInt32 = 0

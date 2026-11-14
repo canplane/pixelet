@@ -8,9 +8,9 @@ import {
   Link,
   Prose,
   Section,
-  setting_text,
+  SETTING_TEXT,
 } from "@/ui/feature/setting/row.tsx";
-import { weight } from "@/ui/shared/component/theme.ts";
+import { WEIGHT } from "@/ui/shared/component/theme.ts";
 
 /**
  * License notices, grouped by the provider each comes from, and not
@@ -98,11 +98,11 @@ function Provider({ name, children }: { name: string; children: ReactNode }) {
 }
 
 function Line({ children }: { children: ReactNode }) {
-  return <Text style={setting_text.small}>{children}</Text>;
+  return <Text style={SETTING_TEXT.small}>{children}</Text>;
 }
 
 const styles = StyleSheet.create({
   providers: { gap: 16 },
   provider: { gap: 4 },
-  name: { ...setting_text.small, fontWeight: weight.medium },
+  name: { ...SETTING_TEXT.small, fontWeight: WEIGHT.medium },
 });

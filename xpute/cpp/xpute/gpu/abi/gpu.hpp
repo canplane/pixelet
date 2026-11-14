@@ -34,7 +34,7 @@ using ::xpute::link::answer;
 using ::xpute::link::span;
 } // namespace _rt
 
-// The interface's handle, named by `xpute:gpu/gpu` (frame.json `NAMED`).
+// The interface's handle, named by `xpute:gpu/gpu` (frame.json5 `NAMED`).
 inline constexpr _rt::Handle HANDLE = 0x79d455;
 
 // `run`

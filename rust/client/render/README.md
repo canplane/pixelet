@@ -74,7 +74,7 @@ what is done a pixel at a time: the pixels' cast and holes, the visibility
 buffer, the world's passes, the occlusion. The beam rays, cells, samples and
 boxes run on angular cells and do not shrink, and the finish and the markers
 always draw at the display's pixels, so text stays sharp. Each GPU span says
-which kind it is (span.json `GPU_SPAN_PER_PX`). The rate spaces the frames, a refresh at a
+which kind it is (span.json5 `GPU_SPAN_PER_PX`). The rate spaces the frames, a refresh at a
 time, down to 30 Hz (`RATE_MIN_HZ`), and gives every pass more time.
 
 `auto` steers both as congestion control steers a connection. While the GPU's

@@ -15,7 +15,7 @@ import {
   PanelPresence,
   type PanelProps,
 } from "@/ui/shared/component/panel.tsx";
-import { color } from "@/ui/shared/component/theme.ts";
+import { COLOR } from "@/ui/shared/component/theme.ts";
 
 // Every export of the default file, except `Panel`: an export declared in this
 // file takes the place of a star export with the same name.
@@ -34,7 +34,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
           modifiers={[
             presentationDetents(half ? ["medium", "large"] : ["large"]),
             presentationDragIndicator("visible"),
-            presentationBackground(color.ground),
+            presentationBackground(COLOR.ground),
             createModifier("pxlContentScrolls"),
             ignoreSafeArea({ regions: "container", edges: "bottom" }),
           ]}

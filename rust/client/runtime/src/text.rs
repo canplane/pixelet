@@ -129,44 +129,15 @@ mod android {
 
     use xpute_kit::status::bug::OrBug;
     use xpute_kit::status::errno::Errno;
-    use xpute_native_runtime::jni::sys::{
-        jbyteArray, jclass, jmethodID, jobject, jvalue, JNIEnv, JavaVM, JNI_OK, JNI_VERSION_1_6,
-    };
-    use xpute_native_runtime::jni::{self, sys::jint};
+    use xpute_native_runtime::jni::sys::{jbyteArray, jint, jobject, jvalue, JNIEnv};
+    use xpute_native_runtime::jni::{call, class, env, Class};
 
     use super::{text_on, Rgba, SystemText};
 
-    struct Class {
-        vm: *mut JavaVM,
-        class: jclass,
-        width: jmethodID,
-        raster: jmethodID,
-    }
-
-    // SAFETY: JNI's VM is one for the process and may be used from any thread;
-    // a global reference and a method ID stay valid in every thread.
-    unsafe impl Send for Class {}
-    // SAFETY: as for `Send`: nothing in it is changed once it is made.
-    unsafe impl Sync for Class {}
-
-    static CLASS: OnceLock<Class> = OnceLock::new();
-
-    /// The core's thread as JNI knows it, attached for good as a daemon.
-    ///
-    /// # Safety
-    /// `vm` is the process's VM.
-    unsafe fn env_here(vm: *mut JavaVM) -> *mut JNIEnv {
-        let mut e: *mut JNIEnv = core::ptr::null_mut();
-        // SAFETY: the VM, which lives as long as the process.
-        unsafe {
-            let get = (**vm).GetEnv.or_bug(Errno::ENOSYS);
-            if get(vm, (&raw mut e).cast(), JNI_VERSION_1_6) != JNI_OK {
-                let attach = (**vm).AttachCurrentThreadAsDaemon.or_bug(Errno::ENOSYS);
-                attach(vm, (&raw mut e).cast(), core::ptr::null_mut());
-            }
-        }
-        e
-    }
+    /// The class `PxlNative` and its static methods at `WIDTH` and `RASTER`.
+    static CLASS: OnceLock<Class<2>> = OnceLock::new();
+    const WIDTH: usize = 0;
+    const RASTER: usize = 1;
 
     /// The UTF-8 of a text as a Java `byte[]`, a local reference.
     ///
@@ -175,7 +146,7 @@ mod android {
     unsafe fn bytes(e: *mut JNIEnv, text: *const u8, len: usize) -> jbyteArray {
         // SAFETY: as the caller says.
         unsafe {
-            let j = jni::env(e);
+            let j = env(e);
             let out = j.NewByteArray.or_bug(Errno::ENOSYS)(e, len as jint);
             j.SetByteArrayRegion.or_bug(Errno::ENOSYS)(e, out, 0, len as jint, text.cast());
             out
@@ -184,19 +155,14 @@ mod android {
 
     unsafe extern "C" fn width(weight: f64, px: f64, text: *const u8, len: usize) -> f64 {
         let Some(c) = CLASS.get() else { return 0.0 };
-        // SAFETY: the class holds the VM and the method; a local reference is
-        // let go here, since this thread never returns to Java.
-        unsafe {
-            let e = env_here(c.vm);
-            let j = jni::env(e);
-            let t = bytes(e, text, len);
-            let args = [jvalue { l: t }, jvalue { d: weight }, jvalue { d: px }];
-            let w =
-                j.CallStaticDoubleMethodA.or_bug(Errno::ENOSYS)(e, c.class, c.width, args.as_ptr());
-            j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
-            j.DeleteLocalRef.or_bug(Errno::ENOSYS)(e, t);
-            w
-        }
+        let args = |e| {
+            // SAFETY: this thread's environment, and the text's bytes, the
+            // caller's for the call.
+            let t = unsafe { bytes(e, text, len) };
+            vec![jvalue { l: t }, jvalue { d: weight }, jvalue { d: px }]
+        };
+        // SAFETY: `width([BDD)D`, at its index, and its three values in order.
+        unsafe { call(c, WIDTH, args) }
     }
 
     unsafe extern "C" fn raster(
@@ -211,18 +177,18 @@ mod android {
         out: *mut u8,
     ) {
         let Some(c) = CLASS.get() else { return };
-        // SAFETY: as in `width`; `out` is `width` by `height` pixels of four
-        // bytes, the caller's for the call.
-        unsafe {
-            let e = env_here(c.vm);
-            let j = jni::env(e);
-            let t = bytes(e, text, len);
-            let buf = j.NewDirectByteBuffer.or_bug(Errno::ENOSYS)(
-                e,
-                out.cast(),
-                i64::from(width) * i64::from(height) * 4,
-            );
-            let args = [
+        let args = |e| {
+            // SAFETY: as in `width`; `out` is `width` by `height` pixels of
+            // four bytes, the caller's for the call.
+            let (t, buf) = unsafe {
+                let buf = env(e).NewDirectByteBuffer.or_bug(Errno::ENOSYS)(
+                    e,
+                    out.cast(),
+                    i64::from(width) * i64::from(height) * 4,
+                );
+                (bytes(e, text, len), buf)
+            };
+            vec![
                 jvalue { l: t },
                 jvalue { d: weight },
                 jvalue { d: px },
@@ -231,12 +197,11 @@ mod android {
                 jvalue { i: width as jint },
                 jvalue { i: height as jint },
                 jvalue { l: buf },
-            ];
-            j.CallStaticVoidMethodA.or_bug(Errno::ENOSYS)(e, c.class, c.raster, args.as_ptr());
-            j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
-            j.DeleteLocalRef.or_bug(Errno::ENOSYS)(e, t);
-            j.DeleteLocalRef.or_bug(Errno::ENOSYS)(e, buf);
-        }
+            ]
+        };
+        // SAFETY: `raster([BDDJDIILjava/nio/ByteBuffer;)V`, at its index, and
+        // its eight values in order.
+        unsafe { call(c, RASTER, args) }
     }
 
     /// Kotlin's `PxlNative.textOn`: takes the class on a thread Java made, which
@@ -252,38 +217,14 @@ mod android {
         if CLASS.get().is_some() {
             return;
         }
-        // SAFETY: JNI's own calls on the environment it called with; the class
-        // is held globally, so it outlives this call.
-        unsafe {
-            let j = jni::env(e);
-            let mut vm: *mut JavaVM = core::ptr::null_mut();
-            if j.GetJavaVM.or_bug(Errno::ENOSYS)(e, &raw mut vm) != JNI_OK {
-                return;
-            }
-            let class = j.NewGlobalRef.or_bug(Errno::ENOSYS)(
-                e,
-                j.GetObjectClass.or_bug(Errno::ENOSYS)(e, this),
-            );
-            let method = |name: &core::ffi::CStr, sig: &core::ffi::CStr| {
-                j.GetStaticMethodID.or_bug(Errno::ENOSYS)(e, class, name.as_ptr(), sig.as_ptr())
-            };
-            let w = method(c"width", c"([BDD)D");
-            if w.is_null() {
-                j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
-                return;
-            }
-            let r = method(c"raster", c"([BDDJDIILjava/nio/ByteBuffer;)V");
-            if r.is_null() {
-                j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
-                return;
-            }
-            let _ = CLASS.set(Class {
-                vm,
-                class,
-                width: w,
-                raster: r,
-            });
-        }
+        let mut methods = [(c"", c""); 2];
+        methods[WIDTH] = (c"width", c"([BDD)D");
+        methods[RASTER] = (c"raster", c"([BDDJDIILjava/nio/ByteBuffer;)V");
+        // SAFETY: what JNI called with, on a thread Java made.
+        let Some(c) = (unsafe { class(e, this, methods) }) else {
+            return;
+        };
+        let _ = CLASS.set(c);
         text_on(SystemText { width, raster });
     }
 }

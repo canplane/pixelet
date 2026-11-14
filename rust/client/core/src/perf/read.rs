@@ -1,6 +1,6 @@
 // pxl-core/perf/read.rs
 
-//! What PERF_STATS reads. The profiler's window is reduced into perf.json's
+//! What PERF_STATS reads. The profiler's window is reduced into perf.json5's
 //! STAT, and the state at the moment of the read into its NOW, which the
 //! reply hands over together (`perf_read`). A section is written only through
 //! `put` (perf/word.rs).
@@ -51,7 +51,7 @@ fn read() -> &'static mut [f64; stat::WORDS + now::WORDS] {
     READ.get(|| Box::new([0.0; stat::WORDS + now::WORDS]))
 }
 
-/// The percentiles of `vals` (perf.json PERCENTILE) and how many values
+/// The percentiles of `vals` (perf.json5 PERCENTILE) and how many values
 /// they cover. Only as many values as `scratch` holds are taken.
 fn percentile_n(scratch: &mut [f64], vals: impl Iterator<Item = f64>) -> (Percentile, usize) {
     let mut n = 0;

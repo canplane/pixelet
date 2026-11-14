@@ -10,16 +10,14 @@ and the core's snapshot back.
 
 ```text
   ui/         the UI: React Native, the same on every platform
-     │  reaches below only through service/
+  runtime/    where xpute's host runs, and the boot that opens it
+     │  each reaches below only through service/
      ▼
   service/    what answers the core and the UI on this platform
     core/       the app's ABI: commands, the snapshot, surfaces, sensors, text
     sys/        the core's files, the boot's and the GPU's states, the stop report
     origin/     the server the client reads from, and whether it is online
     platform/   what differs by platform, as file pairs
-     │
-     ▼
-  runtime/    where xpute's host runs, opened where the platform places the core
 ```
 
 The UI reaches the core only through `service/core/`, and `service/core/`
@@ -35,18 +33,21 @@ command's number and not its name.
 What differs between the page and a device is a pair of files in
 `service/platform/`: `<x>.ts` is the page's and `<x>.native.ts` the device's,
 and the shapes both share are in `platform/types.ts`. Metro picks the right one
-for each build. The pair that opens the host is in `runtime/`: on a page the
-core runs in a worker (`open.ts`), and on a device it runs beside the UI, linked
-into the app (`open.native.ts`). A piece of the UI that the platforms draw
-differently is a file with its override beside it
+for each build. The pair that boots the core is in `runtime/` (`boot.ts`,
+`boot.native.ts`) and opens the runtime it runs in, and the pair it reaches
+the core through is `service/platform/core.ts`: on a page the core runs in a
+worker, and on a device on a thread of its own, linked into the app, and the
+UI reaches it through a `Remote` either way. A piece of the UI that the
+platforms draw differently is a file with its override beside it
 (`src/ui/shared/component/README.md`).
 
 ## The boot
 
-`runtime/boot.ts` brings the client up from the bottom: it opens the host,
-binds the core's commands to it, and reports where the boot stands as the core
-starts, a GPU answers, the world's source is declared and the first snapshots
-come. The UI only reads that state, through the services, and shows a cover over
+The boot brings the client up from the bottom: it mounts what the UI serves the
+core, starts the core where its platform runs it, and moves where the boot
+stands as the core answers, a GPU and the world's source come and the first
+snapshots arrive, which is alike on both platforms (`runtime/ui.ts`). The UI
+only reads that state, through the services, and shows a cover over
 the world until the view is first drawn (`ui/feature/cover/`).
 
 ## The app's ABI

@@ -12,23 +12,55 @@
  * is declared here too.
  */
 
-import { type Link, type Sender, serve, wait } from "@xpute/link";
+import type { GpuState } from "@xpute/gpu-link";
+import { type Link, serve, wait } from "@xpute/link";
 import { hook, serve_clock, serve_stop } from "@xpute/web-host";
-import { forward_console, type Instantiate, instantiate } from "@xpute/web-runtime";
+import {
+  forward_console,
+  type Instantiate,
+  instantiate,
+  type InstantiateError,
+  type Log,
+  type Stopped,
+  type Trap,
+} from "@xpute/web-runtime";
 import { serve_vsync, WebGpu } from "@xpute/gpu-web-host";
 import { device } from "@/abi/gpu.spec.ts";
 import { LATER } from "@/abi/later.ts";
 import { mem } from "@/abi/manifest.spec.ts";
 import { LIMIT } from "@/abi/perf.spec.ts";
-import * as source from "@/abi/source.ts";
-import type { ToPage, ToWorker } from "@/runtime/boot.ts";
 import { set_online } from "@/service/origin/online.ts";
 import { serve_files } from "@/service/sys/fs/file.ts";
 import { serve_objects } from "@/service/sys/fs/object.ts";
-import { declare_source, source_decl, source_state, watch_source } from "@/service/sys/fs/source.ts";
+import {
+  type Declaration,
+  declare_source,
+  type Source,
+  source_decl,
+  source_state,
+  watch_source,
+} from "@/service/sys/fs/source.ts";
 import { set_storage } from "@/service/sys/fs/storage.ts";
 import { serve_text } from "@/service/core/text.ts";
 import * as online from "@/service/platform/online.ts";
+
+/** What the page sends the worker: the page's kept entries, which a worker
+ * cannot read, ahead of the core's instantiation (@xpute/web-runtime
+ * `Instantiate`). */
+export type ToWorker =
+  { kind: "entries"; entries: [string, string][] } | Instantiate;
+
+/** What the worker sends the page: the source's state, a kept key it wrote,
+ * the GPU's state, the error the core's instantiation came to, the core's
+ * report before it stops, its trap, and a line of the worker's console. */
+export type ToPage =
+  | { kind: "source"; state: Source; decl: Declaration | null }
+  | { kind: "keep"; key: string; val: string }
+  | { kind: "gpu"; state: GpuState }
+  | Stopped
+  | InstantiateError
+  | Trap
+  | Log;
 
 const tell = (m: ToPage) => postMessage(m);
 
@@ -59,7 +91,7 @@ function keep(entries: [string, string][]): void {
 
 async function start(m: Instantiate): Promise<void> {
   online.watch(set_online);
-  const link = await instantiate(m.module, m.init, mem.bytes, tell);
+  const link = await instantiate(m.module, m.init, mem.sz, tell);
   if (link === null) return;
   serve_stop(link, (stop) => tell({ kind: "stopped", stop }));
   hook(link);
@@ -69,8 +101,8 @@ async function start(m: Instantiate): Promise<void> {
   serve_files(link);
   serve_objects(link);
   // The page's host stages its writes in the chunks a device's does
-  // (spec/client/render/api.json `device`), and in a build made for
-  // measuring says what runs slower than perf.json's LIMIT.SLOW_MS.
+  // (spec/client/render/api.json5 `device`), and in a build made for
+  // measuring says what runs slower than perf.json5's LIMIT.SLOW_MS.
   const gpu = new WebGpu(
     link,
     { power: device.POWER, required_feats: device.REQUIRED_FEATURES, optional_feats: device.OPTIONAL_FEATURES },
@@ -78,7 +110,7 @@ async function start(m: Instantiate): Promise<void> {
     (state) => tell({ kind: "gpu", state }),
   );
   gpu.serve();
-  serve(m.port, link, m.named, LATER, {
+  serve(m.port, link, m.named, m.prefixes, LATER, {
     give: (h, canvas) => gpu.bind(h, canvas as OffscreenCanvas),
     take: (h) => gpu.unbind(h),
   });
@@ -88,12 +120,6 @@ async function start(m: Instantiate): Promise<void> {
 
 /** Declares the tile source to the core, and tells the page its state. */
 async function declare(link: Link): Promise<void> {
-  const sender: Sender = { send: (h, m, args) => wait(link, h, m, args) };
   watch_source(() => tell({ kind: "source", state: source_state(), decl: source_decl() }));
-  await declare_source((min_zoom, formats, shards) =>
-    source.declare(sender, min_zoom, Uint32Array.from(formats), shards).then(
-      () => true,
-      () => false,
-    ),
-  );
+  await declare_source({ send: (h, m, args) => wait(link, h, m, args) });
 }

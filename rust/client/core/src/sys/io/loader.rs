@@ -159,11 +159,11 @@ pub fn open_asset(key: u64, load: Load) {
 /// attempt's credit back once it is read. Where the entry is spent before the
 /// tasks run, each arrival still advances one step an entry, so no arrival
 /// waits on another. A file that cannot be read, absent among them, fails
-/// its load; a read its stop canceled reaches no one, and the load is asked
+/// its load; a canceled read ends aborted (`exit_of`), and the load is asked
 /// again.
 #[embassy_executor::task(pool_size = LOAD_FILE_CAP)]
 async fn arrival(key: u64, kind: LoadKind, load: Load) {
-    let read = file::read_whole(&load.path(), mem::MIN_HEAP_BYTES, Some(key), file::heap)
+    let read = file::read_whole(&load.path(), mem::MIN_HEAP_SZ, Some(key), file::heap)
         .await
         .map(Vec::into_boxed_slice);
     let l = loader();
@@ -173,13 +173,10 @@ async fn arrival(key: u64, kind: LoadKind, load: Load) {
             *l.at(kind, load) = Some(Entry::InTask);
             bytes
         }
-        Err(Errno::ECANCELED) => {
-            *l.at(kind, load) = None;
-            return;
-        }
         Err(errnum) => {
-            settle(key, exit_of(Failure::from(errnum)), None);
-            *l.at(kind, load) = Some(Entry::Failed);
+            let exit = exit_of(Failure::from(errnum));
+            settle(key, exit, None);
+            *l.at(kind, load) = if exit == Exit::Aborted { None } else { Some(Entry::Failed) };
             invalidate();
             return;
         }

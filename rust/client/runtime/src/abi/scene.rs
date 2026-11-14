@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-/// The interface's handle, named by `pxl:core/scene` (frame.json `NAMED`).
+/// The interface's handle, named by `pxl:core/scene` (frame.json5 `NAMED`).
 pub const HANDLE: _rt::Handle = 0x7c289a;
 
 /// `draw`

@@ -2,7 +2,7 @@
 //
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 
-/// The interface's handle, named by `xpute:gpu/vsync` (frame.json `NAMED`).
+/// The interface's handle, named by `xpute:gpu/vsync` (frame.json5 `NAMED`).
 pub const HANDLE: _rt::Handle = 0x42eda6;
 
 /// `next`

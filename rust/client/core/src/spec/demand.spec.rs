@@ -1,10 +1,10 @@
 // pxl-core/spec/demand.spec.rs
 //
-// GENERATED from spec/client/core/sys/io/demand.json (xpute-gen data.rs)
+// GENERATED from spec/client/core/sys/io/demand.json5 (xpute-gen data.rs)
 //
 // A request's vocabulary, the core's and the UI's: what stream it is in, how
 // its run came to an end, and the phases a run reports its time in. The profiler
-// records and reports them by these names (spec/client/core/perf/perf.json).
+// records and reports them by these names (spec/client/core/perf/perf.json5).
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]

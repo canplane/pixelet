@@ -1,94 +1,31 @@
 // @pxl/client/runtime/boot.ts
 
 /**
- * A page opens the core in a worker of its own (worker.ts) and reaches it
- * across a message port. The worker holds the files, and keeps a copy of the
- * page's storage that it writes back here. The UI takes no part in the boot:
- * it reads where the boot stands (service/sys/boot.ts), and, once the core
- * has started, what the core shows it.
+ * A page runs the core in a worker of its own (worker.ts), opened here and
+ * started through the page's core (service/platform/core.ts). The worker holds
+ * the files, keeps a copy of the page's storage that it writes back here, and
+ * tells the page the source's state, the GPU's and the core's stop. Where the
+ * boot stands is moved as on a device (ui.ts).
  */
 
-import {
-  type Instantiate,
-  type InstantiateError,
-  type Log,
-  open_worker,
-  type Stopped,
-  tell_life,
-  type Trap,
-} from "@xpute/web-runtime";
-import { type Snapshot } from "@/abi/overlay.ts";
-import { GROUND_STATUS_SUCCESS } from "@/abi/overlay.enum.ts";
-import { set_online } from "@/service/origin/online.ts";
+import { open_worker, tell_life } from "@xpute/web-runtime";
 import { log } from "@/service/platform/log.ts";
-import type { GpuState } from "@xpute/gpu-link";
-import { stop_code, stopped } from "@/service/sys/abort.ts";
-import {
-  boot_state,
-  set_boot,
-  BOOT_FAILED,
-  BOOT_LOADING,
-  BOOT_STARTED,
-  BOOT_STARTING,
-  BOOT_TERMINATED,
-} from "@/service/sys/boot.ts";
+import { stopped } from "@/service/sys/abort.ts";
+import { set_boot, BOOT_FAILED } from "@/service/sys/boot.ts";
 import { GPU_STATE, set_gpu } from "@/service/sys/gpu.ts";
-import {
-  type Declaration,
-  mirror_source,
-  type Source,
-} from "@/service/sys/fs/source.ts";
+import { mirror_source } from "@/service/sys/fs/source.ts";
 import { is_storage_key } from "@/service/sys/fs/storage.ts";
-import { serve_overlay } from "@/service/core/core.ts";
-import {
-  SENSOR_LISTENER,
-  serve_watch,
-  tell_platform,
-} from "@/service/core/sensor.ts";
-import { listen } from "@/service/platform/sensor-listener.ts";
-import { tell_dev } from "@/service/core/setting.ts";
-import { cur, watch_snapshot } from "@/service/core/snapshot.ts";
-import { source } from "@/service/platform/core.ts";
-import * as online from "@/service/platform/online.ts";
+import { core_of } from "@/service/platform/core.ts";
 import * as storage from "@/service/platform/storage.ts";
-
-/** What the page sends the worker: the page's kept entries, which a worker
- * cannot read, ahead of the core's instantiation (@xpute/web-runtime
- * `Instantiate`). */
-export type ToWorker =
-  { kind: "entries"; entries: [string, string][] } | Instantiate;
-
-/** What the worker sends the page: the source's state, a kept key it wrote,
- * the GPU's state, the error the core's instantiation came to, the core's
- * report before it stops, its trap, and a line of the worker's console. */
-export type ToPage =
-  | { kind: "source"; state: Source; decl: Declaration | null }
-  | { kind: "keep"; key: string; val: string }
-  | { kind: "gpu"; state: GpuState }
-  | Stopped
-  | InstantiateError
-  | Trap
-  | Log;
-
-/** Whether the world has arrived, or nothing of it will show: every pipeline
- * is made, and the view is drawn or lies past the service area. When locating
- * fails, the view is drawn at its default place. */
-function loaded(s: Snapshot): boolean {
-  return (
-    s.renderer_progress === 1 &&
-    (s.pivot.status === GROUND_STATUS_SUCCESS || s.pivot.outside)
-  );
-}
+import { serve_ui, start_client, trapped } from "@/runtime/ui.ts";
+import type { ToPage, ToWorker } from "@/runtime/worker.ts";
 
 export function boot(): void {
   // Metro bundles the worker through this call, and through no form of
   // `new Worker` that tree shaking also compiles (metro.config.ts).
-  const { worker, remote, port } = open_worker(
-    require.unstable_resolveWorker("./worker.ts"),
-  );
-  const tell = (m: ToWorker, move: Transferable[] = []) =>
-    worker.postMessage(m, move);
-  worker.onmessage = ({ data: m }: MessageEvent<ToPage>) => {
+  const opened = open_worker(require.unstable_resolveWorker("./worker.ts"));
+  const { remote, start } = core_of(opened);
+  opened.worker.onmessage = ({ data: m }: MessageEvent<ToPage>) => {
     switch (m.kind) {
       case "source":
         return mirror_source(m.state, m.decl);
@@ -104,54 +41,20 @@ export function boot(): void {
         log(`[core] did not start: ${m.err}`);
         return set_boot(BOOT_FAILED);
       case "trap":
-        log(
-          `[core] stopped${stop_code() ? ` (${stop_code()})` : ""}: ${m.err}`,
-        );
-        return set_boot(BOOT_TERMINATED);
+        return trapped(m.err);
     }
   };
-  const { module, init } = source();
-  serve_overlay(remote);
-  serve_watch(remote);
+  serve_ui(remote);
+  // The page's kept entries, which a worker cannot read, go ahead of the
+  // core's module.
   const entries = storage
     .keys()
     .filter(is_storage_key)
     .map((key): [string, string] => [key, storage.get(key)!]);
-  tell({ kind: "entries", entries });
-  tell(
-    {
-      kind: "instantiate",
-      module: module.href,
-      init,
-      port,
-      named: remote.named,
-    },
-    [port],
-  );
-  watch_snapshot(() => {
-    if (boot_state() === BOOT_LOADING && loaded(cur())) set_boot(BOOT_STARTED);
-  });
-  online.watch(set_online);
-  set_boot(BOOT_STARTING);
-  // The core is told the page's lifecycle, the device's readings are routed
-  // to the core, the core is told the device's sensors and whether this is a
-  // development build, and once both have answered the UI calls it from
-  // LOADING on; the app shows once the world has arrived (`loaded`). The
-  // core's calls wait in the worker until it has booted.
+  opened.worker.postMessage({ kind: "entries", entries } satisfies ToWorker);
+  start();
+  // The core is told the page's lifecycle; a device's reaches its runtime
+  // natively.
   tell_life(remote);
-  // The device's readings go to the core from here on, before the core hears
-  // that it has sensors and starts one.
-  listen(SENSOR_LISTENER);
-  Promise.all([tell_platform(), tell_dev()]).then(
-    () => {
-      if (boot_state() !== BOOT_STARTING) return;
-      set_boot(BOOT_LOADING);
-      // The world may have arrived before the core answered.
-      if (loaded(cur())) set_boot(BOOT_STARTED);
-    },
-    (err: unknown) => {
-      console.error("[boot] the client did not start:", err);
-      if (boot_state() === BOOT_STARTING) set_boot(BOOT_FAILED);
-    },
-  );
+  start_client();
 }

@@ -1,18 +1,19 @@
 // @pxl/client/abi/perf.spec.ts
 //
-// GENERATED from spec/client/core/perf/perf.json (xpute-gen data.rs)
+// GENERATED from spec/client/core/perf/perf.json5 (xpute-gen data.rs)
 //
 // The profiler's records and sections as the core lays them out and the client reads
 // them from the replies that hand them over (perf/record.rs, ts/client/src/service/core/perf.ts):
 // word offsets, eight bytes a word. The names the numbers index are their owners':
-// a task's io's (spec/client/core/sys/io/demand.json), a step's and an effect's the
-// frame's (spec/client/core/perf/step.json), a GPU span's the renderer's
-// (spec/client/render/gpu/span.json). A packed table gives each field's
+// a task's io's (spec/client/core/sys/io/demand.json5), a step's and an effect's the
+// frame's (spec/client/core/perf/step.json5), a GPU span's the renderer's
+// (spec/client/render/gpu/span.json5). A packed table gives each field's
 // width and the generator lays the offsets out. Nothing is built
 // for a read: the core writes numbers where they stay, and the words for them are
 // the UI's. LIMIT holds the bounds the profiler keeps, and the one a build made for
 // measuring hands its GPU hosts, which the core and the client both read.
 
+/** What the pick met (NOW.view `hit_kind`; pxl-core domain/query/ray.rs `HitKind`): the ground, a placed cube, placed cubes folded into a coarser box, or a decor. */
 export const HIT_KINDS = ["ground", "object", "objects", "decor"] as const;
 
 export type HitKind =
@@ -37,10 +38,14 @@ export function of_HitKind(val: number): HitKind | null {
 
 export const LIMIT = {
   REASON_CAP: 4 as number,
+  /** A reason's words: its fail, its detail and how many (STREAM_STAT.reasons). */
   REASON_WORDS: 3 as number,
   STEP_CAP: 32 as number,
+  /** How far back the rings keep, the core's frames and tasks and the UI's long frames alike: the last minute. */
   WINDOW_MS: 60000 as number,
+  /** The most bytes one read of a ring hands over (perf.wit `ring`): a ring is read a page at a time, each from where the last ended, until a page comes short. The string table and the statistics fit one page. */
   PAGE_BYTES: 8192 as number,
+  /** In a build made for measuring, the hosts log a record of the GPU stream, the stream's run or the core's entry slower than this, the page's and the device's alike (xpute-gpu-link `GpuConfig::slow_ms`, @xpute/gpu-link `GpuConfig`). */
   SLOW_MS: 1000 as number,
 } as const;
 
@@ -323,4 +328,5 @@ export const NOW = {
   WORDS: 38 as number,
 } as const;
 
+/** The rings the profiler keeps: the frames, the tasks, and the worst moving frames since the recording started. */
 export const RING_NAMES = ["frames", "tasks", "worst"] as const;

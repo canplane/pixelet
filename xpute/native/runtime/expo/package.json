@@ -23,7 +23,8 @@
     ".": "./src/mod.ts"
   },
   "dependencies": {
-    "@xpute/kit": "workspace:*"
+    "@xpute/kit": "workspace:*",
+    "@xpute/link": "workspace:*"
   },
   "peerDependencies": {
     "expo": "*",

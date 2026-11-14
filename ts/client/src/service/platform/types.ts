@@ -9,6 +9,7 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { Remote } from "@xpute/link";
 
 /** A transaction on the place's database, which keeps files of bytes by key.
  * null stands for no file. */
@@ -17,11 +18,12 @@ export interface Tx {
   put(key: string, bytes: U8Array | null): Promise<void>;
 }
 
-/** What a place needs to open the core: the size of its memory in bytes,
- * which must be one its manifest allows. A place that links the core in needs
- * no config. */
-export interface Config {
-  bytes: u32;
+/** The core where the place runs it, over the runtime the boot opened (core.ts
+ * `core_of`): the UI's end of its link, on which the UI mounts what it serves
+ * the core, and what starts the core once that is mounted. */
+export interface Core {
+  remote: Remote;
+  start(): void;
 }
 
 export interface SafeArea {
@@ -59,7 +61,7 @@ export interface Fix {
 }
 
 export interface SensorListener {
-  position(
+  pos(
     lon: f64,
     lat: f64,
     alt: f64 | null,
@@ -69,17 +71,17 @@ export interface SensorListener {
   /** `watching` says whether the watch runs on past the failure, which only
    * the platform knows: a page's watch rides out all but a refusal, and a
    * device's ends on any. */
-  positionError(
+  pos_err(
     err: "denied" | "unavailable" | "timeout" | "other",
     watching: boolean,
   ): void;
-  orientation(
+  orient(
     compass: f64 | null,
     alpha: f64 | null,
     beta: f64 | null,
     gamma: f64 | null,
   ): void;
-  orientationLost(): void;
+  orient_err(): void;
   permission(
     sensor: "geolocation" | "orientation",
     answer: "asking" | "granted" | "denied" | "failed",

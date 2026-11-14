@@ -5,9 +5,9 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { Panel } from "@/ui/shared/component/panel.tsx";
 import { Tabbed } from "@/ui/shared/component/tabbed.tsx";
-import { hairline } from "@/ui/shared/component/theme.ts";
+import { HAIRLINE } from "@/ui/shared/component/theme.ts";
 import { SettingsSection } from "./section.tsx";
-import { setting_text } from "./row.tsx";
+import { SETTING_TEXT } from "./row.tsx";
 import { LanguageSection } from "@/ui/feature/setting/info/language.tsx";
 import { DisclaimerSection } from "@/ui/feature/setting/info/disclaimer.tsx";
 import { AboutSection } from "@/ui/feature/setting/info/about.tsx";
@@ -35,7 +35,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         {(tab) =>
           tab === OPTIONS ? (
             <>
-              <Text style={setting_text.faint}>
+              <Text style={SETTING_TEXT.faint}>
                 {t("settings.cost_legend")}
               </Text>
               <Separator />
@@ -60,5 +60,5 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  separator: { height: 1, backgroundColor: hairline },
+  separator: { height: 1, backgroundColor: HAIRLINE },
 });

@@ -1,6 +1,6 @@
 // cpp/xpute/link/frame.hpp
 
-// A frame's words are laid out by link/spec/frame.json, as xpute-link's
+// A frame's words are laid out by link/spec/frame.json5, as xpute-link's
 // frame.rs lays them: the request's tag, its command, the result, and the
 // packet's length. The command is the RES bit, the handle the callee issued
 // and the method's place among its object's. The packet, the method's args or

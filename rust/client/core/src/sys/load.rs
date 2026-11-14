@@ -20,7 +20,7 @@ pub enum LoadKind {
 }
 
 /// A file to load. `File` is a file after ASSET by its id: the
-/// catalog itself (file.json `CATALOG`) or a file the catalog names.
+/// catalog itself (file.json5 `CATALOG`) or a file the catalog names.
 /// `Sphere` is the picture of the whole Earth, which is opened after EARTH
 /// and so under that bake's version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

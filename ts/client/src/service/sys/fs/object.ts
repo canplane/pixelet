@@ -58,7 +58,7 @@ function as_file(fmt: number, pkt: U8Array): U8Array {
 }
 
 /** Returns the writes in a file of `fmt` in the order they were written. The
- * layout is file.json's `write`. */
+ * layout is file.json5's `write`. */
 export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
   const [keys, asset_ids, rows, texts] = new TreeReader(pkt(fmt, bytes))
     .read_branch()
@@ -87,7 +87,7 @@ export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
     texts.push(l.text);
   });
   const tree = new TreeView();
-  // The fields go in the order file.json's `write` lists them.
+  // The fields go in the order file.json5's `write` lists them.
   tree.branch((b) =>
     b
       .strs(leaves.map((l) => l.key))
@@ -98,7 +98,7 @@ export function encode_writes(fmt: number, leaves: readonly Leaf[]): U8Array {
   return as_file(fmt, new TreeEncoder().encode(tree, { init_cap: 1 << 12 }));
 }
 
-/** The layout is file.json's `top`. */
+/** The layout is file.json5's `top`. */
 export function decode_top(bytes: U8Array): TopRow[] {
   const [shard, fold] = new TreeReader(pkt(format.OBJECT_TOP, bytes))
     .read_branch()
@@ -109,7 +109,7 @@ export function decode_top(bytes: U8Array): TopRow[] {
 
 export function encode_top(rows: readonly TopRow[]): U8Array {
   const tree = new TreeView();
-  // The fields go in the order file.json's `top` lists them.
+  // The fields go in the order file.json5's `top` lists them.
   tree.branch((b) =>
     b
       .strs(rows.map((r) => r.shard))
@@ -240,7 +240,9 @@ export const OBJECTS = object_backend();
 /** Serves the core's objects (pxl:core object): each batch it lends is
  * applied. One that does not decode answers `bad-message`, and one the
  * database fails to keep `io`. */
-export function serve_objects(link: Link): void {
+export function serve_objects(
+  link: Pick<Link, "bytes" | "mount_named" | "task_return" | "on_cancel">,
+): void {
   object.mount(link, {
     async apply(batch) {
       try {

@@ -1,11 +1,11 @@
 // xpute-gpu-link/enum.spec.rs
 //
-// GENERATED from gpu/link/spec/enum.json (xpute-gen data.rs)
+// GENERATED from gpu/link/spec/enum.json5 (xpute-gen data.rs)
 //
 // WebGPU's own enumerations. Each one lists its WebGPU spec's strings in order, and a
 // member's number is its place in that list. A host hands the device the string as it
 // is, and a guest names a member by its generated constant. Nothing here belongs to any one
-// program. A value that WebGPU leaves optional is NONE (api.json) when it is unset.
+// program. A value that WebGPU leaves optional is NONE (api.json5) when it is unset.
 
 /// GPUTextureFormat: the formats of the core WebGPU spec and of its texture-compression
 /// features.
@@ -1495,7 +1495,7 @@ impl CanvasAlphaMode {
     }
 }
 
-/// GPUFeatureName. The DEVICE block (api.json) holds a device's features as one bit each,
+/// GPUFeatureName. The DEVICE block (api.json5) holds a device's features as one bit each,
 /// at the member's place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -1589,7 +1589,7 @@ impl FeatureName {
     }
 }
 
-/// The members of GPUSupportedLimits. The DEVICE block (api.json) holds a device's limits
+/// The members of GPUSupportedLimits. The DEVICE block (api.json5) holds a device's limits
 /// as one word each, at the member's place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]

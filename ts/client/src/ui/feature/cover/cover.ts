@@ -111,7 +111,7 @@ function wait_of(s: Standing): Cover {
  * the core opened, a GPU and the source asked for, the world made. Once the
  * core has run, what breaks it is a panic. Before the app shows, the cover is
  * a failure or progress, and it holds until the boot shows the app
- * (runtime/boot.ts), so neither ever comes up over the app. Once the app
+ * (runtime/ui.ts), so neither ever comes up over the app. Once the app
  * shows, nothing but a panic covers it. */
 export function cover_of(s: Standing): Cover | null {
   switch (s.boot) {

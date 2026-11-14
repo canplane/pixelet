@@ -1,6 +1,6 @@
 // xpute-gpu-link/api.spec.rs
 //
-// GENERATED from gpu/link/spec/api.json (xpute-gen data.rs)
+// GENERATED from gpu/link/spec/api.json5 (xpute-gen data.rs)
 //
 // The calls a guest makes to a GPU it cannot reach, written as records of a stream
 // (xpute-gpu-guest stream.rs). The vocabulary is WebGPU's, with its descriptors written out as words, and

@@ -5,9 +5,9 @@ import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { create } from "zustand";
 
-import { corner_panel } from "@/ui/shared/component/corner-card.ts";
-import { alpha, color } from "@/ui/shared/component/theme.ts";
-import { gauge } from "./perf/gauge.tsx";
+import { CORNER_PANEL } from "@/ui/shared/component/corner-card.ts";
+import { alpha, COLOR } from "@/ui/shared/component/theme.ts";
+import { GAUGE } from "./perf/gauge.tsx";
 import type { SettingName } from "@/ui/shared/setting.ts";
 
 /** Opening a panel closes the one that was open, so the corner holds one open
@@ -21,7 +21,7 @@ const toggle = (name: SettingName) =>
     open: open === name ? null : name,
   }));
 
-export const HINT_INK = alpha(color.white, 0.55);
+export const HINT_INK = alpha(COLOR.white, 0.55);
 
 /** `note` follows the title in regular weight, since it is a reading and not a
  * name. */
@@ -47,7 +47,7 @@ export function Accordion({
         aria-expanded={open}
       >
         <View style={styles.title}>
-          <Text style={[gauge.text, styles.title_text]}>
+          <Text style={[GAUGE.text, styles.title_text]}>
             {title}
             {note !== undefined && (
               <Text style={styles.note_text}>{` · ${note}`}</Text>
@@ -70,7 +70,7 @@ export function Accordion({
 
 const styles = StyleSheet.create({
   panel: {
-    ...corner_panel,
+    ...CORNER_PANEL,
     flexShrink: 1,
     overflow: "hidden",
     pointerEvents: "box-none",
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.6,
     textTransform: "uppercase",
-    color: alpha(color.white, 0.75),
+    color: alpha(COLOR.white, 0.75),
   },
   note_text: { fontWeight: "400" },
   end: { flexDirection: "row", alignItems: "center", gap: 6 },

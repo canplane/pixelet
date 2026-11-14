@@ -10,6 +10,6 @@ export function useSafeArea(): SafeArea {
   return {
     top,
     bottom,
-    tappable: PLATFORM.tappableBottom(),
+    tappable: PLATFORM.tappable_bottom(),
   };
 }

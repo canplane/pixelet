@@ -33,9 +33,9 @@ function same(a: Required<Pose>, b: Required<Pose>): boolean {
 
 function timing(t: Transition): KeyframeAnimationOptions {
   return {
-    delay: t.delayMs ?? 0,
+    delay: t.delay_ms ?? 0,
     fill: "backwards",
-    duration: t.durationMs,
+    duration: t.duration_ms,
     easing: `linear(${t.samples.join(", ")})`,
   };
 }

@@ -19,11 +19,12 @@ import {
 import { KEEPS_KEYBOARD } from "@/ui/shared/component/keyboard.tsx";
 import { TextField } from "@/ui/shared/component/text-field.tsx";
 import {
-  chrome,
-  color,
-  text_scale,
-  text_style,
-  weight,
+  CHROME,
+  COLOR,
+  hex,
+  TEXT_SCALE_CAP,
+  TEXT_STYLE,
+  WEIGHT,
 } from "@/ui/shared/component/theme.ts";
 import { SectionTitle } from "@/ui/shared/component/section-title.tsx";
 import { status_color } from "@/ui/feature/world/top/sensor-icon.tsx";
@@ -173,7 +174,7 @@ function LocateCard() {
   return (
     <AboveKeyboard inset={PANEL_EDGE}>
       <Backing
-        fill={color.ground}
+        fill={COLOR.ground}
         place={BackingPlace.OnSheet}
         interactive
         style={styles.locate_card}
@@ -186,18 +187,18 @@ function LocateCard() {
         >
           <Glyph
             glyph="location"
-            size={chrome.glyph}
+            size={CHROME.glyph}
             color={status_color(location, LABEL.secondary, STATUS)}
           />
           <Text
             numberOfLines={1}
-            maxFontSizeMultiplier={text_scale.chrome}
+            maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
             style={styles.locate_label}
           >
             {t("world.sensors.label")}
           </Text>
           <Text
-            maxFontSizeMultiplier={text_scale.chrome}
+            maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
             style={locating ? styles.locating : styles.locate_action}
           >
             {locating ? t("world.search.locating") : t("world.sensors.turn_on")}
@@ -245,8 +246,8 @@ interface Found {
 export function SearchModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
 
-  const [query, setQuery] = useState("");
-  const [found, setFound] = useState<Found>({
+  const [query, set_query] = useState("");
+  const [found, set_found] = useState<Found>({
     query: "",
     results: [],
     home: null,
@@ -267,12 +268,12 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
       fetch_search(q, { near, signal: controller.signal })
         .then(
           (results) =>
-            controller.signal.aborted || setFound({ query: q, results, home }),
+            controller.signal.aborted || set_found({ query: q, results, home }),
         )
         .catch(
           () =>
             controller.signal.aborted ||
-            setFound({ query: q, results: [], home: null }),
+            set_found({ query: q, results: [], home: null }),
         );
     }, DEBOUNCE_MS);
     return () => {
@@ -296,18 +297,18 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
         bar={
           <PanelBar {...KEEPS_KEYBOARD} onClose={onClose}>
             <Backing
-              fill={color.faint}
+              fill={COLOR.faint}
               place={BackingPlace.OnSheet}
               style={styles.well}
             >
               <Glyph
                 glyph="magnifyingglass"
-                size={chrome.glyph}
+                size={CHROME.glyph}
                 color={LABEL.secondary}
               />
               <TextField
                 value={query}
-                onChangeText={setQuery}
+                onChangeText={set_query}
                 placeholder={t("world.search.placeholder")}
                 placeholderTextColor={LABEL.placeholder}
                 clearButtonMode={SYSTEM_CLEAR ? "while-editing" : undefined}
@@ -315,7 +316,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
               />
               {!SYSTEM_CLEAR && query.length > 0 && (
                 <Pressable
-                  onPress={() => setQuery("")}
+                  onPress={() => set_query("")}
                   accessibilityRole="button"
                   accessibilityLabel={t("world.search.clear_aria_label")}
                   style={styles.clear_target}
@@ -325,7 +326,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                       glyph="xmark"
                       size={10}
                       weight="heavy"
-                      color={color.ground}
+                      color={COLOR.ground}
                     />
                   </View>
                 </Pressable>
@@ -375,28 +376,28 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
 const styles = StyleSheet.create({
   locate_card: {
-    borderRadius: chrome.target / 2,
+    borderRadius: CHROME.target / 2,
     pointerEvents: "auto",
     boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)",
   },
   locate_row: {
-    minHeight: chrome.target,
+    minHeight: CHROME.target,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingLeft: (chrome.target - chrome.glyph) / 2,
+    paddingLeft: (CHROME.target - CHROME.glyph) / 2,
     paddingRight: PANEL_EDGE,
   },
-  locate_label: { flex: 1, ...text_style.body, color: LABEL.primary },
+  locate_label: { flex: 1, ...TEXT_STYLE.body, color: LABEL.primary },
   locate_action: {
-    ...text_style.body,
-    fontWeight: weight.semibold,
-    color: color.action,
+    ...TEXT_STYLE.body,
+    fontWeight: WEIGHT.semibold,
+    color: COLOR.action,
   },
-  locating: { ...text_style.body, color: LABEL.secondary },
+  locating: { ...TEXT_STYLE.body, color: LABEL.secondary },
   results_room: {
     paddingTop: PANEL_CONTENT_TOP,
-    paddingBottom: chrome.target + 2 * PANEL_EDGE,
+    paddingBottom: CHROME.target + 2 * PANEL_EDGE,
     gap: PANEL_SECTION_GAP,
   },
   well: {
@@ -406,14 +407,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingLeft: (PANEL_CONTROL - chrome.glyph) / 2,
+    paddingLeft: (PANEL_CONTROL - CHROME.glyph) / 2,
     paddingRight: (PANEL_CONTROL - CLEAR) / 2,
     borderRadius: PANEL_CONTROL / 2,
   },
   field: { flex: 1, minWidth: 0, color: LABEL.primary },
   clear_target: {
-    width: chrome.target,
-    height: chrome.target,
+    width: CHROME.target,
+    height: CHROME.target,
     marginHorizontal: -touch_outset(CLEAR),
     alignItems: "center",
     justifyContent: "center",
@@ -429,7 +430,7 @@ const styles = StyleSheet.create({
   results: { flex: 1 },
   empty: {
     paddingHorizontal: PANEL_EDGE,
-    ...text_style.footnote,
+    ...TEXT_STYLE.footnote,
     color: LABEL.secondary,
   },
   section_hdr: { paddingHorizontal: PANEL_EDGE, paddingBottom: 8 },
@@ -441,9 +442,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   row_text: { flex: 1, minWidth: 0, gap: 4 },
-  name: { ...text_style.body, color: LABEL.primary },
+  name: { ...TEXT_STYLE.body, color: LABEL.primary },
   subtitle: { flexDirection: "row", alignItems: "baseline", gap: 8 },
-  small: { ...text_style.caption, color: LABEL.secondary },
+  small: { ...TEXT_STYLE.caption, color: LABEL.secondary },
   context: { flexShrink: 1 },
   center: { gap: 4, paddingHorizontal: PANEL_EDGE },
   numbers: { fontVariant: ["tabular-nums"] },
@@ -471,8 +472,8 @@ function place_theme(
   category: number,
 ): { fill: string; symbol: PlaceSymbol | undefined } | null {
   const fill = FILL[category - 1];
-  if (!fill) return null;
-  return { fill, symbol: PLACE_SYMBOLS[SYMBOL[category - 1] - 1] };
+  if (fill === null || fill === undefined) return null;
+  return { fill: hex(fill), symbol: PLACE_SYMBOLS[SYMBOL[category - 1] - 1] };
 }
 
 const SYMBOL_SIZE = 18;

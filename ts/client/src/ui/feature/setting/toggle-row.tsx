@@ -18,7 +18,7 @@ import {
 
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { SNAP } from "@/ui/shared/component/motion/transition.ts";
-import { color } from "@/ui/shared/component/theme.ts";
+import { COLOR } from "@/ui/shared/component/theme.ts";
 
 export interface ToggleRowProps {
   value: boolean;
@@ -72,13 +72,13 @@ const styles = StyleSheet.create({
   track: {
     ...TRACK,
     borderRadius: TRACK.height / 2,
-    backgroundColor: color.track,
+    backgroundColor: COLOR.track,
     pointerEvents: "none",
   },
   on: {
     ...StyleSheet.absoluteFill,
     borderRadius: TRACK.height / 2,
-    backgroundColor: color.chosen,
+    backgroundColor: COLOR.chosen,
   },
   thumb: {
     position: "absolute",
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     left: INSET,
     ...THUMB,
     borderRadius: THUMB.height / 2,
-    backgroundColor: color.white,
+    backgroundColor: COLOR.white,
     boxShadow: "0 2px 6px rgba(0, 0, 0, 0.15), 0 0 1px rgba(0, 0, 0, 0.1)",
   },
 });

@@ -17,7 +17,7 @@ import {
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { Backing } from "@/ui/shared/component/backing.tsx";
 import { SNAP } from "@/ui/shared/component/motion/transition.ts";
-import { pill_styles } from "./pill-style.ts";
+import { PILL_STYLE } from "./pill-style.ts";
 import type { PillProps } from "./pill.tsx";
 import { touch_outset } from "@/ui/shared/component/touch.ts";
 
@@ -27,7 +27,7 @@ export * from "./pill.tsx";
 
 /** Only size and place animate. A view that comes or goes does so at once. */
 const MOVE: LayoutAnimationConfig = {
-  duration: SNAP.durationMs,
+  duration: SNAP.duration_ms,
   update: { type: "spring", springDamping: 1 },
 };
 
@@ -67,7 +67,7 @@ export function Pill({
     <View
       {...touch}
       style={[
-        touch ? pill_styles.target : pill_styles.box,
+        touch ? PILL_STYLE.target : PILL_STYLE.box,
         {
           left: x - outset,
           top: -outset,
@@ -101,7 +101,7 @@ export function Pill({
               onContentWidth &&
               ((e) => onContentWidth(e.nativeEvent.layout.width))
             }
-            style={[pill_styles.content, { height }]}
+            style={[PILL_STYLE.content, { height }]}
           >
             {children}
           </View>

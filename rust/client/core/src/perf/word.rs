@@ -1,11 +1,11 @@
 // pxl-core/perf/word.rs
 
-//! Records laid out word for word as perf.json lays them, with every offset
+//! Records laid out word for word as perf.json5 lays them, with every offset
 //! checked at compile time.
 
 use core::mem::size_of;
 
-/// A record laid out as a perf.json section. Implemented only through
+/// A record laid out as a perf.json5 section. Implemented only through
 /// `words!`, which checks every field's offset at compile time.
 ///
 /// # Safety
@@ -14,7 +14,7 @@ use core::mem::size_of;
 /// reads as an f64.
 pub unsafe trait AsWords: Sized {}
 
-/// `val`'s words, laid end to end as perf.json lays them.
+/// `val`'s words, laid end to end as perf.json5 lays them.
 pub fn as_words<T: AsWords>(val: &T) -> &[f64] {
     // SAFETY: `AsWords` guarantees plain f64s laid end to end.
     unsafe {
@@ -50,8 +50,8 @@ pub fn put<T: AsWords>(out: &mut [f64], at: usize, val: &T) {
 
 macro_rules! words {
     ($t:ty, $words:expr, $($($field:ident).+ => $at:expr),+ $(,)?) => {
-        const _: () = assert!(size_of::<$t>() == $words * 8, concat!(stringify!($t), " is not the size perf.json lays out"));
-        $(const _: () = assert!(offset_of!($t, $($field).+) == $at * 8, concat!(stringify!($t), " puts ", stringify!($($field).+), " off the word perf.json gives it"));)+
+        const _: () = assert!(size_of::<$t>() == $words * 8, concat!(stringify!($t), " is not the size perf.json5 lays out"));
+        $(const _: () = assert!(offset_of!($t, $($field).+) == $at * 8, concat!(stringify!($t), " puts ", stringify!($($field).+), " off the word perf.json5 gives it"));)+
         // SAFETY: the two assertions above are the claim.
         unsafe impl AsWords for $t {}
     };

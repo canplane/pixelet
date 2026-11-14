@@ -7,8 +7,8 @@ import { CheckSquareIcon, SquareIcon } from "phosphor-react-native";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import { alpha, color, disabled_content } from "@/ui/shared/component/theme.ts";
-import { gauge, PerfGauge, PerfRec } from "./perf/gauge.tsx";
+import { alpha, COLOR, DISABLED_CONTENT } from "@/ui/shared/component/theme.ts";
+import { GAUGE, PerfGauge, PerfRec } from "./perf/gauge.tsx";
 import { Accordion, HINT_INK } from "./accordion.tsx";
 import { n1 } from "./perf/column.ts";
 import { perf_report_copy, perf_report_text } from "./perf/report.ts";
@@ -50,20 +50,20 @@ function hued(hue: string): TintLook {
 
 const TINT: Record<Tint, TintLook> = {
   [PLAIN]: {
-    border: alpha(color.white, 0.15),
-    ground: alpha(color.white, 0.05),
-    ink: alpha(color.white, 0.6),
-    lit: alpha(color.white, 0.1),
-    lit_ink: alpha(color.white, 0.9),
+    border: alpha(COLOR.white, 0.15),
+    ground: alpha(COLOR.white, 0.05),
+    ink: alpha(COLOR.white, 0.6),
+    lit: alpha(COLOR.white, 0.1),
+    lit_ink: alpha(COLOR.white, 0.9),
   },
-  [GO]: hued(color.perf_go),
-  [HALT]: hued(color.perf_halt),
+  [GO]: hued(COLOR.perf_go),
+  [HALT]: hued(COLOR.perf_halt),
   [OFF]: {
-    border: alpha(color.white, 0.1),
-    ground: alpha(color.white, 0.05),
-    ink: alpha(color.white, 0.25),
-    lit: alpha(color.white, 0.05),
-    lit_ink: alpha(color.white, 0.25),
+    border: alpha(COLOR.white, 0.1),
+    ground: alpha(COLOR.white, 0.05),
+    ink: alpha(COLOR.white, 0.25),
+    lit: alpha(COLOR.white, 0.05),
+    lit_ink: alpha(COLOR.white, 0.25),
   },
 };
 
@@ -84,17 +84,17 @@ function PanelButton({
   onHint: (hint: string | null) => void;
   disabled?: boolean;
 }) {
-  const [hovered, setHovered] = useState(false);
+  const [hovered, set_hovered] = useState(false);
   const t = TINT[tint];
   return (
     <Pressable
       onPress={onPress}
       onHoverIn={() => {
-        setHovered(true);
+        set_hovered(true);
         onHint(hint);
       }}
       onHoverOut={() => {
-        setHovered(false);
+        set_hovered(false);
         onHint(null);
       }}
       onLongPress={() => onHint(hint)}
@@ -115,9 +115,9 @@ function PanelButton({
       {({ pressed }) => (
         <Text
           style={[
-            gauge.text,
+            GAUGE.text,
             { color: hovered || pressed ? t.lit_ink : t.ink },
-            disabled && { opacity: disabled_content },
+            disabled && { opacity: DISABLED_CONTENT },
           ]}
         >
           {label}
@@ -154,20 +154,20 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
       accessibilityRole="checkbox"
       aria-checked={on}
       style={[
-        gauge.row,
+        GAUGE.row,
         styles.check,
-        disabled && { opacity: disabled_content },
+        disabled && { opacity: DISABLED_CONTENT },
       ]}
     >
       <View style={styles.check_label}>
         <Box
           size={18}
-          color={gauge.text.color}
+          color={GAUGE.text.color}
           weight={on ? "fill" : "regular"}
         />
-        <Text style={gauge.text}>{own.label}</Text>
+        <Text style={GAUGE.text}>{own.label}</Text>
       </View>
-      <Text style={[gauge.text, gauge.key, styles.note]} numberOfLines={1}>
+      <Text style={[GAUGE.text, GAUGE.key, styles.note]} numberOfLines={1}>
         {disabled ? "stop the window to change" : own.note}
       </Text>
     </Pressable>
@@ -181,15 +181,15 @@ function restart_window(): void {
 
 export function PerfPanel() {
   const show = useCore((s) => s.settings[SETTING.perf.key] === 1);
-  const [hint, setHint] = useState<string | null>(null);
-  const [said, setSaid] = useState<string | null>(null);
+  const [hint, set_hint] = useState<string | null>(null);
+  const [said, set_said] = useState<string | null>(null);
   // The gauge is read while the panel is shown, open or closed, because the
   // title shows the frame rate.
   const g = usePerfGauge(show);
 
   useEffect(() => {
     if (said === null) return;
-    const id = setTimeout(() => setSaid(null), SAID_MS);
+    const id = setTimeout(() => set_said(null), SAID_MS);
     return () => clearTimeout(id);
   }, [said]);
 
@@ -215,7 +215,7 @@ export function PerfPanel() {
       title="Performance"
       note={note}
       end={
-        <Text style={[gauge.text, gauge.key]}>
+        <Text style={[GAUGE.text, GAUGE.key]}>
           Last {LIVE_WINDOW_MS / 1000} s
         </Text>
       }
@@ -225,14 +225,14 @@ export function PerfPanel() {
             offer only "Stop" for a window that opened at boot, until the
             window was first stopped. */}
         <PanelButton
-          onHint={setHint}
+          onHint={set_hint}
           label={recording ? "Restart" : "Start"}
           hint="clear everything and begin a fresh window"
           tint={recording ? PLAIN : GO}
           onPress={restart_window}
         />
         <PanelButton
-          onHint={setHint}
+          onHint={set_hint}
           label="Stop"
           hint="freeze the window so exports are stable while you read them"
           tint={recording ? HALT : OFF}
@@ -240,20 +240,20 @@ export function PerfPanel() {
           onPress={perf.stop}
         />
         <PanelButton
-          onHint={setHint}
+          onHint={set_hint}
           label="Report"
           hint="copy the window's summary as text"
           onPress={() =>
             void perf_report_read()
               .then((r) => perf_report_copy(perf_report_text(r)))
-              .then(setSaid)
+              .then(set_said)
           }
         />
         <PanelButton
-          onHint={setHint}
+          onHint={set_hint}
           label="Trace"
           hint="save the window as a timeline for ui.perfetto.dev"
-          onPress={() => void perf_trace_save().then(setSaid)}
+          onPress={() => void perf_trace_save().then(set_said)}
         />
       </View>
       {(settings_in("perf") as Own[]).map((name) => (
@@ -262,7 +262,7 @@ export function PerfPanel() {
       {/* The hint shows under the buttons. Above them, a hint that wraps to two
           lines would push the hovered button out from under the pointer. */}
       {(said ?? hint) !== null && (
-        <Text style={[gauge.text, styles.hint]}>{said ?? hint}</Text>
+        <Text style={[GAUGE.text, styles.hint]}>{said ?? hint}</Text>
       )}
       {g !== null && <PerfRec rec={g.rec} />}
       <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
