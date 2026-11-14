@@ -39,7 +39,7 @@ interface ToastState {
   entries: Entry[];
   /** The sum of the turns so far, a turn up counting as 1. The stack compares
    * it with its last value to tell which way the cards moved. */
-  turns: i32;
+  turnCount: i32;
   dragging: boolean;
   /** A toast that changed during a drag. It comes to the front when the drag
    * ends. */
@@ -48,7 +48,7 @@ interface ToastState {
 
 const store = create<ToastState>()(() => ({
   entries: [],
-  turns: 0,
+  turnCount: 0,
   dragging: false,
   pending: null,
 }));
@@ -60,8 +60,8 @@ export function useToastEntries(): readonly Entry[] {
   return store((s) => s.entries);
 }
 
-export function useToastTurns(): i32 {
-  return store((s) => s.turns);
+export function useToastTurnCount(): i32 {
+  return store((s) => s.turnCount);
 }
 
 export function toastCount(): u32 {
@@ -113,11 +113,11 @@ export function dismissToast(id: u32): void {
 /** A `delta` of 1, a swipe up, sends the front card to the back. A `delta` of
  * -1, a swipe down, brings the back card forward. */
 export function rotateToasts(delta: i32): void {
-  const { entries, turns } = get();
+  const { entries, turnCount } = get();
   const k = ((delta % entries.length) + entries.length) % entries.length;
   set({
     entries: [...entries.slice(k), ...entries.slice(0, k)],
-    turns: turns + delta,
+    turnCount: turnCount + delta,
   });
 }
 

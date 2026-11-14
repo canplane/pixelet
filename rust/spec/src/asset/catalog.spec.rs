@@ -2,17 +2,11 @@
 //
 // GENERATED from the asset specs and spec/spec/asset/ingest.json (xpute-gen data.rs)
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 /// Every file reference the asset specs make, a slot each.
-pub const SLOTS: usize = 71;
+pub const SLOT_CNT: usize = 71;
 
 /// The catalog the host plugs in, served at (ASSET, `CATALOG`)
 /// (ts/client/src/service/sys/fs/asset.ts): the file each slot names and its extent,

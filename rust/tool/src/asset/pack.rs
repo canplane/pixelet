@@ -14,7 +14,7 @@ use serde::Deserialize;
 /// One size for every layer of the shared array texture.
 pub const TILE_SIZE: u32 = 256;
 /// Tiles a row of the laid-out image.
-pub const COLUMNS: u32 = 8;
+pub const COLUMN_CNT: u32 = 8;
 
 #[derive(Deserialize)]
 struct Entry {
@@ -331,10 +331,10 @@ fn linear_to_srgb(c: f64) -> u8 {
 /// Every tile must be exactly `TILE_SIZE` square; a wrong size is an upstream mistake
 /// and is refused rather than resized. Each tile is its path and the bytes it ships as.
 pub fn compose(tiles: &[(String, &[u8])]) -> Result<Image, String> {
-    let rows = tiles.len().div_ceil(COLUMNS as usize) as u32;
+    let rows = tiles.len().div_ceil(COLUMN_CNT as usize) as u32;
     // Opaque black, so an uncovered cell is visible rather than blended.
     let mut sheet = RgbaImage::from_pixel(
-        COLUMNS * TILE_SIZE,
+        COLUMN_CNT * TILE_SIZE,
         rows.max(1) * TILE_SIZE,
         image::Rgba([0, 0, 0, 255]),
     );
@@ -352,8 +352,8 @@ pub fn compose(tiles: &[(String, &[u8])]) -> Result<Image, String> {
             ));
         }
         let (x, y) = (
-            (n as u32 % COLUMNS) * TILE_SIZE,
-            (n as u32 / COLUMNS) * TILE_SIZE,
+            (n as u32 % COLUMN_CNT) * TILE_SIZE,
+            (n as u32 / COLUMN_CNT) * TILE_SIZE,
         );
         means.push(mean_of(&img));
         imageops::replace(&mut sheet, &img, x as i64, y as i64);

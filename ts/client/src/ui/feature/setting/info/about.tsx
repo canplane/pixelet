@@ -6,13 +6,15 @@ import { StyleSheet, Text, View } from "react-native";
 import { Prose, Section, settingText } from "@/ui/feature/setting/row.tsx";
 import { BrandSymbol } from "./brand-symbol.tsx";
 import { textStyle } from "@/ui/shared/component/theme.ts";
-import { APP_ENV, BUILD_NUMBER, BUILD_TIME, DEV_SOURCE } from "@/build.ts";
+import { BUILD_NUMBER, BUILD_TIME, TILE_SOURCE } from "@/build.ts";
 import { format } from "@/abi/file.spec.ts";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import { useSourceVersions } from "@/ui/shared/watch.ts";
 
-function envLabel(): string {
-  return DEV_SOURCE === "delivery" ? APP_ENV : `${APP_ENV}:${DEV_SOURCE}`;
+/** Shown in the settings in a dev build, because a phone has no URL bar to
+ * tell which build is on screen. */
+function devLabel(): string {
+  return TILE_SOURCE === "delivery" ? "dev" : `dev:${TILE_SOURCE}`;
 }
 
 function bakeLines(source: Readonly<Record<string, string>> | null): string[] {
@@ -56,7 +58,7 @@ export function AboutSection() {
         <View>
           <Text style={settingText.faint}>
             {BUILD_NUMBER}
-            {APP_ENV !== "prod" && ` (${envLabel()})`}
+            {__DEV__ && ` (${devLabel()})`}
             {` · ${buildLabel()}`}
           </Text>
           {bakeLines(source).map((line) => (

@@ -18,10 +18,10 @@ use super::timed;
 use super::word::WordCursor;
 use super::GpuHost;
 use xpute_gpu_link::enums::{
-    BUFFER_BINDING_TYPE, CANVAS_ALPHA_MODE, CULL_MODE, LOAD_OP, QUERY_TYPE, STORE_OP,
-    TEXTURE_SAMPLE_TYPE,
+    BUFFER_BINDING_TYPES, CANVAS_ALPHA_MODES, CULL_MODES, LOAD_OPS, QUERY_TYPES, STORE_OPS,
+    TEXTURE_SAMPLE_TYPES,
 };
-use xpute_gpu_link::spec::{op, DEVICE, NONE, STATUS, SURFACE_PREFERRED};
+use xpute_gpu_link::spec::{device, op, status, NONE, SURFACE_PREFERRED};
 
 impl GpuHost {
     /// Runs the records the guest lent, `len` bytes at `at` (gpu/wit/gpu.wit
@@ -86,7 +86,7 @@ impl GpuHost {
         }
         // wgpu resolves timestamps in ticks of this many nanoseconds.
         set_word(
-            addr + 4 * DEVICE::PERIOD_AT as u32,
+            addr + 4 * device::PERIOD_AT as u32,
             self.queue.get_timestamp_period().to_bits(),
         );
         let preferred = self
@@ -95,7 +95,7 @@ impl GpuHost {
             .iter()
             .position(|f| *f == Some(self.preferred_format));
         set_word(
-            addr + 4 * DEVICE::FORMAT_AT as u32,
+            addr + 4 * device::FORMAT_AT as u32,
             preferred.unwrap_or_else(|| {
                 panic!(
                     "[gpu] {:?} is no format the spec names",
@@ -104,7 +104,7 @@ impl GpuHost {
             }) as u32,
         );
         self.tell_counts();
-        mem::store_release(addr + 4 * DEVICE::STATUS_AT as u32, STATUS::READY);
+        mem::store_release(addr + 4 * device::STATUS_AT as u32, status::READY);
     }
 
     /// Stages `bytes` through the belt, a chunk's room at a time, and copies
@@ -345,7 +345,7 @@ impl GpuHost {
                             (r.u(), r.u(), r.u(), r.u(), r.u(), r.u());
                         let ty = match kind {
                             0 => wgpu::BindingType::Buffer {
-                                ty: match BUFFER_BINDING_TYPE.get(a as usize).copied() {
+                                ty: match BUFFER_BINDING_TYPES.get(a as usize).copied() {
                                     Some("uniform") => wgpu::BufferBindingType::Uniform,
                                     Some("storage") => {
                                         wgpu::BufferBindingType::Storage { read_only: false }
@@ -364,7 +364,7 @@ impl GpuHost {
                                 "sampler binding type",
                             )),
                             2 => wgpu::BindingType::Texture {
-                                sample_type: match TEXTURE_SAMPLE_TYPE.get(a as usize).copied() {
+                                sample_type: match TEXTURE_SAMPLE_TYPES.get(a as usize).copied() {
                                     Some("float") => {
                                         wgpu::TextureSampleType::Float { filterable: true }
                                     }
@@ -479,7 +479,7 @@ impl GpuHost {
             }
             op::QUERY_SET => {
                 let id = r.u();
-                let ty = match QUERY_TYPE.get(r.u() as usize).copied() {
+                let ty = match QUERY_TYPES.get(r.u() as usize).copied() {
                     Some("occlusion") => wgpu::QueryType::Occlusion,
                     Some("timestamp") => wgpu::QueryType::Timestamp,
                     t => panic!("[gpu] query type {t:?}"),
@@ -789,7 +789,8 @@ impl GpuHost {
                 } else {
                     of(&self.names.texture_format, format, "format")
                 };
-                let premultiplied = CANVAS_ALPHA_MODE.get(alpha as usize) == Some(&"premultiplied");
+                let premultiplied =
+                    CANVAS_ALPHA_MODES.get(alpha as usize) == Some(&"premultiplied");
                 self.surface(surface).cfg = Some((format, usage, premultiplied));
                 self.want_configured(surface);
             }
@@ -885,7 +886,7 @@ impl GpuHost {
             .opt()
             .map(|s| of(&self.names.index_format, s, "index format"));
         let front_face = of(&self.names.front_face, r.u(), "front face");
-        let cull_mode = match CULL_MODE.get(r.u() as usize).copied() {
+        let cull_mode = match CULL_MODES.get(r.u() as usize).copied() {
             Some("front") => Some(wgpu::Face::Front),
             Some("back") => Some(wgpu::Face::Back),
             _ => None,
@@ -999,10 +1000,10 @@ impl GpuHost {
             ops: wgpu::Operations<wgpu::Color>,
         }
         let n = r.u() as usize;
-        if n > COLORS {
+        if n > COLOR_CAP {
             panic!("[gpu] a pass of {n} color targets");
         }
-        let mut colors: [Option<Color>; COLORS] = core::array::from_fn(|_| None);
+        let mut colors: [Option<Color>; COLOR_CAP] = core::array::from_fn(|_| None);
         for color in &mut colors[..n] {
             let view = self.view(r.u()).0.clone();
             let resolve = r.opt().map(|v| self.view(v).0.clone());
@@ -1055,7 +1056,7 @@ impl GpuHost {
         });
         let stamps = self.timestamps(r);
         let occlusion = r.opt().map(|q| self.query_set(q).clone());
-        let color_attachments: [Option<wgpu::RenderPassColorAttachment>; COLORS] =
+        let color_attachments: [Option<wgpu::RenderPassColorAttachment>; COLOR_CAP] =
             core::array::from_fn(|k| {
                 colors[k].as_ref().map(|c| wgpu::RenderPassColorAttachment {
                     view: &c.view,
@@ -1096,17 +1097,17 @@ impl GpuHost {
 
 /// This is the most color attachments a render pass takes: wgpu-hal's
 /// `MAX_COLOR_ATTACHMENTS`, the bound wgpu builds its passes to.
-const COLORS: usize = 8;
+const COLOR_CAP: usize = 8;
 
 fn load_op<V>(load: u32, clear: V) -> wgpu::LoadOp<V> {
-    match LOAD_OP.get(load as usize).copied() {
+    match LOAD_OPS.get(load as usize).copied() {
         Some("clear") => wgpu::LoadOp::Clear(clear),
         _ => wgpu::LoadOp::Load,
     }
 }
 
 fn store_op(store: u32) -> wgpu::StoreOp {
-    match STORE_OP.get(store as usize).copied() {
+    match STORE_OPS.get(store as usize).copied() {
         Some("discard") => wgpu::StoreOp::Discard,
         _ => wgpu::StoreOp::Store,
     }

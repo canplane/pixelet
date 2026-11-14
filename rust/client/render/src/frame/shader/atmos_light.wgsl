@@ -48,7 +48,7 @@ fn light_unexposed_in(r: f32, up: vec3f, s: Lighting, moon_sky: bool) -> Light {
   return Light(
     atmos_white() * sun_transmittance(r, dot(up, s.sun)),
     s.moon_color * sun_transmittance(r, dot(up, s.moon)),
-    (sky + atmos_night_sky()) * atmos_white(),
+    (sky + NIGHT_SKY) * atmos_white(),
   );
 }
 
@@ -61,7 +61,7 @@ fn light_unexposed(r: f32, up: vec3f) -> Light {
 // The light the ground bounces up to a down-facing face, at the Earth's mean
 // albedo.
 fn ground_bounce_in(up: vec3f, l: Light, s: Lighting) -> vec3f {
-  return atmos_ground_albedo() * (l.sun * max(dot(up, s.sun), 0.0) + l.other * max(dot(up, s.moon), 0.0) + l.fill);
+  return GROUND_ALBEDO * (l.sun * max(dot(up, s.sun), 0.0) + l.other * max(dot(up, s.moon), 0.0) + l.fill);
 }
 
 // The light on a matte face of albedo one, divided by pi: Lambert, as three.js's
@@ -117,21 +117,21 @@ fn surface_light(n: vec3f, up: vec3f, l: Light) -> vec3f {
 }
 
 fn noon() -> f32 {
-  let r = atmos_bottom_radius();
+  let r = BOTTOM_RADIUS_KM;
   return dot((sun_transmittance(r, 1.0) + sky_ground(r, 1.0).rgb) * atmos_white(), LUMA) / PI;
 }
 
 // The eye's exposure in stops, adapted to the light on the land under it at
 // radius `land_r`. The land is measured as an up-facing face of albedo one,
 // against the same face at sea level under a sun overhead (`noon`). A fall in
-// light from noon shows as `atmos_shown_fall` of itself, down to
-// `atmos_night_stops` under noon, and the eye takes back the rest.
+// light from noon shows as `SHOWN_FALL` of itself, down to
+// `NIGHT_STOPS` under noon, and the eye takes back the rest.
 fn eye_stops_at(land_r: f32, s: Lighting) -> f32 {
   let up = frame_up();
   let land = dot(surface_light_in(up, up, vec2f(1.0), 1.0, light_unexposed_in(land_r, up, s, true), s), LUMA);
   let stops = log2(max(land, 1e-30) / noon());
-  let shown = clamp(stops * atmos_shown_fall(), -atmos_night_stops(), 0.0);
-  return log2(atmos_exposure()) + shown - stops;
+  let shown = clamp(stops * SHOWN_FALL, -NIGHT_STOPS, 0.0);
+  return log2(EXPOSURE) + shown - stops;
 }
 
 fn eye_stops(s: Lighting) -> f32 {

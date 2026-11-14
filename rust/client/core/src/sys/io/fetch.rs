@@ -6,8 +6,7 @@
 //! asked, and so is an absence. The layer decides what an absence means and
 //! settles the fetch, and what it does with the packet is its own.
 
-use std::cell::RefCell;
-
+use pxl_global::Global;
 use xpute_guest::clock::now;
 use xpute_kit::collection::list::List;
 use xpute_kit::status::bug::OrBug;
@@ -18,7 +17,7 @@ use crate::sys::io::body::{self, Body};
 use crate::sys::io::demand::{PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::{exit_of, Exit, Failure};
 use crate::sys::io::file;
-use crate::sys::io::param::MAX_CREDITS;
+use crate::sys::io::param::CREDIT_CAP;
 use crate::sys::io::request::{attempt_of, settle};
 use crate::sys::io::room::Refusal;
 use crate::sys::manifest::mem;
@@ -33,11 +32,11 @@ pub struct Response {
     pub phases: PhaseList,
 }
 
-const CREDITS: usize = MAX_CREDITS as usize;
+/// The answers waiting for their layers to take them.
+static ANSWERS: Global<List<Response, { CREDIT_CAP as usize }>> = Global::new();
 
-thread_local! {
-    /// The answers waiting for their layers to take them.
-    static ANSWERS: RefCell<List<Response, CREDITS>> = const { RefCell::new(List::new()) };
+fn answers() -> &'static mut List<Response, { CREDIT_CAP as usize }> {
+    ANSWERS.get(List::new)
 }
 
 /// Reads the want `id` of `stream` for the attempt `key`, in a task of its
@@ -54,9 +53,9 @@ pub fn start(key: u64, stream: Stream, id: u64) {
 /// is a bad body, and one longer than a packet of its kind can be is refused.
 /// With every slot out the read waits for one given back, before it opens
 /// the file. A read its stop canceled reaches no one.
-#[embassy_executor::task(pool_size = CREDITS)]
+#[embassy_executor::task(pool_size = CREDIT_CAP as usize)]
 async fn fetch(key: u64, stream: Stream, path: Vec<Token>, at_ms: f64) {
-    let most = stream.max_body().unwrap_or(mem::min_heap_bytes);
+    let most = stream.max_body().unwrap_or(mem::MIN_HEAP_BYTES);
     let read = if stream.row().slotted {
         let Some(mut slot) = body::take() else {
             return arrive(key, at_ms, Err(Exit::Refused(Refusal::bodies())));
@@ -89,19 +88,19 @@ fn arrive(key: u64, at_ms: f64, body: Result<Option<Body>, Exit>) {
         return;
     };
     let mut phases = PhaseList::default();
-    phases.push(TaskPhaseName::net_ms, now() - at_ms);
+    phases.push(TaskPhaseName::NetMs, now() - at_ms);
     match body {
         Ok(pkt) => {
             if let Some(pkt) = &pkt {
-                phases.push(TaskPhaseName::bytes, pkt.len() as f64);
+                phases.push(TaskPhaseName::Bytes, pkt.len() as f64);
             }
-            ANSWERS.with_borrow_mut(|a| a.push(Response {
+            answers().push(Response {
                 key,
                 stream,
                 id,
                 pkt,
                 phases,
-            }));
+            });
             invalidate();
         }
         Err(exit) => settle(key, exit, Some(phases)),
@@ -110,18 +109,17 @@ fn arrive(key: u64, at_ms: f64, body: Result<Option<Body>, Exit>) {
 
 /// Gives back the bodies of what the scheduler no longer holds.
 fn drop_stopped() {
-    ANSWERS.with_borrow_mut(|a| a.retain(|a| attempt_of(a.key).is_some()));
+    answers().retain(|a| attempt_of(a.key).is_some());
 }
 
 /// How many answers to any stream in `of` wait to be taken.
 pub fn answer_cnt(of: &[Stream]) -> usize {
-    ANSWERS.with_borrow(|a| a.iter().filter(|a| of.contains(&a.stream)).count())
+    answers().iter().filter(|a| of.contains(&a.stream)).count()
 }
 
 /// The oldest answer to any stream in `of`.
 pub fn take_answer(of: &[Stream]) -> Option<Response> {
-    ANSWERS.with_borrow_mut(|a| {
-        let at = a.iter().position(|a| of.contains(&a.stream))?;
-        Some(a.remove(at))
-    })
+    let a = answers();
+    let at = a.iter().position(|a| of.contains(&a.stream))?;
+    Some(a.remove(at))
 }

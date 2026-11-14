@@ -26,9 +26,9 @@ pub enum Asset {
 impl Asset {
     pub fn of(id: AssetId) -> Asset {
         match kind_of(id) {
-            Some(Kind::cube) => cube_of(id).map_or(Asset::Unknown, Asset::Cube),
-            Some(Kind::decor) => Decor::find(id).map_or(Asset::Unknown, |d| Asset::Decor(d.id)),
-            Some(Kind::marker) => Asset::Marker,
+            Some(Kind::Cube) => cube_of(id).map_or(Asset::Unknown, Asset::Cube),
+            Some(Kind::Decor) => Decor::find(id).map_or(Asset::Unknown, |d| Asset::Decor(d.id)),
+            Some(Kind::Marker) => Asset::Marker,
             _ => Asset::Unknown,
         }
     }
@@ -51,18 +51,18 @@ impl Asset {
     /// stand on it. None for an unknown asset.
     pub fn kind(self) -> Option<Kind> {
         match self {
-            Asset::Cube(_) => Some(Kind::cube),
-            Asset::Decor(_) => Some(Kind::decor),
-            Asset::Marker => Some(Kind::marker),
+            Asset::Cube(_) => Some(Kind::Cube),
+            Asset::Decor(_) => Some(Kind::Decor),
+            Asset::Marker => Some(Kind::Marker),
             Asset::Unknown => None,
         }
     }
 
     /// The zoom of the cube the asset takes. A cube's zoom comes from the
     /// chosen scale step; anything else fills one unit cell.
-    pub fn zoom(self, scale_steps: i32) -> Zoom {
+    pub fn zoom(self, scale_step: i32) -> Zoom {
         match self {
-            Asset::Cube(_) => object_zoom_of(scale_steps),
+            Asset::Cube(_) => object_zoom_of(scale_step),
             Asset::Decor(_) | Asset::Marker | Asset::Unknown => UNIT_ZOOM,
         }
     }

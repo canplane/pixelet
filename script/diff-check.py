@@ -186,6 +186,13 @@ cargo("check-rust")
 if under("spec/") or any(".spec." in path for path in changed) or "pxl-tool" in touched:
     task("check-spec")
 task("check-rules")
+# The published core, built as a deploy builds it beside cargo's build rather
+# than into public/, which refuses a string of our sources it may not hold
+# (ts/client/script/strings.py); and so again when a script that builds or
+# checks it changes.
+published = [f"ts/client/script/{s}.py" for s in ("wasm-build", "number-paths", "strings")]
+if "pxl-core" in touched or any(map(under, published)):
+    runs.append(("wasm-build --check", [str(ROOT / "ts/client/script/wasm-build.py"), "--check"], ROOT))
 
 # What the assembled shaders are made from: their sources, the words the build writes and
 # the crates those words and the Rust they translate come from.

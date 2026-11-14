@@ -1,7 +1,7 @@
 // pxl-render/pass/resolve.rs
 
 //! Gathers the world's color over frames. Each frame samples every pixel off its middle by a
-//! jitter (pxl-engine `eye::JITTER`) taken from a sequence that covers the pixel in `JITTERS`
+//! jitter (pxl-engine `eye::JITTER`) taken from a sequence that covers the pixel in `JITTER_CNT`
 //! frames, and blends it into what the frames before left (screen_resolve.wgsl). The world
 //! surface has two histories, written in turn, and the one written this frame is what the
 //! finish encodes (pass/finish.rs). A frame drawn through the gate writes its damaged tiles back
@@ -12,7 +12,7 @@
 //! the sequence. Where the tile changed this frame, what the frames before left is moved to
 //! where this frame's eye sees it, and held within what this frame's pixels about it hold. A
 //! tile is damaged, and drawn again, until it has run through the sequence (word.rs
-//! `screen::DAMAGE_FRAMES`, screen_tile.wgsl). Once every tile has, the jitter holds and the
+//! `screen::DAMAGE_FRAME_CNT`, screen_tile.wgsl). Once every tile has, the jitter holds and the
 //! frame stands still.
 //!
 //! The tiles' words live on the GPU, as the light's do (gpu/tile.rs). Each holds the number of
@@ -26,7 +26,7 @@ use pxl_spec::space::coord::world;
 use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::record::{PIPELINE_SCREEN_RESOLVE, PIPELINE_SCREEN_WRITE_BACK};
-use crate::frame::shader::word::screen::{DAMAGE_FRAMES, JITTERS};
+use crate::frame::shader::word::screen::{DAMAGE_FRAME_CNT, JITTER_CNT};
 use crate::gpu::api::WORLD_COLOR;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, sampler_entry, view_entry, Gpu, Group, Load,
@@ -79,10 +79,10 @@ impl Resolve {
         Resolve {
             pipeline: pipelines.build_world(g, PIPELINE_SCREEN_RESOLVE),
             sampler: g.sampler(
-                FilterMode::linear,
-                FilterMode::linear,
-                MipmapFilterMode::nearest,
-                AddressMode::clamp_to_edge,
+                FilterMode::Linear,
+                FilterMode::Linear,
+                MipmapFilterMode::Nearest,
+                AddressMode::ClampToEdge,
                 None,
                 1,
             ),
@@ -100,7 +100,7 @@ impl Resolve {
             last: (mat4::new(), [0.0; 3]),
             phase: 0,
             jitter: [0.0; 2],
-            tiles: TileGrid::new(g, pipelines, SIDE, DAMAGE_FRAMES, GpuSpanName::damage),
+            tiles: TileGrid::new(g, pipelines, SIDE, DAMAGE_FRAME_CNT, GpuSpanName::Damage),
         }
     }
 
@@ -112,7 +112,7 @@ impl Resolve {
     /// This frame's jitter, in drawn pixels, X right and Y down. While a change that is not
     /// the scene's animation settles (`asks`), it is the sequence's next. Otherwise it holds
     /// where it stands: once the sequence has run through, which takes the last frame such a
-    /// change came in and the `JITTERS - 1` frames after it, each at its own place of the
+    /// change came in and the `JITTER_CNT - 1` frames after it, each at its own place of the
     /// sequence; and in a frame drawn for anything else, such as an animation's step.
     pub fn jitter(&mut self) -> [f32; 2] {
         if self.asks() {
@@ -161,7 +161,7 @@ impl Resolve {
     /// the finish encodes.
     pub fn draw(&mut self, ctx: &mut RenderContext, s: &Surface, masked: bool) -> u32 {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::resolve);
+        let stamp = ctx.stamp(GpuSpanName::Resolve);
         if s.history_view != self.histories {
             (self.histories, self.gathered, self.cur) = (s.history_view, 0, 0);
         }
@@ -180,7 +180,7 @@ impl Resolve {
         }
         u[16] = blend;
         g.write_buf(self.uniform, 0, bytes(&u));
-        let [across, down] = self.tiles.squares();
+        let [across, down] = self.tiles.square_cnt();
         let tiles = across * down;
         let load = if masked { Load::Load } else { Load::Clear };
         let pass = g.pass(
@@ -241,14 +241,14 @@ impl Resolve {
         self.gathered = self.gathered.saturating_add(1);
         self.last = self.view;
         if self.asks() {
-            self.phase = (self.phase + 1) % JITTERS;
+            self.phase = (self.phase + 1) % JITTER_CNT;
         }
     }
 
     /// Whether the frames left of the jitter's sequence are asked for, with the jitter taking
     /// the sequence's next place in each. They are while the screen gathers after a change that
     /// is not the scene's animation alone (`TileGrid::asking`). The jitter is the world's
-    /// sequence, and moving it casts every pixel again (ray/schedule.rs `FrameKind::px`).
+    /// sequence, and moving it casts every pixel again (ray/schedule.rs `FrameKind::Px`).
     /// So an animation's step holds the jitter: the tiles it marks are drawn through the gate
     /// with the jitter where it stands, and no pixel is cast for it. The animation's own
     /// antialiasing converges no further while only it moves.

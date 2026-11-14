@@ -8,29 +8,21 @@ use pxl_spec::asset::cube::cube_rgb;
 use pxl_spec::asset::cube::ALL_CUBES;
 use pxl_spec::asset::cube::{Ground, Object, Sentinel};
 use pxl_spec::asset::ingest::CubeFace;
-use pxl_spec::asset::AssetId;
 use pxl_spec::asset::{shipped_sentinel_mean, shipped_tile_mean};
 use std::sync::LazyLock;
 
 /// The sentinels the world draws, each with a layer after the cubes'. The only one is the
 /// bedrock's.
-pub const SENTINELS: [u8; 1] = [Sentinel::unknown as u8];
+pub const SENTINELS: [u8; 1] = [Sentinel::Unknown as u8];
 
 /// The texture array's layers: one for each placeable cube, in the catalog's order, so a cube
 /// of a look is drawn as its ground is; then one for each drawn sentinel.
-pub const LAYERS: usize = Object::ALL.len() + Ground::ALL.len() + SENTINELS.len();
+pub const LAYER_CNT: usize = Object::ALL.len() + Ground::ALL.len() + SENTINELS.len();
 
 /// A drawn sentinel's layer, past every cube's.
 pub fn sentinel_layer(s: u8) -> Option<u32> {
     let k = SENTINELS.iter().position(|&x| x == s)?;
     Some((ALL_CUBES.len() + k) as u32)
-}
-
-pub fn layer_idx(cube: AssetId) -> u32 {
-    ALL_CUBES
-        .iter()
-        .position(|&c| c == cube)
-        .expect("a cube of the catalog") as u32
 }
 
 pub fn rgb255(rgb: u32) -> [u8; 3] {

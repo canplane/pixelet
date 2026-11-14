@@ -2,14 +2,15 @@
 //
 // GENERATED from wit/stop (xpute-link-gen wit.rs)
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { Lift } from "../../cabi.ts";
 import {
+  type Handle,
   type Link,
   type LinkObject,
   type Method,
   refusal_of,
-  type Handle,
 } from "../../link.ts";
+import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
 
 /** The interface's handle, named by `xpute:stop/stop` (frame.json `NAMED`). */
 export const HANDLE: Handle = 0x4eccaa;
@@ -17,7 +18,7 @@ export const HANDLE: Handle = 0x4eccaa;
 /** `stopped` */
 export const STOPPED: Method = 0;
 
-export interface Stop {
+export interface Host {
   stopped(
     errnum: number,
     file: string,
@@ -28,24 +29,25 @@ export interface Stop {
 }
 
 /** The object over `imp`. */
-function object(imp: Stop): LinkObject {
+function object(imp: Host): LinkObject {
   return {
     call(m, tag, args) {
       try {
         switch (m) {
           case STOPPED: {
-            if (args === null) return Errno.EBADMSG;
+            if (args === null) return ERRNO_EBADMSG;
+            const r_ = new Lift(args);
             imp.stopped(
-              args.at(0).get_number(),
-              args.at(1).get_str(),
-              args.at(2).get_number(),
-              args.at(3).get_u64(),
-              args.at(4).get_u64(),
+              r_.i32(0),
+              r_.str(4),
+              r_.u32(12),
+              r_.u64(16),
+              r_.u64(24),
             );
             return 0;
           }
           default:
-            return Errno.ENOSYS;
+            return ERRNO_ENOSYS;
         }
       } catch (e) {
         return refusal_of(e);
@@ -55,6 +57,6 @@ function object(imp: Stop): LinkObject {
 }
 
 /** Serves `imp` under the interface's handle. */
-export function mount(l: Pick<Link, "mount_named">, imp: Stop): void {
+export function mount(l: Pick<Link, "mount_named">, imp: Host): void {
   l.mount_named(HANDLE, object(imp));
 }

@@ -34,7 +34,7 @@ impl Room {
     fn release_cnt(self) -> u32 {
         match self {
             Room::Heap => heap::stat().releases,
-            Room::Bodies => body::releases(),
+            Room::Bodies => body::release_cnt(),
             Room::Ways => *WAYS_GIVEN.get(|| 0),
         }
     }

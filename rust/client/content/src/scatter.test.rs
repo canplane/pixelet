@@ -55,7 +55,7 @@ fn standing_ones_never_meet() {
 #[test]
 fn stands_finer() {
     for decor in &ROWS {
-        for v in 0..decor.variants {
+        for v in 0..decor.variant_cnt {
             assert!(stands_at(decor, v, LEAF_CELL_ZOOM));
             for cell_zoom in FIRST_CELL_ZOOM..LEAF_CELL_ZOOM {
                 if stands_at(decor, v, cell_zoom) {
@@ -97,7 +97,7 @@ fn counts_hand_down_whole() {
 #[test]
 fn stands_as_a_cube_keeps() {
     for d in &ROWS {
-        for v in 0..d.variants {
+        for v in 0..d.variant_cnt {
             let [x, y, z] = d.sizes[v as usize];
             for cell_zoom in FIRST_CELL_ZOOM..=LEAF_CELL_ZOOM {
                 let steps = 3 * (UNIT_ZOOM - cell_zoom.min(UNIT_ZOOM));

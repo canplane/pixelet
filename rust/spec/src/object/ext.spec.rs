@@ -7,30 +7,23 @@
 // extensions in a pool of its own; a leaf names its record by its place there,
 // or none. Which class an id is of is the catalog's (pxl-spec object/ext.rs).
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    non_camel_case_types,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Class {
-    marker_text = 0,
+    MarkerText = 0,
 }
 
 impl Class {
     /// Every member, in its source's own order.
-    pub const ALL: [Class; 1] = [Class::marker_text];
+    pub const ALL: [Class; 1] = [Class::MarkerText];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<Class> {
         match val {
-            0 => Some(Class::marker_text),
+            0 => Some(Class::MarkerText),
             _ => None,
         }
     }
@@ -38,7 +31,7 @@ impl Class {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            Class::marker_text => "marker_text",
+            Class::MarkerText => "marker_text",
         }
     }
 }

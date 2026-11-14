@@ -4,13 +4,13 @@ use std::io::Read;
 use std::path::Path;
 
 /// How many times a fetch is tried before it fails.
-const TRIES: u32 = 3;
+const TRY_CNT: u32 = 3;
 
-/// `url`'s bytes, tried `TRIES` times, a longer wait after each failure. An
+/// `url`'s bytes, tried `TRY_CNT` times, a longer wait after each failure. An
 /// empty body is a failure.
 pub fn get(url: &str) -> Result<Vec<u8>, String> {
     let mut last = String::new();
-    for k in 1..=TRIES {
+    for k in 1..=TRY_CNT {
         match ureq::get(url).call() {
             Ok(res) => {
                 let mut body = Vec::new();
@@ -24,7 +24,7 @@ pub fn get(url: &str) -> Result<Vec<u8>, String> {
             }
             Err(e) => last = format!("{url}: {e}"),
         }
-        if k < TRIES {
+        if k < TRY_CNT {
             std::thread::sleep(std::time::Duration::from_millis(400 * k as u64));
         }
     }

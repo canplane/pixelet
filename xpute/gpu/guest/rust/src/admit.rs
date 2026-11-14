@@ -6,12 +6,13 @@
 //! on the GPU. Every host writes its count into the device's block (spec
 //! DEVICE), and `frame` applies the rule there.
 
-use core::sync::atomic::{AtomicU32, Ordering};
 use std::cell::Cell;
 
 use xpute_gpu_link::admit::admits;
-use xpute_gpu_link::spec::DEVICE;
-use xpute_gpu_link::spec::STATUS;
+use xpute_gpu_link::spec::device;
+use xpute_gpu_link::spec::status;
+
+use crate::encode::load_acquire;
 
 thread_local! {
     /// The first word of the device's block the guest last lent
@@ -29,7 +30,7 @@ pub fn ask(block: &[u32]) {
 /// The block `ask` kept, its words to load with acquire.
 pub fn block() -> Option<&'static [u32]> {
     // SAFETY: the block `ask` kept, in place while it is lent.
-    BLOCK.get().map(|at| unsafe { core::slice::from_raw_parts(at, DEVICE::WORDS) })
+    BLOCK.get().map(|at| unsafe { core::slice::from_raw_parts(at, device::WORDS) })
 }
 
 /// This is the admission of a guest that has the GPU, where `LATENCY` is the
@@ -38,10 +39,8 @@ pub fn block() -> Option<&'static [u32]> {
 /// unfinished frames. It admits none before the guest has asked for the block,
 /// and none once the device is lost.
 pub fn frame<const LATENCY: u32>() -> bool {
-    BLOCK.get().is_some_and(|at| {
-        // SAFETY: the block `ask` kept, which stays live and in place; its
-        // words the host writes are only ever loaded atomically.
-        let word = |k: usize| unsafe { AtomicU32::from_ptr(at.add(k).cast_mut()) }.load(Ordering::Acquire);
-        word(DEVICE::STATUS_AT) == STATUS::READY && admits(word(DEVICE::UNFINISHED_AT), LATENCY)
+    block().is_some_and(|b| {
+        let word = |k: usize| load_acquire(&b[k]);
+        word(device::STATUS_AT) == status::READY && admits(word(device::UNFINISHED_AT), LATENCY)
     })
 }

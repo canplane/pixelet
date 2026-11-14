@@ -13,7 +13,7 @@
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_EBADF, ERRNO_EMFILE } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 import { NAMED, SLOT_BITS } from "./frame.spec.ts";
 
@@ -48,7 +48,7 @@ export class Table<T> {
     } else {
       this._slots.push({ gen: 0, val: undefined, next: ISSUED });
       k = this._slots.length;
-      if (k > SLOT_MASK) throw new InvariantError(Errno.EMFILE);
+      if (k > SLOT_MASK) throw new InvariantError(ERRNO_EMFILE);
     }
     return (k | (this._slots[k - 1]!.gen << SLOT_BITS)) >>> 0;
   }
@@ -61,7 +61,7 @@ export class Table<T> {
 
   put(h: Handle, v: T): void {
     const s = this._slot(h);
-    if (s === undefined) throw new InvariantError(Errno.EBADF);
+    if (s === undefined) throw new InvariantError(ERRNO_EBADF);
     s.val = v;
   }
 

@@ -17,19 +17,19 @@ fn laid(slot_cnt: usize) -> Vec<u8> {
 
 #[test]
 fn reads_each_slot() {
-    let c = Catalog::read(&laid(SLOTS)).expect("a catalog of the compiled slots");
-    let last = SLOTS as Slot - 1;
-    assert_eq!(c.file(last), SLOTS as u32);
+    let c = Catalog::read(&laid(SLOT_CNT)).expect("a catalog of the compiled slots");
+    let last = SLOT_CNT as Slot - 1;
+    assert_eq!(c.file(last), SLOT_CNT as u32);
     assert_eq!(
         c.extent(last),
-        [0.0, 0.25, 0.5].map(|k| (SLOTS - 1) as f64 + k)
+        [0.0, 0.25, 0.5].map(|k| (SLOT_CNT - 1) as f64 + k)
     );
 }
 
 #[test]
 fn refuses_another_shape() {
-    assert!(Catalog::read(&laid(SLOTS + 1)).is_none());
-    let mut short = laid(SLOTS);
+    assert!(Catalog::read(&laid(SLOT_CNT + 1)).is_none());
+    let mut short = laid(SLOT_CNT);
     short.pop();
     assert!(Catalog::read(&short).is_none());
 }

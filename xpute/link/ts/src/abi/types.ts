@@ -2,28 +2,36 @@
 //
 // GENERATED from link/wit (xpute-link-gen wit.rs)
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
-import { XputeError } from "@xpute/kit/status/error.ts";
-import { type NodeCursor, type PacketWriter } from "@xpute/kit/wire/xtp/mod.ts";
+import type { Lift, Lower } from "../cabi.ts";
+import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
+import { MarshalError } from "@xpute/kit/status/error.ts";
 
 export type Token = { tag: "int"; val: number } | { tag: "str"; val: string };
 
-/** Its payload alone, whose node's type says its case. */
-export function write_Token(w: PacketWriter, v: Token): void {
+export const TOKEN_SZ = 12;
+export const TOKEN_ALIGN = 4;
+
+export function store_Token(w: Lower, at: number, v: Token): void {
   switch (v.tag) {
     case "int":
-      w.i32(v.val);
+      w.u8(at, 0);
+      w.i32(at + 4, v.val);
       return;
     case "str":
-      w.str(v.val);
+      w.u8(at, 1);
+      w.str(at + 4, v.val);
       return;
   }
 }
 
-export function read_Token(c: NodeCursor): Token {
-  if (typeof c.get() === "number") return { tag: "int", val: c.get_number() };
-  if (typeof c.get() === "string") return { tag: "str", val: c.get_str() };
-  throw new XputeError(Errno.EBADMSG);
+export function load_Token(r: Lift, at: number): Token {
+  switch (r.case(at, 2)) {
+    case 0:
+      return { tag: "int", val: r.i32(at + 4) };
+    case 1:
+      return { tag: "str", val: r.str(at + 4) };
+  }
+  throw new MarshalError(ERRNO_EBADMSG);
 }
 
 export interface Lent {
@@ -31,17 +39,17 @@ export interface Lent {
   len: number;
 }
 
-export function write_Lent(w: PacketWriter, r: Lent): void {
-  w.branch(2, (w) => {
-    w.u32(r.at);
-    w.u32(r.len);
-  });
+export const LENT_SZ = 8;
+export const LENT_ALIGN = 4;
+
+export function store_Lent(w: Lower, at: number, v: Lent): void {
+  w.u32(at + 0, v.at);
+  w.u32(at + 4, v.len);
 }
 
-export function read_Lent(c: NodeCursor): Lent {
-  const b = c.as_branch();
+export function load_Lent(r: Lift, at: number): Lent {
   return {
-    at: b.at(0).get_number(),
-    len: b.at(1).get_number(),
+    at: r.u32(at + 0),
+    len: r.u32(at + 4),
   };
 }

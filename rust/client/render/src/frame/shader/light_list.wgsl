@@ -70,10 +70,10 @@ fn texel_slot(p: vec2<u32>) -> vec2<u32> {
 
 /// What of `level` the thread at `id` of its pass takes, from the list of what feeds the tiles
 /// the cast damaged. A workgroup is a square of `SAMPLE_SIDE` × `SAMPLE_SIDE` threads, the
-/// list's `LIST_LANES`, and an entry takes a square of places (`light_item_at`). Past the list
+/// list's `LIST_LANE_CNT`, and an entry takes a square of places (`light_item_at`). Past the list
 /// the thread takes `NONE`.
 fn light_item(level: u32, id: vec2<u32>) -> vec2<u32> {
-  let place = ((id.y / SAMPLE_SIDE) * LIGHT_LIST_ACROSS + id.x / SAMPLE_SIDE) * LIGHT_LIST_LANES
+  let place = ((id.y / SAMPLE_SIDE) * LIGHT_LIST_ACROSS + id.x / SAMPLE_SIDE) * LIGHT_LIST_LANE_CNT
     + (id.y % SAMPLE_SIDE) * SAMPLE_SIDE + id.x % SAMPLE_SIDE;
   return light_item_at(level, place);
 }

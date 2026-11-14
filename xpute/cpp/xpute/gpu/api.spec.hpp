@@ -18,6 +18,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 
 namespace xpute::gpu {
@@ -246,7 +247,16 @@ enum class BindingKind : std::uint8_t {
     storage_texture = 3,
 };
 
-inline constexpr std::array<std::string_view, 4> BINDING_KIND{"buffer", "sampler", "texture", "storage-texture"};
+// The member `val` is, or none for a number no member has.
+constexpr std::optional<BindingKind> binding_kind_of(std::uint8_t val) noexcept {
+    switch (val) {
+    case 0: return BindingKind::buffer;
+    case 1: return BindingKind::sampler;
+    case 2: return BindingKind::texture;
+    case 3: return BindingKind::storage_texture;
+    }
+    return std::nullopt;
+}
 
 enum class ResourceKind : std::uint8_t {
     buffer = 0,
@@ -254,7 +264,15 @@ enum class ResourceKind : std::uint8_t {
     texture_view = 2,
 };
 
-inline constexpr std::array<std::string_view, 3> RESOURCE_KIND{"buffer", "sampler", "texture-view"};
+// The member `val` is, or none for a number no member has.
+constexpr std::optional<ResourceKind> resource_kind_of(std::uint8_t val) noexcept {
+    switch (val) {
+    case 0: return ResourceKind::buffer;
+    case 1: return ResourceKind::sampler;
+    case 2: return ResourceKind::texture_view;
+    }
+    return std::nullopt;
+}
 
 // GPUBufferUsage, its bits as WebGPU numbers them.
 namespace BUFFER_USAGE {

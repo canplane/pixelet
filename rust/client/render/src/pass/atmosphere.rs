@@ -12,38 +12,32 @@
 
 use core::ops::Range;
 
-use pxl_spec::bake::tile::earth::{self, EARTH_ZOOM};
+use pxl_spec::bake::tile::earth;
 use pxl_spec::space::coord::adapter::epsg3857::height_u_per_m;
-use pxl_spec::space::coord::world::around;
 use pxl_spec::space::coord::zoom::HEIGHT_BITS;
-use pxl_spec::space::layer::demand::{GROUND_DEMAND_ACROSS, GROUND_DEMAND_TILES};
+use pxl_spec::space::layer::demand::GROUND_DEMAND_TILE_CAP;
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 
 use crate::frame::shader::record::{
-    binds, COMPUTE, COMPUTE_ATMOS_EXPOSURE, COMPUTE_ATMOS_FROXEL, PIPELINE_ATMOS_IRRADIANCE,
-    PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE, SAMPLER,
-    STORAGE_RW, STORAGE_TEXTURE_2D, STORAGE_TEXTURE_3D, TEXTURE, UNIFORM,
+    AIR, COMPUTE_ATMOS_EXPOSURE, COMPUTE_ATMOS_FROXEL, PIPELINE_ATMOS_IRRADIANCE,
+    PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE,
 };
 use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use xpute_link::mem;
 
 use crate::frame::shader::word::atmos::{
-    BOTTOM_RADIUS, CAMERA_ALT, CITY_LIGHT, DRAWN, EARTH_DIST, EARTH_TILES, EARTH_WINDOW, EXPOSURE,
-    GROUND_ALBEDO, HORIZON_TO_TOP, KM_PER_U, LAND_ALT_KM, MIE_EXTINCTION, MIE_G, MIE_SCALE_HEIGHT,
-    MIE_SCATTERING, MOON_COLOR, MOON_DIR, MOON_LAYOUT, MOON_LIGHT, MOON_REACHES, NIGHT_SKY,
-    NIGHT_STOPS, OZONE_ABSORPTION, OZONE_CENTER, OZONE_HALF_WIDTH, RAYLEIGH_SCALE_HEIGHT,
-    RAYLEIGH_SCATTERING, SHOWN_FALL, SUN_ANGULAR_RADIUS, SUN_DIR, SUN_LAYOUT, SUN_REACHES,
-    TOP_RADIUS,
+    CAMERA_ALT, DRAWN, EARTH_TILES, EARTH_WINDOW, KM_PER_U, LAND_ALT_KM, MOON_COLOR, MOON_DIR,
+    MOON_LAYOUT, MOON_LIGHT, MOON_REACHES, SUN_DIR, SUN_LAYOUT, SUN_REACHES,
 };
 use crate::frame::shader::word::{
     AIR_FROXELS, ATMOS_FLOATS, EARTH_TILE_BITS, GROUND_SLOPES, IRRADIANCE_SIZE, LIGHT_SLOPES,
     MULTISCATTER_SIZE, SKY_VIEW_SIZE, SLOPE_WORDS, TRANSMITTANCE_SIZE,
 };
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, pass_desc, room, sampler_entry, signaled, texture_usage,
-    view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Layout, Load, RenderContext,
-    RESULT,
+    buf_entry, buffer_usage, bytes, pass_desc, result, room, sampler_entry, signaled,
+    texture_usage, view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Layout, Load,
+    RenderContext,
 };
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
@@ -58,86 +52,24 @@ use crate::param::atmos::{ALT_SAMPLE, ALT_SAMPLE_LEAST_KM};
 pub type Upload = dyn FnMut(&mut dyn FnMut(u32, &[u8]) -> bool);
 
 /// How many of the air's entries every painter and the sky read (record.rs `AIR`).
-pub const AIR_ENTRIES: usize = 6;
-
-/// The layout of the group the volume's pass binds: the volume it writes, the air's words,
-/// the tables it marches through, and which light it is for, as the light's sky view reads
-/// it.
-const FROXEL_GROUP: [u32; 18] = [
-    1,
-    COMPUTE,
-    STORAGE_TEXTURE_3D,
-    8,
-    COMPUTE,
-    UNIFORM,
-    9,
-    COMPUTE,
-    TEXTURE,
-    11,
-    COMPUTE,
-    SAMPLER,
-    12,
-    COMPUTE,
-    TEXTURE,
-    14,
-    COMPUTE,
-    UNIFORM,
-];
-
-/// The layout of the group the exposure's pass binds: the texel it writes, the air's words,
-/// the transmittance, the sampler, multiple scattering and irradiance, its own words, and the
-/// buffer it writes its measures into.
-const EXPOSURE_GROUP: [u32; 24] = [
-    1,
-    COMPUTE,
-    STORAGE_TEXTURE_2D,
-    8,
-    COMPUTE,
-    UNIFORM,
-    9,
-    COMPUTE,
-    TEXTURE,
-    11,
-    COMPUTE,
-    SAMPLER,
-    12,
-    COMPUTE,
-    TEXTURE,
-    14,
-    COMPUTE,
-    UNIFORM,
-    18,
-    COMPUTE,
-    TEXTURE,
-    20,
-    COMPUTE,
-    STORAGE_RW,
-];
-
-// Each compute group here must lay out what its shader declares, as build.rs reads the
-// declarations (`BINDS`).
-const _: () = assert!(
-    binds(&[COMPUTE_ATMOS_EXPOSURE], &EXPOSURE_GROUP)
-        && binds(&[COMPUTE_ATMOS_FROXEL], &FROXEL_GROUP),
-    "a compute group lays out other than its shader reads (record.rs `binds`)"
-);
+pub const AIR_ENTRY_CNT: usize = AIR.len();
 
 /// One texture layer for each tile the earth layer's floor holds at once, which is one for
 /// each slot of its tile cache.
-pub const EARTH_LAYERS: u32 = GROUND_DEMAND_TILES;
+pub const EARTH_LAYER_CNT: u32 = GROUND_DEMAND_TILE_CAP;
 /// A tile's layer plus one takes `EARTH_TILE_BITS` bits, eight tiles to a word, in the four
 /// words at `EARTH_TILES`.
 const _: () = assert!(
-    EARTH_LAYERS < 1 << EARTH_TILE_BITS && EARTH_LAYERS <= 32 / EARTH_TILE_BITS * 4,
+    EARTH_LAYER_CNT < 1 << EARTH_TILE_BITS && EARTH_LAYER_CNT <= 32 / EARTH_TILE_BITS * 4,
     "the window's layers fit their word"
 );
 
-const TABLES: usize = 6;
+const TABLE_CNT: usize = 6;
 /// The tables' sizes, in the order of their indices below: transmittance, multiple
 /// scattering, the sun's sky view, the exposure texel, irradiance, and the moon's sky view.
 /// The exposure's three texels hold its stops, then the sun's reach and the moon's
 /// (atmos_exposure.wgsl).
-pub(crate) const SIZES: [(u32, u32); TABLES] = [
+pub(crate) const SIZES: [(u32, u32); TABLE_CNT] = [
     TRANSMITTANCE_SIZE,
     MULTISCATTER_SIZE,
     SKY_VIEW_SIZE,
@@ -164,7 +96,6 @@ const REACH: f32 = 0.5;
 /// eye's altitude, the mu's sample, the most display levels its sky shows, which says how
 /// far it reaches, and that reach's slope in its mu. The ground's slope and sample
 /// follow.
-const SLOPES: usize = SLOPE_WORDS as usize;
 const SLOPES_BYTES: u32 = 4 * SLOPE_WORDS;
 const LIGHT_WORDS: usize = LIGHT_SLOPES as usize;
 const GROUND_WORDS: usize = GROUND_SLOPES as usize;
@@ -191,11 +122,9 @@ impl Measure {
 }
 
 /// The words the exposure texel is a function of (atmos_light.wgsl `eye_stops`), besides the
-/// ground under the eye, at which it is held by a step (`Atmosphere::ground`). They are all
-/// the words but the eye's altitude and scale, where the rays end, the city lights, the
-/// Earth's window, and the lights' tables as laid out.
-const EXPOSURE_READS: [Range<usize>; 3] =
-    [0..CAMERA_ALT, MIE_EXTINCTION..DRAWN, NIGHT_SKY..LAND_ALT_KM];
+/// ground under the eye, at which it is held by a step (`Atmosphere::ground`): the lights'
+/// directions, the moon's light and its color.
+const EXPOSURE_READS: [Range<usize>; 2] = [SUN_DIR..CAMERA_ALT, MOON_COLOR..KM_PER_U];
 
 /// Where each light's layout words and its reach flag lie (atmos_medium.wgsl `view_layout`,
 /// `reach`), the sun's first.
@@ -275,13 +204,13 @@ pub struct Atmosphere {
     uniform: u32,
     words: [f32; ATMOS_FLOATS],
     sampler: u32,
-    views: [u32; TABLES],
+    views: [u32; TABLE_CNT],
     /// The tables' render pipelines (`pass_of`), and the exposure's compute pipeline. The
     /// exposure is a compute pass so that its span times its own work alone
     /// (`dispatch_exposure`).
     passes: [Pipeline; 4],
     exposure: Pipeline,
-    groups: [u32; TABLES],
+    groups: [u32; TABLE_CNT],
     baked: bool,
     /// Each light's own words, the sun's first (atmos_skyview.wgsl `light`): which light it
     /// is, and whether its drawing measures the slopes in its mu and in the eye's
@@ -293,7 +222,7 @@ pub struct Atmosphere {
     /// is held at.
     light_memos: [LightMemo; 2],
     ground: TableInput,
-    /// The buffer the views and the exposure write their measures into (`SLOPES`), and the
+    /// The buffer the views and the exposure write their measures into (`SLOPE_WORDS`), and the
     /// buffer the measures are mapped back through.
     slopes: (u32, u32),
     /// The measures that are due and not yet copied to be mapped, and those copied and on
@@ -304,7 +233,7 @@ pub struct Atmosphere {
     /// as the host writes them and a native build's statics lie outside the memory it
     /// writes. `ticket` is the core's number the mapping was last asked with, and `mapped`
     /// says whether a mapping is out, or landed and not yet taken.
-    landed_words: Box<[u32; SLOPES]>,
+    landed_words: Box<[u32; SLOPE_WORDS as usize]>,
     mapping: Box<[u32; 2]>,
     ticket: u32,
     mapped: bool,
@@ -333,63 +262,19 @@ impl Atmosphere {
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let mut words = [0.0f32; ATMOS_FLOATS];
-        for (at, rgb) in [
-            (RAYLEIGH_SCATTERING, model::RAYLEIGH_SCATTERING),
-            (OZONE_ABSORPTION, model::OZONE_ABSORPTION),
-            (
-                NIGHT_SKY,
-                core::array::from_fn(|k| model::NIGHT_COLOR[k] * model::NIGHT_SKY),
-            ),
-            (
-                CITY_LIGHT,
-                core::array::from_fn(|k| model::CITY_COLOR[k] * model::CITY_LIGHT),
-            ),
-        ] {
-            for (w, v) in words[at..at + 3].iter_mut().zip(rgb) {
-                *w = v as f32;
-            }
-        }
-        for (at, v) in [
-            (BOTTOM_RADIUS, model::BOTTOM_RADIUS_KM),
-            (TOP_RADIUS, model::TOP_RADIUS_KM),
-            (
-                HORIZON_TO_TOP,
-                libm::sqrt(
-                    model::TOP_RADIUS_KM * model::TOP_RADIUS_KM
-                        - model::BOTTOM_RADIUS_KM * model::BOTTOM_RADIUS_KM,
-                ),
-            ),
-            (RAYLEIGH_SCALE_HEIGHT, model::RAYLEIGH_SCALE_HEIGHT_KM),
-            (MIE_SCATTERING, model::MIE_SCATTERING),
-            (MIE_EXTINCTION, model::MIE_EXTINCTION),
-            (MIE_SCALE_HEIGHT, model::MIE_SCALE_HEIGHT_KM),
-            (MIE_G, model::MIE_G),
-            (OZONE_CENTER, model::OZONE_CENTER_KM),
-            (OZONE_HALF_WIDTH, model::OZONE_HALF_WIDTH_KM),
-            (GROUND_ALBEDO, model::GROUND_ALBEDO),
-            (SUN_ANGULAR_RADIUS, model::SUN_ANGULAR_RADIUS),
-            (EXPOSURE, model::EXPOSURE),
-            (NIGHT_STOPS, model::NIGHT_STOPS),
-            (SHOWN_FALL, model::SHOWN_FALL),
-        ] {
-            words[at] = v as f32;
-        }
         words[SUN_DIR + 2] = 1.0;
-        words[EARTH_DIST] = earth::EARTH_DIST as f32;
-        words[EARTH_WINDOW + 2] = f32::from_bits(GROUND_DEMAND_ACROSS);
-        words[EARTH_WINDOW + 3] = f32::from_bits(around(EARTH_ZOOM) as u32);
 
         let sampler = g.sampler(
-            FilterMode::linear,
-            FilterMode::linear,
-            MipmapFilterMode::nearest,
-            AddressMode::clamp_to_edge,
+            FilterMode::Linear,
+            FilterMode::Linear,
+            MipmapFilterMode::Nearest,
+            AddressMode::ClampToEdge,
             None,
             1,
         );
-        let mut textures = [0; TABLES];
-        let mut views = [0; TABLES];
-        for k in 0..TABLES {
+        let mut textures = [0; TABLE_CNT];
+        let mut views = [0; TABLE_CNT];
+        for k in 0..TABLE_CNT {
             let (w, h) = SIZES[k];
             let written = if k == EXPOSURE_TEXEL {
                 texture_usage::STORAGE_BINDING
@@ -400,7 +285,7 @@ impl Atmosphere {
                 w,
                 h,
                 1,
-                Format::rgba16float,
+                Format::Rgba16float,
                 1,
                 texture_usage::TEXTURE_BINDING | written,
             );
@@ -412,12 +297,12 @@ impl Atmosphere {
             PIPELINE_ATMOS_SKY_VIEW,
             PIPELINE_ATMOS_IRRADIANCE,
         ]
-        .map(|id| pipelines.build(g, id, Format::rgba16float));
+        .map(|id| pipelines.build(g, id, Format::Rgba16float));
         // The volume holds the sun's half across, then the moon's.
         let n = AIR_FROXELS;
         let volume = g.volume_view(g.volume(
             [2 * n, n, n],
-            Format::rgba16float,
+            Format::Rgba16float,
             texture_usage::STORAGE_BINDING | texture_usage::TEXTURE_BINDING,
         ));
 
@@ -427,8 +312,8 @@ impl Atmosphere {
             sampler,
             views,
             passes,
-            exposure: pipelines.build_compute(g, COMPUTE_ATMOS_EXPOSURE, &EXPOSURE_GROUP),
-            groups: [0; TABLES],
+            exposure: pipelines.build_compute(g, COMPUTE_ATMOS_EXPOSURE),
+            groups: [0; TABLE_CNT],
             baked: false,
             lights: [0.0f32, 1.0].map(|which| {
                 let light = g.buf(16, buffer_usage::UNIFORM | buffer_usage::COPY_DST);
@@ -454,7 +339,7 @@ impl Atmosphere {
             ),
             pending: 0,
             flying: 0,
-            landed_words: Box::new([0; SLOPES]),
+            landed_words: Box::new([0; SLOPE_WORDS as usize]),
             mapping: Box::new([0; 2]),
             ticket: 0,
             mapped: false,
@@ -467,16 +352,16 @@ impl Atmosphere {
                 let texture = g.texture(
                     TILE_CELLS,
                     TILE_CELLS,
-                    EARTH_LAYERS,
-                    Format::rgba8unorm_srgb,
+                    EARTH_LAYER_CNT,
+                    Format::Rgba8unormSrgb,
                     1,
                     texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST,
                 );
-                let view = g.view(texture, true, 0, 1, 0, EARTH_LAYERS);
+                let view = g.view(texture, true, 0, 1, 0, EARTH_LAYER_CNT);
                 (texture, view)
             },
             volume,
-            froxel: pipelines.build_compute(g, COMPUTE_ATMOS_FROXEL, &FROXEL_GROUP),
+            froxel: pipelines.build_compute(g, COMPUTE_ATMOS_FROXEL),
             froxel_groups: [0; 2],
         };
         // Every table's group holds the air's entries its layout binds, then its own entries.
@@ -490,7 +375,7 @@ impl Atmosphere {
         let light = |k: usize| buf_entry(14, lights[k]);
         // The exposure's layout binds the air's entries but two: the texel it writes, and the
         // volume.
-        let own: [(usize, Vec<Entry>); TABLES] = [
+        let own: [(usize, Vec<Entry>); TABLE_CNT] = [
             (TRANSMITTANCE, vec![]),
             (MULTISCATTER, vec![]),
             (IRRADIANCE, vec![multiscatter]),
@@ -531,7 +416,7 @@ impl Atmosphere {
     }
 
     /// The air's entries that every painter and the sky read (record.rs `AIR`).
-    pub fn entries(&self) -> [Entry; AIR_ENTRIES] {
+    pub fn entries(&self) -> [Entry; AIR_ENTRY_CNT] {
         [
             buf_entry(8, self.uniform),
             view_entry(9, self.views[TRANSMITTANCE]),
@@ -557,7 +442,7 @@ impl Atmosphere {
     /// view.
     fn froxel(&self, ctx: &mut RenderContext, k: usize) {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::air);
+        let stamp = ctx.stamp(GpuSpanName::Air);
         let pass = g.compute_pass(encoder, stamp.pass());
         g.set_pipeline(pass, self.froxel.id);
         g.set_bind_group(pass, 0, self.froxel_groups[k], &[]);
@@ -572,7 +457,7 @@ impl Atmosphere {
     /// their time.
     fn dispatch_exposure(&self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::exposure);
+        let stamp = ctx.stamp(GpuSpanName::Exposure);
         let pass = g.compute_pass(encoder, stamp.pass());
         g.set_pipeline(pass, self.exposure.id);
         g.set_bind_group(pass, 0, self.groups[EXPOSURE_TEXEL], &[]);
@@ -736,9 +621,9 @@ impl Atmosphere {
         let (g, encoder) = (ctx.g, ctx.encoder);
         let mut drew = !self.baked;
         if !self.baked {
-            self.table(ctx, TRANSMITTANCE, GpuSpanName::air);
-            self.table(ctx, MULTISCATTER, GpuSpanName::air);
-            self.table(ctx, IRRADIANCE, GpuSpanName::air);
+            self.table(ctx, TRANSMITTANCE, GpuSpanName::Air);
+            self.table(ctx, MULTISCATTER, GpuSpanName::Air);
+            self.table(ctx, IRRADIANCE, GpuSpanName::Air);
             self.baked = true;
         }
         // Each light's froxels go before its table, which reads none of them. The span `air`
@@ -747,7 +632,7 @@ impl Atmosphere {
         for (k, table) in [SKY_VIEW, MOON_VIEW].into_iter().enumerate() {
             if self.plan.lights[k] {
                 self.froxel(ctx, k);
-                self.table(ctx, table, GpuSpanName::air);
+                self.table(ctx, table, GpuSpanName::Air);
                 drew = true;
             }
         }
@@ -789,7 +674,7 @@ impl Atmosphere {
     /// Whether measures have landed for a frame to take (`take_slopes`). A refused mapping
     /// asks for no frame; what it carried is copied again with the next frame drawn.
     pub fn complete(&self) -> bool {
-        self.mapped && signaled(&self.mapping[0], self.ticket) && self.mapping[1] == RESULT::OK
+        self.mapped && signaled(&self.mapping[0], self.ticket) && self.mapping[1] == result::OK
     }
 
     /// Takes the measures that landed. Each slope becomes a step: how far its quantity moves
@@ -802,7 +687,7 @@ impl Atmosphere {
         }
         self.mapped = false;
         // A refused mapping measured nothing, so what it carried is measured again.
-        if self.mapping[1] != RESULT::OK {
+        if self.mapping[1] != result::OK {
             self.pending |= core::mem::take(&mut self.flying);
             return;
         }

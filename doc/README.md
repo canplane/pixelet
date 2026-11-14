@@ -35,5 +35,9 @@ before the documents catch up.
 Where the code and a stated contract disagree, neither the code nor an old
 record settles it alone.
 
+A record is not rewritten. Where one defers something or leaves it open, or
+decides something since reversed, and that is found when the record is read, a
+note goes beneath it: `> Since <date> (<commit>): …`, saying what holds now.
+
 A report or a request from outside the project is a GitHub issue. What is
 resolved in one is written here, and the issue links to it.

@@ -44,27 +44,27 @@ fn fold(children: [&GroundCells; 4], zoom: Zoom) -> Vec<u8> {
 
 #[test]
 fn uniform_tile_fold() {
-    let p = plane(|_, _| Ground::subway as u8);
+    let p = plane(|_, _| Ground::Subway as u8);
     assert!(fold([&p, &p, &p, &p], LEAF_ZOOM - 1)
         .iter()
-        .all(|&v| v == Ground::subway as u8));
+        .all(|&v| v == Ground::Subway as u8));
 }
 
 #[test]
 fn thin_area_tie() {
     // A one-cell strip ties 2:2 in every parent, so a leaf's parent's
     // south-west tie child keeps it only where x is even.
-    let lot = plane(|x, _| if x == 10 { Ground::parking as u8 } else { 0 });
+    let lot = plane(|x, _| if x == 10 { Ground::Parking as u8 } else { 0 });
     let empty = plane(|_, _| 0);
     assert_eq!(
         fold([&lot, &empty, &empty, &empty], LEAF_ZOOM - 1)[5],
-        Ground::parking as u8
+        Ground::Parking as u8
     );
-    let odd = plane(|x, _| if x == 11 { Ground::parking as u8 } else { 0 });
+    let odd = plane(|x, _| if x == 11 { Ground::Parking as u8 } else { 0 });
     assert_eq!(fold([&odd, &empty, &empty, &empty], LEAF_ZOOM - 1)[5], 0);
     let dot = plane(|x, y| {
         if (x, y) == (10, 10) {
-            Ground::parking as u8
+            Ground::Parking as u8
         } else {
             0
         }
@@ -219,7 +219,7 @@ fn volume_majority_fold() {
 
 /// The open ocean: flat water at sea level, no tile.
 fn zero_tile() -> TerrainTile {
-    let cells = vec![Ground::water as u8; 4 * SPAN * SPAN];
+    let cells = vec![Ground::Water as u8; 4 * SPAN * SPAN];
     TerrainTile::of(
         vec![0; PADDED * PADDED],
         cells.into(),

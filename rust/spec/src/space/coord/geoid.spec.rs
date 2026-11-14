@@ -7,14 +7,8 @@
 // 5' grid (egm2008-5) by pxl-tool/bin/geoid.rs; bilinear between these misses it by at
 // most 23.1 m, 1.9 m RMS.
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 /// The grid's spacing; rows from 90N down, 72 columns from 0E east.
 pub const GEOID_STEP_DEG: f64 = 5.0;

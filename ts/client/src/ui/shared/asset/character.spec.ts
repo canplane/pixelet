@@ -10,10 +10,11 @@
 /** The groups a character is of, each numbered, and in each its variants,
  * each numbered by its row, row for row with its models, the colormap its pack
  * shares, how tall it stands and which clip is its move. */
-export const groups = {
+export const group = {
   /** The people a player can be, each by its row, the number the settings store
    * persists. One pack, so one colormap. */
   person: {
+    number: 0 as number,
     /** World units tall — one cell. */
     size: 1 as number,
     /** Each variant's gender (`GENDER`), row for row with its models. */
@@ -54,6 +55,7 @@ export const groups = {
   /** The pets a player's companion can be, each by its row, the number the settings store
    * persists. One pack, so one colormap. */
   pet: {
+    number: 1 as number,
     /** World units tall — a quarter cell, the step the object tiers also take. */
     size: 0.25 as number,
     /** Each pet's name, the one every locale shows (an item has one name), row for row with its models. */
@@ -117,27 +119,17 @@ export const groups = {
   },
 } as const;
 
-export const Group = {
-  /** The people a player can be, each by its row, the number the settings store
-   * persists. One pack, so one colormap. */
-  person: 0,
-  /** The pets a player's companion can be, each by its row, the number the settings store
-   * persists. One pack, so one colormap. */
-  pet: 1,
-} as const;
-export type Group = (typeof Group)[keyof typeof Group];
+export type Group = typeof GROUP_PERSON | typeof GROUP_PET;
+/** The people a player can be, each by its row, the number the settings store
+ * persists. One pack, so one colormap. */
+export const GROUP_PERSON = 0;
+/** The pets a player's companion can be, each by its row, the number the settings store
+ * persists. One pack, so one colormap. */
+export const GROUP_PET = 1;
 
-/** The name of the `Group` member numbered `n`, or undefined for a number
- * no member has. */
-export function group_name(n: number): keyof typeof Group | undefined {
-  for (const k in Group)
-    if (Group[k as keyof typeof Group] === n) return k as keyof typeof Group;
-  return undefined;
-}
-
-/** The `Group` member `n` is, or null for a number no member has. */
-export function group_of(n: number): Group | null {
-  return group_name(n) === undefined ? null : (n as Group);
+/** The member `val` is, or null for a number no member has. */
+export function of_Group(val: number): Group | null {
+  return val === GROUP_PERSON || val === GROUP_PET ? val : null;
 }
 
 /** The clip a character stands in, "idle", by its index in both packs' animations. */
@@ -145,21 +137,11 @@ export const IDLE_CLIP = 1 as number;
 
 /** A person's gender, which splits the picker into two rows; a person is
  * shown by its place in its row. */
-export const Gender = {
-  female: 0,
-  male: 1,
-} as const;
-export type Gender = (typeof Gender)[keyof typeof Gender];
+export type Gender = typeof GENDER_FEMALE | typeof GENDER_MALE;
+export const GENDER_FEMALE = 0;
+export const GENDER_MALE = 1;
 
-/** The name of the `Gender` member numbered `n`, or undefined for a number
- * no member has. */
-export function gender_name(n: number): keyof typeof Gender | undefined {
-  for (const k in Gender)
-    if (Gender[k as keyof typeof Gender] === n) return k as keyof typeof Gender;
-  return undefined;
-}
-
-/** The `Gender` member `n` is, or null for a number no member has. */
-export function gender_of(n: number): Gender | null {
-  return gender_name(n) === undefined ? null : (n as Gender);
+/** The member `val` is, or null for a number no member has. */
+export function of_Gender(val: number): Gender | null {
+  return val === GENDER_FEMALE || val === GENDER_MALE ? val : null;
 }

@@ -9,12 +9,12 @@ fn cell_start(c: vec2<u32>) -> u32 {
 }
 
 fn sample_word(s: vec2<u32>) -> u32 {
-  return eye_word(EYE_GRID + GRID_SAMPLES_AT) + (s.y * eye_word(EYE_GRID + GRID_SAMPLES) + s.x) * SAMPLE_WORDS;
+  return eye_word(EYE_GRID + GRID_SAMPLES_AT) + (s.y * eye_word(EYE_GRID + GRID_SAMPLE_LATTICE) + s.x) * SAMPLE_WORDS;
 }
 
 /// The steps of the beam ray whose line the rays of cell `c` go on from (`beam::LINE_STEPS`),
 /// which each of those rays counts as its own in the ray steps view (pxl-engine `eye::STEPS`).
-fn beam_steps(c: vec2<u32>) -> u32 {
+fn beam_step_cnt(c: vec2<u32>) -> u32 {
   return beams[beams[cell_start(c) + CELL_CORNER] * LINE_WORDS + LINE_STEPS];
 }
 

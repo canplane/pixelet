@@ -1,12 +1,25 @@
 // @pxl/client/service/core/sensor.ts
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { GeolocationErrorCode, PermissionAnswer } from "@/abi/sensor.ts";
-import { Sensor } from "@/abi/types.ts";
+import {
+  type Sensor,
+  SENSOR_GEOLOCATION,
+  SENSOR_ORIENTATION,
+} from "@/abi/types.enum.ts";
 import { type SensorListener } from "@/service/platform/types.ts";
 import * as platform from "@/service/platform/sensor.ts";
 import { geo_fix, MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
 import * as sensor from "@/abi/sensor.ts";
+import {
+  GEOLOCATION_ERROR_CODE_PERMISSION_DENIED,
+  GEOLOCATION_ERROR_CODE_POSITION_UNAVAILABLE,
+  GEOLOCATION_ERROR_CODE_TIMEOUT,
+  GEOLOCATION_ERROR_CODE_OTHER,
+  PERMISSION_ANSWER_ASKING,
+  PERMISSION_ANSWER_GRANTED,
+  PERMISSION_ANSWER_DENIED,
+  PERMISSION_ANSWER_FAILED,
+} from "@/abi/sensor.enum.ts";
 import * as watch from "@/abi/watch.ts";
 import type { Remote } from "@xpute/link";
 import { ui } from "@/service/core/core.ts";
@@ -48,31 +61,31 @@ function core_orient(
 }
 
 const ERR = {
-  denied: GeolocationErrorCode.PermissionDenied,
-  unavailable: GeolocationErrorCode.PositionUnavailable,
-  timeout: GeolocationErrorCode.Timeout,
-  other: GeolocationErrorCode.Other,
+  denied: GEOLOCATION_ERROR_CODE_PERMISSION_DENIED,
+  unavailable: GEOLOCATION_ERROR_CODE_POSITION_UNAVAILABLE,
+  timeout: GEOLOCATION_ERROR_CODE_TIMEOUT,
+  other: GEOLOCATION_ERROR_CODE_OTHER,
 } as const;
 
 const SENSOR = {
-  geolocation: Sensor.Geolocation,
-  orientation: Sensor.Orientation,
+  geolocation: SENSOR_GEOLOCATION,
+  orientation: SENSOR_ORIENTATION,
 } as const;
 
 const ANSWER = {
-  asking: PermissionAnswer.Asking,
-  granted: PermissionAnswer.Granted,
-  denied: PermissionAnswer.Denied,
-  failed: PermissionAnswer.Failed,
+  asking: PERMISSION_ANSWER_ASKING,
+  granted: PERMISSION_ANSWER_GRANTED,
+  denied: PERMISSION_ANSWER_DENIED,
+  failed: PERMISSION_ANSWER_FAILED,
 } as const;
 
 export const SENSOR_LISTENER: SensorListener = {
   position: core_pos,
   positionError: (err, watching) =>
-    void sensor.err(ui, Sensor.Geolocation, ERR[err], watching),
+    void sensor.err(ui, SENSOR_GEOLOCATION, ERR[err], watching),
   orientation: core_orient,
   // The compass gives no code for its failure.
-  orientationLost: () => void sensor.err(ui, Sensor.Orientation, null, false),
+  orientationLost: () => void sensor.err(ui, SENSOR_ORIENTATION, null, false),
   permission: (which, answer) =>
     void sensor.permission(ui, SENSOR[which], ANSWER[answer]),
 };
@@ -94,16 +107,16 @@ function sensor_start(s: Sensor): void {
   // A build made for measuring has its place given and starts no sensor, so
   // that no permission prompt holds it on any platform.
   if (__PERF_DRIVE__) {
-    if (s === Sensor.Geolocation) geo_fix(MEASURE_PLACE);
+    if (s === SENSOR_GEOLOCATION) geo_fix(MEASURE_PLACE);
     return;
   }
-  if (s === Sensor.Geolocation) {
+  if (s === SENSOR_GEOLOCATION) {
     platform.geo.start();
   } else platform.orient.start();
 }
 
 function sensor_stop(s: Sensor): void {
-  if (s === Sensor.Geolocation) {
+  if (s === SENSOR_GEOLOCATION) {
     platform.geo.stop();
   } else platform.orient.stop();
 }

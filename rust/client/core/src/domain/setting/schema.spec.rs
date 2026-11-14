@@ -24,15 +24,8 @@
 // kept elsewhere — the person and the pet are by theirs in character.json — and
 // crosses as itself.
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    non_camel_case_types,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 /// Which controller makes the camera's pose.
 ///
@@ -44,19 +37,19 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum CameraMode {
-    orbit = 0,
-    first_person = 1,
+    Orbit = 0,
+    FirstPerson = 1,
 }
 
 impl CameraMode {
     /// Every member, in its source's own order.
-    pub const ALL: [CameraMode; 2] = [CameraMode::orbit, CameraMode::first_person];
+    pub const ALL: [CameraMode; 2] = [CameraMode::Orbit, CameraMode::FirstPerson];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u32) -> Option<CameraMode> {
         match val {
-            0 => Some(CameraMode::orbit),
-            1 => Some(CameraMode::first_person),
+            0 => Some(CameraMode::Orbit),
+            1 => Some(CameraMode::FirstPerson),
             _ => None,
         }
     }
@@ -64,8 +57,8 @@ impl CameraMode {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            CameraMode::orbit => "orbit",
-            CameraMode::first_person => "first_person",
+            CameraMode::Orbit => "orbit",
+            CameraMode::FirstPerson => "first_person",
         }
     }
 }
@@ -84,25 +77,25 @@ impl CameraMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum OrbitObstacleMode {
-    through = 0,
-    stop = 1,
-    climb = 2,
+    Through = 0,
+    Stop = 1,
+    Climb = 2,
 }
 
 impl OrbitObstacleMode {
     /// Every member, in its source's own order.
     pub const ALL: [OrbitObstacleMode; 3] = [
-        OrbitObstacleMode::through,
-        OrbitObstacleMode::stop,
-        OrbitObstacleMode::climb,
+        OrbitObstacleMode::Through,
+        OrbitObstacleMode::Stop,
+        OrbitObstacleMode::Climb,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u32) -> Option<OrbitObstacleMode> {
         match val {
-            0 => Some(OrbitObstacleMode::through),
-            1 => Some(OrbitObstacleMode::stop),
-            2 => Some(OrbitObstacleMode::climb),
+            0 => Some(OrbitObstacleMode::Through),
+            1 => Some(OrbitObstacleMode::Stop),
+            2 => Some(OrbitObstacleMode::Climb),
             _ => None,
         }
     }
@@ -110,9 +103,9 @@ impl OrbitObstacleMode {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            OrbitObstacleMode::through => "through",
-            OrbitObstacleMode::stop => "stop",
-            OrbitObstacleMode::climb => "climb",
+            OrbitObstacleMode::Through => "through",
+            OrbitObstacleMode::Stop => "stop",
+            OrbitObstacleMode::Climb => "climb",
         }
     }
 }
@@ -138,21 +131,21 @@ impl OrbitObstacleMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum AoMode {
-    off = 0,
-    corner = 1,
-    screen = 2,
+    Off = 0,
+    Corner = 1,
+    Screen = 2,
 }
 
 impl AoMode {
     /// Every member, in its source's own order.
-    pub const ALL: [AoMode; 3] = [AoMode::off, AoMode::corner, AoMode::screen];
+    pub const ALL: [AoMode; 3] = [AoMode::Off, AoMode::Corner, AoMode::Screen];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u32) -> Option<AoMode> {
         match val {
-            0 => Some(AoMode::off),
-            1 => Some(AoMode::corner),
-            2 => Some(AoMode::screen),
+            0 => Some(AoMode::Off),
+            1 => Some(AoMode::Corner),
+            2 => Some(AoMode::Screen),
             _ => None,
         }
     }
@@ -160,9 +153,9 @@ impl AoMode {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            AoMode::off => "off",
-            AoMode::corner => "corner",
-            AoMode::screen => "screen",
+            AoMode::Off => "off",
+            AoMode::Corner => "corner",
+            AoMode::Screen => "screen",
         }
     }
 }
@@ -182,21 +175,21 @@ impl AoMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum ResMode {
-    auto = 0,
-    fixed = 1,
-    low = 2,
+    Auto = 0,
+    Fixed = 1,
+    Low = 2,
 }
 
 impl ResMode {
     /// Every member, in its source's own order.
-    pub const ALL: [ResMode; 3] = [ResMode::auto, ResMode::fixed, ResMode::low];
+    pub const ALL: [ResMode; 3] = [ResMode::Auto, ResMode::Fixed, ResMode::Low];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u32) -> Option<ResMode> {
         match val {
-            0 => Some(ResMode::auto),
-            1 => Some(ResMode::fixed),
-            2 => Some(ResMode::low),
+            0 => Some(ResMode::Auto),
+            1 => Some(ResMode::Fixed),
+            2 => Some(ResMode::Low),
             _ => None,
         }
     }
@@ -204,9 +197,9 @@ impl ResMode {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            ResMode::auto => "auto",
-            ResMode::fixed => "fixed",
-            ResMode::low => "low",
+            ResMode::Auto => "auto",
+            ResMode::Fixed => "fixed",
+            ResMode::Low => "low",
         }
     }
 }
@@ -226,34 +219,34 @@ impl ResMode {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum SkyTime {
-    real = 0,
-    dawn = 1,
-    morning = 2,
-    noon = 3,
-    afternoon = 4,
-    dusk = 5,
+    Real = 0,
+    Dawn = 1,
+    Morning = 2,
+    Noon = 3,
+    Afternoon = 4,
+    Dusk = 5,
 }
 
 impl SkyTime {
     /// Every member, in its source's own order.
     pub const ALL: [SkyTime; 6] = [
-        SkyTime::real,
-        SkyTime::dawn,
-        SkyTime::morning,
-        SkyTime::noon,
-        SkyTime::afternoon,
-        SkyTime::dusk,
+        SkyTime::Real,
+        SkyTime::Dawn,
+        SkyTime::Morning,
+        SkyTime::Noon,
+        SkyTime::Afternoon,
+        SkyTime::Dusk,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u32) -> Option<SkyTime> {
         match val {
-            0 => Some(SkyTime::real),
-            1 => Some(SkyTime::dawn),
-            2 => Some(SkyTime::morning),
-            3 => Some(SkyTime::noon),
-            4 => Some(SkyTime::afternoon),
-            5 => Some(SkyTime::dusk),
+            0 => Some(SkyTime::Real),
+            1 => Some(SkyTime::Dawn),
+            2 => Some(SkyTime::Morning),
+            3 => Some(SkyTime::Noon),
+            4 => Some(SkyTime::Afternoon),
+            5 => Some(SkyTime::Dusk),
             _ => None,
         }
     }
@@ -261,12 +254,12 @@ impl SkyTime {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            SkyTime::real => "real",
-            SkyTime::dawn => "dawn",
-            SkyTime::morning => "morning",
-            SkyTime::noon => "noon",
-            SkyTime::afternoon => "afternoon",
-            SkyTime::dusk => "dusk",
+            SkyTime::Real => "real",
+            SkyTime::Dawn => "dawn",
+            SkyTime::Morning => "morning",
+            SkyTime::Noon => "noon",
+            SkyTime::Afternoon => "afternoon",
+            SkyTime::Dusk => "dusk",
         }
     }
 }
@@ -283,7 +276,7 @@ pub enum SettingKey {
     /// the screen and not with the world, and nothing else — no geometry, no
     /// pass of its own, and no work off the GPU past an atlas the client
     /// already holds.
-    textures = 0,
+    Texture = 0,
     /// Procedurally scattered decor only; what the player placed stays.
     ///
     /// Med because it is models rather than a shading term: the GPU generates the
@@ -291,31 +284,31 @@ pub enum SettingKey {
     /// each kind as a model, an impostor or nothing by the angle it
     /// spans, so what it costs follows what is in view. The badge is an ordering,
     /// and this is the one to reach for before any shading term.
-    decor = 1,
+    Decor = 1,
     /// The cumulus' models and the altocumulus and cirrus sheets
     /// (rust/client/core/src/domain/scene/environment/cloud.rs, rust/client/render/src/pass/cloud.rs).
     /// Med as decor is: models in view, and a pass over the screen for the sheets.
-    clouds = 2,
+    Cloud = 2,
     /// The places' markers over the world, from the published places tiles.
-    place = 3,
+    Place = 3,
     /// Rotate-drag and pinch stop writing polar; azimuth is unaffected.
     /// Off by default: the tilt is the one control a view from above is expected to
     /// have, and locking it reads as the app being stuck.
-    tilt_lock = 4,
+    TiltLock = 4,
     /// On a switch to first person the person stands at the pivot, the eye at its
     /// height over the ground. On a switch to third person the pivot is laid on the
     /// ground and the eye steps back by the radius.
-    camera_mode = 5,
+    CameraMode = 5,
     /// The pivot stands on what supports it and a pan takes the lowest way over what is in it (control/support.rs). Off, a pan keeps the pivot's height and passes through anything; a tap still stands it on the surface it struck.
-    surface_follow = 6,
+    SurfaceFollow = 6,
     /// Only `climb` goes into a tunnel (camera/orbit.rs `dive`), so a shipped build holds it, and the others are a development build's to compare, each session from the default.
-    orbit_obstacle = 7,
+    OrbitObstacle = 7,
     /// Darkens cube edges that border open air (rust/client/render/src/frame/shader/paint.wgsl).
     /// A few fragment ops behind a uniform; the shader is the same either way.
-    edge_shade = 8,
+    EdgeShade = 8,
     /// A uniform on an already-compiled shader term; not a pass.
-    rim_light = 9,
-    ao = 10,
+    RimLight = 9,
+    Ao = 10,
     /// The shadow map (rust/client/render/src/pass/shadow.rs): the world cast
     /// once more from the sun, or the moon where the sun is down, as the eye's
     /// rays are, none where neither is up; beams and samples on
@@ -323,81 +316,81 @@ pub enum SettingKey {
     /// taken, the rest walked (pxl-render queue.wgsl), recast only where what it
     /// reads moves; decor and the characters drawn into it depth only, and a 3x3
     /// compare per fragment; 16 MB of map.
-    shadows = 11,
+    Shadow = 11,
     /// The pixels the world is drawn at: two to a CSS pixel is four times the
-    /// work done a drawn pixel at a time (span.json `per_px`), and nothing
+    /// work done a drawn pixel at a time (span.json `GPU_SPAN_PER_PX`), and nothing
     /// more; the camera grid's rays and the light's map cost the same at any.
     /// The markers and the finish stay at the display's.
-    res = 12,
+    Res = 12,
     /// Where the camera and the pointer are, read live (perf/read.rs, NOW's view section).
-    view = 13,
+    View = 13,
     /// The performance panel, recording while it is on (perf/window.rs `perf_follow`).
-    perf = 14,
+    Perf = 14,
     /// Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage.rs).
-    world_gizmo = 15,
+    WorldGizmo = 15,
     /// The camera grid over the screen, the cells the rays are spaced by, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json gives them.
-    camera_gizmo = 16,
-    person = 17,
-    pet = 18,
+    CameraGizmo = 16,
+    Person = 17,
+    Pet = 18,
     /// Each ray's pixel colored by the steps taken on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the steps of the beam ray its cell starts off (beam::LINE_STEPS) and its own after, or, where it took a voxel or the sky without a walk, those of the sample before it on the camera grid's lattice, counted the same way (beam::SAMPLE_STEPS_SHIFT; rust/client/render/src/frame/shader/cast.wgsl `taken_word`, queue.wgsl `finish`).
-    ray_steps = 19,
+    RayStep = 19,
     /// Counts what the eye's cast and the sun's shadow map do: the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn. The GPU counts them and writes them into the profiler's ray lanes of the frame that counted them (rust/client/engine/src/count.rs, rust/client/render/src/ray/count.rs). The counting's atomics run inside the cast's spans, so time the cast with this off.
-    ray_cnts = 20,
-    sky_time = 21,
+    RayCnt = 20,
+    SkyTime = 21,
 }
 
 impl SettingKey {
     /// Every member, in its source's own order.
     pub const ALL: [SettingKey; 22] = [
-        SettingKey::textures,
-        SettingKey::decor,
-        SettingKey::clouds,
-        SettingKey::place,
-        SettingKey::tilt_lock,
-        SettingKey::camera_mode,
-        SettingKey::surface_follow,
-        SettingKey::orbit_obstacle,
-        SettingKey::edge_shade,
-        SettingKey::rim_light,
-        SettingKey::ao,
-        SettingKey::shadows,
-        SettingKey::res,
-        SettingKey::view,
-        SettingKey::perf,
-        SettingKey::world_gizmo,
-        SettingKey::camera_gizmo,
-        SettingKey::person,
-        SettingKey::pet,
-        SettingKey::ray_steps,
-        SettingKey::ray_cnts,
-        SettingKey::sky_time,
+        SettingKey::Texture,
+        SettingKey::Decor,
+        SettingKey::Cloud,
+        SettingKey::Place,
+        SettingKey::TiltLock,
+        SettingKey::CameraMode,
+        SettingKey::SurfaceFollow,
+        SettingKey::OrbitObstacle,
+        SettingKey::EdgeShade,
+        SettingKey::RimLight,
+        SettingKey::Ao,
+        SettingKey::Shadow,
+        SettingKey::Res,
+        SettingKey::View,
+        SettingKey::Perf,
+        SettingKey::WorldGizmo,
+        SettingKey::CameraGizmo,
+        SettingKey::Person,
+        SettingKey::Pet,
+        SettingKey::RayStep,
+        SettingKey::RayCnt,
+        SettingKey::SkyTime,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u32) -> Option<SettingKey> {
         match val {
-            0 => Some(SettingKey::textures),
-            1 => Some(SettingKey::decor),
-            2 => Some(SettingKey::clouds),
-            3 => Some(SettingKey::place),
-            4 => Some(SettingKey::tilt_lock),
-            5 => Some(SettingKey::camera_mode),
-            6 => Some(SettingKey::surface_follow),
-            7 => Some(SettingKey::orbit_obstacle),
-            8 => Some(SettingKey::edge_shade),
-            9 => Some(SettingKey::rim_light),
-            10 => Some(SettingKey::ao),
-            11 => Some(SettingKey::shadows),
-            12 => Some(SettingKey::res),
-            13 => Some(SettingKey::view),
-            14 => Some(SettingKey::perf),
-            15 => Some(SettingKey::world_gizmo),
-            16 => Some(SettingKey::camera_gizmo),
-            17 => Some(SettingKey::person),
-            18 => Some(SettingKey::pet),
-            19 => Some(SettingKey::ray_steps),
-            20 => Some(SettingKey::ray_cnts),
-            21 => Some(SettingKey::sky_time),
+            0 => Some(SettingKey::Texture),
+            1 => Some(SettingKey::Decor),
+            2 => Some(SettingKey::Cloud),
+            3 => Some(SettingKey::Place),
+            4 => Some(SettingKey::TiltLock),
+            5 => Some(SettingKey::CameraMode),
+            6 => Some(SettingKey::SurfaceFollow),
+            7 => Some(SettingKey::OrbitObstacle),
+            8 => Some(SettingKey::EdgeShade),
+            9 => Some(SettingKey::RimLight),
+            10 => Some(SettingKey::Ao),
+            11 => Some(SettingKey::Shadow),
+            12 => Some(SettingKey::Res),
+            13 => Some(SettingKey::View),
+            14 => Some(SettingKey::Perf),
+            15 => Some(SettingKey::WorldGizmo),
+            16 => Some(SettingKey::CameraGizmo),
+            17 => Some(SettingKey::Person),
+            18 => Some(SettingKey::Pet),
+            19 => Some(SettingKey::RayStep),
+            20 => Some(SettingKey::RayCnt),
+            21 => Some(SettingKey::SkyTime),
             _ => None,
         }
     }
@@ -405,28 +398,28 @@ impl SettingKey {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            SettingKey::textures => "textures",
-            SettingKey::decor => "decor",
-            SettingKey::clouds => "clouds",
-            SettingKey::place => "place",
-            SettingKey::tilt_lock => "tilt_lock",
-            SettingKey::camera_mode => "camera_mode",
-            SettingKey::surface_follow => "surface_follow",
-            SettingKey::orbit_obstacle => "orbit_obstacle",
-            SettingKey::edge_shade => "edge_shade",
-            SettingKey::rim_light => "rim_light",
-            SettingKey::ao => "ao",
-            SettingKey::shadows => "shadows",
-            SettingKey::res => "res",
-            SettingKey::view => "view",
-            SettingKey::perf => "perf",
-            SettingKey::world_gizmo => "world_gizmo",
-            SettingKey::camera_gizmo => "camera_gizmo",
-            SettingKey::person => "person",
-            SettingKey::pet => "pet",
-            SettingKey::ray_steps => "ray_steps",
-            SettingKey::ray_cnts => "ray_cnts",
-            SettingKey::sky_time => "sky_time",
+            SettingKey::Texture => "texture",
+            SettingKey::Decor => "decor",
+            SettingKey::Cloud => "cloud",
+            SettingKey::Place => "place",
+            SettingKey::TiltLock => "tilt_lock",
+            SettingKey::CameraMode => "camera_mode",
+            SettingKey::SurfaceFollow => "surface_follow",
+            SettingKey::OrbitObstacle => "orbit_obstacle",
+            SettingKey::EdgeShade => "edge_shade",
+            SettingKey::RimLight => "rim_light",
+            SettingKey::Ao => "ao",
+            SettingKey::Shadow => "shadow",
+            SettingKey::Res => "res",
+            SettingKey::View => "view",
+            SettingKey::Perf => "perf",
+            SettingKey::WorldGizmo => "world_gizmo",
+            SettingKey::CameraGizmo => "camera_gizmo",
+            SettingKey::Person => "person",
+            SettingKey::Pet => "pet",
+            SettingKey::RayStep => "ray_step",
+            SettingKey::RayCnt => "ray_cnt",
+            SettingKey::SkyTime => "sky_time",
         }
     }
 }
@@ -442,32 +435,32 @@ pub enum SettingKind {
 impl SettingKey {
     /// One past the highest number: the length of a list of every
     /// setting's value at its number, where a number not given out stays 0.
-    pub const SLOTS: usize = 22;
+    pub const SLOT_CNT: usize = 22;
 
     pub fn kind(self) -> SettingKind {
         match self {
-            SettingKey::textures => SettingKind::Toggle,
-            SettingKey::decor => SettingKind::Toggle,
-            SettingKey::clouds => SettingKind::Toggle,
-            SettingKey::place => SettingKind::Toggle,
-            SettingKey::tilt_lock => SettingKind::Toggle,
-            SettingKey::camera_mode => SettingKind::Choice,
-            SettingKey::surface_follow => SettingKind::Toggle,
-            SettingKey::orbit_obstacle => SettingKind::Choice,
-            SettingKey::edge_shade => SettingKind::Toggle,
-            SettingKey::rim_light => SettingKind::Toggle,
-            SettingKey::ao => SettingKind::Choice,
-            SettingKey::shadows => SettingKind::Toggle,
-            SettingKey::res => SettingKind::Choice,
-            SettingKey::view => SettingKind::Toggle,
-            SettingKey::perf => SettingKind::Toggle,
-            SettingKey::world_gizmo => SettingKind::Toggle,
-            SettingKey::camera_gizmo => SettingKind::Toggle,
-            SettingKey::person => SettingKind::Index,
-            SettingKey::pet => SettingKind::Index,
-            SettingKey::ray_steps => SettingKind::Toggle,
-            SettingKey::ray_cnts => SettingKind::Toggle,
-            SettingKey::sky_time => SettingKind::Choice,
+            SettingKey::Texture => SettingKind::Toggle,
+            SettingKey::Decor => SettingKind::Toggle,
+            SettingKey::Cloud => SettingKind::Toggle,
+            SettingKey::Place => SettingKind::Toggle,
+            SettingKey::TiltLock => SettingKind::Toggle,
+            SettingKey::CameraMode => SettingKind::Choice,
+            SettingKey::SurfaceFollow => SettingKind::Toggle,
+            SettingKey::OrbitObstacle => SettingKind::Choice,
+            SettingKey::EdgeShade => SettingKind::Toggle,
+            SettingKey::RimLight => SettingKind::Toggle,
+            SettingKey::Ao => SettingKind::Choice,
+            SettingKey::Shadow => SettingKind::Toggle,
+            SettingKey::Res => SettingKind::Choice,
+            SettingKey::View => SettingKind::Toggle,
+            SettingKey::Perf => SettingKind::Toggle,
+            SettingKey::WorldGizmo => SettingKind::Toggle,
+            SettingKey::CameraGizmo => SettingKind::Toggle,
+            SettingKey::Person => SettingKind::Index,
+            SettingKey::Pet => SettingKind::Index,
+            SettingKey::RayStep => SettingKind::Toggle,
+            SettingKey::RayCnt => SettingKind::Toggle,
+            SettingKey::SkyTime => SettingKind::Choice,
         }
     }
 
@@ -476,10 +469,10 @@ impl SettingKey {
     pub fn is_stored(self) -> bool {
         !matches!(
             self,
-            SettingKey::place
-                | SettingKey::camera_mode
-                | SettingKey::orbit_obstacle
-                | SettingKey::sky_time
+            SettingKey::Place
+                | SettingKey::CameraMode
+                | SettingKey::OrbitObstacle
+                | SettingKey::SkyTime
         )
     }
 
@@ -487,10 +480,10 @@ impl SettingKey {
     pub fn dev(self) -> bool {
         matches!(
             self,
-            SettingKey::surface_follow
-                | SettingKey::orbit_obstacle
-                | SettingKey::ray_cnts
-                | SettingKey::sky_time
+            SettingKey::SurfaceFollow
+                | SettingKey::OrbitObstacle
+                | SettingKey::RayCnt
+                | SettingKey::SkyTime
         )
     }
 
@@ -503,9 +496,9 @@ impl SettingKey {
 /// Every setting's value: what the store holds, and what the app reads.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Setting {
-    pub textures: bool,
+    pub texture: bool,
     pub decor: bool,
-    pub clouds: bool,
+    pub cloud: bool,
     pub place: bool,
     pub tilt_lock: bool,
     pub camera_mode: CameraMode,
@@ -514,7 +507,7 @@ pub struct Setting {
     pub edge_shade: bool,
     pub rim_light: bool,
     pub ao: AoMode,
-    pub shadows: bool,
+    pub shadow: bool,
     pub res: ResMode,
     pub view: bool,
     pub perf: bool,
@@ -522,64 +515,64 @@ pub struct Setting {
     pub camera_gizmo: bool,
     pub person: u8,
     pub pet: u8,
-    pub ray_steps: bool,
-    pub ray_cnts: bool,
+    pub ray_step: bool,
+    pub ray_cnt: bool,
     pub sky_time: SkyTime,
 }
 
 impl Setting {
     /// Every setting at schema.json's default.
     pub const DEFAULT: Setting = Setting {
-        textures: true,
+        texture: true,
         decor: true,
-        clouds: true,
+        cloud: true,
         place: false,
         tilt_lock: false,
-        camera_mode: CameraMode::orbit,
+        camera_mode: CameraMode::Orbit,
         surface_follow: true,
-        orbit_obstacle: OrbitObstacleMode::climb,
+        orbit_obstacle: OrbitObstacleMode::Climb,
         edge_shade: true,
         rim_light: true,
-        ao: AoMode::corner,
-        shadows: false,
-        res: ResMode::auto,
+        ao: AoMode::Corner,
+        shadow: false,
+        res: ResMode::Auto,
         view: false,
         perf: false,
         world_gizmo: false,
         camera_gizmo: false,
         person: 1,
         pet: 5,
-        ray_steps: false,
-        ray_cnts: false,
-        sky_time: SkyTime::real,
+        ray_step: false,
+        ray_cnt: false,
+        sky_time: SkyTime::Real,
     };
 
     /// A setting's value as it crosses and is kept: a toggle's 0 or 1, a
     /// choice's option by its number, an index as itself.
     pub fn get(&self, key: SettingKey) -> u32 {
         match key {
-            SettingKey::textures => self.textures as u32,
-            SettingKey::decor => self.decor as u32,
-            SettingKey::clouds => self.clouds as u32,
-            SettingKey::place => self.place as u32,
-            SettingKey::tilt_lock => self.tilt_lock as u32,
-            SettingKey::camera_mode => self.camera_mode as u32,
-            SettingKey::surface_follow => self.surface_follow as u32,
-            SettingKey::orbit_obstacle => self.orbit_obstacle as u32,
-            SettingKey::edge_shade => self.edge_shade as u32,
-            SettingKey::rim_light => self.rim_light as u32,
-            SettingKey::ao => self.ao as u32,
-            SettingKey::shadows => self.shadows as u32,
-            SettingKey::res => self.res as u32,
-            SettingKey::view => self.view as u32,
-            SettingKey::perf => self.perf as u32,
-            SettingKey::world_gizmo => self.world_gizmo as u32,
-            SettingKey::camera_gizmo => self.camera_gizmo as u32,
-            SettingKey::person => self.person as u32,
-            SettingKey::pet => self.pet as u32,
-            SettingKey::ray_steps => self.ray_steps as u32,
-            SettingKey::ray_cnts => self.ray_cnts as u32,
-            SettingKey::sky_time => self.sky_time as u32,
+            SettingKey::Texture => self.texture as u32,
+            SettingKey::Decor => self.decor as u32,
+            SettingKey::Cloud => self.cloud as u32,
+            SettingKey::Place => self.place as u32,
+            SettingKey::TiltLock => self.tilt_lock as u32,
+            SettingKey::CameraMode => self.camera_mode as u32,
+            SettingKey::SurfaceFollow => self.surface_follow as u32,
+            SettingKey::OrbitObstacle => self.orbit_obstacle as u32,
+            SettingKey::EdgeShade => self.edge_shade as u32,
+            SettingKey::RimLight => self.rim_light as u32,
+            SettingKey::Ao => self.ao as u32,
+            SettingKey::Shadow => self.shadow as u32,
+            SettingKey::Res => self.res as u32,
+            SettingKey::View => self.view as u32,
+            SettingKey::Perf => self.perf as u32,
+            SettingKey::WorldGizmo => self.world_gizmo as u32,
+            SettingKey::CameraGizmo => self.camera_gizmo as u32,
+            SettingKey::Person => self.person as u32,
+            SettingKey::Pet => self.pet as u32,
+            SettingKey::RayStep => self.ray_step as u32,
+            SettingKey::RayCnt => self.ray_cnt as u32,
+            SettingKey::SkyTime => self.sky_time as u32,
         }
     }
 
@@ -587,46 +580,46 @@ impl Setting {
     /// for a value the setting cannot hold.
     pub fn set(&mut self, key: SettingKey, val: u32) -> bool {
         match key {
-            SettingKey::textures if val <= 1 => self.textures = val == 1,
-            SettingKey::decor if val <= 1 => self.decor = val == 1,
-            SettingKey::clouds if val <= 1 => self.clouds = val == 1,
-            SettingKey::place if val <= 1 => self.place = val == 1,
-            SettingKey::tilt_lock if val <= 1 => self.tilt_lock = val == 1,
-            SettingKey::camera_mode => match CameraMode::of(val) {
+            SettingKey::Texture if val <= 1 => self.texture = val == 1,
+            SettingKey::Decor if val <= 1 => self.decor = val == 1,
+            SettingKey::Cloud if val <= 1 => self.cloud = val == 1,
+            SettingKey::Place if val <= 1 => self.place = val == 1,
+            SettingKey::TiltLock if val <= 1 => self.tilt_lock = val == 1,
+            SettingKey::CameraMode => match CameraMode::of(val) {
                 Some(o) => self.camera_mode = o,
                 None => return false,
             },
-            SettingKey::surface_follow if val <= 1 => self.surface_follow = val == 1,
-            SettingKey::orbit_obstacle => match OrbitObstacleMode::of(val) {
+            SettingKey::SurfaceFollow if val <= 1 => self.surface_follow = val == 1,
+            SettingKey::OrbitObstacle => match OrbitObstacleMode::of(val) {
                 Some(o) => self.orbit_obstacle = o,
                 None => return false,
             },
-            SettingKey::edge_shade if val <= 1 => self.edge_shade = val == 1,
-            SettingKey::rim_light if val <= 1 => self.rim_light = val == 1,
-            SettingKey::ao => match AoMode::of(val) {
+            SettingKey::EdgeShade if val <= 1 => self.edge_shade = val == 1,
+            SettingKey::RimLight if val <= 1 => self.rim_light = val == 1,
+            SettingKey::Ao => match AoMode::of(val) {
                 Some(o) => self.ao = o,
                 None => return false,
             },
-            SettingKey::shadows if val <= 1 => self.shadows = val == 1,
-            SettingKey::res => match ResMode::of(val) {
+            SettingKey::Shadow if val <= 1 => self.shadow = val == 1,
+            SettingKey::Res => match ResMode::of(val) {
                 Some(o) => self.res = o,
                 None => return false,
             },
-            SettingKey::view if val <= 1 => self.view = val == 1,
-            SettingKey::perf if val <= 1 => self.perf = val == 1,
-            SettingKey::world_gizmo if val <= 1 => self.world_gizmo = val == 1,
-            SettingKey::camera_gizmo if val <= 1 => self.camera_gizmo = val == 1,
-            SettingKey::person => match u8::try_from(val) {
+            SettingKey::View if val <= 1 => self.view = val == 1,
+            SettingKey::Perf if val <= 1 => self.perf = val == 1,
+            SettingKey::WorldGizmo if val <= 1 => self.world_gizmo = val == 1,
+            SettingKey::CameraGizmo if val <= 1 => self.camera_gizmo = val == 1,
+            SettingKey::Person => match u8::try_from(val) {
                 Ok(n) => self.person = n,
                 Err(_) => return false,
             },
-            SettingKey::pet => match u8::try_from(val) {
+            SettingKey::Pet => match u8::try_from(val) {
                 Ok(n) => self.pet = n,
                 Err(_) => return false,
             },
-            SettingKey::ray_steps if val <= 1 => self.ray_steps = val == 1,
-            SettingKey::ray_cnts if val <= 1 => self.ray_cnts = val == 1,
-            SettingKey::sky_time => match SkyTime::of(val) {
+            SettingKey::RayStep if val <= 1 => self.ray_step = val == 1,
+            SettingKey::RayCnt if val <= 1 => self.ray_cnt = val == 1,
+            SettingKey::SkyTime => match SkyTime::of(val) {
                 Some(o) => self.sky_time = o,
                 None => return false,
             },

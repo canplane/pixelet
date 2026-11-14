@@ -33,6 +33,9 @@ completion, where the Canonical ABI copies and ends a borrow at the call's
 return. Only the vocabulary of own and borrow is taken from it. XTP stays the one
 encoding.
 
+> Since 2026-11-14 (50f39b1b27): the link's values cross in the Canonical ABI
+> layout; RESULT is status alone; XTP stays the format of stored and served data.
+
 ## How the work is judged
 
 The user holds every change to these:
@@ -77,6 +80,10 @@ The user holds every change to these:
   The counter wraps, skipping tags still pending. CMD names the target and the
   method, with one RES bit. RESULT is a value ≥ 0 or a negative errno. PKT is the
   XTP packet's length. XTP stays the args' encoding.
+
+> Since 2026-11-14 (50f39b1b27): the link's values cross in the Canonical ABI
+> layout; RESULT is status alone; XTP stays the format of stored and served data.
+
 - A pointer is an offset into the core's memory and a length, `(at, len)`. Offset
   0 is not special. A pointer lent to a call is valid for the call; one lent to an
   async request is valid until its completion. Data crossing to another thread,

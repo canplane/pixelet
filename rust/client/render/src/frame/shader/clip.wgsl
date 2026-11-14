@@ -38,7 +38,7 @@ fn entry(q: vec2<i32>) -> u32 {
 
 /// The row of entry `e` of the clip level at `cell_zoom` in the table.
 fn entry_row(cell_zoom: u32, e: u32) -> u32 {
-  return (cell_zoom - FIRST_CELL_ZOOM) * CLIP_ENTRIES + e;
+  return (cell_zoom - FIRST_CELL_ZOOM) * CLIP_ENTRY_CNT + e;
 }
 
 /// This is the port of pxl-engine `clipmap::key_word`.
@@ -55,7 +55,7 @@ fn joined_idx(l: u32, at: vec2<u32>) -> u32 {
 /// The row of entry `e` of the eye's clip level at `cell_zoom` over its bricks
 /// (`clipmap::JOINED_AT`).
 fn joined_row(cell_zoom: u32, e: u32) -> u32 {
-  return JOINED_AT + (cell_zoom - FIRST_CELL_ZOOM) * JOINED_ENTRIES + e;
+  return JOINED_AT + (cell_zoom - FIRST_CELL_ZOOM) * JOINED_ENTRY_CNT + e;
 }
 
 /// `clipmap::unfold`: the bounds that entry `e` holds for a clip level whose first brick is
@@ -134,9 +134,9 @@ struct NodeBound {
   place: u32,
 }
 
-/// `clipmap::level_bounds`: what the eye's clip level at `cell_zoom` holds of a node `2^l` bricks a
+/// `clipmap::level_bound`: what the eye's clip level at `cell_zoom` holds of a node `2^l` bricks a
 /// side.
-fn level_bounds(place: u32, cell_zoom: u32, g: vec2<i32>, l: u32) -> NodeBound {
+fn level_bound(place: u32, cell_zoom: u32, g: vec2<i32>, l: u32) -> NodeBound {
   let origin = clipmap[ORIGIN_AT + cell_zoom - FIRST_CELL_ZOOM];
   if (origin.z == 0i) {
     return NodeBound(BOUNDS_EMPTY, cell_zoom, true, false, place);
@@ -148,7 +148,7 @@ fn level_bounds(place: u32, cell_zoom: u32, g: vec2<i32>, l: u32) -> NodeBound {
   if (d.x >= across || d.y >= across || d.x + side <= 0i || d.y + side <= 0i) {
     return NodeBound(BOUNDS_EMPTY, cell_zoom, true, false, place);
   }
-  let mip = min(l, JOINED_MIPS);
+  let mip = min(l, JOINED_MIP_CNT);
   let at = vec2<u32>(q & vec2<i32>(across - 1i)) >> vec2<u32>(mip);
   let b = unfold(clipmap[joined_row(cell_zoom, joined_idx(mip, at))], origin.xy);
   // No clip level holds this brick, and no coarser clip level bounds it either, so this
@@ -164,8 +164,8 @@ fn bounded(place: u32, cell_zoom: u32, zoom: u32, c: vec2<i32>) -> NodeBound {
   // The node's first cell at `cell_zoom`, or the cell that holds the node when the node is
   // finer (`idx_at`).
   let g = select(c >> vec2<u32>((zoom - cell_zoom) & 31u), c << vec2<u32>((cell_zoom - zoom) & 31u), cell_zoom >= zoom);
-  if (cell_zoom > zoom + BRICK_MIPS) {
-    return level_bounds(place, cell_zoom, g, cell_zoom - zoom - BRICK_MIPS);
+  if (cell_zoom > zoom + BRICK_MIP_LAST) {
+    return level_bound(place, cell_zoom, g, cell_zoom - zoom - BRICK_MIP_LAST);
   }
   let s = step_to(place, cell_zoom, g);
   let clip = lookup_from(s.place);

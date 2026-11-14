@@ -2,14 +2,14 @@
 
 //! The frame's calls over the buffers that hold indirect counts, in the order the host encodes
 //! them (renderer.rs `frame`): the light's tiles' marks, then `RayPass::dispatch`, then
-//! the shadow map's pass. Each call states its pipeline, the groups set for it and the buffers
-//! they view, and where it reads its count. Every indirect call in ray/cast.rs,
+//! the shadow map's pass. Each call states its pipeline, the group set for it and the buffers
+//! it views, and where it reads its count. Every indirect call in ray/cast.rs,
 //! ray/raster.rs, gpu/generator.rs and pass/shadow.rs takes the place of its count from its
 //! step here, and those files name the steps in this order (sequence.test.rs). access.rs
 //! `check` refuses the hazards among the calls as the crate is built.
 
 use crate::frame::shader::access::{
-    check, light_marks, Bound, Frame, Persistent, Range, Step, END, NO_RANGE,
+    check, light_mark, Bound, Frame, Persistent, Range, Step, END, NO_RANGE,
 };
 use crate::frame::shader::group::*;
 use crate::frame::shader::record::*;
@@ -91,21 +91,15 @@ pub const LIT_PASS: &[u32] = &[
 /// The eye's raster draw of the record and its faces' pass (ray/raster.rs `Raster::draw`),
 /// then the cast of the pixels in the damaged tiles (ray/cast.rs `RayPass::dispatch`).
 pub const RASTER: Step =
-    Step::draw_off("raster", IN_EYE, PIPELINE_RASTER, &[], (RASTER_ARGS, 0)).in_pass(RASTER_PASS);
+    Step::draw_off("raster", IN_EYE, PIPELINE_RASTER, (RASTER_ARGS, 0)).in_pass(RASTER_PASS);
 pub const FACE: Step = Step::dispatch_off(
     "face",
     IN_EYE,
     COMPUTE_FACE,
-    &[&FACES_BINDS],
+    &FACES_BINDS,
     (RASTER_ARGS, raster::ASKED_AT + raster::ARGS_FACES),
 );
-pub const PX: Step = Step::dispatch_off(
-    "px",
-    IN_EYE,
-    COMPUTE_CAST,
-    &[&PIXELS_BINDS],
-    (CAST_TILES, 0),
-);
+pub const PX: Step = Step::dispatch_off("px", IN_EYE, COMPUTE_CAST, &PIXELS_BINDS, (CAST_TILES, 0));
 /// The eye's holes' stops into the node cache's drawable entries (ray/raster.rs
 /// `Raster::rec_hits`). Their dispatch is first copied out of the node cache's head, because the
 /// stops bind the node cache writable and a call cannot read its count from a buffer a group
@@ -120,21 +114,21 @@ pub const REC_HITS: Step = Step::dispatch_off(
     "rec_hits",
     IN_EYE_HOLES,
     COMPUTE_REC_HITS,
-    &[&REC_HITS_OF_BINDS],
+    &REC_HITS_OF_BINDS,
     (RASTER_HITS, 0),
 );
 pub const HIT_FACES: Step = Step::dispatch_off(
     "hit_faces",
     IN_EYE_HOLES,
     COMPUTE_FACE,
-    &[&HIT_FACES_OF_BINDS],
+    &HIT_FACES_OF_BINDS,
     (RASTER_ARGS, raster::HIT_ASKED_AT + raster::ARGS_FACES),
 );
 pub const HIT_FACES_PUT: Step = Step::dispatch_off(
     "hit_faces_put",
     IN_EYE_HOLES,
     COMPUTE_REC_FACES,
-    &[&REC_HITS_OF_BINDS],
+    &REC_HITS_OF_BINDS,
     (RASTER_HITS, 0),
 );
 /// The thinning and the generation of the decor's slots, each dispatched off the list's args
@@ -143,14 +137,14 @@ pub const THIN: Step = Step::dispatch_off(
     "thin",
     IN_GENERATE,
     COMPUTE_GENERATION_THIN,
-    &[&GENERATION_THIN_BINDS],
+    &GENERATION_THIN_BINDS,
     (GENERATION_LIST, generation::THIN_ARGS),
 );
 pub const GENERATE: Step = Step::dispatch_off(
     "generate",
     IN_GENERATE,
     COMPUTE_GENERATION,
-    &[&GENERATION_BINDS],
+    &GENERATION_BINDS,
     (GENERATION_LIST, generation::GENERATE_ARGS),
 );
 /// The light's cast (ray/cast.rs `RayPass::dispatch`).
@@ -158,41 +152,41 @@ pub const LIGHT_MARK_WALKED: Step = Step::dispatch(
     "light_mark_walked",
     IN_LIGHT,
     COMPUTE_LIGHT_MARK_WALKED,
-    &[&LIGHT_MARK_BINDS],
+    &LIGHT_MARK_BINDS,
 );
 pub const LIGHT_MARK_DRAWS: Step = Step::dispatch_off(
     "light_mark_draws",
     IN_LIGHT,
     COMPUTE_LIGHT_MARK_DRAWS,
-    &[&LIGHT_MARK_DRAWS_BINDS],
+    &LIGHT_MARK_DRAWS_BINDS,
     (LIGHT_DRAWS, 0),
 );
 pub const LIGHT_SLIDE: Step = Step::dispatch_off(
     "light_slide",
     IN_LIGHT,
     COMPUTE_LIGHT_SLIDE,
-    &[&LIGHT_SLIDE_BINDS],
+    &LIGHT_SLIDE_BINDS,
     (LIGHT_RECEIVER_TILES, light::RECEIVER_TILES_SLIDE),
 );
 pub const LIGHT_PROPAGATE: Step = Step::dispatch_off(
     "light_propagate",
     IN_LIGHT,
     COMPUTE_LIGHT_PROPAGATE,
-    &[&LIGHT_PROPAGATE_BINDS],
+    &LIGHT_PROPAGATE_BINDS,
     (LIGHT_RECEIVER_TILES, light::RECEIVER_TILES_LIST),
 );
 pub const LIGHT_CELLS: Step = Step::dispatch_off(
     "light_cells",
     IN_LIGHT,
     COMPUTE_LIGHT_CELL,
-    &[&LIGHT_WORLD_BINDS],
+    &LIGHT_WORLD_BINDS,
     (LIGHT_ARGS, light::ARGS_CELLS),
 );
 pub const LIGHT_SAMPLE_HIT: Step = Step::dispatch_off(
     "light_sample_hit",
     IN_LIGHT,
     COMPUTE_LIGHT_SAMPLE_HIT,
-    &[&LIGHT_SAMPLE_HIT_BINDS],
+    &LIGHT_SAMPLE_HIT_BINDS,
     (LIGHT_ARGS, light::ARGS_SAMPLE_HIT),
 );
 /// The light's raster draw of the record (ray/raster.rs `Raster::light_draw`).
@@ -200,7 +194,6 @@ pub const LIGHT_RASTER: Step = Step::draw_off(
     "light_raster",
     IN_LIGHT,
     PIPELINE_RASTER,
-    &[],
     (LIGHT_RASTER_ARGS, 0),
 )
 .in_pass(LIGHT_RASTER_PASS);
@@ -208,7 +201,7 @@ pub const LIGHT_SLOTS: Step = Step::dispatch_off(
     "light_slots",
     IN_LIGHT,
     COMPUTE_LIGHT,
-    &[&LIGHT_SLOTS_BINDS],
+    &LIGHT_SLOTS_BINDS,
     (LIGHT_ARGS, light::ARGS_SLOT),
 );
 /// The light's holes' stops into the node cache's drawable entries (ray/raster.rs
@@ -224,7 +217,7 @@ pub const LIGHT_REC_HITS: Step = Step::dispatch_off(
     "light_rec_hits",
     IN_LIGHT_HOLES,
     COMPUTE_LIGHT_REC_HITS,
-    &[&LIGHT_REC_HITS_BINDS],
+    &LIGHT_REC_HITS_BINDS,
     (LIGHT_RASTER_HITS, 0),
 );
 /// The shadow map's pass opens with one of two draws (pass/shadow.rs `Shadow::begin`): its gate
@@ -233,7 +226,6 @@ pub const MAP_MASK: Step = Step::draw_off(
     "map_mask",
     IN_MAP,
     PIPELINE_LIGHT_MASK,
-    &[],
     (LIGHT_RECT_ARGS, 0),
 )
 .one_of(1)
@@ -242,7 +234,6 @@ pub const MAP_LAY: Step = Step::draw_off(
     "map_lay",
     IN_MAP,
     PIPELINE_LIGHT_MAP,
-    &[],
     (LIGHT_ARGS, light::ARGS_LAY),
 )
 .one_of(1)
@@ -252,51 +243,38 @@ pub const MAP_LAY: Step = Step::draw_off(
 /// with the impostors. Each is drawn whole off the generation's args, or through its gate off
 /// the args the gate's cull wrote, and the two run in place of each other (pass/decor.rs
 /// `draw_generated`, pass/impostor.rs `draw_generated`).
-pub const DECOR_MAP: Step = Step::draw_regions(
-    "decor_map",
-    IN_MAP,
-    PIPELINE_DECOR_DEPTH,
-    &[],
-    GENERATION_ARGS,
-)
-.one_of(2)
-.in_pass(MAP_PASS);
+pub const DECOR_MAP: Step =
+    Step::draw_regions("decor_map", IN_MAP, PIPELINE_DECOR_DEPTH, GENERATION_ARGS)
+        .one_of(2)
+        .in_pass(MAP_PASS);
 pub const DECOR_MAP_MASKED: Step = Step::draw_regions(
     "decor_map_masked",
     IN_MAP,
     PIPELINE_DECOR_DEPTH,
-    &[],
     CULLED_LIGHT_ARGS,
 )
 .one_of(2)
 .in_pass(MAP_PASS);
 pub const DECOR_LIT: Step =
-    Step::draw_regions("decor_lit", IN_LIT, PIPELINE_DECOR, &[], GENERATION_ARGS)
+    Step::draw_regions("decor_lit", IN_LIT, PIPELINE_DECOR, GENERATION_ARGS)
         .one_of(3)
         .in_pass(LIT_PASS);
 pub const DECOR_LIT_MASKED: Step = Step::draw_regions(
     "decor_lit_masked",
     IN_LIT,
     PIPELINE_DECOR,
-    &[],
     CULLED_SCREEN_ARGS,
 )
 .one_of(3)
 .in_pass(LIT_PASS);
-pub const IMPOSTOR_LIT: Step = Step::draw_regions(
-    "impostor_lit",
-    IN_LIT,
-    PIPELINE_IMPOSTOR,
-    &[],
-    GENERATION_ARGS,
-)
-.one_of(4)
-.in_pass(LIT_PASS);
+pub const IMPOSTOR_LIT: Step =
+    Step::draw_regions("impostor_lit", IN_LIT, PIPELINE_IMPOSTOR, GENERATION_ARGS)
+        .one_of(4)
+        .in_pass(LIT_PASS);
 pub const IMPOSTOR_LIT_MASKED: Step = Step::draw_regions(
     "impostor_lit_masked",
     IN_LIT,
     PIPELINE_IMPOSTOR,
-    &[],
     CULLED_SCREEN_ARGS,
 )
 .one_of(4)
@@ -584,13 +562,13 @@ pub const FRAME: Frame = Frame {
             "decor_cull_args",
             IN_SCREEN_MASK,
             COMPUTE_DECOR_CULL_ARGS,
-            &[&CULL_SCREEN_BINDS],
+            &CULL_SCREEN_BINDS,
         ),
         Step::dispatch(
             "decor_cull",
             IN_SCREEN_MASK,
             COMPUTE_DECOR_CULL,
-            &[&CULL_SCREEN_BINDS],
+            &CULL_SCREEN_BINDS,
         ),
         // The box the light's tiles' marks cover, written as the args of the light's gate's
         // draw (gpu/tile.rs `dispatch_rect_args`).
@@ -598,7 +576,7 @@ pub const FRAME: Frame = Frame {
             "light_rect_args",
             IN_LIGHT_MARKS,
             COMPUTE_RECT_ARGS,
-            &[&LIGHT_RECT_BINDS],
+            &LIGHT_RECT_BINDS,
         ),
         // What the casts since the world's receivers were last stood afresh left in the stood
         // list's args and in the read list's count is copied back in before every pass that
@@ -610,13 +588,13 @@ pub const FRAME: Frame = Frame {
             "decor_cull_args_light",
             IN_LIGHT_MASK,
             COMPUTE_DECOR_CULL_ARGS,
-            &[&CULL_LIGHT_BINDS],
+            &CULL_LIGHT_BINDS,
         ),
         Step::dispatch(
             "decor_cull_light",
             IN_LIGHT_MASK,
             COMPUTE_DECOR_CULL,
-            &[&CULL_LIGHT_BINDS],
+            &CULL_LIGHT_BINDS,
         ),
         // The eye's cast: its beam rays, their cells, its samples, the draw of its record, and
         // its pixels. First the run of its beam rays (ray/cast.rs `walk_run`).
@@ -624,108 +602,88 @@ pub const FRAME: Frame = Frame {
             "corners",
             IN_EYE,
             COMPUTE_QUEUE_CORNERS,
-            &[&CORNERS_WALK_BINDS],
+            &CORNERS_WALK_BINDS,
         ),
-        Step::dispatch(
-            "corners_ask",
-            IN_EYE,
-            COMPUTE_QUEUE_ASK,
-            &[&CORNERS_ASK_BINDS],
-        ),
+        Step::dispatch("corners_ask", IN_EYE, COMPUTE_QUEUE_ASK, &CORNERS_ASK_BINDS),
         Step::dispatch(
             "corners_parked",
             IN_EYE,
             COMPUTE_QUEUE_CORNERS_PARKED,
-            &[&CORNERS_WALK_BINDS],
+            &CORNERS_WALK_BINDS,
         ),
         Step::dispatch(
             "corners_ask_parked",
             IN_EYE,
             COMPUTE_QUEUE_ASK_PARKED,
-            &[&CORNERS_ASK_BINDS],
+            &CORNERS_ASK_BINDS,
         ),
         Step::dispatch(
             "corners_last",
             IN_EYE,
             COMPUTE_QUEUE_LAST_CORNERS,
-            &[&LATTICE_LAST_BINDS],
+            &LATTICE_LAST_BINDS,
         ),
-        Step::dispatch("cell", IN_EYE, COMPUTE_CELL, &[&WORLD_BINDS]),
+        Step::dispatch("cell", IN_EYE, COMPUTE_CELL, &WORLD_BINDS),
         // The run of the eye's samples (ray/cast.rs `walk_run`).
         Step::dispatch(
             "samples",
             IN_EYE,
             COMPUTE_QUEUE_SAMPLES,
-            &[&SAMPLES_WALK_BINDS],
+            &SAMPLES_WALK_BINDS,
         ),
-        Step::dispatch(
-            "samples_ask",
-            IN_EYE,
-            COMPUTE_QUEUE_ASK,
-            &[&SAMPLES_ASK_BINDS],
-        ),
+        Step::dispatch("samples_ask", IN_EYE, COMPUTE_QUEUE_ASK, &SAMPLES_ASK_BINDS),
         Step::dispatch(
             "samples_parked",
             IN_EYE,
             COMPUTE_QUEUE_SAMPLES_PARKED,
-            &[&SAMPLES_WALK_BINDS],
+            &SAMPLES_WALK_BINDS,
         ),
         Step::dispatch(
             "samples_ask_parked",
             IN_EYE,
             COMPUTE_QUEUE_ASK_PARKED,
-            &[&SAMPLES_ASK_BINDS],
+            &SAMPLES_ASK_BINDS,
         ),
         Step::dispatch(
             "samples_last",
             IN_EYE,
             COMPUTE_QUEUE_LAST_SAMPLES,
-            &[&LATTICE_LAST_BINDS],
+            &LATTICE_LAST_BINDS,
         ),
-        Step::dispatch(
-            "sample_hit",
-            IN_EYE,
-            COMPUTE_SAMPLE_HIT,
-            &[&SAMPLE_HIT_BINDS],
-        ),
-        Step::dispatch("rec_draw", IN_EYE, COMPUTE_REC_DRAW, &[&REC_BINDS]),
+        Step::dispatch("sample_hit", IN_EYE, COMPUTE_SAMPLE_HIT, &SAMPLE_HIT_BINDS),
+        Step::dispatch("rec_draw", IN_EYE, COMPUTE_REC_DRAW, &REC_BINDS),
         RASTER,
         FACE,
         Step::dispatch(
             "cast_tiles",
             IN_EYE,
             COMPUTE_CAST_TILES,
-            &[&CAST_TILES_OF_BINDS],
+            &CAST_TILES_OF_BINDS,
         ),
         PX,
         // The eye's holes are walked, and their stops written into the record.
         EYE_HOLES_CNT,
-        Step::dispatch("queue", IN_EYE_HOLES, COMPUTE_QUEUE, &[&WALK_BINDS]),
+        Step::dispatch("queue", IN_EYE_HOLES, COMPUTE_QUEUE, &WALK_BINDS),
         Step::dispatch(
             "queue_ask",
             IN_EYE_HOLES,
             COMPUTE_QUEUE_ASK,
-            &[&WALK_ASK_BINDS],
+            &WALK_ASK_BINDS,
         ),
         Step::dispatch(
             "queue_parked",
             IN_EYE_HOLES,
             COMPUTE_QUEUE_PARKED,
-            &[&WALK_BINDS],
+            &WALK_BINDS,
         ),
         Step::dispatch(
             "queue_ask_parked",
             IN_EYE_HOLES,
             COMPUTE_QUEUE_ASK_PARKED,
-            &[&WALK_ASK_BINDS],
+            &WALK_ASK_BINDS,
         ),
         HITS,
-        Step::dispatch(
-            "queue_last",
-            IN_EYE_HOLES,
-            COMPUTE_QUEUE_LAST,
-            &[&LAST_BINDS],
-        ),
+        Step::dispatch("queue_last", IN_EYE_HOLES, COMPUTE_QUEUE_LAST, &LAST_BINDS),
         REC_HITS_DISPATCH,
         REC_HITS,
         HIT_FACES,
@@ -735,7 +693,7 @@ pub const FRAME: Frame = Frame {
             "generation_mark",
             IN_GENERATE,
             COMPUTE_GENERATION_MARK,
-            &[&GENERATION_MARK_BINDS],
+            &GENERATION_MARK_BINDS,
         ),
         THIN,
         GENERATE,
@@ -743,24 +701,19 @@ pub const FRAME: Frame = Frame {
             "generation_args",
             IN_GENERATE,
             COMPUTE_GENERATION_ARGS,
-            &[&GENERATION_ARGS_OF_BINDS],
+            &GENERATION_ARGS_OF_BINDS,
         ),
         // The light's cast: its receivers stand, its tiles are read and damaged, and then come
         // its beam rays, its samples, the draw of its record and its slots.
         LIGHT_READS_OUT,
         LIGHT_READS_IN,
-        Step::dispatch(
-            "rec_draw_for_light",
-            IN_LIGHT,
-            COMPUTE_REC_DRAW,
-            &[&REC_BINDS],
-        ),
+        Step::dispatch("rec_draw_for_light", IN_LIGHT, COMPUTE_REC_DRAW, &REC_BINDS),
         LIGHT_MARK_WALKED,
         Step::dispatch(
             "light_mark_draws_open",
             IN_LIGHT,
             COMPUTE_LIGHT_MARK_DRAWS_OPEN,
-            &[&LIGHT_MARK_DRAWS_OPEN_BINDS],
+            &LIGHT_MARK_DRAWS_OPEN_BINDS,
         ),
         LIGHT_MARK_DRAWS,
         RECEIVER_TILES_CNT,
@@ -772,7 +725,7 @@ pub const FRAME: Frame = Frame {
             "light_damage",
             IN_LIGHT,
             COMPUTE_LIGHT_DAMAGE,
-            &[&LIGHT_PROPAGATE_BINDS],
+            &LIGHT_PROPAGATE_BINDS,
         ),
         CORNERS_CNT,
         SOURCES_CNT,
@@ -782,31 +735,31 @@ pub const FRAME: Frame = Frame {
             "light_corners",
             IN_LIGHT,
             COMPUTE_QUEUE_LIGHT_CORNERS,
-            &[&LIGHT_CORNERS_WALK_BINDS],
+            &LIGHT_CORNERS_WALK_BINDS,
         ),
         Step::dispatch(
             "light_corners_ask",
             IN_LIGHT,
             COMPUTE_QUEUE_ASK,
-            &[&LIGHT_CORNERS_ASK_BINDS],
+            &LIGHT_CORNERS_ASK_BINDS,
         ),
         Step::dispatch(
             "light_corners_parked",
             IN_LIGHT,
             COMPUTE_QUEUE_LIGHT_CORNERS_PARKED,
-            &[&LIGHT_CORNERS_WALK_BINDS],
+            &LIGHT_CORNERS_WALK_BINDS,
         ),
         Step::dispatch(
             "light_corners_ask_parked",
             IN_LIGHT,
             COMPUTE_QUEUE_ASK_PARKED,
-            &[&LIGHT_CORNERS_ASK_BINDS],
+            &LIGHT_CORNERS_ASK_BINDS,
         ),
         Step::dispatch(
             "light_corners_last",
             IN_LIGHT,
             COMPUTE_QUEUE_LAST_LIGHT_CORNERS,
-            &[&LIGHT_LATTICE_LAST_BINDS],
+            &LIGHT_LATTICE_LAST_BINDS,
         ),
         LIGHT_CELLS,
         // The run of the light's samples (ray/cast.rs `walk_run`).
@@ -814,38 +767,38 @@ pub const FRAME: Frame = Frame {
             "light_samples",
             IN_LIGHT,
             COMPUTE_QUEUE_LIGHT_SAMPLES,
-            &[&LIGHT_SAMPLES_WALK_BINDS],
+            &LIGHT_SAMPLES_WALK_BINDS,
         ),
         Step::dispatch(
             "light_samples_ask",
             IN_LIGHT,
             COMPUTE_QUEUE_ASK,
-            &[&LIGHT_SAMPLES_ASK_BINDS],
+            &LIGHT_SAMPLES_ASK_BINDS,
         ),
         Step::dispatch(
             "light_samples_parked",
             IN_LIGHT,
             COMPUTE_QUEUE_LIGHT_SAMPLES_PARKED,
-            &[&LIGHT_SAMPLES_WALK_BINDS],
+            &LIGHT_SAMPLES_WALK_BINDS,
         ),
         Step::dispatch(
             "light_samples_ask_parked",
             IN_LIGHT,
             COMPUTE_QUEUE_ASK_PARKED,
-            &[&LIGHT_SAMPLES_ASK_BINDS],
+            &LIGHT_SAMPLES_ASK_BINDS,
         ),
         Step::dispatch(
             "light_samples_last",
             IN_LIGHT,
             COMPUTE_QUEUE_LAST_LIGHT_SAMPLES,
-            &[&LIGHT_LATTICE_LAST_BINDS],
+            &LIGHT_LATTICE_LAST_BINDS,
         ),
         LIGHT_SAMPLE_HIT,
         Step::dispatch(
             "light_rec_draw",
             IN_LIGHT,
             COMPUTE_LIGHT_REC_DRAW,
-            &[&LIGHT_REC_BINDS],
+            &LIGHT_REC_BINDS,
         ),
         LIGHT_RASTER,
         LIGHT_SLOTS,
@@ -855,32 +808,32 @@ pub const FRAME: Frame = Frame {
             "light_queue",
             IN_LIGHT_HOLES,
             COMPUTE_QUEUE_LIGHT,
-            &[&LIGHT_WALK_BINDS],
+            &LIGHT_WALK_BINDS,
         ),
         Step::dispatch(
             "light_queue_ask",
             IN_LIGHT_HOLES,
             COMPUTE_QUEUE_ASK,
-            &[&LIGHT_WALK_ASK_BINDS],
+            &LIGHT_WALK_ASK_BINDS,
         ),
         Step::dispatch(
             "light_queue_parked",
             IN_LIGHT_HOLES,
             COMPUTE_QUEUE_LIGHT_PARKED,
-            &[&LIGHT_WALK_BINDS],
+            &LIGHT_WALK_BINDS,
         ),
         Step::dispatch(
             "light_queue_ask_parked",
             IN_LIGHT_HOLES,
             COMPUTE_QUEUE_ASK_PARKED,
-            &[&LIGHT_WALK_ASK_BINDS],
+            &LIGHT_WALK_ASK_BINDS,
         ),
         LIGHT_HITS,
         Step::dispatch(
             "light_queue_last",
             IN_LIGHT_HOLES,
             COMPUTE_QUEUE_LAST_LIGHT,
-            &[&LIGHT_LAST_BINDS],
+            &LIGHT_LAST_BINDS,
         ),
         LIGHT_REC_HITS_DISPATCH,
         LIGHT_REC_HITS,
@@ -940,12 +893,12 @@ const BOUNDS: &[Bound] = &[Bound {
 
 /// The stood list's marks in the light's args.
 const fn receiver_tiles_marks() -> Range {
-    let [first, words] = light_marks(light::LIST_RECEIVERS);
+    let [first, words] = light_mark(light::LIST_RECEIVERS);
     at(LIGHT_ARGS, first, words)
 }
 
 const fn persistent_marks(which: u32, owner: &'static str) -> Persistent {
-    let [first, words] = light_marks(which);
+    let [first, words] = light_mark(which);
     Persistent {
         range: at(LIGHT_ARGS, first, words),
         owner,
@@ -958,7 +911,7 @@ const fn persistent_marks(which: u32, owner: &'static str) -> Persistent {
 /// A kept range of the stood or the read list's marks. Each mark is the number of the cast in
 /// which the world's receivers were last stood afresh (pxl-engine `light::HDR_WORLD`).
 const fn persistent_world_marks(which: u32, owner: &'static str) -> Persistent {
-    let [first, words] = light_marks(which);
+    let [first, words] = light_mark(which);
     Persistent {
         range: at(LIGHT_ARGS, first, words),
         owner,

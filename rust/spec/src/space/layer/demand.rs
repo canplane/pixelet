@@ -42,7 +42,7 @@ pub const fn demand_tiles(lattice: Lattice) -> u32 {
 
 /// The ground lattice's `demand_across`, to which the floor and the Earth's window are cut.
 pub const GROUND_DEMAND_ACROSS: u32 = demand_across(GROUND);
-pub const GROUND_DEMAND_TILES: u32 = demand_tiles(GROUND);
+pub const GROUND_DEMAND_TILE_CAP: u32 = demand_tiles(GROUND);
 
 /// Every tile at `zoom` with ground within `radius` of `at`.
 pub fn tiles_within(zoom: Zoom, at: [f64; 2], radius: f64) -> impl Iterator<Item = Quadrant> {

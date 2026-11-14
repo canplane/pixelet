@@ -28,14 +28,14 @@ impl Catalog {
     pub fn read(bytes: &[u8]) -> Option<Catalog> {
         let word = |at: usize| Some(u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?));
         let real = |at: usize| Some(f64::from_le_bytes(bytes.get(at..at + 8)?.try_into().ok()?));
-        if word(0)? as usize != SLOTS || bytes.len() != 4 + SLOTS * (4 + 3 * 8) {
+        if word(0)? as usize != SLOT_CNT || bytes.len() != 4 + SLOT_CNT * (4 + 3 * 8) {
             return None;
         }
-        let files = (0..SLOTS)
+        let files = (0..SLOT_CNT)
             .map(|s| word(4 + 4 * s))
             .collect::<Option<Vec<_>>>()?;
-        let at = 4 + 4 * SLOTS;
-        let extents = (0..SLOTS)
+        let at = 4 + 4 * SLOT_CNT;
+        let extents = (0..SLOT_CNT)
             .map(|s| {
                 Some([
                     real(at + 24 * s)?,

@@ -73,7 +73,7 @@ fn read_tile(world: u32, t: vec2<i32>) {
   }
 }
 
-@compute @workgroup_size(MISS_LANES, 1, 1)
+@compute @workgroup_size(MISS_LANE_CNT, 1, 1)
 fn light_propagate_cs(
   @builtin(workgroup_id) group: vec3<u32>,
   @builtin(local_invocation_id) lane: vec3<u32>,
@@ -82,7 +82,7 @@ fn light_propagate_cs(
   // (`light::carry_at`), as list.wgsl `list_place` numbers a list walked apart.
   let n = light_tiles();
   let propagated = in_cap(list_at(hdr_word(LIGHT_HDR_CARRY) + LIGHT_RECEIVER_TILES_CNT), n * n);
-  let k = propagated + (group.y * MISS_ACROSS + group.x) * MISS_LANES + lane.x;
+  let k = propagated + (group.y * MISS_ACROSS + group.x) * MISS_LANE_CNT + lane.x;
   let at = list_cnt_at(LIGHT_LIST_RECEIVERS);
   if (k >= in_cap(list_at(at), n * n)) {
     return;
@@ -107,7 +107,7 @@ fn light_propagate_cs(
 
 /// Opens the map's lay to every tile listed as read, and damages each such tile that no cast of
 /// the reads' epoch damaged, one thread for each tile.
-@compute @workgroup_size(LIGHT_LIST_LANES, 1, 1)
+@compute @workgroup_size(LIGHT_LIST_LANE_CNT, 1, 1)
 fn light_damage_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let n = light_tiles();
   let read = in_cap(atomicLoad(&args.cnts[LIGHT_LIST_READS]), n * n);

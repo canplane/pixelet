@@ -97,18 +97,18 @@ fn hit_in_cap() -> u32 {
   if (r >= HITS_A_FRAME) {
     return NONE;
   }
-  if (r % HIT_LANES == 0u) {
-    hit_rows(workgroups(r + 1u, HITS_A_FRAME, HIT_LANES));
+  if (r % HIT_LANE_CNT == 0u) {
+    hit_rows(workgroup_cnt(r + 1u, HITS_A_FRAME, HIT_LANE_CNT));
   }
   return r;
 }
 
 /// Lists stop `r` for the record (miss_word.wgsl `hit_put`) and returns its number marked as
-/// waiting (`beam::HIT_WAITS`). The pixel keeps that word until record_hits.wgsl puts there
+/// waiting (`beam::HIT_WAIT`). The pixel keeps that word until record_hits.wgsl puts there
 /// what lies around the stop's face.
 fn keep_hit(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) -> u32 {
   hit_put(r, w, face, id);
-  return HIT_WAITS | r;
+  return HIT_WAIT | r;
 }
 
 /// Ends the walk `w` of hole `item`. Its stop, whatever it stopped on, is listed for its
@@ -133,7 +133,7 @@ fn finish(item: u32, aim: Aim, w: WalkEnd) {
   // A `select` evaluates both its arms, so the stop is kept under an `if`, only where it has a
   // number.
   if (r != NONE) {
-    faces = keep_hit(r, w, face | select(0u, HIT_LACKS, w.ends == ENDS_LACK), at);
+    faces = keep_hit(r, w, face | select(0u, HIT_LACK, w.ends == ENDS_LACK), at);
   }
   hole_write(at, w, shown, face, faces);
 }

@@ -16,7 +16,11 @@
  */
 
 import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import {
+  ERRNO_EBADMSG,
+  ERRNO_EINVAL,
+  ERRNO_ENOENT,
+} from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 import { TreeEncoder, TreeReader, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 
@@ -36,7 +40,7 @@ export const TOP_KEY = "top";
 
 /** A file is one format byte followed by a tree packet. */
 function pkt(fmt: number, bytes: U8Array): U8Array {
-  if (bytes[0] !== fmt) throw new FaultError(Errno.EBADMSG);
+  if (bytes[0] !== fmt) throw new FaultError(ERRNO_EBADMSG);
   // The tree reader needs the packet to start on a word boundary. A view at
   // offset 1 would not, so the packet is copied.
   return bytes.slice(1);
@@ -55,7 +59,7 @@ export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
   const [keys, asset_ids, rows, texts] = new TreeReader(pkt(fmt, bytes))
     .read_branch()
     .get<[string[], U32Array, U32Array, string[]]>();
-  if (keys.length !== asset_ids.length) throw new FaultError(Errno.EINVAL);
+  if (keys.length !== asset_ids.length) throw new FaultError(ERRNO_EINVAL);
   const out: Leaf[] = keys.map((key, r) => ({
     key,
     asset_id: asset_ids[r]!,
@@ -63,7 +67,7 @@ export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
   }));
   rows.forEach((r, k) => {
     if (out[r] === undefined || texts[k] === undefined) {
-      throw new FaultError(Errno.EINVAL);
+      throw new FaultError(ERRNO_EINVAL);
     }
     out[r]!.text = texts[k]!;
   });
@@ -95,7 +99,7 @@ export function decode_top(bytes: U8Array): TopRow[] {
   const [shard, fold] = new TreeReader(pkt(format.OBJECT_TOP, bytes))
     .read_branch()
     .get<[string[], U32Array]>();
-  if (shard.length !== fold.length) throw new FaultError(Errno.EINVAL);
+  if (shard.length !== fold.length) throw new FaultError(ERRNO_EINVAL);
   return shard.map((s, r) => ({ shard: s, fold: fold[r]! }));
 }
 
@@ -203,7 +207,7 @@ export function object_backend(db: Db = DB): {
     open(key) {
       return db.transaction(async (tx) => {
         const bytes = await tx.get(key);
-        if (bytes === null) throw new FaultError(Errno.ENOENT);
+        if (bytes === null) throw new FaultError(ERRNO_ENOENT);
         return bytes;
       });
     },

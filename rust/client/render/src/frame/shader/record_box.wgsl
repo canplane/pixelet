@@ -10,7 +10,7 @@
 /// box is inset on each axis to the part it fills.
 fn asset_box(slot: u32, k: Node, o: vec3<i32>) -> Aabb {
   let p = node_planes(k, o);
-  let eighths = (node_cache_word(entry_at(slot) + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
+  let eighths = (node_cache_word(entry_at(slot) + W_ASSET) >> FILL_SHIFT) & (EIGHTH_CNT - 1u);
   var lo = p.lo;
   var hi = p.hi;
   if (eighths != 0u) {

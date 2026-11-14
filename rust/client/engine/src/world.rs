@@ -14,12 +14,11 @@ use crate::clipmap::{self, BrickSource, Lookup, Pool};
 use crate::ground;
 use crate::object::{self, Cut, Table, CELL, ROOT, SPLIT};
 use crate::way;
+use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::ground::word;
 use pxl_spec::share::{eighths, FULL};
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, UNIT_ZOOM};
 use pxl_spec::space::layer::area::Shard;
-use pxl_spec::value::AIR;
-use pxl_spec::value::VOID;
 use pxl_spec::way::NOTHING;
 
 /// What a node is handed by the node over it, each source's own part, so that a descent asks
@@ -172,7 +171,7 @@ pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Po
             kind: i.kind,
             asset: i.asset,
         };
-        if i.kind == Kind::Lacks && over.answer != CELL {
+        if i.kind == Kind::Lack && over.answer != CELL {
             return lacks;
         }
         // Start from the ground's asset, the share of its cube it fills and its four palette
@@ -183,12 +182,12 @@ pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Po
         let mut val = if i.kind == Kind::Cell {
             i.asset[0]
         } else {
-            VOID
+            Sentinel::Void as u32
         };
         // The ground's share, less what its caves take (the second word of the ground's answer,
         // `ground::node`).
         let mut fill = if fills(val) {
-            let (f, _) = cover(cell.cover(c[2]), AIR, i.asset[1]);
+            let (f, _) = cover(cell.cover(c[2]), Sentinel::Air as u32, i.asset[1]);
             f
         } else {
             0
@@ -214,16 +213,16 @@ pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Po
             fill = f;
         }
         let filled = eighths(fill);
-        if filled == 0 && i.kind == Kind::Lacks {
+        if filled == 0 && i.kind == Kind::Lack {
             return lacks;
         }
         let asset = if filled == 0 {
             // Nothing is kept: the cell is air, and placed air where what is placed is air.
             [
-                if over.answer == CELL && over.asset == AIR {
-                    PLACED_ASSET | AIR
+                if over.answer == CELL && over.asset == Sentinel::Air as u32 {
+                    PLACED_ASSET | Sentinel::Air as u32
                 } else {
-                    VOID
+                    Sentinel::Void as u32
                 },
                 0,
             ]
@@ -254,14 +253,14 @@ pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Po
     }
     let own = match i.kind {
         Kind::Split => i.asset,
-        Kind::Lacks => BOX_WHOLE,
+        Kind::Lack => BOX_WHOLE,
         _ => BOX_NONE,
     };
     let joined = box_join(
         box_join(own, ground::box_along_z(ways, (zoom, c[2]))),
         placed,
     );
-    // Where every source says nothing lies in it, the node is air its size.
+    // Where every source says nothing lies in it, the node is a void cell its size.
     if box_none(joined) {
         return In {
             kind: Kind::Cell,
@@ -277,7 +276,7 @@ pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Po
 /// The zoom at which a box's placed leaves are first asked: nodes 8 unit cells a side, so a
 /// box with nothing placed near it is told so after a few nodes.
 pub const PLACED_FIRST: Zoom = UNIT_ZOOM - 3;
-const PLACED_LEVELS: usize = (UNIT_ZOOM - PLACED_FIRST) as usize;
+const PLACED_STEP_CNT: usize = (UNIT_ZOOM - PLACED_FIRST) as usize;
 
 /// What is placed at the unit cells of a box, one leaf at a time (`PlacedCursor::next`), each
 /// with its cell and its stored word as the objects' tree holds it (`object`). It is asked of
@@ -291,9 +290,9 @@ pub struct PlacedCursor {
     first: [i32; 3],
     /// The nodes gone into, one a level, with the child each is at and the current level
     /// (`depth`); at depth 0 none is gone into.
-    nodes: [object::NodeSlot; PLACED_LEVELS + 1],
-    idx: [[i32; 3]; PLACED_LEVELS + 1],
-    next: [u32; PLACED_LEVELS + 1],
+    nodes: [object::NodeSlot; PLACED_STEP_CNT + 1],
+    idx: [[i32; 3]; PLACED_STEP_CNT + 1],
+    next: [u32; PLACED_STEP_CNT + 1],
     depth: usize,
 }
 
@@ -304,9 +303,9 @@ pub fn placed_in(lo: [i32; 3], hi: [i32; 3]) -> PlacedCursor {
         lo,
         hi,
         first: [lo[0] >> s, lo[1] >> s, lo[2] >> s],
-        nodes: [object::NodeSlot::NOTHING; PLACED_LEVELS + 1],
-        idx: [[0; 3]; PLACED_LEVELS + 1],
-        next: [0; PLACED_LEVELS + 1],
+        nodes: [object::NodeSlot::NOTHING; PLACED_STEP_CNT + 1],
+        idx: [[0; 3]; PLACED_STEP_CNT + 1],
+        next: [0; PLACED_STEP_CNT + 1],
         depth: 0,
     }
 }
@@ -364,13 +363,13 @@ impl PlacedCursor {
             } else {
                 object::NodeSlot::NOTHING
             };
-            if h.holds() && h.is_folded() && d < PLACED_LEVELS {
+            if h.holds() && h.is_folded() && d < PLACED_STEP_CNT {
                 (self.nodes[d], self.idx[d], self.next[d + 1]) = (h, c, 0);
                 self.depth += 1;
                 continue;
             }
             self.next[d] += 1;
-            if d == PLACED_LEVELS && h.holds() && !h.is_folded() && h.zoom() == UNIT_ZOOM {
+            if d == PLACED_STEP_CNT && h.holds() && !h.is_folded() && h.zoom() == UNIT_ZOOM {
                 return (c, columns.data(h.slot()), true);
             }
         }

@@ -18,8 +18,8 @@ fn kinds(each: impl Fn(BaseLayer) -> Kind) -> KindTable {
 fn shard_served_when_all_kinds() {
     let all = ["01033000", "01033001", "01033002", "01033003", "01033010"];
     let kinds = kinds(|l| match l {
-        BaseLayer::division => kind(&all[..4]),
-        BaseLayer::earth => Kind {
+        BaseLayer::Division => kind(&all[..4]),
+        BaseLayer::Earth => Kind {
             shard: None,
             ..kind(&[])
         },
@@ -41,8 +41,8 @@ fn unread_keys_unwritten() {
     let shards = || Some(tiles(["01033000"]).expect("a shard"));
     let kinds = kinds(|l| Kind {
         format: 1,
-        version: if l == BaseLayer::terrain { "a/b" } else { "v1" }.into(),
-        shard: shards().filter(|_| l != BaseLayer::earth),
+        version: if l == BaseLayer::Terrain { "a/b" } else { "v1" }.into(),
+        shard: shards().filter(|_| l != BaseLayer::Earth),
     });
     assert!(
         decl(MIN_ZOOM, &kinds, &OverrideMap::new()).is_err(),
@@ -65,7 +65,7 @@ fn unread_keys_unwritten() {
 #[test]
 fn override_names_shard() {
     let kinds = kinds(|l| match l {
-        BaseLayer::earth => Kind {
+        BaseLayer::Earth => Kind {
             shard: None,
             ..kind(&[])
         },
@@ -76,7 +76,7 @@ fn override_names_shard() {
         .pop_first()
         .expect("one");
     let overrides =
-        OverrideMap::from([(at, vec![(BaseLayer::place, "v10.2026-10-12.1".to_string())])]);
+        OverrideMap::from([(at, vec![(BaseLayer::Place, "v10.2026-10-12.1".to_string())])]);
     let shard = &decl(MIN_ZOOM, &kinds, &overrides).expect("a declaration")["shard"];
     assert_eq!(shard["0103300"], json!({}));
     assert_eq!(
@@ -88,17 +88,17 @@ fn override_names_shard() {
 #[test]
 fn partial_shard_override_refused() {
     let kinds = kinds(|l| match l {
-        BaseLayer::earth => Kind {
+        BaseLayer::Earth => Kind {
             shard: None,
             ..kind(&[])
         },
-        BaseLayer::division => kind(&["01033000"]),
+        BaseLayer::Division => kind(&["01033000"]),
         _ => kind(&["01033000", "01033001"]),
     });
     for name in ["01033001", "0103300"] {
         let at = key(name).expect("a key");
         let overrides =
-            OverrideMap::from([(at, vec![(BaseLayer::place, "v10.2026-10-12.1".to_string())])]);
+            OverrideMap::from([(at, vec![(BaseLayer::Place, "v10.2026-10-12.1".to_string())])]);
         assert!(decl(MIN_ZOOM, &kinds, &overrides).is_err(), "{name}");
     }
 }

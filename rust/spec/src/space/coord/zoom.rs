@@ -69,10 +69,11 @@ pub const fn units(zoom: Zoom) -> f64 {
     }
 }
 
-/// How many `inner` cells stand across one `outer`, which is no finer.
+/// How many `inner` cells stand across one `outer`, which is no finer: every caller passes such
+/// a pair, so a finer outer is unreachable, and in a constant fails the build.
 pub const fn cnt(inner: Zoom, outer: Zoom) -> u32 {
     if inner < outer {
-        panic!("an outer zoom finer than the inner")
+        unreachable!()
     }
     1 << (inner - outer)
 }

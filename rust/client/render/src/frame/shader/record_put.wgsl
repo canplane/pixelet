@@ -17,7 +17,7 @@ fn node_cache_word(k: u32) -> u32 {
 
 /// The raster's arguments, followed by the arguments of the two sets of faces' asks at
 /// `RASTER_ASKED_AT` and `RASTER_HIT_ASKED_AT`, each laid out as the draw's are (pxl-engine
-/// `raster::ARGS_INSTANCES`, `raster::ASKED_AT`, `raster::HIT_ASKED_AT`).
+/// `raster::ARGS_INSTANCE_CNT`, `raster::ASKED_AT`, `raster::HIT_ASKED_AT`).
 @group(0) @binding(16) var<storage, read_write> args: array<atomic<u32>>;
 
 /// What a ray found where it stopped on a node (pxl-engine `record`); the node itself is
@@ -94,7 +94,7 @@ fn observe(p: Hit, slot: u32, asks: AskList) {
   if (!reads || (was & asked) != 0u) {
     return;
   }
-  let box = !p.lacks && ((p.asset.x >> FILL_SHIFT) & (EIGHTHS - 1u)) != 0u;
+  let box = !p.lacks && ((p.asset.x >> FILL_SHIFT) & (EIGHTH_CNT - 1u)) != 0u;
   atomicStore(&node_cache[face_at(slot, p.face)], select(0u, FACE_BOX, box));
   if (p.lacks || box) {
     return;
@@ -103,10 +103,10 @@ fn observe(p: Hit, slot: u32, asks: AskList) {
   if (idx >= asks.cap) {
     return;
   }
-  args_most(asks.args + RASTER_ARGS_INSTANCES, in_cap(idx + 1u, asks.cap));
+  args_most(asks.args + RASTER_ARGS_INSTANCE_CNT, in_cap(idx + 1u, asks.cap));
   // The ask that opens a workgroup of the faces' pass raises the pass's workgroup count.
-  if (idx % RASTER_FACES_LANES == 0u) {
-    args_most(asks.args + RASTER_ARGS_FACES, workgroups(idx + 1u, asks.cap, RASTER_FACES_LANES));
+  if (idx % RASTER_FACES_LANE_CNT == 0u) {
+    args_most(asks.args + RASTER_ARGS_FACES, workgroup_cnt(idx + 1u, asks.cap, RASTER_FACES_LANE_CNT));
   }
   let a = asks.at + idx * ASK_WORDS;
   beams[a + ASK_NODE] = entry_at(slot);

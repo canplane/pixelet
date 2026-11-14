@@ -30,7 +30,7 @@ fn sample_hit(s: vec2<u32>) -> Hit {
   let along = select(select(dir.z, dir.y, axis == 1u), dir.x, axis == 0u);
   return Hit(
     vec2<u32>(beams[w + SAMPLE_ASSET], beams[w + SAMPLE_ASSET + 1u]),
-    (beams[w + SAMPLE_LACKS] & SAMPLE_LACK) != 0u,
+    (beams[w + SAMPLE_LACK_WORD] & SAMPLE_LACK) != 0u,
     sample_whole(s, sample_node(s)),
     2u * axis + select(0u, 1u, along > 0.0),
     sample_line(s),

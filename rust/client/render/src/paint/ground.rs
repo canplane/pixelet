@@ -25,8 +25,8 @@ const BYTES: usize = u8::MAX as usize + 1;
 /// bedrock's `unknown` or a byte no look names, is drawn as `unknown`.
 pub fn look_words() -> Vec<[u32; 4]> {
     let unknown = (
-        color::sentinel(Sentinel::unknown as u16).map_or([0; 3], |s| rgb255(s.rgb)),
-        sentinel_layer(Sentinel::unknown as u8).unwrap_or(NO_LAYER) as u8,
+        color::sentinel(Sentinel::Unknown as u16).map_or([0; 3], |s| rgb255(s.rgb)),
+        sentinel_layer(Sentinel::Unknown as u8).unwrap_or(NO_LAYER) as u8,
     );
     let unit = |v: u8| (linear(v) * f64::from(u16::MAX)).round_ties_even() as u32;
     let pair = |a: u8, b: u8| unit(a) | unit(b) << 16;
@@ -39,7 +39,7 @@ pub fn look_words() -> Vec<[u32; 4]> {
             unit(far[2]),
         ]
     };
-    (0..PAINTER.states().max(BYTES))
+    (0..PAINTER.state_cnt().max(BYTES))
         .map(|v| PAINTER.look_of(v as u32).unwrap_or(unknown))
         .map(words)
         .collect()

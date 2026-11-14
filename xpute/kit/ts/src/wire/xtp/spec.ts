@@ -111,7 +111,11 @@ import type {
   TypedArray,
   U8Array,
 } from "@xpute/kit/abi/array.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import {
+  ERRNO_EBADMSG,
+  ERRNO_EINVAL,
+  ERRNO_EOVERFLOW,
+} from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 import * as ScalarType from "./scalar_type.ts";
 import * as SequenceType from "./sequence_type.ts";
@@ -350,7 +354,7 @@ export const TYPE_IS_KNOWN = (type: u8): boolean => {
  * not zero makes the packet malformed (EBADMSG). */
 export const GET_LEN = (buf_view: DataView, off: u32): u32 => {
   if (buf_view.getUint32(off + 4, LE) !== RESERVED) {
-    throw new MarshalError(Errno.EBADMSG);
+    throw new MarshalError(ERRNO_EBADMSG);
   }
   return buf_view.getUint32(off, LE);
 };
@@ -369,7 +373,7 @@ export const GET_DESC = (
     desc !== FIELD_SET(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type) ||
     !TYPE_IS_KNOWN(type)
   )
-    throw new MarshalError(Errno.EBADMSG);
+    throw new MarshalError(ERRNO_EBADMSG);
   out[0] = buf_view.getUint32(off, LE);
   out[1] = type;
   return out;
@@ -391,13 +395,13 @@ export type AlignUnit = 1 | 2 | 4 | 8;
  */
 export const ALIGN = (nbyte: u32, unit: AlignUnit): u32 => {
   if (unit & (unit - 1) || unit > WORD_SZ) {
-    throw new MarshalError(Errno.EINVAL);
+    throw new MarshalError(ERRNO_EINVAL);
   }
 
   const mask = unit - 1;
   // `&` yields a signed 32-bit number, so `>>> 0` makes a size of 2^31 or
   // more positive again.
-  if (nbyte > 0xffffffff - mask) throw new MarshalError(Errno.EOVERFLOW);
+  if (nbyte > 0xffffffff - mask) throw new MarshalError(ERRNO_EOVERFLOW);
   return ((nbyte + mask) & ~mask) >>> 0;
 };
 
@@ -436,7 +440,7 @@ export const ALIGN_SZ = (type: u8): AlignUnit => {
       return 1;
 
     default:
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
   }
 };
 

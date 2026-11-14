@@ -14,7 +14,7 @@
 /// has one writer.
 @group(0) @binding(9) var<storage, read_write> node_cache: array<u32>;
 /// The raster's args, which say where the pass's asks lie (`raster::ARGS_ASKS`) and how many
-/// there are (`raster::ARGS_INSTANCES`).
+/// there are (`raster::ARGS_INSTANCE_CNT`).
 @group(0) @binding(16) var<storage, read> args: array<u32>;
 
 /// The node at zoom `z` over node `c` of `zoom`, where `z` is no finer than `zoom`
@@ -130,7 +130,7 @@ fn hides(
     at = world_child(at, z, over(n, zoom, z));
   }
   let a = world_node(at, zoom, n, zoom, zoom, eye_cut(EYE_CARVE), eye_cut(EYE_HIDE)).asset.x;
-  return fills(a) && ((a >> FILL_SHIFT) & (EIGHTHS - 1u)) == 0u;
+  return fills(a) && ((a >> FILL_SHIFT) & (EIGHTH_CNT - 1u)) == 0u;
 }
 
 fn unit(axis: u32, s: i32) -> vec3<i32> {
@@ -162,8 +162,8 @@ fn face_word(
   let v = (axis + 2u) % 3u;
   var w = 0u;
   for (var i = 0u; i < FACE_WORD_BITS; i += 1u) {
-    let field = i / FACE_EDGES;
-    let k = i % FACE_EDGES;
+    let field = i / FACE_EDGE_CNT;
+    let k = i % FACE_EDGE_CNT;
     let a = k & 1u;
     let b = 2u + (k >> 1u);
     // The cell to ask, and whether the bits set so far leave it to be asked.
@@ -188,14 +188,14 @@ fn face_word(
   return w;
 }
 
-@compute @workgroup_size(RASTER_FACES_LANES)
+@compute @workgroup_size(RASTER_FACES_LANE_CNT)
 fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // The holes' stops have room for `HITS_A_FRAME` asks, and the samples for one ask a sample
   // (`beam::Grid::hit_asks_at`, `asks_at`). Where the asks start tells which list this is.
   let asks = args[RASTER_ARGS_ASKS];
-  let samples = eye_word(EYE_GRID + GRID_SAMPLES) * eye_word(EYE_GRID + GRID_SAMPLES + 1u);
+  let samples = eye_word(EYE_GRID + GRID_SAMPLE_LATTICE) * eye_word(EYE_GRID + GRID_SAMPLE_LATTICE + 1u);
   let cap = select(samples, HITS_A_FRAME, asks == eye_word(EYE_GRID + GRID_HIT_ASKS_AT));
-  if (id.x >= in_cap(args[RASTER_ARGS_INSTANCES], cap)) {
+  if (id.x >= in_cap(args[RASTER_ARGS_INSTANCE_CNT], cap)) {
     return;
   }
   let a = asks + id.x * ASK_WORDS;

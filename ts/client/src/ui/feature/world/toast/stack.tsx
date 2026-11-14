@@ -24,7 +24,7 @@ import {
   setToastDragging,
   toastCount,
   useToastEntries,
-  useToastTurns,
+  useToastTurnCount,
 } from "./store.ts";
 import { Toast, TOAST_SIDE } from "./item.tsx";
 
@@ -37,7 +37,7 @@ const MAKE_ROOM = after(SETTLE, SETTLE.durationMs / 2);
 
 export function Toaster() {
   const entries = useToastEntries();
-  const turns = useToastTurns();
+  const turnCount = useToastTurnCount();
   const { list, onExited } = usePresent(entries, (e) => e.id);
   // The center is rounded to a whole pixel, because half of an odd width is
   // not one.
@@ -46,7 +46,7 @@ export function Toaster() {
   // A leaving card keeps its place until it has faded, so the cards behind
   // move up only once it is gone.
   const lastOrder = useRef<Key[]>([]);
-  const turnedBack = useTurnedBack(turns);
+  const turnedBack = useTurnedBack(turnCount);
   const order: Key[] = entries.map((e) => e.id);
   const arrivals = new Set<Key>(
     order.filter((key) => !lastOrder.current.includes(key)),
@@ -118,7 +118,7 @@ export function Toaster() {
             <Motion
               key={key}
               from={fromAbove ? pose.above : pose.rest}
-              replay={fromAbove ? turns : null}
+              replay={fromAbove ? turnCount : null}
               to={present ? pose.rest : { scale: 0.9 }}
               transition={transition}
               onSettled={present ? undefined : () => onExited(key)}

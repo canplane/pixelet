@@ -16,7 +16,7 @@ fn in_cap(cnt: u32, cap: u32) -> u32 {
 }
 
 /// How many workgroups of `per` threads take `cnt` items of a list that holds `cap`, a thread
-/// an item, held to the workgroups a dispatch takes in one dimension (`WORKGROUPS_CAP`).
-fn workgroups(cnt: u32, cap: u32, per: u32) -> u32 {
-  return min((in_cap(cnt, cap) + per - 1u) / per, WORKGROUPS_CAP);
+/// an item, held to the workgroups a dispatch takes in one dimension (`WORKGROUP_CAP`).
+fn workgroup_cnt(cnt: u32, cap: u32, per: u32) -> u32 {
+  return min((in_cap(cnt, cap) + per - 1u) / per, WORKGROUP_CAP);
 }

@@ -23,16 +23,16 @@ use pxl_render::gpu::upload;
 
 /// Every model the core can hold at once. No model is ever freed, so this is
 /// the sum of every owner's bound.
-const MODELS_MAX: usize = character::MODELS_MAX + asset::MODELS_MAX + cloud::MODELS_MAX;
+const MODEL_CAP: usize = character::MODEL_CAP + asset::MODEL_CAP + cloud::MODEL_CAP;
 
 /// The uploads that exist once each: the ghost's, the location indicator's
 /// zone, the two debug line sets (the frame gizmo's and the coverage gizmo's,
 /// domain/scene/gizmo/) and the markers'.
-const SINGLE_UPLOADS: usize = 5;
+const SINGLE_UPLOAD_CNT: usize = 5;
 
 /// One palette upload for each of the companion's characters, the person and
 /// the pet.
-const CHARACTER_UPLOADS: usize = Group::ALL.len();
+const CHARACTER_UPLOAD_CNT: usize = Group::ALL.len();
 
 /// The sum of every owner's bound, so the renderer's upload table cannot
 /// fill. Each bound is a count the structure fixes (the models the catalogs
@@ -40,8 +40,8 @@ const CHARACTER_UPLOADS: usize = Group::ALL.len();
 /// so an overflow of the table is a bug, not load. The renderer frees a
 /// list's uploads before it takes the list's new ones, so it never holds
 /// more than this.
-pub(crate) const MAX_LIVE_UPLOADS: usize =
-    MODELS_MAX + cloud::PATCHES_MAX + CHARACTER_UPLOADS + SINGLE_UPLOADS;
+pub(crate) const LIVE_UPLOAD_CAP: usize =
+    MODEL_CAP + cloud::PATCH_CAP + CHARACTER_UPLOAD_CNT + SINGLE_UPLOAD_CNT;
 
 /// The ranges of `.fixed`, in address order. A range belongs here when it is
 /// mostly in use whenever the core runs, or when its flow's memory must be
@@ -59,8 +59,8 @@ enum Fixed {
 const FIXED: [u32; 4] = [
     fixed::TERRAIN_BYTES,
     division::DIVISION_BYTES,
-    param::BODY_SLOTS * body::SLOT_BYTES,
-    upload::uploads_bytes(MAX_LIVE_UPLOADS),
+    param::BODY_SLOT_CNT * body::SLOT_BYTES,
+    upload::uploads_bytes(LIVE_UPLOAD_CAP),
 ];
 
 /// Where range `f` begins in `.fixed`: each range on a page.
@@ -79,7 +79,7 @@ const FIXED_BYTES: u32 = off(Fixed::Uploads) + FIXED[Fixed::Uploads as usize];
 // block is asked for before `install`; the declared size is the ranges' on a
 // page, no more.
 const _: () = assert!(
-    FIXED_BYTES.next_multiple_of(PAGE_BYTES) == manifest::mem::fixed_bytes,
+    FIXED_BYTES.next_multiple_of(PAGE_BYTES) == manifest::mem::FIXED_BYTES,
     "manifest.json's mem.fixed_bytes is not the fixed ranges' size on a page"
 );
 
@@ -87,8 +87,8 @@ const _: () = assert!(
 // memory; the boot checks the module's data with them against the memory
 // given.
 const _: () = assert!(
-    manifest::stack::module_bytes as u64 + manifest::mem::fixed_bytes as u64 + manifest::mem::min_heap_bytes as u64
-        <= manifest::mem::bytes as u64,
+    manifest::stack::MODULE_BYTES as u64 + manifest::mem::FIXED_BYTES as u64 + manifest::mem::MIN_HEAP_BYTES as u64
+        <= manifest::mem::BYTES as u64,
     "the stack, the fixed ranges and the heap do not fit the core's memory"
 );
 
@@ -100,7 +100,7 @@ pub(crate) fn install() {
     body::RANGE.set(at(Fixed::Bodies));
     // SAFETY: the uploads' range, zeroed, the renderer's alone.
     let uploads = unsafe { at(Fixed::Uploads).arr::<u32>(0, FIXED[Fixed::Uploads as usize] as usize / 4) };
-    upload::set_uploads(uploads, MAX_LIVE_UPLOADS);
+    upload::set_uploads(uploads, LIVE_UPLOAD_CAP);
 }
 
 /// The buddy's block for the longest body of a stream whose bodies take no
@@ -135,11 +135,10 @@ const fn longest_unslotted() -> u64 {
 /// Each flow is refused past its cap, and waits or stays absent when the heap
 /// refuses it. A shard's body has no longest (`Stream::max_body`), so no sum
 /// counts it. The rest of the heap is workspace.
-const HEAP_FLOWS_BYTES: u64 = 2 * param::MAX_CREDITS as u64 * longest_unslotted()
-    + pool::POOL_BYTES
-    + record::PERF_BYTES;
+const HEAP_FLOWS_BYTES: u64 =
+    2 * param::CREDIT_CAP as u64 * longest_unslotted() + pool::POOL_BYTES + record::PERF_BYTES;
 
 const _: () = assert!(
-    HEAP_FLOWS_BYTES <= manifest::mem::min_heap_bytes as u64,
+    HEAP_FLOWS_BYTES <= manifest::mem::MIN_HEAP_BYTES as u64,
     "the caps of the heap's bounded flows do not fit the heap the core counts on"
 );

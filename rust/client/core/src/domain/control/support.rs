@@ -28,7 +28,7 @@ pub fn stand(at: &Q3) -> Q3 {
         Answer::Exact(Some(top)) => on_floor(at, top),
         // Nothing stands under the point, so it keeps its height.
         Answer::Exact(None) => *at,
-        Answer::Coarser(..) | Answer::Nothing(_) => unknown(at),
+        Answer::Coarser(..) | Answer::Lack(_) => unknown(at),
     }
 }
 
@@ -84,7 +84,7 @@ pub fn floor_at(world: World, at: &Q3) -> Option<f64> {
 pub fn resolve(at: &Q3, cur: V3) -> V3 {
     match standing(World::now(), at) {
         Answer::Exact(Some(p)) | Answer::Coarser(Some(p), _) => to_world(&p),
-        Answer::Exact(None) | Answer::Coarser(None, _) | Answer::Nothing(_) => {
+        Answer::Exact(None) | Answer::Coarser(None, _) | Answer::Lack(_) => {
             let l = to_world(at);
             [l[0], l[1], cur[2]]
         }

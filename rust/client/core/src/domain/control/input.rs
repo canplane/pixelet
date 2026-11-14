@@ -86,7 +86,7 @@ struct Input {
 
     /// The screen direction of the held keys, of unit length, or zero when
     /// none is held.
-    keys: [f64; 2],
+    key_dir: [f64; 2],
     /// The time the keys last panned, in ms.
     keys_at: f64,
 
@@ -127,7 +127,7 @@ fn input() -> &'static mut Input {
         pending_view_y: 0.0,
         pending_wheel_delta_y: None,
         pending_pinch_scale: None,
-        keys: [0.0; 2],
+        key_dir: [0.0; 2],
         keys_at: 0.0,
         rotate_turn: None,
         rotate_tilt: Anchor::new(0.0, 0.0),
@@ -474,15 +474,15 @@ pub fn camera_pinch(scale: f64) {
 pub fn camera_keys(x: i32, y: i32) {
     let s = input();
     let len = libm::hypot(x as f64, y as f64);
-    let keys = if len > 0.0 {
+    let key_dir = if len > 0.0 {
         [x as f64 / len, y as f64 / len]
     } else {
         [0.0; 2]
     };
-    if s.keys == [0.0; 2] {
+    if s.key_dir == [0.0; 2] {
         s.keys_at = now();
     }
-    s.keys = keys;
+    s.key_dir = key_dir;
     invalidate();
 }
 
@@ -490,13 +490,13 @@ pub fn camera_keys(x: i32, y: i32) {
 /// last step. It runs once a frame.
 pub fn camera_input_step() {
     let s = input();
-    if s.keys != [0.0; 2] {
+    if s.key_dir != [0.0; 2] {
         let at = now();
         let share = KEY_PAN_PER_S * (at - s.keys_at) / 1000.0;
         s.keys_at = at;
         // A key moves the view the way it points. The keys' y runs down the
         // screen and the pan's runs up it, so y changes sign.
-        let way = [s.keys[0] * share, -s.keys[1] * share];
+        let way = [s.key_dir[0] * share, -s.key_dir[1] * share];
         by_hand(|| controller::pan_across(way[0], way[1]));
         invalidate();
     }
@@ -557,5 +557,5 @@ pub fn dragging() -> bool {
 /// Whether movement keys are held, so the view is walked rather than
 /// dragged.
 pub fn steering() -> bool {
-    input().keys != [0.0; 2]
+    input().key_dir != [0.0; 2]
 }

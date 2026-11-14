@@ -52,11 +52,11 @@ pub const EASE_EPS_RAD: f64 = 0.0001;
 /// (camera/orbit.rs `way_hit`). Testing only where a step lands would let
 /// the camera tunnel, because the easing carries it through everything in
 /// between.
-pub const COLLISION_STEP_SAMPLES: u32 = 16;
+pub const COLLISION_STEP_SAMPLE_CNT: u32 = 16;
 /// How many times a climb steepens the pitch (camera/orbit.rs
 /// `steepened`). Steepening moves the eye, so the ground under the eye
 /// changes too. Two passes leave less than a cell to go.
-pub const CLIMB_PASSES: u32 = 2;
+pub const CLIMB_PASS_CNT: u32 = 2;
 
 // ---- input ----
 

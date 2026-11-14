@@ -10,28 +10,29 @@
     reason = "generated from WIT"
 )]
 
-use std::rc::Rc;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-use xpute_native_host::link;
-use xpute_native_host::wait;
-
 /// `[method]surface.resize`
-pub const SURFACE_RESIZE: Method = 0;
+pub const SURFACE_RESIZE: _rt::Method = 0;
 
-pub fn surface_resize(surface_: Handle, width: u32, height: u32, dpr: f32) -> Result<(), Errno> {
-    let (r, data) = link::call(
+pub fn surface_resize(
+    surface_: _rt::Handle,
+    width: u32,
+    height: u32,
+    dpr: f64,
+) -> Result<(), _rt::Errno> {
+    let (r, data) = _rt::link::call(
         surface_,
         SURFACE_RESIZE,
-        Some((3, &|w_: &mut PacketWriter| {
-            w_.u32(Some(width as u32));
-            w_.u32(Some(height as u32));
-            w_.f64(Some(dpr as f64));
+        Some((16, &|w_: &mut _rt::Lower| {
+            w_.u32(0, *&width);
+            w_.u32(4, *&height);
+            w_.f64(8, *&dpr);
         })),
     );
-    xpute_link::answer(r).map(|_| ())
+    _rt::answer(r)
+}
+
+mod _rt {
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::{answer, Handle, Lower, Method};
+    pub use xpute_native_host::link;
 }

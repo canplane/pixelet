@@ -3,14 +3,18 @@
 import { useSyncExternalStore } from "react";
 
 import type { Snapshot } from "@/abi/overlay.ts";
-import { type UiView, watch_snapshot, watch_view } from "@/service/core/snapshot.ts";
-import type { Gpu, Source } from "@/abi/state.ts";
-import { gpu, watch_gpu } from "@/service/sys/gpu.ts";
+import {
+  type UiView,
+  watch_snapshot,
+  watch_view,
+} from "@/service/core/snapshot.ts";
+import { gpu, watch_gpu, type Gpu } from "@/service/sys/gpu.ts";
 import { online, watch_online } from "@/service/origin/online.ts";
 import {
   source_state,
   source_versions,
   watch_source,
+  type Source,
 } from "@/service/sys/fs/source.ts";
 import * as snapshot from "@/service/core/snapshot.ts";
 

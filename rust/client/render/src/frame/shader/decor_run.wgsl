@@ -6,17 +6,17 @@
 /// `rec_at`: the first word of record `n`. The entries' records are numbered first, then
 /// placed decor's.
 fn rec_at(n: u32) -> u32 {
-  if (n < ENTRY_RECS) {
+  if (n < ENTRY_REC_CAP) {
     return ENTRY_RECS_AT + n * REC_WORDS;
   }
-  return PLACED_HDR + PLACED_HDR_WORDS + (n - ENTRY_RECS) * REC_WORDS;
+  return PLACED_HDR + PLACED_HDR_WORDS + (n - ENTRY_REC_CAP) * REC_WORDS;
 }
 
 /// `holds_recs`: whether workgroup `g`'s records still hold. Placed decor's, past the entries,
 /// always do; an entry's hold while the clip levels still hold the brick they were generated
 /// for.
 fn holds_recs(g: u32) -> bool {
-  if (g >= EYE_ENTRIES) {
+  if (g >= EYE_ENTRY_CNT) {
     return true;
   }
   let q = clipmap[g];
@@ -25,9 +25,9 @@ fn holds_recs(g: u32) -> bool {
 
 /// `run_of`: the `k`-th run of workgroup `g`, as record numbers: the first and how many.
 fn run_of(g: u32, k: u32) -> vec2<u32> {
-  if (g >= EYE_ENTRIES) {
-    let n = (g - EYE_ENTRIES) * RUNS + k;
-    return vec2<u32>(ENTRY_RECS + n, u32(n < recs[PLACED_HDR]));
+  if (g >= EYE_ENTRY_CNT) {
+    let n = (g - EYE_ENTRY_CNT) * RUN_CNT + k;
+    return vec2<u32>(ENTRY_REC_CAP + n, u32(n < recs[PLACED_HDR]));
   }
   let first = k * RUN;
   var j = 0u;

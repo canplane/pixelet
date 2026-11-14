@@ -77,7 +77,7 @@ fn light_cs(
     let faces = state & REC_FACES;
     if ((visible & RASTER_LACK) == 0u && entry_kind(slot) != KIND_SPLIT && faces != 0u) {
       let k = entry_node(slot, vec3<i32>(aim.origin));
-      let fill = (node_cache_word(entry_at(slot) + W_ASSET) >> FILL_SHIFT) & (EIGHTHS - 1u);
+      let fill = (node_cache_word(entry_at(slot) + W_ASSET) >> FILL_SHIFT) & (EIGHTH_CNT - 1u);
       let entry = visible_cell(aim, k.zoom, k.corner, k.roots - origin_roots(aim.origin), fill, faces);
       // The voxel is taken only where it is the node that a ray asking the slot's band stops on
       // (pxl-engine `Light::band`, `record::band_fresh`).

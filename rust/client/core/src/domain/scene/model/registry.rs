@@ -408,7 +408,7 @@ impl Model {
         self.rest_radius = self.radius_at(None, &pause).await;
     }
 
-    pub fn joints(&self) -> usize {
+    pub fn joint_cnt(&self) -> usize {
         self.parent.len()
     }
 
@@ -454,7 +454,7 @@ impl Model {
         at: Option<(u32, f32)>,
         pause: &impl Fn() -> P,
     ) -> f32 {
-        let n = self.joints();
+        let n = self.joint_cnt();
         if n == 0 {
             return self.radius;
         }
@@ -583,7 +583,7 @@ impl Model {
             .collect();
         times.sort_by(f32::total_cmp);
         times.dedup();
-        let n = self.joints();
+        let n = self.joint_cnt();
         let (mut local, mut global) = (vec![[0.0; 10]; n], vec![[0.0; 16]; n]);
         let (mut first, mut palette) = (vec![0.0; n * 16], vec![0.0; n * 16]);
         self.pose(Some((clip as u32, times[0])), &mut local);
@@ -692,7 +692,7 @@ impl Model {
                 mat_mul(&global[p as usize], &l)
             };
         }
-        for j in 0..self.joints() {
+        for j in 0..self.joint_cnt() {
             palette[j * 16..j * 16 + 16]
                 .copy_from_slice(&mat_mul(&global[j], &self.inverse_bind[j]));
         }

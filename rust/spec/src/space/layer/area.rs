@@ -12,7 +12,7 @@ use crate::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, SHARD_ZOOM};
 
 /// The shards a source serves, as one level of the pyramid at `SHARD_ZOOM` that the CPU and
 /// the GPU both read (`nine_at`). Every cell at that zoom has a key (`shard_key`, one of
-/// `SHARD_CELLS`) and holds which of the nine cells around it, itself among them, are served
+/// `SHARD_CELL_CNT`) and holds which of the nine cells around it, itself among them, are served
 /// (`nine`); a cell beside no served one holds none. On the CPU the area is the source's
 /// declaration; on a GPU it is a buffer of it.
 pub trait Area {
@@ -24,7 +24,7 @@ pub trait Area {
 }
 
 /// The cells at `SHARD_ZOOM`, each with a key (`shard_key`).
-pub const SHARD_CELLS: u32 = 1 << (2 * SHARD_ZOOM);
+pub const SHARD_CELL_CNT: u32 = 1 << (2 * SHARD_ZOOM);
 
 /// The key of a cell at `SHARD_ZOOM`: its quadkey, the bits of its X and Y interleaved from
 /// the top as a tile pyramid orders its tiles, so the cells around one lie near it in the
@@ -200,7 +200,7 @@ impl Shard {
 /// The service area's wall, the one rule that every reader asks, on the CPU and on a GPU
 /// alike. The column `b` at `cell_zoom` is the wall exactly where it is a leaf column or
 /// finer and the leaf cell holding it has a leaf cell beside it past the area. So the wall is
-/// one leaf column thick at every zoom past the leaves, bedrock (`UNKNOWN`) up to its own
+/// one leaf column thick at every zoom past the leaves, bedrock (`Sentinel::Unknown`) up to its own
 /// face, with its outer face on the area's edge. The area alone decides it, through `shard`,
 /// the shard of the node `(cell_zoom, b)` (`Shard::at`). A column is read by this rule
 /// (pxl-engine `clipmap::ground`), the ways' fill writes no way into the wall

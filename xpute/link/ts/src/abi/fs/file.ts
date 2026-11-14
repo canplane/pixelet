@@ -2,14 +2,19 @@
 //
 // GENERATED from wit/fs (xpute-link-gen wit.rs)
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { Lift } from "../../cabi.ts";
 import {
   type Link,
   type LinkObject,
   type Method,
   refusal_of,
 } from "../../link.ts";
-import * as types from "../types.ts";
+import { type Lent, load_Lent } from "../types.ts";
+import {
+  ERRNO_EBADMSG,
+  ERRNO_EINPROGRESS,
+  ERRNO_ENOSYS,
+} from "@xpute/kit/status/errno.spec.ts";
 
 /** `[method]file.size` */
 export const FILE_SIZE: Method = 0;
@@ -22,10 +27,10 @@ export const FILE_CHANGED: Method = 3;
 /** `[method]file.close` */
 export const FILE_CLOSE: Method = 4;
 
-export interface File {
+export interface HostFile {
   size(signal_: AbortSignal): Promise<number>;
-  read(buf: types.Lent, signal_: AbortSignal): Promise<number>;
-  write(buf: types.Lent, signal_: AbortSignal): Promise<void>;
+  read(buf: Lent, signal_: AbortSignal): Promise<number>;
+  write(buf: Lent, signal_: AbortSignal): Promise<void>;
   changed(signal_: AbortSignal): Promise<void>;
   close(signal_: AbortSignal): Promise<void>;
 }
@@ -33,7 +38,7 @@ export interface File {
 /** The object over `imp`. */
 export function file(
   l: Pick<Link, "task_return" | "on_cancel">,
-  imp: File,
+  imp: HostFile,
 ): LinkObject {
   return {
     call(m, tag, args) {
@@ -42,52 +47,66 @@ export function file(
           case FILE_SIZE: {
             const stop = new AbortController();
             imp.size(stop.signal).then(
-              (v) => l.task_return(tag, v),
+              (v) =>
+                l.task_return(tag, 0, [
+                  4,
+                  (w) => {
+                    w.u32(0, v);
+                  },
+                ]),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());
-            return Errno.EINPROGRESS;
+            return ERRNO_EINPROGRESS;
           }
           case FILE_READ: {
-            if (args === null) return Errno.EBADMSG;
+            if (args === null) return ERRNO_EBADMSG;
+            const r_ = new Lift(args);
             const stop = new AbortController();
-            imp.read(types.read_Lent(args.at(0)), stop.signal).then(
-              (v) => l.task_return(tag, v),
+            imp.read(load_Lent(r_, 0), stop.signal).then(
+              (v) =>
+                l.task_return(tag, 0, [
+                  4,
+                  (w) => {
+                    w.u32(0, v);
+                  },
+                ]),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());
-            return Errno.EINPROGRESS;
+            return ERRNO_EINPROGRESS;
           }
           case FILE_WRITE: {
-            if (args === null) return Errno.EBADMSG;
+            if (args === null) return ERRNO_EBADMSG;
+            const r_ = new Lift(args);
             const stop = new AbortController();
-            imp.write(types.read_Lent(args.at(0)), stop.signal).then(
-              () => l.task_return(tag, 0),
+            imp.write(load_Lent(r_, 0), stop.signal).then(
+              () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());
-            return Errno.EINPROGRESS;
+            return ERRNO_EINPROGRESS;
           }
           case FILE_CHANGED: {
             const stop = new AbortController();
             imp.changed(stop.signal).then(
-              () => l.task_return(tag, 0),
+              () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());
-            return Errno.EINPROGRESS;
+            return ERRNO_EINPROGRESS;
           }
           case FILE_CLOSE: {
             const stop = new AbortController();
             imp.close(stop.signal).then(
-              () => l.task_return(tag, 0),
+              () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());
-            return Errno.EINPROGRESS;
+            return ERRNO_EINPROGRESS;
           }
           default:
-            return Errno.ENOSYS;
+            return ERRNO_ENOSYS;
         }
       } catch (e) {
         return refusal_of(e);

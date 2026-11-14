@@ -5,16 +5,14 @@
 //! word, which the GPU holds, is the number of the frame it last changed in. Each frame, a
 //! pass sets the words of the tiles that the one mark the CPU hands covers (`damage`), before
 //! anything reads them, and the draws that changed set the words of the tiles they cover
-//! (pass/mark.rs). A tile is damaged while it changed fewer than `damage_frames` frames
+//! (pass/mark.rs). A tile is damaged while it changed fewer than `damage_frame_cnt` frames
 //! ago, and every tile is damaged in a frame drawn whole. The screen keeps a tile damaged until
 //! its history has gathered the jitter's whole sequence; the map damages a tile only in the
 //! frame it changed. A pass that draws the tiles reads the words and the uniform
 //! (screen_tile.wgsl) and draws only the damaged ones. A target drawn through its gate takes
 //! the number its gate writes into the stencil from here (`mask`).
 
-use crate::frame::shader::group::{
-    DAMAGE_RECT_GROUP, LIGHT_RECT_ARGS, LIGHT_RECT_BINDS, RECT_ARGS_GROUP, SCREEN_MARK_GROUP,
-};
+use crate::frame::shader::group::{LIGHT_RECT_ARGS, LIGHT_RECT_BINDS};
 
 use crate::frame::shader::record::{COMPUTE_DAMAGE_RECT, COMPUTE_RECT_ARGS, COMPUTE_SCREEN_MARK};
 /// The side of a screen tile, in pixels.
@@ -72,13 +70,13 @@ const NO_DAMAGE_RECT: [u32; 4] = [u32::MAX, u32::MAX, 0, 0];
 /// stencil: 1 to 255, every value of the stencil's eight bits but 0, which a frame drawn whole
 /// leaves. When the numbers come round to 1, the frame clears the stencil first, so no tile
 /// holds this frame's number but those it damages (gpu/api.rs `Stencil`).
-const MASK_NUMBERS: u32 = 255;
+const MASK_NUMBER_CNT: u32 = 255;
 
 pub struct TileGrid {
     /// A tile's side in pixels, and how many frames a tile stays damaged once it changed, in a
     /// frame drawn through the gate.
     side: u32,
-    damage_frames: u32,
+    damage_frame_cnt: u32,
     /// The span the marks' passes are timed in: the screen's (`dispatch_damage`) or the
     /// light's (`dispatch_rect_args`).
     span: GpuSpanName,
@@ -122,13 +120,13 @@ pub struct TileGrid {
 }
 
 impl TileGrid {
-    /// Makes tiles `side` pixels a side, which stay damaged for `damage_frames` frames once
+    /// Makes tiles `side` pixels a side, which stay damaged for `damage_frame_cnt` frames once
     /// they changed, with their marks' passes timed in `span`.
     pub fn new(
         g: &Gpu,
         pipelines: &mut PipelineCache,
         side: u32,
-        damage_frames: u32,
+        damage_frame_cnt: u32,
         span: GpuSpanName,
     ) -> TileGrid {
         let new_damage_rect = g.buf(
@@ -139,12 +137,12 @@ impl TileGrid {
             word_bytes(TILES_WORDS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
-        let rect_args = (damage_frames == 1).then(|| {
+        let rect_args = (damage_frame_cnt == 1).then(|| {
             let args = g.buf(
                 word_bytes(4),
                 buffer_usage::STORAGE | buffer_usage::INDIRECT,
             );
-            let pass = pipelines.build_compute(g, COMPUTE_RECT_ARGS, &RECT_ARGS_GROUP);
+            let pass = pipelines.build_compute(g, COMPUTE_RECT_ARGS);
             let group = g.frame_group(
                 pass.layouts[0],
                 &LIGHT_RECT_BINDS,
@@ -155,14 +153,14 @@ impl TileGrid {
         });
         TileGrid {
             side,
-            damage_frames,
+            damage_frame_cnt,
             span,
             uniform,
             changed_at: 0,
             size: [0; 2],
             now: 0,
             asked_at: 0,
-            damage_pipeline: pipelines.build_compute(g, COMPUTE_SCREEN_MARK, &SCREEN_MARK_GROUP),
+            damage_pipeline: pipelines.build_compute(g, COMPUTE_SCREEN_MARK),
             damage_uniform: g.buf(
                 word_bytes(8),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
@@ -176,11 +174,7 @@ impl TileGrid {
                 word_bytes(4),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST,
             ),
-            damage_rect_pipeline: pipelines.build_compute(
-                g,
-                COMPUTE_DAMAGE_RECT,
-                &DAMAGE_RECT_GROUP,
-            ),
+            damage_rect_pipeline: pipelines.build_compute(g, COMPUTE_DAMAGE_RECT),
         }
     }
 
@@ -192,7 +186,7 @@ impl TileGrid {
             return;
         }
         self.size = size;
-        let [across, down] = self.squares();
+        let [across, down] = self.square_cnt();
         release(self.changed_at);
         self.changed_at = g.buf(word_bytes((across * down) as usize), buffer_usage::STORAGE);
         let entries = [
@@ -209,7 +203,7 @@ impl TileGrid {
     /// stepped (`animated`) is the animation's own, and it asks for no frame of its damage
     /// (`asking`). The uniform covers the damaged tiles alone in a gated frame, and every tile
     /// in any other. `dispatch_damage` later sets the mark into the words on the GPU. Where a
-    /// tile is damaged only in the frame it changed (`damage_frames` 1, the map's), a frame
+    /// tile is damaged only in the frame it changed (`damage_frame_cnt` 1, the map's), a frame
     /// that is not gated sets nothing: it damages every tile by its uniform, and a later gated
     /// frame damages only the tiles set in that frame, so no frame would read what it set.
     pub fn damage(
@@ -218,19 +212,20 @@ impl TileGrid {
         (masked, quiet, animated): (bool, bool, bool),
         damage: Option<Damage>,
     ) {
-        let squares = self.squares();
+        let square_cnt = self.square_cnt();
         self.now = self.now.wrapping_add(1);
         let whole = !masked && !quiet;
         let side = self.side;
         let tiles = if whole {
-            Some([0, 0, squares[0], squares[1]])
+            Some([0, 0, square_cnt[0], square_cnt[1]])
         } else {
             damage
                 .filter(|_| masked)
                 .map(|m| {
                     let lo = [m[0], m[1]].map(|v| v / side);
-                    let hi: [u32; 2] =
-                        core::array::from_fn(|k| (m[k] + m[k + 2]).div_ceil(side).min(squares[k]));
+                    let hi: [u32; 2] = core::array::from_fn(|k| {
+                        (m[k] + m[k + 2]).div_ceil(side).min(square_cnt[k])
+                    });
                     [lo[0], lo[1], hi[0], hi[1]]
                 })
                 .filter(|t| t[2] > t[0] && t[3] > t[1])
@@ -238,10 +233,10 @@ impl TileGrid {
         if tiles.is_some() && !(masked && animated) {
             self.asked_at = self.now;
         }
-        let stamped = tiles.filter(|_| masked || self.damage_frames > 1);
+        let stamped = tiles.filter(|_| masked || self.damage_frame_cnt > 1);
         self.damage_cnt = stamped.map_or(0, |t| (t[2] - t[0]) * (t[3] - t[1]));
         if let Some(t) = stamped {
-            let words = [t[0], t[1], t[2], t[3], self.now, squares[0], 0, 0];
+            let words = [t[0], t[1], t[2], t[3], self.now, square_cnt[0], 0, 0];
             g.write_buf(self.damage_uniform, 0, bytes(&words));
         }
         if self.rect_args.is_some() {
@@ -252,8 +247,12 @@ impl TileGrid {
             let new_damage_rect = tiles.unwrap_or([none, none, 0, 0]);
             g.write_buf(self.new_damage_rect, 0, bytes(&new_damage_rect));
         }
-        let damage_frames = if masked { self.damage_frames } else { u32::MAX };
-        let words = self.words(0.0, damage_frames);
+        let damage_frame_cnt = if masked {
+            self.damage_frame_cnt
+        } else {
+            u32::MAX
+        };
+        let words = self.words(0.0, damage_frame_cnt);
         g.write_buf(self.uniform, 0, bytes(&words));
     }
 
@@ -286,7 +285,7 @@ impl TileGrid {
                 buf_entry(31, self.uniform),
             ],
         );
-        let [across, down] = self.squares();
+        let [across, down] = self.square_cnt();
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(self.span).pass());
         g.set_bind_group(pass, 0, group, &[]);
         g.set_pipeline(pass, self.damage_rect_pipeline.id);
@@ -346,12 +345,12 @@ impl TileGrid {
 
     /// Prepares the pass `desc` that draws the target these tiles cover, through its gate
     /// where `masked`. It returns the pass and the number the gate writes into the damaged
-    /// tiles' stencil, which counts from 1 and comes round after `MASK_NUMBERS`. The pass
+    /// tiles' stencil, which counts from 1 and comes round after `MASK_NUMBER_CNT`. The pass
     /// keeps the stencil the last gated frame left, except when the numbers come round, and
     /// then it clears the stencil. The number is none where the target is drawn whole, which
     /// clears the stencil.
     pub fn mask(&mut self, desc: PassDesc, masked: bool) -> (PassDesc, Option<u32>) {
-        let number = masked.then(|| self.mask_number % MASK_NUMBERS + 1);
+        let number = masked.then(|| self.mask_number % MASK_NUMBER_CNT + 1);
         self.mask_number = number.unwrap_or(0);
         let desc = if number.is_some_and(|n| n > 1) {
             desc.load_stencil()
@@ -364,21 +363,21 @@ impl TileGrid {
     /// Called when the frame was dropped. The stencil holds what the last drawn frame left, so
     /// the next gated frame clears it.
     pub fn on_dropped(&mut self) {
-        self.mask_number = MASK_NUMBERS;
+        self.mask_number = MASK_NUMBER_CNT;
     }
 
     /// The tiles across and down.
-    pub fn squares(&self) -> [u32; 2] {
+    pub fn square_cnt(&self) -> [u32; 2] {
         self.size.map(|v| v.div_ceil(self.side))
     }
 
     /// The uniform's words for this frame, laid out as tile_word.wgsl's `TileGrid` reads them.
     /// A quad is grown by `grow` pixels each way past its tile, and a tile stays damaged for
-    /// `damage_frames` frames once it changed.
-    pub fn words(&self, grow: f32, damage_frames: u32) -> [u32; TILES_WORDS] {
-        let [across, down] = self.squares();
+    /// `damage_frame_cnt` frames once it changed.
+    pub fn words(&self, grow: f32, damage_frame_cnt: u32) -> [u32; TILES_WORDS] {
+        let [across, down] = self.square_cnt();
         let mut t = [0u32; TILES_WORDS];
-        t[..4].copy_from_slice(&[across, down, damage_frames, self.now]);
+        t[..4].copy_from_slice(&[across, down, damage_frame_cnt, self.now]);
         t[4] = (self.size[0] as f32).to_bits();
         t[5] = (self.size[1] as f32).to_bits();
         t[6] = grow.to_bits();
@@ -387,8 +386,8 @@ impl TileGrid {
     }
 
     /// How many frames a tile stays damaged once it changed, in a frame drawn through the gate.
-    pub fn damage_frames(&self) -> u32 {
-        self.damage_frames
+    pub fn damage_frame_cnt(&self) -> u32 {
+        self.damage_frame_cnt
     }
 
     /// Whether a mark that asks for the frames of its damage changed a tile so lately that the
@@ -397,7 +396,7 @@ impl TileGrid {
     pub fn asking(&self) -> bool {
         screen::in_damage(
             screen::age(self.now, self.asked_at),
-            self.damage_frames.saturating_sub(1),
+            self.damage_frame_cnt.saturating_sub(1),
         )
     }
 

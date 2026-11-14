@@ -14,15 +14,15 @@ fn transmittance_to_top(r: f32, mu: f32) -> vec3f {
 // The exposure pass writes it beside the eye's stops, where every pass after it
 // reads it (atmos_eye.wgsl).
 fn table_white() -> vec3f {
-  return 1.0 / transmittance_to_top(atmos_bottom_radius(), 1.0);
+  return 1.0 / transmittance_to_top(BOTTOM_RADIUS_KM, 1.0);
 }
 
 // What the air lets through of the sun at radius `r` and cosine `mu_s`. The
 // sun's disc sets across its own width, so the light the air passes does not
 // switch off within one frame.
 fn sun_transmittance(r: f32, mu_s: f32) -> vec3f {
-  let horizon = -sqrt(max(1.0 - (atmos_bottom_radius() / r) * (atmos_bottom_radius() / r), 0.0));
-  let above = clamp((mu_s - horizon) / (2.0 * atmos_sun_angular_radius()) + 0.5, 0.0, 1.0);
+  let horizon = -sqrt(max(1.0 - (BOTTOM_RADIUS_KM / r) * (BOTTOM_RADIUS_KM / r), 0.0));
+  let above = clamp((mu_s - horizon) / (2.0 * SUN_ANGULAR_RADIUS) + 0.5, 0.0, 1.0);
   // Once the disc has set whole, no light passes and the table is not read.
   if (above <= 0.0) {
     return vec3f(0.0);
@@ -36,7 +36,7 @@ fn sun_transmittance(r: f32, mu_s: f32) -> vec3f {
 // point, so a ray past the ground's horizon needs no case of its own.
 fn depth_along(r: f32, mu: f32, low: vec3f, t: f32) -> vec3f {
   let out = r * mu + t;
-  let rt = max(radius_along(r, mu, t), atmos_bottom_radius());
+  let rt = max(radius_along(r, mu, t), BOTTOM_RADIUS_KM);
   return sign(out) * (low - depth_to_top(rt, min(abs(out) / rt, 1.0)));
 }
 
@@ -47,7 +47,7 @@ fn ray_low(r: f32, mu: f32, end: f32) -> vec3f {
   if (-r * mu <= 0.0 || -r * mu >= end) {
     return vec3f(0.0);
   }
-  return depth_to_top(max(r * sqrt(max(1.0 - mu * mu, 0.0)), atmos_bottom_radius()), 0.0);
+  return depth_to_top(max(r * sqrt(max(1.0 - mu * mu, 0.0)), BOTTOM_RADIUS_KM), 0.0);
 }
 
 // A ray stops where it meets the ground, as no air lies past it.

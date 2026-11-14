@@ -5,7 +5,7 @@
 //! specs, the errno table among them. Paths are from xpute's root.
 
 use xpute_gen::spec::data::DataSpec;
-use xpute_link_gen::wit::WitTarget;
+use xpute_link_gen::wit::{Side, WitTarget};
 
 /// The bindings of the link's own types, which every side's bindings read
 /// first.
@@ -13,7 +13,7 @@ pub const LINK_TARGET: WitTarget<'static> = WitTarget {
     wit: "link/wit",
     rs: Some("link/rust/src/abi.rs"),
     ts: Some("link/ts/src/abi"),
-    side: "link/rust",
+    side: None,
 };
 
 /// Everything else of xpute's packages follows from their names, each
@@ -31,7 +31,7 @@ macro_rules! packages {
             wit: concat!("wit/", stringify!($p)),
             rs: Some(concat!($g, "/src/abi/", stringify!($p), ".rs")),
             ts: Some(concat!("link/ts/src/abi/", stringify!($p))),
-            side: $g,
+            side: Some(Side::Guest($g)),
         }),*];
 
         /// xpute's bindings on a native device's host's side.
@@ -39,7 +39,7 @@ macro_rules! packages {
             wit: concat!("wit/", stringify!($p)),
             rs: Some(concat!($n, "/src/abi/", stringify!($p), ".rs")),
             ts: None,
-            side: $n,
+            side: Some(Side::Host($n)),
         }),*];
     };
 }
@@ -58,6 +58,6 @@ pub const DATA_SPECS: [DataSpec; 2] = [
         json: "kit/spec/errno.json",
         ts: Some("kit/ts/src/status/errno.spec.ts"),
         rs: Some("kit/rust/src/status/errno.spec.rs"),
-        ..DataSpec::DEFAULT
+        cpp: Some(("cpp/xpute/kit/status/errno.spec.hpp", "xpute")),
     },
 ];

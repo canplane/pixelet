@@ -1,7 +1,7 @@
 // pxl-render/ray/count.rs
 
 //! Counts what the eye's cast and the light's walked and reused, while the
-//! `ray_cnts` setting is on; pxl-engine `count` lays the counts out. A
+//! `ray_cnt` setting is on; pxl-engine `count` lays the counts out. A
 //! counted frame clears the counters before its passes run, and gathers what
 //! they counted into one array after them. One readback of the array is out
 //! at a time, and a frame that counts while one is out is not read. The
@@ -11,7 +11,7 @@
 use pxl_engine::{count, node_cache, raster, ray};
 use xpute_link::mem;
 
-use crate::gpu::api::{buffer_usage, bytes, signaled, word_bytes, Gpu, RESULT};
+use crate::gpu::api::{buffer_usage, bytes, result, signaled, word_bytes, Gpu};
 
 const WORDS: usize = count::WORDS as usize;
 
@@ -22,12 +22,12 @@ const WORDS: usize = count::WORDS as usize;
 pub const CAST: usize = 0;
 pub const RAYS: usize = 1;
 pub const LANES_AT: usize = 2;
-const OBSERVER_CNTS: usize = LANES_AT + count::LANES as usize;
-pub const RAY_CNTS: usize = count::OBSERVERS as usize * OBSERVER_CNTS;
+const OBSERVER_CNT_CNT: usize = LANES_AT + count::LANE_CNT as usize;
+pub const RAY_CNT_CNT: usize = count::OBSERVER_CNT as usize * OBSERVER_CNT_CNT;
 
 /// Where `observer`'s count `k` is.
 pub const fn cnt_at(observer: u32, k: usize) -> usize {
-    observer as usize * OBSERVER_CNTS + k
+    observer as usize * OBSERVER_CNT_CNT + k
 }
 
 /// One frame's counts, which land a frame or two after it. `frame` is the
@@ -35,7 +35,7 @@ pub const fn cnt_at(observer: u32, k: usize) -> usize {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RayCount {
     pub frame: f64,
-    pub cnts: [f64; RAY_CNTS],
+    pub cnts: [f64; RAY_CNT_CNT],
 }
 
 /// What the CPU knows of a counted frame as it encodes it, kept until its
@@ -45,8 +45,8 @@ pub struct RayCount {
 #[derive(Clone, Copy, Default)]
 pub(super) struct Frame {
     pub number: f64,
-    pub casts: [bool; count::OBSERVERS as usize],
-    pub rays: [u32; count::OBSERVERS as usize],
+    pub casts: [bool; count::OBSERVER_CNT as usize],
+    pub rays: [u32; count::OBSERVER_CNT as usize],
 }
 
 /// The buffers the passes count into. Every walk counts in the node cache's
@@ -54,8 +54,8 @@ pub(super) struct Frame {
 /// (`args`); the boxes each raster draws count in its draw's args (`boxes`).
 pub(super) struct CountBuffer {
     pub node_cache: u32,
-    pub args: [u32; count::OBSERVERS as usize],
-    pub boxes: [u32; count::OBSERVERS as usize],
+    pub args: [u32; count::OBSERVER_CNT as usize],
+    pub boxes: [u32; count::OBSERVER_CNT as usize],
 }
 
 /// The counts' array on the GPU and its readback. One copy is out at a time: it is `copied`
@@ -116,7 +116,7 @@ impl Counter {
         }
         // A bit for each observer that counts. The eye counts only in a full cast, so the
         // pixels a `px` frame casts again count nothing.
-        let mut hdr = [0u32; 1 + (count::OBSERVERS * count::WALKS) as usize];
+        let mut hdr = [0u32; 1 + (count::OBSERVER_CNT * count::WALK_CNT) as usize];
         for (o, &cast) in frame.casts.iter().enumerate() {
             hdr[0] |= u32::from(self.on && cast) << o;
         }
@@ -139,7 +139,7 @@ impl Counter {
             return;
         }
         self.copied = true;
-        for o in 0..count::OBSERVERS {
+        for o in 0..count::OBSERVER_CNT {
             let k = o as usize;
             if !self.frame.casts[k] {
                 continue;
@@ -149,10 +149,15 @@ impl Counter {
                     from.node_cache,
                     node_cache::lane_at(o, count::BEAM),
                     count::BEAM,
-                    count::WALKS,
+                    count::WALK_CNT,
                 ),
-                (from.args[k], ray::MISS_ARGS_CNTS, count::VOXEL, count::RAYS),
-                (from.boxes[k], raster::ARGS_INSTANCES, count::BOXES, 1),
+                (
+                    from.args[k],
+                    ray::MISS_ARGS_CNTS,
+                    count::VOXEL,
+                    count::RAY_CNT,
+                ),
+                (from.boxes[k], raster::ARGS_INSTANCE_CNT, count::BOX, 1),
             ] {
                 let to = word_bytes(count::at(o, lane) as usize);
                 let size = word_bytes(words as usize);
@@ -175,16 +180,16 @@ impl Counter {
         let signaled = signaled(&self.mapping[0], self.ticket);
         if self.mapped && signaled {
             self.mapped = false;
-            if self.mapping[1] == RESULT::OK {
+            if self.mapping[1] == result::OK {
                 let (l, f) = (&self.read_cnts, self.copying);
-                let mut cnts = [0.0; RAY_CNTS];
-                for o in 0..count::OBSERVERS {
+                let mut cnts = [0.0; RAY_CNT_CNT];
+                for o in 0..count::OBSERVER_CNT {
                     if !f.casts[o as usize] {
                         continue;
                     }
                     cnts[cnt_at(o, CAST)] = 1.0;
                     cnts[cnt_at(o, RAYS)] = f64::from(f.rays[o as usize]);
-                    for lane in 0..count::LANES {
+                    for lane in 0..count::LANE_CNT {
                         let c = f64::from(l[count::at(o, lane) as usize]);
                         cnts[cnt_at(o, LANES_AT + lane as usize)] = c;
                     }

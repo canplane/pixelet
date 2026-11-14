@@ -64,8 +64,8 @@ fn box_fraction() -> vec3f {
 // its slot times the cube's vertices.
 @vertex
 fn vs(@builtin(vertex_index) v: u32) -> VertexOut {
-  draw_slot = v / BOX_VERTICES;
-  let c = box_corner(v % BOX_VERTICES, ghost_box_side(), from_eye(ghost_box_q(), ghost_box_r()));
+  draw_slot = v / BOX_VERTEX_CNT;
+  let c = box_corner(v % BOX_VERTEX_CNT, ghost_box_side(), from_eye(ghost_box_q(), ghost_box_r()));
   var o: VertexOut;
   o.clip = jittered(frame_view_proj() * vec4f(c.world, 1.0));
   let local = c.local;

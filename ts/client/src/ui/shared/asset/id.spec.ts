@@ -10,22 +10,14 @@
 
 export const IDX_BITS = 10 as number;
 
-export const Kind = {
-  cube: 0,
-  decor: 1,
-  marker: 2,
-} as const;
-export type Kind = (typeof Kind)[keyof typeof Kind];
+export type Kind = typeof KIND_CUBE | typeof KIND_DECOR | typeof KIND_MARKER;
+export const KIND_CUBE = 0;
+export const KIND_DECOR = 1;
+export const KIND_MARKER = 2;
 
-/** The name of the `Kind` member numbered `n`, or undefined for a number
- * no member has. */
-export function kind_name(n: number): keyof typeof Kind | undefined {
-  for (const k in Kind)
-    if (Kind[k as keyof typeof Kind] === n) return k as keyof typeof Kind;
-  return undefined;
-}
-
-/** The `Kind` member `n` is, or null for a number no member has. */
-export function kind_of(n: number): Kind | null {
-  return kind_name(n) === undefined ? null : (n as Kind);
+/** The member `val` is, or null for a number no member has. */
+export function of_Kind(val: number): Kind | null {
+  return val === KIND_CUBE || val === KIND_DECOR || val === KIND_MARKER
+    ? val
+    : null;
 }

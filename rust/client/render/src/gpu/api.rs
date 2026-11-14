@@ -22,7 +22,7 @@ use xpute_gpu_link::enums::{
     StoreOp, TextureAspect, TextureDimension, TextureFormat, TextureSampleType,
     TextureViewDimension, VertexFormat, VertexStepMode,
 };
-use xpute_gpu_link::spec::{BUFFER_USAGE, COLOR_WRITE, DEVICE, STATUS, TEXTURE_USAGE};
+use xpute_gpu_link::spec;
 use xpute_gpu_guest::stream::{Stream, WORD};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -31,7 +31,7 @@ use xpute_link::mem;
 pub use xpute_gpu_guest::encode::load_acquire;
 pub use xpute_gpu_guest::encode::signaled;
 pub use xpute_gpu_link::enums::TextureFormat as Format;
-pub use xpute_gpu_link::spec::RESULT;
+pub use xpute_gpu_link::spec::result;
 
 use crate::api_spec::{record, stream};
 use crate::frame::shader::access::{self, END};
@@ -41,27 +41,17 @@ use crate::frame::shader::record::{FRAGMENT_ENTRY, VERTEX_ENTRY};
 use crate::gpu::span_spec::{GpuSpanName, GPU_SPAN_NAMES};
 use crate::gpu::split::Split;
 
-pub mod buffer_usage {
-    pub use xpute_gpu_link::spec::BUFFER_USAGE::{
-        COPY_DST, COPY_SRC, INDEX, INDIRECT, MAP_READ, STORAGE, UNIFORM, VERTEX,
-    };
-}
-
-pub mod texture_usage {
-    pub use xpute_gpu_link::spec::TEXTURE_USAGE::{
-        COPY_DST, COPY_SRC, RENDER_ATTACHMENT, STORAGE_BINDING, TEXTURE_BINDING,
-    };
-}
+pub use xpute_gpu_link::spec::{buffer_usage, texture_usage};
 
 /// The most objects the renderer holds at once: the size of the encoder's handle table.
-pub const OBJECTS: usize = 1 << 15;
+pub const OBJECT_CAP: usize = 1 << 15;
 
-use crate::frame::shader::record::GROUP_ENTRIES;
+use crate::frame::shader::record::GROUP_ENTRY_CAP;
 
-const SPANS: usize = GPU_SPAN_NAMES.len();
+const SPAN_CNT: usize = GPU_SPAN_NAMES.len();
 /// The most passes a frame times, each with a begin and an end of its own. A pass past them
 /// is not timed.
-const PASSES: usize = 256;
+const PASS_CAP: usize = 256;
 
 /// WebGPU's default `minUniformBufferOffsetAlignment`. Every adapter's limit is a power of two
 /// no larger than this, so a larger value comes from no real device and is refused (`device`).
@@ -73,7 +63,7 @@ pub const UNIFORM_ALIGN_MAX: u32 = 256;
 /// belongs to whoever took it (`Gpu::image`).
 pub type Image = (u32, &'static [u8]);
 
-/// The head's words, apart from the stream's records: `READS` reads of the spans, each a
+/// The head's words, apart from the stream's records: `READ_CAP` reads of the spans, each a
 /// fence, a result, and the begin and end ticks of every pass of the frame it timed, two words
 /// a tick (`read_at`). The records name these words for the host to answer into, so the
 /// host does not read this layout.
@@ -81,9 +71,9 @@ const READS_AT: usize = 0;
 /// How many reads of the spans may be out at once, each into its own mapped buffer. A frame's
 /// read lands a frame or two after the frame, so with three no new read waits for an earlier
 /// one to be taken.
-pub const READS: usize = 3;
-const READ_WORDS: usize = 2 + 2 * 2 * PASSES;
-const HDR: usize = READS_AT + READS * READ_WORDS;
+pub const READ_CAP: usize = 3;
+const READ_WORDS: usize = 2 + 2 * 2 * PASS_CAP;
+const HDR: usize = READS_AT + READ_CAP * READ_WORDS;
 
 /// The head word that holds read `k`'s fence. The read's result and ticks follow it.
 const fn read_at(k: usize) -> usize {
@@ -121,7 +111,7 @@ pub fn place(texture: Id, origin: [u32; 3]) -> encode::TexelCopyTexture {
         texture,
         mip: 0,
         origin,
-        aspect: TextureAspect::all,
+        aspect: TextureAspect::All,
     }
 }
 
@@ -284,17 +274,17 @@ impl<'a> TrackedRenderPass<'a> {
 /// depth and the light map's. A frame that is not drawn whole is drawn through a gate, which
 /// marks the tiles the frame damages. The format is a 32-bit float with a stencil, and the
 /// stencil holds those marks, so the passes after the gate skip the other tiles (`Stencil`).
-pub const MASKED_DEPTH: Format = Format::depth32float_stencil8;
+pub const MASKED_DEPTH: Format = Format::Depth32floatStencil8;
 
 /// The format of the world's color as its passes leave it: toned, linear, and blended in place.
 /// The color is gathered over frames (pass/resolve.rs) and encoded onto the canvas once
 /// (pass/finish.rs). It is a float, so the color has no levels of its own, and the finish's
 /// dither works only between the levels the canvas has.
-pub const WORLD_COLOR: Format = Format::rgba16float;
+pub const WORLD_COLOR: Format = Format::Rgba16float;
 
 /// The most color targets a pipeline draws into. The finish draws into two: the canvas and the
 /// picture that the world's surface keeps (pass/finish.rs).
-pub const TARGETS: usize = 2;
+pub const TARGET_CAP: usize = 2;
 
 /// What a pipeline does with the stencil beside its depth (`MASKED_DEPTH`). In each tile, the
 /// stencil holds the number of the gated frame that last damaged the tile. `Unused` leaves the
@@ -384,19 +374,19 @@ pub fn pass_desc(
     }
 }
 
-/// A bind group layout, with the group words it was made from: a (binding, stages, kind)
-/// triple per binding, as a pipeline record holds them (frame/shader/record.rs) or as a
-/// compute group gives them. Only `Gpu::layout` makes one, so every bind group over it can be
-/// checked against those words.
+/// A bind group layout, with the entries it was made from: a (binding, stages, kind) triple
+/// per binding, as a render pipeline's record holds them or a compute pipeline's layout
+/// (frame/shader/record.rs `pipeline`, `compute_layout`). Only `Gpu::layout` makes one, so
+/// every bind group over it can be checked against those entries.
 #[derive(Clone, Copy, Default)]
 pub struct Layout {
     id: Id,
-    group: &'static [u32],
+    entries: &'static [u32],
 }
 
 impl Layout {
     pub fn binds(&self, binding: u32) -> bool {
-        self.group
+        self.entries
             .as_chunks::<3>()
             .0
             .iter()
@@ -406,7 +396,7 @@ impl Layout {
     /// The buffers among `entries` that the group binds as writable storage, each with its
     /// binding.
     fn writable<'e>(&self, entries: &'e [Entry]) -> impl Iterator<Item = (u32, Id)> + 'e {
-        let words = self.group.as_chunks::<3>().0;
+        let words = self.entries.as_chunks::<3>().0;
         entries.iter().filter_map(move |e| match e.resource {
             encode::Resource::Buffer { buffer, .. }
                 if words
@@ -424,7 +414,7 @@ impl Layout {
     /// for the rest. Anything else is a bug.
     #[track_caller]
     fn holds(&self, entries: &[Entry]) {
-        let words = self.group.as_chunks::<3>().0;
+        let words = self.entries.as_chunks::<3>().0;
         xpute_kit::ensure!(
             entries.len() == words.len(),
             ENOTRECOVERABLE,
@@ -617,7 +607,7 @@ struct State {
     stream: Stream,
     /// The encoder, never moved: all-zero bytes are an encoder that has made nothing (xpute-gpu-guest
     /// encode).
-    encoder: &'static mut Encoder<OBJECTS>,
+    encoder: &'static mut Encoder<OBJECT_CAP>,
     /// The words the records name for the host to answer into (`HDR`).
     head: Box<[u32]>,
     /// Whether a frame's transaction is open. Inside one, a record that does not fit drops the
@@ -628,22 +618,22 @@ struct State {
     device: Option<Device>,
     /// The spans' query set, the buffer it resolves into, and one buffer per read that the
     /// resolved ticks are copied into and mapped back through.
-    stamps: Option<(Id, Id, [Id; READS])>,
+    stamps: Option<(Id, Id, [Id; READ_CAP])>,
     /// The span of each pass this frame has timed so far, in order (`Gpu::stamp_pass`).
-    stamp_spans: [GpuSpanName; PASSES],
+    stamp_spans: [GpuSpanName; PASS_CAP],
     stamp_cnt: usize,
     /// For each read, the span of each pass it timed, and how many passes it timed.
-    stamps_read: [([GpuSpanName; PASSES], usize); READS],
+    stamps_read: [([GpuSpanName; PASS_CAP], usize); READ_CAP],
     /// For each read, the order in which it was asked, or 0 where it is not out. The reads are
     /// taken in that order.
-    stamps_out: [u32; READS],
+    stamps_out: [u32; READ_CAP],
     stamps_asked_cnt: u32,
     /// The read this frame asked for. Its mapping's ticket is written as the frame is encoded,
     /// so a frame dropped whole must take the read back (`frame_commit`), or the read would
     /// stay out and never land.
     stamps_asked: Option<usize>,
     /// Each span's own time from the last read taken in, in ms.
-    gpu_ms: [f64; SPANS],
+    gpu_ms: [f64; SPAN_CNT],
     /// The time the last read's passes ran, in ms, with overlapping passes counted once. This
     /// is the frame's GPU time; the spans' sum is not, where passes overlap. A pass with no work
     /// may be dropped and leave its begin tick unwritten; it is then counted from the latest end
@@ -715,7 +705,7 @@ fn read_fence(r: usize) -> &'static [u32; 2] {
 pub fn install(bytes: u32) {
     xpute_kit::ensure!(bytes as usize > stream::RESERVE as usize, EINVAL, bytes);
     // SAFETY: all-zero bytes are an encoder that has made nothing (xpute-gpu-guest encode).
-    let encoder = unsafe { Box::<Encoder<OBJECTS>>::new_zeroed().assume_init() };
+    let encoder = unsafe { Box::<Encoder<OBJECT_CAP>>::new_zeroed().assume_init() };
     STATE.set(Some(State::over(
         Stream::new(bytes as usize / WORD),
         Box::leak(encoder),
@@ -736,13 +726,13 @@ pub(crate) fn test_device() -> Device {
     Device {
         align: UNIFORM_ALIGN_MAX,
         timestamps: false,
-        canvas: Format::bgra8unorm,
+        canvas: Format::Bgra8unorm,
         period_ns: 1.0,
     }
 }
 
 impl State {
-    fn over(stream: Stream, encoder: &'static mut Encoder<OBJECTS>) -> State {
+    fn over(stream: Stream, encoder: &'static mut Encoder<OBJECT_CAP>) -> State {
         State {
             stream,
             encoder,
@@ -751,13 +741,13 @@ impl State {
             device_out: false,
             device: None,
             stamps: None,
-            stamp_spans: [GpuSpanName::ALL[0]; PASSES],
+            stamp_spans: [GpuSpanName::ALL[0]; PASS_CAP],
             stamp_cnt: 0,
-            stamps_read: [([GpuSpanName::ALL[0]; PASSES], 0); READS],
-            stamps_out: [0; READS],
+            stamps_read: [([GpuSpanName::ALL[0]; PASS_CAP], 0); READ_CAP],
+            stamps_out: [0; READ_CAP],
             stamps_asked_cnt: 0,
             stamps_asked: None,
-            gpu_ms: [0.0; SPANS],
+            gpu_ms: [0.0; SPAN_CNT],
             gpu_busy_ms: 0.0,
             stamps_complete: None,
             images: Vec::new(),
@@ -809,7 +799,7 @@ pub fn device() -> Option<Device> {
     if s.device.is_none() && s.device_out {
         let block = admit::block()?;
         let read = device::Device::read(block)?;
-        let align = read.limit(LimitName::minUniformBufferOffsetAlignment);
+        let align = read.limit(LimitName::MinUniformBufferOffsetAlignment);
         xpute_kit::ensure!(
             align.is_power_of_two() && align <= UNIFORM_ALIGN_MAX,
             EINVAL,
@@ -817,7 +807,7 @@ pub fn device() -> Option<Device> {
         );
         s.device = Some(Device {
             align,
-            timestamps: read.has(FeatureName::timestamp_query),
+            timestamps: read.has(FeatureName::TimestampQuery),
             canvas: read.format,
             period_ns: read.period_ns,
         });
@@ -829,7 +819,7 @@ pub fn device() -> Option<Device> {
 /// `block`, or a new one, kept in place while it is lent, which admission keeps for `device`
 /// and itself to read (xpute-gpu-guest `admit::ask`).
 pub fn lend_block(block: Option<Vec<u32>>) -> Vec<u32> {
-    let block = block.unwrap_or_else(|| vec![0; DEVICE::WORDS]);
+    let block = block.unwrap_or_else(|| vec![0; spec::device::WORDS]);
     admit::ask(&block);
     block
 }
@@ -849,7 +839,7 @@ pub fn take_device_lost() -> bool {
     let Some(block) = admit::block() else {
         return false;
     };
-    let lost = load_acquire(&block[DEVICE::STATUS_AT]) == STATUS::LOST;
+    let lost = load_acquire(&block[spec::device::STATUS_AT]) == spec::status::LOST;
     !core::mem::replace(&mut s.lost, lost) && lost
 }
 
@@ -864,7 +854,7 @@ pub fn device_generation() -> u32 {
 #[derive(Clone, Copy, Default)]
 pub struct DeviceBlock {
     pub status: u32,
-    pub errors: u32,
+    pub err_cnt: u32,
     pub unfinished: u32,
 }
 
@@ -874,9 +864,9 @@ pub fn device_block() -> DeviceBlock {
     };
     let word = |k: usize| load_acquire(&block[k]);
     DeviceBlock {
-        status: word(DEVICE::STATUS_AT),
-        errors: word(DEVICE::ERRORS_AT),
-        unfinished: word(DEVICE::UNFINISHED_AT),
+        status: word(spec::device::STATUS_AT),
+        err_cnt: word(spec::device::ERRORS_AT),
+        unfinished: word(spec::device::UNFINISHED_AT),
     }
 }
 
@@ -885,7 +875,7 @@ pub fn device_block() -> DeviceBlock {
 /// and returns which read it took. A read that was refused is freed and measures nothing. One
 /// read is taken a frame, as one is asked a frame.
 fn take_stamps(s: &mut State) -> Option<usize> {
-    let r = (0..READS)
+    let r = (0..READ_CAP)
         .filter(|&r| s.stamps_out[r] != 0)
         .min_by_key(|&r| s.stamps_out[r])?;
     let fence = read_fence(r);
@@ -893,14 +883,14 @@ fn take_stamps(s: &mut State) -> Option<usize> {
         return None;
     }
     s.stamps_out[r] = 0;
-    if fence[1] != RESULT::OK {
+    if fence[1] != result::OK {
         return None;
     }
     let (spans, cnt) = s.stamps_read[r];
     let period_ms = f64::from(s.device.map_or(1.0, |d| d.period_ns)) / 1e6;
     let ticks = read_at(r) + 2;
     let tick = |k: usize| u64::from(*hdr(ticks + 2 * k)) | u64::from(*hdr(ticks + 2 * k + 1)) << 32;
-    let mut ran = [(0u64, 0u64); PASSES];
+    let mut ran = [(0u64, 0u64); PASS_CAP];
     for (k, r) in ran[..cnt].iter_mut().enumerate() {
         let (b, e) = (tick(2 * k), tick(2 * k + 1));
         if e >= b {
@@ -913,10 +903,10 @@ fn take_stamps(s: &mut State) -> Option<usize> {
     // before the passes it waits on have finished. A render pass's end and a compute pass's
     // begin are stamped in order, so counting from the latest earlier end leaves out the time
     // that belongs to the passes before it. A span's time is its passes' sum.
-    let mut ends = [(0u64, 0u64); PASSES];
+    let mut ends = [(0u64, 0u64); PASS_CAP];
     ends[..ran.len()].copy_from_slice(ran);
     let ends = &ends[..ran.len()];
-    s.gpu_ms = [0.0; SPANS];
+    s.gpu_ms = [0.0; SPAN_CNT];
     for (k, r) in ran.iter_mut().enumerate() {
         let (b, e) = *r;
         let before = ends
@@ -966,7 +956,7 @@ pub fn on_device_lost() {
         s.complete.clear();
         s.generation = s.generation.wrapping_add(1);
         s.frees.clear();
-        s.stamps_out = [0; READS];
+        s.stamps_out = [0; READ_CAP];
     }
 }
 
@@ -1049,7 +1039,7 @@ pub use xpute_gpu_guest::encode::call::{write_buffer_bytes, write_texture_bytes}
 /// The stream bytes a shader module of `code` takes (`Gpu::shader`). Its maker asks `room`
 /// for them before making it.
 pub fn shader_bytes(code: &str) -> usize {
-    Encoder::<OBJECTS>::shader_module_bytes(code)
+    Encoder::<OBJECT_CAP>::shader_module_bytes(code)
 }
 
 /// Whether records of `bytes` in all (`write_buffer_bytes`, `write_texture_bytes`,
@@ -1069,7 +1059,7 @@ fn handle_of(id: Option<Id>) -> Id {
     match id {
         Some(id) => id,
         None => {
-            xpute_kit::ensure!(state().in_frame, ENOSPC, OBJECTS);
+            xpute_kit::ensure!(state().in_frame, ENOSPC, OBJECT_CAP);
             0
         }
     }
@@ -1092,12 +1082,12 @@ pub fn release(id: Id) {
 
 pub fn vertex_format(code: u32) -> VertexFormat {
     match code {
-        record::F32X2 => VertexFormat::float32x2,
-        record::F32X3 => VertexFormat::float32x3,
-        record::F32X4 => VertexFormat::float32x4,
-        record::U32X4 => VertexFormat::uint32x4,
-        record::U32X2 => VertexFormat::uint32x2,
-        record::U32 => VertexFormat::uint32,
+        record::F32X2 => VertexFormat::Float32x2,
+        record::F32X3 => VertexFormat::Float32x3,
+        record::F32X4 => VertexFormat::Float32x4,
+        record::U32X4 => VertexFormat::Uint32x4,
+        record::U32X2 => VertexFormat::Uint32x2,
+        record::U32 => VertexFormat::Uint32,
         _ => xpute_kit::bug!(EINVAL, code),
     }
 }
@@ -1115,38 +1105,38 @@ fn binding_layout(kind: u32) -> encode::BindingLayout {
         multisampled: false,
     };
     match kind {
-        record::UNIFORM => buf(BufferBindingType::uniform, false),
-        record::UNIFORM_DYNAMIC => buf(BufferBindingType::uniform, true),
-        record::STORAGE => buf(BufferBindingType::read_only_storage, false),
-        record::STORAGE_RW => buf(BufferBindingType::storage, false),
-        record::TEXTURE => texture(TextureSampleType::float, TextureViewDimension::_2d),
-        record::TEXTURE_ARRAY => texture(TextureSampleType::float, TextureViewDimension::_2d_array),
-        record::DEPTH => texture(TextureSampleType::depth, TextureViewDimension::_2d),
+        record::UNIFORM => buf(BufferBindingType::Uniform, false),
+        record::UNIFORM_DYNAMIC => buf(BufferBindingType::Uniform, true),
+        record::STORAGE => buf(BufferBindingType::ReadOnlyStorage, false),
+        record::STORAGE_RW => buf(BufferBindingType::Storage, false),
+        record::TEXTURE => texture(TextureSampleType::Float, TextureViewDimension::_2d),
+        record::TEXTURE_ARRAY => texture(TextureSampleType::Float, TextureViewDimension::_2dArray),
+        record::DEPTH => texture(TextureSampleType::Depth, TextureViewDimension::_2d),
         record::TEXTURE_UNFILTERED => texture(
-            TextureSampleType::unfilterable_float,
+            TextureSampleType::UnfilterableFloat,
             TextureViewDimension::_2d,
         ),
         record::TEXTURE_UINT_ARRAY => {
-            texture(TextureSampleType::uint, TextureViewDimension::_2d_array)
+            texture(TextureSampleType::Uint, TextureViewDimension::_2dArray)
         }
         record::STORAGE_TEXTURE_RW => L::StorageTexture {
-            access: StorageTextureAccess::read_write,
-            format: TextureFormat::r32uint,
-            dimension: TextureViewDimension::_2d_array,
+            access: StorageTextureAccess::ReadWrite,
+            format: TextureFormat::R32uint,
+            dimension: TextureViewDimension::_2dArray,
         },
-        record::TEXTURE_3D => texture(TextureSampleType::float, TextureViewDimension::_3d),
+        record::TEXTURE_3D => texture(TextureSampleType::Float, TextureViewDimension::_3d),
         record::STORAGE_TEXTURE_3D => L::StorageTexture {
-            access: StorageTextureAccess::write_only,
-            format: TextureFormat::rgba16float,
+            access: StorageTextureAccess::WriteOnly,
+            format: TextureFormat::Rgba16float,
             dimension: TextureViewDimension::_3d,
         },
         record::STORAGE_TEXTURE_2D => L::StorageTexture {
-            access: StorageTextureAccess::write_only,
-            format: TextureFormat::rgba16float,
+            access: StorageTextureAccess::WriteOnly,
+            format: TextureFormat::Rgba16float,
             dimension: TextureViewDimension::_2d,
         },
-        record::SAMPLER_COMPARISON => L::Sampler(SamplerBindingType::comparison),
-        _ => L::Sampler(SamplerBindingType::filtering),
+        record::SAMPLER_COMPARISON => L::Sampler(SamplerBindingType::Comparison),
+        _ => L::Sampler(SamplerBindingType::Filtering),
     }
 }
 
@@ -1164,27 +1154,27 @@ const fn comp(
 
 const ALPHA_BLEND: encode::BlendState = encode::BlendState {
     color: comp(
-        BlendOperation::add,
-        BlendFactor::src_alpha,
-        BlendFactor::one_minus_src_alpha,
+        BlendOperation::Add,
+        BlendFactor::SrcAlpha,
+        BlendFactor::OneMinusSrcAlpha,
     ),
     alpha: comp(
-        BlendOperation::add,
-        BlendFactor::one,
-        BlendFactor::one_minus_src_alpha,
+        BlendOperation::Add,
+        BlendFactor::One,
+        BlendFactor::OneMinusSrcAlpha,
     ),
 };
 
 const ADD_BLEND: encode::BlendState = encode::BlendState {
-    color: comp(BlendOperation::add, BlendFactor::one, BlendFactor::one),
-    alpha: comp(BlendOperation::add, BlendFactor::zero, BlendFactor::one),
+    color: comp(BlendOperation::Add, BlendFactor::One, BlendFactor::One),
+    alpha: comp(BlendOperation::Add, BlendFactor::Zero, BlendFactor::One),
 };
 
 fn load_op(l: Load) -> LoadOp {
     if l == Load::Load {
-        LoadOp::load
+        LoadOp::Load
     } else {
-        LoadOp::clear
+        LoadOp::Clear
     }
 }
 
@@ -1192,11 +1182,11 @@ fn stencil_face(stencil: Stencil) -> encode::StencilFaceState {
     match stencil {
         Stencil::Unused => encode::STENCIL_UNUSED,
         Stencil::Masked => encode::StencilFaceState {
-            compare: CompareFunction::equal,
+            compare: CompareFunction::Equal,
             ..encode::STENCIL_UNUSED
         },
         Stencil::Mask => encode::StencilFaceState {
-            pass: StencilOperation::replace,
+            pass: StencilOperation::Replace,
             ..encode::STENCIL_UNUSED
         },
     }
@@ -1246,8 +1236,8 @@ impl Gpu {
             &mut s.stream,
             &encode::TextureDescriptor {
                 size: [width, height, layer_cnt],
-                mip_levels: mip_cnt,
-                samples: 1,
+                mip_cnt,
+                sample_cnt: 1,
                 dimension: TextureDimension::_2d,
                 format,
                 usage,
@@ -1262,8 +1252,8 @@ impl Gpu {
             &mut s.stream,
             &encode::TextureDescriptor {
                 size,
-                mip_levels: 1,
-                samples: 1,
+                mip_cnt: 1,
+                sample_cnt: 1,
                 dimension: TextureDimension::_3d,
                 format,
                 usage,
@@ -1281,9 +1271,9 @@ impl Gpu {
             &encode::ViewDescriptor {
                 dimension: Some(TextureViewDimension::_3d),
                 base_mip: 0,
-                mips: Some(1),
+                mip_cnt: Some(1),
                 base_layer: 0,
-                layers: Some(1),
+                layer_cnt: Some(1),
                 ..Default::default()
             },
         ))
@@ -1305,14 +1295,14 @@ impl Gpu {
             texture,
             &encode::ViewDescriptor {
                 dimension: Some(if array {
-                    TextureViewDimension::_2d_array
+                    TextureViewDimension::_2dArray
                 } else {
                     TextureViewDimension::_2d
                 }),
                 base_mip,
-                mips: Some(mip_cnt),
+                mip_cnt: Some(mip_cnt),
                 base_layer,
-                layers: Some(layer_cnt),
+                layer_cnt: Some(layer_cnt),
                 ..Default::default()
             },
         ))
@@ -1327,9 +1317,9 @@ impl Gpu {
             texture,
             &encode::ViewDescriptor {
                 dimension: Some(TextureViewDimension::_2d),
-                aspect: Some(TextureAspect::depth_only),
-                mips: Some(1),
-                layers: Some(1),
+                aspect: Some(TextureAspect::DepthOnly),
+                mip_cnt: Some(1),
+                layer_cnt: Some(1),
                 ..Default::default()
             },
         ))
@@ -1348,7 +1338,7 @@ impl Gpu {
         handle_of(s.encoder.sampler(
             &mut s.stream,
             &encode::SamplerDescriptor {
-                addr: [addr, addr, AddressMode::clamp_to_edge],
+                addr: [addr, addr, AddressMode::ClampToEdge],
                 mag,
                 min,
                 mipmap,
@@ -1364,12 +1354,12 @@ impl Gpu {
         handle_of(s.encoder.shader_module(&mut s.stream, code))
     }
 
-    /// A group's layout from its words, a (binding, stages, kind) triple per binding, as a
+    /// A group's layout from its entries, a (binding, stages, kind) triple per binding, as a
     /// pipeline record holds them.
-    pub fn layout(&self, group: &'static [u32]) -> Layout {
-        let words = group.as_chunks::<3>().0;
-        xpute_kit::ensure!(words.len() <= GROUP_ENTRIES, ENOSPC, words.len());
-        let entries: [encode::BindGroupLayoutEntry; GROUP_ENTRIES] = core::array::from_fn(|i| {
+    pub fn layout(&self, entries: &'static [u32]) -> Layout {
+        let words = entries.as_chunks::<3>().0;
+        xpute_kit::ensure!(words.len() <= GROUP_ENTRY_CAP, ENOSPC, words.len());
+        let bindings: [encode::BindGroupLayoutEntry; GROUP_ENTRY_CAP] = core::array::from_fn(|i| {
             let [binding, stage, kind] = words.get(i).copied().unwrap_or_default();
             encode::BindGroupLayoutEntry {
                 binding,
@@ -1380,9 +1370,9 @@ impl Gpu {
         let s = self.s();
         let id = handle_of(
             s.encoder
-                .bind_group_layout(&mut s.stream, &entries[..words.len()]),
+                .bind_group_layout(&mut s.stream, &bindings[..words.len()]),
         );
-        Layout { id, group }
+        Layout { id, entries }
     }
 
     fn pipeline_layout(&self, layouts: &[Layout]) -> Id {
@@ -1416,9 +1406,9 @@ impl Gpu {
             .map(|_| {
                 let stride = next();
                 let step = if next() == record::PER_INSTANCE {
-                    VertexStepMode::instance
+                    VertexStepMode::Instance
                 } else {
-                    VertexStepMode::vertex
+                    VertexStepMode::Vertex
                 };
                 let attributes = (0..next())
                     .map(|_| {
@@ -1442,30 +1432,30 @@ impl Gpu {
                 attributes,
             })
             .collect();
-        let layout = self.pipeline_layout(layouts);
+        let pipeline_layout = self.pipeline_layout(layouts);
         let blend = || match words[8] {
             record::ALPHA => Some(ALPHA_BLEND),
             record::ADD => Some(ADD_BLEND),
             _ => None,
         };
-        let colors: [encode::ColorTargetState; TARGETS] =
+        let colors: [encode::ColorTargetState; TARGET_CAP] =
             core::array::from_fn(|_| encode::ColorTargetState {
                 format,
                 blend: blend(),
-                write_mask: COLOR_WRITE::ALL,
+                write_mask: spec::color_write::ALL,
             });
-        xpute_kit::ensure!(targets <= TARGETS, EINVAL, targets);
+        xpute_kit::ensure!(targets <= TARGET_CAP, EINVAL, targets);
         let compare = match words[5] {
-            record::GREATER => CompareFunction::greater,
-            record::GREATER_EQUAL => CompareFunction::greater_equal,
-            record::LESS => CompareFunction::less,
-            _ => CompareFunction::always,
+            record::GREATER => CompareFunction::Greater,
+            record::GREATER_EQUAL => CompareFunction::GreaterEqual,
+            record::LESS => CompareFunction::Less,
+            _ => CompareFunction::Always,
         };
         let s = self.s();
         let p = handle_of(s.encoder.render_pipeline_async(
             &mut s.stream,
             &encode::RenderPipelineDescriptor {
-                layout: Some(layout),
+                layout: Some(pipeline_layout),
                 vertex: encode::VertexState {
                     module,
                     entry: VERTEX_ENTRY[words[record::HDR as usize - 1] as usize],
@@ -1473,15 +1463,15 @@ impl Gpu {
                 },
                 primitive: encode::PrimitiveState {
                     topology: match words[2] {
-                        record::STRIP => PrimitiveTopology::triangle_strip,
-                        _ => PrimitiveTopology::triangle_list,
+                        record::STRIP => PrimitiveTopology::TriangleStrip,
+                        _ => PrimitiveTopology::TriangleList,
                     },
                     strip_index_format: None,
-                    front_face: FrontFace::ccw,
+                    front_face: FrontFace::Ccw,
                     cull: if words[3] == record::CULL_BACK {
-                        CullMode::back
+                        CullMode::Back
                     } else {
-                        CullMode::none
+                        CullMode::None
                     },
                     unclipped_depth: false,
                 },
@@ -1503,7 +1493,7 @@ impl Gpu {
                 fragment: (words[1] != 0).then_some(encode::FragmentState {
                     module,
                     entry: FRAGMENT_ENTRY,
-                    targets: if format == Format::depth32float {
+                    targets: if format == Format::Depth32float {
                         &[]
                     } else {
                         &colors[..targets]
@@ -1513,32 +1503,32 @@ impl Gpu {
             fence,
             ticket,
         ));
-        s.encoder.destroy(&mut s.stream, layout);
+        s.encoder.destroy(&mut s.stream, pipeline_layout);
         p
     }
 
-    /// A compute pipeline of `module`'s entry `entry` over `layouts`. It is made
+    /// A compute pipeline of `module`'s entry `entry` over its one group's `layout`. It is made
     /// asynchronously, and its fence and ticket work as `pipeline`'s do.
     pub fn compute_pipeline(
         &self,
         module: Id,
         entry: &str,
-        layouts: &[Layout],
+        layout: Layout,
         (fence, ticket): (&u32, u32),
     ) -> Id {
-        let layout = self.pipeline_layout(layouts);
+        let pipeline_layout = self.pipeline_layout(&[layout]);
         let s = self.s();
         let p = handle_of(s.encoder.compute_pipeline_async(
             &mut s.stream,
             &encode::ComputePipelineDescriptor {
-                layout: Some(layout),
+                layout: Some(pipeline_layout),
                 module,
                 entry,
             },
             fence,
             ticket,
         ));
-        s.encoder.destroy(&mut s.stream, layout);
+        s.encoder.destroy(&mut s.stream, pipeline_layout);
         p
     }
 
@@ -1615,18 +1605,18 @@ impl Gpu {
         let s = self.s();
         if let Some(k) = s.images.iter().position(|a| a.image == image) {
             let fence = &s.images[k].fence;
-            if !signaled(&fence[0], IMAGE_TICKET) || fence[1] != RESULT::OK {
+            if !signaled(&fence[0], IMAGE_TICKET) || fence[1] != result::OK {
                 return None;
             }
             s.complete.push(image);
             return Some(s.images.swap_remove(k).texture);
         }
         let (width, height) = asset::image_size(file)?;
-        let usage = TEXTURE_USAGE::TEXTURE_BINDING
-            | TEXTURE_USAGE::COPY_SRC
-            | TEXTURE_USAGE::COPY_DST
-            | TEXTURE_USAGE::RENDER_ATTACHMENT;
-        let texture = self.texture(width, height, 1, Format::rgba8unorm_srgb, 1, usage);
+        let usage = texture_usage::TEXTURE_BINDING
+            | texture_usage::COPY_SRC
+            | texture_usage::COPY_DST
+            | texture_usage::RENDER_ATTACHMENT;
+        let texture = self.texture(width, height, 1, Format::Rgba8unormSrgb, 1, usage);
         let fence = Box::new([0; 2]);
         self.copy_image(texture, file, &fence, IMAGE_TICKET);
         self.s().images.push(ImageCopy {
@@ -1729,7 +1719,7 @@ impl Gpu {
             view,
             resolve: None,
             load: load_op(d.color_load),
-            store: StoreOp::store,
+            store: StoreOp::Store,
             clear: d.color_clear,
         });
         let targets = match (d.color, d.second) {
@@ -1740,11 +1730,11 @@ impl Gpu {
         let depth_stencil = (d.depth != 0).then(|| encode::DepthStencilAttachment {
             view: d.depth,
             depth_load: load_op(d.depth_load),
-            depth_store: StoreOp::store,
+            depth_store: StoreOp::Store,
             depth_clear: d.depth_clear,
             depth_read_only: d.depth_load == Load::ReadOnly,
             stencil_load: load_op(d.stencil_load),
-            stencil_store: StoreOp::store,
+            stencil_store: StoreOp::Store,
             stencil_clear: 0,
             stencil_read_only: false,
         });
@@ -1865,7 +1855,7 @@ impl Gpu {
             &mut self.s().stream,
             pass,
             buf,
-            IndexFormat::uint32,
+            IndexFormat::Uint32,
             off,
             (size != 0).then_some(size),
         );
@@ -1953,7 +1943,7 @@ impl Gpu {
     pub fn submit_frame(&self, encoder: Id) -> Option<usize> {
         let s = self.s();
         s.stamps_complete = take_stamps(s);
-        let free = (0..READS).find(|&r| s.stamps_out[r] == 0);
+        let free = (0..READ_CAP).find(|&r| s.stamps_out[r] == 0);
         let bufs = s.split.submitted(encoder);
         let passes = s.stamp_cnt;
         let (Some((set, resolve, mapped)), Some(r), true) = (s.stamps, free, passes != 0) else {
@@ -1993,8 +1983,8 @@ impl Gpu {
             &mut self.s().stream,
             surface,
             None,
-            TEXTURE_USAGE::RENDER_ATTACHMENT,
-            CanvasAlphaMode::opaque,
+            texture_usage::RENDER_ATTACHMENT,
+            CanvasAlphaMode::Opaque,
         );
     }
 
@@ -2015,14 +2005,14 @@ impl Gpu {
         let s = self.s();
         let set = handle_of(s.encoder.query_set(
             &mut s.stream,
-            QueryType::timestamp,
-            2 * PASSES as u32,
+            QueryType::Timestamp,
+            2 * PASS_CAP as u32,
         ));
         let resolve = handle_of(s.encoder.buffer(
             &mut s.stream,
             &encode::BufferDescriptor {
-                size: (2 * PASSES * 8) as u32,
-                usage: BUFFER_USAGE::QUERY_RESOLVE | BUFFER_USAGE::COPY_SRC,
+                size: (2 * PASS_CAP * 8) as u32,
+                usage: buffer_usage::QUERY_RESOLVE | buffer_usage::COPY_SRC,
                 mapped_at_creation: false,
             },
         ));
@@ -2030,8 +2020,8 @@ impl Gpu {
             handle_of(s.encoder.buffer(
                 &mut s.stream,
                 &encode::BufferDescriptor {
-                    size: (2 * PASSES * 8) as u32,
-                    usage: BUFFER_USAGE::MAP_READ | BUFFER_USAGE::COPY_DST,
+                    size: (2 * PASS_CAP * 8) as u32,
+                    usage: buffer_usage::MAP_READ | buffer_usage::COPY_DST,
                     mapped_at_creation: false,
                 },
             ))
@@ -2050,7 +2040,7 @@ impl Gpu {
         let s = self.s();
         let (set, ..) = s.stamps?;
         let k = s.stamp_cnt;
-        if k == PASSES {
+        if k == PASS_CAP {
             return None;
         }
         s.stamp_spans[k] = span;

@@ -13,7 +13,7 @@
 use crate::api_spec::stream;
 use crate::frame::shader::floor::{BIND_GROUPS, VERTEX_BUFFERS};
 use crate::frame::shader::record::{
-    compute, pipeline as rec_of, src, COMPUTES, HDR, PIPELINES, SHADERS,
+    compute, compute_layout, pipeline as rec_of, src, COMPUTE_CNT, HDR, PIPELINE_CNT, SHADER_CNT,
 };
 use crate::gpu::api::{
     room, shader_bytes, signaled, Format, Gpu, Layout, Stencil, MASKED_DEPTH, WORLD_COLOR,
@@ -29,16 +29,16 @@ pub struct Pipeline {
 
 /// The most distinct group layouts there are: every render pipeline's groups,
 /// and a compute pipeline's one.
-const LAYOUTS: usize = PIPELINES as usize * BIND_GROUPS + COMPUTES as usize;
+const LAYOUT_CAP: usize = PIPELINE_CNT as usize * BIND_GROUPS + COMPUTE_CNT as usize;
 /// The most pipelines the renderer makes, render and compute. Each pipeline is checked against
 /// it as it is made.
 const PIPELINE_CAP: usize = 118;
 
 pub struct PipelineCache {
-    modules: [u32; SHADERS as usize],
+    modules: [u32; SHADER_CNT as usize],
     /// How many shaders have their module made. They are the first ones in order of kind.
     modules_made: u32,
-    layouts: [(u64, Layout); LAYOUTS],
+    layouts: [(u64, Layout); LAYOUT_CAP],
     layout_len: usize,
     pipelines: [(u64, Pipeline); PIPELINE_CAP],
     pipeline_len: usize,
@@ -69,9 +69,9 @@ fn fold(key: u64, word: u32) -> u64 {
 impl PipelineCache {
     pub fn new() -> Self {
         PipelineCache {
-            modules: [0; SHADERS as usize],
+            modules: [0; SHADER_CNT as usize],
             modules_made: 0,
-            layouts: [(0, Layout::default()); LAYOUTS],
+            layouts: [(0, Layout::default()); LAYOUT_CAP],
             layout_len: 0,
             pipelines: [(0, Pipeline::default()); PIPELINE_CAP],
             pipeline_len: 0,
@@ -86,7 +86,7 @@ impl PipelineCache {
     /// module is made.
     pub fn make_modules(&mut self, g: &Gpu) -> bool {
         let mut frame_bytes = None;
-        while self.modules_made < SHADERS {
+        while self.modules_made < SHADER_CNT {
             let code = src(self.modules_made);
             let past =
                 frame_bytes.is_some_and(|b: usize| b + code.len() > stream::MODULE_BYTES as usize);
@@ -97,7 +97,7 @@ impl PipelineCache {
             self.modules_made += 1;
             frame_bytes = Some(frame_bytes.unwrap_or(0) + code.len());
         }
-        self.modules_made == SHADERS
+        self.modules_made == SHADER_CNT
     }
 
     fn module(&self, kind: u32) -> u32 {
@@ -106,16 +106,16 @@ impl PipelineCache {
         m
     }
 
-    fn layout(&mut self, g: &Gpu, group: &'static [u32]) -> Layout {
-        let key = group.iter().fold(0xcbf29ce484222325, |k, &w| fold(k, w));
+    fn layout(&mut self, g: &Gpu, entries: &'static [u32]) -> Layout {
+        let key = entries.iter().fold(0xcbf29ce484222325, |k, &w| fold(k, w));
         if let Some(&(_, layout)) = self.layouts[..self.layout_len]
             .iter()
             .find(|(k, _)| *k == key)
         {
             return layout;
         }
-        xpute_kit::ensure!(self.layout_len < LAYOUTS, ENOSPC, LAYOUTS);
-        let layout = g.layout(group);
+        xpute_kit::ensure!(self.layout_len < LAYOUT_CAP, ENOSPC, LAYOUT_CAP);
+        let layout = g.layout(entries);
         self.layouts[self.layout_len] = (key, layout);
         self.layout_len += 1;
         layout
@@ -158,7 +158,7 @@ impl PipelineCache {
         format: Format,
         target_cnt: usize,
     ) -> Pipeline {
-        let depth = (Format::depth32float, Stencil::Unused);
+        let depth = (Format::Depth32float, Stencil::Unused);
         self.build_onto(g, id, (format, target_cnt), depth)
     }
 
@@ -210,17 +210,11 @@ impl PipelineCache {
             b.strides[lane] = words[at];
             at += 3 + 3 * words[at + 2] as usize;
         }
-        let groups = words[at] as usize;
-        at += 1;
-        for group in 0..groups {
-            let n = words[at] as usize;
-            b.layouts[group] = self.layout(g, &words[at + 1..at + 1 + 3 * n]);
-            at += 1 + 3 * n;
-        }
+        let group_cnt = self.make_layouts(g, &mut b, &words[at..]);
         let (place, word, ticket) = self.next();
         b.id = g.pipeline(
             words,
-            &b.layouts[..groups],
+            &b.layouts[..group_cnt],
             module,
             (format, targets),
             (depth, stencil),
@@ -230,25 +224,36 @@ impl PipelineCache {
         self.keep(place, key, b)
     }
 
-    /// Compute pipeline `id` (record.rs `compute`) over `group`, group 0's (binding, stages,
-    /// kind) words. It is kept under both, as a render pipeline is kept under its record and
-    /// targets, so owners that ask for the same one share it.
-    pub fn build_compute(&mut self, g: &Gpu, id: u32, group: &'static [u32]) -> Pipeline {
-        // The key starts past every render pipeline's record number, so it never starts as a
-        // render pipeline's key does.
-        let key = group
-            .iter()
-            .fold(fold(0xcbf29ce484222325, PIPELINES + id), |k, &w| fold(k, w));
+    /// Compute pipeline `id` over its one group (record.rs `compute`). It is kept under its
+    /// number, as a render pipeline is kept under its record and targets, so owners that ask
+    /// for the same one share it.
+    pub fn build_compute(&mut self, g: &Gpu, id: u32) -> Pipeline {
+        // The key is past every render pipeline's record number, so it is never a render
+        // pipeline's.
+        let key = fold(0xcbf29ce484222325, PIPELINE_CNT + id);
         if let Some(b) = self.existing(key) {
             return b;
         }
-        let (shader, entry) = compute(id);
+        let (shader, entry, _) = compute(id);
         let module = self.module(shader);
         let mut b = Pipeline::default();
-        b.layouts[0] = self.layout(g, group);
+        b.layouts[0] = self.layout(g, compute_layout(id));
         let (place, word, ticket) = self.next();
-        b.id = g.compute_pipeline(module, entry, &b.layouts[..1], (word, ticket));
+        b.id = g.compute_pipeline(module, entry, b.layouts[0], (word, ticket));
         self.keep(place, key, b)
+    }
+
+    /// Lays out `b`'s groups from `words`, the groups as a record lays them out (record.rs),
+    /// and returns how many there are.
+    fn make_layouts(&mut self, g: &Gpu, b: &mut Pipeline, words: &'static [u32]) -> usize {
+        let group_cnt = words[0] as usize;
+        let mut at = 1;
+        for group in 0..group_cnt {
+            let n = words[at] as usize;
+            b.layouts[group] = self.layout(g, &words[at + 1..at + 1 + 3 * n]);
+            at += 1 + 3 * n;
+        }
+        group_cnt
     }
 
     /// Whether every pipeline asked for is made, its fence holding its ticket:

@@ -27,6 +27,10 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
   the language makes them (its casing, a template for inlined code, what it
   already gives). A local gain alone does not weaken one. A contract changed
   on purpose is named as such, with what keeps or replaces what it held.
+- In pixelet's TypeScript, a value whose width is fixed (a field crossing the
+  link, a stored or a GPU word) takes the kit's word alias (`u32`, `i32`, `f32`)
+  to say so; any other number is `number` or `bigint`. The alias informs the
+  reader and enforces nothing.
 - A comment holds what the code cannot say: the contract, the reason, the
   invariant. It reads on its own in whole sentences, never says how the code
   came to be and never cites a minute under `doc/`.

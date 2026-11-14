@@ -171,6 +171,11 @@ first four:
    generated TypeScript's `.get<f64>()` is a cast that checks nothing
    (`cmd.spec.ts:214`). Each generator emits an exact accessor (`.u32()`,
    `.f64()`), which the TypeScript cursor needs added.
+
+   > Since 2026-11-14 (aa53a0239c): XTP's API is the April checkpoint's. The
+   > generated Rust reads each integer at its declared width, narrowing the
+   > node's integer by `TryFrom` (xpute-link `get_int`); the TypeScript takes
+   > the node's JavaScript value, the tag being its writer's compact choice.
 2. **Tiles and files in the table.** Their layouts are written by hand on each
    side: 35 positional reads in `rust/spec` and the kernel's layers, the column
    order held by a `const _: () = assert!`

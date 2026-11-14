@@ -19,12 +19,12 @@ struct RecordBuffer {
 @group(0) @binding(9) var<storage, read_write> recs: RecordBuffer;
 @group(0) @binding(11) var<storage, read> list: array<u32>;
 
-@compute @workgroup_size(LANES)
+@compute @workgroup_size(LANE_CNT)
 fn decor_thin_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let pair = list[LIST_AT + id.z];
   let brick = pair_entry(pair);
   let j = pair_decor(pair);
-  let cell_zoom = FIRST_CELL_ZOOM + brick / CLIP_ENTRIES;
+  let cell_zoom = FIRST_CELL_ZOOM + brick / CLIP_ENTRY_CNT;
   let hdr = brick * HDR_WORDS;
   let q = vec2<i32>(i32(atomicLoad(&recs.hdrs[hdr])), i32(atomicLoad(&recs.hdrs[hdr + 1u])));
   let s = LEAF_CELL_ZOOM - cell_zoom;

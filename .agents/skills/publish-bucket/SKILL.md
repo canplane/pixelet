@@ -23,8 +23,10 @@ aws configure --profile r2          # region: auto
 aws configure set endpoint_url https://<account_id>.r2.cloudflarestorage.com --profile r2
 ```
 
-`publish.py` uses that profile (`$R2`, if set, overrides its endpoint). A manual
-`aws s3 sync` also needs `AWS_REQUEST_CHECKSUM_CALCULATION=when_required`.
+`publish.py` reaches the bucket through `script/r2.py`: that profile, or a key in
+`AWS_ACCESS_KEY_ID`; the endpoint `$R2`, else the account's from
+`CLOUDFLARE_ACCOUNT_ID`, else the profile's. A manual `aws s3 sync` also needs
+`AWS_REQUEST_CHECKSUM_CALCULATION=when_required`.
 
 ## Upload
 

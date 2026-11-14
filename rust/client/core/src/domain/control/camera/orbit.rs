@@ -52,7 +52,7 @@ use crate::domain::control::camera::{camera, ease_facing, facing_dir, set_eye_wo
 use crate::domain::control::param;
 use crate::domain::control::param::DOLLY_GAIN;
 use crate::domain::control::param::{CAM_DAMP, CLIMB_RELAX_DAMP, CLIMB_RISE_DAMP, EASE_EPS_U};
-use crate::domain::control::param::{CLIMB_PASSES, COLLISION_STEP_SAMPLES};
+use crate::domain::control::param::{CLIMB_PASS_CNT, COLLISION_STEP_SAMPLE_CNT};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST, NEAREST_DIST};
 use crate::domain::query::change::Memo;
 use crate::domain::query::{finest, Hit, Ray, World};
@@ -173,7 +173,7 @@ pub(crate) fn step(delta: f64) -> bool {
     // instead of shortening the distance. The pitch rises fast and relaxes
     // slowly while the ground bounds it.
     let polar = match settings().orbit_obstacle {
-        OrbitObstacleMode::climb => climb_polar(drawn_pivot, o.dist, vs.polar, vs.azimuth),
+        OrbitObstacleMode::Climb => climb_polar(drawn_pivot, o.dist, vs.polar, vs.azimuth),
         _ => vs.polar,
     };
     let rate = match (polar < vs.polar, polar < cam.polar) {
@@ -282,7 +282,7 @@ fn eye(at: &ViewPose) -> (V3, Q3) {
 /// of this module.
 fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     let mode = settings().orbit_obstacle;
-    if mode == OrbitObstacleMode::through {
+    if mode == OrbitObstacleMode::Through {
         return *to;
     }
     if at_nearest(to) && above_pivot(to) {
@@ -291,7 +291,7 @@ fn allowed_step(to: &ViewPose, from: &ViewPose) -> ViewPose {
     let world = World::now();
     let access = Ground::of(&world);
     match mode {
-        OrbitObstacleMode::climb => climb_step(to, from, &access),
+        OrbitObstacleMode::Climb => climb_step(to, from, &access),
         _ => match way_hit(from, to, |at| *at, &access) {
             Some(t) => between(from, to, t),
             None => *to,
@@ -402,11 +402,11 @@ fn way_hit(
     }
     let (a, b) = (eye(from).0, eye(to).0);
     let moved = libm::sqrt((0..3).map(|k| (b[k] - a[k]) * (b[k] - a[k])).sum());
-    let samples = (libm::ceil(moved / 2.0) as u32).clamp(1, COLLISION_STEP_SAMPLES);
-    for i in 1..=samples {
-        let next = draw(&between(from, to, f64::from(i) / f64::from(samples)));
+    let sample_cnt = (libm::ceil(moved / 2.0) as u32).clamp(1, COLLISION_STEP_SAMPLE_CNT);
+    for i in 1..=sample_cnt {
+        let next = draw(&between(from, to, f64::from(i) / f64::from(sample_cnt)));
         if !rise_clear(&last, &next, access) {
-            return Some(f64::from(i - 1) / f64::from(samples));
+            return Some(f64::from(i - 1) / f64::from(sample_cnt));
         }
         last = next;
     }
@@ -529,7 +529,7 @@ fn climb_pose(at: ViewPose, access: &Ground<'_>) -> ViewPose {
 /// zero or negative.
 fn steepened(at: ViewPose, access: &Ground<'_>) -> ViewPose {
     let mut climbed = at;
-    for _ in 0..CLIMB_PASSES {
+    for _ in 0..CLIMB_PASS_CNT {
         let Some(rise) = climb_rise(&climbed, access) else {
             break;
         };

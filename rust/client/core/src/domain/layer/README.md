@@ -58,7 +58,7 @@ picture of the whole globe where none is held.
 What people place is one sparse octree (`object/store.rs`): each leaf an asset's
 id at its node, each branch its eight children folded. A write splits leaves
 only on its path, folds again up it and joins eight equal leaves into one, so
-one picture has one tree. A leaf of `AIR` erases what a lower layer would show.
+one picture has one tree. A leaf of air erases what a lower layer would show.
 A leaf may carry an extension, such as a marker's words, kept in a pool for its
 class of ids (pxl-spec `object/ext.rs` `class_of`) and placed and erased with
 its leaf.
@@ -89,7 +89,7 @@ which keeps four promises:
   cache otherwise; only the hard set is correctness. The slots are counted at
   compile time and asserted to hold everything that can be held hard at once,
   and for a layer that reads the view one more to land in
-  (`TileCache::SLOTS`). A tile that arrives takes a
+  (`TileCache::SLOT_CNT`). A tile that arrives takes a
   free slot, or else the farthest one nothing holds hard and the view does not
   read.
 - A region goes from unresolved to coarse to as fine as it is observed, and
@@ -119,6 +119,6 @@ same bridge. A tile's lines are vectors of its own on the heap and go with it,
 bounded as the tile is, by the slots and the bake's limit on a tile's bytes. A brick whose spans the pool cannot hold
 reads the coarser level's meanwhile, and its fill is tried again once the pool gives
 a run back; a heap that refuses a tile waits on the heap.
-A brick with a column past `way::SPANS` stays refused while a level wants it.
+A brick with a column past `way::SPAN_CAP` stays refused while a level wants it.
 Nothing of a tile is kept for a brick still to come: a brick that enters asks
 for its tile again, and the browser's cache answers.

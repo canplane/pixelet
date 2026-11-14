@@ -3,11 +3,11 @@
 //! A frame's words are laid out by link/spec/frame.json: the request's tag, its
 //! command, the result, and the packet's length. The command is the RES bit,
 //! the handle the callee issued and the method's place among its object's.
-//! The packet, the method's args in XTP, lies right past the words. The words
+//! The packet, the method's args or its answer's value in the Canonical ABI's
+//! layout (cabi.rs), lies right past the words. The words
 //! are little-endian, as both forms' memory is.
 
 use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
 
 use crate::mem::{self, set_word, word};
 
@@ -63,12 +63,12 @@ impl Frame {
 
     /// The packet of the frame laid at `at` in a room of `room` bytes; a
     /// packet past the room is EBADMSG.
-    pub fn pkt(&self, at: u32, room: u32) -> Result<Option<&'static [u8]>, MarshalError> {
+    pub fn pkt(&self, at: u32, room: u32) -> Result<Option<&'static [u8]>, Errno> {
         if self.pkt_len == 0 {
             return Ok(None);
         }
         if u64::from(WORD_BYTES) + u64::from(self.pkt_len) > u64::from(room) {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(Errno::EBADMSG);
         }
         // SAFETY: the frame's room in the guest's memory.
         Ok(Some(unsafe { mem::bytes(at + WORD_BYTES, self.pkt_len) }))

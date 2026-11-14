@@ -25,7 +25,7 @@ use pxl_engine::ground;
 use pxl_engine::object::{self, Cut, Table};
 use pxl_engine::way;
 use pxl_engine::world::{self, Inheritance};
-use pxl_spec::asset::cube::Ground;
+use pxl_spec::asset::cube::{Ground, Sentinel};
 use pxl_spec::brick::BRICK_SHIFT;
 use pxl_spec::space::layer::area;
 use pxl_spec::value;
@@ -50,7 +50,7 @@ impl AskLog {
     fn push(
         &mut self,
         (op, zoom, c): (u32, Zoom, [i32; 3]),
-        zooms: [Zoom; 2],
+        range: [Zoom; 2],
         at: [u32; 3],
         cuts: [Cut; 2],
         kind: u32,
@@ -66,7 +66,7 @@ impl AskLog {
         };
         self.asked
             .extend([op, zoom, c[0] as u32, c[1] as u32, c[2] as u32]);
-        self.asked.extend(zooms);
+        self.asked.extend(range);
         self.asked.extend(at);
         self.asked.extend(word(cuts[0]));
         self.asked.extend(word(cuts[1]));
@@ -187,9 +187,9 @@ fn tell_way(w: World, (z, c): (Zoom, [i32; 3]), seen: &mut BTreeMap<[i32; 2], u3
     let s = 1 << (LEAF_CELL_ZOOM - z);
     let column = clip::cell(&w, Lookup::NONE, z, [c[0], c[1]]).1;
     let under = (c[2] + 1) * s <= clip::column_top(column);
-    let kind = if v == value::VOID {
+    let kind = if v == Sentinel::Void as u32 {
         1
-    } else if v == value::PIER {
+    } else if v == Ground::Building as u32 {
         2
     } else if under {
         3
@@ -213,7 +213,7 @@ fn tell(
     w: World,
     before: Inheritance,
     (z, c): (Zoom, [i32; 3]),
-    zooms: [Zoom; 2],
+    range: [Zoom; 2],
     cuts: [Cut; 2],
     got: In<[u32; 2]>,
     at: Inheritance,
@@ -223,20 +223,20 @@ fn tell(
     let v = answer::val(got.asset[0]);
     let is_cell = got.kind == Kind::Cell;
     // Compares the clip level this node asks with what the node above it found.
-    let asked = clip::clip_zoom(if z >= zooms[1] { z } else { zooms[1] });
+    let asked = clip::clip_zoom(if z >= range[1] { z } else { range[1] });
     let above = before.ground;
-    if above != Lookup::NONE && asked <= z + clip::BRICK_MIPS {
+    if above != Lookup::NONE && asked <= z + clip::BRICK_MIP_LAST {
         t.add("asked coarser than above's cell", asked < above.cell_zoom());
         t.add("asked coarser than above's clip", asked < above.from());
         t.add("asked finer by 2 or more", asked >= above.cell_zoom() + 2);
     }
-    if asked > z + clip::BRICK_MIPS && !UNLAID.contains(&asked) {
+    if asked > z + clip::BRICK_MIP_LAST && !UNLAID.contains(&asked) {
         let up = asked - z;
         let g = [
             wrap_idx(asked, c[0] << up) >> BRICK_SHIFT,
             (c[1] << up) >> BRICK_SHIFT,
         ];
-        let (first, side) = (level_first(EYE, asked), 1 << (up - clip::BRICK_MIPS));
+        let (first, side) = (level_first(EYE, asked), 1 << (up - clip::BRICK_MIP_LAST));
         let d = [
             wrap_idx(brick::bricks_zoom(asked), g[0] - first[0]),
             g[1] - first[1],
@@ -248,12 +248,12 @@ fn tell(
     }
     t.add(
         "asked of a level not laid",
-        asked > z + clip::BRICK_MIPS && UNLAID.contains(&asked),
+        asked > z + clip::BRICK_MIP_LAST && UNLAID.contains(&asked),
     );
     if (MIN_ZOOM..SHARD_ZOOM).contains(&z) && got.kind == Kind::Split {
         let mut place = before.ground;
-        let coarsest = ground::coarsest(z, zooms[0]).min(zooms[1]);
-        let cells = [coarsest, zooms[1]];
+        let coarsest = ground::coarsest(z, range[0]).min(range[1]);
+        let cells = [coarsest, range[1]];
         let (b, _, here) = clip::bound_over(&w, &mut place, cells, (z, [c[0], c[1]]));
         t.add(
             "wider than a shard, all under the sea",
@@ -269,7 +269,7 @@ fn tell(
     }
     t.add(
         "past the leaves, the node 0, 0, 0, coarser than asked",
-        z >= LEAF_CELL_ZOOM && c == [0, 0, 0] && z < zooms[1],
+        z >= LEAF_CELL_ZOOM && c == [0, 0, 0] && z < range[1],
     );
     t.add("past the poles or the world's height", {
         let row = 1 << (z.max(1) - 1);
@@ -282,15 +282,15 @@ fn tell(
     });
     if got.kind != Kind::Cell && z >= MIN_ZOOM && !is_cell {
         let (mut resident, mut place) = (w, before.ground);
-        let (i, _, bound) = ground::node(&mut resident, shard, &mut place, (z, c), zooms, false);
-        let ways = way::slab(bound, [ground::coarsest(z, zooms[0]), zooms[1]]);
+        let (i, _, bound) = ground::node(&mut resident, shard, &mut place, (z, c), range, false);
+        let ways = way::slab(bound, [ground::coarsest(z, range[0]), range[1]]);
         t.add(
             "ways' span rounded to none",
             bound[0] < bound[1] && ways[0] == ways[1],
         );
         t.add(
             "ways' span rounded to none, strictly in the node",
-            bound[0] < bound[1] && ways[0] == ways[1] && ground::meets(ways, (z, c[2]), zooms[1]),
+            bound[0] < bound[1] && ways[0] == ways[1] && ground::meets(ways, (z, c[2]), range[1]),
         );
         let z_first = got.asset[1] >> 10 & 1023;
         t.add(
@@ -307,7 +307,7 @@ fn tell(
         let word = w.data(at.object.slot());
         t.add(
             "a fold of none, of a kind",
-            object::high(word) == 0 && object::low(word) != 0,
+            object::high(word) == 0 && object::low(word) != Sentinel::Void as u32,
         );
     }
     t.add("split", got.kind == Kind::Split);
@@ -315,44 +315,44 @@ fn tell(
         "split, a box short of whole",
         got.kind == Kind::Split && got.asset != answer::BOX_WHOLE,
     );
-    t.add("lack", got.kind == Kind::Lacks);
+    t.add("lack", got.kind == Kind::Lack);
     t.add("cell", is_cell);
     t.add(
         "cell, air",
-        is_cell && v == value::VOID && got.asset[0] == 0,
+        is_cell && v == Sentinel::Void as u32 && got.asset[0] == 0,
     );
     if is_cell && answer::is_placed(got.asset[0]) && z >= FIRST_CELL_ZOOM && !shard.past() {
         let (mut resident, mut place) = (w, before.ground);
-        let (i, _, _) = ground::node(&mut resident, shard, &mut place, (z, c), zooms, true);
-        t.add("cell over a lack, placed", i.kind == Kind::Lacks);
+        let (i, _, _) = ground::node(&mut resident, shard, &mut place, (z, c), range, true);
+        t.add("cell over a lack, placed", i.kind == Kind::Lack);
     }
     t.add("cell, placed", is_cell && answer::is_placed(got.asset[0]));
     t.add(
         "cell, placed air",
-        is_cell && answer::is_placed(got.asset[0]) && v == value::AIR,
+        is_cell && answer::is_placed(got.asset[0]) && v == Sentinel::Air as u32,
     );
-    t.add("cell, an object's", is_cell && value::objects(v));
+    t.add("cell, an object's", is_cell && value::is_object(v));
     let placed = is_cell && answer::is_placed(got.asset[0]);
     t.add(
         "cell, placed, the first object's",
-        placed && v == value::OBJECTS[0],
+        placed && v == value::OBJECT[0],
     );
     t.add(
         "cell, placed, the first ground's",
-        placed && v == value::GROUNDS[0],
+        placed && v == value::GROUND[0],
     );
     t.add(
         "cell, kept short of its cube",
-        is_cell && answer::fill_eighths(got.asset[0]) < 8 && v != 0,
+        is_cell && answer::fill_eighths(got.asset[0]) < 8 && v != Sentinel::Void as u32,
     );
-    t.add("cell, a way's", is_cell && value::transports(v));
-    t.add("cell, stone", is_cell && v == Ground::stone as u32);
-    t.add("cell, soil", is_cell && v == Ground::soil as u32);
-    t.add("cell, sandstone", is_cell && v == Ground::sandstone as u32);
-    t.add("cell, unknown", is_cell && v == value::UNKNOWN);
+    t.add("cell, a way's", is_cell && value::is_transport(v));
+    t.add("cell, stone", is_cell && v == Ground::Stone as u32);
+    t.add("cell, soil", is_cell && v == Ground::Soil as u32);
+    t.add("cell, sandstone", is_cell && v == Ground::Sandstone as u32);
+    t.add("cell, unknown", is_cell && v == Sentinel::Unknown as u32);
     t.add(
         "cell, coarser than asked, past the leaves",
-        is_cell && z >= LEAF_CELL_ZOOM && z < zooms[1] && v != 0,
+        is_cell && z >= LEAF_CELL_ZOOM && z < range[1] && v != Sentinel::Void as u32,
     );
     t.add(
         "cell, four differ",
@@ -365,13 +365,13 @@ fn tell(
     if z >= SHARD_ZOOM && is_cell {
         let wall = !shard.past() && area::is_wall(shard, z, [c[0], c[1]]);
         t.add("cell, on the wall", wall);
-        t.add("cell, the wall's", wall && v == value::UNKNOWN);
+        t.add("cell, the wall's", wall && v == Sentinel::Unknown as u32);
     }
     // How much of the cell the caves took, from the ground's own answer.
     if is_cell && z >= FIRST_CELL_ZOOM && !shard.past() {
         let mut resident = w;
         let mut place = before.ground;
-        let (i, _, _) = ground::node(&mut resident, shard, &mut place, (z, c), zooms, true);
+        let (i, _, _) = ground::node(&mut resident, shard, &mut place, (z, c), range, true);
         if i.kind == Kind::Cell {
             t.add("cell, some of it cave", i.asset[1] > 0 && i.asset[1] < FULL);
             t.add("cell, all of it cave", i.asset[1] >= FULL);
@@ -386,7 +386,7 @@ fn tell(
             w.pool,
             &mut plain,
             (z, c),
-            zooms,
+            range,
             [Cut::NONE; 2],
         );
         t.add("a cut changed it", without != got);

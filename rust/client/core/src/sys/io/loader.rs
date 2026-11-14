@@ -27,7 +27,7 @@ use crate::sys::manifest::mem;
 use crate::sys::io::file_spec::CATALOG;
 use crate::sys::io::request::{attempt_of, settle};
 use crate::sys::io::source;
-use crate::sys::load::{id_of, of_id, Load, LoadKind, LOAD_FILES};
+use crate::sys::load::{id_of, of_id, Load, LoadKind, LOAD_FILE_CAP};
 use crate::sys::sched::executor;
 use crate::sys::sched::{self, invalidate};
 
@@ -44,14 +44,14 @@ enum Entry {
     Failed,
 }
 
-const KINDS: usize = LoadKind::ALL.len();
+const KIND_CNT: usize = LoadKind::ALL.len();
 
 struct Loader {
     /// The entries by kind, then by number after ASSET. A row grows
     /// to the highest number asked, and an unasked number holds None. One
     /// file can be wanted as several kinds, so each kind has its own row.
-    entries: [Vec<Option<Entry>>; KINDS],
-    sphere: [Option<Entry>; KINDS],
+    entries: [Vec<Option<Entry>>; KIND_CNT],
+    sphere: [Option<Entry>; KIND_CNT],
     catalog: Option<Catalog>,
     /// Scratch for `load_wants`, so that declaring the wants every frame
     /// allocates nothing.
@@ -151,7 +151,7 @@ pub fn open_asset(key: u64, load: Load) {
     let Some((_, id)) = attempt_of(key) else { return };
     let Some((kind, _)) = of_id(id) else { return };
     // The task's pool has room for one for each file in flight
-    // (sys/load.rs `LOAD_FILES`), so the spawn cannot fail.
+    // (sys/load.rs `LOAD_FILE_CAP`), so the spawn cannot fail.
     executor::spawner().spawn(arrival(key, kind, load).or_bug(Errno::ENOSPC));
 }
 
@@ -161,9 +161,9 @@ pub fn open_asset(key: u64, load: Load) {
 /// waits on another. A file that cannot be read, absent among them, fails
 /// its load; a read its stop canceled reaches no one, and the load is asked
 /// again.
-#[embassy_executor::task(pool_size = LOAD_FILES)]
+#[embassy_executor::task(pool_size = LOAD_FILE_CAP)]
 async fn arrival(key: u64, kind: LoadKind, load: Load) {
-    let read = file::read_whole(&load.path(), mem::min_heap_bytes, Some(key), file::heap)
+    let read = file::read_whole(&load.path(), mem::MIN_HEAP_BYTES, Some(key), file::heap)
         .await
         .map(Vec::into_boxed_slice);
     let l = loader();

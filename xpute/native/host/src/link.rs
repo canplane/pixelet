@@ -21,9 +21,8 @@ use std::rc::Rc;
 
 use xpute_link::abi::types::Token;
 use xpute_link::frame::WORD_BYTES;
-use xpute_link::{Answer, Args, Handle, Layout, Method, Object, Packet, Side, Tag, TRAP};
+use xpute_link::{Answer, Args, Handle, Layout, Lower, Method, Object, Packet, Side, Tag, TRAP};
 use xpute_kit::status::errno::Errno;
-use xpute_kit::wire::xtp::PacketWriter;
 
 unsafe extern "C" {
     /// Lays the link and answers where its layout lies, or u32::MAX.
@@ -143,12 +142,12 @@ pub fn task_return(t: Tag, result: i32, data: Args) {
     if !SIDE.with(Side::crossing) {
         return SIDE.with(|s| s.task_return(t, result, Packet::Args(data)));
     }
-    let written = data.filter(|(fields, _)| *fields > 0).map(|(fields, write)| {
+    let written = data.map(|(fixed_bytes, write)| {
         let mut buf = vec![0; pkt_cap() as usize];
-        let mut w = PacketWriter::new(&mut buf, fields);
+        let mut w = Lower::new(&mut buf, fixed_bytes);
         write(&mut w);
-        let len = w.fit_len()?;
-        buf.truncate(len as usize);
+        let len = w.finish().ok()?;
+        buf.truncate(len);
         Some(buf)
     });
     let later = match written {

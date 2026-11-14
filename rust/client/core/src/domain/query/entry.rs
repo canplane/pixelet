@@ -4,7 +4,7 @@
 //! world's answer for what a player wrote, as opposed to what the assets
 //! compose to (`node.rs`).
 
-use pxl_spec::object::is_air;
+use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::zoom::Zoom;
 
@@ -21,14 +21,14 @@ impl World {
         let node = (at.zoom(), at.at());
         self.object
             .entry_at(node.0, node.1, self.object.cursor(node))
-            .filter(|e| !is_air(e.asset_id))
+            .filter(|e| e.asset_id != Sentinel::Air as u32)
     }
 
     /// Calls `visit` with everything placed whose cube meets `space`, air
     /// left out, with X on the lap of `space`.
     pub fn placed_in(&self, space: &Aabb, visit: &mut dyn FnMut(&Entry)) {
         self.object.entries_in(space, &mut |e| {
-            if !is_air(e.asset_id) {
+            if e.asset_id != Sentinel::Air as u32 {
                 visit(e);
             }
         });
@@ -61,7 +61,7 @@ impl World {
         let mut met = None;
         self.object.entries_in(&around, &mut |e| {
             if met.is_none()
-                && !is_air(e.asset_id)
+                && e.asset_id != Sentinel::Air as u32
                 && which(e)
                 && occupies(e).is_some_and(|room| room.shares(*space))
             {

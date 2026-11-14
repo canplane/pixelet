@@ -15,7 +15,13 @@
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { PointerPhase, PointerType } from "@/abi/input.ts";
+import {
+  type PointerPhase,
+  POINTER_PHASE_DOWN,
+  POINTER_PHASE_MOVE,
+  POINTER_PHASE_UP,
+  POINTER_TYPE_MOUSE,
+} from "@/abi/input.enum.ts";
 import { SETTING } from "@/abi/schema.spec.ts";
 import { perfReportText } from "./report.ts";
 import { perfReportRead } from "./view.ts";
@@ -50,7 +56,7 @@ const BUTTON = 2;
  * measuring can put them back (perf/measure.ts). */
 export const DRIVE_SETTINGS: readonly (readonly [number, number])[] = [
   [SETTING.res.key, SETTING.res.options.fixed],
-  [SETTING.shadows.key, 1],
+  [SETTING.shadow.key, 1],
   [SETTING.perf.key, 1],
   [SETTING.sky_time.key, SETTING.sky_time.options.dawn],
   [SETTING.orbit_obstacle.key, SETTING.orbit_obstacle.options.through],
@@ -67,17 +73,17 @@ export async function perfDrive(): Promise<string> {
   const tilt = TILT_SHARE * box.height;
   const [x, y] = [box.width / 2, box.height / 2];
   const pointer = (phase: PointerPhase, at: [f64, f64]) =>
-    input.pointer(phase, PointerType.Mouse, POINTER_ID, BUTTON, at[0], at[1]);
+    input.pointer(phase, POINTER_TYPE_MOUSE, POINTER_ID, BUTTON, at[0], at[1]);
   for (let n = 0; n < RUN; n++) {
     input.wheel(WHEEL);
     await wait(STEP_MS);
   }
-  pointer(PointerPhase.Down, [x, y]);
+  pointer(POINTER_PHASE_DOWN, [x, y]);
   for (let n = 1; n <= RUN; n++) {
-    pointer(PointerPhase.Move, [x, y - (tilt * n) / RUN]);
+    pointer(POINTER_PHASE_MOVE, [x, y - (tilt * n) / RUN]);
     await wait(STEP_MS);
   }
-  pointer(PointerPhase.Up, [x, y - tilt]);
+  pointer(POINTER_PHASE_UP, [x, y - tilt]);
   await wait(SETTLE_MS);
   perf.start();
   const on = (a: number): [f64, f64] => [
@@ -85,7 +91,7 @@ export async function perfDrive(): Promise<string> {
     y + RADIUS * Math.sin(a),
   ];
   const start = -Math.PI / 2;
-  pointer(PointerPhase.Down, on(start));
+  pointer(POINTER_PHASE_DOWN, on(start));
   const t0 = performance.now();
   // The sweep's place, in steps in from the farthest zoom, is computed from
   // the clock. A late frame sends every step it owes, so a fast build and a
@@ -94,7 +100,7 @@ export async function perfDrive(): Promise<string> {
   let swept = 0;
   const step = setInterval(() => {
     const ms = performance.now() - t0;
-    pointer(PointerPhase.Move, on(start + (ms / 1000 / TURN_S) * 2 * Math.PI));
+    pointer(POINTER_PHASE_MOVE, on(start + (ms / 1000 / TURN_S) * 2 * Math.PI));
     const part = (ms % leg) / leg;
     const steps = RUN * (Math.floor(ms / leg) % 2 ? 1 - part : part);
     input.wheel((swept - steps) * WHEEL);
@@ -102,6 +108,6 @@ export async function perfDrive(): Promise<string> {
   }, STEP_MS);
   await wait(DRIVE_S * 1000);
   clearInterval(step);
-  pointer(PointerPhase.Up, on(start));
+  pointer(POINTER_PHASE_UP, on(start));
   return perfReportText(await perfReportRead());
 }

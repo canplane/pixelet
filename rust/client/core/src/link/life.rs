@@ -5,7 +5,8 @@
 
 use core::future::poll_fn;
 use core::task::{Poll, Waker};
-use std::cell::Cell;
+
+use pxl_global::Global;
 
 use crate::domain::control::sensor::device_orientation;
 use crate::domain::control::sensor::geolocation;
@@ -18,33 +19,42 @@ pub(super) fn on_hidden() {
     repository::save();
 }
 
-thread_local! {
-    /// How many times the app has been shown, and what awaits the next.
-    static SHOWN: Cell<u32> = const { Cell::new(0) };
-    static WAKER: Cell<Option<Waker>> = const { Cell::new(None) };
+/// How many times the app has been shown, and what awaits the next.
+#[derive(Default)]
+struct Shown {
+    cnt: u32,
+    waker: Option<Waker>,
+}
+
+static SHOWN: Global<Shown> = Global::new();
+
+fn shown() -> &'static mut Shown {
+    SHOWN.get(Shown::default)
 }
 
 pub(super) fn on_shown() {
     geolocation::geolocation_visibility(true);
     device_orientation::orient_visible();
-    SHOWN.set(SHOWN.get().wrapping_add(1));
-    if let Some(w) = WAKER.take() {
+    let s = shown();
+    s.cnt = s.cnt.wrapping_add(1);
+    if let Some(w) = s.waker.take() {
         w.wake();
     }
 }
 
 /// How many times the app has been shown so far, for `shown_after`.
-pub(super) fn shows() -> u32 {
-    SHOWN.get()
+pub(super) fn show_cnt() -> u32 {
+    shown().cnt
 }
 
-/// Waits until the app has been shown since `shows` answered `since`.
+/// Waits until the app has been shown since `show_cnt` answered `since`.
 pub(super) async fn shown_after(since: u32) {
     poll_fn(|cx| {
-        if SHOWN.get() != since {
+        let s = shown();
+        if s.cnt != since {
             return Poll::Ready(());
         }
-        WAKER.set(Some(cx.waker().clone()));
+        s.waker = Some(cx.waker().clone());
         Poll::Pending
     })
     .await;

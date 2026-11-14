@@ -6,9 +6,9 @@
 //! tokens, and opened by the root's `open` to a handle the serving side
 //! issues. A frame is one method called: its
 //! tag the request, unique among the sender's pending ones, its command the
-//! handle, the method and a RES bit (frame.rs), its packet the args in XTP. A
-//! frame crosses one way through one function, `link_out` from the guest and
-//! `link_in` into it, and each crossing returns at once what the method came
+//! handle, the method and a RES bit (frame.rs), its packet the args in the
+//! Canonical ABI's layout (cabi.rs). A frame crosses one way through one
+//! function, `link_out` from the guest and `link_in` into it, and each crossing returns at once what the method came
 //! to: its result, or EINPROGRESS for one that answers later, by a frame marked
 //! RES with the request's tag. So each side has the same ways:
 //!
@@ -46,8 +46,7 @@ use std::rc::Rc;
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{BranchCursor, PacketWriter, TreeReader};
+use crate::cabi::{Lift, Lower};
 
 use crate::abi::types::Token;
 use crate::frame::{Frame, WORD_BYTES};
@@ -81,7 +80,7 @@ pub use crate::frame::spec::{CANCEL, DROP, NAMED, OPEN, ROOT};
 /// An object a side serves: given a method, the request's tag, for a later
 /// answer (`task_return`), and the args, it answers.
 pub trait Object {
-    fn call(&self, m: Method, tag: Tag, args: Option<BranchCursor<'_>>) -> Reply;
+    fn call(&self, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply;
 }
 
 /// What answers an async method's request once the method has its value, and
@@ -115,8 +114,8 @@ impl<T> Return<T> {
 /// What opens the object a URI names, given the handle it is issued.
 type Opener = dyn Fn(&[Token], Handle) -> Result<Rc<dyn Object>, Errno>;
 
-/// What a method answers: its result, a status or a value, and its return
-/// data, written once its args are read.
+/// What a method answers: its result, a status, and its return data, its
+/// value, written once its args are read.
 pub struct Reply {
     pub result: i32,
     pub data: Data,
@@ -128,17 +127,17 @@ impl From<i32> for Reply {
     }
 }
 
-/// Return data, owned until it is written: how many fields, and what writes
-/// them. None, or no fields, is no packet.
-pub type Data = Option<(u32, Box<dyn Fn(&mut PacketWriter)>)>;
+/// Return data, owned until it is written: its fixed part's size, and what
+/// writes it (`Lower`). None is no packet.
+pub type Data = Option<(usize, Box<dyn Fn(&mut Lower)>)>;
 
 /// What hears a sent method's answer: its result, and a copy of its return
 /// data, which it owns.
 pub type Answer = Box<dyn FnOnce(i32, Option<Vec<u8>>)>;
 
-/// A method's args: how many fields, and what writes them. None, or no
-/// fields, is no packet.
-pub type Args<'a> = Option<(u32, &'a dyn Fn(&mut PacketWriter))>;
+/// A method's args: their fixed part's size, and what writes them (`Lower`).
+/// None is no packet.
+pub type Args<'a> = Option<(usize, &'a dyn Fn(&mut Lower))>;
 
 /// A frame's packet: its args, written as the frame is laid, or a packet
 /// written already, as one the UI sent (link.ts `Packet`).
@@ -262,10 +261,14 @@ impl Side {
     /// Opens the object `uri` names on the other side, and answers its
     /// handle.
     pub fn open(&self, uri: &[Token]) -> Result<Handle, Errno> {
-        let write = |w: &mut PacketWriter| {
-            w.branch(uri.len() as u32, |w| uri.iter().for_each(|t| t.write(w)));
+        let write = |w: &mut Lower| {
+            if let Some(base) = w.list(0, uri.len(), Token::SZ, Token::ALIGN) {
+                uri.iter().enumerate().for_each(|(k, t)| t.store(w, base + k * Token::SZ));
+            }
         };
-        answer(self.call(ROOT, OPEN, Packet::Args(Some((1, &write)))).0)
+        let (result, data) = self.call(ROOT, OPEN, Packet::Args(Some((8, &write))));
+        answer(result)?;
+        Lift::new(data.ok_or(Errno::EBADMSG)?).u32(0)
     }
 
     /// Lets the object `h` names on the other side go.
@@ -305,10 +308,8 @@ impl Side {
     /// its answer still comes, and is heard as any other (`CANCEL`).
     pub fn cancel(&self, t: Tag) {
         if self.pending.borrow().contains_key(&t) {
-            let write = |w: &mut PacketWriter| {
-                w.u32(Some(t));
-            };
-            self.send(ROOT, CANCEL, Packet::Args(Some((1, &write))), None);
+            let write = |w: &mut Lower| w.u32(0, t);
+            self.send(ROOT, CANCEL, Packet::Args(Some((4, &write))), None);
         }
     }
 
@@ -340,15 +341,12 @@ impl Side {
             }
             return 0;
         }
-        let reply = match pkt.and_then(args_of) {
+        let reply = match pkt {
             Ok(args) => self.serve(f.handle, f.method, f.tag, args),
-            Err(e) => Reply::from(e.errnum as i32),
+            Err(e) => Reply::from(e as i32),
         };
         // The args are read: the answer goes in the frame they came in.
-        let data = reply
-            .data
-            .as_ref()
-            .map(|(n, w)| (*n, &**w as &dyn Fn(&mut PacketWriter)));
+        let data = reply.data.as_ref().map(|(n, w)| (*n, &**w as &dyn Fn(&mut Lower)));
         let words = Frame {
             res: true,
             result: reply.result,
@@ -386,24 +384,22 @@ impl Side {
 
     /// Runs `m` of `h`: the root's open or cancel, a drop, or an object's
     /// method.
-    fn serve(&self, h: Handle, m: Method, tag: Tag, args: Option<BranchCursor<'_>>) -> Reply {
+    fn serve(&self, h: Handle, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply {
         match (h, m) {
-            (ROOT, OPEN) => Reply::from(self.opened(args).map_or_else(|e| e as i32, |h| h as i32)),
-            (ROOT, CANCEL) => {
-                let t = args
-                    .ok_or(MarshalError::new(Errno::EBADMSG))
-                    .and_then(|b| b.at(0)?.get_number());
-                match t {
-                    Ok(t) => {
-                        let stop = self.cancels.borrow_mut().remove(&(t as Tag));
-                        if let Some(stop) = stop {
-                            stop();
-                        }
-                        Reply::from(0)
+            (ROOT, OPEN) => match self.opened(args) {
+                Ok(h) => Reply { result: 0, data: Some((4, Box::new(move |w: &mut Lower| w.u32(0, h)))) },
+                Err(e) => Reply::from(e as i32),
+            },
+            (ROOT, CANCEL) => match args.ok_or(Errno::EBADMSG).and_then(|p| Lift::new(p).u32(0)) {
+                Ok(t) => {
+                    let stop = self.cancels.borrow_mut().remove(&t);
+                    if let Some(stop) = stop {
+                        stop();
                     }
-                    Err(e) => Reply::from(e.errnum as i32),
+                    Reply::from(0)
                 }
-            }
+                Err(e) => Reply::from(e as i32),
+            },
             (_, DROP) => match self.objects.borrow_mut().remove(h) {
                 Some(_) => Reply::from(0),
                 None => Reply::from(Errno::EBADF as i32),
@@ -426,16 +422,10 @@ impl Side {
 
     /// Opens the object the args' URI names, by the opener of its longest
     /// matching mount, and issues its handle.
-    fn opened(&self, args: Option<BranchCursor<'_>>) -> Result<Handle, Errno> {
-        let uri = args
-            .ok_or(MarshalError::new(Errno::EBADMSG))
-            .and_then(|b| b.at(0)?.as_branch())
-            .and_then(|b| {
-                b.iter()
-                    .map(|c| Token::read(c?))
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .map_err(|e| e.errnum)?;
+    fn opened(&self, args: Option<&[u8]>) -> Result<Handle, Errno> {
+        let r = Lift::new(args.ok_or(Errno::EBADMSG)?);
+        let (base, len) = r.list(0, Token::SZ, Token::ALIGN)?;
+        let uri = (0..len).map(|k| Token::load(r, base + k * Token::SZ)).collect::<Result<Vec<_>, _>>()?;
         let open = self
             .mounts
             .borrow()
@@ -480,14 +470,14 @@ impl Side {
                 unsafe { mem::bytes(at + WORD_BYTES, b.len() as u32) }.copy_from_slice(b);
                 b.len() as u32
             }
-            Packet::Args(Some((fields, write))) if fields > 0 => {
+            Packet::Args(Some((fixed_bytes, write))) => {
                 // SAFETY: the frame's room past its words, which only `lay` writes.
                 let room = unsafe { mem::bytes(at + WORD_BYTES, room - WORD_BYTES) };
-                let mut w = PacketWriter::new(room, fields);
+                let mut w = Lower::new(room, fixed_bytes);
                 write(&mut w);
-                w.fit_len().ok_or(Errno::EMSGSIZE)?
+                w.finish()? as u32
             }
-            _ => 0,
+            Packet::Args(None) => 0,
         };
         Frame { pkt_len, ..words }.lay(at);
         Ok(())
@@ -551,14 +541,12 @@ pub fn uri(names: &[&str]) -> Vec<Token> {
 /// guest is over, and its host enters it no more.
 pub const TRAP: i32 = i32::MIN;
 
-/// A method's result as its value, or the errno it refused with.
-pub fn answer(result: i32) -> Result<u32, Errno> {
-    match u32::try_from(result) {
-        Ok(v) => Ok(v),
-        Err(_) => Err(Errno::of(result).or_bug(Errno::EPROTO)),
+/// A method's result, its status: answered, or the errno it failed with (a
+/// refusal, or a method's errno where its WIT has no `result`). Its value, if
+/// it has one, is in its return data.
+pub fn answer(result: i32) -> Result<(), Errno> {
+    match result {
+        0 => Ok(()),
+        _ => Err(Errno::of(result).or_bug(Errno::EPROTO)),
     }
-}
-
-fn args_of(pkt: Option<&'static [u8]>) -> Result<Option<BranchCursor<'static>>, MarshalError> {
-    pkt.map(|p| TreeReader::new(p)?.read_branch()).transpose()
 }

@@ -43,7 +43,7 @@ fn unfollowable_decl_refused() {
         // One declaration gives terrain a format past the one this client reads,
         // and another gives the Earth no format.
         let mut unread = f.clone();
-        unread[BaseLayer::terrain as usize] += 1;
+        unread[BaseLayer::Terrain as usize] += 1;
         let short = &f[..f.len() - 1];
         assert!(parse(4, &unread, []).is_none(), "an unread format");
         assert!(parse(4, short, []).is_none(), "a kind with no format");

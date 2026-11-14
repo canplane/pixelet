@@ -17,7 +17,7 @@ pub enum Ext {
 impl Ext {
     pub fn class(&self) -> Class {
         match self {
-            Ext::MarkerText(_) => Class::marker_text,
+            Ext::MarkerText(_) => Class::MarkerText,
         }
     }
 }

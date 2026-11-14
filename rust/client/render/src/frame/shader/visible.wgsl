@@ -5,7 +5,7 @@
 // takes the voxel's cell where it enters the voxel's box through a side the box draws, one some
 // ray entered it through (pxl-engine `raster::accepts`). That test is made again here, exactly,
 // because a GPU's f32 may part the raster from pxl-engine's test (`cast::entry`,
-// `fill_bounds`). The ray takes the sky where the samples around it each went on to their
+// `fill_bound`). The ray takes the sky where the samples around it each went on to their
 // reach. Any other ray is a hole, listed for the holes' queue (queue.wgsl). Each observer
 // counts what its rays took.
 
@@ -14,7 +14,7 @@
 /// (`MISS_ARGS_CNTS`). build.rs checks this struct's size against pxl-engine's.
 struct MissCount {
   cnt: atomic<u32>,
-  cnts: array<atomic<u32>, CNT_RAYS>,
+  cnts: array<atomic<u32>, CNT_RAY_CNT>,
 }
 
 /// Where a ray enters its visible voxel's cell, the axis it enters across, and whether it
@@ -27,7 +27,7 @@ struct Entry {
 
 /// Where the ray `aim` enters the cell of the node at `zoom` and `corner`, in the root `roots`
 /// counted from the origin's. The cell is inset to the share its `fill` keeps (pxl-engine
-/// `cast::asset_box`, `fill_bounds`). The ray must enter through one of the sides in `faces`,
+/// `cast::asset_box`, `fill_bound`). The ray must enter through one of the sides in `faces`,
 /// the sides the box draws (pxl-engine `raster::faces`, `ray::face`).
 fn visible_cell(aim: Aim, zoom: u32, corner: vec3<u32>, roots: vec3<i32>, fill: u32, faces: u32) -> Entry {
   let dir = ray_dir(aim.dir);

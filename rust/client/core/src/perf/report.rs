@@ -13,7 +13,7 @@ use xpute_guest::clock::now;
 
 use crate::domain::layer::Base;
 use crate::domain::scene::stage::FrameReport;
-use crate::perf::frame::{DeviceSample, FrameSample, GpuSample, RaySample, EFFECTS};
+use crate::perf::frame::{DeviceSample, FrameSample, GpuSample, RaySample, EFFECT_CNT};
 use crate::perf::record::{
     perf_fold_recording, perf_record_frame, perf_record_gpu, perf_record_rays, perf_recording,
     RayRead,
@@ -36,7 +36,7 @@ struct RendererFrame {
 impl Default for RendererFrame {
     fn default() -> Self {
         RendererFrame {
-            kind: FrameKind::none,
+            kind: FrameKind::None,
             gpu: GpuSample::default(),
             device: DeviceSample::default(),
             gpu_read: None,
@@ -63,7 +63,7 @@ pub fn set_renderer_frame(report: &FrameReport) {
         });
         return;
     };
-    let [draws, triangles] = stat
+    let [draw_cnt, triangle_cnt] = stat
         .draw_stat
         .iter()
         .fold([0.0; 2], |[d, t], c| [d + c[0], t + c[1]]);
@@ -71,16 +71,16 @@ pub fn set_renderer_frame(report: &FrameReport) {
         kind,
         gpu: GpuSample {
             scale,
-            draws,
-            triangles,
+            draw_cnt,
+            triangle_cnt,
             frame: stat.frame,
             light_changed: stat.light_changed,
-            decor_rects: stat.decor_rects,
+            decor_rect_cnt: stat.decor_rect_cnt,
             ..GpuSample::default()
         },
         device: DeviceSample {
-            uploads: stat.uploads,
-            uploads_bytes: stat.upload_bytes,
+            upload_cnt: stat.upload_cnt,
+            upload_bytes: stat.upload_bytes,
             pack_bytes: stat.pack_bytes,
         },
         gpu_read: stat.gpu,
@@ -96,15 +96,15 @@ pub fn set_renderer_frame(report: &FrameReport) {
 /// a count starts it again from zero.
 fn peaks(h: &HeapStat) -> RecordingSection {
     RecordingSection {
-        frames: 1.0,
+        frame_cnt: 1.0,
         heap_live_max_bytes: h.live as f64,
         heap_run_max_bytes: h.run as f64,
         heap_slot_max_bytes: h.slot as f64,
         heap_range_max_bytes: h.range as f64,
         heap_largest_free_min_bytes: h.largest_free as f64,
-        heap_refusals: f64::from(h.refusals),
+        heap_refusal_cnt: f64::from(h.refusals),
         body_slots_peak: f64::from(body::take_peak()),
-        terrain_refusals: TerrainTile::tile_cache().take_refusals() as f64,
+        terrain_refusal_cnt: TerrainTile::tile_cache().take_refusal_cnt() as f64,
     }
 }
 
@@ -120,7 +120,7 @@ pub struct CpuSample {
     pub settled: bool,
     pub effects_ms: f64,
     /// Each effect's time in the frame, by `EffectName`.
-    pub effects: [f64; EFFECTS],
+    pub effects: [f64; EFFECT_CNT],
     pub stage_ms: f64,
 }
 
@@ -132,7 +132,7 @@ pub fn perf_frame(t: CpuSample) {
     // a recording that starts later counts from its own start.
     let heap = heap::stat();
     let section = peaks(&heap);
-    let terrain_loads = f64::from(TerrainTile::tile_cache().take_loads());
+    let terrain_load_cnt = f64::from(TerrainTile::tile_cache().take_load_cnt());
     let renderer = core::mem::take(RENDERER.get(RendererFrame::default));
     if !perf_recording() {
         return;
@@ -159,7 +159,7 @@ pub fn perf_frame(t: CpuSample) {
         effects: t.effects,
         kind: f64::from(renderer.kind as u8),
         gpu: renderer.gpu,
-        terrain_loads,
+        terrain_load_cnt,
         device: renderer.device,
         heap_used_bytes: heap.peak as f64,
         // The interval's figures come later: its frames' as each ends, and its

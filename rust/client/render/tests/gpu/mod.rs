@@ -372,7 +372,7 @@ impl Gpu {
         );
         let head = ray::queue_at(queue_no);
         let pipeline = |id| {
-            let (shader, entry) = compute(id);
+            let (shader, entry, _) = compute(id);
             self.pipeline(src(shader), entry)
         };
         let take = |keep: &[u32]| {
@@ -405,14 +405,14 @@ impl Gpu {
                 }
             }
         }
-        let groups = [ray::QUEUE_GROUPS, 1, 1];
+        let groups = [ray::QUEUE_GROUP_CNT, 1, 1];
         let word = |w: u32| u64::from(w) * 4;
         // The asks are counted in their observer's lane, which the asks' module reads off
         // the queue it is bound to (ask_run.wgsl). The other observer's stays as it was.
         let other_asked = (if queue_no >= ray::QUEUE_LIGHT_CORNERS {
-            node_cache::lane_at(count::EYE, count::ASKS)
+            node_cache::lane_at(count::EYE, count::ASK)
         } else {
-            node_cache::lane_at(count::LIGHT, count::ASKS)
+            node_cache::lane_at(count::LIGHT, count::ASK)
         }) as usize;
         // Both observers count, as a frame that casts for the eye and the light does.
         self.queue
@@ -482,7 +482,7 @@ pub fn list_every(words: &mut [u32], size: u32, which: u32, per: u32) -> [u32; 2
     let threads = across * across * per * per;
     [
         light::LIST_ACROSS,
-        threads.div_ceil(light::LIST_ACROSS * light::LIST_LANES),
+        threads.div_ceil(light::LIST_ACROSS * light::LIST_LANE_CNT),
     ]
 }
 
@@ -510,7 +510,7 @@ pub fn lay_entry(
 ) {
     let e = node_cache::entry_at(slot) as usize;
     let zooms = n.zoom | n.zoom << pxl_engine::ZOOM_BITS;
-    cache[node_cache::key_at(slot) as usize] = node_cache::PASSES | zooms << node_cache::TAG_BITS;
+    cache[node_cache::key_at(slot) as usize] = node_cache::PASS_CNT | zooms << node_cache::TAG_BITS;
     cache[e + node_cache::W_KIND as usize] = kind as u32;
     cache[e + node_cache::W_ASSET as usize] = asset[0];
     cache[e + node_cache::W_ASSET as usize + 1] = asset[1];

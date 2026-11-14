@@ -24,12 +24,12 @@ fn face_of(aim: Aim, w: WalkEnd) -> u32 {
 /// How many eighths of its cube the cell a walk stopped at keeps, with 0 for the whole cube
 /// (`answer::FILL_SHIFT`).
 fn hit_fill(w: WalkEnd) -> u32 {
-  return (w.asset.x >> FILL_SHIFT) & (EIGHTHS - 1u);
+  return (w.asset.x >> FILL_SHIFT) & (EIGHTH_CNT - 1u);
 }
 
 /// Puts the stop of walk `w` at pixel `id` as stop `r`, which the record takes (`keep_hit`,
 /// `beam::HIT_WORDS`, record_hits.wgsl). The ray entered through `face`, which has
-/// `beam::HIT_LACKS` set where the stop lacks. The stop holds its node, the asset it stopped
+/// `beam::HIT_LACK` set where the stop lacks. The stop holds its node, the asset it stopped
 /// at, and the line its observer gives it (hole.eye.wgsl, hole.light.wgsl `hit_line`).
 fn hit_put(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) {
   let k = hit_at(r);

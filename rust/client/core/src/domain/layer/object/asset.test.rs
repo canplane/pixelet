@@ -29,11 +29,11 @@ fn past_the_catalog() {
         let id_of = |kind: Kind, n: u32| (kind as u32) << IDX_BITS | n;
         let past = (1 << IDX_BITS) - 1;
         for id in [
-            Sentinel::void as AssetId,
-            Sentinel::unknown as AssetId,
-            Sentinel::air as AssetId,
-            id_of(Kind::cube, past),
-            id_of(Kind::decor, past),
+            Sentinel::Void as AssetId,
+            Sentinel::Unknown as AssetId,
+            Sentinel::Air as AssetId,
+            id_of(Kind::Cube, past),
+            id_of(Kind::Decor, past),
             // A kind the layout does not give out.
             3 << IDX_BITS,
             u32::MAX,

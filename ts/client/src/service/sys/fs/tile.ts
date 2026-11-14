@@ -11,8 +11,8 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import {
-  type BaseLayer,
   tileObject,
+  type BASE_LAYERS,
 } from "@/service/origin/publication.spec.ts";
 import { tile_url } from "@/service/origin/route.ts";
 import { get } from "@/service/sys/fs/read.ts";
@@ -24,7 +24,7 @@ import type { Declaration } from "@/service/sys/fs/source.ts";
  * declares a version of the Earth (pxl-geo-bake source.rs). */
 export function version_of(
   d: Declaration,
-  kind: keyof typeof BaseLayer,
+  kind: (typeof BASE_LAYERS)[number],
   name: string,
 ): string {
   let finest: [number, string] | null = null;
@@ -42,7 +42,7 @@ export function version_of(
 
 export function read_object(
   decl: Declaration,
-  kind: keyof typeof BaseLayer,
+  kind: (typeof BASE_LAYERS)[number],
   name: string,
   signal: AbortSignal,
 ): Promise<U8Array> {

@@ -6,5 +6,5 @@ import { ChatLog } from "./chat-log.tsx";
 export function Corner() {
   const debug = useDebugWindow();
   if (debug) return <DebugWindow />;
-  return __IS_DEV__ && <ChatLog />;
+  return __DEV__ && <ChatLog />;
 }

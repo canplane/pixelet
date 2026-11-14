@@ -1,7 +1,7 @@
 // pxl-render/renderer.test.rs
 
 use super::*;
-use crate::frame::shader::record::{reads_shadow_map, SHADERS};
+use crate::frame::shader::record::{reads_shadow_map, SHADER_CNT};
 use crate::frame::shader::record::{
     PIPELINE_DEBUG, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER,
 };
@@ -19,7 +19,7 @@ fn the_renderer_makes_every_group_as_its_layout_lays_it_out() {
     api::install_apart(device);
     let g = gpu().or_bug(Errno::ENODEV);
     let mut pipelines = PipelineCache::new();
-    let made = (0..SHADERS).any(|_| pipelines.make_modules(g));
+    let made = (0..SHADER_CNT).any(|_| pipelines.make_modules(g));
     assert!(
         made,
         "every module is made in as many frames as there are shaders"

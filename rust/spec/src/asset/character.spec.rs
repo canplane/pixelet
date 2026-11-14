@@ -7,15 +7,8 @@
 // asset/content/, how tall it stands and which clip is its move. What a
 // path is, its number and its extent, is the catalog's (pxl_spec::asset::catalog).
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    non_camel_case_types,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 /// The groups a character is of, each numbered, and in each its variants,
 /// each numbered by its row, row for row with its models, the colormap its pack
@@ -25,21 +18,21 @@
 pub enum Group {
     /// The people a player can be, each by its row, the number the settings store
     /// persists. One pack, so one colormap.
-    person = 0,
+    Person = 0,
     /// The pets a player's companion can be, each by its row, the number the settings store
     /// persists. One pack, so one colormap.
-    pet = 1,
+    Pet = 1,
 }
 
 impl Group {
     /// Every member, in its source's own order.
-    pub const ALL: [Group; 2] = [Group::person, Group::pet];
+    pub const ALL: [Group; 2] = [Group::Person, Group::Pet];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<Group> {
         match val {
-            0 => Some(Group::person),
-            1 => Some(Group::pet),
+            0 => Some(Group::Person),
+            1 => Some(Group::Pet),
             _ => None,
         }
     }
@@ -47,34 +40,34 @@ impl Group {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            Group::person => "person",
-            Group::pet => "pet",
+            Group::Person => "person",
+            Group::Pet => "pet",
         }
     }
 }
 
-pub mod groups {
+pub mod group {
     /// The people a player can be, each by its row, the number the settings store
     /// persists. One pack, so one colormap.
     pub mod person {
         /// World units tall — one cell.
-        pub const size: f64 = 1.0;
+        pub const SIZE: f64 = 1.0;
         /// Each variant's gender (`GENDER`), row for row with its models.
-        pub const gender: [u8; 12] = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1];
-        pub const models: [u16; 12] = [28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39];
-        pub const skin: u16 = 40;
+        pub const GENDER: [u8; 12] = [0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1];
+        pub const MODELS: [u16; 12] = [28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39];
+        pub const SKIN: u16 = 40;
         /// The catch-up move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".
-        pub const move_clip: u32 = 3;
+        pub const MOVE_CLIP: u32 = 3;
     }
     /// The pets a player's companion can be, each by its row, the number the settings store
     /// persists. One pack, so one colormap.
     pub mod pet {
         /// World units tall — a quarter cell, the step the object tiers also take.
-        pub const size: f64 = 0.25;
+        pub const SIZE: f64 = 0.25;
         /// Each pet's name, the one every locale shows (an item has one name), row for row with its models.
-        pub const label: &[&str] = &[
+        pub const LABEL: &[&str] = &[
             "Beaver",
             "Bee",
             "Bunny",
@@ -100,15 +93,15 @@ pub mod groups {
             "Polar Bear",
             "Tiger",
         ];
-        pub const models: [u16; 24] = [
+        pub const MODELS: [u16; 24] = [
             41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
             63, 64,
         ];
-        pub const skin: u16 = 65;
+        pub const SKIN: u16 = 65;
         /// The catch-up move's clip, by its index in the pack's animations —
         /// every file of a pack lists them in one order, and Kenney doesn't name this
         /// "walk" consistently: the person's is "sprint", the pet's "run".
-        pub const move_clip: u32 = 3;
+        pub const MOVE_CLIP: u32 = 3;
     }
 }
 
@@ -120,19 +113,19 @@ pub const IDLE_CLIP: u32 = 1;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Gender {
-    female = 0,
-    male = 1,
+    Female = 0,
+    Male = 1,
 }
 
 impl Gender {
     /// Every member, in its source's own order.
-    pub const ALL: [Gender; 2] = [Gender::female, Gender::male];
+    pub const ALL: [Gender; 2] = [Gender::Female, Gender::Male];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<Gender> {
         match val {
-            0 => Some(Gender::female),
-            1 => Some(Gender::male),
+            0 => Some(Gender::Female),
+            1 => Some(Gender::Male),
             _ => None,
         }
     }
@@ -140,8 +133,8 @@ impl Gender {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            Gender::female => "female",
-            Gender::male => "male",
+            Gender::Female => "female",
+            Gender::Male => "male",
         }
     }
 }

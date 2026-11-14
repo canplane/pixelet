@@ -332,16 +332,16 @@ template <class Alloc> void walk(PacketWriter &w, const Node<Alloc> &n) {
     case NodeKind::array:
         if (!n.present) {
             switch (static_cast<SequenceType>(n.type)) {
-            case SequenceType::u8_array: w.u8_array(std::nullopt); return;
-            case SequenceType::i8_array: w.i8_array(std::nullopt); return;
-            case SequenceType::u16_array: w.u16_array(std::nullopt); return;
-            case SequenceType::i16_array: w.i16_array(std::nullopt); return;
-            case SequenceType::u32_array: w.u32_array(std::nullopt); return;
-            case SequenceType::i32_array: w.i32_array(std::nullopt); return;
-            case SequenceType::u64_array: w.u64_array(std::nullopt); return;
-            case SequenceType::i64_array: w.i64_array(std::nullopt); return;
-            case SequenceType::f32_array: w.f32_array(std::nullopt); return;
-            default: w.f64_array(std::nullopt); return;
+            case SequenceType::u8_array: w.template array<std::uint8_t>(std::nullopt); return;
+            case SequenceType::i8_array: w.template array<std::int8_t>(std::nullopt); return;
+            case SequenceType::u16_array: w.template array<std::uint16_t>(std::nullopt); return;
+            case SequenceType::i16_array: w.template array<std::int16_t>(std::nullopt); return;
+            case SequenceType::u32_array: w.template array<std::uint32_t>(std::nullopt); return;
+            case SequenceType::i32_array: w.template array<std::int32_t>(std::nullopt); return;
+            case SequenceType::u64_array: w.template array<std::uint64_t>(std::nullopt); return;
+            case SequenceType::i64_array: w.template array<std::int64_t>(std::nullopt); return;
+            case SequenceType::f32_array: w.template array<float>(std::nullopt); return;
+            default: w.template array<double>(std::nullopt); return;
             }
         }
         switch (static_cast<SequenceType>(n.type)) {

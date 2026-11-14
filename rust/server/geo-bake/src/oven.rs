@@ -38,10 +38,10 @@ struct Row {
 /// None for a kind the oven does not bake, which is the Earth's picture.
 fn row(kind: BaseLayer) -> Option<Row> {
     let (sources, execute): (fn(Quadrant) -> Vec<Quadrant>, _) = match kind {
-        BaseLayer::terrain => (TerrainTile::sources, terrain::execute as _),
-        BaseLayer::place => (PlaceTile::sources, place::execute as _),
-        BaseLayer::division => (DivisionTile::sources, division::execute as _),
-        BaseLayer::earth => return None,
+        BaseLayer::Terrain => (TerrainTile::sources, terrain::execute as _),
+        BaseLayer::Place => (PlaceTile::sources, place::execute as _),
+        BaseLayer::Division => (DivisionTile::sources, division::execute as _),
+        BaseLayer::Earth => return None,
     };
     Some(Row {
         kind,

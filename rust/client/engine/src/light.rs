@@ -288,7 +288,7 @@ impl Light {
     /// none of what moved there (`Column`).
     pub fn reaches(&self, size: u32, range: [Zoom; 2], tile: [u32; 2], column: Column) -> bool {
         let band = self.band(size, range, [tile[0] as i32, tile[1] as i32]);
-        if band < column.bands[0] || band > column.bands[1] {
+        if band < column.band_range[0] || band > column.band_range[1] {
             return false;
         }
         let column = column.at;
@@ -427,7 +427,7 @@ pub fn column_of(origin: [i32; 3], zoom: Zoom, lo: [i32; 2], hi: [i32; 2]) -> [f
 #[derive(Clone, Copy, Debug)]
 pub struct Column {
     pub at: [f32; 4],
-    pub bands: [Zoom; 2],
+    pub band_range: [Zoom; 2],
 }
 
 impl Column {
@@ -435,12 +435,12 @@ impl Column {
     pub const fn every_band(at: [f32; 4]) -> Column {
         Column {
             at,
-            bands: [0, Zoom::MAX],
+            band_range: [0, Zoom::MAX],
         }
     }
 
     /// Takes `c` in, so that it holds both, every column and band of either, as the head's last
-    /// column holds the columns past its room (`COLUMNS`).
+    /// column holds the columns past its room (`COLUMN_CAP`).
     pub fn hold(&mut self, c: Column) {
         self.at = [
             self.at[0].min(c.at[0]),
@@ -448,7 +448,10 @@ impl Column {
             self.at[2].max(c.at[2]),
             self.at[3].max(c.at[3]),
         ];
-        self.bands = [self.bands[0].min(c.bands[0]), self.bands[1].max(c.bands[1])];
+        self.band_range = [
+            self.band_range[0].min(c.band_range[0]),
+            self.band_range[1].max(c.band_range[1]),
+        ];
     }
 }
 
@@ -487,24 +490,24 @@ pub fn brick_columns(
     if absent == 4 {
         return put(Column {
             at: whole,
-            bands: [first, Zoom::MAX],
+            band_range: [first, Zoom::MAX],
         });
     }
     put(Column {
         at: whole,
-        bands: [first, cell_zoom],
+        band_range: [first, cell_zoom],
     });
     if absent != 0 {
         put(Column {
             at: at(cell_zoom + 1, lo, hi),
-            bands: [cell_zoom + 1, Zoom::MAX],
+            band_range: [cell_zoom + 1, Zoom::MAX],
         });
     }
 }
 
 /// How many changed columns a cast is handed (`COLUMNS_AT`); a column past them is taken into
 /// the last (`Column::hold`).
-pub const COLUMNS: usize = 64;
+pub const COLUMN_CAP: usize = 64;
 
 /// What the light's cast is handed beside the eye's words, as a uniform: a head of
 /// `HDR_VEC4S` vec4s. It holds the cast's number, whether it is counted, its epoch and the
@@ -514,7 +517,7 @@ pub const COLUMNS: usize = 64;
 /// host draws that reads the map (`RECEIVER_BOXES_AT`); then where the passes written by hand
 /// find the list's parts (`HDR_CELLS`); and last the world's columns that changed
 /// (`COLUMNS_AT`).
-pub const HDR_VEC4S: usize = COLUMNS_AT + 1 + 2 * COLUMNS;
+pub const HDR_VEC4S: usize = COLUMNS_AT + 1 + 2 * COLUMN_CAP;
 pub const HDR_WORDS: usize = 4 * HDR_VEC4S;
 /// The cast's number, counted up from one each cast. A tile the cast lists to cast is marked
 /// with it (`list_marks_at`), and a tile it damages is named by it (`reads_at`).
@@ -542,7 +545,7 @@ pub const HDR_HOLES: usize = 7;
 /// Where a pass finds the list's words and the arguments' marks, and how many lie in a row,
 /// as `hdr_layout` lays them out for the map's side, in words of their own past the
 /// characters.
-pub const HDR_CELLS: usize = 4 * (RECEIVER_BOXES_AT + 1 + 2 * RECEIVER_BOXES);
+pub const HDR_CELLS: usize = 4 * (RECEIVER_BOXES_AT + 1 + 2 * RECEIVER_BOX_CAP);
 pub const HDR_CELLS_ACROSS: usize = HDR_CELLS + 1;
 pub const HDR_SAMPLES: usize = HDR_CELLS + 2;
 pub const HDR_SAMPLES_ACROSS: usize = HDR_CELLS + 3;
@@ -555,9 +558,9 @@ pub const HDR_BEAM_ACROSS: usize = HDR_CELLS + 8;
 /// Each list's marks (`list_marks_at`), then each list (`list_cnt_at`), a word each in the
 /// lists' order (`LIST_CORNERS`).
 pub const HDR_MARKS: usize = HDR_CELLS + 9;
-pub const HDR_LISTS: usize = HDR_MARKS + LISTS as usize;
+pub const HDR_LISTS: usize = HDR_MARKS + LIST_CNT as usize;
 /// Where the beam rays' run parks them (`corner_states_at`).
-pub const HDR_CORNER_STATES: usize = HDR_LISTS + LISTS as usize;
+pub const HDR_CORNER_STATES: usize = HDR_LISTS + LIST_CNT as usize;
 /// Where a beam rays' or a samples' run lists the items it parked (`parked_items_at`).
 pub const HDR_PARKED_ITEMS: usize = HDR_CORNER_STATES + 1;
 /// The slide's two words (`slide_at`).
@@ -584,11 +587,11 @@ pub const HDR_HITS: usize = HDR_POOL + 1;
 pub const HDR_LAST_RANGE: usize = HDR_HITS + 1;
 const HDR_LAYOUT_VEC4S: usize = 10;
 /// The words `hdr_layout` lays out.
-const HDR_LAYOUT_WORDS: usize = 16 + 2 * LISTS as usize;
+const HDR_LAYOUT_WORDS: usize = 16 + 2 * LIST_CNT as usize;
 /// The world's columns that changed since the cast before, where they did and the epoch goes
 /// on (`Column`, `Light::reaches`): their count in the first word of a vec4, then two vec4s
-/// each, holding its four floats and its first and last band, up to `COLUMNS`.
-pub const COLUMNS_AT: usize = RECEIVER_BOXES_AT + 1 + 2 * RECEIVER_BOXES + HDR_LAYOUT_VEC4S;
+/// each, holding its four floats and its first and last band, up to `COLUMN_CAP`.
+pub const COLUMNS_AT: usize = RECEIVER_BOXES_AT + 1 + 2 * RECEIVER_BOX_CAP + HDR_LAYOUT_VEC4S;
 const _: () = assert!(
     HDR_LAST_RANGE + 1 < HDR_CELLS + 4 * HDR_LAYOUT_VEC4S,
     "the header holds the words it lays"
@@ -622,7 +625,7 @@ pub const fn hdr_layout(size: u32) -> [(usize, u32); HDR_LAYOUT_WORDS] {
         k += 1;
     }
     let mut list = 0;
-    while list < LISTS {
+    while list < LIST_CNT {
         layout[k] = (HDR_MARKS + list as usize, list_marks_at(size, list));
         layout[k + 1] = (HDR_LISTS + list as usize, list_cnt_at(size, list));
         (k, list) = (k + 2, list + 1);
@@ -681,10 +684,10 @@ pub const STARTS_VEC4S: usize = 11;
 /// What the host draws that reads the shadow map, receivers as decor is (pxl-render
 /// gpu/draw.rs `DrawList`, light_mark_draws.wgsl), past the starts: their count in the first
 /// word of a vec4, then for each the box it stands within, in units from the eye, its lowest
-/// corner and then its highest, a vec4 each, up to `RECEIVER_BOXES`. The host takes the boxes
+/// corner and then its highest, a vec4 each, up to `RECEIVER_BOX_CAP`. The host takes the boxes
 /// past them into the last, so no receiver stands on nothing.
 pub const RECEIVER_BOXES_AT: usize = STARTS_AT + STARTS_VEC4S;
-pub const RECEIVER_BOXES: usize = 64;
+pub const RECEIVER_BOX_CAP: usize = 64;
 
 impl StartGrid {
     /// The start of the ray of world texel `w`, X across and Y down the
@@ -1040,18 +1043,18 @@ impl Light {
 /// tile read, stay listed in every cast after it until they are stood afresh again, each cast
 /// adding what it stands on and what that reads (`carry_at`). The passes that cast tiles take
 /// their threads from the first three lists (pxl-render light_list.wgsl `light_item`):
-/// `LIST_ACROSS` workgroups of `LIST_LANES` to a row, an entry taking its side's square of
+/// `LIST_ACROSS` workgroups of `LIST_LANE_CNT` to a row, an entry taking its side's square of
 /// them; the propagation takes one thread for each stood tile.
 pub const LIST_CORNERS: u32 = 0;
 pub const LIST_SOURCES: u32 = 1;
 pub const LIST_DAMAGE: u32 = 2;
 pub const LIST_RECEIVERS: u32 = 3;
 pub const LIST_READS: u32 = 4;
-pub const LISTS: u32 = 5;
+pub const LIST_CNT: u32 = 5;
 pub const LIST_ACROSS: u32 = 64;
-pub const LIST_LANES: u32 = 64;
+pub const LIST_LANE_CNT: u32 = 64;
 const _: () = assert!(
-    LIST_LANES == beam::SAMPLE_SIDE * beam::SAMPLE_SIDE,
+    LIST_LANE_CNT == beam::SAMPLE_SIDE * beam::SAMPLE_SIDE,
     "a listed pass's workgroup is the samples' passes' square"
 );
 
@@ -1092,7 +1095,7 @@ pub const fn list_cnt_at(size: u32, which: u32) -> u32 {
 /// (`beam::Grid::corner_states_at`): one state for each beam ray of the map
 /// (`ray::STATE_WORDS`, pxl-render corner.wgsl), row by row.
 pub const fn corner_states_at(size: u32) -> u32 {
-    list_cnt_at(size, LISTS)
+    list_cnt_at(size, LIST_CNT)
 }
 
 /// Past the beam rays' states, the items a run parked, one word each (pxl-render
@@ -1161,7 +1164,7 @@ pub const fn buf_words(size: u32) -> u32 {
 /// The stood list's arguments, in a buffer of their own (pxl-render light_receiver_tile.wgsl
 /// `ReceiverDispatch`), laid out as a list walked apart lays its own (`ray::LEFT_EMPTY`;
 /// list.wgsl `enlist`). First come the propagation's dispatch over the stood tiles, one row
-/// for each `MISS_LANES · MISS_ACROSS` listed (`RECEIVER_TILES_LIST`), and their count
+/// for each `MISS_LANE_CNT · MISS_ACROSS` listed (`RECEIVER_TILES_LIST`), and their count
 /// (`RECEIVER_TILES_CNT`). Then comes the slide's dispatch (`RECEIVER_TILES_SLIDE`): its
 /// tiles' workgroups across, once a tile is stood, set by the stood list's first entry, and
 /// down where the cast owes a slide, set by the host, so a cast that owes one and stands
@@ -1209,13 +1212,13 @@ pub const ARGS_PASSES: u32 = 13;
 /// (light_mark_draws.wgsl).
 pub const DRAWS_DISPATCH_WORDS: u32 = 3;
 pub const ARGS_CNTS: u32 = ARGS_PASSES;
-pub const ARGS_WORDS: u32 = ARGS_CNTS + LISTS;
+pub const ARGS_WORDS: u32 = ARGS_CNTS + LIST_CNT;
 /// The vertices of a tile the map is laid in, two triangles (pxl-render light_map.wgsl).
-pub const LAY_VERTICES: u32 = 6;
+pub const LAY_VERTEX_CNT: u32 = 6;
 
 /// The args' buffer's words on the map `size` texels a side.
 pub const fn args_words(size: u32) -> u32 {
-    ARGS_WORDS + list_marks_at(size, LISTS)
+    ARGS_WORDS + list_marks_at(size, LIST_CNT)
 }
 
 /// Box texel `p`'s ray: its origin, where its world texel's middle lies on the near plane,
@@ -1250,14 +1253,14 @@ mod tests {
     fn a_column_held_holds_both() {
         let mut a = Column {
             at: [0.0, 0.0, 1.0, 1.0],
-            bands: [22, 22],
+            band_range: [22, 22],
         };
         a.hold(Column {
             at: [-5.0, 2.0, -4.0, 9.0],
-            bands: [20, 21],
+            band_range: [20, 21],
         });
         assert_eq!(a.at, [-5.0, 0.0, 1.0, 9.0]);
-        assert_eq!(a.bands, [20, 22]);
+        assert_eq!(a.band_range, [20, 22]);
     }
 
     use super::*;
@@ -1266,8 +1269,8 @@ mod tests {
     use crate::cast::Node;
     use crate::content::Sample;
     use crate::param::light;
-    use pxl_spec::share::EIGHTHS;
-    use pxl_spec::value::AIR;
+    use pxl_spec::asset::cube::Sentinel;
+    use pxl_spec::share::EIGHTH_CNT;
 
     /// Starts as a host lays them for the eye at the Q3 position `eye`, from the light's words
     /// alone: each anchor where its texel lies relative to the eye, rounded.
@@ -1361,7 +1364,7 @@ mod tests {
         let s = down();
         assert_eq!(depth(&s, &trace(End::Hit, 2.0, 2)), 0.25);
         assert_eq!(depth(&s, &trace(End::Miss, 8.0, 0)), 1.0);
-        assert_eq!(depth(&s, &trace(End::Lacks, 2.0, 2)), 1.0);
+        assert_eq!(depth(&s, &trace(End::Lack, 2.0, 2)), 1.0);
     }
 
     #[test]
@@ -1531,13 +1534,16 @@ mod tests {
             let floor = c[2] as f32 * side;
             let (kind, asset) = if zoom >= near {
                 let mid = |k: usize| (c[k] as f32 + 0.5) * side;
-                let filled = answer::fill_word(Sample::GROUND, EIGHTHS);
+                let filled = answer::fill_word(Sample::GROUND, EIGHTH_CNT);
                 let under = floor < top(mid(0), mid(1));
-                (answer::Kind::Cell, [if under { filled } else { AIR }, 0])
+                (
+                    answer::Kind::Cell,
+                    [if under { filled } else { Sentinel::Air as u32 }, 0],
+                )
             } else if floor < BUMPS {
                 (answer::Kind::Split, answer::BOX_WHOLE)
             } else {
-                (answer::Kind::Cell, [AIR, 0])
+                (answer::Kind::Cell, [Sentinel::Air as u32, 0])
             };
             answer::In { kind, asset }
         }

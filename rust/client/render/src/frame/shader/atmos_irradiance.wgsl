@@ -7,7 +7,7 @@
 fn fs(v: TableOut) -> @location(0) vec4f {
   let uv = v.clip.xy / IRRADIANCE_SIZE;
   let mu_s = unit_of(uv.x, IRRADIANCE_SIZE.x) * 2.0 - 1.0;
-  let r = atmos_bottom_radius() + unit_of(uv.y, IRRADIANCE_SIZE.y) * (atmos_top_radius() - atmos_bottom_radius());
+  let r = BOTTOM_RADIUS_KM + unit_of(uv.y, IRRADIANCE_SIZE.y) * (TOP_RADIUS_KM - BOTTOM_RADIUS_KM);
   let sun = view_light(mu_s);
   // The rings lie evenly in the zenith's sin², so the samples fall in
   // proportion to their cosine. The face's light is then pi times the samples'

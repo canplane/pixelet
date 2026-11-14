@@ -35,7 +35,7 @@
 //!    write it, or, where a rule owns the range, a call that applies the rule but not through
 //!    atomics.
 
-use crate::frame::shader::record::{compute, lays_out_writable, ACCESS, NONE, STAGES, STORAGE_RW};
+use crate::frame::shader::record::{compute, lays_out_writable, ACCESS, NONE, STORAGE_RW};
 use crate::frame::shader::word::SHADOW_SIZE;
 use pxl_engine::{light, node_cache, raster, ray};
 
@@ -100,12 +100,12 @@ pub struct Bind {
     pub words: u32,
 }
 
-/// A bind group as the host makes it: its layout as (binding, stages, kind) words, and the
-/// frame's buffers its bindings view. A binding of the layout that `binds` leaves out views a
-/// buffer outside the frame's, which only the host names.
+/// A bind group as the host makes it: the frame's buffers its bindings view, laid out as the
+/// one group of the compute pipeline its dispatch runs (record.rs `compute`). A binding of the
+/// layout that `binds` leaves out views a buffer outside the frame's, which only the host
+/// names.
 #[derive(Clone, Copy)]
 pub struct Group {
-    pub layout: &'static [u32],
     pub binds: &'static [Bind],
 }
 
@@ -120,18 +120,18 @@ pub struct Touch {
 }
 
 /// A call the host encodes. `stage` is an index into the frame's `stages`. `pipeline` is a
-/// compute or a render pipeline. `groups` are the groups set for the call: a dispatch's group 0,
-/// or every group its render pass sets. `indirect` is the words the call reads its count from.
-/// `from` is a copy's source, and `to` is a copy's or a host write's destination. `one_of` is a
-/// tag the call shares with the other calls of its stage of which only one runs in a frame, or
-/// 0 for none. `pass` is the render pipelines a draw's render pass draws (`in_pass`).
+/// compute or a render pipeline. `group` is the group a dispatch is set with; any other call's
+/// group binds none of the frame's buffers. `indirect` is the words the call reads its count
+/// from. `from` is a copy's source, and `to` is a copy's or a host write's destination.
+/// `one_of` is a tag the call shares with the other calls of its stage of which only one runs
+/// in a frame, or 0 for none. `pass` is the render pipelines a draw's render pass draws (`in_pass`).
 #[derive(Clone, Copy)]
 pub struct Step {
     pub name: &'static str,
     pub stage: u32,
     pub kind: u32,
     pub pipeline: u32,
-    pub groups: &'static [&'static Group],
+    pub group: &'static Group,
     pub indirect: Range,
     pub from: Range,
     pub to: Range,
@@ -146,7 +146,7 @@ impl Step {
             stage,
             kind,
             pipeline: 0,
-            groups: &[],
+            group: &Group { binds: &[] },
             indirect: NO_RANGE,
             from: NO_RANGE,
             to: NO_RANGE,
@@ -159,11 +159,11 @@ impl Step {
         name: &'static str,
         stage: u32,
         compute: u32,
-        group: &'static [&'static Group],
+        group: &'static Group,
     ) -> Step {
         Step {
             pipeline: compute,
-            groups: group,
+            group,
             ..Step::new(name, stage, DISPATCH)
         }
     }
@@ -174,7 +174,7 @@ impl Step {
         name: &'static str,
         stage: u32,
         compute: u32,
-        group: &'static [&'static Group],
+        group: &'static Group,
         (buf, at): (u32, u32),
     ) -> Step {
         Step {
@@ -183,35 +183,26 @@ impl Step {
         }
     }
 
-    /// An indirect draw of render pipeline `render` in a pass that sets `groups`, which reads
-    /// its count from `buf` at word `at`.
+    /// An indirect draw of render pipeline `render`, which reads its count from `buf` at word
+    /// `at`.
     pub const fn draw_off(
         name: &'static str,
         stage: u32,
         render: u32,
-        groups: &'static [&'static Group],
         (buf, at): (u32, u32),
     ) -> Step {
         Step {
             pipeline: render,
-            groups,
             indirect: Range { buf, at, words: 4 },
             ..Step::new(name, stage, DRAW)
         }
     }
 
-    /// Indirect draws of render pipeline `render` in a pass that sets `groups`, one draw a
-    /// region. Each region's count lies in `buf` where the host lays it out (`Step::off`).
-    pub const fn draw_regions(
-        name: &'static str,
-        stage: u32,
-        render: u32,
-        groups: &'static [&'static Group],
-        buf: u32,
-    ) -> Step {
+    /// Indirect draws of render pipeline `render`, one draw a region. Each region's count lies
+    /// in `buf` where the host lays it out (`Step::off`).
+    pub const fn draw_regions(name: &'static str, stage: u32, render: u32, buf: u32) -> Step {
         Step {
             pipeline: render,
-            groups,
             indirect: Range {
                 buf,
                 at: 0,
@@ -320,7 +311,7 @@ pub struct Persistent {
 
 /// The first word and the word count of list `which`'s marks in the light's args (pxl-engine
 /// `light::list_marks_at`). Each tile has one word, the number of the cast that last listed it.
-pub const fn light_marks(which: u32) -> [u32; 2] {
+pub const fn light_mark(which: u32) -> [u32; 2] {
     [
         light::ARGS_WORDS + light::list_marks_at(SHADOW_SIZE, which),
         light::list_cap(SHADOW_SIZE, which),
@@ -333,15 +324,15 @@ pub const TOUCHES: &[Touch] = {
     use crate::frame::shader::record::*;
     /// Words of the light's args (pxl-engine `light::ARGS_WORDS`). `opened` is the x of a
     /// pass's dispatch, which the damage pass raises as it lists (light_enlist.wgsl `opened`).
-    /// `cnt` is a list's count, and `marks` are a list's marks, which lie past the counts.
+    /// `cnt` is a list's count, and `mark` its marks, which lie past the counts.
     const fn opened(w: u32) -> [u32; 2] {
         [w + 1, 1]
     }
     const fn cnt(which: u32) -> [u32; 2] {
         [light::ARGS_CNTS + which, 1]
     }
-    const fn marks(which: u32) -> [u32; 2] {
-        light_marks(which)
+    const fn mark(which: u32) -> [u32; 2] {
+        light_mark(which)
     }
     /// The stood list is the list of the tiles the receivers stand on. These are the words of
     /// its args that a receivers' pass writes as it lists a tile: its dispatch's x, its count
@@ -351,7 +342,7 @@ pub const TOUCHES: &[Touch] = {
     /// The args of a raster's draw, and the faces' asks a pass lays out at `at`
     /// (record_put.wgsl).
     const DRAW_ARGS: [u32; 2] = [0, raster::ARGS_WORDS];
-    const fn asks(at: u32) -> [u32; 2] {
+    const fn ask(at: u32) -> [u32; 2] {
         [at, raster::ARGS_WORDS]
     }
     const QUEUE_HITS: [u32; 2] = [ray::QUEUE_HITS, 4];
@@ -363,8 +354,8 @@ pub const TOUCHES: &[Touch] = {
         Touch {
             compute: COMPUTE_SAMPLE_HIT,
             binding: 16,
-            writes: &[asks(raster::ASKED_AT)],
-            reads: &[asks(raster::ASKED_AT)],
+            writes: &[ask(raster::ASKED_AT)],
+            reads: &[ask(raster::ASKED_AT)],
         },
         Touch {
             compute: COMPUTE_LIGHT_SAMPLE_HIT,
@@ -390,8 +381,8 @@ pub const TOUCHES: &[Touch] = {
         Touch {
             compute: COMPUTE_REC_DRAW,
             binding: 21,
-            writes: &[marks(light::LIST_RECEIVERS)],
-            reads: &[marks(light::LIST_RECEIVERS)],
+            writes: &[mark(light::LIST_RECEIVERS)],
+            reads: &[mark(light::LIST_RECEIVERS)],
         },
         // The eye's holes' stops lay their faces' asks at a place of their own
         // (record_hits.wgsl, record_hits.eye.wgsl); the light's lay none
@@ -399,8 +390,8 @@ pub const TOUCHES: &[Touch] = {
         Touch {
             compute: COMPUTE_REC_HITS,
             binding: 16,
-            writes: &[asks(raster::HIT_ASKED_AT)],
-            reads: &[asks(raster::HIT_ASKED_AT)],
+            writes: &[ask(raster::HIT_ASKED_AT)],
+            reads: &[ask(raster::HIT_ASKED_AT)],
         },
         Touch {
             compute: COMPUTE_LIGHT_REC_HITS,
@@ -420,22 +411,22 @@ pub const TOUCHES: &[Touch] = {
         Touch {
             compute: COMPUTE_LIGHT_MARK_WALKED,
             binding: 21,
-            writes: &[marks(light::LIST_RECEIVERS)],
-            reads: &[marks(light::LIST_RECEIVERS)],
+            writes: &[mark(light::LIST_RECEIVERS)],
+            reads: &[mark(light::LIST_RECEIVERS)],
         },
         Touch {
             compute: COMPUTE_LIGHT_MARK_DRAWS,
             binding: 21,
-            writes: &[marks(light::LIST_RECEIVERS)],
-            reads: &[marks(light::LIST_RECEIVERS)],
+            writes: &[mark(light::LIST_RECEIVERS)],
+            reads: &[mark(light::LIST_RECEIVERS)],
         },
         // The propagation lists the tiles the receivers read (light_propagate.wgsl
         // `light_propagate_cs`).
         Touch {
             compute: COMPUTE_LIGHT_PROPAGATE,
             binding: 21,
-            writes: &[cnt(light::LIST_READS), marks(light::LIST_READS)],
-            reads: &[cnt(light::LIST_READS), marks(light::LIST_READS)],
+            writes: &[cnt(light::LIST_READS), mark(light::LIST_READS)],
+            reads: &[cnt(light::LIST_READS), mark(light::LIST_READS)],
         },
         // The damage pass damages each tile read that is due to be cast again, lists what feeds it,
         // and opens the passes that cast those. It also sets the lay's tiles to those read
@@ -451,9 +442,9 @@ pub const TOUCHES: &[Touch] = {
                 cnt(light::LIST_CORNERS),
                 cnt(light::LIST_SOURCES),
                 cnt(light::LIST_DAMAGE),
-                marks(light::LIST_CORNERS),
-                marks(light::LIST_SOURCES),
-                marks(light::LIST_DAMAGE),
+                mark(light::LIST_CORNERS),
+                mark(light::LIST_SOURCES),
+                mark(light::LIST_DAMAGE),
             ],
             reads: &[
                 opened(light::ARGS_CELLS),
@@ -463,9 +454,9 @@ pub const TOUCHES: &[Touch] = {
                 cnt(light::LIST_CORNERS),
                 cnt(light::LIST_SOURCES),
                 cnt(light::LIST_DAMAGE),
-                marks(light::LIST_CORNERS),
-                marks(light::LIST_SOURCES),
-                marks(light::LIST_DAMAGE),
+                mark(light::LIST_CORNERS),
+                mark(light::LIST_SOURCES),
+                mark(light::LIST_DAMAGE),
             ],
         },
         // The receivers' passes and the record's draw write the stood list's args as they list
@@ -570,9 +561,10 @@ pub const TOUCHES: &[Touch] = {
     ]
 };
 
-/// Pass `id`'s access to its binding `binding` of group 0, as its shader uses it (`ACCESS`).
+/// Pass `id`'s access to its binding `binding` of its one group, group 0, as its shader uses it
+/// (`ACCESS`).
 pub const fn access(id: u32, binding: u32) -> u32 {
-    let (shader, entry) = compute(id);
+    let (shader, entry, _) = compute(id);
     let entries = ACCESS[shader as usize];
     let mut k = 0;
     while k < entries.len() {
@@ -593,7 +585,7 @@ pub const fn access(id: u32, binding: u32) -> u32 {
 }
 
 /// Whether two names are equal, byte for byte. A const fn cannot compare two `str`s with `==`.
-pub const fn same(a: &str, b: &str) -> bool {
+const fn same(a: &str, b: &str) -> bool {
     let (a, b) = (a.as_bytes(), b.as_bytes());
     if a.len() != b.len() {
         return false;
@@ -608,13 +600,13 @@ pub const fn same(a: &str, b: &str) -> bool {
     true
 }
 
-const fn kind_in(layout: &[u32], binding: u32) -> Option<u32> {
+const fn kind_in(layout: &[[u32; 2]], binding: u32) -> Option<u32> {
     let mut e = 0;
-    while e + 2 < layout.len() {
-        if layout[e] == binding {
-            return Some(layout[e + 2]);
+    while e < layout.len() {
+        if layout[e][0] == binding {
+            return Some(layout[e][1]);
         }
-        e += 3;
+        e += 1;
     }
     None
 }
@@ -674,7 +666,7 @@ pub const fn nth(f: &Frame, s: &Step, writing: bool, n: usize) -> Range {
                 }
                 k = 1;
             }
-            let binds = s.groups[0].binds;
+            let binds = s.group.binds;
             let mut b = 0;
             while b < binds.len() {
                 let bind = binds[b];
@@ -722,7 +714,7 @@ pub const fn writes_atomic(s: &Step, buf: u32) -> bool {
     if s.kind != DISPATCH {
         return false;
     }
-    let binds = s.groups[0].binds;
+    let binds = s.group.binds;
     let mut b = 0;
     while b < binds.len() {
         if binds[b].buf == buf {
@@ -762,35 +754,31 @@ const fn persistent_of(f: &Frame, r: Range) -> Option<usize> {
 
 /// Binding `binding`'s role in step `s`: `ARGS_INDIRECT` when the call reads its count from the
 /// binding's buffer, `ARGS_WRITTEN` when a dispatch writes an args buffer there, and otherwise
-/// the buffer's own role. It is `NONE` when the call's groups bind none of the frame's buffers
+/// the buffer's own role. It is `NONE` when the call's group binds none of the frame's buffers
 /// there.
 pub const fn role(f: &Frame, s: &Step, binding: u32) -> u32 {
-    let mut g = 0;
-    while g < s.groups.len() {
-        let binds = s.groups[g].binds;
-        let mut b = 0;
-        while b < binds.len() {
-            if binds[b].binding == binding {
-                let buf = binds[b].buf;
-                let role = f.bufs[buf as usize].role;
-                if buf == s.indirect.buf {
-                    return ARGS_INDIRECT;
-                }
-                if role == ARGS && s.kind == DISPATCH && access(s.pipeline, binding) & WRITE != 0 {
-                    return ARGS_WRITTEN;
-                }
-                return role;
+    let binds = s.group.binds;
+    let mut b = 0;
+    while b < binds.len() {
+        if binds[b].binding == binding {
+            let buf = binds[b].buf;
+            let role = f.bufs[buf as usize].role;
+            if buf == s.indirect.buf {
+                return ARGS_INDIRECT;
             }
-            b += 1;
+            if role == ARGS && s.kind == DISPATCH && access(s.pipeline, binding) & WRITE != 0 {
+                return ARGS_WRITTEN;
+            }
+            return role;
         }
-        g += 1;
+        b += 1;
     }
     NONE
 }
 
 /// A hazard found: its rule, the step it is held at, the other step, and the buffer. For rule
-/// 1 `other` is the group's place, for rule 4 it is the kept range's place, and for rule 3 it
-/// is `usize::MAX` when no step wrote the word.
+/// 1 `other` is 0, for rule 4 it is the kept range's place, and for rule 3 it is `usize::MAX`
+/// when no step wrote the word.
 #[derive(Clone, Copy)]
 pub struct Hazard {
     pub rule: u32,
@@ -857,32 +845,16 @@ pub const fn declared(f: &Frame) {
     let mut k = 0;
     while k < f.steps.len() {
         let s = &f.steps[k];
-        let mut g = 0;
-        while g < s.groups.len() {
-            let group = s.groups[g];
-            let mut b = 0;
-            while b < group.binds.len() {
-                if kind_in(group.layout, group.binds[b].binding).is_none()
-                    || group.binds[b].buf as usize >= f.bufs.len()
-                {
-                    panic!("{}", s.name);
-                }
-                b += 1;
-            }
-            g += 1;
-        }
-        if s.kind == DISPATCH {
-            if s.groups.len() != 1 {
+        let binds = s.group.binds;
+        let mut b = 0;
+        while b < binds.len() {
+            if s.kind != DISPATCH
+                || kind_in(compute(s.pipeline).2, binds[b].binding).is_none()
+                || binds[b].buf as usize >= f.bufs.len()
+            {
                 panic!("{}", s.name);
             }
-            let read = STAGES[compute(s.pipeline).0 as usize];
-            let mut e = 0;
-            while e < read.len() {
-                if read[e][2] != NONE && kind_in(s.groups[0].layout, read[e][1]).is_none() {
-                    panic!("{}", s.name);
-                }
-                e += 1;
-            }
+            b += 1;
         }
         if s.kind == DRAW && !holds(s.pass, s.pipeline) {
             panic!("{}", s.name);
@@ -916,39 +888,33 @@ const fn holds(pipelines: &[u32], pipeline: u32) -> bool {
     false
 }
 
-/// Rule 1: the place among step `k`'s groups of the group that binds writable the buffer the
-/// step reads its count from, if one does. For a draw, a pipeline of its pass that lays out
-/// writable storage also counts, at a place past the groups.
-const fn bound_writable(f: &Frame, k: usize) -> Option<usize> {
+/// Rule 1: whether step `k`'s group binds writable the buffer the step reads its count from,
+/// or, for a draw, a pipeline of its pass lays out writable storage.
+const fn is_bound_writable(f: &Frame, k: usize) -> bool {
     let s = &f.steps[k];
     if s.indirect.buf == NO_BUF {
-        return None;
+        return false;
     }
-    let mut g = 0;
-    while g < s.groups.len() {
-        let group = s.groups[g];
-        let mut b = 0;
-        while b < group.binds.len() {
-            let bind = group.binds[b];
-            if bind.buf == s.indirect.buf {
-                if let Some(STORAGE_RW) = kind_in(group.layout, bind.binding) {
-                    return Some(g);
-                }
+    let binds = s.group.binds;
+    let mut b = 0;
+    while b < binds.len() {
+        if binds[b].buf == s.indirect.buf {
+            if let Some(STORAGE_RW) = kind_in(compute(s.pipeline).2, binds[b].binding) {
+                return true;
             }
-            b += 1;
         }
-        g += 1;
+        b += 1;
     }
     // A whole render pass is one usage scope. A pipeline the pass draws that lays out writable
     // storage may have a group set that binds the count's buffer writable.
     let mut p = 0;
     while p < s.pass.len() {
         if lays_out_writable(s.pass[p]) {
-            return Some(s.groups.len() + p);
+            return true;
         }
         p += 1;
     }
-    None
+    false
 }
 
 /// The most steps a frame has, and the most ranges a step writes or reads.
@@ -1185,11 +1151,11 @@ pub const fn hazards(f: &Frame) -> ([Hazard; HAZARDS_CAP], usize) {
                 buf: f.persistent[p].range.buf,
             };
         }
-        if let Some(g) = bound_writable(f, k) {
+        if is_bound_writable(f, k) {
             each[0] = Hazard {
                 rule: 1,
                 step: k,
-                other: g,
+                other: 0,
                 buf: f.steps[k].indirect.buf,
             };
         }

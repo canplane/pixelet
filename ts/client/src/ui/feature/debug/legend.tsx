@@ -47,7 +47,7 @@ const SHARE: Record<keyof typeof share, string> = {
   coarser: `coarser, past ${share.within.most}`,
 };
 
-const useShown = (name: "world_gizmo" | "camera_gizmo" | "ray_steps") =>
+const useShown = (name: "world_gizmo" | "camera_gizmo" | "ray_step") =>
   useCore((s) => s.settings[SETTING[name].key] === 1);
 
 /** `reversed` lists the looks backwards, so that the look drawn over the
@@ -132,10 +132,10 @@ const along = (n: number) => Math.log2(1 + n) / Math.log2(1 + steps.most);
 const TICKS = [1, Math.sqrt(steps.most), steps.most];
 
 export function RayStepsLegend() {
-  if (!useShown("ray_steps")) return null;
+  if (!useShown("ray_step")) return null;
   const last = steps.ramp.length - 1;
   return (
-    <Accordion name="ray_steps" title="Ray Steps">
+    <Accordion name="ray_step" title="Ray Steps">
       <Head>Steps</Head>
       <View style={styles.ramp}>
         <Svg width="100%" height={8}>

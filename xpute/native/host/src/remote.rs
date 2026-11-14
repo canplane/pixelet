@@ -17,7 +17,7 @@ use std::rc::Rc;
 use std::sync::Mutex;
 
 use xpute_link::Packet;
-use xpute_kit::wire::xtp::{BranchCursor, PacketWriter, MAX_PKT_SZ};
+use xpute_kit::wire::xtp::{PacketWriter, MAX_PKT_SZ};
 
 use crate::link;
 use xpute_link::{Handle, Method, Object, Reply, Tag};
@@ -52,10 +52,9 @@ fn tell(cnt: u32, write: impl Fn(&mut PacketWriter)) {
 struct StandIn(Handle);
 
 impl Object for StandIn {
-    fn call(&self, m: Method, _tag: Tag, args: Option<BranchCursor<'_>>) -> Reply {
-        let pkt = args.map(|b| b.cursor.pkt);
+    fn call(&self, m: Method, _tag: Tag, args: Option<&[u8]>) -> Reply {
         tell(4, |w| {
-            w.u32(Some(2)).u32(Some(self.0)).u32(Some(m)).u8_array(pkt);
+            w.u32(Some(2)).u32(Some(self.0)).u32(Some(m)).array::<u8>(args);
         });
         Reply::from(0)
     }
@@ -78,7 +77,7 @@ pub(crate) fn recv(tag: Tag, h: u32, m: u32, pkt: Option<Vec<u8>>) {
             w.u32(Some(0))
                 .u32(Some(tag))
                 .i32(Some(result))
-                .u8_array(data.as_deref());
+                .array::<u8>(data.as_deref());
         });
     };
     let pkt = pkt.as_deref().map_or(Packet::Args(None), Packet::Bytes);

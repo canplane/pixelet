@@ -163,7 +163,7 @@ const STAGE_POSE = 3u;
 /// Finds the footing and the pose of record `id.x` of a listed pair. `id.z` names the pair: the
 /// pairs generated whole come first, then those in part (`generation::part_at`), of which only
 /// a record that a box reaches is asked.
-@compute @workgroup_size(LANES)
+@compute @workgroup_size(LANE_CNT)
 fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // How many of the pairs the list holds are generated whole (`generation::LIST_WORDS`).
   let whole = in_cap(list[THIN_ARGS + 2u], LIST_WORDS - LIST_AT);
@@ -175,7 +175,7 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     return;
   }
   let r = entry_word(brick, j, id.x);
-  let cell_zoom = FIRST_CELL_ZOOM + brick / CLIP_ENTRIES;
+  let cell_zoom = FIRST_CELL_ZOOM + brick / CLIP_ENTRY_CNT;
   let leaf = vec2<i32>(i32(recs[r + 1u]), i32(recs[r + 2u]));
   if (part && !is_changed(cell_zoom, vec4<i32>(leaf, leaf + 1i))) {
     return;
@@ -317,7 +317,7 @@ fn decor_pose_cs(@builtin(global_invocation_id) id: vec3<u32>) {
         edited = true;
         continue;
       }
-    } else if ((v & VAL_MASK) >= TRANSPORTS_FIRST && (v & VAL_MASK) <= TRANSPORTS_LAST) {
+    } else if ((v & VAL_MASK) >= TRANSPORT_FIRST && (v & VAL_MASK) <= TRANSPORT_LAST) {
       if ((ask & 2i) == 0i) {
         horizontal += 1i;
       } else {

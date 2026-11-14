@@ -52,14 +52,14 @@ fn sea_from_coast() {
         area(
             [0.0, 0.0, 100.0, 100.0],
             10_000.0,
-            Ground::water as GroundId,
+            Ground::Water as GroundId,
             Layer::Landcover,
             "pond",
         ),
         area(
             [40.0, 40.0, 60.0, 60.0],
             400.0,
-            Ground::grass as GroundId,
+            Ground::Grass as GroundId,
             Layer::Landcover,
             "grass",
         ),
@@ -70,8 +70,8 @@ fn sea_from_coast() {
     )]);
     for coast in [Coast::Land, shore] {
         let g = bake_ground(&feats, &coast);
-        assert_eq!(at(&g, 50, 50), Ground::grass as GroundId);
-        assert_eq!(at(&g, 10, 10), Ground::water as GroundId);
+        assert_eq!(at(&g, 50, 50), Ground::Grass as GroundId);
+        assert_eq!(at(&g, 10, 10), Ground::Water as GroundId);
     }
 }
 
@@ -82,19 +82,19 @@ fn src_rank_per_tile() {
         area(
             [0.0, 0.0, 10.0, 100.0],
             10_000.0,
-            Ground::water as GroundId,
+            Ground::Water as GroundId,
             Layer::Landcover,
             "pond",
         ),
         area(
             [0.0, 40.0, 30.0, 60.0],
             1_200.0,
-            Ground::grass as GroundId,
+            Ground::Grass as GroundId,
             Layer::Landcover,
             "grass",
         ),
     ];
-    assert_eq!(at(&bake_ground(&feats, &Coast::Land), 5, 50), Ground::grass as GroundId);
+    assert_eq!(at(&bake_ground(&feats, &Coast::Land), 5, 50), Ground::Grass as GroundId);
 }
 
 #[test]
@@ -103,34 +103,34 @@ fn ground_row_order_free() {
         area(
             [10.0, 10.0, 30.0, 30.0],
             400.0,
-            Ground::park as GroundId,
+            Ground::Park as GroundId,
             Layer::Landcover,
             "a",
         ),
         area(
             [10.0, 10.0, 30.0, 30.0],
             400.0,
-            Ground::grass as GroundId,
+            Ground::Grass as GroundId,
             Layer::Landcover,
             "b",
         ),
         area(
             [20.0, 20.0, 40.0, 40.0],
             400.0,
-            Ground::building as GroundId,
+            Ground::Building as GroundId,
             Layer::Building,
             "c",
         ),
         area(
             [20.0, 20.0, 40.0, 40.0],
             400.0,
-            Ground::building_major as GroundId,
+            Ground::BuildingMajor as GroundId,
             Layer::Building,
             "d",
         ),
         // Two ways of one rank over one cell: which shows is no row's choice.
-        way(70.0, 4.0, Ground::residential_road as GroundId, "south"),
-        way(71.0, 4.0, Ground::secondary as GroundId, "north"),
+        way(70.0, 4.0, Ground::ResidentialRoad as GroundId, "south"),
+        way(71.0, 4.0, Ground::Secondary as GroundId, "north"),
     ];
     let bake = |fs: &[Feature]| bake_ground(fs, &Coast::Land).into_owned();
     let forward = bake(&feats);

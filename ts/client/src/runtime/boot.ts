@@ -17,19 +17,34 @@ import {
   tell_life,
   type Trap,
 } from "@xpute/web-runtime";
-import { GroundStatus, type RefusedFile, type Snapshot } from "@/abi/overlay.ts";
-import type { Source } from "@/abi/state.ts";
-import { BOOT_FAILED, BOOT_LOADING, BOOT_STARTED, BOOT_STARTING, BOOT_TERMINATED } from "@/abi/state.ts";
+import { type RefusedFile, type Snapshot } from "@/abi/overlay.ts";
+import { GROUND_STATUS_SUCCESS } from "@/abi/overlay.enum.ts";
 import { set_online } from "@/service/origin/online.ts";
 import { log } from "@/service/platform/log.ts";
 import type { GpuState } from "@xpute/gpu-link";
 import { stop_code, stopped } from "@/service/sys/abort.ts";
-import { boot_state, set_boot } from "@/service/sys/boot.ts";
+import {
+  boot_state,
+  set_boot,
+  BOOT_FAILED,
+  BOOT_LOADING,
+  BOOT_STARTED,
+  BOOT_STARTING,
+  BOOT_TERMINATED,
+} from "@/service/sys/boot.ts";
 import { GPU_STATE, set_gpu } from "@/service/sys/gpu.ts";
-import { type Declaration, mirror_source } from "@/service/sys/fs/source.ts";
+import {
+  type Declaration,
+  mirror_source,
+  type Source,
+} from "@/service/sys/fs/source.ts";
 import { is_storage_key } from "@/service/sys/fs/storage.ts";
 import { serve_overlay } from "@/service/core/core.ts";
-import { SENSOR_LISTENER, serve_watch, tell_platform } from "@/service/core/sensor.ts";
+import {
+  SENSOR_LISTENER,
+  serve_watch,
+  tell_platform,
+} from "@/service/core/sensor.ts";
 import { listen } from "@/service/platform/sensor-listener.ts";
 import { tell_dev } from "@/service/core/setting.ts";
 import { cur, watch_snapshot } from "@/service/core/snapshot.ts";
@@ -62,14 +77,20 @@ export type ToPage =
  * is made, and the view is drawn or lies past the service area. When locating
  * fails, the view is drawn at its default place. */
 function loaded(s: Snapshot): boolean {
-  return s.renderer_progress === 1 && (s.pivot.status === GroundStatus.Success || s.pivot.outside);
+  return (
+    s.renderer_progress === 1 &&
+    (s.pivot.status === GROUND_STATUS_SUCCESS || s.pivot.outside)
+  );
 }
 
 export function boot(): void {
   // Metro bundles the worker through this call, and through no form of
   // `new Worker` that tree shaking also compiles (metro.config.ts).
-  const { worker, remote, port } = open_worker(require.unstable_resolveWorker("./worker.ts"));
-  const tell = (m: ToWorker, move: Transferable[] = []) => worker.postMessage(m, move);
+  const { worker, remote, port } = open_worker(
+    require.unstable_resolveWorker("./worker.ts"),
+  );
+  const tell = (m: ToWorker, move: Transferable[] = []) =>
+    worker.postMessage(m, move);
   worker.onmessage = ({ data: m }: MessageEvent<ToPage>) => {
     switch (m.kind) {
       case "source":
@@ -86,7 +107,9 @@ export function boot(): void {
         log(`[core] did not start: ${m.err}`);
         return set_boot(BOOT_FAILED);
       case "trap":
-        log(`[core] stopped${stop_code() ? ` (${stop_code()})` : ""}: ${m.err}`);
+        log(
+          `[core] stopped${stop_code() ? ` (${stop_code()})` : ""}: ${m.err}`,
+        );
         return set_boot(BOOT_TERMINATED);
     }
   };
@@ -98,7 +121,16 @@ export function boot(): void {
     .filter(is_storage_key)
     .map((key): [string, string] => [key, storage.get(key)!]);
   tell({ kind: "entries", entries });
-  tell({ kind: "instantiate", module: module.href, init, port, named: remote.named }, [port]);
+  tell(
+    {
+      kind: "instantiate",
+      module: module.href,
+      init,
+      port,
+      named: remote.named,
+    },
+    [port],
+  );
   watch_snapshot(() => {
     tell({ kind: "refused", files: cur().refused_files });
     if (boot_state() === BOOT_LOADING && loaded(cur())) set_boot(BOOT_STARTED);
@@ -114,17 +146,16 @@ export function boot(): void {
   // The device's readings go to the core from here on, before the core hears
   // that it has sensors and starts one.
   listen(SENSOR_LISTENER);
-  Promise.all([tell_platform(), tell_dev()])
-    .then(
-      () => {
-        if (boot_state() !== BOOT_STARTING) return;
-        set_boot(BOOT_LOADING);
-        // The world may have arrived before the core answered.
-        if (loaded(cur())) set_boot(BOOT_STARTED);
-      },
-      (err: unknown) => {
-        console.error("[boot] the client did not start:", err);
-        if (boot_state() === BOOT_STARTING) set_boot(BOOT_FAILED);
-      },
-    );
+  Promise.all([tell_platform(), tell_dev()]).then(
+    () => {
+      if (boot_state() !== BOOT_STARTING) return;
+      set_boot(BOOT_LOADING);
+      // The world may have arrived before the core answered.
+      if (loaded(cur())) set_boot(BOOT_STARTED);
+    },
+    (err: unknown) => {
+      console.error("[boot] the client did not start:", err);
+      if (boot_state() === BOOT_STARTING) set_boot(BOOT_FAILED);
+    },
+  );
 }

@@ -16,20 +16,20 @@
 //! (`STALE`), and leaves that voxel's number at the pixel (`id_of`). For a hit the number names the cell;
 //! for a lack, the pixel walks the node itself.
 
-use crate::node_cache::ENTRIES;
+use crate::node_cache::ENTRY_CNT;
 use pxl_spec::space::coord::q3::FRAC_W;
 
 /// The draw's indirect arguments, in a buffer of their own (`ARGS_WORDS` words). First come
-/// `ARGS_VERTICES` and `ARGS_INSTANCES`, then two words the draw reads as 0. Next is the
+/// `ARGS_VERTEX_CNT` and `ARGS_INSTANCE_CNT`, then two words the draw reads as 0. Next is the
 /// dispatch over the boxes that asks what lies around each box's face (pxl-render face.wgsl
-/// `face_cs`), `FACES_LANES` boxes a workgroup (`ARGS_FACES`): its workgroup count is raised
+/// `face_cs`), `FACES_LANE_CNT` boxes a workgroup (`ARGS_FACES`): its workgroup count is raised
 /// by the box that opens each workgroup, and its other two counts are 1. Then comes the first
 /// word of the boxes' asks among the beam rays' words (`ARGS_ASKS`, `beam::ASK_WORDS` a box,
 /// `beam::Grid::asks_at`), and last the boxes counted as they are written (`ARGS_CNT`), of
-/// which `ARGS_INSTANCES` is the part the boxes' room holds.
+/// which `ARGS_INSTANCE_CNT` is the part the boxes' room holds.
 ///
-/// The eye's boxes are its fresh drawable entries in view, at most `record::EYE_DRAWS`; the
-/// light's are those on its box, at most `record::LIGHT_DRAWS`. The faces' asks are at most
+/// The eye's boxes are its fresh drawable entries in view, at most `record::EYE_DRAW_CAP`; the
+/// light's are those on its box, at most `record::LIGHT_DRAW_CAP`. The faces' asks are at most
 /// one a sample, with `param::beam::SAMPLE` samples a camera grid cell a side: about 270
 /// thousand on a 16:9 view, whatever its pixels, where one dispatch's 65535 workgroups hold
 /// 4.2 million.
@@ -46,8 +46,8 @@ use pxl_spec::space::coord::q3::FRAC_W;
 /// (`cast::asset_box`), and the faces it draws, one bit a side (`faces`). The eye draws the
 /// faces an eye's ray asked about (`record::ASKED`); the light draws every face some ray
 /// entered (`record::FACES`).
-pub const ARGS_VERTICES: u32 = 0;
-pub const ARGS_INSTANCES: u32 = 1;
+pub const ARGS_VERTEX_CNT: u32 = 0;
+pub const ARGS_INSTANCE_CNT: u32 = 1;
 pub const ARGS_FACES: u32 = 4;
 pub const ARGS_ASKS: u32 = 7;
 pub const ARGS_CNT: u32 = 8;
@@ -58,14 +58,14 @@ pub const ASKED_AT: u32 = crate::STORAGE_ALIGN_WORDS;
 pub const HIT_ASKED_AT: u32 = 2 * crate::STORAGE_ALIGN_WORDS;
 /// The arguments' words: the draw's and both sets of faces' asks.
 pub const WORDS: u32 = HIT_ASKED_AT + ARGS_WORDS;
-pub const FACES_LANES: u32 = 64;
+pub const FACES_LANE_CNT: u32 = 64;
 pub const EYED: u32 = 1 << 29;
 pub const STALE: u32 = 1 << 30;
 /// The bits of a draw word that hold the voxel's number (`id_of`): every bit but `EYED` and
 /// `STALE`.
 pub const ID_MASK: u32 = LACK | (EYED - 1);
 const _: () = assert!(
-    ENTRIES < EYED,
+    ENTRY_CNT < EYED,
     "a voxel's number lies under the draw's bits"
 );
 
@@ -96,7 +96,7 @@ pub fn accepts(faces: u32, face: u32) -> bool {
 
 /// The corners a box is drawn with: its three faces turned to the eye, one on each axis, two
 /// triangles each (`corner`). A face that is not drawn collapses to a point.
-pub const VERTICES: u32 = 18;
+pub const VERTEX_CNT: u32 = 18;
 
 /// A voxel's number, as the raster leaves it at a pixel or a slot: its slot in the record
 /// (`node_cache::entry_at`) plus one, so that 0 means none, with `LACK` set where the voxel

@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import {
   useDivisionLabel,
-  usePivotCoordinates,
+  usePivotCoordinate,
 } from "@/ui/feature/division/pivot.ts";
 import { FADE } from "@/ui/shared/component/motion/transition.ts";
 import { HaloText } from "./halo.tsx";
@@ -21,7 +21,7 @@ import {
 export function CurrentAddress() {
   const { t } = useTranslation();
   const label = useDivisionLabel();
-  const position = usePivotCoordinates();
+  const position = usePivotCoordinate();
 
   const text = label ?? position;
 

@@ -100,7 +100,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     };
     let table = Node::Obj(vec![
         (
-            "SLOTS".into(),
+            "SLOT_CNT".into(),
             entry(
                 &["Every file reference the asset specs make, a slot each."],
                 Some("usize"),

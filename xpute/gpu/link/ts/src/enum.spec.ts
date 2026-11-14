@@ -9,7 +9,7 @@
 
 /** GPUTextureFormat: the formats of the core WebGPU spec and of its texture-compression
  * features. */
-export const TEXTURE_FORMAT = [
+export const TEXTURE_FORMATS = [
   "r8unorm",
   "r8snorm",
   "r8uint",
@@ -107,123 +107,301 @@ export const TEXTURE_FORMAT = [
   "astc-12x12-unorm-srgb",
 ] as const;
 
-export const TextureFormat = {
-  r8unorm: 0,
-  r8snorm: 1,
-  r8uint: 2,
-  r8sint: 3,
-  r16uint: 4,
-  r16sint: 5,
-  r16float: 6,
-  rg8unorm: 7,
-  rg8snorm: 8,
-  rg8uint: 9,
-  rg8sint: 10,
-  r32uint: 11,
-  r32sint: 12,
-  r32float: 13,
-  rg16uint: 14,
-  rg16sint: 15,
-  rg16float: 16,
-  rgba8unorm: 17,
-  "rgba8unorm-srgb": 18,
-  rgba8snorm: 19,
-  rgba8uint: 20,
-  rgba8sint: 21,
-  bgra8unorm: 22,
-  "bgra8unorm-srgb": 23,
-  rgb9e5ufloat: 24,
-  rgb10a2uint: 25,
-  rgb10a2unorm: 26,
-  rg11b10ufloat: 27,
-  rg32uint: 28,
-  rg32sint: 29,
-  rg32float: 30,
-  rgba16uint: 31,
-  rgba16sint: 32,
-  rgba16float: 33,
-  rgba32uint: 34,
-  rgba32sint: 35,
-  rgba32float: 36,
-  stencil8: 37,
-  depth16unorm: 38,
-  depth24plus: 39,
-  "depth24plus-stencil8": 40,
-  depth32float: 41,
-  "depth32float-stencil8": 42,
-  "bc1-rgba-unorm": 43,
-  "bc1-rgba-unorm-srgb": 44,
-  "bc2-rgba-unorm": 45,
-  "bc2-rgba-unorm-srgb": 46,
-  "bc3-rgba-unorm": 47,
-  "bc3-rgba-unorm-srgb": 48,
-  "bc4-r-unorm": 49,
-  "bc4-r-snorm": 50,
-  "bc5-rg-unorm": 51,
-  "bc5-rg-snorm": 52,
-  "bc6h-rgb-ufloat": 53,
-  "bc6h-rgb-float": 54,
-  "bc7-rgba-unorm": 55,
-  "bc7-rgba-unorm-srgb": 56,
-  "etc2-rgb8unorm": 57,
-  "etc2-rgb8unorm-srgb": 58,
-  "etc2-rgb8a1unorm": 59,
-  "etc2-rgb8a1unorm-srgb": 60,
-  "etc2-rgba8unorm": 61,
-  "etc2-rgba8unorm-srgb": 62,
-  "eac-r11unorm": 63,
-  "eac-r11snorm": 64,
-  "eac-rg11unorm": 65,
-  "eac-rg11snorm": 66,
-  "astc-4x4-unorm": 67,
-  "astc-4x4-unorm-srgb": 68,
-  "astc-5x4-unorm": 69,
-  "astc-5x4-unorm-srgb": 70,
-  "astc-5x5-unorm": 71,
-  "astc-5x5-unorm-srgb": 72,
-  "astc-6x5-unorm": 73,
-  "astc-6x5-unorm-srgb": 74,
-  "astc-6x6-unorm": 75,
-  "astc-6x6-unorm-srgb": 76,
-  "astc-8x5-unorm": 77,
-  "astc-8x5-unorm-srgb": 78,
-  "astc-8x6-unorm": 79,
-  "astc-8x6-unorm-srgb": 80,
-  "astc-8x8-unorm": 81,
-  "astc-8x8-unorm-srgb": 82,
-  "astc-10x5-unorm": 83,
-  "astc-10x5-unorm-srgb": 84,
-  "astc-10x6-unorm": 85,
-  "astc-10x6-unorm-srgb": 86,
-  "astc-10x8-unorm": 87,
-  "astc-10x8-unorm-srgb": 88,
-  "astc-10x10-unorm": 89,
-  "astc-10x10-unorm-srgb": 90,
-  "astc-12x10-unorm": 91,
-  "astc-12x10-unorm-srgb": 92,
-  "astc-12x12-unorm": 93,
-  "astc-12x12-unorm-srgb": 94,
-} as const;
-export type TextureFormat = (typeof TextureFormat)[keyof typeof TextureFormat];
+export type TextureFormat =
+  | typeof TEXTURE_FORMAT_R8UNORM
+  | typeof TEXTURE_FORMAT_R8SNORM
+  | typeof TEXTURE_FORMAT_R8UINT
+  | typeof TEXTURE_FORMAT_R8SINT
+  | typeof TEXTURE_FORMAT_R16UINT
+  | typeof TEXTURE_FORMAT_R16SINT
+  | typeof TEXTURE_FORMAT_R16FLOAT
+  | typeof TEXTURE_FORMAT_RG8UNORM
+  | typeof TEXTURE_FORMAT_RG8SNORM
+  | typeof TEXTURE_FORMAT_RG8UINT
+  | typeof TEXTURE_FORMAT_RG8SINT
+  | typeof TEXTURE_FORMAT_R32UINT
+  | typeof TEXTURE_FORMAT_R32SINT
+  | typeof TEXTURE_FORMAT_R32FLOAT
+  | typeof TEXTURE_FORMAT_RG16UINT
+  | typeof TEXTURE_FORMAT_RG16SINT
+  | typeof TEXTURE_FORMAT_RG16FLOAT
+  | typeof TEXTURE_FORMAT_RGBA8UNORM
+  | typeof TEXTURE_FORMAT_RGBA8UNORM_SRGB
+  | typeof TEXTURE_FORMAT_RGBA8SNORM
+  | typeof TEXTURE_FORMAT_RGBA8UINT
+  | typeof TEXTURE_FORMAT_RGBA8SINT
+  | typeof TEXTURE_FORMAT_BGRA8UNORM
+  | typeof TEXTURE_FORMAT_BGRA8UNORM_SRGB
+  | typeof TEXTURE_FORMAT_RGB9E5UFLOAT
+  | typeof TEXTURE_FORMAT_RGB10A2UINT
+  | typeof TEXTURE_FORMAT_RGB10A2UNORM
+  | typeof TEXTURE_FORMAT_RG11B10UFLOAT
+  | typeof TEXTURE_FORMAT_RG32UINT
+  | typeof TEXTURE_FORMAT_RG32SINT
+  | typeof TEXTURE_FORMAT_RG32FLOAT
+  | typeof TEXTURE_FORMAT_RGBA16UINT
+  | typeof TEXTURE_FORMAT_RGBA16SINT
+  | typeof TEXTURE_FORMAT_RGBA16FLOAT
+  | typeof TEXTURE_FORMAT_RGBA32UINT
+  | typeof TEXTURE_FORMAT_RGBA32SINT
+  | typeof TEXTURE_FORMAT_RGBA32FLOAT
+  | typeof TEXTURE_FORMAT_STENCIL8
+  | typeof TEXTURE_FORMAT_DEPTH16UNORM
+  | typeof TEXTURE_FORMAT_DEPTH24PLUS
+  | typeof TEXTURE_FORMAT_DEPTH24PLUS_STENCIL8
+  | typeof TEXTURE_FORMAT_DEPTH32FLOAT
+  | typeof TEXTURE_FORMAT_DEPTH32FLOAT_STENCIL8
+  | typeof TEXTURE_FORMAT_BC1_RGBA_UNORM
+  | typeof TEXTURE_FORMAT_BC1_RGBA_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_BC2_RGBA_UNORM
+  | typeof TEXTURE_FORMAT_BC2_RGBA_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_BC3_RGBA_UNORM
+  | typeof TEXTURE_FORMAT_BC3_RGBA_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_BC4_R_UNORM
+  | typeof TEXTURE_FORMAT_BC4_R_SNORM
+  | typeof TEXTURE_FORMAT_BC5_RG_UNORM
+  | typeof TEXTURE_FORMAT_BC5_RG_SNORM
+  | typeof TEXTURE_FORMAT_BC6H_RGB_UFLOAT
+  | typeof TEXTURE_FORMAT_BC6H_RGB_FLOAT
+  | typeof TEXTURE_FORMAT_BC7_RGBA_UNORM
+  | typeof TEXTURE_FORMAT_BC7_RGBA_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ETC2_RGB8UNORM
+  | typeof TEXTURE_FORMAT_ETC2_RGB8UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ETC2_RGB8A1UNORM
+  | typeof TEXTURE_FORMAT_ETC2_RGB8A1UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ETC2_RGBA8UNORM
+  | typeof TEXTURE_FORMAT_ETC2_RGBA8UNORM_SRGB
+  | typeof TEXTURE_FORMAT_EAC_R11UNORM
+  | typeof TEXTURE_FORMAT_EAC_R11SNORM
+  | typeof TEXTURE_FORMAT_EAC_RG11UNORM
+  | typeof TEXTURE_FORMAT_EAC_RG11SNORM
+  | typeof TEXTURE_FORMAT_ASTC_4X4_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_4X4_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ASTC_5X4_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_5X4_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ASTC_5X5_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_5X5_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ASTC_6X5_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_6X5_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ASTC_6X6_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_6X6_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ASTC_8X5_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_8X5_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ASTC_8X6_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_8X6_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ASTC_8X8_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_8X8_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ASTC_10X5_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_10X5_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ASTC_10X6_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_10X6_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ASTC_10X8_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_10X8_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ASTC_10X10_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_10X10_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ASTC_12X10_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_12X10_UNORM_SRGB
+  | typeof TEXTURE_FORMAT_ASTC_12X12_UNORM
+  | typeof TEXTURE_FORMAT_ASTC_12X12_UNORM_SRGB;
+export const TEXTURE_FORMAT_R8UNORM = 0;
+export const TEXTURE_FORMAT_R8SNORM = 1;
+export const TEXTURE_FORMAT_R8UINT = 2;
+export const TEXTURE_FORMAT_R8SINT = 3;
+export const TEXTURE_FORMAT_R16UINT = 4;
+export const TEXTURE_FORMAT_R16SINT = 5;
+export const TEXTURE_FORMAT_R16FLOAT = 6;
+export const TEXTURE_FORMAT_RG8UNORM = 7;
+export const TEXTURE_FORMAT_RG8SNORM = 8;
+export const TEXTURE_FORMAT_RG8UINT = 9;
+export const TEXTURE_FORMAT_RG8SINT = 10;
+export const TEXTURE_FORMAT_R32UINT = 11;
+export const TEXTURE_FORMAT_R32SINT = 12;
+export const TEXTURE_FORMAT_R32FLOAT = 13;
+export const TEXTURE_FORMAT_RG16UINT = 14;
+export const TEXTURE_FORMAT_RG16SINT = 15;
+export const TEXTURE_FORMAT_RG16FLOAT = 16;
+export const TEXTURE_FORMAT_RGBA8UNORM = 17;
+export const TEXTURE_FORMAT_RGBA8UNORM_SRGB = 18;
+export const TEXTURE_FORMAT_RGBA8SNORM = 19;
+export const TEXTURE_FORMAT_RGBA8UINT = 20;
+export const TEXTURE_FORMAT_RGBA8SINT = 21;
+export const TEXTURE_FORMAT_BGRA8UNORM = 22;
+export const TEXTURE_FORMAT_BGRA8UNORM_SRGB = 23;
+export const TEXTURE_FORMAT_RGB9E5UFLOAT = 24;
+export const TEXTURE_FORMAT_RGB10A2UINT = 25;
+export const TEXTURE_FORMAT_RGB10A2UNORM = 26;
+export const TEXTURE_FORMAT_RG11B10UFLOAT = 27;
+export const TEXTURE_FORMAT_RG32UINT = 28;
+export const TEXTURE_FORMAT_RG32SINT = 29;
+export const TEXTURE_FORMAT_RG32FLOAT = 30;
+export const TEXTURE_FORMAT_RGBA16UINT = 31;
+export const TEXTURE_FORMAT_RGBA16SINT = 32;
+export const TEXTURE_FORMAT_RGBA16FLOAT = 33;
+export const TEXTURE_FORMAT_RGBA32UINT = 34;
+export const TEXTURE_FORMAT_RGBA32SINT = 35;
+export const TEXTURE_FORMAT_RGBA32FLOAT = 36;
+export const TEXTURE_FORMAT_STENCIL8 = 37;
+export const TEXTURE_FORMAT_DEPTH16UNORM = 38;
+export const TEXTURE_FORMAT_DEPTH24PLUS = 39;
+export const TEXTURE_FORMAT_DEPTH24PLUS_STENCIL8 = 40;
+export const TEXTURE_FORMAT_DEPTH32FLOAT = 41;
+export const TEXTURE_FORMAT_DEPTH32FLOAT_STENCIL8 = 42;
+export const TEXTURE_FORMAT_BC1_RGBA_UNORM = 43;
+export const TEXTURE_FORMAT_BC1_RGBA_UNORM_SRGB = 44;
+export const TEXTURE_FORMAT_BC2_RGBA_UNORM = 45;
+export const TEXTURE_FORMAT_BC2_RGBA_UNORM_SRGB = 46;
+export const TEXTURE_FORMAT_BC3_RGBA_UNORM = 47;
+export const TEXTURE_FORMAT_BC3_RGBA_UNORM_SRGB = 48;
+export const TEXTURE_FORMAT_BC4_R_UNORM = 49;
+export const TEXTURE_FORMAT_BC4_R_SNORM = 50;
+export const TEXTURE_FORMAT_BC5_RG_UNORM = 51;
+export const TEXTURE_FORMAT_BC5_RG_SNORM = 52;
+export const TEXTURE_FORMAT_BC6H_RGB_UFLOAT = 53;
+export const TEXTURE_FORMAT_BC6H_RGB_FLOAT = 54;
+export const TEXTURE_FORMAT_BC7_RGBA_UNORM = 55;
+export const TEXTURE_FORMAT_BC7_RGBA_UNORM_SRGB = 56;
+export const TEXTURE_FORMAT_ETC2_RGB8UNORM = 57;
+export const TEXTURE_FORMAT_ETC2_RGB8UNORM_SRGB = 58;
+export const TEXTURE_FORMAT_ETC2_RGB8A1UNORM = 59;
+export const TEXTURE_FORMAT_ETC2_RGB8A1UNORM_SRGB = 60;
+export const TEXTURE_FORMAT_ETC2_RGBA8UNORM = 61;
+export const TEXTURE_FORMAT_ETC2_RGBA8UNORM_SRGB = 62;
+export const TEXTURE_FORMAT_EAC_R11UNORM = 63;
+export const TEXTURE_FORMAT_EAC_R11SNORM = 64;
+export const TEXTURE_FORMAT_EAC_RG11UNORM = 65;
+export const TEXTURE_FORMAT_EAC_RG11SNORM = 66;
+export const TEXTURE_FORMAT_ASTC_4X4_UNORM = 67;
+export const TEXTURE_FORMAT_ASTC_4X4_UNORM_SRGB = 68;
+export const TEXTURE_FORMAT_ASTC_5X4_UNORM = 69;
+export const TEXTURE_FORMAT_ASTC_5X4_UNORM_SRGB = 70;
+export const TEXTURE_FORMAT_ASTC_5X5_UNORM = 71;
+export const TEXTURE_FORMAT_ASTC_5X5_UNORM_SRGB = 72;
+export const TEXTURE_FORMAT_ASTC_6X5_UNORM = 73;
+export const TEXTURE_FORMAT_ASTC_6X5_UNORM_SRGB = 74;
+export const TEXTURE_FORMAT_ASTC_6X6_UNORM = 75;
+export const TEXTURE_FORMAT_ASTC_6X6_UNORM_SRGB = 76;
+export const TEXTURE_FORMAT_ASTC_8X5_UNORM = 77;
+export const TEXTURE_FORMAT_ASTC_8X5_UNORM_SRGB = 78;
+export const TEXTURE_FORMAT_ASTC_8X6_UNORM = 79;
+export const TEXTURE_FORMAT_ASTC_8X6_UNORM_SRGB = 80;
+export const TEXTURE_FORMAT_ASTC_8X8_UNORM = 81;
+export const TEXTURE_FORMAT_ASTC_8X8_UNORM_SRGB = 82;
+export const TEXTURE_FORMAT_ASTC_10X5_UNORM = 83;
+export const TEXTURE_FORMAT_ASTC_10X5_UNORM_SRGB = 84;
+export const TEXTURE_FORMAT_ASTC_10X6_UNORM = 85;
+export const TEXTURE_FORMAT_ASTC_10X6_UNORM_SRGB = 86;
+export const TEXTURE_FORMAT_ASTC_10X8_UNORM = 87;
+export const TEXTURE_FORMAT_ASTC_10X8_UNORM_SRGB = 88;
+export const TEXTURE_FORMAT_ASTC_10X10_UNORM = 89;
+export const TEXTURE_FORMAT_ASTC_10X10_UNORM_SRGB = 90;
+export const TEXTURE_FORMAT_ASTC_12X10_UNORM = 91;
+export const TEXTURE_FORMAT_ASTC_12X10_UNORM_SRGB = 92;
+export const TEXTURE_FORMAT_ASTC_12X12_UNORM = 93;
+export const TEXTURE_FORMAT_ASTC_12X12_UNORM_SRGB = 94;
 
-/** The name of the `TextureFormat` member numbered `n`, or undefined for a number
- * no member has. */
-export function texture_format_name(
-  n: number,
-): keyof typeof TextureFormat | undefined {
-  for (const k in TextureFormat)
-    if (TextureFormat[k as keyof typeof TextureFormat] === n)
-      return k as keyof typeof TextureFormat;
-  return undefined;
-}
-
-/** The `TextureFormat` member `n` is, or null for a number no member has. */
-export function texture_format_of(n: number): TextureFormat | null {
-  return texture_format_name(n) === undefined ? null : (n as TextureFormat);
+/** The member `val` is, or null for a number no member has. */
+export function of_TextureFormat(val: number): TextureFormat | null {
+  return val === TEXTURE_FORMAT_R8UNORM ||
+    val === TEXTURE_FORMAT_R8SNORM ||
+    val === TEXTURE_FORMAT_R8UINT ||
+    val === TEXTURE_FORMAT_R8SINT ||
+    val === TEXTURE_FORMAT_R16UINT ||
+    val === TEXTURE_FORMAT_R16SINT ||
+    val === TEXTURE_FORMAT_R16FLOAT ||
+    val === TEXTURE_FORMAT_RG8UNORM ||
+    val === TEXTURE_FORMAT_RG8SNORM ||
+    val === TEXTURE_FORMAT_RG8UINT ||
+    val === TEXTURE_FORMAT_RG8SINT ||
+    val === TEXTURE_FORMAT_R32UINT ||
+    val === TEXTURE_FORMAT_R32SINT ||
+    val === TEXTURE_FORMAT_R32FLOAT ||
+    val === TEXTURE_FORMAT_RG16UINT ||
+    val === TEXTURE_FORMAT_RG16SINT ||
+    val === TEXTURE_FORMAT_RG16FLOAT ||
+    val === TEXTURE_FORMAT_RGBA8UNORM ||
+    val === TEXTURE_FORMAT_RGBA8UNORM_SRGB ||
+    val === TEXTURE_FORMAT_RGBA8SNORM ||
+    val === TEXTURE_FORMAT_RGBA8UINT ||
+    val === TEXTURE_FORMAT_RGBA8SINT ||
+    val === TEXTURE_FORMAT_BGRA8UNORM ||
+    val === TEXTURE_FORMAT_BGRA8UNORM_SRGB ||
+    val === TEXTURE_FORMAT_RGB9E5UFLOAT ||
+    val === TEXTURE_FORMAT_RGB10A2UINT ||
+    val === TEXTURE_FORMAT_RGB10A2UNORM ||
+    val === TEXTURE_FORMAT_RG11B10UFLOAT ||
+    val === TEXTURE_FORMAT_RG32UINT ||
+    val === TEXTURE_FORMAT_RG32SINT ||
+    val === TEXTURE_FORMAT_RG32FLOAT ||
+    val === TEXTURE_FORMAT_RGBA16UINT ||
+    val === TEXTURE_FORMAT_RGBA16SINT ||
+    val === TEXTURE_FORMAT_RGBA16FLOAT ||
+    val === TEXTURE_FORMAT_RGBA32UINT ||
+    val === TEXTURE_FORMAT_RGBA32SINT ||
+    val === TEXTURE_FORMAT_RGBA32FLOAT ||
+    val === TEXTURE_FORMAT_STENCIL8 ||
+    val === TEXTURE_FORMAT_DEPTH16UNORM ||
+    val === TEXTURE_FORMAT_DEPTH24PLUS ||
+    val === TEXTURE_FORMAT_DEPTH24PLUS_STENCIL8 ||
+    val === TEXTURE_FORMAT_DEPTH32FLOAT ||
+    val === TEXTURE_FORMAT_DEPTH32FLOAT_STENCIL8 ||
+    val === TEXTURE_FORMAT_BC1_RGBA_UNORM ||
+    val === TEXTURE_FORMAT_BC1_RGBA_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_BC2_RGBA_UNORM ||
+    val === TEXTURE_FORMAT_BC2_RGBA_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_BC3_RGBA_UNORM ||
+    val === TEXTURE_FORMAT_BC3_RGBA_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_BC4_R_UNORM ||
+    val === TEXTURE_FORMAT_BC4_R_SNORM ||
+    val === TEXTURE_FORMAT_BC5_RG_UNORM ||
+    val === TEXTURE_FORMAT_BC5_RG_SNORM ||
+    val === TEXTURE_FORMAT_BC6H_RGB_UFLOAT ||
+    val === TEXTURE_FORMAT_BC6H_RGB_FLOAT ||
+    val === TEXTURE_FORMAT_BC7_RGBA_UNORM ||
+    val === TEXTURE_FORMAT_BC7_RGBA_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ETC2_RGB8UNORM ||
+    val === TEXTURE_FORMAT_ETC2_RGB8UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ETC2_RGB8A1UNORM ||
+    val === TEXTURE_FORMAT_ETC2_RGB8A1UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ETC2_RGBA8UNORM ||
+    val === TEXTURE_FORMAT_ETC2_RGBA8UNORM_SRGB ||
+    val === TEXTURE_FORMAT_EAC_R11UNORM ||
+    val === TEXTURE_FORMAT_EAC_R11SNORM ||
+    val === TEXTURE_FORMAT_EAC_RG11UNORM ||
+    val === TEXTURE_FORMAT_EAC_RG11SNORM ||
+    val === TEXTURE_FORMAT_ASTC_4X4_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_4X4_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ASTC_5X4_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_5X4_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ASTC_5X5_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_5X5_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ASTC_6X5_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_6X5_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ASTC_6X6_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_6X6_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ASTC_8X5_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_8X5_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ASTC_8X6_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_8X6_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ASTC_8X8_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_8X8_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ASTC_10X5_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_10X5_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ASTC_10X6_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_10X6_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ASTC_10X8_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_10X8_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ASTC_10X10_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_10X10_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ASTC_12X10_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_12X10_UNORM_SRGB ||
+    val === TEXTURE_FORMAT_ASTC_12X12_UNORM ||
+    val === TEXTURE_FORMAT_ASTC_12X12_UNORM_SRGB
+    ? val
+    : null;
 }
 
 /** These are the members of GPUVertexFormat. */
-export const VERTEX_FORMAT = [
+export const VERTEX_FORMATS = [
   "uint8",
   "uint8x2",
   "uint8x4",
@@ -267,68 +445,138 @@ export const VERTEX_FORMAT = [
   "unorm8x4-bgra",
 ] as const;
 
-export const VertexFormat = {
-  uint8: 0,
-  uint8x2: 1,
-  uint8x4: 2,
-  sint8: 3,
-  sint8x2: 4,
-  sint8x4: 5,
-  unorm8: 6,
-  unorm8x2: 7,
-  unorm8x4: 8,
-  snorm8: 9,
-  snorm8x2: 10,
-  snorm8x4: 11,
-  uint16: 12,
-  uint16x2: 13,
-  uint16x4: 14,
-  sint16: 15,
-  sint16x2: 16,
-  sint16x4: 17,
-  unorm16: 18,
-  unorm16x2: 19,
-  unorm16x4: 20,
-  snorm16: 21,
-  snorm16x2: 22,
-  snorm16x4: 23,
-  float16: 24,
-  float16x2: 25,
-  float16x4: 26,
-  float32: 27,
-  float32x2: 28,
-  float32x3: 29,
-  float32x4: 30,
-  uint32: 31,
-  uint32x2: 32,
-  uint32x3: 33,
-  uint32x4: 34,
-  sint32: 35,
-  sint32x2: 36,
-  sint32x3: 37,
-  sint32x4: 38,
-  "unorm10-10-10-2": 39,
-  "unorm8x4-bgra": 40,
-} as const;
-export type VertexFormat = (typeof VertexFormat)[keyof typeof VertexFormat];
+export type VertexFormat =
+  | typeof VERTEX_FORMAT_UINT8
+  | typeof VERTEX_FORMAT_UINT8X2
+  | typeof VERTEX_FORMAT_UINT8X4
+  | typeof VERTEX_FORMAT_SINT8
+  | typeof VERTEX_FORMAT_SINT8X2
+  | typeof VERTEX_FORMAT_SINT8X4
+  | typeof VERTEX_FORMAT_UNORM8
+  | typeof VERTEX_FORMAT_UNORM8X2
+  | typeof VERTEX_FORMAT_UNORM8X4
+  | typeof VERTEX_FORMAT_SNORM8
+  | typeof VERTEX_FORMAT_SNORM8X2
+  | typeof VERTEX_FORMAT_SNORM8X4
+  | typeof VERTEX_FORMAT_UINT16
+  | typeof VERTEX_FORMAT_UINT16X2
+  | typeof VERTEX_FORMAT_UINT16X4
+  | typeof VERTEX_FORMAT_SINT16
+  | typeof VERTEX_FORMAT_SINT16X2
+  | typeof VERTEX_FORMAT_SINT16X4
+  | typeof VERTEX_FORMAT_UNORM16
+  | typeof VERTEX_FORMAT_UNORM16X2
+  | typeof VERTEX_FORMAT_UNORM16X4
+  | typeof VERTEX_FORMAT_SNORM16
+  | typeof VERTEX_FORMAT_SNORM16X2
+  | typeof VERTEX_FORMAT_SNORM16X4
+  | typeof VERTEX_FORMAT_FLOAT16
+  | typeof VERTEX_FORMAT_FLOAT16X2
+  | typeof VERTEX_FORMAT_FLOAT16X4
+  | typeof VERTEX_FORMAT_FLOAT32
+  | typeof VERTEX_FORMAT_FLOAT32X2
+  | typeof VERTEX_FORMAT_FLOAT32X3
+  | typeof VERTEX_FORMAT_FLOAT32X4
+  | typeof VERTEX_FORMAT_UINT32
+  | typeof VERTEX_FORMAT_UINT32X2
+  | typeof VERTEX_FORMAT_UINT32X3
+  | typeof VERTEX_FORMAT_UINT32X4
+  | typeof VERTEX_FORMAT_SINT32
+  | typeof VERTEX_FORMAT_SINT32X2
+  | typeof VERTEX_FORMAT_SINT32X3
+  | typeof VERTEX_FORMAT_SINT32X4
+  | typeof VERTEX_FORMAT_UNORM10_10_10_2
+  | typeof VERTEX_FORMAT_UNORM8X4_BGRA;
+export const VERTEX_FORMAT_UINT8 = 0;
+export const VERTEX_FORMAT_UINT8X2 = 1;
+export const VERTEX_FORMAT_UINT8X4 = 2;
+export const VERTEX_FORMAT_SINT8 = 3;
+export const VERTEX_FORMAT_SINT8X2 = 4;
+export const VERTEX_FORMAT_SINT8X4 = 5;
+export const VERTEX_FORMAT_UNORM8 = 6;
+export const VERTEX_FORMAT_UNORM8X2 = 7;
+export const VERTEX_FORMAT_UNORM8X4 = 8;
+export const VERTEX_FORMAT_SNORM8 = 9;
+export const VERTEX_FORMAT_SNORM8X2 = 10;
+export const VERTEX_FORMAT_SNORM8X4 = 11;
+export const VERTEX_FORMAT_UINT16 = 12;
+export const VERTEX_FORMAT_UINT16X2 = 13;
+export const VERTEX_FORMAT_UINT16X4 = 14;
+export const VERTEX_FORMAT_SINT16 = 15;
+export const VERTEX_FORMAT_SINT16X2 = 16;
+export const VERTEX_FORMAT_SINT16X4 = 17;
+export const VERTEX_FORMAT_UNORM16 = 18;
+export const VERTEX_FORMAT_UNORM16X2 = 19;
+export const VERTEX_FORMAT_UNORM16X4 = 20;
+export const VERTEX_FORMAT_SNORM16 = 21;
+export const VERTEX_FORMAT_SNORM16X2 = 22;
+export const VERTEX_FORMAT_SNORM16X4 = 23;
+export const VERTEX_FORMAT_FLOAT16 = 24;
+export const VERTEX_FORMAT_FLOAT16X2 = 25;
+export const VERTEX_FORMAT_FLOAT16X4 = 26;
+export const VERTEX_FORMAT_FLOAT32 = 27;
+export const VERTEX_FORMAT_FLOAT32X2 = 28;
+export const VERTEX_FORMAT_FLOAT32X3 = 29;
+export const VERTEX_FORMAT_FLOAT32X4 = 30;
+export const VERTEX_FORMAT_UINT32 = 31;
+export const VERTEX_FORMAT_UINT32X2 = 32;
+export const VERTEX_FORMAT_UINT32X3 = 33;
+export const VERTEX_FORMAT_UINT32X4 = 34;
+export const VERTEX_FORMAT_SINT32 = 35;
+export const VERTEX_FORMAT_SINT32X2 = 36;
+export const VERTEX_FORMAT_SINT32X3 = 37;
+export const VERTEX_FORMAT_SINT32X4 = 38;
+export const VERTEX_FORMAT_UNORM10_10_10_2 = 39;
+export const VERTEX_FORMAT_UNORM8X4_BGRA = 40;
 
-/** The name of the `VertexFormat` member numbered `n`, or undefined for a number
- * no member has. */
-export function vertex_format_name(
-  n: number,
-): keyof typeof VertexFormat | undefined {
-  for (const k in VertexFormat)
-    if (VertexFormat[k as keyof typeof VertexFormat] === n)
-      return k as keyof typeof VertexFormat;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_VertexFormat(val: number): VertexFormat | null {
+  return val === VERTEX_FORMAT_UINT8 ||
+    val === VERTEX_FORMAT_UINT8X2 ||
+    val === VERTEX_FORMAT_UINT8X4 ||
+    val === VERTEX_FORMAT_SINT8 ||
+    val === VERTEX_FORMAT_SINT8X2 ||
+    val === VERTEX_FORMAT_SINT8X4 ||
+    val === VERTEX_FORMAT_UNORM8 ||
+    val === VERTEX_FORMAT_UNORM8X2 ||
+    val === VERTEX_FORMAT_UNORM8X4 ||
+    val === VERTEX_FORMAT_SNORM8 ||
+    val === VERTEX_FORMAT_SNORM8X2 ||
+    val === VERTEX_FORMAT_SNORM8X4 ||
+    val === VERTEX_FORMAT_UINT16 ||
+    val === VERTEX_FORMAT_UINT16X2 ||
+    val === VERTEX_FORMAT_UINT16X4 ||
+    val === VERTEX_FORMAT_SINT16 ||
+    val === VERTEX_FORMAT_SINT16X2 ||
+    val === VERTEX_FORMAT_SINT16X4 ||
+    val === VERTEX_FORMAT_UNORM16 ||
+    val === VERTEX_FORMAT_UNORM16X2 ||
+    val === VERTEX_FORMAT_UNORM16X4 ||
+    val === VERTEX_FORMAT_SNORM16 ||
+    val === VERTEX_FORMAT_SNORM16X2 ||
+    val === VERTEX_FORMAT_SNORM16X4 ||
+    val === VERTEX_FORMAT_FLOAT16 ||
+    val === VERTEX_FORMAT_FLOAT16X2 ||
+    val === VERTEX_FORMAT_FLOAT16X4 ||
+    val === VERTEX_FORMAT_FLOAT32 ||
+    val === VERTEX_FORMAT_FLOAT32X2 ||
+    val === VERTEX_FORMAT_FLOAT32X3 ||
+    val === VERTEX_FORMAT_FLOAT32X4 ||
+    val === VERTEX_FORMAT_UINT32 ||
+    val === VERTEX_FORMAT_UINT32X2 ||
+    val === VERTEX_FORMAT_UINT32X3 ||
+    val === VERTEX_FORMAT_UINT32X4 ||
+    val === VERTEX_FORMAT_SINT32 ||
+    val === VERTEX_FORMAT_SINT32X2 ||
+    val === VERTEX_FORMAT_SINT32X3 ||
+    val === VERTEX_FORMAT_SINT32X4 ||
+    val === VERTEX_FORMAT_UNORM10_10_10_2 ||
+    val === VERTEX_FORMAT_UNORM8X4_BGRA
+    ? val
+    : null;
 }
 
-/** The `VertexFormat` member `n` is, or null for a number no member has. */
-export function vertex_format_of(n: number): VertexFormat | null {
-  return vertex_format_name(n) === undefined ? null : (n as VertexFormat);
-}
-
-export const PRIMITIVE_TOPOLOGY = [
+export const PRIMITIVE_TOPOLOGIES = [
   "point-list",
   "line-list",
   "line-strip",
@@ -336,104 +584,72 @@ export const PRIMITIVE_TOPOLOGY = [
   "triangle-strip",
 ] as const;
 
-export const PrimitiveTopology = {
-  "point-list": 0,
-  "line-list": 1,
-  "line-strip": 2,
-  "triangle-list": 3,
-  "triangle-strip": 4,
-} as const;
 export type PrimitiveTopology =
-  (typeof PrimitiveTopology)[keyof typeof PrimitiveTopology];
+  | typeof PRIMITIVE_TOPOLOGY_POINT_LIST
+  | typeof PRIMITIVE_TOPOLOGY_LINE_LIST
+  | typeof PRIMITIVE_TOPOLOGY_LINE_STRIP
+  | typeof PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+  | typeof PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+export const PRIMITIVE_TOPOLOGY_POINT_LIST = 0;
+export const PRIMITIVE_TOPOLOGY_LINE_LIST = 1;
+export const PRIMITIVE_TOPOLOGY_LINE_STRIP = 2;
+export const PRIMITIVE_TOPOLOGY_TRIANGLE_LIST = 3;
+export const PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP = 4;
 
-/** The name of the `PrimitiveTopology` member numbered `n`, or undefined for a number
- * no member has. */
-export function primitive_topology_name(
-  n: number,
-): keyof typeof PrimitiveTopology | undefined {
-  for (const k in PrimitiveTopology)
-    if (PrimitiveTopology[k as keyof typeof PrimitiveTopology] === n)
-      return k as keyof typeof PrimitiveTopology;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_PrimitiveTopology(val: number): PrimitiveTopology | null {
+  return val === PRIMITIVE_TOPOLOGY_POINT_LIST ||
+    val === PRIMITIVE_TOPOLOGY_LINE_LIST ||
+    val === PRIMITIVE_TOPOLOGY_LINE_STRIP ||
+    val === PRIMITIVE_TOPOLOGY_TRIANGLE_LIST ||
+    val === PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP
+    ? val
+    : null;
 }
 
-/** The `PrimitiveTopology` member `n` is, or null for a number no member has. */
-export function primitive_topology_of(n: number): PrimitiveTopology | null {
-  return primitive_topology_name(n) === undefined
-    ? null
-    : (n as PrimitiveTopology);
+export const INDEX_FORMATS = ["uint16", "uint32"] as const;
+
+export type IndexFormat =
+  typeof INDEX_FORMAT_UINT16 | typeof INDEX_FORMAT_UINT32;
+export const INDEX_FORMAT_UINT16 = 0;
+export const INDEX_FORMAT_UINT32 = 1;
+
+/** The member `val` is, or null for a number no member has. */
+export function of_IndexFormat(val: number): IndexFormat | null {
+  return val === INDEX_FORMAT_UINT16 || val === INDEX_FORMAT_UINT32
+    ? val
+    : null;
 }
 
-export const INDEX_FORMAT = ["uint16", "uint32"] as const;
+export const FRONT_FACES = ["ccw", "cw"] as const;
 
-export const IndexFormat = {
-  uint16: 0,
-  uint32: 1,
-} as const;
-export type IndexFormat = (typeof IndexFormat)[keyof typeof IndexFormat];
+export type FrontFace = typeof FRONT_FACE_CCW | typeof FRONT_FACE_CW;
+export const FRONT_FACE_CCW = 0;
+export const FRONT_FACE_CW = 1;
 
-/** The name of the `IndexFormat` member numbered `n`, or undefined for a number
- * no member has. */
-export function index_format_name(
-  n: number,
-): keyof typeof IndexFormat | undefined {
-  for (const k in IndexFormat)
-    if (IndexFormat[k as keyof typeof IndexFormat] === n)
-      return k as keyof typeof IndexFormat;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_FrontFace(val: number): FrontFace | null {
+  return val === FRONT_FACE_CCW || val === FRONT_FACE_CW ? val : null;
 }
 
-/** The `IndexFormat` member `n` is, or null for a number no member has. */
-export function index_format_of(n: number): IndexFormat | null {
-  return index_format_name(n) === undefined ? null : (n as IndexFormat);
+export const CULL_MODES = ["none", "front", "back"] as const;
+
+export type CullMode =
+  typeof CULL_MODE_NONE | typeof CULL_MODE_FRONT | typeof CULL_MODE_BACK;
+export const CULL_MODE_NONE = 0;
+export const CULL_MODE_FRONT = 1;
+export const CULL_MODE_BACK = 2;
+
+/** The member `val` is, or null for a number no member has. */
+export function of_CullMode(val: number): CullMode | null {
+  return val === CULL_MODE_NONE ||
+    val === CULL_MODE_FRONT ||
+    val === CULL_MODE_BACK
+    ? val
+    : null;
 }
 
-export const FRONT_FACE = ["ccw", "cw"] as const;
-
-export const FrontFace = {
-  ccw: 0,
-  cw: 1,
-} as const;
-export type FrontFace = (typeof FrontFace)[keyof typeof FrontFace];
-
-/** The name of the `FrontFace` member numbered `n`, or undefined for a number
- * no member has. */
-export function front_face_name(n: number): keyof typeof FrontFace | undefined {
-  for (const k in FrontFace)
-    if (FrontFace[k as keyof typeof FrontFace] === n)
-      return k as keyof typeof FrontFace;
-  return undefined;
-}
-
-/** The `FrontFace` member `n` is, or null for a number no member has. */
-export function front_face_of(n: number): FrontFace | null {
-  return front_face_name(n) === undefined ? null : (n as FrontFace);
-}
-
-export const CULL_MODE = ["none", "front", "back"] as const;
-
-export const CullMode = {
-  none: 0,
-  front: 1,
-  back: 2,
-} as const;
-export type CullMode = (typeof CullMode)[keyof typeof CullMode];
-
-/** The name of the `CullMode` member numbered `n`, or undefined for a number
- * no member has. */
-export function cull_mode_name(n: number): keyof typeof CullMode | undefined {
-  for (const k in CullMode)
-    if (CullMode[k as keyof typeof CullMode] === n)
-      return k as keyof typeof CullMode;
-  return undefined;
-}
-
-/** The `CullMode` member `n` is, or null for a number no member has. */
-export function cull_mode_of(n: number): CullMode | null {
-  return cull_mode_name(n) === undefined ? null : (n as CullMode);
-}
-
-export const COMPARE_FUNCTION = [
+export const COMPARE_FUNCTIONS = [
   "never",
   "less",
   "equal",
@@ -444,36 +660,39 @@ export const COMPARE_FUNCTION = [
   "always",
 ] as const;
 
-export const CompareFunction = {
-  never: 0,
-  less: 1,
-  equal: 2,
-  "less-equal": 3,
-  greater: 4,
-  "not-equal": 5,
-  "greater-equal": 6,
-  always: 7,
-} as const;
 export type CompareFunction =
-  (typeof CompareFunction)[keyof typeof CompareFunction];
+  | typeof COMPARE_FUNCTION_NEVER
+  | typeof COMPARE_FUNCTION_LESS
+  | typeof COMPARE_FUNCTION_EQUAL
+  | typeof COMPARE_FUNCTION_LESS_EQUAL
+  | typeof COMPARE_FUNCTION_GREATER
+  | typeof COMPARE_FUNCTION_NOT_EQUAL
+  | typeof COMPARE_FUNCTION_GREATER_EQUAL
+  | typeof COMPARE_FUNCTION_ALWAYS;
+export const COMPARE_FUNCTION_NEVER = 0;
+export const COMPARE_FUNCTION_LESS = 1;
+export const COMPARE_FUNCTION_EQUAL = 2;
+export const COMPARE_FUNCTION_LESS_EQUAL = 3;
+export const COMPARE_FUNCTION_GREATER = 4;
+export const COMPARE_FUNCTION_NOT_EQUAL = 5;
+export const COMPARE_FUNCTION_GREATER_EQUAL = 6;
+export const COMPARE_FUNCTION_ALWAYS = 7;
 
-/** The name of the `CompareFunction` member numbered `n`, or undefined for a number
- * no member has. */
-export function compare_function_name(
-  n: number,
-): keyof typeof CompareFunction | undefined {
-  for (const k in CompareFunction)
-    if (CompareFunction[k as keyof typeof CompareFunction] === n)
-      return k as keyof typeof CompareFunction;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_CompareFunction(val: number): CompareFunction | null {
+  return val === COMPARE_FUNCTION_NEVER ||
+    val === COMPARE_FUNCTION_LESS ||
+    val === COMPARE_FUNCTION_EQUAL ||
+    val === COMPARE_FUNCTION_LESS_EQUAL ||
+    val === COMPARE_FUNCTION_GREATER ||
+    val === COMPARE_FUNCTION_NOT_EQUAL ||
+    val === COMPARE_FUNCTION_GREATER_EQUAL ||
+    val === COMPARE_FUNCTION_ALWAYS
+    ? val
+    : null;
 }
 
-/** The `CompareFunction` member `n` is, or null for a number no member has. */
-export function compare_function_of(n: number): CompareFunction | null {
-  return compare_function_name(n) === undefined ? null : (n as CompareFunction);
-}
-
-export const STENCIL_OPERATION = [
+export const STENCIL_OPERATIONS = [
   "keep",
   "zero",
   "replace",
@@ -484,38 +703,39 @@ export const STENCIL_OPERATION = [
   "decrement-wrap",
 ] as const;
 
-export const StencilOperation = {
-  keep: 0,
-  zero: 1,
-  replace: 2,
-  invert: 3,
-  "increment-clamp": 4,
-  "decrement-clamp": 5,
-  "increment-wrap": 6,
-  "decrement-wrap": 7,
-} as const;
 export type StencilOperation =
-  (typeof StencilOperation)[keyof typeof StencilOperation];
+  | typeof STENCIL_OPERATION_KEEP
+  | typeof STENCIL_OPERATION_ZERO
+  | typeof STENCIL_OPERATION_REPLACE
+  | typeof STENCIL_OPERATION_INVERT
+  | typeof STENCIL_OPERATION_INCREMENT_CLAMP
+  | typeof STENCIL_OPERATION_DECREMENT_CLAMP
+  | typeof STENCIL_OPERATION_INCREMENT_WRAP
+  | typeof STENCIL_OPERATION_DECREMENT_WRAP;
+export const STENCIL_OPERATION_KEEP = 0;
+export const STENCIL_OPERATION_ZERO = 1;
+export const STENCIL_OPERATION_REPLACE = 2;
+export const STENCIL_OPERATION_INVERT = 3;
+export const STENCIL_OPERATION_INCREMENT_CLAMP = 4;
+export const STENCIL_OPERATION_DECREMENT_CLAMP = 5;
+export const STENCIL_OPERATION_INCREMENT_WRAP = 6;
+export const STENCIL_OPERATION_DECREMENT_WRAP = 7;
 
-/** The name of the `StencilOperation` member numbered `n`, or undefined for a number
- * no member has. */
-export function stencil_operation_name(
-  n: number,
-): keyof typeof StencilOperation | undefined {
-  for (const k in StencilOperation)
-    if (StencilOperation[k as keyof typeof StencilOperation] === n)
-      return k as keyof typeof StencilOperation;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_StencilOperation(val: number): StencilOperation | null {
+  return val === STENCIL_OPERATION_KEEP ||
+    val === STENCIL_OPERATION_ZERO ||
+    val === STENCIL_OPERATION_REPLACE ||
+    val === STENCIL_OPERATION_INVERT ||
+    val === STENCIL_OPERATION_INCREMENT_CLAMP ||
+    val === STENCIL_OPERATION_DECREMENT_CLAMP ||
+    val === STENCIL_OPERATION_INCREMENT_WRAP ||
+    val === STENCIL_OPERATION_DECREMENT_WRAP
+    ? val
+    : null;
 }
 
-/** The `StencilOperation` member `n` is, or null for a number no member has. */
-export function stencil_operation_of(n: number): StencilOperation | null {
-  return stencil_operation_name(n) === undefined
-    ? null
-    : (n as StencilOperation);
-}
-
-export const BLEND_OPERATION = [
+export const BLEND_OPERATIONS = [
   "add",
   "subtract",
   "reverse-subtract",
@@ -523,33 +743,30 @@ export const BLEND_OPERATION = [
   "max",
 ] as const;
 
-export const BlendOperation = {
-  add: 0,
-  subtract: 1,
-  "reverse-subtract": 2,
-  min: 3,
-  max: 4,
-} as const;
 export type BlendOperation =
-  (typeof BlendOperation)[keyof typeof BlendOperation];
+  | typeof BLEND_OPERATION_ADD
+  | typeof BLEND_OPERATION_SUBTRACT
+  | typeof BLEND_OPERATION_REVERSE_SUBTRACT
+  | typeof BLEND_OPERATION_MIN
+  | typeof BLEND_OPERATION_MAX;
+export const BLEND_OPERATION_ADD = 0;
+export const BLEND_OPERATION_SUBTRACT = 1;
+export const BLEND_OPERATION_REVERSE_SUBTRACT = 2;
+export const BLEND_OPERATION_MIN = 3;
+export const BLEND_OPERATION_MAX = 4;
 
-/** The name of the `BlendOperation` member numbered `n`, or undefined for a number
- * no member has. */
-export function blend_operation_name(
-  n: number,
-): keyof typeof BlendOperation | undefined {
-  for (const k in BlendOperation)
-    if (BlendOperation[k as keyof typeof BlendOperation] === n)
-      return k as keyof typeof BlendOperation;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_BlendOperation(val: number): BlendOperation | null {
+  return val === BLEND_OPERATION_ADD ||
+    val === BLEND_OPERATION_SUBTRACT ||
+    val === BLEND_OPERATION_REVERSE_SUBTRACT ||
+    val === BLEND_OPERATION_MIN ||
+    val === BLEND_OPERATION_MAX
+    ? val
+    : null;
 }
 
-/** The `BlendOperation` member `n` is, or null for a number no member has. */
-export function blend_operation_of(n: number): BlendOperation | null {
-  return blend_operation_name(n) === undefined ? null : (n as BlendOperation);
-}
-
-export const BLEND_FACTOR = [
+export const BLEND_FACTORS = [
   "zero",
   "one",
   "src",
@@ -569,177 +786,147 @@ export const BLEND_FACTOR = [
   "one-minus-src1-alpha",
 ] as const;
 
-export const BlendFactor = {
-  zero: 0,
-  one: 1,
-  src: 2,
-  "one-minus-src": 3,
-  "src-alpha": 4,
-  "one-minus-src-alpha": 5,
-  dst: 6,
-  "one-minus-dst": 7,
-  "dst-alpha": 8,
-  "one-minus-dst-alpha": 9,
-  "src-alpha-saturated": 10,
-  constant: 11,
-  "one-minus-constant": 12,
-  src1: 13,
-  "one-minus-src1": 14,
-  "src1-alpha": 15,
-  "one-minus-src1-alpha": 16,
-} as const;
-export type BlendFactor = (typeof BlendFactor)[keyof typeof BlendFactor];
+export type BlendFactor =
+  | typeof BLEND_FACTOR_ZERO
+  | typeof BLEND_FACTOR_ONE
+  | typeof BLEND_FACTOR_SRC
+  | typeof BLEND_FACTOR_ONE_MINUS_SRC
+  | typeof BLEND_FACTOR_SRC_ALPHA
+  | typeof BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
+  | typeof BLEND_FACTOR_DST
+  | typeof BLEND_FACTOR_ONE_MINUS_DST
+  | typeof BLEND_FACTOR_DST_ALPHA
+  | typeof BLEND_FACTOR_ONE_MINUS_DST_ALPHA
+  | typeof BLEND_FACTOR_SRC_ALPHA_SATURATED
+  | typeof BLEND_FACTOR_CONSTANT
+  | typeof BLEND_FACTOR_ONE_MINUS_CONSTANT
+  | typeof BLEND_FACTOR_SRC1
+  | typeof BLEND_FACTOR_ONE_MINUS_SRC1
+  | typeof BLEND_FACTOR_SRC1_ALPHA
+  | typeof BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
+export const BLEND_FACTOR_ZERO = 0;
+export const BLEND_FACTOR_ONE = 1;
+export const BLEND_FACTOR_SRC = 2;
+export const BLEND_FACTOR_ONE_MINUS_SRC = 3;
+export const BLEND_FACTOR_SRC_ALPHA = 4;
+export const BLEND_FACTOR_ONE_MINUS_SRC_ALPHA = 5;
+export const BLEND_FACTOR_DST = 6;
+export const BLEND_FACTOR_ONE_MINUS_DST = 7;
+export const BLEND_FACTOR_DST_ALPHA = 8;
+export const BLEND_FACTOR_ONE_MINUS_DST_ALPHA = 9;
+export const BLEND_FACTOR_SRC_ALPHA_SATURATED = 10;
+export const BLEND_FACTOR_CONSTANT = 11;
+export const BLEND_FACTOR_ONE_MINUS_CONSTANT = 12;
+export const BLEND_FACTOR_SRC1 = 13;
+export const BLEND_FACTOR_ONE_MINUS_SRC1 = 14;
+export const BLEND_FACTOR_SRC1_ALPHA = 15;
+export const BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA = 16;
 
-/** The name of the `BlendFactor` member numbered `n`, or undefined for a number
- * no member has. */
-export function blend_factor_name(
-  n: number,
-): keyof typeof BlendFactor | undefined {
-  for (const k in BlendFactor)
-    if (BlendFactor[k as keyof typeof BlendFactor] === n)
-      return k as keyof typeof BlendFactor;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_BlendFactor(val: number): BlendFactor | null {
+  return val === BLEND_FACTOR_ZERO ||
+    val === BLEND_FACTOR_ONE ||
+    val === BLEND_FACTOR_SRC ||
+    val === BLEND_FACTOR_ONE_MINUS_SRC ||
+    val === BLEND_FACTOR_SRC_ALPHA ||
+    val === BLEND_FACTOR_ONE_MINUS_SRC_ALPHA ||
+    val === BLEND_FACTOR_DST ||
+    val === BLEND_FACTOR_ONE_MINUS_DST ||
+    val === BLEND_FACTOR_DST_ALPHA ||
+    val === BLEND_FACTOR_ONE_MINUS_DST_ALPHA ||
+    val === BLEND_FACTOR_SRC_ALPHA_SATURATED ||
+    val === BLEND_FACTOR_CONSTANT ||
+    val === BLEND_FACTOR_ONE_MINUS_CONSTANT ||
+    val === BLEND_FACTOR_SRC1 ||
+    val === BLEND_FACTOR_ONE_MINUS_SRC1 ||
+    val === BLEND_FACTOR_SRC1_ALPHA ||
+    val === BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA
+    ? val
+    : null;
 }
 
-/** The `BlendFactor` member `n` is, or null for a number no member has. */
-export function blend_factor_of(n: number): BlendFactor | null {
-  return blend_factor_name(n) === undefined ? null : (n as BlendFactor);
-}
+export const VERTEX_STEP_MODES = ["vertex", "instance"] as const;
 
-export const VERTEX_STEP_MODE = ["vertex", "instance"] as const;
-
-export const VertexStepMode = {
-  vertex: 0,
-  instance: 1,
-} as const;
 export type VertexStepMode =
-  (typeof VertexStepMode)[keyof typeof VertexStepMode];
+  typeof VERTEX_STEP_MODE_VERTEX | typeof VERTEX_STEP_MODE_INSTANCE;
+export const VERTEX_STEP_MODE_VERTEX = 0;
+export const VERTEX_STEP_MODE_INSTANCE = 1;
 
-/** The name of the `VertexStepMode` member numbered `n`, or undefined for a number
- * no member has. */
-export function vertex_step_mode_name(
-  n: number,
-): keyof typeof VertexStepMode | undefined {
-  for (const k in VertexStepMode)
-    if (VertexStepMode[k as keyof typeof VertexStepMode] === n)
-      return k as keyof typeof VertexStepMode;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_VertexStepMode(val: number): VertexStepMode | null {
+  return val === VERTEX_STEP_MODE_VERTEX || val === VERTEX_STEP_MODE_INSTANCE
+    ? val
+    : null;
 }
 
-/** The `VertexStepMode` member `n` is, or null for a number no member has. */
-export function vertex_step_mode_of(n: number): VertexStepMode | null {
-  return vertex_step_mode_name(n) === undefined ? null : (n as VertexStepMode);
-}
-
-export const ADDRESS_MODE = [
+export const ADDRESS_MODES = [
   "clamp-to-edge",
   "repeat",
   "mirror-repeat",
 ] as const;
 
-export const AddressMode = {
-  "clamp-to-edge": 0,
-  repeat: 1,
-  "mirror-repeat": 2,
-} as const;
-export type AddressMode = (typeof AddressMode)[keyof typeof AddressMode];
+export type AddressMode =
+  | typeof ADDRESS_MODE_CLAMP_TO_EDGE
+  | typeof ADDRESS_MODE_REPEAT
+  | typeof ADDRESS_MODE_MIRROR_REPEAT;
+export const ADDRESS_MODE_CLAMP_TO_EDGE = 0;
+export const ADDRESS_MODE_REPEAT = 1;
+export const ADDRESS_MODE_MIRROR_REPEAT = 2;
 
-/** The name of the `AddressMode` member numbered `n`, or undefined for a number
- * no member has. */
-export function address_mode_name(
-  n: number,
-): keyof typeof AddressMode | undefined {
-  for (const k in AddressMode)
-    if (AddressMode[k as keyof typeof AddressMode] === n)
-      return k as keyof typeof AddressMode;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_AddressMode(val: number): AddressMode | null {
+  return val === ADDRESS_MODE_CLAMP_TO_EDGE ||
+    val === ADDRESS_MODE_REPEAT ||
+    val === ADDRESS_MODE_MIRROR_REPEAT
+    ? val
+    : null;
 }
 
-/** The `AddressMode` member `n` is, or null for a number no member has. */
-export function address_mode_of(n: number): AddressMode | null {
-  return address_mode_name(n) === undefined ? null : (n as AddressMode);
+export const FILTER_MODES = ["nearest", "linear"] as const;
+
+export type FilterMode = typeof FILTER_MODE_NEAREST | typeof FILTER_MODE_LINEAR;
+export const FILTER_MODE_NEAREST = 0;
+export const FILTER_MODE_LINEAR = 1;
+
+/** The member `val` is, or null for a number no member has. */
+export function of_FilterMode(val: number): FilterMode | null {
+  return val === FILTER_MODE_NEAREST || val === FILTER_MODE_LINEAR ? val : null;
 }
 
-export const FILTER_MODE = ["nearest", "linear"] as const;
+export const MIPMAP_FILTER_MODES = ["nearest", "linear"] as const;
 
-export const FilterMode = {
-  nearest: 0,
-  linear: 1,
-} as const;
-export type FilterMode = (typeof FilterMode)[keyof typeof FilterMode];
-
-/** The name of the `FilterMode` member numbered `n`, or undefined for a number
- * no member has. */
-export function filter_mode_name(
-  n: number,
-): keyof typeof FilterMode | undefined {
-  for (const k in FilterMode)
-    if (FilterMode[k as keyof typeof FilterMode] === n)
-      return k as keyof typeof FilterMode;
-  return undefined;
-}
-
-/** The `FilterMode` member `n` is, or null for a number no member has. */
-export function filter_mode_of(n: number): FilterMode | null {
-  return filter_mode_name(n) === undefined ? null : (n as FilterMode);
-}
-
-export const MIPMAP_FILTER_MODE = ["nearest", "linear"] as const;
-
-export const MipmapFilterMode = {
-  nearest: 0,
-  linear: 1,
-} as const;
 export type MipmapFilterMode =
-  (typeof MipmapFilterMode)[keyof typeof MipmapFilterMode];
+  typeof MIPMAP_FILTER_MODE_NEAREST | typeof MIPMAP_FILTER_MODE_LINEAR;
+export const MIPMAP_FILTER_MODE_NEAREST = 0;
+export const MIPMAP_FILTER_MODE_LINEAR = 1;
 
-/** The name of the `MipmapFilterMode` member numbered `n`, or undefined for a number
- * no member has. */
-export function mipmap_filter_mode_name(
-  n: number,
-): keyof typeof MipmapFilterMode | undefined {
-  for (const k in MipmapFilterMode)
-    if (MipmapFilterMode[k as keyof typeof MipmapFilterMode] === n)
-      return k as keyof typeof MipmapFilterMode;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_MipmapFilterMode(val: number): MipmapFilterMode | null {
+  return val === MIPMAP_FILTER_MODE_NEAREST || val === MIPMAP_FILTER_MODE_LINEAR
+    ? val
+    : null;
 }
 
-/** The `MipmapFilterMode` member `n` is, or null for a number no member has. */
-export function mipmap_filter_mode_of(n: number): MipmapFilterMode | null {
-  return mipmap_filter_mode_name(n) === undefined
-    ? null
-    : (n as MipmapFilterMode);
-}
+export const TEXTURE_DIMENSIONS = ["1d", "2d", "3d"] as const;
 
-export const TEXTURE_DIMENSION = ["1d", "2d", "3d"] as const;
-
-export const TextureDimension = {
-  "1d": 0,
-  "2d": 1,
-  "3d": 2,
-} as const;
 export type TextureDimension =
-  (typeof TextureDimension)[keyof typeof TextureDimension];
+  | typeof TEXTURE_DIMENSION_1D
+  | typeof TEXTURE_DIMENSION_2D
+  | typeof TEXTURE_DIMENSION_3D;
+export const TEXTURE_DIMENSION_1D = 0;
+export const TEXTURE_DIMENSION_2D = 1;
+export const TEXTURE_DIMENSION_3D = 2;
 
-/** The name of the `TextureDimension` member numbered `n`, or undefined for a number
- * no member has. */
-export function texture_dimension_name(
-  n: number,
-): keyof typeof TextureDimension | undefined {
-  for (const k in TextureDimension)
-    if (TextureDimension[k as keyof typeof TextureDimension] === n)
-      return k as keyof typeof TextureDimension;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_TextureDimension(val: number): TextureDimension | null {
+  return val === TEXTURE_DIMENSION_1D ||
+    val === TEXTURE_DIMENSION_2D ||
+    val === TEXTURE_DIMENSION_3D
+    ? val
+    : null;
 }
 
-/** The `TextureDimension` member `n` is, or null for a number no member has. */
-export function texture_dimension_of(n: number): TextureDimension | null {
-  return texture_dimension_name(n) === undefined
-    ? null
-    : (n as TextureDimension);
-}
-
-export const TEXTURE_VIEW_DIMENSION = [
+export const TEXTURE_VIEW_DIMENSIONS = [
   "1d",
   "2d",
   "2d-array",
@@ -748,127 +935,100 @@ export const TEXTURE_VIEW_DIMENSION = [
   "3d",
 ] as const;
 
-export const TextureViewDimension = {
-  "1d": 0,
-  "2d": 1,
-  "2d-array": 2,
-  cube: 3,
-  "cube-array": 4,
-  "3d": 5,
-} as const;
 export type TextureViewDimension =
-  (typeof TextureViewDimension)[keyof typeof TextureViewDimension];
+  | typeof TEXTURE_VIEW_DIMENSION_1D
+  | typeof TEXTURE_VIEW_DIMENSION_2D
+  | typeof TEXTURE_VIEW_DIMENSION_2D_ARRAY
+  | typeof TEXTURE_VIEW_DIMENSION_CUBE
+  | typeof TEXTURE_VIEW_DIMENSION_CUBE_ARRAY
+  | typeof TEXTURE_VIEW_DIMENSION_3D;
+export const TEXTURE_VIEW_DIMENSION_1D = 0;
+export const TEXTURE_VIEW_DIMENSION_2D = 1;
+export const TEXTURE_VIEW_DIMENSION_2D_ARRAY = 2;
+export const TEXTURE_VIEW_DIMENSION_CUBE = 3;
+export const TEXTURE_VIEW_DIMENSION_CUBE_ARRAY = 4;
+export const TEXTURE_VIEW_DIMENSION_3D = 5;
 
-/** The name of the `TextureViewDimension` member numbered `n`, or undefined for a number
- * no member has. */
-export function texture_view_dimension_name(
-  n: number,
-): keyof typeof TextureViewDimension | undefined {
-  for (const k in TextureViewDimension)
-    if (TextureViewDimension[k as keyof typeof TextureViewDimension] === n)
-      return k as keyof typeof TextureViewDimension;
-  return undefined;
-}
-
-/** The `TextureViewDimension` member `n` is, or null for a number no member has. */
-export function texture_view_dimension_of(
-  n: number,
+/** The member `val` is, or null for a number no member has. */
+export function of_TextureViewDimension(
+  val: number,
 ): TextureViewDimension | null {
-  return texture_view_dimension_name(n) === undefined
-    ? null
-    : (n as TextureViewDimension);
+  return val === TEXTURE_VIEW_DIMENSION_1D ||
+    val === TEXTURE_VIEW_DIMENSION_2D ||
+    val === TEXTURE_VIEW_DIMENSION_2D_ARRAY ||
+    val === TEXTURE_VIEW_DIMENSION_CUBE ||
+    val === TEXTURE_VIEW_DIMENSION_CUBE_ARRAY ||
+    val === TEXTURE_VIEW_DIMENSION_3D
+    ? val
+    : null;
 }
 
-export const TEXTURE_ASPECT = ["all", "stencil-only", "depth-only"] as const;
+export const TEXTURE_ASPECTS = ["all", "stencil-only", "depth-only"] as const;
 
-export const TextureAspect = {
-  all: 0,
-  "stencil-only": 1,
-  "depth-only": 2,
-} as const;
-export type TextureAspect = (typeof TextureAspect)[keyof typeof TextureAspect];
+export type TextureAspect =
+  | typeof TEXTURE_ASPECT_ALL
+  | typeof TEXTURE_ASPECT_STENCIL_ONLY
+  | typeof TEXTURE_ASPECT_DEPTH_ONLY;
+export const TEXTURE_ASPECT_ALL = 0;
+export const TEXTURE_ASPECT_STENCIL_ONLY = 1;
+export const TEXTURE_ASPECT_DEPTH_ONLY = 2;
 
-/** The name of the `TextureAspect` member numbered `n`, or undefined for a number
- * no member has. */
-export function texture_aspect_name(
-  n: number,
-): keyof typeof TextureAspect | undefined {
-  for (const k in TextureAspect)
-    if (TextureAspect[k as keyof typeof TextureAspect] === n)
-      return k as keyof typeof TextureAspect;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_TextureAspect(val: number): TextureAspect | null {
+  return val === TEXTURE_ASPECT_ALL ||
+    val === TEXTURE_ASPECT_STENCIL_ONLY ||
+    val === TEXTURE_ASPECT_DEPTH_ONLY
+    ? val
+    : null;
 }
 
-/** The `TextureAspect` member `n` is, or null for a number no member has. */
-export function texture_aspect_of(n: number): TextureAspect | null {
-  return texture_aspect_name(n) === undefined ? null : (n as TextureAspect);
-}
-
-export const BUFFER_BINDING_TYPE = [
+export const BUFFER_BINDING_TYPES = [
   "uniform",
   "storage",
   "read-only-storage",
 ] as const;
 
-export const BufferBindingType = {
-  uniform: 0,
-  storage: 1,
-  "read-only-storage": 2,
-} as const;
 export type BufferBindingType =
-  (typeof BufferBindingType)[keyof typeof BufferBindingType];
+  | typeof BUFFER_BINDING_TYPE_UNIFORM
+  | typeof BUFFER_BINDING_TYPE_STORAGE
+  | typeof BUFFER_BINDING_TYPE_READ_ONLY_STORAGE;
+export const BUFFER_BINDING_TYPE_UNIFORM = 0;
+export const BUFFER_BINDING_TYPE_STORAGE = 1;
+export const BUFFER_BINDING_TYPE_READ_ONLY_STORAGE = 2;
 
-/** The name of the `BufferBindingType` member numbered `n`, or undefined for a number
- * no member has. */
-export function buffer_binding_type_name(
-  n: number,
-): keyof typeof BufferBindingType | undefined {
-  for (const k in BufferBindingType)
-    if (BufferBindingType[k as keyof typeof BufferBindingType] === n)
-      return k as keyof typeof BufferBindingType;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_BufferBindingType(val: number): BufferBindingType | null {
+  return val === BUFFER_BINDING_TYPE_UNIFORM ||
+    val === BUFFER_BINDING_TYPE_STORAGE ||
+    val === BUFFER_BINDING_TYPE_READ_ONLY_STORAGE
+    ? val
+    : null;
 }
 
-/** The `BufferBindingType` member `n` is, or null for a number no member has. */
-export function buffer_binding_type_of(n: number): BufferBindingType | null {
-  return buffer_binding_type_name(n) === undefined
-    ? null
-    : (n as BufferBindingType);
-}
-
-export const SAMPLER_BINDING_TYPE = [
+export const SAMPLER_BINDING_TYPES = [
   "filtering",
   "non-filtering",
   "comparison",
 ] as const;
 
-export const SamplerBindingType = {
-  filtering: 0,
-  "non-filtering": 1,
-  comparison: 2,
-} as const;
 export type SamplerBindingType =
-  (typeof SamplerBindingType)[keyof typeof SamplerBindingType];
+  | typeof SAMPLER_BINDING_TYPE_FILTERING
+  | typeof SAMPLER_BINDING_TYPE_NON_FILTERING
+  | typeof SAMPLER_BINDING_TYPE_COMPARISON;
+export const SAMPLER_BINDING_TYPE_FILTERING = 0;
+export const SAMPLER_BINDING_TYPE_NON_FILTERING = 1;
+export const SAMPLER_BINDING_TYPE_COMPARISON = 2;
 
-/** The name of the `SamplerBindingType` member numbered `n`, or undefined for a number
- * no member has. */
-export function sampler_binding_type_name(
-  n: number,
-): keyof typeof SamplerBindingType | undefined {
-  for (const k in SamplerBindingType)
-    if (SamplerBindingType[k as keyof typeof SamplerBindingType] === n)
-      return k as keyof typeof SamplerBindingType;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_SamplerBindingType(val: number): SamplerBindingType | null {
+  return val === SAMPLER_BINDING_TYPE_FILTERING ||
+    val === SAMPLER_BINDING_TYPE_NON_FILTERING ||
+    val === SAMPLER_BINDING_TYPE_COMPARISON
+    ? val
+    : null;
 }
 
-/** The `SamplerBindingType` member `n` is, or null for a number no member has. */
-export function sampler_binding_type_of(n: number): SamplerBindingType | null {
-  return sampler_binding_type_name(n) === undefined
-    ? null
-    : (n as SamplerBindingType);
-}
-
-export const TEXTURE_SAMPLE_TYPE = [
+export const TEXTURE_SAMPLE_TYPES = [
   "float",
   "unfilterable-float",
   "depth",
@@ -876,163 +1036,108 @@ export const TEXTURE_SAMPLE_TYPE = [
   "uint",
 ] as const;
 
-export const TextureSampleType = {
-  float: 0,
-  "unfilterable-float": 1,
-  depth: 2,
-  sint: 3,
-  uint: 4,
-} as const;
 export type TextureSampleType =
-  (typeof TextureSampleType)[keyof typeof TextureSampleType];
+  | typeof TEXTURE_SAMPLE_TYPE_FLOAT
+  | typeof TEXTURE_SAMPLE_TYPE_UNFILTERABLE_FLOAT
+  | typeof TEXTURE_SAMPLE_TYPE_DEPTH
+  | typeof TEXTURE_SAMPLE_TYPE_SINT
+  | typeof TEXTURE_SAMPLE_TYPE_UINT;
+export const TEXTURE_SAMPLE_TYPE_FLOAT = 0;
+export const TEXTURE_SAMPLE_TYPE_UNFILTERABLE_FLOAT = 1;
+export const TEXTURE_SAMPLE_TYPE_DEPTH = 2;
+export const TEXTURE_SAMPLE_TYPE_SINT = 3;
+export const TEXTURE_SAMPLE_TYPE_UINT = 4;
 
-/** The name of the `TextureSampleType` member numbered `n`, or undefined for a number
- * no member has. */
-export function texture_sample_type_name(
-  n: number,
-): keyof typeof TextureSampleType | undefined {
-  for (const k in TextureSampleType)
-    if (TextureSampleType[k as keyof typeof TextureSampleType] === n)
-      return k as keyof typeof TextureSampleType;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_TextureSampleType(val: number): TextureSampleType | null {
+  return val === TEXTURE_SAMPLE_TYPE_FLOAT ||
+    val === TEXTURE_SAMPLE_TYPE_UNFILTERABLE_FLOAT ||
+    val === TEXTURE_SAMPLE_TYPE_DEPTH ||
+    val === TEXTURE_SAMPLE_TYPE_SINT ||
+    val === TEXTURE_SAMPLE_TYPE_UINT
+    ? val
+    : null;
 }
 
-/** The `TextureSampleType` member `n` is, or null for a number no member has. */
-export function texture_sample_type_of(n: number): TextureSampleType | null {
-  return texture_sample_type_name(n) === undefined
-    ? null
-    : (n as TextureSampleType);
-}
-
-export const STORAGE_TEXTURE_ACCESS = [
+export const STORAGE_TEXTURE_ACCESSES = [
   "write-only",
   "read-only",
   "read-write",
 ] as const;
 
-export const StorageTextureAccess = {
-  "write-only": 0,
-  "read-only": 1,
-  "read-write": 2,
-} as const;
 export type StorageTextureAccess =
-  (typeof StorageTextureAccess)[keyof typeof StorageTextureAccess];
+  | typeof STORAGE_TEXTURE_ACCESS_WRITE_ONLY
+  | typeof STORAGE_TEXTURE_ACCESS_READ_ONLY
+  | typeof STORAGE_TEXTURE_ACCESS_READ_WRITE;
+export const STORAGE_TEXTURE_ACCESS_WRITE_ONLY = 0;
+export const STORAGE_TEXTURE_ACCESS_READ_ONLY = 1;
+export const STORAGE_TEXTURE_ACCESS_READ_WRITE = 2;
 
-/** The name of the `StorageTextureAccess` member numbered `n`, or undefined for a number
- * no member has. */
-export function storage_texture_access_name(
-  n: number,
-): keyof typeof StorageTextureAccess | undefined {
-  for (const k in StorageTextureAccess)
-    if (StorageTextureAccess[k as keyof typeof StorageTextureAccess] === n)
-      return k as keyof typeof StorageTextureAccess;
-  return undefined;
-}
-
-/** The `StorageTextureAccess` member `n` is, or null for a number no member has. */
-export function storage_texture_access_of(
-  n: number,
+/** The member `val` is, or null for a number no member has. */
+export function of_StorageTextureAccess(
+  val: number,
 ): StorageTextureAccess | null {
-  return storage_texture_access_name(n) === undefined
-    ? null
-    : (n as StorageTextureAccess);
+  return val === STORAGE_TEXTURE_ACCESS_WRITE_ONLY ||
+    val === STORAGE_TEXTURE_ACCESS_READ_ONLY ||
+    val === STORAGE_TEXTURE_ACCESS_READ_WRITE
+    ? val
+    : null;
 }
 
-export const LOAD_OP = ["load", "clear"] as const;
+export const LOAD_OPS = ["load", "clear"] as const;
 
-export const LoadOp = {
-  load: 0,
-  clear: 1,
-} as const;
-export type LoadOp = (typeof LoadOp)[keyof typeof LoadOp];
+export type LoadOp = typeof LOAD_OP_LOAD | typeof LOAD_OP_CLEAR;
+export const LOAD_OP_LOAD = 0;
+export const LOAD_OP_CLEAR = 1;
 
-/** The name of the `LoadOp` member numbered `n`, or undefined for a number
- * no member has. */
-export function load_op_name(n: number): keyof typeof LoadOp | undefined {
-  for (const k in LoadOp)
-    if (LoadOp[k as keyof typeof LoadOp] === n) return k as keyof typeof LoadOp;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_LoadOp(val: number): LoadOp | null {
+  return val === LOAD_OP_LOAD || val === LOAD_OP_CLEAR ? val : null;
 }
 
-/** The `LoadOp` member `n` is, or null for a number no member has. */
-export function load_op_of(n: number): LoadOp | null {
-  return load_op_name(n) === undefined ? null : (n as LoadOp);
+export const STORE_OPS = ["store", "discard"] as const;
+
+export type StoreOp = typeof STORE_OP_STORE | typeof STORE_OP_DISCARD;
+export const STORE_OP_STORE = 0;
+export const STORE_OP_DISCARD = 1;
+
+/** The member `val` is, or null for a number no member has. */
+export function of_StoreOp(val: number): StoreOp | null {
+  return val === STORE_OP_STORE || val === STORE_OP_DISCARD ? val : null;
 }
 
-export const STORE_OP = ["store", "discard"] as const;
+export const QUERY_TYPES = ["occlusion", "timestamp"] as const;
 
-export const StoreOp = {
-  store: 0,
-  discard: 1,
-} as const;
-export type StoreOp = (typeof StoreOp)[keyof typeof StoreOp];
+export type QueryType =
+  typeof QUERY_TYPE_OCCLUSION | typeof QUERY_TYPE_TIMESTAMP;
+export const QUERY_TYPE_OCCLUSION = 0;
+export const QUERY_TYPE_TIMESTAMP = 1;
 
-/** The name of the `StoreOp` member numbered `n`, or undefined for a number
- * no member has. */
-export function store_op_name(n: number): keyof typeof StoreOp | undefined {
-  for (const k in StoreOp)
-    if (StoreOp[k as keyof typeof StoreOp] === n)
-      return k as keyof typeof StoreOp;
-  return undefined;
+/** The member `val` is, or null for a number no member has. */
+export function of_QueryType(val: number): QueryType | null {
+  return val === QUERY_TYPE_OCCLUSION || val === QUERY_TYPE_TIMESTAMP
+    ? val
+    : null;
 }
 
-/** The `StoreOp` member `n` is, or null for a number no member has. */
-export function store_op_of(n: number): StoreOp | null {
-  return store_op_name(n) === undefined ? null : (n as StoreOp);
-}
+export const CANVAS_ALPHA_MODES = ["opaque", "premultiplied"] as const;
 
-export const QUERY_TYPE = ["occlusion", "timestamp"] as const;
-
-export const QueryType = {
-  occlusion: 0,
-  timestamp: 1,
-} as const;
-export type QueryType = (typeof QueryType)[keyof typeof QueryType];
-
-/** The name of the `QueryType` member numbered `n`, or undefined for a number
- * no member has. */
-export function query_type_name(n: number): keyof typeof QueryType | undefined {
-  for (const k in QueryType)
-    if (QueryType[k as keyof typeof QueryType] === n)
-      return k as keyof typeof QueryType;
-  return undefined;
-}
-
-/** The `QueryType` member `n` is, or null for a number no member has. */
-export function query_type_of(n: number): QueryType | null {
-  return query_type_name(n) === undefined ? null : (n as QueryType);
-}
-
-export const CANVAS_ALPHA_MODE = ["opaque", "premultiplied"] as const;
-
-export const CanvasAlphaMode = {
-  opaque: 0,
-  premultiplied: 1,
-} as const;
 export type CanvasAlphaMode =
-  (typeof CanvasAlphaMode)[keyof typeof CanvasAlphaMode];
+  typeof CANVAS_ALPHA_MODE_OPAQUE | typeof CANVAS_ALPHA_MODE_PREMULTIPLIED;
+export const CANVAS_ALPHA_MODE_OPAQUE = 0;
+export const CANVAS_ALPHA_MODE_PREMULTIPLIED = 1;
 
-/** The name of the `CanvasAlphaMode` member numbered `n`, or undefined for a number
- * no member has. */
-export function canvas_alpha_mode_name(
-  n: number,
-): keyof typeof CanvasAlphaMode | undefined {
-  for (const k in CanvasAlphaMode)
-    if (CanvasAlphaMode[k as keyof typeof CanvasAlphaMode] === n)
-      return k as keyof typeof CanvasAlphaMode;
-  return undefined;
-}
-
-/** The `CanvasAlphaMode` member `n` is, or null for a number no member has. */
-export function canvas_alpha_mode_of(n: number): CanvasAlphaMode | null {
-  return canvas_alpha_mode_name(n) === undefined
-    ? null
-    : (n as CanvasAlphaMode);
+/** The member `val` is, or null for a number no member has. */
+export function of_CanvasAlphaMode(val: number): CanvasAlphaMode | null {
+  return val === CANVAS_ALPHA_MODE_OPAQUE ||
+    val === CANVAS_ALPHA_MODE_PREMULTIPLIED
+    ? val
+    : null;
 }
 
 /** GPUFeatureName. The DEVICE record (api.json) reports a device's features as one bit each,
  * at the member's place. */
-export const FEATURE_NAME = [
+export const FEATURE_NAMES = [
   "depth-clip-control",
   "depth32float-stencil8",
   "texture-compression-bc",
@@ -1052,46 +1157,68 @@ export const FEATURE_NAME = [
   "subgroups",
 ] as const;
 
-export const FeatureName = {
-  "depth-clip-control": 0,
-  "depth32float-stencil8": 1,
-  "texture-compression-bc": 2,
-  "texture-compression-bc-sliced-3d": 3,
-  "texture-compression-etc2": 4,
-  "texture-compression-astc": 5,
-  "texture-compression-astc-sliced-3d": 6,
-  "timestamp-query": 7,
-  "indirect-first-instance": 8,
-  "shader-f16": 9,
-  "rg11b10ufloat-renderable": 10,
-  "bgra8unorm-storage": 11,
-  "float32-filterable": 12,
-  "float32-blendable": 13,
-  "clip-distances": 14,
-  "dual-source-blending": 15,
-  subgroups: 16,
-} as const;
-export type FeatureName = (typeof FeatureName)[keyof typeof FeatureName];
+export type FeatureName =
+  | typeof FEATURE_NAME_DEPTH_CLIP_CONTROL
+  | typeof FEATURE_NAME_DEPTH32FLOAT_STENCIL8
+  | typeof FEATURE_NAME_TEXTURE_COMPRESSION_BC
+  | typeof FEATURE_NAME_TEXTURE_COMPRESSION_BC_SLICED_3D
+  | typeof FEATURE_NAME_TEXTURE_COMPRESSION_ETC2
+  | typeof FEATURE_NAME_TEXTURE_COMPRESSION_ASTC
+  | typeof FEATURE_NAME_TEXTURE_COMPRESSION_ASTC_SLICED_3D
+  | typeof FEATURE_NAME_TIMESTAMP_QUERY
+  | typeof FEATURE_NAME_INDIRECT_FIRST_INSTANCE
+  | typeof FEATURE_NAME_SHADER_F16
+  | typeof FEATURE_NAME_RG11B10UFLOAT_RENDERABLE
+  | typeof FEATURE_NAME_BGRA8UNORM_STORAGE
+  | typeof FEATURE_NAME_FLOAT32_FILTERABLE
+  | typeof FEATURE_NAME_FLOAT32_BLENDABLE
+  | typeof FEATURE_NAME_CLIP_DISTANCES
+  | typeof FEATURE_NAME_DUAL_SOURCE_BLENDING
+  | typeof FEATURE_NAME_SUBGROUPS;
+export const FEATURE_NAME_DEPTH_CLIP_CONTROL = 0;
+export const FEATURE_NAME_DEPTH32FLOAT_STENCIL8 = 1;
+export const FEATURE_NAME_TEXTURE_COMPRESSION_BC = 2;
+export const FEATURE_NAME_TEXTURE_COMPRESSION_BC_SLICED_3D = 3;
+export const FEATURE_NAME_TEXTURE_COMPRESSION_ETC2 = 4;
+export const FEATURE_NAME_TEXTURE_COMPRESSION_ASTC = 5;
+export const FEATURE_NAME_TEXTURE_COMPRESSION_ASTC_SLICED_3D = 6;
+export const FEATURE_NAME_TIMESTAMP_QUERY = 7;
+export const FEATURE_NAME_INDIRECT_FIRST_INSTANCE = 8;
+export const FEATURE_NAME_SHADER_F16 = 9;
+export const FEATURE_NAME_RG11B10UFLOAT_RENDERABLE = 10;
+export const FEATURE_NAME_BGRA8UNORM_STORAGE = 11;
+export const FEATURE_NAME_FLOAT32_FILTERABLE = 12;
+export const FEATURE_NAME_FLOAT32_BLENDABLE = 13;
+export const FEATURE_NAME_CLIP_DISTANCES = 14;
+export const FEATURE_NAME_DUAL_SOURCE_BLENDING = 15;
+export const FEATURE_NAME_SUBGROUPS = 16;
 
-/** The name of the `FeatureName` member numbered `n`, or undefined for a number
- * no member has. */
-export function feature_name_name(
-  n: number,
-): keyof typeof FeatureName | undefined {
-  for (const k in FeatureName)
-    if (FeatureName[k as keyof typeof FeatureName] === n)
-      return k as keyof typeof FeatureName;
-  return undefined;
-}
-
-/** The `FeatureName` member `n` is, or null for a number no member has. */
-export function feature_name_of(n: number): FeatureName | null {
-  return feature_name_name(n) === undefined ? null : (n as FeatureName);
+/** The member `val` is, or null for a number no member has. */
+export function of_FeatureName(val: number): FeatureName | null {
+  return val === FEATURE_NAME_DEPTH_CLIP_CONTROL ||
+    val === FEATURE_NAME_DEPTH32FLOAT_STENCIL8 ||
+    val === FEATURE_NAME_TEXTURE_COMPRESSION_BC ||
+    val === FEATURE_NAME_TEXTURE_COMPRESSION_BC_SLICED_3D ||
+    val === FEATURE_NAME_TEXTURE_COMPRESSION_ETC2 ||
+    val === FEATURE_NAME_TEXTURE_COMPRESSION_ASTC ||
+    val === FEATURE_NAME_TEXTURE_COMPRESSION_ASTC_SLICED_3D ||
+    val === FEATURE_NAME_TIMESTAMP_QUERY ||
+    val === FEATURE_NAME_INDIRECT_FIRST_INSTANCE ||
+    val === FEATURE_NAME_SHADER_F16 ||
+    val === FEATURE_NAME_RG11B10UFLOAT_RENDERABLE ||
+    val === FEATURE_NAME_BGRA8UNORM_STORAGE ||
+    val === FEATURE_NAME_FLOAT32_FILTERABLE ||
+    val === FEATURE_NAME_FLOAT32_BLENDABLE ||
+    val === FEATURE_NAME_CLIP_DISTANCES ||
+    val === FEATURE_NAME_DUAL_SOURCE_BLENDING ||
+    val === FEATURE_NAME_SUBGROUPS
+    ? val
+    : null;
 }
 
 /** The members of GPUSupportedLimits. The DEVICE record (api.json) reports a device's limits
  * as one word each, at the member's place. */
-export const LIMIT_NAME = [
+export const LIMIT_NAMES = [
   "maxTextureDimension1D",
   "maxTextureDimension2D",
   "maxTextureDimension3D",
@@ -1125,51 +1252,103 @@ export const LIMIT_NAME = [
   "maxComputeWorkgroupsPerDimension",
 ] as const;
 
-export const LimitName = {
-  maxTextureDimension1D: 0,
-  maxTextureDimension2D: 1,
-  maxTextureDimension3D: 2,
-  maxTextureArrayLayers: 3,
-  maxBindGroups: 4,
-  maxBindGroupsPlusVertexBuffers: 5,
-  maxBindingsPerBindGroup: 6,
-  maxDynamicUniformBuffersPerPipelineLayout: 7,
-  maxDynamicStorageBuffersPerPipelineLayout: 8,
-  maxSampledTexturesPerShaderStage: 9,
-  maxSamplersPerShaderStage: 10,
-  maxStorageBuffersPerShaderStage: 11,
-  maxStorageTexturesPerShaderStage: 12,
-  maxUniformBuffersPerShaderStage: 13,
-  maxUniformBufferBindingSize: 14,
-  maxStorageBufferBindingSize: 15,
-  minUniformBufferOffsetAlignment: 16,
-  minStorageBufferOffsetAlignment: 17,
-  maxVertexBuffers: 18,
-  maxBufferSize: 19,
-  maxVertexAttributes: 20,
-  maxVertexBufferArrayStride: 21,
-  maxInterStageShaderVariables: 22,
-  maxColorAttachments: 23,
-  maxColorAttachmentBytesPerSample: 24,
-  maxComputeWorkgroupStorageSize: 25,
-  maxComputeInvocationsPerWorkgroup: 26,
-  maxComputeWorkgroupSizeX: 27,
-  maxComputeWorkgroupSizeY: 28,
-  maxComputeWorkgroupSizeZ: 29,
-  maxComputeWorkgroupsPerDimension: 30,
-} as const;
-export type LimitName = (typeof LimitName)[keyof typeof LimitName];
+export type LimitName =
+  | typeof LIMIT_NAME_MAX_TEXTURE_DIMENSION_1D
+  | typeof LIMIT_NAME_MAX_TEXTURE_DIMENSION_2D
+  | typeof LIMIT_NAME_MAX_TEXTURE_DIMENSION_3D
+  | typeof LIMIT_NAME_MAX_TEXTURE_ARRAY_LAYERS
+  | typeof LIMIT_NAME_MAX_BIND_GROUPS
+  | typeof LIMIT_NAME_MAX_BIND_GROUPS_PLUS_VERTEX_BUFFERS
+  | typeof LIMIT_NAME_MAX_BINDINGS_PER_BIND_GROUP
+  | typeof LIMIT_NAME_MAX_DYNAMIC_UNIFORM_BUFFERS_PER_PIPELINE_LAYOUT
+  | typeof LIMIT_NAME_MAX_DYNAMIC_STORAGE_BUFFERS_PER_PIPELINE_LAYOUT
+  | typeof LIMIT_NAME_MAX_SAMPLED_TEXTURES_PER_SHADER_STAGE
+  | typeof LIMIT_NAME_MAX_SAMPLERS_PER_SHADER_STAGE
+  | typeof LIMIT_NAME_MAX_STORAGE_BUFFERS_PER_SHADER_STAGE
+  | typeof LIMIT_NAME_MAX_STORAGE_TEXTURES_PER_SHADER_STAGE
+  | typeof LIMIT_NAME_MAX_UNIFORM_BUFFERS_PER_SHADER_STAGE
+  | typeof LIMIT_NAME_MAX_UNIFORM_BUFFER_BINDING_SIZE
+  | typeof LIMIT_NAME_MAX_STORAGE_BUFFER_BINDING_SIZE
+  | typeof LIMIT_NAME_MIN_UNIFORM_BUFFER_OFFSET_ALIGNMENT
+  | typeof LIMIT_NAME_MIN_STORAGE_BUFFER_OFFSET_ALIGNMENT
+  | typeof LIMIT_NAME_MAX_VERTEX_BUFFERS
+  | typeof LIMIT_NAME_MAX_BUFFER_SIZE
+  | typeof LIMIT_NAME_MAX_VERTEX_ATTRIBUTES
+  | typeof LIMIT_NAME_MAX_VERTEX_BUFFER_ARRAY_STRIDE
+  | typeof LIMIT_NAME_MAX_INTER_STAGE_SHADER_VARIABLES
+  | typeof LIMIT_NAME_MAX_COLOR_ATTACHMENTS
+  | typeof LIMIT_NAME_MAX_COLOR_ATTACHMENT_BYTES_PER_SAMPLE
+  | typeof LIMIT_NAME_MAX_COMPUTE_WORKGROUP_STORAGE_SIZE
+  | typeof LIMIT_NAME_MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP
+  | typeof LIMIT_NAME_MAX_COMPUTE_WORKGROUP_SIZE_X
+  | typeof LIMIT_NAME_MAX_COMPUTE_WORKGROUP_SIZE_Y
+  | typeof LIMIT_NAME_MAX_COMPUTE_WORKGROUP_SIZE_Z
+  | typeof LIMIT_NAME_MAX_COMPUTE_WORKGROUPS_PER_DIMENSION;
+export const LIMIT_NAME_MAX_TEXTURE_DIMENSION_1D = 0;
+export const LIMIT_NAME_MAX_TEXTURE_DIMENSION_2D = 1;
+export const LIMIT_NAME_MAX_TEXTURE_DIMENSION_3D = 2;
+export const LIMIT_NAME_MAX_TEXTURE_ARRAY_LAYERS = 3;
+export const LIMIT_NAME_MAX_BIND_GROUPS = 4;
+export const LIMIT_NAME_MAX_BIND_GROUPS_PLUS_VERTEX_BUFFERS = 5;
+export const LIMIT_NAME_MAX_BINDINGS_PER_BIND_GROUP = 6;
+export const LIMIT_NAME_MAX_DYNAMIC_UNIFORM_BUFFERS_PER_PIPELINE_LAYOUT = 7;
+export const LIMIT_NAME_MAX_DYNAMIC_STORAGE_BUFFERS_PER_PIPELINE_LAYOUT = 8;
+export const LIMIT_NAME_MAX_SAMPLED_TEXTURES_PER_SHADER_STAGE = 9;
+export const LIMIT_NAME_MAX_SAMPLERS_PER_SHADER_STAGE = 10;
+export const LIMIT_NAME_MAX_STORAGE_BUFFERS_PER_SHADER_STAGE = 11;
+export const LIMIT_NAME_MAX_STORAGE_TEXTURES_PER_SHADER_STAGE = 12;
+export const LIMIT_NAME_MAX_UNIFORM_BUFFERS_PER_SHADER_STAGE = 13;
+export const LIMIT_NAME_MAX_UNIFORM_BUFFER_BINDING_SIZE = 14;
+export const LIMIT_NAME_MAX_STORAGE_BUFFER_BINDING_SIZE = 15;
+export const LIMIT_NAME_MIN_UNIFORM_BUFFER_OFFSET_ALIGNMENT = 16;
+export const LIMIT_NAME_MIN_STORAGE_BUFFER_OFFSET_ALIGNMENT = 17;
+export const LIMIT_NAME_MAX_VERTEX_BUFFERS = 18;
+export const LIMIT_NAME_MAX_BUFFER_SIZE = 19;
+export const LIMIT_NAME_MAX_VERTEX_ATTRIBUTES = 20;
+export const LIMIT_NAME_MAX_VERTEX_BUFFER_ARRAY_STRIDE = 21;
+export const LIMIT_NAME_MAX_INTER_STAGE_SHADER_VARIABLES = 22;
+export const LIMIT_NAME_MAX_COLOR_ATTACHMENTS = 23;
+export const LIMIT_NAME_MAX_COLOR_ATTACHMENT_BYTES_PER_SAMPLE = 24;
+export const LIMIT_NAME_MAX_COMPUTE_WORKGROUP_STORAGE_SIZE = 25;
+export const LIMIT_NAME_MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP = 26;
+export const LIMIT_NAME_MAX_COMPUTE_WORKGROUP_SIZE_X = 27;
+export const LIMIT_NAME_MAX_COMPUTE_WORKGROUP_SIZE_Y = 28;
+export const LIMIT_NAME_MAX_COMPUTE_WORKGROUP_SIZE_Z = 29;
+export const LIMIT_NAME_MAX_COMPUTE_WORKGROUPS_PER_DIMENSION = 30;
 
-/** The name of the `LimitName` member numbered `n`, or undefined for a number
- * no member has. */
-export function limit_name_name(n: number): keyof typeof LimitName | undefined {
-  for (const k in LimitName)
-    if (LimitName[k as keyof typeof LimitName] === n)
-      return k as keyof typeof LimitName;
-  return undefined;
-}
-
-/** The `LimitName` member `n` is, or null for a number no member has. */
-export function limit_name_of(n: number): LimitName | null {
-  return limit_name_name(n) === undefined ? null : (n as LimitName);
+/** The member `val` is, or null for a number no member has. */
+export function of_LimitName(val: number): LimitName | null {
+  return val === LIMIT_NAME_MAX_TEXTURE_DIMENSION_1D ||
+    val === LIMIT_NAME_MAX_TEXTURE_DIMENSION_2D ||
+    val === LIMIT_NAME_MAX_TEXTURE_DIMENSION_3D ||
+    val === LIMIT_NAME_MAX_TEXTURE_ARRAY_LAYERS ||
+    val === LIMIT_NAME_MAX_BIND_GROUPS ||
+    val === LIMIT_NAME_MAX_BIND_GROUPS_PLUS_VERTEX_BUFFERS ||
+    val === LIMIT_NAME_MAX_BINDINGS_PER_BIND_GROUP ||
+    val === LIMIT_NAME_MAX_DYNAMIC_UNIFORM_BUFFERS_PER_PIPELINE_LAYOUT ||
+    val === LIMIT_NAME_MAX_DYNAMIC_STORAGE_BUFFERS_PER_PIPELINE_LAYOUT ||
+    val === LIMIT_NAME_MAX_SAMPLED_TEXTURES_PER_SHADER_STAGE ||
+    val === LIMIT_NAME_MAX_SAMPLERS_PER_SHADER_STAGE ||
+    val === LIMIT_NAME_MAX_STORAGE_BUFFERS_PER_SHADER_STAGE ||
+    val === LIMIT_NAME_MAX_STORAGE_TEXTURES_PER_SHADER_STAGE ||
+    val === LIMIT_NAME_MAX_UNIFORM_BUFFERS_PER_SHADER_STAGE ||
+    val === LIMIT_NAME_MAX_UNIFORM_BUFFER_BINDING_SIZE ||
+    val === LIMIT_NAME_MAX_STORAGE_BUFFER_BINDING_SIZE ||
+    val === LIMIT_NAME_MIN_UNIFORM_BUFFER_OFFSET_ALIGNMENT ||
+    val === LIMIT_NAME_MIN_STORAGE_BUFFER_OFFSET_ALIGNMENT ||
+    val === LIMIT_NAME_MAX_VERTEX_BUFFERS ||
+    val === LIMIT_NAME_MAX_BUFFER_SIZE ||
+    val === LIMIT_NAME_MAX_VERTEX_ATTRIBUTES ||
+    val === LIMIT_NAME_MAX_VERTEX_BUFFER_ARRAY_STRIDE ||
+    val === LIMIT_NAME_MAX_INTER_STAGE_SHADER_VARIABLES ||
+    val === LIMIT_NAME_MAX_COLOR_ATTACHMENTS ||
+    val === LIMIT_NAME_MAX_COLOR_ATTACHMENT_BYTES_PER_SAMPLE ||
+    val === LIMIT_NAME_MAX_COMPUTE_WORKGROUP_STORAGE_SIZE ||
+    val === LIMIT_NAME_MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP ||
+    val === LIMIT_NAME_MAX_COMPUTE_WORKGROUP_SIZE_X ||
+    val === LIMIT_NAME_MAX_COMPUTE_WORKGROUP_SIZE_Y ||
+    val === LIMIT_NAME_MAX_COMPUTE_WORKGROUP_SIZE_Z ||
+    val === LIMIT_NAME_MAX_COMPUTE_WORKGROUPS_PER_DIMENSION
+    ? val
+    : null;
 }

@@ -9,7 +9,16 @@
  */
 
 import type { f64, i32 } from "@xpute/kit/abi/word.ts";
-import { PointerPhase, PointerType } from "@/abi/input.ts";
+import {
+  type PointerPhase,
+  type PointerType,
+  POINTER_PHASE_CANCEL,
+  POINTER_PHASE_DOWN,
+  POINTER_PHASE_MOVE,
+  POINTER_PHASE_OUT,
+  POINTER_PHASE_UP,
+  POINTER_TYPE_MOUSE,
+} from "@/abi/input.enum.ts";
 import { putKeyboardAway } from "@/ui/shared/component/keyboard.tsx";
 import {
   DockMode,
@@ -26,7 +35,7 @@ const pressed = new Map<i32, PointerType>();
 watchDockMode((mode) => {
   input.typing(mode === DockMode.Message);
   if (mode === DockMode.Message)
-    input.pointer(PointerPhase.Out, PointerType.Mouse, 0, 0, 0, 0);
+    input.pointer(POINTER_PHASE_OUT, POINTER_TYPE_MOUSE, 0, 0, 0, 0);
 });
 
 export function worldPointer(
@@ -39,18 +48,18 @@ export function worldPointer(
 ): void {
   const typing = dockMode() === DockMode.Message;
   switch (phase) {
-    case PointerPhase.Down:
+    case POINTER_PHASE_DOWN:
       // Sent while the core still types, so it spends the press (INPUT_TYPING).
       pressed.set(id, pointerType);
       putKeyboardAway();
       input.pointer(phase, pointerType, id, button, x, y);
       if (typing) setDockMode(DockMode.Palette);
       return;
-    case PointerPhase.Move:
+    case POINTER_PHASE_MOVE:
       if (typing && !pressed.has(id)) return;
       break;
-    case PointerPhase.Up:
-    case PointerPhase.Cancel:
+    case POINTER_PHASE_UP:
+    case POINTER_PHASE_CANCEL:
       pressed.delete(id);
       break;
   }
@@ -62,6 +71,6 @@ export function worldPointer(
  * because their lifts will not come. */
 export function releasePointers(): void {
   for (const [id, pointerType] of pressed) {
-    worldPointer(PointerPhase.Cancel, pointerType, id, 0, 0, 0);
+    worldPointer(POINTER_PHASE_CANCEL, pointerType, id, 0, 0, 0);
   }
 }

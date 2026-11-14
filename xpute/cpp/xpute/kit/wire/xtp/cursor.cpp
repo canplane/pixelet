@@ -155,9 +155,6 @@ Result<Value> Cursor::get() const noexcept {
 Result<std::uint64_t> Cursor::get_u64() const noexcept {
     return get_as<std::uint64_t>();
 }
-Result<std::int64_t> Cursor::get_i64() const noexcept {
-    return get_as<std::int64_t>();
-}
 Result<bool> Cursor::get_bool() const noexcept {
     return get_as<bool>();
 }

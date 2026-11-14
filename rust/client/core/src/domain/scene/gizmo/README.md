@@ -19,6 +19,6 @@ looks of `spec/client/render/frame/shader/debug_look.json`:
   grid's cells over the screen and the cells the rays stop on tinted by the
   share of a grid cell their faces show the eye (pxl-render
   `frame/shader/camera_grid.wgsl`, `screen_shade.wgsl` `cell_share`);
-- behind the `ray_steps` setting (pxl-engine `eye::STEPS`, `../cast.rs` `eye`),
+- behind the `ray_step` setting (pxl-engine `eye::STEPS`, `../cast.rs` `eye`),
   each ray's pixel colored by the steps taken on its way from the eye
   (pxl-render `frame/shader/cast.wgsl` `taken_word`, `queue.wgsl` `finish`).

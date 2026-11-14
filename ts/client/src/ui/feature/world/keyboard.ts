@@ -10,8 +10,8 @@
  */
 
 import type { i32 } from "@xpute/kit/abi/word.ts";
-import { Tool } from "@/abi/edit.ts";
-import { Kind } from "@/ui/shared/asset/id.spec.ts";
+import { type Tool, TOOL_ERASER, TOOL_POINTER } from "@/abi/edit.enum.ts";
+import { KIND_CUBE } from "@/ui/shared/asset/id.spec.ts";
 import { kindOf } from "@/ui/shared/asset/catalog.ts";
 import { closeModal, modalOpen, openModal } from "@/ui/shared/modal.ts";
 import {
@@ -40,8 +40,8 @@ const SLOT = /^Digit([1-9])$/;
 /** The letters follow Figma and Photoshop: V for the move tool and E for the
  * eraser. */
 const TOOL: Record<string, Tool> = {
-  KeyV: Tool.Pointer,
-  KeyE: Tool.Eraser,
+  KeyV: TOOL_POINTER,
+  KeyE: TOOL_ERASER,
 };
 
 /** I opens the drawer, as it opens a game's inventory and, with Shift,
@@ -63,13 +63,13 @@ function sendMove(): void {
   }
   if (to[0] === sent[0] && to[1] === sent[1]) return;
   sent = to;
-  input.keys(to[0], to[1]);
+  input.move(to[0], to[1]);
 }
 
 function pickSlot(slot: number): void {
   const id = recentPick(slot);
   selectAsset(id);
-  if (kindOf(id) === Kind.cube) flashSwatch(id, false);
+  if (kindOf(id) === KIND_CUBE) flashSwatch(id, false);
 }
 
 /** Returns whether the UI answers the key, so that the caller can leave every

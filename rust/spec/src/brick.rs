@@ -6,6 +6,7 @@
 //! (`WAYS_*`, `LINES_*`), and its columns as the ways' one rule asks them (`Brick`). The clip
 //! levels that hold bricks are pxl-engine's (clipmap.rs).
 
+use crate::asset::cube::Sentinel;
 use crate::ground;
 use crate::space::coord::world::wrap_idx;
 use crate::space::coord::zoom::Zoom;
@@ -13,7 +14,6 @@ use crate::space::layer::area;
 use crate::space::layer::area::Shard;
 use crate::space::layer::lattice;
 use crate::space::layer::lattice::TILE_CELLS;
-use crate::value::VOID;
 use crate::way;
 use crate::way::ColumnGrid;
 use crate::way::Segment;
@@ -22,7 +22,7 @@ use crate::way::StationGrid;
 /// The base-2 logarithm of a brick's side in cells.
 pub const BRICK_SHIFT: u32 = 6;
 pub const BRICK: u32 = 1 << BRICK_SHIFT;
-pub const BRICK_CELLS: u32 = BRICK * BRICK;
+pub const BRICK_CELL_CNT: u32 = BRICK * BRICK;
 
 /// The zoom at which a clip level's bricks are counted: `BRICK_SHIFT` zooms coarser than its
 /// cells.
@@ -67,18 +67,18 @@ const _: () = assert!(BRICK <= 1 << 16, "a brick's side spreads in sixteen bits"
 /// segments, and its fill and the world's query make its spans from them.
 pub const WAYS_ACROSS: u32 = 32;
 pub const WAYS_SHIFT: u32 = (TILE_CELLS / WAYS_ACROSS).trailing_zeros();
-pub const WAYS_BINS_ACROSS: u32 = BRICK >> WAYS_SHIFT;
-pub const WAYS_BINS: u32 = WAYS_BINS_ACROSS * WAYS_BINS_ACROSS;
+pub const WAYS_BIN_ACROSS: u32 = BRICK >> WAYS_SHIFT;
+pub const WAYS_BIN_CNT: u32 = WAYS_BIN_ACROSS * WAYS_BIN_ACROSS;
 
 /// A brick's lines, laid out by the CPU while the brick is filled (bake/tile/terrain.rs
 /// `brick_lines`), from which its fill makes its columns' spans and which it then gives back.
-/// First comes its tile's header (`way::hdr`); then `WAYS_BINS + 1` words, each bin's first
+/// First comes its tile's header (`way::hdr`); then `WAYS_BIN_CNT + 1` words, each bin's first
 /// entry and, after the last bin's, how many entries there are; then the entries, a word each,
 /// each one of the brick's segments, a bin's in order; then the segments the bins reach, in
 /// their lines' order, `way::SEGMENT_WORDS` each. No limit bounds how many: the words follow
 /// the brick (`lines_words`).
 pub const LINES_BINS_AT: u32 = way::HDR_WORDS;
-pub const LINES_ENTRIES_AT: u32 = LINES_BINS_AT + WAYS_BINS + 1;
+pub const LINES_ENTRIES_AT: u32 = LINES_BINS_AT + WAYS_BIN_CNT + 1;
 
 /// The words of a brick's lines with `entries` entries over `segments` segments.
 pub const fn lines_words(entries: u32, segments: u32) -> u32 {
@@ -113,7 +113,7 @@ fn in_brick(c: [i32; 2]) -> bool {
 /// Column `c`'s cell index in the brick, none outside it.
 fn cell_idx(c: [i32; 2]) -> u32 {
     if c[0] < 0 || c[1] < 0 || c[0] >= BRICK as i32 || c[1] >= BRICK as i32 {
-        return BRICK_CELLS;
+        return BRICK_CELL_CNT;
     }
     idx_of([c[0] as u32, c[1] as u32])
 }
@@ -128,7 +128,7 @@ fn bin_of(sq: &impl Brick, c: [i32; 2]) -> (u32, u32) {
         c[0].clamp(0, BRICK as i32 - 1) as u32,
         c[1].clamp(0, BRICK as i32 - 1) as u32,
     );
-    let b = (y >> WAYS_SHIFT) * WAYS_BINS_ACROSS + (x >> WAYS_SHIFT);
+    let b = (y >> WAYS_SHIFT) * WAYS_BIN_ACROSS + (x >> WAYS_SHIFT);
     let first = sq.line(LINES_BINS_AT + b);
     (first, sq.line(LINES_BINS_AT + b + 1) - first)
 }
@@ -139,7 +139,7 @@ fn entry_of(sq: &impl Brick, e: u32) -> u32 {
 }
 
 fn segment_at(sq: &impl Brick, at: u32) -> Segment {
-    let entries = sq.line(LINES_BINS_AT + WAYS_BINS);
+    let entries = sq.line(LINES_BINS_AT + WAYS_BIN_CNT);
     let base = LINES_ENTRIES_AT + entries + at * way::SEGMENT_WORDS as u32;
     let mut w = [0; way::SEGMENT_WORDS];
     let mut k = 0;
@@ -197,8 +197,8 @@ impl<Q: Brick> ColumnGrid for Q {
     /// apart (`is_walled`).
     fn asset_id(&self, c: [i32; 2]) -> u32 {
         let i = cell_idx(c);
-        if i == BRICK_CELLS {
-            VOID
+        if i == BRICK_CELL_CNT {
+            Sentinel::Void as u32
         } else {
             self.own(i)
         }

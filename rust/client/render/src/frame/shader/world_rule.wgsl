@@ -7,16 +7,16 @@
 // A value's kind and a fill's eighths, as pxl-spec value.rs and share.rs and pxl-engine answer.rs
 // state them.
 
-fn grounds(v: u32) -> bool {
-  return v >= GROUNDS_FIRST && v <= GROUNDS_LAST;
+fn is_ground(v: u32) -> bool {
+  return v >= GROUND_FIRST && v <= GROUND_LAST;
 }
 
 fn voxel(v: u32) -> bool {
-  return v == VAL_AIR || grounds(v) || (v >= OBJECTS_FIRST && v <= OBJECTS_LAST);
+  return v == VAL_AIR || is_ground(v) || (v >= OBJECT_FIRST && v <= OBJECT_LAST);
 }
 
 fn eighths(fill: u32) -> u32 {
-  return min(fill / (FULL / EIGHTHS), EIGHTHS);
+  return min(fill / (FULL / EIGHTH_CNT), EIGHTH_CNT);
 }
 
 // The service area's wall, as pxl-spec area.rs states it.

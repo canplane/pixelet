@@ -3,63 +3,86 @@
 //! wgsl-port: the value space that every layer stores and the engine reads. A ground cell
 //! is a byte. An object's value is a u16: its byte range is the ground's, and the range past
 //! a byte holds what only an object can be. Decor values lie past the cube kind
-//! (`asset/id.json`). This fixes the sentinels and the range each class of value takes; the
-//! palette lies in those ranges (asset.rs).
+//! (`asset/id.json`). This fixes the ground's and the objects' ranges around the sentinels
+//! (`asset/cube.json` `sentinel`), reads the ways' off the ground's records, and checks the
+//! palette against them.
 
-/// Nothing painted: the ground before a bake writes it, and an object cell
-/// no leaf holds.
-pub const VOID: u32 = 0x00;
-
-/// Where the world holds no more: the floor under the ground, the wall just inside the
-/// service area, and any byte no bake wrote, so that memory filled with 0xFF reads as
-/// unknown. Nothing is placed on it or taken from it.
-pub const UNKNOWN: u32 = 0xff;
-
-/// Explicit air, which only an object holds. It keeps its leaf in the tree and erases the
-/// layers under it. It lies past a byte, where no ground value can be.
-pub const AIR: u32 = 0x100;
+use crate::asset::cube::{self, Ground, Object, Sentinel};
 
 /// The ground's palette entries, first and last: every byte but the
 /// sentinels.
-pub const GROUNDS: [u32; 2] = [0x01, 0xfe];
+pub const GROUND: [u32; 2] = [0x01, 0xfe];
 
-/// The ways' entries among the ground's, first and last. Decor faces along a way, and no
-/// pier stands on one.
-pub const TRANSPORTS: [u32; 2] = [37, 55];
-
-/// The entry a pier is drawn as: a ground entry that is not a way's.
-pub const PIER: u32 = 35;
+/// The ways' entries among the ground's, first and last: the ground records marked
+/// `transport` (`asset/cube.json`), which lie in one run. Decor faces along a
+/// way, and no pier stands on one.
+pub const TRANSPORT: [u32; 2] = {
+    let mut run = [u32::MAX, 0];
+    let mut k = 0;
+    while k < Ground::ALL.len() {
+        if cube::GROUND[k].transport {
+            let v = Ground::ALL[k] as u32;
+            if v < run[0] {
+                run[0] = v;
+            }
+            if v > run[1] {
+                run[1] = v;
+            }
+        }
+        k += 1;
+    }
+    run
+};
 
 /// The colors only an object takes, first and last: past air, within the
 /// cube kind (`asset/id.json` `IDX_BITS`).
-pub const OBJECTS: [u32; 2] = [0x101, 0x3ff];
+pub const OBJECT: [u32; 2] = [0x101, 0x3ff];
 
-/// Whether a value read into a word is a ground palette entry (`GROUNDS`). A GPU has no byte
+/// Whether a value read into a word is a ground palette entry (`GROUND`). A GPU has no byte
 /// type, so every value is tested as a word.
-pub const fn grounds(val: u32) -> bool {
-    val >= GROUNDS[0] && val <= GROUNDS[1]
+pub const fn is_ground(val: u32) -> bool {
+    val >= GROUND[0] && val <= GROUND[1]
 }
 
-/// Whether a value read into a word is a way's entry (`TRANSPORTS`).
-pub const fn transports(val: u32) -> bool {
-    val >= TRANSPORTS[0] && val <= TRANSPORTS[1]
+/// Whether a value read into a word is a way's entry (`TRANSPORT`).
+pub const fn is_transport(val: u32) -> bool {
+    val >= TRANSPORT[0] && val <= TRANSPORT[1]
 }
 
 /// Whether a value read into a word is a color only an object takes
-/// (`OBJECTS`).
-pub const fn objects(val: u32) -> bool {
-    val >= OBJECTS[0] && val <= OBJECTS[1]
+/// (`OBJECT`).
+pub const fn is_object(val: u32) -> bool {
+    val >= OBJECT[0] && val <= OBJECT[1]
 }
 
-const _: () = assert!(
-    !grounds(VOID) && !grounds(UNKNOWN) && !grounds(AIR) && !objects(AIR),
-    "no class holds a sentinel or air"
-);
-const _: () = assert!(
-    grounds(TRANSPORTS[0]) && grounds(TRANSPORTS[1]),
-    "the ways' entries are the ground's"
-);
-const _: () = assert!(
-    grounds(PIER) && !transports(PIER),
-    "a pier is a ground's entry, no way's"
-);
+// The palette laid into the value space: no class holds a sentinel, every ground entry lies
+// in the ground's range, the ways' entries lie in one run, so the ways' range holds them and
+// no other (`TRANSPORT`), a pier's entry (way.rs `column`, `Ground::Building`) is not a way's,
+// and the object's colors lie in their range.
+const _: () = {
+    let mut k = 0;
+    while k < Sentinel::ALL.len() {
+        let v = Sentinel::ALL[k] as u32;
+        assert!(!is_ground(v) && !is_object(v), "no class holds a sentinel");
+        k += 1;
+    }
+    let mut k = 0;
+    while k < Ground::ALL.len() {
+        let g = Ground::ALL[k];
+        assert!(is_ground(g as u32), "a ground entry in the ground's slots");
+        assert!(
+            is_transport(g as u32) == cube::GROUND[k].transport,
+            "the ways' entries lie in one run"
+        );
+        k += 1;
+    }
+    assert!(!is_transport(Ground::Building as u32), "a pier is not a way");
+    let mut k = 0;
+    while k < Object::ALL.len() {
+        assert!(
+            is_object(Object::ALL[k] as u32),
+            "an object's color in the objects' slots"
+        );
+        k += 1;
+    }
+};

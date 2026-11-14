@@ -44,7 +44,7 @@ use pxl_spec::space::coord::zoom::FINEST_ZOOM;
 /// because it asks for no limits, and a native device's adapter allows at least as many.
 /// Every count a pass writes for an indirect dispatch stays under it, because the room the
 /// pass lists into is no larger.
-pub const WORKGROUPS_CAP: u32 = 65_535;
+pub const WORKGROUP_CAP: u32 = 65_535;
 
 /// A storage buffer's view is bound at a multiple of this many words: WebGPU's
 /// `minStorageBufferOffsetAlignment` at its default, 256 bytes, the most any device asks.

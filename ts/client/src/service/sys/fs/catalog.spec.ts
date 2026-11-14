@@ -3,7 +3,7 @@
 // GENERATED from the asset specs and spec/spec/asset/ingest.json (xpute-gen data.rs)
 
 /** Every file reference the asset specs make, a slot each. */
-export const SLOTS = 71 as number;
+export const SLOT_CNT = 71 as number;
 
 /** The catalog the host plugs in, served at (ASSET, `CATALOG`)
  * (ts/client/src/service/sys/fs/asset.ts): the file each slot names and its extent,

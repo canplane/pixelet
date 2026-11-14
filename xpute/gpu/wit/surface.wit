@@ -6,6 +6,6 @@ package xpute:gpu@0.1.0;
 interface surface {
   resource surface {
     // The canvas's size in physical pixels, and its pixels per logical one.
-    resize: func(width: u32, height: u32, dpr: f32);
+    resize: func(width: u32, height: u32, dpr: f64);
   }
 }

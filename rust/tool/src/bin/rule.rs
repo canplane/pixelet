@@ -4,7 +4,8 @@
 //! casts in the crates that address memory by offset; any rounding other than half to even
 //! where clippy does not see it; any CommonJS file; and any name, in the layers' orders, of
 //! what stands above the naming file: across a crate's folders and the client's, and inside
-//! the client's UI and services, the core's heads, pxl-render's, the camera's and the view's. It
+//! the client's UI and services, the core's heads, pxl-render's, the camera's and the view's,
+//! and across xpute's parts. It
 //! also holds that only the top names the profiler, that no renderer stands under the core's
 //! sys/, that only the screen reads the screen's pixels, that no Rust file lies outside
 //! a crate's module tree, and that the modules' and files' dependencies form no cycle. A rule Rust alone can keep is clippy's (rust/clippy.toml,
@@ -53,8 +54,9 @@ const HALF_FLOORED: [&str; 2] = [
 ];
 
 /// One order of dependency over a folder's modules: a module names only what is at or below
-/// it, and neither head names the other; a module beside the order names anything, and only
-/// the order's top names it. `root` is where the folder's files are, and `path` is what a
+/// it, and no head names another's, a head being the modules of one side, its top and what
+/// stands over it there; a module beside the order names anything, and only the order's top
+/// names it. `root` is where the folder's files are, and `path` is what a
 /// Rust file names its modules by, a `domain::` step past it, and the `layer::` before the
 /// query that is its child in the module tree and above it in the order, being passed over (a
 /// TypeScript file names a module by its file: `imported`). A name past `path` that no module
@@ -64,7 +66,7 @@ struct Order {
     root: &'static str,
     path: &'static str,
     levels: &'static [(&'static str, u8)],
-    heads: &'static [&'static str],
+    heads: &'static [&'static [&'static str]],
     beside: &'static [&'static str],
     own: Option<u8>,
 }
@@ -95,7 +97,7 @@ const CORE_ORDER: [(&str, u8); 16] = [
     ("sys", 1),
     ("abi", 0),
 ];
-const CORE_HEADS: [&str; 2] = ["scene", "control"];
+const CORE_HEADS: [&[&str]; 2] = [&["scene"], &["control"]];
 const CORE_BESIDE: [&str; 1] = ["perf"];
 
 /// Control's own order (domain/control.rs): the pointer's edits and its
@@ -191,11 +193,10 @@ const ENGINE_ORDER: [(&str, u8); 21] = [
 ];
 
 /// pxl-spec's order: what stands on nothing; the space; what a tile's cells hold and what the
-/// catalog is; the ways a column makes over them; a brick over the ways, and a tile's place;
-/// and the bake's formats on top.
+/// catalog is; the value space laid over the catalog's palette, and the ways a column makes
+/// over them; a brick over the ways, and a tile's place; and the bake's formats on top.
 const SPEC: &str = "rust/spec/src/";
 const SPEC_ORDER: [(&str, u8); 17] = [
-    ("value", 0),
     ("color", 0),
     ("share", 0),
     ("directory", 0),
@@ -208,6 +209,7 @@ const SPEC_ORDER: [(&str, u8); 17] = [
     ("ground", 2),
     ("asset", 2),
     ("object", 3),
+    ("value", 3),
     ("way", 3),
     ("brick", 4),
     ("procedural", 4),
@@ -263,8 +265,8 @@ const RENDER_ORDER: [(&str, u8); 10] = [
 const FRAME_ORDER: [(&str, u8); 2] = [("shader", 0), ("shelf", 0)];
 
 /// The shaders' own order (frame/shader.rs): the words, the parts and WebGPU's floor, under the
-/// pipeline records, under the compute groups and what a pass does with them, under the
-/// frame's calls.
+/// pipeline records and their groups' layouts, under the frame's buffers, the groups it binds
+/// over them and what a pass does with them, under the frame's calls.
 const SHADER_ORDER: [(&str, u8); 8] = [
     ("debug_look", 0),
     ("floor", 0),
@@ -339,7 +341,7 @@ const CLIENT_ORDER: [(&str, u8); 9] = [
     ("build", 0),
     ("remote-console", 0),
 ];
-const CLIENT_HEADS: [&str; 2] = ["ui", "runtime"];
+const CLIENT_HEADS: [&[&str]; 2] = [&["ui"], &["runtime"]];
 
 /// The UI's own order (ts/client/src/ui): what assembles the features over them, and
 /// under them what every feature shares.
@@ -361,7 +363,7 @@ const SERVICE_ORDER: [(&str, u8); 4] = [("core", 3), ("sys", 2), ("origin", 1), 
 /// Where TypeScript's aliases are (`paths`), every reader's.
 const TSCONFIG: &str = "ts/tsconfig.json";
 
-/// Every order held. A folder whose root holds only its modules gives the root's own items a
+/// Every folder's order held. A folder whose root holds only its modules gives the root's own items a
 /// level above all of them, so no part reaches back to it.
 const ORDERS: [Order; 18] = [
     Order {
@@ -561,6 +563,54 @@ fn screen_reached(text: &str) -> Vec<usize> {
 const XPUTE: &str = "xpute/";
 const PIXELET_WORDS: &str = r"(?i)\b(pixelet|pxl[-_]\w+)\b";
 
+/// xpute's order, over its parts rather than a folder's modules: a part is a crate
+/// (XPUTE_CARGO) or a package (XPUTE_WORKSPACE), or one of each, by its name past `xpute-` or
+/// `@xpute/`. The kit names nothing, and the link stands on it. The guest, the hosts and the
+/// runtimes are heads over the link, none naming another. The GPU is a plugin, which none of
+/// xpute's own parts (the kit, the link and the heads) names, and which may name them: its
+/// link stands over the heads, and each of its other parts over that, on its counterpart, in
+/// its head, so of the GPU's parts only the link and a runtime's own may name that runtime.
+/// Over every part, what develops xpute and generates its code is a head of its own, which no
+/// part names and which names only the kit and the links. A part is held by what it ships: its manifest's
+/// dependencies, a dev-dependency left out, and the names its sources write, its tests left
+/// out, which may take the golden records' reader.
+const XPUTE_ORDER: [(&str, u8); 18] = [
+    ("kit", 0),
+    ("link", 1),
+    ("guest", 2),
+    ("web-host", 2),
+    ("web-runtime", 2),
+    ("native-host", 2),
+    ("native-runtime", 2),
+    ("gpu-link", 3),
+    ("gpu-guest", 4),
+    ("gpu-web-host", 4),
+    ("gpu-native-host", 4),
+    ("gpu-native-runtime", 4),
+    ("golden", 5),
+    ("gen", 5),
+    ("link-gen", 5),
+    ("gen-targets", 5),
+    ("gpu-gen-targets", 5),
+    ("tool", 5),
+];
+const XPUTE_HEADS: [&[&str]; 6] = [
+    &["guest", "gpu-guest"],
+    &["web-host", "gpu-web-host"],
+    &["web-runtime"],
+    &["native-host", "gpu-native-host"],
+    &["native-runtime", "gpu-native-runtime"],
+    &["golden", "gen", "link-gen", "gen-targets", "gpu-gen-targets", "tool"],
+];
+const XPUTE_LAYERS: Order = Order {
+    root: XPUTE,
+    path: "",
+    levels: &XPUTE_ORDER,
+    heads: &XPUTE_HEADS,
+    beside: &[],
+    own: None,
+};
+
 /// The modules `text` names past `path`, a `domain::` step past it passed
 /// over (the core's heads and trunk live under it) and the `layer::` before
 /// `query` (a child of `layer` that stands above it), a group's every first
@@ -648,8 +698,10 @@ fn ts_aliases(read: &dyn Fn(&str) -> Option<String>) -> Vec<(String, String)> {
 
 /// The files `text`, the TypeScript file `f`, imports, exports from or
 /// starts a worker on, comments left out, each a path from the tree's root
-/// with the line it is named on: an alias (`aliases`) put back as its
-/// folder, a relative name resolved from `f`'s; a package is left out.
+/// with the line it is named on: an alias (`aliases`, a prefix ending in `/`,
+/// which a name met with its own `/` after it also takes, as a package's
+/// bare name) put back as its folder, a relative name resolved from `f`'s; a
+/// package no alias gives is left out.
 fn imported(text: &str, f: &str, aliases: &[(String, String)]) -> Vec<(usize, String)> {
     let blank = |m: &regex::Captures| m[0].replace(|c| c != '\n', " ");
     let code = Regex::new(r"/\*[\s\S]*?\*/")
@@ -667,8 +719,8 @@ fn imported(text: &str, f: &str, aliases: &[(String, String)]) -> Vec<(usize, St
             let path = if c[1].starts_with('.') {
                 format!("{dir}/{}", &c[1])
             } else {
-                let (alias, to) = aliases.iter().find(|(a, _)| c[1].starts_with(a.as_str()))?;
-                format!("{to}{}", &c[1][alias.len()..])
+                let (alias, to) = aliases.iter().find(|(a, _)| format!("{}/", &c[1]).starts_with(a.as_str()))?;
+                format!("{to}{}", c[1].get(alias.len()..).unwrap_or(""))
             };
             let mut parts: Vec<&str> = Vec::new();
             for step in path.split('/') {
@@ -721,39 +773,54 @@ fn standing(f: &str, root: &str) -> String {
         .to_string()
 }
 
-/// Every name in `o`'s files of a module above the file's own, or of one
-/// head by another, or of one beside the order off its top; and every module
-/// the order does not place, but the crate's root and those that stand
-/// beside it, so a new one is placed before it is checked.
-fn out_of_order(files: &[&str], read: &dyn Fn(&str) -> Option<String>, o: &Order) -> Vec<String> {
-    let level = |m: &str| o.levels.iter().find(|(n, _)| *n == m).map(|(_, l)| *l);
-    let top = o.levels.iter().map(|&(_, l)| l).max().unwrap_or(0);
+/// What each of `o`'s files names, as `out_of_order` reads it: the file, the module it stands
+/// as, and each module it names with the line it is named on.
+fn folder_uses(
+    files: &[&str],
+    read: &dyn Fn(&str) -> Option<String>,
+    o: &Order,
+) -> Vec<(String, String, Vec<(usize, String)>)> {
     let aliases = ts_aliases(read);
     let declared = declared(read, o.root);
-    let mut problems = Vec::new();
-    let mut unplaced = std::collections::BTreeSet::new();
-    for f in files
+    files
         .iter()
         .filter(|f| f.starts_with(o.root) && [".rs", ".ts", ".tsx"].iter().any(|e| f.ends_with(e)))
-    {
-        let me = declared
-            .iter()
-            .find(|(p, _)| p == f)
-            .map_or_else(|| standing(f, o.root), |(_, m)| m.clone());
+        .map(|f| {
+            let me = declared
+                .iter()
+                .find(|(p, _)| p == f)
+                .map_or_else(|| standing(f, o.root), |(_, m)| m.clone());
+            let text = read(f).unwrap_or_default();
+            let names = match f.ends_with(".rs") {
+                true => named(&text, o.path),
+                false => imported(&text, f, &aliases)
+                    .into_iter()
+                    .filter(|(_, p)| p.starts_with(o.root))
+                    .map(|(line, p)| (line, standing(&p, o.root)))
+                    .collect(),
+            };
+            (f.to_string(), me, names)
+        })
+        .collect()
+}
+
+/// Every name in `uses` (a file, the module it stands as, and what it names, each with its
+/// line) of a module above the file's own, of one head's module by another head's, or of one
+/// beside the order off its top; and every module the order does not place, at the first
+/// file of it, but the crate's root and those that stand beside it, so a new one is placed
+/// before it is checked.
+fn out_of_order(o: &Order, uses: Vec<(String, String, Vec<(usize, String)>)>) -> Vec<String> {
+    let level = |m: &str| o.levels.iter().find(|(n, _)| *n == m).map(|(_, l)| *l);
+    let head = |m: &str| o.heads.iter().position(|h| h.contains(&m));
+    let top = o.levels.iter().map(|&(_, l)| l).max().unwrap_or(0);
+    let mut problems = Vec::new();
+    let mut unplaced = std::collections::BTreeMap::new();
+    for (f, me, names) in uses {
         let Some(mine) = level(&me) else {
             if !["lib", "domain"].contains(&me.as_str()) && !o.beside.contains(&me.as_str()) {
-                unplaced.insert(me);
+                unplaced.entry(me).or_insert(f);
             }
             continue;
-        };
-        let text = read(f).unwrap_or_default();
-        let names = match f.ends_with(".rs") {
-            true => named(&text, o.path),
-            false => imported(&text, f, &aliases)
-                .into_iter()
-                .filter(|(_, p)| p.starts_with(o.root))
-                .map(|(line, p)| (line, standing(&p, o.root)))
-                .collect(),
         };
         for (line, them) in names {
             if them == me {
@@ -770,23 +837,22 @@ fn out_of_order(files: &[&str], read: &dyn Fn(&str) -> Option<String>, o: &Order
             let Some(theirs) = level(&them).or(o.own) else {
                 continue;
             };
-            let head = o.heads.contains(&me.as_str()) && o.heads.contains(&them.as_str());
-            if theirs > mine || head {
+            let apart = head(&me).zip(head(&them)).is_some_and(|(a, b)| a != b);
+            if theirs > mine || apart {
                 let them = if level(&them).is_some() {
                     format!("`{them}`")
                 } else {
                     format!("its folder's root (`{}`)", o.path)
                 };
                 problems.push(format!(
-                    "{f}:{line}: `{me}` names {them}, above it or the other head, in the layers' order"
+                    "{f}:{line}: `{me}` names {them}, above it or on another head, in the layers' order"
                 ));
             }
         }
     }
-    for me in unplaced {
+    for (me, f) in unplaced {
         problems.push(format!(
-            "{}{me}: `{me}` has no place in the layers' order; give it one (rule.rs)",
-            o.root
+            "{f}: `{me}` has no place in the layers' order; give it one (rule.rs)"
         ));
     }
     problems
@@ -928,6 +994,133 @@ fn xpute_packages(read: &dyn Fn(&str) -> Option<String>) -> Result<Vec<(String, 
             Ok((name.to_string(), src))
         })
         .collect()
+}
+
+/// xpute's packages as `imported` takes them: each name an import writes, with its `/`, and
+/// its sources' folder.
+fn package_aliases(packages: &[(String, String)]) -> Vec<(String, String)> {
+    packages
+        .iter()
+        .map(|(n, src)| (format!("{n}/"), src.clone()))
+        .collect()
+}
+
+/// The Cargo workspace that lists xpute's crates.
+const XPUTE_CARGO: &str = "xpute/Cargo.toml";
+
+/// xpute's crates, each a directory XPUTE_CARGO's `members` lists, by the name its manifest
+/// gives and its sources' folder; or why one cannot be read so.
+fn xpute_crates(read: &dyn Fn(&str) -> Option<String>) -> Result<Vec<(String, String)>, String> {
+    let text = read(XPUTE_CARGO).ok_or(format!("{XPUTE_CARGO}: unreadable"))?;
+    let members = text
+        .split_once("\nmembers = [")
+        .and_then(|(_, m)| m.split_once(']'))
+        .ok_or(format!("{XPUTE_CARGO}: no `members = [...]`"))?
+        .0;
+    let member = Regex::new(r#""([^"]+)""#).expect("a member's pattern");
+    let name = Regex::new(r#"(?m)^name\s*=\s*"([^"]+)""#).expect("a crate name's pattern");
+    member
+        .captures_iter(members)
+        .map(|c| {
+            let manifest = format!("xpute/{}/Cargo.toml", &c[1]);
+            let text = read(&manifest).ok_or(format!("{manifest}: unreadable"))?;
+            let n = name.captures(&text).ok_or(format!("{manifest}: no name"))?;
+            let src = format!("xpute/{}/src/", &c[1]);
+            if !root().join(&src).is_dir() {
+                return Err(format!("xpute/{}: no src/", &c[1]));
+            }
+            Ok((n[1].to_string(), src))
+        })
+        .collect()
+}
+
+/// What each of xpute's manifests and sources names of its parts, as `out_of_order` reads it: the
+/// file, the part it is of, and each part it names with the line: a manifest's dependencies
+/// but its dev-dependencies; in a Rust source, a crate's name; in a TypeScript source, an
+/// import of a package or of another part's file. A test is left out. A part's manifest
+/// comes first, so a part the order does not place is reported at it.
+fn xpute_uses(
+    files: &[&str],
+    read: &dyn Fn(&str) -> Option<String>,
+    crates: &[(String, String)],
+    packages: &[(String, String)],
+) -> Vec<(String, String, Vec<(usize, String)>)> {
+    let part = |name: &str| -> String {
+        let name = name.replace('_', "-");
+        name.trim_start_matches("xpute-")
+            .trim_start_matches("@xpute/")
+            .to_string()
+    };
+    let part_of = |path: &str| -> Option<String> {
+        crates
+            .iter()
+            .chain(packages)
+            .find(|(_, src)| format!("{path}/").starts_with(src.as_str()))
+            .map(|(n, _)| part(n))
+    };
+    let aliases = package_aliases(packages);
+    let table = Regex::new(r"^\[(?:target\..+\.)?(?:build-)?dependencies(?:\.(xpute-[a-z0-9-]+))?\]$")
+        .expect("a dependency table's pattern");
+    let dep = Regex::new(r#"^(xpute-[a-z0-9-]+)\s*[.=]|\bpackage\s*=\s*"(xpute-[a-z0-9-]+)""#)
+        .expect("a dependency's pattern");
+    let krate = Regex::new(r"\bxpute_[a-z0-9_]+\b").expect("a crate's pattern");
+    let mut uses = Vec::new();
+    for (name, src) in crates {
+        let manifest = format!("{}Cargo.toml", src.trim_end_matches("src/"));
+        let mut names = Vec::new();
+        let mut on = false;
+        for (n, l) in read(&manifest).unwrap_or_default().lines().enumerate() {
+            let l = l.split('#').next().unwrap_or("").trim();
+            if l.starts_with('[') {
+                let c = table.captures(l);
+                on = c.is_some();
+                names.extend(c.and_then(|c| c.get(1)).map(|d| (n + 1, part(d.as_str()))));
+            } else if let Some(c) = dep.captures(l).filter(|_| on) {
+                names.extend(c.get(1).or(c.get(2)).map(|d| (n + 1, part(d.as_str()))));
+            }
+        }
+        uses.push((manifest, part(name), names));
+    }
+    for (name, src) in packages {
+        let manifest = format!("{}package.json", src.trim_end_matches("src/"));
+        let text = read(&manifest).unwrap_or_default();
+        let json: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+        let lines: Vec<&str> = text.lines().collect();
+        let mut names = Vec::new();
+        for key in ["dependencies", "peerDependencies", "optionalDependencies"] {
+            let at = lines.iter().position(|l| l.contains(&format!("\"{key}\""))).unwrap_or(0);
+            for d in json[key].as_object().into_iter().flat_map(|o| o.keys()).filter(|d| d.starts_with("@xpute/")) {
+                let line = lines[at..].iter().position(|l| l.contains(&format!("\"{d}\""))).map_or(0, |k| at + k + 1);
+                names.push((line, part(d)));
+            }
+        }
+        uses.push((manifest, part(name), names));
+    }
+    for f in files.iter().filter(|f| !f.contains(".test.")) {
+        let Some(me) = part_of(f) else { continue };
+        let text = read(f).unwrap_or_default();
+        let names: Vec<(usize, String)> = if f.ends_with(".rs") {
+            let code: String = text
+                .lines()
+                .map(|l| l.split("//").next().unwrap_or(""))
+                .collect::<Vec<_>>()
+                .join("\n");
+            krate
+                .find_iter(&code)
+                .filter(|m| crates.iter().any(|(n, _)| part(n) == part(m.as_str())))
+                .map(|m| (code[..m.start()].matches('\n').count() + 1, part(m.as_str())))
+                .collect()
+        } else if f.ends_with(".ts") || f.ends_with(".tsx") {
+            imported(&text, f, &aliases)
+                .into_iter()
+                .filter_map(|(line, p)| Some((line, part_of(&p)?)))
+                .collect()
+        } else {
+            continue;
+        };
+        uses.push((f.to_string(), me, names));
+    }
+    uses
 }
 
 /// Whether pixelet's workspace lists xpute's packages as xpute's own does, in its order.
@@ -1092,7 +1285,8 @@ fn cycles(files: &[&str], read: &dyn Fn(&str) -> Option<String>, packages: &[(St
             found.insert(format!("{name}: {}", part.join(" ")));
         }
     }
-    let aliases = ts_aliases(read);
+    let mut aliases = ts_aliases(read);
+    aliases.extend(package_aliases(packages));
     let ts: Vec<&str> = files
         .iter()
         .copied()
@@ -1125,15 +1319,6 @@ fn cycles(files: &[&str], read: &dyn Fn(&str) -> Option<String>, packages: &[(St
                 .into_iter()
                 .filter_map(|(_, p)| resolve(&p))
                 .collect();
-            let pkg = Regex::new(r#"(?:\bfrom|\bimport\s*\(?)\s*["'](@xpute/[a-z-]+)(/[^"']*)?["']"#).expect("a package import's pattern");
-            for c in pkg.captures_iter(&text) {
-                let Some((_, dir)) = packages.iter().find(|(n, _)| n == &c[1]) else { continue };
-                let p = match c.get(2) {
-                    Some(rest) => format!("{dir}{}", &rest.as_str()[1..]),
-                    None => format!("{dir}mod.ts"),
-                };
-                deps.extend(resolve(&p));
-            }
             deps.remove(*f);
             g.insert(f.to_string(), deps);
         }
@@ -1262,7 +1447,7 @@ fn run() -> Result<Vec<String>, String> {
     }
 
     for o in &ORDERS {
-        problems.extend(out_of_order(&files, &read, o));
+        problems.extend(out_of_order(o, folder_uses(&files, &read, o)));
     }
     if ts_aliases(&read).is_empty() {
         problems.push(format!(
@@ -1306,7 +1491,13 @@ fn run() -> Result<Vec<String>, String> {
         problems.push(e);
     }
     match xpute_packages(&read) {
-        Ok(packages) => problems.extend(cycles(&files, &read, &packages)),
+        Ok(packages) => {
+            problems.extend(cycles(&files, &read, &packages));
+            match xpute_crates(&read) {
+                Ok(crates) => problems.extend(out_of_order(&XPUTE_LAYERS, xpute_uses(&files, &read, &crates, &packages))),
+                Err(e) => problems.push(e),
+            }
+        }
         Err(e) => problems.push(e),
     }
     Ok(problems)
@@ -1315,7 +1506,7 @@ fn run() -> Result<Vec<String>, String> {
 fn main() -> ExitCode {
     match run() {
         Ok(problems) if problems.is_empty() => {
-            println!("check-rules: the memory's offsets, one rounding, ES modules, the layers' order, the profiler beside it, sys/ under the renderer, the screen's pixels, the crates' module trees and a dependency graph without cycles hold");
+            println!("check-rules: the memory's offsets, one rounding, ES modules, the layers' order, xpute's parts' order, the profiler beside it, sys/ under the renderer, the screen's pixels, the crates' module trees and a dependency graph without cycles hold");
             ExitCode::SUCCESS
         }
         Ok(problems) => {
@@ -1408,7 +1599,7 @@ mod spec;"
                 .to_string(),
             )
         };
-        let found = out_of_order(&files, &read, &crate_order);
+        let found = out_of_order(&crate_order, folder_uses(&files, &read, &crate_order));
         let at = |found: &[String]| -> Vec<String> {
             found
                 .iter()
@@ -1420,7 +1611,7 @@ mod spec;"
             ["rust/k/src/mid.rs:2", "rust/k/src/low.rs:1"],
             "{found:?}"
         );
-        let found = out_of_order(&files, &read, &folder);
+        let found = out_of_order(&folder, folder_uses(&files, &read, &folder));
         assert_eq!(
             at(&found),
             [
@@ -1444,7 +1635,7 @@ mod spec;"
             "use crate::domain::query::World;",
             "use crate::domain::layer::query::World;",
         ] {
-            let found = out_of_order(&[f.as_str()], &|_| Some(text.to_string()), order);
+            let found = out_of_order(order, folder_uses(&[f.as_str()], &|_| Some(text.to_string()), order));
             assert_eq!(found.len(), 1, "{text}: {found:?}");
         }
     }
@@ -1475,7 +1666,7 @@ mod spec;"
                 .expect("the order");
             let f = format!("{RENDER}{file}");
             let files = [f.as_str()];
-            let found = out_of_order(&files, &|_| Some(text.to_string()), o);
+            let found = out_of_order(o, folder_uses(&files, &|_| Some(text.to_string()), o));
             assert_eq!(found.len(), 1, "{file}: {found:?}");
             assert!(found[0].starts_with(&format!("{f}:1:")), "{found:?}");
         }
@@ -1485,7 +1676,7 @@ mod spec;"
             .expect("the crate's order");
         let f = format!("{RENDER}renderer.rs");
         let names = "use crate::gpu::draw::x;\nuse crate::pass::mark::y;\nuse crate::ray::z;";
-        let found = out_of_order(&[f.as_str()], &|_| Some(names.to_string()), down);
+        let found = out_of_order(down, folder_uses(&[f.as_str()], &|_| Some(names.to_string()), down));
         assert!(found.is_empty(), "{found:?}");
     }
 
@@ -1520,7 +1711,7 @@ mod spec;"
                 .to_string(),
             )
         };
-        let found = out_of_order(&files, &read, &order);
+        let found = out_of_order(&order, folder_uses(&files, &read, &order));
         assert_eq!(found.len(), 1, "{found:?}");
         assert!(
             found[0].starts_with("rust/k/src/gen.spec.rs:1:"),
@@ -1541,7 +1732,7 @@ mod spec;"
             root: "ts/c/src/",
             path: "",
             levels: &LEVELS,
-            heads: &["ui", "runtime"],
+            heads: &[&["ui"], &["runtime"]],
             beside: &[],
             own: None,
         };
@@ -1587,7 +1778,7 @@ mod spec;"
             )
         };
         let at = |o: &Order| -> Vec<String> {
-            out_of_order(&files, &read, o)
+            out_of_order(o, folder_uses(&files, &read, o))
                 .iter()
                 .map(|p| p.split(": ").next().unwrap_or("").to_string())
                 .collect()

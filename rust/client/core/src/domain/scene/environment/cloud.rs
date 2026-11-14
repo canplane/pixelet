@@ -19,7 +19,7 @@ use pxl_content::generation::drawing;
 use pxl_content::param::cloud::{CUMULUS_KM, WIND};
 use pxl_global::Global;
 use pxl_render::frame::shader::record::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
-use pxl_render::frame::shader::word::DECOR_GROUPS;
+use pxl_render::frame::shader::word::DECOR_GROUP_CNT;
 use pxl_render::gpu::draw::{DrawId, DrawList, Position, ReceiverBox};
 use pxl_spec::asset::catalog::{model_extent, Slot};
 use pxl_spec::asset::sky::cumulus;
@@ -48,15 +48,15 @@ use pxl_content::param::cloud;
 use pxl_render::gpu::api::Image;
 
 /// The cumulus models. Each model is one whole cloud.
-const VARIANTS: [Slot; cumulus::models.len()] = cumulus::models;
+const VARIANTS: [Slot; cumulus::MODELS.len()] = cumulus::MODELS;
 
-pub const MODELS_MAX: usize = VARIANTS.len();
+pub const MODEL_CAP: usize = VARIANTS.len();
 
 /// The clouds' draw groups come right after those of the decor variants,
-/// which take the numbers before them (pxl-content generation.rs `GROUPS`).
-const FIRST_GROUP: usize = generation::GROUPS as usize;
+/// which take the numbers before them (pxl-content generation.rs `GROUP_CNT`).
+const FIRST_GROUP: usize = generation::GROUP_CNT as usize;
 const _: () = assert!(
-    FIRST_GROUP + VARIANTS.len() <= DECOR_GROUPS,
+    FIRST_GROUP + VARIANTS.len() <= DECOR_GROUP_CNT,
     "a draw group each variant"
 );
 
@@ -74,7 +74,7 @@ const DRAW_DIST_MAX: f64 = cull_dist_u(CLOUD_WIDTH[1]);
 /// The most patches built at once: the number of patch keys along a side of
 /// the reach, squared. It sets the clouds' share of the renderer's upload
 /// table.
-pub const PATCHES_MAX: usize = {
+pub const PATCH_CAP: usize = {
     let side = (2.0 * DRAW_DIST_MAX / PATCH) as usize + 2;
     side * side
 };
@@ -99,7 +99,7 @@ struct Patch {
     words: Box<[u32]>,
     handle: u32,
     idx: u32,
-    alts: [f32; 2],
+    alt_range: [f32; 2],
     /// For each variant, the draw of its models and the draw of its
     /// impostors.
     draws: [[DrawId; 2]; VARIANTS.len()],
@@ -130,7 +130,7 @@ fn clouds() -> &'static mut CloudLayer {
 /// its extent.
 pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<Image>, [f32; 3])> {
     let models = model::models();
-    let skin = load_of(cumulus::skin).and_then(load_image);
+    let skin = load_of(cumulus::SKIN).and_then(load_image);
     clouds()
         .models
         .iter()
@@ -173,7 +173,7 @@ pub fn drift_step_s() -> f64 {
 /// Otherwise it is 1 while the eye, at the altitude the sky last saw it, is
 /// below half of `CLOUD_GONE_KM`, and it fades to 0 at `CLOUD_GONE_KM`.
 pub fn clouds_shown() -> f64 {
-    if !settings().clouds {
+    if !settings().cloud {
         return 0.0;
     }
     let t = ((environment_alt_km() - CLOUD_GONE_KM / 2.0) / (CLOUD_GONE_KM / 2.0)).clamp(0.0, 1.0);
@@ -267,7 +267,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame) {
             key[0] as f64 * PATCH - off[0],
             key[1] as f64 * PATCH - off[1],
         ];
-        let [zlo, zhi] = b.alts.map(f64::from);
+        let [zlo, zhi] = b.alt_range.map(f64::from);
         let half = largest / 2.0;
         if !frame.sees_box(
             [corner[0] - half, corner[1] - half, zlo - half],
@@ -310,7 +310,7 @@ pub fn step(draw: &mut DrawList, frame: &Frame) {
             corner: [nearest(corner[0], eye[0]), corner[1]],
             box_corner: box_corner(key, off, eye),
             side: PATCH,
-            alts: b.alts,
+            alt_range: b.alt_range,
             draws: &b.draws,
         };
         // The draw's position holds neither the eye nor the drift, so the
@@ -455,11 +455,11 @@ fn build(
     for l in columns.iter_mut() {
         l.clear();
     }
-    let mut alts = [f32::INFINITY, f32::NEG_INFINITY];
+    let mut alt_range = [f32::INFINITY, f32::NEG_INFINITY];
     for c in clouds_of(key, base) {
-        alts = [
-            alts[0].min((c.z - c.width / 2.0) as f32),
-            alts[1].max((c.z + c.width / 2.0) as f32),
+        alt_range = [
+            alt_range[0].min((c.z - c.width / 2.0) as f32),
+            alt_range[1].max((c.z + c.width / 2.0) as f32),
         ];
         columns[c.variant].push([
             c.local[0] as f32,
@@ -474,7 +474,7 @@ fn build(
     let words = hdr
         + columns
             .iter()
-            .map(|l| GroupRange::words(l.len()))
+            .map(|l| GroupRange::word_cnt(l.len()))
             .sum::<usize>();
     let idx = (words * 4) as u32;
     let mut out = heap::zeroed::<u32>(words + instance_cnt)?;
@@ -492,20 +492,24 @@ fn build(
             }
         }
         out[column.flags()..column.flags() + l.len().div_ceil(4)].fill(0);
-        first += GroupRange::words(l.len());
+        first += GroupRange::word_cnt(l.len());
     }
     let handle = draw.upload(mem::off(out.as_ptr().cast()), out.len() as u32 * 4, 0, 0);
     Some(Patch {
         words: out,
         handle,
         idx,
-        alts: if instance_cnt == 0 { [0.0; 2] } else { alts },
+        alt_range: if instance_cnt == 0 {
+            [0.0; 2]
+        } else {
+            alt_range
+        },
         draws: core::array::from_fn(|_| Default::default()),
     })
 }
 
 /// A built patch as `present_patch` reads it. `corner` is the corner of its
-/// square on the lap of X nearest the eye, and `alts` are the alts its
+/// square on the lap of X nearest the eye, and `alt_range` are the alts its
 /// instances stand between.
 struct PatchDraw<'a> {
     handle: u32,
@@ -515,7 +519,7 @@ struct PatchDraw<'a> {
     /// The corner its draws stand by (`box_corner`).
     box_corner: [f64; 2],
     side: f64,
-    alts: [f32; 2],
+    alt_range: [f32; 2],
     draws: &'a [[DrawId; 2]],
 }
 
@@ -537,7 +541,7 @@ fn present_patch(
     let (model, impostor) = (decor_model_angle() as f32, decor_impostor_angle() as f32);
     let lod = |across: f64| drawing::lod(across as f32, model, impostor);
     let [x0, y0] = b.corner;
-    let [zlo, zhi] = b.alts.map(f64::from);
+    let [zlo, zhi] = b.alt_range.map(f64::from);
     let gap = |lo: f64, hi: f64, v: f64| (lo - v).max(v - hi).max(0.0);
     let far = |lo: f64, hi: f64, v: f64| (v - lo).abs().max((hi - v).abs());
     let nearest = v3::len(&[

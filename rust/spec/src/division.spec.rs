@@ -7,20 +7,14 @@
 // how deep to read it. The numbers are stored, so a subtype is appended,
 // never inserted.
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
-pub mod DIVISION_NAME {
+pub mod division_name {
     pub const BYTES: u32 = 128;
 }
 
-pub mod DIVISION_SUBTYPE {
+pub mod division_subtype {
     pub const COUNTRY: u8 = 0;
     pub const DEPENDENCY: u8 = 1;
     pub const MACROREGION: u8 = 2;

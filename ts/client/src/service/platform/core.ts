@@ -1,6 +1,6 @@
 // @pxl/client/service/platform/core.ts
 
-import { BUILD_ID, DEV_BUNDLE } from "@/build.ts";
+import { BUILD_ID } from "@/build.ts";
 
 /** The module is served beside the page, from the app's public/, where
  * wasm-build.py writes it. It is asked for under the build's id, so that a
@@ -11,6 +11,6 @@ import { BUILD_ID, DEV_BUNDLE } from "@/build.ts";
 export function source(): { module: URL; init: RequestInit | undefined } {
   return {
     module: new URL(`/core.wasm?v=${BUILD_ID}`, location.href),
-    init: DEV_BUNDLE ? { cache: "no-store" } : undefined,
+    init: __DEV__ ? { cache: "no-store" } : undefined,
   };
 }

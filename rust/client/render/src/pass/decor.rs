@@ -10,7 +10,7 @@
 
 use crate::frame::shader::record::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_MARK};
-use crate::frame::shader::word::DECOR_GROUPS;
+use crate::frame::shader::word::DECOR_GROUP_CNT;
 use crate::gpu::draw::uniform_of;
 use crate::gpu::draw::DrawStat;
 
@@ -28,7 +28,7 @@ use crate::pass::model::{
 use pxl_content::generation;
 
 const _: () = assert!(
-    generation::GROUPS as usize <= DECOR_GROUPS,
+    generation::GROUP_CNT as usize <= DECOR_GROUP_CNT,
     "a decor variant past the draw groups"
 );
 
@@ -39,7 +39,7 @@ pub struct DecorPass {
     uniforms: UniformBuffer,
     /// Each group's mesh, 0 while its model is not registered, and the image of
     /// its skin.
-    groups: [(u32, Option<Image>); DECOR_GROUPS],
+    groups: [(u32, Option<Image>); DECOR_GROUP_CNT],
     /// The marks of the listed opaque draws, which cast shadows.
     pub mark: MarkPass,
     /// The marks of the listed ghost draws, which are blended.
@@ -54,11 +54,11 @@ impl DecorPass {
             depth: pipelines.build_masked(
                 g,
                 PIPELINE_DECOR_DEPTH,
-                Format::depth32float,
+                Format::Depth32float,
                 Stencil::Masked,
             ),
             uniforms: UniformBuffer::new(DRAW_BYTES, align),
-            groups: [(0, None); DECOR_GROUPS],
+            groups: [(0, None); DECOR_GROUP_CNT],
             mark: MarkPass::new(
                 g,
                 pipelines,
@@ -112,7 +112,7 @@ impl DecorPass {
     }
 
     pub fn set_models(&mut self, groups: &[(u32, Option<Image>, Extent)]) {
-        for (group, &(mesh, image, _)) in groups.iter().take(DECOR_GROUPS).enumerate() {
+        for (group, &(mesh, image, _)) in groups.iter().take(DECOR_GROUP_CNT).enumerate() {
             self.groups[group] = (mesh, image);
         }
     }
@@ -293,7 +293,7 @@ impl DecorPass {
         pass.set_pipeline(self.pipeline(stage));
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(3, d.instances_group, &[]);
-        for group in 0..generation::GROUPS {
+        for group in 0..generation::GROUP_CNT {
             let Some((model, vertex_cnt, idx_cnt, skin)) = self.model_binding(group, uploads)
             else {
                 continue;

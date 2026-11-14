@@ -6,7 +6,7 @@
 
 #[path = "marker.spec.rs"]
 mod spec;
-pub use spec::{MARKER_SCALE_STEPS, MARKER_SHOWN_FROM, MARKER_TEXT_CHARS};
+pub use spec::{MARKER_SCALE_STEP, MARKER_SHOWN_FROM, MARKER_TEXT_CHARS};
 
 use crate::asset::id::{asset_id, AssetId, Kind};
 use crate::space::coord::zoom::Zoom;
@@ -15,16 +15,16 @@ use crate::space::layer::octant::Octant;
 
 /// The one marker a placement puts up: the pin, which its shape does not
 /// tell apart from another's.
-pub const MARKER: AssetId = asset_id(Kind::marker, 0);
+pub const MARKER: AssetId = asset_id(Kind::Marker, 0);
 
 /// A mark's cell: 16 pixels of the web map's 256-pixel tile, four zooms
 /// finer than the tile, the cell Carto keeps its 14-pixel icons apart in.
-pub(crate) const MARK_STEPS: Zoom = 4;
+pub(crate) const MARK_STEP_CNT: Zoom = 4;
 
 /// A marker's cell where the camera grid's cell is at `cell_zoom`: its scale on
 /// the grid (`asset/marker.json`).
 pub const fn marker_cell_zoom(cell_zoom: Zoom) -> i32 {
-    cell_zoom as i32 + MARKER_SCALE_STEPS as i32
+    cell_zoom as i32 + MARKER_SCALE_STEP as i32
 }
 
 /// The marker's cell holding a marker at `at` where the camera grid's cell

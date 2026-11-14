@@ -16,7 +16,7 @@ fn up_at(world_pos: vec3f) -> vec3f {
 // A point's radius in the air, taken from its height on the flat map: the
 // eye's radius plus the point's height over the eye, along z.
 fn radius_of(world_pos: vec3f) -> f32 {
-  return max(camera_r() + (world_pos.z - frame_camera_pos().z) * atmos_km_per_u(), atmos_bottom_radius());
+  return max(camera_r() + (world_pos.z - frame_camera_pos().z) * atmos_km_per_u(), BOTTOM_RADIUS_KM);
 }
 
 fn shown() -> vec3f {

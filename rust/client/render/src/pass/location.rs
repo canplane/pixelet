@@ -7,7 +7,7 @@
 
 use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE};
 use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_ZONE_MARK};
-use crate::frame::shader::word::BOX_VERTICES;
+use crate::frame::shader::word::BOX_VERTEX_CNT;
 use crate::gpu::api::{buf_entry, buffer_usage, bytes, release, Gpu, TrackedRenderPass};
 use crate::gpu::draw::{uniform_of, DRAW_WORDS};
 use crate::gpu::draw::{DrawStat, DrawTable};
@@ -18,9 +18,9 @@ use crate::pass::mark::{put_whole, MarkPass};
 use crate::pass::model::{put_uniform, UniformBuffer, DRAW_BYTES};
 
 /// The octahedron's vertices: three for each of its eight faces.
-const BEACON_VERTICES: u32 = 24;
+const BEACON_VERTEX_CNT: u32 = 24;
 
-fn box_lanes() -> ([f32; 72], [f32; 48], [u32; BOX_VERTICES as usize]) {
+fn box_lanes() -> ([f32; 72], [f32; 48], [u32; BOX_VERTEX_CNT as usize]) {
     let faces: [[[f32; 3]; 3]; 6] = [
         [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
         [[-1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]],
@@ -29,7 +29,7 @@ fn box_lanes() -> ([f32; 72], [f32; 48], [u32; BOX_VERTICES as usize]) {
         [[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
         [[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
     ];
-    let (mut pos, mut uv, mut idx) = ([0.0; 72], [0.0; 48], [0u32; BOX_VERTICES as usize]);
+    let (mut pos, mut uv, mut idx) = ([0.0; 72], [0.0; 48], [0u32; BOX_VERTEX_CNT as usize]);
     for (f, [n, u, w]) in faces.iter().enumerate() {
         for (c, (a, b)) in [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
             .into_iter()
@@ -50,7 +50,7 @@ fn box_lanes() -> ([f32; 72], [f32; 48], [u32; BOX_VERTICES as usize]) {
 }
 
 /// The floats in one of the octahedron's vertex lanes, three a vertex.
-const BEACON_LANE: usize = 3 * BEACON_VERTICES as usize;
+const BEACON_LANE: usize = 3 * BEACON_VERTEX_CNT as usize;
 
 fn octahedron_lanes() -> ([f32; BEACON_LANE], [f32; BEACON_LANE]) {
     let r = beacon::RADIUS;
@@ -146,12 +146,12 @@ impl LocationPass {
             pass.set_vertex_buf(1, self.box_uv, 0, 0);
             pass.set_idx_buf(self.box_idx, 0, 0);
             pass.set_bind_group(2, upload, &[]);
-            pass.draw_indexed(BOX_VERTICES, d[1], 0, 0);
+            pass.draw_indexed(BOX_VERTEX_CNT, d[1], 0, 0);
         });
         self.beacon_mark.draw(pass, frames, |pass, _, _| {
             pass.set_vertex_buf(0, self.oct_pos, 0, 0);
             pass.set_vertex_buf(1, self.oct_normal, 0, 0);
-            pass.draw(BEACON_VERTICES, 1, 0, 0);
+            pass.draw(BEACON_VERTEX_CNT, 1, 0, 0);
         });
     }
 
@@ -166,8 +166,8 @@ impl LocationPass {
     /// Adds the pass's draws to `stat`: a box's triangles for each instance
     /// of a zone, and the octahedron's for each beacon.
     pub fn count(&self, draws: &DrawTable, stat: &mut DrawStat) {
-        draws.count(PIPELINE_LOCATION_ZONE, stat, |d| BOX_VERTICES / 3 * d[1]);
-        draws.count(PIPELINE_LOCATION_BEACON, stat, |_| BEACON_VERTICES / 3);
+        draws.count(PIPELINE_LOCATION_ZONE, stat, |d| BOX_VERTEX_CNT / 3 * d[1]);
+        draws.count(PIPELINE_LOCATION_BEACON, stat, |_| BEACON_VERTEX_CNT / 3);
     }
 
     /// Writes each zone's uniform into a slot of its
@@ -227,7 +227,7 @@ impl LocationPass {
         pass.set_vertex_buf(0, self.oct_pos, 0, 0);
         pass.set_vertex_buf(1, self.oct_normal, 0, 0);
         for d in draws.of(PIPELINE_LOCATION_BEACON) {
-            pass.draw(BEACON_VERTICES, 1, 0, d[3]);
+            pass.draw(BEACON_VERTEX_CNT, 1, 0, d[3]);
         }
     }
 
@@ -258,7 +258,7 @@ impl LocationPass {
             let (group, off) = slots.at(k as u32);
             pass.set_bind_group(1, group, &[off]);
             pass.set_bind_group(2, upload, &[]);
-            pass.draw_indexed(BOX_VERTICES, d[1], 0, 0);
+            pass.draw_indexed(BOX_VERTEX_CNT, d[1], 0, 0);
         }
     }
 }

@@ -4,7 +4,7 @@
 // one returns undefined.
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_ENOSPC } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 
 export class Deque<T> {
@@ -43,7 +43,7 @@ export class Deque<T> {
   }
 
   push_back(v: T): void {
-    if (this.is_full()) throw new InvariantError(Errno.ENOSPC);
+    if (this.is_full()) throw new InvariantError(ERRNO_ENOSPC);
     const cap = this.cap();
     const i = (this.head + this.len) % cap;
     this.buf[i] = v;
@@ -51,7 +51,7 @@ export class Deque<T> {
   }
 
   push_front(v: T): void {
-    if (this.is_full()) throw new InvariantError(Errno.ENOSPC);
+    if (this.is_full()) throw new InvariantError(ERRNO_ENOSPC);
     const cap = this.cap();
     this.head = (this.head + cap - 1) % cap;
     this.buf[this.head] = v;

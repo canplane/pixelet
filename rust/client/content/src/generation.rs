@@ -7,12 +7,13 @@
 
 use pxl_engine::answer::{self, val};
 use pxl_engine::clipmap;
-use pxl_engine::clipmap::{ENTRIES, EYE_CLIP_LEVELS, FIRST_CELL_ZOOM};
+use pxl_engine::clipmap::{ENTRY_CNT, EYE_CLIP_LEVEL_CNT, FIRST_CELL_ZOOM};
 use pxl_engine::object;
 use pxl_engine::seed::node_seed;
 use pxl_engine::world::{placed_in, PlacedCursor};
-use pxl_engine::WORKGROUPS_CAP;
+use pxl_engine::WORKGROUP_CAP;
 use pxl_engine::ZOOM_BITS;
+use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::brick;
 use pxl_spec::brick::BRICK_SHIFT;
 use pxl_spec::space::coord::q3::FRAC_W;
@@ -26,9 +27,9 @@ use crate::scatter::{brick_cap, draw_variant, stands_at, Candidate};
 use pxl_spec::asset::decor::{Decor, Orientation, Row, ROWS};
 
 /// The lanes of a decor pass's workgroup.
-pub const LANES: u32 = 64;
+pub const LANE_CNT: u32 = 64;
 const _: () = assert!(
-    EYE_ENTRIES.is_multiple_of(LANES) && brick::BRICK_CELLS.is_multiple_of(LANES),
+    EYE_ENTRY_CNT.is_multiple_of(LANE_CNT) && brick::BRICK_CELL_CNT.is_multiple_of(LANE_CNT),
     "a pass over the entries or a brick's cells is dispatched whole workgroups"
 );
 
@@ -71,9 +72,9 @@ pub const REC_WORDS: u32 = 5;
 
 /// The eye's clip levels' bricks, one entry each, in which the GPU generates decor; entry `s`
 /// is the brick the clip levels' table holds at `s`.
-pub const EYE_ENTRIES: u32 = EYE_CLIP_LEVELS * ENTRIES;
+pub const EYE_ENTRY_CNT: u32 = EYE_CLIP_LEVEL_CNT * ENTRY_CNT;
 const _: () = assert!(
-    EYE_ENTRIES * ROWS.len() as u32 <= WORKGROUPS_CAP,
+    EYE_ENTRY_CNT * ROWS.len() as u32 <= WORKGROUP_CAP,
     "every entry's pairs listed, a workgroup deep each, fit one dispatch (decor_mark.wgsl)"
 );
 
@@ -95,15 +96,15 @@ const _: () = assert!(
 /// head is its count.
 pub const CNT_AT: u32 = 3;
 pub const HDR_WORDS: u32 = CNT_AT + ROWS.len() as u32;
-pub const ENTRY_RECS_AT: u32 = EYE_ENTRIES * HDR_WORDS;
+pub const ENTRY_RECS_AT: u32 = EYE_ENTRY_CNT * HDR_WORDS;
 /// The records all the entries hold, which come before placed decor's.
-pub const ENTRY_RECS: u32 = EYE_ENTRIES * BRICK_REC_CAP;
-pub const PLACED_HDR: u32 = ENTRY_RECS_AT + ENTRY_RECS * REC_WORDS;
+pub const ENTRY_REC_CAP: u32 = EYE_ENTRY_CNT * BRICK_REC_CAP;
+pub const PLACED_HDR: u32 = ENTRY_RECS_AT + ENTRY_REC_CAP * REC_WORDS;
 pub const PLACED_HDR_WORDS: u32 = 4;
 
 /// The runs of records a decor pass's workgroup reads (decor_run.wgsl `run_of`): for an
 /// entry, `RUN` records each; for placed decor, one record each.
-pub const RUNS: u32 = BRICK_REC_CAP / RUN;
+pub const RUN_CNT: u32 = BRICK_REC_CAP / RUN;
 
 /// Entry `s`'s head.
 pub const fn hdr_at(s: u32) -> u32 {
@@ -135,10 +136,10 @@ pub fn entry_rec(rows: &[Row], s: u32, k: u32, i: u32) -> u32 {
 /// Record `n`'s first word, numbering the entries' records first, entry by entry, then
 /// placed decor's.
 pub const fn rec_at(n: u32) -> u32 {
-    if n < ENTRY_RECS {
+    if n < ENTRY_REC_CAP {
         ENTRY_RECS_AT + n * REC_WORDS
     } else {
-        PLACED_HDR + PLACED_HDR_WORDS + (n - ENTRY_RECS) * REC_WORDS
+        PLACED_HDR + PLACED_HDR_WORDS + (n - ENTRY_REC_CAP) * REC_WORDS
     }
 }
 
@@ -150,7 +151,7 @@ pub const fn generated_for(hdr: [u32; 3], q: [i32; 2]) -> bool {
 /// The most boxes a frame's generation is asked over: the damage and cuts held
 /// (`object::DAMAGE_CAP`), and each brick handed over this frame, which reaches its clip level's
 /// zoom and every coarser one (`asks`'s vote).
-pub const RECT_CAP: u32 = object::DAMAGE_CAP + clipmap::FRAME_BRICKS;
+pub const RECT_CAP: u32 = object::DAMAGE_CAP + clipmap::FRAME_BRICK_CAP;
 /// A box's words: its leaf cells `[x0, y0, x1, y1)`, X on any lap, then the finest clip level
 /// zoom whose candidates it reaches, or `EVERY` for all.
 pub const RECT_WORDS: u32 = 5;
@@ -179,7 +180,7 @@ pub const RECTS_AT: u32 = 12;
 pub const LIST_AT: u32 = RECTS_AT + RECT_CAP * RECT_WORDS;
 
 /// The words of what `decor_mark_cs` lists.
-pub const LIST_WORDS: u32 = LIST_AT + EYE_ENTRIES * ROWS.len() as u32;
+pub const LIST_WORDS: u32 = LIST_AT + EYE_ENTRY_CNT * ROWS.len() as u32;
 
 /// Where the `n`-th pair generated in part is listed: counting from the list's end, since no
 /// more pairs are listed whole and in part together than there are pairs.
@@ -190,7 +191,7 @@ pub const fn part_at(n: u32) -> u32 {
 /// A pair's word in the list: its entry, then its decor past `PAIR_DECOR_SHIFT`.
 pub const PAIR_DECOR_SHIFT: u32 = 16;
 const _: () = assert!(
-    EYE_ENTRIES <= 1 << PAIR_DECOR_SHIFT,
+    EYE_ENTRY_CNT <= 1 << PAIR_DECOR_SHIFT,
     "an entry fits under a pair's decor"
 );
 
@@ -281,10 +282,10 @@ pub const fn rec_of(w: u32) -> (u32, u32, u32, Zoom) {
 
 /// The draw groups: every variant of every decor, numbered decor by decor in the catalog's
 /// order (pxl-spec `Decor::first_group`).
-pub const GROUPS: u32 = {
+pub const GROUP_CNT: u32 = {
     let (mut sum, mut k) = (0, 0);
     while k < ROWS.len() {
-        sum += ROWS[k].variants;
+        sum += ROWS[k].variant_cnt;
         k += 1;
     }
     sum
@@ -293,24 +294,24 @@ pub const GROUPS: u32 = {
 /// How the GPU draws what it generates. Each record is sized for the screen as a model or an
 /// impostor, into its group's region: models at `2·group` and impostors just past it. The
 /// regions lie end to end in the decor's instances, in the layout the decor and impostor
-/// shaders read (columns x, y, z, spin and scale, `drawing::COLUMNS` a slot, then the index
+/// shaders read (columns x, y, z, spin and scale, `drawing::COLUMN_CNT` a slot, then the index
 /// list), and each region's draw is a set of indirect arguments.
 pub mod drawing {
-    use super::GROUPS;
+    use super::GROUP_CNT;
 
-    pub const REGIONS: u32 = 2 * GROUPS;
+    pub const REGION_CNT: u32 = 2 * GROUP_CNT;
     /// A record drawn as nothing.
     pub const NONE: u32 = 0xff;
     /// The place, above its decor, variant, turn and zoom, at which a record's first word holds
     /// its region, once sized.
     pub const REGION_SHIFT: u32 = super::CELL_ZOOM_SHIFT + pxl_engine::ZOOM_BITS;
-    pub const COLUMNS: u32 = 5;
+    pub const COLUMN_CNT: u32 = 5;
     /// Each region's indirect arguments, `ARGS_WORDS` a region: a model's are indexed, and an
     /// impostor's draw a strip of four corners an instance. The first instance is 0, because a
     /// device without `indirect-first-instance` holds every indirect draw to 0.
     pub const ARGS_WORDS: u32 = 5;
     /// The strip an impostor's instance is drawn by, its corners.
-    pub const IMPOSTOR_CORNERS: u32 = 4;
+    pub const IMPOSTOR_CORNER_CNT: u32 = 4;
     /// Each region's draw uniform, `UNIFORM_WORDS` apart (`OFF_BYTES`, the dynamic offset
     /// alignment every device meets), holding its index list's first slot (pxl-render word.rs
     /// `instance::IDX`): the columns' base, to which the arguments pass adds the region's first
@@ -328,7 +329,7 @@ pub mod drawing {
     pub const ANCHOR: u32 = 4;
     pub const HIDE: u32 = 8;
     pub const EXTENTS: u32 = 12;
-    pub const WORDS: u32 = EXTENTS + GROUPS;
+    pub const WORDS: u32 = EXTENTS + GROUP_CNT;
 
     /// The least distance, in units, at which a thing's span around the eye is taken
     /// (decor_cnt.wgsl `cnt_one`).
@@ -469,11 +470,11 @@ fn asks<Q: DecorQuery>(
     let variant = draw_variant(decor, &mut draws);
     let [x0, y0, _] = at;
     let foot = [x0 >> s, y0 >> s];
-    let turn = if decor.orient == Orientation::along_transport {
+    let turn = if decor.orient == Orientation::AlongTransport {
         let flip = draws.next_u32() >> 31;
         let mut way = |x: i32, y: i32| {
             let c = [foot[0] + x, foot[1] + y, base];
-            i32::from(value::transports(val(q.asset(about, zoom, c))))
+            i32::from(value::is_transport(val(q.asset(about, zoom, c))))
         };
         let (mut horizontal, mut vertical) = (0, 0);
         for d in 1..=ALIGN_NEIGHBOR_RADIUS {
@@ -498,7 +499,7 @@ fn asks<Q: DecorQuery>(
                 let holds = if z == base {
                     decor.allows(val(v))
                 } else {
-                    v == value::VOID && !answer::is_placed(q.edited(zoom, c))
+                    v == Sentinel::Void as u32 && !answer::is_placed(q.edited(zoom, c))
                 };
                 if !holds {
                     return (variant, turn, false);
@@ -581,7 +582,7 @@ pub const CLAIM_EXTENT: [i32; 3] = {
         let d = &ROWS[k];
         wide = if d.widest() > wide { d.widest() } else { wide };
         let mut v = 0;
-        while v < d.variants as usize {
+        while v < d.variant_cnt as usize {
             tall = if d.sizes[v][2] > tall {
                 d.sizes[v][2]
             } else {

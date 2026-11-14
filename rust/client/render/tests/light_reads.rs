@@ -248,7 +248,7 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
             [LEAF_CELL_ZOOM, LEAF_CELL_ZOOM],
         ),
     ];
-    for (n, (name, dir, columns, bands)) in changes.into_iter().enumerate() {
+    for (n, (name, dir, columns, band_range)) in changes.into_iter().enumerate() {
         let l = box_of(dir, 0.0625, 0.75, corner);
         let list: Vec<u32> = (0..light::list_words(SIZE))
             .map(|k| mix(k, n as u32) | 1)
@@ -259,7 +259,7 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
         for (k, c) in columns.iter().enumerate() {
             let w = at + 4 * (1 + 2 * k);
             hdr[w..w + 4].copy_from_slice(&c.map(f32::to_bits));
-            hdr[w + 4..w + 6].copy_from_slice(&bands);
+            hdr[w + 4..w + 6].copy_from_slice(&band_range);
         }
         let have = run_with(&gpu, &p, &l, &list, hdr);
         let reads = light::reads_at(SIZE);
@@ -268,7 +268,7 @@ fn hand_slide_forgets_what_a_world_change_reaches() {
         for j in 0..N {
             for i in 0..N {
                 let word = have[(reads + j * N + i) as usize];
-                let column = |&at: &[f32; 4]| light::Column { at, bands };
+                let column = |&at: &[f32; 4]| light::Column { at, band_range };
                 if !columns
                     .iter()
                     .any(|c| l.reaches(SIZE, RANGE, [i, j], column(c)))
@@ -439,7 +439,7 @@ fn hand_propagation_reads_what_stands() {
         let slide = light::slide_at(SIZE) as usize;
         list[slide + light::READS_FROM as usize] = reads_from;
         let mut args = vec![0u32; light::args_words(SIZE) as usize];
-        args[light::ARGS_LAY as usize] = light::LAY_VERTICES;
+        args[light::ARGS_LAY as usize] = light::LAY_VERTEX_CNT;
         // A cast before this one stood the world's receivers afresh (`light::HDR_WORLD`) and
         // propagates the first half of the stood tiles, none of them propagated before it.
         let carry = light::carry_at(SIZE) as usize;
@@ -453,7 +453,7 @@ fn hand_propagation_reads_what_stands() {
         let hdr = gpu.buf(&hdr, wgpu::BufferUsages::UNIFORM);
         let list_buf = gpu.buf(&list, wgpu::BufferUsages::STORAGE);
         let args_buf = gpu.buf(&args, wgpu::BufferUsages::STORAGE);
-        let per = ray::MISS_LANES * ray::MISS_ACROSS;
+        let per = ray::MISS_LANE_CNT * ray::MISS_ACROSS;
         let propagation = |list: &wgpu::Buffer, p: &wgpu::ComputePipeline, groups: [u32; 3]| {
             gpu.dispatch(
                 p,
@@ -478,7 +478,7 @@ fn hand_propagation_reads_what_stands() {
         propagation(
             &list_buf,
             &damage,
-            [(N * N).div_ceil(light::LIST_LANES), 1, 1],
+            [(N * N).div_ceil(light::LIST_LANE_CNT), 1, 1],
         );
         let out = gpu.read(&list_buf);
         let out_args = gpu.read(&args_buf);

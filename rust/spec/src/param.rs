@@ -11,7 +11,7 @@ pub(crate) mod place {
     /// camera grid's, and the cell a place keeps to itself is this many coarser again. At 2, an
     /// icon's cell spans four grid cells around the drawn icon, and a place keeps four icons a
     /// side, sixteen cells; at 1, places stand too close for their names. It is a product choice.
-    pub const SPREAD_STEPS: Zoom = 2;
+    pub const SPREAD_STEP_CNT: Zoom = 2;
 }
 
 pub mod way {

@@ -12,7 +12,7 @@
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_ECANCELED, ERRNO_EIO } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 import type { Link } from "@xpute/link";
 import * as file from "@xpute/link/abi/fs/file.ts";
@@ -35,12 +35,12 @@ export function changed(p: Path): void {
  * the method. */
 function aborted(signal: AbortSignal): Promise<never> {
   return new Promise((_, fail) => {
-    signal.addEventListener("abort", () => fail(new FaultError(Errno.ECANCELED)));
+    signal.addEventListener("abort", () => fail(new FaultError(ERRNO_ECANCELED)));
   });
 }
 
 /** The file at `p`, over the core's memory `link` lends. */
-function open(link: Link, p: Path): file.File {
+function open(link: Link, p: Path): file.HostFile {
   const b = binding();
   const abort = new AbortController();
   const opened = Promise.resolve().then(() => b.open(p, abort.signal));
@@ -49,9 +49,9 @@ function open(link: Link, p: Path): file.File {
   /** The file's bytes, or ECANCELED once it is closed. */
   const bytes = (): Promise<U8Array> =>
     abort.signal.aborted
-      ? Promise.reject(new FaultError(Errno.ECANCELED))
+      ? Promise.reject(new FaultError(ERRNO_ECANCELED))
       : opened.catch((e: unknown) => {
-          throw abort.signal.aborted ? new FaultError(Errno.ECANCELED) : e;
+          throw abort.signal.aborted ? new FaultError(ERRNO_ECANCELED) : e;
         });
   let read = 0;
   const written: U8Array[] = [];
@@ -82,19 +82,19 @@ function open(link: Link, p: Path): file.File {
         };
         change = cancel;
         waiting.set(at, [...(waiting.get(at) ?? []), wake]);
-        signal.addEventListener("abort", () => cancel(new FaultError(Errno.ECANCELED)));
+        signal.addEventListener("abort", () => cancel(new FaultError(ERRNO_ECANCELED)));
       });
     },
     async close() {
       abort.abort();
-      change?.(new FaultError(Errno.ECANCELED));
+      change?.(new FaultError(ERRNO_ECANCELED));
       if (written.length === 0) return;
       const all = new Uint8Array(written.reduce((n, w) => n + w.length, 0));
       written.reduce((at, w) => (all.set(w, at), at + w.length), 0);
       try {
         await b.commit(p, all);
       } catch {
-        throw new FaultError(Errno.EIO);
+        throw new FaultError(ERRNO_EIO);
       }
     },
   };

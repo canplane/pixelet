@@ -185,15 +185,15 @@ pub struct AtlasPainter {
 impl AtlasPainter {
     pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> AtlasPainter {
         let sampler = g.sampler(
-            FilterMode::linear,
-            FilterMode::linear,
-            MipmapFilterMode::nearest,
-            AddressMode::clamp_to_edge,
+            FilterMode::Linear,
+            FilterMode::Linear,
+            MipmapFilterMode::Nearest,
+            AddressMode::ClampToEdge,
             None,
             1,
         );
         AtlasPainter {
-            pipeline: pipelines.build(g, PIPELINE_ATLAS, Format::rgba8unorm_srgb),
+            pipeline: pipelines.build(g, PIPELINE_ATLAS, Format::Rgba8unormSrgb),
             sampler,
         }
     }
@@ -331,7 +331,7 @@ impl AtlasPainter {
             layer_w,
             layer_h,
             layers,
-            Format::rgba8unorm_srgb,
+            Format::Rgba8unormSrgb,
             1,
             texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST,
         );
@@ -364,7 +364,7 @@ impl AtlasPainter {
             w,
             h,
             1,
-            Format::rgba8unorm_srgb,
+            Format::Rgba8unormSrgb,
             1,
             texture_usage::RENDER_ATTACHMENT | texture_usage::COPY_SRC,
         );

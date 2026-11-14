@@ -10,33 +10,23 @@
     reason = "generated from WIT"
 )]
 
-use std::rc::Rc;
-use xpute_guest::link;
-use xpute_guest::wait;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-use xpute_link::{Handle, Method, Object, Reply, Return, Tag};
-
 /// The interface's handle, named by `pxl:core/input` (frame.json `NAMED`).
-pub const HANDLE: Handle = 0x5ee0f8;
+pub const HANDLE: _rt::Handle = 0x5ee0f8;
 
 /// `pointer`
-pub const POINTER: Method = 0;
+pub const POINTER: _rt::Method = 0;
 /// `typing`
-pub const TYPING: Method = 1;
+pub const TYPING: _rt::Method = 1;
 /// `wheel`
-pub const WHEEL: Method = 2;
+pub const WHEEL: _rt::Method = 2;
 /// `pinch`
-pub const PINCH: Method = 3;
+pub const PINCH: _rt::Method = 3;
 /// `move`
-pub const MOVE: Method = 4;
+pub const MOVE: _rt::Method = 4;
 /// `xr-pose`
-pub const XR_POSE: Method = 5;
+pub const XR_POSE: _rt::Method = 5;
 /// `xr-pose-end`
-pub const XR_POSE_END: Method = 6;
+pub const XR_POSE_END: _rt::Method = 6;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -116,7 +106,7 @@ impl PointerType {
     }
 }
 
-pub trait Input {
+pub trait Guest {
     fn pointer(
         &self,
         phase: PointerPhase,
@@ -125,11 +115,11 @@ pub trait Input {
         button: i32,
         x: f64,
         y: f64,
-    ) -> Result<(), Errno>;
-    fn typing(&self, typing: bool) -> Result<(), Errno>;
-    fn wheel(&self, delta_y: f64) -> Result<(), Errno>;
-    fn pinch(&self, scale: f64) -> Result<(), Errno>;
-    fn r#move(&self, x: i32, y: i32) -> Result<(), Errno>;
+    ) -> Result<(), _rt::Errno>;
+    fn typing(&self, typing: bool) -> Result<(), _rt::Errno>;
+    fn wheel(&self, delta_y: f64) -> Result<(), _rt::Errno>;
+    fn pinch(&self, scale: f64) -> Result<(), _rt::Errno>;
+    fn r#move(&self, x: i32, y: i32) -> Result<(), _rt::Errno>;
     fn xr_pose(
         &self,
         x: f64,
@@ -139,96 +129,99 @@ pub trait Input {
         qy: f64,
         qz: f64,
         qw: f64,
-    ) -> Result<(), Errno>;
-    fn xr_pose_end(&self) -> Result<(), Errno>;
+    ) -> Result<(), _rt::Errno>;
+    fn xr_pose_end(&self) -> Result<(), _rt::Errno>;
 }
 
-struct InputObject(Rc<dyn Input>);
+struct _Object(_rt::Rc<dyn Guest>);
 
-impl Object for InputObject {
-    fn call(&self, m_: Method, tag_: Tag, args_: Option<BranchCursor<'_>>) -> Reply {
-        let run = || -> Result<Reply, MarshalError> {
+impl _rt::Object for _Object {
+    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+        let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 POINTER => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let phase = b_.at(0).and_then(|c| {
-                        c.get_number().and_then(|v| {
-                            PointerPhase::of(v as u32).ok_or(MarshalError::new(Errno::EBADMSG))
-                        })
-                    })?;
-                    let pointer_type = b_.at(1).and_then(|c| {
-                        c.get_number().and_then(|v| {
-                            PointerType::of(v as u32).ok_or(MarshalError::new(Errno::EBADMSG))
-                        })
-                    })?;
-                    let id = b_.at(2).and_then(|c| c.get_number().map(|v| v as i32))?;
-                    let button = b_.at(3).and_then(|c| c.get_number().map(|v| v as i32))?;
-                    let x = b_.at(4).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let y = b_.at(5).and_then(|c| c.get_number().map(|v| v as f64))?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let phase = r_
+                        .case(0, 5)
+                        .and_then(|v| PointerPhase::of(v).ok_or(_rt::Errno::EBADMSG))?;
+                    let pointer_type = r_
+                        .case(1, 3)
+                        .and_then(|v| PointerType::of(v).ok_or(_rt::Errno::EBADMSG))?;
+                    let id = r_.i32(4)?;
+                    let button = r_.i32(8)?;
+                    let x = r_.f64(16)?;
+                    let y = r_.f64(24)?;
                     match self.0.pointer(phase, pointer_type, id, button, x, y) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                        Ok(v) => _rt::Reply::from(0),
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
                 TYPING => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let typing = b_.at(0).and_then(|c| c.get_bool())?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let typing = r_.bool(0)?;
                     match self.0.typing(typing) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                        Ok(v) => _rt::Reply::from(0),
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
                 WHEEL => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let delta_y = b_.at(0).and_then(|c| c.get_number().map(|v| v as f64))?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let delta_y = r_.f64(0)?;
                     match self.0.wheel(delta_y) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                        Ok(v) => _rt::Reply::from(0),
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
                 PINCH => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let scale = b_.at(0).and_then(|c| c.get_number().map(|v| v as f64))?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let scale = r_.f64(0)?;
                     match self.0.pinch(scale) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                        Ok(v) => _rt::Reply::from(0),
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
                 MOVE => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let x = b_.at(0).and_then(|c| c.get_number().map(|v| v as i32))?;
-                    let y = b_.at(1).and_then(|c| c.get_number().map(|v| v as i32))?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let x = r_.i32(0)?;
+                    let y = r_.i32(4)?;
                     match self.0.r#move(x, y) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                        Ok(v) => _rt::Reply::from(0),
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
                 XR_POSE => {
-                    let b_ = args_.ok_or(MarshalError::new(Errno::EBADMSG))?;
-                    let x = b_.at(0).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let y = b_.at(1).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let z = b_.at(2).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let qx = b_.at(3).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let qy = b_.at(4).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let qz = b_.at(5).and_then(|c| c.get_number().map(|v| v as f64))?;
-                    let qw = b_.at(6).and_then(|c| c.get_number().map(|v| v as f64))?;
+                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
+                    let x = r_.f64(0)?;
+                    let y = r_.f64(8)?;
+                    let z = r_.f64(16)?;
+                    let qx = r_.f64(24)?;
+                    let qy = r_.f64(32)?;
+                    let qz = r_.f64(40)?;
+                    let qw = r_.f64(48)?;
                     match self.0.xr_pose(x, y, z, qx, qy, qz, qw) {
-                        Ok(v) => Reply::from(0),
-                        Err(e) => Reply::from(e as i32),
+                        Ok(v) => _rt::Reply::from(0),
+                        Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
                 XR_POSE_END => match self.0.xr_pose_end() {
-                    Ok(v) => Reply::from(0),
-                    Err(e) => Reply::from(e as i32),
+                    Ok(v) => _rt::Reply::from(0),
+                    Err(e) => _rt::Reply::from(e as i32),
                 },
-                _ => Reply::from(Errno::ENOSYS as i32),
+                _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
             })
         };
-        run().unwrap_or_else(|e| Reply::from(e.errnum as i32))
+        run().unwrap_or_else(|e| _rt::Reply::from(e as i32))
     }
 }
 
 /// Serves `imp` under the interface's handle.
-pub fn mount(imp: Rc<dyn Input>) {
-    link::mount_named(HANDLE, Rc::new(InputObject(imp)));
+pub fn mount(imp: _rt::Rc<dyn Guest>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+}
+
+mod _rt {
+    pub use std::rc::Rc;
+    pub use xpute_guest::link;
+    pub use xpute_kit::status::errno::Errno;
+    pub use xpute_link::{Handle, Lift, Method, Object, Reply, Tag};
 }

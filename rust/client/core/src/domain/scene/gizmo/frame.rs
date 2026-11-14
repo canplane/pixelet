@@ -23,7 +23,7 @@ use pxl_render::gpu::draw::DrawList;
 use pxl_render::look::color::linear_rgb;
 use pxl_spec::color::{rgb, Rgb};
 
-const RING_SEGMENTS: u32 = 64;
+const RING_SEGMENT_CNT: u32 = 64;
 
 /// Segments as pairs of vertices, each a position relative to `about` and
 /// then a color. A sketch has no faces: a ring is only an outline, and a
@@ -63,7 +63,7 @@ impl Sketch {
                     self.line(
                         corner(i),
                         corner(i | 1 << k),
-                        linear_rgb(const { rgb(frame::pivot::rgb) }),
+                        linear_rgb(const { rgb(frame::pivot::RGB) }),
                     );
                 }
             }
@@ -75,10 +75,10 @@ impl Sketch {
     fn ring(&mut self, center: V3, a: V3, b: V3, (rgb, dashed): (Rgb, bool)) {
         let color = linear_rgb(rgb);
         let at = |i: u32| -> V3 {
-            let (s, c) = libm::sincos(i as f64 / RING_SEGMENTS as f64 * core::f64::consts::TAU);
+            let (s, c) = libm::sincos(i as f64 / RING_SEGMENT_CNT as f64 * core::f64::consts::TAU);
             core::array::from_fn(|k| center[k] + (a[k] * c + b[k] * s) * RING_RADIUS)
         };
-        for i in (0..RING_SEGMENTS).step_by(if dashed { 2 } else { 1 }) {
+        for i in (0..RING_SEGMENT_CNT).step_by(if dashed { 2 } else { 1 }) {
             self.line(at(i), at(i + 1), color);
         }
     }
@@ -95,7 +95,7 @@ fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
         units(GROUND.leaf_cell_zoom()),
     );
     s.cube(cell, units(GROUND.leaf_cell_zoom()));
-    s.point(at, linear_rgb(const { rgb(frame::pivot::rgb) }));
+    s.point(at, linear_rgb(const { rgb(frame::pivot::RGB) }));
     // In first person the eye is at the pivot, so nothing drawn about it
     // would be seen.
     let Some(azimuth) = heading else { return };
@@ -103,12 +103,12 @@ fn sketch(s: &mut Sketch, pivot: &Q3, heading: Option<f64>) {
     let (east, north, up) = ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]);
     let (right, forward) = ([cos, -sin, 0.0], [sin, cos, 0.0]);
     let tip = |d: V3| -> V3 { core::array::from_fn(|k| at[k] + d[k] * RING_RADIUS) };
-    s.ring(at, east, north, (const { rgb(frame::level::rgb) }, frame::level::dashed));
-    s.ring(at, right, up, (const { rgb(frame::forward::rgb) }, frame::forward::dashed));
-    s.ring(at, north, up, (const { rgb(frame::north::rgb) }, frame::north::dashed));
-    s.point(tip(forward), linear_rgb(const { rgb(frame::forward::rgb) }));
-    s.point(tip(north), linear_rgb(const { rgb(frame::north::rgb) }));
-    s.point(tip(up), linear_rgb(const { rgb(frame::up::rgb) }));
+    s.ring(at, east, north, (const { rgb(frame::level::RGB) }, frame::level::DASHED));
+    s.ring(at, right, up, (const { rgb(frame::forward::RGB) }, frame::forward::DASHED));
+    s.ring(at, north, up, (const { rgb(frame::north::RGB) }, frame::north::DASHED));
+    s.point(tip(forward), linear_rgb(const { rgb(frame::forward::RGB) }));
+    s.point(tip(north), linear_rgb(const { rgb(frame::north::RGB) }));
+    s.point(tip(up), linear_rgb(const { rgb(frame::up::RGB) }));
 }
 
 struct Gizmo {

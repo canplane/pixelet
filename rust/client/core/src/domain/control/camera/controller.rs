@@ -137,7 +137,7 @@ static CONTROLLER: Global<Controller> = Global::new();
 
 fn controller() -> &'static mut Controller {
     CONTROLLER.get(|| Controller {
-        base: CameraMode::orbit,
+        base: CameraMode::Orbit,
         tracker: None,
     })
 }
@@ -146,8 +146,8 @@ pub fn active() -> Active {
     let c = controller();
     match (&c.tracker, c.base) {
         (Some(_), _) => Active::Tracked,
-        (None, CameraMode::orbit) => Active::Orbit,
-        (None, CameraMode::first_person) => Active::FirstPerson,
+        (None, CameraMode::Orbit) => Active::Orbit,
+        (None, CameraMode::FirstPerson) => Active::FirstPerson,
     }
 }
 
@@ -279,7 +279,7 @@ fn take_mode(want: CameraMode) -> bool {
     let at = pivot_to();
     c.base = want;
     let cam = camera();
-    if want == CameraMode::orbit {
+    if want == CameraMode::Orbit {
         camera_state_mut().commit_intent(Intent {
             dist: orbit().dist,
             azimuth: cam.azimuth,

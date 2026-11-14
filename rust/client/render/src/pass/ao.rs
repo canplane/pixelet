@@ -65,7 +65,7 @@ impl ScreenAo {
             AO_NOISE_SIDE,
             AO_NOISE_SIDE,
             1,
-            Format::rgba8unorm,
+            Format::Rgba8unorm,
             1,
             texture_usage::TEXTURE_BINDING | texture_usage::COPY_DST,
         );
@@ -80,10 +80,10 @@ impl ScreenAo {
         g.write_buf(run, 0, bytes(&[0.0f32, 0.0, 0.0, 0.0]));
         g.write_buf(run, stride, bytes(&[1.0f32, 0.0, 0.0, 0.0]));
         let sampler = g.sampler(
-            FilterMode::linear,
-            FilterMode::linear,
-            MipmapFilterMode::nearest,
-            AddressMode::clamp_to_edge,
+            FilterMode::Linear,
+            FilterMode::Linear,
+            MipmapFilterMode::Nearest,
+            AddressMode::ClampToEdge,
             None,
             1,
         );
@@ -95,7 +95,7 @@ impl ScreenAo {
             run,
             stride,
             sampler,
-            downsample: pipelines.build(g, PIPELINE_AO_DOWNSAMPLE, Format::r32float),
+            downsample: pipelines.build(g, PIPELINE_AO_DOWNSAMPLE, Format::R32float),
             sample: pipelines.build(g, PIPELINE_AO_SAMPLE, g.canvas()),
             blur: pipelines.build(g, PIPELINE_AO_BLUR, g.canvas()),
             apply: pipelines.build_world(g, PIPELINE_AO_APPLY),
@@ -142,7 +142,7 @@ impl ScreenAo {
                 (height / AO_DOWNSCALE).max(1),
             );
             let attach = texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING;
-            self.half = g.texture(hw, hh, 1, Format::r32float, 1, attach);
+            self.half = g.texture(hw, hh, 1, Format::R32float, 1, attach);
             self.half_view = g.view(self.half, false, 0, 1, 0, 1);
             for k in 0..2 {
                 self.ping[k] = g.texture(hw, hh, 1, g.canvas(), 1, attach);
@@ -213,7 +213,7 @@ impl ScreenAo {
 
     pub fn run(&self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
-        let stamp = ctx.stamp(GpuSpanName::ao);
+        let stamp = ctx.stamp(GpuSpanName::Ao);
         let steps: [(u32, u32, u32, u32); 4] = [
             (self.downsample.id, self.groups[0].id(), self.half_view, 0),
             (self.sample.id, self.groups[1].id(), self.ping_view[0], 0),

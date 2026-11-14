@@ -4,9 +4,9 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 
 import {
-  type BaseLayer,
   TILE_SPHERE,
   tileObject,
+  type BASE_LAYERS,
 } from "@/service/origin/publication.spec.ts";
 import { decl } from "./source.ts";
 import { version_of } from "./tile.ts";
@@ -16,7 +16,7 @@ const DECL = decl(JSON.stringify(FIXTURE.source))!;
 
 test("version_of - each kind's tile at each zoom, a shard's own version or not, is the object the core made", () => {
   for (const { kind, object } of FIXTURE.tiles) {
-    const k = kind as keyof typeof BaseLayer;
+    const k = kind as (typeof BASE_LAYERS)[number];
     const name = object.split("/")[1]!;
     assert.deepStrictEqual(
       tileObject(version_of(DECL, k, name), name),

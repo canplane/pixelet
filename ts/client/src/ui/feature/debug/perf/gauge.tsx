@@ -137,7 +137,7 @@ export function PerfRec({ rec }: { rec: Gauge["rec"] }) {
       </View>
       <Row
         k="frames/tasks"
-        v={`${rec.frames}/${rec.tasks}${rec.truncated ? " truncated" : ""}`}
+        v={`${rec.frame_cnt}/${rec.task_cnt}${rec.truncated ? " truncated" : ""}`}
         warn={rec.truncated}
       />
     </View>

@@ -6,28 +6,28 @@
 //! ancestors, broad to narrow; the client picks the depth, the order and the
 //! language. A provider maps its own areas onto these subtypes in its adapter.
 
-use crate::division_spec::{DIVISION_NAME, DIVISION_SUBTYPE};
+use crate::division_spec::{division_name, division_subtype};
 
 /// The most bytes a division's name takes (division.json `DIVISION_NAME`).
-pub const NAME_BYTES: usize = DIVISION_NAME::BYTES as usize;
+pub const NAME_BYTES: usize = division_name::BYTES as usize;
 
 /// Overture's subtypes, broadest first, numbered as spec/spec/division.json numbers them,
 /// which is also how a subtype crosses as JSON.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum Subtype {
-    Country = DIVISION_SUBTYPE::COUNTRY,
-    Dependency = DIVISION_SUBTYPE::DEPENDENCY,
-    Macroregion = DIVISION_SUBTYPE::MACROREGION,
-    Region = DIVISION_SUBTYPE::REGION,
-    Macrocounty = DIVISION_SUBTYPE::MACROCOUNTY,
-    County = DIVISION_SUBTYPE::COUNTY,
-    Localadmin = DIVISION_SUBTYPE::LOCALADMIN,
-    Locality = DIVISION_SUBTYPE::LOCALITY,
-    Borough = DIVISION_SUBTYPE::BOROUGH,
-    Macrohood = DIVISION_SUBTYPE::MACROHOOD,
-    Neighborhood = DIVISION_SUBTYPE::NEIGHBORHOOD,
-    Microhood = DIVISION_SUBTYPE::MICROHOOD,
+    Country = division_subtype::COUNTRY,
+    Dependency = division_subtype::DEPENDENCY,
+    Macroregion = division_subtype::MACROREGION,
+    Region = division_subtype::REGION,
+    Macrocounty = division_subtype::MACROCOUNTY,
+    County = division_subtype::COUNTY,
+    Localadmin = division_subtype::LOCALADMIN,
+    Locality = division_subtype::LOCALITY,
+    Borough = division_subtype::BOROUGH,
+    Macrohood = division_subtype::MACROHOOD,
+    Neighborhood = division_subtype::NEIGHBORHOOD,
+    Microhood = division_subtype::MICROHOOD,
 }
 
 impl Subtype {

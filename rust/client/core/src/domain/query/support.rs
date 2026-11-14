@@ -28,7 +28,7 @@ use super::ray::{at_zoom, finest, Descent, Ray, Until};
 use super::world::World;
 use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::*;
-use pxl_engine::cast::{fill_bounds, Detail};
+use pxl_engine::cast::{fill_bound, Detail};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// The height of a walker's center standing on a floor whose top is `top`:
@@ -176,7 +176,7 @@ impl<'w> SplitCell<'w> {
             self.lack.get_or_insert(l);
         }
         answer.val().map_or(open, |asset| {
-            let (_, hi) = fill_bounds(([0.0; 3], [1.0; 3]), asset);
+            let (_, hi) = fill_bound(([0.0; 3], [1.0; 3]), asset);
             (f64::from(cell[2]) + f64::from(hi[2])) * side
         })
     }

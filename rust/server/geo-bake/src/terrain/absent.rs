@@ -2,9 +2,9 @@
 
 //! What a terrain tile the set holds no object for is. A leaf inside a shard the set holds
 //! (`Run::read_baked`) is left unbaked only when nothing is drawn in it, so it is open sea.
-//! Past those shards nothing is known, sea or land, so such a leaf is unknown, which gives no
-//! surface and leaves the planet's picture under it to be seen. A coarser tile is the fold of
-//! the four under it, as every stored tile is.
+//! Past those shards nothing is known, sea or land, so such a leaf is unknown: bedrock up to
+//! sea level, drawn as the bedrock's layer (`spec/spec/asset/cube.json` `unknown`). A coarser
+//! tile is the fold of the four under it, as every stored tile is.
 
 use std::borrow::Cow;
 
@@ -38,8 +38,8 @@ impl Absence {
     pub fn new(coverage: Coverage) -> Absence {
         Absence {
             coverage,
-            sea: uniform(Ground::water as u8),
-            unknown: uniform(Sentinel::unknown as u8),
+            sea: uniform(Ground::Water as u8),
+            unknown: uniform(Sentinel::Unknown as u8),
         }
     }
 }

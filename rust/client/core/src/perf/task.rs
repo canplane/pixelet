@@ -12,9 +12,9 @@ use xpute_link::abi::types::Token;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::perf::spec::TASK;
+use crate::perf::spec::task;
 use crate::perf::word::{words, AsWords};
-use crate::sys::io::demand::{PhaseList, Source, Stream, PHASES_MAX};
+use crate::sys::io::demand::{PhaseList, Source, Stream, PHASE_CAP};
 use crate::sys::io::failure::Exit;
 use crate::sys::io::file::{self, Text, KEY_BYTES};
 use crate::sys::io::request::Attempt;
@@ -46,15 +46,15 @@ pub struct TaskRecord {
     pub at_file_bytes: f64,
     pub at_line: f64,
     pub phase_cnt: f64,
-    pub phase_ids: [f64; PHASES_MAX],
-    pub phase_vals: [f64; PHASES_MAX],
+    pub phase_ids: [f64; PHASE_CAP],
+    pub phase_vals: [f64; PHASE_CAP],
 }
 
-words!(TaskRecord, TASK::WORDS,
-    stream => TASK::stream, path => TASK::path, priority => TASK::priority, enqueue_ms => TASK::enqueue_ms,
-    start_ms => TASK::start_ms, end_ms => TASK::end_ms, outcome => TASK::outcome,
-    fail => TASK::fail, detail => TASK::detail,
-    at_file => TASK::at_file, at_file_bytes => TASK::at_file_bytes, at_line => TASK::at_line, phase_cnt => TASK::phase_cnt, phase_ids => TASK::phase_ids, phase_vals => TASK::phase_vals,
+words!(TaskRecord, task::WORDS,
+    stream => task::STREAM, path => task::PATH, priority => task::PRIORITY, enqueue_ms => task::ENQUEUE_MS,
+    start_ms => task::START_MS, end_ms => task::END_MS, outcome => task::OUTCOME,
+    fail => task::FAIL, detail => task::DETAIL,
+    at_file => task::AT_FILE, at_file_bytes => task::AT_FILE_BYTES, at_line => task::AT_LINE, phase_cnt => task::PHASE_CNT, phase_ids => task::PHASE_IDS, phase_vals => task::PHASE_VALS,
 );
 
 /// The name of the file `stream`'s want `id` opens, its path's last token,

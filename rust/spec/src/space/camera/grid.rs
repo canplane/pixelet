@@ -22,7 +22,7 @@ pub const CELLS_A_RAD: f32 = 96.0;
 pub const HALF_TAN: f32 = 0.5;
 
 /// The widest view drawn, as its width over its height: an ultrawide display's 21:9. Whatever is
-/// sized by the view's cells (pxl-engine `node_cache::ENTRIES`) holds them at this aspect or
+/// sized by the view's cells (pxl-engine `node_cache::ENTRY_CNT`) holds them at this aspect or
 /// narrower.
 pub const ASPECT_MOST: f32 = 21.0 / 9.0;
 

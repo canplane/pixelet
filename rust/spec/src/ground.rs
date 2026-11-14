@@ -15,9 +15,6 @@
 use crate::share::{eighths, FULL};
 use crate::space::coord::zoom::{Zoom, HEIGHT_BITS, LEAF_CELL_ZOOM, LEAF_ZOOM, UNIT_ZOOM};
 use crate::space::layer::lattice::TILE_CELLS;
-use crate::value;
-
-pub const UNKNOWN: u32 = value::UNKNOWN;
 
 /// The inner elevation samples across one leaf tile. A leaf tile is about twice as many
 /// meters wide as it has units on a side, and the source's spacing is about 30 m, taken as
@@ -37,12 +34,12 @@ pub const fn ele_idx(x: u32, y: u32) -> usize {
 
 /// The elevation the surface draws at the center of a tile's cell `(x, y)`, in leaf cells, from
 /// its padded elevation samples `ele` (`ele_idx`). It is the one producer of a cell's
-/// elevation, which the core's fill and the bake both run (fill.rs `columns`): Catmull-Rom over
-/// the 4 × 4 samples around the center, rounded half to even and held to their range, so a
-/// bound over the surface is the samples' own.
+/// elevation, which the core's fill and the bake both run (pxl-engine fill.rs `columns`):
+/// Catmull-Rom over the 4 × 4 samples around the center, rounded half to even and held to
+/// their range, so a bound over the surface is the samples' own.
 ///
 /// It is exact, its bits counted. A sample is an `i16`. A center lies an odd number of
-/// `CELL_STEPS`ths of a sample past one (`window`), where each weight is an integer over
+/// `CELL_STEP_CNT`ths of a sample past one (`window`), where each weight is an integer over
 /// `1 << WEIGHT_BITS` (`catmull_rom`), under 2^16 in size. A sample times a weight is under
 /// 2^31. A row's sum, with its weights' sizes summing under 1.23 · 2^16, is under 2^31.3. A
 /// row times a weight, the four summed, is under 2^47.6 and fits an `i64`, whose high word is
@@ -101,19 +98,22 @@ pub fn own(w: u32, cell_zoom: Zoom) -> u32 {
 
 /// The steps of half a cell that an elevation sample spans, since a cell's center lies on a
 /// half cell.
-pub const CELL_STEPS: i32 = 2 * (TILE_CELLS / TILE_ELE_SPAN) as i32;
+pub const CELL_STEP_CNT: i32 = 2 * (TILE_CELLS / TILE_ELE_SPAN) as i32;
 
 /// The bits of a weight's fraction (`catmull_rom`): its denominator is
-/// `2 · CELL_STEPS³`.
-pub const WEIGHT_BITS: u32 = 1 + 3 * CELL_STEPS.trailing_zeros();
+/// `2 · CELL_STEP_CNT³`.
+pub const WEIGHT_BITS: u32 = 1 + 3 * CELL_STEP_CNT.trailing_zeros();
 
 /// The first of the four samples the surface reads along an axis about
 /// cell `g`'s center, and how far past the second the center falls, in
-/// `CELL_STEPS`ths of a sample, odd: the center `g + ½` lies at
-/// `(g + ½) / (CELL_STEPS / 2) + ELE_PAD − ½` samples.
+/// `CELL_STEP_CNT`ths of a sample, odd: the center `g + ½` lies at
+/// `(g + ½) / (CELL_STEP_CNT / 2) + ELE_PAD − ½` samples.
 pub fn window(g: i32) -> (i32, i32) {
-    let s = 2 * g + 1 + CELL_STEPS * ELE_PAD as i32 - CELL_STEPS / 2;
-    ((s >> CELL_STEPS.trailing_zeros()) - 1, s & (CELL_STEPS - 1))
+    let s = 2 * g + 1 + CELL_STEP_CNT * ELE_PAD as i32 - CELL_STEP_CNT / 2;
+    (
+        (s >> CELL_STEP_CNT.trailing_zeros()) - 1,
+        s & (CELL_STEP_CNT - 1),
+    )
 }
 
 /// A sample index on the padded grid: past its edge, the edge sample stands.
@@ -121,12 +121,12 @@ pub fn clamp_idx(i: i32) -> u32 {
     i.clamp(0, ELE_PADDED_SPAN as i32 - 1) as u32
 }
 
-/// Catmull-Rom's four weights at `m / CELL_STEPS` past the second sample,
+/// Catmull-Rom's four weights at `m / CELL_STEP_CNT` past the second sample,
 /// each times `1 << WEIGHT_BITS`, an integer: `−½t³ + t² − ½t`,
 /// `1½t³ − 2½t² + 1`, `−1½t³ + 2t² + ½t` and `½t³ − ½t²` over the
 /// denominator.
 pub fn catmull_rom(m: i32) -> [i32; 4] {
-    let n = CELL_STEPS;
+    let n = CELL_STEP_CNT;
     [
         -m * (n - m) * (n - m),
         3 * m * m * m - 5 * n * m * m + 2 * n * n * n,
@@ -136,8 +136,8 @@ pub fn catmull_rom(m: i32) -> [i32; 4] {
 }
 
 const _: () = assert!(
-    (CELL_STEPS as u32).is_power_of_two()
-        && 2 * CELL_STEPS * CELL_STEPS * CELL_STEPS == 1 << WEIGHT_BITS,
+    (CELL_STEP_CNT as u32).is_power_of_two()
+        && 2 * CELL_STEP_CNT * CELL_STEP_CNT * CELL_STEP_CNT == 1 << WEIGHT_BITS,
     "a weight's denominator is a power of two"
 );
 const _: () = assert!(
@@ -181,8 +181,8 @@ pub fn majority<T: Copy + Eq, const N: usize>(v: [T; N], parent: Zoom) -> T {
 }
 
 /// An elevation in leaf cells as cells of `cell_zoom` (`top`).
-pub fn cells(cell_zoom: Zoom, h: f32) -> i32 {
-    top(cell_zoom, h).0
+pub fn cells(cell_zoom: Zoom, ele: f32) -> i32 {
+    top(cell_zoom, ele).0
 }
 
 /// An elevation in leaf cells as cells of `cell_zoom`, and the share of the top cell it fills,
@@ -192,12 +192,12 @@ pub fn cells(cell_zoom: Zoom, h: f32) -> i32 {
 /// and otherwise the cell under it, whole. So a coarse column's ground is the volume its mean
 /// elevation fills, as a cell of it is drawn: whole under its top, with its top a box of its
 /// share's volume.
-pub fn top(cell_zoom: Zoom, h: f32) -> (i32, u32) {
+pub fn top(cell_zoom: Zoom, ele: f32) -> (i32, u32) {
     let d = cell_zoom as i32 - LEAF_CELL_ZOOM as i32;
     if d >= 0 {
-        return ((h as i32) << d, FULL);
+        return ((ele as i32) << d, FULL);
     }
-    let q = h / (1 << -d) as f32;
+    let q = ele / (1 << -d) as f32;
     let under = libm::floorf(q);
     let part = ((q - under) * FULL as f32) as u32;
     if eighths(part) == 0 {

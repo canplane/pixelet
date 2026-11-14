@@ -23,7 +23,7 @@ import {
   shadow,
 } from "@/ui/shared/component/theme.ts";
 import { selectScale, useScale } from "./store.ts";
-import { OBJECT_SCALES } from "@/ui/feature/world/object.spec.ts";
+import { OBJECT_SCALE_CNT } from "@/ui/feature/world/object.spec.ts";
 import { DOCK_HEIGHT } from "./card.tsx";
 import { type SizeGesture, STRIP } from "./strip.tsx";
 
@@ -37,15 +37,15 @@ const POPOVER_PITCH = chrome.target + POPOVER_GAP_PX;
  * mark's area rather than its width, so that the finest mark stays visible:
  * 28, 20, 14 and 10 pixels. */
 const MARK_COARSEST = 28;
-function sizeMark(scaleSteps: i32): f64 {
-  return round(MARK_COARSEST * Math.SQRT2 ** scaleSteps);
+function sizeMark(scaleStep: i32): f64 {
+  return round(MARK_COARSEST * Math.SQRT2 ** scaleStep);
 }
 
 /** The scales from top to bottom. The finest comes first, so that the
  * coarsest stands nearest the swatch. */
 const SCALES: readonly i32[] = Array.from(
-  { length: OBJECT_SCALES },
-  (_, i) => i + 1 - OBJECT_SCALES,
+  { length: OBJECT_SCALE_CNT },
+  (_, i) => i + 1 - OBJECT_SCALE_CNT,
 );
 
 /** The seed's diameter in pixels. */
@@ -73,11 +73,11 @@ function scaleAt(at: Popover, x: f64, y: f64): i32 | null {
   const top =
     at.bar[1] -
     POPOVER_LIFT_PX -
-    (2 * POPOVER_PAD_Y + OBJECT_SCALES * POPOVER_PITCH - POPOVER_GAP_PX);
+    (2 * POPOVER_PAD_Y + OBJECT_SCALE_CNT * POPOVER_PITCH - POPOVER_GAP_PX);
   const along = y - top - POPOVER_PAD_Y;
   if (along < 0) return null;
   const row = Math.floor(along / POPOVER_PITCH);
-  if (row >= OBJECT_SCALES || along - row * POPOVER_PITCH > chrome.target) {
+  if (row >= OBJECT_SCALE_CNT || along - row * POPOVER_PITCH > chrome.target) {
     return null;
   }
   return SCALES[row];
@@ -133,8 +133,8 @@ export function usePopover(bar: React.RefObject<View | null>): {
       }
     },
     release: (x, y) => {
-      const scaleSteps = popover?.open ? scaleAt(popover, x, y) : null;
-      if (scaleSteps !== null) selectScale(scaleSteps);
+      const scaleStep = popover?.open ? scaleAt(popover, x, y) : null;
+      if (scaleStep !== null) selectScale(scaleStep);
     },
     end: () => {
       pressing.current = false;
@@ -181,26 +181,26 @@ function SizeMarks({ highlighted }: { highlighted: i32 | null }) {
       place={BackingPlace.OverMap}
       style={styles.popover}
     >
-      {SCALES.map((scaleSteps) => {
-        const mark = sizeMark(scaleSteps);
+      {SCALES.map((scaleStep) => {
+        const mark = sizeMark(scaleStep);
         return (
           <View
-            key={scaleSteps}
+            key={scaleStep}
             accessibilityLabel={t("world.dock.object_size", {
-              n: OBJECT_SCALES + scaleSteps,
+              n: OBJECT_SCALE_CNT + scaleStep,
             })}
             style={styles.popoverItem}
           >
             <Motion
-              to={{ scale: highlighted === scaleSteps ? 1.25 : 1 }}
+              to={{ scale: highlighted === scaleStep ? 1.25 : 1 }}
               transition={SNAP}
             >
               <View
                 style={[
                   { width: mark, height: mark, borderRadius: mark / 2 },
-                  highlighted === scaleSteps
+                  highlighted === scaleStep
                     ? styles.markHighlighted
-                    : scale === scaleSteps
+                    : scale === scaleStep
                       ? styles.markCurrent
                       : styles.markIdle,
                 ]}

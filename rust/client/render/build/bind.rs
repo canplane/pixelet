@@ -111,57 +111,6 @@ pub fn stages(module: &naga::Module, info: &ModuleInfo, name: &str) -> String {
     format!("    &[{}],\n", entries.join(", "))
 }
 
-/// The source of `binds`, written into stages.rs beside `STAGES`. `binds` holds when a compute
-/// group's (binding, stages, kind) words lay out exactly what the shaders of the pipelines over
-/// it read. Every binding such a shader reads must be in group 0, have an entry in `group` that
-/// the compute stage sees, and have a kind its declaration takes (its number, whether a buffer
-/// is read-only, a texture's kind). Every entry of `group` must be read by one of the shaders.
-/// Each owner of a compute group asserts it.
-pub const BINDS: &str = "
-/// Whether `group`, a compute group's (binding, stages, kind) words, lays out exactly what
-/// the shaders of compute pipelines `pipelines` (`compute`) read, each binding as its
-/// declaration takes it (build/bind.rs `BINDS`).
-pub const fn binds(pipelines: &[u32], group: &[u32]) -> bool {
-    let mut s = 0;
-    while s < pipelines.len() {
-        let entries = STAGES[compute(pipelines[s]).0 as usize];
-        let mut k = 0;
-        while k < entries.len() {
-            let [g, b, by, takes, _] = entries[k];
-            if by != NONE {
-                let mut found = false;
-                let mut e = 0;
-                while e < group.len() {
-                    found |= group[e] == b
-                        && group[e + 1] & COMPUTE != 0
-                        && takes & 1 << group[e + 2] != 0;
-                    e += 3;
-                }
-                if g != 0 || !found {
-                    return false;
-                }
-            }
-            k += 1;
-        }
-        s += 1;
-    }
-    let mut e = 0;
-    while e < group.len() {
-        let mut read = false;
-        let mut s = 0;
-        while s < pipelines.len() {
-            read |= stages_of(compute(pipelines[s]).0, 0, group[e]) != NONE;
-            s += 1;
-        }
-        if !read {
-            return false;
-        }
-        e += 3;
-    }
-    true
-}
-";
-
 /// Whether `function`, or a function it calls, makes a plain store into `global`: a `Store` of
 /// a non-atomic value into the global, or into a member or element of it. `seen` holds the
 /// functions already walked.

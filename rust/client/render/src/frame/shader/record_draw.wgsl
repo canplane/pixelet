@@ -30,14 +30,14 @@ fn node_cache_word(k: u32) -> u32 {
 /// The boxes for the raster to draw, one word each (pxl-engine `raster::draw_word`).
 @group(0) @binding(14) var<storage, read_write> draws: array<u32>;
 /// The raster's indirect draw arguments, whose instances and count the draws raise (pxl-engine
-/// `raster::ARGS_INSTANCES`, `raster::ARGS_CNT`).
+/// `raster::ARGS_INSTANCE_CNT`, `raster::ARGS_CNT`).
 @group(0) @binding(16) var<storage, read_write> rect_args: array<atomic<u32>>;
 
 /// Writes box `place` for the entry in slot `slot`, as pxl-engine `raster::draw_word` lays it
-/// out. The box is a lack's where `kind` is `KIND_LACKS`, and `flags` carries `RASTER_EYED`
+/// out. The box is a lack's where `kind` is `KIND_LACK`, and `flags` carries `RASTER_EYED`
 /// and `RASTER_STALE`.
 fn put_draw(place: u32, slot: u32, kind: u32, flags: u32) {
-  draws[place] = (slot + 1u) | select(0u, RASTER_LACK, kind == KIND_LACKS) | flags;
+  draws[place] = (slot + 1u) | select(0u, RASTER_LACK, kind == KIND_LACK) | flags;
 }
 
 /// Takes a place for one more box, or `NO_ENTRY` past `cap`. The count counts every box asked
@@ -47,7 +47,7 @@ fn box_place(cap: u32) -> u32 {
   if (place >= cap) {
     return NO_ENTRY;
   }
-  atomicMax(&rect_args[RASTER_ARGS_INSTANCES], place + 1u);
+  atomicMax(&rect_args[RASTER_ARGS_INSTANCE_CNT], place + 1u);
   return place;
 }
 
@@ -92,12 +92,12 @@ fn is_eyed(lo: vec3<f32>, hi: vec3<f32>, tan_xy: vec2<f32>) -> bool {
   return v.x * v.x + v.y * v.y + v.z * v.z < k * k * (1.0 + tan_xy.x * tan_xy.x + tan_xy.y * tan_xy.y);
 }
 
-@compute @workgroup_size(REC_DRAW_LANES, 1, 1)
+@compute @workgroup_size(REC_DRAW_LANE_CNT, 1, 1)
 fn rec_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x == 0u) {
     node_cache[NODE_CACHE_DRAWN] = rec_frame();
   }
-  if (id.x >= ENTRIES) {
+  if (id.x >= ENTRY_CNT) {
     return;
   }
   let state = node_cache_word(state_at(id.x));
@@ -125,7 +125,7 @@ fn rec_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (!is_fresh(k, (state & REC_WHOLE) != 0u, o)) {
     return;
   }
-  let place = box_place(REC_EYE_DRAWS);
+  let place = box_place(REC_EYE_DRAW_CAP);
   if (place == NO_ENTRY) {
     return;
   }
@@ -168,9 +168,9 @@ fn on_box(lo: vec3<f32>, hi: vec3<f32>) -> bool {
   return all(last >= vec2<i32>(0)) && all(first < vec2<i32>(n));
 }
 
-@compute @workgroup_size(REC_DRAW_LANES, 1, 1)
+@compute @workgroup_size(REC_DRAW_LANE_CNT, 1, 1)
 fn light_rec_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x >= ENTRIES) {
+  if (id.x >= ENTRY_CNT) {
     return;
   }
   let state = node_cache_word(state_at(id.x));
@@ -189,7 +189,7 @@ fn light_rec_draw_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     return;
   }
   let fresh = band_fresh(k.zoom, (state & REC_WHOLE) != 0u, tile_band(box_tile((b.lo + b.hi) * 0.5)));
-  let place = box_place(REC_LIGHT_DRAWS);
+  let place = box_place(REC_LIGHT_DRAW_CAP);
   if (place == NO_ENTRY) {
     return;
   }

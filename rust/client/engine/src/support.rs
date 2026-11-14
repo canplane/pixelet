@@ -17,7 +17,7 @@ use pxl_spec::space::coord::zoom::{Zoom, FINEST_ZOOM, HEIGHT_BITS};
 
 /// A column's surface: its top as drawn at its cell zoom (`cast::top`), how the ray down it
 /// ended (it met a cell, `End::Hit`; it met nothing it cannot see through, `Miss`; or it met
-/// a node not held, `Lacks`), and the line it descended.
+/// a node not held, `Lack`), and the line it descended.
 #[derive(Clone, Copy)]
 pub struct ColumnSurface<A> {
     pub top: (i32, f32),
@@ -154,7 +154,7 @@ mod tests {
     use super::*;
     use crate::answer::{fill_word, In, Kind, BOX_WHOLE, EMPTY};
     use crate::content::Sample;
-    use pxl_spec::share::EIGHTHS;
+    use pxl_spec::share::EIGHTH_CNT;
     use pxl_spec::space::coord::zoom::{SHARD_ZOOM, UNIT_ZOOM};
 
     /// Ground of stone up to `ele_at` unit cells: two over the cells west of x = 4, none over
@@ -290,7 +290,7 @@ mod tests {
                     }
                 };
             }
-            let top = [fill_word(STONE[0], self.eighths % EIGHTHS), 0];
+            let top = [fill_word(STONE[0], self.eighths % EIGHTH_CNT), 0];
             In {
                 kind: Kind::Cell,
                 asset: match node[2].cmp(&self.top) {
@@ -311,11 +311,11 @@ mod tests {
     fn column_surface_is_exact_to_the_worlds_edges() {
         let half = 1i32 << (HEIGHT_BITS - 1);
         for top in [-half, 1 - half, -1, 0, 1, 1000, half - 2] {
-            for eighths in 1..=EIGHTHS {
+            for eighths in 1..=EIGHTH_CNT {
                 let mut q = Ground { top, eighths };
                 let f = column_surface(&mut q, UNIT_ZOOM, [5, 7]);
-                let asset = fill_word(STONE[0], eighths % EIGHTHS);
-                let rise = cast::fill_bounds(([0.0; 3], [1.0; 3]), asset).1[2];
+                let asset = fill_word(STONE[0], eighths % EIGHTH_CNT);
+                let rise = cast::fill_bound(([0.0; 3], [1.0; 3]), asset).1[2];
                 assert_eq!(f.end, End::Hit, "{top} {eighths}");
                 assert_eq!(f.top, (top, rise), "{top} {eighths}");
             }

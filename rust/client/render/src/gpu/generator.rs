@@ -13,7 +13,7 @@
 
 use crate::frame::shader::access;
 use crate::frame::shader::sequence;
-use pxl_content::generation::{self, drawing, GROUPS};
+use pxl_content::generation::{self, drawing, GROUP_CNT};
 use pxl_engine::{eye, object};
 use pxl_spec::asset::decor::ROWS;
 use pxl_spec::brick;
@@ -21,10 +21,9 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::Zoom;
 
 use crate::frame::shader::group::{
-    ARGS_GROUP, CNT_GROUP, COMPACT_GROUP, CULLED_LIGHT_ARGS, CULLED_SCREEN_ARGS, CULL_GROUP,
-    CULL_LIGHT_BINDS, CULL_SCREEN_BINDS, GENERATE_GROUP, GENERATION_ARGS, GENERATION_ARGS_OF_BINDS,
-    GENERATION_BINDS, GENERATION_LIST, GENERATION_MARK_BINDS, GENERATION_THIN_BINDS, MARK_GROUP,
-    THIN_GROUP,
+    CULLED_LIGHT_ARGS, CULLED_SCREEN_ARGS, CULL_LIGHT_BINDS, CULL_SCREEN_BINDS, GENERATION_ARGS,
+    GENERATION_ARGS_OF_BINDS, GENERATION_BINDS, GENERATION_LIST, GENERATION_MARK_BINDS,
+    GENERATION_THIN_BINDS,
 };
 use crate::frame::shader::record::PIPELINE_DECOR;
 use crate::frame::shader::record::{
@@ -106,7 +105,7 @@ pub struct Generator {
     /// shaders read one. The args pass sets each uniform's index.
     uniforms: u32,
     /// The records, laid out by entry (`generation::rec_at`). `instances` holds the decor's
-    /// instances: `drawing::COLUMNS` lanes and the index list, each `cap` words long.
+    /// instances: `drawing::COLUMN_CNT` lanes and the index list, each `cap` words long.
     recs: u32,
     instances: u32,
     /// The draws' groups, in the layouts the decor and impostor draws share (record.rs
@@ -176,16 +175,16 @@ impl Generator {
         let decor_pipeline = pipelines.build_world(g, PIPELINE_DECOR);
         let draw_layouts = [decor_pipeline.layouts[1], decor_pipeline.layouts[3]];
         let uniforms = buf(
-            word_bytes((drawing::UNIFORM_WORDS * drawing::REGIONS) as usize),
+            word_bytes((drawing::UNIFORM_WORDS * drawing::REGION_CNT) as usize),
             storage | buffer_usage::UNIFORM,
         );
         Generator {
-            mark: pipelines.build_compute(g, COMPUTE_GENERATION_MARK, &MARK_GROUP),
-            thin: pipelines.build_compute(g, COMPUTE_GENERATION_THIN, &THIN_GROUP),
-            generate: pipelines.build_compute(g, COMPUTE_GENERATION, &GENERATE_GROUP),
-            cnt: pipelines.build_compute(g, COMPUTE_GENERATION_CNT, &CNT_GROUP),
-            args_pipeline: pipelines.build_compute(g, COMPUTE_GENERATION_ARGS, &ARGS_GROUP),
-            compact: pipelines.build_compute(g, COMPUTE_GENERATION_COMPACT, &COMPACT_GROUP),
+            mark: pipelines.build_compute(g, COMPUTE_GENERATION_MARK),
+            thin: pipelines.build_compute(g, COMPUTE_GENERATION_THIN),
+            generate: pipelines.build_compute(g, COMPUTE_GENERATION),
+            cnt: pipelines.build_compute(g, COMPUTE_GENERATION_CNT),
+            args_pipeline: pipelines.build_compute(g, COMPUTE_GENERATION_ARGS),
+            compact: pipelines.build_compute(g, COMPUTE_GENERATION_COMPACT),
             groups: Default::default(),
             list: buf(
                 word_bytes(generation::LIST_WORDS as usize),
@@ -194,10 +193,10 @@ impl Generator {
             zooms: buf(word_bytes(ROWS.len()), storage),
             drawing: buf(word_bytes(drawing::WORDS as usize), storage),
             rows,
-            meshes: buf(word_bytes(GROUPS as usize), storage),
-            regions: buf(word_bytes(2 * drawing::REGIONS as usize), storage),
+            meshes: buf(word_bytes(GROUP_CNT as usize), storage),
+            regions: buf(word_bytes(2 * drawing::REGION_CNT as usize), storage),
             args: buf(
-                word_bytes((drawing::ARGS_WORDS * drawing::REGIONS) as usize),
+                word_bytes((drawing::ARGS_WORDS * drawing::REGION_CNT) as usize),
                 storage | buffer_usage::INDIRECT,
             ),
             uniforms,
@@ -212,13 +211,13 @@ impl Generator {
             culled: [Mask::Screen, Mask::Light].map(|_| Culled {
                 list: 0,
                 args: buf(
-                    word_bytes((drawing::ARGS_WORDS * drawing::REGIONS) as usize),
+                    word_bytes((drawing::ARGS_WORDS * drawing::REGION_CNT) as usize),
                     storage | buffer_usage::INDIRECT,
                 ),
                 group: 0,
             }),
-            cull_arg: pipelines.build_compute(g, COMPUTE_DECOR_CULL_ARGS, &CULL_GROUP),
-            cull: pipelines.build_compute(g, COMPUTE_DECOR_CULL, &CULL_GROUP),
+            cull_arg: pipelines.build_compute(g, COMPUTE_DECOR_CULL_ARGS),
+            cull: pipelines.build_compute(g, COMPUTE_DECOR_CULL),
             cap: 0,
             placed_cnt: 0,
             on: false,
@@ -245,12 +244,12 @@ impl Generator {
         g: &Gpu,
         f: DecorFrame,
         generation: Generation,
-        meshes: &[u32; GROUPS as usize],
+        meshes: &[u32; GROUP_CNT as usize],
         world: World,
     ) {
         self.on = true;
         let need =
-            generation::ENTRY_RECS + (f.placed_recs.len() as u32).next_power_of_two().max(64);
+            generation::ENTRY_REC_CAP + (f.placed_recs.len() as u32).next_power_of_two().max(64);
         let grew = need > self.cap;
         if grew {
             // The entries' records are copied into the new buffer. The placed records after them
@@ -261,7 +260,7 @@ impl Generator {
                 buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             );
             self.instances = g.buf(
-                word_bytes(((drawing::COLUMNS + 1) * need) as usize),
+                word_bytes(((drawing::COLUMN_CNT + 1) * need) as usize),
                 buffer_usage::STORAGE,
             );
             if recs != 0 {
@@ -270,7 +269,7 @@ impl Generator {
                     e,
                     (recs, 0),
                     (self.recs, 0),
-                    word_bytes(generation::rec_at(generation::ENTRY_RECS) as usize),
+                    word_bytes(generation::rec_at(generation::ENTRY_REC_CAP) as usize),
                 );
                 g.submit(e);
             }
@@ -285,7 +284,7 @@ impl Generator {
                 release(culled.group);
                 release(culled.list);
                 culled.list = g.buf(
-                    word_bytes(((drawing::COLUMNS + 1) * need) as usize),
+                    word_bytes(((drawing::COLUMN_CNT + 1) * need) as usize),
                     buffer_usage::STORAGE,
                 );
                 culled.group = g.bind_group(
@@ -352,12 +351,12 @@ impl Generator {
             let mut put = |at: u32, val: u32| hdr[at as usize] = val;
             put(
                 generation::THIN_ARGS,
-                brick::BRICK_CELLS.div_ceil(generation::LANES),
+                brick::BRICK_CELL_CNT.div_ceil(generation::LANE_CNT),
             );
             put(generation::THIN_ARGS + 1, 1);
             put(
                 generation::GENERATE_ARGS,
-                generation::DECOR_REC_CAP.div_ceil(generation::LANES),
+                generation::DECOR_REC_CAP.div_ceil(generation::LANE_CNT),
             );
             put(generation::GENERATE_ARGS + 1, 1);
             put(generation::LIST_EVERY, u32::from(self.stale));
@@ -389,7 +388,7 @@ impl Generator {
                 // The upload is one stream record however many decor records there are.
                 g.upload_buf(
                     self.recs,
-                    generation::rec_at(generation::ENTRY_RECS) * 4,
+                    generation::rec_at(generation::ENTRY_REC_CAP) * 4,
                     bytes(f.placed_recs.as_flattened()),
                 );
             }
@@ -415,20 +414,20 @@ impl Generator {
         g.write_buf(
             self.regions,
             0,
-            bytes(&[0u32; 2 * drawing::REGIONS as usize]),
+            bytes(&[0u32; 2 * drawing::REGION_CNT as usize]),
         );
         // Each region's uniform is written here. Its index is the lanes' base until the args
         // pass adds the region's first instance. A region draws its group about the anchor,
         // which lies on Q3 and so has no remainder. An impostor's region, an odd one, also
         // names its group's layer.
-        let mut uniforms = [0u32; (drawing::UNIFORM_WORDS * drawing::REGIONS) as usize];
-        for r in 0..drawing::REGIONS {
+        let mut uniforms = [0u32; (drawing::UNIFORM_WORDS * drawing::REGION_CNT) as usize];
+        for r in 0..drawing::REGION_CNT {
             let u = &mut uniforms[(r * drawing::UNIFORM_WORDS) as usize..][..DRAW_FLOATS];
             u[instance::Q..instance::Q + 3].copy_from_slice(&f.anchor.map(|v| v as u32));
             u[instance::STRIDE] = self.cap;
             u[instance::OPACITY] = 1.0f32.to_bits();
             u[instance::LAYER] = if r % 2 == 1 { r / 2 } else { 0 };
-            u[instance::IDX] = drawing::COLUMNS * self.cap;
+            u[instance::IDX] = drawing::COLUMN_CNT * self.cap;
         }
         g.write_buf(self.uniforms, 0, bytes(&uniforms));
     }
@@ -583,7 +582,7 @@ impl Generator {
             g.set_bind_group(pass, 0, self.groups[0].id(), &[]);
             g.dispatch(
                 pass,
-                generation::EYE_ENTRIES.div_ceil(generation::LANES),
+                generation::EYE_ENTRY_CNT.div_ceil(generation::LANE_CNT),
                 1,
                 1,
             );
@@ -609,9 +608,9 @@ impl Generator {
             return;
         }
         // A workgroup reads the records an entry's decor laid, and past the entries each workgroup
-        // reads `generation::RUNS` placed records (decor_run.wgsl `run_of`). The dispatch
+        // reads `generation::RUN_CNT` placed records (decor_run.wgsl `run_of`). The dispatch
         // covers the records held, not the capacity.
-        let recs = generation::EYE_ENTRIES + self.placed_cnt.div_ceil(generation::RUNS);
+        let recs = generation::EYE_ENTRY_CNT + self.placed_cnt.div_ceil(generation::RUN_CNT);
         let passes = [
             (&self.cnt, recs),
             (&self.args_pipeline, 1),
@@ -689,7 +688,7 @@ impl Generator {
         let pass = g.compute_pass(ctx.encoder, ctx.stamp(tiles.span()).pass());
         g.set_bind_group(pass, 0, group, &[]);
         g.set_pipeline(pass, self.cull_arg.id);
-        g.dispatch(pass, drawing::REGIONS.div_ceil(64), 1, 1);
+        g.dispatch(pass, drawing::REGION_CNT.div_ceil(64), 1, 1);
         g.set_pipeline(pass, self.cull.id);
         g.dispatch(pass, self.cap.div_ceil(64), 1, 1);
         g.end(pass);

@@ -45,7 +45,7 @@ struct Propagate {
 @group(0) @binding(7) var<storage, read> new_damage_rect: vec4u;
 
 // Whether tile `t` of the map changed this frame, as its word says. A map tile is in damage
-// only in the frame it changed (gpu/tile.rs `damage_frames`).
+// only in the frame it changed (gpu/tile.rs `damage_frame_cnt`).
 fn propagate_changed(t: vec2i) -> bool {
   let n = vec2i(light_tiles.cnt.xy);
   if (any(t < vec2i(0)) || any(t >= n)) {

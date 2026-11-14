@@ -14,7 +14,7 @@ use crate::gpu::draw::{uniform_of, DrawStat, DrawTable};
 use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::sequence;
-use crate::frame::shader::word::DECOR_GROUPS;
+use crate::frame::shader::word::DECOR_GROUP_CNT;
 use crate::gpu::api::{
     buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
     view_entry, Format, Gpu, Load, TrackedRenderPass,
@@ -50,9 +50,9 @@ pub struct ImpostorPass {
     /// Each group's fit in its layer, as impostor_place.wgsl and
     /// impostor_bake.wgsl read it: the center across, the center up, the half
     /// side and the half depth, in the model's units.
-    fit: [[f32; 4]; DECOR_GROUPS],
-    baked: [Option<BakeKey>; DECOR_GROUPS],
-    wanted: [Option<BakeKey>; DECOR_GROUPS],
+    fit: [[f32; 4]; DECOR_GROUP_CNT],
+    baked: [Option<BakeKey>; DECOR_GROUP_CNT],
+    wanted: [Option<BakeKey>; DECOR_GROUP_CNT],
     pub mark: MarkPass,
 }
 
@@ -68,35 +68,35 @@ fn fit_of(extent: Extent) -> [f32; 4] {
 impl ImpostorPass {
     pub fn new(g: &Gpu, pipelines: &mut PipelineCache, align: u32) -> ImpostorPass {
         let draw = pipelines.build_world(g, PIPELINE_IMPOSTOR);
-        let bake = pipelines.build(g, PIPELINE_IMPOSTOR_BAKE, Format::rgba8unorm_srgb);
+        let bake = pipelines.build(g, PIPELINE_IMPOSTOR_BAKE, Format::Rgba8unormSrgb);
         let sampler = g.sampler(
-            FilterMode::linear,
-            FilterMode::linear,
-            MipmapFilterMode::linear,
-            AddressMode::clamp_to_edge,
+            FilterMode::Linear,
+            FilterMode::Linear,
+            MipmapFilterMode::Linear,
+            AddressMode::ClampToEdge,
             None,
             1,
         );
         let atlas = g.texture(
             IMPOSTOR_SIZE,
             IMPOSTOR_SIZE,
-            DECOR_GROUPS as u32,
-            Format::rgba8unorm_srgb,
+            DECOR_GROUP_CNT as u32,
+            Format::Rgba8unormSrgb,
             1,
             texture_usage::RENDER_ATTACHMENT | texture_usage::TEXTURE_BINDING,
         );
-        let atlas_view = g.view(atlas, true, 0, 1, 0, DECOR_GROUPS as u32);
+        let atlas_view = g.view(atlas, true, 0, 1, 0, DECOR_GROUP_CNT as u32);
         let depth = g.texture(
             IMPOSTOR_SIZE,
             IMPOSTOR_SIZE,
             1,
-            Format::depth32float,
+            Format::Depth32float,
             1,
             texture_usage::RENDER_ATTACHMENT,
         );
         let depth_view = g.view(depth, false, 0, 1, 0, 1);
         let fits = g.buf(
-            DECOR_GROUPS as u32 * FIT_BYTES,
+            DECOR_GROUP_CNT as u32 * FIT_BYTES,
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let group = g.bind_group(
@@ -104,7 +104,7 @@ impl ImpostorPass {
             &[
                 view_entry(0, atlas_view),
                 sampler_entry(1, sampler),
-                buf_range_entry(2, fits, 0, DECOR_GROUPS as u32 * FIT_BYTES),
+                buf_range_entry(2, fits, 0, DECOR_GROUP_CNT as u32 * FIT_BYTES),
             ],
         );
         ImpostorPass {
@@ -116,9 +116,9 @@ impl ImpostorPass {
             depth_view,
             fits,
             group,
-            fit: [[0.0; 4]; DECOR_GROUPS],
-            baked: [None; DECOR_GROUPS],
-            wanted: [None; DECOR_GROUPS],
+            fit: [[0.0; 4]; DECOR_GROUP_CNT],
+            baked: [None; DECOR_GROUP_CNT],
+            wanted: [None; DECOR_GROUP_CNT],
             mark: MarkPass::new(
                 g,
                 pipelines,
@@ -154,7 +154,7 @@ impl ImpostorPass {
     }
 
     pub fn set_models(&mut self, groups: impl Iterator<Item = (u32, Option<u32>, Extent)>) {
-        for (group, want) in groups.take(DECOR_GROUPS).enumerate() {
+        for (group, want) in groups.take(DECOR_GROUP_CNT).enumerate() {
             self.wanted[group] = Some(want);
         }
     }
@@ -171,8 +171,8 @@ impl ImpostorPass {
         // baked and its model has landed. A group still landing is due on a
         // later frame, and this frame bakes, writes and submits nothing for
         // it.
-        let (mut due, mut len) = ([(0, BakeKey::default(), (0, 0, 0, 0)); DECOR_GROUPS], 0);
-        for k in 0..DECOR_GROUPS {
+        let (mut due, mut len) = ([(0, BakeKey::default(), (0, 0, 0, 0)); DECOR_GROUP_CNT], 0);
+        for k in 0..DECOR_GROUP_CNT {
             if let Some(w) =
                 self.wanted[k].filter(|w| w.0 != 0 && w.1.is_some() && self.baked[k] != Some(*w))
             {
@@ -288,7 +288,7 @@ impl ImpostorPass {
         pass.set_bind_group(0, frame, &[]);
         pass.set_bind_group(2, self.group, &[]);
         pass.set_bind_group(3, d.instances_group, &[]);
-        for group in 0..groups.min(DECOR_GROUPS as u32) {
+        for group in 0..groups.min(DECOR_GROUP_CNT as u32) {
             if self.baked[group as usize].is_none() {
                 continue;
             }

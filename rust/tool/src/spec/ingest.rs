@@ -12,7 +12,7 @@ use std::sync::OnceLock;
 
 use xpute_gen::spec::data::{table_outputs, DataSpec};
 
-use super::asset::cube_number;
+use super::asset::{cube_member, cube_number};
 use super::{file, read, Node, Output};
 use crate::root;
 
@@ -190,6 +190,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                         "from the glb, null for an image. The bytes themselves are in the bucket.",
                     ]),
                 ),
+                ("$row".into(), Node::Str("asset_file".into())),
                 ("$val".into(), Node::Arr(rows.iter().map(record).collect())),
             ]),
         ),
@@ -285,7 +286,8 @@ pub struct Pack {
             _ => return Err(format!("{INGEST_JSON}: pack.faces: {face} is no face")),
         };
         out.push(format!(
-            "        (cube::{variant}::{ty} as AssetId, CubeFace::{face}, {tile}),"
+            "        (cube::{variant}::{} as AssetId, CubeFace::{face}, {tile}),",
+            cube_member(group, ty)?.ident
         ));
     }
     out.push("    ],".to_string());
@@ -294,7 +296,8 @@ pub struct Pack {
         pack.faces
             .iter()
             .filter(|f| f.0 == "sentinel")
-            .map(|(_, ty, _, tile)| format!("        (cube::Sentinel::{ty}, {tile}),")),
+            .map(|(_, ty, _, tile)| Ok(format!("        (cube::Sentinel::{}, {tile}),", cube_member("sentinel", ty)?.ident)))
+            .collect::<Result<Vec<_>, String>>()?,
     );
     out.push("    ],".to_string());
     out.push("    means: &[".to_string());

@@ -18,7 +18,7 @@ import {
   bytes_to_b64url,
   is_b64url,
 } from "@xpute/kit/codec/encoding.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_EBADMSG, ERRNO_ENOENT } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
 
 import { path } from "@/abi/file.spec.ts";
@@ -39,11 +39,11 @@ export function set_storage(s: Storage): void {
 }
 
 function bytes_of(text: string): U8Array {
-  if (!is_b64url(text)) throw new FaultError(Errno.EBADMSG);
+  if (!is_b64url(text)) throw new FaultError(ERRNO_EBADMSG);
   try {
     return b64url_to_bytes(text);
   } catch {
-    throw new FaultError(Errno.EBADMSG);
+    throw new FaultError(ERRNO_EBADMSG);
   }
 }
 
@@ -86,13 +86,13 @@ export function set_aside(s: Storage, slot: u32, now_ms: number): boolean {
 
 function key_of(slot: u32): string {
   const key = KEYS.get(slot);
-  if (key === undefined) throw new FaultError(Errno.ENOENT);
+  if (key === undefined) throw new FaultError(ERRNO_ENOENT);
   return key;
 }
 
 export function open_storage(slot: u32, s: Storage = STORAGE): U8Array {
   const text = s.get(key_of(slot));
-  if (text === null) throw new FaultError(Errno.ENOENT);
+  if (text === null) throw new FaultError(ERRNO_ENOENT);
   return bytes_of(text);
 }
 

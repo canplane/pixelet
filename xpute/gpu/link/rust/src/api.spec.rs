@@ -13,15 +13,8 @@
 // handles they took, so the host never hears of those objects. The encoder's begin and
 // commit open and close the transaction on both the stream and the handle table.
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    non_camel_case_types,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 /// The URI the guest opens its GPU device by (gpu/wit/gpu.wit `device`), which the GPU's
 /// hosts mount.
@@ -189,32 +182,31 @@ pub mod op {
     pub const LABEL: u32 = 51;
 }
 
-pub const BINDING_KIND: &[&str] = &["buffer", "sampler", "texture", "storage-texture"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum BindingKind {
-    buffer = 0,
-    sampler = 1,
-    texture = 2,
-    storage_texture = 3,
+    Buffer = 0,
+    Sampler = 1,
+    Texture = 2,
+    StorageTexture = 3,
 }
 
 impl BindingKind {
     /// Every member, in its source's own order.
     pub const ALL: [BindingKind; 4] = [
-        BindingKind::buffer,
-        BindingKind::sampler,
-        BindingKind::texture,
-        BindingKind::storage_texture,
+        BindingKind::Buffer,
+        BindingKind::Sampler,
+        BindingKind::Texture,
+        BindingKind::StorageTexture,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<BindingKind> {
         match val {
-            0 => Some(BindingKind::buffer),
-            1 => Some(BindingKind::sampler),
-            2 => Some(BindingKind::texture),
-            3 => Some(BindingKind::storage_texture),
+            0 => Some(BindingKind::Buffer),
+            1 => Some(BindingKind::Sampler),
+            2 => Some(BindingKind::Texture),
+            3 => Some(BindingKind::StorageTexture),
             _ => None,
         }
     }
@@ -222,37 +214,36 @@ impl BindingKind {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            BindingKind::buffer => "buffer",
-            BindingKind::sampler => "sampler",
-            BindingKind::texture => "texture",
-            BindingKind::storage_texture => "storage-texture",
+            BindingKind::Buffer => "buffer",
+            BindingKind::Sampler => "sampler",
+            BindingKind::Texture => "texture",
+            BindingKind::StorageTexture => "storage-texture",
         }
     }
 }
 
-pub const RESOURCE_KIND: &[&str] = &["buffer", "sampler", "texture-view"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum ResourceKind {
-    buffer = 0,
-    sampler = 1,
-    texture_view = 2,
+    Buffer = 0,
+    Sampler = 1,
+    TextureView = 2,
 }
 
 impl ResourceKind {
     /// Every member, in its source's own order.
     pub const ALL: [ResourceKind; 3] = [
-        ResourceKind::buffer,
-        ResourceKind::sampler,
-        ResourceKind::texture_view,
+        ResourceKind::Buffer,
+        ResourceKind::Sampler,
+        ResourceKind::TextureView,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<ResourceKind> {
         match val {
-            0 => Some(ResourceKind::buffer),
-            1 => Some(ResourceKind::sampler),
-            2 => Some(ResourceKind::texture_view),
+            0 => Some(ResourceKind::Buffer),
+            1 => Some(ResourceKind::Sampler),
+            2 => Some(ResourceKind::TextureView),
             _ => None,
         }
     }
@@ -260,15 +251,15 @@ impl ResourceKind {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            ResourceKind::buffer => "buffer",
-            ResourceKind::sampler => "sampler",
-            ResourceKind::texture_view => "texture-view",
+            ResourceKind::Buffer => "buffer",
+            ResourceKind::Sampler => "sampler",
+            ResourceKind::TextureView => "texture-view",
         }
     }
 }
 
 /// GPUBufferUsage, its bits as WebGPU numbers them.
-pub mod BUFFER_USAGE {
+pub mod buffer_usage {
     pub const MAP_READ: u32 = 1;
     pub const MAP_WRITE: u32 = 2;
     pub const COPY_SRC: u32 = 4;
@@ -282,7 +273,7 @@ pub mod BUFFER_USAGE {
 }
 
 /// GPUTextureUsage, its bits as WebGPU numbers them.
-pub mod TEXTURE_USAGE {
+pub mod texture_usage {
     pub const COPY_SRC: u32 = 1;
     pub const COPY_DST: u32 = 2;
     pub const TEXTURE_BINDING: u32 = 4;
@@ -291,14 +282,14 @@ pub mod TEXTURE_USAGE {
 }
 
 /// GPUShaderStage, its bits as WebGPU numbers them.
-pub mod SHADER_STAGE {
+pub mod shader_stage {
     pub const VERTEX: u32 = 1;
     pub const FRAGMENT: u32 = 2;
     pub const COMPUTE: u32 = 4;
 }
 
 /// GPUColorWrite, its bits as WebGPU numbers them.
-pub mod COLOR_WRITE {
+pub mod color_write {
     pub const RED: u32 = 1;
     pub const GREEN: u32 = 2;
     pub const BLUE: u32 = 4;
@@ -310,7 +301,7 @@ pub mod COLOR_WRITE {
 /// that hold a bit a feature (FEATURE_NAME), the timestamp period, the surface format, the
 /// uncaptured errors, the unfinished frames and STATUS, the last, which the host stores
 /// with release after the rest.
-pub mod DEVICE {
+pub mod device {
     pub const LIMITS_AT: usize = 0;
     pub const FEATS_AT: usize = 31;
     pub const PERIOD_AT: usize = 32;
@@ -324,7 +315,7 @@ pub mod DEVICE {
 /// The last word of the DEVICE block: what the host knows of the device. Only the
 /// host writes it, and it stores it with release after the rest of the block. The guest
 /// loads it with acquire before it reads the block.
-pub mod STATUS {
+pub mod status {
     pub const READY: u32 = 1;
     pub const LOST: u32 = 2;
 }
@@ -341,7 +332,7 @@ pub mod STATUS {
 /// result and what the request guards. A late answer to a request that was dropped or
 /// superseded carries an older ticket and never equals the current one. A lost device
 /// answers none of its requests.
-pub mod RESULT {
+pub mod result {
     pub const OK: u32 = 1;
     pub const REFUSED: u32 = 2;
 }

@@ -3,8 +3,8 @@
 // A run's two walks over the node cache alone (walk.wgsl, cached.wgsl): the first over the
 // run's items, and the second over the rays the first parked. The part for the run's kind
 // names its items and gives their rays, starts and ends (queue.wgsl for the holes). The walks
-// are a fixed dispatch (pxl-engine `ray::QUEUE_GROUPS`). Each lane takes the next item when its
-// own ray ends or is parked, walks it `QUEUE_STEPS` steps at a time, and holds its state
+// are a fixed dispatch (pxl-engine `ray::QUEUE_GROUP_CNT`). Each lane takes the next item when its
+// own ray ends or is parked, walks it `QUEUE_STEP_CNT` steps at a time, and holds its state
 // between them, so a lane whose ray ends early walks another while the long ones go on. A ray
 // that meets a node no slot keeps is parked in the state its walk left, and the node is listed
 // for the asks (queue_ask.wgsl). No thread of the pass writes what it reads of the node cache.
@@ -67,7 +67,7 @@ fn list_ask(aim: Aim, w: WalkEnd, parked: bool) {
   var inheritance = vec3<u32>(0u);
   if (w.zoom != 0u) {
     let pc = w.corner & vec3<u32>(~under(w.zoom - 1u));
-    let p = node_answer(vec3<u32>(0u), true, w.zoom - 1u, idx_of(pc, w.zoom - 1u, w.roots, r0), node_zooms(aim, pc, w.zoom - 1u, w.roots), true);
+    let p = node_answer(vec3<u32>(0u), true, w.zoom - 1u, idx_of(pc, w.zoom - 1u, w.roots, r0), node_range(aim, pc, w.zoom - 1u, w.roots), true);
     top = p.kind == KIND_LEFT;
     inheritance = p.inheritance;
   }
@@ -76,7 +76,7 @@ fn list_ask(aim: Aim, w: WalkEnd, parked: bool) {
   atomicStore(&queue[at + 1u], u32(c.x));
   atomicStore(&queue[at + 2u], u32(c.y));
   atomicStore(&queue[at + 3u], u32(c.z));
-  atomicStore(&queue[at + 4u], node_zooms(aim, w.corner, w.zoom, w.roots));
+  atomicStore(&queue[at + 4u], node_range(aim, w.corner, w.zoom, w.roots));
   atomicStore(&queue[at + 5u], select(0u, 1u, top));
   atomicStore(&queue[at + 6u], inheritance.x);
   atomicStore(&queue[at + 7u], inheritance.y);
@@ -109,7 +109,7 @@ fn queue_walk(parked: bool) {
     var roots = s.roots;
     var step = s.step;
     loop {
-      let w = walk(aim, Start(t, corner, zoom, roots, vec3<u32>(0u), true, step), QUEUE_STEPS);
+      let w = walk(aim, Start(t, corner, zoom, roots, vec3<u32>(0u), true, step), QUEUE_STEP_CNT);
       // Out of its steps, or left at a node no slot keeps (walk.wgsl `walk`).
       if (w.ends == ENDS_OUT) {
         t = w.t;
@@ -138,12 +138,12 @@ fn queue_walk(parked: bool) {
   }
 }
 
-@compute @workgroup_size(QUEUE_LANES)
+@compute @workgroup_size(QUEUE_LANE_CNT)
 fn queue_cs() {
   queue_walk(false);
 }
 
-@compute @workgroup_size(QUEUE_LANES)
+@compute @workgroup_size(QUEUE_LANE_CNT)
 fn queue_parked_cs() {
   queue_walk(true);
 }

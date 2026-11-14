@@ -13,13 +13,19 @@ meant to do and where it is, not why its author thinks it is right.
   `git diff` and `git show HEAD:<path>` are fine.
 - Review only the scope you were given.
 - Read code with whichever tool is efficient: text search or the LSP tool.
-- Read AGENTS.md and the skill for the changed code first.
+- Before anything else, read AGENTS.md, the code and naming skills
+  (`.agents/skills/code/`, `.agents/skills/naming/`), and the skill for the
+  changed code.
 
 ## What to check
 
 - **Correctness.** For each claim the change depends on, read the code that
   could break it: a caller with other inputs, an edge case (zero, negative,
   wrap-around, a bound's last value), a path still doing it the old way.
+- **A second form.** Search the tree beyond the change for what already does
+  the job it does: a reader, writer, converter, helper, path, table or
+  constant of the same role, in any language or platform. A change that adds
+  one beside an existing one, or leaves the old one standing, is a finding.
 - **Structure.** A concept living twice or derived again; a pass reading
   another layer's storage or going around the query; machinery that removes
   nothing; a dead item, or a doc or citation naming what is gone.

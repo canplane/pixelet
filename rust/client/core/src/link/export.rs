@@ -67,7 +67,7 @@ pub(super) fn mount() {
     life::mount(Rc::new(Core));
 }
 
-impl abi::camera::Camera for Core {
+impl abi::camera::Guest for Core {
     fn track(&self, tracking: abi::camera::Tracking) -> Result<(), Errno> {
         camera::track(tracking)
     }
@@ -86,7 +86,7 @@ impl abi::camera::Camera for Core {
     }
 }
 
-impl abi::input::Input for Core {
+impl abi::input::Guest for Core {
     fn pointer(
         &self,
         phase: abi::input::PointerPhase,
@@ -127,14 +127,14 @@ impl abi::input::Input for Core {
     }
 }
 
-impl abi::scene::Scene for Core {
+impl abi::scene::Guest for Core {
     fn draw(
         &self,
         surface: u32,
         content: abi::scene::SceneContent,
         group: Option<u8>,
         bg: Option<u32>,
-    ) -> Result<(), Errno> {
+    ) -> Result<Result<(), abi::types::ErrorCode>, Errno> {
         scene::draw(surface, content, group, bg)
     }
     fn chat(&self, text: String) -> Result<(), Errno> {
@@ -142,7 +142,7 @@ impl abi::scene::Scene for Core {
     }
 }
 
-impl abi::sensor::Sensor for Core {
+impl abi::sensor::Guest for Core {
     fn pos(
         &self,
         lon: f64,
@@ -196,20 +196,20 @@ impl abi::sensor::Sensor for Core {
     }
 }
 
-impl abi::setting::Setting for Core {
+impl abi::setting::Guest for Core {
     fn dev(&self, dev: bool) -> Result<(), Errno> {
         setting::dev(dev)
     }
-    fn set(&self, key: u32, val: u32) -> Result<(), Errno> {
+    fn set(&self, key: u32, val: u32) -> Result<Result<(), abi::types::ErrorCode>, Errno> {
         setting::set(key, val)
     }
 }
 
-impl abi::edit::Edit for Core {
-    fn hold(&self, tool: abi::edit::Tool, val: u32, scale_steps: i32) -> Result<(), Errno> {
-        edit::hold(tool, val, scale_steps)
+impl abi::edit::Guest for Core {
+    fn hold(&self, tool: abi::edit::Tool, val: u32, scale_step: i32) -> Result<(), Errno> {
+        edit::hold(tool, val, scale_step)
     }
-    fn marker_text(&self, text: String) -> Result<(), Errno> {
+    fn marker_text(&self, text: String) -> Result<Result<(), abi::types::ErrorCode>, Errno> {
         edit::marker_text(text)
     }
     fn marker_cancel(&self) -> Result<(), Errno> {
@@ -220,14 +220,14 @@ impl abi::edit::Edit for Core {
     }
 }
 
-impl abi::source::Source for Core {
+impl abi::source::Guest for Core {
     fn declare(&self, min_zoom: u32, format: Vec<u32>, shard: Vec<String>) -> Result<(), Errno> {
         source::declare(min_zoom, format, shard)
     }
 }
 
-impl abi::perf::Perf for Core {
-    fn start(&self) -> Result<(), Errno> {
+impl abi::perf::Guest for Core {
+    fn start(&self) -> Result<Result<(), abi::types::ErrorCode>, Errno> {
         perf::start()
     }
     fn stop(&self) -> Result<(), Errno> {
@@ -236,15 +236,15 @@ impl abi::perf::Perf for Core {
     fn stats(&self, window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
         perf::stats(window_ms)
     }
-    fn rings(&self, ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, Errno> {
-        perf::rings(ring, from, cnt)
+    fn ring(&self, ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, Errno> {
+        perf::ring(ring, from, cnt)
     }
     fn strtab(&self) -> Result<Vec<u8>, Errno> {
         perf::strtab()
     }
 }
 
-impl life::Life for Core {
+impl life::Guest for Core {
     fn hidden(&self) -> Result<(), Errno> {
         super::life::on_hidden();
         Ok(())

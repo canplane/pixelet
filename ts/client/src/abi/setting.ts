@@ -2,8 +2,16 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-import { XputeError } from "@xpute/kit/status/error.ts";
-import { type Method, type Sender, type Handle } from "@xpute/link/link.ts";
+import { load_ErrorCode } from "./types.ts";
+import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
+import { MarshalError, XputeError } from "@xpute/kit/status/error.ts";
+import { Lift } from "@xpute/link/cabi.ts";
+import {
+  ComponentError,
+  type Handle,
+  type Method,
+  type Sender,
+} from "@xpute/link/link.ts";
 
 /** The interface's handle, named by `pxl:core/setting` (frame.json `NAMED`). */
 export const HANDLE: Handle = 0x6f63cb;
@@ -17,10 +25,10 @@ export async function dev(link_: Sender, dev: boolean): Promise<void> {
   const a_ = await link_.send(HANDLE, DEV, [
     1,
     (w_) => {
-      w_.bool(dev);
+      w_.bool(0, dev);
     },
   ]);
-  if (a_.result < 0) throw new XputeError(a_.result);
+  if (a_.result !== 0) throw new XputeError(a_.result);
 }
 
 export async function set(
@@ -29,11 +37,19 @@ export async function set(
   val: number,
 ): Promise<void> {
   const a_ = await link_.send(HANDLE, SET, [
-    2,
+    8,
     (w_) => {
-      w_.u32(key);
-      w_.u32(val);
+      w_.u32(0, key);
+      w_.u32(4, val);
     },
   ]);
-  if (a_.result < 0) throw new XputeError(a_.result);
+  if (a_.result !== 0) throw new XputeError(a_.result);
+  if (a_.data === null) throw new MarshalError(ERRNO_EBADMSG);
+  const r_ = new Lift(a_.data);
+  const v_ =
+    r_.case(0, 2) === 0
+      ? { tag: "ok" as const }
+      : { tag: "err" as const, val: load_ErrorCode(r_, 0 + 1) };
+  if (v_.tag === "err") throw new ComponentError(v_.val);
+  return;
 }

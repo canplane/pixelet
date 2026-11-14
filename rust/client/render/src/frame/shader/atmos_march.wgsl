@@ -48,7 +48,7 @@ fn gather_between(r: f32, up: vec3f, dir: vec3f, t0: f32, t1: f32, sun: vec3f, m
   let mu = dot(up, dir);
   let end = short_of_ground(r, mu, t1);
   let low = ray_low(r, mu, end);
-  let a = clamp(t0, min(to_sphere(r, mu, atmos_top_radius()), end), end);
+  let a = clamp(t0, min(to_sphere(r, mu, TOP_RADIUS_KM), end), end);
   let lowest = clamp(-r * mu, a, end);
   let sun_phase = vec2f(rayleigh_phase(dot(dir, sun)), mie_phase(dot(dir, sun)));
   let moon_phase = vec2f(rayleigh_phase(dot(dir, moon)), mie_phase(dot(dir, moon)));

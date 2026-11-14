@@ -174,10 +174,10 @@ fn raster_moves(d: f32) -> f32 {
 }
 
 // The ray's t at the near and the far plane of the slab `lo`..`hi` on one axis, counted from
-// the ray's start, as pxl-engine cast.rs `planes` finds it. A ray that runs along the slab's
+// the ray's start, as pxl-engine cast.rs `plane_range` finds it. A ray that runs along the slab's
 // planes lies inside it over its whole reach where it starts between them, and nowhere where
 // it starts outside.
-fn raster_planes(d: f32, lo: f32, hi: f32, far: f32) -> vec2f {
+fn raster_plane_range(d: f32, lo: f32, hi: f32, far: f32) -> vec2f {
   if (d > 0.0) {
     let inv = 1.0 / d;
     return vec2f(lo * inv, hi * inv);
@@ -206,9 +206,9 @@ fn raster_tan(at: vec2f) -> vec2f {
 fn raster_enters(o: vec3f, u: vec3f, lo: vec3f, hi: vec3f, a: u32) -> bool {
   let d = vec3f(raster_moves(u.x), raster_moves(u.y), raster_moves(u.z));
   let far = raster.screen.w;
-  let x = raster_planes(d.x, lo.x - o.x, hi.x - o.x, far);
-  let y = raster_planes(d.y, lo.y - o.y, hi.y - o.y, far);
-  let z = raster_planes(d.z, lo.z - o.z, hi.z - o.z, far);
+  let x = raster_plane_range(d.x, lo.x - o.x, hi.x - o.x, far);
+  let y = raster_plane_range(d.y, lo.y - o.y, hi.y - o.y, far);
+  let z = raster_plane_range(d.z, lo.z - o.z, hi.z - o.z, far);
   let t0 = max(max(max(0.0, x.x), y.x), z.x);
   let t1 = min(min(min(far, x.y), y.y), z.y);
   let near = vec3f(x.x, y.x, z.x);

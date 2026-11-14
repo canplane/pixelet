@@ -1,59 +1,28 @@
 // pxl-spec/asset/cube.rs
 
 //! The cube kind (`spec/spec/asset/cube.json`): the ground and the cubes, in one table
-//! the GPU reads too, laid into the value space (value.rs), and a cube as the catalog gives it
-//! out to be placed.
+//! the GPU reads too, which the value space (value.rs) is laid over, a cube as the catalog
+//! gives it out to be placed, and what has a cube's body.
 
 use std::sync::LazyLock;
 
 #[path = "cube.spec.rs"]
 mod spec;
-pub use spec::{ground, pack, Ground, Object, Sentinel, BASE};
+pub use spec::{Ground, Object, Sentinel, BASE, GROUND, PACK};
 
 use crate::asset::color;
-use crate::asset::id::AssetId;
-use crate::value;
+use crate::asset::id::{AssetId, Kind, IDX_BITS};
 
-// The palette laid into the value space: the sentinels are the value space's, every ground
-// entry lies in the ground's range and the ways' exactly in the ways', a pier is drawn as a
-// building, and the object's colors lie in their range.
-const _: () = {
-    assert!(
-        Sentinel::void as u32 == value::VOID
-            && Sentinel::unknown as u32 == value::UNKNOWN
-            && Sentinel::air as u32 == value::AIR,
-        "the palette's sentinels and air are the value space's"
-    );
-    assert!(
-        Ground::building as u32 == value::PIER,
-        "a pier is drawn as a building"
-    );
-    let mut k = 0;
-    while k < Ground::ALL.len() {
-        let g = Ground::ALL[k];
-        assert!(
-            value::grounds(g as u32),
-            "a ground entry in the ground's slots"
-        );
-        assert!(
-            value::transports(g as u32) == ground[k].transport,
-            "a way's entry in the ways' slots, and no other"
-        );
-        k += 1;
-    }
-    let mut k = 0;
-    while k < Object::ALL.len() {
-        assert!(
-            value::objects(Object::ALL[k] as u32),
-            "an object's color in the objects' slots"
-        );
-        k += 1;
-    }
-};
+/// Whether an asset is matter with a cube's body: a cube is, and so is an id
+/// in a cube's range that the catalog does not give out; void and air, a
+/// decor and a marker are not.
+pub const fn solid(id: AssetId) -> bool {
+    id != Sentinel::Void as u32 && id != Sentinel::Air as u32 && id >> IDX_BITS == Kind::Cube as u32
+}
 
 /// A cube of the catalog (`asset/cube.json`) is its id: a palette entry of the
 /// ground's, a byte, or past a byte one that is only ever placed; a player may
-/// place either. None for VOID, UNKNOWN, AIR or a decor.
+/// place either. None for a sentinel or a decor.
 pub fn cube_of(id: AssetId) -> Option<AssetId> {
     let known = match u8::try_from(id) {
         Ok(byte) => Ground::of(byte).is_some(),

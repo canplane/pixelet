@@ -30,9 +30,22 @@
 // odd one swaps its box's sides). The ground evaluates them from its cell; a
 // placed one's are the placement's.
 
-import * as decor from "./decor/decor.spec.ts";
+export type Decor =
+  typeof DECOR_TREE | typeof DECOR_BOAT | typeof DECOR_CAR | typeof DECOR_TRAIN;
+export const DECOR_TREE = 1024;
+export const DECOR_BOAT = 1025;
+export const DECOR_CAR = 1026;
+export const DECOR_TRAIN = 1027;
 
-export { decor };
+/** The member `val` is, or null for a number no member has. */
+export function of_Decor(val: number): Decor | null {
+  return val === DECOR_TREE ||
+    val === DECOR_BOAT ||
+    val === DECOR_CAR ||
+    val === DECOR_TRAIN
+    ? val
+    : null;
+}
 
 /** The decors' ids, in the table's order. */
 export const DECORS: readonly number[] = [1024, 1025, 1026, 1027];

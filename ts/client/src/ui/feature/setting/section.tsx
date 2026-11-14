@@ -86,7 +86,7 @@ function SettingControl(props: { name: SettingName }) {
           {Object.entries(setting.options).map(([option, number], i) => {
             const devOnly = devOption(setting, option);
             return (
-              (__IS_DEV__ || !devOnly) && (
+              (__DEV__ || !devOnly) && (
                 <SettingChoiceRow
                   key={option}
                   label={t(`${base}.${option}.label`)}

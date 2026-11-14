@@ -6,15 +6,8 @@
 // registers them, and the effects a frame runs around them. The profiler records and
 // reports them by these names (spec/client/core/perf/perf.json).
 
-// Names as the spec spells them, so one record has one name on every side.
 // A table is generated whole, whether or not this crate calls an entry.
-#![allow(
-    non_upper_case_globals,
-    non_snake_case,
-    non_camel_case_types,
-    dead_code,
-    reason = "generated from the spec"
-)]
+#![allow(dead_code, reason = "generated from the spec")]
 
 pub const STEP_NAMES: &[&str] = &[
     "controller",
@@ -30,43 +23,43 @@ pub const STEP_NAMES: &[&str] = &[
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum StepName {
-    controller = 0,
-    input = 1,
-    camera = 2,
-    edit = 3,
-    ghost = 4,
-    environment = 5,
-    companion = 6,
-    demand = 7,
-    scene = 8,
+    Controller = 0,
+    Input = 1,
+    Camera = 2,
+    Edit = 3,
+    Ghost = 4,
+    Environment = 5,
+    Companion = 6,
+    Demand = 7,
+    Scene = 8,
 }
 
 impl StepName {
     /// Every member, in its source's own order.
     pub const ALL: [StepName; 9] = [
-        StepName::controller,
-        StepName::input,
-        StepName::camera,
-        StepName::edit,
-        StepName::ghost,
-        StepName::environment,
-        StepName::companion,
-        StepName::demand,
-        StepName::scene,
+        StepName::Controller,
+        StepName::Input,
+        StepName::Camera,
+        StepName::Edit,
+        StepName::Ghost,
+        StepName::Environment,
+        StepName::Companion,
+        StepName::Demand,
+        StepName::Scene,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<StepName> {
         match val {
-            0 => Some(StepName::controller),
-            1 => Some(StepName::input),
-            2 => Some(StepName::camera),
-            3 => Some(StepName::edit),
-            4 => Some(StepName::ghost),
-            5 => Some(StepName::environment),
-            6 => Some(StepName::companion),
-            7 => Some(StepName::demand),
-            8 => Some(StepName::scene),
+            0 => Some(StepName::Controller),
+            1 => Some(StepName::Input),
+            2 => Some(StepName::Camera),
+            3 => Some(StepName::Edit),
+            4 => Some(StepName::Ghost),
+            5 => Some(StepName::Environment),
+            6 => Some(StepName::Companion),
+            7 => Some(StepName::Demand),
+            8 => Some(StepName::Scene),
             _ => None,
         }
     }
@@ -74,15 +67,15 @@ impl StepName {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            StepName::controller => "controller",
-            StepName::input => "input",
-            StepName::camera => "camera",
-            StepName::edit => "edit",
-            StepName::ghost => "ghost",
-            StepName::environment => "environment",
-            StepName::companion => "companion",
-            StepName::demand => "demand",
-            StepName::scene => "scene",
+            StepName::Controller => "controller",
+            StepName::Input => "input",
+            StepName::Camera => "camera",
+            StepName::Edit => "edit",
+            StepName::Ghost => "ghost",
+            StepName::Environment => "environment",
+            StepName::Companion => "companion",
+            StepName::Demand => "demand",
+            StepName::Scene => "scene",
         }
     }
 }
@@ -94,50 +87,50 @@ pub const EFFECT_NAMES: &[&str] = &[
     "follow",
     "dst",
     "decor",
-    "objects",
+    "object",
     "location",
-    "settings",
+    "setting",
 ];
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum EffectName {
-    navigation = 0,
-    bootstrap = 1,
-    orient = 2,
-    follow = 3,
-    dst = 4,
-    decor = 5,
-    objects = 6,
-    location = 7,
-    settings = 8,
+    Navigation = 0,
+    Bootstrap = 1,
+    Orient = 2,
+    Follow = 3,
+    Dst = 4,
+    Decor = 5,
+    Object = 6,
+    Location = 7,
+    Setting = 8,
 }
 
 impl EffectName {
     /// Every member, in its source's own order.
     pub const ALL: [EffectName; 9] = [
-        EffectName::navigation,
-        EffectName::bootstrap,
-        EffectName::orient,
-        EffectName::follow,
-        EffectName::dst,
-        EffectName::decor,
-        EffectName::objects,
-        EffectName::location,
-        EffectName::settings,
+        EffectName::Navigation,
+        EffectName::Bootstrap,
+        EffectName::Orient,
+        EffectName::Follow,
+        EffectName::Dst,
+        EffectName::Decor,
+        EffectName::Object,
+        EffectName::Location,
+        EffectName::Setting,
     ];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u8) -> Option<EffectName> {
         match val {
-            0 => Some(EffectName::navigation),
-            1 => Some(EffectName::bootstrap),
-            2 => Some(EffectName::orient),
-            3 => Some(EffectName::follow),
-            4 => Some(EffectName::dst),
-            5 => Some(EffectName::decor),
-            6 => Some(EffectName::objects),
-            7 => Some(EffectName::location),
-            8 => Some(EffectName::settings),
+            0 => Some(EffectName::Navigation),
+            1 => Some(EffectName::Bootstrap),
+            2 => Some(EffectName::Orient),
+            3 => Some(EffectName::Follow),
+            4 => Some(EffectName::Dst),
+            5 => Some(EffectName::Decor),
+            6 => Some(EffectName::Object),
+            7 => Some(EffectName::Location),
+            8 => Some(EffectName::Setting),
             _ => None,
         }
     }
@@ -145,15 +138,15 @@ impl EffectName {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            EffectName::navigation => "navigation",
-            EffectName::bootstrap => "bootstrap",
-            EffectName::orient => "orient",
-            EffectName::follow => "follow",
-            EffectName::dst => "dst",
-            EffectName::decor => "decor",
-            EffectName::objects => "objects",
-            EffectName::location => "location",
-            EffectName::settings => "settings",
+            EffectName::Navigation => "navigation",
+            EffectName::Bootstrap => "bootstrap",
+            EffectName::Orient => "orient",
+            EffectName::Follow => "follow",
+            EffectName::Dst => "dst",
+            EffectName::Decor => "decor",
+            EffectName::Object => "object",
+            EffectName::Location => "location",
+            EffectName::Setting => "setting",
         }
     }
 }

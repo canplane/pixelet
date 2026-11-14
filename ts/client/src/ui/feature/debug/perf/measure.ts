@@ -11,9 +11,14 @@
  */
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { BOOT_FAILED, BOOT_STARTED, BOOT_TERMINATED } from "@/abi/state.ts";
 import { read } from "@/service/core/perf.ts";
-import { boot_state, watch_boot } from "@/service/sys/boot.ts";
+import {
+  boot_state,
+  watch_boot,
+  BOOT_FAILED,
+  BOOT_STARTED,
+  BOOT_TERMINATED,
+} from "@/service/sys/boot.ts";
 import * as setting from "@/service/core/setting.ts";
 import { log } from "@/service/platform/log.ts";
 import * as visibility from "@/service/platform/visibility.ts";
@@ -53,9 +58,9 @@ const off = (v: f64 | null, at: f64) =>
 
 /** Says the run's progress, a line a second until the answer is called,
  * whether or not the core answers: when it was logged, whether the page is
- * shown, the boot's state (abi/state.ts), how long the read of NOW's draw that
- * is out has gone unanswered (`unanswered_ms`, 0 with none out), and that
- * draw as the last answer gave it, each as its name and its value, or the
+ * shown, the boot's state (service/sys/boot.ts), how long the read of NOW's
+ * draw that is out has gone unanswered (`unanswered_ms`, 0 with none out), and
+ * that draw as the last answer gave it, each as its name and its value, or the
  * read's error. One read is out at a time. A second with no line is one the
  * UI's own thread did not run in. */
 function progress(): () => void {
@@ -145,7 +150,7 @@ async function run(): Promise<string> {
   }
   const f = r.frames;
   return JSON.stringify({
-    build: __IS_DEV__ ? "dev" : "release",
+    build: __DEV__ ? "dev" : "release",
     longest: Math.max(0, ...r.longs.map((l) => l.durationMs)),
     gpu: f
       ? [f.gpu_busy.p50, f.gpu_busy.p95, f.n, f.gpu_timed]

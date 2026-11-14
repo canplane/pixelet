@@ -5,7 +5,7 @@
 // tangents of its place on the lattice (pxl-engine `beam::Grid::sample`).
 
 fn sample_lattice() -> vec2<u32> {
-  return vec2<u32>(eye_word(EYE_GRID + GRID_SAMPLES), eye_word(EYE_GRID + GRID_SAMPLES + 1u));
+  return vec2<u32>(eye_word(EYE_GRID + GRID_SAMPLE_LATTICE), eye_word(EYE_GRID + GRID_SAMPLE_LATTICE + 1u));
 }
 
 /// The sample the thread at `id` takes in a pass over the lattice (sample_hit.wgsl): the one

@@ -21,7 +21,7 @@
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
 
-@compute @workgroup_size(HIT_LANES)
+@compute @workgroup_size(HIT_LANE_CNT)
 fn rec_hits_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= in_cap(node_cache_word(HITS_CNT), hits_cap())) {
     return;
@@ -30,10 +30,10 @@ fn rec_hits_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 
 /// Puts what lies around each hit's face at the hit's pixel, where the pixel still waits for
-/// it: its last ray word holds `HIT_WAITS` and the hit's number (pxl-engine `beam::HIT_WAITS`).
+/// it: its last ray word holds `HIT_WAIT` and the hit's number (pxl-engine `beam::HIT_WAIT`).
 /// The word put is the entry's word for that face, which the faces' pass answered for this
 /// stop or for an earlier one. It is 0 where no slot keeps the node.
-@compute @workgroup_size(HIT_LANES)
+@compute @workgroup_size(HIT_LANE_CNT)
 fn rec_faces_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= in_cap(node_cache_word(HITS_CNT), hits_cap())) {
     return;
@@ -41,7 +41,7 @@ fn rec_faces_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let k = hit_at(id.x);
   let px = beams[k + HIT_PX];
   let at = vec2<u32>(px & 0xffffu, px >> 16u);
-  if (textureLoad(rays, at, 3u).x != (HIT_WAITS | id.x)) {
+  if (textureLoad(rays, at, 3u).x != (HIT_WAIT | id.x)) {
     return;
   }
   let h = hit_node(id.x);

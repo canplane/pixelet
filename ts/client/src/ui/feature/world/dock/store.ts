@@ -3,9 +3,17 @@
 import { create } from "zustand";
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
-import * as cube from "@/abi/cube.spec.ts";
+import {
+  GROUND_BUILDING,
+  GROUND_LAND,
+  GROUND_RESIDENTIAL_ROAD,
+  GROUND_WATER,
+  OBJECT_BLUE,
+  OBJECT_RED,
+  OBJECT_WHITE,
+} from "@/abi/cube.spec.ts";
 import { DECORS } from "@/ui/shared/asset/decor.spec.ts";
-import { Kind } from "@/ui/shared/asset/id.spec.ts";
+import { KIND_CUBE } from "@/ui/shared/asset/id.spec.ts";
 import {
   type AssetId,
   type Cube,
@@ -13,8 +21,8 @@ import {
   kindOf,
   MARKER,
 } from "@/ui/shared/asset/catalog.ts";
-import { Tool } from "@/abi/edit.ts";
-import { OBJECT_SCALES } from "@/ui/feature/world/object.spec.ts";
+import { type Tool, TOOL_ITEM, TOOL_POINTER } from "@/abi/edit.enum.ts";
+import { OBJECT_SCALE_CNT } from "@/ui/feature/world/object.spec.ts";
 import * as storage from "@/service/platform/storage.ts";
 import * as DockMode from "./mode.ts";
 import * as edit from "@/service/core/edit.ts";
@@ -48,9 +56,9 @@ interface DockState {
   id: AssetId;
   /**
    * The scale last chosen for a cube, kept while the tool changes. It counts
-   * as a decor's `scale_steps` does: 0 is a unit, and each step down halves it.
+   * as a decor's `scale_step` does: 0 is a unit, and each step down halves it.
    */
-  scaleSteps: i32;
+  scaleStep: i32;
   // The hotbar, newest pick first. Only selectAsset adds a pick, and only once
   // the core holds it.
   recentPicks: AssetId[];
@@ -71,13 +79,13 @@ interface SwatchFlash {
 // One asset of each kind that can be placed, so that a fresh hotbar shows the
 // whole range. Its length sets the hotbar's size.
 const SEED: readonly AssetId[] = [
-  cube.Object.white,
-  cube.Ground.land,
-  cube.Ground.water,
-  cube.Ground.building,
-  cube.Ground.residential_road,
-  cube.Object.red,
-  cube.Object.blue,
+  OBJECT_WHITE,
+  GROUND_LAND,
+  GROUND_WATER,
+  GROUND_BUILDING,
+  GROUND_RESIDENTIAL_ROAD,
+  OBJECT_RED,
+  OBJECT_BLUE,
   DECORS[0],
 ];
 
@@ -120,9 +128,9 @@ function save(s: DockState): void {
 }
 
 const store = create<DockState>()(() => ({
-  tool: Tool.Pointer,
+  tool: TOOL_POINTER,
   id: 0,
-  scaleSteps: 0,
+  scaleStep: 0,
   recentPicks: load().hotbar,
   chatLines: [],
   dockMode: DockMode.Palette,
@@ -167,33 +175,29 @@ export function watchDockMode(
 
 /** Tells the core what is held, and keeps it only if the core accepts it, so
  * that the dock never shows a tool the core refused. */
-async function hold(
-  tool: Tool,
-  id: AssetId,
-  scaleSteps: i32,
-): Promise<boolean> {
+async function hold(tool: Tool, id: AssetId, scaleStep: i32): Promise<boolean> {
   try {
-    await edit.tool(tool, id, scaleSteps);
+    await edit.tool(tool, id, scaleStep);
   } catch (err) {
     console.error(`[dock] the core refused the tool: ${String(err)}`);
     return false;
   }
-  store.setState({ tool, id, scaleSteps });
+  store.setState({ tool, id, scaleStep });
   return true;
 }
 
 export function selectTool(tool: Tool): void {
-  const { id, scaleSteps } = store.getState();
-  void hold(tool, id, scaleSteps);
+  const { id, scaleStep } = store.getState();
+  void hold(tool, id, scaleStep);
 }
 
-export function selectScale(scaleSteps: i32): void {
+export function selectScale(scaleStep: i32): void {
   const { tool, id } = store.getState();
-  void hold(tool, id, scaleSteps);
+  void hold(tool, id, scaleStep);
 }
 
 export function selectAsset(id: AssetId): void {
-  void hold(Tool.Item, id, store.getState().scaleSteps).then((ok) => {
+  void hold(TOOL_ITEM, id, store.getState().scaleStep).then((ok) => {
     if (ok) {
       store.setState((s) => ({ recentPicks: touchRecent(s.recentPicks, id) }));
     }
@@ -205,7 +209,7 @@ export function useTool(): Tool {
 }
 
 export function useScale(): i32 {
-  return store((s) => s.scaleSteps);
+  return store((s) => s.scaleStep);
 }
 
 export function setDockMode(mode: DockMode): void {
@@ -226,9 +230,9 @@ export function flashSwatch(cube: Cube, open: boolean): void {
 
 /** A `delta` of 1 is one step coarser, and -1 one step finer. */
 export function stepScale(delta: i32): void {
-  const { tool, id, scaleSteps } = store.getState();
-  if (tool !== Tool.Item || kindOf(id) !== Kind.cube) return;
-  selectScale(Math.min(0, Math.max(1 - OBJECT_SCALES, scaleSteps + delta)));
+  const { tool, id, scaleStep } = store.getState();
+  if (tool !== TOOL_ITEM || kindOf(id) !== KIND_CUBE) return;
+  selectScale(Math.min(0, Math.max(1 - OBJECT_SCALE_CNT, scaleStep + delta)));
   flashSwatch(id, true);
 }
 
@@ -247,5 +251,5 @@ export function appendChatLine(text: string): void {
 }
 
 export function useInHand(id: AssetId): boolean {
-  return store((s) => s.tool === Tool.Item && s.id === id);
+  return store((s) => s.tool === TOOL_ITEM && s.id === id);
 }

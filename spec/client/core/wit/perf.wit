@@ -1,13 +1,15 @@
 package pxl:core@0.1.0;
 
 interface perf {
-  start: func();
+  use types.{error-code};
+
+  start: func() -> result<_, error-code>;
   stop: func();
   // STAT's words over `window-ms`, and NOW's (perf.json).
   stats: func(window-ms: option<f64>) -> list<u8>;
   // Up to `cnt` records of ring `ring`, in RING_NAMES' order, from its record
   // `from`, no more than a page holds (perf.json LIMIT.PAGE_BYTES).
-  rings: func(ring: u32, %from: u32, cnt: u32) -> list<u8>;
+  ring: func(ring: u32, %from: u32, cnt: u32) -> list<u8>;
   // The string table the tasks' `at_file` names point into.
   strtab: func() -> list<u8>;
 }

@@ -145,7 +145,7 @@ fn native_tells_unfinished() {
     let mut h = host(adapter, &device, queue, 1);
     super::test::region();
     let block = super::test::SPARE_AT;
-    let unfinished = block + 4 * xpute_gpu_link::spec::DEVICE::UNFINISHED_AT as u32;
+    let unfinished = block + 4 * xpute_gpu_link::spec::device::UNFINISHED_AT as u32;
     h.block = Some(block);
     assert!(h.admit_frame());
     h.count_frame();
@@ -170,19 +170,19 @@ fn lost_told_once() {
     let mut h = host(adapter, &device, queue, 1);
     super::test::region();
     // A block of its own, past the other test's.
-    let block = super::test::SPARE_AT + 4 * xpute_gpu_link::spec::DEVICE::WORDS as u32;
-    let status = block + 4 * xpute_gpu_link::spec::DEVICE::STATUS_AT as u32;
+    let block = super::test::SPARE_AT + 4 * xpute_gpu_link::spec::device::WORDS as u32;
+    let status = block + 4 * xpute_gpu_link::spec::device::STATUS_AT as u32;
     h.block = Some(block);
     assert!(!h.lost());
     h.device_lost.store(true, Ordering::Release);
     assert!(!h.poll(), "a lost device answers nothing");
-    assert_eq!(mem::load_acquire(status), STATUS::LOST);
+    assert_eq!(mem::load_acquire(status), status::LOST);
     assert!(h.lost(), "a loss is never cleared");
-    mem::store_release(status, STATUS::READY);
+    mem::store_release(status, status::READY);
     h.poll();
     assert_eq!(
         mem::load_acquire(status),
-        STATUS::READY,
+        status::READY,
         "the block is the next host's"
     );
 }

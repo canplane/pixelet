@@ -12,14 +12,15 @@
 use crate::answer;
 use crate::clipmap;
 use crate::clipmap::{
-    column_top, BrickSource, BOUNDS_AT, BOUND_ENTRY_WORDS, COLUMNS_AT, OWN_AT, OWN_CELLS, ROOT_AT,
-    RUN_BITS_AT, RUN_OFFS_AT, RUN_RANK_AT, SPANS_ACROSS, SPANS_AT, SPANS_COLUMNS,
+    column_top, BrickSource, BOUNDS_AT, BOUND_ENTRY_WORDS, COLUMNS_AT, OWN_AT, OWN_CELL_CNT,
+    ROOT_AT, RUN_BITS_AT, RUN_OFFS_AT, RUN_RANK_AT, SPANS_ACROSS, SPANS_AT, SPANS_COLUMN_CNT,
     SPANS_COLUMN_WORDS,
 };
 use crate::{at, ground, way};
+use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::brick;
-use pxl_spec::brick::{BRICK, BRICK_CELLS};
-use pxl_spec::ground::{ele_at, own, word, UNKNOWN};
+use pxl_spec::brick::{BRICK, BRICK_CELL_CNT};
+use pxl_spec::ground::{ele_at, own, word};
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::area::Shard;
@@ -48,7 +49,7 @@ pub fn mip_of(ground: &[u32], base: u32, j: u32, [x, y]: [u32; 2]) -> [i32; 2] {
 
 /// Cell `i`'s own palette index as laid, in the brick at `base` (`clipmap::OWN_WORDS`).
 pub fn own_of(ground: &[u32], base: u32, i: u32) -> u32 {
-    clipmap::own_at(at(ground, base + OWN_AT + i / OWN_CELLS), i)
+    clipmap::own_at(at(ground, base + OWN_AT + i / OWN_CELL_CNT), i)
 }
 
 /// The first word of the run of kept spans of the brick at `base`, 0 where it has none
@@ -201,42 +202,43 @@ impl brick::Brick for LaneBrick<'_> {
 
 /// Writes a brick's columns and its cells as laid into `lane`, where `four(i)` gives cell `i`'s
 /// four palette indices (pxl-spec `ground::asset_ids`). Each column gets its ground top
-/// (pxl-spec `ground::ele_at`); a gone cell, whose own palette index is `UNKNOWN` past the area,
-/// gets the Earth's top at sea level. Each cell gets its own palette index (pxl-spec `ground::own`
-/// of its four at the brick's zoom), four to a word (`clipmap::OWN_WORDS`).
+/// (pxl-spec `ground::ele_at`); a gone cell, whose own palette index is `Sentinel::Unknown`
+/// past the area, gets the Earth's top at sea level. Each cell gets its own palette index
+/// (pxl-spec `ground::own` of its four at the brick's zoom), four to a word
+/// (`clipmap::OWN_WORDS`).
 pub fn columns(lane: &mut [u32], four: impl Fn(u32) -> u32, site: &Site) {
     let mut i = 0;
-    while i < BRICK_CELLS {
+    while i < BRICK_CELL_CNT {
         let own = own(four(i), site.cell_zoom);
         let [x, y] = brick::of_idx(i);
-        let top = if own == UNKNOWN {
+        let top = if own == Sentinel::Unknown as u32 {
             SEA_LEVEL
         } else {
             site.ele_at([x as i32, y as i32])
         };
         put(lane, COLUMNS_AT + i, top as u32 & 0xffff);
-        let w = OWN_AT + i / OWN_CELLS;
-        let k = 8 * (i % OWN_CELLS);
+        let w = OWN_AT + i / OWN_CELL_CNT;
+        let k = 8 * (i % OWN_CELL_CNT);
         put(lane, w, (at(lane, w) & !(0xff << k)) | own << k);
         i += 1;
     }
 }
 
 /// Writes the spans of column `i` of the brick in `lane`, ring included
-/// (`clipmap::SPANS_COLUMNS`), into its scratch (`keep`). Each column's spans are worked out
+/// (`clipmap::SPANS_COLUMN_CNT`), into its scratch (`keep`). Each column's spans are worked out
 /// once, before the brick's levels read them. It says whether the column made more than
-/// pxl-spec `way::SPANS` (`keep`).
+/// pxl-spec `way::SPAN_CAP` (`keep`).
 pub fn spans(lane: &[u32], site: &Site, scratch: &mut [u32], i: u32) -> bool {
     keep(&LaneBrick { lane, site }, scratch, i)
 }
 
 /// Writes the spans of column `i` of brick `sq`, counting row by row from the ring's first column
-/// (`clipmap::SPANS_COLUMNS`), from its lines and its face (pxl-spec `way::column`) into the
+/// (`clipmap::SPANS_COLUMN_CNT`), from its lines and its face (pxl-spec `way::column`) into the
 /// scratch (`clipmap::SPANS_AT`). A corner of the ring lies beside no column of the brick and gets
-/// none. It says whether the column made more spans than pxl-spec `way::SPANS`, which keeps the
+/// none. It says whether the column made more spans than pxl-spec `way::SPAN_CAP`, which keeps the
 /// brick from being held whole.
 pub fn keep(sq: &impl brick::Brick, scratch: &mut [u32], i: u32) -> bool {
-    if i >= SPANS_COLUMNS {
+    if i >= SPANS_COLUMN_CNT {
         return false;
     }
     let c = [(i % SPANS_ACROSS) as i32 - 1, (i / SPANS_ACROSS) as i32 - 1];
@@ -305,7 +307,7 @@ pub fn mips(lane: &mut [u32], scratch: &[u32], cell_zoom: Zoom) {
         words: scratch,
         at: 0,
     };
-    for j in 0..=clipmap::BRICK_MIPS {
+    for j in 0..=clipmap::BRICK_MIP_LAST {
         let side = BRICK >> j;
         for k in 0..side * side {
             mip(lane, 0, &column_spans, cell_zoom, j, [k % side, k / side]);
@@ -315,7 +317,7 @@ pub fn mips(lane: &mut [u32], scratch: &[u32], cell_zoom: Zoom) {
 
 /// Fills a brick whole into `lane`, with `scratch` for its spans (`clipmap::SPANS_WORDS`)
 /// and `four` giving each cell's four palette indices (`columns`): its columns, its spans and
-/// its levels. It says whether a column made more spans than pxl-spec `way::SPANS` (`keep`).
+/// its levels. It says whether a column made more spans than pxl-spec `way::SPAN_CAP` (`keep`).
 pub fn brick(
     lane: &mut [u32],
     scratch: &mut [u32],
@@ -324,7 +326,7 @@ pub fn brick(
 ) -> bool {
     columns(lane, four, site);
     let mut past = false;
-    for i in 0..SPANS_COLUMNS {
+    for i in 0..SPANS_COLUMN_CNT {
         past |= spans(lane, site, scratch, i);
     }
     mips(lane, scratch, site.cell_zoom);
@@ -355,7 +357,7 @@ fn run_keeps(spans: &Scratch, i: u32) -> bool {
 /// How many columns the brick's run keeps.
 fn kept_cnt(spans: &Scratch) -> u32 {
     let (mut kept, mut i) = (0, 0);
-    while i < SPANS_COLUMNS {
+    while i < SPANS_COLUMN_CNT {
         kept += u32::from(run_keeps(spans, i));
         i += 1;
     }
@@ -370,7 +372,7 @@ pub fn spans_run_words(scratch: &[u32]) -> u32 {
         at: 0,
     };
     let (mut kept, mut spanned, mut i) = (0, 0, 0);
-    while i < SPANS_COLUMNS {
+    while i < SPANS_COLUMN_CNT {
         if run_keeps(&spans, i) {
             kept += 1;
             spanned += at(scratch, SPANS_AT + i * SPANS_COLUMN_WORDS) & clipmap::SPANS_CNT;
@@ -394,7 +396,7 @@ pub fn lay_spans(scratch: &[u32], put: &mut impl FnMut(u32, u32)) {
     let (mut bits, mut rank, mut r) = (0u32, 0u32, 0u32);
     let mut payload = RUN_OFFS_AT + kept_cnt(&spans);
     let mut i = 0;
-    while i < SPANS_COLUMNS {
+    while i < SPANS_COLUMN_CNT {
         if i % 64 == 0 {
             // A count of the columns before each pair of bitmap words, two to a word.
             let block = i / 64;
@@ -417,12 +419,12 @@ pub fn lay_spans(scratch: &[u32], put: &mut impl FnMut(u32, u32)) {
             r += 1;
         }
         i += 1;
-        if i % 32 == 0 || i == SPANS_COLUMNS {
+        if i % 32 == 0 || i == SPANS_COLUMN_CNT {
             put(RUN_BITS_AT + (i - 1) / 32, bits);
             bits = 0;
         }
     }
-    let last = (SPANS_COLUMNS - 1) / 64;
+    let last = (SPANS_COLUMN_CNT - 1) / 64;
     if last.is_multiple_of(2) {
         put(RUN_RANK_AT + last / 2, rank);
     }

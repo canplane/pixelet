@@ -16,13 +16,18 @@ fn place_redundant_only_over_its_own_ground() {
     crate::on_core(|| {
         let [x, y] = flat_at_five();
         let mut store = Store::default();
-        write(&mut store, [x, y, 4.0], GROUND.leaf_cell_zoom(), AIR);
+        write(
+            &mut store,
+            [x, y, 4.0],
+            GROUND.leaf_cell_zoom(),
+            Sentinel::Air as AssetId,
+        );
         let world = placed(store);
         let at = world::point(x, y, 4.0);
         let redundant = |cube| place_val_is_redundant(world, &at, GROUND.leaf_cell_zoom(), cube);
-        assert!(redundant(catalog::Ground::land as AssetId));
-        assert!(!redundant(catalog::Ground::water as AssetId));
-        assert!(!redundant(catalog::Object::red as AssetId));
+        assert!(redundant(catalog::Ground::Land as AssetId));
+        assert!(!redundant(catalog::Ground::Water as AssetId));
+        assert!(!redundant(catalog::Object::Red as AssetId));
     });
 }
 
@@ -32,7 +37,7 @@ fn place_not_redundant_uncarved() {
         let [x, y] = flat_at_five();
         let world = placed(Store::default());
         let at = world::point(x, y, 4.0);
-        let cube = catalog::Ground::land as AssetId;
+        let cube = catalog::Ground::Land as AssetId;
         assert!(!place_val_is_redundant(
             world,
             &at,
@@ -48,10 +53,15 @@ fn place_not_redundant_uncarved() {
 fn place_written_over_a_placed_cube() {
     crate::on_core(|| {
         let [x, y] = flat_at_five();
-        let red = catalog::Object::red as AssetId;
+        let red = catalog::Object::Red as AssetId;
         let mut store = Store::default();
         write(&mut store, [x, y, 5.0], GROUND.leaf_cell_zoom() - 1, red);
-        write(&mut store, [x, y, 5.0], GROUND.leaf_cell_zoom(), AIR);
+        write(
+            &mut store,
+            [x, y, 5.0],
+            GROUND.leaf_cell_zoom(),
+            Sentinel::Air as AssetId,
+        );
         let world = placed(store);
         let at = world::point(x, y, 5.0);
         assert!(!place_val_is_redundant(
@@ -64,12 +74,12 @@ fn place_written_over_a_placed_cube() {
 }
 
 /// Erasing an entry finer than a leaf cell over ground that fills it writes
-/// AIR: the ground would otherwise fill its cube once it is gone.
+/// air: the ground would otherwise fill its cube once it is gone.
 #[test]
 fn erase_finer_than_a_leaf_leaves_the_hole() {
     crate::on_core(|| {
         let [x, y] = flat_at_five();
         let entry = Octant::holding(GROUND.leaf_cell_zoom() + 1, &world::point(x, y, 4.0));
-        assert_eq!(erase_val(entry), AIR);
+        assert_eq!(erase_val(entry), Sentinel::Air as AssetId);
     });
 }

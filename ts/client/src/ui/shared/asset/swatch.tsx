@@ -3,7 +3,12 @@
 import { Image, type StyleProp, View, type ViewStyle } from "react-native";
 
 import type { u16 } from "@xpute/kit/abi/word.ts";
-import { decor } from "@/ui/shared/asset/decor.spec.ts";
+import {
+  DECOR_BOAT,
+  DECOR_CAR,
+  DECOR_TRAIN,
+  DECOR_TREE,
+} from "@/ui/shared/asset/decor.spec.ts";
 import { type Cube, cubeHex } from "@/ui/shared/asset/catalog.ts";
 import { shippedTopTextureKey } from "@/ui/shared/asset/texture.ts";
 import type { GlyphName } from "@/ui/shared/component/icon.tsx";
@@ -30,7 +35,7 @@ export function CubeSwatch({ cube, size, radius, style }: CubeSwatchProps) {
     borderRadius: radius,
     overflow: "hidden" as const,
   };
-  const textured = useCore((s) => s.settings[SETTING.textures.key] === 1);
+  const textured = useCore((s) => s.settings[SETTING.texture.key] === 1);
   const textureUrl = textured ? cubeTextureUrl(cube) : null;
   if (textureUrl) {
     return (
@@ -51,10 +56,10 @@ export function CubeSwatch({ cube, size, radius, style }: CubeSwatchProps) {
 }
 
 const DECOR_GLYPH: Readonly<Record<number, GlyphName>> = {
-  [decor.tree]: "tree",
-  [decor.boat]: "sailboat",
-  [decor.car]: "car",
-  [decor.train]: "train.side.front.car",
+  [DECOR_TREE]: "tree",
+  [DECOR_BOAT]: "sailboat",
+  [DECOR_CAR]: "car",
+  [DECOR_TRAIN]: "train.side.front.car",
 };
 
 export function decorGlyph(id: u16): GlyphName {

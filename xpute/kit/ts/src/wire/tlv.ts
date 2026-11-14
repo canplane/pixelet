@@ -102,7 +102,7 @@ import type { ByteArray } from "@xpute/kit/abi/array.ts";
 import * as encoding from "@xpute/kit/codec/encoding.ts";
 import type { Stream } from "@xpute/kit/wire/scalar.ts";
 import * as scalar from "@xpute/kit/wire/scalar.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
 
 // ============ ABI ============
@@ -191,7 +191,7 @@ export class TlvWriter {
 
   private _check_unsealed() {
     if (this._sealed) {
-      throw new MarshalError(Errno.EBADMSG);
+      throw new MarshalError(ERRNO_EBADMSG);
     }
   }
 
@@ -324,7 +324,7 @@ export class TlvWriter {
           break;
         case "bigint":
           if (v < I64_MIN || v > I64_MAX) {
-            throw new MarshalError(Errno.EBADMSG);
+            throw new MarshalError(ERRNO_EBADMSG);
           }
           this.i64(v);
           break;
@@ -426,7 +426,7 @@ export class TlvReader implements Iterable<TlvValue> {
           yield this._bytes();
           break;
         default:
-          throw new MarshalError(Errno.EBADMSG);
+          throw new MarshalError(ERRNO_EBADMSG);
       }
     }
   }
@@ -434,7 +434,7 @@ export class TlvReader implements Iterable<TlvValue> {
   // ---- Reader bounds ----
 
   private _need(n: u32): void {
-    if (this._stream.off + n > this._end) throw new MarshalError(Errno.EBADMSG);
+    if (this._stream.off + n > this._end) throw new MarshalError(ERRNO_EBADMSG);
   }
 
   // ---- Primitive readers ----

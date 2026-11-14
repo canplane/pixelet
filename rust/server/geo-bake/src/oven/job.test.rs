@@ -25,7 +25,7 @@ async fn outcomes_reported() {
 fn staging_publish() {
     let base = directory::tmp_dir(&format!("oven-publication-{}", std::process::id()));
     let runner = Runner::new(1, Limit::default()).unwrap();
-    let data = Dataset::open(&base, super::super::row(BaseLayer::place).unwrap(), &runner).unwrap();
+    let data = Dataset::open(&base, super::super::row(BaseLayer::Place).unwrap(), &runner).unwrap();
     let stage = Staging(data.cache.root.join("stage"));
     std::fs::create_dir(&stage.0).unwrap();
     write_pkt(&stage.0, Some(b"packet")).unwrap();

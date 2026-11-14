@@ -8,12 +8,9 @@ import assert from "node:assert/strict";
 
 import { Golden } from "@xpute/golden";
 import { bytes_to_hex, hex_to_bytes } from "@xpute/kit/codec/encoding.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
-import type { FaultError, MarshalError } from "@xpute/kit/status/error.ts";
+import type { FaultError } from "@xpute/kit/status/error.ts";
 import {
   ALIGN,
-  PacketWriter,
-  SequenceType,
   type NodeCursor,
   type NodeValue,
   TreeEncoder,
@@ -120,42 +117,4 @@ test("the cursor reads what the typescript reads", async () => {
       `caps_utf8.${j} at ${cap}`,
     ),
   );
-});
-
-/** A packet of 7, "a", true, a packed u32 array and an absent field. */
-function kinds() {
-  const buf = new Uint8Array(256);
-  const w = new PacketWriter().begin(buf, new DataView(buf.buffer), 0, 256, 5);
-  w.u32(7)
-    .str("a")
-    .bool(true)
-    .array(SequenceType.U32_ARRAY, new Uint32Array([1, 2]))
-    .u32(null);
-  return new TreeReader(buf.subarray(0, w.finish())).read_branch();
-}
-
-test("a checked getter reads its kind, and refuses another kind with EBADMSG, as xpute-kit's cursor does", () => {
-  const b = kinds();
-  assert.deepStrictEqual(
-    [b.at(0).get_number(), b.at(1).get_str(), b.at(2).get_bool()],
-    [7, "a", true],
-  );
-  assert.deepStrictEqual([...b.at(3).get_u32s()], [1, 2]);
-  assert.deepStrictEqual(
-    [
-      b.at(0).get_opt((c) => c.get_number()),
-      b.at(4).get_opt((c) => c.get_number()),
-    ],
-    [7, null],
-  );
-  const refused = (e: MarshalError) => e.errnum === Errno.EBADMSG;
-  for (const get of [
-    () => b.at(1).get_number(),
-    () => b.at(0).get_str(),
-    () => b.at(0).get_bool(),
-    () => b.at(0).get_u32s(),
-    () => b.at(4).get_number(),
-  ]) {
-    assert.throws(get, refused);
-  }
 });

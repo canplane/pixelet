@@ -24,7 +24,7 @@ static ASKED: AtomicBool = AtomicBool::new(false);
 
 pub(super) struct Vsync;
 
-impl abi::vsync::Vsync for Vsync {
+impl abi::vsync::Host for Vsync {
     fn next(&self, task_return: Return<()>) {
         WAITING.with_borrow_mut(|n| n.push(task_return));
         ASKED.store(true, Ordering::Release);

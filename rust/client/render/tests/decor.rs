@@ -9,7 +9,7 @@ mod real_world;
 mod gpu;
 
 use pxl_spec::brick;
-use pxl_spec::share::EIGHTHS;
+use pxl_spec::share::EIGHTH_CNT;
 use std::collections::{BTreeMap, BTreeSet};
 
 use pxl_content::generation::{self, drawing, DecorQuery, BRICK_REC_CAP, REC_WORDS};
@@ -18,7 +18,7 @@ use pxl_engine::answer::{self, In};
 use pxl_engine::cast::Line;
 use pxl_engine::cast::{Detail, End, Query, Spacing};
 use pxl_engine::clipmap as clip;
-use pxl_engine::clipmap::{Lookup, ENTRIES, FIRST_CELL_ZOOM};
+use pxl_engine::clipmap::{Lookup, ENTRY_CNT, FIRST_CELL_ZOOM};
 use pxl_engine::ground::Resident;
 use pxl_engine::light::{self, Light};
 use pxl_engine::object::{self, Cut};
@@ -27,13 +27,14 @@ use pxl_engine::support;
 use pxl_engine::world::{self, Inheritance, PlacedCursor};
 use pxl_engine::{beam, eye, ray};
 use pxl_render::frame::shader::record::{
-    src, SHADER_GENERATION, SHADER_GENERATION_ARGS, SHADER_GENERATION_CNT,
-    SHADER_GENERATION_COMPACT, SHADER_GENERATION_MARK, SHADER_GENERATION_THIN,
+    src, COMPUTE_GENERATION, COMPUTE_GENERATION_ARGS, COMPUTE_GENERATION_CNT,
+    COMPUTE_GENERATION_COMPACT, COMPUTE_GENERATION_MARK, COMPUTE_GENERATION_THIN,
     SHADER_LIGHT_MARK_DRAWS, SHADER_LIGHT_MARK_DRAWS_OPEN,
 };
-use pxl_render::frame::shader::word::{instance, ROW_LANES, SQUARE_SIDE};
+use pxl_render::frame::shader::word::{instance, ROW_LANE_CNT, SQUARE_SIDE};
+use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::asset::decor::{Decor, Orientation, DECORS, ROWS};
-use pxl_spec::brick::{BRICK, BRICK_CELLS};
+use pxl_spec::brick::{BRICK, BRICK_CELL_CNT};
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
@@ -85,7 +86,7 @@ impl Query for Ground<'_> {
         at: &mut Inheritance,
         zoom: Zoom,
         c: [i32; 3],
-        zooms: [Zoom; 2],
+        range: [Zoom; 2],
         _: f32,
     ) -> In<[u32; 2]> {
         let mut resident = self.w;
@@ -96,7 +97,7 @@ impl Query for Ground<'_> {
             self.w.pool,
             at,
             (zoom, c),
-            zooms,
+            range,
             self.cuts,
         )
     }
@@ -153,13 +154,15 @@ impl Generating<'_, '_> {
         self.tally.add("ask: as edited", edited);
         if edited && answer::is_placed(v) {
             self.tally
-                .add("edit: air takes it", answer::val(v) == value::AIR);
+                .add("edit: air takes it", answer::val(v) == Sentinel::Air as u32);
             self.tally.add(
                 "edit: something placed takes it",
-                answer::val(v) != value::AIR,
+                answer::val(v) != Sentinel::Air as u32,
             );
-            self.tally
-                .add("edit: part of its cube", answer::fill_eighths(v) < EIGHTHS);
+            self.tally.add(
+                "edit: part of its cube",
+                answer::fill_eighths(v) < EIGHTH_CNT,
+            );
             self.tally
                 .add("edit: at a coarse zoom", zoom < LEAF_CELL_ZOOM);
             let under = Inheritance::of(&self.w, (zoom, c));
@@ -202,7 +205,7 @@ impl DecorQuery for Generating<'_, '_> {
         let f = support::column_surface(&mut ground, cell_zoom, g);
         self.tally.add("surface: columns walked", true);
         assert!(
-            f.end != End::Lacks,
+            f.end != End::Lack,
             "a listed pair's brick holds its leaves' columns"
         );
         self.tally.add("surface: nothing fills", f.end == End::Miss);
@@ -223,11 +226,11 @@ impl DecorQuery for Generating<'_, '_> {
             );
             self.tally.add(
                 "surface: a way on a void column",
-                col.asset_id == value::VOID,
+                col.asset_id == Sentinel::Void as u32,
             );
             self.tally.add("surface: a part of its cube", f.top.1 < 1.0);
             self.tally
-                .add("surface: a wall", col.asset_id == value::UNKNOWN);
+                .add("surface: a wall", col.asset_id == Sentinel::Unknown as u32);
             // What the pass by hand asks of the world: where ways bound the column, its cells
             // down to the surface, and otherwise nothing.
             let (b, _, _) = clip::bound_over(
@@ -251,15 +254,17 @@ impl DecorQuery for Generating<'_, '_> {
                 let eighths =
                     answer::fill_eighths(support::asset(&mut ground, &f.line, cell_zoom, top));
                 self.tally
-                    .add("walk: met a part of its cube", eighths < EIGHTHS);
+                    .add("walk: met a part of its cube", eighths < EIGHTH_CNT);
                 self.tally
                     .add("walk: met an odd part of its cube", eighths % 2 == 1);
             }
         }
         if f.end == End::Miss && !shard.past() {
             let col = resident.cell(shard, Lookup::NONE, cell_zoom, [wrapped, g[1], 0]);
-            self.tally
-                .add("surface: void column, no way", col.asset_id == value::VOID);
+            self.tally.add(
+                "surface: void column, no way",
+                col.asset_id == Sentinel::Void as u32,
+            );
         }
         (f, f.top, met)
     }
@@ -362,7 +367,7 @@ fn stand(q: &mut Generating, j: u32, cell_zoom: Zoom, leaf: [i32; 2]) -> (u32, u
             "generates: at a coarser clip level",
             cell_zoom < LEAF_CELL_ZOOM,
         );
-        let along = decor.orient == Orientation::along_transport;
+        let along = decor.orient == Orientation::AlongTransport;
         q.tally.add("vote: across", along && g.turn & 1 == 1);
         q.tally.add("vote: along", along && g.turn & 1 == 0);
         q.tally.add("vote: flipped", along && g.turn >= 2);
@@ -393,8 +398,8 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
     let mut pairs: BTreeMap<(u32, u32), LeafList> = BTreeMap::new();
     let cells = [22u32, 23, 24];
     for cell_zoom in cells {
-        for e in 0..ENTRIES {
-            let s = (cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + e;
+        for e in 0..ENTRY_CNT {
+            let s = (cell_zoom - FIRST_CELL_ZOOM) * ENTRY_CNT + e;
             let row = built.clipmap[s as usize];
             if row[2] == 0 {
                 continue;
@@ -406,7 +411,7 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                 let [x0, y0, _, _] = generation::brick_rect(cell_zoom, [row[0], row[1]]);
                 let t = LEAF_CELL_ZOOM - cell_zoom;
                 let mut leaves = Vec::new();
-                for i in 0..BRICK_CELLS {
+                for i in 0..BRICK_CELL_CNT {
                     let corner = [
                         x0 + ((i % BRICK) << t) as i32,
                         y0 + ((i / BRICK) << t) as i32,
@@ -448,7 +453,7 @@ fn pairs_about(built: &Built, edges: &[[i32; 2]]) -> BTreeMap<(u32, u32), LeafLi
                         wrap_idx(brick::bricks_zoom(cell_zoom), leaf[0] >> k),
                         leaf[1] >> k,
                     ];
-                    let s = (cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + clip::entry(q);
+                    let s = (cell_zoom - FIRST_CELL_ZOOM) * ENTRY_CNT + clip::entry(q);
                     let row = built.clipmap[s as usize];
                     if row[2] != 0 && [row[0], row[1]] == q {
                         for (j, decor) in ROWS.iter().enumerate() {
@@ -572,26 +577,20 @@ fn pipeline(
     })
 }
 
-/// The pipeline of shader `kind` as the renderer makes it, over the group the renderer states
-/// (gpu/generator.rs) and not one derived from the module.
-fn hand_pipeline(device: &wgpu::Device, kind: u32) -> wgpu::ComputePipeline {
+/// Compute pipeline `id` as the renderer makes it, over its group as record.rs states it
+/// (`compute_layout`) and not one derived from the module.
+fn hand_pipeline(device: &wgpu::Device, id: u32) -> wgpu::ComputePipeline {
     use pxl_render::api_spec::record::{STORAGE, STORAGE_RW, UNIFORM};
-    use pxl_render::frame::shader::group::{
-        ARGS_GROUP, CNT_GROUP, COMPACT_GROUP, GENERATE_GROUP, MARK_GROUP, THIN_GROUP,
-    };
-    let (group, entry): (&[u32], &str) = match kind {
-        SHADER_GENERATION => (&GENERATE_GROUP, "decor_pose_cs"),
-        SHADER_GENERATION_MARK => (&MARK_GROUP, "decor_mark_cs"),
-        SHADER_GENERATION_THIN => (&THIN_GROUP, "decor_thin_cs"),
-        SHADER_GENERATION_CNT => (&CNT_GROUP, "decor_cnt_cs"),
-        SHADER_GENERATION_COMPACT => (&COMPACT_GROUP, "decor_compact_cs"),
-        _ => (&ARGS_GROUP, "decor_args_cs"),
-    };
-    let entries: Vec<_> = group
+    use pxl_render::frame::shader::record::{compute, compute_layout, COMPUTE};
+    let (shader, entry, _) = compute(id);
+    let entries: Vec<_> = compute_layout(id)
         .chunks(3)
         .map(|w| wgpu::BindGroupLayoutEntry {
             binding: w[0],
-            visibility: wgpu::ShaderStages::COMPUTE,
+            visibility: match w[1] {
+                COMPUTE => wgpu::ShaderStages::COMPUTE,
+                s => panic!("{entry} is read by stages {s}"),
+            },
             ty: wgpu::BindingType::Buffer {
                 ty: match w[2] {
                     UNIFORM => wgpu::BufferBindingType::Uniform,
@@ -615,7 +614,7 @@ fn hand_pipeline(device: &wgpu::Device, kind: u32) -> wgpu::ComputePipeline {
         bind_group_layouts: &[Some(&layout)],
         immediate_size: 0,
     });
-    let source = src(kind);
+    let source = src(shader);
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some(entry),
         source: wgpu::ShaderSource::Wgsl(source.into()),
@@ -683,7 +682,7 @@ impl Gpu<'_> {
         let recs = make(init, store);
         let list = make(list, store);
         let eye_buf = make(eye_words, wgpu::BufferUsages::UNIFORM);
-        let x = generation::DECOR_REC_CAP.div_ceil(generation::LANES);
+        let x = generation::DECOR_REC_CAP.div_ceil(generation::LANE_CNT);
         let mut e = d.create_command_encoder(&Default::default());
         let bind = |p: &wgpu::ComputePipeline, at: &[(u32, &wgpu::Buffer)]| {
             let entries: Vec<_> = at
@@ -746,13 +745,13 @@ struct Expected {
 /// The words a round starts from: each pair's count, and its records. A whole pair's records
 /// are as `decor_thin_cs` leaves them, and a pair in part holds what a frame before left.
 fn init_of(laid: &BTreeMap<(u32, u32), LeafList>, round: &Round) -> Vec<u32> {
-    let words = generation::rec_at(generation::ENTRY_RECS) as usize;
+    let words = generation::rec_at(generation::ENTRY_REC_CAP) as usize;
     let mut init = vec![0u32; words];
     for (&(s, j), p) in laid {
         init[generation::cnt_at(s, j) as usize] = p.leaves.len() as u32;
     }
     for &(s, j, part) in &round.pairs {
-        let cell_zoom = clip::eye_cell_zoom(s / ENTRIES);
+        let cell_zoom = clip::eye_cell_zoom(s / ENTRY_CNT);
         for (i, leaf) in laid[&(s, j)].leaves.iter().enumerate() {
             let r = word_of(s, j, i as u32);
             let h = mix(i as u32 + 7, *leaf);
@@ -792,7 +791,7 @@ fn expect(built: &Built, laid: &BTreeMap<(u32, u32), LeafList>, round: &Round) -
                     let mut asked = 0;
                     let mut claims = Vec::new();
                     for &(s, j, part) in pairs {
-                        let cell_zoom = clip::eye_cell_zoom(s / ENTRIES);
+                        let cell_zoom = clip::eye_cell_zoom(s / ENTRY_CNT);
                         let p = &laid[&(s, j)];
                         for (i, leaf) in p.leaves.iter().enumerate() {
                             if part && !is_changed(&round.boxes, cell_zoom, *leaf) {
@@ -932,8 +931,8 @@ fn differ(name: &str, by: &str, got: &[u32], e: &Expected) -> u64 {
 fn lack_columns(built: &mut Built) -> Vec<[i32; 2]> {
     let mut edges = Vec::new();
     let k = |cell_zoom: Zoom| brick::BRICK_SHIFT + LEAF_CELL_ZOOM - cell_zoom;
-    for e in (5..ENTRIES).step_by(13) {
-        let row = built.clipmap[((LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) * ENTRIES + e) as usize];
+    for e in (5..ENTRY_CNT).step_by(13) {
+        let row = built.clipmap[((LEAF_CELL_ZOOM - FIRST_CELL_ZOOM) * ENTRY_CNT + e) as usize];
         if row[2] == 0 {
             continue;
         }
@@ -946,8 +945,8 @@ fn lack_columns(built: &mut Built) -> Vec<[i32; 2]> {
                 wrap_idx(brick::bricks_zoom(cell_zoom), east[0] >> k(cell_zoom)),
                 east[1] >> k(cell_zoom),
             ];
-            built.clipmap[((cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + clip::entry(q)) as usize][2] =
-                0;
+            built.clipmap[((cell_zoom - FIRST_CELL_ZOOM) * ENTRY_CNT + clip::entry(q)) as usize]
+                [2] = 0;
         }
         edges.push([real_world::wrap(east[0] - 1), east[1] + 20]);
         if edges.len() == 4 {
@@ -970,7 +969,7 @@ fn pairs_near(
     laid.iter()
         .filter(|((s, _), l)| {
             let row = built.clipmap[*s as usize];
-            let cell_zoom = clip::eye_cell_zoom(s / ENTRIES);
+            let cell_zoom = clip::eye_cell_zoom(s / ENTRY_CNT);
             let b = generation::brick_rect(cell_zoom, [row[0], row[1]]);
             !l.leaves.is_empty()
                 && wrap_idx(LEAF_CELL_ZOOM, p[0] - b[0]) + reach >= 0
@@ -1212,11 +1211,11 @@ type StoodRecord = (u32, u32, [i32; 2], i32, u32);
 /// a cube a sixty-fourth of a cell in its first column's top cell and a cube at its second
 /// column's base.
 fn placed_in_boxes(stood: &[StoodRecord]) -> (Vec<Leaf>, Vec<StoodRecord>, Vec<StoodRecord>) {
-    let object = object::leaf_word(value::OBJECTS[0], 0);
+    let object = object::leaf_word(value::OBJECT[0], 0);
     let at_leaves: Vec<StoodRecord> = stood
         .iter()
         .copied()
-        .filter(|r| clip::eye_cell_zoom(r.0 / ENTRIES) == LEAF_CELL_ZOOM)
+        .filter(|r| clip::eye_cell_zoom(r.0 / ENTRY_CNT) == LEAF_CELL_ZOOM)
         .collect();
     let mut extra = Vec::new();
     let cubed: Vec<StoodRecord> = at_leaves.iter().step_by(37).take(12).copied().collect();
@@ -1395,7 +1394,7 @@ fn hand_decor_answers_as_placement() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let hand = hand_pipeline(&device, SHADER_GENERATION);
+    let hand = hand_pipeline(&device, COMPUTE_GENERATION);
     let mut tally = Tally::default();
     // Three eyes: east of the seam over the service area's south edge, west of the seam, and
     // about X = 0 south of the world's equator, where X and Y run negative, all past the area.
@@ -1415,7 +1414,7 @@ fn hand_decor_answers_as_placement() {
     assert_eq!(tally.0["words differing"], 0);
     // A box's column is asked from its lowest cell up. On a column no clip level holds, that
     // cell reads void, and no decor stands on void, so the ask never reaches an edit there.
-    assert!(ROWS.iter().all(|d| !d.allows(value::VOID)));
+    assert!(ROWS.iter().all(|d| !d.allows(Sentinel::Void as u32)));
     assert_eq!(tally.0["edit: asked over a column not held"], 0);
     // A decor stands no coarser than two zooms over the leaves. There the ground's top, the
     // ways and the caves under a face keep an even share of a cube, so the walk meets no odd
@@ -1490,7 +1489,7 @@ fn thin_leaves(j: usize, cell_zoom: Zoom, q: [i32; 2]) -> Vec<[i32; 2]> {
     let [x0, y0, _, _] = generation::brick_rect(cell_zoom, q);
     let t = LEAF_CELL_ZOOM - cell_zoom;
     let mut leaves = Vec::new();
-    for i in 0..BRICK_CELLS {
+    for i in 0..BRICK_CELL_CNT {
         let corner = [
             x0 + ((i % BRICK) << t) as i32,
             y0 + ((i / BRICK) << t) as i32,
@@ -1523,9 +1522,9 @@ fn hand_thin_lays_as_scatter() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let hand = hand_pipeline(&device, SHADER_GENERATION_THIN);
-    let words = generation::rec_at(generation::ENTRY_RECS) as usize;
-    let size = |pairs: u32| [BRICK_CELLS.div_ceil(generation::LANES), 1, pairs];
+    let hand = hand_pipeline(&device, COMPUTE_GENERATION_THIN);
+    let words = generation::rec_at(generation::ENTRY_REC_CAP) as usize;
+    let size = |pairs: u32| [BRICK_CELL_CNT.div_ceil(generation::LANE_CNT), 1, pairs];
     let (mut laid_total, mut pairs_total) = (0u64, 0u64);
     let (mut none_past, mut stale_hdrs) = (0u64, 0u64);
     for (name, eye) in [
@@ -1540,8 +1539,8 @@ fn hand_thin_lays_as_scatter() {
         let mut want = BTreeMap::new();
         // Every decor at the clip levels about those it stands at.
         for cell_zoom in 21..=24u32 {
-            for e in 0..ENTRIES {
-                let s = (cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + e;
+            for e in 0..ENTRY_CNT {
+                let s = (cell_zoom - FIRST_CELL_ZOOM) * ENTRY_CNT + e;
                 let row = built.clipmap[s as usize];
                 if row[2] == 0 {
                     continue;
@@ -1603,7 +1602,7 @@ fn hand_thin_lays_as_scatter() {
             .copied()
             .filter(|&(s, j)| {
                 let row = built.clipmap[s as usize];
-                let cell_zoom = FIRST_CELL_ZOOM + s / ENTRIES;
+                let cell_zoom = FIRST_CELL_ZOOM + s / ENTRY_CNT;
                 let east = thin_leaves(j as usize, cell_zoom, [row[0] + 1, row[1]]);
                 !east.is_empty() && east != want[&(s, j)]
             })
@@ -1612,7 +1611,7 @@ fn hand_thin_lays_as_scatter() {
             .collect();
         for &(s, j) in &stale {
             let row = built.clipmap[s as usize];
-            let cell_zoom = FIRST_CELL_ZOOM + s / ENTRIES;
+            let cell_zoom = FIRST_CELL_ZOOM + s / ENTRY_CNT;
             let mut before = init.clone();
             before[generation::hdr_at(s) as usize] = (row[0] + 1) as u32;
             let mut list = vec![0u32; generation::LIST_WORDS as usize];
@@ -1657,13 +1656,13 @@ fn mark_rust(clipmap: &[[i32; 4]], recs: &mut [u32], list: &mut [u32], shown: &[
             )
         })
         .collect();
-    for s in 0..generation::EYE_ENTRIES {
+    for s in 0..generation::EYE_ENTRY_CNT {
         let entry = clipmap[s as usize];
         if entry[2] == 0 {
             continue;
         }
         let (cell_zoom, q, h) = (
-            clip::eye_cell_zoom(s / ENTRIES),
+            clip::eye_cell_zoom(s / ENTRY_CNT),
             [entry[0], entry[1]],
             generation::hdr_at(s) as usize,
         );
@@ -1719,7 +1718,7 @@ fn mark_rust(clipmap: &[[i32; 4]], recs: &mut [u32], list: &mut [u32], shown: &[
 /// Whether workgroup `g` of a pass over the records reads them: the test's reference for
 /// decor_run.wgsl `holds_recs`.
 fn holds_recs(recs: &[u32], clipmap: &[[i32; 4]], g: u32) -> bool {
-    if g >= generation::EYE_ENTRIES {
+    if g >= generation::EYE_ENTRY_CNT {
         return true;
     }
     let (h, q) = (generation::hdr_at(g) as usize, clipmap[g as usize]);
@@ -1729,7 +1728,7 @@ fn holds_recs(recs: &[u32], clipmap: &[[i32; 4]], g: u32) -> bool {
 /// The `k`-th run of records workgroup `g` reads: the test's reference for decor_run.wgsl
 /// `run_of`.
 fn run_of(recs: &[u32], g: u32, k: u32) -> (u32, u32) {
-    if g < generation::EYE_ENTRIES {
+    if g < generation::EYE_ENTRY_CNT {
         let at_run = k * generation::RUN;
         let (mut j, mut first) = (0, 0);
         while j + 1 < ROWS.len() as u32 && at_run >= first + generation::cap(&ROWS[j as usize]) {
@@ -1744,9 +1743,9 @@ fn run_of(recs: &[u32], g: u32, k: u32) -> (u32, u32) {
             cnt.min(generation::RUN),
         )
     } else {
-        let n = (g - generation::EYE_ENTRIES) * generation::RUNS + k;
+        let n = (g - generation::EYE_ENTRY_CNT) * generation::RUN_CNT + k;
         (
-            generation::ENTRY_RECS + n,
+            generation::ENTRY_REC_CAP + n,
             u32::from(n < recs[generation::PLACED_HDR as usize]),
         )
     }
@@ -1758,7 +1757,7 @@ fn each_rec(recs: &[u32], clipmap: &[[i32; 4]], workgroups: u32) -> Vec<usize> {
     let mut out = Vec::new();
     for g in 0..workgroups {
         if holds_recs(recs, clipmap, g) {
-            for k in 0..generation::RUNS {
+            for k in 0..generation::RUN_CNT {
                 let (first, cnt) = run_of(recs, g, k);
                 for n in 0..cnt {
                     out.push(generation::rec_at(first + n) as usize);
@@ -1825,12 +1824,12 @@ const CAST_NUMBER: u32 = 7;
 /// holds a place in its brick, a variant and a turn, or nothing generated. Returns the records
 /// and the workgroups a pass over them takes.
 fn recs_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
-    let need = generation::ENTRY_RECS + placed.next_power_of_two().max(64);
+    let need = generation::ENTRY_REC_CAP + placed.next_power_of_two().max(64);
     let mut recs = vec![0u32; generation::rec_at(need) as usize];
     let mut draw = real_world::Draw(0x0bad_cafe);
-    for s in 0..generation::EYE_ENTRIES {
+    for s in 0..generation::EYE_ENTRY_CNT {
         let row = built.clipmap[s as usize];
-        let cell_zoom = clip::eye_cell_zoom(s / ENTRIES);
+        let cell_zoom = clip::eye_cell_zoom(s / ENTRY_CNT);
         let h = generation::hdr_at(s) as usize;
         let stale = mix(s, [5, 5]).is_multiple_of(9);
         recs[h] = (row[0] + stale as i32) as u32;
@@ -1863,10 +1862,10 @@ fn recs_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
                 } else {
                     generation::rec_word(
                         j as u32,
-                        draw.next() % d.variants,
+                        draw.next() % d.variant_cnt,
                         draw.next() & 3,
                         cell_zoom,
-                    ) | (draw.next() % (drawing::REGIONS + 1)) << drawing::REGION_SHIFT
+                    ) | (draw.next() % (drawing::REGION_CNT + 1)) << drawing::REGION_SHIFT
                 };
                 recs[r + 1] = real_world::wrap(leaf[0]) as u32;
                 recs[r + 2] = leaf[1] as u32;
@@ -1877,12 +1876,12 @@ fn recs_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
     }
     recs[generation::PLACED_HDR as usize] = placed;
     for n in 0..placed {
-        let r = generation::rec_at(generation::ENTRY_RECS + n) as usize;
+        let r = generation::rec_at(generation::ENTRY_REC_CAP + n) as usize;
         let j = n % ROWS.len() as u32;
         let d = &ROWS[j as usize];
-        let v = draw.next() % d.variants;
+        let v = draw.next() % d.variant_cnt;
         recs[r] = generation::rec_word(j, v, draw.next() & 3, scatter::coarsest_stand(d, v))
-            | (draw.next() % (drawing::REGIONS + 1)) << drawing::REGION_SHIFT;
+            | (draw.next() % (drawing::REGION_CNT + 1)) << drawing::REGION_SHIFT;
         // Most lie about the eye, where they are drawn. One in seven lies farther off, where it
         // is not drawn.
         let reach = if n % 7 == 3 { 900 } else { 40 };
@@ -1895,7 +1894,7 @@ fn recs_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
         recs[r + 3] = (built.top_at(at) + draw.within(0, 3)) as u32;
         // The second lies beside the first on its row, a few cells along X.
         if n == 1 {
-            let first = generation::rec_at(generation::ENTRY_RECS) as usize;
+            let first = generation::rec_at(generation::ENTRY_REC_CAP) as usize;
             recs[r + 1] = real_world::wrap(recs[first + 1] as i32 + 3) as u32;
             recs[r + 2] = recs[first + 2];
             recs[r + 3] = recs[first + 3];
@@ -1903,7 +1902,7 @@ fn recs_to_size(built: &Built, eye: [i32; 2], placed: u32) -> (Vec<u32>, u32) {
     }
     (
         recs,
-        generation::EYE_ENTRIES + placed.div_ceil(generation::RUNS),
+        generation::EYE_ENTRY_CNT + placed.div_ceil(generation::RUN_CNT),
     )
 }
 
@@ -1913,7 +1912,7 @@ fn drawing_words(model: f32, impostor: f32) -> Vec<u32> {
     let mut d = vec![0u32; drawing::WORDS as usize];
     d[drawing::MODEL_ANGLE as usize] = model.to_bits();
     d[drawing::IMPOSTOR_ANGLE as usize] = impostor.to_bits();
-    for g in 0..generation::GROUPS {
+    for g in 0..generation::GROUP_CNT {
         d[(drawing::EXTENTS + g) as usize] = (1.0 + g as f32 * 0.37).to_bits();
     }
     d
@@ -1924,7 +1923,7 @@ const UNDER_REGION: u32 = (1 << drawing::REGION_SHIFT) - 1;
 
 /// Each region's count off the records `order` names, as their first words say.
 fn regions_of(recs: &[u32], order: &[usize]) -> Vec<u32> {
-    let mut counted = vec![0u32; 2 * drawing::REGIONS as usize];
+    let mut counted = vec![0u32; 2 * drawing::REGION_CNT as usize];
     for &i in order {
         let region = recs[i] >> drawing::REGION_SHIFT;
         if recs[i] != generation::UNGENERATED && region != drawing::NONE {
@@ -1957,7 +1956,7 @@ fn cnt_rust(w: &World, sizing: &Sizing, recs: &mut [u32], workgroups: u32) {
         let at = [recs[i + 1] as i32, recs[i + 2] as i32, recs[i + 3] as i32];
         let d2 = generation::dist2(sizing.origin, at);
         // Placed decor's records lie past the entries'.
-        let placed = i >= generation::rec_at(generation::ENTRY_RECS) as usize;
+        let placed = i >= generation::rec_at(generation::ENTRY_REC_CAP) as usize;
         let ask = detail.at(d2);
         let zoom = if placed {
             ask
@@ -1992,7 +1991,7 @@ fn hand_cnt_counts_its_regions() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let hand = hand_pipeline(&device, SHADER_GENERATION_CNT);
+    let hand = hand_pipeline(&device, COMPUTE_GENERATION_CNT);
     let mut drawn_total = 0u64;
     for (name, at, placed) in [
         ("east of the seam", real_world::EYE, 0),
@@ -2032,7 +2031,7 @@ fn hand_cnt_counts_its_regions() {
             for run in 0..RUNS_OF_CNT {
                 let (r_buf, regions) = (
                     buf(&device, &recs),
-                    buf(&device, &vec![0u32; 2 * drawing::REGIONS as usize]),
+                    buf(&device, &vec![0u32; 2 * drawing::REGION_CNT as usize]),
                 );
                 let at = [
                     (0, &eye_buf),
@@ -2055,13 +2054,13 @@ fn hand_cnt_counts_its_regions() {
                     );
                 }
                 assert_eq!(
-                    got_regions[..drawing::REGIONS as usize],
-                    regions_of(&want, &order)[..drawing::REGIONS as usize],
+                    got_regions[..drawing::REGION_CNT as usize],
+                    regions_of(&want, &order)[..drawing::REGION_CNT as usize],
                     "{name}, {}: counts, run {run}",
                     sizing.name
                 );
                 if run == 0 {
-                    drawn_total += got_regions[..drawing::REGIONS as usize]
+                    drawn_total += got_regions[..drawing::REGION_CNT as usize]
                         .iter()
                         .map(|&n| n as u64)
                         .sum::<u64>();
@@ -2115,13 +2114,13 @@ fn hand_compact_lays_as_the_rust() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let hand = hand_pipeline(&device, SHADER_GENERATION_COMPACT);
+    let hand = hand_pipeline(&device, COMPUTE_GENERATION_COMPACT);
     let mut tally = Tally::default();
     for (name, at, placed) in [
         (
             "east of the seam",
             real_world::EYE,
-            2 * generation::RUNS + 37,
+            2 * generation::RUN_CNT + 37,
         ),
         ("west of the seam", [(1 << 23) - 300, (40 << 16) + 30], 0),
     ] {
@@ -2131,7 +2130,7 @@ fn hand_compact_lays_as_the_rust() {
         // Each record's region as a frame's cnt may leave it: a region past the last is none.
         for &i in &order {
             if sized[i] != generation::UNGENERATED
-                && sized[i] >> drawing::REGION_SHIFT >= drawing::REGIONS
+                && sized[i] >> drawing::REGION_SHIFT >= drawing::REGION_CNT
             {
                 sized[i] = sized[i] & UNDER_REGION | drawing::NONE << drawing::REGION_SHIFT;
             }
@@ -2150,9 +2149,9 @@ fn hand_compact_lays_as_the_rust() {
             let mut regions = regions_of(&sized, &order);
             // The regions laid out end to end, as `decor_args_cs` may leave them.
             let mut first = 0;
-            let mut firsts = vec![0u32; drawing::REGIONS as usize];
-            for r in 0..drawing::REGIONS as usize {
-                regions[drawing::REGIONS as usize + r] = first;
+            let mut firsts = vec![0u32; drawing::REGION_CNT as usize];
+            for r in 0..drawing::REGION_CNT as usize {
+                regions[drawing::REGION_CNT as usize + r] = first;
                 firsts[r] = first;
                 first += regions[r];
             }
@@ -2174,7 +2173,7 @@ fn hand_compact_lays_as_the_rust() {
                         let regions_buf = buf(&device, &regions);
                         let instances = buf(
                             &device,
-                            &vec![0xffff_ffffu32; ((drawing::COLUMNS + 1) * cap) as usize],
+                            &vec![0xffff_ffffu32; ((drawing::COLUMN_CNT + 1) * cap) as usize],
                         );
                         {
                             let at = [
@@ -2191,16 +2190,16 @@ fn hand_compact_lays_as_the_rust() {
                         let got = read(&device, &queue, &instances, "compact's instances");
                         // Each region's end word must name its next slot past its end, which
                         // light_mark_draws.wgsl `instance_cnt` reads.
-                        for r in 0..drawing::REGIONS as usize {
+                        for r in 0..drawing::REGION_CNT as usize {
                             assert_eq!(
-                                got_regions[drawing::REGIONS as usize + r],
+                                got_regions[drawing::REGION_CNT as usize + r],
                                 firsts[r] + regions[r],
                                 "{name}, region {r}"
                             );
                             assert_eq!(got_regions[r], regions[r], "{name}, region {r}'s count");
                         }
                         let mut have = Vec::new();
-                        for r in 0..drawing::REGIONS as usize {
+                        for r in 0..drawing::REGION_CNT as usize {
                             for slot in firsts[r]..(firsts[r] + regions[r]).min(cap) {
                                 let (c, k) = (cap as usize, slot as usize);
                                 let lanes = [
@@ -2254,7 +2253,7 @@ fn draws_differ(
     fresh: &[u32],
     meshes: &[u32],
 ) -> Vec<String> {
-    let n = drawing::REGIONS as usize;
+    let n = drawing::REGION_CNT as usize;
     let u = drawing::UNIFORM_WORDS as usize;
     let mut out = Vec::new();
     for r in 0..n {
@@ -2262,7 +2261,7 @@ fn draws_differ(
         let corners = if r % 2 == 0 {
             meshes[r / 2]
         } else {
-            drawing::IMPOSTOR_CORNERS
+            drawing::IMPOSTOR_CORNER_CNT
         };
         if args[a..a + 5] != [corners, cnts[r], 0, 0, 0] {
             out.push(format!("region {r}'s args {:?}", &args[a..a + 5]));
@@ -2301,8 +2300,8 @@ fn hand_args_draws_its_regions() {
     let Some((device, queue)) = device() else {
         return;
     };
-    let hand = hand_pipeline(&device, SHADER_GENERATION_ARGS);
-    let (regions_n, groups) = (drawing::REGIONS as usize, generation::GROUPS as usize);
+    let hand = hand_pipeline(&device, COMPUTE_GENERATION_ARGS);
+    let (regions_n, groups) = (drawing::REGION_CNT as usize, generation::GROUP_CNT as usize);
     let store = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC;
     let make = |w: &[u32]| {
         device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -2334,7 +2333,7 @@ fn hand_args_draws_its_regions() {
         // `instance::IDX`.
         let u = drawing::UNIFORM_WORDS as usize;
         let mut uniforms = vec![0u32; u * regions_n];
-        let base = drawing::COLUMNS * 2048;
+        let base = drawing::COLUMN_CNT * 2048;
         for r in 0..regions_n {
             uniforms[r * u] = 1.5f32.to_bits();
             uniforms[r * u + instance::IDX] = base;
@@ -2343,7 +2342,7 @@ fn hand_args_draws_its_regions() {
         let (mb, rb, ab, ub) = (make(&meshes), make(&regions), make(&args0), make(&uniforms));
         // Instances that hold every region's count, so none is cut short.
         let slots = regions[..regions_n].iter().sum::<u32>().max(1);
-        let ib = make(&vec![0u32; ((drawing::COLUMNS + 1) * slots) as usize]);
+        let ib = make(&vec![0u32; ((drawing::COLUMN_CNT + 1) * slots) as usize]);
         let entries = [(0, &mb), (1, &rb), (2, &ab), (3, &ub), (15, &ib)].map(|(binding, b)| {
             wgpu::BindGroupEntry {
                 binding,
@@ -2401,7 +2400,7 @@ type RecordMap = (u32, BTreeMap<[i32; 2], [u32; 3]>);
 /// maps to what the pair laid.
 fn pairs_of(recs: &[u32]) -> BTreeMap<(u32, u32), RecordMap> {
     let mut pairs = BTreeMap::new();
-    for s in 0..generation::EYE_ENTRIES {
+    for s in 0..generation::EYE_ENTRY_CNT {
         for j in 0..ROWS.len() as u32 {
             let cnt = recs[generation::cnt_at(s, j) as usize];
             if cnt == 0 {
@@ -2431,8 +2430,8 @@ struct Model {
 /// What a frame's uniforms hold before its args add to them (`Generator::prepare`).
 fn fresh_uniforms(cap: u32) -> Vec<u32> {
     let u = drawing::UNIFORM_WORDS as usize;
-    let mut uniforms = vec![0u32; u * drawing::REGIONS as usize];
-    for r in 0..drawing::REGIONS as usize {
+    let mut uniforms = vec![0u32; u * drawing::REGION_CNT as usize];
+    for r in 0..drawing::REGION_CNT as usize {
         let layer = if r % 2 == 1 { r as u32 / 2 } else { 0 };
         uniforms[r * u..r * u + 8].copy_from_slice(&[
             1.5f32.to_bits(),
@@ -2442,7 +2441,7 @@ fn fresh_uniforms(cap: u32) -> Vec<u32> {
             cap,
             1.0f32.to_bits(),
             layer,
-            drawing::COLUMNS * cap,
+            drawing::COLUMN_CNT * cap,
         ]);
     }
     uniforms
@@ -2451,10 +2450,10 @@ fn fresh_uniforms(cap: u32) -> Vec<u32> {
 /// A list's head and boxes as `Generator::prepare` writes them, before a mark.
 fn list_hdr(frame: &Frame) -> Vec<u32> {
     let mut list = vec![0u32; generation::LIST_WORDS as usize];
-    list[generation::THIN_ARGS as usize] = BRICK_CELLS.div_ceil(generation::LANES);
+    list[generation::THIN_ARGS as usize] = BRICK_CELL_CNT.div_ceil(generation::LANE_CNT);
     list[generation::THIN_ARGS as usize + 1] = 1;
     list[generation::GENERATE_ARGS as usize] =
-        generation::DECOR_REC_CAP.div_ceil(generation::LANES);
+        generation::DECOR_REC_CAP.div_ceil(generation::LANE_CNT);
     list[generation::GENERATE_ARGS as usize + 1] = 1;
     list[generation::LIST_EVERY as usize] = frame.every as u32;
     list[generation::LIST_RECTS as usize] = frame.boxes.len() as u32;
@@ -2492,7 +2491,7 @@ impl Model {
             let mut asked: Vec<(u32, u32, u32, [i32; 2])> = Vec::new();
             for &w in &list[at_whole..at_whole + whole] {
                 let (s, j) = generation::pair_of(w);
-                let cell_zoom = clip::eye_cell_zoom(s / ENTRIES);
+                let cell_zoom = clip::eye_cell_zoom(s / ENTRY_CNT);
                 let h = generation::hdr_at(s) as usize;
                 let q = [self.recs[h] as i32, self.recs[h + 1] as i32];
                 let leaves = thin_leaves(j as usize, cell_zoom, q);
@@ -2507,7 +2506,7 @@ impl Model {
             }
             for &w in &list[at_part - parts..at_part] {
                 let (s, j) = generation::pair_of(w);
-                let cell_zoom = clip::eye_cell_zoom(s / ENTRIES);
+                let cell_zoom = clip::eye_cell_zoom(s / ENTRY_CNT);
                 let n = self.recs[generation::cnt_at(s, j) as usize]
                     .min(generation::cap(&ROWS[j as usize]));
                 for i in 0..n {
@@ -2529,7 +2528,7 @@ impl Model {
                             let mut claims = Vec::new();
                             let mut out = Vec::new();
                             for &(s, j, i, leaf) in part {
-                                let cell_zoom = clip::eye_cell_zoom(s / ENTRIES);
+                                let cell_zoom = clip::eye_cell_zoom(s / ENTRY_CNT);
                                 let mut q = Generating {
                                     w: world,
                                     cuts: frame.cuts,
@@ -2627,7 +2626,7 @@ fn frame_differs(
         }
     }
     let r = REC_WORDS as usize;
-    let first = generation::rec_at(generation::ENTRY_RECS) as usize;
+    let first = generation::rec_at(generation::ENTRY_REC_CAP) as usize;
     for p in 0..want[generation::PLACED_HDR as usize] as usize {
         let at = first + p * r;
         if got.recs[at..at + r] != want[at..at + r] {
@@ -2638,7 +2637,7 @@ fn frame_differs(
             ));
         }
     }
-    let n = drawing::REGIONS as usize;
+    let n = drawing::REGION_CNT as usize;
     let order = each_rec(&got.recs, clipmap, workgroups);
     let cnts = regions_of(&got.recs, &order);
     // Compact leaves each region's next slot in its end word, so its first slot is that less
@@ -2743,7 +2742,7 @@ fn stood_rust(got: &FrameLeft, sizing: &Sizing, cap: u32, tally: &mut Tally) -> 
     );
     let half = 0.5 * generation::WIDEST as f32;
     let c = cap as usize;
-    let placed = got.regions[2 * drawing::REGIONS as usize - 1].min(cap) as usize;
+    let placed = got.regions[2 * drawing::REGION_CNT as usize - 1].min(cap) as usize;
     let mut stood = BTreeSet::new();
     for k in 0..placed {
         let base = [0, 1, 2].map(|a| anchor(a) + f32::from_bits(got.instances[a * c + k]));
@@ -2809,7 +2808,7 @@ fn stood_differs(got: &FrameLeft, sizing: &Sizing, cap: u32, tally: &mut Tally) 
             want.len()
         ));
     }
-    let per = ray::MISS_LANES * ray::MISS_ACROSS;
+    let per = ray::MISS_LANE_CNT * ray::MISS_ACROSS;
     let mut args = vec![0u32; light::RECEIVER_TILES_WORDS as usize];
     args[..ray::LEFT_EMPTY.len()].copy_from_slice(&ray::LEFT_EMPTY);
     args[light::RECEIVER_TILES_LIST as usize + 1] = (want.len() as u32).div_ceil(per);
@@ -2901,7 +2900,7 @@ impl Chain<'_> {
         q.write_buffer(
             &self.regions,
             0,
-            bytes(&vec![0u32; 2 * drawing::REGIONS as usize]),
+            bytes(&vec![0u32; 2 * drawing::REGION_CNT as usize]),
         );
         q.write_buffer(&self.uniforms, 0, bytes(&fresh_uniforms(self.cap)));
         let drawing = d.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -2951,7 +2950,11 @@ impl Chain<'_> {
                 };
                 pass.set_pipeline(mark);
                 pass.set_bind_group(0, &damage_group, &[]);
-                pass.dispatch_workgroups(generation::EYE_ENTRIES.div_ceil(generation::LANES), 1, 1);
+                pass.dispatch_workgroups(
+                    generation::EYE_ENTRY_CNT.div_ceil(generation::LANE_CNT),
+                    1,
+                    1,
+                );
                 let thin_group = { bind(thin, &[(9, &self.recs), (10, b.rows), (11, &self.list)]) };
                 pass.set_pipeline(thin);
                 pass.set_bind_group(0, &thin_group, &[]);
@@ -3056,12 +3059,12 @@ impl Chain<'_> {
         dispatch(d, q, self.mark_draws_open, &open, [1, 1, 1]);
         let opened = read(d, q, &draws, frame.name);
         let at = 0;
-        let placed =
-            read(d, q, &self.regions, frame.name)[2 * drawing::REGIONS as usize - 1].min(self.cap);
+        let placed = read(d, q, &self.regions, frame.name)[2 * drawing::REGION_CNT as usize - 1]
+            .min(self.cap);
         let groups = if placed == 0 {
             0
         } else {
-            light::RECEIVER_BOXES as u32 + placed.div_ceil(ROW_LANES)
+            light::RECEIVER_BOX_CAP as u32 + placed.div_ceil(ROW_LANE_CNT)
         };
         assert_eq!(
             opened[at..at + 3],
@@ -3114,12 +3117,12 @@ fn hand_frames_answer_as_the_rust() {
         .and_then(|r| r.parse().ok())
         .unwrap_or(12);
     let hand_pipes = [
-        hand_pipeline(&device, SHADER_GENERATION_MARK),
-        hand_pipeline(&device, SHADER_GENERATION_THIN),
-        hand_pipeline(&device, SHADER_GENERATION),
-        hand_pipeline(&device, SHADER_GENERATION_CNT),
-        hand_pipeline(&device, SHADER_GENERATION_ARGS),
-        hand_pipeline(&device, SHADER_GENERATION_COMPACT),
+        hand_pipeline(&device, COMPUTE_GENERATION_MARK),
+        hand_pipeline(&device, COMPUTE_GENERATION_THIN),
+        hand_pipeline(&device, COMPUTE_GENERATION),
+        hand_pipeline(&device, COMPUTE_GENERATION_CNT),
+        hand_pipeline(&device, COMPUTE_GENERATION_ARGS),
+        hand_pipeline(&device, COMPUTE_GENERATION_COMPACT),
     ];
     let mark_draws = pipeline(
         &device,
@@ -3164,7 +3167,7 @@ fn hand_frames_answer_as_the_rust() {
                 }
             }
         }
-        let meshes: Vec<u32> = (0..generation::GROUPS)
+        let meshes: Vec<u32> = (0..generation::GROUP_CNT)
             .map(|g| if g % 3 == 2 { 0 } else { 36 + 6 * g })
             .collect();
         let (clipmap, ground, shards, placing, no_placing, pool, rows, shown_buf, meshes_buf) = (
@@ -3180,13 +3183,13 @@ fn hand_frames_answer_as_the_rust() {
         );
         // Placed decor as the core hands it, five more than one workgroup's runs, so it spills
         // into a second workgroup.
-        let placed = generation::RUNS + 5;
-        let cap = generation::ENTRY_RECS + placed.next_power_of_two().max(64);
-        let workgroups = generation::EYE_ENTRIES + placed.div_ceil(generation::RUNS);
+        let placed = generation::RUN_CNT + 5;
+        let cap = generation::ENTRY_REC_CAP + placed.next_power_of_two().max(64);
+        let workgroups = generation::EYE_ENTRY_CNT + placed.div_ceil(generation::RUN_CNT);
         let mut init = vec![0u32; generation::rec_at(cap) as usize];
         init[generation::PLACED_HDR as usize] = placed;
         for n in 0..placed {
-            let r = generation::rec_at(generation::ENTRY_RECS + n) as usize;
+            let r = generation::rec_at(generation::ENTRY_REC_CAP + n) as usize;
             let j = n % ROWS.len() as u32;
             let p = built.decors[n as usize];
             let (variant, turn) = generation::placed_pose(&ROWS[j as usize], p);
@@ -3263,7 +3266,7 @@ fn hand_frames_answer_as_the_rust() {
             total.merge(tally);
             continue;
         }
-        let stale: Vec<u32> = (0..generation::EYE_ENTRIES)
+        let stale: Vec<u32> = (0..generation::EYE_ENTRY_CNT)
             .filter(|s| mix(*s, [11, 2]).is_multiple_of(40))
             .collect();
         step(
@@ -3283,7 +3286,7 @@ fn hand_frames_answer_as_the_rust() {
         let bricks: Vec<([i32; 4], Zoom)> = (0..9u32)
             .map(|k| {
                 let cell_zoom = 22 + k % 3;
-                let s = (cell_zoom - FIRST_CELL_ZOOM) * ENTRIES + k * 7;
+                let s = (cell_zoom - FIRST_CELL_ZOOM) * ENTRY_CNT + k * 7;
                 (
                     generation::brick_rect(cell_zoom, [row(s)[0], row(s)[1]]),
                     cell_zoom,
@@ -3339,7 +3342,7 @@ fn hand_frames_answer_as_the_rust() {
         let mut hide = sizing.clone();
         let c = (0..placed)
             .find(|&n| {
-                let r = generation::rec_at(generation::ENTRY_RECS + n) as usize;
+                let r = generation::rec_at(generation::ENTRY_REC_CAP + n) as usize;
                 model.recs[r] >> drawing::REGION_SHIFT != drawing::NONE
             })
             .map(|n| built.decors[n as usize])
@@ -3386,16 +3389,16 @@ fn hand_frames_answer_as_the_rust() {
                     wgpu::BufferUsages::INDIRECT,
                 ),
                 regions: buf(
-                    &vec![0; 2 * drawing::REGIONS as usize],
+                    &vec![0; 2 * drawing::REGION_CNT as usize],
                     wgpu::BufferUsages::empty(),
                 ),
                 args: buf(
-                    &vec![0xdead_beef; (drawing::ARGS_WORDS * drawing::REGIONS) as usize],
+                    &vec![0xdead_beef; (drawing::ARGS_WORDS * drawing::REGION_CNT) as usize],
                     wgpu::BufferUsages::empty(),
                 ),
                 uniforms: buf(&fresh_uniforms(cap), wgpu::BufferUsages::empty()),
                 instances: buf(
-                    &vec![0; ((drawing::COLUMNS + 1) * cap) as usize],
+                    &vec![0; ((drawing::COLUMN_CNT + 1) * cap) as usize],
                     wgpu::BufferUsages::empty(),
                 ),
                 cap,

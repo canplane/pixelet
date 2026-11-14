@@ -9,11 +9,11 @@
 
 /// Writes the drawn receivers' workgroups (`light::DRAWS_DISPATCH_WORDS`), one thread for the
 /// cast. There is one workgroup for each box a host's draw stands within, and, where any decor
-/// is placed, the placed decor's workgroups past `LIGHT_RECEIVER_BOXES`.
+/// is placed, the placed decor's workgroups past `LIGHT_RECEIVER_BOX_CAP`.
 @compute @workgroup_size(1)
 fn light_mark_draws_open_cs() {
-  let stands = min(u32(hdr[LIGHT_RECEIVER_BOXES_AT].x), LIGHT_RECEIVER_BOXES);
+  let stands = min(u32(hdr[LIGHT_RECEIVER_BOXES_AT].x), LIGHT_RECEIVER_BOX_CAP);
   let placed = instance_cnt();
-  let groups = select(stands, LIGHT_RECEIVER_BOXES + workgroups(placed, instance_cap(), ROW_LANES), placed != 0u);
-  draws = array<u32, 3>(min(groups, WORKGROUPS_CAP), 1u, 1u);
+  let groups = select(stands, LIGHT_RECEIVER_BOX_CAP + workgroup_cnt(placed, instance_cap(), ROW_LANE_CNT), placed != 0u);
+  draws = array<u32, 3>(min(groups, WORKGROUP_CAP), 1u, 1u);
 }

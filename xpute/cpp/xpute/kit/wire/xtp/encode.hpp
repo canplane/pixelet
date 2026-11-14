@@ -43,16 +43,11 @@ class PacketWriter {
         return scalar(ScalarType::boolean, v ? std::optional<std::uint8_t>(*v ? 1 : 0) : std::nullopt);
     }
 
-    PacketWriter &u8_array(std::optional<std::span<const std::uint8_t>> a) noexcept { return array(a); }
-    PacketWriter &i8_array(std::optional<std::span<const std::int8_t>> a) noexcept { return array(a); }
-    PacketWriter &u16_array(std::optional<std::span<const std::uint16_t>> a) noexcept { return array(a); }
-    PacketWriter &i16_array(std::optional<std::span<const std::int16_t>> a) noexcept { return array(a); }
-    PacketWriter &u32_array(std::optional<std::span<const std::uint32_t>> a) noexcept { return array(a); }
-    PacketWriter &i32_array(std::optional<std::span<const std::int32_t>> a) noexcept { return array(a); }
-    PacketWriter &u64_array(std::optional<std::span<const std::uint64_t>> a) noexcept { return array(a); }
-    PacketWriter &i64_array(std::optional<std::span<const std::int64_t>> a) noexcept { return array(a); }
-    PacketWriter &f32_array(std::optional<std::span<const float>> a) noexcept { return array(a); }
-    PacketWriter &f64_array(std::optional<std::span<const double>> a) noexcept { return array(a); }
+    // A packed array of `T`, an empty optional a typed null.
+    template <class T> PacketWriter &array(std::optional<std::span<const T>> a) noexcept {
+        if (!a) return entry(std::nullopt, type_of(ARRAY_OF<T>));
+        return array_with<T>(static_cast<std::uint32_t>(a->size()), [&a](std::uint32_t i) { return (*a)[i]; });
+    }
 
     template <class T, class F> PacketWriter &array_with(std::uint32_t len, F &&val) noexcept {
         std::optional<std::uint32_t> at = seq(len, std::uint64_t{len} * sizeof(T));
@@ -69,19 +64,6 @@ class PacketWriter {
     PacketWriter &str(std::optional<std::string_view> s) noexcept;
 
     PacketWriter &strs(std::optional<std::span<const std::string_view>> items) noexcept;
-
-    // Writes a str whose bytes `write` puts into the room after the len slot.
-    // `write` returns how many bytes it wrote, or nothing when they did not
-    // fit, which spoils the packet.
-    template <class F> PacketWriter &str_with(F &&write) noexcept {
-        std::optional<std::uint32_t> at;
-        if (std::optional<std::uint32_t> room = str_room()) {
-            std::uint32_t payload = str_payload();
-            std::optional<std::size_t> n = write(std::span<char>(reinterpret_cast<char *>(buf_.data() + payload), *room));
-            at = n && *n <= *room ? str_commit(static_cast<std::uint32_t>(*n)) : spoil(Errno::eoverflow);
-        }
-        return entry(at, type_of(SequenceType::str));
-    }
 
     // Writing a number of children other than `cnt` is a bug.
     template <class F> PacketWriter &branch(std::uint32_t cnt, F &&fill) noexcept {
@@ -106,6 +88,19 @@ class PacketWriter {
     Result<std::uint32_t> finish() noexcept;
 
   private:
+    // Writes a str whose bytes `write` puts into the room after the len slot.
+    // `write` returns how many bytes it wrote, or nothing when they did not
+    // fit, which spoils the packet.
+    template <class F> PacketWriter &str_with(F &&write) noexcept {
+        std::optional<std::uint32_t> at;
+        if (std::optional<std::uint32_t> room = str_room()) {
+            std::uint32_t payload = str_payload();
+            std::optional<std::size_t> n = write(std::span<char>(reinterpret_cast<char *>(buf_.data() + payload), *room));
+            at = n && *n <= *room ? str_commit(static_cast<std::uint32_t>(*n)) : spoil(Errno::eoverflow);
+        }
+        return entry(at, type_of(SequenceType::str));
+    }
+
     // The child table the writer's next entries go in. The root is treated as
     // a branch of one child whose entry is the header's root word: `root`
     // marks it, and its entry sets the root's type instead of writing a
@@ -131,11 +126,6 @@ class PacketWriter {
     }
 
     std::optional<std::uint32_t> seq(std::uint32_t len, std::uint64_t bytes) noexcept;
-
-    template <class T> PacketWriter &array(std::optional<std::span<const T>> a) noexcept {
-        if (!a) return entry(std::nullopt, type_of(ARRAY_OF<T>));
-        return array_with<T>(static_cast<std::uint32_t>(a->size()), [&a](std::uint32_t i) { return (*a)[i]; });
-    }
 
     std::uint32_t str_payload() const noexcept;
     std::optional<std::uint32_t> str_room() noexcept;

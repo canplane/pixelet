@@ -19,9 +19,9 @@ fn hit(r: u32) -> Hit {
   let face = beams[k + HIT_FACE];
   return Hit(
     vec2<u32>(beams[k + HIT_ASSET], beams[k + HIT_ASSET + 1u]),
-    (face & HIT_LACKS) != 0u,
+    (face & HIT_LACK) != 0u,
     hit_whole(hit_node(r), r),
-    face & ~HIT_LACKS,
+    face & ~HIT_LACK,
     beams[k + HIT_LINE],
   );
 }

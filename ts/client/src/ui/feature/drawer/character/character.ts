@@ -4,10 +4,12 @@ import type { u32 } from "@xpute/kit/abi/word.ts";
 
 import { SETTING } from "@/ui/shared/setting.ts";
 import {
-  Gender,
-  gender_of,
-  Group,
-  groups,
+  type Gender,
+  group,
+  GENDER_FEMALE,
+  GENDER_MALE,
+  GROUP_PERSON,
+  GROUP_PET,
 } from "@/ui/shared/asset/character.spec.ts";
 
 export interface Character {
@@ -20,32 +22,30 @@ export interface Pet extends Character {
   label: string;
 }
 
-const PERSONS: readonly Character[] = groups.person.models.map((_, number) => ({
-  group: Group.person,
+const PERSONS: readonly Character[] = group.person.models.map((_, number) => ({
+  group: GROUP_PERSON,
   number,
 }));
-export const PETS: readonly Pet[] = groups.pet.label.map((label, number) => ({
-  group: Group.pet,
+export const PETS: readonly Pet[] = group.pet.label.map((label, number) => ({
+  group: GROUP_PET,
   number,
   label,
 }));
 
-export const GENDERS: readonly Gender[] = [Gender.female, Gender.male];
+export const GENDERS: readonly Gender[] = [GENDER_FEMALE, GENDER_MALE];
 
 export const GENDER_LABEL_KEY: Readonly<Record<Gender, string>> = {
-  [Gender.female]: "drawer.character.female_label",
-  [Gender.male]: "drawer.character.male_label",
+  [GENDER_FEMALE]: "drawer.character.female_label",
+  [GENDER_MALE]: "drawer.character.male_label",
 };
 
 export function personsOf(gender: Gender): readonly Character[] {
-  return PERSONS.filter((v) => groups.person.gender[v.number] === gender);
+  return PERSONS.filter((v) => group.person.gender[v.number] === gender);
 }
 
 export function genderOf(character: Character): Gender {
-  return (
-    gender_of(groups.person.gender[character.number] ?? GENDERS[0]) ??
-    GENDERS[0]
-  );
+  const n = group.person.gender[character.number];
+  return GENDERS.find((g) => g === n) ?? GENDERS[0];
 }
 
 /** The character a setting's number names; the setting's default for a

@@ -67,7 +67,7 @@ fn side_of(k: u32, seed: u32) -> i32 {
 fn stands_at(k: u32, variant: u32, cell_zoom: u32) -> bool {
   let size = decor_size(k, variant, 0u);
   let steps = 3u * (UNIT_ZOOM - min(UNIT_ZOOM, cell_zoom));
-  return cell_zoom >= LEAF_CELL_ZOOM || (steps < 32u && ((EIGHTHS * u32(size.x * size.y * size.z)) >> steps) >= 1u);
+  return cell_zoom >= LEAF_CELL_ZOOM || (steps < 32u && ((EIGHTH_CNT * u32(size.x * size.y * size.z)) >> steps) >= 1u);
 }
 
 /// `scatter::retained`: whether no candidate before it (`before`) claims a brick that meets its

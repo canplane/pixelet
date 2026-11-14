@@ -8,10 +8,10 @@
 //! are pxl-spec's value space (`value`).
 
 #[cfg(test)]
+use pxl_spec::asset::cube::Sentinel;
+#[cfg(test)]
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::Zoom;
-#[cfg(test)]
-use pxl_spec::value::{UNKNOWN, VOID};
 
 /// The rules a content's world follows, each answered the same on the CPU
 /// and on the GPU.
@@ -23,7 +23,8 @@ pub trait Content {
 
     /// What the ground is in cell `z` of a column at `cell_zoom` whose palette index is
     /// `asset_id` and whose top is `top` cells. Under the top it goes by depth; above the top
-    /// it is `value::VOID`; under the bedrock, and all through the wall, it is `value::UNKNOWN`.
+    /// it is `Sentinel::Void`; under the bedrock, and all through the wall, it is
+    /// `Sentinel::Unknown`.
     fn by_depth(cell_zoom: Zoom, asset_id: u32, top: i32, z: i32) -> u32;
 
     /// The top of the bedrock under a face `face` leaf cells high, in leaf cells: the lowest a
@@ -53,7 +54,7 @@ impl Content for Sample {
     }
     fn by_depth(_: Zoom, asset_id: u32, top: i32, z: i32) -> u32 {
         if z >= top {
-            VOID
+            Sentinel::Void as u32
         } else {
             asset_id
         }
@@ -63,9 +64,9 @@ impl Content for Sample {
     }
     fn earth(z: i32) -> u32 {
         if z < SEA_LEVEL {
-            UNKNOWN
+            Sentinel::Unknown as u32
         } else {
-            VOID
+            Sentinel::Void as u32
         }
     }
 }

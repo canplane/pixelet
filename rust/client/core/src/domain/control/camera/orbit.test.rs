@@ -36,7 +36,7 @@ fn east(pivot: V3, dist: f64) -> ViewPose {
 
 /// Writes a red cube at `at`, one cell at the objects' coarsest zoom.
 fn cube_at(store: &mut Store, at: V3) {
-    write(store, at, OBJECT_COARSEST, cube::Object::red as AssetId);
+    write(store, at, OBJECT_COARSEST, cube::Object::Red as AssetId);
 }
 
 /// The ground at five, a roof whose underside is `roof` above the ground

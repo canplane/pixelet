@@ -6,7 +6,7 @@
 //! meets (`first_hit`). An eye casts such rays, and a walker casts them
 //! straight up and down its cell (`support.rs`). A query never fetches or
 //! holds anything. It returns an exact answer, a coarser answer with the
-//! tile it lacked, or nothing with that tile.
+//! tile it lacked, or a lack with that tile.
 //!
 //! A cell is what the cast draws, by one rule, so picks and column surfaces
 //! stand on what is on the screen. A node coarser than the zoom asked is not
@@ -74,7 +74,7 @@ impl World {
         })
     }
 
-    /// What is in `at`'s node, asked over `zooms`, the zooms from far to
+    /// What is in `at`'s node, asked over `range`, the zooms from far to
     /// near that a reader asks within it: this is the world's one query. What
     /// the layers compose (`layer_node`), with the decor standing in it
     /// (`with_decor`), which only the CPU answers. So a tree the ground grew
@@ -83,12 +83,12 @@ impl World {
     fn node(
         &self,
         at: &mut At,
-        zooms: [Zoom; 2],
+        range: [Zoom; 2],
         path: &mut Path,
         sees: &mut dyn FnMut(&Instance) -> bool,
     ) -> Answer<In<[u32; 2]>> {
-        let (answer, relief) = self.layers(at, zooms, path);
-        answer.map(|i| self.with_decor(at, zooms[1], relief, i, sees))
+        let (answer, relief) = self.layers(at, range, path);
+        answer.map(|i| self.with_decor(at, range[1], relief, i, sees))
     }
 }
 

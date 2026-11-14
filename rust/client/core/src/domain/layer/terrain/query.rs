@@ -100,7 +100,7 @@ impl TileCache<TerrainTile> {
     /// `place` comes in as where a node over this one found its cells, or
     /// `Lookup::NONE`, and goes out as where this node's cells are
     /// (pxl-engine `clipmap::step`). The cells are read at the cell zooms in
-    /// `zooms`, coarsest and finest, as the GPU reads them (pxl-engine
+    /// `range`, coarsest and finest, as the GPU reads them (pxl-engine
     /// `clipmap::bound_over`). `line` names the tile and says whether the
     /// clip level read gives the tile's own ground.
     pub(in crate::domain::layer) fn relief(
@@ -108,9 +108,9 @@ impl TileCache<TerrainTile> {
         line: &Line,
         place: &mut Lookup,
         node: Node<2>,
-        zooms: [Zoom; 2],
+        range: [Zoom; 2],
     ) -> Answer<Extent> {
-        let (r, from, here) = clipmap::bound_over(place, zooms, node);
+        let (r, from, here) = clipmap::bound_over(place, range, node);
         answer_at(line, from, here, r)
     }
 
@@ -160,7 +160,7 @@ fn bound_tile((zoom, at): Node<2>, cell_zoom: Zoom) -> Quadrant {
 /// tile.
 fn answer_at<T>(line: &Line, from: Zoom, here: bool, v: T) -> Answer<T> {
     match here {
-        false => Answer::Nothing(line.tile),
+        false => Answer::Lack(line.tile),
         true if line.src.is_some_and(|s| from >= GROUND.cell_zoom(s.zoom)) => Answer::Exact(v),
         true => Answer::Coarser(v, line.tile),
     }

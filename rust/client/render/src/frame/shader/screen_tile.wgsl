@@ -5,13 +5,13 @@
 // collapses the quad of an undamaged tile. A compute pass takes a thread a tile, which returns
 // at once on an undamaged one. A tile is damaged where it changed this frame or has not yet
 // run through the jitter's sequence since, and every tile is damaged where the frame is drawn
-// whole. `TILE_JITTERS`, the frames in which the sequence covers a pixel, comes from word.rs
-// `screen::JITTERS`.
+// whole. `TILE_JITTER_CNT`, the frames in which the sequence covers a pixel, comes from word.rs
+// `screen::JITTER_CNT`.
 
 // The uniform `TileGrid` and the rule a tile's word is read by, `tiles_age` and
 // `tiles_in_damage`, come from tile_word.wgsl, which spells word.rs `screen`'s rule.
 // `cnt` holds the tiles across and down, the frames a tile stays damaged once it changed
-// (`damage_frames`), and this frame's number. In a frame drawn whole, `damage_frames` is
+// (`damage_frame_cnt`), and this frame's number. In a frame drawn whole, `damage_frame_cnt` is
 // `u32::MAX`, so every tile is damaged. `size` holds the target's pixels across and down, how
 // many pixels a quad is grown each way past its tile, and a tile's side in pixels.
 

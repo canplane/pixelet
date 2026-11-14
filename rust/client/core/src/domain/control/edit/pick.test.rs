@@ -1,6 +1,6 @@
 // pxl-core/domain/control/edit/pick.test.rs
 
-// A carve writes an AIR leaf the size of a cell, so its corner must be the
+// A carve writes an air leaf the size of a cell, so its corner must be the
 // cell's, not the size tier's. The store is saved, so a carve in the wrong
 // place outlives the session.
 

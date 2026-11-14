@@ -4,7 +4,7 @@
 // (light_mark.wgsl, `Light::box_tiles`). The host's receivers come first, one workgroup for
 // each: what the host draws that reads the map, standing within the box its draw recorded
 // (`light::RECEIVER_BOXES_AT`). They are the draws gpu/draw.rs `DrawList` records, at most
-// `light::RECEIVER_BOXES`. The decor generated comes after (gpu/generator.rs), one thread for
+// `light::RECEIVER_BOX_CAP`. The decor generated comes after (gpu/generator.rs), one thread for
 // each slot of its instances that is placed, standing where decor_compact.wgsl lays it. The
 // cast's one thread opens the workgroups in a buffer of their own, which this pass reads its
 // count from and does not bind (light_mark_draws_open.wgsl, `light::DRAWS_DISPATCH_WORDS`). A
@@ -30,13 +30,13 @@ fn instance_at(i: u32) -> u32 {
 }
 
 fn instance_cap() -> u32 {
-  return arrayLength(&instances) / (DRAWING_COLUMNS + 1u);
+  return arrayLength(&instances) / (DRAWING_COLUMN_CNT + 1u);
 }
 
 /// How many slots are placed: the end of the last region, held to the slots there are
 /// (decor_compact.wgsl lays the regions).
 fn instance_cnt() -> u32 {
-  let last = 2u * REGIONS - 1u;
+  let last = 2u * REGION_CNT - 1u;
   return min(select(0u, regions[last], last < arrayLength(&regions)), instance_cap());
 }
 
@@ -71,7 +71,7 @@ fn sees(v: vec3<f32>, radius: f32) -> bool {
   return f >= -radius && side.x && side.y;
 }
 
-@compute @workgroup_size(ROW_LANES, 1, 1)
+@compute @workgroup_size(ROW_LANE_CNT, 1, 1)
 fn light_mark_draws_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_invocation_index) lane: u32) {
   var lo: vec3<f32>;
   var hi: vec3<f32>;
@@ -81,7 +81,7 @@ fn light_mark_draws_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_i
   // over the whole map. Past the host's boxes, a placed decor takes a thread.
   var first = 0u;
   var lanes = 1u;
-  if (group.x < LIGHT_RECEIVER_BOXES) {
+  if (group.x < LIGHT_RECEIVER_BOX_CAP) {
     if (group.x >= u32(hdr[LIGHT_RECEIVER_BOXES_AT].x)) {
       return;
     }
@@ -90,9 +90,9 @@ fn light_mark_draws_cs(@builtin(workgroup_id) group: vec3<u32>, @builtin(local_i
     foot_lo = lo;
     foot_hi = hi;
     first = lane;
-    lanes = ROW_LANES;
+    lanes = ROW_LANE_CNT;
   } else {
-    let k = (group.x - LIGHT_RECEIVER_BOXES) * ROW_LANES + lane;
+    let k = (group.x - LIGHT_RECEIVER_BOX_CAP) * ROW_LANE_CNT + lane;
     if (k >= instance_cnt()) {
       return;
     }

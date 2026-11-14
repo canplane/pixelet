@@ -74,7 +74,7 @@ what is done a pixel at a time: the pixels' cast and holes, the visibility
 buffer, the world's passes, the occlusion. The beam rays, cells, samples and
 boxes run on angular cells and do not shrink, and the finish and the markers
 always draw at the display's pixels, so text stays sharp. Each GPU span says
-which kind it is (span.json `per_px`). The rate spaces the frames, a refresh at a
+which kind it is (span.json `GPU_SPAN_PER_PX`). The rate spaces the frames, a refresh at a
 time, down to 30 Hz (`RATE_MIN_HZ`), and gives every pass more time.
 
 `auto` steers both as congestion control steers a connection. While the GPU's
@@ -185,9 +185,9 @@ the layouts and numbers they read are generated from pxl-engine and pxl-spec by
   CPU and handed in a word, and both sides multiply by it. The eye's ray at each
   pixel and a beam's width, which only the GPU walks, are worked out on the GPU
   alone, each in one function (`walk_node.wgsl` `eye_aim`, `spacing_width`).
-- The build validates every shader with naga, and checks each pipeline's groups
-  against the bindings its shaders read, both ways (`build/bind.rs` `BINDS`,
-  `frame/shader/record.rs` `lays_out`); no struct of a shader holds a struct
+- The build validates every shader with naga, and checks each pipeline's groups,
+  render and compute, against the bindings its shaders read, both ways
+  (`frame/shader/record.rs` `lays_out`); no struct of a shader holds a struct
   (`build/check.rs` `refuse_faults`).
 - A test compiles each shader with Tint, the compiler a browser runs, and makes
   every pipeline the renderer makes (`ts/tool/shader/shader.test.ts`).

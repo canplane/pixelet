@@ -13,7 +13,7 @@ use crate::asset::id::{kind_of, AssetId, Kind};
 /// None for an id that carries nothing beyond itself.
 pub fn class_of(id: AssetId) -> Option<Class> {
     match kind_of(id)? {
-        Kind::marker => Some(Class::marker_text),
-        Kind::cube | Kind::decor => None,
+        Kind::Marker => Some(Class::MarkerText),
+        Kind::Cube | Kind::Decor => None,
     }
 }

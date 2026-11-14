@@ -4,7 +4,7 @@
 // clipmap.rs `way_at`, `way::way_cell`, `KeptSpans`). The GPU does no way geometry: a cell asks
 // its column in the brick's run of kept spans, in constant time, and the rule over its spans.
 // It keeps to scoped locals and plain loads; every loop runs over a column's spans, held to
-// `WAY_SPANS`, or the six cells about one.
+// `WAY_SPAN_CAP`, or the six cells about one.
 
 @group(0) @binding(7) var<storage, read> pool: array<u32>;
 
@@ -27,10 +27,10 @@ fn run_column(run: u32, c: vec2<i32>) -> u32 {
   return pool[run + RUN_OFFS_AT + rank + before + countOneBits(word & ((1u << bit) - 1u))];
 }
 
-/// A head word's spans' count, held to `WAY_SPANS` so that a loop over them is bounded whatever
+/// A head word's spans' count, held to `WAY_SPAN_CAP` so that a loop over them is bounded whatever
 /// it reads (`clipmap::head_of`).
 fn head_cnt(w: u32) -> u32 {
-  return min(w & SPANS_CNT, WAY_SPANS);
+  return min(w & SPANS_CNT, WAY_SPAN_CAP);
 }
 
 fn head_face(w: u32) -> i32 {

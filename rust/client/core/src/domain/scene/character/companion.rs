@@ -186,7 +186,7 @@ pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
         .characters
         .iter_mut()
         .zip(&mut s.walks)
-        .zip([(Group::person, settings.person), (Group::pet, settings.pet)])
+        .zip([(Group::Person, settings.person), (Group::Pet, settings.pet)])
     {
         // A walk lives as long as its character.
         if slot.as_ref().is_some_and(|c| c.number != number) {
@@ -536,7 +536,7 @@ pub(crate) fn clear_of_walls(
 /// grid's cell at its feet is one a marker shows at (`marker_shows`), so the
 /// line reads where the markers about it do.
 pub fn line_hangs(eye: V3) -> Option<Q3> {
-    let person = companion().characters[Group::person as usize].as_ref()?;
+    let person = companion().characters[Group::Person as usize].as_ref()?;
     let feet = person.transform?.at;
     let over = [
         feet[0],

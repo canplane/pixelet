@@ -10,7 +10,8 @@ use crate::answer::{
     bound_of, bound_word, box_word, In, Kind, PackedBox, BOX_BITS, BOX_NONE, BOX_STEPS, BOX_WHOLE,
 };
 use crate::content::Content;
-use pxl_spec::ground::{cells, face_cell, face_ele, UNKNOWN};
+use pxl_spec::asset::cube::Sentinel;
+use pxl_spec::ground::{cells, face_cell, face_ele};
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::{
@@ -18,7 +19,6 @@ use pxl_spec::space::coord::zoom::{
 };
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::value;
-use pxl_spec::value::VOID;
 
 /// What the clip levels bound under a node, each source on its own: the ground's faces,
 /// lowest and highest, and the leaf cells the ways fill, lowest and past the highest
@@ -95,7 +95,7 @@ pub fn coarsest(zoom: Zoom, far: Zoom) -> Zoom {
 }
 
 /// A leaf cell's index at the world's floor, under sea level.
-pub const SEA_CELLS: i32 = 1 << (HEIGHT_BITS - 1);
+pub const SEA_CELL: i32 = 1 << (HEIGHT_BITS - 1);
 
 /// Whether the leaf cells `[lo, hi)` along z meet the node `(zoom, z)`, read down to `near`.
 /// Finer than the leaves, a leaf cell is cut 2^e a side, so every height is a whole count of
@@ -103,7 +103,7 @@ pub const SEA_CELLS: i32 = 1 << (HEIGHT_BITS - 1);
 pub fn meets([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32), near: Zoom) -> bool {
     let e = near.max(LEAF_CELL_ZOOM) - LEAF_CELL_ZOOM;
     let s = LEAF_CELL_ZOOM + e - zoom;
-    let first = ((z + z_start(zoom)) << s) - (SEA_CELLS << e);
+    let first = ((z + z_start(zoom)) << s) - (SEA_CELL << e);
     first < hi << e && first + (1 << s) > lo << e
 }
 
@@ -128,15 +128,15 @@ pub trait Resident: Area {
     const NOWHERE: Self::Place;
     /// The lowest and highest that the ground's cells reach over the node `node`, and the ways'
     /// over them, kept apart (`Extent`), read from the finest held tile over every zoom from
-    /// `cells`' coarsest to its finest (`clipmap::bound_over`). Where no brick it reads is held,
-    /// the bounds are no tighter than the elevations' whole range (`UNBOUNDED`), which only splits
-    /// more; where no tile over the node is held, it returns false. `place` is where the cells
-    /// at `cells`' finest zoom of a node over it were found, or `NOWHERE`, and becomes where
-    /// the node's own are found (`clipmap::step`).
+    /// `cell_range`'s coarsest to its finest (`clipmap::bound_over`). Where no brick it reads is
+    /// held, the bounds are no tighter than the elevations' whole range (`UNBOUNDED`), which only
+    /// splits more; where no tile over the node is held, it returns false. `place` is where the
+    /// cells at `cell_range`'s finest zoom of a node over it were found, or `NOWHERE`, and becomes
+    /// where the node's own are found (`clipmap::step`).
     fn relief(
         &mut self,
         place: &mut Self::Place,
-        cells: [Zoom; 2],
+        cell_range: [Zoom; 2],
         node: (Zoom, [i32; 3]),
     ) -> (Extent, bool);
     /// The column of the cell `c` at `zoom` from the clip levels (`clipmap::ground`), or the
@@ -176,9 +176,9 @@ pub fn node<H: Resident>(
     [far, near]: [Zoom; 2],
     is_cell: bool,
 ) -> (Answer, Cell, [i32; 2]) {
-    let air = In {
+    let void = In {
         kind: Kind::Cell,
-        asset: [VOID, 0],
+        asset: [Sentinel::Void as u32, 0],
     };
     // A split whose span no bound tells may hold anything anywhere in it.
     let split = In {
@@ -186,8 +186,8 @@ pub fn node<H: Resident>(
         asset: BOX_WHOLE,
     };
     let lacks = In {
-        kind: Kind::Lacks,
-        asset: [VOID, 0],
+        kind: Kind::Lack,
+        asset: [Sentinel::Void as u32, 0],
     };
     // Past the area: a cell's own Earth, or a node's where it lies all above sea level, which
     // no shard does, since a shard spans the world's height around sea level. No node of a
@@ -199,8 +199,8 @@ pub fn node<H: Resident>(
                 kind: Kind::Cell,
                 asset: [earth, 0],
             }
-        } else if earth == VOID && zoom > SHARD_ZOOM {
-            air
+        } else if earth == Sentinel::Void as u32 && zoom > SHARD_ZOOM {
+            void
         } else {
             split
         };
@@ -230,14 +230,18 @@ pub fn node<H: Resident>(
     if is_cell {
         let column = resident.cell(shard, *place, zoom, c);
         // The caves' share where they may take the cell, beside its asset:
-        // the cell is air where they take it all.
+        // the cell is void where they take it all.
         let ground = column.asset::<H::Content>(zoom, c[2]);
-        let cave = if ground != VOID && column.opens::<H::Content>(zoom, c[2]) {
+        let cave = if ground != Sentinel::Void as u32 && column.opens::<H::Content>(zoom, c[2]) {
             H::Content::hollow((zoom, c))
         } else {
             0
         };
-        let asset = if cave >= FULL { VOID } else { ground };
+        let asset = if cave >= FULL {
+            Sentinel::Void as u32
+        } else {
+            ground
+        };
         return (
             In {
                 kind: Kind::Cell,
@@ -247,7 +251,7 @@ pub fn node<H: Resident>(
             ways,
         );
     }
-    // Air where none of the node lies where the ground may fill, or else a split with its box,
+    // Void where none of the node lies where the ground may fill, or else a split with its box,
     // the span along z the ground may fill, in the node's steps. A node a cave takes all of
     // still splits, and its cells say so.
     let s = slab(zoom, relief, [far, near]);
@@ -257,12 +261,12 @@ pub fn node<H: Resident>(
             asset: box_along_z(s, (zoom, c[2])),
         }
     } else {
-        air
+        void
     };
     (answer, Cell::NONE, ways)
 }
 
-/// A cell's ground, as a column reads it: its palette index (`UNKNOWN` for the service
+/// A cell's ground, as a column reads it: its palette index (`Sentinel::Unknown` for the service
 /// area's wall), its top in cells of its zoom and the share of its top cell it fills (`top`),
 /// and the four palette indices its fold took (`asset_ids`, `dx + 2·dy`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -276,10 +280,10 @@ pub struct Cell {
 impl Cell {
     /// No ground: void at sea level, as a column no tile is read for.
     pub const NONE: Cell = Cell {
-        asset_id: VOID,
+        asset_id: Sentinel::Void as u32,
         top: 0,
         part: FULL,
-        fold: [VOID; 4],
+        fold: [Sentinel::Void as u32; 4],
     };
 
     /// The share of cell `z` that its ground fills, in `share::FULL`'s units, where a cell of
@@ -294,7 +298,7 @@ impl Cell {
 
     /// Whether it has ground at all: a palette index the catalog grounds, or the wall.
     pub fn is_grounded(&self) -> bool {
-        self.asset_id == UNKNOWN || value::grounds(self.asset_id)
+        self.asset_id == Sentinel::Unknown as u32 || value::is_ground(self.asset_id)
     }
 
     /// Whether a cave may take cell `z` of the column at `cell_zoom`, by the ground's one rule:
@@ -305,7 +309,7 @@ impl Cell {
     pub fn opens<C: Content>(&self, cell_zoom: Zoom, z: i32) -> bool {
         let face = face_ele(cell_zoom, self.top);
         let under = face_cell(cell_zoom, face) - (self.part < FULL) as i32;
-        self.asset_id != UNKNOWN && z < under && z >= rock::<C>(cell_zoom, face)
+        self.asset_id != Sentinel::Unknown as u32 && z < under && z >= rock::<C>(cell_zoom, face)
     }
 
     /// The four palette indices that asset `g` of the column at `cell_zoom` is drawn by. Where
@@ -324,10 +328,10 @@ impl Cell {
     /// The asset in cell `z` of the column at `cell_zoom`, before the caves take their share
     /// (`opens`, `Content::hollow`), by `C`'s strata (`Content::by_depth`): the ground's palette
     /// index, which at a coarser cell is its fold's majority, as what is placed is its fold's, or
-    /// `VOID` for air.
+    /// `Sentinel::Void` for air.
     pub fn asset<C: Content>(&self, cell_zoom: Zoom, z: i32) -> u32 {
         if !self.is_grounded() {
-            return VOID;
+            return Sentinel::Void as u32;
         }
         C::by_depth(cell_zoom, self.asset_id, self.top, z)
     }
@@ -347,7 +351,7 @@ pub(crate) fn box_along_z([lo, hi]: [i32; 2], (zoom, z): (Zoom, i32)) -> PackedB
     // steps count it: `v` scaled by `BOX_STEPS` / side, less the node's first.
     let shift = LEAF_CELL_ZOOM - zoom;
     let step = |v: i32| -> i32 {
-        let (v, z) = (v + SEA_CELLS, z + z_start(zoom));
+        let (v, z) = (v + SEA_CELL, z + z_start(zoom));
         if shift >= BOX_BITS {
             (v >> (shift - BOX_BITS)) - (z << BOX_BITS)
         } else {

@@ -174,11 +174,11 @@ fn a_binding_takes_its_role_from_its_buffer_and_its_call() {
 }
 
 /// Rule 1 finds a dispatch off the light's args whose own group binds those args writable:
-/// the light's cells set with the propagation's group, which WebGPU refuses.
+/// the light's propagation dispatched off the args it binds writable at 21, which WebGPU
+/// refuses.
 #[test]
 fn an_indirect_call_off_args_its_group_binds_writable_is_found() {
     const ARGS_BOUND: Group = Group {
-        layout: &LIGHT_PROPAGATE_GROUP,
         binds: &[bind(21, 0)],
     };
     const SHIPPED: Frame = Frame {
@@ -191,13 +191,13 @@ fn an_indirect_call_off_args_its_group_binds_writable_is_found() {
         steps: &[
             Step::write("light_args", at(0, 0, light::ARGS_WORDS)),
             Step::dispatch_off(
-                "light_cells",
+                "light_propagate",
                 0,
-                COMPUTE_LIGHT_CELL,
-                &[&ARGS_BOUND],
+                COMPUTE_LIGHT_PROPAGATE,
+                &ARGS_BOUND,
                 (0, light::ARGS_PASSES),
             ),
         ],
     };
-    assert!(found(&SHIPPED).contains(&(1, "light_cells", "light_args")));
+    assert!(found(&SHIPPED).contains(&(1, "light_propagate", "light_args")));
 }

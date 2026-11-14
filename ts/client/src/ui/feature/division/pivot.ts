@@ -14,7 +14,7 @@ export function useDivisionLabel(): string | null {
   });
 }
 
-export function usePivotCoordinates(): string | null {
+export function usePivotCoordinate(): string | null {
   return useCore((s) => s.pivot.lon_lat && coordinateLabel(s.pivot.lon_lat));
 }
 

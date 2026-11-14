@@ -226,7 +226,7 @@ pub const SHADER_CAMERA_GRID: u32 = 81;
 pub const SHADER_QUEUE_LIGHT: u32 = 82;
 /// `SHADER_QUEUE_LAST` for the light's map.
 pub const SHADER_QUEUE_LAST_LIGHT: u32 = 83;
-pub const SHADERS: u32 = 84;
+pub const SHADER_CNT: u32 = 84;
 
 /// The parts of the air as the frame's shaders read it: its medium, its tables and the sky,
 /// the eye in it, the march through it, its light and the view through it. A shader's own
@@ -245,7 +245,7 @@ macro_rules! lit {
     };
 }
 
-pub const PARTS: [&[&str]; SHADERS as usize] = [
+pub const PARTS: [&[&str]; SHADER_CNT as usize] = [
     // SHADER_BOX
     lit!["paint", "box"],
     // SHADER_DECOR

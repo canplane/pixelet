@@ -10,13 +10,6 @@
     reason = "generated from WIT"
 )]
 
-use std::rc::Rc;
-use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
-use xpute_kit::wire::xtp::{
-    ArrayElem, BranchCursor, Cursor, PacketWriter, ScalarType, SequenceType, TreeReader,
-};
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum Sensor {
@@ -42,6 +35,60 @@ impl Sensor {
         match self {
             Sensor::Geolocation => "Geolocation",
             Sensor::Orientation => "Orientation",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[repr(u32)]
+pub enum ErrorCode {
+    /// The settings are not read yet, and a change would be overwritten.
+    NotLoaded = 0,
+    /// No surface is open there.
+    NotOpen = 1,
+    /// The surface draws something else.
+    Busy = 2,
+    /// The text is longer than a marker holds.
+    TooLong = 3,
+    /// The profiler's setting is off.
+    NotPermitted = 4,
+    /// The profiler's window could not be had.
+    InsufficientMemory = 5,
+}
+
+impl ErrorCode {
+    /// Every member, in its source's own order.
+    pub const ALL: [ErrorCode; 6] = [
+        ErrorCode::NotLoaded,
+        ErrorCode::NotOpen,
+        ErrorCode::Busy,
+        ErrorCode::TooLong,
+        ErrorCode::NotPermitted,
+        ErrorCode::InsufficientMemory,
+    ];
+
+    /// The member `val` is, or none for a number no member has.
+    pub const fn of(val: u32) -> Option<ErrorCode> {
+        match val {
+            0 => Some(ErrorCode::NotLoaded),
+            1 => Some(ErrorCode::NotOpen),
+            2 => Some(ErrorCode::Busy),
+            3 => Some(ErrorCode::TooLong),
+            4 => Some(ErrorCode::NotPermitted),
+            5 => Some(ErrorCode::InsufficientMemory),
+            _ => None,
+        }
+    }
+
+    /// The member's name, as its source spells it.
+    pub const fn name(self) -> &'static str {
+        match self {
+            ErrorCode::NotLoaded => "NotLoaded",
+            ErrorCode::NotOpen => "NotOpen",
+            ErrorCode::Busy => "Busy",
+            ErrorCode::TooLong => "TooLong",
+            ErrorCode::NotPermitted => "NotPermitted",
+            ErrorCode::InsufficientMemory => "InsufficientMemory",
         }
     }
 }

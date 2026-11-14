@@ -483,14 +483,15 @@ fn ramp_len(total: f64, scale: Scale) -> f64 {
 /// within `DECK_WINDOW`. What another deck sets (the deck it clears and the joint it meets)
 /// leans in turn on that deck's own window, so it is weighed only within `DECK_NEAR`, the
 /// cell's own included, and the reach adds up over the levels stacked (a deck over a deck, a
-/// track riding it, a bore opening onto it). `DECK_LEVELS` of them fit in a tile, which every
+/// track riding it, a bore opening onto it). `DECK_LEVEL_CNT` of them fit in a tile, which every
 /// ring holds around what its tile draws.
 const DECK_PANEL: usize = 16;
 const DECK_WINDOW: usize = 384;
 const DECK_NEAR: usize = 16;
-const DECK_LEVELS: usize = 4;
+const DECK_LEVEL_CNT: usize = 4;
 const _: () = assert!(
-    DECK_LEVELS * DECK_PANEL + (DECK_LEVELS - 1) * DECK_NEAR + DECK_WINDOW <= TILE_CELLS as usize
+    DECK_LEVEL_CNT * DECK_PANEL + (DECK_LEVEL_CNT - 1) * DECK_NEAR + DECK_WINDOW
+        <= TILE_CELLS as usize
 );
 
 /// What a group's decks must meet or clear, each where it lies, in the ring's cells.

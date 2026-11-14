@@ -1,7 +1,6 @@
 // xpute-kit/wire/xtp/encode.test.rs
 
 use super::*;
-use crate::wire::xtp::cursor::TreeReader;
 use crate::wire::xtp::spec::{Array, SequenceType};
 use crate::wire::xtp::view::{NodeView, TreeView, ViewValue};
 
@@ -62,29 +61,6 @@ fn check<'a>(name: &str, build: impl FnOnce(&mut TreeView<'a>)) -> Vec<u8> {
     let pkt = encode(build);
     assert_eq!(hex::encode(&pkt), expected(name), "{name}");
     pkt
-}
-
-#[test]
-fn display_string_round_trip() {
-    let mut buf = [0xffu8; 128];
-    let mut w = PacketWriter::new(&mut buf, 2);
-    w.str_display(format_args!("{}-{}", "héllo", 42))
-        .u32(Some(7));
-    let n = w.finish().unwrap() as usize;
-    let branch = TreeReader::new(&buf[..n]).unwrap().read_branch().unwrap();
-    assert_eq!(branch.at(0).unwrap().get_str_ref().unwrap(), "héllo-42");
-    assert!(
-        branch.at(1).unwrap().get_str_ref().is_err(),
-        "a number is not a string"
-    );
-    let mut small = [0u8; 40];
-    let mut w = PacketWriter::new(&mut small, 1);
-    w.str_display("far longer than the room that is left");
-    assert_eq!(
-        w.finish().map_err(|e| e.errnum),
-        Err(Errno::EOVERFLOW),
-        "a string that does not fit spoils the packet"
-    );
 }
 
 #[test]

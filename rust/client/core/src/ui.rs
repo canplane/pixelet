@@ -37,7 +37,7 @@ use crate::sys::io::file;
 use crate::sys::io::file_spec::path;
 use crate::sys::io::request;
 use crate::sys::io::source;
-use pxl_render::gpu::surface::SURFACES;
+use pxl_render::gpu::surface::SURFACE_CAP;
 use pxl_render::renderer::renderer_progress;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -91,17 +91,17 @@ pub struct SnapshotInput {
     /// Each setting's value at its number, and 0 at a number no setting has.
     /// It is None until the settings are read, and the UI holds no settings
     /// before its first snapshot.
-    settings: Option<[u32; SettingKey::SLOTS]>,
+    settings: Option<[u32; SettingKey::SLOT_CNT]>,
     division: Option<(Quadrant, u32)>,
     /// The zoom the view names its divisions to (`named_to`).
     named_to: Option<Zoom>,
-    character_surfaces: ([u32; SURFACES], usize),
+    character_surfaces: ([u32; SURFACE_CAP], usize),
     stall: Option<Message>,
     declared: bool,
     /// Whether the storage file is refused, and the refused objects' files
     /// by their wants' ids, of which only the first `.1` are filled.
     refused_storage: bool,
-    refused_objects: ([u64; REFUSED_OBJECTS], usize),
+    refused_objects: ([u64; REFUSED_OBJECT_CAP], usize),
     renderer_progress: f64,
     area_progress: f64,
 }
@@ -109,13 +109,13 @@ pub struct SnapshotInput {
 /// How many refused objects' files one snapshot names besides the storage
 /// file: as many as the view asks for at once. The rest are named in later
 /// snapshots, as the client empties the ones already named.
-const REFUSED_OBJECTS: usize = repository::WANTS as usize;
+const REFUSED_OBJECT_CAP: usize = repository::WANT_CAP as usize;
 
-fn snapshot_inputs() -> SnapshotInput {
+fn snapshot_input() -> SnapshotInput {
     let (location, settings) = (device_location_store(), settings());
     let pivot = controller::pivot();
     let division = pivot.and_then(|at| naming(&at));
-    let mut character_surfaces = ([0u32; SURFACES], 0);
+    let mut character_surfaces = ([0u32; SURFACE_CAP], 0);
     for (slot, (surface, ..)) in character_surfaces
         .0
         .iter_mut()
@@ -150,7 +150,7 @@ fn snapshot_inputs() -> SnapshotInput {
         zooming: zooming(),
         over_marker: pointer::over_marker(),
         settings: are_settings_loaded().then(|| {
-            let mut by_number = [0; SettingKey::SLOTS];
+            let mut by_number = [0; SettingKey::SLOT_CNT];
             for key in SettingKey::ALL {
                 by_number[key as usize] = settings.get(key);
             }
@@ -163,7 +163,7 @@ fn snapshot_inputs() -> SnapshotInput {
         declared: source::min_zoom().is_some(),
         refused_storage: file::is_storage_refused(),
         refused_objects: {
-            let mut refused = ([0; REFUSED_OBJECTS], 0);
+            let mut refused = ([0; REFUSED_OBJECT_CAP], 0);
             for (at, &id) in refused.0.iter_mut().zip(repository::refused_files()) {
                 *at = id;
                 refused.1 += 1;
@@ -194,7 +194,7 @@ impl SnapshotMemo {
     /// The snapshot's inputs now, or None when they have not changed since
     /// they were last sent. What it returns counts as sent.
     pub fn take_changed(&mut self) -> Option<SnapshotInput> {
-        let (now, text) = (snapshot_inputs(), write::marker_draft().unwrap_or_default());
+        let (now, text) = (snapshot_input(), write::marker_draft().unwrap_or_default());
         if self.last_input == Some(now) && self.text == text {
             return None;
         }
@@ -226,7 +226,7 @@ pub fn snapshot(shown: &SnapshotInput) -> Snapshot {
         refused_files.push(RefusedFile { path: file::storage_path() });
     }
     for &id in &shown.refused_objects.0[..shown.refused_objects.1] {
-        refused_files.push(RefusedFile { path: file::quadrant_path(path::OBJECT::ID, id) });
+        refused_files.push(RefusedFile { path: file::quadrant_path(path::object::ID, id) });
     }
     Snapshot {
         pivot: PivotState {

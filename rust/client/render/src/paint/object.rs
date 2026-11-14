@@ -2,12 +2,9 @@
 
 //! The materials the object store's values are drawn as, as the catalog defines them.
 
-use pxl_spec::asset::cube::{cube_rgb, ALL_CUBES};
+use pxl_spec::asset::cube::{cube_rgb, Sentinel, ALL_CUBES};
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::asset::AssetId;
-use pxl_spec::value::AIR;
 
-use crate::paint::palette::layer_idx;
 use crate::paint::palette::rgb255;
 use std::sync::LazyLock;
 use xpute_kit::status::bug::OrBug;
@@ -34,23 +31,27 @@ impl Painter {
         let named = ALL_CUBES
             .iter()
             .copied()
-            .chain([AIR])
+            .chain([Sentinel::Air as u32])
             .chain(DECORS.iter().map(|d| d.id));
-        let states = named
+        let state_cnt = named
             .filter(|&s| s < u16::MAX as u32)
             .max()
             .map_or(0, |s| s as usize + 1);
-        let mut looks = vec![None; states];
-        for &cube in ALL_CUBES.iter() {
+        let mut looks = vec![None; state_cnt];
+        // A cube's texture layer is its place in the catalog (palette.rs `LAYER_CNT`).
+        for (layer, &cube) in ALL_CUBES.iter().enumerate() {
             if let Some(l) = looks.get_mut(cube as usize) {
-                *l = Some(solid_look(cube));
+                *l = Some((
+                    rgb255(cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE)),
+                    layer as u8,
+                ));
             }
         }
         Painter { looks }
     }
 
     /// The number of states. Every state the catalog names is below it.
-    pub fn states(&self) -> usize {
+    pub fn state_cnt(&self) -> usize {
         self.looks.len()
     }
 
@@ -59,12 +60,4 @@ impl Painter {
     pub fn look_of(&self, state: u32) -> Option<([u8; 3], u8)> {
         self.looks.get(state as usize).copied().flatten()
     }
-}
-
-/// The swatch and texture layer of `cube`. A cube of a look takes its ground's.
-pub fn solid_look(cube: AssetId) -> ([u8; 3], u8) {
-    (
-        rgb255(cube_rgb(cube).or_bug(Errno::ENOTRECOVERABLE)),
-        layer_idx(cube) as u8,
-    )
 }

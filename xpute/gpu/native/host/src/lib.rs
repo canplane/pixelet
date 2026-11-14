@@ -44,8 +44,8 @@ use std::time::Instant;
 
 use xpute_link::mem;
 
-use xpute_gpu_link::spec::DEVICE;
-use xpute_gpu_link::spec::STATUS;
+use xpute_gpu_link::spec::device;
+use xpute_gpu_link::spec::status;
 use belt::Belt;
 use cache::Cache;
 use image::{Decoder, Decoding};
@@ -242,7 +242,7 @@ impl GpuHost {
         self.decoding.clear();
         self.making.clear();
         if let Some(addr) = self.block.take() {
-            mem::store_release(addr + 4 * DEVICE::STATUS_AT as u32, STATUS::LOST);
+            mem::store_release(addr + 4 * device::STATUS_AT as u32, status::LOST);
         }
     }
 

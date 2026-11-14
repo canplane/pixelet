@@ -4,8 +4,9 @@
     "registers them, and the effects a frame runs around them. The profiler records and",
     "reports them by these names (spec/client/core/perf/perf.json)."
   ],
-  "STEP_NAMES": {
+  "STEP_NAME": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "controller",
       "input",
@@ -18,8 +19,9 @@
       "scene"
     ]
   },
-  "EFFECT_NAMES": {
+  "EFFECT_NAME": {
     "$type": "enum",
+    "$names": true,
     "$val": [
       "navigation",
       "bootstrap",
@@ -27,9 +29,9 @@
       "follow",
       "dst",
       "decor",
-      "objects",
+      "object",
       "location",
-      "settings"
+      "setting"
     ]
   }
 }

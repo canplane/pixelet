@@ -8,7 +8,7 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { f64, u32, u64 } from "@xpute/kit/abi/word.ts";
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_EINVAL, ERRNO_ENOENT } from "@xpute/kit/status/errno.spec.ts";
 import { InvariantError } from "@xpute/kit/status/error.ts";
 
 /** Where the tree's spec/ is, as whoever runs the tests knows it and defines
@@ -43,7 +43,7 @@ export class Golden {
 
   s(key: string): string {
     const v = this.map.get(key);
-    if (v === undefined) throw new InvariantError(Errno.ENOENT);
+    if (v === undefined) throw new InvariantError(ERRNO_ENOENT);
     return v;
   }
 
@@ -70,7 +70,7 @@ export class Golden {
     const v = this.s(key);
     if (v === "true") return true;
     if (v === "false") return false;
-    throw new InvariantError(Errno.EINVAL);
+    throw new InvariantError(ERRNO_EINVAL);
   }
 
   bytes(key: string): U8Array {
@@ -101,7 +101,7 @@ export class Golden {
       if (!found) break;
       f(prefix);
     }
-    if (k === 0) throw new InvariantError(Errno.ENOENT);
+    if (k === 0) throw new InvariantError(ERRNO_ENOENT);
   }
 
   len(base: string): u32 {

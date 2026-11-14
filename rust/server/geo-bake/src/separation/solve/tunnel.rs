@@ -44,7 +44,7 @@ const TUNNEL_RAMP_STEP: i32 = 1;
 const TUNNEL_RAMP_RUN: i32 = 3;
 const TUNNEL_LAYER_DROP_M: f64 = 7.0;
 const TUNNEL_MAX_LAYERS_BELOW: i64 = 8;
-const TUNNEL_APPROACH_WAYS: usize = 8;
+const TUNNEL_APPROACH_WAY_CAP: usize = 8;
 /// Ours, not Arnis's: the steepest a bore longer than a tile rises from the lowest floor near
 /// it (`road_bores`), 2%, within which a road tunnel is built.
 const TUNNEL_FAR_GRADE: f64 = 0.02;
@@ -288,7 +288,7 @@ fn road_bores(
                     at = w.row.ends[usize::from(at_start)].clone();
                     if leaves
                         || dist >= budget
-                        || chain.len() >= TUNNEL_APPROACH_WAYS
+                        || chain.len() >= TUNNEL_APPROACH_WAY_CAP
                         || portal_nodes.contains(&at)
                     {
                         break;

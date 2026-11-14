@@ -59,9 +59,9 @@ XPUTE_TEST(xtp_writer_matches_other_languages) {
     check("str", [](PacketWriter &w) { w.str("héllo"); });
     check("str empty", [](PacketWriter &w) { w.str(""); });
     const std::array<std::uint16_t, 3> u16s{1, 2, 3};
-    check("typed u16", [&](PacketWriter &w) { w.u16_array(u16s); });
+    check("typed u16", [&](PacketWriter &w) { w.array<std::uint16_t>(u16s); });
     const std::array<float, 2> f32s{0.5f, -2.0f};
-    check("typed f32", [&](PacketWriter &w) { w.f32_array(f32s); });
+    check("typed f32", [&](PacketWriter &w) { w.array<float>(f32s); });
     const std::array<std::uint8_t, 9> bits{1, 0, 1, 1, 0, 0, 0, 0, 1};
     check("bitset", [&](PacketWriter &w) { w.bitset(bits); });
     const std::array<std::string_view, 3> strs{"a", "héllo", ""};
@@ -71,7 +71,7 @@ XPUTE_TEST(xtp_writer_matches_other_languages) {
         w.branch(7, [&](PacketWriter &b) {
             b.i32(42).str("hello").boolean(true).nil().i64(std::int64_t{1} << 40);
             b.branch(2, [](PacketWriter &b) { b.i32(1).i32(2); });
-            b.i32_array(seven);
+            b.array<std::int32_t>(seven);
         });
     });
     check("branch null child", [](PacketWriter &w) {

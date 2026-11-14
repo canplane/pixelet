@@ -15,12 +15,12 @@
 fn decor_args_cs() {
   var first = 0u;
   let cap = instance_cap();
-  for (var r = 0u; r < REGIONS; r += 1u) {
+  for (var r = 0u; r < REGION_CNT; r += 1u) {
     let n = regions[r];
-    regions[REGIONS + r] = first;
+    regions[REGION_CNT + r] = first;
     uniforms[r * UNIFORM_WORDS + UNIFORM_IDX] += first;
     let a = ARGS_WORDS * r;
-    args[a] = select(IMPOSTOR_CORNERS, meshes[r / 2u], (r & 1u) == 0u);
+    args[a] = select(IMPOSTOR_CORNER_CNT, meshes[r / 2u], (r & 1u) == 0u);
     args[a + 1u] = in_cap(n, cap - min(first, cap));
     args[a + 2u] = 0u;
     args[a + 3u] = 0u;

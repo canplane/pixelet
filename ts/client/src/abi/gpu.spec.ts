@@ -21,7 +21,7 @@ export const surface_role = {
  *
  * Its head, past the stream's own words, is what the host writes for the
  * core: the device's block (xpute DEVICE) and the timed spans' reads, three
- * of them (gpu/api.rs `READS`), each its word, then each span's begin and end
+ * of them (gpu/api.rs `READ_CAP`), each its word, then each span's begin and end
  * ticks. gpu/api.rs lays them out, and the stream says the head's length itself. */
 export const stream = {
   /** The stream's room: what one entry may send the device, then at its end the

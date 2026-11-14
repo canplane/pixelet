@@ -5,7 +5,7 @@
  * and shown on visible. A guest that serves none answers ENOENT, and is told
  * nothing more. */
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_ENOENT } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import * as life from "@xpute/link/abi/life/life.ts";
 import type { Sender } from "@xpute/link";
@@ -14,7 +14,7 @@ export function tell_life(link: Sender): void {
   document.addEventListener("visibilitychange", () => {
     const told = document.visibilityState === "hidden" ? life.hidden(link) : life.shown(link);
     told.catch((e: unknown) => {
-      if (!(e instanceof XputeError && e.errnum === Errno.ENOENT)) throw e;
+      if (!(e instanceof XputeError && e.errnum === ERRNO_ENOENT)) throw e;
     });
   });
 }

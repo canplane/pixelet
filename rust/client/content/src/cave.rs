@@ -29,19 +29,19 @@ pub const PIPE: Zoom = LEAF_CELL_ZOOM - 3;
 pub const BLOCK: Zoom = LEAF_CELL_ZOOM - 1;
 /// The classes a tunnel may be of, by the size of the node it starts in: a tunnel of class
 /// `k` starts in a node at zoom `ROOT + k`.
-const CLASSES: usize = 5;
+const CLASS_CNT: usize = 5;
 /// The blocks a root's tunnels hollow, the same in every root.
 pub const ROOT_BLOCKS: u32 = {
     let mut n = 0;
     let mut k = 0;
-    while k < CLASSES {
+    while k < CLASS_CNT {
         n += ROOT_TUNNELS[k] * BLOCKS_A_TUNNEL[k];
         k += 1;
     }
     n
 };
 /// A pipe cell's blocks, 4 a side.
-pub const CELL_BLOCKS: u32 = 1 << (3 * (BLOCK - PIPE));
+pub const CELL_BLOCK_CNT: u32 = 1 << (3 * (BLOCK - PIPE));
 /// A piece's side at a tunnel's end, where it crosses none.
 pub const NO_SIDE: u32 = 6;
 
@@ -76,7 +76,7 @@ const NONE: Piece = Piece {
 #[derive(Clone, Copy, Debug)]
 struct CaveNode {
     piece: Piece,
-    tunnels: [u32; CLASSES],
+    tunnels: [u32; CLASS_CNT],
 }
 
 /// The tunnels of class `k` that a node at `zoom` with no piece may be handed: one at the
@@ -305,7 +305,7 @@ fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
         let share = (c << 16) / if all == 0 { 1 } else { all };
         let share = if share > 0xffff { 0xffff } else { share };
         let w = weight(share, wh.rotate_left(7 * i + 3));
-        let got = halve(left, [c * CELL_BLOCKS, rest * CELL_BLOCKS], w);
+        let got = halve(left, [c * CELL_BLOCK_CNT, rest * CELL_BLOCK_CNT], w);
         if i == at {
             mine.blocks = got;
         }
@@ -320,14 +320,14 @@ fn hand_down(node: (Zoom, [i32; 3]), p: Piece, want: u32) -> (Piece, u32) {
 /// weight alike on each side, each half's room being what its children can start (`cap`).
 fn tunnels_down(
     node: (Zoom, [i32; 3]),
-    tunnels: [u32; CLASSES],
+    tunnels: [u32; CLASS_CNT],
     on: u32,
     want: u32,
-) -> [u32; CLASSES] {
+) -> [u32; CLASS_CNT] {
     let child = node.0 + 1;
-    let mut out = [0u32; CLASSES];
+    let mut out = [0u32; CLASS_CNT];
     let mut k = 0;
-    while k < CLASSES {
+    while k < CLASS_CNT {
         let r = cap(k, child);
         let mut n = tunnels[k];
         let h = if n > 0 {
@@ -376,11 +376,11 @@ fn holds(node: (Zoom, [i32; 3])) -> CaveNode {
         let here = (z, at(z));
         // Start its own where it is its class's size and holds one.
         let k = (z - ROOT) as usize;
-        if k < CLASSES && h.tunnels[k] > 0 && h.piece.blocks == 0 {
+        if k < CLASS_CNT && h.tunnels[k] > 0 && h.piece.blocks == 0 {
             h.piece = spawn(here, k);
             h.tunnels[k] -= 1;
         }
-        if z == zoom || z == PIPE || h.piece.blocks == 0 && h.tunnels == [0; CLASSES] {
+        if z == zoom || z == PIPE || h.piece.blocks == 0 && h.tunnels == [0; CLASS_CNT] {
             return h;
         }
         let next = at(z + 1);
@@ -439,7 +439,7 @@ fn side_middle(side: u32) -> [i32; 3] {
 /// stops once each is ranked past the piece's blocks.
 fn hollow_from(h: u32, p: &Piece, lo: [u32; 3], t: u32) -> u32 {
     let n = 1u32 << (3 * t);
-    if p.blocks >= CELL_BLOCKS {
+    if p.blocks >= CELL_BLOCK_CNT {
         return n;
     }
     let a = side_middle(p.side_in);
@@ -459,7 +459,7 @@ fn hollow_from(h: u32, p: &Piece, lo: [u32; 3], t: u32) -> u32 {
     let mut before = [0u32; 8];
     let mut past = 0;
     let mut o = 0;
-    while o < CELL_BLOCKS && past < n {
+    while o < CELL_BLOCK_CNT && past < n {
         let k = key(a, ab, l, h, o);
         let mut i = 0;
         while i < n {
@@ -482,7 +482,7 @@ fn blocks(node: (Zoom, [i32; 3])) -> u32 {
         let h = holds(node);
         let mut n = h.piece.blocks;
         let mut k = 0;
-        while k < CLASSES {
+        while k < CLASS_CNT {
             n += h.tunnels[k] * BLOCKS_A_TUNNEL[k];
             k += 1;
         }

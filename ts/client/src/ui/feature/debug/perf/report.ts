@@ -27,38 +27,40 @@ const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 const signedBytes = (b: number) =>
   `${b >= 0 ? "+" : ""}${valueText("_bytes", b)}`;
 const bytes = (b: number) => valueText("_bytes", b);
-const percentiles = (s: Percentile) =>
+const percentile = (s: Percentile) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 type RayColumn<K = keyof RayCount> = K extends `eye_${infer C}` ? C : never;
 
-/** The counts are the ones the `ray_cnts` setting collects, which the core
+/** The counts are the ones the `ray_cnt` setting collects, which the core
  * sums over the window's frames. Each observer, the eye and the light, gets one
  * line when it cast in the window. `beam`, `sample` and `hole_walk` are the
  * nodes that its beam rays, its samples and its holes' walks asked per cast,
- * and `asks` is how many of the walks' nodes were asked of the world. `voxel`,
+ * and `ask_cnt` is how many of the walks' nodes were asked of the world. `voxel`,
  * `hole` and `sky` count the pixels or map slots cast again that took the
  * visible voxel, walked on their own, or took the sky, each shown as a share
- * of all its pixels or slots (`rays`). */
+ * of all its pixels or slots (`ray_cnt`). */
 const raysText = (f: RayCount) => {
   const observer = (name: "eye" | "light") => {
     const at = (column: RayColumn) => f[`${name}_${column}`];
     const casts = at("cast");
     if (casts === 0) return [];
     const perCast = (n: number) => n1(n / casts);
-    const rays = at("rays");
+    const rayCount = at("ray_cnt");
     const part = (n: number) =>
-      rays > 0 ? `${fixed((100 * n) / rays, 2)}%` : `${perCast(n)} a cast`;
+      rayCount > 0
+        ? `${fixed((100 * n) / rayCount, 2)}%`
+        : `${perCast(n)} a cast`;
     const again = at("voxel") + at("hole") + at("sky");
     return [
       `  ${name.padEnd(7)} cast in ${casts} frames   nodes a cast: beam ${perCast(
         at("beam"),
       )}  sample ${perCast(at("sample"))}  hole walk ${perCast(
         at("hole_walk"),
-      )} (${perCast(at("asks"))} asked of the world)   cast again ${part(again)}: voxel ${part(at("voxel"))}  hole ${part(
+      )} (${perCast(at("ask_cnt"))} asked of the world)   cast again ${part(again)}: voxel ${part(at("voxel"))}  hole ${part(
         at("hole"),
       )} (${n1(
         at("hole_walk") / Math.max(1, at("hole")),
-      )} nodes each)  sky ${part(at("sky"))}   boxes ${perCast(at("boxes"))} a cast`,
+      )} nodes each)  sky ${part(at("sky"))}   boxes ${perCast(at("box_cnt"))} a cast`,
     ];
   };
   return [...observer("eye"), ...observer("light")];
@@ -78,17 +80,17 @@ function viewText(v: ViewSection, gpuPx: f64): string {
 }
 
 function recordingText(r: RecordingSection): string {
-  if (!r.frames) return "  since   no frame folded";
+  if (!r.frame_cnt) return "  since   no frame folded";
   return `  since   heap max live ${bytes(r.heap_live_max_bytes)}  run ${bytes(
     r.heap_run_max_bytes,
   )}  slot ${bytes(r.heap_slot_max_bytes)}  range ${bytes(
     r.heap_range_max_bytes,
   )}   largest free min ${bytes(
     r.heap_largest_free_min_bytes,
-  )}   refusals ${r.heap_refusals}   body slots peak ${
+  )}   refusals ${r.heap_refusal_cnt}   body slots peak ${
     r.body_slots_peak
-  }   terrain refused ${r.terrain_refusals}   (over the ${
-    r.frames
+  }   terrain refused ${r.terrain_refusal_cnt}   (over the ${
+    r.frame_cnt
   } frames since the recording started)`;
 }
 
@@ -137,8 +139,8 @@ export function frameLine({ sample: s, delta }: Worst): string {
   const d =
     delta === null
       ? ""
-      : `  Δuploads ${signed(delta.uploads)} Δuploads bytes ${signedBytes(
-          delta.uploads_bytes,
+      : `  Δuploads ${signed(delta.upload_cnt)} Δuploads bytes ${signedBytes(
+          delta.upload_bytes,
         )} Δheap used ${signedBytes(delta.heap_used_bytes)}`;
   return `[${n1(s.t).padStart(9)}] ${valueText(
     "kind_name",
@@ -147,7 +149,7 @@ export function frameLine({ sample: s, delta }: Worst): string {
     s.budget_ms,
   )}${s.settled ? " (still)" : ""}  stage ${n1(s.stage_ms)}  perf ${n1(s.perf_ms)}  gpu busy ${
     s.gpu_timed ? n1(s.gpu_busy_ms) : "-"
-  }  draws ${s.draws} tris ${tris(s.triangles)}  uploads ${s.uploads}  heap used ${bytes(
+  }  draws ${s.draw_cnt} tris ${tris(s.triangle_cnt)}  uploads ${s.upload_cnt}  heap used ${bytes(
     s.heap_used_bytes,
   )}${d}`;
 }
@@ -198,22 +200,22 @@ function windowSection(r: PerfReport): string[] {
       last.refresh_ms,
     )} ms   paced ${n1(last.paced_ms)} ms   scale ${fixed(last.scale, 2)}`,
     `  kinds   ${counted(f.kinds)}`,
-    `  interval ${percentiles(f.interval)} ms`,
-    `  tick    ${percentiles(f.tick)} ms   overran ${f.overran}   budget ${n1(
+    `  interval ${percentile(f.interval)} ms`,
+    `  tick    ${percentile(f.tick)} ms   overran ${f.overran}   budget ${n1(
       last.budget_ms,
     )}${last.settled ? " (still)" : ""}   phase p95 ${f.phases
       .map((p) => `${p.name} ${n1(p.p95)}`)
       .join("  ")}`,
-    `  effects ${percentiles(f.effect)} ms   p95 ${
+    `  effects ${percentile(f.effect)} ms   p95 ${
       f.effects_p95
         .filter((e) => e.p95 > 0)
         .map((e) => `${e.name} ${n1(e.p95)}`)
         .join("  ") || "-"
     }`,
-    `  stage   ${percentiles(f.stage)} ms   (the pump and the render)`,
-    `  perf ${percentiles(f.perf)} ms   (its own record and the UI's reads)`,
+    `  stage   ${percentile(f.stage)} ms   (the pump and the render)`,
+    `  perf ${percentile(f.perf)} ms   (its own record and the UI's reads)`,
     f.gpu_timed > 0
-      ? `  gpu     ${percentiles(
+      ? `  gpu     ${percentile(
           f.gpu_busy,
         )} ms busy   (over the ${f.gpu_timed} frames a read timed)`
       : "  gpu     no timestamps: no read landed (no renderer yet, or the device keeps none)",

@@ -4,13 +4,14 @@
 //! the words it hands over as its return data, so the client never reads the
 //! core's memory.
 
-use super::{applied, refuse_unless};
+use super::applied;
+use crate::abi::types::ErrorCode;
 use crate::domain::setting::store::settings;
 use crate::perf::read;
 use crate::perf::record;
 use crate::perf::frame::{FrameSample, WorstFrame};
 use crate::perf::record::{perf_frames, perf_strtab, perf_tasks, perf_worst, STRTAB_CAP};
-use crate::perf::spec::{LIMIT, NOW, RING_NAMES, STAT};
+use crate::perf::spec::{limit, now, stat, RING_NAMES};
 use crate::perf::task::TaskRecord;
 use crate::perf::window::perf_window_start;
 use crate::perf::window::perf_window_stop;
@@ -20,10 +21,14 @@ use xpute_guest::clock::now;
 use xpute_kit::status::errno::Errno;
 
 /// The profiler records only while its setting is on.
-pub(super) fn start() -> Result<(), Errno> {
-    refuse_unless(settings().perf, Errno::EPERM)?;
-    refuse_unless(perf_window_start(), Errno::ENOMEM)?;
-    applied()
+pub(super) fn start() -> Result<Result<(), ErrorCode>, Errno> {
+    if !settings().perf {
+        return Ok(Err(ErrorCode::NotPermitted));
+    }
+    if !perf_window_start() {
+        return Ok(Err(ErrorCode::InsufficientMemory));
+    }
+    applied().map(Ok)
 }
 
 pub(super) fn stop() -> Result<(), Errno> {
@@ -45,8 +50,8 @@ const RINGS: [(fn() -> &'static [u8], usize); RING_NAMES.len()] = [
 ];
 
 // The string table and the statistics are read whole, each in one page.
-const _: () = assert!(STRTAB_CAP <= LIMIT::PAGE_BYTES as usize);
-const _: () = assert!(8 * (STAT::WORDS + NOW::WORDS) <= LIMIT::PAGE_BYTES as usize);
+const _: () = assert!(STRTAB_CAP <= limit::PAGE_BYTES as usize);
+const _: () = assert!(8 * (stat::WORDS + now::WORDS) <= limit::PAGE_BYTES as usize);
 
 thread_local! {
     /// The ring being read, by its number, as it stood at its first page, so
@@ -56,9 +61,9 @@ thread_local! {
 }
 
 /// Answers up to `cnt` records of ring `ring` from its record `from`, no more
-/// than a page holds (LIMIT::PAGE_BYTES), as the ring stood at its first page,
+/// than a page holds (limit::PAGE_BYTES), as the ring stood at its first page,
 /// the one from record 0.
-pub(super) fn rings(ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, Errno> {
+pub(super) fn ring(ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, Errno> {
     let &(read, record) = RINGS.get(ring as usize).ok_or(Errno::EINVAL)?;
     if from == 0 {
         READING.set(Some((ring, read_timed(read))));
@@ -67,7 +72,7 @@ pub(super) fn rings(ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, Errno> {
         let Some((_, b)) = held.as_ref().filter(|(r, _)| *r == ring) else {
             return Err(Errno::EINVAL);
         };
-        let page = LIMIT::PAGE_BYTES as usize / record;
+        let page = limit::PAGE_BYTES as usize / record;
         let n = b.len() / record;
         let from = (from as usize).min(n);
         let to = from + (cnt as usize).min(page).min(n - from);

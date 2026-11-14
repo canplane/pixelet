@@ -43,7 +43,10 @@ fn demand_within_dist() {
     for zoom in MIN_ZOOM..=LEAF_ZOOM {
         for foot in feet(zoom) {
             let n = demands(zoom, foot).len() as u32;
-            assert!(n <= GROUND_DEMAND_TILES, "z{zoom} at {foot:?}: {n} tiles");
+            assert!(
+                n <= GROUND_DEMAND_TILE_CAP,
+                "z{zoom} at {foot:?}: {n} tiles"
+            );
         }
     }
 }

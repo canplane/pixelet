@@ -27,14 +27,14 @@ fn list_word(k: u32) -> u32 {
   return list.words[k - RECTS_AT];
 }
 
-@compute @workgroup_size(LANES)
+@compute @workgroup_size(LANE_CNT)
 fn decor_mark_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let s = id.x;
   let row = clipmap[s];
   if (row.z == 0i) {
     return;
   }
-  let cell_zoom = FIRST_CELL_ZOOM + s / CLIP_ENTRIES;
+  let cell_zoom = FIRST_CELL_ZOOM + s / CLIP_ENTRY_CNT;
   let whole = list_word(LIST_EVERY) != 0u || !generated_for(s, row.xy);
   if (whole) {
     let h = s * HDR_WORDS;
@@ -60,11 +60,11 @@ fn decor_mark_cs(@builtin(global_invocation_id) id: vec3<u32>) {
       if (all >= cap) {
         continue;
       }
-      atomicMax(&list.hdr[GENERATE_ARGS + 2u], workgroups(all + 1u, cap, 1u));
+      atomicMax(&list.hdr[GENERATE_ARGS + 2u], workgroup_cnt(all + 1u, cap, 1u));
       var w = 0u;
       if (whole) {
         let n = atomicAdd(&list.hdr[THIN_CNT], 1u);
-        atomicMax(&list.hdr[THIN_ARGS + 2u], workgroups(n + 1u, cap, 1u));
+        atomicMax(&list.hdr[THIN_ARGS + 2u], workgroup_cnt(n + 1u, cap, 1u));
         w = LIST_AT + n;
       } else {
         w = part_at(atomicAdd(&list.hdr[LIST_PARTS], 1u));

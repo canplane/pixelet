@@ -5,8 +5,8 @@
 //! its kept spans, a run in a pool every brick shares. The host reads each
 //! brick from the core's own memory when it runs the frame.
 
-use pxl_engine::clipmap::{BRICK_WORDS, FRAME_BRICKS, SLOTS, WAYS_POOL_WORDS};
-use pxl_spec::brick::BRICK_CELLS;
+use pxl_engine::clipmap::{BRICK_WORDS, FRAME_BRICK_CAP, SLOT_CNT, WAYS_POOL_WORDS};
+use pxl_spec::brick::BRICK_CELL_CNT;
 use pxl_spec::space::coord::zoom::Zoom;
 use xpute_kit::collection::list::List;
 
@@ -74,7 +74,7 @@ pub(super) struct GroundBuffer {
     /// The bricks this frame handed, by cells' zoom and place. Decor's
     /// generation reads them as the bricks filled this frame
     /// (gpu/generator.rs `Generation::fresh`).
-    pub(super) bricks: List<(Zoom, [i32; 2]), { FRAME_BRICKS as usize }>,
+    pub(super) bricks: List<(Zoom, [i32; 2]), { FRAME_BRICK_CAP as usize }>,
 }
 
 impl GroundBuffer {
@@ -108,26 +108,26 @@ const BRICK_BYTES: u32 = BRICK_WORDS * 4;
 
 /// Every slot's brick in one storage buffer, which the cast's group binds
 /// whole.
-const GROUND_BYTES: u64 = SLOTS as u64 * BRICK_BYTES as u64;
+const GROUND_BYTES: u64 = SLOT_CNT as u64 * BRICK_BYTES as u64;
 const _: () = assert!(
     floor::fits(GROUND_BYTES, true),
     "GROUND_BYTES: the clip levels' bricks bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
 /// A brick's folds: a word for each cell, which packs its four.
-const FOLDS_BRICK_BYTES: u32 = BRICK_CELLS * 4;
+const FOLDS_BRICK_BYTES: u32 = BRICK_CELL_CNT * 4;
 
 /// Every slot's folds in slot order, which the cast reads at a hit
 /// (fold.wgsl). They take a buffer of their own, as the bricks' buffer
 /// would bind past WebGPU's floor with them.
-const FOLDS_BYTES: u64 = SLOTS as u64 * FOLDS_BRICK_BYTES as u64;
+const FOLDS_BYTES: u64 = SLOT_CNT as u64 * FOLDS_BRICK_BYTES as u64;
 const _: () = assert!(
     floor::fits(FOLDS_BYTES, true),
     "FOLDS_BYTES: the bricks' folds bind past WebGPU's floor (frame/shader/floor.rs `fits`)"
 );
 
 impl RayPass {
-    /// Uploads the bricks the core filled: at most `clipmap::FRAME_BRICKS` a
+    /// Uploads the bricks the core filled: at most `clipmap::FRAME_BRICK_CAP` a
     /// frame, and only while the stream has room for each brick's records.
     /// The renderer calls it every frame, whether or not an eye casts, as the
     /// bricks are the terrain's and not an eye's. It runs before the frame's
@@ -148,7 +148,8 @@ impl RayPass {
         gb.bricks.clear();
         (ground.upload)(&mut |q| {
             let recs = 2 + q.run.len();
-            if gb.bricks.len() == FRAME_BRICKS as usize || !room(recs * write_buffer_bytes(&[])) {
+            if gb.bricks.len() == FRAME_BRICK_CAP as usize || !room(recs * write_buffer_bytes(&[]))
+            {
                 return false;
             }
             g.upload_buf(gb.ground, q.slot * BRICK_BYTES, bytes(q.words));

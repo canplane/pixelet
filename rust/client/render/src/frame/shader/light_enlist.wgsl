@@ -9,7 +9,7 @@
 /// (`light::ARGS_WORDS`). The damage pass reads and writes all three together.
 struct Dispatch {
   passes: array<atomic<u32>, LIGHT_ARGS_PASSES>,
-  cnts: array<atomic<u32>, LIGHT_LISTS>,
+  cnts: array<atomic<u32>, LIGHT_LIST_CNT>,
   marks: array<atomic<u32>>,
 }
 
@@ -19,9 +19,9 @@ struct Dispatch {
 /// entry with a square of `across` threads a side, and lays `light::LIST_ACROSS` workgroups in
 /// a row (pxl-engine).
 fn opened(w: u32, e: u32, cap: u32, across: u32) {
-  let per = LIGHT_LIST_ACROSS * LIGHT_LIST_LANES;
+  let per = LIGHT_LIST_ACROSS * LIGHT_LIST_LANE_CNT;
   let square = across * across;
-  atomicMax(&args.passes[w + 1u], workgroups((e + 1u) * square, cap * square, per));
+  atomicMax(&args.passes[w + 1u], workgroup_cnt((e + 1u) * square, cap * square, per));
 }
 
 /// Lists the places of list `which`, `across` a row, that feed damaged tile `t`. Place `p` lies

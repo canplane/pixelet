@@ -54,13 +54,13 @@ use pxl_engine::clipmap::{self, Lookup};
 use pxl_engine::ground::{self, Cell};
 use pxl_engine::object::{child_at, Cut};
 use pxl_engine::world;
+use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::zoom::{units, Zoom, MIN_ZOOM};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use pxl_spec::value::VOID;
 
 use super::change;
 use super::world::World;
@@ -114,7 +114,7 @@ impl World {
             if i.kind == Kind::Cell {
                 i.asset[0]
             } else {
-                VOID
+                Sentinel::Void as u32
             }
         })
     }
@@ -136,13 +136,13 @@ impl World {
     pub(super) fn layer_node(
         &self,
         at: &mut At,
-        zooms: [Zoom; 2],
+        range: [Zoom; 2],
         path: &mut Path,
     ) -> Answer<In<[u32; 2]>> {
-        self.layers(at, zooms, path).0
+        self.layers(at, range, path).0
     }
 
-    /// What the layers answer of `at`'s node, asked over `zooms` (pxl-engine
+    /// What the layers answer of `at`'s node, asked over `range` (pxl-engine
     /// `world::node`), and the ground's bound they read over it, none where
     /// no bound was read. The ground is read as the GPU reads it, off the
     /// clip levels (`clip_read`), down the node's line through the tile cache
@@ -151,14 +151,14 @@ impl World {
     /// The answer (pxl-engine `answer`) is one of three: a split, with its
     /// box in its own steps; the asset of a cell at the zoom asked, void for
     /// air; or, for a node coarser than asked with nothing under it filling,
-    /// air of the node's size, which its zoom against `zooms` tells apart.
+    /// air of the node's size, which its zoom against `range` tells apart.
     /// The four palette indices a cell is drawn by are left to the GPU.
     /// `path` are the ground's lines the asking walk read, and the node's
     /// line steps on from them (`walk_line`).
     pub(super) fn layers(
         &self,
         at: &mut At,
-        zooms: [Zoom; 2],
+        range: [Zoom; 2],
         path: &mut Path,
     ) -> (Answer<In<[u32; 2]>>, Option<ground::Extent>) {
         let lanes = self.object.columns();
@@ -170,10 +170,10 @@ impl World {
             way_pool(),
             &mut at.inheritance,
             at.node,
-            zooms,
+            range,
             [Cut::NONE; 2],
         );
-        (reading.answer(i.kind != Kind::Lacks, || i), reading.relief)
+        (reading.answer(i.kind != Kind::Lack, || i), reading.relief)
     }
 }
 
@@ -204,7 +204,7 @@ impl<'r> GroundRead<'r> {
     /// answer is the missing tile.
     fn answer<T>(&self, found: bool, of: impl FnOnce() -> T) -> Answer<T> {
         match (found, self.missing, self.coarser) {
-            (false, Some(l), _) => Answer::Nothing(l),
+            (false, Some(l), _) => Answer::Lack(l),
             (_, _, Some(l)) => Answer::Coarser(of(), l),
             _ => Answer::Exact(of()),
         }
@@ -218,7 +218,7 @@ impl<'r> GroundRead<'r> {
                 self.coarser.get_or_insert(l);
                 Some(v)
             }
-            Answer::Nothing(l) => {
+            Answer::Lack(l) => {
                 self.missing = Some(l);
                 None
             }
@@ -239,7 +239,7 @@ impl ground::Resident for GroundRead<'_> {
     type Content = Pixelet;
     type Place = Lookup;
     const NOWHERE: Lookup = Lookup::NONE;
-    /// The bound over the node of its cells at the zooms `cells`, off the
+    /// The bound over the node of its cells at the zooms `cell_range`, off the
     /// clip levels, stepped from `place` (pxl-engine
     /// `ground::Resident::relief`). The node's line names the tile that a
     /// lack or a coarser clip level stands for. Where the bound is lacking,
@@ -247,12 +247,17 @@ impl ground::Resident for GroundRead<'_> {
     fn relief(
         &mut self,
         place: &mut Lookup,
-        cells: [Zoom; 2],
+        cell_range: [Zoom; 2],
         (zoom, c): (Zoom, [i32; 3]),
     ) -> (ground::Extent, bool) {
-        let line = TerrainTile::tile_cache().walk_line(self.path, (zoom, [c[0], c[1]]), cells[1]);
-        self.relief =
-            self.take(TerrainTile::tile_cache().relief(&line, place, (zoom, [c[0], c[1]]), cells));
+        let line =
+            TerrainTile::tile_cache().walk_line(self.path, (zoom, [c[0], c[1]]), cell_range[1]);
+        self.relief = self.take(TerrainTile::tile_cache().relief(
+            &line,
+            place,
+            (zoom, [c[0], c[1]]),
+            cell_range,
+        ));
         (
             self.relief.unwrap_or([ground::EMPTY; 2]),
             self.relief.is_some(),

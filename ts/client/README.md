@@ -26,9 +26,9 @@ The UI reaches the core only through `service/core/`, and `service/core/`
 reaches it only by a command's number and its fields, `core.send(Command.X,
 ...)`, typed by a table generated from the core's specification, so a field
 cannot mean one thing on one side and another on the other. The numbers both
-sides read, generated from `spec/` or written beside it, are in `abi/`. A
-release build writes each exported literal where it is read (`babel.config.ts`),
-so the bundle holds a command's number and not its name.
+sides read, generated from `spec/`, are in `abi/`. A release build writes each
+exported literal where it is read (`babel.config.ts`), so the bundle holds a
+command's number and not its name.
 
 ## One app, two kinds of platform
 

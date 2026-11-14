@@ -15,7 +15,7 @@ use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::put_mat;
 use crate::look::environment;
 use crate::param::sky::star::DRAWN_ABOVE;
-use crate::pass::atmosphere::AIR_ENTRIES;
+use crate::pass::atmosphere::AIR_ENTRY_CNT;
 
 const CATALOG: &[u8] = include_bytes!("bright_star.bin");
 
@@ -34,7 +34,7 @@ impl StarPass {
         g: &Gpu,
         pipelines: &mut PipelineCache,
         frame_buf: u32,
-        air: [Entry; AIR_ENTRIES],
+        air: [Entry; AIR_ENTRY_CNT],
     ) -> StarPass {
         let pipeline = pipelines.build_world(g, PIPELINE_STAR);
         let uniform = g.buf(

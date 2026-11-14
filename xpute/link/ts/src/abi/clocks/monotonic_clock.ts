@@ -2,14 +2,19 @@
 //
 // GENERATED from wit/clocks (xpute-link-gen wit.rs)
 
-import { Errno } from "@xpute/kit/status/errno.spec.ts";
+import { Lift } from "../../cabi.ts";
 import {
+  type Handle,
   type Link,
   type LinkObject,
   type Method,
   refusal_of,
-  type Handle,
 } from "../../link.ts";
+import {
+  ERRNO_EBADMSG,
+  ERRNO_EINPROGRESS,
+  ERRNO_ENOSYS,
+} from "@xpute/kit/status/errno.spec.ts";
 
 /** The interface's handle, named by `xpute:clocks/monotonic-clock` (frame.json `NAMED`). */
 export const HANDLE: Handle = 0x73f703;
@@ -21,7 +26,7 @@ export const WAIT_FOR: Method = 1;
 
 export type Mark = bigint;
 
-export interface MonotonicClock {
+export interface Host {
   now(): bigint;
   wait_for(how_long: bigint, signal_: AbortSignal): Promise<void>;
 }
@@ -29,7 +34,7 @@ export interface MonotonicClock {
 /** The object over `imp`. */
 function object(
   l: Pick<Link, "task_return" | "on_cancel">,
-  imp: MonotonicClock,
+  imp: Host,
 ): LinkObject {
   return {
     call(m, tag, args) {
@@ -40,25 +45,26 @@ function object(
             return {
               result: 0,
               data: [
-                1,
+                8,
                 (w) => {
-                  w.u64(v);
+                  w.u64(0, v);
                 },
               ],
             };
           }
           case WAIT_FOR: {
-            if (args === null) return Errno.EBADMSG;
+            if (args === null) return ERRNO_EBADMSG;
+            const r_ = new Lift(args);
             const stop = new AbortController();
-            imp.wait_for(args.at(0).get_u64(), stop.signal).then(
-              () => l.task_return(tag, 0),
+            imp.wait_for(r_.u64(0), stop.signal).then(
+              () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
             l.on_cancel(tag, () => stop.abort());
-            return Errno.EINPROGRESS;
+            return ERRNO_EINPROGRESS;
           }
           default:
-            return Errno.ENOSYS;
+            return ERRNO_ENOSYS;
         }
       } catch (e) {
         return refusal_of(e);
@@ -70,7 +76,7 @@ function object(
 /** Serves `imp` under the interface's handle. */
 export function mount(
   l: Pick<Link, "mount_named" | "task_return" | "on_cancel">,
-  imp: MonotonicClock,
+  imp: Host,
 ): void {
   l.mount_named(HANDLE, object(l, imp));
 }

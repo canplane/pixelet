@@ -53,7 +53,7 @@ enum Mark {
     Shard,
 }
 
-const MARKS: usize = Mark::ALL.len();
+const MARK_CNT: usize = Mark::ALL.len();
 
 impl Mark {
     const ALL: [Mark; 7] = [
@@ -70,21 +70,21 @@ impl Mark {
     fn look(self) -> (Rgb, f32, bool) {
         use gizmo_spec::coverage::*;
         match self {
-            Mark::Drawn => (const { rgb(drawn::rgb) }, drawn::alpha, drawn::dashed),
+            Mark::Drawn => (const { rgb(drawn::RGB) }, drawn::ALPHA, drawn::DASHED),
             Mark::DrawnFromFloor => (
-                const { rgb(drawn_from_floor::rgb) },
-                drawn_from_floor::alpha,
-                drawn_from_floor::dashed,
+                const { rgb(drawn_from_floor::RGB) },
+                drawn_from_floor::ALPHA,
+                drawn_from_floor::DASHED,
             ),
-            Mark::Unbuilt => (const { rgb(unbuilt::rgb) }, unbuilt::alpha, unbuilt::dashed),
+            Mark::Unbuilt => (const { rgb(unbuilt::RGB) }, unbuilt::ALPHA, unbuilt::DASHED),
             Mark::FloorOnly => (
-                const { rgb(floor_only::rgb) },
-                floor_only::alpha,
-                floor_only::dashed,
+                const { rgb(floor_only::RGB) },
+                floor_only::ALPHA,
+                floor_only::DASHED,
             ),
-            Mark::NoTile => (const { rgb(no_tile::rgb) }, no_tile::alpha, no_tile::dashed),
-            Mark::Quadrant => (const { rgb(tile::rgb) }, tile::alpha, tile::dashed),
-            Mark::Shard => (const { rgb(shard::rgb) }, shard::alpha, shard::dashed),
+            Mark::NoTile => (const { rgb(no_tile::RGB) }, no_tile::ALPHA, no_tile::DASHED),
+            Mark::Quadrant => (const { rgb(tile::RGB) }, tile::ALPHA, tile::DASHED),
+            Mark::Shard => (const { rgb(shard::RGB) }, shard::ALPHA, shard::DASHED),
         }
     }
 
@@ -108,7 +108,7 @@ impl Mark {
 }
 
 /// The pieces a dashed stretch is cut into. Every other piece is drawn.
-const DASHES: u32 = 16;
+const DASH_CNT: u32 = 16;
 
 /// A node of the ground's plane: its zoom and its column and row.
 type Node2 = (Zoom, [i32; 2]);
@@ -366,7 +366,7 @@ impl LineMap {
                     .flat_map(|&(a, b, m)| [(a, true, m), (b, false, m)]),
             );
             ends.sort_unstable_by(|x, y| x.0.total_cmp(&y.0));
-            let mut over = [0u32; MARKS];
+            let mut over = [0u32; MARK_CNT];
             let mut from: Option<f64> = None;
             let mut k = 0;
             while k < ends.len() {
@@ -374,7 +374,7 @@ impl LineMap {
                 // Every edge on the line cuts it, so where a coarse edge lies
                 // over finer ones it is drawn in their stretches, following
                 // the ground at the same points they do.
-                if let (Some(f), Some(m)) = (from, (0..MARKS).rev().find(|&m| over[m] > 0)) {
+                if let (Some(f), Some(m)) = (from, (0..MARK_CNT).rev().find(|&m| over[m] > 0)) {
                     stretch(vertices, point(f), point(t), Mark::of_rank(m));
                 }
                 while k < ends.len() && ends[k].0 == t {
@@ -458,7 +458,7 @@ impl LineMap {
 }
 
 fn stretch(vertices: &mut Vec<f32>, a: V3, b: V3, mark: Mark) {
-    let pieces = if mark.is_dashed() { DASHES } else { 1 };
+    let pieces = if mark.is_dashed() { DASH_CNT } else { 1 };
     let at = |t: u32| -> [f32; 3] {
         core::array::from_fn(|i| (a[i] + (b[i] - a[i]) * t as f64 / pieces as f64) as f32)
     };

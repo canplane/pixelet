@@ -29,7 +29,7 @@ fn region_word(r: u32, k: u32) -> u32 {
 /// region, before `decor_cull_cs` runs.
 @compute @workgroup_size(64, 1, 1)
 fn decor_cull_args_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  if (id.x >= REGIONS) {
+  if (id.x >= REGION_CNT) {
     return;
   }
   for (var k = 0u; k < ARGS_WORDS; k += 1u) {
@@ -49,22 +49,22 @@ fn inside(p: vec4<f32>, c: vec3<f32>, r: f32) -> bool {
 fn decor_cull_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   // The regions' ends lie as the compaction leaves them (decor_compact.wgsl), so the region
   // whose list holds the place is the first that ends past it.
-  let last = REGIONS - 1u;
-  if (id.x >= regions[REGIONS + last]) {
+  let last = REGION_CNT - 1u;
+  if (id.x >= regions[REGION_CNT + last]) {
     return;
   }
   var first = 0u;
   var past = last;
   while (first < past) {
     let mid = (first + past) / 2u;
-    if (regions[REGIONS + mid] > id.x) {
+    if (regions[REGION_CNT + mid] > id.x) {
       past = mid;
     } else {
       first = mid + 1u;
     }
   }
   let region = first;
-  let at = DRAWING_COLUMNS * region_word(0u, 4u) + id.x;
+  let at = DRAWING_COLUMN_CNT * region_word(0u, 4u) + id.x;
   let b = damage_rect;
   if (b[0] > b[2] || b[1] > b[3]) {
     return;

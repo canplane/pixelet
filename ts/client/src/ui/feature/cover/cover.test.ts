@@ -2,8 +2,6 @@
 
 import { expect, test } from "vitest";
 
-import { Message } from "@/abi/overlay.ts";
-
 import {
   BOOT_FAILED,
   BOOT_LOADING,
@@ -11,18 +9,26 @@ import {
   BOOT_STARTED,
   BOOT_STARTING,
   BOOT_TERMINATED,
+} from "@/service/sys/boot.ts";
+import {
   GPU_ASKING,
   GPU_INSECURE,
   GPU_MISSING,
   GPU_UNSUPPORTED,
   GPU_PRESENT,
   GPU_WAITING,
+} from "@/service/sys/gpu.ts";
+import {
   SOURCE_ASKING,
   SOURCE_DECLARED,
   SOURCE_FAILING,
   SOURCE_REFUSED,
-} from "@/abi/state.ts";
+} from "@/service/sys/fs/source.ts";
 import { coverOf, type Standing } from "./cover.ts";
+import {
+  MESSAGE_WORLD_READ_FAILING,
+  MESSAGE_WORLD_UNAVAILABLE,
+} from "@/abi/overlay.enum.ts";
 
 const running: Standing = {
   boot: BOOT_STARTED,
@@ -84,7 +90,7 @@ test("coverOf - loading, the world under it: what it waits on, then a panic if b
     [{}, "progress.shaders"],
     [{ progress: 1 }, "progress.area"],
     [{ online: false }, "progress.offline"],
-    [{ stall: Message.WorldReadFailing }, "progress.server"],
+    [{ stall: MESSAGE_WORLD_READ_FAILING }, "progress.server"],
     [{ gpu: GPU_WAITING }, "progress.gpu"],
   ] as const) {
     expect(of(s)).toEqual({
@@ -93,7 +99,7 @@ test("coverOf - loading, the world under it: what it waits on, then a panic if b
       share: expect.any(Number),
     });
   }
-  expect(of({ stall: Message.WorldUnavailable })).toMatchObject({
+  expect(of({ stall: MESSAGE_WORLD_UNAVAILABLE })).toMatchObject({
     kind: "panic",
   });
 });
@@ -103,8 +109,8 @@ test("coverOf - once it shows, a panic or nothing", () => {
   expect(of({})).toBeNull();
   expect(of({ online: false })).toBeNull();
   expect(of({ gpu: GPU_WAITING })).toBeNull();
-  expect(of({ stall: Message.WorldReadFailing })).toBeNull();
-  expect(of({ stall: Message.WorldUnavailable })).toMatchObject({
+  expect(of({ stall: MESSAGE_WORLD_READ_FAILING })).toBeNull();
+  expect(of({ stall: MESSAGE_WORLD_UNAVAILABLE })).toMatchObject({
     kind: "panic",
     code: "WORLD_UNAVAILABLE",
   });
