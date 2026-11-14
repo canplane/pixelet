@@ -56,7 +56,7 @@ void leave() {
 } // namespace
 
 std::uint32_t init(std::uint32_t room, void (*enter)(), bool (*end)()) noexcept {
-    ensure(room % 8 == 0 && room >= link::WORD_SZ, Errno::einval, room);
+    ensure(room % 8 == 0 && room >= link::HDR_SZ, Errno::einval, room);
     if (the_side == nullptr) the_side = new link::Side([](link::Layout l) { return l.inbox + l.room; }, link_out);
     // The layout's two words, then the inbox and the outbox, for as long as
     // the guest runs.

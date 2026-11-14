@@ -50,7 +50,7 @@ use xpute_kit::status::errno::Errno;
 use crate::cabi::{Lift, Lower};
 
 use crate::abi::types::Token;
-use crate::frame::{Frame, WORD_SZ};
+use crate::frame::{Frame, HDR_SZ};
 use crate::mem;
 use crate::resource::Table;
 
@@ -76,7 +76,7 @@ impl<T: Copy + Unpin + 'static> Lend for Vec<T> {
 pub type Tag = u32;
 pub type Method = u32;
 
-pub use crate::frame::spec::{CANCEL, DROP, NAMED, OPEN, ROOT};
+pub use crate::frame::spec::{CANCEL, DROP, NAMED, OPEN, ROOT, TRAP, TRAP_AT};
 
 /// An object a side serves: given a method, the request's tag, for a later
 /// answer (`task_return`), and the args, it answers.
@@ -470,16 +470,16 @@ impl Side {
         let room = self.layout().room;
         let pkt_len = match pkt {
             Packet::Bytes(b) => {
-                if u64::from(WORD_SZ) + b.len() as u64 > u64::from(room) {
+                if u64::from(HDR_SZ) + b.len() as u64 > u64::from(room) {
                     return Err(Errno::EMSGSIZE);
                 }
                 // SAFETY: the frame's room past its words, which only `lay` writes.
-                unsafe { mem::bytes(at + WORD_SZ, b.len() as u32) }.copy_from_slice(b);
+                unsafe { mem::bytes(at + HDR_SZ, b.len() as u32) }.copy_from_slice(b);
                 b.len() as u32
             }
             Packet::Args(Some((fixed_sz, write))) => {
                 // SAFETY: the frame's room past its words, which only `lay` writes.
-                let room = unsafe { mem::bytes(at + WORD_SZ, room - WORD_SZ) };
+                let room = unsafe { mem::bytes(at + HDR_SZ, room - HDR_SZ) };
                 let mut w = Lower::new(room, fixed_sz);
                 write(&mut w);
                 w.finish()? as u32
@@ -542,11 +542,6 @@ impl Side {
 pub fn uri(names: &[&str]) -> Vec<Token> {
     names.iter().map(|n| Token::Str((*n).to_owned())).collect()
 }
-
-/// What a native guest's export answers where the guest panicked, caught at
-/// the export so nothing unwinds into its caller: as a module's trap. The
-/// guest is over, and its host enters it no more.
-pub const TRAP: i32 = i32::MIN;
 
 /// A method's result, its status: answered, or the errno it failed with (a
 /// refusal, or a method's errno where its WIT has no `result`). Its value, if

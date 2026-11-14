@@ -19,7 +19,7 @@ pub(crate) const PUBLICATION: DataSpec = DataSpec {
 };
 
 /// publication.json, written by xpute's generator as a data spec: its
-/// `BASE_LAYER` enum and `FORMAT` keyed on it among the rest. The tool keeps
+/// `BASE_KIND` enum and `FORMAT` keyed on it among the rest. The tool keeps
 /// what is pixelet's own: the object a tile is published as, read and written
 /// by `OBJECT`, and the Worker's copy of the layers' names, bundled apart from
 /// the client.
@@ -27,9 +27,9 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
     const JSON: &str = PUBLICATION.json;
     // The enum of the layers, which the spec declares and whose names the
     // Worker's copy takes too.
-    const LAYER: &str = "BASE_LAYER";
+    const KIND: &str = "BASE_KIND";
     let spec = read(JSON)?;
-    let layer = spec.get(LAYER).ok_or("publication.json: no BASE_LAYER")?;
+    let layer = spec.get(KIND).ok_or("publication.json: no BASE_KIND")?;
     let layers: Vec<&str> = layer.val().arr().unwrap_or_default().iter().filter_map(Node::str).collect();
 
     // A kind's object in a set: the one place its segments are ordered.
@@ -114,7 +114,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
         "/** The base layers, each a kind a baked page is published under. */".into(),
         format!(
             "export const {} = [{}] as const;",
-            plural(LAYER),
+            plural(KIND),
             layers
                 .iter()
                 .map(|k| json_str(k))
@@ -122,7 +122,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
                 .join(", ")
         ),
     ];
-    edge.extend(ts_enum(&pascal(LAYER), &enum_members(LAYER, layer)?));
+    edge.extend(ts_enum(&pascal(KIND), &enum_members(KIND, layer)?));
     // A version is any one segment the declaration names. A name is digits from 0 to 3, one
     // digit for each zoom (pxl-spec space/hierarchy/morton.rs).
     let pattern = object

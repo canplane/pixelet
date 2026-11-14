@@ -9,29 +9,29 @@
 /// The base layers a version is published for, each a kind a baked page is published under.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-pub enum BaseLayer {
+pub enum BaseKind {
     Terrain = 0,
     Place = 1,
     Division = 2,
     Earth = 3,
 }
 
-impl BaseLayer {
+impl BaseKind {
     /// Every member, in its source's own order.
-    pub const ALL: [BaseLayer; 4] = [
-        BaseLayer::Terrain,
-        BaseLayer::Place,
-        BaseLayer::Division,
-        BaseLayer::Earth,
+    pub const ALL: [BaseKind; 4] = [
+        BaseKind::Terrain,
+        BaseKind::Place,
+        BaseKind::Division,
+        BaseKind::Earth,
     ];
 
     /// The member `val` is, or none for a number no member has.
-    pub const fn of(val: u32) -> Option<BaseLayer> {
+    pub const fn of(val: u32) -> Option<BaseKind> {
         match val {
-            0 => Some(BaseLayer::Terrain),
-            1 => Some(BaseLayer::Place),
-            2 => Some(BaseLayer::Division),
-            3 => Some(BaseLayer::Earth),
+            0 => Some(BaseKind::Terrain),
+            1 => Some(BaseKind::Place),
+            2 => Some(BaseKind::Division),
+            3 => Some(BaseKind::Earth),
             _ => None,
         }
     }
@@ -39,10 +39,10 @@ impl BaseLayer {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            BaseLayer::Terrain => "terrain",
-            BaseLayer::Place => "place",
-            BaseLayer::Division => "division",
-            BaseLayer::Earth => "earth",
+            BaseKind::Terrain => "terrain",
+            BaseKind::Place => "place",
+            BaseKind::Division => "division",
+            BaseKind::Earth => "earth",
         }
     }
 }
@@ -50,7 +50,7 @@ impl BaseLayer {
 /// The format each bake writes now, which a published name begins with.
 /// It is bumped by a change to how the client reads a tile, or to what a
 /// tile guarantees it.
-/// By `BaseLayer`'s number.
+/// By `BaseKind`'s number.
 pub const FORMAT: [u32; 4] = [12, 10, 9, 2];
 
 /// What a version is written in: one segment of a tile's URL, with no character it would

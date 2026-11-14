@@ -14,7 +14,7 @@ use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use crate::frame::shelf::PAD;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, place, room, sampler_entry, texture_usage,
-    view_entry, write_buffer_bytes, write_texture_bytes, Format, Gpu, Load,
+    view_entry, write_buffer_sz, write_texture_sz, Format, Gpu, Load,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::text::{Raster, TextOf};
@@ -321,9 +321,9 @@ impl AtlasPainter {
             .map(|r| r.px)
             .chain(icons.iter().map(Vec::as_slice));
         if !room(
-            px.map(write_texture_bytes).sum::<usize>()
-                + write_buffer_bytes(bytes(&size_bytes))
-                + write_buffer_bytes(instance_bytes),
+            px.map(write_texture_sz).sum::<usize>()
+                + write_buffer_sz(bytes(&size_bytes))
+                + write_buffer_sz(instance_bytes),
         ) {
             return None;
         }

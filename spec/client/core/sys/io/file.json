@@ -16,10 +16,10 @@
       "binding (ts/client/src/service/sys/fs/)."
     ],
     "BASE": {
-      "$each": "BaseLayer",
+      "$each": "BaseKind",
       "$doc": [
-        "A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json",
-        "`BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number."
+        "A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json",
+        "`BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number."
       ],
       "ID": "$number",
       "EARTH": {

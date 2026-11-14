@@ -17,7 +17,7 @@
 #include "error.hpp"
 
 #ifndef __wasm__
-#include <csetjmp>
+#include <setjmp.h>
 #endif
 
 namespace xpute {
@@ -47,16 +47,17 @@ template <class T> T or_bug(Result<T> v, Errno errnum, std::source_location at =
 #ifndef __wasm__
 namespace bug_detail {
 // The innermost `caught` on this thread, which a bug returns to.
-std::jmp_buf *&catcher() noexcept;
+sigjmp_buf *&catcher() noexcept;
 } // namespace bug_detail
 
 // Runs `f` and answers what it answers, or `trap` where a bug stopped it. A
-// bug leaves by `longjmp`, so what `f` held is never destroyed: the program
-// it belongs to is over.
+// bug leaves by `siglongjmp`, so what `f` held is never destroyed: the
+// program it belongs to is over. The signal mask is neither saved nor
+// restored, so an entry costs no system call.
 template <class T, class F> T caught(T trap, F &&f) noexcept {
-    std::jmp_buf here;
-    std::jmp_buf *outer = std::exchange(bug_detail::catcher(), &here);
-    if (setjmp(here) != 0) {
+    sigjmp_buf here;
+    sigjmp_buf *outer = std::exchange(bug_detail::catcher(), &here);
+    if (sigsetjmp(here, 0) != 0) {
         bug_detail::catcher() = outer;
         return trap;
     }

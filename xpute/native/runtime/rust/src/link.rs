@@ -8,8 +8,8 @@
 //! into the app as a module is on a page (link.ts `Guest`): its three
 //! exports, as C symbols, and `link_out`, which the guest imports. The
 //! guest's memory is the process's, which the guest set before it laid its
-//! link. A guest that panics answers a trap (xpute-link link.rs `TRAP`), as a
-//! module traps, where its build unwinds: the runtime tells the platform and
+//! link. A guest that stops, a Rust guest's panic or a C++ guest's bug,
+//! answers a trap (frame.json `TRAP`, or `TRAP_AT` from init), as a module traps: the runtime tells the platform and
 //! enters the guest no more, and the UI stays. What differs from the guest's side is
 //! only here: the layout is read from the guest's export, the answers due run
 //! after each piece of the event loop's work (`run_due`), where a page's run
@@ -22,12 +22,12 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 use xpute_link::abi::types::Token;
-use xpute_link::frame::WORD_SZ;
-use xpute_link::{Answer, Args, Handle, Layout, Lower, Method, Object, Packet, Side, Tag, TRAP};
+use xpute_link::frame::HDR_SZ;
+use xpute_link::{Answer, Args, Handle, Layout, Lower, Method, Object, Packet, Side, Tag, TRAP, TRAP_AT};
 use xpute_kit::status::errno::Errno;
 
 unsafe extern "C" {
-    /// Lays the link and answers where its layout lies, or u32::MAX.
+    /// Lays the link and answers where its layout lies, or `TRAP_AT`.
     fn link_init() -> u32;
     /// The guest's first entry, which boots it: 0, or `TRAP`.
     fn link_boot() -> i32;
@@ -81,7 +81,7 @@ pub fn init(report: fn()) -> bool {
     REPORT.set(Some(report));
     // SAFETY: the guest's export, called once, before any other.
     let at = SIDE.with(|s| s.crossed(|| unsafe { link_init() }));
-    if at == u32::MAX {
+    if at == TRAP_AT {
         trap();
         return false;
     }
@@ -140,7 +140,7 @@ pub fn on_cancel(t: Tag, stop: Box<dyn FnOnce()>) {
 
 /// The bytes a frame's packet may take.
 pub(crate) fn pkt_cap() -> u32 {
-    SIDE.with(Side::layout).room - WORD_SZ
+    SIDE.with(Side::layout).room - HDR_SZ
 }
 
 /// Answers the guest's request `t`; while control is in the guest, its packet

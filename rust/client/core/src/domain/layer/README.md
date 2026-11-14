@@ -36,7 +36,7 @@ texels.
 
 The base layers are baked, and a base tile never changes within a version. A
 kind's lattice, zooms and packet bound are one row in pxl-spec (`bake/tile.rs`
-`BaseLayer::row`, `Tile`), which the client and the bake both read.
+`BaseKind::row`, `Tile`), which the client and the bake both read.
 
 **Terrain** (`terrain/`) is the ground. A cell is one byte, its asset id, a
 ground cube of Carto's palette or pixelet's own (`spec/spec/asset/cube.json`),

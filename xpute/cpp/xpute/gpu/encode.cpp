@@ -25,8 +25,8 @@ bool write_buffer(Stream &stream, Id buffer, std::uint32_t offset, std::span<con
     return emit(stream, op::WRITE_BUFFER, [&](auto &s) { buffer_write(s, buffer, offset, bytes); });
 }
 
-std::uint64_t write_buffer_bytes(std::span<const std::uint8_t> bytes) noexcept {
-    return detail::rec_size([&](auto &s) { buffer_write(s, 0, 0, bytes); });
+std::uint64_t write_buffer_sz(std::span<const std::uint8_t> bytes) noexcept {
+    return detail::rec_sz([&](auto &s) { buffer_write(s, 0, 0, bytes); });
 }
 
 bool write_buffer_at(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept {
@@ -46,9 +46,9 @@ bool write_texture(Stream &stream, const TexelCopyTexture &place, std::array<std
     });
 }
 
-std::uint64_t write_texture_bytes(std::span<const std::uint8_t> bytes) noexcept {
+std::uint64_t write_texture_sz(std::span<const std::uint8_t> bytes) noexcept {
     const TexelCopyTexture place{.texture = 0, .mip = 0, .origin = {0, 0, 0}, .aspect = TextureAspect::all};
-    return detail::rec_size([&](auto &s) {
+    return detail::rec_sz([&](auto &s) {
         texture_write(s, place, {0, 0}, {0, 0, 0});
         s.bytes(bytes);
     });

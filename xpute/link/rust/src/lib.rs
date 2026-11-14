@@ -18,5 +18,5 @@ pub mod wait;
 pub use cabi::{Lift, Lower};
 pub use link::{
     answer, uri, Answer, Args, Data, Handle, Layout, Lend, Method, Object, Packet, Reply, Return,
-    Side, Tag, CANCEL, DROP, NAMED, OPEN, ROOT, TRAP,
+    Side, Tag, CANCEL, DROP, NAMED, OPEN, ROOT, TRAP, TRAP_AT,
 };

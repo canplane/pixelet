@@ -7,7 +7,7 @@ use pxl_global::Global;
 use xpute_link::mem;
 
 use crate::frame::shader::record::UPLOAD_LAYOUT;
-use crate::gpu::api::{buf_entry, buffer_usage, release, room, write_buffer_bytes, Gpu, Layout};
+use crate::gpu::api::{buf_entry, buffer_usage, release, room, write_buffer_sz, Gpu, Layout};
 use crate::gpu::draw;
 
 const EMPTY: u32 = 0;
@@ -111,7 +111,7 @@ impl UploadTable {
     /// Puts upload `i` on the device. Returns false, and leaves it missing, when the frame's
     /// stream has no room.
     fn put(&mut self, g: &Gpu, i: usize) -> bool {
-        if !room(write_buffer_bytes(mem(self.at[i], self.len[i] & !3))) {
+        if !room(write_buffer_sz(mem(self.at[i], self.len[i] & !3))) {
             return false;
         }
         // The buffer is also copied from, so the marks keep each upload they read as the
@@ -194,7 +194,7 @@ impl UploadTable {
             return;
         };
         let bytes = len.min(self.len[i].saturating_sub(from)) & !3;
-        if room(write_buffer_bytes(mem(at + from, bytes))) {
+        if room(write_buffer_sz(mem(at + from, bytes))) {
             g.write_buf(buf, from, mem(at + from, bytes));
         } else {
             release(self.group[i]);

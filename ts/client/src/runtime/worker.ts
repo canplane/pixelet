@@ -74,7 +74,7 @@ async function start(m: Instantiate): Promise<void> {
   const gpu = new WebGpu(
     link,
     { power: device.POWER, required_feats: device.REQUIRED_FEATURES, optional_feats: device.OPTIONAL_FEATURES },
-    { upload_chunk_bytes: device.UPLOAD_CHUNK_BYTES, slow_ms: __PERF_DRIVE__ ? LIMIT.SLOW_MS : null },
+    { upload_chunk_sz: device.UPLOAD_CHUNK_BYTES, slow_ms: __PERF_DRIVE__ ? LIMIT.SLOW_MS : null },
     (state) => tell({ kind: "gpu", state }),
   );
   gpu.serve();

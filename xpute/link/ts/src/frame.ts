@@ -13,8 +13,8 @@ import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 
 import { CMD, METHOD_BITS, PKT, RES, RESULT, TAG, WORDS } from "./frame.spec.ts";
 
-/** The bytes a frame's words take, before its packet. */
-export const WORD_SZ: u32 = WORDS * 4;
+/** The size of a frame's words, its header before its packet. */
+export const HDR_SZ: u32 = WORDS * 4;
 
 export interface Frame {
   tag: u32;

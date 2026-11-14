@@ -123,7 +123,7 @@ fn emit(stream: &mut Stream, op: u32, put: &dyn Fn(&mut dyn Sink)) -> bool {
 
 /// This is the room a record takes of a stream, its op and count words
 /// included, counted as `emit` writes it.
-fn rec_size(put: &dyn Fn(&mut dyn Sink)) -> usize {
+fn rec_sz(put: &dyn Fn(&mut dyn Sink)) -> usize {
     let mut count = Count(0);
     put(&mut count);
     (2 + count.0) * WORD
@@ -659,8 +659,8 @@ impl<const N: usize> Gpu<N> {
 
     /// This is the room `shader_module` takes of a stream, for `Stream::fits`,
     /// so that a caller making several modules can ask before each one.
-    pub fn shader_module_bytes(wgsl: &str) -> usize {
-        rec_size(&|s| {
+    pub fn shader_module_sz(wgsl: &str) -> usize {
+        rec_sz(&|s| {
             s.word(0);
             s.bytes(wgsl.as_bytes());
         })
@@ -966,8 +966,8 @@ pub mod call {
 
     /// This is the room `write_buffer` takes of a stream, for `Stream::fits`,
     /// so that a caller can ask once whether several writes fit.
-    pub fn write_buffer_bytes(bytes: &[u8]) -> usize {
-        rec_size(&|s| buffer_write(s, 0, 0, bytes))
+    pub fn write_buffer_sz(bytes: &[u8]) -> usize {
+        rec_sz(&|s| buffer_write(s, 0, 0, bytes))
     }
 
     /// This is `write_buffer`, but the record names the bytes where they lie in
@@ -1007,16 +1007,16 @@ pub mod call {
         })
     }
 
-    /// This is `write_buffer_bytes` for a texture. The room depends on the
+    /// This is `write_buffer_sz` for a texture. The room depends on the
     /// bytes alone, not on the place, layout or size.
-    pub fn write_texture_bytes(bytes: &[u8]) -> usize {
+    pub fn write_texture_sz(bytes: &[u8]) -> usize {
         let place = TexelCopyTexture {
             texture: 0,
             mip: 0,
             origin: [0; 3],
             aspect: TextureAspect::All,
         };
-        rec_size(&|s| {
+        rec_sz(&|s| {
             texture_write(s, &place, [0; 2], [0; 3]);
             s.bytes(bytes);
         })

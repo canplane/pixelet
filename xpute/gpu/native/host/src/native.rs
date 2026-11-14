@@ -161,7 +161,7 @@ pub const fn config(cfg: GpuConfig) -> Config {
         preferred_format: PREFERRED_FORMAT,
         configure_at: CONFIGURE_AT,
         frame_latency: cfg.frame_latency,
-        upload_chunk_bytes: cfg.upload_chunk_bytes,
+        upload_chunk_sz: cfg.upload_chunk_sz,
         slow_ms: cfg.slow_ms,
         present_mode: wgpu::PresentMode::Fifo,
     }

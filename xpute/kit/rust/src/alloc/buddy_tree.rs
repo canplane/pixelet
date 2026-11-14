@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-//! This is the core's page allocator, and `slab.rs` serves anything smaller
+//! This is the guest's page allocator, and `slab.rs` serves anything smaller
 //! than a page from it. It is a port of evanw/buddy-malloc that follows the C
 //! line for line, and departs from it in two places. `update_max_ptr` asks the
 //! `Range` for memory where the C calls `brk`. A block carries no 8-byte header
@@ -58,7 +58,7 @@ struct List {
     next: *mut List,
 }
 
-/// `repr(C)`, because the runtime reads the fields from `base_ptr` through
+/// `repr(C)`, because the host reads the fields from `base_ptr` through
 /// `allocs` in place, in this order (`stat`).
 #[repr(C)]
 struct Heap<S> {
@@ -143,7 +143,7 @@ impl<R: Range> BuddyMalloc<R> {
         unsafe { (*self.heap.get()).live }
     }
 
-    pub fn range_bytes(&self) -> usize {
+    pub fn range_sz(&self) -> usize {
         // SAFETY: single-threaded; see the Sync impl.
         let h = unsafe { &*self.heap.get() };
         h.end_ptr - h.base_ptr
@@ -178,9 +178,9 @@ impl<R: Range> BuddyMalloc<R> {
         unsafe { (*self.heap.get()).allocs as usize }
     }
 
-    /// Where the runtime reads `base_ptr`, `max_ptr`, `end_ptr`, `live`,
+    /// Where the host reads `base_ptr`, `max_ptr`, `end_ptr`, `live`,
     /// `releases` and `allocs` in place, one after another. Their order in
-    /// `Heap` is part of the contract with the runtime.
+    /// `Heap` is part of the contract with the host.
     pub fn stat(&self) -> *const usize {
         // SAFETY: single-threaded; the fields are laid out as the row.
         unsafe { core::ptr::addr_of!((*self.heap.get()).base_ptr) }
@@ -403,12 +403,12 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
             }
 
             let sz = 1usize << (self.max_log2 - bucket);
-            let bytes_needed = if bucket < original_bucket {
+            let need_sz = if bucket < original_bucket {
                 sz / 2 + core::mem::size_of::<List>()
             } else {
                 sz
             };
-            if !self.update_max_ptr(ptr as usize + bytes_needed) {
+            if !self.update_max_ptr(ptr as usize + need_sz) {
                 // SAFETY: the block just came off this bucket's free list.
                 unsafe { self.list_push(bucket, ptr) };
                 return ptr::null_mut();
@@ -429,7 +429,7 @@ impl<S: AsRef<[u8]> + AsMut<[u8]>> Heap<S> {
                 self.flip_parent_is_split(i);
                 let right = self.ptr_for_node(i + 1, bucket);
                 // SAFETY: the right child is free and its bytes were reserved
-                // by `bytes_needed` above.
+                // by `need_sz` above.
                 unsafe { self.list_push(bucket, right) };
             }
 

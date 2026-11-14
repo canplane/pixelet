@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Token;
-use xpute_link::frame::WORD_SZ;
+use xpute_link::frame::HDR_SZ;
 use xpute_link::mem;
 use xpute_link::{Answer, Args, Handle, Layout, Method, Object, Packet, Side, Tag};
 
@@ -58,11 +58,11 @@ macro_rules! link {
             $crate::link::recv()
         }
         // A native guest's exports catch its panic and answer a trap
-        // (`TRAP`, or u32::MAX for init's layout).
+        // (`TRAP`, or `TRAP_AT` for init's layout).
         #[cfg(not(target_arch = "wasm32"))]
         #[unsafe(no_mangle)]
         pub extern "C" fn link_init() -> u32 {
-            $crate::link::caught(u32::MAX, || $crate::link::init($room, $enter, $end))
+            $crate::link::caught($crate::xpute_link::TRAP_AT, || $crate::link::init($room, $enter, $end))
         }
         #[cfg(not(target_arch = "wasm32"))]
         #[unsafe(no_mangle)]
@@ -86,7 +86,7 @@ macro_rules! link {
 /// the link's layout lies: two words, the inbox and a frame's room, then the
 /// inbox and the outbox.
 pub fn init(room: u32, enter: fn(), end: fn() -> bool) -> u32 {
-    xpute_kit::ensure!(room.is_multiple_of(8) && room >= WORD_SZ, EINVAL, room);
+    xpute_kit::ensure!(room.is_multiple_of(8) && room >= HDR_SZ, EINVAL, room);
     let words: &'static mut [u64] = Vec::leak(vec![0; 1 + 2 * room as usize / 8]);
     let at = mem::off(words.as_ptr().cast());
     let inbox = at + 8;

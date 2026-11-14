@@ -1135,7 +1135,7 @@ export function of_CanvasAlphaMode(val: number): CanvasAlphaMode | null {
     : null;
 }
 
-/** GPUFeatureName. The DEVICE record (api.json) reports a device's features as one bit each,
+/** GPUFeatureName. The DEVICE block (api.json) holds a device's features as one bit each,
  * at the member's place. */
 export const FEATURE_NAMES = [
   "depth-clip-control",
@@ -1216,7 +1216,7 @@ export function of_FeatureName(val: number): FeatureName | null {
     : null;
 }
 
-/** The members of GPUSupportedLimits. The DEVICE record (api.json) reports a device's limits
+/** The members of GPUSupportedLimits. The DEVICE block (api.json) holds a device's limits
  * as one word each, at the member's place. */
 export const LIMIT_NAMES = [
   "maxTextureDimension1D",

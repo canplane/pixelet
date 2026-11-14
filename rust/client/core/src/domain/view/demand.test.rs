@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::domain::layer::Base;
-use pxl_spec::bake::publication::BaseLayer;
+use pxl_spec::bake::publication::BaseKind;
 use pxl_spec::bake::tile::{Occupancy, Tile};
 use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::zoom::units;
@@ -21,7 +21,7 @@ static PROBE_TILES: Global<TileCache<Probe>> = Global::new();
 static PROBE: Global<Demand<Probe>> = Global::new();
 
 impl Tile for Probe {
-    const LAYER: BaseLayer = BaseLayer::Earth;
+    const KIND: BaseKind = BaseKind::Earth;
     const LEAF: Zoom = LEAF_ZOOM;
 
     fn occupancy(&self) -> Occupancy {

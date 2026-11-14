@@ -13,7 +13,7 @@ use fnv::FnvHashSet;
 
 use crate::asset::marker::MARK_STEP_CNT;
 use crate::bake::place_theme::{CATEGORIES, DOT_ZOOM, ICON_ZOOM, SYMBOL};
-use crate::bake::publication::BaseLayer;
+use crate::bake::publication::BaseKind;
 use crate::bake::tile::{occupancy_of, Occupancy, StringTable, Tile};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{Zoom, LEAF_ZOOM};
@@ -114,7 +114,7 @@ pub struct SourcePlace<'a> {
 }
 
 impl Tile for PlaceTile {
-    const LAYER: BaseLayer = BaseLayer::Place;
+    const KIND: BaseKind = BaseKind::Place;
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy

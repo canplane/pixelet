@@ -37,7 +37,7 @@ export function forward_console(tell: (m: Log) => void): void {
 }
 
 /** Instantiates the guest's `module` and lays a link over it: its memory
- * grown whole to `mem_bytes` before its first entry, and never after. An
+ * grown whole to `mem_sz` before its first entry, and never after. An
  * instantiation that fails tells its error and answers null. A trap out of
  * any export stops the guest for good (`Link.trap`), as does a failure of the
  * host's own: the page hears it, with the error, and the worker closes, once
@@ -47,7 +47,7 @@ export function forward_console(tell: (m: Log) => void): void {
 export async function instantiate(
   module: string,
   init: RequestInit | undefined,
-  mem_bytes: number,
+  mem_sz: number,
   tell: (m: InstantiateError | Trap) => void,
 ): Promise<Link | null> {
   let link!: Link;
@@ -60,7 +60,7 @@ export async function instantiate(
       },
     );
     x = instance.exports as unknown as Exports;
-    x.memory.grow(Math.ceil((mem_bytes - x.memory.buffer.byteLength) / 65536));
+    x.memory.grow(Math.ceil((mem_sz - x.memory.buffer.byteLength) / 65536));
   } catch (e) {
     tell({ kind: "instantiate_error", err: line(e) });
     return null;

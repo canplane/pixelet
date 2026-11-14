@@ -7,7 +7,7 @@ mod pyramid;
 mod terrain;
 
 use cache::Cache;
-use pxl_spec::bake::publication::BaseLayer;
+use pxl_spec::bake::publication::BaseKind;
 use pxl_spec::bake::tile;
 use pxl_spec::bake::tile::division::DivisionTile;
 use pxl_spec::bake::tile::place::PlaceTile;
@@ -29,19 +29,19 @@ use job::{Limit, Runner};
 /// What the oven does for a kind, one row a kind: the kind, what its tiles
 /// are, the tiles a fold reads and a job's bake.
 struct Row {
-    kind: BaseLayer,
+    kind: BaseKind,
     tile_row: tile::Row,
     sources: fn(Quadrant) -> Vec<Quadrant>,
     execute: fn(Quadrant, &Path, &Path, u64) -> Result<(), String>,
 }
 
 /// None for a kind the oven does not bake, which is the Earth's picture.
-fn row(kind: BaseLayer) -> Option<Row> {
+fn row(kind: BaseKind) -> Option<Row> {
     let (sources, execute): (fn(Quadrant) -> Vec<Quadrant>, _) = match kind {
-        BaseLayer::Terrain => (TerrainTile::sources, terrain::execute as _),
-        BaseLayer::Place => (PlaceTile::sources, place::execute as _),
-        BaseLayer::Division => (DivisionTile::sources, division::execute as _),
-        BaseLayer::Earth => return None,
+        BaseKind::Terrain => (TerrainTile::sources, terrain::execute as _),
+        BaseKind::Place => (PlaceTile::sources, place::execute as _),
+        BaseKind::Division => (DivisionTile::sources, division::execute as _),
+        BaseKind::Earth => return None,
     };
     Some(Row {
         kind,
@@ -100,7 +100,7 @@ impl Server {
         let owner = claim(&base)?;
         let runner = Arc::new(Runner::new(worker_cnt, limit)?);
         // Every kind is pruned and opened before the first failure is told.
-        let datasets: Vec<Result<_, String>> = BaseLayer::ALL
+        let datasets: Vec<Result<_, String>> = BaseKind::ALL
             .into_iter()
             .filter_map(row)
             .map(|row| {
@@ -117,7 +117,7 @@ impl Server {
         })
     }
 
-    pub async fn get(&self, kind: BaseLayer, name: &str) -> Result<Option<Vec<u8>>, Failure> {
+    pub async fn get(&self, kind: BaseKind, name: &str) -> Result<Option<Vec<u8>>, Failure> {
         let Some(data) = self.datasets.iter().find(|d| d.row.kind == kind).cloned() else {
             return Ok(None);
         };

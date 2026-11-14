@@ -26,7 +26,7 @@ use pxl_geo_bake::oven::{
 use pxl_geo_bake::pyramid;
 use pxl_geo_bake::source::{self, OverrideMap};
 use pxl_geo_bake::util::CONTENT_ENCODING;
-use pxl_spec::bake::publication::{tile_object_parts, BaseLayer, FORMAT, TILE_SPHERE};
+use pxl_spec::bake::publication::{tile_object_parts, BaseKind, FORMAT, TILE_SPHERE};
 use pxl_spec::bake::source::is_sharded;
 use pxl_spec::directory;
 use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
@@ -69,11 +69,11 @@ fn bytes_version(bytes: &[u8]) -> String {
 
 /// The version a kind is served under now: for a set, its manifest's digest, which every bake
 /// writes again; for the oven, its folder's token.
-fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
+fn version_of(app: &App, layer: BaseKind) -> Result<String, String> {
     let read = |path: &FsPath| std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()));
     match &app.tile_source {
         _ if !is_sharded(layer) => {
-            read(&app.out.join(BaseLayer::Earth.name()).join(pyramid::MANIFEST)).map(|b| bytes_version(&b))
+            read(&app.out.join(BaseKind::Earth.name()).join(pyramid::MANIFEST)).map(|b| bytes_version(&b))
         }
         TileSource::Shelf(dir) => {
             read(&dir.join(layer.name()).join(pyramid::MANIFEST)).map(|b| bytes_version(&b))
@@ -103,7 +103,7 @@ fn decl(app: &App) -> Result<String, String> {
         match &app.tile_source {
             _ if !is_sharded(l) => Ok(source::Kind {
                 shard: None,
-                ..source::of_set(&app.out.join(BaseLayer::Earth.name()), &version)?
+                ..source::of_set(&app.out.join(BaseKind::Earth.name()), &version)?
             }),
             TileSource::Shelf(dir) => match source::of_set(&dir.join(l.name()), &version)? {
                 k if k.shard.is_some() => Ok(k),
@@ -126,7 +126,7 @@ async fn earth(app: &App, name: &str) -> Response {
     if Quadrant::of_key(name).is_none() && name != TILE_SPHERE {
         return StatusCode::NOT_FOUND.into_response();
     }
-    match fs::read(app.out.join(BaseLayer::Earth.name()).join(name)).await {
+    match fs::read(app.out.join(BaseKind::Earth.name()).join(name)).await {
         Ok(bytes) => tile_response(bytes),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }
@@ -157,7 +157,7 @@ async fn tile(
     };
     // Only what is served now is answered, so nothing is kept under a version that named other
     // bytes.
-    let Some(layer) = BaseLayer::ALL.into_iter().find(|l| l.name() == kind) else {
+    let Some(layer) = BaseKind::ALL.into_iter().find(|l| l.name() == kind) else {
         return StatusCode::NOT_FOUND.into_response();
     };
     if version_of(&app, layer).ok().as_deref() != Some(version) {
@@ -186,7 +186,7 @@ async fn tile(
     }
 }
 
-async fn from_shelf(dir: &std::path::Path, kind: BaseLayer, name: &str) -> Response {
+async fn from_shelf(dir: &std::path::Path, kind: BaseKind, name: &str) -> Response {
     // Only a tile's name reaches the disk; a set's tiles lie flat under them.
     if Quadrant::of_key(name).is_none() {
         return StatusCode::NOT_FOUND.into_response();

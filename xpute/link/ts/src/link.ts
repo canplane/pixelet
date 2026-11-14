@@ -54,7 +54,7 @@ import { XputeError } from "@xpute/kit/status/error.ts";
 import { bug } from "@xpute/kit/status/bug.ts";
 import { Lift, Lower } from "./cabi.ts";
 import { load_Token, store_Token, type Token, TOKEN_ALIGN, TOKEN_SZ } from "./abi/types.ts";
-import { lay, read, WORD_SZ } from "./frame.ts";
+import { lay, read, HDR_SZ } from "./frame.ts";
 import { CANCEL, DROP, NAMED, OPEN, ROOT } from "./frame.spec.ts";
 import { type Handle, Table } from "./resource.ts";
 
@@ -328,7 +328,7 @@ export class Link {
     if (f.res) {
       const a = this._pending.get(f.tag);
       this._pending.delete(f.tag);
-      const data = f.pkt_len > 0 ? this.bytes(at + WORD_SZ, f.pkt_len).slice() : null;
+      const data = f.pkt_len > 0 ? this.bytes(at + HDR_SZ, f.pkt_len).slice() : null;
       if (a !== undefined) queueMicrotask(() => a(f.result, data));
       return 0;
     }
@@ -414,8 +414,8 @@ export class Link {
   /** The args of the frame at `at`, or EBADMSG for a packet past the room. */
   private _args(at: u32, pkt_len: u32): U8Array | null | i32 {
     if (pkt_len === 0) return null;
-    if (WORD_SZ + pkt_len > this._room) return ERRNO_EBADMSG;
-    return this.bytes(at + WORD_SZ, pkt_len);
+    if (HDR_SZ + pkt_len > this._room) return ERRNO_EBADMSG;
+    return this.bytes(at + HDR_SZ, pkt_len);
   }
 
   /** Lays a frame at `at` in the guest's memory, with the packet `args`: 0,
@@ -426,11 +426,11 @@ export class Link {
     const view = new DataView(this._guest.mem, at, this._room);
     let pkt_len = 0;
     if (args instanceof Uint8Array) {
-      if (WORD_SZ + args.length > this._room) return ERRNO_EMSGSIZE;
-      bytes.set(args, WORD_SZ);
+      if (HDR_SZ + args.length > this._room) return ERRNO_EMSGSIZE;
+      bytes.set(args, HDR_SZ);
       pkt_len = args.length;
     } else if (args !== null) {
-      const w = new Lower(bytes.subarray(WORD_SZ), args[0]);
+      const w = new Lower(bytes.subarray(HDR_SZ), args[0]);
       args[1](w);
       pkt_len = w.finish();
       if (pkt_len < 0) return ERRNO_EMSGSIZE;
@@ -457,7 +457,7 @@ export class Link {
     }
     const answered = this._guest.in();
     const f = read(new DataView(this._guest.mem), this._inbox);
-    const data = f.res && !res && f.pkt_len > 0 ? this.bytes(this._inbox + WORD_SZ, f.pkt_len) : null;
+    const data = f.res && !res && f.pkt_len > 0 ? this.bytes(this._inbox + HDR_SZ, f.pkt_len) : null;
     return { result: answered, data };
   }
 }

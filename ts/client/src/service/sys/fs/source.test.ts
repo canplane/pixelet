@@ -4,7 +4,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 
-import { BASE_LAYERS } from "@/abi/publication.spec.ts";
+import { BASE_KINDS } from "@/abi/publication.spec.ts";
 import { decl } from "./source.ts";
 
 /** pxl-spec is tested against the same record (bake/source.test.rs
@@ -25,7 +25,7 @@ function records(): Map<string, string> {
 
 /** A declaration that gives every kind `version` and is valid otherwise. */
 function declaring(version: string): string {
-  const each = <T>(v: T) => Object.fromEntries(BASE_LAYERS.map((k) => [k, v]));
+  const each = <T>(v: T) => Object.fromEntries(BASE_KINDS.map((k) => [k, v]));
   return JSON.stringify({
     min_zoom: 0,
     format: each(0),

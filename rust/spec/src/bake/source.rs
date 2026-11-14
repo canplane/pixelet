@@ -4,7 +4,7 @@
 //! (pxl-geo-bake source.rs) and where it is read (pxl-core sys/io/source.rs):
 //! a declaration one side writes is one the other reads.
 
-use crate::bake::publication::BaseLayer;
+use crate::bake::publication::BaseKind;
 use crate::space::coord::zoom::SHARD_ZOOM;
 use crate::space::layer::quadrant::Quadrant;
 
@@ -28,8 +28,8 @@ pub fn is_version(version: &str) -> bool {
 
 /// Whether a kind is held a shard at a time: the pyramid's kinds are; the Earth's picture,
 /// the sphere's, belongs to no shard.
-pub fn is_sharded(layer: BaseLayer) -> bool {
-    layer != BaseLayer::Earth
+pub fn is_sharded(layer: BaseKind) -> bool {
+    layer != BaseKind::Earth
 }
 
 #[cfg(test)]

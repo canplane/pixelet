@@ -63,8 +63,8 @@ import {
   TILE_PREFIX,
 } from "./route.spec.ts";
 import {
-  BASE_LAYERS,
-  BASE_LAYER_EARTH,
+  BASE_KINDS,
+  BASE_KIND_EARTH,
   TILE_OBJECT,
   TILE_SPHERE,
 } from "./publication.spec.ts";
@@ -72,7 +72,7 @@ import {
 /**
  * The object keys this Worker asks R2 for, told apart by their shape alone.
  *
- * - `<kind>/<object>`: a baked page. The kind is one of `BASE_LAYERS`, and the
+ * - `<kind>/<object>`: a baked page. The kind is one of `BASE_KINDS`, and the
  *   object is laid out under it as spec/spec/bake/publication.json says
  *   (`TILE_OBJECT`). The Earth's picture lies whole beside its tiles
  *   (`TILE_SPHERE`).
@@ -84,9 +84,9 @@ import {
  */
 const SOURCE_KEY = "source";
 
-const KINDS = BASE_LAYERS.join("|");
+const KINDS = BASE_KINDS.join("|");
 const KEY_RE = new RegExp(
-  String.raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|${BASE_LAYERS[BASE_LAYER_EARTH]}\/[^/]+\/${TILE_SPHERE}|asset\/[0-9a-f]{64}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
+  String.raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|${BASE_KINDS[BASE_KIND_EARTH]}\/[^/]+\/${TILE_SPHERE}|asset\/[0-9a-f]{64}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
 );
 
 /** The header in which a cached entry keeps the encoding of its bytes. It

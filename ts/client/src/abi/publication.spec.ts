@@ -7,24 +7,24 @@
 // at boot and script/publish.py writes, so a publish changes nothing here.
 
 /** The base layers a version is published for, each a kind a baked page is published under. */
-export const BASE_LAYERS = ["terrain", "place", "division", "earth"] as const;
+export const BASE_KINDS = ["terrain", "place", "division", "earth"] as const;
 
-export type BaseLayer =
-  | typeof BASE_LAYER_TERRAIN
-  | typeof BASE_LAYER_PLACE
-  | typeof BASE_LAYER_DIVISION
-  | typeof BASE_LAYER_EARTH;
-export const BASE_LAYER_TERRAIN = 0;
-export const BASE_LAYER_PLACE = 1;
-export const BASE_LAYER_DIVISION = 2;
-export const BASE_LAYER_EARTH = 3;
+export type BaseKind =
+  | typeof BASE_KIND_TERRAIN
+  | typeof BASE_KIND_PLACE
+  | typeof BASE_KIND_DIVISION
+  | typeof BASE_KIND_EARTH;
+export const BASE_KIND_TERRAIN = 0;
+export const BASE_KIND_PLACE = 1;
+export const BASE_KIND_DIVISION = 2;
+export const BASE_KIND_EARTH = 3;
 
 /** The member `val` is, or null for a number no member has. */
-export function of_BaseLayer(val: number): BaseLayer | null {
-  return val === BASE_LAYER_TERRAIN ||
-    val === BASE_LAYER_PLACE ||
-    val === BASE_LAYER_DIVISION ||
-    val === BASE_LAYER_EARTH
+export function of_BaseKind(val: number): BaseKind | null {
+  return val === BASE_KIND_TERRAIN ||
+    val === BASE_KIND_PLACE ||
+    val === BASE_KIND_DIVISION ||
+    val === BASE_KIND_EARTH
     ? val
     : null;
 }
@@ -32,7 +32,7 @@ export function of_BaseLayer(val: number): BaseLayer | null {
 /** The format each bake writes now, which a published name begins with.
  * It is bumped by a change to how the client reads a tile, or to what a
  * tile guarantees it.
- * By `BaseLayer`'s number. */
+ * By `BaseKind`'s number. */
 export const FORMAT = [
   12 as number,
   10 as number,

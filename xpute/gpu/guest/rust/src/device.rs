@@ -1,15 +1,8 @@
 // xpute-gpu-guest/device.rs
 
-//! This reads the device's block, laid out by gpu/link/spec/api.json's DEVICE
-//! (`spec::device`). The host writes the block the guest lends it
-//! (gpu/wit/gpu.wit `device.lost`), and the guest reads it. The limits come first, one word
-//! for each name in LIMIT_NAME; the features take one bit for each name in
-//! FEATURE_NAME; the timestamp period is in nanoseconds per tick, as f32 bits;
-//! the surface format the host prefers is an index into TEXTURE_FORMAT; the
-//! host keeps the counts of uncaptured errors and of the guest's unfinished
-//! frames up to date; and STATUS, the last, the host stores with release
-//! after the rest of the block, so a guest that loads READY with acquire sees
-//! the whole block.
+//! This reads the device's block, which the guest lends the host to write
+//! (gpu/wit/gpu.wit `device.lost`), laid out by gpu/link/spec/api.json's
+//! DEVICE (`spec::device`).
 
 use crate::encode::load_acquire;
 use xpute_gpu_link::enums::{FeatureName, LimitName, TextureFormat};

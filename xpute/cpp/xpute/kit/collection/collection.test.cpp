@@ -84,7 +84,7 @@ struct Slot {
     std::uint32_t mark = 0;
 };
 
-// A test runs as an ordinary program, not inside a core, so its arena may
+// A test runs as an ordinary program, not inside a guest, so its arena may
 // take the system's heap.
 using SlotArena = Arena<Slot, std::allocator<Slot>>;
 

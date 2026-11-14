@@ -1495,7 +1495,7 @@ impl CanvasAlphaMode {
     }
 }
 
-/// GPUFeatureName. The DEVICE record (api.json) reports a device's features as one bit each,
+/// GPUFeatureName. The DEVICE block (api.json) holds a device's features as one bit each,
 /// at the member's place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -1589,7 +1589,7 @@ impl FeatureName {
     }
 }
 
-/// The members of GPUSupportedLimits. The DEVICE record (api.json) reports a device's limits
+/// The members of GPUSupportedLimits. The DEVICE block (api.json) holds a device's limits
 /// as one word each, at the member's place.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]

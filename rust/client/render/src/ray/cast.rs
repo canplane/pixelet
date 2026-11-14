@@ -57,7 +57,7 @@ use crate::frame::shader::word::{screen, CELL_SIDE, ROW_LANE_CNT, SQUARE_SIDE};
 use crate::gpu::api;
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, frame_entries, release, view_entry, word_bytes,
-    write_buffer_bytes, Entry, Gpu, Layout, RenderContext,
+    write_buffer_sz, Entry, Gpu, Layout, RenderContext,
 };
 use crate::gpu::draw::ReceiverBox;
 use crate::gpu::generator::{
@@ -714,7 +714,7 @@ impl RayPass {
             let written_bytes = |lane: &[u32]| {
                 o.written_groups
                     .iter()
-                    .map(|&f| write_buffer_bytes(bytes(child_group(lane, f))))
+                    .map(|&f| write_buffer_sz(bytes(child_group(lane, f))))
                     .sum::<usize>()
             };
             if c.object_revision == Some(o.since)

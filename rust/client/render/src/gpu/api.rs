@@ -1034,15 +1034,15 @@ pub fn frame_commit() -> bool {
 use pxl_spec::asset;
 /// The stream bytes a write takes, as its writer measures them. A caller sums them over the
 /// writes it makes together and asks `room` before making them.
-pub use xpute_gpu_guest::encode::call::{write_buffer_bytes, write_texture_bytes};
+pub use xpute_gpu_guest::encode::call::{write_buffer_sz, write_texture_sz};
 
 /// The stream bytes a shader module of `code` takes (`Gpu::shader`). Its maker asks `room`
 /// for them before making it.
 pub fn shader_bytes(code: &str) -> usize {
-    Encoder::<OBJECT_CAP>::shader_module_bytes(code)
+    Encoder::<OBJECT_CAP>::shader_module_sz(code)
 }
 
-/// Whether records of `bytes` in all (`write_buffer_bytes`, `write_texture_bytes`,
+/// Whether records of `bytes` in all (`write_buffer_sz`, `write_texture_sz`,
 /// `shader_bytes`) fit the stream while leaving `stream::RESERVE` for records that cannot
 /// wait.
 pub fn room(bytes: usize) -> bool {

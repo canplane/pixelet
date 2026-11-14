@@ -157,20 +157,6 @@ impl Header<'_> {
         format!("_rt::{name}")
     }
 
-    /// xpute:link's `lent`, the record a lent buffer crosses as, reached
-    /// through `_rt` where its package's C++ is.
-    fn lent(&self) -> Result<String, String> {
-        let (_, dir) = self
-            .externs
-            .iter()
-            .find(|(p, _)| p == "xpute:link")
-            .ok_or(format!("{}: xpute:link is written in no C++", self.g.at()))?;
-        self.library.borrow_mut().insert(format!("{dir}/types.hpp"));
-        let ns = "::xpute::abi::link::types";
-        self.uses.borrow_mut().entry(ns.into()).or_default().insert("Lent".into());
-        Ok("_rt::Lent".into())
-    }
-
     /// An errno's member, as a method's result.
     fn errno(&self, e: &str) -> String {
         self.include("cstdint");
@@ -784,7 +770,7 @@ impl Header<'_> {
             let lend: String = if lents.is_empty() {
                 String::new()
             } else {
-                let ty = self.lent()?;
+                let ty = self.rt_use(LINK, "Lent");
                 let span = self.rt_use(LINK, "span");
                 lents.iter().map(|l| format!("    {ty} {l}_lent_ = {span}({l});\n")).collect()
             };

@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::util::{pack, Level};
-use pxl_spec::bake::publication::BaseLayer;
+use pxl_spec::bake::publication::BaseKind;
 use pxl_spec::bake::tile::{Occupancy, Tile};
 use pxl_spec::directory;
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
@@ -12,10 +12,10 @@ use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 struct Count<const PLACE: bool>(u32);
 
 impl<const PLACE: bool> Tile for Count<PLACE> {
-    const LAYER: BaseLayer = if PLACE {
-        BaseLayer::Place
+    const KIND: BaseKind = if PLACE {
+        BaseKind::Place
     } else {
-        BaseLayer::Terrain
+        BaseKind::Terrain
     };
 
     fn occupancy(&self) -> Occupancy {
@@ -99,7 +99,7 @@ fn fold_to_coarsest() {
 struct Unencodable(u32);
 
 impl Tile for Unencodable {
-    const LAYER: BaseLayer = BaseLayer::Place;
+    const KIND: BaseKind = BaseKind::Place;
 
     fn occupancy(&self) -> Occupancy {
         Occupancy::of_slots([true; 4])

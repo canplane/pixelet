@@ -77,7 +77,7 @@ pub struct Config {
     /// This is the size of one chunk of the staging belt, chosen as large as a
     /// frame's writes; a larger write is staged across several chunks. The
     /// belt holds one chunk more than the frame latency.
-    pub upload_chunk_bytes: u64,
+    pub upload_chunk_sz: u64,
     /// A record, a run or a completion's landing slower than this is said
     /// (`GpuConfig::slow_ms`); with none, nothing is timed.
     pub slow_ms: Option<u32>,
@@ -192,7 +192,7 @@ impl GpuHost {
         let cache = cache_dir.and_then(|dir| Cache::open(&adapter, &device, dir));
         GpuHost {
             adapter,
-            belt: Belt::new(&device, cfg.upload_chunk_bytes, cfg.frame_latency + 1),
+            belt: Belt::new(&device, cfg.upload_chunk_sz, cfg.frame_latency + 1),
             device,
             queue,
             names: EnumTable::new(),

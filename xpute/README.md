@@ -2,20 +2,23 @@
 
 xpute is a foreign function interface for the compiled part of a program. The
 program's **guest**, its compiled code, and xpute's **host**, which runs it,
-meet in four things: a calling convention over three host functions, which pass
-frames laid in the guest's memory; bindings that a generator writes for both
-ends from the program's protocols, as WIT's tools do; the turn, the one call
-that gives the guest its time; and the GPU stream, a command buffer the guest
-records and the host runs, which moves large data while that memory stays fixed.
-The guest owns nothing but its memory, and the host implements only the device
-that lends it across turns, the GPU. Everything else belongs to the
-**program**, and it travels over one general channel whose messages xpute
-delivers and does not interpret.
+meet in four things: a calling convention of one host function and three guest
+exports, which pass frames laid in the guest's memory; bindings that a generator
+writes for both ends from the program's interfaces in WIT, as WIT's tools do;
+the entry, the only time the guest runs, when its host enters it; and the GPU
+stream, a command buffer the guest records and the host runs, which moves large
+data while that memory stays fixed. The guest owns nothing but its memory. xpute
+declares the few interfaces every guest shares with its host, its clocks, its
+files, its stop and its app's life, and the host implements the clocks, the stop
+and the one device that lends that memory, the GPU. Everything else belongs to
+the **program**, and it travels over the same link, whose frames xpute delivers
+and does not interpret.
 
 The same guest runs as a WebAssembly module in a web page and as a library
-linked into an iOS or Android app, while the program's JavaScript does the I/O
-and draws the UI around it. xpute is both ends of that arrangement, the guest's
-library and the host, and `kit`, the generic code beneath them.
+linked into an iOS or Android app, while the program does the I/O and its
+JavaScript draws the UI around it. xpute is both ends of that arrangement, the
+guest's library and the host, the **runtime** the host runs in on each platform,
+and `kit`, the generic code beneath them.
 
 ## Why one interface
 
@@ -26,67 +29,128 @@ platform. Every crossing costs time, and together the crossings become the
 program's real interface, scattered through glue code.
 
 xpute replaces those crossings with one memory that both sides share and one
-kind of message, a frame, laid in that memory. Into the guest goes one call that
-runs a turn, and the number it returns says when the guest wants its next turn.
-Out of the guest go four functions, the same on every platform: one that hands
-it the next frame waiting for it, one that takes a frame it sends, a call
-answered before it returns, and the host's clock. What a frame says is the
-program's, so no binding is written for any one piece of work.
+kind of message, a frame, laid in that memory: one method of an object, called
+under the object's handle. Into the guest go three exports: `link_init`, which
+lays its link and answers where the link lies, `link_boot`, its first entry,
+and `link_in`, which enters it with a frame laid in its inbox, a request or an
+answer. Out of the guest goes one function, `link_out`, the same on every
+platform, which takes a frame laid in its outbox and returns at once what the
+method came to: its result, or `EINPROGRESS` for a method that answers later,
+in a frame of its own. Each method is declared in WIT and its bindings are
+generated, so no binding is written by hand for any one piece of work.
 
-The host gives the guest only its memory, its turns, a clock and the device
-that lends the memory, and the guest decides everything else. Because
-that is all the host gives, the same guest runs unchanged in a page, on a
-phone and in a test.
+The host gives the guest only its memory, its entries, the clocks, the stop and
+the device that lends the memory, and the guest decides everything else.
+Because that is all the host gives, the same guest runs unchanged in a page, on
+a phone and in a test.
 
 ## The guest, the host and the program
 
 A program built on xpute has three parts.
 
 - The **guest** is the program's compiled code, linked with xpute's guest
-  library into one image. It runs only inside a turn, and everything it says to
-  the world it writes into its memory.
-- The **host** is xpute's TypeScript, `@xpute/runtime`. It reserves the
-  guest's memory and lays out its front, runs each turn and reads what the turn
-  sent. The GPU is a plugin, `@xpute/gpu`.
-- The **program** is everything else the app decides: what its commands mean,
-  when its turns should run, and its UI.
+  library into one image. It runs only inside an entry, and everything it says
+  to the world it writes into its memory.
+- The **host** serves the guest the clocks and the stop under their
+  interfaces' handles, `@xpute/web-host` on a page and `xpute-native-host` on a
+  device, and the GPU, which is a plugin. It runs in a runtime, the platform's
+  environment. On a page that is `@xpute/web-runtime`, which instantiates the
+  guest's module in a worker, grows its memory whole before its first entry
+  and lays the host's link over it; on a device it is `xpute-native-runtime`,
+  which runs the guest linked into the app on a thread of its own, and
+  `@xpute/native-runtime`, the Expo module that starts it.
+- The **program** is everything else the app decides: its interfaces and what
+  their methods do, and its UI, which reaches the guest's link from another
+  thread: over a port on a page (`Remote`), and through the native module on a
+  device.
 
 ```text
   ┌────────────────────────────────────────────────────────────────┐
   │ the guest: the program's code, built on xpute's guest library. │
   │ It owns one memory, where every frame is laid, and it runs     │
-  │ only inside run(deadline).                                     │
+  │ only inside an entry.                                          │
   └───────────┬─────────────────────────────────┬──────────────────┘
               ▲                                 │
-              │ receive:                        │ send:
-              │ what the guest is sent          ▼ what the guest says
+              │ link_in:                        │ link_out:
+              │ a frame for the guest           ▼ a frame it sends
   ┌───────────┴─────────────────────────────────┴──────────────────┐
-  │ the host: lays out the memory, runs each turn, and routes      │
-  │ each frame by the major of its command                         │
+  │ the host's link: enters the guest, and routes each frame by    │
+  │ the handle in its command to the object served under it        │
   └───────────┬─────────────────────────────────┬──────────────────┘
-              │ majors 0x00 to 0x0F             │ majors 0x10 and up
-    xpute's own                             the program: its handlers
-                                            and its UI, which xpute
-                                            does not read
+              │ the host's own                  │ the program's
+    the clocks, the stop,                   its objects, its files
+    the GPU                                 among them, and its UI's,
+                                            which xpute does not read
 ```
 
-Each frame carries a command and a packet, in the Component Model's
-Canonical ABI layout (`link/rust/src/cabi.rs`, `link/ts/src/cabi.ts`,
-`cpp/xpute/link/cabi.hpp`).
-The high byte of a command's number is its major, and
-xpute delivers a program's frame by that major and reads nothing of what it
-says.
+Each frame is four words, its tag, its command, its result and its packet's
+length, and the packet past them, in the Component Model's Canonical ABI layout
+(`link/rust/src/cabi.rs`, `link/ts/src/cabi.ts`, `cpp/xpute/link/cabi.hpp`).
+The command carries the handle of the object called and the method's number,
+and xpute delivers a program's frame by that handle and reads nothing of what
+it says.
 
 ## How a program uses it
 
+### Its interfaces
+
+A program declares its interfaces in WIT, as xpute declares its own under
+`wit/` and `gpu/wit/`, and `xpute-link-gen` writes their bindings for each side
+in Rust, TypeScript and C++. The guest serves what its world exports and calls
+what it imports. A Rust guest defines its three exports with one macro, over
+frames of a room it chooses, and mounts what it serves as it boots; here it
+serves xpute's `life`, which is called as the app is hidden and shown:
+
+```rust
+use std::rc::Rc;
+use xpute_guest::abi::life;
+use xpute_kit::status::errno::Errno;
+
+struct Program;
+
+impl life::Guest for Program {
+    fn hidden(&self) -> Result<(), Errno> { /* save */ Ok(()) }
+    fn shown(&self) -> Result<(), Errno> { Ok(()) }
+}
+
+xpute_guest::link!(4096, || life::mount(Rc::new(Program)), || {}, || false);
+```
+
+### On a page
+
+The page opens the guest's worker and sends it the module to instantiate. The
+worker instantiates it, mounts what the host serves and serves the link to the
+UI across the port, and only then enters the guest. `LATER` is generated with
+the program's bindings, the methods the UI serves that answer later, and
+`taker` takes what the UI gives beside the link, a canvas (see the GPU below):
+
+```ts
+// The worker, given the page's `Instantiate`, m.
+const link = await instantiate(m.module, m.init, MEM_SZ, tell);
+if (link === null) return;
+serve_stop(link, (stop) => tell({ kind: "stopped", stop }));
+hook(link);
+serve_clock(link);
+serve(m.port, link, m.named, LATER, taker);
+link.init();
+
+// The page.
+const { worker, remote, port } = open_worker(WORKER_URL);
+const ask = { kind: "instantiate", module: MODULE_URL, init: undefined };
+worker.postMessage({ ...ask, port, named: remote.named }, [port]);
+tell_life(remote);
+```
+
 ### On a device, and in C++
 
-A native app installs `@xpute/native`, the React Native module, which Expo
-autolinks, and names its guest crate in its `package.json` under `xpute.guest`.
-The app builds that crate for the device as it builds, and the module links it:
-a static library at `$PODS_CONFIGURATION_BUILD_DIR/Xpute/lib<crate>.a` on an
-iPhone, and a shared one among the app's `jniLibs` on Android.
-The app's bundler takes each `x.native.ts` in place of `x.ts`.
+A native app installs `@xpute/native-runtime`, the React Native module, which
+Expo autolinks, and names in its `package.json` under `xpute.guest.runtime` the
+crate a device links: its guest with the runtime the app composes around it
+from `xpute-native-runtime` and `xpute-native-host`. The app builds that crate
+for the device as it builds, and the module links it: a static library at
+`$PODS_CONFIGURATION_BUILD_DIR/Xpute/lib<crate>.a` on an iPhone, and a shared
+one among the app's `jniLibs` on Android. The app's bundler takes each
+`x.native.ts` in place of `x.ts`.
 
 A C++ guest takes xpute's library as two files, as SQLite ships its own: it
 includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with no exceptions,
@@ -97,114 +161,98 @@ no RTTI and no floating-point contraction, the flags `cpp/Makefile` builds with.
 
 ### The GPU
 
-The GPU is a plugin: `xpute-gpu` on the guest's side, with its wgpu host behind
-the `runtime` feature, and `@xpute/gpu` on the host's. A guest that draws gives
-its manifest a stream and says what it asks of the device:
+The GPU is a plugin, declared in WIT as xpute's own packages are
+(`gpu/wit/`): the guest imports `gpu`, which runs the records it lends and
+gives it a device, and `vsync`, which answers at the display's next frame, and
+it serves `surface`, which the UI opens to draw on. On the guest's side the
+plugin is `xpute-gpu-guest`, which writes WebGPU's calls as records of a
+stream; on the host's it is `@xpute/gpu-web-host` on WebGPU and
+`xpute-gpu-native-host` on wgpu. A guest draws a frame only while fewer of its
+frames are unfinished on the GPU than its frame latency
+(`xpute_gpu_guest::admit::frame`), so taking a surface's texture never blocks.
 
-```json
-{
-  "stream": { "bytes": 4194304 },
-  "gpu": {
-    "power": "high-performance",
-    "features": { "required": [], "optional": [] }
-  }
-}
-```
-
-The generator writes `GPU_ASK` beside `MANIFEST`, and the crate defines its
-guest through the plugin's macro, which also defines `admit_frame`, whether the
-GPU takes a frame now. The GPU's commands reach the program as any other,
-numbered by minors under a major the program chooses from its own, so its turn
-asks the plugin's generated `apply` with that major, and its UI names the same
-major (`gpu_exports`, `gpu_grant`):
-
-```rust
-xpute_gpu::core!(MANIFEST, FIXED_BYTES, entry, CONFIG, GPU_ASK);
-
-impl xpute_gpu::abi::Exports for Program {
-    fn gpu_ready(&mut self) -> Outcome { /* a device answered */ }
-    fn gpu_surface_open(&mut self) -> Outcome { /* a surface lent */ }
-    // ... _resize, _close
-}
-
-Event::Program(cmd, pkt) if cmd >> 8 == GPU_MAJOR => {
-    xpute_gpu::abi::apply(&mut program, GPU_MAJOR, cmd, &pkt)
-}
-```
-
-On a page, `after_turn` runs the stream as each turn returns. The worker grants
-the GPU what the host holds, with the program's settings for the page's host
-(`GpuConfig`), and a port of the app's carries the GPU's state up and the
-canvases down. A page's host stages its buffer writes in mapped chunks of
-`upload_chunk_bytes`, as a device's does. `slow_ms` has the hosts say a record
-of the stream, the stream's run, a completion's landing or the guest's turn
-slower than that many milliseconds; on a page the guest's host takes it in its
-config as well, and null, `None` or none times none:
+On a page the worker serves the GPU on the guest's link with what the guest
+asks of the device (`GpuAsk`, WebGPU's power preference and features) and the
+program's settings for the host (`GpuConfig`), and hears what the page has of
+a GPU (`GpuState`). The UI opens a surface and gives its canvas beside the link
+under the surface's handle, and the worker's `serve` hands the canvas to the
+GPU. A page's host stages its buffer writes in mapped chunks of
+`upload_chunk_sz`, as a device's does. `slow_ms` has the hosts say a record
+of the stream, the stream's run or a completion's landing slower than that
+many milliseconds, and null, or `None`, times none:
 
 ```ts
-// The config, where the guest runs.
-{ after_turn: () => gpu.after_turn(), /* ... */ }
-
-// The worker.
-const gpu = new WebGpu();
-serve(MANIFEST, core).then((runtime) =>
-  gpu_grant(gpu, runtime, MANIFEST, GPU_MAJOR, {
-    upload_chunk_bytes: 1 << 20,
-    slow_ms: null,
-  }),
+// The worker, before `serve` and `link.init()`.
+serve_vsync(link);
+const gpu = new WebGpu(
+  link,
+  { power: "high-performance", required_feats: [], optional_feats: [] },
+  { upload_chunk_sz: 1 << 20, slow_ms: null },
+  (state) => tell({ kind: "gpu", state }),
 );
-gpu_serve(port, gpu);
+gpu.serve();
+const taker = {
+  give: (h: Handle, canvas: unknown) => gpu.bind(h, canvas as OffscreenCanvas),
+  take: (h: Handle) => gpu.unbind(h),
+};
 
 // The page.
-const binder = gpu_connect(port, (state) => show(state));
-binder.bind(handle, canvas);
+const surface = await open(remote, uri("xpute:gpu", "surface"));
+remote.give(surface, canvas.transferControlToOffscreen());
 ```
 
-On a device the GPU's host runs the stream itself and opens the device when
-the guest asks, and `@xpute/gpu-native-runtime`'s module holds the view a
-surface draws into (`SurfaceView`) and drives the display's frames.
+On a device `xpute-gpu-native-host` runs in the app's own process and opens
+the device when the guest asks, with the program's `GpuConfig`, its frame
+latency among it (`native::config`), and `@xpute/gpu-native-runtime`'s module
+gives the view a guest's surface draws into (`SurfaceView`) and drives the
+display's frames.
 
 ### The packages
 
-In TypeScript the parts are `@xpute/kit`, `@xpute/runtime`, `@xpute/gpu` and
-`@xpute/native`, and in Rust they are the crates `xpute-kit`, `xpute-core`
-and `xpute-gpu`, with the generators `xpute-gen` and `xpute-link-gen`. Each carries
-what a registry asks. A program beside this tree lists the packages in its pnpm workspace and depends on them as
-`workspace:*`, and it names the crates by `path`. `@xpute/native` is an optional
-peer of `@xpute/runtime` and `@xpute/gpu`, so a program that runs only on a page
-installs neither React Native nor Expo. Each TypeScript package is its
-own source: its `package.json` maps a path under the package's name to the file
-under `src/`, and the files use only syntax that strips to JavaScript, so a
-bundler or Node's type stripping takes them with no build.
+In TypeScript the parts are `@xpute/kit`, `@xpute/link`, `@xpute/web-runtime`,
+`@xpute/web-host`, `@xpute/native-runtime`, `@xpute/gpu-link`,
+`@xpute/gpu-web-host` and `@xpute/gpu-native-runtime`, and in Rust they are the
+crates `xpute-kit`, `xpute-link`, `xpute-guest`, `xpute-native-runtime`,
+`xpute-native-host`, `xpute-gpu-link`, `xpute-gpu-guest` and
+`xpute-gpu-native-host`, with the generators `xpute-gen` and `xpute-link-gen`.
+Each carries what a registry asks. A program beside this tree lists the
+packages in its pnpm workspace and depends on them as `workspace:*`, and it
+names the crates by `path`. React Native and Expo are peers of the two native
+modules alone, so a program that runs only on a page installs neither. Each
+TypeScript package is its own source: its `package.json` maps a path under the
+package's name to the file under `src/`, and the files use only syntax that
+strips to JavaScript, so a bundler or Node's type stripping takes them with no
+build.
 
 ## Where to read next
 
-- [ARCHITECTURE.md](./ARCHITECTURE.md) follows the same claim through each part,
-  the memory, the turn, the devices and the languages, and ends
-  with the invariants every end keeps and a map of the code.
-- `spec/` is the contract itself: the header, the frame and the stream,
-  from which every language's numbers are generated.
+- [ARCHITECTURE.md](./ARCHITECTURE.md) follows the same claim through the
+  device that lends the memory and the languages, and ends with xpute's
+  boundaries, what it took from earlier work and a map of the code.
+- Each part's `spec/` is the contract itself: the link's frame (`link/spec/`),
+  the GPU stream's records (`gpu/link/spec/`) and the errno table
+  (`kit/spec/`), from which every language's numbers are generated. The
+  interfaces are WIT, under `link/wit/`, `wit/` and `gpu/wit/`.
 - [XTP's README](./kit/ts/src/wire/xtp/README.md) describes XTP, the tree
-  format of files, tiles, and the native host's batches to a UI on the
-  JavaScript thread.
+  format of the native runtime's batches to a UI on the JavaScript thread.
 
 ## Running it
 
-xpute builds with Node at the version `ts/.tool-versions` names, with pnpm;
-rustup, which installs the toolchain `rust/rust-toolchain.toml` names; a C++20
-compiler, as `c++` or `$CXX`; GNU Make; and, for the C++ guest built as a
-module, the [WASI SDK](https://github.com/WebAssembly/wasi-sdk) at
-`/opt/wasi-sdk` or `$WASI_SDK_PATH`.
+xpute builds with Node at the version `.tool-versions` names, with pnpm; rustup,
+which installs the toolchain `rust-toolchain.toml` names; a C++20 compiler, as
+`c++` or `$CXX`; GNU Make; and the
+[WASI SDK](https://github.com/WebAssembly/wasi-sdk) at `/opt/wasi-sdk` or
+`$WASI_SDK_PATH`, with which the C++ tests compile the library for wasm32.
+Each command runs from xpute's root.
 
 ```sh
-(cd ts && pnpm install)             # ts/'s packages
-(cd rust && cargo spec --write)     # the files generated from spec/, written
-(cd rust && cargo clippy --workspace --all-targets -- -D warnings)
-(cd rust && cargo test --workspace)
-(cd rust && cargo test-gpu)         # the GPU host on wgpu
-(cd ts && pnpm check && pnpm test)
-make -C cpp -j8 check test          # the C++ compiled, its tests, its guests
-(cd ts && pnpm test:gpu:web)        # the GPU host in Chrome ($CHROME)
+pnpm install                        # the TypeScript packages
+cargo spec --write                  # the generated files, written
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace              # the GPU host's on a wgpu adapter too
+pnpm check && pnpm test
+make -C cpp -j8 check test          # the C++ compiled, its tests, wasm32
+pnpm test:gpu:web                   # the GPU host in Chrome ($CHROME)
 ```
 
 ## License

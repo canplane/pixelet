@@ -21,7 +21,7 @@ pub(crate) mod ui;
 
 use pxl_render::spec::api::device;
 use xpute_gpu_guest::admit;
-use xpute_link::frame::WORD_SZ;
+use xpute_link::frame::HDR_SZ;
 
 /// Whether this is a build made for measuring: `PXL_PERF_DRIVE=1` where it is
 /// compiled, read as the page's build reads it (ts/client babel.config.ts).
@@ -40,7 +40,7 @@ pub(crate) fn admit_frame() -> bool {
 // A frame's room holds its words and the largest packet the core lays
 // (link/bound.rs).
 xpute_guest::link!(
-    link::bound::PKT_CAP + WORD_SZ,
+    link::bound::PKT_CAP + HDR_SZ,
     link::boot,
     link::enter,
     link::end

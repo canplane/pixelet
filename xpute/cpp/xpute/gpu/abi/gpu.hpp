@@ -12,7 +12,6 @@
 #include "xpute/guest/link.hpp"
 #include "xpute/guest/wait.hpp"
 #include "xpute/kit/status/error.hpp"
-#include "xpute/link/abi/types.hpp"
 #include "xpute/link/cabi.hpp"
 #include "xpute/link/link.hpp"
 #include "xpute/link/wait.hpp"
@@ -21,11 +20,11 @@ namespace xpute::abi::gpu::gpu {
 
 namespace _rt {
 using ::xpute::Result;
-using ::xpute::abi::link::types::Lent;
 using ::xpute::guest::call;
 using ::xpute::guest::wait;
 using ::xpute::link::Handle;
 using ::xpute::link::Lend;
+using ::xpute::link::Lent;
 using ::xpute::link::Lift;
 using ::xpute::link::Lower;
 using ::xpute::link::Method;
