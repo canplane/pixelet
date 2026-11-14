@@ -5,9 +5,9 @@
 import type { Lift, Lower } from "../../cabi.ts";
 import {
   type Handle,
-  type Link,
   type LinkObject,
   type Method,
+  type Side,
   refusal_of,
 } from "../../link.ts";
 import { ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
@@ -73,7 +73,7 @@ function object(implementation: Host): LinkObject {
 
 /** Serves `implementation` under the interface's handle. */
 export function mount(
-  l: Pick<Link, "mount_named">,
+  l: Pick<Side, "mount_named">,
   implementation: Host,
 ): void {
   l.mount_named(HANDLE, object(implementation));

@@ -179,10 +179,9 @@ pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let zoom = |k: &str, f: &str| -> Result<String, String> {
         match rows.get(k).and_then(|r| r.get(f)) {
             None => Ok("0".into()),
-            Some(z) => z
-                .num()
-                .filter(|z| (1.0..=31.0).contains(z) && z.fract() == 0.0)
-                .map(|z| format!("{z}"))
+            Some(z) => u32_of(z)
+                .filter(|z| (1..=31).contains(z))
+                .map(|z| z.to_string())
                 .ok_or(format!("{theme_json}: {k}.{f} is not a zoom")),
         }
     };

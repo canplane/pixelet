@@ -49,12 +49,12 @@ export function KeyboardAway({
     return false;
   };
   return (
-    <View onStartShouldSetResponderCapture={on_touch} style={styles.fill}>
+    <View onStartShouldSetResponderCapture={on_touch} style={STYLE.fill}>
       {children}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   fill: { flex: 1 },
 });

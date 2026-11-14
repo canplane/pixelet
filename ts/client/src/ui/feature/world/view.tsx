@@ -59,7 +59,7 @@ function BetweenChrome({ children }: { children: ReactNode }) {
   const top = useChromeTop() + CHROME.control + PANEL_GAP_PX;
   const bottom =
     bottom_rest(useSafeArea(), CHROME.inset) + DOCK_HEIGHT + PANEL_GAP_PX;
-  return <View style={[styles.between, { top, bottom }]}>{children}</View>;
+  return <View style={[STYLE.between, { top, bottom }]}>{children}</View>;
 }
 
 function Overlays() {
@@ -69,7 +69,7 @@ function Overlays() {
     <>
       <TopOverlays />
       <AboveKeyboard inset={CHROME.inset}>
-        <BusyDim style={styles.bottom}>
+        <BusyDim style={STYLE.bottom}>
           <Dock />
         </BusyDim>
       </AboveKeyboard>
@@ -79,7 +79,7 @@ function Overlays() {
 
 export function WorldView() {
   return (
-    <View style={[StyleSheet.absoluteFill, styles.root]}>
+    <View style={[StyleSheet.absoluteFill, STYLE.root]}>
       <ToastController />
       <BetweenChrome>
         <Corner />
@@ -102,7 +102,7 @@ export function WorldView() {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   root: { overflow: "hidden", backgroundColor: COLOR.black },
   between: {
     position: "absolute",

@@ -40,20 +40,20 @@ export function Accordion({
 }) {
   const open = store((s) => s.open === name);
   return (
-    <View style={styles.panel}>
+    <View style={STYLE.panel}>
       <Pressable
         onPress={() => toggle(name)}
         accessibilityRole="button"
         aria-expanded={open}
       >
-        <View style={styles.title}>
-          <Text style={[GAUGE.text, styles.title_text]}>
+        <View style={STYLE.title}>
+          <Text style={[GAUGE.text, STYLE.title_text]}>
             {title}
             {note !== undefined && (
-              <Text style={styles.note_text}>{` · ${note}`}</Text>
+              <Text style={STYLE.note_text}>{` · ${note}`}</Text>
             )}
           </Text>
-          <View style={styles.end}>
+          <View style={STYLE.end}>
             {open && end}
             {open ? (
               <CaretUpIcon size={12} color={HINT_INK} />
@@ -68,7 +68,7 @@ export function Accordion({
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   panel: {
     ...CORNER_PANEL,
     flexShrink: 1,

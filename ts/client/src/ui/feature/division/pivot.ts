@@ -15,11 +15,11 @@ export function useDivisionLabel(): string | null {
 }
 
 export function usePivotCoordinate(): string | null {
-  return useCore((s) => s.pivot.lon_lat && coord_label(s.pivot.lon_lat));
+  return useCore((s) => s.pivot.lon_lat && coordinate_label(s.pivot.lon_lat));
 }
 
 /** Four decimals of a degree are about eleven meters. */
-function coord_label({ lat, lon }: LonLat): string {
+function coordinate_label({ lat, lon }: LonLat): string {
   return `${fixed(Math.abs(lat), 4)}° ${lat < 0 ? "S" : "N"}, ${fixed(
     Math.abs(lon),
     4,

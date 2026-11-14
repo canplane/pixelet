@@ -12,7 +12,7 @@ import {
 } from "@/ui/shared/setting.ts";
 import { Section, SettingChoiceRow, SettingGroup, SettingRow } from "./row.tsx";
 import { useCore } from "@/ui/shared/watch.ts";
-import { set as setSetting } from "@/service/core/setting.ts";
+import { set as set_setting } from "@/service/core/setting.ts";
 
 const SECTION_ICONS: Partial<Record<SettingSection, GlyphName>> = {
   display: "eye",
@@ -66,7 +66,7 @@ function SettingControl(props: { name: SettingName }) {
           label={t(`${base}.label`)}
           description={t(`${base}.description`)}
           active={value === 1}
-          onChange={(on) => setSetting(key, on ? 1 : 0)}
+          onChange={(on) => set_setting(key, on ? 1 : 0)}
           cost={cost}
           dev={dev}
         />
@@ -92,7 +92,7 @@ function SettingControl(props: { name: SettingName }) {
                   label={t(`${base}.${option}.label`)}
                   description={t(`${base}.${option}.description`)}
                   selected={value === number}
-                  onSelect={() => setSetting(key, number)}
+                  onSelect={() => set_setting(key, number)}
                   cost={("costs" in setting ? setting.costs[i] : "") || cost}
                   dev={dev_only}
                 />

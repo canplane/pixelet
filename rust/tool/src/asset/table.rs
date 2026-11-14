@@ -10,7 +10,7 @@ use crate::spec::mark;
 pub struct Row {
     pub path: String,
     pub key: String,
-    pub bytes: u64,
+    pub bytes: u32,
     pub extent: Option<[f64; 3]>,
 }
 
@@ -108,29 +108,37 @@ pub fn render_json(rows: &[Row], pack: &Pack, symbols: &[String]) -> String {
         "order of their masks, which numbers each from 1.",
     ]
     .join("\n");
-    // A token whose value is a list, one item a line, under `key`, at `pad`.
-    let list = |out: &mut String, pad: &str, key: &str, items: Vec<String>| {
+    // A token whose value is a list, one item a line, under `key`, at `pad`,
+    // typed `ty` where its items hold numbers.
+    let list = |out: &mut String, pad: &str, key: &str, items: Vec<String>, ty: Option<&str>| {
         let _ = writeln!(out, "{pad}{key}: {{\n{pad}  $value: [");
         for i in items {
             let _ = writeln!(out, "{pad}    {i},");
         }
-        let _ = writeln!(out, "{pad}  ],\n{pad}}},");
+        let _ = writeln!(out, "{pad}  ],");
+        if let Some(ty) = ty {
+            let _ = writeln!(out, "{pad}  $type: {ty:?},");
+        }
+        let _ = writeln!(out, "{pad}}},");
     };
     let mut out = String::with_capacity(rows.len() * 200);
     let _ = writeln!(out, "{{\n  $description: {},\n  files: {{\n    $value: [", string(&doc));
     for r in rows {
         let _ = writeln!(out, "      {{\n        path: {},\n        key: {},\n        bytes: {},", string(&r.path), string(&r.key), r.bytes);
-        if let Some(e) = r.extent {
-            let _ = writeln!(out, "        extent: [{}, {}, {}],", e[0], e[1], e[2]);
+        match r.extent {
+            Some(e) => {
+                let _ = writeln!(out, "        extent: {{ $value: [{}, {}, {}], $type: \"f64\" }},", e[0], e[1], e[2]);
+            }
+            None => out.push_str("        extent: null,\n"),
         }
         out.push_str("      },\n");
     }
-    out.push_str("    ],\n  },\n  pack: {\n");
+    out.push_str("    ],\n    $type: \"u32\",\n  },\n  pack: {\n");
     let _ = writeln!(out, "    image: {{ $value: {} }},", string(&pack.image));
-    let _ = writeln!(out, "    cell: {{ $value: {} }},", pack.cell);
-    let _ = writeln!(out, "    columns: {{ $value: {} }},", pack.columns);
-    list(&mut out, "    ", "tiles", pack.tiles.iter().map(|t| string(t)).collect());
-    list(&mut out, "    ", "means", pack.means.iter().map(|m| format!("[{}, {}, {}]", m[0], m[1], m[2])).collect());
+    let _ = writeln!(out, "    cell: {{ $value: {}, $type: \"u32\" }},", pack.cell);
+    let _ = writeln!(out, "    columns: {{ $value: {}, $type: \"u32\" }},", pack.columns);
+    list(&mut out, "    ", "tiles", pack.tiles.iter().map(|t| string(t)).collect(), None);
+    list(&mut out, "    ", "means", pack.means.iter().map(|m| format!("[{}, {}, {}]", m[0], m[1], m[2])).collect(), Some("u8"));
     list(
         &mut out,
         "    ",
@@ -139,9 +147,10 @@ pub fn render_json(rows: &[Row], pack: &Pack, symbols: &[String]) -> String {
             .iter()
             .map(|f| format!("[{}, {}, {}, {}]", string(&f.group), string(&f.ty), string(f.face.name()), f.tile))
             .collect(),
+        Some("u32"),
     );
     out.push_str("  },\n");
-    list(&mut out, "  ", "symbols", symbols.iter().map(|s| string(s)).collect());
+    list(&mut out, "  ", "symbols", symbols.iter().map(|s| string(s)).collect(), None);
     out.push_str("}\n");
     out
 }

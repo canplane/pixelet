@@ -20,7 +20,7 @@ interface CardPose {
   rest: { translateY: f64; scale: f64 };
   above: { translateY: f64 };
   fade: f64;
-  z_idx: u32;
+  z_index: u32;
 }
 
 /** `peek` is how far each card behind shows past the one in front of it. */
@@ -30,7 +30,7 @@ export function card_pose(depth: u32, peek: f64): CardPose {
     rest: { translateY: depth * peek, scale: SCALE[shown] },
     above: { translateY: peek * FROM_ABOVE },
     fade: depth <= DEPTH ? OPACITY[depth] : 0,
-    z_idx: DEPTH + 1 - Math.min(depth, DEPTH + 1),
+    z_index: DEPTH + 1 - Math.min(depth, DEPTH + 1),
   };
 }
 

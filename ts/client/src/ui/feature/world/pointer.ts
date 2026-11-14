@@ -33,8 +33,8 @@ import * as input from "@/service/core/input.ts";
 const pressed = new Map<i32, PointerType>();
 
 watch_dock_mode((mode) => {
-  input.typing(mode === DockMode.Message);
-  if (mode === DockMode.Message)
+  input.typing(mode === DockMode.MESSAGE);
+  if (mode === DockMode.MESSAGE)
     input.pointer(POINTER_PHASE_OUT, POINTER_TYPE_MOUSE, 0, 0, 0, 0);
 });
 
@@ -46,14 +46,14 @@ export function world_pointer(
   x: f64,
   y: f64,
 ): void {
-  const typing = dock_mode() === DockMode.Message;
+  const typing = dock_mode() === DockMode.MESSAGE;
   switch (phase) {
     case POINTER_PHASE_DOWN:
       // Sent while the core still types, so it spends the press (INPUT_TYPING).
       pressed.set(id, pointer_type);
       put_keyboard_away();
       input.pointer(phase, pointer_type, id, button, x, y);
-      if (typing) set_dock_mode(DockMode.Palette);
+      if (typing) set_dock_mode(DockMode.PALETTE);
       return;
     case POINTER_PHASE_MOVE:
       if (typing && !pressed.has(id)) return;

@@ -3,7 +3,7 @@
 /** iOS gates the compass behind a permission prompt, which must be raised
  * inside a gesture. */
 
-import { coords_fix, geo_fix, listener } from "./sensor-listener.ts";
+import { coords_fix, geolocation_fix, listener } from "./sensor-listener.ts";
 import type { GeolocationSensor, OrientationSensor } from "./types.ts";
 
 interface IosOrientationEvent extends DeviceOrientationEvent {
@@ -25,17 +25,17 @@ function orient_gated(): boolean {
   );
 }
 
-let geo_watch: number | null = null;
+let geolocation_watch: number | null = null;
 
-function geo_stop(): void {
-  if (geo_watch !== null) navigator.geolocation.clearWatch(geo_watch);
-  geo_watch = null;
+function geolocation_stop(): void {
+  if (geolocation_watch !== null) navigator.geolocation.clearWatch(geolocation_watch);
+  geolocation_watch = null;
 }
 
-function geo_start(): void {
-  if (geo_watch !== null || !("geolocation" in navigator)) return;
-  geo_watch = navigator.geolocation.watchPosition(
-    (pos) => geo_fix(coords_fix(pos.coords)),
+function geolocation_start(): void {
+  if (geolocation_watch !== null || !("geolocation" in navigator)) return;
+  geolocation_watch = navigator.geolocation.watchPosition(
+    (pos) => geolocation_fix(coords_fix(pos.coords)),
     (err) => {
       // A watch keeps trying through POSITION_UNAVAILABLE and TIMEOUT, and ends
       // only on PERMISSION_DENIED (https://www.w3.org/TR/geolocation/#watchposition-method).
@@ -43,7 +43,7 @@ function geo_start(): void {
       // failure until a fix lands.
       switch (err.code) {
         case err.PERMISSION_DENIED:
-          geo_stop();
+          geolocation_stop();
           listener.pos_err("denied", false);
           break;
         case err.POSITION_UNAVAILABLE:
@@ -119,17 +119,17 @@ function orient_permit(): Promise<boolean> {
   if (!orient_gated() || orient_event !== null) return Promise.resolve(true);
   const prompt = (DeviceOrientationEvent as IosOrientationEventCtor)
     .requestPermission!();
-  listener.permission("orientation", "asking");
+  listener.permission("orient", "asking");
   return prompt.then(
     (permission) => {
       const granted = permission === "granted";
       if (granted) orient_listen("deviceorientation");
-      listener.permission("orientation", granted ? "granted" : "denied");
+      listener.permission("orient", granted ? "granted" : "denied");
       return granted;
     },
     (err) => {
       console.error("[sensor] orientation permission error:", err);
-      listener.permission("orientation", "failed");
+      listener.permission("orient", "failed");
       return false;
     },
   );
@@ -147,8 +147,8 @@ export const GEOLOCATION: GeolocationSensor = {
   // The watch raises the browser's prompt itself, wherever the browser still
   // asks. A page cannot open the browser's settings.
   permit: () => Promise.resolve(true),
-  start: geo_start,
-  stop: geo_stop,
+  start: geolocation_start,
+  stop: geolocation_stop,
 };
 export const ORIENT: OrientationSensor = {
   has: orient_has(),

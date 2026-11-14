@@ -10,7 +10,8 @@ import java.nio.ByteBuffer
  * native library, which the module's build names (build.gradle). The runtime
  * runs on the guest's thread; each call posts its task there and returns. It
  * tells of a batch, a stop and a trap through the static callbacks below,
- * which it calls from its threads, attached to the VM as daemons.
+ * which it calls from its threads, attached to the VM as daemons, and a stop
+ * and a trap again from each start after them (xpute.h `xpute_start`).
  * It takes nothing of React Native's; the Expo module (XputeModule.kt) is one
  * app's way to reach it.
  */
@@ -24,19 +25,21 @@ object Runtime {
   external fun init()
 
   /** Starts the runtime on the guest's thread, once a process; each call is a
-   * new UI on it, as a reload's (xpute.h `xpute_start`). */
-  external fun start(named: IntArray, prefixes: ByteArray, filesDir: String, cacheDir: String)
+   * new UI on it, as a reload's, and answers its generation (xpute.h
+   * `xpute_start`). */
+  external fun start(named: IntArray, prefixes: ByteArray, filesDir: String, cacheDir: String): Int
 
-  /** Sends the UI's method `m` of the guest's object `h` (xpute.h
-   * `xpute_post`); null `pkt` for none. */
-  external fun post(tag: Int, h: Int, m: Int, pkt: ByteArray?)
+  /** Sends the method `m` of the guest's object `h` of the UI of
+   * `generation` (xpute.h `xpute_post`); null `pkt` for none. */
+  external fun post(generation: Int, tag: Int, h: Int, m: Int, pkt: ByteArray?)
 
-  /** Answers the request `tag` the runtime sent the UI (xpute.h
-   * `xpute_answer`); null `data` for none. */
-  external fun answer(tag: Int, result: Int, data: ByteArray?)
+  /** Answers the request `tag` the runtime sent the UI of `generation`
+   * (xpute.h `xpute_answer`); null `data` for none. */
+  external fun answer(generation: Int, tag: Int, result: Int, data: ByteArray?)
 
-  /** Hands over the batch the UI has not taken (xpute.h `xpute_take`). */
-  external fun take(): ByteArray
+  /** Hands over the batch the UI of `generation` has not taken (xpute.h
+   * `xpute_take`). */
+  external fun take(generation: Int): ByteArray
 
   /** The guest's memory, a direct buffer over its whole region. */
   external fun mem(): ByteBuffer

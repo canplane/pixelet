@@ -40,9 +40,9 @@ export function ButtonStack({
     <Backing
       fill={isActive ? SURFACE.chosen.fill : COLOR.ground}
       tint={isActive ? SURFACE.chosen.glass : undefined}
-      place={BackingPlace.OverMap}
+      place={BackingPlace.OVER_MAP}
       interactive
-      style={[styles.capsule, isActive && styles.chosen]}
+      style={[STYLE.capsule, isActive && STYLE.chosen]}
     >
       {items.map((item) => (
         <Pressable
@@ -53,7 +53,7 @@ export function ButtonStack({
           accessibilityRole="button"
           accessibilityLabel={item.label}
           accessibilityState={{ disabled: item.disabled }}
-          style={styles.item}
+          style={STYLE.item}
         >
           {({ pressed }) => (
             <Motion
@@ -82,7 +82,7 @@ export function ButtonStack({
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   capsule: {
     width: CHROME.control,
     borderRadius: CHROME.control / 2,

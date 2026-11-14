@@ -18,7 +18,7 @@ import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { Bug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import { ComponentError, type Link } from "@xpute/link";
+import { ComponentError, type Side } from "@xpute/link";
 import * as file from "@xpute/link/abi/fs/file.ts";
 import { ERROR_CODE_IO } from "@xpute/link/abi/fs/types.enum.ts";
 
@@ -41,7 +41,7 @@ function aborted(signal: AbortSignal): Promise<never> {
 }
 
 /** The file at `p`, over the core's memory `link` lends. */
-function open(link: Pick<Link, "bytes">, p: Path): file.HostFile {
+function open(link: Pick<Side, "bytes">, p: Path): file.HostFile {
   const b = binding();
   const abort = new AbortController();
   const opened = Promise.resolve().then(() => b.open(p, abort.signal));
@@ -103,7 +103,7 @@ function open(link: Pick<Link, "bytes">, p: Path): file.HostFile {
 
 /** Mounts an opener at each node atop file.json5's `path` tree. */
 export function serve_files(
-  link: Pick<Link, "bytes" | "mount" | "task_return" | "on_cancel">,
+  link: Pick<Side, "bytes" | "mount" | "task_return" | "on_cancel">,
 ): void {
   for (const node of Object.values(path)) {
     const id = (node as { ID?: number }).ID;

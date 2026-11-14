@@ -52,6 +52,8 @@ class PlatformModule : Module() {
 
     Function("storage_get") { key: String -> preferences().getString(key, null) }
 
+    Function("storage_keys") { preferences().all.keys.toList() }
+
     Function("storage_set") { key: String, value: String ->
       preferences().edit().putString(key, value).apply()
     }
@@ -94,7 +96,7 @@ class PlatformModule : Module() {
       // in the screen's pixels.
       Prop("clearance") { view: KeyboardDock, clearance: Double -> view.clearance = view.px(clearance) }
       Prop("rest") { view: KeyboardDock, rest: Double -> view.rest = view.px(rest) }
-      Prop("layoutLift") { view: KeyboardDock, layoutLift: Double -> view.layoutLift = view.px(layoutLift) }
+      Prop("layoutLiftPx") { view: KeyboardDock, layoutLiftDp: Double -> view.layoutLift = view.px(layoutLiftDp) }
     }
   }
 

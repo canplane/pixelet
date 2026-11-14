@@ -424,15 +424,18 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             if f == "$description" || f == "number" {
                 continue;
             }
+            // A field's value, its `$description` the schema's alone.
+            let v = match v {
+                Node::Obj(t) if v.is_wrapper() => Node::Obj(t.iter().filter(|(k, _)| k != "$description").cloned().collect()),
+                v => v.clone(),
+            };
             let val = match f.as_str() {
                 "options" => Node::Obj(
-                    options_of(s)?
-                        .into_iter()
-                        .map(|(o, n)| (o, Node::Num(n as f64)))
+                    std::iter::once(("$type".to_string(), Node::Str("u32".into())))
+                        .chain(options_of(s)?.into_iter().map(|(o, n)| (o, Node::Num(f64::from(n)))))
                         .collect(),
                 ),
-                "default" => v.val().clone(),
-                _ => v.clone(),
+                _ => v,
             };
             match out.iter_mut().find(|(k, _)| k == f) {
                 Some(slot) => slot.1 = val,
@@ -453,7 +456,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         String::new(),
         format!(
             "export const SETTING = {} as const;",
-            ts_literal(&table(&|_| true)?, "f64", "")?
+            ts_literal(table(&|_| true)?, "")?
         ),
     ]);
     ts.extend([
@@ -462,7 +465,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             .into(),
         format!(
             "export const SETTING_PROD = {} as const;",
-            ts_literal(&table(&|s| !s.dev)?, "f64", "")?
+            ts_literal(table(&|s| !s.dev)?, "")?
         ),
     ]);
 

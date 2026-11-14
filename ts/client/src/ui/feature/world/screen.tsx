@@ -6,13 +6,13 @@ import { WorldView } from "@/ui/feature/world/view.tsx";
 
 function WorldScreen() {
   return (
-    <View style={styles.screen}>
+    <View style={STYLE.screen}>
       <WorldView />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   screen: { flex: 1, width: "100%", alignItems: "center" },
 });
 

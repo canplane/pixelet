@@ -18,7 +18,7 @@ import UIKit
 /// the transform is only ever the part of the lift that the layout has not
 /// taken yet. Once the keys have arrived, the view reports the lift
 /// (`onLift`). The UI then lays the view out that much higher and reports it
-/// back (`layoutLift`), and the transform falls to zero. At rest, the view is
+/// back (`layoutLiftPx`), and the transform falls to zero. At rest, the view is
 /// where the layout says it is. The view takes no touch itself; only what
 /// stands on it does.
 class KeyboardDock: ExpoView {

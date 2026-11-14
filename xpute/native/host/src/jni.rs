@@ -4,7 +4,9 @@
 //! under the names JNI looks for, as the `external` functions of the Kotlin
 //! class `xpute.Runtime` (`jni_abi!`), and what the app hears as calls of its
 //! static `onNotify()`, `onStopped(…)` and `onTrap()`, from the threads
-//! that tell it, each attached to the VM for good as a daemon.
+//! that tell it, a thread the runtime made attached to the VM for good as a
+//! daemon, and a stop and a trap again from the Java thread of a start after
+//! them (native.rs `start`).
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -126,12 +128,12 @@ pub unsafe fn dir(e: *mut JNIEnv, s: jstring) -> PathBuf {
     }
 }
 
-/// The batch the UI has not taken, as a Java `byte[]`.
+/// The batch the UI of `generation` has not taken, as a Java `byte[]`.
 ///
 /// # Safety
 /// `e` is what JNI called with.
-pub unsafe fn take(e: *mut JNIEnv) -> jbyteArray {
-    let b = xpute_native_runtime::remote::take();
+pub unsafe fn take(e: *mut JNIEnv, generation: u32) -> jbyteArray {
+    let b = xpute_native_runtime::remote::take(generation);
     // SAFETY: JNI's own calls; the array is the caller's local reference.
     unsafe {
         let j = env(e);
@@ -154,9 +156,10 @@ pub unsafe fn mem(e: *mut JNIEnv) -> jobject {
 /// Exports the runtime and its host to JNI for the Kotlin class
 /// `xpute.Runtime`, which `native_abi!` expands on Android: `init()`,
 /// `start(named: IntArray, prefixes: ByteArray, filesDir: String, cacheDir:
-/// String)`, `post(tag: Int, h: Int, m: Int, pkt: ByteArray?)`, `answer(tag:
-/// Int, result: Int, data: ByteArray?)`, `take(): ByteArray`, `mem():
-/// ByteBuffer` and `life(shown: Boolean)`.
+/// String): Int`, which answers the UI's generation, `post(generation: Int,
+/// tag: Int, h: Int, m: Int, pkt: ByteArray?)`, `answer(generation: Int, tag:
+/// Int, result: Int, data: ByteArray?)`, `take(generation: Int): ByteArray`,
+/// `mem(): ByteBuffer` and `life(shown: Boolean)`.
 #[macro_export]
 macro_rules! jni_abi {
     ($start:path) => {
@@ -181,13 +184,13 @@ macro_rules! jni_abi {
             prefixes: ::xpute_native_runtime::jni::sys::jbyteArray,
             files_dir: ::xpute_native_runtime::jni::sys::jstring,
             cache_dir: ::xpute_native_runtime::jni::sys::jstring,
-        ) {
+        ) -> ::xpute_native_runtime::jni::sys::jint {
             // SAFETY: what JNI called with.
             unsafe {
                 let named = $crate::jni::handles(env, named);
                 let prefixes = $crate::jni::bytes(env, prefixes).unwrap_or_default();
                 let (files_dir, cache_dir) = ($crate::jni::dir(env, files_dir), $crate::jni::dir(env, cache_dir));
-                $crate::native::start($start, named, &prefixes, files_dir, cache_dir);
+                $crate::native::start($start, named, &prefixes, files_dir, cache_dir) as ::xpute_native_runtime::jni::sys::jint
             }
         }
 
@@ -197,6 +200,7 @@ macro_rules! jni_abi {
         unsafe extern "system" fn Java_xpute_Runtime_post(
             env: *mut ::xpute_native_runtime::jni::sys::JNIEnv,
             _this: ::xpute_native_runtime::jni::sys::jobject,
+            generation: ::xpute_native_runtime::jni::sys::jint,
             tag: ::xpute_native_runtime::jni::sys::jint,
             h: ::xpute_native_runtime::jni::sys::jint,
             m: ::xpute_native_runtime::jni::sys::jint,
@@ -204,7 +208,7 @@ macro_rules! jni_abi {
         ) {
             // SAFETY: what JNI called with.
             let pkt = unsafe { $crate::jni::bytes(env, pkt) };
-            ::xpute_native_runtime::post(tag as u32, h as u32, m as u32, pkt);
+            ::xpute_native_runtime::post(generation as u32, tag as u32, h as u32, m as u32, pkt);
         }
 
         /// # Safety
@@ -213,13 +217,14 @@ macro_rules! jni_abi {
         unsafe extern "system" fn Java_xpute_Runtime_answer(
             env: *mut ::xpute_native_runtime::jni::sys::JNIEnv,
             _this: ::xpute_native_runtime::jni::sys::jobject,
+            generation: ::xpute_native_runtime::jni::sys::jint,
             tag: ::xpute_native_runtime::jni::sys::jint,
             result: ::xpute_native_runtime::jni::sys::jint,
             data: ::xpute_native_runtime::jni::sys::jbyteArray,
         ) {
             // SAFETY: what JNI called with.
             let data = unsafe { $crate::jni::bytes(env, data) };
-            ::xpute_native_runtime::answer(tag as u32, result, data);
+            ::xpute_native_runtime::answer(generation as u32, tag as u32, result, data);
         }
 
         /// # Safety
@@ -228,9 +233,10 @@ macro_rules! jni_abi {
         unsafe extern "system" fn Java_xpute_Runtime_take(
             env: *mut ::xpute_native_runtime::jni::sys::JNIEnv,
             _this: ::xpute_native_runtime::jni::sys::jobject,
+            generation: ::xpute_native_runtime::jni::sys::jint,
         ) -> ::xpute_native_runtime::jni::sys::jbyteArray {
             // SAFETY: the environment JNI called with.
-            unsafe { $crate::jni::take(env) }
+            unsafe { $crate::jni::take(env, generation as u32) }
         }
 
         /// # Safety

@@ -61,16 +61,17 @@ The world is stored as **layers**, and they split on who changes them.
 The **base** is baked from the map sources and never changes within a version.
 Its main layer is **terrain**: a ground cell is one byte, its asset id, a
 ground cube of OpenStreetMap Carto's palette or pixelet's own, beside elevation
-samples from which the client works out each cell's elevation, so those are never sent. Bridges and tunnels come along as
-lines with a top and a width. Beside terrain are the **places** Carto would
-label, the administrative **divisions**, and a picture of the **earth** seen
-from orbit. Every base layer but the earth is a **pyramid**: a tile at one zoom
-is the four under it folded into one, by the layer's own rule. A faraway region
+samples from which the client works out each cell's elevation, so those are
+never sent. Bridges and tunnels come along as lines with a top and a width.
+Beside terrain are the **places** Carto would label, the administrative
+**divisions**, and a picture of the **earth** seen from orbit. Every base layer
+but the earth is a **pyramid**: a tile at one zoom is the four under it folded
+into one, by the layer's own rule. A faraway region
 is drawn from a single coarse tile that already summarizes everything under it,
 the way a texture is drawn from its mipmap, so a view from orbit reads a handful
 of tiles, not the planet.
 
-The **objects** are what people build. They are one sparse octree that keeps
+The **object layer** is what people build. It is one sparse octree that keeps
 only the leaves people filled and, in each branch, its children folded into one
 word. A write splits only the path down to its leaf and folds again up it, and
 eight equal leaves are joined back into one, so one picture has exactly one
@@ -212,15 +213,9 @@ judges what it struck by the zoom the eye's rays draw there
 whole cells and a folded cell is a summary.
 
 Decor is part of that answer on the CPU alone, since the GPU draws it as models
-and its rays never ask for it. A leaf cell the layers leave void is the decor
-whose box claims it, grown or placed (`pxl-core domain/query/decor.rs`). A body
-reads the layers alone, so a decor stops it nowhere, while what an eye sees and
-the pointer strikes include one. Nothing is searched for along a ray, so a ray over a forest
-must still pass the sky whole. A node is split for decor only where one can
-reach it. What the ground grows stands on the columns its box covers, so it lies
-within a decor's height of the node's own ground, and only where the counts of
-trees say one may stand; what is placed is found in the objects' tree around the
-node.
+and its rays never ask for it: a leaf cell the layers leave void is the decor
+whose box claims it, grown or placed (`pxl-core domain/query/decor.rs`). What
+an eye sees and the pointer strikes include it; a body reads the layers alone.
 
 ### Honest answers, bounded holding
 
@@ -236,11 +231,11 @@ each layer holds what is demanded in its own **tile cache**
 (`domain/layer/tile_cache.rs`), which keeps four promises. Every observation has
 an answer, because the coarsest zoom is always held all round the eye, as the
 **floor**. The tiles held for the floor and for demand are counted at compile
-time and fit the cache's slots (`TileCache::SLOTS`), so no view can ask for more
-tiles than the cache holds. A region only ever goes from unresolved to coarse
-to as fine as it is observed, never back. And nothing is fetched on a guess: a
-view converges on its misses alone, and a camera sent somewhere waits for the
-ground there.
+time and fit the cache's slots (`TileCache::SLOT_CNT`), so no view can ask for
+more tiles than the cache holds. A region only ever goes from unresolved to
+coarse to as fine as it is observed, never back. And nothing is fetched on a
+guess: a view converges on its misses alone, and a camera sent somewhere waits
+for the ground there.
 
 The ground's cells are held in a **clipmap** (Tanner, Migdal and Jones 1998):
 one level per zoom about a center, each a few **bricks** wide and addressed
@@ -260,20 +255,16 @@ cell moves:
 ```
 
 A tile is cut into its bricks as it lands, and the bricks are filled on the CPU
-over the following turns, a part at a time within the turn's share, with a
-min-max pyramid over their elevations and their bridges and tunnels as spans. All
-of it is uploaded, so the CPU's question and the GPU's ray meet the same bridge.
-Where a level holds no brick, the coarser level's ground is read, and drawn, in
-its place.
-
-A tile owns what is its own, and what it owns goes when it goes: its lines are
-vectors on the heap, and an Earth tile holds its packet until the GPU has its
-texels.
+over the entries that follow, a part at a time within each entry's budget, with
+a min-max pyramid over their elevations and their bridges and tunnels as spans.
+All of it is uploaded, so the CPU's question and the GPU's ray meet the same
+bridge. Where a level holds no brick, the coarser level's ground is read, and
+drawn, in its place. The layers' README tells how each layer holds its tiles.
 
 Every bound in the view has an owner: the camera grid bounds what is drawn,
-demand bounds what is fetched, the slots bound what is held, and a turn's time
-bounds the work done at once. The numbers a person would tune are none of these.
-Set to their least, the view still converges, only coarser or later.
+demand bounds what is fetched, the slots bound what is held, and an entry's
+budget bounds the work done at once. The numbers a person would tune are none
+of these. Set to their least, the view still converges, only coarser or later.
 
 ## Drawing
 
@@ -324,7 +315,7 @@ A still camera over a still world costs almost nothing, and a frame where
 nothing it reads moved submits no work at all.
 
 When the GPU runs out of time anyway, two knobs give it room: the **scale**
-draws fewer pixels, and the **rate** spaces the turns further apart. The `auto`
+draws fewer pixels, and the **rate** spaces the frames further apart. The `auto`
 setting steers both against the frame's GPU time, as congestion control steers a
 connection.
 
@@ -359,13 +350,15 @@ reaches; a ray stops at the first thing it meets, so only what is seen costs.
 
 ### The GPU gives the CPU's answer
 
-The GPU runs the same rules as the CPU, rewritten by hand in WGSL, and both have
-to give the same answer, or the world would be drawn where it cannot be walked.
-A test holds every compute pass over the world to the engine's Rust, word for
-word, over a real world's buffers (`rust/client/render/tests/`). Positions are
-integers on both sides, and any value a rule would divide by or take the root of
-is rounded once on the CPU and handed to the GPU, so the two never round
-differently.
+The renderer is centred on rays, and what the CPU and the GPU both decide, a
+ray's walk and the decor the ground grows, is written twice: in Rust
+(pxl-engine, pxl-content), and again by hand in WGSL. The two have to decide
+alike, or the world would be drawn where it cannot be walked, so that part of
+them is coupled: a test holds every compute pass over the world to the engine's
+Rust, word for word, over a real world's buffers (`rust/client/render/tests/`).
+Positions are integers on both sides, and any value a rule would divide by or
+take the root of is rounded once on the CPU and handed to the GPU, so the two
+never round differently.
 
 ### What is not a layer
 
@@ -379,39 +372,37 @@ by the platform, so each platform shapes its own scripts and emoji.
 ## The core and the host
 
 The world lives in one Rust **core**, `pxl-core`, which draws through
-`pxl-render`. It owns no device. It is linked with `xpute-guest`, the guest's
-end of the xpute interface, into one image, and a **host** around it gives the
-core one memory, a GPU, its files and its time, and nothing else reaches in. On
-a page the image is a WebAssembly module and the host is TypeScript in a
-worker; on a device it is linked with the runtime the app composes around it,
-`pxl-runtime`, into a library the app links, and the host is Rust on the
-core's thread, the UI's TypeScript across it. The core cannot tell which, and does not need
-to, so the same world runs everywhere. xpute's own documents describe that
-interface; this one is about what pixelet does over it.
+`pxl-render`. It is a pure guest of xpute: linked with `xpute-guest` into one
+image, it owns no device and names no host, and what the app composes around it
+gives it a GPU, its files and its time, and nothing else reaches in. On a page
+the image is a WebAssembly module and its runtime the page's worker; on a device
+it is linked into the app with `pxl-runtime`, the device's counterpart of that
+worker, which runs it on a thread of its own. The world cannot tell which, and
+does not need to, so the same world runs everywhere. Every interface between the
+core and what serves it is declared in WIT, pixelet's own under
+`spec/client/core/wit/`; xpute's own documents describe the link it crosses, and
+this one is about what pixelet does over it.
 
-The core is given its time in **turns**. Each turn is paced to the display and
-arrives as a grant that carries its budget, frame pacing's SYS_FRAME before
-xpute's SYS_TURN (`turn.rs` `TurnGrant`). A turn runs one task in one order: the effects of the
-last one, the tick's phases under the budget, then the frame, and none of it
-where the GPU cannot take a frame yet. The core's memory is laid out once at
-boot, in sections that nothing grows past (`sys/section.rs`), so a long
-session reserves what a short one does. What fills the heap grows with what was
-read, up to the heap's end.
+The core runs only when the link enters it. A frame is asked for when something
+changed (`sys/sched.rs` `invalidate`) and drawn at the display's next vsync, as
+one task in one order: the effects of what the UI sent, the tick's phases, then
+the draw, and none of it while the GPU cannot take a frame yet (`frame.rs`).
+Each entry has a budget from its start. The core's memory is laid out once,
+before its first entry, and never grown; `sys/`'s README tells how.
 
-Reads are asked for, never taken. Each turn every stream of reads declares
-everything it wants now, and one pump starts the best of them on the credits the
-grant gave, ranked by what the view needs first (`sys/io/request.rs` `declare`,
+Reads are asked for, never taken. Every frame each stream of reads declares
+everything it wants now, and one pump starts the best of them on the frame's
+credits, ranked by what the view needs first (`sys/io/request.rs` `declare`,
 `pump`; `policy.rs` `rank`). A read nobody wants any more is stopped in the same
-turn, so a zoom the camera only passed through holds no credit. When a read
-fails it keeps its want, and when the network or the server fails, every start
-waits while one probe goes out, after a jittered delay (`policy.rs` `backoff`).
-Meanwhile the view draws what it has, coarser, as it always does.
+frame, so a zoom the camera only passed through holds no credit. When the
+network or the server fails, every start waits while one probe goes out, after
+a jittered delay (`policy.rs` `backoff`). Meanwhile the view draws what it has,
+coarser, as it always does.
 
 The UI sits outside the image. It never computes a coordinate or a tile: it
-sends the core commands and draws the snapshot the core sends back, and its one
-way in is `ts/client/src/service/core/`, through a table of each command's
-fields generated from one specification, so the two cannot disagree about a
-field.
+calls the core's interfaces and shows what the core tells it, and it reaches
+the runtime only through a remote, by `ts/client/src/service/core/`, over
+bindings generated from the same WIT, so the two cannot disagree about a field.
 
 ## Making the data
 
@@ -441,8 +432,9 @@ noticing:
   Everything else asks the world, and the compiler refuses their reads anywhere
   else: they are visible within `domain/layer` alone, and the query is its
   child.
+- The core is a pure guest: it names no host.
 - The UI computes no coordinate and no tile, and reaches the core only through
-  the generated commands and the snapshot.
+  `service/core/` and the bindings generated from WIT.
 - Nothing under `xpute/` knows pixelet: no tile, no world, no pixelet name.
 - The CPU and the GPU give the same answer to the same question, held by tests
   word for word.
@@ -483,7 +475,7 @@ The core is one order of dependency: an import may skip a level but never points
 up, and the folders are that order. The check-rules tool holds it.
 
 ```text
-  turn · door · ui · pointer     the top: wires everything
+  link · frame · ui · pointer    the top: wires everything
   ────────────────────────────────────────────────────────────────────
   domain/                the world and the eye
 
@@ -496,9 +488,9 @@ up, and the folders are that order. The check-rules tool holds it.
   ────────────────────────────────────────────────────────────────────
   sys/                   what all of it stands on
     io/          reads and their scheduler
-    sched/       a turn's tasks and its phases
-    section      the memory's sections
-    boot · load  bringing it up and what it loads
+    sched/       the frame's signal, an entry's budget, the tick
+    heap · range the memory, laid out once
+    load         the files it loads
 
   beside: perf/, the profiler, which reads anything and decides nothing
 ```
@@ -510,13 +502,16 @@ thing runs:
   rust/spec/            pxl-spec, the model every crate shares
   rust/client/engine/   pxl-engine, what the CPU and the GPU both compute
   rust/client/content/  pxl-content, the content: decor, caves, clouds
+  rust/client/global/   pxl-global, the global the core's state lives in
   rust/client/core/     pxl-core, the core
   rust/client/runtime/  pxl-runtime, the core with its runtime on a device
   rust/client/render/   pxl-render, the renderer and its WGSL
   rust/server/          the servers and the bakes, one crate a folder
-  ts/client/            the app: the UI, its services and the runtime
+  rust/tool/            pxl-tool, the generator and the checks
+  ts/client/            the app: the UI, its services and its runtime
   ts/server/edge/       the Cloudflare Worker in front of everything
-  spec/                 JSON both languages' code is generated from
+  spec/                 the specs and WIT both languages' code is
+                        generated from
   xpute/                the system under the core, its own repository
 ```
 

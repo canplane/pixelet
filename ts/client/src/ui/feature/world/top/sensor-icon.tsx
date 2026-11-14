@@ -64,7 +64,7 @@ export function SensorIcons() {
   );
 
   return (
-    <View style={styles.row}>
+    <View style={STYLE.row}>
       {icon("location", location)}
       {device.HANDHELD &&
         orientation !== SENSOR_STATUS_UNAVAILABLE &&
@@ -73,6 +73,6 @@ export function SensorIcons() {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: halo_gap(8) },
 });

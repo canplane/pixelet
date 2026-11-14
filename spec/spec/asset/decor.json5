@@ -6,7 +6,7 @@
       label: { $value: "Tree" },
       $description: "Trees on green and bare land. Bare is the fallback type for untagged land\nand this pack draws it as grass; sports fields are left out as maintained,\nnot natural, ground. Sparse: a hillside with some trees, not a forest wall\nat 1u spacing.",
       seed: { $value: 0x7902530c, $type: "u32" },
-      density: { $value: 0.025 },
+      density: { $value: 0.025, $type: "f64" },
       orient: { $value: "random" },
       on: { $value: ["park", "forest", "land"] },
       packs: {
@@ -15,22 +15,25 @@
             $type: "file",
             skin: "decor/kenney_fantasy_town/colormap.png",
             variants: [
-              { model: "decor/kenney_fantasy_town/tree.glb", size: [1, 1, 3] },
+              {
+                model: "decor/kenney_fantasy_town/tree.glb",
+                size: { $value: [1, 1, 3], $type: "u16" },
+              },
               {
                 model: "decor/kenney_fantasy_town/tree-high.glb",
-                size: [1, 1, 3],
+                size: { $value: [1, 1, 3], $type: "u16" },
               },
               {
                 model: "decor/kenney_fantasy_town/tree-crooked.glb",
-                size: [1, 1, 3],
+                size: { $value: [1, 1, 3], $type: "u16" },
               },
               {
                 model: "decor/kenney_fantasy_town/tree-high-round.glb",
-                size: [1, 1, 3],
+                size: { $value: [1, 1, 3], $type: "u16" },
               },
               {
                 model: "decor/kenney_fantasy_town/tree-high-crooked.glb",
-                size: [1, 1, 3],
+                size: { $value: [1, 1, 3], $type: "u16" },
               },
             ],
           },
@@ -38,18 +41,21 @@
             $type: "file",
             skin: "decor/kenney_graveyard_kit/colormap.png",
             variants: [
-              { model: "decor/kenney_graveyard_kit/pine.glb", size: [1, 1, 2] },
+              {
+                model: "decor/kenney_graveyard_kit/pine.glb",
+                size: { $value: [1, 1, 2], $type: "u16" },
+              },
               {
                 model: "decor/kenney_graveyard_kit/pine-crooked.glb",
-                size: [1, 1, 2],
+                size: { $value: [1, 1, 2], $type: "u16" },
               },
               {
                 model: "decor/kenney_graveyard_kit/pine-fall.glb",
-                size: [1, 1, 2],
+                size: { $value: [1, 1, 2], $type: "u16" },
               },
               {
                 model: "decor/kenney_graveyard_kit/pine-fall-crooked.glb",
-                size: [1, 1, 2],
+                size: { $value: [1, 1, 2], $type: "u16" },
               },
             ],
           },
@@ -60,7 +66,7 @@
       label: { $value: "Boat" },
       $description: "Boats on open water: rivers, lakes and the sea near a coast; wetland is\ntoo shallow. The sea is the same `water` ground, and boats stand on it\nnear a coast alone: a tile of open sea is left out of the bake and drawn\nfrom a coarser one, at whose cells no boat stands (pxl-content\n`scatter::stands_at`), so the clip levels a boat stands at hold sea only in\nthe tiles a coast crosses. Rivers are a few cells wide, so the same per-cell\nrate reads far denser than on land.",
       seed: { $value: 0xb0a5802d, $type: "u32" },
-      density: { $value: 0.001 },
+      density: { $value: 0.001, $type: "f64" },
       orient: { $value: "random" },
       on: { $value: ["water"] },
       packs: {
@@ -71,19 +77,19 @@
             variants: [
               {
                 model: "decor/kenney_watercraft_pack/boat-row-small.glb",
-                size: [3, 2, 1],
+                size: { $value: [3, 2, 1], $type: "u16" },
               },
               {
                 model: "decor/kenney_watercraft_pack/boat-fishing-small.glb",
-                size: [2, 4, 3],
+                size: { $value: [2, 4, 3], $type: "u16" },
               },
               {
                 model: "decor/kenney_watercraft_pack/boat-sail-a.glb",
-                size: [2, 4, 5],
+                size: { $value: [2, 4, 5], $type: "u16" },
               },
               {
                 model: "decor/kenney_watercraft_pack/boat-speed-a.glb",
-                size: [2, 3, 2],
+                size: { $value: [2, 3, 2], $type: "u16" },
               },
             ],
           },
@@ -94,7 +100,7 @@
       label: { $value: "Car" },
       $description: "Cars on major roads only: neighborhood streets and pedestrian ways are\nwhere users build, and a car there reads as in the way. Aligned to the\nroad, since a random heading reads as a crash. Sparse: a car every couple\nof cells reads as gridlock.",
       seed: { $value: 0x0ca63010, $type: "u32" },
-      density: { $value: 0.003 },
+      density: { $value: 0.003, $type: "f64" },
       orient: { $value: "along_transport" },
       on: {
         $value: [
@@ -111,14 +117,26 @@
             $type: "file",
             skin: "decor/kenney_car_kit/colormap.png",
             variants: [
-              { model: "decor/kenney_car_kit/sedan.glb", size: [1, 3, 1] },
-              { model: "decor/kenney_car_kit/suv.glb", size: [1, 3, 1] },
-              { model: "decor/kenney_car_kit/van.glb", size: [1, 3, 1] },
+              {
+                model: "decor/kenney_car_kit/sedan.glb",
+                size: { $value: [1, 3, 1], $type: "u16" },
+              },
+              {
+                model: "decor/kenney_car_kit/suv.glb",
+                size: { $value: [1, 3, 1], $type: "u16" },
+              },
+              {
+                model: "decor/kenney_car_kit/van.glb",
+                size: { $value: [1, 3, 1], $type: "u16" },
+              },
               {
                 model: "decor/kenney_car_kit/hatchback-sports.glb",
-                size: [1, 3, 1],
+                size: { $value: [1, 3, 1], $type: "u16" },
               },
-              { model: "decor/kenney_car_kit/taxi.glb", size: [1, 3, 1] },
+              {
+                model: "decor/kenney_car_kit/taxi.glb",
+                size: { $value: [1, 3, 1], $type: "u16" },
+              },
             ],
           },
         ],
@@ -128,7 +146,7 @@
       label: { $value: "Train" },
       $description: "Trains on rail lines the ground shows (a tunnel's is not painted), aligned\nto the rail, since one lying across it reads as derailed. Very sparse:\ntrains should read as occasional.",
       seed: { $value: 0x7ba5802d, $type: "u32" },
-      density: { $value: 0.0015 },
+      density: { $value: 0.0015, $type: "f64" },
       orient: { $value: "along_transport" },
       on: { $value: ["tram", "light_rail", "subway", "monorail", "rail"] },
       packs: {
@@ -139,19 +157,19 @@
             variants: [
               {
                 model: "decor/kenney_train_kit/train-locomotive-a.glb",
-                size: [1, 3, 2],
+                size: { $value: [1, 3, 2], $type: "u16" },
               },
               {
                 model: "decor/kenney_train_kit/train-locomotive-b.glb",
-                size: [1, 3, 2],
+                size: { $value: [1, 3, 2], $type: "u16" },
               },
               {
                 model: "decor/kenney_train_kit/train-diesel-a.glb",
-                size: [1, 3, 2],
+                size: { $value: [1, 3, 2], $type: "u16" },
               },
               {
                 model: "decor/kenney_train_kit/train-electric-city-a.glb",
-                size: [1, 3, 2],
+                size: { $value: [1, 3, 2], $type: "u16" },
               },
             ],
           },

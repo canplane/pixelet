@@ -37,7 +37,7 @@ type Effect = "none" | "clear" | "regular";
 
 function effect_at(level: f64, place: Place): Effect {
   if (level <= 0) return "none";
-  if (level < 1 || place === BackingPlace.OnSheet) return "clear";
+  if (level < 1 || place === BackingPlace.ON_SHEET) return "clear";
   return "regular";
 }
 
@@ -125,7 +125,7 @@ export function Backing(props: BackingProps) {
       <Motion
         {...dim.motion}
         style={[
-          styles.layout,
+          STYLE.layout,
           {
             flexDirection,
             alignItems,
@@ -142,6 +142,6 @@ export function Backing(props: BackingProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   layout: { flexGrow: 1, alignSelf: "stretch" },
 });

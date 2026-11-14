@@ -13,7 +13,7 @@
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import { ComponentError, type Link } from "@xpute/link";
+import { ComponentError, type Side } from "@xpute/link";
 import * as gpu from "@xpute/gpu-link/abi/gpu.ts";
 import { ERROR_CODE_NO_DEVICE } from "@xpute/gpu-link/abi/gpu.enum.ts";
 import { type GpuAsk, type GpuConfig, type GpuState } from "@xpute/gpu-link";
@@ -28,13 +28,13 @@ export class WebGpu {
   private lost: (() => void)[] = [];
   /** Where the guest lent the device's block, while it is lent. */
   private block: u32 | null = null;
-  private readonly link: Link;
+  private readonly link: Side;
   private readonly ask: GpuAsk;
   private readonly cfg: GpuConfig;
   private readonly report: (state: GpuState) => void;
 
   /** `report` hears what the page has of a GPU, as each ask finds it. */
-  constructor(link: Link, ask: GpuAsk, cfg: GpuConfig, report: (state: GpuState) => void) {
+  constructor(link: Side, ask: GpuAsk, cfg: GpuConfig, report: (state: GpuState) => void) {
     this.link = link;
     this.ask = ask;
     this.cfg = cfg;

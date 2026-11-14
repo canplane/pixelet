@@ -98,9 +98,11 @@ pub fn start(
             // answered EPIPE; what boot made due or completed is not left
             // waiting.
             link::init(report_trap);
-            link::run_due();
-            remote::flush(notify);
-            event_loop::run(notify)
+            loop {
+                link::run_due();
+                remote::flush(notify);
+                event_loop::turn();
+            }
         });
     spawned.or_bug(Errno::EAGAIN);
 }

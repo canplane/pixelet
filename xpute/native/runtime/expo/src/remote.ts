@@ -82,7 +82,7 @@ export function start(remote: Remote): void {
   XPUTE.start(remote.named, pkt!);
 }
 
-/** The `len` bytes at `at` in the guest's memory, as Link `bytes` gives
+/** The `len` bytes at `at` in the guest's memory, as Side `bytes` gives
  * them. The memory is asked for each time, as the runtime sets it up once it
  * has started. */
 export function bytes(at: u32, len: u32): U8Array {

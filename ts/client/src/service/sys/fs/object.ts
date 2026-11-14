@@ -19,7 +19,7 @@ import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
 import { Bug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_EBADMSG, ERRNO_EINVAL } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import { ComponentError, type Link } from "@xpute/link";
+import { ComponentError, type Side } from "@xpute/link";
 import {
   ERROR_CODE_BAD_MESSAGE,
   ERROR_CODE_IO,
@@ -241,7 +241,7 @@ export const OBJECTS = object_backend();
  * applied. One that does not decode answers `bad-message`, and one the
  * database fails to keep `io`. */
 export function serve_objects(
-  link: Pick<Link, "bytes" | "mount_named" | "task_return" | "on_cancel">,
+  link: Pick<Side, "bytes" | "mount_named" | "task_return" | "on_cancel">,
 ): void {
   object.mount(link, {
     async apply(batch) {

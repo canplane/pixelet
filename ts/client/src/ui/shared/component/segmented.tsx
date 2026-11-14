@@ -24,7 +24,7 @@ export function Segmented<T extends string | number>({
   onChange,
 }: SegmentedProps<T>) {
   return (
-    <View accessibilityRole="tablist" style={styles.track}>
+    <View accessibilityRole="tablist" style={STYLE.track}>
       {segments.map((s) => {
         const on = s.value === value;
         return (
@@ -33,15 +33,15 @@ export function Segmented<T extends string | number>({
             onPress={() => onChange(s.value)}
             accessibilityRole="tab"
             aria-selected={on}
-            style={styles.target}
+            style={STYLE.target}
           >
             {/* The segment stays mounted and only its color changes. On
                 Android, a view created with its background already set is
                 drawn without its rounded corners. */}
-            <View collapsable={false} style={[styles.segment, on && styles.on]}>
+            <View collapsable={false} style={[STYLE.segment, on && STYLE.on]}>
               <Text
                 maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
-                style={[styles.label, on && styles.label_on]}
+                style={[STYLE.label, on && STYLE.label_on]}
               >
                 {s.label}
               </Text>
@@ -55,7 +55,7 @@ export function Segmented<T extends string | number>({
 
 const INSET = (PANEL_CONTROL - CHROME.selection) / 2;
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   track: {
     flexDirection: "row",
     height: PANEL_CONTROL,

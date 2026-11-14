@@ -30,7 +30,7 @@ export function item_of(cell: f64): f64 {
   return ITEM_SLOPE * cell + ITEM_BASE;
 }
 
-function column_cnt(width: f64): f64 {
+function column_count(width: f64): f64 {
   return Math.max(
     1,
     Math.floor((width + GRID_GAP) / (CHROME.target + GRID_GAP)),
@@ -51,7 +51,7 @@ export function Grid({
   children: (cell: f64) => React.ReactNode;
 }) {
   const [width, set_width] = useState(0);
-  const columns = column_cnt(width);
+  const columns = column_count(width);
   const cell =
     width > 0
       ? (width - (columns - 1) * GRID_GAP - ITEM_BASE) /
@@ -59,12 +59,12 @@ export function Grid({
       : CHROME.target;
   return (
     <View
-      style={styles.section}
+      style={STYLE.section}
       onLayout={(e: LayoutChangeEvent) => set_width(e.nativeEvent.layout.width)}
     >
       {head}
       <View
-        style={[styles.grid, { marginHorizontal: -(cell - item_of(cell)) / 2 }]}
+        style={[STYLE.grid, { marginHorizontal: -(cell - item_of(cell)) / 2 }]}
       >
         {children(cell)}
       </View>
@@ -96,7 +96,7 @@ export function Item({
       accessibilityRole="button"
       accessibilityLabel={label}
       aria-selected={active}
-      style={[styles.cell, { width: cell, height: cell }]}
+      style={[STYLE.cell, { width: cell, height: cell }]}
     >
       {children}
     </Pressable>
@@ -111,7 +111,7 @@ export const MARK = StyleSheet.create({
   },
 });
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   section: { gap: 8 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: GRID_GAP },
   cell: { alignItems: "center", justifyContent: "center" },

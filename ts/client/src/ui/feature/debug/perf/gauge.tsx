@@ -3,9 +3,9 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { type FrameGroup, GROUPS, n1, val_text, zoom_name } from "./column.ts";
+import { type FrameGroup, GROUPS, n1, value_text, zoom_name } from "./column.ts";
 
-const bytes = (b: number) => val_text("_bytes", b);
+const bytes = (b: number) => value_text("_bytes", b);
 import { fail_text } from "./report.ts";
 import { fps, type Gauge } from "./view.ts";
 import { alpha, COLOR } from "@/ui/shared/component/theme.ts";
@@ -195,7 +195,7 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
         <Row
           k="scale/drawn"
           v={`${fixed(f.last.scale, 2)}/${
-            f.gpu_px > 0 ? val_text("gpu_px", f.gpu_px) : "-"
+            f.gpu_px > 0 ? value_text("gpu_px", f.gpu_px) : "-"
           }`}
           warn={f.last.scale < 1}
         />

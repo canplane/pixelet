@@ -120,7 +120,7 @@ fn run() -> Result<(), String> {
         rows.push(Row {
             path: rel.clone(),
             key: format!("{KEY_PREFIX}{name}"),
-            bytes: bytes.len() as u64,
+            bytes: u32::try_from(bytes.len()).map_err(|_| format!("{rel}: more bytes than a u32 counts"))?,
             extent,
         });
         if rel.starts_with("cube/") {
@@ -178,7 +178,7 @@ fn run() -> Result<(), String> {
     rows.push(Row {
         path: image.clone(),
         key: format!("{KEY_PREFIX}{image_name}"),
-        bytes: composed.bytes.len() as u64,
+        bytes: u32::try_from(composed.bytes.len()).map_err(|_| format!("{image}: more bytes than a u32 counts"))?,
         extent: None,
     });
     rows.sort_by(|a, b| a.path.cmp(&b.path));

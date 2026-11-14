@@ -11,13 +11,13 @@
 import { td } from "@xpute/kit/codec/encoding.ts";
 import { ERRNO_EINVAL } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import type { Link } from "@xpute/link";
+import type { Side } from "@xpute/link";
 import type { Lent } from "@xpute/link/abi/types.ts";
 
 import * as text from "@/abi/text.ts";
 import * as platform from "@/service/platform/text.ts";
 
-export function serve_text(link: Link): void {
+export function serve_text(link: Side): void {
   /** The text a call lends, which the core holds only until the call
    * returns. */
   const text_of = (span: Lent): string => td.decode(link.bytes(span.at, span.len));

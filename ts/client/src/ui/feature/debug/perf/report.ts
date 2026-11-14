@@ -15,7 +15,7 @@ import type {
   ViewSection,
   Worst,
 } from "@/service/core/perf.ts";
-import { n1, phase_text, tris, val_text } from "./column.ts";
+import { n1, phase_text, tris, value_text } from "./column.ts";
 import { fps, type PerfReport } from "./view.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
 import { EFFECT_NAMES } from "@/abi/step.spec.ts";
@@ -25,8 +25,8 @@ import * as share from "@/service/platform/share.ts";
 
 const signed = (n: number) => (n >= 0 ? `+${n}` : String(n));
 const signed_bytes = (b: number) =>
-  `${b >= 0 ? "+" : ""}${val_text("_bytes", b)}`;
-const bytes = (b: number) => val_text("_bytes", b);
+  `${b >= 0 ? "+" : ""}${value_text("_bytes", b)}`;
+const bytes = (b: number) => value_text("_bytes", b);
 const percentile = (s: Percentile) =>
   `p50 ${n1(s.p50)}  p95 ${n1(s.p95)}  max ${n1(s.max)}`;
 type RayColumn<K = keyof RayCount> = K extends `eye_${infer C}` ? C : never;
@@ -45,10 +45,10 @@ const rays_text = (f: RayCount) => {
     const casts = at("cast");
     if (casts === 0) return [];
     const per_cast = (n: number) => n1(n / casts);
-    const ray_cnt = at("ray_cnt");
+    const ray_count = at("ray_cnt");
     const part = (n: number) =>
-      ray_cnt > 0
-        ? `${fixed((100 * n) / ray_cnt, 2)}%`
+      ray_count > 0
+        ? `${fixed((100 * n) / ray_count, 2)}%`
         : `${per_cast(n)} a cast`;
     const again = at("voxel") + at("hole") + at("sky");
     return [
@@ -75,7 +75,7 @@ function view_text(v: ViewSection, gpu_px: f64): string {
   return `  view    pivot ${pivot}  distance ${n1(v.dist)} u  polar ${n1(
     deg(v.polar),
   )}°  azimuth ${n1(deg(v.azimuth))}°   drawn ${
-    gpu_px > 0 ? val_text("gpu_px", gpu_px) : "-"
+    gpu_px > 0 ? value_text("gpu_px", gpu_px) : "-"
   }`;
 }
 
@@ -142,7 +142,7 @@ export function frame_line({ sample: s, delta }: Worst): string {
       : `  Δuploads ${signed(delta.upload_cnt)} Δuploads bytes ${signed_bytes(
           delta.upload_bytes,
         )} Δheap used ${signed_bytes(delta.heap_used_bytes)}`;
-  return `[${n1(s.t).padStart(9)}] ${val_text(
+  return `[${n1(s.t).padStart(9)}] ${value_text(
     "kind_name",
     s.kind_name,
   )}  interval ${n1(s.interval_ms)}  effects ${n1(s.effects_ms)}${worst_effect_text(s)}  tick ${n1(s.tick_ms)}/${n1(

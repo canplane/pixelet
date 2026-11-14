@@ -22,7 +22,7 @@ use std::path::Path;
 
 use wit_parser::{Function, FunctionKind, IndexMap, InterfaceId, Param, Resolve, Type, TypeDefKind, TypeId, TypeOwner, WorldItem, WorldKey};
 
-use xpute_gen::spec::{mark, of_ident, package, package_path, pascal, read, rs_crate, rs_enum, rs_ident, rs_module, screaming, snake, ts_enum, ts_ident, ts_module, Member, Output};
+use xpute_gen::spec::{int_of, is_float, mark, ts_number, of_ident, package, package_path, pascal, read, rs_crate, rs_enum, rs_ident, rs_module, screaming, snake, ts_enum, ts_ident, ts_module, Member, Output};
 
 mod cpp;
 
@@ -170,11 +170,25 @@ const RS_GIVEN: [&str; 32] = [
 /// `exclude_globals`.
 const TS_GIVEN: [&str; 33] = [
     "HANDLE", "mount", "object", "Host", "ERRNO_EBADMSG", "ERRNO_EINPROGRESS", "ERRNO_ENOSYS", "ComponentError",
-    "Handle", "Lift", "Link", "LinkObject", "Lower", "Method", "Ref", "Sender", "XputeError",
+    "Handle", "Lift", "LinkObject", "Lower", "Method", "Ref", "Sender", "Side", "XputeError",
     "refusal_of", "AbortController", "AbortSignal",
     "ArrayBuffer", "BigInt64Array", "BigUint64Array", "Float32Array", "Float64Array", "Int16Array", "Int32Array",
     "Int8Array", "Pick", "Promise", "Uint16Array", "Uint32Array", "Uint8Array",
 ];
+
+/// The modules the TypeScript bindings give beside interfaces' modules in a
+/// package with a world: its table of methods answered later (later.ts). An
+/// interface's module that meets one takes `_`, as a name in `TS_GIVEN`
+/// does.
+const TS_GIVEN_MODULES: [&str; 1] = ["later"];
+
+/// An interface's TypeScript module, escaped where its package has a world
+/// (`TS_GIVEN_MODULES`).
+fn interface_ts_module(r: &Resolve, i: InterfaceId) -> String {
+    let m = rs_name(r.interfaces[i].name.as_deref().unwrap_or_default());
+    let world = r.interfaces[i].package.is_some_and(|p| !r.packages[p].worlds.is_empty());
+    if world { escaped(m, |n| TS_GIVEN_MODULES.contains(&n)) } else { m }
+}
 
 /// Whether `n` is a resource's serving trait or interface's form, a side's
 /// name and then a word (`GuestDevice`, `HostDevice`), which any module may
@@ -237,33 +251,40 @@ fn is_lent(r: &Resolve, ty: &Type) -> bool {
         && package_name(r, i) == "xpute:link"
 }
 
-/// A number the link carries, at its WIT width.
+/// A number the link carries, at its WIT width: an integer of xpute-gen's
+/// `INTS`, which gives its spellings and its range, or a float.
 pub(crate) struct Number {
     pub(crate) wit: Type,
     /// Its Rust type, the name of its writer and reader in both languages.
     pub(crate) rs: &'static str,
     /// Its size, which is its alignment (Canonical ABI).
     pub(crate) sz: usize,
-    /// Whether it is a TypeScript `number`, and not a `bigint`: none of 64
-    /// bits but the f64.
-    pub(crate) in_f64: bool,
     /// Its list's TypeScript typed array, as type and as constructor.
     pub(crate) arr: &'static str,
-    /// Its C++ type.
-    pub(crate) cpp: &'static str,
+}
+
+impl Number {
+    /// Its C++ type: a float's, `float` of 4 bytes and `double` of 8, or its
+    /// integer's.
+    pub(crate) fn cpp(&self) -> &'static str {
+        match self.rs {
+            r if is_float(r) => if self.sz == 4 { "float" } else { "double" },
+            r => int_of(r).map_or("", |i| i.cpp),
+        }
+    }
 }
 
 pub(crate) static NUMBERS: [Number; 10] = [
-    Number { wit: Type::U8, rs: "u8", sz: 1, in_f64: true, arr: "Uint8Array", cpp: "std::uint8_t" },
-    Number { wit: Type::S8, rs: "i8", sz: 1, in_f64: true, arr: "Int8Array", cpp: "std::int8_t" },
-    Number { wit: Type::U16, rs: "u16", sz: 2, in_f64: true, arr: "Uint16Array", cpp: "std::uint16_t" },
-    Number { wit: Type::S16, rs: "i16", sz: 2, in_f64: true, arr: "Int16Array", cpp: "std::int16_t" },
-    Number { wit: Type::U32, rs: "u32", sz: 4, in_f64: true, arr: "Uint32Array", cpp: "std::uint32_t" },
-    Number { wit: Type::S32, rs: "i32", sz: 4, in_f64: true, arr: "Int32Array", cpp: "std::int32_t" },
-    Number { wit: Type::U64, rs: "u64", sz: 8, in_f64: false, arr: "BigUint64Array", cpp: "std::uint64_t" },
-    Number { wit: Type::S64, rs: "i64", sz: 8, in_f64: false, arr: "BigInt64Array", cpp: "std::int64_t" },
-    Number { wit: Type::F32, rs: "f32", sz: 4, in_f64: true, arr: "Float32Array", cpp: "float" },
-    Number { wit: Type::F64, rs: "f64", sz: 8, in_f64: true, arr: "Float64Array", cpp: "double" },
+    Number { wit: Type::U8, rs: "u8", sz: 1, arr: "Uint8Array" },
+    Number { wit: Type::S8, rs: "i8", sz: 1, arr: "Int8Array" },
+    Number { wit: Type::U16, rs: "u16", sz: 2, arr: "Uint16Array" },
+    Number { wit: Type::S16, rs: "i16", sz: 2, arr: "Int16Array" },
+    Number { wit: Type::U32, rs: "u32", sz: 4, arr: "Uint32Array" },
+    Number { wit: Type::S32, rs: "i32", sz: 4, arr: "Int32Array" },
+    Number { wit: Type::U64, rs: "u64", sz: 8, arr: "BigUint64Array" },
+    Number { wit: Type::S64, rs: "i64", sz: 8, arr: "BigInt64Array" },
+    Number { wit: Type::F32, rs: "f32", sz: 4, arr: "Float32Array" },
+    Number { wit: Type::F64, rs: "f64", sz: 8, arr: "Float64Array" },
 ];
 
 pub(crate) fn number(ty: &Type) -> Option<&'static Number> {
@@ -327,18 +348,15 @@ fn cases(r: &Resolve, v: &wit_parser::Variant, at: &str) -> Result<Vec<(String, 
     v.cases.iter().map(|c| Ok((c.name.clone(), c.ty.as_ref().map(|t| kind(r, t, at)).transpose()?))).collect()
 }
 
-/// The size of a discriminant of `n` cases, which is its alignment.
-pub(crate) fn discriminant_sz(n: usize) -> usize {
-    match n {
-        0..=256 => 1,
-        257..=65536 => 2,
-        _ => 4,
-    }
-}
-
-/// The Rust and TypeScript type of a discriminant of `n` cases.
-pub(crate) fn discriminant_type(n: usize) -> &'static str {
-    ["u8", "u16", "u32"][discriminant_sz(n).trailing_zeros() as usize]
+/// The integer a discriminant of `n` cases is held in: the narrowest
+/// unsigned one of 4 bytes or fewer that numbers them (Canonical ABI). More
+/// cases than a u32 numbers are refused.
+pub(crate) fn discriminant(n: usize) -> Result<&'static Number, String> {
+    let last = n.max(1) as f64 - 1.0;
+    NUMBERS
+        .iter()
+        .find(|x| x.sz <= 4 && int_of(x.rs).is_some_and(|i| i.lo == 0.0 && i.holds(last)))
+        .ok_or(format!("{n} cases are more than a discriminant numbers"))
 }
 
 /// Whether the interface `i` is its package's module `module` itself, not a
@@ -401,12 +419,12 @@ pub(crate) fn rec_layout(layouts: &[(usize, usize)]) -> (Vec<usize>, usize, usiz
 
 /// A variant's layout from its cases' payloads' layouts: the payload's
 /// offset, and the variant's size and alignment.
-pub(crate) fn variant_layout(payloads: &[Option<(usize, usize)>]) -> (usize, usize, usize) {
-    let d = discriminant_sz(payloads.len());
+pub(crate) fn variant_layout(payloads: &[Option<(usize, usize)>]) -> Result<(usize, usize, usize), String> {
+    let d = discriminant(payloads.len())?.sz;
     let align = payloads.iter().flatten().map(|&(_, a)| a).max().unwrap_or(1).max(d);
     let off = d.next_multiple_of(payloads.iter().flatten().map(|&(_, a)| a).max().unwrap_or(1));
     let sz = payloads.iter().flatten().map(|&(s, _)| s).max().unwrap_or(0);
-    (off, (off + sz).next_multiple_of(align), align)
+    Ok((off, (off + sz).next_multiple_of(align), align))
 }
 
 /// An enum's members as the enum writers take them (xpute-gen `rs_enum`,
@@ -484,9 +502,9 @@ impl Gen<'_> {
         self.r.interfaces[self.here].name.clone().unwrap_or_default()
     }
 
-    /// The interface's module's name, in both languages.
-    fn module(&self) -> String {
-        rs_name(&self.iname())
+    /// The interface's TypeScript module's name (`interface_ts_module`).
+    fn module_ts(&self) -> String {
+        interface_ts_module(self.r, self.here)
     }
 
     fn at(&self) -> String {
@@ -536,13 +554,14 @@ impl Gen<'_> {
         }
         let iname = self.r.interfaces[i].name.clone().unwrap_or_default();
         let alias = rs_name(&iname);
+        let ts_alias = interface_ts_module(self.r, i);
         let pkg = package_name(self.r, i);
         let owner = if pkg == package_name(self.r, self.here) {
-            Owner { rs: format!("super::{alias}"), ts: format!("./{alias}") }
+            Owner { rs: format!("super::{alias}"), ts: format!("./{ts_alias}") }
         } else {
             let (rs, ts) = self.externs.iter().find(|(p, _, _)| *p == pkg).map_or(("", ""), |(_, rs, ts)| (rs.as_str(), ts.as_str()));
             let module = rs.rsplit("::").next().unwrap_or_default();
-            Owner { rs: if folded(self.r, i, module) { rs.into() } else { format!("{rs}::{alias}") }, ts: format!("{ts}/{alias}") }
+            Owner { rs: if folded(self.r, i, module) { rs.into() } else { format!("{rs}::{alias}") }, ts: format!("{ts}/{ts_alias}") }
         };
         (Some(owner), name)
     }
@@ -557,11 +576,11 @@ impl Gen<'_> {
             Kind::Str | Kind::Array(_) | Kind::List(_) => (8, 4),
             Kind::Handle => (4, 4),
             Kind::Enum(t) => {
-                let d = discriminant_sz(self.case_cnt(*t));
+                let d = discriminant(self.case_cnt(*t))?.sz;
                 (d, d)
             }
             Kind::Option(e) => {
-                let (_, sz, align) = variant_layout(&[None, Some(self.layout(e)?)]);
+                let (_, sz, align) = variant_layout(&[None, Some(self.layout(e)?)])?;
                 (sz, align)
             }
             Kind::Result(ok, err) => {
@@ -573,7 +592,7 @@ impl Gen<'_> {
                 (sz, align)
             }
             Kind::Variant(t) => {
-                let (_, sz, align) = variant_layout(&self.payload_layouts(*t)?);
+                let (_, sz, align) = variant_layout(&self.payload_layouts(*t)?)?;
                 (sz, align)
             }
         })
@@ -605,7 +624,7 @@ impl Gen<'_> {
 
     pub(crate) fn result_layout(&self, ok: &Option<Box<Kind>>, err: &Option<Box<Kind>>) -> Result<(usize, usize, usize), String> {
         let payload = |k: &Option<Box<Kind>>| k.as_ref().map(|k| self.layout(k)).transpose();
-        Ok(variant_layout(&[payload(ok)?, payload(err)?]))
+        variant_layout(&[payload(ok)?, payload(err)?])
     }
 
     /// Where the values `ks` lie as one tuple, and its size: a call's params.
@@ -652,7 +671,7 @@ impl Gen<'_> {
             Kind::Number(n) => format!("{w}.{}({at}, {});", n.rs, deref(e)),
             Kind::Handle => format!("{w}.u32({at}, {});", deref(e)),
             Kind::Enum(t) => {
-                let d = discriminant_type(self.case_cnt(*t));
+                let d = discriminant(self.case_cnt(*t))?.rs;
                 format!("{w}.{d}({at}, {} as {d});", deref(e))
             }
             Kind::Str => format!("{w}.str({at}, {e});"),
@@ -667,7 +686,7 @@ impl Gen<'_> {
             }
             Kind::Record(_) | Kind::Variant(_) => format!("{}.store({w}, {at});", receiver(e)),
             Kind::Option(el) => {
-                let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)]);
+                let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)])?;
                 format!("if let Some(v) = {e} {{ {w}.u8({at}, 1); {} }}", self.rs_store(w, &plus(at, off), "v", el)?)
             }
             Kind::Result(ok, err) => {
@@ -707,7 +726,7 @@ impl Gen<'_> {
             }
             Kind::Record(_) | Kind::Variant(_) => format!("{}::load({r}, {at})", self.rs_ty(k, true)),
             Kind::Option(el) => {
-                let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)]);
+                let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)])?;
                 format!(
                     "{r}.case({at}, 2).and_then(|d| if d == 0 {{ Ok(None) }} else {{ {}.map(Some) }})",
                     self.rs_load(r, &plus(at, off), el)?
@@ -976,7 +995,7 @@ impl Gen<'_> {
             Kind::Bool => format!("{w}.bool({at}, {e});"),
             Kind::Number(n) => format!("{w}.{}({at}, {e});", n.rs),
             Kind::Handle => format!("{w}.u32({at}, {e});"),
-            Kind::Enum(t) => format!("{w}.{}({at}, {e});", discriminant_type(self.case_cnt(*t))),
+            Kind::Enum(t) => format!("{w}.{}({at}, {e});", discriminant(self.case_cnt(*t))?.rs),
             Kind::Str => format!("{w}.str({at}, {e});"),
             Kind::Array(_) => format!("{w}.arr({at}, {e});"),
             Kind::List(el) => {
@@ -990,7 +1009,7 @@ impl Gen<'_> {
             }
             Kind::Record(t) | Kind::Variant(t) => format!("{}({w}, {at}, {e});", self.ts_path(*t, "store_")),
             Kind::Option(el) => {
-                let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)]);
+                let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)])?;
                 format!("if ({e} !== null) {{ {w}.u8({at}, 1); {} }}", self.ts_store(w, &plus(at, off), e, el)?)
             }
             Kind::Result(ok, err) => {
@@ -1018,7 +1037,7 @@ impl Gen<'_> {
             }
             Kind::Record(t) | Kind::Variant(t) | Kind::Enum(t) => format!("{}({r}, {at})", self.ts_path(*t, "load_")),
             Kind::Option(el) => {
-                let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)]);
+                let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)])?;
                 format!("({r}.case({at}, 2) === 0 ? null : {})", self.ts_load(r, &plus(at, off), el)?)
             }
             Kind::Result(ok, err) => {
@@ -1067,7 +1086,7 @@ impl Gen<'_> {
             let _ = writeln!(out, "  drop(): void;");
         }
         let fname = if o.resource { ts_name(&o.name) } else { "object".into() };
-        let pick = if o.methods.iter().any(|f| is_async(f)) { format!("l: Pick<{}, \"task_return\" | \"on_cancel\">, ", self.ts_use(link, "Link", true)) } else { String::new() };
+        let pick = if o.methods.iter().any(|f| is_async(f)) { format!("l: Pick<{}, \"task_return\" | \"on_cancel\">, ", self.ts_use(link, "Side", true)) } else { String::new() };
         let refusal_of = self.ts_use(link, "refusal_of", false);
         let _ = writeln!(out, "}}\n\n/** The object over `implementation`. */\n{}function {fname}({pick}implementation: {t}): {} {{\n  return {{\n    call(m, tag, args) {{\n      try {{\n        switch (m) {{", if o.resource { "export " } else { "" }, self.ts_use(link, "LinkObject", true));
         for f in &o.methods {
@@ -1112,7 +1131,7 @@ impl Gen<'_> {
         let drop = if o.resource { "drop() {\n      implementation.drop();\n    }" } else { "drop() {}" };
         let _ = writeln!(out, "          default:\n            return {};\n        }}\n      }} catch (e) {{\n        return {refusal_of}(e);\n      }}\n    }},\n    {drop},\n  }};\n}}\n", self.ts_use(TS_ERRNO, "ERRNO_ENOSYS", false));
         if !o.resource {
-            let ln = self.ts_use(link, "Link", true);
+            let ln = self.ts_use(link, "Side", true);
             let pick = if pick.is_empty() { format!("l: Pick<{ln}, \"mount_named\">") } else { format!("l: Pick<{ln}, \"mount_named\" | \"task_return\" | \"on_cancel\">") };
             let pass = if o.methods.iter().any(|f| is_async(f)) { "l, " } else { "" };
             let _ = writeln!(out, "/** Serves `implementation` under the interface's handle. */\nexport function mount({pick}, implementation: {t}): void {{\n  l.mount_named(HANDLE, object({pass}implementation));\n}}\n");
@@ -1269,8 +1288,8 @@ impl Gen<'_> {
                 }
                 TypeDefKind::Variant(v) => {
                     let cases = cases(self.r, v, &at)?;
-                    let (off, sz, align) = variant_layout(&self.payload_layouts(t)?);
-                    let d = discriminant_type(cases.len());
+                    let (off, sz, align) = variant_layout(&self.payload_layouts(t)?)?;
+                    let d = discriminant(cases.len())?.rs;
                     let _ = writeln!(out, "#[derive(Clone, Debug, PartialEq)]\npub enum {n} {{");
                     for (c, k) in &cases {
                         match k {
@@ -1340,7 +1359,7 @@ impl Gen<'_> {
         let is_type = prefix.is_empty();
         let base = m.map(|m| m.ts);
         if is_type && matches!(self.r.types[t].kind, TypeDefKind::Enum(_)) {
-            let base = base.unwrap_or(format!("./{}", self.module()));
+            let base = base.unwrap_or(format!("./{}", self.module_ts()));
             return self.ts_use(&format!("{base}.enum.ts"), &name, true);
         }
         match base {
@@ -1352,8 +1371,7 @@ impl Gen<'_> {
     fn ts_ty(&self, k: &Kind) -> String {
         match k {
             Kind::Bool => "boolean".into(),
-            Kind::Number(n) if n.in_f64 => "number".into(),
-            Kind::Number(_) => "bigint".into(),
+            Kind::Number(n) => ts_number(n.rs).into(),
             Kind::Handle => "number".into(),
             Kind::Str => "string".into(),
             Kind::Array(n) => format!("{}<ArrayBuffer>", n.arr),
@@ -1385,7 +1403,7 @@ impl Gen<'_> {
                 TypeDefKind::Enum(e) => {
                     let members = members(e);
                     let _ = writeln!(enums, "{}\n", ts_enum(&n, &members).join("\n"));
-                    let own = format!("./{}.enum.ts", self.module());
+                    let own = format!("./{}.enum.ts", self.module_ts());
                     let _ = writeln!(
                         out,
                         "export function load_{n}(r: {}, at: number): {} {{\n  const v = {}(r.case(at, {}));\n  if (v === null) throw new {}({});\n  return v;\n}}\n",
@@ -1413,8 +1431,8 @@ impl Gen<'_> {
                 }
                 TypeDefKind::Variant(v) => {
                     let cases = cases(self.r, v, &at)?;
-                    let (off, sz, align) = variant_layout(&self.payload_layouts(t)?);
-                    let d = discriminant_type(cases.len());
+                    let (off, sz, align) = variant_layout(&self.payload_layouts(t)?)?;
+                    let d = discriminant(cases.len())?.rs;
                     let alts: Vec<String> = cases
                         .iter()
                         .map(|(c, k)| match k {
@@ -1582,8 +1600,9 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
     let rs_dir = t.rs.map(|path| path.trim_end_matches(".rs"));
     let package_rs = t.rs.and_then(|path| Path::new(path).file_stem()?.to_str()).unwrap_or_default();
     // The methods of the named interfaces the host serves that answer later,
-    // each its interface's module and its method's constant, from WIT's
-    // `async func`.
+    // each its interface's Rust module, whether it is folded, and its
+    // method's Rust constant, then its TypeScript module and constant, from
+    // WIT's `async func`.
     let mut later = Vec::new();
     for (iname, &i) in &p.interfaces {
         let at = format!("{pname}/{iname}");
@@ -1615,7 +1634,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
         if guest_serves == Some(false) {
             for o in objs.iter().filter(|o| !o.resource) {
                 for f in o.methods.iter().filter(|f| is_async(f)) {
-                    later.push((m.clone(), folded(&r, i, package_rs), method_const(o, f, rs_given), method_const(o, f, ts_given)));
+                    later.push((m.clone(), folded(&r, i, package_rs), method_const(o, f, rs_given), interface_ts_module(&r, i), method_const(o, f, ts_given)));
                 }
             }
         }
@@ -1636,14 +1655,11 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
         }
         if let Some(dir) = t.ts {
             let (body, enums) = g.ts_interface(&objs, guest_serves.map(|g| role(!g)))?;
+            let m = g.module_ts();
             if !enums.is_empty() {
                 let path = format!("{dir}/{m}.enum.ts");
                 let text = format!("// {}\n//\n// {}\n{enums}", package_path(root, &path)?, mark(src, TOOL));
                 outs.push(Output::new(&path, text));
-            }
-            // The package's later.ts is its table of methods answered later.
-            if m == "later" {
-                return Err(format!("{at}: its TypeScript would be the package's later.ts"));
             }
             let path = format!("{dir}/{m}.ts");
             let text = format!("// {}\n//\n// {}\n\n{}\n{body}", package_path(root, &path)?, mark(src, TOOL), g.ts_imports());
@@ -1662,8 +1678,8 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
     if let (Some((_, false)), Some(_)) = (&side, world) {
         let pairs: Vec<_> = later
             .iter()
-            .map(|(m, in_root, c, _)| {
-                let module = if *in_root { String::new() } else { format!("{m}::") };
+            .map(|(m, folded, c, ..)| {
+                let module = if *folded { String::new() } else { format!("{m}::") };
                 format!("({module}HANDLE, {module}{c})")
             })
             .collect();
@@ -1674,9 +1690,9 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
         );
     }
     if let (Some(dir), Some(_)) = (t.ts, world) {
-        let modules: std::collections::BTreeSet<_> = later.iter().map(|(m, ..)| m.as_str()).collect();
+        let modules: std::collections::BTreeSet<_> = later.iter().map(|(_, _, _, m, _)| m.as_str()).collect();
         let imports: String = modules.iter().map(|m| format!("import * as {m} from \"./{m}.ts\";\n")).collect();
-        let pairs: Vec<_> = later.iter().map(|(m, _, _, c)| format!("[{m}.HANDLE, {m}.{c}]")).collect();
+        let pairs: Vec<_> = later.iter().map(|(_, _, _, m, c)| format!("[{m}.HANDLE, {m}.{c}]")).collect();
         let path = format!("{dir}/later.ts");
         let text = format!(
             "// {}\n//\n// {}\n\nimport type {{ Handle, Method }} from \"{link_ts}\";\n{imports}\n/** The methods of the named interfaces the host serves that answer\n * later, each `[handle, method]`, as WIT's `async func` marks them. */\nexport const LATER: readonly (readonly [Handle, Method])[] = [{}];\n",

@@ -36,7 +36,7 @@ function Halo({
   draw: (ink?: string) => ReactNode;
 }) {
   return (
-    <View style={[style, styles.rings]}>
+    <View style={[style, STYLE.rings]}>
       {HALO_RINGS.map((px) => (
         <View
           key={px}
@@ -48,7 +48,7 @@ function Halo({
             <View
               key={i}
               style={[
-                styles.copy,
+                STYLE.copy,
                 {
                   transform: [{ translateX: x }, { translateY: y }],
                 },
@@ -135,7 +135,7 @@ export function HaloText({
 }) {
   return (
     <Halo
-      style={styles.shrink}
+      style={STYLE.shrink}
       draw={(ink) => (
         <Text
           numberOfLines={1}
@@ -157,7 +157,7 @@ function around(px: f64): [f64, f64][] {
   });
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   shrink: { flexShrink: 1, minWidth: 0 },
   rings: { padding: HALO.width },
   copy: {

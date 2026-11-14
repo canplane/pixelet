@@ -24,7 +24,7 @@ export * from "./panel.tsx";
 export function Panel({ label, onClose, half, children }: PanelProps) {
   const { open, on_exited } = useContext(PanelPresence);
   return (
-    <Host style={styles.host}>
+    <Host style={STYLE.host}>
       <BottomSheet
         isPresented={open}
         onIsPresentedChange={(presented) => presented || onClose()}
@@ -52,6 +52,6 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   host: { position: "absolute" },
 });

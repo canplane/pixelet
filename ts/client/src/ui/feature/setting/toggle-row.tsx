@@ -51,24 +51,24 @@ export function ToggleRow({
       <View
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        style={styles.track}
+        style={STYLE.track}
       >
         <Motion
           to={{ opacity: value ? 1 : 0 }}
           transition={SNAP}
-          style={styles.on}
+          style={STYLE.on}
         />
         <Motion
           to={{ translateX: value ? TRAVEL : 0 }}
           transition={SNAP}
-          style={styles.thumb}
+          style={STYLE.thumb}
         />
       </View>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   track: {
     ...TRACK,
     borderRadius: TRACK.height / 2,

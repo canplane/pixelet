@@ -78,7 +78,7 @@ pub struct Character {
     /// The model's index in `ModelTable`.
     model: u32,
     cur: Option<ClipTime>,
-    previous: Option<ClipTime>,
+    prev: Option<ClipTime>,
     fade: f32,
     fade_len: f32,
     /// The joints' palette, one mat4 a joint, which the renderer uploads.
@@ -155,7 +155,7 @@ impl Character {
             number,
             model,
             cur: None,
-            previous: None,
+            prev: None,
             fade: 0.0,
             fade_len: 0.0,
             palette,
@@ -202,11 +202,11 @@ impl Character {
         if lacks || self.cur.is_some_and(|c| c.clip == clip) {
             return;
         }
-        self.previous = self.cur;
+        self.prev = self.cur;
         self.cur = Some(ClipTime { clip, time: 0.0 });
         self.posed = false;
         self.fade = 0.0;
-        self.fade_len = if self.previous.is_some() {
+        self.fade_len = if self.prev.is_some() {
             fade_s.max(0.0)
         } else {
             0.0
@@ -247,7 +247,7 @@ impl Character {
         };
         let length = |p: &ClipTime| m.duration(p.clip).filter(|&d| d > 0.0);
         let playing = self.cur.filter(|p| length(p).is_some());
-        let moving = playing.is_some() || self.previous.is_some();
+        let moving = playing.is_some() || self.prev.is_some();
         // In the world, the character is observed where it spans the model's
         // edge at its distance, as a decor's model is. It is drawn, posed or
         // not, where it spans the impostor's edge, as a decor's impostor is.
@@ -262,7 +262,7 @@ impl Character {
             seen = frame.frustum.sees(about, r) && 2.0 * r >= decor_model_angle() * dist;
             self.visible = 2.0 * r >= decor_impostor_angle() * dist;
             world_moves = seen
-                && (self.previous.is_some()
+                && (self.prev.is_some()
                     || playing.is_some_and(|p| f64::from(m.motion(p.clip) * scale) >= cell_there));
         }
         let mut moves = world_moves || on_surface && moving;
@@ -271,7 +271,7 @@ impl Character {
         // gone a display pixel from the pose drawn, or when its motion turns
         // back. A fade runs one frame a step.
         if let Some((p, d)) = playing
-            .filter(|_| world_moves && !on_surface && self.previous.is_none())
+            .filter(|_| world_moves && !on_surface && self.prev.is_none())
             .and_then(|p| Some((p, f64::from(length(&p)?))))
         {
             let far = (dist / frame.px_per_unit / f64::from(scale)) as f32;
@@ -317,13 +317,13 @@ impl Character {
             if let Some(p) = self.cur.as_mut() {
                 wrap(p);
             }
-            if let Some(p) = self.previous.as_mut() {
+            if let Some(p) = self.prev.as_mut() {
                 wrap(p);
             }
-            if self.previous.is_some() {
+            if self.prev.is_some() {
                 self.fade += dt;
                 if self.fade >= self.fade_len {
-                    self.previous = None;
+                    self.prev = None;
                 }
             }
         }
@@ -339,7 +339,7 @@ impl Character {
         }
         self.posed = true;
         m.pose(self.cur.map(|p| (p.clip, p.time)), &mut self.local);
-        if let Some(prev) = self.previous {
+        if let Some(prev) = self.prev {
             self.from.resize(joint_cnt, [0.0; 10]);
             m.pose(Some((prev.clip, prev.time)), &mut self.from);
             let w = if self.fade_len > 0.0 {

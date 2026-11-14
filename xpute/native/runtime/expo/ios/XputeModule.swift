@@ -16,6 +16,10 @@ public class XputeModule: Module {
   /// `lock`.
   nonisolated(unsafe) static weak var current: XputeModule?
   private static let lock = NSLock()
+  /// The UI's generation, which its start answers and each post, answer and
+  /// take carries, so an old JavaScript runtime's reaches nothing once a new
+  /// one has started (xpute.h `xpute_start`); 0, no UI's, until then.
+  private var generation: UInt32 = 0
 
   public func definition() -> ModuleDefinition {
     Name("Xpute")
@@ -76,7 +80,7 @@ public class XputeModule: Module {
       let caches = Array(try FileManager.default.url(
         for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true
       ).path.utf8CString.dropLast())
-      named.withUnsafeBufferPointer { buf in
+      self.generation = named.withUnsafeBufferPointer { buf in
         xpute_start(
           buf.baseAddress, buf.count,
           prefixes.rawPointer.assumingMemoryBound(to: UInt8.self), prefixes.byteLength,
@@ -85,17 +89,19 @@ public class XputeModule: Module {
     }
 
     Function("post") { (tag: UInt32, h: UInt32, m: UInt32, pkt: Uint8Array?) in
-      xpute_post(tag, h, m, pkt?.rawPointer.assumingMemoryBound(to: UInt8.self), pkt?.byteLength ?? 0)
+      xpute_post(
+        self.generation, tag, h, m, pkt?.rawPointer.assumingMemoryBound(to: UInt8.self), pkt?.byteLength ?? 0)
     }
 
     Function("answer") { (tag: UInt32, result: Int32, data: Uint8Array?) in
-      xpute_answer(tag, result, data?.rawPointer.assumingMemoryBound(to: UInt8.self), data?.byteLength ?? 0)
+      xpute_answer(
+        self.generation, tag, result, data?.rawPointer.assumingMemoryBound(to: UInt8.self), data?.byteLength ?? 0)
     }
 
     /// The batch is JavaScript's without a copy, and freed when the buffer is.
     Function("take") { () throws -> NativeArrayBuffer in
       var len = 0
-      let at = xpute_take(&len)
+      let at = xpute_take(self.generation, &len)
       return try NativeArrayBuffer.wrap(
         dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: len),
         cleanup: { xpute_taken_free(at, len) })

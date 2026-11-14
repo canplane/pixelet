@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Builds the core's module (rust/client/core) to public/,
 # where the page fetches it as /core.wasm
-# (ts/client/src/service/platform/core.ts).
+# (ts/client/src/runtime/boot.ts).
 #
 #   ./script/wasm-build.py [--published | --check]
 #
@@ -62,7 +62,7 @@ WASM_OPT = ["-O3", *STRIPS] if PUBLISHED else STRIPS
 
 # embassy and critical-section export their `#[no_mangle]` symbols. Only
 # these exports stay: the module's memory and the link's three exports
-# (@xpute/link link.ts `Core`).
+# (@xpute/link link.ts `Guest`).
 EXPORTS = ["memory", "link_init", "link_boot", "link_in"]
 
 

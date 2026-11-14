@@ -8,7 +8,7 @@
 //! it sets (`notify_on`, `stopped_on`, `trap_on`).
 
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
@@ -53,16 +53,45 @@ fn notify() {
     }
 }
 
-fn stopped(s: Stop) {
+/// What the app was told of the guest's end: the last stop reported, as the
+/// UI keeps it, and whether the guest trapped, told again to each new UI
+/// (`start`).
+struct End {
+    stop: Option<Stop>,
+    trapped: bool,
+}
+
+static END: Mutex<End> = Mutex::new(End {
+    stop: None,
+    trapped: false,
+});
+
+fn end() -> MutexGuard<'static, End> {
+    END.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn tell_stop(s: &Stop) {
     if let Some(f) = *STOPPED.lock().unwrap_or_else(|e| e.into_inner()) {
         f(s.errnum, s.file.as_ptr(), s.file.len(), s.line, s.n1, s.n2);
     }
 }
 
-fn trap() {
+fn tell_trap() {
     if let Some(f) = *TRAP.lock().unwrap_or_else(|e| e.into_inner()) {
         f();
     }
+}
+
+fn stopped(s: Stop) {
+    let mut end = end();
+    tell_stop(&s);
+    end.stop = Some(s);
+}
+
+fn trap() {
+    let mut end = end();
+    tell_trap();
+    end.trapped = true;
 }
 
 /// The prefixes the UI opens at, from a lowered `list<list<token>>`.
@@ -78,11 +107,24 @@ static STARTED: std::sync::Once = std::sync::Once::new();
 /// Starts the program's runtime (`xpute_start`): `named` and `prefixes` the
 /// UI's, and the two directories. The runtime starts once a process, and
 /// each call is a new UI on it (`remote::accept`), as a reload's, which
-/// serves what the first did.
-pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], files_dir: PathBuf, cache_dir: PathBuf) {
+/// serves what the first did and is told the guest's end where it came
+/// (`End`). It answers the new UI's generation, which the UI's posts, answers
+/// and takes carry.
+pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], files_dir: PathBuf, cache_dir: PathBuf) -> u32 {
     let prefixes = prefixes(prefixes_pkt).or_bug(Errno::EBADMSG);
-    remote::accept();
+    let generation = remote::accept();
+    {
+        // A stop told again lands before a trap told meanwhile.
+        let end = end();
+        if let Some(s) = &end.stop {
+            tell_stop(s);
+        }
+        if end.trapped {
+            tell_trap();
+        }
+    }
     STARTED.call_once(|| start(named, prefixes, files_dir, cache_dir, notify, stopped, trap));
+    generation
 }
 
 /// A directory the app names by the `len` bytes of UTF-8 at `at`.
@@ -103,10 +145,10 @@ pub unsafe fn bytes(at: *const u8, len: usize) -> Option<Vec<u8>> {
     (!at.is_null()).then(|| unsafe { core::slice::from_raw_parts(at, len) }.to_vec())
 }
 
-/// Hands over the batch the UI has not taken, the caller's until
-/// `taken_free`.
-pub fn take() -> (*mut u8, usize) {
-    let b = Box::into_raw(remote::take().into_boxed_slice());
+/// Hands over the batch the UI of `generation` has not taken, the caller's
+/// until `taken_free`.
+pub fn take(generation: u32) -> (*mut u8, usize) {
+    let b = Box::into_raw(remote::take(generation).into_boxed_slice());
     (b.cast::<u8>(), b.len())
 }
 
@@ -144,14 +186,14 @@ macro_rules! native_abi {
             files_dir_len: usize,
             cache_dir: *const u8,
             cache_dir_len: usize,
-        ) {
+        ) -> u32 {
             // SAFETY: the caller's.
             unsafe {
                 let named = ::core::slice::from_raw_parts(named, named_len).to_vec();
                 let prefixes = ::core::slice::from_raw_parts(prefixes, prefixes_len);
                 let (files_dir, cache_dir) =
                     ($crate::native::dir(files_dir, files_dir_len), $crate::native::dir(cache_dir, cache_dir_len));
-                $crate::native::start($start, named, prefixes, files_dir, cache_dir);
+                $crate::native::start($start, named, prefixes, files_dir, cache_dir)
             }
         }
 
@@ -173,26 +215,26 @@ macro_rules! native_abi {
         /// # Safety
         /// `pkt` is null or `len` readable bytes.
         #[no_mangle]
-        pub unsafe extern "C" fn xpute_post(tag: u32, h: u32, m: u32, pkt: *const u8, len: usize) {
+        pub unsafe extern "C" fn xpute_post(generation: u32, tag: u32, h: u32, m: u32, pkt: *const u8, len: usize) {
             // SAFETY: the caller's.
             let pkt = unsafe { $crate::native::bytes(pkt, len) };
-            ::xpute_native_runtime::post(tag, h, m, pkt);
+            ::xpute_native_runtime::post(generation, tag, h, m, pkt);
         }
 
         /// # Safety
         /// `data` is null or `len` readable bytes.
         #[no_mangle]
-        pub unsafe extern "C" fn xpute_answer(tag: u32, result: i32, data: *const u8, len: usize) {
+        pub unsafe extern "C" fn xpute_answer(generation: u32, tag: u32, result: i32, data: *const u8, len: usize) {
             // SAFETY: the caller's.
             let data = unsafe { $crate::native::bytes(data, len) };
-            ::xpute_native_runtime::answer(tag, result, data);
+            ::xpute_native_runtime::answer(generation, tag, result, data);
         }
 
         /// # Safety
         /// `len` is a writable word.
         #[no_mangle]
-        pub unsafe extern "C" fn xpute_take(len: *mut usize) -> *mut u8 {
-            let (at, n) = $crate::native::take();
+        pub unsafe extern "C" fn xpute_take(generation: u32, len: *mut usize) -> *mut u8 {
+            let (at, n) = $crate::native::take(generation);
             // SAFETY: the caller's word.
             unsafe { *len = n };
             at

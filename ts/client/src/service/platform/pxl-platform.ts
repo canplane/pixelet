@@ -11,6 +11,7 @@ interface PxlPlatform {
    * (origin.native.ts). */
   unpack(packed: Uint8Array): Promise<ArrayBuffer>;
   storage_get(key: string): string | null;
+  storage_keys(): string[];
   storage_set(key: string, val: string): void;
   clipboard_set(text: string): void;
   has_heading(): boolean;

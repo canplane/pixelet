@@ -69,19 +69,19 @@ export function usePresent<T>(
   items: readonly T[],
   key_of: (item: T) => Key,
 ): { list: Present<T>[]; on_exited: (key: Key) => void } {
-  const [prev, set_prev] = useState(items);
+  const [previous, set_previous] = useState(items);
   const [leaving, set_leaving] = useState<Leaving<T>[]>([]);
 
   let current = leaving;
-  if (prev !== items) {
+  if (previous !== items) {
     const keys = new Set(items.map(key_of));
     const leaving_keys = new Set(leaving.map((l) => l.key));
-    const left = prev
+    const left = previous
       .map((item) => ({ item, key: key_of(item) }))
       .filter((l) => !keys.has(l.key) && !leaving_keys.has(l.key));
     current = [...leaving.filter((l) => !keys.has(l.key)), ...left];
     set_leaving(current);
-    set_prev(items);
+    set_previous(items);
   }
 
   return {

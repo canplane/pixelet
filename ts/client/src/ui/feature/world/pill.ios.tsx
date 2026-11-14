@@ -87,14 +87,14 @@ export function Pill({
         fadeFrom={fadeFrom}
         transition={fadeTransition}
         style={[
-          styles.glass,
+          STYLE.glass,
           { borderRadius: r },
           border && { borderWidth: border.width, borderColor: border.color },
           shadow ? { boxShadow: shadow } : null,
         ]}
       >
         <View
-          style={[StyleSheet.absoluteFill, styles.clip, { borderRadius: r }]}
+          style={[StyleSheet.absoluteFill, STYLE.clip, { borderRadius: r }]}
         >
           <View
             onLayout={
@@ -111,7 +111,7 @@ export function Pill({
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   glass: { flex: 1 },
   clip: { overflow: "hidden", pointerEvents: "box-none" },
 });

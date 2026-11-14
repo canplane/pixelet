@@ -34,7 +34,7 @@ export function PickedCharacter(props: PickedCharacterProps) {
         // The surface stays hidden until the core has drawn this character,
         // because until then its canvas holds the last character's frame.
       }
-      <View style={[StyleSheet.absoluteFill, !drawn && styles.hidden]}>
+      <View style={[StyleSheet.absoluteFill, !drawn && STYLE.hidden]}>
         <CharacterSurface
           surface={SURFACE}
           openKey={`${character.group}:${character.number}`}
@@ -46,7 +46,7 @@ export function PickedCharacter(props: PickedCharacterProps) {
         />
       </View>
       {!drawn && (
-        <View style={styles.loading}>
+        <View style={STYLE.loading}>
           <Spinner size={CHROME.glyph} color={LABEL.secondary} />
         </View>
       )}
@@ -54,7 +54,7 @@ export function PickedCharacter(props: PickedCharacterProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   hidden: { opacity: 0 },
   loading: {
     ...StyleSheet.absoluteFill,

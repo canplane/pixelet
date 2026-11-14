@@ -43,7 +43,7 @@ export function coords_fix(c: Coords): Fix {
 
 /** An altitude without an accuracy was not measured, so it is passed on as
  * null. A desktop's location gives 0 for it. */
-export function geo_fix(fix: Fix): void {
+export function geolocation_fix(fix: Fix): void {
   listener.pos(
     fix.lon,
     fix.lat,

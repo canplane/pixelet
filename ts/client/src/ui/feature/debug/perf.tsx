@@ -105,7 +105,7 @@ function PanelButton({
       accessibilityRole="button"
       accessibilityHint={hint}
       style={({ pressed }) => [
-        styles.button,
+        STYLE.button,
         {
           borderColor: t.border,
           backgroundColor: hovered || pressed ? t.lit : t.ground,
@@ -155,11 +155,11 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
       aria-checked={on}
       style={[
         GAUGE.row,
-        styles.check,
+        STYLE.check,
         disabled && { opacity: DISABLED_CONTENT },
       ]}
     >
-      <View style={styles.check_label}>
+      <View style={STYLE.check_label}>
         <Box
           size={18}
           color={GAUGE.text.color}
@@ -167,7 +167,7 @@ function OwnCheck({ name, disabled }: { name: Own; disabled: boolean }) {
         />
         <Text style={GAUGE.text}>{own.label}</Text>
       </View>
-      <Text style={[GAUGE.text, GAUGE.key, styles.note]} numberOfLines={1}>
+      <Text style={[GAUGE.text, GAUGE.key, STYLE.note]} numberOfLines={1}>
         {disabled ? "stop the window to change" : own.note}
       </Text>
     </Pressable>
@@ -220,7 +220,7 @@ export function PerfPanel() {
         </Text>
       }
     >
-      <View style={styles.buttons}>
+      <View style={STYLE.buttons}>
         {/* Start and Stop are two buttons rather than one toggle. A toggle would
             offer only "Stop" for a window that opened at boot, until the
             window was first stopped. */}
@@ -262,17 +262,17 @@ export function PerfPanel() {
       {/* The hint shows under the buttons. Above them, a hint that wraps to two
           lines would push the hovered button out from under the pointer. */}
       {(said ?? hint) !== null && (
-        <Text style={[GAUGE.text, styles.hint]}>{said ?? hint}</Text>
+        <Text style={[GAUGE.text, STYLE.hint]}>{said ?? hint}</Text>
       )}
       {g !== null && <PerfRec rec={g.rec} />}
-      <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
+      <ScrollView style={STYLE.body} showsVerticalScrollIndicator={false}>
         <PerfGauge g={g} />
       </ScrollView>
     </Accordion>
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   hint: {
     marginTop: 6,
     fontWeight: "600",

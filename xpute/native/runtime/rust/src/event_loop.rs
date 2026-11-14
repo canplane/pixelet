@@ -4,10 +4,10 @@
 //! event loop is. Any thread pushes a task (`post_task`): the UI's methods
 //! (lib.rs `post`), the disk's results (xpute-native-host disk.rs), the app's
 //! lifecycle, the answers of a plugin's threads. The loop waits until a task
-//! comes or its earliest timer is due, runs it on the guest's thread, entering
-//! the guest where it must, then runs the answers due and hands the UI its
-//! frames (link.rs `run_due`, remote.rs `flush`), as a page's runs a task, its
-//! microtasks, then posts.
+//! comes or its earliest timer is due and runs it on the guest's thread,
+//! entering the guest where it must (`turn`); the program runs the answers due
+//! and hands the UI its frames between turns (lib.rs), as a page's runs a
+//! task, its microtasks, then posts.
 
 use core::any::Any;
 use std::cell::{Cell, RefCell};
@@ -86,19 +86,15 @@ pub fn done<T: Send + 'static>(id: u64, result: T) {
     }));
 }
 
-/// The guest thread's loop, for the guest's life: one task at a time, then
-/// the answers due and the UI's batch (`notify`). A task's panic, which the
-/// host's hook has reported and turned into a trap (xpute-native-host
-/// `hook`), ends the task and not the loop.
-pub fn run(notify: fn()) -> ! {
-    loop {
-        let task = wait();
-        answer_timers();
-        if let Some(task) = task {
-            let _ = std::panic::catch_unwind(core::panic::AssertUnwindSafe(task));
-        }
-        crate::link::run_due();
-        crate::remote::flush(notify);
+/// One turn of the guest thread's loop: the next task, or the earliest timer
+/// due, waited for, the timers due answered and the task run. A task's panic,
+/// which the host's hook has reported and turned into a trap
+/// (xpute-native-host `hook`), ends the task and not the loop.
+pub fn turn() {
+    let task = wait();
+    answer_timers();
+    if let Some(task) = task {
+        let _ = std::panic::catch_unwind(core::panic::AssertUnwindSafe(task));
     }
 }
 

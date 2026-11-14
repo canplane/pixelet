@@ -4,6 +4,6 @@
 // sheet, and regular (frosted) over the map or content, where what is behind
 // it moves. A page draws the same fill in every place.
 
-export const OnSheet = 0;
-export const OverMap = 1;
-export const OverContent = 2;
+export const ON_SHEET = 0;
+export const OVER_MAP = 1;
+export const OVER_CONTENT = 2;

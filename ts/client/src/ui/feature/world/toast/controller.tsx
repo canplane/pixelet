@@ -76,8 +76,8 @@ function useNotice(id: Report, notice: Notice | null, hold_ms = 0): void {
   }, [id, key, tone, words, hold_ms]);
 }
 
-const error = (key: string): Notice => ({ key, tone: ToastTone.Error });
-const loading = (key: string): Notice => ({ key, tone: ToastTone.Loading });
+const error = (key: string): Notice => ({ key, tone: ToastTone.ERROR });
+const loading = (key: string): Notice => ({ key, tone: ToastTone.LOADING });
 
 function location(
   status: SensorStatus,
@@ -91,11 +91,11 @@ function location(
 
 /** The GPU's toast shows while the client asks again for a GPU, because none
  * answered or the one drawing was lost. */
-function gpu_err(gpu: Gpu): Notice | null {
+function gpu_error(gpu: Gpu): Notice | null {
   return gpu === GPU_WAITING ? error("toast.gpu_unstable") : null;
 }
 
-function server_err(stall: Message | null): Notice | null {
+function server_error(stall: Message | null): Notice | null {
   return stall === MESSAGE_WORLD_READ_FAILING
     ? error(message_key(stall))
     : null;
@@ -111,7 +111,7 @@ function world(
   if (!shown) return loading("toast.world_loading");
   if (companion_loading) return loading("toast.companion_loading");
   return greeting === SAYING
-    ? { key: "toast.world_ready", tone: ToastTone.Ready }
+    ? { key: "toast.world_ready", tone: ToastTone.READY }
     : null;
 }
 
@@ -119,14 +119,14 @@ function world(
  * source of an error has one toast. */
 export function ToastController() {
   const location_status = useCore((s) => s.location.status);
-  const location_err = useCore((s) => s.location.err);
-  useNotice(LOCATION, location(location_status, location_err));
+  const location_error = useCore((s) => s.location.err);
+  useNotice(LOCATION, location(location_status, location_error));
 
   const gpu = useGpu();
   const stall = useCore((s) => s.stall);
-  useNotice(GPU, gpu_err(gpu));
+  useNotice(GPU, gpu_error(gpu));
   useNotice(NETWORK, useOnline() ? null : error("toast.network_unstable"));
-  useNotice(SERVER, server_err(stall), SERVER_HOLD_MS);
+  useNotice(SERVER, server_error(stall), SERVER_HOLD_MS);
 
   const outside = useCore((s) => s.pivot.outside);
   const shown = useCore((s) => s.pivot.status === GROUND_STATUS_SUCCESS);

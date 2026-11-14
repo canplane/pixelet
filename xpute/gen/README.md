@@ -39,14 +39,15 @@ number the spec writes in hex, which JSON5 allows.
 
 A value goes as it is: a number keeps its value, a string its text, and a
 string a `$type` names as an enum's member is that member. A `$type` the
-generator does not know is refused, and so is a number its integer `$type`
-does not hold, not whole or past its width. An enum that is a list is numbered by its
-members' places, or, where every record carries one, each by its `number`;
-an enum that is a table gives each member a number of its own. A number goes
-at its own width, and a list of fixed-size numbers is packed at its
-element's. A table marked `"packed": true` is a layout of words: each field's
-width is an element or `[count, element]`, and the generator writes where
-each field begins.
+generator does not know is refused, and so is a number with no `$type`, its
+own or its group's, or with a type no number has, or one its integer `$type`
+does not hold, not whole or past its width, a packed table's words a
+`usize`'s. An enum that is a list is numbered by its members' places, or,
+where every record carries one, each by its `number`; an enum that is a
+table gives each member a number of its own. A number goes at its own width,
+and a list of fixed-size numbers is packed at its element's. A table marked
+`"packed": true` is a layout of words: each field's width is an element or
+`[count, element]`, and the generator writes where each field begins.
 
 ## Only what the compiler uses
 

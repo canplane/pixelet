@@ -56,22 +56,22 @@ function Chip({
       aria-checked={active}
       style={CHIP_TARGET}
     >
-      <View style={[styles.chip, active && styles.chip_on]}>
+      <View style={[STYLE.chip, active && STYLE.chip_on]}>
         {/* A hidden copy in the heavier weight sizes the chip, so a pick never rewraps the row. */}
         <Text
           aria-hidden
           maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
-          style={[styles.chip_text, styles.chip_text_on, styles.sizer]}
+          style={[STYLE.chip_text, STYLE.chip_text_on, STYLE.sizer]}
         >
           {label}
         </Text>
-        <View style={styles.label}>
+        <View style={STYLE.label}>
           <Text
             maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
             style={[
-              styles.chip_text,
-              styles.centered,
-              active && styles.chip_text_on,
+              STYLE.chip_text,
+              STYLE.centered,
+              active && STYLE.chip_text_on,
             ]}
           >
             {label}
@@ -92,11 +92,11 @@ function PickerCard({
   children: ReactNode;
 }) {
   return (
-    <View style={styles.picker}>
+    <View style={STYLE.picker}>
       <SectionTitle>{label}</SectionTitle>
-      <View style={styles.picker_row}>
-        <PickedCharacter character={selected} style={styles.surface} />
-        <View style={styles.chip_column}>{children}</View>
+      <View style={STYLE.picker_row}>
+        <PickedCharacter character={selected} style={STYLE.surface} />
+        <View style={STYLE.chip_column}>{children}</View>
       </View>
     </View>
   );
@@ -117,7 +117,7 @@ function PersonPicker(props: PersonPickerProps) {
 
   return (
     <PickerCard label={t("drawer.character.person_label")} selected={selected}>
-      <View style={styles.chips}>
+      <View style={STYLE.chips}>
         {GENDERS.map((g) => (
           <Chip
             key={g}
@@ -127,8 +127,8 @@ function PersonPicker(props: PersonPickerProps) {
           />
         ))}
       </View>
-      <View style={styles.rule} />
-      <View style={styles.chips}>
+      <View style={STYLE.rule} />
+      <View style={STYLE.chips}>
         {characters.map((v, i) => (
           <Chip
             key={v.number}
@@ -153,7 +153,7 @@ function PetPicker(props: PetPickerProps) {
 
   return (
     <PickerCard label={t("drawer.character.pet_label")} selected={selected}>
-      <View style={styles.chips}>
+      <View style={STYLE.chips}>
         {PETS.map((v) => (
           <Chip
             key={v.number}
@@ -178,7 +178,7 @@ export function CharacterPicker() {
   const [gender, set_gender] = useState<Gender>(gender_of(person));
 
   return (
-    <View style={styles.pickers}>
+    <View style={STYLE.pickers}>
       <PersonPicker
         gender={gender}
         onGenderChange={set_gender}
@@ -193,7 +193,7 @@ export function CharacterPicker() {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   pickers: { gap: PANEL_SECTION_GAP },
   picker: { gap: 8 },
   picker_row: {

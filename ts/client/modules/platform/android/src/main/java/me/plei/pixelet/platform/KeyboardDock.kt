@@ -26,7 +26,7 @@ import expo.modules.kotlin.views.ExpoView
  * the send button does not send. So the translation is only ever the part of
  * the lift that the layout has not taken yet. Once the keyboard is still, the
  * view reports the lift (`onLift`). The UI then lays the view out that much
- * higher and reports it back (`layoutLift`), and the translation falls to
+ * higher and reports it back (`layoutLiftPx`), and the translation falls to
  * zero. At rest, the view is where the layout says it is.
  */
 class KeyboardDock(context: Context, appContext: AppContext) : ExpoView(context, appContext) {

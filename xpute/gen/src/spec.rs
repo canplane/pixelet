@@ -313,45 +313,114 @@ pub fn marks(marks: Vec<(String, Node)>) -> (String, Node) {
     ("$extensions".into(), Node::Obj(vec![(MARKS.into(), Node::Obj(marks))]))
 }
 
-/// The spec at `path`, JSON5, its tokens folded (`Node::folded`), each
-/// number an integer `$type` gives whole and within its width (`check_widths`).
+/// The spec at `path` (`typed`).
 pub fn read(path: &str) -> Result<Node, String> {
+    typed(parse(path)?).map_err(|e| format!("{path}: {e}"))
+}
+
+/// The spec at `path`, JSON5, as it is written.
+fn parse(path: &str) -> Result<Node, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
-    let spec = json5::from_str::<Node>(&text).map(Node::folded).map_err(|e| format!("{path}: {e}"))?;
-    check_widths(&spec, "", None).map_err(|e| format!("{path}: {e}"))?;
+    json5::from_str::<Node>(&text).map_err(|e| format!("{path}: {e}"))
+}
+
+/// `spec`, read from a file or built by a tool, its tokens folded
+/// (`Node::folded`), each number typed and an integer whole and within its
+/// width (`check_widths`).
+fn typed(spec: Node) -> Result<Node, String> {
+    let spec = spec.folded();
+    check_widths(&spec, "", None)?;
     Ok(spec)
 }
 
-/// The numbers an integer type holds, from `lo` up to and not reaching `end`,
-/// none for any other type. A `usize` holds what a 32-bit target's does, the
-/// narrowest a spec is written for.
-pub fn int_range(ty: &str) -> Option<(f64, f64)> {
-    let bits = |b: i32| 2f64.powi(b);
-    Some(match ty {
-        "u8" => (0.0, bits(8)),
-        "u16" => (0.0, bits(16)),
-        "u32" | "usize" => (0.0, bits(32)),
-        "u64" => (0.0, bits(64)),
-        "i8" => (-bits(7), bits(7)),
-        "i16" => (-bits(15), bits(15)),
-        "i32" => (-bits(31), bits(31)),
-        "i64" => (-bits(63), bits(63)),
-        _ => return None,
-    })
+/// The type of a packed table's numbers (data.rs `laid_out`): the words each
+/// field spans, and the offsets and the count laid out from them.
+pub const PACKED_TYPE: &str = "usize";
+
+/// Whether `n` is a table a spec lays out in words, marked `"packed": true`,
+/// which only the spec's own entries are (data.rs `laid_out`).
+pub fn is_packed(n: &Node) -> bool {
+    n.mark("packed") == Some(&Node::Bool(true))
 }
 
-/// Refuses a number under `n` whose type, its token's `$type` or its
-/// group's (`ty`), is an integer it is not: not whole, or past its width. A
-/// token's value is checked whole: a number, a list, a table or a record,
-/// each number of it typed by the token. A group's `enum` is its own mark: its
+/// An integer type a spec or the link names: its name, which is Rust's
+/// spelling, the numbers it holds from `lo` up to and not reaching `end`, its
+/// C++ type, the header that declares it and its literals' suffix, its
+/// TypeScript type, and whether an enum may be held in it. TypeScript writes
+/// one a `number` where a `number` holds it exactly, to 2^53, and a `bigint`
+/// past that, as WIT's 64-bit integers are. A `usize` holds what a 32-bit
+/// target's does, the narrowest a spec is written for.
+pub struct Int {
+    pub name: &'static str,
+    pub lo: f64,
+    pub end: f64,
+    pub cpp: &'static str,
+    pub header: &'static str,
+    pub suffix: &'static str,
+    pub ts: &'static str,
+    pub repr: bool,
+}
+
+impl Int {
+    /// Whether `x` is a number of the type: whole, from `lo` up to `end`.
+    pub fn holds(&self, x: f64) -> bool {
+        x.fract() == 0.0 && x >= self.lo && x < self.end
+    }
+}
+
+const fn int(name: &'static str, bits: i32, signed: bool, cpp: &'static str, suffix: &'static str, repr: bool) -> Int {
+    let width = bits - signed as i32;
+    let end = (1u128 << width) as f64;
+    let ts = if width > 53 { "bigint" } else { "number" };
+    Int { name, lo: if signed { -end } else { 0.0 }, end, cpp, header: "cstdint", suffix, ts, repr }
+}
+
+/// Every integer type a spec may name, the one table of them.
+pub const INTS: [Int; 9] = [
+    int("u8", 8, false, "std::uint8_t", "u", true),
+    int("u16", 16, false, "std::uint16_t", "u", true),
+    int("u32", 32, false, "std::uint32_t", "u", true),
+    int("u64", 64, false, "std::uint64_t", "ull", false),
+    Int { header: "cstddef", ..int("usize", 32, false, "std::size_t", "u", false) },
+    int("i8", 8, true, "std::int8_t", "", true),
+    int("i16", 16, true, "std::int16_t", "", true),
+    int("i32", 32, true, "std::int32_t", "", true),
+    int("i64", 64, true, "std::int64_t", "ll", false),
+];
+
+/// The integer type `ty` names, none for any other type.
+pub fn int_of(ty: &str) -> Option<&'static Int> {
+    INTS.iter().find(|i| i.name == ty)
+}
+
+/// Whether `ty` is a float a spec may name, the other type a number has
+/// beside `INTS`'.
+pub fn is_float(ty: &str) -> bool {
+    matches!(ty, "f32" | "f64")
+}
+
+/// The TypeScript type of a number of type `ty`: its integer's (`INTS`), or a
+/// float's, a `number`.
+pub fn ts_number(ty: &str) -> &'static str {
+    int_of(ty).map_or("number", |i| i.ts)
+}
+
+/// Refuses a number under `n` that has no type or a type no number has, or
+/// whose type, its token's
+/// `$type`, its group's (`ty`) or, for one of the spec's own packed tables,
+/// `PACKED_TYPE`, is an integer it is not: not whole, or past its width. A
+/// token's value is checked whole: a number, a list, a table or a record, each
+/// number of it typed by the token. A group's `enum` is its own mark: its
 /// members are numbered by their `repr` (data.rs `numbers`), not typed by it,
 /// and its tables take the type around it.
 fn check_widths(n: &Node, at: &str, ty: Option<&str>) -> Result<(), String> {
     fn value(v: &Node, at: &str, ty: Option<&str>) -> Result<(), String> {
         let ty = v.str_at("$type").or(ty);
         match v.val() {
-            Node::Num(x) => match ty.and_then(|t| int_range(t).map(|w| (t, w))) {
-                Some((t, (lo, end))) if x.fract() != 0.0 || *x < lo || *x >= end => Err(format!("{at}: {x} is no {t}")),
+            Node::Num(x) => match ty.map(|t| (t, int_of(t))) {
+                None => Err(format!("{at}: {x} has no `$type`, its own or its group's")),
+                Some((t, Some(i))) if !i.holds(*x) => Err(format!("{at}: {x} is no {t}")),
+                Some((t, None)) if !is_float(t) => Err(format!("{at}: {x} is a number, and `{t}` no number's type")),
                 _ => Ok(()),
             },
             Node::Arr(a) => a.iter().enumerate().try_for_each(|(i, e)| value(e, &format!("{at}[{i}]"), ty)),
@@ -363,9 +432,11 @@ fn check_widths(n: &Node, at: &str, ty: Option<&str>) -> Result<(), String> {
         return value(n, at, ty);
     }
     let own = n.str_at("$type");
+    let top = at.is_empty();
     n.named().try_for_each(|(k, v)| {
-        let at = if at.is_empty() { k.to_string() } else { format!("{at}.{k}") };
+        let at = if top { k.to_string() } else { format!("{at}.{k}") };
         match (v, own) {
+            (Node::Obj(_), _) if top && is_packed(v) => check_widths(v, &at, Some(PACKED_TYPE)),
             (Node::Obj(_), _) if !v.is_wrapper() => check_widths(v, &at, own.filter(|t| *t != "enum").or(ty)),
             (_, Some("enum")) => Ok(()),
             _ => value(v, &at, own.or(ty)),

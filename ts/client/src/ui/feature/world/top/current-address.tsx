@@ -31,13 +31,13 @@ export function CurrentAddress() {
       from={{ opacity: 0 }}
       to={{}}
       transition={FADE}
-      style={styles.shrink}
+      style={STYLE.shrink}
     >
       <HaloText
         style={[
-          styles.label,
-          !label && styles.numbers,
-          !text && styles.locating,
+          STYLE.label,
+          !label && STYLE.numbers,
+          !text && STYLE.locating,
         ]}
       >
         {text ?? t("world.search.locating")}
@@ -46,7 +46,7 @@ export function CurrentAddress() {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   shrink: { flexShrink: 1, minWidth: 0 },
   label: {
     ...TEXT_STYLE.body,

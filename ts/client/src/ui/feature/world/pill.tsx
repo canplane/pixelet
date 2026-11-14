@@ -37,7 +37,7 @@ export interface PillProps {
   x: f64;
   width: f64;
   height: f64;
-  span: f64;
+  spanPx: f64;
   fill: ColorValue;
   tint?: ColorValue;
   place: BackingPlace;
@@ -61,7 +61,7 @@ export function Pill({
   x,
   width,
   height,
-  span,
+  spanPx,
   fill,
   border,
   shadow,
@@ -76,7 +76,7 @@ export function Pill({
   const transition = SNAP;
   const dim = useDim(fade, fadeTransition, fadeFrom);
   const r = height / 2;
-  const slide = width - span;
+  const slide = width - spanPx;
   const edge: ViewStyle = {
     borderRadius: r,
     ...(border && { borderWidth: border.width, borderColor: border.color }),
@@ -90,26 +90,26 @@ export function Pill({
   const clip_right = {
     left: r,
     top: -SHADOW_ROOM,
-    width: span - r + SHADOW_ROOM,
+    width: spanPx - r + SHADOW_ROOM,
     height: height + 2 * SHADOW_ROOM,
   };
   const body = {
     position: "absolute" as const,
     left: -r,
     top: SHADOW_ROOM,
-    width: span,
+    width: spanPx,
     height,
   };
   const outset = touch ? touch_outset(height) : 0;
 
   return (
-    <Motion to={{ translateX: x }} transition={transition} style={styles.at}>
+    <Motion to={{ translateX: x }} transition={transition} style={STYLE.at}>
       <Motion
         {...dim.motion}
         style={[
-          styles.fade,
+          STYLE.fade,
           {
-            width: span + 2 * SHADOW_ROOM,
+            width: spanPx + 2 * SHADOW_ROOM,
             height: height + 2 * SHADOW_ROOM,
           },
         ]}
@@ -119,7 +119,7 @@ export function Pill({
           // box turns from flattened to not, and Android's Fabric renderer can
           // lose the box's creation and crash adding the pill into it.
         }
-        <View collapsable={false} style={styles.corner}>
+        <View collapsable={false} style={STYLE.corner}>
           <View
             collapsable={false}
             {...touch}
@@ -142,7 +142,7 @@ export function Pill({
             >
               {shadow && (
                 <>
-                  <View style={[styles.clip, clip_left]}>
+                  <View style={[STYLE.clip, clip_left]}>
                     <View
                       style={{
                         position: "absolute",
@@ -155,7 +155,7 @@ export function Pill({
                       }}
                     />
                   </View>
-                  <View style={[styles.clip, clip_right]}>
+                  <View style={[STYLE.clip, clip_right]}>
                     <Motion
                       to={{ translateX: slide }}
                       transition={transition}
@@ -163,7 +163,7 @@ export function Pill({
                     >
                       <View
                         style={[
-                          styles.fill,
+                          STYLE.fill,
                           {
                             borderRadius: r,
                             boxShadow: shadow,
@@ -178,7 +178,7 @@ export function Pill({
               <View
                 style={[
                   edge,
-                  styles.circle,
+                  STYLE.circle,
                   {
                     width: height,
                     height,
@@ -186,14 +186,14 @@ export function Pill({
                   },
                 ]}
               />
-              <View style={[styles.clip, clip_right]}>
+              <View style={[STYLE.clip, clip_right]}>
                 <Motion
                   to={{ translateX: slide }}
                   transition={transition}
                   style={body}
                 >
                   <View
-                    style={[edge, styles.fill, { backgroundColor: fill }]}
+                    style={[edge, STYLE.fill, { backgroundColor: fill }]}
                   />
                 </Motion>
               </View>
@@ -201,7 +201,7 @@ export function Pill({
               <Motion
                 to={{ translateX: slide }}
                 transition={transition}
-                style={[styles.window, { width: span, height }]}
+                style={[STYLE.window, { width: spanPx, height }]}
               >
                 <Motion
                   to={{ translateX: -slide }}
@@ -223,7 +223,7 @@ export function Pill({
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   at: { position: "absolute", left: 0, top: 0, pointerEvents: "box-none" },
   fade: {
     position: "absolute",

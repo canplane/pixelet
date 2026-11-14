@@ -5,9 +5,9 @@
 import { Lift } from "../../cabi.ts";
 import {
   ComponentError,
-  type Link,
   type LinkObject,
   type Method,
+  type Side,
   refusal_of,
 } from "../../link.ts";
 import { type Lent, load_Lent } from "../types.ts";
@@ -40,7 +40,7 @@ export interface HostFile {
 
 /** The object over `implementation`. */
 export function file(
-  l: Pick<Link, "task_return" | "on_cancel">,
+  l: Pick<Side, "task_return" | "on_cancel">,
   implementation: HostFile,
 ): LinkObject {
   return {

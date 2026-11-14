@@ -36,7 +36,7 @@ pub(super) fn err(sensor: Sensor, code: Option<GeolocationErrorCode>, watching: 
                 watching,
             );
         }
-        Sensor::Orientation => device_orientation::on_orient_lost(),
+        Sensor::Orient => device_orientation::on_orient_lost(),
     }
     Ok(())
 }
@@ -68,7 +68,7 @@ pub(super) fn permission(sensor: Sensor, answer: PermissionAnswer) -> Result<(),
                 geolocation::on_geolocation_permission_granted();
             }
         }
-        Sensor::Orientation => {
+        Sensor::Orient => {
             device_orientation::orient_permission(answer);
         }
     }

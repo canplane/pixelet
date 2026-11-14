@@ -83,8 +83,8 @@ function serve(): void {
     .listen(port, () => console.log(`[web] dist/ on http://localhost:${port}`));
 }
 
-const what = process.argv[2];
-if (what === "html") html();
-else if (what === "stamp") build_json();
-else if (what === "serve") serve();
-else throw new Error(`web.ts: no step ${what ?? ""}; html, stamp or serve`);
+const STEP = process.argv[2];
+if (STEP === "html") html();
+else if (STEP === "stamp") build_json();
+else if (STEP === "serve") serve();
+else throw new Error(`web.ts: no step ${STEP ?? ""}; html, stamp or serve`);

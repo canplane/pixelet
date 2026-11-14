@@ -32,9 +32,9 @@ use wit_parser::{Function, InterfaceId, PackageId, Resolve, Type, TypeDefKind, T
 use xpute_gen::spec::{cpp_enum, cpp_ident, cpp_member, mark, pascal, snake, Includes, Member};
 
 use super::{
-    cases, discriminant_type, escaped, folded, is_async, is_lent, is_serving, kind, members,
+    cases, discriminant, escaped, folded, is_async, is_lent, is_serving, kind, members,
     method_const, method_name, object_method, package_name, params, plus, rec_layout, rs_name,
-    serving, type_name, variant_layout, Gen, Kind, Obj, Role, WitTarget, NUMBERS, TOOL,
+    serving, type_name, variant_layout, Gen, Kind, Obj, Role, WitTarget, TOOL,
 };
 
 /// Where a name the bindings take from the library is declared: its
@@ -170,10 +170,9 @@ impl Header<'_> {
     }
 
     /// A discriminant's C++ type, of `n` cases.
-    fn discriminant_type(&self, n: usize) -> &'static str {
+    fn discriminant_type(&self, n: usize) -> Result<&'static str, String> {
         self.include("cstdint");
-        let rs = discriminant_type(n);
-        NUMBERS.iter().find(|x| x.rs == rs).map_or("", |x| x.cpp)
+        Ok(discriminant(n)?.cpp())
     }
 
     /// A WIT type's C++ type, by its whole path, which no case's struct
@@ -210,7 +209,7 @@ impl Header<'_> {
             Kind::Bool => "bool".into(),
             Kind::Number(n) => {
                 self.include("cstdint");
-                n.cpp.into()
+                n.cpp().into()
             }
             Kind::Handle => {
                 self.include("cstdint");
@@ -223,7 +222,7 @@ impl Header<'_> {
             Kind::Array(n) => {
                 self.include("cstdint");
                 self.include("vector");
-                format!("std::vector<{}>", n.cpp)
+                format!("std::vector<{}>", n.cpp())
             }
             Kind::List(e) => {
                 self.include("vector");
@@ -267,11 +266,11 @@ impl Header<'_> {
                 format!("{w}.put<{}>({at}, {e});", self.ty(k)?)
             }
             Kind::Enum(t) => {
-                let u = self.discriminant_type(self.g.case_cnt(*t));
+                let u = self.discriminant_type(self.g.case_cnt(*t))?;
                 format!("{w}.put<{u}>({at}, static_cast<{u}>({e}));")
             }
             Kind::Str => format!("{w}.str({at}, {e});"),
-            Kind::Array(n) => format!("{w}.arr<{}>({at}, {e});", n.cpp),
+            Kind::Array(n) => format!("{w}.arr<{}>({at}, {e});", n.cpp()),
             Kind::List(el) => {
                 let (sz, align) = self.layout(el)?;
                 // A list inside a list takes names of its own depth.
@@ -291,7 +290,7 @@ impl Header<'_> {
             }
             Kind::Record(_) | Kind::Variant(_) => format!("{e}.store({w}, {at});"),
             Kind::Option(el) => {
-                let (off, _, _) = variant_layout(&[None, Some(self.g.layout(el)?)]);
+                let (off, _, _) = variant_layout(&[None, Some(self.g.layout(el)?)])?;
                 self.include("cstdint");
                 format!(
                     "if ({e}) {{ {w}.put<std::uint8_t>({at}, 1); {} }}",
@@ -336,7 +335,7 @@ impl Header<'_> {
                 self.g.case_cnt(*t)
             ),
             Kind::Str => format!("std::string({r}.str({at}))"),
-            Kind::Array(n) => format!("{r}.arr<{}>({at})", n.cpp),
+            Kind::Array(n) => format!("{r}.arr<{}>({at})", n.cpp()),
             Kind::List(el) => {
                 let (sz, align) = self.layout(el)?;
                 // A list inside a list takes names of its own depth.
@@ -352,7 +351,7 @@ impl Header<'_> {
             }
             Kind::Record(_) | Kind::Variant(_) => format!("{}::load({r}, {at})", self.ty(k)?),
             Kind::Option(el) => {
-                let (off, _, _) = variant_layout(&[None, Some(self.g.layout(el)?)]);
+                let (off, _, _) = variant_layout(&[None, Some(self.g.layout(el)?)])?;
                 let ty = self.ty(k)?;
                 format!(
                     "({r}.case_({at}, 2) == 0 ? {ty}() : {ty}({}))",
@@ -476,8 +475,8 @@ impl Header<'_> {
                 TypeDefKind::Variant(v) => {
                     self.include("variant");
                     let cases = cases(g.r, v, &at)?;
-                    let (off, sz, align) = variant_layout(&g.payload_layouts(t)?);
-                    let u = self.discriminant_type(cases.len());
+                    let (off, sz, align) = variant_layout(&g.payload_layouts(t)?)?;
+                    let u = self.discriminant_type(cases.len())?;
                     // A case named as its variant would name the variant's
                     // own struct.
                     let case = |c: &str| {
@@ -636,7 +635,7 @@ impl Header<'_> {
             Kind::Array(n) => {
                 self.include("cstdint");
                 self.include("span");
-                format!("std::span<const {}>", n.cpp)
+                format!("std::span<const {}>", n.cpp())
             }
             Kind::List(e) => {
                 self.include("span");

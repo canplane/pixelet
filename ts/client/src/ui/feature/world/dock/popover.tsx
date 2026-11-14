@@ -151,8 +151,8 @@ export function SizePopover({ popover }: { popover: Popover }) {
   return (
     <View
       style={[
-        styles.popover_at,
-        popover.open ? styles.popover_takes : TOUCH.block,
+        STYLE.popover_at,
+        popover.open ? STYLE.popover_takes : TOUCH.block,
         { left: popover.center_x - POPOVER_WIDTH / 2 },
       ]}
     >
@@ -162,8 +162,8 @@ export function SizePopover({ popover }: { popover: Popover }) {
         <Backing
           fill={STRIP.ground}
           material={MATERIAL.popover}
-          place={BackingPlace.OverMap}
-          style={styles.seed}
+          place={BackingPlace.OVER_MAP}
+          style={STYLE.seed}
         />
       )}
     </View>
@@ -178,8 +178,8 @@ function SizeMarks({ highlighted }: { highlighted: i32 | null }) {
     <Backing
       fill={STRIP.ground}
       material={MATERIAL.popover}
-      place={BackingPlace.OverMap}
-      style={styles.popover}
+      place={BackingPlace.OVER_MAP}
+      style={STYLE.popover}
     >
       {SCALES.map((scale_step) => {
         const mark = size_mark(scale_step);
@@ -189,7 +189,7 @@ function SizeMarks({ highlighted }: { highlighted: i32 | null }) {
             accessibilityLabel={t("world.dock.object_size", {
               n: OBJECT_SCALE_CNT + scale_step,
             })}
-            style={styles.popover_item}
+            style={STYLE.popover_item}
           >
             <Motion
               to={{ scale: highlighted === scale_step ? 1.25 : 1 }}
@@ -199,10 +199,10 @@ function SizeMarks({ highlighted }: { highlighted: i32 | null }) {
                 style={[
                   { width: mark, height: mark, borderRadius: mark / 2 },
                   highlighted === scale_step
-                    ? styles.mark_highlighted
+                    ? STYLE.mark_highlighted
                     : scale === scale_step
-                      ? styles.mark_cur
-                      : styles.mark_idle,
+                      ? STYLE.mark_current
+                      : STYLE.mark_idle,
                 ]}
               />
             </Motion>
@@ -213,7 +213,7 @@ function SizeMarks({ highlighted }: { highlighted: i32 | null }) {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   popover_at: {
     position: "absolute",
     bottom: DOCK_HEIGHT + POPOVER_LIFT_PX,
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   mark_idle: { backgroundColor: alpha(STRIP.mark, 0.4) },
-  mark_cur: { backgroundColor: alpha(STRIP.mark, 0.8) },
+  mark_current: { backgroundColor: alpha(STRIP.mark, 0.8) },
   mark_highlighted: {
     backgroundColor: STRIP.mark,
     boxShadow: `0 0 0 1px ${STRIP.mark}`,

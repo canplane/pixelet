@@ -4,6 +4,7 @@
 # lists them.
 packages:
   - client
+  - xr
   - build
   - tool/shader
   - ../xpute/kit/ts

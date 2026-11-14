@@ -10,8 +10,8 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   takes its word from Unix, Linux or Wayland; a device outside them keeps its
   platform's word. The application takes its field's word (graphics, cartography,
   games). A metaphor no field uses is no name.
-- A word on this list is abbreviated, in every casing (`asset_cnt`,
-  `assetCnt`), and any other stays whole: index `idx`, value `val`, buffer `buf`, source `src`, destination `dst`,
+- In a name of the mechanism, a word on this list is abbreviated, in every
+  casing (`asset_cnt`, `assetCnt`), and any other stays whole: index `idx`, value `val`, buffer `buf`, source `src`, destination `dst`,
   offset `off`, count `cnt`, current `cur` (not `curr`), position `pos`,
   direction `dir`, directory `dir`, pixel `px`, resolution `res`, distance
   `dist`, address `addr`, capacity `cap`, dimension `dim`, memory `mem`,
@@ -21,7 +21,8 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   matrix `mat`, configuration or config `cfg`, descriptor `desc`, context `ctx`,
   coordinate `coord`, declaration `decl`, definition `def`, sequence `seq`,
   atmosphere `atmos`, record `rec`, header `hdr`, command `cmd`, vector `vec`,
-  condition `cond`, resource `resrc`, array `arr`, constructor `ctor`. A plural
+  condition `cond`, resource `resrc`, array `arr`, constructor `ctor`, previous
+  `prev`. A plural
   is `vals`, `bufs`, `offs`, `cnts`, `idxs`, `recs`, `hdrs`, `cmds`, `vecs`,
   `conds`, `resrcs`, `arrs` or `ctors`, and whole otherwise. `pkt` is only a wire
   packet; `rec` only the noun, and to record stays whole. A condition variable
@@ -46,11 +47,14 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 - Spelling is American (`color`, `behavior`, `center`). A word copied from
   outside keeps its own (OpenStreetMap's `community_centre`).
 - Casing, generated names too: functions, variables and fields in snake_case,
-  types in Pascal, constants in SCREAMING, in Rust and in TypeScript alike, as
+  types in Pascal, constants in SCREAMING, in Rust, C++ and TypeScript alike, as
   Svelte writes its own code; so a spec's name is one spelling in JSON, Rust and
-  TypeScript. Only what React requires takes React's form: a hook's `use`
-  prefix, a component, a prop. A type and the React UI's own names spell their
-  words whole (`let cfg: Config`). A generated helper of a type is its verb, an
+  TypeScript. Kotlin and Swift keep their own casing. Only what React requires
+  takes React's form: a hook's `use` prefix, a component, a prop. A type spells
+  its words whole (`let cfg: Config`), and so does the name of a thing that is
+  there only for the UI to show or handle, wherever it is defined (a toast's
+  tone `ERROR`, the overlay's sensor status `error`, `toast_count`); a name of
+  the mechanism keeps its form where the UI reads it (`ray_cnt`). A generated helper of a type is its verb, an
   underscore and the type's own spelling (`store_LonLat`, `of_Tool`), so the
   type's name finds it. A name copied from an outside API keeps that API's
   (`with_capacity`, `memory_hints`, `devicePixelRatio`).
@@ -115,6 +119,9 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   in `_cap` (`CREDIT_CAP`), a size in bytes in `_sz` in xpute (`HDR_SZ`), and
   any other size or length in its unit (`HDR_WORDS`, `PAGE_BYTES`, `_ms`, `_px`; `_u` the world's units, `_merc` a meter on the
   EPSG:3857 plane, `_m` a meter on the ground), the unit shown where a person
-  reads the value (`29.0 m`).
+  reads the value (`29.0 m`). A length takes its unit where it crosses into
+  what does not say it (a prop `spanPx`, a dp value `layoutLiftDp` before it
+  becomes pixels); where its context says it, as a UI style's width, it stays
+  bare.
 - A predicate's call reads as a yes-or-no assertion about its subject
   (`v.is_ground()`, `pool.fits(n)`, `list.contains(x)`).

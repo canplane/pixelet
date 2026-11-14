@@ -23,7 +23,7 @@ interface CircularButtonProps {
 export function CircularButton({
   glyph,
   size = CHROME.control,
-  place = BackingPlace.OverMap,
+  place = BackingPlace.OVER_MAP,
   onPress,
   label,
 }: CircularButtonProps) {
@@ -39,13 +39,13 @@ export function CircularButton({
         <Motion
           to={{ scale: pressed && !SYSTEM_BACKING ? 0.95 : 1 }}
           transition={SNAP}
-          style={[styles.press, { borderRadius: size / 2 }]}
+          style={[STYLE.press, { borderRadius: size / 2 }]}
         >
           <Backing
-            fill={place === BackingPlace.OnSheet ? COLOR.faint : COLOR.ground}
+            fill={place === BackingPlace.ON_SHEET ? COLOR.faint : COLOR.ground}
             place={place}
             interactive
-            style={[styles.face, { borderRadius: size / 2 }]}
+            style={[STYLE.face, { borderRadius: size / 2 }]}
           >
             <Glyph glyph={glyph} size={CHROME.glyph} color={LABEL.primary} />
           </Backing>
@@ -55,7 +55,7 @@ export function CircularButton({
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   press: { flex: 1 },
   face: { flex: 1, alignItems: "center", justifyContent: "center" },
 });

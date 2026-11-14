@@ -14,7 +14,7 @@ import { useSafeArea } from "@/service/platform/safe-area.ts";
 interface KeyboardDockProps extends ViewProps {
   clearance: number;
   rest: number;
-  layoutLift: number;
+  layoutLiftPx: number;
   onLift: (event: NativeSyntheticEvent<{ lift: number }>) => void;
 }
 
@@ -40,7 +40,7 @@ export function AboveKeyboard({
     <KeyboardDock
       clearance={inset}
       rest={rest}
-      layoutLift={layout_lift}
+      layoutLiftPx={layout_lift}
       onLift={(event) => set_layout_lift(event.nativeEvent.lift)}
       style={{
         position: "absolute",

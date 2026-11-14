@@ -53,16 +53,16 @@ const TONE: Record<
   ToastTone,
   { mark: "checkmark" | "xmark" | null; status: string }
 > = {
-  [ToastTone.Loading]: { mark: null, status: alpha(SYSTEM.green, 0.3) },
-  [ToastTone.Error]: { mark: "xmark", status: STATUS.failed },
-  [ToastTone.Ready]: { mark: "checkmark", status: STATUS.ready },
+  [ToastTone.LOADING]: { mark: null, status: alpha(SYSTEM.green, 0.3) },
+  [ToastTone.ERROR]: { mark: "xmark", status: STATUS.failed },
+  [ToastTone.READY]: { mark: "checkmark", status: STATUS.ready },
 };
 
 function ToneGlyph({ tone }: { tone: ToastTone }) {
   const { mark, status } = TONE[tone];
   if (!mark) return <Spinner size={CHROME.glyph} color={LABEL.primary} />;
   return (
-    <View style={[styles.disc, { backgroundColor: status }]}>
+    <View style={[STYLE.disc, { backgroundColor: status }]}>
       <Glyph glyph={mark} size={12} weight="black" color={COLOR.white} />
     </View>
   );
@@ -83,27 +83,27 @@ export function Toast({
   touch,
   touchBelow,
 }: ToastProps) {
-  const error = tone === ToastTone.Error;
-  const span = useWindowSize().width;
+  const error = tone === ToastTone.ERROR;
+  const window_width = useWindowSize().width;
   const [open, set_open] = useState(false);
-  const [content, set_content] = useState<f64>(TOAST_SIDE);
+  const [content_width, set_content_width] = useState<f64>(TOAST_SIDE);
 
   useEffect(() => {
     const timer = setTimeout(() => set_open(true), OPEN_AFTER_MS);
     return () => clearTimeout(timer);
   }, []);
 
-  const width = open ? Math.max(TOAST_SIDE, content) : TOAST_SIDE;
+  const width = open ? Math.max(TOAST_SIDE, content_width) : TOAST_SIDE;
 
   return (
     <Pill
       x={PixelRatio.roundToNearestPixel(-width / 2)}
       width={width}
       height={TOAST_SIDE}
-      span={span}
+      spanPx={window_width}
       fill={error ? SURFACE.alarm.fill : COLOR.ground}
       tint={error ? SURFACE.alarm.glass : undefined}
-      place={BackingPlace.OverMap}
+      place={BackingPlace.OVER_MAP}
       border={{
         width: 2,
         color: error ? SURFACE.alarm.edge : alpha(COLOR.white, 0.9),
@@ -114,20 +114,20 @@ export function Toast({
       fadeTransition={fadeTransition}
       touch={touch}
       touchBelow={touchBelow}
-      onContentWidth={set_content}
+      onContentWidth={set_content_width}
     >
-      <View style={styles.slot}>
+      <View style={STYLE.slot}>
         <Swap
           id={tone}
           from={
-            tone === ToastTone.Ready
+            tone === ToastTone.READY
               ? { opacity: 0, scale: 0.3, rotate: -20 }
               : { opacity: 0, scale: 0.8 }
           }
           exit={{ opacity: 0, scale: 0.5 }}
-          transition={tone === ToastTone.Ready ? POP : FADE}
+          transition={tone === ToastTone.READY ? POP : FADE}
           exitTransition={FADE}
-          style={styles.glyph}
+          style={STYLE.glyph}
         >
           <ToneGlyph tone={tone} />
         </Swap>
@@ -140,25 +140,25 @@ export function Toast({
           numberOfLines={1}
           maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
           style={[
-            styles.message,
+            STYLE.message,
             {
-              maxWidth: span - 2 * TOAST_SIDE - 2 * MESSAGE_PAD - 2 * EDGE,
+              maxWidth: window_width - 2 * TOAST_SIDE - 2 * MESSAGE_PAD - 2 * EDGE,
             },
           ]}
         >
           {message}
         </Text>
       </Motion>
-      <View style={styles.slot}>
+      <View style={STYLE.slot}>
         <Motion to={open ? {} : { opacity: 0, scale: 0 }} transition={SNAP}>
-          <View style={[styles.dot, { backgroundColor: TONE[tone].status }]} />
+          <View style={[STYLE.dot, { backgroundColor: TONE[tone].status }]} />
         </Motion>
       </View>
     </Pill>
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   slot: {
     width: TOAST_SIDE,
     height: TOAST_SIDE,

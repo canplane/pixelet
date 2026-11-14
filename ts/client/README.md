@@ -1,32 +1,32 @@
 # @pxl/client
 
 The client is everything around the core: the UI people touch, the services that
-answer the core's needs on each platform, and the host that runs the core. It
+answer the core's needs on each platform, and the runtime the core runs in. It
 is one Expo app for iOS, Android and the page. The world is not here: the client
-never computes a coordinate or a tile, it only carries the core's requests out
-and the core's snapshot back.
+never computes a coordinate or a tile, it only calls the core and shows what the
+core tells it.
 
 ## Three layers
 
 ```text
   ui/         the UI: React Native, the same on every platform
-  runtime/    where xpute's host runs, and the boot that opens it
+  runtime/    the core's runtime on a page, and the boot that opens it
      │  each reaches below only through service/
      ▼
   service/    what answers the core and the UI on this platform
-    core/       the app's ABI: commands, the snapshot, surfaces, sensors, text
+    core/       the core's interfaces: calls, what the core tells the UI,
+                surfaces, sensors, text
     sys/        the core's files, the boot's and the GPU's states, the stop report
     origin/     the server the client reads from, and whether it is online
     platform/   what differs by platform, as file pairs
 ```
 
 The UI reaches the core only through `service/core/`, and `service/core/`
-reaches it only by a command's number and its fields, `core.send(Command.X,
-...)`, typed by a table generated from the core's specification, so a field
-cannot mean one thing on one side and another on the other. The numbers both
-sides read, generated from `spec/`, are in `abi/`. A release build writes each
-exported literal where it is read (`babel.config.ts`), so the bundle holds a
-command's number and not its name.
+reaches it only through the remote, by the bindings generated from the core's
+WIT, so a field cannot mean one thing on one side and another on the other.
+The bindings and the numbers both sides read, generated from `spec/`, are in
+`abi/`. A release build writes each exported literal where it is read
+(`babel.config.ts`), so the bundle holds a method's number and not its name.
 
 ## One app, two kinds of platform
 
@@ -34,12 +34,13 @@ What differs between the page and a device is a pair of files in
 `service/platform/`: `<x>.ts` is the page's and `<x>.native.ts` the device's,
 and the shapes both share are in `platform/types.ts`. Metro picks the right one
 for each build. The pair that boots the core is in `runtime/` (`boot.ts`,
-`boot.native.ts`) and opens the runtime it runs in, and the pair it reaches
-the core through is `service/platform/core.ts`: on a page the core runs in a
-worker, and on a device on a thread of its own, linked into the app, and the
-UI reaches it through a `Remote` either way. A piece of the UI that the
-platforms draw differently is a file with its override beside it
-(`src/ui/shared/component/README.md`).
+`boot.native.ts`), and it opens and starts the runtime the core runs in: on a
+page the worker (`worker.ts`), and on a device `pxl-runtime`, linked into the
+app, which runs the core on a thread of its own. The UI reaches either through
+a `Remote`. A device's runtime outlives a reload of the UI, which meets the
+same core as a new UI. A piece of the UI that the platforms draw differently is
+a file with its override beside it (`src/ui/shared/component/README.md`).
+`src/conform.ts` holds every platform file to its default's exports.
 
 ## The boot
 
@@ -52,14 +53,16 @@ the world until the view is first drawn (`ui/feature/cover/`).
 
 ## The app's ABI
 
-xpute carries numbers and does not know what they mean; their meaning is the
-app's, defined here once, in two protocols under `spec/client/core/` from which
-both sides are generated. Each of the app's modules has one end in the core and
-one in the services, named alike.
+xpute carries frames and does not know what they mean; their meaning is the
+app's, declared once as interfaces in WIT under `spec/client/core/wit/`, from
+which both sides' bindings are generated. Each interface has one end in the
+core and one in the services, named alike.
 
-The core names files only by a root and a name, and the client decides, once at
-boot, what answers each root. So no URL, version or storage key reaches the
-core, and where the world is read from changes without it.
+The core names a file only by its path, a tuple of tokens, and the client
+decides, once at boot, what answers each path: the services
+(`service/sys/fs/`), and on a device `pxl-runtime` for the settings. So no URL,
+version or storage key reaches the core, and where the world is read from
+changes without it.
 
 ## Builds
 

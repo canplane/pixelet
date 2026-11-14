@@ -13,10 +13,10 @@ import { ProgressBar } from "./progress-bar.tsx";
 function Progress({ of, share }: { of: string; share: number }) {
   const { t } = useTranslation();
   return (
-    <View style={styles.cover}>
-      <View style={styles.bar}>
+    <View style={STYLE.cover}>
+      <View style={STYLE.bar}>
         <ProgressBar share={share} />
-        <Text style={styles.line}>{t(of)}</Text>
+        <Text style={STYLE.line}>{t(of)}</Text>
       </View>
     </View>
   );
@@ -28,11 +28,11 @@ function Progress({ of, share }: { of: string; share: number }) {
 function Failed({ of }: { of: string }) {
   const { t } = useTranslation();
   return (
-    <View style={styles.cover}>
-      <Text accessibilityRole="header" style={styles.title}>
+    <View style={STYLE.cover}>
+      <Text accessibilityRole="header" style={STYLE.title}>
         {t(`${of}.title`)}
       </Text>
-      <Text style={styles.body}>{t(`${of}.body`)}</Text>
+      <Text style={STYLE.body}>{t(`${of}.body`)}</Text>
     </View>
   );
 }
@@ -43,15 +43,15 @@ function Failed({ of }: { of: string }) {
 function Panic({ of, code }: { of: string; code: string | null }) {
   const { t } = useTranslation();
   return (
-    <View style={[styles.cover, styles.panic]}>
-      <View style={styles.column}>
-        <Text style={styles.face}>:(</Text>
-        <Text accessibilityRole="header" style={styles.panic_title}>
+    <View style={[STYLE.cover, STYLE.panic]}>
+      <View style={STYLE.column}>
+        <Text style={STYLE.face}>:(</Text>
+        <Text accessibilityRole="header" style={STYLE.panic_title}>
           {t(`${of}.title`)}
         </Text>
-        <Text style={styles.panic_body}>{t(`${of}.body`)}</Text>
+        <Text style={STYLE.panic_body}>{t(`${of}.body`)}</Text>
         {code !== null && (
-          <Text selectable style={styles.code}>
+          <Text selectable style={STYLE.code}>
             {t("panic.stop_code", { code })}
           </Text>
         )}
@@ -71,7 +71,7 @@ export function Screen({ cover }: { cover: Cover }) {
   }
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   cover: {
     flex: 1,
     alignItems: "center",

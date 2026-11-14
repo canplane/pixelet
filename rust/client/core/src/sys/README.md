@@ -1,9 +1,10 @@
 # sys
 
-The core cannot read a file, open a connection or tell the time. The host
-does all of that for it. What the core has is its memory, laid out once, and
-the entries the host gives it. `sys/` is the layer that makes those enough. It
-turns what the layers above want into asks of the host, fits every answer
+The core cannot read a file, open a connection or tell the time. What serves
+it across xpute's link does all of that for it. What the core has is its
+memory, laid out once, and the entries the link gives it. `sys/` is the layer
+that makes those enough. It turns what the layers above want into calls across
+the link, fits every answer
 into memory that was set aside at boot, and spends each entry's time in an order
 the rest of the core can rely on.
 
@@ -51,18 +52,19 @@ Every other body is a heap buffer of its own, owned by whoever holds it.
 
 ## An entry
 
-The host decides when the core runs. Each entry arrives with a grant that
-says how long the frame may take and how many reads may be out, and the core
-spends it in one order: the effects of what the UI sent, then the tick, then the
-draw, then the tasks (`frame.rs`).
+The core runs only when xpute's link enters it: with a call from the UI, an
+answer, or the answer of a wait it armed. What it does there is its own, on
+embassy's executor (`sched.rs`). A frame is asked for (`invalidate`, or
+`invalidate_at` for a time, one clock wait armed for the earliest) and runs at
+the display's next vsync as one task, in one order: the effects of what the UI
+sent, then the tick, then the draw (`frame.rs`).
 
-The tick runs the phases the core declares, in their order, against one
-budget. A phase that runs long cannot take everything: each phase holds back a
-share of what is left for the phases after it, so a busy load does not starve
-what follows (`sched/tick.rs`). After the frame, the entry's tasks get their
-own share of the frame time, however far the frame ran over (`sched.rs`).
-A task that has work left asks for the next entry; a core with nothing to do asks
-for none, and the host lets it sleep.
+Each entry has a budget from its start (`begin`, `param.rs` `BUDGET_MS`). The
+tick runs the phases the core declares, in their order, within it
+(`sched/tick.rs`), and a list of work stops once the budget is spent and one
+item has done work, so the list always moves (`run`). A task yields where the
+budget is spent and comes back in a later entry (`yield_if_spent`). An entry
+ends once no task is ready, and a core with nothing to do is not entered.
 
 ## Reads
 
@@ -71,7 +73,7 @@ does not start a read. It says, every frame, everything it wants on its stream,
 each with its place in the view's order. The scheduler keeps what is still
 wanted, drops what is not, and once every layer has spoken it runs one pump: it
 stops what nobody wants any more, ranks the rest by the one policy
-(`io/policy.rs`), and starts the best of them on the credits the frame granted.
+(`io/policy.rs`), and starts the best of them on the frame's credits.
 
 ```text
  a layer ── declare(stream, wants) ─┐
@@ -83,7 +85,7 @@ stops what nobody wants any more, ranks the rest by the one policy
                                         └▶ loader (assets)
                                               │
                                               ▼
-                                  file ─▶ the host's file device
+                                  file ─▶ xpute's fs, the client's files
                                               │ completion
                                               ▼
                                    packet ─▶ the layer that asked

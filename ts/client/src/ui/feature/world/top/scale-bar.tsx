@@ -61,10 +61,10 @@ export function MapScaleBar({ show }: { show: boolean }) {
       exit={{ opacity: 0 }}
       transition={SETTLE}
       exitTransition={LEAVE}
-      style={styles.root}
+      style={STYLE.root}
     >
-      <View style={styles.above}>
-        <HaloText style={scale_label}>{label}</HaloText>
+      <View style={STYLE.above}>
+        <HaloText style={SCALE_LABEL}>{label}</HaloText>
       </View>
       <Svg
         width={width}
@@ -77,7 +77,7 @@ export function MapScaleBar({ show }: { show: boolean }) {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   // The bar is as tall below its line as above it, so that the line lies at
   // the strip's middle.
   root: { alignItems: "center", paddingTop: TICK_PX },
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   },
 });
 
-const scale_label = StyleSheet.create({
+const SCALE_LABEL = StyleSheet.create({
   label: {
     ...TEXT_STYLE.caption2,
     fontWeight: WEIGHT.semibold,

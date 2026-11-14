@@ -19,8 +19,14 @@ import java.nio.ByteBuffer
 class XputeModule : Module() {
   private fun bytesOf(a: Uint8Array): ByteArray = ByteArray(a.byteLength).also { a.read(it, 0, a.byteLength) }
 
-  /** These send the module's events from the runtime's threads, and Expo
-   * carries each to the JavaScript thread. */
+  /** The UI's generation, which its start answers and each post, answer and
+   * take carries, so an old JavaScript runtime's reaches nothing once a new
+   * one has started (xpute.h `xpute_start`); 0, no UI's, until then. */
+  private var generation = 0
+
+  /** These send the module's events from the runtime's threads, a stop and
+   * a trap also from a start after them, and Expo carries each to the
+   * JavaScript thread. */
   private val notify = { sendEvent("onNotify") }
   // A JavaScript number holds no u64 whole, so each crosses as its decimal
   // digits.
@@ -73,7 +79,7 @@ class XputeModule : Module() {
     OnActivityEntersForeground { Runtime.life(true) }
 
     Function("start") { named: LongArray, prefixes: Uint8Array ->
-      Runtime.start(
+      generation = Runtime.start(
         IntArray(named.size) { named[it].toInt() },
         bytesOf(prefixes),
         appContext.persistentFilesDirectory.path,
@@ -82,15 +88,15 @@ class XputeModule : Module() {
     }
 
     Function("post") { tag: Long, h: Long, m: Long, pkt: Uint8Array? ->
-      Runtime.post(tag.toInt(), h.toInt(), m.toInt(), pkt?.let(::bytesOf))
+      Runtime.post(generation, tag.toInt(), h.toInt(), m.toInt(), pkt?.let(::bytesOf))
     }
 
     Function("answer") { tag: Long, result: Int, data: Uint8Array? ->
-      Runtime.answer(tag.toInt(), result, data?.let(::bytesOf))
+      Runtime.answer(generation, tag.toInt(), result, data?.let(::bytesOf))
     }
 
     Function("take") {
-      val bytes = Runtime.take()
+      val bytes = Runtime.take(generation)
       NativeArrayBuffer(ByteBuffer.allocateDirect(bytes.size).put(bytes).also { it.flip() })
     }
 
