@@ -10,7 +10,14 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import { ERRNO_EINPROGRESS } from "@xpute/kit/status/errno.spec.ts";
-import { DROP, type Handle, type Method, type Port, type Side, type Tag } from "@xpute/link";
+import {
+  DROP,
+  type Handle,
+  type Method,
+  type Port,
+  type Side,
+  type Tag,
+} from "@xpute/link";
 import type { Later, Prefixes, ToLink, ToUi } from "@xpute/link/remote.ts";
 
 /** What takes the things the UI gives beside the link, by the handle it
@@ -43,7 +50,8 @@ export function serve(
   for (const h of named) {
     link.mount_named(h, {
       call(m, tag, args) {
-        if (later.some(([lh, lm]) => lh === h && lm === m)) return forward(h, m, tag, args);
+        if (later.some(([lh, lm]) => lh === h && lm === m))
+          return forward(h, m, tag, args);
         tell({ h, m, tag: null, pkt: args === null ? null : args.slice() });
         return 0;
       },
@@ -64,7 +72,9 @@ export function serve(
     if ("give" in m) return taker.give(m.give, m.thing);
     if ("answer" in m) return link.task_return(m.answer, m.result, m.data);
     if (m.m === DROP) taker.take(m.h);
-    // A packet past the room is refused whole, EMSGSIZE.
-    link.send(m.h, m.m, m.pkt, (result, data) => tell({ tag: m.tag, result, data }));
+    // A packet past the cap is refused whole, EMSGSIZE.
+    link.send(m.h, m.m, m.pkt, (result, data) =>
+      tell({ tag: m.tag, result, data }),
+    );
   };
 }

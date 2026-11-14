@@ -10,10 +10,9 @@ type Plugin = string | [string, unknown];
 const EXPO = app("../client").expo;
 const PHONE_PLUGINS = EXPO.plugins as Plugin[];
 const name = (p: Plugin) => (Array.isArray(p) ? p[0] : p);
-const [, PERMISSION] = PHONE_PLUGINS.find((p) => name(p) === "expo-location") as [
-  string,
-  unknown,
-];
+const [, PERMISSION] = PHONE_PLUGINS.find(
+  (p) => name(p) === "expo-location",
+) as [string, unknown];
 
 export default {
   expo: {

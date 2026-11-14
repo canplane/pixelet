@@ -25,10 +25,10 @@ use std::rc::Rc;
 
 use fnv::FnvHashMap;
 
+use pxl_global::Global;
 use pxl_render::asset::{parse_gltf, scene_nodes, world_mats, Gltf, GltfPrimitive};
 use pxl_render::gpu::draw::MODEL_VERTEX_WORDS;
 use pxl_spec::space::coord::mat4::{self, Mat4};
-use pxl_global::Global;
 
 use crate::domain::scene::model;
 use crate::domain::scene::model::registry::{Channel, Model, STEPS_PER_PAUSE};
@@ -134,7 +134,7 @@ fn gltf_of(load: Load) -> Option<Rc<Gltf>> {
 /// then wakes a frame.
 #[embassy_executor::task(pool_size = REGISTRATION_CAP)]
 async fn parse(file: u32, bytes: Box<[u8]>) {
-    let parsed = parse_gltf(&bytes, &[], || sched::yield_if_spent()).await;
+    let parsed = parse_gltf(&bytes, &[], sched::yield_if_spent).await;
     if let Some((_, entry)) = PARSED.get(Vec::new).iter_mut().find(|(a, _)| *a == file) {
         *entry = Some(parsed.map(Rc::new));
     }
@@ -159,7 +159,7 @@ pub(crate) fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<u32>
 /// or refused, then wakes a frame.
 #[embassy_executor::task(pool_size = REGISTRATION_CAP)]
 async fn registration(file: u32, height_u: Option<f64>, gltf: Rc<Gltf>) {
-    let entry = register_model(&gltf, height_u, || sched::yield_if_spent())
+    let entry = register_model(&gltf, height_u, sched::yield_if_spent)
         .await
         .ok_or_else(Refusal::now);
     let key = height_u.map(f64::to_bits);

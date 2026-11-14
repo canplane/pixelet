@@ -40,7 +40,10 @@ impl monotonic_clock::Host for Monotonic {
                 }
             }
         });
-        timer.set(Some(event_loop::after(Duration::from_nanos(how_long), task_return)));
+        timer.set(Some(event_loop::after(
+            Duration::from_nanos(how_long),
+            task_return,
+        )));
     }
 }
 

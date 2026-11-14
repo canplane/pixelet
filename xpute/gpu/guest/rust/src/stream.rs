@@ -68,16 +68,16 @@ enum Buf {
 
 pub struct Stream {
     buf: Buf,
-    room: usize,
+    cap: usize,
     mark: Mark,
 }
 
 impl Stream {
-    /// A stream of `room` words.
-    pub fn new(room: usize) -> Stream {
+    /// A stream of `cap` words.
+    pub fn new(cap: usize) -> Stream {
         Stream {
-            buf: Buf::Free(Vec::with_capacity(room)),
-            room,
+            buf: Buf::Free(Vec::with_capacity(cap)),
+            cap,
             mark: Mark::Off,
         }
     }
@@ -91,7 +91,7 @@ impl Stream {
     }
 
     pub fn left(&self) -> usize {
-        (self.room - self.len()) * WORD
+        (self.cap - self.len()) * WORD
     }
 
     /// Whether no run holds the stream, so that it is the guest's to write.
@@ -126,12 +126,12 @@ impl Stream {
     }
 
     /// Opens a record of `n` words for its writer to fill. A record past the
-    /// room, or one opened while a run holds the stream (EBUSY), is a bug,
+    /// cap, or one opened while a run holds the stream (EBUSY), is a bug,
     /// reported at the caller, which names the record.
     #[track_caller]
     pub fn open(&mut self, op: u32, n: usize) -> &mut [u32] {
         let at = self.len();
-        xpute_kit::ensure!(at + 2 + n <= self.room, ENOSPC, self.room * WORD);
+        xpute_kit::ensure!(at + 2 + n <= self.cap, ENOSPC, self.cap * WORD);
         xpute_kit::ensure!(self.is_free(), EBUSY, op);
         let Buf::Free(words) = &mut self.buf else {
             xpute_kit::bug!(EBUSY, op);

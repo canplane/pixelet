@@ -57,11 +57,11 @@ struct Frame {
         set(frame::PKT, pkt_len);
     }
 
-    // The packet of the frame laid at `at` in a room of `room` bytes, none
-    // where it has none; a packet past the room is EBADMSG.
-    Result<std::optional<std::span<const std::uint8_t>>> pkt(std::uint32_t at, std::uint32_t room) const noexcept {
+    // The packet of the frame of `cap` bytes laid at `at`, none where it has
+    // none; a packet past the cap is EBADMSG.
+    Result<std::optional<std::span<const std::uint8_t>>> pkt(std::uint32_t at, std::uint32_t cap) const noexcept {
         if (pkt_len == 0) return std::optional<std::span<const std::uint8_t>>();
-        if (std::uint64_t{HDR_SZ} + pkt_len > room) return make_error(Errno::ebadmsg);
+        if (std::uint64_t{HDR_SZ} + pkt_len > cap) return make_error(Errno::ebadmsg);
         return std::optional<std::span<const std::uint8_t>>(mem::bytes(at + HDR_SZ, pkt_len));
     }
 };

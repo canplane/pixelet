@@ -37,7 +37,7 @@ fn expected(name: &str) -> String {
                 .is_none_or(|n| *n == name)
         })
         .unwrap();
-    v.get(format!("{k}.packet").as_str())
+    v.get(format!("{k}.pkt").as_str())
         .unwrap_or_else(|| panic!("no vector {name}"))
         .to_string()
 }

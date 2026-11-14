@@ -23,8 +23,8 @@ macro_rules! number {
 number!(u8 i8 u16 i16 u32 i32 u64 i64 f32 f64);
 
 /// Writes a packet into the bytes it is given: its fixed part first, then the
-/// bytes of its strings and lists past it. A packet past the room spoils, and
-/// `finish` answers EMSGSIZE.
+/// bytes of its strings and lists past it. A packet past the bytes it is
+/// given spoils, and `finish` answers EMSGSIZE.
 pub struct Lower<'a> {
     buf: &'a mut [u8],
     end: usize,
@@ -38,7 +38,11 @@ impl<'a> Lower<'a> {
         if !overflow {
             buf[..fixed_sz].fill(0);
         }
-        Lower { buf, end: fixed_sz, overflow }
+        Lower {
+            buf,
+            end: fixed_sz,
+            overflow,
+        }
     }
 
     fn put<const N: usize>(&mut self, at: usize, b: [u8; N]) {
@@ -95,7 +99,7 @@ impl<'a> Lower<'a> {
     /// Takes `len` elements of `sz` bytes at `align` past what is written,
     /// zeroed, and puts their offset and count at `at`: a list's or a
     /// string's pointer and length. It answers where they begin, or none
-    /// where the room is past.
+    /// where they run past the bytes it is given.
     pub fn list(&mut self, at: usize, len: usize, sz: usize, align: usize) -> Option<usize> {
         let base = self.end.next_multiple_of(align);
         let end = base + len * sz;
@@ -125,9 +129,13 @@ impl<'a> Lower<'a> {
         self.arr(at, s.as_bytes());
     }
 
-    /// The packet's length, or EMSGSIZE where it is past the room.
+    /// The packet's length, or EMSGSIZE where it is past the bytes it is given.
     pub fn finish(self) -> Result<usize, Errno> {
-        if self.overflow { Err(Errno::EMSGSIZE) } else { Ok(self.end) }
+        if self.overflow {
+            Err(Errno::EMSGSIZE)
+        } else {
+            Ok(self.end)
+        }
     }
 }
 
@@ -203,7 +211,11 @@ impl<'a> Lift<'a> {
             257..=65536 => u32::from(self.u16(at)?),
             _ => self.u32(at)?,
         };
-        if d as usize >= n { Err(Errno::EBADMSG) } else { Ok(d) }
+        if d as usize >= n {
+            Err(Errno::EBADMSG)
+        } else {
+            Ok(d)
+        }
     }
 
     /// The elements of `sz` bytes at `align` whose offset and count lie at
@@ -211,7 +223,10 @@ impl<'a> Lift<'a> {
     pub fn list(&self, at: usize, sz: usize, align: usize) -> Result<(usize, usize), Errno> {
         let base = self.u32(at)? as usize;
         let len = self.u32(at + 4)? as usize;
-        let fits = len.checked_mul(sz).and_then(|n| n.checked_add(base)).is_some_and(|end| end <= self.pkt.len());
+        let fits = len
+            .checked_mul(sz)
+            .and_then(|n| n.checked_add(base))
+            .is_some_and(|end| end <= self.pkt.len());
         if !base.is_multiple_of(align) || !fits {
             return Err(Errno::EBADMSG);
         }

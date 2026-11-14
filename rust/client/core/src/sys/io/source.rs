@@ -8,6 +8,7 @@
 //! that no served shard is over or under is never asked for. The versions the
 //! source names stay with the client.
 
+use pxl_global::Global;
 use pxl_spec::bake::publication::{BaseKind, FORMAT};
 use pxl_spec::bake::source::{is_sharded, key};
 use pxl_spec::space::coord::world::wrap_idx;
@@ -15,7 +16,6 @@ use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM, MIN_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::Area;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use pxl_global::Global;
 use xpute_kit::status::errno::Errno;
 
 struct Source {

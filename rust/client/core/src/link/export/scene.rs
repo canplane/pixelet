@@ -3,14 +3,14 @@
 //! The scene interface's methods: what a surface draws, and a chat line said.
 
 use super::{applied, or_refuse, refuse_unless};
+use crate::abi::scene::SceneContent;
 use crate::abi::types::ErrorCode;
 use crate::domain::scene::character::surface::character_surface_open;
 use crate::domain::scene::marker;
 use crate::domain::scene::resolution;
-use crate::abi::scene::SceneContent;
-use pxl_spec::asset::character::Group;
 use pxl_render::gpu::surface;
 use pxl_render::spec::api::surface_role;
+use pxl_spec::asset::character::Group;
 use xpute_kit::status::errno::Errno;
 
 pub(super) fn chat(text: String) -> Result<(), Errno> {

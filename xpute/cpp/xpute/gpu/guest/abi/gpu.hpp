@@ -61,9 +61,9 @@ constexpr std::optional<ErrorCode> of_ErrorCode(std::uint32_t val) noexcept {
     return std::nullopt;
 }
 
-template <_rt::Lend L> inline _rt::Task<std::pair<L, _rt::Result<void>>> run(L records) noexcept {
-    _rt::Lent records_lent_ = _rt::span(records);
-    auto sent_ = _rt::wait(HANDLE, RUN, _rt::Packet{8, [&](_rt::Lower &w_) { records_lent_.store(w_, 0); }}, std::move(records));
+template <_rt::Lend L> inline _rt::Task<std::pair<L, _rt::Result<void>>> run(L recs) noexcept {
+    _rt::Lent recs_lent_ = _rt::span(recs);
+    auto sent_ = _rt::wait(HANDLE, RUN, _rt::Packet{8, [&](_rt::Lower &w_) { recs_lent_.store(w_, 0); }}, std::move(recs));
     auto [result_, data_, lent_] = co_await std::move(sent_);
     co_return {std::move(lent_), _rt::answer(result_)};
 }

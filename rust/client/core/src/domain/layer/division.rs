@@ -10,18 +10,18 @@
 //! are decoded into it straight from the packet. The tile's divisions, a
 //! handful, live on the heap.
 
+use pxl_global::Global;
 use pxl_spec::bake::tile::division::{self, Division, DivisionTile, CELL_CNT};
 use pxl_spec::bake::tile::Tile;
 use pxl_spec::space::coord::q3::Q3;
-use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use pxl_spec::space::coord::world::idx_of;
+use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use pxl_spec::space::layer::lattice::{Grid, GROUND};
 use pxl_spec::space::layer::quadrant::Quadrant;
-use pxl_global::Global;
 
-use crate::sys::io::body::Body;
 use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::{AskScope, Base};
+use crate::sys::io::body::Body;
 use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;
 use crate::sys::range::{arr_bytes, OwnedRange};

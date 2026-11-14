@@ -207,5 +207,5 @@ word; and a rule the GPU alone decides is one function every pass calls.
   its hosts on WebGPU and wgpu, and `gpu/native/runtime/rust` the bindings a
   device's host serves on `xpute-native-runtime`'s link, and
   `gpu/native/runtime/expo` a device's surface view.
-- `dev/golden` and `cpp/dev/test/` are what the tests take, and
-  `cpp/amalgamation.awk` makes the C++ library's two files.
+- `dev/golden`, `dev/mem` and `cpp/dev/test/` are what the tests take,
+  and `cpp/amalgamation.awk` makes the C++ library's two files.

@@ -5,15 +5,24 @@
  * runtime tells the page, the worker's console, a failed instantiation, the
  * guest's stop and its trap, each posted to the page (`tell`), as a device's
  * runtime tells its app through the functions the app sets
- * (xpute-native-runtime native.rs). */
+ * (xpute-native-runtime listener.rs). */
 
 import { Bug, frames } from "@xpute/kit/status/bug.ts";
-import { ERRNO_ENOTRECOVERABLE, ERRNO_EPIPE } from "@xpute/kit/status/errno.spec.ts";
+import {
+  ERRNO_ENOTRECOVERABLE,
+  ERRNO_EPIPE,
+} from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/error.ts";
 import { type Imports, set_hook, Side, type Stop } from "@xpute/link";
 import type { Later } from "@xpute/link/remote.ts";
 import { tell_attached } from "./life.ts";
-import type { Instantiate, InstantiateError, Log, Stopped, Trap } from "./message.ts";
+import type {
+  Instantiate,
+  InstantiateError,
+  Log,
+  Stopped,
+  Trap,
+} from "./message.ts";
 import { serve, type Taker } from "./remote.ts";
 
 interface Exports {
@@ -41,7 +50,7 @@ function tell(m: InstantiateError | Trap | Stopped | Log): void {
 /** Tells the page the guest stopped, with the report of the broken
  * invariant: the guest's, which the host that serves the stop hands it
  * (@xpute/web-host `serve_stop`), or the host's own failure (`hook`), as
- * xpute-native-runtime native.rs `tell_stop` tells a device's app. */
+ * xpute-native-runtime listener.rs `tell_stop` tells a device's app. */
 export function tell_stop(stop: Stop): void {
   tell({ kind: "stopped", stop });
 }
@@ -125,7 +134,8 @@ function hook(link: Side): void {
     if (link.trapped()) return;
     const stack = e instanceof Error ? (e.stack ?? "") : "";
     const errnum = e instanceof Bug ? e.errnum : ERRNO_ENOTRECOVERABLE;
-    const [file, line] = e instanceof Bug ? [e.file, e.line] : (frames(stack)[0] ?? ["", 0]);
+    const [file, line] =
+      e instanceof Bug ? [e.file, e.line] : (frames(stack)[0] ?? ["", 0]);
     console.error(`[host] stopped: ${strerror(errnum)} at ${file}:${line}`);
     tell_stop({ errnum, file, line, n1: 0n, n2: 0n });
     link.trap(e);

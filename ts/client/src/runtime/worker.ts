@@ -94,8 +94,15 @@ async function boot(m: Instantiate): Promise<void> {
   // measuring says what runs slower than `perf.json5`'s `LIMIT.SLOW_MS`.
   const gpu = new WebGpu(
     link,
-    { power: device.POWER, required_feats: device.REQUIRED_FEATURES, optional_feats: device.OPTIONAL_FEATURES },
-    { upload_chunk_sz: device.UPLOAD_CHUNK_BYTES, slow_ms: __PERF_DRIVE__ ? LIMIT.SLOW_MS : null },
+    {
+      power: device.POWER,
+      required_feats: device.REQUIRED_FEATURES,
+      optional_feats: device.OPTIONAL_FEATURES,
+    },
+    {
+      upload_chunk_sz: device.UPLOAD_CHUNK_BYTES,
+      slow_ms: __PERF_DRIVE__ ? LIMIT.SLOW_MS : null,
+    },
   );
   start(
     link,
@@ -123,6 +130,8 @@ async function boot(m: Instantiate): Promise<void> {
 
 /** Declares the tile source to the core, and tells the page its state. */
 async function declare(link: Side): Promise<void> {
-  watch_source(() => tell({ kind: "source", state: source_state(), decl: source_decl() }));
+  watch_source(() =>
+    tell({ kind: "source", state: source_state(), decl: source_decl() }),
+  );
   await declare_source(sender(link));
 }

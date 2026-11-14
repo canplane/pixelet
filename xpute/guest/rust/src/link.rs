@@ -28,7 +28,7 @@ fn cross_out(at: u32) -> i32 {
 }
 
 thread_local! {
-    static SIDE: Side = const { Side::new(|l| l.inbox + l.room, cross_out) };
+    static SIDE: Side = const { Side::new(|l| l.inbox + l.cap, cross_out) };
     /// Whether the guest is in an entry.
     static ENTERED: Cell<bool> = const { Cell::new(false) };
     /// Whether the guest is laying its link (`init`), before the host can
@@ -40,22 +40,22 @@ thread_local! {
     static END: Cell<fn() -> bool> = const { Cell::new(|| false) };
 }
 
-/// Lays the link over frames of `room` bytes, a multiple of 8 that holds a
+/// Lays the link over frames of `cap` bytes, a multiple of 8 that holds a
 /// frame's words, and runs nothing of the program; `enter` and `end` are the
 /// program's start and end of every entry (`boot`, `recv`). It answers where
-/// the link's layout lies: two words, the inbox and a frame's room, then the
+/// the link's layout lies: two words, the inbox and a frame's cap, then the
 /// inbox and the outbox.
-pub fn init(room: u32, enter: fn(), end: fn() -> bool) -> u32 {
+pub fn init(cap: u32, enter: fn(), end: fn() -> bool) -> u32 {
     INIT.set(true);
-    xpute_kit::ensure!(room.is_multiple_of(8) && room >= HDR_SZ, EINVAL, room);
-    let words: &'static mut [u64] = Vec::leak(vec![0; 1 + 2 * room as usize / 8]);
+    xpute_kit::ensure!(cap.is_multiple_of(8) && cap >= HDR_SZ, EINVAL, cap);
+    let words: &'static mut [u64] = Vec::leak(vec![0; 1 + 2 * cap as usize / 8]);
     let at = mem::off(words.as_ptr().cast());
     let inbox = at + 8;
     // SAFETY: the layout's two words, which only `init` writes.
     let layout = unsafe { mem::bytes(at, 8) };
     layout[..4].copy_from_slice(&inbox.to_le_bytes());
-    layout[4..].copy_from_slice(&room.to_le_bytes());
-    SIDE.with(|s| s.set_layout(Layout { inbox, room }));
+    layout[4..].copy_from_slice(&cap.to_le_bytes());
+    SIDE.with(|s| s.set_layout(Layout { inbox, cap }));
     ENTER.set(enter);
     END.set(end);
     INIT.set(false);

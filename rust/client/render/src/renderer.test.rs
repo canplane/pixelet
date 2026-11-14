@@ -8,6 +8,12 @@ use crate::frame::shader::record::{
 use crate::frame::shader::word::{draw, ghost_box, instance};
 use crate::gpu::draw::{drifted, test_lists, Draw, DrawId, DrawList, ReceiverBox};
 use crate::pass::mark::{marked, UploadOf};
+use xpute_test_mem::Heap;
+
+/// The renderer takes the offsets of what it lends the host (`mem::off`), so
+/// the tests' process has a guest's memory as its heap.
+#[global_allocator]
+static HEAP: Heap = Heap;
 
 /// The only test here that installs the calls' state. The lists' tests read
 /// that state, so this test takes their lock (`test_lists`) and never runs

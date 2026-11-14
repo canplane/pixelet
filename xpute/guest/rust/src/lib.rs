@@ -15,17 +15,17 @@ pub mod stop;
 pub mod wait;
 
 /// Defines the guest's three exports (link/wit/types.wit), over frames of
-/// `room` bytes, with `boot` mounting what the guest serves and opening what it
+/// `cap` bytes, with `boot` mounting what the guest serves and opening what it
 /// calls, and `enter` and `end` starting and ending each entry. From its init
 /// on, the guest's failures are its own (stop.rs `hook`).
 #[macro_export]
 macro_rules! link {
-    ($room:expr, $boot:expr, $enter:expr, $end:expr) => {
+    ($cap:expr, $boot:expr, $enter:expr, $end:expr) => {
         #[cfg(target_arch = "wasm32")]
         #[unsafe(no_mangle)]
         pub extern "C" fn link_init() -> u32 {
             $crate::stop::hook();
-            $crate::link::init($room, $enter, $end)
+            $crate::link::init($cap, $enter, $end)
         }
         #[cfg(target_arch = "wasm32")]
         #[unsafe(no_mangle)]
@@ -44,7 +44,7 @@ macro_rules! link {
         pub extern "C" fn link_init() -> u32 {
             $crate::link::caught($crate::xpute_link::TRAP_AT, || {
                 $crate::stop::hook();
-                $crate::link::init($room, $enter, $end)
+                $crate::link::init($cap, $enter, $end)
             })
         }
         #[cfg(not(target_arch = "wasm32"))]

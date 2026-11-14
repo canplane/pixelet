@@ -35,7 +35,7 @@ fn lower(buf: &mut [u8]) -> Result<usize, Errno> {
     w.finish()
 }
 
-/// The packet lowers as the record holds it, and only into a room that holds
+/// The packet lowers as the record holds it, and only into a buffer that holds
 /// it whole.
 #[test]
 fn lower_matches_record() {
@@ -74,6 +74,10 @@ fn lift_matches_record() {
 fn refusals_match_record() {
     let g = Golden::load(GOLDEN);
     g.each("refused", |k| {
-        assert_eq!(load_uri(Lift::new(&g.bytes(k)), 0), Err(Errno::EBADMSG), "{k}");
+        assert_eq!(
+            load_uri(Lift::new(&g.bytes(k)), 0),
+            Err(Errno::EBADMSG),
+            "{k}"
+        );
     });
 }

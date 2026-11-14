@@ -1,21 +1,27 @@
 // xpute-link/link.test.rs
 
 use std::cell::Cell;
+use std::rc::Rc;
 
-use super::*;
-use crate::mem::test::alloc;
+use xpute_kit::status::errno::Errno;
+use xpute_link::frame::Frame;
+use xpute_link::{Handle, Layout, Lower, Method, Object, Packet, Reply, Side, Tag, CANCEL, NAMED, ROOT};
+use xpute_test_mem::{alloc, Heap};
+
+#[global_allocator]
+static HEAP: Heap = Heap;
 
 // A guest's side and its host's, each crossing into the other's `recv`, over
 // a layout of this thread's own.
 thread_local! {
-    static GUEST: Side = const { Side::new(|l| l.inbox + l.room, |at| HOST.with(|h| h.recv(at))) };
+    static GUEST: Side = const { Side::new(|l| l.inbox + l.cap, |at| HOST.with(|h| h.recv(at))) };
     static HOST: Side = const { Side::new(|l| l.inbox, |at| GUEST.with(|g| g.recv(at))) };
 }
 
-const ROOM: u32 = 64;
+const CAP: u32 = 64;
 
 /// What the host serves: method 0 answers at once with a word, method 1
-/// later, and method 2 at once with a value past the room.
+/// later, and method 2 at once with a value past the cap.
 const SERVED: Handle = NAMED | 1;
 
 struct Served {
@@ -25,12 +31,18 @@ struct Served {
 impl Object for Served {
     fn call(&self, m: Method, tag: Tag, _: Option<&[u8]>) -> Reply {
         match m {
-            0 => Reply { result: 0, data: Some((4, Box::new(|w: &mut Lower| w.u32(0, 7)))) },
+            0 => Reply {
+                result: 0,
+                data: Some((4, Box::new(|w: &mut Lower| w.u32(0, 7)))),
+            },
             1 => {
                 self.later.set(Some(tag));
                 Reply::from(Errno::EINPROGRESS as i32)
             }
-            _ => Reply { result: 0, data: Some((ROOM as usize, Box::new(|_: &mut Lower| {}))) },
+            _ => Reply {
+                result: 0,
+                data: Some((CAP as usize, Box::new(|_: &mut Lower| {}))),
+            },
         }
     }
 }
@@ -38,42 +50,69 @@ impl Object for Served {
 /// Lays the link and mounts what the host serves: the inbox, and the tag of
 /// the request method 1 left to answer.
 fn link() -> (u32, Rc<Cell<Option<Tag>>>) {
-    let l = Layout { inbox: alloc(2 * ROOM), room: ROOM };
+    let l = Layout {
+        inbox: alloc(2 * CAP),
+        cap: CAP,
+    };
     let later = Rc::new(Cell::new(None));
     GUEST.with(|g| g.set_layout(l));
     HOST.with(|h| {
         h.set_layout(l);
-        h.mount_named(SERVED, Rc::new(Served { later: later.clone() }));
+        h.mount_named(
+            SERVED,
+            Rc::new(Served {
+                later: later.clone(),
+            }),
+        );
     });
     (l.inbox, later)
 }
 
 /// The answer a side lays in the frame its request came in is marked `RES`
-/// and carries the request's tag, a value past the room refused EMSGSIZE.
+/// and carries the request's tag, a value past the cap refused EMSGSIZE.
 #[test]
 fn recv_answers_res_with_tag() {
     let (inbox, _) = link();
-    let outbox = inbox + ROOM;
+    let outbox = inbox + CAP;
     for (m, result) in [(0, 0), (2, Errno::EMSGSIZE as i32)] {
         let t = GUEST.with(|g| g.send(SERVED, m, Packet::Args(None), None));
         let f = Frame::at(outbox);
-        assert_eq!((f.res, f.tag, f.handle, f.method, f.result), (true, t, SERVED, m, result), "method {m}");
+        assert_eq!(
+            (f.res, f.tag, f.handle, f.method, f.result),
+            (true, t, SERVED, m, result),
+            "method {m}"
+        );
     }
 }
 
 /// A later answer is marked `RES` and carries the request's tag, and its
-/// request hears it, a value past the room refused EMSGSIZE.
+/// request hears it, a value past the cap refused EMSGSIZE.
 #[test]
 fn task_return_answers_res_with_tag() {
     let (inbox, later) = link();
     let word = |w: &mut Lower| w.u32(0, 9);
     for (data, result, value) in [
-        (Some((4, &word as &dyn Fn(&mut Lower))), 0, Some(vec![9, 0, 0, 0])),
-        (Some((ROOM as usize, &word as &dyn Fn(&mut Lower))), Errno::EMSGSIZE as i32, None),
+        (
+            Some((4, &word as &dyn Fn(&mut Lower))),
+            0,
+            Some(vec![9, 0, 0, 0]),
+        ),
+        (
+            Some((CAP as usize, &word as &dyn Fn(&mut Lower))),
+            Errno::EMSGSIZE as i32,
+            None,
+        ),
     ] {
         let heard = Rc::new(Cell::new(None));
         let h = heard.clone();
-        let t = GUEST.with(|g| g.send(SERVED, 1, Packet::Args(None), Some(Box::new(move |r, d| h.set(Some((r, d)))))));
+        let t = GUEST.with(|g| {
+            g.send(
+                SERVED,
+                1,
+                Packet::Args(None),
+                Some(Box::new(move |r, d| h.set(Some((r, d))))),
+            )
+        });
         assert_eq!(later.take(), Some(t));
         HOST.with(|h| h.task_return(t, 0, Packet::Args(data)));
         let f = Frame::at(inbox);

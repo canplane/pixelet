@@ -16,8 +16,8 @@ use xpute_kit::status::errno::Errno;
 use xpute_link::frame::HDR_SZ;
 use xpute_link::{Handle, Layout, Method, Object, Packet, Reply, Side, Tag};
 
-/// A frame's room: its words and a page, past every packet the tests lay.
-const ROOM: u32 = HDR_SZ + 4096;
+/// A frame's cap: its words and a page, past every packet the tests lay.
+const CAP: u32 = HDR_SZ + 4096;
 
 thread_local! {
     static SIDE: Side = const { Side::new(|l| l.inbox, |_| recv()) };
@@ -54,7 +54,7 @@ fn lay() {
     if LAID.replace(true) {
         return;
     }
-    let at = init(ROOM, || {}, || false);
+    let at = init(CAP, || {}, || false);
     SIDE.with(|s| {
         s.set_layout(Layout::at(at));
         s.mount_named(monotonic_clock::HANDLE, Rc::new(Clock));

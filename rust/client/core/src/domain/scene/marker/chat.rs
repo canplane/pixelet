@@ -8,8 +8,8 @@
 
 use std::rc::Rc;
 
-use xpute_guest::clock::now;
 use pxl_global::Global;
+use xpute_guest::clock::now;
 
 use crate::domain::scene::marker::design::Design;
 use crate::domain::scene::marker::param::SHOWN_MS;

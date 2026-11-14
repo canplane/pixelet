@@ -126,7 +126,10 @@ function watch_keep(
 let geolocation: Watch | null = null;
 
 /** A device's watch ends on any failure. */
-function geolocation_fail(watch: Watch, err: "denied" | "unavailable" | "other"): void {
+function geolocation_fail(
+  watch: Watch,
+  err: "denied" | "unavailable" | "other",
+): void {
   if (geolocation !== watch) return;
   geolocation_stop();
   listener.pos_err(err, false);
@@ -137,7 +140,8 @@ function geolocation_start(): void {
   const watch: Watch = { subscription: null, stopped: false };
   geolocation = watch;
   void (async () => {
-    if (!(await geolocation_granted())) return geolocation_fail(watch, "denied");
+    if (!(await geolocation_granted()))
+      return geolocation_fail(watch, "denied");
     // A watch the core starts asks only for a permission not yet decided and
     // raises no settings dialog: the location switched off ends it, and the
     // press turns the location on (`services_on`).

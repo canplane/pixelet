@@ -10,8 +10,8 @@
 
 namespace xpute::gpu {
 
-Stream::Stream(std::size_t room) : buf_(std::vector<std::uint32_t>()), room_(room) {
-    std::get<0>(buf_).reserve(room);
+Stream::Stream(std::size_t cap) : buf_(std::vector<std::uint32_t>()), cap_(cap) {
+    std::get<0>(buf_).reserve(cap);
 }
 
 std::size_t Stream::len() const noexcept {
@@ -36,7 +36,7 @@ void Stream::flush() {
 
 std::span<std::uint32_t> Stream::open(std::uint32_t op, std::size_t n, std::source_location at) {
     std::size_t off = len();
-    ensure(off + 2 + n <= room_, Errno::enospc, room_ * WORD, 0, at);
+    ensure(off + 2 + n <= cap_, Errno::enospc, cap_ * WORD, 0, at);
     ensure(is_free(), Errno::ebusy, op, 0, at);
     auto &words = std::get<0>(buf_);
     // Within the capacity the stream was made with, so nothing moves.

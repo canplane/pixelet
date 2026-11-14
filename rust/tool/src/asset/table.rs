@@ -122,12 +122,26 @@ pub fn render_json(rows: &[Row], pack: &Pack, symbols: &[String]) -> String {
         let _ = writeln!(out, "{pad}}},");
     };
     let mut out = String::with_capacity(rows.len() * 200);
-    let _ = writeln!(out, "{{\n  $description: {},\n  files: {{\n    $value: [", string(&doc));
+    let _ = writeln!(
+        out,
+        "{{\n  $description: {},\n  files: {{\n    $value: [",
+        string(&doc)
+    );
     for r in rows {
-        let _ = writeln!(out, "      {{\n        path: {},\n        key: {},\n        bytes: {},", string(&r.path), string(&r.key), r.bytes);
+        let _ = writeln!(
+            out,
+            "      {{\n        path: {},\n        key: {},\n        bytes: {},",
+            string(&r.path),
+            string(&r.key),
+            r.bytes
+        );
         match r.extent {
             Some(e) => {
-                let _ = writeln!(out, "        extent: {{ $value: [{}, {}, {}], $type: \"f64\" }},", e[0], e[1], e[2]);
+                let _ = writeln!(
+                    out,
+                    "        extent: {{ $value: [{}, {}, {}], $type: \"f64\" }},",
+                    e[0], e[1], e[2]
+                );
             }
             None => out.push_str("        extent: null,\n"),
         }
@@ -135,22 +149,59 @@ pub fn render_json(rows: &[Row], pack: &Pack, symbols: &[String]) -> String {
     }
     out.push_str("    ],\n    $type: \"u32\",\n  },\n  pack: {\n");
     let _ = writeln!(out, "    image: {{ $value: {} }},", string(&pack.image));
-    let _ = writeln!(out, "    cell: {{ $value: {}, $type: \"u32\" }},", pack.cell);
-    let _ = writeln!(out, "    columns: {{ $value: {}, $type: \"u32\" }},", pack.columns);
-    list(&mut out, "    ", "tiles", pack.tiles.iter().map(|t| string(t)).collect(), None);
-    list(&mut out, "    ", "means", pack.means.iter().map(|m| format!("[{}, {}, {}]", m[0], m[1], m[2])).collect(), Some("u8"));
+    let _ = writeln!(
+        out,
+        "    cell: {{ $value: {}, $type: \"u32\" }},",
+        pack.cell
+    );
+    let _ = writeln!(
+        out,
+        "    columns: {{ $value: {}, $type: \"u32\" }},",
+        pack.columns
+    );
+    list(
+        &mut out,
+        "    ",
+        "tiles",
+        pack.tiles.iter().map(|t| string(t)).collect(),
+        None,
+    );
+    list(
+        &mut out,
+        "    ",
+        "means",
+        pack.means
+            .iter()
+            .map(|m| format!("[{}, {}, {}]", m[0], m[1], m[2]))
+            .collect(),
+        Some("u8"),
+    );
     list(
         &mut out,
         "    ",
         "faces",
         pack.faces
             .iter()
-            .map(|f| format!("[{}, {}, {}, {}]", string(&f.group), string(&f.ty), string(f.face.name()), f.tile))
+            .map(|f| {
+                format!(
+                    "[{}, {}, {}, {}]",
+                    string(&f.group),
+                    string(&f.ty),
+                    string(f.face.name()),
+                    f.tile
+                )
+            })
             .collect(),
         Some("u32"),
     );
     out.push_str("  },\n");
-    list(&mut out, "  ", "symbols", symbols.iter().map(|s| string(s)).collect(), None);
+    list(
+        &mut out,
+        "  ",
+        "symbols",
+        symbols.iter().map(|s| string(s)).collect(),
+        None,
+    );
     out.push_str("}\n");
     out
 }

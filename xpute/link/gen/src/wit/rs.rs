@@ -12,8 +12,8 @@ use xpute_gen::spec::{pascal, rs_enum};
 
 use super::{
     cases, discriminant, is_async, is_lent, kind, members, method_const, method_name,
-    object_method, params, plus, rec_layout, rs_given, rs_name, serving, type_name,
-    variant_layout, Gen, Kind, Obj, Role,
+    object_method, params, plus, rec_layout, rs_given, rs_name, serving, type_name, variant_layout,
+    Gen, Kind, Obj, Role,
 };
 
 /// The Rust modules the bindings take items from, beside the link's crate.
@@ -22,7 +22,11 @@ const RS_ERRNO: &str = "xpute_kit::status::errno";
 /// The object over a served object's implementation, a name of the
 /// generator's alone, which its leading `_` keeps from every WIT name.
 fn object_struct(o: &Obj) -> String {
-    if o.resource { format!("_{}Object", pascal(&o.name)) } else { "_Object".into() }
+    if o.resource {
+        format!("_{}Object", pascal(&o.name))
+    } else {
+        "_Object".into()
+    }
 }
 
 /// What a Rust function of `n` arguments, `self` among them, carries past
@@ -39,26 +43,34 @@ fn many_args(n: usize, indent: &str) -> String {
 /// The value the Rust expression `e`, a reference, names: the referent of a
 /// borrow it writes, else its dereference.
 fn deref(e: &str) -> String {
-    e.strip_prefix('&').map_or_else(|| format!("*{e}"), str::to_owned)
+    e.strip_prefix('&')
+        .map_or_else(|| format!("*{e}"), str::to_owned)
 }
 
 /// The Rust expression `e`, a reference, as a method's receiver: what a
 /// borrow it writes borrows, which the call borrows again.
 fn receiver(e: &str) -> String {
-    e.strip_prefix('&').map_or_else(|| format!("({e})"), str::to_owned)
+    e.strip_prefix('&')
+        .map_or_else(|| format!("({e})"), str::to_owned)
 }
 
 impl Gen<'_> {
     fn kinds(&self, f: &Function) -> Result<Vec<(String, Kind)>, String> {
         let at = format!("{}.{}", self.at(), f.name);
-        params(f).map(|p| Ok((rs_name(&p.name), kind(self.r, &p.ty, &at)?))).collect()
+        params(f)
+            .map(|p| Ok((rs_name(&p.name), kind(self.r, &p.ty, &at)?)))
+            .collect()
     }
 
     /// `name` of the Rust module `module`, reached through the module's
     /// runtime module `_rt`, which re-exports it, as wit-bindgen's bindings
     /// reach theirs.
     fn rs_use(&self, module: &str, name: &str) -> String {
-        self.rs_uses.borrow_mut().entry(module.into()).or_default().insert(name.into());
+        self.rs_uses
+            .borrow_mut()
+            .entry(module.into())
+            .or_default()
+            .insert(name.into());
         format!("_rt::{name}")
     }
 
@@ -101,7 +113,10 @@ impl Gen<'_> {
             Kind::Record(_) | Kind::Variant(_) => format!("{}.store({w}, {at});", receiver(e)),
             Kind::Option(el) => {
                 let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)])?;
-                format!("if let Some(v) = {e} {{ {w}.u8({at}, 1); {} }}", self.rs_store(w, &plus(at, off), "v", el)?)
+                format!(
+                    "if let Some(v) = {e} {{ {w}.u8({at}, 1); {} }}",
+                    self.rs_store(w, &plus(at, off), "v", el)?
+                )
             }
             Kind::Result(ok, err) => {
                 let (off, _, _) = self.result_layout(ok, err)?;
@@ -111,7 +126,13 @@ impl Gen<'_> {
                 };
                 // A case with no payload binds nothing.
                 let bind = |k: &Option<Box<Kind>>| if k.is_some() { "v" } else { "_" };
-                format!("match {e} {{ Ok({}) => {{ {} }} Err({}) => {{ {w}.u8({at}, 1); {} }} }}", bind(ok), case(ok)?, bind(err), case(err)?)
+                format!(
+                    "match {e} {{ Ok({}) => {{ {} }} Err({}) => {{ {w}.u8({at}, 1); {} }} }}",
+                    bind(ok),
+                    case(ok)?,
+                    bind(err),
+                    case(err)?
+                )
             }
         })
     }
@@ -138,7 +159,9 @@ impl Gen<'_> {
                     self.rs_load(r, &format!("b + i * {sz}"), el)?
                 )
             }
-            Kind::Record(_) | Kind::Variant(_) => format!("{}::load({r}, {at})", self.rs_ty(k, true)),
+            Kind::Record(_) | Kind::Variant(_) => {
+                format!("{}::load({r}, {at})", self.rs_ty(k, true))
+            }
             Kind::Option(el) => {
                 let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)])?;
                 format!(
@@ -149,7 +172,10 @@ impl Gen<'_> {
             Kind::Result(ok, err) => {
                 let (off, _, _) = self.result_layout(ok, err)?;
                 let case = |k: &Option<Box<Kind>>, tag: &str| match k {
-                    Some(k) => Ok(format!("{}.map({tag})", self.rs_load(r, &plus(at, off), k)?)),
+                    Some(k) => Ok(format!(
+                        "{}.map({tag})",
+                        self.rs_load(r, &plus(at, off), k)?
+                    )),
                     None => Ok::<_, String>(format!("Ok({tag}(()))")),
                 };
                 format!(
@@ -172,18 +198,29 @@ impl Gen<'_> {
         let mut writes = Vec::new();
         for ((n, k), at) in ps.iter().zip(&offs) {
             writes.push(if lents.contains(n) {
-                format!("{} {{ at: {n}_at_, len: {n}_len_ }}.store(w_, {at});", self.rs_ty(k, true))
+                format!(
+                    "{} {{ at: {n}_at_, len: {n}_len_ }}.store(w_, {at});",
+                    self.rs_ty(k, true)
+                )
             } else {
                 // A string's, a list's, a record's or a variant's param is
                 // a borrow already.
                 let e = match k {
-                    Kind::Str | Kind::Array(_) | Kind::List(_) | Kind::Record(_) | Kind::Variant(_) => n.clone(),
+                    Kind::Str
+                    | Kind::Array(_)
+                    | Kind::List(_)
+                    | Kind::Record(_)
+                    | Kind::Variant(_) => n.clone(),
                     _ => format!("&{n}"),
                 };
                 self.rs_store("w_", &at.to_string(), &e, k)?
             });
         }
-        let w = format!("|w_: &mut {}| {{ {} }}", self.rs_use(self.link_rs, "Lower"), writes.join(" "));
+        let w = format!(
+            "|w_: &mut {}| {{ {} }}",
+            self.rs_use(self.link_rs, "Lower"),
+            writes.join(" ")
+        );
         Ok(format!("Some(({sz}, &{w}))"))
     }
 
@@ -225,19 +262,42 @@ impl Gen<'_> {
         let rc = self.rs_use("std::rc", "Rc");
         let _ = writeln!(out, "pub trait {t} {{");
         for f in &o.methods {
-            let ps: Vec<String> = self.kinds(f)?.iter().map(|(n, k)| format!("{n}: {}", self.rs_ty(k, true))).collect();
+            let ps: Vec<String> = self
+                .kinds(f)?
+                .iter()
+                .map(|(n, k)| format!("{n}: {}", self.rs_ty(k, true)))
+                .collect();
             let ret = self.ret(f)?.map_or("()".into(), |k| self.rs_ty(&k, true));
             let name = rs_name(method_name(f));
             if is_async(f) {
-                let _ = writeln!(out, "{}    fn {name}(&self, {}task_return: {}<{ret}>);", many_args(ps.len() + 2, "    "), ps.iter().map(|p| format!("{p}, ")).collect::<String>(), self.rs_use(self.link_rs, "Return"));
+                let _ = writeln!(
+                    out,
+                    "{}    fn {name}(&self, {}task_return: {}<{ret}>);",
+                    many_args(ps.len() + 2, "    "),
+                    ps.iter().map(|p| format!("{p}, ")).collect::<String>(),
+                    self.rs_use(self.link_rs, "Return")
+                );
             } else {
-                let _ = writeln!(out, "{}    fn {name}(&self, {}) -> Result<{ret}, {errno}>;", many_args(ps.len() + 1, "    "), ps.join(", "));
+                let _ = writeln!(
+                    out,
+                    "{}    fn {name}(&self, {}) -> Result<{ret}, {errno}>;",
+                    many_args(ps.len() + 1, "    "),
+                    ps.join(", ")
+                );
             }
         }
         // A request's tag is read where a method answers later, and the args
         // where one takes any.
-        let tag = if o.methods.iter().any(|f| is_async(f)) { "tag_" } else { "_" };
-        let args = if o.methods.iter().any(|f| params(f).next().is_some()) { "args_" } else { "_" };
+        let tag = if o.methods.iter().any(|f| is_async(f)) {
+            "tag_"
+        } else {
+            "_"
+        };
+        let args = if o.methods.iter().any(|f| params(f).next().is_some()) {
+            "args_"
+        } else {
+            "_"
+        };
         let _ = writeln!(
             out,
             "}}\n\nstruct {obj}({rc}<dyn {t}>);\n\nimpl {} for {obj} {{\n    fn call(&self, m_: {}, {tag}: {}, {args}: Option<&[u8]>) -> {reply} {{\n        let run = || -> Result<{reply}, {errno}> {{\n            Ok(match m_ {{",
@@ -247,13 +307,25 @@ impl Gen<'_> {
         );
         for f in &o.methods {
             let ps = self.kinds(f)?;
-            let _ = writeln!(out, "                {} => {{", method_const(o, f, rs_given));
+            let _ = writeln!(
+                out,
+                "                {} => {{",
+                method_const(o, f, rs_given)
+            );
             if !ps.is_empty() {
-                let _ = writeln!(out, "                    let r_ = {}::new(args_.ok_or({errno}::EBADMSG)?);", self.rs_use(self.link_rs, "Lift"));
+                let _ = writeln!(
+                    out,
+                    "                    let r_ = {}::new(args_.ok_or({errno}::EBADMSG)?);",
+                    self.rs_use(self.link_rs, "Lift")
+                );
             }
             let (offs, _) = self.tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
             for ((n, kd), at) in ps.iter().zip(&offs) {
-                let _ = writeln!(out, "                    let {n} = {}?;", self.rs_load("r_", &at.to_string(), kd)?);
+                let _ = writeln!(
+                    out,
+                    "                    let {n} = {}?;",
+                    self.rs_load("r_", &at.to_string(), kd)?
+                );
             }
             let names: String = ps.iter().map(|(n, _)| format!("{n}, ")).collect();
             let name = rs_name(method_name(f));
@@ -288,26 +360,56 @@ impl Gen<'_> {
         let errno = self.rs_use(RS_ERRNO, "Errno");
         for f in &o.methods {
             let ps = self.kinds(f)?;
-            let lents: Vec<String> = params(f).filter(|p| is_lent(self.r, &p.ty)).map(|p| rs_name(&p.name)).collect();
+            let lents: Vec<String> = params(f)
+                .filter(|p| is_lent(self.r, &p.ty))
+                .map(|p| rs_name(&p.name))
+                .collect();
             // An async call's one lent buffer, which its answer hands back.
-            let lent = if is_async(f) { lents.first().cloned() } else { None };
+            let lent = if is_async(f) {
+                lents.first().cloned()
+            } else {
+                None
+            };
             // A sync call lends slices of any plain elements, each its own; an
             // async call lends any buffer that says its span (link `Lend`).
-            let lent_ty = |k: usize| if is_async(f) { "L".to_string() } else { format!("&mut [T{k}]") };
+            let lent_ty = |k: usize| {
+                if is_async(f) {
+                    "L".to_string()
+                } else {
+                    format!("&mut [T{k}]")
+                }
+            };
             let generic = if lents.is_empty() {
                 String::new()
             } else if is_async(f) {
                 format!("<L: {}>", self.rs_use(self.link_rs, "Lend"))
             } else {
-                let ts: Vec<String> = (0..lents.len()).map(|k| format!("T{k}: Copy + Unpin + 'static")).collect();
+                let ts: Vec<String> = (0..lents.len())
+                    .map(|k| format!("T{k}: Copy + Unpin + 'static"))
+                    .collect();
                 format!("<{}>", ts.join(", "))
             };
-            let mut sig: Vec<String> = if o.resource { vec![format!("{}_: {}", rs_name(&o.name), self.rs_use(self.link_rs, "Handle"))] } else { vec![] };
-            sig.extend(ps.iter().map(|(n, k)| match lents.iter().position(|l| l == n) {
-                Some(j) => format!("{n}: {}", lent_ty(j)),
-                None => format!("{n}: {}", self.rs_ty(k, false)),
-            }));
-            let h = if o.resource { format!("{}_", rs_name(&o.name)) } else { "HANDLE".into() };
+            let mut sig: Vec<String> = if o.resource {
+                vec![format!(
+                    "{}_: {}",
+                    rs_name(&o.name),
+                    self.rs_use(self.link_rs, "Handle")
+                )]
+            } else {
+                vec![]
+            };
+            sig.extend(
+                ps.iter()
+                    .map(|(n, k)| match lents.iter().position(|l| l == n) {
+                        Some(j) => format!("{n}: {}", lent_ty(j)),
+                        None => format!("{n}: {}", self.rs_ty(k, false)),
+                    }),
+            );
+            let h = if o.resource {
+                format!("{}_", rs_name(&o.name))
+            } else {
+                "HANDLE".into()
+            };
             let rk = self.ret(f)?;
             let ret = rk.as_ref().map_or("()".into(), |k| self.rs_ty(k, true));
             let lend: String = lents
@@ -324,8 +426,16 @@ impl Gen<'_> {
             let name = rs_name(&object_method(o, f));
             if is_async(f) {
                 let (output, kept, give) = match &lent {
-                    Some(l) => (format!("(L, Result<{ret}, {errno}>)"), l.clone(), format!("(lent, {})", self.rs_answer(&rk, "data.as_deref()")?)),
-                    None => (format!("Result<{ret}, {errno}>"), "()".into(), self.rs_answer(&rk, "data.as_deref()")?),
+                    Some(l) => (
+                        format!("(L, Result<{ret}, {errno}>)"),
+                        l.clone(),
+                        format!("(lent, {})", self.rs_answer(&rk, "data.as_deref()")?),
+                    ),
+                    None => (
+                        format!("Result<{ret}, {errno}>"),
+                        "()".into(),
+                        self.rs_answer(&rk, "data.as_deref()")?,
+                    ),
                 };
                 // The call is sent here, and the future answers it.
                 let _ = writeln!(out, "{}pub fn {name}{generic}({}) -> impl {}<Output = {output}> {{\n    {lend}\n    let sent = {}::wait({h}, {c}, {}, {kept});\n    async move {{\n        let (r, {}, {}) = sent.await;\n        {give}\n    }}\n}}\n", many_args(sig.len(), ""), sig.join(", "), self.rs_use("core::future", "Future"), self.rs_use(side, "wait"), self.rs_args(&ps, &lents)?, if rk.is_some() { "data" } else { "_" }, if lent.is_some() { "lent" } else { "_" });
@@ -338,14 +448,24 @@ impl Gen<'_> {
 
     /// The interface's Rust module, by `role` on the side of its crate, none
     /// for an interface of types alone.
-    pub(super) fn rs_interface(&self, objs: &[Obj], role: Option<(Role, &str, &str)>) -> Result<String, String> {
+    pub(super) fn rs_interface(
+        &self,
+        objs: &[Obj],
+        role: Option<(Role, &str, &str)>,
+    ) -> Result<String, String> {
         let mut items = String::new();
         if !objs.is_empty() {
             let _ = writeln!(items, "/// The interface's handle, named by `{}` (frame.json5 `NAMED`).\npub const HANDLE: {} = {:#x};\n", self.at(), self.rs_use(self.link_rs, "Handle"), self.handle());
         }
         for o in objs {
             for (k, f) in o.methods.iter().enumerate() {
-                let _ = writeln!(items, "/// `{}`\npub const {}: {} = {k};", f.name, method_const(o, f, rs_given), self.rs_use(self.link_rs, "Method"));
+                let _ = writeln!(
+                    items,
+                    "/// `{}`\npub const {}: {} = {k};",
+                    f.name,
+                    method_const(o, f, rs_given),
+                    self.rs_use(self.link_rs, "Method")
+                );
             }
         }
         items.push('\n');
@@ -377,10 +497,20 @@ impl Gen<'_> {
             Kind::Bool => "bool".into(),
             Kind::Number(n) => n.rs.into(),
             Kind::Str => if owned { "String" } else { "&str" }.into(),
-            Kind::Array(n) => if owned { format!("Vec<{}>", n.rs) } else { format!("&[{}]", n.rs) },
+            Kind::Array(n) => {
+                if owned {
+                    format!("Vec<{}>", n.rs)
+                } else {
+                    format!("&[{}]", n.rs)
+                }
+            }
             Kind::List(e) => {
                 let e = self.rs_ty(e, true);
-                if owned { format!("Vec<{e}>") } else { format!("&[{e}]") }
+                if owned {
+                    format!("Vec<{e}>")
+                } else {
+                    format!("&[{e}]")
+                }
             }
             Kind::Record(t) | Kind::Variant(t) | Kind::Enum(t) => {
                 let (m, n) = self.type_path(*t, rs_given);
@@ -389,11 +519,16 @@ impl Gen<'_> {
                     Some(m) => self.rs_use(&m.rs, &n),
                     None => n,
                 };
-                if owned || matches!(k, Kind::Enum(_)) { p } else { format!("&{p}") }
+                if owned || matches!(k, Kind::Enum(_)) {
+                    p
+                } else {
+                    format!("&{p}")
+                }
             }
             Kind::Option(e) => format!("Option<{}>", self.rs_ty(e, owned)),
             Kind::Result(ok, err) => {
-                let case = |k: &Option<Box<Kind>>| k.as_ref().map_or("()".into(), |k| self.rs_ty(k, true));
+                let case =
+                    |k: &Option<Box<Kind>>| k.as_ref().map_or("()".into(), |k| self.rs_ty(k, true));
                 format!("Result<{}, {}>", case(ok), case(err))
             }
             Kind::Handle => "u32".into(),
@@ -424,11 +559,25 @@ impl Gen<'_> {
                     }
                     let _ = writeln!(out, "}}\n\nimpl {n} {{\n    pub const SZ: usize = {sz};\n    pub const ALIGN: usize = {align};\n\n    pub fn store(&self, w: &mut {}, at: usize) {{", lower());
                     for ((f, k), &off) in fields.iter().zip(&offs) {
-                        let _ = writeln!(out, "        {}", self.rs_store("w", &plus("at", off), &format!("&self.{}", rs_name(f)), k)?);
+                        let _ = writeln!(
+                            out,
+                            "        {}",
+                            self.rs_store(
+                                "w",
+                                &plus("at", off),
+                                &format!("&self.{}", rs_name(f)),
+                                k
+                            )?
+                        );
                     }
                     let _ = writeln!(out, "    }}\n\n    pub fn load(r: {}<'_>, at: usize) -> Result<{n}, {}> {{\n        Ok({n} {{", lift(), errno());
                     for ((f, k), &off) in fields.iter().zip(&offs) {
-                        let _ = writeln!(out, "            {}: {}?,", rs_name(f), self.rs_load("r", &plus("at", off), k)?);
+                        let _ = writeln!(
+                            out,
+                            "            {}: {}?,",
+                            rs_name(f),
+                            self.rs_load("r", &plus("at", off), k)?
+                        );
                     }
                     let _ = writeln!(out, "        }})\n    }}\n}}\n");
                 }
@@ -440,7 +589,8 @@ impl Gen<'_> {
                     for (c, k) in &cases {
                         match k {
                             Some(k) => {
-                                let _ = writeln!(out, "    {}({}),", pascal(c), self.rs_ty(k, true));
+                                let _ =
+                                    writeln!(out, "    {}({}),", pascal(c), self.rs_ty(k, true));
                             }
                             None => {
                                 let _ = writeln!(out, "    {},", pascal(c));
@@ -451,10 +601,19 @@ impl Gen<'_> {
                     for (k, (c, kd)) in cases.iter().enumerate() {
                         match kd {
                             Some(kd) => {
-                                let _ = writeln!(out, "            {n}::{}(v) => {{ w.{d}(at, {k}); {} }}", pascal(c), self.rs_store("w", &plus("at", off), "v", kd)?);
+                                let _ = writeln!(
+                                    out,
+                                    "            {n}::{}(v) => {{ w.{d}(at, {k}); {} }}",
+                                    pascal(c),
+                                    self.rs_store("w", &plus("at", off), "v", kd)?
+                                );
                             }
                             None => {
-                                let _ = writeln!(out, "            {n}::{} => w.{d}(at, {k}),", pascal(c));
+                                let _ = writeln!(
+                                    out,
+                                    "            {n}::{} => w.{d}(at, {k}),",
+                                    pascal(c)
+                                );
                             }
                         }
                     }
@@ -462,18 +621,31 @@ impl Gen<'_> {
                     for (k, (c, kd)) in cases.iter().enumerate() {
                         match kd {
                             Some(kd) => {
-                                let _ = writeln!(out, "            {k} => {}.map({n}::{}),", self.rs_load("r", &plus("at", off), kd)?, pascal(c));
+                                let _ = writeln!(
+                                    out,
+                                    "            {k} => {}.map({n}::{}),",
+                                    self.rs_load("r", &plus("at", off), kd)?,
+                                    pascal(c)
+                                );
                             }
                             None => {
                                 let _ = writeln!(out, "            {k} => Ok({n}::{}),", pascal(c));
                             }
                         }
                     }
-                    let _ = writeln!(out, "            _ => Err({}::EBADMSG),\n        }}\n    }}\n}}\n", errno());
+                    let _ = writeln!(
+                        out,
+                        "            _ => Err({}::EBADMSG),\n        }}\n    }}\n}}\n",
+                        errno()
+                    );
                 }
                 // A type `use`d from another interface is reached by its owner's path.
                 TypeDefKind::Type(ty) if !matches!(ty, Type::Id(_)) => {
-                    let _ = writeln!(out, "pub type {n} = {};\n", self.rs_ty(&kind(self.r, ty, &at)?, true));
+                    let _ = writeln!(
+                        out,
+                        "pub type {n} = {};\n",
+                        self.rs_ty(&kind(self.r, ty, &at)?, true)
+                    );
                 }
                 _ => {
                     kind(self.r, &Type::Id(t), &at)?;

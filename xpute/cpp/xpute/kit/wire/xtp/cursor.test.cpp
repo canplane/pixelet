@@ -136,8 +136,8 @@ std::string read_deep(std::span<const std::uint8_t> pkt) {
 
 XPUTE_TEST(xtp_cursor_matches_other_languages) {
     Golden v = Golden::load("kit/spec/golden/wire/xtp/cursor.tsv");
-    v.each("packets", [&v](const std::string &k) {
-        std::vector<std::uint8_t> pkt = bytes(v.s(k + ".packet"));
+    v.each("pkts", [&v](const std::string &k) {
+        std::vector<std::uint8_t> pkt = bytes(v.s(k + ".pkt"));
         Result<TreeReader> reader = TreeReader::make(pkt);
         XPUTE_CHECK(reader.ok());
         Cursor root = reader->read();
@@ -154,12 +154,12 @@ XPUTE_TEST(xtp_cursor_matches_other_languages) {
         }
     });
 
-    const std::string &good = v.s("packets.0.packet");
+    const std::string &good = v.s("pkts.0.pkt");
     auto refused = [](const std::string &h) { return read_deep(bytes(h)); };
     XPUTE_CHECK_EQ(refused(good.substr(0, 20)), v.s("malformed.truncated_hdr"), "a header cut short");
     XPUTE_CHECK_EQ(refused("00" + good.substr(2)), v.s("malformed.bad_magic"), "a magic that is not");
     XPUTE_CHECK_EQ(refused(good.substr(0, 40)), v.s("malformed.truncated_payload"), "a payload cut short");
-    v.each("refused", [&](const std::string &k) { XPUTE_CHECK_EQ(refused(v.s(k + ".packet")), v.s(k + ".read"), k.c_str()); });
+    v.each("refused", [&](const std::string &k) { XPUTE_CHECK_EQ(refused(v.s(k + ".pkt")), v.s(k + ".read"), k.c_str()); });
 
     const std::uint32_t aligns[] = {0x7ffffff9u, 0xfffffff8u, 0xfffffff9u};
     for (std::size_t j = 0; j < 3; j++) {

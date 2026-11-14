@@ -99,6 +99,10 @@ importers:
       '@xpute/link':
         specifier: workspace:*
         version: link:../../../link/ts
+    devDependencies:
+      '@xpute/golden':
+        specifier: workspace:*
+        version: link:../../../dev/golden/ts
 
   kit/ts: {}
 
@@ -107,6 +111,10 @@ importers:
       '@xpute/kit':
         specifier: workspace:*
         version: link:../../kit/ts
+    devDependencies:
+      '@xpute/golden':
+        specifier: workspace:*
+        version: link:../../dev/golden/ts
 
   native/runtime/expo:
     dependencies:

@@ -5,13 +5,13 @@
 //! text.
 
 use super::{applied, refuse_unless};
+use crate::abi::input::{PointerPhase, PointerType};
 use crate::domain::control::camera::controller;
 use crate::domain::control::edit::{clear_hover, clear_hover_coord};
 use crate::domain::control::input::{
     camera_keys, camera_pinch, camera_pointer_down, camera_pointer_move, camera_pointer_out,
     camera_pointer_up, camera_wheel, pinching,
 };
-use crate::abi::input::{PointerPhase, PointerType};
 use crate::pointer::tap;
 use pxl_global::Global;
 use xpute_kit::status::errno::Errno;
@@ -52,7 +52,14 @@ fn phase_of(phase: PointerPhase, id: i32) -> PointerPhase {
     }
 }
 
-pub(super) fn pointer(phase: PointerPhase, pointer_type: PointerType, id: i32, button: i32, x: f64, y: f64) -> Result<(), Errno> {
+pub(super) fn pointer(
+    phase: PointerPhase,
+    pointer_type: PointerType,
+    id: i32,
+    button: i32,
+    x: f64,
+    y: f64,
+) -> Result<(), Errno> {
     match phase_of(phase, id) {
         PointerPhase::Down => {
             camera_pointer_down(pointer_type, id, button, x, y);
@@ -94,13 +101,18 @@ pub(super) fn r#move(x: i32, y: i32) -> Result<(), Errno> {
     Ok(())
 }
 
-pub(super) fn xr_pose(x: f64, y: f64, z: f64, qx: f64, qy: f64, qz: f64, qw: f64) -> Result<(), Errno> {
+pub(super) fn xr_pose(
+    x: f64,
+    y: f64,
+    z: f64,
+    qx: f64,
+    qy: f64,
+    qz: f64,
+    qw: f64,
+) -> Result<(), Errno> {
     // The protocol sends a unit quaternion. One of zero length describes no
     // rotation and is refused.
-    refuse_unless(
-        qx * qx + qy * qy + qz * qz + qw * qw > 0.0,
-        Errno::EINVAL,
-    )?;
+    refuse_unless(qx * qx + qy * qy + qz * qz + qw * qw > 0.0, Errno::EINVAL)?;
     controller::tracked_pose([x, y, z], [qx, qy, qz, qw]);
     applied()
 }

@@ -46,9 +46,9 @@ use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, VecDeque};
 use std::rc::Rc;
 
+use crate::cabi::{Lift, Lower};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
-use crate::cabi::{Lift, Lower};
 
 use crate::abi::types::Token;
 use crate::frame::{Frame, HDR_SZ};
@@ -56,7 +56,6 @@ use crate::mem;
 use crate::resource::Table;
 
 pub use crate::resource::Handle;
-
 
 /// What an async method lends: a buffer that says where it lies in the guest's
 /// memory and how long (link/wit/types.wit `lent`), and stays put while the
@@ -96,7 +95,11 @@ pub struct Return<T> {
 
 impl<T> Return<T> {
     /// The answer to request `tag` on the side whose `on_cancel` is `on`.
-    pub fn new(tag: Tag, on: fn(Tag, Box<dyn FnOnce()>), answer: Box<dyn FnOnce(Result<T, Errno>)>) -> Return<T> {
+    pub fn new(
+        tag: Tag,
+        on: fn(Tag, Box<dyn FnOnce()>),
+        answer: Box<dyn FnOnce(Result<T, Errno>)>,
+    ) -> Return<T> {
         Return { tag, on, answer }
     }
 
@@ -149,12 +152,12 @@ pub enum Packet<'a> {
     Bytes(&'a [u8]),
 }
 
-/// The link's layout: the guest's inbox and a frame's room. The outbox lies
+/// The link's layout: the guest's inbox and a frame's cap. The outbox lies
 /// right past the inbox.
 #[derive(Clone, Copy)]
 pub struct Layout {
     pub inbox: u32,
-    pub room: u32,
+    pub cap: u32,
 }
 
 impl Layout {
@@ -164,7 +167,7 @@ impl Layout {
         let b = unsafe { mem::bytes(at, 8) };
         Layout {
             inbox: u32::from_le_bytes([b[0], b[1], b[2], b[3]]),
-            room: u32::from_le_bytes([b[4], b[5], b[6], b[7]]),
+            cap: u32::from_le_bytes([b[4], b[5], b[6], b[7]]),
         }
     }
 }
@@ -240,7 +243,11 @@ impl Side {
             return false;
         }
         let pending = core::mem::take(&mut *self.pending.borrow_mut());
-        self.due.borrow_mut().extend(pending.into_values().map(|a| (a, Errno::EPIPE as i32, None)));
+        self.due.borrow_mut().extend(
+            pending
+                .into_values()
+                .map(|a| (a, Errno::EPIPE as i32, None)),
+        );
         true
     }
 
@@ -369,9 +376,9 @@ impl Side {
     /// The frame the other side laid at `at`: a later answer, made due, or a
     /// method, run by its object, its answer laid in the frame it came in.
     pub fn recv(&self, at: u32) -> i32 {
-        let room = self.layout().room;
+        let cap = self.layout().cap;
         let f = Frame::at(at);
-        let pkt = f.pkt(at, room);
+        let pkt = f.pkt(at, cap);
         if f.res {
             let a = self.pending.borrow_mut().remove(&f.tag);
             if let Some(a) = a {
@@ -385,13 +392,16 @@ impl Side {
             Err(e) => Reply::from(e as i32),
         };
         // The args are read: the answer goes in the frame they came in.
-        let data = reply.data.as_ref().map(|(n, w)| (*n, &**w as &dyn Fn(&mut Lower)));
+        let data = reply
+            .data
+            .as_ref()
+            .map(|(n, w)| (*n, &**w as &dyn Fn(&mut Lower)));
         let words = Frame {
             res: true,
             result: reply.result,
             ..f
         };
-        // An answer past the room is refused as a later one is (`out`).
+        // An answer past the cap is refused as a later one is (`out`).
         match self.lay(at, words, Packet::Args(data)) {
             Ok(()) => reply.result,
             Err(e) => {
@@ -399,7 +409,8 @@ impl Side {
                     result: e as i32,
                     ..words
                 };
-                self.lay(at, refused, Packet::Args(None)).or_bug(Errno::EMSGSIZE);
+                self.lay(at, refused, Packet::Args(None))
+                    .or_bug(Errno::EMSGSIZE);
                 e as i32
             }
         }
@@ -426,7 +437,10 @@ impl Side {
     fn serve(&self, h: Handle, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply {
         match (h, m) {
             (ROOT, OPEN) => match self.opened(args) {
-                Ok(h) => Reply { result: 0, data: Some((4, Box::new(move |w: &mut Lower| w.u32(0, h)))) },
+                Ok(h) => Reply {
+                    result: 0,
+                    data: Some((4, Box::new(move |w: &mut Lower| w.u32(0, h)))),
+                },
                 Err(e) => Reply::from(e as i32),
             },
             (ROOT, CANCEL) => match args.ok_or(Errno::EBADMSG).and_then(|p| Lift::new(p).u32(0)) {
@@ -494,23 +508,23 @@ impl Side {
     }
 
     /// Lays a frame at `at`: its words, and the packet `pkt`, whose length
-    /// it takes; EMSGSIZE, laying nothing, where the packet is past the room
+    /// it takes; EMSGSIZE, laying nothing, where the packet is past the cap
     /// (link.ts `_lay`).
     fn lay(&self, at: u32, words: Frame, pkt: Packet) -> Result<(), Errno> {
-        let room = self.layout().room;
+        let cap = self.layout().cap;
         let pkt_len = match pkt {
             Packet::Bytes(b) => {
-                if u64::from(HDR_SZ) + b.len() as u64 > u64::from(room) {
+                if u64::from(HDR_SZ) + b.len() as u64 > u64::from(cap) {
                     return Err(Errno::EMSGSIZE);
                 }
-                // SAFETY: the frame's room past its words, which only `lay` writes.
+                // SAFETY: the frame's bytes past its words, which only `lay` writes.
                 unsafe { mem::bytes(at + HDR_SZ, b.len() as u32) }.copy_from_slice(b);
                 b.len() as u32
             }
             Packet::Args(Some((fixed_sz, write))) => {
-                // SAFETY: the frame's room past its words, which only `lay` writes.
-                let room = unsafe { mem::bytes(at + HDR_SZ, room - HDR_SZ) };
-                let mut w = Lower::new(room, fixed_sz);
+                // SAFETY: the frame's bytes past its words, which only `lay` writes.
+                let buf = unsafe { mem::bytes(at + HDR_SZ, cap - HDR_SZ) };
+                let mut w = Lower::new(buf, fixed_sz);
                 write(&mut w);
                 w.finish()? as u32
             }
@@ -522,7 +536,7 @@ impl Side {
 
     /// Lays a frame in this side's box and crosses with it, and answers what
     /// the callee laid there: its result, and its return data. A packet past
-    /// the room is refused: a packet written elsewhere, as one from across a
+    /// the cap is refused: a packet written elsewhere, as one from across a
     /// port, is its sender's fault, answered EMSGSIZE; a later answer's is
     /// answered EMSGSIZE with no data, so its request still hears; args this
     /// side writes past it are a bug (link.ts `_out`).
@@ -559,12 +573,13 @@ impl Side {
                 result: e as i32,
                 ..words
             };
-            self.lay(at, refused, Packet::Args(None)).or_bug(Errno::EMSGSIZE);
+            self.lay(at, refused, Packet::Args(None))
+                .or_bug(Errno::EMSGSIZE);
         }
         let result = self.crossed(|| (self.cross)(at));
         let f = Frame::at(at);
         let data = if f.res && !res {
-            f.pkt(at, l.room).ok().flatten()
+            f.pkt(at, l.cap).ok().flatten()
         } else {
             None
         };
@@ -581,14 +596,18 @@ pub fn uri(names: &[&str]) -> Vec<Token> {
 /// (`types.wit`).
 pub fn store_uri(w: &mut Lower, at: usize, uri: &[Token]) {
     if let Some(base) = w.list(at, uri.len(), Token::SZ, Token::ALIGN) {
-        uri.iter().enumerate().for_each(|(k, t)| t.store(w, base + k * Token::SZ));
+        uri.iter()
+            .enumerate()
+            .for_each(|(k, t)| t.store(w, base + k * Token::SZ));
     }
 }
 
 /// The URI the `list<token>` at `at` holds (`store_uri`).
 pub fn load_uri(r: Lift, at: usize) -> Result<Vec<Token>, Errno> {
     let (base, len) = r.list(at, Token::SZ, Token::ALIGN)?;
-    (0..len).map(|k| Token::load(r, base + k * Token::SZ)).collect()
+    (0..len)
+        .map(|k| Token::load(r, base + k * Token::SZ))
+        .collect()
 }
 
 /// A method's result, its status: answered, or the errno it failed with (a
@@ -600,7 +619,3 @@ pub fn answer(result: i32) -> Result<(), Errno> {
         _ => Err(Errno::of(result).or_bug(Errno::EPROTO)),
     }
 }
-
-#[cfg(test)]
-#[path = "link.test.rs"]
-mod test;

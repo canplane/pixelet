@@ -13,6 +13,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Token;
 
+use crate::spec::manifest::mem;
 use crate::sys::io::body::{self, Body};
 use crate::sys::io::demand::{PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::{exit_of, Exit, Failure};
@@ -20,7 +21,6 @@ use crate::sys::io::file;
 use crate::sys::io::param::CREDIT_CAP;
 use crate::sys::io::request::{attempt_of, settle};
 use crate::sys::io::room::Refusal;
-use crate::spec::manifest::mem;
 use crate::sys::sched::{executor, invalidate};
 
 pub(crate) struct Response {
@@ -65,7 +65,9 @@ async fn fetch(key: u64, stream: Stream, path: Vec<Token>, at_ms: f64) {
             slot.set_len(n);
             Ok(slot)
         };
-        file::read_whole(&path, most, Some(key), take).await.map(Body::Slot)
+        file::read_whole(&path, most, Some(key), take)
+            .await
+            .map(Body::Slot)
     } else {
         let heap = file::read_whole(&path, most, Some(key), file::heap).await;
         heap.map(|v| Body::Heap(v.into_boxed_slice()))

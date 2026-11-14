@@ -40,7 +40,12 @@ impl life::Guest for Guest {
 
     fn attached(&self) -> Result<(), Errno> {
         ATTACH_CNT.fetch_add(1, Ordering::Relaxed);
-        xpute_guest::link::send(UI, 0, None, Some(Box::new(|r, _| ANSWERS.lock().unwrap().push(r))));
+        xpute_guest::link::send(
+            UI,
+            0,
+            None,
+            Some(Box::new(|r, _| ANSWERS.lock().unwrap().push(r))),
+        );
         Ok(())
     }
 }
@@ -63,7 +68,11 @@ xpute_guest::link!(
     4096,
     || {
         life::mount(Rc::new(Guest));
-        xpute_guest::link::mount(OBJ, uri(&["obj"]), |_, _| Ok(Rc::new(Obj) as Rc<dyn Object>));
+        xpute_guest::link::mount(
+            OBJ,
+            uri(&["obj"]),
+            |_, _| Ok(Rc::new(Obj) as Rc<dyn Object>),
+        );
     },
     || {},
     || false
@@ -88,7 +97,10 @@ fn request(generation: u32, messages: &mut Vec<app::Message>) -> i64 {
     let mut tag = None;
     app::until("the guest's request", || {
         messages.extend(app::take(generation));
-        tag = messages.iter().find(|m| m[..4] == [2, i64::from(UI), 0, 1]).map(|m| m[4]);
+        tag = messages
+            .iter()
+            .find(|m| m[..4] == [2, i64::from(UI), 0, 1])
+            .map(|m| m[4]);
         tag.is_some()
     });
     tag.unwrap()
@@ -99,7 +111,7 @@ fn request(generation: u32, messages: &mut Vec<app::Message>) -> i64 {
 /// the old UI's take, and its answer to the new UI's request, reach nothing.
 #[test]
 fn reload() {
-    xpute_native_runtime::native::notify_on(Some(notified));
+    xpute_native_runtime::listener::notify_on(Some(notified));
     let old = app::start(boot, &[UI]);
     let mut messages = Vec::new();
     let pending = request(old, &mut messages) as Tag;
@@ -108,10 +120,18 @@ fn reload() {
 
     let notify_cnt = NOTIFY_CNT.load(Ordering::Relaxed);
     let new = app::start(boot, &[UI]);
-    app::until("the new UI attached", || ATTACH_CNT.load(Ordering::Relaxed) == 2);
-    app::until("the old request canceled", || *ANSWERS.lock().unwrap() == [Errno::ECANCELED as i32]);
-    app::until("the old UI's object dropped", || DROP_CNT.load(Ordering::Relaxed) == 1);
-    app::until("a batch waits for the new UI", || NOTIFY_CNT.load(Ordering::Relaxed) > notify_cnt);
+    app::until("the new UI attached", || {
+        ATTACH_CNT.load(Ordering::Relaxed) == 2
+    });
+    app::until("the old request canceled", || {
+        *ANSWERS.lock().unwrap() == [Errno::ECANCELED as i32]
+    });
+    app::until("the old UI's object dropped", || {
+        DROP_CNT.load(Ordering::Relaxed) == 1
+    });
+    app::until("a batch waits for the new UI", || {
+        NOTIFY_CNT.load(Ordering::Relaxed) > notify_cnt
+    });
     assert!(app::take(old).is_empty(), "the old UI takes nothing of it");
 
     let mut messages = Vec::new();
@@ -125,6 +145,8 @@ fn reload() {
     assert_eq!(*ANSWERS.lock().unwrap(), [Errno::ECANCELED as i32]);
 
     xpute_native_runtime::answer(new, again, 0, None);
-    app::until("the new UI's answer heard", || *ANSWERS.lock().unwrap() == [Errno::ECANCELED as i32, 0]);
+    app::until("the new UI's answer heard", || {
+        *ANSWERS.lock().unwrap() == [Errno::ECANCELED as i32, 0]
+    });
     assert_eq!(app::ends(), []);
 }

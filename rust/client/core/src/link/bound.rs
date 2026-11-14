@@ -38,6 +38,10 @@ const PERF_PAGE: usize = 8 + list(limit::PAGE_BYTES as usize, 1);
 
 /// The largest packet the core lays, a multiple of 8.
 pub const PKT_CAP: u32 = {
-    let most = if SNAPSHOT > PERF_PAGE { SNAPSHOT } else { PERF_PAGE };
+    let most = if SNAPSHOT > PERF_PAGE {
+        SNAPSHOT
+    } else {
+        PERF_PAGE
+    };
     most.next_multiple_of(8) as u32
 };

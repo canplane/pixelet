@@ -9,7 +9,9 @@
 
 use xpute_gen::spec::data::{table_outputs, ts_literal, DataSpec};
 
-use super::{description, file, js_num, marks, pascal, read, rs_field, rs_member, u32_of, Node, Output};
+use super::{
+    description, file, js_num, marks, pascal, read, rs_field, rs_member, u32_of, Node, Output,
+};
 use crate::root;
 
 const JSON: &str = "spec/client/core/domain/setting/schema.json5";
@@ -47,7 +49,8 @@ struct List<'a> {
 
 /// A number as `schema.json5` gives one, a u32.
 fn number(n: Option<&Node>, what: &str) -> Result<u32, String> {
-    n.and_then(u32_of).ok_or(format!("{JSON}: {what} has no number"))
+    n.and_then(u32_of)
+        .ok_or(format!("{JSON}: {what} has no number"))
 }
 
 /// A setting's bool field, `default` where it is absent; anything else there is refused.
@@ -85,12 +88,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         .collect::<Result<_, String>>()?;
     let numbers = settings
         .iter()
-        .map(|s| {
-            Ok((
-                s.key,
-                number(s.spec.get("number"), s.key)?,
-            ))
-        })
+        .map(|s| Ok((s.key, number(s.spec.get("number"), s.key)?)))
         .collect::<Result<Vec<_>, String>>()?;
     check_numbers("SETTING", &numbers)?;
     let number_of = |s: &Setting| {
@@ -173,8 +171,15 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let members = settings
         .iter()
         .map(|s| {
-            let mut m = vec![marks(vec![("number".to_string(), Node::Num(f64::from(number_of(s))))])];
-            m.extend(s.spec.get("$description").map(|d| ("$description".to_string(), d.clone())));
+            let mut m = vec![marks(vec![(
+                "number".to_string(),
+                Node::Num(f64::from(number_of(s))),
+            )])];
+            m.extend(
+                s.spec
+                    .get("$description")
+                    .map(|d| ("$description".to_string(), d.clone())),
+            );
             (s.key.to_string(), Node::Obj(m))
         })
         .collect();
@@ -426,13 +431,22 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             }
             // A field's value without its `$description`, which stays the schema's.
             let v = match v {
-                Node::Obj(t) if v.is_wrapper() => Node::Obj(t.iter().filter(|(k, _)| k != "$description").cloned().collect()),
+                Node::Obj(t) if v.is_wrapper() => Node::Obj(
+                    t.iter()
+                        .filter(|(k, _)| k != "$description")
+                        .cloned()
+                        .collect(),
+                ),
                 v => v.clone(),
             };
             let val = match f.as_str() {
                 "options" => Node::Obj(
                     std::iter::once(("$type".to_string(), Node::Str("u32".into())))
-                        .chain(options_of(s)?.into_iter().map(|(o, n)| (o, Node::Num(f64::from(n)))))
+                        .chain(
+                            options_of(s)?
+                                .into_iter()
+                                .map(|(o, n)| (o, Node::Num(f64::from(n)))),
+                        )
                         .collect(),
                 ),
                 _ => v,

@@ -6,18 +6,23 @@
  * their pointer an offset from the packet's start. A packet that does not
  * hold what its type says is refused (EBADMSG). */
 
-import { type BigTypedArray, to_bytes, type TypedArray, type U8Array } from "@xpute/kit/abi/array.ts";
+import {
+  type BigTypedArray,
+  to_bytes,
+  type TypedArray,
+  type U8Array,
+} from "@xpute/kit/abi/array.ts";
 import { te } from "@xpute/kit/codec/encoding.ts";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 
-const align_to = (at: number, align: number): number => Math.ceil(at / align) * align;
+const align_to = (at: number, align: number): number =>
+  Math.ceil(at / align) * align;
 
 const UTF8 = new TextDecoder("utf-8", { fatal: true });
 
 /** Writes a packet into `buf`: its fixed part first, then its strings' and
- * lists' bytes. A packet past the room
- * spoils, and `finish` answers -1. */
+ * lists' bytes. A packet past `buf` spoils, and `finish` answers -1. */
 export class Lower {
   private readonly buf: U8Array;
   private readonly view: DataView;
@@ -74,7 +79,7 @@ export class Lower {
 
   /** Takes `len` elements of `sz` bytes at `align` past what is written,
    * zeroed, and puts their offset and count at `at`. It answers where they
-   * begin, or null where the room is past. */
+   * begin, or null where they run past the bytes it is given. */
   list(at: number, len: number, sz: number, align: number): number | null {
     const base = align_to(this.end, align);
     if (!this.fits(base, len * sz)) return null;
@@ -88,7 +93,12 @@ export class Lower {
   /** Puts `a`'s bytes past what is written, at its elements' alignment, and
    * their offset and count at `at`. */
   arr(at: number, a: TypedArray | BigTypedArray): void {
-    const base = this.list(at, a.length, a.BYTES_PER_ELEMENT, a.BYTES_PER_ELEMENT);
+    const base = this.list(
+      at,
+      a.length,
+      a.BYTES_PER_ELEMENT,
+      a.BYTES_PER_ELEMENT,
+    );
     if (base !== null) this.buf.set(to_bytes(a), base);
   }
 
@@ -98,7 +108,7 @@ export class Lower {
     if (base !== null) this.buf.set(b, base);
   }
 
-  /** The packet's length, or -1 where it is past the room. */
+  /** The packet's length, or -1 where it is past the bytes it is given. */
   finish(): number {
     return this.overflow ? -1 : this.end;
   }

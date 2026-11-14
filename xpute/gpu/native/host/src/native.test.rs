@@ -9,7 +9,10 @@ static STATES: Mutex<Vec<String>> = Mutex::new(Vec::new());
 extern "C" fn record(state: *const u8, len: usize) {
     // SAFETY: the host's UTF-8, `len` bytes.
     let s = unsafe { core::slice::from_raw_parts(state, len) };
-    STATES.lock().unwrap().push(String::from_utf8_lossy(s).into_owned());
+    STATES
+        .lock()
+        .unwrap()
+        .push(String::from_utf8_lossy(s).into_owned());
 }
 
 /// What the host has of a GPU is told as it changes, and kept as the state
@@ -24,5 +27,9 @@ fn late_ui_reads_state() {
     assert_eq!(state(), Some("present"));
     report("waiting");
     assert_eq!(state(), Some("waiting"));
-    assert_eq!(*STATES.lock().unwrap(), ["present"], "told to none while none hears");
+    assert_eq!(
+        *STATES.lock().unwrap(),
+        ["present"],
+        "told to none while none hears"
+    );
 }

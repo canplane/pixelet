@@ -34,12 +34,19 @@ impl Object for Relay {
     }
 }
 
-xpute_guest::link!(4096, || xpute_guest::link::mount_named(RELAY, Rc::new(Relay)), || {}, || false);
+xpute_guest::link!(
+    4096,
+    || xpute_guest::link::mount_named(RELAY, Rc::new(Relay)),
+    || {},
+    || false
+);
 
 fn boot(_: std::path::PathBuf) -> Boot {
     Boot {
         stack_sz: 1 << 20,
-        servers: vec![Box::new(|| xpute_native_runtime::link::mount_named(FAIL, Rc::new(Fail)))],
+        servers: vec![Box::new(|| {
+            xpute_native_runtime::link::mount_named(FAIL, Rc::new(Fail))
+        })],
         imports: &[("fail", FAIL)],
         later: &[],
     }

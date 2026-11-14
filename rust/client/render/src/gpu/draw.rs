@@ -21,9 +21,9 @@ use pxl_global::Global;
 use pxl_spec::space::coord::q3::{from_real, ONE, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::between;
-use xpute_link::mem;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+use xpute_link::mem;
 
 /// An upload record's words: handle, address, byte length, vertex count and index count.
 pub const UPLOAD_WORDS: usize = 5;

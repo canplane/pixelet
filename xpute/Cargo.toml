@@ -12,8 +12,8 @@
 # serves on `native/runtime/rust`'s link, and `gpu/native/host` that host. `gen` is the
 # generator, and each part's `gen-targets` what the generator makes of it,
 # which any program's generating tool reads. `dev/` holds what develops them:
-# `golden/rust`, the golden records' reader the tests take, and xpute's own
-# use of the generator (`tool`).
+# `golden/rust`, the golden records' reader the tests take, `mem/rust`, a
+# test process's guest memory, and xpute's own use of the generator (`tool`).
 
 [workspace]
 resolver = "2"
@@ -32,6 +32,7 @@ members = [
     "link/gen",
     "gen-targets",
     "dev/golden/rust",
+    "dev/mem/rust",
     "dev/tool",
 ]
 
@@ -52,6 +53,7 @@ xpute-gen = { path = "gen", version = "0.1.0" }
 xpute-link-gen = { path = "link/gen", version = "0.1.0" }
 xpute-gen-targets = { path = "gen-targets" }
 xpute-golden = { path = "dev/golden/rust" }
+xpute-test-mem = { path = "dev/mem/rust" }
 # A test reads a golden packet's bytes back with this.
 hex = "0.4"
 

@@ -19,22 +19,35 @@ import { GpuHost } from "./host.ts";
 
 /** Checks that `seen` holds the values of `want` in the same order, and
  * otherwise names the first place they part. */
-function same(seen: ArrayLike<unknown>, want: ArrayLike<unknown>, message: string): void {
+function same(
+  seen: ArrayLike<unknown>,
+  want: ArrayLike<unknown>,
+  message: string,
+): void {
   const at =
     seen.length === want.length
       ? Array.from(seen).findIndex((val, i) => val !== want[i])
       : Math.min(seen.length, want.length);
-  if (at !== -1) throw new Error(`${message}: they part at ${at} of ${seen.length} and ${want.length}`);
+  if (at !== -1)
+    throw new Error(
+      `${message}: they part at ${at} of ${seen.length} and ${want.length}`,
+    );
 }
 
 async function replay(): Promise<void> {
   const g = await Golden.load("gpu/link/spec/golden/program.tsv");
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) throw new Error("no WebGPU adapter");
-  const device = await adapter.requestDevice({ requiredFeatures: ["timestamp-query"] });
-  const [region_sz, records_at, input_at, done_at, readback_at] = ["region", "records.at", "input.at", "done.at", "readback.at"].map(
-    (k) => g.u32(k),
-  );
+  const device = await adapter.requestDevice({
+    requiredFeatures: ["timestamp-query"],
+  });
+  const [region_sz, recs_at, input_at, done_at, readback_at] = [
+    "region",
+    "recs.at",
+    "input.at",
+    "done.at",
+    "readback.at",
+  ].map((k) => g.u32(k));
   const names: string[] = [];
   g.each("program", (k) => names.push(g.s(k)));
   for (const p of names) {
@@ -42,19 +55,28 @@ async function replay(): Promise<void> {
     const bytes = new Uint8Array(mem);
     const words = new Uint32Array(mem);
     if (g.has(`${p}.input`)) bytes.set(g.bytes(`${p}.input`), input_at);
-    const host = new GpuHost(device, () => mem, () => {}, { upload_chunk_sz: 1 << 16, slow_ms: null });
+    const host = new GpuHost(
+      device,
+      () => mem,
+      () => {},
+      { upload_chunk_sz: 1 << 16, slow_ms: null },
+    );
     const turns: string[] = [];
     g.each(`${p}.turn`, (k) => turns.push(k));
     for (const [k, turn] of turns.entries()) {
-      const records = g.bytes(turn);
-      bytes.set(records, records_at);
-      host.run(new Uint32Array(mem, records_at, records.length / 4));
+      const recs = g.bytes(turn);
+      bytes.set(recs, recs_at);
+      host.run(new Uint32Array(mem, recs_at, recs.length / 4));
       while (Atomics.load(words, done_at / 4) !== k + 1) {
         await new Promise((r) => setTimeout(r, 1));
       }
     }
     const want = g.bytes(`${p}.readback`);
-    same(bytes.slice(readback_at, readback_at + want.length), want, `${p}.readback`);
+    same(
+      bytes.slice(readback_at, readback_at + want.length),
+      want,
+      `${p}.readback`,
+    );
   }
   device.destroy();
 }

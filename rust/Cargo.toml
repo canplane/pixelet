@@ -68,6 +68,7 @@ xpute-native-host = { path = "../xpute/native/host" }
 xpute-gpu-native-host = { path = "../xpute/gpu/native/host" }
 xpute-gpu-native-runtime = { path = "../xpute/gpu/native/runtime/rust" }
 xpute-golden = { path = "../xpute/dev/golden/rust" }
+xpute-test-mem = { path = "../xpute/dev/mem/rust" }
 pxl-global = { path = "client/global" }
 pxl-engine = { path = "client/engine" }
 pxl-content = { path = "client/content" }

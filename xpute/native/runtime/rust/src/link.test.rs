@@ -18,7 +18,12 @@ use app::End;
 
 static ENTERED: AtomicBool = AtomicBool::new(false);
 
-xpute_guest::link!(4096, || ENTERED.store(true, Ordering::Relaxed), || {}, || false);
+xpute_guest::link!(
+    4096,
+    || ENTERED.store(true, Ordering::Relaxed),
+    || {},
+    || false
+);
 
 struct Nothing;
 
@@ -42,7 +47,12 @@ fn boot(_: std::path::PathBuf) -> Boot {
             Box::new(|| link::mount_named(NAMED_ONE, Rc::new(Nothing))),
             Box::new(|| link::mount(OPENED, uri(&["opened"]), |_, _| Err(Errno::ENOENT))),
         ],
-        imports: &[("named", NAMED_ONE), ("opened", OPENED), ("missing", MISSING), ("missing-too", MISSING_TOO)],
+        imports: &[
+            ("named", NAMED_ONE),
+            ("opened", OPENED),
+            ("missing", MISSING),
+            ("missing-too", MISSING_TOO),
+        ],
         later: &[],
     }
 }
@@ -55,6 +65,12 @@ fn unserved_import_refused() {
     let mut messages = Vec::new();
     app::post(ui, 1, ROOT, OPEN, Some(app::lowered(&[])));
     assert_eq!(app::answer_to(ui, 1, &mut messages), Errno::EPIPE as i64);
-    assert_eq!(app::ends(), [End::Trap("no server mounts missing, missing-too".into())]);
-    assert!(!ENTERED.load(Ordering::Relaxed), "the guest is never entered");
+    assert_eq!(
+        app::ends(),
+        [End::Trap("no server mounts missing, missing-too".into())]
+    );
+    assert!(
+        !ENTERED.load(Ordering::Relaxed),
+        "the guest is never entered"
+    );
 }

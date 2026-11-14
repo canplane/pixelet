@@ -43,8 +43,12 @@ pub(crate) fn bake_ground(feats: &[Feature], coast: &Coast) -> GroundCells {
             }
         }
     }
-    let sea: Option<Vec<bool>> = (!matches!(coast, Coast::Land))
-        .then(|| cells.iter().map(|&c| c == Ground::Water as GroundId).collect());
+    let sea: Option<Vec<bool>> = (!matches!(coast, Coast::Land)).then(|| {
+        cells
+            .iter()
+            .map(|&c| c == Ground::Water as GroundId)
+            .collect()
+    });
 
     let mut ordered: Vec<&Feature> = feats.iter().collect();
     ordered.sort_by(|a, b| a.rank.cmp(&b.rank));

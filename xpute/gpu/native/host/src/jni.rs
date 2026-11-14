@@ -126,9 +126,7 @@ macro_rules! jni_abi {
             surface: ::xpute_native_runtime::jni::sys::jobject,
         ) -> ::xpute_native_runtime::jni::sys::jint {
             // SAFETY: the environment and surface JNI called with.
-            unsafe {
-                $crate::jni::bind(env, handle as u32, surface, xpute_gpu_surface_bind)
-            }
+            unsafe { $crate::jni::bind(env, handle as u32, surface, xpute_gpu_surface_bind) }
         }
 
         #[no_mangle]

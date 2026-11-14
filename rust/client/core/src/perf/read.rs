@@ -13,6 +13,7 @@ use crate::domain::query::Ray;
 use crate::domain::view::frame::coord;
 use crate::domain::view::frame::pose;
 use crate::domain::view::observation;
+use crate::frame::refused_frames;
 use crate::perf::frame::overran;
 use crate::perf::frame::{FrameSample, RaySample, GPU_SPAN_CNT};
 use crate::perf::record::{
@@ -29,7 +30,6 @@ use crate::perf::word::put;
 use crate::spec;
 use crate::spec::perf::{limit, now, stat};
 use crate::sys::io::failure::Outcome;
-use crate::frame::refused_frames;
 use pxl_global::Global;
 use pxl_render::gpu::api;
 use pxl_render::renderer;

@@ -11,13 +11,19 @@ const COLOR_JSON: &str = "spec/spec/asset/color.json5";
 /// A group's cubes (`sentinel`, `ground`, `object`), each its name and its
 /// number, as the generator numbers its enum.
 fn cubes(spec: &Node, group: &str) -> Result<Vec<(String, u32)>, String> {
-    enum_members(group, spec.get(group).ok_or(format!("{CUBE_JSON}: no {group}"))?)?
-        .into_iter()
-        .map(|m| {
-            let number = m.number.parse().map_err(|_| format!("{CUBE_JSON}: {} has no number", m.name))?;
-            Ok((m.name, number))
-        })
-        .collect()
+    enum_members(
+        group,
+        spec.get(group).ok_or(format!("{CUBE_JSON}: no {group}"))?,
+    )?
+    .into_iter()
+    .map(|m| {
+        let number = m
+            .number
+            .parse()
+            .map_err(|_| format!("{CUBE_JSON}: {} has no number", m.name))?;
+        Ok((m.name, number))
+    })
+    .collect()
 }
 
 /// A cube's member of its group's enum (`sentinel`, `ground`, `object`), by
@@ -45,7 +51,9 @@ pub(crate) fn members(name: &str, names: &[&str]) -> Result<Vec<Member>, String>
 /// A cube's number by its group (`sentinel`, `ground`, `object`) and name.
 pub(crate) fn cube_number(group: &str, name: &str) -> Result<u32, String> {
     let m = cube_member(group, name)?;
-    m.number.parse().map_err(|_| format!("{CUBE_JSON}: {} has no number", m.name))
+    m.number
+        .parse()
+        .map_err(|_| format!("{CUBE_JSON}: {} has no number", m.name))
 }
 
 /// The path the cube kind's texture pack ships at (`cube.json5` `pack`).
@@ -81,7 +89,9 @@ pub fn ground_colors() -> Result<std::collections::BTreeMap<String, u32>, String
         .map(|(n, e)| {
             Ok((
                 n.clone(),
-                e.get("rgb").and_then(super::u32_of).ok_or(format!("color.json5: ground.{n} has no rgb"))?,
+                e.get("rgb")
+                    .and_then(super::u32_of)
+                    .ok_or(format!("color.json5: ground.{n} has no rgb"))?,
             ))
         })
         .collect()
@@ -91,7 +101,11 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     let spec = read(COLOR_JSON)?;
     let head: Vec<String> = [
         "//",
-        format!("// {}", mark("spec/spec/asset/color.json5", "pxl-tool spec/asset.rs")).as_str(),
+        format!(
+            "// {}",
+            mark("spec/spec/asset/color.json5", "pxl-tool spec/asset.rs")
+        )
+        .as_str(),
         "//",
         "// The color of every ground cube and every placed color: what a cube *is* to",
         "// the eye when no texture is drawn over it — everything drawn with the",
@@ -115,7 +129,10 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
             continue;
         }
         for (n, e) in colors.entries() {
-            let rgb = e.get("rgb").and_then(super::u32_of).ok_or(format!("color.json5: {group}.{n} has no rgb"))?;
+            let rgb = e
+                .get("rgb")
+                .and_then(super::u32_of)
+                .ok_or(format!("color.json5: {group}.{n} has no rgb"))?;
             ts.push(format!("  {}: {rgb},", cube_number(group, n)?));
         }
     }
@@ -155,7 +172,10 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
                 ));
             }
             rs.extend(line_comments(&entry.doc().unwrap_or_default(), "        "));
-            let rgb = entry.get("rgb").and_then(super::u32_of).ok_or(format!("color.json5: {group}.{name} has no rgb"))?;
+            let rgb = entry
+                .get("rgb")
+                .and_then(super::u32_of)
+                .ok_or(format!("color.json5: {group}.{name} has no rgb"))?;
             rs.push(format!(
                 "        Some({e}::{}) => Some(Swatch::new({rgb})),",
                 cube_member(group, name)?.ident
@@ -182,7 +202,9 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
 fn kind_layout(name: &str) -> Result<(u32, u32), String> {
     let id = read(ID_JSON)?;
     Ok((
-        id.get("IDX_BITS").and_then(super::u32_of).ok_or(format!("{ID_JSON}: no IDX_BITS"))?,
+        id.get("IDX_BITS")
+            .and_then(super::u32_of)
+            .ok_or(format!("{ID_JSON}: no IDX_BITS"))?,
         id.get("KIND")
             .and_then(|k| k.get(name))
             .and_then(super::u32_of)
@@ -195,7 +217,11 @@ pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     let doc = spec.doc().unwrap_or_default();
     let head: Vec<String> = [
         "//",
-        format!("// {}", mark("spec/spec/asset/decor.json5", "pxl-tool spec/asset.rs")).as_str(),
+        format!(
+            "// {}",
+            mark("spec/spec/asset/decor.json5", "pxl-tool spec/asset.rs")
+        )
+        .as_str(),
         "//",
         "// The decors, the cube catalog's sibling: drawn as a model, not a cell the rays meet.",
         "//",
@@ -318,10 +344,7 @@ fn decor_table(
         .entries()
     {
         let at = |field: &str| format!("{DECOR_JSON}: {name}.{field}");
-        let seed = k
-            .get("seed")
-            .and_then(super::u32_of)
-            .ok_or(at("seed"))?;
+        let seed = k.get("seed").and_then(super::u32_of).ok_or(at("seed"))?;
         let density = k
             .get("density")
             .map(Node::val)
@@ -357,8 +380,7 @@ fn decor_table(
                     .filter(|s| s.len() == 3)
                     .map(|s| s.iter().map(super::u32_of).collect::<Option<Vec<_>>>());
                 match (v.str_at("model"), size.flatten()) {
-                    (Some(model), Some(size)) if size.iter().all(|&n| n >= 1) =>
-                    {
+                    (Some(model), Some(size)) if size.iter().all(|&n| n >= 1) => {
                         sizes.push(format!(
                             "[{}]",
                             size.iter()

@@ -12,6 +12,7 @@
 use pxl_content::generation::{self, drawing};
 use pxl_content::scatter;
 use pxl_engine::object;
+use pxl_global::Global;
 use pxl_render::gpu::api;
 use pxl_render::gpu::draw::Position;
 use pxl_render::gpu::generator::{hold, DecorFrame};
@@ -22,7 +23,6 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::{idx_of, wrap_idx};
 use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, UNIT_ZOOM};
-use pxl_global::Global;
 
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::preview::RenderEdit;

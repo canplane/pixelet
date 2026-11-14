@@ -410,10 +410,7 @@ async function perf_frames(): Promise<Frame[]> {
 /** The tasks the ring holds, oldest first: the last `last` of them, or all of
  * them when `last` is null. */
 async function perf_tasks(last: u32 | null = null): Promise<TaskRecord[]> {
-  const [tasks, strtab] = await Promise.all([
-    ring("tasks"),
-    perf.strtab(ui),
-  ]);
+  const [tasks, strtab] = await Promise.all([ring("tasks"), perf.strtab(ui)]);
   const all = words(tasks);
   const total = all.length / TASK.WORDS;
   const from = last === null ? 0 : Math.max(0, total - last);

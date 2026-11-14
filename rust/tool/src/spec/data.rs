@@ -142,7 +142,8 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         let ts = with_numbers(&spec, None, &mut |path| {
             refs += 1;
             let k = files.iter().position(|f| f == path);
-            k.map(|k| k as u16 + 1).ok_or(format!("{}: {path} is no file the ingest lists", d.json))
+            k.map(|k| k as u16 + 1)
+                .ok_or(format!("{}: {path} is no file the ingest lists", d.json))
         })?;
         if refs == 0 {
             out.extend(table_outputs(&root(), d, spec, &peers)?);
@@ -155,10 +156,23 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             Ok(next - 1)
         })?;
         if next != first + cnt {
-            return Err(format!("{}: its references are not the {cnt} of its run", d.json));
+            return Err(format!(
+                "{}: its references are not the {cnt} of its run",
+                d.json
+            ));
         }
-        out.extend(table_outputs(&root(), &DataSpec { ts: None, ..*d }, rs, &peers)?);
-        out.extend(table_outputs(&root(), &DataSpec { rs: None, ..*d }, ts, &peers)?);
+        out.extend(table_outputs(
+            &root(),
+            &DataSpec { ts: None, ..*d },
+            rs,
+            &peers,
+        )?);
+        out.extend(table_outputs(
+            &root(),
+            &DataSpec { rs: None, ..*d },
+            ts,
+            &peers,
+        )?);
     }
     Ok(out)
 }
@@ -174,7 +188,11 @@ fn with_numbers(
     let ty = n.str_at("$type").or(ty);
     Ok(match n {
         Node::Str(s) if ty == Some(FILE) => Node::Num(f64::from(number(s)?)),
-        Node::Arr(a) => Node::Arr(a.iter().map(|e| with_numbers(e, ty, number)).collect::<Result<_, _>>()?),
+        Node::Arr(a) => Node::Arr(
+            a.iter()
+                .map(|e| with_numbers(e, ty, number))
+                .collect::<Result<_, _>>()?,
+        ),
         Node::Obj(entries) => Node::Obj(
             entries
                 .iter()

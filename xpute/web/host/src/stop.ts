@@ -14,7 +14,9 @@ import { tell_stop } from "@xpute/web-runtime";
 export function serve_stop(link: Pick<Side, "mount_named">): void {
   stop.mount(link, {
     stopped(errnum, file, line, n1, n2) {
-      console.error(`[guest] stopped: ${strerror(errnum)} at ${file}:${line} (${n1}, ${n2})`);
+      console.error(
+        `[guest] stopped: ${strerror(errnum)} at ${file}:${line} (${n1}, ${n2})`,
+      );
       tell_stop({ errnum, file, line, n1, n2 });
     },
   });

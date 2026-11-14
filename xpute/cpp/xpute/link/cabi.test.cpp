@@ -44,7 +44,7 @@ Result<std::size_t> lower(std::span<std::uint8_t> buf) {
 
 } // namespace
 
-// The packet lowers as the record holds it, and only into a room that holds
+// The packet lowers as the record holds it, and only into a buffer that holds
 // it whole.
 XPUTE_TEST(cabi_lower_matches_record) {
     std::vector<std::uint8_t> want = Golden::load("link/spec/golden/cabi.tsv").bytes("pkt");

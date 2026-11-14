@@ -168,25 +168,25 @@ fn a_draw_set_as_it_was_is_no_change() {
             d.draw_as(&debug, PIPELINE_DEBUG, 5, 1, 0, Position::of([x; 3]), None);
         }
     };
-    frame(&mut d,box_at, None);
+    frame(&mut d, box_at, None);
     let l = d.take();
     assert_eq!(l.changes.len(), 2, "both drawn first");
     assert!(l.changes.iter().all(|c| c.was.is_none()));
-    frame(&mut d,box_at, None);
+    frame(&mut d, box_at, None);
     let l = d.take();
     assert!(l.changes.is_empty() && !l.reordered);
     assert_eq!(l.receivers, &[box_at]);
     let moved = ReceiverBox::of([-1.0, 5.0, 0.0], [1.0, 6.0, 3.0]);
-    frame(&mut d,moved, None);
+    frame(&mut d, moved, None);
     let l = d.take();
     assert!(l.changes.is_empty(), "a stand is no draw's");
     assert_eq!(l.receivers, &[moved], "a stand moved");
-    frame(&mut d,box_at, Some(0.0));
+    frame(&mut d, box_at, Some(0.0));
     let l = d.take();
     assert_eq!(l.changes.len(), 1);
     let slot = l.changes[0].slot;
     assert!(l.changes[0].was.is_none() && l.draws.now(slot).is_some());
-    frame(&mut d,box_at, Some(1.0));
+    frame(&mut d, box_at, Some(1.0));
     let l = d.take();
     let was = l.changes[0]
         .was
@@ -195,7 +195,7 @@ fn a_draw_set_as_it_was_is_no_change() {
         (l.changes.len(), was),
         (1, Some((5, Position::of([0.0; 3]))))
     );
-    frame(&mut d,box_at, None);
+    frame(&mut d, box_at, None);
     let l = d.take();
     assert_eq!(l.changes.len(), 1);
     assert!(
@@ -203,7 +203,7 @@ fn a_draw_set_as_it_was_is_no_change() {
         "let go"
     );
     assert_eq!(l.draws.of(PIPELINE_DEBUG).len(), 0);
-    frame(&mut d,box_at, Some(1.0));
+    frame(&mut d, box_at, Some(1.0));
     let l = d.take();
     assert_eq!(l.changes.len(), 1);
     assert!(l.changes[0].was.is_none(), "drawn anew");

@@ -25,7 +25,7 @@ pub use ndk_sys as ndk;
 
 use sys::{jbyteArray, jint, jintArray, jobject, jstring, jvalue, JNIEnv};
 
-use crate::native::{notify_on, stopped_on, trap_on};
+use crate::listener::{notify_on, stopped_on, trap_on};
 
 /// This is the table of JNI's functions that the environment of a call holds.
 ///
@@ -44,7 +44,8 @@ pub unsafe fn env<'e>(env: *mut sys::JNIEnv) -> &'e sys::JNINativeInterface_ {
 /// `e` is this thread's environment, and `at` `len` readable bytes.
 pub unsafe fn string(e: *mut sys::JNIEnv, at: *const u8, len: usize) -> sys::jstring {
     // SAFETY: as the caller holds.
-    let s = String::from_utf8_lossy(unsafe { core::slice::from_raw_parts(at, len) }).replace('\0', " ");
+    let s =
+        String::from_utf8_lossy(unsafe { core::slice::from_raw_parts(at, len) }).replace('\0', " ");
     let s = std::ffi::CString::new(s).unwrap_or_default();
     // SAFETY: this thread's environment, and a NUL-terminated string.
     unsafe { env(e).NewStringUTF.or_bug(Errno::ENOSYS)(e, s.as_ptr()) }
@@ -86,7 +87,10 @@ pub unsafe fn class<const N: usize>(
         if j.GetJavaVM.or_bug(Errno::ENOSYS)(e, &raw mut vm) != sys::JNI_OK {
             return None;
         }
-        let class = j.NewGlobalRef.or_bug(Errno::ENOSYS)(e, j.GetObjectClass.or_bug(Errno::ENOSYS)(e, this));
+        let class = j.NewGlobalRef.or_bug(Errno::ENOSYS)(
+            e,
+            j.GetObjectClass.or_bug(Errno::ENOSYS)(e, this),
+        );
         let mut ids = [core::ptr::null_mut(); N];
         for (id, (name, sig)) in ids.iter_mut().zip(methods) {
             *id = j.GetStaticMethodID.or_bug(Errno::ENOSYS)(e, class, name.as_ptr(), sig.as_ptr());
@@ -113,18 +117,33 @@ pub trait Return: Default {
     /// As JNI's `CallStatic…MethodA`: `e` is this thread's environment, `m`
     /// a static method of `class` that returns this type, and `args` the
     /// values of its signature.
-    unsafe fn call(e: *mut sys::JNIEnv, class: sys::jclass, m: sys::jmethodID, args: *const sys::jvalue) -> Self;
+    unsafe fn call(
+        e: *mut sys::JNIEnv,
+        class: sys::jclass,
+        m: sys::jmethodID,
+        args: *const sys::jvalue,
+    ) -> Self;
 }
 
 impl Return for () {
-    unsafe fn call(e: *mut sys::JNIEnv, class: sys::jclass, m: sys::jmethodID, args: *const sys::jvalue) {
+    unsafe fn call(
+        e: *mut sys::JNIEnv,
+        class: sys::jclass,
+        m: sys::jmethodID,
+        args: *const sys::jvalue,
+    ) {
         // SAFETY: as the caller holds.
         unsafe { env(e).CallStaticVoidMethodA.or_bug(Errno::ENOSYS)(e, class, m, args) }
     }
 }
 
 impl Return for f64 {
-    unsafe fn call(e: *mut sys::JNIEnv, class: sys::jclass, m: sys::jmethodID, args: *const sys::jvalue) -> f64 {
+    unsafe fn call(
+        e: *mut sys::JNIEnv,
+        class: sys::jclass,
+        m: sys::jmethodID,
+        args: *const sys::jvalue,
+    ) -> f64 {
         // SAFETY: as the caller holds.
         unsafe { env(e).CallStaticDoubleMethodA.or_bug(Errno::ENOSYS)(e, class, m, args) }
     }

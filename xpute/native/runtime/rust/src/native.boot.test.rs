@@ -16,7 +16,12 @@ use app::End;
 
 static ENTERED: AtomicBool = AtomicBool::new(false);
 
-xpute_guest::link!(4096, || ENTERED.store(true, Ordering::Relaxed), || {}, || false);
+xpute_guest::link!(
+    4096,
+    || ENTERED.store(true, Ordering::Relaxed),
+    || {},
+    || false
+);
 
 fn boot(_: std::path::PathBuf) -> Boot {
     Boot {
@@ -39,5 +44,8 @@ fn failing_server_traps() {
             if *e == Errno::ENOTRECOVERABLE as i32 && err.starts_with("the host stopped at ")),
         "{told:?}"
     );
-    assert!(!ENTERED.load(Ordering::Relaxed), "the guest is never entered");
+    assert!(
+        !ENTERED.load(Ordering::Relaxed),
+        "the guest is never entered"
+    );
 }

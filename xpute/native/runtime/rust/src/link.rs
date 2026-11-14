@@ -23,10 +23,12 @@ use std::rc::Rc;
 use std::sync::OnceLock;
 use std::thread::ThreadId;
 
+use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Token;
 use xpute_link::frame::HDR_SZ;
-use xpute_link::{Answer, Args, Handle, Layout, Lower, Method, Object, Packet, Side, Tag, TRAP, TRAP_AT};
-use xpute_kit::status::errno::Errno;
+use xpute_link::{
+    Answer, Args, Handle, Layout, Lower, Method, Object, Packet, Side, Tag, TRAP, TRAP_AT,
+};
 
 unsafe extern "C" {
     /// Lays the link and answers where its layout lies, or `TRAP_AT`.
@@ -80,11 +82,11 @@ pub(crate) const HOST_STOPPED: &str = "the host stopped";
 
 /// Marks the link trapped, and tells the platform the first time, with
 /// `err`, what stopped it, as a page's worker tells its trap with its error
-/// (native.rs `tell_trap`). On the guest's thread.
+/// (listener.rs `tell_trap`). On the guest's thread.
 pub(crate) fn trap(err: &str) {
     if SIDE.with(Side::trap) {
         crate::log(&format!("[link] trapped: {err}"));
-        crate::native::tell_trap(err);
+        crate::listener::tell_trap(err);
     }
 }
 
@@ -107,7 +109,11 @@ thread_local! {
 /// traps, naming each, and the guest is never entered. False where the link
 /// trapped, whichever side failed.
 pub(crate) fn init(imports: &[(&str, Handle)]) -> bool {
-    let unserved: Vec<&str> = imports.iter().filter(|&&(_, h)| !SIDE.with(|s| s.serves(h))).map(|&(name, _)| name).collect();
+    let unserved: Vec<&str> = imports
+        .iter()
+        .filter(|&&(_, h)| !SIDE.with(|s| s.serves(h)))
+        .map(|&(name, _)| name)
+        .collect();
     if !unserved.is_empty() {
         trap(&format!("no server mounts {}", unserved.join(", ")));
         return false;
@@ -179,11 +185,11 @@ pub fn on_cancel(t: Tag, stop: Box<dyn FnOnce()>) {
 
 /// The bytes a frame's packet may take.
 pub(crate) fn pkt_cap() -> u32 {
-    SIDE.with(Side::layout).room - HDR_SZ
+    SIDE.with(Side::layout).cap - HDR_SZ
 }
 
 /// Answers the guest's request `t`; while control is in the guest, its packet
-/// is written now and laid after the work at hand. A packet past the room is
+/// is written now and laid after the work at hand. A packet past the cap is
 /// answered EMSGSIZE with no data, as Side's own is.
 pub fn task_return(t: Tag, result: i32, data: Args) {
     if !SIDE.with(Side::crossing) {
@@ -206,7 +212,7 @@ pub fn task_return(t: Tag, result: i32, data: Args) {
 
 /// Answers the guest's request `t` with a packet written already, as the
 /// UI's answer to a method it serves (remote.rs `answer`), on the event
-/// loop's thread between entries. A packet past the room is answered
+/// loop's thread between entries. A packet past the cap is answered
 /// EMSGSIZE with no data, as Side's own is.
 pub(crate) fn task_return_pkt(t: Tag, result: i32, pkt: Option<Vec<u8>>) {
     let pkt = pkt.as_deref().map_or(Packet::Args(None), Packet::Bytes);

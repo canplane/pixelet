@@ -162,11 +162,11 @@ template <class T> class Return {
 // What opens the object a URI names, given the handle it is issued.
 using Opener = std::function<Result<std::unique_ptr<Object>>(std::span<const Token>, Handle)>;
 
-// The link's layout: the guest's inbox and a frame's room. The outbox lies
+// The link's layout: the guest's inbox and a frame's cap. The outbox lies
 // right past the inbox.
 struct Layout {
     std::uint32_t inbox;
-    std::uint32_t room;
+    std::uint32_t cap;
 
     // The layout `init` wrote at `at`: its two words.
     static Layout at(std::uint32_t at) noexcept { return Layout{mem::word(at), mem::word(at + 4)}; }

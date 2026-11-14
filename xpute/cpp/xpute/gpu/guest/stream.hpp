@@ -53,10 +53,10 @@ constexpr std::size_t rec_words(std::size_t args, std::optional<std::size_t> byt
 
 class Stream {
   public:
-    // A stream of `room` words.
-    explicit Stream(std::size_t room);
+    // A stream of `cap` words.
+    explicit Stream(std::size_t cap);
 
-    std::size_t left() const noexcept { return (room_ - len()) * WORD; }
+    std::size_t left() const noexcept { return (cap_ - len()) * WORD; }
 
     // Whether no run holds the stream, so that it is the guest's to write.
     bool is_free();
@@ -71,7 +71,7 @@ class Stream {
     bool fits(std::size_t bytes, std::size_t leave) const noexcept { return left() >= bytes + leave; }
 
     // Opens a record of `n` words for its writer to fill. A record past the
-    // room, or one opened while a run holds the stream (EBUSY), is a bug,
+    // cap, or one opened while a run holds the stream (EBUSY), is a bug,
     // reported at the caller, which names the record.
     std::span<std::uint32_t> open(std::uint32_t op, std::size_t n, std::source_location at = std::source_location::current());
 
@@ -103,7 +103,7 @@ class Stream {
     // Who holds the stream's buffer: the guest, with the records recorded
     // since the last flush, or a run.
     std::variant<std::vector<std::uint32_t>, Run> buf_;
-    std::size_t room_;
+    std::size_t cap_;
     // A mark says whether a transaction is open, where it began, and whether
     // a record that did not fit has dropped it.
     struct Mark {

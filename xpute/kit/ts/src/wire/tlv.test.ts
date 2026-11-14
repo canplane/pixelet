@@ -42,7 +42,7 @@ test("tlv computes what the typescript computes", async () => {
   ]);
   const pkt = w.finish();
 
-  assert.deepStrictEqual(bytes_to_hex(pkt), v.s("packet"));
+  assert.deepStrictEqual(bytes_to_hex(pkt), v.s("pkt"));
 
   const read = new TlvReader(pkt).read_all().map(show);
   const want: string[] = [];
@@ -51,8 +51,8 @@ test("tlv computes what the typescript computes", async () => {
 
   // Each case gives the values read before the sequence stopped, then how it
   // stopped: END read, the input run out between two values, or a fault.
-  for (let k = 0; v.has(`end.${k}.packet`); k++) {
-    const r = new TlvReader(hex_to_bytes(v.s(`end.${k}.packet`)));
+  for (let k = 0; v.has(`end.${k}.pkt`); k++) {
+    const r = new TlvReader(hex_to_bytes(v.s(`end.${k}.pkt`)));
     let n = 0;
     let stop: string;
     try {
@@ -68,7 +68,7 @@ test("tlv computes what the typescript computes", async () => {
   // instead of reading whatever lies after the packet.
   let huge = "ok";
   try {
-    new TlvReader(hex_to_bytes(v.s("huge.packet"))).read_all();
+    new TlvReader(hex_to_bytes(v.s("huge.pkt"))).read_all();
   } catch (err) {
     huge = `errno:${(err as XputeError).errnum ?? ERRNO_OK}`;
   }

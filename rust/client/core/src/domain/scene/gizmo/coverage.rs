@@ -78,11 +78,7 @@ impl Mark {
                 drawn_from_floor::DASHED,
             ),
             Mark::Unbuilt => (unbuilt::RGB, unbuilt::ALPHA, unbuilt::DASHED),
-            Mark::FloorOnly => (
-                floor_only::RGB,
-                floor_only::ALPHA,
-                floor_only::DASHED,
-            ),
+            Mark::FloorOnly => (floor_only::RGB, floor_only::ALPHA, floor_only::DASHED),
             Mark::NoTile => (no_tile::RGB, no_tile::ALPHA, no_tile::DASHED),
             Mark::Quadrant => (tile::RGB, tile::ALPHA, tile::DASHED),
             Mark::Shard => (shard::RGB, shard::ALPHA, shard::DASHED),

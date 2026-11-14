@@ -16,5 +16,8 @@ fn main() {
         return;
     }
     println!("cargo:rustc-link-arg=--stack-first");
-    println!("cargo:rustc-link-arg=-zstack-size={}", manifest::stack::MODULE_SZ);
+    println!(
+        "cargo:rustc-link-arg=-zstack-size={}",
+        manifest::stack::MODULE_SZ
+    );
 }

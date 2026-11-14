@@ -1,5 +1,5 @@
 region	65536
-records.at	16
+recs.at	16
 input.at	32768
 done.at	40960
 readback.at	49152

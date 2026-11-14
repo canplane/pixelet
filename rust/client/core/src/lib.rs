@@ -37,7 +37,7 @@ pub(crate) fn admit_frame() -> bool {
     admit::frame::<{ device::FRAME_LATENCY }>()
 }
 
-// A frame's room holds its words and the largest packet the core lays
+// A frame's cap holds its words and the largest packet the core lays
 // (link/bound.rs).
 xpute_guest::link!(
     link::bound::PKT_CAP + HDR_SZ,

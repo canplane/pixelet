@@ -172,7 +172,8 @@ export function watch_dock_mode(
   listener: (mode: DockMode, before: DockMode) => void,
 ): () => void {
   return store.subscribe((s, previous) => {
-    if (s.dock_mode !== previous.dock_mode) listener(s.dock_mode, previous.dock_mode);
+    if (s.dock_mode !== previous.dock_mode)
+      listener(s.dock_mode, previous.dock_mode);
   });
 }
 

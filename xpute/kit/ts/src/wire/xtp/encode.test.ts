@@ -14,7 +14,7 @@ import { TreeEncoder, TreeView } from "@xpute/kit/wire/xtp/mod.ts";
 function expected(v: Golden, name: string): string {
   for (let k = 0; ; k++) {
     if (!v.has(`${k}.name`)) throw new Error(`no vector ${name}`);
-    if (v.s(`${k}.name`) === name) return v.s(`${k}.packet`);
+    if (v.s(`${k}.name`) === name) return v.s(`${k}.pkt`);
   }
 }
 

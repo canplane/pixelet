@@ -7,5 +7,7 @@ import type { Side } from "@xpute/link/link.ts";
 import * as vsync from "@xpute/gpu-link/abi/vsync.ts";
 
 export function serve_vsync(link: Side): void {
-  vsync.mount(link, { next: () => new Promise((done) => requestAnimationFrame(() => done())) });
+  vsync.mount(link, {
+    next: () => new Promise((done) => requestAnimationFrame(() => done())),
+  });
 }

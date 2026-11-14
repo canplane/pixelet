@@ -4,14 +4,13 @@
 //! start it, and when silence counts as a lost sensor. The UI owns the
 //! listener and iOS's permission prompt, and the core hears only the answer.
 
-use crate::abi::sensor::PermissionAnswer;
 use crate::abi::overlay::SensorStatus;
-use crate::domain::control::navigation::follow_mode::following;
+use crate::abi::sensor::PermissionAnswer;
 use crate::domain::control::param::WATCHDOG_TIMEOUT_MS;
 use crate::domain::control::sensor::reading::{device_orient_store, device_orient_store_mut};
-use crate::sys::sched::{invalidate, invalidate_at};
-use xpute_guest::clock::now;
+use crate::sys::sched::invalidate_at;
 use pxl_global::Global;
+use xpute_guest::clock::now;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum OrientationCommand {
@@ -60,19 +59,16 @@ fn orient() -> &'static mut Orientation {
     })
 }
 
-/// An orientation event. iOS's compass heading is preferred, and otherwise
-/// the heading is derived from alpha.
-pub(crate) fn orient_event(webkit_compass_heading: Option<f64>, alpha: Option<f64>) {
+/// An orientation event, and whether it changed the heading held. iOS's
+/// compass heading is preferred, and otherwise the heading is derived from
+/// alpha.
+pub(crate) fn orient_event(webkit_compass_heading: Option<f64>, alpha: Option<f64>) -> bool {
     // An event with neither is a reading with no heading. One with no field at
     // all is a page's word that it has no compass, which its reader tells
     // apart (`orient_unavailable`).
     let heading = webkit_compass_heading.or_else(|| alpha.map(|a| (360.0 - a) % 360.0));
     orient().last_event_at = now();
-    // The heading turns the camera only while it follows the device, so a
-    // changed heading asks for a frame only then.
-    if device_orient_store_mut().set_orient(heading) && following() {
-        invalidate();
-    }
+    device_orient_store_mut().set_orient(heading)
 }
 
 /// The place has no compass, as a page's event with every field null says: its

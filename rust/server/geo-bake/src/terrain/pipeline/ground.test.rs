@@ -94,7 +94,10 @@ fn src_rank_per_tile() {
             "grass",
         ),
     ];
-    assert_eq!(at(&bake_ground(&feats, &Coast::Land), 5, 50), Ground::Grass as GroundId);
+    assert_eq!(
+        at(&bake_ground(&feats, &Coast::Land), 5, 50),
+        Ground::Grass as GroundId
+    );
 }
 
 #[test]

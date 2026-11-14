@@ -36,7 +36,9 @@ const failure = (e: unknown): unknown =>
  * or a file closed. */
 function aborted(signal: AbortSignal): Promise<never> {
   return new Promise((_, fail) => {
-    signal.addEventListener("abort", () => fail(new XputeError(ERRNO_ECANCELED)));
+    signal.addEventListener("abort", () =>
+      fail(new XputeError(ERRNO_ECANCELED)),
+    );
   });
 }
 
@@ -108,6 +110,14 @@ export function serve_files(
   for (const node of Object.values(path)) {
     const id = (node as { ID?: number }).ID;
     if (id === undefined) continue;
-    link.mount(file.HANDLE, [{ tag: "int", val: id }], (uri) => file.file(link, open(link, uri.map((t) => t.val))));
+    link.mount(file.HANDLE, [{ tag: "int", val: id }], (uri) =>
+      file.file(
+        link,
+        open(
+          link,
+          uri.map((t) => t.val),
+        ),
+      ),
+    );
   }
 }

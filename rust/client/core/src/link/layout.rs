@@ -13,11 +13,11 @@ use crate::domain::scene::character::Group;
 use crate::domain::scene::decor::asset;
 use crate::domain::scene::environment::cloud;
 use crate::perf::record;
+use crate::spec::manifest;
+use crate::sys::heap::PAGE_BYTES;
 use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param;
-use crate::spec::manifest;
-use crate::sys::heap::PAGE_BYTES;
 use crate::sys::range;
 use pxl_render::gpu::upload;
 
@@ -87,7 +87,9 @@ const _: () = assert!(
 // memory; the boot checks the module's data with them against the memory
 // given.
 const _: () = assert!(
-    manifest::stack::MODULE_SZ as u64 + manifest::mem::FIXED_SZ as u64 + manifest::mem::MIN_HEAP_SZ as u64
+    manifest::stack::MODULE_SZ as u64
+        + manifest::mem::FIXED_SZ as u64
+        + manifest::mem::MIN_HEAP_SZ as u64
         <= manifest::mem::SZ as u64,
     "the stack, the fixed ranges and the heap do not fit the core's memory"
 );
@@ -99,7 +101,8 @@ pub(crate) fn install() {
     division::RANGE.set(at(Fixed::Division));
     body::RANGE.set(at(Fixed::Bodies));
     // SAFETY: the uploads' range, zeroed, the renderer's alone.
-    let uploads = unsafe { at(Fixed::Uploads).arr::<u32>(0, FIXED[Fixed::Uploads as usize] as usize / 4) };
+    let uploads =
+        unsafe { at(Fixed::Uploads).arr::<u32>(0, FIXED[Fixed::Uploads as usize] as usize / 4) };
     upload::set_uploads(uploads, LIVE_UPLOAD_CAP);
 }
 

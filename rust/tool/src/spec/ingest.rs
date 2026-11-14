@@ -108,7 +108,12 @@ fn pack() -> Result<Pack, String> {
     let spec = read(INGEST_JSON)?;
     let p = spec.get("pack").ok_or(format!("{INGEST_JSON}: no pack"))?;
     let at = |field: &str| format!("{INGEST_JSON}: pack.{field}");
-    let list = |field: &str| p.get(field).map(Node::val).and_then(Node::arr).ok_or(at(field));
+    let list = |field: &str| {
+        p.get(field)
+            .map(Node::val)
+            .and_then(Node::arr)
+            .ok_or(at(field))
+    };
     let means = list("means")?
         .iter()
         .map(|m| {
@@ -150,7 +155,10 @@ fn pack() -> Result<Pack, String> {
 /// tool's own, as each side reads it.
 pub fn outputs() -> Result<Vec<Output>, String> {
     let (spec, pack) = (read(INGEST_JSON)?, pack()?);
-    let files = spec.get("files").filter(|f| f.is_wrapper()).ok_or(format!("{INGEST_JSON}: no files"))?;
+    let files = spec
+        .get("files")
+        .filter(|f| f.is_wrapper())
+        .ok_or(format!("{INGEST_JSON}: no files"))?;
     let table = Node::Obj(vec![
         (
             "$description".into(),
@@ -278,7 +286,12 @@ pub struct Pack {
         pack.faces
             .iter()
             .filter(|f| f.0 == "sentinel")
-            .map(|(_, ty, _, tile)| Ok(format!("        (cube::Sentinel::{}, {tile}),", cube_member("sentinel", ty)?.ident)))
+            .map(|(_, ty, _, tile)| {
+                Ok(format!(
+                    "        (cube::Sentinel::{}, {tile}),",
+                    cube_member("sentinel", ty)?.ident
+                ))
+            })
             .collect::<Result<Vec<_>, String>>()?,
     );
     out.push("    ],".to_string());

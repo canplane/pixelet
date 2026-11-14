@@ -26,12 +26,12 @@
 
 namespace xpute::guest {
 
-// Lays the link over frames of `room` bytes, a multiple of 8 that holds a
+// Lays the link over frames of `cap` bytes, a multiple of 8 that holds a
 // frame's words, and runs nothing of the program; `enter` and `end` are the
 // program's start and end of every entry (`boot`, `recv`), `end` answering
 // whether it left work. It answers where the link's layout lies: two words,
-// the inbox and a frame's room, then the inbox and the outbox.
-std::uint32_t init(std::uint32_t room, void (*enter)(), bool (*end)()) noexcept;
+// the inbox and a frame's cap, then the inbox and the outbox.
+std::uint32_t init(std::uint32_t cap, void (*enter)(), bool (*end)()) noexcept;
 
 // The guest's first entry, once the host has read the layout. Unlike every
 // later entry, it starts by `boot`, which opens what the program's `enter`
@@ -86,7 +86,7 @@ bool in_guest() noexcept;
 } // namespace xpute::guest
 
 // Defines the guest's three exports (`link/wit/types.wit`), over frames of
-// `room_` bytes, with `boot_` mounting what the guest serves and opening what
+// `cap_` bytes, with `boot_` mounting what the guest serves and opening what
 // it calls, and `enter_` and `end_` starting and ending each entry; from its
 // init on, the guest's failures are its own (`stop.hpp` `hook`). A module
 // exports them by name; a native guest as C symbols, which catch a bug
@@ -94,19 +94,19 @@ bool in_guest() noexcept;
 // layout), as a Rust guest's catch its panic. A failed check of libc++'s own
 // still aborts a native guest's process, where a module traps.
 #ifdef __wasm__
-#define XPUTE_LINK(room_, boot_, enter_, end_)                                                                                                      \
+#define XPUTE_LINK(cap_, boot_, enter_, end_)                                                                                                      \
     extern "C" __attribute__((export_name("link_init"))) std::uint32_t link_init() {                                                              \
         ::xpute::guest::stop::hook();                                                                                                               \
-        return ::xpute::guest::init((room_), (enter_), (end_));                                                                                     \
+        return ::xpute::guest::init((cap_), (enter_), (end_));                                                                                     \
     }                                                                                                                                               \
     extern "C" __attribute__((export_name("link_boot"))) void link_boot() { ::xpute::guest::boot(boot_); }                                        \
     extern "C" __attribute__((export_name("link_in"))) std::int32_t link_in() { return ::xpute::guest::recv(); }
 #else
-#define XPUTE_LINK(room_, boot_, enter_, end_)                                                                                                      \
+#define XPUTE_LINK(cap_, boot_, enter_, end_)                                                                                                      \
     extern "C" __attribute__((visibility("default"))) std::uint32_t link_init() {                                                                 \
         return ::xpute::caught(::xpute::link::TRAP_AT, [] {                                                                                         \
             ::xpute::guest::stop::hook();                                                                                                           \
-            return ::xpute::guest::init((room_), (enter_), (end_));                                                                                 \
+            return ::xpute::guest::init((cap_), (enter_), (end_));                                                                                 \
         });                                                                                                                                         \
     }                                                                                                                                               \
     extern "C" __attribute__((visibility("default"))) std::int32_t link_boot() {                                                                  \

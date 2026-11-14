@@ -5,29 +5,16 @@
 //! through the C ABI (xpute.h), which the program exports by `native_abi!`
 //! with what it starts its guest with (`Boot`), and on Android the same calls
 //! under JNI's names (jni.rs). What the app hears, a batch waiting, a stop
-//! and a trap, it hears through the functions it sets (`notify_on`,
-//! `stopped_on`, `trap_on`).
+//! and a trap, it hears through the functions it sets (listener.rs).
 
 use std::path::PathBuf;
-use std::sync::{Mutex, MutexGuard};
 
+use crate::listener::{self, Stop};
+use crate::{event_loop, link, remote};
 use xpute_kit::status::bug::{Bug, OrBug};
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Token;
 use xpute_link::{load_uri, mem, Handle, Lift, Method};
-use crate::{event_loop, link, remote};
-
-/// The report of a broken invariant before the guest stops: the guest's
-/// (wit/stop/stop.wit), which the host that serves the stop hands the runtime
-/// (xpute-native-host stop.rs), or the host's own failure (`hook`), which the
-/// runtime tells the app (`tell_stop`).
-pub struct Stop {
-    pub errnum: i32,
-    pub file: String,
-    pub line: u32,
-    pub n1: u64,
-    pub n2: u64,
-}
 
 /// What serves the guest some of its imports: it mounts them on the link,
 /// on the guest's thread.
@@ -49,91 +36,14 @@ pub struct Boot {
 /// platform keeps the app's caches in, what it starts its guest with.
 pub type Start = fn(PathBuf) -> Boot;
 
-/// What tells the app a batch waits.
-pub type Tell = extern "C" fn();
-
-/// What tells the app the guest stopped: its errno, its file's UTF-8 and
-/// length, its line and its two numbers.
-pub type Stopped = extern "C" fn(i32, *const u8, usize, u32, u64, u64);
-
-/// What tells the app the guest trapped: what stopped it, its UTF-8 and
-/// length, as a page's trap carries its error (@xpute/web-runtime `Trap`).
-pub type Trapped = extern "C" fn(*const u8, usize);
-
-static NOTIFY: Mutex<Option<Tell>> = Mutex::new(None);
-static STOPPED: Mutex<Option<Stopped>> = Mutex::new(None);
-static TRAP: Mutex<Option<Trapped>> = Mutex::new(None);
-
-pub fn notify_on(f: Option<Tell>) {
-    *NOTIFY.lock().unwrap_or_else(|e| e.into_inner()) = f;
-}
-
-pub fn stopped_on(f: Option<Stopped>) {
-    *STOPPED.lock().unwrap_or_else(|e| e.into_inner()) = f;
-}
-
-pub fn trap_on(f: Option<Trapped>) {
-    *TRAP.lock().unwrap_or_else(|e| e.into_inner()) = f;
-}
-
-fn notify() {
-    if let Some(f) = *NOTIFY.lock().unwrap_or_else(|e| e.into_inner()) {
-        f();
-    }
-}
-
-/// What the app was told of the guest's end: the last stop reported, as the
-/// UI keeps it, and what trapped the guest, told again to each new UI
-/// (`start`).
-struct End {
-    stop: Option<Stop>,
-    trap: Option<String>,
-}
-
-static END: Mutex<End> = Mutex::new(End {
-    stop: None,
-    trap: None,
-});
-
-fn end() -> MutexGuard<'static, End> {
-    END.lock().unwrap_or_else(|e| e.into_inner())
-}
-
-fn call_stopped(s: &Stop) {
-    if let Some(f) = *STOPPED.lock().unwrap_or_else(|e| e.into_inner()) {
-        f(s.errnum, s.file.as_ptr(), s.file.len(), s.line, s.n1, s.n2);
-    }
-}
-
-fn call_trapped(err: &str) {
-    if let Some(f) = *TRAP.lock().unwrap_or_else(|e| e.into_inner()) {
-        f(err.as_ptr(), err.len());
-    }
-}
-
-/// Tells the app the guest stopped, with the report of the broken
-/// invariant: the guest's, which the host that serves the stop hands it
-/// (xpute-native-host stop.rs), or the host's own failure (`hook`), as
-/// @xpute/web-runtime worker.ts `tell_stop` tells a page.
-pub fn tell_stop(s: Stop) {
-    let mut end = end();
-    call_stopped(&s);
-    end.stop = Some(s);
-}
-
-/// Tells the app the guest trapped, with what stopped it (link.rs `trap`).
-pub(crate) fn tell_trap(err: &str) {
-    let mut end = end();
-    call_trapped(err);
-    end.trap = Some(err.to_owned());
-}
-
 /// The prefixes the UI opens at, each with the named handle of the interface
 /// whose resources they are, from a lowered `list<tuple<u32, list<token>>>`.
 fn prefixes(pkt: &[u8]) -> Result<Vec<(Handle, Vec<Token>)>, Errno> {
     let r = Lift::new(pkt);
     let (base, len) = r.list(0, 12, 4)?;
-    (0..len).map(|k| Ok((r.u32(base + k * 12)?, load_uri(r, base + k * 12 + 4)?))).collect()
+    (0..len)
+        .map(|k| Ok((r.u32(base + k * 12)?, load_uri(r, base + k * 12 + 4)?)))
+        .collect()
 }
 
 /// Whether the runtime has started, which it does once a process.
@@ -143,22 +53,14 @@ static STARTED: std::sync::Once = std::sync::Once::new();
 /// UI's, and the caches' directory. The runtime starts once a process
 /// (`run`), and each call is a new UI on it (`remote::accept`), as a
 /// reload's, which serves what the first did, whose attach the guest is
-/// told, and which is told the guest's end where it came (`End`). It
+/// told, and which is told the guest's end where it came
+/// (listener.rs `tell_end`). It
 /// answers the new UI's generation, which the UI's posts, answers and takes
 /// carry.
 pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], cache_dir: PathBuf) -> u32 {
     let prefixes = prefixes(prefixes_pkt).or_bug(Errno::EBADMSG);
     let generation = remote::accept();
-    {
-        // A stop told again lands before a trap told meanwhile.
-        let end = end();
-        if let Some(s) = &end.stop {
-            call_stopped(s);
-        }
-        if let Some(err) = &end.trap {
-            call_trapped(err);
-        }
-    }
+    listener::tell_end();
     STARTED.call_once(|| run(start(cache_dir), named, prefixes));
     generation
 }
@@ -189,7 +91,7 @@ fn run(boot: Boot, named: Vec<Handle>, prefixes: Vec<(Handle, Vec<Token>)>) {
             loop {
                 caught(|| {
                     link::run_due();
-                    remote::flush(notify);
+                    remote::flush();
                     event_loop::turn();
                 });
             }
@@ -227,7 +129,7 @@ fn hook() {
         let fail = move || {
             if !link::trapped() {
                 crate::log(&format!("[host] stopped: {errnum} at {file}:{line}"));
-                tell_stop(Stop {
+                listener::tell_stop(Stop {
                     errnum,
                     file: file.clone(),
                     line,
@@ -251,7 +153,9 @@ fn hook() {
 /// `at` is `len` readable bytes.
 pub unsafe fn dir(at: *const u8, len: usize) -> PathBuf {
     // SAFETY: the caller's.
-    PathBuf::from(String::from_utf8_lossy(unsafe { core::slice::from_raw_parts(at, len) }).into_owned())
+    PathBuf::from(
+        String::from_utf8_lossy(unsafe { core::slice::from_raw_parts(at, len) }).into_owned(),
+    )
 }
 
 /// `len` bytes at `at`, or none where `at` is null.
@@ -313,24 +217,31 @@ macro_rules! native_abi {
         }
 
         #[no_mangle]
-        pub extern "C" fn xpute_notify_on(f: Option<$crate::native::Tell>) {
-            $crate::native::notify_on(f);
+        pub extern "C" fn xpute_notify_on(f: Option<$crate::listener::Tell>) {
+            $crate::listener::notify_on(f);
         }
 
         #[no_mangle]
-        pub extern "C" fn xpute_stopped_on(f: Option<$crate::native::Stopped>) {
-            $crate::native::stopped_on(f);
+        pub extern "C" fn xpute_stopped_on(f: Option<$crate::listener::Stopped>) {
+            $crate::listener::stopped_on(f);
         }
 
         #[no_mangle]
-        pub extern "C" fn xpute_trap_on(f: Option<$crate::native::Trapped>) {
-            $crate::native::trap_on(f);
+        pub extern "C" fn xpute_trap_on(f: Option<$crate::listener::Trapped>) {
+            $crate::listener::trap_on(f);
         }
 
         /// # Safety
         /// `pkt` is null or `len` readable bytes.
         #[no_mangle]
-        pub unsafe extern "C" fn xpute_post(generation: u32, tag: u32, h: u32, m: u32, pkt: *const u8, len: usize) {
+        pub unsafe extern "C" fn xpute_post(
+            generation: u32,
+            tag: u32,
+            h: u32,
+            m: u32,
+            pkt: *const u8,
+            len: usize,
+        ) {
             // SAFETY: the caller's.
             let pkt = unsafe { $crate::native::bytes(pkt, len) };
             $crate::post(generation, tag, h, m, pkt);
@@ -339,7 +250,13 @@ macro_rules! native_abi {
         /// # Safety
         /// `data` is null or `len` readable bytes.
         #[no_mangle]
-        pub unsafe extern "C" fn xpute_answer(generation: u32, tag: u32, result: i32, data: *const u8, len: usize) {
+        pub unsafe extern "C" fn xpute_answer(
+            generation: u32,
+            tag: u32,
+            result: i32,
+            data: *const u8,
+            len: usize,
+        ) {
             // SAFETY: the caller's.
             let data = unsafe { $crate::native::bytes(data, len) };
             $crate::answer(generation, tag, result, data);

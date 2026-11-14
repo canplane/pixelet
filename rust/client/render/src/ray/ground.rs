@@ -148,8 +148,7 @@ impl RayPass {
         gb.bricks.clear();
         (ground.upload)(&mut |q| {
             let recs = 2 + q.run.len();
-            if gb.bricks.len() == FRAME_BRICK_CAP as usize || !room(recs * write_buffer_sz(&[]))
-            {
+            if gb.bricks.len() == FRAME_BRICK_CAP as usize || !room(recs * write_buffer_sz(&[])) {
                 return false;
             }
             g.upload_buf(gb.ground, q.slot * BRICK_BYTES, bytes(q.words));

@@ -3,25 +3,33 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 
-import { ERRNO_EINPROGRESS, ERRNO_EMSGSIZE } from "@xpute/kit/status/errno.spec.ts";
+import {
+  ERRNO_EINPROGRESS,
+  ERRNO_EMSGSIZE,
+} from "@xpute/kit/status/errno.spec.ts";
 import { type Frame, HDR_SZ, lay, read } from "./frame.ts";
 import { CANCEL, NAMED, ROOT, Side, type Tag } from "./link.ts";
 
 const INBOX = 8;
-const ROOM = 64;
-const OUTBOX = INBOX + ROOM;
+const CAP = 64;
+const OUTBOX = INBOX + CAP;
 
 /** What the host serves: method 0 answers at once with a word, method 1
- * later, and method 2 at once with a value past the room. */
+ * later, and method 2 at once with a value past the cap. */
 const SERVED = (NAMED | 1) >>> 0;
 
 /** The host's side over a guest that only lays its link and keeps each
  * frame the host lays in its inbox; and the tag method 1 left to answer. */
-function link(): { side: Side; view: DataView; frames: Frame[]; later: () => Tag } {
-  const mem = new ArrayBuffer(INBOX + 2 * ROOM);
+function link(): {
+  side: Side;
+  view: DataView;
+  frames: Frame[];
+  later: () => Tag;
+} {
+  const mem = new ArrayBuffer(INBOX + 2 * CAP);
   const view = new DataView(mem);
   view.setUint32(0, INBOX, true);
-  view.setUint32(4, ROOM, true);
+  view.setUint32(4, CAP, true);
   const frames: Frame[] = [];
   let later: Tag | null = null;
   const side = new Side({
@@ -41,7 +49,7 @@ function link(): { side: Side; view: DataView; frames: Frame[]; later: () => Tag
         later = tag;
         return ERRNO_EINPROGRESS;
       }
-      return { result: 0, data: [ROOM, () => {}] };
+      return { result: 0, data: [CAP, () => {}] };
     },
     drop() {},
   });
@@ -56,10 +64,20 @@ test("the answer a side lays in the frame its request came in is marked RES and 
     [5, 0, 0],
     [6, 2, ERRNO_EMSGSIZE],
   ] as const) {
-    lay(view, OUTBOX, { tag, res: false, handle: SERVED, method, result: 0, pkt_len: 0 });
+    lay(view, OUTBOX, {
+      tag,
+      res: false,
+      handle: SERVED,
+      method,
+      result: 0,
+      pkt_len: 0,
+    });
     assert.equal(out(OUTBOX), result);
     const f = read(view, OUTBOX);
-    assert.deepEqual([f.res, f.tag, f.handle, f.method, f.result], [true, tag, SERVED, method, result]);
+    assert.deepEqual(
+      [f.res, f.tag, f.handle, f.method, f.result],
+      [true, tag, SERVED, method, result],
+    );
   }
 });
 
@@ -68,9 +86,16 @@ test("a later answer is marked RES and carries the request's tag", () => {
   const out = Side.imports(() => side).link_out;
   for (const [tag, sz, result] of [
     [5, 4, 0],
-    [6, ROOM, ERRNO_EMSGSIZE],
+    [6, CAP, ERRNO_EMSGSIZE],
   ] as const) {
-    lay(view, OUTBOX, { tag, res: false, handle: SERVED, method: 1, result: 0, pkt_len: 0 });
+    lay(view, OUTBOX, {
+      tag,
+      res: false,
+      handle: SERVED,
+      method: 1,
+      result: 0,
+      pkt_len: 0,
+    });
     assert.equal(out(OUTBOX), ERRNO_EINPROGRESS);
     side.task_return(later(), 0, [sz, (w) => w.u32(0, 9)]);
     const f = frames.pop()!;
@@ -91,9 +116,14 @@ test("a world importing what no server mounts refuses to start, naming each, and
     in: () => 0,
     trap: (e) => traps.push(e),
   });
-  const [named, opened, missing, missing_too] = [1, 2, 3, 4].map((k) => (NAMED | k) >>> 0) as [number, number, number, number];
+  const [named, opened, missing, missing_too] = [1, 2, 3, 4].map(
+    (k) => (NAMED | k) >>> 0,
+  ) as [number, number, number, number];
   side.mount_named(named, { call: () => 0, drop() {} });
-  side.mount(opened, [{ tag: "str", val: "opened" }], () => ({ call: () => 0, drop() {} }));
+  side.mount(opened, [{ tag: "str", val: "opened" }], () => ({
+    call: () => 0,
+    drop() {},
+  }));
   const imports = [
     ["named", named],
     ["opened", opened],
@@ -110,7 +140,14 @@ test("a cancel runs the stop its request put once, and none once the request has
   const out = Side.imports(() => side).link_out;
   const send = (tag: Tag, handle: number, method: number, arg: Tag | null) => {
     if (arg !== null) view.setUint32(OUTBOX + HDR_SZ, arg, true);
-    lay(view, OUTBOX, { tag, res: false, handle, method, result: 0, pkt_len: arg === null ? 0 : 4 });
+    lay(view, OUTBOX, {
+      tag,
+      res: false,
+      handle,
+      method,
+      result: 0,
+      pkt_len: arg === null ? 0 : 4,
+    });
     return out(OUTBOX);
   };
   let stops = 0;

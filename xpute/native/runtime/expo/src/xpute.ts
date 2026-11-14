@@ -6,7 +6,7 @@ import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { Stop } from "@xpute/link";
 import { requireNativeModule } from "expo";
 
-/** The guest's stop, as its host reports it (xpute-native-runtime native.rs
+/** The guest's stop, as its host reports it (xpute-native-runtime listener.rs
  * `Stop`): `n1` and `n2`, u64s, in their decimal digits. */
 interface Report {
   errnum: i32;
@@ -25,9 +25,15 @@ interface Xpute {
   /** `onNotify` fires when a batch waits for `take`. */
   addListener(event: "onNotify", listener: () => void): { remove(): void };
   /** `onTrap` fires when the guest trapped, with what stopped it. */
-  addListener(event: "onTrap", listener: (r: { err: string }) => void): { remove(): void };
+  addListener(
+    event: "onTrap",
+    listener: (r: { err: string }) => void,
+  ): { remove(): void };
   /** `onStopped` fires when the guest stopped, with its report. */
-  addListener(event: "onStopped", listener: (r: Report) => void): { remove(): void };
+  addListener(
+    event: "onStopped",
+    listener: (r: Report) => void,
+  ): { remove(): void };
   /** Starts the runtime on the guest's thread (xpute.h `xpute_start`):
    * `named` the named handles of the interfaces the UI serves (@xpute/link remote.ts
    * `Remote.named`), `prefixes` the prefixes the UI mounts openers at, each

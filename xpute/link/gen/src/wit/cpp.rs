@@ -59,25 +59,41 @@ const GUEST_WAIT: Declaration = ("::xpute::guest", "xpute/guest/wait.hpp");
 /// mounts it, an async method's answer, and an async call's lent buffer's
 /// template parameter. A WIT
 /// name that meets one takes `_`.
-const GIVEN: [&str; 7] = ["HANDLE", "store", "load", "mount", "task_return", "Guest", "L"];
+const GIVEN: [&str; 7] = [
+    "HANDLE",
+    "store",
+    "load",
+    "mount",
+    "task_return",
+    "Guest",
+    "L",
+];
 
 /// Whether the C++ bindings give `n`: one of `GIVEN`, a lent span's template
 /// parameter (`T0`, …), or a resource's serving class's form.
 fn given(n: &str) -> bool {
     GIVEN.contains(&n)
-        || n.strip_prefix('T').is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
+        || n.strip_prefix('T')
+            .is_some_and(|d| !d.is_empty() && d.bytes().all(|b| b.is_ascii_digit()))
         || is_serving(n)
 }
 
 /// The class over a served object's implementation, which its trailing `_`
 /// keeps from every WIT name.
 fn object_class(o: &Obj) -> String {
-    if o.resource { format!("{}Object_", pascal(&o.name)) } else { "Object_".into() }
+    if o.resource {
+        format!("{}Object_", pascal(&o.name))
+    } else {
+        "Object_".into()
+    }
 }
 
 /// Whether a value of `k` is passed by value: a scalar's.
 fn is_scalar(k: &Kind) -> bool {
-    matches!(k, Kind::Bool | Kind::Number(_) | Kind::Handle | Kind::Enum(_))
+    matches!(
+        k,
+        Kind::Bool | Kind::Number(_) | Kind::Handle | Kind::Enum(_)
+    )
 }
 
 /// A WIT name as a C++ identifier in snake_case.
@@ -153,20 +169,30 @@ impl Header<'_> {
     /// through `_rt`.
     fn rt_use(&self, (ns, hdr): Declaration, name: &str) -> String {
         self.library.borrow_mut().insert(hdr.into());
-        self.uses.borrow_mut().entry(ns.into()).or_default().insert(name.into());
+        self.uses
+            .borrow_mut()
+            .entry(ns.into())
+            .or_default()
+            .insert(name.into());
         format!("_rt::{name}")
     }
 
     /// An errno's member, as a method's result.
     fn errno(&self, e: &str) -> String {
         self.include("cstdint");
-        format!("static_cast<std::int32_t>({}::{e})", self.rt_use(ERROR, "Errno"))
+        format!(
+            "static_cast<std::int32_t>({}::{e})",
+            self.rt_use(ERROR, "Errno")
+        )
     }
 
     /// The reply of the errno `e`, an expression of `Errno`.
     fn refusal(&self, e: &str) -> String {
         self.include("cstdint");
-        format!("{}{{static_cast<std::int32_t>({e})}}", self.rt_use(LINK, "Reply"))
+        format!(
+            "{}{{static_cast<std::int32_t>({e})}}",
+            self.rt_use(LINK, "Reply")
+        )
     }
 
     /// A discriminant's C++ type, of `n` cases.
@@ -304,12 +330,7 @@ impl Header<'_> {
                     match k {
                         Some(k) => Ok(format!(
                             " {}",
-                            self.store(
-                                w,
-                                &plus(at, off),
-                                &format!("std::get<{c}>({e})"),
-                                k
-                            )?
+                            self.store(w, &plus(at, off), &format!("std::get<{c}>({e})"), k)?
                         )),
                         None => Ok(String::new()),
                     }
@@ -449,12 +470,7 @@ impl Header<'_> {
                         let _ = writeln!(
                             store,
                             "        {}",
-                            self.store(
-                                "w",
-                                &plus("at", off),
-                                &format!("this->{}", name(f)),
-                                k
-                            )?
+                            self.store("w", &plus("at", off), &format!("this->{}", name(f)), k)?
                         );
                     }
                     let _ = writeln!(
@@ -565,7 +581,9 @@ impl Header<'_> {
     /// A method's args: each its name and its kind.
     fn kinds(&self, f: &Function) -> Result<Vec<(String, Kind)>, String> {
         let at = format!("{}.{}", self.g.at(), f.name);
-        params(f).map(|p| Ok((name(&p.name), kind(self.g.r, &p.ty, &at)?))).collect()
+        params(f)
+            .map(|p| Ok((name(&p.name), kind(self.g.r, &p.ty, &at)?)))
+            .collect()
     }
 
     /// The args `ps` as a packet: none, or their tuple's size and what writes
@@ -576,7 +594,9 @@ impl Header<'_> {
             self.include("optional");
             return Ok("std::nullopt".into());
         }
-        let (offs, sz) = self.g.tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
+        let (offs, sz) = self
+            .g
+            .tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
         let mut writes = Vec::new();
         for ((n, k), at) in ps.iter().zip(&offs) {
             writes.push(if lents.contains(n) {
@@ -660,20 +680,40 @@ impl Header<'_> {
         self.include("span");
         self.include("utility");
         self.include("cstdint");
-        let _ = writeln!(out, "class {t} {{\n  public:\n    virtual ~{t}() = default;");
+        let _ = writeln!(
+            out,
+            "class {t} {{\n  public:\n    virtual ~{t}() = default;"
+        );
         for f in &o.methods {
-            let ps: Vec<String> = self.kinds(f)?.iter().map(|(n, k)| Ok(format!("{} {n}", self.ty(k)?))).collect::<Result<_, String>>()?;
+            let ps: Vec<String> = self
+                .kinds(f)?
+                .iter()
+                .map(|(n, k)| Ok(format!("{} {n}", self.ty(k)?)))
+                .collect::<Result<_, String>>()?;
             let rk = self.g.ret(f)?;
             let m = name(method_name(f));
             if is_async(f) {
                 let ret = rk.as_ref().map_or(Ok("void".into()), |k| self.ty(k))?;
                 let ps: String = ps.iter().map(|p| format!("{p}, ")).collect();
-                let _ = writeln!(out, "    virtual void {m}({ps}{}<{ret}> task_return) = 0;", self.rt_use(LINK, "Return"));
+                let _ = writeln!(
+                    out,
+                    "    virtual void {m}({ps}{}<{ret}> task_return) = 0;",
+                    self.rt_use(LINK, "Return")
+                );
             } else {
-                let _ = writeln!(out, "    virtual {} {m}({}) = 0;", self.result(&rk)?, ps.join(", "));
+                let _ = writeln!(
+                    out,
+                    "    virtual {} {m}({}) = 0;",
+                    self.result(&rk)?,
+                    ps.join(", ")
+                );
             }
         }
-        let (reply, method, tag) = (self.rt_use(LINK, "Reply"), self.rt_use(LINK, "Method"), self.rt_use(LINK, "Tag"));
+        let (reply, method, tag) = (
+            self.rt_use(LINK, "Reply"),
+            self.rt_use(LINK, "Method"),
+            self.rt_use(LINK, "Tag"),
+        );
         let _ = writeln!(
             out,
             "}};\n\nclass {obj} final : public {} {{\n  public:\n    explicit {obj}(std::unique_ptr<{t}> implementation) noexcept : implementation_(std::move(implementation)) {{}}\n\n    {reply} call({method} m_, [[maybe_unused]] {tag} tag_, [[maybe_unused]] std::optional<std::span<const std::uint8_t>> args_) override {{\n        switch (m_) {{",
@@ -684,14 +724,34 @@ impl Header<'_> {
             let _ = writeln!(out, "        case {}: {{", method_const(o, f, given));
             if !ps.is_empty() {
                 let ebadmsg = self.refusal(&format!("{}::ebadmsg", self.rt_use(ERROR, "Errno")));
-                let _ = writeln!(out, "            if (!args_) return {ebadmsg};\n            {} r_(*args_);", self.rt_use(CABI, "Lift"));
-                let (offs, _) = self.g.tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
+                let _ = writeln!(
+                    out,
+                    "            if (!args_) return {ebadmsg};\n            {} r_(*args_);",
+                    self.rt_use(CABI, "Lift")
+                );
+                let (offs, _) = self
+                    .g
+                    .tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
                 for ((n, k), at) in ps.iter().zip(&offs) {
-                    let _ = writeln!(out, "            {} {n} = {};", self.ty(k)?, self.load("r_", &at.to_string(), k)?);
+                    let _ = writeln!(
+                        out,
+                        "            {} {n} = {};",
+                        self.ty(k)?,
+                        self.load("r_", &at.to_string(), k)?
+                    );
                 }
                 let _ = writeln!(out, "            if (!r_.finish()) return {ebadmsg};");
             }
-            let args: Vec<String> = ps.iter().map(|(n, k)| if is_scalar(k) { n.clone() } else { format!("std::move({n})") }).collect();
+            let args: Vec<String> = ps
+                .iter()
+                .map(|(n, k)| {
+                    if is_scalar(k) {
+                        n.clone()
+                    } else {
+                        format!("std::move({n})")
+                    }
+                })
+                .collect();
             let rk = self.g.ret(f)?;
             let m = name(method_name(f));
             let refusal = self.refusal("x_.error().errnum");
@@ -736,9 +796,16 @@ impl Header<'_> {
     fn import(&self, o: &Obj, out: &mut String) -> Result<(), String> {
         for f in &o.methods {
             let ps = self.kinds(f)?;
-            let lents: Vec<String> = params(f).filter(|p| is_lent(self.g.r, &p.ty)).map(|p| name(&p.name)).collect();
+            let lents: Vec<String> = params(f)
+                .filter(|p| is_lent(self.g.r, &p.ty))
+                .map(|p| name(&p.name))
+                .collect();
             // An async call's one lent buffer, which its answer hands back.
-            let lent = if is_async(f) { lents.first().cloned() } else { None };
+            let lent = if is_async(f) {
+                lents.first().cloned()
+            } else {
+                None
+            };
             // A sync call lends spans of any elements, each its own; an async
             // call lends a vector of plain values (link `Lend`).
             let generic = if lents.is_empty() {
@@ -751,7 +818,11 @@ impl Header<'_> {
             };
             let mut sig = Vec::new();
             if o.resource {
-                sig.push(format!("{} {}_", self.rt_use(LINK, "Handle"), name(&o.name)));
+                sig.push(format!(
+                    "{} {}_",
+                    self.rt_use(LINK, "Handle"),
+                    name(&o.name)
+                ));
             }
             for (n, k) in &ps {
                 sig.push(match lents.iter().position(|l| l == n) {
@@ -762,7 +833,11 @@ impl Header<'_> {
                     }
                     None => {
                         let t = self.borrowed(k)?;
-                        if t.ends_with('&') { format!("{t}{n}") } else { format!("{t} {n}") }
+                        if t.ends_with('&') {
+                            format!("{t}{n}")
+                        } else {
+                            format!("{t} {n}")
+                        }
                     }
                 });
             }
@@ -771,9 +846,16 @@ impl Header<'_> {
             } else {
                 let ty = self.rt_use(LINK, "Lent");
                 let span = self.rt_use(LINK, "span");
-                lents.iter().map(|l| format!("    {ty} {l}_lent_ = {span}({l});\n")).collect()
+                lents
+                    .iter()
+                    .map(|l| format!("    {ty} {l}_lent_ = {span}({l});\n"))
+                    .collect()
             };
-            let h = if o.resource { format!("{}_", name(&o.name)) } else { "HANDLE".into() };
+            let h = if o.resource {
+                format!("{}_", name(&o.name))
+            } else {
+                "HANDLE".into()
+            };
             let c = method_const(o, f, given);
             let m = name(&object_method(o, f));
             let rk = self.g.ret(f)?;
@@ -781,7 +863,11 @@ impl Header<'_> {
                 self.include("utility");
                 let result = self.result(&rk)?;
                 let (output, kept, give) = match &lent {
-                    Some(l) => (format!("std::pair<L, {result}>"), format!("std::move({l})"), format!("{{std::move(lent_), {}}}", self.answer(&rk)?)),
+                    Some(l) => (
+                        format!("std::pair<L, {result}>"),
+                        format!("std::move({l})"),
+                        format!("{{std::move(lent_), {}}}", self.answer(&rk)?),
+                    ),
                     None => {
                         self.include("variant");
                         (result, "std::monostate()".into(), self.answer(&rk)?)
@@ -858,6 +944,9 @@ pub(super) fn hdr(
         rt.push_str("} // namespace _rt\n\n");
     }
     let ns = namespace(g.r, g.here);
-    let _ = write!(out, "\nnamespace {ns} {{\n\n{rt}{body}}} // namespace {ns}\n");
+    let _ = write!(
+        out,
+        "\nnamespace {ns} {{\n\n{rt}{body}}} // namespace {ns}\n"
+    );
     Ok(out)
 }

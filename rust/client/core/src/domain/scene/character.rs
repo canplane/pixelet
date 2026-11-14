@@ -29,9 +29,9 @@ use pxl_spec::asset::character::group::{person, pet};
 pub(crate) use pxl_spec::asset::character::Group;
 use pxl_spec::space::coord::v3;
 use xpute_guest::clock::now;
-use xpute_link::mem;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+use xpute_link::mem;
 
 use crate::domain::scene::animation;
 use crate::domain::scene::frame::Frame;

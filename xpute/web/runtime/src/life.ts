@@ -20,7 +20,11 @@ function take_answer(told: Promise<void>): void {
 
 export function tell_life(link: Sender): void {
   document.addEventListener("visibilitychange", () => {
-    take_answer(document.visibilityState === "hidden" ? life.hidden(link) : life.shown(link));
+    take_answer(
+      document.visibilityState === "hidden"
+        ? life.hidden(link)
+        : life.shown(link),
+    );
   });
 }
 

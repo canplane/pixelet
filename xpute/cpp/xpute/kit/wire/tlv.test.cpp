@@ -81,7 +81,7 @@ XPUTE_TEST(tlv_matches_other_languages) {
     };
     XPUTE_CHECK(w.write_all(vals).ok());
     const std::vector<std::uint8_t> &pkt = w.finish();
-    XPUTE_CHECK_EQ(hex(pkt), v.s("packet"), "the packet is not the other languages' bytes");
+    XPUTE_CHECK_EQ(hex(pkt), v.s("pkt"), "the packet is not the other languages' bytes");
 
     std::vector<tlv::Value> read;
     XPUTE_CHECK(tlv::Reader(pkt).read_all(read).ok());
@@ -92,7 +92,7 @@ XPUTE_TEST(tlv_matches_other_languages) {
     // stopped: the tag `end` read, the input run out between two values, or a
     // fault.
     v.each("end", [&](const std::string &k) {
-        std::vector<std::uint8_t> pkt = v.bytes(k + ".packet");
+        std::vector<std::uint8_t> pkt = v.bytes(k + ".pkt");
         tlv::Reader r(pkt);
         int n = 0;
         std::string stop;
@@ -111,7 +111,7 @@ XPUTE_TEST(tlv_matches_other_languages) {
         XPUTE_CHECK_EQ(std::to_string(n) + ":" + stop, v.s(k + ".read"), k.c_str());
     });
 
-    const std::string &huge_hex = v.s("huge.packet");
+    const std::string &huge_hex = v.s("huge.pkt");
     std::vector<std::uint8_t> huge(huge_hex.size() / 2);
     XPUTE_CHECK(hex_decode(huge_hex, huge).ok());
     std::vector<tlv::Value> none;

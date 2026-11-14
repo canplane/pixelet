@@ -8,12 +8,12 @@
 use core::fmt::Write;
 use core::mem::{offset_of, size_of};
 
-use xpute_link::abi::types::Token;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
+use xpute_link::abi::types::Token;
 
-use crate::spec::perf::task;
 use crate::perf::word::{words, AsWords};
+use crate::spec::perf::task;
 use crate::sys::io::demand::{PhaseList, Source, Stream, PHASE_CAP};
 use crate::sys::io::failure::Exit;
 use crate::sys::io::file::{self, Text, KEY_BYTES};

@@ -3,7 +3,10 @@
 import { afterEach, test, vi } from "vitest";
 import assert from "node:assert/strict";
 
-import { ERRNO_ECANCELED, ERRNO_EINPROGRESS } from "@xpute/kit/status/errno.spec.ts";
+import {
+  ERRNO_ECANCELED,
+  ERRNO_EINPROGRESS,
+} from "@xpute/kit/status/errno.spec.ts";
 import { HANDLE, WAIT_FOR } from "@xpute/link/abi/clocks/monotonic_clock.ts";
 import type { LinkObject, Side, Tag } from "@xpute/link";
 import { serve_clock } from "./clock.ts";
@@ -14,7 +17,11 @@ afterEach(() => {
 
 /** The clock served on a link that keeps what it is given: the monotonic
  * clock, each answer by its tag, and each request's stop. */
-function served(): { clock: LinkObject; answers: [Tag, number][]; stops: Map<Tag, () => void> } {
+function served(): {
+  clock: LinkObject;
+  answers: [Tag, number][];
+  stops: Map<Tag, () => void>;
+} {
   const named = new Map<number, LinkObject>();
   const answers: [Tag, number][] = [];
   const stops = new Map<Tag, () => void>();
@@ -36,8 +43,14 @@ const wait_args = (ns: bigint) => {
 test("a canceled wait stops its timer and answers ECANCELED, and a wait answers once its time has passed", async () => {
   vi.useFakeTimers();
   const { clock, answers, stops } = served();
-  assert.equal(clock.call(WAIT_FOR, 1, wait_args(1_000_000_000n)), ERRNO_EINPROGRESS);
-  assert.equal(clock.call(WAIT_FOR, 2, wait_args(1_000_000n)), ERRNO_EINPROGRESS);
+  assert.equal(
+    clock.call(WAIT_FOR, 1, wait_args(1_000_000_000n)),
+    ERRNO_EINPROGRESS,
+  );
+  assert.equal(
+    clock.call(WAIT_FOR, 2, wait_args(1_000_000n)),
+    ERRNO_EINPROGRESS,
+  );
   stops.get(1)!();
   await vi.advanceTimersByTimeAsync(2_000);
   assert.deepEqual(answers, [

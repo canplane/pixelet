@@ -8,8 +8,8 @@
 
 use crate::sys::io::demand::Order;
 use pxl_content::scatter::COARSEST_STAND;
-use pxl_spec::space::layer::lattice::{demand_dist, draw_dist, Lattice, GROUND};
 use pxl_global::Global;
+use pxl_spec::space::layer::lattice::{demand_dist, draw_dist, Lattice, GROUND};
 
 use pxl_spec::brick::{bricks_zoom, BRICK_SHIFT};
 use pxl_spec::space::camera::eye::Observation;

@@ -3,7 +3,13 @@
 import type { ReactNode } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { type FrameGroup, GROUPS, n1, value_text, zoom_name } from "./column.ts";
+import {
+  type FrameGroup,
+  GROUPS,
+  n1,
+  value_text,
+  zoom_name,
+} from "./column.ts";
 
 const bytes = (b: number) => value_text("_bytes", b);
 import { fail_text } from "./report.ts";

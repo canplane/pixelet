@@ -45,9 +45,11 @@ use std::collections::BTreeSet;
 use std::path::Path;
 
 use super::{
-    align_star, cpp_enum, cpp_member, file, is_ts_ident, js_num, json_str, line_comments, mark,
-    marks, package, package_path, parse, pascal, plural, read, rs_const, rs_doc, rs_enum, rs_field, rs_ident, rs_member, rs_module, screaming, snake, int_of, is_float, is_packed, typed, ts_number, Int, PACKED_TYPE,
-    ts_const, ts_doc, ts_enum, ts_module, Includes, Member, Node, Output, MARKS,
+    align_star, cpp_enum, cpp_member, file, int_of, is_float, is_packed, is_ts_ident, js_num,
+    json_str, line_comments, mark, marks, package, package_path, parse, pascal, plural, read,
+    rs_const, rs_doc, rs_enum, rs_field, rs_ident, rs_member, rs_module, screaming, snake,
+    ts_const, ts_doc, ts_enum, ts_module, ts_number, typed, Includes, Int, Member, Node, Output,
+    MARKS, PACKED_TYPE,
 };
 
 pub struct DataSpec {
@@ -178,7 +180,12 @@ pub fn ts_literal(n: Node, indent: &str) -> Result<String, String> {
 /// `ts_literal`, where a name whose `$type` is one of `enums`, the enums the
 /// spec declares, is its member's number, typed by the enum, as Rust writes
 /// the member.
-fn ts_value(n: &Node, ty: &str, indent: &str, enums: &[(String, Vec<Member>)]) -> Result<String, String> {
+fn ts_value(
+    n: &Node,
+    ty: &str,
+    indent: &str,
+    enums: &[(String, Vec<Member>)],
+) -> Result<String, String> {
     if n.is_wrapper() {
         return ts_value(n.val(), type_of(n, ty), indent, enums);
     }
@@ -191,7 +198,10 @@ fn ts_value(n: &Node, ty: &str, indent: &str, enums: &[(String, Vec<Member>)]) -
         Node::Bool(b) => b.to_string(),
         Node::Str(s) => match enums.iter().find(|(e, _)| e == ty) {
             Some((e, members)) => {
-                let m = members.iter().find(|m| m.name == *s).ok_or(format!("{s} is no {e}"))?;
+                let m = members
+                    .iter()
+                    .find(|m| m.name == *s)
+                    .ok_or(format!("{s} is no {e}"))?;
                 format!("{} as {e}", m.number)
             }
             None => json_str(s),
@@ -223,10 +233,7 @@ fn ts_value(n: &Node, ty: &str, indent: &str, enums: &[(String, Vec<Member>)]) -
                 } else {
                     json_str(k)
                 };
-                lines.push(format!(
-                    "{inner}{key}: {},",
-                    ts_value(v, t, &inner, enums)?
-                ));
+                lines.push(format!("{inner}{key}: {},", ts_value(v, t, &inner, enums)?));
             }
             lines.push(format!("{indent}}}"));
             lines.join("\n")
@@ -301,7 +308,9 @@ impl<'a> Marks<'a> {
 
 /// Whether `n`'s value is a list of names.
 fn is_names(n: &Node) -> bool {
-    n.val().arr().is_some_and(|a| a.iter().all(|e| e.str().is_some()))
+    n.val()
+        .arr()
+        .is_some_and(|a| a.iter().all(|e| e.str().is_some()))
 }
 
 /// Refuses a `$type` that names no primitive, no enum the spec or a spec it
@@ -316,13 +325,20 @@ fn check_types(spec: &Node, declared: &[(String, Node)]) -> Result<(), String> {
             repr_of(n).map_err(|e| format!("{at}: {e}"))?;
         }
         if let Some(r) = n.mark("row") {
-            if r.str().is_none() || n.val().arr().and_then(|a| fields(a).ok().flatten()).is_none() {
+            if r.str().is_none()
+                || n.val()
+                    .arr()
+                    .and_then(|a| fields(a).ok().flatten())
+                    .is_none()
+            {
                 return Err(format!("{at}: `row` names the row of a list of records"));
             }
         }
         if let Some(o) = n.mark("names") {
             if n.str_at("$type") != Some("enum") || !is_names(n) || *o != Node::Bool(true) {
-                return Err(format!("{at}: `names` is true, beside `$type` enum on a list of names"));
+                return Err(format!(
+                    "{at}: `names` is true, beside `$type` enum on a list of names"
+                ));
             }
         }
         if let Some(f) = n.mark("distinct") {
@@ -339,14 +355,19 @@ fn check_types(spec: &Node, declared: &[(String, Node)]) -> Result<(), String> {
             let r = repr_of(n).map_err(|e| format!("{at}: {e}"))?;
             if !r.holds(a.len() as f64 - 1.0) {
                 let cnt = a.len();
-                return Err(format!("{at}: {cnt} members are more than a {} numbers", r.name));
+                return Err(format!(
+                    "{at}: {cnt} members are more than a {} numbers",
+                    r.name
+                ));
             }
             let number = |v: &Node| match v.val() {
                 Node::Arr(x) => x.iter().any(|x| x.num().is_some()),
                 v => v.num().is_some(),
             };
             if a.iter().any(|e| e.named().any(|(_, v)| number(v))) {
-                return Err(format!("{at}: an enum's records hold no number, each marking its `number`"));
+                return Err(format!(
+                    "{at}: an enum's records hold no number, each marking its `number`"
+                ));
             }
         }
         if let Some(ty) = n.str_at("$type") {
@@ -373,7 +394,10 @@ fn check_types(spec: &Node, declared: &[(String, Node)]) -> Result<(), String> {
         }
         match n {
             Node::Obj(entries) => {
-                for (k, v) in entries.iter().filter(|(k, _)| !k.starts_with('$') || k == "$value") {
+                for (k, v) in entries
+                    .iter()
+                    .filter(|(k, _)| !k.starts_with('$') || k == "$value")
+                {
                     walk(v, &format!("{at}.{k}"), enums)?;
                 }
             }
@@ -444,12 +468,7 @@ pub fn enum_members(name: &str, n: &Node) -> Result<Vec<Member>, String> {
 /// A list's members: its names, or its records' `name`s, numbered by their
 /// places, or each by the `number` its record carries where every one
 /// carries one, and documented by its record's `$description`.
-fn list_members(
-    name: &str,
-    a: &[Node],
-    repr: &Int,
-    casing: Casing,
-) -> Result<Vec<Member>, String> {
+fn list_members(name: &str, a: &[Node], repr: &Int, casing: Casing) -> Result<Vec<Member>, String> {
     let numbered = a.iter().filter(|e| e.mark("number").is_some()).count();
     if numbered != 0 && numbered != a.len() {
         return Err(format!(
@@ -462,8 +481,14 @@ fn list_members(
         .map(|(k, e)| {
             let number = e.mark("number").cloned().unwrap_or(Node::Num(k as f64));
             let mut m = vec![marks(vec![("number".to_string(), number)])];
-            m.extend(e.get("$description").map(|d| ("$description".to_string(), d.clone())));
-            (e.str().or(e.str_at("name")).unwrap_or_default(), Node::Obj(m))
+            m.extend(
+                e.get("$description")
+                    .map(|d| ("$description".to_string(), d.clone())),
+            );
+            (
+                e.str().or(e.str_at("name")).unwrap_or_default(),
+                Node::Obj(m),
+            )
         })
         .collect();
     let keys: Vec<(&str, &Node)> = keys.iter().map(|(k, v)| (*k, v)).collect();
@@ -490,12 +515,7 @@ fn numbers(
         .iter()
         .enumerate()
         .all(|(i, a)| numbers[..i].iter().all(|b| b != a));
-    if keys.is_empty()
-        || !distinct
-        || !numbers
-            .iter()
-            .all(|v| v.is_some_and(|v| repr.holds(v)))
-    {
+    if keys.is_empty() || !distinct || !numbers.iter().all(|v| v.is_some_and(|v| repr.holds(v))) {
         return Err(format!(
             "{name}: an enum's members are distinct numbers its `repr` holds, or tables that carry one as `number`"
         ));
@@ -523,7 +543,15 @@ fn rs_items(
     let doc = if n.is_obj() { n.doc() } else { None };
     let mut lines: Vec<String> = Vec::new();
     if n.is_wrapper() {
-        rs_leaf(name, n.val(), type_of(n, ty), &Marks::of(n)?, indent, &mut lines, scope)?;
+        rs_leaf(
+            name,
+            n.val(),
+            type_of(n, ty),
+            &Marks::of(n)?,
+            indent,
+            &mut lines,
+            scope,
+        )?;
     } else if !n.is_obj() {
         rs_leaf(name, n, ty, &Marks::of(n)?, indent, &mut lines, scope)?;
     } else {
@@ -609,7 +637,8 @@ fn rs_recs(
     // A field's type is its own `$type` or the list's: a string's an enum
     // where it names one, as `rs_scalar` writes it.
     let base = |f: &Field| match f.kind {
-        0 => enum_path(f.ty.unwrap_or(ty), scope).map_or("&'static str".to_string(), |(path, _)| path),
+        0 => enum_path(f.ty.unwrap_or(ty), scope)
+            .map_or("&'static str".to_string(), |(path, _)| path),
         1 => "bool".to_string(),
         _ => f.ty.unwrap_or(ty).to_string(),
     };
@@ -965,8 +994,7 @@ fn laid_out(node: Node, used: &[(String, Node)]) -> Result<Node, String> {
     let mut above: Vec<(String, Node)> = Vec::with_capacity(entries.len());
     for (k, v) in entries {
         let v = match v {
-            Node::Obj(_) if is_packed(&v) =>
-            {
+            Node::Obj(_) if is_packed(&v) => {
                 Node::Obj(lay(v.entries().to_vec(), &above, used).map_err(|e| format!("{k}.{e}"))?)
             }
             v => v,
@@ -998,11 +1026,14 @@ fn lay(
             ));
         }
         if v.is_wrapper() && v.get("$type").is_some() {
-            return Err(format!("{k}: a packed table's field is a `{PACKED_TYPE}`, and declares no `$type`"));
+            return Err(format!(
+                "{k}: a packed table's field is a `{PACKED_TYPE}`, and declares no `$type`"
+            ));
         }
         match v {
             Node::Obj(_) if !v.is_wrapper() => {
-                let mut section = lay(v.entries().to_vec(), above, used).map_err(|e| format!("{k}.{e}"))?;
+                let mut section =
+                    lay(v.entries().to_vec(), above, used).map_err(|e| format!("{k}.{e}"))?;
                 let words = words_of(&section).unwrap_or(0.0);
                 let first = section
                     .iter()
@@ -1013,10 +1044,15 @@ fn lay(
                 out.push((k, Node::Obj(section)));
             }
             v => {
-                let width = width(v.val(), above, used).and_then(word).map_err(|e| format!("{k}: {e}"))?;
+                let width = width(v.val(), above, used)
+                    .and_then(word)
+                    .map_err(|e| format!("{k}: {e}"))?;
                 let end = word(at + width).map_err(|e| format!("{k}: it ends at {e}"))?;
                 let off = match v.get("$description") {
-                    Some(d) => Node::Obj(vec![("$description".into(), d.clone()), ("$value".into(), Node::Num(at))]),
+                    Some(d) => Node::Obj(vec![
+                        ("$description".into(), d.clone()),
+                        ("$value".into(), Node::Num(at)),
+                    ]),
                     None => Node::Num(at),
                 };
                 out.push((k, off));
@@ -1120,20 +1156,37 @@ fn keyed(spec: Node, declared: &[(String, Node)]) -> Result<Node, String> {
         };
         let members = declared_members(declared, e).map_err(|err| format!("{k}: `keys` {err}"))?;
         let names: Vec<&str> = v.named().map(|(n, _)| n).collect();
-        let by_place = members.iter().enumerate().all(|(i, m)| m.number == i.to_string());
+        let by_place = members
+            .iter()
+            .enumerate()
+            .all(|(i, m)| m.number == i.to_string());
         if !by_place || names != members.iter().map(|m| m.name.as_str()).collect::<Vec<_>>() {
-            return Err(format!("{k}: its keys are {e}'s members, in their order, numbered by place"));
+            return Err(format!(
+                "{k}: its keys are {e}'s members, in their order, numbered by place"
+            ));
         }
         let mut list: Vec<(String, Node)> = v
             .entries()
             .iter()
             .filter(|(f, _)| f.starts_with('$') && f != "$description")
-            .map(|(f, x)| (f.clone(), if f == "$extensions" { without(x, "keys") } else { x.clone() }))
+            .map(|(f, x)| {
+                (
+                    f.clone(),
+                    if f == "$extensions" {
+                        without(x, "keys")
+                    } else {
+                        x.clone()
+                    },
+                )
+            })
             .collect();
         let mut doc = v.doc().unwrap_or_default();
         doc.push(format!("By `{e}`'s number."));
         list.push(("$description".into(), Node::Str(doc.join("\n"))));
-        list.push(("$value".into(), Node::Arr(v.named().map(|(_, x)| x.clone()).collect())));
+        list.push((
+            "$value".into(),
+            Node::Arr(v.named().map(|(_, x)| x.clone()).collect()),
+        ));
         out.push((k, Node::Obj(list)));
     }
     Ok(Node::Obj(out))
@@ -1141,7 +1194,10 @@ fn keyed(spec: Node, declared: &[(String, Node)]) -> Result<Node, String> {
 
 /// The enums this spec or a spec it uses declares, each by its key.
 fn declared_enums(declared: &[(String, Node)]) -> impl Iterator<Item = (&str, &Node)> {
-    declared.iter().filter(|(_, n)| n.str_at("$type") == Some("enum")).map(|(k, n)| (k.as_str(), n))
+    declared
+        .iter()
+        .filter(|(_, n)| n.str_at("$type") == Some("enum"))
+        .map(|(k, n)| (k.as_str(), n))
 }
 
 /// `extensions`, a node's `$extensions`, without xpute's mark `name`; none
@@ -1151,7 +1207,10 @@ fn without(extensions: &Node, name: &str) -> Node {
         .entries()
         .iter()
         .map(|(k, x)| match x {
-            Node::Obj(m) if k == MARKS => (k.clone(), Node::Obj(m.iter().filter(|(f, _)| f != name).cloned().collect())),
+            Node::Obj(m) if k == MARKS => (
+                k.clone(),
+                Node::Obj(m.iter().filter(|(f, _)| f != name).cloned().collect()),
+            ),
             x => (k.clone(), x.clone()),
         })
         .filter(|(_, x)| *x != Node::Obj(Vec::new()))
@@ -1163,7 +1222,9 @@ fn without(extensions: &Node, name: &str) -> Node {
 fn declared_members(declared: &[(String, Node)], e: &str) -> Result<Vec<Member>, String> {
     let (key, list) = declared_enums(declared)
         .find(|(k, _)| pascal(k) == e)
-        .ok_or(format!("{e} is no enum this spec or a spec it uses declares"))?;
+        .ok_or(format!(
+            "{e} is no enum this spec or a spec it uses declares"
+        ))?;
     enum_members(key, list)
 }
 
@@ -1185,24 +1246,38 @@ fn expanded(n: Node, declared: &[(String, Node)]) -> Result<Node, String> {
             continue;
         };
         let (Some(e), Some(numbered)) = (each.str_at("enum"), each.str_at("number")) else {
-            return Err(format!("{k}: `each` names an enum and the field its number takes"));
+            return Err(format!(
+                "{k}: `each` names an enum and the field its number takes"
+            ));
         };
         let members = declared_members(declared, e).map_err(|err| format!("{k}: `each` {err}"))?;
         let names: Vec<String> = members.iter().map(|m| screaming(&m.name)).collect();
         let mut own: Vec<&(String, Node)> = Vec::new();
-        let stripped = v.get("$extensions").map(|x| ("$extensions".to_string(), without(x, "each")));
-        for field @ (f, x) in v.entries().iter().filter(|(f, _)| f != "$extensions").chain(&stripped) {
+        let stripped = v
+            .get("$extensions")
+            .map(|x| ("$extensions".to_string(), without(x, "each")));
+        for field @ (f, x) in v
+            .entries()
+            .iter()
+            .filter(|(f, _)| f != "$extensions")
+            .chain(&stripped)
+        {
             let table = x.is_obj() && !x.is_wrapper();
             match (names.contains(f), table) {
                 (true, true) => {}
                 (true, false) => return Err(format!("{k}.{f}: not a table")),
-                (false, true) if !f.starts_with('$') => return Err(format!("{k}.{f}: names no member of {e}")),
+                (false, true) if !f.starts_with('$') => {
+                    return Err(format!("{k}.{f}: names no member of {e}"))
+                }
                 (false, _) => own.push(field),
             }
         }
         for m in &members {
             let name = screaming(&m.name);
-            let number: f64 = m.number.parse().map_err(|_| format!("{k}: {e}'s {} has no number", m.name))?;
+            let number: f64 = m
+                .number
+                .parse()
+                .map_err(|_| format!("{k}: {e}'s {} has no number", m.name))?;
             let mut fields: Vec<(String, Node)> = own.iter().map(|&f| f.clone()).collect();
             fields.push((numbered.to_string(), Node::Num(number)));
             for (f, x) in v.get(&name).map(Node::entries).unwrap_or_default() {
@@ -1225,7 +1300,10 @@ fn expanded(n: Node, declared: &[(String, Node)]) -> Result<Node, String> {
 fn check_distinct(n: &Node, at: &str, field: Option<&str>) -> Result<(), String> {
     let field = n.mark("distinct").and_then(Node::str).or(field);
     if let Some(f) = field {
-        let held: Vec<(&str, &Node)> = n.named().filter_map(|(k, v)| Some((k, v.get(f)?.val()))).collect();
+        let held: Vec<(&str, &Node)> = n
+            .named()
+            .filter_map(|(k, v)| Some((k, v.get(f)?.val())))
+            .collect();
         if let Some(i) = (1..held.len()).find(|&i| held[..i].iter().any(|(_, x)| *x == held[i].1)) {
             return Err(format!("{at}.{}: its {f} is a sibling's too", held[i].0));
         }
@@ -1273,7 +1351,10 @@ fn types(n: &Node) -> BTreeSet<String> {
     fn walk(n: &Node, out: &mut BTreeSet<String>) {
         out.extend(n.str_at("$type").map(String::from));
         match n {
-            Node::Obj(entries) => entries.iter().filter(|(k, _)| !k.starts_with('$') || k == "$value").for_each(|(_, v)| walk(v, out)),
+            Node::Obj(entries) => entries
+                .iter()
+                .filter(|(k, _)| !k.starts_with('$') || k == "$value")
+                .for_each(|(_, v)| walk(v, out)),
             Node::Arr(a) => a.iter().for_each(|v| walk(v, out)),
             _ => {}
         }
@@ -1333,7 +1414,9 @@ type Used = (String, Vec<(String, Node)>);
 
 /// The names the used specs give, as one list.
 fn flat(used: &[Used]) -> Vec<(String, Node)> {
-    used.iter().flat_map(|(_, names)| names.iter().cloned()).collect()
+    used.iter()
+        .flat_map(|(_, names)| names.iter().cloned())
+        .collect()
 }
 
 /// Every file that `specs` write, each read from its JSON, with paths relative
@@ -1341,7 +1424,12 @@ fn flat(used: &[Used]) -> Vec<(String, Node)> {
 pub fn outputs_at(root: &Path, specs: &[DataSpec]) -> Result<Vec<Output>, String> {
     let mut outputs = Vec::new();
     for d in specs {
-        outputs.extend(table_outputs(root, d, parse(&root.join(d.json).to_string_lossy())?, specs)?);
+        outputs.extend(table_outputs(
+            root,
+            d,
+            parse(&root.join(d.json).to_string_lossy())?,
+            specs,
+        )?);
     }
     Ok(outputs)
 }
@@ -1367,7 +1455,9 @@ pub fn table_outputs(
     let spec = expanded(spec, &declared).map_err(|e| format!("{}: {e}", d.json))?;
     let spec = typed(spec).map_err(|e| format!("{}: {e}", d.json))?;
     check_types(&spec, &declared).map_err(|e| format!("{}: {e}", d.json))?;
-    spec.named().try_for_each(|(k, v)| check_distinct(v, k, None)).map_err(|e| format!("{}: {e}", d.json))?;
+    spec.named()
+        .try_for_each(|(k, v)| check_distinct(v, k, None))
+        .map_err(|e| format!("{}: {e}", d.json))?;
     if let Some(k) = spec
         .named()
         .map(|(k, _)| k)
@@ -1394,7 +1484,11 @@ pub fn table_outputs(
 }
 
 fn head(shown: &str, json: &str, spec: &Node) -> Vec<String> {
-    let mut out = vec![format!("// {shown}"), "//".into(), format!("// {}", mark(json, "xpute-gen data.rs"))];
+    let mut out = vec![
+        format!("// {shown}"),
+        "//".into(),
+        format!("// {}", mark(json, "xpute-gen data.rs")),
+    ];
     if let Some(doc) = spec.doc() {
         out.push("//".into());
         out.extend(line_comments(&doc, ""));
@@ -1416,7 +1510,8 @@ fn ts_outputs(
     let named = types(spec);
     let mut imports = Vec::new();
     for f in foreign.iter().filter(|f| named.contains(&f.name)) {
-        let from = f.ts.ok_or(format!("{}: a spec it uses writes no TypeScript", d.json))?;
+        let from =
+            f.ts.ok_or(format!("{}: a spec it uses writes no TypeScript", d.json))?;
         let here = root.join(ts_path);
         let module = ts_module(here.parent().unwrap_or(root), root, from)?;
         imports.push(format!("import type {{ {} }} from \"{module}\";", f.name));
@@ -1447,7 +1542,9 @@ fn ts_outputs(
         let names = enumed && is_names(n);
         let bare = enumed
             && (names
-                || !n.is_wrapper() && n.named().all(|(_, v)| !v.is_obj() || v.named().next().is_none()));
+                || !n.is_wrapper()
+                    && n.named()
+                        .all(|(_, v)| !v.is_obj() || v.named().next().is_none()));
         let members = if enumed {
             enum_members(name, n)?
         } else {
@@ -1523,7 +1620,11 @@ fn numbered(n: &Node, members: &[Member]) -> Node {
             entries
                 .iter()
                 .map(|(k, v)| {
-                    let v = if k == "$value" { rows.clone() } else { v.clone() };
+                    let v = if k == "$value" {
+                        rows.clone()
+                    } else {
+                        v.clone()
+                    };
                     (k.clone(), v)
                 })
                 .collect(),
@@ -1543,7 +1644,9 @@ fn rs_outputs(
     let shown = package_path(root, rs_path)?;
     let mut rs = head(&shown, d.json, spec);
     // The spec's own enums, which the module names by their name alone.
-    let enums = declared_enums(spec.entries()).map(|(k, n)| (pascal(k), casing(n))).collect();
+    let enums = declared_enums(spec.entries())
+        .map(|(k, n)| (pascal(k), casing(n)))
+        .collect();
     // A foreign enum a `$type` names is its spec's own output's, `use`d by
     // its module.
     let named = types(spec);
@@ -1552,8 +1655,13 @@ fn rs_outputs(
         .iter()
         .filter(|f| named.contains(&f.name))
         .map(|f| {
-            let rs = f.rs.ok_or(format!("{}: a spec it uses writes no Rust", d.json))?;
-            Ok((f.name.clone(), f.casing, format!("{}::{}", rs_module(&here, root, rs)?, f.name)))
+            let rs =
+                f.rs.ok_or(format!("{}: a spec it uses writes no Rust", d.json))?;
+            Ok((
+                f.name.clone(),
+                f.casing,
+                format!("{}::{}", rs_module(&here, root, rs)?, f.name),
+            ))
         })
         .collect::<Result<_, String>>()?;
     let scope = Scope {
@@ -1610,10 +1718,18 @@ fn cpp_items(
     inc: &mut Includes,
 ) -> Result<(), String> {
     let mut lines: Vec<String> = Vec::new();
-    if let Some(numbers) = n.val().arr().filter(|a| !a.is_empty()).and_then(|a| a.iter().map(Node::num).collect::<Option<Vec<_>>>()) {
+    if let Some(numbers) = n
+        .val()
+        .arr()
+        .filter(|a| !a.is_empty())
+        .and_then(|a| a.iter().map(Node::num).collect::<Option<Vec<_>>>())
+    {
         let (ty, suffix) = cpp_number(name, type_of(n, ty), inc)?;
         inc.insert("array");
-        let items: Vec<String> = numbers.iter().map(|v| format!("{}{suffix}", js_num(*v))).collect();
+        let items: Vec<String> = numbers
+            .iter()
+            .map(|v| format!("{}{suffix}", js_num(*v)))
+            .collect();
         lines.push(format!(
             "inline constexpr std::array<{ty}, {}> {name}{{{}}};",
             items.len(),
@@ -1622,15 +1738,28 @@ fn cpp_items(
     } else if let Node::Arr(list) = n.val() {
         let names = list
             .iter()
-            .map(|v| v.str().ok_or(format!("{name}: a C++ list takes names only")))
+            .map(|v| {
+                v.str()
+                    .ok_or(format!("{name}: a C++ list takes names only"))
+            })
             .collect::<Result<Vec<_>, _>>()?;
         let enumed = type_of(n, ty) == "enum";
         if enumed {
             let repr = repr_of(n)?;
-            cpp_enum(name, &list_members(name, list, repr, cpp_member)?, repr.cpp, &mut lines, inc);
+            cpp_enum(
+                name,
+                &list_members(name, list, repr, cpp_member)?,
+                repr.cpp,
+                &mut lines,
+                inc,
+            );
         }
         if !enumed || names_read(n) {
-            let key = if enumed { plural(name) } else { name.to_string() };
+            let key = if enumed {
+                plural(name)
+            } else {
+                name.to_string()
+            };
             inc.extend(["array", "string_view"]);
             let quoted: Vec<String> = names.iter().map(|v| json_str(v)).collect();
             lines.extend(enumed.then(String::new));
@@ -1690,18 +1819,28 @@ fn cpp_leaf(name: &str, v: &Node, t: &str, inc: &mut Includes) -> Result<String,
             return Err(format!("{name}: a C++ header takes no string typed {t}"));
         }
         inc.insert("string_view");
-        return Ok(format!("inline constexpr std::string_view {name} = {};", json_str(s)));
+        return Ok(format!(
+            "inline constexpr std::string_view {name} = {};",
+            json_str(s)
+        ));
     }
-    let number = v
-        .num()
-        .ok_or(format!("{name}: a C++ header takes numbers and strings only"))?;
+    let number = v.num().ok_or(format!(
+        "{name}: a C++ header takes numbers and strings only"
+    ))?;
     let (ty, suffix) = cpp_number(name, t, inc)?;
-    Ok(format!("inline constexpr {ty} {name} = {}{suffix};", js_num(number)))
+    Ok(format!(
+        "inline constexpr {ty} {name} = {}{suffix};",
+        js_num(number)
+    ))
 }
 
 /// A number's C++ type for its integer `$type` (`INTS`), and its literal's
 /// suffix, its header included.
-fn cpp_number(name: &str, t: &str, inc: &mut Includes) -> Result<(&'static str, &'static str), String> {
+fn cpp_number(
+    name: &str,
+    t: &str,
+    inc: &mut Includes,
+) -> Result<(&'static str, &'static str), String> {
     let i = int_of(t).ok_or(format!("{name}: a C++ header takes an integer, not {t}"))?;
     inc.insert(i.header);
     Ok((i.cpp, i.suffix))
