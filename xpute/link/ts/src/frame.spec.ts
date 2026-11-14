@@ -9,8 +9,8 @@
 // them. An answer carries 0 or a negative errno, its value in its packet. The method's args, a packet in the Canonical ABI's layout,
 // lie right past the words, and PKT says how long they are (link/wit/types.wit). ROOT
 // is the handle every side serves, OPEN and CANCEL its methods, DROP the method every handle
-// has, NAMED marks an interface's handle, and SLOT_BITS splits an issued handle into its
-// slot and its generation.
+// has, NAMED marks an interface's handle, SLOT_BITS splits an issued handle into its
+// slot and its generation, and TRAP and TRAP_AT are a native guest's stop.
 
 /** The request, which a later answer carries back. */
 export const TAG = 0 as number;
@@ -54,3 +54,9 @@ export const NAMED = 4194304 as number;
 
 /** The bits of a handle that name its slot, below its generation. */
 export const SLOT_BITS = 20 as number;
+
+/** What a native guest's export answers where the guest stopped, caught at the export so nothing leaves into its caller: as a module's trap. The guest is over, and its host enters it no more. */
+export const TRAP = -2147483648 as number;
+
+/** What a native guest's link_init answers in its layout's place where the guest stopped, as TRAP is for its other exports. */
+export const TRAP_AT = 4294967295 as number;

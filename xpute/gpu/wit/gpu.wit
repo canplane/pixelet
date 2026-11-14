@@ -20,10 +20,9 @@ interface gpu {
   get-device: func() -> device;
 
   resource device {
-    // Lends `block` (gpu/link/spec api.json DEVICE) for the host to write
-    // while a device is held: its limits, features, unfinished frames and
-    // STATUS, each a word of one writer, which the guest loads with acquire.
-    // It answers when the device is lost, and the block is the guest's again.
+    // Lends `block` (gpu/link/spec api.json DEVICE, which lays it out) for the
+    // host to write while a device is held. It answers when the device is
+    // lost, and the block is the guest's again.
     lost: async func(block: lent);
     // Asks for a device, and answers once it is ready, its block written.
     ready: async func() -> result<_, error-code>;

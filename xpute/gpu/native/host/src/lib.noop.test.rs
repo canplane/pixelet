@@ -11,7 +11,7 @@ use super::belt::Belt;
 use super::object::Object;
 use super::*;
 
-const CHUNK_BYTES: u64 = 64;
+const CHUNK_SZ: u64 = 64;
 
 fn host(
     adapter: wgpu::Adapter,
@@ -23,7 +23,7 @@ fn host(
         preferred_format: wgpu::TextureFormat::Bgra8Unorm,
         configure_at: ConfigureAt::Here,
         frame_latency,
-        upload_chunk_bytes: CHUNK_BYTES,
+        upload_chunk_sz: CHUNK_SZ,
         slow_ms: None,
         present_mode: wgpu::PresentMode::Fifo,
     };
@@ -56,10 +56,10 @@ fn device() -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
 #[test]
 fn pool_never_grows() {
     let (_, device, queue) = device();
-    let mut belt = Belt::new(&device, CHUNK_BYTES, 3);
+    let mut belt = Belt::new(&device, CHUNK_SZ, 3);
     for _ in 0..3 {
-        let (_, at, n) = belt.take(CHUNK_BYTES).expect("a free chunk");
-        assert_eq!((at, n), (0, CHUNK_BYTES));
+        let (_, at, n) = belt.take(CHUNK_SZ).expect("a free chunk");
+        assert_eq!((at, n), (0, CHUNK_SZ));
     }
     assert!(belt.take(4).is_none(), "every chunk taken");
     belt.finish();
@@ -72,7 +72,7 @@ fn pool_never_grows() {
         "mapped again once the queue's work is done"
     );
     for _ in 0..3 {
-        assert!(belt.take(CHUNK_BYTES).is_some(), "a chunk back");
+        assert!(belt.take(CHUNK_SZ).is_some(), "a chunk back");
     }
     assert!(belt.take(4).is_none(), "and no more than the pool");
 }
@@ -82,7 +82,7 @@ fn pool_never_grows() {
 #[test]
 fn take_keeps_alignment() {
     let (_, device, _) = device();
-    let mut belt = Belt::new(&device, CHUNK_BYTES, 1);
+    let mut belt = Belt::new(&device, CHUNK_SZ, 1);
     assert_eq!(belt.take(4).map(|(_, at, n)| (at, n)), Some((0, 4)));
     assert_eq!(belt.take(100).map(|(_, at, n)| (at, n)), Some((8, 56)));
     assert!(belt.take(4).is_none(), "the one chunk full");
@@ -94,7 +94,7 @@ fn take_keeps_alignment() {
 fn write_waits_for_chunks() {
     let (adapter, device, queue) = device();
     let mut h = host(adapter, &device, queue, 1);
-    let size = 5 * CHUNK_BYTES;
+    let size = 5 * CHUNK_SZ;
     let target = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size,
@@ -111,7 +111,7 @@ fn write_waits_for_chunks() {
     let _ = device.poll(wgpu::PollType::wait_indefinitely());
     for _ in 0..2 {
         assert!(
-            h.belt.take(CHUNK_BYTES).is_some(),
+            h.belt.take(CHUNK_SZ).is_some(),
             "a chunk a frame and one more"
         );
     }

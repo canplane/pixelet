@@ -146,8 +146,8 @@ impl<R: Range> SlabMalloc<R> {
         self.buddy.live()
     }
 
-    pub fn range_bytes(&self) -> usize {
-        self.buddy.range_bytes()
+    pub fn range_sz(&self) -> usize {
+        self.buddy.range_sz()
     }
 
     /// Counts only the blocks given back to the buddy, not a slot freed into
@@ -208,26 +208,26 @@ impl<R: Range> SlabMalloc<R> {
     }
 
     unsafe fn open_run(&self, c: usize) -> *mut Run {
-        let run_bytes = 1usize << Self::run_log2(c);
+        let run_sz = 1usize << Self::run_log2(c);
         // SAFETY: the buddy's own range.
-        let at = unsafe { self.buddy.malloc(run_bytes) };
+        let at = unsafe { self.buddy.malloc(run_sz) };
         if at.is_null() {
             return ptr::null_mut();
         }
-        let class = 1usize << class_log2(c);
+        let class_sz = 1usize << class_log2(c);
         let mut next: *mut u8 = ptr::null_mut();
         // The free list is built from the last slot back, so the first slots
         // handed out have the lowest addresses.
         let mut i = Self::slots(c);
         while i > Self::head_slots(c) {
             i -= 1;
-            let slot = unsafe { at.add(i * class) };
+            let slot = unsafe { at.add(i * class_sz) };
             // SAFETY: the slot is free, and a class is at least one pointer.
             unsafe { *(slot as *mut *mut u8) = next };
             next = slot;
         }
         // SAFETY: single-threaded; see the Sync impl.
-        unsafe { *self.run_live.get() += run_bytes };
+        unsafe { *self.run_live.get() += run_sz };
         let run = at as *mut Run;
         // SAFETY: the run's leading slots, which head_slots keeps for this.
         unsafe {
@@ -329,9 +329,9 @@ unsafe impl<R: Range> GlobalAlloc for SlabMalloc<R> {
             return unsafe { self.buddy.free(ptr, layout.size()) };
         };
 
-        let run_bytes = 1usize << Self::run_log2(c);
+        let run_sz = 1usize << Self::run_log2(c);
         let base = R::base();
-        let run = (base + ((ptr as usize - base) & !(run_bytes - 1))) as *mut Run;
+        let run = (base + ((ptr as usize - base) & !(run_sz - 1))) as *mut Run;
 
         // SAFETY: the caller's — a slot of this run, of this class.
         unsafe {
@@ -345,8 +345,8 @@ unsafe impl<R: Range> GlobalAlloc for SlabMalloc<R> {
                 if !was_full {
                     self.drop_partial(c, run);
                 }
-                *self.run_live.get() -= run_bytes;
-                self.buddy.free(run as *mut u8, run_bytes);
+                *self.run_live.get() -= run_sz;
+                self.buddy.free(run as *mut u8, run_sz);
             } else if was_full {
                 self.push_partial(c, run);
             }

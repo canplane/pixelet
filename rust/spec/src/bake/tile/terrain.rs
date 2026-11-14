@@ -11,7 +11,7 @@ use std::collections::TryReserveError;
 
 use super::{occupancy_of, Occupancy, Tile};
 use crate::bake::malformed;
-use crate::bake::publication::BaseLayer;
+use crate::bake::publication::BaseKind;
 use crate::bake::separation::{self, Separation};
 use crate::procedural::Frame;
 use crate::space::coord::zoom::Zoom;
@@ -282,7 +282,7 @@ static VOID_CELLS: std::sync::LazyLock<Vec<GroundId>> =
     std::sync::LazyLock::new(|| vec![Sentinel::Void as GroundId; GROUND_COLUMN]);
 
 impl Tile for TerrainTile {
-    const LAYER: BaseLayer = BaseLayer::Terrain;
+    const KIND: BaseKind = BaseKind::Terrain;
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy

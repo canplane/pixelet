@@ -6,7 +6,7 @@ use std::sync::OnceLock;
 
 const MIN: usize = 12;
 const MAX: usize = 20;
-const SPLIT_BYTES: usize = (1 << (MAX - MIN)) / 8;
+const SPLIT_SZ: usize = (1 << (MAX - MIN)) / 8;
 
 /// `arena` reserves a test's range once and never frees it. `Range`'s
 /// functions take no receiver, so the base lives in a static, and the
@@ -28,8 +28,8 @@ macro_rules! range {
         impl Range for $name {
             const MIN_LOG2: usize = MIN;
             const MAX_LOG2: usize = MAX;
-            type Split = [u8; SPLIT_BYTES];
-            const SPLIT_INIT: Self::Split = [0; SPLIT_BYTES];
+            type Split = [u8; SPLIT_SZ];
+            const SPLIT_INIT: Self::Split = [0; SPLIT_SZ];
             fn base() -> usize {
                 arena(&$cell)
             }
@@ -135,7 +135,7 @@ fn oversize_refused() {
         );
     }
     assert!(
-        heap.live() <= heap.range_bytes(),
+        heap.live() <= heap.range_sz(),
         "more is live than the range has"
     );
 

@@ -1,14 +1,14 @@
 // @pxl/client/service/origin/route.ts
 
 import * as origin from "@/service/platform/origin.ts";
-import { type BASE_LAYERS } from "@/abi/publication.spec.ts";
+import { type BASE_KINDS } from "@/abi/publication.spec.ts";
 import { SITE_URL, TILE_ROOT } from "./route.spec.ts";
 
 /** The URL of a bake's object, `<tile root>/<layer>/<version>/<name>`. The
  * object carries the version the source declares for it
  * (service/sys/fs/tile.ts). */
 export function tile_url(
-  layer: (typeof BASE_LAYERS)[number],
+  layer: (typeof BASE_KINDS)[number],
   object: string,
 ): string {
   return `${TILE_ROOT}/${layer}/${object}`;

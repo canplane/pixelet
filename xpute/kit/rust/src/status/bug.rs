@@ -40,7 +40,7 @@ pub fn bug(errnum: Errno, a: u64, b: u64) -> ! {
     if let Some(report) = REPORT.get() {
         report(errnum, at, a, b);
     }
-    // The report is all the runtime is told, so a WebAssembly module traps
+    // The report is all the host is told, so a WebAssembly module traps
     // at once and spends nothing on formatting a panic message.
     #[cfg(target_arch = "wasm32")]
     core::arch::wasm32::unreachable();

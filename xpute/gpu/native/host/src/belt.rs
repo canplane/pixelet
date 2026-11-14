@@ -30,22 +30,22 @@ struct Chunk {
 
 pub(super) struct Belt {
     chunks: Vec<Chunk>,
-    chunk_bytes: u64,
+    chunk_sz: u64,
     /// This is the chunk being written, and its first byte not yet taken.
     cur: Option<(usize, u64)>,
 }
 
 impl Belt {
-    pub(super) fn new(device: &wgpu::Device, chunk_bytes: u64, chunk_cnt: u32) -> Belt {
+    pub(super) fn new(device: &wgpu::Device, chunk_sz: u64, chunk_cnt: u32) -> Belt {
         assert!(
-            chunk_bytes > 0 && chunk_bytes.is_multiple_of(wgpu::MAP_ALIGNMENT),
-            "[gpu] an upload chunk of {chunk_bytes} bytes"
+            chunk_sz > 0 && chunk_sz.is_multiple_of(wgpu::MAP_ALIGNMENT),
+            "[gpu] an upload chunk of {chunk_sz} bytes"
         );
         let chunks = (0..chunk_cnt)
             .map(|_| Chunk {
                 buffer: device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("upload chunk"),
-                    size: chunk_bytes,
+                    size: chunk_sz,
                     usage: wgpu::BufferUsages::MAP_WRITE | wgpu::BufferUsages::COPY_SRC,
                     mapped_at_creation: true,
                 }),
@@ -54,7 +54,7 @@ impl Belt {
             .collect();
         Belt {
             chunks,
-            chunk_bytes,
+            chunk_sz,
             cur: None,
         }
     }
@@ -64,7 +64,7 @@ impl Belt {
     /// and the byte count. It answers none where no chunk is free.
     pub(super) fn take(&mut self, want: u64) -> Option<(wgpu::Buffer, u64, u64)> {
         let (k, at) = match self.cur {
-            Some((k, at)) if at < self.chunk_bytes => (k, at),
+            Some((k, at)) if at < self.chunk_sz => (k, at),
             _ => {
                 let k = self
                     .chunks
@@ -74,11 +74,11 @@ impl Belt {
                 (k, 0)
             }
         };
-        let n = want.min(self.chunk_bytes - at);
+        let n = want.min(self.chunk_sz - at);
         // Each mapped range begins at the mapping's alignment, so the next
         // piece does too.
         let next = (at + n).next_multiple_of(wgpu::MAP_ALIGNMENT);
-        self.cur = Some((k, next.min(self.chunk_bytes)));
+        self.cur = Some((k, next.min(self.chunk_sz)));
         Some((self.chunks[k].buffer.clone(), at, n))
     }
 

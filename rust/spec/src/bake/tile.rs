@@ -8,7 +8,7 @@ use xpute_kit::status::error::XputeError;
 use xpute_kit::wire::xtp::{HDR_SZ, WORD_SZ};
 
 use crate::bake::malformed;
-use crate::bake::publication::BaseLayer;
+use crate::bake::publication::BaseKind;
 use crate::space::coord::zoom::{Zoom, LEAF_ZOOM};
 use crate::space::layer::lattice::{coarsest, Lattice, GROUND};
 
@@ -59,7 +59,7 @@ pub mod pkt {
     }
 }
 
-/// What each kind's tiles are, the one table of them (`BaseLayer::row`).
+/// What each kind's tiles are, the one table of them (`BaseKind::row`).
 pub struct Row {
     /// How its tiles lie on the camera grid, which says what part of the grid
     /// a tile at each zoom draws.
@@ -72,13 +72,13 @@ pub struct Row {
     pub pkt_cap: usize,
 }
 
-impl BaseLayer {
+impl BaseKind {
     pub const fn row(self) -> Row {
         let (lattice, leaf, pkt_cap) = match self {
-            BaseLayer::Terrain => (GROUND, LEAF_ZOOM, terrain::MAX_PKT_BYTES),
-            BaseLayer::Place => (place::PLACE_LATTICE, LEAF_ZOOM, place::MAX_PKT_BYTES),
-            BaseLayer::Division => (GROUND, division::DIVISION_LEAF, division::MAX_PKT_BYTES),
-            BaseLayer::Earth => (GROUND, earth::EARTH_ZOOM, earth::PKT_BYTES),
+            BaseKind::Terrain => (GROUND, LEAF_ZOOM, terrain::MAX_PKT_BYTES),
+            BaseKind::Place => (place::PLACE_LATTICE, LEAF_ZOOM, place::MAX_PKT_BYTES),
+            BaseKind::Division => (GROUND, division::DIVISION_LEAF, division::MAX_PKT_BYTES),
+            BaseKind::Earth => (GROUND, earth::EARTH_ZOOM, earth::PKT_BYTES),
         };
         Row {
             lattice,
@@ -91,11 +91,11 @@ impl BaseLayer {
 /// A kind's tile as a type, the client's and the bake's alike: its row, and
 /// what the tile says of its children.
 pub trait Tile {
-    const LAYER: BaseLayer;
+    const KIND: BaseKind;
 
-    const LATTICE: Lattice = Self::LAYER.row().lattice;
+    const LATTICE: Lattice = Self::KIND.row().lattice;
 
-    const LEAF: Zoom = Self::LAYER.row().leaf;
+    const LEAF: Zoom = Self::KIND.row().leaf;
 
     /// The coarsest zoom the kind's tiles are read at, up to which the bake
     /// folds them (`lattice::coarsest`).

@@ -70,7 +70,7 @@ template <Range R> class SlabMalloc {
 
     std::size_t peak() const noexcept { return buddy_.peak(); }
     std::size_t live() const noexcept { return buddy_.live(); }
-    std::size_t range_bytes() const noexcept { return buddy_.range_bytes(); }
+    std::size_t range_sz() const noexcept { return buddy_.range_sz(); }
     std::uint32_t releases() const noexcept { return buddy_.releases(); }
     std::size_t largest_free() const noexcept { return buddy_.largest_free(); }
     std::size_t allocs() const noexcept { return allocs_; }
@@ -111,9 +111,9 @@ template <Range R> class SlabMalloc {
             buddy_.free(at, bytes);
             return;
         }
-        std::size_t run_bytes = std::size_t{1} << run_log2(c);
+        std::size_t run_sz = std::size_t{1} << run_log2(c);
         std::uintptr_t base = R::base();
-        Run *run = reinterpret_cast<Run *>(base + ((reinterpret_cast<std::uintptr_t>(at) - base) & ~(run_bytes - 1)));
+        Run *run = reinterpret_cast<Run *>(base + ((reinterpret_cast<std::uintptr_t>(at) - base) & ~(run_sz - 1)));
         std::uint8_t *slot = static_cast<std::uint8_t *>(at);
         bool was_full = run->free == nullptr;
         set_next(slot, run->free);
@@ -125,8 +125,8 @@ template <Range R> class SlabMalloc {
             // where any class can have its pages, rather than staying with
             // this class.
             if (!was_full) drop_partial(c, run);
-            run_live_ -= run_bytes;
-            buddy_.free(run, run_bytes);
+            run_live_ -= run_sz;
+            buddy_.free(run, run_sz);
         } else if (was_full) {
             push_partial(c, run);
         }
@@ -152,19 +152,19 @@ template <Range R> class SlabMalloc {
     static void set_next(std::uint8_t *slot, std::uint8_t *next) noexcept { *reinterpret_cast<std::uint8_t **>(slot) = next; }
 
     Run *open_run(std::size_t c) noexcept {
-        std::size_t run_bytes = std::size_t{1} << run_log2(c);
-        auto *at = static_cast<std::uint8_t *>(buddy_.malloc(run_bytes));
+        std::size_t run_sz = std::size_t{1} << run_log2(c);
+        auto *at = static_cast<std::uint8_t *>(buddy_.malloc(run_sz));
         if (at == nullptr) return nullptr;
-        std::size_t cls = std::size_t{1} << class_log2(c);
+        std::size_t class_sz = std::size_t{1} << class_log2(c);
         std::uint8_t *next = nullptr;
         // The free list is built from the last slot back, so the first slots
         // handed out have the lowest addresses.
         for (std::size_t i = slots(c); i > head_slots(c);) {
             i--;
-            set_next(at + i * cls, next);
-            next = at + i * cls;
+            set_next(at + i * class_sz, next);
+            next = at + i * class_sz;
         }
-        run_live_ += run_bytes;
+        run_live_ += run_sz;
         Run *run = reinterpret_cast<Run *>(at);
         run->free = next;
         run->inuse = 0;

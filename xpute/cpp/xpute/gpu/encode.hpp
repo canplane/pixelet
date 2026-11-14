@@ -330,7 +330,7 @@ template <class F> bool emit(Stream &stream, std::uint32_t op, F &&put) noexcept
 
 // This is the room a record takes of a stream, its op and count words
 // included, counted as `emit` writes it.
-template <class F> std::uint64_t rec_size(F &&put) noexcept {
+template <class F> std::uint64_t rec_sz(F &&put) noexcept {
     Count count;
     put(count);
     return (2 + std::uint64_t{count.n}) * WORD;
@@ -451,8 +451,8 @@ template <std::size_t N> class Gpu {
 
     // This is the room `shader_module` takes of a stream, for `Stream::fits`,
     // so that a caller making several modules can ask before each one.
-    static std::uint64_t shader_module_bytes(std::string_view wgsl) noexcept {
-        return detail::rec_size([&](auto &s) {
+    static std::uint64_t shader_module_sz(std::string_view wgsl) noexcept {
+        return detail::rec_sz([&](auto &s) {
             s.word(0);
             s.bytes(detail::text(wgsl));
         });
@@ -658,16 +658,16 @@ namespace call {
 bool write_buffer(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
 // This is the room `write_buffer` takes of a stream, for `Stream::fits`, so
 // that a caller can ask once whether several writes fit.
-std::uint64_t write_buffer_bytes(std::span<const std::uint8_t> bytes) noexcept;
+std::uint64_t write_buffer_sz(std::span<const std::uint8_t> bytes) noexcept;
 // This is `write_buffer`, but the record names the bytes where they lie in the
 // guest's memory, and the host reads them there as it runs the stream. The
 // guest leaves them unchanged until the stream is handed back (stream.hpp).
 bool write_buffer_at(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
 // `layout` holds the bytes per row and the rows per image.
 bool write_texture(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
-// This is `write_buffer_bytes` for a texture. The room depends on the bytes
+// This is `write_buffer_sz` for a texture. The room depends on the bytes
 // alone, not on the place, layout or size.
-std::uint64_t write_texture_bytes(std::span<const std::uint8_t> bytes) noexcept;
+std::uint64_t write_texture_sz(std::span<const std::uint8_t> bytes) noexcept;
 bool write_texture_at(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;
 // Decodes an encoded image (PNG, JPEG or WebP) from the guest's memory into
 // `to`. `fence` is the fence and the result word after it (spec RESULT): the

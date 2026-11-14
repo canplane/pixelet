@@ -20,7 +20,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// This is the core's page allocator, and slab.hpp serves anything smaller than
+// This is the guest's page allocator, and slab.hpp serves anything smaller than
 // a page from it. It is a port of evanw/buddy-malloc that follows the C line
 // for line, and departs from it in two places. `update_max_ptr` asks the
 // `Range` for memory where the C calls `brk`. A block carries no 8-byte header
@@ -36,7 +36,7 @@
 namespace xpute {
 
 // The width in bits that a range's size and the buddy's exponents fit in. A
-// core's memory is 32-bit on every machine the allocator is built for; on a
+// guest's memory is 32-bit on every machine the allocator is built for; on a
 // native build only the range's base is a full pointer.
 inline constexpr std::size_t ADDR_BITS = 32;
 
@@ -78,14 +78,14 @@ template <Range R> class BuddyMalloc {
     // the bytes live now.
     std::size_t peak() const noexcept { return max_ptr_ - base_ptr_; }
     std::size_t live() const noexcept { return live_; }
-    std::size_t range_bytes() const noexcept { return end_ptr_ - base_ptr_; }
+    std::size_t range_sz() const noexcept { return end_ptr_ - base_ptr_; }
     // Changes exactly when a request refused before might now be served, so
     // a caller can wait for it to change before it retries.
     std::uint32_t releases() const noexcept { return releases_; }
-    // Where the runtime reads `base_ptr_`, `max_ptr_`, `end_ptr_` and `live_`,
+    // Where the host reads `base_ptr_`, `max_ptr_`, `end_ptr_` and `live_`,
     // then `releases_` and `allocs_` as half-words, in place and in that
     // order. The order of the fields below is part of the contract with the
-    // runtime.
+    // host.
     const std::uintptr_t *stat() const noexcept { return &base_ptr_; }
     std::size_t allocs() const noexcept { return allocs_; }
 
@@ -146,8 +146,8 @@ template <Range R> class BuddyMalloc {
             // it; when the range has no room, the block goes back and the
             // request fails.
             std::size_t sz = std::size_t{1} << (R::MAX_LOG2 - bucket);
-            std::size_t bytes_needed = bucket < original_bucket ? sz / 2 + sizeof(List) : sz;
-            if (!update_max_ptr(reinterpret_cast<std::uintptr_t>(ptr) + bytes_needed)) {
+            std::size_t need_sz = bucket < original_bucket ? sz / 2 + sizeof(List) : sz;
+            if (!update_max_ptr(reinterpret_cast<std::uintptr_t>(ptr) + need_sz)) {
                 list_push(bucket, ptr);
                 return nullptr;
             }

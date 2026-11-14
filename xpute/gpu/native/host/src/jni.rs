@@ -10,30 +10,16 @@
 use std::ptr::NonNull;
 use std::sync::OnceLock;
 
-use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
-use xpute_native_runtime::jni::env;
 use xpute_native_runtime::jni::ndk::{ANativeWindow_fromSurface, ANativeWindow_release};
-use xpute_native_runtime::jni::sys::{jclass, jint, jmethodID, jobject, JNIEnv, JavaVM, JNI_OK};
+use xpute_native_runtime::jni::sys::{jint, jobject, JNIEnv};
+use xpute_native_runtime::jni::{call, class, Class};
 
 use super::native::lost_on;
 
-/// This holds the VM, a global reference to the class `xpute.Gpu`, and the ID
-/// of its static method `onLost()V`. The class is taken on a thread Java made,
-/// because a thread the host made cannot find the app's classes by name.
-struct Class {
-    vm: *mut JavaVM,
-    class: jclass,
-    on_lost: jmethodID,
-}
-
-// SAFETY: JNI's VM is one for the process and may be used from any thread; a
-// global reference and a method ID stay valid in every thread until let go.
-unsafe impl Send for Class {}
-// SAFETY: as for `Send`: nothing in it is changed once it is made.
-unsafe impl Sync for Class {}
-
-static CLASS: OnceLock<Class> = OnceLock::new();
+/// The class `xpute.Gpu` and its static method `onLost()V`, at `ON_LOST`.
+static CLASS: OnceLock<Class<1>> = OnceLock::new();
+const ON_LOST: usize = 0;
 
 /// Takes the class `xpute.Gpu` from `this`, once, and makes its static method
 /// hear of each device lost (`lost_on`).
@@ -45,58 +31,23 @@ pub unsafe fn init(e: *mut JNIEnv, this: jobject) {
     if CLASS.get().is_some() {
         return;
     }
-    // SAFETY: the environment JNI called this with.
-    let j = unsafe { env(e) };
-    let mut vm: *mut JavaVM = core::ptr::null_mut();
-    // SAFETY: JNI's own calls on the environment it called with; the class
-    // is held globally, so it outlives this call.
-    unsafe {
-        if j.GetJavaVM.or_bug(Errno::ENOSYS)(e, &raw mut vm) != JNI_OK {
-            return;
-        }
-        let class = j.NewGlobalRef.or_bug(Errno::ENOSYS)(
-            e,
-            j.GetObjectClass.or_bug(Errno::ENOSYS)(e, this),
-        );
-        let on_lost = j.GetStaticMethodID.or_bug(Errno::ENOSYS)(
-            e,
-            class,
-            c"onLost".as_ptr(),
-            c"()V".as_ptr(),
-        );
-        if on_lost.is_null() {
-            j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
-            return;
-        }
-        let _ = CLASS.set(Class { vm, class, on_lost });
-    }
+    let mut methods = [(c"", c""); 1];
+    methods[ON_LOST] = (c"onLost", c"()V");
+    // SAFETY: what JNI called with, on a thread Java made.
+    let Some(c) = (unsafe { class(e, this, methods) }) else {
+        return;
+    };
+    let _ = CLASS.set(c);
     lost_on(Some(lost));
 }
 
 /// Calls `Gpu.onLost` from the thread that found the loss (`lost_on`), the
-/// GPU's (native.rs). JNI may be called only from a thread
-/// attached to the VM, so that thread is attached for good, as a daemon, as
-/// the guest's thread is for `Runtime.onNotify`.
+/// GPU's (native.rs), attached to the VM for good as a daemon, as the guest's
+/// thread is for `Runtime.onNotify`.
 extern "C" fn lost() {
-    let Some(&Class { vm, class, on_lost }) = CLASS.get() else {
-        return;
-    };
-    let mut e: *mut JNIEnv = core::ptr::null_mut();
-    // SAFETY: the VM GetJavaVM gave, which lives as long as the process; the
-    // class `init` holds globally, and the ID of its `onLost()V`.
-    unsafe {
-        let attach = (**vm).AttachCurrentThreadAsDaemon.or_bug(Errno::ENOSYS);
-        if attach(vm, (&raw mut e).cast(), core::ptr::null_mut()) != JNI_OK {
-            return;
-        }
-        let j = env(e);
-        j.CallStaticVoidMethodA.or_bug(Errno::ENOSYS)(e, class, on_lost, core::ptr::null());
-        // An exception Kotlin threw has no Java caller here to reach, so it is
-        // cleared.
-        if j.ExceptionCheck.or_bug(Errno::ENOSYS)(e) != 0 {
-            j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
-        }
-    }
+    let Some(c) = CLASS.get() else { return };
+    // SAFETY: `onLost()V`, at its index.
+    unsafe { call(c, ON_LOST, |_| Vec::new()) };
 }
 
 /// This is `Gpu.surfaceBind`: it binds the guest's surface `handle` to a view's

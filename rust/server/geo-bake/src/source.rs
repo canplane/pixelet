@@ -11,7 +11,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use pxl_spec::bake::publication::BaseLayer;
+use pxl_spec::bake::publication::BaseKind;
 use pxl_spec::bake::source::{is_sharded, is_version, key};
 use pxl_spec::space::coord::zoom::{Zoom, MIN_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -29,11 +29,11 @@ pub struct Kind {
     pub shard: Option<BTreeSet<Quadrant>>,
 }
 
-pub(crate) type KindTable = [Kind; BaseLayer::ALL.len()];
+pub(crate) type KindTable = [Kind; BaseKind::ALL.len()];
 
-/// Each kind's, in `BaseLayer`'s order.
-pub fn try_kinds(kind: impl FnMut(BaseLayer) -> Result<Kind, String>) -> Result<KindTable, String> {
-    let all: Vec<Kind> = BaseLayer::ALL
+/// Each kind's, in `BaseKind`'s order.
+pub fn try_kinds(kind: impl FnMut(BaseKind) -> Result<Kind, String>) -> Result<KindTable, String> {
+    let all: Vec<Kind> = BaseKind::ALL
         .into_iter()
         .map(kind)
         .collect::<Result<_, _>>()?;
@@ -43,13 +43,13 @@ pub fn try_kinds(kind: impl FnMut(BaseLayer) -> Result<Kind, String>) -> Result<
 }
 
 /// A kind's versions for a shard and the tiles under it, over the kind's own.
-pub type OverrideMap = BTreeMap<Quadrant, Vec<(BaseLayer, String)>>;
+pub type OverrideMap = BTreeMap<Quadrant, Vec<(BaseKind, String)>>;
 
 /// Refused for anything a client would refuse (pxl-spec bake/source.rs), or
 /// would serve wrongly: a version that is no URL segment, a sharded kind holding no shards
 /// or another holding some, an override on anything but a shard served.
 pub fn decl(min_zoom: Zoom, kinds: &KindTable, overrides: &OverrideMap) -> Result<Value, String> {
-    for l in BaseLayer::ALL {
+    for l in BaseKind::ALL {
         let k = &kinds[l as usize];
         if k.shard.is_some() != is_sharded(l) {
             return Err(format!(
@@ -95,7 +95,7 @@ pub fn decl(min_zoom: Zoom, kinds: &KindTable, overrides: &OverrideMap) -> Resul
         }
     }
     let named = |f: &dyn Fn(&Kind) -> Value| -> Map<String, Value> {
-        BaseLayer::ALL
+        BaseKind::ALL
             .into_iter()
             .map(|l| (l.name().to_string(), f(&kinds[l as usize])))
             .collect()
@@ -187,7 +187,7 @@ pub fn of_set(set: &Path, version: &str) -> Result<Kind, String> {
 /// `kind`, each kind's version and what its manifest says of it, its
 /// `format` and `shard`; `override`, a kind's version for a shard.
 pub fn decl_of(rec: &Value) -> Result<Value, String> {
-    let kind = |l: BaseLayer| -> Result<Kind, String> {
+    let kind = |l: BaseKind| -> Result<Kind, String> {
         let k = &rec["kind"][l.name()];
         let at = |field: &str| format!("kind.{}.{field}", l.name());
         Ok(Kind {
@@ -205,7 +205,7 @@ pub fn decl_of(rec: &Value) -> Result<Value, String> {
         let tile = key(name).ok_or(format!("override.{name}: no shard's name"))?;
         let mut own = Vec::new();
         for (kind, version) in versions.as_object().into_iter().flatten() {
-            let layer = BaseLayer::ALL
+            let layer = BaseKind::ALL
                 .into_iter()
                 .find(|l| l.name() == kind)
                 .ok_or(format!("override.{name}.{kind}: no kind"))?;

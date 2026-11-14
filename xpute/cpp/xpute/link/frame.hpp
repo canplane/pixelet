@@ -19,8 +19,8 @@
 
 namespace xpute::link {
 
-// The bytes a frame's words take, before its packet.
-inline constexpr std::uint32_t WORD_SZ = frame::WORDS * 4;
+// The size of a frame's words, its header before its packet.
+inline constexpr std::uint32_t HDR_SZ = frame::WORDS * 4;
 
 // NAMED is a handle's top bit.
 static_assert(frame::NAMED == frame::RES >> frame::METHOD_BITS >> 1);
@@ -61,8 +61,8 @@ struct Frame {
     // where it has none; a packet past the room is EBADMSG.
     Result<std::optional<std::span<const std::uint8_t>>> pkt(std::uint32_t at, std::uint32_t room) const noexcept {
         if (pkt_len == 0) return std::optional<std::span<const std::uint8_t>>();
-        if (std::uint64_t{WORD_SZ} + pkt_len > room) return make_error(Errno::ebadmsg);
-        return std::optional<std::span<const std::uint8_t>>(mem::bytes(at + WORD_SZ, pkt_len));
+        if (std::uint64_t{HDR_SZ} + pkt_len > room) return make_error(Errno::ebadmsg);
+        return std::optional<std::span<const std::uint8_t>>(mem::bytes(at + HDR_SZ, pkt_len));
     }
 };
 

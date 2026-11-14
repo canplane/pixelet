@@ -23,7 +23,7 @@ export interface GpuAsk {
 export interface GpuConfig {
   /** The size of one chunk that buffer writes are staged through, as large
    * as one frame's writes; a larger write is staged across several chunks. */
-  upload_chunk_bytes: u32;
+  upload_chunk_sz: u32;
   /** What the host does on the thread that runs it that takes longer than
    * this many milliseconds is logged, as `[gpu] <what> took <ms> ms`, the whole
    * milliseconds: a record of the stream (`op <op>`, by its number), the

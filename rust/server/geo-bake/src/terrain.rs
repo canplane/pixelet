@@ -22,10 +22,10 @@ impl Base for TerrainTile {
     const PRUNED: bool = false;
 
     /// The packet, refused past the limit a client holds one to
-    /// (pxl-spec `BaseLayer::row`).
+    /// (pxl-spec `BaseKind::row`).
     fn encode(&self, at: Quadrant) -> Result<Vec<u8>, String> {
         let pkt = terrain::encode(self).map_err(|e| format!("{}: {e:?}", at.key()))?;
-        let cap = Self::LAYER.row().pkt_cap;
+        let cap = Self::KIND.row().pkt_cap;
         if pkt.len() > cap {
             return Err(format!("tile {} size {} > {cap}", at.key(), pkt.len()));
         }

@@ -11,33 +11,17 @@ use std::sync::OnceLock;
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
-use xpute_native_runtime::jni::env;
-use xpute_native_runtime::jni::sys::{
-    jbyteArray, jclass, jint, jintArray, jmethodID, jobject, jstring, jvalue, JNIEnv, JavaVM,
-    JNI_OK,
-};
+use xpute_native_runtime::jni::sys::{jbyteArray, jint, jintArray, jobject, jstring, jvalue, JNIEnv};
+use xpute_native_runtime::jni::{call, class, env, Class};
 
 use crate::native::{notify_on, stopped_on, trap_on};
 
-/// The VM, a global reference to the class `xpute.Runtime`, and the IDs of
-/// its static methods the app hears by. The class is taken on a thread Java
-/// made, because a thread the runtime made cannot find the app's classes by
-/// name.
-struct Class {
-    vm: *mut JavaVM,
-    class: jclass,
-    on_notify: jmethodID,
-    on_stopped: jmethodID,
-    on_trap: jmethodID,
-}
-
-// SAFETY: JNI's VM is one for the process and may be used from any thread; a
-// global reference and a method ID stay valid in every thread until let go.
-unsafe impl Send for Class {}
-// SAFETY: as for `Send`: nothing in it is changed once it is made.
-unsafe impl Sync for Class {}
-
-static CLASS: OnceLock<Class> = OnceLock::new();
+/// The class `xpute.Runtime` and the static methods the app hears by, at
+/// `ON_NOTIFY`, `ON_STOPPED` and `ON_TRAP`.
+static CLASS: OnceLock<Class<3>> = OnceLock::new();
+const ON_NOTIFY: usize = 0;
+const ON_STOPPED: usize = 1;
+const ON_TRAP: usize = 2;
 
 /// Takes the class `xpute.Runtime` from `this`, once, and makes its static
 /// methods hear a batch waiting, a stop and a trap.
@@ -49,87 +33,51 @@ pub unsafe fn init(e: *mut JNIEnv, this: jobject) {
     if CLASS.get().is_some() {
         return;
     }
-    // SAFETY: the environment JNI called this with.
-    let j = unsafe { env(e) };
-    let mut vm: *mut JavaVM = core::ptr::null_mut();
-    // SAFETY: JNI's own calls on the environment it called with; the class
-    // is held globally, so it outlives this call.
-    unsafe {
-        if j.GetJavaVM.or_bug(Errno::ENOSYS)(e, &raw mut vm) != JNI_OK {
-            return;
-        }
-        let class = j.NewGlobalRef.or_bug(Errno::ENOSYS)(e, j.GetObjectClass.or_bug(Errno::ENOSYS)(e, this));
-        let method = |name: &core::ffi::CStr, sig: &core::ffi::CStr| {
-            j.GetStaticMethodID.or_bug(Errno::ENOSYS)(e, class, name.as_ptr(), sig.as_ptr())
-        };
-        let on_notify = method(c"onNotify", c"()V");
-        let on_stopped = method(c"onStopped", c"(ILjava/lang/String;IJJ)V");
-        let on_trap = method(c"onTrap", c"()V");
-        if on_notify.is_null() || on_stopped.is_null() || on_trap.is_null() {
-            j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
-            return;
-        }
-        let _ = CLASS.set(Class {
-            vm,
-            class,
-            on_notify,
-            on_stopped,
-            on_trap,
-        });
-    }
+    let mut methods = [(c"", c""); 3];
+    methods[ON_NOTIFY] = (c"onNotify", c"()V");
+    methods[ON_STOPPED] = (c"onStopped", c"(ILjava/lang/String;IJJ)V");
+    methods[ON_TRAP] = (c"onTrap", c"()V");
+    // SAFETY: what JNI called with, on a thread Java made.
+    let Some(c) = (unsafe { class(e, this, methods) }) else {
+        return;
+    };
+    let _ = CLASS.set(c);
     notify_on(Some(notify));
     stopped_on(Some(stopped));
     trap_on(Some(trap));
 }
 
-/// Calls the static method `m` with `args` on this thread, attached to the
-/// VM for good as a daemon. An exception Kotlin threw has no Java caller here
-/// to reach, so it is cleared.
-fn call(m: impl FnOnce(&Class) -> jmethodID, args: impl FnOnce(*mut JNIEnv) -> Vec<jvalue>) {
-    let Some(c) = CLASS.get() else { return };
-    let mut e: *mut JNIEnv = core::ptr::null_mut();
-    // SAFETY: the VM GetJavaVM gave, which lives as long as the process; the
-    // class `init` holds globally, and the ID of one of its static methods.
-    unsafe {
-        let attach = (**c.vm).AttachCurrentThreadAsDaemon.or_bug(Errno::ENOSYS);
-        if attach(c.vm, (&raw mut e).cast(), core::ptr::null_mut()) != JNI_OK {
-            return;
-        }
-        let j = env(e);
-        let args = args(e);
-        j.CallStaticVoidMethodA.or_bug(Errno::ENOSYS)(e, c.class, m(c), args.as_ptr());
-        if j.ExceptionCheck.or_bug(Errno::ENOSYS)(e) != 0 {
-            j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
-        }
-    }
-}
-
 extern "C" fn notify() {
-    call(|c| c.on_notify, |_| Vec::new());
+    let Some(c) = CLASS.get() else { return };
+    // SAFETY: `onNotify()V`, at its index.
+    unsafe { call(c, ON_NOTIFY, |_| Vec::new()) };
 }
 
 extern "C" fn trap() {
-    call(|c| c.on_trap, |_| Vec::new());
+    let Some(c) = CLASS.get() else { return };
+    // SAFETY: `onTrap()V`, at its index.
+    unsafe { call(c, ON_TRAP, |_| Vec::new()) };
 }
 
 extern "C" fn stopped(errnum: i32, file: *const u8, len: usize, line: u32, n1: u64, n2: u64) {
+    let Some(c) = CLASS.get() else { return };
     // SAFETY: the file's UTF-8, the stop's for the call.
     let file = String::from_utf8_lossy(unsafe { core::slice::from_raw_parts(file, len) }).into_owned();
     let file = std::ffi::CString::new(file.replace('\0', " ")).unwrap_or_default();
-    call(
-        |c| c.on_stopped,
-        |e| {
-            // SAFETY: this thread's environment, and a NUL-terminated string.
-            let s = unsafe { env(e).NewStringUTF.or_bug(Errno::ENOSYS)(e, file.as_ptr()) };
-            vec![
-                jvalue { i: errnum },
-                jvalue { l: s },
-                jvalue { i: line as jint },
-                jvalue { j: n1 as i64 },
-                jvalue { j: n2 as i64 },
-            ]
-        },
-    );
+    let args = |e| {
+        // SAFETY: this thread's environment, and a NUL-terminated string.
+        let s = unsafe { env(e).NewStringUTF.or_bug(Errno::ENOSYS)(e, file.as_ptr()) };
+        vec![
+            jvalue { i: errnum },
+            jvalue { l: s },
+            jvalue { i: line as jint },
+            jvalue { j: n1 as i64 },
+            jvalue { j: n2 as i64 },
+        ]
+    };
+    // SAFETY: `onStopped(ILjava/lang/String;IJJ)V`, at its index, and its
+    // five values in order.
+    unsafe { call(c, ON_STOPPED, args) };
 }
 
 /// The bytes of a Java `byte[]`, or none for null.

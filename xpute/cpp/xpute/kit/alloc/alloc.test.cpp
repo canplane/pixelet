@@ -87,7 +87,7 @@ XPUTE_TEST(buddy_oversize_refused) {
         served++;
         XPUTE_CHECK(served <= (std::size_t{1} << (MAX - MIN)) + 1);
     }
-    XPUTE_CHECK(heap.live() <= heap.range_bytes());
+    XPUTE_CHECK(heap.live() <= heap.range_sz());
     XPUTE_CHECK_EQ(all(first, PAGE, 0x5a), true, "a refusal wrote over a live block");
 }
 
@@ -170,7 +170,7 @@ XPUTE_TEST(slab_slots_inside_runs) {
     auto check = [] {
         XPUTE_CHECK(heap.slot_live() <= heap.run_live());
         XPUTE_CHECK(heap.run_live() <= heap.pages().live());
-        XPUTE_CHECK(heap.pages().live() <= heap.range_bytes());
+        XPUTE_CHECK(heap.pages().live() <= heap.range_sz());
     };
     for (int round = 0; round < 4; round++) {
         for (std::size_t k = 0; k < 7; k++) {

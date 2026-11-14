@@ -19,7 +19,8 @@ xpute-link.workspace = true
 
 # An Android app's native side reaches the runtime through JNI (src/jni.rs),
 # and a line is told to the NDK's log (src/log.rs). These are the NDK's own
-# headers as bindings, with nothing over them.
+# headers as bindings; over JNI's, only a class whose static methods a
+# thread calls (src/jni.rs).
 [target.'cfg(target_os = "android")'.dependencies]
 jni-sys = "0.3"
 ndk-sys = "0.6"

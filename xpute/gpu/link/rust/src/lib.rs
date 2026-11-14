@@ -39,7 +39,7 @@ pub struct GpuConfig {
     /// This is the size of one chunk that buffer writes are staged through.
     /// Choose it as large as one frame's writes; a larger write is staged
     /// across several chunks.
-    pub upload_chunk_bytes: u64,
+    pub upload_chunk_sz: u64,
     /// What takes longer than this many milliseconds is logged, the whole
     /// milliseconds: a record of the stream, as `[gpu] op <op> took <ms> ms`
     /// by the op's number, the stream's run as a whole, as `[gpu] run took

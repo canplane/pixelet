@@ -13,7 +13,7 @@ import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import { get, TILE_SOURCE_ROUTE } from "@/service/origin/route.ts";
 import { online, when_online } from "@/service/origin/online.ts";
 import {
-  BASE_LAYERS,
+  BASE_KINDS,
   VERSION_BYTES,
   VERSION_CHARS,
 } from "@/abi/publication.spec.ts";
@@ -39,11 +39,11 @@ export type Source =
  * its own version of a kind. */
 export interface Declaration {
   min_zoom: number;
-  format: Record<(typeof BASE_LAYERS)[number], number>;
-  version: Record<(typeof BASE_LAYERS)[number], string>;
+  format: Record<(typeof BASE_KINDS)[number], number>;
+  version: Record<(typeof BASE_KINDS)[number], string>;
   shard: Record<
     string,
-    { version?: Partial<Record<(typeof BASE_LAYERS)[number], string>> }
+    { version?: Partial<Record<(typeof BASE_KINDS)[number], string>> }
   >;
 }
 
@@ -74,11 +74,11 @@ export function decl(text: string): Declaration | null {
     v !== null &&
     Object.entries(v).every(
       ([k, s]) =>
-        (BASE_LAYERS as readonly string[]).includes(k) &&
+        (BASE_KINDS as readonly string[]).includes(k) &&
         typeof s === "string" &&
         is_version(s),
     ) &&
-    (!every || BASE_LAYERS.every((k) => k in v));
+    (!every || BASE_KINDS.every((k) => k in v));
   if (
     typeof d !== "object" ||
     d === null ||
@@ -93,7 +93,7 @@ export function decl(text: string): Declaration | null {
     !("format" in d) ||
     typeof d.format !== "object" ||
     d.format === null ||
-    !BASE_LAYERS.every((k) => whole((d.format as Record<string, unknown>)[k]))
+    !BASE_KINDS.every((k) => whole((d.format as Record<string, unknown>)[k]))
   )
     return null;
   if (!("shard" in d)) return null;
@@ -223,7 +223,7 @@ export async function declare_source(send: SendSource): Promise<void> {
   if (
     !(await send(
       read.min_zoom,
-      BASE_LAYERS.map((kind) => read.format[kind]),
+      BASE_KINDS.map((kind) => read.format[kind]),
       shards,
     ))
   ) {

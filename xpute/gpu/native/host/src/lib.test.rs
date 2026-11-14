@@ -39,7 +39,7 @@ fn cfg(frame_latency: u32) -> Config {
         preferred_format: wgpu::TextureFormat::Bgra8Unorm,
         configure_at: ConfigureAt::Here,
         frame_latency,
-        upload_chunk_bytes: 1 << 16,
+        upload_chunk_sz: 1 << 16,
         slow_ms: None,
         present_mode: wgpu::PresentMode::Fifo,
     }

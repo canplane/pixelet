@@ -38,7 +38,7 @@ SOURCE = "source"
 # Beside a copy's tiles, what it is: never uploaded.
 MANIFEST = "manifest.json"
 PUBLISHED = json.loads((REPO / "spec/spec/bake/publication.json").read_text())
-KINDS = PUBLISHED["BASE_LAYER"]["$val"]
+KINDS = PUBLISHED["BASE_KIND"]["$val"]
 
 
 class Refused(Exception):

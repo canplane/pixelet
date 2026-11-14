@@ -81,6 +81,8 @@ using frame::DROP;
 using frame::NAMED;
 using frame::OPEN;
 using frame::ROOT;
+using frame::TRAP;
+using frame::TRAP_AT;
 
 // What an async method lends: a vector of plain values, whose bytes the
 // other side may write, which lie in one run of the guest's memory and stay
@@ -289,11 +291,6 @@ class Side {
 
 // The URI of names alone, as a resource's (package, resource).
 std::vector<Token> uri(std::initializer_list<std::string_view> names);
-
-// What a native guest's export answers where a bug stopped the guest, caught
-// at the export (kit `caught`) so nothing leaves into its caller: as a
-// module's trap. The guest is over, and its host enters it no more.
-inline constexpr std::int32_t TRAP = INT32_MIN;
 
 // A method's result, its status: answered, or the errno it failed with (a
 // refusal, or a method's errno where its WIT has no `result`). Its value, if

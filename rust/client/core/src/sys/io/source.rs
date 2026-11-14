@@ -8,7 +8,7 @@
 //! is over or under is never asked for. The versions the source names stay
 //! with the client.
 
-use pxl_spec::bake::publication::{BaseLayer, FORMAT};
+use pxl_spec::bake::publication::{BaseKind, FORMAT};
 use pxl_spec::bake::source::{is_sharded, key};
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM, MIN_ZOOM, SHARD_ZOOM};
@@ -64,8 +64,8 @@ fn parse<'a>(
     names: impl IntoIterator<Item = &'a str>,
 ) -> Option<Source> {
     let min_zoom = Some(min_zoom).filter(|z| (MIN_ZOOM..=LEAF_ZOOM).contains(z))?;
-    let read = format.len() == BaseLayer::ALL.len()
-        && BaseLayer::ALL
+    let read = format.len() == BaseKind::ALL.len()
+        && BaseKind::ALL
             .into_iter()
             .all(|l| format[l as usize] == FORMAT[l as usize]);
     if !read {
@@ -163,7 +163,7 @@ pub fn min_zoom() -> Option<Zoom> {
 
 /// Whether a served shard is over or under `p`. A kind that shards do not
 /// hold is served everywhere.
-pub fn serves(layer: BaseLayer, p: Quadrant) -> bool {
+pub fn serves(layer: BaseKind, p: Quadrant) -> bool {
     !is_sharded(layer) || declared_source().is_some_and(|s| s.covers(p))
 }
 

@@ -777,7 +777,7 @@ constexpr std::optional<CanvasAlphaMode> of_CanvasAlphaMode(std::uint8_t val) no
 
 inline constexpr std::array<std::string_view, 2> CANVAS_ALPHA_MODES{"opaque", "premultiplied"};
 
-// GPUFeatureName. The DEVICE record (api.json) reports a device's features as one bit each,
+// GPUFeatureName. The DEVICE block (api.json) holds a device's features as one bit each,
 // at the member's place.
 enum class FeatureName : std::uint8_t {
     depth_clip_control = 0,
@@ -825,7 +825,7 @@ constexpr std::optional<FeatureName> of_FeatureName(std::uint8_t val) noexcept {
 
 inline constexpr std::array<std::string_view, 17> FEATURE_NAMES{"depth-clip-control", "depth32float-stencil8", "texture-compression-bc", "texture-compression-bc-sliced-3d", "texture-compression-etc2", "texture-compression-astc", "texture-compression-astc-sliced-3d", "timestamp-query", "indirect-first-instance", "shader-f16", "rg11b10ufloat-renderable", "bgra8unorm-storage", "float32-filterable", "float32-blendable", "clip-distances", "dual-source-blending", "subgroups"};
 
-// The members of GPUSupportedLimits. The DEVICE record (api.json) reports a device's limits
+// The members of GPUSupportedLimits. The DEVICE block (api.json) holds a device's limits
 // as one word each, at the member's place.
 enum class LimitName : std::uint8_t {
     max_texture_dimension_1d = 0,

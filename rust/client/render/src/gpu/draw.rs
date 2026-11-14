@@ -258,7 +258,7 @@ const FREE: u32 = u32::MAX;
 
 #[derive(Clone, Copy)]
 pub struct Slot {
-    gen: u32,
+    generation: u32,
     /// Its draw's pipeline, `FREE` where it holds none.
     pipeline: u32,
     /// Its record's place among its pipeline's.
@@ -582,17 +582,17 @@ impl DrawList {
 
     /// The slot `id` names, or a slot taken for it where it names none live.
     fn slot_of(&mut self, id: &DrawId) -> u32 {
-        let live = id.0.get().filter(|&(slot, gen)| {
+        let live = id.0.get().filter(|&(slot, generation)| {
             self.slots
                 .get(slot as usize)
-                .is_some_and(|s| s.gen == gen && s.pipeline != FREE)
+                .is_some_and(|s| s.generation == generation && s.pipeline != FREE)
         });
         if let Some((slot, _)) = live {
             return slot;
         }
         let slot = self.free_slots.pop().unwrap_or_else(|| {
             self.slots.push(Slot {
-                gen: 0,
+                generation: 0,
                 pipeline: FREE,
                 at: 0,
                 set: u32::MAX,
@@ -601,7 +601,7 @@ impl DrawList {
             });
             self.slots.len() as u32 - 1
         });
-        id.0.set(Some((slot, self.slots[slot as usize].gen)));
+        id.0.set(Some((slot, self.slots[slot as usize].generation)));
         slot
     }
 
@@ -829,7 +829,7 @@ impl DrawList {
                 self.change(slot, Some((d, u)));
                 self.drifting -= u32::from(drifts(&u));
                 let s = &mut self.slots[slot as usize];
-                (s.pipeline, s.gen) = (FREE, s.gen.wrapping_add(1));
+                (s.pipeline, s.generation) = (FREE, s.generation.wrapping_add(1));
                 self.free_slots.push(slot);
             }
             self.set[p] = 0;

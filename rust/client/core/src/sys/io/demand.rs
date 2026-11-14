@@ -7,7 +7,7 @@
 
 use core::cmp::Ordering;
 
-use pxl_spec::bake::publication::BaseLayer;
+use pxl_spec::bake::publication::BaseKind;
 
 use crate::spec;
 pub use crate::spec::demand::StreamName as Stream;
@@ -20,7 +20,7 @@ pub use crate::spec::demand::TaskPhaseName;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Source {
     Load,
-    Base(BaseLayer),
+    Base(BaseKind),
     Object,
 }
 
@@ -74,11 +74,11 @@ impl Stream {
     /// The one table of what each stream is.
     pub const fn row(self) -> Row {
         let (source, slotted, class) = match self {
-            Stream::Terrain => (Source::Base(BaseLayer::Terrain), true, Class::Ground),
-            Stream::Place => (Source::Base(BaseLayer::Place), false, Class::Place),
-            Stream::Division => (Source::Base(BaseLayer::Division), false, Class::Aside),
+            Stream::Terrain => (Source::Base(BaseKind::Terrain), true, Class::Ground),
+            Stream::Place => (Source::Base(BaseKind::Place), false, Class::Place),
+            Stream::Division => (Source::Base(BaseKind::Division), false, Class::Aside),
             Stream::Asset => (Source::Load, false, Class::File),
-            Stream::Earth => (Source::Base(BaseLayer::Earth), true, Class::Picture),
+            Stream::Earth => (Source::Base(BaseKind::Earth), true, Class::Picture),
             Stream::Object => (Source::Object, false, Class::OnGround),
         };
         Row {
@@ -88,7 +88,7 @@ impl Stream {
         }
     }
 
-    pub const fn layer(self) -> Option<BaseLayer> {
+    pub const fn layer(self) -> Option<BaseKind> {
         match self.row().source {
             Source::Base(layer) => Some(layer),
             Source::Load | Source::Object => None,
@@ -96,7 +96,7 @@ impl Stream {
     }
 
     /// The most bytes one of the stream's bodies takes: the longest packet of
-    /// its kind (pxl-spec `BaseLayer::row`). A load and a shard's objects
+    /// its kind (pxl-spec `BaseKind::row`). A load and a shard's objects
     /// have none, because only the heap bounds them.
     pub const fn max_body(self) -> Option<u32> {
         match self.layer() {
@@ -106,7 +106,7 @@ impl Stream {
     }
 
     /// The stream `layer`'s tiles come in, the one row that names it.
-    pub const fn of_layer(layer: BaseLayer) -> Stream {
+    pub const fn of_layer(layer: BaseKind) -> Stream {
         let mut s = 0;
         while s < Stream::ALL.len() {
             if let Source::Base(l) = Stream::ALL[s].row().source {

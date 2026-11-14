@@ -6,7 +6,7 @@ use crate::coverage::Node;
 use crate::coverage::Overture;
 use crate::util;
 use postgres::Client;
-use pxl_spec::bake::publication::BaseLayer;
+use pxl_spec::bake::publication::BaseKind;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -34,7 +34,7 @@ impl Default for Limit {
     }
 }
 
-/// A worker's order, written to its argument. `kind` numbers its `BaseLayer`.
+/// A worker's order, written to its argument. `kind` numbers its `BaseKind`.
 #[derive(Serialize, Deserialize)]
 pub struct Job {
     pub kind: u32,
@@ -229,7 +229,7 @@ pub fn connect(
 }
 
 pub fn execute(job: Job, out: &Path, seconds: u64) -> Result<(), String> {
-    let row = BaseLayer::of(job.kind)
+    let row = BaseKind::of(job.kind)
         .and_then(super::row)
         .ok_or_else(|| format!("no kind {}", job.kind))?;
     (row.execute)(Quadrant::of_id(job.id), &job.cache, out, seconds)

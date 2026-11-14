@@ -54,16 +54,16 @@ export class Belt {
   private cur: { k: number; at: u32 } | null = null;
 
   private readonly device: GPUDevice;
-  private readonly chunk_bytes: u32;
+  private readonly chunk_sz: u32;
   /** A remap's landing slower than this is logged (timed.ts). */
   private readonly slow_ms: u32 | null;
 
-  constructor(device: GPUDevice, chunk_bytes: u32, slow_ms: u32 | null) {
-    if (chunk_bytes <= 0 || chunk_bytes % MAP_ALIGNMENT !== 0) {
-      throw new Error(`[gpu] an upload chunk of ${chunk_bytes} bytes`);
+  constructor(device: GPUDevice, chunk_sz: u32, slow_ms: u32 | null) {
+    if (chunk_sz <= 0 || chunk_sz % MAP_ALIGNMENT !== 0) {
+      throw new Error(`[gpu] an upload chunk of ${chunk_sz} bytes`);
     }
     this.device = device;
-    this.chunk_bytes = chunk_bytes;
+    this.chunk_sz = chunk_sz;
     this.slow_ms = slow_ms;
   }
 
@@ -72,7 +72,7 @@ export class Belt {
   take(want: u32): Room {
     let k: number;
     let at: u32;
-    if (this.cur && this.cur.at < this.chunk_bytes) {
+    if (this.cur && this.cur.at < this.chunk_sz) {
       ({ k, at } = this.cur);
     } else {
       k = this.chunks.findIndex((c) => c.state === FREE);
@@ -80,9 +80,9 @@ export class Belt {
       this.chunks[k].state = OPEN;
       at = 0;
     }
-    const n = Math.min(want, this.chunk_bytes - at);
+    const n = Math.min(want, this.chunk_sz - at);
     const next = Math.ceil((at + n) / MAP_ALIGNMENT) * MAP_ALIGNMENT;
-    this.cur = { k, at: Math.min(next, this.chunk_bytes) };
+    this.cur = { k, at: Math.min(next, this.chunk_sz) };
     const c = this.chunks[k];
     return { chunk: c.buffer, at, bytes: c.bytes!, n };
   }
@@ -122,7 +122,7 @@ export class Belt {
   private made(): Chunk {
     const buffer = this.device.createBuffer({
       label: "upload chunk",
-      size: this.chunk_bytes,
+      size: this.chunk_sz,
       usage: GPUBufferUsage.MAP_WRITE | GPUBufferUsage.COPY_SRC,
       mappedAtCreation: true,
     });

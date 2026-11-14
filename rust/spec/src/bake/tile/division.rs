@@ -15,7 +15,7 @@ use xpute_kit::status::error::XputeError;
 use xpute_kit::wire::xtp::shape;
 
 use crate::bake::malformed;
-use crate::bake::publication::BaseLayer;
+use crate::bake::publication::BaseKind;
 use crate::bake::tile::{occupancy_of, Occupancy, StringTable, Tile};
 use crate::division::{Subtype, NAME_BYTES};
 use crate::ground::majority;
@@ -79,7 +79,7 @@ pub struct DivisionTile {
 }
 
 impl Tile for DivisionTile {
-    const LAYER: BaseLayer = BaseLayer::Division;
+    const KIND: BaseKind = BaseKind::Division;
 
     fn occupancy(&self) -> Occupancy {
         self.occupancy

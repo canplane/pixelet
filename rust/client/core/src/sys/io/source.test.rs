@@ -9,7 +9,7 @@ fn tile(name: &str) -> Quadrant {
 /// The formats this client reads, by each kind's bake number, as the
 /// published table gives them (pxl-spec bake/publication.json `FORMAT`).
 fn formats() -> Vec<u32> {
-    BaseLayer::ALL.into_iter().map(BaseLayer::format).collect()
+    FORMAT.to_vec()
 }
 
 // The test reads a parsed source and never declares it. A declaration is
@@ -43,7 +43,7 @@ fn unfollowable_decl_refused() {
         // One declaration gives terrain a format past the one this client reads,
         // and another gives the Earth no format.
         let mut unread = f.clone();
-        unread[BaseLayer::Terrain as usize] += 1;
+        unread[BaseKind::Terrain as usize] += 1;
         let short = &f[..f.len() - 1];
         assert!(parse(4, &unread, []).is_none(), "an unread format");
         assert!(parse(4, short, []).is_none(), "a kind with no format");

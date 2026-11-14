@@ -236,7 +236,7 @@ export class GpuHost {
     this._mem = mem;
     this._wake = wake;
     this._slow_ms = cfg.slow_ms;
-    this._belt = new Belt(device, cfg.upload_chunk_bytes, cfg.slow_ms);
+    this._belt = new Belt(device, cfg.upload_chunk_sz, cfg.slow_ms);
     // Nothing here destroys the device, so every loss is the browser's. The
     // guest is told of it in its block.
     device.lost.then(() => {

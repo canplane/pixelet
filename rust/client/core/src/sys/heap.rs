@@ -209,7 +209,7 @@ unsafe impl core::alloc::GlobalAlloc for Locked {
 
 pub fn stat() -> HeapStat {
     HeapStat {
-        range: HEAP.range_bytes(),
+        range: HEAP.range_sz(),
         peak: HEAP.peak(),
         live: HEAP.live(),
         run: HEAP.run_live(),

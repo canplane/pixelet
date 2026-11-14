@@ -47,12 +47,6 @@ pub const fn rec_words(args: usize, bytes: Option<usize>) -> usize {
         }
 }
 
-/// `rec_sz` is a record's size in bytes, the unit a stream's room is
-/// counted in.
-pub const fn rec_sz(args: usize, bytes: Option<usize>) -> usize {
-    rec_words(args, bytes) * WORD
-}
-
 /// A mark says whether a transaction is open, where it began, and whether a
 /// record that did not fit has dropped it.
 #[derive(Clone, Copy, PartialEq)]
@@ -125,7 +119,7 @@ impl Stream {
         }
     }
 
-    /// `fits` says whether records of `bytes` bytes (`rec_sz`) fit with
+    /// `fits` says whether records of `bytes` bytes fit with
     /// `leave` bytes left after them.
     pub fn fits(&self, bytes: usize, leave: usize) -> bool {
         self.left() >= bytes + leave

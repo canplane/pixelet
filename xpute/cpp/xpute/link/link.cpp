@@ -196,7 +196,7 @@ Result<void> Side::lay(std::uint32_t at, Frame words, const Args &pkt) {
     std::uint32_t room = layout().room;
     words.pkt_len = 0;
     if (pkt) {
-        Lower w(mem::bytes(at + WORD_SZ, room - WORD_SZ), pkt->fixed_sz);
+        Lower w(mem::bytes(at + HDR_SZ, room - HDR_SZ), pkt->fixed_sz);
         pkt->write(w);
         Result<std::size_t> n = w.finish();
         if (!n) return n.error();

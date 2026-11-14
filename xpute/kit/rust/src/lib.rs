@@ -2,7 +2,7 @@
 
 //! This is the generic code under both of xpute's ends, and the Rust
 //! counterpart of `@xpute/kit`. The kit knows nothing of any program's domain.
-//! `xpute-guest` depends on the kit, and the kit never depends on the core.
+//! `xpute-guest` depends on the kit, and the kit never depends on the guest.
 //! Without its `std` feature the crate is `no_std` and holds only `math::rng`.
 
 #![cfg_attr(not(feature = "std"), no_std)]

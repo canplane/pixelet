@@ -36,7 +36,7 @@ use crate::frame::shader::word::{
 };
 use crate::gpu::api::{
     buf_entry, buffer_usage, bytes, pass_desc, result, room, sampler_entry, signaled,
-    texture_usage, view_entry, word_bytes, write_texture_bytes, Entry, Format, Gpu, Layout, Load,
+    texture_usage, view_entry, word_bytes, write_texture_sz, Entry, Format, Gpu, Layout, Load,
     RenderContext,
 };
 use crate::gpu::image_map::ImageMap;
@@ -478,7 +478,7 @@ impl Atmosphere {
     ) -> bool {
         let (texture, mut came) = (self.earth_tiles.0, false);
         upload(&mut |layer, texels| {
-            if !room(write_texture_bytes(texels)) {
+            if !room(write_texture_sz(texels)) {
                 return false;
             }
             g.write_texture(texture, layer, TILE_CELLS, TILE_CELLS, texels);

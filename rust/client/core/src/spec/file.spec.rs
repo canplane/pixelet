@@ -12,23 +12,23 @@
 /// What a file is past its path, a tile's version and URL, a storage key, is the client's
 /// binding (ts/client/src/service/sys/fs/).
 pub mod path {
-    /// A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json
-    /// `BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number.
+    /// A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json
+    /// `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number.
     pub mod terrain {
         pub const ID: i32 = 0;
     }
-    /// A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json
-    /// `BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number.
+    /// A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json
+    /// `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number.
     pub mod place {
         pub const ID: i32 = 1;
     }
-    /// A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json
-    /// `BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number.
+    /// A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json
+    /// `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number.
     pub mod division {
         pub const ID: i32 = 2;
     }
-    /// A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json
-    /// `BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number.
+    /// A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json
+    /// `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number.
     pub mod earth {
         pub const ID: i32 = 3;
         /// The picture of the whole Earth, (EARTH, SPHERE), served under the Earth layer's

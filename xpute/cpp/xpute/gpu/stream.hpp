@@ -51,12 +51,6 @@ constexpr std::size_t rec_words(std::size_t args, std::optional<std::size_t> byt
     return 2 + args + (bytes ? 1 + (*bytes + WORD - 1) / WORD : 0);
 }
 
-// `rec_sz` is a record's size in bytes, the unit a stream's room is
-// counted in.
-constexpr std::size_t rec_sz(std::size_t args, std::optional<std::size_t> bytes) noexcept {
-    return rec_words(args, bytes) * WORD;
-}
-
 class Stream {
   public:
     // A stream of `room` words.
@@ -72,7 +66,7 @@ class Stream {
     // none, or that a run still holds, sends nothing.
     void flush();
 
-    // `fits` says whether records of `bytes` bytes (`rec_sz`) fit with
+    // `fits` says whether records of `bytes` bytes fit with
     // `leave` bytes left after them.
     bool fits(std::size_t bytes, std::size_t leave) const noexcept { return left() >= bytes + leave; }
 

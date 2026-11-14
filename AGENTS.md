@@ -24,9 +24,11 @@
 - Before a commit, the review agent (`.claude/agents/review.md`) reads the
   change, briefed with its goal and its code, not its author's conclusions.
   Each finding is checked against the code or its source before it is acted on
-  or passed on, and a fix is no larger than its finding. A fixed finding goes
-  back to a review until one finds nothing; the report says how many rounds it
-  took. Whoever hands work to an agent runs this loop on what comes back, unasked.
+  or passed on; one of correctness, a contract or structure is fixed by the
+  change's author, one of lint or format alone is not, and a fix is no larger
+  than its finding. The fix's diff alone gets a second round, and there is no
+  third; the report says how many rounds it took. Whoever hands work to an agent
+  runs this loop on what comes back, unasked.
 
 ## The system
 
@@ -47,8 +49,9 @@
 - Read the skill the task needs (`.agents/skills/`).
 - The code is agents' work, not the user's intent: judge it against the user's
   decisions. A comment, a structure or a pattern in it is no reason to keep it.
-- Work in the main checkout and commit only your own paths; a worktree only for
-  a tree that must be built apart.
+- Work in the main checkout, and a worktree only for a tree that must be built
+  apart. A commit holds its author's hunks alone, staged in an index of HEAD
+  that is still HEAD when it commits.
 - `out/` holds what a build makes, and no drafts. A temporary folder, an
   experiment's data too, goes under the checkout's `tmp/`; delete only the
   folder you made.
@@ -58,8 +61,10 @@
   not hold the device itself (the shader probe, an install, xpute's GPU tests),
   runs under its device's module: `script/perf/mac.py`, `android.py` or `ios.py`
   `<command>`.
-- A change is checked by `./script/diff-check.py [base]`: the checks and tests
-  of what the change since `base` reaches (default HEAD and the uncommitted). `make check`
+- While the structure is being reworked, a change is checked by building it, and
+  the tests and the formatter wait until it has settled. Then a change is
+  checked by `./script/diff-check.py [base]`: the checks and tests of what the
+  change since `base` reaches (default HEAD and the uncommitted). `make check`
   and `make test` whole are a deploy's. A passed check is not run again over
   unchanged code, and a long run shows its progress.
 - A test that blocks a change is suspected first: `git blame` its lines and read

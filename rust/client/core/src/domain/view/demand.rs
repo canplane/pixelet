@@ -93,7 +93,7 @@ pub struct Layer {
 
 const fn layer<L: DemandedBase>() -> Layer {
     Layer {
-        stream: const { Stream::of_layer(L::LAYER) },
+        stream: const { Stream::of_layer(L::KIND) },
         slot_cnt: TileCache::<L>::SLOT_CNT,
         on_arrival: on_arrived::<L>,
     }
@@ -409,7 +409,7 @@ impl<L: DemandedBase> Demand<L> {
             demand
                 .iter()
                 .copied()
-                .filter(|&p| unanswered(p, &mut path) && !source::serves(L::LAYER, p)),
+                .filter(|&p| unanswered(p, &mut path) && !source::serves(L::KIND, p)),
         );
         for &p in &absent_tiles {
             self.absent(p);
@@ -498,7 +498,7 @@ impl<L: DemandedBase> Demand<L> {
             return;
         }
         self.want(o, dst, pinned, min_zoom);
-        declare(const { Stream::of_layer(L::LAYER) }, &self.wants);
+        declare(const { Stream::of_layer(L::KIND) }, &self.wants);
     }
 
     /// The body of `step` for the observation `o` and the layer's `top`. It
@@ -565,7 +565,7 @@ impl<L: DemandedBase> Demand<L> {
         }
         self.wants.clear();
         L::tile_cache().ask(&self.asks);
-        declare(const { Stream::of_layer(L::LAYER) }, &[]);
+        declare(const { Stream::of_layer(L::KIND) }, &[]);
         self.last = None;
         self.idle_revision = Some(L::tile_cache().revision());
     }

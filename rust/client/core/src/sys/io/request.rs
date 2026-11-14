@@ -73,7 +73,7 @@ pub struct Attempt {
 /// only while the slot's attempt is out.
 #[derive(Clone, Copy)]
 struct Slot {
-    gen: u32,
+    generation: u32,
     out: Option<Attempt>,
 }
 
@@ -141,7 +141,10 @@ pub fn open(frames: impl Fn(Stream) -> u32) {
     SCHED.set(Sched {
         wants: bounds.map(Vec::with_capacity),
         bounds,
-        slots: [Slot { gen: 0, out: None }; SLOT_CNT],
+        slots: [Slot {
+            generation: 0,
+            out: None,
+        }; SLOT_CNT],
         credit_cnt: 0,
         credit_peak: 0,
         events: VecDeque::new(),
@@ -266,7 +269,7 @@ fn start_ready(s: &mut Sched, at: f64) {
             start_ms: at,
         });
         s.events
-            .push_back(Event::Start(key(k, s.slots[k].gen), stream, w.id));
+            .push_back(Event::Start(key(k, s.slots[k].generation), stream, w.id));
     }
     s.ready = ready;
 }
@@ -361,14 +364,14 @@ pub fn given_up() -> bool {
     sched().given_up
 }
 
-const fn key(slot: usize, gen: u32) -> u64 {
-    (slot as u64) << 32 | gen as u64
+const fn key(slot: usize, generation: u32) -> u64 {
+    (slot as u64) << 32 | generation as u64
 }
 
 fn slot_of(s: &Sched, key: u64) -> Option<usize> {
     let k = (key >> 32) as usize;
     let slot = s.slots.get(k)?;
-    (slot.gen == key as u32 && slot.out.is_some()).then_some(k)
+    (slot.generation == key as u32 && slot.out.is_some()).then_some(k)
 }
 
 fn find(s: &Sched, stream: Stream, id: u64) -> Option<usize> {
@@ -389,12 +392,13 @@ fn attempting(s: &Sched, stream: Stream, id: u64) -> bool {
 /// dropped.
 fn end(s: &mut Sched, k: usize) -> Attempt {
     let slot = &mut s.slots[k];
-    slot.gen = slot.gen.wrapping_add(1);
+    slot.generation = slot.generation.wrapping_add(1);
     slot.out.take().or_bug(Errno::ENOTRECOVERABLE)
 }
 
 fn stop(s: &mut Sched, k: usize, at: f64) {
-    s.events.push_back(Event::Stop(key(k, s.slots[k].gen)));
+    s.events
+        .push_back(Event::Stop(key(k, s.slots[k].generation)));
     let a = end(s, k);
     s.events.push_back(Event::End(a, at, Exit::Aborted, None));
 }
