@@ -1,11 +1,11 @@
 // pxl-geo-bake/bin/server.rs
 
 //! The dev tile server, baking on demand. It keeps what it bakes, one directory a kind, across
-//! restarts, in `--oven` or else in the checkout's tmp/. After a re-ingest or a change to a
-//! bake the oven is purged by command. The Earth's picture is baked offline (bin/earth.rs), so it is served from
-//! that bake (`./out`, or `--shelf`), under the names the bucket holds, however the rest is
-//! served.
-//! `--shelf` serves each kind's set (tile/shard.rs), so a bake can be looked at before
+//! restarts, in `--oven` or else in the checkout's `tmp/`. After a re-ingest or a change to a
+//! bake the oven is purged by command. The Earth's picture is baked offline (`bin/earth.rs`),
+//! so it is served from that bake (`./out`, or `--shelf`), under the names the bucket holds,
+//! however the rest is served.
+//! `--shelf` serves each kind's set (`tile/shard.rs`), so a bake can be looked at before
 //! anything is published. A tile goes out immutable under a version that names what is
 //! served, as the Worker's tiles do: a set's version is its manifest's digest, and the oven's
 //! is the token its folder holds (`version_of`).
@@ -94,7 +94,7 @@ fn version_of(app: &App, layer: BaseKind) -> Result<String, String> {
     }
 }
 
-/// The source's declaration (pxl-geo-bake source.rs) for the server as it stands: a shelf's
+/// The source's declaration (`source.rs`) for the server as it stands: a shelf's
 /// sets as their manifests say; for the oven, the coverage in the formats this code writes;
 /// and for the Earth's picture, its bake's.
 fn decl(app: &App) -> Result<String, String> {

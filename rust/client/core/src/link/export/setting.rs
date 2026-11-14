@@ -1,6 +1,6 @@
 // pxl-core/link/export/setting.rs
 
-//! The SETTING major's commands.
+//! The setting interface's methods.
 
 use super::{applied, or_refuse, refuse_unless};
 use crate::abi::types::ErrorCode;

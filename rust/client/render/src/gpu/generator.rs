@@ -533,8 +533,8 @@ impl Generator {
         self.cnt_read.forget();
     }
 
-    /// Called when the frame was drawn. The boxes it marked by, and its generation of every
-    /// entry, are done.
+    /// Takes the frame as drawn: the boxes it marked by, and its generation of every entry,
+    /// are done.
     pub fn on_drawn(&mut self) {
         if self.marking {
             self.damage.copy_within(self.mark_cnt..self.damage_cnt, 0);
@@ -544,9 +544,9 @@ impl Generator {
         self.mark_cnt = 0;
     }
 
-    /// Called when the frame was dropped and nothing of it was recorded. What it wrote is
-    /// written again: the entries it marked are marked again by the boxes still held, and the
-    /// clip levels' table and the placed decor are read anew.
+    /// Takes the frame as dropped, nothing of it recorded. What it wrote is written again: the
+    /// entries it marked are marked again by the boxes still held, and the clip levels' table
+    /// and the placed decor are read anew.
     pub fn on_dropped(&mut self) {
         self.mark_cnt = 0;
         self.clipmap.forget();

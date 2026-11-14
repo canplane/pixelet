@@ -13,7 +13,7 @@ import { bug } from "@xpute/kit/status/bug.ts";
 
 /** Where the tree's spec/ is, as whoever runs the tests knows it and defines
  * it: vitest's config in Node (vitest.config.ts), and the browser runner for
- * its page (gpu/script/browser.ts). Every record is read under it. */
+ * its page (gpu/web/host/script/browser.ts). Every record is read under it. */
 declare const GOLDEN_ROOT: string;
 
 export class Golden {

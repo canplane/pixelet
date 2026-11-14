@@ -40,9 +40,9 @@ AMALGAMATION_MAP := -fmacro-prefix-map=$(AMALGAMATION)/=
 
 SOURCES := $(sort $(shell find xpute dev -name '*.cpp'))
 # The library is what the amalgamation holds: kit, then the link over it, then
-# the guest's end, then the GPU's calls over that, in the order the two files
-# read.
-LAYERS := kit link guest gpu
+# the guest's end, then the GPU's link and its guest's calls over that, in the
+# order the two files read.
+LAYERS := kit link guest gpu/link gpu/guest
 LIBRARY_HEADERS := $(foreach d,$(LAYERS),$(sort $(shell find xpute/$(d) -name '*.hpp')))
 LIBRARY_SOURCES := $(filter-out %.test.cpp,$(foreach d,$(LAYERS),$(filter xpute/$(d)/%,$(SOURCES))))
 

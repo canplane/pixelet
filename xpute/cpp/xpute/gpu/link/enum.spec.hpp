@@ -1,4 +1,4 @@
-// cpp/xpute/gpu/enum.spec.hpp
+// cpp/xpute/gpu/link/enum.spec.hpp
 //
 // GENERATED from gpu/link/spec/enum.json5 (xpute-gen data.rs)
 //

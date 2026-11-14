@@ -1,4 +1,4 @@
-// pxl-render/light_box.wgsl
+// pxl-render/frame/shader/light_box.wgsl
 
 // What the receivers' passes and the slide read of the light's box, beyond what
 // light_aim.wgsl reads. A receiver is a surface that reads the shadow map. This part gives the

@@ -1,9 +1,9 @@
-// pxl-render/queue.wgsl
+// pxl-render/frame/shader/queue.wgsl
 
 // The holes as the queue's items (queue_walk.wgsl, queue_last.wgsl). The holes are the pixels
 // the eye's cast listed and the slots the light's cast listed, which took neither a visible
 // voxel nor the sky (cast.wgsl, light.wgsl). The observer's part (hole.eye.wgsl,
-// hole.light.wgsl) says where its holes, pool and stops lie, a hole's ray, and the words an
+// hole.light.wgsl) says where its holes, pool and hits lie, a hole's ray, and the words an
 // ended walk leaves.
 //
 // A ray parked between the run's walks lies in its observer's pool with its pixel or slot
@@ -89,8 +89,8 @@ fn parked_start(item: u32) -> Start {
   return parked_from(beams[at], vec3<u32>(beams[at + 1u], beams[at + 2u], beams[at + 3u]), beams[at + 4u]);
 }
 
-/// Takes a number for a stop the record will take, as the walk that ends the ray numbers them
-/// (`hit_number`). The number that opens a workgroup raises the dispatch over the stops. Past
+/// Takes a number for a hit the record will take, as the walk that ends the ray numbers them
+/// (`hit_number`). The number that opens a workgroup raises the dispatch over the hits. Past
 /// the list's room it is `NONE` (`ray::HITS_A_FRAME`).
 fn hit_in_cap() -> u32 {
   let r = hit_number();
@@ -103,19 +103,19 @@ fn hit_in_cap() -> u32 {
   return r;
 }
 
-/// Lists stop `r` for the record (miss_word.wgsl `hit_put`) and returns its number marked as
+/// Lists hit `r` for the record (miss_word.wgsl `hit_put`) and returns its number marked as
 /// waiting (`beam::HIT_WAIT`). The pixel keeps that word until record_hits.wgsl puts there
-/// what lies around the stop's face.
+/// what lies around the hit's face.
 fn keep_hit(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) -> u32 {
   hit_put(r, w, face, id);
   return HIT_WAIT | r;
 }
 
-/// Ends the walk `w` of hole `item`. Its stop, whatever it stopped on, is listed for its
+/// Ends the walk `w` of hole `item`. Its hit, whatever it stopped on, is listed for its
 /// observer's record (`keep_hit`, record_hits.wgsl), the eye's and the light's alike, and the
 /// observer writes what the ray shows at the hole (`hole_write`): for a whole cell of the eye,
-/// with the word the record puts there once its stop is in (record_hits.wgsl `rec_faces_cs`).
-/// A ray that ended as a lack shows the deepest node held (`shows`), and its stop stays a
+/// with the word the record puts there once its hit is in (record_hits.wgsl `rec_faces_cs`).
+/// A ray that ended as a lack shows the deepest node held (`shows`), and its hit stays a
 /// lack, so the next frame asks for what it lacked.
 fn finish(item: u32, aim: Aim, w: WalkEnd) {
   let hit = w.ends == ENDS_CELL || w.ends == ENDS_LACK;
@@ -130,7 +130,7 @@ fn finish(item: u32, aim: Aim, w: WalkEnd) {
   let face = face_of(aim, w);
   let shown = shows(aim, w);
   var faces = 0u;
-  // A `select` evaluates both its arms, so the stop is kept under an `if`, only where it has a
+  // A `select` evaluates both its arms, so the hit is kept under an `if`, only where it has a
   // number.
   if (r != NONE) {
     faces = keep_hit(r, w, face | select(0u, HIT_LACK, w.ends == ENDS_LACK), at);

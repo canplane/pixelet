@@ -4,9 +4,8 @@ edition.workspace = true
 version.workspace = true
 publish.workspace = true
 
-# The device's library (lib.rs): the core linked with the runtime the app
-# composes on the core's thread, as ts/client/src/runtime/worker.ts is a
-# page's. An iPhone app links it static (staticlib), an Android app loads it
+# The device's library (lib.rs): the core linked with what xpute's runtime
+# starts it with, as ts/client/src/runtime/worker.ts is a page's. An iPhone app links it static (staticlib), an Android app loads it
 # shared (cdylib); the device's build asks cargo for the one it takes by name
 # (`cargo rustc --crate-type`, ts/client/script/core-build.py).
 [lib]

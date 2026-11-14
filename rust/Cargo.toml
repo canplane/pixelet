@@ -215,9 +215,10 @@ lto = false
 codegen-units = 256
 incremental = true
 
-# wgpu with one hal command buffer per encoder on every backend, the iOS
-# Simulator's Metal capabilities and Metal's pipeline cache: what the fork
-# changes is wgpu-fork.md's.
+# The wgpu xpute's native GPU host and pxl-render draw with, the fork
+# xpute/wgpu-fork.md holds: its revision is xpute's (xpute/Cargo.toml) and
+# moves with it, and when it moves the renderer's passes run on the GPU too
+# (`make test-gpu`).
 [patch.crates-io]
 naga = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
 naga-types = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }

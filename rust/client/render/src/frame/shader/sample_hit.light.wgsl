@@ -1,4 +1,4 @@
-// pxl-render/sample_hit.light.wgsl
+// pxl-render/frame/shader/sample_hit.light.wgsl
 
 // What sample_hit.wgsl reads of the light: whether a sample stopped on its node whole, and
 // where the faces' asks its samples open lie.

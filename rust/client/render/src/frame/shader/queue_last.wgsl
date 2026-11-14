@@ -1,4 +1,4 @@
-// pxl-render/queue_last.wgsl
+// pxl-render/frame/shader/queue_last.wgsl
 
 // A run's last walk (walk.wgsl, ask.wgsl), over the rays the walks over the node cache left
 // parked, each from the state it was parked in. It asks the world where no slot keeps a node.
@@ -56,9 +56,9 @@ fn load(word: u32) -> u32 {
   return atomicLoad(&node_cache[word]);
 }
 
-/// Takes the next stop's number (queue.wgsl `keep_hit`), counting on from the stops the walks
+/// Takes the next hit's number (queue.wgsl `keep_hit`), counting on from the hits the walks
 /// over the node cache listed (`node_cache::HITS_CNT`). `hit_rows` raises the dispatch over the
-/// stops to `rows` (`node_cache::HITS_ARGS`).
+/// hits to `rows` (`node_cache::HITS_ARGS`).
 fn hit_number() -> u32 {
   return atomicAdd(&node_cache[HITS_CNT], 1u);
 }

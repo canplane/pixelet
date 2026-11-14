@@ -1,4 +1,4 @@
-// pxl-render/light_cell.wgsl
+// pxl-render/frame/shader/light_cell.wgsl
 
 // Works out where the rays of each cell of the shadow map start (pxl-engine
 // `beam::CELL_WORDS`), one thread for each cell. The starts lie past the beam's lines in the
@@ -23,7 +23,7 @@ fn light_cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
     return;
   }
   let side = 2u + 2u * LIGHT_BEAM_WINDOW;
-  let least = window_least(light_hand_at(0u), beam_across(), c, side);
+  let least = window_least(light_start_dist_at(0u), beam_across(), c, side);
   let lo = light_on(LEVEL_CORNER, c);
   let hi = light_on(LEVEL_CORNER, c + vec2<u32>(side - 1u));
   let at = light_cell_at(c);

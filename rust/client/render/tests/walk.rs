@@ -17,7 +17,7 @@ const PROBE_WORDS: usize = 7;
 /// A probe that works out the zoom and the narrowness as the walks do (walk_node.wgsl), one
 /// thread for each case. It writes the vector's length squared and the zoom asked there over
 /// the full range of zooms. It then writes the width of a beam whose rays lie `y` apart in
-/// angle at `z` squared from the origin, and whether a split `x` wide is narrow at that width.
+/// angle at the squared distance `z`, and whether a split `x` wide is narrow at that width.
 const PROBE: &str = r"
 @group(0) @binding(40) var<storage, read_write> probe: array<u32>;
 

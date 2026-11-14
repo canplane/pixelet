@@ -1,7 +1,7 @@
 // pxl-core/sys/io/param.rs
 
-//! The numbers of the core's I/O: how reads are retried and how many run at
-//! once, how many files a frame writes, and how much memory bodies may hold.
+//! The numbers of the core's I/O: how reads are retried, how many run at
+//! once, and how much memory bodies may hold.
 
 /// After the server fails, every read waits before it starts. The longest
 /// wait is `RETRY_BASE_MS`, doubled for each failure in a row and never more

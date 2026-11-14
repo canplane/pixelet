@@ -1,14 +1,14 @@
-// pxl-render/hole.light.wgsl
+// pxl-render/frame/shader/hole.light.wgsl
 
 // The light's holes as the holes' queue reads them (queue.wgsl): the slots the light's cast
-// listed (light.wgsl), where its pool and stops lie, a slot's ray, and the word an ended walk
+// listed (light.wgsl), where its pool and hits lie, a slot's ray, and the word an ended walk
 // leaves at the slot.
 
 fn pool_at() -> u32 {
   return hdr_word(LIGHT_HDR_POOL);
 }
 
-/// Where the light's stops lie (hit.wgsl), past its pool (`light::hits_at`).
+/// Where the light's hits lie (hit.wgsl), past its pool (`light::hits_at`).
 fn hits_at() -> u32 {
   return hdr_word(LIGHT_HDR_HITS);
 }
@@ -33,7 +33,7 @@ fn item_start(item: u32, aim: Aim) -> Start {
   return light_resumed(aim, slot_texel(hole_px(item)));
 }
 
-/// The light's stops hold no line: the light asks no face's word off one
+/// The light's hits hold no line: the light asks no face's word off one
 /// (record_hits.light.wgsl `hit_asks`).
 fn hit_line(id: vec2<u32>) -> u32 {
   return NONE;

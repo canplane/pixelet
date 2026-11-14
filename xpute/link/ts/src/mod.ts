@@ -8,6 +8,7 @@ export {
   type Args,
   type Guest,
   type Handle,
+  type Imports,
   type LinkObject,
   load_uri,
   type Method,

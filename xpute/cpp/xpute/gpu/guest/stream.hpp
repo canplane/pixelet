@@ -1,4 +1,4 @@
-// cpp/xpute/gpu/stream.hpp
+// cpp/xpute/gpu/guest/stream.hpp
 
 // A stream carries the guest's GPU calls to the host as records, as
 // `xpute-gpu-guest`'s `stream.rs` carries them: op, n, then n words; bytes go

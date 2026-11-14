@@ -1,4 +1,4 @@
-// cpp/xpute/gpu/encode.cpp
+// cpp/xpute/gpu/guest/encode.cpp
 
 #include "encode.hpp"
 

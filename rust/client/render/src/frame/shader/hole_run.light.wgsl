@@ -1,4 +1,4 @@
-// pxl-render/hole_run.light.wgsl
+// pxl-render/frame/shader/hole_run.light.wgsl
 
 // What the queue's passes over the light's holes read of their run (queue_walk.wgsl,
 // queue_ask.wgsl, queue_last.wgsl, queue.wgsl): the tag their walks put in the node cache's

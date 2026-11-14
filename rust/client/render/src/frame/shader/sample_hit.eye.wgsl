@@ -1,4 +1,4 @@
-// pxl-render/sample_hit.eye.wgsl
+// pxl-render/frame/shader/sample_hit.eye.wgsl
 
 // What sample_hit.wgsl reads of the eye: whether a sample stopped on its node whole, and where
 // the faces' asks its samples open lie.

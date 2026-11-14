@@ -1,4 +1,4 @@
-// xpute-gpu-native-host/abi/surface.rs
+// xpute-gpu-native-runtime/abi/surface.rs
 //
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 

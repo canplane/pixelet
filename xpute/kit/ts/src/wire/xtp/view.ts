@@ -279,7 +279,7 @@ export class TreeView extends NodeView {
    *   requirement of the tree packet format itself.
    *
    * Contract:
-   * - Unsupported input is treated as programmer error and throws.
+   * - Unsupported input throws `XputeError` (EINVAL), as any input the caller cannot write.
    * - bigint is accepted only when it fits the i64 lowering path.
    * - Generic scalar bigint lowering currently targets only i64.
    *   Unsigned 64-bit scalar writes must use the explicit u64() writer.

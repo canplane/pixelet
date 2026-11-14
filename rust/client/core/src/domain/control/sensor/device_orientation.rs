@@ -1,28 +1,30 @@
 // pxl-core/domain/control/sensor/device_orientation.rs
 
 //! The compass sensor's decisions: the heading an event means, when to
-//! listen, and when silence counts as a lost sensor. The UI owns the
+//! start it, and when silence counts as a lost sensor. The UI owns the
 //! listener and iOS's permission prompt, and the core hears only the answer.
 
 use crate::abi::sensor::PermissionAnswer;
 use crate::abi::overlay::SensorStatus;
+use crate::domain::control::navigation::follow_mode::following;
 use crate::domain::control::param::WATCHDOG_TIMEOUT_MS;
 use crate::domain::control::sensor::reading::{device_orient_store, device_orient_store_mut};
-use crate::sys::sched::invalidate_at;
+use crate::sys::sched::{invalidate, invalidate_at};
 use xpute_guest::clock::now;
 use pxl_global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum OrientationCommand {
-    /// The UI listens to deviceorientationabsolute where the browser has it.
-    Listen,
-    Remove,
+    /// The UI starts the compass, deviceorientationabsolute where the browser
+    /// has it.
+    Start,
+    Stop,
 }
 
 #[derive(Clone, Copy, Default)]
 pub(crate) struct OrientationPlatform {
     pub supported: bool,
-    /// On iOS 13 and later, requestPermission must run inside a user
+    /// On iOS 13 and later, `requestPermission` must run inside a user
     /// gesture.
     pub needs_permission: bool,
     /// Whether silence means the sensor is lost. A browser's sensor talks
@@ -60,24 +62,26 @@ fn orient() -> &'static mut Orientation {
 
 /// An orientation event. iOS's compass heading is preferred, and otherwise
 /// the heading is derived from alpha.
-pub(crate) fn orient_event(
-    webkit_compass_heading: Option<f64>,
-    alpha: Option<f64>,
-    beta: Option<f64>,
-    gamma: Option<f64>,
-) {
-    // An API without a sensor answers once with nothing and never again, so
-    // the sensor counts as unavailable.
-    if webkit_compass_heading.is_none() && alpha.is_none() && beta.is_none() && gamma.is_none() {
-        orient().cmd = Some(OrientationCommand::Remove);
-        let store = device_orient_store_mut();
-        store.set_is_tracking_orient(false);
-        store.status = SensorStatus::Unavailable;
-        return;
-    }
-    orient().last_event_at = now();
+pub(crate) fn orient_event(webkit_compass_heading: Option<f64>, alpha: Option<f64>) {
+    // An event with neither is a reading with no heading. One with no field at
+    // all is a page's word that it has no compass, which its reader tells as
+    // the platform's (`orient_unavailable`).
     let heading = webkit_compass_heading.or_else(|| alpha.map(|a| (360.0 - a) % 360.0));
-    device_orient_store_mut().set_orient(heading, beta, gamma);
+    orient().last_event_at = now();
+    // The heading turns the camera only while it follows the device, so a
+    // changed heading asks for a frame only then.
+    if device_orient_store_mut().set_orient(heading) && following() {
+        invalidate();
+    }
+}
+
+/// The place has no compass: its listener stops, and the compass reads
+/// unavailable, which `request_orient` keeps.
+pub(crate) fn orient_unavailable() {
+    orient().cmd = Some(OrientationCommand::Stop);
+    let store = device_orient_store_mut();
+    store.set_is_tracking_orient(false);
+    store.status = SensorStatus::Unavailable;
 }
 
 /// Asks for the heading. Returns true when the heading is tracked or now
@@ -97,7 +101,7 @@ pub(crate) fn request_orient() -> bool {
     }
     store.status = SensorStatus::Loading;
     let o = orient();
-    o.cmd = Some(OrientationCommand::Listen);
+    o.cmd = Some(OrientationCommand::Start);
     o.last_event_at = now();
     store.set_is_tracking_orient(true);
     true
@@ -135,7 +139,7 @@ pub(crate) fn on_orient_lost() {
 }
 
 pub(crate) fn orient_close() {
-    orient().cmd = Some(OrientationCommand::Remove);
+    orient().cmd = Some(OrientationCommand::Stop);
     let store = device_orient_store_mut();
     store.set_is_tracking_orient(false);
     store.status = SensorStatus::Idle;
@@ -163,7 +167,7 @@ pub(crate) fn orient_watchdog_step() {
         invalidate_at(lost_at);
         return;
     }
-    o.cmd = Some(OrientationCommand::Remove);
+    o.cmd = Some(OrientationCommand::Stop);
     on_orient_lost();
 }
 

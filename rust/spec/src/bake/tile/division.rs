@@ -203,7 +203,7 @@ pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, XputeError> {
     )
 }
 
-/// Every name within NAME_BYTES.
+/// Every name within `NAME_BYTES`.
 fn check_names<'a>(mut names: impl Iterator<Item = &'a str>) -> Result<(), XputeError> {
     if names.any(|n| n.len() > NAME_BYTES) {
         return Err(malformed());

@@ -36,9 +36,9 @@ A missing or partial table needs an ingest; the bake names it
 A bake changes its set only through `out/<kind>.stage/`, one shard at a time:
 `leaf` (the named shards' leaves), then `fold`, then `commit`. `publish` runs
 only when named and makes `out/<kind>.publish/` for an upload. Any step can be
-stopped and rerun, and `commit` refuses to run before `fold`. After a change of
-source, code or coverage, purge
-(`rm -rf out/<kind> out/<kind>.stage out/<kind>.publish`) and bake every shard.
+stopped and rerun, and `commit` refuses to run before `fold`. What a change of
+source, code or coverage, or a re-ingest, purges is
+[CONTRIBUTING.md](../../../CONTRIBUTING.md#making-data)'s.
 
 ```bash
 make bake-terrain ARGS="--shard 01033210 --step leaf"
@@ -50,7 +50,7 @@ make bake-terrain ARGS="--step fold --step commit"
 | `--step <s>`        | `leaf`, `fold`, `commit`, `publish`; repeatable; the first three when omitted |
 | `--shard <name>`    | bake that shard's leaves, repeatable; every shard when omitted                |
 | `--out <dir>`       | the set (default `./out/<kind>`), staged in `<dir>.stage`                     |
-| `--concurrency <n>` | parallel tiles — match `DB_POOL_SIZE`, the DB is the bottleneck               |
+| `--concurrency <n>` | parallel workers: the folds', and the terrain and division leaves'            |
 
 ## Verifying
 
@@ -82,5 +82,3 @@ make bake-terrain ARGS="--step fold --step commit"
 
 Bump the kind's `FORMAT` (`spec/spec/bake/publication.json5`) only when how the client
 reads a tile changes (its format in `pxl-spec bake/`).
-
-After a re-ingest or a bake change, `rm -rf tmp/oven` (the dev tile server's cache).

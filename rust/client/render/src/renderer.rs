@@ -1,6 +1,6 @@
 // pxl-render/renderer.rs
 
-//! The renderer. It draws the world's cast and the scheduler's draw lists on
+//! The renderer. It draws the world's cast and the core's draw lists on
 //! the device, within the core's own frame. Its depth is the device's,
 //! reversed as `mat4::perspective` makes it: the nearer depth is the greater.
 //! A frame draws only what moved: one that reads as the last stands and
@@ -705,7 +705,7 @@ impl Renderer {
     /// Makes what only the shadows hold while their setting `on` is on
     /// (`FrameInput::shadow`), and lets it go while it is off, before the
     /// frame. The shadows hold the map and the world's depth seen from the
-    /// light (`Shadow::made`), and the light's cast (`RayPass::light_made`).
+    /// light (`Shadow::sync`), and the light's cast (`RayPass::light_made`).
     /// When the setting turned, the lit passes' groups are made again, over
     /// the map or over the blank one.
     fn shadows_made(&mut self, g: &Gpu, on: bool) {
@@ -1085,7 +1085,6 @@ impl Renderer {
             self.jitter_written = jitter;
             self.drift_written = drift_now;
         }
-        // Whether nothing in the lists changed this frame.
         let drifted = draws.drifting() && drift_now != drift_bits(&self.last_frame_words);
         let lists_same = !lists_changed && !uploads_changed && !drifted;
         if words_changed || drift_changed {
@@ -1661,7 +1660,7 @@ impl Renderer {
         }
     }
 
-    /// The frame's figures. The draws counted are what the scheduler asked
+    /// The frame's figures. The draws counted are what the core's lists ask
     /// for, so a draw passed over because its upload, skin or sprite is not on
     /// the device yet still counts. They are counted only while `counted`,
     /// which only the profiler sets, so a frame no one reads counts none.

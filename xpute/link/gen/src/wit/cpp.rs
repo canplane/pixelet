@@ -1,7 +1,7 @@
 // xpute-link-gen/wit/cpp.rs
 
 //! The link's bindings in C++, a header per interface, in the shape the Rust
-//! takes (wit.rs) and in C++'s own forms: the interface's handle and its
+//! takes (rs.rs) and in C++'s own forms: the interface's handle and its
 //! methods' numbers, its types, each storing itself into a packet and loading
 //! itself from one (cpp/xpute/link/cabi.hpp) at the offsets the Rust and the
 //! TypeScript take, from the one layout of each type (`Gen::layout`), and the

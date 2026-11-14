@@ -1,7 +1,6 @@
 // pxl-core/link/export/source.rs
 
-//! The SOURCE major's command: the tile source the client declares
-//! (SOURCE_DECLARE).
+//! The source interface's method: the tile source the client declares.
 
 use super::refuse_unless;
 use crate::sys::io::source;

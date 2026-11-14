@@ -1,11 +1,11 @@
 // pxl-render/pass/impostor.rs
 
-//! The decor's impostor tier. Each draw group's model is baked once, seen from
-//! the side, into a layer of an atlas, and baked again only when its model,
-//! skin or extent changes. Each instance is drawn as a quad turned to the eye
-//! about the world's up and textured from its group's layer. A listed draw
-//! that changed marks the screen's tiles it covers where it was and where it
-//! is (pass/mark.rs). The upload such a draw reads holds its instances.
+//! The decor drawn as an impostor. Each draw group's model is baked once, seen
+//! from the side, into a layer of an atlas, and baked again only when its
+//! model, skin or extent changes. Each instance is drawn as a quad turned to
+//! the eye about the world's up and textured from its group's layer. A listed
+//! draw that changed marks the screen's tiles it covers where it was and where
+//! it is (pass/mark.rs). The upload such a draw reads holds its instances.
 
 use crate::frame::shader::record::PIPELINE_IMPOSTOR;
 use crate::frame::shader::record::{PIPELINE_IMPOSTOR_BAKE, PIPELINE_IMPOSTOR_MARK};
@@ -29,10 +29,9 @@ use crate::pass::model::{
 };
 
 /// The side of an atlas layer, in texels. An impostor is drawn only smaller
-/// than the model tier's floor, which is one camera grid cell (pxl-engine
-/// `grid::CELLS_A_RAD`). A cell is 45 drawn pixels on a view 2160 CSS pixels
-/// high at a pixel ratio of 2, so this side is several times any impostor's
-/// drawn size.
+/// than decor drawn as a model, two camera grid cells (pxl-core
+/// `DECOR_MODEL_CELLS`). A cell is 45 drawn pixels at the middle of a view
+/// 2160 CSS pixels high at a pixel ratio of 2.
 const IMPOSTOR_SIZE: u32 = 128;
 const FIT_BYTES: u32 = 16;
 
@@ -270,7 +269,7 @@ impl ImpostorPass {
 
     /// Draws the impostors the GPU generated, one indirect draw for each group
     /// whose layer is baked. A group's impostors are in region `2·group + 1`
-    /// of what the GPU generated (pxl-content `generation::drawn`).
+    /// of what the GPU generated (pxl-content `generation::drawing`).
     pub fn draw_generated(
         &self,
         pass: &mut TrackedRenderPass,

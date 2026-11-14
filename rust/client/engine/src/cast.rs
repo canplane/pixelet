@@ -32,7 +32,7 @@ use pxl_spec::space::layer::lattice::{draw_dist, GROUND};
 
 /// The direction at the tangents `tx` across and `ty` up from the optical axis, as a
 /// projection puts a drawn pixel's middle: its tangents are those of the screen's half-angles
-/// (pxl-core domain/view/lens.rs `Lens`), scaled by where the pixel lies on the screen.
+/// (pxl-spec space/camera/eye.rs `Lens`), scaled by where the pixel lies on the screen.
 pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f32) -> [f32; 3] {
     let d = [
         forward[0] + tx * right[0] + ty * up[0],
@@ -44,7 +44,7 @@ pub fn through(forward: [f32; 3], right: [f32; 3], up: [f32; 3], tx: f32, ty: f3
 }
 
 /// How far apart a beam's rays lie: `across + angle · d` units at `d` from the walk's origin.
-/// The eye's spacing is an angle, its camera grid's lattice (`beam::Grid::s`); the light's,
+/// The eye's spacing is an angle, its camera grid's lattice (`grid::CELL`); the light's,
 /// whose rays are parallel, is a width, `light::BEAM` of its map's texels. Only a beam reads
 /// it, for its widening and for `narrow` (`Until::Beam`); an asker that casts no beam, such as
 /// control or physics, gives none (`NONE`).
@@ -802,7 +802,7 @@ impl<A: Copy> Line<A> {
 }
 
 /// What a walk leaves where it ends (`walk`), for whatever reads on from it: what it met,
-/// whose stop is the node it ended at and what was handed that node (`Hit::node`, `Hit::at`),
+/// whose hit is the node it ended at and what was handed that node (`Hit::node`, `Hit::at`),
 /// and what was handed every node above that, its stack by zoom, taken from `over` above where
 /// the walk started (`LINE`). A walk that nothing reads on from leaves nothing (`()`), and
 /// reads nothing of `over` for it.
@@ -987,7 +987,7 @@ pub fn walk_at_most<Q: Query>(
                 // since the grid's rays around it clear it too. Otherwise it stops at a split it may not
                 // share with them, and enters every other. For any other walk, a span wholly outside the box,
                 // or only touching it, meets nothing a ray cannot see through, so a walk that stops at that
-                // passes the node whole, and a walk that stops at what is transparent goes in, its stop
+                // passes the node whole, and a walk that stops at what is transparent goes in, its hit
                 // being where that span begins. Either way the box is asked once.
                 Kind::Split => {
                     let beam = until == Until::Beam;

@@ -1,7 +1,7 @@
 // pxl-geo-bake/bin/division.rs
 
-//! The divisions pyramid, a shard at a time into its set (tile/shard.rs):
-//! `leaf` stages the named shards' leaves (division.rs `leaf`), then the
+//! The divisions pyramid, a shard at a time into its set (`tile/shard.rs`):
+//! `leaf` stages the named shards' leaves (`division::leaf`), then the
 //! zooms over them are folded again and committed; a version leaves out the
 //! tiles that say no more than their parent.
 //!

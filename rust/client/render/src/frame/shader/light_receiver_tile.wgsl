@@ -1,4 +1,4 @@
-// pxl-render/light_receiver_tile.wgsl
+// pxl-render/frame/shader/light_receiver_tile.wgsl
 
 // How the receivers' passes (light_mark.wgsl, light_mark_draws.wgsl) list the tiles of the box
 // a receiver stands on (pxl-engine `light::LIST_RECEIVERS`). The propagation then takes one

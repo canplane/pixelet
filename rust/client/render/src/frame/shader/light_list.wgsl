@@ -1,4 +1,4 @@
-// pxl-render/light_list.wgsl
+// pxl-render/frame/shader/light_list.wgsl
 
 // The shadow map's lattice, as the light's beam, cells and slots read it from the light's list
 // (pxl-engine light.rs). This part says where a beam ray's line, how far the rays about it
@@ -25,10 +25,10 @@ fn light_line(k: u32) -> u32 {
   return k * LIGHT_LINE_WORDS;
 }
 
-/// The word that says how far the rays about beam ray `k` start (`light::hand_at`). There is
+/// The word that says how far the rays about beam ray `k` start (`light::start_dist_at`). There is
 /// one word for each beam ray, past the lines and before the cells.
-fn light_hand_at(k: u32) -> u32 {
-  return hdr_word(LIGHT_HDR_HANDS) + k;
+fn light_start_dist_at(k: u32) -> u32 {
+  return hdr_word(LIGHT_HDR_START_DISTS) + k;
 }
 
 /// The first word of sample `s`, wrapped as the slots are (`light::sample`).

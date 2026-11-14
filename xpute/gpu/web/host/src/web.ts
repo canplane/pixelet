@@ -126,8 +126,8 @@ export class WebGpu {
       this.host = null;
       this.block = null;
       // The guest asks for a device again.
-      this.report("waiting");
       this.tell(this.lost);
+      this.report("waiting");
     });
     this.canvases.forEach((canvas, handle) => r.bind(handle, canvas.getContext("webgpu")!));
     this.host = r;

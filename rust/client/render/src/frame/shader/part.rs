@@ -60,7 +60,7 @@ pub const SHADER_CAST: u32 = 25;
 /// stands on its column's surface and takes its pose (decor_pose.wgsl). It has one compute
 /// entry point.
 pub const SHADER_GENERATION: u32 = 26;
-/// The three passes after `SHADER_GENERATION` (pxl-engine `generation::drawn`). The count
+/// The three passes after `SHADER_GENERATION` (pxl-content `generation::drawing`). The count
 /// sizes each record that generation and placed decor leave for the screen, and counts it in a
 /// draw region (decor_cnt.wgsl). The args lay out the regions one after another with their
 /// indirect args (decor_args.wgsl). The compact writes each drawn record into the decor's
@@ -102,15 +102,15 @@ pub const SHADER_QUEUE_ASK: u32 = 39;
 /// Brings the occlusion's half-resolution map up to each pixel and multiplies it into the
 /// world's color, drawn as the damaged tiles' quads (ao_apply.wgsl).
 pub const SHADER_AO_APPLY: u32 = 40;
-/// `SHADER_SAMPLE_HIT` writes the eye's samples into the record of voxels as stops (pxl-engine
-/// `record`, sample_hit.wgsl). It is a port by hand with two compute entry points.
+/// `SHADER_SAMPLE_HIT` writes the eye's samples into the record of voxels as hits (pxl-engine
+/// `record`, sample_hit.wgsl). It is a port by hand with one compute entry point.
 /// `SHADER_RASTER` draws the record's voxels as boxes, the eye's and the light's, and keeps at
 /// each pixel the voxel whose face its ray enters first (raster.wgsl). The cast reads what
 /// each pixel keeps (`SHADER_CAST`).
 pub const SHADER_SAMPLE_HIT: u32 = 41;
 pub const SHADER_RASTER: u32 = 42;
 /// Asks the world what lies around each face of the record's voxels, once a face (pxl-engine
-/// `raster::ARGS_FACES`, `record::R_FACES`), and around the face each missed pixel's hit
+/// `raster::ARGS_FACES`, `node_cache::R_FACES`), and around the face each missed pixel's hit
 /// entered (face.wgsl). It is a port by hand with one compute entry point.
 pub const SHADER_FACE: u32 = 43;
 /// The three shaders that list the tiles of the light's box the shadow map's receivers stand
@@ -176,7 +176,7 @@ pub const SHADER_LOCATION_BEACON_MARK: u32 = 63;
 pub const SHADER_RECT_ARGS: u32 = 64;
 /// `SHADER_QUEUE_CORNERS`, `SHADER_CELL`, `SHADER_QUEUE_LAST_SAMPLES` and `SHADER_SAMPLE_HIT`
 /// for the light's map: the walks of its beam rays, its cells, the last walk of its samples,
-/// and its samples' stops into the record (beam.light.wgsl, light_cell.wgsl,
+/// and its samples' hits into the record (beam.light.wgsl, light_cell.wgsl,
 /// sample.light.wgsl, sample_hit.light.wgsl).
 pub const SHADER_QUEUE_LIGHT_CORNERS: u32 = 65;
 pub const SHADER_LIGHT_CELL: u32 = 66;
@@ -211,10 +211,10 @@ pub const SHADER_DECOR_CULL: u32 = 76;
 /// world's receivers are stood this frame. Each entry on the light's box is written as a box
 /// for the light's raster. It is a port by hand.
 pub const SHADER_REC_DRAW: u32 = 77;
-/// Writes the holes' stops into the node cache's drawable entries, and puts at each hole's
+/// Writes the holes' hits into the node cache's drawable entries, and puts at each hole's
 /// pixel what lies about the face it entered (record_hits.wgsl). It is a port by hand.
 pub const SHADER_REC_HITS: u32 = 78;
-/// `SHADER_REC_HITS` for the light's stops (record_hits.light.wgsl).
+/// `SHADER_REC_HITS` for the light's hits (record_hits.light.wgsl).
 pub const SHADER_LIGHT_REC_HITS: u32 = 79;
 /// Writes the dispatch of the drawn receivers' pass (light_mark_draws_open.wgsl). It is a
 /// module apart from that pass, so the pass, which takes its dispatch from the buffer this one

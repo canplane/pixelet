@@ -488,7 +488,7 @@ impl Model {
     ) -> impl Iterator<Item = [f32; 3]> + 'a {
         let cnt = self.vertex_cnt as usize;
         let column = move |k: usize| k * cnt;
-        // The model's mesh, written (`seal`): its vertex columns first.
+        // The vertex columns lead the block, which is written before `seal`.
         let w = &self.words[..cnt * MODEL_VERTEX_WORDS as usize];
         vertices.map(move |v| {
             let p = [0, 1, 2].map(|k| f32::from_bits(w[column(0) + v * 3 + k]));

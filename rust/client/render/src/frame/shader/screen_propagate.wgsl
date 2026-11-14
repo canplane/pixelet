@@ -15,8 +15,8 @@
 // tested first, and a tile whose slab lies off every map tile the frame's marks cover stops
 // there. Where a square's slab spans more than a few map tiles, each pixel is taken alone.
 //
-// The tests must cover: a tile marked too many only costs work, and a tile missed is a
-// failure.
+// Every test errs toward marking: a tile marked too many only costs work, and a tile missed
+// is a failure.
 
 // `TileGrid`, `tiles_age` and `tiles_in_damage` come from tile_word.wgsl, which spells word.rs
 // `screen`'s rule.

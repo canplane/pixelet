@@ -8,8 +8,9 @@
 //! and across xpute's parts. It
 //! also holds that only the top names the profiler, that no renderer stands under the core's
 //! sys/, that only the screen reads the screen's pixels, that no Rust file lies outside
-//! a crate's module tree, that no host of xpute's names its runtime's entries, and that the
-//! modules' and files' dependencies form no cycle. A rule Rust alone can keep is clippy's (rust/clippy.toml,
+//! a crate's module tree, that no host of xpute's names its runtime's entries, that the two
+//! workspaces patch crates.io alike, and that the modules' and files' dependencies form no
+//! cycle. A rule Rust alone can keep is clippy's (rust/clippy.toml,
 //! xpute/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
@@ -20,7 +21,7 @@ use pxl_tool::root;
 use regex::Regex;
 
 /// The crates that address the core's memory by offset, in which an offset becomes a pointer
-/// only through `xpute_link::mem::at` or `Memory::at`.
+/// only through `xpute_link::mem`.
 const OFF_CRATES: [&str; 5] = [
     "xpute/link/rust/src/",
     "xpute/guest/rust/src/",
@@ -586,7 +587,8 @@ fn declared(header: &str) -> Vec<String> {
 /// the environment its runtime is; the guest and each platform are heads, none naming
 /// another. The GPU is a plugin, which none of xpute's own parts (the kit, the link and the
 /// heads) names, and which may name them: its link stands over the heads, and each of its
-/// other parts over that, in its counterpart's head. Over every part, what develops xpute and
+/// other parts over that, in its counterpart's head, a device's host over its runtime as
+/// xpute's own. Over every part, what develops xpute and
 /// generates its code is a head of its own, which no part names and which names only the kit
 /// and the links. A part is held by what it ships: its manifest's dependencies, a
 /// dev-dependency left out, and the names its sources write, its tests left out, which may
@@ -602,14 +604,14 @@ const XPUTE_ORDER: [(&str, u8); 18] = [
     ("gpu-link", 4),
     ("gpu-guest", 5),
     ("gpu-web-host", 5),
-    ("gpu-native-host", 5),
     ("gpu-native-runtime", 5),
-    ("golden", 6),
-    ("gen", 6),
-    ("link-gen", 6),
-    ("gen-targets", 6),
-    ("gpu-gen-targets", 6),
-    ("tool", 6),
+    ("gpu-native-host", 6),
+    ("golden", 7),
+    ("gen", 7),
+    ("link-gen", 7),
+    ("gen-targets", 7),
+    ("gpu-gen-targets", 7),
+    ("tool", 7),
 ];
 const XPUTE_HEADS: [&[&str]; 4] = [
     &["guest", "gpu-guest"],
@@ -683,7 +685,7 @@ fn named(text: &str, path: &str) -> Vec<(usize, String)> {
     out
 }
 
-/// Each alias TSCONFIG gives, as the name an import writes and the folder,
+/// Each alias `TSCONFIG` gives, as the name an import writes and the folder,
 /// from the tree's root, it stands for.
 fn ts_aliases(read: &dyn Fn(&str) -> Option<String>) -> Vec<(String, String)> {
     let text: String = read(TSCONFIG)
@@ -932,9 +934,9 @@ fn unlinked(files: &[&str], read: &dyn Fn(&str) -> Option<String>) -> Vec<String
         .collect()
 }
 
-/// The dependency cycles that stood before the cycle rule, each as its graph and its members
-/// in order. pxl-tool's waits for the catalog's redesign, which changes its edges. No other
-/// cycle stands, and one of these that gains or loses a member is another.
+/// The dependency cycles let stand, each as its graph and its members in order. pxl-tool's
+/// waits for the catalog's redesign, which changes its edges. No other cycle stands, and one
+/// of these that gains or loses a member is another.
 const CYCLES_KNOWN: [&str; 1] = ["rust/tool: spec::asset spec::catalog spec::ingest"];
 
 /// The workspace file that lists xpute's TypeScript packages, the one source every reader of
@@ -997,7 +999,25 @@ fn package_aliases(packages: &[(String, String)]) -> Vec<(String, String)> {
 /// The Cargo workspace that lists xpute's crates.
 const XPUTE_CARGO: &str = "xpute/Cargo.toml";
 
-/// xpute's crates, each a directory XPUTE_CARGO's `members` lists, by the name its manifest
+/// pixelet's workspace, which builds xpute's crates by path. It patches crates.io in its own
+/// root, as `[patch]` holds only there, with xpute's table (`patches_agree`, xpute/wgpu-fork.md).
+const RUST_CARGO: &str = "rust/Cargo.toml";
+
+/// The entries of `manifest`'s `[patch.crates-io]` table, its comment lines and blank lines
+/// left out; none where it has no such table.
+fn patch_table(manifest: &str) -> Option<Vec<&str>> {
+    let mut lines = manifest.lines().skip_while(|l| l.trim() != "[patch.crates-io]");
+    lines.next()?;
+    Some(
+        lines
+            .take_while(|l| !l.trim_start().starts_with('['))
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .collect(),
+    )
+}
+
+/// xpute's crates, each a directory `XPUTE_CARGO`'s `members` lists, by the name its manifest
 /// gives and its sources' folder; or why one cannot be read so.
 fn xpute_crates(read: &dyn Fn(&str) -> Option<String>) -> Result<Vec<(String, String)>, String> {
     let text = read(XPUTE_CARGO).ok_or(format!("{XPUTE_CARGO}: unreadable"))?;
@@ -1121,6 +1141,16 @@ fn workspaces_agree(read: &dyn Fn(&str) -> Option<String>) -> Result<(), String>
         .collect();
     if listed != xpute {
         return Err(format!("{TS_WORKSPACE}: its ../xpute/ entries are not {XPUTE_WORKSPACE}'s list"));
+    }
+    Ok(())
+}
+
+/// Whether pixelet's workspace patches crates.io as xpute's does: one table in both, or none
+/// in either.
+fn patches_agree(read: &dyn Fn(&str) -> Option<String>) -> Result<(), String> {
+    let (rust, xpute) = (read(RUST_CARGO), read(XPUTE_CARGO));
+    if rust.as_deref().and_then(patch_table) != xpute.as_deref().and_then(patch_table) {
+        return Err(format!("{RUST_CARGO}: its [patch.crates-io] table is not {XPUTE_CARGO}'s"));
     }
     Ok(())
 }
@@ -1394,7 +1424,7 @@ fn run() -> Result<Vec<String>, String> {
     {
         for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
             if !comment.is_match(line) && cast.is_match(line) {
-                problems.push(format!("{f}:{}: casts to a pointer where an offset goes through mem::at or Memory::at: {}", n + 1, line.trim()));
+                problems.push(format!("{f}:{}: casts to a pointer where an offset goes through xpute_link::mem: {}", n + 1, line.trim()));
             }
         }
     }
@@ -1495,6 +1525,9 @@ fn run() -> Result<Vec<String>, String> {
 
     problems.extend(unlinked(&files, &read));
     if let Err(e) = workspaces_agree(&read) {
+        problems.push(e);
+    }
+    if let Err(e) = patches_agree(&read) {
         problems.push(e);
     }
     match xpute_packages(&read) {

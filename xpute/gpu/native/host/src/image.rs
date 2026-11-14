@@ -1,7 +1,7 @@
 // xpute-gpu-native-host/image.rs
 
-//! This is COPY_EXTERNAL_IMAGE on a native device. The web asks its browser to
-//! decode the image (createImageBitmap); here a thread of the host's own
+//! This is `COPY_EXTERNAL_IMAGE` on a native device. The web asks its browser
+//! to decode the image (createImageBitmap); here a thread of the host's own
 //! decodes it, and a later poll lands it in its texture. The formats are PNG,
 //! JPEG and WebP, the ones every browser is sure to read, so a guest can count
 //! on them on either host. Any other format is refused here.
@@ -74,8 +74,8 @@ impl GpuHost {
     }
 
     /// Writes each decoded image into its texture, ahead in the queue of
-    /// anything the guest submits from now on, and answers OK. An image the
-    /// host cannot decode is answered REFUSED, as on the web. An image
+    /// anything the guest submits from now on, and answers `OK`. An image the
+    /// host cannot decode is answered `REFUSED`, as on the web. An image
     /// whose texture is gone, or which the device's loss forgot, has nowhere
     /// to land and is not answered.
     pub(super) fn land_images(&mut self) {
@@ -105,7 +105,7 @@ impl GpuHost {
                 height: image.height,
                 depth_or_array_layers: 1,
             };
-            // The landing is timed as a page's is (`run::timed`).
+            // The landing is timed as a page's is (`timed`).
             timed(self.slow_ms, "image", || {
                 self.queue
                     .write_texture(d.to.info(), &image.rgba, layout, size)

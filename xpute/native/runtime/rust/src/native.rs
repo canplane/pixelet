@@ -1,12 +1,12 @@
 // xpute-native-runtime/native.rs
 
 //! The runtime as a native device's app reaches it, as @xpute/web-runtime is
-//! a page's: xpute's module calls the program's start and the runtime's
-//! entries through the C ABI (xpute.h), which the program exports by
-//! `native_abi!` with its start, and on Android the same calls under JNI's
-//! names (jni.rs). What the app hears, a batch waiting, a stop and a trap, it
-//! hears through the functions it sets (`notify_on`, `stopped_on`,
-//! `trap_on`).
+//! a page's: xpute's module starts the guest and calls the runtime's entries
+//! through the C ABI (xpute.h), which the program exports by `native_abi!`
+//! with what it starts its guest with (`Boot`), and on Android the same calls
+//! under JNI's names (jni.rs). What the app hears, a batch waiting, a stop
+//! and a trap, it hears through the functions it sets (`notify_on`,
+//! `stopped_on`, `trap_on`).
 
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
@@ -14,8 +14,8 @@ use std::sync::{Mutex, MutexGuard};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Token;
-use xpute_link::{load_uri, mem, Handle, Lift};
-use crate::remote;
+use xpute_link::{load_uri, mem, Handle, Lift, Method};
+use crate::{event_loop, link, remote};
 
 /// The guest's report before it stops (wit/stop/stop.wit), as the host that
 /// serves the stop hands it to the app (xpute-native-host stop.rs).
@@ -27,11 +27,26 @@ pub struct Stop {
     pub n2: u64,
 }
 
-/// The program's start, which `native_abi!` takes: the named handles of the
-/// interfaces the UI serves, the prefixes it opens at, the directory the
-/// platform keeps the app's caches in, and what tells the app a batch waits,
-/// a stop and a trap.
-pub type Start = fn(Vec<Handle>, Vec<Vec<Token>>, PathBuf, fn(), fn(Stop), fn());
+/// What serves the guest some of its imports: it mounts them on the link,
+/// on the guest's thread.
+pub type Server = Box<dyn FnOnce() + Send>;
+
+/// What a program starts its guest with: the stack its thread takes, its
+/// servers, in no order, since none depends on another; the interfaces its
+/// guest's world imports under a named handle (the bindings' `IMPORTS`);
+/// and the methods of the UI's named interfaces that answer later (the
+/// bindings' `LATER`).
+pub struct Boot {
+    pub stack_sz: usize,
+    pub servers: Vec<Server>,
+    pub imports: &'static [(&'static str, Handle)],
+    pub later: &'static [(Handle, Method)],
+}
+
+/// The program's start, which `native_abi!` takes: given the directory the
+/// platform keeps the app's caches in and what tells the app a stop, what
+/// it starts its guest with.
+pub type Start = fn(PathBuf, fn(Stop)) -> Boot;
 
 /// What tells the app a batch waits, or the guest's trap.
 pub type Tell = extern "C" fn();
@@ -114,11 +129,12 @@ fn prefixes(pkt: &[u8]) -> Result<Vec<Vec<Token>>, Errno> {
 static STARTED: std::sync::Once = std::sync::Once::new();
 
 /// Starts the program's runtime (`xpute_start`): `named` and `prefixes` the
-/// UI's, and the caches' directory. The runtime starts once a process, and
-/// each call is a new UI on it (`remote::accept`), as a reload's, which
-/// serves what the first did, whose attach the guest is told, and which is
-/// told the guest's end where it came (`End`). It answers the new UI's
-/// generation, which the UI's posts, answers and takes carry.
+/// UI's, and the caches' directory. The runtime starts once a process
+/// (`run`), and each call is a new UI on it (`remote::accept`), as a
+/// reload's, which serves what the first did, whose attach the guest is
+/// told, and which is told the guest's end where it came (`End`). It
+/// answers the new UI's generation, which the UI's posts, answers and takes
+/// carry.
 pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], cache_dir: PathBuf) -> u32 {
     let prefixes = prefixes(prefixes_pkt).or_bug(Errno::EBADMSG);
     let generation = remote::accept();
@@ -132,8 +148,34 @@ pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], cache_dir: P
             tell_trap();
         }
     }
-    STARTED.call_once(|| start(named, prefixes, cache_dir, notify, stopped, trap));
+    STARTED.call_once(|| run(start(cache_dir, stopped), named, prefixes));
     generation
+}
+
+/// Starts the guest on a thread of its own, as @xpute/web-runtime worker.ts
+/// `start` does on a page: mounts each server, then what the UI serves
+/// (`remote::serve`), enters the guest, which an import no server mounts
+/// refuses (`link::init`), and runs the loop for the guest's life. The guest
+/// is told each UI attached by `remote::accept`. A trapped guest is entered
+/// no more, and the UI's methods are answered EPIPE; what boot made due or
+/// completed is not left waiting.
+fn run(boot: Boot, named: Vec<Handle>, prefixes: Vec<Vec<Token>>) {
+    let spawned = std::thread::Builder::new()
+        .name("xpute guest".into())
+        .stack_size(boot.stack_sz)
+        .spawn(move || {
+            for s in boot.servers {
+                s();
+            }
+            remote::serve(&named, prefixes, boot.later);
+            link::init(trap, boot.imports);
+            loop {
+                link::run_due();
+                remote::flush(notify);
+                event_loop::turn();
+            }
+        });
+    spawned.or_bug(Errno::EAGAIN);
 }
 
 /// A directory the app names by the `len` bytes of UTF-8 at `at`.

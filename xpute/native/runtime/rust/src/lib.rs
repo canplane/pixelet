@@ -7,14 +7,15 @@
 //! arrives (`event_loop`), and every other thread only waits long and pushes
 //! into the queue.
 //!
-//! It offers pieces, which the program composes on the guest's thread in the
-//! order they run, as a page's worker composes @xpute/web-runtime's: what
-//! the UI serves (`remote`), the guest's first entry (`link::init`), then
-//! for the guest's life the answers due, the UI's batch and the loop's next
-//! turn (`link::run_due`, `remote::flush`, `event_loop::turn`). What the host serves is mounted on
-//! its link (xpute-native-host). It exports itself to the platform's module
-//! over the program's start (`native`, `native_abi!`), as @xpute/web-runtime
-//! is the page's.
+//! It starts the guest from what the program lists (native.rs `Boot`), as
+//! @xpute/web-runtime starts a page's: the program's servers,
+//! xpute-native-host's among them, each mounting on the link what it serves,
+//! and the interfaces the guest's world imports, which are all mounted
+//! before the guest is entered. It runs the steps itself, in their order:
+//! the servers, what the UI serves (`remote`), the guest's first entry
+//! (`link::init`), and the loop for the guest's life. It exports itself to
+//! the platform's module over the program's start (`native`, `native_abi!`),
+//! as @xpute/web-runtime is the page's.
 //!
 //! It takes the link, the contract both sides take, from xpute-link: a
 //! frame's words (`frame`), the link machine (`Side`), a URI's tokens and a

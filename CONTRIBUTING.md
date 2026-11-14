@@ -95,8 +95,10 @@ catalog the sky draws and the geoid table that GPS heights are corrected by.
 `make ingest-overture` fills the local geographic database, and
 [infra/geo/README.md](./infra/geo/README.md) describes each source's ingest.
 
-After a re-ingest or a change to a bake, empty what it made by hand
-(`rm -rf tmp/oven`, or `out/<kind>*` to bake one kind from nothing).
+After a change of source, code or coverage, purge the kind's set
+(`rm -rf out/<kind> out/<kind>.stage out/<kind>.publish`) and bake every shard;
+after a re-ingest or a change to a bake, empty the dev tile server's cache too
+(`rm -rf tmp/oven`).
 
 ## Checking a change
 
@@ -111,9 +113,10 @@ checks and tests of what changed since `base` reaches (the working tree's
 changes by default), and `--list` names them without running them. A deploy
 adds `check-build`, the bundle a deploy builds; xpute's own `check-xpute` and
 `test-xpute`; and
-`test-gpu`, the renderer's passes on this machine's GPU. A change to xpute's GPU
-encoder or host also takes `(cd xpute && ../script/perf/mac.py cargo test-gpu) && script/perf/mac.py pnpm --dir xpute test:gpu:web`, which needs a GPU and
-Chrome. `make fmt` formats.
+`test-gpu`, the renderer's passes on this machine's GPU. A change that touches a
+GPU call (`xpute/gpu/link/spec/`, xpute's `gpu` crates and packages, or how
+pxl-render encodes) also takes `(cd xpute && ../script/perf/mac.py cargo test-gpu) && script/perf/mac.py pnpm --dir xpute test:gpu:web`,
+which needs a GPU and Chrome (`$CHROME`). `make fmt` formats.
 `check-ts` holds the TypeScript to knip too (`pnpm --dir ts knip`), which names the files, exports and dependencies nothing reaches.
 
 `make check` also lints Android, with the newest NDK installed

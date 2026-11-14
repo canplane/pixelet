@@ -1,4 +1,4 @@
-// pxl-render/clipmap.wgsl
+// pxl-render/frame/shader/clipmap.wgsl
 
 // Binds the clip levels' table (pxl-engine `clipmap::Entry`) for a pass that only reads it.
 

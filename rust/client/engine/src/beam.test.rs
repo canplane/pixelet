@@ -273,7 +273,7 @@ fn each<T: Send>(n: usize, f: impl Fn(usize) -> T + Sync) -> Vec<T> {
     })
 }
 
-/// A sample's stop as the sample leaves it for the raster (pxl-render sample_put.wgsl
+/// A sample's hit as the sample leaves it for the raster (pxl-render sample_put.wgsl
 /// `sample_put`): how it ended, the node, its asset and the axis it entered across. For a
 /// sample that went on to its reach, only that is kept, because its zoom `SAMPLE_NONE` is all
 /// the raster reads of it (pxl-render sample_hit.wgsl `hits`).
@@ -304,7 +304,7 @@ impl Hit {
     }
 }
 
-/// A sample's stop, and how it started: its cell, that cell's start, and whether it resumed
+/// A sample's hit, and how it started: its cell, that cell's start, and whether it resumed
 /// from a node of the line rather than from a root.
 #[derive(Clone, Copy)]
 struct Cast {
@@ -315,10 +315,10 @@ struct Cast {
 }
 
 /// The view cast as the shader casts it (pxl-render corner.wgsl, cell.wgsl, sample.wgsl
-/// over sample.eye.wgsl): every corner's beam ray to where it stops, and how far it hands on;
+/// over sample.eye.wgsl): every corner's beam ray to where it stops, and its start distance;
 /// each cell's start, the least of its window's, with that corner's line and whether the cell
 /// resumes, which it does where every beam ray of the window asks as its rays ask; and every
-/// sample walked to its stop from its cell's start along that line (pxl-render resume.wgsl),
+/// sample walked to its hit from its cell's start along that line (pxl-render resume.wgsl),
 /// or from the world's root where it does not resume. The samples come row by row,
 /// `samples[0]` to a row.
 fn cast_view(view: &View) -> Vec<Cast> {
@@ -334,7 +334,7 @@ fn cast_view(view: &View) -> Vec<Cast> {
         };
         let ray = view.ray(g.corner(c));
         let trace = cast::walk_from_root(&mut Stand, o, &ray, detail, Until::Beam, &mut line);
-        (line, g.hand_dist(trace.hit.t))
+        (line, g.start_dist(trace.hit.t))
     });
     let idx = |[i, j]: [u32; 2]| j * across + i;
     let cells = each((g.span[0] * g.span[1]) as usize, |k| {
@@ -398,7 +398,7 @@ fn cast_view(view: &View) -> Vec<Cast> {
 }
 
 /// A sample's hit on a world is the hit of its ray walked from the eye with nothing resumed:
-/// each cell's start, the least distance its window's beam rays hand on, lies short of
+/// each cell's start, the least start distance of its window's beam rays, lies short of
 /// everything any ray of the cell meets.
 #[test]
 fn sample_hit_is_the_walks_from_the_eye() {

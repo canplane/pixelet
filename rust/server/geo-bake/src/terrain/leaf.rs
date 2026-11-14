@@ -1,8 +1,8 @@
 // pxl-geo-bake/terrain/leaf.rs
 
 //! Which leaves exist, and their bytes. A leaf exists where the elevation source covers it
-//! and land touches it, by the coastline it is painted by; the offline bake and the dev server
-//! ask the same question, so both produce the same objects.
+//! and something is drawn in it (`has_ground`); the offline bake and the dev server ask the
+//! same question, so both produce the same objects.
 
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
@@ -40,7 +40,7 @@ pub const READS: [&[&str]; 3] = [
     &separation::source::READS,
 ];
 
-/// A tile nothing is drawn in is open water; a cheap check, not the carve.
+/// A tile nothing is drawn in is open water; a cheap check, not the bake.
 pub fn has_ground(client: &mut Client, tiles: &[[i32; 2]]) -> Result<Vec<bool>, postgres::Error> {
     let bbox: Vec<[f64; 4]> = tiles
         .iter()

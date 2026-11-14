@@ -57,11 +57,11 @@ pub fn rock<C: Content>(cell_zoom: Zoom, face: i32) -> i32 {
 ///
 /// The slab's top lies past the highest top any of those zooms rounds `hi` to, since a
 /// coarser zoom's cell may round past a finer zoom's. Its bottom is the world's bottom: a node
-/// a cave takes all of is split, and its cells say so (`node`). It is nothing (`EMPTY`) where
-/// no zoom is asked within the node.
+/// a cave takes all of is split, and its cells say so (`node`). It is empty where no zoom is
+/// asked within the node.
 ///
 /// What fills the node is the part of it inside the slab (`meets`). The node's bottom and top
-/// are whole cells of every zoom finer than it, an even number of each, and `cells` ends a
+/// are whole cells of every zoom finer than it, an even number of each, and `cells` ends an
 /// elevation at the cell it fills an eighth of or more (`top`). So a zoom's top is at most the
 /// bottom exactly when the face lies under an eighth of that zoom's cell over it, and the
 /// finest zoom decides it for all of them. A top kept short of whole still lies in the slab

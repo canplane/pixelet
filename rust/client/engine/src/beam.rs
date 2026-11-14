@@ -3,7 +3,7 @@
 //! wgsl-port: the camera grid's beam. A beam ray is cast through each corner of the
 //! grid's cells and walks the pyramid until it meets a cell that fills or lacks, or a split
 //! narrower than it can share with the rays around it (`cast::narrow`). Each cell starts from
-//! the least distance of the beam rays around it, shortened by a margin (`hand_dist`). The
+//! the least distance of the beam rays around it, shortened by a margin (`start_dist`). The
 //! samples, `SAMPLE` to an angular cell (`grid::CELL`) a side, resume from the line that beam
 //! ray left and walk to the cell that fills. The cells they stopped at are drawn as boxes, and
 //! each drawn pixel takes the nearest one its own ray enters (`raster`); a pixel walks from
@@ -32,7 +32,7 @@ pub struct Grid {
     /// (`eye::TAN`), so they are not among the grid's words.
     pub tan: [f32; 2],
     /// The factor `1 − γ` a beam ray's hit is shortened by, where `γ` is the margin within which
-    /// two rays enter a cube under `2√2 · s · d` wide apart (`hand_dist`).
+    /// two rays enter a cube under `2√2 · s · d` wide apart (`start_dist`).
     keep: f32,
     /// How far a cube that a beam ray must cross reaches from its center, `√6 · s`, as an angle
     /// with the margin, and its tangent (`window`).
@@ -49,13 +49,13 @@ pub struct Grid {
     pub span: [u32; 2],
     pub corner_lattice: [u32; 2],
     pub sample_lattice: [u32; 2],
-    /// Where, among the beam rays' words, the distances each beam ray hands on begin: past the
-    /// lines (`hand_at`).
-    hands_at: u32,
+    /// Where, among the beam rays' words, the distances the rays about each beam ray start at
+    /// begin: past the lines (`start_dist_at`).
+    start_dists_at: u32,
     /// Where, among the beam rays' words, the cells' starts and the samples' hits begin, past the
-    /// lines and the distances each beam ray hands on (`hand_at`). After them come the asks of the
+    /// lines and the start distances (`start_dist_at`). After them come the asks of the
     /// drawable entries' faces, with room for one a sample (`asks_at`; the voxels themselves are
-    /// the node cache's, `record`), then the holes' stops (`hits_at`) and the asks of the faces
+    /// the node cache's, `record`), then the holes' hits (`hits_at`) and the asks of the faces
     /// they opened (`hit_asks_at`), `ray::HITS_A_FRAME` of each.
     cells_at: u32,
     samples_at: u32,
@@ -80,12 +80,11 @@ pub const SAMPLE_SPACING_INVERSE: f32 = 1.0 / SAMPLE_SPACING;
 /// Where each of the grid's fields lies among the eye's words (`eye::GRID`, `words`). First
 /// come `keep`, `radius` and `radius_tan` as f32 bits. Then come `past`, `span`, `corner_lattice`
 /// and `sample_lattice`, each across then up; the words where the cells' starts, the samples' hits,
-/// the boxes' asks and the holes' stops begin; where the list left by the walk over the node
-/// cache alone begins; the corners'; and where the eye's holes lie past the grid's words
-/// (`walked_at`, `ray::holes_words`). Then comes the slope of the screen's sides across and up
-/// (`slope`), as f32 bits rounded once by the host, and last where the distances each beam ray
-/// hands on begin (`hand_at`) and where the asks opened by the hits' stops begin
-/// (`hit_asks_at`).
+/// the boxes' asks and the holes' hits begin; where the eye's holes lie past the grid's words
+/// (`walked_at`, `ray::holes_words`); and where the corners' states begin. Then comes the slope
+/// of the screen's sides across and up (`slope`), as f32 bits rounded once by the host, and
+/// last where the start distances begin (`start_dist_at`) and where the asks opened by the
+/// holes' hits begin (`hit_asks_at`).
 pub const GRID_KEEP: usize = 0;
 pub const GRID_RADIUS: usize = 1;
 pub const GRID_RADIUS_TAN: usize = 2;
@@ -100,7 +99,7 @@ pub const GRID_HITS_AT: usize = 13;
 pub const GRID_WALKED_AT: usize = 14;
 pub const GRID_CORNER_STATES_AT: usize = 15;
 pub const GRID_SLOPE: usize = 16;
-pub const GRID_HANDS_AT: usize = 18;
+pub const GRID_START_DISTS_AT: usize = 18;
 pub const GRID_HIT_ASKS_AT: usize = 19;
 /// The grid's words, rounded up to whole vec4s, since the eye's words bind as a uniform
 /// (`eye::WORDS`).
@@ -127,7 +126,7 @@ impl Grid {
             span,
             corner_lattice: [0; 2],
             sample_lattice,
-            hands_at: 0,
+            start_dists_at: 0,
             cells_at: 0,
             samples_at: 0,
             asks_at: 0,
@@ -137,8 +136,8 @@ impl Grid {
         };
         g.past = g.cell_window([span[0] - 1, span[1] - 1]);
         g.corner_lattice = [span[0] + 1 + 2 * g.past, span[1] + 1 + 2 * g.past];
-        g.hands_at = g.corner_lattice[0] * g.corner_lattice[1] * LINE_WORDS;
-        g.cells_at = g.hands_at + g.corner_lattice[0] * g.corner_lattice[1];
+        g.start_dists_at = g.corner_lattice[0] * g.corner_lattice[1] * LINE_WORDS;
+        g.cells_at = g.start_dists_at + g.corner_lattice[0] * g.corner_lattice[1];
         g.samples_at = g.cells_at + span[0] * span[1] * CELL_WORDS;
         g.asks_at = g.samples_at + sample_lattice[0] * sample_lattice[1] * SAMPLE_WORDS;
         g.hits_at = g.asks_at + sample_lattice[0] * sample_lattice[1] * ASK_WORDS;
@@ -168,7 +167,7 @@ impl Grid {
             w[GRID_HITS_AT],
         ) = (self.cells_at, self.samples_at, self.asks_at, self.hits_at);
         (w[GRID_WALKED_AT], w[GRID_CORNER_STATES_AT]) = (self.size(), self.corner_states_at);
-        w[GRID_HANDS_AT] = self.hands_at;
+        w[GRID_START_DISTS_AT] = self.start_dists_at;
         w[GRID_HIT_ASKS_AT] = self.hit_asks_at;
         let slope = self.slope();
         (w[GRID_SLOPE], w[GRID_SLOPE + 1]) = (slope[0].to_bits(), slope[1].to_bits());
@@ -187,7 +186,7 @@ impl Grid {
             span: [w[GRID_SPAN], w[GRID_SPAN + 1]],
             corner_lattice: [w[GRID_CORNER_LATTICE], w[GRID_CORNER_LATTICE + 1]],
             sample_lattice: [w[GRID_SAMPLE_LATTICE], w[GRID_SAMPLE_LATTICE + 1]],
-            hands_at: w[GRID_HANDS_AT],
+            start_dists_at: w[GRID_START_DISTS_AT],
             cells_at: w[GRID_CELLS_AT],
             samples_at: w[GRID_SAMPLES_AT],
             asks_at: w[GRID_ASKS_AT],
@@ -204,9 +203,9 @@ impl Grid {
         self.tan.map(|t| libm::sqrtf(1.0 + t * t))
     }
 
-    /// How far a beam ray that stopped at `t` hands on: no farther than any pixel's ray around it
-    /// enters what stopped it.
-    pub fn hand_dist(&self, t: f32) -> f32 {
+    /// Where the rays about a beam ray that stopped at `t` start: no farther than any pixel's ray
+    /// around it enters what stopped it.
+    pub fn start_dist(&self, t: f32) -> f32 {
         t * self.keep
     }
 
@@ -287,11 +286,12 @@ impl Grid {
         c * LINE_WORDS
     }
 
-    /// The word holding how far corner `c`'s beam ray hands on (`hand_dist`), as f32 bits.
+    /// The word holding where the rays about corner `c`'s beam ray start (`start_dist`), as f32
+    /// bits.
     /// There is one word a corner past the lines, in the corners' order, so a cell's window reads
     /// its corners row by row from one run of words, not from one line each.
-    pub fn hand_at(&self, c: u32) -> u32 {
-        self.hands_at + c
+    pub fn start_dist_at(&self, c: u32) -> u32 {
+        self.start_dists_at + c
     }
 
     /// The first word of the screen's cell `[x, y]`'s start.
@@ -317,9 +317,9 @@ impl Grid {
         self.size()
     }
 
-    /// The beam rays' words: the lines, the cells' starts, the samples' hits, the boxes' asks,
-    /// the missed pixels' hits and their asks, and the corners' list. Their count follows the
-    /// grid, whatever the pixels drawn.
+    /// The beam rays' words: the lines, the start distances, the cells' starts, the samples'
+    /// hits, the boxes' asks, the missed pixels' hits and their asks, and the corners' states.
+    /// Their count follows the grid, whatever the pixels drawn.
     pub fn size(&self) -> u32 {
         self.corner_states_at + self.corner_lattice[0] * self.corner_lattice[1] * ray::STATE_WORDS
     }
@@ -333,15 +333,15 @@ pub const NODE_ROOTS: u32 = 4;
 pub const NODE_WORDS: u32 = 7;
 
 /// What a beam ray leaves for the pixels around it, in words: the node it stopped at
-/// (`NODE_WORDS`); the steps its walk took from the root (`LINE_STEPS`), which the ray steps
-/// view counts into every ray that goes on from the line (pxl-render grid.wgsl `beam_step_cnt`);
-/// then, for every node from the root to it, what was handed that node
-/// (`world::Inheritance::words`), `LINE_STEP` words a zoom, with its own at its zoom. A node's
-/// entry in the node cache is found by its key (pxl-render walk_node.wgsl `bucket_of`), so a
-/// line holds no entry. How far the ray hands on (`Grid::hand_dist`) lies apart from its line,
-/// one word a corner past the lines (`Grid::hand_at`), because the cells' windows read it
-/// alone. The light's beam rays leave the same, with their origin after it
-/// (`light::LINE_ORIGIN`), and keep how far they hand on apart as well (`light::hand_at`).
+/// (`NODE_WORDS`); the steps its walk took from the root (`LINE_STEPS`), which the ray steps view
+/// counts into every ray that goes on from the line (pxl-render grid.wgsl `beam_step_cnt`); then,
+/// for every node from the root to it, what was handed that node (`world::Inheritance::words`),
+/// `LINE_STEP` words a zoom, with its own at its zoom. A node's entry in the node cache is found by
+/// its key (pxl-render walk_node.wgsl `bucket_of`), so a line holds no entry. The beam ray's start
+/// distance (`Grid::start_dist`) lies apart from its line, one word a corner past the lines
+/// (`Grid::start_dist_at`), because the cells' windows read it alone. The light's beam rays leave
+/// the same, with their origin after it (`light::LINE_ORIGIN`), and keep their start distances
+/// apart as well (`light::start_dist_at`).
 pub const LINE_NODE: u32 = 0;
 pub const LINE_STEPS: u32 = LINE_NODE + NODE_WORDS;
 pub const LINE_INHERITANCE: u32 = LINE_STEPS + 1;
@@ -398,7 +398,7 @@ pub const SAMPLE_SIDE: u32 = 8;
 /// ray entered (pxl-engine `ray`); the first word of the beam ray's line its faces are asked
 /// from, the line its cell's rays resumed from (`CELL_CORNER`); and the word its faces are
 /// left in, `ASK_NONE` where it asks none. For a voxel's face (`Grid::ask_at`,
-/// `hit_asks_at`), the ask is made by the first stop on the voxel to enter it across that
+/// `hit_asks_at`), the ask is made by the first hit on the voxel to enter it across that
 /// face's axis. Its node is then the entry in the node cache (`node_cache::entry_at`), its
 /// face is left at that axis among the entry's words (`node_cache::R_FACES`), and the word is
 /// named under `record::TO_REC`.
@@ -409,13 +409,13 @@ pub const ASK_TO: u32 = 3;
 pub const ASK_WORDS: u32 = 4;
 pub const ASK_NONE: u32 = u32::MAX;
 
-/// The stops of the holes' rays (pxl-render miss_word.wgsl `hit_put`, queue.wgsl), every one,
+/// The hits of the holes' rays (pxl-render miss_word.wgsl `hit_put`, queue.wgsl), every one,
 /// whatever it stopped on, which the record takes (`record`; pxl-render record_hits.wgsl).
 /// There are at most `ray::HITS_A_FRAME`, numbered as the walks take them. In words: the node
 /// (`NODE_WORDS`); the face its ray entered, with `HIT_LACK` set where it lacks; its pixel,
 /// with the row above the column; the asset it stopped at; and the first word of the line its
 /// pixel's cell's rays resumed from, from which its face's word is asked (`ASK_LINE`). A pixel
-/// whose stop's face word is being asked holds `HIT_WAIT` and the stop's number in its last
+/// whose hit's face word is being asked holds `HIT_WAIT` and the hit's number in its last
 /// ray word until the word is put there from the record (`ray::FACE_WORD`, record_hits.wgsl
 /// `rec_faces_cs`), in the cast's own pass.
 pub const HIT_NODE: u32 = 0;

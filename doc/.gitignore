@@ -1,0 +1,2 @@
+# An experiment keeps its logs as evidence, whatever the root ignores.
+!*.log

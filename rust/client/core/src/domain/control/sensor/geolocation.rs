@@ -2,17 +2,19 @@
 
 //! The GPS sensor's decisions: when a watch runs and what an error means.
 //! The UI owns the watch itself, and says with each failure whether the watch
-//! runs on (SENSOR_ERR `watching`): a W3C watch rides out all but
-//! PERMISSION_DENIED (https://www.w3.org/TR/geolocation/#watchposition-method),
+//! runs on (sensor `err`'s `watching`): a W3C watch rides out all but
+//! `PERMISSION_DENIED` (https://www.w3.org/TR/geolocation/#watchposition-method),
 //! and a device's ends on any. Nothing is retried here. A watch that ended starts again on a
 //! grant, a return to the foreground or a press of the location card.
 
 use crate::abi::overlay::Message;
 use crate::abi::overlay::SensorStatus;
 use crate::abi::sensor::GeolocationErrorCode;
+use crate::domain::control::navigation::follow_mode::following;
 use crate::domain::control::sensor::reading::{
     device_location_store, device_location_store_mut, SensorState,
 };
+use crate::sys::sched::invalidate;
 use pxl_global::Global;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
@@ -131,7 +133,11 @@ pub(crate) fn geolocation_fix(
     let [base_lon, base_lat, _] =
         epsg4326::from_mercator(&[epsg3857::merc_from_u(x0), epsg3857::merc_from_u(y0), 0.0]);
     let alt = alt.map(|h| h - epsg4326::geoid_m(base_lon, base_lat));
-    device_location_store_mut().set_location([lon, lat], alt, accuracy, course);
+    // The location indicator stands at the position, so a fix that moves it
+    // asks for a frame.
+    if device_location_store_mut().set_location([lon, lat], alt, accuracy, course) {
+        invalidate();
+    }
 }
 
 /// A location error. Whether the watch runs on past it (`watching`) is the
@@ -149,7 +155,13 @@ pub(crate) fn geolocation_err(code: GeolocationErrorCode, watching: bool) {
     });
     if !watching {
         store.is_tracking_location = false;
-        store.location = None;
+    }
+    let cleared = !watching && store.location.take().is_some();
+    // A cleared location moves the location indicator, and while following a
+    // failed one starts follow mode's grace (`follow_mode_step`), whose deadline
+    // then wakes its own frame.
+    if cleared || following() {
+        invalidate();
     }
 }
 

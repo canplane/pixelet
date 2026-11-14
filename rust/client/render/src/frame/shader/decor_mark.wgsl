@@ -1,4 +1,4 @@
-// pxl-render/decor_mark.wgsl
+// pxl-render/frame/shader/decor_mark.wgsl
 
 // Lists the eye's entries whose decor generates again this frame, one thread an entry, with a
 // pair for each decor shown at the entry's clip level. An entry is listed whole when every entry

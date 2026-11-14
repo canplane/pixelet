@@ -79,7 +79,7 @@ pub fn between(a: &Q3, b: &Q3) -> [i64; 3] {
 /// One lap of the world, in units: zoom 0's side.
 pub const ROUND: f64 = units(0);
 
-/// How many cells at `z` stand around the world, and as many from its south edge to its north.
+/// How many cells at `zoom` stand around the world, and as many from its south edge to its north.
 pub const fn around(zoom: Zoom) -> i64 {
     1i64 << zoom
 }

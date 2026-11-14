@@ -123,7 +123,7 @@ impl decor::Decor {
             .filter(|_| kind_of(id) == Some(Kind::Decor))
     }
 
-    /// The decor of an id known to be one, as a tool holds it.
+    /// The decor of an id known to be one; any other id is a bug.
     pub fn of(id: AssetId) -> &'static decor::Decor {
         use xpute_kit::status::bug::OrBug;
         decor::Decor::find(id).or_bug(Errno::ENOTRECOVERABLE)

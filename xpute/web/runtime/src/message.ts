@@ -30,7 +30,8 @@ export interface InstantiateError {
   err: string;
 }
 
-/** A trap out of an export, which stops the guest for good. */
+/** A trap, out of an export or a failure of the host's own, which stops the
+ * guest for good. */
 export interface Trap {
   kind: "trap";
   err: string;

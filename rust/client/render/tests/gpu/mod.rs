@@ -784,7 +784,7 @@ impl LightBox {
 
 /// The margins a device may take for `light::margin` of a beam `width` wide, each named by its
 /// rounding. The engine rounds the product and then adds, and a device may fuse the two into
-/// one rounding (beam.light.wgsl `beam_hand`). The width comes from the host's word
+/// one rounding (beam.light.wgsl `beam_start_dist`). The width comes from the host's word
 /// (`Light::width`), so no other step rounds apart.
 pub(crate) fn margins(width: f32) -> [(&'static str, f32); 2] {
     let fused = (2.0 * cast::SQRT_6).mul_add(width, light::margin(0.0));

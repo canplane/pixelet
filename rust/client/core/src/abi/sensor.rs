@@ -111,8 +111,6 @@ pub trait Guest {
         &self,
         webkit_compass_heading: Option<f64>,
         alpha: Option<f64>,
-        beta: Option<f64>,
-        gamma: Option<f64>,
     ) -> Result<(), _rt::Errno>;
     fn err(
         &self,
@@ -187,21 +185,7 @@ impl _rt::Object for _Object {
                             r_.f64(24).map(Some)
                         }
                     })?;
-                    let beta = r_.case(32, 2).and_then(|d| {
-                        if d == 0 {
-                            Ok(None)
-                        } else {
-                            r_.f64(40).map(Some)
-                        }
-                    })?;
-                    let gamma = r_.case(48, 2).and_then(|d| {
-                        if d == 0 {
-                            Ok(None)
-                        } else {
-                            r_.f64(56).map(Some)
-                        }
-                    })?;
-                    match self.0.orient(webkit_compass_heading, alpha, beta, gamma) {
+                    match self.0.orient(webkit_compass_heading, alpha) {
                         Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }

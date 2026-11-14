@@ -5,12 +5,11 @@
  * that the core holds up none of the UI's events. The page sends, in one
  * message, its kept entries, the core's module, the UI's port, and the named
  * handles and prefixes of what the UI serves; the worker instantiates the
- * module with a link laid over it (@xpute/web-runtime `instantiate`), mounts
- * the objects the host serves, the core's files and GPU among them, and the
- * UI's stand-ins, enters the core, serves the link to the UI across the
- * port (@xpute/web-runtime `serve`), the canvases the UI gives going to the
- * GPU, and tells the core the UI attached. The files are here, so the source
- * is declared here too.
+ * module with a link laid over it (@xpute/web-runtime `instantiate`) and
+ * starts the core on it from the servers listed here (@xpute/web-runtime
+ * `start`): what the host serves, the core's files and GPU among them, the
+ * UI's stand-ins across the port, the canvases the UI gives going to the
+ * GPU. The files are here, so the source is declared here too.
  */
 
 import type { GpuState } from "@xpute/gpu-link";
@@ -22,13 +21,13 @@ import {
   instantiate,
   type InstantiateError,
   type Log,
-  serve,
+  start,
   type Stopped,
-  tell_attached,
   type Trap,
 } from "@xpute/web-runtime";
 import { serve_vsync, WebGpu } from "@xpute/gpu-web-host";
 import { device } from "@/abi/gpu.spec.ts";
+import { IMPORTS } from "@/abi/imports.ts";
 import { LATER } from "@/abi/later.ts";
 import { mem } from "@/abi/manifest.spec.ts";
 import { LIMIT } from "@/abi/perf.spec.ts";
@@ -72,7 +71,7 @@ forward_console(tell);
 
 onmessage = ({ data: m }: MessageEvent<ToWorker>) => {
   keep(m.entries);
-  void start(m);
+  void boot(m);
 };
 
 /** A copy of the page's kept entries, each write sent back to the page. */
@@ -87,17 +86,10 @@ function keep(entries: [string, string][]): void {
   });
 }
 
-async function start(m: Instantiate): Promise<void> {
+async function boot(m: Instantiate): Promise<void> {
   online.watch(set_online);
   const link = await instantiate(m.module, m.init, mem.sz, tell);
   if (link === null) return;
-  serve_stop(link, (stop) => tell({ kind: "stopped", stop }));
-  hook(link);
-  serve_clock(link);
-  serve_vsync(link);
-  serve_text(link);
-  serve_files(link);
-  serve_objects(link);
   // The page's host stages its writes in the chunks a device's does
   // (spec/client/render/api.json5 `device`), and in a build made for
   // measuring says what runs slower than `perf.json5`'s `LIMIT.SLOW_MS`.
@@ -107,13 +99,30 @@ async function start(m: Instantiate): Promise<void> {
     { upload_chunk_sz: device.UPLOAD_CHUNK_BYTES, slow_ms: __PERF_DRIVE__ ? LIMIT.SLOW_MS : null },
     (state) => tell({ kind: "gpu", state }),
   );
-  gpu.serve();
-  serve(m.port, link, m.named, m.prefixes, LATER, {
-    give: (h, canvas) => gpu.bind(h, canvas as OffscreenCanvas),
-    take: (h) => gpu.unbind(h),
-  });
-  link.init();
-  tell_attached(link);
+  start(
+    link,
+    {
+      servers: [
+        () => {
+          serve_stop(link, (stop) => tell({ kind: "stopped", stop }));
+          hook(link);
+        },
+        serve_clock,
+        serve_vsync,
+        () => gpu.serve(),
+        serve_text,
+        serve_files,
+        serve_objects,
+      ],
+      imports: IMPORTS,
+      later: LATER,
+      taker: {
+        give: (h, canvas) => gpu.bind(h, canvas as OffscreenCanvas),
+        take: (h) => gpu.unbind(h),
+      },
+    },
+    m,
+  );
   await declare(link);
 }
 

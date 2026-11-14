@@ -125,7 +125,7 @@ function by_shard(a: TopRow, b: TopRow): number {
   return a.shard < b.shard ? -1 : a.shard > b.shard ? 1 : 0;
 }
 
-/** A test passes its own in place of the platform's database. */
+/** The database the files are kept in: the platform's, or a test's own. */
 export type Db = { transaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> };
 
 const DB: Db = db;

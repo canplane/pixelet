@@ -394,7 +394,8 @@ pub(crate) fn bases(row: &BaseRow, tile_min: G3857) -> Vec<Feature> {
 }
 
 /// The order in which ways paint, the later keeping the cell: OpenStreetMap Carto's `z` from
-/// `roads_info` (openstreetmap-carto-flex.lua, CC0); other transport features rank under all.
+/// `roads_info` (`openstreetmap-carto-flex.lua`, CC0); a road of a class not named takes
+/// 330, a residential road's.
 fn paint_order(subtype: &str, class: Option<&str>, role: Role) -> i64 {
     let c = class.unwrap_or("");
     if subtype == "rail" {

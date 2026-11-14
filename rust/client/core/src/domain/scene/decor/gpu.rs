@@ -247,7 +247,7 @@ fn drawing(p: &mut [u32; drawing::WORDS as usize], key: Key) {
 /// `[x0, y0, x1, y1)`, with X on whatever lap it was written on. Past
 /// `object::WRITE_DAMAGE_CAP` regions, the rest are joined into the last one
 /// (pxl-render gpu/generator.rs `hold`), so no write is lost however many
-/// turns pass before a frame takes them.
+/// writes come before a frame takes them.
 pub(crate) fn note_damage(regions: &[Aabb]) {
     let h = hand_over();
     let leaf = units(LEAF_CELL_ZOOM);

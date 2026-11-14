@@ -1,22 +1,22 @@
-// pxl-render/record_hits.wgsl
+// pxl-render/frame/shader/record_hits.wgsl
 
-// Writes an observer's holes' stops into the record, the eye's and the light's alike
-// (pxl-engine record.rs, the third of its writers). The holes' queue keeps every stop, whatever
+// Writes an observer's holes' hits into the record, the eye's and the light's alike
+// (pxl-engine record.rs, the third of its writers). The holes' queue keeps every hit, whatever
 // it stopped on (queue_walk.wgsl and queue_last.wgsl, through queue.wgsl `keep_hit`;
 // pxl-engine `beam::HIT_WORDS`).
-// This pass runs once the queue is done, a thread a stop. Its dispatch reads the stops' count
+// This pass runs once the queue is done, a thread a hit. Its dispatch reads the hits' count
 // from a copy of the node cache's head (`node_cache::HITS_ARGS`; ray/raster.rs `rec_hits`),
 // because the pass binds the node cache writable and a dispatch cannot take its arguments from
 // a buffer it writes.
 //
-// `rec_hits_cs` finds each stop's entry and sets the face its ray entered (record_put.wgsl
-// `observe_hit`). The first stop to enter a face asks that face's word, among the hits' asks
+// `rec_hits_cs` finds each hit's entry and sets the face its ray entered (record_put.wgsl
+// `observe_hit`). The first hit to enter a face asks that face's word, among the hits' asks
 // (`beam::Grid::hit_asks_at`). Once the faces' pass has answered the asks, `rec_faces_cs`
-// puts what lies around each stop's face at the stop's pixel.
+// puts what lies around each hit's face at the hit's pixel.
 //
 // record_hits.eye.wgsl and record_hits.light.wgsl give what differs by observer: where its
-// stops lie and how many there may be (`hits_at`, `hits_cap`), the origin a stop's node is held
-// from (`hit_origin`), whether a stop is whole (`hit_whole`), and where its faces' asks lie
+// hits lie and how many there may be (`hits_at`, `hits_cap`), the origin a hit's node is held
+// from (`hit_origin`), whether a hit is whole (`hit_whole`), and where its faces' asks lie
 // (`hit_asks`).
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
@@ -32,7 +32,7 @@ fn rec_hits_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 /// Puts what lies around each hit's face at the hit's pixel, where the pixel still waits for
 /// it: its last ray word holds `HIT_WAIT` and the hit's number (pxl-engine `beam::HIT_WAIT`).
 /// The word put is the entry's word for that face, which the faces' pass answered for this
-/// stop or for an earlier one. It is 0 where no slot keeps the node.
+/// hit or for an earlier one. It is 0 where no slot keeps the node.
 @compute @workgroup_size(HIT_LANE_CNT)
 fn rec_faces_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   if (id.x >= in_cap(node_cache_word(HITS_CNT), hits_cap())) {

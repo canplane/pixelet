@@ -1,9 +1,9 @@
 // pxl-geo-bake/bin/terrain.rs
 
-//! The terrain bake, a shard at a time into its set (tile/shard.rs): `leaf`
-//! stages the named shards' leaves (terrain/leaf.rs `bake_leaf`, each where
-//! `has_ground` finds something drawn), then the zooms over them are folded
-//! again and committed.
+//! The terrain bake, a shard at a time into its set (`tile/shard.rs`):
+//! `leaf` stages the named shards' leaves (`terrain/leaf.rs` `bake_leaf`,
+//! each where `has_ground` finds something drawn), then the zooms over them
+//! are folded again and committed.
 //!
 //!   cargo run --profile server -p pxl-geo-bake --bin terrain -- [flags]
 //!

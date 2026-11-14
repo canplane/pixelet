@@ -2,8 +2,11 @@
 
 A native GPU host draws with wgpu, taken from the fork
 [canplane/fork.wgpu](https://github.com/canplane/fork.wgpu), branch `xpute-30.0.1`,
-which is wgpu 30.0.1 with three commits on it. The program's Cargo workspace names
-its revision in `[patch.crates-io]`, and every crate of wgpu's comes from it so that they stay one set.
+which is wgpu 30.0.1 with three commits on it. xpute's `Cargo.toml` names its
+revision in `[patch.crates-io]`, and every crate of wgpu's comes from it so
+that they stay one set. `[patch]` holds only in the root workspace, so a
+program's workspace that builds xpute's crates, by path or as published,
+carries the same table, its revision moving with this one.
 
 ## One command buffer an encoder
 
@@ -58,5 +61,5 @@ The fork's three commits are rebased onto the new release, on a branch of its ow
 a commit upstream has made unneeded is dropped. Where none is left the
 `[patch.crates-io]` tables go. wgpu-core's pass encoding is what the recording
 depends on, so the order of a pass's timestamp resets and writes and its deferred
-resolves is read again, and `make -j8 test-gpu` is run. The recording's effect shows
+resolves is read again, and xpute's `cargo test-gpu` is run. The recording's effect shows
 on an Android phone as the `Graphics` line of `adb shell dumpsys meminfo <package>`.

@@ -68,7 +68,7 @@ fn formats_round_trip() {
         "a tile reads back as it was written"
     );
     // On the CPU its lines, but for what only a bake reads: a fold's
-    // coarsest zooms and a grid sweep's boxes.
+    // coarsest zooms.
     let resident = decode_into::<Refused>(&terrain, vec![0; ELE_COLUMN].leak()).unwrap();
     let want = Separation {
         first_zooms: Default::default(),

@@ -13,8 +13,8 @@ import {
 import { IDX_BITS, KIND_MARKER } from "./id.spec.ts";
 import { hex } from "@/ui/shared/component/theme.ts";
 
-/** An asset's number: its kind shifted left by IDX_BITS, with its index in
- * the low bits. */
+/** An asset's number: its kind shifted left by `IDX_BITS`, with its index
+ * in the low bits. */
 export type AssetId = u16;
 
 /** The marker's kind has no other index. */

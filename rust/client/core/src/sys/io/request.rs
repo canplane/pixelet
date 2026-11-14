@@ -119,7 +119,7 @@ struct Sched {
     fresh: Vec<Want>,
     ready: Vec<(Rank, Stream, Want)>,
     outage: Outage,
-    /// The server failed after its last wait. Only `reset` clears this.
+    /// The server failed after its last wait. Nothing clears this.
     given_up: bool,
 }
 

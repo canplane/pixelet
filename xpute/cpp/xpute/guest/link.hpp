@@ -22,6 +22,7 @@
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/kit/status/error.hpp"
 #include "xpute/link/link.hpp"
+#include "stop.hpp"
 
 namespace xpute::guest {
 
@@ -85,7 +86,8 @@ bool in_guest() noexcept;
 
 // Defines the guest's three exports (`link/wit/types.wit`), over frames of
 // `room_` bytes, with `boot_` mounting what the guest serves and opening what
-// it calls, and `enter_` and `end_` starting and ending each entry. A module
+// it calls, and `enter_` and `end_` starting and ending each entry; before its
+// boot the guest's failures are made its stop (`stop.hpp` `hook`). A module
 // exports them by name; a native guest as C symbols, which catch a bug
 // (kit `caught`) and answer a trap (`TRAP`, or `TRAP_AT` for init's
 // layout), as a Rust guest's catch its panic. A failed check of libc++'s own
@@ -93,7 +95,10 @@ bool in_guest() noexcept;
 #ifdef __wasm__
 #define XPUTE_LINK(room_, boot_, enter_, end_)                                                                                                      \
     extern "C" __attribute__((export_name("link_init"))) std::uint32_t link_init() { return ::xpute::guest::init((room_), (enter_), (end_)); }      \
-    extern "C" __attribute__((export_name("link_boot"))) void link_boot() { ::xpute::guest::boot(boot_); }                                       \
+    extern "C" __attribute__((export_name("link_boot"))) void link_boot() {                                                                       \
+        ::xpute::guest::stop::hook();                                                                                                                     \
+        ::xpute::guest::boot(boot_);                                                                                                                \
+    }                                                                                                                                               \
     extern "C" __attribute__((export_name("link_in"))) std::int32_t link_in() { return ::xpute::guest::recv(); }
 #else
 #define XPUTE_LINK(room_, boot_, enter_, end_)                                                                                                      \
@@ -102,6 +107,7 @@ bool in_guest() noexcept;
     }                                                                                                                                               \
     extern "C" __attribute__((visibility("default"))) std::int32_t link_boot() {                                                                  \
         return ::xpute::caught(::xpute::link::TRAP, [] {                                                                                            \
+            ::xpute::guest::stop::hook();                                                                                                                 \
             ::xpute::guest::boot(boot_);                                                                                                            \
             return 0;                                                                                                                               \
         });                                                                                                                                         \

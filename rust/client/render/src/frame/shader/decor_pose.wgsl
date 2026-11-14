@@ -1,4 +1,4 @@
-// pxl-render/decor_pose.wgsl
+// pxl-render/frame/shader/decor_pose.wgsl
 
 // Generates the decor of each record of a listed pair, one thread a record: its footing, then
 // its pose (pxl-content `generation::placement`). Decor stands on the world with nothing

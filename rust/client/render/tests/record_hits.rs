@@ -888,7 +888,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, hdr]: [&wgpu::Buffer; 2], list: &
         ],
         [cells.div_ceil(WORKGROUP), cells.div_ceil(WORKGROUP), 1],
     );
-    // The beam's lines and hands and the cells' starts all lie before the holes' list
+    // The beam's lines and start distances and the cells' starts all lie before the holes' list
     // (`light::holes_at`), so the copy leaves the listed slots as they were.
     let laid = light::holes_at(SIZE) as usize;
     list[..laid].copy_from_slice(&gpu.read(&buf)[..laid]);

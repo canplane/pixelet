@@ -13,15 +13,16 @@ pub const GUEST_TARGET: WitTarget<'static> = WitTarget {
     wit: "gpu/wit",
     rs: Some("gpu/guest/rust/src/abi.rs"),
     ts: Some("gpu/link/ts/src/abi"),
-    cpp: Some("cpp/xpute/gpu/abi"),
+    cpp: Some("cpp/xpute/gpu/guest/abi"),
     side: Some(Side::Guest("guest/rust")),
 };
 
-/// The plugin's bindings on a native device's host's side, served on
-/// xpute-native-runtime's link.
+/// The plugin's bindings on a native device's host's side, which its host
+/// serves on xpute-native-runtime's link, in xpute-gpu-native-runtime as
+/// xpute's own are in that runtime.
 pub const NATIVE_HOST_TARGET: WitTarget<'static> = WitTarget {
     wit: "gpu/wit",
-    rs: Some("gpu/native/host/src/abi.rs"),
+    rs: Some("gpu/native/runtime/rust/src/abi.rs"),
     ts: None,
     cpp: None,
     side: Some(Side::Host("native/runtime/rust")),
@@ -33,12 +34,12 @@ pub const DATA_SPECS: [DataSpec; 2] = [
         json: "gpu/link/spec/api.json5",
         ts: Some("gpu/link/ts/src/api.spec.ts"),
         rs: Some("gpu/link/rust/src/api.spec.rs"),
-        cpp: Some(("cpp/xpute/gpu/api.spec.hpp", "xpute::gpu")),
+        cpp: Some(("cpp/xpute/gpu/link/api.spec.hpp", "xpute::gpu")),
     },
     DataSpec {
         json: "gpu/link/spec/enum.json5",
         ts: Some("gpu/link/ts/src/enum.spec.ts"),
         rs: Some("gpu/link/rust/src/enum.spec.rs"),
-        cpp: Some(("cpp/xpute/gpu/enum.spec.hpp", "xpute::gpu")),
+        cpp: Some(("cpp/xpute/gpu/link/enum.spec.hpp", "xpute::gpu")),
     },
 ];

@@ -1,4 +1,4 @@
-// cpp/xpute/gpu/encode.hpp
+// cpp/xpute/gpu/guest/encode.hpp
 
 // The encoder writes a guest's GPU calls as records of a stream (`stream.hpp`)
 // in the words `gpu/link/spec/api.json5` gives each op, as
@@ -23,8 +23,8 @@
 
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/link/mem.hpp"
-#include "api.spec.hpp"
-#include "enum.spec.hpp"
+#include "xpute/gpu/link/api.spec.hpp"
+#include "xpute/gpu/link/enum.spec.hpp"
 #include "handle.hpp"
 #include "stream.hpp"
 

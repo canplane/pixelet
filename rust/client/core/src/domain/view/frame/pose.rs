@@ -133,10 +133,10 @@ pub(crate) fn km_per_u() -> f64 {
 }
 
 /// Sets the view to `width` × `height` CSS pixels, the layout box of the
-/// world's surface (GPU_SURFACE_RESIZE), and composes the matrices again
-/// when either changed. A pointer's place is read against this size. The
-/// pixels the surface is drawn with matter to the drawing alone, since the
-/// camera grid is an angle (lens.rs `CELL`).
+/// world's surface (link/export/surface.rs `resize`), and composes the
+/// matrices again when either changed. A pointer's place is read against
+/// this size. The pixels the surface is drawn with matter to the drawing
+/// alone, since the camera grid is an angle (lens.rs `CELL`).
 pub(crate) fn view_resize(width: f64, height: f64) {
     let v = view_mut();
     let (width, height) = (width.max(1.0), height.max(1.0));

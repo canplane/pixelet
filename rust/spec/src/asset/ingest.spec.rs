@@ -1029,7 +1029,7 @@ impl CubeFace {
 /// tile n at column n % columns and row n / columns, `tiles` the cube face
 /// each tile is, and `sentinels` the tile a sentinel the world draws wears.
 /// Its image is the file the catalog names for the cube kind's pack
-/// (catalog.spec.rs `pack`).
+/// (`cube::PACK`).
 pub struct Pack {
     pub cell: u32,
     pub columns: u32,

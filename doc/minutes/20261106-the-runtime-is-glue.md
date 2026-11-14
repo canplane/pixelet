@@ -88,6 +88,11 @@ program on it.
 - **A command posted with `ACKREQ`**: the core replies once, in the turn that
   applies it; a `RES` nothing waits for is dropped; a stopped core answers
   `ENOTRECOVERABLE`; a paused one leaves it waiting; there is no cancel.
+
+  > Since 2026-11-13 (08d4d9d4cd): a call whose future is dropped before its
+  > answer is cancelled (frame.json5 `CANCEL`), and a host stops what it can;
+  > since 2026-11-15 (22defa01be) a device's clock stops its wait too, as a
+  > page's does.
 - **Memory a frame names** is the receiver's until it stores HEAD past the
   frame (the rings' R3, `Door::is_consumed`). Bytes that cross to the UI (the
   snapshot's `at` and `len`, the profiler's replies) are copied before HEAD

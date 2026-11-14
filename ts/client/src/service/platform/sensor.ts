@@ -65,14 +65,22 @@ function geolocation_start(): void {
 
 let orient_event: string | null = null;
 
+/** An event with every field null is how a browser says it has no sensor; any
+ * other is a reading, one with neither a compass heading nor alpha a reading
+ * with no heading. */
 function on_orient(e: Event): void {
   const o = e as IosOrientationEvent;
-  listener.orient(
-    o.webkitCompassHeading ?? null,
-    o.alpha,
-    o.beta,
-    o.gamma,
-  );
+  const compass = o.webkitCompassHeading ?? null;
+  if (
+    compass === null &&
+    o.alpha === null &&
+    o.beta === null &&
+    o.gamma === null
+  ) {
+    listener.orient_unavailable();
+    return;
+  }
+  listener.orient(compass, o.alpha);
 }
 
 function orient_listen(name: string): void {

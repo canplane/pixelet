@@ -3729,10 +3729,20 @@ dependencies = [
  "serde",
  "wgpu",
  "xpute-gpu-link",
+ "xpute-gpu-native-runtime",
  "xpute-kit",
  "xpute-link",
  "xpute-native-runtime",
  "zune-jpeg",
+]
+
+[[package]]
+name = "xpute-gpu-native-runtime"
+version = "0.1.0"
+dependencies = [
+ "xpute-kit",
+ "xpute-link",
+ "xpute-native-runtime",
 ]
 
 [[package]]

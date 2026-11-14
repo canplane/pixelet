@@ -1,4 +1,4 @@
-// xpute's link in WIT's shape; the execution meaning is xpute's (xpute-guest
+// xpute's link in WIT's shape; the execution meaning is xpute's (xpute-link
 // link.rs). WIT's grammar is used as far as xpute needs it: interfaces, `func`
 // and `async func`, resources and their methods, records, enums, variants,
 // lists, options, results, bool, the integers of every width, f32, f64 and
@@ -18,7 +18,7 @@
 // The root, handle 0, has two methods. `open(uri) -> handle`, number 0, the
 // serving side answers at once from the opener mounted at the URI's longest
 // matching leading tokens. An open is pipelined, so a missing file opens, and
-// its first async method answers ENOENT. `cancel(tag)`, number 1, cancels a
+// its first method answers `no-entry`. `cancel(tag)`, number 1, cancels a
 // call the sender has pending (`frame.json5` `CANCEL`). Every handle has a
 // drop, method 0xFF, as the component model's resource drop, which takes no
 // result and lets the object go; a

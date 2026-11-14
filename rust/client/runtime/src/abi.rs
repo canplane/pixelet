@@ -16,6 +16,20 @@ pub mod text;
 pub mod types;
 pub mod watch;
 
+/// The interfaces the world imports that the host serves under a named
+/// handle, each `(name, handle)`, which are mounted before the guest boots.
+pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[
+    ("xpute:stop/stop", 0x4eccaa),
+    ("xpute:clocks/monotonic-clock", 0x73f703),
+    ("xpute:clocks/system-clock", 0x7dfa61),
+    ("xpute:gpu/gpu", 0x79d455),
+    ("xpute:gpu/vsync", 0x42eda6),
+    ("pxl:core/object", 0x4edab0),
+    ("pxl:core/overlay", 0x7b1393),
+    ("pxl:core/watch", 0x71919e),
+    ("pxl:core/text", 0x61d944),
+];
+
 /// The methods of the named interfaces the host serves that answer
 /// later, each `(handle, method)`, as WIT's `async func` marks them.
 pub const LATER: &[(xpute_link::Handle, xpute_link::Method)] = &[(object::HANDLE, object::APPLY)];

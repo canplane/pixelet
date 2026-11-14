@@ -1,5 +1,5 @@
-// How a decor draw reads its instances, for the model tier (decor.wgsl) and the
-// impostors (impostor.wgsl) alike. The draw has a uniform of its own (word.rs
+// How a decor draw reads its instances, as a model (decor.wgsl) and as an
+// impostor (impostor.wgsl) alike. The draw has a uniform of its own (word.rs
 // `instance`), and the decor's instances lie in `instances`.
 
 // The uniform is read field by field from vec4 words and is never declared as a

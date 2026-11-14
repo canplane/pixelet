@@ -153,7 +153,7 @@ fn vs(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> Raste
     return o;
   }
   // The eye's projection is the cast's (grid.wgsl `px_tan`) with a reversed, infinite depth:
-  // a point at view depth w has depth RASTER_NEAR / w, which falls as the point lies farther
+  // a point at view depth `w` has depth `RASTER_NEAR / w`, which falls as the point lies farther
   // along a pixel's ray. The position is shifted against the jitter in `first`, so a pixel's
   // middle shows what its own jittered ray passes through.
   let depth = dot(p, raster.forward.xyz);

@@ -146,7 +146,7 @@ pub struct Segment {
 }
 
 /// A segment's words: `a` and `b` each two `i16` eighths of a cell, the heights
-/// two `i16`, then width (eighths), asset_id, form with first, last and
+/// two `i16`, then width (eighths), `asset_id`, form with first, last and
 /// continues over it, and clearance, a byte each; then its direction, two `i16`,
 /// at `SEGMENT_DIR`.
 pub const SEGMENT_WORDS: usize = SEGMENT_DIR + 1;
@@ -216,7 +216,8 @@ impl Segment {
     }
 
     /// Its words, from the wire's integers: its two points in eighths, its heights in leaf cells,
-    /// and its bytes (width in eighths, asset_id, `flags`, clearance); then its run's direction (`dir`).
+    /// and its bytes (width in eighths, `asset_id`, `flags`, clearance); then its run's direction
+    /// (`dir`).
     pub fn words(
         [a, b]: [[i16; 2]; 2],
         heights: [i16; 2],
@@ -290,7 +291,7 @@ pub(crate) fn of_hdr(w: [u32; HDR_WORDS as usize]) -> (f32, StationGrid) {
 }
 
 /// A bent's columns across the deck, from its line: the middle, both edges,
-/// or both and the middle, by its half width in cells; `count` of them.
+/// or both and the middle, by its half width in cells, and how many they are.
 fn bent(half: i32) -> ([i32; 3], u32) {
     match half {
         ..=2 => ([0, 0, 0], 1),
@@ -393,7 +394,7 @@ pub struct Crossing {
 }
 
 impl Crossing {
-    /// No crossing: one of asset_id `NOTHING`.
+    /// No crossing: one of `asset_id` `NOTHING`.
     pub const NONE: Crossing = Crossing {
         low: 0,
         top: 0,

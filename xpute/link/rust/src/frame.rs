@@ -19,7 +19,7 @@ use spec::{CMD, METHOD_BITS, NAMED, PKT, RES, RESULT, TAG, WORDS};
 /// The size of a frame's words, its header before its packet.
 pub const HDR_SZ: u32 = WORDS * 4;
 
-// NAMED is a handle's top bit.
+// `NAMED` is a handle's top bit.
 const _: () = assert!(NAMED == RES >> METHOD_BITS >> 1);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

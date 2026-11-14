@@ -1,12 +1,12 @@
 // pxl-geo-bake/source.rs
 
 //! The tile source's declaration, the one writer of what pxl-core
-//! sys/io/source.rs reads: the coarsest zoom supplied whole, each kind's format
-//! and version, and the shards every kind holds, four siblings written as their
-//! parent, with each override's version. The published one is made from a
-//! record of what the bucket serves (bin/declaration.rs, which
-//! script/publish.py gathers out of the bucket and uploads), a dev tile
-//! server's from what it serves (bin/server.rs).
+//! `sys/io/source.rs` reads: the coarsest zoom supplied whole, each kind's
+//! format and version, and the shards every kind holds, four siblings written
+//! as their parent, with each override's version. The published one is made
+//! from a record of what the bucket serves (`bin/declaration.rs`, which
+//! `script/publish.py` gathers out of the bucket and uploads), a dev tile
+//! server's from what it serves (`bin/server.rs`).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -20,8 +20,8 @@ use serde_json::{json, Map, Value};
 use crate::pyramid::MANIFEST;
 
 /// What a source says of one kind: the format it is in, where it is (the
-/// version a tile's name is under, which no client reads) and the shards
-/// it holds; the Earth's picture is no shard's.
+/// version a tile's name is under, which the core does not read) and the
+/// shards it holds; the Earth's picture is no shard's.
 #[derive(Clone)]
 pub struct Kind {
     pub format: u32,
@@ -45,7 +45,7 @@ pub fn try_kinds(kind: impl FnMut(BaseKind) -> Result<Kind, String>) -> Result<K
 /// A kind's versions for a shard and the tiles under it, over the kind's own.
 pub type OverrideMap = BTreeMap<Quadrant, Vec<(BaseKind, String)>>;
 
-/// Refused for anything a client would refuse (pxl-spec bake/source.rs), or
+/// Refused for anything a client would refuse (pxl-spec `bake/source.rs`), or
 /// would serve wrongly: a version that is no URL segment, a sharded kind holding no shards
 /// or another holding some, an override on anything but a shard served.
 pub fn decl(min_zoom: Zoom, kinds: &KindTable, overrides: &OverrideMap) -> Result<Value, String> {

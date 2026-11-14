@@ -1,7 +1,7 @@
-// pxl-render/decor_row.wgsl
+// pxl-render/frame/shader/decor_row.wgsl
 
 // A decor as the catalog's row holds it, read a word at a time, and the draws its seeds start
-// (pxl-spec asset/decor.spec.rs, scatter.rs; xpute-kit `SplitMix32`).
+// (pxl-spec asset/decor.spec.rs, pxl-content scatter.rs; xpute-kit `SplitMix32`).
 
 @group(0) @binding(10) var<storage, read> rows: array<u32>;
 

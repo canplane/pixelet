@@ -123,7 +123,8 @@ fn appearance(c: vec3u) -> Appearance {
 }
 
 // How far the eye lies along `axis` past the start of the cell 2^k units a side that it stands
-// in: the low k + FRAC_W bits of its Q3 steps, or all of them for a cell as large as the world.
+// in: the low `k + FRAC_W` bits of its Q3 steps, or all of them for a cell as large as the
+// world.
 fn eye_phase(axis: u32, k: i32) -> f32 {
   let bits = u32(k + i32(FRAC_W));
   let steps = eye_word(EYE_ORIGIN + axis);
@@ -195,7 +196,7 @@ fn footprint(p: mat2x3f) -> vec3f {
 // camera grid cell there over the cosine of the ray's angle off the forward axis, and a cell
 // observed there spans at least a grid cell. So the step is at most `SNAP / cos` of a cell,
 // under one for any field of view narrower than 150°, however edge-on the face is seen.
-// `BEHIND` adds 2^-14 of the distance, where a cell is at least 1/96 of it (pxl-engine
+// `BEHIND` adds 2^-14 of the distance, where a cell is at least 1/96 of it (pxl-spec
 // `grid::CELL`).
 fn behind(h: Hit, p: mat2x3f) -> f32 {
   let f = eye_vec3(EYE_FORWARD);

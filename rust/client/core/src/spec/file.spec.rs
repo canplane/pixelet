@@ -5,7 +5,7 @@
 // The core's files: the tokens of their paths and what a file holds (pxl-core
 // sys/io/file.rs, ts/client/src/service/sys/fs/).
 
-/// The tree of the paths the core opens (xpute's FS_OPEN), as a URI's path is a
+/// The tree of the paths the core opens (xpute wit/fs/file.wit), as a URI's path is a
 /// tree: each node takes one token, its `ID`, distinct among its siblings, and hands the
 /// rest of the path to the child it names. A node that holds data takes the tokens left as
 /// that data: a tile's quadkey (pxl-spec space/layer/quadrant.rs) as a string, or a load's id.

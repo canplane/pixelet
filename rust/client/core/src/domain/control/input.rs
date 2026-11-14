@@ -6,9 +6,9 @@
 //! by hand ends a pending destination, and a pointer down ends following
 //! the device. What the pointer is over, its hover and its tap, belongs to
 //! pxl-core pointer.rs. Events only gather what they ask, and the camera is
-//! written once a frame (`camera_input_step`). What the pointer holds comes
-//! with each event. When that changes under a still pointer, the UI sends
-//! the move again so that the hover is resolved again.
+//! written once a frame (`camera_input_step`). When what the pointer holds
+//! changes under a still pointer, its hover is picked again
+//! (`camera_rehover`).
 
 use std::collections::BTreeMap;
 
@@ -78,8 +78,8 @@ struct Input {
     pending_pan_dy: f64,
     pending_view_x: f64,
     pending_view_y: f64,
-    // The wheel's deltas are summed before a single exp(). That gives the
-    // same zoom as one exp() per delta, since the exponents add.
+    // The wheel's deltas are summed before a single `exp()`. That gives the
+    // same zoom as one `exp()` per delta, since the exponents add.
     pending_wheel_delta_y: Option<f64>,
     /// A trackpad pinch's scales since the last step, multiplied.
     pending_pinch_scale: Option<f64>,

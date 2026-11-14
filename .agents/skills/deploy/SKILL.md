@@ -27,9 +27,8 @@ Run from a tree whose HEAD is the commit to send, with nothing uncommitted:
 make -j8 check check-build check-xpute && make -j8 test test-xpute test-gpu
 ```
 
-If the change touches a GPU call (`xpute/gpu/link/spec/`, xpute's `gpu` crates and
-packages, or how pxl-render encodes), also run `(cd xpute && ../script/perf/mac.py cargo test-gpu) && script/perf/mac.py pnpm --dir xpute test:gpu:web` (a GPU
-and Chrome, `$CHROME`).
+A change that touches a GPU call also takes xpute's GPU tests, as
+[CONTRIBUTING.md](../../../CONTRIBUTING.md#checking-a-change) says.
 
 ## Squash
 

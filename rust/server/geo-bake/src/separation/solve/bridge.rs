@@ -95,8 +95,7 @@ struct ObstacleGrid {
 }
 
 impl ObstacleGrid {
-    /// Each segment cut to the ring `[origin, far]`, with its nodes those in it. `none` has
-    /// nothing to clear, for where no deck is solved.
+    /// Nothing to clear, for where no deck is solved.
     fn none() -> ObstacleGrid {
         ObstacleGrid {
             list: Vec::new(),
@@ -105,6 +104,7 @@ impl ObstacleGrid {
         }
     }
 
+    /// Each segment cut to the ring `[origin, far]`, with its nodes those in it.
     fn of(src: &Ring, [origin, far]: [[f64; 2]; 2], scale: Scale) -> ObstacleGrid {
         let cell = |p: [f64; 2]| {
             [

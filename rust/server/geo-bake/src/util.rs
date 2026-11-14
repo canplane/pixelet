@@ -11,7 +11,7 @@ use zstd::stream;
 /// The `Content-Encoding` every baked tile is uploaded with, so the transport decodes it.
 pub const CONTENT_ENCODING: &str = "zstd";
 
-/// FNV-1a 64.
+/// The 64-bit FNV-1a hash of `bytes`.
 pub const fn fnv1a(bytes: &[u8]) -> u64 {
     let (mut h, mut i) = (0xcbf2_9ce4_8422_2325u64, 0);
     while i < bytes.len() {

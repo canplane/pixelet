@@ -66,12 +66,9 @@ export interface SensorListener {
     err: "denied" | "unavailable" | "timeout" | "other",
     watching: boolean,
   ): void;
-  orient(
-    compass: f64 | null,
-    alpha: f64 | null,
-    beta: f64 | null,
-    gamma: f64 | null,
-  ): void;
+  orient(compass: f64 | null, alpha: f64 | null): void;
+  /** The place has no compass: a page's event with every field null. */
+  orient_unavailable(): void;
   orient_err(): void;
   permission(
     sensor: "geolocation" | "orient",

@@ -1,4 +1,4 @@
-// pxl-render/queue_walk.wgsl
+// pxl-render/frame/shader/queue_walk.wgsl
 
 // A run's two walks over the node cache alone (walk.wgsl, cached.wgsl): the first over the
 // run's items, and the second over the rays the first parked. The part for the run's kind
@@ -35,8 +35,8 @@ fn load(word: u32) -> u32 {
   return atomicLoad(&queue[word]);
 }
 
-/// Takes the next stop's number (queue.wgsl `keep_hit`). The count and the dispatch over the
-/// stops, which `hit_rows` raises to `rows`, lie in the queue's words, laid out as
+/// Takes the next hit's number (queue.wgsl `keep_hit`). The count and the dispatch over the
+/// hits, which `hit_rows` raises to `rows`, lie in the queue's words, laid out as
 /// `node_cache::HITS_ARGS` (`ray::QUEUE_HITS`). The last walk goes on numbering from them in
 /// the node cache's head.
 fn hit_number() -> u32 {
@@ -72,15 +72,15 @@ fn list_ask(aim: Aim, w: WalkEnd, parked: bool) {
     inheritance = p.inheritance;
   }
   let at = queue_recs_at() + r * QUEUE_REC_WORDS;
-  atomicStore(&queue[at], w.zoom);
-  atomicStore(&queue[at + 1u], u32(c.x));
-  atomicStore(&queue[at + 2u], u32(c.y));
-  atomicStore(&queue[at + 3u], u32(c.z));
-  atomicStore(&queue[at + 4u], node_range(aim, w.corner, w.zoom, w.roots));
-  atomicStore(&queue[at + 5u], select(0u, 1u, top));
-  atomicStore(&queue[at + 6u], inheritance.x);
-  atomicStore(&queue[at + 7u], inheritance.y);
-  atomicStore(&queue[at + 8u], inheritance.z);
+  atomicStore(&queue[at + QUEUE_REC_ZOOM], w.zoom);
+  atomicStore(&queue[at + QUEUE_REC_IDX], u32(c.x));
+  atomicStore(&queue[at + QUEUE_REC_IDX + 1u], u32(c.y));
+  atomicStore(&queue[at + QUEUE_REC_IDX + 2u], u32(c.z));
+  atomicStore(&queue[at + QUEUE_REC_ZOOMS], node_range(aim, w.corner, w.zoom, w.roots));
+  atomicStore(&queue[at + QUEUE_REC_TOP], select(0u, 1u, top));
+  atomicStore(&queue[at + QUEUE_REC_INHERITANCE], inheritance.x);
+  atomicStore(&queue[at + QUEUE_REC_INHERITANCE + 1u], inheritance.y);
+  atomicStore(&queue[at + QUEUE_REC_INHERITANCE + 2u], inheritance.z);
 }
 
 /// Where item `item`, whose ray is `aim`, starts in the first walk, or goes on from in the

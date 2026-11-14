@@ -58,7 +58,7 @@ const off = (v: f64 | null, at: f64) =>
 
 /** Says the run's progress, a line a second until the answer is called,
  * whether or not the core answers: when it was logged, whether the page is
- * shown, the boot's state (service/sys/boot.ts), how long the read of NOW's
+ * shown, the boot's state (service/sys/boot.ts), how long the read of `NOW`'s
  * draw that is out has gone unanswered (`unanswered_ms`, 0 with none out), and
  * that draw as the last answer gave it, each as its name and its value, or the
  * read's error. One read is out at a time. A second with no line is one the
@@ -89,7 +89,7 @@ function progress(): () => void {
   return () => clearInterval(tick);
 }
 
-/** The boot's state turns STARTED: the world has been made. */
+/** The boot's state turns `BOOT_STARTED`: the world has been made. */
 function started(): Promise<void> {
   return new Promise((done) => {
     if (boot_state() === BOOT_STARTED) return done();
@@ -102,7 +102,7 @@ function started(): Promise<void> {
 }
 
 /** A run measures a page or an app shown from the core's start, as the world
- * begins to load (BOOT_LOADING), to its result, on whatever runs it. It ends
+ * begins to load (`BOOT_LOADING`), to its result, on whatever runs it. It ends
  * at once with the error where the page is hidden, which draws nothing while
  * its core waits for it to be shown again, or where the core stops, whose
  * reason the host says. */

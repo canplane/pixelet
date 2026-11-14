@@ -1,4 +1,4 @@
-// pxl-render/light_propagate.wgsl
+// pxl-render/frame/shader/light_propagate.wgsl
 
 // Lists which tiles of the box a receiver reads, one thread for each tile a receiver stands on
 // (`light::LIST_RECEIVERS`; light_mark.wgsl, light_mark_draws.wgsl). It runs after every

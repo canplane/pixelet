@@ -1,13 +1,15 @@
 // xpute-link-gen/wit.rs
 
-//! This writes the link's bindings from WIT (xpute/link/wit/types.wit), in Rust
-//! and in TypeScript. For each interface it writes its methods' numbers, its
+//! This writes the link's bindings from WIT (xpute/link/wit/types.wit), in Rust,
+//! TypeScript and C++. For each interface it writes its methods' numbers, its
 //! types, the side that serves it and the side that calls it: a singleton
 //! interface's functions are one object's methods, under its named handle, the
 //! FNV-1a hash of `package/interface` folded below frame.json5's `NAMED`, and
 //! each resource's methods another's. A method's number is its place among its
 //! object's, in declaration order. No two interfaces a target reaches share a
-//! named handle. In C++ it writes the guest's side alone (cpp.rs).
+//! named handle. Each language is written by its own module, from the one
+//! reading of the WIT here: Rust (rs.rs), TypeScript (ts.rs), and in C++ the
+//! guest's side alone (cpp.rs).
 //!
 //! A packet lays its values out as the Component Model's Canonical ABI does
 //! (xpute-link cabi.rs): a call's params as one tuple, an answer's value
@@ -22,9 +24,11 @@ use std::path::Path;
 
 use wit_parser::{Function, FunctionKind, IndexMap, InterfaceId, Param, Resolve, Type, TypeDefKind, TypeId, TypeOwner, WorldItem, WorldKey};
 
-use xpute_gen::spec::{int_of, is_float, mark, ts_number, of_ident, package, package_path, pascal, read, rs_crate, rs_enum, rs_ident, rs_module, screaming, snake, ts_enum, ts_ident, ts_module, Member, Output};
+use xpute_gen::spec::{int_of, is_float, mark, package, package_path, pascal, read, rs_crate, rs_ident, rs_module, screaming, snake, ts_module, Member, Output};
 
 mod cpp;
+mod rs;
+mod ts;
 
 /// One package's bindings on one side, and where they go.
 pub struct WitTarget<'a> {
@@ -149,17 +153,11 @@ fn serving(o: &Obj, side: &str) -> String {
     if o.resource { format!("{side}{}", pascal(&o.name)) } else { side.into() }
 }
 
-/// The object over a served object's implementation, a name of the
-/// generator's alone, which its leading `_` keeps from every WIT name.
-fn object_struct(o: &Obj) -> String {
-    if o.resource { format!("_{}Object", pascal(&o.name)) } else { "_Object".into() }
-}
-
 /// The names the Rust bindings give beside WIT names, those the runtime
 /// module `_rt` holds, and the prelude's they name bare. A WIT name that
 /// meets one takes `_`, as wit-bindgen's `Guest_` does.
-const RS_GIVEN: [&str; 32] = [
-    "HANDLE", "LATER", "mount", "task_return", "Guest", "Host", "L", "Errno", "Future", "Handle", "Lend", "Lift", "Lower", "Method",
+const RS_GIVEN: [&str; 33] = [
+    "HANDLE", "IMPORTS", "LATER", "mount", "task_return", "Guest", "Host", "L", "Errno", "Future", "Handle", "Lend", "Lift", "Lower", "Method",
     "Object", "Rc", "Reply", "Return", "Tag", "Box", "Copy", "Err", "Fn", "None", "Ok", "Option", "Result", "Some",
     "String", "Unpin", "Vec", "size_of_val",
 ];
@@ -177,10 +175,10 @@ const TS_GIVEN: [&str; 33] = [
 ];
 
 /// The modules the TypeScript bindings give beside interfaces' modules in a
-/// package with a world: its table of methods answered later (later.ts). An
-/// interface's module that meets one takes `_`, as a name in `TS_GIVEN`
-/// does.
-const TS_GIVEN_MODULES: [&str; 1] = ["later"];
+/// package with a world: its tables of the interfaces it imports
+/// (imports.ts) and of methods answered later (later.ts). An interface's
+/// module that meets one takes `_`, as a name in `TS_GIVEN` does.
+const TS_GIVEN_MODULES: [&str; 2] = ["imports", "later"];
 
 /// An interface's TypeScript module, escaped where its package has a world
 /// (`TS_GIVEN_MODULES`).
@@ -227,11 +225,6 @@ fn rs_name(n: &str) -> String {
     escaped(rs_ident(&snake(n)), rs_given)
 }
 
-/// A WIT name as a TypeScript identifier.
-fn ts_name(n: &str) -> String {
-    escaped(ts_ident(&snake(n)), ts_given)
-}
-
 /// A method's args, `self` dropped: the handle names it.
 fn params(f: &Function) -> impl Iterator<Item = &Param> {
     f.params.iter().filter(|p| p.name != "self")
@@ -255,7 +248,7 @@ fn is_lent(r: &Resolve, ty: &Type) -> bool {
 /// `INTS`, which gives its spellings and its range, or a float.
 pub(crate) struct Number {
     pub(crate) wit: Type,
-    /// Its Rust type, the name of its writer and reader in both languages.
+    /// Its Rust type, the name of its writer and reader in Rust and TypeScript.
     pub(crate) rs: &'static str,
     /// Its size, which is its alignment (Canonical ABI).
     pub(crate) sz: usize,
@@ -378,29 +371,6 @@ fn plus(at: &str, off: usize) -> String {
     }
 }
 
-/// What a Rust function of `n` arguments, `self` among them, carries past
-/// clippy's limit, indented by `indent`: the lint written off, as the tree
-/// writes it where each argument is its own (wit-bindgen likewise).
-fn many_args(n: usize, indent: &str) -> String {
-    if n > 7 {
-        format!("{indent}#[expect(clippy::too_many_arguments, reason = \"the WIT function's parameters, each its own\")]\n")
-    } else {
-        String::new()
-    }
-}
-
-/// The value the Rust expression `e`, a reference, names: the referent of a
-/// borrow it writes, else its dereference.
-fn deref(e: &str) -> String {
-    e.strip_prefix('&').map_or_else(|| format!("*{e}"), str::to_owned)
-}
-
-/// The Rust expression `e`, a reference, as a method's receiver: what a
-/// borrow it writes borrows, which the call borrows again.
-fn receiver(e: &str) -> String {
-    e.strip_prefix('&').map_or_else(|| format!("({e})"), str::to_owned)
-}
-
 /// Where fields of `layouts`, each (size, align), lie one after another, and
 /// the size and alignment of them all: a record's, or a tuple's, which the
 /// Canonical ABI lays out as a record.
@@ -464,13 +434,6 @@ enum Role {
     Call,
 }
 
-/// The Rust modules the bindings take items from, beside the link's crate.
-const RS_ERRNO: &str = "xpute_kit::status::errno";
-
-/// The TypeScript modules the bindings take items from, beside the link's.
-const TS_ERRNO: &str = "@xpute/kit/status/errno.spec.ts";
-const TS_ERROR: &str = "@xpute/kit/status/error.ts";
-
 pub(crate) struct Gen<'a> {
     r: &'a Resolve,
     here: InterfaceId,
@@ -516,31 +479,9 @@ impl Gen<'_> {
         named(&self.at(), self.named_bit)
     }
 
-    fn kinds(&self, f: &Function) -> Result<Vec<(String, Kind)>, String> {
-        let at = format!("{}.{}", self.at(), f.name);
-        params(f).map(|p| Ok((rs_name(&p.name), kind(self.r, &p.ty, &at)?))).collect()
-    }
-
     fn ret(&self, f: &Function) -> Result<Option<Kind>, String> {
         let at = format!("{}.{}", self.at(), f.name);
         f.result.as_ref().map(|t| kind(self.r, t, &at)).transpose()
-    }
-
-    /// `name` of the Rust module `module`, reached through the module's
-    /// runtime module `_rt`, which re-exports it, as wit-bindgen's bindings
-    /// reach theirs.
-    fn rs_use(&self, module: &str, name: &str) -> String {
-        self.rs_uses.borrow_mut().entry(module.into()).or_default().insert(name.into());
-        format!("_rt::{name}")
-    }
-
-    /// `name` of the TypeScript module `module`, which the module imports by
-    /// its name, as a type alone where `is_type`.
-    fn ts_use(&self, module: &str, name: &str, is_type: bool) -> String {
-        let mut uses = self.ts_uses.borrow_mut();
-        let t = uses.entry(module.into()).or_default().entry(name.into()).or_insert(is_type);
-        *t &= is_type;
-        name.into()
     }
 
     /// A type's name, and the interface it is reached through where it is
@@ -632,845 +573,6 @@ impl Gen<'_> {
         let layouts = ks.iter().map(|k| self.layout(k)).collect::<Result<Vec<_>, String>>()?;
         let (offs, sz, _) = rec_layout(&layouts);
         Ok((offs, sz))
-    }
-
-    /// The size and alignment of `k` as Rust writes them: a record's or a
-    /// variant's own constants, any other's numbers.
-    fn rs_layout(&self, k: &Kind) -> Result<(String, String), String> {
-        Ok(match k {
-            Kind::Record(_) | Kind::Variant(_) => {
-                let t = self.rs_ty(k, true);
-                (format!("{t}::SZ"), format!("{t}::ALIGN"))
-            }
-            _ => {
-                let (sz, align) = self.layout(k)?;
-                (sz.to_string(), align.to_string())
-            }
-        })
-    }
-
-    /// The size and alignment of `k` as TypeScript writes them: a record's or
-    /// a variant's own constants, any other's numbers.
-    fn ts_layout(&self, k: &Kind) -> Result<(String, String), String> {
-        Ok(match k {
-            Kind::Record(t) | Kind::Variant(t) => (self.ts_const(*t, "SZ"), self.ts_const(*t, "ALIGN")),
-            _ => {
-                let (sz, align) = self.layout(k)?;
-                (sz.to_string(), align.to_string())
-            }
-        })
-    }
-
-    // ---- Rust ----
-
-    /// Stores `e`, a reference to a value of `k`, at `at` with the writer
-    /// `w`.
-    fn rs_store(&self, w: &str, at: &str, e: &str, k: &Kind) -> Result<String, String> {
-        Ok(match k {
-            Kind::Bool => format!("{w}.bool({at}, {});", deref(e)),
-            Kind::Number(n) => format!("{w}.{}({at}, {});", n.rs, deref(e)),
-            Kind::Handle => format!("{w}.u32({at}, {});", deref(e)),
-            Kind::Enum(t) => {
-                let d = discriminant(self.case_cnt(*t))?.rs;
-                format!("{w}.{d}({at}, {} as {d});", deref(e))
-            }
-            Kind::Str => format!("{w}.str({at}, {e});"),
-            Kind::Array(_) => format!("{w}.arr({at}, {e});"),
-            Kind::List(el) => {
-                let (sz, align) = self.rs_layout(el)?;
-                let r = receiver(e);
-                format!(
-                    "if let Some(b) = {w}.list({at}, {r}.len(), {sz}, {align}) {{ for (i, x) in {r}.iter().enumerate() {{ {} }} }}",
-                    self.rs_store(w, &format!("b + i * {sz}"), "x", el)?
-                )
-            }
-            Kind::Record(_) | Kind::Variant(_) => format!("{}.store({w}, {at});", receiver(e)),
-            Kind::Option(el) => {
-                let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)])?;
-                format!("if let Some(v) = {e} {{ {w}.u8({at}, 1); {} }}", self.rs_store(w, &plus(at, off), "v", el)?)
-            }
-            Kind::Result(ok, err) => {
-                let (off, _, _) = self.result_layout(ok, err)?;
-                let case = |k: &Option<Box<Kind>>| match k {
-                    Some(k) => self.rs_store(w, &plus(at, off), "v", k),
-                    None => Ok(String::new()),
-                };
-                // A case with no payload binds nothing.
-                let bind = |k: &Option<Box<Kind>>| if k.is_some() { "v" } else { "_" };
-                format!("match {e} {{ Ok({}) => {{ {} }} Err({}) => {{ {w}.u8({at}, 1); {} }} }}", bind(ok), case(ok)?, bind(err), case(err)?)
-            }
-        })
-    }
-
-    /// Loads a value of `k` at `at` with the reader `r`, an expression of
-    /// `Result<_, Errno>`.
-    fn rs_load(&self, r: &str, at: &str, k: &Kind) -> Result<String, String> {
-        let errno = self.rs_use(RS_ERRNO, "Errno");
-        Ok(match k {
-            Kind::Bool => format!("{r}.bool({at})"),
-            Kind::Number(n) => format!("{r}.{}({at})", n.rs),
-            Kind::Handle => format!("{r}.u32({at})"),
-            Kind::Enum(t) => format!(
-                "{r}.case({at}, {}).and_then(|v| {}::of(v).ok_or({errno}::EBADMSG))",
-                self.case_cnt(*t),
-                self.rs_ty(k, true)
-            ),
-            Kind::Str => format!("{r}.str({at}).map(str::to_owned)"),
-            Kind::Array(n) => format!("{r}.arr::<{}>({at})", n.rs),
-            Kind::List(el) => {
-                let (sz, align) = self.rs_layout(el)?;
-                format!(
-                    "{r}.list({at}, {sz}, {align}).and_then(|(b, n)| (0..n).map(|i| {}).collect::<Result<Vec<_>, {errno}>>())",
-                    self.rs_load(r, &format!("b + i * {sz}"), el)?
-                )
-            }
-            Kind::Record(_) | Kind::Variant(_) => format!("{}::load({r}, {at})", self.rs_ty(k, true)),
-            Kind::Option(el) => {
-                let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)])?;
-                format!(
-                    "{r}.case({at}, 2).and_then(|d| if d == 0 {{ Ok(None) }} else {{ {}.map(Some) }})",
-                    self.rs_load(r, &plus(at, off), el)?
-                )
-            }
-            Kind::Result(ok, err) => {
-                let (off, _, _) = self.result_layout(ok, err)?;
-                let case = |k: &Option<Box<Kind>>, tag: &str| match k {
-                    Some(k) => Ok(format!("{}.map({tag})", self.rs_load(r, &plus(at, off), k)?)),
-                    None => Ok::<_, String>(format!("Ok({tag}(()))")),
-                };
-                format!(
-                    "{r}.case({at}, 2).and_then(|d| if d == 0 {{ {} }} else {{ {} }})",
-                    case(ok, "Ok")?,
-                    case(err, "Err")?
-                )
-            }
-        })
-    }
-
-    /// The Rust of the args `ps`: none, or their tuple's size and what writes
-    /// it, each of `lents` lending memory, written as the lent record of its
-    /// span (`{lent}_at_`, `{lent}_len_`), names no WIT name escapes to.
-    fn rs_args(&self, ps: &[(String, Kind)], lents: &[String]) -> Result<String, String> {
-        if ps.is_empty() {
-            return Ok("None".into());
-        }
-        let (offs, sz) = self.tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
-        let mut writes = Vec::new();
-        for ((n, k), at) in ps.iter().zip(&offs) {
-            writes.push(if lents.contains(n) {
-                format!("{} {{ at: {n}_at_, len: {n}_len_ }}.store(w_, {at});", self.rs_ty(k, true))
-            } else {
-                // A string's, a list's, a record's or a variant's param is
-                // a borrow already.
-                let e = match k {
-                    Kind::Str | Kind::Array(_) | Kind::List(_) | Kind::Record(_) | Kind::Variant(_) => n.clone(),
-                    _ => format!("&{n}"),
-                };
-                self.rs_store("w_", &at.to_string(), &e, k)?
-            });
-        }
-        let w = format!("|w_: &mut {}| {{ {} }}", self.rs_use(self.link_rs, "Lower"), writes.join(" "));
-        Ok(format!("Some(({sz}, &{w}))"))
-    }
-
-    /// The Rust that answers `v`, a method's value.
-    fn rs_reply(&self, rk: &Option<Kind>) -> Result<String, String> {
-        let reply = self.rs_use(self.link_rs, "Reply");
-        Ok(match rk {
-            None => format!("{reply}::from(0)"),
-            Some(k) => format!(
-                "{reply} {{ result: 0, data: Some(({}, Box::new(move |w: &mut {}| {{ {} }}))) }}",
-                self.rs_layout(k)?.0,
-                self.rs_use(self.link_rs, "Lower"),
-                self.rs_store("w", "0", "&v", k)?
-            ),
-        })
-    }
-
-    /// The Rust of the answer's decoding, from the result `r` and the return
-    /// data `data`.
-    fn rs_answer(&self, k: &Option<Kind>, data: &str) -> Result<String, String> {
-        let answer = self.rs_use(self.link_rs, "answer");
-        Ok(match k {
-            None => format!("{answer}(r)"),
-            Some(k) => format!(
-                "{answer}(r).and_then(|_| {{ let r_ = {}::new({data}.ok_or({}::EBADMSG)?); {} }})",
-                self.rs_use(self.link_rs, "Lift"),
-                self.rs_use(RS_ERRNO, "Errno"),
-                self.rs_load("r_", "0", k)?
-            ),
-        })
-    }
-
-    /// The serving side of an object, on the side of the crate `side`: its
-    /// trait, and the object over it.
-    fn rs_export(&self, o: &Obj, side: &str, serves: &str, out: &mut String) -> Result<(), String> {
-        let (t, obj) = (serving(o, serves), object_struct(o));
-        let errno = self.rs_use(RS_ERRNO, "Errno");
-        let reply = self.rs_use(self.link_rs, "Reply");
-        let rc = self.rs_use("std::rc", "Rc");
-        let _ = writeln!(out, "pub trait {t} {{");
-        for f in &o.methods {
-            let ps: Vec<String> = self.kinds(f)?.iter().map(|(n, k)| format!("{n}: {}", self.rs_ty(k, true))).collect();
-            let ret = self.ret(f)?.map_or("()".into(), |k| self.rs_ty(&k, true));
-            let name = rs_name(method_name(f));
-            if is_async(f) {
-                let _ = writeln!(out, "{}    fn {name}(&self, {}task_return: {}<{ret}>);", many_args(ps.len() + 2, "    "), ps.iter().map(|p| format!("{p}, ")).collect::<String>(), self.rs_use(self.link_rs, "Return"));
-            } else {
-                let _ = writeln!(out, "{}    fn {name}(&self, {}) -> Result<{ret}, {errno}>;", many_args(ps.len() + 1, "    "), ps.join(", "));
-            }
-        }
-        // A request's tag is read where a method answers later, and the args
-        // where one takes any.
-        let tag = if o.methods.iter().any(|f| is_async(f)) { "tag_" } else { "_" };
-        let args = if o.methods.iter().any(|f| params(f).next().is_some()) { "args_" } else { "_" };
-        let _ = writeln!(
-            out,
-            "}}\n\nstruct {obj}({rc}<dyn {t}>);\n\nimpl {} for {obj} {{\n    fn call(&self, m_: {}, {tag}: {}, {args}: Option<&[u8]>) -> {reply} {{\n        let run = || -> Result<{reply}, {errno}> {{\n            Ok(match m_ {{",
-            self.rs_use(self.link_rs, "Object"),
-            self.rs_use(self.link_rs, "Method"),
-            self.rs_use(self.link_rs, "Tag")
-        );
-        for f in &o.methods {
-            let ps = self.kinds(f)?;
-            let _ = writeln!(out, "                {} => {{", method_const(o, f, rs_given));
-            if !ps.is_empty() {
-                let _ = writeln!(out, "                    let r_ = {}::new(args_.ok_or({errno}::EBADMSG)?);", self.rs_use(self.link_rs, "Lift"));
-            }
-            let (offs, _) = self.tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
-            for ((n, kd), at) in ps.iter().zip(&offs) {
-                let _ = writeln!(out, "                    let {n} = {}?;", self.rs_load("r_", &at.to_string(), kd)?);
-            }
-            let names: String = ps.iter().map(|(n, _)| format!("{n}, ")).collect();
-            let name = rs_name(method_name(f));
-            let rk = self.ret(f)?;
-            // A value is bound where the method answers one.
-            let v = if rk.is_some() { "v" } else { "()" };
-            if is_async(f) {
-                let link = self.rs_use(side, "link");
-                let done = format!(
-                    "{}::new(tag_, {link}::on_cancel, Box::new(move |got| {{ let reply = match got {{ Ok({v}) => {}, Err(e) => {reply}::from(e as i32) }}; {link}::task_return(tag_, reply.result, reply.data.as_ref().map(|(n, w)| (*n, &**w as &dyn Fn(&mut {})))); }}))",
-                    self.rs_use(self.link_rs, "Return"),
-                    self.rs_reply(&rk)?,
-                    self.rs_use(self.link_rs, "Lower")
-                );
-                let _ = writeln!(out, "                    self.0.{name}({names}{done});\n                    {reply}::from({errno}::EINPROGRESS as i32)\n                }}");
-            } else {
-                let _ = writeln!(out, "                    match self.0.{name}({}) {{\n                        Ok({v}) => {},\n                        Err(e) => {reply}::from(e as i32),\n                    }}\n                }}", names.trim_end_matches(", "), self.rs_reply(&rk)?);
-            }
-        }
-        let _ = writeln!(out, "                _ => {reply}::from({errno}::ENOSYS as i32),\n            }})\n        }};\n        run().unwrap_or_else(|e| {reply}::from(e as i32))\n    }}\n}}\n");
-        if o.resource {
-            let _ = writeln!(out, "/// The object over `implementation`, for an opener or a function to answer.\npub fn {}(implementation: {rc}<dyn {t}>) -> {rc}<dyn {}> {{\n    {rc}::new({obj}(implementation))\n}}\n", rs_name(&o.name), self.rs_use(self.link_rs, "Object"));
-        } else {
-            let _ = writeln!(out, "/// Serves `implementation` under the interface's handle.\npub fn mount(implementation: {rc}<dyn {t}>) {{\n    {}::mount_named(HANDLE, {rc}::new({obj}(implementation)));\n}}\n", self.rs_use(side, "link"));
-        }
-        Ok(())
-    }
-
-    /// The calling side of an object, on the side of the crate `side`: its
-    /// methods, by a handle, a singleton's its interface's named one.
-    fn rs_import(&self, o: &Obj, side: &str, out: &mut String) -> Result<(), String> {
-        let errno = self.rs_use(RS_ERRNO, "Errno");
-        for f in &o.methods {
-            let ps = self.kinds(f)?;
-            let lents: Vec<String> = params(f).filter(|p| is_lent(self.r, &p.ty)).map(|p| rs_name(&p.name)).collect();
-            // An async call's one lent buffer, which its answer hands back.
-            let lent = if is_async(f) { lents.first().cloned() } else { None };
-            // A sync call lends slices of any plain elements, each its own; an
-            // async call lends any buffer that says its span (link `Lend`).
-            let lent_ty = |k: usize| if is_async(f) { "L".to_string() } else { format!("&mut [T{k}]") };
-            let generic = if lents.is_empty() {
-                String::new()
-            } else if is_async(f) {
-                format!("<L: {}>", self.rs_use(self.link_rs, "Lend"))
-            } else {
-                let ts: Vec<String> = (0..lents.len()).map(|k| format!("T{k}: Copy + Unpin + 'static")).collect();
-                format!("<{}>", ts.join(", "))
-            };
-            let mut sig: Vec<String> = if o.resource { vec![format!("{}_: {}", rs_name(&o.name), self.rs_use(self.link_rs, "Handle"))] } else { vec![] };
-            sig.extend(ps.iter().map(|(n, k)| match lents.iter().position(|l| l == n) {
-                Some(j) => format!("{n}: {}", lent_ty(j)),
-                None => format!("{n}: {}", self.rs_ty(k, false)),
-            }));
-            let h = if o.resource { format!("{}_", rs_name(&o.name)) } else { "HANDLE".into() };
-            let rk = self.ret(f)?;
-            let ret = rk.as_ref().map_or("()".into(), |k| self.rs_ty(k, true));
-            let lend: String = lents
-                .iter()
-                .map(|l| {
-                    if is_async(f) {
-                        format!("let mut {l} = {l}; let ({l}_at_, {l}_len_) = {}::span(&mut {l}); ", self.rs_use(self.link_rs, "Lend"))
-                    } else {
-                        format!("let {l}_at_ = {}::off({l}.as_ptr().cast()); let {l}_len_ = size_of_val(&{l}[..]) as u32; ", self.rs_use(self.link_rs, "mem"))
-                    }
-                })
-                .collect();
-            let c = method_const(o, f, rs_given);
-            let name = rs_name(&object_method(o, f));
-            if is_async(f) {
-                let (output, kept, give) = match &lent {
-                    Some(l) => (format!("(L, Result<{ret}, {errno}>)"), l.clone(), format!("(lent, {})", self.rs_answer(&rk, "data.as_deref()")?)),
-                    None => (format!("Result<{ret}, {errno}>"), "()".into(), self.rs_answer(&rk, "data.as_deref()")?),
-                };
-                // The call is sent here, and the future answers it.
-                let _ = writeln!(out, "{}pub fn {name}{generic}({}) -> impl {}<Output = {output}> {{\n    {lend}\n    let sent = {}::wait({h}, {c}, {}, {kept});\n    async move {{\n        let (r, {}, {}) = sent.await;\n        {give}\n    }}\n}}\n", many_args(sig.len(), ""), sig.join(", "), self.rs_use("core::future", "Future"), self.rs_use(side, "wait"), self.rs_args(&ps, &lents)?, if rk.is_some() { "data" } else { "_" }, if lent.is_some() { "lent" } else { "_" });
-            } else {
-                let _ = writeln!(out, "{}pub fn {name}{generic}({}) -> Result<{ret}, {errno}> {{\n    {lend}let (r, {}) = {}::call({h}, {c}, {});\n    {}\n}}\n", many_args(sig.len(), ""), sig.join(", "), if rk.is_some() { "data" } else { "_" }, self.rs_use(side, "link"), self.rs_args(&ps, &lents)?, self.rs_answer(&rk, "data")?);
-            }
-        }
-        Ok(())
-    }
-
-    /// The interface's Rust module, by `role` on the side of its crate, none
-    /// for an interface of types alone.
-    fn rs_interface(&self, objs: &[Obj], role: Option<(Role, &str, &str)>) -> Result<String, String> {
-        let mut items = String::new();
-        if objs.iter().any(|o| !o.resource) {
-            let _ = writeln!(items, "/// The interface's handle, named by `{}` (frame.json5 `NAMED`).\npub const HANDLE: {} = {:#x};\n", self.at(), self.rs_use(self.link_rs, "Handle"), self.handle());
-        }
-        for o in objs {
-            for (k, f) in o.methods.iter().enumerate() {
-                let _ = writeln!(items, "/// `{}`\npub const {}: {} = {k};", f.name, method_const(o, f, rs_given), self.rs_use(self.link_rs, "Method"));
-            }
-        }
-        items.push('\n');
-        self.rs_types(&mut items)?;
-        if let Some((role, side, serves)) = role {
-            for o in objs {
-                match role {
-                    Role::Serve => self.rs_export(o, side, serves, &mut items)?,
-                    Role::Call => self.rs_import(o, side, &mut items)?,
-                }
-            }
-        }
-        // What the module takes from other modules, which its runtime module
-        // holds alone (wit-bindgen's `_rt`) for the module above it.
-        let mut body = items;
-        if !self.rs_uses.borrow().is_empty() {
-            body.push_str("mod _rt {\n");
-            for (m, names) in self.rs_uses.borrow().iter() {
-                let names: Vec<&str> = names.iter().map(String::as_str).collect();
-                let _ = writeln!(body, "    pub(super) use {m}::{{{}}};", names.join(", "));
-            }
-            body.push_str("}\n");
-        }
-        Ok(body)
-    }
-
-    // ---- TypeScript ----
-
-    fn ts_params(&self, f: &Function) -> Result<Vec<(String, Kind)>, String> {
-        let at = format!("{}.{}", self.at(), f.name);
-        params(f).map(|p| Ok((ts_name(&p.name), kind(self.r, &p.ty, &at)?))).collect()
-    }
-
-    /// A function's `result` returns its ok value and throws its error case,
-    /// as jco's bindings do.
-    fn ts_ret(&self, f: &Function) -> Result<String, String> {
-        Ok(match self.ret(f)? {
-            Some(Kind::Result(ok, _)) => ok.map_or("void".into(), |k| self.ts_ty(&k)),
-            Some(k) => self.ts_ty(&k),
-            None => "void".into(),
-        })
-    }
-
-    /// A `result` of `ok` and `err`, tagged as it is stored, from `x`, an ok
-    /// value, and from `e`, a `ComponentError`.
-    fn ts_tagged(&self, ok: &Option<Box<Kind>>, err: &Option<Box<Kind>>, x: &str, e: &str) -> (String, String) {
-        let ok = match ok {
-            Some(_) => format!("{{ tag: \"ok\", val: {x} }}"),
-            None => "{ tag: \"ok\" }".into(),
-        };
-        let err = match err {
-            Some(k) => format!("{{ tag: \"err\", val: {e}.payload as {} }}", self.ts_ty(k)),
-            None => "{ tag: \"err\" }".into(),
-        };
-        (ok, err)
-    }
-
-    /// Stores `e`, a value of `k`, at `at` with the writer `w`.
-    fn ts_store(&self, w: &str, at: &str, e: &str, k: &Kind) -> Result<String, String> {
-        Ok(match k {
-            Kind::Bool => format!("{w}.bool({at}, {e});"),
-            Kind::Number(n) => format!("{w}.{}({at}, {e});", n.rs),
-            Kind::Handle => format!("{w}.u32({at}, {e});"),
-            Kind::Enum(t) => format!("{w}.{}({at}, {e});", discriminant(self.case_cnt(*t))?.rs),
-            Kind::Str => format!("{w}.str({at}, {e});"),
-            Kind::Array(_) => format!("{w}.arr({at}, {e});"),
-            Kind::List(el) => {
-                let (sz, align) = self.ts_layout(el)?;
-                // A list inside a list takes names of its own depth.
-                let d = self.depth.get();
-                self.depth.set(d + 1);
-                let inner = self.ts_store(w, &format!("b{d} + i{d} * {sz}"), &format!("x{d}"), el);
-                self.depth.set(d);
-                format!("{{ const b{d} = {w}.list({at}, {e}.length, {sz}, {align}); if (b{d} !== null) {e}.forEach((x{d}, i{d}) => {{ {} }}); }}", inner?)
-            }
-            Kind::Record(t) | Kind::Variant(t) => format!("{}({w}, {at}, {e});", self.ts_path(*t, "store_")),
-            Kind::Option(el) => {
-                let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)])?;
-                format!("if ({e} !== null) {{ {w}.u8({at}, 1); {} }}", self.ts_store(w, &plus(at, off), e, el)?)
-            }
-            Kind::Result(ok, err) => {
-                let (off, _, _) = self.result_layout(ok, err)?;
-                let case = |k: &Option<Box<Kind>>| match k {
-                    Some(k) => self.ts_store(w, &plus(at, off), &format!("{e}.val"), k),
-                    None => Ok(String::new()),
-                };
-                format!("if ({e}.tag === \"ok\") {{ {} }} else {{ {w}.u8({at}, 1); {} }}", case(ok)?, case(err)?)
-            }
-        })
-    }
-
-    /// Loads a value of `k` at `at` with the reader `r`.
-    fn ts_load(&self, r: &str, at: &str, k: &Kind) -> Result<String, String> {
-        Ok(match k {
-            Kind::Bool => format!("{r}.bool({at})"),
-            Kind::Number(n) => format!("{r}.{}({at})", n.rs),
-            Kind::Handle => format!("{r}.u32({at})"),
-            Kind::Str => format!("{r}.str({at})"),
-            Kind::Array(n) => format!("{r}.arr({at}, {})", n.arr),
-            Kind::List(el) => {
-                let (sz, align) = self.ts_layout(el)?;
-                format!("{r}.map({at}, {sz}, {align}, (at) => {})", self.ts_load(r, "at", el)?)
-            }
-            Kind::Record(t) | Kind::Variant(t) | Kind::Enum(t) => format!("{}({r}, {at})", self.ts_path(*t, "load_")),
-            Kind::Option(el) => {
-                let (off, _, _) = variant_layout(&[None, Some(self.layout(el)?)])?;
-                format!("({r}.case({at}, 2) === 0 ? null : {})", self.ts_load(r, &plus(at, off), el)?)
-            }
-            Kind::Result(ok, err) => {
-                let (off, _, _) = self.result_layout(ok, err)?;
-                let case = |tag: &str, k: &Option<Box<Kind>>| -> Result<String, String> {
-                    Ok(match k {
-                        Some(k) => format!("{{ tag: \"{tag}\" as const, val: {} }}", self.ts_load(r, &plus(at, off), k)?),
-                        None => format!("{{ tag: \"{tag}\" as const }}"),
-                    })
-                };
-                format!("({r}.case({at}, 2) === 0 ? {} : {})", case("ok", ok)?, case("err", err)?)
-            }
-        })
-    }
-
-    /// The args `ps` as a packet: none, or their tuple's size and what writes
-    /// it.
-    fn ts_args(&self, ps: &[(String, Kind)]) -> Result<String, String> {
-        if ps.is_empty() {
-            return Ok("null".into());
-        }
-        let (offs, sz) = self.tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
-        let writes = ps.iter().zip(&offs).map(|((n, k), at)| self.ts_store("w_", &at.to_string(), n, k)).collect::<Result<Vec<_>, String>>()?;
-        Ok(format!("[{sz}, (w_) => {{ {} }}]", writes.join(" ")))
-    }
-
-    /// The serving side of an object: its interface, and the object over it.
-    fn ts_export(&self, o: &Obj, out: &mut String) -> Result<(), String> {
-        let link = self.link_ts;
-        let t = serving(o, "Host");
-        let _ = writeln!(out, "export interface {t} {{");
-        for f in &o.methods {
-            let mut sig: Vec<String> = self.ts_params(f)?.iter().map(|(n, k)| format!("{n}: {}", self.ts_ty(k))).collect();
-            let r = self.ts_ret(f)?;
-            // An async method stops on `signal_` where its caller cancels it
-            // and it can; one that can't leaves it unread.
-            if is_async(f) {
-                sig.push("signal_: AbortSignal".into());
-            }
-            let r = if is_async(f) { format!("Promise<{r}>") } else { r };
-            let _ = writeln!(out, "  {}({}): {r};", ts_name(method_name(f)), sig.join(", "));
-        }
-        // A resource's implementation is told its drop, as Rust's is by its
-        // Drop; an interface is never dropped.
-        if o.resource {
-            let _ = writeln!(out, "  drop(): void;");
-        }
-        let fname = if o.resource { ts_name(&o.name) } else { "object".into() };
-        let pick = if o.methods.iter().any(|f| is_async(f)) { format!("l: Pick<{}, \"task_return\" | \"on_cancel\">, ", self.ts_use(link, "Side", true)) } else { String::new() };
-        let refusal_of = self.ts_use(link, "refusal_of", false);
-        let _ = writeln!(out, "}}\n\n/** The object over `implementation`. */\n{}function {fname}({pick}implementation: {t}): {} {{\n  return {{\n    call(m, tag, args) {{\n      try {{\n        switch (m) {{", if o.resource { "export " } else { "" }, self.ts_use(link, "LinkObject", true));
-        for f in &o.methods {
-            let ps = self.ts_params(f)?;
-            let (offs, _) = self.tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
-            let mut loads = ps.iter().zip(&offs).map(|((_, kd), at)| self.ts_load("r_", &at.to_string(), kd)).collect::<Result<Vec<_>, String>>()?;
-            let takes_args = !loads.is_empty();
-            if is_async(f) {
-                loads.push("stop.signal".into());
-            }
-            let call = format!("implementation.{}({})", ts_name(method_name(f)), loads.join(", "));
-            let rk = self.ret(f)?;
-            let data = match &rk {
-                None => "null".to_string(),
-                Some(k) => format!("[{}, (w) => {{ {} }}]", self.ts_layout(k)?.0, self.ts_store("w", "0", "v", k)?),
-            };
-            let c = method_const(o, f, ts_given);
-            let _ = writeln!(out, "          case {c}: {{");
-            if takes_args {
-                let _ = writeln!(out, "            if (args === null) return {};\n            const r_ = new {}(args);", self.ts_use(TS_ERRNO, "ERRNO_EBADMSG", false), self.ts_use(self.cabi_ts, "Lift", false));
-            }
-            if let Some(k @ Kind::Result(ok, err)) = &rk {
-                let ce = self.ts_use(link, "ComponentError", false);
-                let ty = self.ts_ty(k);
-                let (tag_ok, tag_err) = self.ts_tagged(ok, err, "x", "e");
-                let bind = if ok.is_some() { "(x)" } else { "()" };
-                if is_async(f) {
-                    let _ = writeln!(out, "            const stop = new AbortController();\n            {call}.then(\n              {bind} => {{\n                const v = {tag_ok} as {ty};\n                l.task_return(tag, 0, {data});\n              }},\n              (e: unknown) => {{\n                if (!(e instanceof {ce})) return l.task_return(tag, {refusal_of}(e));\n                const v = {tag_err} as {ty};\n                l.task_return(tag, 0, {data});\n              }},\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return {};\n          }}", self.ts_use(TS_ERRNO, "ERRNO_EINPROGRESS", false));
-                } else {
-                    let set = if ok.is_some() { format!("const x = {call};\n              v = {tag_ok};") } else { format!("{call};\n              v = {tag_ok};") };
-                    let _ = writeln!(out, "            let v: {ty};\n            try {{\n              {set}\n            }} catch (e) {{\n              if (!(e instanceof {ce})) throw e;\n              v = {tag_err};\n            }}\n            return {{ result: 0, data: {data} }};\n          }}");
-                }
-            } else if is_async(f) {
-                let bind = if rk.is_none() { "()" } else { "(v)" };
-                let _ = writeln!(out, "            const stop = new AbortController();\n            {call}.then(\n              {bind} => l.task_return(tag, 0, {data}),\n              (e: unknown) => l.task_return(tag, {refusal_of}(e)),\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return {};\n          }}", self.ts_use(TS_ERRNO, "ERRNO_EINPROGRESS", false));
-            } else if rk.is_none() {
-                let _ = writeln!(out, "            {call};\n            return 0;\n          }}");
-            } else {
-                let _ = writeln!(out, "            const v = {call};\n            return {{ result: 0, data: {data} }};\n          }}");
-            }
-        }
-        let drop = if o.resource { "drop() {\n      implementation.drop();\n    }" } else { "drop() {}" };
-        let _ = writeln!(out, "          default:\n            return {};\n        }}\n      }} catch (e) {{\n        return {refusal_of}(e);\n      }}\n    }},\n    {drop},\n  }};\n}}\n", self.ts_use(TS_ERRNO, "ERRNO_ENOSYS", false));
-        if !o.resource {
-            let ln = self.ts_use(link, "Side", true);
-            let pick = if pick.is_empty() { format!("l: Pick<{ln}, \"mount_named\">") } else { format!("l: Pick<{ln}, \"mount_named\" | \"task_return\" | \"on_cancel\">") };
-            let pass = if o.methods.iter().any(|f| is_async(f)) { "l, " } else { "" };
-            let _ = writeln!(out, "/** Serves `implementation` under the interface's handle. */\nexport function mount({pick}, implementation: {t}): void {{\n  l.mount_named(HANDLE, object({pass}implementation));\n}}\n");
-        }
-        Ok(())
-    }
-
-    /// The calling side of an object: its methods as functions, each taking
-    /// first the link a singleton is called over, or a resource's reference.
-    fn ts_import(&self, o: &Obj, out: &mut String) -> Result<(), String> {
-        let link = self.link_ts;
-        let (by, to) = if o.resource {
-            (format!("ref_: {}", self.ts_use(link, "Ref", true)), "ref_.link.send(ref_.handle")
-        } else {
-            (format!("link_: {}", self.ts_use(link, "Sender", true)), "link_.send(HANDLE")
-        };
-        let err = self.ts_use(TS_ERROR, "XputeError", false);
-        for f in &o.methods {
-            let ps = self.ts_params(f)?;
-            let mut sig = vec![by.clone()];
-            sig.extend(ps.iter().map(|(n, k)| format!("{n}: {}", self.ts_ty(k))));
-            let rk = self.ret(f)?;
-            let ret = self.ts_ret(f)?;
-            let lift = |k: &Kind| -> Result<String, String> {
-                Ok(format!(
-                    "\n  if (a_.data === null) throw new {}({});\n  const r_ = new {}(a_.data);",
-                    self.ts_use(TS_ERROR, "XputeError", false),
-                    self.ts_use(TS_ERRNO, "ERRNO_EBADMSG", false),
-                    self.ts_use(self.cabi_ts, "Lift", false)
-                ) + &match k {
-                    Kind::Result(ok, e) => format!(
-                        "\n  const v_ = {};\n  if (v_.tag === \"err\") throw new {}({});\n  return{};",
-                        self.ts_load("r_", "0", k)?,
-                        self.ts_use(link, "ComponentError", false),
-                        if e.is_some() { "v_.val" } else { "undefined" },
-                        if ok.is_some() { " v_.val" } else { "" }
-                    ),
-                    _ => format!("\n  return {};", self.ts_load("r_", "0", k)?),
-                })
-            };
-            let take = match &rk {
-                None => String::new(),
-                Some(k) => lift(k)?,
-            };
-            let name = ts_name(&object_method(o, f));
-            let _ = writeln!(out, "export async function {name}({}): Promise<{ret}> {{\n  const a_ = await {to}, {}, {});\n  if (a_.result !== 0) throw new {err}(a_.result);{take}\n}}\n", sig.join(", "), method_const(o, f, ts_given), self.ts_args(&ps)?);
-        }
-        Ok(())
-    }
-
-    /// The interface's TypeScript modules, by `role`, none for an interface
-    /// of types alone: its functions' module, and its enums' module, empty
-    /// where it has none.
-    fn ts_interface(&self, objs: &[Obj], role: Option<Role>) -> Result<(String, String), String> {
-        let link = self.link_ts;
-        let mut out = String::new();
-        let mut enums = String::new();
-        if objs.iter().any(|o| !o.resource) {
-            let _ = writeln!(out, "/** The interface's handle, named by `{}` (frame.json5 `NAMED`). */\nexport const HANDLE: {} = {:#x};\n", self.at(), self.ts_use(link, "Handle", true), self.handle());
-        }
-        for o in objs {
-            for (k, f) in o.methods.iter().enumerate() {
-                let _ = writeln!(out, "/** `{}` */\nexport const {}: {} = {k};", f.name, method_const(o, f, ts_given), self.ts_use(link, "Method", true));
-            }
-        }
-        out.push('\n');
-        self.ts_types(&mut out, &mut enums)?;
-        if let Some(role) = role {
-            for o in objs {
-                match role {
-                    Role::Serve => self.ts_export(o, &mut out)?,
-                    Role::Call => self.ts_import(o, &mut out)?,
-                }
-            }
-        }
-        Ok((out, enums))
-    }
-
-    /// The imports of a TypeScript module.
-    fn ts_imports(&self) -> String {
-        let mut out = String::new();
-        for (from, names) in self.ts_uses.borrow().iter() {
-            if names.values().all(|t| *t) {
-                let _ = writeln!(out, "import type {{ {} }} from \"{from}\";", names.keys().cloned().collect::<Vec<_>>().join(", "));
-            } else {
-                let names: Vec<String> = names.iter().map(|(n, t)| if *t { format!("type {n}") } else { n.clone() }).collect();
-                let _ = writeln!(out, "import {{ {} }} from \"{from}\";", names.join(", "));
-            }
-        }
-        out
-    }
-
-    // ---- Rust types ----
-
-    fn rs_ty(&self, k: &Kind, owned: bool) -> String {
-        match k {
-            Kind::Bool => "bool".into(),
-            Kind::Number(n) => n.rs.into(),
-            Kind::Str => if owned { "String" } else { "&str" }.into(),
-            Kind::Array(n) => if owned { format!("Vec<{}>", n.rs) } else { format!("&[{}]", n.rs) },
-            Kind::List(e) => {
-                let e = self.rs_ty(e, true);
-                if owned { format!("Vec<{e}>") } else { format!("&[{e}]") }
-            }
-            Kind::Record(t) | Kind::Variant(t) | Kind::Enum(t) => {
-                let (m, n) = self.type_path(*t, rs_given);
-                let p = match m {
-                    Some(m) if m.rs.starts_with("super::") => format!("{}::{n}", m.rs),
-                    Some(m) => self.rs_use(&m.rs, &n),
-                    None => n,
-                };
-                if owned || matches!(k, Kind::Enum(_)) { p } else { format!("&{p}") }
-            }
-            Kind::Option(e) => format!("Option<{}>", self.rs_ty(e, owned)),
-            Kind::Result(ok, err) => {
-                let case = |k: &Option<Box<Kind>>| k.as_ref().map_or("()".into(), |k| self.rs_ty(k, true));
-                format!("Result<{}, {}>", case(ok), case(err))
-            }
-            Kind::Handle => "u32".into(),
-        }
-    }
-
-    fn rs_types(&self, out: &mut String) -> Result<(), String> {
-        let at = self.at();
-        let lower = || self.rs_use(self.link_rs, "Lower");
-        let lift = || self.rs_use(self.link_rs, "Lift");
-        let errno = || self.rs_use(RS_ERRNO, "Errno");
-        for &t in self.r.interfaces[self.here].types.values() {
-            let td = &self.r.types[t];
-            if !matches!(td.owner, TypeOwner::Interface(i) if i == self.here) {
-                continue;
-            }
-            let n = type_name(self.r, t, rs_given);
-            match &td.kind {
-                TypeDefKind::Enum(e) => {
-                    let _ = writeln!(out, "{}\n", rs_enum(&n, &members(e), "u32", "").join("\n"));
-                }
-                TypeDefKind::Record(_) => {
-                    let fields = self.fields(t)?;
-                    let (offs, sz, align) = rec_layout(&self.field_layouts(t)?);
-                    let _ = writeln!(out, "#[derive(Clone, Debug, PartialEq)]\npub struct {n} {{");
-                    for (f, k) in &fields {
-                        let _ = writeln!(out, "    pub {}: {},", rs_name(f), self.rs_ty(k, true));
-                    }
-                    let _ = writeln!(out, "}}\n\nimpl {n} {{\n    pub const SZ: usize = {sz};\n    pub const ALIGN: usize = {align};\n\n    pub fn store(&self, w: &mut {}, at: usize) {{", lower());
-                    for ((f, k), &off) in fields.iter().zip(&offs) {
-                        let _ = writeln!(out, "        {}", self.rs_store("w", &plus("at", off), &format!("&self.{}", rs_name(f)), k)?);
-                    }
-                    let _ = writeln!(out, "    }}\n\n    pub fn load(r: {}<'_>, at: usize) -> Result<{n}, {}> {{\n        Ok({n} {{", lift(), errno());
-                    for ((f, k), &off) in fields.iter().zip(&offs) {
-                        let _ = writeln!(out, "            {}: {}?,", rs_name(f), self.rs_load("r", &plus("at", off), k)?);
-                    }
-                    let _ = writeln!(out, "        }})\n    }}\n}}\n");
-                }
-                TypeDefKind::Variant(v) => {
-                    let cases = cases(self.r, v, &at)?;
-                    let (off, sz, align) = variant_layout(&self.payload_layouts(t)?)?;
-                    let d = discriminant(cases.len())?.rs;
-                    let _ = writeln!(out, "#[derive(Clone, Debug, PartialEq)]\npub enum {n} {{");
-                    for (c, k) in &cases {
-                        match k {
-                            Some(k) => {
-                                let _ = writeln!(out, "    {}({}),", pascal(c), self.rs_ty(k, true));
-                            }
-                            None => {
-                                let _ = writeln!(out, "    {},", pascal(c));
-                            }
-                        }
-                    }
-                    let _ = writeln!(out, "}}\n\nimpl {n} {{\n    pub const SZ: usize = {sz};\n    pub const ALIGN: usize = {align};\n\n    pub fn store(&self, w: &mut {}, at: usize) {{\n        match self {{", lower());
-                    for (k, (c, kd)) in cases.iter().enumerate() {
-                        match kd {
-                            Some(kd) => {
-                                let _ = writeln!(out, "            {n}::{}(v) => {{ w.{d}(at, {k}); {} }}", pascal(c), self.rs_store("w", &plus("at", off), "v", kd)?);
-                            }
-                            None => {
-                                let _ = writeln!(out, "            {n}::{} => w.{d}(at, {k}),", pascal(c));
-                            }
-                        }
-                    }
-                    let _ = writeln!(out, "        }}\n    }}\n\n    pub fn load(r: {}<'_>, at: usize) -> Result<{n}, {}> {{\n        match r.case(at, {})? {{", lift(), errno(), cases.len());
-                    for (k, (c, kd)) in cases.iter().enumerate() {
-                        match kd {
-                            Some(kd) => {
-                                let _ = writeln!(out, "            {k} => {}.map({n}::{}),", self.rs_load("r", &plus("at", off), kd)?, pascal(c));
-                            }
-                            None => {
-                                let _ = writeln!(out, "            {k} => Ok({n}::{}),", pascal(c));
-                            }
-                        }
-                    }
-                    let _ = writeln!(out, "            _ => Err({}::EBADMSG),\n        }}\n    }}\n}}\n", errno());
-                }
-                // A type `use`d from another interface is reached by its owner's path.
-                TypeDefKind::Type(ty) if !matches!(ty, Type::Id(_)) => {
-                    let _ = writeln!(out, "pub type {n} = {};\n", self.rs_ty(&kind(self.r, ty, &at)?, true));
-                }
-                _ => {
-                    kind(self.r, &Type::Id(t), &at)?;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    // ---- TypeScript types ----
-
-    /// The record's or variant's `t` constant `<T>_<suffix>`, imported from its
-    /// module where that is another.
-    fn ts_const(&self, t: TypeId, suffix: &str) -> String {
-        let (m, n) = self.type_path(t, ts_given);
-        let name = format!("{}_{suffix}", screaming(&n));
-        match m.map(|m| m.ts) {
-            Some(base) => self.ts_use(&format!("{base}.ts"), &name, false),
-            None => name,
-        }
-    }
-
-    /// A type's name, or one of its functions' (`load_`, `store_`): its own
-    /// module's, or imported from its interface's. An enum's type is its
-    /// enums' module's.
-    fn ts_path(&self, t: TypeId, prefix: &str) -> String {
-        let (m, n) = self.type_path(t, ts_given);
-        let name = format!("{prefix}{n}");
-        let is_type = prefix.is_empty();
-        let base = m.map(|m| m.ts);
-        if is_type && matches!(self.r.types[t].kind, TypeDefKind::Enum(_)) {
-            let base = base.unwrap_or(format!("./{}", self.module_ts()));
-            return self.ts_use(&format!("{base}.enum.ts"), &name, true);
-        }
-        match base {
-            Some(base) => self.ts_use(&format!("{base}.ts"), &name, is_type),
-            None => name,
-        }
-    }
-
-    fn ts_ty(&self, k: &Kind) -> String {
-        match k {
-            Kind::Bool => "boolean".into(),
-            Kind::Number(n) => ts_number(n.rs).into(),
-            Kind::Handle => "number".into(),
-            Kind::Str => "string".into(),
-            Kind::Array(n) => format!("{}<ArrayBuffer>", n.arr),
-            Kind::List(e) => format!("{}[]", self.ts_ty(e)),
-            Kind::Option(e) => format!("({} | null)", self.ts_ty(e)),
-            Kind::Result(ok, err) => {
-                let case = |tag: &str, k: &Option<Box<Kind>>| match k {
-                    Some(k) => format!("{{ tag: \"{tag}\"; val: {} }}", self.ts_ty(k)),
-                    None => format!("{{ tag: \"{tag}\" }}"),
-                };
-                format!("({} | {})", case("ok", ok), case("err", err))
-            }
-            Kind::Record(t) | Kind::Variant(t) | Kind::Enum(t) => self.ts_path(*t, ""),
-        }
-    }
-
-    /// The interface's types into `out`, each enum's members into `enums`.
-    fn ts_types(&self, out: &mut String, enums: &mut String) -> Result<(), String> {
-        let at = self.at();
-        for &t in self.r.interfaces[self.here].types.values() {
-            let td = &self.r.types[t];
-            if !matches!(td.owner, TypeOwner::Interface(i) if i == self.here) {
-                continue;
-            }
-            let n = type_name(self.r, t, ts_given);
-            let up = screaming(&n);
-            match &td.kind {
-                // An enum is read as one of its members, or refused.
-                TypeDefKind::Enum(e) => {
-                    let members = members(e);
-                    let _ = writeln!(enums, "{}\n", ts_enum(&n, &members).join("\n"));
-                    let own = format!("./{}.enum.ts", self.module_ts());
-                    let _ = writeln!(
-                        out,
-                        "export function load_{n}(r: {}, at: number): {} {{\n  const v = {}(r.case(at, {}));\n  if (v === null) throw new {}({});\n  return v;\n}}\n",
-                        self.ts_use(self.cabi_ts, "Lift", true),
-                        self.ts_path(t, ""),
-                        self.ts_use(&own, &of_ident(&n), false),
-                        e.cases.len(),
-                        self.ts_use(TS_ERROR, "XputeError", false),
-                        self.ts_use(TS_ERRNO, "ERRNO_EBADMSG", false)
-                    );
-                }
-                TypeDefKind::Record(_) => {
-                    let fields = self.fields(t)?;
-                    let (offs, sz, align) = rec_layout(&self.field_layouts(t)?);
-                    let _ = writeln!(out, "export interface {n} {{");
-                    for (f, k) in &fields {
-                        let _ = writeln!(out, "  {}: {};", ts_name(f), self.ts_ty(k));
-                    }
-                    let writes = fields.iter().zip(&offs).map(|((f, k), &off)| self.ts_store("w", &plus("at", off), &format!("v.{}", ts_name(f)), k)).collect::<Result<Vec<_>, String>>()?;
-                    let _ = writeln!(out, "}}\n\nexport const {up}_SZ = {sz};\nexport const {up}_ALIGN = {align};\n\nexport function store_{n}(w: {}, at: number, v: {n}): void {{\n  {}\n}}\n\nexport function load_{n}(r: {}, at: number): {n} {{\n  return {{", self.ts_use(self.cabi_ts, "Lower", true), writes.join("\n  "), self.ts_use(self.cabi_ts, "Lift", true));
-                    for ((f, k), &off) in fields.iter().zip(&offs) {
-                        let _ = writeln!(out, "    {}: {},", ts_name(f), self.ts_load("r", &plus("at", off), k)?);
-                    }
-                    let _ = writeln!(out, "  }};\n}}\n");
-                }
-                TypeDefKind::Variant(v) => {
-                    let cases = cases(self.r, v, &at)?;
-                    let (off, sz, align) = variant_layout(&self.payload_layouts(t)?)?;
-                    let d = discriminant(cases.len())?.rs;
-                    let alts: Vec<String> = cases
-                        .iter()
-                        .map(|(c, k)| match k {
-                            Some(k) => format!("{{ tag: \"{c}\"; val: {} }}", self.ts_ty(k)),
-                            None => format!("{{ tag: \"{c}\" }}"),
-                        })
-                        .collect();
-                    let _ = writeln!(out, "export type {n} = {};\n\nexport const {up}_SZ = {sz};\nexport const {up}_ALIGN = {align};\n\nexport function store_{n}(w: {}, at: number, v: {n}): void {{\n  switch (v.tag) {{", alts.join(" | "), self.ts_use(self.cabi_ts, "Lower", true));
-                    for (k, (c, kd)) in cases.iter().enumerate() {
-                        let payload = match kd {
-                            Some(kd) => self.ts_store("w", &plus("at", off), "v.val", kd)?,
-                            None => String::new(),
-                        };
-                        let _ = writeln!(out, "    case \"{c}\":\n      w.{d}(at, {k});\n      {payload}\n      return;");
-                    }
-                    let _ = writeln!(out, "  }}\n}}\n\nexport function load_{n}(r: {}, at: number): {n} {{\n  switch (r.case(at, {})) {{", self.ts_use(self.cabi_ts, "Lift", true), cases.len());
-                    for (k, (c, kd)) in cases.iter().enumerate() {
-                        match kd {
-                            Some(kd) => {
-                                let _ = writeln!(out, "    case {k}:\n      return {{ tag: \"{c}\", val: {} }};", self.ts_load("r", &plus("at", off), kd)?);
-                            }
-                            None => {
-                                let _ = writeln!(out, "    case {k}:\n      return {{ tag: \"{c}\" }};");
-                            }
-                        }
-                    }
-                    let _ = writeln!(out, "  }}\n  throw new {}({});\n}}\n", self.ts_use(TS_ERROR, "XputeError", false), self.ts_use(TS_ERRNO, "ERRNO_EBADMSG", false));
-                }
-                // A type `use`d from another interface is reached by its owner's path.
-                TypeDefKind::Type(ty) if !matches!(ty, Type::Id(_)) => {
-                    let _ = writeln!(out, "export type {n} = {};\n", self.ts_ty(&kind(self.r, ty, &at)?));
-                }
-                _ => {
-                    kind(self.r, &Type::Id(t), &at)?;
-                }
-            }
-        }
-        Ok(())
     }
 }
 
@@ -1675,7 +777,26 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
             outs.push(Output::new(&path, cpp::hdr(&g, &objs, cpp_role, &path, src, &cpp_externs)?));
         }
     }
+    // The interfaces the world imports that a host serves under a named
+    // handle, each its name and handle, in the world's order. One of types
+    // alone, and one of resources alone, which the guest opens by URI, has
+    // none.
+    let mut imports = Vec::new();
+    for item in world.into_iter().flat_map(|w| w.imports.values()) {
+        let WorldItem::Interface { id, .. } = *item else { continue };
+        let Some(n) = &r.interfaces[id].name else { continue };
+        let name = format!("{}/{n}", package_name(&r, id));
+        if objs(&r, id, &name, drop)?.iter().any(|o| !o.resource) {
+            imports.push((named(&name, named_bit), name));
+        }
+    }
     if let (Some((_, false)), Some(_)) = (&side, world) {
+        let pairs: Vec<_> = imports.iter().map(|(h, n)| format!("(\"{n}\", {h:#x})")).collect();
+        let _ = writeln!(
+            rs,
+            "\n/// The interfaces the world imports that the host serves under a named\n/// handle, each `(name, handle)`, which are mounted before the guest boots.\npub const IMPORTS: &[(&str, {link_rs}::Handle)] = &[{}];",
+            pairs.join(", ")
+        );
         let pairs: Vec<_> = later
             .iter()
             .map(|(m, folded, c, ..)| {
@@ -1690,6 +811,15 @@ pub fn wit_outputs(root: &Path, t: &WitTarget, peers: &[(&Path, &WitTarget)]) ->
         );
     }
     if let (Some(dir), Some(_)) = (t.ts, world) {
+        let pairs: Vec<_> = imports.iter().map(|(h, n)| format!("[\"{n}\", {h:#x}]")).collect();
+        let path = format!("{dir}/imports.ts");
+        let text = format!(
+            "// {}\n//\n// {}\n\nimport type {{ Handle }} from \"{link_ts}\";\n\n/** The interfaces the world imports that the host serves under a named\n * handle, each `[name, handle]`, which are mounted before the guest boots. */\nexport const IMPORTS: readonly (readonly [string, Handle])[] = [{}];\n",
+            package_path(root, &path)?,
+            mark(src, TOOL),
+            pairs.join(", ")
+        );
+        outs.push(Output::new(&path, text));
         let modules: std::collections::BTreeSet<_> = later.iter().map(|(_, _, _, m, _)| m.as_str()).collect();
         let imports: String = modules.iter().map(|m| format!("import * as {m} from \"./{m}.ts\";\n")).collect();
         let pairs: Vec<_> = later.iter().map(|(_, _, _, m, c)| format!("[{m}.HANDLE, {m}.{c}]")).collect();

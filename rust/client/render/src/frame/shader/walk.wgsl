@@ -1,4 +1,4 @@
-// pxl-render/walk.wgsl
+// pxl-render/frame/shader/walk.wgsl
 
 // A ray's walk, the one every walk runs (pxl-engine `cast::walk`): one node a step, with no
 // stack. The kernel's node module answers each node (`node_answer`), either from the node

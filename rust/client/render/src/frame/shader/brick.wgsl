@@ -1,4 +1,4 @@
-// pxl-render/brick.wgsl
+// pxl-render/frame/shader/brick.wgsl
 
 // Where a brick lies in its words (pxl-engine clipmap.rs `BRICK_WORDS`, `column_top`), with
 // its cells in clip.wgsl's order. The part reads no binding, so a pass that writes the bricks

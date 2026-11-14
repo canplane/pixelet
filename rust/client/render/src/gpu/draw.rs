@@ -885,7 +885,7 @@ impl Block {
         Some(unsafe { core::slice::from_raw_parts_mut(self.0.as_mut_ptr(), bytes as usize) })
     }
 
-    /// Where the block lies in the core's memory, and its room.
+    /// Where the block lies in the core's memory.
     fn at(&self) -> u32 {
         mem::off(self.0.as_ptr())
     }

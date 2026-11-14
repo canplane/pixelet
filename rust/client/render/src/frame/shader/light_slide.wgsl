@@ -1,4 +1,4 @@
-// pxl-render/light_slide.wgsl
+// pxl-render/frame/shader/light_slide.wgsl
 
 // Drops what an earlier cast of the epoch left in a tile of the box where the box slid since,
 // a `TILE`-aligned corner at a time (pass/shadow.rs `aim`), where the eye's zooms moved

@@ -5,7 +5,7 @@
 //! edges lies the air, the next cell of a flat run, or a cell rising in front of the face. At
 //! each of its four corners there may be a cell rising there alone. The word is asked of the
 //! world's one query, about the cells beside the cell at the cell's own zoom (pxl-render
-//! face.wgsl). It is asked once, where a sample stops, and handed with the hit to every pixel
+//! face.wgsl). It is asked once for each face a hit enters, and handed with the hit to every pixel
 //! that shows the cell, so every pixel of a cell is painted from the same bits in a frame,
 //! whatever else the screen shows around it.
 //!

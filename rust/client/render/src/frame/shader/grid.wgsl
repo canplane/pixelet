@@ -1,4 +1,4 @@
-// pxl-render/grid.wgsl
+// pxl-render/frame/shader/grid.wgsl
 
 // The eye's camera grid, read from its words among the eye's (pxl-engine `beam::Grid`,
 // `eye::GRID`). It says where a cell's start and a sample's hit lie among the beam rays'

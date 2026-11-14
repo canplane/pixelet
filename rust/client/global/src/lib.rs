@@ -4,7 +4,9 @@
 //! hold. The core runs on one thread, entered only through xpute's link, one
 //! entry at a time, so a global has one reader and writer at once; that
 //! contract is what makes `Global` `Sync`. Nothing here is for a crate that
-//! runs on more than one thread.
+//! runs on more than one thread. Within an entry, a borrow `get` hands out is
+//! the value's only one while it lives: no other `get` or `set` of the same
+//! global, `init`'s own included, runs before it ends.
 
 use core::cell::UnsafeCell;
 
@@ -21,15 +23,17 @@ impl<T> Global<T> {
     /// The value, made by `init` the first time it is asked for.
     #[expect(
         clippy::mut_from_ref,
-        reason = "one reader and writer at once, the link's contract above"
+        reason = "a borrow from `get` is the value's only one while it lives, the contract above"
     )]
     pub fn get(&self, init: impl FnOnce() -> T) -> &mut T {
-        // SAFETY: the link's contract above.
+        // SAFETY: the contract above: one entry at a time, and no other borrow
+        // of the value while the one handed out lives.
         unsafe { (*self.0.get()).get_or_insert_with(init) }
     }
 
     pub fn set(&self, val: T) {
-        // SAFETY: the link's contract above.
+        // SAFETY: the contract above: one entry at a time, and no borrow of the
+        // value from `get` alive.
         unsafe { *self.0.get() = Some(val) }
     }
 }

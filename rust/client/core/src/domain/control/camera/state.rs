@@ -71,7 +71,7 @@ impl CameraState {
     }
 
     /// The camera eases toward its intent only on a frame that was asked
-    /// for, so a changed intent asks for a world tick.
+    /// for, so a changed intent asks for a frame.
     pub(crate) fn commit_intent(&mut self, next: Intent) {
         if self.intent == next {
             return;

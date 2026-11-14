@@ -8,7 +8,8 @@
 # serves over that link. The GPU plugin has the same shape: `gpu/link/rust`
 # is what both of its sides take, WebGPU's vocabulary among it,
 # `gpu/guest/rust` the guest's encoder of its calls to a device it cannot
-# reach, and `gpu/native/host` its host on a native device. `gen` is the
+# reach, `gpu/native/runtime/rust` the bindings its host on a native device
+# serves on `native/runtime/rust`'s link, and `gpu/native/host` that host. `gen` is the
 # generator, and each part's `gen-targets` what the generator makes of it,
 # which any program's generating tool reads. `dev/` holds what develops them:
 # `golden/rust`, the golden records' reader the tests take, and xpute's own
@@ -24,6 +25,7 @@ members = [
     "native/host",
     "gpu/link/rust",
     "gpu/guest/rust",
+    "gpu/native/runtime/rust",
     "gpu/native/host",
     "gpu/gen-targets",
     "gen",
@@ -43,6 +45,7 @@ xpute-native-runtime = { path = "native/runtime/rust", version = "0.1.0" }
 xpute-native-host = { path = "native/host", version = "0.1.0" }
 xpute-gpu-link = { path = "gpu/link/rust", version = "0.1.0" }
 xpute-gpu-guest = { path = "gpu/guest/rust", version = "0.1.0" }
+xpute-gpu-native-runtime = { path = "gpu/native/runtime/rust", version = "0.1.0" }
 xpute-gpu-native-host = { path = "gpu/native/host", version = "0.1.0" }
 xpute-gpu-gen-targets = { path = "gpu/gen-targets" }
 xpute-gen = { path = "gen", version = "0.1.0" }
@@ -57,7 +60,7 @@ edition = "2021"
 version = "0.1.0"
 publish = true
 # The library crates (kit, link, guest, native runtime and host, the GPU's
-# link, guest and native host, gen) carry these for a registry.
+# link, guest and native runtime and host, gen) carry these for a registry.
 license = "MIT"
 repository = "https://github.com/canplane/xpute"
 readme = "README.md"
@@ -69,3 +72,15 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
+
+# The native GPU host's wgpu, the fork wgpu-fork.md holds.
+[patch.crates-io]
+naga = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+naga-types = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu-core = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu-core-deps-apple = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu-core-deps-windows-linux-android = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu-hal = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu-naga-bridge = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+wgpu-types = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }

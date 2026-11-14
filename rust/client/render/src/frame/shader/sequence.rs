@@ -100,9 +100,9 @@ pub const FACE: Step = Step::dispatch_off(
     (RASTER_ARGS, raster::ASKED_AT + raster::ARGS_FACES),
 );
 pub const PX: Step = Step::dispatch_off("px", IN_EYE, COMPUTE_CAST, &PIXELS_BINDS, (CAST_TILES, 0));
-/// The eye's holes' stops into the node cache's drawable entries (ray/raster.rs
+/// The eye's holes' hits into the node cache's drawable entries (ray/raster.rs
 /// `Raster::rec_hits`). Their dispatch is first copied out of the node cache's head, because the
-/// stops bind the node cache writable and a call cannot read its count from a buffer a group
+/// hits bind the node cache writable and a call cannot read its count from a buffer a group
 /// set for it binds writable (access.rs rule 1).
 pub const REC_HITS_DISPATCH: Step = Step::copy(
     "rec_hits_dispatch",
@@ -204,7 +204,7 @@ pub const LIGHT_SLOTS: Step = Step::dispatch_off(
     &LIGHT_SLOTS_BINDS,
     (LIGHT_ARGS, light::ARGS_SLOT),
 );
-/// The light's holes' stops into the node cache's drawable entries (ray/raster.rs
+/// The light's holes' hits into the node cache's drawable entries (ray/raster.rs
 /// `Raster::light_rec_hits`). Their dispatch is first copied out of the node cache's head,
 /// as the eye's is.
 pub const LIGHT_REC_HITS_DISPATCH: Step = Step::copy(
@@ -280,8 +280,8 @@ pub const IMPOSTOR_LIT_MASKED: Step = Step::draw_regions(
 .one_of(4)
 .in_pass(LIT_PASS);
 
-/// The count of the stops the holes' walks listed, copied into the node cache's head before
-/// the last walk adds its own, where the stops' passes read it (ray/cast.rs `walk_run`).
+/// The count of the hits the holes' walks listed, copied into the node cache's head before
+/// the last walk adds its own, where the hits' passes read it (ray/cast.rs `walk_run`).
 /// One copy is the eye's and one the light's.
 pub const HITS: Step = Step::copy(
     "hits",
@@ -661,7 +661,7 @@ pub const FRAME: Frame = Frame {
             &CAST_TILES_OF_BINDS,
         ),
         PX,
-        // The eye's holes are walked, and their stops written into the record.
+        // The eye's holes are walked, and their hits written into the record.
         EYE_HOLES_CNT,
         Step::dispatch("queue", IN_EYE_HOLES, COMPUTE_QUEUE, &WALK_BINDS),
         Step::dispatch(
@@ -803,7 +803,7 @@ pub const FRAME: Frame = Frame {
         LIGHT_RASTER,
         LIGHT_SLOTS,
         LIGHT_HOLES_CNT,
-        // The light's holes are walked, and their stops written into the record.
+        // The light's holes are walked, and their hits written into the record.
         Step::dispatch(
             "light_queue",
             IN_LIGHT_HOLES,
@@ -851,10 +851,10 @@ pub const FRAME: Frame = Frame {
 /// The counts several passes of a stage add to through atomics. A copy may seed each one ahead
 /// of those passes (`SEEDS`), and every pass that adds to a count runs before any pass that
 /// reads it. They are: the eye's faces' asks, which the samples' passes lay and the holes'
-/// stops lay at a place of their own (record_put.wgsl `observe`); the stops each observer's two
+/// hits lay at a place of their own (record_put.wgsl `observe`); the hits each observer's two
 /// walks of the holes over the node cache list (queue_walk.wgsl); the stood list, which the
 /// record's draw and both receivers' passes list tiles on (light_receiver_tile.wgsl
-/// `receiver_tiles_put`); the stops' dispatch in the node cache's head, which the last walk
+/// `receiver_tiles_put`); the hits' dispatch in the node cache's head, which the last walk
 /// raises; the stood list's marks; the args the decor's culls write; the read list's count, by
 /// which the propagation lists a tile (light_propagate.wgsl `read_tile`); and the frame's asks
 /// (ask.wgsl `may_ask`).
@@ -877,9 +877,9 @@ const APPENDS: &[Range] = &[
 ];
 
 /// The copies that open a count before the passes that add to it. `hits` and `light_hits` copy
-/// the stops each observer's holes' walks over the node cache listed into the node cache's
+/// the hits each observer's holes' walks over the node cache listed into the node cache's
 /// head, before the last walk adds its own (ray/cast.rs `walk_run`; queue.wgsl
-/// `keep_hit`). `receiver_tiles_back` and `read_count_back` copy back the stood list's args and
+/// `keep_hit`). `receiver_tiles_back` and `read_cnt_back` copy back the stood list's args and
 /// the read list's count that the casts since the world's receivers were last stood afresh
 /// left, before this cast's receivers and propagation add to them.
 const SEEDS: &[&str] = &["hits", "light_hits", "receiver_tiles_back", "read_cnt_back"];

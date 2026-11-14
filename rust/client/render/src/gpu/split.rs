@@ -45,7 +45,7 @@ pub struct Open {
     /// as a render pass is one usage scope whole.
     drawn_groups: Vec<Id>,
     drawn_args: Vec<Id>,
-    /// A render pass's declared pipelines, by their records' numbers (frame/shader/sequence.rs
+    /// A render pass's declared pipelines, by their records' numbers (frame/shader/access.rs
     /// `Step::in_pass`); none where the pass declares none.
     declared: &'static [u32],
 }
@@ -103,7 +103,7 @@ impl Split {
         self.recs.retain(|&(p, _)| p != id);
     }
 
-    /// Records a render pipeline made from record `record` (frame/shader/record.rs
+    /// Records a render pipeline made from record `rec` (frame/shader/record.rs
     /// `pipeline`).
     pub fn recorded(&mut self, pipeline: Id, rec: u32) {
         self.let_go(pipeline);

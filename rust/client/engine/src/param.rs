@@ -5,7 +5,7 @@
 //! What follows from them is computed by name where it is used.
 
 pub mod beam {
-    /// The samples on a side of a camera grid cell. They form the lattice of stops of which a
+    /// The samples on a side of a camera grid cell. They form the lattice of hits of which a
     /// pixel takes the nearest (beam.rs `SAMPLE_NODE`).
     pub const SAMPLE: u32 = 4;
 

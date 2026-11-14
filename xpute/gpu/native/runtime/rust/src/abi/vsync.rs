@@ -1,4 +1,4 @@
-// xpute-gpu-native-host/abi/vsync.rs
+// xpute-gpu-native-runtime/abi/vsync.rs
 //
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 

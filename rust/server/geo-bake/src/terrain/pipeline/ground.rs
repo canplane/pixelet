@@ -130,7 +130,7 @@ pub(crate) fn render_polygon<T: Copy>(
 }
 
 /// Every cell whose center the way covers along a segment (pxl-spec
-/// way.rs `on_way`, the rule a column is crossed by), its line cut square
+/// `way.rs` `on_way`, the rule a column is crossed by), its line cut square
 /// where `cut` says at its first and last; its points and width in eighths
 /// of a cell, as the rule takes them (`way::eighths`).
 fn render_linear_feat(

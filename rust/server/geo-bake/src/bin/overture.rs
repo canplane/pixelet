@@ -190,7 +190,7 @@ const TYPES: &[Type] = &[
 ];
 
 /// The script that runs the official CLI at the release `tool/Dockerfile` pins; what it
-/// downloads is kept beside it.
+/// downloads is kept in `EXTRACTS`.
 const TOOLS: &str = "./infra/geo/tool/run";
 const EXTRACTS: &str = "./infra/geo/overture/raw";
 const SRC: &str = "./infra/geo/overture/source.json";

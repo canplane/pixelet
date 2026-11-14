@@ -8,7 +8,7 @@
 //!
 //! `cast_cs` must give each pixel it draws the words `cast::entry` takes off the visible voxel
 //! that the test lays at that pixel. Where the pixel takes no voxel and all four samples about
-//! it (`Grid::sample_before`) went on without a stop, it must give the sky. It must not enter a
+//! it (`Grid::sample_before`) went on without a hit, it must give the sky. It must not enter a
 //! cell past the eye's reach. A pixel it leaves, or marks as a hole, is the walk's to answer,
 //! and tests/sample.rs checks the walk.
 //!
@@ -120,7 +120,7 @@ struct Cast {
     /// The beam rays' words before the faces' pass (`asked`) and after it (`beams`).
     asked: Vec<u32>,
     beams: Vec<u32>,
-    /// The node cache's words. The samples' stops set its drawable entries, and the faces'
+    /// The node cache's words. The samples' hits set its drawable entries, and the faces'
     /// pass leaves the words of their faces in them (pxl-engine `record`).
     node_cache: Vec<u32>,
     /// How many faces' asks the samples laid.

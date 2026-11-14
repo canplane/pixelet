@@ -1,4 +1,4 @@
-// pxl-render/clip.wgsl
+// pxl-render/frame/shader/clip.wgsl
 
 // Where the clip levels hold a node's cells, and what they bound under it at a zoom
 // (pxl-engine clipmap.rs `step`, `bounded`). It reads the clip levels' table, `clipmap`

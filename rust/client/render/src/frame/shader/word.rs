@@ -95,7 +95,7 @@ uniform! {
 pub const DRAW_FLOATS: usize = floats(draw::FIELDS);
 
 uniform! {
-    /// The uniform of a decor draw, of the model tier and of the impostors
+    /// The uniform of a decor draw, as a model and as an impostor
     /// (instance.wgsl): where the draw's lanes lie, its opacity, the
     /// impostor's atlas layer, and the first word of its index list.
     instance {
@@ -330,8 +330,9 @@ pub const MARKER_FLOATS: usize = floats(marker::FIELDS);
 
 /// The size of a marker's instance in words, and of a location zone's box in
 /// floats, as the core lays them out (pxl-core domain/scene/marker/set.rs,
-/// location.rs) and marker.wgsl and location_zone.wgsl read them. A marker's
-/// first three words are the Q3 it stands at, and the rest are floats.
+/// domain/scene/indicator/location.rs) and marker.wgsl and location_zone.wgsl
+/// read them. A marker's first three words are the Q3 it stands at, and the
+/// rest are floats.
 pub const MARKER_INSTANCE_WORDS: u32 = 11;
 pub const LOCATION_ZONE_INSTANCE_FLOATS: u32 = 8;
 
@@ -518,7 +519,7 @@ pub const HALF_STEP: f32 = 0.5 / 255.0;
 /// swatch alone.
 pub const NO_LAYER: u32 = 255;
 
-/// A face's word holds the slots in the pack of its top, side and bottom
+/// A layer's word holds the slots in the pack of its top, side and bottom
 /// images, `SLOT_BITS` bits each, in the order `IMAGE_TOP`, `IMAGE_SIDE`,
 /// `IMAGE_BOTTOM`. A slot is `NO_SLOT` until its image arrives. `NO_SLOT`
 /// lies past any texture array WebGPU gives (maxTextureArrayLayers is 256).

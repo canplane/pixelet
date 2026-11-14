@@ -1,4 +1,4 @@
-// pxl-render/decor_record.wgsl
+// pxl-render/frame/shader/decor_record.wgsl
 
 // Where decor's records lie, as pxl-content generation.rs lays them: an entry's header, its
 // records by decor, and a record's first word.

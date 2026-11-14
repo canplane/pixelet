@@ -552,7 +552,7 @@ pub const HDR_SAMPLES: usize = HDR_CELLS + 2;
 pub const HDR_SAMPLES_ACROSS: usize = HDR_CELLS + 3;
 pub const HDR_READS: usize = HDR_CELLS + 4;
 pub const HDR_TILES: usize = HDR_CELLS + 5;
-pub const HDR_HANDS: usize = HDR_CELLS + 6;
+pub const HDR_START_DISTS: usize = HDR_CELLS + 6;
 /// What a cast keeps for the next (`carry_at`).
 pub const HDR_CARRY: usize = HDR_CELLS + 7;
 pub const HDR_BEAM_ACROSS: usize = HDR_CELLS + 8;
@@ -578,7 +578,7 @@ pub const HDR_SLIDE_CAST: usize = HDR_WORLD + 1;
 /// draws only where the light's cast stands them (pxl-render record_draw.wgsl
 /// `rec_draw_cs`).
 pub const HDR_WORLD_RECEIVERS: usize = HDR_SLIDE_CAST + 1;
-/// The pool the holes' rays are parked in between a run's walks (`list_words`), and their stops
+/// The pool the holes' rays are parked in between a run's walks (`list_words`), and their hits
 /// (`hits_at`), laid by the map's side.
 pub const HDR_POOL: usize = HDR_WORLD_RECEIVERS + 1;
 pub const HDR_HITS: usize = HDR_POOL + 1;
@@ -610,7 +610,7 @@ pub const fn hdr_layout(size: u32) -> [(usize, u32); HDR_LAYOUT_WORDS] {
         (HDR_SAMPLES_ACROSS, size / SAMPLE),
         (HDR_READS, reads_at(size)),
         (HDR_TILES, tiles(size)),
-        (HDR_HANDS, hand_at(size, 0)),
+        (HDR_START_DISTS, start_dist_at(size, 0)),
         (HDR_CARRY, carry_at(size)),
         (HDR_BEAM_ACROSS, beam_across(size)),
         (HDR_CORNER_STATES, corner_states_at(size)),
@@ -843,10 +843,10 @@ pub const fn cells_across(size: u32) -> u32 {
     size / BEAM
 }
 
-/// Where the beam's words lie in the list's buffer, at its start: the lines, one a beam ray;
-/// then how far a cell's texels may start from each, one word a beam ray in their order
-/// (`hand_at`), as for the eye (`beam::Grid::hand_at`); then the cells' starts; and the count
-/// of all its words.
+/// Where the beam's words lie in the list's buffer, at its start: the lines, one a beam ray; then
+/// how far a cell's texels may start from each, one word a beam ray in their order
+/// (`start_dist_at`), as for the eye (`beam::Grid::start_dist_at`); then the cells' starts; and the
+/// count of all its words.
 pub(crate) const fn lines_at(_size: u32) -> u32 {
     0
 }
@@ -855,7 +855,7 @@ pub const fn line(size: u32, ray: u32) -> u32 {
     lines_at(size) + ray * LINE_WORDS
 }
 
-pub const fn hand_at(size: u32, ray: u32) -> u32 {
+pub const fn start_dist_at(size: u32, ray: u32) -> u32 {
     lines_at(size) + beam_across(size) * beam_across(size) * LINE_WORDS + ray
 }
 
@@ -876,6 +876,15 @@ pub(crate) const fn beam_words(size: u32) -> u32 {
 /// a Q3 step's rounding of each ray's start on the near plane.
 pub fn margin(width: f32) -> f32 {
     2.0 * cast::SQRT_6 * width + 2.0 / (1u32 << FRAC_W) as f32
+}
+
+/// Where the texels of the cells about a beam ray that stopped at `t` start: `margin` short of
+/// `t`, and never before the near plane, as the eye's rays start short of a beam ray's hit
+/// (`beam::Grid::start_dist`). It takes the margin as given, `margin` of the beam spacing,
+/// since a device may round that margin's product and sum as one (pxl-render beam.light.wgsl
+/// `beam_start_dist`).
+pub fn start_dist(t: f32, margin: f32) -> f32 {
+    (t - margin).max(0.0)
 }
 
 /// The shadow map cast as the eye's rays are, every slot every frame (pxl-engine `raster`).
@@ -1144,20 +1153,20 @@ pub const CARRY_READ: u32 = RECEIVER_TILES_CARRY;
 pub const CARRY_WORDS: u32 = CARRY_READ + 1;
 
 /// The list buffer's words: the beam's, the samples, the holes, the reads, their squares, the
-/// lists, the samples left, the beam rays left, the parked items, the slide's two words and what the world's
+/// lists, the beam rays left, the parked items, the slide's two words and what the world's
 /// receivers left, with the pool past them (`ray::POOL_WORDS`).
 pub const fn list_words(size: u32) -> u32 {
     carry_at(size) + CARRY_WORDS
 }
 
-/// The light's holes' stops, past its pool: `ray::HITS_A_FRAME` of `beam::HIT_WORDS` each,
+/// The light's holes' hits, past its pool: `ray::HITS_A_FRAME` of `beam::HIT_WORDS` each,
 /// kept by pxl-render queue.wgsl `finish` and taken into the node cache's drawable entries
 /// after the light's queue (record_hits.wgsl).
 pub const fn hits_at(size: u32) -> u32 {
     list_words(size) + ray::POOL_WORDS
 }
 
-/// The light's list, its pool and its stops with it: the buffer's words.
+/// The light's list, its pool and its hits with it: the buffer's words.
 pub const fn buf_words(size: u32) -> u32 {
     hits_at(size) + ray::HITS_A_FRAME * beam::HIT_WORDS
 }
@@ -1231,7 +1240,7 @@ pub fn ray(s: &Light, starts: &StartGrid, p: [u32; 2]) -> ([i32; 3], Ray) {
     ]);
     (o, Ray::new(s.dir, s.t_max))
 }
-/// The depth a texel's walk `met` leaves in the map: where it stopped along its ray, as a
+/// The depth a texel's walk `trace` leaves in the map: where it stopped along its ray, as a
 /// share of the box's depth (its t times the reach's reciprocal, `Light::t_max_inverse`),
 /// pushed back as its face's axis says (`Light::bias`); or the far plane, 1, where it stopped
 /// at nothing.

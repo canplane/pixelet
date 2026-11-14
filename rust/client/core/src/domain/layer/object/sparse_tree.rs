@@ -25,8 +25,7 @@ pub(crate) struct SparseTree<T: Copy + PartialEq, const D: usize> {
     first_child: Vec<u32>,
     data: Vec<T>,
     free: Vec<u32>,
-    /// The first slots of the child groups written since they were last taken, each child group
-    /// once a write.
+    /// The first slots of the child groups written since they were last taken.
     written_groups: Vec<u32>,
 }
 

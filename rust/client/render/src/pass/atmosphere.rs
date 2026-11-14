@@ -127,7 +127,7 @@ impl Measure {
 const EXPOSURE_READS: [Range<usize>; 2] = [SUN_DIR..CAMERA_ALT, MOON_COLOR..KM_PER_U];
 
 /// Where each light's layout words and its reach flag lie (atmos_medium.wgsl `view_layout`,
-/// `reach`), the sun's first.
+/// `reaches`), the sun's first.
 const LAYOUTS: [usize; 2] = [SUN_LAYOUT, MOON_LAYOUT];
 const REACHES: [usize; 2] = [SUN_REACHES, MOON_REACHES];
 
@@ -466,9 +466,8 @@ impl Atmosphere {
     }
 
     /// Writes each earth tile that has come into its layer while the stream has room, and
-    /// lays out in the words the window and which layer each tile reads. `prepare`, which the
-    /// renderer calls after this, writes the words to the uniform. Returns whether a tile came
-    /// this frame.
+    /// lays out in the words the window and which layer each tile reads. Returns whether a
+    /// tile came this frame.
     pub fn set_earth_tiles(
         &mut self,
         g: &Gpu,
@@ -537,7 +536,7 @@ impl Atmosphere {
     /// light's view and air are drawn where its mu or the eye's altitude has moved half
     /// its step (`TableInput::changed`), or where the light has come to reach the air since
     /// they were last held. They are drawn only while the light reaches the air by `REACH`,
-    /// and a reader reads them only then (atmos_medium.wgsl `reach`). The exposure is drawn
+    /// and a reader reads them only then (atmos_medium.wgsl `reaches`). The exposure is drawn
     /// where the words it reads moved (`EXPOSURE_READS`), where the ground under the eye moved
     /// half its step, where a light's view or air was due, and in the frame that draws the
     /// tables drawn only once. Each time, it measures how far each light reaches. A slope is

@@ -1,4 +1,4 @@
-// cpp/xpute/gpu/stream.cpp
+// cpp/xpute/gpu/guest/stream.cpp
 
 #include "stream.hpp"
 
@@ -6,7 +6,7 @@
 #include <cstring>
 
 #include "xpute/kit/status/bug.hpp"
-#include "xpute/gpu/abi/gpu.hpp"
+#include "xpute/gpu/guest/abi/gpu.hpp"
 
 namespace xpute::gpu {
 

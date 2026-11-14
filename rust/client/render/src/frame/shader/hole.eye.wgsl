@@ -1,7 +1,7 @@
-// pxl-render/hole.eye.wgsl
+// pxl-render/frame/shader/hole.eye.wgsl
 
 // The eye's holes as the holes' queue reads them (queue.wgsl): the pixels the eye's cast
-// listed (cast.wgsl), where its pool and stops lie, a pixel's ray, and the words an ended
+// listed (cast.wgsl), where its pool and hits lie, a pixel's ray, and the words an ended
 // walk leaves at the pixel.
 
 fn eye_size() -> vec2<u32> {
@@ -12,7 +12,7 @@ fn pool_at() -> u32 {
   return eye_pool_at(eye_size());
 }
 
-/// Where the eye's stops lie (hit.wgsl), past the beam rays' words (`beam::Grid::hits_at`).
+/// Where the eye's hits lie (hit.wgsl), past the beam rays' words (`beam::Grid::hits_at`).
 fn hits_at() -> u32 {
   return eye_word(EYE_GRID + GRID_HITS_AT);
 }
@@ -37,7 +37,7 @@ fn item_start(item: u32, aim: Aim) -> Start {
   return px_start(aim, hole_px(item), eye_size());
 }
 
-/// The line the rays of pixel `id`'s cell resumed from, off which a stop's face word is asked
+/// The line the rays of pixel `id`'s cell resumed from, off which a hit's face word is asked
 /// (miss_word.wgsl `hit_put`).
 fn hit_line(id: vec2<u32>) -> u32 {
   let cell = grid_cell(px_tan(id, eye_size()));
@@ -45,7 +45,7 @@ fn hit_line(id: vec2<u32>) -> u32 {
 }
 
 /// Writes at pixel `at` the ray's words of walk `w`, which shows `shown` and entered through
-/// `face`, with `faces` the word its stop takes from the record. A lack's stop takes no word
+/// `face`, with `faces` the word its hit takes from the record. A lack's hit takes no word
 /// from the record, so what its pixel shows waits for none; a cell short of its cube shows a
 /// box's faces (pxl-engine `face::BOX`).
 fn hole_write(at: vec2<u32>, w: WalkEnd, shown: WalkEnd, face: u32, faces: u32) {

@@ -39,10 +39,10 @@ pub(crate) struct GpuSample {
     /// `FrameStat::frame`). A GPU read names this number when it lands, so
     /// the read finds its frame. It is 0 when the renderer drew no frame.
     pub frame: f64,
-    /// What changed that cast the light's map, one bit each in LIGHT_CHANGED's
-    /// order, and 0 when it was not cast. `decor_rect_cnt` counts the rects that
-    /// marked decor's slots to be generated again (pxl-render renderer.rs
-    /// `FrameStat`).
+    /// What changed that cast the light's map, one bit each in
+    /// `LIGHT_CHANGED`'s order, and 0 when it was not cast. `decor_rect_cnt`
+    /// counts the rects that marked decor's slots to be generated again
+    /// (pxl-render renderer.rs `FrameStat`).
     pub light_changed: f64,
     pub decor_rect_cnt: f64,
 }
@@ -71,7 +71,7 @@ pub(crate) struct DeviceSample {
 pub(crate) struct FrameSample {
     pub t: f64,
     /// The interval from this frame to the next. It is not the world's step,
-    /// which is capped at MAX_STEP_S.
+    /// which is capped at `MAX_STEP_S`.
     pub interval_ms: f64,
     /// The display's measured interval (sys/sched/display.rs), and the gap
     /// since the last frame, which the frame was paced at (frame.rs `run`).
@@ -137,7 +137,7 @@ pub(crate) struct RaySample {
 }
 
 impl RaySample {
-    /// Reads the renderer's counts, laid out in `RAY_CNT_CNT` order.
+    /// Reads the renderer's counts, laid out as `ray::cnt_at` places them.
     pub(crate) fn of(c: [f64; ray::RAY_CNT_CNT]) -> RaySample {
         let at = |o: u32, k: usize| c[ray::cnt_at(o, k)];
         let lane = |o: u32, l: u32| at(o, ray::LANES_AT + l as usize);

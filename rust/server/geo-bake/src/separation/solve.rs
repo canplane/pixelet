@@ -110,7 +110,7 @@ fn is_road_tunnel(piece: &Piece) -> bool {
 struct Stretch {
     piece: Piece,
     k0: usize,
-    /// Cells: DB coordinates, the ring's cell coordinates, the terrain.
+    /// Its cells as DB coordinates, as the ring's cell coordinates, and their terrain.
     at: Vec<[f64; 2]>,
     cell: Vec<[f64; 2]>,
     terrain: Vec<i32>,
@@ -240,7 +240,8 @@ pub fn solve_tile(r: &mut Reader<impl Store>, tile: [i32; 2]) -> Result<Solution
     }
     let radius = merc_from_u(f64::from(scale.c(bridge::DUAL_CARRIAGEWAY_MAX_DIST_M) + 16) * CELL_U);
     // Each piece is looked at once, against the pieces read so far; a piece that a later read
-    // brings in is held against what was looked at before it (`seen`), so no pass is repeated.
+    // brings in is held against what was looked at before it (`seen_ends`, `seen_portals`,
+    // `seen_decks`), so no pass is repeated.
     let lies_on = |o: &Piece, ends: &FnvHashSet<End>| {
         (o.form == Form::Bridge || is_road_tunnel(o))
             && o.way

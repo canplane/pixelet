@@ -5,7 +5,7 @@
 //!
 //! In each tile the cast casts, a slot must take its visible voxel, a drawable entry of the
 //! node cache, where the slot's own ray enters that voxel across the axis the sample entered
-//! by (`cast::entry_with`) and the voxel is the stop at the band the slot asks
+//! by (`cast::entry_with`) and the voxel is the hit at the band the slot asks
 //! (`Light::band`). The slot's word is then `light::word(light::depth(..))`. Otherwise the slot
 //! takes the sky where the four samples about it (`light::samples_about`) went on to their
 //! reach at its band. Otherwise it is listed for its walk. pxl-engine has no one function for
@@ -1087,7 +1087,7 @@ fn run_marks(
                         Kind::Cell
                     };
                     // The entry is whole where its ray hit on a node coarser than it asked,
-                    // as a stop sets it.
+                    // as a hit sets it.
                     let whole = record::ray_whole(c.origin, &m.hit.node, range);
                     let state =
                         face | face << record::ASKED_SHIFT | if whole { record::WHOLE } else { 0 };

@@ -2,7 +2,7 @@
 
 //! The raster that draws the node cache's drawable entries as boxes, so that each drawn pixel
 //! keeps the voxel its ray enters first (pxl-engine `record`, `raster`). After the samples,
-//! each sample's stop sets its face on its node's entry (sample_hit.wgsl). Every drawable
+//! each sample's hit sets its face on its node's entry (sample_hit.wgsl). Every drawable
 //! entry in view is then written as a box (record_draw.wgsl) and drawn at the rays' pixels
 //! (raster.wgsl), and the depth test keeps the nearest face a pixel's ray enters. The pixels'
 //! cast reads that voxel (cast.wgsl `cast_cs`). What lies about each new face is asked once a
@@ -42,21 +42,21 @@ use pxl_engine::param::raster::GROWTH;
 
 /// The eye's raster. Its targets are at the rays' size.
 pub(super) struct Raster {
-    /// Sets each sample's stop on its node's drawable entry (sample_hit.wgsl).
+    /// Sets each sample's hit on its node's drawable entry (sample_hit.wgsl).
     pub(super) sample_hit: Pipeline,
     /// The passes that write drawable entries as boxes, a thread a slot of the node cache: the
     /// eye's for the entries in view, the light's for those on its box (record_draw.wgsl).
     rec_draw_pipeline: Pipeline,
     light_rec_draw: Pipeline,
-    /// Writes the holes' stops into their drawable entries (record_hits.wgsl).
+    /// Writes the holes' hits into their drawable entries (record_hits.wgsl).
     rec_hit: Pipeline,
     /// Puts what lies about each hole's face at its pixel, read off its entry (record_hits.wgsl
     /// `rec_faces_cs`).
     face_put: Pipeline,
-    /// Writes the light's holes' stops into their drawable entries (record_hits.wgsl over
+    /// Writes the light's holes' hits into their drawable entries (record_hits.wgsl over
     /// record_hits.light.wgsl).
     light_rec_hit: Pipeline,
-    /// Sets the shadow map's samples' stops, as `sample_hit` sets the eye's (sample_hit.wgsl over
+    /// Sets the shadow map's samples' hits, as `sample_hit` sets the eye's (sample_hit.wgsl over
     /// sample.light.wgsl). Its group binds the light's head as well.
     pub(super) light_sample_hit: Pipeline,
     face: Pipeline,
@@ -65,24 +65,24 @@ pub(super) struct Raster {
     /// tiles' depth back to the far plane (raster_mask.wgsl).
     mask: Pipeline,
     pub(super) args: u32,
-    /// The dispatch over the holes' stops, copied out of the node cache's head
+    /// The dispatch over the holes' hits, copied out of the node cache's head
     /// (`node_cache::HITS_ARGS`). A dispatch cannot read its args from a buffer it binds
-    /// writable, and the stops bind the node cache writable, so the args take a buffer of
+    /// writable, and the hits bind the node cache writable, so the args take a buffer of
     /// their own.
     hits: u32,
     draws: u32,
     uniform: u32,
     pub(super) targets: Targets,
     size: [u32; 2],
-    /// The groups, by index: the samples' stops, the boxes' draw, the samples' faces' asks, the
-    /// record's draw (made by `rec_group`), the holes' faces' asks, and the holes' stops.
+    /// The groups, by index: the samples' hits, the boxes' draw, the samples' faces' asks, the
+    /// record's draw (made by `rec_group`), the holes' faces' asks, and the holes' hits.
     groups: [api::Group; 6],
     /// The light's raster, which exists while shadows are on (`light_made`, `light_release`).
     pub(super) light: LightRaster,
 }
 
 /// The light's raster over the same drawable entries (pxl-engine `record`). The light's
-/// samples and holes set their stops on the entries as the eye's do. Its draw writes a box for
+/// samples and holes set their hits on the entries as the eye's do. Its draw writes a box for
 /// each entry on the light's box (record_draw.wgsl `light_rec_draw_cs`) and draws them from
 /// the light with the eye's raster pipeline. Its targets are the map's size, laid out as the
 /// light's box is.
@@ -90,14 +90,14 @@ pub(super) struct Raster {
 pub(super) struct LightRaster {
     draws: u32,
     pub(super) args: u32,
-    /// The dispatch over its holes' stops, in a buffer of its own as the eye's is
+    /// The dispatch over its holes' hits, in a buffer of its own as the eye's is
     /// (`Raster::hits`).
     hits: u32,
     uniform: u32,
     pub(super) targets: Targets,
     group: api::Group,
     rec_group: api::Group,
-    /// The group of its holes' stops (`LIGHT_REC_HITS_LAYOUT`), set with the record's draw
+    /// The group of its holes' hits (`LIGHT_REC_HITS_LAYOUT`), set with the record's draw
     /// group.
     rec_hits_group: api::Group,
 }
@@ -264,7 +264,7 @@ impl Raster {
                 bytes(&faces_args(grid.asks_at)),
             );
         }
-        // The holes' stops have opened no face ask yet. They run every frame the pixels are
+        // The holes' hits have opened no face ask yet. They run every frame the pixels are
         // cast, so this is written in every one; their faces' dispatch lies at
         // `raster::HIT_ASKED_AT`.
         g.write_buf(
@@ -282,7 +282,7 @@ impl Raster {
             let layout = p.layouts[0];
             (layout, frame_entries(layout, table, buf, rest))
         };
-        // One faces' pass serves the samples' stops and the holes', each through a group
+        // One faces' pass serves the samples' hits and the holes', each through a group
         // bound to its own asks.
         let world = [
             buf_entry(0, eye),
@@ -343,10 +343,10 @@ impl Raster {
         self.groups[3].set(g, layout, &frame_entries(layout, &REC_BINDS, buf, &rest));
     }
 
-    /// Records the holes' stops once the holes' queue is done (ray/cast.rs). Their dispatch is
+    /// Records the holes' hits once the holes' queue is done (ray/cast.rs). Their dispatch is
     /// copied out of the node cache's head first (`hits`). Then, in one pass timed in `span`,
-    /// the stops are written into their entries, the faces they opened are asked, and each
-    /// stop's face word is put at its pixel off its entry.
+    /// the hits are written into their entries, the faces they opened are asked, and each
+    /// hit's face word is put at its pixel off its entry.
     pub(super) fn rec_hits(&self, ctx: &mut RenderContext, node_cache: u32, span: GpuSpanName) {
         let (g, encoder) = (ctx.g, ctx.encoder);
         g.copy_buf(
@@ -368,7 +368,7 @@ impl Raster {
         g.end(pass);
     }
 
-    /// Draws the raster. Where the samples were cast again (`samples_cast`), their stops are set
+    /// Draws the raster. Where the samples were cast again (`samples_cast`), their hits are set
     /// on the entries first. Where `draws_rec`, the entries in view are written as boxes
     /// again; otherwise the boxes the last draw wrote are kept. The boxes are then drawn into
     /// cleared targets, through the gate in the tiles of `damage` where the frame is not drawn
@@ -560,7 +560,7 @@ impl Raster {
 
     /// Sets the light's draw groups over the cast's `eye` and `node_cache`, and `light`, the
     /// light's head, list, args, stood list's args and map, while the light's raster exists.
-    /// Only the holes' stops' group binds the map (`LIGHT_REC_HITS_LAYOUT`).
+    /// Only the holes' hits' group binds the map (`LIGHT_REC_HITS_LAYOUT`).
     pub(super) fn light_rec_group(
         &mut self,
         g: &Gpu,
@@ -614,7 +614,7 @@ impl Raster {
         );
     }
 
-    /// Records the light's holes' stops after the light's queue, as `rec_hits` does the eye's.
+    /// Records the light's holes' hits after the light's queue, as `rec_hits` does the eye's.
     /// Their dispatch is copied out of the node cache's head, then a pass timed in `span`
     /// writes them into their entries (record_hits.wgsl over record_hits.light.wgsl). The
     /// light's next draw takes them. The light's slots read no face word, so no face is asked

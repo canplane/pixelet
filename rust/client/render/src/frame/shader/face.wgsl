@@ -1,8 +1,8 @@
-// pxl-render/face.wgsl
+// pxl-render/frame/shader/face.wgsl
 
 // Asks the world (world.wgsl) what lies around the face each hit's ray entered, and writes the
 // face's word (pxl-engine `face::word`). There is one ask for each hit, whether the hit is a
-// drawable entry's voxel or the stop of a missed pixel, and the args the pass is bound to say
+// drawable entry's voxel or that of a missed pixel, and the args the pass is bound to say
 // which list of asks it runs. Each cell beside the hit is asked from the deepest node it
 // shares with the line down to the hit (`support::asset`). That line follows the beam ray's
 // line that the hit's cell resumed from, as the beam ray left it, down to the deepest node the
@@ -190,7 +190,7 @@ fn face_word(
 
 @compute @workgroup_size(RASTER_FACES_LANE_CNT)
 fn face_cs(@builtin(global_invocation_id) id: vec3<u32>) {
-  // The holes' stops have room for `HITS_A_FRAME` asks, and the samples for one ask a sample
+  // The holes' hits have room for `HITS_A_FRAME` asks, and the samples for one ask a sample
   // (`beam::Grid::hit_asks_at`, `asks_at`). Where the asks start tells which list this is.
   let asks = args[RASTER_ARGS_ASKS];
   let samples = eye_word(EYE_GRID + GRID_SAMPLE_LATTICE) * eye_word(EYE_GRID + GRID_SAMPLE_LATTICE + 1u);

@@ -1,11 +1,11 @@
-// pxl-render/seed.wgsl
+// pxl-render/frame/shader/seed.wgsl
 
 // The seeds every random draw over the world's nodes starts from, and the rule by which a count
 // is handed down a pyramid. Each function computes bit for bit what its Rust twin computes, so
 // the GPU draws what the CPU draws (pxl-engine seed.rs, xpute-kit `seed_mix32`,
 // pxl-content halve.rs).
 
-/// The port of `xpute_kit::seed_mix32`.
+/// The port of `xpute_kit::math::rng::seed_mix32`.
 fn seed_mix32(base: u32, tag: u32) -> u32 {
   var z = (base ^ tag) + SEED_SALT_32;
   z = (z ^ (z >> 16u)) * MIX32_FIRST;

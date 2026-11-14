@@ -6,13 +6,13 @@
 //! the same credits, and it stays wanted until it arrives. A slot names no
 //! file until the catalog lands, and its reader treats it as still loading.
 //!
-//! An open that fails leaves its asset unasked, so that it is asked again.
-//! An open the heap refused room, or the file table a descriptor, waits as a
-//! tile's body does (sys/io/request.rs `Wait::Room`). Bytes that do not read are final,
-//! because asking again brings the same bytes. A model's bytes are handed
-//! once to the scene, which parses them (`take_gltf`). An image's bytes are
-//! handed to the renderer under the asset's number until its texture lands
-//! (pxl-render `Gpu::image`), and they are read again if the device is lost.
+//! A read the host canceled leaves its asset unasked, so that it is asked
+//! again (`arrival`); any other failed read is final. Bytes that do not read
+//! are final, because asking again brings the same bytes. A model's bytes are
+//! handed once to the scene, which parses them (`take_gltf`). An image's
+//! bytes are handed to the renderer under the asset's number until its
+//! texture lands (pxl-render `Gpu::image`), and they are read again if the
+//! device is lost.
 
 use pxl_spec::asset;
 use pxl_spec::asset::catalog::{Catalog, Slot};

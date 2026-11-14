@@ -214,8 +214,8 @@ const word_up = (n: number): number => Math.ceil(n / WORD_SZ) * WORD_SZ;
  * Writes a packet in place, into bytes the caller holds, without building a
  * tree first. It is the one writer of the layout: `TreeEncoder` walks its tree
  * onto it, so both give the same bytes. A node that does not fit does not
- * fail its call: the writer goes on counting entries, and `finish` refuses the
- * packet (EOVERFLOW). One writer object is reused: its room begins it again
+ * fail its call: the writer goes on counting entries, and `finish_or_throw`
+ * refuses the packet (EOVERFLOW), `finish` answering -1. One writer object is reused: its room begins it again
  * for each packet.
  */
 export class PacketWriter {
@@ -526,11 +526,12 @@ export class PacketWriter {
   //   bits 0..7   : node type
   //   bits 8..31  : reserved
   //
-  // Len and each offset take an 8-byte slot, the value its low 32 bits; a
-  // reader refuses a len slot whose high half is not zero, and an offset's
-  // high half holds the type. Each child offset is relative to the enclosing
-  // branch node's base, a branch is aligned to `WORD_SZ`, and writing a
-  // number of children other than `cnt` is a bug.
+  // - len and offsets occupy 8-byte slots
+  // - the value is the low 32 bits; a reader refuses a len slot whose high half is not zero,
+  //   and an offset's high half holds the type
+  // - each child offset is relative to the enclosing branch node base
+  // - branch alignment is WORD_SZ
+  // - writing a number of children other than `cnt` is a bug
   branch(cnt: u32, fill: (w: this) => void): this {
     // empty branch (len = 0) is valid — analogous to [] or {} in JSON
     const at = this.branch_open(cnt);
@@ -560,7 +561,7 @@ export class PacketWriter {
   // - because root_payload_sz excludes the fixed packet header, graft preserves
   //   the same root payload layout as inline encoding
   // - base-offset alignment is expected to be enforced by the view construction path
-  // - a malformed `pkt` makes `finish` refuse the packet (EBADMSG)
+  // - a malformed `pkt` makes `finish_or_throw` refuse the packet (EBADMSG), and `finish` answer -1
   graft(pkt: U8Array): this {
     let payload_sz: u32, type: NodeType;
     try {

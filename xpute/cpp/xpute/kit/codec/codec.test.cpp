@@ -54,7 +54,7 @@ XPUTE_TEST(codec_hex) {
     XPUTE_CHECK(!hex_decode("zz", back).ok());
 }
 
-// FNV-1a's published test values, which the other languages check too.
+// FNV-1a's published test values.
 XPUTE_TEST(codec_fnv1a64) {
     XPUTE_CHECK_EQ(fnv1a64(""), FNV64_OFF, "the empty string");
     XPUTE_CHECK_EQ(fnv1a64("a"), std::uint64_t{0xaf63dc4c8601ec8cu}, "\"a\"");

@@ -2,8 +2,8 @@
 
 //! The core's fixed ranges (sys/range.rs): `.fixed`, past the module's data
 //! and before the heap, holds each owner's range at the size its consts give,
-//! in the order of `Fixed`, each handed its place at boot (`install`). Then
-//! the bound the heap's flows are held to.
+//! in the order of `Fixed`, each handed its place at boot (`install`). This
+//! module also holds the bound the heap's flows are held to.
 
 use crate::domain::layer::division;
 use crate::domain::layer::terrain::fixed;

@@ -1,4 +1,4 @@
-// pxl-render/ask_run.wgsl
+// pxl-render/frame/shader/ask_run.wgsl
 
 // The run whose asks the pass serves (queue_ask.wgsl), told by the queue it is bound to: the
 // view reaches from that queue's head to the end of the records (pxl-engine `ray::queue_at`).

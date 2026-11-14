@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use xpute_link::Return;
 use xpute_native_runtime::post_task;
 
-use super::abi;
+use xpute_gpu_native_runtime::abi;
 
 thread_local! {
     /// The guest's waiting `next`, on the guest's thread.

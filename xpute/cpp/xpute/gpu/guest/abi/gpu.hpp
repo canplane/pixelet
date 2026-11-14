@@ -1,4 +1,4 @@
-// cpp/xpute/gpu/abi/gpu.hpp
+// cpp/xpute/gpu/guest/abi/gpu.hpp
 //
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 

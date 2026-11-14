@@ -1,7 +1,7 @@
 // pxl-core/domain/scene/column.rs
 
 //! Instances laid out as columns, in the layout the decor and impostor
-//! shaders read (pxl-content generation.rs `drawn`), for the instances the CPU
+//! shaders read (pxl-content `generation::drawing`), for the instances the CPU
 //! writes: the clouds' patches (domain/scene/environment/cloud.rs) and the
 //! ghost's one decor (domain/scene/indicator/ghost.rs). A buffer holds the
 //! group count, then each group's instance count, then each group's columns,

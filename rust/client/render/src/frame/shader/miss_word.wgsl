@@ -1,6 +1,6 @@
-// pxl-render/miss_word.wgsl
+// pxl-render/frame/shader/miss_word.wgsl
 
-// A missed pixel's ray, and the words its walk leaves at the pixel and among the stops, as the
+// A missed pixel's ray, and the words its walk leaves at the pixel and among the hits, as the
 // holes' queue takes and leaves them (queue.wgsl; grid.wgsl, hit.wgsl).
 
 @group(0) @binding(3) var rays: texture_storage_2d_array<r32uint, read_write>;
@@ -27,9 +27,9 @@ fn hit_fill(w: WalkEnd) -> u32 {
   return (w.asset.x >> FILL_SHIFT) & (EIGHTH_CNT - 1u);
 }
 
-/// Puts the stop of walk `w` at pixel `id` as stop `r`, which the record takes (`keep_hit`,
+/// Puts the hit of walk `w` at pixel `id` as hit `r`, which the record takes (`keep_hit`,
 /// `beam::HIT_WORDS`, record_hits.wgsl). The ray entered through `face`, which has
-/// `beam::HIT_LACK` set where the stop lacks. The stop holds its node, the asset it stopped
+/// `beam::HIT_LACK` set where the hit lacks. The hit holds its node, the asset it stopped
 /// at, and the line its observer gives it (hole.eye.wgsl, hole.light.wgsl `hit_line`).
 fn hit_put(r: u32, w: WalkEnd, face: u32, id: vec2<u32>) {
   let k = hit_at(r);

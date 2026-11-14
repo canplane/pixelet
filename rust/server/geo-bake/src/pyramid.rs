@@ -312,8 +312,8 @@ fn readers<L: Base>(below: &[Quadrant]) -> Vec<Quadrant> {
 }
 
 /// Folds `targets`, a zoom's parents in rows; returns those staged, those gone and how many
-/// failed, each said as it failed, as a leaf's walk says it (tile/walk.rs). Each worker keeps
-/// only the child rows its current parent row reads.
+/// failed, each said as it failed, as a leaf's walk says it (`tile/walk.rs`). Each worker
+/// keeps only the child rows its current parent row reads.
 fn fold_zoom<L: Base>(
     set: &Staged<'_>,
     targets: &[Quadrant],

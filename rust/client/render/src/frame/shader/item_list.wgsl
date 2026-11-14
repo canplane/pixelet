@@ -1,4 +1,4 @@
-// pxl-render/item_list.wgsl
+// pxl-render/frame/shader/item_list.wgsl
 
 // How the queue's walks (queue_walk.wgsl, queue_last.wgsl) take the items of a run that lists
 // them: the samples (sample.wgsl) or the beam rays (corner.wgsl). The first walk takes the

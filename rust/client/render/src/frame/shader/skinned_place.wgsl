@@ -6,8 +6,8 @@
 // they agree.
 
 // The draw's uniform is read field by field from vec4 words (word.rs `skinned`,
-// skinned_draw.slot.wgsl or skinned_draw.mark.wgsl), never as a struct: Safari's WebGPU lost
-// its GPU process on a struct here.
+// skinned_draw.slot.wgsl or skinned_draw.mark.wgsl), never as a struct: a struct here makes
+// Safari's WebGPU lose its GPU process.
 fn draw_translation() -> vec3f { return from_eye(skinned_q(), skinned_r()); }
 
 // The palette is read as vec4 columns, because the Galaxy S23's Vulkan driver misreads an
@@ -32,7 +32,6 @@ fn skin_of(v: VertexIn) -> mat4x4f {
   return joint(v.joints.x) * v.weights.x + joint(v.joints.y) * v.weights.y + joint(v.joints.z) * v.weights.z + joint(v.joints.w) * v.weights.w;
 }
 
-// The depth pass and the lit pass both place a vertex here, so they place it alike.
 fn skinned_world(v: VertexIn, m: mat4x4f) -> vec3f {
   let p = (m * vec4f(v.pos, 1.0)).xyz * skinned_scale();
   return place_up(p, skinned_rot()) + draw_translation();

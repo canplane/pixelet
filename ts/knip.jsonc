@@ -34,7 +34,7 @@
     },
     "xr": {
       "entry": ["plugin/*.ts"],
-      "ignoreDependencies": ["expo-updates", "expo-system-ui"],
+      "ignoreDependencies": ["expo-updates"],
     },
     "tool/shader": {
       "entry": ["probe.ts"],

@@ -66,7 +66,7 @@ pub(crate) const CLIMB_PASS_CNT: u32 = 2;
 pub(crate) const TILT_SWEEP_FRACTION: f64 = 0.5;
 pub(crate) const DOLLY_GAIN: f64 = 0.0022;
 /// Within this radius of the screen's center, a rotate drag does not turn
-/// the azimuth, because the hand's angle about the center (atan2) swings
+/// the azimuth, because the hand's angle about the center (`atan2`) swings
 /// wildly there.
 pub(crate) const MIN_ROTATE_RADIUS_PX: f64 = 24.0;
 pub(crate) const MIN_TWIST_DIST_PX: f64 = 24.0;

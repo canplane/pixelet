@@ -1,29 +1,21 @@
-// cpp/xpute/gpu/handle.hpp
+// cpp/xpute/gpu/guest/handle.hpp
 
 // The encoder's table of handles, as `xpute-gpu-guest`'s `handle.rs` keeps
-// it. A handle is a slot and that slot's generation, so a handle kept past its
-// release names nothing that takes the slot later; the host reads such a
-// handle's slot alone (`handle_slot`). 0 is never a handle, and slot 0 holds
-// no value: slots from 1 hold the objects the encoder made.
+// it, over the link's handle (xpute/gpu/link/handle.hpp). 0 is never a
+// handle, and slot 0 holds no value: slots from 1 hold the objects the
+// encoder made.
 
 #pragma once
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <optional>
 #include <utility>
 
-#include "api.spec.hpp"
+#include "xpute/gpu/link/handle.hpp"
 
 namespace xpute::gpu {
-
-static_assert(SLOT_BITS + std::numeric_limits<std::uint16_t>::digits == 32, "a slot and a generation fill a handle");
-
-constexpr std::uint32_t handle_slot(std::uint32_t handle) noexcept {
-    return handle & ((1u << SLOT_BITS) - 1);
-}
 
 // A table has N slots, each holding a `T` while its handle is live. A slot
 // given back is the next one taken.

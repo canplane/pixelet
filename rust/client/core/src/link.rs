@@ -35,10 +35,8 @@ use pxl_render::gpu::api;
 use pxl_render::gpu::surface;
 use pxl_render::renderer;
 use pxl_render::spec::api::stream;
-use xpute_guest::abi::stop;
 use xpute_guest::clock::now;
-use xpute_guest::link::in_guest;
-use xpute_kit::status::bug::{self, OrBug};
+use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 struct State {
@@ -65,30 +63,10 @@ fn close_surface(handle: u32) {
 
 /// Boots the core in its first entry (xpute-guest link `boot`).
 pub fn boot() {
-    // From here a bug or a panic in the core's own code is told to the
-    // host before the core stops. Both hooks are the process's on a device, so
-    // what is not the core's own (another thread's, or the host's while the
-    // core is out on `link_out`) goes on as it would have.
-    bug::set_report(|errnum, at, n1, n2| {
-        if in_guest() {
-            let _ = stop::stopped(errnum as i32, at.file(), at.line(), n1, n2);
-        }
-    });
-    let prev = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        if !in_guest() {
-            return prev(info);
-        }
-        // A bug's own panic, which its report told already.
-        if info.payload().is::<bug::Bug>() {
-            return;
-        }
-        let (file, line) = info.location().map_or(("", 0), |at| (at.file(), at.line()));
-        let _ = stop::stopped(Errno::ENOTRECOVERABLE as i32, file, line, 0, 0);
-    }));
     layout::install();
     export::mount();
-    // The renderer's stream, as large as the manifest says, and the device it runs on.
+    // The renderer's stream is laid at the size api.json5 gives it, and
+    // then the device it runs on is taken.
     api::install(stream::BYTES);
     gpu::boot();
     sched::boot();
@@ -183,8 +161,8 @@ fn post_ui(s: &mut State) {
     }
     if let Some(c) = take_orient_cmd() {
         match c {
-            OrientationCommand::Listen => start(Sensor::Orient),
-            OrientationCommand::Remove => stop(Sensor::Orient),
+            OrientationCommand::Start => start(Sensor::Orient),
+            OrientationCommand::Stop => stop(Sensor::Orient),
         }
     }
     if let Some((azimuth, m_per_px)) = s.last_snapshot.take_view_changed() {

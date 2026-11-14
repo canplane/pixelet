@@ -1,4 +1,4 @@
-// pxl-render/light_stand.wgsl
+// pxl-render/frame/shader/light_stand.wgsl
 
 // The light's list (pxl-engine light.rs `list_words`) as the passes that stand, read and damage
 // its tiles write it. These passes bind it apart from `beams` (light_list.wgsl), read and write

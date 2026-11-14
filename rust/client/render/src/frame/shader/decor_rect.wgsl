@@ -1,4 +1,4 @@
-// pxl-render/decor_rect.wgsl
+// pxl-render/frame/shader/decor_rect.wgsl
 
 // Whether a box of the frame's reaches what a candidate reads (pxl-content
 // `generation::reaches`). The boxes are read from the list through `list_word`, which each pass

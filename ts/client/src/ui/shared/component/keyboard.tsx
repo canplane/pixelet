@@ -21,7 +21,7 @@ export function put_keyboard_away(): void {
 
 /** Marks the current touch as one that keeps the keyboard. A view whose
  * capture handler is already a PanResponder's calls this from that handler
- * instead of spreading KEEPS_KEYBOARD. */
+ * instead of spreading `KEEPS_KEYBOARD`. */
 export function keep_keyboard(): false {
   keep = true;
   return false;

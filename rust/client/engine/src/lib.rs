@@ -5,7 +5,7 @@
 //!
 //! The crate holds a node's seed, the answer a node gives, the ground's column and the clip
 //! levels that hold its cells, the ways as a cell reads them, what is placed, the ray's
-//! descent, and the samples' stops as the boxes a raster draws. It computes over the model
+//! descent, and the samples' hits as the boxes a raster draws. It computes over the model
 //! pxl-spec gives every crate (the zooms, the lattices, the value space, the service area, a
 //! brick and the ways a column makes), and asks the content it draws for that content's rules
 //! (`content`). pxl-render's WGSL passes are written by hand to it, their layouts are
@@ -55,7 +55,6 @@ pub const STORAGE_ALIGN_WORDS: u32 = 256 / 4;
 /// the one rule for what lies outside a buffer. A host that indexes past what it wrote breaks
 /// a contract, which the CPU's debug builds catch.
 pub fn at<T: Copy + Default>(s: &[T], i: u32) -> T {
-    // The check runs only in debug builds.
     #[cfg(debug_assertions)]
     assert!(
         (i as usize) < s.len(),

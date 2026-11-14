@@ -1,4 +1,4 @@
-// pxl-render/record_draw.wgsl
+// pxl-render/frame/shader/record_draw.wgsl
 
 // The record's draws, the last of its writers (pxl-engine record.rs). One thread a node cache
 // slot writes a box for the raster for each drawable entry, an entry with a face set, and marks

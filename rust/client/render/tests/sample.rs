@@ -5,7 +5,7 @@
 //! for the eye and for the light (sample.eye.wgsl, sample.light.wgsl), starts from what the
 //! beam passes leave. Each sample must stop where the Rust stops it, in a first frame and in
 //! the next frame over the node cache the first left. The beam rays themselves, the holes'
-//! queue over the pixels the cast marked, the drawable entries the samples' stops set and the
+//! queue over the pixels the cast marked, the drawable entries the samples' hits set and the
 //! draw draws, and the boxes the light's samples draw must answer alike.
 //!
 //! The tests are skipped where no adapter answers.
@@ -143,7 +143,7 @@ impl Observed {
     }
 
     /// The band that sample `s`'s ray asked. An eye's ray asks no one band, so it is 0, and no
-    /// eye's stop counts as whole by it (`record::light_whole`).
+    /// eye's hit counts as whole by it (`record::light_whole`).
     fn band(&self, s: [u32; 2]) -> u32 {
         match &self.source {
             RaySource::Eye { .. } => 0,
@@ -516,7 +516,7 @@ fn light_beams(
     words
 }
 
-/// Runs one frame's samples over the node cache `node_cache0`. Each sample's stop must be the stop
+/// Runs one frame's samples over the node cache `node_cache0`. Each sample's hit must be the hit
 /// the walk from the root gives its ray, and no sample may be written that no thread takes.
 /// Where `last_cache` is given, the run's last walk, which asks the world, runs over it, while the
 /// walks over the node cache alone and their asks read `node_cache0`. Returns the node cache the
@@ -560,7 +560,7 @@ fn run_frame(
     let node_cache = last_cache.unwrap_or(node_cache);
     let out = gpu.read(&beams);
 
-    // A needed sample's stop must be what its ray's walk answers. A sample not needed must
+    // A needed sample's hit must be what its ray's walk answers. A sample not needed must
     // stop on nothing.
     let (mut same, mut differ, mut axis_over, mut edges) = (0u64, 0u64, 0u64, 0u64);
     let mut first = None;
@@ -605,7 +605,7 @@ fn run_frame(
             && out[at + beam::SAMPLE_LACK_WORD as usize] & beam::SAMPLE_LACK
                 == u32::from(trace.end == End::Lack);
         // A ray that the device's rounding takes across an edge may stop on either side of it.
-        // The device's stop is taken where the cell the walk stopped at, or the one the device
+        // The device's hit is taken where the cell the walk stopped at, or the one the device
         // stopped at, is entered at an edge (`at_edge`, as tests/cast.rs takes a pixel).
         if !ok {
             let (o, ray, _) = observed.aim(s);
@@ -1477,7 +1477,7 @@ fn hand_missed_pixels_answer_as_cast_walk() {
 
 /// Runs the holes' queue over the pixels of `s` that the cast marked, from the eye of case `c`.
 /// Every marked pixel must hold the words the walk from the root gives its ray, and no other
-/// pixel may be written. Returns the stops the run counted (`node_cache::HITS_CNT`).
+/// pixel may be written. Returns the hits the run counted (`node_cache::HITS_CNT`).
 fn holes_answer(
     gpu: &Gpu,
     b: &WorldBuffer,
@@ -1763,8 +1763,8 @@ fn hand_missed_pixels_at_an_edge_answer_as_cast_walk() {
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
-/// The holes' queue over more pixels than a frame's stops hold (`ray::HITS_A_FRAME`). A ray
-/// past them keeps no stop, and every marked pixel must still hold the words the walk from the
+/// The holes' queue over more pixels than a frame's hits hold (`ray::HITS_A_FRAME`). A ray
+/// past them keeps no hit, and every marked pixel must still hold the words the walk from the
 /// root gives its ray (`holes_answer`).
 #[test]
 fn eye_rays_past_a_frames_hits_answer_as_cast_walk() {
@@ -2028,7 +2028,7 @@ fn boxes_want(
     want
 }
 
-/// Runs the light's hand-written record of its samples' stops over `words`, in frame `frame`,
+/// Runs the light's hand-written record of its samples' hits over `words`, in frame `frame`,
 /// into a node cache that keeps each node a sample stopped on as its walk would (`lay_kept`),
 /// and checks it against pxl-engine `record`. Each such entry's state must hold the faces its
 /// samples entered across, and whether some ray stopped on it coarser than its band
@@ -2304,7 +2304,7 @@ fn light_raster_drawn(
     }
 }
 
-/// Runs the eye's hand-written record of its samples' stops over `words` from `origin`, in
+/// Runs the eye's hand-written record of its samples' hits over `words` from `origin`, in
 /// frame `frame`, and then its draw. The record runs into the node cache `was` left, with each
 /// node a sample stopped on kept as its walk would keep it (`lay_kept`). The result is checked
 /// against `boxes_want` and pxl-engine `record`. Each such entry's state must be whole where
@@ -3333,12 +3333,12 @@ fn hand_light_rec_answers_as_raster() {
     assert!(failed.is_empty(), "{}", failed.join("\n"));
 }
 
-/// The beam rays' run (corner.wgsl over beam.eye.wgsl) over a node cache that holds part of
-/// what the beam rays meet. A beam ray that its walks over the node cache park must go on from
-/// the state it was parked in. Every corner must stop where the walk from the root stops the
-/// same ray, at the same node, and must hand on the same distance (`Grid::hand_dist`). The
-/// first frame runs over an empty node cache, and the next over the first frame's with every
-/// other entry finer than `DROP_ZOOM` dropped.
+/// The beam rays' run (corner.wgsl over beam.eye.wgsl) over a node cache that holds part of what
+/// the beam rays meet. A beam ray that its walks over the node cache park must go on from the state
+/// it was parked in. Every corner must stop where the walk from the root stops the same ray, at the
+/// same node, and must start the rays about it at the same distance (`Grid::start_dist`). The first
+/// frame runs over an empty node cache, and the next over the first frame's with every other entry
+/// finer than `DROP_ZOOM` dropped.
 #[test]
 fn hand_beam_rays_answer_as_cast_walk() {
     const DROP_ZOOM: Zoom = 12;
@@ -3431,9 +3431,9 @@ fn hand_beam_rays_answer_as_cast_walk() {
                     corner: [0, 1, 2].map(|i| words[n + beam::NODE_CORNER as usize + i]),
                     roots: [0, 1, 2].map(|i| words[n + beam::NODE_ROOTS as usize + i] as i32),
                 };
-                let got_t = f32::from_bits(words[grid.hand_at(k) as usize]);
+                let got_t = f32::from_bits(words[grid.start_dist_at(k) as usize]);
                 let m = &want[k as usize];
-                let want_t = grid.hand_dist(m.hit.t);
+                let want_t = grid.start_dist(m.hit.t);
                 if got_node != m.hit.node || gpu::ulps(got_t, want_t) > 4 {
                     differ += 1;
                     first_differ.get_or_insert((k, got_node, got_t, m.hit.node, want_t));
@@ -3465,12 +3465,12 @@ impl Keep<Inheritance> for Handed {
     }
 }
 
-/// The beam rays' run for the light's map (corner.wgsl over beam.light.wgsl) over a node cache
-/// that holds part of what its beam rays meet. Every beam ray must stop where the walk from the
-/// root stops the same ray from the origin the pass laid, at the same node. It must hand on the
-/// same distance (`light::margin`) under either rounding a device may take (`margins`), and its
-/// line must hold what that walk handed the node and every node above it. The first frame runs
-/// over an empty node cache, and the next over the first frame's with every other entry finer
+/// The beam rays' run for the light's map (corner.wgsl over beam.light.wgsl) over a node cache that
+/// holds part of what its beam rays meet. Every beam ray must stop where the walk from the root
+/// stops the same ray from the origin the pass laid, at the same node. It must start the rays about
+/// it at the same distance (`light::margin`) under either rounding a device may take (`margins`),
+/// and its line must hold what that walk handed the node and every node above it. The first frame
+/// runs over an empty node cache, and the next over the first frame's with every other entry finer
 /// than `DROP_ZOOM` dropped.
 #[test]
 fn hand_light_beam_rays_answer_as_cast_walk() {
@@ -3560,18 +3560,18 @@ fn hand_light_beam_rays_answer_as_cast_walk() {
                     corner: [0, 1, 2].map(|i| at(n + beam::NODE_CORNER + i)),
                     roots: [0, 1, 2].map(|i| at(n + beam::NODE_ROOTS + i) as i32),
                 };
-                let got_t = f32::from_bits(words[light::hand_at(*size, k) as usize]);
-                let hands = margins.map(|(_, margin)| (m.hit.t - margin).max(0.0));
-                let hand_alike = hands.iter().any(|h| h.to_bits() == got_t.to_bits());
+                let got_t = f32::from_bits(words[light::start_dist_at(*size, k) as usize]);
+                let start_dists = margins.map(|(_, margin)| light::start_dist(m.hit.t, margin));
+                let start_dist_alike = start_dists.iter().any(|h| h.to_bits() == got_t.to_bits());
                 let line_alike = got_node == m.hit.node
                     && inheritance.0.iter().enumerate().all(|(z, h)| {
                         let g = [0, 1, 2]
                             .map(|i| at(beam::LINE_INHERITANCE + beam::LINE_STEP * z as u32 + i));
                         g == h.words()
                     });
-                if !hand_alike || !line_alike {
+                if !start_dist_alike || !line_alike {
                     differ += 1;
-                    first_differ.get_or_insert((k, got_node, got_t, m.hit.node, hands[0]));
+                    first_differ.get_or_insert((k, got_node, got_t, m.hit.node, start_dists[0]));
                 }
             }
             eprintln!(

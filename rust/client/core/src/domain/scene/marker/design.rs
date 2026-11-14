@@ -84,7 +84,7 @@ pub(super) enum Design {
 
 impl Design {
     /// The design as laid out where a place keeps `spacing` pixels to itself
-    /// (`arrangement.rs` `SPACING_PX`), with the width of the region it keeps
+    /// (param.rs `SPACING_PX`), with the width of the region it keeps
     /// (`set.rs`). A place's name is wrapped at `spacing`, and its region is
     /// `spacing` wide. Any other design keeps a region of its own width,
     /// given here as 0, which the candidates widen to that width.

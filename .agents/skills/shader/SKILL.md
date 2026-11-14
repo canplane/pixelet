@@ -25,10 +25,13 @@ After writing, in this order:
 It makes every module as the renderer assembles it, with every pipeline the
 renderer makes over it, on the device it is opened on.
 
+Ask the user before taking the browser (AGENTS.md), and to bring the page
+forward.
+
 ```sh
 cd ts/tool/shader
 CARGO_TARGET_DIR=<root>/rust/target/session/<id> ../../../script/perf/mac.py pnpm exec vite --host --port <port> --strictPort
-open -a Safari http://127.0.0.1:<port>/probe.html
+open -g -a Safari http://127.0.0.1:<port>/probe.html
 ```
 
 - Read the result in the server's output or `ts/tool/shader/.dev-console.log`:

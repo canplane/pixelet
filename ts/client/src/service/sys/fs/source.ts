@@ -148,8 +148,8 @@ export function mirror_source(next: Source, decl: Declaration | null): void {
 }
 
 /** After a failed ask, the next one waits a random time below a bound. The
- * bound starts at ASK_AGAIN_MS and doubles after each failure, up to
- * ASK_AGAIN_MOST_MS. The random wait keeps clients that one outage failed
+ * bound starts at `ASK_AGAIN_MS` and doubles after each failure, up to
+ * `ASK_AGAIN_MOST_MS`. The random wait keeps clients that one outage failed
  * together from asking again together. While the device is offline, nothing
  * is asked until it says it is online. */
 const ASK_AGAIN_MS = 2_000;

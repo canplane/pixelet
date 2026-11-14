@@ -43,7 +43,7 @@ export const phase_text = ([k, v]: [string, f64]) =>
 export const tris = (t: number) =>
   t >= 1000 ? `${round(t / 1000)}k` : String(round(t));
 
-/** The type requires a table for every `_name` column of FRAME. */
+/** The type requires a table for every `_name` column of `FRAME`. */
 type NameColumn = Extract<FrameColumn, `${string}_name`>;
 const NAME_TABLES: { readonly [K in NameColumn]: readonly string[] } = {
   kind_name: FRAME_KINDS,

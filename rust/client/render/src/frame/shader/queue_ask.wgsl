@@ -1,4 +1,4 @@
-// pxl-render/queue_ask.wgsl
+// pxl-render/frame/shader/queue_ask.wgsl
 
 // Asks the world once for each node a run's walk was parked at (queue_walk.wgsl, `ask_once`).
 // A lane takes one listed node at a time. The lanes are a fixed dispatch (pxl-engine
@@ -53,12 +53,12 @@ fn queue_ask(parked: bool, id: u32) {
   for (var k = id; k < n; k += QUEUE_GROUP_CNT * QUEUE_LANE_CNT) {
     let at = queue_recs_at() + k * QUEUE_REC_WORDS;
     let c = vec3<i32>(
-      i32(atomicLoad(&queue[at + 1u])),
-      i32(atomicLoad(&queue[at + 2u])),
-      i32(atomicLoad(&queue[at + 3u])),
+      i32(atomicLoad(&queue[at + QUEUE_REC_IDX])),
+      i32(atomicLoad(&queue[at + QUEUE_REC_IDX + 1u])),
+      i32(atomicLoad(&queue[at + QUEUE_REC_IDX + 2u])),
     );
-    let parent = vec3<u32>(atomicLoad(&queue[at + 6u]), atomicLoad(&queue[at + 7u]), atomicLoad(&queue[at + 8u]));
-    ask_once(parent, atomicLoad(&queue[at + 5u]) != 0u, atomicLoad(&queue[at]), c, atomicLoad(&queue[at + 4u]));
+    let parent = vec3<u32>(atomicLoad(&queue[at + QUEUE_REC_INHERITANCE]), atomicLoad(&queue[at + QUEUE_REC_INHERITANCE + 1u]), atomicLoad(&queue[at + QUEUE_REC_INHERITANCE + 2u]));
+    ask_once(parent, atomicLoad(&queue[at + QUEUE_REC_TOP]) != 0u, atomicLoad(&queue[at + QUEUE_REC_ZOOM]), c, atomicLoad(&queue[at + QUEUE_REC_ZOOMS]));
   }
 }
 

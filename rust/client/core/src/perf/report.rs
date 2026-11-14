@@ -152,8 +152,6 @@ pub(crate) fn perf_frame(t: CpuSample) {
         budget_ms: t.tick.budget_ms,
         effects_ms: t.effects_ms,
         tick_ms: t.tick.total_ms,
-        // The core's phases fill the first of the slots xpute's tick has room
-        // for.
         phases: core::array::from_fn(|k| t.tick.phase_ms[k]),
         stage_ms: t.stage_ms,
         effects: t.effects,

@@ -22,7 +22,7 @@ namespace xpute::xtp {
 class PacketWriter {
   public:
     // A writer for a packet whose root is any one node. The packet may take
-    // the whole buffer, up to MAX_PKT_SZ bytes.
+    // the whole buffer, up to `MAX_PKT_SZ` bytes.
     explicit PacketWriter(std::span<std::uint8_t> buf) noexcept;
 
     PacketWriter &nil() noexcept { return entry(std::nullopt, type_of(SpecialType::nil)); }

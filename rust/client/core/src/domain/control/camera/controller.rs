@@ -204,8 +204,8 @@ pub(crate) fn reset_dist() {
     });
 }
 
-/// Used when going to a place. A view farther out than the default comes
-/// back in to it, and a view the user brought nearer stays.
+/// A view farther out than the default comes back in to it, and a view the
+/// user brought nearer stays.
 pub(crate) fn come_in_to_default() {
     let default = DEFAULT_DIST;
     if camera_state().intent.dist > default {

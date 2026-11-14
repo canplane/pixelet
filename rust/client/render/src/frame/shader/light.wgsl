@@ -1,4 +1,4 @@
-// pxl-render/light.wgsl
+// pxl-render/frame/shader/light.wgsl
 
 // Writes the world's depth from the light into every slot of the tiles the cast damaged
 // (light_list.wgsl `light_item`), one workgroup for each tile (`light::TILE`) and one thread

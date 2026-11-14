@@ -109,6 +109,14 @@ decided before the pause:
   leaves the UI (**the agents**).
 - The program composes its runtime in the order it runs, as the page's worker
   does; xpute offers pieces, not a start with hooks (**the agents**).
+
+  > Since 2026-11-15 (05d5167e9b): the program builds its host as one list, its
+  > servers in no order with its world's `IMPORTS` and `LATER`, and each
+  > runtime runs the fixed steps itself, on a page and on a device alike:
+  > it mounts each server, serves the UI's side, enters the guest only once
+  > every import under a named handle is mounted, tells it the UI attached,
+  > and on a device runs the loop (**the user**).
+
 - What a path is bound to is the program's on both platforms; xpute offers only
   the platform's storage (**the agents**).
 

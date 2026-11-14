@@ -49,10 +49,9 @@ pub(crate) fn eye_draw_dist() -> Option<f64> {
 /// `Some(None)` means the last reader found no eye or no demand distance.
 static OBSERVATION: Global<Option<Option<Observation>>> = Global::new();
 
-/// Called once a frame (frame.rs `camera_tick`). The kept observation
-/// holds the eye's height over the ground under it, so it is dropped when a
-/// change touched that ground. It must run every frame, so that
-/// `change::within` sees each change once.
+/// Drops the kept observation where a change touched the ground under the
+/// eye, since it holds the eye's height over that ground. It runs every
+/// frame, so that `change::within` sees each change once.
 pub(crate) fn forget_touched() {
     let cached = OBSERVATION.get(|| None);
     if cached.is_some_and(|o| o.is_some_and(|o| change::within([[o.eye[0], o.eye[1]]; 2], &[]))) {
@@ -181,7 +180,7 @@ pub(crate) fn demand_radius(
 /// before; the rays only see the tiles arrive.
 ///
 /// The demand measures distance across the ground and leaves out the eye's
-/// height. A ray picks a cell's zoom by its distance in 3D (pxl-engine
+/// height. A ray picks a cell's zoom by its distance in 3D (pxl-spec
 /// `grid::cell_zoom_at`), which is never shorter than the distance across
 /// the ground, so the demand asks for at least what the rays read.
 pub(crate) struct ByEye {

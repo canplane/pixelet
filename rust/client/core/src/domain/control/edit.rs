@@ -28,7 +28,7 @@ use pxl_global::Global;
 use pxl_spec::space::coord::world::{base_of, cube, idx_of};
 use pxl_spec::space::coord::zoom::Zoom;
 
-/// The tool the pointer holds, as the UI chose it (`EDIT_TOOL`).
+/// The tool the pointer holds, as the UI chose it (pxl:core edit `hold`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) enum Tool {
     #[default]
@@ -94,7 +94,7 @@ struct State {
     tool: Tool,
     hover: Hover,
     /// Where the pointer is on the screen, in NDC, whether or not it strikes
-    /// anything. The gauge casts its own ray there.
+    /// anything. perf/read.rs `view` casts its own ray there.
     pointer_ndc: Option<[f64; 2]>,
 }
 

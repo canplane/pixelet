@@ -6,11 +6,12 @@
 //! eight tiles), as `infra/earth/source.json` names them and
 //! `make download-earth` keeps them. Each is averaged in linear light over what a
 //! texel covers.
-//!  - The earth layer's tiles (pxl-spec bake/tile/earth.rs) at its top zoom, one
-//!    ground cell to a texel, are written to its set, `./out/earth/<name>`, flat
-//!    under the tiles' names as every kind's set is. A tile of one color says
-//!    nothing the global picture does not, and has no object. The copy an upload
-//!    takes lies beside the set, in `./out/earth.publish/` (script/publish.py).
+//!  - The earth layer's tiles (pxl-spec `bake/tile/earth.rs`) at its top
+//!    zoom, one ground cell to a texel, are written to its set,
+//!    `./out/earth/<name>`, flat under the tiles' names as every kind's set is.
+//!    A tile of one color says nothing the global picture does not, and has no
+//!    object. The copy an upload takes lies beside the set, in
+//!    `./out/earth.publish/` (`script/publish.py`).
 //!  - The global picture every tile falls back to, 2048 × 1024, belongs to the
 //!    sphere and is no tile of the pyramid. It lies beside the tiles under its
 //!    own name (`TILE_SPHERE`), packed as they are, and is published with them.
@@ -354,7 +355,7 @@ fn run() -> Result<(), String> {
         git_sha().as_deref(),
         serde_json::json!({ "objects": t.baked + 1, "z": EARTH_ZOOM, "format": FORMAT[BaseKind::Earth as usize] }),
     )?;
-    // The copy an upload takes (script/publish.py), the global picture with the tiles.
+    // The copy an upload takes (`script/publish.py`), the global picture with the tiles.
     let copy = set.publish(|_| true)?;
     std::fs::copy(out.join(TILE_SPHERE), copy.join(TILE_SPHERE))
         .map_err(|e| format!("{}: {e}", out.join(TILE_SPHERE).display()))?;

@@ -350,8 +350,9 @@ export const TYPE_IS_KNOWN = (type: u8): boolean => {
   }
 };
 
-/** Reads a slot that holds a len, a size or the magic. A high half that is
- * not zero makes the packet malformed (EBADMSG). */
+/** Reads a slot that holds a len or the magic; a size is a descriptor's
+ * (`GET_DESC`). A high half that is not zero makes the packet malformed
+ * (EBADMSG). */
 export const GET_LEN = (buf_view: DataView, off: u32): u32 => {
   if (buf_view.getUint32(off + 4, LE) !== RESERVED) {
     throw new XputeError(ERRNO_EBADMSG);

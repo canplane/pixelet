@@ -7,8 +7,8 @@
  * The platform serves static assets before this script runs (wrangler.jsonc).
  * What reaches this script is the roots of spec/spec/route.json5. `/tile/*` and
  * `/asset/*` come straight out of the R2 bucket. `/geo/*` and `/api/*` are
- * reverse-proxied as they are to GEO_ORIGIN and API_ORIGIN (infra/README.md),
- * so that they stay same-origin with the app.
+ * reverse-proxied as they are to `GEO_ORIGIN` and `API_ORIGIN`
+ * (infra/README.md), so that they stay same-origin with the app.
  */
 
 type R2Object = {
@@ -238,8 +238,8 @@ export default {
     // uploaded would otherwise answer empty for good.
     if (object === null) return missing();
 
-    // writeHttpMetadata replays the headers set at upload time, among them the
-    // `content-encoding` the object was packed in.
+    // `writeHttpMetadata` replays the headers set at upload time, among them
+    // the `content-encoding` the object was packed in.
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set("etag", object.httpEtag);

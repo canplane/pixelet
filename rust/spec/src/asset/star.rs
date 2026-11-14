@@ -2,8 +2,8 @@
 
 //! A star of the Yale Bright Star Catalog (Hoffleit and Warren 1991, CDS
 //! V/50) as the sky's catalog holds it, written by the bake
-//! (pxl-geo-bake bin/star.rs) and read by the sky (pxl-render
-//! pass/star.rs): one layout, these two functions.
+//! (pxl-geo-bake `bin/star.rs`) and read by the sky (pxl-render
+//! `pass/star.rs`): one layout, these two functions.
 //!
 //! A record is `REC_BYTES` little-endian: the right ascension a u16 of a
 //! turn, the declination an i16 of a quarter turn, the visual magnitude and

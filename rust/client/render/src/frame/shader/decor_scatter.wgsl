@@ -1,4 +1,4 @@
-// pxl-render/decor_scatter.wgsl
+// pxl-render/frame/shader/decor_scatter.wgsl
 
 // The decor the ground holds, found from the hashes alone (pxl-content scatter.rs): how many of
 // a decor a column holds, a leaf cell's candidate, and whether it stands clear of the decor's

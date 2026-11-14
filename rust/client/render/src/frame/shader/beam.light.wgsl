@@ -1,4 +1,4 @@
-// pxl-render/beam.light.wgsl
+// pxl-render/frame/shader/beam.light.wgsl
 
 // The shadow map's beam rays, as the beam rays' walks read them from the light's list
 // (corner.wgsl, light_list.wgsl). A beam ray starts over every `light::BEAM`-th texel, from
@@ -25,9 +25,9 @@ fn beam_line(c: vec2<u32>) -> u32 {
   return light_line(c.y * beam_across() + c.x);
 }
 
-/// The word that holds how far the rays about beam ray `c` start (`light::hand_at`).
-fn beam_hand_at(c: vec2<u32>) -> u32 {
-  return light_hand_at(c.y * beam_across() + c.x);
+/// The word that holds how far the rays about beam ray `c` start (`light::start_dist_at`).
+fn beam_start_dist_at(c: vec2<u32>) -> u32 {
+  return light_start_dist_at(c.y * beam_across() + c.x);
 }
 
 /// Beam ray `c`'s ray, at the band of the tile its texel lies on, which may lie past the box.
@@ -52,10 +52,10 @@ fn beam_lay_origin(base: u32, origin: vec3<i32>) {
 }
 
 /// Where the texels of the cells about a beam ray that stopped at `t` start: a margin short of
-/// `t`, and never before the near plane (`light::margin`). The product is rounded, and the Q3
-/// steps are added after, as the engine computes it. Metal may fuse the two into one rounding;
-/// tests/margin.rs names each rounding a pass takes.
-fn beam_hand(t: f32) -> f32 {
+/// `t`, and never before the near plane (pxl-engine `light::start_dist` of `light::margin`).
+/// The product is rounded, and the Q3 steps are added after, as the engine computes it. Metal
+/// may fuse the two into one rounding; tests/margin.rs names each rounding a pass takes.
+fn beam_start_dist(t: f32) -> f32 {
   return max(t - (LIGHT_MARGIN_PER_WIDTH * beam_spacing().x + LIGHT_MARGIN_STEPS), 0.0);
 }
 

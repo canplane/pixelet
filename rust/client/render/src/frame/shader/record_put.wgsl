@@ -1,14 +1,14 @@
-// pxl-render/record_put.wgsl
+// pxl-render/frame/shader/record_put.wgsl
 
-// Writes a ray's stop into the record (pxl-engine record.rs, the third of its writers). Every
-// stop goes in this way: the samples' (sample_hit.wgsl) and the missed pixels' hits
-// (record_hits.wgsl) each call `observe_hit`. A stop finds its node's entry (record.wgsl
+// Writes a ray's hit into the record (pxl-engine record.rs, the third of its writers). Every
+// hit goes in this way: the samples' (sample_hit.wgsl) and the missed pixels' hits
+// (record_hits.wgsl) each call `observe_hit`. A hit finds its node's entry (record.wgsl
 // `find`), marks the entry whole where it stopped on it whole, and sets the face its ray
-// entered. The first stop to enter a face asks the faces' pass (face.wgsl) for that face's
+// entered. The first hit to enter a face asks the faces' pass (face.wgsl) for that face's
 // word, with an ask laid among the asks it is handed (`AskList`).
 
-/// The node cache. A stop sets its entry's state (`node_cache::STATES_AT`) with atomics,
-/// because many stops on one node set it at once.
+/// The node cache. A hit sets its entry's state (`node_cache::STATES_AT`) with atomics,
+/// because many hits on one node set it at once.
 @group(0) @binding(9) var<storage, read_write> node_cache: array<atomic<u32>>;
 
 fn node_cache_word(k: u32) -> u32 {
@@ -72,13 +72,13 @@ fn node_at(k: u32, origin: vec3<i32>) -> Node {
   );
 }
 
-/// Sets, in the entry of slot `slot`, the bit of the side that stop `p` entered it through
+/// Sets, in the entry of slot `slot`, the bit of the side that hit `p` entered it through
 /// (pxl-engine `raster::faces`). An observer that reads faces' words, which is the eye, also
 /// sets the side's asked bit (`record::ASKED`). A word is read only under that bit, and the one
-/// stop that sets the bit settles the word. A lack's side takes none. A cell that fills only
+/// hit that sets the bit settles the word. A lack's side takes none. A cell that fills only
 /// part of its cube is a box apart from everything around it, so its side takes `FACE_BOX` at
 /// once (pxl-engine `face::BOX`). Any other side takes none until the faces' pass answers an ask
-/// laid among `asks` from the stop's line, whose target is the entry's word
+/// laid among `asks` from the hit's line, whose target is the entry's word
 /// (`record::TO_REC`). Past the asks' room it keeps none. An observer that reads no words,
 /// which is the light, sets only the side.
 fn observe(p: Hit, slot: u32, asks: AskList) {
@@ -115,10 +115,10 @@ fn observe(p: Hit, slot: u32, asks: AskList) {
   beams[a + ASK_TO] = REC_TO | face_at(slot, p.face);
 }
 
-/// Writes stop `p` on the node `k` into the entry that draws the node (`find`). Where no slot
-/// keeps the node, nothing is written, and the stop's pixel walks again. Where the stop is
+/// Writes hit `p` on the node `k` into the entry that draws the node (`find`). Where no slot
+/// keeps the node, nothing is written, and the hit's pixel walks again. Where the hit is
 /// whole, the entry is set whole (`REC_WHOLE`). That is a fact of the world, so the first
-/// ray of either observer to stop on the node whole sets it. Then the stop's face is set
+/// ray of either observer to stop on the node whole sets it. Then the hit's face is set
 /// (`observe`).
 fn observe_hit(k: Node, p: Hit, asks: AskList) {
   let slot = find(k.zoom, idx_of(k.corner, k.zoom, k.roots, vec3<i32>(0i)), p.asset, p.lacks);
@@ -126,7 +126,7 @@ fn observe_hit(k: Node, p: Hit, asks: AskList) {
     return;
   }
   let state = node_cache_word(state_at(slot));
-  // An entry with no face set becomes drawable with this stop. Marking it with this frame's
+  // An entry with no face set becomes drawable with this hit. Marking it with this frame's
   // number keeps eviction from taking it before a draw draws it (pxl-engine `record::drawn`).
   if ((state & (REC_FACES | REC_ASKED)) == 0u) {
     atomicStore(&node_cache[drawn_at(slot)], rec_frame());
