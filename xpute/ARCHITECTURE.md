@@ -61,8 +61,11 @@ the platform's environment, which instantiates or links the guest, holds the
 host's `Side` and runs the loop that enters it: `@xpute/web-runtime` in a page's
 worker, `xpute-native-runtime` on a device's guest thread. The **host** is what
 is served over it, the clocks and the stop: `@xpute/web-host` and
-`xpute-native-host`. xpute offers these as pieces, and the program composes
-them in the order they run, on both platforms alike.
+`xpute-native-host`. The program lists its servers, the host's among them,
+and its runtime runs the steps in their order, on both platforms alike: it
+mounts each server, serves the UI's side, enters the guest only once every
+interface the guest's world imports is mounted, and on a device runs the
+loop.
 
 The UI lives on another thread, and reaches the link through a **remote**:
 over a port on a page, and through the Expo module `@xpute/native-runtime` on
@@ -196,8 +199,10 @@ word; and a rule the GPU alone decides is one function every pass calls.
   (`xpute-native-runtime`) and `native/host` (`xpute-native-host`) a
   device's, and `native/runtime/expo` (`@xpute/native-runtime`) the Expo
   module the UI reaches them by.
-- `gpu/link`, `gpu/guest/rust` and `cpp/xpute/gpu` are the GPU's link and
-  encoder; `gpu/web/host` and `gpu/native/host` its hosts on WebGPU and wgpu,
-  and `gpu/native/runtime/expo` a device's surface view.
+- `gpu/link` and `cpp/xpute/gpu/link` are the GPU's link, and `gpu/guest/rust`
+  and `cpp/xpute/gpu/guest` its encoder; `gpu/web/host` and `gpu/native/host`
+  its hosts on WebGPU and wgpu, and `gpu/native/runtime/rust` the bindings a
+  device's host serves on `xpute-native-runtime`'s link, and
+  `gpu/native/runtime/expo` a device's surface view.
 - `dev/golden` and `cpp/dev/test/` are what the tests take, and
   `cpp/amalgamation.awk` makes the C++ library's two files.

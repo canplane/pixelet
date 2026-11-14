@@ -333,7 +333,7 @@ mod tests {
         }
     }
 
-    /// The assets around a walk's stop, asked from the line it keeps there, are the world's,
+    /// The assets around a walk's hit, asked from the line it keeps there, are the world's,
     /// whether the walk started from the root or resumed under another ray's line and climbed
     /// above where it resumed.
     #[test]

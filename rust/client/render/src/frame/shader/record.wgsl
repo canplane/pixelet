@@ -1,4 +1,4 @@
-// pxl-render/record.wgsl
+// pxl-render/frame/shader/record.wgsl
 
 // The record's reads of the node cache (pxl-engine record.rs). They give the node an entry
 // holds, placed as a walk from a given origin holds it; whether that node is the one the eye's

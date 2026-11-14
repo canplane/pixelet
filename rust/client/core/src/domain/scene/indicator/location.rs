@@ -325,8 +325,7 @@ impl LocationIndicator {
     }
 
     /// Advances the beacon by one frame. Returns whether it slides and wants
-    /// more frames. The indicator is drawn by the rule a character is drawn
-    /// by (domain/scene/character.rs `tick`): when it is in the frustum and
+    /// more frames. The indicator is drawn when it is in the frustum and
     /// spans a camera cell at its distance. Its zone is drawn only where the
     /// ground under it is drawn in leaf cells or finer (`zone_drawn`). The
     /// beacon slides toward its target, a step each frame, only while the

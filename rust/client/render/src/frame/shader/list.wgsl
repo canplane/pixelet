@@ -1,4 +1,4 @@
-// pxl-render/list.wgsl
+// pxl-render/frame/shader/list.wgsl
 
 // A list that a pass fills and a later dispatch walks, one thread for each entry. The list's
 // count and the walk's dispatch lie in `args` (light_receiver_tile.wgsl `ReceiverDispatch`), and

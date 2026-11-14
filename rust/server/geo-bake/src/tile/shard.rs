@@ -389,7 +389,7 @@ impl Run {
         Ok(Coverage::of_shards(shards))
     }
 
-    /// Every stage after the leaves; the set's manifest says what it was
+    /// Every step after the leaves; the set's manifest says what it was
     /// made from once it is committed.
     /// `absent` is asked only by a fold.
     pub fn finish<L: Base, A: Absent<L>>(

@@ -5,7 +5,7 @@
 //! back here. It
 //! records how many times what refused it had given room back, and it is over
 //! once that count moves. A refused request waits only on what refused it,
-//! never on the other.
+//! never on the others.
 
 use crate::sys::heap;
 use crate::sys::io::body;

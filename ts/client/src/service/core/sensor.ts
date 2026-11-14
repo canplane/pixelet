@@ -17,8 +17,8 @@ import {
 } from "@/abi/sensor.enum.ts";
 import { ui } from "@/service/core/core.ts";
 
-/** Called from the press that asks for the location, which raises the
- * permission's prompt or its settings. */
+/** Starts the location once it is permitted. It must run inside a press,
+ * which raises the permission's prompt or its settings. */
 export async function locate(): Promise<void> {
   if (await platform.GEOLOCATION.permit()) void sensor.locate(ui);
 }
@@ -42,15 +42,8 @@ function core_pos(
 function core_orient(
   webkit_compass_heading: f64 | null,
   alpha: f64 | null,
-  beta: f64 | null,
-  gamma: f64 | null,
 ): void {
-  void sensor.orient(ui, 
-    finite(webkit_compass_heading),
-    finite(alpha),
-    finite(beta),
-    finite(gamma),
-  );
+  void sensor.orient(ui, finite(webkit_compass_heading), finite(alpha));
 }
 
 const ERR = {
@@ -77,6 +70,7 @@ export const SENSOR_LISTENER: SensorListener = {
   pos_err: (err, watching) =>
     void sensor.err(ui, SENSOR_GEOLOCATION, ERR[err], watching),
   orient: core_orient,
+  orient_unavailable: () => void tell(false),
   // The compass gives no code for its failure.
   orient_err: () => void sensor.err(ui, SENSOR_ORIENT, null, false),
   permission: (which, answer) =>
@@ -86,10 +80,15 @@ export const SENSOR_LISTENER: SensorListener = {
 /** Tells the core which sensors the device has, once its interfaces are
  * open. */
 export function tell_platform(): Promise<void> {
+  return tell(platform.ORIENT.has);
+}
+
+/** Tells the core the platform's sensors, with the compass as `orient` says. */
+function tell(orient: boolean): Promise<void> {
   return sensor.platform(
     ui,
     platform.GEOLOCATION.has,
-    platform.ORIENT.has,
+    orient,
     platform.ORIENT.gated,
     platform.ORIENT.silence,
   );

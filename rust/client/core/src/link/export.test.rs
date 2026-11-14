@@ -63,7 +63,7 @@ fn go_to(from: f64, dist: Option<f64>, azimuth: Option<f64>, polar: Option<f64>)
     camera_state().intent
 }
 
-/// A view field the command asks for is applied as the controls would take
+/// A view field `goto` asks for is applied as the controls would take
 /// it, after the camera has come in. A field left out keeps its value, but a
 /// view far out still comes in, and a view already nearer stays where it is.
 #[test]
@@ -91,7 +91,7 @@ fn go_to_asks_after() {
     });
 }
 
-/// A ring past RING_NAMES is refused.
+/// A ring past `RING_NAMES` is refused.
 #[test]
 fn ring_past_the_names_refused() {
     crate::on_core(|| {

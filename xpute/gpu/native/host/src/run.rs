@@ -71,13 +71,20 @@ impl GpuHost {
         }
     }
 
-    /// Writes the device's block (spec DEVICE) at `addr`, which the guest lent
-    /// (gpu/wit/gpu.wit `device.lost`), STATUS last, READY, with release; its
-    /// counts are written there from then on (@xpute/gpu-web-host host.ts `attach`).
+    /// Lets the block go: the guest has it back, and nothing more is written
+    /// there (@xpute/gpu-web-host host.ts `detach`).
+    pub fn detach(&mut self) {
+        self.block = None;
+    }
+
+    /// Writes the device's block (spec `DEVICE`) at `addr`, which the guest
+    /// lent (gpu/wit/gpu.wit `device.lost`), `STATUS` last, `READY`, with
+    /// release; its counts are written there from then on (@xpute/gpu-web-host
+    /// host.ts `attach`).
     pub fn attach(&mut self, addr: u32) {
         self.block = Some(addr);
-        // SAFETY: the block the guest lent, whose words before STATUS it reads
-        // only once STATUS is READY.
+        // SAFETY: the block the guest lent, whose words before `STATUS` it
+        // reads only once `STATUS` is `READY`.
         let set_word = |a, v| unsafe { mem::set_word(a, v) };
         let (limits, bits) = super::open::block(&self.device);
         for (k, w) in limits.into_iter().chain(bits).enumerate() {

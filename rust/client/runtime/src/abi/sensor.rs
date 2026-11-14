@@ -128,16 +128,11 @@ pub fn pos(
     _rt::answer(r)
 }
 
-pub fn orient(
-    webkit_compass_heading: Option<f64>,
-    alpha: Option<f64>,
-    beta: Option<f64>,
-    gamma: Option<f64>,
-) -> Result<(), _rt::Errno> {
+pub fn orient(webkit_compass_heading: Option<f64>, alpha: Option<f64>) -> Result<(), _rt::Errno> {
     let (r, _) = _rt::link::call(
         HANDLE,
         ORIENT,
-        Some((64, &|w_: &mut _rt::Lower| {
+        Some((32, &|w_: &mut _rt::Lower| {
             if let Some(v) = &webkit_compass_heading {
                 w_.u8(0, 1);
                 w_.f64(8, *v);
@@ -145,14 +140,6 @@ pub fn orient(
             if let Some(v) = &alpha {
                 w_.u8(16, 1);
                 w_.f64(24, *v);
-            }
-            if let Some(v) = &beta {
-                w_.u8(32, 1);
-                w_.f64(40, *v);
-            }
-            if let Some(v) = &gamma {
-                w_.u8(48, 1);
-                w_.f64(56, *v);
             }
         })),
     );

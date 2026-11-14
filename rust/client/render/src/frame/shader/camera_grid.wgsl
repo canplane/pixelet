@@ -1,4 +1,4 @@
-// pxl-render/camera_grid.wgsl
+// pxl-render/frame/shader/camera_grid.wgsl
 
 // The camera grid fixed to the screen, drawn over the canvas: the cells the rays are spaced by,
 // squares of the screen's tangent plane a cell (`GRID_CELL`, pxl-spec grid.rs `CELL`) a side,

@@ -1,4 +1,4 @@
-// cpp/xpute/gpu/api.spec.hpp
+// cpp/xpute/gpu/link/api.spec.hpp
 //
 // GENERATED from gpu/link/spec/api.json5 (xpute-gen data.rs)
 //

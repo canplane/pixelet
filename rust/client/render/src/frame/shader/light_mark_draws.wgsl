@@ -1,4 +1,4 @@
-// pxl-render/light_mark_draws.wgsl
+// pxl-render/frame/shader/light_mark_draws.wgsl
 
 // Stands the drawn receivers of the shadow map that the eye sees, by the world's one rule
 // (light_mark.wgsl, `Light::box_tiles`). The host's receivers come first, one workgroup for

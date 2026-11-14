@@ -114,7 +114,7 @@ impl SlotMirror {
         true
     }
 
-    /// Called when the buffer no longer holds what was written, so the next write is whole.
+    /// Takes the buffer as no longer holding what was written, so the next write is whole.
     pub(crate) fn forget(&mut self) {
         self.in_sync = false;
     }

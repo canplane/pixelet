@@ -1,9 +1,9 @@
-// pxl-render/record_hits.light.wgsl
+// pxl-render/frame/shader/record_hits.light.wgsl
 
-// What record_hits.wgsl reads of the light, which takes its stops as its samples' stops are
-// taken (sample_hit.light.wgsl). The light's holes' stops lie past its pool, at most
-// `ray::HITS_A_FRAME` of them (pxl-engine `light::hits_at`). A stop's node is held from where
-// its slot's ray starts, and the stop is whole where the node is coarser than its slot's band
+// What record_hits.wgsl reads of the light, which takes its hits as its samples' hits are
+// taken (sample_hit.light.wgsl). The light's holes' hits lie past its pool, at most
+// `ray::HITS_A_FRAME` of them (pxl-engine `light::hits_at`). A hit's node is held from where
+// its slot's ray starts, and the hit is whole where the node is coarser than its slot's band
 // (`record::light_whole`).
 
 fn hits_at() -> u32 {

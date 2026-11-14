@@ -3,7 +3,7 @@
   $extensions: { xpute: { uses: ["spec/spec/bake/publication.json5"] } },
   path: {
     $type: "i32",
-    $description: "The tree of the paths the core opens (xpute's FS_OPEN), as a URI's path is a\ntree: each node takes one token, its `ID`, distinct among its siblings, and hands the\nrest of the path to the child it names. A node that holds data takes the tokens left as\nthat data: a tile's quadkey (pxl-spec space/layer/quadrant.rs) as a string, or a load's id.\nWhat a file is past its path, a tile's version and URL, a storage key, is the client's\nbinding (ts/client/src/service/sys/fs/).",
+    $description: "The tree of the paths the core opens (xpute wit/fs/file.wit), as a URI's path is a\ntree: each node takes one token, its `ID`, distinct among its siblings, and hands the\nrest of the path to the child it names. A node that holds data takes the tokens left as\nthat data: a tile's quadkey (pxl-spec space/layer/quadrant.rs) as a string, or a load's id.\nWhat a file is past its path, a tile's version and URL, a storage key, is the client's\nbinding (ts/client/src/service/sys/fs/).",
     $extensions: { xpute: { distinct: "ID" } },
     BASE: {
       $description: "A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json5\n`BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number.",

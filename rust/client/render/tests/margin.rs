@@ -1,10 +1,10 @@
-//! This test holds where the light's cells start (beam.light.wgsl `beam_hand`, light_cell.wgsl
-//! `light_cell_cs`) to pxl-engine's `light::margin` of the beam spacing (`Light::spacing`), over
-//! the real world of tests/real_world. A beam ray's hand is how far along the light the texels
-//! about the ray start, a margin short of where the ray stopped. A cell starts at the least hand
-//! of the beam rays in its window (`beam::CELL_T`). The engine walks each beam ray from the
-//! origin the pass laid, and each hand and each cell's start must equal what the margin takes
-//! off where that walk stops.
+//! This test holds where the light's cells start (beam.light.wgsl `beam_start_dist`,
+//! light_cell.wgsl `light_cell_cs`) to pxl-engine's `light::margin` of the beam spacing
+//! (`Light::spacing`), over the real world of tests/real_world. A beam ray's start distance is how
+//! far along the light the texels about the ray start, a margin short of where the ray stopped. A
+//! cell starts at the least start distance of the beam rays in its window (`beam::CELL_T`). The
+//! engine walks each beam ray from the origin the pass laid, and each start distance and each
+//! cell's start must equal what the margin takes off where that walk stops.
 
 mod gpu;
 mod real_world;
@@ -106,7 +106,7 @@ impl Keep<Inheritance> for Unkept {
 }
 
 /// Where beam ray `c` of the light's box stops when `cast::walk_at_most` walks it from the
-/// world's root and from origin `o`. The value is the ray's hand with a margin of zero.
+/// world's root and from origin `o`. The value is the ray's start distance with a margin of zero.
 fn hit_of(w: World, l: &Light, range: [Zoom; 2], c: [u32; 2], o: [i32; 3]) -> f32 {
     let p = light::corner_at(c);
     let band = l.band(SIZE, range, p.map(|v| v.div_euclid(light::TILE as i32)));
@@ -194,9 +194,9 @@ fn beams_of(gpu: &Gpu, b: &WorldBuffer, eye: &[u32], hdr: &[u32]) -> Vec<u32> {
     gpu.read(&beams)
 }
 
-/// Each beam ray's hand and each cell's `CELL_T` from the shaders must equal `light::margin` of
-/// the light's spacing, taken off where the engine's walk of the beam ray stops. The test runs
-/// two boxes: one whose texel is a unit wide, and one narrow and slanting.
+/// Each beam ray's start distance and each cell's `CELL_T` from the shaders must equal
+/// `light::margin` of the light's spacing, taken off where the engine's walk of the beam ray stops.
+/// The test runs two boxes: one whose texel is a unit wide, and one narrow and slanting.
 #[test]
 fn light_cells_start_short_by_the_margin() {
     let Some(gpu) = device() else { return };
@@ -257,7 +257,8 @@ fn light_cells_start_short_by_the_margin() {
         hdr[light::STARTS_AT * 4..(light::STARTS_AT + light::STARTS_VEC4S) * 4]
             .copy_from_slice(&starts.words());
         let got = beams_of(&gpu, &b, &eye, &hdr);
-        let hand_of = |w: &[u32], k: u32| f32::from_bits(w[light::hand_at(SIZE, k) as usize]);
+        let start_dist_of =
+            |w: &[u32], k: u32| f32::from_bits(w[light::start_dist_at(SIZE, k) as usize]);
         // The engine walks each beam ray from the origin the pass laid in the ray's line, not
         // from its own. A device rounds `StartGrid::start` one Q3 step off the engine's for some
         // rays.
@@ -269,8 +270,11 @@ fn light_cells_start_short_by_the_margin() {
                 hit_of(w, &l, c.range, [k % across, k / across], o)
             })
             .collect();
-        let hands: Vec<f32> = (0..across * across).map(|k| hand_of(&got, k)).collect();
-        let hand = |m: f32| -> Vec<f32> { t.iter().map(|&t| (t - m).max(0.0)).collect() };
+        let start_dists: Vec<f32> = (0..across * across)
+            .map(|k| start_dist_of(&got, k))
+            .collect();
+        let start_dists_by =
+            |m: f32| -> Vec<f32> { t.iter().map(|&t| light::start_dist(t, m)).collect() };
         let least = |h: &[f32], [i, j]: [u32; 2]| {
             (0..side)
                 .flat_map(|y| (0..side).map(move |x| (j + y) * across + i + x))
@@ -278,30 +282,30 @@ fn light_cells_start_short_by_the_margin() {
                 .fold(f32::INFINITY, f32::min)
         };
         let margins = margins(l.spacing().across);
-        let engine = hand(margins[0].1);
+        let engine = start_dists_by(margins[0].1);
         // The light's beam rays share one spacing, so they share one margin. The pass takes that
-        // margin with one rounding for every hand, so one of `margins` must give every hand bit
-        // for bit.
+        // margin with one rounding for every start distance, so one of `margins` must give every
+        // one bit for bit.
         let Some(&(cause, m)) = margins.iter().find(|&&(_, m)| {
-            hand(m)
+            start_dists_by(m)
                 .iter()
-                .zip(&hands)
+                .zip(&start_dists)
                 .all(|(w, g)| w.to_bits() == g.to_bits())
         }) else {
-            let k = (0..hands.len())
-                .find(|&k| hands[k].to_bits() != engine[k].to_bits())
+            let k = (0..start_dists.len())
+                .find(|&k| start_dists[k].to_bits() != engine[k].to_bits())
                 .unwrap();
             failed.push(format!(
-                "{}: beam ray {k}'s hand {:?} under no margin's rounding, the engine's {:?}",
-                c.name, hands[k], engine[k]
+                "{}: beam ray {k}'s start distance {:?} under no margin's rounding, the engine's {:?}",
+                c.name, start_dists[k], engine[k]
             ));
             continue;
         };
-        let taken = hand(m);
-        let moved = (0..hands.len())
-            .filter(|&k| hands[k].to_bits() != engine[k].to_bits())
+        let taken = start_dists_by(m);
+        let moved = (0..start_dists.len())
+            .filter(|&k| start_dists[k].to_bits() != engine[k].to_bits())
             .count();
-        let past = hands.iter().filter(|&&h| h > 0.0).count();
+        let past = start_dists.iter().filter(|&&h| h > 0.0).count();
         let (mut cells_moved, mut cells_past) = (0, 0);
         for j in 0..cells {
             for i in 0..cells {
@@ -319,15 +323,15 @@ fn light_cells_start_short_by_the_margin() {
             }
         }
         eprintln!(
-            "{}: the engine's margin {:?}, taken as {cause}: {m:?}; off the engine's by it {moved} of {} hands, {cells_moved} of {} cells; past zero {past} hands, {cells_past} cells",
+            "{}: the engine's margin {:?}, taken as {cause}: {m:?}; off the engine's by it {moved} of {} start distances, {cells_moved} of {} cells; past zero {past} start distances, {cells_past} cells",
             c.name,
             margins[0].1,
-            hands.len(),
+            start_dists.len(),
             cells * cells,
         );
         assert!(
-            past > hands.len() / 4 && cells_past > cells * cells / 4,
-            "{}: too few past zero to say: {past} hands, {cells_past} cells",
+            past > start_dists.len() / 4 && cells_past > cells * cells / 4,
+            "{}: too few past zero to say: {past} start distances, {cells_past} cells",
             c.name
         );
     }

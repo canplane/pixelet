@@ -1,7 +1,16 @@
-# Generated files, kept out of the language stats: what pxl-tool writes from
-# spec/.
+# Generated files, kept out of the language stats: what a tool writes whole.
 *.spec.rs linguist-generated=true
 *.spec.ts linguist-generated=true
+*.spec.hpp linguist-generated=true
+**/abi/** linguist-generated=true
+**/abi.rs linguist-generated=true
+xpute/kit/**/abi/** -linguist-generated
+xpute/kit/rust/src/abi.rs -linguist-generated
+xpute/cpp/xpute/kit/abi/** -linguist-generated
+ts/client/src/ui/feature/search/place-symbol.ts linguist-generated=true
+ts/client/src/ui/feature/setting/info/symbol-path.ts linguist-generated=true
+rust/spec/src/space/coord/geoid.rs linguist-generated=true
+spec/spec/asset/ingest.json5 linguist-generated=true
 
 # Tests and the golden records are not the product: out of the stats too.
 *.test.rs linguist-detectable=false

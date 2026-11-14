@@ -43,7 +43,7 @@ pub struct Line {
     pub(crate) clearance: u8,
 }
 
-/// Each point's coarsest zoom (`way::coarsest`) on the line through `points`,
+/// Each point's coarsest zoom (`pxl_spec::way::coarsest`) on the line through `points`,
 /// whose XY are in DB coordinates and whose heights are in leaf cells. It comes from the
 /// point's effective area on the line, in leaf cells², by Visvalingam–Whyatt, as TopoJSON's
 /// presimplify and mapshaper weigh a point: the triangle it makes with the two around it, the

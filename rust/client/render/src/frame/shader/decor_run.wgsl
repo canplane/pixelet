@@ -1,4 +1,4 @@
-// pxl-render/decor_run.wgsl
+// pxl-render/frame/shader/decor_run.wgsl
 
 // What a pass over the records reads, one workgroup an entry's records or a run of placed
 // decor (tests/decor.rs `holds_recs`, `run_of`). It reads the records laid, not the room for them.

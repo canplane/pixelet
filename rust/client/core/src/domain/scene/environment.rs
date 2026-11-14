@@ -102,8 +102,8 @@ fn sky_clock(time: SkyTime, unix_ms: f64, lon: f64) -> (f64, bool) {
     (today + hour * HOUR_MS - ahead, true)
 }
 
-/// The step of the sun and of the moon, in the measure of `mus`
-/// gives (pxl-render `sky_steps`). For a light whose sky is drawn, its step
+/// The step of the sun and of the moon, in the measure `mus` gives
+/// (pxl-render `sky_steps`). For a light whose sky is drawn, its step
 /// is how far its mu moves before the drawn sky changes by a display
 /// level. For a light out of reach of the air, it is how far its mu moves
 /// before the light comes into reach. A step is 0 until the renderer's first

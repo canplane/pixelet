@@ -349,7 +349,7 @@ pub const TOUCHES: &[Touch] = {
     /// The count of the frame's asks so far, in the node cache's head.
     const ASKED: [u32; 2] = [node_cache::ASKED, 1];
     &[
-        // The eye's samples' stops lay their faces' asks (sample_hit.eye.wgsl); the light's lay
+        // The eye's samples' hits lay their faces' asks (sample_hit.eye.wgsl); the light's lay
         // none (sample_hit.light.wgsl).
         Touch {
             compute: COMPUTE_SAMPLE_HIT,
@@ -384,7 +384,7 @@ pub const TOUCHES: &[Touch] = {
             writes: &[mark(light::LIST_RECEIVERS)],
             reads: &[mark(light::LIST_RECEIVERS)],
         },
-        // The eye's holes' stops lay their faces' asks at a place of their own
+        // The eye's holes' hits lay their faces' asks at a place of their own
         // (record_hits.wgsl, record_hits.eye.wgsl); the light's lay none
         // (record_hits.light.wgsl).
         Touch {
@@ -480,7 +480,7 @@ pub const TOUCHES: &[Touch] = {
             reads: &[RECEIVER_TILES],
         },
         // In the node cache's head, the holes' last walk, the eye's and the light's, adds to the
-        // stops' dispatch and count, and to the frame's asks (queue_last.wgsl).
+        // hits' dispatch and count, and to the frame's asks (queue_last.wgsl).
         Touch {
             compute: COMPUTE_QUEUE_LAST,
             binding: 9,
@@ -493,7 +493,7 @@ pub const TOUCHES: &[Touch] = {
             writes: &[[node_cache::HITS_ARGS, 4], ASKED],
             reads: &[[node_cache::HITS_ARGS, 4], ASKED],
         },
-        // In the holes' queue's words, the walks over the node cache raise the stops' count and
+        // In the holes' queue's words, the walks over the node cache raise the hits' count and
         // dispatch (queue_walk.wgsl), the eye's and the light's. The holes' asks
         // add to the frame's asks in the node cache's head (queue_ask.wgsl).
         Touch {

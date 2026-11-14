@@ -130,7 +130,7 @@ impl Store for Disk<'_> {
     }
 }
 
-/// In memory, for a walk from tile to neighboring tile: holds a tile's
+/// In memory, for a walk from tile to neighboring tile: holds a tile and the
 /// eight around it and no more.
 #[derive(Default)]
 pub struct Walk {

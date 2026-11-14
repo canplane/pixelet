@@ -138,7 +138,7 @@ class Reader {
   public:
     explicit Reader(std::span<const std::uint8_t> buf) noexcept : buf_(buf) {}
 
-    // None at END or at the input's end, which `end` tells apart.
+    // None at the tag `end` or at the input's end, which `end()` tells apart.
     Result<std::optional<Value>> next() noexcept;
 
     // How the sequence ended, once the reader has reached its end; none while

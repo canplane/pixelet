@@ -1,4 +1,4 @@
-// pxl-render/world_asked.wgsl
+// pxl-render/frame/shader/world_asked.wgsl
 
 // Asks the world's one query word for word, with the asks and what the query tells laid in
 // buffers of their own (tests/world.rs). No shader the page runs includes this part: build.rs

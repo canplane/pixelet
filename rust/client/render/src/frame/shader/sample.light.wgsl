@@ -1,4 +1,4 @@
-// pxl-render/sample.light.wgsl
+// pxl-render/frame/shader/sample.light.wgsl
 
 // What a pass over samples reads of the light's samples. The light takes a sample every
 // `LIGHT_SAMPLE` slots across and down, only on the tiles the cast lists as fed

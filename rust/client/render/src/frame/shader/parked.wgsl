@@ -1,4 +1,4 @@
-// pxl-render/parked.wgsl
+// pxl-render/frame/shader/parked.wgsl
 
 // How a ray is parked between a run's walks (queue_walk.wgsl, queue_last.wgsl), for every kind
 // of item alike. A parked ray keeps the bits of its distance, its node's corner, and one word

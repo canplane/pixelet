@@ -1,4 +1,4 @@
-// pxl-render/way.wgsl
+// pxl-render/frame/shader/way.wgsl
 
 // What the ways write in a cell, read from the spans a brick's fill kept on the CPU (pxl-engine
 // clipmap.rs `way_at`, `way::way_cell`, `KeptSpans`). The GPU does no way geometry: a cell asks

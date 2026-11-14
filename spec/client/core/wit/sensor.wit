@@ -8,8 +8,9 @@ interface sensor {
 
   // A GPS fix; a field is absent where the platform gave none.
   pos: func(lon: f64, lat: f64, alt: option<f64>, accuracy: option<f64>, course: option<f64>);
-  // An orientation event; a field is absent where the platform gave none.
-  orient: func(webkit-compass-heading: option<f64>, alpha: option<f64>, beta: option<f64>, gamma: option<f64>);
+  // A heading reading, iOS's compass heading or the turn about the vertical it
+  // is made from; a field is absent where the platform gave none.
+  orient: func(webkit-compass-heading: option<f64>, alpha: option<f64>);
   // A watch's failure, geolocation's with its code, and whether the watch runs
   // on past it.
   err: func(sensor: sensor, code: option<geolocation-error-code>, watching: bool);

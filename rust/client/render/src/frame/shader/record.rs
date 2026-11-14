@@ -48,7 +48,7 @@ pub const COMPUTE_SCREEN_MARK: u32 = 23;
 pub const COMPUTE_SCREEN_BOUND: u32 = 24;
 pub const COMPUTE_LIGHT_SLIDE: u32 = 25;
 pub const COMPUTE_QUEUE_LAST: u32 = 26;
-/// Puts at each hole's pixel what lies about the face its stop entered, read from the record
+/// Puts at each hole's pixel what lies about the face its hit entered, read from the record
 /// (`SHADER_REC_HITS`).
 pub const COMPUTE_REC_FACES: u32 = 27;
 pub const COMPUTE_RECT_ARGS: u32 = 28;
@@ -70,13 +70,13 @@ pub const COMPUTE_DECOR_CULL: u32 = 42;
 /// Writes the node cache's drawable entries as the boxes of the eye's raster
 /// (record_draw.wgsl).
 pub const COMPUTE_REC_DRAW: u32 = 43;
-/// Writes the stops of the eye's holes into the node cache's drawable entries
+/// Writes the hits of the eye's holes into the node cache's drawable entries
 /// (record_hits.wgsl).
 pub const COMPUTE_REC_HITS: u32 = 44;
 /// Writes the node cache's drawable entries as the boxes of the light's raster
 /// (record_draw.wgsl).
 pub const COMPUTE_LIGHT_REC_DRAW: u32 = 45;
-/// Writes the stops of the light's holes into the node cache's drawable entries
+/// Writes the hits of the light's holes into the node cache's drawable entries
 /// (record_hits.wgsl over record_hits.light.wgsl).
 pub const COMPUTE_LIGHT_REC_HITS: u32 = 46;
 /// Damages each tile the light's cast lists as read that has not been cast in its epoch
@@ -363,7 +363,7 @@ pub const PIPELINE_CNT: u32 = 44;
 // offset, format) for each attribute. The bind groups come last: their count, then for each
 // its entry count and a (binding, visibility, kind) for each entry.
 pub use crate::spec::api::record::*;
-/// A binding's stages are xpute's own bits (SHADER_STAGE), and `NONE` is no stage.
+/// A binding's stages are xpute's own bits (`SHADER_STAGE`), and `NONE` is no stage.
 pub use xpute_gpu_link::spec::shader_stage::{COMPUTE, FRAGMENT, VERTEX};
 pub const NONE: u32 = 0;
 
@@ -869,7 +869,7 @@ const LIGHT_LATTICE_LAST_LAYOUT: Layout = &[
     [LIGHT_HDR_BINDING, UNIFORM],
 ];
 
-/// The group of an observer's samples' stops (sample_hit.wgsl): the eye, the samples' words,
+/// The group of an observer's samples' hits (sample_hit.wgsl): the eye, the samples' words,
 /// the node cache whose drawable entries they set, and the args of the faces' asks.
 const SAMPLE_HIT_LAYOUT: Layout = &[
     [0, UNIFORM],
@@ -892,9 +892,9 @@ const REC_LAYOUT: Layout = &[
     [22, STORAGE_RW],
 ];
 
-/// The group of the holes' stops (record_hits.wgsl): the eye, the rays, the stops among the
+/// The group of the holes' hits (record_hits.wgsl): the eye, the rays, the hits among the
 /// beam rays' words, the node cache that holds their count and whose drawable entries they
-/// set, and the args of the faces' asks. It does not bind the stops' dispatch: that is copied
+/// set, and the args of the faces' asks. It does not bind the hits' dispatch: that is copied
 /// out of the node cache, so that no pass reads its count from a buffer it binds writable
 /// (ray/raster.rs `Raster::rec_hits`).
 const REC_HITS_LAYOUT: Layout = &[
@@ -905,7 +905,7 @@ const REC_HITS_LAYOUT: Layout = &[
     [16, STORAGE_RW],
 ];
 
-/// The group of the light's holes' stops (record_hits.wgsl over record_hits.light.wgsl):
+/// The group of the light's holes' hits (record_hits.wgsl over record_hits.light.wgsl):
 /// `REC_HITS_LAYOUT` with the light's map at 3 and its list at 8, and the light's head, by
 /// which its slots' rays are aimed.
 const LIGHT_REC_HITS_LAYOUT: Layout = &[
@@ -917,7 +917,7 @@ const LIGHT_REC_HITS_LAYOUT: Layout = &[
     [16, STORAGE_RW],
 ];
 
-/// The group of the light's samples' stops (sample_hit.wgsl over sample.light.wgsl): the eye,
+/// The group of the light's samples' hits (sample_hit.wgsl over sample.light.wgsl): the eye,
 /// the samples' words, the node cache, the light's head and its raster's args.
 const LIGHT_SAMPLE_HIT_LAYOUT: Layout = &[
     [0, UNIFORM],

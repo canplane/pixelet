@@ -5,6 +5,7 @@
 //! from the host's start, its waits on the event loop's own timers, and the
 //! system clock from the Unix epoch.
 
+use std::cell::Cell;
 use std::rc::Rc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -26,9 +27,20 @@ impl monotonic_clock::Host for Monotonic {
         Ok(self.origin.elapsed().as_nanos() as u64)
     }
 
-    /// Answers once `how_long` has passed; 0, at the loop's next pass.
+    /// Answers once `how_long` has passed; 0, at the loop's next pass. A wait
+    /// its caller cancels stops its timer and answers ECANCELED, as clock.ts's
+    /// does.
     fn wait_for(&self, how_long: u64, task_return: Return<()>) {
-        event_loop::after(Duration::from_nanos(how_long), task_return);
+        let timer = Rc::new(Cell::new(None));
+        task_return.on_cancel({
+            let timer = timer.clone();
+            move || {
+                if let Some(r) = timer.get().and_then(event_loop::clear) {
+                    r.answer(Err(Errno::ECANCELED));
+                }
+            }
+        });
+        timer.set(Some(event_loop::after(Duration::from_nanos(how_long), task_return)));
     }
 }
 

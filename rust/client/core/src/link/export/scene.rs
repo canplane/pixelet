@@ -1,6 +1,6 @@
 // pxl-core/link/export/scene.rs
 
-//! The SCENE major's commands: what a surface draws, and a chat line said.
+//! The scene interface's methods: what a surface draws, and a chat line said.
 
 use super::{applied, or_refuse, refuse_unless};
 use crate::abi::types::ErrorCode;
@@ -19,7 +19,7 @@ pub(super) fn chat(text: String) -> Result<(), Errno> {
 }
 
 /// Sets what a surface draws until it closes: the world, or one group's
-/// companion character alone, which a second command replaces. It answers
+/// companion character alone, which a second call replaces. It answers
 /// `bad-descriptor` when the surface is not open and `busy` when the surface already
 /// draws the other content, and is refused with EINVAL when the character's
 /// fields are missing for a character or given for the world.

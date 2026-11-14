@@ -41,7 +41,7 @@ pub(super) fn stats(window_ms: Option<f64>) -> Result<Vec<u8>, Errno> {
     Ok(read_timed(|| bytes_of(read::perf_read(window_ms))))
 }
 
-/// Each ring's records, in RING_NAMES' order: frames, tasks, worst, and the
+/// Each ring's records, in `RING_NAMES`' order: frames, tasks, worst, and the
 /// bytes a record takes.
 const RINGS: [(fn() -> &'static [u8], usize); RING_NAMES.len()] = [
     (|| bytes_of(perf_frames()), size_of::<FrameSample>()),
@@ -61,8 +61,8 @@ thread_local! {
 }
 
 /// Answers up to `cnt` records of ring `ring` from its record `from`, no more
-/// than a page holds (limit::PAGE_BYTES), as the ring stood at its first page,
-/// the one from record 0.
+/// than a page holds (`limit::PAGE_BYTES`), as the ring stood at its first
+/// page, the one from record 0.
 pub(super) fn ring(ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, Errno> {
     let &(read, record) = RINGS.get(ring as usize).ok_or(Errno::EINVAL)?;
     if from == 0 {

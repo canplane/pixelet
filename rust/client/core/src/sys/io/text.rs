@@ -207,8 +207,8 @@ fn ends(
     Some(ends)
 }
 
-/// Moves the break at `at` back past any mark that NO_LINE_START or
-/// NO_LINE_END keeps with its neighbor, but never past the line's first
+/// Moves the break at `at` back past any mark that `NO_LINE_START` or
+/// `NO_LINE_END` keeps with its neighbor, but never past the line's first
 /// character, which starts at `line`.
 fn allowed_break(text: &str, line: usize, mut at: usize) -> usize {
     while let Some((before, ch)) = text[..at].char_indices().next_back() {

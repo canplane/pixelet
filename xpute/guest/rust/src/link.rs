@@ -1,8 +1,8 @@
 // xpute-guest/link.rs
 
 //! The guest's end of the link (xpute-link link.rs): its one side, which lays
-//! in its outbox and crosses by `link_out`, its three exports (`link!`), and
-//! the entry they run each call in. The machine's names are read here as the
+//! in its outbox and crosses by `link_out`, what its three exports run
+//! (lib.rs `link!`), and the entry they run each call in. The machine's names are read here as the
 //! guest's callers have read them.
 
 use std::cell::Cell;
@@ -20,8 +20,8 @@ unsafe extern "C" {
     fn link_out(at: u32) -> i32;
 }
 
-/// The guest's own side: it lays in its outbox, past the inbox, and crosses
-/// by `link_out`.
+/// Crosses with the frame the guest laid at `at` in its outbox, past the
+/// inbox, by `link_out`.
 fn cross_out(at: u32) -> i32 {
     // SAFETY: the frame just laid in the outbox.
     unsafe { link_out(at) }
@@ -34,50 +34,6 @@ thread_local! {
     /// The program's start and end of an entry (`init`).
     static ENTER: Cell<fn()> = const { Cell::new(|| {}) };
     static END: Cell<fn() -> bool> = const { Cell::new(|| false) };
-}
-
-/// Defines the guest's three exports (link/wit/types.wit), over frames of
-/// `room` bytes, with `boot` mounting what the guest serves and opening what it
-/// calls, and `enter` and `end` starting and ending each entry.
-#[macro_export]
-macro_rules! link {
-    ($room:expr, $boot:expr, $enter:expr, $end:expr) => {
-        #[cfg(target_arch = "wasm32")]
-        #[unsafe(no_mangle)]
-        pub extern "C" fn link_init() -> u32 {
-            $crate::link::init($room, $enter, $end)
-        }
-        #[cfg(target_arch = "wasm32")]
-        #[unsafe(no_mangle)]
-        pub extern "C" fn link_boot() {
-            $crate::link::boot($boot)
-        }
-        #[cfg(target_arch = "wasm32")]
-        #[unsafe(no_mangle)]
-        pub extern "C" fn link_in() -> i32 {
-            $crate::link::recv()
-        }
-        // A native guest's exports catch its panic and answer a trap
-        // (`TRAP`, or `TRAP_AT` for init's layout).
-        #[cfg(not(target_arch = "wasm32"))]
-        #[unsafe(no_mangle)]
-        pub extern "C" fn link_init() -> u32 {
-            $crate::link::caught($crate::xpute_link::TRAP_AT, || $crate::link::init($room, $enter, $end))
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        #[unsafe(no_mangle)]
-        pub extern "C" fn link_boot() -> i32 {
-            $crate::link::caught($crate::xpute_link::TRAP, || {
-                $crate::link::boot($boot);
-                0
-            })
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        #[unsafe(no_mangle)]
-        pub extern "C" fn link_in() -> i32 {
-            $crate::link::caught($crate::xpute_link::TRAP, $crate::link::recv)
-        }
-    };
 }
 
 /// Lays the link over frames of `room` bytes, a multiple of 8 that holds a

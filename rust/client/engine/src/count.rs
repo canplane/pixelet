@@ -18,11 +18,10 @@ pub const LIGHT: u32 = 1;
 pub const OBSERVER_CNT: u32 = 2;
 
 /// An observer's counters. `BEAM`, `SAMPLE` and `HOLE_WALK` count the nodes visited by its
-/// beam rays, its samples and the walk of its holes. `ASK` counts the nodes that no node
-/// cache slot answered, among those visited by the walks that ask the world themselves: its
-/// samples and the light's holes' walk. `VOXEL`, `HOLE` and `SKY` count the pixels or slots it
-/// cast again by what each took: the visible voxel, a walk of its own as a hole, or the sky.
-/// `BOX` counts the boxes it drew.
+/// beam rays, its samples and the walk of its holes. `ASK` counts the nodes its walks asked of
+/// the world, which no node cache slot answered. `VOXEL`, `HOLE` and `SKY` count the pixels or
+/// slots it cast again by what each took: the visible voxel, a walk of its own as a hole, or
+/// the sky. `BOX` counts the boxes it drew.
 pub const BEAM: u32 = 0;
 pub const SAMPLE: u32 = 1;
 pub const HOLE_WALK: u32 = 2;

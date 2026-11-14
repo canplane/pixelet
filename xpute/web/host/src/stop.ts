@@ -28,9 +28,9 @@ export function serve_stop(
   });
 }
 
-/** Makes a failure of the host's own a stop, as xpute-native-host's `hook`
- * makes a panic one: a throw out of its answer to the guest's import, which
- * the link hands it (@xpute/link `set_hook`), and any the worker leaves
+/** Makes a failure of the host's own a stop, as xpute-native-host stop.rs's
+ * `hook` makes a panic one: a throw out of its answer to the guest's import,
+ * which the link hands it (@xpute/link `set_hook`), and any the worker leaves
  * unhandled or uncaught, as a method answered later throws one. The link's
  * `trap` stops the guest, so that no answer the failed host owed leaves the
  * guest waiting, and where it did just now, the failure is logged and handed

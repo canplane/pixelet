@@ -8,8 +8,9 @@ import UIKit
 
 /// The device's half of the client's services on iOS (the .native files in
 /// ts/client/src/service/platform/), as one module that answers what the UI
-/// asks of the system. The core, and the view it draws into, are in xpute's own
-/// module (@xpute/native-runtime).
+/// asks of the system. The core is in xpute's own module
+/// (@xpute/native-runtime), and the view it draws into in
+/// @xpute/gpu-native-runtime's.
 public class PlatformModule: Module {
   private static let suite = "pxl"
   private static let storage = UserDefaults(suiteName: suite)!

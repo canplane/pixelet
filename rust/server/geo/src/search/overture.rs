@@ -84,7 +84,7 @@ const DIVISION_SEARCH_SQL: &str = concat!(
     "ORDER BY word_similarity($1, names) DESC, similarity(name, $1) DESC, gers_id\nLIMIT $2"
 );
 
-/// `near`'s country, and the divisions its lineage holds, first.
+/// `near`'s country, and the divisions whose lineage holds it, first.
 const DIVISION_SEARCH_NEAR_SQL: &str = concat!(
     "WITH home AS (SELECT ",
     home!(),
@@ -99,7 +99,7 @@ LIMIT $2"
 #[derive(Serialize)]
 pub(crate) struct SearchResult {
     pub gers_id: String,
-    /// `search_kind`.
+    /// A `search_kind` number.
     pub kind: u8,
     pub name: String,
     /// A place's category (`category_of`), a division's subtype.

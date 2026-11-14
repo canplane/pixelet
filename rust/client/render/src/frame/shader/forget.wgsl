@@ -1,4 +1,4 @@
-// pxl-render/forget.wgsl
+// pxl-render/frame/shader/forget.wgsl
 
 // Forgets what the node cache keeps where what the world's query reads has changed, one
 // thread for each slot (pxl-engine node_cache.rs `FORGETS`). A frame forgets every slot's key,

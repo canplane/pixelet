@@ -4,7 +4,7 @@
 //! blocking. Every host holds a frame to one rule (`admits`): a guest draws a
 //! frame only while fewer of its frames than its frame latency are unfinished
 //! on the GPU. Every host writes its count into the device's block (spec
-//! DEVICE), and `frame` applies the rule there.
+//! `DEVICE`), and `frame` applies the rule there.
 
 use std::cell::Cell;
 
@@ -35,9 +35,9 @@ pub fn block() -> Option<*const u32> {
 
 /// This is the admission of a guest that has the GPU, where `LATENCY` is the
 /// program's frame latency (`GpuConfig`). It admits a
-/// frame while the block's STATUS is READY and `admits` holds for the block's
-/// unfinished frames. It admits none before the guest has asked for the block,
-/// and none once the device is lost.
+/// frame while the block's `STATUS` is `READY` and `admits` holds for the
+/// block's unfinished frames. It admits none before the guest has asked for
+/// the block, and none once the device is lost.
 pub fn frame<const LATENCY: u32>() -> bool {
     block().is_some_and(|at| {
         // SAFETY: a word of the block `ask` kept, which stays live and in

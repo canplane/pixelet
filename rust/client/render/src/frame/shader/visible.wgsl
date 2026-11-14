@@ -1,4 +1,4 @@
-// pxl-render/visible.wgsl
+// pxl-render/frame/shader/visible.wgsl
 
 // What a ray takes from the visible voxel the raster kept at its place, for the eye's pixels
 // (cast.wgsl) and the light's slots (light.wgsl), each from its own observer's record. The ray

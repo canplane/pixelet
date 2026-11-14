@@ -49,7 +49,7 @@ impl GpuHost {
     }
 
     /// Writes the uncaptured errors and the unfinished frames into the
-    /// device's block (spec DEVICE), as a page's host does. It runs at each
+    /// device's block (spec `DEVICE`), as a page's host does. It runs at each
     /// `poll`, after the queue's callbacks that end frames have run.
     pub(super) fn tell_counts(&self) {
         if let Some(addr) = self.block {

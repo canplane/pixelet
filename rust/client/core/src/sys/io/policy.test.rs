@@ -2,8 +2,8 @@
 
 use super::*;
 
-/// An object's id is a file's number, and the top's id 0 names no tile, so
-/// the top must rank without a tile read from its id.
+/// An object's id is its shard's tile id, and the top's id 0 names no tile,
+/// so the top must rank without a tile read from its id.
 #[test]
 fn object_top_ranked() {
     crate::on_core(|| {

@@ -16,7 +16,7 @@ use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
 /// Elevations at points from the tiles' elevations, in cells, as the client
 /// draws the elevation: the elevation of the cell a point lies in (pxl-spec
-/// ground.rs `ele_at`); a point's tile must be held.
+/// `ground.rs` `ele_at`); a point's tile must be held.
 pub(crate) fn sample_cells(
     eles: &FnvHashMap<[i32; 2], Vec<i16>>,
     points: &[[f64; 2]],

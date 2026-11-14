@@ -90,15 +90,19 @@ it says.
 
 ## How a program uses it
 
-### Its interfaces
+### The guest
 
 A program declares its interfaces in WIT, as xpute declares its own under
-`wit/` and `gpu/wit/`, and `xpute-link-gen` writes their bindings for each side
-in Rust, TypeScript and C++. The guest serves what its world exports and calls
-what it imports. A Rust guest defines its three exports with one macro, over
-frames of a room it chooses, and mounts what it serves as it boots; here it
-serves xpute's `life`, which is called as the app is hidden and shown and as
-a UI attaches:
+`wit/` and `gpu/wit/`, and its guest's world says which the guest serves, its
+exports, and which it calls, its imports. `xpute-link-gen` writes their
+bindings for each side in Rust, TypeScript and C++, and for the host two lists
+from the world: `IMPORTS`, the interfaces the guest calls under a named handle,
+and `LATER`, the methods of the interfaces the UI serves that answer later. A
+Rust guest defines its three exports with one macro, over frames of a room it
+chooses, and mounts what it serves as it boots; the macro makes the guest's
+own bug or panic its stop, told to the host before it stops, as a C++ guest's
+`XPUTE_LINK` makes its bug. Here it serves xpute's `life`, which is called as
+the app is hidden and shown and as a UI attaches:
 
 ```rust
 use std::rc::Rc;
@@ -116,43 +120,13 @@ impl life::Guest for Program {
 xpute_guest::link!(4096, || life::mount(Rc::new(Program)), || {}, || false);
 ```
 
-### On a page
-
-The page opens the guest's worker and sends it the module to instantiate. The
-worker instantiates it, mounts what the host serves and serves the link to the
-UI across the port, only then enters the guest, and tells it the UI attached.
-`LATER` is generated with the program's bindings, the methods the UI serves
-that answer later, and `taker` takes what the UI gives beside the link, a
-canvas (see the GPU below):
-
-```ts
-// The worker, given the page's `Instantiate`, m.
-const link = await instantiate(m.module, m.init, MEM_SZ, tell);
-if (link === null) return;
-serve_stop(link, (stop) => tell({ kind: "stopped", stop }));
-hook(link);
-serve_clock(link);
-serve(m.port, link, m.named, m.prefixes, LATER, taker);
-link.init();
-tell_attached(link);
-
-// The page.
-const { worker, remote, port } = open_worker(WORKER_URL);
-const ask = { kind: "instantiate", module: MODULE_URL, init: undefined };
-worker.postMessage({ ...ask, port, named: remote.named, prefixes: remote.prefixes }, [port]);
-tell_life(remote);
-```
-
-### On a device, and in C++
-
-A native app installs `@xpute/native-runtime`, the React Native module, which
-Expo autolinks, and names in its `package.json` under `xpute.guest.runtime` the
-crate a device links: its guest with the runtime the app composes around it
-from `xpute-native-runtime` and `xpute-native-host`. The app builds that crate
-for the device as it builds, and the module links it: a static library at
-`$PODS_CONFIGURATION_BUILD_DIR/Xpute/lib<crate>.a` on an iPhone, and a shared
-one among the app's `jniLibs` on Android. The app's bundler takes each
-`x.native.ts` in place of `x.ts`.
+The GPU is a plugin, declared in WIT as xpute's own packages are: the guest
+imports `gpu`, which runs the records it lends and gives it a device, and
+`vsync`, which answers at the display's next frame, and serves `surface`, which
+the UI opens to draw on. `xpute-gpu-guest` writes WebGPU's calls as records of
+a stream, and draws a frame only while fewer of its frames are unfinished on
+the GPU than its frame latency (`xpute_gpu_guest::admit::frame`), so taking a
+surface's texture never blocks.
 
 A C++ guest takes xpute's library as two files, as SQLite ships its own: it
 includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with no exceptions,
@@ -161,53 +135,96 @@ no RTTI and no floating-point contraction, the flags `cpp/Makefile` builds with.
 `cpp/target/amalgamation/`, and xpute's own repository carries them at
 `cpp/amalgamation/`.
 
-### The GPU
+### On a page
 
-The GPU is a plugin, declared in WIT as xpute's own packages are
-(`gpu/wit/`): the guest imports `gpu`, which runs the records it lends and
-gives it a device, and `vsync`, which answers at the display's next frame, and
-it serves `surface`, which the UI opens to draw on. On the guest's side the
-plugin is `xpute-gpu-guest`, which writes WebGPU's calls as records of a
-stream; on the host's it is `@xpute/gpu-web-host` on WebGPU and
-`xpute-gpu-native-host` on wgpu. A guest draws a frame only while fewer of its
-frames are unfinished on the GPU than its frame latency
-(`xpute_gpu_guest::admit::frame`), so taking a surface's texture never blocks.
+The program builds its host as a list, and the runtime starts the guest from
+it, here as on a device: the program's servers, each of which mounts on the
+link what it serves, with `IMPORTS` and `LATER`. The servers come in no order,
+since none depends on another, and the steps are the runtime's: it mounts each
+server, then the stand-ins of what the UI serves, and enters the guest only
+once every interface in `IMPORTS` is mounted; one that no server mounts traps
+the link before the guest's first entry, naming each.
 
-On a page the worker serves the GPU on the guest's link with what the guest
+The worker instantiates the guest's module and starts it, and the runtime
+tells the guest the UI attached. The GPU's server takes what the guest
 asks of the device (`GpuAsk`, WebGPU's power preference and features) and the
-program's settings for the host (`GpuConfig`), and hears what the page has of
-a GPU (`GpuState`). The UI opens a surface and gives its canvas beside the link
-under the surface's handle, and the worker's `serve` hands the canvas to the
-GPU. A page's host stages its buffer writes in mapped chunks of
-`upload_chunk_sz`, as a device's does. `slow_ms` has the hosts say a record
-of the stream, the stream's run or a completion's landing slower than that
-many milliseconds, and null, or `None`, times none:
+program's settings for its host (`GpuConfig`), and the canvas the UI gives
+beside the link under a surface's handle goes to it:
 
 ```ts
-// The worker, before `serve` and `link.init()`.
-serve_vsync(link);
-const gpu = new WebGpu(
-  link,
-  { power: "high-performance", required_feats: [], optional_feats: [] },
-  { upload_chunk_sz: 1 << 20, slow_ms: null },
-  (state) => tell({ kind: "gpu", state }),
-);
-gpu.serve();
-const taker = {
-  give: (h: Handle, canvas: unknown) => gpu.bind(h, canvas as OffscreenCanvas),
-  take: (h: Handle) => gpu.unbind(h),
-};
+// The worker, given the page's `Instantiate`, m.
+const link = await instantiate(m.module, m.init, MEM_SZ, tell);
+if (link === null) return;
+const gpu = new WebGpu(link, ASK, CFG, (state) => tell({ kind: "gpu", state }));
+start(link, {
+  servers: [
+    () => {
+      serve_stop(link, (stop) => tell({ kind: "stopped", stop }));
+      hook(link);
+    },
+    serve_clock,
+    serve_vsync,
+    () => gpu.serve(),
+  ],
+  imports: IMPORTS,
+  later: LATER,
+  taker: {
+    give: (h, canvas) => gpu.bind(h, canvas as OffscreenCanvas),
+    take: (h) => gpu.unbind(h),
+  },
+}, m);
 
 // The page.
+const { worker, remote, port } = open_worker(WORKER_URL);
+const ask = { kind: "instantiate", module: MODULE_URL, init: undefined };
+worker.postMessage({ ...ask, port, named: remote.named, prefixes: remote.prefixes }, [port]);
+tell_life(remote);
 const surface = await open(remote, uri("xpute:gpu", "surface"));
 remote.give(surface, canvas.transferControlToOffscreen());
 ```
 
-On a device `xpute-gpu-native-host` runs in the app's own process and opens
-the device when the guest asks, with the program's `GpuConfig`, its frame
-latency among it (`native::config`), and `@xpute/gpu-native-runtime`'s module
-gives the view a guest's surface draws into (`SurfaceView`) and drives the
-display's frames.
+### On a device
+
+A native app installs `@xpute/native-runtime`, the React Native module, which
+Expo autolinks, and names in its `package.json` under `xpute.guest.runtime` the
+crate a device links: its guest, and the function that gives the runtime its
+list, which the crate exports the runtime over. The runtime starts the guest
+on a thread of its own, with the stack the list asks, and runs the loop for
+the guest's life; each start of a UI tells the guest it attached:
+
+```rust
+fn start(cache_dir: PathBuf, report: fn(Stop)) -> Boot {
+    Boot {
+        stack_sz: 8 << 20,
+        servers: vec![
+            Box::new(move || {
+                stop::serve(report);
+                stop::hook();
+            }),
+            Box::new(clock::serve),
+            Box::new(move || {
+                native::serve(Ask::of(ASK), native::config(CFG), Some(cache_dir));
+            }),
+        ],
+        imports: abi::IMPORTS,
+        later: abi::LATER,
+    }
+}
+
+xpute_native_runtime::native_abi!(start);
+xpute_gpu_native_host::native_abi!();
+```
+
+The app builds that crate for the device as it builds, and the module links
+it: a static library at `$PODS_CONFIGURATION_BUILD_DIR/Xpute/lib<crate>.a` on
+an iPhone, and a shared one among the app's `jniLibs` on Android. The app's
+bundler takes each `x.native.ts` in place of `x.ts`. `xpute-gpu-native-host`
+opens the device when the guest asks, with the program's `GpuConfig`, its
+frame latency among it, and keeps its compiled pipelines in `cache_dir`;
+`@xpute/gpu-native-runtime`'s module gives the view a guest's surface draws
+into (`SurfaceView`) and drives the display's frames. The host draws with a
+fork of wgpu, which a program's workspace patches in as xpute's does
+([wgpu-fork.md](wgpu-fork.md)).
 
 ### The packages
 
@@ -215,8 +232,9 @@ In TypeScript the parts are `@xpute/kit`, `@xpute/link`, `@xpute/web-runtime`,
 `@xpute/web-host`, `@xpute/native-runtime`, `@xpute/gpu-link`,
 `@xpute/gpu-web-host` and `@xpute/gpu-native-runtime`, and in Rust they are the
 crates `xpute-kit`, `xpute-link`, `xpute-guest`, `xpute-native-runtime`,
-`xpute-native-host`, `xpute-gpu-link`, `xpute-gpu-guest` and
-`xpute-gpu-native-host`, with the generators `xpute-gen` and `xpute-link-gen`.
+`xpute-native-host`, `xpute-gpu-link`, `xpute-gpu-guest`,
+`xpute-gpu-native-runtime` and `xpute-gpu-native-host`, with the generators
+`xpute-gen` and `xpute-link-gen`.
 Each carries what a registry asks. A program beside this tree lists the
 packages in its pnpm workspace and depends on them as `workspace:*`, and it
 names the crates by `path`. React Native and Expo are peers of the two native

@@ -1,0 +1,18 @@
+[package]
+name = "xpute-gpu-native-runtime"
+description = "The GPU's bindings that its host on a native device serves on xpute-native-runtime's link"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+xpute-kit.workspace = true
+xpute-link.workspace = true
+# The link the bindings are served on.
+xpute-native-runtime.workspace = true

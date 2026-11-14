@@ -36,9 +36,8 @@ static QUEUE: Queue = Queue {
 type Then = Box<dyn FnOnce(Box<dyn Any + Send>)>;
 
 thread_local! {
-    /// The timers due, earliest first: when, a count that keeps them apart,
-    /// and the answer each gives.
-    static TIMERS: RefCell<BTreeMap<(Instant, u64), Return<()>>> = const { RefCell::new(BTreeMap::new()) };
+    /// The timers set, earliest first, and the answer each gives.
+    static TIMERS: RefCell<BTreeMap<Timer, Return<()>>> = const { RefCell::new(BTreeMap::new()) };
     /// What hears each job's result on this thread, by the job's id.
     static THENS: RefCell<BTreeMap<u64, Then>> = const { RefCell::new(BTreeMap::new()) };
     /// The next timer's or job's count.
@@ -59,10 +58,23 @@ pub fn post_task(task: Task) {
     QUEUE.came.notify_one();
 }
 
+/// A timer `after` set, when it is due and a count that keeps it apart, until
+/// it has answered or is cleared.
+pub type Timer = (Instant, u64);
+
 /// Answers `task_return` once `d` has passed, on the guest's thread
-/// (xpute-native-host clock.rs `wait_for`).
-pub fn after(d: Duration, task_return: Return<()>) {
-    TIMERS.with_borrow_mut(|t| t.insert((Instant::now() + d, next()), task_return));
+/// (xpute-native-host clock.rs `wait_for`), and returns the timer that will,
+/// as a page's `setTimeout` returns its id.
+pub fn after(d: Duration, task_return: Return<()>) -> Timer {
+    let timer = (Instant::now() + d, next());
+    TIMERS.with_borrow_mut(|t| t.insert(timer, task_return));
+    timer
+}
+
+/// Clears `timer` before it answers, as a page's `clearTimeout` does, and
+/// hands back what it would have answered; none once it has answered.
+pub fn clear(timer: Timer) -> Option<Return<()>> {
+    TIMERS.with_borrow_mut(|t| t.remove(&timer))
 }
 
 /// Keeps `then` for the result of a job another thread runs, and answers the
@@ -88,8 +100,8 @@ pub fn done<T: Send + 'static>(id: u64, result: T) {
 /// One turn of the guest thread's loop: the next task, or the earliest timer
 /// due, waited for, the timers due answered and the task run. A task's panic,
 /// which the host's hook has reported and turned into a trap
-/// (xpute-native-host `hook`), ends the task and not the loop.
-pub fn turn() {
+/// (xpute-native-host stop.rs `hook`), ends the task and not the loop.
+pub(crate) fn turn() {
     let task = wait();
     answer_timers();
     if let Some(task) = task {

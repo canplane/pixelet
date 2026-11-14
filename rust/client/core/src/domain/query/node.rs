@@ -16,7 +16,7 @@
 //!   are read off the spans their brick's fill kept, which lie in the pool
 //!   and are read as the GPU reads them (pxl-engine `clipmap::ground`,
 //!   `clipmap::way_at`);
-//! - the caves: the noises at the cell's center (pxl-content `cave::hollow`);
+//! - the caves: the share of the cell they take (pxl-content `cave::hollow`);
 //! - what is placed: the objects' pyramid record at that zoom, folded by
 //!   majority (domain/layer/object/store.rs, through the store's query).
 //!
@@ -32,16 +32,15 @@
 //!   asset applies to one cell as `Cell::opens`) over the lowest and highest
 //!   elevations the clip levels hold under the node (`TileCache::relief`, off
 //!   the finest clip level holding its cells). Every cell under the node at
-//!   each zoom is asked against the ground, or against the ground a cave may
-//!   take where a cave runs through all of the node;
+//!   each zoom is asked against the ground;
 //! - the ways: by their own rule (pxl-engine `way::slab`) over their own
 //!   bound in the same levels. That bound is the leaf cells the ways write in
 //!   each column (pxl-engine `way::lined_hull`), joined apart from the
 //!   ground's (pxl-engine fill.rs `mip`). A way that a coarser tile drops as
 //!   narrower than half its cell is dropped there too, as that level of
 //!   detail does;
-//! - the caves: whether a cave runs through all of the node, by the noises'
-//!   least and most over it (pxl-content `cave::all_hollow`);
+//! - the caves: nothing; a node a cave takes all of still splits, and its
+//!   cells say so (pxl-engine `ground::node`);
 //! - what is placed: whether the objects' pyramid has no record at the node.
 //!
 //! A source that does not hold the node answers that it lacks it, never air

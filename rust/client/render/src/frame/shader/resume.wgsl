@@ -1,4 +1,4 @@
-// pxl-render/resume.wgsl
+// pxl-render/frame/shader/resume.wgsl
 
 // Where a ray's walk starts, read from what its camera grid cell hands its rays (pxl-engine
 // `beam::CELL_WORDS`) and from the line the cell resumes from (`beam::LINE_WORDS`). A line is

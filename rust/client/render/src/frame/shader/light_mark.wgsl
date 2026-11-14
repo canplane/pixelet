@@ -1,4 +1,4 @@
-// pxl-render/light_mark.wgsl
+// pxl-render/frame/shader/light_mark.wgsl
 
 // Stands the world's receivers of the shadow map that the eye walked apart on the tiles their
 // hits lie on. Every receiver stands by one rule (pxl-engine `Light::box_tiles`): a box within

@@ -1,6 +1,6 @@
 // @pxl/client/remote-console.ts
 
-/** Forwards a device's console to the dev server's terminal, because a phone
+/** Forwards a page's console to the dev server's terminal, because a phone
  * reached over a tunnel has no devtools to attach. */
 
 const ENDPOINT = "/__console";

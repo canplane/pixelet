@@ -1,15 +1,16 @@
 // pxl-runtime/lib.rs
 
 //! pixelet's library on a device: the core (pxl-core), linked in as a page
-//! instantiates its module, and the runtime the app composes around it, as
-//! ts/client/src/runtime/worker.ts is a page's. `start` makes the core's
-//! thread and composes xpute's runtime on it in the order it runs: it mounts
-//! what the host serves, the stop, the clocks, the text and the GPU, then what
-//! the UI serves, enters the core, and runs the loop for the core's life. The
-//! text is pixelet's own, served on the host's side as ts/client/src/service
-//! serves it on a page (text.rs); the UI serves the files, the settings among
-//! them, and the objects over the remote, as the page's worker does. Beside
-//! them is the decoder the app's fetch calls (unpack.rs).
+//! instantiates its module, and what xpute's runtime starts it with, as
+//! ts/client/src/runtime/worker.ts is a page's. `start` lists the servers of
+//! what the host serves, the stop, the clocks, the text and the GPU, and the
+//! runtime mounts them, then what the UI serves, enters the core once every
+//! import of its world under a named handle is mounted, and runs the loop for
+//! the core's life (xpute-native-runtime native.rs `Boot`). The text is
+//! pixelet's own, served on the host's side as ts/client/src/service serves
+//! it on a page (text.rs); the UI serves the files, the settings among them,
+//! and the objects over the remote, as the page's worker does. Beside them is
+//! the decoder the app's fetch calls (unpack.rs).
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -27,14 +28,8 @@ use pxl_core::MEASURING;
 use pxl_render::spec::api::device;
 use xpute_gpu_link::{GpuAsk, GpuConfig};
 use xpute_gpu_native_host::{native, Ask};
-use xpute_kit::status::bug::OrBug;
-use xpute_kit::status::errno::Errno;
-use xpute_link::abi::types::Token;
-use xpute_link::Handle;
-use xpute_native_host::stop;
-use xpute_native_host::{clock, hook};
-use xpute_native_runtime::native::Stop;
-use xpute_native_runtime::{event_loop, link, remote};
+use xpute_native_host::{clock, stop};
+use xpute_native_runtime::native::{Boot, Stop};
 
 // The GPU's host under xpute's names, which the platform's GPU module calls
 // (xpute_gpu.h, and on Android the Kotlin class `xpute.Gpu`).
@@ -58,47 +53,28 @@ const GPU: GpuConfig = GpuConfig {
     },
 };
 
-/// Starts the core's thread. `named` are the named handles of the interfaces
-/// the UI serves (remote.ts `Remote.named`), and `prefixes` those it opens
-/// at (remote.ts `Remote.prefixes`); `cache_dir` is the directory the
-/// platform keeps the app's caches in; `notify` tells the UI a batch waits
-/// (xpute-native-runtime `remote::take`), `report_stop` hears a stop and
-/// `report_trap` a trap.
-pub fn start(
-    named: Vec<Handle>,
-    prefixes: Vec<Vec<Token>>,
-    cache_dir: PathBuf,
-    notify: fn(),
-    report_stop: fn(Stop),
-    report_trap: fn(),
-) {
-    hook();
-    let spawned = std::thread::Builder::new()
-        .name("xpute core".into())
-        .stack_size(stack::THREAD_SZ as usize)
-        .spawn(move || {
-            stop::serve(report_stop);
-            clock::serve();
-            text::serve();
-            native::serve(
-                Ask::of(GpuAsk {
+/// What the runtime starts the core with: `cache_dir` is the directory the
+/// platform keeps the app's caches in, and `report` hears a stop.
+fn start(cache_dir: PathBuf, report: fn(Stop)) -> Boot {
+    Boot {
+        stack_sz: stack::THREAD_SZ as usize,
+        servers: vec![
+            Box::new(move || {
+                stop::serve(report);
+                stop::hook();
+            }),
+            Box::new(clock::serve),
+            Box::new(text::serve),
+            Box::new(move || {
+                let ask = GpuAsk {
                     power: device::POWER,
                     required_feats: device::REQUIRED_FEATURES,
                     optional_feats: device::OPTIONAL_FEATURES,
-                }),
-                native::config(GPU),
-                Some(cache_dir),
-            );
-            remote::serve(&named, prefixes, abi::LATER);
-            // A trapped core is entered no more, and the UI's methods are
-            // answered EPIPE; what boot made due or completed is not left
-            // waiting.
-            link::init(report_trap);
-            loop {
-                link::run_due();
-                remote::flush(notify);
-                event_loop::turn();
-            }
-        });
-    spawned.or_bug(Errno::EAGAIN);
+                };
+                native::serve(Ask::of(ask), native::config(GPU), Some(cache_dir));
+            }),
+        ],
+        imports: abi::IMPORTS,
+        later: abi::LATER,
+    }
 }

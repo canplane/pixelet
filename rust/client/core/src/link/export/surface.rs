@@ -23,8 +23,8 @@ use xpute_kit::status::errno::Errno;
 struct Surface(Handle);
 
 /// Mounts the surfaces' opener: each open opens a surface under its handle,
-/// which draws nothing until SCENE_DRAW (scene.rs `draw`); ENFILE where every
-/// surface is taken.
+/// which draws nothing until scene.rs `draw` sets its content; ENFILE where
+/// every surface is taken.
 pub(super) fn mount() {
     link::mount(xpute_link::uri(SURFACE_URI), |_, h| {
         refuse_unless(surface::surface_open(h), Errno::ENFILE)?;

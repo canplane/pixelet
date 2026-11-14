@@ -1,10 +1,10 @@
 // pxl-geo-bake/terrain/pipeline/separation.rs
 
-//! A tile's separation from the solve's rows. A tile keeps whole segments within
-//! a line's footprint (pxl-spec bake/separation.rs `footprint`, `runs_within`),
-//! each point quantized once in the world's grid of leaf cells and the tile's
-//! integer origin then taken off, so tiles sharing a line hold the same
-//! numbers for its points: what the fold takes each segment once by.
+//! A tile's separation from the solve's lines. A tile keeps whole segments
+//! within a line's footprint (pxl-spec `bake/separation.rs` `footprint`,
+//! `runs_within`), each point quantized once in the world's grid of leaf cells
+//! and the tile's integer origin then taken off, so tiles sharing a line hold
+//! the same numbers for its points: what the fold takes each segment once by.
 
 use crate::terrain::CELL_U;
 use pxl_spec::bake::separation::{self, Builder, Separation, POINT_SCALE};
@@ -73,7 +73,7 @@ type Point = ([f64; 2], f64, u8);
 /// zoom holds where its line crosses each edge of the tiles of the zoom under it, and a
 /// segment a zoom holds lies in one tile of the zoom under it, whose copy of the line holds
 /// every point between the segment's ends; that is what a fold of its 4×4 children needs
-/// (pxl-spec bake/separation.rs `fold_separation`).
+/// (pxl-spec `bake/separation.rs` `fold_separation`).
 fn edge_coarsest(m: i64) -> u8 {
     let first = LEAF_ZOOM.saturating_sub(if m == 0 {
         LEAF_ZOOM

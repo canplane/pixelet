@@ -1,8 +1,8 @@
-// pxl-render/cell.wgsl
+// pxl-render/frame/shader/cell.wgsl
 
 // Finds where the rays of each cell of the eye's camera grid start, one thread a cell
-// (pxl-engine `beam::CELL_WORDS`). A cell's rays start at the least distance that the beam rays
-// in its window of corners hand on (`beam::Grid::cell_window`, window.wgsl), and they resume from
+// (pxl-engine `beam::CELL_WORDS`). A cell's rays start at the least start distance of the beam
+// rays in its window of corners (`beam::Grid::cell_window`, window.wgsl), and they resume from
 // that corner's line. light_cell.wgsl does the same for the shadow map.
 //
 // The window is computed in f32, as the Rust computes it: a ceiling over a square root and a
@@ -37,8 +37,8 @@ fn cell_cs(@builtin(global_invocation_id) id: vec3<u32>) {
   let k = min(cell_window(id.xy), eye_word(EYE_GRID + GRID_PAST));
   let first = id.xy + vec2<u32>(eye_word(EYE_GRID + GRID_PAST)) - vec2<u32>(k);
   // How far each corner's rays start lies in one word a corner, past the lines
-  // (`Grid::hand_at`).
-  let least = window_least(eye_word(EYE_GRID + GRID_HANDS_AT), eye_word(EYE_GRID + GRID_CORNER_LATTICE), first, 2u + 2u * k);
+  // (`Grid::start_dist_at`).
+  let least = window_least(eye_word(EYE_GRID + GRID_START_DISTS_AT), eye_word(EYE_GRID + GRID_CORNER_LATTICE), first, 2u + 2u * k);
   let at = cell_start(id.xy);
   beams[at + CELL_T] = least.x;
   beams[at + CELL_CORNER] = least.y;

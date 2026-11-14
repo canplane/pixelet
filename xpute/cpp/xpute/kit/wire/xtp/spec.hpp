@@ -3,7 +3,7 @@
 // XTP, the Xpute Tree Packet, is a tree of values in one buffer, read in place.
 // This header holds its layout, its type byte, and the helpers that read and
 // write a packet's words. The format is described in
-// ts/kit/src/wire/xtp/README.md, and the golden records under
+// kit/ts/src/wire/xtp/README.md, and the golden records under
 // kit/spec/golden/wire/xtp/ hold the C++, Rust and TypeScript sides to the same
 // bytes.
 //
@@ -220,7 +220,7 @@ inline Result<Desc> get_desc(std::span<const std::uint8_t> buf, std::uint32_t of
     return Desc{lo, type};
 }
 
-// `unit` must be a power of two no larger than WORD_SZ, or EINVAL.
+// `unit` must be a power of two no larger than `WORD_SZ`, or EINVAL.
 inline Result<std::uint32_t> align(std::uint32_t nbyte, std::uint32_t unit) noexcept {
     if (unit == 0 || (unit & (unit - 1)) != 0 || unit > WORD_SZ) return make_error(Errno::einval);
     std::uint32_t mask = unit - 1;

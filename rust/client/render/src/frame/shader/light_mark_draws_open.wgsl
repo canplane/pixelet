@@ -1,4 +1,4 @@
-// pxl-render/light_mark_draws_open.wgsl
+// pxl-render/frame/shader/light_mark_draws_open.wgsl
 
 // Writes the drawn receivers' dispatch (light_mark_draws.wgsl `light_mark_draws_cs`). The
 // dispatch is a buffer of its own, which this pass writes and that pass reads its workgroups

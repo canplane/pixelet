@@ -1,4 +1,4 @@
-// pxl-render/world_split.wgsl
+// pxl-render/frame/shader/world_split.wgsl
 
 // The world's one query for a node coarser than asked, and what a node hands the child a walk
 // steps down to (pxl-engine world.rs `node`, `Inheritance::child`), built over world.wgsl's

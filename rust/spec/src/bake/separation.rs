@@ -366,7 +366,7 @@ pub fn fold_separation(around: [Option<&Separation>; 16], zoom: Zoom) -> Separat
 
 /// A folded segment: its ends in the parent's eighths of a cell with their
 /// surface and the coarsest zoom each is held at, and its line's width,
-/// asset_id, form and clearance.
+/// `asset_id`, form and clearance.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct FoldSegment {
     a: ([i32; 2], i16, u8),

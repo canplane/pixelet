@@ -1,4 +1,4 @@
-// pxl-render/sample.eye.wgsl
+// pxl-render/frame/shader/sample.eye.wgsl
 
 // What a pass over samples reads of the eye's samples (eye_bind.wgsl). The eye takes every
 // sample of its camera grid's lattice, and a sample's ray runs through the screen at the

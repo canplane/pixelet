@@ -2,8 +2,8 @@
 
 //! What the model passes share: the decor, the impostors and the skinned
 //! characters. They bind one group 0, which holds the frame words, the light's
-//! shadow map and the air. Each pass writes its draws' uniforms once before
-//! the pass, one slot a draw, and draws them by one loop.
+//! shadow map and the air. The decor and the impostors write their draws'
+//! uniforms once before the pass, one slot a draw, and draw them by one loop.
 
 use pxl_global::Global;
 use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};

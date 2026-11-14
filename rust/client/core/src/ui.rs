@@ -1,6 +1,6 @@
 // pxl-core/ui.rs
 
-//! What the UI reads of the core: a Snapshot packet, and beside it the view's
+//! What the UI reads of the core: a `Snapshot`, and beside it the view's
 //! azimuth and scale. Each is handed over only when it has changed since it
 //! was last sent.
 

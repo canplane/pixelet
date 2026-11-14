@@ -1,9 +1,9 @@
-// pxl-render/hit.wgsl
+// pxl-render/frame/shader/hit.wgsl
 
-// The stops of the holes' rays, which the walks keep. A hole is a pixel of the eye or a slot of
+// The hits of the holes' rays, which the walks keep. A hole is a pixel of the eye or a slot of
 // the light that took neither a visible voxel nor the sky, and the holes' queue walks its ray
-// alone. A stop takes `beam::HIT_WORDS` words (pxl-engine), and an observer keeps at most
-// `ray::HITS_A_FRAME` of them. The eye keeps its stops past the beam rays' words, and the light
+// alone. A hit takes `beam::HIT_WORDS` words (pxl-engine), and an observer keeps at most
+// `ray::HITS_A_FRAME` of them. The eye keeps its hits past the beam rays' words, and the light
 // keeps its own past its pool (`light::hits_at`). Each observer's part says where they lie and
 // how many fit (`hits_at` in hole.eye.wgsl and hole.light.wgsl, and `hits_at` and `hits_cap`
 // in record_hits.eye.wgsl and record_hits.light.wgsl).

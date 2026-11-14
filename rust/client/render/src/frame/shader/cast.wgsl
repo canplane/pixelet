@@ -1,4 +1,4 @@
-// pxl-render/cast.wgsl
+// pxl-render/frame/shader/cast.wgsl
 
 // Finds each drawn pixel's ray without a walk, one thread a pixel of the tiles damaged
 // (cast_tile.wgsl). A pixel takes its ray from the visible voxel the raster kept at it, when

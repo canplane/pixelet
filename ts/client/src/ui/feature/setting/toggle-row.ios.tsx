@@ -11,8 +11,8 @@ import { Switch, View } from "react-native";
 import { COLOR } from "@/ui/shared/component/theme.ts";
 import type { ToggleRowProps } from "./toggle-row.tsx";
 
-// The default file's other exports, beside the ToggleRow this file draws
-// itself.
+// This file exports everything toggle-row.tsx does, with its own `ToggleRow`
+// in place of that one.
 export * from "./toggle-row.tsx";
 
 export function ToggleRow({

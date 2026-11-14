@@ -1,4 +1,4 @@
-// pxl-render/walk_node.wgsl
+// pxl-render/frame/shader/walk_node.wgsl
 
 // What every walk works out about a ray and a node, the same for every walk, over the eye's
 // words (eye_bind.wgsl): the ray to walk, where a walk starts and ends, a node's planes, its
@@ -231,7 +231,7 @@ fn root_of(origin: vec3<i32>) -> vec3<i32> {
 }
 
 /// The zoom asked at the squared distance `r2`, held within `range` (pxl-engine `Detail::at`,
-/// `grid::cell_zoom_at`).
+/// pxl-spec `grid::cell_zoom_at`).
 fn zoom_at(r2: f32, range: vec2<u32>) -> u32 {
   return zoom_in_splits(r2 * INV_SPLIT2, range);
 }

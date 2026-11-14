@@ -555,7 +555,7 @@ mod tests {
     use super::*;
     use crate::answer::box_of;
 
-    /// A child group at slot 8: the children `held` names hold a voxel, the rest
+    /// A child group at slot 8: the children it names hold a voxel, the rest
     /// nothing.
     struct ChildGroup(&'static [u32]);
 

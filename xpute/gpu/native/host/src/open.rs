@@ -12,7 +12,7 @@ pub struct Ask {
     /// adapter lacks makes the device refuse to open (`OpenError::Device`);
     /// one wgpu does not know refuses it before it is asked
     /// (`OpenError::Feature`). The guest reads the features the device has
-    /// from the device's block (spec DEVICE).
+    /// from the device's block (spec `DEVICE`).
     pub required: &'static [&'static str],
     /// The device takes these features where the adapter has them.
     pub optional: &'static [&'static str],
@@ -110,8 +110,8 @@ pub fn open(instance: &wgpu::Instance, ask: &Ask) -> Result<Wgpu, OpenError> {
 }
 
 /// These are the device's limits and features as the device's block lays them
-/// out (spec DEVICE): a word for each limit LIMIT_NAME names, then a bit for
-/// each feature FEATURE_NAME names.
+/// out (spec `DEVICE`): a word for each limit `LIMIT_NAME` names, then a bit
+/// for each feature `FEATURE_NAME` names.
 pub(super) fn block(device: &wgpu::Device) -> (Vec<u32>, Vec<u32>) {
     let (limits, features) = (device.limits(), device.features());
     let words = LimitName::ALL.iter().map(|l| limit(&limits, l.name())).collect();

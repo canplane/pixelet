@@ -1,4 +1,4 @@
-// pxl-render/decor_compact.wgsl
+// pxl-render/frame/shader/decor_compact.wgsl
 
 // Compacts each record that its region drew a slot for into the decor's instances at that
 // slot, reading the records as `decor_cnt_cs` does. An instance holds the middle of its box's

@@ -56,14 +56,14 @@ export function stop(): void {
 const words = (b: U8Array) =>
   new Float64Array(b.buffer, b.byteOffset, b.byteLength / WORD);
 /** A failure's site, or none at line 0, a failure of the host's: its line,
- * and its file as the string table `strtab` (PERF_STRTAB) names it at `file`,
- * or unknown at offset 0, where the table had no room for it. */
+ * and its file as the string table `strtab` names it at `file`, or unknown at
+ * offset 0, where the table had no room for it. */
 const site = (strtab: U8Array, file: u32, bytes: u32, line: u32) =>
   line === 0
     ? null
     : `${file === 0 ? "?" : td.decode(strtab.subarray(file, file + bytes))}:${line}`;
 
-/** The FRAME columns that are lists, one word for each name in the list. */
+/** The `FRAME` columns that are lists, one word for each name in the list. */
 const LIST_COLUMNS = ["phases", "effects", "gpu_spans"] as const;
 export type ListColumn = (typeof LIST_COLUMNS)[number];
 export type FrameColumn = Exclude<keyof typeof FRAME, "WORDS">;
@@ -75,7 +75,7 @@ export type Frame = { [K in ScalarColumn]: f64 } & {
   gpu_spans: f64[];
 };
 
-/** Each FRAME column with its first word and its width in words. */
+/** Each `FRAME` column with its first word and its width in words. */
 export const COLUMNS: readonly { name: FrameColumn; at: u32; width: u32 }[] =
   (() => {
     const at = (Object.entries(FRAME) as [FrameColumn | "WORDS", u32][]).filter(
@@ -141,8 +141,8 @@ export interface FrameSummary {
   kinds: { name: string; n: f64 }[];
   /** How many of the world's pixels the last frame a read timed drew. */
   gpu_px: f64;
-  /** The ray counts of the window's frames, summed for each of FRAME's rays
-   * columns. */
+  /** The ray counts of the window's frames, summed for each of `FRAME`'s
+   * `rays` columns. */
   ray_cnt: RayCount;
   /** How far the heap's high-water mark rose over the window: the last
    * frame's mark less the first frame's. */
@@ -201,7 +201,7 @@ type Section<S> = { [K in Exclude<keyof S, "AT" | "WORDS">]: f64 };
 export type ViewSection = Section<typeof NOW.view>;
 type DrawSection = Section<typeof NOW.draw>;
 /** The highest or lowest values the frames held since the recording started
- * (STAT.recording). */
+ * (`STAT.recording`). */
 export type RecordingSection = Section<typeof STAT.recording>;
 export type RayCount = { [K in (typeof FRAME_GROUP.rays)[number]]: f64 };
 
@@ -364,18 +364,18 @@ async function perf_summary(window_ms: f64 | null): Promise<Summary> {
   };
 }
 
-/** Reads NOW's view alone. The core is asked for an empty window, so that no
- * frame or task is folded. */
+/** Reads `NOW`'s view alone. The core is asked for an empty window, so that
+ * no frame or task is folded. */
 async function perf_view(): Promise<ViewSection> {
   return section((await stats_of(0)).now, NOW.view);
 }
 
-/** Reads NOW's draw alone, as `perf_view` reads its view. */
+/** Reads `NOW`'s draw alone, as `perf_view` reads its view. */
 async function perf_draw(): Promise<DrawSection> {
   return section((await stats_of(0)).now, NOW.draw);
 }
 
-/** The words of a record of each ring, in RING_NAMES' order. */
+/** The words of a record of each ring, in `RING_NAMES`' order. */
 const RING_WORDS = [FRAME.WORDS, TASK.WORDS, WORST.WORDS] as const;
 
 /** The records of the ring `name`: the frames and the tasks oldest first,

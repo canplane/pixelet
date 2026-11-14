@@ -38,7 +38,7 @@ pub mod cave {
     /// crosses.
     pub const BLOCKS_A_TUNNEL: [u32; 5] = [1536, 768, 384, 192, 96];
     /// How far a block's own hash moves it from its line, in squared
-    /// sixteenths of a unit: walls that do not run smooth.
+    /// eighths of a unit: walls that do not run smooth.
     pub const NUDGE: u32 = 1200;
 }
 

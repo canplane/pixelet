@@ -18,7 +18,7 @@ use crate::space::layer::lattice::TILE_CELLS;
 /// embankment's or a cutting's height stays its line's.
 pub fn lay(sep: &Separation, frame: Frame, asset_ids: &mut [GroundId]) {
     let n = i64::from(TILE_CELLS);
-    // For each cell, the highest top over it and its asset_id.
+    // For each cell, the highest top over it and its `asset_id`.
     let mut laid: FnvHashMap<usize, (i32, u8)> = FnvHashMap::default();
     sep.crossing_grid(frame, [0, 0], [n, n], |x, y, _, o| {
         let col = (y * n + x) as usize;

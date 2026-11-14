@@ -6,6 +6,7 @@
   "dependencies": {
     "expo": "57.0.25",
     "expo-horizon-core": "~57.0.2",
-    "expo-horizon-location": "~57.0.2"
+    "expo-horizon-location": "~57.0.2",
+    "expo-system-ui": "~57.0.4"
   }
 }

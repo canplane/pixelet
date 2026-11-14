@@ -83,7 +83,7 @@ fn passes() -> Vec<(u32, UploadOf)> {
 }
 
 /// The oracle's lists: a frame's draws rebuilt whole, with nothing kept from
-/// the frames before. `records` holds every draw's record in the order it was
+/// the frames before. `recs` holds every draw's record in the order it was
 /// set, and a draw's uniform index is its place. A cloud's uniform holds its
 /// place on the field's map, which drifts, and `drift` is the drift the frame
 /// draws at.

@@ -23,7 +23,7 @@
 
 use core::ffi::c_void;
 use core::ptr::NonNull;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc::{channel, Sender};
@@ -35,7 +35,7 @@ use xpute_link::Return;
 use xpute_native_runtime::link;
 use xpute_native_runtime::{done, job};
 
-use super::abi;
+use xpute_gpu_native_runtime::abi;
 use super::vsync::Vsync;
 use super::{Ask, Config, ConfigureAt, GpuHost, OpenError, Wgpu};
 use xpute_gpu_link::GpuConfig;
@@ -107,7 +107,8 @@ struct Device {
     /// This tells the open device's poller that a run was submitted.
     poller: Option<Sender<()>>,
     /// Where the guest lent the device's block, which each device writes
-    /// (`GpuHost::attach`), until a loss answers `device.lost`.
+    /// (`GpuHost::attach`) while it is lent: until a loss answers
+    /// `device.lost` or its caller cancels it.
     block: Option<u32>,
     /// The requests waiting on the device, by job id: the next completion's
     /// (`device.settled`), and its loss (`device.lost`).
@@ -225,7 +226,7 @@ fn poll() {
     let answered = r.poll();
     if answered || lost {
         for id in d.settled.drain(..) {
-            done(id, ());
+            done(id, Ok::<(), Errno>(()));
         }
     }
     if lost {
@@ -233,7 +234,7 @@ fn poll() {
         d.poller = None;
         d.block = None;
         for id in d.lost.drain(..) {
-            done(id, ());
+            done(id, Ok::<(), Errno>(()));
         }
         drop(guard);
         report("waiting");
@@ -241,9 +242,10 @@ fn poll() {
 }
 
 /// Mounts `gpu` and `vsync` on the host's link, on the guest's thread before
-/// it boots (the program composes it), the device `gpu` gives to be opened
-/// as `ask` and `cfg` say, its compiled pipelines kept in `cache_dir`, the
-/// directory the platform keeps the app's caches in.
+/// it boots (a server the program lists, xpute-native-runtime native.rs
+/// `Boot`), the device `gpu` gives to be opened as `ask` and `cfg` say, its
+/// compiled pipelines kept in `cache_dir`, the directory the platform keeps
+/// the app's caches in.
 pub fn serve(ask: Ask, cfg: Config, cache_dir: Option<PathBuf>) {
     let args = Arc::new(OpenArgs {
         ask,
@@ -292,9 +294,16 @@ struct GuestDevice(Arc<OpenArgs>);
 
 impl abi::gpu::HostDevice for GuestDevice {
     /// The block lent until the device is lost: written now where a device is
-    /// open, and by each device opened while it is lent.
+    /// open, and by each device opened while it is lent. A loss its caller
+    /// cancels hands the block back, and the host writes it no more.
     fn lost(&self, block: Lent, task_return: Return<()>) {
-        let id = job(Box::new(move |()| task_return.answer(Ok(()))));
+        let id = wait(task_return, |d, id| {
+            d.lost.retain(|&w| w != id);
+            d.block = None;
+            if let Some(r) = d.host.as_mut() {
+                r.detach();
+            }
+        });
         let args = self.0.clone();
         on_gpu(Box::new(move || {
             let mut guard = device();
@@ -320,7 +329,7 @@ impl abi::gpu::HostDevice for GuestDevice {
     }
 
     fn settled(&self, task_return: Return<()>) {
-        let id = job(Box::new(move |()| task_return.answer(Ok(()))));
+        let id = wait(task_return, |d, id| d.settled.retain(|&w| w != id));
         let args = self.0.clone();
         on_gpu(Box::new(move || {
             device()
@@ -329,6 +338,28 @@ impl abi::gpu::HostDevice for GuestDevice {
                 .push(id);
         }));
     }
+}
+
+/// The job of a request that waits in one of the device's lists until it is
+/// told (`poll`), or answers ECANCELED once its caller cancels it, as
+/// @xpute/gpu-web-host web.ts `wait` does: on the GPU's thread `cancel` takes
+/// it out of its list and stops what else it holds, and then it answers.
+fn wait(task_return: Return<()>, cancel: fn(&mut Device, u64)) -> u64 {
+    let id = Rc::new(Cell::new(0));
+    task_return.on_cancel({
+        let id = id.clone();
+        move || {
+            let id = id.get();
+            on_gpu(Box::new(move || {
+                if let Some(d) = device().as_mut() {
+                    cancel(d, id);
+                }
+                done(id, Err::<(), Errno>(Errno::ECANCELED));
+            }));
+        }
+    });
+    id.set(job(Box::new(move |r: Result<(), Errno>| task_return.answer(r))));
+    id.get()
 }
 
 fn new_device(ask: &Ask) -> Device {

@@ -28,11 +28,13 @@ import {
 // not allow `import.meta`.
 const APP = path.join(WORKSPACE, "client");
 
-/** Packages an app may hold only one copy of. React Native and React are the
- * host the app runs on, and a library's own copy of them would be a second
+/** Packages an app may hold only one copy of. React Native, React and Expo are
+ * the host the app runs on, and a library's own copy of them would be a second
  * host. A package manager may link a library's peer to another version it has
- * on disk, so these are resolved from this app wherever they are imported. */
-const SINGLETONS = ["react", "react-native"];
+ * on disk, or to another set of its own peers (Expo without the app's
+ * @expo/metro-runtime, for a package that does not take it), so these are
+ * resolved from this app wherever they are imported. */
+const SINGLETONS = ["react", "react-native", "expo"];
 const FROM_APP = path.join(APP, "index.ts");
 
 /** The stamp is written once, when Metro starts, so a dev server's stamp is

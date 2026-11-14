@@ -153,14 +153,8 @@ impl abi::sensor::Guest for Core {
     ) -> Result<(), Errno> {
         sensor::pos(lon, lat, alt, accuracy, course)
     }
-    fn orient(
-        &self,
-        webkit_compass_heading: Option<f64>,
-        alpha: Option<f64>,
-        beta: Option<f64>,
-        gamma: Option<f64>,
-    ) -> Result<(), Errno> {
-        sensor::orient(webkit_compass_heading, alpha, beta, gamma)
+    fn orient(&self, webkit_compass_heading: Option<f64>, alpha: Option<f64>) -> Result<(), Errno> {
+        sensor::orient(webkit_compass_heading, alpha)
     }
     fn err(
         &self,

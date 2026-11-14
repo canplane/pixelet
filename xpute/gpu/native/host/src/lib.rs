@@ -9,12 +9,11 @@
 //! work done or an async pipeline, is answered at a later `poll`. That holds
 //! for an async pipeline too, which wgpu makes at once. So the guest finds its
 //! ticket at the fence once the answer has landed, as on the web (spec
-//! RESULT), and a run never waits for an answer.
+//! `RESULT`), and a run never waits for an answer.
 //!
 //! `native` holds the host for a guest linked into its own process, and
 //! exports it under xpute's names (`native_abi!`).
 
-pub mod abi;
 mod admit;
 mod belt;
 mod cache;
@@ -65,7 +64,7 @@ use admit::FrameGuard;
 /// platform's choices (`native::config`).
 #[derive(Clone, Copy)]
 pub struct Config {
-    /// This is the format that SURFACE_PREFERRED stands for and the device's
+    /// This is the format that `SURFACE_PREFERRED` stands for and the device's
     /// block tells the guest, as `getPreferredCanvasFormat` gives it on the web.
     pub preferred_format: wgpu::TextureFormat,
     pub configure_at: ConfigureAt,
@@ -90,8 +89,8 @@ pub struct GpuHost {
     queue: wgpu::Queue,
     names: EnumTable,
     objects: Vec<Option<Object>>,
-    /// This is indexed by surface number, and holds the slot of the handle the
-    /// program binds the surface by.
+    /// This is indexed by surface number, the slot of the handle the program
+    /// binds the surface by.
     surfaces: Vec<Surface>,
     preferred_format: wgpu::TextureFormat,
     configure_at: ConfigureAt,
@@ -248,8 +247,8 @@ impl GpuHost {
 
     /// Writes into `mem` what the device has answered since the last
     /// poll. Call it on the thread that runs the stream. After a loss it
-    /// writes only the block's LOST STATUS: every object and pending request
-    /// goes with the device. It says whether a request was answered.
+    /// writes only the block's `LOST` `STATUS`: every object and pending
+    /// request goes with the device. It says whether a request was answered.
     pub fn poll(&mut self) -> bool {
         if self.lost() {
             self.on_lost();
@@ -258,7 +257,7 @@ impl GpuHost {
         let _ = self.device.poll(wgpu::PollType::Poll);
         self.tell_counts();
         let waited = self.waiting();
-        // Each completion's landing is timed as a page's is (`run::timed`);
+        // Each completion's landing is timed as a page's is (`timed`);
         // the belt's chunks land in an atomic store, which has nothing to time.
         let slow = self.slow_ms;
         self.pending.retain(|p| p.poll(slow));

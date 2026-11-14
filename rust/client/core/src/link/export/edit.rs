@@ -1,6 +1,6 @@
 // pxl-core/link/export/edit.rs
 
-//! The EDIT major's commands: the tool held and what it places, and the
+//! The edit interface's methods: the tool held and what it places, and the
 //! marker draft it left waiting.
 
 use crate::abi::types::ErrorCode;

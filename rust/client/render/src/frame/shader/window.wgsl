@@ -1,23 +1,23 @@
-// pxl-render/window.wgsl
+// pxl-render/frame/shader/window.wgsl
 
-// Finds the least of the beam rays' starts within a cell's window, for the eye (cell.wgsl,
-// pxl-engine `beam::Grid::cell_window`) and for the light (light_cell.wgsl, `light::cell`). It
-// takes the least of each row, then the first row whose least is less than every earlier
-// row's, so of equal starts it takes the first in row-major order.
+// Finds the least of the beam rays' start distances within a cell's window, for the eye
+// (cell.wgsl, pxl-engine `beam::Grid::cell_window`) and for the light (light_cell.wgsl,
+// `light::cell`). It takes the least of each row, then the first row whose least is less than
+// every earlier row's, so of equal start distances it takes the first in row-major order.
 
-/// The least hand over the square `side` a side from `first`, of the hands laid from word
-/// `hands`, `across` to a row. A hand is how far a beam ray hands its start on (pxl-engine
-/// `beam::Grid::hand_dist`). It returns the least hand's bits, then the index of the first hand
-/// that holds it.
-fn window_least(hands: u32, across: u32, first: vec2<u32>, side: u32) -> vec2<u32> {
+/// The least start distance over the square `side` a side from `first`, of those laid from
+/// word `start_dists`, `across` to a row. A start distance is where the rays about a beam ray
+/// start (pxl-engine `beam::Grid::start_dist`). It returns the least one's bits, then the index
+/// of the first that holds it.
+fn window_least(start_dists: u32, across: u32, first: vec2<u32>, side: u32) -> vec2<u32> {
   var least_at = first.y * across + first.x;
-  var least = bitcast<f32>(beams[hands + least_at]);
+  var least = bitcast<f32>(beams[start_dists + least_at]);
   for (var j = 0u; j < side; j += 1u) {
     let row = (first.y + j) * across + first.x;
     var row_at = row;
-    var row_least = bitcast<f32>(beams[hands + row]);
+    var row_least = bitcast<f32>(beams[start_dists + row]);
     for (var i = 1u; i < side; i += 1u) {
-      let t = bitcast<f32>(beams[hands + row + i]);
+      let t = bitcast<f32>(beams[start_dists + row + i]);
       if (t < row_least) {
         row_least = t;
         row_at = row + i;

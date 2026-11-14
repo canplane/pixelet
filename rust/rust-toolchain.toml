@@ -1,16 +1,11 @@
 # Which Rust this checkout is, for rustup to read — locally, in CI and in an
-# editor alike. Before this file there was nothing in the tree that said so:
-# the version lived in the gate's environment and in the two server images'
-# base tags, and a working copy compiled with whatever `rustup default`
-# happened to be, so the gate a developer ran was not the gate CI ran.
+# editor alike. It is pinned to the patch, not the minor, so that a toolchain
+# release cannot turn a clippy lint on under us: `1.98` would let 1.98.2 in.
 #
-# Pinned to the patch, not the minor. The point of pinning at all is that a
-# toolchain release cannot turn a clippy lint on under us and fail a push
-# that changed nothing, and `1.98` would still let 1.98.2 in.
-#
-# This is the one place the version is written. The server images name it
-# again because a base image tag is chosen before anything in the build
-# context can be read.
+# The version is written in three places, which change together: here,
+# xpute/rust-toolchain.toml, and the server images' base tags
+# (rust/server/geo/Dockerfile, rust/server/api/Dockerfile), since an image's
+# tag is chosen before anything in its build context can be read.
 [toolchain]
 channel = "1.98.1"
 profile = "minimal"

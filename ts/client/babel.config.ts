@@ -40,8 +40,8 @@ const in_type = (p: NodePath): boolean =>
 /** Replaces each literal read through an import, or read in the module that
  * exports it, with its value, and strikes what that leaves with no use: the
  * import, and a module of literals named again by the file that imports it
- * (`export { Major }`). A module read whole keeps its names. An export no
- * longer read by name is left for tree shaking to drop. */
+ * (`export { ToastTone }`). A module read whole keeps its names. An export
+ * no longer read by name is left for tree shaking to drop. */
 const inline = ({ types: t }: Babel): PluginObj => ({
   visitor: {
     Program(p, state) {

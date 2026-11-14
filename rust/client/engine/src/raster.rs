@@ -53,7 +53,7 @@ pub const ARGS_ASKS: u32 = 7;
 pub const ARGS_CNT: u32 = 8;
 pub const ARGS_WORDS: u32 = 9;
 pub const ASKED_AT: u32 = crate::STORAGE_ALIGN_WORDS;
-/// Where the faces' asks opened by the holes' stops begin, past the samples' asks (`record`),
+/// Where the faces' asks opened by the holes' hits begin, past the samples' asks (`record`),
 /// laid out as those are.
 pub const HIT_ASKED_AT: u32 = 2 * crate::STORAGE_ALIGN_WORDS;
 /// The arguments' words: the draw's and both sets of faces' asks.

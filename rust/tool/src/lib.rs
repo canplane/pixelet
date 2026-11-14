@@ -24,7 +24,7 @@ pub mod v3;
 use std::path::{Path, PathBuf};
 
 /// The tree the tool runs in: the nearest directory up from where it was started that holds
-/// this tool's own manifest, `rust/tool/Cargo.toml` (xpute's `rust/Cargo.toml` is a workspace
+/// this tool's own manifest, `rust/tool/Cargo.toml` (xpute's parts hold a `rust/Cargo.toml`
 /// too). It is found where the tool runs, not where it was built, because a target directory
 /// shared between two checkouts hands each the binary built last, from either.
 pub fn root() -> PathBuf {

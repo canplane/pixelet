@@ -172,10 +172,6 @@ function geolocation_stop(): void {
 
 let orient: Watch | null = null;
 
-/** A heading nearer the last one told than this is not told: a phone at rest
- * trembles by less, and each reading told is a frame drawn. */
-const HEADING_STEP_DEG = 1;
-
 function orient_fail(watch: Watch, refused: boolean): void {
   if (orient !== watch) return;
   orient_stop();
@@ -187,17 +183,12 @@ function orient_start(): void {
   if (orient !== null) return;
   const watch: Watch = { subscription: null, stopped: false };
   orient = watch;
-  let told: number | null = null;
   void (async () => {
     if (!(await geolocation_granted())) return orient_fail(watch, true);
     const subscription = await Location.watchHeadingAsync(
       (h) => {
         const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
-        const moved =
-          told === null ? 360 : 180 - Math.abs(Math.abs(heading - told) - 180);
-        if (moved < HEADING_STEP_DEG) return;
-        told = heading;
-        listener.orient(heading, null, null, null);
+        listener.orient(heading, null);
       },
       (reason) => {
         console.error("[sensor] heading:", reason);

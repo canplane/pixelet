@@ -11,9 +11,10 @@ use super::GpuHost;
 /// This is what the guest asked of a surface. It holds whether or not a window's
 /// surface is bound, so a window bound later is configured as asked.
 pub(super) struct Surface {
-    /// This holds CONFIGURE's format, usage and whether alpha is premultiplied.
+    /// This holds `CONFIGURE`'s format, usage and whether alpha is
+    /// premultiplied.
     pub(super) cfg: Option<(wgpu::TextureFormat, wgpu::TextureUsages, bool)>,
-    /// This is RESIZE's size, at least a pixel each way.
+    /// This is `RESIZE`'s size, at least a pixel each way.
     pub(super) size: [u32; 2],
     bound: Option<Bound>,
     /// This is the handle bound here. A slot outlives its handles, so an old
@@ -22,7 +23,7 @@ pub(super) struct Surface {
     /// This is the newest handle bound here, kept after it is let go, so that
     /// an older handle's late bind is refused.
     newest_handle: Option<u32>,
-    /// This run's texture is here, and every CURRENT of the run shares it.
+    /// This run's texture is here, and every `CURRENT` of the run shares it.
     pub(super) frame: Option<Frame>,
     /// This is the texture drawn into where the window gives none. It is kept
     /// until the format, usage or size asked for changes, so a hidden window

@@ -20,6 +20,8 @@
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
+use std::sync::OnceLock;
+use std::thread::ThreadId;
 
 use xpute_link::abi::types::Token;
 use xpute_link::frame::HDR_SZ;
@@ -49,6 +51,24 @@ fn cross_in(_at: u32) -> i32 {
     }
 }
 
+/// Whether the link is trapped (`trap`). On the guest's thread.
+pub fn trapped() -> bool {
+    SIDE.with(Side::trapped)
+}
+
+/// The guest's thread, the one that mounts what the host serves and enters
+/// the guest (`mount_named`, `mount`, `init`).
+static GUEST_THREAD: OnceLock<ThreadId> = OnceLock::new();
+
+fn record_guest_thread() {
+    GUEST_THREAD.get_or_init(|| std::thread::current().id());
+}
+
+/// Whether this is the guest's thread, where the link's state is.
+pub fn on_guest_thread() -> bool {
+    GUEST_THREAD.get() == Some(&std::thread::current().id())
+}
+
 /// Marks the link trapped, and tells the platform the first time, as a
 /// page's worker tells its trap. On the guest's thread.
 pub fn trap() {
@@ -75,10 +95,19 @@ thread_local! {
 
 /// Enters the guest first, once the host's own objects are mounted: the
 /// guest lays its link, the host reads its layout, then the guest boots and
-/// may open them (link.ts `init`). `report` hears a trap, from then on.
-/// False where the link trapped, whichever side failed.
-pub fn init(report: fn()) -> bool {
+/// may open them (link.ts `init`). Where an interface of `imports` (the
+/// bindings' `IMPORTS`) is not mounted under its named handle, the link
+/// traps, naming each, and the guest is never entered. `report` hears a
+/// trap, from then on. False where the link trapped, whichever side failed.
+pub(crate) fn init(report: fn(), imports: &[(&str, Handle)]) -> bool {
+    record_guest_thread();
     REPORT.set(Some(report));
+    let unserved: Vec<&str> = imports.iter().filter(|&&(_, h)| !SIDE.with(|s| s.serves(h))).map(|&(name, _)| name).collect();
+    if !unserved.is_empty() {
+        crate::log(&format!("[host] no server mounts {}", unserved.join(", ")));
+        trap();
+        return false;
+    }
     // SAFETY: the guest's export, called once, before any other.
     let at = SIDE.with(|s| s.crossed(|| unsafe { link_init() }));
     if at == TRAP_AT {
@@ -90,18 +119,20 @@ pub fn init(report: fn()) -> bool {
     if SIDE.with(|s| s.crossed(|| unsafe { link_boot() })) == TRAP {
         trap();
     }
-    !SIDE.with(Side::trapped)
+    !trapped()
 }
 
 pub fn mount(
     prefix: Vec<Token>,
     open: impl Fn(&[Token], Handle) -> Result<Rc<dyn Object>, Errno> + 'static,
 ) {
+    record_guest_thread();
     SIDE.with(|s| s.mount(prefix, open));
 }
 
 /// Serves `o` under its interface's named handle `h`.
 pub fn mount_named(h: Handle, o: Rc<dyn Object>) {
+    record_guest_thread();
     SIDE.with(|s| s.mount_named(h, o));
 }
 
@@ -186,7 +217,7 @@ pub(crate) fn task_return_pkt(t: Tag, result: i32, pkt: Option<Vec<u8>>) {
 /// trapped, a frame is not served: EPIPE, as `cross_in` answers.
 #[unsafe(no_mangle)]
 pub extern "C" fn link_out(at: u32) -> i32 {
-    if SIDE.with(Side::trapped) {
+    if trapped() {
         return Errno::EPIPE as i32;
     }
     std::panic::catch_unwind(|| SIDE.with(|s| s.recv(at))).unwrap_or_else(|_| {
@@ -197,7 +228,7 @@ pub extern "C" fn link_out(at: u32) -> i32 {
 
 /// Lays the completions given while serving, then runs the answers due,
 /// after the work at hand.
-pub fn run_due() {
+pub(crate) fn run_due() {
     while let Some((t, result, pkt)) = COMPLETIONS.with_borrow_mut(VecDeque::pop_front) {
         let pkt = pkt.as_deref().map_or(Packet::Args(None), Packet::Bytes);
         SIDE.with(|s| s.task_return(t, result, pkt));

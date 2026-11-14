@@ -1,9 +1,9 @@
 # Third-party notices
 
-Two copies here are of someone else's code rather than our own, and their
-licenses ask for a notice to travel with the copy; this records where each came
-from. xpute, the system pixelet runs on, is developed in
-this repository and keeps its own record of what it ported:
+One copy here is of someone else's code rather than our own, and its license
+asks for a notice to travel with the copy; this records where it came from.
+xpute, the system pixelet runs on, is developed in this repository and keeps
+its own record of what it ported:
 [xpute/THIRD_PARTY_NOTICES.md](./xpute/THIRD_PARTY_NOTICES.md).
 
 This file covers copied source only. Crates and npm packages that are merely
@@ -22,8 +22,9 @@ How bridges and tunnels stand is [louis-e/arnis][arnis] at `c96872e`
 railways without the blocks it places: the bake's solve in
 `separation/solve.rs`, its bridges in `solve/bridge.rs` and its tunnels in
 `solve/tunnel.rs`, each of whose heads carries the license notice, and the piers
-in `procedural.rs`, which reach the client and are marked where they begin. Both
-read Overture's fields for OSM's tags and take their widths from the ground.
+in `procedural.rs`, which reach the client; the parts taken from it are marked
+where they begin (`param.rs`, `way.rs`). Both read Overture's fields for OSM's
+tags and take their widths from the ground.
 Arnis's `NOTICE` asks that this be kept with them:
 
 ```text

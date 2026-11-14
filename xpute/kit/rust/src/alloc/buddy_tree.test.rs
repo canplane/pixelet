@@ -63,7 +63,7 @@ fn block_contents_survive() {
             at >= base && at + sz <= end,
             "a block of {sz} at {at:#x} is outside [{base:#x}, {end:#x})"
         );
-        // SAFETY: `size` bytes the allocator just handed out.
+        // SAFETY: `sz` bytes the allocator just handed out.
         unsafe { core::ptr::write_bytes(p, i as u8, *sz) };
         live.push((p, *sz, i as u8));
     }
@@ -83,13 +83,13 @@ fn block_contents_survive() {
         // SAFETY: as above.
         let p = unsafe { heap.malloc(sz) };
         if !p.is_null() {
-            // SAFETY: `size` bytes the allocator just handed out.
+            // SAFETY: `sz` bytes the allocator just handed out.
             unsafe { core::ptr::write_bytes(p, 0xff, sz) };
         }
     }
 
     for (p, sz, byte) in &live {
-        // SAFETY: still live, and `size` bytes long.
+        // SAFETY: still live, and `sz` bytes long.
         let bytes = unsafe { core::slice::from_raw_parts(*p, *sz) };
         assert!(
             bytes.iter().all(|b| b == byte),

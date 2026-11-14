@@ -360,8 +360,8 @@ impl TileGrid {
         (desc, number)
     }
 
-    /// Called when the frame was dropped. The stencil holds what the last drawn frame left, so
-    /// the next gated frame clears it.
+    /// Takes the frame as dropped. The stencil holds what the last drawn frame left, so the
+    /// next gated frame clears it.
     pub fn on_dropped(&mut self) {
         self.mask_number = MASK_NUMBER_CNT;
     }

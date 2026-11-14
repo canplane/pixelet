@@ -1,4 +1,4 @@
-// pxl-render/eye_bind.wgsl
+// pxl-render/frame/shader/eye_bind.wgsl
 
 // The eye a cast is made from. Its words lie where pxl-engine eye.rs places them, and a shader
 // reads them one word at a time.

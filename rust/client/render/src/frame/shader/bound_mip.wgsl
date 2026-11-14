@@ -1,4 +1,4 @@
-// pxl-render/bound_mip.wgsl
+// pxl-render/frame/shader/bound_mip.wgsl
 
 // Where a brick's levels of bounds lie in its words. Each level begins where `bound_mip_at`
 // says (world_word.wgsl, from pxl-engine clipmap.rs `bound_mip_at`), and its entries follow

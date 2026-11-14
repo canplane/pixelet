@@ -137,7 +137,7 @@ fn write_lands_before_destroy() {
 }
 
 /// A host writes the frames it admitted and has not seen done into the
-/// device's block, in the word before STATUS, at each poll. It admits
+/// device's block, in the word before `STATUS`, at each poll. It admits
 /// by the same rule that a page's guest applies to that word.
 #[test]
 fn native_tells_unfinished() {
@@ -162,8 +162,8 @@ fn native_tells_unfinished() {
 }
 
 /// A device lost stays lost, so its owner lets the host go. The first poll
-/// after the loss writes LOST into the device's block and lets the block go, so
-/// a later poll writes nothing over the block the next device's host writes.
+/// after the loss writes `LOST` into the device's block and lets the block go,
+/// so a later poll writes nothing over the block the next device's host writes.
 #[test]
 fn lost_told_once() {
     let (adapter, device, queue) = device();

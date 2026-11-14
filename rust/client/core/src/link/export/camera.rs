@@ -1,6 +1,6 @@
 // pxl-core/link/export/camera.rs
 
-//! The CAMERA major's commands: the tracking button, the compass, and going
+//! The camera interface's methods: the tracking button, the compass, and going
 //! to a search result.
 
 use super::{applied, on_earth, refuse_unless};

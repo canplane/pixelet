@@ -1,4 +1,4 @@
-// pxl-render/cached.wgsl
+// pxl-render/frame/shader/cached.wgsl
 
 // How the walk that only reads the node cache answers a node (walk.wgsl). It uses no atomics
 // and never asks the world, so a thread holds few words across its loop: on the Galaxy S23,
@@ -18,9 +18,10 @@ fn node_cache_word(k: u32) -> u32 {
 /// (walk_node.wgsl `holds_for`): kept at those zooms, or as a cell by its node alone. What it
 /// inherits is read only where `hands`. With no such slot, the answer is `KIND_LEFT`. A slot
 /// that keeps a split at other zooms is gone into when the node is asked finer than itself
-/// (`KIND_BLIND`). It hands on what it inherited of the clip levels only, not of the shards, as a
-/// moved brick's may be gone (`Inheritance::of`). `parent` and `top` serve the walk
-/// that asks (ask.wgsl) and are not read here.
+/// (`KIND_BLIND`). It hands on only what it inherited of what is placed: the shard is unknown,
+/// and where the clip levels held the ground is dropped, as a moved brick's may be gone
+/// (`Inheritance::of`). `parent` and `top` serve the walk that asks (ask.wgsl) and are not
+/// read here.
 fn node_answer(parent: vec3<u32>, top: bool, zoom: u32, c: vec3<i32>, zooms: u32, hands: bool) -> Answer {
   if (keeps(zoom, c)) {
     let node = vec4<u32>(zoom, u32(c.x), u32(c.y), u32(c.z));

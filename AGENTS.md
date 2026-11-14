@@ -21,8 +21,10 @@
 - After a change, check its state space: it is correct and no larger than
   before, or what it adds is justified by what it buys and why less would not
   do. Report the state removed, or the state added and what it buys.
-- Before a commit, the review agent (`.claude/agents/review.md`) reads the
-  change, briefed with its goal and its code, not its author's conclusions.
+- Before a commit, the review agent (`.agents/agents/review.md`) reads the
+  change, and the name agent (`.agents/agents/name.md`) the names it adds or
+  renames, each briefed with its goal and its code, not its author's
+  conclusions.
   Each finding is checked against the code or its source before it is acted on
   or passed on; one of correctness, a contract or structure is fixed by the
   change's author, one of lint or format alone is not, and a fix is no larger

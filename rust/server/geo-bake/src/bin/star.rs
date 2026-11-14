@@ -2,7 +2,7 @@
 
 //! The night sky's stars from the Yale Bright Star Catalog (V/50, CDS), as
 //! `make download-star` keeps it in `asset/raw/sky/star/`, into the
-//! records pxl-render's pass/star.rs reads (pxl-spec asset/star.rs),
+//! records pxl-render's `pass/star.rs` reads (pxl-spec `asset/star.rs`),
 //! brightest first.
 //!
 //!   make bake-star
@@ -15,7 +15,7 @@ use flate2::read::GzDecoder;
 use pxl_geo_bake::cli;
 use pxl_spec::asset::star::{rec, Star, REC_BYTES};
 
-/// The catalog as pxl-tool download/star.rs keeps it.
+/// The catalog as pxl-tool `download/star.rs` keeps it.
 const SRC: &str = "asset/raw/sky/star/catalog.gz";
 const OUT: &str = "rust/client/render/src/pass/bright_star.bin";
 const SOLAR_BV: f64 = 0.65;

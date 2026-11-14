@@ -15,7 +15,7 @@ use crate::frame::spec::{NAMED, SLOT_BITS};
 pub type Handle = u32;
 
 const SLOT_MASK: u32 = (1 << SLOT_BITS) - 1;
-/// The largest generation an issued handle holds above its slot, below NAMED.
+/// The largest generation an issued handle holds above its slot, below `NAMED`.
 const GENERATION_MASK: u32 = (NAMED - 1) >> SLOT_BITS;
 
 /// What an issued slot's `next` holds, which no free slot's does.

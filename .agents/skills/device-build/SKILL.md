@@ -1,6 +1,6 @@
 ---
 name: device-build
-description: Build the device app (ts/client) and put it on an iPhone, the iOS simulator, an Android emulator or an Android phone — the one-time setup of each machine, the Debug and Release builds, install and launch, and the failures each has had. Use when a device build is asked for, when one fails, or when a machine is set up for one.
+description: Build the device app (ts/client) and put it on an iPhone, the iOS simulator, an Android emulator or an Android phone — the one-time setup of each machine, the Debug and Release builds, install and launch, and the failures each has had. Use when a device build is asked for, when one fails, or when a machine is set up for one. Running the page is CONTRIBUTING.md's.
 ---
 
 # Building for a device
@@ -8,7 +8,8 @@ description: Build the device app (ts/client) and put it on an iPhone, the iOS s
 Prebuild first: `ts/client/ios/` and `ts/client/android/` come from
 `expo prebuild` and are not committed. Each platform's build builds the core
 with its runtime, `pxl-runtime` (`ts/client/package.json` `xpute.guest.runtime`),
-through `@xpute/native-runtime`'s `ts/client/script/core-build.py`.
+through the app's `ts/client/script/core-build.py`, which `PxlPlatform.podspec`
+and `build.gradle` (`ts/client/modules/platform/`) run.
 
 After the app moves, pnpm's links are remade or a config plugin is dropped from `app.config.ts`, prebuild again with `--clean` and run `pod install` again.
 
@@ -47,6 +48,8 @@ after `app.config.ts` or a plugin changes, or after a dependency is added.
 
 ### Build, install, launch
 
+Ask the user before taking a phone or the simulator (AGENTS.md).
+
 From `ts/client/ios`. A phone has different ids for xcodebuild and
 devicectl: `xcrun xctrace list devices` gives the first, `xcrun devicectl list
 devices` the second.
@@ -69,7 +72,7 @@ in Xcode (`com.apple.dt.Devices`). From `ts/client/ios`, with an id from
 `xcrun simctl list devices available`:
 
 ```bash
-xcrun simctl boot <id> && open -b com.apple.dt.Devices
+xcrun simctl boot <id> && open -g -b com.apple.dt.Devices
 xcodebuild -workspace pixelet.xcworkspace -scheme pixelet -configuration Debug \
   -destination 'id=<id>' -derivedDataPath build/derived -quiet
 ../../../script/perf/mac.py xcrun simctl install booted build/derived/Build/Products/Debug-iphonesimulator/pixelet.app
@@ -106,6 +109,8 @@ make install && (cd ts/client && pnpm exec expo prebuild --platform android --no
 
 ### Build, install, launch
 
+Ask the user before taking a phone or an emulator (AGENTS.md).
+
 From `ts/client/android`, with `ANDROID_HOME=~/Library/Android/sdk` and the
 platform tools' `adb`:
 
@@ -117,7 +122,7 @@ jenv exec ./gradlew :app:assembleRelease
 
 On an emulator, which draws on the Mac's GPU, the two run under
 script/perf/mac.py in place of android.py.
-`./gradlew :app:installRelease` builds and installs in one step, under the same
+`jenv exec ./gradlew :app:installRelease` builds and installs in one step, under the same
 module. The core's last
 messages and panics go to logcat under the tag `pxl`:
 `adb logcat -d | grep -E "FATAL| pxl |ReactNativeJS"`.

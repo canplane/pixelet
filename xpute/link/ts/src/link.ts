@@ -33,7 +33,7 @@
  *   args lend by (at, len) is the callee's until the answer: the caller keeps
  *   it, as the answer it owns.
  * - The callee answers in the frame the request came in: it lays it again,
- *   marked RES, with its result and its return data as the packet. A call's
+ *   marked `RES`, with its result and its return data as the packet. A call's
  *   return data is readable until the next crossing; a send's answer gets a
  *   copy, which it owns.
  */
@@ -61,6 +61,10 @@ import { type Handle, Table } from "./resource.ts";
 export type Tag = u32;
 export type Method = u32;
 export type { Handle } from "./resource.ts";
+
+/** The interfaces a guest's world imports that a host serves under a named
+ * handle, each `[name, handle]` (the bindings' `IMPORTS`). */
+export type Imports = readonly (readonly [string, Handle])[];
 
 export { CANCEL, DROP, NAMED, OPEN, ROOT };
 
@@ -184,11 +188,12 @@ export function refusal_of(e: unknown): i32 {
  * answered. */
 export interface Guest {
   readonly mem: ArrayBuffer;
-  /** link_init: where the link's layout lies, the inbox and a frame's room. */
+  /** Runs `link_init`, which answers where the link's layout lies, the inbox
+   * and a frame's room. */
   init(): u32;
-  /** link_boot: the guest's first entry, which boots it. */
+  /** Runs `link_boot`, the guest's first entry, which boots it. */
   boot(): void;
-  /** link_in: the frame laid in the inbox. */
+  /** Runs `link_in` on the frame laid in the inbox. */
   in(): i32;
   /** Tells the guest's platform the guest trapped, with the error `e`
    * (`Side.trap`). */
@@ -351,10 +356,17 @@ export class Side extends Server<Table<LinkObject>> {
 
   /** Enters the guest first, once the host's own objects are mounted: the
    * guest lays its link, the host reads its layout, and then the guest
-   * boots, and may open them. False where the link trapped meanwhile, the
+   * boots, and may open them. Where an interface of `imports` is not
+   * mounted under its named handle, the link traps, naming each, and the
+   * guest is never entered. False where the link trapped meanwhile, the
    * guest's trap or a failure of the host's (xpute-native-runtime
    * `link.rs` `init`). */
-  init(): boolean {
+  init(imports: Imports): boolean {
+    const unserved = imports.filter(([, h]) => !this._named.has(h)).map(([name]) => name);
+    if (unserved.length > 0) {
+      this.trap(`no server mounts ${unserved.join(", ")}`);
+      return false;
+    }
     const at = this._guest.init();
     if (this._trapped) return false;
     const layout = new DataView(this._guest.mem, at, 8);

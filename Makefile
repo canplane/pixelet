@@ -8,7 +8,7 @@
 # over them, and what runs across them: the generated code, the dev servers
 # and the deploy. Only code is formatted, each tree's by its own formatter;
 # the documents and data outside the trees are not. A script that runs alone
-# is run by its path, not from here (README.md, Commands). GNU Make 3.81 is enough.
+# is run by its path, not from here (CONTRIBUTING.md). GNU Make 3.81 is enough.
 #
 #   make install | -j8 check | test | fmt
 #   make check-ts, make test-rust, ...   one tree's
@@ -22,7 +22,7 @@
 .PHONY: install install-ts install-xpute install-rust install-py \
 	check check-ts check-rust check-rules check-spec check-build check-xpute \
 	test test-ts test-rust test-xpute test-gpu \
-	fmt fmt-ts fmt-rust \
+	fmt fmt-ts fmt-rust fmt-xpute \
 	spec dev dev-oven dev-shelf dev-native preview preview-oven preview-shelf \
 	serve-tile watch-wasm web web-preview \
 	sync-build-number deploy
@@ -76,11 +76,14 @@ test-xpute:
 test-gpu:
 	+cd rust && cargo test-gpu
 
-fmt: fmt-ts fmt-rust
+fmt: fmt-ts fmt-rust fmt-xpute
 fmt-ts:
 	pnpm --dir ts fmt
 fmt-rust:
 	cd rust && cargo fmt
+fmt-xpute:
+	cd xpute && cargo fmt
+	pnpm --dir xpute fmt
 
 # The code generated from spec/.
 spec:

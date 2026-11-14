@@ -7,7 +7,7 @@
 //! the passes.
 //!
 //! The eye's cast runs in stages over the camera grid (pxl-engine `beam`): beam rays from the
-//! grid's corners, each cell's start off them, and samples from those starts, whose stops go
+//! grid's corners, each cell's start off them, and samples from those starts, whose hits go
 //! into the record. The raster draws the record as boxes and keeps each pixel's nearest voxel,
 //! which the pixels' cast takes. The pixels the raster missed, the holes, are walked apart by
 //! the holes' queue, and the walked bits mark them, a bit a pixel (pxl-engine
@@ -147,7 +147,7 @@ pub(super) struct CastBuffer {
     beams: u32,
     grid: beam::Grid,
     beam_cap: u32,
-    /// The holes' runs through the queue (pxl-engine `ray::QUEUE_LANE_CNT`, `Run`): the eye's
+    /// The holes' runs through the queue (`Run`, pxl-engine `ray::QUEUE_LANE_CNT`): the eye's
     /// holes, which its pixels' cast left, over `queue_groups`, and the light's slots no voxel
     /// answered, over `light_groups`, each from its own head in `queues`.
     holes: [Pipeline; 5],
@@ -1126,7 +1126,7 @@ impl RayPass {
             hdr[written] = c.write_cnt as u32;
             hdr[written + 1..written + 1 + c.write_cnt]
                 .copy_from_slice(&c.written_groups[..c.write_cnt]);
-            // The holes' stops' dispatch starts with no workgroup across, one deep and one high.
+            // The holes' hits' dispatch starts with no workgroup across, one deep and one high.
             hdr[node_cache::HITS_ARGS as usize + 1] = 1;
             hdr[node_cache::HITS_ARGS as usize + 2] = 1;
             g.write_buf(c.node_cache, sequence::OPEN_NODE_CACHE.to_at(), bytes(&hdr));
@@ -1436,7 +1436,7 @@ impl RayPass {
         if casts {
             // The eye's cast, in order: the node cache forgets what it must, and what draws its
             // entries goes with them; the beam rays walk it, a corner each; each cell's start is
-            // found off them; the samples walk it from their cells' starts and set their stops
+            // found off them; the samples walk it from their cells' starts and set their hits
             // in the record; the raster draws the record's voxels as boxes and keeps each
             // pixel's nearest (ray/raster.rs); the pixels take their voxel off that and mark the
             // pixels it missed; and the holes' queue walks those (below). Each step reads what
@@ -1539,7 +1539,7 @@ impl RayPass {
                 g.end(pass);
             }
         }
-        // The holes' queue walks the eye's holes, and every stop goes into the record.
+        // The holes' queue walks the eye's holes, and every hit goes into the record.
         if casts {
             g.copy_buf(
                 encoder,
@@ -1568,7 +1568,7 @@ impl RayPass {
                 },
             );
             g.end(pass);
-            // Every stop is recorded, its new faces are asked, and its face word is put at its
+            // Every hit is recorded, its new faces are asked, and its face word is put at its
             // pixel (ray/raster.rs `rec_hits`). The next frame's raster draws them.
             c.raster.rec_hits(ctx, c.node_cache, GpuSpanName::Hole);
         }
@@ -1763,7 +1763,7 @@ impl RayPass {
                 },
             );
             g.end(pass);
-            // The samples' stops are set and drawn as the eye's are (ray/raster.rs `draw`).
+            // The samples' hits are set and drawn as the eye's are (ray/raster.rs `draw`).
             let stamp = ctx.stamp(GpuSpanName::LightRaster).pass();
             let pass = g.compute_pass(encoder, stamp);
             g.set_bind_group(pass, 0, c.light_groups[2].id(), &[]);
@@ -1808,7 +1808,7 @@ impl RayPass {
                 },
             );
             g.end(pass);
-            // Every stop the queue listed is recorded after the queue and before the light's
+            // Every hit the queue listed is recorded after the queue and before the light's
             // next draw (ray/raster.rs `light_rec_hits`, `light_draw`).
             c.raster
                 .light_rec_hits(ctx, c.node_cache, GpuSpanName::LightWalk);
@@ -1881,7 +1881,7 @@ impl RayPass {
 
     /// What the shadow map's pass reads of the light's cast, while the light's list exists: the
     /// list, whose reads tell the tiles its epoch cast and which tiles are read
-    /// (`light::reads_at`, `light::LIST_READS`); the cast that began the host's epoch
+    /// (`light::reads_at`, `light::LIST_READS`); the cast that began the epoch
     /// (`light::HDR_EPOCH`); and the args, whose lay draws the tiles read (`light::ARGS_LAY`).
     pub fn light_read(&self) -> Option<LightRead> {
         self.cast
@@ -2010,7 +2010,7 @@ fn light_args_buf(g: &Gpu) -> u32 {
 }
 
 /// Makes the light's list buffer: the words of `light::list_words`, then the pool and the
-/// stops (`light::buf_words`).
+/// hits (`light::buf_words`).
 fn light_list(g: &Gpu) -> u32 {
     g.buf(
         word_bytes(light::buf_words(SHADOW_SIZE) as usize),
@@ -2029,10 +2029,10 @@ fn light_list(g: &Gpu) -> u32 {
 /// (`LIGHT_WORLD_LAYOUT`) binds the light's list where the eye's world group binds the beam
 /// rays' buffer, and the light's head.
 ///
-/// The groups, by index: the slots'; the world's; the boxes'; the holes' last walk; the walked
-/// mark; the drawn mark; the propagation; the slide; the holes' walks over the node cache
-/// alone; the samples' walks over the node cache alone; the beam rays' walks over the node
-/// cache alone and their asks; the holes' asks; the drawn receivers' opening; the samples'
+/// The groups, by index: the slots'; the world's; the samples' hits; the holes' last walk; the
+/// walked mark; the drawn mark; the propagation; the slide; the holes' walks over the node
+/// cache alone; the samples' walks over the node cache alone; the beam rays' walks over the
+/// node cache alone and their asks; the holes' asks; the drawn receivers' opening; the samples'
 /// asks and last walk; and the beam rays' last walk.
 fn light_groups(
     [
@@ -2171,7 +2171,7 @@ fn set_groups<const N: usize>(
 /// A run of the queue's passes (pxl-engine `ray::QUEUE_LANE_CNT`): the pipelines of its first
 /// walk, its asks, its second walk, their asks and its last walk; its groups
 /// (`queue_groups`); the queues' buffer, which holds its head; the node cache, whose head takes
-/// its stops' count; and, for a holes' run, where that count is copied from and to before the
+/// its hits' count; and, for a holes' run, where that count is copied from and to before the
 /// last walk, as bytes (`sequence::HITS`).
 struct Run<'a> {
     pipelines: [&'a Pipeline; 5],
@@ -2183,7 +2183,7 @@ struct Run<'a> {
 
 /// Encodes a run's passes, each a fixed dispatch over what the one before wrote. The two walks
 /// over the node cache alone, each followed by the asks of the nodes it parked rays at, are
-/// timed in `spans[0]`. A holes' run then copies its stops' count and dispatch into the node
+/// timed in `spans[0]`. A holes' run then copies its hits' count and dispatch into the node
 /// cache's head. The last walk runs in a pass timed in `spans[1]`, which is returned open for
 /// what follows it.
 fn walk_run(ctx: &mut RenderContext, spans: [GpuSpanName; 2], r: &Run) -> Id {

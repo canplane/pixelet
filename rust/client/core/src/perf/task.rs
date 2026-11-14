@@ -40,8 +40,8 @@ pub(crate) struct TaskRecord {
     pub outcome: f64,
     pub fail: f64,
     pub detail: f64,
-    /// Where the failure was raised: the file name's address and length, and
-    /// the line. All are 0 when the host raised it.
+    /// Where the failure was raised: the file name's offset in the string
+    /// table and its length, and the line. All are 0 when the host raised it.
     pub at_file: f64,
     pub at_file_bytes: f64,
     pub at_line: f64,

@@ -31,6 +31,7 @@ pub const FACE_BITS: u32 = 3;
 use crate::answer;
 use crate::cast::STEPS_CAP;
 use crate::count;
+use crate::world;
 pub use crate::ZOOM_BITS;
 use pxl_spec::share::FILL_BITS;
 
@@ -138,9 +139,9 @@ pub const QUEUE_GROUP_CNT: u32 = 256;
 /// held.
 pub const ASKS_A_FRAME: u32 = 1 << 21;
 
-/// The stops an observer's list holds (pxl-render queue.wgsl `hit_in_cap`,
-/// `beam::Grid::hits_at`, `light::hits_at`). A ray past it ends with no stop kept for the
-/// record, and its pixel shows a box's face word (`face::BOX`) instead of its face's own.
+/// The hits an observer's list holds (pxl-render queue.wgsl `hit_in_cap`,
+/// `beam::Grid::hits_at`, `light::hits_at`). A ray past it ends with no hit kept for the
+/// record, and its pixel shows a face word of 0 instead of its face's own.
 pub const HITS_A_FRAME: u32 = 1 << 18;
 
 /// The queues' words, all in one buffer (pxl-render queue_walk.wgsl `queue`,
@@ -151,9 +152,9 @@ pub const HITS_A_FRAME: u32 = 1 << 18;
 /// of a run, go one after another, and no pass reads a record past the asks that follow the
 /// walk that listed it.
 ///
-/// A head holds the next hole the first walk takes (`QUEUE_NEXT`) and the next the second
+/// A head holds the next item the first walk takes (`QUEUE_NEXT`) and the next the second
 /// takes (`QUEUE_NEXT_PARKED`); the nodes each walk was parked at, listed for the asks
-/// (`QUEUE_ASKS`, `QUEUE_ASKS_PARKED`); the stops the two walks listed, laid out as
+/// (`QUEUE_ASKS`, `QUEUE_ASKS_PARKED`); the hits the two walks listed, laid out as
 /// `node_cache::HITS_ARGS` (`QUEUE_HITS`); and the rays its walks parked (`QUEUE_PARKED`). Each
 /// run starts from `QUEUE_EMPTY`.
 pub const QUEUE_NEXT: u32 = 0;
@@ -193,8 +194,14 @@ pub const fn queue_recs_at(queue: u32) -> u32 {
 
 /// An ask's record: the node's zoom, the three words of its index, the zooms it is asked at
 /// (the far zoom, then the near one `ZOOM_BITS` above it), whether it is asked from the top,
-/// and what was handed to its parent.
-pub const QUEUE_REC_WORDS: u32 = 9;
+/// and the three words of what was handed to its parent. pxl-render queue_walk.wgsl writes it
+/// and queue_ask.wgsl reads it, each word by its name.
+pub const QUEUE_REC_ZOOM: u32 = 0;
+pub const QUEUE_REC_IDX: u32 = 1;
+pub const QUEUE_REC_ZOOMS: u32 = 4;
+pub const QUEUE_REC_TOP: u32 = 5;
+pub const QUEUE_REC_INHERITANCE: u32 = 6;
+pub const QUEUE_REC_WORDS: u32 = QUEUE_REC_INHERITANCE + world::INHERITANCE_WORDS;
 /// The most nodes one walk lists for the asks after it. A ray parked at a node listed past
 /// it is asked by the last walk instead.
 pub const QUEUE_RECS_CAP: u32 = 1 << 17;

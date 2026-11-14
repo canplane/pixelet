@@ -1,4 +1,4 @@
-// pxl-render/record_box.wgsl
+// pxl-render/frame/shader/record_box.wgsl
 
 // The box of a drawable entry (pxl-engine raster.rs). The record's draw tests this box against
 // the observer's view (record_draw.wgsl), and the raster draws it from the entry's slot

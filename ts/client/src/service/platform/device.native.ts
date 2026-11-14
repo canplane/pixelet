@@ -1,4 +1,4 @@
 // @pxl/client/service/platform/device.native.ts
 
-/** Every device the app runs on is held to a phone's ceilings. */
+/** Every device the app runs on is a handheld. */
 export const HANDHELD: boolean = true;

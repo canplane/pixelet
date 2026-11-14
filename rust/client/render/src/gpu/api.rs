@@ -485,7 +485,7 @@ pub const fn sampler_entry(binding: u32, sampler: Id) -> Entry {
 }
 
 /// Whether two entries bind the same resource at the same binding. Comparing handles is
-/// enough: a handle is generational (xpute_guest abi/handle.rs), so a resource let go and made
+/// enough: a handle is generational (xpute-gpu-guest handle.rs), so a resource let go and made
 /// again gets a new handle, never its old one.
 fn same_entry(a: &Entry, b: &Entry) -> bool {
     use encode::Resource::{Buffer, Sampler, View};
@@ -656,7 +656,7 @@ struct State {
     /// Whether the device's block said LOST when last read. Only the host writes the block,
     /// so a loss is reported once by comparing against this flag, not by clearing the block.
     lost: bool,
-    /// The memory ranges that WRITE_BUFFER_AT records name, as address and length. `ranges`
+    /// The memory ranges that `WRITE_BUFFER_AT` records name, as address and length. `ranges`
     /// holds those recorded since the last flush. `ranges_out` holds those of the hand-off
     /// the host holds until it gives the stream back (`in_flight`).
     ranges: Vec<(usize, usize)>,
@@ -969,7 +969,7 @@ pub fn gpu_flush() {
     }
 }
 
-/// Whether `vals` overlaps memory that a WRITE_BUFFER_AT record names, among the records not
+/// Whether `vals` overlaps memory that a `WRITE_BUFFER_AT` record names, among the records not
 /// yet flushed or in the hand-off the host has not given back (xpute-gpu-guest
 /// stream.rs). While it does, the host is still to read that memory, so the values' writer leaves
 /// them unchanged and in place.
@@ -1387,7 +1387,7 @@ impl Gpu {
     /// `format` is `depth32float`, it draws into the depth alone and its fragment writes no
     /// color, as the shadow map's does (pass/shadow.rs). WebGPU makes it asynchronously: the
     /// host stores `ticket` at `fence` once the pipeline is made, and nothing names the
-    /// pipeline before then (gpu/pipeline.rs `PipelineCache::made`).
+    /// pipeline before then (gpu/pipeline.rs `PipelineCache::poll`).
     pub fn pipeline(
         &self,
         words: &[u32],
@@ -1797,7 +1797,7 @@ impl Gpu {
     #[track_caller]
     pub fn set_pipeline(&self, pass: Id, pipeline: Id) {
         let s = self.s();
-        // A render pass that declares what it draws draws nothing else (frame/shader/sequence.rs
+        // A render pass that declares what it draws draws nothing else (frame/shader/access.rs
         // `Step::in_pass`). Any other pipeline is refused at the call's line, and the bug names
         // the pipeline's record and the pass.
         if let Some(record) = s.split.undeclared(pass, pipeline) {
@@ -1808,12 +1808,12 @@ impl Gpu {
     }
 
     /// Holds render pass `pass` to drawing only `pipelines`, given by their records' numbers as
-    /// the frame's declarations name them (frame/shader/sequence.rs `Step::in_pass`).
+    /// the frame's declarations name them (frame/shader/access.rs `Step::in_pass`).
     pub fn declare_pass(&self, pass: Id, pipelines: &'static [u32]) {
         self.s().split.declared(pass, pipelines);
     }
 
-    /// Notes that render pipeline `pipeline` was made from record `record`, so that a pass
+    /// Notes that render pipeline `pipeline` was made from record `rec`, so that a pass
     /// that declares what it draws can check the pipeline.
     pub fn recorded(&self, pipeline: Id, rec: u32) {
         self.s().split.recorded(pipeline, rec);

@@ -1,6 +1,6 @@
-// pxl-render/world_rule.wgsl
+// pxl-render/frame/shader/world_rule.wgsl
 
-// The world's rules that read no buffer, written by hand as twins of their pxl-engine
+// The world's rules that read no buffer, written by hand as twins of their Rust
 // functions: a fill's eighths, the service area's wall, a bound word, the bounds a clip level's
 // entry holds, and a column's top in cells. The world's query (world.wgsl) reads them, and a
 // value's kind, which build.rs writes into world_word (`is_ground`, `voxel`).
@@ -67,7 +67,7 @@ fn joined(a: vec4<i32>, b: vec4<i32>) -> vec4<i32> {
 const BOUNDS_EMPTY = vec4<i32>(EMPTY_LO, EMPTY_HI, EMPTY_LO, EMPTY_HI);
 const BOUNDS_OPEN = vec4<i32>(UNBOUNDED_LO, UNBOUNDED_HI, UNBOUNDED_LO, UNBOUNDED_HI);
 
-// A column's top in cells, as pxl-engine ground.rs states it.
+// A column's top in cells, as pxl-spec ground.rs states it.
 
 struct Top {
   cells: i32,

@@ -1,4 +1,4 @@
-// pxl-render/light_resume.wgsl
+// pxl-render/frame/shader/light_resume.wgsl
 
 // A ray of the shadow map starts from the cell of the box its texel lies in (pxl-engine
 // `light::cell`), as the eye's rays start from theirs (resume.wgsl).

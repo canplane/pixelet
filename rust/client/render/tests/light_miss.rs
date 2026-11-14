@@ -581,7 +581,7 @@ fn lay_cells(gpu: &Gpu, b: &WorldBuffer, [eye, hdr]: [&wgpu::Buffer; 2], list: &
         ],
         [cells.div_ceil(side), cells.div_ceil(side), 1],
     );
-    // The beam's lines and hands and the cells' starts all lie before the holes' list
+    // The beam's lines and start distances and the cells' starts all lie before the holes' list
     // (`light::holes_at`), so the copy leaves the slots listed in `list` as they were.
     let laid = light::holes_at(SIZE) as usize;
     list[..laid].copy_from_slice(&gpu.read(&buf)[..laid]);
@@ -866,7 +866,7 @@ fn map_of(gpu: &Gpu) -> wgpu::Texture {
 }
 
 /// The light's list with `slots` in its holes' list (`light::holes_at`), and room past it for
-/// its pool and its stops (`light::buf_words`).
+/// its pool and its hits (`light::buf_words`).
 fn list_of(slots: &[u32]) -> Vec<u32> {
     let mut list = vec![0u32; light::buf_words(SIZE) as usize];
     let at = light::holes_at(SIZE) as usize;
@@ -876,7 +876,7 @@ fn list_of(slots: &[u32]) -> Vec<u32> {
 }
 
 /// Runs the holes' queue over the slots the list holds (`Gpu::holes`), writing the map `view`.
-/// Each stop it keeps in the list (queue.wgsl `finish`, `light::hits_at`) must name a slot that
+/// Each hit it keeps in the list (queue.wgsl `finish`, `light::hits_at`) must name a slot that
 /// `walked` lists, and no slot may have two.
 fn holes(
     gpu: &Gpu,

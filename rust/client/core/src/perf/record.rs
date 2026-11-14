@@ -199,7 +199,7 @@ pub(crate) fn perf_recording_start() -> bool {
             (tasks, frames, worst, scratch, strtab);
     }
     (l.task_len, l.frame_len, l.worst_len) = (0, 0, 0);
-    // The empty name, at offset 0.
+    // Offset 0 holds the empty name.
     l.strtab_len = 1;
     (l.task_head, l.frame_head) = (0, 0);
     l.open = None;
@@ -434,7 +434,7 @@ pub(crate) fn perf_frames() -> &'static [FrameSample] {
     &l.frame_ring[l.frame_head..l.frame_len]
 }
 
-/// In `end_ms` order, since a task is recorded as it settles.
+/// The tasks lie in `end_ms` order, since a task is recorded as it settles.
 pub(crate) fn perf_tasks() -> &'static [TaskRecord] {
     let l = perf();
     &l.task_ring[l.task_head..l.task_len]

@@ -35,7 +35,7 @@ const MAP_ALIGNMENT = 8;
 interface Chunk {
   buffer: GPUBuffer;
   state: number;
-  /** The chunk's mapped bytes while it is FREE or OPEN. */
+  /** The chunk's mapped bytes while it is `FREE` or `OPEN`. */
   bytes: Uint8Array | null;
 }
 

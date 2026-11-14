@@ -237,7 +237,7 @@ fn lowered(uri: &[Token]) -> Vec<u8> {
 /// Mounts what the UI serves: its named interfaces under their handles
 /// (@xpute/link remote.ts `Remote.named`), the methods `later` names answered
 /// later, and an opener at each of its `prefixes` (`Remote.prefixes`).
-pub fn serve(named: &[Handle], prefixes: Vec<Vec<Token>>, later: &'static [(Handle, Method)]) {
+pub(crate) fn serve(named: &[Handle], prefixes: Vec<Vec<Token>>, later: &'static [(Handle, Method)]) {
     for &h in named {
         link::mount_named(h, Rc::new(Named { h, later }));
     }
@@ -303,7 +303,7 @@ pub(crate) fn answer(generation: u32, tag: Tag, result: i32, data: Option<Vec<u8
 }
 
 /// Tells the UI once that a batch waits, after the work at hand.
-pub fn flush(notify: fn()) {
+pub(crate) fn flush(notify: fn()) {
     let tell = {
         let mut out = out();
         let tell = !out.batch.is_empty() && !out.told;

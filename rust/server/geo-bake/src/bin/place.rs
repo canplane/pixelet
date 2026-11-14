@@ -1,6 +1,6 @@
 // pxl-geo-bake/bin/place.rs
 
-//! The places pyramid, a shard at a time into its set (tile/shard.rs):
+//! The places pyramid, a shard at a time into its set (`tile/shard.rs`):
 //! `leaf` stages the named shards' leaves, then the zooms over them are
 //! folded again and committed; a version leaves out the tiles their parent
 //! marks as none.

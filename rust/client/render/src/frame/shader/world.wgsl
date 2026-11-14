@@ -1,4 +1,4 @@
-// pxl-render/world.wgsl
+// pxl-render/frame/shader/world.wgsl
 
 // The world's one query, written by hand (pxl-engine world.rs `node`). It reads, and never writes,
 // what the Rust side wrote: the clip levels, their bricks, the service area's index, what is placed
@@ -436,7 +436,7 @@ fn hand_down(zoom: u32, c: vec3<i32>, p: Piece, want: u32) -> Piece {
       at = i;
     }
   }
-  // The piece's p.blocks are handed along the walk, each part taking its share of what is left.
+  // The piece's `p.blocks` are handed along the walk, each part taking its share of what is left.
   var want_blocks = 0u;
   var rest = cells.x + cells.y + cells.z + cells.w;
   var left = p.blocks;

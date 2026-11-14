@@ -1,7 +1,8 @@
 // pxl-core/link/export/input.rs
 
-//! The INPUT major's commands: the pointer, the wheel, a trackpad's pinch,
-//! the held movement keys, and a tracker's pose.
+//! The input interface's methods: the pointer, the wheel, a trackpad's pinch,
+//! the held movement keys, a tracker's pose, and whether the UI takes typed
+//! text.
 
 use super::{applied, refuse_unless};
 use crate::domain::control::camera::controller;
@@ -17,7 +18,7 @@ use xpute_kit::status::errno::Errno;
 
 #[derive(Default)]
 struct Pointers {
-    /// The UI is taking typed text (INPUT_TYPING).
+    /// The UI is taking typed text (`typing`).
     typing: bool,
     /// The pointers pressed while it was, whose lifts tap nothing.
     spent: Vec<i32>,

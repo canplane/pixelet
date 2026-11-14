@@ -73,7 +73,7 @@ impl Inheritance {
 }
 
 /// What is in the node `c` at `zoom`, asked from `far` to `near`, given what the node above
-/// handed it (`at`). Its shard is found first, before any layer answers, so a stop's shard is
+/// handed it (`at`). Its shard is found first, before any layer answers, so a hit's shard is
 /// its own whichever layer stops it. Where the ground's cells of a node above were held
 /// becomes the node's own (`ground::node`). A preview's `carve` and `hide` (`object::Cut`) are
 /// read with what is placed.

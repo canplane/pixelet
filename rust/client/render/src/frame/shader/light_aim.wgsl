@@ -1,4 +1,4 @@
-// pxl-render/light_aim.wgsl
+// pxl-render/frame/shader/light_aim.wgsl
 
 // What the light's passes read of the light's head and of its cast: where a cell's rays start,
 // a texel's ray and band, and the word a slot's walk leaves. Each is the rule pxl-engine

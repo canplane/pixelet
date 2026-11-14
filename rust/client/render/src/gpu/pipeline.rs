@@ -7,7 +7,7 @@
 //! The renderer is made in three steps (renderer.rs `render_frame`). First every shader
 //! module is made, a few a frame (`make_modules`). Then the renderer is made, and each of its
 //! pipelines is made by WebGPU's async call, with the word its ticket lands in kept here. Then
-//! no frame is drawn until every word says its pipeline is made (`made`). A pipeline asked for
+//! no frame is drawn until every word says its pipeline is made (`poll`). A pipeline asked for
 //! once the renderer draws must be found already made; anything else is a bug.
 
 use crate::frame::shader::floor::{BIND_GROUPS, VERTEX_BUFFERS};
@@ -48,7 +48,7 @@ pub struct PipelineCache {
     /// host writes nothing more.
     words: Box<[u32; PIPELINE_CAP]>,
     /// How many of the pipelines are made, in whatever order WebGPU made
-    /// them, as `made` last counted.
+    /// them, as `poll` last counted.
     made_cnt: usize,
 }
 
@@ -175,7 +175,7 @@ impl PipelineCache {
     }
 
     /// Pipeline `id` drawing into `format` and a gated depth (`MASKED_DEPTH`), as `stencil`
-    /// asks. When `format` is depth32's, it draws into the depth alone (`build`).
+    /// asks. When `format` is depth32's, it draws into the depth alone (`Gpu::pipeline`).
     pub fn build_masked(&mut self, g: &Gpu, id: u32, format: Format, stencil: Stencil) -> Pipeline {
         self.build_onto(g, id, (format, 1), (MASKED_DEPTH, stencil))
     }

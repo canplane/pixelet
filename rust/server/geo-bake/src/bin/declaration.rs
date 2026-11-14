@@ -1,8 +1,8 @@
 // pxl-geo-bake/bin/declaration.rs
 
 //! Writes the published declaration (`source`) out of a record of what the
-//! bucket serves, read from stdin (`source::recorded`), to stdout, for
-//! script/publish.py to upload.
+//! bucket serves, read from stdin (`source::decl_of`), to stdout, for
+//! `script/publish.py` to upload.
 
 use std::io::Read;
 use std::process::ExitCode;

@@ -38,7 +38,7 @@
 //!   args lend by (at, len) is the callee's until the answer: the caller keeps
 //!   it, as the answer it owns.
 //! - The callee answers in the frame the request came in: it lays it again,
-//!   marked RES, with its result and its return data as the packet. A call's
+//!   marked `RES`, with its result and its return data as the packet. A call's
 //!   return data is readable until the next crossing; a send's answer gets a
 //!   copy, which it owns.
 
@@ -273,6 +273,11 @@ impl Side {
     pub fn mount_named(&self, h: Handle, o: Rc<dyn Object>) {
         let was = self.named.borrow_mut().insert(h, o);
         xpute_kit::ensure!(was.is_none(), EEXIST, h);
+    }
+
+    /// Whether this side serves an interface under the named handle `h`.
+    pub fn serves(&self, h: Handle) -> bool {
+        self.named.borrow().contains_key(&h)
     }
 
     /// Serves `o` under a handle issued for it, which a method answers for

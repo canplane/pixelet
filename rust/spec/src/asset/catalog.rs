@@ -14,7 +14,7 @@ pub mod spec;
 pub use spec::*;
 
 /// A file reference a definition makes, numbered in the asset specs' order
-/// (pxl-tool spec/catalog.rs numbers them).
+/// (pxl-tool `spec/catalog.rs` numbers them).
 pub type Slot = u16;
 
 pub struct Catalog {

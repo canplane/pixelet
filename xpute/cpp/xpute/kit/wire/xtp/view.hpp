@@ -376,8 +376,9 @@ template <class Alloc> void walk(PacketWriter &w, const Node<Alloc> &n) {
 
 // This encodes a tree by walking it onto `PacketWriter`. The first buffer has
 // `init_cap` bytes; each time the packet overflows it, the tree is walked
-// again into one twice as large, up to `max_cap`. A `max_cap` below HDR_SZ or
-// above MAX_PKT_SZ is EINVAL; a packet larger than `max_cap` is EOVERFLOW.
+// again into one twice as large, up to `max_cap`. A `max_cap` below `HDR_SZ`
+// or above `MAX_PKT_SZ` is EINVAL; a packet larger than `max_cap` is
+// EOVERFLOW.
 template <class Alloc, class View>
 Result<std::vector<std::uint8_t, typename std::allocator_traits<Alloc>::template rebind_alloc<std::uint8_t>>> encode(const View &view, TreeEncoderConfig opts = {},
                                                                                                                      const Alloc &alloc = Alloc()) {

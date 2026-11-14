@@ -326,9 +326,9 @@ async fn frame_task() {
             }
         }
         // A frame whose stream the host still holds, or that the GPU cannot
-        // take without blocking (xpute_gpu_guest::admit::frame), does not run,
-        // is counted by why, and asks for the next, so the renderer is never
-        // handed a frame it would have to put off.
+        // take without blocking (`xpute_gpu_guest::admit::frame`), does not
+        // run, is counted by why, and asks for the next, so the renderer is
+        // never handed a frame it would have to put off.
         let refused = REFUSED.get(Refused::default);
         let why = if !api::stream_free() {
             Some(&mut refused.stream)
@@ -359,8 +359,8 @@ fn run() -> TickReport {
     set_credit_cnt(CREDIT_CNT);
     text_drop_unread();
     let (effects_ms, effects) = effects();
-    // A step longer than MAX_STEP_S would carry a character through a wall
-    // or make a damped camera overshoot.
+    // A step longer than `MAX_STEP_S` would carry a character through a
+    // wall or make a damped camera overshoot.
     let step = delta.min(MAX_STEP_S);
     let report = tick(step);
     let after_tick = now();

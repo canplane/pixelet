@@ -1,11 +1,11 @@
-// pxl-render/corner.wgsl
+// pxl-render/frame/shader/corner.wgsl
 
 // The beam rays as the queue's items (queue_walk.wgsl, queue_last.wgsl), laid out for an
 // observer by beam.eye.wgsl or beam.light.wgsl. Each is a ray from the root that keeps its line
 // as it goes (walk.wgsl). Between its run's walks it is parked at its state's place
 // (`corner_state_at`, parked.wgsl), and its line then ends at the parent of the node it was left
 // at, whose inherited words the line holds. When the ray ends, it writes how far the rays about
-// it start (`beam_hand`).
+// it start (`beam_start_dist`).
 
 /// The beam ray an item word names: its column in the low half and its row in the high half.
 fn corner_of(item: u32) -> vec2<u32> {
@@ -67,10 +67,10 @@ fn parked_start(item: u32) -> Start {
 }
 
 /// Ends the beam ray: its state is no longer parked, it writes how far the rays about it start
-/// (`beam_hand`), and its line takes the steps its walk took.
+/// (`beam_start_dist`), and its line takes the steps its walk took.
 fn finish(item: u32, aim: Aim, w: WalkEnd) {
   let c = corner_of(item);
   beams[corner_state_at(c) + 4u] = 0u;
-  beams[beam_hand_at(c)] = bitcast<u32>(beam_hand(w.t));
+  beams[beam_start_dist_at(c)] = bitcast<u32>(beam_start_dist(w.t));
   beams[beam_line(c) + LINE_STEPS] = w.step;
 }

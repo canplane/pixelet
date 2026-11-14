@@ -1,6 +1,6 @@
 ---
 name: naming
-description: Naming in pixelet — short, plain names read where they stand; where a word comes from; the abbreviations and the words that stay whole; the names chosen with the user. Use before naming, renaming or reviewing names, in code, spec JSON or a backticked identifier in a document.
+description: Naming in pixelet — short, plain names read where they stand; where a word comes from; the abbreviations and the words that stay whole; the names chosen with the user. Use before naming, renaming or reviewing names, in code, spec JSON or a backticked identifier in a document. How the code itself is shaped is the code skill's.
 ---
 
 # Naming
@@ -79,7 +79,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   | a frame's word naming its target handle and method | its `cmd` | vec, vector, opcode |
   | a function of an interface the other side serves (the UI calls the core's exports, the guest its imports) | a method | command, hostcall, system call, hypercall |
   | a method answered before it returns | a call | hostcall |
-  | a node of the plane at a zoom | `Quadrant`, `quad_at` | Tile |
+  | a node of the plane at a zoom | `Quadrant` (`Quadrant::new`) | Tile |
   | a node under a shard, through the height as well | `Octant` | EntryAt |
   | a quadrant fetched and stored as one, and what it holds | a tile (`TerrainTile`, `TileCache`) | |
   | a node's name as text, a quadkey or an octkey | its `key` | |

@@ -56,6 +56,10 @@ mod _rt {
     pub(super) use xpute_link::{Handle, Lift, Method, Object, Reply, Tag};
 }
 
+/// The interfaces the world imports that the host serves under a named
+/// handle, each `(name, handle)`, which are mounted before the guest boots.
+pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[("xpute:stop/stop", 0x4eccaa)];
+
 /// The methods of the named interfaces the host serves that answer
 /// later, each `(handle, method)`, as WIT's `async func` marks them.
 pub const LATER: &[(xpute_link::Handle, xpute_link::Method)] = &[];

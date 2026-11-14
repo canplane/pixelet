@@ -257,7 +257,7 @@ fn walk_word() -> String {
         // workgroup with a side of its own: light_cell.wgsl with `SAMPLE_SIDE`, the light's
         // sample box (sample.light.wgsl `sample_item`) with `SQUARE_SIDE`, and light.wgsl with
         // its tile. The cast sizes each pass's dispatch by that pass's side (ray/cast.rs
-        // `light_args`), so each side must be SAMPLE_SIDE.
+        // `light_args`), so each side must be `SAMPLE_SIDE`.
         assert!(
             light::TILE == SAMPLE_SIDE && word::SQUARE_SIDE == SAMPLE_SIDE,
             "light_item reads a workgroup as SAMPLE_SIDE x SAMPLE_SIDE lanes: a light tile and \
@@ -394,7 +394,7 @@ fn walk_word() -> String {
         ),
         ("LIGHT_HDR_READS", U32(light::HDR_READS as u32)),
         ("LIGHT_HDR_TILES", U32(light::HDR_TILES as u32)),
-        ("LIGHT_HDR_HANDS", U32(light::HDR_HANDS as u32)),
+        ("LIGHT_HDR_START_DISTS", U32(light::HDR_START_DISTS as u32)),
         ("LIGHT_HDR_CARRY", U32(light::HDR_CARRY as u32)),
         ("LIGHT_HDR_SLIDE", U32(light::HDR_SLIDE as u32)),
         ("LIGHT_HDR_WORLD", U32(light::HDR_WORLD as u32)),
@@ -472,7 +472,7 @@ fn walk_word() -> String {
             "GRID_CORNER_STATES_AT",
             U32(beam::GRID_CORNER_STATES_AT as u32),
         ),
-        ("GRID_HANDS_AT", U32(beam::GRID_HANDS_AT as u32)),
+        ("GRID_START_DISTS_AT", U32(beam::GRID_START_DISTS_AT as u32)),
         ("GRID_SLOPE", U32(beam::GRID_SLOPE as u32)),
         ("STARTS_ACROSS", U32(light::STARTS_ACROSS as u32)),
         ("STARTS_DOWN", U32(light::STARTS_DOWN as u32)),
@@ -544,6 +544,11 @@ fn walk_word() -> String {
             "LIGHT_HOLES_RECS_AT",
             U32(ray::queue_recs_at(ray::QUEUE_LIGHT_HOLES)),
         ),
+        ("QUEUE_REC_ZOOM", U32(ray::QUEUE_REC_ZOOM)),
+        ("QUEUE_REC_IDX", U32(ray::QUEUE_REC_IDX)),
+        ("QUEUE_REC_ZOOMS", U32(ray::QUEUE_REC_ZOOMS)),
+        ("QUEUE_REC_TOP", U32(ray::QUEUE_REC_TOP)),
+        ("QUEUE_REC_INHERITANCE", U32(ray::QUEUE_REC_INHERITANCE)),
         ("QUEUE_REC_WORDS", U32(ray::QUEUE_REC_WORDS)),
         ("QUEUE_WORDS", U32(ray::QUEUE_WORDS)),
         ("QUEUE_HDR_STRIDE", U32(ray::QUEUE_HDR_STRIDE)),
@@ -870,7 +875,7 @@ fn decor_word() -> String {
     let spin = |t: u32| U32((t as f32 * core::f32::consts::FRAC_PI_2).to_bits());
     out += &table("turn_spin", (0..turns).map(|t| (t, spin(t))), spin(turns));
     // How far below its box's top a cell keeping `k` eighths leaves its own top, as a share of
-    // the cell's side (`cast::top`, `generation::footing`), read as the Rust's float.
+    // the cell's side (`cast::top`, `cast::fill_bound`), read as the Rust's float.
     let sink = |k: u32| {
         let asset = (k % EIGHTH_CNT) << answer::FILL_SHIFT;
         Bits(1.0 - cast::fill_bound(([0.0; 3], [1.0; 3]), asset).1[2])
@@ -1004,7 +1009,7 @@ fn debug_look() -> String {
     use pxl_spec::color::Rgb;
     use pxl_spec::space::camera::grid::SPANS;
     // A world's cell spans (1, `SPANS`] of the view's cells where the rays stop on it
-    // (pxl-engine grid.rs `cell_zoom_at`), so its share of a cell squared lies within
+    // (pxl-spec grid.rs `cell_zoom_at`), so its share of a cell squared lies within
     // (1, `SPANS`²]: the tints' bounds are those.
     const {
         assert!(

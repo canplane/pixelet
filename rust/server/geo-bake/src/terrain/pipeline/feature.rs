@@ -94,7 +94,7 @@ pub(crate) fn closes(g: &WkbGeometry) -> bool {
 }
 
 impl Feature {
-    /// A line of no width yet, from its points; None where it has none.
+    /// A line of no width yet, from its points; `None` where it has none.
     pub fn line(points: &[G3857], tile_min: G3857, cell: GroundId, rank: Rank) -> Option<Feature> {
         (!points.is_empty()).then(|| Feature {
             points: points.iter().map(|&p| local(p, tile_min)).collect(),
@@ -107,7 +107,7 @@ impl Feature {
         })
     }
 
-    /// An area, or a line of no width, from a geometry; None where it has no points.
+    /// An area, or a line of no width, from a geometry; `None` where it has no points.
     pub fn of(g: &WkbGeometry, tile_min: G3857, cell: GroundId, rank: Rank) -> Option<Feature> {
         (!g.points.is_empty()).then(|| Feature {
             points: g.points.iter().map(|&p| local(p, tile_min)).collect(),

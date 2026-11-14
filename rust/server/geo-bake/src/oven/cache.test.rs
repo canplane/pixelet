@@ -6,7 +6,7 @@ use pxl_spec::directory;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::time;
 
-/// The folder a test's caches lie in, under the checkout's tmp/, removed when the test ends.
+/// The folder a test's caches lie in, under the checkout's `tmp/`, removed when the test ends.
 struct Folder(PathBuf);
 
 impl Drop for Folder {

@@ -1,4 +1,4 @@
-// pxl-render/walked.wgsl
+// pxl-render/frame/shader/walked.wgsl
 
 // Where the eye's holes lie among the beam rays' words, past the camera grid's (pxl-engine
 // `beam::Grid::walked_at`, `ray::holes_words`). Three parts follow one another. The walked bits

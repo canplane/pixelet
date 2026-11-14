@@ -1,4 +1,4 @@
-// pxl-render/decor_instance.wgsl
+// pxl-render/frame/shader/decor_instance.wgsl
 
 // The decor's instances (gpu/generator.rs `instances`): `drawing::COLUMN_CNT` lanes and the index
 // list, each a word a slot. `decor_compact_cs` writes them, and `decor_args_cs` lets a region

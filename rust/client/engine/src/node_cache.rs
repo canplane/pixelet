@@ -32,7 +32,7 @@
 //! and asset, what was handed the node after it was asked (`world::Inheritance::words`), and
 //! the node's zoom and index, which tell it from another node in the same slot (pxl-render
 //! forget.wgsl reads its column). What draws the entry lies apart (`STATES_AT`,
-//! `RECS_AT`): it is none until a ray stops on the node, is written by the stops, the
+//! `RECS_AT`): it is none until a ray stops on the node, is written by the hits, the
 //! draws and the faces' pass, and its state is cleared wherever the slot is written. It lies apart
 //! because a walk reads a bucket's keys from one cache line and an entry's words from
 //! another, and a pass over every slot reads only the words it asks.
@@ -93,7 +93,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 /// (`object::DAMAGE_CAP`, `object::cut_rect`; pxl-render gpu/generator.rs). From `WRITTEN_AT` come
 /// the child groups of what is placed written since the last cast, by their first slots: their
 /// count, then at most `WRITTEN_CAP`, past which everything is forgotten (pxl-render
-/// forget.wgsl `reads_written`). Last, `CNT_ON` and `CNT_AT` say whether the walks count
+/// forget.wgsl `reads_written`). Then `CNT_ON` and `CNT_AT` say whether the walks count
 /// what they ask, and hold what they counted.
 pub const FRAME: u32 = 0;
 pub const FORGETS: u32 = 1;
@@ -115,7 +115,7 @@ pub const CNT_ON: u32 = WRITTEN_AT + 1 + WRITTEN_CAP;
 pub(crate) const CNT_AT: u32 = CNT_ON + 1;
 pub(crate) const CNT_WORDS: u32 = count::OBSERVER_CNT * count::WALK_CNT;
 /// The hits of the missed pixels kept for their faces (`beam::HIT_WORDS`): the dispatch over
-/// them, which the second walks raise, and their count (`HITS_ARGS`, `HITS_CNT`). They are
+/// them, which the last walks raise, and their count (`HITS_ARGS`, `HITS_CNT`). They are
 /// set each frame the cast runs, with the rest of the head; the passes they dispatch read
 /// them and do not write them.
 pub const HITS_ARGS: u32 = CNT_AT + CNT_WORDS;

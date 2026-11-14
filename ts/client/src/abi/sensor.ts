@@ -79,11 +79,9 @@ export async function orient(
   link_: Sender,
   webkit_compass_heading: number | null,
   alpha: number | null,
-  beta: number | null,
-  gamma: number | null,
 ): Promise<void> {
   const a_ = await link_.send(HANDLE, ORIENT, [
-    64,
+    32,
     (w_) => {
       if (webkit_compass_heading !== null) {
         w_.u8(0, 1);
@@ -92,14 +90,6 @@ export async function orient(
       if (alpha !== null) {
         w_.u8(16, 1);
         w_.f64(24, alpha);
-      }
-      if (beta !== null) {
-        w_.u8(32, 1);
-        w_.f64(40, beta);
-      }
-      if (gamma !== null) {
-        w_.u8(48, 1);
-        w_.f64(56, gamma);
       }
     },
   ]);

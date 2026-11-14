@@ -1,6 +1,6 @@
-// pxl-render/sample_hit.wgsl
+// pxl-render/frame/shader/sample_hit.wgsl
 
-// Writes an observer's samples into the record as stops, the eye's and the light's alike, one
+// Writes an observer's samples into the record as hits, the eye's and the light's alike, one
 // thread a sample (record_put.wgsl `observe_hit`; pxl-engine record.rs). Each sample that
 // stopped finds its node's entry, which the walk that stopped it kept, and sets the face it
 // entered across. Where its observer reads faces' words, the first sample to enter a face asks

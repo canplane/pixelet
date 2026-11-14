@@ -1,4 +1,4 @@
-// pxl-render/answer.wgsl
+// pxl-render/frame/shader/answer.wgsl
 
 // A node's answer, laid out as pxl-engine answer.rs defines it. The world's query gives it
 // (world.wgsl), and every walk reads it (walk.wgsl), whether the walk finds it in the node cache

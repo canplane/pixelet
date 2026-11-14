@@ -20,7 +20,7 @@ import { NAMED, SLOT_BITS } from "./frame.spec.ts";
 export type Handle = u32;
 
 const SLOT_MASK = (1 << SLOT_BITS) - 1;
-/** The largest generation an issued handle holds above its slot, below NAMED. */
+/** The largest generation an issued handle holds above its slot, below `NAMED`. */
 const GENERATION_MASK = (NAMED - 1) >>> SLOT_BITS;
 
 /** What an issued slot's `next` holds, which no free slot's does. */

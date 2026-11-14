@@ -934,7 +934,7 @@ struct BrickFill {
     stage: Stage,
 }
 
-/// A part of a brick's fill, the unit a frame takes. `Spans` is one row of
+/// A part of a brick's fill, the unit a frame takes. `Span` is one row of
 /// its spans, the ring's rows included.
 #[derive(Clone, Copy)]
 enum Stage {

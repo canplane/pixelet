@@ -1,4 +1,4 @@
-// pxl-render/decor_thin.wgsl
+// pxl-render/frame/shader/decor_thin.wgsl
 
 // Lays the candidates of each pair that `decor_mark_cs` listed whole, one thread a clip level
 // cell of the pair's brick. Each leaf cell under that cell is read from the decor's hashes. A

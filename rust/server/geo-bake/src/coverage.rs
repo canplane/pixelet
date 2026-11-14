@@ -1,8 +1,8 @@
 // pxl-geo-bake/coverage.rs
 
 //! What the bakes publish: the shards `infra/geo/coverage.json` names, each a tile at
-//! `SHARD_ZOOM`, which are also what the ingests take. The module is also the one door to the
-//! DB.
+//! `SHARD_ZOOM`, which are also what the ingests take. A bake opens the DB through this module
+//! alone.
 
 use std::collections::BTreeSet;
 use std::sync::LazyLock;

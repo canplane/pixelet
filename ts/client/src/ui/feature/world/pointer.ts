@@ -49,7 +49,8 @@ export function world_pointer(
   const typing = dock_mode() === DockMode.MESSAGE;
   switch (phase) {
     case POINTER_PHASE_DOWN:
-      // Sent while the core still types, so it spends the press (INPUT_TYPING).
+      // Sent while the core still types, so that it spends the press
+      // (pxl:core input `typing`).
       pressed.set(id, pointer_type);
       put_keyboard_away();
       input.pointer(phase, pointer_type, id, button, x, y);

@@ -1,4 +1,4 @@
-// pxl-render/corner_run.light.wgsl
+// pxl-render/frame/shader/corner_run.light.wgsl
 
 // What the queue's passes over the light's beam rays read of their run (queue_walk.wgsl,
 // queue_ask.wgsl, queue_last.wgsl, corner.wgsl): the tag their walks put in the node cache's

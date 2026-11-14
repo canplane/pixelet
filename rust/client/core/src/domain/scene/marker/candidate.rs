@@ -20,8 +20,8 @@ pub(super) struct CandidateTable {
     pub region_px: Vec<f32>,
     /// How far below the sprite's top the anchor lies, in CSS pixels.
     pub anchor_px: Vec<f32>,
-    /// Used only to keep two candidates at equal distance from swapping
-    /// between frames.
+    /// It breaks a tie between candidates at equal distance, so they do not
+    /// swap between frames.
     pub tiebreak: Vec<f64>,
 
     // The selector fills the fields below. They live here so the pass

@@ -13,7 +13,7 @@
 //! as it was, the map is drawn again only in the tiles they set (gpu/tile.rs), through a
 //! gate of its own (light_mask.wgsl), as the world's pass is. At a side of 2048 the world
 //! takes 16 MiB and the map with its stencil 20 MiB, and both exist only while the shadows
-//! are on (`Shadow::made`).
+//! are on (`Shadow::sync`).
 
 use crate::frame::shader::sequence;
 use pxl_engine::cast::REACH;
@@ -96,7 +96,7 @@ fn ortho(out: &mut Mat4, half: f64, near: f64, far: f64) {
     out[15] = 1.0;
 }
 
-/// The textures the shadows hold while they are on (`Shadow::made`). `map` is the shadow map
+/// The textures the shadows hold while they are on (`Shadow::sync`). `map` is the shadow map
 /// as its pass draws it, with the gate's stencil (`MASKED_DEPTH`), and `map_depth_view` is its
 /// depth alone, as the lit passes read it. `world` is the world's depth from the light as the
 /// light's cast leaves it, a word for each slot of the clipmap (pxl-engine `light::word`).
@@ -296,7 +296,7 @@ impl Shadow {
         );
     }
 
-    /// Whether the map and the world are made (`made`).
+    /// Whether the map and the world are made (`sync`).
     pub fn on(&self) -> bool {
         self.target.is_some()
     }

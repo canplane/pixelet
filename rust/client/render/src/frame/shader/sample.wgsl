@@ -1,4 +1,4 @@
-// pxl-render/sample.wgsl
+// pxl-render/frame/shader/sample.wgsl
 
 // An observer's samples as the queue's items (queue_walk.wgsl, queue_last.wgsl), laid out as
 // sample.eye.wgsl or sample.light.wgsl lays them. Each item is a sample's ray, which starts at

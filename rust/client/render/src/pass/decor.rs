@@ -1,9 +1,9 @@
 // pxl-render/pass/decor.rs
 
-//! The decor's model tier. Each decor variant is a draw group with one model
-//! and one skin, and the pass draws a group's model instanced. The decor's
-//! instances are the instance buffer, and its index list says which of them
-//! show. A group's skin is the bind group of its image (pass/model.rs
+//! The decor drawn as a model. Each decor variant is a draw group with one
+//! model and one skin, and the pass draws a group's model instanced. The
+//! decor's instances are the instance buffer, and its index list says which of
+//! them show. A group's skin is the bind group of its image (pass/model.rs
 //! `skin_group`). A listed draw that changed marks the tiles it covers where
 //! it was and where it is (pass/mark.rs). The upload such a draw reads
 //! holds its instances.
@@ -274,7 +274,7 @@ impl DecorPass {
 
     /// Draws the models the GPU generated, one indirect draw for each group
     /// whose model is on the device. A group's models are in region `2·group`
-    /// of what the GPU generated (pxl-content `generation::drawn`).
+    /// of what the GPU generated (pxl-content `generation::drawing`).
     pub fn draw_generated(
         &mut self,
         pass: &mut TrackedRenderPass,

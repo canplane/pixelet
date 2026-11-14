@@ -1,4 +1,4 @@
-// pxl-render/light_enlist.wgsl
+// pxl-render/frame/shader/light_enlist.wgsl
 
 // How the propagation (light_propagate.wgsl) writes the light's args and lists. A damaged tile
 // lists what feeds it at each level of the lattice, and raises the rows of the passes that

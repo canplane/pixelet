@@ -197,7 +197,7 @@ export class GpuHost {
   };
   private readonly _cmd_bufs: GPUCommandBuffer[] = [];
   /** This holds each surface by the handle the guest issued it (gpu/wit
-   * surface.wit), which the link never issues again. */
+   * surface.wit). */
   private readonly _surfaces = new Map<u32, Surface>();
   /** This says where the guest lent the device's block, and is kept to write
    * its counts and its status later. */
@@ -307,7 +307,7 @@ export class GpuHost {
       timed(slow, `op ${code}`, () => this._record(code, rec));
     });
     // The run's staged writes reach the queue with the run, as
-    // writeBuffer's would.
+    // `writeBuffer`'s would.
     if (this._uploads) this._submit([]);
     if (!this._drew) return;
     this._unfinished_cnt++;

@@ -70,7 +70,7 @@ impl Aabb {
         self.min.iter().chain(&self.max).all(|c| c.is_finite())
     }
 
-    /// Where a ray from `origin` along `direction` enters it, at `t`
+    /// Where a ray from `origin` along `dir` enters it, at `t`
     /// along it, and the axis it enters across: of its near planes, the last
     /// the ray reaches. None where the ray misses it, or starts inside it.
     pub fn enters(self, origin: V3, dir: V3) -> Option<(f64, usize)> {

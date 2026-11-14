@@ -31,8 +31,8 @@ use xpute_gpu_link::spec::{op, BindingKind, ResourceKind, NONE, SURFACE_PREFERRE
 pub type Id = u32;
 
 /// Loads a word that a record named for the host to answer, such as a
-/// fence or the device block's STATUS. The load is an acquire, so whatever the
-/// host wrote before it stored the word is seen (stream.rs). The word is
+/// fence or the device block's `STATUS`. The load is an acquire, so whatever
+/// the host wrote before it stored the word is seen (stream.rs). The word is
 /// reached through a raw pointer (`AtomicU32::from_ptr`), so no reference is
 /// made to a word the host writes.
 ///
@@ -45,7 +45,7 @@ pub unsafe fn load_acquire(word: *const u32) -> u32 {
 }
 
 /// Whether the host has answered the request asked with `ticket` on
-/// `fence` (spec RESULT). A late answer to an older request stores another
+/// `fence` (spec `RESULT`). A late answer to an older request stores another
 /// ticket, so it never counts.
 ///
 /// # Safety
@@ -412,8 +412,8 @@ fn stencil_face(s: &mut dyn Sink, f: &StencilFaceState) {
     .for_each(|w| s.word(w));
 }
 
-/// These are the words of a RENDER_PIPELINE record after its id, which
-/// RENDER_PIPELINE_ASYNC begins with too.
+/// These are the words of a `RENDER_PIPELINE` record after its id, which
+/// `RENDER_PIPELINE_ASYNC` begins with too.
 fn render_pipeline_words(s: &mut dyn Sink, d: &RenderPipelineDescriptor) {
     s.word(opt(d.layout));
     let v = &d.vertex;
@@ -506,8 +506,8 @@ fn render_pipeline_words(s: &mut dyn Sink, d: &RenderPipelineDescriptor) {
     }
 }
 
-/// These are the words of a COMPUTE_PIPELINE record after its id, which
-/// COMPUTE_PIPELINE_ASYNC begins with too.
+/// These are the words of a `COMPUTE_PIPELINE` record after its id, which
+/// `COMPUTE_PIPELINE_ASYNC` begins with too.
 fn compute_pipeline_words(s: &mut dyn Sink, d: &ComputePipelineDescriptor) {
     [opt(d.layout), d.module]
         .into_iter()
@@ -515,7 +515,7 @@ fn compute_pipeline_words(s: &mut dyn Sink, d: &ComputePipelineDescriptor) {
     s.bytes(d.entry.as_bytes());
 }
 
-/// The ops numbered below DESTROY make objects that last until the guest
+/// The ops numbered below `DESTROY` make objects that last until the guest
 /// destroys them. The ops past it make what an entry lets go: an encoder, a
 /// pass, a surface's current texture.
 pub const OBJECT_OP_CNT: usize = op::DESTROY as usize;
@@ -760,7 +760,7 @@ impl<const N: usize> Gpu<N> {
 
     /// This is `render_pipeline`, but the host makes the pipeline without
     /// holding its thread, and stores `ticket` at `fence` once it is made
-    /// (spec RESULT). No record may name the pipeline before the guest has
+    /// (spec `RESULT`). No record may name the pipeline before the guest has
     /// seen that ticket.
     pub fn render_pipeline_async(
         &mut self,
@@ -882,8 +882,8 @@ impl<const N: usize> Gpu<N> {
         })
     }
 
-    /// This makes a view of `surface`'s texture for this entry. Every CURRENT of
-    /// one entry names the same texture.
+    /// This makes a view of `surface`'s texture for this entry. Every `CURRENT`
+    /// of one entry names the same texture.
     pub fn current(&mut self, stream: &mut Stream, surface: u32) -> Option<Id> {
         self.make(stream, op::CURRENT, &|s| s.word(surface))
     }
@@ -1039,7 +1039,7 @@ pub mod call {
 
     /// Decodes an encoded image (PNG, JPEG or WebP) from the guest's memory
     /// into `to`. `fence` is the fence and the result word after it (spec
-    /// RESULT): the host stores `ticket` there once the image is in the
+    /// `RESULT`): the host stores `ticket` there once the image is in the
     /// texture or refused. The host copies the image's bytes as it runs the
     /// record, so they are the guest's again once the stream is handed back.
     pub fn copy_external_image(
@@ -1324,7 +1324,7 @@ pub mod call {
     /// Reads `buffer` into the guest's memory at `into`. The buffer has
     /// MAP_READ and COPY_DST usage, and an encoder submitted before copied
     /// into it. `fence` is the fence and the result word after it (spec
-    /// RESULT): the host stores `ticket` there once the bytes are in
+    /// `RESULT`): the host stores `ticket` there once the bytes are in
     /// `into` and the buffer is unmapped, or once the mapping is refused.
     pub fn map_async(
         stream: &mut Stream,
@@ -1349,7 +1349,7 @@ pub mod call {
     }
 
     /// Asks the host to store `ticket` at `fence` once the work submitted
-    /// before is done (spec RESULT).
+    /// before is done (spec `RESULT`).
     pub fn queue_done(stream: &mut Stream, fence: &u32, ticket: u32) -> bool {
         words(
             stream,
