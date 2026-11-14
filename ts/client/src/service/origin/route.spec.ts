@@ -1,6 +1,6 @@
 // @pxl/client/service/origin/route.spec.ts
 //
-// GENERATED from spec/spec/route.json (xpute-gen data.rs)
+// GENERATED from spec/spec/route.json5 (xpute-gen data.rs)
 //
 // The address space, as four reserved roots and the branches under them,
 // and the two origins they are served from.
@@ -27,7 +27,7 @@ export const GEO_ROOT = "/geo";
 export const API_ROOT = "/api";
 
 /** Baked tiles by kind, version and name: under the root a kind's own, and
- * under that its object as a published set lays it out (bake/publication.json
+ * under that its object as a published set lays it out (bake/publication.json5
  * `OBJECT`, and `SPHERE` for the Earth's picture whole). Its own root for
  * the reason the asset root is: the bake
  * puts them in the bucket and the edge serves them, so neither server

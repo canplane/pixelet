@@ -4,4 +4,4 @@ import type { ViewStyle } from "react-native";
 
 /** A strip on a device asks nothing: React Native's responder system shares
  * the finger between it and the view's gestures. */
-export const panX: ViewStyle = {};
+export const PAN_X: ViewStyle = {};

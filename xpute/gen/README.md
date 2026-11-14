@@ -27,13 +27,24 @@ fields and variables in snake_case, types in Pascal, constants in SCREAMING. A
 type's generated helper is its verb, an underscore and the type's own name
 (`of_Tool`, `store_LonLat`).
 
+A spec is written in the Design Tokens Community Group's
+[format](https://www.designtokens.org/tr/drafts/format/), in JSON5 so that a
+number written in hex is a number: a value is a token's `$value`, typed by the
+`$type` it carries or its group's, and explained by its `$description`. It
+departs from DTCG in its scalar types, which are ours (`u32`, `f32`, `str`)
+where DTCG has none, and in its own marks, which go under a node's
+`$extensions`, in `xpute`. The generator knows basic types alone (numbers,
+strings, booleans, enums, lists and tables) and no domain type: a color is a
+number the spec writes in hex, which JSON5 allows.
+
 A value goes as it is: a number keeps its value, a string its text, and a
 string a `$type` names as an enum's member is that member. A `$type` the
-generator does not know is refused. An enum that is a list is numbered by its
-members' places, or, where every record carries one, each by its `$number`;
+generator does not know is refused, and so is a number its integer `$type`
+does not hold, not whole or past its width. An enum that is a list is numbered by its
+members' places, or, where every record carries one, each by its `number`;
 an enum that is a table gives each member a number of its own. A number goes
 at its own width, and a list of fixed-size numbers is packed at its
-element's. A table with `"$packed": true` is a layout of words: each field's
+element's. A table marked `"packed": true` is a layout of words: each field's
 width is an element or `[count, element]`, and the generator writes where
 each field begins.
 
@@ -48,8 +59,8 @@ comparing a number with the members' constants; a reader imports what it
 uses by name, so a bundle's tree shaking keeps the numbers and drops every
 name. A list of records whose names are an enum's members gives each
 TypeScript row its member's `number` and no `name`. Where a reader shows a
-group's names, the spec marks it `"$names": true`. A spec reaches another's
-enum through `$uses`, and the other spec's output is imported, never copied.
+group's names, the spec marks it `"names": true`. A spec reaches another's
+enum through its `uses`, and the other spec's output is imported, never copied.
 
 ## Writing and checking
 

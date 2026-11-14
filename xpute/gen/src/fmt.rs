@@ -2,7 +2,7 @@
 
 //! A generated file is formatted before it is written, because
 //! `prettier --check` and `cargo fmt --check` gate the trees. A Rust file goes
-//! through rustfmt. A TypeScript or JSON file takes the prettier of the pnpm
+//! through rustfmt. A TypeScript, JSON or JSON5 file takes the prettier of the pnpm
 //! tree it lies in, found by walking up from the file, so that it reads as that
 //! tree's own check expects. A file under no tree is written as generated.
 
@@ -15,7 +15,7 @@ pub fn format_text(path: &str, text: String) -> Result<String, String> {
         let mut c = Command::new("rustfmt");
         c.args(["--edition", "2021", "--emit", "stdout"]);
         c
-    } else if [".ts", ".json"].iter().any(|e| path.ends_with(e)) {
+    } else if [".ts", ".json", ".json5"].iter().any(|e| path.ends_with(e)) {
         let file = Path::new(path);
         let Some(tree) = file
             .ancestors()

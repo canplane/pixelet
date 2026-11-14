@@ -12,10 +12,12 @@ import sys
 import urllib.request
 from pathlib import Path
 
-SITE = json.loads((Path(__file__).resolve().parent.parent / "spec/spec/route.json").read_text())["origins"]["SITE"]["url"]
 CACHE = Path(__file__).resolve().parent.parent / "ts/client/.build_number"
 
 try:
+    import json5
+
+    SITE = json5.loads((Path(__file__).resolve().parent.parent / "spec/spec/route.json5").read_text())["origins"]["SITE"]["url"]["$value"]
     with urllib.request.urlopen(f"{SITE}/build.json", timeout=5) as res:
         number = json.load(res).get("number")
 except Exception as e:

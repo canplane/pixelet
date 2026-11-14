@@ -9,10 +9,10 @@ use regex::Regex;
 
 use xpute_gen::spec::data::{table_outputs, DataSpec};
 
-use super::{json_str, line_comments, mark, read, Node, Output};
+use super::{description, json_str, line_comments, mark, read, Node, Output};
 use crate::root;
 
-const JSON: &str = "spec/spec/route.json";
+const JSON: &str = "spec/spec/route.json5";
 
 pub fn outputs() -> Result<Vec<Output>, String> {
     let spec = read(JSON)?;
@@ -60,7 +60,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             .iter()
             .chain(branches.iter())
             .find(|(n, _)| *n == name)
-            .and_then(|(_, r)| r.lines_at("$doc"))
+            .and_then(|(_, r)| r.doc())
     };
 
     let worker_first: Vec<String> = roots
@@ -106,7 +106,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         Ok((
             url.to_string(),
             host.to_string(),
-            o.lines_at("$doc").unwrap_or_default(),
+            o.doc().unwrap_or_default(),
         ))
     };
     let (site, site_host, site_doc) = origin("SITE")?;
@@ -161,16 +161,15 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     // The client's and the servers' constants, written by xpute's generator
     // from a table built here: each path, the roots as the edge claims them,
     // and the site and the origin.
-    let lines = |l: &[String]| Node::Arr(l.iter().map(|l| Node::Str(l.clone())).collect());
     let entry = |doc: Vec<String>, val: Node| {
         if doc.is_empty() {
             val
         } else {
-            Node::Obj(vec![("$doc".into(), lines(&doc)), ("$val".into(), val)])
+            Node::Obj(vec![("$description".into(), description(&doc)), ("$value".into(), val)])
         }
     };
-    let spec_doc = spec.lines_at("$doc").unwrap_or_default();
-    let mut table = vec![("$doc".to_string(), lines(&spec_doc))];
+    let spec_doc = spec.doc().unwrap_or_default();
+    let mut table = vec![("$description".to_string(), description(&spec_doc))];
     table.extend(all.iter().map(|(name, val)| {
         (
             name.clone(),

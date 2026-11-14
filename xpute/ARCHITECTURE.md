@@ -87,7 +87,7 @@ and which features the guest needs; the GPU plugin asks the platform for that
 device, and `GPU_READY` tells the guest when the device has answered, the first
 time and again after a loss, with the device block's status saying what the
 device is now. The ops and their words, the fence's results and the device's
-block are in `spec/gpu/api.json`, and the stream's own rules are written out
+block are in `gpu/link/spec/api.json5`, and the stream's own rules are written out
 beside the guest's stream. The GPU's calls stand apart from `kit` and from both
 ends, so a program that never draws links none of them.
 
@@ -216,7 +216,10 @@ The code, in the order its parts depend on each other.
   `WebGpu`), and `gpu/native/runtime/expo` (`@xpute/gpu-native-runtime`) on a
   device the `SurfaceView` and the display's frames, over its own Expo module.
 - `native/runtime/expo` (`@xpute/native-runtime`) is the React Native module:
-  the Kotlin and the Swift over the C ABI and JNI.
+  the Kotlin and the Swift over the C ABI and JNI; the UI's end of the
+  runtime's link, a `Remote` over the module (`open_remote`); the runtime's
+  start with what the UI mounts on it (`start`); the guest's memory
+  (`bytes`); and its stop as the link has it (`stop_of`).
 - `dev/golden/rust`, `dev/golden/ts` (`@xpute/golden`) and `cpp/dev/test/` are
   what the tests take: the golden records' reader, and in C++ the tests'
   runner.

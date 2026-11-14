@@ -18,108 +18,108 @@ use crate::root;
 
 const DATA_SPECS: [DataSpec; 18] = [
     DataSpec {
-        json: "spec/client/core/sys/manifest.json",
+        json: "spec/client/core/sys/manifest.json5",
         ts: Some("ts/client/src/abi/manifest.spec.ts"),
         rs: Some("rust/client/core/src/spec/manifest.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/spec/bake/object.json",
+        json: "spec/spec/bake/object.json5",
         ts: Some("ts/client/src/ui/feature/world/object.spec.ts"),
         rs: Some("rust/spec/src/bake/object.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/spec/asset/marker.json",
+        json: "spec/spec/asset/marker.json5",
         ts: Some("ts/client/src/ui/shared/asset/marker.spec.ts"),
         rs: Some("rust/spec/src/asset/marker.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/spec/asset/id.json",
+        json: "spec/spec/asset/id.json5",
         ts: Some("ts/client/src/ui/shared/asset/id.spec.ts"),
         rs: Some("rust/spec/src/asset/id.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/spec/division.json",
+        json: "spec/spec/division.json5",
         ts: Some("ts/client/src/ui/feature/division/division.spec.ts"),
         rs: Some("rust/spec/src/division.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/spec/search.json",
+        json: "spec/spec/search.json5",
         ts: Some("ts/client/src/ui/feature/search/search.spec.ts"),
         rs: Some("rust/spec/src/search.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/spec/asset/character.json",
+        json: "spec/spec/asset/character.json5",
         ts: Some("ts/client/src/ui/shared/asset/character.spec.ts"),
         rs: Some("rust/spec/src/asset/character.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/spec/asset/cube.json",
+        json: "spec/spec/asset/cube.json5",
         ts: Some("ts/client/src/abi/cube.spec.ts"),
         rs: Some("rust/spec/src/asset/cube.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/spec/asset/sky.json",
+        json: "spec/spec/asset/sky.json5",
         rs: Some("rust/spec/src/asset/sky.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/core/domain/scene/gizmo/gizmo.json",
+        json: "spec/client/core/domain/scene/gizmo/gizmo.json5",
         ts: Some("ts/client/src/abi/gizmo.spec.ts"),
         rs: Some("rust/client/core/src/spec/gizmo.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/render/api.json",
+        json: "spec/client/render/api.json5",
         ts: Some("ts/client/src/abi/gpu.spec.ts"),
         rs: Some("rust/client/render/src/spec/api.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/render/frame/shader/debug_look.json",
+        json: "spec/client/render/frame/shader/debug_look.json5",
         ts: Some("ts/client/src/abi/debug_look.spec.ts"),
         rs: Some("rust/client/render/src/frame/shader/debug_look.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/core/sys/io/file.json",
+        json: "spec/client/core/sys/io/file.json5",
         ts: Some("ts/client/src/abi/file.spec.ts"),
         rs: Some("rust/client/core/src/spec/file.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/core/sys/io/demand.json",
+        json: "spec/client/core/sys/io/demand.json5",
         ts: Some("ts/client/src/abi/demand.spec.ts"),
         rs: Some("rust/client/core/src/spec/demand.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/core/sys/sched/phase.json",
+        json: "spec/client/core/sys/sched/phase.json5",
         ts: Some("ts/client/src/abi/phase.spec.ts"),
         rs: Some("rust/client/core/src/spec/phase.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/core/perf/step.json",
+        json: "spec/client/core/perf/step.json5",
         ts: Some("ts/client/src/abi/step.spec.ts"),
         rs: Some("rust/client/core/src/spec/step.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/render/gpu/span.json",
+        json: "spec/client/render/gpu/span.json5",
         ts: Some("ts/client/src/abi/span.spec.ts"),
         rs: Some("rust/client/render/src/spec/span.spec.rs"),
         ..DataSpec::DEFAULT
     },
     DataSpec {
-        json: "spec/client/core/perf/perf.json",
+        json: "spec/client/core/perf/perf.json5",
         ts: Some("ts/client/src/abi/perf.spec.ts"),
         rs: Some("rust/client/core/src/spec/perf.spec.rs"),
         ..DataSpec::DEFAULT
@@ -133,7 +133,7 @@ const DATA_SPECS: [DataSpec; 18] = [
 /// from 1.
 pub fn outputs() -> Result<Vec<Output>, String> {
     let files: Vec<String> = files()?.into_iter().map(|f| f.path).collect();
-    // The specs whose enums a spec may name by `$uses`.
+    // The specs whose enums a spec may name by its `uses`.
     let peers: Vec<DataSpec> = DATA_SPECS.into_iter().chain([PUBLICATION]).collect();
     let mut out = Vec::new();
     for d in &DATA_SPECS {
@@ -180,7 +180,7 @@ fn with_numbers(
                 .iter()
                 .map(|(k, v)| match k.as_str() {
                     "$type" if v.str() == Some(FILE) => Ok((k.clone(), Node::Str("u16".into()))),
-                    "$val" => Ok((k.clone(), with_numbers(v, ty, number)?)),
+                    "$value" => Ok((k.clone(), with_numbers(v, ty, number)?)),
                     k if k.starts_with('$') => Ok((k.to_string(), v.clone())),
                     _ => Ok((k.clone(), with_numbers(v, ty, number)?)),
                 })

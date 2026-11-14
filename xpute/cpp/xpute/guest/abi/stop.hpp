@@ -24,7 +24,7 @@ using ::xpute::link::Packet;
 using ::xpute::link::answer;
 } // namespace _rt
 
-// The interface's handle, named by `xpute:stop/stop` (frame.json `NAMED`).
+// The interface's handle, named by `xpute:stop/stop` (frame.json5 `NAMED`).
 inline constexpr _rt::Handle HANDLE = 0x4eccaa;
 
 // `stopped`

@@ -21,7 +21,7 @@ import {
   refusal_of,
 } from "@xpute/link/link.ts";
 
-/** The interface's handle, named by `pxl:core/overlay` (frame.json `NAMED`). */
+/** The interface's handle, named by `pxl:core/overlay` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x7b1393;
 
 /** `show` */
@@ -312,6 +312,7 @@ function object(implementation: Host): LinkObject {
         return refusal_of(e);
       }
     },
+    drop() {},
   };
 }
 

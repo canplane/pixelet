@@ -1,7 +1,7 @@
 // pxl-core/domain/scene/character.rs
 
 //! The characters a player can be, a person or a pet, as the character
-//! catalog lists them (`spec/spec/asset/character.json`). The two the player
+//! catalog lists them (`spec/spec/asset/character.json5`). The two the player
 //! chose make up the scene's companion (`companion.rs`).
 //!
 //! A character plays the clips of a model registered once at the character's

@@ -1,7 +1,7 @@
 // xpute-gpu-native-host/run.rs
 
 //! Runs a stream's records on the device, op by op, reading each op's words
-//! as gpu/link/spec/api.json gives them.
+//! as gpu/link/spec/api.json5 gives them.
 
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
@@ -821,7 +821,7 @@ impl GpuHost {
                 self.put(id, Object::View(view, texture.format()));
                 self.drew = true;
             }
-            _ => panic!("[gpu] op {code} is no op of gpu/link/spec/api.json"),
+            _ => panic!("[gpu] op {code} is no op of gpu/link/spec/api.json5"),
         }
     }
 

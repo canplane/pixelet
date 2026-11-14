@@ -1,6 +1,6 @@
 // pxl-spec/asset/marker.rs
 
-//! The marker kind (`spec/spec/asset/marker.json`), drawn flat to the camera from a design;
+//! The marker kind (`spec/spec/asset/marker.json5`), drawn flat to the camera from a design;
 //! its one shape is the pin someone puts up. The module says where a marker's cell is on the
 //! camera grid, and from which cell it shows.
 
@@ -22,7 +22,7 @@ pub const MARKER: AssetId = asset_id(Kind::Marker, 0);
 pub(crate) const MARK_STEP_CNT: Zoom = 4;
 
 /// A marker's cell where the camera grid's cell is at `cell_zoom`: its scale on
-/// the grid (`asset/marker.json`).
+/// the grid (`asset/marker.json5`).
 pub const fn marker_cell_zoom(cell_zoom: Zoom) -> i32 {
     cell_zoom as i32 + MARKER_SCALE_STEP as i32
 }

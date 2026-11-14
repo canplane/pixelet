@@ -4,9 +4,9 @@ use xpute_gen::spec::data::enum_members;
 use xpute_gen::spec::{rs_enum, ts_enum, Member};
 
 use super::catalog::{slots, CUBE_JSON, DECOR_JSON};
-use super::{file, js_num, json_str, mark, read, rs_field, Node, Output};
-const ID_JSON: &str = "spec/spec/asset/id.json";
-const COLOR_JSON: &str = "spec/spec/asset/color.json";
+use super::{file, js_num, json_str, line_comments, mark, read, rs_field, Node, Output};
+const ID_JSON: &str = "spec/spec/asset/id.json5";
+const COLOR_JSON: &str = "spec/spec/asset/color.json5";
 
 /// A group's cubes (`sentinel`, `ground`, `object`), each its name and its
 /// number, as the generator numbers its enum.
@@ -37,7 +37,7 @@ pub(crate) fn members(name: &str, names: &[&str]) -> Result<Vec<Member>, String>
     let names = Node::Arr(names.iter().map(|n| Node::Str(n.to_string())).collect());
     let list = Node::Obj(vec![
         ("$type".into(), Node::Str("enum".into())),
-        ("$val".into(), names),
+        ("$value".into(), names),
     ]);
     enum_members(name, &list)
 }
@@ -48,7 +48,7 @@ pub(crate) fn cube_number(group: &str, name: &str) -> Result<u32, String> {
     m.number.parse().map_err(|_| format!("{CUBE_JSON}: {} has no number", m.name))
 }
 
-/// The path the cube kind's texture pack ships at (`cube.json` `pack`).
+/// The path the cube kind's texture pack ships at (`cube.json5` `pack`).
 pub fn pack_path() -> Result<String, String> {
     let spec = read(CUBE_JSON)?;
     spec.get("pack")
@@ -71,20 +71,17 @@ pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
         .collect()
 }
 
-/// Each ground cube's color by name, packed `0xRRGGBB`, as color.json gives it.
+/// Each ground cube's color by name, packed `0xRRGGBB`, as color.json5 gives it.
 pub fn ground_colors() -> Result<std::collections::BTreeMap<String, u32>, String> {
     let spec = read(COLOR_JSON)?;
-    let ground = spec.get("ground").ok_or("color.json has no ground")?;
+    let ground = spec.get("ground").ok_or("color.json5 has no ground")?;
     ground
         .entries()
         .iter()
         .map(|(n, e)| {
             Ok((
                 n.clone(),
-                super::rgb(
-                    e.str_at("hex")
-                        .ok_or(format!("color.json: ground.{n} has no hex"))?,
-                )?,
+                e.get("rgb").and_then(super::u32_of).ok_or(format!("color.json5: ground.{n} has no rgb"))?,
             ))
         })
         .collect()
@@ -94,7 +91,7 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     let spec = read(COLOR_JSON)?;
     let head: Vec<String> = [
         "//",
-        format!("// {}", mark("spec/spec/asset/color.json", "pxl-tool spec/asset.rs")).as_str(),
+        format!("// {}", mark("spec/spec/asset/color.json5", "pxl-tool spec/asset.rs")).as_str(),
         "//",
         "// The color of every ground cube and every placed color: what a cube *is* to",
         "// the eye when no texture is drawn over it — everything drawn with the",
@@ -110,18 +107,16 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     ts.extend(head.iter().cloned());
     ts.extend([
         String::new(),
-        "/** Each cube's color as `#rrggbb`, by its number. */".to_string(),
-        "export const CUBE_HEX: Readonly<Record<number, string>> = {".to_string(),
+        "/** Each cube's color, `0xRRGGBB`, by its number. */".to_string(),
+        "export const CUBE_RGB: Readonly<Record<number, number>> = {".to_string(),
     ]);
     for (group, colors) in spec.entries() {
-        if group == "$doc" {
+        if group == "$description" {
             continue;
         }
         for (n, e) in colors.entries() {
-            let hex = e
-                .str_at("hex")
-                .ok_or(format!("color.json: {group}.{n} has no hex"))?;
-            ts.push(format!("  {}: {},", cube_number(group, n)?, json_str(hex)));
+            let rgb = e.get("rgb").and_then(super::u32_of).ok_or(format!("color.json5: {group}.{n} has no rgb"))?;
+            ts.push(format!("  {}: {rgb},", cube_number(group, n)?));
         }
     }
     ts.push("};".to_string());
@@ -134,7 +129,6 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
             "",
             "use super::cube::{Ground, Object, Sentinel};",
             "use super::Swatch;",
-            "use crate::color::rgb;",
         ]
         .map(String::from),
     );
@@ -147,7 +141,7 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
         let names: Vec<String> = cubes(&types, group)?.into_iter().map(|(n, _)| n).collect();
         let colors = spec
             .get(group)
-            .ok_or(format!("color.json has no {group}"))?;
+            .ok_or(format!("color.json5 has no {group}"))?;
         rs.extend([
             String::new(),
             format!("/// `{group}`'s color for a value."),
@@ -157,24 +151,19 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
         for (name, entry) in colors.entries() {
             if !names.contains(name) {
                 return Err(format!(
-                    "color.json: {group}.{name} is nothing cube.json names"
+                    "color.json5: {group}.{name} is nothing cube.json5 names"
                 ));
             }
-            if let Some(doc) = entry.str_at("$doc") {
-                rs.push(format!("        // {doc}"));
-            }
-            let hex = entry
-                .str_at("hex")
-                .ok_or(format!("color.json: {group}.{name} has no hex"))?;
+            rs.extend(line_comments(&entry.doc().unwrap_or_default(), "        "));
+            let rgb = entry.get("rgb").and_then(super::u32_of).ok_or(format!("color.json5: {group}.{name} has no rgb"))?;
             rs.push(format!(
-                "        Some({e}::{}) => Some(const {{ Swatch::new(rgb({})) }}),",
-                cube_member(group, name)?.ident,
-                json_str(hex)
+                "        Some({e}::{}) => Some(Swatch::new({rgb})),",
+                cube_member(group, name)?.ident
             ));
         }
         if group == "ground" {
             if let Some(n) = names.iter().find(|n| colors.get(n).is_none()) {
-                return Err(format!("color.json: ground.{n} has no color"));
+                return Err(format!("color.json5: ground.{n} has no color"));
             }
             rs.push("        // A sentinel a baked cell can hold.".to_string());
             rs.push("        None => sentinel(t as u16),".to_string());
@@ -189,7 +178,7 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     ])
 }
 
-/// `IDX_BITS` and the number of kind `name` (id.json).
+/// `IDX_BITS` and the number of kind `name` (id.json5).
 fn kind_layout(name: &str) -> Result<(u32, u32), String> {
     let id = read(ID_JSON)?;
     let number = |n: Option<&Node>| n.and_then(Node::num).map(|n| n as u32);
@@ -202,10 +191,10 @@ fn kind_layout(name: &str) -> Result<(u32, u32), String> {
 
 pub(crate) fn decor_outputs() -> Result<Vec<Output>, String> {
     let spec = read(DECOR_JSON)?;
-    let doc = spec.lines_at("$doc").unwrap_or_default();
+    let doc = spec.doc().unwrap_or_default();
     let head: Vec<String> = [
         "//",
-        format!("// {}", mark("spec/spec/asset/decor.json", "pxl-tool spec/asset.rs")).as_str(),
+        format!("// {}", mark("spec/spec/asset/decor.json5", "pxl-tool spec/asset.rs")).as_str(),
         "//",
         "// The decors, the cube catalog's sibling: drawn as a model, not a cell the rays meet.",
         "//",
@@ -314,7 +303,7 @@ fn decor_table(
     struct Row {
         name: String,
         doc: Vec<String>,
-        seed: String,
+        seed: u32,
         chance: u32,
         orient: String,
         on: [u32; ON_WORDS],
@@ -328,9 +317,10 @@ fn decor_table(
         .entries()
     {
         let at = |field: &str| format!("{DECOR_JSON}: {name}.{field}");
-        let seed = k.str_at("seed").ok_or(at("seed"))?;
-        u32::from_str_radix(seed.trim_start_matches("0x"), 16)
-            .map_err(|e| format!("{}: {e}", at("seed")))?;
+        let seed = k
+            .get("seed")
+            .and_then(super::u32_of)
+            .ok_or(at("seed"))?;
         let density = k
             .get("density")
             .and_then(Node::num)
@@ -390,8 +380,8 @@ fn decor_table(
         }
         rows.push(Row {
             name: name.clone(),
-            doc: k.lines_at("$doc").unwrap_or_default(),
-            seed: seed.to_string(),
+            doc: k.doc().unwrap_or_default(),
+            seed,
             chance: libm::rint(density * 4_294_967_296.0).min(f64::from(u32::MAX)) as u32,
             orient: orient.ident.clone(),
             on,
@@ -449,7 +439,7 @@ fn decor_table(
         sizes.resize(variant_cap, "[0, 0, 0]".into());
         portable.extend([
             "    Row {".to_string(),
-            format!("        seed: {},", r.seed),
+            format!("        seed: {:#010x},", r.seed),
             format!("        chance: {},", r.chance),
             format!("        orient: Orientation::{},", r.orient),
             format!(

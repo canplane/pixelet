@@ -7,7 +7,7 @@ import {
   Link,
   Prose,
   Section,
-  setting_text,
+  SETTING_TEXT,
 } from "@/ui/feature/setting/row.tsx";
 
 export function DisclaimerSection() {
@@ -15,19 +15,19 @@ export function DisclaimerSection() {
   return (
     <Section title={t("settings.disclaimer.section_title")}>
       <Prose>
-        <Text style={setting_text.small}>
+        <Text style={SETTING_TEXT.small}>
           {t("settings.disclaimer.demo_notice")}
         </Text>
-        <Text style={setting_text.small}>
+        <Text style={SETTING_TEXT.small}>
           {t("settings.disclaimer.coverage_notice")}
         </Text>
-        <Text style={setting_text.small}>
+        <Text style={SETTING_TEXT.small}>
           {t("settings.disclaimer.storage_notice")}
         </Text>
-        <Text style={setting_text.small}>
+        <Text style={SETTING_TEXT.small}>
           {t("settings.disclaimer.location_notice")}
         </Text>
-        <Text style={setting_text.small}>
+        <Text style={SETTING_TEXT.small}>
           <Trans
             i18nKey="settings.disclaimer.character_notice"
             components={{ kenney: <Link href="https://kenney.nl/" /> }}

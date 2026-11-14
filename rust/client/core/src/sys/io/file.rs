@@ -4,7 +4,7 @@
 //! path's URI to a `File`, which lets its handle go as it drops, and is read or
 //! written whole by a task: its size, one read of it and its close, or one
 //! write and its close, whose errno says whether the write was applied. A
-//! file's path is a tuple of tokens, as long as its branch of file.json's
+//! file's path is a tuple of tokens, as long as its branch of file.json5's
 //! `path` tree takes: each token names a child of the node before it, and a
 //! branch that holds data takes the tokens left, a tile or a shard by its
 //! quadkey and an asset by its load's id. No path is kept: each is built where
@@ -13,8 +13,8 @@
 //! a storage key, is the client's to decide (ts/client/src/service/sys/fs/). A
 //! file is bytes, and how a platform keeps them is up to its backend.
 //!
-//! The storage file holds the settings, at (STORAGE, SETTINGS) (file.json
-//! `path`). It is a format byte (file.json `format`) followed by what the
+//! The storage file holds the settings, at (STORAGE, SETTINGS) (file.json5
+//! `path`). It is a format byte (file.json5 `format`) followed by what the
 //! settings keep, and it is read whole and written whole. A file of another
 //! format, one its backend cannot read as bytes, or one larger than any heap
 //! is refused: it reads as nothing, it is never written over, and its owner
@@ -219,7 +219,7 @@ pub fn open_storage() {
 
 #[embassy_executor::task]
 async fn storage_read() {
-    let read = match read_whole(&storage_path(), mem::MIN_HEAP_BYTES, None, heap).await {
+    let read = match read_whole(&storage_path(), mem::MIN_HEAP_SZ, None, heap).await {
         Ok(bytes) => storage_of(&bytes),
         // Only an absent file means nothing was kept.
         Err(Errno::ENOENT) => StorageRead::None,
@@ -328,7 +328,7 @@ impl<const N: usize> fmt::Write for Text<N> {
     }
 }
 
-/// The path that `stream`'s want `id` opens (file.json `path`): a layer's
+/// The path that `stream`'s want `id` opens (file.json5 `path`): a layer's
 /// tile by its quadkey after the layer's node, numbered as the layer is
 /// (`BASE`), a shard by its quadkey after OBJECT, the objects' top as
 /// (OBJECT, TOP). A load opens through the loader (sys/io/loader.rs), so its

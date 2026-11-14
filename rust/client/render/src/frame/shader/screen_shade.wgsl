@@ -21,7 +21,7 @@ fn fs(v: VertexOut) -> FragOut {
     // of what the eye draws, nearer than the far plane the sky stands at; one that met a face,
     // at the depth the face is drawn at (`behind`), so what is laid on the face shows as it does
     // there. Its color is the ray's steps, its third word in this view, on the steps' ramp, or
-    // none where it took none (debug_look.json).
+    // none where it took none (debug_look.json5).
     let at = select(d * bitcast<f32>(eye_word(EYE_FAR)), h.at * (1.0 + behind(h, px_steps(a, size, h))), met);
     let clip = frame_view_proj() * vec4f(at, 1.0);
     var o: FragOut;
@@ -64,7 +64,7 @@ fn fs(v: VertexOut) -> FragOut {
 // zoom, `word`'s, squared over the distance squared, as a share of a grid cell's, `GRID_CELL`
 // squared. A world's cell spans (1, `SPANS`] of the view's cells at its distance (pxl-engine
 // grid.rs `cell_zoom_at`), so its share lies within (1, 4]: green there, blue finer and red
-// coarser (debug_look.json `share`).
+// coarser (debug_look.json5 `share`).
 fn cell_share(color: vec3f, word: u32, h: Hit) -> vec3f {
   if (frame_gizmo() < 0.5) {
     return color;

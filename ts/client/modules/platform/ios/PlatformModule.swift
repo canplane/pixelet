@@ -58,11 +58,11 @@ public class PlatformModule: Module {
     // UserDefaults is the system's store for an app's small values, as
     // localStorage is the browser's for a page.
 
-    Function("storageGet") { (key: String) -> String? in
+    Function("storage_get") { (key: String) -> String? in
       UserDefaults.standard.string(forKey: key)
     }
 
-    Function("storageSet") { (key: String, value: String) in
+    Function("storage_set") { (key: String, value: String) in
       UserDefaults.standard.set(value, forKey: key)
     }
 
@@ -71,7 +71,7 @@ public class PlatformModule: Module {
     // The general pasteboard serves as navigator.clipboard does on a page.
     // React Native's JavaScript has no clipboard of its own.
 
-    Function("clipboardSet") { (text: String) in
+    Function("clipboard_set") { (text: String) in
       UIPasteboard.general.string = text
     }
 
@@ -80,7 +80,7 @@ public class PlatformModule: Module {
     /// Whether the device has a compass at all. expo-location tells that
     /// only by failing a watch, and a failed watch reads as a compass lost
     /// rather than one that was never there.
-    Function("headingAvailable") { () -> Bool in
+    Function("has_heading") { () -> Bool in
       CLLocationManager.headingAvailable()
     }
 
@@ -88,7 +88,7 @@ public class PlatformModule: Module {
 
     /// How much of the screen's bottom inset takes a touch, in points: none,
     /// because the home indicator takes only a swipe.
-    Function("tappableBottom") { () -> Double in
+    Function("tappable_bottom") { () -> Double in
       0
     }
 

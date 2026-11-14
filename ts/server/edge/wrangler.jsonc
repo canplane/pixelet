@@ -20,7 +20,7 @@
   // The hostname is the site's own domain rather than one of xpute's.
   // @xpute/kit carries no pixelet knowledge and is meant to stay portable, and
   // putting this app on xpute.* would spend that name on one of the things
-  // built with it. `make spec` writes the host from spec/spec/route.json
+  // built with it. `make spec` writes the host from spec/spec/route.json5
   // `origins`.
   "routes": [{ "pattern": "plei.me", "custom_domain": true }],
 
@@ -38,7 +38,7 @@
   // one, is a change of config. A hostname names a machine and a root names a
   // service, and the two need not match: both roots reach the same VM, where
   // Caddy sends each to the container that answers it. `make spec` writes both
-  // from route.json `origins`.
+  // from route.json5 `origins`.
   "vars": {
     "GEO_ORIGIN": "https://api.plei.me",
     "API_ORIGIN": "https://api.plei.me",
@@ -59,7 +59,7 @@
     // That fallback would also swallow every request meant for a server,
     // answering a page index or a query with index.html. So the Worker runs
     // first for four roots: the world's data, the application, the baked
-    // pages and the content-addressed assets. spec/spec/route.json decides
+    // pages and the content-addressed assets. spec/spec/route.json5 decides
     // them, and `make spec` writes this list from it (pxl-tool's
     // spec/route.rs).
     "run_worker_first": ["/geo/*", "/api/*", "/tile/*", "/asset/*"],

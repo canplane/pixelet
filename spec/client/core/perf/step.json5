@@ -1,0 +1,33 @@
+{
+  $description: "The frame's vocabulary, the core's and the UI's: the steps a tick runs, as frame.rs\nregisters them, and the effects a frame runs around them. The profiler records and\nreports them by these names (spec/client/core/perf/perf.json5).",
+  STEP_NAME: {
+    $type: "enum",
+    $value: [
+      "controller",
+      "input",
+      "camera",
+      "edit",
+      "ghost",
+      "environment",
+      "companion",
+      "demand",
+      "scene",
+    ],
+    $extensions: { xpute: { names: true } },
+  },
+  EFFECT_NAME: {
+    $type: "enum",
+    $value: [
+      "navigation",
+      "bootstrap",
+      "orient",
+      "follow",
+      "dst",
+      "decor",
+      "object",
+      "location",
+      "setting",
+    ],
+    $extensions: { xpute: { names: true } },
+  },
+}

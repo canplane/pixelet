@@ -1,6 +1,6 @@
 // pxl-core/domain/scene/environment/cloud.rs
 
-//! The cumulus clouds (`spec/spec/asset/sky.json` `cumulus`). They are drawn
+//! The cumulus clouds (`spec/spec/asset/sky.json5` `cumulus`). They are drawn
 //! the way decor is drawn, but not held the way decor is held. A cloud claims
 //! no cell, so nothing is built around it and a tower stands through it. No
 //! layer and no clip level's brick holds it. The clouds are laid on the cloud

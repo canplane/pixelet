@@ -33,29 +33,40 @@ final class Vsync: NSObject {
 }
 
 public class XputeGpuModule: Module {
-  /// The function given to `xpute_gpu_lost_on` sends its event through this
-  /// module.
+  /// The function given to `xpute_gpu_state_on` sends its event through this
+  /// module, the newest made. A reload may make the new module before the old
+  /// one is destroyed, so a module clears the function only while it is the
+  /// current one, under `lock`.
   nonisolated(unsafe) static weak var current: XputeGpuModule?
+  private static let lock = NSLock()
   private let vsync = Vsync()
 
   public func definition() -> ModuleDefinition {
     Name("XputeGpu")
 
-    /// Fires once each time a device is lost and let go.
-    Events("onLost")
+    /// Fires with what the host has of a GPU, as it changes.
+    Events("onState")
 
     OnCreate {
+      XputeGpuModule.lock.lock()
+      defer { XputeGpuModule.lock.unlock() }
       XputeGpuModule.current = self
       // A C function captures nothing, so it reaches the module through the
       // static. It is called on the GPU's thread, and Expo's sendEvent
       // carries the event to the JavaScript thread.
-      xpute_gpu_lost_on { XputeGpuModule.current?.sendEvent("onLost") }
+      xpute_gpu_state_on { state, len in
+        XputeGpuModule.current?.sendEvent(
+          "onState", ["state": String(decoding: UnsafeRawBufferPointer(start: state, count: len), as: UTF8.self)])
+      }
       self.vsync.start()
     }
     OnDestroy {
       self.vsync.stop()
+      XputeGpuModule.lock.lock()
+      defer { XputeGpuModule.lock.unlock() }
+      guard XputeGpuModule.current === self else { return }
       XputeGpuModule.current = nil
-      xpute_gpu_lost_on(nil)
+      xpute_gpu_state_on(nil)
     }
 
     View(SurfaceView.self) {

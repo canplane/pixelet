@@ -1,0 +1,73 @@
+{
+  $description: "What each line of the world gizmo is drawn in, so the lines and the\nUI's legend of them read one look: the frame's marks about the pivot\n(domain/scene/gizmo/frame.rs) and the coverage's over the ground\n(domain/scene/gizmo/coverage.rs). Each rgb is sRGB's 0xrrggbb, with its\nopacity, and dashed where a dashed line draws it: a ring of the frame, a\nstretch of the coverage.",
+  frame: {
+    $description: "About the pivot, opaque.",
+    pivot: {
+      $description: "The pivot and the ground cell it floors to.",
+      rgb: { $value: 0x000000, $type: "u32" },
+    },
+    level: {
+      $description: "The level ring.",
+      rgb: { $value: 0x000000, $type: "u32" },
+      dashed: { $value: true },
+    },
+    forward: {
+      $description: "The upright ring facing the screen, and the view's forward on it.",
+      rgb: { $value: 0xff0000, $type: "u32" },
+      dashed: { $value: true },
+    },
+    north: {
+      $description: "The upright ring through north, and north on it.",
+      rgb: { $value: 0x00ff00, $type: "u32" },
+      dashed: { $value: true },
+    },
+    up: {
+      $description: "The point straight up from the pivot, where the two upright rings cross.",
+      rgb: { $value: 0x0000ff, $type: "u32" },
+    },
+  },
+  coverage: {
+    $description: "Over the ground, in the order a stretch shared by several takes the last: a drawn piece faint under what marks something wrong.",
+    drawn: {
+      rgb: { $value: 0xffffff, $type: "u32" },
+      alpha: { $type: "f32", $value: 0.4 },
+      dashed: { $value: false },
+    },
+    drawn_from_floor: {
+      $description: "A drawn piece read from the floor's tile alone.",
+      rgb: { $value: 0x00ffff, $type: "u32" },
+      alpha: { $type: "f32", $value: 0.6 },
+      dashed: { $value: false },
+    },
+    unbuilt: {
+      $description: "A goal piece with a tile on its line, its brick not yet filled.",
+      rgb: { $value: 0xffff00, $type: "u32" },
+      alpha: { $type: "f32", $value: 0.6 },
+      dashed: { $value: true },
+    },
+    floor_only: {
+      $description: "A goal piece only the floor's tile can build.",
+      rgb: { $value: 0xff00ff, $type: "u32" },
+      alpha: { $type: "f32", $value: 0.6 },
+      dashed: { $value: true },
+    },
+    no_tile: {
+      $description: "A goal piece with no tile on its line.",
+      rgb: { $value: 0xff0000, $type: "u32" },
+      alpha: { $type: "f32", $value: 0.6 },
+      dashed: { $value: true },
+    },
+    tile: {
+      $description: "A drawn piece's tile.",
+      rgb: { $value: 0xff9500, $type: "u32" },
+      alpha: { $type: "f32", $value: 0.9 },
+      dashed: { $value: false },
+    },
+    shard: {
+      $description: "A drawn piece's shard, the unit the world's data is kept in.",
+      rgb: { $value: 0x7cff7c, $type: "u32" },
+      alpha: { $type: "f32", $value: 1.0 },
+      dashed: { $value: false },
+    },
+  },
+}

@@ -3,7 +3,7 @@
 /**
  * The host's link to a guest, alike the guest's (xpute-link link.rs,
  * link/wit/types.wit). Whatever is called is an object, called by its methods
- * under a handle: an interface's named handle, the hash of its name (frame.json
+ * under a handle: an interface's named handle, the hash of its name (frame.json5
  * `NAMED`), or a resource's, named by a URI, a tuple of tokens, and opened by
  * the root's `open` to a handle the serving side issues, or answered by a
  * function that returns it. A frame is one method called: its tag the request,
@@ -64,10 +64,13 @@ export type { Handle } from "./resource.ts";
 
 export { CANCEL, DROP, NAMED, OPEN, ROOT };
 
-/** An object the host serves: given a method, the request's tag, for a
- * later answer (`task_return`), and the args, it answers. */
+/** An object a side serves: given a method, the request's tag, for a
+ * later answer (`task_return`), and the args, it answers; and it is told its
+ * drop once the other side drops its handle, as a Rust object is dropped
+ * (xpute-link link.rs `Object`). */
 export interface LinkObject {
   call(m: Method, tag: Tag, args: U8Array | null): i32 | Reply;
+  drop(): void;
 }
 
 /** What opens the object a URI names, given the handle it is issued. */
@@ -117,15 +120,21 @@ export function uri(...names: string[]): Token[] {
   return names.map((val) => ({ tag: "str", val }));
 }
 
+/** Writes `uri` at `at` as a `list<token>`, as ROOT OPEN's args hold it
+ * (types.wit). */
+export function store_uri(w: Lower, at: number, uri: readonly Token[]): void {
+  const b = w.list(at, uri.length, TOKEN_SZ, TOKEN_ALIGN);
+  if (b !== null) uri.forEach((t, k) => store_Token(w, b + k * TOKEN_SZ, t));
+}
+
+/** The URI the `list<token>` at `at` holds (`store_uri`). */
+export function load_uri(r: Lift, at: number): Token[] {
+  return r.map(at, TOKEN_SZ, TOKEN_ALIGN, (off) => load_Token(r, off));
+}
+
 /** Opens the object `uri` names on the other side, and answers its handle. */
 export async function open(link: Sender, uri: readonly Token[]): Promise<Handle> {
-  const a = await link.send(ROOT, OPEN, [
-    8,
-    (w) => {
-      const b = w.list(0, uri.length, TOKEN_SZ, TOKEN_ALIGN);
-      if (b !== null) uri.forEach((t, k) => store_Token(w, b + k * TOKEN_SZ, t));
-    },
-  ]);
+  const a = await link.send(ROOT, OPEN, [8, (w) => store_uri(w, 0, uri)]);
   if (a.result !== 0) throw new XputeError(a.result);
   if (a.data === null) throw new XputeError(ERRNO_EBADMSG);
   return new Lift(a.data).u32(0);
@@ -185,18 +194,112 @@ export interface Guest {
   trap(e: unknown): void;
 }
 
-export class Link {
+/** What a side serves, alike on the host's link and on a UI across a port
+ * (`Link`, `Remote`): its interfaces by their named handles, the objects
+ * under issued handles in a table (`Table`: a Link's, which issues them, or a
+ * UI's, under those its link's side issued), the openers by the URI's
+ * leading tokens, the longest matching winning, and how each request it
+ * answers later stops if its caller cancels it, as xpute-link link.rs `Side`
+ * serves. Only how an answer crosses differs (`_answer`). */
+export abstract class Side<O extends Pick<Table<LinkObject>, "get" | "put" | "remove">> {
   /** The openers, by the URI's leading tokens. */
-  private readonly _mounts: [readonly Token[], Opener][] = [];
-  /** The objects the host serves, by the handles it issued. */
-  private readonly _objects = new Table<LinkObject>();
-  /** The interfaces the host serves, by their named handles (`NAMED`). */
-  private readonly _named = new Map<Handle, LinkObject>();
-  /** The answers of the sent requests that answer later, by tag. */
-  private readonly _pending = new Map<Tag, Answer>();
-  /** How each request the host serves stops if its caller cancels it, by
+  protected readonly _mounts: [readonly Token[], Opener][] = [];
+  /** The interfaces this side serves, by their named handles (`NAMED`). */
+  protected readonly _named = new Map<Handle, LinkObject>();
+  /** The objects this side serves, by the handles issued for them. */
+  protected readonly _objects: O;
+  /** How each request this side serves stops if its caller cancels it, by
    * tag, until it answers. */
   private readonly _cancels = new Map<Tag, () => void>();
+
+  constructor(objects: O) {
+    this._objects = objects;
+  }
+
+  /** Puts `open` as the opener of the URIs that start with `prefix`. */
+  mount(prefix: readonly Token[], open: Opener): void {
+    this._mounts.push([prefix, open]);
+  }
+
+  /** Serves `o` under its interface's named handle `h`, which the other
+   * side calls with no open. */
+  mount_named(h: Handle, o: LinkObject): void {
+    if (this._named.has(h)) bug(ERRNO_EEXIST);
+    this._named.set(h, o);
+  }
+
+  /** Puts `stop` as what runs if the caller cancels the request `t` this
+   * side serves (frame.json5 `CANCEL`): a method that can stop then answers
+   * ECANCELED, and one that can't runs on. */
+  on_cancel(t: Tag, stop: () => void): void {
+    this._cancels.set(t, stop);
+  }
+
+  /** Answers the request `t`, whose method answered EINPROGRESS, with
+   * `result` and its return data, as the component model's `task.return`. A
+   * later answer is found by its tag alone. */
+  task_return(t: Tag, result: i32, data: Packet = null): void {
+    this._cancels.delete(t);
+    this._answer(t, result, data);
+  }
+
+  /** Carries the answer to the request `t` to the other side. */
+  protected abstract _answer(t: Tag, result: i32, data: Packet): void;
+
+  /** Runs `m` of `h`, an interface's or an object's method. A named handle
+   * no interface is mounted under is no object here; an issued one no longer
+   * held is a bad handle. */
+  protected _call(h: Handle, m: Method, tag: Tag, args: U8Array | null): i32 | Reply {
+    if ((h & NAMED) !== 0) {
+      const o = this._named.get(h);
+      return o === undefined ? ERRNO_ENOENT : o.call(m, tag, args);
+    }
+    const o = this._objects.get(h);
+    return o === undefined ? ERRNO_EBADF : o.call(m, tag, args);
+  }
+
+  /** The opener of `uri`'s longest matching mount, if one matches. */
+  protected _opener(uri: readonly Token[]): Opener | undefined {
+    let best: [readonly Token[], Opener] | undefined;
+    for (const m of this._mounts) {
+      const [p] = m;
+      const leads = p.length <= uri.length && p.every((t, k) => t.tag === uri[k]!.tag && t.val === uri[k]!.val);
+      if (leads && (best === undefined || p.length > best[0].length)) best = m;
+    }
+    return best?.[1];
+  }
+
+  /** Opens the object at `uri` under `h` by `open`: 0, or the opener's
+   * refusal, with nothing put under `h`. */
+  protected _open(h: Handle, uri: readonly Token[], open: Opener): i32 {
+    try {
+      this._objects.put(h, open(uri, h));
+      return 0;
+    } catch (e) {
+      return refusal_of(e);
+    }
+  }
+
+  /** Runs the stop of the request `t`, which its caller canceled. */
+  protected _cancel(t: Tag): void {
+    const stop = this._cancels.get(t);
+    this._cancels.delete(t);
+    stop?.();
+  }
+
+  /** Drops the object under `h` and tells it its drop: 0, or EBADF where
+   * none is held. */
+  protected _drop(h: Handle): i32 {
+    const o = this._objects.remove(h);
+    if (o === undefined) return ERRNO_EBADF;
+    o.drop();
+    return 0;
+  }
+}
+
+export class Link extends Side<Table<LinkObject>> {
+  /** The answers of the sent requests that answer later, by tag. */
+  private readonly _pending = new Map<Tag, Answer>();
   private _next: Tag = 0;
   private readonly _guest: Guest;
   /** Whether the guest is trapped (`trap`). */
@@ -237,6 +340,7 @@ export class Link {
   }
 
   constructor(guest: Guest) {
+    super(new Table<LinkObject>());
     this._guest = guest;
   }
 
@@ -253,10 +357,6 @@ export class Link {
     this._room = layout.getUint32(4, true);
     this._guest.boot();
     return !this._trapped;
-  }
-
-  mount(prefix: readonly Token[], open: Opener): void {
-    this._mounts.push([prefix, open]);
   }
 
   call(h: Handle, m: Method, args: Packet = null): Answered {
@@ -283,32 +383,15 @@ export class Link {
     queueMicrotask(() => answer(result, copy));
   }
 
-  /** Answers the request `t`, whose method answered EINPROGRESS, with
-   * `result` and its return data, as the component model's `task.return`. A
-   * later answer is found by its tag alone. */
-  task_return(t: Tag, result: i32, data: Args = null): void {
-    this._cancels.delete(t);
-    this._out(t, ROOT, 0, true, result, data);
-  }
-
-  /** Serves `o` under its interface's named handle `h`, which the guest
-   * calls with no open. */
-  mount_named(h: Handle, o: LinkObject): void {
-    if (this._named.has(h)) bug(ERRNO_EEXIST);
-    this._named.set(h, o);
-  }
-
   /** Serves `o` under a handle issued for it, which a method answers for the
    * other side to call `o` by: a resource a function returns. */
   add(o: LinkObject): Handle {
     return this._objects.add(o);
   }
 
-  /** Puts `stop` as what runs if the caller cancels the request `t` the host
-   * serves (frame.json `CANCEL`): a method that can stop then answers
-   * ECANCELED, and one that can't runs on. */
-  on_cancel(t: Tag, stop: () => void): void {
-    this._cancels.set(t, stop);
+  /** Lays the answer to the request `t` in the guest's inbox. */
+  protected _answer(t: Tag, result: i32, data: Packet): void {
+    this._out(t, ROOT, 0, true, result, data);
   }
 
   /** The guest's memory, as it stands now: it grows, so it is read anew. */
@@ -347,58 +430,41 @@ export class Link {
   /** Runs `m` of `h`: the root's open or cancel, a drop, or an object's
    * method. */
   private _serve(h: Handle, m: Method, tag: Tag, args: U8Array | null): i32 | Reply {
-    if (h === ROOT && m === OPEN) {
-      try {
-        const opened = this._opened(args);
-        return { result: 0, data: [4, (w) => w.u32(0, opened)] };
-      } catch (e) {
-        return refusal_of(e);
-      }
-    }
+    if (h === ROOT && m === OPEN) return this._opened(args);
     if (h === ROOT && m === CANCEL) {
       try {
         if (args === null) return ERRNO_EBADMSG;
-        const t = new Lift(args).u32(0);
-        const stop = this._cancels.get(t);
-        this._cancels.delete(t);
-        stop?.();
+        this._cancel(new Lift(args).u32(0));
         return 0;
       } catch (e) {
         return refusal_of(e);
       }
     }
-    if (m === DROP) return this._objects.remove(h) === undefined ? ERRNO_EBADF : 0;
-    // A named handle no interface is mounted under is no object here; an
-    // issued one no longer held is a bad handle.
-    if ((h & NAMED) !== 0) {
-      const o = this._named.get(h);
-      return o === undefined ? ERRNO_ENOENT : o.call(m, tag, args);
-    }
-    const o = this._objects.get(h);
-    return o === undefined ? ERRNO_EBADF : o.call(m, tag, args);
+    if (m === DROP) return this._drop(h);
+    return this._call(h, m, tag, args);
   }
 
   /** Opens the object the args' URI names, by the opener of its longest
-   * matching mount, and issues its handle. */
-  private _opened(args: U8Array | null): Handle {
-    if (args === null) throw new XputeError(ERRNO_EBADMSG);
-    const r = new Lift(args);
-    const uri = r.map(0, TOKEN_SZ, TOKEN_ALIGN, (at) => load_Token(r, at));
-    let best: [readonly Token[], Opener] | undefined;
-    for (const m of this._mounts) {
-      const [p] = m;
-      const leads = p.length <= uri.length && p.every((t, k) => t.tag === uri[k]!.tag && t.val === uri[k]!.val);
-      if (leads && (best === undefined || p.length > best[0].length)) best = m;
-    }
-    if (best === undefined) throw new XputeError(ERRNO_ENOENT);
-    const h = this._objects.issue();
+   * matching mount, under a handle issued for it, and answers the handle; or
+   * ENOENT where no mount matches, or the opener's refusal, the handle given
+   * back. */
+  private _opened(args: U8Array | null): i32 | Reply {
+    if (args === null) return ERRNO_EBADMSG;
+    let uri: Token[];
     try {
-      this._objects.put(h, best[1](uri, h));
+      uri = load_uri(new Lift(args), 0);
     } catch (e) {
-      this._objects.remove(h);
-      throw e;
+      return refusal_of(e);
     }
-    return h;
+    const open = this._opener(uri);
+    if (open === undefined) return ERRNO_ENOENT;
+    const h = this._objects.issue();
+    const refused = this._open(h, uri, open);
+    if (refused !== 0) {
+      this._objects.remove(h);
+      return refused;
+    }
+    return { result: 0, data: [4, (w) => w.u32(0, h)] };
   }
 
   /** The next request's tag: a counter that wraps, past every tag still

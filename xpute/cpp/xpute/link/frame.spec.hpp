@@ -1,6 +1,6 @@
 // cpp/xpute/link/frame.spec.hpp
 //
-// GENERATED from link/spec/frame.json (xpute-gen data.rs)
+// GENERATED from link/spec/frame.json5 (xpute-gen data.rs)
 //
 // A frame is one method called across the link, four 32-bit words; TAG, CMD, RESULT and
 // PKT are their indices, little-endian. The tag is the request, unique among the sender's

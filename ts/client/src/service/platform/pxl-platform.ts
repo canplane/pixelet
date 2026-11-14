@@ -10,13 +10,13 @@ interface PxlPlatform {
   /** Decodes a body sent zstd-compressed, off the JavaScript thread
    * (origin.native.ts). */
   unpack(packed: Uint8Array): Promise<ArrayBuffer>;
-  storageGet(key: string): string | null;
-  storageSet(key: string, val: string): void;
-  clipboardSet(text: string): void;
-  headingAvailable(): boolean;
+  storage_get(key: string): string | null;
+  storage_set(key: string, val: string): void;
+  clipboard_set(text: string): void;
+  has_heading(): boolean;
   /** The part of the bottom inset that takes a touch, in dp: Android's bar of
    * navigation buttons. It is 0 under gesture navigation and on iOS. */
-  tappableBottom(): f64;
+  tappable_bottom(): f64;
 }
 
 export const PLATFORM: PxlPlatform =

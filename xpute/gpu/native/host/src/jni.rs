@@ -2,8 +2,8 @@
 
 //! This is the GPU's host as an Android app reaches it: the C ABI's calls
 //! under the names JNI looks for, as the `external` functions of the Kotlin
-//! class `xpute.Gpu` (`jni_abi!`), and a device lost as a call of its static
-//! `onLost()`. A view's `Surface` crosses as the native window wgpu draws
+//! class `xpute.Gpu` (`jni_abi!`), and the host's state as a call of its
+//! static `onState(String)`. A view's `Surface` crosses as the native window wgpu draws
 //! through (`target`), which the host holds from its bind until its unbind
 //! (`native::bind`).
 
@@ -12,17 +12,18 @@ use std::sync::OnceLock;
 
 use xpute_kit::status::errno::Errno;
 use xpute_native_runtime::jni::ndk::{ANativeWindow_fromSurface, ANativeWindow_release};
-use xpute_native_runtime::jni::sys::{jint, jobject, JNIEnv};
-use xpute_native_runtime::jni::{call, class, Class};
+use xpute_native_runtime::jni::sys::{jint, jobject, jvalue, JNIEnv};
+use xpute_native_runtime::jni::{call, class, string, Class};
 
-use super::native::lost_on;
+use super::native::state_on;
 
-/// The class `xpute.Gpu` and its static method `onLost()V`, at `ON_LOST`.
+/// The class `xpute.Gpu` and its static method `onState(Ljava/lang/String;)V`,
+/// at `ON_STATE`.
 static CLASS: OnceLock<Class<1>> = OnceLock::new();
-const ON_LOST: usize = 0;
+const ON_STATE: usize = 0;
 
 /// Takes the class `xpute.Gpu` from `this`, once, and makes its static method
-/// hear of each device lost (`lost_on`).
+/// hear the host's state (`state_on`).
 ///
 /// # Safety
 /// `e` and `this` are what JNI called with, on a thread Java made, `this` an
@@ -32,22 +33,28 @@ pub unsafe fn init(e: *mut JNIEnv, this: jobject) {
         return;
     }
     let mut methods = [(c"", c""); 1];
-    methods[ON_LOST] = (c"onLost", c"()V");
+    methods[ON_STATE] = (c"onState", c"(Ljava/lang/String;)V");
     // SAFETY: what JNI called with, on a thread Java made.
     let Some(c) = (unsafe { class(e, this, methods) }) else {
         return;
     };
     let _ = CLASS.set(c);
-    lost_on(Some(lost));
+    state_on(Some(state));
 }
 
-/// Calls `Gpu.onLost` from the thread that found the loss (`lost_on`), the
+/// Calls `Gpu.onState` from the thread that tells the state (`state_on`), the
 /// GPU's (native.rs), attached to the VM for good as a daemon, as the guest's
 /// thread is for `Runtime.onNotify`.
-extern "C" fn lost() {
+extern "C" fn state(state: *const u8, len: usize) {
     let Some(c) = CLASS.get() else { return };
-    // SAFETY: `onLost()V`, at its index.
-    unsafe { call(c, ON_LOST, |_| Vec::new()) };
+    let args = |e| {
+        // SAFETY: this thread's environment, and the name's UTF-8, the
+        // host's for the call.
+        let s = unsafe { string(e, state, len) };
+        vec![jvalue { l: s }]
+    };
+    // SAFETY: `onState(Ljava/lang/String;)V`, at its index, and its one value.
+    unsafe { call(c, ON_STATE, args) }
 }
 
 /// This is `Gpu.surfaceBind`: it binds the guest's surface `handle` to a view's
@@ -78,7 +85,7 @@ pub unsafe fn bind(
 
 /// Exports the GPU's host to JNI for the Kotlin class `xpute.Gpu`, which
 /// `native_abi!` expands on Android: `init()`, which makes its static
-/// `onLost()` hear each device lost (`init`), `surfaceBind(handle: Int,
+/// `onState(state: String)` hear the host's state (`init`), `surfaceBind(handle: Int,
 /// surface: Surface): Int`, `surfaceUnbind(handle: Int)` and `vsync()`.
 #[macro_export]
 macro_rules! jni_abi {

@@ -1,6 +1,6 @@
 // @pxl/edge/route.spec.ts
 //
-// GENERATED from spec/spec/route.json (pxl-tool spec/route.rs)
+// GENERATED from spec/spec/route.json5 (pxl-tool spec/route.rs)
 // The address space, as four reserved roots and the branches under them,
 // and the two origins they are served from.
 //

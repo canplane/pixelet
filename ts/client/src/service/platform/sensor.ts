@@ -44,16 +44,16 @@ function geo_start(): void {
       switch (err.code) {
         case err.PERMISSION_DENIED:
           geo_stop();
-          listener.positionError("denied", false);
+          listener.pos_err("denied", false);
           break;
         case err.POSITION_UNAVAILABLE:
-          listener.positionError("unavailable", true);
+          listener.pos_err("unavailable", true);
           break;
         case err.TIMEOUT:
-          listener.positionError("timeout", true);
+          listener.pos_err("timeout", true);
           break;
         default:
-          listener.positionError("other", true);
+          listener.pos_err("other", true);
       }
     },
     // No timeout is set (PositionOptions.timeout is Infinity by default). With
@@ -67,7 +67,7 @@ let orient_event: string | null = null;
 
 function on_orient(e: Event): void {
   const o = e as IosOrientationEvent;
-  listener.orientation(
+  listener.orient(
     o.webkitCompassHeading ?? null,
     o.alpha,
     o.beta,
@@ -142,7 +142,7 @@ function orient_stop(): void {
   orient_event = null;
 }
 
-export const geo: GeolocationSensor = {
+export const GEOLOCATION: GeolocationSensor = {
   has: "geolocation" in navigator,
   // The watch raises the browser's prompt itself, wherever the browser still
   // asks. A page cannot open the browser's settings.
@@ -150,7 +150,7 @@ export const geo: GeolocationSensor = {
   start: geo_start,
   stop: geo_stop,
 };
-export const orient: OrientationSensor = {
+export const ORIENT: OrientationSensor = {
   has: orient_has(),
   gated: orient_gated(),
   silence: true,

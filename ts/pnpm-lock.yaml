@@ -101,6 +101,9 @@ importers:
       '@xpute/kit':
         specifier: workspace:*
         version: link:../../../kit/ts
+      '@xpute/link':
+        specifier: workspace:*
+        version: link:../../../link/ts
     devDependencies:
       '@types/react':
         specifier: ^19.2.14

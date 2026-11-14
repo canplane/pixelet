@@ -49,7 +49,7 @@ pub(super) struct CastRead {
 /// What the light's cast does in a frame that casts it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) struct Light {
-    /// What changed that it casts, a bit for each `LightChanged` (span.json `LIGHT_CHANGED`).
+    /// What changed that it casts, a bit for each `LightChanged` (span.json5 `LIGHT_CHANGED`).
     /// It is never 0.
     pub changed: u32,
     /// Whether an epoch begins (pxl-engine `light::HDR_EPOCH`). An epoch is a run of casts

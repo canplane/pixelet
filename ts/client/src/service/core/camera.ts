@@ -9,7 +9,7 @@ import * as sensor from "@/service/platform/sensor.ts";
 /** iOS Safari asks for the compass only during a press, and the prompt runs
  * here, so this must be called from the press itself. */
 export async function tracking(tracking: Tracking): Promise<void> {
-  if (tracking === TRACKING_FOLLOW && !(await sensor.orient.permit())) {
+  if (tracking === TRACKING_FOLLOW && !(await sensor.ORIENT.permit())) {
     console.error("[orientation] could not start the sensor.");
     return;
   }

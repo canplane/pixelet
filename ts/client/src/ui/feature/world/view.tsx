@@ -13,9 +13,9 @@ import { surface_driver } from "@/service/core/surface.ts";
 import { key_down, key_up, release_keys } from "./keyboard.ts";
 import { release_pointers, world_pointer } from "./pointer.ts";
 import { Corner } from "./corner.tsx";
-import { bottomRest } from "@/ui/shared/component/bottom-rest.ts";
+import { bottom_rest } from "@/ui/shared/component/bottom-rest.ts";
 import { Toaster } from "@/ui/feature/world/toast/stack.tsx";
-import { chrome, color, layer } from "@/ui/shared/component/theme.ts";
+import { CHROME, COLOR, LAYER } from "@/ui/shared/component/theme.ts";
 import { KEEPS_KEYBOARD } from "@/ui/shared/component/keyboard.tsx";
 
 import { useChromeTop } from "./chrome.ts";
@@ -28,7 +28,7 @@ import { useCore } from "@/ui/shared/watch.ts";
 import * as input from "@/service/core/input.ts";
 import * as scene from "@/service/core/scene.ts";
 
-const TOAST_LIFT_PX = chrome.inset + 20;
+const TOAST_LIFT_PX = CHROME.inset + 20;
 
 const PANEL_GAP_PX = 12;
 
@@ -56,9 +56,9 @@ function World() {
 }
 
 function BetweenChrome({ children }: { children: ReactNode }) {
-  const top = useChromeTop() + chrome.control + PANEL_GAP_PX;
+  const top = useChromeTop() + CHROME.control + PANEL_GAP_PX;
   const bottom =
-    bottomRest(useSafeArea(), chrome.inset) + DOCK_HEIGHT + PANEL_GAP_PX;
+    bottom_rest(useSafeArea(), CHROME.inset) + DOCK_HEIGHT + PANEL_GAP_PX;
   return <View style={[styles.between, { top, bottom }]}>{children}</View>;
 }
 
@@ -68,7 +68,7 @@ function Overlays() {
   return (
     <>
       <TopOverlays />
-      <AboveKeyboard inset={chrome.inset}>
+      <AboveKeyboard inset={CHROME.inset}>
         <BusyDim style={styles.bottom}>
           <Dock />
         </BusyDim>
@@ -93,7 +93,7 @@ export function WorldView() {
 
       {/* The toasts lie under the chrome, so that the size popover covers
           them. */}
-      <AboveKeyboard inset={chrome.inset} lift={DOCK_HEIGHT + TOAST_LIFT_PX}>
+      <AboveKeyboard inset={CHROME.inset} lift={DOCK_HEIGHT + TOAST_LIFT_PX}>
         <Toaster />
       </AboveKeyboard>
 
@@ -103,11 +103,11 @@ export function WorldView() {
 }
 
 const styles = StyleSheet.create({
-  root: { overflow: "hidden", backgroundColor: color.black },
+  root: { overflow: "hidden", backgroundColor: COLOR.black },
   between: {
     position: "absolute",
-    left: chrome.inset,
-    zIndex: layer.debug,
+    left: CHROME.inset,
+    zIndex: LAYER.debug,
     alignItems: "flex-start",
     pointerEvents: "box-none",
   },

@@ -39,7 +39,7 @@ kind's lattice, zooms and packet bound are one row in pxl-spec (`bake/tile.rs`
 `BaseKind::row`, `Tile`), which the client and the bake both read.
 
 **Terrain** (`terrain/`) is the ground. A cell is one byte, its asset id, a
-ground cube of Carto's palette or pixelet's own (`spec/spec/asset/cube.json`),
+ground cube of Carto's palette or pixelet's own (`spec/spec/asset/cube.json5`),
 beside an elevation; each cell's is worked out from those samples as a brick is filled,
 never sent. A tile also holds its separation, the bridges and tunnels as lines
 with a top and a width, and says which of its children are tiles (pxl-spec

@@ -49,7 +49,7 @@ pollster = "1"
 
 [features]
 # What a development build has and a published one does not: the settings
-# schema.json marks `dev` — the nightly features — offered. A published
+# schema.json5 marks `dev` — the nightly features — offered. A published
 # module or device library is built without (`--no-default-features`, the
 # release `args` of ts/client/package.json `xpute.guest`, which
 # ts/client/script/wasm-build.py and core-build.py both read): it offers no

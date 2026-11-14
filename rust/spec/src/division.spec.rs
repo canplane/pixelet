@@ -1,6 +1,6 @@
 // pxl-spec/division.spec.rs
 //
-// GENERATED from spec/spec/division.json (xpute-gen data.rs)
+// GENERATED from spec/spec/division.json5 (xpute-gen data.rs)
 //
 // A division's subtype, Overture's, broadest first (pxl-spec division.rs
 // `Subtype`): a name is a division and its ancestors, and the client picks
@@ -8,6 +8,7 @@
 // never inserted.
 
 pub mod division_name {
+    /// The most bytes a division's name takes in UTF-8. A tile with a longer name is malformed: its bake fails and a reader refuses it (pxl-spec bake/tile/division.rs). A cell names at most one division of each subtype, so a chain of names is at most DIVISION_SUBTYPE's count long.
     pub const BYTES: u32 = 128;
 }
 

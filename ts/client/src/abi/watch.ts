@@ -14,7 +14,7 @@ import {
   refusal_of,
 } from "@xpute/link/link.ts";
 
-/** The interface's handle, named by `pxl:core/watch` (frame.json `NAMED`). */
+/** The interface's handle, named by `pxl:core/watch` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x71919e;
 
 /** `start` */
@@ -52,6 +52,7 @@ function object(implementation: Host): LinkObject {
         return refusal_of(e);
       }
     },
+    drop() {},
   };
 }
 

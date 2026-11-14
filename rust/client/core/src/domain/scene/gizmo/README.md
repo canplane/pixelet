@@ -10,10 +10,10 @@ the core sees the world, each behind its setting, where an indicator
   how they stand, their tiles and shards, as translucent lines over the ground.
 
 The lines are `debug_line.rs`'s, and their colors `crate::spec::gizmo`'s, generated
-from `spec/client/core/domain/scene/gizmo/gizmo.json`.
+from `spec/client/core/domain/scene/gizmo/gizmo.json5`.
 
 Two views the renderer draws itself, from a word the core hands it, in the
-looks of `spec/client/render/frame/shader/debug_look.json`:
+looks of `spec/client/render/frame/shader/debug_look.json5`:
 
 - behind the `camera_gizmo` setting (`FrameInput::camera_gizmo`), the camera
   grid's cells over the screen and the cells the rays stop on tinted by the

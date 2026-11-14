@@ -1,6 +1,6 @@
 // xpute-kit/status/errno.spec.rs
 //
-// GENERATED from kit/spec/errno.json (xpute-gen data.rs)
+// GENERATED from kit/spec/errno.json5 (xpute-gen data.rs)
 //
 // POSIX/Linux-aligned negative errno
 
@@ -589,10 +589,10 @@ pub mod errno {
         pub const TEXT: &str = "Connection refused";
     }
     pub mod ehostdown {
-        pub const TEXT: &str = "Runtime is down";
+        pub const TEXT: &str = "Host is down";
     }
     pub mod ehostunreach {
-        pub const TEXT: &str = "No route to runtime";
+        pub const TEXT: &str = "No route to host";
     }
     pub mod ealready {
         pub const TEXT: &str = "Operation already in progress";

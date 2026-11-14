@@ -15,7 +15,7 @@ use resvg::usvg::Tree;
 use std::path::Path;
 
 use xpute_gen::spec::data::{table_outputs, DataSpec};
-use xpute_gen::spec::{Node as SpecNode, Output};
+use xpute_gen::spec::{description, Node as SpecNode, Output};
 
 /// What the symbols are read from, and the files written from them, which
 /// `spec` leaves to the asset tool.
@@ -145,21 +145,19 @@ fn mask(tree: &Tree) -> Result<Vec<u8>, String> {
 /// Rust the masks the spec crate includes, and in TypeScript the UI's
 /// outlines, each symbol's box and shapes, by its number.
 pub fn outputs(root: &Path, symbols: &[Symbol]) -> Result<Vec<Output>, String> {
-    let lines =
-        |l: &[&str]| SpecNode::Arr(l.iter().map(|l| SpecNode::Str(l.to_string())).collect());
     let entry = |doc: &[&str], ty: &str, n: usize| {
         SpecNode::Obj(vec![
-            ("$doc".into(), lines(doc)),
+            ("$description".into(), description(doc)),
             ("$type".into(), SpecNode::Str(ty.into())),
-            ("$val".into(), SpecNode::Num(n as f64)),
+            ("$value".into(), SpecNode::Num(n as f64)),
         ])
     };
     let table = SpecNode::Obj(vec![
         (
-            "$doc".into(),
-            lines(&[
+            "$description".into(),
+            description(&[
                 "Carto's place symbols (openstreetmap-carto `symbols/`, CC0), symbol n the (n - 1)th in",
-                "spec/spec/asset/ingest.json's `symbols` order: in Rust each a mask of its coverage, a",
+                "spec/spec/asset/ingest.json5's `symbols` order: in Rust each a mask of its coverage, a",
                 "byte a pixel, `SYMBOL_PX` a side, row by row, in `symbol.mask`; in TypeScript its",
                 "outline at `PLACE_SYMBOLS[n - 1]` (place_theme.spec.ts `SYMBOL`), its box and each",
                 "shape's path data and whether it fills even-odd.",

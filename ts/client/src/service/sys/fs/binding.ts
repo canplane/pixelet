@@ -1,7 +1,7 @@
 // @pxl/client/service/sys/fs/binding.ts
 
 /** The binding behind every path the core opens or writes. A path is a tuple
- * of tokens walked down file.json's `path` tree, as a URI's path is: each node
+ * of tokens walked down file.json5's `path` tree, as a URI's path is: each node
  * takes one token, its `ID`, and hands the rest of the tuple to the child it
  * names. The walk goes down the generated tree itself (`path`), so its shape
  * and ids are the spec's alone. A node with no child named takes the tokens
@@ -87,7 +87,7 @@ function base(layer: (typeof BASE_KINDS)[number]): Handler {
 }
 
 /** Each node's handler, beside the generated node it belongs to: each base
- * layer's at the node numbered as the layer is (file.json `BASE`). */
+ * layer's at the node numbered as the layer is (file.json5 `BASE`). */
 const HANDLERS: ReadonlyMap<Node, Handler> = new Map<Node, Handler>([
   ...BASE_KINDS.map((layer, n): [Node, Handler] => [
     walk([n])![0],

@@ -9,23 +9,6 @@ pub type Rgb = u32;
 /// `0xRRGGBBAA`, its alpha straight, not premultiplied.
 pub type Rgba = u32;
 
-/// The color `hex` as the specs write one, `#rrggbb`. Anything else panics,
-/// which in a const is a compile error.
-pub const fn rgb(hex: &str) -> Rgb {
-    let b = hex.as_bytes();
-    assert!(b.len() == 7 && b[0] == b'#', "a color is #rrggbb");
-    let mut n = 0;
-    let mut i = 1;
-    while i < 7 {
-        let Some(d) = (b[i] as char).to_digit(16) else {
-            panic!("a color is #rrggbb");
-        };
-        n = n << 4 | d;
-        i += 1;
-    }
-    n
-}
-
 /// One sRGB channel, 0 to 255, in linear light.
 pub fn linear(v: u8) -> f64 {
     let c = f64::from(v) / 255.0;

@@ -1,6 +1,6 @@
 // pxl-spec/asset/cube.rs
 
-//! The cube kind (`spec/spec/asset/cube.json`): the ground and the cubes, in one table
+//! The cube kind (`spec/spec/asset/cube.json5`): the ground and the cubes, in one table
 //! the GPU reads too, which the value space (value.rs) is laid over, a cube as the catalog
 //! gives it out to be placed, and what has a cube's body.
 
@@ -27,7 +27,7 @@ pub const fn solid(id: AssetId) -> bool {
     is_matter(id) && id >> IDX_BITS == Kind::Cube as u32
 }
 
-/// A cube of the catalog (`asset/cube.json`) is its asset id: one of the
+/// A cube of the catalog (`asset/cube.json5`) is its asset id: one of the
 /// ground's, a byte, or past a byte one that is only ever placed; a player may
 /// place either. None for a sentinel or a decor.
 pub fn cube_of(id: AssetId) -> Option<AssetId> {

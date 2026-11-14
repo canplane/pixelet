@@ -12,10 +12,10 @@ import { FADE } from "@/ui/shared/component/motion/transition.ts";
 import { HaloText } from "./halo.tsx";
 import {
   alpha,
-  color,
+  COLOR,
   SECONDARY,
-  text_style,
-  weight,
+  TEXT_STYLE,
+  WEIGHT,
 } from "@/ui/shared/component/theme.ts";
 
 export function CurrentAddress() {
@@ -49,10 +49,10 @@ export function CurrentAddress() {
 const styles = StyleSheet.create({
   shrink: { flexShrink: 1, minWidth: 0 },
   label: {
-    ...text_style.body,
-    fontWeight: weight.semibold,
-    color: color.white,
+    ...TEXT_STYLE.body,
+    fontWeight: WEIGHT.semibold,
+    color: COLOR.white,
   },
   numbers: { fontVariant: ["tabular-nums"] },
-  locating: { color: alpha(color.white, SECONDARY) },
+  locating: { color: alpha(COLOR.white, SECONDARY) },
 });

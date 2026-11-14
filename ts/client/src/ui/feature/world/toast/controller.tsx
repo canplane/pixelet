@@ -133,18 +133,18 @@ export function ToastController() {
   const companion_loading = useCore(
     (s) => !s.companion.person_ready || !s.companion.pet_ready,
   );
-  const [greeting, setGreeting] = useState<Greeting>(UNSAID);
+  const [greeting, set_greeting] = useState<Greeting>(UNSAID);
   // The cover hides the toasts until the app shows.
   const shows = useSyncExternalStore(watch_boot, boot_state) === BOOT_STARTED;
   const ready = shows && !outside && shown && !companion_loading;
   useEffect(() => {
-    if (ready && greeting === UNSAID) setGreeting(SAYING);
+    if (ready && greeting === UNSAID) set_greeting(SAYING);
     // A ready word cut short is not shown again.
-    if (!ready && greeting === SAYING) setGreeting(SAID);
+    if (!ready && greeting === SAYING) set_greeting(SAID);
   }, [ready, greeting]);
   useEffect(() => {
     if (greeting !== SAYING) return;
-    const timer = setTimeout(() => setGreeting(SAID), READY_MS);
+    const timer = setTimeout(() => set_greeting(SAID), READY_MS);
     return () => clearTimeout(timer);
   }, [greeting]);
   useNotice(WORLD, world(outside, shown, companion_loading, greeting));

@@ -15,7 +15,7 @@ import {
 
 import type { GlyphName } from "@/ui/shared/component/icon.tsx";
 import { halo_gap, HaloIcon } from "./halo.tsx";
-import { color } from "@/ui/shared/component/theme.ts";
+import { COLOR } from "@/ui/shared/component/theme.ts";
 import * as device from "@/service/platform/device.ts";
 import { useCore } from "@/ui/shared/watch.ts";
 
@@ -36,7 +36,7 @@ export function status_color(
   }
 }
 
-const GLYPH_TONE = { pending: color.pending_glyph, failed: color.alarm_glyph };
+const GLYPH_TONE = { pending: COLOR.pending_glyph, failed: COLOR.alarm_glyph };
 
 const PRESENCE: Record<SensorStatus, f64> = {
   [SENSOR_STATUS_IDLE]: 0.35,
@@ -57,7 +57,7 @@ export function SensorIcons() {
       <HaloIcon
         glyph={glyph}
         size={12}
-        color={status_color(status, color.white, GLYPH_TONE)}
+        color={status_color(status, COLOR.white, GLYPH_TONE)}
         struck={status === SENSOR_STATUS_ERROR}
       />
     </View>
@@ -66,7 +66,7 @@ export function SensorIcons() {
   return (
     <View style={styles.row}>
       {icon("location", location)}
-      {device.handheld &&
+      {device.HANDHELD &&
         orientation !== SENSOR_STATUS_UNAVAILABLE &&
         icon("location.north.circle", orientation)}
     </View>

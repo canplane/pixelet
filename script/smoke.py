@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # What a deployment must answer, checked against a running one. Addresses
-# come from spec/spec/route.json, which every relay is written from, so a
+# come from spec/spec/route.json5, which every relay is written from, so a
 # moved root cannot leave this checking a dead URL: by default its site, with
 # `--origin` its origin, the VM behind the edge, where the bucket's branches,
 # which only the edge serves, are skipped. A base URL given checks that one.
@@ -24,18 +24,20 @@ import urllib.request
 import zlib
 from pathlib import Path
 
+import json5
+
 SPEC = Path(__file__).resolve().parent.parent / "spec" / "spec"
-route = json.loads((SPEC / "route.json").read_text())
-published = json.loads((SPEC / "bake" / "publication.json").read_text())
+route = json5.loads((SPEC / "route.json5").read_text())
+published = json5.loads((SPEC / "bake" / "publication.json5").read_text())
 
 
 def root(name):
-    return route["roots"][name]["path"]
+    return route["roots"][name]["path"]["$value"]
 
 
 def branch(name):
     b = route["branches"][name]
-    return f"{root(b['under'])}/{b['name']}"
+    return f"{root(b['under']['$value'])}/{b['name']['$value']}"
 
 
 GEO_ROOT, API_ROOT, TILE_ROOT = root("GEO_ROOT"), root("API_ROOT"), root("TILE_ROOT")
@@ -43,12 +45,12 @@ SEARCH_URL, GEO_INTERNAL, API_INTERNAL = branch("SEARCH_URL"), branch("GEO_INTER
 
 
 def tile_object(version, name):
-    """A tile's object under its kind, publication.json's `OBJECT` filled in."""
-    return published["OBJECT"]["$val"].replace("{version}", version).replace("{name}", name)
+    """A tile's object under its kind, publication.json5's `OBJECT` filled in."""
+    return published["OBJECT"]["$value"].replace("{version}", version).replace("{name}", name)
 
 
-# Any shipped asset's bucket key: the first ingest.json lists.
-ASSET_KEY = json.loads((SPEC / "asset" / "ingest.json").read_text())["files"][0]["key"]
+# Any shipped asset's bucket key: the first ingest.json5 lists.
+ASSET_KEY = json5.loads((SPEC / "asset" / "ingest.json5").read_text())["files"]["$value"][0]["key"]
 
 # A land page in Bundang: the zoom-15 tile's name.
 PAGE = "010332102130223"
@@ -142,7 +144,7 @@ def declared(a):
     if not isinstance(s, dict):
         return "not JSON"
     version = s.get("version") or {}
-    missing = [k for k in published["BASE_KIND"]["$val"] if not isinstance(version.get(k), str)]
+    missing = [k for k in published["BASE_KIND"]["$value"] if not isinstance(version.get(k), str)]
     return f"no version for {', '.join(missing)}" if missing else None
 
 
@@ -219,7 +221,7 @@ def main():
     if len(args) > 1:
         print("usage: ./script/smoke.py [<base-url>] [--origin]", file=sys.stderr)
         return 2
-    base = (args[0] if args else route["origins"]["ORIGIN" if origin_only else "SITE"]["url"]).rstrip("/")
+    base = (args[0] if args else route["origins"]["ORIGIN" if origin_only else "SITE"]["url"]["$value"]).rstrip("/")
 
     version = {} if origin_only else served_versions(base)
     checks = origin_checks() if origin_only else edge_checks(version)

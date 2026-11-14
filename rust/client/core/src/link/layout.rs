@@ -75,20 +75,20 @@ const fn off(f: Fixed) -> u32 {
 
 const FIXED_BYTES: u32 = off(Fixed::Uploads) + FIXED[Fixed::Uploads as usize];
 
-// The heap begins past the size manifest.json declares, since its first
+// The heap begins past the size manifest.json5 declares, since its first
 // block is asked for before `install`; the declared size is the ranges' on a
 // page, no more.
 const _: () = assert!(
-    FIXED_BYTES.next_multiple_of(PAGE_BYTES) == manifest::mem::FIXED_BYTES,
-    "manifest.json's mem.fixed_bytes is not the fixed ranges' size on a page"
+    FIXED_BYTES.next_multiple_of(PAGE_BYTES) == manifest::mem::FIXED_SZ,
+    "manifest.json5's mem.fixed_sz is not the fixed ranges' size on a page"
 );
 
 // The stack, the fixed ranges and the heap the core counts on fit the
 // memory; the boot checks the module's data with them against the memory
 // given.
 const _: () = assert!(
-    manifest::stack::MODULE_BYTES as u64 + manifest::mem::FIXED_BYTES as u64 + manifest::mem::MIN_HEAP_BYTES as u64
-        <= manifest::mem::BYTES as u64,
+    manifest::stack::MODULE_SZ as u64 + manifest::mem::FIXED_SZ as u64 + manifest::mem::MIN_HEAP_SZ as u64
+        <= manifest::mem::SZ as u64,
     "the stack, the fixed ranges and the heap do not fit the core's memory"
 );
 
@@ -139,6 +139,6 @@ const HEAP_FLOWS_BYTES: u64 =
     2 * param::CREDIT_CAP as u64 * longest_unslotted() + pool::POOL_BYTES + record::PERF_BYTES;
 
 const _: () = assert!(
-    HEAP_FLOWS_BYTES <= manifest::mem::MIN_HEAP_BYTES as u64,
+    HEAP_FLOWS_BYTES <= manifest::mem::MIN_HEAP_SZ as u64,
     "the caps of the heap's bounded flows do not fit the heap the core counts on"
 );

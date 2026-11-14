@@ -1,0 +1,25 @@
+{
+  $description: "A division's subtype, Overture's, broadest first (pxl-spec division.rs\n`Subtype`): a name is a division and its ancestors, and the client picks\nhow deep to read it. The numbers are stored, so a subtype is appended,\nnever inserted.",
+  DIVISION_NAME: {
+    $type: "u32",
+    BYTES: {
+      $value: 128,
+      $description: "The most bytes a division's name takes in UTF-8. A tile with a longer name is malformed: its bake fails and a reader refuses it (pxl-spec bake/tile/division.rs). A cell names at most one division of each subtype, so a chain of names is at most DIVISION_SUBTYPE's count long.",
+    },
+  },
+  DIVISION_SUBTYPE: {
+    $type: "u8",
+    COUNTRY: { $value: 0 },
+    DEPENDENCY: { $value: 1 },
+    MACROREGION: { $value: 2 },
+    REGION: { $value: 3 },
+    MACROCOUNTY: { $value: 4 },
+    COUNTY: { $value: 5 },
+    LOCALADMIN: { $value: 6 },
+    LOCALITY: { $value: 7 },
+    BOROUGH: { $value: 8 },
+    MACROHOOD: { $value: 9 },
+    NEIGHBORHOOD: { $value: 10 },
+    MICROHOOD: { $value: 11 },
+  },
+}

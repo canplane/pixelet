@@ -52,10 +52,11 @@ pub fn start(key: u64, stream: Stream, id: u64) {
 /// answers it. Only an absent file means there is no object, so an empty file
 /// is a bad body, and one longer than a packet of its kind can be is refused.
 /// With every slot out the read waits for one given back, before it opens
-/// the file. A read its stop canceled reaches no one.
+/// the file. A canceled read ends aborted (`exit_of`), so its want starts
+/// again, and one its stop canceled reaches no one.
 #[embassy_executor::task(pool_size = CREDIT_CAP as usize)]
 async fn fetch(key: u64, stream: Stream, path: Vec<Token>, at_ms: f64) {
-    let most = stream.max_body().unwrap_or(mem::MIN_HEAP_BYTES);
+    let most = stream.max_body().unwrap_or(mem::MIN_HEAP_SZ);
     let read = if stream.row().slotted {
         let Some(mut slot) = body::take() else {
             return arrive(key, at_ms, Err(Exit::Refused(Refusal::bodies())));
@@ -73,7 +74,6 @@ async fn fetch(key: u64, stream: Stream, path: Vec<Token>, at_ms: f64) {
         Ok(b) if b.is_empty() => Err(exit_of(Failure::from(Errno::EBADMSG))),
         Ok(b) => Ok(Some(b)),
         Err(Errno::ENOENT) => Ok(None),
-        Err(Errno::ECANCELED) => return,
         Err(e) => Err(exit_of(Failure::from(e))),
     };
     arrive(key, at_ms, body);

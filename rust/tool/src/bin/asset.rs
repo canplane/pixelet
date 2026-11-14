@@ -87,7 +87,7 @@ fn run() -> Result<(), String> {
     let toward: BTreeMap<String, u32> = slots
         .iter()
         .filter_map(|i| match &i.slot {
-            pack::Slot::Top { group, ty } if group == "ground" && i.palette_hex.is_some() => {
+            pack::Slot::Top { group, ty } if group == "ground" && i.palette.is_some() => {
                 carto.get(ty).map(|&c| (format!("cube/{}", i.file), c))
             }
             _ => None,
@@ -145,7 +145,7 @@ fn run() -> Result<(), String> {
         let before = tile_slots.len();
         tile_slots.extend(worn);
         if tile_slots.len() == before {
-            return Err(format!("{t} has no entry in asset/raw/cube/manifest.json"));
+            return Err(format!("{t} has no entry in asset/raw/cube/manifest.json5"));
         }
     }
     if let Some(i) = slots
@@ -207,7 +207,7 @@ fn run() -> Result<(), String> {
     // What the code is generated from: the host's table, the pack's layout
     // and the catalog.
     write_formatted(
-        &root.join("spec/spec/asset/ingest.json"),
+        &root.join("spec/spec/asset/ingest.json5"),
         &table::render_json(
             &rows,
             &packed,
@@ -217,7 +217,7 @@ fn run() -> Result<(), String> {
     spec::generate(true)?;
 
     println!(
-        "[ingest] {} assets, {:.1} MiB, pack {} tiles {:.0} KiB -> out/asset/, spec/spec/asset/ingest.json and what it generates written",
+        "[ingest] {} assets, {:.1} MiB, pack {} tiles {:.0} KiB -> out/asset/, spec/spec/asset/ingest.json5 and what it generates written",
         rows.len(),
         total as f64 / 1024.0 / 1024.0,
         packed.tiles.len(),

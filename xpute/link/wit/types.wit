@@ -5,7 +5,7 @@
 // strings.
 //
 // Whatever is called is an object, under a handle. A singleton interface's is
-// named: frame.json's NAMED bit and the hash of its package and its name,
+// named: frame.json5's NAMED bit and the hash of its package and its name,
 // ("xpute:clocks", "monotonic-clock"), which the generator writes on both sides,
 // so it is called with no open. A resource's the side that serves it issues,
 // opened by a URI: a tuple of tokens, each an s32 or a string, as a file's are
@@ -19,7 +19,7 @@
 // serving side answers at once from the opener mounted at the URI's longest
 // matching leading tokens. An open is pipelined, so a missing file opens, and
 // its first async method answers ENOENT. `cancel(tag)`, number 1, cancels a
-// call the sender has pending (frame.json CANCEL). Every handle has a
+// call the sender has pending (frame.json5 CANCEL). Every handle has a
 // drop, method 0xFF, as the component model's resource drop, which takes no
 // result and lets the object go; a
 // resource whose end must report a result keeps its own method for it, as a
@@ -29,7 +29,7 @@
 // the inbox and a frame's room, and runs nothing of the program. `link_boot`
 // is the guest's first entry: the program's boot mounts what it serves, and
 // only then does the entry start. An interface is called by its named handle
-// with no open (frame.json `NAMED`), so a bug in a boot is reported through the
+// with no open (frame.json5 `NAMED`), so a bug in a boot is reported through the
 // stop at once. `link_in` enters the guest with the frame laid in its
 // inbox. The host calls init, reads the layout, then boot, so every entry
 // comes from a host that knows the room. A trap out of any export stops the
@@ -47,7 +47,7 @@
 // callee reads or writes it there. The caller's binding takes a buffer it owns,
 // lends it with the call and hands it back with the answer, so the borrow lasts
 // as long as the ownership. A call dropped before its answer is canceled
-// (frame.json `CANCEL`), as the component model cancels a dropped subtask, and
+// (frame.json5 `CANCEL`), as the component model cancels a dropped subtask, and
 // keeps the buffer alive until its answer, ECANCELED or its own, comes.
 //
 // A packet lays its values out as the Component Model's Canonical ABI does

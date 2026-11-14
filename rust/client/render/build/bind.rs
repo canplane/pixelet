@@ -199,7 +199,7 @@ fn holds_atomic(module: &naga::Module, ty: naga::Handle<naga::Type>) -> bool {
     }
 }
 
-/// The layout kinds (api.json's record words) that can bind `var` as it is declared, written as
+/// The layout kinds (api.json5's record words) that can bind `var` as it is declared, written as
 /// an expression of bits over record.rs's names. None when no record word lays out its kind.
 fn layout_kinds(module: &naga::Module, var: &naga::GlobalVariable) -> Option<String> {
     use naga::{

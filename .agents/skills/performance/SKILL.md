@@ -50,11 +50,11 @@ Make the program faster while keeping every condition the design met.
   after the run's seconds, every line the app said but the result, the host's
   own among them (a core's stop, a device lost, an uncaptured error, and in a
   measured build a GPU record by its op's number, a GPU run, a GPU
-  completion's landing or a core's entry slower than perf.json's
+  completion's landing or a core's entry slower than perf.json5's
   `LIMIT.SLOW_MS`), then why
   the run ended. The app's progress is a line a second from the core's start,
   whatever the core answers (`PXLRUN`: whether it is shown, the boot's state,
-  how long the core's read has gone unanswered, then perf.json NOW `draw` as
+  how long the core's read has gone unanswered, then perf.json5 NOW `draw` as
   last answered: its frames, the granted frames that did not run by
   why, the device's generation, STATUS, uncaptured errors and unfinished
   frames). Each capture, every `CAPTURE_S` (script/perf/measure.py), is a

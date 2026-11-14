@@ -10,11 +10,11 @@ import {
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { selection_ring } from "@/ui/shared/asset/swatch.tsx";
-import { chrome, color, hairline } from "@/ui/shared/component/theme.ts";
+import { CHROME, COLOR, HAIRLINE } from "@/ui/shared/component/theme.ts";
 import { NamingContext } from "./name-tip.tsx";
 
 // A cell is the area a press lands on, and it is at least one touch target
-// (`chrome.target`) wide. The item drawn in it is smaller than the cell.
+// (`CHROME.target`) wide. The item drawn in it is smaller than the cell.
 const GRID_GAP = 4;
 const LIT_SCALE = 1.05;
 const LIT_INK = 2;
@@ -33,7 +33,7 @@ export function item_of(cell: f64): f64 {
 function column_cnt(width: f64): f64 {
   return Math.max(
     1,
-    Math.floor((width + GRID_GAP) / (chrome.target + GRID_GAP)),
+    Math.floor((width + GRID_GAP) / (CHROME.target + GRID_GAP)),
   );
 }
 
@@ -50,17 +50,17 @@ export function Grid({
   head: React.ReactNode;
   children: (cell: f64) => React.ReactNode;
 }) {
-  const [width, setWidth] = useState(0);
+  const [width, set_width] = useState(0);
   const columns = column_cnt(width);
   const cell =
     width > 0
       ? (width - (columns - 1) * GRID_GAP - ITEM_BASE) /
         (columns - 1 + ITEM_SLOPE)
-      : chrome.target;
+      : CHROME.target;
   return (
     <View
       style={styles.section}
-      onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}
+      onLayout={(e: LayoutChangeEvent) => set_width(e.nativeEvent.layout.width)}
     >
       {head}
       <View
@@ -103,10 +103,10 @@ export function Item({
   );
 }
 
-export const mark = StyleSheet.create({
-  off: { boxShadow: `0 0 0 1px ${hairline}` },
+export const MARK = StyleSheet.create({
+  off: { boxShadow: `0 0 0 1px ${HAIRLINE}` },
   on: {
-    boxShadow: selection_ring(color.ground, color.black, LIT_INK),
+    boxShadow: selection_ring(COLOR.ground, COLOR.black, LIT_INK),
     transform: [{ scale: LIT_SCALE }],
   },
 });

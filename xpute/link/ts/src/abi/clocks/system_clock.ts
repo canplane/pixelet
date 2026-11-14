@@ -12,7 +12,7 @@ import {
 } from "../../link.ts";
 import { ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
 
-/** The interface's handle, named by `xpute:clocks/system-clock` (frame.json `NAMED`). */
+/** The interface's handle, named by `xpute:clocks/system-clock` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x7dfa61;
 
 /** `now` */
@@ -67,6 +67,7 @@ function object(implementation: Host): LinkObject {
         return refusal_of(e);
       }
     },
+    drop() {},
   };
 }
 

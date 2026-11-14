@@ -57,20 +57,20 @@ export function Backing(props: BackingProps) {
   const dim = useDim(fade, transition, fadeFrom);
 
   const target = effect_at(dim.level, place);
-  const [shown, setShown] = useState<Effect>(
+  const [shown, set_shown] = useState<Effect>(
     fadeFrom === undefined ? target : effect_at(fadeFrom, place),
   );
   // UIKit installs a glass style set before the first layout without
   // animating it, so a change of style waits for the first layout and for
   // the transition's delay.
-  const [laidOut, setLaidOut] = useState(false);
+  const [laid_out, set_laid_out] = useState(false);
   useEffect(() => {
-    if (!laidOut || shown === target) return;
-    const delay = dim.motion.transition.delayMs ?? 0;
-    if (delay === 0) return setShown(target);
-    const timer = setTimeout(() => setShown(target), delay);
+    if (!laid_out || shown === target) return;
+    const delay = dim.motion.transition.delay_ms ?? 0;
+    if (delay === 0) return set_shown(target);
+    const timer = setTimeout(() => set_shown(target), delay);
     return () => clearTimeout(timer);
-  }, [target, laidOut]);
+  }, [target, laid_out]);
 
   // A see-through backing, one with a material, is the system blur rather
   // than the glass, because the glass's rim draws a line across the sheet.
@@ -112,12 +112,12 @@ export function Backing(props: BackingProps) {
   } = StyleSheet.flatten(style) ?? {};
   return (
     <GlassView
-      onLayout={laidOut ? undefined : () => setLaidOut(true)}
+      onLayout={laid_out ? undefined : () => set_laid_out(true)}
       style={ground}
       glassEffectStyle={{
         style: shown,
         animate: true,
-        animationDuration: dim.motion.transition.durationMs / 1000,
+        animationDuration: dim.motion.transition.duration_ms / 1000,
       }}
       tintColor={tint}
       isInteractive={interactive}

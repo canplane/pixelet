@@ -1,10 +1,10 @@
 // @pxl/client/abi/step.spec.ts
 //
-// GENERATED from spec/client/core/perf/step.json (xpute-gen data.rs)
+// GENERATED from spec/client/core/perf/step.json5 (xpute-gen data.rs)
 //
 // The frame's vocabulary, the core's and the UI's: the steps a tick runs, as frame.rs
 // registers them, and the effects a frame runs around them. The profiler records and
-// reports them by these names (spec/client/core/perf/perf.json).
+// reports them by these names (spec/client/core/perf/perf.json5).
 
 export const STEP_NAMES = [
   "controller",

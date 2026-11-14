@@ -16,8 +16,8 @@ import type { GlyphName } from "@/ui/shared/component/icon.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { SNAP } from "@/ui/shared/component/motion/transition.ts";
-import { alpha, chrome, color } from "@/ui/shared/component/theme.ts";
-import { panX } from "@/ui/shared/component/pan.ts";
+import { alpha, CHROME, COLOR } from "@/ui/shared/component/theme.ts";
+import { PAN_X } from "@/ui/shared/component/pan.ts";
 import { open_modal } from "@/ui/shared/modal.ts";
 import {
   select_tool,
@@ -273,7 +273,7 @@ function ToolButton({
       >
         <Glyph
           glyph={glyph}
-          size={chrome.glyph}
+          size={CHROME.glyph}
           color={active ? STRIP.glyph_on : STRIP.glyph}
         />
       </View>
@@ -341,20 +341,20 @@ export function Strip({
 }
 
 export const STRIP = {
-  glyph: alpha(color.white, 0.6),
-  glyph_on: color.white,
-  mark: color.white,
-  highlight: alpha(color.white, 0.2),
-  line: alpha(color.white, 0.15),
-  swatch_line: alpha(color.white, 0.3),
-  ground: color.band,
+  glyph: alpha(COLOR.white, 0.6),
+  glyph_on: COLOR.white,
+  mark: COLOR.white,
+  highlight: alpha(COLOR.white, 0.2),
+  line: alpha(COLOR.white, 0.15),
+  swatch_line: alpha(COLOR.white, 0.3),
+  ground: COLOR.band,
 };
 
 /** A slot is one touch target wide. A wider slot would overlap its neighbor,
  * and of two overlapping views the later one in the tree takes the tap. */
 export const SLOT: ViewStyle = {
-  width: chrome.target,
-  height: chrome.target,
+  width: CHROME.target,
+  height: CHROME.target,
   alignItems: "center",
   justifyContent: "center",
   flexShrink: 0,
@@ -362,30 +362,30 @@ export const SLOT: ViewStyle = {
 
 const styles = StyleSheet.create({
   strip: {
-    height: chrome.control,
-    borderRadius: chrome.control / 2,
+    height: CHROME.control,
+    borderRadius: CHROME.control / 2,
     flexDirection: "row",
     alignItems: "center",
   },
   group: {
     flexDirection: "row",
     alignItems: "center",
-    padding: (chrome.control - chrome.target) / 2,
+    padding: (CHROME.control - CHROME.target) / 2,
     flexShrink: 0,
   },
   divider: { width: 1, height: 28, backgroundColor: STRIP.line, flexShrink: 0 },
   picks: { flexShrink: 1, minWidth: 0 },
   picks_content: {
     alignItems: "center",
-    paddingHorizontal: (chrome.control - chrome.target) / 2,
+    paddingHorizontal: (CHROME.control - CHROME.target) / 2,
   },
 
   slot: SLOT,
-  swatch_slot: panX,
+  swatch_slot: PAN_X,
   highlight: {
-    width: chrome.selection,
-    height: chrome.selection,
-    borderRadius: chrome.selection / 2,
+    width: CHROME.selection,
+    height: CHROME.selection,
+    borderRadius: CHROME.selection / 2,
     alignItems: "center",
     justifyContent: "center",
   },

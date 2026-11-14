@@ -1,0 +1,2 @@
+# What the scripts here take past the standard library: json5 reads the specs.
+json5==0.17.3

@@ -3,7 +3,7 @@
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
-import { color, text_style } from "@/ui/shared/component/theme.ts";
+import { COLOR, TEXT_STYLE } from "@/ui/shared/component/theme.ts";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import type { Cover } from "./cover.ts";
 import { ProgressBar } from "./progress-bar.tsx";
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 12,
     paddingHorizontal: 32,
-    backgroundColor: color.ground,
+    backgroundColor: COLOR.ground,
   },
   bar: { alignSelf: "stretch", alignItems: "center" },
   line: {
@@ -87,25 +87,25 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     marginTop: 12,
-    ...text_style.footnote,
+    ...TEXT_STYLE.footnote,
     textAlign: "center",
     color: LABEL.secondary,
   },
-  title: { ...text_style.title2, textAlign: "center", color: LABEL.primary },
+  title: { ...TEXT_STYLE.title2, textAlign: "center", color: LABEL.primary },
   body: {
     maxWidth: 384,
-    ...text_style.body,
+    ...TEXT_STYLE.body,
     textAlign: "center",
     color: LABEL.secondary,
   },
-  panic: { alignItems: "stretch", backgroundColor: color.panic },
+  panic: { alignItems: "stretch", backgroundColor: COLOR.panic },
   column: { width: "100%", maxWidth: 480, alignSelf: "center", gap: 16 },
   face: {
     fontSize: 96,
     lineHeight: 112,
-    color: color.white,
+    color: COLOR.white,
   },
-  panic_title: { ...text_style.title2, color: color.white },
-  panic_body: { ...text_style.body, color: color.white },
-  code: { ...text_style.footnote, marginTop: 16, color: color.white },
+  panic_title: { ...TEXT_STYLE.title2, color: COLOR.white },
+  panic_body: { ...TEXT_STYLE.body, color: COLOR.white },
+  code: { ...TEXT_STYLE.footnote, marginTop: 16, color: COLOR.white },
 });

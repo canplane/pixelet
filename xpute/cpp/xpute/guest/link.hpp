@@ -64,7 +64,7 @@ std::pair<std::int32_t, std::optional<std::span<const std::uint8_t>>> call(link:
 // host's is, and answers the request's tag.
 link::Tag send(link::Handle h, link::Method m, const link::Args &args, link::Answer answer);
 
-// Cancels the request `t`, while its answer is pending (frame.json `CANCEL`).
+// Cancels the request `t`, while its answer is pending (frame.json5 `CANCEL`).
 void cancel(link::Tag t);
 
 // Puts `stop` as how the request `t` the guest serves stops if it is

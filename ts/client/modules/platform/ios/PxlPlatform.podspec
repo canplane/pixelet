@@ -14,8 +14,8 @@ Pod::Spec.new do |s|
   s.name = 'PxlPlatform'
   s.version = '0.0.0'
   s.summary = 'The platform the pixelet UI asks of on a device.'
-  # The site's URL (spec/spec/route.json `origins`).
-  s.homepage = JSON.parse(File.read(File.join(__dir__, '../../../../../spec/spec/route.json')))['origins']['SITE']['url']
+  # The site's URL (spec/spec/route.json5 `origins`), as the client's route.spec.ts writes it.
+  s.homepage = File.read(File.join(__dir__, '../../../src/service/origin/route.spec.ts'))[/SITE_URL = "([^"]+)"/, 1]
   s.license = { type: 'UNLICENSED' }
   s.author = 'pixelet'
   s.source = { git: '' }

@@ -5,7 +5,7 @@
 // wait is made. Its answer keeps the result, the return data and what the
 // args lend, and resumes the coroutine that awaits it; the wait hands all
 // three back. Destroying the wait before its answer cancels the call
-// (frame.json `CANCEL`), as the component model's dropped subtask is
+// (frame.json5 `CANCEL`), as the component model's dropped subtask is
 // canceled; what the args lend stays alive until the answer, which still
 // comes and owns it (link/wit/types.wit `lent`). The wait owns its slot until
 // it is destroyed with the answer still to come; the answer owns it from

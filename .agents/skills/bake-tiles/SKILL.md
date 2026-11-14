@@ -80,7 +80,7 @@ make bake-terrain ARGS="--step fold --step commit"
 
 ## Versions
 
-Bump the kind's `FORMAT` (`spec/spec/bake/publication.json`) only when how the client
+Bump the kind's `FORMAT` (`spec/spec/bake/publication.json5`) only when how the client
 reads a tile changes (its format in `pxl-spec bake/`).
 
 After a re-ingest or a bake change, `rm -rf tmp/oven` (the dev tile server's cache).

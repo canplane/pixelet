@@ -1,7 +1,7 @@
 // pxl-core/perf/record.rs
 
 //! Records where the core's time and work go. Each record is laid out word
-//! for word as perf.json says, in columns a read's reply hands over as they
+//! for word as perf.json5 says, in columns a read's reply hands over as they
 //! lie, so reading the profiler allocates nothing in the heap it measures.
 //! The columns, the failures' string table among them, live on the heap while
 //! the profiler's setting is on: they are taken whole when recording starts
@@ -23,7 +23,7 @@ use crate::spec::phase::Phase;
 use crate::spec::step::StepName;
 use crate::sys::sched::tick::TickContext;
 
-/// The rings keep the last minute (perf.json `LIMIT.WINDOW_MS`), as the UI's
+/// The rings keep the last minute (perf.json5 `LIMIT.WINDOW_MS`), as the UI's
 /// long frames do. At 60 Hz that is 3,600 frames. A faster display or a busy
 /// minute fills a column early, and the column then drops its oldest records
 /// and sets `truncated`.

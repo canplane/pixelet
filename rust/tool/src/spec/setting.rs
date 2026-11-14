@@ -1,6 +1,6 @@
 // pxl-tool/spec/setting.rs
 
-//! The settings, each by the number schema.json gives it, and a choice's
+//! The settings, each by the number schema.json5 gives it, and a choice's
 //! options by theirs; a number is given out once in its table. The core's
 //! table carries the numbers and no names, which are the UI's, for its
 //! rows and the locale. The UI gets a separate production table without
@@ -9,10 +9,10 @@
 
 use xpute_gen::spec::data::{table_outputs, ts_literal, DataSpec};
 
-use super::{file, js_num, pascal, read, rs_field, rs_member, Node, Output};
+use super::{description, file, js_num, marks, pascal, read, rs_field, rs_member, u32_of, Node, Output};
 use crate::root;
 
-const JSON: &str = "spec/client/core/domain/setting/schema.json";
+const JSON: &str = "spec/client/core/domain/setting/schema.json5";
 
 struct Setting<'a> {
     key: &'a str,
@@ -45,12 +45,9 @@ struct List<'a> {
     doc: Option<Vec<String>>,
 }
 
-/// A number as schema.json gives one: a whole u32.
-fn number(n: &Node, what: &str) -> Result<u32, String> {
-    n.num()
-        .filter(|v| v.fract() == 0.0 && *v >= 0.0 && *v <= u32::MAX as f64)
-        .map(|v| v as u32)
-        .ok_or(format!("{JSON}: {what}'s number is not a whole u32"))
+/// A number as schema.json5 gives one, a u32.
+fn number(n: Option<&Node>, what: &str) -> Result<u32, String> {
+    n.and_then(u32_of).ok_or(format!("{JSON}: {what} has no number"))
 }
 
 /// A setting's bool field, `default` where it is absent; anything else there is refused.
@@ -91,7 +88,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         .map(|s| {
             Ok((
                 s.key,
-                number(s.spec.get("number").unwrap_or(&Node::Null), s.key)?,
+                number(s.spec.get("number"), s.key)?,
             ))
         })
         .collect::<Result<Vec<_>, String>>()?;
@@ -117,7 +114,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             ))?;
         let vals = vals
             .named()
-            .map(|(o, v)| Ok((o.to_string(), number(v, &format!("{name}'s {o}"))?)))
+            .map(|(o, v)| Ok((o.to_string(), number(Some(v), &format!("{name}'s {o}"))?)))
             .collect::<Result<Vec<_>, String>>()?;
         check_numbers(
             name,
@@ -129,7 +126,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         lists.push(List {
             name,
             vals,
-            doc: n.lines_at("$doc"),
+            doc: n.doc(),
         });
     }
     let list = |name: &str| lists.iter().find(|l| l.name == name);
@@ -149,16 +146,15 @@ pub fn outputs() -> Result<Vec<Output>, String> {
 
     // The choices' options and the settings, each an enum by its numbers,
     // written by xpute's generator from a table built here.
-    let lines = |l: &[String]| Node::Arr(l.iter().map(|l| Node::Str(l.clone())).collect());
     let mut table = vec![(
-        "$doc".to_string(),
-        lines(&spec.lines_at("$doc").unwrap_or_default()),
+        "$description".to_string(),
+        description(&spec.doc().unwrap_or_default()),
     )];
     let enum_entry = |doc: &[String], members: Vec<(String, Node)>| {
         let mut e = vec![
             ("$type".to_string(), Node::Str("enum".into())),
-            ("$repr".to_string(), Node::Str("u32".into())),
-            ("$doc".to_string(), lines(doc)),
+            marks(vec![("repr".to_string(), Node::Str("u32".into()))]),
+            ("$description".to_string(), description(doc)),
         ];
         e.extend(members);
         Node::Obj(e)
@@ -177,15 +173,15 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     let members = settings
         .iter()
         .map(|s| {
-            let mut m = vec![("$number".to_string(), Node::Num(f64::from(number_of(s))))];
-            m.extend(s.spec.get("$doc").map(|d| ("$doc".to_string(), d.clone())));
+            let mut m = vec![marks(vec![("number".to_string(), Node::Num(f64::from(number_of(s))))])];
+            m.extend(s.spec.get("$description").map(|d| ("$description".to_string(), d.clone())));
             (s.key.to_string(), Node::Obj(m))
         })
         .collect();
     table.push((
         "SETTING_KEY".into(),
         enum_entry(
-            &["Every setting, by its number in schema.json's SETTING.".into()],
+            &["Every setting, by its number in schema.json5's SETTING.".into()],
             members,
         ),
     ));
@@ -230,7 +226,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         .collect();
     rs.extend([
         String::new(),
-        "    /// Written to the settings' storage file and read from it; one schema.json".into(),
+        "    /// Written to the settings' storage file and read from it; one schema.json5".into(),
         "    /// marks `stored` false is held for the session alone.".into(),
         "    pub fn is_stored(self) -> bool {".into(),
         if session.is_empty() {
@@ -351,7 +347,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
             "}",
             "",
             "impl Setting {",
-            "    /// Every setting at schema.json's default.",
+            "    /// Every setting at schema.json5's default.",
             "    pub const DEFAULT: Setting = Setting {",
         ]
         .map(String::from),
@@ -417,15 +413,15 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         let mut out: Vec<(String, Node)> = vec![(
             "key".to_string(),
             Node::Obj(vec![
-                ("$val".to_string(), Node::Num(number_of(s) as f64)),
+                ("$value".to_string(), Node::Num(number_of(s) as f64)),
                 ("$type".to_string(), Node::Str("u32".to_string())),
             ]),
         )];
-        if let Some(doc) = s.spec.get("$doc") {
-            out.push(("$doc".to_string(), doc.clone()));
+        if let Some(doc) = s.spec.get("$description") {
+            out.push(("$description".to_string(), doc.clone()));
         }
         for (f, v) in s.spec.entries() {
-            if f == "$doc" || f == "number" {
+            if f == "$description" || f == "number" {
                 continue;
             }
             let val = match f.as_str() {

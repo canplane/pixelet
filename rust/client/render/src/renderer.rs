@@ -343,7 +343,7 @@ pub struct GpuRead {
 
 impl GpuRead {
     /// The read's time in the spans that run threads over the world's drawn
-    /// pixels (span.json `GPU_SPAN_PER_PX`). It is the time a lower drawn
+    /// pixels (span.json5 `GPU_SPAN_PER_PX`). It is the time a lower drawn
     /// resolution can buy back.
     pub fn px_ms(&self) -> f64 {
         GPU_SPAN_PER_PX

@@ -1,6 +1,6 @@
 // @pxl/client/ui/feature/world/object.spec.ts
 //
-// GENERATED from spec/spec/bake/object.json (xpute-gen data.rs)
+// GENERATED from spec/spec/bake/object.json5 (xpute-gen data.rs)
 //
 // The objects a player places, as the bake and the UI count them.
 

@@ -71,7 +71,7 @@ only what search reads: `overture_places`, `overture_division_areas` and
    hcloud firewall apply-to-resource pixelet-prod-fw --type server --server pixelet-prod
    ```
 3. **Docker.** `curl -fsSL https://get.docker.com | sh`.
-4. **DNS.** An A record for the origin's host (`spec/spec/route.json`
+4. **DNS.** An A record for the origin's host (`spec/spec/route.json5`
    `origins`) points at the VM and is **proxied** through Cloudflare. DNS-only
    would bypass the edge that the firewall relies on.
 5. **The tree.** The repository is cloned whole onto the VM. Both servers'
@@ -139,7 +139,7 @@ rm ~/overture.dump
 ## 4. Cloudflare
 
 Every URL the client reads falls under one of four roots, written once in
-`spec/spec/route.json` and read from there by everything that builds or answers
+`spec/spec/route.json5` and read from there by everything that builds or answers
 a URL:
 
 | Root      | What it is                                           | Answered by |

@@ -8,17 +8,17 @@
 use xpute_gen::spec::data::{table_outputs, DataSpec};
 
 use super::ingest::{file_number, files};
-use super::{read, Node, Output};
+use super::{description, read, Node, Output};
 use crate::root;
 
 /// A data spec's `$type` for a file reference: in Rust its slot, in
 /// TypeScript its number after ASSET (data.rs `with_numbers`).
 pub(crate) const FILE: &str = "file";
 
-pub(crate) const CUBE_JSON: &str = "spec/spec/asset/cube.json";
-pub(crate) const DECOR_JSON: &str = "spec/spec/asset/decor.json";
-const CHARACTER_JSON: &str = "spec/spec/asset/character.json";
-const SKY_JSON: &str = "spec/spec/asset/sky.json";
+pub(crate) const CUBE_JSON: &str = "spec/spec/asset/cube.json5";
+pub(crate) const DECOR_JSON: &str = "spec/spec/asset/decor.json5";
+const CHARACTER_JSON: &str = "spec/spec/asset/character.json5";
+const SKY_JSON: &str = "spec/spec/asset/sky.json5";
 
 /// The specs whose `file` leaves are slots, in the order they are numbered.
 const SPECS: [&str; 4] = [CUBE_JSON, DECOR_JSON, CHARACTER_JSON, SKY_JSON];
@@ -91,11 +91,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
     }
     bytes.extend(extents);
     let hex: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
-    let lines = |l: &[&str]| Node::Arr(l.iter().map(|l| Node::Str(l.to_string())).collect());
     let entry = |doc: &[&str], ty: Option<&str>, val: Node| {
-        let mut e = vec![("$doc".to_string(), lines(doc))];
+        let mut e = vec![("$description".to_string(), description(doc))];
         e.extend(ty.map(|t| ("$type".to_string(), Node::Str(t.into()))));
-        e.push(("$val".into(), val));
+        e.push(("$value".into(), val));
         Node::Obj(e)
     };
     let table = Node::Obj(vec![
@@ -121,7 +120,7 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         ),
     ]);
     let d = DataSpec {
-        json: "the asset specs and spec/spec/asset/ingest.json",
+        json: "the asset specs and spec/spec/asset/ingest.json5",
         ts: Some("ts/client/src/service/sys/fs/catalog.spec.ts"),
         rs: Some("rust/spec/src/asset/catalog.spec.rs"),
         ..DataSpec::DEFAULT

@@ -53,13 +53,13 @@ packages!(guest: "guest/rust", cpp: "cpp/xpute/guest", native: "native/runtime/r
 /// xpute's data specs: the link's frame, and the errno table.
 pub const DATA_SPECS: [DataSpec; 2] = [
     DataSpec {
-        json: "link/spec/frame.json",
+        json: "link/spec/frame.json5",
         ts: Some("link/ts/src/frame.spec.ts"),
         rs: Some("link/rust/src/frame.spec.rs"),
         cpp: Some(("cpp/xpute/link/frame.spec.hpp", "xpute::link::frame")),
     },
     DataSpec {
-        json: "kit/spec/errno.json",
+        json: "kit/spec/errno.json5",
         ts: Some("kit/ts/src/status/errno.spec.ts"),
         rs: Some("kit/rust/src/status/errno.spec.rs"),
         cpp: Some(("cpp/xpute/kit/status/errno.spec.hpp", "xpute")),

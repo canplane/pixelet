@@ -6,7 +6,7 @@ import type { StyleProp, ViewStyle } from "react-native";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { Dim } from "@/ui/shared/component/motion/dim.ts";
 import { DIM } from "@/ui/shared/component/motion/transition.ts";
-import { touches } from "@/ui/shared/component/touch.ts";
+import { TOUCH } from "@/ui/shared/component/touch.ts";
 import * as device from "@/service/platform/device.ts";
 import { useCore } from "@/ui/shared/watch.ts";
 
@@ -22,13 +22,13 @@ export function BusyDim({
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
-  const busy = useCore((s) => s.camera_busy) && !device.handheld;
+  const busy = useCore((s) => s.camera_busy) && !device.HANDHELD;
   return (
     <Dim.Provider value={busy ? 0.4 : 1}>
       <Motion
         to={busy ? { scale: 0.98 } : {}}
         transition={DIM}
-        style={[style, busy ? touches.block : touches.pass]}
+        style={[style, busy ? TOUCH.block : TOUCH.pass]}
       >
         {children}
       </Motion>

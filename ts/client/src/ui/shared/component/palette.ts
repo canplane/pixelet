@@ -5,7 +5,7 @@
 
 import {
   alpha,
-  color,
+  COLOR,
   SECONDARY,
   SYSTEM,
 } from "@/ui/shared/component/theme.ts";
@@ -16,10 +16,10 @@ export const LABEL: {
   tertiary: string;
   placeholder: string;
 } = {
-  primary: color.black,
-  secondary: alpha(color.label_gray, SECONDARY),
-  tertiary: alpha(color.label_gray, 0.3),
-  placeholder: alpha(color.label_gray, 0.3),
+  primary: COLOR.black,
+  secondary: alpha(COLOR.label_gray, SECONDARY),
+  tertiary: alpha(COLOR.label_gray, 0.3),
+  placeholder: alpha(COLOR.label_gray, 0.3),
 };
 
 export const NORTH: string = SYSTEM.red;

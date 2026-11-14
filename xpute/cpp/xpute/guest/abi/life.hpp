@@ -27,7 +27,7 @@ using ::xpute::link::Reply;
 using ::xpute::link::Tag;
 } // namespace _rt
 
-// The interface's handle, named by `xpute:life/life` (frame.json `NAMED`).
+// The interface's handle, named by `xpute:life/life` (frame.json5 `NAMED`).
 inline constexpr _rt::Handle HANDLE = 0x46edb9;
 
 // `hidden`

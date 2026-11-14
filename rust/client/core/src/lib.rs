@@ -32,7 +32,7 @@ pub const MEASURING: bool = match option_env!("PXL_PERF_DRIVE") {
 
 /// Whether the GPU's host takes a frame now without blocking (xpute-gpu-guest
 /// `admit::frame`), by the device's block and the frame latency
-/// spec/client/render/api.json `device` sets.
+/// spec/client/render/api.json5 `device` sets.
 pub(crate) fn admit_frame() -> bool {
     admit::frame::<{ device::FRAME_LATENCY }>()
 }

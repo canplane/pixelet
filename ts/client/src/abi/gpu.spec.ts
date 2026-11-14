@@ -1,8 +1,8 @@
 // @pxl/client/abi/gpu.spec.ts
 //
-// GENERATED from spec/client/render/api.json (xpute-gen data.rs)
+// GENERATED from spec/client/render/api.json5 (xpute-gen data.rs)
 //
-// pixelet's conventions over xpute's GPU calls (xpute/gpu/link/spec/api.json), which
+// pixelet's conventions over xpute's GPU calls (xpute/gpu/link/spec/api.json5), which
 // the renderer writes through xpute's encoder (gpu/api.rs): the stream it writes
 // them into, its pipeline records' codes, and what a surface shows.
 

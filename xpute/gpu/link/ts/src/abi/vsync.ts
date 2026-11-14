@@ -14,7 +14,7 @@ import {
   refusal_of,
 } from "@xpute/link/link.ts";
 
-/** The interface's handle, named by `xpute:gpu/vsync` (frame.json `NAMED`). */
+/** The interface's handle, named by `xpute:gpu/vsync` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x42eda6;
 
 /** `next` */
@@ -49,6 +49,7 @@ function object(
         return refusal_of(e);
       }
     },
+    drop() {},
   };
 }
 

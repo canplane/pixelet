@@ -31,7 +31,7 @@ using ::xpute::link::Task;
 using ::xpute::link::answer;
 } // namespace _rt
 
-// The interface's handle, named by `xpute:clocks/monotonic-clock` (frame.json `NAMED`).
+// The interface's handle, named by `xpute:clocks/monotonic-clock` (frame.json5 `NAMED`).
 inline constexpr _rt::Handle HANDLE = 0x73f703;
 
 // `now`

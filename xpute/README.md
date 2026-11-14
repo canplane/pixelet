@@ -131,13 +131,13 @@ if (link === null) return;
 serve_stop(link, (stop) => tell({ kind: "stopped", stop }));
 hook(link);
 serve_clock(link);
-serve(m.port, link, m.named, LATER, taker);
+serve(m.port, link, m.named, m.prefixes, LATER, taker);
 link.init();
 
 // The page.
 const { worker, remote, port } = open_worker(WORKER_URL);
 const ask = { kind: "instantiate", module: MODULE_URL, init: undefined };
-worker.postMessage({ ...ask, port, named: remote.named }, [port]);
+worker.postMessage({ ...ask, port, named: remote.named, prefixes: remote.prefixes }, [port]);
 tell_life(remote);
 ```
 

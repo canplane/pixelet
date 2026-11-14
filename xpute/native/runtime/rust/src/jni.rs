@@ -3,7 +3,8 @@
 //! JNI's and the NDK's bindings as an Android app's native side reaches the
 //! runtime, its host and what they serve, re-exported (`sys`, `ndk`) so that a device
 //! beside the guest names them through this crate; and a Kotlin class whose
-//! static methods a thread of the runtime or a host calls (`Class`, `call`).
+//! static methods a thread of the runtime or a host calls (`Class`, `call`,
+//! `Return`), a string the C ABI gives among their values (`string`).
 
 use core::ffi::CStr;
 
@@ -20,6 +21,20 @@ pub use ndk_sys as ndk;
 pub unsafe fn env<'e>(env: *mut sys::JNIEnv) -> &'e sys::JNINativeInterface_ {
     // SAFETY: an environment points at its function table for the call.
     unsafe { &**env }
+}
+
+/// A Java `String`, a local reference, of the `len` bytes of UTF-8 at `at`, as
+/// a string crosses the C ABI. JNI takes its strings NUL-terminated, so a NUL
+/// in it is a space, and an invalid sequence is U+FFFD.
+///
+/// # Safety
+/// `e` is this thread's environment, and `at` `len` readable bytes.
+pub unsafe fn string(e: *mut sys::JNIEnv, at: *const u8, len: usize) -> sys::jstring {
+    // SAFETY: as the caller holds.
+    let s = String::from_utf8_lossy(unsafe { core::slice::from_raw_parts(at, len) }).replace('\0', " ");
+    let s = std::ffi::CString::new(s).unwrap_or_default();
+    // SAFETY: this thread's environment, and a NUL-terminated string.
+    unsafe { env(e).NewStringUTF.or_bug(Errno::ENOSYS)(e, s.as_ptr()) }
 }
 
 /// The VM, a global reference to a Kotlin class, and the IDs of `N` of its
@@ -40,7 +55,7 @@ unsafe impl<const N: usize> Sync for Class<N> {}
 
 /// The class of `this` and its static methods `methods`, each a name and a
 /// signature, or none where JNI has no VM or the class no such method, the
-/// exception cleared.
+/// exception cleared and the class let go.
 ///
 /// # Safety
 /// `e` and `this` are what JNI called with, on a thread Java made.
@@ -64,6 +79,7 @@ pub unsafe fn class<const N: usize>(
             *id = j.GetStaticMethodID.or_bug(Errno::ENOSYS)(e, class, name.as_ptr(), sig.as_ptr());
             if id.is_null() {
                 j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
+                j.DeleteGlobalRef.or_bug(Errno::ENOSYS)(e, class);
                 return None;
             }
         }
@@ -75,15 +91,48 @@ pub unsafe fn class<const N: usize>(
     }
 }
 
+/// What a static method returns, each type by the JNI function that calls a
+/// method returning it.
+pub trait Return: Default {
+    /// Calls the static method `m` of `class` with `args`.
+    ///
+    /// # Safety
+    /// As JNI's `CallStatic…MethodA`: `e` is this thread's environment, `m`
+    /// a static method of `class` that returns this type, and `args` the
+    /// values of its signature.
+    unsafe fn call(e: *mut sys::JNIEnv, class: sys::jclass, m: sys::jmethodID, args: *const sys::jvalue) -> Self;
+}
+
+impl Return for () {
+    unsafe fn call(e: *mut sys::JNIEnv, class: sys::jclass, m: sys::jmethodID, args: *const sys::jvalue) {
+        // SAFETY: as the caller holds.
+        unsafe { env(e).CallStaticVoidMethodA.or_bug(Errno::ENOSYS)(e, class, m, args) }
+    }
+}
+
+impl Return for f64 {
+    unsafe fn call(e: *mut sys::JNIEnv, class: sys::jclass, m: sys::jmethodID, args: *const sys::jvalue) -> f64 {
+        // SAFETY: as the caller holds.
+        unsafe { env(e).CallStaticDoubleMethodA.or_bug(Errno::ENOSYS)(e, class, m, args) }
+    }
+}
+
 /// Calls the static method `m` of `c`, its index in the names `class` was
 /// given, with `args` on this thread, attached to the VM for good as a
-/// daemon. An exception Kotlin threw has no Java caller here to reach, so it
-/// is cleared.
+/// daemon, and gives what it returns. The references `args` makes live in a
+/// local frame of the call's, since the thread never returns to Java to let
+/// them go. An exception Kotlin threw has no Java caller here to reach, so it
+/// is cleared, and the call, as one that cannot attach or make its frame,
+/// gives `R`'s default.
 ///
 /// # Safety
 /// `args` gives the values of the signature of the method at `m`, in its
-/// order.
-pub unsafe fn call<const N: usize>(c: &Class<N>, m: usize, args: impl FnOnce(*mut sys::JNIEnv) -> Vec<sys::jvalue>) {
+/// order, and the method returns `R`.
+pub unsafe fn call<const N: usize, R: Return>(
+    c: &Class<N>,
+    m: usize,
+    args: impl FnOnce(*mut sys::JNIEnv) -> Vec<sys::jvalue>,
+) -> R {
     let mut e: *mut sys::JNIEnv = core::ptr::null_mut();
     // SAFETY: the VM GetJavaVM gave, which lives as long as the process; the
     // class `class` holds globally, the ID of one of its static methods, and
@@ -91,13 +140,20 @@ pub unsafe fn call<const N: usize>(c: &Class<N>, m: usize, args: impl FnOnce(*mu
     unsafe {
         let attach = (**c.vm).AttachCurrentThreadAsDaemon.or_bug(Errno::ENOSYS);
         if attach(c.vm, (&raw mut e).cast(), core::ptr::null_mut()) != sys::JNI_OK {
-            return;
+            return R::default();
         }
         let j = env(e);
+        if j.PushLocalFrame.or_bug(Errno::ENOSYS)(e, 4) != 0 {
+            j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
+            return R::default();
+        }
         let args = args(e);
-        j.CallStaticVoidMethodA.or_bug(Errno::ENOSYS)(e, c.class, c.methods[m], args.as_ptr());
+        let mut r = R::call(e, c.class, c.methods[m], args.as_ptr());
         if j.ExceptionCheck.or_bug(Errno::ENOSYS)(e) != 0 {
             j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
+            r = R::default();
         }
+        j.PopLocalFrame.or_bug(Errno::ENOSYS)(e, core::ptr::null_mut());
+        r
     }
 }

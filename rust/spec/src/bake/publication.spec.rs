@@ -1,6 +1,6 @@
 // pxl-spec/bake/publication.spec.rs
 //
-// GENERATED from spec/spec/bake/publication.json (xpute-gen data.rs)
+// GENERATED from spec/spec/bake/publication.json5 (xpute-gen data.rs)
 //
 // The format each kind is baked and read in, the code's. Which version of
 // each is served is the bucket's alone: its `source`, which the client reads
@@ -69,7 +69,7 @@ pub const TILE_SPHERE: &str = "sphere";
 /// ordered: the version its source declares, then the tile's name. A version
 /// is a folder its tiles go up in whole (script/publish.py), so it comes
 /// first. Under its kind it is a tile's address below the tile root
-/// (route.json `TILE_ROOT`), and its key in the bucket.
+/// (route.json5 `TILE_ROOT`), and its key in the bucket.
 /// Written into `w`, so a key is made where it is wanted, not allocated.
 pub fn tile_object(
     w: &mut impl core::fmt::Write,

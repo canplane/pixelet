@@ -5,7 +5,7 @@
  *
  *   web.ts html    writes public/index.html, the template Expo fills, from
  *                  index.html. It puts in the site's URL (`%SITE_URL%`, for
- *                  link previews; spec/spec/route.json `origins`) and the
+ *                  link previews; spec/spec/route.json5 `origins`) and the
  *                  UI's ground (`%GROUND%`, for the first paint), and takes
  *                  out the comments, which are only for the source.
  *   web.ts stamp   writes dist/build.json, which says what the deployment

@@ -2,7 +2,7 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-/// The interface's handle, named by `pxl:core/object` (frame.json `NAMED`).
+/// The interface's handle, named by `pxl:core/object` (frame.json5 `NAMED`).
 pub const HANDLE: _rt::Handle = 0x4edab0;
 
 /// `apply`

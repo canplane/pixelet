@@ -1,0 +1,48 @@
+{
+  $description: "The address space, as four reserved roots and the branches under them,\nand the two origins they are served from.\n\nThe app routes on paths of its own, so a relay tells a deep link from a\nrequest meant for a server by a root alone — which is why the reservation is\non the server's side, where it never reaches an address bar.\n\nEvery relay reads a root or a branch and never a route name: adding a route\nis a change to the one server that answers it and to nothing else. This file\nis where all of them read it from: the client, the Worker and the\nservers are written from it, and wrangler's and Caddy's configurations take\ntheir part of it. The core names what it opens and never an address.",
+  roots: {
+    GEO_ROOT: {
+      path: { $value: "/geo" },
+      $description: "The world's data: what is baked from Overture and the elevation raster,\nand the one query over it that cannot be baked. pxl-geo answers what the\nbucket does not.",
+    },
+    API_ROOT: {
+      path: { $value: "/api" },
+      $description: "The application: sessions, chat, what a player places, and the realtime\nhalf. pxl-api answers here. It serves no route; the root, the origin and the\nprocess exist so that a route, when one is written, fits a shape already set\nrather than assembling one.",
+    },
+    TILE_ROOT: {
+      path: { $value: "/tile" },
+      $description: "Baked tiles by kind, version and name: under the root a kind's own, and\nunder that its object as a published set lays it out (bake/publication.json5\n`OBJECT`, and `SPHERE` for the Earth's picture whole). Its own root for\nthe reason the asset root is: the bake\nputs them in the bucket and the edge serves them, so neither server\nanswers them, and the edge tells them from the geo server's routes by\nthe root alone.",
+    },
+    ASSET_ROOT: {
+      path: { $value: "/asset" },
+      $description: "Models and textures, by the sha256 of their bytes. Its own root because\nit is neither server's: the ingest puts them in the bucket and the edge\nserves them, and a content-addressed blob is as immutable as a URL gets.\nUnder the geo root it would be claiming to be geography, and under the\napplication's it would be claiming to be state.",
+    },
+  },
+  branches: {
+    SEARCH_URL: {
+      under: { $value: "GEO_ROOT" },
+      name: { $value: "search" },
+      $description: "Forward search, the one geo query with no finite tile to bake it against.",
+    },
+    GEO_INTERNAL: {
+      under: { $value: "GEO_ROOT" },
+      name: { $value: "internal" },
+      $description: "Ops routes, behind the shared admin token. There is one branch per root rather\nthan one shared branch, because each server gates its own prefix: a token that\nopened both would let a leak from either server open the other's.",
+    },
+    API_INTERNAL: {
+      under: { $value: "API_ROOT" },
+      name: { $value: "internal" },
+      $description: "pxl-api's ops routes, gated the same way.",
+    },
+  },
+  origins: {
+    SITE: {
+      url: { $value: "https://plei.me" },
+      $description: "The site: the custom domain the Worker answers on (wrangler.jsonc `routes`),\nthe app's page and every root, the bucket's served at the edge and the\nservers' relayed to the origin. A device's app, which has no origin of its\nown, reads from it, and so does a dev server's published deployment.",
+    },
+    ORIGIN: {
+      url: { $value: "https://api.plei.me" },
+      $description: "The origin behind the edge: the VM, where Caddy sends the geo root to\npxl-geo and the application's to pxl-api (infra/prod/Caddyfile). One host,\ntwo roots: a hostname is a box and a root a service. The Worker relays\nboth roots here (wrangler.jsonc `GEO_ORIGIN`, `API_ORIGIN`).",
+    },
+  },
+}

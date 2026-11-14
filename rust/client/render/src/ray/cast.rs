@@ -1400,7 +1400,7 @@ impl RayPass {
     /// Encodes the frame's cast: the eye's rays and their holes where they are cast, the decor
     /// generated over the world where it moves, then the light's cast where it casts. Each step
     /// is a pass of its own timed in its own span, so what each costs is read apart, and the
-    /// spans whose threads run over the drawn pixels are told from the rest (span.json
+    /// spans whose threads run over the drawn pixels are told from the rest (span.json5
     /// `GPU_SPAN_PER_PX`).
     pub fn dispatch(&mut self, ctx: &mut RenderContext) {
         let (g, encoder) = (ctx.g, ctx.encoder);
@@ -1609,7 +1609,7 @@ impl RayPass {
             // draw marks every box it writes, in the eye's pixels' cast, or here where the eye's
             // pixels are not cast (`draws_rec`). Then every pixel the eye walked apart marks its
             // hit, a thread a word of the walked bits, in a span of their own
-            // (`light_world_receivers`, span.json `GPU_SPAN_PER_PX`). Where these marks are added to those
+            // (`light_world_receivers`, span.json5 `GPU_SPAN_PER_PX`). Where these marks are added to those
             // already made, the earlier ones were copied back in before the frame's first pass
             // (above).
             if due.world {
@@ -1895,7 +1895,7 @@ impl RayPass {
     }
 
     /// What changed that cast the light's map this frame, a bit for each `LightChanged`
-    /// (span.json `LIGHT_CHANGED`), or 0 where it did not cast.
+    /// (span.json5 `LIGHT_CHANGED`), or 0 where it did not cast.
     pub fn light_changed(&self) -> u32 {
         self.cast
             .as_ref()

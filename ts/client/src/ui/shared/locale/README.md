@@ -26,8 +26,8 @@ place's name is its own in every locale.
 
 An item — each cube, decor, marker and pet — has one name, the English one, in
 every locale, so it is no locale's string: it is written beside the item in its
-spec (`label` in `spec/spec/asset/cube.json` and `decor.json`, `PIN_LABEL` in
-`marker.json`, a pet's `label` in `character.json`) and read by the item's number.
+spec (`label` in `spec/spec/asset/cube.json5` and `decor.json5`, `PIN_LABEL` in
+`marker.json5`, a pet's `label` in `character.json5`) and read by the item's number.
 
 A string only a development build shows, a dev setting's among them, is in
 `dev/<locale>.json`, merged over its locale in a development build alone

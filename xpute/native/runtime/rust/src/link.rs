@@ -9,7 +9,7 @@
 //! exports, as C symbols, and `link_out`, which the guest imports. The
 //! guest's memory is the process's, which the guest set before it laid its
 //! link. A guest that stops, a Rust guest's panic or a C++ guest's bug,
-//! answers a trap (frame.json `TRAP`, or `TRAP_AT` from init), as a module traps: the runtime tells the platform and
+//! answers a trap (frame.json5 `TRAP`, or `TRAP_AT` from init), as a module traps: the runtime tells the platform and
 //! enters the guest no more, and the UI stays. What differs from the guest's side is
 //! only here: the layout is read from the guest's export, the answers due run
 //! after each piece of the event loop's work (`run_due`), where a page's run
@@ -127,7 +127,7 @@ pub(crate) fn send_pkt(h: Handle, m: Method, pkt: Packet, answer: Option<Answer>
     SIDE.with(|s| s.send(h, m, pkt, answer))
 }
 
-/// Cancels the request `t`, while its answer is pending (frame.json `CANCEL`).
+/// Cancels the request `t`, while its answer is pending (frame.json5 `CANCEL`).
 pub fn cancel(t: Tag) {
     SIDE.with(|s| s.cancel(t));
 }

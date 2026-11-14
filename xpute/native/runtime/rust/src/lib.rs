@@ -38,16 +38,19 @@ pub use event_loop::{done, job, post_task, Task};
 pub use log::log;
 
 /// A method from the UI, for the guest's thread: `m` of one of the guest's
-/// objects `h`, its request `tag` the UI's (remote.rs). Called on the
-/// JavaScript thread.
+/// objects `h`, its request `tag` the UI's, which carries the UI's
+/// generation (remote.rs). Called on the JavaScript thread.
 pub fn post(tag: u32, h: u32, m: u32, pkt: Option<Vec<u8>>) {
-    event_loop::post_task(Box::new(move || remote::recv(tag, h, m, pkt)));
+    let g = remote::generation();
+    event_loop::post_task(Box::new(move || remote::recv(g, tag, h, m, pkt)));
 }
 
-/// The UI's answer to the request `tag` of the guest's that it serves later
-/// (remote.rs), for the guest's thread. Called on the JavaScript thread.
+/// The UI's answer to the request `tag` of the guest's that it serves later,
+/// which carries the UI's generation (remote.rs), for the guest's thread.
+/// Called on the JavaScript thread.
 pub fn answer(tag: u32, result: i32, data: Option<Vec<u8>>) {
-    event_loop::post_task(Box::new(move || remote::answer(tag, result, data)));
+    let g = remote::generation();
+    event_loop::post_task(Box::new(move || remote::answer(g, tag, result, data)));
 }
 
 /// The app was hidden or shown again, from the platform's lifecycle.

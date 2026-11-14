@@ -1,6 +1,6 @@
 // pxl-spec/asset/sky.spec.rs
 //
-// GENERATED from spec/spec/asset/sky.json (xpute-gen data.rs)
+// GENERATED from spec/spec/asset/sky.json5 (xpute-gen data.rs)
 //
 // The sky: what hangs in the sky, claiming no cell, so no
 // cell holds it. Each by its files' paths under asset/content/; what a

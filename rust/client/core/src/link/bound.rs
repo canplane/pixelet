@@ -32,7 +32,7 @@ const SNAPSHOT: usize = {
     Snapshot::SZ + draft + settings + division + surfaces
 };
 
-/// A perf read's return data: one page (perf.json LIMIT.PAGE_BYTES), a list of
+/// A perf read's return data: one page (perf.json5 LIMIT.PAGE_BYTES), a list of
 /// bytes.
 const PERF_PAGE: usize = 8 + list(limit::PAGE_BYTES as usize, 1);
 

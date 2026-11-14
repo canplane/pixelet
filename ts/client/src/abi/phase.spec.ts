@@ -1,6 +1,6 @@
 // @pxl/client/abi/phase.spec.ts
 //
-// GENERATED from spec/client/core/sys/sched/phase.json (xpute-gen data.rs)
+// GENERATED from spec/client/core/sys/sched/phase.json5 (xpute-gen data.rs)
 //
 // The core's tick phases, in the order they run (pxl-core sys/sched/tick.rs):
 // what moves the eye first, unbudgeted and O(1); then what is visible. A

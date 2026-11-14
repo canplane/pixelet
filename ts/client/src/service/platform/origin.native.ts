@@ -5,7 +5,7 @@ import { td } from "@xpute/kit/codec/encoding.ts";
 import { PLATFORM } from "./pxl-platform.ts";
 
 /** A device's app has no origin of its own: it reads from the site's. */
-export const remote: boolean = true;
+export const REMOTE: boolean = true;
 
 /** The encoding the bake stores its objects in. It is asked for, so that the
  * objects arrive as stored. */

@@ -14,7 +14,7 @@ import { XputeError } from "@xpute/kit/status/error.ts";
 import type { Lift } from "@xpute/link/cabi.ts";
 import type { Handle, Method, Sender } from "@xpute/link/link.ts";
 
-/** The interface's handle, named by `pxl:core/sensor` (frame.json `NAMED`). */
+/** The interface's handle, named by `pxl:core/sensor` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x5534df;
 
 /** `pos` */

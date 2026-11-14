@@ -2,7 +2,7 @@
 
 //! The link (link/wit/types.wit). Whatever is called is an object, called by
 //! its methods under a handle: an interface's named handle, the hash of its
-//! name (frame.json `NAMED`), or a resource's, named by a URI, a tuple of
+//! name (frame.json5 `NAMED`), or a resource's, named by a URI, a tuple of
 //! tokens, and opened by the root's `open` to a handle the serving side
 //! issues, or answered by a function that returns it. A frame is one method
 //! called: its tag the request, unique among the sender's pending ones, its command the
@@ -268,11 +268,7 @@ impl Side {
     /// Opens the object `uri` names on the other side, and answers its
     /// handle.
     pub fn open(&self, uri: &[Token]) -> Result<Handle, Errno> {
-        let write = |w: &mut Lower| {
-            if let Some(base) = w.list(0, uri.len(), Token::SZ, Token::ALIGN) {
-                uri.iter().enumerate().for_each(|(k, t)| t.store(w, base + k * Token::SZ));
-            }
-        };
+        let write = |w: &mut Lower| store_uri(w, 0, uri);
         let (result, data) = self.call(ROOT, OPEN, Packet::Args(Some((8, &write))));
         answer(result)?;
         Lift::new(data.ok_or(Errno::EBADMSG)?).u32(0)
@@ -430,9 +426,7 @@ impl Side {
     /// Opens the object the args' URI names, by the opener of its longest
     /// matching mount, and issues its handle.
     fn opened(&self, args: Option<&[u8]>) -> Result<Handle, Errno> {
-        let r = Lift::new(args.ok_or(Errno::EBADMSG)?);
-        let (base, len) = r.list(0, Token::SZ, Token::ALIGN)?;
-        let uri = (0..len).map(|k| Token::load(r, base + k * Token::SZ)).collect::<Result<Vec<_>, _>>()?;
+        let uri = load_uri(Lift::new(args.ok_or(Errno::EBADMSG)?), 0)?;
         let open = self
             .mounts
             .borrow()
@@ -541,6 +535,20 @@ impl Side {
 /// The URI of names alone, as a resource's (package, resource).
 pub fn uri(names: &[&str]) -> Vec<Token> {
     names.iter().map(|n| Token::Str((*n).to_owned())).collect()
+}
+
+/// Writes `uri` at `at` as a `list<token>`, as ROOT OPEN's args hold it
+/// (types.wit).
+pub fn store_uri(w: &mut Lower, at: usize, uri: &[Token]) {
+    if let Some(base) = w.list(at, uri.len(), Token::SZ, Token::ALIGN) {
+        uri.iter().enumerate().for_each(|(k, t)| t.store(w, base + k * Token::SZ));
+    }
+}
+
+/// The URI the `list<token>` at `at` holds (`store_uri`).
+pub fn load_uri(r: Lift, at: usize) -> Result<Vec<Token>, Errno> {
+    let (base, len) = r.list(at, Token::SZ, Token::ALIGN)?;
+    (0..len).map(|k| Token::load(r, base + k * Token::SZ)).collect()
 }
 
 /// A method's result, its status: answered, or the errno it failed with (a

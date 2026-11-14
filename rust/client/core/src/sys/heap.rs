@@ -61,8 +61,8 @@ fn region() -> (usize, usize) {
     match REGION[0].load(Relaxed) {
         0 => {
             let (fixed, end) = given();
-            let heap = page_up(fixed + mem::FIXED_BYTES as usize);
-            xpute_kit::ensure!(heap + mem::MIN_HEAP_BYTES as usize <= end, ENOMEM, heap, end);
+            let heap = page_up(fixed + mem::FIXED_SZ as usize);
+            xpute_kit::ensure!(heap + mem::MIN_HEAP_SZ as usize <= end, ENOMEM, heap, end);
             REGION[1].store(end, Relaxed);
             REGION[0].store(fixed, Relaxed);
             (fixed, end)
@@ -87,7 +87,7 @@ fn given() -> (usize, usize) {
     (page_up(data_end), core::arch::wasm32::memory_size(0) << 16)
 }
 
-/// A native core's region: the manifest's `mem.bytes`, reserved from the
+/// A native core's region: the manifest's `mem.sz`, reserved from the
 /// system zeroed, as a module's memory starts, and set as the core's memory.
 /// `.fixed` begins at its base, as nothing else lies in it. It is first asked
 /// for inside the global allocator, which may not unwind, so a reservation the
@@ -96,7 +96,7 @@ fn given() -> (usize, usize) {
 fn given() -> (usize, usize) {
     use std::alloc::{GlobalAlloc, Layout, System};
     use xpute_link::mem::{set, Region};
-    let len = mem::BYTES;
+    let len = mem::SZ;
     let layout = Layout::from_size_align(len as usize, PAGE_BYTES as usize).ok();
     // SAFETY: a layout of nonzero size.
     let base = layout.map_or(core::ptr::null_mut(), |l| unsafe { System.alloc_zeroed(l) });
@@ -130,7 +130,7 @@ impl Range for Span {
     const SPLIT_INIT: Self::Split = [0; SPLIT_BYTES];
 
     fn base() -> usize {
-        page_up(fixed_at() + mem::FIXED_BYTES as usize)
+        page_up(fixed_at() + mem::FIXED_SZ as usize)
     }
 
     fn end() -> usize {

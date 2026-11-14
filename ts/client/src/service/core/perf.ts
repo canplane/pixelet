@@ -3,7 +3,7 @@
 /**
  * The core's profiler, read from the words each read's reply names, which go
  * with the reply's frame. A read allocates nothing in the core's heap, which
- * the profiler measures. The layout of what is read is perf.json's
+ * the profiler measures. The layout of what is read is perf.json5's
  * (perf.spec.ts). What is made of those values, and how they are shown, is the
  * UI's work (ui/feature/debug/perf/).
  */
@@ -37,7 +37,7 @@ import * as perf from "@/abi/perf.ts";
 import { ui } from "@/service/core/core.ts";
 
 const WORD = 8;
-/** How many bytes a task's `path` column holds (perf.json `TASK`). */
+/** How many bytes a task's `path` column holds (perf.json5 `TASK`). */
 const PATH_BYTES = 3 * WORD;
 
 export function start(): void {
@@ -380,7 +380,7 @@ const RING_WORDS = [FRAME.WORDS, TASK.WORDS, WORST.WORDS] as const;
 
 /** The records of the ring `name`: the frames and the tasks oldest first,
  * the worst frames longest first, read a page at a time until a page comes
- * short (perf.json LIMIT.PAGE_BYTES). */
+ * short (perf.json5 LIMIT.PAGE_BYTES). */
 async function ring(name: (typeof RING_NAMES)[number]): Promise<U8Array> {
   const k = RING_NAMES.indexOf(name);
   const record = 8 * RING_WORDS[k]!;

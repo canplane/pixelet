@@ -13,7 +13,7 @@ import { XputeError } from "@xpute/kit/status/error.ts";
 import type { Lift } from "@xpute/link/cabi.ts";
 import type { Handle, Method, Sender } from "@xpute/link/link.ts";
 
-/** The interface's handle, named by `pxl:core/input` (frame.json `NAMED`). */
+/** The interface's handle, named by `pxl:core/input` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x5ee0f8;
 
 /** `pointer` */

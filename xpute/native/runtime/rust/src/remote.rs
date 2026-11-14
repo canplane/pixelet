@@ -26,23 +26,86 @@
 //! - 5 `(h)`: the object `h` the UI opened is dropped,
 //!
 //! where data, pkt and uri are a packet's bytes or nil.
+//!
+//! Each start is a new UI on the same runtime, as a reload's (`accept`),
+//! which serves what the first did: the UI's generation counts them. A
+//! request the UI sent and a request it answers later carry the generation
+//! of the UI they crossed with, so an old UI's answer is told to no new UI
+//! and a new UI's answer to an old UI's request is refused; what an old UI
+//! held answers ECANCELED, the requests it left pending and each method of
+//! the objects it opened until the guest drops them, so the guest's load
+//! starts again. The generation stays on this side: the UI's tags cross as
+//! they are.
 
+use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::rc::Rc;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::wire::xtp::{PacketWriter, MAX_PKT_SZ};
 use xpute_link::abi::types::Token;
-use xpute_link::{Handle, Lower, Method, Object, Packet, Reply, Tag};
+use xpute_link::{store_uri, Handle, Lower, Method, Object, Packet, Reply, Tag};
 
+use crate::event_loop::post_task;
 use crate::link;
 
-/// The batch the UI has not taken, and whether it was told of it.
-static OUT: Mutex<(Vec<u8>, bool)> = Mutex::new((Vec::new(), false));
+/// What the runtime sends the UI: the batch it has not taken, whether it was
+/// told of it, and the UI's generation, which each `accept` counts.
+struct Out {
+    batch: Vec<u8>,
+    told: bool,
+    generation: u32,
+}
 
-/// Appends to the batch one message of `cnt` fields that `write` writes.
-fn tell(cnt: u32, write: impl Fn(&mut PacketWriter)) {
+static OUT: Mutex<Out> = Mutex::new(Out {
+    batch: Vec::new(),
+    told: false,
+    generation: 0,
+});
+
+thread_local! {
+    /// The requests the UI answers later, by tag, each with the generation
+    /// of the UI it was told to, until it is answered.
+    static PENDING: RefCell<BTreeMap<Tag, u32>> = const { RefCell::new(BTreeMap::new()) };
+}
+
+fn out() -> MutexGuard<'static, Out> {
+    OUT.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// The UI's generation now.
+pub(crate) fn generation() -> u32 {
+    out().generation
+}
+
+/// Takes a new UI on the runtime, as a reload's: the batch the last UI did
+/// not take goes, the new UI is told its first, and the requests the last
+/// left pending are answered ECANCELED on the guest's thread (`hang_up`).
+/// Called on the JavaScript thread, by each start.
+pub fn accept() {
+    {
+        let mut out = out();
+        out.generation = out.generation.wrapping_add(1);
+        out.batch.clear();
+        out.told = false;
+    }
+    post_task(Box::new(hang_up));
+}
+
+/// Answers ECANCELED each request pending on a UI before this one.
+fn hang_up() {
+    let g = generation();
+    let old: Vec<Tag> = PENDING.with_borrow_mut(|l| l.extract_if(.., |_, ui| *ui != g).map(|(t, _)| t).collect());
+    for t in old {
+        link::task_return_pkt(t, Errno::ECANCELED as i32, None);
+    }
+}
+
+/// Appends to the batch one message of `cnt` fields that `write` writes,
+/// where `generation` is the UI's.
+fn tell(generation: u32, cnt: u32, write: impl Fn(&mut PacketWriter)) {
     let mut cap = 1 << 10;
     let pkt = loop {
         let mut buf = vec![0u8; cap];
@@ -55,18 +118,21 @@ fn tell(cnt: u32, write: impl Fn(&mut PacketWriter)) {
         xpute_kit::ensure!(cap < MAX_PKT_SZ as usize, EOVERFLOW);
         cap = (cap * 2).min(MAX_PKT_SZ as usize);
     };
-    let mut out = OUT.lock().unwrap_or_else(|e| e.into_inner());
-    out.0.extend_from_slice(&(pkt.len() as u32).to_le_bytes());
-    out.0.extend_from_slice(&[0; 4]);
-    out.0.extend_from_slice(&pkt);
-    let end = out.0.len().next_multiple_of(8);
-    out.0.resize(end, 0);
+    let mut out = out();
+    if out.generation != generation {
+        return;
+    }
+    out.batch.extend_from_slice(&(pkt.len() as u32).to_le_bytes());
+    out.batch.extend_from_slice(&[0; 4]);
+    out.batch.extend_from_slice(&pkt);
+    let end = out.batch.len().next_multiple_of(8);
+    out.batch.resize(end, 0);
 }
 
-/// Tells the UI the method `m` of its object `h`, to answer by `tag` where
-/// `later`.
-fn tell_method(h: Handle, m: Method, later: bool, tag: Tag, args: Option<&[u8]>) {
-    tell(6, |w| {
+/// Tells the UI of `generation` the method `m` of its object `h`, to answer
+/// by `tag` where `later`.
+fn tell_method(generation: u32, h: Handle, m: Method, later: bool, tag: Tag, args: Option<&[u8]>) {
+    tell(generation, 6, |w| {
         w.u32(Some(2))
             .u32(Some(h))
             .u32(Some(m))
@@ -76,13 +142,15 @@ fn tell_method(h: Handle, m: Method, later: bool, tag: Tag, args: Option<&[u8]>)
     });
 }
 
-/// Tells the UI a method it answers later, and the guest's cancel of it.
-fn forward(h: Handle, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply {
-    tell_method(h, m, true, tag, args);
+/// Tells the UI of `generation` a method it answers later, and the guest's
+/// cancel of it.
+fn forward(generation: u32, h: Handle, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply {
+    tell_method(generation, h, m, true, tag, args);
+    PENDING.with_borrow_mut(|l| l.insert(tag, generation));
     link::on_cancel(
         tag,
         Box::new(move || {
-            tell(2, |w| {
+            tell(generation, 2, |w| {
                 w.u32(Some(4)).u32(Some(tag));
             });
         }),
@@ -99,28 +167,37 @@ struct Named {
 
 impl Object for Named {
     fn call(&self, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply {
+        let g = generation();
         if self.later.contains(&(self.h, m)) {
-            return forward(self.h, m, tag, args);
+            return forward(g, self.h, m, tag, args);
         }
-        tell_method(self.h, m, false, tag, args);
+        tell_method(g, self.h, m, false, tag, args);
         Reply::from(0)
     }
 }
 
-/// What stands for an object the UI opened: each method is answered later,
-/// and its drop is told.
-struct Opened(Handle);
+/// What stands for an object the UI of `generation` opened under `h`: each
+/// method is answered later, and its drop is told; once a new UI is taken,
+/// each method answers ECANCELED, as `hang_up` answers what it left
+/// pending, and its drop is told to none.
+struct Opened {
+    h: Handle,
+    generation: u32,
+}
 
 impl Object for Opened {
     fn call(&self, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply {
-        forward(self.0, m, tag, args)
+        if self.generation != generation() {
+            return Reply::from(Errno::ECANCELED as i32);
+        }
+        forward(self.generation, self.h, m, tag, args)
     }
 }
 
 impl Drop for Opened {
     fn drop(&mut self) {
-        let h = self.0;
-        tell(2, |w| {
+        let h = self.h;
+        tell(self.generation, 2, |w| {
             w.u32(Some(5)).u32(Some(h));
         });
     }
@@ -130,9 +207,7 @@ impl Drop for Opened {
 fn lowered(uri: &[Token]) -> Vec<u8> {
     let mut buf = vec![0; link::pkt_cap() as usize];
     let mut w = Lower::new(&mut buf, 8);
-    if let Some(base) = w.list(0, uri.len(), Token::SZ, Token::ALIGN) {
-        uri.iter().enumerate().for_each(|(k, t)| t.store(&mut w, base + k * Token::SZ));
-    }
+    store_uri(&mut w, 0, uri);
     let len = w.finish().ok().or_bug(Errno::EMSGSIZE);
     buf.truncate(len);
     buf
@@ -148,20 +223,21 @@ pub fn serve(named: &[Handle], prefixes: Vec<Vec<Token>>, later: &'static [(Hand
     for p in prefixes {
         link::mount(p, |uri, h| {
             let uri = lowered(uri);
-            tell(3, |w| {
+            let generation = generation();
+            tell(generation, 3, |w| {
                 w.u32(Some(3)).u32(Some(h)).array::<u8>(Some(&uri));
             });
-            Ok(Rc::new(Opened(h)) as Rc<dyn Object>)
+            Ok(Rc::new(Opened { h, generation }) as Rc<dyn Object>)
         });
     }
 }
 
-/// Sends the UI's method on the link, its answer told back (remote.ts
-/// `port.onmessage`); a packet past the room is refused whole, EMSGSIZE
-/// (xpute-link link.rs `Side::send`).
-pub(crate) fn recv(tag: Tag, h: u32, m: u32, pkt: Option<Vec<u8>>) {
+/// Sends the method of the UI of `generation` on the link, its answer told
+/// back to that UI alone (remote.ts `port.onmessage`); a packet past the
+/// room is refused whole, EMSGSIZE (xpute-link link.rs `Side::send`).
+pub(crate) fn recv(generation: u32, tag: Tag, h: u32, m: u32, pkt: Option<Vec<u8>>) {
     let answer = move |result: i32, data: Option<Vec<u8>>| {
-        tell(4, |w| {
+        tell(generation, 4, |w| {
             w.u32(Some(0))
                 .u32(Some(tag))
                 .i32(Some(result))
@@ -172,17 +248,21 @@ pub(crate) fn recv(tag: Tag, h: u32, m: u32, pkt: Option<Vec<u8>>) {
     link::send_pkt(h, m, pkt, Some(Box::new(answer)));
 }
 
-/// The UI's answer to the request `tag` it serves later.
-pub(crate) fn answer(tag: Tag, result: i32, data: Option<Vec<u8>>) {
-    link::task_return_pkt(tag, result, data);
+/// The answer of the UI of `generation` to the request `tag` it serves
+/// later, refused where that UI was not told the request.
+pub(crate) fn answer(generation: u32, tag: Tag, result: i32, data: Option<Vec<u8>>) {
+    let pending = PENDING.with_borrow_mut(|l| l.get(&tag) == Some(&generation) && l.remove(&tag).is_some());
+    if pending {
+        link::task_return_pkt(tag, result, data);
+    }
 }
 
 /// Tells the UI once that a batch waits, after the work at hand.
 pub fn flush(notify: fn()) {
     let tell = {
-        let mut out = OUT.lock().unwrap_or_else(|e| e.into_inner());
-        let tell = !out.0.is_empty() && !out.1;
-        out.1 |= tell;
+        let mut out = out();
+        let tell = !out.batch.is_empty() && !out.told;
+        out.told |= tell;
         tell
     };
     if tell {
@@ -193,7 +273,7 @@ pub fn flush(notify: fn()) {
 /// Hands over the batch the UI has not taken. Called on the JavaScript
 /// thread, on the notify.
 pub fn take() -> Vec<u8> {
-    let mut out = OUT.lock().unwrap_or_else(|e| e.into_inner());
-    out.1 = false;
-    core::mem::take(&mut out.0)
+    let mut out = out();
+    out.told = false;
+    core::mem::take(&mut out.batch)
 }

@@ -14,7 +14,7 @@ import {
   type Sender,
 } from "@xpute/link/link.ts";
 
-/** The interface's handle, named by `pxl:core/edit` (frame.json `NAMED`). */
+/** The interface's handle, named by `pxl:core/edit` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x453522;
 
 /** `hold` */

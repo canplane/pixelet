@@ -22,13 +22,13 @@ import { select_asset, useInHand } from "@/ui/feature/world/dock/store.ts";
 import { Panel } from "@/ui/shared/component/panel.tsx";
 import { Tabbed } from "@/ui/shared/component/tabbed.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
-import { chrome, color } from "@/ui/shared/component/theme.ts";
+import { CHROME, COLOR } from "@/ui/shared/component/theme.ts";
 import { SectionTitle } from "@/ui/shared/component/section-title.tsx";
 import { CharacterPicker } from "@/ui/feature/drawer/character/picker.tsx";
 import { CubeSwatch, decor_glyph } from "@/ui/shared/asset/swatch.tsx";
 import type { GlyphName } from "@/ui/shared/component/icon.tsx";
 import { LABEL } from "@/ui/shared/component/palette.ts";
-import { Grid, Item, item_of, mark } from "./grid.tsx";
+import { Grid, Item, item_of, MARK } from "./grid.tsx";
 import { NameTipLayer } from "./name-tip.tsx";
 
 /** The sections, and the items in each, keep the catalog's order. */
@@ -74,7 +74,7 @@ function CubeItem({
         cube={cube}
         size={item_of(cell)}
         radius={ITEM_RADIUS}
-        style={active ? mark.on : mark.off}
+        style={active ? MARK.on : MARK.off}
       />
     </Item>
   );
@@ -101,10 +101,10 @@ function GlyphItem({
         style={[
           styles.decor,
           { width: item_of(cell), height: item_of(cell) },
-          active ? [mark.on, styles.decor_on] : mark.off,
+          active ? [MARK.on, styles.decor_on] : MARK.off,
         ]}
       >
-        <Glyph glyph={glyph} size={chrome.glyph} color={LABEL.primary} />
+        <Glyph glyph={glyph} size={CHROME.glyph} color={LABEL.primary} />
       </View>
     </Item>
   );
@@ -222,5 +222,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  decor_on: { backgroundColor: color.faint },
+  decor_on: { backgroundColor: COLOR.faint },
 });

@@ -8,7 +8,7 @@
 
 import { Switch, View } from "react-native";
 
-import { color } from "@/ui/shared/component/theme.ts";
+import { COLOR } from "@/ui/shared/component/theme.ts";
 import type { ToggleRowProps } from "./toggle-row.tsx";
 
 // The default file's other exports, beside the ToggleRow this file draws
@@ -27,7 +27,7 @@ export function ToggleRow({
       <Switch
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ true: color.chosen }}
+        trackColor={{ true: COLOR.chosen }}
       />
     </View>
   );

@@ -1,0 +1,16 @@
+{
+  $description: "The core's manifest: its memory, its fixed ranges and\nthe heap it counts on, and its stacks.",
+  mem: {
+    $type: "u32",
+    $description: "`sz`: the core's memory, 512 MiB on every platform, the limit chosen for it. The\npage's worker grows the module's memory to it before the core's first entry, and the\ncore never grows it (sys/heap.rs), so a full heap stops the core: the stack, the\nmodule's data, the fixed ranges, then the heap.\n\n`fixed_sz`: the fixed ranges past the module's data, `.fixed` (link/layout.rs), 147.63 MiB, which\nthe compiler holds the ranges' sum under.\n\n`min_heap_sz`: the heap the core counts on past the fixed ranges, 256 MiB, which the\nboot checks the memory it is given leaves (sys/heap.rs). A whole file read and a fetched body are capped by it,\nand the caps of the heap's bounded flows, added up in the buddy's blocks, are held under\nit at compile time (link/layout.rs `HEAP_FLOWS_BYTES`).",
+    sz: { $value: 536870912 },
+    fixed_sz: { $value: 154800128 },
+    min_heap_sz: { $value: 268435456 },
+  },
+  stack: {
+    $type: "u32",
+    $description: "`module_sz`: the stack, at the bottom of the memory, first so that an overflow\ngoes below zero, wraps as an unsigned 32-bit address and lands outside the memory,\nwhich traps. With the stack after the data it would write over `.data` silently\ninstead. There is no MMU here and so no guard page: the wraparound is the whole of\nthe protection.\n\n`thread_sz`: the core's thread's stack on a device, where the core is a library\non a thread of its own: a main thread's 8 MiB, since React Native's JavaScript thread\nhas 1 MiB and wgpu's depth has no bound to state.",
+    module_sz: { $value: 1048576 },
+    thread_sz: { $value: 8388608 },
+  },
+}

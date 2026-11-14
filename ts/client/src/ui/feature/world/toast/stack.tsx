@@ -33,7 +33,7 @@ const PEEK_PX = 8;
 /** The cards that a new card pushes back wait for half of its arrival before
  * they move, so that the front of the deck never empties before the new card
  * shows. */
-const MAKE_ROOM = after(SETTLE, SETTLE.durationMs / 2);
+const MAKE_ROOM = after(SETTLE, SETTLE.duration_ms / 2);
 
 export function Toaster() {
   const entries = useToastEntries();
@@ -41,7 +41,7 @@ export function Toaster() {
   const { list, on_exited } = usePresent(entries, (e) => e.id);
   // The center is rounded to a whole pixel, because half of an odd width is
   // not one.
-  const [center, setCenter] = useState(0);
+  const [center, set_center] = useState(0);
 
   // A leaving card keeps its place until it has faded, so the cards behind
   // move up only once it is gone.
@@ -87,7 +87,7 @@ export function Toaster() {
     <View
       style={styles.anchor}
       onLayout={(e) =>
-        setCenter(
+        set_center(
           PixelRatio.roundToNearestPixel(e.nativeEvent.layout.width / 2),
         )
       }

@@ -5,9 +5,9 @@
 import { PLATFORM } from "./pxl-platform.ts";
 
 export function get(key: string): string | null {
-  return PLATFORM.storageGet(key);
+  return PLATFORM.storage_get(key);
 }
 
 export function set(key: string, val: string): void {
-  PLATFORM.storageSet(key, val);
+  PLATFORM.storage_set(key, val);
 }

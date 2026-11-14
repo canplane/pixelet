@@ -45,10 +45,7 @@ void Side::mount_named(Handle h, std::unique_ptr<Object> o) {
 }
 
 Result<Handle> Side::open(std::span<const Token> uri) {
-    Args args = Packet{8, [uri](Lower &w) {
-                           if (auto base = w.list(0, uri.size(), Token::SZ, Token::ALIGN))
-                               for (std::size_t k = 0; k < uri.size(); k++) uri[k].store(w, *base + k * Token::SZ);
-                       }};
+    Args args = Packet{8, [uri](Lower &w) { store_uri(w, 0, uri); }};
     auto [result, data] = call(ROOT, OPEN, args);
     return answer(result, data, [](Lift &r) { return r.get<std::uint32_t>(0); });
 }
@@ -158,10 +155,7 @@ Reply Side::serve(Handle h, Method m, Tag tag, std::optional<std::span<const std
 Result<Handle> Side::opened(std::optional<std::span<const std::uint8_t>> args) {
     if (!args) return make_error(Errno::ebadmsg);
     Lift r(*args);
-    auto [base, len] = r.list(0, Token::SZ, Token::ALIGN);
-    std::vector<Token> uri;
-    uri.reserve(len);
-    for (std::size_t k = 0; k < len; k++) uri.push_back(Token::load(r, base + k * Token::SZ));
+    std::vector<Token> uri = load_uri(r, 0);
     if (Result<void> read = r.finish(); !read) return read.error();
     // The longest matching mount wins, the first mounted of those as long.
     const Opener *open = nullptr;
@@ -232,6 +226,19 @@ std::vector<Token> uri(std::initializer_list<std::string_view> names) {
     std::vector<Token> out;
     for (std::string_view n : names) out.push_back(Token{Token::Str{std::string(n)}});
     return out;
+}
+
+void store_uri(Lower &w, std::size_t at, std::span<const Token> uri) {
+    if (auto base = w.list(at, uri.size(), Token::SZ, Token::ALIGN))
+        for (std::size_t k = 0; k < uri.size(); k++) uri[k].store(w, *base + k * Token::SZ);
+}
+
+std::vector<Token> load_uri(Lift &r, std::size_t at) {
+    auto [base, len] = r.list(at, Token::SZ, Token::ALIGN);
+    std::vector<Token> uri;
+    uri.reserve(len);
+    for (std::size_t k = 0; k < len; k++) uri.push_back(Token::load(r, base + k * Token::SZ));
+    return uri;
 }
 
 Result<void> answer(std::int32_t result) noexcept {

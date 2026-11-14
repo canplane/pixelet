@@ -1,6 +1,6 @@
 // pxl-spec/asset/id.spec.rs
 //
-// GENERATED from spec/spec/asset/id.json (xpute-gen data.rs)
+// GENERATED from spec/spec/asset/id.json5 (xpute-gen data.rs)
 //
 // An asset's id is a u16: its kind over its index within that kind.
 // `id >> IDX_BITS` is the kind, the low bits the index. The kind is what an

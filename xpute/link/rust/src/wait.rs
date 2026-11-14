@@ -4,7 +4,7 @@
 //! own. The method is sent when the future is made. Its answer keeps the
 //! result, the return data and what the args lend, and wakes the waker the
 //! last poll left; the future hands all three back. Dropping the future
-//! before its answer cancels the call (frame.json `CANCEL`), as the component
+//! before its answer cancels the call (frame.json5 `CANCEL`), as the component
 //! model's dropped subtask is canceled; what the args lend stays alive until
 //! the answer, which still comes and owns it (link/wit/types.wit `lent`).
 

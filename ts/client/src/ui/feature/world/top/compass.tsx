@@ -4,7 +4,7 @@ import { StyleSheet, View } from "react-native";
 import { Path, Svg } from "react-native-svg";
 
 import { LABEL, NORTH } from "@/ui/shared/component/palette.ts";
-import { chrome, SECONDARY } from "@/ui/shared/component/theme.ts";
+import { CHROME, SECONDARY } from "@/ui/shared/component/theme.ts";
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { useView } from "@/ui/shared/watch.ts";
 
@@ -15,7 +15,7 @@ const NEEDLE_ROUND = 2;
  * middle, so that the two colors meet in a chevron, as on a physical needle's
  * bevel. */
 const SEAM_BEND = 2;
-const TICK_TO = chrome.control / 2 - 3;
+const TICK_TO = CHROME.control / 2 - 3;
 const TICK_FROM = TICK_TO - 2.5;
 const QUARTER_STROKE = 1.5;
 const EIGHTH_STROKE = 0.75;
@@ -26,9 +26,9 @@ const [QUARTERS, EIGHTHS] = [0, 1].map((odd) =>
     return `M${TICK_FROM * x} ${TICK_FROM * y}L${TICK_TO * x} ${TICK_TO * y}`;
   }).join(""),
 );
-const BOX = `${-chrome.control / 2} ${
-  -chrome.control / 2
-} ${chrome.control} ${chrome.control}`;
+const BOX = `${-CHROME.control / 2} ${
+  -CHROME.control / 2
+} ${CHROME.control} ${CHROME.control}`;
 
 /** One face of the needle. Its mirror image meets it with the same tangent, so
  * the two make one rounded end. */
@@ -47,10 +47,10 @@ export function CompassFace() {
   const turn = -useView((v) => v.azimuth);
   const w = NEEDLE_WIDTH / 2;
   return (
-    <View style={{ width: chrome.control, height: chrome.control }}>
+    <View style={{ width: CHROME.control, height: CHROME.control }}>
       <Svg
-        width={chrome.control}
-        height={chrome.control}
+        width={CHROME.control}
+        height={CHROME.control}
         viewBox={BOX}
         style={StyleSheet.absoluteFill}
       >
@@ -79,7 +79,7 @@ export function CompassFace() {
           },
         ]}
       >
-        <Svg width={chrome.control} height={chrome.control} viewBox={BOX}>
+        <Svg width={CHROME.control} height={CHROME.control} viewBox={BOX}>
           {
             // Each half has a shaded face. The south half shades from the
             // primary label color to the secondary, and the red north half

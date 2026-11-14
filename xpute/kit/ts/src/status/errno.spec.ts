@@ -1,6 +1,6 @@
 // @xpute/kit/status/errno.spec.ts
 //
-// GENERATED from kit/spec/errno.json (xpute-gen data.rs)
+// GENERATED from kit/spec/errno.json5 (xpute-gen data.rs)
 //
 // POSIX/Linux-aligned negative errno
 
@@ -281,11 +281,11 @@ export const ERRNO = {
   },
   EHOSTDOWN: {
     number: -112 as number,
-    text: "Runtime is down",
+    text: "Host is down",
   },
   EHOSTUNREACH: {
     number: -113 as number,
-    text: "No route to runtime",
+    text: "No route to host",
   },
   EALREADY: {
     number: -114 as number,

@@ -1,6 +1,6 @@
 // pxl-core/perf/frame.rs
 
-//! The record of one frame as the profiler's rings lay it out (perf.json
+//! The record of one frame as the profiler's rings lay it out (perf.json5
 //! FRAME), and the record of one of the worst frames (WORST).
 
 use core::mem::{offset_of, size_of};
@@ -64,7 +64,7 @@ pub struct DeviceSample {
     pub pack_bytes: f64,
 }
 
-/// One frame and the interval it opened (perf.json FRAME). The record
+/// One frame and the interval it opened (perf.json5 FRAME). The record
 /// lands when the next frame closes the interval.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -106,7 +106,7 @@ pub struct FrameSample {
 
 /// One frame's ray counts, which the renderer gathers while the `ray_cnt`
 /// setting is on (pxl-render ray/count.rs `RayCount`). The fields
-/// follow the order of perf.json FRAME's `rays` group. For the eye they say
+/// follow the order of perf.json5 FRAME's `rays` group. For the eye they say
 /// whether it cast in full, how many pixels it cast, and its lane counts.
 /// For the light's map they say whether it cast, how many slots it cast,
 /// and its lane counts (pxl-engine `count`). The voxel, walk and sky
@@ -175,7 +175,7 @@ impl RaySample {
 }
 
 /// One of the worst frames, and what changed from the frame before it
-/// (perf.json WORST).
+/// (perf.json5 WORST).
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct WorstFrame {

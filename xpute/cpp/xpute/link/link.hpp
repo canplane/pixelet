@@ -2,7 +2,7 @@
 
 // The link (link/wit/types.wit), as xpute-link's link.rs runs it. Whatever is
 // called is an object, called by its methods under a handle: an interface's
-// named handle, the hash of its name (frame.json `NAMED`), or a resource's,
+// named handle, the hash of its name (frame.json5 `NAMED`), or a resource's,
 // named by a URI, a tuple of tokens, and opened by the root's `open` to a
 // handle the serving side issues. A frame is one method called: its tag the
 // request, unique among the sender's pending ones, its command the handle,
@@ -291,6 +291,14 @@ class Side {
 
 // The URI of names alone, as a resource's (package, resource).
 std::vector<Token> uri(std::initializer_list<std::string_view> names);
+
+// Writes `uri` at `at` as a `list<token>`, as ROOT OPEN's args hold it
+// (types.wit).
+void store_uri(Lower &w, std::size_t at, std::span<const Token> uri);
+
+// The URI the `list<token>` at `at` holds (`store_uri`); a read past the
+// packet is `r`'s to report (`Lift::finish`).
+std::vector<Token> load_uri(Lift &r, std::size_t at);
 
 // A method's result, its status: answered, or the errno it failed with (a
 // refusal, or a method's errno where its WIT has no `result`). Its value, if

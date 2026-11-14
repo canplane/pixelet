@@ -29,16 +29,16 @@ import {
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import {
   alpha,
-  chrome,
-  color,
-  layer,
-  material,
+  CHROME,
+  COLOR,
+  LAYER,
+  MATERIAL,
 } from "@/ui/shared/component/theme.ts";
-import { touches } from "@/ui/shared/component/touch.ts";
+import { TOUCH } from "@/ui/shared/component/touch.ts";
 import { useSafeArea } from "@/service/platform/safe-area.ts";
 import { useWindowSize } from "@/service/platform/viewport.ts";
 
-export const PANEL_CONTROL = chrome.target;
+export const PANEL_CONTROL = CHROME.target;
 /** The inset of iOS 26 Maps' sheet. The top row's controls and the content
  * keep this distance from the sheet's sides. */
 export const PANEL_EDGE = 16;
@@ -96,8 +96,8 @@ export function PanelBody({
     <View style={styles.body}>
       <View style={styles.scroll}>{children}</View>
       <Backing
-        fill={color.ground}
-        material={material.bar}
+        fill={COLOR.ground}
+        material={MATERIAL.bar}
         place={BackingPlace.OverContent}
         style={styles.head}
       >
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: PANEL_EDGE,
     flexDirection: "row",
     alignItems: "center",
-    gap: chrome.control_gap,
+    gap: CHROME.control_gap,
   },
   bar_main: { flex: 1, height: PANEL_CONTROL, justifyContent: "center" },
   body: { flex: 1 },
@@ -190,17 +190,17 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
   const full_height = window.height - top - WHOLE_GAP;
   const half_height = window.height / 2;
 
-  const [full, setFull] = useState(!half);
+  const [full, set_full] = useState(!half);
   // The body is as tall as the part of the sheet in view, so that its scroll
   // can reach its end. It grows as soon as the sheet does, and shrinks only
   // once the sheet has slid down to half.
-  const [bodyFull, setBodyFull] = useState(full);
-  const [drag, setDrag] = useState<f64 | null>(null);
+  const [body_full, set_body_full] = useState(full);
+  const [drag, set_drag] = useState<f64 | null>(null);
   const shown = full ? full_height : half_height;
 
   const detent = (to_full: boolean) => {
-    setFull(to_full);
-    if (to_full) setBodyFull(true);
+    set_full(to_full);
+    if (to_full) set_body_full(true);
   };
   const stops = [
     { height: 0, settle: onClose },
@@ -227,15 +227,15 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
       onStartShouldSetPanResponder: (e) =>
         e.nativeEvent.pageY - live.current.top < PANEL_HEAD_HEIGHT,
       onPanResponderTerminationRequest: () => false,
-      onPanResponderMove: (_, g) => setDrag(g.dy),
+      onPanResponderMove: (_, g) => set_drag(g.dy),
       onPanResponderRelease: (_, g) => {
-        setDrag(null);
+        set_drag(null);
         const { top, center, shown, full, half, stops } = live.current;
         const tap = Math.abs(g.dx) < TAP_SLOP && Math.abs(g.dy) < TAP_SLOP;
         if (tap) {
           const on_handle =
-            g.y0 - top < chrome.target &&
-            Math.abs(g.x0 - center) < chrome.target / 2;
+            g.y0 - top < CHROME.target &&
+            Math.abs(g.x0 - center) < CHROME.target / 2;
           if (half && on_handle) detent(!full);
           return;
         }
@@ -252,7 +252,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
                 );
         stop?.settle();
       },
-      onPanResponderTerminate: () => setDrag(null),
+      onPanResponderTerminate: () => set_drag(null),
     }),
   ).current;
 
@@ -261,7 +261,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
   const away = { translateY: full_height + 16 };
 
   return (
-    <View style={[sheet_styles.layer, open ? touches.pass : touches.block]}>
+    <View style={[sheet_styles.layer, open ? TOUCH.pass : TOUCH.block]}>
       <Motion
         from={{ opacity: 0 }}
         to={{ opacity: open ? 1 : 0 }}
@@ -278,7 +278,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
         from={away}
         to={open ? { translateY: offset } : away}
         transition={drag !== null ? FOLLOW : open ? SLIDE : SLIDE_AWAY}
-        onSettled={open ? () => drag === null && setBodyFull(full) : on_exited}
+        onSettled={open ? () => drag === null && set_body_full(full) : on_exited}
         style={[
           sheet_styles.sheet,
           {
@@ -295,7 +295,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
           style={[
             sheet_styles.body,
             {
-              height: bodyFull ? full_height : half_height,
+              height: body_full ? full_height : half_height,
             },
           ]}
         >
@@ -308,16 +308,16 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
 }
 
 const sheet_styles = StyleSheet.create({
-  layer: { ...StyleSheet.absoluteFill, zIndex: layer.sheet },
+  layer: { ...StyleSheet.absoluteFill, zIndex: LAYER.sheet },
   body: { width: "100%" },
-  dim: { flex: 1, backgroundColor: alpha(color.black, 0.2) },
+  dim: { flex: 1, backgroundColor: alpha(COLOR.black, 0.2) },
   sheet: {
     position: "absolute",
     bottom: 0,
     overflow: "hidden",
     borderTopLeftRadius: SHEET_RADIUS,
     borderTopRightRadius: SHEET_RADIUS,
-    backgroundColor: color.ground,
+    backgroundColor: COLOR.ground,
     boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.12)",
   },
   handle: {

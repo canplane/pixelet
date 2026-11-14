@@ -5,7 +5,7 @@
 //! its own cell. Where more than one pin stands in a pin's cell
 //! (`marker_cell_zoom`), their count shows instead, at the cell's middle, on
 //! a pill with the pin's colors turned over. That is the pins' own rule
-//! (`asset/marker.json`). The draft shows wherever it is. A pin is read with
+//! (`asset/marker.json5`). The draft shows wherever it is. A pin is read with
 //! the brick it stands in, and it is shown at the camera grid's cell at its
 //! own point, so whether it shows and how it is counted follow the zoom
 //! drawn there.

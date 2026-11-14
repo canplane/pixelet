@@ -5,11 +5,11 @@ import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
-  color,
-  hairline,
-  text_scale,
-  text_style,
-  weight,
+  COLOR,
+  HAIRLINE,
+  TEXT_SCALE_CAP,
+  TEXT_STYLE,
+  WEIGHT,
 } from "@/ui/shared/component/theme.ts";
 import { SectionTitle } from "@/ui/shared/component/section-title.tsx";
 import { PickedCharacter } from "./picked.tsx";
@@ -60,14 +60,14 @@ function Chip({
         {/* A hidden copy in the heavier weight sizes the chip, so a pick never rewraps the row. */}
         <Text
           aria-hidden
-          maxFontSizeMultiplier={text_scale.chrome}
+          maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
           style={[styles.chip_text, styles.chip_text_on, styles.sizer]}
         >
           {label}
         </Text>
         <View style={styles.label}>
           <Text
-            maxFontSizeMultiplier={text_scale.chrome}
+            maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
             style={[
               styles.chip_text,
               styles.centered,
@@ -175,13 +175,13 @@ export function CharacterPicker() {
 
   // The picker opens on the selected person's gender, so that a pick does not
   // look reset when the sheet opens again.
-  const [gender, setGender] = useState<Gender>(gender_of(person));
+  const [gender, set_gender] = useState<Gender>(gender_of(person));
 
   return (
     <View style={styles.pickers}>
       <PersonPicker
         gender={gender}
-        onGenderChange={setGender}
+        onGenderChange={set_gender}
         selected={person}
         onSelect={(v) => setting.set(SETTING.person.key, v.number)}
       />
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: color.backdrop,
+    backgroundColor: COLOR.backdrop,
   },
   chip_column: {
     flexShrink: 1,
@@ -220,22 +220,22 @@ const styles = StyleSheet.create({
   rule: {
     height: 1,
     marginHorizontal: CHIP_GAP_X / 2,
-    backgroundColor: hairline,
+    backgroundColor: HAIRLINE,
   },
   chip: {
     height: CHIP_HEIGHT,
     justifyContent: "center",
     borderRadius: CHIP_HEIGHT / 2,
     paddingHorizontal: 12,
-    backgroundColor: color.faint,
+    backgroundColor: COLOR.faint,
   },
-  chip_on: { backgroundColor: color.chosen },
+  chip_on: { backgroundColor: COLOR.chosen },
   chip_text: {
-    ...text_style.footnote,
-    fontWeight: weight.medium,
+    ...TEXT_STYLE.footnote,
+    fontWeight: WEIGHT.medium,
     color: LABEL.primary,
   },
-  chip_text_on: { fontWeight: weight.semibold, color: color.ground },
+  chip_text_on: { fontWeight: WEIGHT.semibold, color: COLOR.ground },
   sizer: { opacity: 0 },
   label: { ...StyleSheet.absoluteFill, justifyContent: "center" },
   centered: { textAlign: "center" },

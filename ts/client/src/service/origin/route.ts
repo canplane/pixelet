@@ -19,7 +19,7 @@ export function tile_url(
 export const TILE_SOURCE_ROUTE = `${TILE_ROOT}/source`;
 
 export function href(route: string): string {
-  return origin.remote ? `${SITE_URL}${route}` : route;
+  return origin.REMOTE ? `${SITE_URL}${route}` : route;
 }
 
 export function get(route: string, signal?: AbortSignal): Promise<Response> {

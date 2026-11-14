@@ -19,7 +19,7 @@ import {
   useReplay,
 } from "@/ui/shared/component/motion/pose.ts";
 import {
-  curveAt,
+  curve_at,
   type Transition,
 } from "@/ui/shared/component/motion/transition.ts";
 
@@ -29,9 +29,9 @@ function timing(t: Transition): {
   delay: number;
 } {
   return {
-    duration: t.durationMs,
-    easing: (p) => curveAt(t, p),
-    delay: t.delayMs ?? 0,
+    duration: t.duration_ms,
+    easing: (p) => curve_at(t, p),
+    delay: t.delay_ms ?? 0,
   };
 }
 

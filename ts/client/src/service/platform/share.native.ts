@@ -17,6 +17,6 @@ export async function save(
 }
 
 export function copy(text: string): Promise<void> {
-  PLATFORM.clipboardSet(text);
+  PLATFORM.clipboard_set(text);
   return Promise.resolve();
 }

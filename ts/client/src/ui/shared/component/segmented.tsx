@@ -4,11 +4,11 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { PANEL_CONTROL } from "@/ui/shared/component/panel.tsx";
 import {
-  chrome,
-  color,
-  text_scale,
-  text_style,
-  weight,
+  CHROME,
+  COLOR,
+  TEXT_SCALE_CAP,
+  TEXT_STYLE,
+  WEIGHT,
 } from "@/ui/shared/component/theme.ts";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 
@@ -40,7 +40,7 @@ export function Segmented<T extends string | number>({
                 drawn without its rounded corners. */}
             <View collapsable={false} style={[styles.segment, on && styles.on]}>
               <Text
-                maxFontSizeMultiplier={text_scale.chrome}
+                maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
                 style={[styles.label, on && styles.label_on]}
               >
                 {s.label}
@@ -53,14 +53,14 @@ export function Segmented<T extends string | number>({
   );
 }
 
-const INSET = (PANEL_CONTROL - chrome.selection) / 2;
+const INSET = (PANEL_CONTROL - CHROME.selection) / 2;
 
 const styles = StyleSheet.create({
   track: {
     flexDirection: "row",
     height: PANEL_CONTROL,
     borderRadius: PANEL_CONTROL / 2,
-    backgroundColor: color.faint,
+    backgroundColor: COLOR.faint,
   },
   target: { flex: 1, padding: INSET },
   // The segment's corners are concentric with the track's.
@@ -71,12 +71,12 @@ const styles = StyleSheet.create({
     borderRadius: PANEL_CONTROL / 2 - INSET,
   },
   on: {
-    backgroundColor: color.ground,
+    backgroundColor: COLOR.ground,
     boxShadow: "0 1px 2px rgba(0, 0, 0, 0.08)",
   },
   label: {
-    ...text_style.footnote,
-    fontWeight: weight.medium,
+    ...TEXT_STYLE.footnote,
+    fontWeight: WEIGHT.medium,
     color: LABEL.secondary,
   },
   label_on: { color: LABEL.primary },

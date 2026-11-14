@@ -1,6 +1,6 @@
 // pxl-core/sys/io/demand.rs
 
-//! What a request is for: the stream it belongs to (demand.json
+//! What a request is for: the stream it belongs to (demand.json5
 //! `STREAM_NAME`), which one row of a table describes (`Stream::row`), and
 //! the order of its want in the view. The timings a run reports are here
 //! too.

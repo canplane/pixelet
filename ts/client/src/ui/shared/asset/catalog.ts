@@ -1,7 +1,7 @@
 // @pxl/client/ui/shared/asset/catalog.ts
 
 import type { u16 } from "@xpute/kit/abi/word.ts";
-import { CUBE_HEX } from "./color.spec.ts";
+import { CUBE_RGB } from "./color.spec.ts";
 import { ground, object } from "@/abi/cube.spec.ts";
 import {
   DECOR_BOAT,
@@ -11,6 +11,7 @@ import {
   DECOR_TREE,
 } from "./decor.spec.ts";
 import { IDX_BITS, KIND_MARKER } from "./id.spec.ts";
+import { hex } from "@/ui/shared/component/theme.ts";
 
 /** An asset's number: its kind shifted left by IDX_BITS, with its index in
  * the low bits. */
@@ -45,7 +46,8 @@ export function cube_section(cube: Cube): CubeSection {
 }
 
 export function cube_hex(cube: Cube): string | null {
-  return CUBE_HEX[cube] ?? null;
+  const rgb = CUBE_RGB[cube];
+  return rgb === undefined ? null : hex(rgb);
 }
 
 /** Names are not translated: every locale shows the same one. */

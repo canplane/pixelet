@@ -2,7 +2,7 @@
 //
 // GENERATED from wit/clocks (xpute-link-gen wit.rs)
 
-/// The interface's handle, named by `xpute:clocks/monotonic-clock` (frame.json `NAMED`).
+/// The interface's handle, named by `xpute:clocks/monotonic-clock` (frame.json5 `NAMED`).
 pub const HANDLE: _rt::Handle = 0x73f703;
 
 /// `now`

@@ -30,13 +30,13 @@ pub const NATIVE_HOST_TARGET: WitTarget<'static> = WitTarget {
 /// The plugin's data specs: the GPU's calls and the enumerations they carry.
 pub const DATA_SPECS: [DataSpec; 2] = [
     DataSpec {
-        json: "gpu/link/spec/api.json",
+        json: "gpu/link/spec/api.json5",
         ts: Some("gpu/link/ts/src/api.spec.ts"),
         rs: Some("gpu/link/rust/src/api.spec.rs"),
         cpp: Some(("cpp/xpute/gpu/api.spec.hpp", "xpute::gpu")),
     },
     DataSpec {
-        json: "gpu/link/spec/enum.json",
+        json: "gpu/link/spec/enum.json5",
         ts: Some("gpu/link/ts/src/enum.spec.ts"),
         rs: Some("gpu/link/rust/src/enum.spec.rs"),
         cpp: Some(("cpp/xpute/gpu/enum.spec.hpp", "xpute::gpu")),

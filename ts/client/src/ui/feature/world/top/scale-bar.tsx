@@ -10,17 +10,17 @@ import { Presence } from "@/ui/shared/component/motion/presence.tsx";
 import { LEAVE, SETTLE } from "@/ui/shared/component/motion/transition.ts";
 import { HaloPath, HaloText } from "./halo.tsx";
 import {
-  color,
-  halo,
-  text_style,
-  weight,
+  COLOR,
+  HALO,
+  TEXT_STYLE,
+  WEIGHT,
 } from "@/ui/shared/component/theme.ts";
 import { useView } from "@/ui/shared/watch.ts";
 
 const TICK_PX = 5;
 const QUARTER_TICK_PX = 3;
 const LINE_PX = 1;
-const PAD_PX = LINE_PX + halo.width + 1;
+const PAD_PX = LINE_PX + HALO.width + 1;
 const LABEL_GAP_PX = 8;
 const BAR_MAX_PX = 80;
 
@@ -85,17 +85,17 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: PAD_PX + TICK_PX + LABEL_GAP_PX - halo.width,
+    bottom: PAD_PX + TICK_PX + LABEL_GAP_PX - HALO.width,
     alignItems: "center",
   },
 });
 
 const scale_label = StyleSheet.create({
   label: {
-    ...text_style.caption2,
-    fontWeight: weight.semibold,
+    ...TEXT_STYLE.caption2,
+    fontWeight: WEIGHT.semibold,
     letterSpacing: 0.8,
     fontVariant: ["tabular-nums"],
-    color: color.white,
+    color: COLOR.white,
   },
 }).label;

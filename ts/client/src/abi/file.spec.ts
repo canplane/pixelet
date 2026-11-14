@@ -1,6 +1,6 @@
 // @pxl/client/abi/file.spec.ts
 //
-// GENERATED from spec/client/core/sys/io/file.json (xpute-gen data.rs)
+// GENERATED from spec/client/core/sys/io/file.json5 (xpute-gen data.rs)
 //
 // The core's files: the tokens of their paths and what a file holds (pxl-core
 // sys/io/file.rs, ts/client/src/service/sys/fs/).
@@ -12,27 +12,27 @@
  * What a file is past its path, a tile's version and URL, a storage key, is the client's
  * binding (ts/client/src/service/sys/fs/). */
 export const path = {
-  /** A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json
+  /** A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json5
    * `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number. */
   TERRAIN: {
     ID: 0 as number,
   },
-  /** A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json
+  /** A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json5
    * `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number. */
   PLACE: {
     ID: 1 as number,
   },
-  /** A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json
+  /** A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json5
    * `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number. */
   DIVISION: {
     ID: 2 as number,
   },
-  /** A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json
+  /** A base layer's tile: (the layer, quadkey). Each `BaseKind` (spec/spec/bake/publication.json5
    * `BASE_KIND`) is a node of its own, named as the member is, its `ID` the member's number. */
   EARTH: {
     ID: 3 as number,
     /** The picture of the whole Earth, (EARTH, SPHERE), served under the Earth layer's
-     * version as its `TILE_SPHERE` (spec/spec/bake/publication.json). */
+     * version as its `TILE_SPHERE` (spec/spec/bake/publication.json5). */
     SPHERE: {
       ID: 0 as number,
     },
@@ -67,7 +67,7 @@ export const path = {
 
 /** The load id of the catalog the client plugs in, (ASSET, CATALOG) (pxl-spec asset/catalog.rs):
  * the file each of the asset specs' references names. Any other id is a file,
- * its row in the asset ingest's table counted from 1 (spec/spec/asset/ingest.json). */
+ * its row in the asset ingest's table counted from 1 (spec/spec/asset/ingest.json5). */
 export const CATALOG = 0 as number;
 
 /** The finest zoom a tile's quadkey in a path is at, so the most digits it has:

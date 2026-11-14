@@ -7,14 +7,13 @@
 //! hears, a batch waiting, a stop and a trap, it hears through the functions
 //! it sets (`notify_on`, `stopped_on`, `trap_on`).
 
-use std::ffi::{c_char, CStr};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Token;
-use xpute_link::{mem, Handle, Lift};
+use xpute_link::{load_uri, mem, Handle, Lift};
 use xpute_native_runtime::remote;
 
 use crate::stop::Stop;
@@ -36,11 +35,8 @@ static NOTIFY: Mutex<Option<Tell>> = Mutex::new(None);
 static STOPPED: Mutex<Option<Stopped>> = Mutex::new(None);
 static TRAP: Mutex<Option<Tell>> = Mutex::new(None);
 
-/// Sets what tells the app a batch waits, and tells it once now: a batch
-/// that waited while none was set is told this way, not lost.
 pub fn notify_on(f: Option<Tell>) {
     *NOTIFY.lock().unwrap_or_else(|e| e.into_inner()) = f;
-    notify();
 }
 
 pub fn stopped_on(f: Option<Stopped>) {
@@ -73,32 +69,29 @@ fn trap() {
 fn prefixes(pkt: &[u8]) -> Result<Vec<Vec<Token>>, Errno> {
     let r = Lift::new(pkt);
     let (base, len) = r.list(0, 8, 4)?;
-    (0..len)
-        .map(|k| {
-            let (at, n) = r.list(base + k * 8, Token::SZ, Token::ALIGN)?;
-            (0..n).map(|i| Token::load(r, at + i * Token::SZ)).collect()
-        })
-        .collect()
+    (0..len).map(|k| load_uri(r, base + k * 8)).collect()
 }
 
 /// Whether the runtime has started, which it does once a process.
 static STARTED: std::sync::Once = std::sync::Once::new();
 
 /// Starts the program's runtime (`xpute_start`): `named` and `prefixes` the
-/// UI's, and the two directories. The runtime starts once a process: the
-/// call of a UI started again, as a reload's, finds it running.
+/// UI's, and the two directories. The runtime starts once a process, and
+/// each call is a new UI on it (`remote::accept`), as a reload's, which
+/// serves what the first did.
 pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], files_dir: PathBuf, cache_dir: PathBuf) {
     let prefixes = prefixes(prefixes_pkt).or_bug(Errno::EBADMSG);
+    remote::accept();
     STARTED.call_once(|| start(named, prefixes, files_dir, cache_dir, notify, stopped, trap));
 }
 
-/// A directory the app names as a C string.
+/// A directory the app names by the `len` bytes of UTF-8 at `at`.
 ///
 /// # Safety
-/// `dir` is a live NUL-terminated string.
-pub unsafe fn dir(dir: *const c_char) -> PathBuf {
+/// `at` is `len` readable bytes.
+pub unsafe fn dir(at: *const u8, len: usize) -> PathBuf {
     // SAFETY: the caller's.
-    PathBuf::from(unsafe { CStr::from_ptr(dir) }.to_string_lossy().into_owned())
+    PathBuf::from(String::from_utf8_lossy(unsafe { core::slice::from_raw_parts(at, len) }).into_owned())
 }
 
 /// `len` bytes at `at`, or none where `at` is null.
@@ -126,7 +119,7 @@ pub unsafe fn taken_free(at: *mut u8, len: usize) {
     drop(unsafe { Box::from_raw(core::ptr::slice_from_raw_parts_mut(at, len)) });
 }
 
-/// The core's memory: its first byte and its size.
+/// The guest's memory: its first byte and its size.
 pub fn mem() -> (*mut u8, u32) {
     let r = mem::region();
     (r.base, r.len)
@@ -140,22 +133,24 @@ macro_rules! native_abi {
     ($start:path) => {
         /// # Safety
         /// `named` is `named_len` handles, `prefixes` `prefixes_len` bytes, and
-        /// the directories live NUL-terminated strings.
+        /// each directory its length's bytes.
         #[no_mangle]
         pub unsafe extern "C" fn xpute_start(
             named: *const u32,
             named_len: usize,
             prefixes: *const u8,
             prefixes_len: usize,
-            files_dir: *const ::core::ffi::c_char,
-            cache_dir: *const ::core::ffi::c_char,
+            files_dir: *const u8,
+            files_dir_len: usize,
+            cache_dir: *const u8,
+            cache_dir_len: usize,
         ) {
             // SAFETY: the caller's.
             unsafe {
                 let named = ::core::slice::from_raw_parts(named, named_len).to_vec();
                 let prefixes = ::core::slice::from_raw_parts(prefixes, prefixes_len);
                 let (files_dir, cache_dir) =
-                    ($crate::native::dir(files_dir), $crate::native::dir(cache_dir));
+                    ($crate::native::dir(files_dir, files_dir_len), $crate::native::dir(cache_dir, cache_dir_len));
                 $crate::native::start($start, named, prefixes, files_dir, cache_dir);
             }
         }

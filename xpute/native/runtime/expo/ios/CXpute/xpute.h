@@ -2,12 +2,12 @@
 
 // This is the C ABI of xpute's runtime linked into the app beside its guest,
 // for an app in C, Objective-C or Swift; the app's native library exports it
-// (xpute-native-host `native_abi!`). The runtime runs on the core's thread,
+// (xpute-native-host `native_abi!`). The runtime runs on the guest's thread,
 // its event loop serving the guest's link, and carries the UI's link to it:
 // the UI's methods on the guest's objects (`xpute_post`), its answers to the
 // methods of the objects it serves (`xpute_answer`), and a batch of what the
 // runtime sends the UI, handed over on a notify (`xpute_take`). Every call
-// that reaches the runtime posts a task onto the core's thread's queue and
+// that reaches the runtime posts a task onto the guest's thread's queue and
 // returns.
 
 #pragma once
@@ -15,30 +15,37 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Starts the runtime on the core's thread, once. `named`, `named_len` are the
-// named handles of the interfaces the UI serves (remote.ts `Remote.named`);
-// `prefixes`, `prefixes_len` the prefixes the UI mounts openers at, as a
-// lowered `list<list<token>>` packet (the Canonical ABI, xpute:link/types
-// `token`); `files_dir` the directory the app keeps its files in and
-// `cache_dir` the one it keeps its caches in, UTF-8 and NUL-terminated.
+// Starts the runtime on the guest's thread, once a process. `named`,
+// `named_len` are the named handles of the interfaces the UI serves (remote.ts
+// `Remote.named`); `prefixes`, `prefixes_len` the prefixes the UI mounts
+// openers at, as a lowered `list<list<token>>` packet (the Canonical ABI,
+// xpute:link/types `token`); `files_dir`, `files_dir_len` the directory the
+// app keeps its files in and `cache_dir`, `cache_dir_len` the one it keeps its
+// caches in, each its UTF-8 bytes and their count.
+// Each call, the first too, is a new UI on the runtime, as a reload's, which
+// serves what the first did: the requests the last UI answers later are
+// answered ECANCELED, as is each method of the objects it opened, the answer
+// to a request it sent reaches no new UI, and the batch it did not take goes.
 void xpute_start(const uint32_t *named, size_t named_len, const uint8_t *prefixes,
-                 size_t prefixes_len, const char *files_dir, const char *cache_dir);
+                 size_t prefixes_len, const char *files_dir, size_t files_dir_len,
+                 const char *cache_dir, size_t cache_dir_len);
 
 // Makes `notify` be told that a batch waits for `xpute_take`; null sets none.
-// It is called on the core's thread, and hands the news to the JavaScript
-// thread. Set before `xpute_start`.
+// It is called on the guest's thread alone, once for a batch: the next is
+// told only after `xpute_take` or `xpute_start`. It hands the news to the
+// JavaScript thread. Set before `xpute_start`.
 void xpute_notify_on(void (*notify)(void));
 
 // Makes `stopped` be told that the guest stopped, with its report: the errno,
 // the file of `file_len` UTF-8 bytes, not NUL-terminated, the line, and two
-// numbers of the guest's. Null sets none. It is called on the core's thread,
+// numbers of the guest's. Null sets none. It is called on the guest's thread,
 // or on any thread for a failure of the host's own, and hands the report to
 // the JavaScript thread. Set before `xpute_start`.
 void xpute_stopped_on(void (*stopped)(int32_t errnum, const char *file, size_t file_len,
                                       uint32_t line, uint64_t n1, uint64_t n2));
 
 // Makes `trap` be told that the guest trapped; null sets none. It is
-// called on the core's thread, and hands the news to the JavaScript thread.
+// called on the guest's thread, and hands the news to the JavaScript thread.
 // Set before `xpute_start`.
 void xpute_trap_on(void (*trap)(void));
 
@@ -59,7 +66,7 @@ void xpute_answer(uint32_t tag, int32_t result, const uint8_t *data, size_t len)
 uint8_t *xpute_take(size_t *len);
 void xpute_taken_free(uint8_t *at, size_t len);
 
-// Returns the first byte of the core's memory, and writes its size through
+// Returns the first byte of the guest's memory, and writes its size through
 // `len`. The UI reads and writes there the buffers the guest lends it.
 uint8_t *xpute_mem(uint32_t *len);
 

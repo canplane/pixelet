@@ -394,7 +394,7 @@ impl Header<'_> {
         let g = self.g;
         let mut out = String::new();
         if objs.iter().any(|o| !o.resource) {
-            let _ = writeln!(out, "// The interface's handle, named by `{}` (frame.json `NAMED`).\ninline constexpr {} HANDLE = {:#x};\n", g.at(), self.rt_use(LINK, "Handle"), g.handle());
+            let _ = writeln!(out, "// The interface's handle, named by `{}` (frame.json5 `NAMED`).\ninline constexpr {} HANDLE = {:#x};\n", g.at(), self.rt_use(LINK, "Handle"), g.handle());
         }
         for o in objs {
             for (k, f) in o.methods.iter().enumerate() {

@@ -1,6 +1,6 @@
 // @pxl/client/abi/schema.spec.ts
 //
-// GENERATED from spec/client/core/domain/setting/schema.json (xpute-gen data.rs)
+// GENERATED from spec/client/core/domain/setting/schema.json5 (xpute-gen data.rs)
 //
 // Every setting the app has, declared once: its default, its kind, and
 // where it is shown, its `section`: one of the settings sheet's, or
@@ -21,7 +21,7 @@
 // numbers are what crosses and what storage keeps; the names are the
 // UI's alone, for its rows and the locale. A number is given out once;
 // the generator refuses one given twice. An `index` is a place in a list
-// kept elsewhere — the person and the pet are by theirs in character.json — and
+// kept elsewhere — the person and the pet are by theirs in character.json5 — and
 // crosses as itself.
 
 /** Which controller makes the camera's pose.
@@ -165,7 +165,7 @@ export function of_SkyTime(val: number): SkyTime | null {
     : null;
 }
 
-/** Every setting, by its number in schema.json's SETTING. */
+/** Every setting, by its number in schema.json5's SETTING. */
 export type SettingKey =
   | typeof SETTING_KEY_TEXTURE
   | typeof SETTING_KEY_DECOR
@@ -239,7 +239,7 @@ export const SETTING_KEY_AO = 10;
  * compare per fragment; 16 MB of map. */
 export const SETTING_KEY_SHADOW = 11;
 /** The pixels the world is drawn at: two to a CSS pixel is four times the
- * work done a drawn pixel at a time (span.json `GPU_SPAN_PER_PX`), and nothing
+ * work done a drawn pixel at a time (span.json5 `GPU_SPAN_PER_PX`), and nothing
  * more; the camera grid's rays and the light's map cost the same at any.
  * The markers and the finish stay at the display's. */
 export const SETTING_KEY_RES = 12;
@@ -249,11 +249,11 @@ export const SETTING_KEY_VIEW = 13;
 export const SETTING_KEY_PERF = 14;
 /** Marks for the pivot and the cell it floors to, and rings in the level, the view's upright and the north–south planes (domain/scene/gizmo/frame.rs); and over the ground the eye's windows' bricks by how they stand, their tiles and shards (domain/scene/gizmo/coverage.rs). */
 export const SETTING_KEY_WORLD_GIZMO = 15;
-/** The camera grid over the screen, the cells the rays are spaced by, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json gives them. */
+/** The camera grid over the screen, the cells the rays are spaced by, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json5 gives them. */
 export const SETTING_KEY_CAMERA_GIZMO = 16;
 export const SETTING_KEY_PERSON = 17;
 export const SETTING_KEY_PET = 18;
-/** Each ray's pixel colored by the steps taken on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the steps of the beam ray its cell starts off (beam::LINE_STEPS) and its own after, or, where it took a voxel or the sky without a walk, those of the sample before it on the camera grid's lattice, counted the same way (beam::SAMPLE_STEPS_SHIFT; rust/client/render/src/frame/shader/cast.wgsl `taken_word`, queue.wgsl `finish`). */
+/** Each ray's pixel colored by the steps taken on its way from the eye, as the frame casts it, on debug_look.json5's log ramp: the steps of the beam ray its cell starts off (beam::LINE_STEPS) and its own after, or, where it took a voxel or the sky without a walk, those of the sample before it on the camera grid's lattice, counted the same way (beam::SAMPLE_STEPS_SHIFT; rust/client/render/src/frame/shader/cast.wgsl `taken_word`, queue.wgsl `finish`). */
 export const SETTING_KEY_RAY_STEP = 19;
 /** Counts what the eye's cast and the sun's shadow map do: the nodes each pass's walks asked, the pixels or slots that took the visible sample or walked, and the boxes drawn. The GPU counts them and writes them into the profiler's ray lanes of the frame that counted them (rust/client/engine/src/count.rs, rust/client/render/src/ray/count.rs). The counting's atomics run inside the cast's spans, so time the cast with this off. */
 export const SETTING_KEY_RAY_CNT = 20;
@@ -425,7 +425,7 @@ export const SETTING = {
     section: "lighting",
   },
   /** The pixels the world is drawn at: two to a CSS pixel is four times the
-   * work done a drawn pixel at a time (span.json `GPU_SPAN_PER_PX`), and nothing
+   * work done a drawn pixel at a time (span.json5 `GPU_SPAN_PER_PX`), and nothing
    * more; the camera grid's rays and the light's map cost the same at any.
    * The markers and the finish stay at the display's. */
   res: {
@@ -460,7 +460,7 @@ export const SETTING = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, the cells the rays are spaced by, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json gives them. */
+  /** The camera grid over the screen, the cells the rays are spaced by, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json5 gives them. */
   camera_gizmo: {
     key: 16 as number,
     kind: "toggle",
@@ -479,7 +479,7 @@ export const SETTING = {
     default: 5 as number,
     section: "character",
   },
-  /** Each ray's pixel colored by the steps taken on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the steps of the beam ray its cell starts off (beam::LINE_STEPS) and its own after, or, where it took a voxel or the sky without a walk, those of the sample before it on the camera grid's lattice, counted the same way (beam::SAMPLE_STEPS_SHIFT; rust/client/render/src/frame/shader/cast.wgsl `taken_word`, queue.wgsl `finish`). */
+  /** Each ray's pixel colored by the steps taken on its way from the eye, as the frame casts it, on debug_look.json5's log ramp: the steps of the beam ray its cell starts off (beam::LINE_STEPS) and its own after, or, where it took a voxel or the sky without a walk, those of the sample before it on the camera grid's lattice, counted the same way (beam::SAMPLE_STEPS_SHIFT; rust/client/render/src/frame/shader/cast.wgsl `taken_word`, queue.wgsl `finish`). */
   ray_step: {
     key: 19 as number,
     kind: "toggle",
@@ -629,7 +629,7 @@ export const SETTING_PROD = {
     section: "lighting",
   },
   /** The pixels the world is drawn at: two to a CSS pixel is four times the
-   * work done a drawn pixel at a time (span.json `GPU_SPAN_PER_PX`), and nothing
+   * work done a drawn pixel at a time (span.json5 `GPU_SPAN_PER_PX`), and nothing
    * more; the camera grid's rays and the light's map cost the same at any.
    * The markers and the finish stay at the display's. */
   res: {
@@ -664,7 +664,7 @@ export const SETTING_PROD = {
     default: false,
     section: "debug",
   },
-  /** The camera grid over the screen, the cells the rays are spaced by, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json gives them. */
+  /** The camera grid over the screen, the cells the rays are spaced by, and the cells the rays stop on tinted by the share of a grid cell their faces show the eye (rust/client/render/src/frame/shader/camera_grid.wgsl, screen_shade.wgsl `cell_share`), in the looks debug_look.json5 gives them. */
   camera_gizmo: {
     key: 16 as number,
     kind: "toggle",
@@ -683,7 +683,7 @@ export const SETTING_PROD = {
     default: 5 as number,
     section: "character",
   },
-  /** Each ray's pixel colored by the steps taken on its way from the eye, as the frame casts it, on debug_look.json's log ramp: the steps of the beam ray its cell starts off (beam::LINE_STEPS) and its own after, or, where it took a voxel or the sky without a walk, those of the sample before it on the camera grid's lattice, counted the same way (beam::SAMPLE_STEPS_SHIFT; rust/client/render/src/frame/shader/cast.wgsl `taken_word`, queue.wgsl `finish`). */
+  /** Each ray's pixel colored by the steps taken on its way from the eye, as the frame casts it, on debug_look.json5's log ramp: the steps of the beam ray its cell starts off (beam::LINE_STEPS) and its own after, or, where it took a voxel or the sky without a walk, those of the sample before it on the camera grid's lattice, counted the same way (beam::SAMPLE_STEPS_SHIFT; rust/client/render/src/frame/shader/cast.wgsl `taken_word`, queue.wgsl `finish`). */
   ray_step: {
     key: 19 as number,
     kind: "toggle",

@@ -1,0 +1,35 @@
+{
+  $description: "The format each kind is baked and read in, the code's. Which version of\neach is served is the bucket's alone: its `source`, which the client reads\nat boot and script/publish.py writes, so a publish changes nothing here.",
+  BASE_KIND: {
+    $type: "enum",
+    $description: "The base layers a version is published for, each a kind a baked page is published under.",
+    $value: ["terrain", "place", "division", "earth"],
+    $extensions: { xpute: { repr: "u32", names: true } },
+  },
+  FORMAT: {
+    $type: "u32",
+    $description: "The format each bake writes now, which a published name begins with.\nIt is bumped by a change to how the client reads a tile, or to what a\ntile guarantees it.",
+    $extensions: { xpute: { keys: "BaseKind" } },
+    terrain: { $value: 12 },
+    place: { $value: 10 },
+    division: { $value: 9 },
+    earth: { $value: 2 },
+  },
+  VERSION_CHARS: {
+    $description: "What a version is written in: one segment of a tile's URL, with no character it would\nhave to escape.",
+    $value: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-",
+  },
+  VERSION_BYTES: {
+    $description: "The longest version a declaration may name, in bytes: one segment of a tile's URL,\nbefore its name (pxl-spec bake/source.rs `is_version`).",
+    $type: "usize",
+    $value: 32,
+  },
+  OBJECT: {
+    $description: "A kind's object in a published set, the one place its segments are\nordered: the version its source declares, then the tile's name. A version\nis a folder its tiles go up in whole (script/publish.py), so it comes\nfirst. Under its kind it is a tile's address below the tile root\n(route.json5 `TILE_ROOT`), and its key in the bucket.",
+    $value: "{version}/{name}",
+  },
+  TILE_SPHERE: {
+    $description: "The Earth's picture whole, in place of a tile's name under the earth\nlayer's version: the sphere's, no tile of the pyramid.",
+    $value: "sphere",
+  },
+}

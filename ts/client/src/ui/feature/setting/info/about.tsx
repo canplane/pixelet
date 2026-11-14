@@ -3,9 +3,9 @@
 import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
-import { Prose, Section, setting_text } from "@/ui/feature/setting/row.tsx";
+import { Prose, Section, SETTING_TEXT } from "@/ui/feature/setting/row.tsx";
 import { BrandSymbol } from "./brand-symbol.tsx";
-import { text_style } from "@/ui/shared/component/theme.ts";
+import { TEXT_STYLE } from "@/ui/shared/component/theme.ts";
 import { BUILD_NUMBER, BUILD_TIME, TILE_SOURCE } from "@/build.ts";
 import { format } from "@/abi/file.spec.ts";
 import { LABEL } from "@/ui/shared/component/palette.ts";
@@ -49,24 +49,24 @@ export function AboutSection() {
           <Text style={styles.name_text}>pixelet</Text>
         </View>
 
-        <Text style={setting_text.small}>{t("settings.about.tagline")}</Text>
+        <Text style={SETTING_TEXT.small}>{t("settings.about.tagline")}</Text>
 
-        <Text style={setting_text.small}>
+        <Text style={SETTING_TEXT.small}>
           © 2025 pixelet. All rights reserved.
         </Text>
 
         <View>
-          <Text style={setting_text.faint}>
+          <Text style={SETTING_TEXT.faint}>
             {BUILD_NUMBER}
             {__DEV__ && ` (${dev_label()})`}
             {` · ${build_label()}`}
           </Text>
           {bake_lines(source).map((line) => (
-            <Text key={line} style={setting_text.faint}>
+            <Text key={line} style={SETTING_TEXT.faint}>
               {line}
             </Text>
           ))}
-          <Text style={setting_text.faint}>{object_label()}</Text>
+          <Text style={SETTING_TEXT.faint}>{object_label()}</Text>
         </View>
       </Prose>
     </Section>
@@ -75,5 +75,5 @@ export function AboutSection() {
 
 const styles = StyleSheet.create({
   name: { flexDirection: "row", alignItems: "center", gap: 8 },
-  name_text: { ...text_style.title, color: LABEL.primary },
+  name_text: { ...TEXT_STYLE.title, color: LABEL.primary },
 });

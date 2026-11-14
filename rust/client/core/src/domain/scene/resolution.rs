@@ -16,7 +16,7 @@
 //! budget is the frame's target interval, a whole number of the display's
 //! measured intervals, which `auto`'s frame rate sets apart (rate.rs). Its
 //! knob, the scale, saves only the work done once for each drawn pixel
-//! (span.json `GPU_SPAN_PER_PX`). The camera grid's cells, the samples, the light's
+//! (span.json5 `GPU_SPAN_PER_PX`). The camera grid's cells, the samples, the light's
 //! passes over its map's texels, the finish and the markers cost the same at
 //! every scale.
 

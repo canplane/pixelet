@@ -1,6 +1,6 @@
 // @pxl/client/ui/shared/setting.ts
 
-/** A new setting takes an entry in schema.json and its strings under
+/** A new setting takes an entry in schema.json5 and its strings under
  * `settings.<section>.<name>`. */
 
 import { SETTING as EVERY, SETTING_PROD as PROD } from "@/abi/schema.spec.ts";

@@ -150,7 +150,7 @@ pub fn send(h: Handle, m: Method, args: Args, answer: Option<Answer>) -> Tag {
     SIDE.with(|s| s.send(h, m, Packet::Args(args), answer))
 }
 
-/// Cancels the request `t`, while its answer is pending (frame.json `CANCEL`).
+/// Cancels the request `t`, while its answer is pending (frame.json5 `CANCEL`).
 pub fn cancel(t: Tag) {
     SIDE.with(|s| s.cancel(t));
 }

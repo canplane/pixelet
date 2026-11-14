@@ -15,9 +15,10 @@
 //! browser fires them on a page, while the GPU's thread goes on. What the GPU
 //! answers reaches the guest's thread as a task, by the request's job id
 //! (xpute-native-runtime `job`, `done`). A device the system loses is let go with
-//! the block it was lent, the guest is told (`device.lost`), and the platform
-//! too (`lost_on`); the guest asks it ready again, as a page asks for a new
-//! device, and the next device binds every window again. There is one host a
+//! the block it was lent, and the guest is told (`device.lost`); the guest asks
+//! it ready again, as a page asks for a new device, and the next device binds
+//! every window again. The platform is told what the host has of a GPU as it
+//! changes (`state_on`), as a page's host reports it. There is one host a
 //! process, as there is one guest.
 
 use core::ffi::c_void;
@@ -133,10 +134,12 @@ type Job = Box<dyn FnOnce() + Send>;
 /// The GPU's thread's queue of work, in the order it was asked for.
 static WORK: OnceLock<Sender<Job>> = OnceLock::new();
 
-/// This is the platform's function told of each device lost (`lost_on`).
-pub type Lost = extern "C" fn();
+/// This is the platform's function told what the host has of a GPU
+/// (`state_on`): the state's name, its UTF-8 bytes and their count, as the
+/// guest's stop crosses (xpute-native-host native.rs `Stopped`).
+pub type State = extern "C" fn(state: *const u8, len: usize);
 
-static LOST: Mutex<Option<Lost>> = Mutex::new(None);
+static STATE: Mutex<Option<State>> = Mutex::new(None);
 
 /// A native guest's surfaces are configured on the main thread of an Apple
 /// platform, and elsewhere where the stream runs.
@@ -171,11 +174,22 @@ fn device() -> MutexGuard<'static, Option<Device>> {
     DEVICE.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// Makes `lost` be told of each device lost from the next one on; with none,
-/// nothing is told. It is called once a loss, on the GPU's thread, after the
-/// guest has been told, and must not call into this host.
-pub fn lost_on(lost: Option<Lost>) {
-    *LOST.lock().unwrap_or_else(PoisonError::into_inner) = lost;
+/// Makes `state` be told what the host has of a GPU from the next change on,
+/// as a page's host reports it (gpu.ts `GpuState`): `present` once the guest's
+/// ask finds a device open, `missing` once it finds none opens, and `waiting`
+/// once a device is lost and the guest told, as it asks again. With none,
+/// nothing is told. It is called on the GPU's thread, and must not call into
+/// this host.
+pub fn state_on(state: Option<State>) {
+    *STATE.lock().unwrap_or_else(PoisonError::into_inner) = state;
+}
+
+/// Reports the host's state to the platform (`state_on`), as web.ts
+/// `report` does.
+fn report(state: &str) {
+    if let Some(f) = *STATE.lock().unwrap_or_else(PoisonError::into_inner) {
+        f(state.as_ptr(), state.len());
+    }
 }
 
 /// Runs `job` on the GPU's thread, which the first job starts.
@@ -202,7 +216,7 @@ fn wake() {
 
 /// On the GPU's thread: lands what the device has answered, and answers the
 /// guest's waiting `settled` where something did. A device found lost is let
-/// go, its `lost` answered, and the platform told.
+/// go, its `lost` answered, and the platform told `waiting`.
 fn poll() {
     let mut guard = device();
     let Some(d) = guard.as_mut() else { return };
@@ -222,9 +236,7 @@ fn poll() {
             done(id, ());
         }
         drop(guard);
-        if let Some(f) = *LOST.lock().unwrap_or_else(PoisonError::into_inner) {
-            f();
-        }
+        report("waiting");
     }
 }
 
@@ -296,12 +308,14 @@ impl abi::gpu::HostDevice for GuestDevice {
     }
 
     /// Opens a device as the guest asks, once (`open`), or answers
-    /// `no-device` where none opens.
+    /// `no-device` where none opens; the platform is told which.
     fn ready(&self, task_return: Return<Result<(), abi::gpu::ErrorCode>>) {
         let id = job(Box::new(move |opened: Result<(), abi::gpu::ErrorCode>| task_return.answer(Ok(opened))));
         let args = self.0.clone();
         on_gpu(Box::new(move || {
-            done(id, open(args).map_err(|_| abi::gpu::ErrorCode::NoDevice));
+            let opened = open(args);
+            report(if opened.is_ok() { "present" } else { "missing" });
+            done(id, opened.map_err(|_| abi::gpu::ErrorCode::NoDevice));
         }));
     }
 
@@ -477,8 +491,9 @@ pub fn unbind(handle: u32) {
 
 /// Exports the GPU's host under xpute's names, for the platform:
 ///
-/// - `xpute_gpu_lost_on(void (*lost)(void))` makes `lost` be told of each
-///   device lost, once a loss (`lost_on`); null sets none.
+/// - `xpute_gpu_state_on(void (*state)(const char *state, size_t len))`
+///   makes `state` be told what the host has of a GPU as it changes, by its
+///   name's UTF-8 bytes and their count (`state_on`); null sets none.
 /// - `xpute_gpu_surface_bind(uint32_t handle, void *window) -> int32_t`
 ///   binds the guest's surface `handle` to `window` (`bind`): 0, or EINVAL
 ///   for a null window. It exists on an Apple platform and on Android, whose
@@ -494,8 +509,8 @@ pub fn unbind(handle: u32) {
 macro_rules! native_abi {
     () => {
         #[no_mangle]
-        pub extern "C" fn xpute_gpu_lost_on(lost: Option<$crate::native::Lost>) {
-            $crate::native::lost_on(lost);
+        pub extern "C" fn xpute_gpu_state_on(state: Option<$crate::native::State>) {
+            $crate::native::state_on(state);
         }
 
         /// # Safety

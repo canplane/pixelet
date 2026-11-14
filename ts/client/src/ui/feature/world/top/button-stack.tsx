@@ -12,10 +12,10 @@ import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import { SNAP } from "@/ui/shared/component/motion/transition.ts";
 import {
-  chrome,
-  color,
-  disabled_content,
-  surface,
+  CHROME,
+  COLOR,
+  DISABLED_CONTENT,
+  SURFACE,
 } from "@/ui/shared/component/theme.ts";
 
 interface StackItem {
@@ -38,8 +38,8 @@ export function ButtonStack({
 }) {
   return (
     <Backing
-      fill={isActive ? surface.chosen.fill : color.ground}
-      tint={isActive ? surface.chosen.glass : undefined}
+      fill={isActive ? SURFACE.chosen.fill : COLOR.ground}
+      tint={isActive ? SURFACE.chosen.glass : undefined}
       place={BackingPlace.OverMap}
       interactive
       style={[styles.capsule, isActive && styles.chosen]}
@@ -59,7 +59,7 @@ export function ButtonStack({
             <Motion
               to={{
                 opacity: item.disabled
-                  ? disabled_content
+                  ? DISABLED_CONTENT
                   : pressed && !SYSTEM_BACKING
                     ? 0.5
                     : 1,
@@ -70,8 +70,8 @@ export function ButtonStack({
                 (item.glyph && (
                   <Glyph
                     glyph={item.glyph}
-                    size={chrome.glyph}
-                    color={item.is_active ? color.action : LABEL.primary}
+                    size={CHROME.glyph}
+                    color={item.is_active ? COLOR.action : LABEL.primary}
                   />
                 ))}
             </Motion>
@@ -84,15 +84,15 @@ export function ButtonStack({
 
 const styles = StyleSheet.create({
   capsule: {
-    width: chrome.control,
-    borderRadius: chrome.control / 2,
+    width: CHROME.control,
+    borderRadius: CHROME.control / 2,
     overflow: "hidden",
   },
   item: {
-    width: chrome.control,
-    height: chrome.control,
+    width: CHROME.control,
+    height: CHROME.control,
     alignItems: "center",
     justifyContent: "center",
   },
-  chosen: { boxShadow: `0 0 0 2px ${surface.chosen.edge}` },
+  chosen: { boxShadow: `0 0 0 2px ${SURFACE.chosen.edge}` },
 });

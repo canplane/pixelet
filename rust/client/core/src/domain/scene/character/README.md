@@ -5,7 +5,7 @@ tick advancing them and writing its joint palette into its block
 (`../character.rs` `Character`). That sets it apart from decor, whose population
 is instances of static models, and from the indicators, which have no clips. The
 characters' catalog lists every one a player can be, by its group, the
-person or the pet, and its row there (`spec/spec/asset/character.json`).
+person or the pet, and its row there (`spec/spec/asset/character.json5`).
 
 The two the player chose, a person and a pet, are the **companion**, which keeps
 them by their group's number (`companion.rs` `Companion`). Each is the row its

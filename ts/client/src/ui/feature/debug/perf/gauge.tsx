@@ -8,7 +8,7 @@ import { type FrameGroup, GROUPS, n1, val_text, zoom_name } from "./column.ts";
 const bytes = (b: number) => val_text("_bytes", b);
 import { fail_text } from "./report.ts";
 import { fps, type Gauge } from "./view.ts";
-import { alpha, color } from "@/ui/shared/component/theme.ts";
+import { alpha, COLOR } from "@/ui/shared/component/theme.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
 import { HIT_KINDS } from "@/abi/perf.spec.ts";
 
@@ -16,15 +16,15 @@ const SPAN_ROWS = 3;
 
 function Row(props: { k: string; v: string; warn?: boolean }) {
   return (
-    <View style={gauge.row}>
-      <Text style={[gauge.text, gauge.key]}>{props.k}</Text>
-      <Text style={[gauge.text, props.warn && gauge.warn]}>{props.v}</Text>
+    <View style={GAUGE.row}>
+      <Text style={[GAUGE.text, GAUGE.key]}>{props.k}</Text>
+      <Text style={[GAUGE.text, props.warn && GAUGE.warn]}>{props.v}</Text>
     </View>
   );
 }
 
 const Note = ({ children }: { children: string }) => (
-  <Text style={[gauge.text, gauge.key]}>{children}</Text>
+  <Text style={[GAUGE.text, GAUGE.key]}>{children}</Text>
 );
 
 export const Head = ({
@@ -34,9 +34,9 @@ export const Head = ({
   children: string;
   end?: ReactNode;
 }) => (
-  <View style={gauge.head}>
-    <Text style={[gauge.text, gauge.head_text]}>{children}</Text>
-    <View style={gauge.head_line} />
+  <View style={GAUGE.head}>
+    <Text style={[GAUGE.text, GAUGE.head_text]}>{children}</Text>
+    <View style={GAUGE.head_line} />
     {end}
   </View>
 );
@@ -125,15 +125,15 @@ export function PerfView({ v }: { v: Gauge["view"] }) {
 
 export function PerfRec({ rec }: { rec: Gauge["rec"] }) {
   return (
-    <View style={gauge.rec}>
-      <View style={gauge.row}>
-        <View style={gauge.rec_state}>
-          <View style={[gauge.rec_dot, rec.recording && gauge.rec_dot_on]} />
-          <Text style={[gauge.text, rec.recording && gauge.warn]}>
+    <View style={GAUGE.rec}>
+      <View style={GAUGE.row}>
+        <View style={GAUGE.rec_state}>
+          <View style={[GAUGE.rec_dot, rec.recording && GAUGE.rec_dot_on]} />
+          <Text style={[GAUGE.text, rec.recording && GAUGE.warn]}>
             {rec.recording ? "Recording" : "Stopped"}
           </Text>
         </View>
-        <Text style={gauge.text}>{`${fixed(rec.elapsed_ms / 1000, 1)} s`}</Text>
+        <Text style={GAUGE.text}>{`${fixed(rec.elapsed_ms / 1000, 1)} s`}</Text>
       </View>
       <Row
         k="frames/tasks"
@@ -244,16 +244,16 @@ export function PerfGauge({ g }: { g: Gauge | null }) {
   );
 }
 
-export const gauge = StyleSheet.create({
+export const GAUGE = StyleSheet.create({
   // Every digit takes the same width, so that a column of figures lines up.
   text: {
     fontSize: 10.5,
     lineHeight: 16,
     fontVariant: ["tabular-nums"],
-    color: alpha(color.white, 0.9),
+    color: alpha(COLOR.white, 0.9),
   },
-  key: { color: alpha(color.white, 0.45) },
-  warn: { color: color.perf_halt },
+  key: { color: alpha(COLOR.white, 0.45) },
+  warn: { color: COLOR.perf_halt },
   row: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   head: {
     flexDirection: "row",
@@ -264,19 +264,19 @@ export const gauge = StyleSheet.create({
   },
   // 10 is macOS's smallest text style: smaller text does not render on a 1x
   // screen.
-  head_text: { fontSize: 10, color: alpha(color.white, 0.3) },
+  head_text: { fontSize: 10, color: alpha(COLOR.white, 0.3) },
   rec: { marginTop: 8 },
   rec_state: { flexDirection: "row", alignItems: "center", gap: 6 },
   rec_dot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: alpha(color.white, 0.25),
+    backgroundColor: alpha(COLOR.white, 0.25),
   },
-  rec_dot_on: { backgroundColor: color.perf_halt },
+  rec_dot_on: { backgroundColor: COLOR.perf_halt },
   head_line: {
     flex: 1,
     borderTopWidth: 1,
-    borderTopColor: alpha(color.white, 0.1),
+    borderTopColor: alpha(COLOR.white, 0.1),
   },
 });

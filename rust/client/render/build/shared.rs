@@ -996,12 +996,12 @@ fn cloud_hash() -> String {
         )
 }
 
-/// The debug views' looks (debug_look.json), each decoded to linear light, as the world's
+/// The debug views' looks (debug_look.json5), each decoded to linear light, as the world's
 /// color and the canvas's blend it before it is encoded once (finish.wgsl), so each shows as
 /// its sRGB; the ramp read straight between its stops.
 fn debug_look() -> String {
     use debug_look::{grid, share, steps};
-    use pxl_spec::color::rgb;
+    use pxl_spec::color::Rgb;
     use pxl_spec::space::camera::grid::SPANS;
     // A world's cell spans (1, `SPANS`] of the view's cells where the rays stop on it
     // (pxl-engine grid.rs `cell_zoom_at`), so its share of a cell squared lies within
@@ -1009,10 +1009,10 @@ fn debug_look() -> String {
     const {
         assert!(
             share::finer::MOST == 1.0 && share::within::MOST == SPANS * SPANS,
-            "debug_look.json's share bounds are the split's"
+            "debug_look.json5's share bounds are the split's"
         );
     }
-    let light = |c: &str| color::linear_rgb(rgb(c)).map(|v| v as f32);
+    let light = |c: Rgb| color::linear_rgb(c).map(|v| v as f32);
     let [r, g, b] = light(grid::RGB);
     let last = steps::RAMP.len() - 1;
     consts([

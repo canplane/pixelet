@@ -2,7 +2,7 @@
 
 //! A stream carries the guest's GPU calls to the host as records: op, n, then
 //! n words; bytes go as their count, then the bytes padded to a word
-//! (gpu/link/spec/api.json). The guest writes the records into a buffer it
+//! (gpu/link/spec/api.json5). The guest writes the records into a buffer it
 //! owns and flushes them by lending the buffer to the host's `gpu.run`
 //! (gpu/wit/gpu.wit), which answers once they have run. From the flush to
 //! the answer the records, and any memory a record names for the host to

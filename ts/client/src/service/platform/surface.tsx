@@ -41,7 +41,7 @@ function dpr(): f64 {
 
 /** The device pixel ratio changes with a page zoom or a move to another
  * screen. */
-function onRatioChange(then: () => void): () => void {
+function on_ratio_change(then: () => void): () => void {
   let query = matchMedia(`(resolution: ${dpr()}dppx)`);
   const fire = () => {
     query.removeEventListener("change", fire);
@@ -59,7 +59,7 @@ function onRatioChange(then: () => void): () => void {
  * device pixels, so the CSS box times the pixel ratio stands in, and a change
  * of the ratio alone is watched for.
  */
-function openSurface(
+function open_surface(
   canvas: HTMLCanvasElement,
   surface: SurfaceDriver,
   opened?: (handle: u32) => () => void,
@@ -88,31 +88,31 @@ function attach(
   surface.bind(handle, canvas);
   const send = (width: u32, height: u32) =>
     surface.size(handle, width, height, dpr());
-  const sendBox = () =>
+  const send_box = () =>
     send(round(canvas.clientWidth * dpr()), round(canvas.clientHeight * dpr()));
   const observer = new ResizeObserver((entries) => {
     const entry = entries[entries.length - 1];
     const exact = entry.devicePixelContentBoxSize?.[0];
     if (exact) send(exact.inlineSize, exact.blockSize);
-    else sendBox();
+    else send_box();
   });
-  let stopRatio = () => {};
+  let stop_ratio = () => {};
   try {
     observer.observe(canvas, { box: "device-pixel-content-box" });
   } catch {
     observer.observe(canvas);
-    stopRatio = onRatioChange(sendBox);
+    stop_ratio = on_ratio_change(send_box);
   }
   const after = opened?.(handle) ?? (() => {});
   return () => {
     after();
-    stopRatio();
+    stop_ratio();
     observer.disconnect();
     surface.close(handle);
   };
 }
 
-function inField(e: KeyboardEvent): boolean {
+function in_field(e: KeyboardEvent): boolean {
   const target = e.target;
   return (
     target instanceof HTMLElement &&
@@ -121,7 +121,7 @@ function inField(e: KeyboardEvent): boolean {
   );
 }
 
-function pointerKind(e: PointerEvent): PointerKind {
+function pointer_kind(e: PointerEvent): PointerKind {
   return e.pointerType === "touch"
     ? "touch"
     : e.pointerType === "pen"
@@ -143,18 +143,18 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   const pointer = (phase: PointerPhase) => (e: PointerEvent) =>
     input.pointer(
       phase,
-      pointerKind(e),
+      pointer_kind(e),
       e.pointerId,
       e.button === 0 && e.shiftKey ? 2 : e.button,
       ((e.clientX - rect.left) * canvas.clientWidth) / (rect.width || 1),
       ((e.clientY - rect.top) * canvas.clientHeight) / (rect.height || 1),
     );
-  const onMove = pointer("move");
-  const onUp = pointer("up");
-  const onCancel = pointer("cancel");
-  const onLeave = pointer("out");
+  const on_move = pointer("move");
+  const on_up = pointer("up");
+  const on_cancel = pointer("cancel");
+  const on_leave = pointer("out");
   const down = pointer("down");
-  const onDown = (e: PointerEvent) => {
+  const on_down = (e: PointerEvent) => {
     place();
     down(e);
   };
@@ -162,7 +162,7 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   // times the log of the pinch's scale, in Chrome, Safari and Firefox alike.
   // The page's zoom, its default, is prevented. A wheel turned with ctrl
   // held cannot be told from it (`PINCH_MOST`).
-  const onWheel = (e: WheelEvent) => {
+  const on_wheel = (e: WheelEvent) => {
     const per =
       e.deltaMode === WheelEvent.DOM_DELTA_LINE
         ? LINE_PX
@@ -174,12 +174,11 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
     const scale = Math.exp((-e.deltaY * per) / 100);
     input.pinch(clamp(scale, 1 / PINCH_MOST, PINCH_MOST));
   };
-  const onContextMenu = (e: MouseEvent) => e.preventDefault();
-  const onResize = place;
+  const on_ctx_menu = (e: MouseEvent) => e.preventDefault();
   // A key in a composition belongs to the IME, and a shortcut to the browser,
   // so neither goes to the core. Tab still goes in a composition, because it
   // switches the dock even in the middle of a word.
-  const onKeyDown = (e: KeyboardEvent) => {
+  const on_key_down = (e: KeyboardEvent) => {
     if (
       e.repeat ||
       (e.isComposing && e.code !== "Tab") ||
@@ -188,34 +187,34 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
       e.altKey
     )
       return;
-    if (key_down(e.code, { in_field: inField(e) })) e.preventDefault();
+    if (key_down(e.code, { in_field: in_field(e) })) e.preventDefault();
   };
-  const onKeyUp = (e: KeyboardEvent) => key_up(e.code);
+  const on_key_up = (e: KeyboardEvent) => key_up(e.code);
   // The core hears of the hiding from the platform (visibility.ts), so this
   // only lets go of what the world holds.
-  const onVisibility = () => {
+  const on_visibility = () => {
     if (document.visibilityState !== "visible") {
       release_keys();
       release_pointers();
     }
   };
 
-  canvas.addEventListener("pointerdown", onDown);
-  canvas.addEventListener("pointermove", onMove);
-  canvas.addEventListener("pointerleave", onLeave);
-  canvas.addEventListener("contextmenu", onContextMenu);
-  canvas.addEventListener("wheel", onWheel, { passive: false });
-  globalThis.addEventListener("scroll", onResize, true);
-  globalThis.addEventListener("pointerup", onUp);
-  globalThis.addEventListener("pointercancel", onCancel);
-  document.addEventListener("visibilitychange", onVisibility);
+  canvas.addEventListener("pointerdown", on_down);
+  canvas.addEventListener("pointermove", on_move);
+  canvas.addEventListener("pointerleave", on_leave);
+  canvas.addEventListener("contextmenu", on_ctx_menu);
+  canvas.addEventListener("wheel", on_wheel, { passive: false });
+  globalThis.addEventListener("scroll", place, true);
+  globalThis.addEventListener("pointerup", on_up);
+  globalThis.addEventListener("pointercancel", on_cancel);
+  document.addEventListener("visibilitychange", on_visibility);
   // Keys are heard in the capture phase, because react-native-web's TextInput
   // stops a key's propagation before it would bubble up to here.
-  globalThis.addEventListener("keydown", onKeyDown, true);
-  globalThis.addEventListener("keyup", onKeyUp, true);
+  globalThis.addEventListener("keydown", on_key_down, true);
+  globalThis.addEventListener("keyup", on_key_up, true);
   globalThis.addEventListener("blur", release_keys);
   globalThis.addEventListener("blur", release_pointers);
-  const observer = new ResizeObserver(onResize);
+  const observer = new ResizeObserver(place);
   observer.observe(canvas);
 
   const close = input.open();
@@ -226,17 +225,17 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
     observer.disconnect();
     globalThis.removeEventListener("blur", release_pointers);
     globalThis.removeEventListener("blur", release_keys);
-    globalThis.removeEventListener("keyup", onKeyUp, true);
-    globalThis.removeEventListener("keydown", onKeyDown, true);
-    document.removeEventListener("visibilitychange", onVisibility);
-    globalThis.removeEventListener("pointercancel", onCancel);
-    globalThis.removeEventListener("pointerup", onUp);
-    globalThis.removeEventListener("scroll", onResize, true);
-    canvas.removeEventListener("wheel", onWheel);
-    canvas.removeEventListener("contextmenu", onContextMenu);
-    canvas.removeEventListener("pointerleave", onLeave);
-    canvas.removeEventListener("pointermove", onMove);
-    canvas.removeEventListener("pointerdown", onDown);
+    globalThis.removeEventListener("keyup", on_key_up, true);
+    globalThis.removeEventListener("keydown", on_key_down, true);
+    document.removeEventListener("visibilitychange", on_visibility);
+    globalThis.removeEventListener("pointercancel", on_cancel);
+    globalThis.removeEventListener("pointerup", on_up);
+    globalThis.removeEventListener("scroll", place, true);
+    canvas.removeEventListener("wheel", on_wheel);
+    canvas.removeEventListener("contextmenu", on_ctx_menu);
+    canvas.removeEventListener("pointerleave", on_leave);
+    canvas.removeEventListener("pointermove", on_move);
+    canvas.removeEventListener("pointerdown", on_down);
   };
 }
 
@@ -250,7 +249,7 @@ export function World({
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const close = openSurface(canvas, driver);
+    const close = open_surface(canvas, driver);
     const stop = drive(canvas, input);
     return () => {
       stop();
@@ -282,7 +281,7 @@ export function CharacterSurface({
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    return openSurface(canvas, driver, (handle) => open.current(handle));
+    return open_surface(canvas, driver, (handle) => open.current(handle));
   }, [openKey]);
 
   // Each surface gets a canvas of its own, because a canvas crosses to the

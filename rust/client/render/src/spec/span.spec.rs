@@ -1,11 +1,12 @@
 // pxl-render/spec/span.spec.rs
 //
-// GENERATED from spec/client/render/gpu/span.json (xpute-gen data.rs)
+// GENERATED from spec/client/render/gpu/span.json5 (xpute-gen data.rs)
 //
 // What the renderer reports of a frame (pxl-render renderer.rs): the GPU spans it is timed in,
 // in the order the renderer encodes them, and the kind of frame it made; the profiler records and reports
 // them by these names.
 
+/// `world` is the world's pass as it lays the opaque world, and `world_rest` the pass that goes on after the occlusion is found between them (`ao`), drawing over it the occlusion's map, the sky and what the core animates; where the occlusion is not found again the one pass draws it all, timed as `world`, and `world_rest` runs none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum GpuSpanName {
@@ -182,6 +183,7 @@ impl GpuSpanName {
     }
 }
 
+/// A span is among `GPU_SPAN_PER_PX` where every pass it times runs threads over the world's drawn pixels, its fragments or a thread a pixel or a square of them, so its cost goes with the drawn resolution; a span whose passes do not all is split until each is one or the other. Among them: the world's passes, its occlusion, its gathering and the depth's bound (`resolve`), the boxes drawn into the visibility buffer (`sraster`), the pixels' cast and their holes' walk (`px`, `hole`), the screen's damage, its tiles' words set and the damage drawn over the world's depth (`damage`), the light's changed tiles propagated to the screen's, a thread a square of its pixels (`propagate`), and the tiles of the light's box the pixels the eye walked apart stand on, a thread each (`light_world_receivers`); the drawn resolution's scale is judged on these alone (pxl-render renderer.rs `px_ms`, pxl-core domain/scene/resolution.rs). Not among them: the camera grid's beam rays, cells, samples, their boxes written, each stood on by the light's receivers where they stand (`raster_box`), and their faces, on its own angular lattice (`beam`, `grid_cell`, `sample`, `face`); the light's cast, a span a stage: the tiles the drawn receivers stand on (`light_draws`), the slide (`light_slide`), the tiles the stood tiles read (`light_propagate`), the tiles wanted and set to be cast again (`light_damage`), its beam rays' walks over the node cache (`light_beam_hit`) and on asking the world with the cells' starts (`light_beam`), its samples (`light_sample`), their boxes (`light_raster`), its slots (`light_slot`) and their walks (`light_walk`), at the map's texels and tiles; the shadow map's damage, its tiles' words set, the damage drawn over the map and its rect's args (`shadow_damage`), at the map's texels; the node cache's forgetting, over its entries (`cast`); and the canvas's passes, at the display's pixels, the markers' text among them (`finish`, `marker`, `debug`).
 pub const GPU_SPAN_PER_PX: [GpuSpanName; 10] = [
     GpuSpanName::Ao,
     GpuSpanName::World,
@@ -195,6 +197,7 @@ pub const GPU_SPAN_PER_PX: [GpuSpanName; 10] = [
     GpuSpanName::Propagate,
 ];
 
+/// What changed that cast the light's map, a bit each, bit k the k-th (pxl-render ray/cast.rs `light_changed`): what it reads, the light's frame, the eye's zooms its bands are held to, the shadows' setting, or the world under it where the node cache forgets it whole or more columns of it changed than a cast is handed (`content`); the box slid (`slide`); which tiles the receivers read, the eye's place and look, the characters' places or decor compacted again (`receivers`); the footprints owed the first frame the eye stands in after it moved (`footprint`); or columns of the world under it changed, whose tiles alone are cast again (`world`, pxl-engine `Light::reaches`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum LightChanged {
@@ -239,6 +242,7 @@ impl LightChanged {
     }
 }
 
+/// What the renderer made of a frame, where it decides it (pxl-render renderer.rs `render_frame`, `FrameKind`): `none` before it was asked; `unready` with no device or surface, or while the renderer is made before its first frame (`PipelineCache::share`); `dropped` where the frame did not fit the GPU stream; `plain` drawn with nothing cast; `still` drawn with the eye's rays as the last cast left them, the view and the world still; `cast` drawn with a cast, where the view or the world moved; `unchanged` where nothing the frame reads changed, so nothing is drawn or submitted and the canvases keep what they show; `px` drawn with the pixels cast again over samples that stood, where only the eye's jitter moved once its rays rest (pxl-engine `eye::JITTER`); `masked` drawn through the stencil's mask where only what the core bounds moved: the damaged screen tiles alone drawn again, the rest as they were (pxl-render gpu/tile.rs `MASK_NUMBER_CNT`, screen_tile.wgsl).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum FrameKind {
