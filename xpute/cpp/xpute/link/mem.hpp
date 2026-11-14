@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <span>
+#include <utility>
 
 namespace xpute::link::mem {
 
@@ -33,9 +34,28 @@ Region region() noexcept;
 // past it is a bug, as a module's memory traps past its end.
 std::span<std::uint8_t> bytes(std::uint32_t at, std::uint32_t len) noexcept;
 
+namespace detail {
 // The offset of `p` in the guest's memory; an address whose offset does not
 // fit a u32 is a bug, never truncated.
 std::uint32_t off(const void *p) noexcept;
+} // namespace detail
+
+// The offset of the value `v` in the guest's memory, such as a word the guest
+// lends its host to store into.
+template <class T> std::uint32_t off(const T &v) noexcept {
+    return detail::off(&v);
+}
+
+// Where the range `s` lies in the guest's memory and how many bytes it takes,
+// as a lent span (link/wit/types.wit `lent`). An empty range has no address,
+// and lends (0, 0), in a module and natively alike; any other lies whole in
+// the memory, a native guest's in its region (`bytes`).
+template <class T> std::pair<std::uint32_t, std::uint32_t> span(std::span<const T> s) noexcept {
+    if (s.empty()) return {0, 0};
+    std::uint32_t at = off(s.front()), len = static_cast<std::uint32_t>(s.size_bytes());
+    bytes(at, len);
+    return {at, len};
+}
 
 // The little-endian word at `at`, aligned or not.
 std::uint32_t word(std::uint32_t at) noexcept;

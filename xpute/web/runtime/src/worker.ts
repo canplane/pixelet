@@ -23,7 +23,7 @@ import type {
   Stopped,
   Trap,
 } from "./message.ts";
-import { serve, type Taker } from "./remote.ts";
+import { serve, type Taker, tell_cap } from "./remote.ts";
 
 interface Exports {
   memory: WebAssembly.Memory;
@@ -163,7 +163,8 @@ export interface Boot {
 /** Starts the guest on `link`, as xpute-native-runtime native.rs `run`
  * does on a device: mounts each server, serves the link to the UI across
  * the port `ui` names (`serve`), enters the guest, which an import no server
- * mounts refuses (`Side.init`), and tells it the UI attached. */
+ * mounts refuses (`Side.init`), tells the UI the bytes a frame takes
+ * (`tell_cap`), and tells the guest the UI attached. */
 export function start(
   link: Side,
   boot: Boot,
@@ -171,6 +172,6 @@ export function start(
 ): void {
   for (const s of boot.servers) s(link);
   serve(ui.port, link, ui.named, ui.prefixes, boot.later, boot.taker);
-  link.init(boot.imports);
+  if (link.init(boot.imports)) tell_cap(ui.port, link);
   tell_attached(link);
 }

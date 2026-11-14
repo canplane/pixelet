@@ -203,7 +203,7 @@ impl Counter {
         }
         if self.copied && !self.mapped && signaled {
             (self.copied, self.mapped) = (false, true);
-            let addr = mem::off(self.read_cnts.as_ptr().cast());
+            let addr = mem::span(&self.read_cnts[..]).0;
             self.ticket = self.ticket.wrapping_add(1);
             g.map_read(
                 self.read,

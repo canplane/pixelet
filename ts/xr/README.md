@@ -18,10 +18,10 @@ on. Its build also comes in two flavors, `mobile` and `quest`, which
 A Vision Pro runs the iPhone app unchanged, in a window, as the App Store
 offers every iPhone app there. Nothing in the code is the Vision Pro's.
 
-The core already has the way in for a headset's own view: `INPUT_XR_POSE`
-hands it a head pose, and the camera follows that pose until
-`INPUT_XR_POSE_END` (`rust/client/core/src/domain/control/camera`). Nothing
-sends it yet.
+The core already has the way in for a headset's own view: the input
+interface's `xr-pose` hands it a head pose, and the camera follows that pose
+until `xr-pose-end` (`spec/client/core/wit/input.wit`,
+`rust/client/core/src/domain/control/camera`). Nothing sends it yet.
 
 ## How it is meant to grow
 

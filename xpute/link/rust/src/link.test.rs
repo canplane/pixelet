@@ -5,7 +5,9 @@ use std::rc::Rc;
 
 use xpute_kit::status::errno::Errno;
 use xpute_link::frame::Frame;
-use xpute_link::{Handle, Layout, Lower, Method, Object, Packet, Reply, Side, Tag, CANCEL, NAMED, ROOT};
+use xpute_link::{
+    Handle, Layout, Lower, Method, Object, Packet, Reply, Side, Tag, CANCEL, NAMED, ROOT,
+};
 use xpute_test_mem::{alloc, Heap};
 
 #[global_allocator]

@@ -1,7 +1,8 @@
 package pxl:core@0.1.0;
 
 interface source {
-  // What the tile source declares of itself: the coarsest zoom it supplies
-  // whole, each kind's format by its bake's number, and its shards by name.
-  declare: func(min-zoom: u32, format: list<u32>, shard: list<string>);
+  use types.{declaration};
+
+  // Declares the tile source, once for the core's life (types `declaration`).
+  declare: func(decl: declaration);
 }

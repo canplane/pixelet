@@ -235,12 +235,8 @@ impl ModelTable {
     /// Uploads `model` through `draw`, keeps it for good, and returns its
     /// number, which names it from then on.
     pub(crate) fn add(&mut self, draw: &mut DrawList, mut model: Model) -> u32 {
-        model.handle = draw.upload(
-            mem::off(model.words.as_ptr().cast()),
-            model.words.len() as u32 * 4,
-            model.vertex_cnt,
-            model.idx_cnt,
-        );
+        let (at, bytes) = mem::span(&model.words[..]);
+        model.handle = draw.upload(at, bytes, model.vertex_cnt, model.idx_cnt);
         self.models.push(model);
         (self.models.len() - 1) as u32
     }

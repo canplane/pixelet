@@ -416,9 +416,15 @@ impl Gen<'_> {
                 .iter()
                 .map(|l| {
                     if is_async(f) {
-                        format!("let mut {l} = {l}; let ({l}_at_, {l}_len_) = {}::span(&mut {l}); ", self.rs_use(self.link_rs, "Lend"))
+                        format!(
+                            "let mut {l} = {l}; let ({l}_at_, {l}_len_) = {}::span(&mut {l}); ",
+                            self.rs_use(self.link_rs, "Lend")
+                        )
                     } else {
-                        format!("let {l}_at_ = {}::off({l}.as_ptr().cast()); let {l}_len_ = size_of_val(&{l}[..]) as u32; ", self.rs_use(self.link_rs, "mem"))
+                        format!(
+                            "let ({l}_at_, {l}_len_) = {}::span(&{l}[..]); ",
+                            self.rs_use(self.link_rs, "mem")
+                        )
                     }
                 })
                 .collect();

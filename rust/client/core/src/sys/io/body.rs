@@ -118,7 +118,7 @@ impl DerefMut for Slot {
 
 impl xpute_link::Lend for Slot {
     fn span(&mut self) -> (u32, u32) {
-        (mem::off(self.bytes().as_ptr()), self.len)
+        mem::span(self.bytes())
     }
 }
 

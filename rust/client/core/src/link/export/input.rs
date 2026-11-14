@@ -30,6 +30,11 @@ fn pointers() -> &'static mut Pointers {
     POINTERS.get(Pointers::default)
 }
 
+/// A new UI starts with no pointer pressed and no text taken.
+pub(super) fn forget_pointers() {
+    *pointers() = Pointers::default();
+}
+
 pub(super) fn typing(typing: bool) -> Result<(), Errno> {
     pointers().typing = typing;
     Ok(())
@@ -82,23 +87,24 @@ pub(super) fn pointer(
     if pinching() {
         clear_hover_coord();
     }
-    Ok(())
+    // A pointer moves the view or what it hovers, which a frame shows.
+    applied()
 }
 
 pub(super) fn wheel(delta_y: f64) -> Result<(), Errno> {
     camera_wheel(delta_y);
-    Ok(())
+    applied()
 }
 
 pub(super) fn pinch(scale: f64) -> Result<(), Errno> {
     refuse_unless(scale > 0.0, Errno::EINVAL)?;
     camera_pinch(scale);
-    Ok(())
+    applied()
 }
 
 pub(super) fn r#move(x: i32, y: i32) -> Result<(), Errno> {
     camera_keys(x, y);
-    Ok(())
+    applied()
 }
 
 pub(super) fn xr_pose(
@@ -121,3 +127,7 @@ pub(super) fn xr_pose_end() -> Result<(), Errno> {
     controller::tracked_end();
     applied()
 }
+
+#[cfg(test)]
+#[path = "input.test.rs"]
+mod test;

@@ -8,7 +8,7 @@
 // never inserted.
 
 pub mod division_name {
-    /// The most bytes a division's name takes in UTF-8. A tile with a longer name is malformed: its bake fails and a reader refuses it (pxl-spec bake/tile/division.rs). A cell names at most one division of each subtype, so a chain of names is at most DIVISION_SUBTYPE's count long.
+    /// The most bytes of a division's name in UTF-8 that the overlay's snapshot carries. A tile holds its names whole, and the snapshot cuts a longer one at a character's boundary; it carries at most DIVISION_SUBTYPE's count of a chain's names, the narrowest (pxl-core ui.rs `division_parts`).
     pub const BYTES: u32 = 128;
 }
 

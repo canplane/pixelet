@@ -56,7 +56,7 @@ std::span<std::uint8_t> bytes(std::uint32_t at, std::uint32_t len) noexcept {
     return {reinterpret_cast<std::uint8_t *>(base() + at), len};
 }
 
-std::uint32_t off(const void *p) noexcept {
+std::uint32_t detail::off(const void *p) noexcept {
     std::uintptr_t o = reinterpret_cast<std::uintptr_t>(p) - base();
     ensure(o <= UINT32_MAX, Errno::efault);
     return static_cast<std::uint32_t>(o);

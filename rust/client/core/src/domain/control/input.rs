@@ -418,7 +418,6 @@ pub(crate) fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> O
             0 => {
                 let mode = s.drag_mode;
                 end_drag(s);
-                invalidate();
                 if mode != DragMode::None {
                     return tap_if_still(s, mode);
                 }
@@ -444,10 +443,6 @@ pub(crate) fn camera_pointer_up(pointer_type: PointerType, pointer_id: i32) -> O
     }
     let mode = s.drag_mode;
     end_drag(s);
-    // Nothing moves once the pointer is up, so without this tick the
-    // characters would not see the release until something else asked for
-    // a frame.
-    invalidate();
     tap_if_still(s, mode)
 }
 
@@ -488,7 +483,6 @@ pub(crate) fn camera_keys(x: i32, y: i32) {
         s.keys_at = now();
     }
     s.key_dir = key_dir;
-    invalidate();
 }
 
 /// Writes into the camera what the pointer and the keys asked since the

@@ -2,11 +2,12 @@
 
 //! The tile source's declaration, made once at boot (pxl:core source
 //! `declare`). The source is the published bake's `source` (script/publish.py),
-//! or the dev tile server's in the same shape, and the client hands over the
-//! core's part of it (ts/client/src/service/sys/fs/source.ts): the zoom the
-//! floor is held at, the format each kind is in, and the shards served. A tile
-//! that no served shard is over or under is never asked for. The versions the
-//! source names stay with the client.
+//! or the dev tile server's in the same shape, and the client hands it over
+//! whole (ts/client/src/service/sys/fs/source.ts): the zoom the floor is held
+//! at, the format and the version each kind is in, and the shards served. A
+//! tile that no served shard is over or under is never asked for. The core
+//! keeps the declaration for its life and tells it to the UI as it is made and
+//! to each UI that attaches (`tell`), whose versions name the tiles' paths.
 
 use pxl_global::Global;
 use pxl_spec::bake::publication::{BaseKind, FORMAT};
@@ -16,10 +17,16 @@ use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM, MIN_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::Area;
 use pxl_spec::space::layer::quadrant::Quadrant;
+use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
+use crate::abi::overlay;
+use crate::abi::types::Declaration;
+
 struct Source {
-    min_zoom: Zoom,
+    /// The declaration as it was made, told back to each UI; its zoom is the
+    /// one the floor is held at.
+    decl: Declaration,
     /// The service area at `SHARD_ZOOM` (pxl-spec `area::Area`). For each
     /// cell, by its key (`area::shard_key`), it holds the bits of which of the
     /// nine cells about it are served. A cell beside no served cell holds 0.
@@ -40,43 +47,61 @@ fn declared_source() -> Option<&'static Source> {
 }
 
 /// Declares the source once, and what it says holds while the core runs.
-/// `format` gives each kind's format by its bake's number, and `shard` the
-/// shards' names in any order. The declaration is refused whole where the
-/// core cannot follow it: a zoom outside the pyramid, a name that is no shard
-/// or that names a node over shards (pxl-spec bake/source.rs), or a kind with
-/// no format or with a format the core does not read.
-pub(crate) fn declare<'a>(
-    min_zoom: u32,
-    format: &[u32],
-    shard: impl IntoIterator<Item = &'a str>,
-) -> Result<(), Errno> {
+/// `decl` gives each kind's format by its bake's number and its version, and
+/// its shards in any order, each with the versions it declares of its own. The
+/// declaration is refused whole where the core cannot follow it: a zoom
+/// outside the pyramid, a name that is no shard or that names a node over
+/// shards (pxl-spec bake/source.rs), a kind with no format or with a format
+/// the core does not read, or a version list, the source's or a shard's,
+/// without one entry a kind (a shard's entry none where it takes the
+/// source's).
+pub(crate) fn declare(decl: Declaration) -> Result<(), Errno> {
     let declared = DECLARED_SOURCE.get(|| None);
     if declared.is_some() {
         return Err(Errno::EEXIST);
     }
-    *declared = Some(parse(min_zoom, format, shard).ok_or(Errno::EINVAL)?);
+    *declared = Some(parse(decl).ok_or(Errno::EINVAL)?);
+    tell();
     Ok(())
 }
 
-fn parse<'a>(
-    min_zoom: u32,
-    format: &[u32],
-    names: impl IntoIterator<Item = &'a str>,
-) -> Option<Source> {
-    let min_zoom = Some(min_zoom).filter(|z| (MIN_ZOOM..=LEAF_ZOOM).contains(z))?;
-    let read = format.len() == BaseKind::ALL.len()
+/// Tells the UI the declaration, if it is made, at once, so that it reaches a
+/// UI before any file opened under it in this entry: as it is made, and to
+/// each UI that attaches (link.rs `tell_all`). Its packet is the one the UI
+/// declared it in, which fit a frame.
+pub(crate) fn tell() {
+    if let Some(decl) = decl() {
+        overlay::source(decl).or_bug(Errno::EPROTO);
+    }
+}
+
+fn parse(decl: Declaration) -> Option<Source> {
+    let kind_cnt = BaseKind::ALL.len();
+    let read = (MIN_ZOOM..=LEAF_ZOOM).contains(&decl.min_zoom)
+        && decl.formats.len() == kind_cnt
+        && decl.versions.len() == kind_cnt
+        && decl.shards.iter().all(|s| s.versions.len() == kind_cnt)
         && BaseKind::ALL
             .into_iter()
-            .all(|l| format[l as usize] == FORMAT[l as usize]);
+            .all(|l| decl.formats[l as usize] == FORMAT[l as usize]);
     if !read {
         return None;
     }
-    let shard = names.into_iter().map(key).collect::<Option<Vec<_>>>()?;
+    let shards = decl
+        .shards
+        .iter()
+        .map(|s| key(&s.name))
+        .collect::<Option<Vec<_>>>()?;
     Some(Source {
-        min_zoom,
-        nine: nines_of(&shard),
-        nodes: nodes_of(&shard),
+        nine: nines_of(&shards),
+        nodes: nodes_of(&shards),
+        decl,
     })
+}
+
+/// The declaration the core holds, or none before it is made.
+pub(crate) fn decl() -> Option<&'static Declaration> {
+    declared_source().map(|s| &s.decl)
 }
 
 /// Marks each cell at `SHARD_ZOOM` that a served shard covers, then lays the
@@ -158,7 +183,7 @@ fn node_of(zoom: Zoom, at: [i32; 2]) -> Option<usize> {
 
 /// The coarsest zoom the source supplies whole; none until it is declared.
 pub(crate) fn min_zoom() -> Option<Zoom> {
-    declared_source().map(|s| s.min_zoom)
+    declared_source().map(|s| s.decl.min_zoom)
 }
 
 /// Whether a served shard is over or under `p`. A kind that shards do not

@@ -885,11 +885,6 @@ impl Block {
         Some(unsafe { core::slice::from_raw_parts_mut(self.0.as_mut_ptr(), bytes as usize) })
     }
 
-    /// Where the block lies in the core's memory.
-    fn at(&self) -> u32 {
-        mem::off(self.0.as_ptr())
-    }
-
     fn bytes(&self) -> u32 {
         self.0.len() as u32
     }
@@ -918,7 +913,7 @@ impl MirroredBlock {
             return false;
         };
         bytes[..data.len()].copy_from_slice(data);
-        let (at, room) = (self.block.at(), self.block.bytes());
+        let (at, room) = mem::span(&self.block.0);
         if self.handle == 0 {
             self.handle = draw.upload(at, room, 0, 0);
         } else {

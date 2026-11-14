@@ -10,7 +10,7 @@ use crate::gpu::draw::{drifted, test_lists, Draw, DrawId, DrawList, ReceiverBox}
 use crate::pass::mark::{marked, UploadOf};
 use xpute_test_mem::Heap;
 
-/// The renderer takes the offsets of what it lends the host (`mem::off`), so
+/// The renderer takes the offsets of what it lends the host (`mem::span`), so
 /// the tests' process has a guest's memory as its heap.
 #[global_allocator]
 static HEAP: Heap = Heap;

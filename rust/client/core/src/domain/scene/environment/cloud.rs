@@ -494,7 +494,8 @@ fn build(
         out[column.flags()..column.flags() + l.len().div_ceil(4)].fill(0);
         first += GroupRange::word_cnt(l.len());
     }
-    let handle = draw.upload(mem::off(out.as_ptr().cast()), out.len() as u32 * 4, 0, 0);
+    let (at, bytes) = mem::span(&out[..]);
+    let handle = draw.upload(at, bytes, 0, 0);
     Some(Patch {
         words: out,
         handle,
@@ -647,12 +648,7 @@ fn present_patch(
         }
     }
     if changed {
-        draw.rewrite_part(
-            b.handle,
-            mem::off(b.words.as_ptr().cast()),
-            b.idx,
-            at as u32 * 4,
-        );
+        draw.rewrite_part(b.handle, mem::span(&b.words[..]).0, b.idx, at as u32 * 4);
     }
 }
 

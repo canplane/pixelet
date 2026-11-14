@@ -21,7 +21,7 @@
 //! every scale.
 
 use crate::domain::scene::param;
-use crate::domain::scene::rate;
+use crate::domain::scene::rate::{self, Motion, Pace};
 use crate::domain::setting::{settings, ResMode};
 use crate::sys::sched;
 use pxl_global::Global;
@@ -29,17 +29,6 @@ use pxl_render::gpu::api;
 use pxl_render::gpu::surface::{surfaces, Surface};
 use pxl_render::renderer::GpuRead;
 use pxl_render::spec::api::surface_role;
-
-/// How a frame was paced.
-#[derive(Clone, Copy)]
-pub(crate) struct Pace {
-    /// The real time since the last frame, in ms.
-    pub gap_ms: f64,
-    /// The display's interval, in ms (sys/sched/display.rs).
-    pub display_ms: f64,
-    /// Whether the frame asked for the next (sys/sched.rs `invalidate`).
-    pub moving: bool,
-}
 
 /// The budget, in ms, of a frame at the frame rate's target interval.
 fn budget(display_ms: f64) -> f64 {
@@ -116,7 +105,6 @@ struct Judge {
     backoff: u32,
     /// Whether the step in force is a step up still on trial.
     on_trial: bool,
-    moving: bool,
 }
 
 impl Judge {
@@ -132,7 +120,6 @@ impl Judge {
         since: u32::MAX,
         backoff: 1,
         on_trial: false,
-        moving: false,
     };
 
     /// Starts a fresh window. It clears the window's sums but keeps the count
@@ -314,14 +301,15 @@ pub(crate) fn load(pace: Pace, gpu: Option<GpuRead>) {
         return;
     };
     let k = state();
-    let started = pace.moving && !k.moving;
-    k.moving = pace.moving;
     if settings().res != ResMode::Auto {
         (k.step, k.quiet) = (0, 0);
         k.restart();
-    } else if started {
+    } else if pace.motion == Motion::Start {
         k.restart();
-    } else if pace.moving && pace.display_ms > 0.0 && s.render_px() == (s.width, s.height) {
+    } else if pace.motion == Motion::Moving
+        && pace.display_ms > 0.0
+        && s.render_px() == (s.width, s.height)
+    {
         let px = f64::from(s.width) * f64::from(s.height);
         let timed = api::device().is_some_and(|d| d.timestamps);
         let cost = if timed {

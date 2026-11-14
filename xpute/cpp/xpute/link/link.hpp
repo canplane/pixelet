@@ -99,10 +99,8 @@ concept Lend = requires(L &l) {
 
 // Where `l` lies in the guest's memory, and how long it is.
 template <class L> Lent span(L &l) noexcept {
-    return Lent{
-        .at = mem::off(std::data(l)),
-        .len = static_cast<std::uint32_t>(std::size(l) * sizeof *std::data(l)),
-    };
+    auto [at, len] = mem::span(std::span<const std::remove_reference_t<decltype(*std::data(l))>>(std::data(l), std::size(l)));
+    return Lent{.at = at, .len = len};
 }
 
 // A packet a side writes: its fixed part's size, and what writes it

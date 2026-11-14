@@ -769,7 +769,7 @@ impl<const N: usize> Gpu<N> {
         fence: &u32,
         ticket: u32,
     ) -> Option<Id> {
-        let at = mem::off(core::ptr::from_ref(fence).cast());
+        let at = mem::off(fence);
         self.make_as(
             stream,
             op::RENDER_PIPELINE_ASYNC,
@@ -800,7 +800,7 @@ impl<const N: usize> Gpu<N> {
         fence: &u32,
         ticket: u32,
     ) -> Option<Id> {
-        let at = mem::off(core::ptr::from_ref(fence).cast());
+        let at = mem::off(fence);
         self.make_as(
             stream,
             op::COMPUTE_PIPELINE_ASYNC,
@@ -975,16 +975,8 @@ pub mod call {
     /// stream. The guest leaves them unchanged until the stream is handed back
     /// (stream.rs).
     pub fn write_buffer_at(stream: &mut Stream, buffer: Id, offset: u32, bytes: &[u8]) -> bool {
-        words(
-            stream,
-            op::WRITE_BUFFER_AT,
-            &[
-                buffer,
-                offset,
-                mem::off(bytes.as_ptr().cast()),
-                bytes.len() as u32,
-            ],
-        )
+        let (at, len) = mem::span(bytes);
+        words(stream, op::WRITE_BUFFER_AT, &[buffer, offset, at, len])
     }
 
     fn texture_write(s: &mut dyn Sink, place: &TexelCopyTexture, layout: [u32; 2], size: [u32; 3]) {
@@ -1029,11 +1021,10 @@ pub mod call {
         size: [u32; 3],
         bytes: &[u8],
     ) -> bool {
+        let (at, len) = mem::span(bytes);
         emit(stream, op::WRITE_TEXTURE_AT, &|s| {
             texture_write(s, place, layout, size);
-            [mem::off(bytes.as_ptr().cast()), bytes.len() as u32]
-                .into_iter()
-                .for_each(|w| s.word(w));
+            [at, len].into_iter().for_each(|w| s.word(w));
         })
     }
 
@@ -1051,17 +1042,14 @@ pub mod call {
         fence: &[u32; 2],
         ticket: u32,
     ) -> bool {
-        let (image_at, word_at) = (
-            mem::off(image.as_ptr().cast()),
-            mem::off(fence.as_slice().as_ptr().cast()),
-        );
+        let ((image_at, image_len), word_at) = (mem::span(image), mem::off(fence));
         emit(stream, op::COPY_EXTERNAL_IMAGE, &|s| {
             texture_place(s, to);
             [
                 flag(flip_y),
                 flag(premultiplied),
                 image_at,
-                image.len() as u32,
+                image_len,
                 word_at,
                 ticket,
             ]
@@ -1334,28 +1322,18 @@ pub mod call {
         fence: &[u32; 2],
         ticket: u32,
     ) -> bool {
+        let (at, len) = mem::span(into);
         words(
             stream,
             op::MAP_ASYNC,
-            &[
-                buffer,
-                offset,
-                into.len() as u32,
-                mem::off(into.as_ptr().cast()),
-                mem::off(fence.as_slice().as_ptr().cast()),
-                ticket,
-            ],
+            &[buffer, offset, len, at, mem::off(fence), ticket],
         )
     }
 
     /// Asks the host to store `ticket` at `fence` once the work submitted
     /// before is done (spec `RESULT`).
     pub fn queue_done(stream: &mut Stream, fence: &u32, ticket: u32) -> bool {
-        words(
-            stream,
-            op::QUEUE_DONE,
-            &[mem::off(core::ptr::from_ref(fence).cast()), ticket],
-        )
+        words(stream, op::QUEUE_DONE, &[mem::off(fence), ticket])
     }
 
     /// `format` None asks for the format the host's surface prefers.

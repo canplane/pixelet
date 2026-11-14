@@ -39,7 +39,10 @@ unsafe impl GlobalAlloc for Heap {
             if base.is_null() {
                 std::process::abort();
             }
-            mem::set(Region { base, len: SZ as u32 });
+            mem::set(Region {
+                base,
+                len: SZ as u32,
+            });
         });
         let base = mem::region().base.expose_provenance();
         let mut end = END.load(Relaxed);
@@ -61,5 +64,5 @@ unsafe impl GlobalAlloc for Heap {
 /// Takes `len` zeroed bytes of the guest's memory, given to no one else, and
 /// answers where they lie.
 pub fn alloc(len: u32) -> u32 {
-    mem::off(Vec::leak(vec![0u64; len.div_ceil(8).max(1) as usize]).as_ptr().cast())
+    mem::span(Vec::leak(vec![0u64; len.div_ceil(8).max(1) as usize])).0
 }

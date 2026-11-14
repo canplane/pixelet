@@ -183,9 +183,14 @@ pub fn on_cancel(t: Tag, stop: Box<dyn FnOnce()>) {
     SIDE.with(|s| s.on_cancel(t, stop));
 }
 
+/// The bytes a frame takes, header and packet.
+pub(crate) fn cap() -> u32 {
+    SIDE.with(Side::layout).cap
+}
+
 /// The bytes a frame's packet may take.
 pub(crate) fn pkt_cap() -> u32 {
-    SIDE.with(Side::layout).cap - HDR_SZ
+    cap() - HDR_SZ
 }
 
 /// Answers the guest's request `t`; while control is in the guest, its packet

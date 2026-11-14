@@ -41,8 +41,7 @@ use crate::domain::scene::indicator::ghost::ghost_set;
 use crate::domain::scene::indicator::location::location_step;
 use crate::domain::scene::marker;
 use crate::domain::scene::model::draw_list;
-use crate::domain::scene::rate;
-use crate::domain::scene::resolution::Pace;
+use crate::domain::scene::rate::{self, Motion, Pace};
 use crate::domain::scene::stage;
 use crate::domain::scene::stage::scene_step;
 use crate::domain::setting;
@@ -284,8 +283,8 @@ pub(crate) fn effects() -> (f64, [f64; EFFECT_CNT]) {
 }
 
 static REFUSED: Global<Refused> = Global::new();
-/// When the last frame ran.
-static LAST: Global<Option<f64>> = Global::new();
+/// When the last frame ran, and whether it moved.
+static LAST: Global<Option<(f64, bool)>> = Global::new();
 
 /// The frames that did not run since boot, by why (`frame_task`): the GPU
 /// admitted none, or the host still held the stream.
@@ -320,7 +319,7 @@ async fn frame_task() {
             let target_ms = f64::from(rate::interval()) * display_ms;
             if LAST
                 .get(|| None)
-                .is_none_or(|last| at - last >= target_ms - display_ms / 2.0)
+                .is_none_or(|(last, _)| at - last >= target_ms - display_ms / 2.0)
             {
                 break;
             }
@@ -350,11 +349,12 @@ async fn frame_task() {
 /// Runs the world's frame in its order: the effects, the tick, the requests'
 /// pump and the stage. It steps the world by the time since the last frame,
 /// and the frame is moving where it asked for the next. The frame rate then
-/// judges the frame by its gap and its cost, the GPU's busy time where a read
-/// timed it and the frame's own.
+/// judges a moving frame that does not start motion by its gap and its cost,
+/// the GPU's busy time where a read timed it and the frame's own.
 fn run() -> TickReport {
     let t0 = now();
-    let gap_ms = LAST.get(|| None).map_or(0.0, |at| t0 - at);
+    let last = *LAST.get(|| None);
+    let gap_ms = last.map_or(0.0, |(at, _)| t0 - at);
     let delta = gap_ms / 1000.0;
     set_credit_cnt(CREDIT_CNT);
     text_drop_unread();
@@ -371,21 +371,23 @@ fn run() -> TickReport {
     pump();
     let moving = sched::is_invalid();
     let display_ms = display::interval_ms();
-    let frame = stage::stage_render(
-        Pace {
-            gap_ms,
-            display_ms,
-            moving,
+    let pace = Pace {
+        gap_ms,
+        display_ms,
+        motion: match (moving, last.is_some_and(|(_, moved)| moved)) {
+            (false, _) => Motion::Still,
+            (true, false) => Motion::Start,
+            (true, true) => Motion::Moving,
         },
-        &write::render_edit(),
-    );
+    };
+    let frame = stage::stage_render(pace, &write::render_edit());
     let end = now();
     let gpu_ms = frame
         .stat
         .as_ref()
         .and_then(|s| s.gpu)
         .map_or(0.0, |g| g.busy_ms);
-    rate::judge(gap_ms, gpu_ms.max(end - t0), display_ms);
+    rate::judge(pace, gpu_ms.max(end - t0));
     set_renderer_frame(&frame);
     perf_frame(CpuSample {
         tick: report,
@@ -396,7 +398,7 @@ fn run() -> TickReport {
         effects,
         stage_ms: end - after_tick,
     });
-    LAST.set(Some(t0));
+    LAST.set(Some((t0, moving)));
     report
 }
 
