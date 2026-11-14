@@ -23,14 +23,14 @@
 //! shard the top does not list is taken as empty without asking. Once read,
 //! a shard stays read.
 //!
-//! The writes the store takes go up as edits in batches (file.json
-//! `path`, (OBJECT, EDIT)), and the source applies them to its shards and its top. A
-//! file that does not decode is refused: it is named to the client to set
-//! aside (`refused_files`), and read again once the client says it did
-//! (`on_emptied`).
+//! The writes the store takes go up as edits in batches (pxl:core object
+//! `apply`), and the source applies them to its shards and its top; a batch
+//! stays until the source applied it. A file that does not decode is
+//! refused: the core sets it aside (sys/io/file.rs `set_aside`), and reads it
+//! again once it is (`on_set_aside`).
 
 use fnv::FnvHashSet;
-use pxl_engine::object;
+use pxl_engine::object::high;
 use pxl_global::Global;
 use pxl_spec::asset::marker::MARKER_TEXT_CHARS;
 use pxl_spec::bake::constant::OBJECT_FINEST;
@@ -41,13 +41,15 @@ use pxl_spec::space::hierarchy::morton::{key_of_name, name, node_of};
 use pxl_spec::space::layer::area::shard_over;
 use pxl_spec::space::layer::demand::GROUND_DEMAND_TILE_CAP;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_link::abi::types::Token;
+use xpute_guest::abi::fs::types::ErrorCode;
 use xpute_guest::clock::now;
+use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::MarshalError;
 use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderConfig, TreeReader, TreeView};
 
 use super::store::{object, object_mut};
+use crate::abi::object;
 use crate::domain::layer::object::ext::Ext;
 use crate::domain::layer::object::store::{apply, note_damage, Write};
 use crate::sys::io::body::Body;
@@ -55,9 +57,9 @@ use crate::sys::io::demand::{Order, PhaseList, Stream, TaskPhaseName};
 use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::file;
 use crate::spec;
-use crate::spec::file::{format, path, top, write as column};
+use crate::spec::file::{format, top, write as column};
 use crate::sys::io::request::declare;
-use crate::sys::sched::invalidate;
+use crate::sys::sched::{executor, invalidate};
 use pxl_spec::object::ext::{class_of, Class};
 
 /// The most files wanted at once. Before the top is read, only the top is
@@ -66,10 +68,6 @@ use pxl_spec::object::ext::{class_of, Class};
 /// `object_step`), which are no more than one zoom's demand of ground tiles
 /// (pxl-spec layer/demand.rs `demand_tiles`).
 pub const WANT_CAP: u32 = GROUND_DEMAND_TILE_CAP;
-
-// Every objects' file a snapshot names can be watched beside the storage
-// file (sys/io/file.rs `WATCHED`).
-const _: () = assert!(WANT_CAP as usize + 1 <= file::WATCHED);
 
 /// The id that names the top among the wanted files; every other wanted id
 /// is a shard's.
@@ -85,15 +83,20 @@ struct State {
     top_shards: Option<FnvHashSet<u64>>,
     /// The shards read, by id. Their leaves are in the store.
     read_shards: FnvHashSet<u64>,
-    /// The refused files after OBJECT, by id. Each stays refused until the
-    /// client says it emptied the file or gave it back to its source.
+    /// The refused files after OBJECT, by id. Each stays refused until it is
+    /// set aside.
     refused_files: Vec<u64>,
-    /// The writes the store took since the last batch went up, in order.
+    /// The writes the store took that the source has not applied, in order.
     unsent: Vec<Write>,
+    /// Whether a batch of `unsent` is on its way to the source.
+    applying: bool,
+    /// How many of `unsent` the last batch the source failed to apply held;
+    /// they go again with the next write.
+    failed_cnt: usize,
     /// The files `want` asks for, by id; the buffer is reused across frames.
     wants: Vec<(u64, Order)>,
     /// A counter that advances whenever something `want` reads changes: the
-    /// top or a shard is read, or a file is refused or emptied.
+    /// top or a shard is read, or a file is refused or set aside.
     revision: u32,
     /// The changes waiting for the store, in order, held while the host
     /// holds the store's columns (`change`).
@@ -187,7 +190,7 @@ pub fn holds(space: &Aabb) -> bool {
 /// its `order`. Before the top is read, only the top is wanted, first. After
 /// that, the wanted files are the asked shards that the top lists and that
 /// are not read yet, and they replace what was wanted before. A refused file
-/// is not wanted until the client empties it.
+/// is not wanted until it is set aside.
 pub fn want(asked: impl Iterator<Item = Quadrant>, order: impl Fn(Quadrant) -> Order) {
     let st = state();
     st.wants.clear();
@@ -212,7 +215,7 @@ pub fn want_again() {
 }
 
 /// The repository's revision for `want`. Two readings are equal only if no
-/// top or shard was read and no file was refused or emptied between them.
+/// top or shard was read and no file was refused or set aside between them.
 pub fn revision() -> u32 {
     state().revision
 }
@@ -251,7 +254,7 @@ fn admit(id: u64, bytes: Option<&[u8]>) -> Result<(), MarshalError> {
     };
     if result.is_err() && !state().refused_files.contains(&id) {
         state().refused_files.push(id);
-        watch_named(state().refused_files.len() - 1);
+        file::set_aside(file::Refused::Objects(id));
         changed();
         invalidate();
     }
@@ -276,32 +279,14 @@ fn on_shard(id: u64, writes: Vec<Write>) {
     changed();
 }
 
-/// Watches the refused file at `at` among the refused, where a snapshot names
-/// it: the first WANT_CAP are named (ui.rs), and the client sets aside only
-/// those, so a file is watched from when it is named until it changes.
-fn watch_named(at: usize) {
-    if at < WANT_CAP as usize {
-        if let Some(&id) = state().refused_files.get(at) {
-            file::watch(file::Refused::Objects(id));
-        }
-    }
-}
-
-pub fn refused_files() -> &'static [u64] {
-    &state().refused_files
-}
-
-/// The client set refused file `id` aside, so it is wanted again as a new
-/// file. Returns false where the file was not refused.
-pub fn on_emptied(id: u64) -> bool {
+/// Refused file `id` was set aside, so it is wanted again as a new file.
+/// Returns false where the file was not refused.
+pub fn on_set_aside(id: u64) -> bool {
     let st = state();
     let Some(i) = st.refused_files.iter().position(|&n| n == id) else {
         return false;
     };
     st.refused_files.remove(i);
-    if i < WANT_CAP as usize {
-        watch_named(WANT_CAP as usize - 1);
-    }
     st.revision = st.revision.wrapping_add(1);
     // Drop the failed want, so that the next declaration starts a new one.
     st.wants.retain(|&(n, _)| n != id);
@@ -440,7 +425,7 @@ fn decode_top(bytes: &[u8]) -> Result<Vec<(u64, u32)>, MarshalError> {
         .enumerate()
         .map(|(r, quadkey)| {
             Quadrant::of_key(quadkey)
-                .filter(|t| t.zoom == SHARD_ZOOM && object::high(fold[r]) <= FULL)
+                .filter(|t| t.zoom == SHARD_ZOOM && high(fold[r]) <= FULL)
                 .map(|t| (t.id(), fold[r]))
                 .ok_or(MarshalError::new(Errno::EINVAL))
         })
@@ -466,21 +451,40 @@ pub fn step() {
     save();
 }
 
-/// Sends the writes since the last batch as one edit batch (sys/io/file.rs
-/// `write`). A batch that does not encode is dropped unsent.
+/// Sends the writes the source has not applied as one edit batch (pxl:core
+/// object `apply`), one batch at a time. A batch the source fails to apply
+/// stays, and goes again with the next write; one the source keeps nothing
+/// of (`read-only`) or cannot read (`bad-message`), or that does not encode,
+/// is dropped.
 pub fn save() {
     let st = state();
-    if st.unsent.is_empty() {
+    if st.applying || st.unsent.len() <= st.failed_cnt {
         return;
     }
-    let edit = vec![
-        Token::Int(path::object::ID),
-        Token::Int(path::object::edit::ID),
-    ];
-    if let Ok(batch) = encode_writes(format::OBJECT_EDIT, &st.unsent) {
-        file::write(edit, batch.into_boxed_slice());
+    let Ok(batch) = encode_writes(format::OBJECT_EDIT, &st.unsent) else {
+        st.unsent.clear();
+        st.failed_cnt = 0;
+        return;
+    };
+    st.applying = true;
+    executor::spawner().spawn(apply_batch(batch, st.unsent.len()).or_bug(Errno::ENOSPC));
+}
+
+/// Applies `batch`, the first `n` writes of `unsent`, and drops them where
+/// the source applied them, keeps nothing or cannot read them.
+#[embassy_executor::task]
+async fn apply_batch(batch: Vec<u8>, n: usize) {
+    let (_, applied) = object::apply(batch).await;
+    let st = state();
+    st.applying = false;
+    match applied {
+        Ok(Ok(()) | Err(ErrorCode::ReadOnly | ErrorCode::BadMessage)) => {
+            st.unsent.drain(..n);
+            st.failed_cnt = 0;
+        }
+        _ => st.failed_cnt = n,
     }
-    st.unsent.clear();
+    invalidate();
 }
 
 #[cfg(test)]

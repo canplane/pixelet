@@ -1,22 +1,24 @@
 // xpute-native-host/disk.rs
 
 //! The device's disk, as the browser's storage is a page's: the bytes at a path
-//! under the root the platform gives, read whole, and bytes committed to a path
-//! whole (a file beside it, synced, then renamed over it). What a path stands
+//! under the root the platform gives, read whole, bytes committed to a path
+//! whole (a file beside it, synced, then renamed over it), and a file set aside
+//! (renamed beside itself). What a path stands
 //! for is the program's, whose file binding serves wit/fs/file.wit over this.
 //! The disk's work runs on a thread of its own, which hands each result back to
-//! the guest's thread (`event_loop::job`).
+//! the guest's thread (xpute-native-runtime `job`).
 
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Sender};
 use std::sync::OnceLock;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use xpute_link::abi::types::Token;
 use xpute_kit::status::errno::Errno;
 
-use crate::event_loop::{done, job};
+use xpute_native_runtime::{done, job};
 
 /// The disk's work: its job's id and its path under the root.
 enum Job {
@@ -28,6 +30,10 @@ enum Job {
         id: u64,
         path: PathBuf,
         bytes: Vec<u8>,
+    },
+    SetAside {
+        id: u64,
+        path: PathBuf,
     },
 }
 
@@ -55,6 +61,7 @@ pub fn serve(root: PathBuf) {
                         replace(&root.join(path), &bytes).map_err(|_| Errno::EIO),
                     );
                 }
+                Job::SetAside { id, path } => done(id, rename_aside(&root.join(path)).map_err(errno)),
             }
         }
     });
@@ -74,6 +81,14 @@ pub fn commit(path: PathBuf, bytes: Vec<u8>, then: impl FnOnce(Result<(), Errno>
         id: job(then),
         path,
         bytes,
+    });
+}
+
+/// Sets the file at `path` aside, `then` hearing it done on the guest's thread.
+pub fn set_aside(path: PathBuf, then: impl FnOnce(Result<(), Errno>) + 'static) {
+    send(Job::SetAside {
+        id: job(then),
+        path,
     });
 }
 
@@ -101,9 +116,7 @@ fn replace(path: &Path, bytes: &[u8]) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }
-    let mut beside = path.as_os_str().to_owned();
-    beside.push(".writing");
-    let beside = PathBuf::from(beside);
+    let beside = beside(path, ".writing");
     let written = fs::File::create(&beside).and_then(|mut f| {
         f.write_all(bytes)?;
         f.sync_all()?;
@@ -113,6 +126,28 @@ fn replace(path: &Path, bytes: &[u8]) -> io::Result<()> {
         let _ = fs::remove_file(&beside);
     }
     written
+}
+
+/// Renames the file at `path` beside itself, to a name that says when it was
+/// set aside (`<name>.aside.<ms>`, or `<name>.aside.<ms>-<n>` past the names
+/// taken), as a page's storage keeps `<key>:aside:<ms>`. The disk's thread
+/// alone names files here, so a name found free stays free until the rename.
+fn rename_aside(path: &Path) -> io::Result<()> {
+    let ms = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis());
+    let mut aside = beside(path, &format!(".aside.{ms}"));
+    let mut n = 0;
+    while aside.try_exists()? {
+        n += 1;
+        aside = beside(path, &format!(".aside.{ms}-{n}"));
+    }
+    fs::rename(path, aside)
+}
+
+/// The path beside `path`, its name with `suffix` after it.
+fn beside(path: &Path, suffix: &str) -> PathBuf {
+    let mut beside = path.as_os_str().to_owned();
+    beside.push(suffix);
+    PathBuf::from(beside)
 }
 
 fn errno(e: io::Error) -> Errno {

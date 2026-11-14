@@ -12,9 +12,9 @@ use std::sync::OnceLock;
 
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
-use xpute_native_host::jni::env;
-use xpute_native_host::jni::ndk::{ANativeWindow_fromSurface, ANativeWindow_release};
-use xpute_native_host::jni::sys::{jclass, jint, jmethodID, jobject, JNIEnv, JavaVM, JNI_OK};
+use xpute_native_runtime::jni::env;
+use xpute_native_runtime::jni::ndk::{ANativeWindow_fromSurface, ANativeWindow_release};
+use xpute_native_runtime::jni::sys::{jclass, jint, jmethodID, jobject, JNIEnv, JavaVM, JNI_OK};
 
 use super::native::lost_on;
 
@@ -136,8 +136,8 @@ macro_rules! jni_abi {
         /// Only JNI calls this, on a thread Java made.
         #[no_mangle]
         unsafe extern "system" fn Java_xpute_Gpu_init(
-            env: *mut ::xpute_native_host::jni::sys::JNIEnv,
-            this: ::xpute_native_host::jni::sys::jobject,
+            env: *mut ::xpute_native_runtime::jni::sys::JNIEnv,
+            this: ::xpute_native_runtime::jni::sys::jobject,
         ) {
             // SAFETY: the environment and the `xpute.Gpu` JNI called with.
             unsafe { $crate::jni::init(env, this) }
@@ -147,11 +147,11 @@ macro_rules! jni_abi {
         /// Only JNI calls this, with a live `android.view.Surface`.
         #[no_mangle]
         unsafe extern "system" fn Java_xpute_Gpu_surfaceBind(
-            env: *mut ::xpute_native_host::jni::sys::JNIEnv,
-            _this: ::xpute_native_host::jni::sys::jobject,
-            handle: ::xpute_native_host::jni::sys::jint,
-            surface: ::xpute_native_host::jni::sys::jobject,
-        ) -> ::xpute_native_host::jni::sys::jint {
+            env: *mut ::xpute_native_runtime::jni::sys::JNIEnv,
+            _this: ::xpute_native_runtime::jni::sys::jobject,
+            handle: ::xpute_native_runtime::jni::sys::jint,
+            surface: ::xpute_native_runtime::jni::sys::jobject,
+        ) -> ::xpute_native_runtime::jni::sys::jint {
             // SAFETY: the environment and surface JNI called with.
             unsafe {
                 $crate::jni::bind(env, handle as u32, surface, xpute_gpu_surface_bind)
@@ -160,17 +160,17 @@ macro_rules! jni_abi {
 
         #[no_mangle]
         extern "system" fn Java_xpute_Gpu_surfaceUnbind(
-            _env: *mut ::xpute_native_host::jni::sys::JNIEnv,
-            _this: ::xpute_native_host::jni::sys::jobject,
-            handle: ::xpute_native_host::jni::sys::jint,
+            _env: *mut ::xpute_native_runtime::jni::sys::JNIEnv,
+            _this: ::xpute_native_runtime::jni::sys::jobject,
+            handle: ::xpute_native_runtime::jni::sys::jint,
         ) {
             xpute_gpu_surface_unbind(handle as u32);
         }
 
         #[no_mangle]
         extern "system" fn Java_xpute_Gpu_vsync(
-            _env: *mut ::xpute_native_host::jni::sys::JNIEnv,
-            _this: ::xpute_native_host::jni::sys::jobject,
+            _env: *mut ::xpute_native_runtime::jni::sys::JNIEnv,
+            _this: ::xpute_native_runtime::jni::sys::jobject,
         ) {
             xpute_gpu_vsync();
         }

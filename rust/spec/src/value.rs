@@ -13,7 +13,7 @@ use crate::asset::cube::{self, Ground, Object, Sentinel};
 /// sentinels.
 pub const GROUND: [u32; 2] = [0x01, 0xfe];
 
-/// The ways' entries among the ground's, first and last: the ground records marked
+/// The ways' cubes among the ground's, first and last: the ground records marked
 /// `transport` (`asset/cube.json`), which lie in one run. Decor faces along a
 /// way, and no pier stands on one.
 pub const TRANSPORT: [u32; 2] = {
@@ -44,7 +44,7 @@ pub const fn is_ground(val: u32) -> bool {
     val >= GROUND[0] && val <= GROUND[1]
 }
 
-/// Whether a value read into a word is a way's entry (`TRANSPORT`).
+/// Whether a value read into a word is a way's cube (`TRANSPORT`).
 pub const fn is_transport(val: u32) -> bool {
     val >= TRANSPORT[0] && val <= TRANSPORT[1]
 }
@@ -55,8 +55,8 @@ pub const fn is_object(val: u32) -> bool {
     val >= OBJECT[0] && val <= OBJECT[1]
 }
 
-// The palette laid into the value space: no class holds a sentinel, every ground entry lies
-// in the ground's range, the ways' entries lie in one run, so the ways' range holds them and
+// The palette laid into the value space: no class holds a sentinel, every ground cube lies
+// in the ground's range, the ways' cubes lie in one run, so the ways' range holds them and
 // no other (`TRANSPORT`), and the object's colors lie in their range.
 const _: () = {
     let mut k = 0;
@@ -68,10 +68,10 @@ const _: () = {
     let mut k = 0;
     while k < Ground::ALL.len() {
         let g = Ground::ALL[k];
-        assert!(is_ground(g as u32), "a ground entry in the ground's slots");
+        assert!(is_ground(g as u32), "a ground cube in the ground's range");
         assert!(
             is_transport(g as u32) == cube::GROUND[k].transport,
-            "the ways' entries lie in one run"
+            "the ways' cubes lie in one run"
         );
         k += 1;
     }
@@ -79,7 +79,7 @@ const _: () = {
     while k < Object::ALL.len() {
         assert!(
             is_object(Object::ALL[k] as u32),
-            "an object's color in the objects' slots"
+            "an object's color in the objects' range"
         );
         k += 1;
     }

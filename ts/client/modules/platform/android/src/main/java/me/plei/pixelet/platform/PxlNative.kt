@@ -5,14 +5,15 @@ package me.plei.pixelet.platform
 import java.nio.ByteBuffer
 
 /**
- * What the app calls in the core (rust/client/core) besides xpute's own calls
- * (xpute.Core, xpute.Gpu): the transport's decoder and the text the core asks for. Kotlin reaches it through
- * the JNI function that the core's src/sys/unpack.rs names, and the iPhone's Swift
- * makes the same call through the C ABI (include/pxl_native.h).
+ * What the app calls in its native library (rust/client/runtime) besides
+ * xpute's own calls (xpute.Runtime, xpute.Gpu): the transport's decoder and the
+ * text the core asks for. Kotlin reaches it through the JNI functions that the
+ * library's src/unpack.rs and src/text.rs name, and the iPhone's Swift makes the
+ * same calls through the C ABI (include/pxl_native.h).
  */
 object PxlNative {
   init {
-    System.loadLibrary("pxl_core")
+    System.loadLibrary("pxl_runtime")
   }
 
   /** Decodes a zstd body into a direct buffer, or returns null when it does

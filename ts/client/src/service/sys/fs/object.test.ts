@@ -2,8 +2,10 @@
 
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { ERRNO_EBADMSG, ERRNO_ENOENT } from "@xpute/kit/status/errno.spec.ts";
+import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
 import { FaultError } from "@xpute/kit/status/error.ts";
+import { ComponentError } from "@xpute/link";
+import { ERROR_CODE_NO_ENTRY } from "@xpute/link/abi/fs/types.enum.ts";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 
@@ -71,6 +73,15 @@ async function errno(f: () => unknown): Promise<number | undefined> {
   return undefined;
 }
 
+async function code(f: () => unknown): Promise<unknown> {
+  try {
+    await f();
+  } catch (err) {
+    return err instanceof ComponentError ? err.payload : undefined;
+  }
+  return undefined;
+}
+
 test("encode_writes - a batch reads back as written, in order, texts and all", async () => {
   const writes = [CUBE, MARKER, { ...CUBE, asset_id: 0 }];
   const file = encode_writes(format.OBJECT_EDIT, writes);
@@ -84,7 +95,7 @@ test("encode_writes - a batch reads back as written, in order, texts and all", a
 
 test("object_backend - an edit batch is kept in its shard, and the top lists it", async () => {
   const b = object_backend(database());
-  assert.deepStrictEqual(await errno(() => b.open(TOP)), ERRNO_ENOENT);
+  assert.deepStrictEqual(await code(() => b.open(TOP)), ERROR_CODE_NO_ENTRY);
   b.commit(encode_writes(format.OBJECT_EDIT, [CUBE, MARKER]));
   const own = decode_writes(format.OBJECT, await b.open(SHARD));
   assert.deepStrictEqual(own, [CUBE, MARKER]);
@@ -109,8 +120,8 @@ test("object_backend - a shard emptied by its edits has no file, nor a row", asy
   const b = object_backend(db);
   b.commit(encode_writes(format.OBJECT_EDIT, [CUBE]));
   b.commit(encode_writes(format.OBJECT_EDIT, [{ ...CUBE, asset_id: 0 }]));
-  assert.deepStrictEqual(await errno(() => b.open(SHARD)), ERRNO_ENOENT);
-  assert.deepStrictEqual(await errno(() => b.open(TOP)), ERRNO_ENOENT);
+  assert.deepStrictEqual(await code(() => b.open(SHARD)), ERROR_CODE_NO_ENTRY);
+  assert.deepStrictEqual(await code(() => b.open(TOP)), ERROR_CODE_NO_ENTRY);
   assert.deepStrictEqual(db.map.size, 0);
 });
 
@@ -140,10 +151,10 @@ test("object_backend - a refused shard is set aside, its rows of the top with it
   const b = object_backend(db);
   b.commit(encode_writes(format.OBJECT_EDIT, [CUBE]));
   const file = await b.open(SHARD);
-  assert.ok(await b.set_aside(SHARD, 7));
+  await b.set_aside(SHARD, 7);
   assert.deepStrictEqual(db.map.get(`${SHARD}:aside:7`), file);
-  assert.deepStrictEqual(await errno(() => b.open(SHARD)), ERRNO_ENOENT);
-  assert.deepStrictEqual(await errno(() => b.open(TOP)), ERRNO_ENOENT);
+  assert.deepStrictEqual(await code(() => b.open(SHARD)), ERROR_CODE_NO_ENTRY);
+  assert.deepStrictEqual(await code(() => b.open(TOP)), ERROR_CODE_NO_ENTRY);
 });
 
 test("object_backend - a database that refuses sets nothing aside, and throws at no commit", async () => {
@@ -152,7 +163,7 @@ test("object_backend - a database that refuses sets nothing aside, and throws at
   try {
     const b = object_backend(database(true));
     b.commit(encode_writes(format.OBJECT_EDIT, [CUBE]));
-    assert.deepStrictEqual(await b.set_aside(SHARD, 7), false);
+    await assert.rejects(b.set_aside(SHARD, 7));
   } finally {
     console.error = err;
   }

@@ -8,7 +8,12 @@
 //! slab of size classes over its buddy allocator of pages, whose blocks are
 //! aligned to their own size, which bounds fragmentation. The slab borrows
 //! and returns whole runs of pages, so neither level starves while the other
-//! has room.
+//! has room. A native core's memory is the region the heap reserves at the
+//! process's first allocation (`given`), which it sets as the core's memory
+//! (`xpute_link::mem::set`) before `link_init` lays the link, so every
+//! allocation lies in it and every offset fits a u32. There the global
+//! allocator is the process's, every thread's, so the heap is taken under
+//! one lock.
 
 use core::marker::PhantomData;
 use core::sync::atomic::{AtomicUsize, Ordering::Relaxed};
@@ -82,10 +87,21 @@ fn given() -> (usize, usize) {
     (page_up(data_end), core::arch::wasm32::memory_size(0) << 16)
 }
 
-/// A native core's memory is its region, which the native step gives.
+/// A native core's region: the manifest's `mem.bytes`, reserved from the system zeroed, as
+/// a module's memory starts, and set as the core's memory. `.fixed` begins at
+/// its base, as nothing else lies in it.
 #[cfg(not(target_arch = "wasm32"))]
 fn given() -> (usize, usize) {
-    xpute_kit::bug!(ENOSYS)
+    use std::alloc::{GlobalAlloc, Layout, System};
+    use xpute_link::mem::{self, Region};
+    let len = crate::spec::manifest::mem::BYTES;
+    let layout = Layout::from_size_align(len as usize, PAGE_BYTES as usize).ok();
+    // SAFETY: a layout of nonzero size.
+    let base = layout.map_or(core::ptr::null_mut(), |l| unsafe { System.alloc_zeroed(l) });
+    xpute_kit::ensure!(!base.is_null(), ENOMEM, len);
+    mem::set(Region { base, len });
+    let at = base.expose_provenance();
+    (at, at + len as usize)
 }
 
 /// The log2 of a page, the buddy's smallest block.
@@ -118,9 +134,39 @@ impl Range for Span {
     }
 }
 
-/// A native core's heap waits for its region (the native step).
 #[cfg_attr(target_arch = "wasm32", global_allocator)]
 static HEAP: SlabMalloc<Span> = SlabMalloc::new();
+
+/// The heap as a native process's global allocator: the slab is one
+/// thread's, and a process's threads all allocate, so each takes it under
+/// the lock. The region is reserved before the lock is taken, so a failure
+/// to reserve it does not deadlock the panic that reports it.
+#[cfg(not(target_arch = "wasm32"))]
+struct Locked;
+
+#[cfg(not(target_arch = "wasm32"))]
+static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(not(target_arch = "wasm32"))]
+#[global_allocator]
+static NATIVE: Locked = Locked;
+
+// SAFETY: the slab's, each call alone under the lock.
+#[cfg(not(target_arch = "wasm32"))]
+unsafe impl core::alloc::GlobalAlloc for Locked {
+    unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        region();
+        let _held = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // SAFETY: the caller's.
+        unsafe { HEAP.alloc(layout) }
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: core::alloc::Layout) {
+        let _held = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // SAFETY: the caller's.
+        unsafe { HEAP.dealloc(ptr, layout) }
+    }
+}
 
 pub fn stat() -> HeapStat {
     HeapStat {

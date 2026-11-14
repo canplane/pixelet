@@ -1,8 +1,9 @@
 // @xpute/native-runtime/android/build.gradle
 //
-// This is xpute's module on Android (src/main/java/xpute/), and the guest
-// linked with it: the app's guest crate, as the app's package.json
-// `xpute.guest` names it, which the app builds and packs.
+// This is xpute's module on Android (src/main/java/xpute/), and the app's
+// native crate linked with it: the guest with the runtime the app composes
+// around it, as the app's package.json `xpute.guest.native` names it, which
+// the app builds and packs.
 
 import groovy.json.JsonSlurper
 
@@ -29,7 +30,7 @@ android {
     versionCode 1
     versionName "0.1.0"
     // The library Runtime.kt and @xpute/gpu-native-runtime's Gpu.kt load: cargo's name for the crate's.
-    buildConfigField "String", "GUEST", "\"${guest.package.replace('-', '_')}\""
+    buildConfigField "String", "GUEST", "\"${guest.native.replace('-', '_')}\""
   }
   buildFeatures {
     buildConfig true

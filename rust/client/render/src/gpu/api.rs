@@ -883,11 +883,10 @@ fn take_stamps(s: &mut State) -> Option<usize> {
     }
     let (spans, cnt) = s.stamps_read[r];
     let period_ms = f64::from(s.device.map_or(1.0, |d| d.period_ns)) / 1e6;
-    let ticks = read_at(r) + 2;
-    // SAFETY: the read's ticks, in the head after its fence, which stays in place; the host
-    // wrote them before the fence and writes none since.
-    let word = |k: usize| u64::from(unsafe { core::ptr::addr_of!(s.head[k]).read() });
-    let tick = |k: usize| word(ticks + 2 * k) | word(ticks + 2 * k + 1) << 32;
+    // SAFETY: the read's ticks, after its fence and result in its `READ_WORDS`, which stay in
+    // place; the host wrote them before the fence and writes none since.
+    let word = |k: usize| u64::from(unsafe { fence.add(2 + k).read() });
+    let tick = |k: usize| word(2 * k) | word(2 * k + 1) << 32;
     let mut ran = [(0u64, 0u64); PASS_CAP];
     for (k, r) in ran[..cnt].iter_mut().enumerate() {
         let (b, e) = (tick(2 * k), tick(2 * k + 1));

@@ -20,8 +20,8 @@ pub const LINK_TARGET: WitTarget<'static> = WitTarget {
 /// Everything else of xpute's packages follows from their names, each
 /// `xpute:<name>` in `wit/<name>`, and from each side's crate: the guest's
 /// bindings, with the TypeScript beside the link's and the C++ in the C++
-/// core's `abi/`, and the native host's, each in its side's root module,
-/// `src/abi.rs`.
+/// core's `abi/`, and the native host's, in the native runtime that holds the
+/// host's link, each in its side's root module, `src/abi.rs`.
 macro_rules! packages {
     (guest: $g:literal, cpp: $c:literal, native: $n:literal; $($p:ident),*) => {
         /// The root modules of each side's bindings: the guest's and the
@@ -48,7 +48,7 @@ macro_rules! packages {
     };
 }
 
-packages!(guest: "guest/rust", cpp: "cpp/xpute/core", native: "native/host"; clocks, fs, life, stop);
+packages!(guest: "guest/rust", cpp: "cpp/xpute/core", native: "native/runtime/rust"; clocks, fs, life, stop);
 
 /// xpute's data specs: the link's frame, and the errno table.
 pub const DATA_SPECS: [DataSpec; 2] = [

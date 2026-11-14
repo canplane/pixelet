@@ -79,9 +79,9 @@ fn run() -> Result<(), String> {
     walk(&asset_dir, &asset_dir, &mut files)?;
     files.sort_by(|a, b| a.0.cmp(&b.0));
 
-    // A Carto palette entry's top, one whose entry paints to a Carto color, ships drawn toward
-    // that color; the underground's palette entries are no Carto's, and a side, a bottom and a
-    // color are not palette entries.
+    // The top of a ground cube that paints to a Carto color ships drawn toward that color;
+    // the underground's cubes are no Carto's, and a side, a bottom and a placed color have
+    // none.
     let slots = pack::load(&raw_dir.join("cube"), &asset_dir.join("cube"))?;
     let carto = asset::ground_colors()?;
     let toward: BTreeMap<String, u32> = slots

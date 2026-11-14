@@ -22,7 +22,7 @@ fn mul_hi(a: u32, b: u32) -> u32 {
   return (a >> 16u) * (b >> 16u) + (cross.x >> 16u) + (cross.y >> 16u) + (carry >> 16u);
 }
 
-/// `Decor::size`: `variant`'s box, turned `turn` quarter turns.
+/// The port of pxl-spec `decor::Row::size`: `variant`'s box, turned `turn` quarter turns.
 fn decor_size(k: u32, variant: u32, turn: u32) -> vec3<i32> {
   let at = ROW_SIZES + 3u * variant;
   let x = i32(row_word(k, at));
@@ -36,7 +36,7 @@ fn variant_of(k: u32, seed: u32) -> u32 {
   return mul_hi(draw(seed, 0u), row_word(k, ROW_VARIANT_CNT));
 }
 
-/// This is the port of pxl-content `Decor::allows`.
+/// This is the port of pxl-spec `decor::Row::allows`.
 fn allows(k: u32, v: u32) -> bool {
-  return v < 256u && ((row_word(k, ROW_ON + (v >> 5u)) >> (v & 31u)) & 1u) == 1u;
+  return v <= GROUND_ID_MAX && ((row_word(k, ROW_ON + (v >> 5u)) >> (v & 31u)) & 1u) == 1u;
 }

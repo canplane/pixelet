@@ -17,7 +17,7 @@ import {
   tell_life,
   type Trap,
 } from "@xpute/web-runtime";
-import { type RefusedFile, type Snapshot } from "@/abi/overlay.ts";
+import { type Snapshot } from "@/abi/overlay.ts";
 import { GROUND_STATUS_SUCCESS } from "@/abi/overlay.enum.ts";
 import { set_online } from "@/service/origin/online.ts";
 import { log } from "@/service/platform/log.ts";
@@ -54,12 +54,9 @@ import * as storage from "@/service/platform/storage.ts";
 
 /** What the page sends the worker: the page's kept entries, which a worker
  * cannot read, ahead of the core's instantiation (@xpute/web-runtime
- * `Instantiate`); then the files the core refused, as the snapshot names them,
- * which the worker sets aside. */
+ * `Instantiate`). */
 export type ToWorker =
-  | { kind: "entries"; entries: [string, string][] }
-  | Instantiate
-  | { kind: "refused"; files: readonly RefusedFile[] };
+  { kind: "entries"; entries: [string, string][] } | Instantiate;
 
 /** What the worker sends the page: the source's state, a kept key it wrote,
  * the GPU's state, the error the core's instantiation came to, the core's
@@ -132,7 +129,6 @@ export function boot(): void {
     [port],
   );
   watch_snapshot(() => {
-    tell({ kind: "refused", files: cur().refused_files });
     if (boot_state() === BOOT_LOADING && loaded(cur())) set_boot(BOOT_STARTED);
   });
   online.watch(set_online);

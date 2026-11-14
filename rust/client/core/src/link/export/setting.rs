@@ -15,7 +15,7 @@ pub(super) fn set(key: u32, val: u32) -> Result<Result<(), ErrorCode>, Errno> {
     // A change made before the settings' slot is read would be overwritten
     // by the read, so it is refused until then.
     if !are_settings_loaded() {
-        return Ok(Err(ErrorCode::NotLoaded));
+        return Ok(Err(ErrorCode::WouldBlock));
     }
     let key = or_refuse(SettingKey::of(key), Errno::EINVAL)?;
     let changed = settings_mut().set_setting(key, val);

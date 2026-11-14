@@ -20,10 +20,11 @@ use regex::Regex;
 
 /// The crates that address the core's memory by offset, in which an offset becomes a pointer
 /// only through `xpute_link::mem::at` or `Memory::at`.
-const OFF_CRATES: [&str; 4] = [
+const OFF_CRATES: [&str; 5] = [
     "xpute/link/rust/src/",
     "xpute/guest/rust/src/",
     "rust/client/core/src/",
+    "rust/client/runtime/src/",
     "rust/client/render/src/",
 ];
 
@@ -566,41 +567,40 @@ const PIXELET_WORDS: &str = r"(?i)\b(pixelet|pxl[-_]\w+)\b";
 
 /// xpute's order, over its parts rather than a folder's modules: a part is a crate
 /// (XPUTE_CARGO) or a package (XPUTE_WORKSPACE), or one of each, by its name past `xpute-` or
-/// `@xpute/`. The kit names nothing, and the link stands on it. The guest, the hosts and the
-/// runtimes are heads over the link, none naming another. The GPU is a plugin, which none of
-/// xpute's own parts (the kit, the link and the heads) names, and which may name them: its
-/// link stands over the heads, and each of its other parts over that, on its counterpart, in
-/// its head, so of the GPU's parts only the link and a runtime's own may name that runtime.
-/// Over every part, what develops xpute and generates its code is a head of its own, which no
-/// part names and which names only the kit and the links. A part is held by what it ships: its manifest's
-/// dependencies, a dev-dependency left out, and the names its sources write, its tests left
-/// out, which may take the golden records' reader.
+/// `@xpute/`. The kit names nothing, and the link stands on it. The guest and each platform's
+/// runtime stand over the link, and each platform's host over its runtime, as a host runs in
+/// the environment its runtime is; the guest and each platform are heads, none naming
+/// another. The GPU is a plugin, which none of xpute's own parts (the kit, the link and the
+/// heads) names, and which may name them: its link stands over the heads, and each of its
+/// other parts over that, in its counterpart's head. Over every part, what develops xpute and
+/// generates its code is a head of its own, which no part names and which names only the kit
+/// and the links. A part is held by what it ships: its manifest's dependencies, a
+/// dev-dependency left out, and the names its sources write, its tests left out, which may
+/// take the golden records' reader.
 const XPUTE_ORDER: [(&str, u8); 18] = [
     ("kit", 0),
     ("link", 1),
     ("guest", 2),
-    ("web-host", 2),
     ("web-runtime", 2),
-    ("native-host", 2),
     ("native-runtime", 2),
-    ("gpu-link", 3),
-    ("gpu-guest", 4),
-    ("gpu-web-host", 4),
-    ("gpu-native-host", 4),
-    ("gpu-native-runtime", 4),
-    ("golden", 5),
-    ("gen", 5),
-    ("link-gen", 5),
-    ("gen-targets", 5),
-    ("gpu-gen-targets", 5),
-    ("tool", 5),
+    ("web-host", 3),
+    ("native-host", 3),
+    ("gpu-link", 4),
+    ("gpu-guest", 5),
+    ("gpu-web-host", 5),
+    ("gpu-native-host", 5),
+    ("gpu-native-runtime", 5),
+    ("golden", 6),
+    ("gen", 6),
+    ("link-gen", 6),
+    ("gen-targets", 6),
+    ("gpu-gen-targets", 6),
+    ("tool", 6),
 ];
-const XPUTE_HEADS: [&[&str]; 6] = [
+const XPUTE_HEADS: [&[&str]; 4] = [
     &["guest", "gpu-guest"],
-    &["web-host", "gpu-web-host"],
-    &["web-runtime"],
-    &["native-host", "gpu-native-host"],
-    &["native-runtime", "gpu-native-runtime"],
+    &["web-runtime", "web-host", "gpu-web-host"],
+    &["native-runtime", "native-host", "gpu-native-host", "gpu-native-runtime"],
     &["golden", "gen", "link-gen", "gen-targets", "gpu-gen-targets", "tool"],
 ];
 const XPUTE_LAYERS: Order = Order {

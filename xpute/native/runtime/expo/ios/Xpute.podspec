@@ -1,10 +1,11 @@
 # @xpute/native-runtime/ios/Xpute.podspec
 #
-# This is xpute's module on an iPhone (*.swift), and the guest linked with it.
-# The guest is the app's guest crate, as the app's package.json `xpute.guest`
-# names it. The app builds it into this pod's directory, for the configuration
-# and the SDK the app is built as, and the app links from there. Swift imports
-# xpute's C ABI (`import CXpute`).
+# This is xpute's module on an iPhone (*.swift), and the app's native crate
+# linked with it: the guest with the runtime the app composes around it, as
+# the app's package.json `xpute.guest.native` names it. The app builds it
+# into this pod's directory, for the configuration and the SDK the app is
+# built as, and the app links from there. Swift imports xpute's C ABI
+# (`import CXpute`).
 
 require 'json'
 
@@ -13,13 +14,13 @@ app = File.expand_path('..', Pod::Config.instance.installation_root.to_s)
 guest = JSON.parse(File.read(File.join(app, 'package.json'))).dig('xpute', 'guest')
 raise "#{app}/package.json names no xpute.guest" unless guest
 # This is cargo's name for the crate's library.
-lib = guest['package'].tr('-', '_')
+lib = guest['native'].tr('-', '_')
 include = '"$(PODS_CONFIGURATION_BUILD_DIR)/Xpute/include"'
 
 Pod::Spec.new do |s|
   s.name = 'Xpute'
   s.version = '0.1.0'
-  s.summary = "xpute's native module, and the guest linked with it."
+  s.summary = "xpute's native module, and the app's native crate linked with it."
   s.homepage = 'https://github.com/canplane/xpute'
   s.license = { type: 'MIT' }
   s.author = 'xpute'

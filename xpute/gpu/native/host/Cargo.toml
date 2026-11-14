@@ -16,8 +16,8 @@ path = "src/lib.rs"
 xpute-gpu-link.workspace = true
 xpute-link.workspace = true
 xpute-kit.workspace = true
-# It serves the GPU on xpute-native-host's link.
-xpute-native-host.workspace = true
+# It serves the GPU on xpute-native-runtime's link, on the guest's thread.
+xpute-native-runtime.workspace = true
 # wgpu runs the records, its serde names read the spec's, and an external
 # image is decoded here where the web asks its browser.
 wgpu = { version = "30", default-features = false, features = ["metal", "vulkan", "wgsl", "serde"] }

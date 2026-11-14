@@ -383,8 +383,9 @@ The world lives in one Rust **core**, `pxl-core`, which draws through
 end of the xpute interface, into one image, and a **host** around it gives the
 core one memory, a GPU, its files and its time, and nothing else reaches in. On
 a page the image is a WebAssembly module and the host is TypeScript in a
-worker; on a device it is a library linked into the app and the host is that
-TypeScript with Rust beside it. The core cannot tell which, and does not need
+worker; on a device it is linked with the runtime the app composes around it,
+`pxl-runtime`, into a library the app links, and the host is Rust on the
+core's thread, the UI's TypeScript across it. The core cannot tell which, and does not need
 to, so the same world runs everywhere. xpute's own documents describe that
 interface; this one is about what pixelet does over it.
 
@@ -510,6 +511,7 @@ thing runs:
   rust/client/engine/   pxl-engine, what the CPU and the GPU both compute
   rust/client/content/  pxl-content, the content: decor, caves, clouds
   rust/client/core/     pxl-core, the core
+  rust/client/runtime/  pxl-runtime, the core with its runtime on a device
   rust/client/render/   pxl-render, the renderer and its WGSL
   rust/server/          the servers and the bakes, one crate a folder
   ts/client/            the app: the UI, its services and the runtime

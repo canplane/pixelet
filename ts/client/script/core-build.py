@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
-# Builds an app's core crate for a device as the app is built, and the app
+# Builds an app's native crate for a device as the app is built, and the app
 # links what it leaves: so the core in an app is always the tree's, built for
 # the configuration and the system the app is.
 #
-# The app names its core, xpute's guest, in its package.json:
+# The app names its core, xpute's guest, in its package.json, and the crate a
+# device links, the guest with the runtime the app composes around it:
 #
 #   "xpute": { "guest": {
 #     "workspace": "<the cargo workspace, from the app>",
-#     "package": "<the crate>",
+#     "package": "<the guest's crate>",
+#     "native": "<the crate a device links>",
 #     "profile": { "debug": "<cargo profile>", "release": "<cargo profile>" },
 #     "args": { "debug": [...], "release": [...] }
 #   } }
 #
 # `profile` defaults to cargo's dev and release, `args` (more of cargo's
 # arguments, features among them) to none. The page's build (wasm-build.py)
-# reads the same `workspace`, `package` and `args`, and keeps profiles of its
-# own.
+# builds `package` with the same `workspace` and `args`, and keeps profiles of
+# its own.
 #
 # Two builds run it. Xcode, before it compiles the platform module
 # (modules/platform/ios/PxlPlatform.podspec's script phase), with every input in its environment:
@@ -27,7 +29,7 @@
 #
 # An iPhone links a static library; an Android app loads a shared one. Each
 # is asked of cargo by name, so a build makes only the library its device
-# takes, whatever crate types the core declares.
+# takes, whatever crate types the crate declares.
 #
 # Xcode and Gradle name no Python of their own, so this runs under the
 # system's python3, which on macOS is 3.9: it keeps to what 3.9 reads.
@@ -130,7 +132,7 @@ def main():
     app = Path(args.get("app") or fail("--app is not given"))
     guest = json.loads((app / "package.json").read_text()).get("xpute", {}).get("guest") or fail(f"{app}/package.json names no xpute.guest")
     workspace = (app / guest["workspace"]).resolve()
-    package = guest["package"]
+    package = guest["native"]
     lib = package.replace("-", "_")
     build = gradle(args, lib) if "--android" in argv else xcode(lib)
     which = "release" if build["release"] else "debug"

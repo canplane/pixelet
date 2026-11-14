@@ -16,6 +16,7 @@ use pxl_engine::seed::node_seed;
 use pxl_spec::brick::BRICK_SHIFT;
 use pxl_spec::share::EIGHTH_CNT;
 use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, UNIT_ZOOM};
+use pxl_spec::space::hierarchy::tree::child_idx;
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::halve::{self, weight};
@@ -90,7 +91,7 @@ pub fn cnt_of([seed, chance, root]: [u32; 3], zoom: Zoom, b: [i32; 2]) -> u32 {
         // theirs down by, each half along by a weight of its own.
         let mut draws = SplitMix32::new(node_seed(seed ^ SPLIT_TAG, (z, at(z))));
         let c = at(z + 1);
-        let quarter = (c[0] & 1 | (c[1] & 1) << 1) as usize;
+        let quarter = child_idx(c);
         let cap = 1u32 << (2 * (LEAF_CELL_ZOOM - z - 1));
         let cap = if cap > 0xffff { 0xffff } else { cap };
         let [across, along, other] = [draws.next_u32(), draws.next_u32(), draws.next_u32()];

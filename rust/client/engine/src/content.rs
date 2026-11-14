@@ -43,7 +43,7 @@ pub(crate) struct Sample;
 
 #[cfg(test)]
 impl Sample {
-    /// A ground entry the tests lay.
+    /// A ground cube the tests lay.
     pub(crate) const GROUND: u32 = 66;
 }
 

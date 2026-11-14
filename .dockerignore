@@ -10,6 +10,7 @@
 !xpute/kit/rust
 !xpute/link/rust
 !xpute/guest/rust
+!xpute/native/runtime/rust
 !xpute/native/host
 !xpute/gpu/link/rust
 !xpute/gpu/guest/rust

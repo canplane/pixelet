@@ -1,12 +1,11 @@
 // @xpute/gpu-native-runtime/ios/CXputeGpu/xpute_gpu.h
 
 // This is the C ABI of the GPU's runtime, for a core linked into its runtime's
-// own process (xpute.h); xpute-gpu-guest's `native_abi!` exports it. Each call runs
-// on the core's thread while the caller waits. The runtime runs the core's
-// stream as each entry returns, and asks for an entry when a request it
-// holds completes. A device the system loses is let go: the windows bound stay
-// bound, the app is told (`xpute_gpu_lost_on`), and the next
-// `xpute_gpu_open` opens a new device, which binds them again.
+// own process (xpute.h); xpute-gpu-guest's `native_abi!` exports it. The
+// runtime runs the core's stream as each entry returns, and asks for an entry
+// when a request it holds completes. A device the system loses is let go: the
+// windows bound stay bound, the app is told (`xpute_gpu_lost_on`), and the
+// next `xpute_gpu_open` opens a new device, which binds them again.
 
 #pragma once
 
@@ -29,11 +28,11 @@ void xpute_gpu_lost_on(void (*f)(void));
 // Binds the core's surface `handle` to `window`: on an Apple platform a
 // view's CAMetalLayer, on Android a view's ANativeWindow, live at the call. The
 // runtime holds a reference of its own on the window, retained or acquired,
-// until the window is unbound. Returns 0, or -ENODEV (-19) before
-// `xpute_gpu_open` is first called, -EINVAL (-22) when the system makes no
-// surface of the window, and -EBUSY (-16) when a newer handle has bound the
-// slot since. While no device is open the window is kept, and the next device
-// binds it.
+// until the window is unbound. It binds on the GPU's thread and returns at
+// once: 0, or -EINVAL (-22) for a null window. Where the system makes no
+// surface of the window, or a newer handle has bound the slot since, it is
+// logged and the window let go. While no device is open the window is kept,
+// and the next device binds it.
 int32_t xpute_gpu_surface_bind(uint32_t handle, void *window);
 
 // Lets the window `handle` bound go: its surface, if `handle` is still the one

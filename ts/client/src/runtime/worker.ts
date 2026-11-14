@@ -9,7 +9,7 @@
  * core's files and GPU among them, and the UI's stand-ins, enters the core,
  * and serves the link to the UI across the port (@xpute/link remote.ts), the
  * canvases the UI gives going to the GPU. The files are here, so the source
- * is declared and the refused files are set aside here too.
+ * is declared here too.
  */
 
 import { type Link, type Sender, serve, wait } from "@xpute/link";
@@ -22,8 +22,8 @@ import { LIMIT } from "@/abi/perf.spec.ts";
 import * as source from "@/abi/source.ts";
 import type { ToPage, ToWorker } from "@/runtime/boot.ts";
 import { set_online } from "@/service/origin/online.ts";
-import { changed, serve_files } from "@/service/sys/fs/file.ts";
-import { follow_refused_files, path_of } from "@/service/sys/fs/refusal.ts";
+import { serve_files } from "@/service/sys/fs/file.ts";
+import { serve_objects } from "@/service/sys/fs/object.ts";
 import { declare_source, source_decl, source_state, watch_source } from "@/service/sys/fs/source.ts";
 import { set_storage } from "@/service/sys/fs/storage.ts";
 import { serve_text } from "@/service/core/text.ts";
@@ -41,8 +41,6 @@ onmessage = ({ data: m }: MessageEvent<ToWorker>) => {
       return keep(m.entries);
     case "instantiate":
       return void start(m);
-    case "refused":
-      return follow_refused_files(m.files, (f) => changed(path_of(f)));
   }
 };
 
@@ -67,6 +65,7 @@ async function start(m: Instantiate): Promise<void> {
   serve_vsync(link);
   serve_text(link);
   serve_files(link);
+  serve_objects(link);
   // The page's host stages its writes in the chunks a device's does
   // (spec/client/render/api.json `device`), and in a build made for
   // measuring says what runs slower than perf.json's LIMIT.SLOW_MS.

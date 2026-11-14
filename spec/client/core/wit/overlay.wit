@@ -2,7 +2,6 @@ package pxl:core@0.1.0;
 
 // What is drawn over the world: the core's state, told when it changes.
 interface overlay {
-  use xpute:link/types@0.1.0.{token};
 
   enum ground-status { idle, loading, success }
   enum sensor-status { idle, loading, ready, error, unavailable }
@@ -54,11 +53,6 @@ interface overlay {
     area: bool,
   }
 
-  // A file the core refused, by the path it opened it at.
-  record refused-file {
-    path: list<token>,
-  }
-
   // What the UI shows of the core, replaced whole when it changes.
   record snapshot {
     pivot: pivot-state,
@@ -80,7 +74,6 @@ interface overlay {
     division: list<division-part>,
     // The surfaces a character is drawn on.
     character-surfaces: list<u32>,
-    refused-files: list<refused-file>,
     // Why the server does not answer the world's reads now.
     stall: option<message>,
     // How much of what the renderer makes before its first frame is made, 0

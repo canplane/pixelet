@@ -27,7 +27,6 @@ const INIT: Snapshot = {
   settings: new Uint32Array(),
   division: [],
   character_surfaces: new Uint32Array(),
-  refused_files: [],
   stall: null,
   renderer_progress: 0,
   area_progress: 0,

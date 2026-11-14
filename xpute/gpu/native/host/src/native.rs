@@ -2,7 +2,7 @@
 
 //! This is the GPU's host for a guest on a native device, as web.ts is a
 //! page's: the host serves `gpu` and the guest's `device` (gpu/wit/gpu.wit)
-//! on xpute-native-host's link (`serve`), and binds the platform's windows to
+//! on xpute-native-runtime's link (`serve`), and binds the platform's windows to
 //! the guest's surfaces (`bind`); `vsync` is vsync.rs's. The device, the
 //! windows and everything run on them live on a thread of their own, the
 //! GPU's, since a present waits on the frame before it and would hold the
@@ -14,7 +14,7 @@
 //! each run and wakes the GPU's thread as the work lands (`poller`), as a
 //! browser fires them on a page, while the GPU's thread goes on. What the GPU
 //! answers reaches the guest's thread as a task, by the request's job id
-//! (xpute-native-host `job`, `done`). A device the system loses is let go with
+//! (xpute-native-runtime `job`, `done`). A device the system loses is let go with
 //! the block it was lent, the guest is told (`device.lost`), and the platform
 //! too (`lost_on`); the guest asks it ready again, as a page asks for a new
 //! device, and the next device binds every window again. There is one host a
@@ -30,8 +30,8 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use xpute_link::abi::types::{Lent, Token};
 use xpute_link::{answer, Return};
-use xpute_native_host::link;
-use xpute_native_host::{done, job};
+use xpute_native_runtime::link;
+use xpute_native_runtime::{done, job};
 
 use super::abi;
 use super::vsync::Vsync;
@@ -68,7 +68,7 @@ impl Window {
             #[cfg(target_vendor = "apple")]
             CFRetain(window.as_ptr());
             #[cfg(target_os = "android")]
-            xpute_native_host::jni::ndk::ANativeWindow_acquire(window.as_ptr().cast());
+            xpute_native_runtime::jni::ndk::ANativeWindow_acquire(window.as_ptr().cast());
         }
         Window(window)
     }
@@ -82,7 +82,7 @@ impl Drop for Window {
             #[cfg(target_vendor = "apple")]
             CFRelease(self.0.as_ptr());
             #[cfg(target_os = "android")]
-            xpute_native_host::jni::ndk::ANativeWindow_release(self.0.as_ptr().cast());
+            xpute_native_runtime::jni::ndk::ANativeWindow_release(self.0.as_ptr().cast());
         }
     }
 }
@@ -350,7 +350,7 @@ fn open(args: Arc<OpenArgs>) -> Result<(), OpenError> {
         device,
         queue,
     } = super::open(&d.instance, &args.ask).inspect_err(|e| {
-        xpute_native_host::log(&format!("[gpu] the device did not open: {e:?}"));
+        xpute_native_runtime::log(&format!("[gpu] the device did not open: {e:?}"));
     })?;
     d.poller = Some(poller(device.clone()));
     let host = GpuHost::new(
@@ -373,7 +373,7 @@ fn open(args: Arc<OpenArgs>) -> Result<(), OpenError> {
                 Ok(surface) => {
                     host.bind(*handle, surface);
                 }
-                Err(e) => xpute_native_host::log(&format!(
+                Err(e) => xpute_native_runtime::log(&format!(
                     "[gpu] no surface of surface {handle:#x}'s window on this device: {e}"
                 )),
             }
@@ -441,10 +441,10 @@ pub unsafe fn bind(handle: u32, window: NonNull<c_void>) {
         if let Some((d, h)) = d.and_then(|d| d.host.as_mut().map(|h| (&d.instance, h))) {
             // SAFETY: the window `Window` holds.
             let Ok(surface) = (unsafe { d.create_surface_unsafe(target(window.0)) }) else {
-                return xpute_native_host::log(&format!("[gpu] no surface of {handle:#x}'s window"));
+                return xpute_native_runtime::log(&format!("[gpu] no surface of {handle:#x}'s window"));
             };
             if !h.bind(handle, surface) {
-                return xpute_native_host::log(&format!("[gpu] {handle:#x} is bound over"));
+                return xpute_native_runtime::log(&format!("[gpu] {handle:#x} is bound over"));
             }
         }
         drop(guard);

@@ -8,10 +8,11 @@
 # pixelet's content, pxl-global, the one global the core's state lives in,
 # and over them two crates, pxl-render and pxl-core, and
 # pxl-core is its artifact: one `xpute_guest::link!` makes it the WebAssembly module the
-# main thread and each worker instantiate for themselves, and the library
-# linked into a device's app, which draws with wgpu where the page's host
-# draws with the browser's WebGPU. The form is xpute's for its target
-# (xpute-guest's wasm, xpute-native-host and xpute-gpu-native-host on a device). The server end
+# main thread and each worker instantiate for themselves, and the guest
+# linked into a device's app. pxl-runtime is that app's library: the core
+# with the runtime it composes on the core's thread (xpute-native-runtime,
+# xpute-native-host and xpute-gpu-native-host), which draws with wgpu where
+# the page's host draws with the browser's WebGPU. The server end
 # is native: pxl-geo and pxl-api over
 # pxl-server, pxl-geo-bake beside them for what is baked rather than answered,
 # and pxl-geo-spec where the two geo halves read the same tables.
@@ -33,6 +34,7 @@ members = [
   "client/content",
   "client/render",
   "client/core",
+  "client/runtime",
   "server/common",
   "server/geo-spec",
   "server/geo",
@@ -61,6 +63,7 @@ xpute-link = { path = "../xpute/link/rust" }
 xpute-guest = { path = "../xpute/guest/rust" }
 xpute-gpu-link = { path = "../xpute/gpu/link/rust" }
 xpute-gpu-guest = { path = "../xpute/gpu/guest/rust" }
+xpute-native-runtime = { path = "../xpute/native/runtime/rust" }
 xpute-native-host = { path = "../xpute/native/host" }
 xpute-gpu-native-host = { path = "../xpute/gpu/native/host" }
 xpute-golden = { path = "../xpute/dev/golden/rust" }

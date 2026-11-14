@@ -2120,12 +2120,9 @@ dependencies = [
  "xpute-golden",
  "xpute-gpu-guest",
  "xpute-gpu-link",
- "xpute-gpu-native-host",
  "xpute-guest",
  "xpute-kit",
  "xpute-link",
- "xpute-native-host",
- "zstd 0.13.3",
 ]
 
 [[package]]
@@ -2208,6 +2205,22 @@ dependencies = [
  "xpute-guest",
  "xpute-kit",
  "xpute-link",
+]
+
+[[package]]
+name = "pxl-runtime"
+version = "0.0.0"
+dependencies = [
+ "pxl-core",
+ "pxl-render",
+ "pxl-spec",
+ "xpute-gpu-link",
+ "xpute-gpu-native-host",
+ "xpute-kit",
+ "xpute-link",
+ "xpute-native-host",
+ "xpute-native-runtime",
+ "zstd 0.13.3",
 ]
 
 [[package]]
@@ -3705,7 +3718,7 @@ dependencies = [
  "xpute-gpu-link",
  "xpute-kit",
  "xpute-link",
- "xpute-native-host",
+ "xpute-native-runtime",
  "zune-jpeg",
 ]
 
@@ -3738,6 +3751,15 @@ dependencies = [
 
 [[package]]
 name = "xpute-native-host"
+version = "0.1.0"
+dependencies = [
+ "xpute-kit",
+ "xpute-link",
+ "xpute-native-runtime",
+]
+
+[[package]]
+name = "xpute-native-runtime"
 version = "0.1.0"
 dependencies = [
  "jni-sys 0.3.1",

@@ -1,9 +1,9 @@
 // pxl-geo-bake/terrain/pipeline/overture/policy.rs
 
-//! Overture Buildings, Transportation and Base rows to the OpenStreetMap
-//! Carto palette entry each paints (gravitystorm/openstreetmap-carto 1cc4b89). An
-//! Overture class is the value of the OSM tag it comes from, so it takes the
-//! palette entry, the layer and the `feature` Carto gives that tag (`landcover.mss`,
+//! Overture Buildings, Transportation and Base rows to the ground cube each paints, as
+//! OpenStreetMap Carto paints them (gravitystorm/openstreetmap-carto 1cc4b89). An
+//! Overture class is the value of the OSM tag it comes from, so it takes the cube, the
+//! layer and the `feature` Carto gives that tag (`landcover.mss`,
 //! `water.mss`, `buildings.mss`, `roads.mss`, `project.mml`); a class Carto
 //! draws no fill for paints nothing, and the land under it shows.
 
@@ -20,8 +20,8 @@ use crate::terrain::pipeline::overture::width::{carto_u, waterway_width, width_u
 use crate::terrain::repository::{BaseRow, BuildingRow};
 use crate::wkb::wkb_to_geometries;
 
-/// A way's palette entry: Carto's `highway` and `railway` values, its white roads one
-/// palette entry told apart by width, `path` and `steps` footways.
+/// A way's ground asset id: Carto's `highway` and `railway` values, its white roads one
+/// asset id told apart by width, `path` and `steps` footways.
 pub(crate) fn segment_type(subtype: &str, class: Option<&str>) -> GroundId {
     let c = class.unwrap_or("");
     if subtype == "rail" {
@@ -63,7 +63,7 @@ const MAJOR_BUILDING_CLASSES: [&str; 9] = [
     "train_station",
 ];
 
-/// What a Base row paints: its palette entry, Carto's layer, and Carto's `feature`.
+/// What a Base row paints: its ground asset id, Carto's layer, and Carto's `feature`.
 type Paint = (GroundId, Layer, &'static str);
 
 /// `landuse`, `leisure`, `amenity` and the like, as Overture's land use

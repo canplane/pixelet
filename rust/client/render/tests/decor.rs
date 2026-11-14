@@ -287,8 +287,15 @@ impl DecorQuery for Generating<'_, '_> {
         f.from()
     }
 
-    fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3]) -> u32 {
-        self.ask(Some(f), zoom, c)
+    /// None where the read lacks: no clip level holds its column, inside the service area,
+    /// past which the world answers the earth (world.wgsl `ground_cell`).
+    fn asset(&mut self, f: &Self::ColumnSurface, zoom: Zoom, c: [i32; 3]) -> Option<u32> {
+        let v = self.ask(Some(f), zoom, c);
+        let wrapped = wrap_idx(zoom, c[0]);
+        let past = area::Shard::UNKNOWN
+            .at(&self.w, (zoom, [wrapped, c[1]]))
+            .past();
+        (past || !self.last_lacks).then_some(v)
     }
 
     fn edited(&mut self, zoom: Zoom, c: [i32; 3]) -> u32 {
@@ -346,7 +353,7 @@ fn stand(q: &mut Generating, j: u32, cell_zoom: Zoom, leaf: [i32; 2]) -> (u32, u
         q.claims.push(q.last_decor.get());
     }
     q.tally.add(
-        "box: a column not held takes it",
+        "read: refused, its last read of a column not held",
         !generates && q.last_lacks,
     );
     q.tally.add("record: no footing", !has_footing);
@@ -1088,8 +1095,9 @@ fn rounds(
                 generation::EVERY,
             )],
             4 => vec![([0, leaf[1] - 3, 1 << 24, leaf[1] + 3], generation::EVERY)],
-            // A box over a brick filled at clip level 22 alone, which no candidate at a finer
-            // level reads.
+            // A box over a brick filled at clip level 22, which reaches the finer levels'
+            // candidates within `READ_REACH` of it at their own scale, as their reads may fall
+            // to it (`generation::reaches`).
             5 => {
                 let k = brick::BRICK_SHIFT + LEAF_CELL_ZOOM - 22;
                 let q = [leaf[0] >> k, leaf[1] >> k];
@@ -1414,7 +1422,8 @@ fn hand_decor_answers_as_placement() {
     }
     assert_eq!(tally.0["words differing"], 0);
     // A box's column is asked from its lowest cell up. On a column no clip level holds, that
-    // cell reads void, and no decor stands on void, so the ask never reaches an edit there.
+    // cell's read lacks and refuses the candidate, and no decor stands on void, so the ask
+    // never reaches an edit there.
     assert!(ROWS.iter().all(|d| !d.allows(Sentinel::Void as u32)));
     assert_eq!(tally.0["edit: asked over a column not held"], 0);
     // A decor stands no coarser than two zooms over the leaves. There the ground's top, the

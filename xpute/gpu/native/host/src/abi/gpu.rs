@@ -79,7 +79,7 @@ impl _rt::Object for _Object {
                                         .data
                                         .as_ref()
                                         .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
-                                )
+                                );
                             }),
                         ),
                     );
@@ -129,7 +129,7 @@ impl _rt::Object for _DeviceObject {
                                         .data
                                         .as_ref()
                                         .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
-                                )
+                                );
                             }),
                         ),
                     );
@@ -163,7 +163,7 @@ impl _rt::Object for _DeviceObject {
                                     .data
                                     .as_ref()
                                     .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
-                            )
+                            );
                         }),
                     ));
                     _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
@@ -184,7 +184,7 @@ impl _rt::Object for _DeviceObject {
                                     .data
                                     .as_ref()
                                     .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
-                            )
+                            );
                         }),
                     ));
                     _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
@@ -206,5 +206,5 @@ mod _rt {
     pub use xpute_kit::status::errno::Errno;
     pub use xpute_link::abi::types::Lent;
     pub use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Return, Tag};
-    pub use xpute_native_host::link;
+    pub use xpute_native_runtime::link;
 }

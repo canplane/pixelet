@@ -27,6 +27,7 @@ pub mod symbol;
 
 pub use id::AssetId;
 
+use crate::ground::GroundId;
 use crate::space::coord::aabb::Aabb;
 use crate::space::coord::zoom::{units, UNIT_ZOOM};
 use catalog::{model_extent, Catalog};
@@ -172,7 +173,7 @@ impl decor::Row {
 
     /// Whether the ground generates it on a cell of `value`: an asset id it stands on.
     pub const fn allows(&self, val: u32) -> bool {
-        val < 256 && self.on[(val >> 5) as usize] >> (val & 31) & 1 == 1
+        val <= GroundId::MAX as u32 && self.on[(val >> 5) as usize] >> (val & 31) & 1 == 1
     }
 }
 

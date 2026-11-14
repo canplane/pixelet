@@ -7,10 +7,7 @@
 /// `reaches`: whether box `b` of the frame's, in leaf cells at `zoom`, reaches what a candidate
 /// in `at` reads, in leaf cells of the clip level at `cell_zoom`.
 fn reaches(b: vec4<i32>, zoom: u32, cell_zoom: u32, at: vec4<i32>) -> bool {
-  if (zoom != EVERY && zoom < cell_zoom) {
-    return false;
-  }
-  let s = LEAF_CELL_ZOOM - select(zoom, cell_zoom, zoom == EVERY);
+  let s = LEAF_CELL_ZOOM - max(zoom, cell_zoom);
   let r = READ_REACH << s;
   let low = ((at.xy >> vec2<u32>(s)) << vec2<u32>(s)) - r;
   let high = ((((at.zw - 1i) >> vec2<u32>(s)) + 1i) << vec2<u32>(s)) + r;

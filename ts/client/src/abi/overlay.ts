@@ -12,7 +12,6 @@ import {
 } from "./overlay.enum.ts";
 import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
 import { MarshalError } from "@xpute/kit/status/error.ts";
-import { type Token, load_Token, store_Token } from "@xpute/link/abi/types.ts";
 import { Lift, type Lower } from "@xpute/link/cabi.ts";
 import {
   type Handle,
@@ -205,29 +204,6 @@ export function load_DivisionPart(r: Lift, at: number): DivisionPart {
   };
 }
 
-export interface RefusedFile {
-  path: Token[];
-}
-
-export const REFUSED_FILE_SZ = 8;
-export const REFUSED_FILE_ALIGN = 4;
-
-export function store_RefusedFile(w: Lower, at: number, v: RefusedFile): void {
-  {
-    const b0 = w.list(at + 0, v.path.length, 12, 4);
-    if (b0 !== null)
-      v.path.forEach((x0, i0) => {
-        store_Token(w, b0 + i0 * 12, x0);
-      });
-  }
-}
-
-export function load_RefusedFile(r: Lift, at: number): RefusedFile {
-  return {
-    path: r.map(at + 0, 12, 4, (at) => load_Token(r, at)),
-  };
-}
-
 export interface Snapshot {
   pivot: PivotState;
   location: LocationState;
@@ -241,13 +217,12 @@ export interface Snapshot {
   settings: Uint32Array<ArrayBuffer>;
   division: DivisionPart[];
   character_surfaces: Uint32Array<ArrayBuffer>;
-  refused_files: RefusedFile[];
   stall: Message | null;
   renderer_progress: number;
   area_progress: number;
 }
 
-export const SNAPSHOT_SZ = 120;
+export const SNAPSHOT_SZ = 112;
 export const SNAPSHOT_ALIGN = 8;
 
 export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
@@ -265,26 +240,24 @@ export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
   w.bool(at + 64, v.over_marker);
   w.arr(at + 68, v.settings);
   {
-    const b0 = w.list(at + 76, v.division.length, 16, 4);
+    const b0 = w.list(
+      at + 76,
+      v.division.length,
+      DIVISION_PART_SZ,
+      DIVISION_PART_ALIGN,
+    );
     if (b0 !== null)
       v.division.forEach((x0, i0) => {
-        store_DivisionPart(w, b0 + i0 * 16, x0);
+        store_DivisionPart(w, b0 + i0 * DIVISION_PART_SZ, x0);
       });
   }
   w.arr(at + 84, v.character_surfaces);
-  {
-    const b0 = w.list(at + 92, v.refused_files.length, 8, 4);
-    if (b0 !== null)
-      v.refused_files.forEach((x0, i0) => {
-        store_RefusedFile(w, b0 + i0 * 8, x0);
-      });
-  }
   if (v.stall !== null) {
-    w.u8(at + 100, 1);
-    w.u8(at + 100 + 1, v.stall);
+    w.u8(at + 92, 1);
+    w.u8(at + 92 + 1, v.stall);
   }
-  w.f64(at + 104, v.renderer_progress);
-  w.f64(at + 112, v.area_progress);
+  w.f64(at + 96, v.renderer_progress);
+  w.f64(at + 104, v.area_progress);
 }
 
 export function load_Snapshot(r: Lift, at: number): Snapshot {
@@ -299,12 +272,13 @@ export function load_Snapshot(r: Lift, at: number): Snapshot {
     zooming: r.bool(at + 63),
     over_marker: r.bool(at + 64),
     settings: r.arr(at + 68, Uint32Array),
-    division: r.map(at + 76, 16, 4, (at) => load_DivisionPart(r, at)),
+    division: r.map(at + 76, DIVISION_PART_SZ, DIVISION_PART_ALIGN, (at) =>
+      load_DivisionPart(r, at),
+    ),
     character_surfaces: r.arr(at + 84, Uint32Array),
-    refused_files: r.map(at + 92, 8, 4, (at) => load_RefusedFile(r, at)),
-    stall: r.case(at + 100, 2) === 0 ? null : load_Message(r, at + 100 + 1),
-    renderer_progress: r.f64(at + 104),
-    area_progress: r.f64(at + 112),
+    stall: r.case(at + 92, 2) === 0 ? null : load_Message(r, at + 92 + 1),
+    renderer_progress: r.f64(at + 96),
+    area_progress: r.f64(at + 104),
   };
 }
 

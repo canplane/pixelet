@@ -31,5 +31,21 @@ pub fn outputs() -> Result<Vec<Output>, String> {
         cpp: None,
         side: Some(Side::Guest("xpute/guest/rust")),
     };
-    wit_outputs(&root, &target, &guest)
+    let mut out = wit_outputs(&root, &target, &guest)?;
+    // The same, the host's side on a device, which pxl-runtime serves of
+    // pixelet's own interfaces (rust/client/runtime/src/text.rs) on
+    // xpute-native-runtime's link.
+    let native = peers(
+        xpute_gen_targets::NATIVE_HOST_TARGETS,
+        &xpute_gpu_gen_targets::NATIVE_HOST_TARGET,
+    );
+    let target = WitTarget {
+        wit: "spec/client/core/wit",
+        rs: Some("rust/client/runtime/src/abi.rs"),
+        ts: None,
+        cpp: None,
+        side: Some(Side::Host("xpute/native/runtime/rust")),
+    };
+    out.extend(wit_outputs(&root, &target, &native)?);
+    Ok(out)
 }

@@ -20,7 +20,7 @@ pub(super) fn chat(text: String) -> Result<(), Errno> {
 
 /// Sets what a surface draws until it closes: the world, or one group's
 /// companion character alone, which a second command replaces. It answers
-/// `not-open` when the surface is not open and `busy` when the surface already
+/// `bad-descriptor` when the surface is not open and `busy` when the surface already
 /// draws the other content, and is refused with EINVAL when the character's
 /// fields are missing for a character or given for the world.
 pub(super) fn draw(
@@ -30,7 +30,7 @@ pub(super) fn draw(
     bg: Option<u32>,
 ) -> Result<Result<(), ErrorCode>, Errno> {
     let Some(role) = surface::surface(surface_at).map(|open| open.role) else {
-        return Ok(Err(ErrorCode::NotOpen));
+        return Ok(Err(ErrorCode::BadDescriptor));
     };
     match content {
         SceneContent::World => {

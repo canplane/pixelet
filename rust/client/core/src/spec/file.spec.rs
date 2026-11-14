@@ -46,10 +46,10 @@ pub mod path {
         pub const ID: i32 = 5;
     }
     /// The placed objects, their source's: a shard, read, (OBJECT, quadkey), its
-    /// `format.OBJECT` first; the top of their tree, read, (OBJECT, TOP); and their edits,
-    /// written, (OBJECT, EDIT) (domain/layer/object/repository.rs). A shard with none has no
-    /// file. The source keeps the shards and the top and applies the edits; which source, a
-    /// mock or a server, is the client's.
+    /// `format.OBJECT` first; and the top of their tree, read, (OBJECT, TOP)
+    /// (domain/layer/object/repository.rs). A shard with none has no file. The source keeps
+    /// the shards and the top and applies the edits the core sends it (pxl:core object
+    /// `apply`); which source, a mock or a server, is the client's.
     pub mod object {
         pub const ID: i32 = 6;
         /// The top of the tree, read: what each node at `SHARD_ZOOM` holding objects folds to
@@ -57,11 +57,6 @@ pub mod path {
         /// it from the shards as an edit lands; none is no shard holding any.
         pub mod top {
             pub const ID: i32 = 0;
-        }
-        /// Edits, written, never read: a batch of writes in the order they were made (`write`),
-        /// its `format.OBJECT_EDIT` first, which the source applies to its shards.
-        pub mod edit {
-            pub const ID: i32 = 1;
         }
     }
 }
@@ -108,11 +103,11 @@ pub mod top {
 }
 
 /// Each kept file's format, the first byte of what it holds: a stored file's by its
-/// name, a shard's file as OBJECT, the top and an edit batch as theirs. The
-/// core reads a file of its format and refuses any other, reading none of it and never
-/// writing over it, as a driver refuses a volume whose superblock it does not know; what
-/// to do with the file is the client's. Bump one whenever a change makes an older file mean
-/// something other than it meant when it was written.
+/// name, a shard's file as OBJECT, the top as its own; and an edit batch's, sent rather
+/// than kept, as its own. The core reads a file of its format and refuses any other,
+/// reading none of it and never writing over it, as a driver refuses a volume whose
+/// superblock it does not know, and sets it aside (fs `set-aside`). Bump one whenever a
+/// change makes an older file mean something other than it meant when it was written.
 pub mod format {
     pub const SETTINGS: u8 = 1;
     pub const OBJECT: u8 = 19;

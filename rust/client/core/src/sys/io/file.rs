@@ -17,9 +17,9 @@
 //! `path`). It is a format byte (file.json `format`) followed by what the
 //! settings keep, and it is read whole and written whole. A file of another
 //! format, one its backend cannot read as bytes, or one larger than any heap
-//! is refused: it reads as nothing, it is never written over, and it is named
-//! to the client. A refused file is watched until it changes, as the client
-//! sets it aside, and is read again (`watch`).
+//! is refused: it reads as nothing, it is never written over, and its owner
+//! sets it aside (fs `set-aside`), after which the settings write it from
+//! their next keep on (`set_aside`).
 //!
 //! A read lends its buffer, which its caller makes once the file's size is
 //! known (`read_whole`): a body slot (sys/io/body.rs) or a heap buffer
@@ -33,6 +33,7 @@ use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 use pxl_spec::space::layer::demand::GROUND_DEMAND_TILE_CAP;
 use pxl_spec::space::layer::quadrant::Quadrant;
 use xpute_guest::abi::fs::file;
+use xpute_guest::abi::fs::types::ErrorCode;
 use xpute_link::abi::types::Token;
 use xpute_guest::link;
 use xpute_link::{Handle, Lend};
@@ -50,9 +51,12 @@ pub enum StorageRead {
     None,
     /// What the owner kept, without the format byte.
     Bytes(Vec<u8>),
-    /// A file is there but cannot be read here, because it was refused
-    /// (`is_storage_refused`) or its read failed. Its owner must never write
-    /// over it.
+    /// A file is there in a form the core refuses: larger than any heap, not
+    /// bytes to its backend, or of another format. Its owner sets it aside
+    /// (`set_aside`) and never writes over it.
+    Refused,
+    /// A file is there but its read failed. Its owner must never write over
+    /// it.
     Unreadable,
 }
 
@@ -80,7 +84,7 @@ const _: () = assert!(spec::file::LEAF_ZOOM == LEAF_ZOOM);
 /// other id is a tile's, and no tile's id is 0.
 pub const TOP_ID: u64 = 0;
 
-/// A refused file, which the client sets aside: the storage file, or an
+/// A refused file, which the core sets aside: the storage file, or an
 /// objects' file by its want's id.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Refused {
@@ -88,11 +92,10 @@ pub enum Refused {
     Objects(u64),
 }
 
-/// The refused files watched at once: the storage file, and the objects'
-/// files a snapshot names, one for each tile of the ground's demand
-/// (domain/layer/object/repository.rs `watch_named`). A watch that ends has
-/// left its slot before its owner names the next (`take_changed`).
-pub const WATCHED: usize = 1 + GROUND_DEMAND_TILE_CAP as usize;
+/// The refused files set aside at once: the storage file, and an objects'
+/// file for each tile of the ground's demand, the most wanted at once
+/// (domain/layer/object/repository.rs `WANT_CAP`).
+pub const SET_ASIDE_CAP: usize = 1 + GROUND_DEMAND_TILE_CAP as usize;
 
 #[derive(Default)]
 struct Files {
@@ -101,16 +104,13 @@ struct Files {
     attempts: BTreeMap<u64, Handle>,
     /// The storage file as it was read, until its owner takes it.
     storage_read: Option<StorageRead>,
-    /// Whether the storage file has been refused since the client last
-    /// emptied its slot.
-    storage_refused: bool,
-    /// The writes not yet landed, in the order sent, and whether the writer
-    /// runs.
-    writes: VecDeque<(Vec<Token>, Box<[u8]>)>,
+    /// The storage file's contents not yet written, the latest alone, and
+    /// whether the writer runs.
+    storage_write: Option<Box<[u8]>>,
     writing: bool,
-    /// The refused files that changed, until their owners take them
-    /// (`take_changed`).
-    changed: VecDeque<Refused>,
+    /// The refused files set aside, until their owners take them
+    /// (`take_set_aside`).
+    set_aside: VecDeque<Refused>,
 }
 
 static FILES: Global<Files> = Global::new();
@@ -146,16 +146,31 @@ async fn read_open<B: Lend>(
     most: u32,
     buf: impl FnOnce(u32) -> Result<B, Errno>,
 ) -> Result<B, Errno> {
-    let n = file::file_size(f.0).await?;
+    let n = errno(file::file_size(f.0).await)?;
     if n > most {
         return Err(Errno::EFBIG);
     }
     let (buf, read) = file::file_read(f.0, buf(n)?).await;
-    if read? != n {
+    if errno(read)? != n {
         return Err(Errno::EIO);
     }
-    file::file_close(f.0).await?;
+    errno(file::file_close(f.0).await)?;
     Ok(buf)
+}
+
+/// What an fs method came to as one errno, the number the core counts a
+/// read's failure by: the link's refusal, or the errno of the file's
+/// error-code.
+fn errno<T>(r: Result<Result<T, ErrorCode>, Errno>) -> Result<T, Errno> {
+    r?.map_err(|e| match e {
+        ErrorCode::NoEntry => Errno::ENOENT,
+        ErrorCode::Io => Errno::EIO,
+        ErrorCode::ReadOnly => Errno::EROFS,
+        ErrorCode::Access => Errno::EACCES,
+        ErrorCode::BadMessage => Errno::EBADMSG,
+        ErrorCode::RemoteUnreachable => Errno::ENETUNREACH,
+        ErrorCode::NoObject => Errno::ENXIO,
+    })
 }
 
 /// A heap buffer of `n` bytes, for a read.
@@ -171,35 +186,26 @@ pub fn stop(key: u64) {
     }
 }
 
-/// Replaces the file at `path` with `bytes`. Writes land in the order sent,
-/// one at a time, by one writer task.
-pub fn write(path: Vec<Token>, bytes: Box<[u8]>) {
-    let f = files();
-    f.writes.push_back((path, bytes));
-    if !core::mem::replace(&mut f.writing, true) {
-        executor::spawner().spawn(writer().or_bug(Errno::ENOSPC));
-    }
-}
-
-/// Lands the writes queued, until none is left. A write that fails is not
-/// tried again: what it held is written again by the next.
+/// Lands the storage file's latest contents, until none waits, one write at
+/// a time. A write that fails is not tried again: the next keep writes what
+/// it held.
 #[embassy_executor::task]
 async fn writer() {
-    while let Some((path, bytes)) = files().writes.pop_front() {
-        let _ = write_whole(&path, bytes).await;
+    while let Some(bytes) = files().storage_write.take() {
+        let _ = write_whole(bytes).await;
     }
     files().writing = false;
 }
 
-async fn write_whole(path: &[Token], bytes: Box<[u8]>) -> Result<(), Errno> {
-    let f = File::open(path)?;
+async fn write_whole(bytes: Box<[u8]>) -> Result<(), Errno> {
+    let f = File::open(&storage_path())?;
     let (_, written) = file::file_write(f.0, bytes.into_vec()).await;
     written?;
-    file::file_close(f.0).await
+    errno(file::file_close(f.0).await)
 }
 
 /// The storage file's path, its slot after STORAGE.
-pub fn storage_path() -> Vec<Token> {
+fn storage_path() -> Vec<Token> {
     vec![
         Token::Int(path::storage::ID),
         Token::Int(path::storage::settings::ID),
@@ -219,7 +225,7 @@ async fn storage_read() {
         Err(Errno::ENOENT) => StorageRead::None,
         // The file is too large for any heap, or its backend cannot read it
         // as bytes.
-        Err(Errno::EFBIG | Errno::EBADMSG) => refuse(),
+        Err(Errno::EFBIG | Errno::EBADMSG) => StorageRead::Refused,
         Err(_) => StorageRead::Unreadable,
     };
     files().storage_read = Some(read);
@@ -237,34 +243,23 @@ fn storage_of(bytes: &[u8]) -> StorageRead {
     match bytes.split_first() {
         None => StorageRead::None,
         Some((&format::SETTINGS, settings)) => StorageRead::Bytes(settings.to_vec()),
-        Some(_) => refuse(),
+        Some(_) => StorageRead::Refused,
     }
-}
-
-/// Refuses the storage file. The next snapshot names the refusal to the
-/// client, which sets the file aside, and the file is watched until it does.
-fn refuse() -> StorageRead {
-    files().storage_refused = true;
-    watch(Refused::Storage);
-    invalidate();
-    StorageRead::Unreadable
-}
-
-pub fn is_storage_refused() -> bool {
-    files().storage_refused
 }
 
 /// Writes `bytes` whole as the storage file's contents, after its format
-/// byte. A refused file is not written over.
+/// byte, in place of any write still waiting. Its owner writes only a file it
+/// read (domain/setting/store.rs `writes`).
 pub fn write_storage(bytes: &[u8]) {
-    if is_storage_refused() {
-        return;
+    let f = files();
+    f.storage_write = Some([&[format::SETTINGS][..], bytes].concat().into_boxed_slice());
+    if !core::mem::replace(&mut f.writing, true) {
+        executor::spawner().spawn(writer().or_bug(Errno::ENOSPC));
     }
-    write(storage_path(), [&[format::SETTINGS][..], bytes].concat().into_boxed_slice());
 }
 
 impl Refused {
-    pub fn path(self) -> Vec<Token> {
+    fn path(self) -> Vec<Token> {
         match self {
             Refused::Storage => storage_path(),
             Refused::Objects(id) => quadrant_path(path::object::ID, id),
@@ -272,32 +267,33 @@ impl Refused {
     }
 }
 
-/// Watches the refused file `r` until it changes under the core, as the
-/// client sets it aside; then it is read again.
-pub fn watch(r: Refused) {
-    executor::spawner().spawn(watched(r).or_bug(Errno::ENOSPC));
+/// Sets the refused file `r` aside, out of its path; then its owner takes it
+/// back (`take_set_aside`): the settings write it from their next keep on,
+/// the objects' repository reads it again. One its backend cannot set aside,
+/// or one past the set-asides that can wait at once, stays refused this
+/// session.
+pub fn set_aside(r: Refused) {
+    if let Ok(task) = setting_aside(r) {
+        executor::spawner().spawn(task);
+    }
 }
 
-#[embassy_executor::task(pool_size = WATCHED)]
-async fn watched(r: Refused) {
-    let changed = match File::open(&r.path()) {
-        Ok(f) => file::file_changed(f.0).await,
-        Err(e) => Err(e),
+#[embassy_executor::task(pool_size = SET_ASIDE_CAP)]
+async fn setting_aside(r: Refused) {
+    let Ok(f) = File::open(&r.path()) else {
+        return;
     };
-    if changed.is_err() {
+    if errno(file::file_set_aside(f.0).await).is_err() {
         return;
     }
-    if let Refused::Storage = r {
-        files().storage_refused = false;
-    }
-    files().changed.push_back(r);
+    files().set_aside.push_back(r);
     invalidate();
 }
 
-/// A refused file that has changed since, for its owner to read again: the
-/// settings for the storage file, the objects' repository for theirs.
-pub fn take_changed() -> Option<Refused> {
-    files().changed.pop_front()
+/// A refused file set aside since, for its owner to read again: the settings
+/// for the storage file, the objects' repository for theirs.
+pub fn take_set_aside() -> Option<Refused> {
+    files().set_aside.pop_front()
 }
 
 /// Text held inline, as a quadkey is written: the first `len` of `N` bytes,
@@ -345,7 +341,7 @@ pub fn path_of(stream: Stream, id: u64) -> Option<Vec<Token>> {
 
 /// The path of the tile or shard `id` after `head`: its quadkey, or, for
 /// `TOP_ID`, the objects' top.
-pub fn quadrant_path(head: i32, id: u64) -> Vec<Token> {
+fn quadrant_path(head: i32, id: u64) -> Vec<Token> {
     if id == TOP_ID {
         return vec![Token::Int(head), Token::Int(path::object::top::ID)];
     }

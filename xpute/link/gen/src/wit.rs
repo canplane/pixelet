@@ -571,6 +571,33 @@ impl Gen<'_> {
         Ok((offs, sz))
     }
 
+    /// The size and alignment of `k` as Rust writes them: a record's or a
+    /// variant's own constants, any other's numbers.
+    fn rs_layout(&self, k: &Kind) -> Result<(String, String), String> {
+        Ok(match k {
+            Kind::Record(_) | Kind::Variant(_) => {
+                let t = self.rs_ty(k, true);
+                (format!("{t}::SZ"), format!("{t}::ALIGN"))
+            }
+            _ => {
+                let (sz, align) = self.layout(k)?;
+                (sz.to_string(), align.to_string())
+            }
+        })
+    }
+
+    /// The size and alignment of `k` as TypeScript writes them: a record's or
+    /// a variant's own constants, any other's numbers.
+    fn ts_layout(&self, k: &Kind) -> Result<(String, String), String> {
+        Ok(match k {
+            Kind::Record(t) | Kind::Variant(t) => (self.ts_const(*t, "SZ"), self.ts_const(*t, "ALIGN")),
+            _ => {
+                let (sz, align) = self.layout(k)?;
+                (sz.to_string(), align.to_string())
+            }
+        })
+    }
+
     // ---- Rust ----
 
     /// Stores `e`, a reference to a value of `k`, at `at` with the writer
@@ -587,7 +614,7 @@ impl Gen<'_> {
             Kind::Str => format!("{w}.str({at}, {e});"),
             Kind::Array(_) => format!("{w}.arr({at}, {e});"),
             Kind::List(el) => {
-                let (sz, align) = self.layout(el)?;
+                let (sz, align) = self.rs_layout(el)?;
                 format!(
                     "if let Some(b) = {w}.list({at}, ({e}).len(), {sz}, {align}) {{ for (i, x) in ({e}).iter().enumerate() {{ {} }} }}",
                     self.rs_store(w, &format!("b + i * {sz}"), "x", el)?
@@ -625,7 +652,7 @@ impl Gen<'_> {
             Kind::Str => format!("{r}.str({at}).map(str::to_owned)"),
             Kind::Array(n) => format!("{r}.arr::<{}>({at})", n.rs),
             Kind::List(el) => {
-                let (sz, align) = self.layout(el)?;
+                let (sz, align) = self.rs_layout(el)?;
                 format!(
                     "{r}.list({at}, {sz}, {align}).and_then(|(b, n)| (0..n).map(|i| {}).collect::<Result<Vec<_>, {errno}>>())",
                     self.rs_load(r, &format!("b + i * {sz}"), el)?
@@ -681,7 +708,7 @@ impl Gen<'_> {
             None => format!("{reply}::from(0)"),
             Some(k) => format!(
                 "{reply} {{ result: 0, data: Some(({}, Box::new(move |w: &mut {}| {{ {} }}))) }}",
-                self.layout(k)?.0,
+                self.rs_layout(k)?.0,
                 self.rs_use(self.link_rs, "Lower"),
                 self.rs_store("w", "0", "&v", k)?
             ),
@@ -744,7 +771,7 @@ impl Gen<'_> {
             if is_async(f) {
                 let link = self.rs_use(side, "link");
                 let done = format!(
-                    "{}::new(tag_, {link}::on_cancel, Box::new(move |got| {{ let reply = match got {{ Ok(v) => {}, Err(e) => {reply}::from(e as i32) }}; {link}::task_return(tag_, reply.result, reply.data.as_ref().map(|(n, w)| (*n, &**w as &dyn Fn(&mut {})))) }}))",
+                    "{}::new(tag_, {link}::on_cancel, Box::new(move |got| {{ let reply = match got {{ Ok(v) => {}, Err(e) => {reply}::from(e as i32) }}; {link}::task_return(tag_, reply.result, reply.data.as_ref().map(|(n, w)| (*n, &**w as &dyn Fn(&mut {})))); }}))",
                     self.rs_use(self.link_rs, "Return"),
                     self.rs_reply(&rk)?,
                     self.rs_use(self.link_rs, "Lower")
@@ -894,7 +921,7 @@ impl Gen<'_> {
             Kind::Str => format!("{w}.str({at}, {e});"),
             Kind::Array(_) => format!("{w}.arr({at}, {e});"),
             Kind::List(el) => {
-                let (sz, align) = self.layout(el)?;
+                let (sz, align) = self.ts_layout(el)?;
                 // A list inside a list takes names of its own depth.
                 let d = self.depth.get();
                 self.depth.set(d + 1);
@@ -927,7 +954,7 @@ impl Gen<'_> {
             Kind::Str => format!("{r}.str({at})"),
             Kind::Array(n) => format!("{r}.arr({at}, {})", n.arr),
             Kind::List(el) => {
-                let (sz, align) = self.layout(el)?;
+                let (sz, align) = self.ts_layout(el)?;
                 format!("{r}.map({at}, {sz}, {align}, (at) => {})", self.ts_load(r, "at", el)?)
             }
             Kind::Record(t) | Kind::Variant(t) | Kind::Enum(t) => format!("{}({r}, {at})", self.ts_path(*t, "load_")),
@@ -991,7 +1018,7 @@ impl Gen<'_> {
             let rk = self.ret(f)?;
             let data = match &rk {
                 None => "null".to_string(),
-                Some(k) => format!("[{}, (w) => {{ {} }}]", self.layout(k)?.0, self.ts_store("w", "0", "v", k)?),
+                Some(k) => format!("[{}, (w) => {{ {} }}]", self.ts_layout(k)?.0, self.ts_store("w", "0", "v", k)?),
             };
             let c = method_const(o, f, ts_given);
             let _ = writeln!(out, "          case {c}: {{");
@@ -1227,6 +1254,17 @@ impl Gen<'_> {
     }
 
     // ---- TypeScript types ----
+
+    /// The record's or variant's `t` constant `<T>_<suffix>`, imported from its
+    /// module where that is another.
+    fn ts_const(&self, t: TypeId, suffix: &str) -> String {
+        let (m, n) = self.type_path(t, ts_given);
+        let name = format!("{}_{suffix}", screaming(&n));
+        match m.map(|m| m.ts) {
+            Some(base) => self.ts_use(&format!("{base}.ts"), &name, false),
+            None => name,
+        }
+    }
 
     /// A type's name, or one of its functions' (`load_`, `store_`): its own
     /// module's, or imported from its interface's. An enum's type is its

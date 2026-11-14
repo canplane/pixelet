@@ -34,5 +34,5 @@ pub fn surface_resize(
 mod _rt {
     pub use xpute_kit::status::errno::Errno;
     pub use xpute_link::{answer, Handle, Lower, Method};
-    pub use xpute_native_host::link;
+    pub use xpute_native_runtime::link;
 }

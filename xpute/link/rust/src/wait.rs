@@ -27,7 +27,7 @@ struct Slot<L> {
 }
 
 /// A side's send, which answers the request's tag (link.rs `send`,
-/// xpute-native-host link.rs `send`).
+/// xpute-native-runtime link.rs `send`).
 pub type Send = for<'a> fn(Handle, Method, link::Args<'a>, Option<Answer>) -> Tag;
 
 pub struct Wait<L> {

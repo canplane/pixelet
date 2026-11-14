@@ -68,12 +68,11 @@ pub struct DecorFrame<'a> {
 /// of the clip levels' table with the brick it holds. An entry generates whole where its brick
 /// is another. Otherwise it generates again only the records that a box reaches by what the
 /// record's own candidate reads (`generation::reaches`): a box of damage, a cut as it was or as
-/// it is, or a brick filled at the entry's clip level zoom or finer. Neither the objects nor
-/// the service area's index make an entry generate by themselves: every write of the objects
-/// names its box (the frame's `damage`), and the index is made once, before any brick is held.
-/// A brick filled reaches its own clip level's zoom and every coarser one, as a coarser clip
-/// level's decor faces the way the leaf cells vote, each cell read from the finest clip level
-/// that holds it (pxl-content `generation::asks`).
+/// it is, or a brick filled at any clip level zoom, which may answer a read that a finer clip
+/// level does not hold. Neither the objects nor the service area's index make an entry
+/// generate by themselves: every write of the objects names its box (the frame's `damage`),
+/// and the index is made once, before any brick is held. Each cell a candidate reads comes
+/// from the finest clip level that holds it (pxl-content `generation::asks`).
 pub struct Generation<'a> {
     pub clipmap: &'a [i32],
     pub cuts: &'a [u32; object::CUTS],
@@ -319,14 +318,14 @@ impl Generator {
         w.read(generation.clipmap);
         let changed = !w.end();
         self.mark_cnt = self.damage_cnt;
-        // A brick filled at any clip level makes decor generate again at that clip level and
-        // the coarser ones.
+        // A brick filled at any clip level makes decor generate again wherever it may answer a
+        // candidate's read.
         let fresh = !generation.fresh.is_empty();
         self.marking = self.stale || changed || fresh || self.mark_cnt != 0;
         self.rect_cnt = 0;
         if self.marking {
             // The boxes held come first, each reaching every zoom. Each brick handed follows,
-            // reaching its clip level's zoom and the coarser ones.
+            // reaching the candidates whose reads it may answer.
             let mut rects = [0u32; (generation::RECT_CAP * generation::RECT_WORDS) as usize];
             let fresh = generation
                 .fresh

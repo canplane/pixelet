@@ -28,6 +28,7 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::{nearest_box, origin, wrap_cell};
 use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::hierarchy::tree::child_idx;
 use pxl_spec::space::layer::lattice::GROUND;
 use pxl_spec::space::layer::octant::Octant;
 use pxl_spec::space::layer::quadrant::Quadrant;
@@ -228,8 +229,7 @@ impl Query for CastWorld<'_> {
     /// (`object::path`).
     fn child(&mut self, at: &At, zoom: Zoom, node: [i32; 3]) -> At {
         let p = object::path(zoom, node);
-        self.world
-            .child(at, (p[0] & 1 | (p[1] & 1) << 1 | (p[2] & 1) << 2) as usize)
+        self.world.child(at, child_idx(p))
     }
 
     /// The world's answer, keeping the first tile lacked: with the decor a
