@@ -74,8 +74,8 @@ pub fn mount(implementation: _rt::Rc<dyn Host>) {
 }
 
 mod _rt {
-    pub use crate::link;
-    pub use std::rc::Rc;
-    pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Return, Tag};
+    pub(super) use crate::link;
+    pub(super) use std::rc::Rc;
+    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Return, Tag};
 }

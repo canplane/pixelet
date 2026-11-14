@@ -15,11 +15,11 @@ pub(crate) struct Piece {
 }
 
 impl Piece {
-    pub fn id(&self) -> PartId {
+    pub(crate) fn id(&self) -> PartId {
         self.way.id()
     }
 
-    pub fn width(&self) -> f64 {
+    pub(crate) fn width(&self) -> f64 {
         width_u(
             &self.way.subtype,
             self.way.class.as_deref(),
@@ -28,7 +28,7 @@ impl Piece {
     }
 
     /// Whether any of it lies in `[lo, hi]`.
-    pub fn touches(&self, [lo, hi]: [[f64; 2]; 2]) -> bool {
+    pub(crate) fn touches(&self, [lo, hi]: [[f64; 2]; 2]) -> bool {
         let (mut a, mut b) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
         for p in &self.way.points {
             for k in 0..2 {

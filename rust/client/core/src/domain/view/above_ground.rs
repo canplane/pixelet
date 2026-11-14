@@ -20,6 +20,6 @@ fn ground_under(at: V3) -> f64 {
         .unwrap_or(0.0)
 }
 
-pub fn height_at(at: V3) -> f64 {
+pub(crate) fn height_at(at: V3) -> f64 {
     (at[2] - ground_under(at)).max(0.0)
 }

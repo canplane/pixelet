@@ -27,7 +27,7 @@ export const PKT = 3 as number;
 /** The frame's length in words. */
 export const WORDS = 4 as number;
 
-/** The bit of the command that marks a later answer. */
+/** The bit of the command that marks an answer. */
 export const RES = 2147483648 as number;
 
 /** The bits of the command below the handle, which hold the method. */

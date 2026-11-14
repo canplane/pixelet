@@ -1,9 +1,9 @@
 // cpp/xpute/guest/link.hpp
 
-// The guest's end of the link (xpute/link link.hpp), as xpute-guest's link.rs
-// is: its one side, which lays in its outbox and crosses by `link_out`, its
-// three exports (`XPUTE_LINK`), and the entry they run each call in. The
-// machine's names are read here as the guest's callers read them.
+// The guest's end of the link (`xpute/link/link.hpp`), as `xpute-guest`'s
+// `link.rs` is: its one side, which lays in its outbox and crosses by
+// `link_out`, its three exports (`XPUTE_LINK`), and the entry they run each
+// call in. The machine's names are read here as the guest's callers read them.
 //
 // A module imports `link_out` alone, and so its program defines the global
 // `operator new` and `operator delete`, as a Rust guest sets its global
@@ -64,7 +64,8 @@ std::pair<std::int32_t, std::optional<std::span<const std::uint8_t>>> call(link:
 // host's is, and answers the request's tag.
 link::Tag send(link::Handle h, link::Method m, const link::Args &args, link::Answer answer);
 
-// Cancels the request `t`, while its answer is pending (frame.json5 `CANCEL`).
+// Cancels the request `t`, while its answer is pending
+// (`frame.json5` `CANCEL`).
 void cancel(link::Tag t);
 
 // Puts `stop` as how the request `t` the guest serves stops if it is
@@ -82,7 +83,7 @@ bool in_guest() noexcept;
 
 } // namespace xpute::guest
 
-// Defines the guest's three exports (link/wit/types.wit), over frames of
+// Defines the guest's three exports (`link/wit/types.wit`), over frames of
 // `room_` bytes, with `boot_` mounting what the guest serves and opening what
 // it calls, and `enter_` and `end_` starting and ending each entry. A module
 // exports them by name; a native guest as C symbols, which catch a bug

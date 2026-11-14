@@ -22,12 +22,12 @@ fn animation() -> &'static mut Animation {
 /// Records that an animation stepped this frame. Only an animation that wakes
 /// the frame at its own next step calls this, since the renderer then asks for
 /// no frame after this one.
-pub fn note_animation() {
+pub(crate) fn note_animation() {
     animation().animated = true;
 }
 
 /// Whether an animation stepped this frame. Reading it clears it, so the stage
 /// reads it once a frame.
-pub fn take() -> bool {
+pub(crate) fn take() -> bool {
     core::mem::take(&mut animation().animated)
 }

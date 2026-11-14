@@ -14,7 +14,7 @@ use crate::terrain::pipeline::overture::role::Role;
 const CARTO_ZOOM: i32 = 16;
 
 /// A Carto width, in its z16 pixels, in u: the one place one becomes a length.
-pub const fn carto_u(px: f64) -> f64 {
+pub(crate) const fn carto_u(px: f64) -> f64 {
     px * units(cell_zoom_of(CARTO_ZOOM))
 }
 
@@ -43,7 +43,7 @@ pub(crate) fn waterway_width(class: &str) -> Option<f64> {
 /// `@footway-width-z16`: a sidewalk is a footway.
 const FOOTWAY: f64 = 1.3;
 
-pub fn width_u(subtype: &str, class: Option<&str>, role: Role) -> f64 {
+pub(crate) fn width_u(subtype: &str, class: Option<&str>, role: Role) -> f64 {
     carto_u(width_px(subtype, class, role))
 }
 

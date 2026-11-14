@@ -29,7 +29,7 @@ static SHARDS: Global<(bool, Vec<[i32; 4]>)> = Global::new();
 /// lies, so the index is not rebuilt while the host holds it (pxl-render
 /// gpu/api.rs `in_flight`); a source declared meanwhile is built in at a
 /// later call.
-pub fn shards() -> &'static [[i32; 4]] {
+pub(crate) fn shards() -> &'static [[i32; 4]] {
     let declared = source::min_zoom().is_some();
     let (made, s) = SHARDS.get(|| (false, Vec::new()));
     if s.is_empty() || (*made != declared && !api::in_flight(s)) {
@@ -49,7 +49,7 @@ pub fn shards() -> &'static [[i32; 4]] {
 /// leaves its hidden object out; each is written as X, Y, Z and the zoom
 /// (pxl-engine `eye`). `steps` is the `ray_step` setting,
 /// written as the ray steps view's word (`eye::STEPS`). None without a screen.
-pub fn eye(o: &Observation, edit: &RenderEdit, steps: bool) -> Option<[u32; eye::WORDS]> {
+pub(crate) fn eye(o: &Observation, edit: &RenderEdit, steps: bool) -> Option<[u32; eye::WORDS]> {
     let mut words = [0u32; eye::WORDS];
     lens::gpu_cast(o, &mut words)?;
     words[eye::STEPS] = u32::from(steps);

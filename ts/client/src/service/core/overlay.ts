@@ -1,7 +1,8 @@
-// @pxl/client/service/core/snapshot.ts
+// @pxl/client/service/core/overlay.ts
 
+import type { Remote } from "@xpute/link";
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
-import { type Snapshot } from "@/abi/overlay.ts";
+import { mount, type Snapshot } from "@/abi/overlay.ts";
 import { GROUND_STATUS_IDLE, SENSOR_STATUS_IDLE } from "@/abi/overlay.enum.ts";
 
 const INIT: Snapshot = {
@@ -36,7 +37,7 @@ let snapshot: Snapshot = INIT;
 const listeners = new ListenerSet();
 
 /** The core's snapshot, replaced whole when it changes. */
-export function set_snapshot(s: Snapshot): void {
+function set_snapshot(s: Snapshot): void {
   snapshot = s;
   listeners.notify();
 }
@@ -59,7 +60,7 @@ const view_listeners = new ListenerSet();
 /** Takes the core's view, which a rotation or a zoom posts every frame.
  * Only what watches the view is told, so the snapshot's readers are not woken
  * every frame. */
-export function view_posted(e: UiView): void {
+function view_posted(e: UiView): void {
   view = e;
   view_listeners.notify();
 }
@@ -68,4 +69,13 @@ export const watch_view = view_listeners.watch;
 
 export function cur_view(): UiView {
   return view;
+}
+
+/** Serves `overlay` on `remote`, the core's snapshot and view, before the
+ * core boots. */
+export function serve_overlay(remote: Remote): void {
+  mount(remote, {
+    show: set_snapshot,
+    view: (azimuth, m_per_px) => view_posted({ azimuth, m_per_px }),
+  });
 }

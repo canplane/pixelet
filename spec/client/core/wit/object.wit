@@ -6,7 +6,7 @@ interface object {
   use xpute:fs/types@0.1.0.{error-code};
 
   // Applies a batch of edits to the objects (pxl-core
-  // domain/layer/object/repository.rs `save`), all or none, in the edit
+  // `domain/layer/object/repository.rs` `save`), all or none, in the edit
   // format of the object source. The batch is the core's memory, lent for
   // the call.
   apply: async func(batch: lent) -> result<_, error-code>;

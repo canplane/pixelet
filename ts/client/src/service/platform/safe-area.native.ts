@@ -3,7 +3,7 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { SafeArea } from "./types.ts";
-import { PLATFORM } from "./pxl-platform.ts";
+import { PLATFORM } from "./pxl-platform.native.ts";
 
 export function useSafeArea(): SafeArea {
   const { top, bottom } = useSafeAreaInsets();

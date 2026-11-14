@@ -31,7 +31,7 @@ pub struct Kind {
 
 pub(crate) type KindTable = [Kind; BaseKind::ALL.len()];
 
-/// Each kind's, in `BaseKind`'s order.
+/// The table of each kind's `Kind`, made by `kind` in `BaseKind`'s order.
 pub fn try_kinds(kind: impl FnMut(BaseKind) -> Result<Kind, String>) -> Result<KindTable, String> {
     let all: Vec<Kind> = BaseKind::ALL
         .into_iter()

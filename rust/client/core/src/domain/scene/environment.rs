@@ -6,9 +6,9 @@
 //! only when the drawn sky would change by a display level, one step of a
 //! displayed color, so a still sky costs no frames between such changes.
 
-pub mod celestial;
-pub mod cloud;
-pub mod param;
+pub(crate) mod celestial;
+pub(crate) mod cloud;
+pub(crate) mod param;
 
 use pxl_content::cloud::drift;
 use pxl_content::param::night;
@@ -19,7 +19,7 @@ use pxl_spec::space::coord::v3;
 use crate::domain::scene::animation;
 use crate::domain::scene::environment::param::SKY_EASE_RATE;
 use crate::domain::scene::frame::Frame;
-use crate::domain::setting::store::settings;
+use crate::domain::setting::settings;
 use crate::domain::view::frame::pose::{anchor, km_per_u};
 use crate::domain::view::lens::StepClock;
 use crate::domain::view::observation;
@@ -34,7 +34,7 @@ use xpute_guest::clock::system;
 /// step of the sky or of the clouds falls (`EnvironmentDraw::observe`). The
 /// sky moves with the wall clock while nothing else asks for a frame, so
 /// without this wake a still view would never show it move.
-pub fn environment_step() {
+pub(crate) fn environment_step() {
     let next_ms = environment().observe(system());
     invalidate_at(now() + next_ms);
 }
@@ -47,28 +47,28 @@ fn environment() -> &'static mut EnvironmentDraw {
 
 /// Advances the sky by one frame (`EnvironmentDraw::tick`). Returns whether
 /// a transition still wants frames.
-pub fn environment_animate(frame: &Frame) -> bool {
+pub(crate) fn environment_animate(frame: &Frame) -> bool {
     environment().tick(frame)
 }
 
 /// Whether the sun, as drawn, is under the horizon (`EnvironmentDraw::night`).
-pub fn night() -> bool {
+pub(crate) fn night() -> bool {
     environment().night()
 }
 
 /// The environment's words as the last frame wrote them. The renderer draws
 /// the sky and its light from them (pxl-render look/environment.rs).
-pub fn environment_words() -> &'static [f32; FLOATS] {
+pub(crate) fn environment_words() -> &'static [f32; FLOATS] {
     &environment().out
 }
 
 /// How far the wind has carried the clouds (`EnvironmentDraw::drift`).
-pub fn environment_drift() -> [f64; 2] {
+pub(crate) fn environment_drift() -> [f64; 2] {
     environment().drift
 }
 
 /// The eye's altitude over the sea, in km, as the last frame saw it.
-pub fn environment_alt_km() -> f64 {
+pub(crate) fn environment_alt_km() -> f64 {
     environment().alt_km
 }
 
@@ -112,7 +112,7 @@ fn steps() -> [f64; 2] {
     sky_steps().map(f64::from)
 }
 
-pub struct EnvironmentDraw {
+pub(crate) struct EnvironmentDraw {
     started: bool,
     /// The days since J2000.0 the sky is drawn for. They follow the sky's
     /// clock one step at a time (`observe`).
@@ -192,7 +192,7 @@ impl EnvironmentDraw {
 
     /// Whether the sun, as drawn, is under the horizon, where night begins to
     /// fall (pxl-content param.rs `night::FALL`).
-    pub fn night(&self) -> bool {
+    pub(crate) fn night(&self) -> bool {
         self.started && v3::norm(&self.sun)[2] < f64::from(night::FALL[1])
     }
 
@@ -208,7 +208,7 @@ impl EnvironmentDraw {
     /// steps both clocks. The sky's clock reads the hour the `sky_time`
     /// setting shows (`sky_clock`), and a held hour never steps it. The
     /// clouds' clock reads the wall clock.
-    pub fn observe(&mut self, unix_ms: f64) -> f64 {
+    pub(crate) fn observe(&mut self, unix_ms: f64) -> f64 {
         let first = *self.first_ms.get_or_insert(unix_ms);
         let at = self.sky_anchor();
         let (sky_ms, fixed) = sky_clock(settings().sky_time, unix_ms, at[0]);
@@ -269,7 +269,7 @@ impl EnvironmentDraw {
     /// eased. Each moves the drawn sky by a display level at most, so it is
     /// taken as it comes (`observe`), and a still sky's words do not change
     /// between steps.
-    pub fn tick(&mut self, frame: &Frame) -> bool {
+    pub(crate) fn tick(&mut self, frame: &Frame) -> bool {
         if self.first_ms.is_none() {
             return false;
         }

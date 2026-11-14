@@ -16,7 +16,7 @@ use pxl_global::Global;
 
 /// The facing and the distance the controls ask the camera for.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Intent {
+pub(crate) struct Intent {
     pub dist: f64,
     /// Radians about Z from north toward east, in [-PI, PI].
     pub azimuth: f64,
@@ -25,7 +25,7 @@ pub struct Intent {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct IntentPatch {
+pub(crate) struct IntentPatch {
     pub dist: Option<f64>,
     pub azimuth: Option<f64>,
     pub polar: Option<f64>,
@@ -37,7 +37,7 @@ pub struct IntentPatch {
 /// world. `to` is None until it is first put (controller.rs `put_pivot`), and
 /// whichever controller moves the camera eases its pivot toward it
 /// (`ease_pivot`).
-pub struct CameraState {
+pub(crate) struct CameraState {
     pub intent: Intent,
     pub to: Option<Q3>,
 }
@@ -57,7 +57,7 @@ impl CameraState {
     /// The intent with `partial` applied and held to the camera's ranges.
     /// The orbit may still change it before it is committed (controller.rs
     /// `set_intent`).
-    pub fn with_patch(&self, partial: IntentPatch) -> Intent {
+    pub(crate) fn with_patch(&self, partial: IntentPatch) -> Intent {
         let from = self.intent;
         let (polar, azimuth) = facing_domain(
             partial.polar.unwrap_or(from.polar),
@@ -83,22 +83,22 @@ impl CameraState {
 
 static CAMERA_STATE: Global<CameraState> = Global::new();
 
-pub fn camera_state() -> &'static CameraState {
+pub(crate) fn camera_state() -> &'static CameraState {
     camera_state_mut()
 }
 
-pub fn camera_state_mut() -> &'static mut CameraState {
+pub(crate) fn camera_state_mut() -> &'static mut CameraState {
     CAMERA_STATE.get(CameraState::new)
 }
 
 /// The pivot's `to` as a point in the world, for a pivot drawn at `cur`
 /// (control/support.rs `resolve_to`); `cur` itself before a `to` is put.
-pub fn resolved_to(cur: V3) -> V3 {
+pub(crate) fn resolved_to(cur: V3) -> V3 {
     resolve_to(&mut camera_state_mut().to, cur)
 }
 
 /// Eases the pivot drawn at `cur` toward its `to` over `delta` seconds, and
 /// returns where it is drawn now and whether it is still moving.
-pub fn ease_pivot(cur: V3, delta: f64) -> (V3, bool) {
+pub(crate) fn ease_pivot(cur: V3, delta: f64) -> (V3, bool) {
     smooth_vec(cur, resolved_to(cur), POS_DAMP, delta, EASE_EPS_U)
 }

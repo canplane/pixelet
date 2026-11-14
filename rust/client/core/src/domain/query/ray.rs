@@ -35,14 +35,14 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// The zooms a cell is asked at: no coarser than the cells a tile draws, and
 /// no finer than what is placed is held.
-pub fn zoom_range() -> [Zoom; 2] {
+pub(crate) fn zoom_range() -> [Zoom; 2] {
     [coarsest(), OBJECT_FINEST]
 }
 
 /// The level of detail (pxl-engine `cast::Detail`) that reads the cells of
 /// tiles at zoom `tile` at every distance: a range of that one cell zoom,
 /// held within `zoom_range`.
-pub fn at_zoom(tile: Zoom) -> Detail {
+pub(crate) fn at_zoom(tile: Zoom) -> Detail {
     let [lo, hi] = zoom_range();
     let z = GROUND.cell_zoom(tile).clamp(lo, hi);
     Detail {
@@ -55,7 +55,7 @@ pub fn at_zoom(tile: Zoom) -> Detail {
 /// ground at its cells, which answer the same when asked finer, and what is
 /// placed at its own zoom. Where the eye draws something coarser, the asker
 /// judges that by `by_dist` (domain/control/edit/pick.rs `Pick`).
-pub fn finest() -> Detail {
+pub(crate) fn finest() -> Detail {
     let [_, finest] = zoom_range();
     Detail {
         range: [finest, finest],
@@ -67,7 +67,7 @@ pub fn finest() -> Detail {
 /// origin, the cell zoom whose cell, drawn whole, spans at least one grid
 /// cell from any direction (pxl-spec space/camera/grid.rs `cell_zoom_at`).
 /// This is the rule that sizes every drawn cell.
-pub fn by_dist() -> Detail {
+pub(crate) fn by_dist() -> Detail {
     Detail {
         range: zoom_range(),
         spacing: Spacing::NONE,
@@ -78,27 +78,27 @@ pub fn by_dist() -> Detail {
 /// distance from `eye` (pxl-spec space/camera/grid.rs `cell_zoom_at`), no
 /// finer than the ground's leaf cells and, once the source declares its top,
 /// no coarser than the cells a tile draws.
-pub fn cell_zoom_at(eye: V3, at: V3) -> Zoom {
+pub(crate) fn cell_zoom_at(eye: V3, at: V3) -> Zoom {
     let v = v3::sub(&at, &eye);
     let cell_zoom = grid::cell_zoom_at(v3::dot(&v, &v) as f32).min(GROUND.leaf_cell_zoom());
     TerrainTile::min_zoom().map_or(cell_zoom, |min| cell_zoom.max(GROUND.grid_zoom(min)))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Ray {
+pub(crate) struct Ray {
     pub origin: V3,
     pub dir: V3,
     pub t_max: f64,
 }
 
 impl Ray {
-    pub fn at(&self, t: f64) -> V3 {
+    pub(crate) fn at(&self, t: f64) -> V3 {
         std::array::from_fn(|k| self.origin[k] + self.dir[k] * t)
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum HitKind {
+pub(crate) enum HitKind {
     Ground,
     Object(Octant),
     /// Objects folded into a cell above the leaves; no single object is met.
@@ -109,7 +109,7 @@ pub enum HitKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Hit {
+pub(crate) struct Hit {
     pub t: f64,
     pub point: V3,
     pub normal: V3,
@@ -274,7 +274,7 @@ impl World {
     /// the ground is not stopped where it stands. A cell met coarser than it
     /// is held comes with the tile lacked. A cell not held at all is lacked
     /// too, and past it the ray tells nothing.
-    pub fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
+    pub(crate) fn first_hit(&self, ray: &Ray, detail: Detail) -> Answer<Option<Hit>> {
         let mut path = Path::default();
         self.along(ray, detail, Until::Opaque, None, &mut path, &mut None)
     }
@@ -282,7 +282,12 @@ impl World {
     /// The first thing a viewer sees along `ray`, the same walk stopping at a
     /// decor as the frame draws it: everything placed and, of what the ground
     /// generates at the leaves, `decors` (`lens::leaf_decors`).
-    pub fn first_visible(&self, ray: &Ray, detail: Detail, decors: u32) -> Answer<Option<Hit>> {
+    pub(crate) fn first_visible(
+        &self,
+        ray: &Ray,
+        detail: Detail,
+        decors: u32,
+    ) -> Answer<Option<Hit>> {
         let mut path = Path::default();
         self.along(
             ray,

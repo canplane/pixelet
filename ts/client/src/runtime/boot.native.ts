@@ -3,13 +3,14 @@
 /**
  * A device's core and xpute's runtime are linked into the app, and the runtime
  * runs the core on a thread of its own, serving it the stop, the clocks, the
- * text, the GPU and the settings on the disk; the app's lifecycle reaches it
- * natively. The UI opens its end of the runtime's link and starts the runtime
- * here (@xpute/native-runtime `open_remote`, `start`), and serves the core, on
- * its own thread, what a page's worker serves (worker.ts): the files and the
- * objects, over the core's memory, where the guest lends their buffers, and
- * the source's declaration, whose state is the UI's here. The GPU's host tells
- * the UI what it has of a GPU through its own module, as a page's worker does.
+ * text and the GPU; the app's lifecycle reaches it natively. The UI opens its
+ * end of the runtime's link and starts the runtime here (@xpute/native-runtime
+ * `open_remote`, `start`), and serves the core, on its own thread, what a
+ * page's worker serves (worker.ts): the files, the settings among them in the
+ * platform's storage (storage.native.ts), and the objects, over the core's
+ * memory, where the guest lends their buffers, and the source's declaration,
+ * whose state is the UI's here. The GPU's host tells the UI what it has of a
+ * GPU through its own module, as a page's worker does.
  * Where the boot stands is moved as on a page (ui.ts).
  */
 

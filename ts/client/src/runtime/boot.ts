@@ -59,9 +59,8 @@ export function boot(): void {
     }
   };
   serve_ui(remote);
-  // The core starts with the page's kept entries, which a worker cannot read,
-  // its module, the UI's port, and the named handles and prefixes mounted on
-  // `remote`.
+  // A worker cannot read the page's kept entries, so they go with the core's
+  // instantiation.
   const { module, init } = source();
   const entries = storage
     .keys()

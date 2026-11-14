@@ -23,10 +23,6 @@ fn shown() -> vec3f {
   return atmos_white() * exposure();
 }
 
-fn moon_shown() -> vec3f {
-  return shown() * atmos_moon_light();
-}
-
 fn light_at(r: f32, up: vec3f) -> Light {
   let l = light_unexposed(r, up);
   let e = exposure();

@@ -3,33 +3,32 @@
 /**
  * A UI on another thread than its guest's link, as a page's main thread is to
  * the guest's worker, reaches the link over a port its runtime hands in
- * (`Port`): `serve` on the link's side, `Remote` on the UI's. Packets cross the port as bytes. The UI
- * sends methods to the guest's objects and is answered by promise, with the
- * return data. The interfaces it serves the guest are mounted on the Remote
- * under their named handles before the guest boots, and the handles go with
- * the guest's module, so that `serve` mounts their stand-ins before the guest
- * calls them. A method WIT marks `async func` (the bindings' `LATER`) the UI
- * answers later, by its tag (`task_return`), and a cancel of it is told to the
- * UI (`on_cancel`); any other is told to the UI and answered 0 at once, since
- * the UI is across the port. The UI never waits, so it has no `call`.
+ * (`Port`): its runtime serves the link's side (@xpute/web-runtime remote.ts
+ * `serve`, xpute-native-runtime remote.rs), and `Remote` is the UI's. Packets
+ * cross the port as bytes, as `ToLink` and `ToUi` lay them. The UI sends
+ * methods to the guest's objects and is answered by promise, with the return
+ * data. The interfaces it serves the guest are mounted on the Remote under
+ * their named handles before the guest boots, and the handles go with the
+ * guest's module, so that the runtime mounts their stand-ins before the
+ * guest calls them. A method WIT marks `async func` (the bindings' `LATER`)
+ * the UI answers later, by its tag (`task_return`), and a cancel of it is
+ * told to the UI (`on_cancel`); any other is told to the UI and answered 0 at
+ * once, since the UI is across the port. The UI never waits, so it has no
+ * `call`.
  *
  * Beside them, a UI may serve the objects at the URIs under a prefix
  * (`mount`), opened across the port and answered later in all their methods,
- * as a device's UI serves the guest's files: the link's side mounts their
- * openers (`serve`, and xpute-native-runtime remote.rs `serve`), and tells
- * the UI each object's drop. The UI serves as the link does (link.ts
- * `Server`): only how an answer crosses differs. Its open was answered across
- * the port already, so an opener's refusal answers each method of what it
- * would have opened.
+ * as a device's UI serves the guest's files: the runtime mounts their openers
+ * and tells the UI each object's drop. The UI serves as the link does
+ * (link.ts `Server`): only how an answer crosses differs. Its open was
+ * answered across the port already, so an opener's refusal answers each
+ * method of what it would have opened.
  *
  * Beside the link the UI gives a transferable, a canvas, under a handle the
  * worker's side issued, on the same port, so that it lands before what the
  * UI sends after it; it is taken back when the UI drops the handle.
  *
- * A port is one UI's for its whole life. A page's worker dies with the page,
- * so a reloaded page meets a new worker and link over a new port, and no
- * generation is counted here: a device's runtime outlives its UI and counts
- * them (xpute-native-runtime remote.rs `accept`).
+ * A port is one UI's for its whole life.
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
@@ -41,9 +40,7 @@ import { Lower } from "./cabi.ts";
 import {
   type Answered,
   type Args,
-  DROP,
   type Handle,
-  type Side,
   type LinkObject,
   type Method,
   type Packet,
@@ -63,13 +60,6 @@ export interface Port {
  * port whose handler takes a fuller event, as a MessagePort's does, fits. */
 interface Hear {
   hear(e: { data: unknown }): void;
-}
-
-/** What takes the things the UI gives beside the link, by the handle it
- * gives each under, and hears the handle dropped. */
-export interface Taker {
-  give(h: Handle, thing: unknown): void;
-  take(h: Handle): void;
 }
 
 /** The methods of the named interfaces the UI serves that answer later, each
@@ -94,55 +84,8 @@ export type ToUi =
   | { cancel: Tag }
   | { drop: Handle };
 
-/** Serves `link` to the UI across `port`: the interfaces the UI serves
- * mounted under their named handles (`Remote.named`), the methods `later`
- * names answered later, an opener at each of its `prefixes`
- * (`Remote.prefixes`), and what the UI gives beside the link to `taker`. */
-export function serve(
-  port: Port,
-  link: Side,
-  named: readonly Handle[],
-  prefixes: readonly (readonly Token[])[],
-  later: Later,
-  taker: Taker,
-): void {
-  const tell = (m: ToUi) => port.postMessage(m);
-  // Tells the UI a method it answers later, and the guest's cancel of it.
-  const forward = (h: Handle, m: Method, tag: Tag, args: U8Array | null) => {
-    tell({ h, m, tag, pkt: args === null ? null : args.slice() });
-    link.on_cancel(tag, () => tell({ cancel: tag }));
-    return ERRNO_EINPROGRESS;
-  };
-  for (const h of named) {
-    link.mount_named(h, {
-      call(m, tag, args) {
-        if (later.some(([lh, lm]) => lh === h && lm === m)) return forward(h, m, tag, args);
-        tell({ h, m, tag: null, pkt: args === null ? null : args.slice() });
-        return 0;
-      },
-      drop() {},
-    });
-  }
-  for (const p of prefixes) {
-    link.mount(p, (uri, h) => {
-      tell({ open: h, uri });
-      return {
-        call: (m, tag, args) => forward(h, m, tag, args),
-        drop: () => tell({ drop: h }),
-      };
-    });
-  }
-  port.onmessage = (e) => {
-    const m = e.data as ToLink;
-    if ("give" in m) return taker.give(m.give, m.thing);
-    if ("answer" in m) return link.task_return(m.answer, m.result, m.data);
-    if (m.m === DROP) taker.take(m.h);
-    // A packet past the room is refused whole, EMSGSIZE.
-    link.send(m.h, m.m, m.pkt, (result, data) => tell({ tag: m.tag, result, data }));
-  };
-}
-
-/** The UI's end of a link `serve` serves across a port. */
+/** The UI's end of a link a runtime serves across a port (@xpute/web-runtime
+ * remote.ts `serve`). */
 export class Remote extends Server<ReturnType<typeof opened>> implements Sender {
   private readonly _port: Port;
   private readonly _answers = new Map<Tag, (a: Answered) => void>();
@@ -154,8 +97,9 @@ export class Remote extends Server<ReturnType<typeof opened>> implements Sender 
     port.onmessage = (e) => this._hear(e.data as ToUi);
   }
 
-  /** The named handles of the interfaces the UI serves, which `serve`
-   * mounts. */
+  /** The named handles of the interfaces the UI serves, which the runtime
+   * mounts (@xpute/web-runtime remote.ts `serve`, xpute-native-runtime
+   * remote.rs `serve`). */
   get named(): Handle[] {
     return [...this._named.keys()];
   }

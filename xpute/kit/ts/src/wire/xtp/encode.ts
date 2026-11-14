@@ -526,12 +526,11 @@ export class PacketWriter {
   //   bits 0..7   : node type
   //   bits 8..31  : reserved
   //
-  // - len and offsets occupy 8-byte slots
-  // - the value is the low 32 bits; a reader refuses a len slot whose high half is not zero,
-  //   and an offset's high half holds the type
-  // - each child offset is relative to the enclosing branch node base
-  // - branch alignment is WORD_SZ
-  // - writing a number of children other than `cnt` is a bug
+  // Len and each offset take an 8-byte slot, the value its low 32 bits; a
+  // reader refuses a len slot whose high half is not zero, and an offset's
+  // high half holds the type. Each child offset is relative to the enclosing
+  // branch node's base, a branch is aligned to `WORD_SZ`, and writing a
+  // number of children other than `cnt` is a bug.
   branch(cnt: u32, fill: (w: this) => void): this {
     // empty branch (len = 0) is valid — analogous to [] or {} in JSON
     const at = this.branch_open(cnt);

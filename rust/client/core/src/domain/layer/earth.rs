@@ -24,7 +24,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 
 /// A held Earth tile: its packet until the GPU has its texels, whose words
 /// then live in the GPU layer of its slot.
-pub enum EarthTile {
+pub(crate) enum EarthTile {
     /// The packet the GPU does not have yet. The tile owns the packet and
     /// lets it go with itself. Every slot may hold one, and the request
     /// scheduler leaves body slots for them (sys/io/request.rs `spare_slot_cnt`).
@@ -67,7 +67,7 @@ impl Base for EarthTile {
 /// the device of generation `on`, until `write` takes no more; a packet
 /// written goes back with its tile's change to `Sent`. A tile whose texels
 /// went to an earlier device is fetched again, since its packet is gone.
-pub fn upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
+pub(crate) fn upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
     let cache = EarthTile::tile_cache();
     for slot in 0..EARTH_SLOT_CNT {
         let Some((p, tile)) = cache.in_slot(slot) else {
@@ -98,7 +98,7 @@ pub fn upload(write: &mut dyn FnMut(u32, &[u8]) -> bool, on: u32) {
 /// result is the window's south-west tile and, for each tile of the window
 /// row by row, its GPU layer plus one, or zero where the global picture
 /// answers.
-pub fn window(
+pub(crate) fn window(
     floor: impl Iterator<Item = Quadrant> + Clone,
     on: u32,
 ) -> ([i32; 2], [u32; GROUND_DEMAND_TILE_CAP as usize]) {
@@ -128,7 +128,7 @@ pub fn window(
 }
 
 /// The Earth tiles held at once, each in a GPU layer of its own.
-pub const EARTH_SLOT_CNT: u32 = TileCache::<EarthTile>::SLOT_CNT;
+pub(crate) const EARTH_SLOT_CNT: u32 = TileCache::<EarthTile>::SLOT_CNT;
 
 const _: () = assert!(
     BODY_SLOT_CNT > CREDIT_CAP + EARTH_SLOT_CNT,

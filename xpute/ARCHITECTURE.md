@@ -1,23 +1,20 @@
 # Architecture — xpute
 
-[xpute](./README.md) is a foreign function interface between a program's
-compiled **guest** and the **host** that serves it, in the **runtime** each
-platform gives. The two meet in one **link**: frames laid in the guest's
-memory, each one method of an object called under its handle. Every interface
-that crosses it is declared in WIT, and a generator writes both ends' bindings
-from it. The guest owns nothing but its memory and runs only when its host
-enters it. The host serves the clocks, the stop and the one device that lends
-that memory, the GPU, which is a plugin. Everything else belongs to the
-**program**, and it travels over the same link, whose frames xpute delivers
-and does not interpret.
-
-The guest, in Rust or in C++, runs as a WebAssembly module in a page's worker
-and as a library linked into a native app, on a thread of its own. Each
-section below takes one part, in the order the parts depend on each other: the
-link, the sides that run it, how a failure ends, the device that lends the
-memory, and the languages. The document ends with the boundaries, what xpute
-took from earlier work, and a map of the code. The layouts are written once in
-`spec/` and the interfaces in WIT, and this document points there.
+[xpute](./README.md) claims that a program's compiled **guest** and the
+**host** that serves it need share nothing but the guest's memory and one kind
+of message laid in it. This document follows that claim through the parts that
+make it hold, in the order they depend on each other. The **link** carries
+every call as a frame. The **sides** run the link alike on every platform, and
+a UI on another thread reaches it by a **remote**. A failure is its call's to
+judge, and a bug ends in a stop, after which the link answers what was owed, so
+that no side waits on an answer that will not come. The GPU is the one device
+whose work holds the guest's memory past an answer, so it is the one device the
+host serves. And the three languages hold the same facts: a spec or WIT owns
+each one and a generator writes it into each, and frozen records hold the rest
+of their code to each other. The document ends with
+what xpute does not know, what it took from earlier work and a map of the code.
+The layouts are written once in `spec/` and the interfaces in WIT, and this
+document points there.
 
 ---
 
@@ -64,9 +61,8 @@ the platform's environment, which instantiates or links the guest, holds the
 host's `Side` and runs the loop that enters it: `@xpute/web-runtime` in a page's
 worker, `xpute-native-runtime` on a device's guest thread. The **host** is what
 is served over it, the clocks and the stop: `@xpute/web-host` and
-`xpute-native-host`, which also keeps the disk a device's files lie on. xpute
-offers these as pieces, and the program composes them in the order they run, on
-both platforms alike.
+`xpute-native-host`. xpute offers these as pieces, and the program composes
+them in the order they run, on both platforms alike.
 
 The UI lives on another thread, and reaches the link through a **remote**:
 over a port on a page, and through the Expo module `@xpute/native-runtime` on
@@ -78,8 +74,8 @@ told to it and answered at once.
 
 A device's runtime outlives its UI, so a reload is a new UI on the same runtime:
 what the old UI held goes (xpute-native-runtime's `accept`), and the new UI is
-told the guest's end as the first heard it (xpute-native-host's `start`). A
-page's worker dies with its page, so a reloaded page meets a new runtime.
+told the guest's end as the first heard it (xpute-native-runtime's `start`).
+A page's worker dies with its page, so a reloaded page meets a new runtime.
 
 ## How a failure ends
 
@@ -98,7 +94,7 @@ answers the guest, or asynchronously, by the platform's listener for what the
 worker leaves uncaught, or by Rust's panic hook. A trapped guest is entered no
 more, and a frame to it answers EPIPE.
 
-## The devices that lend the memory
+## The device that lends the memory
 
 A frame is complete in itself: once its answer is in, the caller may write
 over everything it lent. Some work reaches into the guest's memory long after
@@ -107,8 +103,6 @@ request finishes. Such work needs a rule that says who owns which bytes and
 when they come back. So the host implements exactly the device whose work
 lends the guest's memory in this way, the GPU, and the program implements
 everything else over the link.
-
-### The GPU device
 
 The GPU is a plugin, declared in WIT as xpute's own packages are
 (`gpu/wit/`), and a program that never draws links none of it. A renderer
@@ -123,13 +117,6 @@ dropped request never matches. Both hosts admit a frame by one rule: a guest
 draws only while fewer of its frames are unfinished than its frame latency, so
 taking a surface's texture never blocks. What a surface shows is lent by the
 UI, beside the link, under the handle of a surface the guest serves.
-
-A GPU's floats are held only as far as WGSL holds them. Its division may be
-2.5 ulps off, its square root and transcendentals have only bounds, a GPU may
-be further off than that, and a compiler may fuse or reorder, so no order
-written in a shader holds. So a rule the CPU and a GPU both decide is decided
-in integers, or in floats the CPU rounded once and handed to the GPU in a
-word; and a rule the GPU alone decides is one function every pass calls.
 
 ## The languages, held to each other
 
@@ -152,6 +139,13 @@ each language reads bit for bit, so a difference means one side moved. Every
 rounding in the tree is one rule, half to even as WGSL rounds (`math/scalar`),
 so the guest, the UI and a shader round alike; a call that rounds otherwise is
 refused by the tools.
+
+A GPU's floats are held only as far as WGSL holds them. Its division may be
+2.5 ulps off, its square root and transcendentals have only bounds, a GPU may
+be further off than that, and a compiler may fuse or reorder, so no order
+written in a shader holds. So a rule the CPU and a GPU both decide is decided
+in integers, or in floats the CPU rounded once and handed to the GPU in a
+word; and a rule the GPU alone decides is one function every pass calls.
 
 ---
 

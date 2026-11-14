@@ -197,7 +197,7 @@ const QUALITY: f32 = 92.0;
 
 /// How far a top's mean may stay from its ground cube's Carto color, in CIE76 ΔE:
 /// the painted cube kept up close, the map still Carto's from afar, where a
-/// textured cube is drawn as its tile's mean (pxl-render paint/palette.rs).
+/// textured cube is drawn as its tile's mean (pxl-render `paint/palette.rs`).
 pub(crate) const TOWARD_CARTO: f64 = 20.0;
 
 /// sRGB bytes to CIE L*a*b* (D65), through linear light.

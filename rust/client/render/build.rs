@@ -16,6 +16,7 @@ use std::path::Path;
 #[path = "src/look/atmosphere.rs"]
 #[expect(
     dead_code,
+    unreachable_pub,
     reason = "the build reads part of what the crate shares with it"
 )]
 mod atmosphere;
@@ -26,6 +27,7 @@ mod check;
 #[path = "src/look/color.rs"]
 #[expect(
     dead_code,
+    unreachable_pub,
     reason = "the build reads part of what the crate shares with it"
 )]
 mod color;
@@ -36,12 +38,14 @@ pub mod debug_look;
 #[path = "src/param.rs"]
 #[expect(
     dead_code,
+    unreachable_pub,
     reason = "the build reads part of what the crate shares with it"
 )]
 mod param;
 #[path = "src/frame/shader/part.rs"]
 #[expect(
     dead_code,
+    unreachable_pub,
     reason = "the build reads part of what the crate shares with it"
 )]
 mod part;
@@ -52,6 +56,7 @@ mod wgsl;
 #[path = "src/frame/shader/word.rs"]
 #[expect(
     dead_code,
+    unreachable_pub,
     reason = "the build reads part of what the crate shares with it"
 )]
 mod word;

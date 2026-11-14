@@ -12,7 +12,9 @@
 //! the UI serves (`remote`), the guest's first entry (`link::init`), then
 //! for the guest's life the answers due, the UI's batch and the loop's next
 //! turn (`link::run_due`, `remote::flush`, `event_loop::turn`). What the host serves is mounted on
-//! its link (xpute-native-host).
+//! its link (xpute-native-host). It exports itself to the platform's module
+//! over the program's start (`native`, `native_abi!`), as @xpute/web-runtime
+//! is the page's.
 //!
 //! It takes the link, the contract both sides take, from xpute-link: a
 //! frame's words (`frame`), the link machine (`Side`), a URI's tokens and a
@@ -31,6 +33,7 @@ pub mod jni;
 mod life;
 pub mod link;
 mod log;
+pub mod native;
 pub mod remote;
 pub mod wait;
 

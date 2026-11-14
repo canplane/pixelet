@@ -25,7 +25,7 @@ use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model::registry::ModelTable;
 use crate::domain::scene::model::{draw_list, models};
 use crate::domain::scene::transform::Transform;
-use crate::domain::setting::store::settings;
+use crate::domain::setting::settings;
 use crate::domain::smooth::smoothing_factor;
 use crate::domain::view::frame::coord::{to_world, world_to_canonical};
 use crate::sys::sched::tick::TickContext;
@@ -57,12 +57,12 @@ fn back_to_camera(azimuth: f64) -> f64 {
 }
 
 /// The heading from `from` to `to`, in radians, where 0 points along +x.
-pub fn heading_to(from: [f64; 2], to: [f64; 2]) -> f64 {
+pub(crate) fn heading_to(from: [f64; 2], to: [f64; 2]) -> f64 {
     libm::atan2(to[1] - from[1], to[0] - from[0])
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct WalkPlan {
+pub(crate) struct WalkPlan {
     pub start: [f64; 2],
     pub target: [f64; 2],
     pub start_time: f64,
@@ -73,7 +73,7 @@ impl WalkPlan {
     /// Where the walk is at `now`, and its heading, which is None once it has
     /// arrived. A walk takes `duration` whatever the distance, so the person
     /// and the pet catch up on the same beat after a pan of 1 unit or of 1000.
-    pub fn at(&self, now: f64) -> ([f64; 2], Option<f64>) {
+    pub(crate) fn at(&self, now: f64) -> ([f64; 2], Option<f64>) {
         let frac = if self.duration > 0.0 {
             ((now - self.start_time) / self.duration).clamp(0.0, 1.0)
         } else {
@@ -89,14 +89,14 @@ impl WalkPlan {
 
 /// A target settles once it has not changed for a delay, whatever moved it.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct SettleTracker {
+pub(crate) struct SettleTracker {
     pub last_seen: [f64; 2],
     pub last_change_time: f64,
     pub settled_at: [f64; 2],
 }
 
 impl SettleTracker {
-    pub fn new(at: [f64; 2], now: f64) -> SettleTracker {
+    pub(crate) fn new(at: [f64; 2], now: f64) -> SettleTracker {
         SettleTracker {
             last_seen: at,
             last_change_time: now,
@@ -106,7 +106,7 @@ impl SettleTracker {
 
     /// Notes `target` at `now`, and returns whether the target settled on
     /// this call, having stood still for `delay`.
-    pub fn update(&mut self, target: [f64; 2], now: f64, delay: f64) -> bool {
+    pub(crate) fn update(&mut self, target: [f64; 2], now: f64, delay: f64) -> bool {
         if target != self.last_seen {
             (self.last_seen, self.last_change_time) = (target, now);
         }
@@ -121,7 +121,7 @@ impl SettleTracker {
 /// What the companion's walk reads of the camera each frame, in world
 /// coordinates as f64.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Camera {
+pub(crate) struct Camera {
     /// Where the camera's pivot is going.
     pub pivot: [f64; 2],
     /// The top of the floor the pivot is drawn on. It is None while nothing
@@ -166,7 +166,7 @@ fn companion() -> &'static mut Companion {
 /// The floor the pivot `goal` is drawn on, as `ask` finds it in the world.
 /// The answer is kept while the pivot stands and no change touches what it
 /// read (`Memo`), as the companion's own floors are.
-pub fn pivot_floor(goal: Q3, ask: impl FnOnce(World) -> Option<f64>) -> Option<f64> {
+pub(crate) fn pivot_floor(goal: Q3, ask: impl FnOnce(World) -> Option<f64>) -> Option<f64> {
     let c = companion();
     c.pivot_floor.forget_touched();
     c.pivot_floor.of(goal, || ask(World::now()))
@@ -175,7 +175,7 @@ pub fn pivot_floor(goal: Q3, ask: impl FnOnce(World) -> Option<f64>) -> Option<f
 /// Steps the person and the pet. Each is the row its setting names, and a
 /// character of another row is let go for it. Each walks to the pivot, and
 /// neither is placed while the eye is the pivot (`camera` is None).
-pub fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
+pub(crate) fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     let s = companion();
     s.pet_floor.forget_touched();
     // A memo must see every change once, so the pivot's floor checks for
@@ -535,7 +535,7 @@ pub(crate) fn clear_of_walls(
 /// hangs only while the walk places the person, and only where the camera
 /// grid's cell at its feet is one a marker shows at (`marker_shows`), so the
 /// line reads where the markers about it do.
-pub fn line_hangs(eye: V3) -> Option<Q3> {
+pub(crate) fn line_hangs(eye: V3) -> Option<Q3> {
     let person = companion().characters[Group::Person as usize].as_ref()?;
     let feet = person.transform?.at;
     let over = [
@@ -549,7 +549,7 @@ pub fn line_hangs(eye: V3) -> Option<Q3> {
 /// Each character's model and skin image for the world's skinned pass. The
 /// image is as the loader has it now: a lost device takes it back until it
 /// loads again.
-pub fn companion_skins() -> impl Iterator<Item = (u32, Image)> {
+pub(crate) fn companion_skins() -> impl Iterator<Item = (u32, Image)> {
     let c: &'static _ = companion();
     c.characters
         .iter()
@@ -559,14 +559,14 @@ pub fn companion_skins() -> impl Iterator<Item = (u32, Image)> {
 
 /// Whether the person, and whether the pet, has loaded, for the loading
 /// toast.
-pub fn companion_ready() -> [bool; 2] {
+pub(crate) fn companion_ready() -> [bool; 2] {
     companion().characters.each_ref().map(Option::is_some)
 }
 
 /// Advances each character and returns whether a frame must be asked for
 /// (`Character::tick`). `on_surface`, indexed by group number, says whether a
 /// surface shows the person and whether one shows the pet.
-pub fn companion_animate(
+pub(crate) fn companion_animate(
     draw: &mut DrawList,
     models: &ModelTable,
     frame: &Frame,
@@ -581,7 +581,7 @@ pub fn companion_animate(
     moved
 }
 
-pub fn companion_draw(draw: &mut DrawList, models: &ModelTable) {
+pub(crate) fn companion_draw(draw: &mut DrawList, models: &ModelTable) {
     for c in companion().characters.iter().flatten() {
         c.draw(draw, models);
     }
@@ -589,7 +589,7 @@ pub fn companion_draw(draw: &mut DrawList, models: &ModelTable) {
 
 /// The draw of the character of `group` for a character surface, and its
 /// skin as the loader has it now. None while either has not loaded.
-pub fn companion_surface_draw(group: Group) -> Option<(Draw, Image)> {
+pub(crate) fn companion_surface_draw(group: Group) -> Option<(Draw, Image)> {
     let c = companion().characters[group as usize].as_ref()?;
     Some((c.surface_draw(models())?, c.skin()?))
 }

@@ -52,14 +52,14 @@ const ASIDE: u8 = PLACE + SHELL_CNT;
 /// The rank of a want. Wants start in order of a lower `class`, then a lower
 /// `dist`, then a higher `detail`.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Rank {
+pub(crate) struct Rank {
     pub class: u8,
     pub dist: f64,
     pub detail: u8,
 }
 
 impl Rank {
-    pub fn cmp(&self, other: &Rank) -> Ordering {
+    pub(crate) fn cmp(&self, other: &Rank) -> Ordering {
         self.class
             .cmp(&other.class)
             .then(self.dist.total_cmp(&other.dist))
@@ -69,7 +69,7 @@ impl Rank {
 
 /// Who is at fault for a failure. The fault decides what waits on it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Fault {
+pub(crate) enum Fault {
     /// The object itself is at fault, and asking again brings the same
     /// failure.
     Object,
@@ -80,7 +80,7 @@ pub enum Fault {
     Server,
 }
 
-pub fn rank(stream: Stream, id: u64, order: Order) -> Rank {
+pub(crate) fn rank(stream: Stream, id: u64, order: Order) -> Rank {
     let unseen = !order.seen as u8;
     // A zoom fits in the rank's byte. The zoom is read only for streams whose
     // ids are tiles. An object's id is the top's, which is no tile, or a
@@ -111,7 +111,7 @@ pub fn rank(stream: Stream, id: u64, order: Order) -> Rank {
 /// (`ts/client/src/service/sys/fs/read.ts`). An object's failure comes back the same
 /// however often it is asked, because within a version the key fixes the
 /// bytes.
-pub fn fault(failure: Failure) -> Fault {
+pub(crate) fn fault(failure: Failure) -> Fault {
     match failure.errnum {
         // The browser reports that it is offline.
         Errno::ENETUNREACH => Fault::Network,
@@ -137,7 +137,7 @@ pub fn fault(failure: Failure) -> Fault {
 /// retries of every client add up on it. It follows AWS's "full jitter",
 /// drawn uniformly up to the capped exponential, so clients that one outage
 /// failed together do not return together.
-pub fn backoff(fail_cnt: u32, seed: u64) -> Option<f64> {
+pub(crate) fn backoff(fail_cnt: u32, seed: u64) -> Option<f64> {
     if fail_cnt > param::RETRY_ATTEMPT_CNT {
         return None;
     }

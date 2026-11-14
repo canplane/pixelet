@@ -4,14 +4,14 @@
 //! piers, a tunnel's bore and the way's ground around it, and an approach's embankment or
 //! cutting. A brick's fill makes each column's spans once, on the CPU, and keeps them
 //! (`column`); the query, on the CPU and on the GPU, reads a cell off those spans (pxl-engine
-//! way.rs `way_cell`, clipmap.rs `way_at`, pxl-render way.wgsl). The bake makes them by the
-//! same rule to know which lines a zoom draws (bake/tile/terrain.rs `drawn`). The lines
-//! themselves are solved offline (bake/separation.rs).
+//! `way.rs` `way_cell`, `clipmap.rs` `way_at`, pxl-render `way.wgsl`). The bake makes them by
+//! the same rule to know which lines a zoom draws (`bake/tile/terrain.rs` `drawn`). The lines
+//! themselves are solved offline (`bake/separation.rs`).
 //!
 //! A cell is asked of the lines over its column, each visit of a line being its own crossing:
 //! the run of the line's segments, one after another, that lie over the column. A column's
 //! visits make its spans once (`column`), and what a cell of the column holds is read from
-//! them (pxl-engine way.rs `at`). Ground beside the air the spans leave takes that way's
+//! them (pxl-engine `way.rs` `at`). Ground beside the air the spans leave takes that way's
 //! asset id, read from the spans of the columns beside it (pxl-engine `way_cell`), so a
 //! brick's fill and a reader read its ring alike. Whatever is under half a cell in any
 //! dimension at a zoom is absent at that zoom, as the bake drops a line under half a cell
@@ -737,7 +737,7 @@ fn writes<C: ColumnGrid>(cols: &C, c: [i32; 2], k: u32, (face, per_m): (i32, f32
                 pier_stands(cols, c, o.pier, face, per_m)
             },
         },
-        // An approach's asset id is laid into the cells by the bake (bake/way.rs
+        // An approach's asset id is laid into the cells by the bake (`bake/way.rs`
         // `lay`), so the way writes nothing here.
         Occupy::Grade => Write::NONE,
     };
@@ -755,7 +755,7 @@ pub const SPAN_CAP: usize = 10;
 /// `way_cell`); it is `i32::MIN` where the area's edge walls the column or the column is past
 /// the area, where nothing lines it. `past` says a visit made more spans than `SPAN_CAP`, so these
 /// are not all the column's. The column's cells are read from these, so its visits are found
-/// once: a brick's fill keeps them (pxl-engine fill.rs `spans`, read through `way::SpanTable`
+/// once: a brick's fill keeps them (pxl-engine `fill.rs` `spans`, read through `way::SpanTable`
 /// there).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SpanList {

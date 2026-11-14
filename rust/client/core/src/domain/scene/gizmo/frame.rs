@@ -135,7 +135,7 @@ fn gizmo() -> &'static mut Gizmo {
     })
 }
 
-pub fn frame_gizmo_draw(draw: &mut DrawList) {
+pub(crate) fn frame_gizmo_draw(draw: &mut DrawList) {
     gizmo().mesh.draw(draw);
 }
 
@@ -145,7 +145,7 @@ pub fn frame_gizmo_draw(draw: &mut DrawList) {
 /// place as soon as it is known. It must run before the frame's list begins
 /// (domain/scene/stage.rs), so the lines and the origin they are drawn about
 /// come from the same frame.
-pub fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f64>) {
+pub(crate) fn frame_gizmo_step(show: bool, pivot: Option<Q3>, heading: Option<f64>) {
     let g = gizmo();
     let Some(at) = pivot.filter(|_| show) else {
         if core::mem::take(&mut g.shown) {

@@ -103,17 +103,17 @@ fn location() -> &'static mut LocationIndicator {
     LOCATION.get(LocationIndicator::default)
 }
 
-pub fn location_step(device_coord: Option<Q3>) {
+pub(crate) fn location_step(device_coord: Option<Q3>) {
     location().step(draw_list(), device_coord);
 }
 
 /// Advances the beacon by one frame (`LocationIndicator::tick`). Returns
 /// whether it wants more frames.
-pub fn location_animate(frame: &Frame) -> bool {
+pub(crate) fn location_animate(frame: &Frame) -> bool {
     location().tick(frame)
 }
 
-pub fn location_draw(draw: &mut DrawList) {
+pub(crate) fn location_draw(draw: &mut DrawList) {
     location().draw(draw);
 }
 
@@ -193,7 +193,7 @@ fn beacon_speed() -> f64 {
 /// (3), its border flags (4), and the faces it draws open to the air (1, a bit
 /// for each face). location_zone.wgsl reads this stride (pxl-render
 /// frame/shader/word.rs `LOCATION_ZONE_INSTANCE_FLOATS`).
-pub const ZONE_INSTANCE_FLOATS: usize = word::LOCATION_ZONE_INSTANCE_FLOATS as usize;
+pub(crate) const ZONE_INSTANCE_FLOATS: usize = word::LOCATION_ZONE_INSTANCE_FLOATS as usize;
 
 /// The zone shown, and its beacon: where the fix puts them (`center`,
 /// `beacon_to`), and what a frame moves or finds (`tick`).
@@ -218,7 +218,7 @@ struct Zone {
 }
 
 #[derive(Default)]
-pub struct LocationIndicator {
+pub(crate) struct LocationIndicator {
     /// The last height found under the fix, or None until one is found.
     last_known_center_z: Option<f64>,
     /// The center the zone was last grounded at, or None when no height was
@@ -334,7 +334,7 @@ impl LocationIndicator {
     /// step a seen step at a time while the bob spans a camera cell, and the
     /// frame is woken for the next step (`lens::StepClock`). Otherwise they
     /// hold still.
-    pub fn tick(&mut self, frame: &Frame) -> bool {
+    pub(crate) fn tick(&mut self, frame: &Frame) -> bool {
         let Some(p) = self.zone.as_mut() else {
             return false;
         };
@@ -371,7 +371,7 @@ impl LocationIndicator {
         slides
     }
 
-    pub fn draw(&self, draw: &mut DrawList) {
+    pub(crate) fn draw(&self, draw: &mut DrawList) {
         let Some(p) = &self.zone else { return };
         let Some(shown) = p.beacon_at.filter(|_| p.visible && self.block.handle != 0) else {
             return;

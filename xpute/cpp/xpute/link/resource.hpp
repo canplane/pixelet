@@ -1,14 +1,15 @@
 // cpp/xpute/link/resource.hpp
 
 // A handle names an object on the side that serves it, which issued it
-// (link.hpp), as xpute-link's resource.rs issues it. As the component model's
-// table does, a handle's slot is used again once its object is dropped, so
-// that a side issues handles for as long as it runs, the slots dropped first
-// used first, so that each comes back as late as it can; the slot is the
-// handle's low `SLOT_BITS`, from 1, the root being 0. Above it a generation,
-// which a slot's drop advances, keeps a frame late for a dropped object from
-// reaching the one in its slot now, until the slot has been used `GENERATION_MASK` +
-// 1 times. More live objects than the slots hold is a bug.
+// (`link.hpp`), as xpute-link's `resource.rs` issues it. As the component
+// model's table does, a handle's slot is used again once its object is
+// dropped, so that a side issues handles for as long as it runs, the slots
+// dropped first used first, so that each comes back as late as it can; the
+// slot is the handle's low `SLOT_BITS`, from 1, the root being 0. Above it a
+// generation, which a slot's drop advances, keeps a frame late for a dropped
+// object from reaching the one in its slot now, until the slot has been used
+// `GENERATION_MASK` + 1 times. More live objects than the slots hold is a
+// bug.
 
 #pragma once
 
@@ -80,7 +81,7 @@ template <class T> class Table {
   private:
     static constexpr std::uint32_t SLOT_MASK = (1u << frame::SLOT_BITS) - 1;
     // The largest generation an issued handle holds above its slot, below
-    // NAMED.
+    // `NAMED`.
     static constexpr std::uint32_t GENERATION_MASK = (frame::NAMED - 1) >> frame::SLOT_BITS;
     // What an issued slot's `next` holds, which no free slot's does.
     static constexpr std::uint32_t ISSUED = UINT32_MAX;

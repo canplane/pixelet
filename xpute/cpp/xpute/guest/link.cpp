@@ -6,8 +6,8 @@
 #include "xpute/link/frame.hpp"
 #include "xpute/link/mem.hpp"
 
-// A module takes the host's `link_out` under `env` (TS link.ts `imports`); a
-// native guest, from the host linked into its process.
+// A module takes the host's `link_out` under `env` (TS `link.ts` `imports`);
+// a native guest, from the host linked into its process.
 #ifdef __wasm__
 extern "C" __attribute__((import_module("env"), import_name("link_out"))) std::int32_t link_out(std::uint32_t at);
 #else

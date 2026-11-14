@@ -179,12 +179,17 @@ the layouts and numbers they read are generated from pxl-engine and pxl-spec by
 
 - Every compute pass over the world (the cast, the node cache, the light's and
   decor's) is held word for word to pxl-engine's Rust by a test over a real
-  world's buffers (`tests/`).
+  world's buffers (`tests/`), but for the two that `frame/shader/part.rs`
+  names: the light's slide, held looser, and the cells' starts, held only
+  through the samples that start from them.
 - Every walk ends at pxl-engine's `cast::STEPS_CAP` steps.
 - A value both sides would divide by or take the root of is rounded once on the
   CPU and handed in a word, and both sides multiply by it. The eye's ray at each
   pixel and a beam's width, which only the GPU walks, are worked out on the GPU
-  alone, each in one function (`walk_node.wgsl` `eye_aim`, `spacing_width`).
+  alone, each in one function (`walk_node.wgsl` `eye_aim`, `spacing_width`). A
+  cell's window, where its rays start, is worked out on each side
+  (`cell.wgsl` `cell_window`, pxl-engine `Grid::cell_window`): a GPU's root may
+  round it one less, which pxl-engine `param.rs` `RADIUS_SLACK` covers.
 - The build validates every shader with naga, and checks each pipeline's groups,
   render and compute, against the bindings its shaders read, both ways
   (`frame/shader/record.rs` `lays_out`); no struct of a shader holds a struct

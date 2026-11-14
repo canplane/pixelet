@@ -1,7 +1,8 @@
 // pxl-core/link/life.rs
 
 //! The app's lifecycle, which the core serves (xpute wit/life/life.wit):
-//! hidden, the last moment a save is sure to happen, and shown again.
+//! hidden, the last moment a save is sure to happen, shown again, and a UI
+//! attached, the first or one a reload makes on the same core.
 
 use core::future::poll_fn;
 use core::task::{Poll, Waker};
@@ -17,6 +18,12 @@ use crate::domain::layer::object::repository;
 pub(super) fn on_hidden() {
     geolocation::geolocation_visibility(false);
     repository::save();
+}
+
+/// A UI attached, and is posted the overlay whole at the entry's end
+/// (link.rs `tell_all`).
+pub(super) fn on_attached() {
+    super::tell_all();
 }
 
 /// How many times the app has been shown, and what awaits the next.

@@ -33,12 +33,12 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 
 /// The height of a walker's center standing on a floor whose top is `top`:
 /// half a leaf cell up, as a cell's center stands over its ground.
-pub fn over(top: f64) -> f64 {
+pub(crate) fn over(top: f64) -> f64 {
     top + units(GROUND.leaf_cell_zoom()) / 2.0
 }
 
 /// The floor under a walker's center at `z`, the inverse of `over`.
-pub fn under(z: f64) -> f64 {
+pub(super) fn under(z: f64) -> f64 {
     z - units(GROUND.leaf_cell_zoom()) / 2.0
 }
 
@@ -50,20 +50,20 @@ fn with_z(at: &Q3, z: i64) -> Q3 {
     world::at(i64::from(at[0]), i64::from(at[1]), z)
 }
 
-pub fn unknown(at: &Q3) -> Q3 {
+pub(crate) fn unknown(at: &Q3) -> Q3 {
     with_z(at, UNKNOWN_Z)
 }
 
-pub fn is_unknown(at: &Q3) -> bool {
+pub(crate) fn is_unknown(at: &Q3) -> bool {
     i64::from(at[2]) == UNKNOWN_Z
 }
 
 /// The top of the floor under a standing point `at`.
-pub fn floor_of(at: &Q3) -> f64 {
+pub(crate) fn floor_of(at: &Q3) -> f64 {
     under(q3::to_real(i64::from(at[2])))
 }
 
-pub fn on_floor(at: &Q3, top: f64) -> Q3 {
+pub(crate) fn on_floor(at: &Q3, top: f64) -> Q3 {
     with_z(at, q3::from_real(over(top)))
 }
 
@@ -282,7 +282,7 @@ impl<'w> SplitCell<'w> {
 impl World {
     /// What is in the leaf cell at `at`, as the cast draws it (pxl-engine
     /// `world::node`), or void where nothing is.
-    pub fn asset_of(&self, at: &Q3) -> Answer<u32> {
+    pub(crate) fn asset_of(&self, at: &Q3) -> Answer<u32> {
         let side = units(GROUND.leaf_cell_zoom());
         let p = [i64::from(at[0]), i64::from(at[1]), i64::from(at[2])].map(q3::to_real);
         self.asset((
@@ -293,7 +293,7 @@ impl World {
 
     /// Where the point `at` stands: on the surface where its height is not
     /// known (`surface_support`), and otherwise where it is.
-    pub fn stands(&self, at: &Q3) -> Answer<Option<Q3>> {
+    pub(crate) fn stands(&self, at: &Q3) -> Answer<Option<Q3>> {
         match is_unknown(at) {
             true => self
                 .surface_support(at)
@@ -306,7 +306,7 @@ impl World {
     /// whatever its height, as a fix or a search result is. It climbs out of
     /// what fills the surface, or else drops onto the first solid under it.
     /// None where nothing stands: a cell with no surface and nothing placed.
-    pub fn surface_support(&self, at: &Q3) -> Answer<Option<f64>> {
+    pub(crate) fn surface_support(&self, at: &Q3) -> Answer<Option<f64>> {
         let mut c = SplitCell::new(self, xy(at), LEAF_ZOOM, Path::default());
         let [lo, hi] = [BOUNDS.min[2], BOUNDS.max[2]];
         let surface = c.surface();
@@ -322,7 +322,7 @@ impl World {
     /// The floor a center at `at` stands on, as the frame draws the world at
     /// the tile zoom `zoom`: up out of what fills `at`, or else down to the
     /// first solid's top. None where nothing stands under `at`.
-    pub fn floor_under(&self, at: &Q3, zoom: Zoom) -> Answer<Option<f64>> {
+    pub(crate) fn floor_under(&self, at: &Q3, zoom: Zoom) -> Answer<Option<f64>> {
         let start = q3::to_real(i64::from(at[2]));
         let mut c = SplitCell::new(self, xy(at), zoom, Path::default());
         let stands = match c.lift(start) {
@@ -334,7 +334,7 @@ impl World {
 
     /// The top of the highest solid in `at`'s column, whatever `at`'s height.
     /// None where nothing stands there.
-    pub fn column_top(&self, at: &Q3) -> Answer<Option<f64>> {
+    pub(crate) fn column_top(&self, at: &Q3) -> Answer<Option<f64>> {
         let mut c = SplitCell::new(self, xy(at), LEAF_ZOOM, Path::default());
         let top = c.highest();
         c.answer(top)
@@ -343,7 +343,7 @@ impl World {
     /// The floor nearest `at`'s height: the top of a solid with room over
     /// it, under `at` or over it, or the cell's surface. None where nothing
     /// stands.
-    pub fn support_nearest(&self, at: &Q3) -> Answer<Option<f64>> {
+    pub(crate) fn support_nearest(&self, at: &Q3) -> Answer<Option<f64>> {
         let z = q3::to_real(i64::from(at[2]));
         let mut c = SplitCell::new(self, xy(at), LEAF_ZOOM, Path::default());
         let down = match c.lift(z) {
@@ -376,7 +376,7 @@ impl World {
     ///
     /// Where a leaf on the way is not held, it ends at `to` with its height
     /// not known.
-    pub fn step_slide(&self, from: &Q3, to: &Q3, walled: bool) -> Q3 {
+    pub(crate) fn step_slide(&self, from: &Q3, to: &Q3, walled: bool) -> Q3 {
         self.stands(from)
             .exact()
             .flatten()

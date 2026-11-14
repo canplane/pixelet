@@ -22,7 +22,7 @@ import {
 import * as setting from "@/service/core/setting.ts";
 import { log } from "@/service/platform/log.ts";
 import * as visibility from "@/service/platform/visibility.ts";
-import * as snapshot from "@/service/core/snapshot.ts";
+import * as overlay from "@/service/core/overlay.ts";
 import { MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
 import { DRIVE_SETTINGS, perf_drive } from "./drive.ts";
 import { perf_trace } from "./trace.ts";
@@ -138,7 +138,7 @@ async function run(): Promise<string> {
   await started();
   await new Promise((done) => setTimeout(done, SETTLE_MS));
   const before = DRIVE_SETTINGS.map(
-    ([key]) => [key, snapshot.cur().settings[key]] as const,
+    ([key]) => [key, overlay.cur().settings[key]] as const,
   );
   const report = await perf_drive();
   const r = await perf_report_read();

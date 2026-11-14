@@ -6,21 +6,21 @@
 //! posts `SENSOR_START` and `SENSOR_STOP` for them. It asks for the location
 //! again when the location card is pressed (`SENSOR_LOCATE`).
 
-pub mod device_orientation;
-pub mod geolocation;
-pub mod reading;
+pub(crate) mod device_orientation;
+pub(crate) mod geolocation;
+pub(crate) mod reading;
 
 use crate::domain::control::sensor::device_orientation::{orient_close, request_orient};
 use crate::domain::control::sensor::geolocation::{geolocation_close, geolocation_open};
 
 /// Called when the world's surface opens. It starts the location where the
 /// platform has one, and asks for the heading where the platform gives one.
-pub fn sensors_open() {
+pub(crate) fn sensors_open() {
     geolocation_open();
     request_orient();
 }
 
-pub fn sensors_close() {
+pub(crate) fn sensors_close() {
     geolocation_close();
     orient_close();
 }

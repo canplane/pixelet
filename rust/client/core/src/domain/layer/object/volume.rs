@@ -8,7 +8,7 @@ use pxl_engine::object;
 use pxl_spec::space::coord::zoom::Zoom;
 
 /// A branch of `tree` at `zoom`, its child group's eight folded, as its word.
-pub fn fold(tree: &SparseTree<u32, 3>, child_group: u32, zoom: Zoom) -> u32 {
+pub(crate) fn fold(tree: &SparseTree<u32, 3>, child_group: u32, zoom: Zoom) -> u32 {
     object::fold(
         core::array::from_fn(|k| share(tree.child(child_group, k))),
         zoom,

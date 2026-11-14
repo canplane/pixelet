@@ -11,9 +11,11 @@
 //! steps on its root's finest grid (`Node`), the origin's own grid. Only a plane's offset from
 //! the origin, summed as integers first, becomes a float (`units`). So the nodes near the
 //! origin are as exact as f32 is near zero wherever the origin stands, and X wraps around the
-//! world as the integers do. WGSL's f32 is not strictly IEEE (a division's last place, or a
-//! contraction into a fused multiply-add), so where a ray passes within the last bit of a
-//! face, the CPU and a GPU may stop on either side of it.
+//! world as the integers do. WGSL's f32 is not strictly IEEE: a division or a root is held
+//! only to a bound in ulps, a product may be fused into a sum, and a GPU's compiler may
+//! reorder a sum. So the CPU and a GPU compute a ray's planes with different low bits, by no
+//! bound one can promise, and where a ray passes within that difference of a face they may
+//! stop on either side of it. The walk is the drawing's: nothing reads it back.
 //!
 //! The descent holds one frame a zoom, so its stack is as deep as the zooms a node can have.
 //! From a child it steps to the next child across the face it leaves by, so no frame holds

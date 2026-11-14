@@ -40,7 +40,7 @@ fn marker_at(x: f64, y: f64) -> Option<MarkerTap> {
     }
 }
 
-pub fn hover(x: f64, y: f64) {
+pub(crate) fn hover(x: f64, y: f64) {
     match marker_at(x, y) {
         Some(_) => edit::point_at(x, y),
         None => edit::hover_at(x, y),
@@ -48,11 +48,11 @@ pub fn hover(x: f64, y: f64) {
 }
 
 /// Whether the pointer is over a marker a tap would act on.
-pub fn over_marker() -> bool {
+pub(crate) fn over_marker() -> bool {
     edit::pointer_ndc().is_some_and(|[x, y]| marker_at(x, y).is_some())
 }
 
-pub fn tap(x: f64, y: f64) {
+pub(crate) fn tap(x: f64, y: f64) {
     match marker_at(x, y) {
         Some(MarkerTap::Go(at)) => navigation::go_to_place(at),
         Some(MarkerTap::Remove(e)) => edit::write::remove(e),

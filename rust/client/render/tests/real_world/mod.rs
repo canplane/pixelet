@@ -37,12 +37,12 @@ use pxl_spec::way;
 use pxl_spec::way::{Segment, StationGrid};
 
 /// The leaf cell index `x`, wrapped round X as the world names it.
-pub fn wrap(x: i32) -> i32 {
+pub(crate) fn wrap(x: i32) -> i32 {
     wrap_idx(LEAF_CELL_ZOOM, x)
 }
 
 /// The hash the made-up content is drawn from.
-pub fn mix(a: u32, c: [i32; 2]) -> u32 {
+pub(crate) fn mix(a: u32, c: [i32; 2]) -> u32 {
     let mut h = a.wrapping_mul(0x9E37_79B1) ^ 0x51ED_270B;
     for v in c {
         h = (h ^ v as u32).wrapping_mul(0x85EB_CA77).rotate_left(13);
@@ -51,29 +51,29 @@ pub fn mix(a: u32, c: [i32; 2]) -> u32 {
 }
 
 /// A seeded stream.
-pub struct Draw(pub u32);
+pub(crate) struct Draw(pub u32);
 
 impl Draw {
-    pub fn next(&mut self) -> u32 {
+    pub(crate) fn next(&mut self) -> u32 {
         self.0 ^= self.0 << 13;
         self.0 ^= self.0 >> 17;
         self.0 ^= self.0 << 5;
         self.0
     }
     /// The next draw, within `[lo, hi)`.
-    pub fn within(&mut self, lo: i32, hi: i32) -> i32 {
+    pub(crate) fn within(&mut self, lo: i32, hi: i32) -> i32 {
         lo + (self.next() % (hi - lo) as u32) as i32
     }
 }
 
 /// The finest zoom a test asks. What is placed is held no finer (pxl-spec bake
 /// `OBJECT_FINEST`).
-pub const FINEST: Zoom = LEAF_CELL_ZOOM + 3;
+pub(crate) const FINEST: Zoom = LEAF_CELL_ZOOM + 3;
 
 /// Where the eye stands, in leaf cells. It is just east of the world's seam in X, so its finest
 /// clip level starts east of the seam and its coarser levels start west of it. It is a few
 /// cells north of the service area's south edge.
-pub const EYE: [i32; 2] = [-(1 << 23) + 300, (40 << 16) + 30];
+pub(crate) const EYE: [i32; 2] = [-(1 << 23) + 300, (40 << 16) + 30];
 
 /// Whether shard `n` is served. The served shards lie in rows 40 to 43: west of the seam from
 /// X = 100, far past what the clip levels reach; a few east of the seam; and three about
@@ -81,7 +81,7 @@ pub const EYE: [i32; 2] = [-(1 << 23) + 300, (40 << 16) + 30];
 /// level's reach. One shard inside is left out (`NOTCH`), and some leaf cells touch it only at
 /// a corner (`CORNERS`). The shard at the world's first node is served too, out of every clip
 /// level's reach.
-pub fn served(n: [i32; 2]) -> bool {
+pub(crate) fn served(n: [i32; 2]) -> bool {
     (n[0] >= 100 || n[0] < -124 || (-1..=1).contains(&n[0]))
         && (40..44).contains(&n[1])
         && n != NOTCH
@@ -89,11 +89,11 @@ pub fn served(n: [i32; 2]) -> bool {
 }
 
 /// The shard left out of the area.
-pub const NOTCH: [i32; 2] = [-126, 41];
+pub(crate) const NOTCH: [i32; 2] = [-126, 41];
 
 /// The leaf cells that touch the notch only at a corner, each with the name a tally counts it
 /// by.
-pub const CORNERS: [(&str, [i32; 2]); 4] = [
+pub(crate) const CORNERS: [(&str, [i32; 2]); 4] = [
     (
         "wall by a diagonal, south-west",
         [(NOTCH[0] << 16) - 1, (NOTCH[1] << 16) - 1],
@@ -114,13 +114,13 @@ pub const CORNERS: [(&str, [i32; 2]); 4] = [
 
 /// The first row of the land sunk under the sea. From this row north, nodes wider than a shard
 /// lie wholly under the sea.
-pub const SUNK_FROM: i32 = 42 << 16;
+pub(crate) const SUNK_FROM: i32 = 42 << 16;
 
 /// The clip levels the world wants but has not laid out.
-pub const UNLAID: [Zoom; 2] = [15, 21];
+pub(crate) const UNLAID: [Zoom; 2] = [15, 21];
 
 /// The first brick of the clip level at `cell_zoom`.
-pub fn level_first(eye: [i32; 2], cell_zoom: Zoom) -> [i32; 2] {
+pub(crate) fn level_first(eye: [i32; 2], cell_zoom: Zoom) -> [i32; 2] {
     let s = LEAF_CELL_ZOOM - cell_zoom;
     let first = clip::origin(cell_zoom, [eye[0] >> s, eye[1] >> s]);
     // At zooms 16 and 20 the level starts on a block as wide as the whole level, so its top
@@ -136,7 +136,7 @@ pub fn level_first(eye: [i32; 2], cell_zoom: Zoom) -> [i32; 2] {
 /// How far the samples of a brick of the clip level at `cell_zoom` stand over the rest of the
 /// ground. Spires a brick wide stand about the edges of this level and of each finer level, so
 /// a block read at an edge, or read at a coarser level, moves a bound.
-pub fn spire(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
+pub(crate) fn spire(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
     let s = BRICK_SHIFT + LEAF_CELL_ZOOM - cell_zoom;
     let mut most = 0;
     for finer in cell_zoom..=LEAF_CELL_ZOOM {
@@ -159,7 +159,7 @@ pub fn spire(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
 }
 
 /// The ground's face at a leaf column as the clip level at `cell_zoom` holds it, in leaf cells.
-pub fn ele(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
+pub(crate) fn ele(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
     let (fx, fy) = (x as f32, y as f32);
     let hills = 300.0 * libm::sinf(fx * 1.3e-5) + 120.0 * libm::cosf(fy * 3.1e-5);
     let near = 40.0 * libm::sinf(fx * 0.002) + 30.0 * libm::cosf(fy * 0.0031);
@@ -169,14 +169,14 @@ pub fn ele(eye: [i32; 2], cell_zoom: Zoom, x: i32, y: i32) -> i32 {
 }
 
 /// The leaf column at the middle of column `g` of the clip level at `cell_zoom`.
-pub fn leaf_of(cell_zoom: Zoom, g: i32) -> i32 {
+pub(crate) fn leaf_of(cell_zoom: Zoom, g: i32) -> i32 {
     let s = LEAF_CELL_ZOOM - cell_zoom;
     (g << s) + ((1 << s) >> 1)
 }
 
 /// The world as the GPU holds it, read as clip.wgsl and world.wgsl read it.
 #[derive(Clone, Copy)]
-pub struct World<'a> {
+pub(crate) struct World<'a> {
     pub clipmap: &'a [[i32; 4]],
     pub ground: &'a [u32],
     pub folds: &'a [u32],
@@ -262,11 +262,11 @@ impl Resident for World<'_> {
 
 /// The middle of a way, where a descent is sent: the zoom of the way's cells, its line, and the
 /// place in leaf cells.
-pub type Point = (Zoom, u32, [i32; 3]);
+pub(crate) type Point = (Zoom, u32, [i32; 3]);
 
 /// What a brick is filled from (pxl-engine `fill::Site`): four asset ids for each cell,
 /// the samples of its tile, and its lines.
-pub struct Source {
+pub(crate) struct Source {
     pub four: Vec<u32>,
     pub ele: Vec<i16>,
     pub lines: Vec<u32>,
@@ -274,7 +274,7 @@ pub struct Source {
 
 /// What the core hands the fill for brick `q` of the clip level at `cell_zoom`. The brick has
 /// lines only where `lined` is set, and the middles of its ways are added to `ways`.
-pub fn source(
+pub(crate) fn source(
     eye: [i32; 2],
     cell_zoom: Zoom,
     q: [i32; 2],
@@ -423,7 +423,7 @@ pub fn source(
 /// What is placed, as the store lays it. The words are every slot's child pointer, then every
 /// slot's data. The root's child group comes first, and each branch's data is the fold of its
 /// children.
-pub struct Placing {
+pub(crate) struct Placing {
     first: Vec<u32>,
     data: Vec<u32>,
 }
@@ -481,7 +481,7 @@ impl Placing {
 }
 
 /// The world built, and the places where the tests send their asks.
-pub struct Built {
+pub(crate) struct Built {
     pub clipmap: Vec<[i32; 4]>,
     pub ground: Vec<u32>,
     pub folds: Vec<u32>,
@@ -505,7 +505,7 @@ pub struct Built {
 }
 
 impl Built {
-    pub fn world(&self) -> World<'_> {
+    pub(crate) fn world(&self) -> World<'_> {
         World {
             clipmap: &self.clipmap,
             ground: &self.ground,
@@ -518,7 +518,7 @@ impl Built {
 
     /// The ground's top at leaf column `g`, from whichever clip level holds it. What is placed
     /// is not read.
-    pub fn top_at(&self, g: [i32; 2]) -> i32 {
+    pub(crate) fn top_at(&self, g: [i32; 2]) -> i32 {
         let (_, column, _, _) = clip::cell(
             &self.world(),
             Lookup::NONE,
@@ -532,7 +532,7 @@ impl Built {
 /// Folds the entries of the eye's clip levels in `clipmap`, one level at a time over its entry
 /// table (`clip::fold`). Some entries are then left as a clip level that moved along one axis
 /// would leave them, not yet folded again.
-pub fn fold(
+pub(crate) fn fold(
     clipmap: &mut [[i32; 4]],
     ground: &[u32],
     folds: &[u32],
@@ -572,7 +572,7 @@ pub fn fold(
 
 /// The service area's index, which holds each shard's nine (`area::nine`) at its key, as
 /// `served` decides.
-pub fn shards() -> Vec<[u32; 4]> {
+pub(crate) fn shards() -> Vec<[u32; 4]> {
     let mut shards = vec![[0u32; 4]; (area::SHARD_CELL_CNT / 4) as usize];
     for y in 0..1 << SHARD_ZOOM {
         for x in 0..1 << SHARD_ZOOM {
@@ -584,17 +584,21 @@ pub fn shards() -> Vec<[u32; 4]> {
 }
 
 /// The world about an eye at `eye`, always from the same seed.
-pub fn build(eye: [i32; 2]) -> Built {
+pub(crate) fn build(eye: [i32; 2]) -> Built {
     build_with_decors(eye, 0)
 }
 
 /// `build`, and `placed_decors` decors placed about the eye.
-pub fn build_with_decors(eye: [i32; 2], placed_decors: u32) -> Built {
+pub(crate) fn build_with_decors(eye: [i32; 2], placed_decors: u32) -> Built {
     build_with(eye, placed_decors, &[])
 }
 
 /// `build_with_decors`, with `leaves` placed last, each given as its zoom, node and word.
-pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], u32)]) -> Built {
+pub(crate) fn build_with(
+    eye: [i32; 2],
+    placed_decors: u32,
+    leaves: &[(Zoom, [i32; 3], u32)],
+) -> Built {
     let shards = shards();
 
     // The clip levels and their bricks, each brick filled as a frame's fill fills it. Some
@@ -920,7 +924,7 @@ pub fn build_with(eye: [i32; 2], placed_decors: u32, leaves: &[(Zoom, [i32; 3], 
 
 /// The world's one query asked of every node a walk visits, with nothing kept. A walk over it
 /// answers what a walk must answer whatever the node cache holds.
-pub struct Asking<'a> {
+pub(crate) struct Asking<'a> {
     pub w: World<'a>,
     pub cuts: [object::Cut; 2],
 }
@@ -960,7 +964,7 @@ impl Query for Asking<'_> {
 
 /// What the world answers of a node with nothing handed down to it, and what it hands on. This
 /// is what a stackless walk asks.
-pub fn truth(
+pub(crate) fn truth(
     w: World,
     cuts: [object::Cut; 2],
     zoom: Zoom,
@@ -983,7 +987,7 @@ pub fn truth(
 }
 
 /// The Q3 position of `units`, with a fraction that lies off every edge of a step.
-pub fn q8(units: [i32; 3]) -> [i32; 3] {
+pub(crate) fn q8(units: [i32; 3]) -> [i32; 3] {
     [
         units[0].wrapping_shl(FRAC_W) | 5,
         units[1].wrapping_shl(FRAC_W) | 77,
@@ -992,7 +996,7 @@ pub fn q8(units: [i32; 3]) -> [i32; 3] {
 }
 
 /// The world's buffers on the device.
-pub struct WorldBuffer {
+pub(crate) struct WorldBuffer {
     pub clip: wgpu::Buffer,
     pub ground: wgpu::Buffer,
     pub folds: wgpu::Buffer,
@@ -1001,6 +1005,6 @@ pub struct WorldBuffer {
     pub pool: wgpu::Buffer,
 }
 
-pub fn store_of() -> wgpu::BufferUsages {
+pub(crate) fn store_of() -> wgpu::BufferUsages {
     wgpu::BufferUsages::STORAGE
 }

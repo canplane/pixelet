@@ -14,10 +14,10 @@
 //!   reads it, `run` spends it on a list once one item has done work, and
 //!   `yield_if_spent` leaves the entry once it is spent.
 
-pub mod display;
-pub mod executor;
-pub mod param;
-pub mod tick;
+pub(crate) mod display;
+pub(crate) mod executor;
+pub(crate) mod param;
+pub(crate) mod tick;
 
 use core::future::{poll_fn, Future};
 use core::pin::pin;
@@ -56,7 +56,7 @@ fn sched() -> &'static mut Sched {
 }
 
 /// Asks for a frame.
-pub fn invalidate() {
+pub(crate) fn invalidate() {
     let s = sched();
     s.invalid = true;
     if let Some(w) = s.frame_waker.take() {
@@ -65,12 +65,12 @@ pub fn invalidate() {
 }
 
 /// Whether a frame is asked for and not yet taken.
-pub fn is_invalid() -> bool {
+pub(crate) fn is_invalid() -> bool {
     sched().invalid
 }
 
 /// Waits until a frame is asked for, and takes the ask.
-pub async fn invalidated() {
+pub(crate) async fn invalidated() {
     poll_fn(|cx| {
         let s = sched();
         if core::mem::take(&mut s.invalid) {
@@ -83,7 +83,7 @@ pub async fn invalidated() {
 }
 
 /// Asks for a frame at `at`, on the clock.
-pub fn invalidate_at(at: f64) {
+pub(crate) fn invalidate_at(at: f64) {
     let s = sched();
     if at >= s.earliest {
         return;
@@ -95,7 +95,7 @@ pub fn invalidate_at(at: f64) {
 }
 
 /// Starts the timer task.
-pub fn boot() {
+pub(crate) fn boot() {
     executor::spawner().spawn(timer().or_bug(Errno::ENOSPC));
 }
 
@@ -131,18 +131,18 @@ async fn timer() {
 }
 
 /// Starts the entry's budget.
-pub fn begin() {
+pub(crate) fn begin() {
     sched().deadline = now() + BUDGET_MS;
 }
 
-pub fn spent() -> bool {
+pub(crate) fn spent() -> bool {
     now() >= sched().deadline
 }
 
 /// What `run` came to: the items it stepped, and whether the budget stopped
 /// it before the list's end.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Run {
+pub(crate) struct Run {
     pub step_cnt: u32,
     pub stopped_early: bool,
 }
@@ -150,7 +150,7 @@ pub struct Run {
 /// Steps `items` in order until the entry's budget is spent. `step` answers
 /// whether it did work, and the budget holds only once one step has, so the
 /// list always moves.
-pub fn run<T>(items: impl IntoIterator<Item = T>, mut step: impl FnMut(T) -> bool) -> Run {
+pub(crate) fn run<T>(items: impl IntoIterator<Item = T>, mut step: impl FnMut(T) -> bool) -> Run {
     let mut r = Run::default();
     let mut worked = false;
     for item in items {
@@ -165,7 +165,7 @@ pub fn run<T>(items: impl IntoIterator<Item = T>, mut step: impl FnMut(T) -> boo
 }
 
 /// Leaves the entry once its budget is spent, and comes back in a later one.
-pub async fn yield_if_spent() {
+pub(crate) async fn yield_if_spent() {
     if spent() {
         // A wait that fails leaves the entry all the same.
         _ = wait_for(0).await;

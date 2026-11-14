@@ -26,7 +26,7 @@ fn display() -> &'static mut Display {
 }
 
 /// A vsync answered at `at`.
-pub fn answered(at: f64) {
+pub(crate) fn answered(at: f64) {
     let d = display();
     if let Some(last) = d.at {
         d.ring[d.seen_cnt % GAP_CAP] = at - last;
@@ -36,12 +36,12 @@ pub fn answered(at: f64) {
 }
 
 /// The next vsync is not armed back to back with the last.
-pub fn idle() {
+pub(crate) fn idle() {
     display().at = None;
 }
 
 /// The display's interval in ms, or 0 before two vsyncs came back to back.
-pub fn interval_ms() -> f64 {
+pub(crate) fn interval_ms() -> f64 {
     let d = display();
     let n = d.seen_cnt.min(GAP_CAP);
     if n == 0 {

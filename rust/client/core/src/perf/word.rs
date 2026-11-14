@@ -12,10 +12,10 @@ use core::mem::size_of;
 /// The implementor must be `#[repr(C)]` with no padding, and every field an
 /// f64, such a record, or bytes a whole number of words long, so every word
 /// reads as an f64.
-pub unsafe trait AsWords: Sized {}
+pub(crate) unsafe trait AsWords: Sized {}
 
 /// `val`'s words, laid end to end as perf.json5 lays them.
-pub fn as_words<T: AsWords>(val: &T) -> &[f64] {
+pub(crate) fn as_words<T: AsWords>(val: &T) -> &[f64] {
     // SAFETY: `AsWords` guarantees plain f64s laid end to end.
     unsafe {
         core::slice::from_raw_parts(
@@ -25,7 +25,7 @@ pub fn as_words<T: AsWords>(val: &T) -> &[f64] {
     }
 }
 
-pub fn as_words_mut<T: AsWords>(val: &mut T) -> &mut [f64] {
+pub(crate) fn as_words_mut<T: AsWords>(val: &mut T) -> &mut [f64] {
     // SAFETY: `AsWords` guarantees plain f64s laid end to end, and `val` is
     // borrowed whole.
     unsafe {
@@ -38,12 +38,12 @@ pub fn as_words_mut<T: AsWords>(val: &mut T) -> &mut [f64] {
 
 /// A record with every word 0.0. `Default` cannot be derived for an array
 /// longer than 32, and this serves such records instead.
-pub fn zeroed<T: AsWords>() -> T {
+pub(crate) fn zeroed<T: AsWords>() -> T {
     // SAFETY: `AsWords` guarantees plain f64s laid end to end, and all bits 0 is 0.0.
     unsafe { core::mem::zeroed() }
 }
 
-pub fn put<T: AsWords>(out: &mut [f64], at: usize, val: &T) {
+pub(crate) fn put<T: AsWords>(out: &mut [f64], at: usize, val: &T) {
     let words = as_words(val);
     out[at..at + words.len()].copy_from_slice(words);
 }

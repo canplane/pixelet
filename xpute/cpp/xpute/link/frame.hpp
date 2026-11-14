@@ -1,10 +1,10 @@
 // cpp/xpute/link/frame.hpp
 
-// A frame's words are laid out by link/spec/frame.json5, as xpute-link's
-// frame.rs lays them: the request's tag, its command, the result, and the
-// packet's length. The command is the RES bit, the handle the callee issued
+// A frame's words are laid out by `link/spec/frame.json5`, as xpute-link's
+// `frame.rs` lays them: the request's tag, its command, the result, and the
+// packet's length. The command is the `RES` bit, the handle the callee issued
 // and the method's place among its object's. The packet, the method's args or
-// its answer's value in the Canonical ABI's layout (cabi.hpp), lies right
+// its answer's value in the Canonical ABI's layout (`cabi.hpp`), lies right
 // past the words. The words are little-endian, as both forms' memory is.
 
 #pragma once
@@ -22,12 +22,12 @@ namespace xpute::link {
 // The size of a frame's words, its header before its packet.
 inline constexpr std::uint32_t HDR_SZ = frame::WORDS * 4;
 
-// NAMED is a handle's top bit.
+// `NAMED` is a handle's top bit.
 static_assert(frame::NAMED == frame::RES >> frame::METHOD_BITS >> 1);
 
 struct Frame {
     std::uint32_t tag;
-    // A later answer, to the receiver's request `tag`.
+    // An answer, to the receiver's request `tag`.
     bool res;
     std::uint32_t handle;
     std::uint32_t method;

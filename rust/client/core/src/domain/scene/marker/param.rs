@@ -8,12 +8,12 @@
 /// laid out in CSS pixels, as the UI's text is, so the width looks the same
 /// on every screen. The value was chosen by eye to hold a name of a few
 /// words.
-pub const SPACING_PX: f64 = 193.0;
+pub(super) const SPACING_PX: f64 = 193.0;
 
 /// The radius of the sphere tested against the frustum, as a fraction of the
 /// distance, since a marker keeps a constant size on the screen. It is
 /// generous, because one marker too many costs only a sprite.
-pub const ANCHOR_RADIUS: f64 = 0.08;
+pub(super) const ANCHOR_RADIUS: f64 = 0.08;
 
 /// How long a line shows, in ms. The chat has no expiry of its own.
-pub const SHOWN_MS: f64 = 8000.0;
+pub(super) const SHOWN_MS: f64 = 8000.0;

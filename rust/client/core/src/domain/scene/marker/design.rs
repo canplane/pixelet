@@ -41,7 +41,7 @@ fn width(font: Font, text: &str) -> Option<f64> {
 /// One line of `text` in `font` and `color` (0xRRGGBBAA), as the atlas
 /// paints it: drawn at the atlas's scale into the line's box (`raster_box`).
 /// None when it could not be drawn this frame, and a later frame asks again.
-pub fn text_raster(font: Font, color: u32, text: &str) -> Option<Raster<'static>> {
+pub(crate) fn text_raster(font: Font, color: u32, text: &str) -> Option<Raster<'static>> {
     let advance = width(font, text)? as f32;
     let (size, origin) = raster_box(font, advance);
     let scale = ATLAS_SCALE as f32;

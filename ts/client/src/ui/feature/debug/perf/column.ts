@@ -3,8 +3,8 @@
 /**
  * How the report, the panel and the trace show a frame's columns, as
  * service/core/perf.ts decodes them. A column's name ends in its unit: `_ms`,
- * `_bytes`, `_px`, or `_name` for an index into a list of names, as FRAME in
- * perf.json5 defines. So a column the core adds needs nothing here. Only the
+ * `_bytes`, `_px`, or `_name` for an index into a list of names, as `FRAME` in
+ * `perf.json5` defines. So a column the core adds needs nothing here. Only the
  * names of a list column's slots are spelled out.
  */
 

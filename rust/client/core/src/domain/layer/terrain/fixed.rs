@@ -17,7 +17,7 @@ use pxl_engine::clipmap::SLOT_CNT;
 use crate::sys::range::{arr_bytes, OwnedRange};
 
 /// The terrain's range in `.fixed`, which the boot hands in.
-pub static RANGE: OwnedRange = OwnedRange::new();
+pub(crate) static RANGE: OwnedRange = OwnedRange::new();
 
 const TILE_SLOT_CNT: u32 = TileCache::<TerrainTile>::SLOT_CNT;
 
@@ -56,7 +56,7 @@ const FILL_ARRAY_BYTES: [u32; 2] = [ELE_BYTES, arr_bytes(SPANS_WORDS as usize, 4
 /// Where the fill's room starts, on a cache line.
 const FILL_AT: u32 = arr_bytes(folds_off(SLOT_CNT) as usize, 1);
 
-pub const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_ARRAY_BYTES);
+pub(crate) const TERRAIN_BYTES: u32 = FILL_AT + sum(&FILL_ARRAY_BYTES);
 
 /// Where tile slot `slot`'s samples start.
 pub(super) const fn ele_off(slot: u32) -> u32 {

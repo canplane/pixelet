@@ -35,7 +35,7 @@ use crate::domain::scene::environment::{environment_alt_km, environment_drift};
 use crate::domain::scene::frame::Frame;
 use crate::domain::scene::model;
 use crate::domain::scene::model::asset::model_of;
-use crate::domain::setting::store::settings;
+use crate::domain::setting::settings;
 use crate::domain::view::frame::pose::{eye, km_per_u};
 use crate::domain::view::lens::{self, cull_dist_u, decor_impostor_angle, decor_model_angle};
 use crate::domain::view::observation;
@@ -50,7 +50,7 @@ use pxl_render::gpu::api::Image;
 /// The cumulus models. Each model is one whole cloud.
 const VARIANTS: [Slot; cumulus::MODELS.len()] = cumulus::MODELS;
 
-pub const MODEL_CAP: usize = VARIANTS.len();
+pub(crate) const MODEL_CAP: usize = VARIANTS.len();
 
 /// The clouds' draw groups come right after those of the decor variants,
 /// which take the numbers before them (pxl-content generation.rs `GROUP_CNT`).
@@ -74,7 +74,7 @@ const DRAW_DIST_MAX: f64 = cull_dist_u(CLOUD_WIDTH[1]);
 /// The most patches built at once: the number of patch keys along a side of
 /// the reach, squared. It sets the clouds' share of the renderer's upload
 /// table.
-pub const PATCH_CAP: usize = {
+pub(crate) const PATCH_CAP: usize = {
     let side = (2.0 * DRAW_DIST_MAX / PATCH) as usize + 2;
     side * side
 };
@@ -128,7 +128,7 @@ fn clouds() -> &'static mut CloudLayer {
 
 /// Each variant's draw group, with its mesh (0 while it loads), its skin and
 /// its extent.
-pub fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<Image>, [f32; 3])> {
+pub(crate) fn cloud_groups() -> impl Iterator<Item = (usize, u32, Option<Image>, [f32; 3])> {
     let models = model::models();
     let skin = load_of(cumulus::SKIN).and_then(load_image);
     clouds()
@@ -164,7 +164,7 @@ fn layer_u() -> f64 {
 /// clouds' clock steps by this, so a drawn cloud lags the wind by at most the
 /// seen step. That step is an angle, so the lag looks the same on every
 /// screen. It is infinite while no cloud is drawn.
-pub fn drift_step_s() -> f64 {
+pub(crate) fn drift_step_s() -> f64 {
     lens::visible_step_s(clouds().nearest_dist, libm::hypot(WIND[0], WIND[1]))
 }
 
@@ -172,7 +172,7 @@ pub fn drift_step_s() -> f64 {
 /// alike (`FrameInput::clouds`). It is 0 with the clouds setting off.
 /// Otherwise it is 1 while the eye, at the altitude the sky last saw it, is
 /// below half of `CLOUD_GONE_KM`, and it fades to 0 at `CLOUD_GONE_KM`.
-pub fn clouds_shown() -> f64 {
+pub(crate) fn clouds_shown() -> f64 {
     if !settings().cloud {
         return 0.0;
     }
@@ -183,7 +183,7 @@ pub fn clouds_shown() -> f64 {
 /// Takes the cloud models as they arrive, keeps built the patches in which
 /// the eye could see a cloud, and lists their draws, moved as far as the wind
 /// has carried the field (`environment_drift`).
-pub fn step(draw: &mut DrawList, frame: &Frame) {
+pub(crate) fn step(draw: &mut DrawList, frame: &Frame) {
     let c = clouds();
     c.nearest_dist = f64::INFINITY;
     for (slot, file) in c.models.iter_mut().zip(VARIANTS) {

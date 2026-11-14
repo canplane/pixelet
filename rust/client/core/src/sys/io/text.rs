@@ -64,7 +64,12 @@ fn cache() -> &'static mut Cache {
 /// `text` broken into lines no wider than `max_width`, each with its
 /// width; a `max_width` of 0 gives one line. It is None where the platform
 /// could not measure the text this frame, and a later frame asks again.
-pub fn text_lines(weight: u32, px: f64, max_width: f64, text: &str) -> Option<Vec<(&str, f64)>> {
+pub(crate) fn text_lines(
+    weight: u32,
+    px: f64,
+    max_width: f64,
+    text: &str,
+) -> Option<Vec<(&str, f64)>> {
     let key = LayoutKey {
         weight,
         px: px.to_bits(),
@@ -220,7 +225,7 @@ fn allowed_break(text: &str, line: usize, mut at: usize) -> usize {
 /// first. `color` is 0xRRGGBBAA. The pixels stay at least until the next
 /// frame's start. It is None where the platform could not draw the text this
 /// frame, and a later frame asks again.
-pub fn text_pixels(
+pub(crate) fn text_pixels(
     weight: u32,
     px: f64,
     color: u32,
@@ -259,7 +264,7 @@ pub fn text_pixels(
 
 /// Called as a frame starts. The answers that the frame before did not read
 /// are dropped.
-pub fn text_drop_unread() {
+pub(crate) fn text_drop_unread() {
     let c = cache();
     c.layouts.retain(|_, e| core::mem::take(&mut e.read));
     c.rasters.retain(|_, e| core::mem::take(&mut e.read));

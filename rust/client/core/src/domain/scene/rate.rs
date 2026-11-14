@@ -11,7 +11,7 @@
 use pxl_global::Global;
 
 use crate::domain::scene::param;
-use crate::domain::setting::store::{settings, ResMode};
+use crate::domain::setting::{settings, ResMode};
 
 /// The frame's target interval, in display intervals.
 static INTERVAL: Global<u32> = Global::new();
@@ -20,13 +20,13 @@ fn interval_mut() -> &'static mut u32 {
     INTERVAL.get(|| 1)
 }
 
-pub fn interval() -> u32 {
+pub(crate) fn interval() -> u32 {
     *interval_mut()
 }
 
 /// Judges a drawn frame that came `gap_ms` after the last and cost
 /// `cost_ms`, on a display of `display_ms`.
-pub fn judge(gap_ms: f64, cost_ms: f64, display_ms: f64) {
+pub(crate) fn judge(gap_ms: f64, cost_ms: f64, display_ms: f64) {
     let i = interval_mut();
     if settings().res != ResMode::Auto || display_ms <= 0.0 {
         *i = 1;

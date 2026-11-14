@@ -28,7 +28,7 @@ export {
   uri,
 } from "./link.ts";
 export { Lift, Lower } from "./cabi.ts";
-export { packet, type Port, Remote, serve, type Taker } from "./remote.ts";
+export { packet, type Port, Remote } from "./remote.ts";
 export { Table } from "./resource.ts";
 export { type Stop } from "./stop.ts";
-export { wait } from "./wait.ts";
+export { sender, wait } from "./wait.ts";

@@ -945,13 +945,13 @@ impl Gen<'_> {
             }
         }
         // What the module takes from other modules, which its runtime module
-        // holds alone (wit-bindgen's `_rt`).
+        // holds alone (wit-bindgen's `_rt`) for the module above it.
         let mut body = items;
         if !self.rs_uses.borrow().is_empty() {
             body.push_str("mod _rt {\n");
             for (m, names) in self.rs_uses.borrow().iter() {
                 let names: Vec<&str> = names.iter().map(String::as_str).collect();
-                let _ = writeln!(body, "    pub use {m}::{{{}}};", names.join(", "));
+                let _ = writeln!(body, "    pub(super) use {m}::{{{}}};", names.join(", "));
             }
             body.push_str("}\n");
         }

@@ -30,7 +30,7 @@ impl StringTable {
         self.ends.push(self.bytes.len() as u32);
     }
 
-    pub fn get(&self, i: u32) -> &str {
+    pub(crate) fn get(&self, i: u32) -> &str {
         let Some(&end) = self.ends.get(i as usize) else {
             return "";
         };

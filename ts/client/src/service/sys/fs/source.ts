@@ -4,7 +4,8 @@
  * The tile source's declaration, which the bucket serves (script/publish.py
  * writes it) or a dev tile server answers. It is asked for until it answers,
  * and read once. The core is handed its own part of it, the top zoom, the
- * formats and the shards (SOURCE_DECLARE), and observes nothing before that.
+ * formats and the shards (pxl:core source `declare`), and observes nothing
+ * before that.
  * The versions stay on this side, where the bakes' objects (tile.ts) and the
  * settings read them.
  */
@@ -138,21 +139,6 @@ export function source_versions(): Declaration["version"] | null {
 
 export const watch_source = listeners.watch;
 
-/** Resolves with true once the source is declared, or with false once it is
- * refused. */
-export function settled(): Promise<boolean> {
-  return new Promise((done) => {
-    const look = () => {
-      if (state === SOURCE_DECLARED || state === SOURCE_REFUSED) {
-        done(state === SOURCE_DECLARED);
-        return true;
-      }
-      return false;
-    };
-    if (!look()) watch_source(() => void look());
-  });
-}
-
 /** On a page, the core and the asking for the declaration run in a worker.
  * The page's thread holds no files, so the UI learns the source's state and
  * declaration through this (runtime/worker.ts). */
@@ -187,9 +173,9 @@ async function ask_decl(): Promise<string | null> {
 
 /** Resolves once the source is declared or refused, `source_state` then
  * saying which. The core is handed its part of the declaration over `link`
- * (SOURCE_DECLARE). It is refused when that part is more than one command
- * can carry, or when the core refuses it, as it does, among others, a format
- * this build cannot read. */
+ * (pxl:core source `declare`). It is refused when that part is more than one
+ * frame can carry, or when the core refuses it, as it does, among others, a
+ * format this build cannot read. */
 export async function declare_source(link: Sender): Promise<void> {
   let source = await ask_decl();
   let wait_ms = ASK_AGAIN_MS;
@@ -212,7 +198,7 @@ export async function declare_source(link: Sender): Promise<void> {
     return;
   }
   const shards = Object.keys(read.shard);
-  // This is set before SOURCE_DECLARE is sent, because the frame that takes
+  // This is set before `declare` is sent, because the frame that takes
   // it already opens tiles under the declaration.
   cur_decl = read;
   const formats = Uint32Array.from(BASE_KINDS, (kind) => read.format[kind]);

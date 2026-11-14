@@ -32,7 +32,7 @@ use crate::domain::layer::object::meta::decor_instance;
 
 /// The farthest any decor's box in decor.json5 reaches from its min corner,
 /// however it turns. It is computed once.
-pub fn box_extent() -> f64 {
+pub(crate) fn box_extent() -> f64 {
     static EXTENT: Global<f64> = Global::new();
     *EXTENT.get(|| DECORS.iter().map(|d| d.box_extent()).fold(0.0, f64::max))
 }
@@ -68,7 +68,7 @@ impl World {
     /// Every decor the ground's scatter generates on the leaves whose box
     /// shares room with `space`, whether or not its column surface is there
     /// now. This includes what an erase took away.
-    pub fn generated_over(&self, space: &Aabb) -> Vec<Instance> {
+    pub(crate) fn generated_over(&self, space: &Aabb) -> Vec<Instance> {
         let (r, unit) = (box_extent(), units(GROUND.leaf_cell_zoom()));
         let cells = |k: usize| {
             libm::floor((space.min[k] - r) / unit) as i32..libm::ceil(space.max[k] / unit) as i32
@@ -90,7 +90,7 @@ impl World {
     /// The instance of `decor` the ground generates standing in the leaf
     /// cell that `at` lies in. None where it generates nothing there or the
     /// clip levels do not hold the cell.
-    pub fn generated_instance(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
+    pub(crate) fn generated_instance(&self, decor: &Decor, at: &Q3) -> Option<Instance> {
         let [x, y, z] = idx_of(GROUND.leaf_cell_zoom(), at);
         let mut met = None;
         self.generated_in([x, y], |d, i| {

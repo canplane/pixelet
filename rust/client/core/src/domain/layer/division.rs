@@ -29,7 +29,7 @@ use crate::sys::range::{arr_bytes, OwnedRange};
 static DIVISION: Global<TileCache<DivisionTile>> = Global::new();
 
 /// The division's range in `.fixed` (sys/range.rs), which the boot hands in.
-pub static RANGE: OwnedRange = OwnedRange::new();
+pub(crate) static RANGE: OwnedRange = OwnedRange::new();
 
 /// The bytes of one slot's room: a word for each cell, rounded up to whole cache
 /// lines.
@@ -37,7 +37,7 @@ const ROOM_BYTES: u32 = arr_bytes(CELL_CNT, 4);
 
 /// The size of the division's range: one room for each slot of the tile
 /// cache, end to end.
-pub const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOT_CNT * ROOM_BYTES;
+pub(crate) const DIVISION_BYTES: u32 = TileCache::<DivisionTile>::SLOT_CNT * ROOM_BYTES;
 
 impl Base for DivisionTile {
     const ASK_SCOPE: AskScope = AskScope::Line;
@@ -60,7 +60,7 @@ impl Base for DivisionTile {
 
 /// The finest tile on the pivot's line. The demand asks for it together with
 /// every tile over it.
-pub fn line(pivot: Option<Q3>) -> Option<Quadrant> {
+pub(crate) fn line(pivot: Option<Q3>) -> Option<Quadrant> {
     pivot.map(|at| {
         let [x, y, _] = idx_of(LEAF_ZOOM, &at);
         Quadrant::over(DivisionTile::LEAF, [x, y])
@@ -71,14 +71,14 @@ pub fn line(pivot: Option<Q3>) -> Option<Quadrant> {
 /// held over `at`, which is a held parent while the finer tile is on its way,
 /// and the index of `at`'s cell in that tile. The same tile always names the
 /// same divisions.
-pub fn naming(at: &Q3) -> Option<(Quadrant, u32)> {
+pub(crate) fn naming(at: &Q3) -> Option<(Quadrant, u32)> {
     let from = line(Some(*at)).and_then(|p| DivisionTile::tile_cache().finest_resident(p))?;
     Some((from, GROUND.cell_of(from.zoom, at).idx()))
 }
 
 /// Calls `each` with the divisions named at a cell from `naming`, from the
 /// broadest to the narrowest.
-pub fn each_division((from, cell): (Quadrant, u32), each: impl FnMut(Division<'_>)) {
+pub(crate) fn each_division((from, cell): (Quadrant, u32), each: impl FnMut(Division<'_>)) {
     if let Some(tile) = DivisionTile::tile_cache().get(from) {
         tile.name_at(cell).for_each(each);
     }

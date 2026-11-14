@@ -77,8 +77,8 @@ pub unsafe fn bytes<'a>(at: u32, len: u32) -> &'a mut [u8] {
     unsafe { core::slice::from_raw_parts_mut(p, len as usize) }
 }
 
-/// The offset of `p` in the guest's memory; an address outside it is a bug,
-/// never a truncated offset.
+/// The offset of `p` in the guest's memory; an address whose offset does not
+/// fit a u32 is a bug, never truncated.
 pub fn off(p: *const u8) -> u32 {
     let off = p.expose_provenance().wrapping_sub(base());
     u32::try_from(off).ok().or_bug(Errno::EFAULT)

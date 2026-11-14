@@ -40,7 +40,7 @@ export const path = {
   /** The platform's storage, where the platform holds a file being the client's choice. What a file holds is its owner's, written whole, its `format` first (pxl-core sys/io/file.rs). */
   STORAGE: {
     ID: 4 as number,
-    /** The settings' overrides, in the platform's storage (domain/setting/store.rs). */
+    /** The settings' overrides, in the platform's storage (domain/setting.rs). */
     SETTINGS: {
       ID: 0 as number,
     },
@@ -83,7 +83,7 @@ export const SHARD_ZOOM = 8 as number;
 /** The children of the tree packet a shard's file and an edit batch hold after their
  * format byte, by index: each row a write `<key, asset_id, ext>`, a leaf as the write that made
  * it in a shard's file, in the order made in a batch, where void erases (pxl-core
- * domain/layer/object/store.rs `Write`). A record a class's (pxl-spec object/ext.rs),
+ * domain/layer/object/store.rs `Write`). A record a class's (pxl-spec object.rs),
  * its row and its fields as columns. */
 export const write = {
   /** A `strs` column holding each key as an octkey (pxl-spec space/hierarchy/morton.rs `name`, 3D): the shard's quadkey, then a digit 0 to 7 a zoom. */

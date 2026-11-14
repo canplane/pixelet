@@ -8,13 +8,13 @@ use std::collections::TryReserveError;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::XputeError;
 
-pub use crate::spec::demand::OutcomeName as Outcome;
+pub(crate) use crate::spec::demand::OutcomeName as Outcome;
 use crate::sys::io::room::Refusal;
 
 /// How an attempt ended, as one value, so an attempt that ended well cannot
 /// carry a failure and a failed one always carries its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Exit {
+pub(crate) enum Exit {
     Ok,
     Aborted,
     Failed(Failure),
@@ -27,14 +27,14 @@ pub enum Exit {
 /// Why an attempt failed, in the numbers the statistics count by. A failure
 /// the core raised itself carries the source location that raised it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Failure {
+pub(crate) struct Failure {
     pub errnum: Errno,
     pub detail: u16,
     pub at: Option<&'static Location<'static>>,
 }
 
 impl Exit {
-    pub fn outcome(&self) -> Outcome {
+    pub(crate) fn outcome(&self) -> Outcome {
         match self {
             Exit::Ok => Outcome::Ok,
             Exit::Aborted => Outcome::Aborted,
@@ -46,7 +46,7 @@ impl Exit {
 /// How an attempt that failed with `f` ends: one the host canceled, as
 /// a reload of its program leaves an open, is aborted, so its want starts
 /// again; any other failed.
-pub fn exit_of(f: Failure) -> Exit {
+pub(crate) fn exit_of(f: Failure) -> Exit {
     match f.errnum {
         Errno::ECANCELED => Exit::Aborted,
         _ => Exit::Failed(f),

@@ -1,21 +1,14 @@
 // xpute-native-host/lib.rs
 
 //! The host's end of xpute on a native device, paired file by file with
-//! @xpute/web-host: what it serves the guest (`stop`, `clock`), and the
-//! `disk` where the program keeps its files, as the browser's storage is a
-//! page's. It runs in its runtime (xpute-native-runtime), on the guest's
-//! thread, and mounts what it serves on the runtime's link, as a page's
-//! worker composes @xpute/web-host's over the link it instantiated. It
-//! exports the runtime and itself to the platform's module over the
-//! program's start (`native`, `native_abi!`).
+//! @xpute/web-host: what it serves the guest (`stop`, `clock`). It runs in
+//! its runtime (xpute-native-runtime), on the guest's thread, and mounts what
+//! it serves on the runtime's link, as a page's worker composes
+//! @xpute/web-host's over the link it instantiated.
 
 #![cfg(not(target_arch = "wasm32"))]
 
 pub mod clock;
-pub mod disk;
-#[cfg(target_os = "android")]
-pub mod jni;
-pub mod native;
 pub mod stop;
 
 use xpute_kit::status::bug::Bug;

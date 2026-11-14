@@ -45,7 +45,7 @@ fn stands_on(kind: Kind, under: Kind) -> bool {
 /// nothing in the cell under it is something it may not stand on
 /// (`stands_on`). Only a placed marker can refuse it that way, since the
 /// ground generates no markers.
-pub fn is_placement_blocked(asset: Asset, zoom: Zoom, corner: &Q3) -> bool {
+pub(crate) fn is_placement_blocked(asset: Asset, zoom: Zoom, corner: &Q3) -> bool {
     let (world, room) = (World::now(), asset.room(zoom, corner));
     let blocked = !world.editable(&room) || world.placed_occupying(&room, |_| true).is_some();
     let under = Aabb {
@@ -64,7 +64,7 @@ pub fn is_placement_blocked(asset: Asset, zoom: Zoom, corner: &Q3) -> bool {
 
 /// The center of the leaf cell whose min corner is the hover anchor
 /// `anchor`. A tap recenters there, and the ghost box is drawn there.
-pub fn anchor_center(anchor: &Q3) -> Q3 {
+pub(crate) fn anchor_center(anchor: &Q3) -> Q3 {
     let half = q3::from_real(units(GROUND.leaf_cell_zoom()) / 2.0);
     world::at(
         i64::from(anchor[0]) + half,
@@ -74,7 +74,7 @@ pub fn anchor_center(anchor: &Q3) -> Q3 {
 }
 
 /// The box of a placed object in world doubles, the space the pick works in.
-pub fn object_aabb(obj: &Entry) -> Aabb {
+pub(crate) fn object_aabb(obj: &Entry) -> Aabb {
     let min = coord::to_world(&obj.corner());
     let max = min.map(|v| v + obj.size());
     Aabb { min, max }

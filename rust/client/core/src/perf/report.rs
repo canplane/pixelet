@@ -50,7 +50,7 @@ static RENDERER: Global<RendererFrame> = Global::new();
 /// Takes the renderer's report for this frame (domain/scene/stage.rs
 /// `stage_render`) and the reads of earlier frames that landed this frame.
 /// The figures are 0 when the renderer drew no frame.
-pub fn set_renderer_frame(report: &FrameReport) {
+pub(crate) fn set_renderer_frame(report: &FrameReport) {
     let (kind, scale) = (report.kind, report.scale);
     let Some(stat) = report.stat else {
         RENDERER.set(RendererFrame {
@@ -109,7 +109,7 @@ fn peaks(h: &HeapStat) -> RecordingSection {
 }
 
 /// A frame's own measures (frame.rs `run`).
-pub struct CpuSample {
+pub(crate) struct CpuSample {
     pub tick: TickReport,
     /// The display's measured interval, and the gap since the last frame,
     /// which closes the interval before this one and which this frame was
@@ -126,7 +126,7 @@ pub struct CpuSample {
 
 /// Records the frame once its frame is drawn. What taking the record
 /// costs counts as the profiler's time (`perf_ms`), not the frame task's.
-pub fn perf_frame(t: CpuSample) {
+pub(crate) fn perf_frame(t: CpuSample) {
     let at = now();
     // The peaks and counts are taken whether or not the profiler records, so
     // a recording that starts later counts from its own start.

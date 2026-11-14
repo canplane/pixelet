@@ -6,7 +6,9 @@
  * override (`x.ios.tsx`, `x.android.tsx`, `x.native.tsx`) to its default. The
  * bundler swaps a platform file in by its suffix, so no import names it, and
  * without this file nothing would check that it exports what the default
- * does. Nothing imports this file; `tsc` alone reads it.
+ * does. A device's own module, which has no default and which device files
+ * import by its name (service/platform/pxl-platform.native.ts), is none of
+ * the files this one holds. Nothing imports this file; `tsc` alone reads it.
  */
 
 import type * as page from "@/page.ts";

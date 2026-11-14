@@ -4,9 +4,10 @@
 //! own. The method is sent when the future is made. Its answer keeps the
 //! result, the return data and what the args lend, and wakes the waker the
 //! last poll left; the future hands all three back. Dropping the future
-//! before its answer cancels the call (frame.json5 `CANCEL`), as the component
-//! model's dropped subtask is canceled; what the args lend stays alive until
-//! the answer, which still comes and owns it (link/wit/types.wit `lent`).
+//! before its answer cancels the call (`frame.json5` `CANCEL`), as the
+//! component model's dropped subtask is canceled; what the args lend stays
+//! alive until the answer, which still comes and owns it
+//! (`link/wit/types.wit` `lent`).
 
 use core::future::Future;
 use core::pin::Pin;
@@ -26,8 +27,8 @@ struct Slot<L> {
     waker: Cell<Option<Waker>>,
 }
 
-/// A side's send, which answers the request's tag (link.rs `send`,
-/// xpute-native-runtime link.rs `send`).
+/// A side's send, which answers the request's tag (xpute-guest `link.rs`
+/// `send`, xpute-native-runtime `link.rs` `send`).
 pub type Send = for<'a> fn(Handle, Method, link::Args<'a>, Option<Answer>) -> Tag;
 
 pub struct Wait<L> {

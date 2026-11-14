@@ -45,7 +45,7 @@ pub fn set(key: u32, val: u32) -> Result<Result<(), super::types::ErrorCode>, _r
 }
 
 mod _rt {
-    pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::{answer, Handle, Lift, Lower, Method};
-    pub use xpute_native_runtime::link;
+    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_link::{answer, Handle, Lift, Lower, Method};
+    pub(super) use xpute_native_runtime::link;
 }

@@ -42,10 +42,10 @@ const fn longest() -> u32 {
 }
 
 /// A slot's bytes: the longest such body, on a page.
-pub const SLOT_BYTES: u32 = longest().next_multiple_of(PAGE_BYTES);
+pub(crate) const SLOT_BYTES: u32 = longest().next_multiple_of(PAGE_BYTES);
 
 /// The slots' range in `.fixed`, which the boot hands in.
-pub static RANGE: OwnedRange = OwnedRange::new();
+pub(crate) static RANGE: OwnedRange = OwnedRange::new();
 
 const _: () = assert!(BODY_SLOT_CNT <= u32::BITS, "a slot is a bit of `out`");
 
@@ -70,13 +70,13 @@ fn slots() -> &'static mut Slots {
 }
 
 /// A slot out, and the bytes of it a body takes.
-pub struct Slot {
+pub(crate) struct Slot {
     idx: u32,
     len: u32,
 }
 
 /// A free slot, or None with every slot out.
-pub fn take() -> Option<Slot> {
+pub(crate) fn take() -> Option<Slot> {
     let s = slots();
     let idx = (!s.out).trailing_zeros();
     if idx >= BODY_SLOT_CNT {
@@ -90,7 +90,7 @@ pub fn take() -> Option<Slot> {
 
 impl Slot {
     /// Sets the bytes of the slot the body takes; more than the slot is a bug.
-    pub fn set_len(&mut self, len: u32) {
+    pub(crate) fn set_len(&mut self, len: u32) {
         xpute_kit::ensure!(len <= SLOT_BYTES, EFBIG, len);
         self.len = len;
     }
@@ -134,7 +134,7 @@ impl Drop for Slot {
 }
 
 /// A body: in a slot, or a heap buffer of its own.
-pub enum Body {
+pub(crate) enum Body {
     Slot(Slot),
     Heap(Box<[u8]>),
 }
@@ -150,13 +150,13 @@ impl Deref for Body {
     }
 }
 
-pub fn release_cnt() -> u32 {
+pub(crate) fn release_cnt() -> u32 {
     slots().release_cnt
 }
 
 /// The most slots out at once since the last call. The profiler takes it
 /// (perf/report.rs `perf_frame`), and `BODY_SLOT_CNT` is judged against it.
-pub fn take_peak() -> u32 {
+pub(crate) fn take_peak() -> u32 {
     let s = slots();
     core::mem::replace(&mut s.peak, s.out.count_ones())
 }

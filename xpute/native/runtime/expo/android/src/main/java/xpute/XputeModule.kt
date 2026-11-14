@@ -82,7 +82,6 @@ class XputeModule : Module() {
       generation = Runtime.start(
         IntArray(named.size) { named[it].toInt() },
         bytesOf(prefixes),
-        appContext.persistentFilesDirectory.path,
         appContext.cacheDirectory.path,
       )
     }

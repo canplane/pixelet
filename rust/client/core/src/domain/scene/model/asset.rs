@@ -48,7 +48,7 @@ const IDENTITY: [f32; 16] = [
 
 /// How many models may parse or register at once, each in its own task: one a
 /// catalog slot, the most `model_of` can start.
-pub const REGISTRATION_CAP: usize = SLOT_CNT;
+pub(crate) const REGISTRATION_CAP: usize = SLOT_CNT;
 
 /// None while the registration's task runs. Then either the registered
 /// model's number, or the heap's refusal of room.
@@ -83,7 +83,7 @@ fn running() -> usize {
 /// failure: the registration is tried again once the heap gives room back. No
 /// more than `REGISTRATION_CAP` run at once, and a model past them waits its
 /// turn here.
-pub fn model_of(slot: Slot, height_u: Option<f64>) -> Option<u32> {
+pub(crate) fn model_of(slot: Slot, height_u: Option<f64>) -> Option<u32> {
     let load = load_of(slot)?;
     let file = load.id();
     let key = height_u.map(f64::to_bits);
@@ -144,7 +144,7 @@ async fn parse(file: u32, bytes: Box<[u8]>) {
 /// `slot`'s model as `model_of` registered it at `height_u`, without asking
 /// for anything to load. It serves a reader that must not start a load, such
 /// as the query. None while the model is not registered.
-pub fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<u32> {
+pub(crate) fn registered_model(slot: Slot, height_u: Option<f64>) -> Option<u32> {
     let file = load_of(slot)?.id();
     let key = height_u.map(f64::to_bits);
     REGISTRY

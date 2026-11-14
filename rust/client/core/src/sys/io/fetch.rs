@@ -23,7 +23,7 @@ use crate::sys::io::room::Refusal;
 use crate::spec::manifest::mem;
 use crate::sys::sched::{executor, invalidate};
 
-pub struct Response {
+pub(crate) struct Response {
     pub key: u64,
     pub stream: Stream,
     pub id: u64,
@@ -41,7 +41,7 @@ fn answers() -> &'static mut List<Response, { CREDIT_CAP as usize }> {
 
 /// Reads the want `id` of `stream` for the attempt `key`, in a task of its
 /// own. The pool is the credits, which already bound the attempts in flight.
-pub fn start(key: u64, stream: Stream, id: u64) {
+pub(crate) fn start(key: u64, stream: Stream, id: u64) {
     let Some(path) = file::path_of(stream, id) else {
         return;
     };
@@ -113,12 +113,12 @@ fn drop_stopped() {
 }
 
 /// How many answers to any stream in `of` wait to be taken.
-pub fn answer_cnt(of: &[Stream]) -> usize {
+pub(crate) fn answer_cnt(of: &[Stream]) -> usize {
     answers().iter().filter(|a| of.contains(&a.stream)).count()
 }
 
 /// The oldest answer to any stream in `of`.
-pub fn take_answer(of: &[Stream]) -> Option<Response> {
+pub(crate) fn take_answer(of: &[Stream]) -> Option<Response> {
     let a = answers();
     let at = a.iter().position(|a| of.contains(&a.stream))?;
     Some(a.remove(at))

@@ -877,7 +877,7 @@ fn take_stamps(s: &mut State) -> Option<usize> {
         return None;
     }
     s.stamps_out[r] = 0;
-    // SAFETY: as the fence, its result seen since the fence was.
+    // SAFETY: the result after the fence, which the host wrote before the fence was signaled.
     if unsafe { fence.add(1).read() } != result::OK {
         return None;
     }

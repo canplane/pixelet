@@ -20,5 +20,4 @@ xpute-link-gen.workspace = true
 # xpute and its GPU plugin declare their targets.
 xpute-gen-targets.workspace = true
 xpute-gpu-gen-targets.workspace = true
-serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }

@@ -26,13 +26,13 @@ type Sea<'a> = Option<&'a [bool]>;
 
 /// A tile's land against the sea: none of it, all of it, or the land
 /// polygons of a shore, each its outer ring and holes.
-pub enum Coast {
+pub(crate) enum Coast {
     Sea,
     Land,
     Shore(Vec<(Vec<P>, Vec<Vec<P>>)>),
 }
 
-pub fn bake_ground(feats: &[Feature], coast: &Coast) -> GroundCells {
+pub(crate) fn bake_ground(feats: &[Feature], coast: &Coast) -> GroundCells {
     let mut cells = vec![Ground::Water as GroundId; TILE_AREA];
     match coast {
         Coast::Sea => {}

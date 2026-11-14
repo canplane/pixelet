@@ -11,7 +11,7 @@ use pxl_spec::space::coord::v3::V3;
 /// (domain/scene/model/registry.rs `Model::scale`), so a scale of 1 draws the
 /// model at the height it was registered at.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Transform {
+pub(crate) struct Transform {
     pub at: V3,
     pub rot: f32,
     pub scale: f32,

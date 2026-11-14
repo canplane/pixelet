@@ -27,7 +27,7 @@ use pxl_global::Global;
 use crate::domain::layer::object::meta::user_decor_pick;
 use crate::domain::preview::RenderEdit;
 use crate::domain::query::World;
-use crate::domain::setting::store::settings;
+use crate::domain::setting::settings;
 use crate::domain::view::lens::{decor_impostor_angle, decor_model_angle, decor_zooms};
 use crate::sys::io::loader::catalog;
 use pxl_spec::space::layer::lattice;
@@ -107,7 +107,7 @@ fn wrap(x: i32) -> u32 {
 /// Builds this frame's hand-over for an eye at `eye`. Placed decor is walked
 /// out to the reach `walk_zoom` describes. The placed decor and the ground's
 /// decor that the eraser's preview hides (`edit`) are left out.
-pub fn step(eye: V3, edit: &RenderEdit) {
+pub(crate) fn step(eye: V3, edit: &RenderEdit) {
     let RenderEdit {
         hide,
         scattered_cell,
@@ -248,7 +248,7 @@ fn drawing(p: &mut [u32; drawing::WORDS as usize], key: Key) {
 /// `object::WRITE_DAMAGE_CAP` regions, the rest are joined into the last one
 /// (pxl-render gpu/generator.rs `hold`), so no write is lost however many
 /// turns pass before a frame takes them.
-pub fn note_damage(regions: &[Aabb]) {
+pub(crate) fn note_damage(regions: &[Aabb]) {
     let h = hand_over();
     let leaf = units(LEAF_CELL_ZOOM);
     for r in regions {
@@ -266,7 +266,7 @@ pub fn note_damage(regions: &[Aabb]) {
 /// The hand-over `step` built, with each decor's zooms as they are now
 /// (`decor_zooms`). The damage `note_damage` held is handed once and then
 /// cleared.
-pub fn frame() -> DecorFrame<'static> {
+pub(crate) fn frame() -> DecorFrame<'static> {
     let h = hand_over();
     let damage_cnt = core::mem::take(&mut h.damage_cnt);
     h.zooms = decor_zooms(settings().decor);

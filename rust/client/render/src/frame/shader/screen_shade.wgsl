@@ -62,7 +62,7 @@ fn fs(v: VertexOut) -> FragOut {
 // Under the camera gizmo (`frame_gizmo`), `color` tinted by the solid angle the face of the
 // cell the ray stopped on shows the eye as the zoom rule weighs it: its cube's side at its
 // zoom, `word`'s, squared over the distance squared, as a share of a grid cell's, `GRID_CELL`
-// squared. A world's cell spans (1, `SPANS`] of the view's cells at its distance (pxl-engine
+// squared. A world's cell spans (1, `SPANS`] of the view's cells at its distance (pxl-spec
 // grid.rs `cell_zoom_at`), so its share lies within (1, 4]: green there, blue finer and red
 // coarser (debug_look.json5 `share`).
 fn cell_share(color: vec3f, word: u32, h: Hit) -> vec3f {

@@ -5,7 +5,10 @@ that knows how it is stored. Everything above asks the world's query (`query/`),
 and the query asks the terrain and the objects; no other code reads either
 directly, and the compiler holds that: the query is a child of this module
 (`layer.rs`, though its files stand beside the layers), and a layer's reads are
-visible within `layer` alone. A layer never decides what to fetch either: the
+visible within `layer` alone. What a layer holds, rather than what it answers,
+is no question of the world, and a view of it reads the layer itself: the
+coverage gizmo draws which bricks the clip levels hold (`terrain/clipmap.rs`
+`eye_bricks`, visible to `domain` for it). A layer never decides what to fetch either: the
 view says what an observation needs, and a layer holds what it is asked for.
 
 ## The contract
@@ -60,7 +63,7 @@ id at its node, each branch its eight children folded. A write splits leaves
 only on its path, folds again up it and joins eight equal leaves into one, so
 one picture has one tree. A leaf of air erases what a lower layer would show.
 A leaf may carry an extension, such as a marker's words, kept in a pool for its
-class of ids (pxl-spec `object/ext.rs` `class_of`) and placed and erased with
+class of ids (pxl-spec `object.rs` `class_of`) and placed and erased with
 its leaf.
 
 The objects come from the objects' source, as the files of kind `OBJECT`

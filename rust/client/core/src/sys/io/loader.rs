@@ -85,7 +85,7 @@ impl Loader {
 
 /// The catalog the client plugs in (pxl-spec asset/catalog.rs). The first
 /// read asks for it, and it is None while it loads.
-pub fn catalog() -> Option<&'static Catalog> {
+pub(crate) fn catalog() -> Option<&'static Catalog> {
     let l = loader();
     l.at(LoadKind::Catalog, Load::File(CATALOG))
         .get_or_insert(Entry::Pending);
@@ -93,13 +93,13 @@ pub fn catalog() -> Option<&'static Catalog> {
 }
 
 /// The file `slot` names; none while the catalog loads.
-pub fn load_of(slot: Slot) -> Option<Load> {
+pub(crate) fn load_of(slot: Slot) -> Option<Load> {
     catalog().map(|c| Load::File(c.file(slot)))
 }
 
 /// A model's bytes, handed over once. It is None while the file loads and
 /// after the bytes are taken.
-pub fn take_gltf(load: Load) -> Option<Box<[u8]>> {
+pub(crate) fn take_gltf(load: Load) -> Option<Box<[u8]>> {
     let entry = loader()
         .at(LoadKind::Gltf, load)
         .get_or_insert(Entry::Pending);
@@ -115,7 +115,7 @@ pub fn take_gltf(load: Load) -> Option<Box<[u8]>> {
 /// An image as the renderer takes it: the asset's number and the file's
 /// bytes. The bytes are empty once the texture has landed, and the whole is
 /// None while the file loads.
-pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
+pub(crate) fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
     match loader()
         .at(LoadKind::Image, load)
         .get_or_insert(Entry::Pending)
@@ -130,7 +130,7 @@ pub fn load_image(load: Load) -> Option<(u32, &'static [u8])> {
 /// declares its wants. They come by kind, the files by number and the sphere
 /// after them. The sphere is wanted only once its source declares the
 /// version it is opened under.
-pub fn load_wants() -> &'static [(u64, Order)] {
+pub(crate) fn load_wants() -> &'static [(u64, Order)] {
     let l = loader();
     l.wants.clear();
     for kind in LoadKind::ALL {
@@ -147,7 +147,7 @@ pub fn load_wants() -> &'static [(u64, Order)] {
 /// Reads the file of `load` for the attempt `key`, in a task of its own. A
 /// model and an image of one load are the same file, and the attempt's id
 /// says which it is read as.
-pub fn open_asset(key: u64, load: Load) {
+pub(crate) fn open_asset(key: u64, load: Load) {
     let Some((_, id)) = attempt_of(key) else { return };
     let Some((kind, _)) = of_id(id) else { return };
     // The task's pool has room for one for each file in flight
@@ -203,7 +203,7 @@ async fn arrival(key: u64, kind: LoadKind, load: Load) {
 
 /// The renderer has made the texture of the image numbered `image`
 /// (pxl-render `take_complete`), so the file's bytes are let go.
-pub fn on_image_complete(image: u32) {
+pub(crate) fn on_image_complete(image: u32) {
     let Some(load) = Load::of(image) else { return };
     let entry = loader().at(LoadKind::Image, load);
     if matches!(entry, Some(Entry::Bytes(_))) {
@@ -214,7 +214,7 @@ pub fn on_image_complete(image: u32) {
 /// The device was lost, and with it every texture an image landed in. Each
 /// such image is read again when it is next asked for. An image whose bytes
 /// are still held is handed to the renderer again.
-pub fn on_images_lost() {
+pub(crate) fn on_images_lost() {
     let l = loader();
     let image = LoadKind::Image as usize;
     for entry in l.entries[image].iter_mut().chain([&mut l.sphere[image]]) {

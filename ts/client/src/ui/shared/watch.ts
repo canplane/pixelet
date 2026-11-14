@@ -7,7 +7,7 @@ import {
   type UiView,
   watch_snapshot,
   watch_view,
-} from "@/service/core/snapshot.ts";
+} from "@/service/core/overlay.ts";
 import { gpu, watch_gpu, type Gpu } from "@/service/sys/gpu.ts";
 import { online, watch_online } from "@/service/origin/online.ts";
 import {
@@ -16,18 +16,18 @@ import {
   watch_source,
   type Source,
 } from "@/service/sys/fs/source.ts";
-import * as snapshot from "@/service/core/snapshot.ts";
+import * as overlay from "@/service/core/overlay.ts";
 
 /** `select` must return a primitive or a reference that already exists. A new
  * object on every call makes React render again forever. */
 export function useCore<T>(select: (s: Snapshot) => T): T {
-  return useSyncExternalStore(watch_snapshot, () => select(snapshot.cur()));
+  return useSyncExternalStore(watch_snapshot, () => select(overlay.cur()));
 }
 
 /** The view's azimuth and scale, which change apart from the snapshot.
  * `select` keeps the same rule as `useCore`'s. */
 export function useView<T>(select: (v: UiView) => T): T {
-  return useSyncExternalStore(watch_view, () => select(snapshot.cur_view()));
+  return useSyncExternalStore(watch_view, () => select(overlay.cur_view()));
 }
 
 export function useGpu(): Gpu {

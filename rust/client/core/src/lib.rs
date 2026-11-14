@@ -5,8 +5,7 @@
 //! frames. On a device it is linked into the app with the runtime the app
 //! composes (pxl-runtime), and the GPU's host runs beside it and admits each
 //! frame. It runs only when xpute's link enters it (`xpute_guest::link!`): its
-//! boot and every entry's start and end are link.rs's. No other file of the
-//! core knows about WebAssembly, the browser or threads.
+//! boot and every entry's start and end are link.rs's.
 
 /// The link's bindings, generated from spec/client/core/wit/.
 pub mod abi;

@@ -199,7 +199,8 @@ pub fn node<H: ground::Resident<Place = Lookup>, W: BrickSource, L: Table, P: Po
             0
         };
         if way != NOTHING {
-            // Where a way wrote the cell, its asset id four times, whatever its value.
+            // Where the way makes up most of the cell, the cell takes the way's asset id four
+            // times, whatever its value.
             let (f, theirs) = cover(fill, way, FULL);
             if theirs {
                 (val, four) = (way, word([way; 4]));

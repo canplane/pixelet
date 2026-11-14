@@ -38,7 +38,7 @@ pub fn surface(implementation: _rt::Rc<dyn GuestSurface>) -> _rt::Rc<dyn _rt::Ob
 }
 
 mod _rt {
-    pub use std::rc::Rc;
-    pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::{Lift, Method, Object, Reply, Tag};
+    pub(super) use std::rc::Rc;
+    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_link::{Lift, Method, Object, Reply, Tag};
 }

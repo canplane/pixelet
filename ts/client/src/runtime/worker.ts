@@ -7,13 +7,14 @@
  * handles and prefixes of what the UI serves; the worker instantiates the
  * module with a link laid over it (@xpute/web-runtime `instantiate`), mounts
  * the objects the host serves, the core's files and GPU among them, and the
- * UI's stand-ins, enters the core, and serves the link to the UI across the
- * port (@xpute/link remote.ts), the canvases the UI gives going to the GPU.
- * The files are here, so the source is declared here too.
+ * UI's stand-ins, enters the core, serves the link to the UI across the
+ * port (@xpute/web-runtime `serve`), the canvases the UI gives going to the
+ * GPU, and tells the core the UI attached. The files are here, so the source
+ * is declared here too.
  */
 
 import type { GpuState } from "@xpute/gpu-link";
-import { type Side, serve, wait } from "@xpute/link";
+import { type Side, sender } from "@xpute/link";
 import { hook, serve_clock, serve_stop } from "@xpute/web-host";
 import {
   forward_console,
@@ -21,7 +22,9 @@ import {
   instantiate,
   type InstantiateError,
   type Log,
+  serve,
   type Stopped,
+  tell_attached,
   type Trap,
 } from "@xpute/web-runtime";
 import { serve_vsync, WebGpu } from "@xpute/gpu-web-host";
@@ -97,7 +100,7 @@ async function start(m: Instantiate): Promise<void> {
   serve_objects(link);
   // The page's host stages its writes in the chunks a device's does
   // (spec/client/render/api.json5 `device`), and in a build made for
-  // measuring says what runs slower than perf.json5's LIMIT.SLOW_MS.
+  // measuring says what runs slower than `perf.json5`'s `LIMIT.SLOW_MS`.
   const gpu = new WebGpu(
     link,
     { power: device.POWER, required_feats: device.REQUIRED_FEATURES, optional_feats: device.OPTIONAL_FEATURES },
@@ -110,11 +113,12 @@ async function start(m: Instantiate): Promise<void> {
     take: (h) => gpu.unbind(h),
   });
   link.init();
+  tell_attached(link);
   await declare(link);
 }
 
 /** Declares the tile source to the core, and tells the page its state. */
 async function declare(link: Side): Promise<void> {
   watch_source(() => tell({ kind: "source", state: source_state(), decl: source_decl() }));
-  await declare_source({ send: (h, m, args) => wait(link, h, m, args) });
+  await declare_source(sender(link));
 }

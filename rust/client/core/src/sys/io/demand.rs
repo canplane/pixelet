@@ -10,8 +10,8 @@ use core::cmp::Ordering;
 use pxl_spec::bake::publication::BaseKind;
 
 use crate::spec;
-pub use crate::spec::demand::StreamName as Stream;
-pub use crate::spec::demand::TaskPhaseName;
+pub(crate) use crate::spec::demand::StreamName as Stream;
+pub(crate) use crate::spec::demand::TaskPhaseName;
 
 /// Where a stream's wants come from. A `Load` want is an asset file by its
 /// id, which the loader opens (sys/io/loader.rs). A `Base` want is a base
@@ -55,17 +55,17 @@ pub struct Row {
 /// A want's order in the view: seen before unseen, then nearer first. Every
 /// layer takes its work in this order and evicts it in reverse.
 #[derive(Clone, Copy, Debug)]
-pub struct Order {
+pub(crate) struct Order {
     pub seen: bool,
     pub near: f64,
 }
 
-pub const PHASE_CAP: usize = spec::demand::TASK_PHASE_CAP as usize;
+pub(crate) const PHASE_CAP: usize = spec::demand::TASK_PHASE_CAP as usize;
 
 /// The timings a run reports, each under the name the run gives it. A timing
 /// past `PHASE_CAP` is dropped.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct PhaseList {
+pub(crate) struct PhaseList {
     items: [(TaskPhaseName, f64); PHASE_CAP],
     len: usize,
 }
@@ -122,12 +122,12 @@ impl Stream {
 
 impl Order {
     /// A want with no place in the view, ordered by its stream alone.
-    pub const LAST: Order = Order {
+    pub(crate) const LAST: Order = Order {
         seen: false,
         near: f64::INFINITY,
     };
 
-    pub const FIRST: Order = Order {
+    pub(crate) const FIRST: Order = Order {
         seen: true,
         near: 0.0,
     };
@@ -166,14 +166,14 @@ impl Default for PhaseList {
 }
 
 impl PhaseList {
-    pub fn push(&mut self, name: TaskPhaseName, val: f64) {
+    pub(crate) fn push(&mut self, name: TaskPhaseName, val: f64) {
         if self.len < PHASE_CAP {
             self.items[self.len] = (name, val);
             self.len += 1;
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (TaskPhaseName, f64)> + '_ {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (TaskPhaseName, f64)> + '_ {
         self.items[..self.len].iter().copied()
     }
 }

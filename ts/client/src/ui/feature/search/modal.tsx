@@ -49,7 +49,7 @@ import { touch_outset } from "@/ui/shared/component/touch.ts";
 import { useCore } from "@/ui/shared/watch.ts";
 import * as camera from "@/service/core/camera.ts";
 import * as sensor from "@/service/core/sensor.ts";
-import * as snapshot from "@/service/core/snapshot.ts";
+import * as overlay from "@/service/core/overlay.ts";
 
 const DEBOUNCE_MS = 300;
 
@@ -260,7 +260,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     if (q === "") return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      const shown = snapshot.cur();
+      const shown = overlay.cur();
       const near = shown.pivot.lon_lat ?? undefined;
       const home =
         shown.division.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY)

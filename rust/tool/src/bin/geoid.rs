@@ -1,7 +1,7 @@
 // pxl-tool/bin/geoid.rs
 
 //! EGM2008's geoid heights over the WGS84 ellipsoid, every `STEP_DEG`, from
-//! GeographicLib's 5′ grid of it, into pxl-spec's space/coord/geoid.rs. A GPS
+//! GeographicLib's 5′ grid of it, into pxl-spec's `space/coord/geoid.rs`. A GPS
 //! height is the ellipsoid's and the terrain's is EGM2008's (GEDTM30, EPSG:3855);
 //! the geoid is between them.
 //!
@@ -142,8 +142,8 @@ fn run() -> Result<(), String> {
          //! GeographicLib's 5' grid (egm2008-5); bilinear between these misses it by at\n\
          //! most {worst:.1} m, {rms:.1} m RMS.\n\n\
          /// The grid's spacing; rows from 90N down, {cols} columns from 0E east.\n\
-         pub const GEOID_STEP_DEG: f64 = {STEP_DEG}.0;\n\n\
-         pub const GEOID_M: [f32; {}] = [{}];\n",
+         pub(crate) const GEOID_STEP_DEG: f64 = {STEP_DEG}.0;\n\n\
+         pub(crate) const GEOID_M: [f32; {}] = [{}];\n",
         m.len(),
         vals.join(", ")
     );

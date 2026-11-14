@@ -8,7 +8,8 @@
 //! and across xpute's parts. It
 //! also holds that only the top names the profiler, that no renderer stands under the core's
 //! sys/, that only the screen reads the screen's pixels, that no Rust file lies outside
-//! a crate's module tree, and that the modules' and files' dependencies form no cycle. A rule Rust alone can keep is clippy's (rust/clippy.toml,
+//! a crate's module tree, that no host of xpute's names its runtime's entries, and that the
+//! modules' and files' dependencies form no cycle. A rule Rust alone can keep is clippy's (rust/clippy.toml,
 //! xpute/clippy.toml).
 //!
 //!   cargo check-rules            (in rust/; make check-rules from the root)
@@ -72,16 +73,15 @@ struct Order {
     own: Option<u8>,
 }
 
-/// The core's order (ARCHITECTURE.md, "The core is one order of dependency"): a module names
+/// The core's order (`ARCHITECTURE.md`, "The core is one order of dependency"): a module names
 /// only what is at or below it, and neither head names the other. The top wires everything,
-/// the UI's protocol among it. The protocol's enums, which the domain reads, the settings,
-/// and an edit not yet made, which the top hands from control to the scene, stand where both
-/// heads may name them. The profiler reads anything and stands beside the order, in none of its steps, and
+/// the UI's protocol among it. The settings, and an edit not yet made, which the top hands
+/// from control to the scene, stand where both heads may name them. The profiler reads anything and stands beside the order, in none of its steps, and
 /// only the top, which records into it, names it. The link's bindings and the values the
 /// specs hold (`spec`), which name nothing of the core, stand under everything that reads
 /// them.
 const CORE: &str = "rust/client/core/src/";
-const CORE_ORDER: [(&str, u8); 17] = [
+const CORE_ORDER: [(&str, u8); 16] = [
     ("frame", 7),
     ("link", 7),
     ("ui", 7),
@@ -90,7 +90,6 @@ const CORE_ORDER: [(&str, u8); 17] = [
     ("control", 6),
     ("smooth", 5),
     ("param", 5),
-    ("cmd", 5),
     ("preview", 5),
     ("setting", 5),
     ("view", 4),
@@ -328,7 +327,7 @@ const PASS_ORDER: [(&str, u8); 18] = [
 ];
 const PASS_OWN: u8 = 6;
 
-/// The client's order (ts/client/src, AGENTS.md): its entry and the check of
+/// The client's order (`ts/client/src`, `AGENTS.md`): its entry and the check of
 /// its platform files over the UI and the wiring that opens the host, the two
 /// heads; under them the services; and at the bottom the numbers both read
 /// and the build's values.
@@ -566,8 +565,22 @@ fn screen_reached(text: &str) -> Vec<usize> {
 const XPUTE: &str = "xpute/";
 const PIXELET_WORDS: &str = r"(?i)\b(pixelet|pxl[-_]\w+)\b";
 
+/// The entries xpute's module on a device calls, the program's start among them, are the
+/// runtime's: every function its C ABI declares (`RUNTIME_ABI`), and the Kotlin class
+/// `xpute.Runtime`'s JNI names (`RUNTIME_JNI`), is refused under a device's hosts, xpute's and
+/// the GPU's (`HOSTS`).
+const HOSTS: [&str; 2] = ["xpute/native/host/", "xpute/gpu/native/host/"];
+const RUNTIME_ABI: &str = "xpute/native/runtime/expo/ios/CXpute/xpute.h";
+const RUNTIME_JNI: &str = r"\bJava_xpute_Runtime_\w+";
+
+/// The functions `header` declares, a line's first name followed by its parenthesis.
+fn declared(header: &str) -> Vec<String> {
+    let decl = Regex::new(r"^\w[^(/]*?\b(xpute_\w+)\(").expect("a declaration's pattern");
+    header.lines().filter_map(|l| decl.captures(l)).map(|c| c[1].to_owned()).collect()
+}
+
 /// xpute's order, over its parts rather than a folder's modules: a part is a crate
-/// (XPUTE_CARGO) or a package (XPUTE_WORKSPACE), or one of each, by its name past `xpute-` or
+/// (`XPUTE_CARGO`) or a package (`XPUTE_WORKSPACE`), or one of each, by its name past `xpute-` or
 /// `@xpute/`. The kit names nothing, and the link stands on it. The guest and each platform's
 /// runtime stand over the link, and each platform's host over its runtime, as a host runs in
 /// the environment its runtime is; the guest and each platform are heads, none naming
@@ -1460,6 +1473,24 @@ fn run() -> Result<Vec<String>, String> {
                 ));
             }
         }
+    }
+
+    match read(RUNTIME_ABI).map(|h| declared(&h)).filter(|d| !d.is_empty()) {
+        Some(entries) => {
+            let named = Regex::new(&format!(r"\b({})\b|{RUNTIME_JNI}", entries.join("|"))).expect("the entries' pattern");
+            for f in files.iter().filter(|f| HOSTS.iter().any(|h| f.starts_with(h))) {
+                for (n, line) in read(f).unwrap_or_default().lines().enumerate() {
+                    if let Some(m) = named.find(line) {
+                        problems.push(format!(
+                            "{f}:{}: a host names its runtime's entry `{}` (rule.rs `HOSTS`)",
+                            n + 1,
+                            m.as_str()
+                        ));
+                    }
+                }
+            }
+        }
+        None => problems.push(format!("{RUNTIME_ABI}: no entry read, so no host is held to its runtime's")),
     }
 
     problems.extend(unlinked(&files, &read));

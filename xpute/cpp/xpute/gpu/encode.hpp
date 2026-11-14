@@ -1,12 +1,13 @@
 // cpp/xpute/gpu/encode.hpp
 
-// The encoder writes a guest's GPU calls as records of a stream (stream.hpp) in
-// the words gpu/link/spec/api.json5 gives each op, as gpu/guest/rust/src/encode.rs writes
-// them. An object the guest makes is named by a handle from one table (`Gpu`).
-// A record that does not fit an open transaction is not written, and the
-// handle of the object it would have made is given back. One function gives
-// each record's words, and it runs twice: once to count the words, then to
-// write them into the room the stream reserved.
+// The encoder writes a guest's GPU calls as records of a stream (`stream.hpp`)
+// in the words `gpu/link/spec/api.json5` gives each op, as
+// `gpu/guest/rust/src/encode.rs` writes them. An object the guest makes is
+// named by a handle from one table (`Gpu`). A record that does not fit an open
+// transaction is not written, and the handle of the object it would have made
+// is given back. One function gives each record's words, and it runs twice:
+// once to count the words, then to write them into the room the stream
+// reserved.
 
 #pragma once
 
@@ -661,7 +662,7 @@ bool write_buffer(Stream &stream, Id buffer, std::uint32_t offset, std::span<con
 std::uint64_t write_buffer_sz(std::span<const std::uint8_t> bytes) noexcept;
 // This is `write_buffer`, but the record names the bytes where they lie in the
 // guest's memory, and the host reads them there as it runs the stream. The
-// guest leaves them unchanged until the stream is handed back (stream.hpp).
+// guest leaves them unchanged until the stream is handed back (`stream.hpp`).
 bool write_buffer_at(Stream &stream, Id buffer, std::uint32_t offset, std::span<const std::uint8_t> bytes) noexcept;
 // `layout` holds the bytes per row and the rows per image.
 bool write_texture(Stream &stream, const TexelCopyTexture &place, std::array<std::uint32_t, 2> layout, std::array<std::uint32_t, 3> size, std::span<const std::uint8_t> bytes) noexcept;

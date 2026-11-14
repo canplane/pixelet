@@ -6,7 +6,7 @@ import type { i32, u32 } from "@xpute/kit/abi/word.ts";
 import type { Stop } from "@xpute/link";
 import { requireNativeModule } from "expo";
 
-/** The guest's stop, as its host reports it (xpute-native-host stop.rs
+/** The guest's stop, as its host reports it (xpute-native-runtime native.rs
  * `Stop`): `n1` and `n2`, u64s, in their decimal digits. */
 interface Report {
   errnum: i32;

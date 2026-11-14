@@ -46,10 +46,10 @@ pub fn apply<L: _rt::Lend>(
 }
 
 mod _rt {
-    pub use core::future::Future;
-    pub use xpute_guest::abi::fs::types::ErrorCode;
-    pub use xpute_guest::wait;
-    pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::abi::types::Lent;
-    pub use xpute_link::{answer, Handle, Lend, Lift, Lower, Method};
+    pub(super) use core::future::Future;
+    pub(super) use xpute_guest::abi::fs::types::ErrorCode;
+    pub(super) use xpute_guest::wait;
+    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_link::abi::types::Lent;
+    pub(super) use xpute_link::{answer, Handle, Lend, Lift, Lower, Method};
 }

@@ -26,9 +26,9 @@
 // layer.rs names this file by `#[path]`, so it resolves its children as a
 // mod-rs file does: each is named from here.
 #[path = "query/change.rs"]
-pub mod change;
+pub(crate) mod change;
 #[path = "query/decor.rs"]
-pub mod decor;
+pub(crate) mod decor;
 #[path = "query/entry.rs"]
 mod entry;
 #[path = "query/limit.rs"]
@@ -48,9 +48,9 @@ mod surface;
 #[path = "query/world.rs"]
 mod world;
 
-pub use ray::{at_zoom, by_dist, cell_zoom_at, finest, zoom_range, Hit, HitKind, Ray};
-pub use support::{floor_of, is_unknown, on_floor, over, unknown};
-pub use world::{ColumnWalk, World};
+pub(crate) use ray::{at_zoom, by_dist, cell_zoom_at, finest, zoom_range, Hit, HitKind, Ray};
+pub(crate) use support::{floor_of, is_unknown, on_floor, over, unknown};
+pub(crate) use world::{ColumnWalk, World};
 
 use pxl_content::generation::CLAIM_EXTENT;
 use pxl_engine::answer::In;
@@ -67,7 +67,7 @@ impl World {
     /// What is in the cell `node` at its own zoom, which is `coarsest` or
     /// finer, for an asker with nothing handed down (`asset_at`), the decor
     /// standing in it included. X is on the asker's lap.
-    pub fn asset(&self, node: Node<3>) -> Answer<u32> {
+    pub(crate) fn asset(&self, node: Node<3>) -> Answer<u32> {
         report_claims(node);
         self.asset_at(node, |at, zooms, path| {
             self.node(at, zooms, path, &mut |_| true)

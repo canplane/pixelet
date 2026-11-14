@@ -101,7 +101,7 @@ export function fail_text(fail: u32, detail: u32): string {
 
 /** What each task stream waits on, judged by hand from profiling. It only
  * labels the report: scheduling never reads it. */
-export const BOUND: Record<string, string> = {
+const BOUND: Record<string, string> = {
   terrain: "network",
   division: "network",
 };
@@ -109,7 +109,7 @@ export const BOUND: Record<string, string> = {
 const phases_text = (p: [string, f64][]) =>
   p.length === 0 ? "" : `  [${p.map(phase_text).join(" ")}]`;
 
-export function task_line(r: TaskRecord): string {
+function task_line(r: TaskRecord): string {
   const total = r.end_ms - r.enqueue_ms;
   const timing =
     r.start_ms === null
@@ -135,7 +135,7 @@ const worst_effect_text = (f: Frame) => {
 
 /** For one frame, the uploads and the heap mean something only as a change
  * from the frame before, so the line adds their deltas (`Δ`). */
-export function frame_line({ sample: s, delta }: Worst): string {
+function frame_line({ sample: s, delta }: Worst): string {
   const d =
     delta === null
       ? ""
@@ -162,7 +162,7 @@ function long_sources_text(): string {
     : " (none reported here)";
 }
 
-export const long_frame_line = (l: LongFrame) =>
+const long_frame_line = (l: LongFrame) =>
   `[${n1(l.t).padStart(9)}] ${l.source.padEnd(8)} ${n1(
     l.duration_ms,
   )} ms  blocking ${n1(l.blocking_ms)}  script ${n1(l.script_ms)}  render ${n1(

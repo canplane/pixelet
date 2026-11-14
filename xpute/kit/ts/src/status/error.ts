@@ -10,7 +10,7 @@ import {
 import type { i32 } from "../abi/word.ts";
 
 /** An errno as a reader is shown it: its name and what it means
- * (errno.json5). The strings are for a person to read; an error carries the
+ * (`errno.json5`). The strings are for a person to read; an error carries the
  * number alone. */
 export function strerror(errnum: i32): string {
   const e = Object.entries(ERRNO).find(([, v]) => v.number === errnum);
@@ -19,7 +19,7 @@ export function strerror(errnum: i32): string {
 
 /** An errno a fault from outside the program raised: its input, its peer,
  * the network or the environment. It is caught, and what it stops is
- * isolated, degraded or dropped; a broken invariant is a `Bug` (bug.ts)
+ * isolated, degraded or dropped; a broken invariant is a `Bug` (`bug.ts`)
  * instead. What happened is its `kind`. */
 export class XputeError extends Error {
   readonly errnum: i32;
@@ -30,8 +30,8 @@ export class XputeError extends Error {
     this.errnum = errnum;
   }
 
-  /** What happened: the errno's kind (errno.json5), or unknown for a number
-   * no errno has, as Abseil's ErrnoToStatusCode answers one. */
+  /** What happened: the errno's kind (`errno.json5`), or unknown for a
+   * number no errno has, as Abseil's `ErrnoToStatusCode` answers one. */
   kind(): Kind {
     const e = of_Errno(this.errnum);
     return e === null ? KIND_UNKNOWN : kind_Errno(e);

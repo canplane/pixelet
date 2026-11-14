@@ -17,7 +17,7 @@ impl World {
     /// tile and the place's index in it. A tile whose ground no resident tile
     /// gives yields nothing. Each tile's line steps on from the line of the
     /// tile before it, so siblings share the walk.
-    pub fn places_in(
+    pub(crate) fn places_in(
         self,
         tiles: impl IntoIterator<Item = Quadrant>,
         visit: &mut dyn FnMut(Quadrant, u32, Place<'static>),

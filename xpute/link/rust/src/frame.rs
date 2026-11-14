@@ -1,10 +1,10 @@
 // xpute-link/frame.rs
 
-//! A frame's words are laid out by link/spec/frame.json5: the request's tag, its
-//! command, the result, and the packet's length. The command is the RES bit,
-//! the handle the callee issued and the method's place among its object's.
-//! The packet, the method's args or its answer's value in the Canonical ABI's
-//! layout (cabi.rs), lies right past the words. The words
+//! A frame's words are laid out by `link/spec/frame.json5`: the request's tag,
+//! its command, the result, and the packet's length. The command is the `RES`
+//! bit, the handle the callee issued and the method's place among its
+//! object's. The packet, the method's args or its answer's value in the
+//! Canonical ABI's layout (`cabi.rs`), lies right past the words. The words
 //! are little-endian, as both forms' memory is.
 
 use xpute_kit::status::errno::Errno;
@@ -25,7 +25,7 @@ const _: () = assert!(NAMED == RES >> METHOD_BITS >> 1);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Frame {
     pub tag: u32,
-    /// A later answer, to the receiver's request `tag`.
+    /// An answer, to the receiver's request `tag`.
     pub res: bool,
     pub handle: u32,
     pub method: u32,

@@ -11,23 +11,9 @@ fn spread(v: u32) -> u32 {
   return (s | (s << 1u)) & 0x55555555u;
 }
 
-/// `spread`'s inverse (`clipmap::gather`).
-fn gather(v: u32) -> u32 {
-  var g = v & 0x55555555u;
-  g = (g | (g >> 1u)) & 0x33333333u;
-  g = (g | (g >> 2u)) & 0x0f0f0f0fu;
-  g = (g | (g >> 4u)) & 0x00ff00ffu;
-  return (g | (g >> 8u)) & 0x0000ffffu;
-}
-
 /// This is the port of pxl-spec `brick::idx_of`.
 fn cell_id(at: vec2<u32>) -> u32 {
   return spread(at.x) | (spread(at.y) << 1u);
-}
-
-/// This is the port of pxl-spec `brick::of_idx`.
-fn id_cell(i: u32) -> vec2<u32> {
-  return vec2<u32>(gather(i), gather(i >> 1u));
 }
 
 /// The entry brick `q` is held in (`clipmap::entry`).

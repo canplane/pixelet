@@ -4,7 +4,7 @@
 //! on: the frame gizmo and the coverage gizmo, and the lines both are drawn
 //! in.
 
-pub mod coverage;
-pub mod debug_line;
-pub mod frame;
-pub mod param;
+pub(crate) mod coverage;
+pub(crate) mod debug_line;
+pub(crate) mod frame;
+pub(crate) mod param;

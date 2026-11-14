@@ -53,15 +53,3 @@ export function set_gpu(gpu: Gpu): void {
 }
 
 export const watch_gpu = listeners.watch;
-
-/** Resolves once a GPU is present, and never where none is. */
-export function gpu_present(): Promise<void> {
-  return new Promise((resolve) => {
-    if (state === GPU_PRESENT) return resolve();
-    const stop = watch_gpu(() => {
-      if (state !== GPU_PRESENT) return;
-      stop();
-      resolve();
-    });
-  });
-}

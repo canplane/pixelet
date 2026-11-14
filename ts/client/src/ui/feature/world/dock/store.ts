@@ -62,8 +62,8 @@ interface DockState {
    * as a decor's `scale_step` does: 0 is a unit, and each step down halves it.
    */
   scale_step: i32;
-  // The hotbar, newest pick first. Only `select_asset` adds a pick, and only once
-  // the core holds it.
+  // The hotbar, newest asset first; picking one already on it moves nothing.
+  // Only `select_asset` adds a pick, and only once the core holds it.
   recent_picks: AssetId[];
   chat_lines: ChatLine[];
   dock_mode: DockMode;

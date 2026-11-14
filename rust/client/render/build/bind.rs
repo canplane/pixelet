@@ -10,7 +10,7 @@ use naga::valid::{GlobalUse, ModuleInfo};
 /// For each compute entry point of `module`, the bindings it uses, and whether it reads each,
 /// writes it, and writes it through atomics alone (frame/shader/access.rs `READ`, `WRITE`,
 /// `ATOMIC`): its line of `ACCESS`.
-pub fn access(module: &naga::Module, info: &ModuleInfo) -> String {
+pub(crate) fn access(module: &naga::Module, info: &ModuleInfo) -> String {
     let mut accessed = Vec::new();
     for (i, entry) in module.entry_points.iter().enumerate() {
         if entry.stage != naga::ShaderStage::Compute {
@@ -49,7 +49,7 @@ pub fn access(module: &naga::Module, info: &ModuleInfo) -> String {
 /// For each binding of `module`, its group and number, the stages whose entry points read it,
 /// the layout kinds that take it as it is declared, and the vertex entries that read it: the
 /// shader's line of `STAGES`.
-pub fn stages(module: &naga::Module, info: &ModuleInfo, name: &str) -> String {
+pub(crate) fn stages(module: &naga::Module, info: &ModuleInfo, name: &str) -> String {
     let mut read_by: Vec<(u32, u32, Vec<&str>, String, u32)> = Vec::new();
     for (handle, var) in module.global_variables.iter() {
         let Some(b) = var.binding else { continue };

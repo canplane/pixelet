@@ -26,7 +26,7 @@ use crate::domain::scene::gizmo::coverage::coverage_gizmo_step;
 use crate::domain::scene::gizmo::frame::frame_gizmo_step;
 use crate::domain::scene::marker::atlas;
 use crate::domain::scene::model::draw_list;
-use crate::domain::setting::store::{settings, AoMode};
+use crate::domain::setting::{settings, AoMode};
 use crate::domain::view::demand::DemandedBase as _;
 use crate::sys::io::loader::{catalog, load_image, load_of};
 use crate::sys::load::Load;
@@ -39,7 +39,7 @@ static SCREEN_DEVICE: Global<Option<u32>> = Global::new();
 /// Whether the screen holds a frame of the world. It does only when the last
 /// frame was drawn on the current device, because a lost device takes what
 /// it drew with it.
-pub fn screen_shows_world() -> bool {
+pub(crate) fn screen_shows_world() -> bool {
     *SCREEN_DEVICE.get(|| None) == Some(api::device_generation())
 }
 
@@ -80,7 +80,7 @@ const _: () = assert!(
 /// (perf/report.rs `set_renderer_frame`). `scale` is the scale the world was
 /// drawn at, read before the resolution's judge can change it for the next
 /// frame.
-pub struct FrameReport {
+pub(crate) struct FrameReport {
     pub kind: FrameKind,
     pub stat: Option<FrameStat>,
     pub scale: f64,
@@ -89,7 +89,7 @@ pub struct FrameReport {
 /// `pace` is how this frame was paced, and the drawn resolution is
 /// judged by it (domain/scene/resolution.rs `load`). `edit` is the pointer's
 /// preview, by which the GPU's rays cut the world.
-pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
+pub(crate) fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
     let v = view();
     let settings = settings();
     // The matrices are relative to the eye, as the draws' positions are, so
@@ -223,7 +223,7 @@ pub fn stage_render(pace: Pace, edit: &RenderEdit) -> FrameReport {
 /// decided. `pivot` and `heading` are the camera's and place the world gizmo.
 /// `edit` is the pointer's preview, and decor leaves out what it hides. `draft` is the
 /// marker tool's draft, which the markers show.
-pub fn scene_step(
+pub(crate) fn scene_step(
     ctx: &mut TickContext,
     pivot: Option<q3::Q3>,
     heading: Option<f64>,
@@ -253,7 +253,7 @@ pub fn scene_step(
     scene::draw(list, models);
     gpu::step(frame.eye, edit);
     cloud::step(draw_list(), &frame);
-    marker::step(ctx, &frame, draft);
+    marker::step(&frame, draft);
     marker::draw(draw_list());
     if animating {
         invalidate();

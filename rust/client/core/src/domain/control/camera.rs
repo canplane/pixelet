@@ -10,11 +10,11 @@
 //! asks the camera to move lives outside the folder (domain/control/input.rs,
 //! navigation).
 
-pub mod controller;
-pub mod first_person;
-pub mod gesture;
-pub mod orbit;
-pub mod state;
+pub(crate) mod controller;
+pub(crate) mod first_person;
+pub(crate) mod gesture;
+pub(crate) mod orbit;
+pub(crate) mod state;
 
 use pxl_global::Global;
 use pxl_spec::space::coord::mat4::{self, Mat4};
@@ -29,14 +29,14 @@ use crate::domain::smooth::{smooth_angle, smooth_vec};
 // [0, π]. The azimuth φ is measured from north toward east and wraps. At
 // either pole φ still matters: it names the direction the facing leaves the
 // pole along. The orbit adds the distance r. The camera has no roll.
-pub fn facing_domain(polar: f64, azimuth: f64) -> (f64, f64) {
+pub(crate) fn facing_domain(polar: f64, azimuth: f64) -> (f64, f64) {
     (
         polar.clamp(0.0, core::f64::consts::PI),
         wrap(azimuth, -core::f64::consts::PI, core::f64::consts::PI),
     )
 }
 
-pub fn facing_dir(polar: f64, azimuth: f64) -> V3 {
+pub(crate) fn facing_dir(polar: f64, azimuth: f64) -> V3 {
     let (st, ct) = (libm::sin(polar), libm::cos(polar));
     let (sp, cp) = (libm::sin(azimuth), libm::cos(azimuth));
     [st * sp, st * cp, -ct]
@@ -44,7 +44,7 @@ pub fn facing_dir(polar: f64, azimuth: f64) -> V3 {
 
 /// At polar 0 the facing looks straight down and the azimuth points up the
 /// screen. At either pole the azimuth only turns the screen about the facing.
-pub fn facing_rot(polar: f64, azimuth: f64) -> Mat4 {
+pub(crate) fn facing_rot(polar: f64, azimuth: f64) -> Mat4 {
     let mut about_z = mat4::new();
     mat4::rot_z(&mut about_z, azimuth);
     let (s, c) = (libm::sin(polar), libm::cos(polar));
@@ -58,7 +58,7 @@ pub fn facing_rot(polar: f64, azimuth: f64) -> Mat4 {
 /// The camera as it is drawn. The eye is kept in world doubles, not as a
 /// canonical point. A canonical point rounds to 1/256, and the orbit derives
 /// the eye again each frame, so that rounding would make the pivot drift.
-pub struct Camera {
+pub(crate) struct Camera {
     pub eye: Option<V3>,
     /// Radians about Z from north toward east.
     pub azimuth: f64,
@@ -68,7 +68,7 @@ pub struct Camera {
 
 static CAMERA: Global<Camera> = Global::new();
 
-pub fn camera() -> &'static mut Camera {
+pub(crate) fn camera() -> &'static mut Camera {
     // The camera starts where the controls' intent starts (state.rs
     // `CameraState::new`), so nothing eases on the first frame.
     CAMERA.get(|| Camera {
@@ -78,28 +78,28 @@ pub fn camera() -> &'static mut Camera {
     })
 }
 
-pub fn eye_world() -> Option<V3> {
+pub(crate) fn eye_world() -> Option<V3> {
     camera().eye
 }
 
-pub fn set_eye_world(at: &V3) {
+pub(crate) fn set_eye_world(at: &V3) {
     camera().eye = Some(*at);
 }
 
 /// The azimuth the camera is drawn at, in radians from north toward east.
-pub fn azimuth() -> f64 {
+pub(crate) fn azimuth() -> f64 {
     camera().azimuth
 }
 
 /// The polar angle the camera is drawn at, in radians from straight down.
-pub fn polar() -> f64 {
+pub(crate) fn polar() -> f64 {
     camera().polar
 }
 
 /// Eases the facing of `cam` over `delta` seconds, its polar angle toward
 /// `polar` at `polar_rate` and its azimuth toward `azimuth` the short way
 /// round, and returns whether it is still moving.
-pub fn ease_facing(
+pub(crate) fn ease_facing(
     cam: &mut Camera,
     polar: f64,
     polar_rate: f64,

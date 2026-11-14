@@ -13,7 +13,7 @@ pub(crate) struct Polyline {
 }
 
 impl Polyline {
-    pub fn of(points: impl IntoIterator<Item = P>) -> Polyline {
+    pub(crate) fn of(points: impl IntoIterator<Item = P>) -> Polyline {
         let points: Vec<P> = points.into_iter().collect();
         let mut along = vec![0.0; points.len()];
         for i in 1..points.len() {
@@ -26,12 +26,12 @@ impl Polyline {
         Polyline { points, along }
     }
 
-    pub fn length(&self) -> f64 {
+    pub(crate) fn length(&self) -> f64 {
         self.along.last().copied().unwrap_or(0.0)
     }
 
     /// The point `d` along it, in DB coordinates.
-    pub fn at(&self, d: f64) -> P {
+    pub(crate) fn at(&self, d: f64) -> P {
         let i = self
             .along
             .partition_point(|&x| x < d)
@@ -53,7 +53,7 @@ pub(crate) struct Way {
 }
 
 impl Way {
-    pub fn of(row: Part) -> Option<Way> {
+    pub(crate) fn of(row: Part) -> Option<Way> {
         (row.points.len() >= 2).then(|| Way {
             line: Polyline::of(row.points.iter().map(|p| [p[0], p[1]])),
             row,

@@ -13,10 +13,10 @@
 //! TypeScript reach where that spec's own output is (`Foreign`), and C++
 //! refuses. A table with `"keys": "<Enum>"` holds a value for each of the
 //! enum's members and is written as a list by the member's number (`keyed`); a
-//! table with `"each": "<Enum>"` is one table for each member, named as the
-//! member is (`expanded`). Under a table with `"distinct": "<field>"`, no two
-//! sibling tables hold the same `<field>` (`check_distinct`). A list of names
-//! whose `$type` is `enum` is an enum, in Rust and in C++ an enum class,
+//! table whose `"each"` names an enum is one table for each member, named as
+//! the member is (`expanded`). Under a table with `"distinct": "<field>"`, no
+//! two sibling tables hold the same `<field>` (`check_distinct`). A list of
+//! names whose `$type` is `enum` is an enum, in Rust and in C++ an enum class,
 //! numbered by place; a table whose `$type` is `enum` is one too, numbered by
 //! its members, each a number or a table that carries its `number`. An enum is
 //! named as its key is, singular; one whose names a reader takes, marked
@@ -1220,8 +1220,8 @@ fn expanded(n: Node, declared: &[(String, Node)]) -> Result<Node, String> {
     Ok(Node::Obj(out))
 }
 
-/// Refuses, under a table with `"distinct": "<field>"` (the path tree's
-/// `ID`), two sibling tables at any depth that hold the same `<field>`.
+/// Refuses, under a table with `"distinct": "<field>"`, two sibling tables at
+/// any depth that hold the same `<field>`.
 fn check_distinct(n: &Node, at: &str, field: Option<&str>) -> Result<(), String> {
     let field = n.mark("distinct").and_then(Node::str).or(field);
     if let Some(f) = field {
@@ -1598,9 +1598,10 @@ fn cpp_file(d: &DataSpec, spec: &Node, cpp_path: &str, namespace: &str) -> Resul
 /// A table is a namespace, and one whose `$type` is `enum` also an enum
 /// (`cpp_enum`), its members' own values in the namespace, each under its
 /// member's name; a table that holds no value writes nothing. A list of names
-/// is written as a `string_view` array, and one whose `$type` is `enum` also
-/// as an enum; a list of numbers is a `std::array` of its `$type`. Any other
-/// value is a leaf (`cpp_leaf`).
+/// is written as a `string_view` array, and one whose `$type` is `enum` as an
+/// enum, with that array under its plural where it marks `"names": true`; a
+/// list of numbers is a `std::array` of its `$type`. Any other value is a leaf
+/// (`cpp_leaf`).
 fn cpp_items(
     name: &str,
     n: &Node,

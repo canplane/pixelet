@@ -209,9 +209,9 @@ pub fn device(implementation: _rt::Rc<dyn HostDevice>) -> _rt::Rc<dyn _rt::Objec
 }
 
 mod _rt {
-    pub use std::rc::Rc;
-    pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::abi::types::Lent;
-    pub use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Return, Tag};
-    pub use xpute_native_runtime::link;
+    pub(super) use std::rc::Rc;
+    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_link::abi::types::Lent;
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Return, Tag};
+    pub(super) use xpute_native_runtime::link;
 }

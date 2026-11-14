@@ -6,7 +6,7 @@
 /// `text` without its line comments, its indentation and its blank lines. WGSL has no string
 /// literals, so `//` always starts a comment. Lines are never joined, so two tokens cannot run
 /// together. Block comments are kept.
-pub fn strip_comments(text: &str) -> String {
+pub(crate) fn strip_comments(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for line in text.lines() {
         let code = match line.find("//") {
@@ -27,7 +27,7 @@ pub fn strip_comments(text: &str) -> String {
 /// leaves it, one statement a line. A function runs from its `fn` line to the line where its
 /// braces close. An entry point is a function whose attributes stand on its own line or on the
 /// line before.
-pub fn read_fns(text: &str) -> String {
+pub(crate) fn read_fns(text: &str) -> String {
     let is_word = |c: char| c.is_alphanumeric() || c == '_';
     let lines: Vec<&str> = text.lines().collect();
     // Each function's name, with its first and last line.
@@ -106,7 +106,7 @@ pub fn read_fns(text: &str) -> String {
 
 /// `text` with only the structs something in it names. `text` is read as `strip_comments`
 /// leaves it: a struct runs from its `struct` line to the line where its brace closes.
-pub fn read_structs(text: &str) -> String {
+pub(crate) fn read_structs(text: &str) -> String {
     let is_word = |c: char| c.is_alphanumeric() || c == '_';
     let mut lines: Vec<&str> = text.lines().collect();
     loop {
@@ -139,7 +139,7 @@ pub fn read_structs(text: &str) -> String {
 }
 
 /// `text` with only the module's constants something in it reads.
-pub fn read_consts(text: &str) -> String {
+pub(crate) fn read_consts(text: &str) -> String {
     let is_word = |c: char| c.is_alphanumeric() || c == '_';
     let name_of = |line: &str| {
         let rest = line.strip_prefix("const ")?;

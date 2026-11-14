@@ -36,8 +36,8 @@ pub fn wait_for(how_long: u64) -> impl _rt::Future<Output = Result<(), _rt::Errn
 }
 
 mod _rt {
-    pub use crate::{link, wait};
-    pub use core::future::Future;
-    pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::{answer, Handle, Lift, Lower, Method};
+    pub(super) use crate::{link, wait};
+    pub(super) use core::future::Future;
+    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_link::{answer, Handle, Lift, Lower, Method};
 }

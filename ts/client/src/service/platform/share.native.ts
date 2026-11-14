@@ -3,7 +3,7 @@
 import { File, Paths } from "expo-file-system";
 import { Share } from "react-native";
 
-import { PLATFORM } from "./pxl-platform.ts";
+import { PLATFORM } from "./pxl-platform.native.ts";
 
 export async function save(
   name: string,

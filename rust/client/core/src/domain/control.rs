@@ -8,10 +8,10 @@
 //! the camera. At the bottom are the device's sensors (`sensor`) and where
 //! the camera's pivot stands (`support`).
 
-pub mod camera;
-pub mod edit;
-pub mod input;
-pub mod navigation;
-pub mod param;
-pub mod sensor;
-pub mod support;
+pub(crate) mod camera;
+pub(crate) mod edit;
+pub(crate) mod input;
+pub(crate) mod navigation;
+pub(crate) mod param;
+pub(crate) mod sensor;
+pub(crate) mod support;

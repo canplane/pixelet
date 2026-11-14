@@ -31,7 +31,7 @@ impl World {
     /// nine shards around the column's own, with the area's index asked once
     /// (`Shard::at`). A walker comes up to the wall's face and never stands
     /// on the wall.
-    pub fn within(&self, at: &Q3) -> bool {
+    pub(crate) fn within(&self, at: &Q3) -> bool {
         within_in(&source::ServiceArea, at)
     }
 
@@ -39,7 +39,7 @@ impl World {
     /// is declared and serves no shard over it (pxl-spec `area::past`).
     /// The UI is told this of the pivot (ui.rs `outside`). A walk or an edit
     /// asks `within` instead, which also keeps off the area's edge.
-    pub fn past(&self, at: &Q3) -> bool {
+    pub(crate) fn past(&self, at: &Q3) -> bool {
         let [x, y] = [i64::from(at[0]), i64::from(at[1])].map(q3::to_real);
         let leaf = GROUND.cell_of(LEAF_ZOOM, &point(x, y, 0.0)).tile().at;
         area::past(&source::ServiceArea, leaf)
@@ -61,7 +61,7 @@ impl World {
     /// side, at most two a side (`TileCache::relief`). An aligned cube is one
     /// node, its own columns. A box that is not aligned is bounded by the
     /// nodes around it, which can only refuse more.
-    pub fn editable(&self, space: &Aabb) -> bool {
+    pub(crate) fn editable(&self, space: &Aabb) -> bool {
         repository::holds(space) && self.editable_in(&source::ServiceArea, space)
     }
 

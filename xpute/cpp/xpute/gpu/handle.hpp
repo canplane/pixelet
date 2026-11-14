@@ -1,7 +1,7 @@
 // cpp/xpute/gpu/handle.hpp
 
-// The encoder's table of handles, as xpute-gpu-guest's handle.rs keeps it. A
-// handle is a slot and that slot's generation, so a handle kept past its
+// The encoder's table of handles, as `xpute-gpu-guest`'s `handle.rs` keeps
+// it. A handle is a slot and that slot's generation, so a handle kept past its
 // release names nothing that takes the slot later; the host reads such a
 // handle's slot alone (`handle_slot`). 0 is never a handle, and slot 0 holds
 // no value: slots from 1 hold the objects the encoder made.

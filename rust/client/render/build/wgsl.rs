@@ -7,7 +7,7 @@ use std::fmt::Display;
 
 /// A value a shader names, with the WGSL type it takes.
 #[derive(Clone)]
-pub enum Val {
+pub(crate) enum Val {
     U32(u32),
     I32(i32),
     F32(f32),
@@ -64,7 +64,7 @@ impl Val {
 }
 
 /// Each value as a constant of its name.
-pub fn consts<N: Display>(vals: impl IntoIterator<Item = (N, Val)>) -> String {
+pub(crate) fn consts<N: Display>(vals: impl IntoIterator<Item = (N, Val)>) -> String {
     vals.into_iter()
         .map(|(name, v)| format!("const {name}: {} = {};\n", v.ty(), v.lit()))
         .collect()
@@ -72,7 +72,11 @@ pub fn consts<N: Display>(vals: impl IntoIterator<Item = (N, Val)>) -> String {
 
 /// A function `name` of `k` that returns each case's value at its `k`, and `default` at every
 /// other.
-pub fn table(name: &str, cases: impl IntoIterator<Item = (u32, Val)>, default: Val) -> String {
+pub(crate) fn table(
+    name: &str,
+    cases: impl IntoIterator<Item = (u32, Val)>,
+    default: Val,
+) -> String {
     let cases: String = cases
         .into_iter()
         .map(|(k, v)| format!("case {k}u: {{ return {}; }} ", v.lit()))
@@ -86,9 +90,9 @@ pub fn table(name: &str, cases: impl IntoIterator<Item = (u32, Val)>, default: V
 
 /// The WGSL predicate `name` over a value, true where `rule` holds: written as the runs of
 /// values under `cnt` that it holds, a run that reaches either end of them open there, so a
-/// value past them answers as the last one does. Every shader that calls it passes a value
-/// under `cnt`.
-pub fn predicate(name: &str, cnt: u32, rule: impl Fn(u32) -> bool) -> String {
+/// value past them answers as the last one does. It answers `rule` only for a value under
+/// `cnt`.
+pub(crate) fn predicate(name: &str, cnt: u32, rule: impl Fn(u32) -> bool) -> String {
     let last = cnt - 1;
     let mut runs: Vec<[u32; 2]> = Vec::new();
     for v in (0..=last).filter(|&v| rule(v)) {

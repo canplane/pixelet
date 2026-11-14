@@ -123,6 +123,10 @@ Open when native resumes:
   > worker's thread too, in IndexedDB and by message to the page, so the
   > thread is that role on a device, and a sync stays off the core's thread.
 
+  > Since 2026-11-15 (9c1d429c43): the disk goes, its thread with it (**the
+  > user**). A device's storage is the platform's, as a page's is, through
+  > the client's `service/platform/storage.native.ts`.
+
 - The runtime's composition sits in pxl-core's `sys/`, which may not name the
   renderer.
 
@@ -140,6 +144,9 @@ Open when native resumes:
   > event loop, wait, the log, JNI, the lifecycle, the link that enters the
   > guest, the UI's channel, and the host-side bindings beside the link.
   > xpute-native-host keeps the clock, the stop and the disk over it.
+
+  > Since 2026-11-15 (9c1d429c43): xpute-native-host keeps the clock and the
+  > stop; the disk goes (**the user**).
 
 - The device's platform modules, and a source for the origin's paths on a device.
 

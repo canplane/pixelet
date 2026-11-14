@@ -1,9 +1,9 @@
 // cpp/xpute/guest/clock.hpp
 
-// The host's clocks (wit/clocks/monotonic-clock.wit,
-// wit/clocks/system-clock.wit), called in an entry, as xpute-guest's clock.rs
-// reads them. They count nanoseconds, as wasi:clocks does; the program reads
-// them in ms, converted here alone.
+// The host's clocks (`wit/clocks/monotonic-clock.wit`,
+// `wit/clocks/system-clock.wit`), called in an entry, as `xpute-guest`'s
+// `clock.rs` reads them. They count nanoseconds, as wasi:clocks does; the
+// program reads them in ms, converted here alone.
 
 #pragma once
 

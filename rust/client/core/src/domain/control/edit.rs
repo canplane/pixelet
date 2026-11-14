@@ -7,13 +7,13 @@
 //! (pointer.rs, eraser.rs, item.rs). The pointer and the eraser point at what
 //! the pick struck alike (`aim`); the item at the corner flush against it.
 
-pub mod collision;
+pub(crate) mod collision;
 mod eraser;
-pub mod ghost;
+pub(crate) mod ghost;
 mod item;
-pub mod pick;
+pub(crate) mod pick;
 mod pointer;
-pub mod write;
+pub(crate) mod write;
 
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::layer::lattice::GROUND;
@@ -30,7 +30,7 @@ use pxl_spec::space::coord::zoom::Zoom;
 
 /// The tool the pointer holds, as the UI chose it (`EDIT_TOOL`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum Tool {
+pub(crate) enum Tool {
     #[default]
     Pointer,
     Eraser,
@@ -42,7 +42,7 @@ pub enum Tool {
 }
 
 impl Tool {
-    pub fn asset(self) -> Option<(Asset, Zoom)> {
+    pub(crate) fn asset(self) -> Option<(Asset, Zoom)> {
         match self {
             Tool::Item { asset, zoom } => Some((asset, zoom)),
             Tool::Pointer | Tool::Eraser => None,
@@ -82,7 +82,7 @@ impl Tool {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct Hover {
+pub(crate) struct Hover {
     pub coord: Option<Q3>,
     pub target: Option<Target>,
     /// The leaf cell across the struck face, where a pivot sent to the
@@ -108,7 +108,7 @@ fn state() -> &'static mut State {
     })
 }
 
-pub fn tool() -> Tool {
+pub(crate) fn tool() -> Tool {
     state().tool
 }
 
@@ -116,7 +116,7 @@ pub(crate) fn set_tool(tool: Tool) {
     state().tool = tool;
 }
 
-pub fn hover() -> Hover {
+pub(crate) fn hover() -> Hover {
     state().hover
 }
 
@@ -127,7 +127,7 @@ pub(crate) fn clear_hover() {
 
 /// Where the pointer is on the screen, in NDC. None while it is off the
 /// screen.
-pub fn pointer_ndc() -> Option<[f64; 2]> {
+pub(crate) fn pointer_ndc() -> Option<[f64; 2]> {
     state().pointer_ndc
 }
 
@@ -144,7 +144,7 @@ pub(crate) fn clear_hover_coord() {
 }
 
 impl Hover {
-    pub fn decor(&self) -> Option<Instance> {
+    pub(crate) fn decor(&self) -> Option<Instance> {
         self.target?.decor
     }
 
@@ -195,7 +195,7 @@ fn aim(pick: &Pick) -> Hover {
     }
 }
 
-pub fn tap(ndc_x: f64, ndc_y: f64) {
+pub(crate) fn tap(ndc_x: f64, ndc_y: f64) {
     hover_at(ndc_x, ndc_y);
     let hover = state().hover;
     if hover.coord.is_none() {

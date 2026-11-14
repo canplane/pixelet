@@ -16,7 +16,7 @@ databases. `make install` brings the package the Python scripts read the specs
 with (`script/requirements.txt`) and [cargo-nextest](https://nexte.st/), which runs
 pxl-core's unit tests one to a process, since each boots a core of its own. The
 checks and the tests also need
-what [xpute/README.md](./xpute/README.md#running-it) lists.
+what [xpute/CONTRIBUTING.md](./xpute/CONTRIBUTING.md) lists.
 
 ```bash
 git clone git@github.com:canplane/pixelet.git
@@ -114,6 +114,7 @@ adds `check-build`, the bundle a deploy builds; xpute's own `check-xpute` and
 `test-gpu`, the renderer's passes on this machine's GPU. A change to xpute's GPU
 encoder or host also takes `(cd xpute && ../script/perf/mac.py cargo test-gpu) && script/perf/mac.py pnpm --dir xpute test:gpu:web`, which needs a GPU and
 Chrome. `make fmt` formats.
+`check-ts` holds the TypeScript to knip too (`pnpm --dir ts knip`), which names the files, exports and dependencies nothing reaches.
 
 `make check` also lints Android, with the newest NDK installed
 (`script/env.sh`); `CC_aarch64_linux_android` and `AR_aarch64_linux_android` name

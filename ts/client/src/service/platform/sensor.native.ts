@@ -11,7 +11,7 @@ import * as Location from "expo-location";
 
 import { coords_fix, geolocation_fix, listener } from "./sensor-listener.ts";
 import type { GeolocationSensor, OrientationSensor } from "./types.ts";
-import { PLATFORM } from "./pxl-platform.ts";
+import { PLATFORM } from "./pxl-platform.native.ts";
 
 let granted: boolean | null = null;
 

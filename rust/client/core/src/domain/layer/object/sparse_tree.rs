@@ -15,13 +15,13 @@ use pxl_engine::object::BRANCH;
 use pxl_spec::space::hierarchy::tree::{child_idx, children};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Slot<T> {
+pub(crate) enum Slot<T> {
     Leaf(T),
     /// Its child group, and their fold.
     Branch(u32, T),
 }
 
-pub struct SparseTree<T: Copy + PartialEq, const D: usize> {
+pub(crate) struct SparseTree<T: Copy + PartialEq, const D: usize> {
     first_child: Vec<u32>,
     data: Vec<T>,
     free: Vec<u32>,
@@ -39,7 +39,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
     const WIDTH: usize = children(D);
 
     /// The root's children, each a leaf of `val`.
-    pub fn new(val: T) -> SparseTree<T, D> {
+    pub(crate) fn new(val: T) -> SparseTree<T, D> {
         SparseTree {
             first_child: vec![0; Self::WIDTH],
             data: vec![val; Self::WIDTH],
@@ -50,7 +50,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
 
     /// The child groups written since they were last taken, their first slots, into
     /// `into`, which held the last taken; none listed after.
-    pub fn take_written(&mut self, into: &mut Vec<u32>) {
+    pub(crate) fn take_written(&mut self, into: &mut Vec<u32>) {
         into.clear();
         core::mem::swap(into, &mut self.written_groups);
     }
@@ -62,29 +62,29 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
     }
 
     /// The child pointer lane, a word a slot: its child group with `BRANCH`, or 0.
-    pub fn first_child(&self) -> &[u32] {
+    pub(crate) fn first_child(&self) -> &[u32] {
         &self.first_child
     }
 
     /// Slots either lane has room for before it grows.
-    pub fn cap(&self) -> usize {
+    pub(crate) fn cap(&self) -> usize {
         self.first_child.capacity().min(self.data.capacity())
     }
 
     /// The data lane, a value a slot: a leaf's, or a branch's fold.
-    pub fn data(&self) -> &[T] {
+    pub(crate) fn data(&self) -> &[T] {
         &self.data
     }
 
     /// A branch's child `k`, in `child_idx`'s order.
-    pub fn child(&self, child_group: u32, k: usize) -> Slot<T> {
+    pub(crate) fn child(&self, child_group: u32, k: usize) -> Slot<T> {
         self.slot(child_group as usize + k)
     }
 
     /// Makes the node `depth` levels under the root that holds `at` one leaf of `val`, and each
     /// branch above it what `fold` folds its child group to, given its depth. Returns whether
     /// anything changed.
-    pub fn set(
+    pub(crate) fn set(
         &mut self,
         depth: u32,
         at: [i32; D],
@@ -122,7 +122,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
     /// holding `val` as their fold: a node whose leaves are not here but folded where they are.
     /// Each branch above it becomes what `fold` folds its child group to, given its depth. A later
     /// write under it folds it again from what is there.
-    pub fn set_branch(
+    pub(crate) fn set_branch(
         &mut self,
         depth: u32,
         at: [i32; D],
@@ -172,7 +172,7 @@ impl<T: Copy + PartialEq, const D: usize> SparseTree<T, D> {
     }
 
     /// What slot `slot` holds.
-    pub fn slot(&self, slot: usize) -> Slot<T> {
+    pub(crate) fn slot(&self, slot: usize) -> Slot<T> {
         match self.first_child[slot] {
             0 => Slot::Leaf(self.data[slot]),
             h => Slot::Branch(h & !BRANCH, self.data[slot]),

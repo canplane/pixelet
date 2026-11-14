@@ -35,7 +35,7 @@ fn chat() -> &'static mut Chat {
     CHAT.get(Chat::default)
 }
 
-pub fn append_chat_line(text: &str) {
+pub(crate) fn append_chat_line(text: &str) {
     chat().line = Some(Line {
         text: text.into(),
         at_ms: now(),

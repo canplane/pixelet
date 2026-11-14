@@ -21,7 +21,7 @@ use crate::abi::text;
 /// and a line drawn from `x` into `width` by `height` pixels of RGBA, top row
 /// first, alpha not premultiplied.
 #[derive(Clone, Copy)]
-pub struct SystemText {
+pub(crate) struct SystemText {
     pub width: unsafe extern "C" fn(weight: f64, px: f64, text: *const u8, len: usize) -> f64,
     pub raster: unsafe extern "C" fn(
         weight: f64,
@@ -40,7 +40,7 @@ static SYSTEM: OnceLock<SystemText> = OnceLock::new();
 
 /// Says what answers the core's text from now on. A process's text never
 /// changes, so a second call changes nothing.
-pub fn text_on(system: SystemText) {
+pub(crate) fn text_on(system: SystemText) {
     let _ = SYSTEM.set(system);
 }
 

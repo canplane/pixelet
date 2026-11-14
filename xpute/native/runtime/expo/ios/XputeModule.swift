@@ -69,14 +69,8 @@ public class XputeModule: Module {
       xpute_life(1)
     }
 
-    /// The app's files are kept in Application Support, which holds what the
-    /// app makes for itself, out of the user's sight in Files, and is backed
-    /// up, as Android's files directory is.
     Function("start") { (named: [UInt32], prefixes: Uint8Array) throws in
-      // Each directory crosses as its UTF-8 bytes, without the NUL.
-      let files = Array(try FileManager.default.url(
-        for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
-      ).path.utf8CString.dropLast())
+      // The directory crosses as its UTF-8 bytes, without the NUL.
       let caches = Array(try FileManager.default.url(
         for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true
       ).path.utf8CString.dropLast())
@@ -84,7 +78,7 @@ public class XputeModule: Module {
         xpute_start(
           buf.baseAddress, buf.count,
           prefixes.rawPointer.assumingMemoryBound(to: UInt8.self), prefixes.byteLength,
-          files, files.count, caches, caches.count)
+          caches, caches.count)
       }
     }
 

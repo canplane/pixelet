@@ -11,7 +11,7 @@ use crate::perf::record::{
 /// the frame the settings are read, a few frames after boot, so a profiler left
 /// on has the world's start in its window. When the setting is off, the
 /// recording's columns go back to the heap.
-pub fn perf_follow(on: bool) {
+pub(crate) fn perf_follow(on: bool) {
     if on {
         perf_window_start();
     } else {
@@ -22,7 +22,7 @@ pub fn perf_follow(on: bool) {
 
 /// Returns false, and records nothing, when the heap refuses the
 /// recording's columns.
-pub fn perf_window_start() -> bool {
+pub(crate) fn perf_window_start() -> bool {
     if !perf_recording_start() {
         return false;
     }
@@ -30,7 +30,7 @@ pub fn perf_window_start() -> bool {
     true
 }
 
-pub fn perf_window_stop() {
+pub(crate) fn perf_window_stop() {
     perf_recording_stop();
     set_step_timing(false);
 }

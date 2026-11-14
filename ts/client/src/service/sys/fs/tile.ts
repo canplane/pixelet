@@ -3,8 +3,8 @@
 /**
  * The backend of the bakes' files. The core opens a tile by its quadkey, or
  * the Earth's sphere (binding.ts). This reads the object the source serves for
- * that name (spec/spec/route.json5 `object`), under the version the
- * declaration gives it. The name is the core's, and the version is the
+ * that name (spec/spec/bake/publication.json5 `OBJECT`), under the version
+ * the declaration gives it. The name is the core's, and the version is the
  * client's to choose. tile.fixture.json records the object each name must
  * map to, and tile.test.ts holds this module to it.
  */

@@ -9,35 +9,35 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 /// A coarser answer, and a lack, which gives no value, both carry the tile
 /// that was lacking, so a coarser answer can never pass for an exact one.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Answer<T> {
+pub(crate) enum Answer<T> {
     Exact(T),
     Coarser(T, Quadrant),
     Lack(Quadrant),
 }
 
 impl<T> Answer<T> {
-    pub fn val(self) -> Option<T> {
+    pub(crate) fn val(self) -> Option<T> {
         match self {
             Answer::Exact(v) | Answer::Coarser(v, _) => Some(v),
             Answer::Lack(_) => None,
         }
     }
 
-    pub fn exact(self) -> Option<T> {
+    pub(crate) fn exact(self) -> Option<T> {
         match self {
             Answer::Exact(v) => Some(v),
             _ => None,
         }
     }
 
-    pub fn lack(&self) -> Option<Quadrant> {
+    pub(crate) fn lack(&self) -> Option<Quadrant> {
         match self {
             Answer::Exact(_) => None,
             Answer::Coarser(_, l) | Answer::Lack(l) => Some(*l),
         }
     }
 
-    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Answer<U> {
+    pub(crate) fn map<U>(self, f: impl FnOnce(T) -> U) -> Answer<U> {
         match self {
             Answer::Exact(v) => Answer::Exact(f(v)),
             Answer::Coarser(v, l) => Answer::Coarser(f(v), l),

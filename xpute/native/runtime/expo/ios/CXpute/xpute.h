@@ -2,7 +2,7 @@
 
 // This is the C ABI of xpute's runtime linked into the app beside its guest,
 // for an app in C, Objective-C or Swift; the app's native library exports it
-// (xpute-native-host `native_abi!`). The runtime runs on the guest's thread,
+// (xpute-native-runtime `native_abi!`). The runtime runs on the guest's thread,
 // its event loop serving the guest's link, and carries the UI's link to it:
 // the UI's methods on the guest's objects (`xpute_post`), its answers to the
 // methods of the objects it serves (`xpute_answer`), and a batch of what the
@@ -19,22 +19,21 @@
 // `named_len` are the named handles of the interfaces the UI serves (remote.ts
 // `Remote.named`); `prefixes`, `prefixes_len` the prefixes the UI mounts
 // openers at, as a lowered `list<list<token>>` packet (the Canonical ABI,
-// xpute:link/types `token`); `files_dir`, `files_dir_len` the directory the
-// app keeps its files in and `cache_dir`, `cache_dir_len` the one it keeps its
-// caches in, each its UTF-8 bytes and their count.
+// xpute:link/types `token`); `cache_dir`, `cache_dir_len` the directory the
+// app keeps its caches in, its UTF-8 bytes and their count.
 // Each call, the first too, is a new UI on the runtime, as a reload's, which
 // serves what the first did: the requests the last UI answers later are
 // answered ECANCELED, as is each method of the objects it serves the guest,
 // the guest's objects it opened are dropped on the guest, the answer to a
-// request it sent reaches no new UI, and the batch it did not take goes; a
-// new UI is told the guest's last stop and its trap where they came. It
+// request it sent reaches no new UI, and the batch it did not take goes; the
+// guest is then told the new UI attached (xpute:life `attached`), and a new
+// UI is told the guest's last stop and its trap where they came. It
 // returns the new UI's generation, which each of its `xpute_post`,
 // `xpute_answer` and `xpute_take` carries, so nothing an old UI sent that
 // has not reached the guest when a new one starts reaches it: a method is
 // dropped, and an answer refused, its request answered ECANCELED.
 uint32_t xpute_start(const uint32_t *named, size_t named_len, const uint8_t *prefixes,
-                     size_t prefixes_len, const char *files_dir, size_t files_dir_len,
-                     const char *cache_dir, size_t cache_dir_len);
+                     size_t prefixes_len, const char *cache_dir, size_t cache_dir_len);
 
 // Makes `notify` be told that a batch waits for `xpute_take`; null sets none.
 // It is called on the guest's thread alone, once for a batch: the next is

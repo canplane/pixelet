@@ -20,7 +20,7 @@ const PANEL = {
   ray_step: RayStepsLegend,
 } satisfies Partial<Record<SettingName, ComponentType>>;
 
-export type PanelName = keyof typeof PANEL;
+type PanelName = keyof typeof PANEL;
 
 const is_panel = (name: SettingName): name is PanelName =>
   Object.hasOwn(PANEL, name);

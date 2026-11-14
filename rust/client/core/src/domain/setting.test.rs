@@ -1,4 +1,4 @@
-// pxl-core/domain/setting/store.test.rs
+// pxl-core/domain/setting.test.rs
 
 use super::*;
 

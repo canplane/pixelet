@@ -17,7 +17,7 @@ use pxl_spec::space::layer::octant::Octant;
 
 impl World {
     /// What is placed at exactly `at`, air left out.
-    pub fn entry_at(&self, at: Octant) -> Option<Entry> {
+    pub(crate) fn entry_at(&self, at: Octant) -> Option<Entry> {
         let node = (at.zoom(), at.at());
         self.object
             .entry_at(node.0, node.1, self.object.cursor(node))
@@ -26,7 +26,7 @@ impl World {
 
     /// Calls `visit` with everything placed whose cube meets `space`, air
     /// left out, with X on the lap of `space`.
-    pub fn placed_in(&self, space: &Aabb, visit: &mut dyn FnMut(&Entry)) {
+    pub(crate) fn placed_in(&self, space: &Aabb, visit: &mut dyn FnMut(&Entry)) {
         self.object.entries_in(space, &mut |e| {
             if e.asset_id != Sentinel::Air as u32 {
                 visit(e);
@@ -44,14 +44,18 @@ impl World {
     }
 
     /// A marker's text as it was put up. None for any other entry.
-    pub fn text(&self, e: &Entry) -> Option<&'static str> {
+    pub(crate) fn text(&self, e: &Entry) -> Option<&'static str> {
         self.object.text(e)
     }
 
     /// The first placed entry that `which` accepts and whose own room shares
     /// `space`, air left out. An entry's room is what its kind says it
     /// occupies (`occupies`).
-    pub fn placed_occupying(&self, space: &Aabb, which: impl Fn(&Entry) -> bool) -> Option<Entry> {
+    pub(crate) fn placed_occupying(
+        &self,
+        space: &Aabb,
+        which: impl Fn(&Entry) -> bool,
+    ) -> Option<Entry> {
         // A decor's box reaches up to `box_extent` past its min corner, so an
         // entry whose cell starts that far below `space` may still reach it.
         let around = Aabb {

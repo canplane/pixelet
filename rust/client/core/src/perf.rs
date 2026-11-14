@@ -10,11 +10,11 @@
 //! reports (ts/client/src/service/platform/long-frame.ts), or exports them as a
 //! Chrome trace.
 
-pub mod frame;
-pub mod read;
-pub mod record;
-pub mod report;
-pub mod section;
-pub mod task;
-pub mod window;
-pub mod word;
+pub(crate) mod frame;
+pub(crate) mod read;
+pub(crate) mod record;
+pub(crate) mod report;
+pub(crate) mod section;
+pub(crate) mod task;
+pub(crate) mod window;
+pub(crate) mod word;

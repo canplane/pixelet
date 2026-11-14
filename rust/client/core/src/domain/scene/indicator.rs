@@ -3,6 +3,6 @@
 //! The marks that show where something is: the location indicator and the
 //! hover ghost.
 
-pub mod ghost;
-pub mod location;
-pub mod param;
+pub(crate) mod ghost;
+pub(crate) mod location;
+pub(crate) mod param;

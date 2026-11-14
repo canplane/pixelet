@@ -2118,15 +2118,12 @@ dependencies = [
  "critical-section",
  "embassy-executor",
  "fnv",
- "hex",
  "libm",
- "pollster",
  "pxl-content",
  "pxl-engine",
  "pxl-global",
  "pxl-render",
  "pxl-spec",
- "wgpu",
  "xpute-golden",
  "xpute-gpu-guest",
  "xpute-gpu-link",
@@ -2200,7 +2197,6 @@ version = "0.0.0"
 name = "pxl-render"
 version = "0.0.0"
 dependencies = [
- "fnv",
  "image",
  "libm",
  "naga",
@@ -2212,7 +2208,6 @@ dependencies = [
  "wgpu",
  "xpute-gpu-guest",
  "xpute-gpu-link",
- "xpute-guest",
  "xpute-kit",
  "xpute-link",
 ]

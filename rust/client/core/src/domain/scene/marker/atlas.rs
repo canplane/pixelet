@@ -7,6 +7,6 @@ use pxl_global::Global;
 
 static ATLAS: Global<Atlas> = Global::new();
 
-pub fn atlas() -> &'static mut Atlas {
+pub(crate) fn atlas() -> &'static mut Atlas {
     ATLAS.get(Atlas::new)
 }

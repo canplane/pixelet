@@ -27,7 +27,7 @@ object Runtime {
   /** Starts the runtime on the guest's thread, once a process; each call is a
    * new UI on it, as a reload's, and answers its generation (xpute.h
    * `xpute_start`). */
-  external fun start(named: IntArray, prefixes: ByteArray, filesDir: String, cacheDir: String): Int
+  external fun start(named: IntArray, prefixes: ByteArray, cacheDir: String): Int
 
   /** Sends the method `m` of the guest's object `h` of the UI of
    * `generation` (xpute.h `xpute_post`); null `pkt` for none. */

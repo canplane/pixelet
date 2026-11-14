@@ -20,9 +20,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// This is the guest's page allocator, and slab.hpp serves anything smaller than
-// a page from it. It is a port of evanw/buddy-malloc that follows the C line
-// for line, and departs from it in two places. `update_max_ptr` asks the
+// This is the guest's page allocator, and `slab.hpp` serves anything smaller
+// than a page from it. It is a port of evanw/buddy-malloc that follows the C
+// line for line, and departs from it in two places. `update_max_ptr` asks the
 // `Range` for memory where the C calls `brk`. A block carries no 8-byte header
 // with its size, so every caller passes the size it asked for back to `free`.
 
@@ -83,7 +83,7 @@ template <Range R> class BuddyMalloc {
     // a caller can wait for it to change before it retries.
     std::uint32_t releases() const noexcept { return releases_; }
     // Where the host reads `base_ptr_`, `max_ptr_`, `end_ptr_` and `live_`,
-    // then `releases_` and `allocs_` as half-words, in place and in that
+    // then `releases_` and `allocs_` as 32-bit words, in place and in that
     // order. The order of the fields below is part of the contract with the
     // host.
     const std::uintptr_t *stat() const noexcept { return &base_ptr_; }

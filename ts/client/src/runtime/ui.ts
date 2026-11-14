@@ -22,15 +22,12 @@ import {
   BOOT_STARTING,
   BOOT_TERMINATED,
 } from "@/service/sys/boot.ts";
-import { serve_overlay } from "@/service/core/core.ts";
-import {
-  SENSOR_LISTENER,
-  serve_watch,
-  tell_platform,
-} from "@/service/core/sensor.ts";
+import { set_ui } from "@/service/core/core.ts";
+import { SENSOR_LISTENER, tell_platform } from "@/service/core/sensor.ts";
+import { serve_watch } from "@/service/core/watch.ts";
 import { listen } from "@/service/platform/sensor-listener.ts";
 import { tell_dev } from "@/service/core/setting.ts";
-import { cur, watch_snapshot } from "@/service/core/snapshot.ts";
+import { cur, serve_overlay, watch_snapshot } from "@/service/core/overlay.ts";
 import * as online from "@/service/platform/online.ts";
 
 /** Whether the world has arrived, or nothing of it will show: every pipeline
@@ -43,8 +40,10 @@ function loaded(s: Snapshot): boolean {
   );
 }
 
-/** Mounts the interfaces the UI serves on `remote`, before the core boots. */
+/** Makes `remote` the UI's end of the link and mounts on it the interfaces the
+ * UI serves, before the core boots. */
 export function serve_ui(remote: Remote): void {
+  set_ui(remote);
   serve_overlay(remote);
   serve_watch(remote);
 }

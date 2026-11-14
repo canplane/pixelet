@@ -207,9 +207,9 @@ pub fn file(implementation: _rt::Rc<dyn HostFile>) -> _rt::Rc<dyn _rt::Object> {
 }
 
 mod _rt {
-    pub use crate::link;
-    pub use std::rc::Rc;
-    pub use xpute_kit::status::errno::Errno;
-    pub use xpute_link::abi::types::Lent;
-    pub use xpute_link::{Lift, Lower, Method, Object, Reply, Return, Tag};
+    pub(super) use crate::link;
+    pub(super) use std::rc::Rc;
+    pub(super) use xpute_kit::status::errno::Errno;
+    pub(super) use xpute_link::abi::types::Lent;
+    pub(super) use xpute_link::{Lift, Lower, Method, Object, Reply, Return, Tag};
 }

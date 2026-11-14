@@ -1,17 +1,17 @@
 // cpp/xpute/link/link.hpp
 
-// The link (link/wit/types.wit), as xpute-link's link.rs runs it. Whatever is
-// called is an object, called by its methods under a handle: an interface's
-// named handle, the hash of its name (frame.json5 `NAMED`), or a resource's,
-// named by a URI, a tuple of tokens, and opened by the root's `open` to a
-// handle the serving side issues. A frame is one method called: its tag the
-// request, unique among the sender's pending ones, its command the handle,
-// the method and a RES bit (frame.hpp), its packet the args in the Canonical
-// ABI's layout (cabi.hpp). A frame crosses one way through one function,
-// `link_out` from the guest and `link_in` into it, and each crossing returns
-// at once what the method came to: its result, or EINPROGRESS for one that
-// answers later, by a frame marked RES with the request's tag. So each side
-// has the same ways:
+// The link (`link/wit/types.wit`), as xpute-link's `link.rs` runs it.
+// Whatever is called is an object, called by its methods under a handle: an
+// interface's named handle, the hash of its name (`frame.json5` `NAMED`), or
+// a resource's, named by a URI, a tuple of tokens, and opened by the root's
+// `open` to a handle the serving side issues. A frame is one method called:
+// its tag the request, unique among the sender's pending ones, its command
+// the handle, the method and a `RES` bit (`frame.hpp`), its packet the args
+// in the Canonical ABI's layout (`cabi.hpp`). A frame crosses one way through
+// one function, `link_out` from the guest and `link_in` into it, and each
+// crossing returns at once what the method came to: its result, or
+// EINPROGRESS for one that answers later, by a frame marked `RES` with the
+// request's tag. So each side has the same ways:
 //
 // - `call` takes what the crossing returns, for a method that always answers
 //   at once, and stops as a bug on EINPROGRESS;
@@ -20,7 +20,7 @@
 //   puts the opener of the resources the side serves under a URI's leading
 //   tokens, the longest matching winning; `open` and `drop` reach the root's
 //   open and a handle's drop on the other side;
-// - `cancel` cancels a request sent and pending (the root's CANCEL), and
+// - `cancel` cancels a request sent and pending (the root's `CANCEL`), and
 //   `on_cancel` puts what runs if a request the side serves is canceled.
 //
 // The link holds these on both ends:
@@ -87,7 +87,7 @@ using frame::TRAP_AT;
 // What an async method lends: a vector of plain values, whose bytes the
 // other side may write, which lie in one run of the guest's memory and stay
 // put while it is moved, and so while the answer owns it
-// (link/wit/types.wit `lent`).
+// (`link/wit/types.wit` `lent`).
 template <class L>
 concept Lend = requires(L &l) {
     []<class T, class A>(std::vector<T, A> &)
@@ -292,8 +292,8 @@ class Side {
 // The URI of names alone, as a resource's (package, resource).
 std::vector<Token> uri(std::initializer_list<std::string_view> names);
 
-// Writes `uri` at `at` as a `list<token>`, as ROOT OPEN's args hold it
-// (types.wit).
+// Writes `uri` at `at` as a `list<token>`, as `ROOT` `OPEN`'s args hold it
+// (`types.wit`).
 void store_uri(Lower &w, std::size_t at, std::span<const Token> uri);
 
 // The URI the `list<token>` at `at` holds (`store_uri`); a read past the

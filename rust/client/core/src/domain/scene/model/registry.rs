@@ -26,13 +26,13 @@ const _: () = assert!(
 /// How many vertices a pass over a mesh reads or writes, or how many joint
 /// palettes a clip's keys pose, between two of a registration's pauses
 /// (`Model::seal`, asset.rs `register_model`).
-pub const STEPS_PER_PAUSE: usize = 1 << 10;
+pub(crate) const STEPS_PER_PAUSE: usize = 1 << 10;
 
 /// A channel's path: translation or rotation. Any other path is scale.
 const T: u8 = 0;
 const R: u8 = 1;
 
-pub struct Channel {
+pub(crate) struct Channel {
     pub joint: u32,
     pub path: u8,
     /// Step keys hold a value until the next; linear keys interpolate.
@@ -62,11 +62,11 @@ struct Clip {
 }
 
 #[derive(Clone, Copy)]
-pub struct MeshRef {
+pub(crate) struct MeshRef {
     pub handle: u32,
 }
 
-pub struct Model {
+pub(crate) struct Model {
     /// The model's mesh: the vertex columns, then the indices.
     words: Box<[u32]>,
     handle: u32,
@@ -94,7 +94,7 @@ pub struct Model {
 }
 
 #[derive(Default)]
-pub struct ModelTable {
+pub(crate) struct ModelTable {
     /// A model is never let go, so its number names it for good.
     models: Vec<Model>,
 }
@@ -220,7 +220,7 @@ fn sample(ch: &Channel, time: f32, out: &mut [f32; 10]) {
 
 /// The local transform `a` eased toward `b` by `w`, with the rotation taken
 /// along the sphere.
-pub fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
+pub(crate) fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
     let mut o = [0.0; 10];
     for i in 0..3 {
         o[i] = a[i] + (b[i] - a[i]) * w;
@@ -234,7 +234,7 @@ pub fn blend(a: &[f32; 10], b: &[f32; 10], w: f32) -> [f32; 10] {
 impl ModelTable {
     /// Uploads `model` through `draw`, keeps it for good, and returns its
     /// number, which names it from then on.
-    pub fn add(&mut self, draw: &mut DrawList, mut model: Model) -> u32 {
+    pub(crate) fn add(&mut self, draw: &mut DrawList, mut model: Model) -> u32 {
         model.handle = draw.upload(
             mem::off(model.words.as_ptr().cast()),
             model.words.len() as u32 * 4,
@@ -245,12 +245,12 @@ impl ModelTable {
         (self.models.len() - 1) as u32
     }
 
-    pub fn mesh(&self, model: u32) -> Option<MeshRef> {
+    pub(crate) fn mesh(&self, model: u32) -> Option<MeshRef> {
         let m = self.models.get(model as usize)?;
         Some(MeshRef { handle: m.handle })
     }
 
-    pub fn get(&self, model: u32) -> Option<&Model> {
+    pub(crate) fn get(&self, model: u32) -> Option<&Model> {
         self.models.get(model as usize)
     }
 }
@@ -259,7 +259,7 @@ impl Model {
     /// A model of `joint_cnt` joints at rest, with an unwritten block for
     /// `vertex_cnt` vertices and `idx_cnt` indices. None when the heap
     /// refuses.
-    pub fn new(vertex_cnt: u32, idx_cnt: u32, joint_cnt: u32) -> Option<Model> {
+    pub(crate) fn new(vertex_cnt: u32, idx_cnt: u32, joint_cnt: u32) -> Option<Model> {
         let words = vertex_cnt
             .checked_mul(MODEL_VERTEX_WORDS)
             .and_then(|words| words.checked_add(idx_cnt))?;
@@ -293,13 +293,13 @@ impl Model {
     }
 
     /// The model's mesh to write: the vertex columns, then the indices.
-    pub fn words(&mut self) -> &mut [u32] {
+    pub(crate) fn words(&mut self) -> &mut [u32] {
         &mut self.words
     }
 
     /// `parent` is -1 for a root joint, and `root_pre` is the transform above
     /// a root.
-    pub fn joint(
+    pub(crate) fn joint(
         &mut self,
         joint: u32,
         parent: i32,
@@ -317,7 +317,7 @@ impl Model {
         self.inverse_bind[j] = inverse_bind;
     }
 
-    pub fn clip(&mut self, duration: f32) -> u32 {
+    pub(crate) fn clip(&mut self, duration: f32) -> u32 {
         self.clips.push(Clip {
             duration,
             channels: Vec::new(),
@@ -331,7 +331,7 @@ impl Model {
     }
 
     /// Adds `ch` to `clip`, dropping any values past those its keys hold.
-    pub fn ch(&mut self, clip: u32, mut ch: Channel) {
+    pub(crate) fn ch(&mut self, clip: u32, mut ch: Channel) {
         let Some(c) = self.clips.get_mut(clip as usize) else {
             return;
         };
@@ -346,7 +346,11 @@ impl Model {
     ///
     /// # Safety
     /// The model's block has been written.
-    pub async unsafe fn seal<P: Future<Output = ()>>(&mut self, scale: f32, pause: impl Fn() -> P) {
+    pub(crate) async unsafe fn seal<P: Future<Output = ()>>(
+        &mut self,
+        scale: f32,
+        pause: impl Fn() -> P,
+    ) {
         self.scale = scale;
         // Its positions are the mesh's first column.
         let positions = &self.words[..self.vertex_cnt as usize * 3];
@@ -408,38 +412,38 @@ impl Model {
         self.rest_radius = self.radius_at(None, &pause).await;
     }
 
-    pub fn joint_cnt(&self) -> usize {
+    pub(crate) fn joint_cnt(&self) -> usize {
         self.parent.len()
     }
 
-    pub fn handle(&self) -> u32 {
+    pub(crate) fn handle(&self) -> u32 {
         self.handle
     }
 
-    pub fn scale(&self) -> f32 {
+    pub(crate) fn scale(&self) -> f32 {
         self.scale
     }
 
     /// The number of clips. There is one clip a glTF animation, in file
     /// order, so a clip's number is its animation's index.
-    pub fn clip_cnt(&self) -> u32 {
+    pub(crate) fn clip_cnt(&self) -> u32 {
         self.clips.len() as u32
     }
 
     /// A clip's length in seconds. None for a clip the model lacks.
-    pub fn duration(&self, clip: u32) -> Option<f32> {
+    pub(crate) fn duration(&self, clip: u32) -> Option<f32> {
         self.clips.get(clip as usize).map(|c| c.duration)
     }
 
     /// The farthest any point of its mesh moves over a clip, unscaled.
-    pub fn motion(&self, clip: u32) -> f32 {
+    pub(crate) fn motion(&self, clip: u32) -> f32 {
         self.clips.get(clip as usize).map_or(0.0, |c| c.motion)
     }
 
     /// The radius of a sphere about the model's origin that holds the model as
     /// drawn, unscaled. For a clip it is the first key's radius plus the
     /// farthest the clip moves any point. With no clip it is the rest pose's.
-    pub fn pose_radius(&self, clip: Option<u32>) -> f32 {
+    pub(crate) fn pose_radius(&self, clip: Option<u32>) -> f32 {
         clip.and_then(|c| self.clips.get(c as usize))
             .map_or(self.rest_radius, |c| c.radius + c.motion)
     }
@@ -513,7 +517,7 @@ impl Model {
     /// move at the pace of their chord, so a point that turns between them
     /// can go past `far` by as much as its arc is longer than the chord.
     /// Infinite for a clip the model lacks.
-    pub fn next_step(&self, clip: u32, time: f32, far: f32) -> f32 {
+    pub(crate) fn next_step(&self, clip: u32, time: f32, far: f32) -> f32 {
         let Some(c) = self.clips.get(clip as usize) else {
             return f32::INFINITY;
         };
@@ -666,7 +670,7 @@ impl Model {
 
     /// Writes into `out` the joints' local transforms at a clip's time, or at
     /// rest.
-    pub fn pose(&self, at: Option<(u32, f32)>, out: &mut [[f32; 10]]) {
+    pub(crate) fn pose(&self, at: Option<(u32, f32)>, out: &mut [[f32; 10]]) {
         out.copy_from_slice(&self.rest);
         let Some(c) = at.and_then(|(clip, _)| self.clips.get(clip as usize)) else {
             return;
@@ -681,7 +685,12 @@ impl Model {
 
     /// Writes the joint palette from the local transforms, one mat4 a joint.
     /// A parent is composed before its children (`order`).
-    pub fn palette(&self, local: &[[f32; 10]], global: &mut [[f32; 16]], palette: &mut [f32]) {
+    pub(crate) fn palette(
+        &self,
+        local: &[[f32; 10]],
+        global: &mut [[f32; 16]],
+        palette: &mut [f32],
+    ) {
         for &j in &self.order {
             let j = j as usize;
             let l = mat_trs(&local[j]);

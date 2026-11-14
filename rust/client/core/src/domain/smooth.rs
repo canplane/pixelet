@@ -9,13 +9,13 @@ use xpute_kit::math::scalar::wrap;
 
 /// The share of the remaining distance covered in `delta` seconds at rate
 /// `k`, `1 - e^(-k·delta)`. It traces the same curve at any frame rate.
-pub fn smoothing_factor(k: f64, delta: f64) -> f64 {
+pub(crate) fn smoothing_factor(k: f64, delta: f64) -> f64 {
     1.0 - libm::exp(-k * delta)
 }
 
 /// Eases an angle toward `target` the short way round. The result lies in
 /// [-π, π).
-pub fn smooth_angle(cur: f64, target: f64, k: f64, delta: f64, eps: f64) -> (f64, bool) {
+pub(crate) fn smooth_angle(cur: f64, target: f64, k: f64, delta: f64, eps: f64) -> (f64, bool) {
     let pi = core::f64::consts::PI;
     let left = wrap(target - cur, -pi, pi);
     let ([moved], moving) = smooth_vec([0.0], [left], k, delta, eps);
@@ -25,7 +25,7 @@ pub fn smooth_angle(cur: f64, target: f64, k: f64, delta: f64, eps: f64) -> (f64
 /// Eases every axis by the same share, so the path is a straight line. It
 /// arrives once the remaining distance, over all axes together, is under
 /// `eps`. The flag it returns says whether the value is still moving.
-pub fn smooth_vec<const N: usize>(
+pub(crate) fn smooth_vec<const N: usize>(
     cur: [f64; N],
     target: [f64; N],
     k: f64,

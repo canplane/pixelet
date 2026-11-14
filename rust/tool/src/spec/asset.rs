@@ -71,7 +71,7 @@ pub fn catalog() -> Result<Vec<(String, Vec<String>)>, String> {
         .collect()
 }
 
-/// Each ground cube's color by name, packed `0xRRGGBB`, as color.json5 gives it.
+/// Each ground cube's color by name, packed `0xRRGGBB`, as `color.json5` gives it.
 pub fn ground_colors() -> Result<std::collections::BTreeMap<String, u32>, String> {
     let spec = read(COLOR_JSON)?;
     let ground = spec.get("ground").ok_or("color.json5 has no ground")?;
@@ -178,7 +178,7 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
     ])
 }
 
-/// `IDX_BITS` and the number of kind `name` (id.json5).
+/// `IDX_BITS` and the number of kind `name` (`id.json5`).
 fn kind_layout(name: &str) -> Result<(u32, u32), String> {
     let id = read(ID_JSON)?;
     Ok((
@@ -278,7 +278,7 @@ fn ground_asset_ids() -> Result<Vec<(String, u32)>, String> {
     cubes(&spec, "ground")
 }
 
-/// The ground asset ids a decor's `on` holds a bit for, as many as pxl-spec ground.rs
+/// The ground asset ids a decor's `on` holds a bit for, as many as pxl-spec `ground.rs`
 /// `GroundId` takes, in `ON_WORDS` words. The tool links no workspace crate, so it holds the
 /// count itself, and the generated `Row::on`, sized from `GroundId`, refuses a table of another.
 const GROUND_ID_CNT: u32 = 1 << u8::BITS;
@@ -293,7 +293,7 @@ fn decor_table(
     asset_ids: &[(String, u32)],
     slots: &[String],
 ) -> Result<(Vec<String>, Vec<String>), String> {
-    // How a decor faces, Orientation's members.
+    // How a decor faces: the members of `Orientation`.
     let orients = members("orient", &["random", "along_transport"])?;
     let slot_of = |path: &str| {
         slots

@@ -19,9 +19,8 @@ use crate::domain::preview::Draft;
 use crate::domain::scene::marker::candidate::CandidateTable;
 use crate::domain::scene::marker::design::{self, Design};
 use crate::domain::scene::marker::set::{self, Set};
-use crate::domain::setting::store::settings;
+use crate::domain::setting::settings;
 use crate::domain::view::frame::screen::{ndc_to_px, units_per_px_at};
-use crate::sys::sched::tick::TickContext;
 use pxl_render::frame::shelf::NO_SLOT;
 use pxl_spec::space::coord::v3;
 use pxl_spec::space::layer::octant::Octant;
@@ -141,7 +140,7 @@ fn extent_px(spacing: f64) -> f64 {
     2.0 * spacing
 }
 
-pub fn on_changed(places: &[Quadrant]) {
+pub(crate) fn on_changed(places: &[Quadrant]) {
     let p = ARRANGEMENT.get(Arrangement::default);
     p.changed = true;
     p.changed_places.extend_from_slice(places);
@@ -149,7 +148,7 @@ pub fn on_changed(places: &[Quadrant]) {
 
 /// Lays out the markers for `frame`. `draft` is the marker tool's draft as
 /// the frame hands it (frame.rs `scene_tick`).
-pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
+pub(crate) fn step(frame: &Frame, draft: Option<&Draft>) {
     let p = ARRANGEMENT.get(Arrangement::default);
     if pose::eye().is_none() {
         if p.set.free(model::draw_list()) {
@@ -411,13 +410,13 @@ pub fn step(ctx: &mut TickContext, frame: &Frame, draft: Option<&Draft>) {
     (p.sized, p.spare, p.spare_instances) = (sized, drawn_before, drawn_instances);
 }
 
-pub fn draw(draw: &mut DrawList) {
+pub(crate) fn draw(draw: &mut DrawList) {
     ARRANGEMENT.get(Arrangement::default).set.draw(draw);
 }
 
 /// The marker that took a tap at `ndc_x`, `ndc_y`, in [−1, 1] with y up, or
 /// None.
-pub fn tap(ndc_x: f64, ndc_y: f64) -> Option<MarkerHit> {
+pub(crate) fn tap(ndc_x: f64, ndc_y: f64) -> Option<MarkerHit> {
     let [x, y] = ndc_to_px([ndc_x, ndc_y]);
     let hits = &ARRANGEMENT.get(Arrangement::default).hits;
     hits.iter()

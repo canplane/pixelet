@@ -28,7 +28,7 @@
   RES: {
     $value: 2147483648,
     $type: "u32",
-    $description: "The bit of the command that marks a later answer.",
+    $description: "The bit of the command that marks an answer.",
   },
   METHOD_BITS: {
     $value: 8,

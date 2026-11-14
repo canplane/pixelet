@@ -1,16 +1,17 @@
 // xpute-link/link.rs
 
-//! The link (link/wit/types.wit). Whatever is called is an object, called by
-//! its methods under a handle: an interface's named handle, the hash of its
-//! name (frame.json5 `NAMED`), or a resource's, named by a URI, a tuple of
+//! The link (`link/wit/types.wit`). Whatever is called is an object, called
+//! by its methods under a handle: an interface's named handle, the hash of its
+//! name (`frame.json5` `NAMED`), or a resource's, named by a URI, a tuple of
 //! tokens, and opened by the root's `open` to a handle the serving side
 //! issues, or answered by a function that returns it. A frame is one method
-//! called: its tag the request, unique among the sender's pending ones, its command the
-//! handle, the method and a RES bit (frame.rs), its packet the args in the
-//! Canonical ABI's layout (cabi.rs). A frame crosses one way through one
-//! function, `link_out` from the guest and `link_in` into it, and each crossing returns at once what the method came
-//! to: its result, or EINPROGRESS for one that answers later, by a frame marked
-//! RES with the request's tag. So each side has the same ways:
+//! called: its tag the request, unique among the sender's pending ones, its
+//! command the handle, the method and a `RES` bit (`frame.rs`), its packet the
+//! args in the Canonical ABI's layout (`cabi.rs`). A frame crosses one way
+//! through one function, `link_out` from the guest and `link_in` into it, and
+//! each crossing returns at once what the method came to: its result, or
+//! EINPROGRESS for one that answers later, by a frame marked `RES` with the
+//! request's tag. So each side has the same ways:
 //!
 //! - `call` takes what the crossing returns, for a method that always answers
 //!   at once, and stops as a bug on EINPROGRESS;
@@ -20,7 +21,7 @@
 //!   puts the opener of the resources the side serves under a URI's leading
 //!   tokens, the longest matching winning; `open` and `drop` reach the root's
 //!   open and a handle's drop on the other side;
-//! - `cancel` cancels a request sent and pending (the root's CANCEL), and
+//! - `cancel` cancels a request sent and pending (the root's `CANCEL`), and
 //!   `on_cancel` puts what runs if a request the side serves is canceled.
 //!
 //! The link holds these on both ends:
@@ -203,7 +204,7 @@ pub struct Side {
     /// The answers due, run after the work at hand.
     due: RefCell<VecDeque<Due>>,
     /// Whether the link can run no more, whichever side failed: nothing is
-    /// laid or crossed, each frame answering EPIPE (link.ts `_trapped`).
+    /// laid or crossed, each frame answering EPIPE (`link.ts` `_trapped`).
     trapped: Cell<bool>,
 }
 
@@ -226,7 +227,7 @@ impl Side {
     }
 
     /// Stops the link for good, and answers whether it did just now, the link
-    /// not having trapped already (link.ts `trap`).
+    /// not having trapped already (`link.ts` `trap`).
     pub fn trap(&self) -> bool {
         !self.trapped.replace(true)
     }
@@ -556,8 +557,8 @@ pub fn uri(names: &[&str]) -> Vec<Token> {
     names.iter().map(|n| Token::Str((*n).to_owned())).collect()
 }
 
-/// Writes `uri` at `at` as a `list<token>`, as ROOT OPEN's args hold it
-/// (types.wit).
+/// Writes `uri` at `at` as a `list<token>`, as `ROOT` `OPEN`'s args hold it
+/// (`types.wit`).
 pub fn store_uri(w: &mut Lower, at: usize, uri: &[Token]) {
     if let Some(base) = w.list(at, uri.len(), Token::SZ, Token::ALIGN) {
         uri.iter().enumerate().for_each(|(k, t)| t.store(w, base + k * Token::SZ));

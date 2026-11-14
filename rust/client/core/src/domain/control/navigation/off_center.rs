@@ -11,7 +11,7 @@ use crate::domain::query::unknown;
 use pxl_global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct OffCenter {
+pub(crate) struct OffCenter {
     pub device_coord: Option<Q3>,
     pub is_off_center: bool,
 }
@@ -32,7 +32,7 @@ fn device_coord() -> Option<Q3> {
 
 /// The device's location, and whether the pivot has wandered off it as of
 /// this frame's `off_center_step`.
-pub fn off_center() -> OffCenter {
+pub(crate) fn off_center() -> OffCenter {
     OffCenter {
         device_coord: device_coord(),
         is_off_center: *OFF_CENTER.get(|| false),
@@ -41,7 +41,7 @@ pub fn off_center() -> OffCenter {
 
 /// Decides once a frame whether the pivot is off the device, past
 /// `OFF_CENTER_U` and back within `ON_CENTER_U`.
-pub fn off_center_step() {
+pub(crate) fn off_center_step() {
     let off = OFF_CENTER.get(|| false);
     // Only the horizontal distance counts. The fix's Z is a GPS altitude and
     // the pivot's Z is a floor, and their mismatch could hold the pivot

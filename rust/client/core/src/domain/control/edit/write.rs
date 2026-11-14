@@ -81,7 +81,7 @@ pub(super) fn middle(at: Octant) -> Q3 {
 }
 
 impl Asset {
-    pub fn place(self, at: &Q3, zoom: Zoom) {
+    pub(crate) fn place(self, at: &Q3, zoom: Zoom) {
         match self {
             Asset::Cube(id) => place_cube(at, zoom, id),
             Asset::Decor(id) => place_decor(at, zoom, id),
@@ -116,7 +116,7 @@ fn place_decor(at: &Q3, zoom: Zoom, id: AssetId) {
 
 /// The decor the ground generates at `at` that placing `id` would bring back
 /// (`place_decor`). The item tool's preview shows it.
-pub fn restores_scattered(at: &Q3, id: AssetId) -> Option<Instance> {
+pub(crate) fn restores_scattered(at: &Q3, id: AssetId) -> Option<Instance> {
     is_carved(&World::now(), at).then(|| World::now().generated_instance(Decor::of(id), at))?
 }
 
@@ -128,14 +128,14 @@ fn draft_mut() -> &'static mut Option<Draft> {
     DRAFT.get(|| None)
 }
 
-pub fn draft() -> Option<&'static Draft> {
+pub(crate) fn draft() -> Option<&'static Draft> {
     draft_mut().as_ref()
 }
 
 /// Opens a draft at `at` for a marker tool's tap, on a free place or on a
 /// marker. The draft keeps the text of a draft already open there, or else
 /// starts with the text of the marker that stands there.
-pub fn draft_at(at: Octant) {
+pub(crate) fn draft_at(at: Octant) {
     let world = World::now();
     let text = match draft().filter(|d| d.at == at) {
         Some(d) => d.text.clone(),
@@ -151,17 +151,17 @@ pub fn draft_at(at: Octant) {
 
 /// Opens a new marker's draft for a marker tool's tap on the free cell whose
 /// min corner is `corner`.
-pub fn draft_new(corner: &Q3) {
+pub(crate) fn draft_new(corner: &Q3) {
     draft_at(Octant::holding(UNIT_ZOOM, corner));
 }
 
-pub fn cancel_draft() {
+pub(crate) fn cancel_draft() {
     if draft_mut().take().is_some() {
         invalidate();
     }
 }
 
-pub fn marker_draft() -> Option<&'static str> {
+pub(crate) fn marker_draft() -> Option<&'static str> {
     draft().map(|d| d.text.as_str())
 }
 
@@ -169,7 +169,7 @@ pub fn marker_draft() -> Option<&'static str> {
 /// text is copied into the draft's own buffer, so a keystroke allocates only
 /// when the text grows past the longest it has held. A text longer than
 /// `MARKER_TEXT_CHARS` is refused whole, and the earlier text stays.
-pub fn set_draft_text(text: &str) -> Result<(), Errno> {
+pub(crate) fn set_draft_text(text: &str) -> Result<(), Errno> {
     if text.chars().count() > MARKER_TEXT_CHARS as usize {
         return Err(Errno::EMSGSIZE);
     }
@@ -183,7 +183,7 @@ pub fn set_draft_text(text: &str) -> Result<(), Errno> {
 
 /// Commits the open draft with its text, if its place is still free or
 /// still holds a marker. A draft without text is not committed.
-pub fn commit_draft() {
+pub(crate) fn commit_draft() {
     let Some(Draft { at, text }) = draft_mut().take() else {
         return;
     };
@@ -204,7 +204,7 @@ pub fn commit_draft() {
 
 /// Writes an air leaf, which means "nothing here, on purpose". It hides what
 /// the base holds there, which has no leaf of its own to delete.
-pub fn place_air(at: Octant) {
+pub(crate) fn place_air(at: Octant) {
     write_object(at, Sentinel::Air as u32);
 }
 
@@ -224,7 +224,7 @@ fn erase_asset_id(at: Octant) -> AssetId {
 /// would fill the cell once the asset is gone, air is written, so an asset
 /// taken out of a hole leaves the hole. A generated decor that shared the
 /// asset's box comes back, because its erase is undone too.
-pub fn remove(at: Octant) {
+pub(crate) fn remove(at: Octant) {
     let world = World::now();
     let erased: Vec<[i32; 3]> = world
         .generated_over(&cube(at.zoom(), at.at()))
@@ -248,13 +248,13 @@ pub fn remove(at: Octant) {
 static RENDER_EDIT: Global<RenderEdit> = Global::new();
 
 /// What the tool held leaves out of the world as drawn, as this frame decided.
-pub fn render_edit() -> RenderEdit {
+pub(crate) fn render_edit() -> RenderEdit {
     *RENDER_EDIT.get(RenderEdit::default)
 }
 
 /// Decides what the tool held leaves out of the drawing this frame and returns
 /// whether it changed.
-pub fn render_edit_step() -> bool {
+pub(crate) fn render_edit_step() -> bool {
     let now = tool().render_edit(&hover());
     core::mem::replace(RENDER_EDIT.get(RenderEdit::default), now) != now
 }

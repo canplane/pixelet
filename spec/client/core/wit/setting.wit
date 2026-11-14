@@ -4,6 +4,6 @@ interface setting {
   use types.{error-code};
 
   dev: func(dev: bool);
-  // A setting by its number in schema.json5's SETTING.
+  // A setting by its number in `schema.json5`'s `SETTING`.
   set: func(key: u32, val: u32) -> result<_, error-code>;
 }

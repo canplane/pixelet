@@ -4,10 +4,10 @@
 
 use super::{applied, or_refuse, refuse_unless};
 use crate::abi::types::ErrorCode;
-use crate::domain::setting::store::are_settings_loaded;
-use crate::domain::setting::store::set_dev;
-use crate::domain::setting::store::settings_mut;
-use crate::domain::setting::store::SettingKey;
+use crate::domain::setting::are_settings_loaded;
+use crate::domain::setting::set_dev;
+use crate::domain::setting::settings_mut;
+use crate::domain::setting::SettingKey;
 use crate::perf::window::perf_follow;
 use xpute_kit::status::errno::Errno;
 

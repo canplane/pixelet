@@ -19,7 +19,7 @@
       $description: "The platform's storage, where the platform holds a file being the client's choice. What a file holds is its owner's, written whole, its `format` first (pxl-core sys/io/file.rs).",
       ID: { $value: 4 },
       SETTINGS: {
-        $description: "The settings' overrides, in the platform's storage (domain/setting/store.rs).",
+        $description: "The settings' overrides, in the platform's storage (domain/setting.rs).",
         ID: { $value: 0 },
       },
     },
@@ -53,7 +53,7 @@
   },
   write: {
     $type: "u32",
-    $description: "The children of the tree packet a shard's file and an edit batch hold after their\nformat byte, by index: each row a write `<key, asset_id, ext>`, a leaf as the write that made\nit in a shard's file, in the order made in a batch, where void erases (pxl-core\ndomain/layer/object/store.rs `Write`). A record a class's (pxl-spec object/ext.rs),\nits row and its fields as columns.",
+    $description: "The children of the tree packet a shard's file and an edit batch hold after their\nformat byte, by index: each row a write `<key, asset_id, ext>`, a leaf as the write that made\nit in a shard's file, in the order made in a batch, where void erases (pxl-core\ndomain/layer/object/store.rs `Write`). A record a class's (pxl-spec object.rs),\nits row and its fields as columns.",
     KEY: {
       $value: 0,
       $description: "A `strs` column holding each key as an octkey (pxl-spec space/hierarchy/morton.rs `name`, 3D): the shard's quadkey, then a digit 0 to 7 a zoom.",

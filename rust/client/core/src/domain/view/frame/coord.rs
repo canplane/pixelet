@@ -19,14 +19,14 @@ fn canonical_to_world(p: &Q3, near_x: f64) -> V3 {
 
 /// The canonical point `p` in the world's doubles, on the lap of X nearest
 /// the eye.
-pub fn to_world(p: &Q3) -> V3 {
+pub(crate) fn to_world(p: &Q3) -> V3 {
     canonical_to_world(p, view().at().eye[0])
 }
 
 /// The canonical point of the lattice cell `w` lies in. It goes through
 /// `world::point`, the only way a position enters the world: X wraps around
 /// the world, and Y and Z are held at its edge.
-pub fn world_to_canonical(w: &V3) -> Q3 {
+pub(crate) fn world_to_canonical(w: &V3) -> Q3 {
     world::point(w[0], w[1], w[2])
 }
 

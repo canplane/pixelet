@@ -19,7 +19,7 @@ use crate::space::layer::lattice::{GROUND, TILE_CELLS};
 use crate::space::layer::quadrant::Quadrant;
 
 /// A tile's column lengths: one a cell, four asset ids a cell, and its padded samples.
-/// A tile is these sizes and no other.
+/// A packet's columns are these sizes and no other (`read_tile`).
 pub const GROUND_COLUMN: usize = (TILE_CELLS * TILE_CELLS) as usize;
 pub const FOLD_COLUMN: usize = 4 * GROUND_COLUMN;
 pub const ELE_COLUMN: usize = (ELE_PADDED_SPAN * ELE_PADDED_SPAN) as usize;
@@ -44,7 +44,7 @@ type Packet = (Vec<i16>, Vec<GroundId>, u8, separation::Packet);
 
 /// A tile's ground. In the bake it holds the four asset ids each cell folds,
 /// `dx + 2·dy`, as a GPU holds them, a leaf's cell holding its own four; on the wire, one a
-/// cell where every cell's four are one; on the CPU, each cell's own asset id
+/// cell where every cell's four are one; in a client, none but a void tile's
 /// (`decode_into`).
 pub type GroundCells = Cow<'static, [GroundId]>;
 
@@ -393,9 +393,8 @@ fn read_tile(pkt: &[u8]) -> Result<Table<'_>, XputeError> {
     })
 }
 
-/// A packet's asset ids as it holds them, four a cell (`FOLD_COLUMN`), one a
-/// cell, each its own four, or one for the whole tile: which a client's clip levels cut
-/// their bricks' from.
+/// A packet's asset ids as it holds them, four a cell (`FOLD_COLUMN`) or one a
+/// cell, each its own four: which a client's clip levels cut their bricks' from.
 pub fn cells_of(pkt: &[u8]) -> Result<&[GroundId], XputeError> {
     Ok(read_tile(pkt)?.cells)
 }

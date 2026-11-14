@@ -9,7 +9,7 @@ use xpute_guest::clock::now;
 use pxl_global::Global;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct DeviceLocation {
+pub(crate) struct DeviceLocation {
     /// Longitude and latitude, in degrees.
     pub lon_lat: [f64; 2],
     /// Meters above sea level. None where the device gives no altitude.
@@ -22,7 +22,7 @@ pub struct DeviceLocation {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct DeviceOrientation {
+pub(crate) struct DeviceOrientation {
     /// Compass heading, 0-360 degrees.
     pub heading: Option<f64>,
     /// Front-to-back tilt, -180 to 180 degrees.
@@ -59,7 +59,7 @@ fn is_heading_delta_over(a: Option<f64>, b: Option<f64>, eps: f64) -> bool {
 /// The location's state as the snapshot carries it: its status, and what
 /// failed when it failed. `err` is None except at `SensorStatus::Error`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SensorState {
+pub(crate) struct SensorState {
     pub status: SensorStatus,
     pub err: Option<Message>,
 }
@@ -72,11 +72,11 @@ impl Default for SensorState {
 }
 
 impl SensorState {
-    pub const fn of(status: SensorStatus) -> SensorState {
+    pub(crate) const fn of(status: SensorStatus) -> SensorState {
         SensorState { status, err: None }
     }
 
-    pub const fn failed(err: Message) -> SensorState {
+    pub(crate) const fn failed(err: Message) -> SensorState {
         SensorState {
             status: SensorStatus::Error,
             err: Some(err),
@@ -85,7 +85,7 @@ impl SensorState {
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct DeviceLocationStore {
+pub(crate) struct DeviceLocationStore {
     pub is_tracking_location: bool,
     pub location: Option<DeviceLocation>,
     pub state: SensorState,
@@ -94,7 +94,7 @@ pub struct DeviceLocationStore {
 impl DeviceLocationStore {
     /// Takes a fix. The location changes only on a significant change, but
     /// any fix marks the sensor Ready, since it shows the watch delivers.
-    pub fn set_location(
+    pub(crate) fn set_location(
         &mut self,
         lon_lat: [f64; 2],
         alt: Option<f64>,
@@ -148,7 +148,7 @@ impl DeviceLocationStore {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct DeviceOrientationStore {
+pub(crate) struct DeviceOrientationStore {
     pub is_tracking_orient: bool,
     pub orient: Option<DeviceOrientation>,
     pub status: SensorStatus,
@@ -168,7 +168,12 @@ impl Default for DeviceOrientationStore {
 impl DeviceOrientationStore {
     /// Takes an orientation reading, ignoring changes within a dead zone of
     /// 1.5° of heading and 2° of tilt.
-    pub fn set_orient(&mut self, heading: Option<f64>, beta: Option<f64>, gamma: Option<f64>) {
+    pub(crate) fn set_orient(
+        &mut self,
+        heading: Option<f64>,
+        beta: Option<f64>,
+        gamma: Option<f64>,
+    ) {
         let timestamp = now();
         let Some(prev) = self.orient else {
             self.orient = Some(DeviceOrientation {
@@ -197,7 +202,7 @@ impl DeviceOrientationStore {
         });
     }
 
-    pub fn set_is_tracking_orient(&mut self, enabled: bool) {
+    pub(crate) fn set_is_tracking_orient(&mut self, enabled: bool) {
         if self.is_tracking_orient == enabled {
             return;
         }
@@ -211,18 +216,18 @@ impl DeviceOrientationStore {
 static LOCATION: Global<DeviceLocationStore> = Global::new();
 static ORIENT: Global<DeviceOrientationStore> = Global::new();
 
-pub fn device_location_store() -> &'static DeviceLocationStore {
+pub(crate) fn device_location_store() -> &'static DeviceLocationStore {
     device_location_store_mut()
 }
 
-pub fn device_location_store_mut() -> &'static mut DeviceLocationStore {
+pub(crate) fn device_location_store_mut() -> &'static mut DeviceLocationStore {
     LOCATION.get(DeviceLocationStore::default)
 }
 
-pub fn device_orient_store() -> &'static DeviceOrientationStore {
+pub(crate) fn device_orient_store() -> &'static DeviceOrientationStore {
     device_orient_store_mut()
 }
 
-pub fn device_orient_store_mut() -> &'static mut DeviceOrientationStore {
+pub(crate) fn device_orient_store_mut() -> &'static mut DeviceOrientationStore {
     ORIENT.get(DeviceOrientationStore::default)
 }

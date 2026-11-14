@@ -17,19 +17,19 @@ const LINE_BYTES: usize = 64;
 
 /// The bytes an array of `cnt` items of `size` bytes takes, rounded up to
 /// whole cache lines.
-pub const fn arr_bytes(cnt: usize, size: usize) -> u32 {
+pub(crate) const fn arr_bytes(cnt: usize, size: usize) -> u32 {
     ((cnt * size).div_ceil(LINE_BYTES) * LINE_BYTES) as u32
 }
 
 /// A range: where it begins in `.fixed`, and its bytes.
 #[derive(Clone, Copy)]
-pub struct Range {
+pub(crate) struct Range {
     off: u32,
     bytes: u32,
 }
 
 impl Range {
-    pub const fn at(off: u32, bytes: u32) -> Range {
+    pub(crate) const fn at(off: u32, bytes: u32) -> Range {
         Range { off, bytes }
     }
 
@@ -39,7 +39,7 @@ impl Range {
     /// # Safety
     /// The caller holds those bytes alone for as long as it keeps the array,
     /// and they are valid `T`s (zeroed, for plain numbers).
-    pub unsafe fn arr<T>(self, off: u32, n: usize) -> &'static mut [T] {
+    pub(crate) unsafe fn arr<T>(self, off: u32, n: usize) -> &'static mut [T] {
         let end = (n * size_of::<T>()).checked_add(off as usize);
         xpute_kit::ensure!(end.is_some_and(|e| e <= self.bytes as usize), ENOTRECOVERABLE, off);
         let p = core::ptr::with_exposed_provenance_mut::<u8>(heap::fixed_at() + (self.off + off) as usize);
@@ -52,20 +52,20 @@ impl Range {
 
 /// One owner's range, handed in once at boot. Asking for it before then is a
 /// bug.
-pub struct OwnedRange(Global<Range>);
+pub(crate) struct OwnedRange(Global<Range>);
 
 impl OwnedRange {
-    pub const fn new() -> OwnedRange {
+    pub(crate) const fn new() -> OwnedRange {
         OwnedRange(Global::new())
     }
 
-    pub fn set(&self, r: Range) {
+    pub(crate) fn set(&self, r: Range) {
         self.0.set(r);
     }
 
     /// # Safety
     /// As `Range::arr`.
-    pub unsafe fn arr<T>(&self, off: u32, n: usize) -> &'static mut [T] {
+    pub(crate) unsafe fn arr<T>(&self, off: u32, n: usize) -> &'static mut [T] {
         let r = *self.0.get(|| xpute_kit::bug!(ENOTRECOVERABLE));
         // SAFETY: the caller's.
         unsafe { r.arr(off, n) }

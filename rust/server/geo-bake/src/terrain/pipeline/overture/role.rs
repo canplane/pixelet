@@ -27,7 +27,7 @@ impl Role {
         }
     }
 
-    pub fn at(subclass: Option<&str>, rules: &RuleSet, at: f64) -> Role {
+    pub(crate) fn at(subclass: Option<&str>, rules: &RuleSet, at: f64) -> Role {
         rules
             .at(at)
             .and_then(|v| v.as_str())

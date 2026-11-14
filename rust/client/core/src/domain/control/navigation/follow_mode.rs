@@ -44,15 +44,15 @@ fn follow() -> &'static mut Follow {
     })
 }
 
-pub fn following() -> bool {
+pub(crate) fn following() -> bool {
     follow().on
 }
 
-pub fn set_following(on: bool) {
+pub(crate) fn set_following(on: bool) {
     follow().on = on;
 }
 
-pub fn follow_mode_step() {
+pub(crate) fn follow_mode_step() {
     let f = follow();
     let is_follow_mode = f.on;
     let heading = device_orient_store().orient.and_then(|o| o.heading);
@@ -121,7 +121,7 @@ pub fn follow_mode_step() {
 
 /// The UI picks which of the three actions a press means from the state it
 /// drew the button in, so the press means what the user saw.
-pub fn tracking_action(tracking: Tracking) {
+pub(crate) fn tracking_action(tracking: Tracking) {
     match tracking {
         Tracking::Recenter => {
             // The pivot goes to the floor nearest the fix's altitude, or to the

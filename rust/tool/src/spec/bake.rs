@@ -9,7 +9,7 @@ use super::{
 };
 use crate::root;
 
-/// publication.json5's outputs, by which a spec that names its enums reaches
+/// `publication.json5`'s outputs, by which a spec that names its enums reaches
 /// them.
 pub(crate) const PUBLICATION: DataSpec = DataSpec {
     json: "spec/spec/bake/publication.json5",
@@ -18,12 +18,12 @@ pub(crate) const PUBLICATION: DataSpec = DataSpec {
     ..DataSpec::DEFAULT
 };
 
-/// publication.json5, written by xpute's generator as a data spec: its
+/// `publication.json5`, written by xpute's generator as a data spec: its
 /// `BASE_KIND` enum and `FORMAT` keyed on it among the rest. The tool keeps
 /// what is pixelet's own: the object a tile is published as, read and written
 /// by `OBJECT`, and the Worker's copy of the layers' names, bundled apart from
 /// the client.
-pub fn publication_outputs() -> Result<Vec<Output>, String> {
+pub(crate) fn publication_outputs() -> Result<Vec<Output>, String> {
     const JSON: &str = PUBLICATION.json;
     // The enum of the layers, which the spec declares and whose names the
     // Worker's copy takes too.
@@ -150,7 +150,7 @@ pub fn publication_outputs() -> Result<Vec<Output>, String> {
 // The Rust reads a place's look by its category number: for each category, in lists the
 // core indexes, what Carto draws for it, with 0 for a zoom at which it never shows.
 
-pub fn place_theme_outputs() -> Result<Vec<Output>, String> {
+pub(crate) fn place_theme_outputs() -> Result<Vec<Output>, String> {
     let (cat_json, theme_json) = (
         "spec/spec/bake/place_category.json5",
         "spec/spec/bake/place_theme.json5",

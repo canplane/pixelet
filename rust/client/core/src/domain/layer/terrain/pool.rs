@@ -25,7 +25,8 @@ const CHUNK_CNT: u32 = WAYS_POOL_WORDS / CHUNK_WORDS;
 /// The heap the pool takes at its cap, counted in the buddy allocator's blocks: each chunk
 /// rounded up to a power of two, and the list of chunks likewise (link/layout.rs
 /// `HEAP_FLOWS_BYTES`).
-pub const POOL_BYTES: u64 = (CHUNK_CNT as u64) * (CHUNK_WORDS as u64 * 4).next_power_of_two()
+pub(crate) const POOL_BYTES: u64 = (CHUNK_CNT as u64)
+    * (CHUNK_WORDS as u64 * 4).next_power_of_two()
     + (CHUNK_CNT as u64 * size_of::<Box<[u32]>>() as u64).next_power_of_two();
 
 /// A run of words: the first and how many. A count of zero means the run holds none.
@@ -76,7 +77,7 @@ impl WayPool {
     /// Takes a run of `n` words from the lowest free run that holds it and that the host does
     /// not still hold (`in_flight`), or else past every other run, growing the chunks it reaches
     /// first. `n` is at least 1.
-    pub fn take(&mut self, n: u32) -> Result<Run, PoolRefusal> {
+    pub(crate) fn take(&mut self, n: u32) -> Result<Run, PoolRefusal> {
         if let Some(k) = (0..self.free.len())
             .find(|&k| self.free[k][1] >= n && !self.in_flight([self.free[k][0], n]))
         {
@@ -99,7 +100,7 @@ impl WayPool {
 
     /// Gives back a run taken, joined with the free runs it touches, which counts as room given
     /// back for a refusal (`Refusal::ways`).
-    pub fn give(&mut self, run: Run) {
+    pub(crate) fn give(&mut self, run: Run) {
         if run[1] == 0 {
             return;
         }
@@ -124,12 +125,12 @@ impl WayPool {
     }
 
     /// The words the pool spans, which the GPU's copy must hold.
-    pub fn top(&self) -> u32 {
+    pub(crate) fn top(&self) -> u32 {
         self.top
     }
 
     /// Whether a run of `n` words could be taken now, the heap's say apart.
-    pub fn fits(&self, n: u32) -> bool {
+    pub(crate) fn fits(&self, n: u32) -> bool {
         self.free.iter().any(|r| r[1] >= n)
             || n.checked_add(self.top)
                 .is_some_and(|sum| sum <= WAYS_POOL_WORDS)
@@ -137,7 +138,7 @@ impl WayPool {
 
     /// `run` in place, one piece for each chunk it reaches, each piece with its first word in
     /// the pool and its words.
-    pub fn pieces(&self, [first, cnt]: Run) -> List<(u32, &[u32]), RUN_PIECE_CAP> {
+    pub(crate) fn pieces(&self, [first, cnt]: Run) -> List<(u32, &[u32]), RUN_PIECE_CAP> {
         let mut pieces = List::new();
         let (mut at, end) = (first, first + cnt);
         while at < end {
@@ -151,7 +152,7 @@ impl WayPool {
     }
 
     /// Writes word `k` of the pool, across chunks.
-    pub fn set(&mut self, k: u32, v: u32) {
+    pub(crate) fn set(&mut self, k: u32, v: u32) {
         if let Some(chunk) = self.chunks.get_mut((k / CHUNK_WORDS) as usize) {
             chunk[(k % CHUNK_WORDS) as usize] = v;
         }

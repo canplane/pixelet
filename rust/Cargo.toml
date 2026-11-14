@@ -89,6 +89,12 @@ pxl-geo-spec = { path = "server/geo-spec" }
 [workspace.lints.rust]
 # A path no longer than what is already in scope.
 unused_qualifications = "warn"
+# An item is `pub` only where another crate can name it, so `dead_code` sees
+# what nothing in its crate uses. It holds pixelet's crates alone: xpute's, its
+# kit and each published crate, are their own workspace, their API kept whether
+# used here or not. What dead_code reports is a candidate, removed only as the
+# code skill's "One owner" says.
+unreachable_pub = "warn"
 
 [workspace.lints.clippy]
 # A path past a crate and one module is brought in by a `use` at the top of
