@@ -14,7 +14,7 @@ export function useStanding(): Standing {
     source: useSource(),
     online: useOnline(),
     stall: useCore((s) => s.stall),
-    stopCode: useSyncExternalStore(watch_boot, stop_code),
+    stop_code: useSyncExternalStore(watch_boot, stop_code),
     progress: useCore((s) => s.renderer_progress),
     area: useCore((s) => s.area_progress),
   };

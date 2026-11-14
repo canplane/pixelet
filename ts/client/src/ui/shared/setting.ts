@@ -26,6 +26,6 @@ export type SettingCost =
 
 const SETTING_NAMES = Object.keys(SETTING) as SettingName[];
 
-export function settingsIn(section: SettingSection): SettingName[] {
+export function settings_in(section: SettingSection): SettingName[] {
   return SETTING_NAMES.filter((name) => SETTING[name].section === section);
 }

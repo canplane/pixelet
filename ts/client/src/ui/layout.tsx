@@ -4,23 +4,23 @@ import { Component, type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { BOOT_LOADING, BOOT_STARTED } from "@/service/sys/boot.ts";
-import { installConsole } from "@/ui/feature/debug/console.ts";
+import { install_console } from "@/ui/feature/debug/console.ts";
 import { useStanding } from "./feature/cover/standing.ts";
-import { coverOf, UI_PANIC } from "./feature/cover/cover.ts";
+import { cover_of, UI_PANIC } from "./feature/cover/cover.ts";
 import { ModalHost } from "./modal.tsx";
 import { Screen } from "./feature/cover/screen.tsx";
 import { KeyboardAway } from "@/ui/shared/component/keyboard.tsx";
-import { DockMode, setDockMode } from "@/ui/feature/world/dock/store.ts";
+import { DockMode, set_dock_mode } from "@/ui/feature/world/dock/store.ts";
 import { MESSAGE_WORLD_UNAVAILABLE } from "@/abi/overlay.enum.ts";
 
 /** The world mounts once the core runs, and goes at a panic, because nothing
  * can be drawn or read behind one. */
 function AppBody({ children }: { children: ReactNode }) {
   const standing = useStanding();
-  const cover = coverOf(standing);
+  const cover = cover_of(standing);
   // A console over the core is installed once the core runs.
   useEffect(() => {
-    if (standing.boot === BOOT_LOADING) installConsole();
+    if (standing.boot === BOOT_LOADING) install_console();
   }, [standing.boot]);
   useEffect(() => {
     if (standing.stall === MESSAGE_WORLD_UNAVAILABLE) {
@@ -41,7 +41,7 @@ function AppBody({ children }: { children: ReactNode }) {
     (standing.boot === BOOT_LOADING || standing.boot === BOOT_STARTED) &&
     cover?.kind !== "panic";
   return (
-    <KeyboardAway onAway={() => setDockMode(DockMode.Palette)}>
+    <KeyboardAway onAway={() => set_dock_mode(DockMode.Palette)}>
       <View style={styles.page}>{shows && children}</View>
       {shows && <ModalHost />}
       {cover !== null && (

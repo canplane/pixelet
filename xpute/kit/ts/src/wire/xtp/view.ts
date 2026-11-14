@@ -39,7 +39,7 @@ import type {
   U8Array,
 } from "@xpute/kit/abi/array.ts";
 import { ERRNO_EBADMSG, ERRNO_EINVAL } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 
 import type { BranchNode, Node, NodeValue } from "./spec.ts";
 import {
@@ -159,7 +159,7 @@ function val_to_node(val: NodeValue<NodeView>): Node {
     case "number":
       return exact_i32(val) ? I32_NODE(val) : F64_NODE(val);
     case "bigint":
-      if (!fits_i64(val)) throw new MarshalError(ERRNO_EINVAL);
+      if (!fits_i64(val)) throw new XputeError(ERRNO_EINVAL);
       return I64_NODE(val);
     case "boolean":
       return BOOL_NODE(val);
@@ -184,7 +184,7 @@ function val_to_node(val: NodeValue<NodeView>): Node {
     return branch.node;
   }
 
-  throw new MarshalError(ERRNO_EINVAL);
+  throw new XputeError(ERRNO_EINVAL);
 }
 
 // ============ View ============
@@ -406,7 +406,7 @@ export class TreeView extends NodeView {
    * Full packet validation is intentionally out of scope here.
    */
   override graft(pkt: U8Array): this {
-    if (pkt.byteOffset % WORD_SZ) throw new MarshalError(ERRNO_EBADMSG);
+    if (pkt.byteOffset % WORD_SZ) throw new XputeError(ERRNO_EBADMSG);
     return this._set_node({ type: SpecialType.GRAFT, val: pkt });
   }
 }
@@ -550,7 +550,7 @@ export abstract class BranchView extends NodeView {
    * - Full packet validation is intentionally deferred
    */
   override graft(pkt: U8Array): this {
-    if (pkt.byteOffset % WORD_SZ) throw new MarshalError(ERRNO_EBADMSG);
+    if (pkt.byteOffset % WORD_SZ) throw new XputeError(ERRNO_EBADMSG);
     return this._put_node({ type: SpecialType.GRAFT, val: pkt });
   }
 }

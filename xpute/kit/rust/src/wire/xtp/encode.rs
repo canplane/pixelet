@@ -2,7 +2,7 @@
 
 use crate::abi::word::field_set32;
 use crate::status::errno::Errno;
-use crate::status::error::MarshalError;
+use crate::status::error::XputeError;
 
 use super::cursor::{bytes_of, ArrayElem};
 use super::spec::{
@@ -38,10 +38,10 @@ impl TreeEncoder {
         &mut self,
         view: &V,
         cfg: TreeEncoderConfig,
-    ) -> Result<Vec<u8>, MarshalError> {
+    ) -> Result<Vec<u8>, XputeError> {
         let max_cap = cfg.max_cap.unwrap_or(MAX_PKT_SZ);
         if !(HDR_SZ..=MAX_PKT_SZ).contains(&max_cap) {
-            return Err(MarshalError::new(Errno::EINVAL));
+            return Err(XputeError::new(Errno::EINVAL));
         }
         let mut cap = HDR_SZ.max(cfg.init_cap.min(max_cap));
         loop {
@@ -534,7 +534,7 @@ impl<'a> PacketWriter<'a> {
 
     /// Writes the header and returns the packet's length, header included and
     /// padded to a word, or the first error that spoiled the packet.
-    pub fn finish(mut self) -> Result<u32, MarshalError> {
+    pub fn finish(mut self) -> Result<u32, XputeError> {
         let f = self.table;
         crate::ensure!(f.written == f.cnt, ENOTRECOVERABLE, f.cnt, f.written);
         // The root branch that `new` opened is closed here, padded as `branch`
@@ -543,11 +543,11 @@ impl<'a> PacketWriter<'a> {
             self.branch_close(Some(f.base));
         }
         if let Some(e) = self.err {
-            return Err(MarshalError::new(e));
+            return Err(XputeError::new(e));
         }
         let end = align(self.lim, WORD_SZ);
         if end as usize > self.buf.len() {
-            return Err(MarshalError::new(Errno::EOVERFLOW));
+            return Err(XputeError::new(Errno::EOVERFLOW));
         }
         self.buf[self.lim as usize..end as usize].fill(0);
         self.word(0, MAGIC, RESERVED);

@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/sensor` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x5534df;
 
@@ -113,23 +105,23 @@ pub fn pos(
     accuracy: Option<f64>,
     course: Option<f64>,
 ) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         POS,
         Some((64, &|w_: &mut _rt::Lower| {
-            w_.f64(0, *&lon);
-            w_.f64(8, *&lat);
+            w_.f64(0, lon);
+            w_.f64(8, lat);
             if let Some(v) = &alt {
                 w_.u8(16, 1);
-                w_.f64(16 + 8, *v);
+                w_.f64(24, *v);
             }
             if let Some(v) = &accuracy {
                 w_.u8(32, 1);
-                w_.f64(32 + 8, *v);
+                w_.f64(40, *v);
             }
             if let Some(v) = &course {
                 w_.u8(48, 1);
-                w_.f64(48 + 8, *v);
+                w_.f64(56, *v);
             }
         })),
     );
@@ -142,25 +134,25 @@ pub fn orient(
     beta: Option<f64>,
     gamma: Option<f64>,
 ) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         ORIENT,
         Some((64, &|w_: &mut _rt::Lower| {
             if let Some(v) = &webkit_compass_heading {
                 w_.u8(0, 1);
-                w_.f64(0 + 8, *v);
+                w_.f64(8, *v);
             }
             if let Some(v) = &alpha {
                 w_.u8(16, 1);
-                w_.f64(16 + 8, *v);
+                w_.f64(24, *v);
             }
             if let Some(v) = &beta {
                 w_.u8(32, 1);
-                w_.f64(32 + 8, *v);
+                w_.f64(40, *v);
             }
             if let Some(v) = &gamma {
                 w_.u8(48, 1);
-                w_.f64(48 + 8, *v);
+                w_.f64(56, *v);
             }
         })),
     );
@@ -172,16 +164,16 @@ pub fn err(
     code: Option<GeolocationErrorCode>,
     watching: bool,
 ) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         ERR,
         Some((4, &|w_: &mut _rt::Lower| {
-            w_.u8(0, *&sensor as u8);
+            w_.u8(0, sensor as u8);
             if let Some(v) = &code {
                 w_.u8(1, 1);
-                w_.u8(1 + 1, *v as u8);
+                w_.u8(2, *v as u8);
             }
-            w_.bool(3, *&watching);
+            w_.bool(3, watching);
         })),
     );
     _rt::answer(r)
@@ -191,12 +183,12 @@ pub fn permission(
     sensor: super::types::Sensor,
     answer: PermissionAnswer,
 ) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         PERMISSION,
         Some((2, &|w_: &mut _rt::Lower| {
-            w_.u8(0, *&sensor as u8);
-            w_.u8(1, *&answer as u8);
+            w_.u8(0, sensor as u8);
+            w_.u8(1, answer as u8);
         })),
     );
     _rt::answer(r)
@@ -208,21 +200,21 @@ pub fn platform(
     orient_permission: bool,
     orient_silence_is_loss: bool,
 ) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         PLATFORM,
         Some((4, &|w_: &mut _rt::Lower| {
-            w_.bool(0, *&geolocation);
-            w_.bool(1, *&orient);
-            w_.bool(2, *&orient_permission);
-            w_.bool(3, *&orient_silence_is_loss);
+            w_.bool(0, geolocation);
+            w_.bool(1, orient);
+            w_.bool(2, orient_permission);
+            w_.bool(3, orient_silence_is_loss);
         })),
     );
     _rt::answer(r)
 }
 
 pub fn locate() -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(HANDLE, LOCATE, None);
+    let (r, _) = _rt::link::call(HANDLE, LOCATE, None);
     _rt::answer(r)
 }
 

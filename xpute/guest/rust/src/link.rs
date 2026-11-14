@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Token;
-use xpute_link::frame::WORD_BYTES;
+use xpute_link::frame::WORD_SZ;
 use xpute_link::mem;
 use xpute_link::{Answer, Args, Handle, Layout, Method, Object, Packet, Side, Tag};
 
@@ -86,7 +86,7 @@ macro_rules! link {
 /// the link's layout lies: two words, the inbox and a frame's room, then the
 /// inbox and the outbox.
 pub fn init(room: u32, enter: fn(), end: fn() -> bool) -> u32 {
-    xpute_kit::ensure!(room.is_multiple_of(8) && room >= WORD_BYTES, EINVAL, room);
+    xpute_kit::ensure!(room.is_multiple_of(8) && room >= WORD_SZ, EINVAL, room);
     let words: &'static mut [u64] = Vec::leak(vec![0; 1 + 2 * room as usize / 8]);
     let at = mem::off(words.as_ptr().cast());
     let inbox = at + 8;
@@ -121,6 +121,11 @@ pub fn mount(
 /// Serves `o` under its interface's named handle `h`.
 pub fn mount_named(h: Handle, o: Rc<dyn Object>) {
     SIDE.with(|s| s.mount_named(h, o));
+}
+
+/// Serves `o` under a handle issued for it, for a method to answer.
+pub fn add(o: Rc<dyn Object>) -> Handle {
+    SIDE.with(|s| s.add(o))
 }
 
 /// Opens the object `uri` names on the host, and answers its handle.

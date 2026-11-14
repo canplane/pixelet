@@ -11,7 +11,7 @@ import {
   MESSAGE_WORLD_UNAVAILABLE,
 } from "@/abi/overlay.enum.ts";
 
-export function messageKey(message: Message): string {
+export function message_key(message: Message): string {
   switch (message) {
     case MESSAGE_GEOLOCATION_UNSUPPORTED:
       return "device.geolocation.unsupported";

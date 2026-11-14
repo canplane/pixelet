@@ -20,7 +20,7 @@ pub const LINK_TARGET: WitTarget<'static> = WitTarget {
 /// Everything else of xpute's packages follows from their names, each
 /// `xpute:<name>` in `wit/<name>`, and from each side's crate: the guest's
 /// bindings, with the TypeScript beside the link's and the C++ in the C++
-/// core's `abi/`, and the native host's, in the native runtime that holds the
+/// guest's `abi/`, and the native host's, in the native runtime that holds the
 /// host's link, each in its side's root module, `src/abi.rs`.
 macro_rules! packages {
     (guest: $g:literal, cpp: $c:literal, native: $n:literal; $($p:ident),*) => {
@@ -48,7 +48,7 @@ macro_rules! packages {
     };
 }
 
-packages!(guest: "guest/rust", cpp: "cpp/xpute/core", native: "native/runtime/rust"; clocks, fs, life, stop);
+packages!(guest: "guest/rust", cpp: "cpp/xpute/guest", native: "native/runtime/rust"; clocks, fs, life, stop);
 
 /// xpute's data specs: the link's frame, and the errno table.
 pub const DATA_SPECS: [DataSpec; 2] = [
@@ -56,7 +56,7 @@ pub const DATA_SPECS: [DataSpec; 2] = [
         json: "link/spec/frame.json",
         ts: Some("link/ts/src/frame.spec.ts"),
         rs: Some("link/rust/src/frame.spec.rs"),
-        ..DataSpec::DEFAULT
+        cpp: Some(("cpp/xpute/link/frame.spec.hpp", "xpute::link::frame")),
     },
     DataSpec {
         json: "kit/spec/errno.json",

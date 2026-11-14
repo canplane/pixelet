@@ -12,8 +12,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getDefaultConfig } from "expo/metro-config";
-import { REPO, treeFile, WORKSPACE } from "@pxl/build/path.ts";
-import { CONSOLE_PATH, consoleHandler } from "@pxl/build/console.ts";
+import { REPO, tree_file, WORKSPACE } from "@pxl/build/path.ts";
+import { CONSOLE_PATH, console_handler } from "@pxl/build/console.ts";
 import { digest } from "@pxl/build/constant.ts";
 import { stamp } from "@pxl/build/stamp.ts";
 import {
@@ -37,7 +37,7 @@ const FROM_APP = path.join(here, "index.ts");
 
 /** The stamp is written once, when Metro starts, so a dev server's stamp is
  * the one it started under. */
-function buildStamp(): string {
+function build_stamp(): string {
   const { time, id, number } = stamp();
   const file = path.join(here, ".expo/pxl-build.js");
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -49,7 +49,7 @@ function buildStamp(): string {
   );
   return file;
 }
-const BUILD_STAMP = buildStamp();
+const BUILD_STAMP = build_stamp();
 
 /** The file that the platform being built takes for `file`: `pill.ios.tsx`,
  * or else `motion.native.tsx`, beside the default it names, or the default
@@ -60,7 +60,7 @@ const BUILD_STAMP = buildStamp();
  * for an alias across the whole bundle. So a variant must name its default by
  * `./`, and nothing else in its folder may: otherwise the variant is handed
  * the other file's cached answer, which is the variant itself. */
-function ownPlatform(
+function own_platform(
   file: string,
   platform: string | null,
   from: string,
@@ -86,7 +86,7 @@ const base = getDefaultConfig(here);
 /** xpute's packages, as xpute's pnpm-workspace.yaml lists them: one
  * `  - <dir>` a line under `packages:`, up to a blank line, each with a named
  * package.json and a src/. Anything else there refuses the file. */
-function xputePackages(): string[] {
+function xpute_packages(): string[] {
   const file = path.join(REPO, "xpute/pnpm-workspace.yaml");
   const after = fs.readFileSync(file, "utf8").split("\npackages:\n")[1];
   if (after === undefined) throw new Error(`${file}: no \`packages:\``);
@@ -108,7 +108,7 @@ function xputePackages(): string[] {
   if (dirs.length === 0) throw new Error(`${file}: lists no package`);
   return dirs;
 }
-const XPUTE = xputePackages();
+const XPUTE = xpute_packages();
 
 /** A release build compiles each exported literal into the files that read
  * it (babel.config.ts), so the transforms it may reuse depend on them. */
@@ -117,7 +117,7 @@ const LITERALS =
     ? digest([path.join(here, "src"), ...XPUTE])
     : "";
 
-const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
+const resolve_request: NonNullable<typeof base.resolver.resolveRequest> = (
   ctx,
   name,
   platform,
@@ -137,14 +137,18 @@ const resolveRequest: NonNullable<typeof base.resolver.resolveRequest> = (
     ? path.extname(name) !== ""
       ? path.resolve(path.dirname(from), name)
       : null
-    : treeFile(from, name);
+    : tree_file(from, name);
   if (file) {
-    return ctx.resolveRequest(ctx, ownPlatform(file, platform, from), platform);
+    return ctx.resolveRequest(
+      ctx,
+      own_platform(file, platform, from),
+      platform,
+    );
   }
   return ctx.resolveRequest(ctx, name, platform);
 };
 
-const devConsole = consoleHandler(path.join(here, ".dev-console.log"));
+const dev_console = console_handler(path.join(here, ".dev-console.log"));
 
 /** Metro's caches, its transforms' and its file map's, lie in the checkout's
  * tmp/ (AGENTS.md), each tree's its own, where Expo would put them in the
@@ -167,14 +171,14 @@ export default {
   // transform with any other.
   cacheVersion: `${base.cacheVersion ?? ""}${process.env.PXL_PERF_DRIVE ?? ""}${tile_source()}${LITERALS}`,
   fileMapCacheDirectory: CACHE,
-  resolver: { ...base.resolver, resolveRequest },
+  resolver: { ...base.resolver, resolveRequest: resolve_request },
   server: {
     ...base.server,
     enhanceMiddleware:
       (metro: Middleware): Middleware =>
       (req, res, next) => {
         const url = req.url ?? "/";
-        if (url.startsWith(CONSOLE_PATH)) return devConsole(req, res);
+        if (url.startsWith(CONSOLE_PATH)) return dev_console(req, res);
         const target = route_target(url);
         if (target) return forward(target, req, res);
         metro(req, res, next);

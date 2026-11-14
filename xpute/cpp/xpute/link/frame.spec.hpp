@@ -1,0 +1,64 @@
+// cpp/xpute/link/frame.spec.hpp
+//
+// GENERATED from link/spec/frame.json (xpute-gen data.rs)
+//
+// A frame is one method called across the link, four 32-bit words; TAG, CMD, RESULT and
+// PKT are their indices, little-endian. The tag is the request, unique among the sender's
+// pending ones, and a later answer carries it back. The command is the RES bit, the handle
+// the callee issued above METHOD_BITS, and the method's place among its object's below
+// them. An answer carries 0 or a negative errno, its value in its packet. The method's args, a packet in the Canonical ABI's layout,
+// lie right past the words, and PKT says how long they are (link/wit/types.wit). ROOT
+// is the handle every side serves, OPEN and CANCEL its methods, DROP the method every handle
+// has, NAMED marks an interface's handle, and SLOT_BITS splits an issued handle into its
+// slot and its generation.
+
+#pragma once
+
+#include <cstdint>
+
+namespace xpute::link::frame {
+
+// The request, which a later answer carries back.
+inline constexpr std::uint32_t TAG = 0u;
+
+// RES, the handle and the method.
+inline constexpr std::uint32_t CMD = 1u;
+
+// On an answer, 0 or a negative errno: the call refused, by the link or by the method as a caller's bug (EINVAL), or a method's failure where its WIT has no result; on a request, 0.
+inline constexpr std::uint32_t RESULT = 2u;
+
+// The length in bytes of the frame's packet, which lies right past its words; 0 when it has none.
+inline constexpr std::uint32_t PKT = 3u;
+
+// The frame's length in words.
+inline constexpr std::uint32_t WORDS = 4u;
+
+// The bit of the command that marks a later answer.
+inline constexpr std::uint32_t RES = 2147483648u;
+
+// The bits of the command below the handle, which hold the method.
+inline constexpr std::uint32_t METHOD_BITS = 8u;
+
+// The root's handle, which every side serves.
+inline constexpr std::uint32_t ROOT = 0u;
+
+// The root's method that opens an object by its URI.
+inline constexpr std::uint32_t OPEN = 0u;
+
+// The root's method that cancels a call the sender has pending, named by its tag, the one
+// arg. A call the callee can stop it stops, and answers ECANCELED; any other runs on. Either
+// way it settles by its own answer, and what it lent stays lent until then.
+inline constexpr std::uint32_t CANCEL = 1u;
+
+// The method every handle has, which lets it go.
+inline constexpr std::uint32_t DROP = 255u;
+
+// The handle's top bit, which marks it named: an interface's, its bits below the hash of
+// the interface's name the generator writes (xpute-link-gen wit.rs), served with no open.
+// An issued handle has it clear.
+inline constexpr std::uint32_t NAMED = 4194304u;
+
+// The bits of a handle that name its slot, below its generation.
+inline constexpr std::uint32_t SLOT_BITS = 20u;
+
+} // namespace xpute::link::frame

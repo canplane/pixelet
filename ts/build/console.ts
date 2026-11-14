@@ -18,7 +18,7 @@ export const CONSOLE_PATH = "/__console";
  * whole line, and the cut is reported as a line of its own. */
 const POST_MAX = 1 << 16;
 
-export function consoleHandler(
+export function console_handler(
   log: string,
 ): (req: IncomingMessage, res: ServerResponse) => void {
   return (req, res) => {

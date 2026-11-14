@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/source` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x6a88bf;
 
@@ -28,7 +20,7 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
         let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 DECLARE => {
@@ -41,7 +33,7 @@ impl _rt::Object for _Object {
                             .collect::<Result<Vec<_>, _rt::Errno>>()
                     })?;
                     match self.0.declare(min_zoom, format, shard) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -52,9 +44,9 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `imp` under the interface's handle.
-pub fn mount(imp: _rt::Rc<dyn Guest>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+/// Serves `implementation` under the interface's handle.
+pub fn mount(implementation: _rt::Rc<dyn Guest>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 mod _rt {

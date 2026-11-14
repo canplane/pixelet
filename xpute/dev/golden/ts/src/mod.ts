@@ -9,7 +9,7 @@
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { f64, u32, u64 } from "@xpute/kit/abi/word.ts";
 import { ERRNO_EINVAL, ERRNO_ENOENT } from "@xpute/kit/status/errno.spec.ts";
-import { InvariantError } from "@xpute/kit/status/error.ts";
+import { bug } from "@xpute/kit/status/bug.ts";
 
 /** Where the tree's spec/ is, as whoever runs the tests knows it and defines
  * it: vitest's config in Node (vitest.config.ts), and the browser runner for
@@ -43,7 +43,7 @@ export class Golden {
 
   s(key: string): string {
     const v = this.map.get(key);
-    if (v === undefined) throw new InvariantError(ERRNO_ENOENT);
+    if (v === undefined) bug(ERRNO_ENOENT);
     return v;
   }
 
@@ -70,7 +70,7 @@ export class Golden {
     const v = this.s(key);
     if (v === "true") return true;
     if (v === "false") return false;
-    throw new InvariantError(ERRNO_EINVAL);
+    bug(ERRNO_EINVAL);
   }
 
   bytes(key: string): U8Array {
@@ -101,7 +101,7 @@ export class Golden {
       if (!found) break;
       f(prefix);
     }
-    if (k === 0) throw new InvariantError(ERRNO_ENOENT);
+    if (k === 0) bug(ERRNO_ENOENT);
   }
 
   len(base: string): u32 {

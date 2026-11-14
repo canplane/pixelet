@@ -39,7 +39,7 @@ impl Base for Probe {
     }
 }
 
-impl ViewLayer for Probe {
+impl DemandedBase for Probe {
     fn demand() -> &'static mut Demand<Probe> {
         PROBE.get(Demand::default)
     }

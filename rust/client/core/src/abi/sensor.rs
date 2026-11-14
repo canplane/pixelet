@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/sensor` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x5534df;
 
@@ -146,7 +138,7 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
         let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 POS => {
@@ -157,25 +149,25 @@ impl _rt::Object for _Object {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.f64(16 + 8).map(Some)
+                            r_.f64(24).map(Some)
                         }
                     })?;
                     let accuracy = r_.case(32, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.f64(32 + 8).map(Some)
+                            r_.f64(40).map(Some)
                         }
                     })?;
                     let course = r_.case(48, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.f64(48 + 8).map(Some)
+                            r_.f64(56).map(Some)
                         }
                     })?;
                     match self.0.pos(lon, lat, alt, accuracy, course) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -185,32 +177,32 @@ impl _rt::Object for _Object {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.f64(0 + 8).map(Some)
+                            r_.f64(8).map(Some)
                         }
                     })?;
                     let alpha = r_.case(16, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.f64(16 + 8).map(Some)
+                            r_.f64(24).map(Some)
                         }
                     })?;
                     let beta = r_.case(32, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.f64(32 + 8).map(Some)
+                            r_.f64(40).map(Some)
                         }
                     })?;
                     let gamma = r_.case(48, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.f64(48 + 8).map(Some)
+                            r_.f64(56).map(Some)
                         }
                     })?;
                     match self.0.orient(webkit_compass_heading, alpha, beta, gamma) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -223,7 +215,7 @@ impl _rt::Object for _Object {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.case(1 + 1, 4)
+                            r_.case(2, 4)
                                 .and_then(|v| {
                                     GeolocationErrorCode::of(v).ok_or(_rt::Errno::EBADMSG)
                                 })
@@ -232,7 +224,7 @@ impl _rt::Object for _Object {
                     })?;
                     let watching = r_.bool(3)?;
                     match self.0.err(sensor, code, watching) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -245,7 +237,7 @@ impl _rt::Object for _Object {
                         .case(1, 4)
                         .and_then(|v| PermissionAnswer::of(v).ok_or(_rt::Errno::EBADMSG))?;
                     match self.0.permission(sensor, answer) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -261,12 +253,12 @@ impl _rt::Object for _Object {
                         orient_permission,
                         orient_silence_is_loss,
                     ) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
                 LOCATE => match self.0.locate() {
-                    Ok(v) => _rt::Reply::from(0),
+                    Ok(()) => _rt::Reply::from(0),
                     Err(e) => _rt::Reply::from(e as i32),
                 },
                 _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
@@ -276,9 +268,9 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `imp` under the interface's handle.
-pub fn mount(imp: _rt::Rc<dyn Guest>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+/// Serves `implementation` under the interface's handle.
+pub fn mount(implementation: _rt::Rc<dyn Guest>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 mod _rt {

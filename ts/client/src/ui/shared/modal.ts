@@ -6,15 +6,15 @@ export type Modal = "settings" | "drawer" | "search";
 
 const store = create<{ asked: Modal | null }>()(() => ({ asked: null }));
 
-export function openModal(modal: Modal): void {
+export function open_modal(modal: Modal): void {
   store.setState({ asked: modal });
 }
 
-export function closeModal(): void {
+export function close_modal(): void {
   store.setState({ asked: null });
 }
 
-export function modalOpen(): boolean {
+export function modal_open(): boolean {
   return store.getState().asked !== null;
 }
 

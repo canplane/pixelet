@@ -79,7 +79,7 @@ template <class T, class Alloc> class Arena {
     // `max_cap`.
     Result<void> grow(std::uint32_t req) {
         if (req <= cap_) return {};
-        if (req > max_cap_) return marshal_error(Errno::eoverflow);
+        if (req > max_cap_) return make_error(Errno::eoverflow);
         std::uint32_t new_cap = std::clamp(cap_ > max_cap_ / 2 ? max_cap_ : cap_ * 2, req, max_cap_);
         mem_.resize(new_cap);
         cap_ = new_cap;

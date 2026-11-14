@@ -2,14 +2,6 @@
 //
 // GENERATED from wit/fs (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
 pub enum ErrorCode {

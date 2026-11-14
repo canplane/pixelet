@@ -532,7 +532,7 @@ export class GpuHost {
           TEXTURE_FORMATS[r.u()],
           r.u(),
         ];
-        const viewFormats = Array.from(
+        const view_formats = Array.from(
           { length: r.u() },
           () => TEXTURE_FORMATS[r.u()],
         );
@@ -545,7 +545,7 @@ export class GpuHost {
             dimension,
             format,
             usage,
-            viewFormats,
+            viewFormats: view_formats,
           }),
         );
         return;
@@ -745,9 +745,9 @@ export class GpuHost {
           cullMode: CULL_MODES[r.u()],
           unclippedDepth: r.flag(),
         };
-        const depthFormat = r.opt();
+        const depth_format = r.opt();
         const depth: GPUDepthStencilState = {
-          format: TEXTURE_FORMATS[depthFormat ?? 0],
+          format: TEXTURE_FORMATS[depth_format ?? 0],
           depthWriteEnabled: r.flag(),
           depthCompare: COMPARE_FUNCTIONS[r.u()],
           stencilFront: this._stencilFace(r),
@@ -764,7 +764,7 @@ export class GpuHost {
           alphaToCoverageEnabled: r.flag(),
         };
         const module = r.opt();
-        const entryPoint = r.text();
+        const entry_point = r.text();
         const targets = Array.from(
           { length: r.u() },
           (): GPUColorTargetState => {
@@ -804,21 +804,21 @@ export class GpuHost {
           label:
             module === undefined
               ? vertex.entryPoint
-              : `${vertex.entryPoint}+${entryPoint}`,
+              : `${vertex.entryPoint}+${entry_point}`,
           layout:
             layout === undefined
               ? "auto"
               : this._get<GPUPipelineLayout>(layout),
           vertex,
           primitive,
-          depthStencil: depthFormat === undefined ? undefined : depth,
+          depthStencil: depth_format === undefined ? undefined : depth,
           multisample,
           fragment:
             module === undefined
               ? undefined
               : {
                   module: this._get<GPUShaderModule>(module),
-                  entryPoint,
+                  entryPoint: entry_point,
                   targets,
                 },
         };
@@ -840,16 +840,16 @@ export class GpuHost {
         const id = r.u();
         const layout = r.opt();
         const module = this._get<GPUShaderModule>(r.u());
-        const entryPoint = r.text();
+        const entry_point = r.text();
         // The label is the pipeline's entry point, so a device's error about
         // the pipeline says which one it is.
         const desc: GPUComputePipelineDescriptor = {
-          label: entryPoint,
+          label: entry_point,
           layout:
             layout === undefined
               ? "auto"
               : this._get<GPUPipelineLayout>(layout),
-          compute: { module, entryPoint },
+          compute: { module, entryPoint: entry_point },
         };
         if (code === op.COMPUTE_PIPELINE) {
           this._put(id, d.createComputePipeline(desc));
@@ -859,7 +859,7 @@ export class GpuHost {
             r,
             d.createComputePipelineAsync(desc),
             () => d.createComputePipeline(desc),
-            entryPoint,
+            entry_point,
           );
         }
         return;

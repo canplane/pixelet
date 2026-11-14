@@ -24,7 +24,7 @@
 
 use crate::abi::word::{field_get32, field_set32};
 use crate::status::errno::Errno;
-use crate::status::error::MarshalError;
+use crate::status::error::XputeError;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Array<'a> {
     pub type_: SequenceType,
@@ -326,23 +326,23 @@ pub fn TYPE_IS_KNOWN(type_: u8) -> bool {
 
 /// Reads a slot that holds a len, a size or the magic. A high half that is not
 /// zero makes the packet malformed (EBADMSG).
-pub fn GET_LEN(buf: &[u8], off: u32) -> Result<u32, MarshalError> {
+pub fn GET_LEN(buf: &[u8], off: u32) -> Result<u32, XputeError> {
     match GET_WORD(buf, off, &mut [0; 2]) {
         [lo, RESERVED] => Ok(lo),
-        _ => Err(MarshalError::new(Errno::EBADMSG)),
+        _ => Err(XputeError::new(Errno::EBADMSG)),
     }
 }
 
 /// Reads a descriptor, a branch's entry for a child or the header's root word:
 /// the offset or size, and the type. A type the wire cannot carry, or a
 /// reserved bit set, makes the packet malformed (EBADMSG).
-pub fn GET_DESC(buf: &[u8], off: u32) -> Result<(u32, NodeType), MarshalError> {
+pub fn GET_DESC(buf: &[u8], off: u32) -> Result<(u32, NodeType), XputeError> {
     let [lo, desc] = GET_WORD(buf, off, &mut [0; 2]);
     let type_ = field_get32(desc, DESC_TYPE_SHAMT, DESC_TYPE_MASK) as NodeType;
     if desc != field_set32(0, DESC_TYPE_SHAMT, DESC_TYPE_MASK, type_ as u32)
         || !TYPE_IS_KNOWN(type_)
     {
-        return Err(MarshalError::new(Errno::EBADMSG));
+        return Err(XputeError::new(Errno::EBADMSG));
     }
     Ok((lo, type_))
 }
@@ -350,14 +350,14 @@ pub fn GET_DESC(buf: &[u8], off: u32) -> Result<(u32, NodeType), MarshalError> {
 pub type AlignUnit = u32;
 
 /// `unit` must be a power of two no larger than WORD_SZ, or EINVAL.
-pub fn ALIGN(nbyte: u32, unit: AlignUnit) -> Result<u32, MarshalError> {
+pub fn ALIGN(nbyte: u32, unit: AlignUnit) -> Result<u32, XputeError> {
     if unit == 0 || (unit & unit.wrapping_sub(1)) != 0 || unit > WORD_SZ {
-        return Err(MarshalError::new(Errno::EINVAL));
+        return Err(XputeError::new(Errno::EINVAL));
     }
 
     let mask = unit - 1;
     if nbyte > u32::MAX - mask {
-        return Err(MarshalError::new(Errno::EOVERFLOW));
+        return Err(XputeError::new(Errno::EOVERFLOW));
     }
     Ok((nbyte + mask) & !mask)
 }
@@ -379,7 +379,7 @@ pub fn ELEM_SZ(type_: SequenceType) -> AlignUnit {
     }
 }
 
-pub fn ALIGN_SZ(type_: u8) -> Result<AlignUnit, MarshalError> {
+pub fn ALIGN_SZ(type_: u8) -> Result<AlignUnit, XputeError> {
     // A sequence or a branch starts on a word, so its len slot is aligned.
     if type_ == SpecialType::BRANCH as u8 || TYPE_IS_SEQ(type_) {
         return Ok(WORD_SZ);
@@ -395,7 +395,7 @@ pub fn ALIGN_SZ(type_: u8) -> Result<AlignUnit, MarshalError> {
 
         t if t == ScalarType::BOOL as u8 => 1,
 
-        _ => return Err(MarshalError::new(Errno::EBADMSG)),
+        _ => return Err(XputeError::new(Errno::EBADMSG)),
     })
 }
 

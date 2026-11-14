@@ -20,23 +20,23 @@ interface CardPose {
   rest: { translateY: f64; scale: f64 };
   above: { translateY: f64 };
   fade: f64;
-  zIndex: u32;
+  z_idx: u32;
 }
 
 /** `peek` is how far each card behind shows past the one in front of it. */
-export function cardPose(depth: u32, peek: f64): CardPose {
+export function card_pose(depth: u32, peek: f64): CardPose {
   const shown = Math.min(depth, DEPTH);
   return {
     rest: { translateY: depth * peek, scale: SCALE[shown] },
     above: { translateY: peek * FROM_ABOVE },
     fade: depth <= DEPTH ? OPACITY[depth] : 0,
-    zIndex: DEPTH + 1 - Math.min(depth, DEPTH + 1),
+    z_idx: DEPTH + 1 - Math.min(depth, DEPTH + 1),
   };
 }
 
 /** How far the cards behind show under the front one. The front card's touch
  * area reaches over them too. */
-export function peekBelow(count: u32, peek: f64): f64 {
+export function peek_below(count: u32, peek: f64): f64 {
   return Math.min(Math.max(count - 1, 0), DEPTH) * peek;
 }
 
@@ -44,11 +44,11 @@ export function peekBelow(count: u32, peek: f64): f64 {
  * from above. */
 export function useTurnedBack(rotation: i32): boolean {
   const last = useRef(rotation);
-  const turnedBack = rotation < last.current;
+  const turned_back = rotation < last.current;
   useEffect(() => {
     last.current = rotation;
   });
-  return turnedBack;
+  return turned_back;
 }
 
 interface SwipeHandler {
@@ -63,7 +63,7 @@ interface SwipeHandler {
  * `SWIPE_PX`. The card does not follow the finger: that would set a pose on
  * every move, and on a device the UI shares its thread with the core.
  */
-export function deckSwipe(
+export function deck_swipe(
   turn: (delta: i32) => void,
   { press, drag }: SwipeHandler = {},
 ): PanResponderCallbacks {

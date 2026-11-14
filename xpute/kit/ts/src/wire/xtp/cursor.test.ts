@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { Golden } from "@xpute/golden";
 import { bytes_to_hex, hex_to_bytes } from "@xpute/kit/codec/encoding.ts";
-import type { FaultError } from "@xpute/kit/status/error.ts";
+import type { XputeError } from "@xpute/kit/status/error.ts";
 import {
   ALIGN,
   type NodeCursor,
@@ -42,7 +42,7 @@ function refused(hex: string): string {
     deep(new TreeReader(hex_to_bytes(hex)).root);
     return "ok";
   } catch (err) {
-    return `errno:${(err as FaultError).errnum}`;
+    return `errno:${(err as XputeError).errnum}`;
   }
 }
 
@@ -87,7 +87,7 @@ test("the cursor reads what the typescript reads", async () => {
     try {
       got = `ok:${ALIGN(n, 8)}`;
     } catch (err) {
-      got = `errno:${(err as FaultError).errnum}`;
+      got = `errno:${(err as XputeError).errnum}`;
     }
     assert.deepStrictEqual(got, v.s(`align.${j}`), `ALIGN(${n})`);
   });
@@ -100,7 +100,7 @@ test("the cursor reads what the typescript reads", async () => {
         new TreeEncoder().encode(t, { init_cap: 1 << 10, max_cap: cap }),
       );
     } catch (err) {
-      return `errno:${(err as FaultError).errnum}`;
+      return `errno:${(err as XputeError).errnum}`;
     }
   };
   [24, 32, 40, 48].forEach((cap, j) =>

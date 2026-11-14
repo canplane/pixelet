@@ -10,14 +10,14 @@
 //! reader, and XTP does not depend on it.
 
 use crate::status::errno::Errno;
-use crate::status::error::MarshalError;
+use crate::status::error::XputeError;
 
 use super::{ArrayElem, Cursor, NodeValue, PacketWriter, StrList, TreeReader, HDR_SZ, WORD_SZ};
 
 const WORD: u64 = WORD_SZ as u64;
 
-fn refused<T>() -> Result<T, MarshalError> {
-    Err(MarshalError::new(Errno::EBADMSG))
+fn refused<T>() -> Result<T, XputeError> {
+    Err(XputeError::new(Errno::EBADMSG))
 }
 
 pub trait Shape {
@@ -29,7 +29,7 @@ pub trait Shape {
     /// entry in its parent's table.
     fn most(v: &Self::Write<'_>) -> u64;
     fn write(v: &Self::Write<'_>, w: &mut PacketWriter<'_>);
-    fn read(c: Cursor<'_>) -> Result<Self::Read<'_>, MarshalError>;
+    fn read(c: Cursor<'_>) -> Result<Self::Read<'_>, XputeError>;
 }
 
 impl<T: ArrayElem + 'static> Shape for Vec<T> {
@@ -42,7 +42,7 @@ impl<T: ArrayElem + 'static> Shape for Vec<T> {
     fn write(v: &&[T], w: &mut PacketWriter<'_>) {
         w.array(Some(*v));
     }
-    fn read(c: Cursor<'_>) -> Result<&[T], MarshalError> {
+    fn read(c: Cursor<'_>) -> Result<&[T], XputeError> {
         c.get_array::<T>()
     }
 }
@@ -58,7 +58,7 @@ impl Shape for Vec<String> {
     fn write(v: &&[&str], w: &mut PacketWriter<'_>) {
         w.strs(Some(*v));
     }
-    fn read(c: Cursor<'_>) -> Result<StrList<'_>, MarshalError> {
+    fn read(c: Cursor<'_>) -> Result<StrList<'_>, XputeError> {
         c.get_strs()
     }
 }
@@ -75,7 +75,7 @@ macro_rules! scalar {
             fn write(v: &$t, w: &mut PacketWriter<'_>) {
                 w.$t(Some(*v));
             }
-            fn read(c: Cursor<'_>) -> Result<$t, MarshalError> {
+            fn read(c: Cursor<'_>) -> Result<$t, XputeError> {
                 match c.get()? {
                     NodeValue::$value(v) => Ok(v),
                     _ => refused(),
@@ -105,7 +105,7 @@ macro_rules! branch {
                     $($s::write(&v.$i, w);)+
                 });
             }
-            fn read(c: Cursor<'_>) -> Result<Self::Read<'_>, MarshalError> {
+            fn read(c: Cursor<'_>) -> Result<Self::Read<'_>, XputeError> {
                 let b = c.as_branch()?;
                 if b.len as usize != [$($i),+].len() {
                     return refused();
@@ -131,7 +131,7 @@ branch!(A 0, B 1, C 2, D 3, E 4, F 5, G 6, H 7, I 8, J 9, K 10, L 11);
 
 /// This encodes `v` as a packet of shape `S`. A packet that needs more than
 /// `cap` bytes is EOVERFLOW.
-pub fn encode<S: Shape>(v: S::Write<'_>, cap: u32) -> Result<Vec<u8>, MarshalError> {
+pub fn encode<S: Shape>(v: S::Write<'_>, cap: u32) -> Result<Vec<u8>, XputeError> {
     let most = u64::from(HDR_SZ) + S::most(&v);
     let mut buf = vec![0u8; most.min(u64::from(cap)) as usize];
     let mut w = PacketWriter::root(&mut buf);
@@ -142,7 +142,7 @@ pub fn encode<S: Shape>(v: S::Write<'_>, cap: u32) -> Result<Vec<u8>, MarshalErr
 }
 
 /// Reads a packet of shape `S`. Its arrays and strings are read in place.
-pub fn get_deep<S: Shape>(pkt: &[u8]) -> Result<S::Read<'_>, MarshalError> {
+pub fn get_deep<S: Shape>(pkt: &[u8]) -> Result<S::Read<'_>, XputeError> {
     S::read(TreeReader::new(pkt)?.read())
 }
 

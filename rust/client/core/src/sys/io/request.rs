@@ -136,7 +136,7 @@ fn sched() -> &'static mut Sched {
 pub fn open(frames: impl Fn(Stream) -> u32) {
     let bounds = Stream::ALL.map(|s| match s.row().source {
         Source::Load => LOAD_FILE_CAP,
-        Source::Bake(_) | Source::Objects => frames(s) as usize,
+        Source::Base(_) | Source::Object => frames(s) as usize,
     });
     SCHED.set(Sched {
         wants: bounds.map(Vec::with_capacity),

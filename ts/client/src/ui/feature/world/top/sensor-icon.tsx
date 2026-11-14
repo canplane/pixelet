@@ -14,14 +14,14 @@ import {
 } from "@/abi/overlay.enum.ts";
 
 import type { GlyphName } from "@/ui/shared/component/icon.tsx";
-import { haloGap, HaloIcon } from "./halo.tsx";
+import { halo_gap, HaloIcon } from "./halo.tsx";
 import { color } from "@/ui/shared/component/theme.ts";
 import * as device from "@/service/platform/device.ts";
 import { useCore } from "@/ui/shared/watch.ts";
 
 /** Each surface passes its own `tone`, because the glyphs over the world are
  * paler than a sheet's. */
-export function statusColor(
+export function status_color(
   status: SensorStatus,
   base: string,
   tone: { pending: string; failed: string },
@@ -36,7 +36,7 @@ export function statusColor(
   }
 }
 
-const GLYPH_TONE = { pending: color.pendingGlyph, failed: color.alarmGlyph };
+const GLYPH_TONE = { pending: color.pending_glyph, failed: color.alarm_glyph };
 
 const PRESENCE: Record<SensorStatus, f64> = {
   [SENSOR_STATUS_IDLE]: 0.35,
@@ -57,7 +57,7 @@ export function SensorIcons() {
       <HaloIcon
         glyph={glyph}
         size={12}
-        color={statusColor(status, color.white, GLYPH_TONE)}
+        color={status_color(status, color.white, GLYPH_TONE)}
         struck={status === SENSOR_STATUS_ERROR}
       />
     </View>
@@ -74,5 +74,5 @@ export function SensorIcons() {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: haloGap(8) },
+  row: { flexDirection: "row", alignItems: "center", gap: halo_gap(8) },
 });

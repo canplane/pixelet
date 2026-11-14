@@ -1,7 +1,7 @@
 // @pxl/client/service/origin/route.ts
 
 import * as origin from "@/service/platform/origin.ts";
-import { type BASE_LAYERS } from "@/service/origin/publication.spec.ts";
+import { type BASE_LAYERS } from "@/abi/publication.spec.ts";
 import { SITE_URL, TILE_ROOT } from "./route.spec.ts";
 
 /** The URL of a bake's object, `<tile root>/<layer>/<version>/<name>`. The

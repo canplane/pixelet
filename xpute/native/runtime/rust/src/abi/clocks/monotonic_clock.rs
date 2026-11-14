@@ -2,14 +2,6 @@
 //
 // GENERATED from wit/clocks (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `xpute:clocks/monotonic-clock` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x73f703;
 
@@ -37,7 +29,7 @@ impl _rt::Object for _Object {
                         data: Some((
                             8,
                             Box::new(move |w: &mut _rt::Lower| {
-                                w.u64(0, *&v);
+                                w.u64(0, v);
                             }),
                         )),
                     },
@@ -53,7 +45,7 @@ impl _rt::Object for _Object {
                             _rt::link::on_cancel,
                             Box::new(move |got| {
                                 let reply = match got {
-                                    Ok(v) => _rt::Reply::from(0),
+                                    Ok(()) => _rt::Reply::from(0),
                                     Err(e) => _rt::Reply::from(e as i32),
                                 };
                                 _rt::link::task_return(
@@ -76,9 +68,9 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `imp` under the interface's handle.
-pub fn mount(imp: _rt::Rc<dyn Host>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+/// Serves `implementation` under the interface's handle.
+pub fn mount(implementation: _rt::Rc<dyn Host>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 mod _rt {

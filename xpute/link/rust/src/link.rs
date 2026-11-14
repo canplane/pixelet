@@ -4,8 +4,8 @@
 //! its methods under a handle: an interface's named handle, the hash of its
 //! name (frame.json `NAMED`), or a resource's, named by a URI, a tuple of
 //! tokens, and opened by the root's `open` to a handle the serving side
-//! issues. A frame is one method called: its
-//! tag the request, unique among the sender's pending ones, its command the
+//! issues, or answered by a function that returns it. A frame is one method
+//! called: its tag the request, unique among the sender's pending ones, its command the
 //! handle, the method and a RES bit (frame.rs), its packet the args in the
 //! Canonical ABI's layout (cabi.rs). A frame crosses one way through one
 //! function, `link_out` from the guest and `link_in` into it, and each crossing returns at once what the method came
@@ -15,7 +15,8 @@
 //! - `call` takes what the crossing returns, for a method that always answers
 //!   at once, and stops as a bug on EINPROGRESS;
 //! - `send` hands it to its answer, and an `async func` is sent;
-//! - `mount_named` serves an interface under its named handle, and `mount`
+//! - `mount_named` serves an interface under its named handle, `add` an
+//!   object under a handle issued for a function to answer, and `mount`
 //!   puts the opener of the resources the side serves under a URI's leading
 //!   tokens, the longest matching winning; `open` and `drop` reach the root's
 //!   open and a handle's drop on the other side;
@@ -49,7 +50,7 @@ use xpute_kit::status::errno::Errno;
 use crate::cabi::{Lift, Lower};
 
 use crate::abi::types::Token;
-use crate::frame::{Frame, WORD_BYTES};
+use crate::frame::{Frame, WORD_SZ};
 use crate::mem;
 use crate::resource::Table;
 
@@ -258,6 +259,12 @@ impl Side {
         xpute_kit::ensure!(was.is_none(), EEXIST, h);
     }
 
+    /// Serves `o` under a handle issued for it, which a method answers for
+    /// the other side to call `o` by: a resource a function returns.
+    pub fn add(&self, o: Rc<dyn Object>) -> Handle {
+        self.objects.borrow_mut().add(o)
+    }
+
     /// Opens the object `uri` names on the other side, and answers its
     /// handle.
     pub fn open(&self, uri: &[Token]) -> Result<Handle, Errno> {
@@ -463,17 +470,17 @@ impl Side {
         let room = self.layout().room;
         let pkt_len = match pkt {
             Packet::Bytes(b) => {
-                if u64::from(WORD_BYTES) + b.len() as u64 > u64::from(room) {
+                if u64::from(WORD_SZ) + b.len() as u64 > u64::from(room) {
                     return Err(Errno::EMSGSIZE);
                 }
                 // SAFETY: the frame's room past its words, which only `lay` writes.
-                unsafe { mem::bytes(at + WORD_BYTES, b.len() as u32) }.copy_from_slice(b);
+                unsafe { mem::bytes(at + WORD_SZ, b.len() as u32) }.copy_from_slice(b);
                 b.len() as u32
             }
-            Packet::Args(Some((fixed_bytes, write))) => {
+            Packet::Args(Some((fixed_sz, write))) => {
                 // SAFETY: the frame's room past its words, which only `lay` writes.
-                let room = unsafe { mem::bytes(at + WORD_BYTES, room - WORD_BYTES) };
-                let mut w = Lower::new(room, fixed_bytes);
+                let room = unsafe { mem::bytes(at + WORD_SZ, room - WORD_SZ) };
+                let mut w = Lower::new(room, fixed_sz);
                 write(&mut w);
                 w.finish()? as u32
             }

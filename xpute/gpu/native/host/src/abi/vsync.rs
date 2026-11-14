@@ -2,14 +2,6 @@
 //
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `xpute:gpu/vsync` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x42eda6;
 
@@ -23,7 +15,7 @@ pub trait Host {
 struct _Object(_rt::Rc<dyn Host>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, _: Option<&[u8]>) -> _rt::Reply {
         let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 NEXT => {
@@ -32,7 +24,7 @@ impl _rt::Object for _Object {
                         _rt::link::on_cancel,
                         Box::new(move |got| {
                             let reply = match got {
-                                Ok(v) => _rt::Reply::from(0),
+                                Ok(()) => _rt::Reply::from(0),
                                 Err(e) => _rt::Reply::from(e as i32),
                             };
                             _rt::link::task_return(
@@ -54,9 +46,9 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `imp` under the interface's handle.
-pub fn mount(imp: _rt::Rc<dyn Host>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+/// Serves `implementation` under the interface's handle.
+pub fn mount(implementation: _rt::Rc<dyn Host>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 mod _rt {

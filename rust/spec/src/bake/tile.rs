@@ -4,7 +4,7 @@
 //! picture — and what every kind's says alike: which of it and its children
 //! are tiles.
 
-use xpute_kit::status::error::MarshalError;
+use xpute_kit::status::error::XputeError;
 use xpute_kit::wire::xtp::{HDR_SZ, WORD_SZ};
 
 use crate::bake::malformed;
@@ -152,6 +152,6 @@ impl Occupancy {
 }
 
 /// The occupancy a byte holds, refused rather than cast where the byte is not one.
-pub(crate) fn occupancy_of(bits: u8) -> Result<Occupancy, MarshalError> {
+pub(crate) fn occupancy_of(bits: u8) -> Result<Occupancy, XputeError> {
     Occupancy::of_bits(bits).ok_or_else(malformed)
 }

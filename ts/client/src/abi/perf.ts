@@ -4,7 +4,7 @@
 
 import { load_ErrorCode } from "./types.ts";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError, XputeError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import { Lift } from "@xpute/link/cabi.ts";
 import {
   ComponentError,
@@ -30,12 +30,12 @@ export const STRTAB: Method = 4;
 export async function start(link_: Sender): Promise<void> {
   const a_ = await link_.send(HANDLE, START, null);
   if (a_.result !== 0) throw new XputeError(a_.result);
-  if (a_.data === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (a_.data === null) throw new XputeError(ERRNO_EBADMSG);
   const r_ = new Lift(a_.data);
   const v_ =
     r_.case(0, 2) === 0
       ? { tag: "ok" as const }
-      : { tag: "err" as const, val: load_ErrorCode(r_, 0 + 1) };
+      : { tag: "err" as const, val: load_ErrorCode(r_, 1) };
   if (v_.tag === "err") throw new ComponentError(v_.val);
   return;
 }
@@ -54,12 +54,12 @@ export async function stats(
     (w_) => {
       if (window_ms !== null) {
         w_.u8(0, 1);
-        w_.f64(0 + 8, window_ms);
+        w_.f64(8, window_ms);
       }
     },
   ]);
   if (a_.result !== 0) throw new XputeError(a_.result);
-  if (a_.data === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (a_.data === null) throw new XputeError(ERRNO_EBADMSG);
   const r_ = new Lift(a_.data);
   return r_.arr(0, Uint8Array);
 }
@@ -79,7 +79,7 @@ export async function ring(
     },
   ]);
   if (a_.result !== 0) throw new XputeError(a_.result);
-  if (a_.data === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (a_.data === null) throw new XputeError(ERRNO_EBADMSG);
   const r_ = new Lift(a_.data);
   return r_.arr(0, Uint8Array);
 }
@@ -87,7 +87,7 @@ export async function ring(
 export async function strtab(link_: Sender): Promise<Uint8Array<ArrayBuffer>> {
   const a_ = await link_.send(HANDLE, STRTAB, null);
   if (a_.result !== 0) throw new XputeError(a_.result);
-  if (a_.data === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (a_.data === null) throw new XputeError(ERRNO_EBADMSG);
   const r_ = new Lift(a_.data);
   return r_.arr(0, Uint8Array);
 }

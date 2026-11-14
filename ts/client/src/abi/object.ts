@@ -29,10 +29,10 @@ export interface Host {
   apply(batch: Lent, signal_: AbortSignal): Promise<void>;
 }
 
-/** The object over `imp`. */
+/** The object over `implementation`. */
 function object(
   l: Pick<Link, "task_return" | "on_cancel">,
-  imp: Host,
+  implementation: Host,
 ): LinkObject {
   return {
     call(m, tag, args) {
@@ -42,7 +42,7 @@ function object(
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
             const stop = new AbortController();
-            imp.apply(load_Lent(r_, 0), stop.signal).then(
+            implementation.apply(load_Lent(r_, 0), stop.signal).then(
               () => {
                 const v = { tag: "ok" } as
                   { tag: "ok" } | { tag: "err"; val: ErrorCode };
@@ -52,7 +52,7 @@ function object(
                     if (v.tag === "ok") {
                     } else {
                       w.u8(0, 1);
-                      w.u8(0 + 1, v.val);
+                      w.u8(1, v.val);
                     }
                   },
                 ]);
@@ -68,7 +68,7 @@ function object(
                     if (v.tag === "ok") {
                     } else {
                       w.u8(0, 1);
-                      w.u8(0 + 1, v.val);
+                      w.u8(1, v.val);
                     }
                   },
                 ]);
@@ -87,10 +87,10 @@ function object(
   };
 }
 
-/** Serves `imp` under the interface's handle. */
+/** Serves `implementation` under the interface's handle. */
 export function mount(
   l: Pick<Link, "mount_named" | "task_return" | "on_cancel">,
-  imp: Host,
+  implementation: Host,
 ): void {
-  l.mount_named(HANDLE, object(l, imp));
+  l.mount_named(HANDLE, object(l, implementation));
 }

@@ -1,13 +1,13 @@
 // pxl-runtime/file.rs
 
-//! A device's files (xpute wit/fs/file.wit), served on the host's side of the
-//! link as a page's are (ts/client/src/service/sys/fs/file.ts): one opener at
-//! each node atop file.json's `path` tree, each file's bytes read whole as it
-//! opens and waiting for its first method, a size or a read answering
-//! ECANCELED where its caller cancels it or its file closes first, what is
-//! written committed at its close, and a set-aside renaming it beside itself
-//! on the disk. What a path is bound to is the binding's (`source`): the
-//! platform's storage is the device's disk (xpute-native-host `disk`).
+//! A device's settings file (xpute wit/fs/file.wit), the one path the
+//! runtime serves itself, on the device's disk (xpute-native-host `disk`),
+//! as a page's are served (ts/client/src/service/sys/fs/file.ts): its bytes
+//! read whole as it opens and waiting for its first method, a size or a read
+//! answering ECANCELED where its caller cancels it or its file closes first,
+//! what is written committed at its close, and a set-aside renaming it beside
+//! itself. Every other path is the UI's, which serves it over the remote as
+//! the page's worker does, its opener mounted at a shorter prefix.
 
 use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
@@ -22,33 +22,14 @@ use xpute_native_runtime::abi::fs::file;
 use xpute_native_runtime::abi::fs::types::ErrorCode;
 use xpute_native_runtime::link;
 
-/// The nodes atop the tree, each mounted.
-const ROOTS: [i32; 7] = [
-    path::terrain::ID,
-    path::place::ID,
-    path::division::ID,
-    path::earth::ID,
-    path::storage::ID,
-    path::asset::ID,
-    path::object::ID,
-];
-
-/// Where a path's bytes are on the device: the disk's path for the
-/// platform's storage. The others have no source on a device: ENOSYS.
-fn source(uri: &[Token]) -> Result<PathBuf, Errno> {
-    match uri.first() {
-        Some(Token::Int(path::storage::ID)) => disk::path(uri),
-        _ => Err(Errno::ENOSYS),
-    }
-}
-
 /// What waits on a file's bytes.
-type Waiter = Box<dyn FnOnce(&Result<Vec<u8>, Errno>)>;
+type Waiter = Box<dyn FnOnce(&Result<Rc<[u8]>, Errno>)>;
 
-/// A file's bytes, while they come and once they are in.
+/// A file's bytes, while they come and once they are in, shared by each
+/// method that reads them.
 enum Bytes {
     Coming(Vec<Waiter>),
-    In(Result<Vec<u8>, Errno>),
+    In(Result<Rc<[u8]>, Errno>),
 }
 
 struct State {
@@ -59,7 +40,8 @@ struct State {
 }
 
 struct File {
-    source: Result<PathBuf, Errno>,
+    /// Where its bytes are on the disk.
+    path: Result<PathBuf, Errno>,
     state: Rc<RefCell<State>>,
 }
 
@@ -69,7 +51,7 @@ struct File {
 fn when<T: 'static>(
     state: &Rc<RefCell<State>>,
     task_return: Return<T>,
-    f: impl FnOnce(&Result<Vec<u8>, Errno>) -> Result<T, Errno> + 'static,
+    f: impl FnOnce(&Result<Rc<[u8]>, Errno>) -> Result<T, Errno> + 'static,
 ) {
     let mut s = state.borrow_mut();
     match &mut s.bytes {
@@ -79,16 +61,18 @@ fn when<T: 'static>(
             task_return.answer(f(&b));
         }
         Bytes::Coming(waiting) => {
-            let held = Rc::new(Cell::new(None::<Return<T>>));
-            let canceled = held.clone();
-            task_return.on_cancel(move || {
-                if let Some(r) = canceled.take() {
-                    r.answer(Err(Errno::ECANCELED));
+            let pending = Rc::new(Cell::new(None::<Return<T>>));
+            task_return.on_cancel({
+                let pending = pending.clone();
+                move || {
+                    if let Some(r) = pending.take() {
+                        r.answer(Err(Errno::ECANCELED));
+                    }
                 }
             });
-            held.set(Some(task_return));
+            pending.set(Some(task_return));
             waiting.push(Box::new(move |b| {
-                if let Some(r) = held.take() {
+                if let Some(r) = pending.take() {
                     r.answer(f(b));
                 }
             }));
@@ -99,7 +83,7 @@ fn when<T: 'static>(
 /// The bytes are in, or the file closed first: what waited on them runs. The
 /// first comes to stay, so a read that lands after its file closed changes
 /// nothing.
-fn land(state: &Rc<RefCell<State>>, b: Result<Vec<u8>, Errno>) {
+fn settle(state: &Rc<RefCell<State>>, b: Result<Rc<[u8]>, Errno>) {
     let waiting = {
         let mut s = state.borrow_mut();
         let Bytes::Coming(waiting) = &mut s.bytes else {
@@ -120,15 +104,15 @@ fn open(uri: &[Token]) -> File {
         read: 0,
         written: Vec::new(),
     }));
-    let source = source(uri);
-    match &source {
+    let path = disk::path(uri);
+    match &path {
         Ok(p) => {
             let s = state.clone();
-            disk::read(p.clone(), move |b| land(&s, b));
+            disk::read(p.clone(), move |b| settle(&s, b.map(Rc::from)));
         }
-        Err(e) => land(&state, Err(*e)),
+        Err(e) => settle(&state, Err(*e)),
     }
-    File { source, state }
+    File { path, state }
 }
 
 /// The fs answer of the disk's errno `e`: the file's error-code, or a
@@ -136,7 +120,7 @@ fn open(uri: &[Token]) -> File {
 fn answer<T>(e: Errno) -> Result<Result<T, ErrorCode>, Errno> {
     match e {
         Errno::ECANCELED => Err(e),
-        Errno::ENOENT | Errno::ENOSYS => Ok(Err(ErrorCode::NoEntry)),
+        Errno::ENOENT => Ok(Err(ErrorCode::NoEntry)),
         Errno::EACCES => Ok(Err(ErrorCode::Access)),
         Errno::EROFS => Ok(Err(ErrorCode::ReadOnly)),
         _ => Ok(Err(ErrorCode::Io)),
@@ -176,7 +160,7 @@ impl file::HostFile for File {
     }
 
     fn set_aside(&self, task_return: Return<Result<(), ErrorCode>>) {
-        match &self.source {
+        match &self.path {
             Ok(p) => disk::set_aside(p.clone(), move |r| {
                 task_return.answer(r.map_or_else(answer, |()| Ok(Ok(()))));
             }),
@@ -185,12 +169,12 @@ impl file::HostFile for File {
     }
 
     fn close(&self, task_return: Return<Result<(), ErrorCode>>) {
-        land(&self.state, Err(Errno::ECANCELED));
+        settle(&self.state, Err(Errno::ECANCELED));
         let written = core::mem::take(&mut self.state.borrow_mut().written);
         if written.is_empty() {
             return task_return.answer(Ok(Ok(())));
         }
-        match &self.source {
+        match &self.path {
             Ok(p) => disk::commit(p.clone(), written, move |r| {
                 task_return.answer(r.map_or_else(answer, |()| Ok(Ok(()))));
             }),
@@ -199,12 +183,8 @@ impl file::HostFile for File {
     }
 }
 
-/// Mounts an opener at each node atop the tree, on the core's thread before
-/// it boots.
+/// Mounts the settings' opener, on the core's thread before it boots.
 pub(crate) fn serve() {
-    for id in ROOTS {
-        link::mount(vec![Token::Int(id)], |uri, _| {
-            Ok(file::file(Rc::new(open(uri))))
-        });
-    }
+    let settings = vec![Token::Int(path::storage::ID), Token::Int(path::storage::settings::ID)];
+    link::mount(settings, |uri, _| Ok(file::file(Rc::new(open(uri)))));
 }

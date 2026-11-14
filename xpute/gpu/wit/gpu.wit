@@ -1,7 +1,7 @@
 package xpute:gpu@0.1.0;
 
 // The GPU, which the host serves: it runs the stream's records (gpu/link/spec
-// api.json) on a device. A guest opens the device at ("xpute:gpu", "device").
+// api.json) on a device, which a guest takes from `get-device`.
 interface gpu {
   use xpute:link/types@0.1.0.{lent};
 
@@ -14,6 +14,10 @@ interface gpu {
   // Runs the records lent, and answers once they have run: until then the
   // records, and the memory they name, are the host's.
   run: async func(records: lent);
+
+  // The device, a handle the host issues, which the guest lets go of as it
+  // drops; named in WASI's `get-` form, as a resource holds the plain name.
+  get-device: func() -> device;
 
   resource device {
     // Lends `block` (gpu/link/spec api.json DEVICE) for the host to write

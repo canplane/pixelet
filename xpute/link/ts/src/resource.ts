@@ -8,27 +8,27 @@
  * that each comes back as late as it can; the slot is the handle's low
  * `SLOT_BITS`, from 1, the root being 0. Above it a generation, which a slot's drop
  * advances, keeps a frame late for a dropped object from reaching the one in
- * its slot now, until the slot has been used `GEN_MASK` + 1 times. More live
+ * its slot now, until the slot has been used `GENERATION_MASK` + 1 times. More live
  * objects than the slots hold is a bug.
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { ERRNO_EBADF, ERRNO_EMFILE } from "@xpute/kit/status/errno.spec.ts";
-import { InvariantError } from "@xpute/kit/status/error.ts";
+import { bug } from "@xpute/kit/status/bug.ts";
 import { NAMED, SLOT_BITS } from "./frame.spec.ts";
 
 export type Handle = u32;
 
 const SLOT_MASK = (1 << SLOT_BITS) - 1;
 /** The largest generation an issued handle holds above its slot, below NAMED. */
-const GEN_MASK = (NAMED - 1) >>> SLOT_BITS;
+const GENERATION_MASK = (NAMED - 1) >>> SLOT_BITS;
 
 /** What an issued slot's `next` holds, which no free slot's does. */
 const ISSUED = 0xffff_ffff;
 
 /** A slot: its generation, its object while it holds one, and the next free
  * slot while it is free, 0 for none; `ISSUED` while it is issued. */
-type Slot<T> = { gen: u32; val: T | undefined; next: u32 };
+type Slot<T> = { generation: u32; val: T | undefined; next: u32 };
 
 /** The objects a side serves, by handle: slot `k` at `k - 1`, and the queue
  * of the slots dropped, through their `next`, from `_head` to `_tail`. */
@@ -46,22 +46,22 @@ export class Table<T> {
       s.next = ISSUED;
       if (this._head === 0) this._tail = 0;
     } else {
-      this._slots.push({ gen: 0, val: undefined, next: ISSUED });
+      this._slots.push({ generation: 0, val: undefined, next: ISSUED });
       k = this._slots.length;
-      if (k > SLOT_MASK) throw new InvariantError(ERRNO_EMFILE);
+      if (k > SLOT_MASK) bug(ERRNO_EMFILE);
     }
-    return (k | (this._slots[k - 1]!.gen << SLOT_BITS)) >>> 0;
+    return (k | (this._slots[k - 1]!.generation << SLOT_BITS)) >>> 0;
   }
 
   /** The slot `h` names, where `h` is of its generation. */
   private _slot(h: Handle): Slot<T> | undefined {
     const s = this._slots[(h & SLOT_MASK) - 1];
-    return s !== undefined && s.gen === h >>> SLOT_BITS ? s : undefined;
+    return s !== undefined && s.generation === h >>> SLOT_BITS ? s : undefined;
   }
 
   put(h: Handle, v: T): void {
     const s = this._slot(h);
-    if (s === undefined) throw new InvariantError(ERRNO_EBADF);
+    if (s === undefined) bug(ERRNO_EBADF);
     s.val = v;
   }
 
@@ -84,7 +84,7 @@ export class Table<T> {
     if (s === undefined || s.next !== ISSUED) return undefined;
     const v = s.val;
     s.val = undefined;
-    s.gen = (s.gen + 1) & GEN_MASK;
+    s.generation = (s.generation + 1) & GENERATION_MASK;
     s.next = 0;
     const k = h & SLOT_MASK;
     if (this._tail === 0) this._head = k;

@@ -10,7 +10,7 @@
 use crate::bake::malformed;
 use crate::space::coord::zoom::{Zoom, MIN_ZOOM};
 use crate::space::layer::lattice::{demand_dist, GROUND, TILE_CELLS};
-use xpute_kit::status::error::MarshalError;
+use xpute_kit::status::error::XputeError;
 use xpute_kit::wire::xtp::shape;
 
 /// The Earth's one zoom: the ground's top. Its tiles are the ground's lattice,
@@ -34,7 +34,7 @@ pub(crate) const PKT_BYTES: usize =
 
 type Packet = (Vec<u8>,);
 
-pub fn encode(rgba: &[u8]) -> Result<Vec<u8>, MarshalError> {
+pub fn encode(rgba: &[u8]) -> Result<Vec<u8>, XputeError> {
     if rgba.len() != EARTH_BYTES {
         return Err(malformed());
     }
@@ -42,7 +42,7 @@ pub fn encode(rgba: &[u8]) -> Result<Vec<u8>, MarshalError> {
 }
 
 /// The tile's texels, read in place.
-pub fn decode(pkt: &[u8]) -> Result<&[u8], MarshalError> {
+pub fn decode(pkt: &[u8]) -> Result<&[u8], XputeError> {
     let (rgba,) = shape::get_deep::<Packet>(pkt)?;
     if rgba.len() != EARTH_BYTES {
         return Err(malformed());

@@ -10,12 +10,14 @@
  * on it answers ECANCELED. A size or a read its caller cancels answers
  * ECANCELED too (frame.json `CANCEL`). A set-aside goes to the backend the
  * path names (binding.ts). A backend fails with the file's error-code, and a
- * failure that carries none answers `io` (`failure`).
+ * failure that carries none answers `io`, save a bug, which passes on as
+ * itself (`failure`).
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
+import { Bug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
-import { FaultError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import { ComponentError, type Link } from "@xpute/link";
 import * as file from "@xpute/link/abi/fs/file.ts";
 import { ERROR_CODE_IO } from "@xpute/link/abi/fs/types.enum.ts";
@@ -23,15 +25,18 @@ import { ERROR_CODE_IO } from "@xpute/link/abi/fs/types.enum.ts";
 import { path } from "@/abi/file.spec.ts";
 import { binding, type Path } from "@/service/sys/fs/binding.ts";
 
-/** What a backend's failure `e` answers: its own error-code, and `io` where it
- * carries none. */
-const failure = (e: unknown): unknown => (e instanceof ComponentError ? e : new ComponentError(ERROR_CODE_IO));
+/** What a backend's failure `e` answers: its own error-code, `io` where it
+ * carries none, and a bug as itself. */
+const failure = (e: unknown): unknown =>
+  e instanceof ComponentError || e instanceof Bug
+    ? e
+    : new ComponentError(ERROR_CODE_IO);
 
 /** What rejects ECANCELED once `signal` aborts: a method its caller canceled,
  * or a file closed. */
 function aborted(signal: AbortSignal): Promise<never> {
   return new Promise((_, fail) => {
-    signal.addEventListener("abort", () => fail(new FaultError(ERRNO_ECANCELED)));
+    signal.addEventListener("abort", () => fail(new XputeError(ERRNO_ECANCELED)));
   });
 }
 

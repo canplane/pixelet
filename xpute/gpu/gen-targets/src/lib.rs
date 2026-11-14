@@ -8,7 +8,7 @@ use xpute_gen::spec::data::DataSpec;
 use xpute_link_gen::wit::{Side, WitTarget};
 
 /// The plugin's bindings on the guest's side, with the TypeScript in the
-/// plugin's link and the C++ beside the C++ core's GPU calls.
+/// plugin's link and the C++ beside its GPU calls.
 pub const GUEST_TARGET: WitTarget<'static> = WitTarget {
     wit: "gpu/wit",
     rs: Some("gpu/guest/rust/src/abi.rs"),

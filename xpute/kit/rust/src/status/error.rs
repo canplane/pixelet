@@ -3,12 +3,11 @@
 use core::fmt;
 use core::panic::Location;
 
-use crate::status::errno::Errno;
+use crate::status::errno::{Errno, Kind};
 
 /// This is an errno and the place in the source where the error was made, with
-/// no message. The type wrapped around it says whether it is fatal: an
-/// `InvariantError` is, and a `FaultError`, a fault from outside the program,
-/// is not.
+/// no message. It is returned, never fatal: a broken invariant is a bug
+/// (status/bug.rs). What happened is the errno's `kind`.
 #[derive(Debug)]
 pub struct XputeError {
     pub errnum: Errno,
@@ -23,6 +22,10 @@ impl XputeError {
             at: Location::caller(),
         }
     }
+
+    pub const fn kind(&self) -> Kind {
+        self.errnum.kind()
+    }
 }
 
 impl fmt::Display for XputeError {
@@ -32,52 +35,3 @@ impl fmt::Display for XputeError {
 }
 
 impl std::error::Error for XputeError {}
-
-#[derive(Debug)]
-pub struct InvariantError(pub XputeError);
-
-#[derive(Debug)]
-pub struct FaultError(pub XputeError);
-
-#[derive(Debug)]
-pub struct MarshalError(pub FaultError);
-
-#[derive(Debug)]
-pub struct NetworkFaultError(pub FaultError);
-
-macro_rules! subclass {
-    ($name:ident extends $base:ident) => {
-        impl $name {
-            #[track_caller]
-            pub fn new(errnum: Errno) -> $name {
-                $name($base::new(errnum))
-            }
-        }
-
-        impl core::ops::Deref for $name {
-            type Target = $base;
-            fn deref(&self) -> &$base {
-                &self.0
-            }
-        }
-
-        impl fmt::Display for $name {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "{}: {}", stringify!($name), self.0)
-            }
-        }
-
-        impl std::error::Error for $name {}
-
-        impl From<$name> for XputeError {
-            fn from(e: $name) -> XputeError {
-                e.0.into()
-            }
-        }
-    };
-}
-
-subclass!(InvariantError extends XputeError);
-subclass!(FaultError extends XputeError);
-subclass!(MarshalError extends FaultError);
-subclass!(NetworkFaultError extends FaultError);

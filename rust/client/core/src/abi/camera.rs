@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/camera` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x5a7108;
 
@@ -68,7 +60,7 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
         let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 TRACK => {
@@ -77,12 +69,12 @@ impl _rt::Object for _Object {
                         .case(0, 3)
                         .and_then(|v| Tracking::of(v).ok_or(_rt::Errno::EBADMSG))?;
                     match self.0.track(tracking) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
                 NORTH_UP => match self.0.north_up() {
-                    Ok(v) => _rt::Reply::from(0),
+                    Ok(()) => _rt::Reply::from(0),
                     Err(e) => _rt::Reply::from(e as i32),
                 },
                 GOTO => {
@@ -93,25 +85,25 @@ impl _rt::Object for _Object {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.f64(16 + 8).map(Some)
+                            r_.f64(24).map(Some)
                         }
                     })?;
                     let azimuth = r_.case(32, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.f64(32 + 8).map(Some)
+                            r_.f64(40).map(Some)
                         }
                     })?;
                     let polar = r_.case(48, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.f64(48 + 8).map(Some)
+                            r_.f64(56).map(Some)
                         }
                     })?;
                     match self.0.goto(lon, lat, dist, azimuth, polar) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -122,9 +114,9 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `imp` under the interface's handle.
-pub fn mount(imp: _rt::Rc<dyn Guest>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+/// Serves `implementation` under the interface's handle.
+pub fn mount(implementation: _rt::Rc<dyn Guest>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 mod _rt {

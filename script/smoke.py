@@ -142,7 +142,7 @@ def declared(a):
     if not isinstance(s, dict):
         return "not JSON"
     version = s.get("version") or {}
-    missing = [k for k in ("terrain", "place", "division", "earth") if not isinstance(version.get(k), str)]
+    missing = [k for k in published["BASE_LAYER"]["$val"] if not isinstance(version.get(k), str)]
     return f"no version for {', '.join(missing)}" if missing else None
 
 

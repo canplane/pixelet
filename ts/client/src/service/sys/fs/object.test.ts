@@ -3,7 +3,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
-import { FaultError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import { ComponentError } from "@xpute/link";
 import { ERROR_CODE_NO_ENTRY } from "@xpute/link/abi/fs/types.enum.ts";
 
@@ -68,7 +68,7 @@ async function errno(f: () => unknown): Promise<number | undefined> {
   try {
     await f();
   } catch (err) {
-    return err instanceof FaultError ? err.errnum : undefined;
+    return err instanceof XputeError ? err.errnum : undefined;
   }
   return undefined;
 }
@@ -157,14 +157,8 @@ test("object_backend - a refused shard is set aside, its rows of the top with it
   assert.deepStrictEqual(await code(() => b.open(TOP)), ERROR_CODE_NO_ENTRY);
 });
 
-test("object_backend - a database that refuses sets nothing aside, and throws at no commit", async () => {
-  const err = console.error;
-  console.error = () => {};
-  try {
-    const b = object_backend(database(true));
-    b.commit(encode_writes(format.OBJECT_EDIT, [CUBE]));
-    await assert.rejects(b.set_aside(SHARD, 7));
-  } finally {
-    console.error = err;
-  }
+test("object_backend - a database that refuses keeps no commit and sets nothing aside", async () => {
+  const b = object_backend(database(true));
+  await assert.rejects(b.commit(encode_writes(format.OBJECT_EDIT, [CUBE])));
+  await assert.rejects(b.set_aside(SHARD, 7));
 });

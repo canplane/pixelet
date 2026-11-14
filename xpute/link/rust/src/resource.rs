@@ -7,7 +7,7 @@
 //! back as late as it can; the slot is the handle's low `SLOT_BITS`, from 1,
 //! the root being 0. Above it a generation, which a slot's drop advances, keeps a
 //! frame late for a dropped object from reaching the one in its slot now,
-//! until the slot has been used `GEN_MASK` + 1 times. More live objects than
+//! until the slot has been used `GENERATION_MASK` + 1 times. More live objects than
 //! the slots hold is a bug.
 
 use crate::frame::spec::{NAMED, SLOT_BITS};
@@ -16,7 +16,7 @@ pub type Handle = u32;
 
 const SLOT_MASK: u32 = (1 << SLOT_BITS) - 1;
 /// The largest generation an issued handle holds above its slot, below NAMED.
-const GEN_MASK: u32 = (NAMED - 1) >> SLOT_BITS;
+const GENERATION_MASK: u32 = (NAMED - 1) >> SLOT_BITS;
 
 /// What an issued slot's `next` holds, which no free slot's does.
 const ISSUED: u32 = u32::MAX;
@@ -24,7 +24,7 @@ const ISSUED: u32 = u32::MAX;
 /// A slot: its generation, its object while it holds one, and the next free
 /// slot while it is free, 0 for none; `ISSUED` while it is issued.
 struct Slot<T> {
-    gen: u32,
+    generation: u32,
     val: Option<T>,
     next: u32,
 }
@@ -64,7 +64,7 @@ impl<T> Table<T> {
             k
         } else {
             self.slots.push(Slot {
-                gen: 0,
+                generation: 0,
                 val: None,
                 next: ISSUED,
             });
@@ -72,14 +72,14 @@ impl<T> Table<T> {
             xpute_kit::ensure!(k <= SLOT_MASK, EMFILE, k);
             k
         };
-        k | self.slots[k as usize - 1].gen << SLOT_BITS
+        k | self.slots[k as usize - 1].generation << SLOT_BITS
     }
 
     /// The slot `h` names, where `h` is of its generation.
     fn slot(&mut self, h: Handle) -> Option<&mut Slot<T>> {
         let k = (h & SLOT_MASK) as usize;
         let s = self.slots.get_mut(k.checked_sub(1)?)?;
-        (s.gen == h >> SLOT_BITS).then_some(s)
+        (s.generation == h >> SLOT_BITS).then_some(s)
     }
 
     pub fn put(&mut self, h: Handle, v: T) {
@@ -99,7 +99,7 @@ impl<T> Table<T> {
     pub fn get(&self, h: Handle) -> Option<&T> {
         let k = (h & SLOT_MASK) as usize;
         let s = self.slots.get(k.checked_sub(1)?)?;
-        s.val.as_ref().filter(|_| s.gen == h >> SLOT_BITS)
+        s.val.as_ref().filter(|_| s.generation == h >> SLOT_BITS)
     }
 
     pub fn get_mut(&mut self, h: Handle) -> Option<&mut T> {
@@ -112,7 +112,7 @@ impl<T> Table<T> {
     pub fn remove(&mut self, h: Handle) -> Option<T> {
         let s = self.slot(h).filter(|s| s.next == ISSUED)?;
         let v = s.val.take();
-        s.gen = (s.gen + 1) & GEN_MASK;
+        s.generation = (s.generation + 1) & GENERATION_MASK;
         s.next = 0;
         let k = h & SLOT_MASK;
         match self.tail {

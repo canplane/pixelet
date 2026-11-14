@@ -19,7 +19,7 @@ export type AssetId = u16;
 /** The marker's kind has no other index. */
 export const MARKER: AssetId = KIND_MARKER << IDX_BITS;
 
-export function kindOf(id: AssetId): number {
+export function kind_of(id: AssetId): number {
   return id >> IDX_BITS;
 }
 
@@ -40,21 +40,21 @@ export type CubeSection = (typeof CUBE_RECS)[number]["section"];
 const CUBE_SECTION = new Map(CUBE_RECS.map((c) => [c.number, c.section]));
 const CUBE_LABEL = new Map(CUBE_RECS.map((c) => [c.number, c.label]));
 
-export function cubeSection(cube: Cube): CubeSection {
+export function cube_section(cube: Cube): CubeSection {
   return CUBE_SECTION.get(cube) as CubeSection;
 }
 
-export function cubeHex(cube: Cube): string | null {
+export function cube_hex(cube: Cube): string | null {
   return CUBE_HEX[cube] ?? null;
 }
 
 /** Names are not translated: every locale shows the same one. */
-export function cubeLabel(cube: Cube): string {
+export function cube_label(cube: Cube): string {
   return CUBE_LABEL.get(cube) ?? "";
 }
 
 /** Names are not translated: every locale shows the same one. */
-export function decorLabel(id: AssetId): string {
+export function decor_label(id: AssetId): string {
   return DECOR_LABEL[id] ?? "";
 }
 
@@ -69,6 +69,6 @@ const DECOR_SECTION: Readonly<Record<number, DecorSection>> = {
   [DECOR_TRAIN]: "vehicle",
 };
 
-export function decorSection(id: AssetId): DecorSection {
+export function decor_section(id: AssetId): DecorSection {
   return DECOR_SECTION[id];
 }

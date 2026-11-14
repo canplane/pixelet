@@ -11,7 +11,7 @@ import {
   of_SensorStatus,
 } from "./overlay.enum.ts";
 import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import { Lift, type Lower } from "@xpute/link/cabi.ts";
 import {
   type Handle,
@@ -31,19 +31,19 @@ export const VIEW: Method = 1;
 
 export function load_GroundStatus(r: Lift, at: number): GroundStatus {
   const v = of_GroundStatus(r.case(at, 3));
-  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (v === null) throw new XputeError(ERRNO_EBADMSG);
   return v;
 }
 
 export function load_SensorStatus(r: Lift, at: number): SensorStatus {
   const v = of_SensorStatus(r.case(at, 5));
-  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (v === null) throw new XputeError(ERRNO_EBADMSG);
   return v;
 }
 
 export function load_Message(r: Lift, at: number): Message {
   const v = of_Message(r.case(at, 7));
-  if (v === null) throw new MarshalError(ERRNO_EBADMSG);
+  if (v === null) throw new XputeError(ERRNO_EBADMSG);
   return v;
 }
 
@@ -56,13 +56,13 @@ export const LON_LAT_SZ = 16;
 export const LON_LAT_ALIGN = 8;
 
 export function store_LonLat(w: Lower, at: number, v: LonLat): void {
-  w.f64(at + 0, v.lon);
+  w.f64(at, v.lon);
   w.f64(at + 8, v.lat);
 }
 
 export function load_LonLat(r: Lift, at: number): LonLat {
   return {
-    lon: r.f64(at + 0),
+    lon: r.f64(at),
     lat: r.f64(at + 8),
   };
 }
@@ -78,7 +78,7 @@ export const PIVOT_STATE_SZ = 40;
 export const PIVOT_STATE_ALIGN = 8;
 
 export function store_PivotState(w: Lower, at: number, v: PivotState): void {
-  w.u8(at + 0, v.status);
+  w.u8(at, v.status);
   w.bool(at + 1, v.is_off_center);
   if (v.lon_lat !== null) {
     w.u8(at + 8, 1);
@@ -89,7 +89,7 @@ export function store_PivotState(w: Lower, at: number, v: PivotState): void {
 
 export function load_PivotState(r: Lift, at: number): PivotState {
   return {
-    status: load_GroundStatus(r, at + 0),
+    status: load_GroundStatus(r, at),
     is_off_center: r.bool(at + 1),
     lon_lat: r.case(at + 8, 2) === 0 ? null : load_LonLat(r, at + 8 + 8),
     outside: r.bool(at + 32),
@@ -111,7 +111,7 @@ export function store_LocationState(
   at: number,
   v: LocationState,
 ): void {
-  w.u8(at + 0, v.status);
+  w.u8(at, v.status);
   w.bool(at + 1, v.has_location);
   w.bool(at + 2, v.watching);
   if (v.err !== null) {
@@ -122,7 +122,7 @@ export function store_LocationState(
 
 export function load_LocationState(r: Lift, at: number): LocationState {
   return {
-    status: load_SensorStatus(r, at + 0),
+    status: load_SensorStatus(r, at),
     has_location: r.bool(at + 1),
     watching: r.bool(at + 2),
     err: r.case(at + 3, 2) === 0 ? null : load_Message(r, at + 3 + 1),
@@ -142,13 +142,13 @@ export function store_CompanionState(
   at: number,
   v: CompanionState,
 ): void {
-  w.bool(at + 0, v.person_ready);
+  w.bool(at, v.person_ready);
   w.bool(at + 1, v.pet_ready);
 }
 
 export function load_CompanionState(r: Lift, at: number): CompanionState {
   return {
-    person_ready: r.bool(at + 0),
+    person_ready: r.bool(at),
     pet_ready: r.bool(at + 1),
   };
 }
@@ -165,12 +165,12 @@ export function store_OrientationState(
   at: number,
   v: OrientationState,
 ): void {
-  w.u8(at + 0, v.status);
+  w.u8(at, v.status);
 }
 
 export function load_OrientationState(r: Lift, at: number): OrientationState {
   return {
-    status: load_SensorStatus(r, at + 0),
+    status: load_SensorStatus(r, at),
   };
 }
 
@@ -189,7 +189,7 @@ export function store_DivisionPart(
   at: number,
   v: DivisionPart,
 ): void {
-  w.u8(at + 0, v.subtype);
+  w.u8(at, v.subtype);
   w.str(at + 4, v.name);
   w.bool(at + 12, v.shown);
   w.bool(at + 13, v.area);
@@ -197,7 +197,7 @@ export function store_DivisionPart(
 
 export function load_DivisionPart(r: Lift, at: number): DivisionPart {
   return {
-    subtype: r.u8(at + 0),
+    subtype: r.u8(at),
     name: r.str(at + 4),
     shown: r.bool(at + 12),
     area: r.bool(at + 13),
@@ -226,7 +226,7 @@ export const SNAPSHOT_SZ = 112;
 export const SNAPSHOT_ALIGN = 8;
 
 export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
-  store_PivotState(w, at + 0, v.pivot);
+  store_PivotState(w, at, v.pivot);
   store_LocationState(w, at + 40, v.location);
   store_CompanionState(w, at + 45, v.companion);
   if (v.draft !== null) {
@@ -262,7 +262,7 @@ export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
 
 export function load_Snapshot(r: Lift, at: number): Snapshot {
   return {
-    pivot: load_PivotState(r, at + 0),
+    pivot: load_PivotState(r, at),
     location: load_LocationState(r, at + 40),
     companion: load_CompanionState(r, at + 45),
     draft: r.case(at + 48, 2) === 0 ? null : r.str(at + 48 + 4),
@@ -287,8 +287,8 @@ export interface Host {
   view(azimuth: number, m_per_px: number): void;
 }
 
-/** The object over `imp`. */
-function object(imp: Host): LinkObject {
+/** The object over `implementation`. */
+function object(implementation: Host): LinkObject {
   return {
     call(m, tag, args) {
       try {
@@ -296,13 +296,13 @@ function object(imp: Host): LinkObject {
           case SHOW: {
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
-            imp.show(load_Snapshot(r_, 0));
+            implementation.show(load_Snapshot(r_, 0));
             return 0;
           }
           case VIEW: {
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
-            imp.view(r_.f64(0), r_.f64(8));
+            implementation.view(r_.f64(0), r_.f64(8));
             return 0;
           }
           default:
@@ -315,7 +315,10 @@ function object(imp: Host): LinkObject {
   };
 }
 
-/** Serves `imp` under the interface's handle. */
-export function mount(l: Pick<Link, "mount_named">, imp: Host): void {
-  l.mount_named(HANDLE, object(imp));
+/** Serves `implementation` under the interface's handle. */
+export function mount(
+  l: Pick<Link, "mount_named">,
+  implementation: Host,
+): void {
+  l.mount_named(HANDLE, object(implementation));
 }

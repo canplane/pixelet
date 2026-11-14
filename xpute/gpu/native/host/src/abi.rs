@@ -5,3 +5,8 @@
 pub mod gpu;
 pub mod surface;
 pub mod vsync;
+
+/// The methods of the named interfaces the host serves that answer
+/// later, each `(handle, method)`, as WIT's `async func` marks them.
+pub const LATER: &[(xpute_link::Handle, xpute_link::Method)] =
+    &[(gpu::HANDLE, gpu::RUN), (vsync::HANDLE, vsync::NEXT)];

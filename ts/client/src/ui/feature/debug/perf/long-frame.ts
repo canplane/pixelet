@@ -25,17 +25,17 @@ function land(l: LongFrame): void {
 
 /** The ring is filtered rather than searched, because its two sources feed
  * it out of time order. */
-export function longFramesSince(t: f64): LongFrame[] {
+export function long_frames_since(t: f64): LongFrame[] {
   return ring.filter((l) => l.t >= t);
 }
 
-export function longFramesClear(): void {
+export function long_frames_clear(): void {
   ring.length = 0;
 }
 
 let installed = false;
 
-export function installLongFrameObservers(): void {
+export function install_long_frame_observers(): void {
   if (installed) return;
   installed = true;
   long_frame.watch(land);

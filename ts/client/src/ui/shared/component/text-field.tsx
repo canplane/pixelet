@@ -16,7 +16,7 @@ import {
   type TextStyle,
 } from "react-native";
 
-import { color, textScale, textStyle } from "@/ui/shared/component/theme.ts";
+import { color, text_scale, text_style } from "@/ui/shared/component/theme.ts";
 
 /** Whether the platform's field draws its own clear button: on a page and on
  * Android it does not, and the caller draws one; an iPhone's does
@@ -37,7 +37,7 @@ export function TextField({ style, onSubmit, ...props }: TextFieldProps) {
       // react-native-web reads only the older `blurOnSubmit`.
       submitBehavior="submit"
       blurOnSubmit={false}
-      maxFontSizeMultiplier={textScale.chrome}
+      maxFontSizeMultiplier={text_scale.chrome}
       selectionColor={color.chosen}
       cursorColor={color.chosen}
       style={[styles.field, style, styles.size, styles.caret]}
@@ -46,8 +46,8 @@ export function TextField({ style, onSubmit, ...props }: TextFieldProps) {
 }
 
 const styles = StyleSheet.create({
-  field: textStyle.input,
-  size: { fontSize: textStyle.input.fontSize },
+  field: text_style.input,
+  size: { fontSize: text_style.input.fontSize },
   // react-native-web writes `caretColor` out as CSS. A device reads
   // `selectionColor` and `cursorColor` instead.
   caret: { caretColor: color.chosen } as TextStyle,

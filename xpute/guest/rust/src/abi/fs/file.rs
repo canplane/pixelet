@@ -2,14 +2,6 @@
 //
 // GENERATED from wit/fs (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// `[method]file.size`
 pub const FILE_SIZE: _rt::Method = 0;
 /// `[method]file.read`
@@ -26,14 +18,14 @@ pub fn file_size(
 ) -> impl _rt::Future<Output = Result<Result<u32, super::types::ErrorCode>, _rt::Errno>> {
     let sent = _rt::wait::wait(file_, FILE_SIZE, None, ());
     async move {
-        let (r, data, lent) = sent.await;
+        let (r, data, _) = sent.await;
         _rt::answer(r).and_then(|_| {
             let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
             r_.case(0, 2).and_then(|d| {
                 if d == 0 {
-                    r_.u32(0 + 4).map(Ok)
+                    r_.u32(4).map(Ok)
                 } else {
-                    r_.case(0 + 4, 7)
+                    r_.case(4, 7)
                         .and_then(|v| super::types::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                         .map(Err)
                 }
@@ -68,9 +60,9 @@ pub fn file_read<L: _rt::Lend>(
                 let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
                 r_.case(0, 2).and_then(|d| {
                     if d == 0 {
-                        r_.u32(0 + 4).map(Ok)
+                        r_.u32(4).map(Ok)
                     } else {
-                        r_.case(0 + 4, 7)
+                        r_.case(4, 7)
                             .and_then(|v| super::types::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                             .map(Err)
                     }
@@ -99,7 +91,7 @@ pub fn file_write<L: _rt::Lend>(
         buf,
     );
     async move {
-        let (r, data, lent) = sent.await;
+        let (r, _, lent) = sent.await;
         (lent, _rt::answer(r))
     }
 }
@@ -109,14 +101,14 @@ pub fn file_set_aside(
 ) -> impl _rt::Future<Output = Result<Result<(), super::types::ErrorCode>, _rt::Errno>> {
     let sent = _rt::wait::wait(file_, FILE_SET_ASIDE, None, ());
     async move {
-        let (r, data, lent) = sent.await;
+        let (r, data, _) = sent.await;
         _rt::answer(r).and_then(|_| {
             let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
             r_.case(0, 2).and_then(|d| {
                 if d == 0 {
-                    Ok(()).map(Ok)
+                    Ok(Ok(()))
                 } else {
-                    r_.case(0 + 1, 7)
+                    r_.case(1, 7)
                         .and_then(|v| super::types::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                         .map(Err)
                 }
@@ -130,14 +122,14 @@ pub fn file_close(
 ) -> impl _rt::Future<Output = Result<Result<(), super::types::ErrorCode>, _rt::Errno>> {
     let sent = _rt::wait::wait(file_, FILE_CLOSE, None, ());
     async move {
-        let (r, data, lent) = sent.await;
+        let (r, data, _) = sent.await;
         _rt::answer(r).and_then(|_| {
             let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
             r_.case(0, 2).and_then(|d| {
                 if d == 0 {
-                    Ok(()).map(Ok)
+                    Ok(Ok(()))
                 } else {
-                    r_.case(0 + 1, 7)
+                    r_.case(1, 7)
                         .and_then(|v| super::types::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                         .map(Err)
                 }

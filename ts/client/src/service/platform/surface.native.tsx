@@ -35,7 +35,7 @@ const WorldView: ComponentType<
 > = requireNativeView("PxlPlatform", "WorldView");
 
 /** The surface fills the window. */
-export function surfaceBox(): { width: f64; height: f64 } {
+export function surface_box(): { width: f64; height: f64 } {
   const { width, height } = Dimensions.get("window");
   return { width, height };
 }

@@ -10,10 +10,7 @@
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import {
-  tileObject,
-  type BASE_LAYERS,
-} from "@/service/origin/publication.spec.ts";
+import { tile_object, type BASE_LAYERS } from "@/abi/publication.spec.ts";
 import { tile_url } from "@/service/origin/route.ts";
 import { get } from "@/service/sys/fs/read.ts";
 import type { Declaration } from "@/service/sys/fs/source.ts";
@@ -46,6 +43,6 @@ export function read_object(
   name: string,
   signal: AbortSignal,
 ): Promise<U8Array> {
-  const object = tileObject(version_of(decl, kind, name), name);
+  const object = tile_object(version_of(decl, kind, name), name);
   return get(tile_url(kind, object), signal);
 }

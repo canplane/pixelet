@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/perf` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x6be6ac;
 
@@ -27,12 +19,12 @@ pub const STRTAB: _rt::Method = 4;
 pub fn start() -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
     let (r, data) = _rt::link::call(HANDLE, START, None);
     _rt::answer(r).and_then(|_| {
-        let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
+        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
         r_.case(0, 2).and_then(|d| {
             if d == 0 {
-                Ok(()).map(Ok)
+                Ok(Ok(()))
             } else {
-                r_.case(0 + 1, 6)
+                r_.case(1, 6)
                     .and_then(|v| super::types::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                     .map(Err)
             }
@@ -41,7 +33,7 @@ pub fn start() -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
 }
 
 pub fn stop() -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(HANDLE, STOP, None);
+    let (r, _) = _rt::link::call(HANDLE, STOP, None);
     _rt::answer(r)
 }
 
@@ -52,12 +44,12 @@ pub fn stats(window_ms: Option<f64>) -> Result<Vec<u8>, _rt::Errno> {
         Some((16, &|w_: &mut _rt::Lower| {
             if let Some(v) = &window_ms {
                 w_.u8(0, 1);
-                w_.f64(0 + 8, *v);
+                w_.f64(8, *v);
             }
         })),
     );
     _rt::answer(r).and_then(|_| {
-        let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
+        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
         r_.arr::<u8>(0)
     })
 }
@@ -67,13 +59,13 @@ pub fn ring(ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, _rt::Errno> {
         HANDLE,
         RING,
         Some((12, &|w_: &mut _rt::Lower| {
-            w_.u32(0, *&ring);
-            w_.u32(4, *&from);
-            w_.u32(8, *&cnt);
+            w_.u32(0, ring);
+            w_.u32(4, from);
+            w_.u32(8, cnt);
         })),
     );
     _rt::answer(r).and_then(|_| {
-        let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
+        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
         r_.arr::<u8>(0)
     })
 }
@@ -81,7 +73,7 @@ pub fn ring(ring: u32, from: u32, cnt: u32) -> Result<Vec<u8>, _rt::Errno> {
 pub fn strtab() -> Result<Vec<u8>, _rt::Errno> {
     let (r, data) = _rt::link::call(HANDLE, STRTAB, None);
     _rt::answer(r).and_then(|_| {
-        let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
+        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
         r_.arr::<u8>(0)
     })
 }

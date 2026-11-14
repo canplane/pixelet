@@ -2,19 +2,13 @@
 //
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `xpute:gpu/gpu` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x79d455;
 
 /// `run`
 pub const RUN: _rt::Method = 0;
+/// `get-device`
+pub const GET_DEVICE: _rt::Method = 1;
 /// `[method]device.lost`
 pub const DEVICE_LOST: _rt::Method = 0;
 /// `[method]device.ready`
@@ -65,9 +59,17 @@ pub fn run<L: _rt::Lend>(records: L) -> impl _rt::Future<Output = (L, Result<(),
         records,
     );
     async move {
-        let (r, data, lent) = sent.await;
+        let (r, _, lent) = sent.await;
         (lent, _rt::answer(r))
     }
+}
+
+pub fn get_device() -> Result<u32, _rt::Errno> {
+    let (r, data) = _rt::link::call(HANDLE, GET_DEVICE, None);
+    _rt::answer(r).and_then(|_| {
+        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
+        r_.u32(0)
+    })
 }
 
 pub fn device_lost<L: _rt::Lend>(
@@ -89,7 +91,7 @@ pub fn device_lost<L: _rt::Lend>(
         block,
     );
     async move {
-        let (r, data, lent) = sent.await;
+        let (r, _, lent) = sent.await;
         (lent, _rt::answer(r))
     }
 }
@@ -99,14 +101,14 @@ pub fn device_ready(
 ) -> impl _rt::Future<Output = Result<Result<(), ErrorCode>, _rt::Errno>> {
     let sent = _rt::wait::wait(device_, DEVICE_READY, None, ());
     async move {
-        let (r, data, lent) = sent.await;
+        let (r, data, _) = sent.await;
         _rt::answer(r).and_then(|_| {
             let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
             r_.case(0, 2).and_then(|d| {
                 if d == 0 {
-                    Ok(()).map(Ok)
+                    Ok(Ok(()))
                 } else {
-                    r_.case(0 + 1, 1)
+                    r_.case(1, 1)
                         .and_then(|v| ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
                         .map(Err)
                 }
@@ -118,14 +120,14 @@ pub fn device_ready(
 pub fn device_settled(device_: _rt::Handle) -> impl _rt::Future<Output = Result<(), _rt::Errno>> {
     let sent = _rt::wait::wait(device_, DEVICE_SETTLED, None, ());
     async move {
-        let (r, data, lent) = sent.await;
+        let (r, _, _) = sent.await;
         _rt::answer(r)
     }
 }
 
 mod _rt {
     pub use core::future::Future;
-    pub use xpute_guest::wait;
+    pub use xpute_guest::{link, wait};
     pub use xpute_kit::status::errno::Errno;
     pub use xpute_link::abi::types::Lent;
     pub use xpute_link::{answer, Handle, Lend, Lift, Lower, Method};

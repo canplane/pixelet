@@ -16,7 +16,7 @@
 //! 1 may be written as a U8, a U32 or an F64.
 
 use crate::status::errno::Errno;
-use crate::status::error::MarshalError;
+use crate::status::error::XputeError;
 
 const U8_SZ: u32 = size_of::<u8>() as u32;
 const U16_SZ: u32 = size_of::<u16>() as u32;
@@ -110,71 +110,71 @@ impl TlvWriter {
         self.data()
     }
 
-    fn check_unsealed(&self) -> Result<(), MarshalError> {
+    fn check_unsealed(&self) -> Result<(), XputeError> {
         if self.sealed {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         Ok(())
     }
 
-    pub fn u8(&mut self, x: u8) -> Result<&mut Self, MarshalError> {
+    pub fn u8(&mut self, x: u8) -> Result<&mut Self, XputeError> {
         self.check_unsealed()?;
         self.put(Tag::U8, &x.to_le_bytes());
         Ok(self)
     }
-    pub fn i8(&mut self, x: i8) -> Result<&mut Self, MarshalError> {
+    pub fn i8(&mut self, x: i8) -> Result<&mut Self, XputeError> {
         self.check_unsealed()?;
         self.put(Tag::I8, &x.to_le_bytes());
         Ok(self)
     }
-    pub fn u16(&mut self, x: u16) -> Result<&mut Self, MarshalError> {
+    pub fn u16(&mut self, x: u16) -> Result<&mut Self, XputeError> {
         self.check_unsealed()?;
         self.put(Tag::U16, &x.to_le_bytes());
         Ok(self)
     }
-    pub fn i16(&mut self, x: i16) -> Result<&mut Self, MarshalError> {
+    pub fn i16(&mut self, x: i16) -> Result<&mut Self, XputeError> {
         self.check_unsealed()?;
         self.put(Tag::I16, &x.to_le_bytes());
         Ok(self)
     }
-    pub fn u32(&mut self, x: u32) -> Result<&mut Self, MarshalError> {
+    pub fn u32(&mut self, x: u32) -> Result<&mut Self, XputeError> {
         self.check_unsealed()?;
         self.put(Tag::U32, &x.to_le_bytes());
         Ok(self)
     }
-    pub fn i32(&mut self, x: i32) -> Result<&mut Self, MarshalError> {
+    pub fn i32(&mut self, x: i32) -> Result<&mut Self, XputeError> {
         self.check_unsealed()?;
         self.put(Tag::I32, &x.to_le_bytes());
         Ok(self)
     }
-    pub fn u64(&mut self, x: u64) -> Result<&mut Self, MarshalError> {
+    pub fn u64(&mut self, x: u64) -> Result<&mut Self, XputeError> {
         self.check_unsealed()?;
         self.put(Tag::U64, &x.to_le_bytes());
         Ok(self)
     }
-    pub fn i64(&mut self, x: i64) -> Result<&mut Self, MarshalError> {
+    pub fn i64(&mut self, x: i64) -> Result<&mut Self, XputeError> {
         self.check_unsealed()?;
         self.put(Tag::I64, &x.to_le_bytes());
         Ok(self)
     }
-    pub fn f32(&mut self, x: f32) -> Result<&mut Self, MarshalError> {
+    pub fn f32(&mut self, x: f32) -> Result<&mut Self, XputeError> {
         self.check_unsealed()?;
         self.put(Tag::F32, &x.to_le_bytes());
         Ok(self)
     }
-    pub fn f64(&mut self, x: f64) -> Result<&mut Self, MarshalError> {
+    pub fn f64(&mut self, x: f64) -> Result<&mut Self, XputeError> {
         self.check_unsealed()?;
         self.put(Tag::F64, &x.to_le_bytes());
         Ok(self)
     }
 
-    pub fn bool(&mut self, x: bool) -> Result<&mut Self, MarshalError> {
+    pub fn bool(&mut self, x: bool) -> Result<&mut Self, XputeError> {
         self.check_unsealed()?;
         self.put(Tag::BOOL, &[x as u8]);
         Ok(self)
     }
 
-    pub fn str(&mut self, s: &str) -> Result<&mut Self, MarshalError> {
+    pub fn str(&mut self, s: &str) -> Result<&mut Self, XputeError> {
         self.check_unsealed()?;
         let data = s.as_bytes();
         self.put(Tag::STR, &(data.len() as u32).to_le_bytes());
@@ -182,14 +182,14 @@ impl TlvWriter {
         Ok(self)
     }
 
-    pub fn bytes(&mut self, b: &[u8]) -> Result<&mut Self, MarshalError> {
+    pub fn bytes(&mut self, b: &[u8]) -> Result<&mut Self, XputeError> {
         self.check_unsealed()?;
         self.put(Tag::BYTES, &(b.len() as u32).to_le_bytes());
         self.buf.extend_from_slice(b);
         Ok(self)
     }
 
-    pub fn write_all(&mut self, vals: &[TlvValue]) -> Result<&mut Self, MarshalError> {
+    pub fn write_all(&mut self, vals: &[TlvValue]) -> Result<&mut Self, XputeError> {
         for v in vals {
             match v {
                 TlvValue::Bool(x) => self.bool(*x)?,
@@ -238,7 +238,7 @@ impl<'a> TlvReader<'a> {
         self.buf[at..at + N].try_into().unwrap()
     }
 
-    pub fn read_all(&mut self) -> Result<Vec<TlvValue>, MarshalError> {
+    pub fn read_all(&mut self) -> Result<Vec<TlvValue>, XputeError> {
         let mut out = Vec::new();
         while let Some(v) = self.next_val()? {
             out.push(v);
@@ -246,7 +246,7 @@ impl<'a> TlvReader<'a> {
         Ok(out)
     }
 
-    pub fn next_val(&mut self) -> Result<Option<TlvValue>, MarshalError> {
+    pub fn next_val(&mut self) -> Result<Option<TlvValue>, XputeError> {
         if self.end.is_some() {
             return Ok(None);
         }
@@ -275,66 +275,66 @@ impl<'a> TlvReader<'a> {
             t if t == Tag::BOOL as u8 => TlvValue::Bool(self.bool_of()?),
             t if t == Tag::STR as u8 => TlvValue::Str(self.str_of()?),
             t if t == Tag::BYTES as u8 => TlvValue::Bytes(self.bytes_of()?),
-            _ => return Err(MarshalError::new(Errno::EBADMSG)),
+            _ => return Err(XputeError::new(Errno::EBADMSG)),
         }))
     }
 
     #[track_caller]
-    fn need(&self, n: u32) -> Result<(), MarshalError> {
+    fn need(&self, n: u32) -> Result<(), XputeError> {
         // In u64, so that a length off the wire near 2^32 cannot wrap the sum.
         if self.off as u64 + n as u64 > self.buf.len() as u64 {
-            return Err(MarshalError::new(Errno::EBADMSG));
+            return Err(XputeError::new(Errno::EBADMSG));
         }
         Ok(())
     }
 
-    fn u8_of(&mut self) -> Result<u8, MarshalError> {
+    fn u8_of(&mut self) -> Result<u8, XputeError> {
         self.need(U8_SZ)?;
         Ok(u8::from_le_bytes(self.take()))
     }
-    fn i8_of(&mut self) -> Result<i8, MarshalError> {
+    fn i8_of(&mut self) -> Result<i8, XputeError> {
         self.need(U8_SZ)?;
         Ok(i8::from_le_bytes(self.take()))
     }
-    fn u16_of(&mut self) -> Result<u16, MarshalError> {
+    fn u16_of(&mut self) -> Result<u16, XputeError> {
         self.need(U16_SZ)?;
         Ok(u16::from_le_bytes(self.take()))
     }
-    fn i16_of(&mut self) -> Result<i16, MarshalError> {
+    fn i16_of(&mut self) -> Result<i16, XputeError> {
         self.need(U16_SZ)?;
         Ok(i16::from_le_bytes(self.take()))
     }
-    fn u32_of(&mut self) -> Result<u32, MarshalError> {
+    fn u32_of(&mut self) -> Result<u32, XputeError> {
         self.need(U32_SZ)?;
         Ok(u32::from_le_bytes(self.take()))
     }
-    fn i32_of(&mut self) -> Result<i32, MarshalError> {
+    fn i32_of(&mut self) -> Result<i32, XputeError> {
         self.need(U32_SZ)?;
         Ok(i32::from_le_bytes(self.take()))
     }
-    fn u64_of(&mut self) -> Result<u64, MarshalError> {
+    fn u64_of(&mut self) -> Result<u64, XputeError> {
         self.need(U64_SZ)?;
         Ok(u64::from_le_bytes(self.take()))
     }
-    fn i64_of(&mut self) -> Result<i64, MarshalError> {
+    fn i64_of(&mut self) -> Result<i64, XputeError> {
         self.need(U64_SZ)?;
         Ok(i64::from_le_bytes(self.take()))
     }
-    fn f32_of(&mut self) -> Result<f32, MarshalError> {
+    fn f32_of(&mut self) -> Result<f32, XputeError> {
         self.need(U32_SZ)?;
         Ok(f32::from_le_bytes(self.take()))
     }
-    fn f64_of(&mut self) -> Result<f64, MarshalError> {
+    fn f64_of(&mut self) -> Result<f64, XputeError> {
         self.need(U64_SZ)?;
         Ok(f64::from_le_bytes(self.take()))
     }
 
-    fn bool_of(&mut self) -> Result<bool, MarshalError> {
+    fn bool_of(&mut self) -> Result<bool, XputeError> {
         self.need(U8_SZ)?;
         Ok(u8::from_le_bytes(self.take()) != 0)
     }
 
-    fn str_of(&mut self) -> Result<String, MarshalError> {
+    fn str_of(&mut self) -> Result<String, XputeError> {
         let len = self.u32_of()?;
         self.need(len)?;
         let at = self.off;
@@ -342,7 +342,7 @@ impl<'a> TlvReader<'a> {
         Ok(String::from_utf8_lossy(&self.buf[at..at + len as usize]).into_owned())
     }
 
-    fn bytes_of(&mut self) -> Result<Vec<u8>, MarshalError> {
+    fn bytes_of(&mut self) -> Result<Vec<u8>, XputeError> {
         let len = self.u32_of()?;
         self.need(len)?;
         let at = self.off;
@@ -352,7 +352,7 @@ impl<'a> TlvReader<'a> {
 }
 
 impl Iterator for TlvReader<'_> {
-    type Item = Result<TlvValue, MarshalError>;
+    type Item = Result<TlvValue, XputeError>;
     fn next(&mut self) -> Option<Self::Item> {
         self.next_val().transpose()
     }

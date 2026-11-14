@@ -2,14 +2,6 @@
 //
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `xpute:gpu/vsync` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x42eda6;
 
@@ -19,7 +11,7 @@ pub const NEXT: _rt::Method = 0;
 pub fn next() -> impl _rt::Future<Output = Result<(), _rt::Errno>> {
     let sent = _rt::wait::wait(HANDLE, NEXT, None, ());
     async move {
-        let (r, data, lent) = sent.await;
+        let (r, _, _) = sent.await;
         _rt::answer(r)
     }
 }

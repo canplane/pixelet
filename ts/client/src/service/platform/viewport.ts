@@ -49,7 +49,7 @@ export function useViewportTop(): number {
   return store((s) => s.top);
 }
 
-function setTop(top: number): void {
+function set_top(top: number): void {
   store.setState({ top });
 }
 
@@ -97,7 +97,7 @@ export function useVisualViewport(): void {
       settleTimer = setTimeout(() => {
         settleTimer = 0;
         if (!vv) return;
-        setTop(vv.offsetTop);
+        set_top(vv.offsetTop);
       }, SETTLE_MS);
     }
 
@@ -106,7 +106,7 @@ export function useVisualViewport(): void {
       frame = requestAnimationFrame(apply);
     }
 
-    setTop(vv.offsetTop);
+    set_top(vv.offsetTop);
     apply();
     vv.addEventListener("resize", schedule);
     vv.addEventListener("scroll", schedule);
@@ -120,7 +120,7 @@ export function useVisualViewport(): void {
       keyboard?.removeEventListener("geometrychange", schedule);
       if (keyboard) keyboard.overlaysContent = false;
       root.style.removeProperty(VISUAL_VIEWPORT_BOTTOM);
-      setTop(0);
+      set_top(0);
     };
   }, []);
 }

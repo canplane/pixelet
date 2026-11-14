@@ -23,12 +23,12 @@ import {
   POINTER_TYPE_MOUSE,
 } from "@/abi/input.enum.ts";
 import { SETTING } from "@/abi/schema.spec.ts";
-import { perfReportText } from "./report.ts";
-import { perfReportRead } from "./view.ts";
+import { perf_report_text } from "./report.ts";
+import { perf_report_read } from "./view.ts";
 import * as input from "@/service/core/input.ts";
 import * as perf from "@/service/core/perf.ts";
 import * as setting from "@/service/core/setting.ts";
-import { surfaceBox } from "@/service/platform/surface.tsx";
+import { surface_box } from "@/service/platform/surface.tsx";
 
 /** One input is sent each step, about one frame at 60 Hz. */
 const STEP_MS = 16;
@@ -64,8 +64,8 @@ export const DRIVE_SETTINGS: readonly (readonly [number, number])[] = [
 
 const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
-export async function perfDrive(): Promise<string> {
-  const box = surfaceBox();
+export async function perf_drive(): Promise<string> {
+  const box = surface_box();
   if (!box) {
     return "no canvas";
   }
@@ -109,5 +109,5 @@ export async function perfDrive(): Promise<string> {
   await wait(DRIVE_S * 1000);
   clearInterval(step);
   pointer(POINTER_PHASE_UP, on(start));
-  return perfReportText(await perfReportRead());
+  return perf_report_text(await perf_report_read());
 }

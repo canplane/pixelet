@@ -7,7 +7,7 @@ use std::task::{Context, Poll, Waker};
 
 use super::*;
 
-fn parse(bytes: &[u8]) -> Result<Gltf, MarshalError> {
+fn parse(bytes: &[u8]) -> Result<Gltf, XputeError> {
     let mut parsing = pin!(parse_gltf(bytes, &[], || core::future::ready(())));
     match parsing
         .as_mut()

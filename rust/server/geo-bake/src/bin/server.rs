@@ -26,7 +26,7 @@ use pxl_geo_bake::oven::{
 use pxl_geo_bake::pyramid;
 use pxl_geo_bake::source::{self, OverrideMap};
 use pxl_geo_bake::util::CONTENT_ENCODING;
-use pxl_spec::bake::publication::{tile_object_parts, BaseLayer, TILE_SPHERE};
+use pxl_spec::bake::publication::{tile_object_parts, BaseLayer, FORMAT, TILE_SPHERE};
 use pxl_spec::bake::source::is_sharded;
 use pxl_spec::directory;
 use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
@@ -73,7 +73,7 @@ fn version_of(app: &App, layer: BaseLayer) -> Result<String, String> {
     let read = |path: &FsPath| std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()));
     match &app.tile_source {
         _ if !is_sharded(layer) => {
-            read(&app.out.join(EARTH).join(pyramid::MANIFEST)).map(|b| bytes_version(&b))
+            read(&app.out.join(BaseLayer::Earth.name()).join(pyramid::MANIFEST)).map(|b| bytes_version(&b))
         }
         TileSource::Shelf(dir) => {
             read(&dir.join(layer.name()).join(pyramid::MANIFEST)).map(|b| bytes_version(&b))
@@ -103,7 +103,7 @@ fn decl(app: &App) -> Result<String, String> {
         match &app.tile_source {
             _ if !is_sharded(l) => Ok(source::Kind {
                 shard: None,
-                ..source::of_set(&app.out.join(EARTH), &version)?
+                ..source::of_set(&app.out.join(BaseLayer::Earth.name()), &version)?
             }),
             TileSource::Shelf(dir) => match source::of_set(&dir.join(l.name()), &version)? {
                 k if k.shard.is_some() => Ok(k),
@@ -113,7 +113,7 @@ fn decl(app: &App) -> Result<String, String> {
                 )),
             },
             TileSource::Oven(_) => Ok(source::Kind {
-                format: l.format(),
+                format: FORMAT[l as usize],
                 version,
                 shard: Some(source::tiles(app.coverage.iter().map(String::as_str))?),
             }),
@@ -122,13 +122,11 @@ fn decl(app: &App) -> Result<String, String> {
     Ok(source::decl(app.min_zoom, &kinds, &OverrideMap::new())?.to_string())
 }
 
-const EARTH: &str = "earth";
-
 async fn earth(app: &App, name: &str) -> Response {
     if Quadrant::of_key(name).is_none() && name != TILE_SPHERE {
         return StatusCode::NOT_FOUND.into_response();
     }
-    match fs::read(app.out.join(EARTH).join(name)).await {
+    match fs::read(app.out.join(BaseLayer::Earth.name()).join(name)).await {
         Ok(bytes) => tile_response(bytes),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }

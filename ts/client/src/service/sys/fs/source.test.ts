@@ -4,7 +4,7 @@ import { test } from "vitest";
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 
-import { BASE_LAYERS } from "@/service/origin/publication.spec.ts";
+import { BASE_LAYERS } from "@/abi/publication.spec.ts";
 import { decl } from "./source.ts";
 
 /** pxl-spec is tested against the same record (bake/source.test.rs

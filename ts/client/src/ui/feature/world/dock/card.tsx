@@ -11,7 +11,7 @@ import { touches } from "@/ui/shared/component/touch.ts";
 import { chrome, shadow } from "@/ui/shared/component/theme.ts";
 import type { DockMode } from "./store.ts";
 import { Pill } from "@/ui/feature/world/pill.tsx";
-import { cardPose, peekBelow } from "@/ui/feature/world/deck.ts";
+import { card_pose, peek_below } from "@/ui/feature/world/deck.ts";
 
 const PEEK_PX = 10;
 
@@ -49,7 +49,7 @@ export function Card({
   children,
 }: CardProps) {
   const depth = pane === mode ? 0 : 1;
-  const pose = cardPose(depth, PEEK_PX);
+  const pose = card_pose(depth, PEEK_PX);
   // The current mode's card always comes forward from behind, whatever chose
   // the mode: a swipe, a key or a marker's draft.
   return (
@@ -60,7 +60,7 @@ export function Card({
         styles.card,
         depth === 0 ? touches.pass : touches.block,
         {
-          zIndex: pose.zIndex,
+          zIndex: pose.z_idx,
         },
       ]}
     >
@@ -76,7 +76,7 @@ export function Card({
         fade={pose.fade}
         fadeTransition={SETTLE}
         touch={depth === 0 ? BAR_TOUCH : undefined}
-        touchBelow={depth === 0 ? peekBelow(MODES, PEEK_PX) : 0}
+        touchBelow={depth === 0 ? peek_below(MODES, PEEK_PX) : 0}
         onContentWidth={onContentWidth}
       >
         {children}

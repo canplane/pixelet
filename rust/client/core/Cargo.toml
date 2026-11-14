@@ -5,13 +5,14 @@ version.workspace = true
 publish.workspace = true
 
 # The core is its own artifact (lib.rs `link!`): the WebAssembly module a
-# page instantiates (cdylib, pxl_core.wasm), and on a device the library the
-# app's runtime links (rlib, pxl-runtime). The page's build asks cargo for
-# the module by name (`cargo rustc --crate-type`,
-# ts/client/script/wasm-build.py).
+# page instantiates (pxl_core.wasm), which the page's build asks cargo for by
+# name (`cargo rustc --crate-type cdylib`, ts/client/script/wasm-build.py),
+# and on a device the library the app's runtime links (pxl-runtime). It
+# declares no cdylib, which cargo would link on its own for a device, where
+# the runtime's half of the link is not in it.
 [lib]
 path = "src/lib.rs"
-crate-type = ["rlib", "cdylib"]
+crate-type = ["rlib"]
 doctest = false
 
 [dependencies]

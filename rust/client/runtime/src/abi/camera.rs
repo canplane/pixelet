@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/camera` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x5a7108;
 
@@ -53,18 +45,18 @@ impl Tracking {
 }
 
 pub fn track(tracking: Tracking) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         TRACK,
         Some((1, &|w_: &mut _rt::Lower| {
-            w_.u8(0, *&tracking as u8);
+            w_.u8(0, tracking as u8);
         })),
     );
     _rt::answer(r)
 }
 
 pub fn north_up() -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(HANDLE, NORTH_UP, None);
+    let (r, _) = _rt::link::call(HANDLE, NORTH_UP, None);
     _rt::answer(r)
 }
 
@@ -75,23 +67,23 @@ pub fn goto(
     azimuth: Option<f64>,
     polar: Option<f64>,
 ) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         GOTO,
         Some((64, &|w_: &mut _rt::Lower| {
-            w_.f64(0, *&lon);
-            w_.f64(8, *&lat);
+            w_.f64(0, lon);
+            w_.f64(8, lat);
             if let Some(v) = &dist {
                 w_.u8(16, 1);
-                w_.f64(16 + 8, *v);
+                w_.f64(24, *v);
             }
             if let Some(v) = &azimuth {
                 w_.u8(32, 1);
-                w_.f64(32 + 8, *v);
+                w_.f64(40, *v);
             }
             if let Some(v) = &polar {
                 w_.u8(48, 1);
-                w_.f64(48 + 8, *v);
+                w_.f64(56, *v);
             }
         })),
     );

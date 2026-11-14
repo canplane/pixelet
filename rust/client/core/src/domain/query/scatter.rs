@@ -73,8 +73,8 @@ impl DecorQuery for DecorWorld<'_> {
         GROUND.leaf_cell_zoom()
     }
 
-    /// The asset of the cell `c` at `zoom` in the base, none where the world
-    /// lacks it.
+    /// The asset of the cell `c` at `zoom` in the base, a coarser clip
+    /// level's where only it holds the cell, and none where no level does.
     fn asset(&mut self, f: &ColumnSurface<At>, zoom: Zoom, c: [i32; 3]) -> Option<u32> {
         World::base().asset_about(&f.line, zoom, c).val()
     }

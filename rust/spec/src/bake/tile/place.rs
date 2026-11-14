@@ -18,7 +18,7 @@ use crate::bake::tile::{occupancy_of, Occupancy, StringTable, Tile};
 use crate::space::coord::q3::Q3;
 use crate::space::coord::zoom::{Zoom, LEAF_ZOOM};
 use crate::space::layer::quadrant::Quadrant;
-use xpute_kit::status::error::MarshalError;
+use xpute_kit::status::error::XputeError;
 use xpute_kit::wire::xtp::shape;
 
 use crate::bake::malformed;
@@ -300,7 +300,7 @@ fn cut_name(name: &str) -> String {
     }
 }
 
-pub fn encode(tile: &PlaceTile) -> Result<Vec<u8>, MarshalError> {
+pub fn encode(tile: &PlaceTile) -> Result<Vec<u8>, XputeError> {
     validate(tile)?;
     let offs: Vec<u16> = tile.offs.iter().flatten().copied().collect();
     let ids: Vec<&str> = tile.iter().map(|h| h.id).collect();
@@ -318,7 +318,7 @@ pub fn encode(tile: &PlaceTile) -> Result<Vec<u8>, MarshalError> {
     )
 }
 
-pub fn decode(pkt: &[u8]) -> Result<PlaceTile, MarshalError> {
+pub fn decode(pkt: &[u8]) -> Result<PlaceTile, XputeError> {
     let (offs, kinds, first_zooms, ids, names, occupancy) = shape::get_deep::<Packet>(pkt)?;
     let occupancy = occupancy_of(occupancy)?;
     let n = kinds.len();
@@ -348,7 +348,7 @@ pub fn decode(pkt: &[u8]) -> Result<PlaceTile, MarshalError> {
 /// What a tile holds: places ascending by where they stand, each in its own
 /// cell; categories Carto draws; each shown from no sooner than its category and no
 /// later than Carto's last zoom; names whole within `NAME_CHARS`.
-fn validate(tile: &PlaceTile) -> Result<(), MarshalError> {
+fn validate(tile: &PlaceTile) -> Result<(), XputeError> {
     let ascending = tile
         .offs
         .windows(2)

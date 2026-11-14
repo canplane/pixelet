@@ -27,8 +27,8 @@ export interface Host {
   stop(sensor: Sensor): void;
 }
 
-/** The object over `imp`. */
-function object(imp: Host): LinkObject {
+/** The object over `implementation`. */
+function object(implementation: Host): LinkObject {
   return {
     call(m, tag, args) {
       try {
@@ -36,13 +36,13 @@ function object(imp: Host): LinkObject {
           case START: {
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
-            imp.start(load_Sensor(r_, 0));
+            implementation.start(load_Sensor(r_, 0));
             return 0;
           }
           case STOP: {
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
-            imp.stop(load_Sensor(r_, 0));
+            implementation.stop(load_Sensor(r_, 0));
             return 0;
           }
           default:
@@ -55,7 +55,10 @@ function object(imp: Host): LinkObject {
   };
 }
 
-/** Serves `imp` under the interface's handle. */
-export function mount(l: Pick<Link, "mount_named">, imp: Host): void {
-  l.mount_named(HANDLE, object(imp));
+/** Serves `implementation` under the interface's handle. */
+export function mount(
+  l: Pick<Link, "mount_named">,
+  implementation: Host,
+): void {
+  l.mount_named(HANDLE, object(implementation));
 }

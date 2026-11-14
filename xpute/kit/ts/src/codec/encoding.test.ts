@@ -17,7 +17,7 @@ import {
   uuid_equals,
   uuid_to_b64url,
 } from "@xpute/kit/codec/encoding.ts";
-import { MarshalError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 
 const bytes = (...b: number[]) => new Uint8Array(b);
 
@@ -43,10 +43,10 @@ test("hex round trips, pads a byte under 0x10, and reads no half a pair", () => 
 
 test("hex refuses what it cannot read whole rather than taking what it can", () => {
   // A decoder built on `parseInt` alone would read "1g" as 1 and "zz" as NaN.
-  assert.throws(() => hex_to_bytes("0"), MarshalError);
-  assert.throws(() => hex_to_bytes("abc"), MarshalError);
-  assert.throws(() => hex_to_bytes("1g"), MarshalError);
-  assert.throws(() => hex_to_bytes("zz"), MarshalError);
+  assert.throws(() => hex_to_bytes("0"), XputeError);
+  assert.throws(() => hex_to_bytes("abc"), XputeError);
+  assert.throws(() => hex_to_bytes("1g"), XputeError);
+  assert.throws(() => hex_to_bytes("zz"), XputeError);
   assert.throws(() => hex_to_bytes("00 11"), Error);
 });
 

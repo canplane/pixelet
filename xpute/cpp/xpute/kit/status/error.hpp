@@ -1,12 +1,11 @@
 // cpp/xpute/kit/status/error.hpp
 
-// An error is its errno, its class and the place in the source where it was
-// made. A broken invariant is fatal and goes through bug.hpp; a fault from
-// outside the program is returned as a `Result`.
+// An error is its errno and the place in the source where it was made, and
+// what happened is the errno's kind. A fault from outside the program is
+// returned as a `Result`; a broken invariant is fatal and goes through bug.hpp.
 
 #pragma once
 
-#include <cstdint>
 #include <optional>
 #include <source_location>
 #include <utility>
@@ -15,27 +14,15 @@
 
 namespace xpute {
 
-enum class ErrorClass : std::uint8_t {
-    invariant,
-    fault,
-    marshal,
-    network,
-};
-
 struct Error {
     Errno errnum;
-    ErrorClass cls;
     std::source_location at;
 
-    constexpr bool is_fault() const noexcept { return cls != ErrorClass::invariant; }
+    constexpr Kind kind() const noexcept { return kind_Errno(errnum); }
 };
 
-constexpr Error make_error(ErrorClass cls, Errno errnum, std::source_location at = std::source_location::current()) noexcept {
-    return Error{errnum, cls, at};
-}
-
-constexpr Error marshal_error(Errno errnum, std::source_location at = std::source_location::current()) noexcept {
-    return Error{errnum, ErrorClass::marshal, at};
+constexpr Error make_error(Errno errnum, std::source_location at = std::source_location::current()) noexcept {
+    return Error{errnum, at};
 }
 
 template <class T> class [[nodiscard]] Result {
@@ -57,7 +44,7 @@ template <class T> class [[nodiscard]] Result {
 
   private:
     std::optional<T> val_;
-    Error err_{Errno::ok, ErrorClass::invariant, {}};
+    Error err_{Errno::ok, {}};
 };
 
 template <> class [[nodiscard]] Result<void> {
@@ -70,7 +57,7 @@ template <> class [[nodiscard]] Result<void> {
     const Error &error() const noexcept { return err_; }
 
   private:
-    Error err_{Errno::ok, ErrorClass::invariant, {}};
+    Error err_{Errno::ok, {}};
     bool failed_ = false;
 };
 

@@ -5,9 +5,9 @@ import assert from "node:assert/strict";
 
 import {
   TILE_SPHERE,
-  tileObject,
+  tile_object,
   type BASE_LAYERS,
-} from "@/service/origin/publication.spec.ts";
+} from "@/abi/publication.spec.ts";
 import { decl } from "./source.ts";
 import { version_of } from "./tile.ts";
 import FIXTURE from "./tile.fixture.json" with { type: "json" };
@@ -19,13 +19,13 @@ test("version_of - each kind's tile at each zoom, a shard's own version or not, 
     const k = kind as (typeof BASE_LAYERS)[number];
     const name = object.split("/")[1]!;
     assert.deepStrictEqual(
-      tileObject(version_of(DECL, k, name), name),
+      tile_object(version_of(DECL, k, name), name),
       object,
       `${kind} ${name}`,
     );
   }
   assert.deepStrictEqual(
-    tileObject(version_of(DECL, "earth", TILE_SPHERE), TILE_SPHERE),
+    tile_object(version_of(DECL, "earth", TILE_SPHERE), TILE_SPHERE),
     FIXTURE.sphere,
   );
 });

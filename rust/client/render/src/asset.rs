@@ -22,7 +22,7 @@ use pxl_spec::space::coord::mat4::{self, Mat4};
 
 use xpute_kit::codec::json::{read_json, JsonValue};
 use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
+use xpute_kit::status::error::XputeError;
 
 /// Every attribute has the position's vertex count, and every index is below it.
 #[derive(Clone, Debug, PartialEq)]
@@ -135,8 +135,8 @@ fn u32_le(b: &[u8], at: usize) -> u32 {
 }
 
 #[track_caller]
-fn malformed() -> MarshalError {
-    MarshalError::new(Errno::EBADMSG)
+fn malformed() -> XputeError {
+    XputeError::new(Errno::EBADMSG)
 }
 
 /// Bounds one accessor slice between pauses.
@@ -149,7 +149,7 @@ pub async fn parse_gltf<P: Future<Output = ()>>(
     bytes: &[u8],
     external_bufs: &[&[u8]],
     pause: impl Fn() -> P,
-) -> Result<Gltf, MarshalError> {
+) -> Result<Gltf, XputeError> {
     let budget = external_bufs
         .iter()
         .fold(bytes.len(), |n, b| n.saturating_add(b.len()))
@@ -218,7 +218,7 @@ fn idx_below(v: f64, len: usize) -> Option<usize> {
 
 /// A field that is an index below `len`. It is None when the field is absent, and malformed
 /// when the field is anything else.
-fn idx_of(v: Option<JsonValue>, len: usize) -> Result<Option<usize>, MarshalError> {
+fn idx_of(v: Option<JsonValue>, len: usize) -> Result<Option<usize>, XputeError> {
     match v {
         None => Ok(None),
         Some(v) => v
@@ -230,12 +230,12 @@ fn idx_of(v: Option<JsonValue>, len: usize) -> Result<Option<usize>, MarshalErro
 }
 
 /// A field that must be an index below `len`.
-fn idx_in(v: Option<JsonValue>, len: usize) -> Result<usize, MarshalError> {
+fn idx_in(v: Option<JsonValue>, len: usize) -> Result<usize, XputeError> {
     idx_of(v, len)?.ok_or_else(malformed)
 }
 
 /// A field that is a count or a byte offset, `default` when the field is absent.
-fn size(v: Option<JsonValue>, default: usize) -> Result<usize, MarshalError> {
+fn size(v: Option<JsonValue>, default: usize) -> Result<usize, XputeError> {
     Ok(idx_of(v, usize::MAX)?.unwrap_or(default))
 }
 
@@ -314,12 +314,12 @@ struct Reader<'a, F> {
 }
 
 impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
-    fn spend(&self, comps: usize) -> Result<(), MarshalError> {
+    fn spend(&self, comps: usize) -> Result<(), XputeError> {
         let left = self
             .budget
             .get()
             .checked_sub(comps)
-            .ok_or_else(|| MarshalError::new(Errno::EFBIG))?;
+            .ok_or_else(|| XputeError::new(Errno::EFBIG))?;
         self.budget.set(left);
         Ok(())
     }
@@ -330,11 +330,11 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         idx: usize,
         kind: &str,
         convert: fn(f64) -> T,
-    ) -> Result<Vec<T>, MarshalError> {
+    ) -> Result<Vec<T>, XputeError> {
         (self.pause)().await;
         let a = *self.accessors.get(idx).ok_or_else(malformed)?;
         if a.sparse {
-            return Err(MarshalError::new(Errno::ENOTSUP));
+            return Err(XputeError::new(Errno::ENOTSUP));
         }
         if a.kind != Some(kind) {
             return Err(malformed());
@@ -424,7 +424,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         Ok(out)
     }
 
-    async fn f32s(&self, idx: usize, kind: &str) -> Result<Vec<f32>, MarshalError> {
+    async fn f32s(&self, idx: usize, kind: &str) -> Result<Vec<f32>, XputeError> {
         self.read(idx, kind, |v| v as f32).await
     }
 
@@ -436,7 +436,7 @@ impl<P: Future<Output = ()>, F: Fn() -> P> Reader<'_, F> {
         kind: &str,
         cnt: usize,
         convert: fn(f64) -> T,
-    ) -> Result<Option<Vec<T>>, MarshalError> {
+    ) -> Result<Option<Vec<T>>, XputeError> {
         let Some(idx) = idx else {
             return Ok(None);
         };
@@ -453,12 +453,12 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     bufs: &[&[u8]],
     pause: &F,
     budget: usize,
-) -> Result<Gltf, MarshalError> {
+) -> Result<Gltf, XputeError> {
     // A top-level lookup reads the document as far as its key, the whole of
     // it for a key that is not there.
     pause().await;
     if arr(json.get("extensionsRequired")).next().is_some() {
-        return Err(MarshalError::new(Errno::ENOTSUP));
+        return Err(XputeError::new(Errno::ENOTSUP));
     }
     pause().await;
     let mut accessors = Vec::new();
@@ -733,7 +733,7 @@ async fn read_document<P: Future<Output = ()>, F: Fn() -> P>(
     }
     let most = [SCENE_VERTICES_CAP, SCENE_IDXS_CAP, SCENE_PRIMITIVES_CAP];
     if drawn.iter().zip(most).any(|(&d, m)| d > m as usize) {
-        return Err(MarshalError::new(Errno::EFBIG));
+        return Err(XputeError::new(Errno::EFBIG));
     }
     Ok(gltf)
 }

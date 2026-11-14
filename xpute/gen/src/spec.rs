@@ -632,6 +632,7 @@ pub fn ts_ident(k: &str) -> String {
 
 /// An enum's member: its identifier in the language written, its name as its source spells it,
 /// its number, and its doc.
+#[derive(Clone)]
 pub struct Member {
     pub ident: String,
     pub name: String,
@@ -778,6 +779,49 @@ pub fn package<'p>(root: &Path, path: &'p str) -> Result<(String, &'p Path), Str
         return Ok((name, dir));
     }
     Err(format!("{path}: under no package"))
+}
+
+/// The path from the directory `from` to `to`.
+pub fn relative(from: &Path, to: &Path) -> String {
+    let (f, t): (Vec<_>, Vec<_>) = (from.components().collect(), to.components().collect());
+    let common = f.iter().zip(&t).take_while(|(a, b)| a == b).count();
+    let up = std::iter::repeat_n("..".to_string(), f.len() - common);
+    let down = t[common..].iter().map(|c| c.as_os_str().to_string_lossy().into_owned());
+    let path: Vec<String> = up.chain(down).collect();
+    if path.is_empty() { ".".into() } else { path.join("/") }
+}
+
+/// How a Rust module in the crate at `here` names the crate of `path` from
+/// `root`: by its name, or `crate` for its own.
+pub fn rs_crate(here: &Path, root: &Path, path: &str) -> Result<String, String> {
+    let (name, dir) = package(root, path)?;
+    Ok(if root.join(dir) == here { "crate".into() } else { snake(&name) })
+}
+
+/// How a Rust module in the crate at `here` names the module `path` from
+/// `root`: its crate, then its path under `src/`, a generated file's
+/// `.spec` dropped as its mount drops it.
+pub fn rs_module(here: &Path, root: &Path, path: &str) -> Result<String, String> {
+    let (_, dir) = package(root, path)?;
+    let under = Path::new(path).strip_prefix(dir.join("src")).map_err(|_| format!("{path}: not under src/"))?;
+    let under = under.to_string_lossy();
+    let mods = under.trim_end_matches(".rs").trim_end_matches(".spec").split('/').map(String::from);
+    Ok(std::iter::once(rs_crate(here, root, path)?).chain(mods).collect::<Vec<_>>().join("::"))
+}
+
+/// How a TypeScript module in the directory `here` names the path `path`
+/// from `root`: relative to it in its own package, from `.` or `..` as an
+/// import writes it, or by the package's name.
+pub fn ts_module(here: &Path, root: &Path, path: &str) -> Result<String, String> {
+    let (_, dir) = package(root, path)?;
+    if here.starts_with(root.join(dir)) {
+        let path = relative(here, &root.join(path));
+        return Ok(match path.split('/').next() {
+            Some("." | "..") => path,
+            _ => format!("./{path}"),
+        });
+    }
+    package_path(root, path)
 }
 
 /// `package_path` names a generated file, `path` from `root`, as its package

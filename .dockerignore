@@ -9,6 +9,7 @@
 !xpute/Cargo.toml
 !xpute/kit/rust
 !xpute/link/rust
+!xpute/link/gen
 !xpute/guest/rust
 !xpute/native/runtime/rust
 !xpute/native/host

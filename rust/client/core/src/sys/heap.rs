@@ -87,19 +87,23 @@ fn given() -> (usize, usize) {
     (page_up(data_end), core::arch::wasm32::memory_size(0) << 16)
 }
 
-/// A native core's region: the manifest's `mem.bytes`, reserved from the system zeroed, as
-/// a module's memory starts, and set as the core's memory. `.fixed` begins at
-/// its base, as nothing else lies in it.
+/// A native core's region: the manifest's `mem.bytes`, reserved from the
+/// system zeroed, as a module's memory starts, and set as the core's memory.
+/// `.fixed` begins at its base, as nothing else lies in it. It is first asked
+/// for inside the global allocator, which may not unwind, so a reservation the
+/// system refuses stops the process.
 #[cfg(not(target_arch = "wasm32"))]
 fn given() -> (usize, usize) {
     use std::alloc::{GlobalAlloc, Layout, System};
-    use xpute_link::mem::{self, Region};
-    let len = crate::spec::manifest::mem::BYTES;
+    use xpute_link::mem::{set, Region};
+    let len = mem::BYTES;
     let layout = Layout::from_size_align(len as usize, PAGE_BYTES as usize).ok();
     // SAFETY: a layout of nonzero size.
     let base = layout.map_or(core::ptr::null_mut(), |l| unsafe { System.alloc_zeroed(l) });
-    xpute_kit::ensure!(!base.is_null(), ENOMEM, len);
-    mem::set(Region { base, len });
+    if base.is_null() {
+        std::process::abort();
+    }
+    set(Region { base, len });
     let at = base.expose_provenance();
     (at, at + len as usize)
 }
@@ -139,13 +143,48 @@ static HEAP: SlabMalloc<Span> = SlabMalloc::new();
 
 /// The heap as a native process's global allocator: the slab is one
 /// thread's, and a process's threads all allocate, so each takes it under
-/// the lock. The region is reserved before the lock is taken, so a failure
-/// to reserve it does not deadlock the panic that reports it.
+/// the lock, the first reserving the region there. The lock is one word,
+/// spun on and then yielded on, since a lock that allocates, as std's does on
+/// some systems, would enter the allocator again.
 #[cfg(not(target_arch = "wasm32"))]
 struct Locked;
 
+/// Whether a thread holds the native heap.
 #[cfg(not(target_arch = "wasm32"))]
-static LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+static LOCK: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::new(false);
+
+/// How many times a thread spins on the native heap's lock before it gives
+/// its time back to the scheduler on each try instead.
+#[cfg(not(target_arch = "wasm32"))]
+const SPINS: u32 = 100;
+
+/// The native heap held, until it drops.
+#[cfg(not(target_arch = "wasm32"))]
+struct Guard;
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Guard {
+    fn take() -> Guard {
+        use core::sync::atomic::Ordering::Acquire;
+        let mut spins = 0;
+        while LOCK.compare_exchange_weak(false, true, Acquire, Relaxed).is_err() {
+            if spins < SPINS {
+                spins += 1;
+                core::hint::spin_loop();
+            } else {
+                std::thread::yield_now();
+            }
+        }
+        Guard
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl Drop for Guard {
+    fn drop(&mut self) {
+        LOCK.store(false, core::sync::atomic::Ordering::Release);
+    }
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 #[global_allocator]
@@ -155,14 +194,14 @@ static NATIVE: Locked = Locked;
 #[cfg(not(target_arch = "wasm32"))]
 unsafe impl core::alloc::GlobalAlloc for Locked {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
+        let _guard = Guard::take();
         region();
-        let _held = LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // SAFETY: the caller's.
         unsafe { HEAP.alloc(layout) }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: core::alloc::Layout) {
-        let _held = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let _guard = Guard::take();
         // SAFETY: the caller's.
         unsafe { HEAP.dealloc(ptr, layout) }
     }

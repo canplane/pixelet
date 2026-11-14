@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/input` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x5ee0f8;
 
@@ -120,6 +112,10 @@ pub trait Guest {
     fn wheel(&self, delta_y: f64) -> Result<(), _rt::Errno>;
     fn pinch(&self, scale: f64) -> Result<(), _rt::Errno>;
     fn r#move(&self, x: i32, y: i32) -> Result<(), _rt::Errno>;
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the WIT function's parameters, each its own"
+    )]
     fn xr_pose(
         &self,
         x: f64,
@@ -136,7 +132,7 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
         let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 POINTER => {
@@ -152,7 +148,7 @@ impl _rt::Object for _Object {
                     let x = r_.f64(16)?;
                     let y = r_.f64(24)?;
                     match self.0.pointer(phase, pointer_type, id, button, x, y) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -160,7 +156,7 @@ impl _rt::Object for _Object {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
                     let typing = r_.bool(0)?;
                     match self.0.typing(typing) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -168,7 +164,7 @@ impl _rt::Object for _Object {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
                     let delta_y = r_.f64(0)?;
                     match self.0.wheel(delta_y) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -176,7 +172,7 @@ impl _rt::Object for _Object {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
                     let scale = r_.f64(0)?;
                     match self.0.pinch(scale) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -185,7 +181,7 @@ impl _rt::Object for _Object {
                     let x = r_.i32(0)?;
                     let y = r_.i32(4)?;
                     match self.0.r#move(x, y) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -199,12 +195,12 @@ impl _rt::Object for _Object {
                     let qz = r_.f64(40)?;
                     let qw = r_.f64(48)?;
                     match self.0.xr_pose(x, y, z, qx, qy, qz, qw) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
                 XR_POSE_END => match self.0.xr_pose_end() {
-                    Ok(v) => _rt::Reply::from(0),
+                    Ok(()) => _rt::Reply::from(0),
                     Err(e) => _rt::Reply::from(e as i32),
                 },
                 _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
@@ -214,9 +210,9 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `imp` under the interface's handle.
-pub fn mount(imp: _rt::Rc<dyn Guest>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+/// Serves `implementation` under the interface's handle.
+pub fn mount(implementation: _rt::Rc<dyn Guest>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 mod _rt {

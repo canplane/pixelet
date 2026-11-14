@@ -15,12 +15,12 @@ constexpr std::uint64_t word_up(std::uint64_t n) noexcept {
 } // namespace
 
 PacketWriter::PacketWriter(std::span<std::uint8_t> buf) noexcept : buf_(buf.first(std::min<std::size_t>(buf.size(), MAX_PKT_SZ))) {
-    if (buf_.size() < HDR_SZ) err_ = marshal_error(Errno::einval);
+    if (buf_.size() < HDR_SZ) err_ = make_error(Errno::einval);
     else std::memset(buf_.data(), 0, HDR_SZ);
 }
 
 std::optional<std::uint32_t> PacketWriter::spoil(Errno errnum) noexcept {
-    if (!err_) err_ = marshal_error(errnum);
+    if (!err_) err_ = make_error(errnum);
     return std::nullopt;
 }
 
@@ -141,8 +141,8 @@ std::optional<std::uint32_t> PacketWriter::branch_close(std::optional<std::uint3
 PacketWriter &PacketWriter::graft(std::span<const std::uint8_t> pkt) noexcept {
     std::optional<std::uint32_t> at;
     NodeType type = type_of(SpecialType::nil);
-    Result<std::uint32_t> magic = pkt.size() < HDR_SZ ? marshal_error(Errno::ebadmsg) : get_len(pkt, 0);
-    Result<Desc> d = magic && *magic == MAGIC ? get_desc(pkt, WORD_SZ) : marshal_error(Errno::ebadmsg);
+    Result<std::uint32_t> magic = pkt.size() < HDR_SZ ? make_error(Errno::ebadmsg) : get_len(pkt, 0);
+    Result<Desc> d = magic && *magic == MAGIC ? get_desc(pkt, WORD_SZ) : make_error(Errno::ebadmsg);
     if (!d) {
         spoil(Errno::ebadmsg);
     } else {
@@ -166,7 +166,7 @@ Result<std::uint32_t> PacketWriter::finish() noexcept {
     ensure(table_.root && table_.written == table_.cnt, Errno::enotrecoverable, table_.cnt, table_.written);
     if (err_) return *err_;
     std::uint64_t end = word_up(lim_);
-    if (end > buf_.size()) return marshal_error(Errno::eoverflow);
+    if (end > buf_.size()) return make_error(Errno::eoverflow);
     std::memset(buf_.data() + lim_, 0, end - lim_);
     set_word(buf_, 0, MAGIC, RESERVED);
     set_word(buf_, WORD_SZ, lim_ - HDR_SZ, root_type_);

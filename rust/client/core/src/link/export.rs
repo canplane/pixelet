@@ -19,7 +19,7 @@ use std::rc::Rc;
 
 use crate::abi;
 use crate::sys::sched::invalidate;
-use xpute_guest::abi::life::life;
+use xpute_guest::abi::life;
 use xpute_kit::status::errno::Errno;
 
 /// Refuses what the decoder cannot check: a value outside the range the core

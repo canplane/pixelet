@@ -19,12 +19,12 @@ import {
   POINTER_PHASE_UP,
   POINTER_TYPE_MOUSE,
 } from "@/abi/input.enum.ts";
-import { putKeyboardAway } from "@/ui/shared/component/keyboard.tsx";
+import { put_keyboard_away } from "@/ui/shared/component/keyboard.tsx";
 import {
   DockMode,
-  dockMode,
-  setDockMode,
-  watchDockMode,
+  dock_mode,
+  set_dock_mode,
+  watch_dock_mode,
 } from "@/ui/feature/world/dock/store.ts";
 import * as input from "@/service/core/input.ts";
 
@@ -32,28 +32,28 @@ import * as input from "@/service/core/input.ts";
  * hover. */
 const pressed = new Map<i32, PointerType>();
 
-watchDockMode((mode) => {
+watch_dock_mode((mode) => {
   input.typing(mode === DockMode.Message);
   if (mode === DockMode.Message)
     input.pointer(POINTER_PHASE_OUT, POINTER_TYPE_MOUSE, 0, 0, 0, 0);
 });
 
-export function worldPointer(
+export function world_pointer(
   phase: PointerPhase,
-  pointerType: PointerType,
+  pointer_type: PointerType,
   id: i32,
   button: i32,
   x: f64,
   y: f64,
 ): void {
-  const typing = dockMode() === DockMode.Message;
+  const typing = dock_mode() === DockMode.Message;
   switch (phase) {
     case POINTER_PHASE_DOWN:
       // Sent while the core still types, so it spends the press (INPUT_TYPING).
-      pressed.set(id, pointerType);
-      putKeyboardAway();
-      input.pointer(phase, pointerType, id, button, x, y);
-      if (typing) setDockMode(DockMode.Palette);
+      pressed.set(id, pointer_type);
+      put_keyboard_away();
+      input.pointer(phase, pointer_type, id, button, x, y);
+      if (typing) set_dock_mode(DockMode.Palette);
       return;
     case POINTER_PHASE_MOVE:
       if (typing && !pressed.has(id)) return;
@@ -63,14 +63,14 @@ export function worldPointer(
       pressed.delete(id);
       break;
   }
-  input.pointer(phase, pointerType, id, button, x, y);
+  input.pointer(phase, pointer_type, id, button, x, y);
 }
 
 /** Ends every pressed pointer with a cancel. The caller calls it when the page
  * loses its pointers, on a blur, when it is hidden or when the surface goes,
  * because their lifts will not come. */
-export function releasePointers(): void {
-  for (const [id, pointerType] of pressed) {
-    worldPointer(POINTER_PHASE_CANCEL, pointerType, id, 0, 0, 0);
+export function release_pointers(): void {
+  for (const [id, pointer_type] of pressed) {
+    world_pointer(POINTER_PHASE_CANCEL, pointer_type, id, 0, 0, 0);
   }
 }

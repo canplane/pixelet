@@ -17,9 +17,9 @@ export const LABEL: {
   placeholder: string;
 } = {
   primary: color.black,
-  secondary: alpha(color.labelGray, SECONDARY),
-  tertiary: alpha(color.labelGray, 0.3),
-  placeholder: alpha(color.labelGray, 0.3),
+  secondary: alpha(color.label_gray, SECONDARY),
+  tertiary: alpha(color.label_gray, 0.3),
+  placeholder: alpha(color.label_gray, 0.3),
 };
 
 export const NORTH: string = SYSTEM.red;

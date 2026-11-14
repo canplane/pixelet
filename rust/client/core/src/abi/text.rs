@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/text` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x61d944;
 
@@ -29,8 +21,8 @@ pub fn width<T0: Copy + Unpin + 'static>(
         HANDLE,
         WIDTH,
         Some((24, &|w_: &mut _rt::Lower| {
-            w_.u32(0, *&weight);
-            w_.f64(8, *&px);
+            w_.u32(0, weight);
+            w_.f64(8, px);
             _rt::Lent {
                 at: text_at_,
                 len: text_len_,
@@ -39,11 +31,15 @@ pub fn width<T0: Copy + Unpin + 'static>(
         })),
     );
     _rt::answer(r).and_then(|_| {
-        let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
+        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
         r_.f64(0)
     })
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the WIT function's parameters, each its own"
+)]
 pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
     weight: u32,
     px: f64,
@@ -62,17 +58,17 @@ pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
         HANDLE,
         RASTER,
         Some((56, &|w_: &mut _rt::Lower| {
-            w_.u32(0, *&weight);
-            w_.f64(8, *&px);
-            w_.u32(16, *&color);
+            w_.u32(0, weight);
+            w_.f64(8, px);
+            w_.u32(16, color);
             _rt::Lent {
                 at: image_at_,
                 len: image_len_,
             }
             .store(w_, 20);
-            w_.u32(28, *&width);
-            w_.u32(32, *&height);
-            w_.f64(40, *&x);
+            w_.u32(28, width);
+            w_.u32(32, height);
+            w_.f64(40, x);
             _rt::Lent {
                 at: text_at_,
                 len: text_len_,
@@ -81,7 +77,7 @@ pub fn raster<T0: Copy + Unpin + 'static, T1: Copy + Unpin + 'static>(
         })),
     );
     _rt::answer(r).and_then(|_| {
-        let r_ = _rt::Lift::new(data.as_deref().ok_or(_rt::Errno::EBADMSG)?);
+        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
         r_.u32(0)
     })
 }

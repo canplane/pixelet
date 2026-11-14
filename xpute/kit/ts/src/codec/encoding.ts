@@ -10,7 +10,7 @@
 
 import type { ByteArray } from "@xpute/kit/abi/array.ts";
 import { ERRNO_EINVAL } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 
 // ============ UTF-8 ============
 
@@ -121,7 +121,7 @@ export function generate_uuid(): Uuid {
  */
 export function uuid_to_b64url(uuid: Uuid): Base64Url {
   if (uuid.length !== 16) {
-    throw new MarshalError(ERRNO_EINVAL);
+    throw new XputeError(ERRNO_EINVAL);
   }
   return bytes_to_b64url(uuid);
 }
@@ -132,7 +132,7 @@ export function uuid_to_b64url(uuid: Uuid): Base64Url {
 export function b64url_to_uuid(b64url: Base64Url): Uuid {
   const bytes: Uuid = b64url_to_bytes(b64url);
   if (bytes.length !== 16) {
-    throw new MarshalError(ERRNO_EINVAL);
+    throw new XputeError(ERRNO_EINVAL);
   }
   return bytes;
 }
@@ -164,7 +164,7 @@ export function bytes_to_hex(bytes: ByteArray): string {
  */
 export function hex_to_bytes(hex: string): ByteArray {
   if (hex.length % 2 !== 0) {
-    throw new MarshalError(ERRNO_EINVAL);
+    throw new XputeError(ERRNO_EINVAL);
   }
 
   const bytes = new Uint8Array(hex.length / 2);
@@ -172,7 +172,7 @@ export function hex_to_bytes(hex: string): ByteArray {
     // `parseInt` reads what it can and stops, so it would take "1g" as 1 and
     // store "zz", its NaN, as 0; each pair is checked first.
     const pair = hex.slice(i, i + 2);
-    if (!/^[0-9a-fA-F]{2}$/.test(pair)) throw new MarshalError(ERRNO_EINVAL);
+    if (!/^[0-9a-fA-F]{2}$/.test(pair)) throw new XputeError(ERRNO_EINVAL);
     bytes[i / 2] = parseInt(pair, 16);
   }
   return bytes;

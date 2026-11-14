@@ -24,10 +24,10 @@ export interface Host {
   next(signal_: AbortSignal): Promise<void>;
 }
 
-/** The object over `imp`. */
+/** The object over `implementation`. */
 function object(
   l: Pick<Link, "task_return" | "on_cancel">,
-  imp: Host,
+  implementation: Host,
 ): LinkObject {
   return {
     call(m, tag, args) {
@@ -35,7 +35,7 @@ function object(
         switch (m) {
           case NEXT: {
             const stop = new AbortController();
-            imp.next(stop.signal).then(
+            implementation.next(stop.signal).then(
               () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
@@ -52,10 +52,10 @@ function object(
   };
 }
 
-/** Serves `imp` under the interface's handle. */
+/** Serves `implementation` under the interface's handle. */
 export function mount(
   l: Pick<Link, "mount_named" | "task_return" | "on_cancel">,
-  imp: Host,
+  implementation: Host,
 ): void {
-  l.mount_named(HANDLE, object(l, imp));
+  l.mount_named(HANDLE, object(l, implementation));
 }

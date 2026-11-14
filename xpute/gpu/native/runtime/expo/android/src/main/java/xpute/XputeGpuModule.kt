@@ -6,24 +6,41 @@
 
 package xpute
 
+import android.os.Handler
+import android.os.Looper
+import android.view.Choreographer
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 class XputeGpuModule : Module() {
+  private val main = Handler(Looper.getMainLooper())
+
+  /** This tells the GPU's host of each display frame (`Gpu.vsync`), from the
+   * main thread's Choreographer. */
+  private val vsync = object : Choreographer.FrameCallback {
+    override fun doFrame(frameTimeNanos: Long) {
+      Gpu.vsync()
+      Choreographer.getInstance().postFrameCallback(this)
+    }
+  }
+
   override fun definition() = ModuleDefinition {
     Name("XputeGpu")
 
-    /** Fires once each time the open device is lost and let go. It is sent
-     * from the thread that found the loss, and Expo carries the event to the
-     * JavaScript thread. */
+    /** Fires once each time a device is lost and let go. It is sent from the
+     * GPU's thread, and Expo carries the event to the JavaScript thread. */
     Events("onLost")
 
-    OnCreate { Gpu.lost = { sendEvent("onLost") } }
+    OnCreate {
+      Gpu.lost = { sendEvent("onLost") }
+      Gpu.init()
+      main.post { Choreographer.getInstance().postFrameCallback(vsync) }
+    }
 
-    OnDestroy { Gpu.lost = null }
-
-    // The device keeps its compiled pipelines among the app's caches.
-    Function("open") { Gpu.open(appContext.cacheDirectory.path) }
+    OnDestroy {
+      main.post { Choreographer.getInstance().removeFrameCallback(vsync) }
+      Gpu.lost = null
+    }
 
     View(SurfaceView::class) {
       Events("onAttach", "onDetach")

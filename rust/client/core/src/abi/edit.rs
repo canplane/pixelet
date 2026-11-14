@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/edit` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x453522;
 
@@ -64,7 +56,7 @@ pub trait Guest {
 struct _Object(_rt::Rc<dyn Guest>);
 
 impl _rt::Object for _Object {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
         let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 HOLD => {
@@ -75,7 +67,7 @@ impl _rt::Object for _Object {
                     let val = r_.u32(4)?;
                     let scale_step = r_.i32(8)?;
                     match self.0.hold(tool, val, scale_step) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -88,10 +80,10 @@ impl _rt::Object for _Object {
                             data: Some((
                                 2,
                                 Box::new(move |w: &mut _rt::Lower| match &v {
-                                    Ok(v) => {}
+                                    Ok(_) => {}
                                     Err(v) => {
                                         w.u8(0, 1);
-                                        w.u8(0 + 1, *v as u8);
+                                        w.u8(1, *v as u8);
                                     }
                                 }),
                             )),
@@ -100,11 +92,11 @@ impl _rt::Object for _Object {
                     }
                 }
                 MARKER_CANCEL => match self.0.marker_cancel() {
-                    Ok(v) => _rt::Reply::from(0),
+                    Ok(()) => _rt::Reply::from(0),
                     Err(e) => _rt::Reply::from(e as i32),
                 },
                 MARKER_COMMIT => match self.0.marker_commit() {
-                    Ok(v) => _rt::Reply::from(0),
+                    Ok(()) => _rt::Reply::from(0),
                     Err(e) => _rt::Reply::from(e as i32),
                 },
                 _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
@@ -114,9 +106,9 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `imp` under the interface's handle.
-pub fn mount(imp: _rt::Rc<dyn Guest>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+/// Serves `implementation` under the interface's handle.
+pub fn mount(implementation: _rt::Rc<dyn Guest>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 mod _rt {

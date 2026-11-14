@@ -8,24 +8,35 @@
 //! module or a field snake), save an enum whose names are copied from outside,
 //! marked `"$outside": true`, whose Rust members keep their spelling. A table
 //! may be laid out in words (`laid_out`), with its widths read from the specs
-//! it uses. A list of names whose `$type` is `enum` is an enum, in Rust and in
-//! C++ an enum class, numbered by place; a table whose `$type` is `enum` is one
-//! too, numbered by its members, each a number or a table that carries its
-//! `$number`. An enum is named as its key is, singular; one whose names a
-//! reader takes, marked `"$names": true`, has them written in TypeScript and
-//! C++ as a list under the key's plural (`STEP_NAMES` beside `STEP_NAME`), as
-//! Rust's enum holds them in `name`. Every enum is held in its `$repr` (`u8`
-//! where it gives none); in Rust and C++ it has `of`, a number to its member,
-//! in Rust its members' names, and in TypeScript each member is a constant of
-//! its own (`ts_enum`), so no name reaches a bundle. A list of tables of the
-//! same fields is a list of records: an array of objects in TypeScript, and in
-//! Rust an array of a struct (`rs_recs`), its row named by the list's `$row`
-//! where its key is a plural (`"$row": "asset_file"`, `AssetFile`), whose
-//! `name`s are the enum where the list's `$type` is `enum`, numbered by their
-//! places or, where every record carries one, each by its `$number`; there the
-//! TypeScript rows carry each one's `number` and no `name`, and the records of
-//! an enum's table carry their `number` beside their key (`numbered`). A table
-//! a tool builds in memory is written as a read one is (`table_outputs`).
+//! it uses; a `$type` may name an enum a spec it uses declares, which Rust and
+//! TypeScript reach where that spec's own output is (`Foreign`), and C++
+//! refuses. A table with `"$keys": "<Enum>"` holds a value for each of the
+//! enum's members and is written as a list by the member's number (`keyed`); a
+//! table with `"$each": "<Enum>"` is one table for each member, named as the
+//! member is (`expanded`). Under a table with `"$distinct": "<field>"`, no two
+//! sibling tables hold the same `<field>` (`check_distinct`). A list of names
+//! whose `$type` is `enum` is an enum, in Rust and in C++ an enum class,
+//! numbered by place; a table whose `$type` is `enum` is one too, numbered by
+//! its members, each a number or a table that carries its `$number`. An enum is
+//! named as its key is, singular; one whose names a reader takes, marked
+//! `"$names": true`, has them written in TypeScript and C++ as a list under the
+//! key's plural (`STEP_NAMES` beside `STEP_NAME`), as Rust's enum holds them in
+//! `name`. Every enum is held in its `$repr` (`u8` where it gives none); in
+//! Rust and C++ it has `of`, a number to its member, in Rust its members'
+//! names, and in TypeScript each member is a constant of its own (`ts_enum`),
+//! so no name reaches a bundle. A list of tables of the same fields is a list
+//! of records: an array of objects in TypeScript, and in Rust an array of a
+//! struct (`rs_recs`), its row named by the list's `$row` where its key is a
+//! plural (`"$row": "asset_file"`, `AssetFile`), whose `name`s are the enum
+//! where the list's `$type` is `enum`, numbered by their places or, where every
+//! record carries one, each by its `$number`; there the TypeScript rows carry
+//! each one's `number` and no `name`, and the records of an enum's table carry
+//! their `number` beside their key (`numbered`). An enum table's records carry
+//! the same fields, and one whose `$type` names another enum of the spec maps
+//! each member to that enum's, written as a function of the member in every
+//! language (`mapped`: `Errno::kind` in Rust, `kind_Errno` in TypeScript and
+//! C++). A table a tool builds in memory is written as a read one is
+//! (`table_outputs`).
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -33,8 +44,8 @@ use std::path::Path;
 
 use super::{
     align_star, cpp_enum, cpp_member, file, is_ts_ident, js_num, json_str, line_comments, mark,
-    package_path, pascal, plural, read, rs_const, rs_doc, rs_enum, rs_field, rs_ident, rs_member, ts_doc,
-    ts_enum, Includes, Member, Node, Output,
+    package, package_path, pascal, plural, read, rs_const, rs_doc, rs_enum, rs_field, rs_ident, rs_member, rs_module, screaming, snake,
+    ts_const, ts_doc, ts_enum, ts_module, Includes, Member, Node, Output,
 };
 
 pub struct DataSpec {
@@ -217,6 +228,9 @@ struct Scope {
     /// The enums the spec declares, which a `$type` names by their name alone,
     /// each with how its members are named (`casing`).
     enums: Vec<(String, Casing)>,
+    /// The enums the specs it uses declare, which a `$type` names by their
+    /// name alone too, each by its path.
+    foreign: Vec<(String, Casing, String)>,
 }
 
 impl Scope {
@@ -234,15 +248,6 @@ fn is_primitive(ty: &str) -> bool {
         "u8" | "u16" | "u32" | "u64" | "usize" | "i8" | "i16" | "i32" | "i64" | "f32" | "f64"
             | "str"
     )
-}
-
-/// The enums `spec` declares, each by its name, with how its members are
-/// named.
-fn enums(spec: &Node) -> Vec<(String, Casing)> {
-    spec.named()
-        .filter(|(_, n)| n.str_at("$type") == Some("enum"))
-        .map(|(k, n)| (pascal(k), casing(n)))
-        .collect()
 }
 
 /// A member's name in the language written, made from its name in the spec.
@@ -293,10 +298,10 @@ fn is_names(n: &Node) -> bool {
     n.val().arr().is_some_and(|a| a.iter().all(|e| e.str().is_some()))
 }
 
-/// Refuses a `$type` that names no primitive, no enum the spec declares and
-/// no enum by its path (`module::Enum`), and `enum` on anything but a list or
+/// Refuses a `$type` that names no primitive, no enum the spec or a spec it
+/// uses declares and no enum by its path (`module::Enum`), and `enum` on anything but a list or
 /// a table.
-fn check_types(spec: &Node) -> Result<(), String> {
+fn check_types(spec: &Node, declared: &[(String, Node)]) -> Result<(), String> {
     fn walk(n: &Node, at: &str, enums: &[String]) -> Result<(), String> {
         if n.get("$repr").is_some() {
             if n.str_at("$type") != Some("enum") {
@@ -312,6 +317,11 @@ fn check_types(spec: &Node) -> Result<(), String> {
         if let Some(o) = n.get("$names") {
             if n.str_at("$type") != Some("enum") || !is_names(n) || *o != Node::Bool(true) {
                 return Err(format!("{at}: `$names` is true, beside `$type` enum on a list of names"));
+            }
+        }
+        if let Some(f) = n.get("$distinct") {
+            if f.str().is_none() || !n.is_obj() || n.is_wrapper() {
+                return Err(format!("{at}: `$distinct` names a field, on a table"));
             }
         }
         if let Some(o) = n.get("$outside") {
@@ -363,7 +373,7 @@ fn check_types(spec: &Node) -> Result<(), String> {
         }
         Ok(())
     }
-    let enums: Vec<String> = enums(spec).into_iter().map(|(e, _)| e).collect();
+    let enums: Vec<String> = declared_enums(declared).map(|(k, _)| pascal(k)).collect();
     spec.named().try_for_each(|(k, v)| walk(v, k, &enums))
 }
 
@@ -372,6 +382,9 @@ fn check_types(spec: &Node) -> Result<(), String> {
 fn enum_path(ty: &str, scope: &Scope) -> Option<(String, Casing)> {
     if let Some((e, v)) = scope.enums.iter().find(|(e, _)| e == ty) {
         return Some((e.clone(), *v));
+    }
+    if let Some((_, v, path)) = scope.foreign.iter().find(|(e, ..)| e == ty) {
+        return Some((scope.name_of(path), *v));
     }
     (!is_primitive(ty) && ty.contains("::")).then(|| (scope.name_of(ty), rs_member as Casing))
 }
@@ -528,6 +541,10 @@ fn rs_items(
             let variants = numbers(name, &keys, &range, casing(n))?;
             lines.extend(rs_enum(&pascal(name), &variants, repr, indent));
             lines.push(String::new());
+            if let Some(map) = n.get("$map") {
+                lines.extend(rs_map(&pascal(name), &variants, map, indent, scope)?);
+                lines.push(String::new());
+            }
         }
         let mut body: Vec<String> = Vec::new();
         let inner = format!("{indent}    ");
@@ -731,6 +748,206 @@ fn rs_leaf(
     Ok(())
 }
 
+/// A field of an enum table's records whose `$type` names an enum the spec
+/// declares maps each member to one of that enum's members: every member is a
+/// record that names one, of that enum. The field leaves the records, and the table
+/// holds it under `$map`, the field with its enum and the members it names in
+/// the table's order, which each language writes as a function of the member
+/// (`rs_map`, `ts_map`, `cpp_map`).
+fn mapped(spec: Node) -> Result<Node, String> {
+    let Node::Obj(entries) = spec else {
+        return Ok(spec);
+    };
+    let enums: Vec<(String, Node)> = entries
+        .iter()
+        .filter(|(_, n)| n.str_at("$type") == Some("enum"))
+        .map(|(k, n)| (pascal(k), n.clone()))
+        .collect();
+    entries
+        .into_iter()
+        .map(|(k, n)| {
+            let n = map_table(&k, n, &enums)?;
+            Ok((k, n))
+        })
+        .collect::<Result<Vec<_>, String>>()
+        .map(Node::Obj)
+}
+
+fn map_table(name: &str, n: Node, enums: &[(String, Node)]) -> Result<Node, String> {
+    if n.str_at("$type") != Some("enum") || !n.is_obj() || n.is_wrapper() {
+        return Ok(n);
+    }
+    // The fields any record types by an enum of the spec, each with that enum.
+    let mut typed: Vec<(&str, &(String, Node))> = Vec::new();
+    for (f, v) in n
+        .named()
+        .flat_map(|(_, v)| v.named().map(move |(f, _)| (f, v)))
+    {
+        let Some(e) = enums
+            .iter()
+            .find(|(e, _)| Some(e.as_str()) == field_type(v, f))
+        else {
+            continue;
+        };
+        if typed.iter().all(|(t, _)| *t != f) {
+            typed.push((f, e));
+        }
+    }
+    let mut map = Vec::new();
+    for (f, (e, target)) in typed {
+        let members = enum_members(e, target)?;
+        let names = n
+            .named()
+            .map(|(k, v)| {
+                let s = v.get(f).and_then(|x| x.val().str()).unwrap_or_default();
+                if field_type(v, f) != Some(e.as_str()) || !members.iter().any(|m| m.name == s) {
+                    return Err(format!("{name}.{k}.{f} names no member of {e}"));
+                }
+                Ok(Node::Str(s.to_string()))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        map.push((
+            f.to_string(),
+            Node::Obj(vec![
+                ("$type".into(), Node::Str(e.clone())),
+                ("$val".into(), Node::Arr(names)),
+            ]),
+        ));
+    }
+    if map.is_empty() {
+        return Ok(n);
+    }
+    let Node::Obj(entries) = n else {
+        return Ok(n);
+    };
+    let mut out: Vec<(String, Node)> = entries
+        .into_iter()
+        .map(|(k, v)| match v {
+            Node::Obj(fs) if !k.starts_with('$') => (
+                k,
+                Node::Obj(
+                    fs.into_iter()
+                        .filter(|(f, _)| !map.iter().any(|(m, _)| m == f))
+                        .collect(),
+                ),
+            ),
+            v => (k, v),
+        })
+        .collect();
+    out.push(("$map".into(), Node::Obj(map)));
+    Ok(Node::Obj(out))
+}
+
+/// The `$type` the record `v`'s field `f` gives itself, where it wraps its
+/// value.
+fn field_type<'a>(v: &'a Node, f: &str) -> Option<&'a str> {
+    v.get(f)
+        .filter(|x| x.is_wrapper())
+        .and_then(|x| x.str_at("$type"))
+}
+
+/// The name TypeScript and C++ give the function of the enum `e` that a
+/// `$map` field `f` is, as Rust's method `f` (`kind_Errno`).
+fn map_ident(f: &str, e: &str) -> String {
+    format!("{}_{}", snake(f), pascal(e))
+}
+
+/// The enum `e`'s `$map` in Rust: each field a `const fn` of the member.
+fn rs_map(
+    e: &str,
+    members: &[Member],
+    map: &Node,
+    indent: &str,
+    scope: &Scope,
+) -> Result<Vec<String>, String> {
+    let mut out = vec![format!("{indent}impl {e} {{")];
+    for (i, (f, m)) in map.named().enumerate() {
+        let ty = type_of(m, "");
+        let (to, casing) = enum_path(ty, scope).ok_or(format!("{e}.{f}: {ty} is no enum"))?;
+        if i != 0 {
+            out.push(String::new());
+        }
+        out.extend([
+            format!("{indent}    /// The member's `{f}`."),
+            format!("{indent}    pub const fn {}(self) -> {to} {{", rs_field(f)),
+            format!("{indent}        match self {{"),
+        ]);
+        for (mem, name) in members.iter().zip(m.val().arr().unwrap_or_default()) {
+            let name = name.str().unwrap_or_default();
+            out.push(format!(
+                "{indent}            {e}::{} => {to}::{},",
+                mem.ident,
+                casing(name)
+            ));
+        }
+        out.extend([format!("{indent}        }}"), format!("{indent}    }}")]);
+    }
+    out.push(format!("{indent}}}"));
+    Ok(out)
+}
+
+/// The enum `e`'s `$map` in TypeScript: each field a function of the member
+/// (`map_ident`), from its constant to the one it names.
+fn ts_map(
+    e: &str,
+    members: &[Member],
+    map: &Node,
+    enums: &[(String, Vec<Member>)],
+) -> Result<Vec<String>, String> {
+    let mut out = Vec::new();
+    for (f, m) in map.named() {
+        let to = type_of(m, "");
+        let (_, targets) = enums
+            .iter()
+            .find(|(n, _)| n == to)
+            .ok_or(format!("{e}.{f}: {to} is no enum"))?;
+        out.extend([
+            String::new(),
+            format!("/** The member's `{f}`. */"),
+            format!("export function {}(val: {e}): {to} {{", map_ident(f, e)),
+            "  switch (val) {".into(),
+        ]);
+        for (mem, name) in members.iter().zip(m.val().arr().unwrap_or_default()) {
+            let name = name.str().unwrap_or_default();
+            let target = targets
+                .iter()
+                .find(|t| t.name == name)
+                .ok_or(format!("{e}.{f}: {name} is no {to}"))?;
+            out.push(format!("    case {}:", ts_const(e, mem)));
+            out.push(format!("      return {};", ts_const(to, target)));
+        }
+        out.extend(["  }".to_string(), "}".into()]);
+    }
+    Ok(out)
+}
+
+/// The enum `e`'s `$map` in C++: each field a function of the member
+/// (`map_ident`), its switch covering every member.
+fn cpp_map(e: &str, members: &[Member], map: &Node, out: &mut Vec<String>) {
+    for (f, m) in map.named() {
+        let to = type_of(m, "");
+        out.extend([
+            String::new(),
+            format!("// The member's `{f}`."),
+            format!("constexpr {to} {}({e} val) noexcept {{", map_ident(f, e)),
+            "    switch (val) {".into(),
+        ]);
+        for (mem, name) in members.iter().zip(m.val().arr().unwrap_or_default()) {
+            let name = name.str().unwrap_or_default();
+            out.push(format!(
+                "    case {e}::{}: return {to}::{};",
+                mem.ident,
+                cpp_member(name)
+            ));
+        }
+        out.extend([
+            "    }".to_string(),
+            "    __builtin_unreachable();".into(),
+            "}".into(),
+        ]);
+    }
+}
+
 /// A table with `"$packed": true` is laid out end to end. Each field gives its
 /// width in words, and the generator writes where the field begins, and the
 /// table's `WORDS` where the last field ends. What it writes are indices, so a
@@ -872,20 +1089,183 @@ fn width(v: &Node, above: &[(String, Node)], used: &[(String, Node)]) -> Result<
 /// The bits of a word a packed table counts in, which "bit" rounds up to.
 const WORD_BITS: f64 = 32.0;
 
+/// A table with `"$keys": "<Enum>"` holds one value for each of the enum's
+/// members, keyed by its name in the member's order: the enum this spec or a
+/// spec it uses declares, its members numbered from 0 by place. It is written
+/// as a list laid out by number, the member's number its index, in every
+/// language alike (C++ an array of the value's type).
+fn keyed(spec: Node, declared: &[(String, Node)]) -> Result<Node, String> {
+    let Node::Obj(entries) = spec else {
+        return Ok(spec);
+    };
+    let mut out = Vec::with_capacity(entries.len());
+    for (k, v) in entries {
+        let Some(e) = v.str_at("$keys") else {
+            out.push((k, v));
+            continue;
+        };
+        let members = declared_members(declared, e).map_err(|err| format!("{k}: `$keys` {err}"))?;
+        let names: Vec<&str> = v.named().map(|(n, _)| n).collect();
+        let by_place = members.iter().enumerate().all(|(i, m)| m.number == i.to_string());
+        if !by_place || names != members.iter().map(|m| m.name.as_str()).collect::<Vec<_>>() {
+            return Err(format!("{k}: its keys are {e}'s members, in their order, numbered by place"));
+        }
+        let mut list: Vec<(String, Node)> = v
+            .entries()
+            .iter()
+            .filter(|(f, _)| f.starts_with('$') && f != "$keys" && f != "$doc")
+            .cloned()
+            .collect();
+        let mut doc = v.lines_at("$doc").unwrap_or_default();
+        doc.push(format!("By `{e}`'s number."));
+        list.push(("$doc".into(), Node::Arr(doc.into_iter().map(Node::Str).collect())));
+        list.push(("$val".into(), Node::Arr(v.named().map(|(_, x)| x.clone()).collect())));
+        out.push((k, Node::Obj(list)));
+    }
+    Ok(Node::Obj(out))
+}
+
+/// The enums this spec or a spec it uses declares, each by its key.
+fn declared_enums(declared: &[(String, Node)]) -> impl Iterator<Item = (&str, &Node)> {
+    declared.iter().filter(|(_, n)| n.str_at("$type") == Some("enum")).map(|(k, n)| (k.as_str(), n))
+}
+
+/// The members of `e`, an enum this spec or a spec it uses declares.
+fn declared_members(declared: &[(String, Node)], e: &str) -> Result<Vec<Member>, String> {
+    let (key, list) = declared_enums(declared)
+        .find(|(k, _)| pascal(k) == e)
+        .ok_or(format!("{e} is no enum this spec or a spec it uses declares"))?;
+    enum_members(key, list)
+}
+
+/// A table with `"$each": "<Enum>"` stands, among its siblings, for one table
+/// of each of the enum's members, named as the member is: each holds the
+/// table's own fields, a field whose value is `"$number"` taking the member's
+/// number, and the fields of the table under the member's name where it has
+/// one. A table under it names a member, and a member's name a table. The
+/// enum is this spec's or a spec it uses'. A name is distinct among its
+/// siblings.
+fn expanded(n: Node, declared: &[(String, Node)]) -> Result<Node, String> {
+    let Node::Obj(entries) = n else {
+        return Ok(n);
+    };
+    let mut out: Vec<(String, Node)> = Vec::with_capacity(entries.len());
+    for (k, v) in entries {
+        let Some(e) = v.str_at("$each") else {
+            out.push((k, expanded(v, declared)?));
+            continue;
+        };
+        let members = declared_members(declared, e).map_err(|err| format!("{k}: `$each` {err}"))?;
+        let names: Vec<String> = members.iter().map(|m| screaming(&m.name)).collect();
+        let mut own: Vec<&(String, Node)> = Vec::new();
+        for field @ (f, x) in v.entries().iter().filter(|(f, _)| f != "$each") {
+            let table = x.is_obj() && !x.is_wrapper();
+            match (names.contains(f), table) {
+                (true, true) => {}
+                (true, false) => return Err(format!("{k}.{f}: not a table")),
+                (false, true) if !f.starts_with('$') => return Err(format!("{k}.{f}: names no member of {e}")),
+                (false, _) => own.push(field),
+            }
+        }
+        for m in &members {
+            let name = screaming(&m.name);
+            let number: f64 = m.number.parse().map_err(|_| format!("{k}: {e}'s {} has no number", m.name))?;
+            let mut fields: Vec<(String, Node)> = own
+                .iter()
+                .map(|(f, x)| (f.clone(), if x.str() == Some("$number") { Node::Num(number) } else { x.clone() }))
+                .collect();
+            for (f, x) in v.get(&name).map(Node::entries).unwrap_or_default() {
+                if fields.iter().any(|(g, _)| g == f) {
+                    return Err(format!("{k}.{name}: `{f}` is the table's own field too"));
+                }
+                fields.push((f.clone(), x.clone()));
+            }
+            out.push((name, expanded(Node::Obj(fields), declared)?));
+        }
+    }
+    if let Some(i) = (1..out.len()).find(|&i| out[..i].iter().any(|(k, _)| *k == out[i].0)) {
+        return Err(format!("`{}` is named twice among its siblings", out[i].0));
+    }
+    Ok(Node::Obj(out))
+}
+
+/// Refuses, under a table with `"$distinct": "<field>"` (the path tree's
+/// `ID`), two sibling tables at any depth that hold the same `<field>`.
+fn check_distinct(n: &Node, at: &str, field: Option<&str>) -> Result<(), String> {
+    let field = n.str_at("$distinct").or(field);
+    if let Some(f) = field {
+        let held: Vec<(&str, &Node)> = n.named().filter_map(|(k, v)| Some((k, v.get(f)?.val()))).collect();
+        if let Some(i) = (1..held.len()).find(|&i| held[..i].iter().any(|(_, x)| *x == held[i].1)) {
+            return Err(format!("{at}.{}: its {f} is a sibling's too", held[i].0));
+        }
+    }
+    n.named()
+        .filter(|(_, v)| v.is_obj() && !v.is_wrapper())
+        .try_for_each(|(k, v)| check_distinct(v, &format!("{at}.{k}"), field))
+}
+
+/// An enum another spec declares, which a spec names by `$uses` and a `$type`:
+/// its name, how its members are named, and the outputs Rust and TypeScript
+/// read it from.
+struct Foreign {
+    name: String,
+    casing: Casing,
+    rs: Option<&'static str>,
+    ts: Option<&'static str>,
+}
+
+/// The enums the specs a spec uses declare (`used`, from `uses_of`), each
+/// reached through the peer that writes its spec; a spec it uses that no peer
+/// writes is refused.
+fn foreign(used: &[Used], peers: &[DataSpec]) -> Result<Vec<Foreign>, String> {
+    let mut out = Vec::new();
+    for (u, names) in used {
+        let p = peers
+            .iter()
+            .find(|p| p.json == u)
+            .ok_or(format!("`$uses` {u}: no spec beside this one writes it"))?;
+        for (k, n) in declared_enums(names) {
+            out.push(Foreign {
+                name: pascal(k),
+                casing: casing(n),
+                rs: p.rs,
+                ts: p.ts,
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// Every `$type` a value under `n` names.
+fn types(n: &Node) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    fn walk(n: &Node, out: &mut BTreeSet<String>) {
+        out.extend(n.str_at("$type").map(String::from));
+        match n {
+            Node::Obj(entries) => entries.iter().filter(|(k, _)| !k.starts_with('$') || k == "$val").for_each(|(_, v)| walk(v, out)),
+            Node::Arr(a) => a.iter().for_each(|v| walk(v, out)),
+            _ => {}
+        }
+    }
+    walk(n, &mut out);
+    out
+}
+
 fn read_at(root: &Path, json: &str) -> Result<Node, String> {
     read(&root.join(json).to_string_lossy())
 }
 
 /// This answers the names `spec` may read beyond its own, taken from the
-/// specs its `$uses` names, by their paths from `root`. Each used spec is laid
-/// out over its own uses, each name must be owned by one file, and no chain of
-/// uses may be circular; `json` is where `spec` comes from.
+/// specs its `$uses` names, by their paths from `root`, each with the names it
+/// gives. Each used spec is laid out over its own uses, each name must be owned
+/// by one file, and no chain of uses may be circular; `json` is where `spec`
+/// comes from.
 fn uses_of(
     root: &Path,
     json: &str,
     spec: &Node,
     path: &mut Vec<String>,
-) -> Result<Vec<(String, Node)>, String> {
+) -> Result<Vec<Used>, String> {
     if path.iter().any(|p| p == json) {
         return Err(format!("{json}: uses itself through {}", path.join(" → ")));
     }
@@ -895,24 +1275,34 @@ fn uses_of(
         .and_then(Node::arr)
         .map(|a| a.iter().filter_map(|u| u.str().map(String::from)).collect())
         .unwrap_or_default();
-    let mut names: Vec<(String, Node)> = Vec::new();
+    let mut out: Vec<Used> = Vec::new();
     for u in &uses {
         let spec = read_at(root, u)?;
-        let below = uses_of(root, u, &spec, path)?;
+        let below = flat(&uses_of(root, u, &spec, path)?);
         let Node::Obj(entries) = laid_out(spec, &below)? else {
             return Err(format!("{u}: not a table"));
         };
+        let mut names: Vec<(String, Node)> = Vec::new();
         for (k, v) in entries.into_iter().filter(|(k, _)| !k.starts_with('$')) {
-            if names.iter().any(|(n, _)| *n == k) {
+            if out.iter().flat_map(|(_, n)| n).any(|(n, _)| *n == k) {
                 return Err(format!(
                     "{json}: `{k}` is named in two of the specs it uses"
                 ));
             }
             names.push((k, v));
         }
+        out.push((u.clone(), names));
     }
     path.pop();
-    Ok(names)
+    Ok(out)
+}
+
+/// A spec used, by its path, with the names it gives.
+type Used = (String, Vec<(String, Node)>);
+
+/// The names the used specs give, as one list.
+fn flat(used: &[Used]) -> Vec<(String, Node)> {
+    used.iter().flat_map(|(_, names)| names.iter().cloned()).collect()
 }
 
 /// Every file that `specs` write, each read from its JSON, with paths relative
@@ -920,18 +1310,32 @@ fn uses_of(
 pub fn outputs_at(root: &Path, specs: &[DataSpec]) -> Result<Vec<Output>, String> {
     let mut outputs = Vec::new();
     for d in specs {
-        outputs.extend(table_outputs(root, d, read_at(root, d.json)?)?);
+        outputs.extend(table_outputs(root, d, read_at(root, d.json)?, specs)?);
     }
     Ok(outputs)
 }
 
 /// The files `d` writes from `spec`, a table a tool built in memory or read
-/// from `d.json`, which the headers name as its source.
-pub fn table_outputs(root: &Path, d: &DataSpec, spec: Node) -> Result<Vec<Output>, String> {
+/// from `d.json`, which the headers name as its source. `peers` are the specs
+/// beside it, by which an enum a spec it uses declares is reached in each
+/// language (`Foreign`).
+pub fn table_outputs(
+    root: &Path,
+    d: &DataSpec,
+    spec: Node,
+    peers: &[DataSpec],
+) -> Result<Vec<Output>, String> {
     let mut outputs = Vec::new();
-    let uses = uses_of(root, d.json, &spec, &mut Vec::new())?;
+    let used = uses_of(root, d.json, &spec, &mut Vec::new())?;
+    let uses = flat(&used);
+    let foreign = foreign(&used, peers).map_err(|e| format!("{}: {e}", d.json))?;
+    let spec = mapped(spec).map_err(|e| format!("{}: {e}", d.json))?;
     let spec = laid_out(spec, &uses)?;
-    check_types(&spec).map_err(|e| format!("{}: {e}", d.json))?;
+    let declared: Vec<(String, Node)> = spec.entries().iter().chain(&uses).cloned().collect();
+    let spec = keyed(spec, &declared).map_err(|e| format!("{}: {e}", d.json))?;
+    let spec = expanded(spec, &declared).map_err(|e| format!("{}: {e}", d.json))?;
+    check_types(&spec, &declared).map_err(|e| format!("{}: {e}", d.json))?;
+    spec.named().try_for_each(|(k, v)| check_distinct(v, k, None)).map_err(|e| format!("{}: {e}", d.json))?;
     if let Some(k) = spec
         .named()
         .map(|(k, _)| k)
@@ -943,10 +1347,10 @@ pub fn table_outputs(root: &Path, d: &DataSpec, spec: Node) -> Result<Vec<Output
         ));
     }
     if let Some(ts_path) = d.ts {
-        ts_outputs(root, d, &spec, ts_path, &mut outputs)?;
+        ts_outputs(root, d, &spec, &declared, &foreign, ts_path, &mut outputs)?;
     }
     if let Some(rs_path) = d.rs {
-        rs_outputs(root, d, &spec, rs_path, &mut outputs)?;
+        rs_outputs(root, d, &spec, &foreign, rs_path, &mut outputs)?;
     }
     if let Some((cpp_path, namespace)) = d.cpp {
         outputs.push(Output::new(
@@ -970,13 +1374,26 @@ fn ts_outputs(
     root: &Path,
     d: &DataSpec,
     spec: &Node,
+    declared: &[(String, Node)],
+    foreign: &[Foreign],
     ts_path: &str,
     outputs: &mut Vec<Output>,
 ) -> Result<(), String> {
     let mut ts = head(&package_path(root, ts_path)?, d.json, spec);
-    let enums = spec
-        .named()
-        .filter(|(_, n)| n.str_at("$type") == Some("enum"))
+    // A foreign enum a `$type` names is its spec's own output's type.
+    let named = types(spec);
+    let mut imports = Vec::new();
+    for f in foreign.iter().filter(|f| named.contains(&f.name)) {
+        let from = f.ts.ok_or(format!("{}: a spec it uses writes no TypeScript", d.json))?;
+        let here = root.join(ts_path);
+        let module = ts_module(here.parent().unwrap_or(root), root, from)?;
+        imports.push(format!("import type {{ {} }} from \"{module}\";", f.name));
+    }
+    if !imports.is_empty() {
+        ts.push(String::new());
+        ts.extend(imports);
+    }
+    let enums = declared_enums(declared)
         .map(|(k, n)| Ok((pascal(k), enum_members(k, n)?)))
         .collect::<Result<Vec<_>, String>>()?;
     let mut body: Vec<String> = Vec::new();
@@ -1026,6 +1443,9 @@ fn ts_outputs(
         // Its constants follow the doc where it stands for the table.
         let consts = ts_enum(&pascal(name), &members);
         body.extend(consts.into_iter().skip(usize::from(bare)));
+        if let Some(map) = n.get("$map") {
+            body.extend(ts_map(&pascal(name), &members, map, &enums)?);
+        }
     }
     ts.extend(body);
     outputs.push(Output::new(ts_path, file(&ts)));
@@ -1084,14 +1504,30 @@ fn rs_outputs(
     root: &Path,
     d: &DataSpec,
     spec: &Node,
+    foreign: &[Foreign],
     rs_path: &str,
     outputs: &mut Vec<Output>,
 ) -> Result<(), String> {
     let shown = package_path(root, rs_path)?;
     let mut rs = head(&shown, d.json, spec);
+    // The spec's own enums, which the module names by their name alone.
+    let enums = declared_enums(spec.entries()).map(|(k, n)| (pascal(k), casing(n))).collect();
+    // A foreign enum a `$type` names is its spec's own output's, `use`d by
+    // its module.
+    let named = types(spec);
+    let here = root.join(package(root, rs_path)?.1);
+    let foreign = foreign
+        .iter()
+        .filter(|f| named.contains(&f.name))
+        .map(|f| {
+            let rs = f.rs.ok_or(format!("{}: a spec it uses writes no Rust", d.json))?;
+            Ok((f.name.clone(), f.casing, format!("{}::{}", rs_module(&here, root, rs)?, f.name)))
+        })
+        .collect::<Result<_, String>>()?;
     let scope = Scope {
         uses: RefCell::default(),
-        enums: enums(spec),
+        enums,
+        foreign,
     };
     let mut body = Vec::new();
     for (name, n) in spec.named() {
@@ -1131,7 +1567,8 @@ fn cpp_file(d: &DataSpec, spec: &Node, cpp_path: &str, namespace: &str) -> Resul
 /// (`cpp_enum`), its members' own values in the namespace, each under its
 /// member's name; a table that holds no value writes nothing. A list of names
 /// is written as a `string_view` array, and one whose `$type` is `enum` also
-/// as an enum. Any other value is a leaf (`cpp_leaf`).
+/// as an enum; a list of numbers is a `std::array` of its `$type`. Any other
+/// value is a leaf (`cpp_leaf`).
 fn cpp_items(
     name: &str,
     n: &Node,
@@ -1140,7 +1577,16 @@ fn cpp_items(
     inc: &mut Includes,
 ) -> Result<(), String> {
     let mut lines: Vec<String> = Vec::new();
-    if let Node::Arr(list) = n.val() {
+    if let Some(numbers) = n.val().arr().filter(|a| !a.is_empty()).and_then(|a| a.iter().map(Node::num).collect::<Option<Vec<_>>>()) {
+        let (ty, suffix) = cpp_number(name, type_of(n, ty), inc)?;
+        inc.insert("array");
+        let items: Vec<String> = numbers.iter().map(|v| format!("{}{suffix}", js_num(*v))).collect();
+        lines.push(format!(
+            "inline constexpr std::array<{ty}, {}> {name}{{{}}};",
+            items.len(),
+            items.join(", ")
+        ));
+    } else if let Node::Arr(list) = n.val() {
         let names = list
             .iter()
             .map(|v| v.str().ok_or(format!("{name}: a C++ list takes names only")))
@@ -1175,7 +1621,11 @@ fn cpp_items(
         if enumed {
             let (_, range, repr) = repr_of(n)?;
             let keys: Vec<(&str, &Node)> = n.named().collect();
-            cpp_enum(name, &numbers(name, &keys, &range, cpp_member)?, repr, &mut lines, inc);
+            let members = numbers(name, &keys, &range, cpp_member)?;
+            cpp_enum(name, &members, repr, &mut lines, inc);
+            if let Some(map) = n.get("$map") {
+                cpp_map(&pascal(name), &members, map, &mut lines);
+            }
         }
         if !body.is_empty() {
             if enumed {
@@ -1212,6 +1662,13 @@ fn cpp_leaf(name: &str, v: &Node, t: &str, inc: &mut Includes) -> Result<String,
     let number = v
         .num()
         .ok_or(format!("{name}: a C++ header takes numbers and strings only"))?;
+    let (ty, suffix) = cpp_number(name, t, inc)?;
+    Ok(format!("inline constexpr {ty} {name} = {}{suffix};", js_num(number)))
+}
+
+/// A number's C++ type for its `$type`, u32, i32 or usize, and its literal's
+/// suffix, its header included.
+fn cpp_number(name: &str, t: &str, inc: &mut Includes) -> Result<(&'static str, &'static str), String> {
     let (ty, header, suffix) = match t {
         "u32" => ("std::uint32_t", "cstdint", "u"),
         "i32" => ("std::int32_t", "cstdint", ""),
@@ -1223,5 +1680,5 @@ fn cpp_leaf(name: &str, v: &Node, t: &str, inc: &mut Includes) -> Result<String,
         }
     };
     inc.insert(header);
-    Ok(format!("inline constexpr {ty} {name} = {}{suffix};", js_num(number)))
+    Ok((ty, suffix))
 }

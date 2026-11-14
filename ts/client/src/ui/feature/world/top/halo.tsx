@@ -17,8 +17,8 @@ import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import {
   color as theme,
   halo,
-  haloRings,
-  textScale,
+  halo_rings,
+  text_scale,
 } from "@/ui/shared/component/theme.ts";
 
 /**
@@ -37,7 +37,7 @@ function Halo({
 }) {
   return (
     <View style={[style, styles.rings]}>
-      {haloRings.map((px) => (
+      {halo_rings.map((px) => (
         <View
           key={px}
           aria-hidden
@@ -68,7 +68,7 @@ function Halo({
   );
 }
 
-export function haloGap(gap: f64): f64 {
+export function halo_gap(gap: f64): f64 {
   return gap - 2 * halo.width;
 }
 
@@ -104,7 +104,7 @@ export function HaloPath({
 }) {
   return (
     <>
-      {haloRings.map((px) => (
+      {halo_rings.map((px) => (
         <G key={px} opacity={halo.ring}>
           <Path
             d={under}
@@ -139,7 +139,7 @@ export function HaloText({
       draw={(ink) => (
         <Text
           numberOfLines={1}
-          maxFontSizeMultiplier={textScale.chrome}
+          maxFontSizeMultiplier={text_scale.chrome}
           style={[style, ink !== undefined && { color: ink }]}
         >
           {children}

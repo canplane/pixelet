@@ -22,7 +22,7 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 
 use xpute_link::abi::types::Token;
-use xpute_link::frame::WORD_BYTES;
+use xpute_link::frame::WORD_SZ;
 use xpute_link::{Answer, Args, Handle, Layout, Lower, Method, Object, Packet, Side, Tag, TRAP};
 use xpute_kit::status::errno::Errno;
 
@@ -36,16 +36,13 @@ unsafe extern "C" {
 }
 
 /// The host's crossing: one guest entry with the frame laid in its inbox,
-/// on the event loop's thread, never while an entry runs. Once the guest has
-/// trapped, the frame finds no one: EPIPE.
+/// on the event loop's thread, never while an entry runs; a trapped link
+/// lays and crosses nothing (xpute-link link.rs `Side::out`).
 fn cross_in(_at: u32) -> i32 {
-    if TRAPPED.get() {
-        return Errno::EPIPE as i32;
-    }
     // SAFETY: the guest's export, on its thread, one entry at a time.
     match unsafe { link_in() } {
         TRAP => {
-            trapped();
+            trap();
             Errno::EPIPE as i32
         }
         result => result,
@@ -54,8 +51,8 @@ fn cross_in(_at: u32) -> i32 {
 
 /// Marks the link trapped, and tells the platform the first time, as a
 /// page's worker tells its trap. On the guest's thread.
-pub fn trapped() {
-    if !TRAPPED.replace(true) {
+pub fn trap() {
+    if SIDE.with(Side::trap) {
         crate::log("[guest] trapped");
         if let Some(report) = REPORT.get() {
             report();
@@ -65,16 +62,13 @@ pub fn trapped() {
 
 /// A completion given while control is in the guest: its request, result
 /// and packet.
-type Later = (Tag, i32, Option<Vec<u8>>);
+type Completion = (Tag, i32, Option<Vec<u8>>);
 
 thread_local! {
     static SIDE: Side = const { Side::new(|l| l.inbox, cross_in) };
     /// The completions given while control is in the guest, with their
     /// packets written.
-    static LATER: RefCell<VecDeque<Later>> = const { RefCell::new(VecDeque::new()) };
-    /// Whether the link can run no more, whichever side failed: the guest is
-    /// entered no more, and its frames are not served.
-    static TRAPPED: Cell<bool> = const { Cell::new(false) };
+    static COMPLETIONS: RefCell<VecDeque<Completion>> = const { RefCell::new(VecDeque::new()) };
     /// The platform's report of a trap, given with the guest's first entry.
     static REPORT: Cell<Option<fn()>> = const { Cell::new(None) };
 }
@@ -82,22 +76,21 @@ thread_local! {
 /// Enters the guest first, once the host's own objects are mounted: the
 /// guest lays its link, the host reads its layout, then the guest boots and
 /// may open them (link.ts `init`). `report` hears a trap, from then on.
-/// False where the guest trapped.
+/// False where the link trapped, whichever side failed.
 pub fn init(report: fn()) -> bool {
     REPORT.set(Some(report));
     // SAFETY: the guest's export, called once, before any other.
     let at = SIDE.with(|s| s.crossed(|| unsafe { link_init() }));
     if at == u32::MAX {
-        trapped();
+        trap();
         return false;
     }
     SIDE.with(|s| s.set_layout(Layout::at(at)));
     // SAFETY: the guest's export, called once, right after `link_init`.
-    let booted = SIDE.with(|s| s.crossed(|| unsafe { link_boot() })) != TRAP;
-    if !booted {
-        trapped();
+    if SIDE.with(|s| s.crossed(|| unsafe { link_boot() })) == TRAP {
+        trap();
     }
-    booted
+    !SIDE.with(Side::trapped)
 }
 
 pub fn mount(
@@ -112,6 +105,11 @@ pub fn mount_named(h: Handle, o: Rc<dyn Object>) {
     SIDE.with(|s| s.mount_named(h, o));
 }
 
+/// Serves `o` under a handle issued for it, for a method to answer.
+pub fn add(o: Rc<dyn Object>) -> Handle {
+    SIDE.with(|s| s.add(o))
+}
+
 pub fn open(uri: &[Token]) -> Result<Handle, Errno> {
     SIDE.with(|s| s.open(uri))
 }
@@ -121,11 +119,11 @@ pub fn call(h: Handle, m: Method, args: Args) -> (i32, Option<&'static [u8]>) {
 }
 
 pub fn send(h: Handle, m: Method, args: Args, answer: Option<Answer>) -> Tag {
-    send_packet(h, m, Packet::Args(args), answer)
+    send_pkt(h, m, Packet::Args(args), answer)
 }
 
 /// `send` with a packet written already, as the UI's (remote.rs).
-pub(crate) fn send_packet(h: Handle, m: Method, pkt: Packet, answer: Option<Answer>) -> Tag {
+pub(crate) fn send_pkt(h: Handle, m: Method, pkt: Packet, answer: Option<Answer>) -> Tag {
     SIDE.with(|s| s.send(h, m, pkt, answer))
 }
 
@@ -142,7 +140,7 @@ pub fn on_cancel(t: Tag, stop: Box<dyn FnOnce()>) {
 
 /// The bytes a frame's packet may take.
 pub(crate) fn pkt_cap() -> u32 {
-    SIDE.with(Side::layout).room - WORD_BYTES
+    SIDE.with(Side::layout).room - WORD_SZ
 }
 
 /// Answers the guest's request `t`; while control is in the guest, its packet
@@ -152,19 +150,28 @@ pub fn task_return(t: Tag, result: i32, data: Args) {
     if !SIDE.with(Side::crossing) {
         return SIDE.with(|s| s.task_return(t, result, Packet::Args(data)));
     }
-    let written = data.map(|(fixed_bytes, write)| {
+    let written = data.map(|(fixed_sz, write)| {
         let mut buf = vec![0; pkt_cap() as usize];
-        let mut w = Lower::new(&mut buf, fixed_bytes);
+        let mut w = Lower::new(&mut buf, fixed_sz);
         write(&mut w);
         let len = w.finish().ok()?;
         buf.truncate(len);
         Some(buf)
     });
-    let later = match written {
+    let completion = match written {
         Some(None) => (t, Errno::EMSGSIZE as i32, None),
         pkt => (t, result, pkt.flatten()),
     };
-    LATER.with_borrow_mut(|l| l.push_back(later));
+    COMPLETIONS.with_borrow_mut(|l| l.push_back(completion));
+}
+
+/// Answers the guest's request `t` with a packet written already, as the
+/// UI's answer to a method it serves (remote.rs `answer`), on the event
+/// loop's thread between entries. A packet past the room is answered
+/// EMSGSIZE with no data, as Side's own is.
+pub(crate) fn task_return_pkt(t: Tag, result: i32, pkt: Option<Vec<u8>>) {
+    let pkt = pkt.as_deref().map_or(Packet::Args(None), Packet::Bytes);
+    SIDE.with(|s| s.task_return(t, result, pkt));
 }
 
 /// The guest's import: the frame it laid at `at`, taken by the host's side
@@ -174,11 +181,11 @@ pub fn task_return(t: Tag, result: i32, data: Args) {
 /// trapped, a frame is not served: EPIPE, as `cross_in` answers.
 #[unsafe(no_mangle)]
 pub extern "C" fn link_out(at: u32) -> i32 {
-    if TRAPPED.get() {
+    if SIDE.with(Side::trapped) {
         return Errno::EPIPE as i32;
     }
     std::panic::catch_unwind(|| SIDE.with(|s| s.recv(at))).unwrap_or_else(|_| {
-        trapped();
+        trap();
         Errno::ENOTRECOVERABLE as i32
     })
 }
@@ -186,7 +193,7 @@ pub extern "C" fn link_out(at: u32) -> i32 {
 /// Lays the completions given while serving, then runs the answers due,
 /// after the work at hand.
 pub fn run_due() {
-    while let Some((t, result, pkt)) = LATER.with_borrow_mut(VecDeque::pop_front) {
+    while let Some((t, result, pkt)) = COMPLETIONS.with_borrow_mut(VecDeque::pop_front) {
         let pkt = pkt.as_deref().map_or(Packet::Args(None), Packet::Bytes);
         SIDE.with(|s| s.task_return(t, result, pkt));
     }

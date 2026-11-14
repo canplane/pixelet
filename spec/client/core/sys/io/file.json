@@ -1,10 +1,12 @@
 {
+  "$uses": ["spec/spec/bake/publication.json"],
   "$doc": [
     "The core's files: the tokens of their paths and what a file holds (pxl-core",
     "sys/io/file.rs, ts/client/src/service/sys/fs/)."
   ],
   "path": {
     "$type": "i32",
+    "$distinct": "ID",
     "$doc": [
       "The tree of the paths the core opens (xpute's FS_OPEN), as a URI's path is a",
       "tree: each node takes one token, its `ID`, distinct among its siblings, and hands the",
@@ -13,35 +15,21 @@
       "What a file is past its path, a tile's version and URL, a storage key, is the client's",
       "binding (ts/client/src/service/sys/fs/)."
     ],
-    "TERRAIN": {
+    "BASE": {
+      "$each": "BaseLayer",
       "$doc": [
-        "The terrain bake: (TERRAIN, quadkey)."
+        "A base layer's tile: (the layer, quadkey). Each `BaseLayer` (spec/spec/bake/publication.json",
+        "`BASE_LAYER`) is a node of its own, named as the member is, its `ID` the member's number."
       ],
-      "ID": 0
-    },
-    "PLACE": {
-      "$doc": [
-        "The places bake: (PLACE, quadkey)."
-      ],
-      "ID": 1
-    },
-    "DIVISION": {
-      "$doc": [
-        "The divisions bake: (DIVISION, quadkey)."
-      ],
-      "ID": 2
-    },
-    "EARTH": {
-      "$doc": [
-        "The Earth bake: (EARTH, quadkey), and the picture of the whole Earth, (EARTH, SPHERE)."
-      ],
-      "ID": 3,
-      "SPHERE": {
-        "$doc": [
-          "The picture of the whole Earth, served under the Earth bake's version as its",
-          "`SPHERE` (spec/spec/bake/publication.json)."
-        ],
-        "ID": 0
+      "ID": "$number",
+      "EARTH": {
+        "SPHERE": {
+          "$doc": [
+            "The picture of the whole Earth, (EARTH, SPHERE), served under the Earth layer's",
+            "version as its `TILE_SPHERE` (spec/spec/bake/publication.json)."
+          ],
+          "ID": 0
+        }
       }
     },
     "STORAGE": {

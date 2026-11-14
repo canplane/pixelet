@@ -2,14 +2,6 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `pxl:core/input` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x5ee0f8;
 
@@ -114,61 +106,61 @@ pub fn pointer(
     x: f64,
     y: f64,
 ) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         POINTER,
         Some((32, &|w_: &mut _rt::Lower| {
-            w_.u8(0, *&phase as u8);
-            w_.u8(1, *&pointer_type as u8);
-            w_.i32(4, *&id);
-            w_.i32(8, *&button);
-            w_.f64(16, *&x);
-            w_.f64(24, *&y);
+            w_.u8(0, phase as u8);
+            w_.u8(1, pointer_type as u8);
+            w_.i32(4, id);
+            w_.i32(8, button);
+            w_.f64(16, x);
+            w_.f64(24, y);
         })),
     );
     _rt::answer(r)
 }
 
 pub fn typing(typing: bool) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         TYPING,
         Some((1, &|w_: &mut _rt::Lower| {
-            w_.bool(0, *&typing);
+            w_.bool(0, typing);
         })),
     );
     _rt::answer(r)
 }
 
 pub fn wheel(delta_y: f64) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         WHEEL,
         Some((8, &|w_: &mut _rt::Lower| {
-            w_.f64(0, *&delta_y);
+            w_.f64(0, delta_y);
         })),
     );
     _rt::answer(r)
 }
 
 pub fn pinch(scale: f64) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         PINCH,
         Some((8, &|w_: &mut _rt::Lower| {
-            w_.f64(0, *&scale);
+            w_.f64(0, scale);
         })),
     );
     _rt::answer(r)
 }
 
 pub fn r#move(x: i32, y: i32) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         MOVE,
         Some((8, &|w_: &mut _rt::Lower| {
-            w_.i32(0, *&x);
-            w_.i32(4, *&y);
+            w_.i32(0, x);
+            w_.i32(4, y);
         })),
     );
     _rt::answer(r)
@@ -183,24 +175,24 @@ pub fn xr_pose(
     qz: f64,
     qw: f64,
 ) -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(
+    let (r, _) = _rt::link::call(
         HANDLE,
         XR_POSE,
         Some((56, &|w_: &mut _rt::Lower| {
-            w_.f64(0, *&x);
-            w_.f64(8, *&y);
-            w_.f64(16, *&z);
-            w_.f64(24, *&qx);
-            w_.f64(32, *&qy);
-            w_.f64(40, *&qz);
-            w_.f64(48, *&qw);
+            w_.f64(0, x);
+            w_.f64(8, y);
+            w_.f64(16, z);
+            w_.f64(24, qx);
+            w_.f64(32, qy);
+            w_.f64(40, qz);
+            w_.f64(48, qw);
         })),
     );
     _rt::answer(r)
 }
 
 pub fn xr_pose_end() -> Result<(), _rt::Errno> {
-    let (r, data) = _rt::link::call(HANDLE, XR_POSE_END, None);
+    let (r, _) = _rt::link::call(HANDLE, XR_POSE_END, None);
     _rt::answer(r)
 }
 

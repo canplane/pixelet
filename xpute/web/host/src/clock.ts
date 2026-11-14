@@ -7,7 +7,7 @@
 
 import { round } from "@xpute/kit/math/scalar.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
-import { FaultError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 
 import * as monotonic_clock from "@xpute/link/abi/clocks/monotonic_clock.ts";
 import * as system_clock from "@xpute/link/abi/clocks/system_clock.ts";
@@ -24,7 +24,7 @@ export function serve_clock(link: Link): void {
         const timer = setTimeout(done, Number(how_long) / NS_PER_MS);
         signal.addEventListener("abort", () => {
           clearTimeout(timer);
-          fail(new FaultError(ERRNO_ECANCELED));
+          fail(new XputeError(ERRNO_ECANCELED));
         });
       }),
   });

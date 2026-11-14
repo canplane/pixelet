@@ -6,7 +6,7 @@ use core::panic::Location;
 use std::collections::TryReserveError;
 
 use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
+use xpute_kit::status::error::XputeError;
 
 pub use crate::spec::demand::OutcomeName as Outcome;
 use crate::sys::io::room::Refusal;
@@ -73,9 +73,9 @@ impl From<Failure> for Exit {
     }
 }
 
-impl From<MarshalError> for Exit {
+impl From<XputeError> for Exit {
     #[track_caller]
-    fn from(err: MarshalError) -> Exit {
+    fn from(err: XputeError) -> Exit {
         Exit::Failed(Failure::from(err))
     }
 }
@@ -91,8 +91,8 @@ impl From<Errno> for Failure {
     }
 }
 
-impl From<MarshalError> for Failure {
-    fn from(err: MarshalError) -> Failure {
+impl From<XputeError> for Failure {
+    fn from(err: XputeError) -> Failure {
         Failure {
             errnum: err.errnum,
             detail: 0,

@@ -2,14 +2,6 @@
 //
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// `[method]surface.resize`
 pub const SURFACE_RESIZE: _rt::Method = 0;
 
@@ -20,7 +12,7 @@ pub trait GuestSurface {
 struct _SurfaceObject(_rt::Rc<dyn GuestSurface>);
 
 impl _rt::Object for _SurfaceObject {
-    fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
+    fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
         let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
                 SURFACE_RESIZE => {
@@ -29,7 +21,7 @@ impl _rt::Object for _SurfaceObject {
                     let height = r_.u32(4)?;
                     let dpr = r_.f64(8)?;
                     match self.0.resize(width, height, dpr) {
-                        Ok(v) => _rt::Reply::from(0),
+                        Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
@@ -40,9 +32,9 @@ impl _rt::Object for _SurfaceObject {
     }
 }
 
-/// The object over `imp`, for an opener to answer.
-pub fn surface(imp: _rt::Rc<dyn GuestSurface>) -> _rt::Rc<dyn _rt::Object> {
-    _rt::Rc::new(_SurfaceObject(imp))
+/// The object over `implementation`, for an opener or a function to answer.
+pub fn surface(implementation: _rt::Rc<dyn GuestSurface>) -> _rt::Rc<dyn _rt::Object> {
+    _rt::Rc::new(_SurfaceObject(implementation))
 }
 
 mod _rt {

@@ -4,30 +4,30 @@ import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
 import { useChatLines } from "@/ui/feature/world/dock/store.ts";
-import { cornerCard } from "@/ui/shared/component/corner-card.ts";
+import { corner_card } from "@/ui/shared/component/corner-card.ts";
 import {
   alpha,
   color,
-  textStyle,
+  text_style,
   weight,
 } from "@/ui/shared/component/theme.ts";
 import { textEdge } from "@/ui/shared/component/typeface.ts";
 
 export function ChatLog() {
   const { t } = useTranslation();
-  const chatLines = useChatLines();
+  const chat_lines = useChatLines();
 
-  if (chatLines.length === 0) return null;
+  if (chat_lines.length === 0) return null;
 
   return (
     <View style={styles.lines}>
-      {chatLines.map((line, i) => (
+      {chat_lines.map((line, i) => (
         <View
           key={line.id}
           style={[
             styles.line,
             {
-              opacity: 0.4 + 0.6 * ((i + 1) / chatLines.length),
+              opacity: 0.4 + 0.6 * ((i + 1) / chat_lines.length),
             },
           ]}
         >
@@ -42,7 +42,7 @@ export function ChatLog() {
 }
 
 const styles = StyleSheet.create({
-  lines: { ...cornerCard, alignItems: "flex-start", gap: 4 },
+  lines: { ...corner_card, alignItems: "flex-start", gap: 4 },
   line: {
     flexDirection: "row",
     alignItems: "baseline",
@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
     maxWidth: "100%",
   },
   text: {
-    ...textStyle.caption,
+    ...text_style.caption,
     fontWeight: weight.semibold,
     ...textEdge(alpha(color.black, 0.9)),
   },

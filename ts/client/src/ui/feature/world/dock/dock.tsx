@@ -4,10 +4,10 @@ import { useRef, useState } from "react";
 import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
-import { keepKeyboard } from "@/ui/shared/component/keyboard.tsx";
+import { keep_keyboard } from "@/ui/shared/component/keyboard.tsx";
 import { chrome, color } from "@/ui/shared/component/theme.ts";
-import { DockMode, switchDockMode, useDockMode } from "./store.ts";
-import { deckSwipe } from "@/ui/feature/world/deck.ts";
+import { DockMode, switch_dock_mode, useDockMode } from "./store.ts";
+import { deck_swipe } from "@/ui/feature/world/deck.ts";
 import { Card, DOCK_HEIGHT } from "./card.tsx";
 import { SizePopover, usePopover } from "./popover.tsx";
 import { Message, useMessage } from "./message.tsx";
@@ -21,8 +21,8 @@ export function Dock() {
     PanResponder.create({
       onMoveShouldSetPanResponderCapture: (_e, s) =>
         Math.abs(s.dy) > DRAG_PX && Math.abs(s.dy) > Math.abs(s.dx),
-      ...deckSwipe(switchDockMode, {
-        press: keepKeyboard,
+      ...deck_swipe(switch_dock_mode, {
+        press: keep_keyboard,
       }),
     }),
   ).current;
@@ -32,7 +32,7 @@ export function Dock() {
   const bar = useRef<View | null>(null);
   const { popover, gesture } = usePopover(bar);
 
-  const shownPopover = mode === DockMode.Palette ? popover : null;
+  const shown_popover = mode === DockMode.Palette ? popover : null;
   // Every card is as wide as the palette's strip. The cards stand on whole
   // pixels, because only there does a pill on a page cut its shadow cleanly.
   const width = Math.min(stripWidth, barWidth);
@@ -73,7 +73,7 @@ export function Dock() {
             <Strip span={barWidth} scrolls={!popover?.open} gesture={gesture} />
           </Card>
 
-          {shownPopover && <SizePopover popover={shownPopover} />}
+          {shown_popover && <SizePopover popover={shown_popover} />}
         </>
       )}
     </View>

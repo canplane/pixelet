@@ -2,7 +2,7 @@
 #
 # This is xpute's module on an iPhone (*.swift), and the app's native crate
 # linked with it: the guest with the runtime the app composes around it, as
-# the app's package.json `xpute.guest.native` names it. The app builds it
+# the app's package.json `xpute.guest.runtime` names it. The app builds it
 # into this pod's directory, for the configuration and the SDK the app is
 # built as, and the app links from there. Swift imports xpute's C ABI
 # (`import CXpute`).
@@ -14,7 +14,7 @@ app = File.expand_path('..', Pod::Config.instance.installation_root.to_s)
 guest = JSON.parse(File.read(File.join(app, 'package.json'))).dig('xpute', 'guest')
 raise "#{app}/package.json names no xpute.guest" unless guest
 # This is cargo's name for the crate's library.
-lib = guest['native'].tr('-', '_')
+lib = guest['runtime'].tr('-', '_')
 include = '"$(PODS_CONFIGURATION_BUILD_DIR)/Xpute/include"'
 
 Pod::Spec.new do |s|

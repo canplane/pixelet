@@ -53,20 +53,20 @@ function position(s: Spring, seconds: f64): f64 {
 }
 
 export function spring(s: Spring): Transition {
-  let lastMs = 0;
+  let last_ms = 0;
   for (let t = 0; t <= MAX_MS; t += STEP_MS) {
-    if (Math.abs(1 - position(s, t / 1000)) > REST) lastMs = t;
+    if (Math.abs(1 - position(s, t / 1000)) > REST) last_ms = t;
   }
-  const durationMs = lastMs + STEP_MS;
+  const duration_ms = last_ms + STEP_MS;
   const samples = Array.from({ length: SAMPLES + 1 }, (_, i) =>
-    i === SAMPLES ? 1 : position(s, (durationMs * i) / SAMPLES / 1000),
+    i === SAMPLES ? 1 : position(s, (duration_ms * i) / SAMPLES / 1000),
   );
-  return { durationMs, samples };
+  return { durationMs: duration_ms, samples };
 }
 
 /** Finds the curve's y at `x` by bisection on the curve's parameter. Bisection
  * is safe because x rises monotonically for every control point CSS allows. */
-function bezierAt(
+function bezier_at(
   [x1, y1, x2, y2]: readonly [f64, f64, f64, f64],
   x: f64,
 ): f64 {
@@ -83,13 +83,13 @@ function bezierAt(
 }
 
 export function ease(
-  durationMs: f64,
+  duration_ms: f64,
   bezier: readonly [f64, f64, f64, f64],
 ): Transition {
   return {
-    durationMs,
+    durationMs: duration_ms,
     samples: Array.from({ length: SAMPLES + 1 }, (_, i) =>
-      bezierAt(bezier, i / SAMPLES),
+      bezier_at(bezier, i / SAMPLES),
     ),
   };
 }
@@ -128,6 +128,6 @@ export const SLIDE_AWAY: Transition = ease(200, [0.3, 0, 0.8, 0.15]);
 
 export const DIM: Transition = ease(500, [0.42, 0, 0.58, 1]);
 
-export function after(t: Transition, delayMs: f64): Transition {
-  return { ...t, delayMs };
+export function after(t: Transition, delay_ms: f64): Transition {
+  return { ...t, delayMs: delay_ms };
 }

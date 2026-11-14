@@ -2,19 +2,13 @@
 //
 // GENERATED from gpu/wit (xpute-link-gen wit.rs)
 
-#![allow(
-    unused_imports,
-    unused_variables,
-    dead_code,
-    clippy::all,
-    reason = "generated from WIT"
-)]
-
 /// The interface's handle, named by `xpute:gpu/gpu` (frame.json `NAMED`).
 pub const HANDLE: _rt::Handle = 0x79d455;
 
 /// `run`
 pub const RUN: _rt::Method = 0;
+/// `get-device`
+pub const GET_DEVICE: _rt::Method = 1;
 /// `[method]device.lost`
 pub const DEVICE_LOST: _rt::Method = 0;
 /// `[method]device.ready`
@@ -51,6 +45,7 @@ impl ErrorCode {
 
 pub trait Host {
     fn run(&self, records: _rt::Lent, task_return: _rt::Return<()>);
+    fn get_device(&self) -> Result<u32, _rt::Errno>;
 }
 
 struct _Object(_rt::Rc<dyn Host>);
@@ -69,7 +64,7 @@ impl _rt::Object for _Object {
                             _rt::link::on_cancel,
                             Box::new(move |got| {
                                 let reply = match got {
-                                    Ok(v) => _rt::Reply::from(0),
+                                    Ok(()) => _rt::Reply::from(0),
                                     Err(e) => _rt::Reply::from(e as i32),
                                 };
                                 _rt::link::task_return(
@@ -85,6 +80,18 @@ impl _rt::Object for _Object {
                     );
                     _rt::Reply::from(_rt::Errno::EINPROGRESS as i32)
                 }
+                GET_DEVICE => match self.0.get_device() {
+                    Ok(v) => _rt::Reply {
+                        result: 0,
+                        data: Some((
+                            4,
+                            Box::new(move |w: &mut _rt::Lower| {
+                                w.u32(0, v);
+                            }),
+                        )),
+                    },
+                    Err(e) => _rt::Reply::from(e as i32),
+                },
                 _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
             })
         };
@@ -92,9 +99,9 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `imp` under the interface's handle.
-pub fn mount(imp: _rt::Rc<dyn Host>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(imp)));
+/// Serves `implementation` under the interface's handle.
+pub fn mount(implementation: _rt::Rc<dyn Host>) {
+    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 pub trait HostDevice {
@@ -119,7 +126,7 @@ impl _rt::Object for _DeviceObject {
                             _rt::link::on_cancel,
                             Box::new(move |got| {
                                 let reply = match got {
-                                    Ok(v) => _rt::Reply::from(0),
+                                    Ok(()) => _rt::Reply::from(0),
                                     Err(e) => _rt::Reply::from(e as i32),
                                 };
                                 _rt::link::task_return(
@@ -146,10 +153,10 @@ impl _rt::Object for _DeviceObject {
                                     data: Some((
                                         2,
                                         Box::new(move |w: &mut _rt::Lower| match &v {
-                                            Ok(v) => {}
+                                            Ok(_) => {}
                                             Err(v) => {
                                                 w.u8(0, 1);
-                                                w.u8(0 + 1, *v as u8);
+                                                w.u8(1, *v as u8);
                                             }
                                         }),
                                     )),
@@ -174,7 +181,7 @@ impl _rt::Object for _DeviceObject {
                         _rt::link::on_cancel,
                         Box::new(move |got| {
                             let reply = match got {
-                                Ok(v) => _rt::Reply::from(0),
+                                Ok(()) => _rt::Reply::from(0),
                                 Err(e) => _rt::Reply::from(e as i32),
                             };
                             _rt::link::task_return(
@@ -196,9 +203,9 @@ impl _rt::Object for _DeviceObject {
     }
 }
 
-/// The object over `imp`, for an opener to answer.
-pub fn device(imp: _rt::Rc<dyn HostDevice>) -> _rt::Rc<dyn _rt::Object> {
-    _rt::Rc::new(_DeviceObject(imp))
+/// The object over `implementation`, for an opener or a function to answer.
+pub fn device(implementation: _rt::Rc<dyn HostDevice>) -> _rt::Rc<dyn _rt::Object> {
+    _rt::Rc::new(_DeviceObject(implementation))
 }
 
 mod _rt {

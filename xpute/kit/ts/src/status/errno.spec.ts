@@ -4,6 +4,64 @@
 //
 // POSIX/Linux-aligned negative errno
 
+/** What an errno says happened: the canonical status code of gRPC and Abseil
+ * (absl::StatusCode), by its number there, each errno's as Abseil's
+ * ErrnoToStatusCode maps it, save that ENOTRECOVERABLE is internal, and
+ * EBADMSG and EILSEQ data_loss. It says nothing of whether the error is
+ * fatal: a broken invariant is a bug, which stops the program. */
+export type Kind =
+  | typeof KIND_OK
+  | typeof KIND_CANCELLED
+  | typeof KIND_UNKNOWN
+  | typeof KIND_INVALID_ARGUMENT
+  | typeof KIND_DEADLINE_EXCEEDED
+  | typeof KIND_NOT_FOUND
+  | typeof KIND_ALREADY_EXISTS
+  | typeof KIND_PERMISSION_DENIED
+  | typeof KIND_RESOURCE_EXHAUSTED
+  | typeof KIND_FAILED_PRECONDITION
+  | typeof KIND_OUT_OF_RANGE
+  | typeof KIND_UNIMPLEMENTED
+  | typeof KIND_INTERNAL
+  | typeof KIND_UNAVAILABLE
+  | typeof KIND_DATA_LOSS;
+export const KIND_OK = 0;
+export const KIND_CANCELLED = 1;
+export const KIND_UNKNOWN = 2;
+export const KIND_INVALID_ARGUMENT = 3;
+export const KIND_DEADLINE_EXCEEDED = 4;
+export const KIND_NOT_FOUND = 5;
+export const KIND_ALREADY_EXISTS = 6;
+export const KIND_PERMISSION_DENIED = 7;
+export const KIND_RESOURCE_EXHAUSTED = 8;
+export const KIND_FAILED_PRECONDITION = 9;
+export const KIND_OUT_OF_RANGE = 11;
+export const KIND_UNIMPLEMENTED = 12;
+export const KIND_INTERNAL = 13;
+export const KIND_UNAVAILABLE = 14;
+export const KIND_DATA_LOSS = 15;
+
+/** The member `val` is, or null for a number no member has. */
+export function of_Kind(val: number): Kind | null {
+  return val === KIND_OK ||
+    val === KIND_CANCELLED ||
+    val === KIND_UNKNOWN ||
+    val === KIND_INVALID_ARGUMENT ||
+    val === KIND_DEADLINE_EXCEEDED ||
+    val === KIND_NOT_FOUND ||
+    val === KIND_ALREADY_EXISTS ||
+    val === KIND_PERMISSION_DENIED ||
+    val === KIND_RESOURCE_EXHAUSTED ||
+    val === KIND_FAILED_PRECONDITION ||
+    val === KIND_OUT_OF_RANGE ||
+    val === KIND_UNIMPLEMENTED ||
+    val === KIND_INTERNAL ||
+    val === KIND_UNAVAILABLE ||
+    val === KIND_DATA_LOSS
+    ? val
+    : null;
+}
+
 export const ERRNO = {
   OK: {
     number: 0 as number,
@@ -433,4 +491,130 @@ export function of_Errno(val: number): Errno | null {
     val === ERRNO_ENOTRECOVERABLE
     ? val
     : null;
+}
+
+/** The member's `kind`. */
+export function kind_Errno(val: Errno): Kind {
+  switch (val) {
+    case ERRNO_OK:
+      return KIND_OK;
+    case ERRNO_EPERM:
+      return KIND_PERMISSION_DENIED;
+    case ERRNO_ENOENT:
+      return KIND_NOT_FOUND;
+    case ERRNO_ESRCH:
+      return KIND_NOT_FOUND;
+    case ERRNO_EINTR:
+      return KIND_UNAVAILABLE;
+    case ERRNO_EIO:
+      return KIND_UNKNOWN;
+    case ERRNO_ENXIO:
+      return KIND_NOT_FOUND;
+    case ERRNO_E2BIG:
+      return KIND_INVALID_ARGUMENT;
+    case ERRNO_ENOEXEC:
+      return KIND_UNKNOWN;
+    case ERRNO_EBADF:
+      return KIND_FAILED_PRECONDITION;
+    case ERRNO_ECHILD:
+      return KIND_FAILED_PRECONDITION;
+    case ERRNO_EAGAIN:
+      return KIND_UNAVAILABLE;
+    case ERRNO_ENOMEM:
+      return KIND_RESOURCE_EXHAUSTED;
+    case ERRNO_EACCES:
+      return KIND_PERMISSION_DENIED;
+    case ERRNO_EFAULT:
+      return KIND_INVALID_ARGUMENT;
+    case ERRNO_EBUSY:
+      return KIND_FAILED_PRECONDITION;
+    case ERRNO_EEXIST:
+      return KIND_ALREADY_EXISTS;
+    case ERRNO_EXDEV:
+      return KIND_UNIMPLEMENTED;
+    case ERRNO_ENODEV:
+      return KIND_NOT_FOUND;
+    case ERRNO_ENOTDIR:
+      return KIND_FAILED_PRECONDITION;
+    case ERRNO_EISDIR:
+      return KIND_FAILED_PRECONDITION;
+    case ERRNO_EINVAL:
+      return KIND_INVALID_ARGUMENT;
+    case ERRNO_ENFILE:
+      return KIND_RESOURCE_EXHAUSTED;
+    case ERRNO_EMFILE:
+      return KIND_RESOURCE_EXHAUSTED;
+    case ERRNO_ENOTTY:
+      return KIND_INVALID_ARGUMENT;
+    case ERRNO_EFBIG:
+      return KIND_OUT_OF_RANGE;
+    case ERRNO_ENOSPC:
+      return KIND_RESOURCE_EXHAUSTED;
+    case ERRNO_ESPIPE:
+      return KIND_INVALID_ARGUMENT;
+    case ERRNO_EROFS:
+      return KIND_PERMISSION_DENIED;
+    case ERRNO_EMLINK:
+      return KIND_RESOURCE_EXHAUSTED;
+    case ERRNO_EPIPE:
+      return KIND_FAILED_PRECONDITION;
+    case ERRNO_EDOM:
+      return KIND_INVALID_ARGUMENT;
+    case ERRNO_ERANGE:
+      return KIND_OUT_OF_RANGE;
+    case ERRNO_ENOSYS:
+      return KIND_UNIMPLEMENTED;
+    case ERRNO_EPROTO:
+      return KIND_UNKNOWN;
+    case ERRNO_EBADMSG:
+      return KIND_DATA_LOSS;
+    case ERRNO_EOVERFLOW:
+      return KIND_OUT_OF_RANGE;
+    case ERRNO_EMSGSIZE:
+      return KIND_UNKNOWN;
+    case ERRNO_ENOTSUP:
+      return KIND_UNIMPLEMENTED;
+    case ERRNO_EILSEQ:
+      return KIND_DATA_LOSS;
+    case ERRNO_EADDRINUSE:
+      return KIND_FAILED_PRECONDITION;
+    case ERRNO_EADDRNOTAVAIL:
+      return KIND_ALREADY_EXISTS;
+    case ERRNO_ENETDOWN:
+      return KIND_UNAVAILABLE;
+    case ERRNO_ENETUNREACH:
+      return KIND_UNAVAILABLE;
+    case ERRNO_ENETRESET:
+      return KIND_UNAVAILABLE;
+    case ERRNO_ECONNABORTED:
+      return KIND_UNAVAILABLE;
+    case ERRNO_ECONNRESET:
+      return KIND_UNAVAILABLE;
+    case ERRNO_ENOBUFS:
+      return KIND_RESOURCE_EXHAUSTED;
+    case ERRNO_EISCONN:
+      return KIND_FAILED_PRECONDITION;
+    case ERRNO_ENOTCONN:
+      return KIND_FAILED_PRECONDITION;
+    case ERRNO_ESHUTDOWN:
+      return KIND_FAILED_PRECONDITION;
+    case ERRNO_ETOOMANYREFS:
+      return KIND_UNKNOWN;
+    case ERRNO_ETIMEDOUT:
+      return KIND_DEADLINE_EXCEEDED;
+    case ERRNO_ECONNREFUSED:
+      return KIND_UNAVAILABLE;
+    case ERRNO_EHOSTDOWN:
+      return KIND_UNAVAILABLE;
+    case ERRNO_EHOSTUNREACH:
+      return KIND_UNAVAILABLE;
+    case ERRNO_EALREADY:
+      return KIND_ALREADY_EXISTS;
+    case ERRNO_EINPROGRESS:
+      return KIND_UNKNOWN;
+    case ERRNO_ECANCELED:
+      return KIND_CANCELLED;
+    case ERRNO_ENOTRECOVERABLE:
+      return KIND_INTERNAL;
+  }
 }

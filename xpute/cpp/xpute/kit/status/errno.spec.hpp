@@ -12,6 +12,51 @@
 
 namespace xpute {
 
+// What an errno says happened: the canonical status code of gRPC and Abseil
+// (absl::StatusCode), by its number there, each errno's as Abseil's
+// ErrnoToStatusCode maps it, save that ENOTRECOVERABLE is internal, and
+// EBADMSG and EILSEQ data_loss. It says nothing of whether the error is
+// fatal: a broken invariant is a bug, which stops the program.
+enum class Kind : std::uint8_t {
+    ok = 0,
+    cancelled = 1,
+    unknown = 2,
+    invalid_argument = 3,
+    deadline_exceeded = 4,
+    not_found = 5,
+    already_exists = 6,
+    permission_denied = 7,
+    resource_exhausted = 8,
+    failed_precondition = 9,
+    out_of_range = 11,
+    unimplemented = 12,
+    internal = 13,
+    unavailable = 14,
+    data_loss = 15,
+};
+
+// The member `val` is, or none for a number no member has.
+constexpr std::optional<Kind> of_Kind(std::uint8_t val) noexcept {
+    switch (val) {
+    case 0: return Kind::ok;
+    case 1: return Kind::cancelled;
+    case 2: return Kind::unknown;
+    case 3: return Kind::invalid_argument;
+    case 4: return Kind::deadline_exceeded;
+    case 5: return Kind::not_found;
+    case 6: return Kind::already_exists;
+    case 7: return Kind::permission_denied;
+    case 8: return Kind::resource_exhausted;
+    case 9: return Kind::failed_precondition;
+    case 11: return Kind::out_of_range;
+    case 12: return Kind::unimplemented;
+    case 13: return Kind::internal;
+    case 14: return Kind::unavailable;
+    case 15: return Kind::data_loss;
+    }
+    return std::nullopt;
+}
+
 enum class Errno : std::int32_t {
     ok = 0,
     eperm = -1,
@@ -140,6 +185,73 @@ constexpr std::optional<Errno> of_Errno(std::int32_t val) noexcept {
     case -131: return Errno::enotrecoverable;
     }
     return std::nullopt;
+}
+
+// The member's `kind`.
+constexpr Kind kind_Errno(Errno val) noexcept {
+    switch (val) {
+    case Errno::ok: return Kind::ok;
+    case Errno::eperm: return Kind::permission_denied;
+    case Errno::enoent: return Kind::not_found;
+    case Errno::esrch: return Kind::not_found;
+    case Errno::eintr: return Kind::unavailable;
+    case Errno::eio: return Kind::unknown;
+    case Errno::enxio: return Kind::not_found;
+    case Errno::e2big: return Kind::invalid_argument;
+    case Errno::enoexec: return Kind::unknown;
+    case Errno::ebadf: return Kind::failed_precondition;
+    case Errno::echild: return Kind::failed_precondition;
+    case Errno::eagain: return Kind::unavailable;
+    case Errno::enomem: return Kind::resource_exhausted;
+    case Errno::eacces: return Kind::permission_denied;
+    case Errno::efault: return Kind::invalid_argument;
+    case Errno::ebusy: return Kind::failed_precondition;
+    case Errno::eexist: return Kind::already_exists;
+    case Errno::exdev: return Kind::unimplemented;
+    case Errno::enodev: return Kind::not_found;
+    case Errno::enotdir: return Kind::failed_precondition;
+    case Errno::eisdir: return Kind::failed_precondition;
+    case Errno::einval: return Kind::invalid_argument;
+    case Errno::enfile: return Kind::resource_exhausted;
+    case Errno::emfile: return Kind::resource_exhausted;
+    case Errno::enotty: return Kind::invalid_argument;
+    case Errno::efbig: return Kind::out_of_range;
+    case Errno::enospc: return Kind::resource_exhausted;
+    case Errno::espipe: return Kind::invalid_argument;
+    case Errno::erofs: return Kind::permission_denied;
+    case Errno::emlink: return Kind::resource_exhausted;
+    case Errno::epipe: return Kind::failed_precondition;
+    case Errno::edom: return Kind::invalid_argument;
+    case Errno::erange: return Kind::out_of_range;
+    case Errno::enosys: return Kind::unimplemented;
+    case Errno::eproto: return Kind::unknown;
+    case Errno::ebadmsg: return Kind::data_loss;
+    case Errno::eoverflow: return Kind::out_of_range;
+    case Errno::emsgsize: return Kind::unknown;
+    case Errno::enotsup: return Kind::unimplemented;
+    case Errno::eilseq: return Kind::data_loss;
+    case Errno::eaddrinuse: return Kind::failed_precondition;
+    case Errno::eaddrnotavail: return Kind::already_exists;
+    case Errno::enetdown: return Kind::unavailable;
+    case Errno::enetunreach: return Kind::unavailable;
+    case Errno::enetreset: return Kind::unavailable;
+    case Errno::econnaborted: return Kind::unavailable;
+    case Errno::econnreset: return Kind::unavailable;
+    case Errno::enobufs: return Kind::resource_exhausted;
+    case Errno::eisconn: return Kind::failed_precondition;
+    case Errno::enotconn: return Kind::failed_precondition;
+    case Errno::eshutdown: return Kind::failed_precondition;
+    case Errno::etoomanyrefs: return Kind::unknown;
+    case Errno::etimedout: return Kind::deadline_exceeded;
+    case Errno::econnrefused: return Kind::unavailable;
+    case Errno::ehostdown: return Kind::unavailable;
+    case Errno::ehostunreach: return Kind::unavailable;
+    case Errno::ealready: return Kind::already_exists;
+    case Errno::einprogress: return Kind::unknown;
+    case Errno::ecanceled: return Kind::cancelled;
+    case Errno::enotrecoverable: return Kind::internal;
+    }
+    __builtin_unreachable();
 }
 
 namespace ERRNO {

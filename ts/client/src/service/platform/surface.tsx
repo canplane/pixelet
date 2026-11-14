@@ -30,7 +30,7 @@ const FILL = {
 } as const;
 
 /** The canvas's layout box, in CSS pixels; null while there is none. */
-export function surfaceBox(): { width: f64; height: f64 } | null {
+export function surface_box(): { width: f64; height: f64 } | null {
   const canvas = document.querySelector("canvas");
   return canvas && { width: canvas.clientWidth, height: canvas.clientHeight };
 }
@@ -130,7 +130,7 @@ function pointerKind(e: PointerEvent): PointerKind {
 }
 
 function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
-  const { keyDown, keyUp, releaseKeys, releasePointers } = input;
+  const { key_down, key_up, release_keys, release_pointers } = input;
   // Where the canvas is drawn on the page, with its transforms. A pointer's
   // client position is read against it and scaled into the layout box's CSS
   // pixels.
@@ -188,15 +188,15 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
       e.altKey
     )
       return;
-    if (keyDown(e.code, { inField: inField(e) })) e.preventDefault();
+    if (key_down(e.code, { in_field: inField(e) })) e.preventDefault();
   };
-  const onKeyUp = (e: KeyboardEvent) => keyUp(e.code);
+  const onKeyUp = (e: KeyboardEvent) => key_up(e.code);
   // The core hears of the hiding from the platform (visibility.ts), so this
   // only lets go of what the world holds.
   const onVisibility = () => {
     if (document.visibilityState !== "visible") {
-      releaseKeys();
-      releasePointers();
+      release_keys();
+      release_pointers();
     }
   };
 
@@ -213,19 +213,19 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   // stops a key's propagation before it would bubble up to here.
   globalThis.addEventListener("keydown", onKeyDown, true);
   globalThis.addEventListener("keyup", onKeyUp, true);
-  globalThis.addEventListener("blur", releaseKeys);
-  globalThis.addEventListener("blur", releasePointers);
+  globalThis.addEventListener("blur", release_keys);
+  globalThis.addEventListener("blur", release_pointers);
   const observer = new ResizeObserver(onResize);
   observer.observe(canvas);
 
   const close = input.open();
 
   return () => {
-    releasePointers();
+    release_pointers();
     close();
     observer.disconnect();
-    globalThis.removeEventListener("blur", releasePointers);
-    globalThis.removeEventListener("blur", releaseKeys);
+    globalThis.removeEventListener("blur", release_pointers);
+    globalThis.removeEventListener("blur", release_keys);
     globalThis.removeEventListener("keyup", onKeyUp, true);
     globalThis.removeEventListener("keydown", onKeyDown, true);
     document.removeEventListener("visibilitychange", onVisibility);

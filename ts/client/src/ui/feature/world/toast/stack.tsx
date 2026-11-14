@@ -5,9 +5,9 @@ import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
 
 import { Motion } from "@/ui/shared/component/motion/motion.tsx";
 import {
-  cardPose,
-  deckSwipe,
-  peekBelow,
+  card_pose,
+  deck_swipe,
+  peek_below,
   useTurnedBack,
 } from "@/ui/feature/world/deck.ts";
 import {
@@ -20,9 +20,9 @@ import {
   SETTLE,
 } from "@/ui/shared/component/motion/transition.ts";
 import {
-  rotateToasts,
-  setToastDragging,
-  toastCount,
+  rotate_toasts,
+  set_toast_dragging,
+  toast_cnt,
   useToastEntries,
   useToastTurnCount,
 } from "./store.ts";
@@ -37,19 +37,19 @@ const MAKE_ROOM = after(SETTLE, SETTLE.durationMs / 2);
 
 export function Toaster() {
   const entries = useToastEntries();
-  const turnCount = useToastTurnCount();
-  const { list, onExited } = usePresent(entries, (e) => e.id);
+  const turn_cnt = useToastTurnCount();
+  const { list, on_exited } = usePresent(entries, (e) => e.id);
   // The center is rounded to a whole pixel, because half of an odd width is
   // not one.
   const [center, setCenter] = useState(0);
 
   // A leaving card keeps its place until it has faded, so the cards behind
   // move up only once it is gone.
-  const lastOrder = useRef<Key[]>([]);
-  const turnedBack = useTurnedBack(turnCount);
+  const last_order = useRef<Key[]>([]);
+  const turned_back = useTurnedBack(turn_cnt);
   const order: Key[] = entries.map((e) => e.id);
   const arrivals = new Set<Key>(
-    order.filter((key) => !lastOrder.current.includes(key)),
+    order.filter((key) => !last_order.current.includes(key)),
   );
   const arrived = arrivals.size;
   // A leaving card stays behind the card it was behind, and behind any card
@@ -59,17 +59,17 @@ export function Toaster() {
     .filter((c) => !c.present)
     .map((c) => c.key)
     .sort(
-      (a, b) => lastOrder.current.indexOf(a) - lastOrder.current.indexOf(b),
+      (a, b) => last_order.current.indexOf(a) - last_order.current.indexOf(b),
     )) {
-    const ahead = lastOrder.current
-      .slice(0, Math.max(0, lastOrder.current.indexOf(key)))
+    const ahead = last_order.current
+      .slice(0, Math.max(0, last_order.current.indexOf(key)))
       .findLast((k) => order.includes(k));
     let at = ahead === undefined ? 0 : order.indexOf(ahead) + 1;
     while (at < order.length && arrivals.has(order[at])) at++;
     order.splice(at, 0, key);
   }
   useEffect(() => {
-    lastOrder.current = order;
+    last_order.current = order;
   });
 
   const swipe = useRef<ReturnType<typeof PanResponder.create> | null>(null);
@@ -78,8 +78,8 @@ export function Toaster() {
       // The stack claims a touch as it starts. A mouse drag on a page reports
       // each move to whatever lies under the cursor, so a swipe down that
       // reached the dock before the stack claimed it would turn the dock.
-      onStartShouldSetPanResponder: () => toastCount() > 1,
-      ...deckSwipe(rotateToasts, { drag: setToastDragging }),
+      onStartShouldSetPanResponder: () => toast_cnt() > 1,
+      ...deck_swipe(rotate_toasts, { drag: set_toast_dragging }),
     });
   }
 
@@ -101,10 +101,10 @@ export function Toaster() {
         .sort((a, b) => (a.key as number) - (b.key as number))
         .map(({ item, key, present }) => {
           const depth = order.indexOf(key);
-          const pose = cardPose(depth, PEEK_PX);
+          const pose = card_pose(depth, PEEK_PX);
           const front = present && depth === 0;
-          const fromAbove =
-            front && turnedBack && lastOrder.current.indexOf(key) !== 0;
+          const from_above =
+            front && turned_back && last_order.current.indexOf(key) !== 0;
           const transition = !present
             ? LEAVE
             : arrivals.has(key)
@@ -117,16 +117,16 @@ export function Toaster() {
           return (
             <Motion
               key={key}
-              from={fromAbove ? pose.above : pose.rest}
-              replay={fromAbove ? turnCount : null}
+              from={from_above ? pose.above : pose.rest}
+              replay={from_above ? turn_cnt : null}
               to={present ? pose.rest : { scale: 0.9 }}
               transition={transition}
-              onSettled={present ? undefined : () => onExited(key)}
+              onSettled={present ? undefined : () => on_exited(key)}
               style={[
                 styles.card,
                 {
                   left: center,
-                  zIndex: pose.zIndex,
+                  zIndex: pose.z_idx,
                   pointerEvents: front ? "auto" : "none",
                 },
               ]}
@@ -137,7 +137,7 @@ export function Toaster() {
                 fade={present ? pose.fade : 0}
                 fadeTransition={transition}
                 touch={front ? swipe.current!.panHandlers : undefined}
-                touchBelow={front ? peekBelow(entries.length, PEEK_PX) : 0}
+                touchBelow={front ? peek_below(entries.length, PEEK_PX) : 0}
               />
             </Motion>
           );

@@ -24,8 +24,8 @@ const HOODS = new Set([
 
 const TIER_SEPARATOR = " · ";
 
-function joined(names: string[], broadFirst: boolean): string {
-  return broadFirst ? names.join(" ") : [...names].reverse().join(", ");
+function joined(names: string[], broad_first: boolean): string {
+  return broad_first ? names.join(" ") : [...names].reverse().join(", ");
 }
 
 /** A place's label: its address, then its neighborhood set apart. Overture's
@@ -34,8 +34,8 @@ function joined(names: string[], broadFirst: boolean): string {
  * areas do in Google's address descriptors. A neighborhood with the same name
  * as the address's narrowest part is left out, as Pelias drops a name that
  * the label's first admin part repeats (`dedupeNameAndFirstLabelElement`). */
-export function assembleLabel(parts: NamePart[]): string {
-  const broadFirst = BROAD_TO_NARROW.test(parts[0]?.name ?? "");
+export function assemble_label(parts: NamePart[]): string {
+  const broad_first = BROAD_TO_NARROW.test(parts[0]?.name ?? "");
   const split = parts.findIndex((p) => !p.area || HOODS.has(p.subtype));
   const address = (split < 0 ? parts : parts.slice(0, split)).map(
     (p) => p.name,
@@ -44,6 +44,6 @@ export function assembleLabel(parts: NamePart[]): string {
   if (hood[0] !== undefined && hood[0] === address.at(-1)) hood.shift();
   const tiers = [address, hood]
     .filter((t) => t.length > 0)
-    .map((t) => joined(t, broadFirst));
-  return (broadFirst ? tiers : tiers.reverse()).join(TIER_SEPARATOR);
+    .map((t) => joined(t, broad_first));
+  return (broad_first ? tiers : tiers.reverse()).join(TIER_SEPARATOR);
 }

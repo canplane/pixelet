@@ -22,13 +22,13 @@ import { color } from "@/ui/shared/component/theme.ts";
 export * from "./panel.tsx";
 
 export function Panel({ label, onClose, half, children }: PanelProps) {
-  const { open, onExited } = useContext(PanelPresence);
+  const { open, on_exited } = useContext(PanelPresence);
   return (
     <Host style={styles.host}>
       <BottomSheet
         isPresented={open}
         onIsPresentedChange={(presented) => presented || onClose()}
-        onDismiss={onExited}
+        onDismiss={on_exited}
       >
         <Group
           modifiers={[

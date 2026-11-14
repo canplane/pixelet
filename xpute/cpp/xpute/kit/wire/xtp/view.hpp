@@ -188,7 +188,7 @@ template <class Self, class Alloc> class NodeView {
                     // The arrays the Rust encoder accepts: numbers in whole
                     // elements, or a bitset; anything else is EBADMSG.
                     bool bitset = x.type == SequenceType::bitset;
-                    if (!bitset && (type_is_nonnum(type_of(x.type)) || x.bytes.size() % elem_sz(x.type) != 0)) return marshal_error(Errno::ebadmsg);
+                    if (!bitset && (type_is_nonnum(type_of(x.type)) || x.bytes.size() % elem_sz(x.type) != 0)) return make_error(Errno::ebadmsg);
                     Node<Alloc> n(a);
                     n.kind = x.type == SequenceType::bitset ? NodeKind::bitset : NodeKind::array;
                     n.type = type_of(x.type);
@@ -383,7 +383,7 @@ Result<std::vector<std::uint8_t, typename std::allocator_traits<Alloc>::template
                                                                                                                      const Alloc &alloc = Alloc()) {
     using Buffer = std::vector<std::uint8_t, typename std::allocator_traits<Alloc>::template rebind_alloc<std::uint8_t>>;
     std::uint32_t max_cap = opts.max_cap.value_or(MAX_PKT_SZ);
-    if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) return marshal_error(Errno::einval);
+    if (max_cap < HDR_SZ || max_cap > MAX_PKT_SZ) return make_error(Errno::einval);
     std::uint32_t cap = std::max(HDR_SZ, std::min(opts.init_cap, max_cap));
     Buffer buf(alloc);
     for (;;) {

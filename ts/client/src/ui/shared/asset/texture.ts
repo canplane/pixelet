@@ -3,7 +3,7 @@
 import { ASSET_FILES, PACK } from "@/service/origin/ingest.spec.ts";
 import type { Cube } from "@/ui/shared/asset/catalog.ts";
 
-export function shippedTopTextureKey(cube: Cube): string | null {
+export function shipped_top_texture_key(cube: Cube): string | null {
   const tile = PACK.top[cube];
   return tile === undefined
     ? null

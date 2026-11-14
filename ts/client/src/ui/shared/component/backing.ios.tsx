@@ -35,7 +35,7 @@ const Blur: ComponentType<ViewProps> = requireNativeView("PxlPlatform", "Blur");
 
 type Effect = "none" | "clear" | "regular";
 
-function effectAt(level: f64, place: Place): Effect {
+function effect_at(level: f64, place: Place): Effect {
   if (level <= 0) return "none";
   if (level < 1 || place === BackingPlace.OnSheet) return "clear";
   return "regular";
@@ -56,9 +56,9 @@ export function Backing(props: BackingProps) {
   } = props;
   const dim = useDim(fade, transition, fadeFrom);
 
-  const target = effectAt(dim.level, place);
+  const target = effect_at(dim.level, place);
   const [shown, setShown] = useState<Effect>(
-    fadeFrom === undefined ? target : effectAt(fadeFrom, place),
+    fadeFrom === undefined ? target : effect_at(fadeFrom, place),
   );
   // UIKit installs a glass style set before the first layout without
   // animating it, so a change of style waits for the first layout and for

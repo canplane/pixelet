@@ -78,6 +78,11 @@ with `--target=wasm32-wasip1` (xpute/cpp/Makefile), and its module imports
   [backlog.md](../backlog.md), not now: it is what would let an existing program
   in, which is where an open-source xpute gains users, and it has no program to
   be built against yet.
+
+  > Since 2026-11-14: dropped from the backlog. xpute answers on a later turn
+  > and reads in place, and WASI 0.1 and 0.2 block on a call, so an adapter would
+  > be a runtime of its own, not a translation. The vocabulary stays aligned.
+
 - Aligning the vocabulary is the part worth having early, and it is the same
   question as the resource vocabulary
   ([20260930-resources-files-and-streams.md](./archive/20260930-resources-files-and-streams.md)),

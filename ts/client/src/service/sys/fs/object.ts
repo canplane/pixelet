@@ -12,12 +12,13 @@
  * leaves has no file, and neither has a top with no rows. A server can answer
  * the same `open` and `apply` instead, and the core cannot tell the two
  * apart. A batch the database fails to keep answers `io`, and the core sends
- * it again.
+ * it again; a bug passes on as itself.
  */
 
 import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
+import { Bug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_EBADMSG, ERRNO_EINVAL } from "@xpute/kit/status/errno.spec.ts";
-import { FaultError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import { ComponentError, type Link } from "@xpute/link";
 import {
   ERROR_CODE_BAD_MESSAGE,
@@ -43,7 +44,7 @@ export const TOP_KEY = "top";
 
 /** A file is one format byte followed by a tree packet. */
 function pkt(fmt: number, bytes: U8Array): U8Array {
-  if (bytes[0] !== fmt) throw new FaultError(ERRNO_EBADMSG);
+  if (bytes[0] !== fmt) throw new XputeError(ERRNO_EBADMSG);
   // The tree reader needs the packet to start on a word boundary. A view at
   // offset 1 would not, so the packet is copied.
   return bytes.slice(1);
@@ -62,7 +63,7 @@ export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
   const [keys, asset_ids, rows, texts] = new TreeReader(pkt(fmt, bytes))
     .read_branch()
     .get<[string[], U32Array, U32Array, string[]]>();
-  if (keys.length !== asset_ids.length) throw new FaultError(ERRNO_EINVAL);
+  if (keys.length !== asset_ids.length) throw new XputeError(ERRNO_EINVAL);
   const out: Leaf[] = keys.map((key, r) => ({
     key,
     asset_id: asset_ids[r]!,
@@ -70,7 +71,7 @@ export function decode_writes(fmt: number, bytes: U8Array): Leaf[] {
   }));
   rows.forEach((r, k) => {
     if (out[r] === undefined || texts[k] === undefined) {
-      throw new FaultError(ERRNO_EINVAL);
+      throw new XputeError(ERRNO_EINVAL);
     }
     out[r]!.text = texts[k]!;
   });
@@ -102,7 +103,7 @@ export function decode_top(bytes: U8Array): TopRow[] {
   const [shard, fold] = new TreeReader(pkt(format.OBJECT_TOP, bytes))
     .read_branch()
     .get<[string[], U32Array]>();
-  if (shard.length !== fold.length) throw new FaultError(ERRNO_EINVAL);
+  if (shard.length !== fold.length) throw new XputeError(ERRNO_EINVAL);
   return shard.map((s, r) => ({ shard: s, fold: fold[r]! }));
 }
 
@@ -245,9 +246,10 @@ export function serve_objects(link: Link): void {
       try {
         await OBJECTS.commit(link.bytes(batch.at, batch.len).slice());
       } catch (e) {
-        // Only the decode throws a FaultError; the database throws its own.
+        if (e instanceof Bug) throw e;
+        // Only the decode throws an XputeError; the database throws its own.
         throw new ComponentError(
-          e instanceof FaultError ? ERROR_CODE_BAD_MESSAGE : ERROR_CODE_IO,
+          e instanceof XputeError ? ERROR_CODE_BAD_MESSAGE : ERROR_CODE_IO,
         );
       }
     },

@@ -178,7 +178,7 @@ pub fn outputs(root: &Path, symbols: &[Symbol]) -> Result<Vec<Output>, String> {
         rs: Some(RS),
         ..DataSpec::DEFAULT
     };
-    let mut outs = table_outputs(root, &d, table)?;
+    let mut outs = table_outputs(root, &d, table, &[])?;
     let rs = "\npub static SYMBOL_MASKS: &[u8] = include_bytes!(\"symbol.mask\");\n".to_string();
     let mut ts = String::from(
         "\nexport interface PlaceSymbol {\n  box: readonly [number, number];\n  shapes: readonly (readonly [string, boolean])[];\n}\n\nexport const PLACE_SYMBOLS: readonly PlaceSymbol[] = [\n",

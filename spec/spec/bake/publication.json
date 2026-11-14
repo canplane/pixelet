@@ -4,8 +4,16 @@
     "each is served is the bucket's alone: its `source`, which the client reads",
     "at boot and script/publish.py writes, so a publish changes nothing here."
   ],
+  "BASE_LAYER": {
+    "$type": "enum",
+    "$repr": "u32",
+    "$names": true,
+    "$doc": ["The base layers a version is published for, each a kind a baked page is published under."],
+    "$val": ["terrain", "place", "division", "earth"]
+  },
   "FORMAT": {
     "$type": "u32",
+    "$keys": "BaseLayer",
     "$doc": [
       "The format each bake writes now, which a published name begins with.",
       "It is bumped by a change to how the client reads a tile, or to what a",

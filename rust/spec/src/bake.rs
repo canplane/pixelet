@@ -3,7 +3,7 @@
 //! Baked tile formats shared by the bake and the core.
 
 use xpute_kit::status::errno::Errno;
-use xpute_kit::status::error::MarshalError;
+use xpute_kit::status::error::XputeError;
 
 pub mod constant;
 pub mod fold;
@@ -20,6 +20,6 @@ pub mod way;
 
 /// A packet no bake writes, as every tile reader refuses it.
 #[track_caller]
-pub(crate) fn malformed() -> MarshalError {
-    MarshalError::new(Errno::EBADMSG)
+pub(crate) fn malformed() -> XputeError {
+    XputeError::new(Errno::EBADMSG)
 }

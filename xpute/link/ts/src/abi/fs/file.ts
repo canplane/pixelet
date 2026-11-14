@@ -37,10 +37,10 @@ export interface HostFile {
   close(signal_: AbortSignal): Promise<void>;
 }
 
-/** The object over `imp`. */
+/** The object over `implementation`. */
 export function file(
   l: Pick<Link, "task_return" | "on_cancel">,
-  imp: HostFile,
+  implementation: HostFile,
 ): LinkObject {
   return {
     call(m, tag, args) {
@@ -48,7 +48,7 @@ export function file(
         switch (m) {
           case FILE_SIZE: {
             const stop = new AbortController();
-            imp.size(stop.signal).then(
+            implementation.size(stop.signal).then(
               (x) => {
                 const v = { tag: "ok", val: x } as
                   { tag: "ok"; val: number } | { tag: "err"; val: ErrorCode };
@@ -56,10 +56,10 @@ export function file(
                   8,
                   (w) => {
                     if (v.tag === "ok") {
-                      w.u32(0 + 4, v.val);
+                      w.u32(4, v.val);
                     } else {
                       w.u8(0, 1);
-                      w.u8(0 + 4, v.val);
+                      w.u8(4, v.val);
                     }
                   },
                 ]);
@@ -73,10 +73,10 @@ export function file(
                   8,
                   (w) => {
                     if (v.tag === "ok") {
-                      w.u32(0 + 4, v.val);
+                      w.u32(4, v.val);
                     } else {
                       w.u8(0, 1);
-                      w.u8(0 + 4, v.val);
+                      w.u8(4, v.val);
                     }
                   },
                 ]);
@@ -89,7 +89,7 @@ export function file(
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
             const stop = new AbortController();
-            imp.read(load_Lent(r_, 0), stop.signal).then(
+            implementation.read(load_Lent(r_, 0), stop.signal).then(
               (x) => {
                 const v = { tag: "ok", val: x } as
                   { tag: "ok"; val: number } | { tag: "err"; val: ErrorCode };
@@ -97,10 +97,10 @@ export function file(
                   8,
                   (w) => {
                     if (v.tag === "ok") {
-                      w.u32(0 + 4, v.val);
+                      w.u32(4, v.val);
                     } else {
                       w.u8(0, 1);
-                      w.u8(0 + 4, v.val);
+                      w.u8(4, v.val);
                     }
                   },
                 ]);
@@ -114,10 +114,10 @@ export function file(
                   8,
                   (w) => {
                     if (v.tag === "ok") {
-                      w.u32(0 + 4, v.val);
+                      w.u32(4, v.val);
                     } else {
                       w.u8(0, 1);
-                      w.u8(0 + 4, v.val);
+                      w.u8(4, v.val);
                     }
                   },
                 ]);
@@ -130,7 +130,7 @@ export function file(
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
             const stop = new AbortController();
-            imp.write(load_Lent(r_, 0), stop.signal).then(
+            implementation.write(load_Lent(r_, 0), stop.signal).then(
               () => l.task_return(tag, 0, null),
               (e: unknown) => l.task_return(tag, refusal_of(e)),
             );
@@ -139,7 +139,7 @@ export function file(
           }
           case FILE_SET_ASIDE: {
             const stop = new AbortController();
-            imp.set_aside(stop.signal).then(
+            implementation.set_aside(stop.signal).then(
               () => {
                 const v = { tag: "ok" } as
                   { tag: "ok" } | { tag: "err"; val: ErrorCode };
@@ -149,7 +149,7 @@ export function file(
                     if (v.tag === "ok") {
                     } else {
                       w.u8(0, 1);
-                      w.u8(0 + 1, v.val);
+                      w.u8(1, v.val);
                     }
                   },
                 ]);
@@ -165,7 +165,7 @@ export function file(
                     if (v.tag === "ok") {
                     } else {
                       w.u8(0, 1);
-                      w.u8(0 + 1, v.val);
+                      w.u8(1, v.val);
                     }
                   },
                 ]);
@@ -176,7 +176,7 @@ export function file(
           }
           case FILE_CLOSE: {
             const stop = new AbortController();
-            imp.close(stop.signal).then(
+            implementation.close(stop.signal).then(
               () => {
                 const v = { tag: "ok" } as
                   { tag: "ok" } | { tag: "err"; val: ErrorCode };
@@ -186,7 +186,7 @@ export function file(
                     if (v.tag === "ok") {
                     } else {
                       w.u8(0, 1);
-                      w.u8(0 + 1, v.val);
+                      w.u8(1, v.val);
                     }
                   },
                 ]);
@@ -202,7 +202,7 @@ export function file(
                     if (v.tag === "ok") {
                     } else {
                       w.u8(0, 1);
-                      w.u8(0 + 1, v.val);
+                      w.u8(1, v.val);
                     }
                   },
                 ]);

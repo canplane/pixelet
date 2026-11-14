@@ -9,7 +9,7 @@
 import { type BigTypedArray, to_bytes, type TypedArray, type U8Array } from "@xpute/kit/abi/array.ts";
 import { te } from "@xpute/kit/codec/encoding.ts";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
-import { MarshalError } from "@xpute/kit/status/error.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 
 const align_to = (at: number, align: number): number => Math.ceil(at / align) * align;
 
@@ -24,13 +24,13 @@ export class Lower {
   private end: number;
   private overflow: boolean;
 
-  /** A packet of a fixed part `fixed_bytes` long, zeroed, in `buf`. */
-  constructor(buf: U8Array, fixed_bytes: number) {
+  /** A packet of a fixed part `fixed_sz` long, zeroed, in `buf`. */
+  constructor(buf: U8Array, fixed_sz: number) {
     this.buf = buf;
     this.view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
-    this.overflow = fixed_bytes > buf.length;
-    if (!this.overflow) buf.fill(0, 0, fixed_bytes);
-    this.end = fixed_bytes;
+    this.overflow = fixed_sz > buf.length;
+    if (!this.overflow) buf.fill(0, 0, fixed_sz);
+    this.end = fixed_sz;
   }
 
   private fits(at: number, n: number): boolean {
@@ -116,7 +116,7 @@ export class Lift {
   }
 
   private within(at: number, n: number): number {
-    if (at + n > this.pkt.length) throw new MarshalError(ERRNO_EBADMSG);
+    if (at + n > this.pkt.length) throw new XputeError(ERRNO_EBADMSG);
     return at;
   }
 
@@ -158,7 +158,7 @@ export class Lift {
   /** A discriminant of `n` cases at `at`, refused where it names none. */
   case(at: number, n: number): number {
     const d = n <= 256 ? this.u8(at) : n <= 65536 ? this.u16(at) : this.u32(at);
-    if (d >= n) throw new MarshalError(ERRNO_EBADMSG);
+    if (d >= n) throw new XputeError(ERRNO_EBADMSG);
     return d;
   }
 
@@ -168,7 +168,7 @@ export class Lift {
     const base = this.u32(at);
     const len = this.u32(at + 4);
     if (base % align !== 0 || base + len * sz > this.pkt.length) {
-      throw new MarshalError(ERRNO_EBADMSG);
+      throw new XputeError(ERRNO_EBADMSG);
     }
     return [base, len];
   }
@@ -201,7 +201,7 @@ export class Lift {
     try {
       return UTF8.decode(this.bytes(at));
     } catch {
-      throw new MarshalError(ERRNO_EBADMSG);
+      throw new XputeError(ERRNO_EBADMSG);
     }
   }
 }

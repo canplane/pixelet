@@ -16,6 +16,7 @@ export {
   type Opener,
   type Packet,
   refusal_of,
+  set_hook,
   ComponentError,
   type Ref,
   type Reply,

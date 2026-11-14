@@ -196,21 +196,28 @@ The code, in the order its parts depend on each other.
   ends. `dev/tool` is
   xpute's own use of them: `cargo
   spec` checks xpute's generated files, and `cargo spec --write` writes them.
-- `rust/kit`, `ts/kit` and `cpp/xpute/kit` are the kit: `collection`, `codec`,
-  `wire/xtp` and `wire/tlv`, `status` (the errno table and `bug!`),
-  `math/scalar` and `math/rng`, and `alloc` (`buddy_tree`, `slab`).
-- `rust/core` is the guest end: `manifest`, `entry`, `io` and
-  `wasm`. `cpp/xpute/core` holds the same
-  parts but the manifest and the entry, which a C++ guest writes for itself.
-- `rust/gpu` is the GPU's calls, and behind its `runtime` feature the native GPU
-  host. `cpp/xpute/gpu` is the encoder alone.
-- `ts/runtime` (`@xpute/runtime`) is the host end: `start.ts`,
-  `platform.ts` and `module.ts`, and `io/` (the frame and the
-  stream).
-- `ts/gpu` (`@xpute/gpu`) is the GPU host on WebGPU (`GpuHost`, `WebGpu`),
-  and on a device `NativeGpu` and the `SurfaceView`, over its own Expo module.
-- `ts/native` (`@xpute/native`) is the React Native module: the Kotlin and the
-  Swift over the C ABI and JNI.
-- `rust/dev/golden`, `ts/dev/golden.ts` and `cpp/dev/test/` are what the tests
-  take: the golden records' reader, and in C++ the tests' runner.
+- `kit/rust`, `kit/ts` (`@xpute/kit`) and `cpp/xpute/kit` are the kit:
+  `collection`, `codec`, `wire/xtp` and `wire/tlv`, `status` (the errno table
+  and `bug!`), `math/scalar` and `math/rng`, and `alloc` (`buddy_tree`,
+  `slab`).
+- `link/rust` and `link/ts` (`@xpute/link`) are the link both sides take: its
+  frames, its machine and its bindings, and in TypeScript the remote a UI
+  reaches the link by. `guest/rust` is the guest end over it: its link, its
+  clock and its waits. In C++, `cpp/xpute/link` is the link and
+  `cpp/xpute/guest` the guest end, as `link/rust` and `guest/rust` are in
+  Rust.
+- `gpu/guest/rust` is the GPU's calls, and `gpu/native/host` the native GPU
+  host. `cpp/xpute/gpu` is the encoder, its stream and its handles.
+- `web/runtime` (`@xpute/web-runtime`) is a page's runtime: the worker's
+  instantiation of the guest, the page's end of the worker, the console and
+  the lifecycle; `web/host` (`@xpute/web-host`) is the host's servers there,
+  the clocks and the stop.
+- `gpu/web/host` (`@xpute/gpu-web-host`) is the GPU host on WebGPU (`GpuHost`,
+  `WebGpu`), and `gpu/native/runtime/expo` (`@xpute/gpu-native-runtime`) on a
+  device the `SurfaceView` and the display's frames, over its own Expo module.
+- `native/runtime/expo` (`@xpute/native-runtime`) is the React Native module:
+  the Kotlin and the Swift over the C ABI and JNI.
+- `dev/golden/rust`, `dev/golden/ts` (`@xpute/golden`) and `cpp/dev/test/` are
+  what the tests take: the golden records' reader, and in C++ the tests'
+  runner.
 - `cpp/amalgamation.awk` makes the C++ library's two files.

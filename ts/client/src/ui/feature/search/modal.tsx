@@ -21,12 +21,12 @@ import { TextField } from "@/ui/shared/component/text-field.tsx";
 import {
   chrome,
   color,
-  textScale,
-  textStyle,
+  text_scale,
+  text_style,
   weight,
 } from "@/ui/shared/component/theme.ts";
 import { SectionTitle } from "@/ui/shared/component/section-title.tsx";
-import { statusColor } from "@/ui/feature/world/top/sensor-icon.tsx";
+import { status_color } from "@/ui/feature/world/top/sensor-icon.tsx";
 import { LABEL, STATUS } from "@/ui/shared/component/palette.ts";
 import { AboveKeyboard } from "@/ui/shared/component/above-keyboard.tsx";
 import { SYSTEM_CLEAR } from "@/ui/shared/component/text-field.tsx";
@@ -36,15 +36,15 @@ import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { FILL, SYMBOL } from "./place_theme.spec.ts";
 import { PLACE_SYMBOLS, type PlaceSymbol } from "./place-symbol.ts";
 import { SEARCH_KIND } from "./search.spec.ts";
-import { assembleLabel } from "@/ui/feature/division/label.ts";
+import { assemble_label } from "@/ui/feature/division/label.ts";
 import {
   useDivisionLabel,
   usePivotCoordinate,
 } from "@/ui/feature/division/pivot.ts";
 import { DIVISION_SUBTYPE } from "@/ui/feature/division/division.spec.ts";
-import { fetchSearch, type SearchResult } from "./fetch.ts";
+import { fetch_search, type SearchResult } from "./fetch.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
-import { touchOutset } from "@/ui/shared/component/touch.ts";
+import { touch_outset } from "@/ui/shared/component/touch.ts";
 import { useCore } from "@/ui/shared/watch.ts";
 import * as camera from "@/service/core/camera.ts";
 import * as sensor from "@/service/core/sensor.ts";
@@ -52,7 +52,7 @@ import * as snapshot from "@/service/core/snapshot.ts";
 
 const DEBOUNCE_MS = 300;
 
-function formatDistance(m: f64): string {
+function format_dist(m: f64): string {
   if (m < 1000) return `${round(m)}m`;
   if (m < 10000) return `${fixed(m / 1000, 1)}km`;
   return `${round(m / 1000).toLocaleString()}km`;
@@ -73,9 +73,9 @@ function ResultRow({
   const within = result.context.filter(
     (p) => p.subtype !== DIVISION_SUBTYPE.COUNTRY,
   );
-  const where = within.length > 0 ? assembleLabel(within) : "";
+  const where = within.length > 0 ? assemble_label(within) : "";
   const theme =
-    result.kind === SEARCH_KIND.PLACE ? placeTheme(result.category) : null;
+    result.kind === SEARCH_KIND.PLACE ? place_theme(result.category) : null;
   const symbol = theme?.symbol;
   return (
     <Pressable onPress={onPress} accessibilityRole="button" style={styles.row}>
@@ -101,7 +101,7 @@ function ResultRow({
           )}
         </View>
       )}
-      <View style={styles.rowText}>
+      <View style={styles.row_text}>
         <Text numberOfLines={1} style={styles.name}>
           {result.name}
         </Text>
@@ -122,7 +122,7 @@ function ResultRow({
 
 /** The country is null for a result no country holds, such as one at sea or
  * beyond the mapped divisions. */
-function countryOf(result: SearchResult): string | null {
+function country_of(result: SearchResult): string | null {
   if (
     result.kind === SEARCH_KIND.DIVISION &&
     result.category === DIVISION_SUBTYPE.COUNTRY
@@ -143,13 +143,13 @@ interface CountrySection {
 /** The pivot's country comes first, then each other country where its best
  * result was ranked, and the results with no country come last. Within a
  * section, results keep the API's order. */
-function byCountry(
+function by_country(
   results: SearchResult[],
   home: string | null,
 ): CountrySection[] {
   const sections = new Map<string | null, CountrySection>();
   for (const result of results) {
-    const country = countryOf(result);
+    const country = country_of(result);
     const section = sections.get(country) ?? { country, rows: [] };
     section.rows.push(result);
     sections.set(country, section);
@@ -176,29 +176,29 @@ function LocateCard() {
         fill={color.ground}
         place={BackingPlace.OnSheet}
         interactive
-        style={styles.locateCard}
+        style={styles.locate_card}
       >
         <Pressable
           onPress={() => void sensor.locate()}
           disabled={locating}
           accessibilityRole="button"
-          style={styles.locateRow}
+          style={styles.locate_row}
         >
           <Glyph
             glyph="location"
             size={chrome.glyph}
-            color={statusColor(location, LABEL.secondary, STATUS)}
+            color={status_color(location, LABEL.secondary, STATUS)}
           />
           <Text
             numberOfLines={1}
-            maxFontSizeMultiplier={textScale.chrome}
-            style={styles.locateLabel}
+            maxFontSizeMultiplier={text_scale.chrome}
+            style={styles.locate_label}
           >
             {t("world.sensors.label")}
           </Text>
           <Text
-            maxFontSizeMultiplier={textScale.chrome}
-            style={locating ? styles.locating : styles.locateAction}
+            maxFontSizeMultiplier={text_scale.chrome}
+            style={locating ? styles.locating : styles.locate_action}
           >
             {locating ? t("world.search.locating") : t("world.sensors.turn_on")}
           </Text>
@@ -217,7 +217,7 @@ function MapCenter() {
   if (coordinate === null) return null;
   return (
     <View>
-      <SectionTitle style={styles.sectionHeader}>
+      <SectionTitle style={styles.section_hdr}>
         {t("world.search.pivot")}
       </SectionTitle>
       <View style={styles.center}>
@@ -264,7 +264,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
       const home =
         shown.division.find((p) => p.subtype === DIVISION_SUBTYPE.COUNTRY)
           ?.name ?? null;
-      fetchSearch(q, { near, signal: controller.signal })
+      fetch_search(q, { near, signal: controller.signal })
         .then(
           (results) =>
             controller.signal.aborted || setFound({ query: q, results, home }),
@@ -286,8 +286,8 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     onClose();
   }
 
-  function distanceOf(result: SearchResult): string | null {
-    return result.dist_m === null ? null : formatDistance(result.dist_m);
+  function dist_of(result: SearchResult): string | null {
+    return result.dist_m === null ? null : format_dist(result.dist_m);
   }
 
   return (
@@ -318,7 +318,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                   onPress={() => setQuery("")}
                   accessibilityRole="button"
                   accessibilityLabel={t("world.search.clear_aria_label")}
-                  style={styles.clearTarget}
+                  style={styles.clear_target}
                 >
                   <View style={styles.clear}>
                     <Glyph
@@ -336,7 +336,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
       >
         <ScrollView
           style={styles.results}
-          contentContainerStyle={styles.resultsRoom}
+          contentContainerStyle={styles.results_room}
           keyboardShouldPersistTaps="handled"
         >
           {q === "" && <MapCenter />}
@@ -348,9 +348,9 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
             </Text>
           )}
 
-          {byCountry(results, found.home).map(({ country, rows }) => (
+          {by_country(results, found.home).map(({ country, rows }) => (
             <View key={country ?? ""}>
-              <SectionTitle style={styles.sectionHeader}>
+              <SectionTitle style={styles.section_hdr}>
                 {country === null
                   ? t("world.search.section_elsewhere")
                   : country}
@@ -359,7 +359,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                 <ResultRow
                   key={r.gers_id}
                   result={r}
-                  distance={distanceOf(r)}
+                  distance={dist_of(r)}
                   onPress={() => select(r)}
                 />
               ))}
@@ -374,12 +374,12 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  locateCard: {
+  locate_card: {
     borderRadius: chrome.target / 2,
     pointerEvents: "auto",
     boxShadow: "0 6px 20px rgba(0, 0, 0, 0.12)",
   },
-  locateRow: {
+  locate_row: {
     minHeight: chrome.target,
     flexDirection: "row",
     alignItems: "center",
@@ -387,14 +387,14 @@ const styles = StyleSheet.create({
     paddingLeft: (chrome.target - chrome.glyph) / 2,
     paddingRight: PANEL_EDGE,
   },
-  locateLabel: { flex: 1, ...textStyle.body, color: LABEL.primary },
-  locateAction: {
-    ...textStyle.body,
+  locate_label: { flex: 1, ...text_style.body, color: LABEL.primary },
+  locate_action: {
+    ...text_style.body,
     fontWeight: weight.semibold,
     color: color.action,
   },
-  locating: { ...textStyle.body, color: LABEL.secondary },
-  resultsRoom: {
+  locating: { ...text_style.body, color: LABEL.secondary },
+  results_room: {
     paddingTop: PANEL_CONTENT_TOP,
     paddingBottom: chrome.target + 2 * PANEL_EDGE,
     gap: PANEL_SECTION_GAP,
@@ -411,10 +411,10 @@ const styles = StyleSheet.create({
     borderRadius: PANEL_CONTROL / 2,
   },
   field: { flex: 1, minWidth: 0, color: LABEL.primary },
-  clearTarget: {
+  clear_target: {
     width: chrome.target,
     height: chrome.target,
-    marginHorizontal: -touchOutset(CLEAR),
+    marginHorizontal: -touch_outset(CLEAR),
     alignItems: "center",
     justifyContent: "center",
   },
@@ -429,10 +429,10 @@ const styles = StyleSheet.create({
   results: { flex: 1 },
   empty: {
     paddingHorizontal: PANEL_EDGE,
-    ...textStyle.footnote,
+    ...text_style.footnote,
     color: LABEL.secondary,
   },
-  sectionHeader: { paddingHorizontal: PANEL_EDGE, paddingBottom: 8 },
+  section_hdr: { paddingHorizontal: PANEL_EDGE, paddingBottom: 8 },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -440,10 +440,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: PANEL_EDGE,
     paddingVertical: 12,
   },
-  rowText: { flex: 1, minWidth: 0, gap: 4 },
-  name: { ...textStyle.body, color: LABEL.primary },
+  row_text: { flex: 1, minWidth: 0, gap: 4 },
+  name: { ...text_style.body, color: LABEL.primary },
   subtitle: { flexDirection: "row", alignItems: "baseline", gap: 8 },
-  small: { ...textStyle.caption, color: LABEL.secondary },
+  small: { ...text_style.caption, color: LABEL.secondary },
   context: { flexShrink: 1 },
   center: { gap: 4, paddingHorizontal: PANEL_EDGE },
   numbers: { fontVariant: ["tabular-nums"] },
@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
  * (place_theme.spec.ts): its symbol in its fill color, or a dot of that fill
  * for a category with no symbol. It is null for a category Carto draws no
  * point for. */
-function placeTheme(
+function place_theme(
   category: number,
 ): { fill: string; symbol: PlaceSymbol | undefined } | null {
   const fill = FILL[category - 1];

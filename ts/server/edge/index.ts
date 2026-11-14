@@ -62,7 +62,12 @@ import {
   GEO_PREFIX,
   TILE_PREFIX,
 } from "./route.spec.ts";
-import { BASE_LAYERS, TILE_OBJECT, TILE_SPHERE } from "./publication.spec.ts";
+import {
+  BASE_LAYERS,
+  BASE_LAYER_EARTH,
+  TILE_OBJECT,
+  TILE_SPHERE,
+} from "./publication.spec.ts";
 
 /**
  * The object keys this Worker asks R2 for, told apart by their shape alone.
@@ -81,7 +86,7 @@ const SOURCE_KEY = "source";
 
 const KINDS = BASE_LAYERS.join("|");
 const KEY_RE = new RegExp(
-  String.raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|earth\/[^/]+\/${TILE_SPHERE}|asset\/[0-9a-f]{64}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
+  String.raw`^(?:(?:${KINDS})\/${TILE_OBJECT}|${BASE_LAYERS[BASE_LAYER_EARTH]}\/[^/]+\/${TILE_SPHERE}|asset\/[0-9a-f]{64}\.(?:glb|png|webp)|${SOURCE_KEY})$`,
 );
 
 /** The header in which a cached entry keeps the encoding of its bytes. It
