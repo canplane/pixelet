@@ -202,6 +202,9 @@ pub struct Side {
     cancels: RefCell<BTreeMap<Tag, Box<dyn FnOnce()>>>,
     /// The answers due, run after the work at hand.
     due: RefCell<VecDeque<Due>>,
+    /// Whether the link can run no more, whichever side failed: nothing is
+    /// laid or crossed, each frame answering EPIPE (link.ts `_trapped`).
+    trapped: Cell<bool>,
 }
 
 impl Side {
@@ -218,7 +221,19 @@ impl Side {
             pending: RefCell::new(BTreeMap::new()),
             cancels: RefCell::new(BTreeMap::new()),
             due: RefCell::new(VecDeque::new()),
+            trapped: Cell::new(false),
         }
+    }
+
+    /// Stops the link for good, and answers whether it did just now, the link
+    /// not having trapped already (link.ts `trap`).
+    pub fn trap(&self) -> bool {
+        !self.trapped.replace(true)
+    }
+
+    /// Whether the link is trapped (`trap`).
+    pub fn trapped(&self) -> bool {
+        self.trapped.get()
     }
 
     pub fn set_layout(&self, l: Layout) {
@@ -499,6 +514,10 @@ impl Side {
         result: i32,
         pkt: Packet,
     ) -> (i32, Option<&'static [u8]>) {
+        // A trapped link lays nothing, its layout perhaps never read.
+        if self.trapped.get() {
+            return (Errno::EPIPE as i32, None);
+        }
         let l = self.layout();
         let at = (self.out_box)(l);
         let words = Frame {

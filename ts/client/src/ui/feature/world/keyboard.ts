@@ -83,8 +83,8 @@ export function key_down(
       close_modal();
       return true;
     }
-    if (dock_mode() !== DockMode.Message) return false;
-    set_dock_mode(DockMode.Palette);
+    if (dock_mode() !== DockMode.MESSAGE) return false;
+    set_dock_mode(DockMode.PALETTE);
     return true;
   }
   if (modal_open()) return false;

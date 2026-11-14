@@ -22,7 +22,7 @@ import {
 import {
   rotate_toasts,
   set_toast_dragging,
-  toast_cnt,
+  toast_count,
   useToastEntries,
   useToastTurnCount,
 } from "./store.ts";
@@ -37,7 +37,7 @@ const MAKE_ROOM = after(SETTLE, SETTLE.duration_ms / 2);
 
 export function Toaster() {
   const entries = useToastEntries();
-  const turn_cnt = useToastTurnCount();
+  const turn_count = useToastTurnCount();
   const { list, on_exited } = usePresent(entries, (e) => e.id);
   // The center is rounded to a whole pixel, because half of an odd width is
   // not one.
@@ -46,7 +46,7 @@ export function Toaster() {
   // A leaving card keeps its place until it has faded, so the cards behind
   // move up only once it is gone.
   const last_order = useRef<Key[]>([]);
-  const turned_back = useTurnedBack(turn_cnt);
+  const turned_back = useTurnedBack(turn_count);
   const order: Key[] = entries.map((e) => e.id);
   const arrivals = new Set<Key>(
     order.filter((key) => !last_order.current.includes(key)),
@@ -78,14 +78,14 @@ export function Toaster() {
       // The stack claims a touch as it starts. A mouse drag on a page reports
       // each move to whatever lies under the cursor, so a swipe down that
       // reached the dock before the stack claimed it would turn the dock.
-      onStartShouldSetPanResponder: () => toast_cnt() > 1,
+      onStartShouldSetPanResponder: () => toast_count() > 1,
       ...deck_swipe(rotate_toasts, { drag: set_toast_dragging }),
     });
   }
 
   return (
     <View
-      style={styles.anchor}
+      style={STYLE.anchor}
       onLayout={(e) =>
         set_center(
           PixelRatio.roundToNearestPixel(e.nativeEvent.layout.width / 2),
@@ -118,15 +118,15 @@ export function Toaster() {
             <Motion
               key={key}
               from={from_above ? pose.above : pose.rest}
-              replay={from_above ? turn_cnt : null}
+              replay={from_above ? turn_count : null}
               to={present ? pose.rest : { scale: 0.9 }}
               transition={transition}
               onSettled={present ? undefined : () => on_exited(key)}
               style={[
-                styles.card,
+                STYLE.card,
                 {
                   left: center,
-                  zIndex: pose.z_idx,
+                  zIndex: pose.z_index,
                   pointerEvents: front ? "auto" : "none",
                 },
               ]}
@@ -146,7 +146,7 @@ export function Toaster() {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   // Every card is placed from this anchor, and none by measuring another.
   anchor: {
     alignItems: "center",

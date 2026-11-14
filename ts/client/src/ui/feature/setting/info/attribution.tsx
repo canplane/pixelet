@@ -35,7 +35,7 @@ export function AttributionSection() {
   return (
     <Section title={t("settings.attribution.section_title")}>
       <Prose>
-        <View style={styles.providers}>
+        <View style={STYLE.providers}>
           <Provider name="Overture Maps">
             <Line>
               <Link href="https://www.openstreetmap.org/copyright">
@@ -90,8 +90,8 @@ export function AttributionSection() {
 
 function Provider({ name, children }: { name: string; children: ReactNode }) {
   return (
-    <View style={styles.provider}>
-      <Text style={styles.name}>{name}</Text>
+    <View style={STYLE.provider}>
+      <Text style={STYLE.name}>{name}</Text>
       {children}
     </View>
   );
@@ -101,7 +101,7 @@ function Line({ children }: { children: ReactNode }) {
   return <Text style={SETTING_TEXT.small}>{children}</Text>;
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   providers: { gap: 16 },
   provider: { gap: 4 },
   name: { ...SETTING_TEXT.small, fontWeight: WEIGHT.medium },

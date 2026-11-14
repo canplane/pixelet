@@ -4,11 +4,11 @@ import type { f64 } from "@xpute/kit/abi/word.ts";
 import {
   type Sensor,
   SENSOR_GEOLOCATION,
-  SENSOR_ORIENTATION,
+  SENSOR_ORIENT,
 } from "@/abi/types.enum.ts";
 import { type SensorListener } from "@/service/platform/types.ts";
 import * as platform from "@/service/platform/sensor.ts";
-import { geo_fix, MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
+import { geolocation_fix, MEASURE_PLACE } from "@/service/platform/sensor-listener.ts";
 import * as sensor from "@/abi/sensor.ts";
 import {
   GEOLOCATION_ERROR_CODE_PERMISSION_DENIED,
@@ -69,7 +69,7 @@ const ERR = {
 
 const SENSOR = {
   geolocation: SENSOR_GEOLOCATION,
-  orientation: SENSOR_ORIENTATION,
+  orient: SENSOR_ORIENT,
 } as const;
 
 const ANSWER = {
@@ -85,7 +85,7 @@ export const SENSOR_LISTENER: SensorListener = {
     void sensor.err(ui, SENSOR_GEOLOCATION, ERR[err], watching),
   orient: core_orient,
   // The compass gives no code for its failure.
-  orient_err: () => void sensor.err(ui, SENSOR_ORIENTATION, null, false),
+  orient_err: () => void sensor.err(ui, SENSOR_ORIENT, null, false),
   permission: (which, answer) =>
     void sensor.permission(ui, SENSOR[which], ANSWER[answer]),
 };
@@ -112,7 +112,7 @@ function sensor_start(s: Sensor): void {
   // A build made for measuring has its place given and starts no sensor, so
   // that no permission prompt holds it on any platform.
   if (__PERF_DRIVE__) {
-    if (s === SENSOR_GEOLOCATION) geo_fix(MEASURE_PLACE);
+    if (s === SENSOR_GEOLOCATION) geolocation_fix(MEASURE_PLACE);
     return;
   }
   if (s === SENSOR_GEOLOCATION) {

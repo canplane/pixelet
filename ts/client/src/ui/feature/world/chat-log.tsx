@@ -20,28 +20,28 @@ export function ChatLog() {
   if (chat_lines.length === 0) return null;
 
   return (
-    <View style={styles.lines}>
+    <View style={STYLE.lines}>
       {chat_lines.map((line, i) => (
         <View
           key={line.id}
           style={[
-            styles.line,
+            STYLE.line,
             {
               opacity: 0.4 + 0.6 * ((i + 1) / chat_lines.length),
             },
           ]}
         >
-          <Text style={[styles.text, styles.self]}>
+          <Text style={[STYLE.text, STYLE.self]}>
             {t("world.chat.self_label")}
           </Text>
-          <Text style={[styles.text, styles.said]}>{line.text}</Text>
+          <Text style={[STYLE.text, STYLE.said]}>{line.text}</Text>
         </View>
       ))}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   lines: { ...CORNER_CARD, alignItems: "flex-start", gap: 4 },
   line: {
     flexDirection: "row",

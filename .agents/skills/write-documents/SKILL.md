@@ -9,18 +9,32 @@ For what people read. What an agent reads follows AGENTS.md's Instructions.
 
 ## Each document has one reader
 
-A document answers one question for one reader, and holds nothing else.
+A document answers one question for one reader, in one kind, and holds nothing
+else. The kinds are an explanation (how it works and why it holds), a how-to
+(what to type) and a reference (what each name means). A document that mixes
+them serves no reader.
 
-| Document | Reader | Question |
-| --- | --- | --- |
-| `README.md` | someone who has just arrived | what is this, and how can it be? |
-| `ARCHITECTURE.md` | someone who wants to understand or change the code | how does it work, why does it hold, and where is each part? |
-| `CONTRIBUTING.md` | someone working on it | what do I type to set it up, run it and check it? |
-| a README beside the code | someone working in that module | how does this module work? |
-| `infra/README.md` | an operator | how is production set up and run by hand? |
+| Document | Reader | Kind | Question |
+| --- | --- | --- | --- |
+| `README.md` | someone who has just arrived | explanation | what is this, and how can it be? |
+| `ARCHITECTURE.md` | someone who wants to understand or change the code | explanation | how does it work, why does it hold, and where is each part? |
+| `CONTRIBUTING.md` | someone working on it | how-to | what do I type to set it up, run it and check it? |
+| a README beside the code | someone working in that module | explanation | how does this module work? |
+| `infra/README.md` | an operator | how-to | how is production set up and run by hand? |
 
-xpute has the same cut under its own theme; what another language implements
-against is reference, kept in `spec/` and the generated code's comments.
+xpute has the same cut under its own theme. The reference is `spec/` and the
+generated code's comments.
+
+## Written as a paper is
+
+A document is read as a paper is: its first paragraph gives the whole, each
+section carries one argument a reader follows to its end, and what only proves
+a point goes to an appendix. Here the appendix is the module's README, as near
+its code as it can be, and a document above it names it and says no more. A
+root document holds what lasts: the problem, the parts, how they meet, and
+what each part does not know, which the code shows only by its absence. Its
+length is what that argument needs; a detail laid in it that no argument
+needs is a detail nobody reads.
 
 ## Rules
 
@@ -33,20 +47,19 @@ against is reference, kept in `spec/` and the generated code's comments.
   really parallel, never for an argument.
 - **Facts are checked against the code**, older texts holding stale names and
   wrong claims. Name only the files, types and functions a reader needs to find
-  the thing.
+  the thing, by the name a reader searches for rather than a link that moves.
 - **Earn a name before you use it.** Say the need first, then name what meets
   it. A name this project made needs this, and so does a field's term the reader
   may not bring (a `clipmap`).
-- **Order by dependency.** A model's vocabulary comes before the machine that
-  uses it, and a map of the code comes last.
+- **Order by dependency.** The whole comes first, a model's vocabulary before
+  the machine that uses it, and a map of the code last.
 - **An `ARCHITECTURE.md` ends, before its map, with what it took from earlier
   work:** a table, each row its precedent and what is taken, the part named as
   the document names it, and no row for a name alone. This is not history.
 - **Diagrams** are hand-aligned ASCII under about 78 columns; a diagram's
   branches name what comes out.
 - **Each part is said once.** A paragraph that several documents would repeat
-  lives in one, and the others link it. How one module works lives beside its
-  code, and `ARCHITECTURE.md` points there.
+  lives in one, and the others link it.
 - **A heading the code cites stays.** Comments name sections of
   `ARCHITECTURE.md` by their titles; keep those titles, or change the comments
   with them.

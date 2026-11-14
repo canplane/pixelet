@@ -227,14 +227,16 @@ build.
 ## Where to read next
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) follows the same claim through the
-  device that lends the memory and the languages, and ends with xpute's
-  boundaries, what it took from earlier work and a map of the code.
+  link, its sides, how a failure ends, the device that lends the memory and
+  the languages, and ends with xpute's boundaries, what it took from earlier
+  work and a map of the code.
 - Each part's `spec/` is the contract itself: the link's frame (`link/spec/`),
   the GPU stream's records (`gpu/link/spec/`) and the errno table
   (`kit/spec/`), from which every language's numbers are generated. The
   interfaces are WIT, under `link/wit/`, `wit/` and `gpu/wit/`.
 - [XTP's README](./kit/ts/src/wire/xtp/README.md) describes XTP, the tree
-  format of the native runtime's batches to a UI on the JavaScript thread.
+  format of the data a program stores and serves, and of the native
+  runtime's batches to a UI on the JavaScript thread.
 
 ## Running it
 

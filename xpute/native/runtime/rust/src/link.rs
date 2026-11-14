@@ -118,6 +118,11 @@ pub fn call(h: Handle, m: Method, args: Args) -> (i32, Option<&'static [u8]>) {
     SIDE.with(|s| s.call(h, m, Packet::Args(args)))
 }
 
+/// Lets the guest's object `h` go (frame.json5 `DROP`).
+pub fn drop(h: Handle) {
+    SIDE.with(|s| s.drop(h));
+}
+
 pub fn send(h: Handle, m: Method, args: Args, answer: Option<Answer>) -> Tag {
     send_pkt(h, m, Packet::Args(args), answer)
 }

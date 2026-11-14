@@ -99,9 +99,9 @@ function GlyphItem({
     <Item label={label} active={active} cell={cell} onPress={() => onPick(id)}>
       <View
         style={[
-          styles.decor,
+          STYLE.decor,
           { width: item_of(cell), height: item_of(cell) },
-          active ? [MARK.on, styles.decor_on] : MARK.off,
+          active ? [MARK.on, STYLE.decor_on] : MARK.off,
         ]}
       >
         <Glyph glyph={glyph} size={CHROME.glyph} color={LABEL.primary} />
@@ -216,7 +216,7 @@ export function DrawerModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   decor: {
     borderRadius: ITEM_RADIUS,
     alignItems: "center",

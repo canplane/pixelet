@@ -31,10 +31,10 @@ const COST_COLOR: Record<SettingCost, string> = {
 
 function Badge({ text, tint }: { text: string; tint: string }) {
   return (
-    <View style={[styles.badge, { backgroundColor: alpha(tint, 0.15) }]}>
+    <View style={[STYLE.badge, { backgroundColor: alpha(tint, 0.15) }]}>
       <Text
         maxFontSizeMultiplier={TEXT_SCALE_CAP.mark}
-        style={[styles.badge_text, { color: tint }]}
+        style={[STYLE.badge_text, { color: tint }]}
       >
         {text}
       </Text>
@@ -63,9 +63,9 @@ function Described({
   dev?: boolean;
 }) {
   return (
-    <View style={styles.described}>
-      <View style={styles.name_line}>
-        <Text style={styles.name}>{label}</Text>
+    <View style={STYLE.described}>
+      <View style={STYLE.name_line}>
+        <Text style={STYLE.name}>{label}</Text>
         <Badges cost={cost} dev={dev} />
       </View>
       {description && <Text style={SETTING_TEXT.small}>{description}</Text>}
@@ -90,7 +90,7 @@ export function SettingRow(props: SettingRowProps) {
     <ToggleRow
       value={active}
       onValueChange={onChange}
-      style={[styles.row, styles.bleed]}
+      style={[STYLE.row, STYLE.bleed]}
     >
       <Described
         label={label}
@@ -116,23 +116,23 @@ export function SettingGroup(props: SettingGroupProps) {
     <View
       accessibilityRole="radiogroup"
       accessibilityLabel={label}
-      style={[styles.group, styles.bleed]}
+      style={[STYLE.group, STYLE.bleed]}
     >
-      <View style={styles.legend}>
+      <View style={STYLE.legend}>
         <Text
           maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
-          style={styles.legend_text}
+          style={STYLE.legend_text}
         >
           {label}
         </Text>
         <Badges cost={cost} dev={dev} />
       </View>
       {description && (
-        <Text style={[SETTING_TEXT.small, styles.group_description]}>
+        <Text style={[SETTING_TEXT.small, STYLE.group_description]}>
           {description}
         </Text>
       )}
-      <View style={styles.answers}>{children}</View>
+      <View style={STYLE.answers}>{children}</View>
     </View>
   );
 }
@@ -155,7 +155,7 @@ export function SettingChoiceRow(props: SettingChoiceRowProps) {
       onPress={onSelect}
       accessibilityRole="radio"
       aria-checked={selected}
-      style={styles.row}
+      style={STYLE.row}
     >
       <Described
         label={label}
@@ -163,7 +163,7 @@ export function SettingChoiceRow(props: SettingChoiceRowProps) {
         cost={cost}
         dev={dev}
       />
-      <View style={styles.check}>
+      <View style={STYLE.check}>
         {selected && (
           <Glyph
             glyph="checkmark"
@@ -178,7 +178,7 @@ export function SettingChoiceRow(props: SettingChoiceRowProps) {
 }
 
 export function SettingChoices({ children }: { children: ReactNode }) {
-  return <View style={styles.bleed}>{children}</View>;
+  return <View style={STYLE.bleed}>{children}</View>;
 }
 
 interface SectionProps {
@@ -191,9 +191,9 @@ interface SectionProps {
 export function Section(props: SectionProps) {
   const { title, icon, caption, children } = props;
   return (
-    <View style={styles.section}>
-      <View style={styles.title_block}>
-        <View style={styles.title_line}>
+    <View style={STYLE.section}>
+      <View style={STYLE.title_block}>
+        <View style={STYLE.title_line}>
           {icon && <Glyph glyph={icon} size={16} color={LABEL.secondary} />}
           <SectionTitle>{title}</SectionTitle>
         </View>
@@ -205,7 +205,7 @@ export function Section(props: SectionProps) {
 }
 
 export function Prose({ children }: { children: ReactNode }) {
-  return <View style={styles.prose}>{children}</View>;
+  return <View style={STYLE.prose}>{children}</View>;
 }
 
 export function Link({
@@ -216,7 +216,7 @@ export function Link({
   children?: ReactNode;
 }) {
   return (
-    <Text style={styles.link} onPress={() => Linking.openURL(href)}>
+    <Text style={STYLE.link} onPress={() => Linking.openURL(href)}>
       {children}
     </Text>
   );
@@ -231,7 +231,7 @@ export const SETTING_TEXT = StyleSheet.create({
   },
 });
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",

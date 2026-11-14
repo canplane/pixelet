@@ -17,7 +17,7 @@ const OPTIONS = 0;
 const INFO = 1;
 
 function Separator() {
-  return <View style={styles.separator} />;
+  return <View style={STYLE.separator} />;
 }
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
@@ -59,6 +59,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   separator: { height: 1, backgroundColor: HAIRLINE },
 });

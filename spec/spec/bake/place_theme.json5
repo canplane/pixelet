@@ -1,6 +1,7 @@
 {
   $description: "What OpenStreetMap Carto draws for a place of each category: the tags Carto\nstyles it under (`carto`, the attributes `style/amenity-points.mss` reads,\nanything else null as a point's are), the web zoom from which it shows as a\ndot (`marker-width` with no file) and as its icon (`symbol`, under Carto's\n`symbols/`), the zoom from which its name shows (`#text-point`'s\n`text-name: [name]`), the icon's fill and the label's. Each value is the\none Carto's rules give for those tags at that zoom, colors computed from\nits variables (`darken` as LESS does). A category with no row is one Carto\ndraws no point for, so it is neither carried in a tile nor drawn.",
   THEME: {
+    $type: "u8",
     airport: {
       carto: { feature: { $value: "aeroway_aerodrome" } },
       fill: { $value: 0x8461c4, $type: "u32" },

@@ -159,14 +159,14 @@ function SwatchButton({
       {...handlers}
       accessibilityRole="button"
       accessibilityLabel={cube_label(cube)}
-      style={[styles.slot, styles.swatch_slot]}
+      style={[STYLE.slot, STYLE.swatch_slot]}
     >
       <Motion to={{ scale: selected ? 1.1 : 1 }} transition={SNAP}>
         <CubeSwatch
           cube={cube}
           size={ITEM}
           radius={ITEM / 2}
-          style={selected ? styles.swatch_selected : styles.swatch_idle}
+          style={selected ? STYLE.swatch_selected : STYLE.swatch_idle}
         />
       </Motion>
     </View>
@@ -181,13 +181,13 @@ function DecorIconButton({ id }: { id: AssetId }) {
       onPress={() => select_asset(id)}
       accessibilityRole="button"
       accessibilityLabel={decor_label(id)}
-      style={styles.slot}
+      style={STYLE.slot}
     >
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
         <View
           style={[
-            styles.decor_disc,
-            active ? styles.swatch_selected : styles.swatch_idle,
+            STYLE.decor_disc,
+            active ? STYLE.swatch_selected : STYLE.swatch_idle,
           ]}
         >
           <Glyph
@@ -226,13 +226,13 @@ function MarkerButton() {
       onPress={() => select_asset(MARKER)}
       accessibilityRole="button"
       accessibilityLabel={PIN_LABEL}
-      style={styles.slot}
+      style={STYLE.slot}
     >
       <Motion to={{ scale: active ? 1.1 : 1 }} transition={SNAP}>
         <View
           style={[
-            styles.decor_disc,
-            active ? styles.swatch_selected : styles.swatch_idle,
+            STYLE.decor_disc,
+            active ? STYLE.swatch_selected : STYLE.swatch_idle,
           ]}
         >
           <Glyph
@@ -262,14 +262,14 @@ function ToolButton({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
-      style={styles.slot}
+      style={STYLE.slot}
     >
       {/* The highlight stays mounted and only its color changes. On Android,
           a view created with its background already set is drawn without its
           rounded corners. */}
       <View
         collapsable={false}
-        style={[styles.highlight, active && styles.tool_active]}
+        style={[STYLE.highlight, active && STYLE.tool_active]}
       >
         <Glyph
           glyph={glyph}
@@ -281,14 +281,14 @@ function ToolButton({
   );
 }
 
-/** `span` is the bar's width, and the strip never grows past it. The caller
+/** `spanPx` is the bar's width, and the strip never grows past it. The caller
  * stops the hotbar's scrolling while the sizes are open. */
 export function Strip({
-  span,
+  spanPx,
   scrolls,
   gesture,
 }: {
-  span: f64;
+  spanPx: f64;
   scrolls: boolean;
   gesture: Omit<SizeGesture, "press">;
 }) {
@@ -297,8 +297,8 @@ export function Strip({
   const recent_picks = useRecentPicks();
 
   return (
-    <View style={[styles.strip, { maxWidth: span }]}>
-      <View style={styles.group}>
+    <View style={[STYLE.strip, { maxWidth: spanPx }]}>
+      <View style={STYLE.group}>
         <ToolButton
           label={t("world.dock.pointer")}
           glyph="hand.point.up.left"
@@ -313,23 +313,23 @@ export function Strip({
         />
       </View>
 
-      <View style={styles.divider} />
+      <View style={STYLE.divider} />
 
       <ScrollView
         horizontal
         scrollEnabled={scrolls}
         showsHorizontalScrollIndicator={false}
-        style={styles.picks}
-        contentContainerStyle={styles.picks_content}
+        style={STYLE.picks}
+        contentContainerStyle={STYLE.picks_content}
       >
         {recent_picks.map((id) => (
           <PickButton key={id} id={id} gesture={gesture} />
         ))}
       </ScrollView>
 
-      <View style={styles.divider} />
+      <View style={STYLE.divider} />
 
-      <View style={styles.group}>
+      <View style={STYLE.group}>
         <ToolButton
           label={t("world.dock.drawer_tooltip")}
           glyph="archivebox"
@@ -360,7 +360,7 @@ export const SLOT: ViewStyle = {
   flexShrink: 0,
 };
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   strip: {
     height: CHROME.control,
     borderRadius: CHROME.control / 2,

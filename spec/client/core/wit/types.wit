@@ -2,7 +2,7 @@ package pxl:core@0.1.0;
 
 // The types more than one interface takes.
 interface types {
-  enum sensor { geolocation, orientation }
+  enum sensor { geolocation, orient }
 
   // Why the core refused what it was asked, as WASI's interfaces answer an
   // error-code, each case named as WASI names the same error; `too-long` is

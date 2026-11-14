@@ -1,11 +1,9 @@
 // pxl-tool/spec.rs
 
 //! Writes the TypeScript and Rust generated from `spec/` JSON: its data
-//! specs (data.rs) and its command table (cmd.rs) through xpute's generator,
-//! and what else it generates beside them. It links none of the crates it
-//! writes into, so it builds when their generated code is broken. Its
-//! generators write through xpute-gen's writer and follow the code and naming
-//! skills.
+//! specs (data.rs), its command table (cmd.rs) and what else it generates
+//! beside them, each through xpute-gen's writers. It links none of the crates
+//! it writes into, so it builds when their generated code is broken.
 
 pub mod asset;
 pub(crate) mod bake;
@@ -23,8 +21,9 @@ pub use xpute_gen::spec::{
     rs_field, rs_const, rs_member, ts_doc, Node, Output,
 };
 
-/// The u32 a token holds, its `$type` checked as it was read (xpute-gen
-/// `read`), or none.
+/// The u32 a token holds, or none. A value with a `$type`, its own or its
+/// group's, was checked against it as it was read (xpute-gen `read`); an enum's
+/// member, which its `repr` numbers, is checked where its spec is generated.
 pub fn u32_of(n: &Node) -> Option<u32> {
     n.val().num().map(|v| v as u32)
 }

@@ -78,8 +78,8 @@ export function PanelBar({
   children: ReactNode;
 }) {
   return (
-    <View {...rest} style={styles.bar}>
-      <View style={styles.bar_main}>{children}</View>
+    <View {...rest} style={STYLE.bar}>
+      <View style={STYLE.bar_main}>{children}</View>
       <PanelClose onClose={onClose} />
     </View>
   );
@@ -93,13 +93,13 @@ export function PanelBody({
   children: ReactNode;
 }) {
   return (
-    <View style={styles.body}>
-      <View style={styles.scroll}>{children}</View>
+    <View style={STYLE.body}>
+      <View style={STYLE.scroll}>{children}</View>
       <Backing
         fill={COLOR.ground}
         material={MATERIAL.bar}
-        place={BackingPlace.OverContent}
-        style={styles.head}
+        place={BackingPlace.OVER_CONTENT}
+        style={STYLE.head}
       >
         {bar}
       </Backing>
@@ -113,7 +113,7 @@ function PanelClose({ onClose }: { onClose: () => void }) {
     <CircularButton
       glyph="xmark"
       size={PANEL_CONTROL}
-      place={BackingPlace.OnSheet}
+      place={BackingPlace.ON_SHEET}
       onPress={onClose}
       label={t("close")}
     />
@@ -127,9 +127,9 @@ export function PanelScroll({ children }: { children: ReactNode }) {
   const { bottom } = useSafeArea();
   return (
     <ScrollView
-      style={styles.tab_scroll}
+      style={STYLE.tab_scroll}
       contentContainerStyle={[
-        styles.tab_content,
+        STYLE.tab_content,
         {
           paddingBottom: bottom + PANEL_EDGE,
         },
@@ -140,7 +140,7 @@ export function PanelScroll({ children }: { children: ReactNode }) {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   bar: {
     marginTop: PANEL_TOP,
     height: PANEL_CONTROL,
@@ -261,7 +261,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
   const away = { translateY: full_height + 16 };
 
   return (
-    <View style={[sheet_styles.layer, open ? TOUCH.pass : TOUCH.block]}>
+    <View style={[SHEET_STYLE.layer, open ? TOUCH.pass : TOUCH.block]}>
       <Motion
         from={{ opacity: 0 }}
         to={{ opacity: open ? 1 : 0 }}
@@ -271,7 +271,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
         <Pressable
           accessible={false}
           onPress={onClose}
-          style={sheet_styles.dim}
+          style={SHEET_STYLE.dim}
         />
       </Motion>
       <Motion
@@ -280,7 +280,7 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
         transition={drag !== null ? FOLLOW : open ? SLIDE : SLIDE_AWAY}
         onSettled={open ? () => drag === null && set_body_full(full) : on_exited}
         style={[
-          sheet_styles.sheet,
+          SHEET_STYLE.sheet,
           {
             width,
             height: full_height,
@@ -293,21 +293,21 @@ export function Panel({ label, onClose, half, children }: PanelProps) {
           accessibilityViewIsModal
           accessibilityLabel={label}
           style={[
-            sheet_styles.body,
+            SHEET_STYLE.body,
             {
               height: body_full ? full_height : half_height,
             },
           ]}
         >
           {children}
-          <View style={sheet_styles.handle} />
+          <View style={SHEET_STYLE.handle} />
         </View>
       </Motion>
     </View>
   );
 }
 
-const sheet_styles = StyleSheet.create({
+const SHEET_STYLE = StyleSheet.create({
   layer: { ...StyleSheet.absoluteFill, zIndex: LAYER.sheet },
   body: { width: "100%" },
   dim: { flex: 1, backgroundColor: alpha(COLOR.black, 0.2) },

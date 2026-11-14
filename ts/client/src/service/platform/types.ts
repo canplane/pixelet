@@ -9,21 +9,12 @@
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
-import type { Remote } from "@xpute/link";
 
 /** A transaction on the place's database, which keeps files of bytes by key.
  * null stands for no file. */
 export interface Tx {
   get(key: string): Promise<U8Array | null>;
   put(key: string, bytes: U8Array | null): Promise<void>;
-}
-
-/** The core where the place runs it, over the runtime the boot opened (core.ts
- * `core_of`): the UI's end of its link, on which the UI mounts what it serves
- * the core, and what starts the core once that is mounted. */
-export interface Core {
-  remote: Remote;
-  start(): void;
 }
 
 export interface SafeArea {
@@ -83,7 +74,7 @@ export interface SensorListener {
   ): void;
   orient_err(): void;
   permission(
-    sensor: "geolocation" | "orientation",
+    sensor: "geolocation" | "orient",
     answer: "asking" | "granted" | "denied" | "failed",
   ): void;
 }

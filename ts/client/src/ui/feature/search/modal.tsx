@@ -53,7 +53,7 @@ import * as snapshot from "@/service/core/snapshot.ts";
 
 const DEBOUNCE_MS = 300;
 
-function format_dist(m: f64): string {
+function format_distance(m: f64): string {
   if (m < 1000) return `${round(m)}m`;
   if (m < 10000) return `${fixed(m / 1000, 1)}km`;
   return `${round(m / 1000).toLocaleString()}km`;
@@ -79,9 +79,9 @@ function ResultRow({
     result.kind === SEARCH_KIND.PLACE ? place_theme(result.category) : null;
   const symbol = theme?.symbol;
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={styles.row}>
+    <Pressable onPress={onPress} accessibilityRole="button" style={STYLE.row}>
       {theme && (
-        <View style={styles.badge}>
+        <View style={STYLE.badge}>
           {symbol ? (
             <Svg
               width={SYMBOL_SIZE}
@@ -98,21 +98,21 @@ function ResultRow({
               ))}
             </Svg>
           ) : (
-            <View style={[styles.dot, { backgroundColor: theme.fill }]} />
+            <View style={[STYLE.dot, { backgroundColor: theme.fill }]} />
           )}
         </View>
       )}
-      <View style={styles.row_text}>
-        <Text numberOfLines={1} style={styles.name}>
+      <View style={STYLE.row_text}>
+        <Text numberOfLines={1} style={STYLE.name}>
           {result.name}
         </Text>
         {(where !== "" || distance !== null) && (
-          <View style={styles.subtitle}>
-            <Text numberOfLines={1} style={[styles.small, styles.context]}>
+          <View style={STYLE.subtitle}>
+            <Text numberOfLines={1} style={[STYLE.small, STYLE.context]}>
               {where}
             </Text>
             {distance !== null && (
-              <Text style={[styles.small, styles.distance]}>{distance}</Text>
+              <Text style={[STYLE.small, STYLE.distance]}>{distance}</Text>
             )}
           </View>
         )}
@@ -175,15 +175,15 @@ function LocateCard() {
     <AboveKeyboard inset={PANEL_EDGE}>
       <Backing
         fill={COLOR.ground}
-        place={BackingPlace.OnSheet}
+        place={BackingPlace.ON_SHEET}
         interactive
-        style={styles.locate_card}
+        style={STYLE.locate_card}
       >
         <Pressable
           onPress={() => void sensor.locate()}
           disabled={locating}
           accessibilityRole="button"
-          style={styles.locate_row}
+          style={STYLE.locate_row}
         >
           <Glyph
             glyph="location"
@@ -193,13 +193,13 @@ function LocateCard() {
           <Text
             numberOfLines={1}
             maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
-            style={styles.locate_label}
+            style={STYLE.locate_label}
           >
             {t("world.sensors.label")}
           </Text>
           <Text
             maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
-            style={locating ? styles.locating : styles.locate_action}
+            style={locating ? STYLE.locating : STYLE.locate_action}
           >
             {locating ? t("world.search.locating") : t("world.sensors.turn_on")}
           </Text>
@@ -218,16 +218,16 @@ function MapCenter() {
   if (coordinate === null) return null;
   return (
     <View>
-      <SectionTitle style={styles.section_hdr}>
+      <SectionTitle style={STYLE.section_header}>
         {t("world.search.pivot")}
       </SectionTitle>
-      <View style={styles.center}>
+      <View style={STYLE.center}>
         {place !== null && (
-          <Text numberOfLines={2} style={styles.name}>
+          <Text numberOfLines={2} style={STYLE.name}>
             {place}
           </Text>
         )}
-        <Text style={[styles.small, styles.numbers]}>{coordinate}</Text>
+        <Text style={[STYLE.small, STYLE.numbers]}>{coordinate}</Text>
       </View>
     </View>
   );
@@ -287,8 +287,8 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
     onClose();
   }
 
-  function dist_of(result: SearchResult): string | null {
-    return result.dist_m === null ? null : format_dist(result.dist_m);
+  function distance_of(result: SearchResult): string | null {
+    return result.dist_m === null ? null : format_distance(result.dist_m);
   }
 
   return (
@@ -298,8 +298,8 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
           <PanelBar {...KEEPS_KEYBOARD} onClose={onClose}>
             <Backing
               fill={COLOR.faint}
-              place={BackingPlace.OnSheet}
-              style={styles.well}
+              place={BackingPlace.ON_SHEET}
+              style={STYLE.well}
             >
               <Glyph
                 glyph="magnifyingglass"
@@ -312,16 +312,16 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                 placeholder={t("world.search.placeholder")}
                 placeholderTextColor={LABEL.placeholder}
                 clearButtonMode={SYSTEM_CLEAR ? "while-editing" : undefined}
-                style={styles.field}
+                style={STYLE.field}
               />
               {!SYSTEM_CLEAR && query.length > 0 && (
                 <Pressable
                   onPress={() => set_query("")}
                   accessibilityRole="button"
                   accessibilityLabel={t("world.search.clear_aria_label")}
-                  style={styles.clear_target}
+                  style={STYLE.clear_target}
                 >
-                  <View style={styles.clear}>
+                  <View style={STYLE.clear}>
                     <Glyph
                       glyph="xmark"
                       size={10}
@@ -336,13 +336,13 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
         }
       >
         <ScrollView
-          style={styles.results}
-          contentContainerStyle={styles.results_room}
+          style={STYLE.results}
+          contentContainerStyle={STYLE.results_room}
           keyboardShouldPersistTaps="handled"
         >
           {q === "" && <MapCenter />}
           {q !== "" && results.length === 0 && (
-            <Text style={styles.empty}>
+            <Text style={STYLE.empty}>
               {loading
                 ? t("world.search.loading")
                 : t("world.search.no_results")}
@@ -351,7 +351,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
 
           {by_country(results, found.home).map(({ country, rows }) => (
             <View key={country ?? ""}>
-              <SectionTitle style={styles.section_hdr}>
+              <SectionTitle style={STYLE.section_header}>
                 {country === null
                   ? t("world.search.section_elsewhere")
                   : country}
@@ -360,7 +360,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
                 <ResultRow
                   key={r.gers_id}
                   result={r}
-                  distance={dist_of(r)}
+                  distance={distance_of(r)}
                   onPress={() => select(r)}
                 />
               ))}
@@ -374,7 +374,7 @@ export function SearchModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   locate_card: {
     borderRadius: CHROME.target / 2,
     pointerEvents: "auto",
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     ...TEXT_STYLE.footnote,
     color: LABEL.secondary,
   },
-  section_hdr: { paddingHorizontal: PANEL_EDGE, paddingBottom: 8 },
+  section_header: { paddingHorizontal: PANEL_EDGE, paddingBottom: 8 },
   row: {
     flexDirection: "row",
     alignItems: "center",

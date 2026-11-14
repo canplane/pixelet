@@ -41,8 +41,8 @@ function AppBody({ children }: { children: ReactNode }) {
     (standing.boot === BOOT_LOADING || standing.boot === BOOT_STARTED) &&
     cover?.kind !== "panic";
   return (
-    <KeyboardAway onAway={() => set_dock_mode(DockMode.Palette)}>
-      <View style={styles.page}>{shows && children}</View>
+    <KeyboardAway onAway={() => set_dock_mode(DockMode.PALETTE)}>
+      <View style={STYLE.page}>{shows && children}</View>
       {shows && <ModalHost />}
       {cover !== null && (
         <View style={StyleSheet.absoluteFill}>
@@ -85,6 +85,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   page: { flex: 1, alignItems: "center" },
 });

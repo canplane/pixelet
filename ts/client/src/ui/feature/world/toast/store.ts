@@ -23,9 +23,9 @@ interface Entry extends ToastSpec {
 /** Decides where a new card comes in: an error goes before a wait, and a wait
  * before a ready word. */
 const SEVERITY: Record<ToastTone, u32> = {
-  [ToastTone.Error]: 0,
-  [ToastTone.Loading]: 1,
-  [ToastTone.Ready]: 2,
+  [ToastTone.ERROR]: 0,
+  [ToastTone.LOADING]: 1,
+  [ToastTone.READY]: 2,
 };
 
 function outranks(a: Entry, b: Entry): boolean {
@@ -39,7 +39,7 @@ interface ToastState {
   entries: Entry[];
   /** The sum of the turns so far, a turn up counting as 1. The stack compares
    * it with its last value to tell which way the cards moved. */
-  turn_cnt: i32;
+  turn_count: i32;
   dragging: boolean;
   /** A toast that changed during a drag. It comes to the front when the drag
    * ends. */
@@ -48,7 +48,7 @@ interface ToastState {
 
 const store = create<ToastState>()(() => ({
   entries: [],
-  turn_cnt: 0,
+  turn_count: 0,
   dragging: false,
   pending: null,
 }));
@@ -61,10 +61,10 @@ export function useToastEntries(): readonly Entry[] {
 }
 
 export function useToastTurnCount(): i32 {
-  return store((s) => s.turn_cnt);
+  return store((s) => s.turn_count);
 }
 
-export function toast_cnt(): u32 {
+export function toast_count(): u32 {
   return get().entries.length;
 }
 
@@ -113,11 +113,11 @@ export function dismiss_toast(id: u32): void {
 /** A `delta` of 1, a swipe up, sends the front card to the back. A `delta` of
  * -1, a swipe down, brings the back card forward. */
 export function rotate_toasts(delta: i32): void {
-  const { entries, turn_cnt } = get();
+  const { entries, turn_count } = get();
   const k = ((delta % entries.length) + entries.length) % entries.length;
   set({
     entries: [...entries.slice(k), ...entries.slice(0, k)],
-    turn_cnt: turn_cnt + delta,
+    turn_count: turn_count + delta,
   });
 }
 

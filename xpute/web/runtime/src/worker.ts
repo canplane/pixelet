@@ -4,7 +4,7 @@
  * it, and the worker's console carried to the page. */
 
 import { ERRNO_EPIPE } from "@xpute/kit/status/errno.spec.ts";
-import { Link } from "@xpute/link";
+import { Side } from "@xpute/link";
 import type { InstantiateError, Log, Trap } from "./message.ts";
 
 interface Exports {
@@ -39,7 +39,7 @@ export function forward_console(tell: (m: Log) => void): void {
 /** Instantiates the guest's `module` and lays a link over it: its memory
  * grown whole to `mem_sz` before its first entry, and never after. An
  * instantiation that fails tells its error and answers null. A trap out of
- * any export stops the guest for good (`Link.trap`), as does a failure of the
+ * any export stops the guest for good (`Side.trap`), as does a failure of the
  * host's own: the page hears it, with the error, and the worker closes, once
  * the current turn is over, as a native host posts its trap. The trapped
  * export answers as xpute-native-runtime link.rs `cross_in` does, a request
@@ -49,14 +49,14 @@ export async function instantiate(
   init: RequestInit | undefined,
   mem_sz: number,
   tell: (m: InstantiateError | Trap) => void,
-): Promise<Link | null> {
-  let link!: Link;
+): Promise<Side | null> {
+  let link!: Side;
   let x: Exports;
   try {
     const { instance } = await WebAssembly.instantiateStreaming(
       fetch(module, init),
       {
-        env: Link.imports(() => link),
+        env: Side.imports(() => link),
       },
     );
     x = instance.exports as unknown as Exports;
@@ -75,7 +75,7 @@ export async function instantiate(
         return trapped;
       }
     };
-  link = new Link({
+  link = new Side({
     get mem() {
       return x.memory.buffer;
     },

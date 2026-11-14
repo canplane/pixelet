@@ -30,7 +30,7 @@ import {
   MESSAGE_WORLD_UNAVAILABLE,
 } from "@/abi/overlay.enum.ts";
 
-const running: Standing = {
+const RUNNING: Standing = {
   boot: BOOT_STARTED,
   gpu: GPU_PRESENT,
   source: SOURCE_DECLARED,
@@ -40,17 +40,17 @@ const running: Standing = {
   progress: 1,
   area: 1,
 };
-const starting: Standing = {
-  ...running,
+const STARTING: Standing = {
+  ...RUNNING,
   boot: BOOT_STARTING,
   source: SOURCE_ASKING,
   gpu: GPU_ASKING,
   progress: 0,
 };
-const loading: Standing = { ...running, boot: BOOT_LOADING, progress: 0.5 };
+const LOADING: Standing = { ...RUNNING, boot: BOOT_LOADING, progress: 0.5 };
 
 test("cover_of - before it ran: failed where it will not, progress while it waits", () => {
-  const of = (s: Partial<Standing>) => cover_of({ ...starting, ...s });
+  const of = (s: Partial<Standing>) => cover_of({ ...STARTING, ...s });
   for (const [s, key] of [
     [{ boot: BOOT_FAILED }, "failed.boot"],
     [{ gpu: GPU_MISSING }, "failed.gpu"],
@@ -77,7 +77,7 @@ test("cover_of - before it ran: failed where it will not, progress while it wait
 });
 
 test("cover_of - opening the core: its own step, before any GPU is asked for", () => {
-  expect(cover_of({ ...starting, boot: BOOT_OPENING })).toEqual({
+  expect(cover_of({ ...STARTING, boot: BOOT_OPENING })).toEqual({
     kind: "progress",
     of: "progress.app",
     share: expect.any(Number),
@@ -85,7 +85,7 @@ test("cover_of - opening the core: its own step, before any GPU is asked for", (
 });
 
 test("cover_of - loading, the world under it: what it waits on, then a panic if broken", () => {
-  const of = (s: Partial<Standing>) => cover_of({ ...loading, ...s });
+  const of = (s: Partial<Standing>) => cover_of({ ...LOADING, ...s });
   for (const [s, key] of [
     [{}, "progress.shaders"],
     [{ progress: 1 }, "progress.area"],
@@ -105,7 +105,7 @@ test("cover_of - loading, the world under it: what it waits on, then a panic if 
 });
 
 test("cover_of - once it shows, a panic or nothing", () => {
-  const of = (s: Partial<Standing>) => cover_of({ ...running, ...s });
+  const of = (s: Partial<Standing>) => cover_of({ ...RUNNING, ...s });
   expect(of({})).toBeNull();
   expect(of({ online: false })).toBeNull();
   expect(of({ gpu: GPU_WAITING })).toBeNull();
@@ -123,7 +123,7 @@ test("cover_of - once it shows, a panic or nothing", () => {
 
 test("cover_of - the bar's share: half what the renderer makes, half what shows", () => {
   const share = (progress: number, area: number) =>
-    cover_of({ ...loading, progress, area });
+    cover_of({ ...LOADING, progress, area });
   expect(share(0, 0)).toMatchObject({ share: 0 });
   expect(share(1, 0)).toMatchObject({ share: 0.5 });
   expect(share(1, 0.5)).toMatchObject({ share: 0.75 });

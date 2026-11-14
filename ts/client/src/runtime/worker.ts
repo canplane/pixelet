@@ -2,18 +2,18 @@
 
 /**
  * A page's core and the host's link to it run in a worker of their own, so
- * that the core holds up none of the UI's events. The page sends its kept
- * entries, then the core's module, the UI's port and the named handles of the
- * interfaces the UI serves; the worker instantiates the module with a link laid over it
- * (@xpute/web-runtime `instantiate`), mounts the objects the host serves, the
- * core's files and GPU among them, and the UI's stand-ins, enters the core,
- * and serves the link to the UI across the port (@xpute/link remote.ts), the
- * canvases the UI gives going to the GPU. The files are here, so the source
- * is declared here too.
+ * that the core holds up none of the UI's events. The page sends, in one
+ * message, its kept entries, the core's module, the UI's port, and the named
+ * handles and prefixes of what the UI serves; the worker instantiates the
+ * module with a link laid over it (@xpute/web-runtime `instantiate`), mounts
+ * the objects the host serves, the core's files and GPU among them, and the
+ * UI's stand-ins, enters the core, and serves the link to the UI across the
+ * port (@xpute/link remote.ts), the canvases the UI gives going to the GPU.
+ * The files are here, so the source is declared here too.
  */
 
 import type { GpuState } from "@xpute/gpu-link";
-import { type Link, serve, wait } from "@xpute/link";
+import { type Side, serve, wait } from "@xpute/link";
 import { hook, serve_clock, serve_stop } from "@xpute/web-host";
 import {
   forward_console,
@@ -44,11 +44,10 @@ import { set_storage } from "@/service/sys/fs/storage.ts";
 import { serve_text } from "@/service/core/text.ts";
 import * as online from "@/service/platform/online.ts";
 
-/** What the page sends the worker: the page's kept entries, which a worker
- * cannot read, ahead of the core's instantiation (@xpute/web-runtime
- * `Instantiate`). */
-export type ToWorker =
-  { kind: "entries"; entries: [string, string][] } | Instantiate;
+/** What the page sends the worker: the core's instantiation
+ * (@xpute/web-runtime `Instantiate`), with the page's kept entries, which a
+ * worker cannot read. */
+export type ToWorker = Instantiate & { entries: [string, string][] };
 
 /** What the worker sends the page: the source's state, a kept key it wrote,
  * the GPU's state, the error the core's instantiation came to, the core's
@@ -69,12 +68,8 @@ const tell = (m: ToPage) => postMessage(m);
 forward_console(tell);
 
 onmessage = ({ data: m }: MessageEvent<ToWorker>) => {
-  switch (m.kind) {
-    case "entries":
-      return keep(m.entries);
-    case "instantiate":
-      return void start(m);
-  }
+  keep(m.entries);
+  void start(m);
 };
 
 /** A copy of the page's kept entries, each write sent back to the page. */
@@ -119,7 +114,7 @@ async function start(m: Instantiate): Promise<void> {
 }
 
 /** Declares the tile source to the core, and tells the page its state. */
-async function declare(link: Link): Promise<void> {
+async function declare(link: Side): Promise<void> {
   watch_source(() => tell({ kind: "source", state: source_state(), decl: source_decl() }));
   await declare_source({ send: (h, m, args) => wait(link, h, m, args) });
 }

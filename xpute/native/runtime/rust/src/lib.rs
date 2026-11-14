@@ -10,8 +10,8 @@
 //! It offers pieces, which the program composes on the guest's thread in the
 //! order they run, as a page's worker composes @xpute/web-runtime's: what
 //! the UI serves (`remote`), the guest's first entry (`link::init`), then
-//! the answers due, the UI's batch and the loop (`link::run_due`,
-//! `remote::flush`, `event_loop::run`). What the host serves is mounted on
+//! for the guest's life the answers due, the UI's batch and the loop's next
+//! turn (`link::run_due`, `remote::flush`, `event_loop::turn`). What the host serves is mounted on
 //! its link (xpute-native-host).
 //!
 //! It takes the link, the contract both sides take, from xpute-link: a
@@ -37,20 +37,18 @@ pub mod wait;
 pub use event_loop::{done, job, post_task, Task};
 pub use log::log;
 
-/// A method from the UI, for the guest's thread: `m` of one of the guest's
-/// objects `h`, its request `tag` the UI's, which carries the UI's
-/// generation (remote.rs). Called on the JavaScript thread.
-pub fn post(tag: u32, h: u32, m: u32, pkt: Option<Vec<u8>>) {
-    let g = remote::generation();
-    event_loop::post_task(Box::new(move || remote::recv(g, tag, h, m, pkt)));
+/// A method from the UI of `generation` (remote.rs `accept`), for the
+/// guest's thread: `m` of one of the guest's objects `h`, its request `tag`
+/// the UI's. Called on the JavaScript thread.
+pub fn post(generation: u32, tag: u32, h: u32, m: u32, pkt: Option<Vec<u8>>) {
+    event_loop::post_task(Box::new(move || remote::recv(generation, tag, h, m, pkt)));
 }
 
-/// The UI's answer to the request `tag` of the guest's that it serves later,
-/// which carries the UI's generation (remote.rs), for the guest's thread.
-/// Called on the JavaScript thread.
-pub fn answer(tag: u32, result: i32, data: Option<Vec<u8>>) {
-    let g = remote::generation();
-    event_loop::post_task(Box::new(move || remote::answer(g, tag, result, data)));
+/// The answer of the UI of `generation` to the request `tag` of the guest's
+/// that it serves later, for the guest's thread. Called on the JavaScript
+/// thread.
+pub fn answer(generation: u32, tag: u32, result: i32, data: Option<Vec<u8>>) {
+    event_loop::post_task(Box::new(move || remote::answer(generation, tag, result, data)));
 }
 
 /// The app was hidden or shown again, from the platform's lifecycle.

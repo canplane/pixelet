@@ -41,6 +41,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::sys::io::demand::{Source, Stream};
+use crate::sys::io::failure::{exit_of, Exit, Failure};
 use crate::spec;
 use crate::spec::file::{format, path};
 use crate::spec::manifest::mem;
@@ -173,6 +174,15 @@ fn errno<T>(r: Result<Result<T, ErrorCode>, Errno>) -> Result<T, Errno> {
     })
 }
 
+/// Whether a call that failed with `e` ended aborted, as a device's host
+/// cancels what a reload of its UI leaves of the files the UI serves, so it
+/// is made again (`exit_of`). The storage file is the host's own on a device
+/// (pxl-runtime file.rs), and the worker's, which dies with the page, on a
+/// page, so none of its calls ends so.
+fn aborted(e: Errno) -> bool {
+    exit_of(Failure::from(e)) == Exit::Aborted
+}
+
 /// A heap buffer of `n` bytes, for a read.
 pub fn heap(n: u32) -> Result<Vec<u8>, Errno> {
     Ok(vec![0u8; n as usize])
@@ -269,9 +279,9 @@ impl Refused {
 
 /// Sets the refused file `r` aside, out of its path; then its owner takes it
 /// back (`take_set_aside`): the settings write it from their next keep on,
-/// the objects' repository reads it again. One its backend cannot set aside,
-/// or one past the set-asides that can wait at once, stays refused this
-/// session.
+/// the objects' repository reads it again. A set-aside that ended aborted is
+/// made again; one its backend cannot set aside, or one past the set-asides
+/// that can wait at once, stays refused this session.
 pub fn set_aside(r: Refused) {
     if let Ok(task) = setting_aside(r) {
         executor::spawner().spawn(task);
@@ -280,11 +290,15 @@ pub fn set_aside(r: Refused) {
 
 #[embassy_executor::task(pool_size = SET_ASIDE_CAP)]
 async fn setting_aside(r: Refused) {
-    let Ok(f) = File::open(&r.path()) else {
-        return;
-    };
-    if errno(file::file_set_aside(f.0).await).is_err() {
-        return;
+    loop {
+        let Ok(f) = File::open(&r.path()) else {
+            return;
+        };
+        match errno(file::file_set_aside(f.0).await) {
+            Ok(()) => break,
+            Err(e) if aborted(e) => continue,
+            Err(_) => return,
+        }
     }
     files().set_aside.push_back(r);
     invalidate();

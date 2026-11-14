@@ -119,11 +119,12 @@ impl Return for f64 {
 
 /// Calls the static method `m` of `c`, its index in the names `class` was
 /// given, with `args` on this thread, attached to the VM for good as a
-/// daemon, and gives what it returns. The references `args` makes live in a
-/// local frame of the call's, since the thread never returns to Java to let
-/// them go. An exception Kotlin threw has no Java caller here to reach, so it
-/// is cleared, and the call, as one that cannot attach or make its frame,
-/// gives `R`'s default.
+/// daemon where Java has not attached it, and gives what it returns. The
+/// references `args` makes live in a local frame of the call's, since a
+/// thread the runtime made never returns to Java to let them go. An exception
+/// Kotlin threw is cleared, as such a thread has no Java caller to reach, and
+/// the call, as one that cannot attach or make its frame, gives `R`'s
+/// default.
 ///
 /// # Safety
 /// `args` gives the values of the signature of the method at `m`, in its

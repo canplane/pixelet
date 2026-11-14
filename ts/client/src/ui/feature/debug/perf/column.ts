@@ -51,7 +51,7 @@ const NAME_TABLES: { readonly [K in NameColumn]: readonly string[] } = {
 const is_name_column = (name: string): name is NameColumn =>
   Object.hasOwn(NAME_TABLES, name);
 
-export function val_text(name: string, v: f64): string {
+export function value_text(name: string, v: f64): string {
   if (is_name_column(name)) return NAME_TABLES[name][v] ?? "-";
   if (name.endsWith("_ms")) return `${n1(v)} ms`;
   if (name.endsWith("_bytes")) return `${+fixed(v / MIB, 1)} MiB`;

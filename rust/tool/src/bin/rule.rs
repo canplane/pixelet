@@ -328,12 +328,14 @@ const PASS_ORDER: [(&str, u8); 18] = [
 ];
 const PASS_OWN: u8 = 6;
 
-/// The client's order (ts/client/src, AGENTS.md): its entry over the UI
-/// and the wiring that opens the host, the two heads; under them the
-/// services; and at the bottom the numbers both read and the build's values.
+/// The client's order (ts/client/src, AGENTS.md): its entry and the check of
+/// its platform files over the UI and the wiring that opens the host, the two
+/// heads; under them the services; and at the bottom the numbers both read
+/// and the build's values.
 const CLIENT: &str = "ts/client/src/";
-const CLIENT_ORDER: [(&str, u8); 9] = [
+const CLIENT_ORDER: [(&str, u8); 10] = [
     ("app", 3),
+    ("conform", 3),
     ("boot", 3),
     ("page", 3),
     ("ui", 2),
@@ -348,8 +350,7 @@ const CLIENT_HEADS: [&[&str]; 2] = [&["ui"], &["runtime"]];
 /// The UI's own order (ts/client/src/ui): what assembles the features over them, and
 /// under them what every feature shares.
 const UI: &str = "ts/client/src/ui/";
-const UI_ORDER: [(&str, u8); 5] = [
-    ("conform", 2),
+const UI_ORDER: [(&str, u8); 4] = [
     ("layout", 2),
     ("modal", 2),
     ("feature", 1),

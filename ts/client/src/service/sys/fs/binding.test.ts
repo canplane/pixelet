@@ -12,7 +12,7 @@ import {
 import { LEAF_ZOOM, path as tree } from "@/abi/file.spec.ts";
 import { binding, type Path, walk } from "./binding.ts";
 
-const signal = new AbortController().signal;
+const SIGNAL = new AbortController().signal;
 
 function code(f: () => unknown): unknown {
   try {
@@ -52,7 +52,7 @@ test("binding - a path that leads to no node, or whose data its node does not ta
   ];
   for (const p of none) {
     assert.deepStrictEqual(
-      code(() => b.open(p, signal)),
+      code(() => b.open(p, SIGNAL)),
       ERROR_CODE_NO_ENTRY,
       JSON.stringify(p),
     );

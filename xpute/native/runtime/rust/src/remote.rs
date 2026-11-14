@@ -33,12 +33,17 @@
 //! of the UI they crossed with, so an old UI's answer is told to no new UI
 //! and a new UI's answer to an old UI's request is refused; what an old UI
 //! held answers ECANCELED, the requests it left pending and each method of
-//! the objects it opened until the guest drops them, so the guest's load
-//! starts again. The generation stays on this side: the UI's tags cross as
-//! they are.
+//! the objects it serves the guest until the guest drops them, so the
+//! guest's load starts again; and the guest's objects it opened are dropped
+//! on the guest, so none is held for a UI that is gone. A start answers the
+//! UI its generation, which each of its posts, answers and takes carries, so
+//! nothing of an old UI's that the guest's thread has not run when a new one
+//! is taken reaches the guest, its methods and its answers alike, as an old
+//! JavaScript runtime may still send while a reload makes the new one; the
+//! UI's tags cross as they are.
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 use std::sync::{Mutex, MutexGuard};
 
@@ -46,7 +51,7 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::wire::xtp::{PacketWriter, MAX_PKT_SZ};
 use xpute_link::abi::types::Token;
-use xpute_link::{store_uri, Handle, Lower, Method, Object, Packet, Reply, Tag};
+use xpute_link::{store_uri, Handle, Lift, Lower, Method, Object, Packet, Reply, Tag, DROP, OPEN, ROOT};
 
 use crate::event_loop::post_task;
 use crate::link;
@@ -69,6 +74,9 @@ thread_local! {
     /// The requests the UI answers later, by tag, each with the generation
     /// of the UI it was told to, until it is answered.
     static PENDING: RefCell<BTreeMap<Tag, u32>> = const { RefCell::new(BTreeMap::new()) };
+    /// The guest's objects the UI opened, until it drops them; each is the
+    /// UI's now, since `hang_up` drops them all before a new UI's first post.
+    static GUEST_OBJECTS: RefCell<BTreeSet<Handle>> = const { RefCell::new(BTreeSet::new()) };
 }
 
 fn out() -> MutexGuard<'static, Out> {
@@ -76,30 +84,38 @@ fn out() -> MutexGuard<'static, Out> {
 }
 
 /// The UI's generation now.
-pub(crate) fn generation() -> u32 {
+fn generation() -> u32 {
     out().generation
 }
 
 /// Takes a new UI on the runtime, as a reload's: the batch the last UI did
-/// not take goes, the new UI is told its first, and the requests the last
-/// left pending are answered ECANCELED on the guest's thread (`hang_up`).
-/// Called on the JavaScript thread, by each start.
-pub fn accept() {
-    {
+/// not take goes, the new UI is told its first, and on the guest's thread
+/// the requests the last left pending are answered ECANCELED and the guest's
+/// objects it opened dropped (`hang_up`).
+/// Called on the JavaScript thread, by each start; answers the new UI's
+/// generation.
+pub fn accept() -> u32 {
+    let generation = {
         let mut out = out();
         out.generation = out.generation.wrapping_add(1);
         out.batch.clear();
         out.told = false;
-    }
+        out.generation
+    };
     post_task(Box::new(hang_up));
+    generation
 }
 
-/// Answers ECANCELED each request pending on a UI before this one.
+/// Answers ECANCELED each request pending on a UI before this one, and
+/// drops on the guest each of its objects a UI before this one opened.
 fn hang_up() {
     let g = generation();
     let old: Vec<Tag> = PENDING.with_borrow_mut(|l| l.extract_if(.., |_, ui| *ui != g).map(|(t, _)| t).collect());
     for t in old {
         link::task_return_pkt(t, Errno::ECANCELED as i32, None);
+    }
+    for h in GUEST_OBJECTS.take() {
+        link::drop(h);
     }
 }
 
@@ -234,9 +250,27 @@ pub fn serve(named: &[Handle], prefixes: Vec<Vec<Token>>, later: &'static [(Hand
 
 /// Sends the method of the UI of `generation` on the link, its answer told
 /// back to that UI alone (remote.ts `port.onmessage`); a packet past the
-/// room is refused whole, EMSGSIZE (xpute-link link.rs `Side::send`).
+/// room is refused whole, EMSGSIZE (xpute-link link.rs `Side::send`). A
+/// method of a UI that is not the one now reaches nothing. The guest's
+/// object an open answers is held for that UI until it drops it, or dropped
+/// at once where a new UI has been taken since (`hang_up`).
 pub(crate) fn recv(generation: u32, tag: Tag, h: u32, m: u32, pkt: Option<Vec<u8>>) {
+    if generation != self::generation() {
+        return;
+    }
+    if m == DROP {
+        GUEST_OBJECTS.with_borrow_mut(|l| l.remove(&h));
+    }
+    let opens = h == ROOT && m == OPEN;
     let answer = move |result: i32, data: Option<Vec<u8>>| {
+        let opened = data.as_deref().filter(|_| opens && result == 0).and_then(|d| Lift::new(d).u32(0).ok());
+        if let Some(o) = opened {
+            if generation == self::generation() {
+                GUEST_OBJECTS.with_borrow_mut(|l| l.insert(o));
+            } else {
+                link::drop(o);
+            }
+        }
         tell(generation, 4, |w| {
             w.u32(Some(0))
                 .u32(Some(tag))
@@ -249,8 +283,13 @@ pub(crate) fn recv(generation: u32, tag: Tag, h: u32, m: u32, pkt: Option<Vec<u8
 }
 
 /// The answer of the UI of `generation` to the request `tag` it serves
-/// later, refused where that UI was not told the request.
+/// later, refused, as `recv` refuses a method, where that UI is not the one
+/// now, and where it was not told the request; `hang_up` answers an old UI's
+/// requests itself.
 pub(crate) fn answer(generation: u32, tag: Tag, result: i32, data: Option<Vec<u8>>) {
+    if generation != self::generation() {
+        return;
+    }
     let pending = PENDING.with_borrow_mut(|l| l.get(&tag) == Some(&generation) && l.remove(&tag).is_some());
     if pending {
         link::task_return_pkt(tag, result, data);
@@ -270,10 +309,14 @@ pub fn flush(notify: fn()) {
     }
 }
 
-/// Hands over the batch the UI has not taken. Called on the JavaScript
-/// thread, on the notify.
-pub fn take() -> Vec<u8> {
+/// Hands over the batch the UI of `generation` has not taken, or none where
+/// that UI is not the one now. Called on the JavaScript thread, on the
+/// notify.
+pub fn take(generation: u32) -> Vec<u8> {
     let mut out = out();
+    if out.generation != generation {
+        return Vec::new();
+    }
     out.told = false;
     core::mem::take(&mut out.batch)
 }

@@ -37,7 +37,7 @@ export function TopOverlays() {
 
   return (
     <>
-      <View style={[styles.scrim, { height: scrim_depth }]}>
+      <View style={[STYLE.scrim, { height: scrim_depth }]}>
         <Svg width="100%" height="100%">
           <Defs>
             <LinearGradient id="scrim-down" x1="0" y1="0" x2="0" y2="1">
@@ -85,7 +85,7 @@ export function TopOverlays() {
         </Svg>
       </View>
 
-      <BusyDim style={[styles.left, { top }]}>
+      <BusyDim style={[STYLE.left, { top }]}>
         <CircularButton
           glyph="line.3.horizontal"
           onPress={() => open_modal("settings")}
@@ -93,11 +93,11 @@ export function TopOverlays() {
         />
       </BusyDim>
 
-      <BusyDim style={[styles.center, { top }]}>
+      <BusyDim style={[STYLE.center, { top }]}>
         <SearchStrip />
       </BusyDim>
 
-      <BusyDim style={[styles.right, { top }]}>
+      <BusyDim style={[STYLE.right, { top }]}>
         <LocationStack />
         <ViewButtons />
       </BusyDim>
@@ -110,12 +110,12 @@ function SearchStrip() {
   const zooming = useCore((s) => s.zooming);
   const dim = useDim(1, SNAP);
   return (
-    <Motion {...dim.motion} style={styles.fill}>
+    <Motion {...dim.motion} style={STYLE.fill}>
       <Pressable
         onPress={() => open_modal("search")}
         accessibilityRole="button"
         accessibilityLabel={t("world.search.trigger_aria_label")}
-        style={styles.strip}
+        style={STYLE.strip}
       >
         <Presence
           show={!zooming}
@@ -123,10 +123,10 @@ function SearchStrip() {
           exit={{ opacity: 0 }}
           transition={SETTLE}
           exitTransition={LEAVE}
-          style={styles.place}
+          style={STYLE.place}
         >
-          <View style={styles.title}>
-            <View style={styles.search}>
+          <View style={STYLE.title}>
+            <View style={STYLE.search}>
               <HaloIcon
                 glyph="magnifyingglass"
                 size={12}
@@ -138,7 +138,7 @@ function SearchStrip() {
             <SensorIcons />
           </View>
         </Presence>
-        <View style={styles.scale}>
+        <View style={STYLE.scale}>
           <MapScaleBar show={zooming} />
         </View>
       </Pressable>
@@ -158,7 +158,7 @@ const SCRIM_EASE = Array.from({ length: 9 }, (_, i) => {
   return [t, t * t * (3 - 2 * t)] as const;
 });
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   scrim: {
     position: "absolute",
     top: 0,

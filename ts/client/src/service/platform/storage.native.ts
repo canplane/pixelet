@@ -8,6 +8,10 @@ export function get(key: string): string | null {
   return PLATFORM.storage_get(key);
 }
 
+export function keys(): string[] {
+  return PLATFORM.storage_keys();
+}
+
 export function set(key: string, val: string): void {
   PLATFORM.storage_set(key, val);
 }

@@ -11,11 +11,11 @@ import { XputeError } from "@xpute/kit/status/error.ts";
 
 import * as monotonic_clock from "@xpute/link/abi/clocks/monotonic_clock.ts";
 import * as system_clock from "@xpute/link/abi/clocks/system_clock.ts";
-import type { Link } from "@xpute/link";
+import type { Side } from "@xpute/link";
 
 const NS_PER_MS = 1e6;
 
-export function serve_clock(link: Link): void {
+export function serve_clock(link: Side): void {
   monotonic_clock.mount(link, {
     now: () => BigInt(round(performance.now() * NS_PER_MS)),
     // A wait its caller cancels stops its timer and answers ECANCELED.

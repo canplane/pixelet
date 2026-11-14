@@ -9,14 +9,14 @@ import { Bug, frames } from "@xpute/kit/status/bug.ts";
 import { ERRNO_ENOTRECOVERABLE } from "@xpute/kit/status/errno.spec.ts";
 import { strerror } from "@xpute/kit/status/error.ts";
 import * as stop from "@xpute/link/abi/stop/stop.ts";
-import { type Link, set_hook, type Stop } from "@xpute/link";
+import { type Side, set_hook, type Stop } from "@xpute/link";
 
 /** The program's report, which both the guest's stop and the host's own
  * failures reach. */
 let report: ((s: Stop) => void) | null = null;
 
 export function serve_stop(
-  link: Pick<Link, "mount_named">,
+  link: Pick<Side, "mount_named">,
   r: (s: Stop) => void,
 ): void {
   report ??= r;
@@ -37,7 +37,7 @@ export function serve_stop(
  * to the report, with its errno, a bug's or ENOTRECOVERABLE, and where it was
  * thrown, before the page hears the trap. A throw after the guest trapped is
  * no failure of the host's. */
-export function hook(link: Pick<Link, "trap">): void {
+export function hook(link: Pick<Side, "trap">): void {
   const fail = (e: unknown) => {
     if (!link.trap(e)) return;
     const stack = e instanceof Error ? (e.stack ?? "") : "";

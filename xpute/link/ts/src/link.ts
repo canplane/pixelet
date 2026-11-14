@@ -179,7 +179,7 @@ export function refusal_of(e: unknown): i32 {
 
 /** What the host holds of its guest: the guest's memory, its three exports
  * (link/wit/types.wit), and its platform's report of a trap (`trap`). An
- * export the guest traps in traps the link (`Link.trap`) and answers on,
+ * export the guest traps in traps the link (`Side.trap`) and answers on,
  * throwing nothing: link_in EPIPE, as a trapped guest's request is answered. */
 export interface Guest {
   readonly mem: ArrayBuffer;
@@ -190,18 +190,19 @@ export interface Guest {
   /** link_in: the frame laid in the inbox. */
   in(): i32;
   /** Tells the guest's platform the guest trapped, with the error `e`
-   * (`Link.trap`). */
+   * (`Side.trap`). */
   trap(e: unknown): void;
 }
 
 /** What a side serves, alike on the host's link and on a UI across a port
- * (`Link`, `Remote`): its interfaces by their named handles, the objects
- * under issued handles in a table (`Table`: a Link's, which issues them, or a
- * UI's, under those its link's side issued), the openers by the URI's
- * leading tokens, the longest matching winning, and how each request it
- * answers later stops if its caller cancels it, as xpute-link link.rs `Side`
- * serves. Only how an answer crosses differs (`_answer`). */
-export abstract class Side<O extends Pick<Table<LinkObject>, "get" | "put" | "remove">> {
+ * (`Side`, `Remote`), as xpute-link link.rs `Side` serves beside its frames,
+ * Rust naming this part apart nowhere: its interfaces by their named
+ * handles, the objects under issued handles in a table (`Table`: a Side's,
+ * which issues them, or a UI's, under those its link's side issued), the
+ * openers by the URI's leading tokens, the longest matching winning, and how
+ * each request it answers later stops if its caller cancels it. Only how an
+ * answer crosses differs (`_answer`). */
+export abstract class Server<O extends Pick<Table<LinkObject>, "get" | "put" | "remove">> {
   /** The openers, by the URI's leading tokens. */
   protected readonly _mounts: [readonly Token[], Opener][] = [];
   /** The interfaces this side serves, by their named handles (`NAMED`). */
@@ -297,7 +298,10 @@ export abstract class Side<O extends Pick<Table<LinkObject>, "get" | "put" | "re
   }
 }
 
-export class Link extends Side<Table<LinkObject>> {
+/** The host's side of the link, as xpute-link link.rs `Side` is either side:
+ * what it serves (`Server`), and the frames it lays in the guest's inbox
+ * and takes from its outbox. */
+export class Side extends Server<Table<LinkObject>> {
   /** The answers of the sent requests that answer later, by tag. */
   private readonly _pending = new Map<Tag, Answer>();
   private _next: Tag = 0;
@@ -312,7 +316,7 @@ export class Link extends Side<Table<LinkObject>> {
    * it answers is a failure of its own: it is handed to the hook, the guest is
    * trapped, and its call is answered ENOTRECOVERABLE, so nothing unwinds
    * through it. Once trapped, a frame is not served: EPIPE. */
-  static imports(link: () => Link) {
+  static imports(link: () => Side) {
     return {
       link_out: (at: u32): i32 => {
         const l = link();

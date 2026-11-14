@@ -14,7 +14,7 @@ use xpute_gen::spec::data::{table_outputs, DataSpec};
 use xpute_gen::spec::rs_enum;
 
 use super::asset::{cube_member, cube_number, members};
-use super::{description, file, marks, read, Node, Output};
+use super::{description, file, marks, read, u32_of, Node, Output};
 use crate::asset::table::Face;
 use crate::root;
 
@@ -22,8 +22,6 @@ pub(crate) const INGEST_JSON: &str = "spec/spec/asset/ingest.json5";
 
 pub struct File {
     pub path: String,
-    key: String,
-    bytes: u64,
     /// ENU (x, y, z-up); None for an image.
     pub extent: Option<[f64; 3]>,
 }
@@ -33,12 +31,13 @@ pub fn files() -> Result<Vec<File>, String> {
     let spec = read(INGEST_JSON)?;
     let rows = spec
         .get("files")
+        .map(Node::val)
         .and_then(Node::arr)
         .ok_or(format!("{INGEST_JSON}: no files"))?;
     rows.iter()
         .map(|r| {
             let at = |field: &str| format!("{INGEST_JSON}: a file's {field}");
-            let extent = match r.get("extent").and_then(Node::arr) {
+            let extent = match r.get("extent").map(Node::val).and_then(Node::arr) {
                 None => None,
                 Some(e) => Some(
                     e.iter()
@@ -50,8 +49,6 @@ pub fn files() -> Result<Vec<File>, String> {
             };
             Ok(File {
                 path: r.str_at("path").ok_or(at("path"))?.to_string(),
-                key: r.str_at("key").ok_or(at("key"))?.to_string(),
-                bytes: r.get("bytes").and_then(Node::num).ok_or(at("bytes"))? as u64,
                 extent,
             })
         })
@@ -111,17 +108,12 @@ fn pack() -> Result<Pack, String> {
     let spec = read(INGEST_JSON)?;
     let p = spec.get("pack").ok_or(format!("{INGEST_JSON}: no pack"))?;
     let at = |field: &str| format!("{INGEST_JSON}: pack.{field}");
-    let whole = |n: &Node| {
-        n.num()
-            .filter(|n| n.fract() == 0.0 && *n >= 0.0)
-            .map(|n| n as u32)
-    };
-    let list = |field: &str| p.get(field).and_then(Node::arr).ok_or(at(field));
+    let list = |field: &str| p.get(field).map(Node::val).and_then(Node::arr).ok_or(at(field));
     let means = list("means")?
         .iter()
         .map(|m| {
             m.arr()
-                .and_then(|m| m.iter().map(whole).collect::<Option<Vec<_>>>())
+                .and_then(|m| m.iter().map(u32_of).collect::<Option<Vec<_>>>())
                 .and_then(|m| m.try_into().ok())
         })
         .collect::<Option<Vec<_>>>()
@@ -133,7 +125,7 @@ fn pack() -> Result<Pack, String> {
                 g.str()?.to_string(),
                 t.str()?.to_string(),
                 face.str()?.to_string(),
-                whole(n)?,
+                u32_of(n)?,
             )),
             _ => None,
         })
@@ -141,8 +133,8 @@ fn pack() -> Result<Pack, String> {
         .ok_or(at("faces"))?;
     Ok(Pack {
         image: p.str_at("image").ok_or(at("image"))?.to_string(),
-        cell: p.get("cell").and_then(whole).ok_or(at("cell"))?,
-        columns: p.get("columns").and_then(whole).ok_or(at("columns"))?,
+        cell: p.get("cell").and_then(u32_of).ok_or(at("cell"))?,
+        columns: p.get("columns").and_then(u32_of).ok_or(at("columns"))?,
         tiles: list("tiles")?
             .iter()
             .map(|t| t.str().map(str::to_string))
@@ -153,23 +145,12 @@ fn pack() -> Result<Pack, String> {
     })
 }
 
-/// The files, written by xpute's generator as a data spec built here: every
-/// field of each file on both sides. The pack's layout follows, the tool's
-/// own, as each side reads it.
+/// The files, written by xpute's generator from the ingest's own `files`:
+/// every field of each file on both sides. The pack's layout follows, the
+/// tool's own, as each side reads it.
 pub fn outputs() -> Result<Vec<Output>, String> {
-    let (rows, pack) = (files()?, pack()?);
-    let record = |r: &File| {
-        let extent = match r.extent {
-            Some(e) => Node::Arr(e.iter().map(|n| Node::Num(*n)).collect()),
-            None => Node::Null,
-        };
-        Node::Obj(vec![
-            ("path".into(), Node::Str(r.path.clone())),
-            ("key".into(), Node::Str(r.key.clone())),
-            ("bytes".into(), Node::Num(r.bytes as f64)),
-            ("extent".into(), extent),
-        ])
-    };
+    let (spec, pack) = (read(INGEST_JSON)?, pack()?);
+    let files = spec.get("files").filter(|f| f.is_wrapper()).ok_or(format!("{INGEST_JSON}: no files"))?;
     let table = Node::Obj(vec![
         (
             "$description".into(),
@@ -192,8 +173,10 @@ pub fn outputs() -> Result<Vec<Output>, String> {
                     ]),
                 ),
                 marks(vec![("row".into(), Node::Str("asset_file".into()))]),
-                ("$value".into(), Node::Arr(rows.iter().map(record).collect())),
-            ]),
+            ]
+            .into_iter()
+            .chain(files.entries().iter().cloned())
+            .collect()),
         ),
     ]);
     let d = DataSpec {

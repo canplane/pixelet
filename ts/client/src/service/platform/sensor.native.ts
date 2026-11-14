@@ -9,7 +9,7 @@
 import { AppState, Linking } from "react-native";
 import * as Location from "expo-location";
 
-import { coords_fix, geo_fix, listener } from "./sensor-listener.ts";
+import { coords_fix, geolocation_fix, listener } from "./sensor-listener.ts";
 import type { GeolocationSensor, OrientationSensor } from "./types.ts";
 import { PLATFORM } from "./pxl-platform.ts";
 
@@ -30,7 +30,7 @@ function serial<T>(look: () => Promise<T>): Promise<T> {
 /** Asks for the permission only while it is undetermined, and otherwise only
  * reads the answer. Asking opens an Android activity, and the app's resume
  * from it restarts the sensors, so asking every time would loop. */
-function geo_granted(): Promise<boolean> {
+function geolocation_granted(): Promise<boolean> {
   return serial(async () => {
     const now = await Location.getForegroundPermissionsAsync();
     const { status } =
@@ -46,7 +46,7 @@ function geo_granted(): Promise<boolean> {
  * second. The settings then grant it, and the app's return to the foreground
  * starts the watch again. A granted location still needs the device's own
  * location switched on. */
-function geo_permit(): Promise<boolean> {
+function geolocation_permit(): Promise<boolean> {
   return serial(async () => {
     const now = await Location.getForegroundPermissionsAsync();
     if (now.status !== Location.PermissionStatus.GRANTED) {
@@ -97,7 +97,7 @@ function recheck(): void {
       }
       granted = true;
       listener.permission("geolocation", "granted");
-      listener.permission("orientation", "granted");
+      listener.permission("orient", "granted");
     },
   );
 }
@@ -126,23 +126,23 @@ function watch_keep(
 let geolocation: Watch | null = null;
 
 /** A device's watch ends on any failure. */
-function geo_fail(watch: Watch, err: "denied" | "unavailable" | "other"): void {
+function geolocation_fail(watch: Watch, err: "denied" | "unavailable" | "other"): void {
   if (geolocation !== watch) return;
-  geo_stop();
+  geolocation_stop();
   listener.pos_err(err, false);
 }
 
-function geo_start(): void {
+function geolocation_start(): void {
   if (geolocation !== null) return;
   const watch: Watch = { subscription: null, stopped: false };
   geolocation = watch;
   void (async () => {
-    if (!(await geo_granted())) return geo_fail(watch, "denied");
+    if (!(await geolocation_granted())) return geolocation_fail(watch, "denied");
     // A watch the core starts asks only for a permission not yet decided and
     // raises no settings dialog: the location switched off ends it, and the
     // press turns the location on (`services_on`).
     if (!(await Location.hasServicesEnabledAsync())) {
-      return geo_fail(watch, "unavailable");
+      return geolocation_fail(watch, "unavailable");
     }
     const subscription = await Location.watchPositionAsync(
       {
@@ -151,45 +151,45 @@ function geo_start(): void {
         distanceInterval: 0,
         mayShowUserSettingsDialog: false,
       },
-      (pos) => geo_fix(coords_fix(pos.coords)),
+      (pos) => geolocation_fix(coords_fix(pos.coords)),
       // Android's watch never ends on its own: expo's watch callbacks leave
       // onLocationError empty, and the fused provider keeps the request. iOS
       // rides out locationUnknown while CoreLocation keeps trying, and ends
       // the stream on any other failure. An ended watch is reported as a
       // failure, and the core starts the watch again on a grant, a return to
       // the foreground or a press.
-      () => geo_fail(watch, "other"),
+      () => geolocation_fail(watch, "other"),
     );
     watch_keep(watch, subscription);
-  })().catch(() => geo_fail(watch, "other"));
+  })().catch(() => geolocation_fail(watch, "other"));
 }
 
-function geo_stop(): void {
+function geolocation_stop(): void {
   if (geolocation === null) return;
   watch_end(geolocation);
   geolocation = null;
 }
 
-let orientation: Watch | null = null;
+let orient: Watch | null = null;
 
 /** A heading nearer the last one told than this is not told: a phone at rest
  * trembles by less, and each reading told is a frame drawn. */
 const HEADING_STEP_DEG = 1;
 
 function orient_fail(watch: Watch, refused: boolean): void {
-  if (orientation !== watch) return;
+  if (orient !== watch) return;
   orient_stop();
-  if (refused) listener.permission("orientation", "denied");
+  if (refused) listener.permission("orient", "denied");
   else listener.orient_err();
 }
 
 function orient_start(): void {
-  if (orientation !== null) return;
+  if (orient !== null) return;
   const watch: Watch = { subscription: null, stopped: false };
-  orientation = watch;
+  orient = watch;
   let told: number | null = null;
   void (async () => {
-    if (!(await geo_granted())) return orient_fail(watch, true);
+    if (!(await geolocation_granted())) return orient_fail(watch, true);
     const subscription = await Location.watchHeadingAsync(
       (h) => {
         const heading = h.trueHeading >= 0 ? h.trueHeading : h.magHeading;
@@ -212,16 +212,16 @@ function orient_start(): void {
 }
 
 function orient_stop(): void {
-  if (orientation === null) return;
-  watch_end(orientation);
-  orientation = null;
+  if (orient === null) return;
+  watch_end(orient);
+  orient = null;
 }
 
 export const GEOLOCATION: GeolocationSensor = {
   has: true,
-  permit: geo_permit,
-  start: geo_start,
-  stop: geo_stop,
+  permit: geolocation_permit,
+  start: geolocation_start,
+  stop: geolocation_stop,
 };
 export const ORIENT: OrientationSensor = {
   has: PLATFORM.has_heading(),

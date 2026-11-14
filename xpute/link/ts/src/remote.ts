@@ -18,7 +18,7 @@
  * as a device's UI serves the guest's files: the link's side mounts their
  * openers (`serve`, and xpute-native-runtime remote.rs `serve`), and tells
  * the UI each object's drop. The UI serves as the link does (link.ts
- * `Side`): only how an answer crosses differs. Its open was answered across
+ * `Server`): only how an answer crosses differs. Its open was answered across
  * the port already, so an opener's refusal answers each method of what it
  * would have opened.
  *
@@ -43,12 +43,12 @@ import {
   type Args,
   DROP,
   type Handle,
-  type Link,
+  type Side,
   type LinkObject,
   type Method,
   type Packet,
   type Sender,
-  Side,
+  Server,
   type Tag,
 } from "./link.ts";
 
@@ -100,7 +100,7 @@ export type ToUi =
  * (`Remote.prefixes`), and what the UI gives beside the link to `taker`. */
 export function serve(
   port: Port,
-  link: Link,
+  link: Side,
   named: readonly Handle[],
   prefixes: readonly (readonly Token[])[],
   later: Later,
@@ -143,7 +143,7 @@ export function serve(
 }
 
 /** The UI's end of a link `serve` serves across a port. */
-export class Remote extends Side<ReturnType<typeof opened>> implements Sender {
+export class Remote extends Server<ReturnType<typeof opened>> implements Sender {
   private readonly _port: Port;
   private readonly _answers = new Map<Tag, (a: Answered) => void>();
   private _next = 0;

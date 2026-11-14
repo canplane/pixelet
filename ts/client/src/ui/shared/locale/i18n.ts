@@ -37,7 +37,7 @@ function deep_merge(base: Catalog, extra: Catalog): Catalog {
 /** The dev catalogs are merged behind `__DEV__` tested at the top level, so
  * that a release bundle drops them. Tree shaking does not drop an argument
  * passed to a helper that tests the flag. */
-const catalog = __DEV__
+const CATALOGS = __DEV__
   ? {
       en: deep_merge(en, enDev) as typeof en,
       ko: deep_merge(ko, koDev) as typeof ko,
@@ -47,7 +47,7 @@ const catalog = __DEV__
     }
   : { en, ko, ja, "zh-Hans": zhHans, "zh-Hant": zhHant };
 
-export type Language = keyof typeof catalog;
+export type Language = keyof typeof CATALOGS;
 
 export const LANGUAGE_NAMES: Record<Language, string> = {
   en: "English",
@@ -57,7 +57,7 @@ export const LANGUAGE_NAMES: Record<Language, string> = {
   "zh-Hant": "繁體中文",
 };
 
-const LANGUAGES = Object.keys(catalog) as Language[];
+const LANGUAGES = Object.keys(CATALOGS) as Language[];
 
 const LANG_KEY = "pxl:lang";
 
@@ -71,7 +71,7 @@ function language_of(tag: string): string {
 
 /** The person's chosen language comes first, then the first of the system's
  * preferred languages that has a catalog, then English. */
-const language_detector: LanguageDetectorModule = {
+const LANGUAGE_DETECTOR: LanguageDetectorModule = {
   type: "languageDetector",
   // The system's tags are cut to their languages. Given whole tags, i18next
   // prefers a later exact match to an earlier tag's region, so ["en-US", "ko"]
@@ -91,7 +91,7 @@ export function boot(): void {
   booted = true;
 
   i18next
-    .use(language_detector)
+    .use(LANGUAGE_DETECTOR)
     .use(initReactI18next)
     .init({
       fallbackLng: "en",
@@ -99,7 +99,7 @@ export function boot(): void {
       ns: ["translation"],
       defaultNS: "translation",
       resources: Object.fromEntries(
-        LANGUAGES.map((lng) => [lng, { translation: catalog[lng] }]),
+        LANGUAGES.map((lng) => [lng, { translation: CATALOGS[lng] }]),
       ),
       interpolation: {
         // React escapes text itself, so i18next's escaping would escape it

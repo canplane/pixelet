@@ -6,18 +6,18 @@
 #[repr(u32)]
 pub enum Sensor {
     Geolocation = 0,
-    Orientation = 1,
+    Orient = 1,
 }
 
 impl Sensor {
     /// Every member, in its source's own order.
-    pub const ALL: [Sensor; 2] = [Sensor::Geolocation, Sensor::Orientation];
+    pub const ALL: [Sensor; 2] = [Sensor::Geolocation, Sensor::Orient];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u32) -> Option<Sensor> {
         match val {
             0 => Some(Sensor::Geolocation),
-            1 => Some(Sensor::Orientation),
+            1 => Some(Sensor::Orient),
             _ => None,
         }
     }
@@ -26,7 +26,7 @@ impl Sensor {
     pub const fn name(self) -> &'static str {
         match self {
             Sensor::Geolocation => "Geolocation",
-            Sensor::Orientation => "Orientation",
+            Sensor::Orient => "Orient",
         }
     }
 }

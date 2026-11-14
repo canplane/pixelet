@@ -19,19 +19,19 @@ export function ProgressBar({ share }: { share: f64 }) {
     <View
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: 100, now: Math.floor(share * 100) }}
-      style={styles.track}
+      style={STYLE.track}
     >
       <Motion
         from={{ translateX: -WIDTH_PX }}
         to={{ translateX: (share - 1) * WIDTH_PX }}
         transition={SETTLE}
-        style={styles.fill}
+        style={STYLE.fill}
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   track: {
     width: WIDTH_PX,
     height: HEIGHT_PX,

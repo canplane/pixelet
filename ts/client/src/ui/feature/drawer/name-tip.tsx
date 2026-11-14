@@ -40,27 +40,27 @@ interface Named {
   y: f64;
 }
 
-function NameTip({ named, sheetHeight }: { named: Named; sheetHeight: f64 }) {
+function NameTip({ named, sheetHeightPx }: { named: Named; sheetHeightPx: f64 }) {
   return (
     <View
       pointerEvents="none"
       style={[
-        styles.tip_anchor,
+        STYLE.tip_anchor,
         {
           left: named.x - TIP_SPAN / 2,
-          bottom: sheetHeight - named.y,
+          bottom: sheetHeightPx - named.y,
         },
       ]}
     >
-      <View style={styles.tip_shape}>
+      <View style={STYLE.tip_shape}>
         <View
           needsOffscreenAlphaCompositing
-          style={[StyleSheet.absoluteFill, styles.tip_fill]}
+          style={[StyleSheet.absoluteFill, STYLE.tip_fill]}
         >
-          <View style={styles.tip_pill} />
-          <View style={styles.tip_point} />
+          <View style={STYLE.tip_pill} />
+          <View style={STYLE.tip_point} />
         </View>
-        <Text numberOfLines={1} style={styles.tip}>
+        <Text numberOfLines={1} style={STYLE.tip}>
           {named.label}
         </Text>
       </View>
@@ -100,18 +100,18 @@ export function NameTipLayer({ children }: { children: ReactNode }) {
   return (
     <View
       ref={sheet}
-      style={styles.sheet}
+      style={STYLE.sheet}
       onLayout={(e: LayoutChangeEvent) =>
         set_sheet_height(e.nativeEvent.layout.height)
       }
     >
       <NamingContext.Provider value={naming}>{children}</NamingContext.Provider>
-      {named && <NameTip named={named} sheetHeight={sheet_height} />}
+      {named && <NameTip named={named} sheetHeightPx={sheet_height} />}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   sheet: { flex: 1 },
   tip_anchor: {
     position: "absolute",

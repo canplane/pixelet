@@ -31,8 +31,8 @@ interface CardProps {
   tint?: string;
   x: f64;
   width: f64;
-  /** `span` is the bar's width. */
-  span: f64;
+  /** `spanPx` is the bar's width. */
+  spanPx: f64;
   onContentWidth?: (w: f64) => void;
   children: ReactNode;
 }
@@ -44,7 +44,7 @@ export function Card({
   tint,
   x,
   width,
-  span,
+  spanPx,
   onContentWidth,
   children,
 }: CardProps) {
@@ -57,10 +57,10 @@ export function Card({
       to={pose.rest}
       transition={SETTLE}
       style={[
-        styles.card,
+        STYLE.card,
         depth === 0 ? TOUCH.pass : TOUCH.block,
         {
-          zIndex: pose.z_idx,
+          zIndex: pose.z_index,
         },
       ]}
     >
@@ -68,10 +68,10 @@ export function Card({
         x={x}
         width={width}
         height={CHROME.control}
-        span={span}
+        spanPx={spanPx}
         fill={fill}
         tint={tint}
-        place={BackingPlace.OverMap}
+        place={BackingPlace.OVER_MAP}
         shadow={SHADOW.lift}
         fade={pose.fade}
         fadeTransition={SETTLE}
@@ -85,7 +85,7 @@ export function Card({
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   card: {
     position: "absolute",
     left: 0,

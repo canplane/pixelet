@@ -173,8 +173,8 @@ fn post_ui(s: &mut State) {
     }
     if let Some(c) = take_orient_cmd() {
         match c {
-            OrientationCommand::Listen => start(Sensor::Orientation),
-            OrientationCommand::Remove => stop(Sensor::Orientation),
+            OrientationCommand::Listen => start(Sensor::Orient),
+            OrientationCommand::Remove => stop(Sensor::Orient),
         }
     }
     if let Some((azimuth, m_per_px)) = s.last_snapshot.take_view_changed() {

@@ -136,12 +136,12 @@ const store = create<DockState>()(() => ({
   scale_step: 0,
   recent_picks: load().hotbar,
   chat_lines: [],
-  dock_mode: DockMode.Palette,
+  dock_mode: DockMode.PALETTE,
   swatch_flash: { n: 0, cube: null, open: false },
 }));
 
-store.subscribe((s, prev) => {
-  if (s.recent_picks !== prev.recent_picks) save(s);
+store.subscribe((s, previous) => {
+  if (s.recent_picks !== previous.recent_picks) save(s);
 });
 
 export function useRecentPicks(): readonly AssetId[] {
@@ -171,8 +171,8 @@ export function dock_mode(): DockMode {
 export function watch_dock_mode(
   listener: (mode: DockMode, before: DockMode) => void,
 ): () => void {
-  return store.subscribe((s, prev) => {
-    if (s.dock_mode !== prev.dock_mode) listener(s.dock_mode, prev.dock_mode);
+  return store.subscribe((s, previous) => {
+    if (s.dock_mode !== previous.dock_mode) listener(s.dock_mode, previous.dock_mode);
   });
 }
 
@@ -227,7 +227,7 @@ export function set_dock_mode(mode: DockMode): void {
 
 export function switch_dock_mode(): void {
   set_dock_mode(
-    dock_mode() === DockMode.Message ? DockMode.Palette : DockMode.Message,
+    dock_mode() === DockMode.MESSAGE ? DockMode.PALETTE : DockMode.MESSAGE,
   );
 }
 

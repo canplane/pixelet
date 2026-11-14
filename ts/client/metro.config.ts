@@ -26,20 +26,20 @@ import {
 // The app's directory is found from the workspace that the aliases are read
 // under, because Expo loads this file through its own transform, which does
 // not allow `import.meta`.
-const here = path.join(WORKSPACE, "client");
+const APP = path.join(WORKSPACE, "client");
 
 /** Packages an app may hold only one copy of. React Native and React are the
  * host the app runs on, and a library's own copy of them would be a second
  * host. A package manager may link a library's peer to another version it has
  * on disk, so these are resolved from this app wherever they are imported. */
 const SINGLETONS = ["react", "react-native"];
-const FROM_APP = path.join(here, "index.ts");
+const FROM_APP = path.join(APP, "index.ts");
 
 /** The stamp is written once, when Metro starts, so a dev server's stamp is
  * the one it started under. */
 function build_stamp(): string {
   const { time, id, number } = stamp();
-  const file = path.join(here, ".expo/pxl-build.js");
+  const file = path.join(APP, ".expo/pxl-build.js");
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(
     file,
@@ -81,7 +81,7 @@ function own_platform(
 process.env.EXPO_UNSTABLE_METRO_OPTIMIZE_GRAPH = "1";
 process.env.EXPO_UNSTABLE_TREE_SHAKING = "1";
 
-const base = getDefaultConfig(here);
+const BASE = getDefaultConfig(APP);
 
 /** xpute's packages, as xpute's pnpm-workspace.yaml lists them: one
  * `  - <dir>` a line under `packages:`, up to a blank line, each with a named
@@ -114,10 +114,10 @@ const XPUTE = xpute_packages();
  * it (babel.config.ts), so the transforms it may reuse depend on them. */
 const LITERALS =
   process.env.NODE_ENV === "production"
-    ? digest([path.join(here, "src"), ...XPUTE])
+    ? digest([path.join(APP, "src"), ...XPUTE])
     : "";
 
-const resolve_request: NonNullable<typeof base.resolver.resolveRequest> = (
+const resolve_request: NonNullable<typeof BASE.resolver.resolveRequest> = (
   ctx,
   name,
   platform,
@@ -148,7 +148,7 @@ const resolve_request: NonNullable<typeof base.resolver.resolveRequest> = (
   return ctx.resolveRequest(ctx, name, platform);
 };
 
-const dev_console = console_handler(path.join(here, ".dev-console.log"));
+const dev_console = console_handler(path.join(APP, ".dev-console.log"));
 
 /** Metro's caches, its transforms' and its file map's, lie in the checkout's
  * tmp/ (AGENTS.md), each tree's its own, where Expo would put them in the
@@ -156,12 +156,12 @@ const dev_console = console_handler(path.join(here, ".dev-console.log"));
  * Expo does not export its class, so it is taken from Expo's own store. */
 const CACHE = path.join(REPO, "tmp/metro");
 fs.mkdirSync(CACHE, { recursive: true });
-const Store = base.cacheStores[0].constructor as new (options: {
+const Store = BASE.cacheStores[0].constructor as new (options: {
   root: string;
-}) => (typeof base.cacheStores)[number];
+}) => (typeof BASE.cacheStores)[number];
 
 export default {
-  ...base,
+  ...BASE,
   // The UI's files, xpute's and pnpm's store all lie outside this app's
   // directory. The bundle reads nothing outside these folders.
   watchFolders: [WORKSPACE, ...XPUTE],
@@ -169,11 +169,11 @@ export default {
   // A build made for measuring, or for another tile source, differs in what
   // its modules compile to (babel.config.ts's defines), so it shares no
   // transform with any other.
-  cacheVersion: `${base.cacheVersion ?? ""}${process.env.PXL_PERF_DRIVE ?? ""}${tile_source()}${LITERALS}`,
+  cacheVersion: `${BASE.cacheVersion ?? ""}${process.env.PXL_PERF_DRIVE ?? ""}${tile_source()}${LITERALS}`,
   fileMapCacheDirectory: CACHE,
-  resolver: { ...base.resolver, resolveRequest: resolve_request },
+  resolver: { ...BASE.resolver, resolveRequest: resolve_request },
   server: {
-    ...base.server,
+    ...BASE.server,
     enhanceMiddleware:
       (metro: Middleware): Middleware =>
       (req, res, next) => {

@@ -32,7 +32,7 @@ export function Dock() {
   const bar = useRef<View | null>(null);
   const { popover, gesture } = usePopover(bar);
 
-  const shown_popover = mode === DockMode.Palette ? popover : null;
+  const shown_popover = mode === DockMode.PALETTE ? popover : null;
   // Every card is as wide as the palette's strip. The cards stand on whole
   // pixels, because only there does a pill on a page cut its shadow cleanly.
   const width = Math.min(strip_width, bar_width);
@@ -43,34 +43,34 @@ export function Dock() {
       ref={bar}
       {...swipe.panHandlers}
       onLayout={(e) => set_bar_width(e.nativeEvent.layout.width)}
-      style={styles.bar}
+      style={STYLE.bar}
     >
       {bar_width > 0 && (
         <>
           <Card
-            key={DockMode.Message}
-            pane={DockMode.Message}
+            key={DockMode.MESSAGE}
+            pane={DockMode.MESSAGE}
             mode={mode}
             fill={COLOR.ground}
             x={x}
             width={width}
-            span={bar_width}
+            spanPx={bar_width}
           >
             <Message message={message} width={width} />
           </Card>
 
           <Card
-            key={DockMode.Palette}
-            pane={DockMode.Palette}
+            key={DockMode.PALETTE}
+            pane={DockMode.PALETTE}
             mode={mode}
             fill={STRIP.ground}
             tint={STRIP.ground}
             x={x}
             width={width}
-            span={bar_width}
+            spanPx={bar_width}
             onContentWidth={set_strip_width}
           >
-            <Strip span={bar_width} scrolls={!popover?.open} gesture={gesture} />
+            <Strip spanPx={bar_width} scrolls={!popover?.open} gesture={gesture} />
           </Card>
 
           {shown_popover && <SizePopover popover={shown_popover} />}
@@ -80,7 +80,7 @@ export function Dock() {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   bar: {
     height: DOCK_HEIGHT,
     width: "100%",

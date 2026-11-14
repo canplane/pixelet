@@ -44,9 +44,9 @@ export function AboutSection() {
   return (
     <Section title={t("settings.about.section_title")}>
       <Prose>
-        <View style={styles.name}>
+        <View style={STYLE.name}>
           <BrandSymbol size={20} color={LABEL.primary} />
-          <Text style={styles.name_text}>pixelet</Text>
+          <Text style={STYLE.name_text}>pixelet</Text>
         </View>
 
         <Text style={SETTING_TEXT.small}>{t("settings.about.tagline")}</Text>
@@ -73,7 +73,7 @@ export function AboutSection() {
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   name: { flexDirection: "row", alignItems: "center", gap: 8 },
   name_text: { ...TEXT_STYLE.title, color: LABEL.primary },
 });

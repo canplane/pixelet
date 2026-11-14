@@ -35,7 +35,7 @@ export function useMessage(mode: DockMode) {
   // The keyboard is up exactly while the dock is in message mode. A marker's
   // draft exists only in message mode, so leaving the mode cancels it.
   useEffect(() => {
-    if (mode === DockMode.Message) input_ref.current?.focus();
+    if (mode === DockMode.MESSAGE) input_ref.current?.focus();
     else {
       put_keyboard_away();
       if (drafting) edit.marker_cancel();
@@ -48,7 +48,7 @@ export function useMessage(mode: DockMode) {
   useEffect(() => {
     set_message_text(drafting ? (snapshot.cur().draft ?? "") : "");
     set_marker_fits(true);
-    if (drafting) set_dock_mode(DockMode.Message);
+    if (drafting) set_dock_mode(DockMode.MESSAGE);
   }, [drafting]);
 
   function change_text(text: string) {
@@ -74,7 +74,7 @@ export function useMessage(mode: DockMode) {
         return;
       }
       edit.marker_commit();
-      set_dock_mode(DockMode.Palette);
+      set_dock_mode(DockMode.PALETTE);
     }, FADE.duration_ms);
   }
 
@@ -115,14 +115,14 @@ export function Message({
   } = message;
 
   return (
-    <View style={[styles.message, { width }]}>
-      <View style={styles.message_icon}>
+    <View style={[STYLE.message, { width }]}>
+      <View style={STYLE.message_icon}>
         <Glyph glyph="bubble.left" size={CHROME.glyph} color={LABEL.primary} />
       </View>
       <Motion
         to={{ opacity: is_sending ? 0 : 1 }}
         transition={FADE}
-        style={styles.field_fill}
+        style={STYLE.field_fill}
       >
         <TextField
           ref={input_ref}
@@ -135,7 +135,7 @@ export function Message({
               : t("world.dock.message_placeholder")
           }
           placeholderTextColor={LABEL.placeholder}
-          style={styles.message_input}
+          style={STYLE.message_input}
         />
       </Motion>
       <Presence
@@ -143,7 +143,7 @@ export function Message({
         from={{ opacity: 0, scale: 0.5 }}
         exit={{ opacity: 0 }}
         transition={SNAP}
-        style={styles.slot}
+        style={STYLE.slot}
       >
         <Pressable
           onPress={send_message}
@@ -153,10 +153,10 @@ export function Message({
             drafting ? t("world.dock.put_pin") : t("world.dock.send")
           }
           style={({ pressed }) => [
-            styles.send,
-            drafting && styles.confirm,
-            pressed && styles.send_pressed,
-            !fits && styles.send_refused,
+            STYLE.send,
+            drafting && STYLE.confirm,
+            pressed && STYLE.send_pressed,
+            !fits && STYLE.send_refused,
           ]}
         >
           <Glyph
@@ -171,7 +171,7 @@ export function Message({
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   message: {
     flexDirection: "row",
     alignItems: "center",

@@ -14,12 +14,12 @@ export function SectionTitle({
   children: ReactNode;
 }) {
   return (
-    <Text accessibilityRole="header" style={[styles.title, style]}>
+    <Text accessibilityRole="header" style={[STYLE.title, style]}>
       {children}
     </Text>
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   title: { ...SECTION_TITLE, color: LABEL.secondary },
 });

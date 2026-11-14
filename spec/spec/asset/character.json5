@@ -6,7 +6,11 @@
     person: {
       $description: "The people a player can be, each by its row, the number the settings store\npersists. One pack, so one colormap.",
       $extensions: { xpute: { number: 0 } },
-      size: { $value: 1.0, $description: "World units tall — one cell." },
+      size: {
+        $value: 1.0,
+        $type: "f64",
+        $description: "World units tall — one cell.",
+      },
       gender: {
         $type: "u8",
         $description: "Each variant's gender (`GENDER`), row for row with its models.",
@@ -44,6 +48,7 @@
       $extensions: { xpute: { number: 1 } },
       size: {
         $value: 0.25,
+        $type: "f64",
         $description: "World units tall — a quarter cell, the step the object tiers also take.",
       },
       label: {

@@ -11,6 +11,8 @@ import UIKit
 /// asks of the system. The core, and the view it draws into, are in xpute's own
 /// module (@xpute/native-runtime).
 public class PlatformModule: Module {
+  private static let suite = "pxl"
+  private static let storage = UserDefaults(suiteName: suite)!
 
   public func definition() -> ModuleDefinition {
     Name("PxlPlatform")
@@ -56,14 +58,20 @@ public class PlatformModule: Module {
     // ---- storage (service/platform/storage.native.ts) ----
     //
     // UserDefaults is the system's store for an app's small values, as
-    // localStorage is the browser's for a page.
+    // localStorage is the browser's for a page. They are kept in a suite of
+    // their own, "pxl", which nothing else in the app writes, as Android keeps
+    // them in its "pxl" preferences.
 
     Function("storage_get") { (key: String) -> String? in
-      UserDefaults.standard.string(forKey: key)
+      PlatformModule.storage.string(forKey: key)
+    }
+
+    Function("storage_keys") { () -> [String] in
+      PlatformModule.storage.persistentDomain(forName: PlatformModule.suite).map { Array($0.keys) } ?? []
     }
 
     Function("storage_set") { (key: String, value: String) in
-      UserDefaults.standard.set(value, forKey: key)
+      PlatformModule.storage.set(value, forKey: key)
     }
 
     // ---- the clipboard (service/platform/share.native.ts) ----
@@ -111,8 +119,8 @@ public class PlatformModule: Module {
       Prop("rest") { (view: KeyboardDock, rest: Double) in
         view.rest = rest
       }
-      Prop("layoutLift") { (view: KeyboardDock, layoutLift: Double) in
-        view.layoutLift = layoutLift
+      Prop("layoutLiftPx") { (view: KeyboardDock, layoutLiftPx: Double) in
+        view.layoutLift = layoutLiftPx
       }
     }
 

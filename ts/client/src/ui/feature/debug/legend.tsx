@@ -82,14 +82,14 @@ function Row({
   children: string;
 }) {
   return (
-    <View style={styles.row}>
-      <View style={styles.chip}>
+    <View style={STYLE.row}>
+      <View style={STYLE.chip}>
         <View
           style={
             filled
-              ? [styles.patch, { backgroundColor: hex(look.rgb) }]
+              ? [STYLE.patch, { backgroundColor: hex(look.rgb) }]
               : [
-                  styles.stroke,
+                  STYLE.stroke,
                   {
                     borderColor: hex(look.rgb),
                     borderStyle: look.dashed ? "dashed" : "solid",
@@ -138,7 +138,7 @@ export function RayStepsLegend() {
   return (
     <Accordion name="ray_step" title="Ray Steps">
       <Head>Steps</Head>
-      <View style={styles.ramp}>
+      <View style={STYLE.ramp}>
         <Svg width="100%" height={8}>
           <Defs>
             <LinearGradient id="steps-ramp" x1="0" y1="0" x2="1" y2="0">
@@ -149,11 +149,11 @@ export function RayStepsLegend() {
           </Defs>
           <Rect width="100%" height="100%" fill="url(#steps-ramp)" />
         </Svg>
-        <View style={styles.ticks}>
+        <View style={STYLE.ticks}>
           {TICKS.map((n) => (
             <Text
               key={n}
-              style={[GAUGE.text, styles.tick, { left: `${along(n) * 100}%` }]}
+              style={[GAUGE.text, STYLE.tick, { left: `${along(n) * 100}%` }]}
             >
               {n}
             </Text>
@@ -169,7 +169,7 @@ export function RayStepsLegend() {
 
 const TICK_WIDTH = 32;
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
   // A mid gray, on which both the black marks and the faint white mark show.
   chip: {

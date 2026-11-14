@@ -4,7 +4,7 @@ use xpute_gen::spec::data::enum_members;
 use xpute_gen::spec::{rs_enum, ts_enum, Member};
 
 use super::catalog::{slots, CUBE_JSON, DECOR_JSON};
-use super::{file, js_num, json_str, line_comments, mark, read, rs_field, Node, Output};
+use super::{file, json_str, line_comments, mark, read, rs_field, Node, Output};
 const ID_JSON: &str = "spec/spec/asset/id.json5";
 const COLOR_JSON: &str = "spec/spec/asset/color.json5";
 
@@ -181,10 +181,11 @@ pub(crate) fn color_outputs() -> Result<Vec<Output>, String> {
 /// `IDX_BITS` and the number of kind `name` (id.json5).
 fn kind_layout(name: &str) -> Result<(u32, u32), String> {
     let id = read(ID_JSON)?;
-    let number = |n: Option<&Node>| n.and_then(Node::num).map(|n| n as u32);
     Ok((
-        number(id.get("IDX_BITS").map(Node::val)).ok_or(format!("{ID_JSON}: no IDX_BITS"))?,
-        number(id.get("KIND").and_then(|k| k.get(name)))
+        id.get("IDX_BITS").and_then(super::u32_of).ok_or(format!("{ID_JSON}: no IDX_BITS"))?,
+        id.get("KIND")
+            .and_then(|k| k.get(name))
+            .and_then(super::u32_of)
             .ok_or(format!("{ID_JSON}: no kind {name}"))?,
     ))
 }
@@ -323,6 +324,7 @@ fn decor_table(
             .ok_or(at("seed"))?;
         let density = k
             .get("density")
+            .map(Node::val)
             .and_then(Node::num)
             .filter(|d| *d > 0.0 && *d <= 1.0)
             .ok_or(at("density"))?;
@@ -350,19 +352,17 @@ fn decor_table(
             {
                 let size = v
                     .get("size")
+                    .map(Node::val)
                     .and_then(Node::arr)
                     .filter(|s| s.len() == 3)
-                    .map(|s| s.iter().map(Node::num).collect::<Option<Vec<_>>>());
+                    .map(|s| s.iter().map(super::u32_of).collect::<Option<Vec<_>>>());
                 match (v.str_at("model"), size.flatten()) {
-                    (Some(model), Some(size))
-                        if size
-                            .iter()
-                            .all(|&n| n >= 1.0 && n.fract() == 0.0 && n <= f64::from(u16::MAX)) =>
+                    (Some(model), Some(size)) if size.iter().all(|&n| n >= 1) =>
                     {
                         sizes.push(format!(
                             "[{}]",
                             size.iter()
-                                .map(|&n| js_num(n))
+                                .map(u32::to_string)
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         ));

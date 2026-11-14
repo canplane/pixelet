@@ -40,12 +40,12 @@ export function TextField({ style, onSubmit, ...props }: TextFieldProps) {
       maxFontSizeMultiplier={TEXT_SCALE_CAP.chrome}
       selectionColor={COLOR.chosen}
       cursorColor={COLOR.chosen}
-      style={[styles.field, style, styles.size, styles.caret]}
+      style={[STYLE.field, style, STYLE.size, STYLE.caret]}
     />
   );
 }
 
-const styles = StyleSheet.create({
+const STYLE = StyleSheet.create({
   field: TEXT_STYLE.input,
   size: { fontSize: TEXT_STYLE.input.fontSize },
   // react-native-web writes `caretColor` out as CSS. A device reads

@@ -13,9 +13,9 @@ import { Lift } from "@xpute/link/cabi.ts";
 import {
   ComponentError,
   type Handle,
-  type Link,
   type LinkObject,
   type Method,
+  type Side,
   refusal_of,
 } from "@xpute/link/link.ts";
 
@@ -31,7 +31,7 @@ export interface Host {
 
 /** The object over `implementation`. */
 function object(
-  l: Pick<Link, "task_return" | "on_cancel">,
+  l: Pick<Side, "task_return" | "on_cancel">,
   implementation: Host,
 ): LinkObject {
   return {
@@ -90,7 +90,7 @@ function object(
 
 /** Serves `implementation` under the interface's handle. */
 export function mount(
-  l: Pick<Link, "mount_named" | "task_return" | "on_cancel">,
+  l: Pick<Side, "mount_named" | "task_return" | "on_cancel">,
   implementation: Host,
 ): void {
   l.mount_named(HANDLE, object(l, implementation));
