@@ -9,5 +9,5 @@
 #[unsafe(no_mangle)]
 unsafe extern "C" fn xpute_mem(len: *mut u32, share: *mut u32) -> *mut u8 {
     // SAFETY: the caller's words.
-    unsafe { xpute_native_runtime::native::mem(u32::MAX & !4095, 0, len, share) }
+    unsafe { xpute_native_runtime::native::mem(!4095, 0, len, share) }
 }

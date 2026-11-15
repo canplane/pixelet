@@ -22,7 +22,7 @@
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use wit_parser::{
     Function, FunctionKind, IndexMap, InterfaceId, Param, Resolve, SourceMap, Type, TypeDefKind,
@@ -30,8 +30,8 @@ use wit_parser::{
 };
 
 use xpute_gen::spec::{
-    int_of, is_float, mark, package, package_path, pascal, read_str, relative, rs_ident, screaming,
-    snake, Member, Output,
+    int_of, is_float, mark, package, package_path, pascal, read_str, rs_crate, rs_ident, rs_module,
+    screaming, snake, ts_module, Member, Output,
 };
 
 mod cpp;
@@ -130,69 +130,13 @@ fn xpute_wit(dir: &str) -> Result<UnresolvedPackageGroup, String> {
 }
 
 /// xpute's package that holds `path`, a path from xpute's root: its name and
-/// its directory.
-fn xpute_package(path: &str) -> Result<(&'static str, &'static str), String> {
+/// its directory (`Packages`).
+fn xpute_package(path: &str) -> Result<(String, PathBuf), String> {
     PACKAGES
         .iter()
         .find(|(dir, _)| Path::new(path).starts_with(dir))
-        .map(|&(dir, name)| (name, dir))
+        .map(|&(dir, name)| (name.into(), dir.into()))
         .ok_or(format!("{path}: in no package of xpute's"))
-}
-
-/// `path`, in xpute's package `dir`, from under the package's `src/`.
-fn under_src<'p>(path: &'p str, dir: &str) -> Result<&'p Path, String> {
-    Path::new(path)
-        .strip_prefix(Path::new(dir).join("src"))
-        .map_err(|_| format!("{path}: not under src/"))
-}
-
-/// How a Rust module in the crate at `here` names the crate of xpute's file
-/// `path`: `crate` from within it, where the bindings are xpute's own, which
-/// lie in xpute's tree at `inside`, and its name otherwise.
-fn xpute_rs_crate(here: &Path, inside: Option<&Path>, path: &str) -> Result<String, String> {
-    let (name, dir) = xpute_package(path)?;
-    Ok(if inside.is_some_and(|x| x.join(dir) == here) {
-        "crate".into()
-    } else {
-        snake(name)
-    })
-}
-
-/// How a Rust module in the crate at `here` names the module of xpute's file
-/// `path` (`xpute_rs_crate`): its crate, then its path under `src/`, a
-/// generated file's `.spec` dropped as its mount drops it.
-fn xpute_rs_module(here: &Path, inside: Option<&Path>, path: &str) -> Result<String, String> {
-    let (_, dir) = xpute_package(path)?;
-    let under = under_src(path, dir)?.to_string_lossy();
-    let mods = under
-        .trim_end_matches(".rs")
-        .trim_end_matches(".spec")
-        .split('/')
-        .map(String::from);
-    Ok(std::iter::once(xpute_rs_crate(here, inside, path)?)
-        .chain(mods)
-        .collect::<Vec<_>>()
-        .join("::"))
-}
-
-/// How a TypeScript module in the directory `here` names xpute's path `path`:
-/// relative to it from within its own package, where the bindings are
-/// xpute's own, which lie in xpute's tree at `inside`, from `.` or `..` as an
-/// import writes it; by the package's name and the path under its `src/`
-/// otherwise.
-fn xpute_ts_module(here: &Path, inside: Option<&Path>, path: &str) -> Result<String, String> {
-    let (name, dir) = xpute_package(path)?;
-    if let Some(x) = inside.filter(|x| here.starts_with(x.join(dir))) {
-        let path = relative(here, &x.join(path));
-        return Ok(match path.split('/').next() {
-            Some("." | "..") => path,
-            _ => format!("./{path}"),
-        });
-    }
-    Ok(format!(
-        "{name}/{}",
-        under_src(path, dir)?.to_string_lossy()
-    ))
 }
 
 // xpute's packages by name, among the link's and the GPU's, as `TARGETS`
@@ -1054,7 +998,7 @@ pub fn abi_root(root: &Path, side: Side) -> Result<Output, String> {
         .collect();
     let text = format!(
         "// {}\n//\n// {}\n\n{mods}",
-        package_path(root, &path)?,
+        package_path(&|p| package(root, p), &path)?,
         mark("wit", TOOL)
     );
     Ok(Output::new(&path, text))
@@ -1130,11 +1074,11 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
     for (&id, p) in ids.iter().zip(&peers) {
         let name = &r.packages[id].name;
         let rs = match (&crate_dir, p.rs) {
-            (Some(here), Some(rs)) => xpute_rs_module(here, inside, rs)?,
+            (Some(here), Some(rs)) => rs_module(here, inside, &xpute_package, rs)?,
             _ => String::new(),
         };
         let ts = match (&ts_dir, p.ts) {
-            (Some(here), Some(ts)) => xpute_ts_module(here, inside, ts)?,
+            (Some(here), Some(ts)) => ts_module(here, inside, &xpute_package, ts)?,
             _ => String::new(),
         };
         externs.push((format!("{}:{}", name.namespace, name.name), rs, ts));
@@ -1142,7 +1086,12 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
     // The side's crate, as the Rust names it, and whether it is the guest.
     let side = match (&crate_dir, t.side) {
         (Some(here), Some(s)) => Some((
-            xpute_rs_crate(here, inside, &format!("{}/Cargo.toml", s.dir()))?,
+            rs_crate(
+                here,
+                inside,
+                &xpute_package,
+                &format!("{}/Cargo.toml", s.dir()),
+            )?,
             s == Side::Guest,
         )),
         _ => None,
@@ -1151,7 +1100,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
     let link_module = |file: &str| match (&ts_dir, link.ts) {
         (Some(here), Some(ts)) => {
             let at = Path::new(ts).parent().unwrap_or(Path::new("")).join(file);
-            xpute_ts_module(here, inside, &at.to_string_lossy())
+            ts_module(here, inside, &xpute_package, &at.to_string_lossy())
         }
         _ => Ok(String::new()),
     };
@@ -1159,7 +1108,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
     let cabi_ts = link_module("cabi.ts")?;
     // The link's crate, xpute:link's bindings' own, as the Rust names it.
     let link_rs = match (&crate_dir, link.rs) {
-        (Some(here), Some(rs)) => xpute_rs_crate(here, inside, rs)?,
+        (Some(here), Some(rs)) => rs_crate(here, inside, &xpute_package, rs)?,
         _ => String::new(),
     };
     // No two interfaces the target reaches share a named handle.
@@ -1276,7 +1225,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
                 let path = format!("{dir}/{m}.rs");
                 let text = format!(
                     "// {}\n//\n// {}\n\n{}",
-                    package_path(root, &path)?,
+                    package_path(&|p| package(root, p), &path)?,
                     mark(src, TOOL),
                     g.rs_interface(&objs, rs_role)?
                 );
@@ -1298,7 +1247,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
                 let path = format!("{dir}/{m}.enum.ts");
                 let text = format!(
                     "// {}\n//\n// {}\n{enums}",
-                    package_path(root, &path)?,
+                    package_path(&|p| package(root, p), &path)?,
                     mark(src, TOOL)
                 );
                 outs.push(Output::new(&path, text));
@@ -1306,7 +1255,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
             let path = format!("{dir}/{m}.ts");
             let text = format!(
                 "// {}\n//\n// {}\n\n{}\n{body}",
-                package_path(root, &path)?,
+                package_path(&|p| package(root, p), &path)?,
                 mark(src, TOOL),
                 g.ts_imports()
             );
@@ -1374,7 +1323,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
         let path = format!("{dir}/imports.ts");
         let text = format!(
             "// {}\n//\n// {}\n\nimport type {{ Handle }} from \"{link_ts}\";\n\n/** The interfaces the world imports, each `[name, handle]`, which are\n * mounted before the guest boots: one with functions of its own under its\n * handle, one of resources alone by an opener at a prefix. */\nexport const IMPORTS: readonly (readonly [string, Handle])[] = [{}];\n",
-            package_path(root, &path)?,
+            package_path(&|p| package(root, p), &path)?,
             mark(src, TOOL),
             pairs.join(", ")
         );
@@ -1387,7 +1336,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
         let path = format!("{dir}/later.ts");
         let text = format!(
             "// {}\n//\n// {}\n\nimport type {{ Handle, Method }} from \"{link_ts}\";\n{uses}\n/** The methods of the package's own named interfaces its world imports\n * that answer later, each `[handle, method]`, as WIT's `async func`\n * marks them. */\nexport const LATER: readonly (readonly [Handle, Method])[] = [{}];\n",
-            package_path(root, &path)?,
+            package_path(&|p| package(root, p), &path)?,
             mark(src, TOOL),
             pairs.join(", ")
         );
@@ -1396,7 +1345,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
     if let Some(path) = t.rs {
         let text = format!(
             "// {}\n//\n// {}\n\n{rs}",
-            package_path(root, path)?,
+            package_path(&|p| package(root, p), path)?,
             mark(src, TOOL)
         );
         outs.push(Output::new(path, text));

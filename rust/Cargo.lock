@@ -2208,6 +2208,7 @@ dependencies = [
  "wgpu",
  "xpute-gpu-guest",
  "xpute-gpu-link",
+ "xpute-guest",
  "xpute-kit",
  "xpute-link",
  "xpute-native-runtime",

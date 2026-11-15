@@ -11,9 +11,12 @@
 //! guest's at its region's base. The heap runs from the page past the share to
 //! the memory's end. The memory is never grown, so a full heap refuses.
 //!
-//! A native guest's global allocator is the process's, every thread's, so the
-//! heap is taken under one lock, and its first call, from whatever thread
-//! allocates first, has the runtime reserve the region.
+//! The heap is the program's global allocator, which the program declares by
+//! `link!` (`Global`), as a library declares none: a binary that links this
+//! crate and invokes no `link!` keeps the system's. A native guest's global
+//! allocator is the process's, every thread's, so the heap is taken under one
+//! lock, and its first call, from whatever thread allocates first, has the
+//! runtime reserve the region.
 
 use core::marker::PhantomData;
 use core::sync::atomic::AtomicUsize;
@@ -114,18 +117,16 @@ impl Range for Span {
     }
 }
 
-/// The heap. Its counters are the program's to read; a native guest's
-/// allocator is `Locked`.
-#[cfg_attr(target_arch = "wasm32", global_allocator)]
+/// The heap, whose counters are the program's to read. It is allocated from
+/// through `Global` alone.
 pub static HEAP: SlabMalloc<Span> = SlabMalloc::new();
 
-/// The heap as a native process's global allocator: the slab is one
-/// thread's, and a process's threads all allocate, so each takes it under
-/// the lock. The lock is one word, spun on and then yielded on, since a lock
-/// that allocates, as std's does on some systems, would enter the allocator
-/// again.
-#[cfg(not(target_arch = "wasm32"))]
-struct Locked;
+/// The heap as the program's global allocator (`link!`). A module's is one
+/// thread's. A native process's threads all allocate, and the slab is one
+/// thread's, so each takes it under the lock. The lock is one word, spun on
+/// and then yielded on, since a lock that allocates, as std's does on some
+/// systems, would enter the allocator again.
+pub struct Global;
 
 /// Whether a thread holds the native heap.
 #[cfg(not(target_arch = "wasm32"))]
@@ -136,12 +137,17 @@ static LOCK: core::sync::atomic::AtomicBool = core::sync::atomic::AtomicBool::ne
 #[cfg(not(target_arch = "wasm32"))]
 const SPINS: u32 = 100;
 
-/// The native heap held, until it drops.
-#[cfg(not(target_arch = "wasm32"))]
+/// The heap held, until it drops: a module's at once, a native process's
+/// under the lock.
 struct Guard;
 
-#[cfg(not(target_arch = "wasm32"))]
 impl Guard {
+    #[cfg(target_arch = "wasm32")]
+    fn take() -> Guard {
+        Guard
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn take() -> Guard {
         let mut spins = 0;
         while LOCK
@@ -166,13 +172,8 @@ impl Drop for Guard {
     }
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-#[global_allocator]
-static NATIVE: Locked = Locked;
-
-// SAFETY: the slab's, each call alone under the lock.
-#[cfg(not(target_arch = "wasm32"))]
-unsafe impl core::alloc::GlobalAlloc for Locked {
+// SAFETY: the slab's, each call alone while the heap is held.
+unsafe impl core::alloc::GlobalAlloc for Global {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
         let _guard = Guard::take();
         // SAFETY: the caller's.

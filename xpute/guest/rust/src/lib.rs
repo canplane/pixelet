@@ -19,10 +19,14 @@ pub mod wait;
 /// Defines the guest's three exports (link/wit/types.wit), over frames of
 /// `cap` bytes, with `boot` mounting what the guest serves and opening what it
 /// calls, and `enter` and `end` starting and ending each entry. From its init
-/// on, the guest's failures are its own (stop.rs `hook`).
+/// on, the guest's failures are its own (stop.rs `hook`). It declares the
+/// guest's heap the program's global allocator (heap.rs `Global`), as the
+/// program, which invokes it once, is where a global allocator is declared.
 #[macro_export]
 macro_rules! link {
     ($cap:expr, $boot:expr, $enter:expr, $end:expr) => {
+        #[global_allocator]
+        static XPUTE_HEAP: $crate::heap::Global = $crate::heap::Global;
         #[cfg(target_arch = "wasm32")]
         #[unsafe(no_mangle)]
         pub extern "C" fn link_init() -> u32 {

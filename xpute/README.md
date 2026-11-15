@@ -151,11 +151,14 @@ and `xpute_mem` from `env` and nothing of WASI, and runs its static
 initializers as its first export starts.
 `make -C cpp module GUEST="<sources>" MODULE=<file>` links one so.
 
-A Rust guest writes nothing about its memory: xpute's guest library makes the
-heap in it Rust's global allocator. A C++ guest takes what it lends its host
+A Rust guest writes nothing about its memory: the `link!` it invokes declares
+the guest library's heap its global allocator, which the program declares and
+a library never does, so a binary that links the library without `link!`
+keeps the system's. A C++ guest takes what it lends its host
 from `guest::heap()`, a `std::pmr::memory_resource` over that heap
 (`xpute/guest/heap.hpp`), on a page and a device alike, so the same program
-runs on both. The two differ because Rust's global allocator reaches Rust's
+runs on both; a range it lends from outside that heap stops the guest with
+EFAULT on both. The two differ because Rust's global allocator reaches Rust's
 allocations alone, while C++'s global `operator new` reaches the whole process,
 and a library never replaces it in a process it shares; a module's global `new`
 is the module's own, and nothing relies on it for what crosses. The program
@@ -214,9 +217,10 @@ as it starts the guest. And the start tells the guest the page's lifecycle
 from the document's visibility, which a worker cannot see, as a device's
 module tells its runtime the app's from the platform. What the worker posts
 the page is a message by its kind, the runtime's, the GPU's server's and the
-program's alike, which the UI hears by its kind (`message_on`), the last of
-each told at once to one who begins to hear it; the GPU's state among them
-(`state_on`, from `@xpute/gpu-web-host`) as the device's GPU module tells it:
+program's alike, which the UI hears by its kind as it comes (`message_on`).
+The guest's stop, its trap and the GPU's state (`state_on`, from
+`@xpute/gpu-web-host`) are kept, and told at once to one who begins to hear
+them, as a device's runtime and its GPU module keep them:
 
 ```ts
 const remote = open_remote(WORKER_URL);

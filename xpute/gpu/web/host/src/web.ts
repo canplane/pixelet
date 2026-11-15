@@ -31,11 +31,20 @@ export interface GpuReport {
   state: GpuState;
 }
 
+/** What the host has of a GPU, as the page was told it last, or null before,
+ * as a device's GPU host keeps it (@xpute/gpu-native-runtime `state_on`). */
+let state: GpuState | null = null;
+message_on<GpuReport>("gpu", (m) => {
+  state = m.state;
+});
+
 /** Adds `hear` to what the UI is told of what the host has of a GPU, as it
  * changes (`GpuReport`), and tells it the state now, as
  * @xpute/gpu-native-runtime `state_on` tells a device's UI. */
 export function state_on(hear: (state: GpuState) => void): { remove(): void } {
-  return message_on<GpuReport>("gpu", (m) => hear(m.state));
+  const sub = message_on<GpuReport>("gpu", (m) => hear(m.state));
+  if (state !== null) hear(state);
+  return sub;
 }
 
 export class WebGpu {

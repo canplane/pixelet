@@ -12,18 +12,6 @@ use pxl_render::frame::shader::record::{
 };
 use pxl_render::gpu::api::vertex_format;
 
-/// The renderer links xpute's guest, whose heap is the process's: the guest's
-/// memory is the runtime's, as a device's is, the most a u32 offset reaches,
-/// on a page.
-///
-/// # Safety
-/// `len` and `share` are each null or a writable word.
-#[unsafe(no_mangle)]
-unsafe extern "C" fn xpute_mem(len: *mut u32, share: *mut u32) -> *mut u8 {
-    // SAFETY: the caller's words.
-    unsafe { xpute_native_runtime::native::mem(u32::MAX & !4095, 0, len, share) }
-}
-
 fn main() {
     let dir = std::env::args()
         .nth(1)

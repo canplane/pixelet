@@ -1505,7 +1505,7 @@ fn ts_outputs(
     ts_path: &str,
     outputs: &mut Vec<Output>,
 ) -> Result<(), String> {
-    let mut ts = head(&package_path(root, ts_path)?, d.json, spec);
+    let mut ts = head(&package_path(&|p| package(root, p), ts_path)?, d.json, spec);
     // A foreign enum a `$type` names is its spec's own output's type.
     let named = types(spec);
     let mut imports = Vec::new();
@@ -1513,7 +1513,12 @@ fn ts_outputs(
         let from =
             f.ts.ok_or(format!("{}: a spec it uses writes no TypeScript", d.json))?;
         let here = root.join(ts_path);
-        let module = ts_module(here.parent().unwrap_or(root), root, from)?;
+        let module = ts_module(
+            here.parent().unwrap_or(root),
+            Some(root),
+            &|p| package(root, p),
+            from,
+        )?;
         imports.push(format!("import type {{ {} }} from \"{module}\";", f.name));
     }
     if !imports.is_empty() {
@@ -1641,7 +1646,7 @@ fn rs_outputs(
     rs_path: &str,
     outputs: &mut Vec<Output>,
 ) -> Result<(), String> {
-    let shown = package_path(root, rs_path)?;
+    let shown = package_path(&|p| package(root, p), rs_path)?;
     let mut rs = head(&shown, d.json, spec);
     // The spec's own enums, which the module names by their name alone.
     let enums = declared_enums(spec.entries())
@@ -1660,7 +1665,11 @@ fn rs_outputs(
             Ok((
                 f.name.clone(),
                 f.casing,
-                format!("{}::{}", rs_module(&here, root, rs)?, f.name),
+                format!(
+                    "{}::{}",
+                    rs_module(&here, Some(root), &|p| package(root, p), rs)?,
+                    f.name
+                ),
             ))
         })
         .collect::<Result<_, String>>()?;

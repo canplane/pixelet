@@ -10,7 +10,7 @@ pub mod data;
 use std::collections::BTreeSet;
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 
@@ -991,9 +991,14 @@ pub fn file(lines: &[String]) -> String {
     lines.join("\n") + "\n"
 }
 
+/// How a path maps to its package: the package's name and its directory,
+/// each from the root the path is from (`package`, or a table of the
+/// packages a program depends on).
+pub type Packages<'a> = &'a dyn Fn(&str) -> Result<(String, PathBuf), String>;
+
 /// The package `path` from `root` lies in: its name, from the nearest
 /// Cargo.toml or package.json above it, and its directory from `root`.
-pub fn package<'p>(root: &Path, path: &'p str) -> Result<(String, &'p Path), String> {
+pub fn package(root: &Path, path: &str) -> Result<(String, PathBuf), String> {
     for dir in Path::new(path).ancestors().skip(1) {
         let cargo = root.join(dir).join("Cargo.toml");
         let npm = root.join(dir).join("package.json");
@@ -1015,7 +1020,7 @@ pub fn package<'p>(root: &Path, path: &'p str) -> Result<(String, &'p Path), Str
         } else {
             continue;
         };
-        return Ok((name, dir));
+        return Ok((name, dir.to_path_buf()));
     }
     Err(format!("{path}: under no package"))
 }
@@ -1036,22 +1041,33 @@ pub fn relative(from: &Path, to: &Path) -> String {
     }
 }
 
-/// How a Rust module in the crate at `here` names the crate of `path` from
-/// `root`: by its name, or `crate` for its own.
-pub fn rs_crate(here: &Path, root: &Path, path: &str) -> Result<String, String> {
-    let (name, dir) = package(root, path)?;
-    Ok(if root.join(dir) == here {
+/// How a Rust module in the crate at `here` names the crate of `path`: by
+/// its name, or `crate` for its own, `root` being the root `path` is from
+/// where `here` lies in that tree, and `pkg` mapping it to its package.
+pub fn rs_crate(
+    here: &Path,
+    root: Option<&Path>,
+    pkg: Packages,
+    path: &str,
+) -> Result<String, String> {
+    let (name, dir) = pkg(path)?;
+    Ok(if root.is_some_and(|r| r.join(dir) == here) {
         "crate".into()
     } else {
         snake(&name)
     })
 }
 
-/// How a Rust module in the crate at `here` names the module `path` from
-/// `root`: its crate, then its path under `src/`, a generated file's
+/// How a Rust module in the crate at `here` names the module `path`
+/// (`rs_crate`): its crate, then its path under `src/`, a generated file's
 /// `.spec` dropped as its mount drops it.
-pub fn rs_module(here: &Path, root: &Path, path: &str) -> Result<String, String> {
-    let (_, dir) = package(root, path)?;
+pub fn rs_module(
+    here: &Path,
+    root: Option<&Path>,
+    pkg: Packages,
+    path: &str,
+) -> Result<String, String> {
+    let (_, dir) = pkg(path)?;
     let under = Path::new(path)
         .strip_prefix(dir.join("src"))
         .map_err(|_| format!("{path}: not under src/"))?;
@@ -1061,36 +1077,41 @@ pub fn rs_module(here: &Path, root: &Path, path: &str) -> Result<String, String>
         .trim_end_matches(".spec")
         .split('/')
         .map(String::from);
-    Ok(std::iter::once(rs_crate(here, root, path)?)
+    Ok(std::iter::once(rs_crate(here, root, pkg, path)?)
         .chain(mods)
         .collect::<Vec<_>>()
         .join("::"))
 }
 
 /// How a TypeScript module in the directory `here` names the path `path`
-/// from `root`: relative to it in its own package, from `.` or `..` as an
-/// import writes it, or by the package's name.
-pub fn ts_module(here: &Path, root: &Path, path: &str) -> Result<String, String> {
-    let (_, dir) = package(root, path)?;
-    if here.starts_with(root.join(dir)) {
-        let path = relative(here, &root.join(path));
+/// (`rs_crate`): relative to it in its own package, from `.` or `..` as an
+/// import writes it, or by the package's name (`package_path`).
+pub fn ts_module(
+    here: &Path,
+    root: Option<&Path>,
+    pkg: Packages,
+    path: &str,
+) -> Result<String, String> {
+    let (_, dir) = pkg(path)?;
+    if let Some(r) = root.filter(|r| here.starts_with(r.join(&dir))) {
+        let path = relative(here, &r.join(path));
         return Ok(match path.split('/').next() {
             Some("." | "..") => path,
             _ => format!("./{path}"),
         });
     }
-    package_path(root, path)
+    package_path(pkg, path)
 }
 
-/// `package_path` names a generated file, `path` from `root`, as its package
-/// takes it: the package's name, then its path under the package's `src/`,
-/// or under the package for a file outside `src/`.
-pub fn package_path(root: &Path, path: &str) -> Result<String, String> {
-    let (name, dir) = package(root, path)?;
+/// `package_path` names a generated file `path`, which `pkg` maps to its
+/// package, as its package takes it: the package's name, then its path under
+/// the package's `src/`, or under the package for a file outside `src/`.
+pub fn package_path(pkg: Packages, path: &str) -> Result<String, String> {
+    let (name, dir) = pkg(path)?;
     let file = Path::new(path);
     let under = file
         .strip_prefix(dir.join("src"))
-        .or_else(|_| file.strip_prefix(dir))
+        .or_else(|_| file.strip_prefix(&dir))
         .unwrap_or(file);
     Ok(format!("{name}/{}", under.to_string_lossy()))
 }
