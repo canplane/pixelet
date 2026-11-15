@@ -20,7 +20,7 @@
  * (`mount`), opened across the port and answered later in all their methods,
  * as a device's UI serves the guest's files: the runtime mounts their openers
  * and tells the UI each object's drop. The UI serves as the link does
- * (link.ts `Server`): only how an answer crosses differs. Its open was
+ * (link.ts `Dispatcher`): only how an answer crosses differs. Its open was
  * answered across the port already, so an opener's refusal answers each
  * method of what it would have opened.
  *
@@ -44,12 +44,12 @@ import { Lower } from "./cabi.ts";
 import {
   type Answered,
   type Args,
+  Dispatcher,
   type Handle,
   type LinkObject,
   type Method,
   type Packet,
   type Sender,
-  Server,
   type Tag,
 } from "./link.ts";
 
@@ -66,8 +66,9 @@ interface Hear {
   hear(e: { data: unknown }): void;
 }
 
-/** The methods of the named interfaces the UI serves that answer later, each
- * `[handle, method]` (the bindings' `LATER`). */
+/** The methods of the program's own named interfaces the guest's world
+ * imports that answer later, each `[handle, method]` (the bindings'
+ * `LATER`), of which the UI answers later those it serves. */
 export type Later = readonly (readonly [Handle, Method])[];
 
 /** The prefixes a UI opens objects under, each `[handle, prefix]`, the named
@@ -95,7 +96,7 @@ export type ToUi =
 /** The UI's end of a link a runtime serves across a port (@xpute/web-runtime
  * remote.ts `serve`). */
 export class Remote
-  extends Server<ReturnType<typeof opened>>
+  extends Dispatcher<ReturnType<typeof opened>>
   implements Sender
 {
   private readonly _port: Port;

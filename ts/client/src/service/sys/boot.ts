@@ -10,21 +10,18 @@ import { ListenerSet } from "@xpute/kit/lang/listener.ts";
  * - loading: a GPU answered and the source is declared, and the world is
  *   made under a cover;
  * - started: the app shows;
- * - failed: the client never started;
  * - terminated: the core stopped for good.
  */
 export const BOOT_OPENING = 0;
 export const BOOT_STARTING = 1;
 export const BOOT_LOADING = 2;
 export const BOOT_STARTED = 3;
-export const BOOT_FAILED = 4;
-export const BOOT_TERMINATED = 5;
+export const BOOT_TERMINATED = 4;
 export type Boot =
   | typeof BOOT_OPENING
   | typeof BOOT_STARTING
   | typeof BOOT_LOADING
   | typeof BOOT_STARTED
-  | typeof BOOT_FAILED
   | typeof BOOT_TERMINATED;
 
 let state: Boot = BOOT_OPENING;

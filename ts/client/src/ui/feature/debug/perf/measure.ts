@@ -15,7 +15,6 @@ import { read } from "@/service/core/perf.ts";
 import {
   boot_state,
   watch_boot,
-  BOOT_FAILED,
   BOOT_STARTED,
   BOOT_TERMINATED,
 } from "@/service/sys/boot.ts";
@@ -114,7 +113,7 @@ export async function measure(): Promise<void> {
       visibility.shown() || fail(new Error("the page is hidden"));
     const stopped = () => {
       const b = boot_state();
-      if (b === BOOT_TERMINATED || b === BOOT_FAILED) {
+      if (b === BOOT_TERMINATED) {
         fail(new Error(`the core stopped (boot ${b})`));
       }
     };

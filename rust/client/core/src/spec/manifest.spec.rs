@@ -6,15 +6,17 @@
 // the heap it counts on, and its stacks.
 
 /// `sz`: the core's memory, 512 MiB on every platform, the limit chosen for it. The
-/// page's worker grows the module's memory to it before the core's first entry, and the
-/// core never grows it (sys/heap.rs), so a full heap stops the core: the stack, the
-/// module's data, the fixed ranges, then the heap.
+/// page's worker grows the module's memory to it and a device's runtime reserves it, each
+/// before the core's first entry, and nothing grows it after (xpute-guest heap.rs), so a
+/// full heap stops the core: the stack, the module's data, the fixed ranges, then the heap.
 ///
-/// `fixed_sz`: the fixed ranges past the module's data, `.fixed` (link/layout.rs), 147.63 MiB, which
-/// the compiler holds the ranges' sum under.
+/// `fixed_sz`: the fixed ranges, `.fixed` (link/layout.rs), 147.63 MiB, which the compiler holds
+/// the ranges' sum under: the core's share of its memory, which it gives its runtime beside
+/// `sz`. In a module it begins on the page past the module's data, and on a device at the
+/// region's base; the heap begins on the page past it (xpute-guest heap.rs).
 ///
 /// `min_heap_sz`: the heap the core counts on past the fixed ranges, 256 MiB, which the
-/// boot checks the memory it is given leaves (sys/heap.rs). A whole file read and a fetched body are capped by it,
+/// boot checks the memory it is given leaves (link/layout.rs `install`). A whole file read and a fetched body are capped by it,
 /// and the caps of the heap's bounded flows, added up in the buddy's blocks, are held under
 /// it at compile time (link/layout.rs `HEAP_FLOWS_BYTES`).
 pub mod mem {

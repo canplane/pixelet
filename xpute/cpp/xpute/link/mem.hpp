@@ -2,9 +2,9 @@
 
 // The guest's memory, which every offset on the link names: offset `at` is
 // the byte `at` past the memory's base, as xpute-link's `mem.rs` reads it. A
-// module's memory begins at 0. A native guest's is the one region it
-// reserves as it starts (`set`), which a host linked into the same process
-// reads as its own.
+// module's memory begins at 0. A native guest's is the region its runtime
+// reserves (`region`), which a host linked into the same process reads as
+// its own.
 
 #pragma once
 
@@ -14,21 +14,18 @@
 
 namespace xpute::link::mem {
 
-// Where a native guest's memory lies.
+// Where the guest's memory lies, as its runtime sized it before the guest's
+// first crossing: its first byte, its size, and the bytes the program keeps
+// for itself, which the guest's heap leaves before its own.
 struct Region {
     std::uint8_t *base;
     std::uint32_t len;
+    std::uint32_t share_sz;
 };
 
-#ifndef __wasm__
-// Sets the native guest's region, once, before anything reaches it: the
-// guest reserves it and its allocator hands out only memory inside it, so
-// every offset fits a u32. A second set is a bug.
-void set(Region r) noexcept;
-
-// The native guest's region.
+// The guest's memory, as its runtime answers it (`xpute.h` `xpute_mem`). A
+// native guest's region is reserved by the first call, from any thread.
 Region region() noexcept;
-#endif
 
 // The `len` bytes at `at`. A native guest's are held to its region: a range
 // past it is a bug, as a module's memory traps past its end.

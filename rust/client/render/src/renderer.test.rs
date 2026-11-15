@@ -8,61 +8,19 @@ use crate::frame::shader::record::{
 use crate::frame::shader::word::{draw, ghost_box, instance};
 use crate::gpu::draw::{drifted, test_lists, Draw, DrawId, DrawList, ReceiverBox};
 use crate::pass::mark::{marked, UploadOf};
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
-use std::sync::Once;
-use xpute_link::mem::{self, Region};
 
 /// The renderer takes the offsets of what it lends the host (`mem::off`,
-/// `mem::span`), so the tests' process has a guest's memory as its heap: one
-/// region, set as the guest's memory (xpute-link `mem::set`) at the first
-/// allocation, as a program's guest sets its own. It is never freed, a test
-/// being short, and is the most a u32 offset reaches.
-struct Heap;
-
-const SZ: usize = u32::MAX as usize & !15;
-
-static BRK: AtomicUsize = AtomicUsize::new(0);
-
-// SAFETY: each block lies in the region, apart from every other, and none is
-// handed out twice.
-unsafe impl GlobalAlloc for Heap {
-    unsafe fn alloc(&self, l: Layout) -> *mut u8 {
-        static SET: Once = Once::new();
-        SET.call_once(|| {
-            // At the system's own alignment, the system's zeroed memory is
-            // mapped as it is touched; past it, it is written. A region the
-            // system refuses stops the process, as nothing inside the
-            // allocator may unwind.
-            // SAFETY: a layout of nonzero size.
-            let base = unsafe { System.alloc_zeroed(Layout::from_size_align(SZ, 16).unwrap()) };
-            if base.is_null() {
-                std::process::abort();
-            }
-            mem::set(Region {
-                base,
-                len: SZ as u32,
-            });
-        });
-        let base = mem::region().base.expose_provenance();
-        let mut end = BRK.load(Relaxed);
-        loop {
-            let at = (base + end).next_multiple_of(l.align()) - base;
-            if at + l.size() > SZ {
-                return core::ptr::null_mut();
-            }
-            match BRK.compare_exchange_weak(end, at + l.size(), Relaxed, Relaxed) {
-                Ok(_) => return core::ptr::with_exposed_provenance_mut(base + at),
-                Err(cur) => end = cur,
-            }
-        }
-    }
-
-    unsafe fn dealloc(&self, _: *mut u8, _: Layout) {}
+/// `mem::span`), so the tests' process is a program with a guest's memory:
+/// the runtime's, as a device's is, and xpute-guest's heap in it is the
+/// process's. It is the most a u32 offset reaches, on a page.
+///
+/// # Safety
+/// `len` and `share` are each null or a writable word.
+#[unsafe(no_mangle)]
+unsafe extern "C" fn xpute_mem(len: *mut u32, share: *mut u32) -> *mut u8 {
+    // SAFETY: the caller's words.
+    unsafe { xpute_native_runtime::native::mem(u32::MAX & !4095, 0, len, share) }
 }
-
-#[global_allocator]
-static HEAP: Heap = Heap;
 
 /// The only test here that installs the calls' state. The lists' tests read
 /// that state, so this test takes their lock (`test_lists`) and never runs

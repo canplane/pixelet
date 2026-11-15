@@ -219,7 +219,7 @@ export interface Guest {
  * longest matching winning, and how
  * each request it answers later stops if its caller cancels it. Only how an
  * answer crosses differs (`_answer`). */
-export abstract class Server<
+export abstract class Dispatcher<
   O extends Pick<Table<LinkObject>, "get" | "put" | "remove">,
 > {
   /** The openers, each with the named handle of the interface whose
@@ -333,9 +333,9 @@ export abstract class Server<
 }
 
 /** The host's side of the link, as xpute-link `link.rs` `Side` is either
- * side: what it serves (`Server`), and the frames it lays in the guest's
+ * side: what it serves (`Dispatcher`), and the frames it lays in the guest's
  * inbox and takes from its outbox. */
-export class Side extends Server<Table<LinkObject>> {
+export class Side extends Dispatcher<Table<LinkObject>> {
   /** The answers of the sent requests that answer later, by tag. */
   private readonly _pending = new Map<Tag, Answer>();
   private _next: Tag = 0;

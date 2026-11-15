@@ -11,13 +11,14 @@
  * itself as that changes, posted from the worker (`GpuReport`), as a device's
  * GPU host tells its app through its own module (xpute-gpu-native-host
  * native.rs `state_on`) and as the page's runtime posts its own
- * (@xpute/web-runtime worker.ts `tell`).
+ * (@xpute/web-runtime worker.ts `tell`); the UI hears it (`state_on`).
  */
 
 import type { u32 } from "@xpute/kit/abi/word.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { ComponentError, type Side } from "@xpute/link";
+import { message_on } from "@xpute/web-runtime";
 import * as gpu from "@xpute/gpu-link/abi/gpu.ts";
 import { ERROR_CODE_NO_DEVICE } from "@xpute/gpu-link/abi/gpu.enum.ts";
 import { type GpuAsk, type GpuConfig, type GpuState } from "@xpute/gpu-link";
@@ -28,6 +29,13 @@ import { GpuHost } from "./host.ts";
 export interface GpuReport {
   kind: "gpu";
   state: GpuState;
+}
+
+/** Adds `hear` to what the UI is told of what the host has of a GPU, as it
+ * changes (`GpuReport`), and tells it the state now, as
+ * @xpute/gpu-native-runtime `state_on` tells a device's UI. */
+export function state_on(hear: (state: GpuState) => void): { remove(): void } {
+  return message_on<GpuReport>("gpu", (m) => hear(m.state));
 }
 
 export class WebGpu {

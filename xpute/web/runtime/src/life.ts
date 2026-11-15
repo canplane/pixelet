@@ -1,8 +1,10 @@
 // @xpute/web-runtime/life.ts
 
-/** The page's lifecycle, told to a guest that serves it (wit/life/life.wit):
- * hidden on `visibilitychange` to hidden, the Page Lifecycle's last sure event,
- * and shown on visible. The worker tells it the UI attached (`tell_attached`).
+/** The page's lifecycle, told to a guest that serves it (wit/life/life.wit)
+ * from its start (page.ts `start`), as a device's module tells its runtime
+ * the app's: hidden on `visibilitychange` to hidden, the Page Lifecycle's last
+ * sure event, and shown on visible. The worker tells it the UI attached
+ * (`tell_attached`).
  * The guest's answer is its own (`take_answer`). */
 
 import { XputeError } from "@xpute/kit/status/error.ts";

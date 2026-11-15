@@ -20,6 +20,8 @@ use crate::sys::io::demand::Stream;
 use crate::sys::io::param;
 use crate::sys::range;
 use pxl_render::gpu::upload;
+use xpute_guest::heap::Span;
+use xpute_kit::alloc::buddy_tree::Range;
 
 /// Every model the core can hold at once. No model is ever freed, so this is
 /// the sum of every owner's bound.
@@ -94,8 +96,12 @@ const _: () = assert!(
     "the stack, the fixed ranges and the heap do not fit the core's memory"
 );
 
-/// Hands each owner its range, before anything reads one.
+/// Hands each owner its range, before anything reads one, once the memory
+/// given is found to hold the heap the core counts on past them; one too
+/// small is a bug: the core cannot run.
 pub(crate) fn install() {
+    let heap = Span::end() - Span::base();
+    xpute_kit::ensure!(heap >= manifest::mem::MIN_HEAP_SZ as usize, ENOMEM, heap);
     let at = |f: Fixed| range::Range::at(off(f), FIXED[f as usize]);
     fixed::RANGE.set(at(Fixed::Terrain));
     division::RANGE.set(at(Fixed::Division));

@@ -5,13 +5,10 @@
 /// The interface's handle, named by `pxl:core/setting` (frame.json5 `NAMED`).
 pub const HANDLE: _rt::Handle = 0x6f63cb;
 
-/// `dev`
-pub const DEV: _rt::Method = 0;
 /// `set`
-pub const SET: _rt::Method = 1;
+pub const SET: _rt::Method = 0;
 
 pub trait Guest {
-    fn dev(&self, dev: bool) -> Result<(), _rt::Errno>;
     fn set(&self, key: u32, val: u32) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno>;
 }
 
@@ -21,14 +18,6 @@ impl _rt::Object for _Object {
     fn call(&self, m_: _rt::Method, _: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
         let run = || -> Result<_rt::Reply, _rt::Errno> {
             Ok(match m_ {
-                DEV => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let dev = r_.bool(0)?;
-                    match self.0.dev(dev) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
-                    }
-                }
                 SET => {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
                     let key = r_.u32(0)?;

@@ -15,7 +15,6 @@ import { stop_code } from "@/service/sys/abort.ts";
 import {
   boot_state,
   set_boot,
-  BOOT_FAILED,
   BOOT_LOADING,
   BOOT_OPENING,
   BOOT_STARTED,
@@ -36,7 +35,6 @@ import {
 } from "@/service/core/sensor.ts";
 import { listen } from "@/service/platform/sensor-listener.ts";
 import * as visibility from "@/service/platform/visibility.ts";
-import { tell_dev } from "@/service/core/setting.ts";
 import { cur, serve_overlay, watch_snapshot } from "@/service/core/overlay.ts";
 import * as online from "@/service/platform/online.ts";
 
@@ -73,9 +71,7 @@ function step(): void {
 /** Starts the client, after the core is asked to start: the boot moves on as
  * the core, the GPU and the source answer (`step`), the network's state is
  * told the origin, the device's readings and the app's hiding are routed to
- * the sensors' driver, and the core is told whether this is a development
- * build, the boot FAILED where that is refused while it opens or starts. The
- * core's calls wait until it has booted. */
+ * the sensors' driver. The core's calls wait until it has booted. */
 export function start_client(): void {
   // The core's overlay comes once it runs, at the end of its first entry or
   // whole as a UI attaches (pxl-core link.rs `post_ui`, `tell_all`): the
@@ -92,15 +88,10 @@ export function start_client(): void {
   listen(SENSOR_LISTENER);
   set_platform();
   visibility.watch(sensors_visibility);
-  tell_dev().catch((err: unknown) => {
-    console.error("[boot] the client did not start:", err);
-    const s = boot_state();
-    if (s === BOOT_OPENING || s === BOOT_STARTING) set_boot(BOOT_FAILED);
-  });
 }
 
-/** The core trapped, with `err` as its runtime tells it: its turns end, and
- * the boot with them. */
+/** The core trapped, with `err` as its runtime tells it, whether before its
+ * first entry ended or after: its turns end, and the boot with them. */
 export function trapped(err: string): void {
   log(`[core] stopped${stop_code() ? ` (${stop_code()})` : ""}: ${err}`);
   set_boot(BOOT_TERMINATED);

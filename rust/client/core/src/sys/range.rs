@@ -1,16 +1,16 @@
 // pxl-core/sys/range.rs
 
-//! A fixed range is memory the core holds for good, in `.fixed`: past the
-//! module's data and before the heap (sys/heap.rs), sized at compile time by
-//! its owner's consts and never freed, so a large array takes no buddy block.
+//! A fixed range is memory the core holds for good, in `.fixed`, the core's
+//! share of its memory before the heap (xpute-guest heap.rs), sized at compile
+//! time by its owner's consts and never freed, so a large array takes no buddy
+//! block.
 //! Only the core's own formats live in one; an external format (glTF, PNG)
 //! has no bound to size it by, so it is read into the heap (sys/io/loader.rs).
 //! link/layout.rs lays the ranges out and hands each owner its place at boot.
 //! A range is read only through `arr`, which checks its end.
 
 use pxl_global::Global;
-
-use crate::sys::heap;
+use xpute_guest::heap;
 
 /// A cache line is this many bytes, and arrays are laid out in whole lines.
 const LINE_BYTES: usize = 64;
@@ -47,7 +47,7 @@ impl Range {
             off
         );
         let p = core::ptr::with_exposed_provenance_mut::<u8>(
-            heap::fixed_at() + (self.off + off) as usize,
+            heap::share_at() + (self.off + off) as usize,
         );
         xpute_kit::ensure!(p.cast::<T>().is_aligned(), ENOTRECOVERABLE, off);
         // SAFETY: inside `.fixed`, which nothing but its owners writes,

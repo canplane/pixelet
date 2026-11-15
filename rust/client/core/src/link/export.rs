@@ -146,9 +146,6 @@ impl abi::sensor::Guest for Core {
 }
 
 impl abi::setting::Guest for Core {
-    fn dev(&self, dev: bool) -> Result<(), Errno> {
-        setting::dev(dev)
-    }
     fn set(&self, key: u32, val: u32) -> Result<Result<(), abi::types::ErrorCode>, Errno> {
         setting::set(key, val)
     }

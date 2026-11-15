@@ -32,6 +32,44 @@ extern "C" fn link_out(at: u32) -> i32 {
     SIDE.with(|s| s.recv(at))
 }
 
+/// The guest's memory, as this side's runtime answers it, on the runtime's
+/// contract (xpute-native-runtime native.rs `mem`): the manifest's size and
+/// `.fixed` the core's share, as pxl-runtime gives a device's, reserved by
+/// the first call, inside the global allocator, zeroed and on a page, a
+/// refusal stopping the process. The system is asked a page more at its own
+/// alignment, where its zeroed memory is mapped as it is touched.
+///
+/// # Safety
+/// `len` and `share` are each null or a writable word.
+#[unsafe(no_mangle)]
+unsafe extern "C" fn xpute_mem(len: *mut u32, share: *mut u32) -> *mut u8 {
+    use crate::spec::manifest::mem;
+    use std::alloc::{GlobalAlloc, Layout, System};
+    const PAGE_SZ: usize = 4096;
+    static BASE: std::sync::OnceLock<usize> = std::sync::OnceLock::new();
+    let base = *BASE.get_or_init(|| {
+        let Ok(layout) = Layout::from_size_align(mem::SZ as usize + PAGE_SZ, 16) else {
+            std::process::abort();
+        };
+        // SAFETY: a layout of nonzero size.
+        let at = unsafe { System.alloc_zeroed(layout) };
+        if at.is_null() {
+            std::process::abort();
+        }
+        at.expose_provenance().next_multiple_of(PAGE_SZ)
+    });
+    // SAFETY: the caller's words.
+    unsafe {
+        if !len.is_null() {
+            *len = mem::SZ;
+        }
+        if !share.is_null() {
+            *share = mem::FIXED_SZ;
+        }
+    }
+    core::ptr::with_exposed_provenance_mut(base)
+}
+
 struct Clock;
 
 impl Object for Clock {

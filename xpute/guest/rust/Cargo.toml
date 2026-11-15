@@ -1,6 +1,6 @@
 [package]
 name = "xpute-guest"
-description = "xpute's guest end: its side of the link, and the clocks it reads"
+description = "xpute's guest end: its side of the link, its heap, and the clocks it reads"
 edition.workspace = true
 version.workspace = true
 publish.workspace = true
@@ -10,6 +10,8 @@ readme.workspace = true
 
 [lib]
 path = "src/lib.rs"
+# It has no unit tests; its contracts are held by the processes that link it.
+test = false
 
 [dependencies]
 xpute-kit.workspace = true

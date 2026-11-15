@@ -14,14 +14,17 @@
 //! before the guest is entered. It runs the steps itself, in their order:
 //! the servers, what the UI serves (`remote`), the guest's first entry
 //! (`link::init`), and the loop for the guest's life. It exports itself to
-//! the platform's module over the program's start (`native`, `native_abi!`),
-//! as @xpute/web-runtime is the page's.
+//! the platform's module over the program's start and the guest's memory's
+//! size and the program's share of it (`native`, `native_abi!`), as
+//! @xpute/web-runtime is the page's. The memory is the runtime's
+//! (native.rs `mem`), reserved by its first reader, as a page's runtime grows
+//! a module's before its first entry.
 //!
 //! It takes the link, the contract both sides take, from xpute-link: a
 //! frame's words (`frame`), the link machine (`Side`), a URI's tokens and a
-//! lent span (`abi::types`), the handle table (`resource`), and the guest's
-//! memory (`mem`), which is the same in one process. It never calls
-//! xpute-guest, the guest's own side.
+//! lent span (`abi::types`), the handle table (`resource`), and where the
+//! guest's memory lies (`mem`), which is the same in one process. It never
+//! calls xpute-guest, the guest's own side.
 
 #![cfg(not(target_arch = "wasm32"))]
 

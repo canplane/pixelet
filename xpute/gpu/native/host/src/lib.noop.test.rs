@@ -143,7 +143,6 @@ fn write_lands_before_destroy() {
 fn native_tells_unfinished() {
     let (adapter, device, queue) = device();
     let mut h = host(adapter, &device, queue, 1);
-    super::test::region();
     let block = super::test::SPARE_AT;
     let unfinished = block + 4 * xpute_gpu_link::spec::device::UNFINISHED_AT as u32;
     h.block = Some(block);
@@ -168,7 +167,6 @@ fn native_tells_unfinished() {
 fn lost_told_once() {
     let (adapter, device, queue) = device();
     let mut h = host(adapter, &device, queue, 1);
-    super::test::region();
     // A block of its own, past the other test's.
     let block = super::test::SPARE_AT + 4 * xpute_gpu_link::spec::device::WORDS as u32;
     let status = block + 4 * xpute_gpu_link::spec::device::STATUS_AT as u32;

@@ -3,7 +3,6 @@
 import { expect, test } from "vitest";
 
 import {
-  BOOT_FAILED,
   BOOT_LOADING,
   BOOT_OPENING,
   BOOT_STARTED,
@@ -52,7 +51,6 @@ const LOADING: Standing = { ...RUNNING, boot: BOOT_LOADING, progress: 0.5 };
 test("cover_of - before it ran: failed where it will not, progress while it waits", () => {
   const of = (s: Partial<Standing>) => cover_of({ ...STARTING, ...s });
   for (const [s, key] of [
-    [{ boot: BOOT_FAILED }, "failed.boot"],
     [{ gpu: GPU_MISSING }, "failed.gpu"],
     [{ gpu: GPU_UNSUPPORTED }, "failed.webgpu"],
     [{ gpu: GPU_INSECURE }, "failed.insecure"],

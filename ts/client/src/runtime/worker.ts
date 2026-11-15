@@ -6,8 +6,8 @@
  * message, its kept entries, the core's module, the UI's port, and the named
  * handles and prefixes of what the UI serves; the worker instantiates the
  * module with a link laid over it (@xpute/web-runtime `instantiate`) and
- * starts the core on it from the servers listed here (@xpute/web-runtime
- * `start`): what the host serves, the core's files and GPU among them, the
+ * runs the core on it from the servers listed here (@xpute/web-runtime
+ * `run`): what the host serves, the core's files and GPU among them, the
  * UI's stand-ins across the port, the canvases the UI gives going to the
  * GPU. The files are here, so the source is declared here too.
  */
@@ -18,13 +18,9 @@ import {
   forward_console,
   type Instantiate,
   instantiate,
-  type InstantiateError,
-  type Log,
-  start,
-  type Stopped,
-  type Trap,
+  run,
 } from "@xpute/web-runtime";
-import { type GpuReport, serve_vsync, WebGpu } from "@xpute/gpu-web-host";
+import { serve_vsync, WebGpu } from "@xpute/gpu-web-host";
 import { device } from "@/abi/gpu.spec.ts";
 import { IMPORTS } from "@/abi/imports.ts";
 import { LATER } from "@/abi/later.ts";
@@ -45,30 +41,34 @@ import { set_storage } from "@/service/sys/fs/storage.ts";
 import { serve_text } from "@/service/core/text.ts";
 import * as online from "@/service/platform/online.ts";
 
-/** What the page sends the worker: the core's instantiation
- * (@xpute/web-runtime `Instantiate`), with the page's kept entries, which a
- * worker cannot read. */
-export type ToWorker = Instantiate & { entries: [string, string][] };
+/** What the page's start sends the worker beside the core's instantiation
+ * (@xpute/web-runtime `Instantiate`): the page's kept entries, which a worker
+ * cannot read. */
+export interface Kept {
+  entries: [string, string][];
+}
 
-/** What the worker sends the page: the source's state, a kept key it wrote,
- * the GPU's state, the error the core's instantiation came to, the core's
- * report before it stops, its trap, and a line of the worker's console. */
-export type ToPage =
-  | { kind: "source"; state: Source; decl: Declaration | null }
-  | { kind: "keep"; key: string; val: string }
-  | GpuReport
-  | Stopped
-  | InstantiateError
-  | Trap
-  | Log;
+/** The source's state, as the worker tells the page. */
+export interface SourceReport {
+  kind: "source";
+  state: Source;
+  decl: Declaration | null;
+}
 
-const tell = (m: ToPage) => postMessage(m);
+/** A kept key the worker wrote, which the page keeps too. */
+export interface KeepReport {
+  kind: "keep";
+  key: string;
+  val: string;
+}
+
+const tell = (m: SourceReport | KeepReport) => postMessage(m);
 
 // What the worker writes to its console goes to the page's lines too, where a
 // tool driving the page reads them (service/platform/log.ts).
 forward_console();
 
-onmessage = ({ data: m }: MessageEvent<ToWorker>) => {
+onmessage = ({ data: m }: MessageEvent<Instantiate & Kept>) => {
   keep(m.entries);
   void boot(m);
 };
@@ -87,7 +87,7 @@ function keep(entries: [string, string][]): void {
 
 async function boot(m: Instantiate): Promise<void> {
   online.watch(set_online);
-  const link = await instantiate(m.module, m.init, mem.sz);
+  const link = await instantiate(m.module, m.init, mem.sz, mem.fixed_sz);
   if (link === null) return;
   // The page's host stages its writes in the chunks a device's does
   // (spec/client/render/api.json5 `device`), and in a build made for
@@ -104,7 +104,7 @@ async function boot(m: Instantiate): Promise<void> {
       slow_ms: __PERF_DRIVE__ ? LIMIT.SLOW_MS : null,
     },
   );
-  start(
+  run(
     link,
     {
       servers: [

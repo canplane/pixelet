@@ -1,7 +1,8 @@
 // xpute-guest/lib.rs
 
 //! The guest's end of xpute: its end of the link (xpute-link) to its host,
-//! the clocks it reads, and the report of its failures (`stop`).
+//! its heap in the memory its runtime sized (`heap`), the clocks it reads,
+//! and the report of its failures (`stop`).
 
 /// The bindings of xpute's packages on the guest's side, a module to a
 /// package, generated from their WIT (xpute-gen-targets).
@@ -10,6 +11,7 @@ pub mod abi;
 #[doc(hidden)]
 pub use xpute_link;
 pub mod clock;
+pub mod heap;
 pub mod link;
 pub mod stop;
 pub mod wait;

@@ -2,6 +2,9 @@
 
 #include "link.hpp"
 
+#include <algorithm>
+
+#include "heap.hpp"
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/link/frame.hpp"
 #include "xpute/link/mem.hpp"
@@ -61,7 +64,8 @@ std::uint32_t init(std::uint32_t cap, void (*enter)(), bool (*end)()) noexcept {
     // The layout's two words, then the inbox and the outbox, for as long as
     // the guest runs.
     std::size_t n = 1 + 2 * cap / 8;
-    std::uint64_t *words = new std::uint64_t[n]();
+    auto *words = static_cast<std::uint64_t *>(heap().allocate(n * 8, 8));
+    std::fill_n(words, n, 0);
     std::uint32_t at = link::mem::span(std::span<const std::uint64_t>(words, n)).first;
     std::uint32_t inbox = at + 8;
     link::mem::set_word(at, inbox);

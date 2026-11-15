@@ -2210,6 +2210,7 @@ dependencies = [
  "xpute-gpu-link",
  "xpute-kit",
  "xpute-link",
+ "xpute-native-runtime",
 ]
 
 [[package]]
