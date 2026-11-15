@@ -150,7 +150,11 @@ export interface DeviceOrientationStore {
 
 /** The device's orientation is idle until it is asked to start. */
 export function default_DeviceOrientationStore(): DeviceOrientationStore {
-  return { is_tracking_orient: false, orient: null, status: SENSOR_STATUS_IDLE };
+  return {
+    is_tracking_orient: false,
+    orient: null,
+    status: SENSOR_STATUS_IDLE,
+  };
 }
 
 /** Takes a reading, ignoring a change of heading within a dead zone of 1.5°.

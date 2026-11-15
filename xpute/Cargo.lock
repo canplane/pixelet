@@ -1141,7 +1141,6 @@ name = "xpute-gen-targets"
 version = "0.1.0"
 dependencies = [
  "xpute-gen",
- "xpute-link-gen",
 ]
 
 [[package]]
@@ -1156,7 +1155,6 @@ name = "xpute-gpu-gen-targets"
 version = "0.1.0"
 dependencies = [
  "xpute-gen",
- "xpute-link-gen",
 ]
 
 [[package]]

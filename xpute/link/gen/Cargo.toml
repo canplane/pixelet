@@ -12,6 +12,11 @@ exclude = ["src/**/*.test.rs"]
 [lib]
 path = "src/lib.rs"
 
+# The command a program runs to write its bindings or check them.
+[[bin]]
+name = "xpute-link-gen"
+path = "src/main.rs"
+
 # The generator depends on no crate of the workspace but the generator's
 # writer, because it writes into them.
 [dependencies]

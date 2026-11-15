@@ -330,10 +330,20 @@ pub fn read(path: &str) -> Result<Node, String> {
     typed(parse(path)?).map_err(|e| format!("{path}: {e}"))
 }
 
+/// The spec `text`, which `path` names (`typed`).
+pub fn read_str(path: &str, text: &str) -> Result<Node, String> {
+    typed(parse_str(path, text)?).map_err(|e| format!("{path}: {e}"))
+}
+
 /// The spec at `path`, JSON5, as it is written.
 fn parse(path: &str) -> Result<Node, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
-    json5::from_str::<Node>(&text).map_err(|e| format!("{path}: {e}"))
+    parse_str(path, &text)
+}
+
+/// The spec `text`, JSON5, which `path` names, as it is written.
+fn parse_str(path: &str, text: &str) -> Result<Node, String> {
+    json5::from_str::<Node>(text).map_err(|e| format!("{path}: {e}"))
 }
 
 /// `spec`, read from a file or built by a tool, its tokens folded

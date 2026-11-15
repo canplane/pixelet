@@ -57,12 +57,12 @@ pub(crate) fn set_pos(at: Option<Position>) {
             .cell_of(LEAF_ZOOM, &epsg4326::project(&[lon, lat, 0.0]))
             .tile()
             .rect();
-        let [base_lon, base_lat, _] = epsg4326::from_mercator(&[
-            epsg3857::merc_from_u(x0),
-            epsg3857::merc_from_u(y0),
-            0.0,
-        ]);
-        ([lon, lat], alt.map(|h| h - epsg4326::geoid_m(base_lon, base_lat)))
+        let [base_lon, base_lat, _] =
+            epsg4326::from_mercator(&[epsg3857::merc_from_u(x0), epsg3857::merc_from_u(y0), 0.0]);
+        (
+            [lon, lat],
+            alt.map(|h| h - epsg4326::geoid_m(base_lon, base_lat)),
+        )
     });
 }
 

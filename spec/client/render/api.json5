@@ -25,7 +25,7 @@
   },
   device: {
     $type: "u32",
-    $description: "What the GPU's host runs the renderer's stream by: a device's (xpute-gpu-native-host\n`Config`), which the core hands it (pxl-core lib.rs `GPU`, xpute-gpu-link\n`GpuConfig`), and a page's, which reads the chunk its writes are staged in from\nthe page's worker (ts/client runtime/worker.ts, @xpute/gpu-link `GpuConfig`); a page's\nbrowser paces its frames itself.",
+    $description: "What the GPU's host runs the renderer's stream by (xpute-gpu-link and @xpute/gpu-link\n`GpuConfig`), the same on a device, where the runtime hands it (pxl-runtime lib.rs `GPU`),\nand on a page, where the page's worker hands it (ts/client runtime/worker.ts).",
     FRAME_LATENCY: {
       $value: 2,
       $description: "The frames drawn and not yet finished on the GPU at once: a frame draws only\nwhile fewer are (xpute-gpu-guest `admit::frame`), and a surface queues as\nmany. Two, as wgpu configures a surface by default\n(`Surface::get_default_config`): one frame's lag behind the input, with the\nGPU kept busy while the next is drawn.",

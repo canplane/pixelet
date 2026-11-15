@@ -243,24 +243,26 @@ export const COLOR_WRITE = {
  * bits: how many nanoseconds one unit of a resolved timestamp is, 1 when the units are
  * nanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: the
  * format SURFACE_PREFERRED stands for, as the web's getPreferredCanvasFormat gives it), then
- * the count of uncaptured errors, then the count of unfinished frames, then STATUS, the
- * last, which the host stores with release after the rest. The uncaptured errors are the
- * errors the device raised that no error scope caught, each logged where the host logs.
- * The unfinished frames are the frames the guest has drawn whose work the queue has not
- * yet done. Only the host writes the two counts: first before STATUS, as it writes the
- * rest of the block, and afterwards with release each time a count changes. The guest
- * loads them with acquire once STATUS reads READY, and draws a frame only while the
- * unfinished frames are below its frame latency; both hosts hold a frame to that rule
- * (xpute-gpu-link `admits`). */
+ * the frame latency (the program's GpuConfig `frame_latency`: how many of the guest's frames
+ * may be unfinished at once, at least one), then the count of uncaptured errors, then the
+ * count of unfinished frames, then STATUS, the last, which the host stores with release
+ * after the rest. The uncaptured errors are the errors the device raised that no error
+ * scope caught, each logged where the host logs. The unfinished frames are the frames the
+ * guest has drawn whose work the queue has not yet done. Only the host writes the two
+ * counts: first before STATUS, as it writes the rest of the block, and afterwards with
+ * release each time a count changes. The guest loads them with acquire once STATUS reads
+ * READY, and draws a frame only while the unfinished frames are below the block's frame
+ * latency; both hosts hold a frame to that rule (xpute-gpu-link `admits`). */
 export const DEVICE = {
   LIMITS_AT: 0 as number,
   FEATS_AT: 31 as number,
   PERIOD_AT: 32 as number,
   FORMAT_AT: 33 as number,
-  ERRORS_AT: 34 as number,
-  UNFINISHED_AT: 35 as number,
-  STATUS_AT: 36 as number,
-  WORDS: 37 as number,
+  LATENCY_AT: 34 as number,
+  ERRORS_AT: 35 as number,
+  UNFINISHED_AT: 36 as number,
+  STATUS_AT: 37 as number,
+  WORDS: 38 as number,
 } as const;
 
 /** The last word of the DEVICE block: what the host knows of the device. Only the

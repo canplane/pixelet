@@ -18,8 +18,7 @@ import {
 } from "./reading.ts";
 
 export type OrientationCommand =
-  | typeof ORIENTATION_COMMAND_START
-  | typeof ORIENTATION_COMMAND_STOP;
+  typeof ORIENTATION_COMMAND_START | typeof ORIENTATION_COMMAND_STOP;
 /** The platform starts the compass, deviceorientationabsolute where the
  * browser has it. */
 export const ORIENTATION_COMMAND_START = 0;

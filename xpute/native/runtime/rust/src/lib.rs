@@ -29,7 +29,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 /// The bindings of xpute's packages on a native device's host's side, a
-/// module to a package, generated from their WIT (xpute-gen-targets).
+/// module to a package, generated from their WIT (xpute-link-gen).
 pub mod abi;
 pub mod event_loop;
 #[cfg(target_os = "android")]

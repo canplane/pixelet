@@ -2,13 +2,14 @@
 
 //! This writes xpute's own generated files, with the generators a program
 //! takes: its data specs, the errno table among them (data.rs, xpute-gen),
-//! and its bindings (xpute-link-gen), from link/wit and wit/, then the GPU plugin's, each as its
-//! targets declare them (xpute-gen-targets, xpute-gpu-gen-targets).
+//! as its targets declare them (xpute-gen-targets, xpute-gpu-gen-targets),
+//! and its bindings, each package's as a program's are written
+//! (xpute-link-gen `wit_outputs`), with each side's root module.
 
 pub mod data;
 
 use xpute_gen::spec::{generate_at, Output};
-use xpute_link_gen::wit::{abi_root, wit_outputs};
+use xpute_link_gen::wit::{abi_root, wit_outputs, Side, TARGETS};
 
 use crate::root;
 
@@ -73,34 +74,11 @@ fn check_versions() -> Result<(), String> {
 pub fn outputs() -> Result<Vec<Output>, String> {
     check_versions()?;
     let mut out = data::outputs()?;
-    let root = root();
-    let link = (root.as_path(), &xpute_gen_targets::LINK_TARGET);
-    out.extend(wit_outputs(&root, link.1, &[])?);
-    let sides = [
-        (
-            xpute_gen_targets::GUEST_TARGETS,
-            &xpute_gpu_gen_targets::GUEST_TARGET,
-        ),
-        (
-            xpute_gen_targets::NATIVE_HOST_TARGETS,
-            &xpute_gpu_gen_targets::NATIVE_HOST_TARGET,
-        ),
-    ];
-    let mut targets = Vec::new();
-    for (xpute, gpu) in sides {
-        let side: Vec<_> = xpute
-            .iter()
-            .chain([gpu])
-            .map(|t| (root.as_path(), t))
-            .collect();
-        let peers: Vec<_> = [link].into_iter().chain(side.iter().copied()).collect();
-        for (_, t) in &side {
-            out.extend(wit_outputs(&root, t, &peers)?);
-        }
-        targets.extend(xpute);
+    for t in TARGETS {
+        out.extend(wit_outputs(&root(), t)?);
     }
-    for path in xpute_gen_targets::ABI_ROOTS {
-        out.push(abi_root(&root, path, &targets)?);
+    for side in [Side::Guest, Side::Host] {
+        out.push(abi_root(&root(), side)?);
     }
     Ok(out)
 }

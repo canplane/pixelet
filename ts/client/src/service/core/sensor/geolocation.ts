@@ -20,8 +20,7 @@ import {
 } from "./reading.ts";
 
 export type GeolocationCommand =
-  | typeof GEOLOCATION_COMMAND_START
-  | typeof GEOLOCATION_COMMAND_STOP;
+  typeof GEOLOCATION_COMMAND_START | typeof GEOLOCATION_COMMAND_STOP;
 export const GEOLOCATION_COMMAND_START = 0;
 export const GEOLOCATION_COMMAND_STOP = 1;
 
@@ -110,7 +109,10 @@ const ERR_KEY: Readonly<Record<GeolocationError, string>> = {
  * location reads as failed until the next fix. One that ended it leaves
  * nothing watching and no location, and a grant, a return to the foreground
  * or a press starts the watch again. */
-export function geolocation_err(err: GeolocationError, watching: boolean): void {
+export function geolocation_err(
+  err: GeolocationError,
+  watching: boolean,
+): void {
   const store = device_location_store();
   store.state = failed_SensorState(ERR_KEY[err]);
   if (!watching) {

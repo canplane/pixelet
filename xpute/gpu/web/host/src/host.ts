@@ -222,6 +222,7 @@ export class GpuHost {
   private readonly _mem: () => ArrayBufferLike;
   private readonly _wake: () => void;
   private readonly _slow_ms: u32 | null;
+  private readonly _frame_latency: u32;
 
   /** `wake` tells the guest a completion landed (gpu/wit/gpu.wit
    * `device.settled`), and that the device was lost. `cfg` is the program's
@@ -236,6 +237,7 @@ export class GpuHost {
     this._mem = mem;
     this._wake = wake;
     this._slow_ms = cfg.slow_ms;
+    this._frame_latency = cfg.frame_latency;
     this._belt = new Belt(device, cfg.upload_chunk_sz, cfg.slow_ms);
     // Nothing here destroys the device, so every loss is the browser's. The
     // guest is told of it in its block.
@@ -384,6 +386,7 @@ export class GpuHost {
     out[DEVICE.FORMAT_AT] = (TEXTURE_FORMATS as readonly string[]).indexOf(
       navigator.gpu.getPreferredCanvasFormat(),
     );
+    out[DEVICE.LATENCY_AT] = this._frame_latency;
     this._tell_counts();
     Atomics.store(out, DEVICE.STATUS_AT, STATUS.READY);
   }

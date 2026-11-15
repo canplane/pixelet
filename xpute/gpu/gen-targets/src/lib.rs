@@ -1,32 +1,11 @@
 // xpute-gpu-gen-targets/lib.rs
 
-//! The GPU plugin's generation targets, which the tools that generate code
-//! read rather than know: its bindings on the guest's side and on the native
-//! host's, and its data specs. Paths are from xpute's root.
+//! The GPU plugin's generation targets, which the tool that generates its
+//! code reads rather than knows: its data specs. Paths are from xpute's root.
+//! Its bindings' targets are the link generator's (xpute-link-gen
+//! `TARGETS`).
 
 use xpute_gen::spec::data::DataSpec;
-use xpute_link_gen::wit::{Side, WitTarget};
-
-/// The plugin's bindings on the guest's side, with the TypeScript in the
-/// plugin's link and the C++ beside its GPU calls.
-pub const GUEST_TARGET: WitTarget<'static> = WitTarget {
-    wit: "gpu/wit",
-    rs: Some("gpu/guest/rust/src/abi.rs"),
-    ts: Some("gpu/link/ts/src/abi"),
-    cpp: Some("cpp/xpute/gpu/guest/abi"),
-    side: Some(Side::Guest("guest/rust")),
-};
-
-/// The plugin's bindings on a native device's host's side, which its host
-/// serves on xpute-native-runtime's link, in xpute-gpu-native-runtime as
-/// xpute's own are in that runtime.
-pub const NATIVE_HOST_TARGET: WitTarget<'static> = WitTarget {
-    wit: "gpu/wit",
-    rs: Some("gpu/native/runtime/rust/src/abi.rs"),
-    ts: None,
-    cpp: None,
-    side: Some(Side::Host("native/runtime/rust")),
-};
 
 /// The plugin's data specs: the GPU's calls and the enumerations they carry.
 pub const DATA_SPECS: [DataSpec; 2] = [

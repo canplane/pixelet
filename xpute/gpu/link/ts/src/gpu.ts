@@ -17,10 +17,14 @@ export interface GpuAsk {
   optional_feats: readonly string[];
 }
 
-/** These are the settings of the GPU's host that the program chooses. The
- * frame latency, which the guest admits frames by and a device's surface
- * queues, is not one a page's host reads: its browser paces its frames. */
+/** These are the settings of the GPU's host that the program chooses, the
+ * same on a page and a device (xpute-gpu-link `GpuConfig`). */
 export interface GpuConfig {
+  /** How many frames may be admitted and unfinished on the GPU at once, at
+   * least one. The host tells it the guest in the device's block (spec
+   * DEVICE), which the guest admits frames by (xpute-gpu-guest
+   * `admit::frame`); a page's browser paces the frames themselves. */
+  frame_latency: u32;
   /** The size of one chunk that buffer writes are staged through, as large
    * as one frame's writes; a larger write is staged across several chunks. */
   upload_chunk_sz: u32;
