@@ -2,20 +2,67 @@
 
 //! What the native runtime's process tests share. Each is a binary of its
 //! own, since a process starts one runtime and links one guest. A native
-//! guest's offsets name its one region, so the process's heap is a test's
-//! guest memory (xpute-test-mem `Heap`). And the test is the app: it starts
-//! the runtime and keeps what the runtime tells it.
+//! guest's offsets name its one region, so the process's heap is a region
+//! too, set as the guest's memory (xpute-link `mem::set`) at the first
+//! allocation, as a program's guest sets its own. It is never freed, a test
+//! being short, and is the most a u32 offset reaches. And the test is the
+//! app: it starts the runtime and keeps what the runtime tells it.
 
+use std::alloc::{GlobalAlloc, Layout, System};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+use std::sync::{Mutex, Once};
 use std::time::{Duration, Instant};
 
 use xpute_kit::wire::xtp::cursor::TreeReader;
 use xpute_link::abi::types::Token;
+use xpute_link::mem::{self, Region};
 use xpute_link::{store_uri, Handle, Lower};
 use xpute_native_runtime::listener;
 use xpute_native_runtime::native::{self, Start};
-use xpute_test_mem::Heap;
+
+struct Heap;
+
+const SZ: usize = u32::MAX as usize & !15;
+
+static BRK: AtomicUsize = AtomicUsize::new(0);
+
+// SAFETY: each block lies in the region, apart from every other, and none is
+// handed out twice.
+unsafe impl GlobalAlloc for Heap {
+    unsafe fn alloc(&self, l: Layout) -> *mut u8 {
+        static SET: Once = Once::new();
+        SET.call_once(|| {
+            // At the system's own alignment, the system's zeroed memory is
+            // mapped as it is touched; past it, it is written. A region the
+            // system refuses stops the process, as nothing inside the
+            // allocator may unwind.
+            // SAFETY: a layout of nonzero size.
+            let base = unsafe { System.alloc_zeroed(Layout::from_size_align(SZ, 16).unwrap()) };
+            if base.is_null() {
+                std::process::abort();
+            }
+            mem::set(Region {
+                base,
+                len: SZ as u32,
+            });
+        });
+        let base = mem::region().base.expose_provenance();
+        let mut end = BRK.load(Relaxed);
+        loop {
+            let at = (base + end).next_multiple_of(l.align()) - base;
+            if at + l.size() > SZ {
+                return core::ptr::null_mut();
+            }
+            match BRK.compare_exchange_weak(end, at + l.size(), Relaxed, Relaxed) {
+                Ok(_) => return core::ptr::with_exposed_provenance_mut(base + at),
+                Err(cur) => end = cur,
+            }
+        }
+    }
+
+    unsafe fn dealloc(&self, _: *mut u8, _: Layout) {}
+}
 
 #[global_allocator]
 static HEAP: Heap = Heap;

@@ -10,8 +10,8 @@ pub mod types;
 /// mounted before the guest boots: one with functions of its own under its
 /// handle, one of resources alone by an opener at a prefix.
 pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[
-    ("xpute:clocks/monotonic-clock", monotonic_clock::HANDLE),
-    ("xpute:clocks/system-clock", system_clock::HANDLE),
+    ("xpute:clocks/monotonic-clock", 0x73f703),
+    ("xpute:clocks/system-clock", 0x7dfa61),
 ];
 
 /// The methods of the named interfaces the host serves that answer

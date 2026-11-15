@@ -1,17 +1,9 @@
 // xpute-link/link.test.rs
 
 use std::cell::Cell;
-use std::rc::Rc;
 
-use xpute_kit::status::errno::Errno;
-use xpute_link::frame::Frame;
-use xpute_link::{
-    Handle, Layout, Lower, Method, Object, Packet, Reply, Side, Tag, CANCEL, NAMED, ROOT,
-};
-use xpute_test_mem::{alloc, Heap};
-
-#[global_allocator]
-static HEAP: Heap = Heap;
+use super::*;
+use crate::mem::test::alloc;
 
 // A guest's side and its host's, each crossing into the other's `recv`, over
 // a layout of this thread's own.

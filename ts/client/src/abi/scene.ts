@@ -69,4 +69,12 @@ export async function chat(link_: Sender, text: string): Promise<void> {
     },
   ]);
   if (a_.result !== 0) throw new XputeError(a_.result);
+  if (a_.data === null) throw new XputeError(ERRNO_EBADMSG);
+  const r_ = new Lift(a_.data);
+  const v_ =
+    r_.case(0, 2) === 0
+      ? { tag: "ok" as const }
+      : { tag: "err" as const, val: load_ErrorCode(r_, 1) };
+  if (v_.tag === "err") throw new ComponentError(v_.val);
+  return;
 }

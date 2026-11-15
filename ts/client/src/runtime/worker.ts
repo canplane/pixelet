@@ -9,8 +9,7 @@
  * starts the core on it from the servers listed here (@xpute/web-runtime
  * `start`): what the host serves, the core's files and GPU among them, the
  * UI's stand-ins across the port, the canvases the UI gives going to the
- * GPU. The files are here, so the source is declared here too, and the page
- * relays the declaration the core tells it, under which they are served.
+ * GPU. The files are here, so the source is declared here too.
  */
 
 import { type Side, sender } from "@xpute/link";
@@ -35,31 +34,27 @@ import { set_online } from "@/service/origin/online.ts";
 import { serve_files } from "@/service/sys/fs/file.ts";
 import { serve_objects } from "@/service/sys/fs/object.ts";
 import {
+  type Declaration,
   declare_source,
-  type Asking,
-  source_asking,
-  take_source,
+  type Source,
+  source_decl,
+  source_state,
   watch_source,
 } from "@/service/sys/fs/source.ts";
-import type { Declaration } from "@/abi/types.ts";
 import { set_storage } from "@/service/sys/fs/storage.ts";
 import { serve_text } from "@/service/core/text.ts";
 import * as online from "@/service/platform/online.ts";
 
 /** What the page sends the worker: the core's instantiation
  * (@xpute/web-runtime `Instantiate`), with the page's kept entries, which a
- * worker cannot read, and the declaration the core told the page, under which
- * the worker serves the core's files (source.ts `take_source`). */
-export type ToWorker =
-  | (Instantiate & { entries: [string, string][] })
-  | { kind: "source"; decl: Declaration };
+ * worker cannot read. */
+export type ToWorker = Instantiate & { entries: [string, string][] };
 
-/** What the worker sends the page: how its asking for the source stands, a
- * kept key it wrote,
+/** What the worker sends the page: the source's state, a kept key it wrote,
  * the GPU's state, the error the core's instantiation came to, the core's
  * report before it stops, its trap, and a line of the worker's console. */
 export type ToPage =
-  | { kind: "source"; state: Asking }
+  | { kind: "source"; state: Source; decl: Declaration | null }
   | { kind: "keep"; key: string; val: string }
   | GpuReport
   | Stopped
@@ -74,7 +69,6 @@ const tell = (m: ToPage) => postMessage(m);
 forward_console();
 
 onmessage = ({ data: m }: MessageEvent<ToWorker>) => {
-  if (m.kind === "source") return take_source(m.decl);
   keep(m.entries);
   void boot(m);
 };
@@ -134,9 +128,10 @@ async function boot(m: Instantiate): Promise<void> {
   await declare(link);
 }
 
-/** Declares the tile source to the core, and tells the page how its asking
- * stands. */
+/** Declares the tile source to the core, and tells the page its state. */
 async function declare(link: Side): Promise<void> {
-  watch_source(() => tell({ kind: "source", state: source_asking() }));
+  watch_source(() =>
+    tell({ kind: "source", state: source_state(), decl: source_decl() }),
+  );
   await declare_source(sender(link));
 }

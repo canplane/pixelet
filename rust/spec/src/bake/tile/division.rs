@@ -202,8 +202,10 @@ pub fn encode(tile: &DivisionTile) -> Result<Vec<u8>, XputeError> {
     )
 }
 
-/// Every cell a division of the tile or none, every parent one or none, and
-/// no walk up the parents a cycle.
+/// Every cell a division of the tile or none, and every parent one or none.
+/// A walk up the parents ends at a country: Overture's hierarchy is a tree
+/// whose every division but a country has a parent, and the bake writes it as
+/// it is. Its subtypes may repeat or come out of order along a walk.
 fn check(cells: &[u32], parents: &[u32]) -> Result<(), XputeError> {
     let n = parents.len();
     if n >= NONE as usize {
@@ -215,18 +217,6 @@ fn check(cells: &[u32], parents: &[u32]) -> Result<(), XputeError> {
         || !parents.iter().all(|&p| fits(p))
     {
         return Err(malformed());
-    }
-    for start in 0..n {
-        let mut at = start as u32;
-        for step in 0.. {
-            if step > n {
-                return Err(malformed());
-            }
-            match parents[at as usize] {
-                NONE => break,
-                p => at = p,
-            }
-        }
     }
     Ok(())
 }

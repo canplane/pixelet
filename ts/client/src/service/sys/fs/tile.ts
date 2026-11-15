@@ -10,10 +10,10 @@
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import { tile_object, BASE_KINDS } from "@/abi/publication.spec.ts";
-import type { Declaration } from "@/abi/types.ts";
+import { tile_object, type BASE_KINDS } from "@/abi/publication.spec.ts";
 import { tile_url } from "@/service/origin/route.ts";
 import { get } from "@/service/sys/fs/read.ts";
+import type { Declaration } from "@/service/sys/fs/source.ts";
 
 /** The version `name` is served under. Among the shards whose quadkey
  * prefixes `name` and that declare their own version of `kind`, the finest
@@ -24,18 +24,17 @@ export function version_of(
   kind: (typeof BASE_KINDS)[number],
   name: string,
 ): string {
-  const idx = BASE_KINDS.indexOf(kind);
   let finest: [number, string] | null = null;
-  for (const shard of d.shards) {
-    const own = shard.versions[idx] ?? null;
+  for (const [key, shard] of Object.entries(d.shard)) {
+    const own = shard.version?.[kind];
     if (
-      own !== null &&
-      name.startsWith(shard.name) &&
-      (finest === null || shard.name.length >= finest[0])
+      own !== undefined &&
+      name.startsWith(key) &&
+      (finest === null || key.length >= finest[0])
     )
-      finest = [shard.name.length, own];
+      finest = [key.length, own];
   }
-  return finest?.[1] ?? d.versions[idx]!;
+  return finest?.[1] ?? d.version[kind];
 }
 
 export function read_object(

@@ -32,7 +32,7 @@
 use fnv::FnvHashSet;
 use pxl_engine::object::high;
 use pxl_global::Global;
-use pxl_spec::asset::marker::MARKER_TEXT_CHARS;
+use pxl_spec::asset::marker::{text_fits, MARKER_TEXT_CHARS};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::aabb::Aabb;
@@ -375,7 +375,7 @@ fn decode_writes(format: u8, bytes: &[u8]) -> Result<Vec<Write>, XputeError> {
             return Err(XputeError::new(Errno::EINVAL));
         }
         // A marker's text past its cap means the same.
-        if t.chars().count() > MARKER_TEXT_CHARS as usize {
+        if !text_fits(t, MARKER_TEXT_CHARS) {
             return Err(XputeError::new(Errno::EINVAL));
         }
         ext[r] = Some(Ext::MarkerText(t.to_string()));

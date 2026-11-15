@@ -4,8 +4,8 @@
 //! entry, which xpute's link runs (lib.rs `link!`). The boot mounts what the
 //! core serves and starts its tasks; the start begins the entry's budget;
 //! the end runs the core's tasks until none is ready and tells the UI what
-//! changed, and the overlay whole to a UI that has just started, its tile
-//! source at once (`tell_all`).
+//! changed, and the overlay whole to a UI that has just started
+//! (`tell_all`).
 
 pub mod bound;
 mod export;
@@ -26,7 +26,6 @@ use crate::sys::io::dispatch;
 use crate::sys::io::file;
 use crate::sys::io::loader;
 use crate::sys::io::request;
-use crate::sys::io::source;
 use crate::sys::sched::executor;
 use crate::sys::sched::{self, invalidate, invalidate_at};
 use crate::ui;
@@ -137,14 +136,12 @@ pub fn end() -> bool {
     executor::pending()
 }
 
-/// Tells a UI that has just started where everything stands: the tile source
-/// at once (sys/io/source.rs `tell`), and the snapshot and the view whole at
-/// this entry's end, as nothing was posted to it. The runtime tells the core
-/// each UI that attaches (xpute's `life.attached`), the first and one a
-/// reload makes on the same core alike; its sensors start with its world's
-/// surface (`sensors_open`).
+/// Tells a UI that has just started where everything stands, at this
+/// entry's end: the snapshot and the view whole, as nothing was posted to
+/// it. The runtime tells the core each UI that attaches (xpute's
+/// `life.attached`), the first and one a reload makes on the same core alike;
+/// its sensors start with its world's surface (`sensors_open`).
 fn tell_all() {
-    source::tell();
     state().last_snapshot = SnapshotMemo::default();
 }
 

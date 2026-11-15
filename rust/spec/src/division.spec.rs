@@ -7,11 +7,6 @@
 // how deep to read it. The numbers are stored, so a subtype is appended,
 // never inserted.
 
-pub mod division_name {
-    /// The most bytes of a division's name in UTF-8 that the overlay's snapshot carries. A tile holds its names whole, and the snapshot cuts a longer one at a character's boundary; it carries at most DIVISION_SUBTYPE's count of a chain's names, the narrowest (pxl-core ui.rs `division_parts`).
-    pub const BYTES: u32 = 128;
-}
-
 pub mod division_subtype {
     pub const COUNTRY: u8 = 0;
     pub const DEPENDENCY: u8 = 1;

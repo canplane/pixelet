@@ -30,13 +30,7 @@ function warn_err(e: unknown): void {
 }
 
 /** Resolves once the core takes the line, and rejects when it refuses it
- * whole, too long for the link. */
+ * whole: too long, a `ComponentError`. */
 export function chat(text: string): Promise<void> {
   return scene.chat(ui, text);
-}
-
-/** Whether a chat line of `text` fits one call to the core: a line too long
- * for the link is refused whole, never cut (@xpute/link `Remote.fits`). */
-export function chat_fits(text: string): boolean {
-  return ui.fits((link) => scene.chat(link, text));
 }

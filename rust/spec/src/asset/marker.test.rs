@@ -29,3 +29,13 @@ fn marker_cell_nests() {
         }
     }
 }
+
+/// A text fits its kind's cap in code points, not bytes, and one past it
+/// does not.
+#[test]
+fn text_fits_in_code_points() {
+    for cap in [MARKER_TEXT_CHARS, CHAT_TEXT_CHARS] {
+        assert!(text_fits(&"😀".repeat(cap as usize), cap));
+        assert!(!text_fits(&"😀".repeat(cap as usize + 1), cap));
+    }
+}

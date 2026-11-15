@@ -59,7 +59,7 @@ mod _rt {
 /// The interfaces the world imports, each `(name, handle)`, which are
 /// mounted before the guest boots: one with functions of its own under its
 /// handle, one of resources alone by an opener at a prefix.
-pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[("xpute:stop/stop", HANDLE)];
+pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[("xpute:stop/stop", 0x4eccaa)];
 
 /// The methods of the named interfaces the host serves that answer
 /// later, each `(handle, method)`, as WIT's `async func` marks them.

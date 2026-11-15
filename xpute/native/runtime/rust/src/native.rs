@@ -5,7 +5,8 @@
 //! through the C ABI (xpute.h), which the program exports by `native_abi!`
 //! with what it starts its guest with (`Boot`), and on Android the same calls
 //! under JNI's names (jni.rs). What the app hears, a batch waiting, a stop
-//! and a trap, it hears through the functions it sets (listener.rs).
+//! and a trap, it hears through the functions it sets, and a stop and a trap
+//! told before its UI started it reads (listener.rs).
 
 use std::path::PathBuf;
 
@@ -52,15 +53,12 @@ static STARTED: std::sync::Once = std::sync::Once::new();
 /// Starts the program's runtime (`xpute_start`): `named` and `prefixes` the
 /// UI's, and the caches' directory. The runtime starts once a process
 /// (`run`), and each call is a new UI on it (`remote::accept`), as a
-/// reload's, which serves what the first did, whose attach the guest is
-/// told, and which is told the guest's end where it came
-/// (listener.rs `tell_end`). It
-/// answers the new UI's generation, which the UI's posts, answers and takes
-/// carry.
+/// reload's, which serves what the first did, and whose attach the guest is
+/// told. It answers the new UI's generation, which the UI's posts, answers
+/// and takes carry.
 pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], cache_dir: PathBuf) -> u32 {
     let prefixes = prefixes(prefixes_pkt).or_bug(Errno::EBADMSG);
     let generation = remote::accept();
-    listener::tell_end();
     STARTED.call_once(|| run(start(cache_dir), named, prefixes));
     generation
 }
@@ -229,6 +227,39 @@ macro_rules! native_abi {
         #[no_mangle]
         pub extern "C" fn xpute_trap_on(f: Option<$crate::listener::Trapped>) {
             $crate::listener::trap_on(f);
+        }
+
+        /// # Safety
+        /// Each is a writable word.
+        #[no_mangle]
+        pub unsafe extern "C" fn xpute_stop(
+            errnum: *mut i32,
+            file_len: *mut usize,
+            line: *mut u32,
+            n1: *mut u64,
+            n2: *mut u64,
+        ) -> *const u8 {
+            let Some(s) = $crate::listener::stop() else {
+                return ::core::ptr::null();
+            };
+            // SAFETY: the caller's words.
+            unsafe {
+                (*errnum, *file_len, *line, *n1, *n2) =
+                    (s.errnum, s.file.len(), s.line, s.n1, s.n2);
+            }
+            s.file.as_ptr()
+        }
+
+        /// # Safety
+        /// `len` is a writable word.
+        #[no_mangle]
+        pub unsafe extern "C" fn xpute_trap(len: *mut usize) -> *const u8 {
+            let Some(err) = $crate::listener::trap() else {
+                return ::core::ptr::null();
+            };
+            // SAFETY: the caller's word.
+            unsafe { *len = err.len() };
+            err.as_ptr()
         }
 
         /// # Safety

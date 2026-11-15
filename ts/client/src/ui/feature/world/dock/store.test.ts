@@ -4,7 +4,11 @@ import { expect, test, vi } from "vitest";
 
 import { CUBES } from "@/ui/shared/asset/catalog.ts";
 import * as edit from "@/service/core/edit.ts";
-import { RECENT_PICKS, recent_pick, select_asset } from "./store.ts";
+import {
+  CHAT_TEXT_CHARS,
+  MARKER_TEXT_CHARS,
+} from "@/ui/shared/asset/marker.spec.ts";
+import { text_fits, RECENT_PICKS, recent_pick, select_asset } from "./store.ts";
 
 vi.mock("@/service/core/edit.ts", () => ({ tool: vi.fn(async () => {}) }));
 
@@ -33,4 +37,13 @@ test("a pick goes first on the hotbar once the core holds it", async () => {
   vi.spyOn(console, "error").mockImplementation(() => {});
   await pick(fresh[1]);
   expect(hotbar()).toEqual([fresh[0], ...seed.slice(0, -1)]);
+});
+
+// A pin's text and a chat line fit to their caps in code points of the text
+// as it is sent, trimmed, and one past the cap does not fit.
+test("a text fits its cap in code points, trimmed", () => {
+  for (const cap of [MARKER_TEXT_CHARS, CHAT_TEXT_CHARS]) {
+    expect(text_fits(` ${"😀".repeat(cap)} `, cap)).toBe(true);
+    expect(text_fits("😀".repeat(cap + 1), cap)).toBe(false);
+  }
 });

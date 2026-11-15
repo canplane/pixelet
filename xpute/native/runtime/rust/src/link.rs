@@ -80,14 +80,17 @@ const GUEST_TRAPPED: &str = "the guest trapped";
 /// where it stopped (native.rs `hook`).
 pub(crate) const HOST_STOPPED: &str = "the host stopped";
 
-/// Marks the link trapped, and tells the platform the first time, with
-/// `err`, what stopped it, as a page's worker tells its trap with its error
-/// (listener.rs `tell_trap`). On the guest's thread.
+/// Stops the link for good, where it has not trapped already, and tells the
+/// platform with `err`, what stopped it, as a page's worker tells its trap
+/// with its error (link.ts `trap`, listener.rs `tell_trap`). On the guest's
+/// thread.
 pub(crate) fn trap(err: &str) {
-    if SIDE.with(Side::trap) {
-        crate::log(&format!("[link] trapped: {err}"));
-        crate::listener::tell_trap(err);
+    if trapped() {
+        return;
     }
+    SIDE.with(Side::trap);
+    crate::log(&format!("[link] trapped: {err}"));
+    crate::listener::tell_trap(err);
 }
 
 /// A completion given while control is in the guest: its request, result
@@ -183,14 +186,9 @@ pub fn on_cancel(t: Tag, stop: Box<dyn FnOnce()>) {
     SIDE.with(|s| s.on_cancel(t, stop));
 }
 
-/// The bytes a frame takes, header and packet.
-pub(crate) fn cap() -> u32 {
-    SIDE.with(Side::layout).cap
-}
-
 /// The bytes a frame's packet may take.
 pub(crate) fn pkt_cap() -> u32 {
-    cap() - HDR_SZ
+    SIDE.with(Side::layout).cap - HDR_SZ
 }
 
 /// Answers the guest's request `t`; while control is in the guest, its packet

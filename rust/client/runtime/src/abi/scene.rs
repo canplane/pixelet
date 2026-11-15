@@ -75,15 +75,26 @@ pub fn draw(
     })
 }
 
-pub fn chat(text: &str) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn chat(text: &str) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
+    let (r, data) = _rt::link::call(
         HANDLE,
         CHAT,
         Some((8, &|w_: &mut _rt::Lower| {
             w_.str(0, text);
         })),
     );
-    _rt::answer(r)
+    _rt::answer(r).and_then(|_| {
+        let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
+        r_.case(0, 2).and_then(|d| {
+            if d == 0 {
+                Ok(Ok(()))
+            } else {
+                r_.case(1, 6)
+                    .and_then(|v| super::types::ErrorCode::of(v).ok_or(_rt::Errno::EBADMSG))
+                    .map(Err)
+            }
+        })
+    })
 }
 
 mod _rt {

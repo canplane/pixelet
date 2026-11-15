@@ -1,10 +1,8 @@
 package pxl:core@0.1.0;
 
 // What is drawn over the world: the core's state, told when it changes and
-// whole to a UI that attaches (xpute's `life.attached`), and the tile source
-// it holds, from which the UI names its tiles' paths.
+// whole to a UI that attaches (xpute's `life.attached`).
 interface overlay {
-  use types.{declaration};
 
   enum ground-status { idle, loading, success }
   enum sensor-status { idle, loading, ready, error, unavailable }
@@ -84,15 +82,9 @@ interface overlay {
     renderer-progress: f64,
     // How much of the view's ground shows, 0 to 1.
     area-progress: f64,
-    // Whether the core holds its tile source (source `declare`), which it
-    // tells whole (`source`).
-    declared: bool,
   }
 
   show: func(snapshot: snapshot);
-  // The tile source the core holds for its life, told as it is declared and
-  // whole to a UI that attaches, before any file opened under it.
-  source: func(decl: declaration);
   // The view's azimuth, and the meters a logical pixel spans at the pivot, 0
   // where the camera stands there.
   view: func(azimuth: f64, m-per-px: f64);

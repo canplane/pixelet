@@ -4,8 +4,7 @@
  * A page runs the core in a worker of its own (worker.ts), opened and started
  * here, and reaches it across a message port. The worker holds the files,
  * keeps a copy of the page's storage that it writes back here, and tells the
- * page how its asking for the source stands, the GPU's state and the core's
- * stop; the page relays it the declaration the core tells the page. Where the boot
+ * page the source's state, the GPU's and the core's stop. Where the boot
  * stands is moved as on a device (ui.ts).
  */
 
@@ -15,10 +14,7 @@ import { log } from "@/service/platform/log.ts";
 import { stopped } from "@/service/sys/abort.ts";
 import { set_boot, BOOT_FAILED } from "@/service/sys/boot.ts";
 import { GPU_STATE, set_gpu } from "@/service/sys/gpu.ts";
-import {
-  mirror_source,
-  when_source_declared,
-} from "@/service/sys/fs/source.ts";
+import { mirror_source } from "@/service/sys/fs/source.ts";
 import { is_storage_key } from "@/service/sys/fs/storage.ts";
 import * as storage from "@/service/platform/storage.ts";
 import { serve_ui, start_client, trapped } from "@/runtime/ui.ts";
@@ -46,7 +42,7 @@ export function boot(): void {
   worker.onmessage = ({ data: m }: MessageEvent<ToPage>) => {
     switch (m.kind) {
       case "source":
-        return mirror_source(m.state);
+        return mirror_source(m.state, m.decl);
       case "keep":
         return storage.set(m.key, m.val);
       case "gpu":
@@ -63,11 +59,6 @@ export function boot(): void {
     }
   };
   serve_ui(remote);
-  // The worker serves the core's files under the declaration the core tells
-  // this thread (overlay `source`).
-  void when_source_declared().then((decl) =>
-    worker.postMessage({ kind: "source", decl } satisfies ToWorker),
-  );
   // A worker cannot read the page's kept entries, so they go with the core's
   // instantiation.
   const { module, init } = source();

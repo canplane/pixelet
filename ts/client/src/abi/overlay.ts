@@ -10,7 +10,6 @@ import {
   of_Message,
   of_SensorStatus,
 } from "./overlay.enum.ts";
-import { type Declaration, load_Declaration } from "./types.ts";
 import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { Lift, type Lower } from "@xpute/link/cabi.ts";
@@ -27,10 +26,8 @@ export const HANDLE: Handle = 0x7b1393;
 
 /** `show` */
 export const SHOW: Method = 0;
-/** `source` */
-export const SOURCE: Method = 1;
 /** `view` */
-export const VIEW: Method = 2;
+export const VIEW: Method = 1;
 
 export function load_GroundStatus(r: Lift, at: number): GroundStatus {
   const v = of_GroundStatus(r.case(at, 3));
@@ -223,10 +220,9 @@ export interface Snapshot {
   stall: Message | null;
   renderer_progress: number;
   area_progress: number;
-  declared: boolean;
 }
 
-export const SNAPSHOT_SZ = 120;
+export const SNAPSHOT_SZ = 112;
 export const SNAPSHOT_ALIGN = 8;
 
 export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
@@ -262,7 +258,6 @@ export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
   }
   w.f64(at + 96, v.renderer_progress);
   w.f64(at + 104, v.area_progress);
-  w.bool(at + 112, v.declared);
 }
 
 export function load_Snapshot(r: Lift, at: number): Snapshot {
@@ -284,13 +279,11 @@ export function load_Snapshot(r: Lift, at: number): Snapshot {
     stall: r.case(at + 92, 2) === 0 ? null : load_Message(r, at + 92 + 1),
     renderer_progress: r.f64(at + 96),
     area_progress: r.f64(at + 104),
-    declared: r.bool(at + 112),
   };
 }
 
 export interface Host {
   show(snapshot: Snapshot): void;
-  source(decl: Declaration): void;
   view(azimuth: number, m_per_px: number): void;
 }
 
@@ -304,12 +297,6 @@ function object(implementation: Host): LinkObject {
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
             implementation.show(load_Snapshot(r_, 0));
-            return 0;
-          }
-          case SOURCE: {
-            if (args === null) return ERRNO_EBADMSG;
-            const r_ = new Lift(args);
-            implementation.source(load_Declaration(r_, 0));
             return 0;
           }
           case VIEW: {

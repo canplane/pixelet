@@ -1,8 +1,9 @@
 package pxl:core@0.1.0;
 
 interface source {
-  use types.{declaration};
-
-  // Declares the tile source, once for the core's life (types `declaration`).
-  declare: func(decl: declaration);
+  // What the tile source declares of itself: the coarsest zoom it supplies
+  // whole, each kind's format by its bake's number, and its shards by name.
+  // Each UI declares it at its boot: once the core holds one, the same
+  // declaration again changes nothing, and another is refused with EEXIST.
+  declare: func(min-zoom: u32, formats: list<u32>, shards: list<string>);
 }

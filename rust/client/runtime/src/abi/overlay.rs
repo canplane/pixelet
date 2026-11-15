@@ -7,10 +7,8 @@ pub const HANDLE: _rt::Handle = 0x7b1393;
 
 /// `show`
 pub const SHOW: _rt::Method = 0;
-/// `source`
-pub const SOURCE: _rt::Method = 1;
 /// `view`
-pub const VIEW: _rt::Method = 2;
+pub const VIEW: _rt::Method = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
@@ -342,11 +340,10 @@ pub struct Snapshot {
     pub stall: Option<Message>,
     pub renderer_progress: f64,
     pub area_progress: f64,
-    pub declared: bool,
 }
 
 impl Snapshot {
-    pub const SZ: usize = 120;
+    pub const SZ: usize = 112;
     pub const ALIGN: usize = 8;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
@@ -380,7 +377,6 @@ impl Snapshot {
         }
         w.f64(at + 96, self.renderer_progress);
         w.f64(at + 104, self.area_progress);
-        w.bool(at + 112, self.declared);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Snapshot, _rt::Errno> {
@@ -420,14 +416,12 @@ impl Snapshot {
             })?,
             renderer_progress: r.f64(at + 96)?,
             area_progress: r.f64(at + 104)?,
-            declared: r.bool(at + 112)?,
         })
     }
 }
 
 pub trait Host {
     fn show(&self, snapshot: Snapshot) -> Result<(), _rt::Errno>;
-    fn source(&self, decl: super::types::Declaration) -> Result<(), _rt::Errno>;
     fn view(&self, azimuth: f64, m_per_px: f64) -> Result<(), _rt::Errno>;
 }
 
@@ -441,14 +435,6 @@ impl _rt::Object for _Object {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
                     let snapshot = Snapshot::load(r_, 0)?;
                     match self.0.show(snapshot) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
-                    }
-                }
-                SOURCE => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let decl = super::types::Declaration::load(r_, 0)?;
-                    match self.0.source(decl) {
                         Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }

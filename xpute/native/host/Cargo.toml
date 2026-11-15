@@ -22,10 +22,9 @@ xpute-link.workspace = true
 xpute-native-runtime.workspace = true
 
 [dev-dependencies]
-# The clock's test links a guest beside the runtime, as an app does, over a
-# test's guest memory (src/clock.test.rs).
+# The clock's test links a guest beside the runtime, as an app does
+# (src/clock.test.rs).
 xpute-guest.workspace = true
-xpute-test-mem.workspace = true
 
 # A process starts one runtime and links one guest, so the test is a binary of
 # its own, on the runtime's process tests' app (xpute-native-runtime

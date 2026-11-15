@@ -9,6 +9,11 @@
     $type: "u32",
     $description: "The most a marker's text may be, in code points: a product choice, a short line put up at a place. Bytes follow, four to a code point at most.",
   },
+  CHAT_TEXT_CHARS: {
+    $value: 200,
+    $type: "u32",
+    $description: "The most a chat line may be, in code points: a product choice, Roblox's chat limit, a game whose chat shows as bubbles over its avatars, as a line's bubble hangs over its speaker. Bytes follow, four to a code point at most.",
+  },
   MARKER_SHOWN_FROM: {
     $value: 19,
     $type: "u8",

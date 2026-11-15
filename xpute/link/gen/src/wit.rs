@@ -665,7 +665,7 @@ fn owner(
 
 /// The TypeScript imports of the interfaces' modules a table names, each
 /// module as its own name, one line a module; no two of the modules share a
-/// name (the world's imports are refused where they would).
+/// name, as LATER's are the package's own interfaces.
 fn ts_namespaces<'a>(reaches: impl Iterator<Item = &'a (String, String, String)>) -> String {
     let modules: BTreeMap<_, _> = reaches
         .map(|(_, ts, m)| (m.as_str(), ts.as_str()))
@@ -1132,11 +1132,8 @@ pub fn wit_outputs(
         }
     }
     // The interfaces the world imports, in the world's order, each its name
-    // and its reach (`reach`); one of types alone has none. The bindings name
-    // each by its module, in Rust beside the package's own modules and in
-    // TypeScript by the same name, so no other import, nor for one of
-    // another package any interface of this one, has its module's name.
-    let mut imports: Vec<(String, (String, String, String))> = Vec::new();
+    // and its named handle; one of types alone has none.
+    let mut imports: Vec<(String, u32)> = Vec::new();
     for item in world.into_iter().flat_map(|w| w.imports.values()) {
         let WorldItem::Interface { id, .. } = *item else {
             continue;
@@ -1148,42 +1145,14 @@ pub fn wit_outputs(
         if objs(&r, id, &name, drop)?.is_empty() {
             continue;
         }
-        let module = rs_name(n);
-        let outside = package_name(&r, id) != pname;
-        let mut imported = imports.iter().map(|(o, _)| o.clone());
-        let mut own_names = p
-            .interfaces
-            .keys()
-            .filter(|_| outside)
-            .map(|i| format!("{pname}/{i}"));
-        let same_module = |o: &String| {
-            o.rsplit_once('/')
-                .is_some_and(|(_, i)| rs_name(i) == module)
-        };
-        if let Some(other) = imported
-            .find(same_module)
-            .or_else(|| own_names.find(same_module))
-        {
-            return Err(format!("{pname}: its world imports {name}, whose module {module} is {other}'s too, and the bindings name each import by its module"));
-        }
-        imports.push((name, reach(id)));
+        let handle = named(&name, named_bit);
+        imports.push((name, handle));
     }
     if let (Some((_, false)), Some(_)) = (&side, world) {
-        // An interface of another package is brought in by a `use` of its
-        // module and named by that module (`imports`).
-        let mut uses = Vec::new();
-        let mut pairs = Vec::new();
-        for (n, (rs, ..)) in &imports {
-            let Some((_, module)) = rs.trim_end_matches("::").rsplit_once("::") else {
-                pairs.push(format!("(\"{n}\", {rs}HANDLE)"));
-                continue;
-            };
-            uses.push(format!("use {};", rs.trim_end_matches("::")));
-            pairs.push(format!("(\"{n}\", {module}::HANDLE)"));
-        }
-        if !uses.is_empty() {
-            let _ = write!(rs, "\n{}\n", uses.join("\n"));
-        }
+        let pairs: Vec<_> = imports
+            .iter()
+            .map(|(n, h)| format!("(\"{n}\", {h:#x})"))
+            .collect();
         let _ = writeln!(
             rs,
             "\n/// The interfaces the world imports, each `(name, handle)`, which are\n/// mounted before the guest boots: one with functions of its own under its\n/// handle, one of resources alone by an opener at a prefix.\npub const IMPORTS: &[(&str, {link_rs}::Handle)] = &[{}];",
@@ -1200,14 +1169,13 @@ pub fn wit_outputs(
         );
     }
     if let (Some(dir), Some(_)) = (t.ts, world) {
-        let uses = ts_namespaces(imports.iter().map(|(_, reach)| reach));
         let pairs: Vec<_> = imports
             .iter()
-            .map(|(n, (_, _, m))| format!("[\"{n}\", {m}.HANDLE]"))
+            .map(|(n, h)| format!("[\"{n}\", {h:#x}]"))
             .collect();
         let path = format!("{dir}/imports.ts");
         let text = format!(
-            "// {}\n//\n// {}\n\nimport type {{ Handle }} from \"{link_ts}\";\n{uses}\n/** The interfaces the world imports, each `[name, handle]`, which are\n * mounted before the guest boots: one with functions of its own under its\n * handle, one of resources alone by an opener at a prefix. */\nexport const IMPORTS: readonly (readonly [string, Handle])[] = [{}];\n",
+            "// {}\n//\n// {}\n\nimport type {{ Handle }} from \"{link_ts}\";\n\n/** The interfaces the world imports, each `[name, handle]`, which are\n * mounted before the guest boots: one with functions of its own under its\n * handle, one of resources alone by an opener at a prefix. */\nexport const IMPORTS: readonly (readonly [string, Handle])[] = [{}];\n",
             package_path(root, &path)?,
             mark(src, TOOL),
             pairs.join(", ")
@@ -1237,7 +1205,3 @@ pub fn wit_outputs(
     }
     Ok(outs)
 }
-
-#[cfg(test)]
-#[path = "wit.test.rs"]
-mod test;

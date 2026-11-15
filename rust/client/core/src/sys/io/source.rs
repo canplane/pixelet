@@ -1,13 +1,12 @@
 // pxl-core/sys/io/source.rs
 
-//! The tile source's declaration, made once at boot (pxl:core source
+//! The tile source's declaration, made by each UI at its boot (pxl:core source
 //! `declare`). The source is the published bake's `source` (script/publish.py),
-//! or the dev tile server's in the same shape, and the client hands it over
-//! whole (ts/client/src/service/sys/fs/source.ts): the zoom the floor is held
-//! at, the format and the version each kind is in, and the shards served. A
-//! tile that no served shard is over or under is never asked for. The core
-//! keeps the declaration for its life and tells it to the UI as it is made and
-//! to each UI that attaches (`tell`), whose versions name the tiles' paths.
+//! or the dev tile server's in the same shape, and the client hands over the
+//! core's part of it (ts/client/src/service/sys/fs/source.ts): the zoom the
+//! floor is held at, the format each kind is in, and the shards served. A tile
+//! that no served shard is over or under is never asked for. The versions the
+//! source names stay with the client.
 
 use pxl_global::Global;
 use pxl_spec::bake::publication::{BaseKind, FORMAT};
@@ -17,16 +16,11 @@ use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM, MIN_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::layer::area;
 use pxl_spec::space::layer::area::Area;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
-use crate::abi::overlay;
-use crate::abi::types::Declaration;
-
+#[derive(PartialEq)]
 struct Source {
-    /// The declaration as it was made, told back to each UI; its zoom is the
-    /// one the floor is held at.
-    decl: Declaration,
+    min_zoom: Zoom,
     /// The service area at `SHARD_ZOOM` (pxl-spec `area::Area`). For each
     /// cell, by its key (`area::shard_key`), it holds the bits of which of the
     /// nine cells about it are served. A cell beside no served cell holds 0.
@@ -46,62 +40,48 @@ fn declared_source() -> Option<&'static Source> {
     DECLARED_SOURCE.get(|| None).as_ref()
 }
 
-/// Declares the source once, and what it says holds while the core runs.
-/// `decl` gives each kind's format by its bake's number and its version, and
-/// its shards in any order, each with the versions it declares of its own. The
-/// declaration is refused whole where the core cannot follow it: a zoom
-/// outside the pyramid, a name that is no shard or that names a node over
-/// shards (pxl-spec bake/source.rs), a kind with no format or with a format
-/// the core does not read, or a version list, the source's or a shard's,
-/// without one entry a kind (a shard's entry none where it takes the
-/// source's).
-pub(crate) fn declare(decl: Declaration) -> Result<(), Errno> {
+/// Declares the source, and what it says holds while the core runs.
+/// `formats` gives each kind's format by its bake's number, and `shards` the
+/// shards' names in any order. The declaration is refused whole with EINVAL
+/// where the core cannot follow it: a zoom outside the pyramid, a name that is
+/// no shard or that names a node over shards (pxl-spec bake/source.rs), or a
+/// kind with no format or with a format the core does not read. Once one is
+/// held, a declaration that parses to it changes nothing, as a UI that
+/// attaches to a running core makes, and any other is refused with EEXIST.
+pub(crate) fn declare<'a>(
+    min_zoom: u32,
+    formats: &[u32],
+    shards: impl IntoIterator<Item = &'a str>,
+) -> Result<(), Errno> {
+    let source = parse(min_zoom, formats, shards).ok_or(Errno::EINVAL)?;
     let declared = DECLARED_SOURCE.get(|| None);
-    if declared.is_some() {
-        return Err(Errno::EEXIST);
+    match declared {
+        None => *declared = Some(source),
+        Some(cur) if *cur != source => return Err(Errno::EEXIST),
+        Some(_) => {}
     }
-    *declared = Some(parse(decl).ok_or(Errno::EINVAL)?);
-    tell();
     Ok(())
 }
 
-/// Tells the UI the declaration, if it is made, at once, so that it reaches a
-/// UI before any file opened under it in this entry: as it is made, and to
-/// each UI that attaches (link.rs `tell_all`). Its packet is the one the UI
-/// declared it in, which fit a frame.
-pub(crate) fn tell() {
-    if let Some(decl) = decl() {
-        overlay::source(decl).or_bug(Errno::EPROTO);
-    }
-}
-
-fn parse(decl: Declaration) -> Option<Source> {
-    let kind_cnt = BaseKind::ALL.len();
-    let read = (MIN_ZOOM..=LEAF_ZOOM).contains(&decl.min_zoom)
-        && decl.formats.len() == kind_cnt
-        && decl.versions.len() == kind_cnt
-        && decl.shards.iter().all(|s| s.versions.len() == kind_cnt)
+fn parse<'a>(
+    min_zoom: u32,
+    formats: &[u32],
+    shards: impl IntoIterator<Item = &'a str>,
+) -> Option<Source> {
+    let min_zoom = Some(min_zoom).filter(|z| (MIN_ZOOM..=LEAF_ZOOM).contains(z))?;
+    let read = formats.len() == BaseKind::ALL.len()
         && BaseKind::ALL
             .into_iter()
-            .all(|l| decl.formats[l as usize] == FORMAT[l as usize]);
+            .all(|l| formats[l as usize] == FORMAT[l as usize]);
     if !read {
         return None;
     }
-    let shards = decl
-        .shards
-        .iter()
-        .map(|s| key(&s.name))
-        .collect::<Option<Vec<_>>>()?;
+    let shards = shards.into_iter().map(key).collect::<Option<Vec<_>>>()?;
     Some(Source {
+        min_zoom,
         nine: nines_of(&shards),
         nodes: nodes_of(&shards),
-        decl,
     })
-}
-
-/// The declaration the core holds, or none before it is made.
-pub(crate) fn decl() -> Option<&'static Declaration> {
-    declared_source().map(|s| &s.decl)
 }
 
 /// Marks each cell at `SHARD_ZOOM` that a served shard covers, then lays the
@@ -109,10 +89,10 @@ pub(crate) fn decl() -> Option<&'static Declaration> {
 /// addresses it (`area::nine`). A row off the world has no key. All such rows
 /// count as one cell, which is served where any covered cell is off the
 /// world.
-fn nines_of(shard: &[Quadrant]) -> Vec<u16> {
+fn nines_of(shards: &[Quadrant]) -> Vec<u16> {
     let cells = area::SHARD_CELL_CNT as usize;
     let (mut served, mut off, mut covered) = (vec![false; cells], false, Vec::new());
-    for k in shard {
+    for k in shards {
         let d = SHARD_ZOOM - k.zoom;
         let [x, y] = k.at.map(|v| v << d);
         for j in 0..1 << d {
@@ -145,9 +125,9 @@ fn nines_of(shard: &[Quadrant]) -> Vec<u16> {
 /// Marks the nodes for each shard. A shard is at or under its own node and
 /// every node over it, and at or over its own node and every node under it,
 /// down to `SHARD_ZOOM`.
-fn nodes_of(shard: &[Quadrant]) -> Vec<u8> {
+fn nodes_of(shards: &[Quadrant]) -> Vec<u8> {
     let mut nodes = vec![0u8; ((1usize << (2 * (SHARD_ZOOM + 1))) - 1) / 3];
-    for k in shard {
+    for k in shards {
         let (zk, at) = (k.zoom, k.at);
         for z in 0..=zk {
             if let Some(n) = node_of(z, at.map(|v| v >> (zk - z))) {
@@ -183,7 +163,7 @@ fn node_of(zoom: Zoom, at: [i32; 2]) -> Option<usize> {
 
 /// The coarsest zoom the source supplies whole; none until it is declared.
 pub(crate) fn min_zoom() -> Option<Zoom> {
-    declared_source().map(|s| s.decl.min_zoom)
+    declared_source().map(|s| s.min_zoom)
 }
 
 /// Whether a served shard is over or under `p`. A kind that shards do not

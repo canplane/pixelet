@@ -7,11 +7,6 @@
 // how deep to read it. The numbers are stored, so a subtype is appended,
 // never inserted.
 
-export const DIVISION_NAME = {
-  /** The most bytes of a division's name in UTF-8 that the overlay's snapshot carries. A tile holds its names whole, and the snapshot cuts a longer one at a character's boundary; it carries at most DIVISION_SUBTYPE's count of a chain's names, the narrowest (pxl-core ui.rs `division_parts`). */
-  BYTES: 128 as number,
-} as const;
-
 export const DIVISION_SUBTYPE = {
   COUNTRY: 0 as number,
   DEPENDENCY: 1 as number,

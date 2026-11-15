@@ -47,7 +47,7 @@ pub trait Guest {
         group: Option<u8>,
         bg: Option<u32>,
     ) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno>;
-    fn chat(&self, text: String) -> Result<(), _rt::Errno>;
+    fn chat(&self, text: String) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno>;
 }
 
 struct _Object(_rt::Rc<dyn Guest>);
@@ -97,7 +97,19 @@ impl _rt::Object for _Object {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
                     let text = r_.str(0).map(str::to_owned)?;
                     match self.0.chat(text) {
-                        Ok(()) => _rt::Reply::from(0),
+                        Ok(v) => _rt::Reply {
+                            result: 0,
+                            data: Some((
+                                2,
+                                Box::new(move |w: &mut _rt::Lower| match &v {
+                                    Ok(_) => {}
+                                    Err(v) => {
+                                        w.u8(0, 1);
+                                        w.u8(1, *v as u8);
+                                    }
+                                }),
+                            )),
+                        },
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }

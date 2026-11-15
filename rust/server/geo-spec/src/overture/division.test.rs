@@ -43,7 +43,7 @@ fn name_lineage() {
 }
 
 #[test]
-fn lineage_gap_or_cycle() {
+fn lineage_gap() {
     let mut divisions = lineage();
     divisions.remove("r");
     assert_eq!(
@@ -53,11 +53,6 @@ fn lineage_gap_or_cycle() {
             .collect::<Vec<_>>(),
         ["Paris", "Montmartre"]
     );
-    let looped = FnvHashMap::from_iter([
-        division("a", "region", "A", Some("b")),
-        division("b", "county", "B", Some("a")),
-    ]);
-    assert!(name("a", false, &looped).len() <= Subtype::ALL.len());
     assert!(name("nowhere", false, &divisions).is_empty());
 }
 

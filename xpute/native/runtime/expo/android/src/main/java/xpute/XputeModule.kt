@@ -24,25 +24,21 @@ class XputeModule : Module() {
    * one has started (xpute.h `xpute_start`); 0, no UI's, until then. */
   private var generation = 0
 
-  /** These send the module's events from the runtime's threads, a stop and
-   * a trap also from a start after them, and Expo carries each to the
-   * JavaScript thread. */
+  /** The guest's stop as `onStopped` carries it. A JavaScript number holds
+   * no u64 whole, so each crosses as its decimal digits. */
+  private fun report(s: Stop) = mapOf(
+    "errnum" to s.errnum,
+    "file" to s.file,
+    "line" to s.line.toUInt().toLong(),
+    "n1" to s.n1.toULong().toString(),
+    "n2" to s.n2.toULong().toString(),
+  )
+
+  /** These send the module's events from the runtime's threads, and Expo
+   * carries each to the JavaScript thread. */
   private val notify = { sendEvent("onNotify") }
-  // A JavaScript number holds no u64 whole, so each crosses as its decimal
-  // digits.
-  private val stopped = { errnum: Int, file: String, line: Int, n1: Long, n2: Long ->
-    sendEvent(
-      "onStopped",
-      mapOf(
-        "errnum" to errnum,
-        "file" to file,
-        "line" to line.toUInt().toLong(),
-        "n1" to n1.toULong().toString(),
-        "n2" to n2.toULong().toString(),
-      ),
-    )
-  }
-  private val trap = { err: String -> sendEvent("onTrap", mapOf("err" to err)) }
+  private val stopped = { s: Stop -> sendEvent("onStopped", report(s)) }
+  private val trapped = { err: String -> sendEvent("onTrap", mapOf("err" to err)) }
 
   override fun definition() = ModuleDefinition {
     Name("Xpute")
@@ -60,7 +56,7 @@ class XputeModule : Module() {
       synchronized(Runtime) {
         Runtime.notify = notify
         Runtime.stopped = stopped
-        Runtime.trap = trap
+        Runtime.trapped = trapped
       }
       Runtime.init()
     }
@@ -70,7 +66,7 @@ class XputeModule : Module() {
         if (Runtime.notify === notify) {
           Runtime.notify = null
           Runtime.stopped = null
-          Runtime.trap = null
+          Runtime.trapped = null
         }
       }
     }
@@ -103,6 +99,13 @@ class XputeModule : Module() {
     // The region is the guest's for the app's whole life, so nothing is freed
     // when the buffer is.
     Function("mem") { NativeArrayBuffer(Runtime.mem()) }
+
+    /** The guest's last stop, as `onStopped` carries it, or null before the
+     * guest stopped (`Runtime.stop()`). */
+    Function("stop") { Runtime.stop()?.let(::report) }
+
+    /** What trapped the guest, or null before it trapped (`Runtime.trap()`). */
+    Function("trap") { Runtime.trap() }
 
     Function("log") { line: String -> Log.i("xpute", line); Unit }
   }

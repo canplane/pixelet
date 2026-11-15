@@ -24,9 +24,7 @@
 //! - 3 `(h, uri)`: open the object at `uri`, a lowered `list<token>`, under
 //!   `h`;
 //! - 4 `(tag)`: the guest canceled the request `tag`;
-//! - 5 `(h)`: the object `h` the UI opened is dropped;
-//! - 6 `(cap)`: the bytes a frame takes, header and packet, told each UI as
-//!   it attaches once the guest has laid its link (`tell_cap`),
+//! - 5 `(h)`: the object `h` the UI opened is dropped,
 //!
 //! where data, pkt and uri are a packet's bytes or nil.
 //!
@@ -34,13 +32,12 @@
 //! which serves what the first did: the UI's generation counts them. A
 //! request the UI sent and a request it answers later carry the generation
 //! of the UI they crossed with, so an old UI's answer is told to no new UI
-//! and a new UI's answer to an old UI's request is refused; the guest is told
-//! the new UI attached (wit/life/life.wit `attached`); then what an old UI
+//! and a new UI's answer to an old UI's request is refused; what an old UI
 //! held answers ECANCELED, the requests it left pending and each method of
 //! the objects it serves the guest until the guest drops them, so the
-//! guest's load starts again, on a UI it has told where it stands; and the
-//! guest's objects it opened are dropped on the guest, so none is held for a
-//! UI that is gone. A start answers the
+//! guest's load starts again; and the guest's objects it opened are dropped
+//! on the guest, so none is held for a UI that is gone; then the guest is
+//! told the new UI attached (wit/life/life.wit `attached`). A start answers the
 //! UI its generation, which each of its posts, answers and takes carries, so
 //! nothing of an old UI's that the guest's thread has not run when a new one
 //! is taken reaches the guest, its methods and its answers alike, as an old
@@ -99,11 +96,9 @@ fn generation() -> u32 {
 
 /// Takes a new UI on the runtime, as a reload's: the batch the last UI did
 /// not take goes, the new UI is told its first, and on the guest's thread
-/// the guest is told the new UI attached (life.rs `attached`), so that what
-/// it tells a UI that starts reaches this one before anything it asks again,
-/// then the requests the last left pending are answered ECANCELED and the
-/// guest's objects it opened dropped (`hang_up`), and the UI is told the
-/// bytes a frame takes (`tell_cap`).
+/// the requests the last left pending are answered ECANCELED and the guest's
+/// objects it opened dropped (`hang_up`), then the guest is told the new UI
+/// attached (life.rs `attached`).
 /// Called on the JavaScript thread, by each start; answers the new UI's
 /// generation.
 pub fn accept() -> u32 {
@@ -114,23 +109,9 @@ pub fn accept() -> u32 {
         out.told = false;
         out.generation
     };
-    post_task(Box::new(life::attached));
     post_task(Box::new(hang_up));
-    post_task(Box::new(tell_cap));
+    post_task(Box::new(life::attached));
     generation
-}
-
-/// Tells the UI the bytes a frame takes, so that it judges a call's packet
-/// before it sends it (@xpute/link remote.ts `Remote.fits`), as
-/// @xpute/web-runtime remote.ts `tell_cap` tells a page's; a trapped link,
-/// whose UI's calls answer EPIPE, tells none.
-fn tell_cap() {
-    if link::trapped() {
-        return;
-    }
-    tell(generation(), 2, |w| {
-        w.u32(Some(6)).u32(Some(link::cap()));
-    });
 }
 
 /// Answers ECANCELED each request pending on a UI before this one, and

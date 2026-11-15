@@ -44,9 +44,6 @@ xpute-kit.workspace = true
 naga = { version = "30", features = ["wgsl-in"] }
 
 [dev-dependencies]
-# The unit tests' process takes a test's guest memory as its heap, since the
-# renderer takes offsets of what it lends (src/renderer.test.rs).
-xpute-test-mem.workspace = true
 # The moon's shipped map read back, so its mean holds `MOON_MAP_MEAN`
 # (frame/shader/word.test.rs).
 image = { version = "0.25", default-features = false, features = ["png"] }

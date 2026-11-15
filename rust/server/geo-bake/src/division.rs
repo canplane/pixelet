@@ -8,8 +8,7 @@
 use fnv::FnvHashMap;
 
 use pxl_geo_spec::overture::division::{steps, Children, LINEAGE_SQL};
-
-use crate::coverage::BAKE_READ_DIST;
+use pxl_geo_spec::BAKE_READ_DIST;
 
 use postgres::types::ToSql;
 use postgres::Client;

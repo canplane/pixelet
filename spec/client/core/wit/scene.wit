@@ -8,5 +8,7 @@ interface scene {
   // Draws `content` on the surface the UI lent; a character takes its group,
   // and a background color where it is given.
   draw: func(surface: u32, content: scene-content, group: option<u8>, bg: option<u32>) -> result<_, error-code>;
-  chat: func(text: string);
+  // Says the line `text` over the person; past `CHAT_TEXT_CHARS` code points
+  // it is refused whole, `too-long`.
+  chat: func(text: string) -> result<_, error-code>;
 }

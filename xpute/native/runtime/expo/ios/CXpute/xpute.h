@@ -23,13 +23,11 @@
 // Canonical ABI, xpute:link/types `token`); `cache_dir`, `cache_dir_len` the directory the
 // app keeps its caches in, its UTF-8 bytes and their count.
 // Each call, the first too, is a new UI on the runtime, as a reload's, which
-// serves what the first did: the batch the last UI did not take goes, and
-// the answer to a request it sent reaches no new UI; the guest is told the
-// new UI attached (xpute:life `attached`); then the requests the last UI
-// answers later are answered ECANCELED, as is each method of the objects it
-// serves the guest, and the guest's objects it opened are dropped on the
-// guest; and a new UI is told the guest's last stop and its trap where they
-// came. It
+// serves what the first did: the requests the last UI answers later are
+// answered ECANCELED, as is each method of the objects it serves the guest,
+// the guest's objects it opened are dropped on the guest, the answer to a
+// request it sent reaches no new UI, and the batch it did not take goes; the
+// guest is then told the new UI attached (xpute:life `attached`). It
 // returns the new UI's generation, which each of its `xpute_post`,
 // `xpute_answer` and `xpute_take` carries, so nothing an old UI sent that
 // has not reached the guest when a new one starts reaches it: a method is
@@ -46,19 +44,31 @@ void xpute_notify_on(void (*notify)(void));
 // Makes `stopped` be told that the guest stopped, with its report: the errno,
 // the file of `file_len` UTF-8 bytes, not NUL-terminated, the line, and two
 // numbers of the guest's. Null sets none. It is called on the guest's thread,
-// on any thread for a failure of the host's own, and on the thread of each
-// `xpute_start` after the guest stopped, and hands the report to the
-// JavaScript thread. Set before `xpute_start`.
+// a failure of the host's own on another thread being posted there, and hands
+// the report to the JavaScript thread. Set before `xpute_start`.
 void xpute_stopped_on(void (*stopped)(int32_t errnum, const char *file, size_t file_len,
                                       uint32_t line, uint64_t n1, uint64_t n2));
 
-// Makes `trap` be told that the guest trapped, with what stopped it, `err`
+// Makes `trapped` be told that the guest trapped, with what stopped it, `err`
 // of `err_len` UTF-8 bytes, not NUL-terminated, the imports no server mounts
 // among them where the runtime refused to start the guest. Null sets none. It
-// is called on the guest's thread, and on the thread of each `xpute_start`
-// after the guest trapped, and hands the news to the JavaScript thread. Set
-// before `xpute_start`.
-void xpute_trap_on(void (*trap)(const char *err, size_t err_len));
+// is called on the guest's thread, and hands the news to the JavaScript
+// thread. Set before `xpute_start`.
+void xpute_trap_on(void (*trapped)(const char *err, size_t err_len));
+
+// Answers the guest's last stop, as `xpute_stopped_on`'s function was last
+// told it: its file's UTF-8 bytes, not NUL-terminated, their count put at
+// `file_len`, and the errno, the line and the two numbers put at theirs; null
+// before the guest stopped. A UI that starts after the stop reads it so. The
+// bytes live as long as the process.
+const char *xpute_stop(int32_t *errnum, size_t *file_len, uint32_t *line, uint64_t *n1,
+                       uint64_t *n2);
+
+// Answers what trapped the guest, as `xpute_trap_on`'s function was told it:
+// its UTF-8 bytes, not NUL-terminated, their count put at `len`; null before
+// the guest trapped. A UI that starts after the trap reads it so. The bytes
+// live as long as the process.
+const char *xpute_trap(size_t *len);
 
 // Sends the method `m` of the guest's object `h` of the UI of `generation`,
 // its request `tag` the UI's (remote.ts `Remote.send`), with the packet `pkt`
