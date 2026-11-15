@@ -35,8 +35,9 @@ A change that touches a GPU call also takes the GPU's tests, as
 main is the last squash plus the commits since. Squash those commits on the
 last squash, as the user says, keeping every original message.
 
-- **The originals** go on `original` as one line behind a marker, an empty
-  commit on its tip, and `original` moves only by fast-forward:
+- **The originals** go on `original` as one line after a marker: an empty
+  commit put on `original`'s tip, then the round's commits on top of it, and
+  `original` moves only by fast-forward:
 
   ```
   chore: original/<date>-<line>

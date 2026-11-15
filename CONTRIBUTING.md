@@ -14,10 +14,10 @@ version `ts/.tool-versions` pins with pnpm, which runs the version
 [rustup](https://rustup.rs/) (the toolchain is pinned in
 `rust/rust-toolchain.toml`), Binaryen's `wasm-opt`, Docker for the local
 databases. `make install` brings the package the Python scripts read the specs
-with (`script/requirements.txt`) and [cargo-nextest](https://nexte.st/), which runs
-pxl-core's unit tests one to a process, since each boots a core of its own. The
-checks and the tests also need
-what [xpute/CONTRIBUTING.md](./xpute/CONTRIBUTING.md) lists.
+with (`script/requirements.txt`) and [cargo-nextest](https://nexte.st/), which
+runs pxl-core's unit tests one to a process, since each boots a core of its own.
+The checks and the tests also need what
+[xpute/CONTRIBUTING.md](./xpute/CONTRIBUTING.md) lists.
 
 ```bash
 git clone git@github.com:canplane/pixelet.git
@@ -51,21 +51,20 @@ what publishing them would show. `make preview`, `preview-oven` and
 `preview-shelf` do the same over the production bundle, which is the one to
 measure speed on.
 
-The page is Expo's web build, bundled by Metro. Beside the dev server, a watcher
-rebuilds the core's WebAssembly module whenever its Rust changes.
-
 The make targets set everything a run needs. Point a run at another
 deployment or other ports only by the variables `ts/client/script/proxy.ts`
-reads, and run a server alone by its own target (`make serve-tile`).
+reads, and run a server alone by its own target (`make serve-tile`). How the
+page and the device are built is in
+[ts/client/README.md](./ts/client/README.md), "Builds".
 
-A page leaves a helper in the browser console. `pxl.perf` is the profiler: `report()`
-summarizes where the frames' time went and `trace()` saves a trace for
-ui.perfetto.dev.
+A page leaves a helper in the browser console. `pxl.perf` is the profiler:
+`report()` summarizes where the frames' time went and `trace()` saves a trace
+for ui.perfetto.dev.
 
 ## Running on a device
 
 The device app takes every route from the live site. Its native projects are
-generated, not kept, and the core is compiled as a step of the native build.
+generated, so a build starts from `expo prebuild`.
 
 On Android, with a JDK from 17 up and the NDK installed:
 
@@ -113,17 +112,23 @@ as `check-ts` or `test-rust`. `./script/diff-check.py [base]` runs only the
 checks and tests of what changed since `base` reaches (the working tree's
 changes by default), and `--list` names them without running them. A deploy
 adds `check-build`, the bundle a deploy builds; xpute's own `check-xpute` and
-`test-xpute`; and
-`test-gpu`, the GPU's crates and the renderer's passes on this machine's GPU.
-A change that touches a
-GPU call (`spec/gpu/`, the GPU's crates under `rust/gpu/` and its
-package under `ts/gpu/`, or how pxl-render encodes) also takes `(cd rust && ../script/perf/mac.py cargo test-gpu-host) && script/perf/mac.py pnpm --dir ts test:gpu:web`,
-which needs a GPU and Chrome (`$CHROME`). `make fmt` formats.
-`check-ts` holds the TypeScript to knip too (`pnpm --dir ts knip`), which names the files, exports and dependencies nothing reaches.
+`test-xpute`; and `test-gpu`, the GPU's crates and the renderer's passes on
+this machine's GPU. `make fmt` formats. `check-ts` holds the TypeScript to knip
+too (`pnpm --dir ts knip`), which names the files, exports and dependencies
+nothing reaches.
+
+A change that touches a GPU call (`spec/gpu/`, the GPU's crates under
+`rust/gpu/` and its package under `ts/gpu/`, or how pxl-render encodes) also
+takes this, which needs a GPU and Chrome (`$CHROME`):
+
+```bash
+(cd rust && ../script/perf/mac.py cargo test-gpu-host)
+script/perf/mac.py pnpm --dir ts test:gpu:web
+```
 
 `make check` also lints Android, with the newest NDK installed
-(`script/env.sh`); `CC_aarch64_linux_android` and `AR_aarch64_linux_android` name
-another.
+(`script/env.sh`); `CC_aarch64_linux_android` and `AR_aarch64_linux_android`
+name another.
 
 Code generated from the JSON under `spec/` is never edited by hand: change the
 JSON and run `make spec`.

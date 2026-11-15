@@ -74,7 +74,7 @@ struct Order {
     own: Option<u8>,
 }
 
-/// The core's order (`ARCHITECTURE.md`, "The core is one order of dependency"): a module names
+/// The core's order (`ARCHITECTURE.md`, "Where things are"): a module names
 /// only what is at or below it, and neither head names the other. The top wires everything,
 /// the UI's protocol among it. The settings, and an edit not yet made, which the top hands
 /// from control to the scene, stand where both heads may name them. The profiler reads anything and stands beside the order, in none of its steps, and
