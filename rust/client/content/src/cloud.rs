@@ -8,7 +8,7 @@
 //! (`holds_cloud`, `cloud_draw`).
 
 use pxl_engine::seed::node_seed;
-use pxl_spec::space::coord::zoom::{Zoom, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{UNIT_ZOOM, Zoom};
 use pxl_spec::space::hierarchy::tree::child_idx;
 use xpute_kit::math::rng::seed_mix32;
 

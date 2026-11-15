@@ -1,0 +1,16 @@
+[package]
+name = "pxl-gpu-link"
+description = "What both of the GPU's sides take: the stream's words, a handle's slot, a frame's admission and a program's settings"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+# A 64-bit address as two words (addr.rs).
+xpute-kit = { workspace = true, features = ["std"] }
+
+[lints]
+workspace = true

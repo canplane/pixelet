@@ -21,11 +21,7 @@ static OFF_CENTER: Global<bool> = Global::new();
 fn device_coord() -> Option<Q3> {
     sensor::pos().map(|([lon, lat], alt)| {
         let at = epsg4326::project(&[lon, lat, alt.unwrap_or(0.0)]);
-        if alt.is_some() {
-            at
-        } else {
-            unknown(&at)
-        }
+        if alt.is_some() { at } else { unknown(&at) }
     })
 }
 

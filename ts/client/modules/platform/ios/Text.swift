@@ -1,4 +1,4 @@
-// @pxl/native/modules/platform/ios/Text.swift
+// @pxl/client/modules/platform/ios/Text.swift
 
 import CoreText
 import UIKit

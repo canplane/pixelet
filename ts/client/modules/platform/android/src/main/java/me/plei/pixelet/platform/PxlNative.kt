@@ -1,4 +1,4 @@
-// @pxl/app/modules/platform/android/src/main/java/me/plei/pixelet/platform/PxlNative.kt
+// @pxl/client/modules/platform/android/src/main/java/me/plei/pixelet/platform/PxlNative.kt
 
 package me.plei.pixelet.platform
 
@@ -6,8 +6,8 @@ import java.nio.ByteBuffer
 
 /**
  * What the app calls in its native library (rust/client/runtime) besides
- * xpute's own calls (xpute.Runtime, xpute.Gpu): the transport's decoder and the
- * text the core asks for. Kotlin reaches it through the JNI functions that the
+ * xpute's and the GPU's own calls (xpute.Runtime, me.plei.pixelet.gpu.Gpu):
+ * the transport's decoder and the text the core asks for. Kotlin reaches it through the JNI functions that the
  * library's src/unpack.rs and src/text.rs name, and the iPhone's Swift makes the
  * same calls through the C ABI (include/pxl_native.h).
  */

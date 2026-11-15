@@ -35,7 +35,7 @@ use crate::param::way::PIER_MIN_RISE_M;
 use crate::param::way::STACKED_DECK_HEADROOM_M;
 use crate::param::way::WIDE_BEAM_PIER_INTERVAL_M;
 use crate::space::coord::adapter::epsg3857::cells_of_m;
-use crate::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM};
+use crate::space::coord::zoom::{LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, Zoom};
 use crate::value;
 
 /// Points are counted in eighths of the tile's cell.
@@ -158,11 +158,7 @@ pub const DIR_BITS: u32 = 14;
 
 /// The axis a run `d` is longest along, x where the two are equal.
 fn major(d: [i32; 2]) -> usize {
-    if d[0].abs() >= d[1].abs() {
-        0
-    } else {
-        1
-    }
+    if d[0].abs() >= d[1].abs() { 0 } else { 1 }
 }
 
 /// Run `d`'s direction: `d` divided by its length, times `1 << DIR_BITS`, each taken in

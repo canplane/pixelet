@@ -1,9 +1,8 @@
 // pxl-geo-bake/oven/cache.rs
 
 use super::Failure;
-use crate::util::{pack, write_atomic, Level};
+use crate::util::{Level, pack, write_atomic};
 use fnv::FnvHashMap;
-use std::future::Future;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};

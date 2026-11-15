@@ -1,7 +1,7 @@
 // pxl-core/domain/control/edit/write.test.rs
 
-use pxl_spec::asset::cube as catalog;
 use pxl_spec::asset::AssetId;
+use pxl_spec::asset::cube as catalog;
 use pxl_spec::space::coord::world;
 
 use super::*;

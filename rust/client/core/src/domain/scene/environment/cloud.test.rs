@@ -3,7 +3,7 @@
 use super::*;
 use crate::domain::view::lens;
 use pxl_content::cloud::drift;
-use pxl_render::gpu::draw::{lists_bytes, set_lists};
+use pxl_render::gpu::draw::{lists_sz, set_lists};
 
 /// The drift's step written out by hand: a twelfth of a camera grid cell at
 /// the nearest drawn cloud, over the wind's speed. `drift_step_s` must give
@@ -34,7 +34,7 @@ fn cloud_steps_unchanged() {
 #[test]
 fn only_time_moving_moves_no_draw() {
     const LIVE: usize = 4;
-    set_lists(Vec::leak(vec![0; lists_bytes(LIVE) as usize / 4]), LIVE);
+    set_lists(Vec::leak(vec![0; lists_sz(LIVE) as usize / 4]), LIVE);
     let key = [-3, 7];
     let eye = [
         key[0] as f64 * PATCH + 100.0,

@@ -10,9 +10,9 @@ world core {
   import xpute:clocks/monotonic-clock@0.1.0;
   import xpute:clocks/system-clock@0.1.0;
   import xpute:fs/file@0.1.0;
-  import xpute:gpu/gpu@0.1.0;
-  import xpute:gpu/vsync@0.1.0;
-  export xpute:gpu/surface@0.1.0;
+  import pxl:gpu/gpu@0.1.0;
+  import pxl:gpu/vsync@0.1.0;
+  export pxl:gpu/surface@0.1.0;
   export camera;
   export input;
   export scene;

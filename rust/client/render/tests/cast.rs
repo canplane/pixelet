@@ -29,8 +29,8 @@ mod gpu;
 mod real_world;
 
 use gpu::{
-    array_view, at_edge, cross, edges_within, entry_node, holds_node, mix, read_texture, slack,
-    texture, ulps, unit, Gpu, KindCount, Tally,
+    Gpu, KindCount, Tally, array_view, at_edge, cross, edges_within, entry_node, holds_node, mix,
+    read_texture, slack, texture, ulps, unit,
 };
 use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
@@ -41,14 +41,14 @@ use pxl_engine::support;
 use pxl_engine::world::Inheritance;
 use pxl_engine::{eye, face, node_cache, raster, ray, record};
 use pxl_render::frame::shader::record::{
-    src, SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE_HIT,
+    SHADER_CAST, SHADER_CAST_TILES, SHADER_CELL, SHADER_FACE, SHADER_SAMPLE_HIT, src,
 };
-use pxl_render::frame::shader::word::{screen, SQUARE_SIDE};
+use pxl_render::frame::shader::word::{SQUARE_SIDE, screen};
 use pxl_spec::share::EIGHTH_CNT;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, Zoom};
 use pxl_spec::space::hierarchy::tree::ancestor_at;
 
-use real_world::{q8, Asking, Built, WorldBuffer, FINEST};
+use real_world::{Asking, Built, FINEST, WorldBuffer, q8};
 
 /// The leaf cells the worlds are built about. `EYE` lies 300 cells west of X's seam, and
 /// `EYE_ZERO` lies by X = 0, where one root ends and the next begins in X.

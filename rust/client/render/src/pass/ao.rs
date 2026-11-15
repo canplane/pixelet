@@ -14,13 +14,13 @@ use pxl_spec::space::coord::mat4::{self, Mat4};
 use crate::frame::shader::record::{
     PIPELINE_AO_APPLY, PIPELINE_AO_BLUR, PIPELINE_AO_DOWNSAMPLE, PIPELINE_AO_SAMPLE,
 };
-use crate::frame::shader::word::{ao, AO_DOWNSCALE, AO_FLOATS, AO_NOISE_SIDE};
-use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use crate::frame::shader::word::{AO_DOWNSCALE, AO_FLOATS, AO_NOISE_SIDE, ao};
+use pxl_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry,
-    texture_usage, view_entry, word_bytes, Entry, Format, Gpu, Group, Layout, Load, RenderContext,
-    TrackedRenderPass,
+    Entry, Format, Gpu, Group, Layout, Load, RenderContext, TrackedRenderPass, buf_entry,
+    buf_range_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage,
+    view_entry, word_sz,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::put_mat;
@@ -72,7 +72,7 @@ impl ScreenAo {
         g.write_texture(noise, 0, AO_NOISE_SIDE, AO_NOISE_SIDE, NOISE);
         let noise_view = g.view(noise, false, 0, 1, 0, 1);
         let uniform = g.buf(
-            word_bytes(AO_FLOATS),
+            word_sz(AO_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let stride = 16u32.max(align);

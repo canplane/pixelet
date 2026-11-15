@@ -4,12 +4,12 @@ use std::sync::Arc;
 
 use postgres::types::ToSql;
 use postgres::{Client, Statement};
-use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, BBox3857};
+use pxl_spec::space::coord::adapter::epsg3857::{BBox3857, get_tile_bbox, merc_from_u};
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
 use crate::elevation::Raster;
 use crate::segment::Part;
-use crate::terrain::pipeline::overture::width::{carto_u, WIDEST_LINE};
+use crate::terrain::pipeline::overture::width::{WIDEST_LINE, carto_u};
 
 // Buildings and roads are not clipped: a bbox clip breaks ring closure.
 // Water and coast are clipped.

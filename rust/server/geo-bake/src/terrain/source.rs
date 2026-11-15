@@ -6,8 +6,8 @@
 use postgres::Client;
 
 use crate::separation::WayRange;
-use crate::terrain::bake::bake_surface;
 use crate::terrain::bake::Surface;
+use crate::terrain::bake::bake_surface;
 use crate::terrain::pipeline::overture::policy::{INFRASTRUCTURE, LAND};
 use crate::terrain::repository::TerrainRepository;
 

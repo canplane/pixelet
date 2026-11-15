@@ -11,6 +11,7 @@
 //! The lattice is the grid's own, so neither the beam rays nor the samples follow the screen's
 //! pixels.
 
+use crate::WORKGROUP_CAP;
 use crate::cast;
 use crate::param::beam;
 use crate::param::beam::NEAR;
@@ -18,7 +19,6 @@ use crate::param::beam::SAMPLE;
 use crate::raster::FACES_LANE_CNT;
 use crate::ray;
 use crate::world;
-use crate::WORKGROUP_CAP;
 use pxl_spec::space::camera::grid::{CELL, CELL_INVERSE};
 
 /// The camera grid as a frame lays it over the screen, worked out once from the screen's

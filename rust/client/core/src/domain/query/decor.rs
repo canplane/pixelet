@@ -9,22 +9,22 @@
 //! arrive (domain/scene/decor/asset.rs).
 
 use pxl_content::generation::{CLAIM_EXTENT, TALLEST};
-use pxl_content::scatter::{cnt, ROOTS};
-use pxl_engine::answer::{In, Kind, BOX_WHOLE, PLACED_ASSET};
+use pxl_content::scatter::{ROOTS, cnt};
+use pxl_engine::answer::{BOX_WHOLE, In, Kind, PLACED_ASSET};
 use pxl_engine::ground::Extent;
 use pxl_engine::object;
 use pxl_global::Global;
 use pxl_spec::asset::cube::Sentinel;
-use pxl_spec::asset::decor::{Decor, DECORS};
+use pxl_spec::asset::decor::{DECORS, Decor};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::world::idx_of;
-use pxl_spec::space::coord::zoom::{units, Zoom, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{UNIT_ZOOM, Zoom, units};
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 
 use super::node::At;
-use super::scatter::{generated_at, DecorWorld};
+use super::scatter::{DecorWorld, generated_at};
 use super::world::World;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::asset::Asset;

@@ -2,7 +2,7 @@
 
 //! What a stage last read, so a frame that reads the same input keeps what the stage made.
 
-use crate::gpu::api::{bytes, room, write_buffer_sz, Gpu};
+use crate::gpu::api::{Gpu, bytes, room, write_buffer_sz};
 
 /// A stage's whole input as it last read it, byte for byte. What a stage makes is a function
 /// of its input alone, so a frame that reads the same input keeps what the stage made: the

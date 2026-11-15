@@ -7,7 +7,7 @@
 //! the same numbers for its points: what the fold takes each segment once by.
 
 use crate::terrain::CELL_U;
-use pxl_spec::bake::separation::{self, Builder, Separation, POINT_SCALE};
+use pxl_spec::bake::separation::{self, Builder, POINT_SCALE, Separation};
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, u_from_merc};
 use pxl_spec::space::coord::zoom::{LEAF_ZOOM, MIN_ZOOM};
 use pxl_spec::space::layer::lattice::TILE_CELLS;

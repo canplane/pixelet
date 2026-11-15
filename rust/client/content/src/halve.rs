@@ -35,11 +35,7 @@ pub fn quarter(n: u32, cap: u32, w: [u32; 2], q: u32) -> u32 {
     let a = halve(n, [2 * cap, 2 * cap], w[0]);
     let n = if q & 1 == 0 { a } else { n - a };
     let b = halve(n, [cap, cap], w[1]);
-    if q & 2 == 0 {
-        b
-    } else {
-        n - b
-    }
+    if q & 2 == 0 { b } else { n - b }
 }
 
 #[cfg(test)]

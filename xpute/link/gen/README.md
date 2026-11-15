@@ -26,14 +26,15 @@ import, takes `_`, as wit-bindgen's `Guest_` does.
 A program declares one package, its world being its guest's, and asks for its
 bindings on one side at a time. Each side's bindings are read over xpute's
 own packages, which the program's WIT may take types of and its world imports
-or exports: xpute:link's, then `wit/`'s, then the GPU's. The generator
+or exports: xpute:link's, then `wit/`'s. The generator
 carries those itself, their WIT embedded as it is built (`build.rs`, through
 the links under `xpute/` here), and reads them in that order, with where each
 side's bindings of them lie and the names a program depends on them by
 (`TARGETS`, `PACKAGES`), so a program names only its own WIT and where its
 own bindings go. The guest takes Rust and C++, and a host Rust and TypeScript. A host's
-bindings, which serve the world's imports, carry `IMPORTS` and `LATER`; the
-guest's carry neither.
+bindings, which serve the world's imports, carry `IMPORTS` and `CALLS`; the
+guest's carry neither. The Rust is written for a crate of edition 2024, its
+prelude and its style.
 
 The command is `xpute-link-gen`, installed once from this crate, from a
 registry or from an xpute checkout, and it needs neither after. Its paths
@@ -51,16 +52,25 @@ xpute-link-gen guest wit --rs core/src/abi.rs
 # its amalgamation's one header, xpute.hpp.
 xpute-link-gen guest wit --cpp cpp/app/abi
 
-# A page's host: a module per interface, imports.ts and later.ts.
+# A page's host: a module per interface, imports.ts and calls.ts.
 xpute-link-gen host wit --ts ui/src/abi
 
-# A device's host: the Rust it serves on xpute-native-runtime's link. The UI
+# A device's host: the Rust it serves on xpute-runtime-native's link. The UI
 # on the device takes the page's TypeScript.
-xpute-link-gen host wit --rs runtime/src/abi.rs
+xpute-link-gen host wit --rs host/src/abi.rs
+
+# A package over a plugin's: the plugin's WIT, and where its bindings of the
+# same side lie, which the program's name.
+xpute-link-gen guest wit --rs core/src/abi.rs --use gpu/wit --rs gpu/guest/src/abi.rs
 ```
 
 A side's Rust and TypeScript, or its Rust and C++, may go in one run. With
 `--check` it writes nothing and fails where a file is not what the WIT writes.
-The command calls one function, `wit_outputs`, which a program's own tool
-may call instead to check the bindings with its other generated files, as
-xpute's `cargo spec` calls it for each of xpute's packages.
+A plugin's package is written as a program's is, and each `--use` after
+the program's paths names one the program's package takes, read after
+xpute's, with the paths of its bindings of the same side: each named by the
+manifest, Cargo.toml or package.json, above where its bindings lie. The
+command calls one function, `wit_outputs`, which a program's own tool may
+call instead to check the bindings with its other generated files, as
+xpute's `cargo spec` calls it for each of xpute's packages, the plugins'
+packages its last argument.

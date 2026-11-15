@@ -149,7 +149,10 @@ fn run() -> Result<(), String> {
     );
     let rs = format_text(&root().join(OUT).to_string_lossy(), rs)?;
     std::fs::write(root().join(OUT), rs).map_err(|e| format!("{OUT}: {e}"))?;
-    println!("[geoid] {} points every {STEP_DEG}°, bilinear off the 5' grid by at most {worst:.2} m, {rms:.2} m RMS", m.len());
+    println!(
+        "[geoid] {} points every {STEP_DEG}°, bilinear off the 5' grid by at most {worst:.2} m, {rms:.2} m RMS",
+        m.len()
+    );
     Ok(())
 }
 

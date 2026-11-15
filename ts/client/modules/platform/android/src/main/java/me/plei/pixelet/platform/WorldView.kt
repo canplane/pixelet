@@ -1,4 +1,4 @@
-// @pxl/app/modules/platform/android/src/main/java/me/plei/pixelet/platform/WorldView.kt
+// @pxl/client/modules/platform/android/src/main/java/me/plei/pixelet/platform/WorldView.kt
 
 package me.plei.pixelet.platform
 
@@ -6,7 +6,7 @@ import android.content.Context
 import android.view.MotionEvent
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
-import xpute.SurfaceView
+import me.plei.pixelet.gpu.SurfaceView
 
 /** The world's surface, which hands its touches to the UI as pointer events
  * (`onPointer`), as a page's canvas gives its pointer events. */

@@ -7,15 +7,15 @@
 //! domain/scene/environment/cloud.rs).
 
 use crate::frame::shader::record::{PIPELINE_CLOUD, PIPELINE_CLOUD_FIELD};
-use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use pxl_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use crate::frame::shader::word::clouds::{BASE, CNT, DRAW_DIST, DRIFT, FRAC, SHOWN};
-use crate::frame::shader::word::{CLOUDS_FLOATS, CLOUD_TILE_TEXELS, CLOUD_TILE_UNITS};
+use crate::frame::shader::word::{CLOUD_TILE_TEXELS, CLOUD_TILE_UNITS, CLOUDS_FLOATS};
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
-    word_bytes, Entry, Format, Gpu, Load, TrackedRenderPass,
+    Entry, Format, Gpu, Load, TrackedRenderPass, buf_entry, buffer_usage, bytes, pass_desc,
+    release, sampler_entry, texture_usage, view_entry, word_sz,
 };
-use crate::gpu::mip::{mip_cnt, MipPass};
+use crate::gpu::mip::{MipPass, mip_cnt};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::pass::atmosphere::AIR_ENTRY_CNT;
 use pxl_content::cloud::LATTICE_CNT;
@@ -76,7 +76,7 @@ impl CloudPass {
             1,
         );
         let uniform = g.buf(
-            word_bytes(CLOUDS_FLOATS),
+            word_sz(CLOUDS_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let mut e = vec![

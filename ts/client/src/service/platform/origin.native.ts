@@ -13,9 +13,12 @@ const ZSTD = "zstd";
 
 /** Rejects with a TypeError on a transport failure, as the page's fetch does,
  * where Expo's FetchError stands for both a failure and a stop. A body sent
- * zstd is decoded natively, off this thread (PlatformModule `unpack`), as a
- * browser decodes its own, so no reader ever sees an encoding. A failed decode
- * is a transport failure. */
+ * zstd is decoded off this thread, as a browser decodes its own, so no reader
+ * ever sees an encoding: on Android Expo's fetch decodes it in its transport
+ * (its OkHttp interceptor decodes zstd even where the caller set
+ * `accept-encoding`), so the body arrives decoded and passes through; on iOS
+ * URLSession decodes no zstd, so the body arrives encoded and is decoded here,
+ * natively (PlatformModule `unpack`). A failed decode is a transport failure. */
 export async function get(
   url: string,
   signal?: AbortSignal,

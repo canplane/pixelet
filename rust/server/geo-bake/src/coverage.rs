@@ -9,9 +9,9 @@ use std::sync::LazyLock;
 
 use postgres::types::ToSql;
 use postgres::{Client, NoTls};
-use pxl_geo_spec::table::CATALOG;
 use pxl_geo_spec::BAKE_READ_DIST;
-use pxl_spec::space::coord::zoom::{cnt, units, Zoom, LEAF_ZOOM, SHARD_ZOOM};
+use pxl_geo_spec::table::CATALOG;
+use pxl_spec::space::coord::zoom::{LEAF_ZOOM, SHARD_ZOOM, Zoom, cnt, units};
 use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of, region};
 use pxl_spec::space::layer::area;
@@ -240,7 +240,9 @@ impl Overture {
             let missing = want.iter().filter(|n| !have.contains(n.as_str())).count();
             let extra = have.iter().filter(|n| !shards.contains(**n)).count();
             if missing + extra > 0 {
-                return Err(format!("{table} lacks {missing} of the shards needed and holds {extra} past the coverage's: {INGEST}"));
+                return Err(format!(
+                    "{table} lacks {missing} of the shards needed and holds {extra} past the coverage's: {INGEST}"
+                ));
             }
         }
         Ok((Overture { url }, client))

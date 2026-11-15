@@ -18,7 +18,7 @@
 /// `min_heap_sz`: the heap the core counts on past the fixed ranges, 256 MiB, which the
 /// boot checks the memory leaves (link/layout.rs `install`). A whole file read and a fetched body are capped by it,
 /// and the caps of the heap's bounded flows, added up in the buddy's blocks, are held under
-/// it at compile time (link/layout.rs `HEAP_FLOWS_BYTES`).
+/// it at compile time (link/layout.rs `HEAP_FLOWS_SZ`).
 pub mod mem {
     pub const SZ: u32 = 536870912;
     pub const FIXED_SZ: u32 = 154849280;

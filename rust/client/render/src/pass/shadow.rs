@@ -16,15 +16,15 @@
 //! are on (`Shadow::sync`).
 
 use crate::frame::shader::sequence;
+use pxl_engine::WORKGROUP_CAP;
 use pxl_engine::cast::REACH;
 use pxl_engine::eye;
-use pxl_engine::light::{self, Light, StartGrid, ANCHOR};
-use pxl_engine::WORKGROUP_CAP;
+use pxl_engine::light::{self, ANCHOR, Light, StartGrid};
+use pxl_gpu_link::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMode};
 use pxl_spec::space::coord::mat4::{self, Mat4};
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
-use xpute_gpu_link::enums::{AddressMode, CompareFunction, FilterMode, MipmapFilterMode};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -32,9 +32,9 @@ use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_LIGHT_MAP, PIP
 use crate::frame::shader::word::frame::{DRIFT_Q, EYE, VIEW_PROJ};
 use crate::frame::shader::word::{FRAME_FLOATS, SHADOW_SIZE};
 use crate::gpu::api::{
+    Entry, Format, Gpu, Group, Load, MASKED_DEPTH, RenderContext, Stencil, TrackedRenderPass,
     buf_entry, buffer_usage, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry,
-    word_bytes, Entry, Format, Gpu, Group, Load, RenderContext, Stencil, TrackedRenderPass,
-    MASKED_DEPTH,
+    word_sz,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::put::put_mat;
@@ -183,12 +183,9 @@ impl Shadow {
         let depth = Format::Depth32float;
         let lay = pipelines.build_masked(g, PIPELINE_LIGHT_MAP, depth, Stencil::Unused);
         let mask = pipelines.build_masked(g, PIPELINE_LIGHT_MASK, depth, Stencil::Mask);
-        let corner = g.buf(
-            word_bytes(8),
-            buffer_usage::UNIFORM | buffer_usage::COPY_DST,
-        );
+        let corner = g.buf(word_sz(8), buffer_usage::UNIFORM | buffer_usage::COPY_DST);
         let light_frame = g.buf(
-            word_bytes(FRAME_FLOATS),
+            word_sz(FRAME_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let light_group = g.bind_group(

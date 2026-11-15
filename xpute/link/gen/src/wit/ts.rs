@@ -11,9 +11,9 @@ use wit_parser::{Function, Type, TypeDefKind, TypeId, TypeOwner};
 use xpute_gen::spec::{of_ident, screaming, snake, ts_enum, ts_ident, ts_number};
 
 use super::{
-    cases, discriminant, escaped, is_async, kind, members, method_const, method_name,
-    object_method, params, plus, rec_layout, serving, ts_given, type_name, variant_layout, Gen,
-    Kind, Obj, Role,
+    Gen, Kind, Obj, Role, cases, discriminant, escaped, is_async, kind, members, method_const,
+    method_name, object_method, params, plus, rec_layout, serving, ts_given, type_name,
+    variant_layout,
 };
 
 /// The TypeScript modules the bindings take items from, beside the link's.
@@ -107,7 +107,10 @@ impl Gen<'_> {
                 self.depth.set(d + 1);
                 let inner = self.ts_store(w, &format!("b{d} + i{d} * {sz}"), &format!("x{d}"), el);
                 self.depth.set(d);
-                format!("{{ const b{d} = {w}.list({at}, {e}.length, {sz}, {align}); if (b{d} !== null) {e}.forEach((x{d}, i{d}) => {{ {} }}); }}", inner?)
+                format!(
+                    "{{ const b{d} = {w}.list({at}, {e}.length, {sz}, {align}); if (b{d} !== null) {e}.forEach((x{d}, i{d}) => {{ {} }}); }}",
+                    inner?
+                )
             }
             Kind::Record(t) | Kind::Variant(t) => {
                 format!("{}({w}, {at}, {e});", self.ts_path(*t, "store_"))
@@ -236,13 +239,18 @@ impl Gen<'_> {
         let pick = if o.methods.iter().any(|f| is_async(f)) {
             format!(
                 "l: Pick<{}, \"task_return\" | \"on_cancel\">, ",
-                self.ts_use(link, "Side", true)
+                self.ts_use(link, "Serving", true)
             )
         } else {
             String::new()
         };
         let refusal_of = self.ts_use(link, "refusal_of", false);
-        let _ = writeln!(out, "}}\n\n/** The object over `implementation`. */\n{}function {fname}({pick}implementation: {t}): {} {{\n  return {{\n    call(m, tag, args) {{\n      try {{\n        switch (m) {{", if o.resource { "export " } else { "" }, self.ts_use(link, "LinkObject", true));
+        let _ = writeln!(
+            out,
+            "}}\n\n/** The object over `implementation`. */\n{}function {fname}({pick}implementation: {t}): {} {{\n  return {{\n    call(m, tag, args) {{\n      try {{\n        switch (m) {{",
+            if o.resource { "export " } else { "" },
+            self.ts_use(link, "LinkObject", true)
+        );
         for f in &o.methods {
             let ps = self.ts_params(f)?;
             let (offs, _) = self.tuple_layout(&ps.iter().map(|(_, k)| k).collect::<Vec<_>>())?;
@@ -272,7 +280,12 @@ impl Gen<'_> {
             let c = method_const(o, f, ts_given);
             let _ = writeln!(out, "          case {c}: {{");
             if takes_args {
-                let _ = writeln!(out, "            if (args === null) return {};\n            const r_ = new {}(args);", self.ts_use(TS_ERRNO, "ERRNO_EBADMSG", false), self.ts_use(self.cabi_ts, "Lift", false));
+                let _ = writeln!(
+                    out,
+                    "            if (args === null) return {};\n            const r_ = new {}(args);",
+                    self.ts_use(TS_ERRNO, "ERRNO_EBADMSG", false),
+                    self.ts_use(self.cabi_ts, "Lift", false)
+                );
             }
             if let Some(k @ Kind::Result(ok, err)) = &rk {
                 let ce = self.ts_use(link, "ComponentError", false);
@@ -280,25 +293,39 @@ impl Gen<'_> {
                 let (tag_ok, tag_err) = self.ts_tagged(ok, err, "x", "e");
                 let bind = if ok.is_some() { "(x)" } else { "()" };
                 if is_async(f) {
-                    let _ = writeln!(out, "            const stop = new AbortController();\n            {call}.then(\n              {bind} => {{\n                const v = {tag_ok} as {ty};\n                l.task_return(tag, 0, {data});\n              }},\n              (e: unknown) => {{\n                if (!(e instanceof {ce})) return l.task_return(tag, {refusal_of}(e));\n                const v = {tag_err} as {ty};\n                l.task_return(tag, 0, {data});\n              }},\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return {};\n          }}", self.ts_use(TS_ERRNO, "ERRNO_EINPROGRESS", false));
+                    let _ = writeln!(
+                        out,
+                        "            const stop = new AbortController();\n            {call}.then(\n              {bind} => {{\n                const v = {tag_ok} as {ty};\n                l.task_return(tag, 0, {data});\n              }},\n              (e: unknown) => {{\n                if (!(e instanceof {ce})) return l.task_return(tag, {refusal_of}(e));\n                const v = {tag_err} as {ty};\n                l.task_return(tag, 0, {data});\n              }},\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return {};\n          }}",
+                        self.ts_use(TS_ERRNO, "ERRNO_EINPROGRESS", false)
+                    );
                 } else {
                     let set = if ok.is_some() {
                         format!("const x = {call};\n              v = {tag_ok};")
                     } else {
                         format!("{call};\n              v = {tag_ok};")
                     };
-                    let _ = writeln!(out, "            let v: {ty};\n            try {{\n              {set}\n            }} catch (e) {{\n              if (!(e instanceof {ce})) throw e;\n              v = {tag_err};\n            }}\n            return {{ result: 0, data: {data} }};\n          }}");
+                    let _ = writeln!(
+                        out,
+                        "            let v: {ty};\n            try {{\n              {set}\n            }} catch (e) {{\n              if (!(e instanceof {ce})) throw e;\n              v = {tag_err};\n            }}\n            return {{ result: 0, data: {data} }};\n          }}"
+                    );
                 }
             } else if is_async(f) {
                 let bind = if rk.is_none() { "()" } else { "(v)" };
-                let _ = writeln!(out, "            const stop = new AbortController();\n            {call}.then(\n              {bind} => l.task_return(tag, 0, {data}),\n              (e: unknown) => l.task_return(tag, {refusal_of}(e)),\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return {};\n          }}", self.ts_use(TS_ERRNO, "ERRNO_EINPROGRESS", false));
+                let _ = writeln!(
+                    out,
+                    "            const stop = new AbortController();\n            {call}.then(\n              {bind} => l.task_return(tag, 0, {data}),\n              (e: unknown) => l.task_return(tag, {refusal_of}(e)),\n            );\n            l.on_cancel(tag, () => stop.abort());\n            return {};\n          }}",
+                    self.ts_use(TS_ERRNO, "ERRNO_EINPROGRESS", false)
+                );
             } else if rk.is_none() {
                 let _ = writeln!(
                     out,
                     "            {call};\n            return 0;\n          }}"
                 );
             } else {
-                let _ = writeln!(out, "            const v = {call};\n            return {{ result: 0, data: {data} }};\n          }}");
+                let _ = writeln!(
+                    out,
+                    "            const v = {call};\n            return {{ result: 0, data: {data} }};\n          }}"
+                );
             }
         }
         let drop = if o.resource {
@@ -306,9 +333,13 @@ impl Gen<'_> {
         } else {
             "drop() {}"
         };
-        let _ = writeln!(out, "          default:\n            return {};\n        }}\n      }} catch (e) {{\n        return {refusal_of}(e);\n      }}\n    }},\n    {drop},\n  }};\n}}\n", self.ts_use(TS_ERRNO, "ERRNO_ENOSYS", false));
+        let _ = writeln!(
+            out,
+            "          default:\n            return {};\n        }}\n      }} catch (e) {{\n        return {refusal_of}(e);\n      }}\n    }},\n    {drop},\n  }};\n}}\n",
+            self.ts_use(TS_ERRNO, "ERRNO_ENOSYS", false)
+        );
         if !o.resource {
-            let ln = self.ts_use(link, "Side", true);
+            let ln = self.ts_use(link, "Serving", true);
             let pick = if pick.is_empty() {
                 format!("l: Pick<{ln}, \"mount_named\">")
             } else {
@@ -319,7 +350,10 @@ impl Gen<'_> {
             } else {
                 ""
             };
-            let _ = writeln!(out, "/** Serves `implementation` under the interface's handle. */\nexport function mount({pick}, implementation: {t}): void {{\n  l.mount_named(HANDLE, object({pass}implementation));\n}}\n");
+            let _ = writeln!(
+                out,
+                "/** Serves `implementation` under the interface's handle. */\nexport function mount({pick}, implementation: {t}): void {{\n  l.mount_named(HANDLE, object({pass}implementation));\n}}\n"
+            );
         }
         Ok(())
     }
@@ -368,7 +402,13 @@ impl Gen<'_> {
                 Some(k) => lift(k)?,
             };
             let name = ts_name(&object_method(o, f));
-            let _ = writeln!(out, "export async function {name}({}): Promise<{ret}> {{\n  const a_ = await {to}, {}, {});\n  if (a_.result !== 0) throw new {err}(a_.result);{take}\n}}\n", sig.join(", "), method_const(o, f, ts_given), self.ts_args(&ps)?);
+            let _ = writeln!(
+                out,
+                "export async function {name}({}): Promise<{ret}> {{\n  const a_ = await {to}, {}, {});\n  if (a_.result !== 0) throw new {err}(a_.result);{take}\n}}\n",
+                sig.join(", "),
+                method_const(o, f, ts_given),
+                self.ts_args(&ps)?
+            );
         }
         Ok(())
     }
@@ -385,7 +425,13 @@ impl Gen<'_> {
         let mut out = String::new();
         let mut enums = String::new();
         if !objs.is_empty() {
-            let _ = writeln!(out, "/** The interface's handle, named by `{}` (frame.json5 `NAMED`). */\nexport const HANDLE: {} = {:#x};\n", self.at(), self.ts_use(link, "Handle", true), self.handle());
+            let _ = writeln!(
+                out,
+                "/** The interface's handle, named by `{}` (frame.json5 `NAMED`). */\nexport const HANDLE: {} = {:#x};\n",
+                self.at(),
+                self.ts_use(link, "Handle", true),
+                self.handle()
+            );
         }
         for o in objs {
             for (k, f) in o.methods.iter().enumerate() {
@@ -524,7 +570,13 @@ impl Gen<'_> {
                             self.ts_store("w", &plus("at", off), &format!("v.{}", ts_name(f)), k)
                         })
                         .collect::<Result<Vec<_>, String>>()?;
-                    let _ = writeln!(out, "}}\n\nexport const {up}_SZ = {sz};\nexport const {up}_ALIGN = {align};\n\nexport function store_{n}(w: {}, at: number, v: {n}): void {{\n  {}\n}}\n\nexport function load_{n}(r: {}, at: number): {n} {{\n  return {{", self.ts_use(self.cabi_ts, "Lower", true), writes.join("\n  "), self.ts_use(self.cabi_ts, "Lift", true));
+                    let _ = writeln!(
+                        out,
+                        "}}\n\nexport const {up}_SZ = {sz};\nexport const {up}_ALIGN = {align};\n\nexport function store_{n}(w: {}, at: number, v: {n}): void {{\n  {}\n}}\n\nexport function load_{n}(r: {}, at: number): {n} {{\n  return {{",
+                        self.ts_use(self.cabi_ts, "Lower", true),
+                        writes.join("\n  "),
+                        self.ts_use(self.cabi_ts, "Lift", true)
+                    );
                     for ((f, k), &off) in fields.iter().zip(&offs) {
                         let _ = writeln!(
                             out,
@@ -546,15 +598,28 @@ impl Gen<'_> {
                             None => format!("{{ tag: \"{c}\" }}"),
                         })
                         .collect();
-                    let _ = writeln!(out, "export type {n} = {};\n\nexport const {up}_SZ = {sz};\nexport const {up}_ALIGN = {align};\n\nexport function store_{n}(w: {}, at: number, v: {n}): void {{\n  switch (v.tag) {{", alts.join(" | "), self.ts_use(self.cabi_ts, "Lower", true));
+                    let _ = writeln!(
+                        out,
+                        "export type {n} = {};\n\nexport const {up}_SZ = {sz};\nexport const {up}_ALIGN = {align};\n\nexport function store_{n}(w: {}, at: number, v: {n}): void {{\n  switch (v.tag) {{",
+                        alts.join(" | "),
+                        self.ts_use(self.cabi_ts, "Lower", true)
+                    );
                     for (k, (c, kd)) in cases.iter().enumerate() {
                         let payload = match kd {
                             Some(kd) => self.ts_store("w", &plus("at", off), "v.val", kd)?,
                             None => String::new(),
                         };
-                        let _ = writeln!(out, "    case \"{c}\":\n      w.{d}(at, {k});\n      {payload}\n      return;");
+                        let _ = writeln!(
+                            out,
+                            "    case \"{c}\":\n      w.{d}(at, {k});\n      {payload}\n      return;"
+                        );
                     }
-                    let _ = writeln!(out, "  }}\n}}\n\nexport function load_{n}(r: {}, at: number): {n} {{\n  switch (r.case(at, {})) {{", self.ts_use(self.cabi_ts, "Lift", true), cases.len());
+                    let _ = writeln!(
+                        out,
+                        "  }}\n}}\n\nexport function load_{n}(r: {}, at: number): {n} {{\n  switch (r.case(at, {})) {{",
+                        self.ts_use(self.cabi_ts, "Lift", true),
+                        cases.len()
+                    );
                     for (k, (c, kd)) in cases.iter().enumerate() {
                         match kd {
                             Some(kd) => {

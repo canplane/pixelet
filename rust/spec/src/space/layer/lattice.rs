@@ -6,16 +6,16 @@
 //! tiles by them alike. Placing a lattice in the world, such as finding a position's cell or a
 //! tile's neighbors, and the cells so placed (`Cell`), are `Grid`'s.
 
-use crate::space::camera::grid::{cell_zoom_at, split_dist, CLIP_MARGIN};
+use crate::space::camera::grid::{CLIP_MARGIN, cell_zoom_at, split_dist};
 use crate::space::coord::q3;
 use crate::space::coord::q3::{FRAC_W, Q3};
 use crate::space::coord::world;
 use crate::space::coord::world::{base_of, idx_of};
 use crate::space::coord::zoom::{
-    cnt, shamt, units, Zoom, FINEST_ZOOM, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM,
+    FINEST_ZOOM, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, Zoom, cnt, shamt, units,
 };
 use crate::space::hierarchy::tree::{
-    ancestor_of, child_idx, child_of, first_descendant_of, off_in, parent_of, Node,
+    Node, ancestor_of, child_idx, child_of, first_descendant_of, off_in, parent_of,
 };
 use crate::space::layer::quadrant::Quadrant;
 

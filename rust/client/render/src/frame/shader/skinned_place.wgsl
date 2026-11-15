@@ -6,7 +6,7 @@
 // they agree.
 
 // The draw's uniform is read field by field from vec4 words (word.rs `skinned`,
-// skinned_draw.slot.wgsl or skinned_draw.mark.wgsl), never as a struct: a struct here makes
+// skinned_draw.slot.wgsl or skinned_draw.uniform.wgsl), never as a struct: a struct here makes
 // Safari's WebGPU lose its GPU process.
 fn draw_translation() -> vec3f { return from_eye(skinned_q(), skinned_r()); }
 

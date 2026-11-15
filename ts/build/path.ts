@@ -2,11 +2,10 @@
 
 /**
  * The aliases that tsconfig.json's `paths` give the tree's own directories,
- * and the sources of the workspace packages, read for the one tool with no
- * tsconfig resolver of its own: Metro. Vite and vitest read the same paths
- * themselves (`resolve.tsconfigPaths`) and resolve the packages as Node does.
- * This file is plain TypeScript over `node:` modules, so that Node loads it
- * directly (package.json `engines`).
+ * the sources of the workspace packages, and the file each platform takes for
+ * an import, read by the bundlers, Metro and vitest, so that they resolve the
+ * tree as the type-checks do. This file is plain TypeScript over `node:`
+ * modules, so that Node loads it directly (package.json `engines`).
  */
 
 import * as fs from "node:fs";
@@ -78,4 +77,35 @@ export function tree_file(from: string, spec: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** The file that `spec`, imported from the file `from`, names on `platform`:
+ * beside the file it names, `pill.ios.tsx` or else `motion.native.tsx` on a
+ * device, and `motion.web.tsx` on the page, or the file itself when none
+ * exists, as the type-checks' `moduleSuffixes` take it. Every import names
+ * the plain file with its extension, which Metro's own platform lookup does
+ * not handle. An override's import of its own default gets the default, which
+ * the override extends; Metro caches the answer for a relative name by folder,
+ * and for an alias across the whole bundle, so an override must name its
+ * default by `./`, and nothing else in its folder may. It is null where
+ * `tree_file` is, and for a relative name without an extension. */
+export function platform_file(
+  from: string,
+  spec: string,
+  platform: string | null,
+): string | null {
+  const file = spec.startsWith(".")
+    ? path.extname(spec) !== ""
+      ? path.resolve(path.dirname(from), spec)
+      : null
+    : tree_file(from, spec);
+  const ext = file ? path.extname(file) : "";
+  if (!file || !platform || ext === "") return file;
+  const stem = file.slice(0, -ext.length);
+  for (const which of platform === "web" ? ["web"] : [platform, "native"]) {
+    const own = `${stem}.${which}${ext}`;
+    if (own === from) break;
+    if (fs.existsSync(own)) return own;
+  }
+  return file;
 }

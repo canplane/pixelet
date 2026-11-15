@@ -15,12 +15,12 @@ use pxl_engine::clipmap::FIRST_CELL_ZOOM;
 use pxl_engine::seed::node_seed;
 use pxl_spec::brick::BRICK_SHIFT;
 use pxl_spec::share::EIGHTH_CNT;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, UNIT_ZOOM, Zoom};
 use pxl_spec::space::hierarchy::tree::child_idx;
 use xpute_kit::math::rng::SplitMix32;
 
 use crate::halve::{self, weight};
-use pxl_spec::asset::decor::{Row, ROWS};
+use pxl_spec::asset::decor::{ROWS, Row};
 
 /// A cell's candidate: the leaf cell it stands at, at every zoom; its first draw, which is
 /// tested against the decor's chance and orders, lower first, which neighbors give way

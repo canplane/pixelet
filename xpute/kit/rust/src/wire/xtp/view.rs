@@ -9,8 +9,8 @@
 use crate::status::error::XputeError;
 
 use super::spec::{
-    Array, BranchNode, GraftNode, Node, NodeValue, Numeric, ScalarNode, ScalarType, SequenceNode,
-    SequenceType, SequenceVal, NIL_NODE,
+    Array, BranchNode, GraftNode, NIL_NODE, Node, NodeValue, Numeric, ScalarNode, ScalarType,
+    SequenceNode, SequenceType, SequenceVal,
 };
 
 fn scalar<'a>(type_: ScalarType, val: Option<Numeric>) -> Node<'a> {

@@ -16,7 +16,7 @@ use xpute_link::abi::types::Token;
 use crate::spec::manifest::mem;
 use crate::sys::io::body::{self, Body};
 use crate::sys::io::demand::{PhaseList, Stream, TaskPhaseName};
-use crate::sys::io::failure::{exit_of, Exit, Failure};
+use crate::sys::io::failure::{Exit, Failure, exit_of};
 use crate::sys::io::file;
 use crate::sys::io::param::CREDIT_CAP;
 use crate::sys::io::request::{attempt_of, settle};

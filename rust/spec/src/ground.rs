@@ -12,8 +12,8 @@
 //! A cell's elevation from the samples (`ele_at`) is exact, in integers, so the CPU and a GPU
 //! draw it alike whatever they fuse or reorder.
 
-use crate::share::{eighths, FULL};
-use crate::space::coord::zoom::{Zoom, HEIGHT_BITS, LEAF_CELL_ZOOM, LEAF_ZOOM, UNIT_ZOOM};
+use crate::share::{FULL, eighths};
+use crate::space::coord::zoom::{HEIGHT_BITS, LEAF_CELL_ZOOM, LEAF_ZOOM, UNIT_ZOOM, Zoom};
 use crate::space::layer::lattice::TILE_CELLS;
 
 /// The inner elevation samples across one leaf tile. A leaf tile is about twice as many
@@ -219,11 +219,7 @@ pub fn leaf_cells(cell_zoom: Zoom) -> i32 {
 /// (pxl-render world_rule.wgsl `face_ele`).
 pub fn face_ele(cell_zoom: Zoom, top: i32) -> i32 {
     let d = cell_zoom as i32 - LEAF_CELL_ZOOM as i32;
-    if d >= 0 {
-        top >> d
-    } else {
-        top << -d
-    }
+    if d >= 0 { top >> d } else { top << -d }
 }
 
 /// The face cell of a column whose face is `face` leaf cells high, in cells of `cell_zoom`:

@@ -7,14 +7,14 @@
 //! column's volume; a parent's surface is its own bicubic of its own samples. The mean is the
 //! surface drawn at the parent's zoom, not a bound on the surfaces under it.
 
-use crate::space::layer::lattice::{Grid, GROUND, TILE_CELLS};
-use crate::space::layer::quadrant::{neighbor_idx, CHILDREN};
+use crate::space::layer::lattice::{GROUND, Grid, TILE_CELLS};
+use crate::space::layer::quadrant::{CHILDREN, neighbor_idx};
 use xpute_kit::math::scalar::round;
 
 use super::separation::fold_separation;
-use super::tile::terrain::{GroundCells, TerrainTile, ELE_COLUMN};
 use super::tile::Occupancy;
-use crate::ground::{ele_idx, own, ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN};
+use super::tile::terrain::{ELE_COLUMN, GroundCells, TerrainTile};
+use crate::ground::{ELE_PAD, ELE_PADDED_SPAN, TILE_ELE_SPAN, ele_idx, own};
 use crate::space::coord::zoom::Zoom;
 
 /// The four asset ids of each parent cell: the own asset id of each child cell

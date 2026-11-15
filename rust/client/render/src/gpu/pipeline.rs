@@ -12,10 +12,10 @@
 
 use crate::frame::shader::floor::{BIND_GROUPS, VERTEX_BUFFERS};
 use crate::frame::shader::record::{
-    compute, compute_layout, pipeline as rec_of, src, COMPUTE_CNT, HDR, PIPELINE_CNT, SHADER_CNT,
+    COMPUTE_CNT, HDR, PIPELINE_CNT, SHADER_CNT, compute, compute_layout, pipeline as rec_of, src,
 };
 use crate::gpu::api::{
-    room, shader_bytes, signaled, Format, Gpu, Layout, Stencil, MASKED_DEPTH, WORLD_COLOR,
+    Format, Gpu, Layout, MASKED_DEPTH, Stencil, WORLD_COLOR, room, shader_sz, signaled,
 };
 use crate::spec::api::stream;
 
@@ -81,21 +81,20 @@ impl PipelineCache {
     }
 
     /// Makes the next shaders' modules in order of kind: one, then more while their sources
-    /// stay within `stream::MODULE_BYTES`. Each is made only when the stream keeps
+    /// stay within `stream::MODULE_SZ`. Each is made only when the stream keeps
     /// `stream::RESERVE` past it, as an upload waits for room (`room`). Returns whether every
     /// module is made.
     pub fn make_modules(&mut self, g: &Gpu) -> bool {
-        let mut frame_bytes = None;
+        let mut frame_sz = None;
         while self.modules_made < SHADER_CNT {
             let code = src(self.modules_made);
-            let past =
-                frame_bytes.is_some_and(|b: usize| b + code.len() > stream::MODULE_BYTES as usize);
-            if past || !room(shader_bytes(code)) {
+            let past = frame_sz.is_some_and(|b: usize| b + code.len() > stream::MODULE_SZ as usize);
+            if past || !room(shader_sz(code)) {
                 break;
             }
             self.modules[self.modules_made as usize] = g.shader(code);
             self.modules_made += 1;
-            frame_bytes = Some(frame_bytes.unwrap_or(0) + code.len());
+            frame_sz = Some(frame_sz.unwrap_or(0) + code.len());
         }
         self.modules_made == SHADER_CNT
     }
@@ -248,9 +247,9 @@ impl PipelineCache {
     fn make_layouts(&mut self, g: &Gpu, b: &mut Pipeline, words: &'static [u32]) -> usize {
         let group_cnt = words[0] as usize;
         let mut at = 1;
-        for group in 0..group_cnt {
+        for layout in &mut b.layouts[..group_cnt] {
             let n = words[at] as usize;
-            b.layouts[group] = self.layout(g, &words[at + 1..at + 1 + 3 * n]);
+            *layout = self.layout(g, &words[at + 1..at + 1 + 3 * n]);
             at += 1 + 3 * n;
         }
         group_cnt

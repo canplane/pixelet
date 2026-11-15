@@ -75,7 +75,7 @@ impl<T: Copy + Unpin + 'static> Lend for Vec<T> {
 pub type Tag = u32;
 pub type Method = u32;
 
-pub use crate::frame::spec::{layout, CANCEL, DROP, NAMED, OPEN, ROOT, TRAP, TRAP_AT};
+pub use crate::frame::spec::{CANCEL, DROP, NAMED, OPEN, ROOT, TRAP, TRAP_AT, layout};
 
 /// An object a side serves: given a method, the request's tag, for a later
 /// answer (`task_return`), and the args, it answers.
@@ -253,8 +253,8 @@ impl Side {
         }
     }
 
-    /// Stops the link for good, as `link.ts` `Side.trap` does; a host's
-    /// runtime tells its platform, the first time (xpute-native-runtime
+    /// Stops the link for good, as `link.ts` `End.trap` does; a host's
+    /// runtime tells its platform, the first time (xpute-runtime-native
     /// link.rs `trap`). Each request this side sent that is still pending is
     /// answered EPIPE, once, among the answers due (`run_due`), as a frame to
     /// the trapped link is; none is pending after, so a late answer to one,
@@ -560,7 +560,7 @@ impl Side {
 
     /// Lays a frame at `at`: its words, and the packet `pkt`, whose length
     /// it takes; EMSGSIZE, laying nothing, where the packet is past the cap
-    /// (link.ts `_lay`).
+    /// (link.ts `Side._lay`).
     fn lay(&self, at: u64, words: Frame, pkt: Packet) -> Result<(), Errno> {
         let cap = self.layout().cap;
         let pkt_len = match pkt {
@@ -587,10 +587,11 @@ impl Side {
 
     /// Lays a frame in this side's box and crosses with it, and answers what
     /// the callee laid there: its result, and its return data. A packet past
-    /// the cap is refused: a packet written elsewhere, as one from across a
-    /// port, is its sender's fault, answered EMSGSIZE; a later answer's is
-    /// answered EMSGSIZE with no data, so its request still hears; args this
-    /// side writes past it are a bug (link.ts `_out`).
+    /// the cap is refused: a packet written elsewhere, as one a runtime
+    /// carried from another thread, is its sender's fault, answered
+    /// EMSGSIZE; a later answer's is answered EMSGSIZE with no data, so its
+    /// request still hears; args this side writes past it are a bug (link.ts
+    /// `Side._out`).
     fn out(
         &self,
         tag: Tag,

@@ -10,9 +10,9 @@
 //! child (`asset`). The CPU and a GPU run it alike, each over its own reading of the world
 //! (`cast::Query`).
 
-use crate::cast::{self, Detail, End, Keep, Line, Node, Query, Ray, Trace, Until, DEPTH};
+use crate::cast::{self, DEPTH, Detail, End, Keep, Line, Node, Query, Ray, Trace, Until};
 use pxl_spec::space::coord::q3::FRAC_W;
-use pxl_spec::space::coord::zoom::{Zoom, FINEST_ZOOM, HEIGHT_BITS};
+use pxl_spec::space::coord::zoom::{FINEST_ZOOM, HEIGHT_BITS, Zoom};
 use pxl_spec::space::hierarchy::tree::ancestor_at;
 
 /// A column's surface: its top as drawn at its cell zoom (`cast::top`), how the ray down it
@@ -152,7 +152,7 @@ pub fn asset<Q: Query>(q: &mut Q, l: &Line<Q::At>, zoom: Zoom, c: [i32; 3]) -> u
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::answer::{fill_word, In, Kind, BOX_WHOLE, EMPTY};
+    use crate::answer::{BOX_WHOLE, EMPTY, In, Kind, fill_word};
     use crate::content::Sample;
     use pxl_spec::share::EIGHTH_CNT;
     use pxl_spec::space::coord::zoom::{SHARD_ZOOM, UNIT_ZOOM};
@@ -163,11 +163,7 @@ mod tests {
     struct Step;
 
     fn ele_at(x: i32) -> i32 {
-        if x < 4 {
-            2
-        } else {
-            0
-        }
+        if x < 4 { 2 } else { 0 }
     }
 
     const STONE: [u32; 2] = [Sample::GROUND, 0];

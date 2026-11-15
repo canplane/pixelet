@@ -37,7 +37,7 @@ pub(crate) fn parts() -> [(&'static str, String); 11] {
 fn constant() -> String {
     use pxl_content::param::night;
     use pxl_engine::answer::side;
-    use pxl_engine::{eye, face, light, param, WORKGROUP_CAP};
+    use pxl_engine::{WORKGROUP_CAP, eye, face, light, param};
     use pxl_spec::share::EIGHTH_CNT;
     use pxl_spec::space::camera::grid;
     use pxl_spec::space::coord::q3::FRAC_W;
@@ -242,7 +242,7 @@ fn params() -> Vec<(String, Val)> {
 fn walk_word() -> String {
     use pxl_engine::beam::SAMPLE_SIDE;
     use pxl_engine::clipmap::{self, Lookup};
-    use pxl_engine::object::{NodeSlot, DAMAGE_CAP};
+    use pxl_engine::object::{DAMAGE_CAP, NodeSlot};
     use pxl_engine::{
         answer, beam, cast, count, face, light, node_cache, param, raster, ray, record,
     };
@@ -776,8 +776,8 @@ fn decor_word() -> String {
     use pxl_content::param::scatter::ALIGN_NEIGHBOR_RADIUS;
     use pxl_content::scatter;
     use pxl_engine::{answer, cast, world};
-    use pxl_spec::asset::decor::{Orientation, Row, DECORS, ROWS};
-    use pxl_spec::asset::id::{Kind, IDX_BITS};
+    use pxl_spec::asset::decor::{DECORS, Orientation, ROWS, Row};
+    use pxl_spec::asset::id::{IDX_BITS, Kind};
     use pxl_spec::share::EIGHTH_CNT;
     use pxl_spec::space::coord::zoom::UNIT_ZOOM;
     use pxl_spec::value;
@@ -931,7 +931,7 @@ fn ray() -> String {
 /// is drawn at a depth just short of 1, the depth of a lack. Every float written here is
 /// finite, as Tint refuses a literal past f32's range.
 fn raster_box() -> String {
-    use pxl_engine::raster::{corner, EYED, ID_MASK, LACK, NEAR, STALE, STALE_DEPTH};
+    use pxl_engine::raster::{EYED, ID_MASK, LACK, NEAR, STALE, STALE_DEPTH, corner};
     use pxl_spec::space::hierarchy::tree::child_idx;
     let n = word::BOX_VERTEX_CNT;
     let per_word = 32 / 3;
@@ -1044,7 +1044,7 @@ fn debug_look() -> String {
 /// a struct, as one crashed the GPU process of Safari's WebGPU. Each field is checked to lie
 /// within its vec4s and apart from the others.
 pub(crate) fn accessors(text: &str) -> String {
-    use word::{floats, Kind, UNIFORMS};
+    use word::{Kind, UNIFORMS, floats};
     let mut out = String::new();
     for (uniform, fields) in UNIFORMS {
         let words = format!("{uniform}_words");

@@ -15,7 +15,7 @@
 //! Where the ray met nothing, every word but that view's third is zero; a hit's value is never
 //! void.
 
-use pxl_spec::space::coord::zoom::{Zoom, FINEST_ZOOM};
+use pxl_spec::space::coord::zoom::{FINEST_ZOOM, Zoom};
 
 /// A ray's words, and the index of the word that says what lies around its face.
 pub const WORDS: u32 = 4;
@@ -28,11 +28,11 @@ pub const FACE_WORD: u32 = 3;
 /// the box the cell is (`answer::side`).
 pub use crate::answer::VAL_BITS;
 pub const FACE_BITS: u32 = 3;
+pub use crate::ZOOM_BITS;
 use crate::answer;
 use crate::cast::STEPS_CAP;
 use crate::count;
 use crate::world;
-pub use crate::ZOOM_BITS;
 use pxl_spec::share::FILL_BITS;
 
 pub const FACE_SHIFT: u32 = VAL_BITS;

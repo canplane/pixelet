@@ -13,12 +13,12 @@ use crate::sys::heap;
 use pxl_global::Global;
 
 /// A cache line is this many bytes, and arrays are laid out in whole lines.
-const LINE_BYTES: usize = 64;
+const LINE_SZ: usize = 64;
 
 /// The bytes an array of `cnt` items of `size` bytes takes, rounded up to
 /// whole cache lines.
-pub(crate) const fn arr_bytes(cnt: usize, size: usize) -> u32 {
-    ((cnt * size).div_ceil(LINE_BYTES) * LINE_BYTES) as u32
+pub(crate) const fn arr_sz(cnt: usize, size: usize) -> u32 {
+    ((cnt * size).div_ceil(LINE_SZ) * LINE_SZ) as u32
 }
 
 /// A range: where it begins in `.fixed`, and its bytes.

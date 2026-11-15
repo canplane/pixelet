@@ -7,7 +7,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { type LayoutChangeEvent, StyleSheet, Text, View } from "react-native";
+import {
+  type LayoutChangeEvent,
+  StyleSheet,
+  Text,
+  View,
+  type ViewInstance,
+} from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { COLOR, TEXT_STYLE } from "@/ui/shared/component/theme.ts";
@@ -29,7 +35,7 @@ const TIP_RADIUS = (TEXT_STYLE.notice.lineHeight + 2 * TIP_PAD_Y) / 2;
 /** The name is drawn in the sheet's top layer, over its bar: a name drawn
  * inside the scrolling content could not reach over the bar. */
 interface Naming {
-  show: (label: string, item: View) => void;
+  show: (label: string, item: ViewInstance) => void;
   hide: () => void;
 }
 export const NamingContext = createContext<Naming | null>(null);
@@ -75,7 +81,7 @@ function NameTip({
 }
 
 export function NameTipLayer({ children }: { children: ReactNode }) {
-  const sheet = useRef<View>(null);
+  const sheet = useRef<ViewInstance>(null);
   const [sheet_height, set_sheet_height] = useState(0);
   const [named, set_named] = useState<Named | null>(null);
   // The sheet and the item are both measured in the window. On a device,

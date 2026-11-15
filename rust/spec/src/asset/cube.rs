@@ -8,10 +8,10 @@ use std::sync::LazyLock;
 
 #[path = "cube.spec.rs"]
 pub mod spec;
-pub use spec::{Ground, Object, Sentinel, BASE, GROUND, PACK};
+pub use spec::{BASE, GROUND, Ground, Object, PACK, Sentinel};
 
 use crate::asset::color;
-use crate::asset::id::{AssetId, Kind, IDX_BITS};
+use crate::asset::id::{AssetId, IDX_BITS, Kind};
 
 /// Whether a value is matter: everything but void, on which nothing is painted, and air,
 /// which is placed as nothing. A ray sees through what is not matter, and it takes no share

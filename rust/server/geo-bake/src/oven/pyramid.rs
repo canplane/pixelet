@@ -5,12 +5,11 @@
 
 use super::job::{self, Job, Runner};
 use super::{Dataset, Failure};
-use crate::pyramid::{fold_parent, Absent, Base, TileSet};
-use crate::util::{pack, Level};
+use crate::pyramid::{Absent, Base, TileSet, fold_parent};
+use crate::util::{Level, pack};
 use fnv::FnvHashMap;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::quadrant::Quadrant;
-use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;

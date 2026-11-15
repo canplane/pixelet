@@ -7,9 +7,9 @@
 
 use regex::Regex;
 
-use xpute_gen::spec::data::{table_outputs, DataSpec};
+use xpute_gen::spec::data::{DataSpec, table_outputs};
 
-use super::{description, json_str, line_comments, mark, read, Node, Output};
+use super::{Node, Output, description, json_str, line_comments, mark, read};
 use crate::root;
 
 const JSON: &str = "spec/spec/route.json5";

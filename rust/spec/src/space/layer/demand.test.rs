@@ -4,7 +4,7 @@ use super::*;
 use crate::space::camera::grid::*;
 use crate::space::coord::zoom::FINEST_ZOOM;
 use crate::space::coord::zoom::MIN_ZOOM;
-use crate::space::layer::lattice::{demand_dist, draw_dist, GROUND};
+use crate::space::layer::lattice::{GROUND, demand_dist, draw_dist};
 use crate::space::layer::quadrant::*;
 
 /// The ground tile zoom a distance folds from, past the pyramid's ends too, read as the rule

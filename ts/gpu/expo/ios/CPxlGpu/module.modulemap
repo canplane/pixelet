@@ -1,0 +1,4 @@
+module CPxlGpu {
+  header "pxl_gpu.h"
+  export *
+}

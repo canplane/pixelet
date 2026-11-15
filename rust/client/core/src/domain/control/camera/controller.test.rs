@@ -3,7 +3,7 @@
 use super::*;
 use crate::domain::control::camera::fixture::place;
 use crate::domain::control::param;
-use crate::domain::setting::{settings_mut, OrbitObstacleMode};
+use crate::domain::setting::{OrbitObstacleMode, settings_mut};
 use crate::domain::view::frame::coord::to_world;
 
 struct Rng(u64);

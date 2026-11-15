@@ -2,6 +2,7 @@
 //
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
+import type { ErrorCode } from "@xpute/host/abi/fs/types.enum.ts";
 import {
   ERRNO_EBADMSG,
   ERRNO_EINPROGRESS,
@@ -14,10 +15,9 @@ import {
   type Handle,
   type LinkObject,
   type Method,
-  type Side,
+  type Serving,
   refusal_of,
 } from "@xpute/link/link.ts";
-import type { ErrorCode } from "@xpute/web-host/abi/fs/types.enum.ts";
 
 /** The interface's handle, named by `pxl:core/object` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x4edab0;
@@ -31,7 +31,7 @@ export interface Host {
 
 /** The object over `implementation`. */
 function object(
-  l: Pick<Side, "task_return" | "on_cancel">,
+  l: Pick<Serving, "task_return" | "on_cancel">,
   implementation: Host,
 ): LinkObject {
   return {
@@ -90,7 +90,7 @@ function object(
 
 /** Serves `implementation` under the interface's handle. */
 export function mount(
-  l: Pick<Side, "mount_named" | "task_return" | "on_cancel">,
+  l: Pick<Serving, "mount_named" | "task_return" | "on_cancel">,
   implementation: Host,
 ): void {
   l.mount_named(HANDLE, object(l, implementation));

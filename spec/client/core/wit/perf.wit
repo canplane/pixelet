@@ -8,7 +8,7 @@ interface perf {
   // `STAT`'s words over `window-ms`, and `NOW`'s (`perf.json5`).
   stats: func(window-ms: option<f64>) -> list<u8>;
   // The records of table `table`, in `TABLE_NAMES`' order, from its record
-  // `from`, as many as a page holds (`perf.json5` `LIMIT.PAGE_BYTES`).
+  // `from`, as many as a page holds (`perf.json5` `LIMIT.PAGE_SZ`).
   table: func(table: u32, %from: u32) -> list<u8>;
   // The string table the tasks' `at_file` names point into.
   strtab: func() -> list<u8>;

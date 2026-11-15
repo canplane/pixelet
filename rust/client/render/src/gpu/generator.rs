@@ -13,7 +13,7 @@
 
 use crate::frame::shader::access;
 use crate::frame::shader::sequence;
-use pxl_content::generation::{self, drawing, GROUP_CNT};
+use pxl_content::generation::{self, GROUP_CNT, drawing};
 use pxl_engine::{eye, object};
 use pxl_spec::asset::decor::ROWS;
 use pxl_spec::brick;
@@ -21,7 +21,7 @@ use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::zoom::Zoom;
 
 use crate::frame::shader::group::{
-    CULLED_LIGHT_ARGS, CULLED_SCREEN_ARGS, CULL_LIGHT_BINDS, CULL_SCREEN_BINDS, GENERATION_ARGS,
+    CULL_LIGHT_BINDS, CULL_SCREEN_BINDS, CULLED_LIGHT_ARGS, CULLED_SCREEN_ARGS, GENERATION_ARGS,
     GENERATION_ARGS_OF_BINDS, GENERATION_BINDS, GENERATION_LIST, GENERATION_MARK_BINDS,
     GENERATION_THIN_BINDS,
 };
@@ -31,10 +31,10 @@ use crate::frame::shader::record::{
     COMPUTE_GENERATION_CNT, COMPUTE_GENERATION_COMPACT, COMPUTE_GENERATION_MARK,
     COMPUTE_GENERATION_THIN,
 };
-use crate::frame::shader::word::{instance, DRAW_FLOATS};
+use crate::frame::shader::word::{DRAW_FLOATS, instance};
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, bytes, frame_entries, release, word_bytes, Entry,
-    Gpu, Group, Layout, RenderContext,
+    Entry, Gpu, Group, Layout, RenderContext, buf_entry, buf_range_entry, buffer_usage, bytes,
+    frame_entries, release, word_sz,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::read::Read;
@@ -174,7 +174,7 @@ impl Generator {
         let decor_pipeline = pipelines.build_world(g, PIPELINE_DECOR);
         let draw_layouts = [decor_pipeline.layouts[1], decor_pipeline.layouts[3]];
         let uniforms = buf(
-            word_bytes((drawing::UNIFORM_WORDS * drawing::REGION_CNT) as usize),
+            word_sz((drawing::UNIFORM_WORDS * drawing::REGION_CNT) as usize),
             storage | buffer_usage::UNIFORM,
         );
         Generator {
@@ -186,16 +186,16 @@ impl Generator {
             compact: pipelines.build_compute(g, COMPUTE_GENERATION_COMPACT),
             groups: Default::default(),
             list: buf(
-                word_bytes(generation::LIST_WORDS as usize),
+                word_sz(generation::LIST_WORDS as usize),
                 storage | buffer_usage::INDIRECT,
             ),
-            zooms: buf(word_bytes(ROWS.len()), storage),
-            drawing: buf(word_bytes(drawing::WORDS as usize), storage),
+            zooms: buf(word_sz(ROWS.len()), storage),
+            drawing: buf(word_sz(drawing::WORDS as usize), storage),
             rows,
-            meshes: buf(word_bytes(GROUP_CNT as usize), storage),
-            regions: buf(word_bytes(2 * drawing::REGION_CNT as usize), storage),
+            meshes: buf(word_sz(GROUP_CNT as usize), storage),
+            regions: buf(word_sz(2 * drawing::REGION_CNT as usize), storage),
             args: buf(
-                word_bytes((drawing::ARGS_WORDS * drawing::REGION_CNT) as usize),
+                word_sz((drawing::ARGS_WORDS * drawing::REGION_CNT) as usize),
                 storage | buffer_usage::INDIRECT,
             ),
             uniforms,
@@ -204,13 +204,13 @@ impl Generator {
             draw_layouts,
             uniform_group: g.bind_group(
                 draw_layouts[0],
-                &[buf_range_entry(0, uniforms, 0, word_bytes(DRAW_FLOATS))],
+                &[buf_range_entry(0, uniforms, 0, word_sz(DRAW_FLOATS))],
             ),
             instances_group: 0,
             culled: [Mask::Screen, Mask::Light].map(|_| Culled {
                 list: 0,
                 args: buf(
-                    word_bytes((drawing::ARGS_WORDS * drawing::REGION_CNT) as usize),
+                    word_sz((drawing::ARGS_WORDS * drawing::REGION_CNT) as usize),
                     storage | buffer_usage::INDIRECT,
                 ),
                 group: 0,
@@ -255,11 +255,11 @@ impl Generator {
             // are written anew.
             let (recs, instances) = (self.recs, self.instances);
             self.recs = g.buf(
-                word_bytes(generation::rec_at(need) as usize),
+                word_sz(generation::rec_at(need) as usize),
                 buffer_usage::STORAGE | buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             );
             self.instances = g.buf(
-                word_bytes(((drawing::COLUMN_CNT + 1) * need) as usize),
+                word_sz(((drawing::COLUMN_CNT + 1) * need) as usize),
                 buffer_usage::STORAGE,
             );
             if recs != 0 {
@@ -268,7 +268,7 @@ impl Generator {
                     e,
                     (recs, 0),
                     (self.recs, 0),
-                    word_bytes(generation::rec_at(generation::ENTRY_REC_CAP) as usize),
+                    word_sz(generation::rec_at(generation::ENTRY_REC_CAP) as usize),
                 );
                 g.submit(e);
             }
@@ -283,7 +283,7 @@ impl Generator {
                 release(culled.group);
                 release(culled.list);
                 culled.list = g.buf(
-                    word_bytes(((drawing::COLUMN_CNT + 1) * need) as usize),
+                    word_sz(((drawing::COLUMN_CNT + 1) * need) as usize),
                     buffer_usage::STORAGE,
                 );
                 culled.group = g.bind_group(

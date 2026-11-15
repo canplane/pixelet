@@ -1,7 +1,7 @@
 // pxl-spec/space/layer/quadrant.test.rs
 
 use super::*;
-use crate::space::coord::world::{nearest, ROUND};
+use crate::space::coord::world::{ROUND, nearest};
 use crate::space::coord::zoom::{LEAF_ZOOM, MIN_ZOOM};
 
 /// X goes round the world and Y stops at the Mercator square's edge, and a

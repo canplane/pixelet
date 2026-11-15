@@ -1,7 +1,7 @@
 // pxl-render/frame/shader/location.slot.wgsl
 
 // The beacon reads its draw from the draw list's buffer, in place of a uniform
-// of its own (location.wgsl). The buffer is bound once for the pass, and its
+// of its own (location.uniform.wgsl). The buffer is bound once for the pass, and its
 // slots lie `DRAW_VEC4S` vec4s apart, as gpu/draw.rs `DrawList::draw_beacon`
 // lays them out: the position's Q3 steps, the spin, whether it is night, and
 // the position's remainder. A beacon's draw names its slot as its

@@ -15,7 +15,7 @@
 
 use pxl_engine::seed::node_seed;
 use pxl_spec::share::FULL;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, Zoom};
 use pxl_spec::space::hierarchy::tree::child_idx;
 use xpute_kit::math::rng::seed_mix32;
 
@@ -149,11 +149,7 @@ fn spawn(node: (Zoom, [i32; 3]), k: usize) -> Piece {
     let back = |e: i32, r: u32| {
         let m = s - 1 - e;
         let d = (r % (q as u32 / 2 + 1)) as i32;
-        if m < 2 * q {
-            m + d
-        } else {
-            m - d
-        }
+        if m < 2 * q { m + d } else { m - d }
     };
     let x = [
         o[0] + back(ex, g),
@@ -533,11 +529,7 @@ pub fn hollow(node: (Zoom, [i32; 3])) -> u32 {
         - 3 * (LEAF_CELL_ZOOM - zoom) as i32;
     if shift >= 0 {
         let v = n << shift;
-        if v > FULL {
-            FULL
-        } else {
-            v
-        }
+        if v > FULL { FULL } else { v }
     } else {
         n >> -shift
     }

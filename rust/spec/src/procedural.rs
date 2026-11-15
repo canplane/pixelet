@@ -5,10 +5,10 @@
 //! agrees.
 
 use crate::space::coord::adapter::epsg3857::{cells_of_m, per_m};
-use crate::space::coord::zoom::{units, LEAF_CELL_ZOOM};
+use crate::space::coord::zoom::{LEAF_CELL_ZOOM, units};
 use crate::space::layer::lattice::TILE_CELLS;
 use crate::space::layer::quadrant::Quadrant;
-use crate::way::{StationGrid, INTERVAL_M};
+use crate::way::{INTERVAL_M, StationGrid};
 
 /// A tile's cells in the world, so a station is the world's and not a tile's.
 #[derive(Clone, Copy, Debug, PartialEq)]

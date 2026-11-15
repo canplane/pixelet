@@ -12,8 +12,8 @@ mod real_world;
 use pxl_spec::brick;
 use pxl_spec::ground::asset_ids;
 use pxl_spec::share::FULL;
-use pxl_spec::space::coord::world::{wrap_idx, SEA_LEVEL};
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, MIN_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::coord::world::{SEA_LEVEL, wrap_idx};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, MIN_ZOOM, SHARD_ZOOM, Zoom};
 use pxl_spec::space::hierarchy::tree::ancestor_at;
 use pxl_spec::way::{NOTHING, PIER};
 use std::collections::BTreeMap;
@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 use pxl_content::cave;
 use pxl_engine::answer::{self, In, Kind};
 use pxl_engine::clipmap as clip;
-use pxl_engine::clipmap::{Lookup, ACROSS, FIRST_CELL_ZOOM, ORIGIN_AT};
+use pxl_engine::clipmap::{ACROSS, FIRST_CELL_ZOOM, Lookup, ORIGIN_AT};
 use pxl_engine::ground;
 use pxl_engine::object::{self, Cut, Table};
 use pxl_engine::way;
@@ -32,7 +32,7 @@ use pxl_spec::space::layer::area;
 use pxl_spec::value;
 
 use pxl_render::frame::shader::record::WORLD_ASKED;
-use real_world::{level_first, Draw, World, CORNERS, EYE, FINEST, UNLAID};
+use real_world::{CORNERS, Draw, EYE, FINEST, UNLAID, World, level_first};
 
 /// The words of one ask and of the answer told back (world_asked.wgsl `world_asked_cs`).
 const ASKED_WORDS: usize = 19;

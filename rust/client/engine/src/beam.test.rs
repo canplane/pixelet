@@ -2,15 +2,15 @@
 
 use super::*;
 use crate::answer::{
-    box_join, box_word, fill_eighths, fill_word, In, Kind, BOX_NONE, BOX_STEPS, EMPTY,
+    BOX_NONE, BOX_STEPS, EMPTY, In, Kind, box_join, box_word, fill_eighths, fill_word,
 };
-use crate::cast::{Detail, End, Node, Query, Ray, Spacing, Trace, Until, DEPTH};
+use crate::cast::{DEPTH, Detail, End, Node, Query, Ray, Spacing, Trace, Until};
 use crate::content::Sample;
 use pxl_spec::share::EIGHTH_CNT;
 use pxl_spec::space::coord::q3::FRAC_W;
 use pxl_spec::space::coord::world::wrap_idx;
 use pxl_spec::space::coord::zoom::HEIGHT_BITS;
-use pxl_spec::space::coord::zoom::{starts, Zoom, MIN_ZOOM, UNIT_ZOOM};
+use pxl_spec::space::coord::zoom::{MIN_ZOOM, UNIT_ZOOM, Zoom, starts};
 use pxl_spec::space::hierarchy::tree::ancestor_at;
 
 #[test]

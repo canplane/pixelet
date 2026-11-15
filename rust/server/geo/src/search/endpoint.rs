@@ -1,10 +1,10 @@
 // pxl-geo/search/endpoint.rs
 
+use axum::Router;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use axum::Router;
 use deadpool_postgres::Pool;
 use pxl_spec::route;
 use serde::Deserialize;

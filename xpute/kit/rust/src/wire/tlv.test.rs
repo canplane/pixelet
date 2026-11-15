@@ -92,7 +92,7 @@ fn matches_typescript() {
                         "closed".to_string()
                     } else {
                         "unclosed".to_string()
-                    }
+                    };
                 }
                 Err(e) => break format!("errno:{}", e.errnum as i32),
             }

@@ -82,8 +82,8 @@ fn formats_round_trip() {
 /// An Earth tile is as long as its texels say.
 #[test]
 fn earth_pkt_size() {
-    let earth = earth::encode(&vec![0; earth::EARTH_BYTES]).unwrap();
-    assert_eq!(earth.len(), earth::PKT_BYTES);
+    let earth = earth::encode(&vec![0; earth::EARTH_SZ]).unwrap();
+    assert_eq!(earth.len(), earth::PKT_SZ as usize);
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn cells_of_any_other_count_refused() {
         let cells: Vec<GroundId> = vec![0; n];
         shape::encode::<Packet>(
             (&t.ele, &cells[..], t.occupancy.bits(), t.separation.pkt()),
-            MAX_PKT_SZ,
+            PKT_CAP,
         )
         .unwrap()
     };

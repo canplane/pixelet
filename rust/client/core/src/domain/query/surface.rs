@@ -16,13 +16,13 @@ use pxl_engine::clipmap::Lookup;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::ground::GroundId;
 use pxl_spec::space::coord::world::SEA_LEVEL;
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::layer::area::Shard;
 
 use super::change;
 use super::world::World;
-use crate::domain::layer::terrain::clipmap::clip_read;
 use crate::domain::layer::Answer;
+use crate::domain::layer::terrain::clipmap::clip_read;
 use pxl_spec::asset::cube::Sentinel;
 
 /// The ground's top in a cell, in units, and the asset of its face.

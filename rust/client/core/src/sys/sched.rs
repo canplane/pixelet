@@ -19,7 +19,7 @@ pub(crate) mod executor;
 pub(crate) mod param;
 pub(crate) mod tick;
 
-use core::future::{poll_fn, Future};
+use core::future::poll_fn;
 use core::pin::pin;
 use core::task::{Poll, Waker};
 

@@ -12,7 +12,7 @@ pub(crate) mod param;
 
 use pxl_content::cloud::drift;
 use pxl_content::param::night;
-use pxl_render::look::environment::{write_environment, Light, FLOATS};
+use pxl_render::look::environment::{FLOATS, Light, write_environment};
 use pxl_render::renderer::sky_steps;
 use pxl_spec::space::coord::v3;
 

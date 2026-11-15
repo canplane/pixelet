@@ -6,7 +6,7 @@
 //! in the node's own steps, alike on every axis. The descent, the query and the sources all
 //! stand on this module.
 
-use pxl_spec::asset::cube::{is_matter, Sentinel};
+use pxl_spec::asset::cube::{Sentinel, is_matter};
 use pxl_spec::share::{EIGHTH_CNT, FILL_BITS, FULL};
 
 /// What a node is to a descent.
@@ -177,11 +177,7 @@ pub(crate) const fn fill_word(asset: u32, k: u32) -> u32 {
 /// (`FILL_SHIFT`).
 pub const fn fill_eighths(asset: u32) -> u32 {
     let k = asset >> FILL_SHIFT & ((1 << FILL_BITS) - 1);
-    if k == 0 {
-        EIGHTH_CNT
-    } else {
-        k
-    }
+    if k == 0 { EIGHTH_CNT } else { k }
 }
 
 /// The side of the box a cell keeping `k` eighths of its cube is drawn as, as a share of the

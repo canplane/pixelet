@@ -9,8 +9,8 @@
 
 use crate::ground;
 use pxl_spec::asset::cube::Sentinel;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
-use pxl_spec::way::{fill_range, fills, AIR_OF, NOTHING};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, Zoom};
+use pxl_spec::way::{AIR_OF, NOTHING, fill_range, fills};
 
 /// Whether run `v` sorts at or after `best`, by its low end, then its high.
 fn at_or_after(v: [i32; 2], best: [i32; 2]) -> bool {
@@ -45,11 +45,7 @@ fn at(k: &impl SpanTable, c: [i32; 2], n: u32, cell_zoom: Zoom, z: i32) -> u32 {
         }
         j += 1;
     }
-    if asset_id != NOTHING {
-        asset_id
-    } else {
-        air
-    }
+    if asset_id != NOTHING { asset_id } else { air }
 }
 
 /// The offset of the `k`-th of a cell and the six around it, the cell's own first: then the
@@ -270,14 +266,14 @@ mod tests {
             let mut five = [(0, [([0, 0], 0); 4], 0); 5];
             for (k, col) in five.iter_mut().enumerate() {
                 let n = next(5);
-                for j in 0..n as usize {
+                for span in &mut col.1[..n as usize] {
                     let lo = next(140) as i32 - 70;
                     let v = match next(3) {
                         0 => AIR_OF | 3,
                         1 => 7,
                         _ => PIER,
                     };
-                    col.1[j] = ([lo, lo + 1 + next(30) as i32], v);
+                    *span = ([lo, lo + 1 + next(30) as i32], v);
                 }
                 col.2 = n;
                 col.0 = if k == 0 && next(8) == 0 {

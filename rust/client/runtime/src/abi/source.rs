@@ -32,5 +32,5 @@ pub fn declare(
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lower, Method, Packet, Side};
+    pub(super) use xpute_link::{Handle, Lower, Method, Packet, Side, answer};
 }

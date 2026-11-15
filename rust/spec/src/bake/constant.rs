@@ -1,6 +1,6 @@
 // pxl-spec/bake/constant.rs
 
-use crate::space::coord::zoom::{Zoom, EXTENT, FINEST_ZOOM, MIN_ZOOM, UNIT_ZOOM};
+use crate::space::coord::zoom::{EXTENT, FINEST_ZOOM, MIN_ZOOM, UNIT_ZOOM, Zoom};
 use crate::space::layer::lattice::GROUND;
 
 // Elevation is sampled at cell centers (x + 0.5, y + 0.5) by both the SQL

@@ -13,9 +13,9 @@ use std::path::Path;
 
 use pxl_spec::bake::publication::BaseKind;
 use pxl_spec::bake::source::{is_sharded, is_version, key};
-use pxl_spec::space::coord::zoom::{Zoom, MIN_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{MIN_ZOOM, SHARD_ZOOM, Zoom};
 use pxl_spec::space::layer::quadrant::Quadrant;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::pyramid::MANIFEST;
 

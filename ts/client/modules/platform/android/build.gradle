@@ -1,4 +1,4 @@
-// @pxl/app/modules/platform/android/build.gradle
+// @pxl/client/modules/platform/android/build.gradle
 //
 // The device's half of the app's platform on Android, in src/main/java/.
 // This module builds and packs the core (script/core-build.py).
@@ -26,8 +26,8 @@ android {
 
 dependencies {
   implementation 'androidx.core:core-ktx:1.16.0'
-  // The world's surface subclasses xpute's (WorldView.kt).
-  implementation project(':xpute-gpu-native-runtime')
+  // The world's surface subclasses the GPU's (WorldView.kt).
+  implementation project(':pxl-gpu')
 }
 
 // Each variant's library lies in a directory of its own, which that variant

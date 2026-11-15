@@ -2,6 +2,9 @@
 
 use std::io::Read;
 use std::path::Path;
+use std::time::Duration;
+
+use ureq::Agent;
 
 /// How many times a fetch is tried before it fails.
 const TRY_CNT: u32 = 3;
@@ -9,12 +12,18 @@ const TRY_CNT: u32 = 3;
 /// `url`'s bytes, tried `TRY_CNT` times, a longer wait after each failure. An
 /// empty body is a failure.
 pub fn get(url: &str) -> Result<Vec<u8>, String> {
+    // A connect gives up after 30 s, ureq 2's default kept.
+    let agent = Agent::config_builder()
+        .timeout_connect(Some(Duration::from_secs(30)))
+        .build()
+        .new_agent();
     let mut last = String::new();
     for k in 1..=TRY_CNT {
-        match ureq::get(url).call() {
-            Ok(res) => {
+        match agent.get(url).call() {
+            Ok(mut res) => {
                 let mut body = Vec::new();
-                res.into_reader()
+                res.body_mut()
+                    .as_reader()
                     .read_to_end(&mut body)
                     .map_err(|e| format!("{url}: {e}"))?;
                 if !body.is_empty() {
@@ -25,7 +34,7 @@ pub fn get(url: &str) -> Result<Vec<u8>, String> {
             Err(e) => last = format!("{url}: {e}"),
         }
         if k < TRY_CNT {
-            std::thread::sleep(std::time::Duration::from_millis(400 * k as u64));
+            std::thread::sleep(Duration::from_millis(400 * k as u64));
         }
     }
     Err(last)

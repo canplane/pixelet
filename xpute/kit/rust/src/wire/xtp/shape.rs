@@ -12,7 +12,7 @@
 use crate::status::errno::Errno;
 use crate::status::error::XputeError;
 
-use super::{ArrayElem, Cursor, NodeValue, PacketWriter, StrList, TreeReader, HDR_SZ, WORD_SZ};
+use super::{ArrayElem, Cursor, HDR_SZ, NodeValue, PacketWriter, StrList, TreeReader, WORD_SZ};
 
 const WORD: u64 = WORD_SZ as u64;
 

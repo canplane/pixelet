@@ -1,6 +1,8 @@
 // The Worker, checked without the workspace's aliases, as wrangler's bundler
 // resolves it. An alias or a bare specifier the bundler could not resolve
-// fails the check here.
+// fails the check here. The folder is no package of the workspace: the Worker
+// takes no npm dependency, and wrangler is a program on the PATH, as git is,
+// which CI installs pinned (.github/workflows/deploy.yml).
 {
   "compilerOptions": {
     "target": "esnext",

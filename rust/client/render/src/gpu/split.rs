@@ -18,7 +18,7 @@
 
 use crate::frame::shader::floor::BIND_GROUPS as GROUPS;
 use crate::spec::span::GpuSpanName;
-use xpute_gpu_guest::encode::Id;
+use pxl_gpu_guest::encode::Id;
 
 /// An encoder as its recorder names it, and the command buffers it is cut
 /// into: the encoder recorded into now, those ended before it in the order
@@ -194,10 +194,10 @@ impl Split {
                 .drawn_groups
                 .iter()
                 .find_map(|&g| self.writes_at(g, buf).map(|b| (g, b)));
-            if let Some(o) = self.open(pass) {
-                if !o.drawn_args.contains(&buf) {
-                    o.drawn_args.push(buf);
-                }
+            if let Some(o) = self.open(pass)
+                && !o.drawn_args.contains(&buf)
+            {
+                o.drawn_args.push(buf);
             }
             return found;
         }
@@ -302,12 +302,11 @@ impl Split {
 
     /// Records a copy into `to` on `encoder`, which writes `to` when it is an args buffer.
     pub fn copied(&mut self, encoder: Id, to: Id) {
-        if self.is_args(to) {
-            if let Some(c) = self.chain_mut(encoder) {
-                if !c.written.contains(&to) {
-                    c.written.push(to);
-                }
-            }
+        if self.is_args(to)
+            && let Some(c) = self.chain_mut(encoder)
+            && !c.written.contains(&to)
+        {
+            c.written.push(to);
         }
     }
 

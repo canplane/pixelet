@@ -46,7 +46,7 @@ use pxl_spec::space::layer::quadrant::Quadrant;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::terrain::CELL_U;
-use pxl_spec::bake::separation::{footprint as line_footprint, Form};
+use pxl_spec::bake::separation::{Form, footprint as line_footprint};
 use pxl_spec::space::coord::adapter::epsg3857;
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, u_from_merc};
 use pxl_spec::way;
@@ -54,8 +54,8 @@ use xpute_kit::math::scalar::round;
 
 use crate::segment::{End, Part, PartId};
 use crate::separation::elevation::{sample_cells, tile_of};
-use crate::separation::piece::{piece_of, Piece};
-use crate::separation::source::{portals_in, ring, Store};
+use crate::separation::piece::{Piece, piece_of};
+use crate::separation::source::{Store, portals_in, ring};
 use crate::separation::way::{Polyline, Way};
 use crate::separation::{Line, Reader, Solution, WayRange};
 use crate::terrain::pipeline::overture::width::width_u;

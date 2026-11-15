@@ -10,7 +10,7 @@ pub const APPLY: _rt::Method = 0;
 
 pub fn apply<L: _rt::Lend>(
     batch: L,
-) -> impl _rt::Future<Output = (L, Result<Result<(), _rt::ErrorCode>, _rt::Errno>)> {
+) -> impl Future<Output = (L, Result<Result<(), _rt::ErrorCode>, _rt::Errno>)> + use<L> {
     let mut batch = batch;
     let (batch_at_, batch_len_) = _rt::Lend::span(&mut batch);
     let sent = _rt::wait::wait(
@@ -46,10 +46,9 @@ pub fn apply<L: _rt::Lend>(
 }
 
 mod _rt {
-    pub(super) use core::future::Future;
     pub(super) use xpute_guest::abi::fs::types::ErrorCode;
     pub(super) use xpute_guest::wait;
     pub(super) use xpute_kit::status::errno::Errno;
     pub(super) use xpute_link::abi::types::Lent;
-    pub(super) use xpute_link::{answer, Handle, Lend, Lift, Lower, Method};
+    pub(super) use xpute_link::{Handle, Lend, Lift, Lower, Method, answer};
 }

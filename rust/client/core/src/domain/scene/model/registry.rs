@@ -7,7 +7,6 @@
 //! and scales it to its registered height (`Model::scale`). A model poses its
 //! joints at a clip's time and writes their palette for whatever plays it.
 
-use core::future::Future;
 use core::ops::Range;
 
 use pxl_render::asset::{SCENE_IDXS_CAP, SCENE_VERTICES_CAP};
@@ -167,11 +166,7 @@ fn slerp(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
 }
 
 fn width(path: u8) -> usize {
-    if path == R {
-        4
-    } else {
-        3
-    }
+    if path == R { 4 } else { 3 }
 }
 
 fn sample(ch: &Channel, time: f32, out: &mut [f32; 10]) {

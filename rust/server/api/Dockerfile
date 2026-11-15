@@ -3,7 +3,7 @@
 # Build context is the repo root: docker build -f rust/server/api/Dockerfile .
 # Same stages and reasons as rust/server/geo/Dockerfile.
 
-FROM rust:1.98.1-slim-trixie AS build
+FROM rust:1.100.0-slim-trixie AS build
 WORKDIR /src
 ENV RUSTUP_TOOLCHAIN=$RUST_VERSION
 
@@ -15,7 +15,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     cd rust && cargo build --profile server -p pxl-api \
  && cp target/server/pxl-api /usr/local/bin/pxl-api
 
-FROM gcr.io/distroless/cc-debian12
+FROM gcr.io/distroless/cc-debian13
 COPY --from=build /usr/local/bin/pxl-api /usr/local/bin/pxl-api
 
 EXPOSE 3000

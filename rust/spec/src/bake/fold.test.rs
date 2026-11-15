@@ -5,7 +5,7 @@ use super::*;
 use crate::asset::cube::Ground;
 use crate::ground::majority;
 use crate::space::coord::zoom::LEAF_ZOOM;
-use crate::space::layer::quadrant::{neighborhood, Quadrant};
+use crate::space::layer::quadrant::{Quadrant, neighborhood};
 
 const SPAN: usize = TILE_CELLS as usize;
 const PADDED: usize = ELE_PADDED_SPAN as usize;
@@ -45,9 +45,11 @@ fn fold(children: [&GroundCells; 4], zoom: Zoom) -> Vec<u8> {
 #[test]
 fn uniform_tile_fold() {
     let p = plane(|_, _| Ground::Subway as u8);
-    assert!(fold([&p, &p, &p, &p], LEAF_ZOOM - 1)
-        .iter()
-        .all(|&v| v == Ground::Subway as u8));
+    assert!(
+        fold([&p, &p, &p, &p], LEAF_ZOOM - 1)
+            .iter()
+            .all(|&v| v == Ground::Subway as u8)
+    );
 }
 
 #[test]
@@ -69,9 +71,11 @@ fn thin_area_tie() {
             0
         }
     });
-    assert!(fold([&dot, &empty, &empty, &empty], LEAF_ZOOM - 1)
-        .iter()
-        .all(|&v| v == 0));
+    assert!(
+        fold([&dot, &empty, &empty, &empty], LEAF_ZOOM - 1)
+            .iter()
+            .all(|&v| v == 0)
+    );
 }
 
 #[test]

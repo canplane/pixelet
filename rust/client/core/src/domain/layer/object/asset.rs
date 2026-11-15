@@ -7,11 +7,11 @@
 //! `unknown`, and left as it is where it is stored. What a tool does with an
 //! asset is defined beside the tool (`control/edit`).
 
+use pxl_spec::asset::AssetId;
 use pxl_spec::asset::cube::cube_of;
 use pxl_spec::asset::decor::Decor;
-use pxl_spec::asset::id::{kind_of, Kind};
-use pxl_spec::asset::AssetId;
-use pxl_spec::space::coord::zoom::{Zoom, UNIT_ZOOM};
+use pxl_spec::asset::id::{Kind, kind_of};
+use pxl_spec::space::coord::zoom::{UNIT_ZOOM, Zoom};
 
 use crate::domain::layer::object::size::object_zoom_of;
 

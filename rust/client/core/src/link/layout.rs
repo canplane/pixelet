@@ -14,7 +14,7 @@ use crate::domain::scene::decor::asset;
 use crate::domain::scene::environment::cloud;
 use crate::perf::record;
 use crate::spec::manifest;
-use crate::sys::heap::{Span, PAGE_BYTES};
+use crate::sys::heap::{PAGE_SZ, Span};
 use crate::sys::io::body;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param;
@@ -48,7 +48,7 @@ pub(crate) const LIVE_UPLOAD_CAP: usize =
 /// mostly in use whenever the core runs, or when its flow's memory must be
 /// fixed: the body slots, the largest flow (sys/io/body.rs). Anything else
 /// held only at times, or far below its worst most of the time, goes on the
-/// heap (`HEAP_FLOWS_BYTES`).
+/// heap (`HEAP_FLOWS_SZ`).
 #[derive(Clone, Copy)]
 enum Fixed {
     Terrain,
@@ -58,29 +58,29 @@ enum Fixed {
 }
 
 const FIXED: [u32; 4] = [
-    fixed::TERRAIN_BYTES,
-    division::DIVISION_BYTES,
-    param::BODY_SLOT_CNT * body::SLOT_BYTES,
-    upload::uploads_bytes(LIVE_UPLOAD_CAP),
+    fixed::TERRAIN_SZ,
+    division::DIVISION_SZ,
+    param::BODY_SLOT_CNT * body::SLOT_SZ,
+    upload::uploads_sz(LIVE_UPLOAD_CAP),
 ];
 
 /// Where range `f` begins in `.fixed`: each range on a page.
 const fn off(f: Fixed) -> u32 {
     let (mut at, mut k) = (0, 0);
     while k < f as usize {
-        at += FIXED[k].next_multiple_of(PAGE_BYTES);
+        at += FIXED[k].next_multiple_of(PAGE_SZ);
         k += 1;
     }
     at
 }
 
-const FIXED_BYTES: u32 = off(Fixed::Uploads) + FIXED[Fixed::Uploads as usize];
+const FIXED_SZ: u32 = off(Fixed::Uploads) + FIXED[Fixed::Uploads as usize];
 
 // The heap begins past the size manifest.json5 declares, since its first
 // block is asked for before `install`; the declared size is the ranges' on a
 // page, no more.
 const _: () = assert!(
-    FIXED_BYTES.next_multiple_of(PAGE_BYTES) == manifest::mem::FIXED_SZ,
+    FIXED_SZ.next_multiple_of(PAGE_SZ) == manifest::mem::FIXED_SZ,
     "manifest.json5's mem.fixed_sz is not the fixed ranges' size on a page"
 );
 
@@ -118,10 +118,11 @@ const fn longest_unslotted() -> u64 {
     let mut k = 0;
     while k < Stream::ALL.len() {
         let s = Stream::ALL[k];
-        if let Some(max) = s.max_body() {
-            if !s.row().slotted && max as u64 > most {
-                most = max as u64;
-            }
+        if let Some(max) = s.max_body()
+            && !s.row().slotted
+            && max as u64 > most
+        {
+            most = max as u64;
         }
         k += 1;
     }
@@ -143,10 +144,10 @@ const fn longest_unslotted() -> u64 {
 /// Each flow is refused past its cap, and waits or stays absent when the heap
 /// refuses it. A shard's body has no longest (`Stream::max_body`), so no sum
 /// counts it. The rest of the heap is workspace.
-const HEAP_FLOWS_BYTES: u64 =
-    2 * param::CREDIT_CAP as u64 * longest_unslotted() + pool::POOL_BYTES + record::PERF_BYTES;
+const HEAP_FLOWS_SZ: u64 =
+    2 * param::CREDIT_CAP as u64 * longest_unslotted() + pool::POOL_SZ + record::PERF_SZ;
 
 const _: () = assert!(
-    HEAP_FLOWS_BYTES <= manifest::mem::MIN_HEAP_SZ as u64,
+    HEAP_FLOWS_SZ <= manifest::mem::MIN_HEAP_SZ as u64,
     "the caps of the heap's bounded flows do not fit the heap the core counts on"
 );

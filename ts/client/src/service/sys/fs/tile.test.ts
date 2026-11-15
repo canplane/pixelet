@@ -12,7 +12,7 @@ import { decl } from "./source.ts";
 import { version_of } from "./tile.ts";
 import FIXTURE from "./tile.fixture.json" with { type: "json" };
 
-const DECL = decl(JSON.stringify(FIXTURE.source))!;
+const DECL = decl(FIXTURE.source)!;
 
 test("version_of - each kind's tile at each zoom, a shard's own version or not, is the object the core made", () => {
   for (const { kind, object } of FIXTURE.tiles) {
@@ -34,7 +34,7 @@ test("decl - one this client cannot read is not handed over", () => {
   const whole = FIXTURE.source;
   const { version } = whole;
   assert.deepStrictEqual(
-    decl(JSON.stringify(whole)) !== null,
+    decl(whole) !== null,
     true,
     "the fixture's own is read",
   );
@@ -56,10 +56,5 @@ test("decl - one this client cannot read is not handed over", () => {
     { ...whole, min_zoom: 4.5 },
     { ...whole, format: { ...whole.format, terrain: -1 } },
   ])
-    assert.deepStrictEqual(
-      decl(JSON.stringify(bad)),
-      null,
-      JSON.stringify(bad),
-    );
-  assert.deepStrictEqual(decl("not json"), null);
+    assert.deepStrictEqual(decl(bad), null, JSON.stringify(bad));
 });

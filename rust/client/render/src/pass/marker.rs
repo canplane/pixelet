@@ -9,26 +9,26 @@
 
 use crate::frame::shader::record::PIPELINE_MARKER;
 use crate::frame::shader::record::PIPELINE_MARKER_REGION;
-use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use pxl_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::frame::shader::word::{marker, MARKER_FLOATS};
+use crate::frame::shader::word::{MARKER_FLOATS, marker};
 use crate::frame::shelf::{Atlas, Paint, SlotSet};
 use crate::gpu::api::{
-    buf_entry, bytes, pass_desc, release, sampler_entry, texture_usage, view_entry, word_bytes,
-    Format, Gpu, Group, Load, RenderContext,
+    Format, Gpu, Group, Load, RenderContext, buf_entry, bytes, pass_desc, release, sampler_entry,
+    texture_usage, view_entry, word_sz,
 };
 use crate::gpu::atlas::{AtlasPainter, DisplayList};
 use crate::gpu::draw::{DrawStat, DrawTable};
-use crate::gpu::mip::{mip_cnt, MipPass};
+use crate::gpu::mip::{MipPass, mip_cnt};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::text::TextOf;
 use crate::gpu::upload::UploadTable;
 use crate::look::marker::ATLAS_SCALE;
 use crate::look::marker::{
-    bubble_rect_h, point_mark, BLACK, BORDER, BUBBLE_FONT, DOT_BORDER, DOT_CY, DOT_DIAM, DOT_FILL,
-    DOT_RING, LINE_H, NOTCH, PADDING_Y, PILL_FONT, PILL_H, PILL_R, POINT_FONT, POINT_GAP,
-    POINT_LINE, POINT_PAD, POINT_PITCH, POINT_RIM, POINT_RIM_FILL, POINT_SHADE, POINT_SHADOW_BLUR,
-    POINT_SHADOW_DY, POINT_SHADOW_FILL, POINT_TEXT_HALO, TAIL_H, TAIL_W, WHITE,
+    BLACK, BORDER, BUBBLE_FONT, DOT_BORDER, DOT_CY, DOT_DIAM, DOT_FILL, DOT_RING, LINE_H, NOTCH,
+    PADDING_Y, PILL_FONT, PILL_H, PILL_R, POINT_FONT, POINT_GAP, POINT_LINE, POINT_PAD,
+    POINT_PITCH, POINT_RIM, POINT_RIM_FILL, POINT_SHADE, POINT_SHADOW_BLUR, POINT_SHADOW_DY,
+    POINT_SHADOW_FILL, POINT_TEXT_HALO, TAIL_H, TAIL_W, WHITE, bubble_rect_h, point_mark,
 };
 use crate::pass::model::UniformBuffer;
 use crate::spec::span::GpuSpanName;
@@ -196,7 +196,7 @@ impl MarkerPass {
             generation: u32::MAX,
             groups: Groups::default(),
             dirty: SlotSet::default(),
-            uniforms: UniformBuffer::new(word_bytes(MARKER_FLOATS), align),
+            uniforms: UniformBuffer::new(word_sz(MARKER_FLOATS), align),
             view: [0.0; 16],
             proj: [0.0; 16],
             px_per_unit: 1.0,
@@ -374,7 +374,7 @@ impl MarkerPass {
         s[marker::PX_PER_UNIT] = self.px_per_unit;
         self.uniforms
             .write(g, self.pipeline.layouts[1], 1, 0..1, true, |buf, _| {
-                buf[..word_bytes(MARKER_FLOATS) as usize].copy_from_slice(bytes(&s));
+                buf[..word_sz(MARKER_FLOATS) as usize].copy_from_slice(bytes(&s));
             });
     }
 

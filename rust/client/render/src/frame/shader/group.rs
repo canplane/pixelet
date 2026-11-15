@@ -6,7 +6,7 @@
 //! (gpu/api.rs `Gpu::frame_group`), and the frame's calls are checked against the same
 //! statement (sequence.rs), so the two cannot disagree.
 
-use crate::frame::shader::access::{Bind, Buffer, Group, ARGS, END, LIST, STATE};
+use crate::frame::shader::access::{ARGS, Bind, Buffer, END, Group, LIST, STATE};
 use crate::frame::shader::record::LIGHT_DRAWS_BINDING;
 use pxl_engine::{raster, ray};
 

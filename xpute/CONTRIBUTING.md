@@ -15,8 +15,7 @@ pnpm install                        # the TypeScript packages
 cargo spec --write                  # the generated files, written
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace              # the GPU host's on a wgpu adapter too
+cargo test --workspace
 pnpm check && pnpm test
 make -C cpp -j8 check test          # the C++ compiled, its tests, wasm32
-pnpm test:gpu:web                   # the GPU host in Chrome ($CHROME)
 ```

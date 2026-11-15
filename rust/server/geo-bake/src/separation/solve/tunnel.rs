@@ -242,8 +242,7 @@ fn road_bores(
         let r = &stretches[q];
         let want = drop_of(r);
         let walking = is_pedestrian(r.piece.way.class.as_deref().unwrap_or(""));
-        for e in 0..2 {
-            let node = &r.ends[e];
+        for (e, node) in r.ends.iter().enumerate() {
             if internal(q, e) || deck.contains_key(node) || drops.contains_key(node) || want <= 0 {
                 continue;
             }
@@ -362,28 +361,28 @@ fn road_bores(
                     cells.push(w.line.at(along(k)));
                     k += 1;
                 }
-                if cells.len() >= 2 {
-                    if let Ok(terrain) = sample_cells(&src.ground, &cells) {
-                        let points = (from..k)
-                            .zip(cells.iter().zip(&terrain))
-                            .map(|(k, (p, &t))| {
-                                let drop = cs
-                                    .iter()
-                                    .map(|c| c.drop - (k - c.anchor).abs() / c.run)
-                                    .max()
-                                    .unwrap_or(0)
-                                    .max(0);
-                                [p[0], p[1], f64::from(t - drop)]
-                            })
-                            .collect();
-                        let fraction = |k: i32| w.row.between[0] + along(k) / w.row.segment_length;
-                        lines.push(grade_line(
-                            w,
-                            points,
-                            [from == 0, k - 1 == last],
-                            [fraction(from), fraction(k - 1)],
-                        ));
-                    }
+                if cells.len() >= 2
+                    && let Ok(terrain) = sample_cells(&src.ground, &cells)
+                {
+                    let points = (from..k)
+                        .zip(cells.iter().zip(&terrain))
+                        .map(|(k, (p, &t))| {
+                            let drop = cs
+                                .iter()
+                                .map(|c| c.drop - (k - c.anchor).abs() / c.run)
+                                .max()
+                                .unwrap_or(0)
+                                .max(0);
+                            [p[0], p[1], f64::from(t - drop)]
+                        })
+                        .collect();
+                    let fraction = |k: i32| w.row.between[0] + along(k) / w.row.segment_length;
+                    lines.push(grade_line(
+                        w,
+                        points,
+                        [from == 0, k - 1 == last],
+                        [fraction(from), fraction(k - 1)],
+                    ));
                 }
                 k += 1;
             }

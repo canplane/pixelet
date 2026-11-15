@@ -4,8 +4,8 @@
 //! layers, so one number reaches both.
 
 use pxl_spec::asset::color;
-use pxl_spec::asset::cube::cube_rgb;
 use pxl_spec::asset::cube::ALL_CUBES;
+use pxl_spec::asset::cube::cube_rgb;
 use pxl_spec::asset::cube::{Ground, Object, Sentinel};
 use pxl_spec::asset::ingest::CubeFace;
 use pxl_spec::asset::{shipped_sentinel_mean, shipped_tile_mean};

@@ -44,9 +44,9 @@
 //!   | climb | Climb | Climb |
 //!   | climb, its way hit | Dive | Stop |
 
-use crate::domain::control::camera::gesture::{spread, Anchor};
+use crate::domain::control::camera::gesture::{Anchor, spread};
 use crate::domain::control::camera::state::{
-    camera_state, camera_state_mut, ease_pivot, resolved_to, Intent, IntentPatch,
+    Intent, IntentPatch, camera_state, camera_state_mut, ease_pivot, resolved_to,
 };
 use crate::domain::control::camera::{camera, ease_facing, facing_dir, set_eye_world};
 use crate::domain::control::param;
@@ -55,8 +55,8 @@ use crate::domain::control::param::{CAM_DAMP, CLIMB_RELAX_DAMP, CLIMB_RISE_DAMP,
 use crate::domain::control::param::{CLIMB_PASS_CNT, COLLISION_STEP_SAMPLE_CNT};
 use crate::domain::control::param::{EYE_CLEARANCE_U, MIN_DIST, NEAREST_DIST};
 use crate::domain::query::change::Memo;
-use crate::domain::query::{finest, Hit, Ray, World};
-use crate::domain::setting::{settings, OrbitObstacleMode};
+use crate::domain::query::{Hit, Ray, World, finest};
+use crate::domain::setting::{OrbitObstacleMode, settings};
 use crate::domain::smooth::smooth_vec;
 use crate::domain::view::frame::coord::world_to_canonical;
 use crate::domain::view::param::NEAR;

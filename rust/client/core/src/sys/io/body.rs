@@ -20,7 +20,7 @@ use core::ops::{Deref, DerefMut};
 use pxl_global::Global;
 use xpute_link::mem;
 
-use crate::sys::heap::PAGE_BYTES;
+use crate::sys::heap::PAGE_SZ;
 use crate::sys::io::demand::Stream;
 use crate::sys::io::param::BODY_SLOT_CNT;
 use crate::sys::range::OwnedRange;
@@ -31,10 +31,10 @@ const fn longest() -> u32 {
     let (mut most, mut k) = (0, 0);
     while k < Stream::ALL.len() {
         let s = Stream::ALL[k];
-        if let (true, Some(max)) = (s.row().slotted, s.max_body()) {
-            if max > most {
-                most = max;
-            }
+        if let (true, Some(max)) = (s.row().slotted, s.max_body())
+            && max > most
+        {
+            most = max;
         }
         k += 1;
     }
@@ -42,7 +42,7 @@ const fn longest() -> u32 {
 }
 
 /// A slot's bytes: the longest such body, on a page.
-pub(crate) const SLOT_BYTES: u32 = longest().next_multiple_of(PAGE_BYTES);
+pub(crate) const SLOT_SZ: u32 = longest().next_multiple_of(PAGE_SZ);
 
 /// The slots' range in `.fixed`, which the boot hands in.
 pub(crate) static RANGE: OwnedRange = OwnedRange::new();
@@ -91,14 +91,14 @@ pub(crate) fn take() -> Option<Slot> {
 impl Slot {
     /// Sets the bytes of the slot the body takes; more than the slot is a bug.
     pub(crate) fn set_len(&mut self, len: u32) {
-        xpute_kit::ensure!(len <= SLOT_BYTES, EFBIG, len);
+        xpute_kit::ensure!(len <= SLOT_SZ, EFBIG, len);
         self.len = len;
     }
 
     fn bytes(&self) -> &'static mut [u8] {
         // SAFETY: the slot is this guard's alone while it lives, and its
         // bytes lie in `.fixed`.
-        unsafe { RANGE.arr::<u8>(self.idx * SLOT_BYTES, self.len as usize) }
+        unsafe { RANGE.arr::<u8>(self.idx * SLOT_SZ, self.len as usize) }
     }
 }
 

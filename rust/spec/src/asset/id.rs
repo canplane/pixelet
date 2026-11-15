@@ -4,7 +4,7 @@
 
 #[path = "id.spec.rs"]
 pub mod spec;
-pub use spec::{Kind, IDX_BITS};
+pub use spec::{IDX_BITS, Kind};
 
 /// An asset's id, `kind << IDX_BITS | idx`, as the code carries it: a
 /// u32 whose values a u16 holds. A value past a u16 is refused where it is

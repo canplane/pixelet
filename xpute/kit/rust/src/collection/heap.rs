@@ -25,11 +25,7 @@ impl<'a, K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'a, K, T, MIN> {
 
 impl<K: PartialOrd + Copy, T: Copy, const MIN: bool> Heap<'_, K, T, MIN> {
     fn ahead(x: K, y: K) -> bool {
-        if MIN {
-            x < y
-        } else {
-            x > y
-        }
+        if MIN { x < y } else { x > y }
     }
 
     pub fn top(&self) -> Option<&Element<K, T>> {

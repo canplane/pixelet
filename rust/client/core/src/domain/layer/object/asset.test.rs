@@ -1,8 +1,8 @@
 // pxl-core/domain/layer/object/asset.test.rs
 
-use pxl_spec::asset::cube::{Sentinel, ALL_CUBES};
+use pxl_spec::asset::cube::{ALL_CUBES, Sentinel};
 use pxl_spec::asset::decor::DECORS;
-use pxl_spec::asset::id::{Kind, IDX_BITS};
+use pxl_spec::asset::id::{IDX_BITS, Kind};
 use pxl_spec::asset::marker::MARKER;
 
 use super::*;

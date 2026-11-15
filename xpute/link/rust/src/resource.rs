@@ -82,10 +82,44 @@ impl<T> Table<T> {
         (s.generation == h >> SLOT_BITS).then_some(s)
     }
 
+    /// Puts `v` under `h`: a handle this table issued, or one the other end
+    /// issued, as a UI's end holds what the runtime opens on it under the
+    /// guest's end's handles. The slot `h` names is then issued at `h`'s
+    /// generation, taken out of the queue if it was free, it and the slots
+    /// before it made free where there were none; one issued at another
+    /// generation is a bug.
     pub fn put(&mut self, h: Handle, v: T) {
-        let Some(s) = self.slot(h) else {
-            xpute_kit::bug!(EBADF, h)
-        };
+        let k = h & SLOT_MASK;
+        xpute_kit::ensure!(k != 0, EBADF, h);
+        while (self.slots.len() as u32) < k {
+            self.slots.push(Slot {
+                generation: 0,
+                val: None,
+                next: ISSUED,
+            });
+            self.remove(self.slots.len() as u32);
+        }
+        let next = self.slots[k as usize - 1].next;
+        if next != ISSUED {
+            let mut prev = 0;
+            let mut c = self.head;
+            while c != k {
+                prev = c;
+                c = self.slots[c as usize - 1].next;
+            }
+            match prev {
+                0 => self.head = next,
+                p => self.slots[p as usize - 1].next = next,
+            }
+            if self.tail == k {
+                self.tail = prev;
+            }
+            let s = &mut self.slots[k as usize - 1];
+            s.next = ISSUED;
+            s.generation = h >> SLOT_BITS;
+        }
+        let s = &mut self.slots[k as usize - 1];
+        xpute_kit::ensure!(s.generation == h >> SLOT_BITS, EBADF, h);
         s.val = Some(v);
     }
 

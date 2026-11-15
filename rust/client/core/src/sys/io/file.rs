@@ -26,7 +26,6 @@
 //! (`heap`). Either lies in the core's memory, so its offset holds.
 
 use core::fmt;
-use core::future::Future;
 use std::collections::{BTreeMap, VecDeque};
 
 use pxl_global::Global;
@@ -45,7 +44,7 @@ use crate::spec;
 use crate::spec::file::{format, path};
 use crate::spec::manifest::mem;
 use crate::sys::io::demand::{Source, Stream};
-use crate::sys::io::failure::{exit_of, Exit, Failure};
+use crate::sys::io::failure::{Exit, Failure, exit_of};
 use crate::sys::sched::{executor, invalidate};
 
 pub(crate) enum StorageRead {
@@ -78,7 +77,7 @@ impl Drop for File {
 }
 
 /// The longest quadkey, a leaf's.
-pub(crate) const KEY_BYTES: usize = LEAF_ZOOM as usize;
+pub(crate) const KEY_SZ: usize = LEAF_ZOOM as usize;
 
 const _: () = assert!(spec::file::LEAF_ZOOM == LEAF_ZOOM);
 
@@ -368,7 +367,7 @@ fn quadrant_path(mut head: Vec<Token>, id: u64) -> Vec<Token> {
         head.push(Token::Int(path::object::top::ID));
         return head;
     }
-    let mut key = Text::<KEY_BYTES>::EMPTY;
+    let mut key = Text::<KEY_SZ>::EMPTY;
     Quadrant::of_id(id)
         .write_key(&mut key)
         .or_bug(Errno::EOVERFLOW);

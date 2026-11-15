@@ -62,13 +62,9 @@ impl _rt::Object for _Object {
                     let content = r_
                         .case(4, 2)
                         .and_then(|v| SceneContent::of(v).ok_or(_rt::Errno::EBADMSG))?;
-                    let group = r_.case(5, 2).and_then(|d| {
-                        if d == 0 {
-                            Ok(None)
-                        } else {
-                            r_.u8(6).map(Some)
-                        }
-                    })?;
+                    let group = r_
+                        .case(5, 2)
+                        .and_then(|d| if d == 0 { Ok(None) } else { r_.u8(6).map(Some) })?;
                     let bg = r_.case(8, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)

@@ -5,12 +5,12 @@
 //! (pxl-geo-bake `bin/star.rs`) and read by the sky (pxl-render
 //! `pass/star.rs`): one layout, these two functions.
 //!
-//! A record is `REC_BYTES` little-endian: the right ascension a u16 of a
+//! A record is `REC_SZ` little-endian: the right ascension a u16 of a
 //! turn, the declination an i16 of a quarter turn, the visual magnitude and
 //! B−V i16 thousandths, each rounded half to even. The catalog runs
 //! brightest first, so a prefix of it is the sky to a magnitude.
 
-pub const REC_BYTES: usize = 8;
+pub const REC_SZ: usize = 8;
 
 /// A star as the catalog gives it: right ascension and declination in
 /// degrees, visual magnitude, and B−V.
@@ -22,11 +22,11 @@ pub struct Star {
     pub bv: f64,
 }
 
-pub fn rec(star: &Star) -> [u8; REC_BYTES] {
+pub fn rec(star: &Star) -> [u8; REC_SZ] {
     let ra = (libm::rint(star.ra / 360.0 * 65536.0) as u32 % 65536) as u16;
     let dec = libm::rint(star.dec / 90.0 * 32767.0) as i16;
     let [vmag, bv] = [star.vmag, star.bv].map(|v| libm::rint(v * 1000.0) as i16);
-    let mut r = [0; REC_BYTES];
+    let mut r = [0; REC_SZ];
     r[0..2].copy_from_slice(&ra.to_le_bytes());
     r[2..4].copy_from_slice(&dec.to_le_bytes());
     r[4..6].copy_from_slice(&vmag.to_le_bytes());
@@ -34,7 +34,7 @@ pub fn rec(star: &Star) -> [u8; REC_BYTES] {
     r
 }
 
-pub fn star(r: &[u8; REC_BYTES]) -> Star {
+pub fn star(r: &[u8; REC_SZ]) -> Star {
     let word = |k: usize| [r[2 * k], r[2 * k + 1]];
     Star {
         ra: f64::from(u16::from_le_bytes(word(0))) / 65536.0 * 360.0,

@@ -1,6 +1,7 @@
 # The project's Rust, both ends of it, grouped by which end a crate is on:
-# client/ reaches the browser and the device, server/ does not, and spec/ is
-# pxl-spec, the model every crate shares, which depends on neither end.
+# client/ reaches the browser and the device, server/ does not, spec/ is
+# pxl-spec, the model every crate shares, which depends on neither end, and
+# gpu/ is the GPU, a library pixelet owns, which the client's crates take.
 # server/ is a folder of crates: pxl-server, what geo and api both need before
 # they can answer anything, is server/common.
 #
@@ -10,9 +11,11 @@
 # pxl-core is its artifact: one `xpute_guest::link!` makes it the WebAssembly module the
 # main thread and each worker instantiate for themselves, and the guest
 # linked into a device's app. pxl-runtime is that app's library: the core
-# with the runtime it composes on the core's thread (xpute-native-runtime,
-# xpute-native-host and xpute-gpu-native-host), which draws with wgpu where
-# the page's host draws with the browser's WebGPU. The server end
+# with the runtime it composes on the core's thread (xpute-runtime-native and
+# xpute-host) and the GPU's host beside it (pxl-gpu-host), which draws
+# with wgpu where the page's host draws with the browser's WebGPU. The GPU is
+# pixelet's plugin of xpute: its link (pxl-gpu-link), the guest's encoder
+# (pxl-gpu-guest) and the device's host (pxl-gpu-host). The server end
 # is native: pxl-geo and pxl-api over
 # pxl-server, pxl-geo-bake beside them for what is baked rather than answered,
 # and pxl-geo-spec where the two geo halves read the same tables.
@@ -26,9 +29,12 @@
 # xpute's, is what tells the targets apart.
 
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
   "spec",
+  "gpu/link",
+  "gpu/guest",
+  "gpu/host",
   "client/global",
   "client/engine",
   "client/content",
@@ -61,13 +67,13 @@ hex = "0.4"
 xpute-kit = { path = "../xpute/kit/rust", default-features = false }
 xpute-link = { path = "../xpute/link/rust" }
 xpute-guest = { path = "../xpute/guest/rust" }
-xpute-gpu-link = { path = "../xpute/gpu/link/rust" }
-xpute-gpu-guest = { path = "../xpute/gpu/guest/rust" }
-xpute-native-runtime = { path = "../xpute/native/runtime/rust" }
-xpute-native-host = { path = "../xpute/native/host" }
-xpute-gpu-native-host = { path = "../xpute/gpu/native/host" }
-xpute-golden = { path = "../xpute/dev/golden/rust" }
+xpute-runtime-native = { path = "../xpute/runtime/native" }
+xpute-host = { path = "../xpute/host/rust" }
+xpute-golden = { path = "../xpute/golden/rust" }
 pxl-global = { path = "client/global" }
+pxl-gpu-link = { path = "gpu/link" }
+pxl-gpu-guest = { path = "gpu/guest" }
+pxl-gpu-host = { path = "gpu/host" }
 pxl-engine = { path = "client/engine" }
 pxl-content = { path = "client/content" }
 pxl-spec = { path = "spec" }
@@ -84,7 +90,7 @@ pxl-geo-spec = { path = "server/geo-spec" }
 # what they are — `.cast()`, `.cast_const()`, `&raw`, `ptr::from_ref` — and
 # any `as *const` or `as *mut` left is an offset made a pointer, which
 # pxl-tool's rule refuses. A crate takes these with `[lints]
-# workspace = true`; xpute-guest and xpute-native-host, in their own workspace, spell
+# workspace = true`; xpute-guest and xpute-host, in their own workspace, spell
 # them themselves.
 [workspace.lints.rust]
 # A path no longer than what is already in scope.
@@ -118,7 +124,7 @@ manual_let_else = "warn"
 semicolon_if_nothing_returned = "warn"
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
 version = "0.0.0"
 publish = false
 
@@ -215,17 +221,16 @@ lto = false
 codegen-units = 256
 incremental = true
 
-# The wgpu xpute's native GPU host and pxl-render draw with, the fork
-# xpute/wgpu-fork.md holds: its revision is xpute's (xpute/Cargo.toml) and
-# moves with it, and when it moves the renderer's passes run on the GPU too
-# (`make test-gpu`).
+# The wgpu pxl-gpu-host and pxl-render draw with, the fork
+# gpu/wgpu-fork.md holds: when its revision moves, the GPU host's tests
+# and the renderer's passes run on the GPU too (`make test-gpu`).
 [patch.crates-io]
-naga = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
-naga-types = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
-wgpu = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
-wgpu-core = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
-wgpu-core-deps-apple = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
-wgpu-core-deps-windows-linux-android = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
-wgpu-hal = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
-wgpu-naga-bridge = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
-wgpu-types = { git = "https://github.com/canplane/fork.wgpu", rev = "2cbb4a993b05dcce6e65e40ad3eb3ffc629c05f0" }
+naga = { git = "https://github.com/canplane/fork.wgpu", rev = "3e77962acf3b73f460ae865a1730c08f7934a40d" }
+naga-types = { git = "https://github.com/canplane/fork.wgpu", rev = "3e77962acf3b73f460ae865a1730c08f7934a40d" }
+wgpu = { git = "https://github.com/canplane/fork.wgpu", rev = "3e77962acf3b73f460ae865a1730c08f7934a40d" }
+wgpu-core = { git = "https://github.com/canplane/fork.wgpu", rev = "3e77962acf3b73f460ae865a1730c08f7934a40d" }
+wgpu-core-deps-apple = { git = "https://github.com/canplane/fork.wgpu", rev = "3e77962acf3b73f460ae865a1730c08f7934a40d" }
+wgpu-core-deps-windows-linux-android = { git = "https://github.com/canplane/fork.wgpu", rev = "3e77962acf3b73f460ae865a1730c08f7934a40d" }
+wgpu-hal = { git = "https://github.com/canplane/fork.wgpu", rev = "3e77962acf3b73f460ae865a1730c08f7934a40d" }
+wgpu-naga-bridge = { git = "https://github.com/canplane/fork.wgpu", rev = "3e77962acf3b73f460ae865a1730c08f7934a40d" }
+wgpu-types = { git = "https://github.com/canplane/fork.wgpu", rev = "3e77962acf3b73f460ae865a1730c08f7934a40d" }

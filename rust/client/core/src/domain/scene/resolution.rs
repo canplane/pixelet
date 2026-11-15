@@ -22,11 +22,11 @@
 
 use crate::domain::scene::param;
 use crate::domain::scene::rate::{self, Motion, Pace};
-use crate::domain::setting::{settings, ResMode};
+use crate::domain::setting::{ResMode, settings};
 use crate::sys::sched;
 use pxl_global::Global;
 use pxl_render::gpu::api;
-use pxl_render::gpu::surface::{surfaces, Surface};
+use pxl_render::gpu::surface::{Surface, surfaces};
 use pxl_render::renderer::GpuRead;
 use pxl_render::spec::api::surface_role;
 

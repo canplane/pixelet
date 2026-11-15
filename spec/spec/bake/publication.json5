@@ -19,7 +19,7 @@
     $description: "What a version is written in: one segment of a tile's URL, with no character it would\nhave to escape.",
     $value: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-",
   },
-  VERSION_BYTES: {
+  VERSION_SZ: {
     $description: "The longest version a declaration may name, in bytes: one segment of a tile's URL,\nbefore its name (pxl-spec bake/source.rs `is_version`).",
     $type: "usize",
     $value: 32,

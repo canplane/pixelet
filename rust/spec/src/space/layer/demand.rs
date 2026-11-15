@@ -7,9 +7,9 @@
 
 use crate::space::camera::eye::Observation;
 use crate::space::camera::grid::split_dist;
-use crate::space::coord::zoom::{units, Zoom, LEAF_ZOOM};
-use crate::space::layer::lattice::{demand_dist, draw_dist, Lattice, GROUND};
-use crate::space::layer::quadrant::{quad_rows, Quadrant};
+use crate::space::coord::zoom::{LEAF_ZOOM, Zoom, units};
+use crate::space::layer::lattice::{GROUND, Lattice, demand_dist, draw_dist};
+use crate::space::layer::quadrant::{Quadrant, quad_rows};
 
 /// The distances over which a layer's `zoom` is required: from where the grid's cell its
 /// tiles fold into begins (0 for the leaves) to where the next coarser one's does; or, for the

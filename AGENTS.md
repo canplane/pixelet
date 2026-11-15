@@ -53,9 +53,10 @@
 - The UI computes no coordinate or tile. It calls what is below it through
   `service/` alone, and the core through `service/core/` alone; the types and
   constants generated into `abi/` it may read directly.
-- What differs by platform is a file pair in `service/platform/` (`<x>.ts` the
-  page's, `<x>.native.ts` the device's) or, for a piece of the UI, a file and
-  its override beside it (`ts/client/src/ui/shared/component/README.md`).
+- What differs by platform is a file pair in `service/platform/` (`<x>.web.ts`
+  the page's, `<x>.native.ts` the device's, an import naming `<x>.ts`) or, for
+  a piece of the UI, such a pair or a file and its override beside it
+  (`ts/client/src/ui/shared/component/README.md`).
 
 ## Working
 
@@ -71,7 +72,7 @@
 - Cargo builds into `<root>/rust/target/session/$CLAUDE_CODE_SESSION_ID`,
   written absolute.
 - A command that uses a device's GPU or starts or stops an app on it, and does
-  not hold the device itself (the shader probe, an install, xpute's GPU tests),
+  not hold the device itself (the shader probe, an install, the GPU's tests),
   runs under its device's module: `script/perf/mac.py`, `android.py` or `ios.py`
   `<command>`.
 - While the structure is being reworked, a change is checked by building it, and

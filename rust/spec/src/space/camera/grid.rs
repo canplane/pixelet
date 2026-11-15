@@ -7,7 +7,7 @@
 //! and what lies inside it is for its layer to fold. What the descent asks at a distance, and
 //! how far the ground's clip levels reach, both follow from it.
 
-use crate::space::coord::zoom::{units, Zoom, FINEST_ZOOM, UNIT_ZOOM};
+use crate::space::coord::zoom::{FINEST_ZOOM, UNIT_ZOOM, Zoom, units};
 
 // Each knob here is set on its own. What is drawn, and how finely, follows from them, from
 // the field of view and from the display's pixels.

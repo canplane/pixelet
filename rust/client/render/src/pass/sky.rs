@@ -8,9 +8,9 @@ use pxl_spec::space::camera::eye::Frustum;
 use pxl_spec::space::coord::mat4::{self, Mat4};
 
 use crate::frame::shader::record::PIPELINE_SKY;
-use crate::frame::shader::word::{sky, SKY_FLOATS};
+use crate::frame::shader::word::{SKY_FLOATS, sky};
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, sampler_entry, view_entry, word_bytes, Gpu, TrackedRenderPass,
+    Gpu, TrackedRenderPass, buf_entry, buffer_usage, bytes, sampler_entry, view_entry, word_sz,
 };
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
@@ -35,7 +35,7 @@ impl SkyPass {
     ) -> SkyPass {
         let pipeline = pipelines.build_world(g, PIPELINE_SKY);
         let uniform = g.buf(
-            word_bytes(SKY_FLOATS),
+            word_sz(SKY_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let mut entries = vec![

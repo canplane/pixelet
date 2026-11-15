@@ -8,7 +8,7 @@ use xpute_kit::abi::word::{join64, split64};
 use xpute_link::mem;
 
 use crate::frame::shader::record::UPLOAD_LAYOUT;
-use crate::gpu::api::{buf_entry, buffer_usage, release, room, write_buffer_sz, Gpu, Layout};
+use crate::gpu::api::{Gpu, Layout, buf_entry, buffer_usage, release, room, write_buffer_sz};
 use crate::gpu::draw;
 
 const EMPTY: u32 = 0;
@@ -55,12 +55,12 @@ fn mem(at: u64, n: u32) -> &'static [u8] {
 /// counts, buffer and group.
 const UPLOAD_COLUMN_CNT: usize = 8;
 
-/// The table's columns for `live` uploads, then the draw list's (gpu/draw.rs `lists_bytes`).
-pub const fn uploads_bytes(live: usize) -> u32 {
-    (UPLOAD_COLUMN_CNT * slots_of(live) * 4) as u32 + draw::lists_bytes(live)
+/// The table's columns for `live` uploads, then the draw list's (gpu/draw.rs `lists_sz`).
+pub const fn uploads_sz(live: usize) -> u32 {
+    (UPLOAD_COLUMN_CNT * slots_of(live) * 4) as u32 + draw::lists_sz(live)
 }
 
-/// Lays the table for `live` uploads, then the draw list's, in `room`, `uploads_bytes(live)`
+/// Lays the table for `live` uploads, then the draw list's, in `room`, `uploads_sz(live)`
 /// zeroed, the renderer's alone for as long as the core runs.
 pub fn set_uploads(room: &'static mut [u32], live: usize) {
     let slots = slots_of(live);

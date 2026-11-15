@@ -29,9 +29,9 @@ pub use id::AssetId;
 
 use crate::ground::GroundId;
 use crate::space::coord::aabb::Aabb;
-use crate::space::coord::zoom::{units, UNIT_ZOOM};
-use catalog::{model_extent, Catalog};
-use id::{idx_of, kind_of, Kind};
+use crate::space::coord::zoom::{UNIT_ZOOM, units};
+use catalog::{Catalog, model_extent};
+use id::{Kind, idx_of, kind_of};
 use ingest::{CubeFace, PACK};
 use xpute_kit::status::errno::Errno;
 

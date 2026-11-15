@@ -8,12 +8,12 @@
 use crate::frame::shader::word::{IMAGE_BOTTOM, IMAGE_SIDE, IMAGE_TOP, NO_SLOT, SLOT_BITS};
 use pxl_spec::asset::cube::ALL_CUBES;
 use pxl_spec::asset::ingest::{CubeFace, PACK};
-use pxl_spec::asset::{shipped_sentinel_tile, shipped_texture_tile, TileOrigin};
+use pxl_spec::asset::{TileOrigin, shipped_sentinel_tile, shipped_texture_tile};
 
-use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use pxl_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
-use crate::gpu::api::{buffer_usage, bytes, place, release, texture_usage, Format, Gpu, Image};
-use crate::gpu::mip::{mip_cnt, MipPass};
+use crate::gpu::api::{Format, Gpu, Image, buffer_usage, bytes, place, release, texture_usage};
+use crate::gpu::mip::{MipPass, mip_cnt};
 use crate::paint::palette::{LAYER_CNT, SENTINELS};
 
 pub const LAYER_TEX_SIZE: u32 = PACK.cell;

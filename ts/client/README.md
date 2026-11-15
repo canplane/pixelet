@@ -31,10 +31,10 @@ The bindings and the numbers both sides read, generated from `spec/`, are in
 ## One app, two kinds of platform
 
 What differs between the page and a device is a pair of files in
-`service/platform/`: `<x>.ts` is the page's and `<x>.native.ts` the device's,
-and the shapes both share are in `platform/types.ts`. Metro picks the right one
-for each build. The pair that boots the core is in `runtime/` (`boot.ts`,
-`boot.native.ts`), and it opens and starts the runtime the core runs in: on a
+`service/platform/`: `<x>.web.ts` is the page's and `<x>.native.ts` the
+device's, and the shapes both share are in `platform/types.ts`. An import names
+`<x>.ts`, and Metro and the type-checks pick the right one for each build. The
+pair that boots the core is in `runtime/` (`boot.web.ts`, `boot.native.ts`), and it opens and starts the runtime the core runs in: on a
 page the worker (`worker.ts`), and on a device `pxl-runtime`, linked into the
 app, which runs the core on a thread of its own. The UI reaches either through
 a `Remote`. A device's runtime outlives a reload of the UI, which meets the

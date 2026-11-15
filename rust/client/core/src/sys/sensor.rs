@@ -9,7 +9,7 @@ use crate::abi::sensor::{LocationStatus, Position};
 use pxl_global::Global;
 use pxl_spec::space::coord::adapter::{epsg3857, epsg4326};
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
-use pxl_spec::space::layer::lattice::{Grid, GROUND};
+use pxl_spec::space::layer::lattice::{GROUND, Grid};
 
 struct Sensor {
     heading: Option<f64>,

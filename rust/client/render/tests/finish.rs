@@ -6,11 +6,11 @@
 
 mod gpu;
 
-use gpu::{bytes, read_buf, Gpu};
-use pxl_render::frame::shader::record::{src, SHADER_SCREEN_FINISH, SHADER_SCREEN_SHOW};
+use gpu::{Gpu, bytes, read_buf};
+use pxl_render::frame::shader::record::{SHADER_SCREEN_FINISH, SHADER_SCREEN_SHOW, src};
 /// A screen tile's side, counted in the world's pixels.
 use pxl_render::frame::shader::word::screen::TILE as SIDE;
-use pxl_render::frame::shader::word::{frame, FRAME_FLOATS};
+use pxl_render::frame::shader::word::{FRAME_FLOATS, frame};
 
 /// The sizes of the world and the canvas in pixels. The canvas is twice the world, as when the
 /// renderer draws the world at a share of the display's pixels.

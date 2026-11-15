@@ -32,11 +32,11 @@
 use fnv::FnvHashSet;
 use pxl_engine::object::high;
 use pxl_global::Global;
-use pxl_spec::asset::marker::{text_fits, MARKER_TEXT_CHARS};
+use pxl_spec::asset::marker::{MARKER_TEXT_CHARS, text_fits};
 use pxl_spec::bake::constant::OBJECT_FINEST;
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::zoom::{units, CUBE_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{CUBE_ZOOM, SHARD_ZOOM, units};
 use pxl_spec::space::hierarchy::morton::{key_of_name, name, node_of};
 use pxl_spec::space::layer::area::shard_over;
 use pxl_spec::space::layer::demand::GROUND_DEMAND_TILE_CAP;
@@ -46,12 +46,12 @@ use xpute_guest::clock::now;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::status::error::XputeError;
-use xpute_kit::wire::xtp::{encoder, NodeView, TreeEncoderConfig, TreeReader, TreeView};
+use xpute_kit::wire::xtp::{NodeView, TreeEncoderConfig, TreeReader, TreeView, encoder};
 
 use super::store::{object, object_mut};
 use crate::abi::object;
 use crate::domain::layer::object::ext::Ext;
-use crate::domain::layer::object::store::{apply, note_damage, Write};
+use crate::domain::layer::object::store::{Write, apply, note_damage};
 use crate::spec;
 use crate::spec::file::{format, top, write as column};
 use crate::sys::io::body::Body;
@@ -60,7 +60,7 @@ use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::file;
 use crate::sys::io::request::declare;
 use crate::sys::sched::{executor, invalidate};
-use pxl_spec::object::{class_of, Class};
+use pxl_spec::object::{Class, class_of};
 
 /// The most files wanted at once. Before the top is read, only the top is
 /// wanted. After that, the wanted files are the shards within the ground's

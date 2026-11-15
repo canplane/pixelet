@@ -9,7 +9,7 @@
 //! the bindings the group's layout makes visible to that stage; `holds`
 //! counts them the same way.
 
-use xpute_gpu_link::spec::shader_stage::{COMPUTE, FRAGMENT, VERTEX};
+use pxl_gpu_link::spec::shader_stage::{COMPUTE, FRAGMENT, VERTEX};
 
 use crate::spec::api::record::{
     DEPTH, SAMPLER, SAMPLER_COMPARISON, STORAGE, STORAGE_RW, STORAGE_TEXTURE_2D,

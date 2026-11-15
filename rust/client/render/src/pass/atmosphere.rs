@@ -22,7 +22,7 @@ use crate::frame::shader::record::{
     AIR, COMPUTE_ATMOS_EXPOSURE, COMPUTE_ATMOS_FROXEL, PIPELINE_ATMOS_IRRADIANCE,
     PIPELINE_ATMOS_MULTISCATTER, PIPELINE_ATMOS_SKY_VIEW, PIPELINE_ATMOS_TRANSMITTANCE,
 };
-use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use pxl_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 
 use xpute_link::mem;
 
@@ -35,9 +35,8 @@ use crate::frame::shader::word::{
     MULTISCATTER_SIZE, SKY_VIEW_SIZE, SLOPE_WORDS, TRANSMITTANCE_SIZE,
 };
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, pass_desc, result, room, sampler_entry, signaled,
-    texture_usage, view_entry, word_bytes, write_texture_sz, Entry, Format, Gpu, Layout, Load,
-    RenderContext,
+    Entry, Format, Gpu, Layout, Load, RenderContext, buf_entry, buffer_usage, bytes, pass_desc,
+    result, room, sampler_entry, signaled, texture_usage, view_entry, word_sz, write_texture_sz,
 };
 use crate::gpu::image_map::ImageMap;
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
@@ -96,7 +95,7 @@ const REACH: f32 = 0.5;
 /// eye's altitude, the mu's sample, the most display levels its sky shows, which says how
 /// far it reaches, and that reach's slope in its mu. The ground's slope and sample
 /// follow.
-const SLOPES_BYTES: u32 = 4 * SLOPE_WORDS;
+const SLOPES_SZ: u32 = 4 * SLOPE_WORDS;
 const LIGHT_WORDS: usize = LIGHT_SLOPES as usize;
 const GROUND_WORDS: usize = GROUND_SLOPES as usize;
 
@@ -258,7 +257,7 @@ pub struct Atmosphere {
 impl Atmosphere {
     pub fn new(g: &Gpu, pipelines: &mut PipelineCache) -> Atmosphere {
         let uniform = g.buf(
-            word_bytes(ATMOS_FLOATS),
+            word_sz(ATMOS_FLOATS),
             buffer_usage::UNIFORM | buffer_usage::COPY_DST,
         );
         let mut words = [0.0f32; ATMOS_FLOATS];
@@ -329,13 +328,10 @@ impl Atmosphere {
             ground: TableInput::default(),
             slopes: (
                 g.buf(
-                    SLOPES_BYTES,
+                    SLOPES_SZ,
                     buffer_usage::STORAGE | buffer_usage::COPY_SRC | buffer_usage::COPY_DST,
                 ),
-                g.buf(
-                    SLOPES_BYTES,
-                    buffer_usage::MAP_READ | buffer_usage::COPY_DST,
-                ),
+                g.buf(SLOPES_SZ, buffer_usage::MAP_READ | buffer_usage::COPY_DST),
             ),
             pending: 0,
             flying: 0,
@@ -408,9 +404,9 @@ impl Atmosphere {
             atmosphere.groups[k] = g.bind_group(layout, &of(layout, &own));
         }
         let froxel = atmosphere.froxel.layouts[0];
-        for k in 0..2 {
+        for (k, group) in atmosphere.froxel_groups.iter_mut().enumerate() {
             let own = [multiscatter, view_entry(1, volume), light(k)];
-            atmosphere.froxel_groups[k] = g.bind_group(froxel, &of(froxel, &own));
+            *group = g.bind_group(froxel, &of(froxel, &own));
         }
         atmosphere
     }
@@ -641,12 +637,7 @@ impl Atmosphere {
         }
         let copied = self.pending != 0 && self.flying == 0;
         if copied {
-            g.copy_buf(
-                encoder,
-                (self.slopes.0, 0),
-                (self.slopes.1, 0),
-                SLOPES_BYTES,
-            );
+            g.copy_buf(encoder, (self.slopes.0, 0), (self.slopes.1, 0), SLOPES_SZ);
             self.flying = core::mem::take(&mut self.pending);
         }
         (drew, exposed, copied)
@@ -661,7 +652,7 @@ impl Atmosphere {
             g.map_read(
                 self.slopes.1,
                 0,
-                SLOPES_BYTES,
+                SLOPES_SZ,
                 addr,
                 &self.mapping,
                 self.ticket,
@@ -697,8 +688,8 @@ impl Atmosphere {
         let (w, flying) = (*self.landed_words, self.flying);
         let word = |at: usize| f32::from_bits(w[at]);
         let has = |m: Measure| flying & m.bit() != 0;
-        for k in 0..2 {
-            let (base, l) = (LIGHT_WORDS * k, &mut self.light_memos[k]);
+        for (k, l) in self.light_memos.iter_mut().enumerate() {
+            let base = LIGHT_WORDS * k;
             if has(Measure::Mu(k)) {
                 (l.mu.step, l.mu.sample) = (Some(1.0 / word(base)), word(base + 2));
             }

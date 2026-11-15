@@ -9,8 +9,8 @@
 // (pxl-render paint.wgsl). A texture pack decorates these; it
 // does not replace them.
 
-use super::cube::{Ground, Object, Sentinel};
 use super::Swatch;
+use super::cube::{Ground, Object, Sentinel};
 
 /// `sentinel`'s color for a value.
 pub const fn sentinel(t: u16) -> Option<Swatch> {

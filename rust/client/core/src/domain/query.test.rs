@@ -3,14 +3,14 @@
 // The query's laws, checked over a leaf tile's four children folded into
 // their parent as the bake folds them, and over objects written into a store.
 
-use pxl_spec::asset::cube::{self, Ground, Sentinel};
 use pxl_spec::asset::AssetId;
+use pxl_spec::asset::cube::{self, Ground, Sentinel};
 use pxl_spec::bake::constant::{OBJECT_COARSEST, OBJECT_FINEST};
-use pxl_spec::bake::tile::terrain::{GroundCells, TerrainTile, GROUND_COLUMN};
+use pxl_spec::bake::tile::terrain::{GROUND_COLUMN, GroundCells, TerrainTile};
 use pxl_spec::ground::GroundId;
 use pxl_spec::space::coord::world::idx_of;
-use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, UNIT_ZOOM};
-use pxl_spec::space::layer::lattice::{Grid, GROUND, TILE_CELLS};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, LEAF_ZOOM, MIN_ZOOM, UNIT_ZOOM, Zoom, units};
+use pxl_spec::space::layer::lattice::{GROUND, Grid, TILE_CELLS};
 
 use super::*;
 use crate::domain::layer::instance::Instance;
@@ -454,7 +454,7 @@ fn stack_gap_floored() {
 /// a ray from the top meets.
 #[test]
 fn ray_goes_on_from_the_last() {
-    use super::ray::{at_zoom, Until};
+    use super::ray::{Until, at_zoom};
     use crate::domain::layer::tile_cache::Path;
 
     let [x, y] = flat_at_five();
@@ -655,7 +655,7 @@ fn late_brick_spike() {
     use crate::domain::layer::terrain::clipmap::clip_read;
     use crate::domain::layer::terrain::clipmap::test::{hand, unland};
     use pxl_engine::clipmap as cells;
-    use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIP_LAST, CLIP_SIZE};
+    use pxl_engine::clipmap::{BRICK_MIP_LAST, BrickSource, CLIP_SIZE, Lookup};
     use pxl_spec::brick::BRICK;
     use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;
     let leaf = top().children()[0];
@@ -732,7 +732,7 @@ fn late_brick_spike() {
 fn device_loss_drops_bounds() {
     use crate::domain::layer::terrain::clipmap::{clip_read, test::lose};
     use pxl_engine::clipmap as cells;
-    use pxl_engine::clipmap::{BrickSource, Lookup, BRICK_MIP_LAST};
+    use pxl_engine::clipmap::{BRICK_MIP_LAST, BrickSource, Lookup};
     use pxl_engine::ground::UNBOUNDED;
     use pxl_spec::brick::BRICK;
     use pxl_spec::space::coord::zoom::LEAF_CELL_ZOOM;

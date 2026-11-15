@@ -215,42 +215,54 @@ impl Snapshot {
     }
 }
 
-pub fn show(snapshot: &Snapshot) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn show(snapshot: &Snapshot) -> impl Future<Output = Result<(), _rt::Errno>> + use<> {
+    let sent = _rt::wait::wait(
         HANDLE,
         SHOW,
         Some((96, &|w_: &mut _rt::Lower| {
             (snapshot).store(w_, 0);
         })),
+        (),
     );
-    _rt::answer(r)
+    async move {
+        let (r, _, _) = sent.await;
+        _rt::answer(r)
+    }
 }
 
-pub fn draft(text: &str) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn draft(text: &str) -> impl Future<Output = Result<(), _rt::Errno>> + use<> {
+    let sent = _rt::wait::wait(
         HANDLE,
         DRAFT,
         Some((8, &|w_: &mut _rt::Lower| {
             w_.str(0, text);
         })),
+        (),
     );
-    _rt::answer(r)
+    async move {
+        let (r, _, _) = sent.await;
+        _rt::answer(r)
+    }
 }
 
-pub fn view(azimuth: f64, m_per_px: f64) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn view(azimuth: f64, m_per_px: f64) -> impl Future<Output = Result<(), _rt::Errno>> + use<> {
+    let sent = _rt::wait::wait(
         HANDLE,
         VIEW,
         Some((16, &|w_: &mut _rt::Lower| {
             w_.f64(0, azimuth);
             w_.f64(8, m_per_px);
         })),
+        (),
     );
-    _rt::answer(r)
+    async move {
+        let (r, _, _) = sent.await;
+        _rt::answer(r)
+    }
 }
 
 mod _rt {
-    pub(super) use xpute_guest::link;
+    pub(super) use xpute_guest::wait;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lift, Lower, Method};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, answer};
 }

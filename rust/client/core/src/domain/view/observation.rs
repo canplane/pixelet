@@ -9,19 +9,19 @@
 use crate::sys::io::demand::Order;
 use pxl_content::scatter::COARSEST_STAND;
 use pxl_global::Global;
-use pxl_spec::space::layer::lattice::{demand_dist, draw_dist, Lattice, GROUND};
+use pxl_spec::space::layer::lattice::{GROUND, Lattice, demand_dist, draw_dist};
 
-use pxl_spec::brick::{bricks_zoom, BRICK_SHIFT};
+use pxl_spec::brick::{BRICK_SHIFT, bricks_zoom};
 use pxl_spec::space::camera::eye::Observation;
 use pxl_spec::space::camera::grid::split_dist;
 use pxl_spec::space::coord::aabb::Aabb;
-use pxl_spec::space::coord::zoom::{units, Zoom, LEAF_ZOOM};
-use pxl_spec::space::hierarchy::tree::{child_of, Node};
+use pxl_spec::space::coord::zoom::{LEAF_ZOOM, Zoom, units};
+use pxl_spec::space::hierarchy::tree::{Node, child_of};
 use pxl_spec::space::layer::demand::{band, squares_within, tiles_within};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
-use crate::domain::layer::floor;
 use crate::domain::layer::Base as _;
+use crate::domain::layer::floor;
 use crate::domain::query::change;
 use crate::domain::query::{ColumnWalk, World};
 use crate::domain::view::above_ground::height_at;

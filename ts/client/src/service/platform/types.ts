@@ -106,10 +106,8 @@ export interface SurfaceDriver {
    * none left. */
   open(): Promise<u32>;
   size(handle: u32, width: u32, height: u32, dpr: f64): void;
-  /** Closes the surface, which takes back the canvas `bind` lent. */
+  /** Closes the surface, which takes back a page's canvas lent under it. */
   close(handle: u32): void;
-  /** Lends a page's canvas to the GPU under `handle`, until `close`. */
-  bind(handle: u32, canvas: HTMLCanvasElement): void;
 }
 
 export type PointerPhase = "down" | "move" | "up" | "cancel" | "out";
@@ -168,6 +166,6 @@ export interface LongFrame {
 /** The CSS variable that a page's `useVisualViewport` keeps on its root on
  * every frame. It holds how far the visual viewport's bottom stands above the
  * layout viewport's, which is the keyboard's height, in px. The page sets it
- * (service/platform/viewport.ts) and the UI's CSS reads it
- * (ui/shared/component/above-keyboard.tsx). A device never sets it. */
+ * (service/platform/viewport.web.ts) and the UI's CSS reads it
+ * (ui/shared/component/above-keyboard.web.tsx). A device never sets it. */
 export const VISUAL_VIEWPORT_BOTTOM = "--vv-bottom";

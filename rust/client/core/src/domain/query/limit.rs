@@ -13,10 +13,10 @@ use pxl_content::strata::{bedrock, ceiling};
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::world::{point, wrap_idx};
-use pxl_spec::space::coord::zoom::{units, LEAF_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_ZOOM, units};
 use pxl_spec::space::layer::area;
-use pxl_spec::space::layer::area::{is_wall, walls_in, Area, Shard};
-use pxl_spec::space::layer::lattice::{Grid, GROUND};
+use pxl_spec::space::layer::area::{Area, Shard, is_wall, walls_in};
+use pxl_spec::space::layer::lattice::{GROUND, Grid};
 
 use super::World;
 use crate::domain::layer::object::repository;

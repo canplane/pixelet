@@ -9,8 +9,8 @@
 use std::borrow::Cow;
 
 use pxl_spec::asset::cube::{Ground, Sentinel};
-use pxl_spec::bake::tile::terrain::{TerrainTile, ELE_COLUMN};
 use pxl_spec::bake::tile::Occupancy;
+use pxl_spec::bake::tile::terrain::{ELE_COLUMN, TerrainTile};
 use pxl_spec::space::layer::lattice::TILE_CELLS;
 use pxl_spec::space::layer::quadrant::Quadrant;
 

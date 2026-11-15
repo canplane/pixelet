@@ -13,11 +13,11 @@
 //! where it holds a value, air included, that value is the cell's asset, whatever lies under
 //! it.
 
-use crate::answer::{box_word, fills, PackedBox, BOX_NONE, BOX_STEPS, BOX_WHOLE};
+use crate::answer::{BOX_NONE, BOX_STEPS, BOX_WHOLE, PackedBox, box_word, fills};
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::share;
 use pxl_spec::share::FULL;
-use pxl_spec::space::coord::zoom::{starts, Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, Zoom, starts};
 use pxl_spec::space::hierarchy::tree::{child_idx, child_of, children};
 use pxl_spec::value;
 
@@ -129,11 +129,7 @@ pub fn fold(children: [u32; 8], zoom: Zoom) -> u32 {
 /// builds a tree of what is placed (the objects' store, pxl-core domain/layer/object/volume.rs).
 pub fn share(word: u32) -> u32 {
     let id = low(word);
-    if voxel(id) {
-        fold_word(id, FULL)
-    } else {
-        0
-    }
+    if voxel(id) { fold_word(id, FULL) } else { 0 }
 }
 
 /// The tree's two columns, one word a slot.
@@ -331,11 +327,7 @@ pub fn val(columns: &impl Table, slot: NodeSlot, hide: Cut, zoom: Zoom, at: [i32
     } else {
         Sentinel::Void as u32
     };
-    if voxel(v) {
-        v
-    } else {
-        Sentinel::Void as u32
-    }
+    if voxel(v) { v } else { Sentinel::Void as u32 }
 }
 
 /// The share of its cube that what the node holding `slot` folds to fills, in `FULL`'s units
@@ -561,11 +553,7 @@ mod tests {
 
     impl Table for ChildGroup {
         fn first_child(&self, slot: u32) -> u32 {
-            if slot == 1 {
-                8
-            } else {
-                0
-            }
+            if slot == 1 { 8 } else { 0 }
         }
         fn data(&self, slot: u32) -> u32 {
             if slot >= 8 && self.0.contains(&(slot - 8)) {

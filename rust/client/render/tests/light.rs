@@ -31,7 +31,7 @@ mod real_world;
 use std::collections::BTreeSet;
 
 use gpu::{
-    array_view, cross, lay_entry, read_texture, texture, unit, Gpu, KindCount, LightBox, Tally,
+    Gpu, KindCount, LightBox, Tally, array_view, cross, lay_entry, read_texture, texture, unit,
 };
 use pxl_engine::answer::Kind;
 use pxl_engine::beam;
@@ -39,11 +39,11 @@ use pxl_engine::cast::{self, Detail, End, Hit, Node, Ray, Spacing, Trace, Until}
 use pxl_engine::light::{self, Light};
 use pxl_engine::object::Cut;
 use pxl_engine::{eye, node_cache, param, raster, ray, record};
-use pxl_render::frame::shader::record::{src, SHADER_LIGHT, SHADER_LIGHT_MARK, SHADER_REC_DRAW};
+use pxl_render::frame::shader::record::{SHADER_LIGHT, SHADER_LIGHT_MARK, SHADER_REC_DRAW, src};
 use pxl_render::frame::shader::word::SQUARE_SIDE;
 use pxl_spec::space::coord::zoom::Zoom;
 
-use real_world::{q8, Asking, Built, World, FINEST};
+use real_world::{Asking, Built, FINEST, World, q8};
 
 /// The leaf cells the worlds are built about. `EYE` lies 300 cells west of X's seam, and
 /// `EYE_ZERO` lies by X = 0, where one root ends and the next begins in X.
@@ -1332,9 +1332,9 @@ fn probe_cs(@builtin(global_invocation_id) id: vec3<u32>) {
 #[test]
 fn every_pass_bands_a_tile_alike() {
     use pxl_render::frame::shader::record::{
-        compute, COMPUTE_LIGHT, COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_SLIDE, COMPUTE_QUEUE_LAST_LIGHT,
+        COMPUTE_LIGHT, COMPUTE_LIGHT_CELL, COMPUTE_LIGHT_SLIDE, COMPUTE_QUEUE_LAST_LIGHT,
         COMPUTE_QUEUE_LAST_LIGHT_CORNERS, COMPUTE_QUEUE_LAST_LIGHT_SAMPLES, COMPUTE_QUEUE_LIGHT,
-        COMPUTE_QUEUE_LIGHT_CORNERS, COMPUTE_QUEUE_LIGHT_SAMPLES,
+        COMPUTE_QUEUE_LIGHT_CORNERS, COMPUTE_QUEUE_LIGHT_SAMPLES, compute,
     };
     use pxl_spec::space::camera::grid::INV_SPLIT2;
     use pxl_spec::space::coord::zoom::FINEST_ZOOM;

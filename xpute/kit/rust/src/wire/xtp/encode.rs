@@ -4,11 +4,11 @@ use crate::abi::word::field_set32;
 use crate::status::errno::Errno;
 use crate::status::error::XputeError;
 
-use super::cursor::{bytes_of, ArrayElem};
+use super::cursor::{ArrayElem, bytes_of};
 use super::spec::{
-    BranchNode, GraftNode, Node, Numeric, ScalarNode, ScalarType, SequenceNode, SequenceType,
-    SequenceVal, SpecialType, ALIGN_SZ, DESC_TYPE_MASK, DESC_TYPE_SHAMT, ELEM_SZ, GET_DESC,
-    GET_LEN, HDR_SZ, MAGIC, MAX_PKT_SZ, RESERVED, WORD_SZ,
+    ALIGN_SZ, BranchNode, DESC_TYPE_MASK, DESC_TYPE_SHAMT, ELEM_SZ, GET_DESC, GET_LEN, GraftNode,
+    HDR_SZ, MAGIC, MAX_PKT_SZ, Node, Numeric, RESERVED, ScalarNode, ScalarType, SequenceNode,
+    SequenceType, SequenceVal, SpecialType, WORD_SZ,
 };
 use super::view::NodeView;
 

@@ -10,11 +10,11 @@
 use std::fmt::Write;
 use std::sync::OnceLock;
 
-use xpute_gen::spec::data::{table_outputs, DataSpec};
+use xpute_gen::spec::data::{DataSpec, table_outputs};
 use xpute_gen::spec::rs_enum;
 
 use super::asset::{cube_member, cube_number, members};
-use super::{description, file, marks, read, u32_of, Node, Output};
+use super::{Node, Output, description, file, marks, read, u32_of};
 use crate::asset::table::Face;
 use crate::root;
 
@@ -228,7 +228,8 @@ export const PACK = {
 
 fn pack_rs(pack: &Pack) -> Result<String, String> {
     let faces = members("face", &Face::ALL.map(Face::name))?;
-    let mut out = vec![r##"use crate::asset::cube;
+    let mut out = vec![
+        r##"use crate::asset::cube;
 use crate::asset::id::AssetId;
 
 /// Which of a box's images a tile is, as Minecraft's `cube_bottom_top`
@@ -254,10 +255,11 @@ pub struct Pack {
     pub means: &'static [[u8; 3]],
 }
 "##
-    .replace(
-        "{CUBE_FACE}",
-        &rs_enum("CubeFace", &faces, "u8", "").join("\n"),
-    )];
+        .replace(
+            "{CUBE_FACE}",
+            &rs_enum("CubeFace", &faces, "u8", "").join("\n"),
+        ),
+    ];
     out.extend([
         "pub const PACK: Pack = Pack {".to_string(),
         format!("    cell: {},", pack.cell),

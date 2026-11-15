@@ -14,14 +14,14 @@ mod schedule;
 
 use crate::frame::shader::record::PIPELINE_SCREEN_RAY;
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, view_entry, word_bytes, Entry, Gpu, Group, TrackedRenderPass,
+    Entry, Gpu, Group, TrackedRenderPass, buf_entry, buffer_usage, bytes, view_entry, word_sz,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::paint::ground::look_words;
 use crate::spec::span::FrameKind;
 use cast::CastBuffer;
 pub use cast::{Cast, LightRead, ObjectTable};
-pub use count::{cnt_at, RayCount, CAST, LANES_AT, RAYS, RAY_CNT_CNT};
+pub use count::{CAST, LANES_AT, RAY_CNT_CNT, RAYS, RayCount, cnt_at};
 use ground::GroundBuffer;
 pub use ground::{BrickWrite, GroundInput, TerrainUpload, TerrainWrite};
 
@@ -58,7 +58,7 @@ impl RayPass {
         let pipeline = pipelines.build_world(g, PIPELINE_SCREEN_RAY);
         let words = look_words();
         let looks = g.buf(
-            word_bytes(4 * words.len()),
+            word_sz(4 * words.len()),
             buffer_usage::STORAGE | buffer_usage::COPY_DST,
         );
         g.write_buf(looks, 0, bytes(&words));

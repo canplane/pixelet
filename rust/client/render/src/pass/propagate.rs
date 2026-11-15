@@ -29,7 +29,7 @@ use crate::frame::shader::floor::MAX_COMPUTE_INVOCATIONS_PER_WORKGROUP;
 use crate::frame::shader::record::{COMPUTE_SCREEN_BOUND, COMPUTE_SCREEN_PROPAGATE};
 use crate::frame::shader::word::{BOUND_SQUARES, BOUND_STEP};
 use crate::gpu::api::{
-    buf_entry, buffer_usage, bytes, release, view_entry, word_bytes, Gpu, Group, RenderContext,
+    Gpu, Group, RenderContext, buf_entry, buffer_usage, bytes, release, view_entry, word_sz,
 };
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::tile::TileGrid;
@@ -61,7 +61,7 @@ impl Propagate {
         Propagate {
             pipeline: pipelines.build_compute(g, COMPUTE_SCREEN_PROPAGATE),
             uniform: g.buf(
-                word_bytes(UNIFORM_FLOATS),
+                word_sz(UNIFORM_FLOATS),
                 buffer_usage::UNIFORM | buffer_usage::COPY_DST,
             ),
             bounds: 0,
@@ -107,7 +107,7 @@ impl Propagate {
         }
         release(self.bounds);
         self.bounds = g.buf(
-            word_bytes(2 * (squares[0] * squares[1]) as usize),
+            word_sz(2 * (squares[0] * squares[1]) as usize),
             buffer_usage::STORAGE,
         );
         self.bounds_size = squares;

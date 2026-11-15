@@ -7,8 +7,8 @@
 //! compiles them in ts/tool/shader/probe.html.
 
 use pxl_render::frame::shader::record::{
-    self, compute, COMPUTE_CNT, FRAGMENT_ENTRY, HDR, NO_DEPTH, PARTS, PER_INSTANCE, PIPELINE_CNT,
-    STRIP, VERTEX_ENTRY,
+    self, COMPUTE_CNT, FRAGMENT_ENTRY, HDR, NO_DEPTH, PARTS, PER_INSTANCE, PIPELINE_CNT, STRIP,
+    VERTEX_ENTRY, compute,
 };
 use pxl_render::gpu::api::vertex_format;
 

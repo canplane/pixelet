@@ -19,7 +19,7 @@ pub mod spec;
 pub mod sys;
 pub(crate) mod ui;
 
-use xpute_gpu_guest::admit;
+use pxl_gpu_guest::admit;
 use xpute_link::frame::HDR_SZ;
 
 /// Whether this is a build made for measuring: `PXL_PERF_DRIVE=1` where it is
@@ -29,7 +29,7 @@ pub const MEASURING: bool = match option_env!("PXL_PERF_DRIVE") {
     None => false,
 };
 
-/// Whether the GPU's host takes a frame now without blocking (xpute-gpu-guest
+/// Whether the GPU's host takes a frame now without blocking (pxl-gpu-guest
 /// `admit::frame`), by the device's block, where the host writes the frame
 /// latency spec/client/render/api.json5 `device` sets.
 pub(crate) fn admit_frame() -> bool {

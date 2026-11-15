@@ -48,7 +48,7 @@ mod surface;
 #[path = "query/world.rs"]
 mod world;
 
-pub(crate) use ray::{at_zoom, by_dist, cell_zoom_at, finest, zoom_range, Hit, HitKind, Ray};
+pub(crate) use ray::{Hit, HitKind, Ray, at_zoom, by_dist, cell_zoom_at, finest, zoom_range};
 pub(crate) use support::{floor_of, is_unknown, on_floor, over, unknown};
 pub(crate) use world::{ColumnWalk, World};
 
@@ -58,9 +58,9 @@ use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::lattice::GROUND;
 
+use crate::domain::layer::Answer;
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::tile_cache::Path;
-use crate::domain::layer::Answer;
 use node::At;
 
 impl World {

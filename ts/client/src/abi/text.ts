@@ -9,7 +9,7 @@ import {
   type Handle,
   type LinkObject,
   type Method,
-  type Side,
+  type Serving,
   refusal_of,
 } from "@xpute/link/link.ts";
 
@@ -87,7 +87,7 @@ function object(implementation: Host): LinkObject {
 
 /** Serves `implementation` under the interface's handle. */
 export function mount(
-  l: Pick<Side, "mount_named">,
+  l: Pick<Serving, "mount_named">,
   implementation: Host,
 ): void {
   l.mount_named(HANDLE, object(implementation));

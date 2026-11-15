@@ -107,3 +107,24 @@ XPUTE_TEST(link_cancel_stops_once_and_never_after_answer) {
     guest.send(ROOT, CANCEL, Packet{4, [t](Lower &w) { w.put<std::uint32_t>(0, t); }}, nullptr);
     XPUTE_CHECK(stops == 1);
 }
+
+// A table holds an object under a handle the other end issued, as under its
+// own, and its slot follows that end's next generation (`Table::put`), as
+// xpute-link's link.test.rs holds it.
+XPUTE_TEST(table_holds_other_ends_handle) {
+    Table<int> issuer;
+    Table<int> holder;
+    Handle a = issuer.add(1);
+    Handle b = issuer.add(2);
+    holder.put(b, 2);
+    XPUTE_CHECK(holder.get(b) != nullptr && *holder.get(b) == 2);
+    XPUTE_CHECK(holder.get(a) == nullptr);
+    XPUTE_CHECK(holder.remove(b) == 2);
+    XPUTE_CHECK(issuer.remove(b) == 2);
+    Handle c = issuer.add(3);
+    holder.put(c, 3);
+    holder.put(a, 1);
+    XPUTE_CHECK(holder.get(b) == nullptr);
+    XPUTE_CHECK(holder.get(c) != nullptr && *holder.get(c) == 3);
+    XPUTE_CHECK(holder.get(a) != nullptr && *holder.get(a) == 1);
+}

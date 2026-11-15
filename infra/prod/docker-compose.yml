@@ -22,7 +22,7 @@
 
 services:
   db-main:
-    image: postgres:16
+    image: postgres:18
     container_name: pixelet-db-main
     restart: unless-stopped
     environment:
@@ -30,12 +30,12 @@ services:
       POSTGRES_PASSWORD: ${DB_MAIN_PASSWORD}
       POSTGRES_DB: ${DB_MAIN_NAME}
     volumes:
-      - pgdata-main:/var/lib/postgresql/data
+      - pgdata-main:/var/lib/postgresql
     networks:
       - pixelet
 
   db-geo:
-    image: postgis/postgis:16-3.4
+    image: postgis/postgis:18-3.7
     container_name: pixelet-db-geo
     restart: unless-stopped
     environment:
@@ -43,7 +43,7 @@ services:
       POSTGRES_PASSWORD: ${DB_GEO_PASSWORD}
       POSTGRES_DB: ${DB_GEO_NAME}
     volumes:
-      - pgdata-geo:/var/lib/postgresql/data
+      - pgdata-geo:/var/lib/postgresql
     networks:
       - pixelet
 

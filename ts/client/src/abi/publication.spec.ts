@@ -47,7 +47,7 @@ export const VERSION_CHARS =
 
 /** The longest version a declaration may name, in bytes: one segment of a tile's URL,
  * before its name (pxl-spec bake/source.rs `is_version`). */
-export const VERSION_BYTES = 32 as number;
+export const VERSION_SZ = 32 as number;
 
 /** The Earth's picture whole, in place of a tile's name under the earth
  * layer's version: the sphere's, no tile of the pyramid. */

@@ -6,8 +6,8 @@
 //! own, over the color it clears to (`companion_surface_draw`, pxl-render
 //! pass/character.rs).
 
-use crate::domain::scene::character::companion::companion_surface_draw;
 use crate::domain::scene::character::Group;
+use crate::domain::scene::character::companion::companion_surface_draw;
 use crate::sys::sched::invalidate;
 use pxl_global::Global;
 use pxl_render::gpu::api::Image;

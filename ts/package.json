@@ -1,29 +1,30 @@
 {
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.34.9",
+  "packageManager": "pnpm@12.21.0",
   "engines": {
-    "node": ">=24"
+    "node": ">=26"
   },
   "scripts": {
     "check": "pnpm fmt:check && pnpm lint && pnpm typecheck && pnpm knip",
     "typecheck": "tsc -p . && tsc -p client/tsconfig.native.json && tsc -p server/edge",
     "test": "vitest run --exclude 'tool/shader/**'",
+    "test:gpu:web": "node gpu/host/script/browser.ts",
     "fmt": "prettier --write .",
     "fmt:check": "prettier --check .",
     "lint": "oxlint",
     "knip": "knip"
   },
   "devDependencies": {
-    "@types/node": "^24",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
+    "@types/node": "^26",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@webgpu/types": "~0.1.74",
     "knip": "^6.45.1",
-    "oxlint": "^1.90.0",
-    "prettier": "^3.9.10",
+    "oxlint": "^1.93.0",
+    "prettier": "^3.10.1",
     "typescript": "^7.0.2",
-    "vite": "^8.3.0",
-    "vitest": "^5.0.5"
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
   }
 }

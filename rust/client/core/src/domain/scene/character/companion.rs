@@ -13,8 +13,8 @@
 //! Pets", CC0.
 
 use crate::domain::param;
-use crate::domain::query::change::Memo;
 use crate::domain::query::World;
+use crate::domain::query::change::Memo;
 use crate::domain::query::{cell_zoom_at, floor_of, is_unknown, over};
 use crate::domain::scene::character::param::{
     BODY_SHARE, CATCHUP_DURATION_S, CLIP_FADE_S, FOLLOW_WALK_LINGER_S, HEAD_CLEARANCE_U, PET_OFF,
@@ -37,8 +37,8 @@ use pxl_spec::asset::character::IDLE_CLIP;
 use pxl_spec::asset::marker::marker_shows;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::coord::v3::V3;
-use pxl_spec::space::coord::zoom::{units, Zoom};
-use pxl_spec::space::layer::lattice::{Grid, GROUND};
+use pxl_spec::space::coord::zoom::{Zoom, units};
+use pxl_spec::space::layer::lattice::{GROUND, Grid};
 use xpute_guest::clock;
 
 // The world's scroll rate. A character that glides at it cancels the scroll
@@ -189,11 +189,11 @@ pub(crate) fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
         .zip([(Group::Person, settings.person), (Group::Pet, settings.pet)])
     {
         // A walk lives as long as its character.
-        if slot.as_ref().is_some_and(|c| c.number != number) {
-            if let Some(c) = slot.take() {
-                c.free(draw_list());
-                *walk = Walk::default();
-            }
+        if slot.as_ref().is_some_and(|c| c.number != number)
+            && let Some(c) = slot.take()
+        {
+            c.free(draw_list());
+            *walk = Walk::default();
         }
         if slot.is_none() {
             *slot = Character::of(group, number);
@@ -215,14 +215,13 @@ pub(crate) fn companion_step(ctx: &TickContext, camera: Option<Camera>) {
     // While nothing is known under the pivot, each character with a height
     // holds where it is, and the rest of its step goes on.
     let hold = |w: &Walk| w.floor(World::now()).map(|z| (w.at, z));
-    if let Some(person) = person {
-        if let Some((target, z)) = camera
+    if let Some(person) = person
+        && let Some((target, z)) = camera
             .floor
             .map(|z| (camera.pivot, z))
             .or_else(|| hold(person_walk))
-        {
-            person.step(person_walk, ctx, target, z, &camera);
-        }
+    {
+        person.step(person_walk, ctx, target, z, &camera);
     }
     let Some(pet) = pet else { return };
     let target = [camera.pivot[0] + PET_OFF[0], camera.pivot[1] + PET_OFF[1]];

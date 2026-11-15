@@ -1,13 +1,13 @@
 // @pxl/client/service/core/core.ts
 
-/** The core as the UI reaches it: the UI's remote end of the link (`ui`),
- * which the core's interfaces are called over by their named handles. */
+/** The core as the UI reaches it: the UI's end, which the core's interfaces
+ * are called over by their named handles (`ui`). */
 
-import type { Remote } from "@xpute/link";
+import type { Sender } from "@xpute/link";
 
-export let ui: Remote;
+export let ui: Sender;
 
-/** Makes `remote` the UI's end of the link, before the core boots. */
-export function set_ui(remote: Remote): void {
-  ui = remote;
+/** Makes `end` the UI's end, before the core boots. */
+export function set_ui(end: Sender): void {
+  ui = end;
 }

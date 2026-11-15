@@ -4,8 +4,8 @@ use super::*;
 use crate::domain::layer::object::store::Store;
 use crate::domain::query::over;
 use crate::domain::query::test::{flat_at_five, placed, write};
-use pxl_spec::asset::cube::{self, Sentinel};
 use pxl_spec::asset::AssetId;
+use pxl_spec::asset::cube::{self, Sentinel};
 use pxl_spec::bake::constant::OBJECT_COARSEST;
 use pxl_spec::space::coord::{q3, world};
 

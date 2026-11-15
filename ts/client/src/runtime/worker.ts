@@ -5,25 +5,25 @@
  * that the core holds up none of the UI's events. The page sends, in one
  * message, its kept entries, the core's module, the UI's port, and the named
  * handles and prefixes of what the UI serves; the worker instantiates the
- * module with a link laid over it (@xpute/web-runtime `instantiate`) and
- * runs the core on it from the servers listed here (@xpute/web-runtime
+ * module with a link laid over it (@xpute/runtime-web `instantiate`) and
+ * runs the core on it from the servers listed here (@xpute/runtime-web
  * `run`): what the host serves, the core's files and GPU among them, the
  * UI's stand-ins across the port, the canvases the UI gives going to the
  * GPU. The files are here, so the source is declared here too.
  */
 
 import { type Side, sender } from "@xpute/link";
-import { serve_clock, serve_stop } from "@xpute/web-host";
+import { serve_clock, serve_stop } from "@xpute/host";
 import {
   forward_console,
   type Instantiate,
   instantiate,
   run,
-} from "@xpute/web-runtime";
-import { serve_vsync, WebGpu } from "@xpute/gpu-web-host";
+} from "@xpute/runtime-web";
+import { serve_vsync, WebGpu } from "@pxl/gpu/host";
 import { device } from "@/abi/gpu.spec.ts";
 import { IMPORTS } from "@/abi/imports.ts";
-import { LATER } from "@/abi/later.ts";
+import { CALLS } from "@/abi/calls.ts";
 import { set_online } from "@/service/origin/online.ts";
 import { serve_files } from "@/service/sys/fs/file.ts";
 import { serve_objects } from "@/service/sys/fs/object.ts";
@@ -40,7 +40,7 @@ import { serve_text } from "@/service/core/text.ts";
 import * as online from "@/service/platform/online.ts";
 
 /** What the page's start sends the worker beside the core's instantiation
- * (@xpute/web-runtime `Instantiate`): the page's kept entries, which a worker
+ * (@xpute/runtime-web `Instantiate`): the page's kept entries, which a worker
  * cannot read. */
 export interface Kept {
   entries: [string, string][];
@@ -63,7 +63,7 @@ export interface KeepReport {
 const tell = (m: SourceReport | KeepReport) => postMessage(m);
 
 // What the worker writes to its console goes to the page's lines too, where a
-// tool driving the page reads them (service/platform/log.ts).
+// tool driving the page reads them (service/platform/log.web.ts).
 forward_console();
 
 onmessage = ({ data: m }: MessageEvent<Instantiate & Kept>) => {
@@ -85,8 +85,9 @@ function keep(entries: [string, string][]): void {
 
 async function boot(m: Instantiate): Promise<void> {
   online.watch(set_online);
-  const side = await instantiate(m.module, m.init);
-  if (side === null) return;
+  const instance = await instantiate(m.module, m.init);
+  if (instance === null) return;
+  const { side } = instance;
   // The page's host runs by the config a device's does
   // (spec/client/render/api.json5 `device`).
   const gpu = new WebGpu(
@@ -98,23 +99,23 @@ async function boot(m: Instantiate): Promise<void> {
     },
     {
       frame_latency: device.FRAME_LATENCY,
-      upload_chunk_sz: device.UPLOAD_CHUNK_BYTES,
+      upload_chunk_sz: device.UPLOAD_CHUNK_SZ,
     },
   );
   run(
-    side,
+    instance,
     {
       servers: [
         serve_stop,
         serve_clock,
         serve_vsync,
         () => gpu.serve(),
-        serve_text,
-        serve_files,
-        serve_objects,
+        (s) => serve_text(s, s),
+        (s) => serve_files(s, s),
+        (s) => serve_objects(s, s),
       ],
       imports: IMPORTS,
-      later: LATER,
+      calls: CALLS,
       taker: {
         give: (h, canvas) => gpu.bind(h, canvas as OffscreenCanvas),
         take: (h) => gpu.unbind(h),

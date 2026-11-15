@@ -29,11 +29,7 @@ pub const fn field_mask64(nbit: u32, shamt: u32) -> u64 {
     } else {
         (1u64 << nbit) - 1
     };
-    if shamt >= 64 {
-        0
-    } else {
-        field << shamt
-    }
+    if shamt >= 64 { 0 } else { field << shamt }
 }
 pub const fn field_mask32(nbit: u32, shamt: u32) -> u32 {
     let field = if nbit >= 32 {
@@ -41,11 +37,7 @@ pub const fn field_mask32(nbit: u32, shamt: u32) -> u32 {
     } else {
         (1u32 << nbit) - 1
     };
-    if shamt >= 32 {
-        0
-    } else {
-        field << shamt
-    }
+    if shamt >= 32 { 0 } else { field << shamt }
 }
 
 pub const fn field_get64(x: u64, shamt: u32, mask: u64) -> u64 {

@@ -26,13 +26,15 @@ fn id_of(zoom: Zoom, at: [i32; 3]) -> u128 {
 fn write_undo_round_trip() {
     let mut store = Store::default();
     for at in [[8, 16, 24], [-3, 5, -7]] {
-        assert!(!store
-            .write([Write {
-                at: id_of(OBJECT_COARSEST, at),
-                asset_id: 3,
-                ext: None
-            }])
-            .is_empty());
+        assert!(
+            !store
+                .write([Write {
+                    at: id_of(OBJECT_COARSEST, at),
+                    asset_id: 3,
+                    ext: None
+                }])
+                .is_empty()
+        );
         let finest = at.map(|v| v << (OBJECT_FINEST - OBJECT_COARSEST));
         assert!(
             {

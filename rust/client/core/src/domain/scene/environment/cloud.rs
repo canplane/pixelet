@@ -21,7 +21,7 @@ use pxl_global::Global;
 use pxl_render::frame::shader::record::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR, PIPELINE_IMPOSTOR};
 use pxl_render::frame::shader::word::DECOR_GROUP_CNT;
 use pxl_render::gpu::draw::{DrawId, DrawList, Position, ReceiverBox};
-use pxl_spec::asset::catalog::{model_extent, Slot};
+use pxl_spec::asset::catalog::{Slot, model_extent};
 use pxl_spec::asset::sky::cumulus;
 use pxl_spec::space::coord::v3::{self, V3};
 use pxl_spec::space::coord::world::nearest;

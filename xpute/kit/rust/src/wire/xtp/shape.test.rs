@@ -1,7 +1,7 @@
 // xpute-kit/wire/xtp/shape.test.rs
 
 use super::*;
-use crate::wire::xtp::{encoder, NodeView, TreeEncoderConfig, TreeView, MAX_PKT_SZ};
+use crate::wire::xtp::{MAX_PKT_SZ, NodeView, TreeEncoderConfig, TreeView, encoder};
 
 type Packet = (Vec<u16>, u8, Vec<String>, (Vec<i16>, bool));
 

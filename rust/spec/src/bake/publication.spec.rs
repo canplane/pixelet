@@ -59,7 +59,7 @@ pub const VERSION_CHARS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstu
 
 /// The longest version a declaration may name, in bytes: one segment of a tile's URL,
 /// before its name (pxl-spec bake/source.rs `is_version`).
-pub const VERSION_BYTES: usize = 32;
+pub const VERSION_SZ: usize = 32;
 
 /// The Earth's picture whole, in place of a tile's name under the earth
 /// layer's version: the sphere's, no tile of the pyramid.

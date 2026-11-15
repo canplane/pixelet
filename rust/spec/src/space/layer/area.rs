@@ -8,7 +8,7 @@
 //! along shards' edges, which no node of a shard's size or finer straddles.
 
 use crate::space::coord::world::wrap_idx as wrap;
-use crate::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM, SHARD_ZOOM};
+use crate::space::coord::zoom::{LEAF_CELL_ZOOM, LEAF_ZOOM, SHARD_ZOOM, Zoom};
 
 /// The shards a source serves, as one level of the pyramid at `SHARD_ZOOM` that the CPU and
 /// the GPU both read (`nine_at`). Every cell at that zoom has a key (`shard_key`, one of
@@ -78,11 +78,7 @@ pub fn nine(served: impl Fn([i32; 2]) -> bool, own: [i32; 2]) -> u32 {
 /// a row off the world.
 pub fn nine_at(area: &impl Area, c: [i32; 2]) -> u32 {
     let k = shard_key(c);
-    if k == NO_KEY {
-        0
-    } else {
-        area.nine(k)
-    }
+    if k == NO_KEY { 0 } else { area.nine(k) }
 }
 
 /// Whether the leaf tile `leaf` is past the area: the area ends, and no served shard is over

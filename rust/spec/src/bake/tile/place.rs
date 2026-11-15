@@ -8,15 +8,15 @@
 //! a tile is its children with what shows from its zoom on. It is one XTP
 //! tree, as every other baked tile is.
 
-use crate::space::layer::lattice::{Cell, Grid, Lattice, GROUND};
+use crate::space::layer::lattice::{Cell, GROUND, Grid, Lattice};
 use fnv::FnvHashSet;
 
 use crate::asset::marker::MARK_STEP_CNT;
 use crate::bake::place_theme::{CATEGORIES, DOT_ZOOM, ICON_ZOOM, SYMBOL};
 use crate::bake::publication::BaseKind;
-use crate::bake::tile::{occupancy_of, Occupancy, StringTable, Tile};
+use crate::bake::tile::{Occupancy, StringTable, Tile, occupancy_of};
 use crate::space::coord::q3::Q3;
-use crate::space::coord::zoom::{Zoom, LEAF_ZOOM};
+use crate::space::coord::zoom::{LEAF_ZOOM, Zoom};
 use crate::space::layer::quadrant::Quadrant;
 use xpute_kit::status::error::XputeError;
 use xpute_kit::wire::xtp::shape;
@@ -44,10 +44,10 @@ pub const PLACE_FIRST: Zoom = {
     let mut first = PLACE_LAST;
     let mut k = 0;
     while k < CATEGORIES.len() {
-        if let Some(z) = first_zoom(k as u16 + 1) {
-            if z < first {
-                first = z;
-            }
+        if let Some(z) = first_zoom(k as u16 + 1)
+            && z < first
+        {
+            first = z;
         }
         k += 1;
     }
@@ -64,7 +64,7 @@ const _: () = assert!(
 );
 
 /// The most a packet takes, a tile past it failing its bake (`encode`).
-pub(crate) const MAX_PKT_BYTES: usize = 1 << 20;
+pub(crate) const PKT_CAP: u32 = 1 << 20;
 
 /// Per place its offset (two half-words), its category, the zoom it is shown
 /// from, the source's id and its name; the occupancy.
@@ -314,7 +314,7 @@ pub fn encode(tile: &PlaceTile) -> Result<Vec<u8>, XputeError> {
             &names,
             tile.occupancy.bits(),
         ),
-        MAX_PKT_BYTES as u32,
+        PKT_CAP,
     )
 }
 

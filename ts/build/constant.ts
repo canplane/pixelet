@@ -134,10 +134,14 @@ function literal_of(e: Init | Node | undefined, names: Names): Literal | null {
   }
 }
 
-type Pattern = Declaration["declarations"][number]["id"];
+/** A pattern a declaration binds through, at any depth, or an array's hole. */
+type Pattern = Extract<
+  Declaration["declarations"][number]["id"],
+  { type: "ArrayPattern" }
+>["elements"][number];
 
 /** The names a declaration's pattern binds. */
-function names_in(p: Pattern | null): string[] {
+function names_in(p: Pattern): string[] {
   switch (p?.type) {
     case "Identifier":
       return [p.name];
@@ -146,11 +150,11 @@ function names_in(p: Pattern | null): string[] {
         names_in(q.type === "RestElement" ? q.argument : (q.value as Pattern)),
       );
     case "ArrayPattern":
-      return p.elements.flatMap((q) => names_in(q as Pattern | null));
+      return p.elements.flatMap(names_in);
     case "AssignmentPattern":
       return names_in(p.left);
     case "RestElement":
-      return names_in(p.argument as Pattern);
+      return names_in(p.argument);
     default:
       return [];
   }
@@ -225,9 +229,10 @@ function read(file: string, m: Module): void {
       own.add(name_of(e.exported));
       others++;
       if (e.type === "ExportNamespaceSpecifier") {
-        if (to) exports.set(e.exported.name, { file: to });
+        if (to) exports.set(name_of(e.exported), { file: to });
       } else if (e.type === "ExportSpecifier" && e.exportKind !== "type") {
-        const at = s.source ? named(to, e.local.name) : bound.get(e.local.name);
+        const local = name_of(e.local);
+        const at = s.source ? named(to, local) : bound.get(local);
         if (at) exports.set(name_of(e.exported), at);
       }
     }

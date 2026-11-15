@@ -31,7 +31,7 @@ use pxl_spec::space::hierarchy::tree::Node;
 use pxl_spec::space::layer::octant::Octant;
 use pxl_spec::space::layer::quadrant::Quadrant;
 
-use crate::domain::query::{at_zoom, Ray, World};
+use crate::domain::query::{Ray, World, at_zoom};
 use design::Design;
 
 /// A brick of the eye's clip levels that markers are read over, named by its

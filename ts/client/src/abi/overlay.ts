@@ -3,14 +3,18 @@
 // GENERATED from spec/client/core/wit (xpute-link-gen wit.rs)
 
 import { type Message, of_Message } from "./overlay.enum.ts";
-import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
+import {
+  ERRNO_EBADMSG,
+  ERRNO_EINPROGRESS,
+  ERRNO_ENOSYS,
+} from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { Lift, type Lower } from "@xpute/link/cabi.ts";
 import {
   type Handle,
   type LinkObject,
   type Method,
-  type Side,
+  type Serving,
   refusal_of,
 } from "@xpute/link/link.ts";
 
@@ -179,13 +183,16 @@ export function load_Snapshot(r: Lift, at: number): Snapshot {
 }
 
 export interface Host {
-  show(snapshot: Snapshot): void;
-  draft(text: string): void;
-  view(azimuth: number, m_per_px: number): void;
+  show(snapshot: Snapshot, signal_: AbortSignal): Promise<void>;
+  draft(text: string, signal_: AbortSignal): Promise<void>;
+  view(azimuth: number, m_per_px: number, signal_: AbortSignal): Promise<void>;
 }
 
 /** The object over `implementation`. */
-function object(implementation: Host): LinkObject {
+function object(
+  l: Pick<Serving, "task_return" | "on_cancel">,
+  implementation: Host,
+): LinkObject {
   return {
     call(m, tag, args) {
       try {
@@ -193,20 +200,35 @@ function object(implementation: Host): LinkObject {
           case SHOW: {
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
-            implementation.show(load_Snapshot(r_, 0));
-            return 0;
+            const stop = new AbortController();
+            implementation.show(load_Snapshot(r_, 0), stop.signal).then(
+              () => l.task_return(tag, 0, null),
+              (e: unknown) => l.task_return(tag, refusal_of(e)),
+            );
+            l.on_cancel(tag, () => stop.abort());
+            return ERRNO_EINPROGRESS;
           }
           case DRAFT: {
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
-            implementation.draft(r_.str(0));
-            return 0;
+            const stop = new AbortController();
+            implementation.draft(r_.str(0), stop.signal).then(
+              () => l.task_return(tag, 0, null),
+              (e: unknown) => l.task_return(tag, refusal_of(e)),
+            );
+            l.on_cancel(tag, () => stop.abort());
+            return ERRNO_EINPROGRESS;
           }
           case VIEW: {
             if (args === null) return ERRNO_EBADMSG;
             const r_ = new Lift(args);
-            implementation.view(r_.f64(0), r_.f64(8));
-            return 0;
+            const stop = new AbortController();
+            implementation.view(r_.f64(0), r_.f64(8), stop.signal).then(
+              () => l.task_return(tag, 0, null),
+              (e: unknown) => l.task_return(tag, refusal_of(e)),
+            );
+            l.on_cancel(tag, () => stop.abort());
+            return ERRNO_EINPROGRESS;
           }
           default:
             return ERRNO_ENOSYS;
@@ -221,8 +243,8 @@ function object(implementation: Host): LinkObject {
 
 /** Serves `implementation` under the interface's handle. */
 export function mount(
-  l: Pick<Side, "mount_named">,
+  l: Pick<Serving, "mount_named" | "task_return" | "on_cancel">,
   implementation: Host,
 ): void {
-  l.mount_named(HANDLE, object(implementation));
+  l.mount_named(HANDLE, object(l, implementation));
 }

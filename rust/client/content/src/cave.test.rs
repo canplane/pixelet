@@ -1,4 +1,4 @@
-use super::{blocks, hollow, ROOT, ROOT_BLOCKS};
+use super::{ROOT, ROOT_BLOCKS, blocks, hollow};
 use pxl_engine::seed::node_seed;
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::world::SEA_LEVEL;
@@ -66,7 +66,7 @@ fn every_root_alike() {
 #[test]
 #[ignore]
 fn picture() {
-    use super::{holds, hollow_from, PIPE};
+    use super::{PIPE, holds, hollow_from};
     let Ok(path) = std::env::var("CAVE_PICTURE") else {
         return;
     };
@@ -133,7 +133,7 @@ fn picture() {
 /// node; and the pipe cells together hold the root's blocks.
 #[test]
 fn every_node_of_a_root_is_its_children() {
-    use super::{bounds, holds, PIPE};
+    use super::{PIPE, bounds, holds};
     for r in [[0, 0, 0], [1, 2, 3], [-7, 5, -1], [33, -40, 2]] {
         let mut level = vec![(ROOT, r)];
         while level[0].0 < PIPE {

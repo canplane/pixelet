@@ -17,7 +17,7 @@ use pxl_geo_bake::coverage::{Coverage, Overture};
 use pxl_geo_bake::place::{self, leaves};
 use pxl_geo_bake::pyramid::Base;
 use pxl_geo_bake::tile::shard::Run;
-use pxl_geo_bake::util::{pack, Level};
+use pxl_geo_bake::util::{Level, pack};
 use pxl_spec::bake::tile::place::PlaceTile;
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::layer::quadrant::Quadrant;

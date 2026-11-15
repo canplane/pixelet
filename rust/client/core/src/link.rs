@@ -28,7 +28,9 @@ use crate::sys::io::request;
 use crate::sys::sched::executor;
 use crate::sys::sched::{self, invalidate, invalidate_at};
 use crate::ui;
-use crate::ui::SnapshotMemo;
+use crate::ui::{SnapshotInput, SnapshotMemo};
+use core::future::poll_fn;
+use core::task::{Poll, Waker};
 use pxl_global::Global;
 use pxl_render::gpu::api;
 use pxl_render::gpu::surface;
@@ -42,6 +44,10 @@ struct State {
     /// The UI snapshot and view last posted. Each is posted again only when
     /// it changes, or when a UI starts (`tell_all`).
     last_snapshot: SnapshotMemo,
+    /// What the UI is posted next, until `ui_task` takes it.
+    ui_changed: Option<Changed>,
+    /// The waker of `ui_task` while it posts the UI nothing.
+    ui_waker: Option<Waker>,
 }
 
 static STATE: Global<State> = Global::new();
@@ -49,6 +55,8 @@ static STATE: Global<State> = Global::new();
 fn state() -> &'static mut State {
     STATE.get(|| State {
         last_snapshot: Default::default(),
+        ui_changed: None,
+        ui_waker: None,
     })
 }
 
@@ -66,9 +74,10 @@ pub fn boot() {
     export::mount();
     // The renderer's stream is laid at the size api.json5 gives it, and
     // then the device it runs on is taken.
-    api::install(stream::BYTES);
+    api::install(stream::SZ);
     gpu::boot();
     sched::boot();
+    executor::spawner().spawn(ui_task().or_bug(Errno::ENOSPC));
     // A layer asks for no more tiles at once than its tile cache has slots.
     request::open(|c| demand::of_stream(c).map_or(0, |l| l.slot_cnt));
     // The settings' slot is opened here and read by the frames that follow.
@@ -143,17 +152,59 @@ fn tell_all() {
     state().last_snapshot = SnapshotMemo::default();
 }
 
-/// Tells the other side what changed: what is drawn over the world, the view
-/// and the snapshot, the text of a draft that opened before the snapshot that
-/// shows it open. A call to the UI answers at once, its args copied across.
+/// What the UI is posted next: the view, its azimuth and meters per pixel,
+/// and the snapshot's inputs with the text of a draft that opened before the
+/// snapshot that shows it open (`SnapshotMemo`).
+type Changed = (
+    Option<(f64, f64)>,
+    Option<(SnapshotInput, Option<&'static str>)>,
+);
+
+/// Tells the other side what changed, at an entry's end, where the UI is
+/// posted nothing now (`ui_task`): what is drawn over the world, the view and
+/// the snapshot.
 fn post_ui(s: &mut State) {
-    if let Some((azimuth, m_per_px)) = s.last_snapshot.take_view_changed() {
-        abi::overlay::view(azimuth, m_per_px).or_bug(Errno::EPROTO);
+    let Some(w) = s.ui_waker.take() else {
+        return;
+    };
+    let changed = (
+        s.last_snapshot.take_view_changed(),
+        s.last_snapshot.take_changed(),
+    );
+    if changed.0.is_none() && changed.1.is_none() {
+        s.ui_waker = Some(w);
+        return;
     }
-    if let Some((shown, draft)) = s.last_snapshot.take_changed() {
-        if let Some(text) = draft {
-            abi::overlay::draft(text).or_bug(Errno::EPROTO);
+    s.ui_changed = Some(changed);
+    w.wake();
+}
+
+/// Posts the UI what `post_ui` hands it, each method an `async func` sent
+/// once the one before is answered, so a UI that lags is posted what stands
+/// as it answers. A UI dropped meanwhile answers ECANCELED, and the next is
+/// told all as it attaches (`tell_all`), so an answer is the UI's own.
+#[embassy_executor::task]
+async fn ui_task() {
+    loop {
+        let (view, changed) = poll_fn(|cx| {
+            let s = state();
+            match s.ui_changed.take() {
+                Some(p) => Poll::Ready(p),
+                None => {
+                    s.ui_waker = Some(cx.waker().clone());
+                    Poll::Pending
+                }
+            }
+        })
+        .await;
+        if let Some((azimuth, m_per_px)) = view {
+            let _ = abi::overlay::view(azimuth, m_per_px).await;
         }
-        abi::overlay::show(&ui::snapshot(&shown)).or_bug(Errno::EPROTO);
+        if let Some((shown, draft)) = changed {
+            if let Some(text) = draft {
+                let _ = abi::overlay::draft(text).await;
+            }
+            let _ = abi::overlay::show(&ui::snapshot(&shown)).await;
+        }
     }
 }

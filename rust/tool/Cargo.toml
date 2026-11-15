@@ -25,8 +25,8 @@ regex = "1"
 # `image` encodes WebP lossless only; the pack is lossy q92.
 webp = "0.3"
 # Carto's symbols are SVG; rasterized once, at ingest, into the masks the atlas draws.
-resvg = { version = "0.45", default-features = false }
-ureq = "2"
+resvg = { version = "0.50", default-features = false }
+ureq = "3"
 # Half the size of `image`'s JPEG encoder for the link preview.
 mozjpeg = "0.10"
 

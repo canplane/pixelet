@@ -10,7 +10,7 @@ use xpute_kit::math::scalar::round;
 use crate::frame::shader::floor;
 use crate::frame::shader::word::screen::TILE;
 use crate::spec::api::surface_role;
-use pxl_engine::{ray, WORKGROUP_CAP};
+use pxl_engine::{WORKGROUP_CAP, ray};
 
 /// The surface table's slots: at most this many surfaces are open at once.
 pub const SURFACE_CAP: usize = 9;
@@ -156,7 +156,7 @@ impl Surface {
     }
 }
 
-/// The surfaces open, each by the handle the link issued it (xpute gpu/wit
+/// The surfaces open, each by the handle the link issued it (spec/gpu/wit
 /// surface.wit); a free slot's handle is 0, which the link never issues.
 struct Table {
     surfaces: [Surface; SURFACE_CAP],

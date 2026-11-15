@@ -8,16 +8,16 @@
 
 use crate::answer;
 use crate::answer::{
-    box_join, box_none, cover, fill_word, fills, In, Kind, BOX_NONE, BOX_WHOLE, PLACED_ASSET,
+    BOX_NONE, BOX_WHOLE, In, Kind, PLACED_ASSET, box_join, box_none, cover, fill_word, fills,
 };
 use crate::clipmap::{self, BrickSource, Lookup, Pool};
 use crate::ground;
-use crate::object::{self, Cut, Table, CELL, ROOT, SPLIT};
+use crate::object::{self, CELL, Cut, ROOT, SPLIT, Table};
 use crate::way;
 use pxl_spec::asset::cube::Sentinel;
-use pxl_spec::ground::{word, GroundId};
-use pxl_spec::share::{eighths, FULL};
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM, UNIT_ZOOM};
+use pxl_spec::ground::{GroundId, word};
+use pxl_spec::share::{FULL, eighths};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, UNIT_ZOOM, Zoom};
 use pxl_spec::space::hierarchy::tree::child_of;
 use pxl_spec::space::layer::area::Shard;
 use pxl_spec::way::NOTHING;

@@ -2,7 +2,7 @@
 
 //! The materials the object store's values are drawn as, as the catalog defines them.
 
-use pxl_spec::asset::cube::{cube_rgb, Sentinel, ALL_CUBES};
+use pxl_spec::asset::cube::{ALL_CUBES, Sentinel, cube_rgb};
 use pxl_spec::asset::decor::DECORS;
 
 use crate::paint::palette::rgb255;

@@ -1,8 +1,8 @@
-// @pxl/native/modules/platform/ios/WorldView.swift
+// @pxl/client/modules/platform/ios/WorldView.swift
 
 import ExpoModulesCore
 import UIKit
-import XputeGpu
+import PxlGpu
 
 /// The world's surface, which hands its touches to the UI as pointer events
 /// (`onPointer`), as a page's canvas gives its pointer events.

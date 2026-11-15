@@ -1,5 +1,5 @@
 # The Node this workspace builds and runs with, as rust/rust-toolchain.toml
 # names the Rust of its tree. actions/setup-node reads this file through
 # `node-version-file`, and asdf and mise read it under ts/. pnpm's version is
-# package.json's `packageManager`, which corepack runs.
-nodejs 24.21.0
+# package.json's `packageManager`, which pnpm downloads and runs.
+nodejs 26.13.1

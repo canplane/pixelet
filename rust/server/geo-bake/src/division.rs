@@ -7,13 +7,13 @@
 
 use fnv::FnvHashMap;
 
-use pxl_geo_spec::overture::division::{steps, Children, LINEAGE_SQL};
 use pxl_geo_spec::BAKE_READ_DIST;
+use pxl_geo_spec::overture::division::{Children, LINEAGE_SQL, steps};
 
-use postgres::types::ToSql;
 use postgres::Client;
-use pxl_spec::bake::tile::division::{Division, DivisionTile, DIVISION_LEAF, NONE};
+use postgres::types::ToSql;
 use pxl_spec::bake::tile::Occupancy;
+use pxl_spec::bake::tile::division::{DIVISION_LEAF, Division, DivisionTile, NONE};
 use pxl_spec::division::Subtype;
 use pxl_spec::space::coord::adapter::epsg3857::{get_tile_bbox, merc_from_u, u_from_merc};
 use pxl_spec::space::coord::zoom::units;

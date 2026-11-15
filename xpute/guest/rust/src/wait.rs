@@ -3,7 +3,7 @@
 //! A sent method as a future, on the guest's side (xpute-link wait.rs), for
 //! the generated bindings' calls.
 
-use xpute_link::wait::{wait_by, Wait};
+use xpute_link::wait::{Wait, wait_by};
 use xpute_link::{Args, Handle, Method};
 
 pub fn wait<L: 'static>(h: Handle, m: Method, args: Args<'_>, lent: L) -> Wait<L> {

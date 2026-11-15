@@ -38,7 +38,7 @@ import { ui } from "@/service/core/core.ts";
 
 const WORD = 8;
 /** How many bytes a task's `path` column holds (perf.json5 `TASK`). */
-const PATH_BYTES = 3 * WORD;
+const PATH_SZ = 3 * WORD;
 
 export function start(): void {
   void perf.start(ui).catch((e: unknown) => {
@@ -380,11 +380,11 @@ const TABLE_WORDS = [FRAME.WORDS, TASK.WORDS, WORST.WORDS] as const;
 
 /** The records of the table `name`: the frames and the tasks oldest first,
  * the worst frames longest first, read a page at a time until a page comes
- * short (`perf.json5` `LIMIT.PAGE_BYTES`). */
+ * short (`perf.json5` `LIMIT.PAGE_SZ`). */
 async function table(name: (typeof TABLE_NAMES)[number]): Promise<U8Array> {
   const k = TABLE_NAMES.indexOf(name);
   const record = 8 * TABLE_WORDS[k]!;
-  const full = Math.floor(LIMIT.PAGE_BYTES / record) * record;
+  const full = Math.floor(LIMIT.PAGE_SZ / record) * record;
   const pages: U8Array[] = [];
   let bytes = 0;
   let from = 0;
@@ -434,7 +434,7 @@ async function perf_tasks(last: u32 | null = null): Promise<TaskRecord[]> {
           new Uint8Array(
             w.buffer,
             w.byteOffset + (o + TASK.path) * WORD,
-            PATH_BYTES,
+            PATH_SZ,
           ),
         )
         .replace(/\0+$/, ""),
@@ -448,7 +448,7 @@ async function perf_tasks(last: u32 | null = null): Promise<TaskRecord[]> {
       at: site(
         strtab,
         w[o + TASK.at_file],
-        w[o + TASK.at_file_bytes],
+        w[o + TASK.at_file_sz],
         w[o + TASK.at_line],
       ),
       phases,
@@ -486,7 +486,7 @@ const READERS = {
 
 export type PerfRead = keyof typeof READERS;
 
-/** Runs a read over the UI's link, on a page and on a device alike. */
+/** Runs a read over the UI's end, on a page and on a device alike. */
 export function read<K extends PerfRead>(
   what: K,
   ...args: Parameters<(typeof READERS)[K]>

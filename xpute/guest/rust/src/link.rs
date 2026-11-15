@@ -15,7 +15,8 @@ use xpute_link::layout;
 use xpute_link::mem;
 use xpute_link::{Answer, Args, Handle, Layout, Method, Object, Packet, Side, Tag};
 
-// A module takes the host's `link_out` under `env` (TS link.ts `imports`).
+// A module takes the host's `link_out` under `env` (@xpute/runtime-web
+// worker.ts `instantiate`).
 #[cfg_attr(target_arch = "wasm32", link(wasm_import_module = "env"))]
 unsafe extern "C" {
     fn link_out(at: u64) -> i32;

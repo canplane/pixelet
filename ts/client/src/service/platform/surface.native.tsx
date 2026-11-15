@@ -1,6 +1,6 @@
 // @pxl/client/service/platform/surface.native.tsx
 
-/** The core's surfaces on a device are xpute's native view (@xpute/gpu-native-runtime
+/** The core's surfaces on a device are the GPU's native view (@pxl/gpu/expo
  * `SurfaceView`), which wgpu draws into directly; the world's is the subclass
  * that gives its touches as pointer events (modules/platform `WorldView`),
  * fed to the input as a page's canvas feeds its own. The view's layer arrives
@@ -8,7 +8,7 @@
 
 import type { f64, i32, u32 } from "@xpute/kit/abi/word.ts";
 import { round } from "@xpute/kit/math/scalar.ts";
-import { SurfaceView, type SurfaceViewProps } from "@xpute/gpu-native-runtime";
+import { SurfaceView, type SurfaceViewProps } from "@pxl/gpu/expo";
 import { requireNativeView } from "expo";
 import { type ComponentType, useEffect, useRef, useState } from "react";
 import {

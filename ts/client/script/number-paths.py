@@ -26,8 +26,9 @@ from pathlib import Path
 
 PATH = re.compile(rb"[A-Za-z0-9_/.+-]*\.rs\b")
 # `src/` is a crate's own path, as the standard library's line tables hold it in
-# a static library.
-SOURCE_ROOT = re.compile(rb"/library/|^/rustc/|^/rust/deps/|\.rustup/|^src/")
+# a static library; `/cargo/registry/` is where the toolchain's own build took
+# the standard library's dependencies from.
+SOURCE_ROOT = re.compile(rb"/library/|^/rustc/|^/cargo/registry/|\.rustup/|^src/")
 
 
 def prefixes(workspace):

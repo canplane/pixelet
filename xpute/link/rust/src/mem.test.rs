@@ -2,7 +2,7 @@
 
 //! The guest's memory for a process's tests: what a test lays its frames,
 //! packets and blocks in, taken from the process's own. xpute-link's tests and
-//! xpute-gpu-native-host's take it alike.
+//! a plugin's host's take it alike.
 
 /// Takes `len` zeroed bytes, on a word, given to no other test, for the
 /// process's life, and answers their address.

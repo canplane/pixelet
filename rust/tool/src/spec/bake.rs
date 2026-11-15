@@ -1,11 +1,11 @@
 // pxl-tool/spec/bake.rs
 
 use super::ingest::symbol_number;
-use xpute_gen::spec::data::{enum_members, table_outputs, DataSpec};
+use xpute_gen::spec::data::{DataSpec, enum_members, table_outputs};
 use xpute_gen::spec::ts_enum;
 
 use super::{
-    file, json_str, line_comments, mark, pascal, plural, read, rs_doc, ts_doc, u32_of, Node, Output,
+    Node, Output, file, json_str, line_comments, mark, pascal, plural, read, rs_doc, ts_doc, u32_of,
 };
 use crate::root;
 

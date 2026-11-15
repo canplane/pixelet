@@ -9,10 +9,10 @@
 
 use core::f64::consts::TAU;
 
-use crate::space::coord::q3::{to_real, unpack, Q3};
+use crate::space::coord::q3::{Q3, to_real, unpack};
 use crate::space::coord::world;
-use crate::space::coord::world::{base_of, ROUND};
-use crate::space::coord::zoom::{units, Zoom, LEAF_CELL_ZOOM, LEAF_ZOOM};
+use crate::space::coord::world::{ROUND, base_of};
+use crate::space::coord::zoom::{LEAF_CELL_ZOOM, LEAF_ZOOM, Zoom, units};
 
 use super::epsg4326::EARTH_RADIUS_M;
 

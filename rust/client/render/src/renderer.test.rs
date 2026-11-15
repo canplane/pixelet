@@ -1,13 +1,13 @@
 // pxl-render/renderer.test.rs
 
 use super::*;
-use crate::frame::shader::record::{reads_shadow_map, SHADER_CNT};
 use crate::frame::shader::record::{
     PIPELINE_DEBUG, PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE, PIPELINE_MARKER,
 };
+use crate::frame::shader::record::{SHADER_CNT, reads_shadow_map};
 use crate::frame::shader::word::{draw, ghost_box, instance};
-use crate::gpu::draw::{drifted, test_lists, Draw, DrawId, DrawList, ReceiverBox};
-use crate::pass::mark::{marked, UploadOf};
+use crate::gpu::draw::{Draw, DrawId, DrawList, ReceiverBox, drifted, test_lists};
+use crate::pass::mark::{UploadOf, marked};
 
 /// The only test here that installs the calls' state. The lists' tests read
 /// that state, so this test takes their lock (`test_lists`) and never runs

@@ -49,6 +49,16 @@ fragmentation. What is held only at times lives on it, the largest of it
 under caps that the build checks against the heap; `heap.rs` reads its
 counters.
 
+The heap is not the same on a page and a device. Stable Rust gives a binary
+one global allocator and no allocator per allocation, and a device's library
+holds the core with xpute's runtime and host and the GPU's host. So on a device
+the heap takes all of their allocations, where on a page it takes the core's
+alone, the page's runtime and host being the worker's JavaScript and its GPU
+the browser's. On a device their allocations come out of the core's budget and
+can be what fills the heap, the runtime's, the GPU's and the core's threads
+take the heap's one lock, and the heap's counters count theirs too. `.fixed`
+is the same on both, since no allocator reaches it.
+
 The largest bodies, terrain and Earth packets of about two mebibytes, take
 slots in `.fixed` instead (`io/body.rs`): a fixed number of them, each as long
 as the longest such body. A slot is held by its guard from the moment it is

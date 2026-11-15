@@ -1,0 +1,27 @@
+// @pxl/gpu/expo/android/build.gradle
+//
+// This is the GPU's module (src/main/java/me/plei/pixelet/gpu/), the view the
+// guest's surface draws into and the GPU's host beside xpute's runtime. Its
+// classes are JNI's names in the package `me.plei.pixelet.gpu`, and load the
+// library xpute's module builds (`xpute.BuildConfig`).
+
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'me.plei.pixelet'
+version = '0.0.0'
+
+android {
+  namespace "me.plei.pixelet.gpu"
+  defaultConfig {
+    consumerProguardFiles "consumer-rules.pro"
+    versionCode 1
+    versionName "0.0.0"
+  }
+}
+
+dependencies {
+  implementation project(':xpute-expo')
+}

@@ -16,11 +16,11 @@ use fnv::{FnvHashMap, FnvHashSet};
 use crate::domain::scene::marker::atlas::atlas;
 use crate::sys::io::text::{text_lines, text_pixels};
 use pxl_global::Global;
-use pxl_render::frame::shelf::{Paint, NO_SLOT};
-use pxl_render::gpu::text::{raster_box, Raster};
+use pxl_render::frame::shelf::{NO_SLOT, Paint};
+use pxl_render::gpu::text::{Raster, raster_box};
 use pxl_render::look::marker::ATLAS_SCALE;
 use pxl_render::look::marker::{
-    bubble_size, pill_size, point_size, Font, BUBBLE_FONT, BUBBLE_TEXT_W, PILL_FONT, POINT_FONT,
+    BUBBLE_FONT, BUBBLE_TEXT_W, Font, PILL_FONT, POINT_FONT, bubble_size, pill_size, point_size,
 };
 
 use xpute_kit::status::bug::OrBug;

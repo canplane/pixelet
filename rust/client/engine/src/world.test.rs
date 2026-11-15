@@ -4,17 +4,17 @@ use super::*;
 use crate::cast::{End, Query};
 use crate::clipmap;
 use crate::clipmap::{
-    bound_over, column_top, entry, fold, join, joined_idx, mip_idx, Entry, Pool, ACROSS, BOUNDS_AT,
-    BOUND_ENTRY_WORDS, BRICK_MIP_LAST, BRICK_WORDS, CLIP_LEVEL_CNT, CLIP_SIZE, COLUMNS_AT,
-    ENTRY_CNT, EYE_CLIP_LEVEL_CNT, FIRST_CELL_ZOOM, JOINED_ENTRY_CNT, JOINED_MIP_CNT, JOINED_WORDS,
-    ORIGIN_AT, OWN_AT, OWN_CELL_CNT,
+    ACROSS, BOUND_ENTRY_WORDS, BOUNDS_AT, BRICK_MIP_LAST, BRICK_WORDS, CLIP_LEVEL_CNT, CLIP_SIZE,
+    COLUMNS_AT, ENTRY_CNT, EYE_CLIP_LEVEL_CNT, Entry, FIRST_CELL_ZOOM, JOINED_ENTRY_CNT,
+    JOINED_MIP_CNT, JOINED_WORDS, ORIGIN_AT, OWN_AT, OWN_CELL_CNT, Pool, bound_over, column_top,
+    entry, fold, join, joined_idx, mip_idx,
 };
 use crate::content::Sample;
-use crate::fill::{column_of, mip_of, own_of, put, root_of, LoneBrick};
+use crate::fill::{LoneBrick, column_of, mip_of, own_of, put, root_of};
 use crate::ground::Extent;
 use crate::support::{asset, column_surface};
-use pxl_spec::brick::{of_idx, BRICK, BRICK_CELL_CNT, BRICK_SHIFT};
-use pxl_spec::ground::{word, GroundId};
+use pxl_spec::brick::{BRICK, BRICK_CELL_CNT, BRICK_SHIFT, of_idx};
+use pxl_spec::ground::{GroundId, word};
 use pxl_spec::space::coord::zoom::SHARD_ZOOM;
 use pxl_spec::space::hierarchy::tree::{ancestor_at, child_of};
 use pxl_spec::space::layer::area;

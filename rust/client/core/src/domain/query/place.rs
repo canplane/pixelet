@@ -8,8 +8,8 @@ use pxl_spec::bake::tile::place::{Place, PlaceTile};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use super::world::World;
-use crate::domain::layer::tile_cache::Path;
 use crate::domain::layer::Base as _;
+use crate::domain::layer::tile_cache::Path;
 
 impl World {
     /// Calls `visit` with each place of each of `tiles`, read from the

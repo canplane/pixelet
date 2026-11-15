@@ -8,14 +8,14 @@
 use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON, PIPELINE_LOCATION_ZONE};
 use crate::frame::shader::record::{PIPELINE_LOCATION_BEACON_MARK, PIPELINE_LOCATION_ZONE_MARK};
 use crate::frame::shader::word::BOX_VERTEX_CNT;
-use crate::gpu::api::{buf_entry, buffer_usage, bytes, release, Gpu, TrackedRenderPass};
-use crate::gpu::draw::{uniform_of, DRAW_WORDS};
+use crate::gpu::api::{Gpu, TrackedRenderPass, buf_entry, buffer_usage, bytes, release};
+use crate::gpu::draw::{DRAW_WORDS, uniform_of};
 use crate::gpu::draw::{DrawStat, DrawTable};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
-use crate::gpu::upload::{buf_size, UploadTable};
+use crate::gpu::upload::{UploadTable, buf_size};
 use crate::param::location::beacon;
-use crate::pass::mark::{put_whole, MarkPass};
-use crate::pass::model::{put_uniform, UniformBuffer, DRAW_BYTES};
+use crate::pass::mark::{MarkPass, put_whole};
+use crate::pass::model::{DRAW_SZ, UniformBuffer, put_uniform};
 
 /// The octahedron's vertices: three for each of its eight faces.
 const BEACON_VERTEX_CNT: u32 = 24;
@@ -111,7 +111,7 @@ impl LocationPass {
         let (oct_p, oct_n) = octahedron_lanes();
         LocationPass {
             frame_group: g.bind_group(zone.layouts[0], &[buf_entry(0, frame_buf)]),
-            zone_uniforms: UniformBuffer::new(DRAW_BYTES, align),
+            zone_uniforms: UniformBuffer::new(DRAW_SZ, align),
             draws: 0,
             draws_buf: 0,
             zone,

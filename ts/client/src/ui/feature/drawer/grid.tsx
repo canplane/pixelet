@@ -6,6 +6,7 @@ import {
   Pressable,
   StyleSheet,
   View,
+  type ViewInstance,
 } from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
@@ -86,7 +87,7 @@ export function Item({
   children: React.ReactNode;
 }) {
   const naming = useContext(NamingContext);
-  const ref = useRef<View>(null);
+  const ref = useRef<ViewInstance>(null);
   return (
     <Pressable
       ref={ref}

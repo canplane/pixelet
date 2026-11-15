@@ -1,0 +1,27 @@
+[package]
+name = "pxl-gpu-guest"
+description = "WebGPU's calls, which the guest writes and the GPU's host runs"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+xpute-guest.workspace = true
+xpute-link.workspace = true
+pxl-gpu-link.workspace = true
+xpute-kit = { workspace = true, features = ["std"] }
+
+[dev-dependencies]
+# The golden programs' test reads and writes their record, which its writer
+# runs on this machine's GPU through the native host (program.test.rs).
+xpute-golden.workspace = true
+pxl-gpu-host.workspace = true
+hex.workspace = true
+wgpu = { version = "30", default-features = false, features = ["metal", "vulkan", "wgsl"] }
+pollster = "1"
+
+[lints]
+workspace = true

@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::space::coord::zoom::UNIT_ZOOM;
-use crate::space::layer::quadrant::{neighborhood, CHILDREN};
+use crate::space::layer::quadrant::{CHILDREN, neighborhood};
 
 /// A cell is found from its own corner, and the cell `up` zooms coarser is the point's cell there.
 #[test]

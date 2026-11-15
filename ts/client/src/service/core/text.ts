@@ -11,19 +11,20 @@
 import { td } from "@xpute/kit/codec/encoding.ts";
 import { ERRNO_EINVAL } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
-import type { Side } from "@xpute/link";
+import type { Memory, Serving } from "@xpute/link";
 import type { Lent } from "@xpute/link/abi/types.ts";
 
 import * as text from "@/abi/text.ts";
 import * as platform from "@/service/platform/text.ts";
 
-export function serve_text(side: Side): void {
+/** Serves the text on `link`, reading what the core lends in `mem`. */
+export function serve_text(link: Serving, mem: Memory): void {
   /** The text a call lends, which the core holds only until the call
    * returns. */
   const text_of = (span: Lent): string =>
-    td.decode(side.bytes(span.at, span.len));
+    td.decode(mem.bytes(span.at, span.len));
 
-  text.mount(side, {
+  text.mount(link, {
     width(weight, px, text) {
       return platform.width(weight, px, text_of(text));
     },
@@ -38,7 +39,7 @@ export function serve_text(side: Side): void {
         x,
         width,
         height,
-        side.bytes(image.at, len),
+        mem.bytes(image.at, len),
       );
     },
   });

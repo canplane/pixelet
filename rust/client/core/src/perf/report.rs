@@ -13,10 +13,10 @@ use xpute_guest::clock::now;
 
 use crate::domain::layer::Base;
 use crate::domain::scene::stage::FrameReport;
-use crate::perf::frame::{DeviceSample, FrameSample, GpuSample, RaySample, EFFECT_CNT};
+use crate::perf::frame::{DeviceSample, EFFECT_CNT, FrameSample, GpuSample, RaySample};
 use crate::perf::record::{
-    perf_fold_recording, perf_record_frame, perf_record_gpu, perf_record_rays, perf_recording,
-    RayRead,
+    RayRead, perf_fold_recording, perf_record_frame, perf_record_gpu, perf_record_rays,
+    perf_recording,
 };
 use crate::perf::section::RecordingSection;
 use crate::sys::heap::{self, HeapStat};

@@ -225,7 +225,7 @@ impl<Q: Brick> ColumnGrid for Q {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::asset::marker::{marker_cell_of, MARKER_SHOWN_FROM};
+    use crate::asset::marker::{MARKER_SHOWN_FROM, marker_cell_of};
     use crate::space::coord::zoom::UNIT_ZOOM;
     use crate::space::hierarchy::tree::ancestor_of;
     use crate::space::layer::octant::Octant;

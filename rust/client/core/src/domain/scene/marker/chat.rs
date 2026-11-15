@@ -9,7 +9,7 @@
 use std::rc::Rc;
 
 use pxl_global::Global;
-use pxl_spec::asset::marker::{text_fits, CHAT_TEXT_CHARS};
+use pxl_spec::asset::marker::{CHAT_TEXT_CHARS, text_fits};
 use xpute_guest::clock::now;
 use xpute_kit::status::errno::Errno;
 

@@ -11,11 +11,11 @@
 use pxl_content::scatter;
 use pxl_engine::clipmap::FIRST_CELL_ZOOM;
 use pxl_engine::{beam, eye};
-use pxl_spec::asset::decor::{Decor, DECORS};
+use pxl_spec::asset::decor::{DECORS, Decor};
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::camera::grid::{split_dist, CELLS_A_RAD, CLIP_CELLS_A_RAD, CLIP_MARGIN};
+use pxl_spec::space::camera::grid::{CELLS_A_RAD, CLIP_CELLS_A_RAD, CLIP_MARGIN, split_dist};
 use pxl_spec::space::coord::world::origin;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, Zoom};
 
 use crate::domain::query::zoom_range;
 use crate::domain::view::observation;

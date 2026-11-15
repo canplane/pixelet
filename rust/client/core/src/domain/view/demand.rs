@@ -20,7 +20,7 @@ use crate::domain::layer::object::repository;
 use crate::domain::layer::{AskScope, Base};
 use crate::sys::io::body::Body;
 use crate::sys::io::demand::{Source, Stream};
-use crate::sys::io::fetch::{answer_cnt, take_answer, Response};
+use crate::sys::io::fetch::{Response, answer_cnt, take_answer};
 use crate::sys::io::request::{attempt_of, settle};
 use pxl_spec::bake::tile::division::DivisionTile;
 use xpute_kit::status::errno::Errno;
@@ -28,14 +28,14 @@ use xpute_kit::status::errno::Errno;
 use fnv::FnvHashMap;
 
 use pxl_spec::space::camera::eye::Observation;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM, SHARD_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_ZOOM, SHARD_ZOOM, Zoom};
 use pxl_spec::space::layer::quadrant::Quadrant;
 
 use crate::domain::layer::floor;
 use crate::domain::layer::tile_cache::{Path, TileCache};
 use crate::domain::query::ColumnWalk;
 use crate::domain::view::observation;
-use crate::domain::view::observation::{observation, ByEye};
+use crate::domain::view::observation::{ByEye, observation};
 use crate::sys::io::demand::{Order, PhaseList};
 use crate::sys::io::failure::{Exit, Failure};
 use crate::sys::io::request::declare;
@@ -43,7 +43,7 @@ use crate::sys::io::source;
 use crate::sys::sched;
 use pxl_spec::space::hierarchy::morton::key_of;
 use pxl_spec::space::layer::demand::tiles_within;
-use pxl_spec::space::layer::lattice::{demand_dist, GROUND};
+use pxl_spec::space::layer::lattice::{GROUND, demand_dist};
 
 /// A base layer whose demand the view holds, beside its tile cache.
 pub(crate) trait DemandedBase: Base {

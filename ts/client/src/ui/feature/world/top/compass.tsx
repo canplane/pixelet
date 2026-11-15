@@ -52,7 +52,7 @@ export function CompassFace() {
         width={CHROME.control}
         height={CHROME.control}
         viewBox={BOX}
-        style={StyleSheet.absoluteFill}
+        style={[StyleSheet.absoluteFill]}
       >
         <Path
           d={QUARTERS}

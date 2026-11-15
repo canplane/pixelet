@@ -11,7 +11,7 @@
 use pxl_engine::{count, node_cache, raster, ray};
 use xpute_link::mem;
 
-use crate::gpu::api::{buffer_usage, bytes, result, signaled, word_bytes, Gpu};
+use crate::gpu::api::{Gpu, buffer_usage, bytes, result, signaled, word_sz};
 
 const WORDS: usize = count::WORDS as usize;
 
@@ -83,11 +83,11 @@ impl Counter {
     pub(super) fn new(g: &Gpu) -> Counter {
         Counter {
             cnts: g.buf(
-                word_bytes(WORDS),
+                word_sz(WORDS),
                 buffer_usage::COPY_DST | buffer_usage::COPY_SRC,
             ),
             read: g.buf(
-                word_bytes(WORDS),
+                word_sz(WORDS),
                 buffer_usage::MAP_READ | buffer_usage::COPY_DST,
             ),
             on: false,
@@ -122,7 +122,7 @@ impl Counter {
         }
         g.write_buf(
             node_cache,
-            word_bytes(node_cache::CNT_ON as usize),
+            word_sz(node_cache::CNT_ON as usize),
             bytes(&hdr),
         );
         if !self.on {
@@ -159,17 +159,17 @@ impl Counter {
                 ),
                 (from.boxes[k], raster::ARGS_INSTANCE_CNT, count::BOX, 1),
             ] {
-                let to = word_bytes(count::at(o, lane) as usize);
-                let size = word_bytes(words as usize);
+                let to = word_sz(count::at(o, lane) as usize);
+                let size = word_sz(words as usize);
                 g.copy_buf(
                     encoder,
-                    (buf, word_bytes(word as usize)),
+                    (buf, word_sz(word as usize)),
                     (self.cnts, to),
                     size,
                 );
             }
         }
-        g.copy_buf(encoder, (self.cnts, 0), (self.read, 0), word_bytes(WORDS));
+        g.copy_buf(encoder, (self.cnts, 0), (self.read, 0), word_sz(WORDS));
         self.copying = self.frame;
     }
 
@@ -208,7 +208,7 @@ impl Counter {
             g.map_read(
                 self.read,
                 0,
-                word_bytes(WORDS),
+                word_sz(WORDS),
                 addr,
                 &self.mapping,
                 self.ticket,

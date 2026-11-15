@@ -69,7 +69,7 @@ fn decor_edges_cell_shares() {
 /// box would keep nothing there.
 #[test]
 fn decor_clip_levels_by_size() {
-    use pxl_spec::space::coord::zoom::{units, UNIT_ZOOM};
+    use pxl_spec::space::coord::zoom::{UNIT_ZOOM, units};
     let leaf = 1 << (LEAF_CELL_ZOOM - FIRST_CELL_ZOOM);
     // Extents from a tuft of grass to a ship.
     for extent in [0.5, 2.0, 8.0, 40.0, 400.0] {

@@ -1,12 +1,15 @@
 // The client as a device's bundler reads it, from its entry (index.ts) and
-// its build's configuration: x.native.ts in place of x.ts where there is one,
-// and the page's own files, which no device reaches, left out. The page's is
-// ../tsconfig.json.
+// its build's configuration: x.native.ts where an import names x.ts, and the
+// page's own files, which no device reaches, left out. It also reads
+// src/conform.ts, which imports both halves of each pair and which only this
+// view resolves as each half's own platform does; the page's view leaves it
+// out, so this view's `exclude` is its own. The page's is ../tsconfig.json.
 {
   "extends": "../tsconfig.json",
   "compilerOptions": {
     "types": ["node", "@webgpu/types"],
     "moduleSuffixes": [".native", ""]
   },
-  "include": ["*.ts", "plugin", "script", "@types"]
+  "include": ["*.ts", "plugin", "script", "@types", "src/conform.ts"],
+  "exclude": []
 }

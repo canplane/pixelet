@@ -7,9 +7,9 @@
 //! never as a cube.
 
 use crate::domain::control::camera::controller::Motion;
+use crate::domain::control::edit::Hover;
 use crate::domain::control::edit::collision::anchor_center;
 use crate::domain::control::edit::ghost::{at_corner, decor_of, ghost_of};
-use crate::domain::control::edit::Hover;
 use crate::domain::control::navigation::destination;
 use crate::domain::control::support::stand;
 use crate::domain::preview::Ghost;

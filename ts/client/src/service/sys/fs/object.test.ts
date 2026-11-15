@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { ComponentError } from "@xpute/link";
-import { ERROR_CODE_NO_ENTRY } from "@xpute/web-host/abi/fs/types.enum.ts";
+import { ERROR_CODE_NO_ENTRY } from "@xpute/host/abi/fs/types.enum.ts";
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
 

@@ -8,8 +8,8 @@
 //! other baked tile is; a tile with no object is answered by the global picture.
 
 use crate::bake::malformed;
-use crate::space::coord::zoom::{Zoom, MIN_ZOOM};
-use crate::space::layer::lattice::{demand_dist, GROUND, TILE_CELLS};
+use crate::space::coord::zoom::{MIN_ZOOM, Zoom};
+use crate::space::layer::lattice::{GROUND, TILE_CELLS, demand_dist};
 use xpute_kit::status::error::XputeError;
 use xpute_kit::wire::xtp::shape;
 
@@ -21,7 +21,7 @@ pub const EARTH_ZOOM: Zoom = MIN_ZOOM;
 /// ground's demand at that zoom.
 pub const EARTH_DIST: f64 = demand_dist(GROUND, EARTH_ZOOM);
 
-pub const EARTH_BYTES: usize = (TILE_CELLS * TILE_CELLS * 4) as usize;
+pub const EARTH_SZ: usize = (TILE_CELLS * TILE_CELLS * 4) as usize;
 
 /// The global picture's texels, across and down, what is drawn past the
 /// tiles: the whole Earth equirectangular, as pxl-geo-bake bin/earth.rs
@@ -29,22 +29,22 @@ pub const EARTH_BYTES: usize = (TILE_CELLS * TILE_CELLS * 4) as usize;
 pub const PICTURE: (u32, u32) = (2048, 1024);
 
 /// Every packet's length: its texels, as `encode` lays them.
-pub(crate) const PKT_BYTES: usize =
-    super::pkt::HDR + super::pkt::branch(1) + super::pkt::seq(EARTH_BYTES);
+pub(crate) const PKT_SZ: u32 =
+    (super::pkt::HDR + super::pkt::branch(1) + super::pkt::seq(EARTH_SZ)) as u32;
 
 type Packet = (Vec<u8>,);
 
 pub fn encode(rgba: &[u8]) -> Result<Vec<u8>, XputeError> {
-    if rgba.len() != EARTH_BYTES {
+    if rgba.len() != EARTH_SZ {
         return Err(malformed());
     }
-    shape::encode::<Packet>((rgba,), PKT_BYTES as u32)
+    shape::encode::<Packet>((rgba,), PKT_SZ)
 }
 
 /// The tile's texels, read in place.
 pub fn decode(pkt: &[u8]) -> Result<&[u8], XputeError> {
     let (rgba,) = shape::get_deep::<Packet>(pkt)?;
-    if rgba.len() != EARTH_BYTES {
+    if rgba.len() != EARTH_SZ {
         return Err(malformed());
     }
     Ok(rgba)

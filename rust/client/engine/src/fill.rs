@@ -12,19 +12,19 @@
 use crate::answer;
 use crate::clipmap;
 use crate::clipmap::{
-    column_top, BrickSource, BOUNDS_AT, BOUND_ENTRY_WORDS, COLUMNS_AT, OWN_AT, OWN_CELL_CNT,
-    ROOT_AT, RUN_BITS_AT, RUN_OFFS_AT, RUN_RANK_AT, SPANS_ACROSS, SPANS_AT, SPANS_COLUMN_CNT,
-    SPANS_COLUMN_WORDS,
+    BOUND_ENTRY_WORDS, BOUNDS_AT, BrickSource, COLUMNS_AT, OWN_AT, OWN_CELL_CNT, ROOT_AT,
+    RUN_BITS_AT, RUN_OFFS_AT, RUN_RANK_AT, SPANS_ACROSS, SPANS_AT, SPANS_COLUMN_CNT,
+    SPANS_COLUMN_WORDS, column_top,
 };
 use crate::{at, ground, way};
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::brick;
 use pxl_spec::brick::{BRICK, BRICK_CELL_CNT};
-use pxl_spec::ground::{ele_at, own, word, GroundId};
+use pxl_spec::ground::{GroundId, ele_at, own, word};
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::Zoom;
 use pxl_spec::space::layer::area::Shard;
-use pxl_spec::way::{column, SpanList, AIR_OF};
+use pxl_spec::way::{AIR_OF, SpanList, column};
 
 /// Sets word `i` of `s` to `v`. Like `at`, it is total: a store past the slice does nothing,
 /// so no store aborts.

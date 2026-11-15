@@ -10,27 +10,27 @@
 //! served, as the Worker's tiles do: a set's version is its manifest's digest, and the oven's
 //! is the token its folder holds (`version_of`).
 
+use axum::Router;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
-use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
-use axum::Router;
 use pxl_geo_bake::cli;
 use pxl_geo_bake::cli::Argv;
 use pxl_geo_bake::coverage::Coverage;
 use pxl_geo_bake::oven::{
-    job::{self, Limit},
     Failure, Server,
+    job::{self, Limit},
 };
 use pxl_geo_bake::pyramid;
 use pxl_geo_bake::source::{self, OverrideMap};
 use pxl_geo_bake::util::CONTENT_ENCODING;
-use pxl_spec::bake::publication::{tile_object_parts, BaseKind, FORMAT, TILE_SPHERE};
+use pxl_spec::bake::publication::{BaseKind, FORMAT, TILE_SPHERE, tile_object_parts};
 use pxl_spec::bake::source::is_sharded;
 use pxl_spec::directory;
 use pxl_spec::route::{ASSET_ROOT, TILE_ROOT};
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_ZOOM, MIN_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_ZOOM, MIN_ZOOM, Zoom};
 use pxl_spec::space::layer::quadrant::Quadrant;
 use std::path::{Path as FsPath, PathBuf};
 use std::process::ExitCode;

@@ -11,13 +11,14 @@
 //! terminal crates declare (lib.rs on a page, pxl-runtime on a device). The
 //! memory is never grown, so a full heap refuses.
 
+use xpute_kit::alloc::ADDR_BITS;
 use xpute_kit::alloc::buddy_tree::Range;
 use xpute_kit::alloc::heap::HeapMalloc;
-use xpute_kit::alloc::ADDR_BITS;
 
 use crate::spec::manifest::mem;
 
-/// The heap's counters, as its allocator reports them.
+/// The heap's counters, as its allocator reports them: on a device the whole
+/// library's allocations, on a page the core's (sys/README.md).
 #[derive(Clone, Copy, Default)]
 pub(crate) struct HeapStat {
     pub range: usize,
@@ -39,10 +40,10 @@ pub(crate) struct HeapStat {
 
 /// The buddy's smallest block. Every fixed range begins on one, as the heap
 /// after them does.
-pub(crate) const PAGE_BYTES: u32 = 4096;
+pub(crate) const PAGE_SZ: u32 = 4096;
 
 const fn page_up(at: usize) -> usize {
-    at.next_multiple_of(PAGE_BYTES as usize)
+    at.next_multiple_of(PAGE_SZ as usize)
 }
 
 /// Where the memory begins: a module's at 0.
@@ -69,7 +70,7 @@ fn mem_at() -> usize {
     if base != 0 {
         return base;
     }
-    let Ok(layout) = Layout::from_size_align(mem::SZ as usize + PAGE_BYTES as usize, 16) else {
+    let Ok(layout) = Layout::from_size_align(mem::SZ as usize + PAGE_SZ as usize, 16) else {
         std::process::abort();
     };
     // SAFETY: a layout of nonzero size.
@@ -105,7 +106,7 @@ pub(crate) fn fixed_at() -> usize {
 }
 
 /// The log2 of a page.
-const PAGE_LOG2: usize = PAGE_BYTES.trailing_zeros() as usize;
+const PAGE_LOG2: usize = PAGE_SZ.trailing_zeros() as usize;
 
 /// 2 GiB, the largest power of two short of the whole address space. The
 /// tree starts as one leaf and grows only as requests need it; `end` says

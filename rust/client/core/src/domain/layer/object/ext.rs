@@ -60,10 +60,9 @@ impl Pool {
         if let Some(slot) = h
             .checked_sub(1)
             .and_then(|s| pool.slots.get_mut(usize::from(s)))
+            && slot.take().is_some()
         {
-            if slot.take().is_some() {
-                pool.free.push(h);
-            }
+            pool.free.push(h);
         }
     }
 

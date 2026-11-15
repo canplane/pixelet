@@ -1,7 +1,13 @@
 // @pxl/client/ui/feature/world/dock/dock.tsx
 
 import { useRef, useState } from "react";
-import { PanResponder, PixelRatio, StyleSheet, View } from "react-native";
+import {
+  PanResponder,
+  PixelRatio,
+  StyleSheet,
+  View,
+  type ViewInstance,
+} from "react-native";
 
 import type { f64 } from "@xpute/kit/abi/word.ts";
 import { keep_keyboard } from "@/ui/shared/component/keyboard.tsx";
@@ -29,7 +35,7 @@ export function Dock() {
   const message = useMessage(mode);
   const [bar_width, set_bar_width] = useState<f64>(0);
   const [strip_width, set_strip_width] = useState<f64>(CHROME.control);
-  const bar = useRef<View | null>(null);
+  const bar = useRef<ViewInstance | null>(null);
   const { popover, gesture } = usePopover(bar);
 
   const shown_popover = mode === DockMode.PALETTE ? popover : null;

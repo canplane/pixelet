@@ -1,13 +1,13 @@
 // @pxl/client/runtime/ui.ts
 
 /**
- * What the boot does alike on a page (boot.ts) and a device (boot.native.ts):
- * it mounts the interfaces the UI serves the core before the core starts, and
- * moves where the boot stands as the core answers and the world arrives. The
- * UI only reads where the boot stands (service/sys/boot.ts).
+ * What the boot does alike on a page (boot.web.ts) and a device
+ * (boot.native.ts): it mounts the interfaces the UI serves the core before the
+ * core starts, and moves where the boot stands as the core answers and the
+ * world arrives. The UI only reads where the boot stands (service/sys/boot.ts).
  */
 
-import type { Remote } from "@xpute/link";
+import { type End, sender } from "@xpute/link";
 import { type Snapshot } from "@/abi/overlay.ts";
 import { set_online } from "@/service/origin/online.ts";
 import { log } from "@/service/platform/log.ts";
@@ -45,11 +45,11 @@ function loaded(s: Snapshot): boolean {
   return s.renderer_progress === 1 && (s.pivot.ground_shown || s.pivot.outside);
 }
 
-/** Makes `remote` the UI's end of the link and mounts on it the interfaces the
- * UI serves, before the core boots. */
-export function serve_ui(remote: Remote): void {
-  set_ui(remote);
-  serve_overlay(remote);
+/** Makes `ui` the UI's end and mounts on it the interfaces the UI serves,
+ * before the core boots. */
+export function serve_ui(ui: End): void {
+  set_ui(sender(ui));
+  serve_overlay(ui);
 }
 
 /** Moves the started core's boot on as what it waits on comes: LOADING once a

@@ -7,7 +7,7 @@
 //! content's strata and caves (`Resident::Content`).
 
 use crate::answer::{
-    bound_of, bound_word, box_word, In, Kind, PackedBox, BOX_BITS, BOX_NONE, BOX_STEPS, BOX_WHOLE,
+    BOX_BITS, BOX_NONE, BOX_STEPS, BOX_WHOLE, In, Kind, PackedBox, bound_of, bound_word, box_word,
 };
 use crate::content::Content;
 use pxl_spec::asset::cube::Sentinel;
@@ -15,7 +15,7 @@ use pxl_spec::ground::{cells, face_cell, face_ele};
 use pxl_spec::share::FULL;
 use pxl_spec::space::coord::world::SEA_LEVEL;
 use pxl_spec::space::coord::zoom::{
-    z_start, Zoom, HEIGHT_BITS, LEAF_CELL_ZOOM, MIN_ZOOM, SHARD_ZOOM,
+    HEIGHT_BITS, LEAF_CELL_ZOOM, MIN_ZOOM, SHARD_ZOOM, Zoom, z_start,
 };
 use pxl_spec::space::layer::area::{Area, Shard};
 use pxl_spec::value;
@@ -87,11 +87,7 @@ pub fn slab(zoom: Zoom, [_, hi]: [i32; 2], [far, near]: [Zoom; 2]) -> [i32; 2] {
 /// coarser than asked, so it is no coarser than its children's. Every source's bound over a
 /// node is read from this zoom to the finest asked.
 pub fn coarsest(zoom: Zoom, far: Zoom) -> Zoom {
-    if far > zoom + 1 {
-        far
-    } else {
-        zoom + 1
-    }
+    if far > zoom + 1 { far } else { zoom + 1 }
 }
 
 /// A leaf cell's index at the world's floor, under sea level.
@@ -289,11 +285,7 @@ impl Cell {
     /// The share of cell `z` that its ground fills, in `share::FULL`'s units, where a cell of
     /// it fills there (`asset`): whole under its top cell, and its part in the top cell (`top`).
     pub fn cover(&self, z: i32) -> u32 {
-        if z == self.top - 1 {
-            self.part
-        } else {
-            FULL
-        }
+        if z == self.top - 1 { self.part } else { FULL }
     }
 
     /// Whether it has ground at all: an asset id the catalog grounds, or the wall.

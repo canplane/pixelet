@@ -74,12 +74,12 @@
 //! read only where it hashes to the entry's stamp (pxl-render ask.wgsl `entry_stamp`), because
 //! another walk may be taking the slot over while it reads.
 
+use crate::ZOOM_BITS;
 use crate::answer::Kind;
 use crate::clipmap::{self, EYE_CLIP_LEVEL_CNT};
 use crate::count;
 use crate::object::DAMAGE_CAP;
 use crate::world::INHERITANCE_WORDS;
-use crate::ZOOM_BITS;
 use pxl_spec::asset::cube::Sentinel;
 use pxl_spec::space::coord::zoom::Zoom;
 
@@ -145,18 +145,10 @@ pub const NO_BRICKS: [i32; 4] = [i32::MAX, i32::MAX, i32::MIN, i32::MIN];
 /// The least box holding boxes `a` and `b` (`CHANGED_BRICKS_AT`).
 pub const fn bricks_joined(a: [i32; 4], b: [i32; 4]) -> [i32; 4] {
     const fn most(x: i32, y: i32) -> i32 {
-        if x > y {
-            x
-        } else {
-            y
-        }
+        if x > y { x } else { y }
     }
     const fn least(x: i32, y: i32) -> i32 {
-        if x < y {
-            x
-        } else {
-            y
-        }
+        if x < y { x } else { y }
     }
     [
         least(a[0], b[0]),
@@ -400,8 +392,8 @@ mod tests {
         }
     }
 
-    use crate::cast::tests::reached;
     use crate::cast::Node;
+    use crate::cast::tests::reached;
 
     /// Every node within `REACH` of an origin in the world, at every zoom from 1 to the one
     /// coarser than the finest, is one a slot may keep, near X's seam and the world's edges

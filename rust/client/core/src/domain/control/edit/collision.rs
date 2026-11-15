@@ -1,11 +1,11 @@
 // pxl-core/domain/control/edit/collision.rs
 
-use pxl_spec::asset::id::{kind_of, Kind};
+use pxl_spec::asset::id::{Kind, kind_of};
 use pxl_spec::space::coord::aabb::Aabb;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
 use pxl_spec::space::coord::world::{cube, idx_of};
-use pxl_spec::space::coord::zoom::{units, Zoom};
+use pxl_spec::space::coord::zoom::{Zoom, units};
 use pxl_spec::space::layer::lattice::GROUND;
 
 use crate::domain::layer::object::asset::Asset;

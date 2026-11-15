@@ -141,3 +141,24 @@ fn cancel_stops_once_and_never_after_answer() {
     GUEST.with(|g| g.send(ROOT, CANCEL, Packet::Args(Some((4, &tag))), None));
     assert_eq!(stops.get(), 1);
 }
+
+/// A table holds an object under a handle the other end issued, as under its
+/// own, and its slot follows that end's next generation (`Table::put`).
+#[test]
+fn table_holds_other_ends_handle() {
+    let mut issuer = Table::new();
+    let mut holder = Table::new();
+    let a = issuer.add(1);
+    let b = issuer.add(2);
+    holder.put(b, 2);
+    assert_eq!(holder.get(b), Some(&2));
+    assert_eq!(holder.get(a), None);
+    assert_eq!(holder.remove(b), Some(2));
+    assert_eq!(issuer.remove(b), Some(2));
+    let c = issuer.add(3);
+    holder.put(c, 3);
+    holder.put(a, 1);
+    assert_eq!(holder.get(b), None);
+    assert_eq!(holder.get(c), Some(&3));
+    assert_eq!(holder.get(a), Some(&1));
+}

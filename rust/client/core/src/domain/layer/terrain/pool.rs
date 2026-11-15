@@ -24,9 +24,8 @@ const CHUNK_CNT: u32 = WAYS_POOL_WORDS / CHUNK_WORDS;
 
 /// The heap the pool takes at its cap, counted in the buddy allocator's blocks: each chunk
 /// rounded up to a power of two, and the list of chunks likewise (link/layout.rs
-/// `HEAP_FLOWS_BYTES`).
-pub(crate) const POOL_BYTES: u64 = (CHUNK_CNT as u64)
-    * (CHUNK_WORDS as u64 * 4).next_power_of_two()
+/// `HEAP_FLOWS_SZ`).
+pub(crate) const POOL_SZ: u64 = (CHUNK_CNT as u64) * (CHUNK_WORDS as u64 * 4).next_power_of_two()
     + (CHUNK_CNT as u64 * size_of::<Box<[u32]>>() as u64).next_power_of_two();
 
 /// A run of words: the first and how many. A count of zero means the run holds none.

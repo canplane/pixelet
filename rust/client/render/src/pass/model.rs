@@ -6,15 +6,15 @@
 //! uniforms once before the pass, one slot a draw, and draw them by one loop.
 
 use pxl_global::Global;
-use xpute_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
+use pxl_gpu_link::enums::{AddressMode, FilterMode, MipmapFilterMode};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::frame::shader::record::PIPELINE_SKINNED;
 use crate::frame::shader::word::DRAW_FLOATS;
 use crate::gpu::api::{
-    buf_entry, buf_range_entry, buffer_usage, bytes, release, sampler_entry, view_entry,
-    word_bytes, Entry, Gpu, Image, Layout, TrackedRenderPass,
+    Entry, Gpu, Image, Layout, TrackedRenderPass, buf_entry, buf_range_entry, buffer_usage, bytes,
+    release, sampler_entry, view_entry, word_sz,
 };
 use crate::gpu::draw::{Block, DRAW_WORDS, MODEL_VERTEX_WORDS};
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
@@ -206,11 +206,11 @@ impl UniformBuffer {
 /// The bytes of one draw's uniform: the part of a `UniformBuffer` slot that
 /// every model pass writes and its shader reads (frame/shader/word.rs
 /// `DRAW_FLOATS`).
-pub const DRAW_BYTES: u32 = word_bytes(DRAW_FLOATS);
+pub const DRAW_SZ: u32 = word_sz(DRAW_FLOATS);
 
 /// Puts a draw's uniform `u` into `buf` whole, as its shader reads it.
 pub fn put_uniform(buf: &mut [u8], u: &[f32]) {
-    buf[..DRAW_BYTES as usize].copy_from_slice(bytes(u));
+    buf[..DRAW_SZ as usize].copy_from_slice(bytes(u));
 }
 
 /// A model's extent as the catalog measures it: across (glTF's X), deep (glTF's Z) and up
@@ -278,8 +278,8 @@ pub fn bind_mesh(
     idx_cnt: u32,
 ) {
     let mut at = 0;
-    for lane in 0..lit.lane_cnt {
-        let size = vertex_cnt * lit.strides[lane];
+    for (lane, stride) in lit.strides[..lit.lane_cnt].iter().enumerate() {
+        let size = vertex_cnt * stride;
         pass.set_vertex_buf(lane as u32, mesh, at, size);
         at += size;
     }

@@ -17,26 +17,26 @@ use pxl_spec::share::{EIGHTH_CNT, FILL_BITS};
 use std::collections::{BTreeMap, BTreeSet};
 
 use gpu::{
-    at_edge, cross, edge_axes, edges_within, entry_node, holds_node, lay_kept, list_every, margins,
-    read_texture, texture, unit, Gpu, KindCount, LightBox,
+    Gpu, KindCount, LightBox, at_edge, cross, edge_axes, edges_within, entry_node, holds_node,
+    lay_kept, list_every, margins, read_texture, texture, unit,
 };
 use pxl_engine::answer::{self, Kind};
 use pxl_engine::beam::{self, Grid};
-use pxl_engine::cast::{self, Detail, End, Keep, Node, Ray, Spacing, Trace, Until, DEPTH};
+use pxl_engine::cast::{self, DEPTH, Detail, End, Keep, Node, Ray, Spacing, Trace, Until};
 use pxl_engine::light::{self, Light, StartGrid};
 use pxl_engine::node_cache;
 use pxl_engine::object::Cut;
 use pxl_engine::param;
 use pxl_engine::world::Inheritance;
 use pxl_engine::{eye, raster, ray, record};
-use pxl_render::frame::shader::record::{src, SHADER_CELL, SHADER_LIGHT_CELL};
+use pxl_render::frame::shader::record::{SHADER_CELL, SHADER_LIGHT_CELL, src};
 use pxl_render::frame::shader::word::SHADOW_SIZE;
 use pxl_spec::space::camera::grid::CELL;
 use pxl_spec::space::coord::q3::FRAC_W;
-use pxl_spec::space::coord::zoom::{Zoom, LEAF_CELL_ZOOM};
+use pxl_spec::space::coord::zoom::{LEAF_CELL_ZOOM, Zoom};
 use pxl_spec::value;
 
-use real_world::{q8, store_of, truth, Asking, Built, World, WorldBuffer, FINEST};
+use real_world::{Asking, Built, FINEST, World, WorldBuffer, q8, store_of, truth};
 
 /// The leaf cells the worlds are built about. `EYE` lies 300 cells west of X's seam, on the
 /// east side of X = 0, and `EYE_WEST` 300 cells east of the seam, on the west side of X = 0.
@@ -633,7 +633,14 @@ fn run_frame(
             if first.is_none() {
                 eprintln!(
                     "DIFFERS {name} {s:?}: want {:?} z{} {:?} {:?} t{} axis {} asset {:x?}; got {:x?}",
-                    trace.end, trace.hit.node.zoom, trace.hit.node.corner, trace.hit.node.roots, trace.hit.t, trace.hit.axis, trace.hit.asset, &out[at..at + beam::SAMPLE_WORDS as usize]
+                    trace.end,
+                    trace.hit.node.zoom,
+                    trace.hit.node.corner,
+                    trace.hit.node.roots,
+                    trace.hit.t,
+                    trace.hit.axis,
+                    trace.hit.asset,
+                    &out[at..at + beam::SAMPLE_WORDS as usize]
                 );
             }
             first.get_or_insert((s, out[at..at + 12].to_vec()));

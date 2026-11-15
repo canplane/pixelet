@@ -8,8 +8,8 @@
 //! (`zoom::starts`).
 
 use crate::space::coord::aabb::Aabb;
-use crate::space::coord::world::{has_digit, BOUNDS};
-use crate::space::coord::zoom::{starts, units, Zoom};
+use crate::space::coord::world::{BOUNDS, has_digit};
+use crate::space::coord::zoom::{Zoom, starts, units};
 
 /// A node of the hierarchy in `D` axes: its zoom and its index there.
 pub type Node<const D: usize> = (Zoom, [i32; D]);

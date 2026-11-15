@@ -6,8 +6,8 @@
 
 use pxl_spec::space::coord::zoom::LEAF_ZOOM;
 
-use postgres::types::ToSql;
 use postgres::Client;
+use postgres::types::ToSql;
 use pxl_spec::bake::tile::terrain::TerrainTile;
 use pxl_spec::space::coord::adapter::epsg3857::{self, merc_from_u};
 

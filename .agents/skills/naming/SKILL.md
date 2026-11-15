@@ -49,7 +49,10 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 - Casing, generated names too: functions, variables and fields in snake_case,
   types in Pascal, constants in SCREAMING, in Rust, C++ and TypeScript alike, as
   Svelte writes its own code; so a spec's name is one spelling in JSON, Rust and
-  TypeScript. Kotlin and Swift keep their own casing. Only what React requires
+  TypeScript. Kotlin and Swift keep their own casing. The TypeScript kit's word
+  casts and bit helpers keep the capitals of a system's macros (`U32`, `BIT`,
+  `FIELD_GET64`), where Rust and C++ write theirs as functions in snake_case.
+  Only what React requires
   takes React's form: a hook's `use` prefix, a component, a prop. A type spells
   its words whole (`let cfg: Config`), and so does the name of a thing that is
   there only for the UI to show or handle, wherever it is defined (a toast's
@@ -61,9 +64,12 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 - A file or module is named for its layer: a system one takes its field's short
   word (`sys`, `io`, `mem`, `abi`), a domain one the whole word (`scene`,
   `query`, `count`), and this list alone renames neither.
-- A symmetric pair's part is the base, a dot and its side (`x.native.ts`,
-  `sample.eye.wgsl` beside `sample.wgsl`); a stand-in replacing a part at
-  assembly is the part, a dot and what it stands in as (`fold.none.wgsl`).
+- A symmetric pair's part is the base, a dot and its side, on both halves
+  (`x.web.ts` the page's beside `x.native.ts` a device's,
+  `location.uniform.wgsl` beside `location.slot.wgsl`); a body both sides
+  take is the plain base (`sample.wgsl` under `sample.eye.wgsl` and
+  `sample.light.wgsl`); a stand-in replacing a part at assembly is the part, a
+  dot and what it stands in as (`fold.none.wgsl`).
 - Name a new concept the parts share with the user, and use the names already
   chosen with the user:
 
@@ -103,18 +109,19 @@ description: Naming in pixelet — short, plain names read where they stand; whe
 - xpute's names are the mechanism's, as the component model has them: the
   guest, the host that serves it, the UI, a device and a frame. Two are
   outside the standard: the `link`, xpute's own word, the protocol both sides
-  run, and its code; and the runtime, the platform's execution environment the
+  run, and its code, named for the data link layer (L2): it knows its two
+  ends and not the wire under them, and what crosses it is a `frame`; and the
+  runtime, the platform's execution environment the
   host runs in, as the JS field has it (a browser, Node). xpute's words for
   its parts are `kit`, `link`, `guest`, `host`, `runtime`, `expo` (React
   Native's UI end), `gen`, `tool` and `golden`. A plugin repeats the link, the
-  guest, the host and the UI end under its own name (`gpu/link`, `gpu/guest`,
-  `gpu/host`, `gpu/expo`). pixelet's core is its guest, and pixelet names its
-  parts by the side of xpute they sit on (`pxl-core`, `pxl-host`).
+  guest, the host and the UI end under its own name. pixelet's core is its guest, and pixelet names its
+  parts by the side of xpute they sit on (`pxl-core`, `pxl-runtime`).
 - An xpute crate's or package's name is its folder: `xpute-` or `@xpute/`,
   then the path under `xpute/` with `/` as `-` and its language's leaf left
   out, one name in every language. A plugin's name stands first, as an owner's;
   then the base word, and its qualifier after (`runtime/web` is
-  `@xpute/runtime-web`, `gpu/host/rust` is `xpute-gpu-host`). No folder only
+  `@xpute/runtime-web`, `host/rust` is `xpute-host`). No folder only
   groups. A name says what a part depends on that its siblings do not: a
   shell's (`expo`), a platform's (`web`, `native`).
 - A name is singular: a file, a folder, a type, an enum and its members, a

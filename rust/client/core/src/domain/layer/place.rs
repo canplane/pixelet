@@ -5,10 +5,10 @@
 //! of the tile, which is an icon wide, and its places are drawn as Carto
 //! draws them (domain/scene/marker/place.rs).
 
-use pxl_spec::bake::tile::place::{self, PlaceTile, PLACE_LATTICE};
+use pxl_spec::bake::tile::place::{self, PLACE_LATTICE, PlaceTile};
 
-use crate::domain::layer::tile_cache::TileCache;
 use crate::domain::layer::Base;
+use crate::domain::layer::tile_cache::TileCache;
 use crate::sys::io::body::Body;
 use crate::sys::io::demand::PhaseList;
 use crate::sys::io::failure::Exit;

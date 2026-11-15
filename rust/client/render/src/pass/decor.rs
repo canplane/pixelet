@@ -11,8 +11,8 @@
 use crate::frame::shader::record::{PIPELINE_DECOR, PIPELINE_GHOST_DECOR};
 use crate::frame::shader::record::{PIPELINE_DECOR_DEPTH, PIPELINE_DECOR_MARK};
 use crate::frame::shader::word::DECOR_GROUP_CNT;
-use crate::gpu::draw::uniform_of;
 use crate::gpu::draw::DrawStat;
+use crate::gpu::draw::uniform_of;
 
 use crate::frame::shader::sequence;
 use crate::gpu::api::{Format, Gpu, Image, Stencil, TrackedRenderPass};
@@ -20,10 +20,10 @@ use crate::gpu::draw::DrawTable;
 use crate::gpu::generator::IndirectDraw;
 use crate::gpu::pipeline::{Pipeline, PipelineCache};
 use crate::gpu::upload::UploadTable;
-use crate::pass::mark::{put_whole, MarkPass};
+use crate::pass::mark::{MarkPass, put_whole};
 use crate::pass::model::{
-    bind_mesh, draw_model, draw_models, put_uniform, skin_group, skin_made, Extent, ModelDraw,
-    Stage, UniformBuffer, DRAW_BYTES,
+    DRAW_SZ, Extent, ModelDraw, Stage, UniformBuffer, bind_mesh, draw_model, draw_models,
+    put_uniform, skin_group, skin_made,
 };
 use pxl_content::generation;
 
@@ -57,7 +57,7 @@ impl DecorPass {
                 Format::Depth32float,
                 Stencil::Masked,
             ),
-            uniforms: UniformBuffer::new(DRAW_BYTES, align),
+            uniforms: UniformBuffer::new(DRAW_SZ, align),
             groups: [(0, None); DECOR_GROUP_CNT],
             mark: MarkPass::new(
                 g,

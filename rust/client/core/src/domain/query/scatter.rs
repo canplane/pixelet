@@ -22,9 +22,9 @@ use pxl_spec::space::layer::lattice::GROUND;
 
 use super::node::At;
 use super::world::World;
+use crate::domain::layer::Answer;
 use crate::domain::layer::instance::{Instance, Source};
 use crate::domain::layer::object::store;
-use crate::domain::layer::Answer;
 
 /// The world as decor's generation asks it on the CPU (pxl-content
 /// `DecorQuery`): what the layers compose under the decor (`World::layer_node`),

@@ -1,9 +1,11 @@
 // @xpute/link/link.ts
 
 /**
- * The host's link to a guest, alike the guest's (xpute-link `link.rs`,
- * `link/wit/types.wit`). Whatever is called is an object, called by its
- * methods under a handle: an interface's named handle, the hash of its name
+ * An end of the link, alike the guest's (xpute-link `link.rs`,
+ * `link/wit/types.wit`): what every end runs alike (`End`), over the
+ * transport that takes its frames to the other end, the guest's boxes for the
+ * host's (`Side`). Whatever is called is an
+ * object, called by its methods under a handle: an interface's named handle, the hash of its name
  * (`frame.json5` `NAMED`), or a resource's, named by a URI, a tuple of
  * tokens, and opened by the root's `open` to a handle the serving side
  * issues, or answered by a function that returns it. A frame is one method
@@ -47,7 +49,7 @@ import {
   ERRNO_EINPROGRESS,
   ERRNO_EMSGSIZE,
   ERRNO_ENOENT,
-  ERRNO_ENOTRECOVERABLE,
+  ERRNO_EOVERFLOW,
   ERRNO_EPIPE,
 } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
@@ -109,13 +111,43 @@ export interface Answered {
 }
 
 /** A frame's packet: the args, written as the frame is laid, or a packet
- * written already, as one that crossed a port. */
+ * written already, as one a runtime carried from another thread. */
 export type Packet = Args | U8Array;
 
-/** What sends a method to the other side and is answered by promise: a UI's
- * `Remote`, or a link through `wait`. */
+/** The most bytes a packet holds, the Canonical ABI's largest list. */
+const PKT_CAP = (1 << 28) - 1;
+
+/** The bytes of the packet `args`: those `args` write, those it is, or none
+ * for no args. A packet past the largest is EOVERFLOW. */
+export function pkt_of(args: Packet): U8Array | null {
+  if (args === null || args instanceof Uint8Array) return args;
+  for (let cap = 1 << 10; ; cap = Math.min(cap * 2, PKT_CAP)) {
+    const buf = new Uint8Array(cap);
+    const w = new Lower(buf, args[0]);
+    args[1](w);
+    const n = w.finish();
+    if (n >= 0) return buf.subarray(0, n);
+    if (cap === PKT_CAP) throw new XputeError(ERRNO_EOVERFLOW);
+  }
+}
+
+/** What the generated bindings call by: it sends a method to the object
+ * under a handle and is answered by promise. An end is one through `wait`
+ * (`sender`). */
 export interface Sender {
   send(h: Handle, m: Method, args: Args): Promise<Answered>;
+}
+
+/** What the generated bindings serve by: it serves an interface under its
+ * named handle (`mount_named`), puts the opener of an interface's resources
+ * under a URI's leading tokens (`mount`), answers a request later by its tag
+ * (`task_return`), and puts what runs if the caller cancels a request
+ * (`on_cancel`). An end (`End`) is one. */
+export interface Serving {
+  mount_named(h: Handle, o: LinkObject): void;
+  mount(h: Handle, prefix: readonly Token[], open: Opener): void;
+  task_return(t: Tag, result: i32, data?: Packet): void;
+  on_cancel(t: Tag, stop: () => void): void;
 }
 
 /** A reference to an object on the other side: the link it is reached
@@ -170,71 +202,81 @@ export class ComponentError<P = unknown> extends Error {
   }
 }
 
-/** What a failure of the serving side's own is handed (`set_hook`). */
-let hook: ((e: unknown) => void) | null = null;
-
-/** Installs what a failure of the serving side's own, a throw out of its
- * answer to the guest's import (`imports`), is handed, as Rust's panic hook
- * is (@xpute/web-runtime worker.ts `hook`). Only the first call takes
- * effect. */
-export function set_hook(h: (e: unknown) => void): void {
-  hook ??= h;
-}
-
 /** The errno a method refuses with: an XputeError's. Anything else, a `XputeBug`
  * or any other throw, is a failure of the serving side's own, thrown on: out
  * of a method answered at once, to what called it (on the host, the guest's
- * import, `imports`; on the UI, its port's message handler, `Remote`); out of
+ * import, `Side.recv`; on a UI, its runtime's message handler); out of
  * one answered later, on either side, as a rejection no one handles. */
 export function refusal_of(e: unknown): i32 {
   if (e instanceof XputeError) return e.errnum;
   throw e;
 }
 
-/** What the host holds of its guest: the guest's memory, its three exports
- * (`link/wit/types.wit`), and its platform's report of a trap (`trap`). An
- * export the guest traps in traps the link (`Side.trap`) and answers on,
- * throwing nothing: `link_in` EPIPE, as a trapped guest's request is
- * answered. */
-export interface Guest {
-  readonly mem: ArrayBuffer;
-  /** Runs `link_init`, which answers where the link's layout lies, the
-   * inbox's address and a frame's cap, at an address, a u64. */
-  init(): u64;
-  /** Runs `link_boot`, the guest's first entry, which boots it. */
-  boot(): void;
-  /** Runs `link_in` on the frame laid in the inbox. */
-  in(): i32;
-  /** Tells the guest's platform the guest trapped, with the error `e`
-   * (`Side.trap`). */
-  trap(e: unknown): void;
+/** What reads the guest's memory in place, where what the guest lends lies:
+ * the host's end (`Side`), or a device's UI end, in the guest's process. */
+export interface Memory {
+  /** The `len` bytes the guest lent at `at`, its address
+   * (link/wit/types.wit `lent`). */
+  bytes(at: u64, len: u32): U8Array;
 }
 
-/** What a side serves, alike on the host's link and on a UI across a port
- * (`Side`, `Remote`), as xpute-link `link.rs` `Side` serves beside its frames,
- * Rust naming this part apart nowhere: its interfaces by their named
- * handles, the objects under issued handles in a table (`Table`: a `Side`'s,
- * which issues them, or a UI's, under those its link's side issued), the
- * openers of an interface's resources by the URI's leading tokens, the
- * longest matching winning, and how
- * each request it answers later stops if its caller cancels it. Only how an
- * answer crosses differs (`_answer`). */
-export abstract class Dispatcher<
-  O extends Pick<Table<LinkObject>, "get" | "put" | "remove">,
-> {
+/** One end of the link, the part both ends run alike, as xpute-link
+ * `link.rs` `Side` runs it beside its frames: what it serves, its interfaces
+ * by their named handles, the objects in a table (`Table`) under handles,
+ * the openers of an interface's resources by the URI's leading tokens, the
+ * longest matching winning, how each request it answers later stops if its
+ * caller cancels it, and the answers of what it sent, by tag. How a frame
+ * crosses to the other end is its transport's (`_out`), which an end over it
+ * implements, and the transport hands the end each frame from the other end
+ * (`input`): the guest's boxes and the crossing into it (`Side`), or a
+ * runtime's transport to a UI on another thread. */
+export abstract class End implements Serving {
   /** The openers, each with the named handle of the interface whose
    * resources it opens, by the URI's leading tokens. */
-  protected readonly _mounts: [Handle, readonly Token[], Opener][] = [];
-  /** The interfaces this side serves, by their named handles (`NAMED`). */
-  protected readonly _named = new Map<Handle, LinkObject>();
-  /** The objects this side serves, by the handles issued for them. */
-  protected readonly _objects: O;
-  /** How each request this side serves stops if its caller cancels it, by
+  private readonly _mounts: [Handle, readonly Token[], Opener][] = [];
+  /** The interfaces this end serves, by their named handles (`NAMED`). */
+  private readonly _named = new Map<Handle, LinkObject>();
+  /** The objects this end serves, by their handles: those it issued, or,
+   * for an object the other end opened under a handle it issued, that
+   * handle (`open_at`). */
+  private readonly _objects = new Table<LinkObject>();
+  /** How each request this end serves stops if its caller cancels it, by
    * tag, until it answers. */
   private readonly _cancels = new Map<Tag, () => void>();
+  /** The answers of the sent requests that answer later, by tag. */
+  private readonly _pending = new Map<Tag, Answer>();
+  private _next: Tag = 0;
+  /** Whether the link is trapped (`trap`). */
+  private _trapped = false;
 
-  constructor(objects: O) {
-    this._objects = objects;
+  /** Carries a frame to the other end, a request or a later answer, with
+   * the packet `pkt`, and answers what the method came to there: its result
+   * and its return data at once, or EINPROGRESS for one answered later, by
+   * a frame the transport hands this end (`input`). */
+  protected abstract _out(
+    tag: Tag,
+    h: Handle,
+    m: Method,
+    res: boolean,
+    result: i32,
+    pkt: Packet,
+  ): Answered;
+
+  /** Stops the link for good: nothing is carried, a frame sent answering
+   * EPIPE, and each request this end sent that is still pending is answered
+   * EPIPE, once, as xpute-link `link.rs` `Side::trap` answers it; none is
+   * pending after, so a late answer to one finds nothing to answer. The
+   * runtime tells its platform (@xpute/runtime-web worker.ts `trap`). */
+  trap(): void {
+    this._trapped = true;
+    const pending = [...this._pending.values()];
+    this._pending.clear();
+    for (const a of pending) queueMicrotask(() => a(ERRNO_EPIPE, null));
+  }
+
+  /** Whether the link is trapped (`trap`). */
+  trapped(): boolean {
+    return this._trapped;
   }
 
   /** Puts `open` as the opener of the URIs that start with `prefix`, whose
@@ -243,21 +285,57 @@ export abstract class Dispatcher<
     this._mounts.push([h, prefix, open]);
   }
 
-  /** Whether this side serves the interface of the named handle `h`: under
+  /** The named handles of the interfaces this end serves. */
+  named(): Handle[] {
+    return [...this._named.keys()];
+  }
+
+  /** The prefixes this end opens objects under, in the order they were
+   * mounted, each with the named handle of the interface whose resources
+   * they are. */
+  prefixes(): (readonly [Handle, readonly Token[]])[] {
+    return this._mounts.map(([h, p]) => [h, p]);
+  }
+
+  /** Whether this end serves the interface of the named handle `h`: under
    * that handle, or by an opener of its resources. */
   serves(h: Handle): boolean {
     return this._named.has(h) || this._mounts.some(([i]) => i === h);
   }
 
   /** Serves `o` under its interface's named handle `h`, which the other
-   * side calls with no open. */
+   * end calls with no open. */
   mount_named(h: Handle, o: LinkObject): void {
     if (this._named.has(h)) bug(ERRNO_EEXIST);
     this._named.set(h, o);
   }
 
+  /** Serves `o` under a handle issued for it, which a method answers for the
+   * other end to call `o` by: a resource a function returns. */
+  add(o: LinkObject): Handle {
+    return this._objects.add(o);
+  }
+
+  /** Opens the object at `uri` under `h`, a handle the other end issued, by
+   * the opener of this end's `k`th mount (`prefixes`): the other end
+   * answered its open at once and issued `h`, and this end opens the object
+   * later, as a runtime carries the open to a UI on another thread. An
+   * opener that refuses answers each method of what it would have opened
+   * with the refusal. */
+  open_at(k: number, h: Handle, uri: readonly Token[]): void {
+    const [, , open] = this._mounts[k] ?? bug(ERRNO_EBADF);
+    let o: LinkObject;
+    try {
+      o = open(uri, h);
+    } catch (e) {
+      const refused = refusal_of(e);
+      o = { call: () => refused, drop() {} };
+    }
+    this._objects.put(h, o);
+  }
+
   /** Puts `stop` as what runs if the caller cancels the request `t` this
-   * side serves (`frame.json5` `CANCEL`): a method that can stop then answers
+   * end serves (`frame.json5` `CANCEL`): a method that can stop then answers
    * ECANCELED, and one that can't runs on. */
   on_cancel(t: Tag, stop: () => void): void {
     this._cancels.set(t, stop);
@@ -268,158 +346,13 @@ export abstract class Dispatcher<
    * later answer is found by its tag alone. */
   task_return(t: Tag, result: i32, data: Packet = null): void {
     this._cancels.delete(t);
-    this._answer(t, result, data);
+    this._carry(t, ROOT, 0, true, result, data);
   }
 
-  /** Carries the answer to the request `t` to the other side. */
-  protected abstract _answer(t: Tag, result: i32, data: Packet): void;
-
-  /** Runs `m` of `h`, an interface's or an object's method. A named handle
-   * no interface is mounted under is no object here; an issued one no longer
-   * held is a bad handle. */
-  protected _call(
-    h: Handle,
-    m: Method,
-    tag: Tag,
-    args: U8Array | null,
-  ): i32 | Reply {
-    if ((h & NAMED) !== 0) {
-      const o = this._named.get(h);
-      return o === undefined ? ERRNO_ENOENT : o.call(m, tag, args);
-    }
-    const o = this._objects.get(h);
-    return o === undefined ? ERRNO_EBADF : o.call(m, tag, args);
-  }
-
-  /** The opener of `uri`'s longest matching mount, if one matches. */
-  protected _opener(uri: readonly Token[]): Opener | undefined {
-    let best: [Handle, readonly Token[], Opener] | undefined;
-    for (const m of this._mounts) {
-      const [, p] = m;
-      const leads =
-        p.length <= uri.length &&
-        p.every((t, k) => t.tag === uri[k]!.tag && t.val === uri[k]!.val);
-      if (leads && (best === undefined || p.length > best[1].length)) best = m;
-    }
-    return best?.[2];
-  }
-
-  /** Opens the object at `uri` under `h` by `open`: 0, or the opener's
-   * refusal, with nothing put under `h`. */
-  protected _open(h: Handle, uri: readonly Token[], open: Opener): i32 {
-    try {
-      this._objects.put(h, open(uri, h));
-      return 0;
-    } catch (e) {
-      return refusal_of(e);
-    }
-  }
-
-  /** Runs the stop of the request `t`, which its caller canceled. */
-  protected _cancel(t: Tag): void {
-    const stop = this._cancels.get(t);
-    this._cancels.delete(t);
-    stop?.();
-  }
-
-  /** Drops the object under `h` and tells it its drop: 0, or EBADF where
-   * none is held. */
-  protected _drop(h: Handle): i32 {
-    const o = this._objects.remove(h);
-    if (o === undefined) return ERRNO_EBADF;
-    o.drop();
-    return 0;
-  }
-}
-
-/** The host's side of the link, as xpute-link `link.rs` `Side` is either
- * side: what it serves (`Dispatcher`), and the frames it lays in the guest's
- * inbox and takes from its outbox. */
-export class Side extends Dispatcher<Table<LinkObject>> {
-  /** The answers of the sent requests that answer later, by tag. */
-  private readonly _pending = new Map<Tag, Answer>();
-  private _next: Tag = 0;
-  private readonly _guest: Guest;
-  /** Whether the guest is trapped (`trap`). */
-  private _trapped = false;
-  private _inbox = 0;
-  private _cap = 0;
-
-  /** The guest's import, which a module takes under `env`
-   * (xpute-native-runtime `link.rs` `link_out`). A throw out of the host
-   * while it answers is a failure of its own: it is handed to the hook, the
-   * guest is trapped, and its call is answered ENOTRECOVERABLE, so nothing
-   * unwinds through it. Once trapped, a frame is not served: EPIPE. */
-  static imports(link: () => Side) {
-    return {
-      link_out: (at: u64): i32 => {
-        const l = link();
-        if (l._trapped) return ERRNO_EPIPE;
-        try {
-          return l._recv(Number(at));
-        } catch (e) {
-          hook?.(e);
-          l.trap(e);
-          return ERRNO_ENOTRECOVERABLE;
-        }
-      },
-    };
-  }
-
-  /** Stops the guest for good, where it has not trapped already: it is
-   * entered no more, a frame sent to it or laid by it answering EPIPE, and
-   * its platform is told (`Guest.trap`), as xpute-native-runtime `link.rs`
-   * `trap`. Each request this side sent that is still pending is answered
-   * EPIPE, once, as xpute-link `link.rs` `Side::trap` answers it; none is
-   * pending after, so a late answer to one finds nothing to answer. */
-  trap(e: unknown): void {
-    if (this._trapped) return;
-    this._trapped = true;
-    const pending = [...this._pending.values()];
-    this._pending.clear();
-    for (const a of pending) queueMicrotask(() => a(ERRNO_EPIPE, null));
-    this._guest.trap(e);
-  }
-
-  /** Whether the guest is trapped (`trap`). */
-  trapped(): boolean {
-    return this._trapped;
-  }
-
-  constructor(guest: Guest) {
-    super(new Table<LinkObject>());
-    this._guest = guest;
-  }
-
-  /** Enters the guest first, once the host's own objects are mounted: the
-   * guest lays its link, the host reads its layout, and then the guest
-   * boots, and may open them. Where an interface of `imports` is served by
-   * nothing mounted, under its named handle or by an opener of its
-   * resources (`serves`), the link traps, naming each, and the guest is
-   * never entered. False where the link trapped meanwhile, the
-   * guest's trap or a failure of the host's (xpute-native-runtime
-   * `link.rs` `init`). */
-  init(imports: Imports): boolean {
-    const unserved = imports
-      .filter(([, h]) => !this.serves(h))
-      .map(([name]) => name);
-    if (unserved.length > 0) {
-      this.trap(`no server mounts ${unserved.join(", ")}`);
-      return false;
-    }
-    const at = this._guest.init();
-    if (this._trapped) return false;
-    // The layout's words (frame.json5 `LAYOUT`); a module's addresses are
-    // offsets into its memory, which a number holds.
-    const w = new Uint32Array(this._guest.mem, Number(at), LAYOUT.WORDS);
-    this._inbox = Number(join64(w[LAYOUT.INBOX_AT]!, w[LAYOUT.INBOX_AT + 1]!));
-    this._cap = w[LAYOUT.CAP_AT]!;
-    this._guest.boot();
-    return !this._trapped;
-  }
-
+  /** Calls `m` of `h`, which answers at once: its result, and its return
+   * data, readable until the next crossing. A later answer is a bug. */
   call(h: Handle, m: Method, args: Packet = null): Answered {
-    const answered = this._out(this._tag(), h, m, false, 0, args);
+    const answered = this._carry(this._tag(), h, m, false, 0, args);
     if (answered.result === ERRNO_EINPROGRESS) bug(ERRNO_EINPROGRESS);
     return answered;
   }
@@ -431,7 +364,7 @@ export class Side extends Dispatcher<Table<LinkObject>> {
     if (answer !== undefined) this._pending.set(t, answer);
     let out: Answered;
     try {
-      out = this._out(t, h, m, false, 0, args);
+      out = this._carry(t, h, m, false, 0, args);
     } catch (e) {
       this._pending.delete(t);
       throw e;
@@ -447,81 +380,67 @@ export class Side extends Dispatcher<Table<LinkObject>> {
     queueMicrotask(() => answer(result, copy));
   }
 
-  /** Serves `o` under a handle issued for it, which a method answers for the
-   * other side to call `o` by: a resource a function returns. */
-  add(o: LinkObject): Handle {
-    return this._objects.add(o);
-  }
-
-  /** Lays the answer to the request `t` in the guest's inbox. */
-  protected _answer(t: Tag, result: i32, data: Packet): void {
-    this._out(t, ROOT, 0, true, result, data);
-  }
-
-  /** The guest's memory, as it stands now: it grows, so it is read anew. */
-  get mem(): ArrayBuffer {
-    return this._guest.mem;
-  }
-
-  /** The `len` bytes the guest lent at `at`, its address (link/wit/types.wit
-   * `lent`): a module's offset into its memory. */
-  bytes(at: u64, len: u32): U8Array {
-    return this._bytes(Number(at), len);
-  }
-
-  /** The `len` bytes at `off` in the guest's memory. */
-  private _bytes(off: number, len: u32): U8Array {
-    return new Uint8Array(this._guest.mem, off, len);
-  }
-
-  /** The frame the guest laid at `at`: a later answer, to its request, or a
-   * method, to its object. */
-  private _recv(at: u32): i32 {
-    const f = read(new DataView(this._guest.mem), at);
-    if (f.res) {
-      const a = this._pending.get(f.tag);
-      this._pending.delete(f.tag);
-      const data =
-        f.pkt_len > 0 ? this._bytes(at + HDR_SZ, f.pkt_len).slice() : null;
-      if (a !== undefined) queueMicrotask(() => a(f.result, data));
-      return 0;
-    }
-    const args = this._args(at, f.pkt_len);
-    const reply =
-      typeof args === "number"
-        ? args
-        : this._serve(f.handle, f.method, f.tag, args);
-    // The args are read: the answer goes in the frame they came in.
-    const { result, data } =
-      typeof reply === "number" ? { result: reply, data: null } : reply;
-    // An answer past the cap is refused as a later one is (`_out`).
-    if (this._lay(at, f.tag, f.handle, f.method, true, result, data) !== 0) {
-      this._lay(at, f.tag, f.handle, f.method, true, ERRNO_EMSGSIZE, null);
-      return ERRNO_EMSGSIZE;
-    }
-    return result;
-  }
-
-  /** Runs `m` of `h`: the root's open or cancel, a drop, or an object's
-   * method. */
-  private _serve(
+  /** The frame the transport brought from the other end: a later answer, to
+   * this end's request, heard after the work at hand with a copy of its
+   * data, answering 0; or a method, to an object this end serves, answering
+   * its reply, which the transport carries back where it is not EINPROGRESS:
+   * the root's open or cancel, a drop, or an object's method. `args` are the
+   * receiver's for the crossing alone. */
+  input(
+    tag: Tag,
     h: Handle,
     m: Method,
-    tag: Tag,
+    res: boolean,
+    result: i32,
     args: U8Array | null,
   ): i32 | Reply {
+    if (res) {
+      const a = this._pending.get(tag);
+      this._pending.delete(tag);
+      const data = args && args.slice();
+      if (a !== undefined) queueMicrotask(() => a(result, data));
+      return 0;
+    }
     if (h === ROOT && m === OPEN) return this._opened(args);
     if (h === ROOT && m === CANCEL) {
       try {
         if (args === null) return ERRNO_EBADMSG;
-        this._cancel(new Lift(args).u32(0));
+        const t = new Lift(args).u32(0);
+        const stop = this._cancels.get(t);
+        this._cancels.delete(t);
+        stop?.();
         return 0;
       } catch (e) {
         return refusal_of(e);
       }
     }
-    if (m === DROP) return this._drop(h);
-    return this._call(h, m, tag, args);
+    if (m === DROP) {
+      const o = this._objects.remove(h);
+      if (o === undefined) return ERRNO_EBADF;
+      o.drop();
+      return 0;
+    }
+    // A named handle no interface is mounted under is no object here; an
+    // issued one no longer held is a bad handle.
+    if ((h & NAMED) !== 0) {
+      const o = this._named.get(h);
+      return o === undefined ? ERRNO_ENOENT : o.call(m, tag, args);
+    }
+    const o = this._objects.get(h);
+    return o === undefined ? ERRNO_EBADF : o.call(m, tag, args);
+  }
+
+  /** The opener of `uri`'s longest matching mount, if one matches. */
+  private _opener(uri: readonly Token[]): Opener | undefined {
+    let best: [Handle, readonly Token[], Opener] | undefined;
+    for (const m of this._mounts) {
+      const [, p] = m;
+      const leads =
+        p.length <= uri.length &&
+        p.every((t, k) => t.tag === uri[k]!.tag && t.val === uri[k]!.val);
+      if (leads && (best === undefined || p.length > best[1].length)) best = m;
+    }
+    return best?.[2];
   }
 
   /** Opens the object the args' URI names, by the opener of its longest
@@ -539,10 +458,11 @@ export class Side extends Dispatcher<Table<LinkObject>> {
     const open = this._opener(uri);
     if (open === undefined) return ERRNO_ENOENT;
     const h = this._objects.issue();
-    const refused = this._open(h, uri, open);
-    if (refused !== 0) {
+    try {
+      this._objects.put(h, open(uri, h));
+    } catch (e) {
       this._objects.remove(h);
-      return refused;
+      return refusal_of(e);
     }
     return { result: 0, data: [4, (w) => w.u32(0, h)] };
   }
@@ -557,18 +477,108 @@ export class Side extends Dispatcher<Table<LinkObject>> {
     return t;
   }
 
-  /** The args of the frame at `at`, or EBADMSG for a packet past the cap. */
-  private _args(at: u32, pkt_len: u32): U8Array | null | i32 {
-    if (pkt_len === 0) return null;
-    if (HDR_SZ + pkt_len > this._cap) return ERRNO_EBADMSG;
-    return this._bytes(at + HDR_SZ, pkt_len);
+  /** Carries a frame by the transport; a trapped link carries nothing:
+   * EPIPE, its transport perhaps never laid. */
+  private _carry(
+    tag: Tag,
+    h: Handle,
+    m: Method,
+    res: boolean,
+    result: i32,
+    pkt: Packet,
+  ): Answered {
+    if (this._trapped) return { result: ERRNO_EPIPE, data: null };
+    return this._out(tag, h, m, res, result, pkt);
+  }
+}
+
+/** What the host's side holds of the guest: its memory, as it stands now,
+ * since it grows, and its `link_in` (`link/wit/types.wit`), which the
+ * runtime's own wrapping makes trap the link where the guest traps. */
+export interface Guest {
+  readonly mem: ArrayBuffer;
+  in(): i32;
+}
+
+/** The host's end of the link over the guest's boxes, as xpute-link
+ * `link.rs` `Side` is either side: the end (`End`), and its transport, the
+ * frames it lays in the guest's inbox, crossing by `link_in`, and takes from
+ * the guest's outbox at its import (`recv`), by the layout the guest laid
+ * (`set_layout`); and the guest's memory, where what it lends is read in
+ * place. */
+export class Side extends End implements Memory {
+  private readonly _guest: Guest;
+  private _inbox = 0;
+  private _cap = 0;
+
+  constructor(guest: Guest) {
+    super();
+    this._guest = guest;
+  }
+
+  /** Reads the link's layout the guest laid at `at`, an address, a u64
+   * (frame.json5 `LAYOUT`); a module's addresses are offsets into its
+   * memory, which a number holds. */
+  set_layout(at: u64): void {
+    const w = new Uint32Array(this._guest.mem, Number(at), LAYOUT.WORDS);
+    this._inbox = Number(join64(w[LAYOUT.INBOX_AT]!, w[LAYOUT.INBOX_AT + 1]!));
+    this._cap = w[LAYOUT.CAP_AT]!;
+  }
+
+  /** The guest's memory, as it stands now: it grows, so it is read anew. */
+  get mem(): ArrayBuffer {
+    return this._guest.mem;
+  }
+
+  /** The `len` bytes the guest lent at `at`, its address (link/wit/types.wit
+   * `lent`): a module's offset into its memory. */
+  bytes(at: u64, len: u32): U8Array {
+    return this._bytes(Number(at), len);
+  }
+
+  /** The frame the guest laid at `at`, at its import: a later answer, heard
+   * with no data where its packet is past the cap, or a method, its answer
+   * laid in the frame it came in. A request's packet past the cap is
+   * refused, EBADMSG; an answer past it EMSGSIZE (xpute-link `link.rs`
+   * `Side::recv`). */
+  recv(at: u64): i32 {
+    const off = Number(at);
+    const f = read(new DataView(this._guest.mem), off);
+    const args =
+      f.pkt_len === 0
+        ? null
+        : HDR_SZ + f.pkt_len > this._cap
+          ? ERRNO_EBADMSG
+          : this._bytes(off + HDR_SZ, f.pkt_len);
+    if (f.res) {
+      const data = typeof args === "number" ? null : args;
+      return this.input(f.tag, f.handle, f.method, true, f.result, data) as i32;
+    }
+    const reply =
+      typeof args === "number"
+        ? args
+        : this.input(f.tag, f.handle, f.method, false, f.result, args);
+    // The args are read: the answer goes in the frame they came in.
+    const { result, data } =
+      typeof reply === "number" ? { result: reply, data: null } : reply;
+    // An answer past the cap is refused as a later one is (`_out`).
+    if (this._lay(off, f.tag, f.handle, f.method, true, result, data) !== 0) {
+      this._lay(off, f.tag, f.handle, f.method, true, ERRNO_EMSGSIZE, null);
+      return ERRNO_EMSGSIZE;
+    }
+    return result;
+  }
+
+  /** The `len` bytes at `off` in the guest's memory. */
+  private _bytes(off: number, len: u32): U8Array {
+    return new Uint8Array(this._guest.mem, off, len);
   }
 
   /** Lays a frame at `at` in the guest's memory, with the packet `args`: 0,
    * or EMSGSIZE, laying nothing, where the packet is past the cap
    * (xpute-link link.rs `Side::lay`). */
   private _lay(
-    at: u32,
+    at: number,
     tag: Tag,
     handle: Handle,
     method: Method,
@@ -595,12 +605,12 @@ export class Side extends Dispatcher<Table<LinkObject>> {
 
   /** Lays a frame in the guest's inbox and crosses with it, and answers what
    * the guest laid there: its result, and its return data. A packet past the
-   * cap is refused: a packet written elsewhere, as one from across a port,
-   * is its sender's fault, answered EMSGSIZE; a later answer's is answered
-   * EMSGSIZE with no data, so its request still hears; args this side
-   * writes past it are a bug (xpute-link `link.rs` `Side::out`). A trapped
-   * guest is sent nothing: EPIPE, its layout perhaps never read. */
-  private _out(
+   * cap is refused: a packet written elsewhere, as one a runtime carried
+   * from another thread, is its sender's fault, answered EMSGSIZE; a later
+   * answer's is answered EMSGSIZE with no data, so its request still hears;
+   * args this side writes past it are a bug (xpute-link `link.rs`
+   * `Side::out`). */
+  protected _out(
     tag: Tag,
     h: Handle,
     m: Method,
@@ -608,7 +618,6 @@ export class Side extends Dispatcher<Table<LinkObject>> {
     result: i32,
     args: Packet,
   ): Answered {
-    if (this._trapped) return { result: ERRNO_EPIPE, data: null };
     if (this._lay(this._inbox, tag, h, m, res, result, args) !== 0) {
       if (!res) {
         if (!(args instanceof Uint8Array)) bug(ERRNO_EMSGSIZE);

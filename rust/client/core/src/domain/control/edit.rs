@@ -18,7 +18,7 @@ pub(crate) mod write;
 use pxl_spec::space::coord::q3::Q3;
 use pxl_spec::space::layer::lattice::GROUND;
 
-use crate::domain::control::edit::pick::{pick_at, Pick, Target};
+use crate::domain::control::edit::pick::{Pick, Target, pick_at};
 use crate::domain::layer::instance::Instance;
 use crate::domain::layer::object::asset::Asset;
 use crate::domain::layer::object::store::Entry;

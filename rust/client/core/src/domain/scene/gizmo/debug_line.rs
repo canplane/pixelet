@@ -13,8 +13,8 @@ use pxl_spec::space::coord::v3::V3;
 /// The floats of a line vertex: its position relative to the set's origin
 /// (3), then its linear color and opacity (4). A segment takes two vertices.
 /// The layout is the renderer's (pxl-render frame/shader/record.rs
-/// `DEBUG_VERTEX_BYTES`).
-pub(crate) const DEBUG_VERTEX_FLOATS: usize = record::DEBUG_VERTEX_BYTES as usize / 4;
+/// `DEBUG_VERTEX_SZ`).
+pub(crate) const DEBUG_VERTEX_FLOATS: usize = record::DEBUG_VERTEX_SZ as usize / 4;
 
 /// The floats of a face vertex: its position relative to the set's origin. A
 /// triangle takes three vertices.

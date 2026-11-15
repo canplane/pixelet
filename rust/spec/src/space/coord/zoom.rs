@@ -129,11 +129,7 @@ pub fn within(units: f64) -> i32 {
 /// A floor on a signed axis.
 pub const fn idx(zoom: Zoom, units: i64) -> i64 {
     let s = shamt(zoom);
-    if s >= 0 {
-        units >> s
-    } else {
-        units << -s
-    }
+    if s >= 0 { units >> s } else { units << -s }
 }
 
 #[cfg(test)]
