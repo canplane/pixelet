@@ -137,7 +137,13 @@ def sources(dirs):
 def library(workspace):
     """The standard library's sources: core, alloc and std."""
     sysroot = subprocess.run(["rustc", "--print", "sysroot"], cwd=workspace, check=True, stdout=subprocess.PIPE, text=True).stdout.strip()
-    return [Path(sysroot, "lib/rustlib/src/rust/library", c) for c in ("core", "alloc", "std")]
+    dirs = [Path(sysroot, "lib/rustlib/src/rust/library", c) for c in ("core", "alloc", "std")]
+    # Without them every text the standard library puts in the core would read
+    # as ours: the toolchain lacks its rust-src component.
+    missing = [d for d in dirs if not d.is_dir()]
+    if missing:
+        sys.exit(f"[strings] no standard library sources at {missing[0]}: add the toolchain's rust-src component")
+    return dirs
 
 
 def shaders(built):
