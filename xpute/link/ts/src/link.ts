@@ -39,7 +39,7 @@
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import type { i32, u32 } from "@xpute/kit/abi/word.ts";
+import { join64, type i32, type u32, type u64 } from "@xpute/kit/abi/word.ts";
 import {
   ERRNO_EBADF,
   ERRNO_EBADMSG,
@@ -61,7 +61,7 @@ import {
   TOKEN_SZ,
 } from "./abi/types.ts";
 import { lay, read, HDR_SZ } from "./frame.ts";
-import { CANCEL, DROP, NAMED, OPEN, ROOT } from "./frame.spec.ts";
+import { CANCEL, DROP, LAYOUT, NAMED, OPEN, ROOT } from "./frame.spec.ts";
 import { type Handle, Table } from "./resource.ts";
 
 export type Tag = u32;
@@ -198,9 +198,9 @@ export function refusal_of(e: unknown): i32 {
  * answered. */
 export interface Guest {
   readonly mem: ArrayBuffer;
-  /** Runs `link_init`, which answers where the link's layout lies, the inbox
-   * and a frame's cap. */
-  init(): u32;
+  /** Runs `link_init`, which answers where the link's layout lies, the
+   * inbox's address and a frame's cap, at an address, a u64. */
+  init(): u64;
   /** Runs `link_boot`, the guest's first entry, which boots it. */
   boot(): void;
   /** Runs `link_in` on the frame laid in the inbox. */
@@ -352,11 +352,11 @@ export class Side extends Dispatcher<Table<LinkObject>> {
    * unwinds through it. Once trapped, a frame is not served: EPIPE. */
   static imports(link: () => Side) {
     return {
-      link_out: (at: u32): i32 => {
+      link_out: (at: u64): i32 => {
         const l = link();
         if (l._trapped) return ERRNO_EPIPE;
         try {
-          return l._recv(at);
+          return l._recv(Number(at));
         } catch (e) {
           hook?.(e);
           l.trap(e);
@@ -409,9 +409,11 @@ export class Side extends Dispatcher<Table<LinkObject>> {
     }
     const at = this._guest.init();
     if (this._trapped) return false;
-    const layout = new DataView(this._guest.mem, at, 8);
-    this._inbox = layout.getUint32(0, true);
-    this._cap = layout.getUint32(4, true);
+    // The layout's words (frame.json5 `LAYOUT`); a module's addresses are
+    // offsets into its memory, which a number holds.
+    const w = new Uint32Array(this._guest.mem, Number(at), LAYOUT.WORDS);
+    this._inbox = Number(join64(w[LAYOUT.INBOX_AT]!, w[LAYOUT.INBOX_AT + 1]!));
+    this._cap = w[LAYOUT.CAP_AT]!;
     this._guest.boot();
     return !this._trapped;
   }
@@ -461,9 +463,15 @@ export class Side extends Dispatcher<Table<LinkObject>> {
     return this._guest.mem;
   }
 
-  /** The `len` bytes at `at` in the guest's memory. */
-  bytes(at: u32, len: u32): U8Array {
-    return new Uint8Array(this._guest.mem, at, len);
+  /** The `len` bytes the guest lent at `at`, its address (link/wit/types.wit
+   * `lent`): a module's offset into its memory. */
+  bytes(at: u64, len: u32): U8Array {
+    return this._bytes(Number(at), len);
+  }
+
+  /** The `len` bytes at `off` in the guest's memory. */
+  private _bytes(off: number, len: u32): U8Array {
+    return new Uint8Array(this._guest.mem, off, len);
   }
 
   /** The frame the guest laid at `at`: a later answer, to its request, or a
@@ -474,7 +482,7 @@ export class Side extends Dispatcher<Table<LinkObject>> {
       const a = this._pending.get(f.tag);
       this._pending.delete(f.tag);
       const data =
-        f.pkt_len > 0 ? this.bytes(at + HDR_SZ, f.pkt_len).slice() : null;
+        f.pkt_len > 0 ? this._bytes(at + HDR_SZ, f.pkt_len).slice() : null;
       if (a !== undefined) queueMicrotask(() => a(f.result, data));
       return 0;
     }
@@ -553,7 +561,7 @@ export class Side extends Dispatcher<Table<LinkObject>> {
   private _args(at: u32, pkt_len: u32): U8Array | null | i32 {
     if (pkt_len === 0) return null;
     if (HDR_SZ + pkt_len > this._cap) return ERRNO_EBADMSG;
-    return this.bytes(at + HDR_SZ, pkt_len);
+    return this._bytes(at + HDR_SZ, pkt_len);
   }
 
   /** Lays a frame at `at` in the guest's memory, with the packet `args`: 0,
@@ -612,7 +620,7 @@ export class Side extends Dispatcher<Table<LinkObject>> {
     const f = read(new DataView(this._guest.mem), this._inbox);
     const data =
       f.res && !res && f.pkt_len > 0
-        ? this.bytes(this._inbox + HDR_SZ, f.pkt_len)
+        ? this._bytes(this._inbox + HDR_SZ, f.pkt_len)
         : null;
     return { result: answered, data };
   }

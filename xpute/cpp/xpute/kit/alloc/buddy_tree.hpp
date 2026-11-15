@@ -35,9 +35,8 @@
 
 namespace xpute {
 
-// The width in bits that a range's size and the buddy's exponents fit in. A
-// guest's memory is 32-bit on every machine the allocator is built for; on a
-// native build only the range's base is a full pointer.
+// The width in bits that a range's size and the buddy's exponents fit in; the
+// range's base alone is a full pointer.
 inline constexpr std::size_t ADDR_BITS = 32;
 
 // The memory this allocator manages. A block is `2^MIN_LOG2` bytes at the

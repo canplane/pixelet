@@ -31,5 +31,4 @@ export {
 export { Lift, Lower } from "./cabi.ts";
 export { packet, type Port, Remote } from "./remote.ts";
 export { Table } from "./resource.ts";
-export { type Stop } from "./stop.ts";
 export { sender, wait } from "./wait.ts";

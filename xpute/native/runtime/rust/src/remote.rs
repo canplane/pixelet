@@ -53,13 +53,14 @@ use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_kit::wire::xtp::{PacketWriter, MAX_PKT_SZ};
 use xpute_link::abi::types::Token;
+use xpute_link::frame::HDR_SZ;
 use xpute_link::{
     store_uri, Handle, Lift, Lower, Method, Object, Packet, Reply, Tag, DROP, OPEN, ROOT,
 };
 
 use crate::event_loop::post_task;
 use crate::life;
-use crate::link;
+use crate::link::side;
 use crate::listener;
 
 /// What the runtime sends the UI: the batch it has not taken, whether it was
@@ -121,10 +122,10 @@ fn hang_up() {
     let old: Vec<Tag> =
         PENDING.with_borrow_mut(|l| l.extract_if(.., |_, ui| *ui != g).map(|(t, _)| t).collect());
     for t in old {
-        link::task_return_pkt(t, Errno::ECANCELED as i32, None);
+        side().task_return(t, Errno::ECANCELED as i32, Packet::Args(None));
     }
     for h in GUEST_OBJECTS.take() {
-        link::drop(h);
+        side().drop(h);
     }
 }
 
@@ -173,7 +174,7 @@ fn tell_method(generation: u32, h: Handle, m: Method, later: bool, tag: Tag, arg
 fn forward(generation: u32, h: Handle, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply {
     tell_method(generation, h, m, true, tag, args);
     PENDING.with_borrow_mut(|l| l.insert(tag, generation));
-    link::on_cancel(
+    side().on_cancel(
         tag,
         Box::new(move || {
             tell(generation, 2, |w| {
@@ -231,7 +232,7 @@ impl Drop for Opened {
 
 /// `uri` as a lowered `list<token>`, as ROOT OPEN's args are.
 fn lowered(uri: &[Token]) -> Vec<u8> {
-    let mut buf = vec![0; link::pkt_cap() as usize];
+    let mut buf = vec![0; (side().layout().cap - HDR_SZ) as usize];
     let mut w = Lower::new(&mut buf, 8);
     store_uri(&mut w, 0, uri);
     let len = w.finish().ok().or_bug(Errno::EMSGSIZE);
@@ -249,10 +250,10 @@ pub(crate) fn serve(
     later: &'static [(Handle, Method)],
 ) {
     for &h in named {
-        link::mount_named(h, Rc::new(Named { h, later }));
+        side().mount_named(h, Rc::new(Named { h, later }));
     }
     for (i, p) in prefixes {
-        link::mount(i, p, |uri, h| {
+        side().mount(i, p, |uri, h| {
             let uri = lowered(uri);
             let generation = generation();
             tell(generation, 3, |w| {
@@ -287,7 +288,7 @@ pub(crate) fn recv(generation: u32, tag: Tag, h: u32, m: u32, pkt: Option<Vec<u8
             if generation == self::generation() {
                 GUEST_OBJECTS.with_borrow_mut(|l| l.insert(o));
             } else {
-                link::drop(o);
+                side().drop(o);
             }
         }
         tell(generation, 4, |w| {
@@ -298,7 +299,7 @@ pub(crate) fn recv(generation: u32, tag: Tag, h: u32, m: u32, pkt: Option<Vec<u8
         });
     };
     let pkt = pkt.as_deref().map_or(Packet::Args(None), Packet::Bytes);
-    link::send_pkt(h, m, pkt, Some(Box::new(answer)));
+    side().send(h, m, pkt, Some(Box::new(answer)));
 }
 
 /// The answer of the UI of `generation` to the request `tag` it serves
@@ -312,7 +313,8 @@ pub(crate) fn answer(generation: u32, tag: Tag, result: i32, data: Option<Vec<u8
     let pending =
         PENDING.with_borrow_mut(|l| l.get(&tag) == Some(&generation) && l.remove(&tag).is_some());
     if pending {
-        link::task_return_pkt(tag, result, data);
+        let pkt = data.as_deref().map_or(Packet::Args(None), Packet::Bytes);
+        side().task_return(tag, result, pkt);
     }
 }
 

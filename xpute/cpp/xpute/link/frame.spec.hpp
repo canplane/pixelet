@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 namespace xpute::link::frame {
@@ -65,7 +66,22 @@ inline constexpr std::uint32_t SLOT_BITS = 20u;
 // What a native guest's export answers where the guest stopped, caught at the export so nothing leaves into its caller: as a module's trap. The guest is over, and its host enters it no more.
 inline constexpr std::int32_t TRAP = -2147483648;
 
-// What a native guest's link_init answers in its layout's place where the guest stopped, as TRAP is for its other exports.
-inline constexpr std::uint32_t TRAP_AT = 4294967295u;
+// What a native guest's link_init answers in its layout's place where the guest stopped, as TRAP is for its other exports: an odd address, where no layout lies.
+inline constexpr std::uint64_t TRAP_AT = 4294967295ull;
+
+// The words of the link's layout, which a guest's link_init lays and answers the address
+// of: the inbox's address, a u64 in two words, its low word first, then a frame's cap, then a
+// word unused, so the inbox, which follows the layout's words, lies on 8 bytes. The outbox
+// follows the inbox.
+namespace LAYOUT {
+
+inline constexpr std::size_t INBOX_AT = 0u;
+
+inline constexpr std::size_t CAP_AT = 2u;
+
+inline constexpr std::size_t PAD_AT = 3u;
+
+inline constexpr std::size_t WORDS = 4u;
+} // namespace LAYOUT
 
 } // namespace xpute::link::frame

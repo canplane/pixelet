@@ -1,9 +1,10 @@
 // pxl-core/build.rs
 
 // Links the core as a WebAssembly module from its manifest (manifest.json5):
-// the module owns its memory, and its stack comes first in it,
-// so that an overflow runs below address 0 and traps instead of writing over
-// the data above the stack. For any other target the script prints nothing,
+// the module owns its memory, which starts at the core's size and grows no
+// further (sys/heap.rs), and its stack comes first in it, so that an overflow
+// runs below address 0 and traps instead of writing over the data above the
+// stack. For any other target the script prints nothing,
 // and the platform links the core as it links any library.
 
 #[path = "src/spec/manifest.spec.rs"]
@@ -16,6 +17,11 @@ fn main() {
         return;
     }
     println!("cargo:rustc-link-arg=--stack-first");
+    println!(
+        "cargo:rustc-link-arg=--initial-memory={}",
+        manifest::mem::SZ
+    );
+    println!("cargo:rustc-link-arg=--max-memory={}", manifest::mem::SZ);
     println!(
         "cargo:rustc-link-arg=-zstack-size={}",
         manifest::stack::MODULE_SZ

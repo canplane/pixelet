@@ -177,3 +177,13 @@ export const FIELD_GET64 = (x: u64, shamt: u32, mask: u64): u64 =>
   U64((x >> BigInt(shamt)) & mask);
 export const FIELD_SET64 = (x: u64, shamt: u32, mask: u64, v: u64): u64 =>
   U64((x & ~(mask << BigInt(shamt))) | ((v & mask) << BigInt(shamt)));
+
+/** The two 32-bit words of `v`, its low word first, as a stream of 32-bit
+ * words carries a 64-bit one. */
+export const split64 = (v: u64): [u32, u32] => [
+  Number(v & 0xffff_ffffn),
+  Number((v >> 32n) & 0xffff_ffffn),
+];
+/** The 64-bit word whose low and high 32-bit words are `lo` and `hi`. */
+export const join64 = (lo: u32, hi: u32): u64 =>
+  (BigInt(hi >>> 0) << 32n) | BigInt(lo >>> 0);

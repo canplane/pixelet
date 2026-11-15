@@ -21,6 +21,27 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
   independent and which derive or repeat. The change follows from who owns the
   fact, as the design and those decisions place it; its size follows from
   that.
+- Layers, as a system is built. A part depends only on what is below it: the
+  part below gives the mechanism and declares the interface it needs; the part
+  above implements it, sets the policy and injects it; the program's assembly,
+  the top, makes the pieces. A part never reaches up for a concrete thing, a
+  global or a function, of the part that runs it, and no policy (what to print,
+  a limit to measure by) is carried down into a mechanism. The orders `rule.rs`
+  (`rust/tool/src/bin/rule.rs`) holds change only on the user's word.
+- What goes wrong is an error or a bug, and what is worth telling and is
+  neither is a log record. An error is an errno, the place it was made and an
+  optional message, as a kernel's is: across a boundary its status (a frame's
+  RESULT), inside a language the error object (`XputeError`, C++'s
+  `xpute::Error`), returned in Rust and C++ and thrown in TypeScript, for the
+  caller to judge. A bug is a broken invariant: the same, at most two numbers,
+  handed to the report installed from above, and the part stops; a panic the
+  language raises is one too. A log record is a level, a context and a message,
+  handed to the log the part's environment gives it. No part writes to the
+  platform's output; that is the environment's alone, as a shell prints what a
+  kernel returns.
+- What depends on a platform lives in the one part that is the platform's
+  (xpute's runtime, pixelet's `service/platform/`); every other part is
+  portable, using no platform API beyond its language's standard library.
 - Data first. Structures and tables, then short straight functions over them.
   Where a branch picks by kind, a table picks.
 - Read in the order it runs. No step behind a wrapper or a hook.

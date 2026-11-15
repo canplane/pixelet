@@ -28,7 +28,7 @@ bool frame() noexcept {
     // A word of the block `ask` kept, which stays live and in place; the host
     // stores into it only atomically, and writes the frame latency before
     // `STATUS` and never after.
-    auto word = [](std::size_t k) { return link::mem::load_acquire(link::mem::off(kept[k])); };
+    auto word = [](std::size_t k) { return link::mem::load_acquire(link::mem::addr(kept[k])); };
     return word(DEVICE::STATUS_AT) == STATUS::READY && admits(word(DEVICE::UNFINISHED_AT), word(DEVICE::LATENCY_AT));
 }
 

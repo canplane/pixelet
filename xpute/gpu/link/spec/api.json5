@@ -1,5 +1,5 @@
 {
-  $description: "The calls a guest makes to a GPU it cannot reach, written as records of a stream\n(xpute-gpu-guest stream.rs). The vocabulary is WebGPU's, with its descriptors written out as words, and\nit serves any program. A record is an op, a count, and the op's words in the order the\nop's doc lists them. Bytes go as a count followed by padded words, as the stream lays\nthem. Objects are named by the guest's handles (abi/handle). An optional field holds NONE\nwhen it is unset. Render and compute ops sit side by side.\n\nA transaction (xpute-gpu-guest stream.rs) that does not commit drops its records and gives back the\nhandles they took, so the host never hears of those objects. The encoder's begin and\ncommit open and close the transaction on both the stream and the handle table.",
+  $description: "The calls a guest makes to a GPU it cannot reach, written as records of a stream\n(xpute-gpu-guest stream.rs). The vocabulary is WebGPU's, with its descriptors written out as words, and\nit serves any program. A record is an op, a count, and the op's words in the order the\nop's doc lists them. Bytes go as a count followed by padded words, as the stream lays\nthem. Objects are named by the guest's handles (abi/handle). An optional field holds NONE\nwhen it is unset. Render and compute ops sit side by side.\n\nA transaction (xpute-gpu-guest stream.rs) that does not commit drops its records and gives back the\nhandles they took, so the host never hears of those objects. The encoder's begin and\ncommit open and close the transaction on both the stream and the handle table.\n\nWhere a record names the guest's memory, the bytes it reads or the fence word it answers at\n(OPS), the memory address is a u64 on every platform (link/wit/types.wit `lent`), written as\ntwo words, its low word first.",
   $extensions: { xpute: { uses: ["gpu/link/spec/enum.json5"] } },
   SURFACE_URI: {
     $description: "The URI a guest that draws serves its surface under (gpu/wit/surface.wit `surface`),\nwhich its host opens.",
@@ -251,8 +251,24 @@
     ALPHA: { $value: 8 },
     ALL: { $value: 15 },
   },
+  OPS: {
+    $type: "u32",
+    $description: "Each address the records of an op name in the guest's memory: the op, and the place\nof the address's low word, counted back from the record's end (`from_end`), as the op's\nwords list them: WRITE_BUFFER_AT's bytes, WRITE_TEXTURE_AT's, COPY_EXTERNAL_IMAGE's\nimage and fence, MAP_ASYNC's address and fence, and the fence of QUEUE_DONE and of the\nasync pipelines, each followed by a count or a ticket. A reader that moves records to\nanother block finds their addresses here.",
+    $extensions: { xpute: { row: "op_addr" } },
+    $value: [
+      { op: "{op.WRITE_BUFFER_AT}", from_end: 3 },
+      { op: "{op.WRITE_TEXTURE_AT}", from_end: 3 },
+      { op: "{op.COPY_EXTERNAL_IMAGE}", from_end: 6 },
+      { op: "{op.COPY_EXTERNAL_IMAGE}", from_end: 3 },
+      { op: "{op.MAP_ASYNC}", from_end: 5 },
+      { op: "{op.MAP_ASYNC}", from_end: 3 },
+      { op: "{op.QUEUE_DONE}", from_end: 3 },
+      { op: "{op.RENDER_PIPELINE_ASYNC}", from_end: 3 },
+      { op: "{op.COMPUTE_PIPELINE_ASYNC}", from_end: 3 },
+    ],
+  },
   DEVICE: {
-    $description: "The words of the device block, which the guest lends the host to write (gpu/wit/gpu.wit\n`device.lost`), in order: the device's limits (LIMIT_NAME, one word each), then its\nfeatures (FEATURE_NAME, one bit each, packed in words), then its timestamp period (f32\nbits: how many nanoseconds one unit of a resolved timestamp is, 1 when the units are\nnanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: the\nformat SURFACE_PREFERRED stands for, as the web's getPreferredCanvasFormat gives it), then\nthe frame latency (the program's GpuConfig `frame_latency`: how many of the guest's frames\nmay be unfinished at once, at least one), then the count of uncaptured errors, then the\ncount of unfinished frames, then STATUS, the last, which the host stores with release\nafter the rest. The uncaptured errors are the errors the device raised that no error\nscope caught, each logged where the host logs. The unfinished frames are the frames the\nguest has drawn whose work the queue has not yet done. Only the host writes the two\ncounts: first before STATUS, as it writes the rest of the block, and afterwards with\nrelease each time a count changes. The guest loads them with acquire once STATUS reads\nREADY, and draws a frame only while the unfinished frames are below the block's frame\nlatency; both hosts hold a frame to that rule (xpute-gpu-link `admits`).",
+    $description: "The words of the device block, which the guest lends the host to write (gpu/wit/gpu.wit\n`device.lost`), in order: the device's limits (LIMIT_NAME, one word each), then its\nfeatures (FEATURE_NAME, one bit each, packed in words), then its timestamp period (f32\nbits: how many nanoseconds one unit of a resolved timestamp is, 1 when the units are\nnanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: the\nformat SURFACE_PREFERRED stands for, as the web's getPreferredCanvasFormat gives it), then\nthe frame latency (the program's GpuConfig `frame_latency`: how many of the guest's frames\nmay be unfinished at once, at least one), then the count of uncaptured errors, then the\ncount of unfinished frames, then STATUS, the last, which the host stores with release\nafter the rest. The uncaptured errors are the errors the device raised that no error\nscope caught. The unfinished frames are the frames the\nguest has drawn whose work the queue has not yet done. Only the host writes the two\ncounts: first before STATUS, as it writes the rest of the block, and afterwards with\nrelease each time a count changes. The guest loads them with acquire once STATUS reads\nREADY, and draws a frame only while the unfinished frames are below the block's frame\nlatency; both hosts hold a frame to that rule (xpute-gpu-link `admits`).",
     $extensions: { xpute: { packed: true } },
     LIMITS_AT: { $value: ["LIMIT_NAME"] },
     FEATS_AT: { $value: ["FEATURE_NAME", "bit"] },

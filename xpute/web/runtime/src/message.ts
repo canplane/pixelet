@@ -3,7 +3,8 @@
 /** The messages the page and the guest's worker share; a program's own
  * messages join these in its own unions. */
 
-import type { Remote, Stop } from "@xpute/link";
+import type { Remote } from "@xpute/link";
+import type { UiStop } from "@xpute/web-host";
 
 /** What the page sends the worker to instantiate the guest (page.ts
  * `start`): the module, how to fetch it, the UI's port, the named handles of
@@ -31,10 +32,10 @@ export interface Trap {
 }
 
 /** The guest stopped, with the report of the broken invariant: the guest's,
- * as the host that serves the stop hands it (@xpute/web-host `serve_stop`),
- * or the host's own failure (worker.ts `hook`), which the runtime sends
- * (worker.ts `tell_stop`). */
+ * as the host that serves the stop hands it (worker.ts `stopped`), or the
+ * host's own failure (worker.ts `hook`), which the runtime sends (worker.ts
+ * `tell_stop`). */
 export interface Stopped {
   kind: "stopped";
-  stop: Stop;
+  stop: UiStop;
 }

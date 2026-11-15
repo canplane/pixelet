@@ -59,5 +59,16 @@ pub const SLOT_BITS: u32 = 20;
 /// What a native guest's export answers where the guest stopped, caught at the export so nothing leaves into its caller: as a module's trap. The guest is over, and its host enters it no more.
 pub const TRAP: i32 = -2147483648;
 
-/// What a native guest's link_init answers in its layout's place where the guest stopped, as TRAP is for its other exports.
-pub const TRAP_AT: u32 = 4294967295;
+/// What a native guest's link_init answers in its layout's place where the guest stopped, as TRAP is for its other exports: an odd address, where no layout lies.
+pub const TRAP_AT: u64 = 4294967295;
+
+/// The words of the link's layout, which a guest's link_init lays and answers the address
+/// of: the inbox's address, a u64 in two words, its low word first, then a frame's cap, then a
+/// word unused, so the inbox, which follows the layout's words, lies on 8 bytes. The outbox
+/// follows the inbox.
+pub mod layout {
+    pub const INBOX_AT: usize = 0;
+    pub const CAP_AT: usize = 2;
+    pub const PAD_AT: usize = 3;
+    pub const WORDS: usize = 4;
+}

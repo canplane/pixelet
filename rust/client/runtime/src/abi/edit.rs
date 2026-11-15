@@ -46,26 +46,29 @@ impl Tool {
     }
 }
 
-pub fn hold(tool: Tool, val: u32, scale_step: i32) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn hold(side_: &_rt::Side, tool: Tool, val: u32, scale_step: i32) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
         HANDLE,
         HOLD,
-        Some((12, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((12, &|w_: &mut _rt::Lower| {
             w_.u8(0, tool as u8);
             w_.u32(4, val);
             w_.i32(8, scale_step);
-        })),
+        }))),
     );
     _rt::answer(r)
 }
 
-pub fn marker_text(text: &str) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
-    let (r, data) = _rt::link::call(
+pub fn marker_text(
+    side_: &_rt::Side,
+    text: &str,
+) -> Result<Result<(), super::types::ErrorCode>, _rt::Errno> {
+    let (r, data) = side_.call(
         HANDLE,
         MARKER_TEXT,
-        Some((8, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((8, &|w_: &mut _rt::Lower| {
             w_.str(0, text);
-        })),
+        }))),
     );
     _rt::answer(r).and_then(|_| {
         let r_ = _rt::Lift::new(data.ok_or(_rt::Errno::EBADMSG)?);
@@ -81,18 +84,17 @@ pub fn marker_text(text: &str) -> Result<Result<(), super::types::ErrorCode>, _r
     })
 }
 
-pub fn marker_cancel() -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(HANDLE, MARKER_CANCEL, None);
+pub fn marker_cancel(side_: &_rt::Side) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(HANDLE, MARKER_CANCEL, _rt::Packet::Args(None));
     _rt::answer(r)
 }
 
-pub fn marker_commit() -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(HANDLE, MARKER_COMMIT, None);
+pub fn marker_commit(side_: &_rt::Side) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(HANDLE, MARKER_COMMIT, _rt::Packet::Args(None));
     _rt::answer(r)
 }
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lift, Lower, Method};
-    pub(super) use xpute_native_runtime::link;
+    pub(super) use xpute_link::{answer, Handle, Lift, Lower, Method, Packet, Side};
 }

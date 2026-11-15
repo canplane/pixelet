@@ -1,14 +1,18 @@
 // cpp/xpute/kit/status/error.hpp
 
-// An error is its errno and the place in the source where it was made, and
-// what happened is the errno's kind. A fault from outside the program is
-// returned as a `Result`; a broken invariant is fatal and goes through
-// `bug.hpp`.
+// An error is its errno, the place in the source where it was made, and what
+// a person reads of it beyond the errno, where its maker says more; what
+// happened is the errno's kind, and across the link it is its errno alone. A
+// fault from outside the program is returned as a `Result`; a broken
+// invariant is fatal and goes through `bug.hpp`.
 
 #pragma once
 
+#include <cstring>
+#include <memory>
 #include <optional>
 #include <source_location>
+#include <string_view>
 #include <utility>
 
 #include "errno.spec.hpp"
@@ -18,18 +22,28 @@ namespace xpute {
 struct Error {
     Errno errnum;
     std::source_location at;
+    // What a person reads beyond the errno, NUL-terminated, made once and
+    // never grown, and shared by an error's copies, as an error is passed on
+    // by value; null where the maker says nothing more.
+    std::shared_ptr<const char[]> message;
 
     constexpr Kind kind() const noexcept { return kind_Errno(errnum); }
 };
 
-constexpr Error make_error(Errno errnum, std::source_location at = std::source_location::current()) noexcept {
-    return Error{errnum, at};
+inline Error make_error(Errno errnum, std::string_view message = {},
+                        std::source_location at = std::source_location::current()) noexcept {
+    std::shared_ptr<char[]> m;
+    if (!message.empty()) {
+        m = std::make_shared<char[]>(message.size() + 1);
+        std::memcpy(m.get(), message.data(), message.size());
+    }
+    return Error{errnum, at, std::move(m)};
 }
 
 template <class T> class [[nodiscard]] Result {
   public:
     Result(T val) noexcept : val_(std::move(val)) {}
-    Result(Error err) noexcept : err_(err) {}
+    Result(Error err) noexcept : err_(std::move(err)) {}
 
     bool ok() const noexcept { return val_.has_value(); }
     explicit operator bool() const noexcept { return ok(); }
@@ -45,20 +59,20 @@ template <class T> class [[nodiscard]] Result {
 
   private:
     std::optional<T> val_;
-    Error err_{Errno::ok, {}};
+    Error err_{Errno::ok, {}, {}};
 };
 
 template <> class [[nodiscard]] Result<void> {
   public:
     Result() noexcept = default;
-    Result(Error err) noexcept : err_(err), failed_(true) {}
+    Result(Error err) noexcept : err_(std::move(err)), failed_(true) {}
 
     bool ok() const noexcept { return !failed_; }
     explicit operator bool() const noexcept { return ok(); }
     const Error &error() const noexcept { return err_; }
 
   private:
-    Error err_{Errno::ok, {}};
+    Error err_{Errno::ok, {}, {}};
     bool failed_ = false;
 };
 

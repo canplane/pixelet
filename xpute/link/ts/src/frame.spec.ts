@@ -59,5 +59,16 @@ export const SLOT_BITS = 20 as number;
 /** What a native guest's export answers where the guest stopped, caught at the export so nothing leaves into its caller: as a module's trap. The guest is over, and its host enters it no more. */
 export const TRAP = -2147483648 as number;
 
-/** What a native guest's link_init answers in its layout's place where the guest stopped, as TRAP is for its other exports. */
-export const TRAP_AT = 4294967295 as number;
+/** What a native guest's link_init answers in its layout's place where the guest stopped, as TRAP is for its other exports: an odd address, where no layout lies. */
+export const TRAP_AT = 4294967295n as bigint;
+
+/** The words of the link's layout, which a guest's link_init lays and answers the address
+ * of: the inbox's address, a u64 in two words, its low word first, then a frame's cap, then a
+ * word unused, so the inbox, which follows the layout's words, lies on 8 bytes. The outbox
+ * follows the inbox. */
+export const LAYOUT = {
+  INBOX_AT: 0 as number,
+  CAP_AT: 2 as number,
+  PAD_AT: 3 as number,
+  WORDS: 4 as number,
+} as const;

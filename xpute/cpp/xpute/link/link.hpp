@@ -61,6 +61,7 @@
 #include <utility>
 #include <vector>
 
+#include "xpute/kit/abi/word.hpp"
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/kit/status/error.hpp"
 #include "xpute/link/abi/types.hpp"
@@ -163,11 +164,23 @@ using Opener = std::function<Result<std::unique_ptr<Object>>(std::span<const Tok
 // The link's layout: the guest's inbox and a frame's cap. The outbox lies
 // right past the inbox.
 struct Layout {
-    std::uint32_t inbox;
+    std::uint64_t inbox;
     std::uint32_t cap;
 
-    // The layout `init` wrote at `at`: its two words.
-    static Layout at(std::uint32_t at) noexcept { return Layout{mem::word(at), mem::word(at + 4)}; }
+    // The layout `init` wrote at `at` (frame.json5 `LAYOUT`).
+    static Layout at(std::uint64_t at) noexcept {
+        auto w = [at](std::size_t k) { return mem::word(at + 4 * k); };
+        return Layout{join64(w(frame::LAYOUT::INBOX_AT), w(frame::LAYOUT::INBOX_AT + 1)), w(frame::LAYOUT::CAP_AT)};
+    }
+
+    // Writes the layout at `at`, whose words are the caller's.
+    void lay(std::uint64_t at) const noexcept {
+        auto set = [at](std::size_t k, std::uint32_t v) { mem::set_word(at + 4 * k, v); };
+        auto [lo, hi] = split64(inbox);
+        set(frame::LAYOUT::INBOX_AT, lo);
+        set(frame::LAYOUT::INBOX_AT + 1, hi);
+        set(frame::LAYOUT::CAP_AT, cap);
+    }
 };
 
 // One side of the link: what both sides do, once. A side lays its frames in
@@ -177,7 +190,7 @@ struct Layout {
 // hand is done (`run_due`): the guest as an entry ends.
 class Side {
   public:
-    Side(std::uint32_t (*out_box)(Layout), std::int32_t (*cross)(std::uint32_t)) noexcept : out_box_(out_box), cross_(cross) {}
+    Side(std::uint64_t (*out_box)(Layout), std::int32_t (*cross)(std::uint64_t)) noexcept : out_box_(out_box), cross_(cross) {}
 
     void set_layout(Layout l) noexcept { layout_ = l; }
 
@@ -242,7 +255,7 @@ class Side {
 
     // The frame the other side laid at `at`: a later answer, made due, or a
     // method, run by its object, its answer laid in the frame it came in.
-    std::int32_t recv(std::uint32_t at);
+    std::int32_t recv(std::uint64_t at);
 
     // Runs the answers due, those made due while they run too.
     void run_due();
@@ -261,15 +274,15 @@ class Side {
     Reply serve(Handle h, Method m, Tag tag, std::optional<std::span<const std::uint8_t>> args);
     Result<Handle> opened(std::optional<std::span<const std::uint8_t>> args);
     Tag tag() noexcept;
-    Result<void> lay(std::uint32_t at, Frame words, const Args &pkt);
+    Result<void> lay(std::uint64_t at, Frame words, const Args &pkt);
     std::pair<std::int32_t, std::optional<std::span<const std::uint8_t>>> out(Tag tag, Handle h, Method m, bool res, std::int32_t result, const Args &pkt);
 
     std::optional<Layout> layout_;
     // The box this side lays its frames in.
-    std::uint32_t (*out_box_)(Layout);
+    std::uint64_t (*out_box_)(Layout);
     // Crosses with the frame laid at `at`, and answers what the method came
     // to.
-    std::int32_t (*cross_)(std::uint32_t);
+    std::int32_t (*cross_)(std::uint64_t);
     // Whether this side is crossing: control is on the other side.
     bool crossing_ = false;
     // Where the next request's tag is sought.

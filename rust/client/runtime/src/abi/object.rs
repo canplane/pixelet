@@ -12,7 +12,7 @@ pub trait Host {
     fn apply(&self, batch: _rt::Lent, task_return: _rt::Return<Result<(), _rt::ErrorCode>>);
 }
 
-struct _Object(_rt::Rc<dyn Host>);
+struct _Object(&'static _rt::Side, _rt::Rc<dyn Host>);
 
 impl _rt::Object for _Object {
     fn call(&self, m_: _rt::Method, tag_: _rt::Tag, args_: Option<&[u8]>) -> _rt::Reply {
@@ -21,11 +21,11 @@ impl _rt::Object for _Object {
                 APPLY => {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
                     let batch = _rt::Lent::load(r_, 0)?;
-                    self.0.apply(
+                    let side_ = self.0;
+                    self.1.apply(
                         batch,
                         _rt::Return::new(
-                            tag_,
-                            _rt::link::on_cancel,
+                            Box::new(move |stop| side_.on_cancel(tag_, stop)),
                             Box::new(move |got| {
                                 let reply = match got {
                                     Ok(v) => _rt::Reply {
@@ -43,13 +43,15 @@ impl _rt::Object for _Object {
                                     },
                                     Err(e) => _rt::Reply::from(e as i32),
                                 };
-                                _rt::link::task_return(
+                                side_.task_return(
                                     tag_,
                                     reply.result,
-                                    reply
-                                        .data
-                                        .as_ref()
-                                        .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
+                                    _rt::Packet::Args(
+                                        reply
+                                            .data
+                                            .as_ref()
+                                            .map(|(n, w)| (*n, &**w as &dyn Fn(&mut _rt::Lower))),
+                                    ),
                                 );
                             }),
                         ),
@@ -63,16 +65,17 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `implementation` under the interface's handle.
-pub fn mount(implementation: _rt::Rc<dyn Host>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
+/// Serves `implementation` under the interface's handle on `side_`.
+pub fn mount(side_: &'static _rt::Side, implementation: _rt::Rc<dyn Host>) {
+    side_.mount_named(HANDLE, _rt::Rc::new(_Object(side_, implementation)));
 }
 
 mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
     pub(super) use xpute_link::abi::types::Lent;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Return, Tag};
-    pub(super) use xpute_native_runtime::abi::fs::types::ErrorCode;
-    pub(super) use xpute_native_runtime::link;
+    pub(super) use xpute_link::{
+        Handle, Lift, Lower, Method, Object, Packet, Reply, Return, Side, Tag,
+    };
+    pub(super) use xpute_native_host::abi::fs::types::ErrorCode;
 }

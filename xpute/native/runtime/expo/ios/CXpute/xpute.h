@@ -91,12 +91,5 @@ void xpute_answer(uint32_t generation, uint32_t tag, int32_t result, const uint8
 uint8_t *xpute_take(uint32_t generation, size_t *len);
 void xpute_taken_free(uint8_t *at, size_t len);
 
-// Returns the first byte of the guest's memory, and writes its size through
-// `len` and the program's share of it through `share_sz`, either null when
-// not wanted. The runtime reserves it at the first call, from any thread, at
-// the size the program gives `native_abi!`. The UI reads and writes there the
-// buffers the guest lends it; the guest's link and heap read it too.
-uint8_t *xpute_mem(uint32_t *len, uint32_t *share_sz);
-
 // Tells the runtime that the app was hidden (0) or shown (1).
 void xpute_life(int32_t shown);

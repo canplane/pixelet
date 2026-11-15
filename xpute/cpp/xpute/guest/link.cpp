@@ -3,8 +3,8 @@
 #include "link.hpp"
 
 #include <algorithm>
+#include <memory_resource>
 
-#include "heap.hpp"
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/link/frame.hpp"
 #include "xpute/link/mem.hpp"
@@ -12,9 +12,9 @@
 // A module takes the host's `link_out` under `env` (TS `link.ts` `imports`);
 // a native guest, from the host linked into its process.
 #ifdef __wasm__
-extern "C" __attribute__((import_module("env"), import_name("link_out"))) std::int32_t link_out(std::uint32_t at);
+extern "C" __attribute__((import_module("env"), import_name("link_out"))) std::int32_t link_out(std::uint64_t at);
 #else
-extern "C" std::int32_t link_out(std::uint32_t at);
+extern "C" std::int32_t link_out(std::uint64_t at);
 #endif
 
 namespace xpute::guest {
@@ -58,19 +58,18 @@ void leave() {
 
 } // namespace
 
-std::uint32_t init(std::uint32_t cap, void (*enter)(), bool (*end)()) noexcept {
+std::uint64_t init(std::uint32_t cap, void (*enter)(), bool (*end)()) noexcept {
     ensure(cap % 8 == 0 && cap >= link::HDR_SZ, Errno::einval, cap);
     if (the_side == nullptr) the_side = new link::Side([](link::Layout l) { return l.inbox + l.cap; }, link_out);
-    // The layout's two words, then the inbox and the outbox, for as long as
-    // the guest runs.
-    std::size_t n = 1 + 2 * cap / 8;
-    auto *words = static_cast<std::uint64_t *>(heap().allocate(n * 8, 8));
+    // The layout (frame.json5 `LAYOUT`), then the inbox and the outbox, for as
+    // long as the guest runs.
+    std::size_t n = (4 * link::frame::LAYOUT::WORDS + 2 * cap) / 8;
+    auto *words = static_cast<std::uint64_t *>(std::pmr::get_default_resource()->allocate(n * 8, 8));
     std::fill_n(words, n, 0);
-    std::uint32_t at = link::mem::span(std::span<const std::uint64_t>(words, n)).first;
-    std::uint32_t inbox = at + 8;
-    link::mem::set_word(at, inbox);
-    link::mem::set_word(at + 4, cap);
-    side().set_layout(link::Layout{inbox, cap});
+    std::uint64_t at = link::mem::addr(words[0]);
+    link::Layout l{at + 4 * link::frame::LAYOUT::WORDS, cap};
+    l.lay(at);
+    side().set_layout(l);
     enter_fn = enter;
     end_fn = end;
     return at;

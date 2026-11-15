@@ -3,9 +3,11 @@
 [xpute](./README.md) claims that a program's compiled **guest** and the
 **host** that serves it need share nothing but the guest's memory and one kind
 of message laid in it. This document follows that claim through the parts that
-make it hold, in the order they depend on each other. The **link** carries
-every call as a frame. The **sides** run the link alike on every platform, and
-a UI on another thread reaches it by a **remote**. A failure is its call's to
+make it hold, in the order they depend on each other, across xpute's three
+parts: the guest, the host and the link between them, which WIT draws; the
+runtime, the platform's environment that runs them; and the kit beneath both.
+The **link** carries every call as a frame. The **sides** run the link alike on
+every platform, each end over a medium its runtime plugs in, a UI's too. A failure is its call's to
 judge, and a bug ends in a stop, after which the link answers what was owed, so
 that no side waits on an answer that will not come. The GPU is the one device
 whose work holds the guest's memory past an answer, so it is the one device the
@@ -39,7 +41,9 @@ A packet holds the args, or an answer's value, in the Component Model's
 Canonical ABI layout, with four departures. A pointer is an offset into the
 packet, which is the one copy. A buffer the caller lends, WIT's `lent`
 (`link/wit/types.wit`), stays where it lies and is the callee's until the
-answer. A packet that does not hold what its type says is refused, EBADMSG,
+answer; its address is a u64 on every platform, an offset into a module's
+memory or a pointer natively, so a packet has one layout everywhere. A packet
+that does not hold what its type says is refused, EBADMSG,
 where the ABI traps. And RESULT is status alone, the value in the packet.
 
 A `func` answers at once, and is called. An `async func` answers later, and is
@@ -56,32 +60,44 @@ C++: it lays frames in its own box, crosses by its own function, serves what
 is mounted on it and hears the answers to what it sent. The guest holds one
 over its outbox, and the host one over the guest's inbox.
 
-Each platform splits what runs beside the guest the same way. The **runtime** is
-the platform's environment, which instantiates or links the guest, holds the
-host's `Side` and runs the loop that enters it: `@xpute/web-runtime` in a page's
-worker, `xpute-native-runtime` on a device's guest thread. The **host** is what
-is served over it, the clocks and the stop: `@xpute/web-host` and
-`xpute-native-host`. The program starts its guest with a `Boot`, which lists
+What runs beside the guest is split the same way everywhere, and every
+dependency points down: a part declares the interface it needs, and a part
+above implements it and injects it. The **host** is the guest's counterpart: the
+host's end of the link, the bindings of what is served there, and xpute's own
+servers, the clocks and the stop. It varies by language, as the guest does,
+and names no runtime. The **runtime** is the platform's environment, a page's
+worker or a device's guest thread. It instantiates or links the guest, makes
+the host's `Side`, injects into the host what the host needs of it (the way
+back to the guest's thread, where a report goes, the log) and runs the loop
+that enters the guest. Nothing names a runtime but its own UI end and the
+program's assembly. A plugin stands beside the runtime, as its own guest's end
+and host, and neither names the other. The program starts its guest with a `Boot`, which lists
 its servers, the host's among them, each a `Server` that mounts some of the
 guest's imports, and its runtime runs the steps in their order, on both
 platforms alike: it mounts each server, serves the UI's side, enters the guest
 only once every interface the guest's world imports is mounted, and on a
 device runs the loop.
 
-The UI lives on another thread, and reaches the link through a **remote**:
-over a port on a page, and through the Expo module `@xpute/native-runtime` on
-a device. A `Side` and a `Remote` serve by one class beneath both
-(`link/ts/src/link.ts`); only how an answer crosses differs. The UI never
-waits, so it has no `call`. A method the UI serves that WIT marks `async func`,
-which the bindings list as `LATER`, it answers later by its tag; any other is
-told to it and answered at once.
+An end of the link is one machine whatever carries its frames, as a link
+layer knows its two ends and not the wire. What carries them is the
+**medium**, which the runtime plugs in: the guest's boxes and the crossing into
+it, or a port to a UI on another thread (a page's MessagePort, a device's C
+ABI). A call that waits for its answer needs a medium that can wait, so an end
+over a port has none. The runtime bridges an end over a port to the guest's
+end, as a bridge joins two links. A method the UI serves that WIT marks
+`async func`, which the bindings list as `LATER`, it answers later by its tag;
+any other is told to it and answered at once.
 
-A device's runtime outlives its UI, so a reload is a new UI on the same runtime:
-what the old UI held goes (xpute-native-runtime's `accept`), and the runtime
+The UI is one party on the link, over a port, and its connection is an object like
+any other: it attaches by opening a handle, everything it sends and takes names
+that handle, and it leaves when the handle is dropped, which drops what it
+opened and answers ECANCELED what it owed, by the link's own drop. The guest is
+told only that a remote attached (`xpute:life` `attached`); the WIT between it
+and the UI does not change. A device's runtime outlives its UI, so a reload
+opens a new handle on the same runtime and drops the old one, and the runtime
 keeps the guest's end, its last stop and its trap, which a new UI reads as it
-begins to hear them (@xpute/native-runtime's `stopped_on` and `trap_on`), as
-it reads the GPU's state. A page's worker dies with its page, so a reloaded
-page meets a new runtime.
+begins to hear them. A page's worker dies with its page, so a reloaded page
+meets a new runtime.
 
 ## How a failure ends
 
@@ -91,6 +107,16 @@ Abseil status code. The kind says nothing of whether the failure is fatal:
 that is the call's. A caller that holds a failure impossible makes it a
 **bug** (`bug` and `or_bug`), reported with its errno, file and line before it
 stops.
+
+Between xpute's parts a failure moves as an `XputeError` with its optional
+message, an end as a stop or a trap report, the stop with the bug's optional
+message (a panic the language raises, the panic's own), and what is worth
+telling and is neither as a log record, a level, a context and a message
+(`wit/log`, in `wasi:logging`'s shape). Each end has its `log`: the guest's
+calls the import, and the host serves it and hands the records, with its own,
+to the log its runtime injects. The runtime alone writes them to the
+platform's output, its error stream, Android's log or a page's console, and
+alone decides by level which it writes; no other part drops a record.
 
 A guest's bug is reported through `stop`, and the guest traps. A host's own
 failure is a stop on both platforms too, reported the same way, and then the
@@ -144,8 +170,10 @@ tree packet, is the format of data a program stores and serves, and of a
 device's batches to its UI; the link's packets are the Canonical ABI's.
 
 What holds the languages to each other is data. Under a part's
-`spec/golden/` are records produced once, checked once and then frozen, which
-each language reads bit for bit, so a difference means one side moved. Every
+`spec/golden/` are records each language reads bit for bit, so a difference
+means one side moved. A record is frozen: its writer, a Rust test behind
+`XPUTE_GOLDEN_WRITE`, writes it again only when a contract changes on
+purpose. Every
 rounding in the tree is one rule, half to even as WGSL rounds (`math/scalar`),
 so the guest, the UI and a shader round alike; a call that rounds otherwise is
 refused by the tools.
@@ -165,12 +193,14 @@ word; and a rule the GPU alone decides is one function every pass calls.
   on either end.
 - **No method of the program's has a meaning in xpute.** A side delivers a
   frame by its handle and reads nothing of what it says.
-- **The guest's memory is the guest's.** Its runtime sizes it with the
-  program's two numbers, the memory's size and the program's share, before the
-  first entry: a page's grows the module's memory, and a device's reserves a
-  region and answers where it lies (`xpute_mem`), which the link and the heap
-  read. It is never grown after. The heap in it is the guest library's, past
-  the share; the program writes nothing of it in either language.
+- **The guest's memory is the guest's.** xpute lays nothing in it and sizes
+  nothing: a module's memory is its own, which it grows as its allocator asks,
+  and a native guest's is its process's. A span the guest lends is named by
+  its address (`lent`), a u64 on every platform: an offset into the module's
+  memory in a module, a pointer natively, which a host in the same process
+  reads in place and a device's UI through a buffer over that span alone. The
+  GPU's stream carries its addresses so too, each in two words. Whether the memory is fixed, what lies where in it and
+  which allocator each allocation takes are the program's, in either language.
 - **The policy is the program's.** When the guest runs and how much I/O is out
   are decided outside xpute; it has no turn, no budget and no backpressure.
 - **The host serves only what every guest shares**: the clocks, the stop and
@@ -188,6 +218,7 @@ word; and a rule the GPU alone decides is one function every pass calls.
 | WASI's `wasi:clocks` | The clocks, as a subset |
 | A GPU's command buffer, as WebGPU's encoder records one | The GPU stream |
 | gRPC's and Abseil's status codes | An errno's kind |
+| Linux's uAPI, which carries a user pointer in an ioctl's struct as a `__u64`; Vulkan's `VkDeviceAddress`; WebGPU's `GPUSize64` | An address the link carries, a u64 whatever the platform's pointer, so one layout and one golden record serve every platform |
 | [evanw/buddy-malloc](https://github.com/evanw/buddy-malloc) | `kit`'s buddy allocator, ported line for line |
 | POSIX and Linux errno | Every failure: a negative errno |
 | IEEE 754's round half to even, as WGSL rounds | The one rounding in every language |
@@ -212,9 +243,9 @@ word; and a rule the GPU alone decides is one function every pass calls.
   module the UI reaches them by.
 - `gpu/link` and `cpp/xpute/gpu/link` are the GPU's link, and `gpu/guest/rust`
   and `cpp/xpute/gpu/guest` its encoder; `gpu/web/host` and `gpu/native/host`
-  its hosts on WebGPU and wgpu, and `gpu/native/runtime/rust` the bindings a
-  device's host serves on `xpute-native-runtime`'s link, and
-  `gpu/native/runtime/expo` a device's surface view.
+  its hosts on WebGPU and wgpu, the device's with its bindings, served on the
+  side `xpute-native-runtime` makes, and `gpu/native/runtime/expo` a
+  device's surface view.
 - `dev/golden` and `cpp/dev/test/` are what the tests take,
   `cpp/amalgamation.awk` makes the C++ library's two files, and
   `cpp/dev/guest.cpp` is the smallest guest, which the build links over them

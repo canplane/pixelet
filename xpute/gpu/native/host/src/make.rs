@@ -27,14 +27,14 @@ pub(super) fn maker(wake: fn()) -> Maker {
 /// answered.
 pub(super) struct Making {
     id: u32,
-    word: u32,
+    word: u64,
     ticket: u32,
 }
 
 impl GpuHost {
     /// Sends the pipeline to the maker. Its fence's words follow its record.
     pub(super) fn make_later(&mut self, (id, make): (u32, Make), r: &mut WordCursor) {
-        let (word, ticket) = (r.u(), r.u());
+        let (word, ticket) = (r.addr(), r.u());
         self.making
             .insert(handle_slot(id), Making { id, word, ticket });
         let _ = self.maker.ask.send((id, make));

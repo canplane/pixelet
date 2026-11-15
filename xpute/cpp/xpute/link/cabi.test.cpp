@@ -17,7 +17,7 @@ namespace {
 
 // The record's packet: one of each number, a string, a list of numbers, a URI
 // and a lent span, as the Canonical ABI lays a tuple of them.
-constexpr std::size_t FIXED_SZ = 80;
+constexpr std::size_t FIXED_SZ = 88;
 
 const std::vector<Token> URI{Token{Token::Int{5}}, Token{Token::Str{"f"}}};
 

@@ -11,7 +11,7 @@
  * device (ui.ts).
  */
 
-import { state_on } from "@xpute/gpu-web-host";
+import type { GpuReport } from "@xpute/gpu-web-host";
 import {
   type Log,
   message_on,
@@ -49,7 +49,7 @@ export function boot(): void {
   const remote = open_remote(require.unstable_resolveWorker("./worker.ts"));
   stopped_on(stopped);
   trap_on(trapped);
-  state_on((state) => set_gpu(GPU_STATE[state]));
+  message_on<GpuReport>("gpu", (m) => set_gpu(GPU_STATE[m.state]));
   message_on<SourceReport>("source", (m) => mirror_source(m.state, m.decl));
   message_on<KeepReport>("keep", (m) => storage.set(m.key, m.val));
   message_on<Log>("log", (m) => log(`[worker] ${m.text}`));

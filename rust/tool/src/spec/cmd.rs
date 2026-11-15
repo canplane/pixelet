@@ -4,7 +4,7 @@
 //! xpute-link-gen as any program's are, over xpute's own packages, which it
 //! carries itself: the guest's Rust in pxl-core, and a host's, the Rust that
 //! pxl-runtime serves of pixelet's own interfaces (rust/client/runtime/src/text.rs)
-//! on xpute-native-runtime's link and the TypeScript the UI takes.
+//! on xpute-native-host's link and the TypeScript the UI takes.
 
 use xpute_link_gen::wit::{wit_outputs, Side, WitTarget};
 

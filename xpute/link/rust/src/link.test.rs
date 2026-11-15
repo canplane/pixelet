@@ -8,7 +8,7 @@ use crate::mem::test::alloc;
 // A guest's side and its host's, each crossing into the other's `recv`, over
 // a layout of this thread's own.
 thread_local! {
-    static GUEST: Side = const { Side::new(|l| l.inbox + l.cap, |at| HOST.with(|h| h.recv(at))) };
+    static GUEST: Side = const { Side::new(|l| l.inbox + u64::from(l.cap), |at| HOST.with(|h| h.recv(at))) };
     static HOST: Side = const { Side::new(|l| l.inbox, |at| GUEST.with(|g| g.recv(at))) };
 }
 
@@ -43,7 +43,7 @@ impl Object for Served {
 
 /// Lays the link and mounts what the host serves: the inbox, and the tag of
 /// the request method 1 left to answer.
-fn link() -> (u32, Rc<Cell<Option<Tag>>>) {
+fn link() -> (u64, Rc<Cell<Option<Tag>>>) {
     let l = Layout {
         inbox: alloc(2 * CAP),
         cap: CAP,
@@ -67,7 +67,7 @@ fn link() -> (u32, Rc<Cell<Option<Tag>>>) {
 #[test]
 fn recv_answers_res_with_tag() {
     let (inbox, _) = link();
-    let outbox = inbox + CAP;
+    let outbox = inbox + u64::from(CAP);
     for (m, result) in [(0, 0), (2, Errno::EMSGSIZE as i32)] {
         let t = GUEST.with(|g| g.send(SERVED, m, Packet::Args(None), None));
         let f = Frame::at(outbox);

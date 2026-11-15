@@ -46,7 +46,7 @@ pub fn file_read<L: _rt::Lend>(
     let sent = _rt::wait::wait(
         file_,
         FILE_READ,
-        Some((8, &|w_: &mut _rt::Lower| {
+        Some((16, &|w_: &mut _rt::Lower| {
             _rt::Lent {
                 at: buf_at_,
                 len: buf_len_,
@@ -84,7 +84,7 @@ pub fn file_write<L: _rt::Lend>(
     let sent = _rt::wait::wait(
         file_,
         FILE_WRITE,
-        Some((8, &|w_: &mut _rt::Lower| {
+        Some((16, &|w_: &mut _rt::Lower| {
             _rt::Lent {
                 at: buf_at_,
                 len: buf_len_,

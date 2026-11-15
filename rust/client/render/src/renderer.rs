@@ -17,6 +17,7 @@ use pxl_spec::space::coord::mat4::Mat4;
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world;
 use pxl_spec::space::layer::lattice::EFFECT_REACH;
+use xpute_kit::abi::word::join64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
@@ -1857,10 +1858,10 @@ fn take_lists(g: Option<&Gpu>, update: &DrawUpdate) -> bool {
         b.remove(handle);
     }
     for u in update.uploads.as_chunks::<UPLOAD_WORDS>().0 {
-        b.insert(g, u[0], u[1], u[2], u[3], u[4]);
+        b.insert(g, u[0], join64(u[1], u[2]), u[3], u[4], u[5]);
     }
     for r in update.rewrites.as_chunks::<REWRITE_WORDS>().0 {
-        b.rewrite(g, r[0], r[1], r[2], r[3]);
+        b.rewrite(g, r[0], join64(r[1], r[2]), r[3], r[4]);
     }
     !(update.frees.is_empty() && update.uploads.is_empty() && update.rewrites.is_empty())
 }

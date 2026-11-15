@@ -5,13 +5,13 @@
  * (@xpute/web-runtime page.ts): a `Remote` over this module. What the UI
  * sends goes to the module's `post` and `answer`, and what the runtime sends
  * comes in a batch on one notify (`take`), each message an XTP packet read
- * into what a port carries (xpute-native-runtime remote.rs). The buffers the
- * guest lends lie in its memory, which the module hands over whole (`mem`),
- * read here by range (`bytes`).
+ * into what a port carries (xpute-native-runtime remote.rs). A buffer the
+ * guest lends is read and written through a buffer the module makes over its
+ * span (`bytes`).
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import type { i32, u32 } from "@xpute/kit/abi/word.ts";
+import { split64, type i32, type u32, type u64 } from "@xpute/kit/abi/word.ts";
 import { bug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
 import { type BranchCursor, TreeReader } from "@xpute/kit/wire/xtp/mod.ts";
@@ -104,9 +104,11 @@ export function start(remote: Remote): void {
   XPUTE.start(remote.named, pkt!);
 }
 
-/** The `len` bytes at `at` in the guest's memory, as Side `bytes` gives
- * them. The memory is asked for each time, as the runtime sets it up once it
- * has started. */
-export function bytes(at: u32, len: u32): U8Array {
-  return new Uint8Array(XPUTE.mem(), at, len);
+/** The `len` bytes the guest lent at `at`, its address, as Side `bytes`
+ * gives them: a buffer the module makes over that span alone. An empty span
+ * has no address (link/wit/types.wit `lent`). */
+export function bytes(at: u64, len: u32): U8Array {
+  if (len === 0) return new Uint8Array(0);
+  const [lo, hi] = split64(at);
+  return new Uint8Array(XPUTE.bytes(lo, hi, len));
 }

@@ -23,6 +23,7 @@
 
 #include "xpute/kit/status/bug.hpp"
 #include "xpute/link/mem.hpp"
+#include "xpute/kit/abi/word.hpp"
 #include "xpute/gpu/link/api.spec.hpp"
 #include "xpute/gpu/link/enum.spec.hpp"
 #include "handle.hpp"
@@ -508,10 +509,10 @@ template <std::size_t N> class Gpu {
     // RESULT). No record may name the pipeline before the guest has seen that
     // ticket.
     std::optional<Id> render_pipeline_async(Stream &stream, const RenderPipelineDescriptor &d, const std::uint32_t &fence, std::uint32_t ticket) noexcept {
-        std::uint32_t at = link::mem::off(fence);
+        auto [lo, hi] = split64(link::mem::addr(fence));
         return make_as(stream, op::RENDER_PIPELINE_ASYNC, op::RENDER_PIPELINE, [&](auto &s) {
             detail::render_pipeline_words(s, d);
-            detail::words(s, {at, ticket});
+            detail::words(s, {lo, hi, ticket});
         });
     }
 
@@ -522,10 +523,10 @@ template <std::size_t N> class Gpu {
     // This is `compute_pipeline`, with the fence and ticket of
     // `render_pipeline_async`.
     std::optional<Id> compute_pipeline_async(Stream &stream, const ComputePipelineDescriptor &d, const std::uint32_t &fence, std::uint32_t ticket) noexcept {
-        std::uint32_t at = link::mem::off(fence);
+        auto [lo, hi] = split64(link::mem::addr(fence));
         return make_as(stream, op::COMPUTE_PIPELINE_ASYNC, op::COMPUTE_PIPELINE, [&](auto &s) {
             detail::compute_pipeline_words(s, d);
-            detail::words(s, {at, ticket});
+            detail::words(s, {lo, hi, ticket});
         });
     }
 

@@ -6,7 +6,7 @@
 //! Nothing here uses the domain, the renderer or the profiler (pxl-tool
 //! rule.rs).
 
-pub(crate) mod heap;
+pub mod heap;
 #[cfg(test)]
 #[path = "sys/host.test.rs"]
 pub(crate) mod host;

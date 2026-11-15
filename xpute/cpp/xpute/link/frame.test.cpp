@@ -17,7 +17,7 @@ using link::HDR_SZ;
 // fields.
 XPUTE_TEST(frame_matches_record) {
     Golden g = Golden::load("link/spec/golden/frame.tsv");
-    std::uint32_t at = test::alloc(HDR_SZ);
+    std::uint64_t at = test::alloc(HDR_SZ);
     g.each("", [&](const std::string &k) {
         Frame f{
             .tag = g.u32(k + ".tag"),

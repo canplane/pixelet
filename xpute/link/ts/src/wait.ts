@@ -16,7 +16,7 @@ export function wait(
   );
 }
 
-/** `link` as a `Sender`, each method sent through `wait`. */
-export function sender(link: Side): Sender {
-  return { send: (h, m, args) => wait(link, h, m, args) };
+/** `side` as a `Sender`, each method sent through `wait`. */
+export function sender(side: Side): Sender {
+  return { send: (h, m, args) => wait(side, h, m, args) };
 }

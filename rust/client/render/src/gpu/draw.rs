@@ -21,12 +21,14 @@ use pxl_global::Global;
 use pxl_spec::space::coord::q3::{from_real, ONE, Q3};
 use pxl_spec::space::coord::v3::V3;
 use pxl_spec::space::coord::world::between;
+use xpute_kit::abi::word::split64;
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 use xpute_link::mem;
 
-/// An upload record's words: handle, address, byte length, vertex count and index count.
-pub const UPLOAD_WORDS: usize = 5;
+/// An upload record's words: handle, address (two words, xpute-gpu-link `addr`), byte length,
+/// vertex count and index count.
+pub const UPLOAD_WORDS: usize = 6;
 /// A draw record's words: handle, two words the pipeline gives a meaning, the slot where the
 /// draw's uniform lies, and pipeline.
 pub const DRAW_WORDS: usize = 5;
@@ -170,8 +172,8 @@ fn stats_slot(pipeline: u32) -> usize {
         .position(|&p| p == pipeline)
         .or_bug(Errno::EINVAL)
 }
-/// A rewrite record's words: handle, address, byte offset and length.
-pub const REWRITE_WORDS: usize = 4;
+/// A rewrite record's words: handle, address (two words), byte offset and length.
+pub const REWRITE_WORDS: usize = 5;
 
 /// The uploads' and the frees' arrays in the uploads' fixed range (gpu/upload.rs `set_uploads`),
 /// each twice: one being written and one the renderer took. Each has room for as many records
@@ -458,13 +460,14 @@ impl<'a> DrawTable<'a> {
 }
 
 impl DrawList {
-    pub fn upload(&mut self, at: u32, bytes: u32, vertex_cnt: u32, idx_cnt: u32) -> u32 {
+    pub fn upload(&mut self, at: u64, bytes: u32, vertex_cnt: u32, idx_cnt: u32) -> u32 {
         self.next_handle = self.next_handle.wrapping_add(1).max(1);
         let handle = self.next_handle;
         let arr = &mut list_arrays().uploads[self.side];
+        let [lo, hi] = split64(at);
         xpute_kit::ensure!(self.uploads + UPLOAD_WORDS <= arr.len(), ENOSPC, arr.len());
         arr[self.uploads..self.uploads + UPLOAD_WORDS]
-            .copy_from_slice(&[handle, at, bytes, vertex_cnt, idx_cnt]);
+            .copy_from_slice(&[handle, lo, hi, bytes, vertex_cnt, idx_cnt]);
         self.uploads += UPLOAD_WORDS;
         handle
     }
@@ -501,28 +504,30 @@ impl DrawList {
         self.frees += 1;
     }
 
-    pub fn rewrite(&mut self, handle: u32, at: u32, bytes: u32) {
+    pub fn rewrite(&mut self, handle: u32, at: u64, bytes: u32) {
         self.rewrite_part(handle, at, 0, bytes);
     }
 
     /// Asks for one rewrite of the part of an upload from byte `from`, however often it is
     /// asked before the list is taken. The renderer reads the bytes when the list is taken, at
     /// the latest place asked, and as many as the most asked.
-    pub fn rewrite_part(&mut self, handle: u32, at: u32, from: u32, bytes: u32) {
+    pub fn rewrite_part(&mut self, handle: u32, at: u64, from: u32, bytes: u32) {
         if handle == 0 {
             return;
         }
+        let [lo, hi] = split64(at);
         if let Some(r) = self
             .rewrites
             .as_chunks_mut::<REWRITE_WORDS>()
             .0
             .iter_mut()
-            .find(|r| r[0] == handle && r[2] == from)
+            .find(|r| r[0] == handle && r[3] == from)
         {
-            (r[1], r[3]) = (at, r[3].max(bytes));
+            (r[1], r[2], r[4]) = (lo, hi, r[4].max(bytes));
             return;
         }
-        self.rewrites.extend_from_slice(&[handle, at, from, bytes]);
+        self.rewrites
+            .extend_from_slice(&[handle, lo, hi, from, bytes]);
     }
 
     /// Chooses the copy the frame writes its uniforms into. Where the host holds the current

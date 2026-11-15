@@ -3,59 +3,20 @@
 //! This is the GPU's host as an Android app reaches it: the C ABI's calls
 //! under the names JNI looks for, as the `external` functions of the Kotlin
 //! class `xpute.Gpu` (`jni_abi!`), and the host's state as a call of its
-//! static `onState(String)`. A view's `Surface` crosses as the native window wgpu draws
+//! static `onState(String)`, made through the JNI helpers the program's
+//! assembly names. A view's `Surface` crosses as the native window wgpu draws
 //! through (`target`), which the host holds from its bind until its unbind
 //! (`native::bind`).
 
 use std::ptr::NonNull;
-use std::sync::OnceLock;
 
+use ndk_sys::{ANativeWindow_fromSurface, ANativeWindow_release};
 use xpute_kit::status::errno::Errno;
-use xpute_native_runtime::jni::ndk::{ANativeWindow_fromSurface, ANativeWindow_release};
-use xpute_native_runtime::jni::sys::{jint, jobject, jvalue, JNIEnv};
-use xpute_native_runtime::jni::{call, class, string, Class};
 
-use super::native::state_on;
-
-/// The class `xpute.Gpu` and its static method `onState(Ljava/lang/String;)V`,
-/// at `ON_STATE`.
-static CLASS: OnceLock<Class<1>> = OnceLock::new();
-const ON_STATE: usize = 0;
-
-/// Takes the class `xpute.Gpu` from `this`, once, and makes its static method
-/// hear the host's state (`state_on`).
-///
-/// # Safety
-/// `e` and `this` are what JNI called with, on a thread Java made, `this` an
-/// `xpute.Gpu`.
-pub unsafe fn init(e: *mut JNIEnv, this: jobject) {
-    if CLASS.get().is_some() {
-        return;
-    }
-    let mut methods = [(c"", c""); 1];
-    methods[ON_STATE] = (c"onState", c"(Ljava/lang/String;)V");
-    // SAFETY: what JNI called with, on a thread Java made.
-    let Some(c) = (unsafe { class(e, this, methods) }) else {
-        return;
-    };
-    let _ = CLASS.set(c);
-    state_on(Some(state));
-}
-
-/// Calls `Gpu.onState` from the thread that tells the state (`state_on`), the
-/// GPU's (native.rs), attached to the VM for good as a daemon, as the guest's
-/// thread is for `Runtime.onNotify`.
-extern "C" fn state(state: *const u8, len: usize) {
-    let Some(c) = CLASS.get() else { return };
-    let args = |e| {
-        // SAFETY: this thread's environment, and the name's UTF-8, the
-        // host's for the call.
-        let s = unsafe { string(e, state, len) };
-        vec![jvalue { l: s }]
-    };
-    // SAFETY: `onState(Ljava/lang/String;)V`, at its index, and its one value.
-    unsafe { call(c, ON_STATE, args) }
-}
+/// JNI's types, which the exports `jni_abi!` expands to name through this
+/// crate.
+pub use jni_sys as sys;
+use sys::{jint, jobject, JNIEnv};
 
 /// This is `Gpu.surfaceBind`: it binds the guest's surface `handle` to a view's
 /// `surface`, through the native window the surface is (`bind`, the program's
@@ -84,64 +45,98 @@ pub unsafe fn bind(
 }
 
 /// Exports the GPU's host to JNI for the Kotlin class `xpute.Gpu`, which
-/// `native_abi!` expands on Android: `init()`, which makes its static
-/// `onState(state: String)` hear the host's state (`init`), `state(): String?`,
-/// the host's state now (`native::state`), `surfaceBind(handle: Int,
-/// surface: Surface): Int`, `surfaceUnbind(handle: Int)` and `vsync()`.
+/// `native_abi!` expands on Android over the JNI helpers `$jni` names (a
+/// module with `Class`, `class`, `call` and `string`), JNI's types its own
+/// (`sys`): `init()`, which
+/// takes the class from `this` once and makes its static `onState(state:
+/// String)` hear the host's state from the thread that tells it, attached to
+/// the VM for good as a daemon (`native::state_on`), `state(): String?`, the
+/// host's state now (`native::state`), `surfaceBind(handle: Int, surface:
+/// Surface): Int` (`bind`), `surfaceUnbind(handle: Int)` and `vsync()`.
 #[macro_export]
 macro_rules! jni_abi {
-    () => {
+    ($($jni:tt)+) => {
+        /// The class `xpute.Gpu` and its static method
+        /// `onState(Ljava/lang/String;)V`, its one.
+        static XPUTE_GPU_CLASS: ::std::sync::OnceLock<$($jni)+::Class<1>> =
+            ::std::sync::OnceLock::new();
+
+        /// Calls `Gpu.onState` with the state's name, `len` bytes of UTF-8 at
+        /// `state`, from the thread that tells it.
+        extern "C" fn xpute_gpu_on_state(state: *const u8, len: usize) {
+            let Some(c) = XPUTE_GPU_CLASS.get() else {
+                return;
+            };
+            let args = |e| {
+                // SAFETY: this thread's environment, and the name's UTF-8, the
+                // host's for the call.
+                let s = unsafe { $($jni)+::string(e, state, len) };
+                vec![$crate::jni::sys::jvalue { l: s }]
+            };
+            // SAFETY: `onState(Ljava/lang/String;)V`, its one method, and its
+            // one value.
+            unsafe { $($jni)+::call(c, 0, args) }
+        }
+
         /// # Safety
         /// Only JNI calls this, on a thread Java made.
         #[no_mangle]
         unsafe extern "system" fn Java_xpute_Gpu_init(
-            env: *mut ::xpute_native_runtime::jni::sys::JNIEnv,
-            this: ::xpute_native_runtime::jni::sys::jobject,
+            env: *mut $crate::jni::sys::JNIEnv,
+            this: $crate::jni::sys::jobject,
         ) {
+            if XPUTE_GPU_CLASS.get().is_some() {
+                return;
+            }
+            let methods = [(c"onState", c"(Ljava/lang/String;)V")];
             // SAFETY: the environment and the `xpute.Gpu` JNI called with.
-            unsafe { $crate::jni::init(env, this) }
+            let Some(c) = (unsafe { $($jni)+::class(env, this, methods) }) else {
+                return;
+            };
+            let _ = XPUTE_GPU_CLASS.set(c);
+            $crate::native::state_on(Some(xpute_gpu_on_state));
         }
 
         /// # Safety
         /// Only JNI calls this, on a thread Java made.
         #[no_mangle]
         unsafe extern "system" fn Java_xpute_Gpu_state(
-            env: *mut ::xpute_native_runtime::jni::sys::JNIEnv,
-            _this: ::xpute_native_runtime::jni::sys::jobject,
-        ) -> ::xpute_native_runtime::jni::sys::jstring {
+            env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+        ) -> $crate::jni::sys::jstring {
             let Some(s) = $crate::native::state() else {
                 return ::core::ptr::null_mut();
             };
             // SAFETY: the environment JNI called with, and the name's UTF-8.
-            unsafe { ::xpute_native_runtime::jni::string(env, s.as_ptr(), s.len()) }
+            unsafe { $($jni)+::string(env, s.as_ptr(), s.len()) }
         }
 
         /// # Safety
         /// Only JNI calls this, with a live `android.view.Surface`.
         #[no_mangle]
         unsafe extern "system" fn Java_xpute_Gpu_surfaceBind(
-            env: *mut ::xpute_native_runtime::jni::sys::JNIEnv,
-            _this: ::xpute_native_runtime::jni::sys::jobject,
-            handle: ::xpute_native_runtime::jni::sys::jint,
-            surface: ::xpute_native_runtime::jni::sys::jobject,
-        ) -> ::xpute_native_runtime::jni::sys::jint {
+            env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+            handle: $crate::jni::sys::jint,
+            surface: $crate::jni::sys::jobject,
+        ) -> $crate::jni::sys::jint {
             // SAFETY: the environment and surface JNI called with.
             unsafe { $crate::jni::bind(env, handle as u32, surface, xpute_gpu_surface_bind) }
         }
 
         #[no_mangle]
         extern "system" fn Java_xpute_Gpu_surfaceUnbind(
-            _env: *mut ::xpute_native_runtime::jni::sys::JNIEnv,
-            _this: ::xpute_native_runtime::jni::sys::jobject,
-            handle: ::xpute_native_runtime::jni::sys::jint,
+            _env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+            handle: $crate::jni::sys::jint,
         ) {
             xpute_gpu_surface_unbind(handle as u32);
         }
 
         #[no_mangle]
         extern "system" fn Java_xpute_Gpu_vsync(
-            _env: *mut ::xpute_native_runtime::jni::sys::JNIEnv,
-            _this: ::xpute_native_runtime::jni::sys::jobject,
+            _env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
         ) {
             xpute_gpu_vsync();
         }

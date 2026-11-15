@@ -6,13 +6,10 @@ use super::*;
 
 const GOLDEN: &str = include_str!("../../../link/spec/golden/program.tsv");
 
-/// The guest's memory for this process's tests, the runtime's: the golden
-/// records' offsets from its start, and from `SPARE_AT` on, the room the
-/// other tests lay their blocks in.
-pub(super) const SPARE_AT: u32 = 1 << 24;
+#[path = "../../../../link/rust/src/mem.test.rs"]
+pub(super) mod mem;
 
-#[path = "../../../../native/runtime/rust/src/mem.test.rs"]
-mod mem;
+use mem::alloc;
 
 fn device() -> (wgpu::Adapter, wgpu::Device, wgpu::Queue) {
     let instance =
@@ -34,7 +31,6 @@ fn cfg(frame_latency: u32) -> Config {
         configure_at: ConfigureAt::Here,
         frame_latency,
         upload_chunk_sz: 1 << 16,
-        slow_ms: None,
         present_mode: wgpu::PresentMode::Fifo,
     }
 }
@@ -157,18 +153,17 @@ fn recs_read_back() {
         ..Default::default()
     }))
     .expect("a device with timestamp queries");
-    let [region_sz, recs_at, input_at, done_at, readback_at] =
-        ["region", "recs.at", "input.at", "done.at", "readback.at"].map(|k| g.u32(k));
-    assert!(
-        region_sz <= SPARE_AT,
-        "the golden region fits before the spare room"
-    );
+    let region_sz = g.u32("region");
+    let base = alloc(region_sz);
+    // The record's places, as addresses in the test's block.
+    let [recs_at, input_at, done_at, readback_at] =
+        ["recs.at", "input.at", "done.at", "readback.at"].map(|k| base + u64::from(g.u32(k)));
     // SAFETY: the test's own region, which the host touches only inside
     // `run` and `poll`.
     let write = |at, from: &[u8]| unsafe { xpute_link::mem::write(at, from) };
     g.each("program", |name| {
         let p = g.s(name);
-        write(0, &vec![0u8; region_sz as usize]);
+        write(base, &vec![0u8; region_sz as usize]);
         let key = format!("{p}.input");
         if g.has(&key) {
             write(input_at, &g.bytes(&key));
@@ -182,7 +177,18 @@ fn recs_read_back() {
             || {},
         );
         g.each(&format!("{p}.turn"), |turn| {
-            let recs = g.bytes(turn);
+            // An address is a native pointer on a device, and so differs
+            // every run: the record holds each relative to its block, and
+            // the addresses the stream spec's ops name move to this block.
+            let mut words: Vec<u32> = g
+                .bytes(turn)
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|w| u32::from_le_bytes(*w))
+                .collect();
+            xpute_gpu_link::addr::rebase(&mut words, 0, base);
+            let recs: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
             write(recs_at, &recs);
             let ticket = turn.rsplit('.').next().unwrap().parse::<u32>().unwrap() + 1;
             host.run(recs_at, recs.len() as u32);

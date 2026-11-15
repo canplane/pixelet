@@ -14,6 +14,7 @@
  */
 
 import { Golden } from "@xpute/golden";
+import { rebase } from "@xpute/gpu-link/addr.ts";
 
 import { GpuHost } from "./host.ts";
 
@@ -59,14 +60,20 @@ async function replay(): Promise<void> {
       device,
       () => mem,
       () => {},
-      { frame_latency: 2, upload_chunk_sz: 1 << 16, slow_ms: null },
+      { frame_latency: 2, upload_chunk_sz: 1 << 16 },
     );
     const turns: string[] = [];
     g.each(`${p}.turn`, (k) => turns.push(k));
     for (const [k, turn] of turns.entries()) {
       const recs = g.bytes(turn);
       bytes.set(recs, recs_at);
-      host.run(new Uint32Array(mem, recs_at, recs.length / 4));
+      const turn_words = new Uint32Array(mem, recs_at, recs.length / 4);
+      // An address is a native pointer on a device, and so differs every
+      // run: the record holds each relative to its block, and the addresses
+      // the stream spec's ops name move to this block, whose base on a page
+      // is the memory's start.
+      rebase(turn_words, 0n, 0n);
+      host.run(turn_words);
       while (Atomics.load(words, done_at / 4) !== k + 1) {
         await new Promise((r) => setTimeout(r, 1));
       }

@@ -4,6 +4,7 @@
 //! passes read them.
 
 use pxl_global::Global;
+use xpute_kit::abi::word::{join64, split64};
 use xpute_link::mem;
 
 use crate::frame::shader::record::UPLOAD_LAYOUT;
@@ -24,6 +25,7 @@ const fn slots_of(live: usize) -> usize {
 /// addresses.
 pub struct UploadTable {
     handle: &'static mut [u32],
+    /// Each upload's address, two words a slot, its low word first.
     at: &'static mut [u32],
     len: &'static mut [u32],
     vertex_cnt: &'static mut [u32],
@@ -44,13 +46,14 @@ pub(crate) fn buf_size(len: u32) -> u32 {
     ((len + 3) & !3).max(4)
 }
 
-fn mem(at: u32, n: u32) -> &'static [u8] {
+fn mem(at: u64, n: u32) -> &'static [u8] {
     // SAFETY: a heap block the draw list named, live until its free is listed.
     unsafe { mem::bytes(at, n) }
 }
 
-/// The table's columns: handle, address, length, the vertex and index counts, buffer and group.
-const UPLOAD_COLUMN_CNT: usize = 7;
+/// The table's columns, in words a slot: handle, address (two), length, the vertex and index
+/// counts, buffer and group.
+const UPLOAD_COLUMN_CNT: usize = 8;
 
 /// The table's columns for `live` uploads, then the draw list's (gpu/draw.rs `lists_bytes`).
 pub const fn uploads_bytes(live: usize) -> u32 {
@@ -62,19 +65,19 @@ pub const fn uploads_bytes(live: usize) -> u32 {
 pub fn set_uploads(room: &'static mut [u32], live: usize) {
     let slots = slots_of(live);
     let mut room = room;
-    let mut column = || {
-        let (c, rest) = core::mem::take(&mut room).split_at_mut(slots);
+    let mut column = |words: usize| {
+        let (c, rest) = core::mem::take(&mut room).split_at_mut(words * slots);
         room = rest;
         c
     };
     UPLOADS.set(UploadTable {
-        handle: column(),
-        at: column(),
-        len: column(),
-        vertex_cnt: column(),
-        idx_cnt: column(),
-        buf: column(),
-        group: column(),
+        handle: column(1),
+        at: column(2),
+        len: column(1),
+        vertex_cnt: column(1),
+        idx_cnt: column(1),
+        buf: column(1),
+        group: column(1),
         live: live as u32,
         cnt: 0,
         bytes: 0,
@@ -89,6 +92,15 @@ fn home(handle: u32, slot_cnt: usize) -> usize {
 }
 
 impl UploadTable {
+    /// Upload `i`'s address.
+    fn addr(&self, i: usize) -> u64 {
+        join64(self.at[2 * i], self.at[2 * i + 1])
+    }
+
+    fn set_addr(&mut self, i: usize, at: u64) {
+        self.at[2 * i..2 * i + 2].copy_from_slice(&split64(at));
+    }
+
     pub(crate) fn lose(&mut self) {
         self.buf.fill(0);
         self.group.fill(0);
@@ -111,7 +123,7 @@ impl UploadTable {
     /// Puts upload `i` on the device. Returns false, and leaves it missing, when the frame's
     /// stream has no room.
     fn put(&mut self, g: &Gpu, i: usize) -> bool {
-        if !room(write_buffer_sz(mem(self.at[i], self.len[i] & !3))) {
+        if !room(write_buffer_sz(mem(self.addr(i), self.len[i] & !3))) {
             return false;
         }
         // The buffer is also copied from, so the marks keep each upload they read as the
@@ -124,7 +136,7 @@ impl UploadTable {
                 | buffer_usage::COPY_DST
                 | buffer_usage::COPY_SRC,
         );
-        g.write_buf(buf, 0, mem(self.at[i], self.len[i] & !3));
+        g.write_buf(buf, 0, mem(self.addr(i), self.len[i] & !3));
         self.buf[i] = buf;
         self.group[i] = 0;
         self.missing -= 1;
@@ -157,7 +169,7 @@ impl UploadTable {
         &mut self,
         g: Option<&Gpu>,
         handle: u32,
-        at: u32,
+        at: u64,
         len: u32,
         vertex_cnt: u32,
         idx_cnt: u32,
@@ -171,7 +183,7 @@ impl UploadTable {
             i = (i + 1) & (self.handle.len() - 1);
         }
         self.handle[i] = handle;
-        self.at[i] = at;
+        self.set_addr(i, at);
         self.len[i] = len;
         self.vertex_cnt[i] = vertex_cnt;
         self.idx_cnt[i] = idx_cnt;
@@ -187,15 +199,15 @@ impl UploadTable {
 
     /// Writes the changed range of `handle`'s upload. When the frame's stream has no room, the
     /// buffer is released and the upload is put again whole once there is room.
-    pub(crate) fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u32, from: u32, len: u32) {
+    pub(crate) fn rewrite(&mut self, g: Option<&Gpu>, handle: u32, at: u64, from: u32, len: u32) {
         let Some(i) = self.find(handle) else { return };
-        self.at[i] = at;
+        self.set_addr(i, at);
         let (Some(g), buf @ 1..) = (g, self.buf[i]) else {
             return;
         };
         let bytes = len.min(self.len[i].saturating_sub(from)) & !3;
-        if room(write_buffer_sz(mem(at + from, bytes))) {
-            g.write_buf(buf, from, mem(at + from, bytes));
+        if room(write_buffer_sz(mem(at + u64::from(from), bytes))) {
+            g.write_buf(buf, from, mem(at + u64::from(from), bytes));
         } else {
             release(self.group[i]);
             release(buf);
@@ -233,7 +245,8 @@ impl UploadTable {
                 };
                 if !stays {
                     self.handle[i] = self.handle[j];
-                    self.at[i] = self.at[j];
+                    let at = self.addr(j);
+                    self.set_addr(i, at);
                     self.len[i] = self.len[j];
                     self.vertex_cnt[i] = self.vertex_cnt[j];
                     self.idx_cnt[i] = self.idx_cnt[j];

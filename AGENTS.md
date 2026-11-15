@@ -36,10 +36,14 @@
 
 - `pxl-core` and `xpute-guest` link into one image, the guest. xpute is the FFI
   between it and its host.
-- Under `xpute/`: the guest, its hosts, the link between them and the
-  runtimes they run in, laid out by platform, with no pixelet domain or name.
-  It is to be published: don't propose removing a part of its `kit` or its
-  C++ because nothing here calls it.
+- Under `xpute/`: the kit, the link, the guest, the host, the runtime and a
+  shell's UI end, each cut by what it varies on (the kit, the link, the guest
+  and the host by language, the runtime by platform, the UI end by shell), with
+  no pixelet domain or name; a plugin repeats the link, the guest, the host and
+  the UI end under its own name. It is to be published: don't propose removing
+  a part of its `kit` or its C++ because nothing here calls it.
+- Every dependency points down (the code skill); how xpute's runtime injects
+  into its host is `xpute/ARCHITECTURE.md`'s.
 - The core holds the world and its rules; the UI holds the devices, the
   network and files, the app's lifecycle and what is shown. The WIT between
   them is drawn by min cut: the fewest, smallest facts cross, each read on the

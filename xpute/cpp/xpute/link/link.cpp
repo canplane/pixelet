@@ -87,7 +87,7 @@ void Side::task_return(Tag t, std::int32_t result, const Data &data) {
     out(t, ROOT, 0, true, result, data);
 }
 
-std::int32_t Side::recv(std::uint32_t at) {
+std::int32_t Side::recv(std::uint64_t at) {
     std::uint32_t cap = layout().cap;
     Frame f = Frame::at(at);
     Result<std::optional<std::span<const std::uint8_t>>> pkt = f.pkt(at, cap);
@@ -186,7 +186,7 @@ Tag Side::tag() noexcept {
     return t;
 }
 
-Result<void> Side::lay(std::uint32_t at, Frame words, const Args &pkt) {
+Result<void> Side::lay(std::uint64_t at, Frame words, const Args &pkt) {
     std::uint32_t cap = layout().cap;
     words.pkt_len = 0;
     if (pkt) {
@@ -206,7 +206,7 @@ Result<void> Side::lay(std::uint32_t at, Frame words, const Args &pkt) {
 // args this side writes past it are a bug.
 std::pair<std::int32_t, std::optional<std::span<const std::uint8_t>>> Side::out(Tag tag, Handle h, Method m, bool res, std::int32_t result, const Args &pkt) {
     Layout l = layout();
-    std::uint32_t at = out_box_(l);
+    std::uint64_t at = out_box_(l);
     Frame words{.tag = tag, .res = res, .handle = h, .method = m, .result = result, .pkt_len = 0};
     if (Result<void> laid = lay(at, words, pkt); !laid) {
         ensure(res, Errno::emsgsize, h, m);

@@ -19,8 +19,8 @@ import { XputeBug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { ComponentError, type Side } from "@xpute/link";
-import * as file from "@xpute/link/abi/fs/file.ts";
-import { ERROR_CODE_IO } from "@xpute/link/abi/fs/types.enum.ts";
+import * as file from "@xpute/web-host/abi/fs/file.ts";
+import { ERROR_CODE_IO } from "@xpute/web-host/abi/fs/types.enum.ts";
 
 import { path } from "@/abi/file.spec.ts";
 import { binding, type Path } from "@/service/sys/fs/binding.ts";

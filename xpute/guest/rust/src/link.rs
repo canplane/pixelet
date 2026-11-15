@@ -11,24 +11,25 @@ use std::rc::Rc;
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Token;
 use xpute_link::frame::HDR_SZ;
+use xpute_link::layout;
 use xpute_link::mem;
 use xpute_link::{Answer, Args, Handle, Layout, Method, Object, Packet, Side, Tag};
 
 // A module takes the host's `link_out` under `env` (TS link.ts `imports`).
 #[cfg_attr(target_arch = "wasm32", link(wasm_import_module = "env"))]
 unsafe extern "C" {
-    fn link_out(at: u32) -> i32;
+    fn link_out(at: u64) -> i32;
 }
 
 /// Crosses with the frame the guest laid at `at` in its outbox, past the
 /// inbox, by `link_out`.
-fn cross_out(at: u32) -> i32 {
+fn cross_out(at: u64) -> i32 {
     // SAFETY: the frame just laid in the outbox.
     unsafe { link_out(at) }
 }
 
 thread_local! {
-    static SIDE: Side = const { Side::new(|l| l.inbox + l.cap, cross_out) };
+    static SIDE: Side = const { Side::new(|l| l.inbox + u64::from(l.cap), cross_out) };
     /// Whether the guest is in an entry.
     static ENTERED: Cell<bool> = const { Cell::new(false) };
     /// Whether the guest is laying its link (`init`), before the host can
@@ -43,19 +44,20 @@ thread_local! {
 /// Lays the link over frames of `cap` bytes, a multiple of 8 that holds a
 /// frame's words, and runs nothing of the program; `enter` and `end` are the
 /// program's start and end of every entry (`boot`, `recv`). It answers where
-/// the link's layout lies: two words, the inbox and a frame's cap, then the
-/// inbox and the outbox.
-pub fn init(cap: u32, enter: fn(), end: fn() -> bool) -> u32 {
+/// the link's layout lies: the inbox's address and a frame's cap
+/// (frame.json5 `LAYOUT`), then the inbox and the outbox.
+pub fn init(cap: u32, enter: fn(), end: fn() -> bool) -> u64 {
     INIT.set(true);
     xpute_kit::ensure!(cap.is_multiple_of(8) && cap >= HDR_SZ, EINVAL, cap);
-    let words: &'static mut [u64] = Vec::leak(vec![0; 1 + 2 * cap as usize / 8]);
-    let at = mem::off(&words[0]);
-    let inbox = at + 8;
-    // SAFETY: the layout's two words, which only `init` writes.
-    let layout = unsafe { mem::bytes(at, 8) };
-    layout[..4].copy_from_slice(&inbox.to_le_bytes());
-    layout[4..].copy_from_slice(&cap.to_le_bytes());
-    SIDE.with(|s| s.set_layout(Layout { inbox, cap }));
+    let words: &'static mut [u64] = Vec::leak(vec![0; (4 * layout::WORDS + 2 * cap as usize) / 8]);
+    let at = mem::addr(&words[0]);
+    let l = Layout {
+        inbox: at + 4 * layout::WORDS as u64,
+        cap,
+    };
+    // SAFETY: the layout's words, which only `init` writes.
+    unsafe { l.lay(at) };
+    SIDE.with(|s| s.set_layout(l));
     ENTER.set(enter);
     END.set(end);
     INIT.set(false);

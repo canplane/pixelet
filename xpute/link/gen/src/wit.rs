@@ -74,14 +74,15 @@ pub enum Side {
 }
 
 impl Side {
-    /// The directory of the side's crate in xpute, whose `link` opens, calls
-    /// and sends and whose `wait` waits, and whose `src/abi.rs` is the root
-    /// module of xpute's bindings on the side; the link's own items come from
-    /// xpute-link.
+    /// The directory of the side's crate in xpute, whose `src/abi.rs` is the
+    /// root module of xpute's bindings on the side: the guest's, whose `link`
+    /// opens, calls and sends and whose `wait` waits, which its bindings
+    /// reach, and the host's, whose bindings take the side they are given;
+    /// the link's own items come from xpute-link.
     fn dir(self) -> &'static str {
         match self {
             Side::Guest => "guest/rust",
-            Side::Host => "native/runtime/rust",
+            Side::Host => "native/host",
         }
     }
 }
@@ -97,14 +98,15 @@ const FRAME: &str = "link/spec/frame.json5";
 
 /// xpute's packages that bindings reach, each its directory from xpute's
 /// root and its name, as a program depends on it.
-const PACKAGES: [(&str, &str); 7] = [
+const PACKAGES: [(&str, &str); 8] = [
     ("link/rust", "xpute-link"),
     ("link/ts", "@xpute/link"),
     ("guest/rust", "xpute-guest"),
-    ("native/runtime/rust", "xpute-native-runtime"),
+    ("native/host", "xpute-native-host"),
+    ("web/host", "@xpute/web-host"),
     ("gpu/link/ts", "@xpute/gpu-link"),
     ("gpu/guest/rust", "xpute-gpu-guest"),
-    ("gpu/native/runtime/rust", "xpute-gpu-native-runtime"),
+    ("gpu/native/host", "xpute-gpu-native-host"),
 ];
 
 /// The text of xpute's file `path`, among `FILES`.
@@ -160,8 +162,8 @@ macro_rules! targets {
             },)*
             $(WitTarget {
                 wit: concat!("wit/", stringify!($p)),
-                rs: Some(concat!("native/runtime/rust/src/abi/", stringify!($p), ".rs")),
-                ts: Some(concat!("link/ts/src/abi/", stringify!($p))),
+                rs: Some(concat!("native/host/src/abi/", stringify!($p), ".rs")),
+                ts: Some(concat!("web/host/src/abi/", stringify!($p))),
                 cpp: None,
                 side: Some(Side::Host),
             },)*
@@ -174,7 +176,7 @@ macro_rules! targets {
             },
             WitTarget {
                 wit: "gpu/wit",
-                rs: Some("gpu/native/runtime/rust/src/abi.rs"),
+                rs: Some("gpu/native/host/src/abi.rs"),
                 ts: Some("gpu/link/ts/src/abi"),
                 cpp: None,
                 side: Some(Side::Host),
@@ -189,10 +191,11 @@ macro_rules! targets {
 /// plugin's, each before those that take its types. A program's package is
 /// read after all of its side's. On the guest's side the Rust is in the
 /// guest's crate and the C++ in the C++ guest's `abi/`, and the GPU's beside
-/// its calls; on a host's the Rust is in the native runtime, which holds the
-/// host's link, and the GPU's in xpute-gpu-native-runtime, which its host
-/// serves on that link, and the TypeScript beside each link's.
-pub const TARGETS: &[WitTarget<'static>] = targets!(clocks, fs, life, stop);
+/// its calls; on a host's the Rust is in the native host, and the GPU's in
+/// its native host, and the TypeScript of xpute's packages in the web host,
+/// on no platform's head, and the GPU's in its link's package, which both its
+/// UI ends and its web host take.
+pub const TARGETS: &[WitTarget<'static>] = targets!(clocks, fs, life, log, stop);
 
 /// What a binding's header names as its writer.
 const TOOL: &str = "xpute-link-gen wit.rs";
@@ -1083,17 +1086,20 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
         };
         externs.push((format!("{}:{}", name.namespace, name.name), rs, ts));
     }
-    // The side's crate, as the Rust names it, and whether it is the guest.
+    // The guest's crate, as the Rust names it, whose `link` its bindings
+    // reach, or none for a host's, which take the side they are given; and
+    // whether it is the guest.
     let side = match (&crate_dir, t.side) {
-        (Some(here), Some(s)) => Some((
-            rs_crate(
+        (Some(here), Some(Side::Guest)) => Some((
+            Some(rs_crate(
                 here,
                 inside,
                 &xpute_package,
-                &format!("{}/Cargo.toml", s.dir()),
-            )?,
-            s == Side::Guest,
+                &format!("{}/Cargo.toml", Side::Guest.dir()),
+            )?),
+            true,
         )),
+        (Some(_), Some(Side::Host)) => Some((None, false)),
         _ => None,
     };
     // The link's TypeScript module `file`, beside xpute:link's bindings.
@@ -1214,7 +1220,7 @@ pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
                 (None, _) => None,
                 (Some(g), Some((side, guest))) => Some((
                     role(g == *guest),
-                    side.as_str(),
+                    side.as_deref(),
                     if *guest { "Guest" } else { "Host" },
                 )),
                 (Some(_), None) => return Err(format!("{at}: its target names no side")),

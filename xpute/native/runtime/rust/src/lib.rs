@@ -5,7 +5,10 @@
 //! guest's thread, as a page's worker holds the runtime and the guest
 //! together: that thread waits on one queue and enters the guest when work
 //! arrives (`event_loop`), and every other thread only waits long and pushes
-//! into the queue.
+//! into the queue. It gives its host (xpute-native-host) what the host needs
+//! of it (xpute-native-host runtime.rs `Runtime`): the way back to the guest's
+//! thread, the timers there, where a stop is told, and its writer, which
+//! alone writes to the platform's output (`log`).
 //!
 //! It starts the guest from what the program lists (native.rs `Boot`), as
 //! @xpute/web-runtime starts a page's: the program's servers,
@@ -14,36 +17,27 @@
 //! before the guest is entered. It runs the steps itself, in their order:
 //! the servers, what the UI serves (`remote`), the guest's first entry
 //! (`link::init`), and the loop for the guest's life. It exports itself to
-//! the platform's module over the program's start and the guest's memory's
-//! size and the program's share of it (`native`, `native_abi!`), as
-//! @xpute/web-runtime is the page's. The memory is the runtime's
-//! (native.rs `mem`), reserved by its first reader, as a page's runtime grows
-//! a module's before its first entry.
+//! the platform's module over the program's start (`native`, `native_abi!`),
+//! as @xpute/web-runtime is the page's.
 //!
-//! It takes the link, the contract both sides take, from xpute-link: a
-//! frame's words (`frame`), the link machine (`Side`), a URI's tokens and a
-//! lent span (`abi::types`), the handle table (`resource`), and where the
-//! guest's memory lies (`mem`), which is the same in one process. It never
-//! calls xpute-guest, the guest's own side.
+//! It makes the host's side of the link over the guest (`link`), from
+//! xpute-link's machine (`Side`), and takes the rest of the contract both
+//! sides take from it: a frame's words (`frame`), a URI's tokens
+//! (`abi::types`) and how an address is read (`mem`), which is the
+//! same in one process. It never calls xpute-guest, the
+//! guest's own side.
 
 #![cfg(not(target_arch = "wasm32"))]
 
-/// The bindings of xpute's packages on a native device's host's side, a
-/// module to a package, generated from their WIT (xpute-link-gen).
-pub mod abi;
-pub mod event_loop;
+mod event_loop;
 #[cfg(target_os = "android")]
 pub mod jni;
 mod life;
-pub mod link;
+mod link;
 pub mod listener;
 mod log;
 pub mod native;
 pub mod remote;
-pub mod wait;
-
-pub use event_loop::{done, job, post_task, Task};
-pub use log::log;
 
 /// A method from the UI of `generation` (remote.rs `accept`), for the
 /// guest's thread: `m` of one of the guest's objects `h`, its request `tag`

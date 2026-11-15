@@ -47,10 +47,12 @@ use std::collections::{BTreeMap, VecDeque};
 use std::rc::Rc;
 
 use crate::cabi::{Lift, Lower};
+use xpute_kit::abi::word::{join64, split64};
 use xpute_kit::status::bug::OrBug;
 use xpute_kit::status::errno::Errno;
 
 use crate::abi::types::Token;
+
 use crate::frame::{Frame, HDR_SZ};
 use crate::mem;
 use crate::resource::Table;
@@ -61,11 +63,11 @@ pub use crate::resource::Handle;
 /// memory and how long (link/wit/types.wit `lent`), and stays put while the
 /// answer owns it.
 pub trait Lend: Unpin + 'static {
-    fn span(&mut self) -> (u32, u32);
+    fn span(&mut self) -> (u64, u32);
 }
 
 impl<T: Copy + Unpin + 'static> Lend for Vec<T> {
-    fn span(&mut self) -> (u32, u32) {
+    fn span(&mut self) -> (u64, u32) {
         mem::span(self)
     }
 }
@@ -73,7 +75,7 @@ impl<T: Copy + Unpin + 'static> Lend for Vec<T> {
 pub type Tag = u32;
 pub type Method = u32;
 
-pub use crate::frame::spec::{CANCEL, DROP, NAMED, OPEN, ROOT, TRAP, TRAP_AT};
+pub use crate::frame::spec::{layout, CANCEL, DROP, NAMED, OPEN, ROOT, TRAP, TRAP_AT};
 
 /// An object a side serves: given a method, the request's tag, for a later
 /// answer (`task_return`), and the args, it answers.
@@ -81,23 +83,22 @@ pub trait Object {
     fn call(&self, m: Method, tag: Tag, args: Option<&[u8]>) -> Reply;
 }
 
+/// How a request a side serves stops if its caller cancels it (`CANCEL`).
+pub type Cancel = Box<dyn FnOnce()>;
+
 /// What answers an async method's request once the method has its value, and
 /// where the method says how it stops if its caller cancels it (`CANCEL`).
 pub struct Return<T> {
-    tag: Tag,
-    /// The side's `on_cancel`.
-    on: fn(Tag, Box<dyn FnOnce()>),
+    /// The serving side's `on_cancel` for the request.
+    on: Box<dyn Fn(Cancel)>,
     answer: Box<dyn FnOnce(Result<T, Errno>)>,
 }
 
 impl<T> Return<T> {
-    /// The answer to request `tag` on the side whose `on_cancel` is `on`.
-    pub fn new(
-        tag: Tag,
-        on: fn(Tag, Box<dyn FnOnce()>),
-        answer: Box<dyn FnOnce(Result<T, Errno>)>,
-    ) -> Return<T> {
-        Return { tag, on, answer }
+    /// The answer to a request, `on` putting how it stops on the side that
+    /// serves it.
+    pub fn new(on: Box<dyn Fn(Cancel)>, answer: Box<dyn FnOnce(Result<T, Errno>)>) -> Return<T> {
+        Return { on, answer }
     }
 
     /// Answers the request with `v`.
@@ -109,7 +110,7 @@ impl<T> Return<T> {
     /// method then answers ECANCELED once it has stopped. A method that
     /// cannot stop says nothing, runs on and answers as it would.
     pub fn on_cancel(&self, stop: impl FnOnce() + 'static) {
-        (self.on)(self.tag, Box::new(stop));
+        (self.on)(Box::new(stop));
     }
 }
 
@@ -153,24 +154,41 @@ pub enum Packet<'a> {
 /// right past the inbox.
 #[derive(Clone, Copy)]
 pub struct Layout {
-    pub inbox: u32,
+    pub inbox: u64,
     pub cap: u32,
 }
 
 impl Layout {
-    /// The layout `init` wrote at `at`: its two words.
-    pub fn at(at: u32) -> Layout {
-        // SAFETY: the layout's two words, which `init` wrote.
-        let b = unsafe { mem::bytes(at, 8) };
+    /// The layout `init` wrote at `at` (frame.json5 `LAYOUT`).
+    pub fn at(at: u64) -> Layout {
+        // SAFETY: the layout's words, which `init` wrote.
+        let w = |k: usize| unsafe { mem::word(at + 4 * k as u64) };
         Layout {
-            inbox: u32::from_le_bytes([b[0], b[1], b[2], b[3]]),
-            cap: u32::from_le_bytes([b[4], b[5], b[6], b[7]]),
+            inbox: join64(w(layout::INBOX_AT), w(layout::INBOX_AT + 1)),
+            cap: w(layout::CAP_AT),
         }
+    }
+
+    /// Writes the layout at `at`.
+    ///
+    /// # Safety
+    /// The layout's words at `at` are the caller's.
+    pub unsafe fn lay(&self, at: u64) {
+        // SAFETY: the caller's.
+        let set = |k: usize, v: u32| unsafe { mem::set_word(at + 4 * k as u64, v) };
+        let [lo, hi] = split64(self.inbox);
+        set(layout::INBOX_AT, lo);
+        set(layout::INBOX_AT + 1, hi);
+        set(layout::CAP_AT, self.cap);
     }
 }
 
 /// An answer due: what hears it, its result and its return data.
 type Due = (Answer, i32, Option<Vec<u8>>);
+
+/// A later answer given while this side is crossing: its request, result and
+/// packet, written.
+type Completion = (Tag, i32, Option<Vec<u8>>);
 
 /// An opener mounted: the named handle of the interface whose resources it
 /// opens, the URI's leading tokens it opens under, and the opener.
@@ -182,14 +200,16 @@ type Mount = (Handle, Vec<Token>, Rc<Opener>);
 /// crosses by `link_in`. It takes the other side's frame where that side laid
 /// it (`recv`), and runs the answers due when its owner says the work at hand
 /// is done (`run_due`): the guest as an entry ends, the host after each piece
-/// of work.
+/// of work. A later answer this side gives while it is crossing, which only a
+/// host's thread can give as a page's microtasks never do, is written then
+/// and laid with the answers due.
 pub struct Side {
     layout: Cell<Option<Layout>>,
     /// The box this side lays its frames in.
-    out_box: fn(Layout) -> u32,
+    out_box: fn(Layout) -> u64,
     /// Crosses with the frame laid at `at`, and answers what the method came
     /// to.
-    cross: fn(u32) -> i32,
+    cross: fn(u64) -> i32,
     /// Whether this side is crossing: control is on the other side.
     crossing: Cell<bool>,
     /// Where the next request's tag is sought.
@@ -204,16 +224,18 @@ pub struct Side {
     pending: RefCell<BTreeMap<Tag, Answer>>,
     /// How each request this side serves stops if its caller cancels it, by
     /// tag, until it answers.
-    cancels: RefCell<BTreeMap<Tag, Box<dyn FnOnce()>>>,
+    cancels: RefCell<BTreeMap<Tag, Cancel>>,
     /// The answers due, run after the work at hand.
     due: RefCell<VecDeque<Due>>,
+    /// The later answers given while crossing, laid after the work at hand.
+    completions: RefCell<VecDeque<Completion>>,
     /// Whether the link can run no more, whichever side failed: nothing is
     /// laid or crossed, each frame answering EPIPE (`link.ts` `_trapped`).
     trapped: Cell<bool>,
 }
 
 impl Side {
-    pub const fn new(out_box: fn(Layout) -> u32, cross: fn(u32) -> i32) -> Side {
+    pub const fn new(out_box: fn(Layout) -> u64, cross: fn(u64) -> i32) -> Side {
         Side {
             layout: Cell::new(None),
             out_box,
@@ -226,6 +248,7 @@ impl Side {
             pending: RefCell::new(BTreeMap::new()),
             cancels: RefCell::new(BTreeMap::new()),
             due: RefCell::new(VecDeque::new()),
+            completions: RefCell::new(VecDeque::new()),
             trapped: Cell::new(false),
         }
     }
@@ -356,21 +379,45 @@ impl Side {
 
     /// Puts `stop` as how the request `t` this side serves stops if it is
     /// canceled (`Return::on_cancel`).
-    pub fn on_cancel(&self, t: Tag, stop: Box<dyn FnOnce()>) {
+    pub fn on_cancel(&self, t: Tag, stop: Cancel) {
         self.cancels.borrow_mut().insert(t, stop);
     }
 
     /// Answers the request `t`, whose method answered EINPROGRESS, with
     /// `result` and its return data, as the component model's `task.return`.
-    /// A later answer is found by its tag alone.
+    /// A later answer is found by its tag alone. While this side is crossing,
+    /// its packet is written now and laid after the work at hand
+    /// (`run_due`); a packet past the cap is answered EMSGSIZE with no data,
+    /// as one laid at once is.
     pub fn task_return(&self, t: Tag, result: i32, pkt: Packet) {
         self.cancels.borrow_mut().remove(&t);
-        self.out(t, ROOT, 0, true, result, pkt);
+        if !self.crossing.get() {
+            self.out(t, ROOT, 0, true, result, pkt);
+            return;
+        }
+        let written = match pkt {
+            Packet::Bytes(b) => Ok(Some(b.to_vec())),
+            Packet::Args(None) => Ok(None),
+            Packet::Args(Some((fixed_sz, write))) => {
+                let mut buf = vec![0; (self.layout().cap - HDR_SZ) as usize];
+                let mut w = Lower::new(&mut buf, fixed_sz);
+                write(&mut w);
+                w.finish().map(|len| {
+                    buf.truncate(len);
+                    Some(buf)
+                })
+            }
+        };
+        let completion = match written {
+            Ok(pkt) => (t, result, pkt),
+            Err(_) => (t, Errno::EMSGSIZE as i32, None),
+        };
+        self.completions.borrow_mut().push_back(completion);
     }
 
     /// The frame the other side laid at `at`: a later answer, made due, or a
     /// method, run by its object, its answer laid in the frame it came in.
-    pub fn recv(&self, at: u32) -> i32 {
+    pub fn recv(&self, at: u64) -> i32 {
         let cap = self.layout().cap;
         let f = Frame::at(at);
         let pkt = f.pkt(at, cap);
@@ -411,8 +458,17 @@ impl Side {
         }
     }
 
-    /// Runs the answers due, those made due while they run too.
+    /// Lays the later answers given while crossing, then runs the answers
+    /// due, those made due while they run too.
     pub fn run_due(&self) {
+        loop {
+            let next = self.completions.borrow_mut().pop_front();
+            let Some((t, result, pkt)) = next else {
+                break;
+            };
+            let pkt = pkt.as_deref().map_or(Packet::Args(None), Packet::Bytes);
+            self.out(t, ROOT, 0, true, result, pkt);
+        }
         loop {
             let next = self.due.borrow_mut().pop_front();
             let Some((a, result, data)) = next else {
@@ -424,7 +480,7 @@ impl Side {
 
     /// Whether an answer is due.
     pub fn has_due(&self) -> bool {
-        !self.due.borrow().is_empty()
+        !self.due.borrow().is_empty() || !self.completions.borrow().is_empty()
     }
 
     /// Runs `m` of `h`: the root's open or cancel, a drop, or an object's
@@ -505,7 +561,7 @@ impl Side {
     /// Lays a frame at `at`: its words, and the packet `pkt`, whose length
     /// it takes; EMSGSIZE, laying nothing, where the packet is past the cap
     /// (link.ts `_lay`).
-    fn lay(&self, at: u32, words: Frame, pkt: Packet) -> Result<(), Errno> {
+    fn lay(&self, at: u64, words: Frame, pkt: Packet) -> Result<(), Errno> {
         let cap = self.layout().cap;
         let pkt_len = match pkt {
             Packet::Bytes(b) => {
@@ -513,12 +569,12 @@ impl Side {
                     return Err(Errno::EMSGSIZE);
                 }
                 // SAFETY: the frame's bytes past its words, which only `lay` writes.
-                unsafe { mem::bytes(at + HDR_SZ, b.len() as u32) }.copy_from_slice(b);
+                unsafe { mem::bytes(at + u64::from(HDR_SZ), b.len() as u32) }.copy_from_slice(b);
                 b.len() as u32
             }
             Packet::Args(Some((fixed_sz, write))) => {
                 // SAFETY: the frame's bytes past its words, which only `lay` writes.
-                let buf = unsafe { mem::bytes(at + HDR_SZ, cap - HDR_SZ) };
+                let buf = unsafe { mem::bytes(at + u64::from(HDR_SZ), cap - HDR_SZ) };
                 let mut w = Lower::new(buf, fixed_sz);
                 write(&mut w);
                 w.finish()? as u32

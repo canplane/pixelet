@@ -9,17 +9,23 @@
 //! told before its UI started it reads (listener.rs).
 
 use std::path::PathBuf;
+use std::sync::OnceLock;
+use std::thread::ThreadId;
 
-use crate::listener::{self, Stop};
-use crate::{event_loop, link, remote};
+use crate::log::log;
+use crate::{event_loop, listener, remote};
 use xpute_kit::status::bug::{OrBug, XputeBug};
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Token;
-use xpute_link::{load_uri, Handle, Lift, Method};
+use xpute_link::{load_uri, Handle, Lift, Method, Side};
+use xpute_native_host::abi::log::Level;
+use xpute_native_host::runtime::{Runtime, Stop};
 
-/// What serves the guest some of its imports: it mounts them on the link,
-/// on the guest's thread.
-pub type Server = Box<dyn FnOnce() + Send>;
+use crate::link::{self, side};
+
+/// What serves the guest some of its imports: it mounts them on the host's
+/// side the runtime gives it, on the guest's thread.
+pub type Server = Box<dyn FnOnce(&'static Side) + Send>;
 
 /// What a program starts its guest with: the stack its thread takes, its
 /// servers, in no order, since none depends on another; the interfaces its
@@ -64,11 +70,22 @@ pub fn start(start: Start, named: Vec<Handle>, prefixes_pkt: &[u8], cache_dir: P
     generation
 }
 
+/// The guest's thread, the one that mounts what the host serves and enters
+/// the guest, which the runtime names as it starts it (`run`).
+static GUEST_THREAD: OnceLock<ThreadId> = OnceLock::new();
+
+/// Whether this is the guest's thread, where the link's state is.
+fn on_guest_thread() -> bool {
+    GUEST_THREAD.get() == Some(&std::thread::current().id())
+}
+
 /// Starts the guest on a thread of its own, as @xpute/web-runtime worker.ts
-/// `run` does on a page: once a failure of the host's is a trap (`hook`),
-/// mounts each server, then what the UI serves (`remote::serve`), enters the
-/// guest, which an import no server mounts refuses (`link::init`), and runs
-/// the loop for the guest's life. The guest is told each UI attached by
+/// `run` does on a page: names the thread the guest's, gives the host what it
+/// needs of the runtime (xpute-native-host runtime.rs `Runtime`), and once a failure
+/// of the host's is a trap (`hook`), mounts each server on the host's side it
+/// makes (`link::side`), then what the UI serves (`remote::serve`), enters
+/// the guest, which an import no server mounts refuses (`link::init`), and
+/// runs the loop for the guest's life. The guest is told each UI attached by
 /// `remote::accept`. A failure of the host's anywhere on this thread traps
 /// the link and ends only the step it was in, boot's or the loop's turn: a
 /// trapped guest is entered no more, and the UI's methods are answered
@@ -78,24 +95,54 @@ fn run(boot: Boot, named: Vec<Handle>, prefixes: Vec<(Handle, Vec<Token>)>) {
         .name("xpute guest".into())
         .stack_size(boot.stack_sz)
         .spawn(move || {
-            link::record_guest_thread();
+            GUEST_THREAD.get_or_init(|| std::thread::current().id());
+            xpute_native_host::runtime::init(Runtime {
+                post: event_loop::post_task,
+                after: event_loop::after,
+                clear: event_loop::clear,
+                stopped,
+                log,
+            });
             hook();
             caught(|| {
                 for s in boot.servers {
-                    s();
+                    s(side());
                 }
                 remote::serve(&named, prefixes, boot.later);
                 link::init(boot.imports);
             });
             loop {
                 caught(|| {
-                    link::run_due();
+                    side().run_due();
                     remote::flush();
                     event_loop::turn();
                 });
             }
         });
     spawned.or_bug(Errno::EAGAIN);
+}
+
+/// Writes the stop `s` of `context`, the guest or the host, with its message
+/// where it has one, then tells the app (`listener::tell_stop`).
+fn tell_stop(context: &str, s: Stop) {
+    let message = s
+        .message
+        .as_deref()
+        .map_or(String::new(), |m| format!(": {m}"));
+    log(
+        Level::Error,
+        context,
+        &format!(
+            "stopped: {} at {}:{} ({}, {}){message}",
+            s.errnum, s.file, s.line, s.n1, s.n2
+        ),
+    );
+    listener::tell_stop(s);
+}
+
+/// The guest's stop, as its host hands it (xpute-native-host stop.rs).
+fn stopped(s: Stop) {
+    tell_stop("guest", s);
 }
 
 /// Runs `f`, a step of the guest's thread, a panic in it ending the step
@@ -106,10 +153,13 @@ fn caught(f: impl FnOnce()) {
 
 /// Makes a panic of the host's own, on any thread, a stop, as @xpute/web-runtime
 /// worker.ts `hook` makes a throw one: where the guest has not trapped
-/// already, the failure is logged and told the app as a stop, with its errno,
-/// a bug's or ENOTRECOVERABLE, and where it was raised; then the link is
+/// already, the failure is written and told the app as a stop, with its errno,
+/// a bug's or ENOTRECOVERABLE, where it was raised and a panic's own message;
+/// then the link is
 /// trapped, so that no answer the dead thread owed leaves the guest waiting,
-/// and the app hears the trap after the stop. A panic after the guest trapped
+/// and the app hears the trap after the stop, its cause what the panic gives,
+/// its message and place, as a page's trap carries the throw's, or a bug's
+/// place. A panic after the guest trapped
 /// is no failure of the host's. The link's state
 /// is the guest thread's: a panic there is told at once, before it unwinds,
 /// and one on another thread is posted to it. A guest installs its own hook
@@ -118,27 +168,45 @@ fn caught(f: impl FnOnce()) {
 /// took.
 fn hook() {
     std::panic::set_hook(Box::new(|info| {
-        let (errnum, file, line) = match info.payload().downcast_ref::<XputeBug>() {
-            Some(b) => (b.errnum as i32, b.file.to_owned(), b.line),
+        let payload = info.payload();
+        let (stop, cause) = match payload.downcast_ref::<XputeBug>() {
+            Some(b) => (
+                Stop {
+                    errnum: b.errnum as i32,
+                    file: b.file.to_owned(),
+                    line: b.line,
+                    n1: 0,
+                    n2: 0,
+                    message: None,
+                },
+                format!("{} at {}:{}", link::HOST_STOPPED, b.file, b.line),
+            ),
             None => {
                 let (file, line) = info.location().map_or(("", 0), |at| (at.file(), at.line()));
-                (Errno::ENOTRECOVERABLE as i32, file.to_owned(), line)
+                let message = payload
+                    .downcast_ref::<&str>()
+                    .map(|m| (*m).to_owned())
+                    .or_else(|| payload.downcast_ref::<String>().cloned());
+                (
+                    Stop {
+                        errnum: Errno::ENOTRECOVERABLE as i32,
+                        file: file.to_owned(),
+                        line,
+                        n1: 0,
+                        n2: 0,
+                        message,
+                    },
+                    format!("{}: {info}", link::HOST_STOPPED),
+                )
             }
         };
         let fail = move || {
-            if !link::trapped() {
-                crate::log(&format!("[host] stopped: {errnum} at {file}:{line}"));
-                listener::tell_stop(Stop {
-                    errnum,
-                    file: file.clone(),
-                    line,
-                    n1: 0,
-                    n2: 0,
-                });
+            if !side().trapped() {
+                tell_stop("host", stop);
             }
-            link::trap(&format!("{} at {file}:{line}", link::HOST_STOPPED));
+            link::trap(&cause);
         };
-        if link::on_guest_thread() {
+        if on_guest_thread() {
             fail();
         } else {
             event_loop::post_task(Box::new(fail));
@@ -182,64 +250,12 @@ pub unsafe fn taken_free(at: *mut u8, len: usize) {
     drop(unsafe { Box::from_raw(core::ptr::slice_from_raw_parts_mut(at, len)) });
 }
 
-/// A page, which the guest's memory begins on.
-const PAGE_SZ: usize = 4096;
-
-/// The guest's memory, which the runtime owns: `sz` bytes on a page, zeroed,
-/// as a module's memory starts, reserved by the first call from any thread
-/// and never freed. It writes `sz` through `len` and the program's share of
-/// it, `share_sz`, through `share`, either null when not wanted. It is first
-/// asked for inside the global allocator, which may not unwind, so a
-/// reservation the system refuses stops the process; of two first calls at
-/// once, the one that loses gives its own back. The system is asked a page
-/// more at its own alignment, where its zeroed memory is mapped as it is
-/// touched; at a page's, it would be written whole.
-///
-/// # Safety
-/// `len` and `share` are each null or a writable word.
-pub unsafe fn mem(sz: u32, share_sz: u32, len: *mut u32, share: *mut u32) -> *mut u8 {
-    use core::sync::atomic::{AtomicPtr, Ordering::AcqRel, Ordering::Acquire};
-    use std::alloc::{GlobalAlloc, Layout, System};
-    static BASE: AtomicPtr<u8> = AtomicPtr::new(core::ptr::null_mut());
-    let mut base = BASE.load(Acquire);
-    if base.is_null() {
-        let Ok(layout) = Layout::from_size_align(sz as usize + PAGE_SZ, 16) else {
-            std::process::abort();
-        };
-        // SAFETY: a layout of nonzero size.
-        let at = unsafe { System.alloc_zeroed(layout) };
-        if at.is_null() {
-            std::process::abort();
-        }
-        let new = at.map_addr(|a| a.next_multiple_of(PAGE_SZ));
-        base = match BASE.compare_exchange(core::ptr::null_mut(), new, AcqRel, Acquire) {
-            Ok(_) => new,
-            Err(first) => {
-                // SAFETY: what this call reserved, as it reserved it.
-                unsafe { System.dealloc(at, layout) };
-                first
-            }
-        };
-    }
-    // SAFETY: the caller's words.
-    unsafe {
-        if !len.is_null() {
-            *len = sz;
-        }
-        if !share.is_null() {
-            *share = share_sz;
-        }
-    }
-    base
-}
-
 /// Exports the runtime under xpute's names (xpute.h) for the
-/// program's `$start` ([`Start`]) and its guest's memory, `$mem_sz` bytes of
-/// which the program keeps `$share_sz` for itself (`mem`), and on Android
+/// program's `$start` ([`Start`]), and on Android
 /// under JNI's for the Kotlin class `xpute.Runtime` (`jni_abi!`).
 #[macro_export]
 macro_rules! native_abi {
-    ($start:path, $mem_sz:expr, $share_sz:expr) => {
+    ($start:path) => {
         /// # Safety
         /// `named` is `named_len` handles, `prefixes` `prefixes_len` bytes, and
         /// `cache_dir` `cache_dir_len` bytes.
@@ -356,14 +372,6 @@ macro_rules! native_abi {
         pub unsafe extern "C" fn xpute_taken_free(at: *mut u8, len: usize) {
             // SAFETY: the caller's.
             unsafe { $crate::native::taken_free(at, len) };
-        }
-
-        /// # Safety
-        /// `len` and `share` are each null or a writable word.
-        #[no_mangle]
-        pub unsafe extern "C" fn xpute_mem(len: *mut u32, share: *mut u32) -> *mut u8 {
-            // SAFETY: the caller's words.
-            unsafe { $crate::native::mem($mem_sz, $share_sz, len, share) }
         }
 
         #[no_mangle]

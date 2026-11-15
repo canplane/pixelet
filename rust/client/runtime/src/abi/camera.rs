@@ -44,36 +44,35 @@ impl Tracking {
     }
 }
 
-pub fn track(tracking: Tracking) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn track(side_: &_rt::Side, tracking: Tracking) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
         HANDLE,
         TRACK,
-        Some((1, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((1, &|w_: &mut _rt::Lower| {
             w_.u8(0, tracking as u8);
-        })),
+        }))),
     );
     _rt::answer(r)
 }
 
-pub fn north_up() -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(HANDLE, NORTH_UP, None);
+pub fn north_up(side_: &_rt::Side) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(HANDLE, NORTH_UP, _rt::Packet::Args(None));
     _rt::answer(r)
 }
 
-pub fn goto(lon: f64, lat: f64) -> Result<(), _rt::Errno> {
-    let (r, _) = _rt::link::call(
+pub fn goto(side_: &_rt::Side, lon: f64, lat: f64) -> Result<(), _rt::Errno> {
+    let (r, _) = side_.call(
         HANDLE,
         GOTO,
-        Some((16, &|w_: &mut _rt::Lower| {
+        _rt::Packet::Args(Some((16, &|w_: &mut _rt::Lower| {
             w_.f64(0, lon);
             w_.f64(8, lat);
-        })),
+        }))),
     );
     _rt::answer(r)
 }
 
 mod _rt {
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{answer, Handle, Lower, Method};
-    pub(super) use xpute_native_runtime::link;
+    pub(super) use xpute_link::{answer, Handle, Lower, Method, Packet, Side};
 }

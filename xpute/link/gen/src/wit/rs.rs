@@ -3,6 +3,10 @@
 //! The link's bindings in Rust (wit.rs): a module per interface, its types,
 //! each storing itself into a packet and loading itself from one
 //! (xpute-link cabi.rs), the side that serves it and the side that calls it.
+//! The guest's reach its link through its crate's `link`, the one the guest
+//! lays; a host's take the side they serve on and call by (xpute-link
+//! `Side`), as the TypeScript takes its link, given by the runtime that made
+//! it.
 
 use std::fmt::Write as _;
 
@@ -253,9 +257,15 @@ impl Gen<'_> {
         })
     }
 
-    /// The serving side of an object, on the side of the crate `side`: its
-    /// trait, and the object over it.
-    fn rs_export(&self, o: &Obj, side: &str, serves: &str, out: &mut String) -> Result<(), String> {
+    /// The serving side of an object, on the side of the crate `side`, or on
+    /// a side given where `side` is none: its trait, and the object over it.
+    fn rs_export(
+        &self,
+        o: &Obj,
+        side: Option<&str>,
+        serves: &str,
+        out: &mut String,
+    ) -> Result<(), String> {
         let (t, obj) = (serving(o, serves), object_struct(o));
         let errno = self.rs_use(RS_ERRNO, "Errno");
         let reply = self.rs_use(self.link_rs, "Reply");
@@ -298,9 +308,23 @@ impl Gen<'_> {
         } else {
             "_"
         };
+        // A host's object that answers later holds the side it serves on.
+        let holds = side.is_none() && o.methods.iter().any(|f| is_async(f));
+        let (fields, imp, made) = if holds {
+            (
+                format!(
+                    "&'static {}, {rc}<dyn {t}>",
+                    self.rs_use(self.link_rs, "Side")
+                ),
+                "self.1",
+                "side_, implementation",
+            )
+        } else {
+            (format!("{rc}<dyn {t}>"), "self.0", "implementation")
+        };
         let _ = writeln!(
             out,
-            "}}\n\nstruct {obj}({rc}<dyn {t}>);\n\nimpl {} for {obj} {{\n    fn call(&self, m_: {}, {tag}: {}, {args}: Option<&[u8]>) -> {reply} {{\n        let run = || -> Result<{reply}, {errno}> {{\n            Ok(match m_ {{",
+            "}}\n\nstruct {obj}({fields});\n\nimpl {} for {obj} {{\n    fn call(&self, m_: {}, {tag}: {}, {args}: Option<&[u8]>) -> {reply} {{\n        let run = || -> Result<{reply}, {errno}> {{\n            Ok(match m_ {{",
             self.rs_use(self.link_rs, "Object"),
             self.rs_use(self.link_rs, "Method"),
             self.rs_use(self.link_rs, "Tag")
@@ -333,30 +357,64 @@ impl Gen<'_> {
             // A value is bound where the method answers one.
             let v = if rk.is_some() { "v" } else { "()" };
             if is_async(f) {
-                let link = self.rs_use(side, "link");
-                let done = format!(
-                    "{}::new(tag_, {link}::on_cancel, Box::new(move |got| {{ let reply = match got {{ Ok({v}) => {}, Err(e) => {reply}::from(e as i32) }}; {link}::task_return(tag_, reply.result, reply.data.as_ref().map(|(n, w)| (*n, &**w as &dyn Fn(&mut {})))); }}))",
-                    self.rs_use(self.link_rs, "Return"),
-                    self.rs_reply(&rk)?,
+                let data = format!(
+                    "reply.data.as_ref().map(|(n, w)| (*n, &**w as &dyn Fn(&mut {})))",
                     self.rs_use(self.link_rs, "Lower")
                 );
-                let _ = writeln!(out, "                    self.0.{name}({names}{done});\n                    {reply}::from({errno}::EINPROGRESS as i32)\n                }}");
+                // How the request stops and how it is answered, on the
+                // guest's link or on the side the host's object holds.
+                let (bind, on, answer) = match side {
+                    Some(c) => {
+                        let link = self.rs_use(c, "link");
+                        (
+                            String::new(),
+                            format!("{link}::on_cancel(tag_, stop)"),
+                            format!("{link}::task_return(tag_, reply.result, {data})"),
+                        )
+                    }
+                    None => (
+                        "let side_ = self.0;\n                    ".to_string(),
+                        "side_.on_cancel(tag_, stop)".to_string(),
+                        format!(
+                            "side_.task_return(tag_, reply.result, {}::Args({data}))",
+                            self.rs_use(self.link_rs, "Packet")
+                        ),
+                    ),
+                };
+                let done = format!(
+                    "{}::new(Box::new(move |stop| {on}), Box::new(move |got| {{ let reply = match got {{ Ok({v}) => {}, Err(e) => {reply}::from(e as i32) }}; {answer}; }}))",
+                    self.rs_use(self.link_rs, "Return"),
+                    self.rs_reply(&rk)?,
+                );
+                let _ = writeln!(out, "                    {bind}{imp}.{name}({names}{done});\n                    {reply}::from({errno}::EINPROGRESS as i32)\n                }}");
             } else {
-                let _ = writeln!(out, "                    match self.0.{name}({}) {{\n                        Ok({v}) => {},\n                        Err(e) => {reply}::from(e as i32),\n                    }}\n                }}", names.trim_end_matches(", "), self.rs_reply(&rk)?);
+                let _ = writeln!(out, "                    match {imp}.{name}({}) {{\n                        Ok({v}) => {},\n                        Err(e) => {reply}::from(e as i32),\n                    }}\n                }}", names.trim_end_matches(", "), self.rs_reply(&rk)?);
             }
         }
         let _ = writeln!(out, "                _ => {reply}::from({errno}::ENOSYS as i32),\n            }})\n        }};\n        run().unwrap_or_else(|e| {reply}::from(e as i32))\n    }}\n}}\n");
-        if o.resource {
-            let _ = writeln!(out, "/// The object over `implementation`, for an opener or a function to answer.\npub fn {}(implementation: {rc}<dyn {t}>) -> {rc}<dyn {}> {{\n    {rc}::new({obj}(implementation))\n}}\n", rs_name(&o.name), self.rs_use(self.link_rs, "Object"));
-        } else {
-            let _ = writeln!(out, "/// Serves `implementation` under the interface's handle.\npub fn mount(implementation: {rc}<dyn {t}>) {{\n    {}::mount_named(HANDLE, {rc}::new({obj}(implementation)));\n}}\n", self.rs_use(side, "link"));
+        let object = self.rs_use(self.link_rs, "Object");
+        match (o.resource, side) {
+            (true, Some(_)) => {
+                let _ = writeln!(out, "/// The object over `implementation`, for an opener or a function to answer.\npub fn {}(implementation: {rc}<dyn {t}>) -> {rc}<dyn {object}> {{\n    {rc}::new({obj}(implementation))\n}}\n", rs_name(&o.name));
+            }
+            (true, None) => {
+                let side_ = if holds { "side_" } else { "_" };
+                let _ = writeln!(out, "/// The object over `implementation` on `side_`, for an opener or a function to answer.\npub fn {}({side_}: &'static {}, implementation: {rc}<dyn {t}>) -> {rc}<dyn {object}> {{\n    {rc}::new({obj}({made}))\n}}\n", rs_name(&o.name), self.rs_use(self.link_rs, "Side"));
+            }
+            (false, Some(c)) => {
+                let _ = writeln!(out, "/// Serves `implementation` under the interface's handle.\npub fn mount(implementation: {rc}<dyn {t}>) {{\n    {}::mount_named(HANDLE, {rc}::new({obj}(implementation)));\n}}\n", self.rs_use(c, "link"));
+            }
+            (false, None) => {
+                let _ = writeln!(out, "/// Serves `implementation` under the interface's handle on `side_`.\npub fn mount(side_: &'static {}, implementation: {rc}<dyn {t}>) {{\n    side_.mount_named(HANDLE, {rc}::new({obj}({made})));\n}}\n", self.rs_use(self.link_rs, "Side"));
+            }
         }
         Ok(())
     }
 
-    /// The calling side of an object, on the side of the crate `side`: its
-    /// methods, by a handle, a singleton's its interface's named one.
-    fn rs_import(&self, o: &Obj, side: &str, out: &mut String) -> Result<(), String> {
+    /// The calling side of an object, on the side of the crate `side`, or by
+    /// a side given where `side` is none: its methods, by a handle, a
+    /// singleton's its interface's named one.
+    fn rs_import(&self, o: &Obj, side: Option<&str>, out: &mut String) -> Result<(), String> {
         let errno = self.rs_use(RS_ERRNO, "Errno");
         for f in &o.methods {
             let ps = self.kinds(f)?;
@@ -389,15 +447,25 @@ impl Gen<'_> {
                     .collect();
                 format!("<{}>", ts.join(", "))
             };
-            let mut sig: Vec<String> = if o.resource {
-                vec![format!(
+            // A host's call takes the side it calls by, a later answer's for
+            // the life of the side.
+            let mut sig: Vec<String> = match side {
+                Some(_) => vec![],
+                None if is_async(f) => {
+                    vec![format!(
+                        "side_: &'static {}",
+                        self.rs_use(self.link_rs, "Side")
+                    )]
+                }
+                None => vec![format!("side_: &{}", self.rs_use(self.link_rs, "Side"))],
+            };
+            if o.resource {
+                sig.push(format!(
                     "{}_: {}",
                     rs_name(&o.name),
                     self.rs_use(self.link_rs, "Handle")
-                )]
-            } else {
-                vec![]
-            };
+                ));
+            }
             sig.extend(
                 ps.iter()
                     .map(|(n, k)| match lents.iter().position(|l| l == n) {
@@ -444,9 +512,26 @@ impl Gen<'_> {
                     ),
                 };
                 // The call is sent here, and the future answers it.
-                let _ = writeln!(out, "{}pub fn {name}{generic}({}) -> impl {}<Output = {output}> {{\n    {lend}\n    let sent = {}::wait({h}, {c}, {}, {kept});\n    async move {{\n        let (r, {}, {}) = sent.await;\n        {give}\n    }}\n}}\n", many_args(sig.len(), ""), sig.join(", "), self.rs_use("core::future", "Future"), self.rs_use(side, "wait"), self.rs_args(&ps, &lents)?, if rk.is_some() { "data" } else { "_" }, if lent.is_some() { "lent" } else { "_" });
+                let args = self.rs_args(&ps, &lents)?;
+                let sent = match side {
+                    Some(s) => format!("{}::wait({h}, {c}, {args}, {kept})", self.rs_use(s, "wait")),
+                    None => format!(
+                        "{}(move |h_, m_, a_, w_| side_.send(h_, m_, {}::Args(a_), w_), Box::new(move |t_| side_.cancel(t_)), {h}, {c}, {args}, {kept})",
+                        self.rs_use(&format!("{}::wait", self.link_rs), "wait_by"),
+                        self.rs_use(self.link_rs, "Packet")
+                    ),
+                };
+                let _ = writeln!(out, "{}pub fn {name}{generic}({}) -> impl {}<Output = {output}> {{\n    {lend}\n    let sent = {sent};\n    async move {{\n        let (r, {}, {}) = sent.await;\n        {give}\n    }}\n}}\n", many_args(sig.len(), ""), sig.join(", "), self.rs_use("core::future", "Future"), if rk.is_some() { "data" } else { "_" }, if lent.is_some() { "lent" } else { "_" });
             } else {
-                let _ = writeln!(out, "{}pub fn {name}{generic}({}) -> Result<{ret}, {errno}> {{\n    {lend}let (r, {}) = {}::call({h}, {c}, {});\n    {}\n}}\n", many_args(sig.len(), ""), sig.join(", "), if rk.is_some() { "data" } else { "_" }, self.rs_use(side, "link"), self.rs_args(&ps, &lents)?, self.rs_answer(&rk, "data")?);
+                let args = self.rs_args(&ps, &lents)?;
+                let call = match side {
+                    Some(s) => format!("{}::call({h}, {c}, {args})", self.rs_use(s, "link")),
+                    None => format!(
+                        "side_.call({h}, {c}, {}::Args({args}))",
+                        self.rs_use(self.link_rs, "Packet")
+                    ),
+                };
+                let _ = writeln!(out, "{}pub fn {name}{generic}({}) -> Result<{ret}, {errno}> {{\n    {lend}let (r, {}) = {call};\n    {}\n}}\n", many_args(sig.len(), ""), sig.join(", "), if rk.is_some() { "data" } else { "_" }, self.rs_answer(&rk, "data")?);
             }
         }
         Ok(())
@@ -457,7 +542,7 @@ impl Gen<'_> {
     pub(super) fn rs_interface(
         &self,
         objs: &[Obj],
-        role: Option<(Role, &str, &str)>,
+        role: Option<(Role, Option<&str>, &str)>,
     ) -> Result<String, String> {
         let mut items = String::new();
         if !objs.is_empty() {

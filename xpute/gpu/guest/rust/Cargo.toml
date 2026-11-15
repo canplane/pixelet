@@ -16,3 +16,12 @@ xpute-guest.workspace = true
 xpute-link.workspace = true
 xpute-gpu-link.workspace = true
 xpute-kit.workspace = true
+
+[dev-dependencies]
+# The golden programs' test reads and writes their record, which its writer
+# runs on this machine's GPU through the native host (program.test.rs).
+xpute-golden.workspace = true
+xpute-gpu-native-host.workspace = true
+hex.workspace = true
+wgpu = { version = "30", default-features = false, features = ["metal", "vulkan", "wgsl"] }
+pollster = "1"

@@ -48,21 +48,21 @@ struct Token {
 };
 
 struct Lent {
-    std::uint32_t at;
+    std::uint64_t at;
     std::uint32_t len;
 
-    static constexpr std::size_t SZ = 8;
-    static constexpr std::size_t ALIGN = 4;
+    static constexpr std::size_t SZ = 16;
+    static constexpr std::size_t ALIGN = 8;
 
     void store(_rt::Lower &w, std::size_t at) const noexcept {
-        w.put<std::uint32_t>(at, this->at);
-        w.put<std::uint32_t>(at + 4, this->len);
+        w.put<std::uint64_t>(at, this->at);
+        w.put<std::uint32_t>(at + 8, this->len);
     }
 
     static Lent load(_rt::Lift &r, std::size_t at) noexcept {
         return Lent{
-            .at = r.get<std::uint32_t>(at),
-            .len = r.get<std::uint32_t>(at + 4),
+            .at = r.get<std::uint64_t>(at),
+            .len = r.get<std::uint32_t>(at + 8),
         };
     }
 };

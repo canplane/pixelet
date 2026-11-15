@@ -23,7 +23,7 @@
     "@xpute/gpu-link": "workspace:*",
     "@xpute/link": "workspace:*",
     "@xpute/kit": "workspace:*",
-    "@xpute/web-runtime": "workspace:*"
+    "@xpute/web-host": "workspace:*"
   },
   "devDependencies": {
     "@xpute/golden": "workspace:*"

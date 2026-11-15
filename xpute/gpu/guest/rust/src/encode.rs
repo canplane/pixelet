@@ -25,6 +25,7 @@ use xpute_gpu_link::enums::{
     VertexStepMode,
 };
 use xpute_gpu_link::spec::{op, BindingKind, ResourceKind, NONE, SURFACE_PREFERRED};
+use xpute_kit::abi::word::split64;
 
 /// An `Id` is an object the guest made, named by a handle from its encoder's
 /// table.
@@ -769,14 +770,14 @@ impl<const N: usize> Gpu<N> {
         fence: &u32,
         ticket: u32,
     ) -> Option<Id> {
-        let at = mem::off(fence);
+        let [lo, hi] = split64(mem::addr(fence));
         self.make_as(
             stream,
             op::RENDER_PIPELINE_ASYNC,
             op::RENDER_PIPELINE,
             &|s| {
                 render_pipeline_words(s, d);
-                [at, ticket].into_iter().for_each(|w| s.word(w));
+                [lo, hi, ticket].into_iter().for_each(|w| s.word(w));
             },
         )
     }
@@ -800,14 +801,14 @@ impl<const N: usize> Gpu<N> {
         fence: &u32,
         ticket: u32,
     ) -> Option<Id> {
-        let at = mem::off(fence);
+        let [lo, hi] = split64(mem::addr(fence));
         self.make_as(
             stream,
             op::COMPUTE_PIPELINE_ASYNC,
             op::COMPUTE_PIPELINE,
             &|s| {
                 compute_pipeline_words(s, d);
-                [at, ticket].into_iter().for_each(|w| s.word(w));
+                [lo, hi, ticket].into_iter().for_each(|w| s.word(w));
             },
         )
     }
@@ -976,7 +977,8 @@ pub mod call {
     /// (stream.rs).
     pub fn write_buffer_at(stream: &mut Stream, buffer: Id, offset: u32, bytes: &[u8]) -> bool {
         let (at, len) = mem::span(bytes);
-        words(stream, op::WRITE_BUFFER_AT, &[buffer, offset, at, len])
+        let [lo, hi] = split64(at);
+        words(stream, op::WRITE_BUFFER_AT, &[buffer, offset, lo, hi, len])
     }
 
     fn texture_write(s: &mut dyn Sink, place: &TexelCopyTexture, layout: [u32; 2], size: [u32; 3]) {
@@ -1022,9 +1024,10 @@ pub mod call {
         bytes: &[u8],
     ) -> bool {
         let (at, len) = mem::span(bytes);
+        let [lo, hi] = split64(at);
         emit(stream, op::WRITE_TEXTURE_AT, &|s| {
             texture_write(s, place, layout, size);
-            [at, len].into_iter().for_each(|w| s.word(w));
+            [lo, hi, len].into_iter().for_each(|w| s.word(w));
         })
     }
 
@@ -1042,15 +1045,19 @@ pub mod call {
         fence: &[u32; 2],
         ticket: u32,
     ) -> bool {
-        let ((image_at, image_len), word_at) = (mem::span(image), mem::off(fence));
+        let (image_at, image_len) = mem::span(image);
+        let ([image_lo, image_hi], [word_lo, word_hi]) =
+            (split64(image_at), split64(mem::addr(fence)));
         emit(stream, op::COPY_EXTERNAL_IMAGE, &|s| {
             texture_place(s, to);
             [
                 flag(flip_y),
                 flag(premultiplied),
-                image_at,
+                image_lo,
+                image_hi,
                 image_len,
-                word_at,
+                word_lo,
+                word_hi,
                 ticket,
             ]
             .into_iter()
@@ -1323,17 +1330,19 @@ pub mod call {
         ticket: u32,
     ) -> bool {
         let (at, len) = mem::span(into);
+        let ([lo, hi], [word_lo, word_hi]) = (split64(at), split64(mem::addr(fence)));
         words(
             stream,
             op::MAP_ASYNC,
-            &[buffer, offset, len, at, mem::off(fence), ticket],
+            &[buffer, offset, len, lo, hi, word_lo, word_hi, ticket],
         )
     }
 
     /// Asks the host to store `ticket` at `fence` once the work submitted
     /// before is done (spec `RESULT`).
     pub fn queue_done(stream: &mut Stream, fence: &u32, ticket: u32) -> bool {
-        words(stream, op::QUEUE_DONE, &[mem::off(fence), ticket])
+        let [lo, hi] = split64(mem::addr(fence));
+        words(stream, op::QUEUE_DONE, &[lo, hi, ticket])
     }
 
     /// `format` None asks for the format the host's surface prefers.

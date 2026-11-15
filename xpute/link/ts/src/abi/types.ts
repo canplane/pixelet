@@ -3,6 +3,7 @@
 // GENERATED from link/wit (xpute-link-gen wit.rs)
 
 import type { Lift, Lower } from "../cabi.ts";
+import type { u64 } from "@xpute/kit/abi/word.ts";
 import { ERRNO_EBADMSG } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 
@@ -35,21 +36,21 @@ export function load_Token(r: Lift, at: number): Token {
 }
 
 export interface Lent {
-  at: number;
+  at: u64;
   len: number;
 }
 
-export const LENT_SZ = 8;
-export const LENT_ALIGN = 4;
+export const LENT_SZ = 16;
+export const LENT_ALIGN = 8;
 
 export function store_Lent(w: Lower, at: number, v: Lent): void {
-  w.u32(at, v.at);
-  w.u32(at + 4, v.len);
+  w.u64(at, v.at);
+  w.u32(at + 8, v.len);
 }
 
 export function load_Lent(r: Lift, at: number): Lent {
   return {
-    at: r.u32(at),
-    len: r.u32(at + 4),
+    at: r.u64(at),
+    len: r.u32(at + 8),
   };
 }

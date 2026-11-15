@@ -72,7 +72,14 @@
   },
   TRAP_AT: {
     $value: 4294967295,
-    $type: "u32",
-    $description: "What a native guest's link_init answers in its layout's place where the guest stopped, as TRAP is for its other exports.",
+    $type: "u64",
+    $description: "What a native guest's link_init answers in its layout's place where the guest stopped, as TRAP is for its other exports: an odd address, where no layout lies.",
+  },
+  LAYOUT: {
+    $description: "The words of the link's layout, which a guest's link_init lays and answers the address\nof: the inbox's address, a u64 in two words, its low word first, then a frame's cap, then a\nword unused, so the inbox, which follows the layout's words, lies on 8 bytes. The outbox\nfollows the inbox.",
+    $extensions: { xpute: { packed: true } },
+    INBOX_AT: { $value: 2 },
+    CAP_AT: { $value: 1 },
+    PAD_AT: { $value: 1 },
   },
 }

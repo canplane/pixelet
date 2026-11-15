@@ -5,13 +5,18 @@ use core::panic::Location;
 
 use crate::status::errno::{Errno, Kind};
 
-/// This is an errno and the place in the source where the error was made, with
-/// no message. It is returned, never fatal: a broken invariant is a bug
-/// (`status/bug.rs`). What happened is the errno's `kind`.
+/// This is an errno, the place in the source where the error was made, and
+/// what a person reads of it beyond the errno, where its maker says more. It
+/// is returned, never fatal: a broken invariant is a bug (`status/bug.rs`).
+/// What happened is the errno's `kind`; across the link it is its errno
+/// alone.
 #[derive(Debug)]
 pub struct XputeError {
     pub errnum: Errno,
     pub at: &'static Location<'static>,
+    /// What a person reads beyond the errno, made once and never grown, so
+    /// it holds no capacity.
+    pub message: Option<Box<str>>,
 }
 
 impl XputeError {
@@ -20,6 +25,17 @@ impl XputeError {
         XputeError {
             errnum,
             at: Location::caller(),
+            message: None,
+        }
+    }
+
+    /// The error `errnum`, with what a person reads of it.
+    #[track_caller]
+    pub fn with_message(errnum: Errno, message: impl Into<Box<str>>) -> XputeError {
+        XputeError {
+            errnum,
+            at: Location::caller(),
+            message: Some(message.into()),
         }
     }
 
@@ -30,7 +46,11 @@ impl XputeError {
 
 impl fmt::Display for XputeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?} at {}", self.errnum, self.at)
+        write!(f, "{:?} at {}", self.errnum, self.at)?;
+        match &self.message {
+            Some(m) => write!(f, ": {m}"),
+            None => Ok(()),
+        }
     }
 }
 

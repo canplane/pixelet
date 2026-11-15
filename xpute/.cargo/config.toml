@@ -2,6 +2,11 @@
 # do: what a check holds a change to.
 [alias]
 test-gpu = ["test", "-p", "xpute-gpu-native-host"]
+# The device's crates, built for an Android phone.
+# Clippy misreads std's Android thread-local expansion: os-based TLS drops the `const` block,
+# so the lint fires on const initializers no code can satisfy. The flag goes when clippy reads
+# it right.
+lint-android = ["clippy", "--target", "aarch64-linux-android", "--workspace", "--exclude", "xpute-tool", "--exclude", "xpute-gen", "--exclude", "xpute-link-gen", "--", "-D", "warnings", "-A", "clippy::missing_const_for_thread_local"]
 # `cargo spec` says which files generated from spec/ are stale, and
 # `cargo spec --write` writes them.
 spec = ["run", "-q", "-p", "xpute-tool", "--bin", "spec", "--"]

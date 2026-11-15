@@ -259,14 +259,13 @@ impl _rt::Object for _Object {
     }
 }
 
-/// Serves `implementation` under the interface's handle.
-pub fn mount(implementation: _rt::Rc<dyn Host>) {
-    _rt::link::mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
+/// Serves `implementation` under the interface's handle on `side_`.
+pub fn mount(side_: &'static _rt::Side, implementation: _rt::Rc<dyn Host>) {
+    side_.mount_named(HANDLE, _rt::Rc::new(_Object(implementation)));
 }
 
 mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Tag};
-    pub(super) use xpute_native_runtime::link;
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Side, Tag};
 }

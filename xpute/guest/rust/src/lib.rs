@@ -1,8 +1,8 @@
 // xpute-guest/lib.rs
 
 //! The guest's end of xpute: its end of the link (xpute-link) to its host,
-//! its heap in the memory its runtime sized (`heap`), the clocks it reads,
-//! and the report of its failures (`stop`).
+//! the clocks it reads, its log records (`log`) and the report of its
+//! failures (`stop`). Its memory and its allocator are the program's.
 
 /// The bindings of xpute's packages on the guest's side, a module to a
 /// package, generated from their WIT (xpute-link-gen).
@@ -11,25 +11,21 @@ pub mod abi;
 #[doc(hidden)]
 pub use xpute_link;
 pub mod clock;
-pub mod heap;
 pub mod link;
+pub mod log;
 pub mod stop;
 pub mod wait;
 
 /// Defines the guest's three exports (link/wit/types.wit), over frames of
 /// `cap` bytes, with `boot` mounting what the guest serves and opening what it
 /// calls, and `enter` and `end` starting and ending each entry. From its init
-/// on, the guest's failures are its own (stop.rs `hook`). It declares the
-/// guest's heap the program's global allocator (heap.rs `Global`), as the
-/// program, which invokes it once, is where a global allocator is declared.
+/// on, the guest's failures are its own (stop.rs `hook`).
 #[macro_export]
 macro_rules! link {
     ($cap:expr, $boot:expr, $enter:expr, $end:expr) => {
-        #[global_allocator]
-        static XPUTE_HEAP: $crate::heap::Global = $crate::heap::Global;
         #[cfg(target_arch = "wasm32")]
         #[unsafe(no_mangle)]
-        pub extern "C" fn link_init() -> u32 {
+        pub extern "C" fn link_init() -> u64 {
             $crate::stop::hook();
             $crate::link::init($cap, $enter, $end)
         }
@@ -47,7 +43,7 @@ macro_rules! link {
         // (`TRAP`, or `TRAP_AT` for init's layout).
         #[cfg(not(target_arch = "wasm32"))]
         #[unsafe(no_mangle)]
-        pub extern "C" fn link_init() -> u32 {
+        pub extern "C" fn link_init() -> u64 {
             $crate::link::caught($crate::xpute_link::TRAP_AT, || {
                 $crate::stop::hook();
                 $crate::link::init($cap, $enter, $end)

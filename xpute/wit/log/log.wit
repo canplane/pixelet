@@ -1,0 +1,17 @@
+package xpute:log@0.1.0;
+
+// A record worth telling that is neither an error nor a bug, which the host
+// serves and hands to its environment, as wasi:logging's `logging` is: its
+// level, a context (what it is about) and its message.
+interface log {
+  enum level {
+    trace,
+    debug,
+    info,
+    warn,
+    error,
+    critical,
+  }
+
+  log: func(level: level, context: string, message: string);
+}

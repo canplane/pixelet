@@ -27,23 +27,20 @@ struct Slot<L> {
     waker: Cell<Option<Waker>>,
 }
 
-/// A side's send, which answers the request's tag (xpute-guest `link.rs`
-/// `send`, xpute-native-runtime `link.rs` `send`).
-pub type Send = for<'a> fn(Handle, Method, link::Args<'a>, Option<Answer>) -> Tag;
-
 pub struct Wait<L> {
     slot: Rc<Slot<L>>,
     /// The request, and the side's `cancel`, for a drop before the answer.
     tag: Tag,
-    cancel: fn(Tag),
+    cancel: Box<dyn Fn(Tag)>,
 }
 
-/// Sends `m` of `h` by `by`, a side's send, with `args`, now, and answers its
-/// outcome; `lent` is what the args lend by (at, len), kept until the answer.
-/// `cancel` is the side's, which a drop before the answer calls.
+/// Sends `m` of `h` by `by`, a side's send, which answers the request's tag,
+/// with `args`, now, and answers its outcome; `lent` is what the args lend by
+/// (at, len), kept until the answer. `cancel` is the side's, which a drop
+/// before the answer calls.
 pub fn wait_by<L: 'static>(
-    by: Send,
-    cancel: fn(Tag),
+    by: impl FnOnce(Handle, Method, link::Args<'_>, Option<Answer>) -> Tag,
+    cancel: Box<dyn Fn(Tag)>,
     h: Handle,
     m: Method,
     args: link::Args<'_>,

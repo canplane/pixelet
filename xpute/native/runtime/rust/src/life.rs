@@ -7,19 +7,21 @@
 //! serves none and EPIPE where it trapped among them, as on a page (life.ts
 //! `take_answer`).
 
-use crate::abi;
+use xpute_native_host::abi;
+
+use crate::link::side;
 
 /// Tells the guest `hidden` or `shown`.
 pub(crate) fn tell(shown: bool) {
     // The guest's answer is its own, as a page's is (life.ts).
     let _ = if shown {
-        abi::life::shown()
+        abi::life::shown(side())
     } else {
-        abi::life::hidden()
+        abi::life::hidden(side())
     };
 }
 
 /// Tells the guest a UI attached.
 pub(crate) fn attached() {
-    let _ = abi::life::attached();
+    let _ = abi::life::attached(side());
 }

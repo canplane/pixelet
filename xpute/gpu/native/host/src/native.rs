@@ -2,7 +2,7 @@
 
 //! This is the GPU's host for a guest on a native device, as web.ts is a
 //! page's: the host serves `gpu` and the guest's `device` (gpu/wit/gpu.wit)
-//! on xpute-native-runtime's link (`serve`), and binds the platform's windows to
+//! on the host's side its runtime gives (`serve`), and binds the platform's windows to
 //! the guest's surfaces (`bind`); `vsync` is vsync.rs's. The device, the
 //! windows and everything run on them live on a thread of their own, the
 //! GPU's, since a present waits on the frame before it and would hold the
@@ -14,7 +14,7 @@
 //! each run and wakes the GPU's thread as the work lands (`poller`), as a
 //! browser fires them on a page, while the GPU's thread goes on. What the GPU
 //! answers reaches the guest's thread as a task, by the request's job id
-//! (xpute-native-runtime `job`, `done`). A device the system loses is let go with
+//! (xpute-native-host `job`, `complete`). A device the system loses is let go with
 //! the block it was lent, and the guest is told (`device.lost`); the guest asks
 //! it ready again, as a page asks for a new device, and the next device binds
 //! every window again. The platform is told what the host has of a GPU as it
@@ -31,14 +31,15 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Lent;
-use xpute_link::Return;
-use xpute_native_runtime::link;
-use xpute_native_runtime::{done, job};
+use xpute_link::{Return, Side};
+use xpute_native_host::abi::log::Level;
+use xpute_native_host::job::{complete, job};
+use xpute_native_host::log::log;
 
+use super::abi;
 use super::vsync::Vsync;
 use super::{Ask, Config, ConfigureAt, GpuHost, OpenError, Wgpu};
 use xpute_gpu_link::GpuConfig;
-use xpute_gpu_native_runtime::abi;
 
 /// This is a platform's window, as `target` takes it, with a reference of the
 /// host's own on it from its bind until its unbind: on an Apple platform a
@@ -70,7 +71,7 @@ impl Window {
             #[cfg(target_vendor = "apple")]
             CFRetain(window.as_ptr());
             #[cfg(target_os = "android")]
-            xpute_native_runtime::jni::ndk::ANativeWindow_acquire(window.as_ptr().cast());
+            ndk_sys::ANativeWindow_acquire(window.as_ptr().cast());
         }
         Window(window)
     }
@@ -84,7 +85,7 @@ impl Drop for Window {
             #[cfg(target_vendor = "apple")]
             CFRelease(self.0.as_ptr());
             #[cfg(target_os = "android")]
-            xpute_native_runtime::jni::ndk::ANativeWindow_release(self.0.as_ptr().cast());
+            ndk_sys::ANativeWindow_release(self.0.as_ptr().cast());
         }
     }
 }
@@ -109,7 +110,7 @@ struct Device {
     /// Where the guest lent the device's block, which each device writes
     /// (`GpuHost::attach`) while it is lent: until a loss answers
     /// `device.lost` or its caller cancels it.
-    block: Option<u32>,
+    block: Option<u64>,
     /// The requests waiting on the device, by job id: the next completion's
     /// (`device.settled`), and its loss (`device.lost`).
     settled: Vec<u64>,
@@ -136,8 +137,7 @@ type Job = Box<dyn FnOnce() + Send>;
 static WORK: OnceLock<Sender<Job>> = OnceLock::new();
 
 /// This is the platform's function told what the host has of a GPU
-/// (`state_on`): the state's name, its UTF-8 bytes and their count, as the
-/// guest's stop crosses (xpute-native-runtime listener.rs `Stopped`).
+/// (`state_on`): the state's name, its UTF-8 bytes and their count.
 pub type State = extern "C" fn(state: *const u8, len: usize);
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -170,7 +170,6 @@ pub const fn config(cfg: GpuConfig) -> Config {
         configure_at: CONFIGURE_AT,
         frame_latency: cfg.frame_latency,
         upload_chunk_sz: cfg.upload_chunk_sz as u64,
-        slow_ms: cfg.slow_ms,
         present_mode: wgpu::PresentMode::Fifo,
     }
 }
@@ -238,7 +237,7 @@ fn poll() {
     let answered = r.poll();
     if answered || lost {
         for id in d.settled.drain(..) {
-            done(id, Ok::<(), Errno>(()));
+            complete(id, Ok::<(), Errno>(()));
         }
     }
     if lost {
@@ -246,29 +245,33 @@ fn poll() {
         d.poller = None;
         d.block = None;
         for id in d.lost.drain(..) {
-            done(id, Ok::<(), Errno>(()));
+            complete(id, Ok::<(), Errno>(()));
         }
         drop(guard);
         report("waiting");
     }
 }
 
-/// Mounts `gpu` and `vsync` on the host's link, on the guest's thread before
-/// it boots (a server the program lists, xpute-native-runtime native.rs
-/// `Boot`), the device `gpu` gives to be opened as `ask` and `cfg` say, its
-/// compiled pipelines kept in `cache_dir`, the directory the platform keeps
-/// the app's caches in.
-pub fn serve(ask: Ask, cfg: Config, cache_dir: Option<PathBuf>) {
+/// Mounts `gpu` and `vsync` on `side`, the host's side its runtime gives, on
+/// the guest's thread before it boots (a server the program lists), the
+/// device `gpu` gives to be opened as `ask` and `cfg` say, its compiled
+/// pipelines kept in `cache_dir`, the directory the platform keeps the app's
+/// caches in.
+pub fn serve(side: &'static Side, ask: Ask, cfg: Config, cache_dir: Option<PathBuf>) {
     let args = Arc::new(OpenArgs {
         ask,
         cfg,
         cache_dir,
     });
-    abi::gpu::mount(Rc::new(Gpu(args)));
-    abi::vsync::mount(Rc::new(Vsync));
+    abi::gpu::mount(side, Rc::new(Gpu { side, args }));
+    abi::vsync::mount(side, Rc::new(Vsync));
 }
 
-struct Gpu(Arc<OpenArgs>);
+/// What serves `gpu` on `side`, which issues the guest's device its handle.
+struct Gpu {
+    side: &'static Side,
+    args: Arc<OpenArgs>,
+}
 
 impl abi::gpu::Host for Gpu {
     /// Runs the lent records on the GPU's thread, and answers once they are
@@ -280,13 +283,13 @@ impl abi::gpu::Host for Gpu {
         on_gpu(Box::new(move || {
             let mut guard = device();
             let Some(d) = guard.as_mut() else {
-                return done(id, ());
+                return complete(id, ());
             };
             let Some(r) = d.host.as_mut() else {
-                return done(id, ());
+                return complete(id, ());
             };
             r.run(recs.at, recs.len);
-            done(id, ());
+            complete(id, ());
             r.present();
             if let Some(p) = &d.poller {
                 let _ = p.send(());
@@ -298,9 +301,8 @@ impl abi::gpu::Host for Gpu {
 
     /// The guest's device, served under a handle the link issues.
     fn get_device(&self) -> Result<u32, Errno> {
-        Ok(link::add(abi::gpu::device(Rc::new(GuestDevice(
-            self.0.clone(),
-        )))))
+        let device = abi::gpu::device(self.side, Rc::new(GuestDevice(self.args.clone())));
+        Ok(self.side.add(device))
     }
 }
 
@@ -340,7 +342,7 @@ impl abi::gpu::HostDevice for GuestDevice {
         on_gpu(Box::new(move || {
             let opened = open(args);
             report(if opened.is_ok() { "present" } else { "missing" });
-            done(id, opened.map_err(|_| abi::gpu::ErrorCode::NoDevice));
+            complete(id, opened.map_err(|_| abi::gpu::ErrorCode::NoDevice));
         }));
     }
 
@@ -370,7 +372,7 @@ fn wait(task_return: Return<()>, cancel: fn(&mut Device, u64)) -> u64 {
                 if let Some(d) = device().as_mut() {
                     cancel(d, id);
                 }
-                done(id, Err::<(), Errno>(Errno::ECANCELED));
+                complete(id, Err::<(), Errno>(Errno::ECANCELED));
             }));
         }
     });
@@ -402,8 +404,8 @@ fn configure() {
 /// pipelines in its cache directory where one is given (`Cache`). A device
 /// already open is kept. A new device writes the block lent, and binds every
 /// window bound, in the order bound; one the system makes no surface of now
-/// is logged, its surface drawn into textures never shown until the next
-/// device.
+/// is logged through the host's log, its surface drawn into textures never
+/// shown until the next device.
 fn open(args: Arc<OpenArgs>) -> Result<(), OpenError> {
     let mut guard = device();
     let d = guard.get_or_insert_with(|| new_device(&args.ask));
@@ -414,9 +416,7 @@ fn open(args: Arc<OpenArgs>) -> Result<(), OpenError> {
         adapter,
         device,
         queue,
-    } = super::open(&d.instance, &args.ask).inspect_err(|e| {
-        xpute_native_runtime::log(&format!("[gpu] the device did not open: {e:?}"));
-    })?;
+    } = super::open(&d.instance, &args.ask)?;
     d.poller = Some(poller(device.clone()));
     let host = GpuHost::new(
         adapter,
@@ -438,9 +438,11 @@ fn open(args: Arc<OpenArgs>) -> Result<(), OpenError> {
                 Ok(surface) => {
                     host.bind(*handle, surface);
                 }
-                Err(e) => xpute_native_runtime::log(&format!(
-                    "[gpu] no surface of surface {handle:#x}'s window on this device: {e}"
-                )),
+                Err(e) => log(
+                    Level::Error,
+                    "gpu",
+                    &format!("no surface of surface {handle:#x}'s window on this device: {e}"),
+                ),
             }
         }
     });
@@ -489,10 +491,10 @@ fn target(window: NonNull<c_void>) -> wgpu::SurfaceTargetUnsafe {
 /// Binds the guest's surface `handle` to `window` on the GPU's thread, on the
 /// open device and on every device opened after it, and returns at once, so
 /// the caller never waits on a present. Where the system makes no surface of
-/// the window, or a newer handle has bound the slot since, it is said and the
-/// window let go. While no device is open the window is kept, and the next
-/// device binds it (`open`). The host holds a reference of its own on a
-/// window bound until it is unbound (`Window`).
+/// the window, it is logged and the window let go; where a newer handle has
+/// bound the slot since, the window is let go. While no device is open the
+/// window is kept, and the next device binds it (`open`). The host holds a
+/// reference of its own on a window bound until it is unbound (`Window`).
 ///
 /// # Safety
 /// `window` is a live window of the platform's kind (`target`).
@@ -506,12 +508,14 @@ pub unsafe fn bind(handle: u32, window: NonNull<c_void>) {
         if let Some((d, h)) = d.and_then(|d| d.host.as_mut().map(|h| (&d.instance, h))) {
             // SAFETY: the window `Window` holds.
             let Ok(surface) = (unsafe { d.create_surface_unsafe(target(window.0)) }) else {
-                return xpute_native_runtime::log(&format!(
-                    "[gpu] no surface of {handle:#x}'s window"
-                ));
+                return log(
+                    Level::Error,
+                    "gpu",
+                    &format!("no surface of {handle:#x}'s window"),
+                );
             };
             if !h.bind(handle, surface) {
-                return xpute_native_runtime::log(&format!("[gpu] {handle:#x} is bound over"));
+                return;
             }
         }
         drop(guard);
@@ -558,10 +562,11 @@ pub fn unbind(handle: u32) {
 ///   (vsync.rs `vsync`).
 ///
 /// On Android the same calls are exported to JNI for the Kotlin class
-/// `xpute.Gpu` (`jni_abi!`).
+/// `xpute.Gpu` over the JNI helpers the assembly names by `$jni`
+/// (`jni_abi!`).
 #[macro_export]
 macro_rules! native_abi {
-    () => {
+    ($($jni:tt)+) => {
         #[no_mangle]
         pub extern "C" fn xpute_gpu_state_on(state: Option<$crate::native::State>) {
             $crate::native::state_on(state);
@@ -606,7 +611,7 @@ macro_rules! native_abi {
         }
 
         #[cfg(target_os = "android")]
-        $crate::jni_abi!();
+        $crate::jni_abi!($($jni)+);
     };
 }
 

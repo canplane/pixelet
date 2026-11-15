@@ -7,7 +7,6 @@ import {
   ERRNO_EINPROGRESS,
   ERRNO_ENOSYS,
 } from "@xpute/kit/status/errno.spec.ts";
-import type { ErrorCode } from "@xpute/link/abi/fs/types.enum.ts";
 import { type Lent, load_Lent } from "@xpute/link/abi/types.ts";
 import { Lift } from "@xpute/link/cabi.ts";
 import {
@@ -18,6 +17,7 @@ import {
   type Side,
   refusal_of,
 } from "@xpute/link/link.ts";
+import type { ErrorCode } from "@xpute/web-host/abi/fs/types.enum.ts";
 
 /** The interface's handle, named by `pxl:core/object` (frame.json5 `NAMED`). */
 export const HANDLE: Handle = 0x4edab0;

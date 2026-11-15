@@ -16,7 +16,7 @@ pub fn apply<L: _rt::Lend>(
     let sent = _rt::wait::wait(
         HANDLE,
         APPLY,
-        Some((8, &|w_: &mut _rt::Lower| {
+        Some((16, &|w_: &mut _rt::Lower| {
             _rt::Lent {
                 at: batch_at_,
                 len: batch_len_,

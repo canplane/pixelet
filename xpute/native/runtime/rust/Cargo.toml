@@ -15,14 +15,18 @@ path = "src/lib.rs"
 [dependencies]
 xpute-kit.workspace = true
 # The contract's pure types, shared rather than copied: a frame's words, a
-# URI's tokens, the handle table, and the guest's memory (link.rs).
+# URI's tokens and the guest's memory (remote.rs, native.rs).
 xpute-link.workspace = true
+# The host the runtime runs: its end of the link, the bindings served there,
+# and what it needs of the runtime, which the runtime gives it (native.rs
+# `run`).
+xpute-native-host.workspace = true
 
 # An Android app's native side reaches the runtime through JNI (src/jni.rs),
-# and a line is told to the NDK's log (src/log.rs). These are the NDK's own
-# headers as bindings; over JNI's, a class whose static methods a thread
-# calls, and the Kotlin class `xpute.Runtime`'s exports over Java's arrays,
-# strings and a direct buffer (src/jni.rs).
+# and a line is told to the NDK's log (src/log.rs). These are JNI's and the
+# NDK's own headers as bindings; over JNI's, a class whose static methods a
+# thread calls, and the Kotlin class `xpute.Runtime`'s exports over Java's
+# arrays, strings and a direct buffer (src/jni.rs).
 [target.'cfg(target_os = "android")'.dependencies]
 jni-sys = "0.3"
 ndk-sys = "0.6"

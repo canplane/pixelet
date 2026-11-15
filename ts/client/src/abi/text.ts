@@ -66,11 +66,11 @@ function object(implementation: Host): LinkObject {
               r_.u32(0),
               r_.f64(8),
               r_.u32(16),
-              load_Lent(r_, 20),
-              r_.u32(28),
-              r_.u32(32),
-              r_.f64(40),
-              load_Lent(r_, 48),
+              load_Lent(r_, 24),
+              r_.u32(40),
+              r_.u32(44),
+              r_.f64(48),
+              load_Lent(r_, 56),
             );
             return 0;
           }

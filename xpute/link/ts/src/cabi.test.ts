@@ -17,7 +17,7 @@ import { load_uri, store_uri } from "./link.ts";
 
 /** The record's packet: one of each number, a string, a list of numbers, a
  * URI and a lent span, as the Canonical ABI lays a tuple of them. */
-const FIXED_SZ = 80;
+const FIXED_SZ = 88;
 
 const URI: Token[] = [
   { tag: "int", val: 5 },
@@ -40,7 +40,7 @@ function lower(buf: U8Array): number {
   w.str(48, "€€");
   w.arr(56, new Uint16Array([1, 2, 65535]));
   store_uri(w, 64, URI);
-  store_Lent(w, 72, { at: 4096, len: 64 });
+  store_Lent(w, 72, { at: 4096n, len: 64 });
   return w.finish();
 }
 
@@ -70,7 +70,7 @@ test("the record's packet lifts as the values it was lowered from", async () => 
   assert.equal(r.str(48), "€€");
   assert.deepEqual(r.arr(56, Uint16Array), new Uint16Array([1, 2, 65535]));
   assert.deepEqual(load_uri(r, 64), URI);
-  assert.deepEqual(load_Lent(r, 72), { at: 4096, len: 64 });
+  assert.deepEqual(load_Lent(r, 72), { at: 4096n, len: 64 });
 });
 
 test("each recorded packet that does not hold a URI is refused as one, EBADMSG", async () => {

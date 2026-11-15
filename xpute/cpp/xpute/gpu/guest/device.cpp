@@ -10,7 +10,7 @@
 namespace xpute::gpu {
 
 std::optional<Device> Device::read(const std::uint32_t *block) noexcept {
-    if (link::mem::load_acquire(link::mem::off(block[DEVICE::STATUS_AT])) != STATUS::READY) return std::nullopt;
+    if (link::mem::load_acquire(link::mem::addr(block[DEVICE::STATUS_AT])) != STATUS::READY) return std::nullopt;
     // A word before STATUS is read only once STATUS is READY, after which the
     // host writes none of those read.
     std::uint32_t f = block[DEVICE::FORMAT_AT];

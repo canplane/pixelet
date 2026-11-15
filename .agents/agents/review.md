@@ -29,6 +29,8 @@ meant to do and where it is, not why its author thinks it is right.
 - **Structure.** A concept living twice or derived again; a pass reading
   another layer's storage or going around the query; machinery that removes
   nothing; a dead item, or a doc or citation naming what is gone.
+- **Dependency.** An import that points up, or a change to `rule.rs`'s orders,
+  against the code skill's dependency rule.
 - **The WIT.** A change to the WIT between the UI and the core is held to min
   cut first (AGENTS.md): a fact that crosses with no reader on the other side,
   a round trip, a raw detail where a derived fact is read, a mechanism's

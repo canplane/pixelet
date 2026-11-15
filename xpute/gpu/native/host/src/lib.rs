@@ -12,8 +12,12 @@
 //! `RESULT`), and a run never waits for an answer.
 //!
 //! `native` holds the host for a guest linked into its own process, and
-//! exports it under xpute's names (`native_abi!`).
+//! exports it under xpute's names (`native_abi!`); it serves the GPU's
+//! bindings (`abi`) on the host's side its runtime gives.
 
+/// The bindings of the GPU's package on the host's side, generated from its
+/// WIT (xpute-link-gen).
+pub mod abi;
 mod admit;
 mod belt;
 mod cache;
@@ -39,9 +43,10 @@ use std::collections::{HashMap, VecDeque};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
 
 use xpute_link::mem;
+use xpute_native_host::abi::log::Level;
+use xpute_native_host::log::log;
 
 use belt::Belt;
 use cache::Cache;
@@ -78,9 +83,6 @@ pub struct Config {
     /// frame's writes; a larger write is staged across several chunks. The
     /// belt holds one chunk more than the frame latency.
     pub upload_chunk_sz: u64,
-    /// A record, a run or a completion's landing slower than this is said
-    /// (`GpuConfig::slow_ms`); with none, nothing is timed.
-    pub slow_ms: Option<u32>,
     pub present_mode: wgpu::PresentMode,
 }
 
@@ -96,7 +98,7 @@ pub struct GpuHost {
     preferred_format: wgpu::TextureFormat,
     configure_at: ConfigureAt,
     /// This is the address where the guest asked for the device's block.
-    block: Option<u32>,
+    block: Option<u64>,
     /// wgpu's device-lost callback sets this, on whatever thread wgpu calls it,
     /// and nothing clears it: a host runs one device (`lost`).
     device_lost: Arc<AtomicBool>,
@@ -122,7 +124,6 @@ pub struct GpuHost {
     /// back its own.
     unfinished_cnt: Arc<AtomicU32>,
     frame_latency: u32,
-    slow_ms: Option<u32>,
     present_mode: wgpu::PresentMode,
     /// Every buffer write is staged through the belt and copied by
     /// `uploads`, which is submitted ahead of what follows.
@@ -131,31 +132,11 @@ pub struct GpuHost {
     uploads: Option<wgpu::CommandEncoder>,
 }
 
-/// Runs `f`, and where `slow` is some and `f` took longer, says `[gpu] <what>
-/// took <ms> ms`, the whole milliseconds, as a page's host says it
-/// (`GpuConfig::slow_ms`, @xpute/gpu-web-host `timed`).
-pub(crate) fn timed<R>(
-    slow: Option<u32>,
-    what: impl core::fmt::Display,
-    f: impl FnOnce() -> R,
-) -> R {
-    let Some(slow) = slow else {
-        return f();
-    };
-    let t0 = Instant::now();
-    let r = f();
-    let ms = t0.elapsed().as_millis();
-    if ms > u128::from(slow) {
-        xpute_native_runtime::log(&format!("[gpu] {what} took {ms} ms"));
-    }
-    r
-}
-
 impl GpuHost {
     /// `wake` asks for a `poll` and may be called from any thread; beside a
     /// native guest it is native.rs's `wake`. Whatever learns of a completion
     /// calls it, so that the next `poll` writes the answer. A device the
-    /// system loses (`Unknown`) is said, as a page's host says it, and told
+    /// system loses (`Unknown`) is logged, as a page's host logs it, and told
     /// the guest at the next `poll`, and the host's owner lets the host go
     /// (`lost`). A device lost as `Destroyed` was its
     /// owner's doing, and is none of these.
@@ -176,7 +157,11 @@ impl GpuHost {
         let lost = device_lost.clone();
         device.set_device_lost_callback(move |reason, message| {
             if reason == wgpu::DeviceLostReason::Unknown {
-                xpute_native_runtime::log(&format!("[gpu] device lost ({reason:?}): {message}"));
+                log(
+                    Level::Warn,
+                    "gpu",
+                    &format!("device lost ({reason:?}): {message}"),
+                );
                 lost.store(true, Ordering::Release);
                 wake();
             }
@@ -186,7 +171,7 @@ impl GpuHost {
         let error_cnt = Arc::new(AtomicU32::new(0));
         let errors = error_cnt.clone();
         device.on_uncaptured_error(Arc::new(move |e: wgpu::Error| {
-            xpute_native_runtime::log(&format!("[gpu] {e}"));
+            log(Level::Error, "gpu", &e.to_string());
             errors.fetch_add(1, Ordering::Relaxed);
         }));
         let cache = cache_dir.and_then(|dir| Cache::open(&adapter, &device, dir));
@@ -214,7 +199,6 @@ impl GpuHost {
             drew: false,
             unfinished_cnt: Arc::new(AtomicU32::new(0)),
             frame_latency: cfg.frame_latency,
-            slow_ms: cfg.slow_ms,
             present_mode: cfg.present_mode,
             uploads: None,
         }
@@ -242,7 +226,7 @@ impl GpuHost {
         self.decoding.clear();
         self.making.clear();
         if let Some(addr) = self.block.take() {
-            mem::store_release(addr + 4 * device::STATUS_AT as u32, status::LOST);
+            mem::store_release(addr + 4 * device::STATUS_AT as u64, status::LOST);
         }
     }
 
@@ -258,10 +242,7 @@ impl GpuHost {
         let _ = self.device.poll(wgpu::PollType::Poll);
         self.tell_counts();
         let waited = self.waiting();
-        // Each completion's landing is timed as a page's is (`timed`);
-        // the belt's chunks land in an atomic store, which has nothing to time.
-        let slow = self.slow_ms;
-        self.pending.retain(|p| p.poll(slow));
+        self.pending.retain(Pending::poll);
         self.land_images();
         self.land_pipelines();
         self.waiting() != waited

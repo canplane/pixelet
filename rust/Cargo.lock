@@ -2208,10 +2208,8 @@ dependencies = [
  "wgpu",
  "xpute-gpu-guest",
  "xpute-gpu-link",
- "xpute-guest",
  "xpute-kit",
  "xpute-link",
- "xpute-native-runtime",
 ]
 
 [[package]]
@@ -3702,31 +3700,26 @@ dependencies = [
 [[package]]
 name = "xpute-gpu-link"
 version = "0.1.0"
+dependencies = [
+ "xpute-kit",
+]
 
 [[package]]
 name = "xpute-gpu-native-host"
 version = "0.1.0"
 dependencies = [
  "image-webp",
+ "jni-sys 0.3.1",
+ "ndk-sys",
  "png 0.18.1",
  "pollster",
  "serde",
  "wgpu",
  "xpute-gpu-link",
- "xpute-gpu-native-runtime",
  "xpute-kit",
  "xpute-link",
- "xpute-native-runtime",
+ "xpute-native-host",
  "zune-jpeg",
-]
-
-[[package]]
-name = "xpute-gpu-native-runtime"
-version = "0.1.0"
-dependencies = [
- "xpute-kit",
- "xpute-link",
- "xpute-native-runtime",
 ]
 
 [[package]]
@@ -3762,7 +3755,6 @@ version = "0.1.0"
 dependencies = [
  "xpute-kit",
  "xpute-link",
- "xpute-native-runtime",
 ]
 
 [[package]]
@@ -3773,6 +3765,7 @@ dependencies = [
  "ndk-sys",
  "xpute-kit",
  "xpute-link",
+ "xpute-native-host",
 ]
 
 [[package]]

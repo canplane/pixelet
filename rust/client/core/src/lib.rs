@@ -36,6 +36,12 @@ pub(crate) fn admit_frame() -> bool {
     admit::frame()
 }
 
+// On a page the core is its own module, so it declares its heap the
+// module's global allocator here; on a device pxl-runtime declares it.
+#[cfg(target_arch = "wasm32")]
+#[global_allocator]
+static HEAP: sys::heap::Heap = sys::heap::Heap;
+
 // A frame's cap holds its words and the largest packet the core lays
 // (link/bound.rs).
 xpute_guest::link!(

@@ -350,9 +350,55 @@ fn parse_str(path: &str, text: &str) -> Result<Node, String> {
 /// (`Node::folded`), each number typed and an integer whole and within its
 /// width (`check_widths`).
 fn typed(spec: Node) -> Result<Node, String> {
-    let spec = spec.folded();
+    let folded = spec.folded();
+    let spec = resolved(&folded, folded.clone())?;
     check_widths(&spec, "", None)?;
     Ok(spec)
+}
+
+/// Whether `s` is a reference to a token, DTCG's `"{group.token}"`: a path
+/// of names, at least a group's and a token's, in braces.
+fn is_ref(s: &str) -> bool {
+    s.strip_prefix('{')
+        .and_then(|s| s.strip_suffix('}'))
+        .is_some_and(|p| {
+            p.contains('.')
+                && p.split('.').all(|k| {
+                    !k.is_empty() && k.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_')
+                })
+        })
+}
+
+/// `n`, each value that is a reference to another token of `root`
+/// (`is_ref`), read as that token's value; a reference to no token, or to
+/// one that is no value, is refused.
+fn resolved(root: &Node, n: Node) -> Result<Node, String> {
+    Ok(match n {
+        Node::Str(s) if is_ref(&s) => {
+            let path = &s[1..s.len() - 1];
+            let to = path
+                .split('.')
+                .try_fold(root, |n, k| n.get(k))
+                .map(Node::val)
+                .ok_or(format!("{s} names no token"))?;
+            if to.is_obj() {
+                return Err(format!("{s} names no value"));
+            }
+            to.clone()
+        }
+        Node::Obj(entries) => Node::Obj(
+            entries
+                .into_iter()
+                .map(|(k, v)| Ok((k, resolved(root, v)?)))
+                .collect::<Result<_, String>>()?,
+        ),
+        Node::Arr(a) => Node::Arr(
+            a.into_iter()
+                .map(|v| resolved(root, v))
+                .collect::<Result<_, String>>()?,
+        ),
+        n => n,
+    })
 }
 
 /// The type of a packed table's numbers (data.rs `laid_out`): the words each

@@ -9,16 +9,29 @@ the entry, the only time the guest runs, when its host enters it; and the GPU
 stream, a command buffer the guest records and the host runs, which moves large
 data while that memory stays fixed. The guest owns nothing but its memory. xpute
 declares the few interfaces every guest shares with its host, its clocks, its
-files, its stop and its app's life, and the host implements the clocks, the stop
-and the one device that lends that memory, the GPU. Everything else belongs to
+files, its stop, its log and its app's life, and the host implements the clocks,
+the stop, the log and the one device that lends that memory, the GPU. Everything else belongs to
 the **program**, and it travels over the same link, whose frames xpute delivers
 and does not interpret.
 
 The same guest runs as a WebAssembly module in a web page and as a library
 linked into an iOS or Android app, while the program does the I/O and its
-JavaScript draws the UI around it. xpute is both ends of that arrangement, the
-guest's library and the host, the **runtime** the host runs in on each platform,
-and `kit`, the generic code beneath them.
+JavaScript draws the UI around it. xpute is three parts that run there, and
+tools that only build them:
+
+- **the guest, the host and the link between them**, the side WIT draws: what
+  crosses the boundary, and the protocol both ends run. It assumes one thread,
+  knows nothing of where each end runs, and varies by language;
+- **the runtime**, the execution environment: where and how the guest runs on
+  a platform, what carries frames to it and to the UI, and what it gives its
+  host. It varies by platform, with an adapter for each shell;
+- **the kit**, the reusable code beneath both: collections, codecs, math, the
+  errors, the wire format and allocators. It varies by language and names
+  nothing above it.
+
+The generators, xpute's build tool and the golden records' readers run only
+when a program is built or tested, and no image links them. xpute holds no
+memory layout or policy, no scheduler, no isolation and no UI.
 
 ## Why one interface
 
@@ -39,8 +52,8 @@ method came to: its result, or `EINPROGRESS` for a method that answers later,
 in a frame of its own. Each method is declared in WIT and its bindings are
 generated, so no binding is written by hand for any one piece of work.
 
-The host gives the guest only its memory, its entries, the clocks, the stop and
-the device that lends the memory, and the guest decides everything else.
+The host gives the guest only its memory, its entries, the clocks, the stop, the
+log and the device that lends the memory, and the guest decides everything else.
 Because that is all the host gives, the same guest runs unchanged in a page, on
 a phone and in a test.
 
@@ -147,25 +160,32 @@ are all it compiles. `make -C cpp amalgamation` writes the two files under
 entry, and its stack first, of the size the program chooses:
 `-nostartfiles -Wl,--no-entry -Wl,--stack-first -Wl,-z,stack-size=<bytes>`.
 It then exports its memory and the link's three exports, imports `link_out`
-and `xpute_mem` from `env` and nothing of WASI, and runs its static
-initializers as its first export starts.
+from `env` and nothing of WASI, and runs its static initializers as its first
+export starts.
 `make -C cpp module GUEST="<sources>" MODULE=<file>` links one so.
 
-A Rust guest writes nothing about its memory: the `link!` it invokes declares
-the guest library's heap its global allocator, which the program declares and
-a library never does, so a binary that links the library without `link!`
-keeps the system's. A C++ guest takes what it lends its host
-from `guest::heap()`, a `std::pmr::memory_resource` over that heap
-(`xpute/guest/heap.hpp`), on a page and a device alike, so the same program
-runs on both; a range it lends from outside that heap stops the guest with
-EFAULT on both. The two differ because Rust's global allocator reaches Rust's
-allocations alone, while C++'s global `operator new` reaches the whole process,
-and a library never replaces it in a process it shares; a module's global `new`
-is the module's own, and nothing relies on it for what crosses. The program
-tells its runtime two numbers before the guest's first entry: the memory's
-size, and its share of it, the bytes it keeps for itself outside the heap, 0
-where it keeps none. The runtime sizes the memory, the heap lies past the
-share, and nothing grows the memory after.
+xpute lays out none of the guest's memory and picks none of its allocators.
+A module's memory is its own, grown as its allocator asks, and a host on a
+page reads it through a view made at each access, so a growth detaches
+nothing. A native guest's memory is its process's. A span the guest lends is
+named by its address, a u64 on every platform: an offset into the module's
+memory, or a native pointer, which the host and the UI read in place. A Rust
+guest's global allocator is the one its program declares, as any Rust
+program's is. A C++ guest takes what it lays and lends, the link's boxes and a
+GPU stream's records, from its default memory resource
+(`std::pmr::get_default_resource`), which its program sets, and its global
+`operator new` is the program's as well.
+
+A program that wants its memory fixed and laid out by itself declares so in
+its own code. On a page it links its module with `--initial-memory` and
+`--max-memory` equal, so the memory starts at its size and never grows; on a
+device it reserves a block of that size of its process. Its fixed ranges lie
+first, on the page past the module's data or at the block's base, and the
+kit's heap (`xpute_kit::alloc::heap::HeapMalloc`, a slab of size classes over
+a buddy allocator of pages, taken under one lock) runs over the rest, which
+its terminal crate declares its global allocator: the module's crate on a
+page, the device's library on a device. The C++ kit has the same heap as a
+`std::pmr::memory_resource` (`xpute/kit/alloc/heap.hpp`).
 
 ### On a page
 
@@ -179,18 +199,16 @@ functions of its own and by an opener at some prefix where the guest opens its
 resources by URI; which prefixes those are stays the program's. One that no
 server mounts traps the link before the guest's first entry, naming each.
 
-The worker instantiates the guest's module, grows its memory to the size the
-program gives, of which the program's share lies past the module's data, and
-runs it, and the runtime tells the guest the UI attached. A module that does
-not load, or a memory refused, traps the guest before its first entry, as a
-device's runtime traps on its own failure. The GPU's server takes what the
+The worker instantiates the guest's module and runs it, and the runtime tells
+the guest the UI attached. A module that does not load traps the guest before
+its first entry, as a device's runtime traps on its own failure. The GPU's server takes what the
 guest asks of the device (`GpuAsk`, WebGPU's power preference and features)
 and the program's settings for its host (`GpuConfig`), and the canvas the UI
 gives beside the link under a surface's handle goes to it:
 
 ```ts
 // The worker, given the page's `Instantiate`, m.
-const link = await instantiate(m.module, m.init, MEM_SZ, SHARE_SZ);
+const link = await instantiate(m.module, m.init);
 if (link === null) return;
 const gpu = new WebGpu(link, ASK, CFG);
 run(link, {
@@ -217,16 +235,17 @@ as it starts the guest. And the start tells the guest the page's lifecycle
 from the document's visibility, which a worker cannot see, as a device's
 module tells its runtime the app's from the platform. What the worker posts
 the page is a message by its kind, the runtime's, the GPU's server's and the
-program's alike, which the UI hears by its kind as it comes (`message_on`).
-The guest's stop, its trap and the GPU's state (`state_on`, from
-`@xpute/gpu-web-host`) are kept, and told at once to one who begins to hear
-them, as a device's runtime and its GPU module keep them:
+program's alike, which the UI hears by its kind as it comes (`message_on`),
+the GPU's state among them (`GpuReport`, from `@xpute/gpu-web-host`). Nothing
+is kept for a late hearer, since the worker dies with its page and no UI comes
+late to it; a device's runtime outlives its UI and keeps the guest's stop and
+its trap:
 
 ```ts
 const remote = open_remote(WORKER_URL);
 stopped_on((stop) => { /* show it */ });
 trap_on((err) => { /* show it */ });
-state_on((state) => { /* show it */ });
+message_on<GpuReport>("gpu", (m) => { /* show m.state */ });
 // Mount on `remote` what the UI serves, before `start`.
 start(remote, MODULE_URL, undefined);
 const surface = await open(remote, uri("xpute:gpu", "surface"));
@@ -238,11 +257,9 @@ remote.give(surface, canvas.transferControlToOffscreen());
 A native app installs `@xpute/native-runtime`, the React Native module, which
 Expo autolinks, and names in its `package.json` under `xpute.guest.runtime` the
 crate a device links: its guest, and the function that gives the runtime its
-list, which the crate exports the runtime over with the memory's size and the
-program's share. The runtime reserves the memory once, at its first reader,
-before the guest's first entry, with the share at its front. It starts the
-guest on a thread of its own, with the stack the list asks, and runs the loop
-for the guest's life:
+list, which the crate exports the runtime over. It starts the guest on a
+thread of its own, with the stack the list asks, and runs the
+loop for the guest's life:
 
 ```rust
 fn start(cache_dir: PathBuf) -> Boot {
@@ -260,7 +277,7 @@ fn start(cache_dir: PathBuf) -> Boot {
     }
 }
 
-xpute_native_runtime::native_abi!(start, MEM_SZ, SHARE_SZ);
+xpute_native_runtime::native_abi!(start);
 xpute_gpu_native_host::native_abi!();
 ```
 
@@ -290,8 +307,8 @@ guest reaches a device by the same rule. The crate's build script compiles the
 guest's sources and the amalgamation's `xpute.cpp` for the device, with the
 flags a module is compiled with, into a static library the crate links, as
 the `cc` crate does. In a library, `XPUTE_LINK` defines the three exports as
-the C symbols the runtime calls, and the runtime defines `link_out` and
-`xpute_mem`, which the guest calls:
+the C symbols the runtime calls, and the runtime defines `link_out`, which
+the guest calls:
 
 ```rust
 // build.rs of the crate `xpute.guest.runtime` names.
@@ -325,8 +342,8 @@ In TypeScript the parts are `@xpute/kit`, `@xpute/link`, `@xpute/web-runtime`,
 `@xpute/web-host`, `@xpute/native-runtime`, `@xpute/gpu-link`,
 `@xpute/gpu-web-host` and `@xpute/gpu-native-runtime`, and in Rust they are the
 crates `xpute-kit`, `xpute-link`, `xpute-guest`, `xpute-native-runtime`,
-`xpute-native-host`, `xpute-gpu-link`, `xpute-gpu-guest`,
-`xpute-gpu-native-runtime` and `xpute-gpu-native-host`, with the generators
+`xpute-native-host`, `xpute-gpu-link`, `xpute-gpu-guest` and
+`xpute-gpu-native-host`, with the generators
 `xpute-gen` and `xpute-link-gen`.
 Each carries what a registry asks. A program beside this tree lists the
 packages in its pnpm workspace and depends on them as `workspace:*`, and it

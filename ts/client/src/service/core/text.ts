@@ -17,13 +17,13 @@ import type { Lent } from "@xpute/link/abi/types.ts";
 import * as text from "@/abi/text.ts";
 import * as platform from "@/service/platform/text.ts";
 
-export function serve_text(link: Side): void {
+export function serve_text(side: Side): void {
   /** The text a call lends, which the core holds only until the call
    * returns. */
   const text_of = (span: Lent): string =>
-    td.decode(link.bytes(span.at, span.len));
+    td.decode(side.bytes(span.at, span.len));
 
-  text.mount(link, {
+  text.mount(side, {
     width(weight, px, text) {
       return platform.width(weight, px, text_of(text));
     },
@@ -38,7 +38,7 @@ export function serve_text(link: Side): void {
         x,
         width,
         height,
-        link.bytes(image.at, len),
+        side.bytes(image.at, len),
       );
     },
   });

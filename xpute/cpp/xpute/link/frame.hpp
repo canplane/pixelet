@@ -35,8 +35,8 @@ struct Frame {
     std::uint32_t pkt_len;
 
     // The frame laid at `at`.
-    static Frame at(std::uint32_t at) noexcept {
-        auto w = [at](std::uint32_t k) { return mem::word(at + 4 * k); };
+    static Frame at(std::uint64_t at) noexcept {
+        auto w = [at](std::uint32_t k) { return mem::word(at + 4 * std::uint64_t{k}); };
         std::uint32_t cmd = w(frame::CMD);
         return Frame{
             .tag = w(frame::TAG),
@@ -49,8 +49,8 @@ struct Frame {
     }
 
     // Lays the frame's words at `at`.
-    void lay(std::uint32_t at) const noexcept {
-        auto set = [at](std::uint32_t k, std::uint32_t v) { mem::set_word(at + 4 * k, v); };
+    void lay(std::uint64_t at) const noexcept {
+        auto set = [at](std::uint32_t k, std::uint32_t v) { mem::set_word(at + 4 * std::uint64_t{k}, v); };
         set(frame::TAG, tag);
         set(frame::CMD, (res ? frame::RES : 0) | handle << frame::METHOD_BITS | method);
         set(frame::RESULT, static_cast<std::uint32_t>(result));
@@ -59,7 +59,7 @@ struct Frame {
 
     // The packet of the frame of `cap` bytes laid at `at`, none where it has
     // none; a packet past the cap is EBADMSG.
-    Result<std::optional<std::span<const std::uint8_t>>> pkt(std::uint32_t at, std::uint32_t cap) const noexcept {
+    Result<std::optional<std::span<const std::uint8_t>>> pkt(std::uint64_t at, std::uint32_t cap) const noexcept {
         if (pkt_len == 0) return std::optional<std::span<const std::uint8_t>>();
         if (std::uint64_t{HDR_SZ} + pkt_len > cap) return make_error(Errno::ebadmsg);
         return std::optional<std::span<const std::uint8_t>>(mem::bytes(at + HDR_SZ, pkt_len));

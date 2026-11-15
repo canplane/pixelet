@@ -27,9 +27,9 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   `conds`, `resrcs`, `arrs` or `ctors`, and whole otherwise. `pkt` is only a wire
   packet; `rec` only the noun, and to record stays whole. A condition variable
   is `cv`.
-- Whole, though they look short: `zoom`; `size` in pixelet, GPU texture sizes
-  included, and `sz` in xpute (`HDR_SZ`, `WORD_SZ`); `environment`; `source` as
-  a source of data; `encode`, `decode`.
+- Whole, though they look short: `zoom`; `size` for a size that is not in
+  bytes (a GPU texture's, in texels); `environment`; `source` as a source of
+  data; `encode`, `decode`.
 - Name what the thing is now: what it holds, does and which boundary it crosses.
   A placeholder says nothing (`kept`, `held`, `goes`, `done`; `Stop`, not
   `Held`); a plain word that reads at once (`reach`) is fine. A word in a comment
@@ -104,20 +104,28 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   guest, the host that serves it, the UI, a device and a frame. Two are
   outside the standard: the `link`, xpute's own word, the protocol both sides
   run, and its code; and the runtime, the platform's execution environment the
-  host runs in, as the JS field has it (a browser, Node). xpute's tree is laid
-  out by platform: `link/`, `guest/`, `web/host`, `web/runtime`, `native/host`
-  and `native/runtime`, and the GPU's `gpu/link`, `gpu/guest`, `gpu/web/host`,
-  `gpu/native/host` and `gpu/native/runtime`. pixelet's core is its guest.
-  pixelet names its parts by the side of xpute they sit on, the owner in the
-  prefix (`pxl_core`, `xpute_guest`, `@xpute/web-host`).
+  host runs in, as the JS field has it (a browser, Node). xpute's words for
+  its parts are `kit`, `link`, `guest`, `host`, `runtime`, `expo` (React
+  Native's UI end), `gen`, `tool` and `golden`. A plugin repeats the link, the
+  guest, the host and the UI end under its own name (`gpu/link`, `gpu/guest`,
+  `gpu/host`, `gpu/expo`). pixelet's core is its guest, and pixelet names its
+  parts by the side of xpute they sit on (`pxl-core`, `pxl-host`).
+- An xpute crate's or package's name is its folder: `xpute-` or `@xpute/`,
+  then the path under `xpute/` with `/` as `-` and its language's leaf left
+  out, one name in every language. A plugin's name stands first, as an owner's;
+  then the base word, and its qualifier after (`runtime/web` is
+  `@xpute/runtime-web`, `gpu/host/rust` is `xpute-gpu-host`). No folder only
+  groups. A name says what a part depends on that its siblings do not: a
+  shell's (`expo`), a platform's (`web`, `native`).
 - A name is singular: a file, a folder, a type, an enum and its members, a
   function, a variable and a constant (`service/`, `remote.ts`, `component/`).
   It is plural only when the thing holds many of what it names, read by
   meaning, not by type: a column is plural, the row read from it singular, and
   one range's first and last is a `range` or singular (`GROUND`).
 - A quantity is named by its form: a count ends in `_cnt` (`LAYER_CNT`), a cap
-  in `_cap` (`CREDIT_CAP`), a size in bytes in `_sz` in xpute (`HDR_SZ`), and
-  any other size or length in its unit (`HDR_WORDS`, `PAGE_BYTES`, `_ms`, `_px`; `_u` the world's units, `_merc` a meter on the
+  in `_cap` (`CREDIT_CAP`), a size in bytes in `_sz` in both trees (`HDR_SZ`,
+  `PAGE_SZ`), and any other size or length in its unit (`HDR_WORDS`, `_ms`,
+  `_px`; `_u` the world's units, `_merc` a meter on the
   EPSG:3857 plane, `_m` a meter on the ground), the unit shown where a person
   reads the value (`29.0 m`). A length takes its unit where it crosses into
   what does not say it (a prop `spanPx`, a dp value `layoutLiftDp` before it

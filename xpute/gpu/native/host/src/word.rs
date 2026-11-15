@@ -1,6 +1,7 @@
 // xpute-gpu-native-host/word.rs
 
 use xpute_gpu_link::spec::NONE;
+use xpute_kit::abi::word::join64;
 
 /// These are a record's words, read in order.
 pub(super) struct WordCursor<'w> {
@@ -22,6 +23,11 @@ impl<'w> WordCursor<'w> {
     }
     pub(super) fn f32(&mut self) -> f32 {
         f32::from_bits(self.u())
+    }
+    /// This reads an address in the guest's memory, two words (spec).
+    pub(super) fn addr(&mut self) -> u64 {
+        let lo = self.u();
+        join64(lo, self.u())
     }
     pub(super) fn flag(&mut self) -> bool {
         self.u() != 0

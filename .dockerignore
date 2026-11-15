@@ -15,7 +15,6 @@
 !xpute/native/host
 !xpute/gpu/link/rust
 !xpute/gpu/guest/rust
-!xpute/gpu/native/runtime/rust
 !xpute/gpu/native/host
 !xpute/gpu/gen-targets
 !xpute/gen

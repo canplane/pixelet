@@ -5,10 +5,10 @@
 // `link_out`, its three exports (`XPUTE_LINK`), and the entry they run each
 // call in. The machine's names are read here as the guest's callers read them.
 //
-// A program says nothing of its memory here: the heap is the guest's own
-// (`heap.hpp`), the global `operator new` and `operator delete` of a module,
-// and on a native device a memory resource for what crosses the link, the
-// global `new` left to the system's. The link's layout lies in it.
+// A program says nothing of its memory here: what the link lays and lends,
+// its layout and a GPU stream's records, it takes from the memory resource
+// the program set as its default (`std::pmr::get_default_resource`), and the
+// program picks it and its global `operator new`.
 
 #pragma once
 
@@ -30,9 +30,10 @@ namespace xpute::guest {
 // Lays the link over frames of `cap` bytes, a multiple of 8 that holds a
 // frame's words, and runs nothing of the program; `enter` and `end` are the
 // program's start and end of every entry (`boot`, `recv`), `end` answering
-// whether it left work. It answers where the link's layout lies: two words,
-// the inbox and a frame's cap, then the inbox and the outbox.
-std::uint32_t init(std::uint32_t cap, void (*enter)(), bool (*end)()) noexcept;
+// whether it left work. It answers where the link's layout lies: the inbox's
+// address and a frame's cap (frame.json5 `LAYOUT`), then the inbox and the
+// outbox.
+std::uint64_t init(std::uint32_t cap, void (*enter)(), bool (*end)()) noexcept;
 
 // The guest's first entry, once the host has read the layout. Unlike every
 // later entry, it starts by `boot`, which opens what the program's `enter`
@@ -101,7 +102,7 @@ bool in_guest() noexcept;
 // wasm-ld, whose exports it leaves as they are.
 extern "C" void __wasm_call_ctors();
 #define XPUTE_LINK(cap_, boot_, enter_, end_)                                                                                                      \
-    extern "C" __attribute__((export_name("link_init"))) std::uint32_t link_init() {                                                              \
+    extern "C" __attribute__((export_name("link_init"))) std::uint64_t link_init() {                                                              \
         __wasm_call_ctors();                                                                                                                        \
         ::xpute::guest::stop::hook();                                                                                                               \
         return ::xpute::guest::init((cap_), (enter_), (end_));                                                                                     \
@@ -110,8 +111,8 @@ extern "C" void __wasm_call_ctors();
     extern "C" __attribute__((export_name("link_in"))) std::int32_t link_in() { return ::xpute::guest::recv(); }
 #else
 #define XPUTE_LINK(cap_, boot_, enter_, end_)                                                                                                      \
-    extern "C" __attribute__((visibility("default"))) std::uint32_t link_init() {                                                                 \
-        return ::xpute::caught(::xpute::link::TRAP_AT, [] {                                                                                         \
+    extern "C" __attribute__((visibility("default"))) std::uint64_t link_init() {                                                                 \
+        return ::xpute::caught(::xpute::link::TRAP_AT, [] {                                                                                       \
             ::xpute::guest::stop::hook();                                                                                                           \
             return ::xpute::guest::init((cap_), (enter_), (end_));                                                                                 \
         });                                                                                                                                         \

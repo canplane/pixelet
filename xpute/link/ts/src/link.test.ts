@@ -8,9 +8,10 @@ import {
   ERRNO_EMSGSIZE,
 } from "@xpute/kit/status/errno.spec.ts";
 import { type Frame, HDR_SZ, lay, read } from "./frame.ts";
+import { LAYOUT } from "./frame.spec.ts";
 import { CANCEL, NAMED, ROOT, Side, type Tag } from "./link.ts";
 
-const INBOX = 8;
+const INBOX = 4 * LAYOUT.WORDS;
 const CAP = 64;
 const OUTBOX = INBOX + CAP;
 
@@ -28,13 +29,13 @@ function link(): {
 } {
   const mem = new ArrayBuffer(INBOX + 2 * CAP);
   const view = new DataView(mem);
-  view.setUint32(0, INBOX, true);
-  view.setUint32(4, CAP, true);
+  view.setUint32(4 * LAYOUT.INBOX_AT, INBOX, true);
+  view.setUint32(4 * LAYOUT.CAP_AT, CAP, true);
   const frames: Frame[] = [];
   let later: Tag | null = null;
   const side = new Side({
     mem,
-    init: () => 0,
+    init: () => 0n,
     boot: () => {},
     in: () => {
       frames.push(read(view, INBOX));
@@ -72,7 +73,7 @@ test("the answer a side lays in the frame its request came in is marked RES and 
       result: 0,
       pkt_len: 0,
     });
-    assert.equal(out(OUTBOX), result);
+    assert.equal(out(BigInt(OUTBOX)), result);
     const f = read(view, OUTBOX);
     assert.deepEqual(
       [f.res, f.tag, f.handle, f.method, f.result],
@@ -96,7 +97,7 @@ test("a later answer is marked RES and carries the request's tag", () => {
       result: 0,
       pkt_len: 0,
     });
-    assert.equal(out(OUTBOX), ERRNO_EINPROGRESS);
+    assert.equal(out(BigInt(OUTBOX)), ERRNO_EINPROGRESS);
     side.task_return(later(), 0, [sz, (w) => w.u32(0, 9)]);
     const f = frames.pop()!;
     assert.deepEqual([f.res, f.tag, f.result], [true, tag, result]);
@@ -110,7 +111,7 @@ test("a world importing what no server mounts refuses to start, naming each, and
     mem: new ArrayBuffer(8),
     init: () => {
       entered = true;
-      return 0;
+      return 0n;
     },
     boot: () => {},
     in: () => 0,
@@ -148,7 +149,7 @@ test("a cancel runs the stop its request put once, and none once the request has
       result: 0,
       pkt_len: arg === null ? 0 : 4,
     });
-    return out(OUTBOX);
+    return out(BigInt(OUTBOX));
   };
   let stops = 0;
   assert.equal(send(5, SERVED, 1, null), ERRNO_EINPROGRESS);

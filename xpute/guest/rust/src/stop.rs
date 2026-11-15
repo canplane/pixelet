@@ -1,7 +1,8 @@
 // xpute-guest/stop.rs
 
 //! The guest's report of its own failures to the host, by the stop the host
-//! serves (wit/stop/stop.wit), as cpp/xpute/guest/stop.hpp is a C++ guest's.
+//! serves (wit/stop/stop.wit), as cpp/xpute/guest/stop.hpp is a C++ guest's:
+//! a bug's errno, place and numbers, or a panic's place and its own message.
 
 use xpute_kit::status::bug;
 use xpute_kit::status::errno::Errno;
@@ -16,11 +17,12 @@ use crate::link::{in_guest, in_init};
 /// process's on a device, so what is not the guest's own (another thread's,
 /// or the host's while the guest is out on `link_out`) goes on to the hook
 /// before, its runtime's (xpute-native-runtime native.rs `hook`), as it
-/// would have.
+/// would have. A bug has no message; a panic `bug` did not raise, the
+/// standard library's or a dependency's, is told with its own.
 pub fn hook() {
     bug::set_report(|errnum, at, n1, n2| {
         if in_guest() {
-            let _ = stop::stopped(errnum as i32, at.file(), at.line(), n1, n2);
+            let _ = stop::stopped(errnum as i32, at.file(), at.line(), n1, n2, None);
         }
     });
     let prev = std::panic::take_hook();
@@ -36,6 +38,11 @@ pub fn hook() {
             return;
         }
         let (file, line) = info.location().map_or(("", 0), |at| (at.file(), at.line()));
-        let _ = stop::stopped(Errno::ENOTRECOVERABLE as i32, file, line, 0, 0);
+        let payload = info.payload();
+        let message = payload
+            .downcast_ref::<&str>()
+            .copied()
+            .or_else(|| payload.downcast_ref::<String>().map(String::as_str));
+        let _ = stop::stopped(Errno::ENOTRECOVERABLE as i32, file, line, 0, 0, message);
     }));
 }
