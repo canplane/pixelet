@@ -25,10 +25,14 @@ document points there.
 A frame is four words and a packet (`link/spec/frame.json5`): TAG, the
 request; CMD, the handle of the object called and the method's place in its
 interface, with a RES bit that marks an answer; RESULT, the answer's status
-alone, 0 or a negative errno; and PKT, the packet's length. The guest lays a
-frame in its outbox and crosses by `link_out`; the host lays one in the
-guest's inbox and enters it by `link_in`. Each crossing returns at once what
-the method came to.
+alone, 0 or a negative errno; and PKT, the packet's length. The guest has
+three exports: `link_init`, which lays its link and answers where the link
+lies; `link_boot`, its first entry, which mounts what it serves; and
+`link_in`, which enters it with a frame the host laid in its inbox, a request
+or an answer. Out of the guest goes one
+function, `link_out`, the same on every platform, which takes a frame the
+guest laid in its outbox. Each crossing returns at once what the method came
+to.
 
 Whatever is called is an object under a handle. A singleton interface is a
 **named handle**, the hash of its package and name, called with no open. An
@@ -64,23 +68,23 @@ pending by tag, the dispatch to an object by its handle, the later answers,
 the cancels and the drops; a `Side` is an `End` over the guest's boxes.
 
 What runs beside the guest is split the same way everywhere, and every
-dependency points down: a part declares the interface it needs, and a part
-above implements it and injects it. The **host** is the guest's counterpart: the
+dependency points down: a part declares the interface it needs, and a part above
+implements it and injects it. The **host** is the guest's counterpart: the
 host's end of the link, the bindings of what is served there, and xpute's own
-servers, the clocks and the stop. It varies by language, as the guest does,
-and names no runtime. The **runtime** is the platform's environment, a page's
-worker or a device's guest thread. It instantiates or links the guest, makes
-the host's `Side`, injects into the host what the host needs of it (the way
-back to the guest's thread, where a report goes, the log) and runs the loop
+servers, the clocks, the stop and the log. It varies by language, as the guest
+does, and names no runtime. The **runtime** is the platform's environment, a
+page's worker or a device's guest thread. It instantiates or links the guest,
+makes the host's `Side`, injects into the host what the host needs of it (the
+way back to the guest's thread, where a report goes, the log) and runs the loop
 that enters the guest. Nothing names a runtime but its own UI end and the
-program's assembly. A program may bring plugins of its own, a GPU for one,
-each beside the runtime as its own guest's end and host, and neither names the
-other. The program starts its guest with a `Boot`, which lists
-its servers, the host's among them, each a `Server` that mounts some of the
-guest's imports, and its runtime runs the steps in their order, on both
-platforms alike: it mounts each server, stands in for the UI, enters the guest
-only once every interface the guest's world imports is mounted, and on a
-device runs the loop.
+program's assembly. A program may bring plugins of its own, a GPU for one, each
+beside the runtime as its own guest's end and host, and neither names the other.
+The program starts its guest with a `Boot`, which lists its servers, the host's
+among them, each a `Server` that mounts some of the guest's imports, in no
+order, since none depends on another, and its runtime runs the steps in their
+order, on both platforms alike: it mounts each server, stands in for the UI,
+enters the guest only once every interface the guest's world imports is mounted,
+and on a device runs the loop.
 
 An end of the link is one machine whatever carries its frames, as a link
 layer knows its two ends and not the wire. What carries them is the
@@ -153,12 +157,16 @@ the guest.
 
 ## The languages, held to each other
 
-xpute is written in TypeScript, Rust and C++. The kit is symmetric: each
-language implements the same collections, codecs, wire formats, errno table
-and scalar math. So is the link: the same frame, codec and `Side`. The guest
-exists in Rust and in C++ from the same WIT; the hosts are TypeScript's on a
-page and Rust's on a device. Where the C++ differs, the language is the
-reason: RAII, templates and results, with no exceptions and no RTTI.
+xpute is written in TypeScript, Rust and C++. What the golden records hold is
+the same in each: the wire formats (TLV and XTP), the errno table, scalar math
+and the seeded streams, the deque and the heap, the JSON texts a reader accepts
+(TypeScript's being its runtime's `JSON.parse`), and the link's frame and packet
+layout; the link's `Side` is one machine in all three. The rest of the kit is
+each language's own: TypeScript has no allocator, and Rust no text encoding or
+hash codec. The guest exists in Rust and in C++ from the same WIT; the hosts are
+TypeScript's on a page and Rust's on a device. Where the C++ differs, the
+language is the reason: RAII, templates and results, with no exceptions and no
+RTTI.
 
 A fact that crosses languages has one owner, a spec or WIT, and a generator
 writes it into every language that holds it: `xpute-gen` the data specs, and
@@ -192,11 +200,10 @@ word; and a rule the GPU alone decides is one function every pass calls.
   frame by its handle and reads nothing of what it says.
 - **The guest's memory is the guest's.** xpute lays nothing in it and sizes
   nothing: a module's memory is its own, which it grows as its allocator asks,
-  and a native guest's is its process's. A span the guest lends is named by
-  its address (`lent`), a u64 on every platform: an offset into the module's
-  memory in a module, a pointer natively, which a host in the same process
-  reads in place and a device's UI through a buffer over that span alone.
-  Whether the memory is fixed, what lies where in it and which allocator each
+  and a native guest's is its process's. A span the guest
+  lends is read where it lies (`lent`, above), in place by a host in the same
+  process and by a device's UI through a buffer over that span alone. Whether
+  the memory is fixed, what lies where in it and which allocator each
   allocation takes are the program's, in either language.
 - **The policy is the program's.** When the guest runs and how much I/O is out
   are decided outside xpute; it has no turn, no budget and no backpressure.
@@ -235,10 +242,13 @@ word; and a rule the GPU alone decides is one function every pass calls.
   guest's end.
 - `host/rust` (`xpute-host`) and `host/ts` (`@xpute/host`) are the host,
   one in each language; `runtime/web` (`@xpute/runtime-web`) is a page's
-  runtime and `runtime/native` (`xpute-runtime-native`) a device's; and
-  `expo` (`@xpute/expo`) is the Expo module the UI reaches them by, with the
-  runtime's C header (`ios/CXpute/xpute.h`) and its JNI class
-  (`android/.../xpute/Runtime.kt`).
+  runtime, its page half (`page.ts`) a page's UI end, and `runtime/native`
+  (`xpute-runtime-native`) a device's runtime; and `expo` (`@xpute/expo`) is
+  the device's UI end, the Expo module that reaches the native runtime, with
+  the runtime's C header (`ios/CXpute/xpute.h`) and its JNI class
+  (`android/.../xpute/Runtime.kt`). The guest in Rust and C++, both runtimes
+  and `expo` each have a README beside them that says how a program takes
+  them.
 - `golden/rust` (`xpute-golden`), `golden/ts` (`@xpute/golden`) and
   `cpp/dev/test/` are what the tests take,
   `cpp/amalgamation.awk` makes the C++ library's two files, and

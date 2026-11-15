@@ -1,18 +1,19 @@
 # @pxl/client
 
 The client is everything around the core: the UI people touch, the services that
-answer the core's needs on each platform, and the runtime the core runs in. It
-is one Expo app for iOS, Android and the page. The world is not here: the client
-never computes a coordinate or a tile, it only calls the core and shows what the
-core tells it.
+answer the core's needs on each platform, and pixelet's assembly of xpute's
+runtime, which starts the core. It is one Expo app for iOS, Android and the
+page. The world is not here: the client never computes a coordinate or a tile,
+it only calls the core and shows what the core tells it.
 
 ## Three layers
 
 ```text
   ui/         the UI: React Native, the same on every platform
-  runtime/    the core's runtime on a page, and each platform's boot
-     │  each reaches below only through service/
-     ▼
+  runtime/    pixelet's assembly of xpute's runtime: a page's worker, and
+              each platform's boot
+     │  ui/ reaches below only through service/; runtime/ takes xpute's
+     ▼  packages and the GPU's directly as well
   service/    what answers the core and the UI on this platform
     core/       the core's interfaces: calls, what the core tells the UI,
                 surfaces, sensors, text
@@ -21,12 +22,16 @@ core tells it.
     platform/   what differs by platform, as file pairs
 ```
 
-The UI reaches the core only through `service/core/`, and `service/core/`
-reaches it only through the remote, by the bindings generated from the core's
-WIT, so a field cannot mean one thing on one side and another on the other.
-The bindings and the numbers both sides read, generated from `spec/`, are in
-`abi/`. A release build writes each exported literal where it is read
-(`babel.config.ts`), so the bundle holds a method's number and not its name.
+The UI reaches the core only through `service/core/`, and beside it reads
+directly only the types and constants generated into `abi/` and xpute's kit.
+`service/core/` calls the core over the UI's own end of the runtime, which the
+boot opens (`open_ui`, from `@xpute/runtime-web` on a page and `@xpute/expo` on
+a device) and `runtime/ui.ts` installs as a `Sender` in `service/core/core.ts`.
+The calls go by the bindings generated from the core's WIT, so a field cannot
+mean one thing on one side and another on the other. The bindings and the
+numbers both sides read, generated from `spec/`, are in `abi/`. A release build
+writes each exported literal where it is read (`babel.config.ts`), so the bundle
+holds a method's number and not its name.
 
 ## One app, two kinds of platform
 
@@ -34,13 +39,16 @@ What differs between the page and a device is a pair of files in
 `service/platform/`: `<x>.web.ts` is the page's and `<x>.native.ts` the
 device's, and the shapes both share are in `platform/types.ts`. An import names
 `<x>.ts`, and Metro and the type-checks pick the right one for each build. The
-pair that boots the core is in `runtime/` (`boot.web.ts`, `boot.native.ts`), and it opens and starts the runtime the core runs in: on a
-page the worker (`worker.ts`), and on a device `pxl-runtime`, linked into the
-app, which runs the core on a thread of its own. The UI reaches either through
-a `Remote`. A device's runtime outlives a reload of the UI, which meets the
-same core as a new UI. A piece of the UI that the platforms draw differently is
-a file with its override beside it (`src/ui/shared/component/README.md`).
-`src/conform.ts` holds every platform file to its default's exports.
+pair that boots the core is in `runtime/` (`boot.web.ts`, `boot.native.ts`).
+On a page it opens the worker (`worker.ts`), which instantiates the core's
+module and lists what xpute's runtime starts it with. On a device the core is
+linked into the app with `pxl-runtime`, the device's counterpart of
+`worker.ts`, which lists the same for `xpute-runtime-native`, and that runtime
+runs the core on a thread of its own. A device's runtime outlives a reload of
+the UI, which meets the same core as a new UI. A piece of the UI that the
+platforms draw differently is a file with its override beside it
+(`src/ui/shared/component/README.md`). `src/conform.ts` holds every platform
+file to its default's exports.
 
 ## The boot
 

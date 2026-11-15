@@ -41,9 +41,9 @@ It takes the client's code whole and differs only where a headset does:
 - `plugin/quest-build.ts` tells React Native that the flavors' debug builds
   are debug builds.
 
-To build it, add this folder to `ts/pnpm-workspace.yaml`, give it a Metro and
-a Babel config that extend the client's with the variants above, and run
-`expo prebuild` here.
+It is already a package of `ts/pnpm-workspace.yaml`. To build it, give it a
+Metro and a Babel config that extend the client's with the variants above, and
+run `expo prebuild` here.
 
 ## On a headset
 

@@ -2,7 +2,9 @@
 
 //! The pointer's pick (`Pick`), and what it struck means for a placement or
 //! an erase. The pick asks the world at terrain's finest zoom, the leaves',
-//! because the leaves are what the screen shows around the eye.
+//! because the leaves are what the screen shows around the eye. It then
+//! judges what it struck by the zoom the eye's rays draw there, since an edit
+//! takes only whole cells and a folded cell is a summary.
 
 use crate::domain::layer::instance::{Instance, Source};
 use pxl_spec::bake::constant::OBJECT_FINEST;

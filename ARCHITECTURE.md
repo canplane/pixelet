@@ -165,8 +165,8 @@ how far the view reaches, and what a frame draws is bound to the screen's cells.
 
 The world itself stays in its own axes; what turns is the observer. A draw holds
 its position as a `Q3` and a small remainder in floating point, and the shader
-takes the wrapping integer difference from the eye (`frame.wgsl` `from_eye`), so
-precision is always spent where the eye is.
+takes the wrapping integer difference from the eye, so precision is always
+spent where the eye is.
 
 ### The query, the only seam
 
@@ -177,7 +177,7 @@ answers from, store their answers. Its files stand beside the layers'
 (`domain/layer.rs`): what those two store their answers in is visible within
 the layers alone, the query among them, and the compiler refuses any other
 reader. The **world** composes the layers into one answer for drawing and for
-control alike (`pxl-engine world.rs` `node`), each written over the one below:
+control alike (`pxl-engine world.rs`), each written over the one below:
 
 ```text
   what is placed, air included            ┐ each is written
@@ -187,7 +187,7 @@ control alike (`pxl-engine world.rs` `node`), each written over the one below:
 ```
 
 A ray descends the octree by the same rule on the CPU and the GPU
-(`pxl-engine cast.rs` `first`). A node coarser than the zoom its distance asks
+(`pxl-engine cast.rs`). A node coarser than the zoom its distance asks
 for is not what is drawn there, so it is asked only whether anything under it
 might fill. If nothing can, the ray passes it whole; what a zoom folds away is
 not there to miss.
@@ -202,15 +202,14 @@ a cell at the zoom its distance asks for
    └── it is not known ────────────────▶ the ray stops there
 ```
 
-Control asks the same world, one ray at a time (`pxl-core domain/query/ray.rs`
-`first_hit`). So there is no collision mesh beside a drawing mesh to drift
-apart: what you see is what you stand on and what you click. What a body stands
+Control asks the same world, one ray at a time (`pxl-core domain/query/ray.rs`).
+So there is no collision mesh beside a drawing mesh to drift apart: what you
+see is what you stand on and what you click. What a body stands
 on and what an edit takes are the world's at its finest held zoom, not the
 eye's: the walker stands on the first cell that fills under it, the orbit camera
-keeps clear of what is there, and the pointer asks at the finest zoom and then
+keeps clear of what is there, and the pointer asks at the finest zoom and
 judges what it struck by the zoom the eye's rays draw there
-(`domain/control/edit/pick.rs` `Pick`, `by_dist`), since an edit takes only
-whole cells and a folded cell is a summary.
+(`domain/control/edit/pick.rs`).
 
 Decor is part of that answer on the CPU alone, since the GPU draws it as models
 and its rays never ask for it: a leaf cell the layers leave void is the decor
@@ -220,19 +219,18 @@ an eye sees and the pointer strikes include it; a body reads the layers alone.
 ### Honest answers, bounded holding
 
 An answer always says what it lacked: it is exact, or coarser along with the
-tile it needed, or a lack, which gives no value, along with that tile
-(`domain/layer/answer.rs` `Answer`). Where the tile is missing, a coarser one answers in its place; where
-none is held, the ray stops and says nothing past it. Nothing is invented.
+tile it needed, or a lack, which gives no value, along with that tile. Where the
+tile is missing, a coarser one answers in its place; where none is held, the ray
+stops and says nothing past it. Nothing is invented.
 
 What the view fetches is **demand**: for each zoom, every tile within that
 zoom's band about the eye, and the ground under the pivot and under a place the
 camera is sent to. It follows where those stand, never what the rays met, and
-each layer holds what is demanded in its own **tile cache**
-(`domain/layer/tile_cache.rs`), which keeps four promises. Every observation has
-an answer, because the coarsest zoom is always held all round the eye, as the
-**floor**. The tiles held for the floor and for demand are counted at compile
-time and fit the cache's slots (`TileCache::SLOT_CNT`), so no view can ask for
-more tiles than the cache holds. A region only ever goes from unresolved to
+each layer holds what is demanded in its own **tile cache**, which keeps four
+promises. Every observation has an answer, because the coarsest zoom is always
+held all round the eye, as the **floor**. No view asks for more tiles than the
+cache holds, because what the floor and demand can hold at once is counted at
+compile time against its slots. A region only ever goes from unresolved to
 coarse to as fine as it is observed, never back. And nothing is fetched on a
 guess: a view converges on its misses alone, and a camera sent somewhere waits
 for the ground there.
@@ -254,12 +252,11 @@ cell moves:
   brick 12 leaves, and 13 to 19 stay where they are
 ```
 
-A tile is cut into its bricks as it lands, and the bricks are filled on the CPU
-over the entries that follow, a part at a time within each entry's budget, with
-a min-max pyramid over their elevations and their bridges and tunnels as spans.
-All of it is uploaded, so the CPU's question and the GPU's ray meet the same
-bridge. Where a level holds no brick, the coarser level's ground is read, and
-drawn, in its place. The layers' README tells how each layer holds its tiles.
+The bricks are filled on the CPU as their tiles land, within each entry's
+budget, and uploaded whole, so the CPU's question and the GPU's ray meet the
+same ground, bridges included. Where a level holds no brick yet, the coarser
+level answers, and is drawn, in its place. The layers' README tells how each
+layer holds its tiles and how the clipmap is filled.
 
 Every bound in the view has an owner: the camera grid bounds what is drawn,
 demand bounds what is fetched, the slots bound what is held, and an entry's
@@ -303,16 +300,15 @@ solid below its surface.
 
 ### What was found is remembered
 
-What the rays asked of each node is kept between frames in the **node cache**
-(`pxl-engine node_cache.rs`), and forgotten where the data a node read changed,
-or given up for room once it has not been drawn for two frames. The voxels in it
-are the **record**, and each frame the raster draws every one in view that is
-**fresh**, still the node the eye's ray stops on, whatever that frame's rays
-reached (`pxl-engine record.rs`). So a voxel found once is drawn until its data
-changes or the eye's distance asks another zoom there, and rays walk only where
-something is newly seen.
-A still camera over a still world costs almost nothing, and a frame where
-nothing it reads moved submits no work at all.
+What the rays asked of each node is kept between frames in the **node cache**,
+and forgotten where the data that node read changed, or given up for room once
+it has gone undrawn. The voxels in it are the **record**, and each frame
+the raster draws every one in view that is still **fresh**, still the node the
+eye's ray stops on, whatever that frame's rays reached. So a voxel found once is
+drawn until its data changes or the eye's distance asks another zoom there, and
+rays walk only where something is newly seen. A still camera over a still world
+costs almost nothing, and a frame where nothing it reads moved submits no work
+at all. The renderer's README tells how the cache forgets and gives up room.
 
 When the GPU runs out of time anyway, two knobs give it room: the **scale**
 draws fewer pixels, and the **rate** spaces the frames further apart. The `auto`
@@ -322,27 +318,14 @@ connection.
 ### The sun is a second eye
 
 Shadows come from a **shadow map**, the depth of the world as the sun sees it in
-a square box about the eye (`pass/shadow.rs`). The sun is an observer like the
-eye, by the same rule and the same passes. Each tile of the box asks the world
-at one zoom, its **band**: the zoom the eye's rays would ask at the point of the
-tile's column nearest the eye, measured from the box's middle
-(`pxl-engine light.rs` `Light::band`). A band depends only on where the tile
-lies in the box, so when the eye moves, the box slides a tile at a time and
-every tile keeps what it cast; only a tile that slid on, or into another band,
-is cast again. And the sun casts only what something seen will read:
-
-```text
-  each voxel the eye sees, and each pixel it walked  ┐
-  decor, where it is placed                          ├─▶ the tiles it stands
-  a character, where it is drawn                     ┘   on, within the reach
-                                                         of the effects
-                                                                 │
-            a tile is read if it lies sunward of one stood on,   │
-            within the height of the tallest decor  ◀────────────┘
-                                 │
-                                 ▼
-            the tiles read anew are cast; the others stand
-```
+a square box about the eye. The sun is an observer like the eye, by the same
+rule and the same passes. Each tile of the box asks the world at one zoom, its
+**band**, and a band depends only on where the tile lies in the box, so when the
+eye moves, the box slides a tile at a time and every tile keeps what it cast;
+only a tile that slid on, or into another band, is cast again. And the sun casts
+only what something seen will read: a tile is cast only where it lies sunward of
+one that something seen stands on, within the reach of the effects. The
+renderer's README tells how the bands and the marks are worked out.
 
 The sun keeps its rays for the same reason the eye's holes do. A raster would
 need every cell under a tile listed, and the ground is solid as deep as the box
@@ -377,32 +360,34 @@ image, it owns no device and names no host, and what the app composes around it
 gives it a GPU, its files and its time, and nothing else reaches in. On a page
 the image is a WebAssembly module and its runtime the page's worker; on a device
 it is linked into the app with `pxl-runtime`, the device's counterpart of that
-worker, which runs it on a thread of its own. The world cannot tell which, and
-does not need to, so the same world runs everywhere. Every interface between the
-core and what serves it is declared in WIT, pixelet's own under
-`spec/client/core/wit/`; xpute's own documents describe the link it crosses, and
-this one is about what pixelet does over it.
+worker, and xpute's native runtime runs it on a thread of its own. The world
+cannot tell which, and does not need to, so the same world runs everywhere.
+Every interface between the core and what serves it is declared in WIT,
+pixelet's own under `spec/client/core/wit/`; xpute's own documents describe the
+link it crosses, and this one is about what pixelet does over it. The GPU is
+pixelet's plugin of xpute, its own guest's end, hosts and UI ends beside xpute's
+(`rust/gpu/README.md`).
 
-The core runs only when the link enters it. A frame is asked for when something
-changed (`sys/sched.rs` `invalidate`) and drawn at the display's next vsync, as
-one task in one order: the effects of what the UI sent, the tick's phases, then
-the draw, and none of it while the GPU cannot take a frame yet (`frame.rs`).
-Each entry has a budget from its start. The core's memory is laid out once,
-before its first entry, and never grown; `sys/`'s README tells how.
+The core runs only when the link enters it. A frame is asked for only when
+something changed, and drawn at the display's next vsync as one task in one
+order: the effects of what the UI sent, the tick, then the draw, and none of it
+while the GPU cannot take a frame yet. Each entry spends a budget from its
+start, and what it leaves comes back in a later entry. The core's memory is
+laid out once, before its first entry, and never grown.
 
 Reads are asked for, never taken. Every frame each stream of reads declares
-everything it wants now, and one pump starts the best of them on the frame's
-credits, ranked by what the view needs first (`sys/io/request.rs` `declare`,
-`pump`; `policy.rs` `rank`). A read nobody wants any more is stopped in the same
-frame, so a zoom the camera only passed through holds no credit. When the
-network or the server fails, every start waits while one probe goes out, after
-a jittered delay (`policy.rs` `backoff`). Meanwhile the view draws what it has,
-coarser, as it always does.
+everything it wants now, and one pump starts the best of them, ranked by what
+the view needs first, so a read nobody wants any more is stopped in the same
+frame and a zoom the camera only passed through holds nothing. When the network
+or the server fails, the core holds its reads and sends one probe at a time
+rather than asking again for everything. Meanwhile the view draws what it has,
+coarser, as it always does. `sys/`'s README tells how the memory is laid out,
+how an entry is spent and how reads are scheduled.
 
 The UI sits outside the image. It never computes a coordinate or a tile: it
-calls the core's interfaces and shows what the core tells it, and it reaches
-the runtime only through a remote, by `ts/client/src/service/core/`, over
-bindings generated from the same WIT, so the two cannot disagree about a field.
+calls the core's interfaces through `ts/client/src/service/core/`, over the
+UI's end of the runtime and bindings generated from the same WIT, so the two
+cannot disagree about a field, and it shows what the core tells it.
 
 ## Making the data
 
@@ -506,7 +491,8 @@ thing runs:
   rust/client/content/  pxl-content, the content: decor, caves, clouds
   rust/client/global/   pxl-global, the global the core's state lives in
   rust/client/core/     pxl-core, the core
-  rust/client/runtime/  pxl-runtime, the core with its runtime on a device
+  rust/client/runtime/  pxl-runtime, the core as xpute's runtime starts it on
+                        a device
   rust/client/render/   pxl-render, the renderer and its WGSL
   rust/server/          the servers and the bakes, one crate a folder
   rust/tool/            pxl-tool, the generator and the checks
@@ -519,5 +505,6 @@ thing runs:
 ```
 
 How a part works in detail is written beside its code:
-`rust/spec/src/space/README.md` for sizes and positions, and a README in each of
-the renderer, the core's layers, `sys/`, the bake and the client.
+`rust/spec/src/space/README.md` for sizes and positions, `rust/gpu/README.md`
+for the GPU, and a README in each of the renderer, the core's layers, `sys/`,
+the bake and the client.
