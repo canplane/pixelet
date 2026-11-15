@@ -7,44 +7,36 @@ pub const HANDLE: _rt::Handle = 0x5534df;
 
 /// `pos`
 pub const POS: _rt::Method = 0;
-/// `orient`
-pub const ORIENT: _rt::Method = 1;
-/// `orient-unavailable`
-pub const ORIENT_UNAVAILABLE: _rt::Method = 2;
-/// `err`
-pub const ERR: _rt::Method = 3;
-/// `permission`
-pub const PERMISSION: _rt::Method = 4;
-/// `platform`
-pub const PLATFORM: _rt::Method = 5;
-/// `locate`
-pub const LOCATE: _rt::Method = 6;
+/// `heading`
+pub const HEADING: _rt::Method = 1;
+/// `location`
+pub const LOCATION: _rt::Method = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-pub enum GeolocationErrorCode {
-    Other = 0,
-    PermissionDenied = 1,
-    PositionUnavailable = 2,
-    Timeout = 3,
+pub enum LocationStatus {
+    Idle = 0,
+    Loading = 1,
+    Ready = 2,
+    Error = 3,
 }
 
-impl GeolocationErrorCode {
+impl LocationStatus {
     /// Every member, in its source's own order.
-    pub const ALL: [GeolocationErrorCode; 4] = [
-        GeolocationErrorCode::Other,
-        GeolocationErrorCode::PermissionDenied,
-        GeolocationErrorCode::PositionUnavailable,
-        GeolocationErrorCode::Timeout,
+    pub const ALL: [LocationStatus; 4] = [
+        LocationStatus::Idle,
+        LocationStatus::Loading,
+        LocationStatus::Ready,
+        LocationStatus::Error,
     ];
 
     /// The member `val` is, or none for a number no member has.
-    pub const fn of(val: u32) -> Option<GeolocationErrorCode> {
+    pub const fn of(val: u32) -> Option<LocationStatus> {
         match val {
-            0 => Some(GeolocationErrorCode::Other),
-            1 => Some(GeolocationErrorCode::PermissionDenied),
-            2 => Some(GeolocationErrorCode::PositionUnavailable),
-            3 => Some(GeolocationErrorCode::Timeout),
+            0 => Some(LocationStatus::Idle),
+            1 => Some(LocationStatus::Loading),
+            2 => Some(LocationStatus::Ready),
+            3 => Some(LocationStatus::Error),
             _ => None,
         }
     }
@@ -52,88 +44,53 @@ impl GeolocationErrorCode {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            GeolocationErrorCode::Other => "Other",
-            GeolocationErrorCode::PermissionDenied => "PermissionDenied",
-            GeolocationErrorCode::PositionUnavailable => "PositionUnavailable",
-            GeolocationErrorCode::Timeout => "Timeout",
+            LocationStatus::Idle => "Idle",
+            LocationStatus::Loading => "Loading",
+            LocationStatus::Ready => "Ready",
+            LocationStatus::Error => "Error",
         }
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u32)]
-pub enum PermissionAnswer {
-    Asking = 0,
-    Granted = 1,
-    Denied = 2,
-    Failed = 3,
+#[derive(Clone, Debug, PartialEq)]
+pub struct Position {
+    pub lon: f64,
+    pub lat: f64,
+    pub alt: Option<f64>,
 }
 
-impl PermissionAnswer {
-    /// Every member, in its source's own order.
-    pub const ALL: [PermissionAnswer; 4] = [
-        PermissionAnswer::Asking,
-        PermissionAnswer::Granted,
-        PermissionAnswer::Denied,
-        PermissionAnswer::Failed,
-    ];
+impl Position {
+    pub const SZ: usize = 32;
+    pub const ALIGN: usize = 8;
 
-    /// The member `val` is, or none for a number no member has.
-    pub const fn of(val: u32) -> Option<PermissionAnswer> {
-        match val {
-            0 => Some(PermissionAnswer::Asking),
-            1 => Some(PermissionAnswer::Granted),
-            2 => Some(PermissionAnswer::Denied),
-            3 => Some(PermissionAnswer::Failed),
-            _ => None,
+    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
+        w.f64(at, self.lon);
+        w.f64(at + 8, self.lat);
+        if let Some(v) = &self.alt {
+            w.u8(at + 16, 1);
+            w.f64(at + 16 + 8, *v);
         }
     }
 
-    /// The member's name, as its source spells it.
-    pub const fn name(self) -> &'static str {
-        match self {
-            PermissionAnswer::Asking => "Asking",
-            PermissionAnswer::Granted => "Granted",
-            PermissionAnswer::Denied => "Denied",
-            PermissionAnswer::Failed => "Failed",
-        }
+    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Position, _rt::Errno> {
+        Ok(Position {
+            lon: r.f64(at)?,
+            lat: r.f64(at + 8)?,
+            alt: r.case(at + 16, 2).and_then(|d| {
+                if d == 0 {
+                    Ok(None)
+                } else {
+                    r.f64(at + 16 + 8).map(Some)
+                }
+            })?,
+        })
     }
 }
 
 pub trait Guest {
-    fn pos(
-        &self,
-        lon: f64,
-        lat: f64,
-        alt: Option<f64>,
-        accuracy: Option<f64>,
-        course: Option<f64>,
-    ) -> Result<(), _rt::Errno>;
-    fn orient(
-        &self,
-        webkit_compass_heading: Option<f64>,
-        alpha: Option<f64>,
-    ) -> Result<(), _rt::Errno>;
-    fn orient_unavailable(&self) -> Result<(), _rt::Errno>;
-    fn err(
-        &self,
-        sensor: super::types::Sensor,
-        code: Option<GeolocationErrorCode>,
-        watching: bool,
-    ) -> Result<(), _rt::Errno>;
-    fn permission(
-        &self,
-        sensor: super::types::Sensor,
-        answer: PermissionAnswer,
-    ) -> Result<(), _rt::Errno>;
-    fn platform(
-        &self,
-        geolocation: bool,
-        orient: bool,
-        orient_permission: bool,
-        orient_silence_is_loss: bool,
-    ) -> Result<(), _rt::Errno>;
-    fn locate(&self) -> Result<(), _rt::Errno>;
+    fn pos(&self, at: Option<Position>) -> Result<(), _rt::Errno>;
+    fn heading(&self, deg: Option<f64>) -> Result<(), _rt::Errno>;
+    fn location(&self, status: LocationStatus) -> Result<(), _rt::Errno>;
 }
 
 struct _Object(_rt::Rc<dyn Guest>);
@@ -144,114 +101,42 @@ impl _rt::Object for _Object {
             Ok(match m_ {
                 POS => {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let lon = r_.f64(0)?;
-                    let lat = r_.f64(8)?;
-                    let alt = r_.case(16, 2).and_then(|d| {
+                    let at = r_.case(0, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
-                            r_.f64(24).map(Some)
+                            Position::load(r_, 8).map(Some)
                         }
                     })?;
-                    let accuracy = r_.case(32, 2).and_then(|d| {
-                        if d == 0 {
-                            Ok(None)
-                        } else {
-                            r_.f64(40).map(Some)
-                        }
-                    })?;
-                    let course = r_.case(48, 2).and_then(|d| {
-                        if d == 0 {
-                            Ok(None)
-                        } else {
-                            r_.f64(56).map(Some)
-                        }
-                    })?;
-                    match self.0.pos(lon, lat, alt, accuracy, course) {
+                    match self.0.pos(at) {
                         Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
-                ORIENT => {
+                HEADING => {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let webkit_compass_heading = r_.case(0, 2).and_then(|d| {
+                    let deg = r_.case(0, 2).and_then(|d| {
                         if d == 0 {
                             Ok(None)
                         } else {
                             r_.f64(8).map(Some)
                         }
                     })?;
-                    let alpha = r_.case(16, 2).and_then(|d| {
-                        if d == 0 {
-                            Ok(None)
-                        } else {
-                            r_.f64(24).map(Some)
-                        }
-                    })?;
-                    match self.0.orient(webkit_compass_heading, alpha) {
+                    match self.0.heading(deg) {
                         Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
-                ORIENT_UNAVAILABLE => match self.0.orient_unavailable() {
-                    Ok(()) => _rt::Reply::from(0),
-                    Err(e) => _rt::Reply::from(e as i32),
-                },
-                ERR => {
+                LOCATION => {
                     let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let sensor = r_
-                        .case(0, 2)
-                        .and_then(|v| super::types::Sensor::of(v).ok_or(_rt::Errno::EBADMSG))?;
-                    let code = r_.case(1, 2).and_then(|d| {
-                        if d == 0 {
-                            Ok(None)
-                        } else {
-                            r_.case(2, 4)
-                                .and_then(|v| {
-                                    GeolocationErrorCode::of(v).ok_or(_rt::Errno::EBADMSG)
-                                })
-                                .map(Some)
-                        }
-                    })?;
-                    let watching = r_.bool(3)?;
-                    match self.0.err(sensor, code, watching) {
+                    let status = r_
+                        .case(0, 4)
+                        .and_then(|v| LocationStatus::of(v).ok_or(_rt::Errno::EBADMSG))?;
+                    match self.0.location(status) {
                         Ok(()) => _rt::Reply::from(0),
                         Err(e) => _rt::Reply::from(e as i32),
                     }
                 }
-                PERMISSION => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let sensor = r_
-                        .case(0, 2)
-                        .and_then(|v| super::types::Sensor::of(v).ok_or(_rt::Errno::EBADMSG))?;
-                    let answer = r_
-                        .case(1, 4)
-                        .and_then(|v| PermissionAnswer::of(v).ok_or(_rt::Errno::EBADMSG))?;
-                    match self.0.permission(sensor, answer) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
-                    }
-                }
-                PLATFORM => {
-                    let r_ = _rt::Lift::new(args_.ok_or(_rt::Errno::EBADMSG)?);
-                    let geolocation = r_.bool(0)?;
-                    let orient = r_.bool(1)?;
-                    let orient_permission = r_.bool(2)?;
-                    let orient_silence_is_loss = r_.bool(3)?;
-                    match self.0.platform(
-                        geolocation,
-                        orient,
-                        orient_permission,
-                        orient_silence_is_loss,
-                    ) {
-                        Ok(()) => _rt::Reply::from(0),
-                        Err(e) => _rt::Reply::from(e as i32),
-                    }
-                }
-                LOCATE => match self.0.locate() {
-                    Ok(()) => _rt::Reply::from(0),
-                    Err(e) => _rt::Reply::from(e as i32),
-                },
                 _ => _rt::Reply::from(_rt::Errno::ENOSYS as i32),
             })
         };
@@ -268,5 +153,5 @@ mod _rt {
     pub(super) use std::rc::Rc;
     pub(super) use xpute_guest::link;
     pub(super) use xpute_kit::status::errno::Errno;
-    pub(super) use xpute_link::{Handle, Lift, Method, Object, Reply, Tag};
+    pub(super) use xpute_link::{Handle, Lift, Lower, Method, Object, Reply, Tag};
 }

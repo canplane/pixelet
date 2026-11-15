@@ -10,8 +10,7 @@ use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::zoom::{units, Zoom, FINEST_ZOOM};
 
 use crate::abi::overlay::{
-    CompanionState, DivisionPart, GroundStatus, LocationState, LonLat, Message, OrientationState,
-    PivotState, SensorStatus, Snapshot,
+    CompanionState, DivisionPart, GroundStatus, LonLat, Message, PivotState, Snapshot,
 };
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::dist;
@@ -20,9 +19,6 @@ use crate::domain::control::edit::write;
 use crate::domain::control::input::{dragging, zooming};
 use crate::domain::control::navigation::follow_mode::following;
 use crate::domain::control::navigation::off_center::off_center;
-use crate::domain::control::sensor::reading::{
-    device_location_store, device_orient_store, SensorState,
-};
 use crate::domain::layer::division::{each_division, naming};
 use crate::domain::query::World;
 use crate::domain::scene::character::companion::companion_ready;
@@ -78,11 +74,8 @@ pub(crate) struct SnapshotInput {
     status: GroundStatus,
     is_off_center: bool,
     pivot: Option<Q3>,
-    /// The location's state, whether one is known and whether a watch runs.
-    location: (SensorState, bool, bool),
     companion: [bool; 2],
     drafting: bool,
-    orient: SensorStatus,
     is_follow_mode: bool,
     camera_busy: bool,
     zooming: bool,
@@ -102,7 +95,7 @@ pub(crate) struct SnapshotInput {
 }
 
 fn snapshot_input() -> SnapshotInput {
-    let (location, settings) = (device_location_store(), settings());
+    let settings = settings();
     let pivot = controller::pivot();
     let division = pivot.and_then(|at| naming(&at));
     let mut character_surfaces = ([0u32; SURFACE_CAP], 0);
@@ -127,14 +120,8 @@ fn snapshot_input() -> SnapshotInput {
         status,
         is_off_center: off_center().is_off_center,
         pivot,
-        location: (
-            location.state,
-            location.location.is_some(),
-            location.is_tracking_location,
-        ),
         companion: companion_ready(),
         drafting: write::marker_draft().is_some(),
-        orient: device_orient_store().status,
         is_follow_mode: following(),
         camera_busy: dragging(),
         zooming: zooming(),
@@ -215,20 +202,11 @@ pub(crate) fn snapshot(shown: &SnapshotInput) -> Snapshot {
             }),
             outside: shown.pivot.is_some_and(|c| World::now().past(&c)),
         },
-        location: LocationState {
-            status: shown.location.0.status,
-            has_location: shown.location.1,
-            watching: shown.location.2,
-            err: shown.location.0.err,
-        },
         companion: CompanionState {
             person_ready: shown.companion[0],
             pet_ready: shown.companion[1],
         },
         draft: write::marker_draft().map(str::to_owned),
-        orient: OrientationState {
-            status: shown.orient,
-        },
         is_follow_mode: shown.is_follow_mode,
         camera_busy: shown.camera_busy,
         zooming: shown.zooming,

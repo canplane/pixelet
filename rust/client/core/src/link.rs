@@ -14,7 +14,6 @@ pub mod layout;
 mod life;
 
 use crate::abi;
-use crate::abi::types::Sensor;
 use crate::domain::layer::object::repository;
 use crate::domain::scene::character::surface::character_surface_close;
 use crate::domain::setting::{on_settings_set_aside, settings_open};
@@ -139,32 +138,14 @@ pub fn end() -> bool {
 /// Tells a UI that has just started where everything stands, at this
 /// entry's end: the snapshot and the view whole, as nothing was posted to
 /// it. The runtime tells the core each UI that attaches (xpute's
-/// `life.attached`), the first and one a reload makes on the same core alike;
-/// its sensors start with its world's surface (`sensors_open`).
+/// `life.attached`), the first and one a reload makes on the same core alike.
 fn tell_all() {
     state().last_snapshot = SnapshotMemo::default();
 }
 
-/// Tells the other side what changed: the sensors to watch or not, and what
-/// is drawn over the world, the view and the snapshot. A call to the UI answers at once, its args copied across.
+/// Tells the other side what changed: what is drawn over the world, the view
+/// and the snapshot. A call to the UI answers at once, its args copied across.
 fn post_ui(s: &mut State) {
-    use crate::domain::control::sensor::device_orientation::{take_orient_cmd, OrientationCommand};
-    use crate::domain::control::sensor::geolocation::{take_geolocation_cmd, GeolocationCommand};
-
-    let start = |sensor: Sensor| abi::watch::start(sensor).or_bug(Errno::EPROTO);
-    let stop = |sensor: Sensor| abi::watch::stop(sensor).or_bug(Errno::EPROTO);
-    if let Some(c) = take_geolocation_cmd() {
-        match c {
-            GeolocationCommand::Start => start(Sensor::Geolocation),
-            GeolocationCommand::Stop => stop(Sensor::Geolocation),
-        }
-    }
-    if let Some(c) = take_orient_cmd() {
-        match c {
-            OrientationCommand::Start => start(Sensor::Orient),
-            OrientationCommand::Stop => stop(Sensor::Orient),
-        }
-    }
     if let Some((azimuth, m_per_px)) = s.last_snapshot.take_view_changed() {
         abi::overlay::view(azimuth, m_per_px).or_bug(Errno::EPROTO);
     }

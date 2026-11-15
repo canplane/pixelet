@@ -3,7 +3,7 @@
 import type { Remote } from "@xpute/link";
 import { ListenerSet } from "@xpute/kit/lang/listener.ts";
 import { mount, type Snapshot } from "@/abi/overlay.ts";
-import { GROUND_STATUS_IDLE, SENSOR_STATUS_IDLE } from "@/abi/overlay.enum.ts";
+import { GROUND_STATUS_IDLE } from "@/abi/overlay.enum.ts";
 
 const INIT: Snapshot = {
   pivot: {
@@ -12,15 +12,8 @@ const INIT: Snapshot = {
     lon_lat: null,
     outside: false,
   },
-  location: {
-    status: SENSOR_STATUS_IDLE,
-    has_location: false,
-    watching: false,
-    err: null,
-  },
   companion: { person_ready: false, pet_ready: false },
   draft: null,
-  orient: { status: SENSOR_STATUS_IDLE },
   is_follow_mode: false,
   camera_busy: false,
   zooming: false,

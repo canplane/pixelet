@@ -17,7 +17,6 @@ import {
   type PointerKind,
   type PointerPhase as PlacePhase,
 } from "@/service/platform/types.ts";
-import * as sensor from "@/service/platform/sensor.ts";
 import * as input from "@/abi/input.ts";
 import { ui } from "@/service/core/core.ts";
 
@@ -46,12 +45,6 @@ export function pinch(scale: f64): void {
 
 export function move(x: i32, y: i32): void {
   void input.move(ui, x, y);
-}
-
-/** Follows the sensors while the world's view is open: called as it opens,
- * it returns the function called as it closes. */
-export function open(): () => void {
-  return sensor.follow();
 }
 
 export const POINTER_PHASE: Readonly<Record<PlacePhase, PointerPhase>> = {

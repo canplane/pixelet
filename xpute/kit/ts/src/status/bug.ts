@@ -1,20 +1,20 @@
 // @xpute/kit/status/bug.ts
 
 /** A broken invariant is a bug, as Rust's `bug!` has it: `bug` throws a
- * `Bug`, its errno and the place in the source it was made. A `Bug` is no
+ * `XputeBug`, its errno and the place in the source it was made. A `XputeBug` is no
  * `XputeError`, so a catch that takes an `XputeError` passes it on. */
 
 import { strerror } from "./error.ts";
 import type { i32, u32 } from "../abi/word.ts";
 
-export class Bug extends Error {
+export class XputeBug extends Error {
   readonly errnum: i32;
   readonly file: string;
   readonly line: u32;
 
   constructor(errnum: i32, file: string, line: u32) {
     super(strerror(errnum));
-    this.name = "Bug";
+    this.name = "XputeBug";
     this.errnum = errnum;
     this.file = file;
     this.line = line;
@@ -25,7 +25,7 @@ export class Bug extends Error {
  * the one after `bug`'s own, as Rust's `#[track_caller]` gives it. */
 export function bug(errnum: i32): never {
   const [file, line] = frames(new Error().stack ?? "")[1] ?? ["", 0];
-  throw new Bug(errnum, file, line);
+  throw new XputeBug(errnum, file, line);
 }
 
 /** Each frame of `stack` that names its place, as its file and line, the

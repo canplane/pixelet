@@ -30,9 +30,13 @@ import {
   watch_source,
 } from "@/service/sys/fs/source.ts";
 import { set_ui } from "@/service/core/core.ts";
-import { SENSOR_LISTENER, tell_platform } from "@/service/core/sensor.ts";
-import { serve_watch } from "@/service/core/watch.ts";
+import {
+  SENSOR_LISTENER,
+  sensors_visibility,
+  set_platform,
+} from "@/service/core/sensor.ts";
 import { listen } from "@/service/platform/sensor-listener.ts";
+import * as visibility from "@/service/platform/visibility.ts";
 import { tell_dev } from "@/service/core/setting.ts";
 import { cur, serve_overlay, watch_snapshot } from "@/service/core/overlay.ts";
 import * as online from "@/service/platform/online.ts";
@@ -52,7 +56,6 @@ function loaded(s: Snapshot): boolean {
 export function serve_ui(remote: Remote): void {
   set_ui(remote);
   serve_overlay(remote);
-  serve_watch(remote);
 }
 
 /** Moves the started core's boot on as what it waits on comes: LOADING once a
@@ -70,10 +73,10 @@ function step(): void {
 
 /** Starts the client, after the core is asked to start: the boot moves on as
  * the core, the GPU and the source answer (`step`), the network's state is
- * told the origin, the device's readings are routed to the core, and the core
- * is told the device's sensors and whether this is a development build, the
- * boot FAILED where either is refused while it opens or starts. The core's
- * calls wait until it has booted. */
+ * told the origin, the device's readings and the app's hiding are routed to
+ * the sensors' driver, and the core is told whether this is a development
+ * build, the boot FAILED where that is refused while it opens or starts. The
+ * core's calls wait until it has booted. */
 export function start_client(): void {
   // The core's overlay comes once it runs, at the end of its first entry or
   // whole as a UI attaches (pxl-core link.rs `post_ui`, `tell_all`): the
@@ -85,10 +88,12 @@ export function start_client(): void {
   watch_gpu(step);
   watch_source(step);
   online.watch(set_online);
-  // The device's readings go to the core from here on, before the core hears
-  // that it has sensors and starts one.
+  // The device's readings go to the driver from here on, before a world's
+  // surface starts a sensor.
   listen(SENSOR_LISTENER);
-  Promise.all([tell_platform(), tell_dev()]).catch((err: unknown) => {
+  set_platform();
+  visibility.watch(sensors_visibility);
+  tell_dev().catch((err: unknown) => {
     console.error("[boot] the client did not start:", err);
     const s = boot_state();
     if (s === BOOT_OPENING || s === BOOT_STARTING) set_boot(BOOT_FAILED);

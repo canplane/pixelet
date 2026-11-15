@@ -53,7 +53,7 @@ description: Naming in pixelet — short, plain names read where they stand; whe
   takes React's form: a hook's `use` prefix, a component, a prop. A type spells
   its words whole (`let cfg: Config`), and so does the name of a thing that is
   there only for the UI to show or handle, wherever it is defined (a toast's
-  tone `ERROR`, the overlay's sensor status `error`, `toast_count`); a name of
+  tone `ERROR`, a sensor's status `error`, `toast_count`); a name of
   the mechanism keeps its form where the UI reads it (`ray_cnt`). A generated helper of a type is its verb, an
   underscore and the type's own spelling (`store_LonLat`, `of_Tool`), so the
   type's name finds it. A name copied from an outside API keeps that API's

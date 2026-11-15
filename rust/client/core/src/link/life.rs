@@ -9,14 +9,10 @@ use core::task::{Poll, Waker};
 
 use pxl_global::Global;
 
-use crate::domain::control::sensor::device_orientation;
-use crate::domain::control::sensor::geolocation;
 use crate::domain::layer::object::repository;
 
-/// The objects are written, and the position is no longer watched while
-/// nothing shows it.
+/// The objects are written.
 pub(super) fn on_hidden() {
-    geolocation::geolocation_visibility(false);
     repository::save();
 }
 
@@ -34,8 +30,6 @@ fn shown() -> &'static mut Shown {
 }
 
 pub(super) fn on_shown() {
-    geolocation::geolocation_visibility(true);
-    device_orientation::orient_visible();
     let s = shown();
     s.cnt = s.cnt.wrapping_add(1);
     if let Some(w) = s.waker.take() {

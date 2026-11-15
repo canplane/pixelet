@@ -1,25 +1,24 @@
 package pxl:core@0.1.0;
 
+// The three facts of the device's sensors the core reads, each told as it
+// changes; the UI runs the sensors themselves.
 interface sensor {
-  use types.{sensor};
+  // The location's status: idle until asked, loading until a fix, ready once
+  // one came, error where it failed.
+  enum location-status { idle, loading, ready, error }
 
-  enum geolocation-error-code { other, permission-denied, position-unavailable, timeout }
-  enum permission-answer { asking, granted, denied, failed }
+  // A position in degrees, its altitude in meters over the WGS 84 ellipsoid
+  // where the device gives one.
+  record position {
+    lon: f64,
+    lat: f64,
+    alt: option<f64>,
+  }
 
-  // A GPS fix; a field is absent where the platform gave none.
-  pos: func(lon: f64, lat: f64, alt: option<f64>, accuracy: option<f64>, course: option<f64>);
-  // A heading reading, iOS's compass heading or the turn about the vertical it
-  // is made from; a field is absent where the platform gave none.
-  orient: func(webkit-compass-heading: option<f64>, alpha: option<f64>);
-  // The place has no compass, as a page's orientation event with every field
-  // null says.
-  orient-unavailable: func();
-  // A watch's failure, geolocation's with its code, and whether the watch runs
-  // on past it.
-  err: func(sensor: sensor, code: option<geolocation-error-code>, watching: bool);
-  permission: func(sensor: sensor, answer: permission-answer);
-  // What the place's sensors are: a position, a heading, whether the heading
-  // asks a permission inside a gesture, and whether its silence is a loss.
-  platform: func(geolocation: bool, orient: bool, orient-permission: bool, orient-silence-is-loss: bool);
-  locate: func();
+  // The device's position, absent without a fix.
+  pos: func(at: option<position>);
+  // The compass heading, 0-360 degrees, absent while there is none.
+  heading: func(deg: option<f64>);
+  // The location's status, as it changes.
+  location: func(status: location-status);
 }

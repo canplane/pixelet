@@ -71,21 +71,19 @@ impl StepName {
 pub enum EffectName {
     Navigation = 0,
     Bootstrap = 1,
-    Orient = 2,
-    Follow = 3,
-    Dst = 4,
-    Decor = 5,
-    Object = 6,
-    Location = 7,
-    Setting = 8,
+    Follow = 2,
+    Dst = 3,
+    Decor = 4,
+    Object = 5,
+    Location = 6,
+    Setting = 7,
 }
 
 impl EffectName {
     /// Every member, in its source's own order.
-    pub const ALL: [EffectName; 9] = [
+    pub const ALL: [EffectName; 8] = [
         EffectName::Navigation,
         EffectName::Bootstrap,
-        EffectName::Orient,
         EffectName::Follow,
         EffectName::Dst,
         EffectName::Decor,
@@ -99,13 +97,12 @@ impl EffectName {
         match val {
             0 => Some(EffectName::Navigation),
             1 => Some(EffectName::Bootstrap),
-            2 => Some(EffectName::Orient),
-            3 => Some(EffectName::Follow),
-            4 => Some(EffectName::Dst),
-            5 => Some(EffectName::Decor),
-            6 => Some(EffectName::Object),
-            7 => Some(EffectName::Location),
-            8 => Some(EffectName::Setting),
+            2 => Some(EffectName::Follow),
+            3 => Some(EffectName::Dst),
+            4 => Some(EffectName::Decor),
+            5 => Some(EffectName::Object),
+            6 => Some(EffectName::Location),
+            7 => Some(EffectName::Setting),
             _ => None,
         }
     }
@@ -115,7 +112,6 @@ impl EffectName {
         match self {
             EffectName::Navigation => "navigation",
             EffectName::Bootstrap => "bootstrap",
-            EffectName::Orient => "orient",
             EffectName::Follow => "follow",
             EffectName::Dst => "dst",
             EffectName::Decor => "decor",

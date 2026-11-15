@@ -23,6 +23,5 @@ world core {
   export perf;
   import object;
   import overlay;
-  import watch;
   import text;
 }

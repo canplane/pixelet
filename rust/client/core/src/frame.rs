@@ -13,7 +13,6 @@ use crate::domain::control::input::{camera_input_step, rehover_at};
 use crate::domain::control::navigation::bootstrap::map_bootstrap_step;
 use crate::domain::control::navigation::follow_mode::follow_mode_step;
 use crate::domain::control::navigation::off_center::{off_center, off_center_step};
-use crate::domain::control::sensor::device_orientation::orient_watchdog_step;
 use crate::sys::io::param::CREDIT_CNT;
 use crate::sys::io::request::{pump, set_credit_cnt};
 use crate::sys::io::text::text_drop_unread;
@@ -264,7 +263,6 @@ pub(crate) fn effects() -> (f64, [f64; EFFECT_CNT]) {
     });
     effect!(times, Navigation, off_center_step());
     effect!(times, Bootstrap, map_bootstrap_step());
-    effect!(times, Orient, orient_watchdog_step());
     effect!(times, Follow, follow_mode_step());
     effect!(times, Dst, {
         // The floors the walker found under a position of unknown height

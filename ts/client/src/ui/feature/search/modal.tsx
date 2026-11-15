@@ -46,7 +46,7 @@ import { DIVISION_SUBTYPE } from "@/ui/feature/division/division.spec.ts";
 import { fetch_search, type SearchResult } from "./fetch.ts";
 import { fixed } from "@/ui/shared/fixed.ts";
 import { touch_outset } from "@/ui/shared/component/touch.ts";
-import { useCore } from "@/ui/shared/watch.ts";
+import { useSensor } from "@/ui/shared/watch.ts";
 import * as camera from "@/service/core/camera.ts";
 import * as sensor from "@/service/core/sensor.ts";
 import * as overlay from "@/service/core/overlay.ts";
@@ -167,9 +167,9 @@ function LocateCard() {
   // The card offers the location until one is known, kept or fixed. A press
   // starts a watch, so while one runs, failing or not, it says it is looking
   // and takes no press.
-  const location = useCore((s) => s.location.status);
-  const known = useCore((s) => s.location.has_location);
-  const locating = useCore((s) => s.location.watching);
+  const location = useSensor((l) => l.state.status);
+  const known = useSensor((l) => l.location !== null);
+  const locating = useSensor((l) => l.is_tracking_location);
   if (known) return null;
   return (
     <AboveKeyboard inset={PANEL_EDGE}>

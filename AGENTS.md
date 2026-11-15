@@ -40,6 +40,12 @@
   runtimes they run in, laid out by platform, with no pixelet domain or name.
   It is to be published: don't propose removing a part of its `kit` or its
   C++ because nothing here calls it.
+- The core holds the world and its rules; the UI holds the devices, the
+  network and files, the app's lifecycle and what is shown. The WIT between
+  them is drawn by min cut: the fewest, smallest facts cross, each read on the
+  other side in the form that side uses. No raw device or presentation detail
+  crosses where a fact derived from it is what is read, no fact makes a round
+  trip, and no mechanism's concern (a frame's size) crosses.
 - The UI computes no coordinate or tile. It calls what is below it through
   `service/` alone, and the core through `service/core/` alone; the types and
   constants generated into `abi/` it may read directly.

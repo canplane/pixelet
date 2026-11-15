@@ -20,7 +20,6 @@
     $value: [
       "navigation",
       "bootstrap",
-      "orient",
       "follow",
       "dst",
       "decor",

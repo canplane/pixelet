@@ -15,7 +15,7 @@
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import { Bug } from "@xpute/kit/status/bug.ts";
+import { XputeBug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_ECANCELED } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { ComponentError, type Side } from "@xpute/link";
@@ -28,7 +28,7 @@ import { binding, type Path } from "@/service/sys/fs/binding.ts";
 /** What a backend's failure `e` answers: its own error-code, `io` where it
  * carries none, and a bug as itself. */
 const failure = (e: unknown): unknown =>
-  e instanceof ComponentError || e instanceof Bug
+  e instanceof ComponentError || e instanceof XputeBug
     ? e
     : new ComponentError(ERROR_CODE_IO);
 

@@ -7,7 +7,6 @@
 use std::rc::Rc;
 
 use super::refuse_unless;
-use crate::domain::control::sensor;
 use crate::domain::scene::resolution;
 use crate::domain::view::frame::pose::view_resize;
 use crate::sys::sched::invalidate;
@@ -41,20 +40,18 @@ impl wit::GuestSurface for Surface {
 
 impl Drop for Surface {
     fn drop(&mut self) {
-        close(self.0);
+        super::super::close_surface(self.0);
     }
 }
 
-/// Makes the surface `handle` draw the world. The sensors are watched while
-/// the world's surface is open, and the view is sized at once when the
-/// surface's box is already known. Returns false when the surface is not
+/// Makes the surface `handle` draw the world. The view is sized at once when
+/// the surface's box is already known. Returns false when the surface is not
 /// open.
 pub(super) fn draw_world(handle: u32) -> bool {
     let Some(s) = surface::surface(handle) else {
         return false;
     };
     s.role = surface_role::WORLD;
-    sensor::sensors_open();
     if s.px_w != 0 {
         s.ratio = resolution::surface_ratio(s.role, [s.px_w, s.px_h], s.dpr);
         view_resize(f64::from(s.px_w) / s.dpr, f64::from(s.px_h) / s.dpr);
@@ -77,17 +74,4 @@ fn resize(h: Handle, width: u32, height: u32, dpr: f64) -> Result<(), Errno> {
     }
     invalidate();
     Ok(())
-}
-
-fn close(h: Handle) {
-    let Some(role) = surface::surface(h).map(|s| s.role) else {
-        return;
-    };
-    super::super::close_surface(h);
-    // A surface can close after the one replacing it has opened, so the
-    // sensors stop with the last world's surface.
-    let world_open = surface::surfaces().any(|s| s.role == surface_role::WORLD);
-    if role == surface_role::WORLD && !world_open {
-        sensor::sensors_close();
-    }
 }

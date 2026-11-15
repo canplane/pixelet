@@ -2,16 +2,13 @@
 
 use super::*;
 use crate::abi::edit::Tool;
-use crate::abi::overlay::SensorStatus;
 use crate::abi::scene::SceneContent;
+use crate::abi::sensor::Position;
 use crate::abi::types::ErrorCode;
 use crate::domain::control::camera::state::{camera_state, Intent};
 use crate::domain::control::edit::write;
 use crate::domain::control::navigation::destination;
 use crate::domain::control::param;
-use crate::domain::control::sensor::device_orientation::{self, OrientationCommand};
-use crate::domain::control::sensor::geolocation;
-use crate::domain::control::sensor::reading::device_orient_store;
 use crate::domain::query::test::flat_at_five;
 use crate::spec::perf::RING_NAMES;
 use pxl_render::gpu::surface::surface_open;
@@ -32,11 +29,13 @@ fn a_refused_argument_answers_its_errno() {
         input::xr_pose(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
         edit::hold(Tool::Item, u32::MAX, 0),
         source::declare(0, Vec::new(), Vec::new()),
-        sensor::pos(0.0, off_earth, None, None, None),
-        sensor::pos(0.0, 0.0, None, Some(-1.0), None),
-        sensor::pos(0.0, 0.0, None, None, Some(361.0)),
-        sensor::orient(Some(-1.0), None),
-        sensor::orient(None, Some(361.0)),
+        sensor::pos(Some(Position {
+            lon: 0.0,
+            lat: off_earth,
+            alt: None,
+        })),
+        sensor::heading(Some(-1.0)),
+        sensor::heading(Some(361.0)),
         scene::draw(1, SceneContent::World, Some(0), None).map(drop),
         scene::draw(1, SceneContent::Character, None, Some(0)).map(drop),
         scene::draw(1, SceneContent::Character, Some(u8::MAX), Some(0)).map(drop),
@@ -46,29 +45,6 @@ fn a_refused_argument_answers_its_errno() {
     for (k, r) in refused.into_iter().enumerate() {
         assert_eq!(r, Err(Errno::EINVAL), "refusal {k}");
     }
-}
-
-/// `sensor.platform` sets the sensors the platform reported, and
-/// `orient-unavailable` the compass's status alone: it stops the listener and
-/// reads unavailable from then on, the platform's report kept.
-#[test]
-fn the_platform_and_a_missing_compass_set_what_they_say() {
-    assert_eq!(sensor::platform(true, true, false, true), Ok(()));
-    assert!(geolocation::platform().supported);
-    let p = *device_orientation::platform();
-    assert!(p.supported && !p.needs_permission && p.silence_is_loss);
-    assert_eq!(sensor::orient_unavailable(), Ok(()));
-    assert!(device_orientation::platform().supported, "the report kept");
-    assert_eq!(
-        device_orientation::take_orient_cmd(),
-        Some(OrientationCommand::Stop)
-    );
-    assert!(!device_orientation::request_orient());
-    let store = device_orient_store();
-    assert_eq!(
-        (store.status, store.is_tracking_orient),
-        (SensorStatus::Unavailable, false)
-    );
 }
 
 fn goto(from: f64, dist: Option<f64>, azimuth: Option<f64>, polar: Option<f64>) -> Intent {

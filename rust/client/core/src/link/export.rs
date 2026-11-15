@@ -143,53 +143,14 @@ impl abi::scene::Guest for Core {
 }
 
 impl abi::sensor::Guest for Core {
-    fn pos(
-        &self,
-        lon: f64,
-        lat: f64,
-        alt: Option<f64>,
-        accuracy: Option<f64>,
-        course: Option<f64>,
-    ) -> Result<(), Errno> {
-        sensor::pos(lon, lat, alt, accuracy, course)
+    fn pos(&self, at: Option<abi::sensor::Position>) -> Result<(), Errno> {
+        sensor::pos(at)
     }
-    fn orient(&self, webkit_compass_heading: Option<f64>, alpha: Option<f64>) -> Result<(), Errno> {
-        sensor::orient(webkit_compass_heading, alpha)
+    fn heading(&self, deg: Option<f64>) -> Result<(), Errno> {
+        sensor::heading(deg)
     }
-    fn orient_unavailable(&self) -> Result<(), Errno> {
-        sensor::orient_unavailable()
-    }
-    fn err(
-        &self,
-        sensor: abi::types::Sensor,
-        code: Option<abi::sensor::GeolocationErrorCode>,
-        watching: bool,
-    ) -> Result<(), Errno> {
-        sensor::err(sensor, code, watching)
-    }
-    fn permission(
-        &self,
-        sensor: abi::types::Sensor,
-        answer: abi::sensor::PermissionAnswer,
-    ) -> Result<(), Errno> {
-        sensor::permission(sensor, answer)
-    }
-    fn platform(
-        &self,
-        geolocation: bool,
-        orient: bool,
-        orient_permission: bool,
-        orient_silence_is_loss: bool,
-    ) -> Result<(), Errno> {
-        sensor::platform(
-            geolocation,
-            orient,
-            orient_permission,
-            orient_silence_is_loss,
-        )
-    }
-    fn locate(&self) -> Result<(), Errno> {
-        sensor::locate()
+    fn location(&self, status: abi::sensor::LocationStatus) -> Result<(), Errno> {
+        sensor::location(status)
     }
 }
 

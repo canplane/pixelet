@@ -6,8 +6,8 @@ use pxl_spec::space::coord::world;
 
 use crate::domain::control::camera::controller;
 use crate::domain::control::param::{OFF_CENTER_U, ON_CENTER_U};
-use crate::domain::control::sensor::reading::device_location_store;
 use crate::domain::query::unknown;
+use crate::sys::sensor;
 use pxl_global::Global;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -19,10 +19,9 @@ pub(crate) struct OffCenter {
 static OFF_CENTER: Global<bool> = Global::new();
 
 fn device_coord() -> Option<Q3> {
-    device_location_store().location.map(|l| {
-        let [lon, lat] = l.lon_lat;
-        let at = epsg4326::project(&[lon, lat, l.alt.unwrap_or(0.0)]);
-        if l.alt.is_some() {
+    sensor::pos().map(|([lon, lat], alt)| {
+        let at = epsg4326::project(&[lon, lat, alt.unwrap_or(0.0)]);
+        if alt.is_some() {
             at
         } else {
             unknown(&at)

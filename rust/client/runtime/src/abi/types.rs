@@ -4,35 +4,6 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-pub enum Sensor {
-    Geolocation = 0,
-    Orient = 1,
-}
-
-impl Sensor {
-    /// Every member, in its source's own order.
-    pub const ALL: [Sensor; 2] = [Sensor::Geolocation, Sensor::Orient];
-
-    /// The member `val` is, or none for a number no member has.
-    pub const fn of(val: u32) -> Option<Sensor> {
-        match val {
-            0 => Some(Sensor::Geolocation),
-            1 => Some(Sensor::Orient),
-            _ => None,
-        }
-    }
-
-    /// The member's name, as its source spells it.
-    pub const fn name(self) -> &'static str {
-        match self {
-            Sensor::Geolocation => "Geolocation",
-            Sensor::Orient => "Orient",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u32)]
 pub enum ErrorCode {
     /// The settings are not read yet, and a change would be overwritten.
     WouldBlock = 0,

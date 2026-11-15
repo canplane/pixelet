@@ -14,4 +14,3 @@ pub mod setting;
 pub mod source;
 pub mod text;
 pub mod types;
-pub mod watch;

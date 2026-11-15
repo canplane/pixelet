@@ -14,13 +14,13 @@ import {
 import {
   SENSOR_STATUS_LOADING,
   SENSOR_STATUS_READY,
-} from "@/abi/overlay.enum.ts";
+} from "@/service/core/sensor/reading.ts";
 import { CompassFace } from "./compass.tsx";
 import { ButtonStack } from "./button-stack.tsx";
 import { Glyph } from "@/ui/shared/component/glyph.tsx";
 import { SETTLE } from "@/ui/shared/component/motion/transition.ts";
 import { CHROME, COLOR } from "@/ui/shared/component/theme.ts";
-import { useCore } from "@/ui/shared/watch.ts";
+import { useCore, useSensor } from "@/ui/shared/watch.ts";
 import * as camera from "@/service/core/camera.ts";
 
 /** The glyphs follow MapKit's MKUserTrackingButton. */
@@ -41,8 +41,8 @@ const PRESS: Record<Tracking, { glyph: GlyphName; label: string }> = {
 
 export function LocationStack() {
   const { t } = useTranslation();
-  const status = useCore((s) => s.location.status);
-  const has_location = useCore((s) => s.location.has_location);
+  const status = useSensor((l) => l.state.status);
+  const has_location = useSensor((l) => l.location !== null);
   const following = useCore((s) => s.is_follow_mode);
   const is_off_center = useCore((s) => s.pivot.is_off_center);
 

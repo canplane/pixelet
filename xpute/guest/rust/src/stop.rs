@@ -32,7 +32,7 @@ pub fn hook() {
             return prev(info);
         }
         // A bug's own panic, which its report told already.
-        if info.payload().is::<bug::Bug>() {
+        if info.payload().is::<bug::XputeBug>() {
             return;
         }
         let (file, line) = info.location().map_or(("", 0), |at| (at.file(), at.line()));

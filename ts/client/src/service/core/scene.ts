@@ -8,9 +8,11 @@ import {
   SCENE_CONTENT_CHARACTER,
 } from "@/abi/scene.enum.ts";
 import { ui } from "@/service/core/core.ts";
+import { world_open } from "@/service/core/sensor.ts";
 
 export function draw_world(surface: u32): void {
   void scene.draw(ui, surface, SCENE_CONTENT_WORLD, null, null).catch(warn_err);
+  world_open(surface);
 }
 
 /** Draws the companion's character of `group` alone into `surface`, as it

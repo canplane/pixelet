@@ -3,16 +3,15 @@
 use pxl_spec::space::coord::q3::Q3;
 
 use crate::abi::camera::Tracking;
-use crate::abi::overlay::SensorStatus;
+use crate::abi::sensor::LocationStatus;
 use crate::domain::control::camera::controller;
 use crate::domain::control::camera::controller::Motion;
 use crate::domain::control::camera::state::IntentPatch;
 use crate::domain::control::navigation::destination::go_to_ground;
 use crate::domain::control::navigation::off_center::off_center;
 use crate::domain::control::param::SENSOR_GRACE_MS;
-use crate::domain::control::sensor::device_orientation::request_orient;
-use crate::domain::control::sensor::reading::{device_location_store, device_orient_store};
 use crate::sys::sched::invalidate_at;
+use crate::sys::sensor;
 use pxl_global::Global;
 use xpute_guest::clock::now;
 
@@ -27,7 +26,7 @@ struct Follow {
     last_heading: Option<f64>,
     /// The location status a not-ready location's deadline was set for, and
     /// when following is given up.
-    grace: Option<(SensorStatus, f64)>,
+    grace: Option<(LocationStatus, f64)>,
 }
 
 static FOLLOW: Global<Follow> = Global::new();
@@ -52,14 +51,14 @@ pub(crate) fn set_following(on: bool) {
 pub(crate) fn follow_mode_step() {
     let f = follow();
     let is_follow_mode = f.on;
-    let heading = device_orient_store().orient.and_then(|o| o.heading);
+    let heading = sensor::heading();
     let device_coord = off_center().device_coord;
 
     // Following needs the location to be Ready. A heading only turns the
     // camera where there is one, so a device without a compass still follows
     // where it is.
-    let status = device_location_store().state.status;
-    let ready = status == SensorStatus::Ready;
+    let status = sensor::location_status();
+    let ready = status == LocationStatus::Ready;
     if is_follow_mode && !ready {
         // The deadline restarts whenever the status changes, because Loading
         // to Error is a fresh gap with its own retry ahead.
@@ -118,10 +117,9 @@ pub(crate) fn tracking_action(tracking: Tracking) {
             set_following(false);
         }
         Tracking::Follow => {
-            // The heading is asked for, and the view turns with it once it
-            // comes. Without a heading, following keeps only the pivot on the
-            // device's location.
-            request_orient();
+            // The UI asks for the heading with the press, and the view turns
+            // with it once it comes. Without a heading, following keeps only
+            // the pivot on the device's location.
             set_following(true);
         }
         Tracking::Unfollow => {

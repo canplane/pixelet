@@ -11,13 +11,13 @@ import {
   SENSOR_STATUS_LOADING,
   SENSOR_STATUS_READY,
   SENSOR_STATUS_UNAVAILABLE,
-} from "@/abi/overlay.enum.ts";
+} from "@/service/core/sensor/reading.ts";
 
 import type { GlyphName } from "@/ui/shared/component/icon.tsx";
 import { halo_gap, HaloIcon } from "./halo.tsx";
 import { COLOR } from "@/ui/shared/component/theme.ts";
 import * as device from "@/service/platform/device.ts";
-import { useCore } from "@/ui/shared/watch.ts";
+import { useSensor } from "@/ui/shared/watch.ts";
 
 /** Each surface passes its own `tone`, because the glyphs over the world are
  * paler than a sheet's. */
@@ -47,8 +47,8 @@ const PRESENCE: Record<SensorStatus, f64> = {
 };
 
 export function SensorIcons() {
-  const location = useCore((s) => s.location.status);
-  const orientation = useCore((s) => s.orient.status);
+  const location = useSensor((l) => l.state.status);
+  const orientation = useSensor((_, o) => o.status);
 
   // The glyph and its halo fade as one layer. Faded apart, the halo would
   // show through and gray the glyph.

@@ -19,7 +19,7 @@ export function strerror(errnum: i32): string {
 
 /** An errno a fault from outside the program raised: its input, its peer,
  * the network or the environment. It is caught, and what it stops is
- * isolated, degraded or dropped; a broken invariant is a `Bug` (`bug.ts`)
+ * isolated, degraded or dropped; a broken invariant is a `XputeBug` (`bug.ts`)
  * instead. What happened is its `kind`. */
 export class XputeError extends Error {
   readonly errnum: i32;

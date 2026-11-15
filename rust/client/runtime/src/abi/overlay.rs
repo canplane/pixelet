@@ -48,84 +48,22 @@ impl GroundStatus {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u32)]
-pub enum SensorStatus {
-    Idle = 0,
-    Loading = 1,
-    Ready = 2,
-    Error = 3,
-    Unavailable = 4,
-}
-
-impl SensorStatus {
-    /// Every member, in its source's own order.
-    pub const ALL: [SensorStatus; 5] = [
-        SensorStatus::Idle,
-        SensorStatus::Loading,
-        SensorStatus::Ready,
-        SensorStatus::Error,
-        SensorStatus::Unavailable,
-    ];
-
-    /// The member `val` is, or none for a number no member has.
-    pub const fn of(val: u32) -> Option<SensorStatus> {
-        match val {
-            0 => Some(SensorStatus::Idle),
-            1 => Some(SensorStatus::Loading),
-            2 => Some(SensorStatus::Ready),
-            3 => Some(SensorStatus::Error),
-            4 => Some(SensorStatus::Unavailable),
-            _ => None,
-        }
-    }
-
-    /// The member's name, as its source spells it.
-    pub const fn name(self) -> &'static str {
-        match self {
-            SensorStatus::Idle => "Idle",
-            SensorStatus::Loading => "Loading",
-            SensorStatus::Ready => "Ready",
-            SensorStatus::Error => "Error",
-            SensorStatus::Unavailable => "Unavailable",
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[repr(u32)]
 pub enum Message {
-    GeolocationUnsupported = 0,
-    GeolocationPermissionDenied = 1,
-    GeolocationPositionUnavailable = 2,
-    GeolocationTimeout = 3,
-    GeolocationGenericError = 4,
     /// Reads reach the server and fail; they are tried again.
-    WorldReadFailing = 5,
+    WorldReadFailing = 0,
     /// Reads failed past every retry; the world is not coming.
-    WorldUnavailable = 6,
+    WorldUnavailable = 1,
 }
 
 impl Message {
     /// Every member, in its source's own order.
-    pub const ALL: [Message; 7] = [
-        Message::GeolocationUnsupported,
-        Message::GeolocationPermissionDenied,
-        Message::GeolocationPositionUnavailable,
-        Message::GeolocationTimeout,
-        Message::GeolocationGenericError,
-        Message::WorldReadFailing,
-        Message::WorldUnavailable,
-    ];
+    pub const ALL: [Message; 2] = [Message::WorldReadFailing, Message::WorldUnavailable];
 
     /// The member `val` is, or none for a number no member has.
     pub const fn of(val: u32) -> Option<Message> {
         match val {
-            0 => Some(Message::GeolocationUnsupported),
-            1 => Some(Message::GeolocationPermissionDenied),
-            2 => Some(Message::GeolocationPositionUnavailable),
-            3 => Some(Message::GeolocationTimeout),
-            4 => Some(Message::GeolocationGenericError),
-            5 => Some(Message::WorldReadFailing),
-            6 => Some(Message::WorldUnavailable),
+            0 => Some(Message::WorldReadFailing),
+            1 => Some(Message::WorldUnavailable),
             _ => None,
         }
     }
@@ -133,11 +71,6 @@ impl Message {
     /// The member's name, as its source spells it.
     pub const fn name(self) -> &'static str {
         match self {
-            Message::GeolocationUnsupported => "GeolocationUnsupported",
-            Message::GeolocationPermissionDenied => "GeolocationPermissionDenied",
-            Message::GeolocationPositionUnavailable => "GeolocationPositionUnavailable",
-            Message::GeolocationTimeout => "GeolocationTimeout",
-            Message::GeolocationGenericError => "GeolocationGenericError",
             Message::WorldReadFailing => "WorldReadFailing",
             Message::WorldUnavailable => "WorldUnavailable",
         }
@@ -208,48 +141,6 @@ impl PivotState {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct LocationState {
-    pub status: SensorStatus,
-    pub has_location: bool,
-    pub watching: bool,
-    pub err: Option<Message>,
-}
-
-impl LocationState {
-    pub const SZ: usize = 5;
-    pub const ALIGN: usize = 1;
-
-    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
-        w.u8(at, self.status as u8);
-        w.bool(at + 1, self.has_location);
-        w.bool(at + 2, self.watching);
-        if let Some(v) = &self.err {
-            w.u8(at + 3, 1);
-            w.u8(at + 3 + 1, *v as u8);
-        }
-    }
-
-    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<LocationState, _rt::Errno> {
-        Ok(LocationState {
-            status: r
-                .case(at, 5)
-                .and_then(|v| SensorStatus::of(v).ok_or(_rt::Errno::EBADMSG))?,
-            has_location: r.bool(at + 1)?,
-            watching: r.bool(at + 2)?,
-            err: r.case(at + 3, 2).and_then(|d| {
-                if d == 0 {
-                    Ok(None)
-                } else {
-                    r.case(at + 3 + 1, 7)
-                        .and_then(|v| Message::of(v).ok_or(_rt::Errno::EBADMSG))
-                        .map(Some)
-                }
-            })?,
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
 pub struct CompanionState {
     pub person_ready: bool,
     pub pet_ready: bool,
@@ -268,28 +159,6 @@ impl CompanionState {
         Ok(CompanionState {
             person_ready: r.bool(at)?,
             pet_ready: r.bool(at + 1)?,
-        })
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct OrientationState {
-    pub status: SensorStatus,
-}
-
-impl OrientationState {
-    pub const SZ: usize = 1;
-    pub const ALIGN: usize = 1;
-
-    pub fn store(&self, w: &mut _rt::Lower, at: usize) {
-        w.u8(at, self.status as u8);
-    }
-
-    pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<OrientationState, _rt::Errno> {
-        Ok(OrientationState {
-            status: r
-                .case(at, 5)
-                .and_then(|v| SensorStatus::of(v).ok_or(_rt::Errno::EBADMSG))?,
         })
     }
 }
@@ -326,10 +195,8 @@ impl DivisionPart {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Snapshot {
     pub pivot: PivotState,
-    pub location: LocationState,
     pub companion: CompanionState,
     pub draft: Option<String>,
-    pub orient: OrientationState,
     pub is_follow_mode: bool,
     pub camera_busy: bool,
     pub zooming: bool,
@@ -343,25 +210,23 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    pub const SZ: usize = 112;
+    pub const SZ: usize = 104;
     pub const ALIGN: usize = 8;
 
     pub fn store(&self, w: &mut _rt::Lower, at: usize) {
         self.pivot.store(w, at);
-        self.location.store(w, at + 40);
-        self.companion.store(w, at + 45);
+        self.companion.store(w, at + 40);
         if let Some(v) = &self.draft {
-            w.u8(at + 48, 1);
-            w.str(at + 48 + 4, v);
+            w.u8(at + 44, 1);
+            w.str(at + 44 + 4, v);
         }
-        self.orient.store(w, at + 60);
-        w.bool(at + 61, self.is_follow_mode);
-        w.bool(at + 62, self.camera_busy);
-        w.bool(at + 63, self.zooming);
-        w.bool(at + 64, self.over_marker);
-        w.arr(at + 68, &self.settings);
+        w.bool(at + 56, self.is_follow_mode);
+        w.bool(at + 57, self.camera_busy);
+        w.bool(at + 58, self.zooming);
+        w.bool(at + 59, self.over_marker);
+        w.arr(at + 60, &self.settings);
         if let Some(b) = w.list(
-            at + 76,
+            at + 68,
             self.division.len(),
             DivisionPart::SZ,
             DivisionPart::ALIGN,
@@ -370,52 +235,50 @@ impl Snapshot {
                 (x).store(w, b + i * DivisionPart::SZ);
             }
         }
-        w.arr(at + 84, &self.character_surfaces);
+        w.arr(at + 76, &self.character_surfaces);
         if let Some(v) = &self.stall {
-            w.u8(at + 92, 1);
-            w.u8(at + 92 + 1, *v as u8);
+            w.u8(at + 84, 1);
+            w.u8(at + 84 + 1, *v as u8);
         }
-        w.f64(at + 96, self.renderer_progress);
-        w.f64(at + 104, self.area_progress);
+        w.f64(at + 88, self.renderer_progress);
+        w.f64(at + 96, self.area_progress);
     }
 
     pub fn load(r: _rt::Lift<'_>, at: usize) -> Result<Snapshot, _rt::Errno> {
         Ok(Snapshot {
             pivot: PivotState::load(r, at)?,
-            location: LocationState::load(r, at + 40)?,
-            companion: CompanionState::load(r, at + 45)?,
-            draft: r.case(at + 48, 2).and_then(|d| {
+            companion: CompanionState::load(r, at + 40)?,
+            draft: r.case(at + 44, 2).and_then(|d| {
                 if d == 0 {
                     Ok(None)
                 } else {
-                    r.str(at + 48 + 4).map(str::to_owned).map(Some)
+                    r.str(at + 44 + 4).map(str::to_owned).map(Some)
                 }
             })?,
-            orient: OrientationState::load(r, at + 60)?,
-            is_follow_mode: r.bool(at + 61)?,
-            camera_busy: r.bool(at + 62)?,
-            zooming: r.bool(at + 63)?,
-            over_marker: r.bool(at + 64)?,
-            settings: r.arr::<u32>(at + 68)?,
+            is_follow_mode: r.bool(at + 56)?,
+            camera_busy: r.bool(at + 57)?,
+            zooming: r.bool(at + 58)?,
+            over_marker: r.bool(at + 59)?,
+            settings: r.arr::<u32>(at + 60)?,
             division: r
-                .list(at + 76, DivisionPart::SZ, DivisionPart::ALIGN)
+                .list(at + 68, DivisionPart::SZ, DivisionPart::ALIGN)
                 .and_then(|(b, n)| {
                     (0..n)
                         .map(|i| DivisionPart::load(r, b + i * DivisionPart::SZ))
                         .collect::<Result<Vec<_>, _rt::Errno>>()
                 })?,
-            character_surfaces: r.arr::<u32>(at + 84)?,
-            stall: r.case(at + 92, 2).and_then(|d| {
+            character_surfaces: r.arr::<u32>(at + 76)?,
+            stall: r.case(at + 84, 2).and_then(|d| {
                 if d == 0 {
                     Ok(None)
                 } else {
-                    r.case(at + 92 + 1, 7)
+                    r.case(at + 84 + 1, 2)
                         .and_then(|v| Message::of(v).ok_or(_rt::Errno::EBADMSG))
                         .map(Some)
                 }
             })?,
-            renderer_progress: r.f64(at + 96)?,
-            area_progress: r.f64(at + 104)?,
+            renderer_progress: r.f64(at + 88)?,
+            area_progress: r.f64(at + 96)?,
         })
     }
 }
