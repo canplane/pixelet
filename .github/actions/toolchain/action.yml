@@ -20,7 +20,8 @@ runs:
   steps:
     # The version is rust/rust-toolchain.toml's; the components and the
     # target are the ones a job builds with, fewer than the file names for a
-    # checkout. A step of its own rather than left to the first cargo command,
+    # checkout: rust-src among them, the standard library's sources, whose
+    # texts a published core may hold (ts/client/script/strings.py). A step of its own rather than left to the first cargo command,
     # so that a toolchain that cannot be fetched fails here, where the log says
     # what happened. The job then runs
     # every cargo under it whatever its directory (RUSTUP_TOOLCHAIN): a cargo
@@ -30,7 +31,7 @@ runs:
       working-directory: rust
       run: |
         channel=$(sed -n 's/^channel = "\(.*\)"$/\1/p' rust-toolchain.toml)
-        rustup toolchain install "$channel" --profile minimal --component clippy,rustfmt --target wasm32-unknown-unknown
+        rustup toolchain install "$channel" --profile minimal --component clippy,rustfmt,rust-src --target wasm32-unknown-unknown
         echo "RUSTUP_TOOLCHAIN=$channel" >> "$GITHUB_ENV"
 
     - name: Install Binaryen
