@@ -6,9 +6,11 @@
  * it what it serves, hears the guest's stop and its trap (`stopped_on`,
  * `trap_on`), and starts the guest (`start`). A page has one worker, as a
  * process has one runtime. What the worker posts is a message by its kind,
- * the runtime's own and a host's or the program's alike (`message_on`), and
- * the last of each kind is kept, so that one who begins to hear a kind hears
- * the last told before, as a device's runtime keeps its stop and its trap.
+ * the runtime's own and a host's or the program's alike (`message_on`),
+ * heard as it comes. The guest's stop and its trap are kept, as a device's
+ * runtime keeps them, so that one who begins to hear them is told those
+ * told before; a host keeps what it reports so, as the GPU's host its state
+ * (@xpute/gpu-web-host `state_on`).
  */
 
 import { Remote, type Stop } from "@xpute/link";
@@ -24,9 +26,19 @@ interface Message {
 let worker: Worker;
 let port: MessagePort;
 
-/** The last message of each kind, and who hears them. */
-const last = new Map<string, Message>();
+/** Who hears what the worker posts. */
 const hearers = new Set<(m: Message) => void>();
+
+/** The guest's stop and what trapped it, or null before, as a device's
+ * runtime keeps them (@xpute/native-runtime `stopped_on`, `trap_on`). */
+let stop: Stop | null = null;
+let trap: string | null = null;
+message_on<Stopped>("stopped", (m) => {
+  stop = m.stop;
+});
+message_on<Trap>("trap", (m) => {
+  trap = m.err;
+});
 
 /** Opens the guest's module worker at `url`, and the UI's end of the link on
  * one port of a channel to it; the other goes to the worker as the guest
@@ -34,7 +46,6 @@ const hearers = new Set<(m: Message) => void>();
 export function open_remote(url: string | URL): Remote {
   worker = new Worker(url, { type: "module" });
   worker.onmessage = ({ data: m }: MessageEvent<Message>) => {
-    last.set(m.kind, m);
     for (const hear of hearers) hear(m);
   };
   const { port1, port2 } = new MessageChannel();
@@ -42,8 +53,8 @@ export function open_remote(url: string | URL): Remote {
   return new Remote(port1);
 }
 
-/** Adds `hear` to what is told each message of `kind` the worker posts, and
- * tells it the last posted before, as a device's runtime tells its stop. */
+/** Adds `hear` to what is told each message of `kind` the worker posts from
+ * now on. */
 export function message_on<M extends Message>(
   kind: M["kind"],
   hear: (m: M) => void,
@@ -52,21 +63,25 @@ export function message_on<M extends Message>(
     if (m.kind === kind) hear(m as M);
   };
   hearers.add(f);
-  const m = last.get(kind);
-  if (m !== undefined) f(m);
   return { remove: () => hearers.delete(f) };
 }
 
 /** Adds `hear` to what is told the guest's stop, as the link has it
- * (`Stopped`), as @xpute/native-runtime `stopped_on` tells a device's. */
+ * (`Stopped`), and tells it the stop kept, as @xpute/native-runtime
+ * `stopped_on` tells a device's. */
 export function stopped_on(hear: (stop: Stop) => void): { remove(): void } {
-  return message_on<Stopped>("stopped", (m) => hear(m.stop));
+  const sub = message_on<Stopped>("stopped", (m) => hear(m.stop));
+  if (stop !== null) hear(stop);
+  return sub;
 }
 
 /** Adds `hear` to what is told that the guest trapped, with what stopped it
- * (`Trap`), as @xpute/native-runtime `trap_on` tells a device's. */
+ * (`Trap`), and tells it the trap kept, as @xpute/native-runtime `trap_on`
+ * tells a device's. */
 export function trap_on(hear: (err: string) => void): { remove(): void } {
-  return message_on<Trap>("trap", (m) => hear(m.err));
+  const sub = message_on<Trap>("trap", (m) => hear(m.err));
+  if (trap !== null) hear(trap);
+  return sub;
 }
 
 /** Starts the guest with what the UI serves, once it is mounted on `remote`,

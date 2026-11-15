@@ -8,18 +8,24 @@ use crate::frame::shader::record::{
 use crate::frame::shader::word::{draw, ghost_box, instance};
 use crate::gpu::draw::{drifted, test_lists, Draw, DrawId, DrawList, ReceiverBox};
 use crate::pass::mark::{marked, UploadOf};
+use xpute_guest::heap::Global;
+use xpute_native_runtime::native;
 
 /// The renderer takes the offsets of what it lends the host (`mem::off`,
-/// `mem::span`), so the tests' process is a program with a guest's memory:
-/// the runtime's, as a device's is, and xpute-guest's heap in it is the
-/// process's. It is the most a u32 offset reaches, on a page.
+/// `mem::span`), so the tests' process is a program with a guest's memory,
+/// as a guest's `link!` makes one: xpute-guest's heap is its global allocator.
+#[global_allocator]
+static HEAP: Global = Global;
+
+/// The tests' memory, the runtime's, as a device's is: the most a u32 offset
+/// reaches, on a page.
 ///
 /// # Safety
 /// `len` and `share` are each null or a writable word.
 #[unsafe(no_mangle)]
 unsafe extern "C" fn xpute_mem(len: *mut u32, share: *mut u32) -> *mut u8 {
     // SAFETY: the caller's words.
-    unsafe { xpute_native_runtime::native::mem(u32::MAX & !4095, 0, len, share) }
+    unsafe { native::mem(!4095, 0, len, share) }
 }
 
 /// The only test here that installs the calls' state. The lists' tests read
