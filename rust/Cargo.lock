@@ -2270,8 +2270,6 @@ dependencies = [
  "ureq",
  "webp",
  "xpute-gen",
- "xpute-gen-targets",
- "xpute-gpu-gen-targets",
  "xpute-link-gen",
 ]
 
@@ -3684,26 +3682,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "xpute-gen-targets"
-version = "0.1.0"
-dependencies = [
- "xpute-gen",
- "xpute-link-gen",
-]
-
-[[package]]
 name = "xpute-golden"
 version = "0.1.0"
 dependencies = [
  "xpute-kit",
-]
-
-[[package]]
-name = "xpute-gpu-gen-targets"
-version = "0.1.0"
-dependencies = [
- "xpute-gen",
- "xpute-link-gen",
 ]
 
 [[package]]

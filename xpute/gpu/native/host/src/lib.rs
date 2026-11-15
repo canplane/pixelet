@@ -69,7 +69,8 @@ pub struct Config {
     pub preferred_format: wgpu::TextureFormat,
     pub configure_at: ConfigureAt,
     /// This is how many frames may be admitted and unfinished at once
-    /// (`GpuHost::admit_frame`); at least one. It is also each surface's
+    /// (`GpuHost::admit_frame`); at least one. The device's block tells it the
+    /// guest, which admits frames by it too. It is also each surface's
     /// `desired_maximum_frame_latency`. A surface keeps one texture more than
     /// that, so taking a texture for an admitted frame never blocks.
     pub frame_latency: u32,

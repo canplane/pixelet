@@ -323,15 +323,16 @@ inline constexpr std::uint32_t ALL = 15u;
 // bits: how many nanoseconds one unit of a resolved timestamp is, 1 when the units are
 // nanoseconds as WebGPU's are), then the surface format it prefers (TEXTURE_FORMAT: the
 // format SURFACE_PREFERRED stands for, as the web's getPreferredCanvasFormat gives it), then
-// the count of uncaptured errors, then the count of unfinished frames, then STATUS, the
-// last, which the host stores with release after the rest. The uncaptured errors are the
-// errors the device raised that no error scope caught, each logged where the host logs.
-// The unfinished frames are the frames the guest has drawn whose work the queue has not
-// yet done. Only the host writes the two counts: first before STATUS, as it writes the
-// rest of the block, and afterwards with release each time a count changes. The guest
-// loads them with acquire once STATUS reads READY, and draws a frame only while the
-// unfinished frames are below its frame latency; both hosts hold a frame to that rule
-// (xpute-gpu-link `admits`).
+// the frame latency (the program's GpuConfig `frame_latency`: how many of the guest's frames
+// may be unfinished at once, at least one), then the count of uncaptured errors, then the
+// count of unfinished frames, then STATUS, the last, which the host stores with release
+// after the rest. The uncaptured errors are the errors the device raised that no error
+// scope caught, each logged where the host logs. The unfinished frames are the frames the
+// guest has drawn whose work the queue has not yet done. Only the host writes the two
+// counts: first before STATUS, as it writes the rest of the block, and afterwards with
+// release each time a count changes. The guest loads them with acquire once STATUS reads
+// READY, and draws a frame only while the unfinished frames are below the block's frame
+// latency; both hosts hold a frame to that rule (xpute-gpu-link `admits`).
 namespace DEVICE {
 
 inline constexpr std::size_t LIMITS_AT = 0u;
@@ -342,13 +343,15 @@ inline constexpr std::size_t PERIOD_AT = 32u;
 
 inline constexpr std::size_t FORMAT_AT = 33u;
 
-inline constexpr std::size_t ERRORS_AT = 34u;
+inline constexpr std::size_t LATENCY_AT = 34u;
 
-inline constexpr std::size_t UNFINISHED_AT = 35u;
+inline constexpr std::size_t ERRORS_AT = 35u;
 
-inline constexpr std::size_t STATUS_AT = 36u;
+inline constexpr std::size_t UNFINISHED_AT = 36u;
 
-inline constexpr std::size_t WORDS = 37u;
+inline constexpr std::size_t STATUS_AT = 37u;
+
+inline constexpr std::size_t WORDS = 38u;
 } // namespace DEVICE
 
 // The last word of the DEVICE block: what the host knows of the device. Only the

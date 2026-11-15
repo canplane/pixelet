@@ -35,7 +35,7 @@ async function ready(nav: object): Promise<GpuReport[]> {
   new WebGpu(
     link as unknown as Side,
     { power: "high-performance", required_feats: [], optional_feats: [] },
-    { upload_chunk_sz: 1 << 16, slow_ms: null },
+    { frame_latency: 2, upload_chunk_sz: 1 << 16, slow_ms: null },
   ).serve();
   const reply = named.get(HANDLE)!.call(GET_DEVICE, 0, null);
   assert.ok(typeof reply !== "number" && reply.data !== null);

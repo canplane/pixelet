@@ -37,14 +37,7 @@ const WORLD = surface_driver(scene.draw_world, sensor.world_closed);
 
 const INPUT: InputDriver = {
   pointer: (phase, kind, id, button, x, y) =>
-    world_pointer(
-      POINTER_PHASE[phase],
-      TOUCH[kind],
-      id,
-      drag_of(button),
-      x,
-      y,
-    ),
+    world_pointer(POINTER_PHASE[phase], TOUCH[kind], id, drag_of(button), x, y),
   wheel: input.wheel,
   pinch: input.pinch,
   key_down,

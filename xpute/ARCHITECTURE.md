@@ -123,8 +123,9 @@ page and on wgpu on a device. The device is answered by `get-device`, and a
 completion the stream asked for lands as a **fence**, a word only the host
 writes, set to the guest's **ticket** with release, so a late answer to a
 dropped request never matches. Both hosts admit a frame by one rule: a guest
-draws only while fewer of its frames are unfinished than its frame latency, so
-taking a surface's texture never blocks. What a surface shows is lent by the
+draws only while fewer of its frames are unfinished than its frame latency,
+which the program sets in its host's config and the host writes beside its
+count in the device's block, so taking a surface's texture never blocks. What a surface shows is lent by the
 UI, beside the link, under the handle of a surface the guest serves.
 
 ## The languages, held to each other
@@ -197,8 +198,9 @@ word; and a rule the GPU alone decides is one function every pass calls.
   stream and the errno table, each with golden records, the link's of its
   frames and packets; `link/wit/`, `wit/` and `gpu/wit/` the interfaces.
 - `gen` (`xpute-gen`) and `link/gen` (`xpute-link-gen`) are the generators,
-  `gen-targets` what they write, and `dev/tool` the `cargo spec` that checks
-  and writes it.
+  the second with the command a program writes its bindings with; each
+  part's `gen-targets` is the data specs `xpute-gen` writes of it, and
+  `dev/tool` the `cargo spec` that checks and writes xpute's own.
 - `kit/rust`, `kit/ts` (`@xpute/kit`) and `cpp/xpute/kit` are the kit.
 - `link/rust` (`xpute-link`), `link/ts` (`@xpute/link`) and `cpp/xpute/link`
   are the link; `guest/rust` (`xpute-guest`) and `cpp/xpute/guest` the
@@ -213,5 +215,7 @@ word; and a rule the GPU alone decides is one function every pass calls.
   its hosts on WebGPU and wgpu, and `gpu/native/runtime/rust` the bindings a
   device's host serves on `xpute-native-runtime`'s link, and
   `gpu/native/runtime/expo` a device's surface view.
-- `dev/golden` and `cpp/dev/test/` are what the tests take, and
-  `cpp/amalgamation.awk` makes the C++ library's two files.
+- `dev/golden` and `cpp/dev/test/` are what the tests take,
+  `cpp/amalgamation.awk` makes the C++ library's two files, and
+  `cpp/dev/guest.cpp` is the smallest guest, which the build links over them
+  as a module.

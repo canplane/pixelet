@@ -59,7 +59,7 @@ async function replay(): Promise<void> {
       device,
       () => mem,
       () => {},
-      { upload_chunk_sz: 1 << 16, slow_ms: null },
+      { frame_latency: 2, upload_chunk_sz: 1 << 16, slow_ms: null },
     );
     const turns: string[] = [];
     g.each(`${p}.turn`, (k) => turns.push(k));

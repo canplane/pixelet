@@ -16,12 +16,7 @@ import { GPU_WAITING, type Gpu } from "@/service/sys/gpu.ts";
 import { boot_state, watch_boot, BOOT_STARTED } from "@/service/sys/boot.ts";
 
 import { dismiss_toast, show_toast, ToastTone } from "./store.ts";
-import {
-  useGpu,
-  useCore,
-  useOnline,
-  useSensor,
-} from "@/ui/shared/watch.ts";
+import { useGpu, useCore, useOnline, useSensor } from "@/ui/shared/watch.ts";
 
 /** The reports that can each show a toast. Among toasts of one tone, a lower
  * number ranks higher: a cause comes before what it holds up, the device's
@@ -85,10 +80,7 @@ function useNotice(id: Report, notice: Notice | null, hold_ms = 0): void {
 const error = (key: string): Notice => ({ key, tone: ToastTone.ERROR });
 const loading = (key: string): Notice => ({ key, tone: ToastTone.LOADING });
 
-function location(
-  status: SensorStatus,
-  failure: string | null,
-): Notice | null {
+function location(status: SensorStatus, failure: string | null): Notice | null {
   if (failure !== null) return error(failure);
   return status === SENSOR_STATUS_LOADING
     ? loading("toast.location_checking")

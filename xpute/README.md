@@ -94,11 +94,12 @@ it says.
 
 A program declares its interfaces in WIT, as xpute declares its own under
 `wit/` and `gpu/wit/`, and its guest's world says which the guest serves, its
-exports, and which it calls, its imports. `xpute-link-gen` writes their
-bindings for each side in Rust, TypeScript and C++, and for the host two lists
-from the world: `IMPORTS`, the interfaces the guest calls, and `LATER`, the
-methods of the program's own named interfaces among them that answer later,
-which tells the runtime which of the UI's methods answer later. A Rust guest
+exports, and which it calls, its imports. `xpute-link-gen`, one command a
+side ([link/gen](./link/gen/README.md)), writes their bindings in Rust,
+TypeScript and C++, and for the host two lists from the world: `IMPORTS`, the
+interfaces the guest calls, and `LATER`, the methods of the program's own
+named interfaces among them that answer later, which tells the runtime which
+of the UI's methods answer later. A Rust guest
 defines its three exports with one macro, `link!`, given four things. The
 first is a frame's cap in bytes, a multiple of 8 that holds a frame's words
 (`HDR_SZ`) and the largest packet the program lays or takes. The second is
@@ -131,15 +132,24 @@ imports `gpu`, which runs the records it lends and gives it a device, and
 `vsync`, which answers at the display's next frame, and serves `surface`, which
 the UI opens to draw on. `xpute-gpu-guest` writes WebGPU's calls as records of
 a stream, and draws a frame only while fewer of its frames are unfinished on
-the GPU than its frame latency (`xpute_gpu_guest::admit::frame`), so taking a
-surface's texture never blocks.
+the GPU than its frame latency (`xpute_gpu_guest::admit::frame`), which the
+program sets in its host's `GpuConfig`, so taking a surface's texture never
+blocks.
 
 A C++ guest takes xpute's library as two files, as SQLite ships its own: it
 includes `xpute.hpp` and compiles `xpute.cpp` once, as C++20 with no exceptions,
 no RTTI and no floating-point contraction, the flags `cpp/Makefile` builds with.
-`make -C cpp amalgamation` writes the two files under
+Its bindings include `xpute.hpp` as well, so the two files and the bindings
+are all it compiles. `make -C cpp amalgamation` writes the two files under
 `cpp/target/amalgamation/`, and xpute's own repository carries them at
-`cpp/amalgamation/`.
+`cpp/amalgamation/`. A module is compiled with the WASI SDK's clang for
+`wasm32-wasip1` and linked as a Rust guest's is, with no start files and no
+entry, and its stack first, of the size the program chooses:
+`-nostartfiles -Wl,--no-entry -Wl,--stack-first -Wl,-z,stack-size=<bytes>`.
+It then exports its memory and the link's three exports, imports `link_out`
+and `xpute_mem` from `env` and nothing of WASI, and runs its static
+initializers as its first export starts.
+`make -C cpp module GUEST="<sources>" MODULE=<file>` links one so.
 
 A Rust guest writes nothing about its memory: xpute's guest library makes the
 heap in it Rust's global allocator. A C++ guest takes what it lends its host
@@ -270,15 +280,39 @@ start(remote);
 
 The app builds that crate for the device as it builds, and the module links
 it: a static library at `$PODS_CONFIGURATION_BUILD_DIR/Xpute/lib<crate>.a` on
-an iPhone, and a shared one among the app's `jniLibs` on Android. The app's
-bundler takes each `x.native.ts` in place of `x.ts`. `xpute-gpu-native-host`
-opens the device when the guest asks, with the program's `GpuConfig`, its
-frame latency among it, and keeps its compiled pipelines in `cache_dir`;
-`@xpute/gpu-native-runtime`'s module gives the view a guest's surface draws
-into (`SurfaceView`), drives the display's frames, and tells the UI what the
-host has of a GPU as that changes, the state now first to a UI that starts
-later (`state_on`). The host draws with a
-fork of wgpu, which a program's workspace patches in as xpute's does
+an iPhone, and a shared one among the app's `jniLibs` on Android. The crate is
+Rust whichever language its guest is in, as the runtime it holds is, so a C++
+guest reaches a device by the same rule. The crate's build script compiles the
+guest's sources and the amalgamation's `xpute.cpp` for the device, with the
+flags a module is compiled with, into a static library the crate links, as
+the `cc` crate does. In a library, `XPUTE_LINK` defines the three exports as
+the C symbols the runtime calls, and the runtime defines `link_out` and
+`xpute_mem`, which the guest calls:
+
+```rust
+// build.rs of the crate `xpute.guest.runtime` names.
+fn main() {
+    cc::Build::new()
+        .cpp(true)
+        .std("c++20")
+        .flag("-fno-exceptions")
+        .flag("-fno-rtti")
+        .flag("-ffp-contract=off")
+        .include("xpute") // xpute.hpp
+        .file("xpute/xpute.cpp")
+        .file("guest/main.cpp")
+        .compile("guest");
+}
+```
+
+The app's bundler takes each `x.native.ts` in place of `x.ts`.
+`xpute-gpu-native-host` opens the device when the guest asks, with the
+program's `GpuConfig`, its frame latency among it, and keeps its compiled
+pipelines in `cache_dir`; `@xpute/gpu-native-runtime`'s module gives the view
+a guest's surface draws into (`SurfaceView`), drives the display's frames, and
+tells the UI what the host has of a GPU as that changes, the state now first
+to a UI that starts later (`state_on`). The host draws with a fork of wgpu,
+which a program's workspace patches in as xpute's does
 ([wgpu-fork.md](wgpu-fork.md)).
 
 ### The packages

@@ -20,7 +20,10 @@
 //! its package's (`folded`), as its Rust module does: the words wit-bindgen's
 //! C prefixes a name with, under `abi` as the bindings' Rust modules are. What a header takes from the
 //! library it reaches through one namespace, `_rt`, of using-declarations, as
-//! the Rust's `_rt` module re-exports.
+//! the Rust's `_rt` module re-exports. A program's header includes the library
+//! as the amalgamation, the two files a program takes, by its one header; the
+//! headers of xpute's own packages lie inside the library and include its
+//! headers by their paths, which the amalgamation takes in.
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -53,6 +56,21 @@ const WAIT: Declaration = ("::xpute::link", "xpute/link/wait.hpp");
 const GUEST_LINK: Declaration = ("::xpute::guest", "xpute/guest/link.hpp");
 /// The guest's send of an async call.
 const GUEST_WAIT: Declaration = ("::xpute::guest", "xpute/guest/wait.hpp");
+
+/// The library's one header that a program's bindings include, the
+/// amalgamation's (cpp/amalgamation.awk), which holds every header above and
+/// the bindings of xpute's packages.
+const AMALGAMATION: &str = "xpute.hpp";
+
+/// How a header reaches the library.
+pub(super) enum Library {
+    /// From inside it, as the bindings of xpute's own packages are, which the
+    /// amalgamation takes in: each header by its path from the library's
+    /// root, and each package's headers where `externs` puts them.
+    Inside(Vec<(String, String)>),
+    /// From over it, as a program's bindings are: by the amalgamation alone.
+    Over,
+}
 
 /// The names the C++ bindings give in a scope a WIT name shares: the
 /// interface's handle, a record's store and load, what serves an object and
@@ -121,21 +139,22 @@ fn namespace(r: &Resolve, i: InterfaceId) -> String {
     words.join("::")
 }
 
-/// Where each package of `peers` (each with its root) written in C++ has its
-/// headers, by its `namespace:package`: its directory as an include names it,
-/// from its library's root, the nearest directory holding `compile_flags.txt`
-/// (`-I.`).
+/// Where each package of `peers`, its paths from xpute's root `xpute`,
+/// written in C++ has its headers, by its `namespace:package`: its directory
+/// as an include names it, from its library's root, the nearest directory
+/// holding `compile_flags.txt` (`-I.`).
 pub(super) fn externs(
     r: &Resolve,
     ids: &[PackageId],
-    peers: &[&(&Path, &WitTarget)],
+    xpute: &Path,
+    peers: &[&WitTarget],
 ) -> Result<Vec<(String, String)>, String> {
     let mut out = Vec::new();
-    for (&id, (pr, p)) in ids.iter().zip(peers) {
+    for (&id, p) in ids.iter().zip(peers) {
         let Some(dir) = p.cpp else { continue };
         let library = Path::new(dir)
             .ancestors()
-            .find(|d| pr.join(d).join("compile_flags.txt").is_file())
+            .find(|d| xpute.join(d).join("compile_flags.txt").is_file())
             .ok_or(format!("{dir}: under no C++ library"))?;
         let n = &r.packages[id].name;
         let under = Path::new(dir)
@@ -152,7 +171,7 @@ pub(super) fn externs(
 /// One interface's header being written.
 struct Header<'a> {
     g: &'a Gen<'a>,
-    externs: &'a [(String, String)],
+    library_at: &'a Library,
     /// The standard's headers it includes, and the library's.
     std: RefCell<Includes>,
     library: RefCell<BTreeSet<String>>,
@@ -168,6 +187,10 @@ impl Header<'_> {
     /// `name`, declared in the namespace `ns` by the header `hdr`, reached
     /// through `_rt`.
     fn rt_use(&self, (ns, hdr): Declaration, name: &str) -> String {
+        let hdr = match self.library_at {
+            Library::Inside(_) => hdr,
+            Library::Over => AMALGAMATION,
+        };
         self.library.borrow_mut().insert(hdr.into());
         self.uses
             .borrow_mut()
@@ -211,19 +234,20 @@ impl Header<'_> {
         if i != self.g.here {
             let m = rs_name(r.interfaces[i].name.as_deref().unwrap_or_default());
             let pkg = package_name(r, i);
-            let hdr = if pkg == self.g.pkg {
-                format!("{m}.hpp")
-            } else {
-                let (_, dir) = self
-                    .externs
-                    .iter()
-                    .find(|(p, _)| *p == pkg)
-                    .ok_or(format!("{}: {pkg} is written in no C++", self.g.at()))?;
-                if is_folded(r, i) {
-                    format!("{dir}.hpp")
-                } else {
-                    format!("{dir}/{m}.hpp")
+            let hdr = match self.library_at {
+                _ if pkg == self.g.pkg => format!("{m}.hpp"),
+                Library::Inside(externs) => {
+                    let (_, dir) = externs
+                        .iter()
+                        .find(|(p, _)| *p == pkg)
+                        .ok_or(format!("{}: {pkg} is written in no C++", self.g.at()))?;
+                    if is_folded(r, i) {
+                        format!("{dir}.hpp")
+                    } else {
+                        format!("{dir}/{m}.hpp")
+                    }
                 }
+                Library::Over => AMALGAMATION.into(),
             };
             self.library.borrow_mut().insert(hdr);
         }
@@ -900,19 +924,18 @@ impl Header<'_> {
 
 /// The header at `path` of `g`'s interface, whose objects are `objs`, from
 /// the WIT at `src`; `role` is what the guest does with the objects, none for
-/// an interface of types alone, and `externs` are where
-/// other packages' headers are (`externs`).
+/// an interface of types alone, and `library_at` how it reaches the library.
 pub(super) fn hdr(
     g: &Gen,
     objs: &[Obj],
     role: Option<Role>,
     path: &str,
     src: &str,
-    externs: &[(String, String)],
+    library_at: &Library,
 ) -> Result<String, String> {
     let hdr = Header {
         g,
-        externs,
+        library_at,
         std: RefCell::default(),
         library: RefCell::default(),
         uses: RefCell::default(),

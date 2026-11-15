@@ -19,7 +19,6 @@ pub mod spec;
 pub mod sys;
 pub(crate) mod ui;
 
-use pxl_render::spec::api::device;
 use xpute_gpu_guest::admit;
 use xpute_link::frame::HDR_SZ;
 
@@ -31,10 +30,10 @@ pub const MEASURING: bool = match option_env!("PXL_PERF_DRIVE") {
 };
 
 /// Whether the GPU's host takes a frame now without blocking (xpute-gpu-guest
-/// `admit::frame`), by the device's block and the frame latency
-/// spec/client/render/api.json5 `device` sets.
+/// `admit::frame`), by the device's block, where the host writes the frame
+/// latency spec/client/render/api.json5 `device` sets.
 pub(crate) fn admit_frame() -> bool {
-    admit::frame::<{ device::FRAME_LATENCY }>()
+    admit::frame()
 }
 
 // A frame's cap holds its words and the largest packet the core lays

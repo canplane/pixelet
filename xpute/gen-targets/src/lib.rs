@@ -1,54 +1,11 @@
 // xpute-gen-targets/lib.rs
 
-//! xpute's generation targets, which the tools that generate code read rather
-//! than know: its bindings on each side and their root modules, and its data
-//! specs, the errno table among them. Paths are from xpute's root.
+//! xpute's generation targets, which the tool that generates its code reads
+//! rather than knows: its data specs, the errno table among them. Paths are
+//! from xpute's root. Its bindings' targets are the link generator's
+//! (xpute-link-gen `TARGETS`).
 
 use xpute_gen::spec::data::DataSpec;
-use xpute_link_gen::wit::{Side, WitTarget};
-
-/// The bindings of the link's own types, which every side's bindings read
-/// first.
-pub const LINK_TARGET: WitTarget<'static> = WitTarget {
-    wit: "link/wit",
-    rs: Some("link/rust/src/abi.rs"),
-    ts: Some("link/ts/src/abi"),
-    cpp: Some("cpp/xpute/link/abi"),
-    side: None,
-};
-
-/// Everything else of xpute's packages follows from their names, each
-/// `xpute:<name>` in `wit/<name>`, and from each side's crate: the guest's
-/// bindings, with the TypeScript beside the link's and the C++ in the C++
-/// guest's `abi/`, and the native host's, in the native runtime that holds the
-/// host's link, each in its side's root module, `src/abi.rs`.
-macro_rules! packages {
-    (guest: $g:literal, cpp: $c:literal, native: $n:literal; $($p:ident),*) => {
-        /// The root modules of each side's bindings: the guest's and the
-        /// native host's.
-        pub const ABI_ROOTS: [&str; 2] = [concat!($g, "/src/abi.rs"), concat!($n, "/src/abi.rs")];
-
-        /// xpute's bindings on the guest's side.
-        pub const GUEST_TARGETS: &[WitTarget<'static>] = &[$(WitTarget {
-            wit: concat!("wit/", stringify!($p)),
-            rs: Some(concat!($g, "/src/abi/", stringify!($p), ".rs")),
-            ts: Some(concat!("link/ts/src/abi/", stringify!($p))),
-            cpp: Some(concat!($c, "/abi/", stringify!($p))),
-            side: Some(Side::Guest($g)),
-        }),*];
-
-        /// xpute's bindings on a native device's host's side.
-        pub const NATIVE_HOST_TARGETS: &[WitTarget<'static>] = &[$(WitTarget {
-            wit: concat!("wit/", stringify!($p)),
-            rs: Some(concat!($n, "/src/abi/", stringify!($p), ".rs")),
-            ts: None,
-            cpp: None,
-            side: Some(Side::Host($n)),
-        }),*];
-    };
-}
-
-packages!(guest: "guest/rust", cpp: "cpp/xpute/guest", native: "native/runtime/rust"; clocks, fs, life, stop);
 
 /// xpute's data specs: the link's frame, and the errno table.
 pub const DATA_SPECS: [DataSpec; 2] = [

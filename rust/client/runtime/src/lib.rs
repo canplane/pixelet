@@ -46,7 +46,7 @@ xpute_native_runtime::native_abi!(start, mem::SZ, mem::FIXED_SZ);
 /// `limit::SLOW_MS`, as the page's worker has the page's hosts log.
 const GPU: GpuConfig = GpuConfig {
     frame_latency: device::FRAME_LATENCY,
-    upload_chunk_sz: device::UPLOAD_CHUNK_BYTES as u64,
+    upload_chunk_sz: device::UPLOAD_CHUNK_BYTES,
     slow_ms: if MEASURING {
         Some(limit::SLOW_MS)
     } else {

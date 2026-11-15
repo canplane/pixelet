@@ -5,7 +5,7 @@
 //! and the report of its failures (`stop`).
 
 /// The bindings of xpute's packages on the guest's side, a module to a
-/// package, generated from their WIT (xpute-gen-targets).
+/// package, generated from their WIT (xpute-link-gen).
 pub mod abi;
 // What `link!` expands to names the link's own items through this crate.
 #[doc(hidden)]

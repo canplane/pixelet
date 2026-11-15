@@ -8,8 +8,10 @@
 //! each resource's methods another's. A method's number is its place among its
 //! object's, in declaration order. No two interfaces a target reaches share a
 //! named handle. Each language is written by its own module, from the one
-//! reading of the WIT here: Rust (rs.rs), TypeScript (ts.rs), and in C++ the
-//! guest's side alone (cpp.rs).
+//! reading of the WIT here: Rust for either side (rs.rs), TypeScript for a
+//! host alone (ts.rs) and C++ for the guest alone (cpp.rs). A program's
+//! package is read over xpute's own (`TARGETS`), which it may take, and
+//! whose WIT the generator carries (`FILES`).
 //!
 //! A packet lays its values out as the Component Model's Canonical ABI does
 //! (xpute-link cabi.rs): a call's params as one tuple, an answer's value
@@ -23,20 +25,21 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use wit_parser::{
-    Function, FunctionKind, IndexMap, InterfaceId, Param, Resolve, Type, TypeDefKind, TypeId,
-    TypeOwner, WorldItem, WorldKey,
+    Function, FunctionKind, IndexMap, InterfaceId, Param, Resolve, SourceMap, Type, TypeDefKind,
+    TypeId, TypeOwner, UnresolvedPackageGroup, WorldItem, WorldKey,
 };
 
 use xpute_gen::spec::{
-    int_of, is_float, mark, package, package_path, pascal, read, rs_crate, rs_ident, rs_module,
-    screaming, snake, ts_module, Member, Output,
+    int_of, is_float, mark, package, package_path, pascal, read_str, relative, rs_ident, screaming,
+    snake, Member, Output,
 };
 
 mod cpp;
 mod rs;
 mod ts;
 
-/// One package's bindings on one side, and where they go.
+/// One package's bindings on one side, and where they go, each path from the
+/// root of the program they are written for.
 pub struct WitTarget<'a> {
     /// The package's WIT directory.
     pub wit: &'a str,
@@ -44,29 +47,208 @@ pub struct WitTarget<'a> {
     /// directory of its name, or is itself the module of a package's one
     /// interface of its name (`folded`).
     pub rs: Option<&'a str>,
-    /// The TypeScript directory, a module per interface.
+    /// The TypeScript directory, a module per interface, which a host
+    /// alone takes.
     pub ts: Option<&'a str>,
-    /// The C++ directory, a header per interface, under the library whose
-    /// root holds `compile_flags.txt`.
+    /// The C++ directory, a header per interface, which the guest alone
+    /// takes. A program's headers include xpute's library as the
+    /// amalgamation's one header, `xpute.hpp`; xpute's own lie in the
+    /// library, under its root, which holds `compile_flags.txt`.
     pub cpp: Option<&'a str>,
-    /// The side the Rust runs on, or none for a package of types alone,
+    /// The side the bindings are for, or none for a package of types alone,
     /// which takes nothing of a side. The Rust is written per side, as two
-    /// Rust sides share one process on a device; the TypeScript is
-    /// side-agnostic, taking the link it sends on as an argument, from
-    /// `link.ts` beside xpute:link's bindings.
-    pub side: Option<Side<'a>>,
+    /// Rust sides share one process on a device; the TypeScript is a host's,
+    /// taking the link it sends on as an argument, from `link.ts` beside
+    /// xpute:link's bindings.
+    pub side: Option<Side>,
 }
 
-/// A side of the link, by the directory of its crate, whose `link` opens,
-/// calls and sends and whose `wait` waits; the link's own items come from
-/// xpute-link. A package's world is its guest's, which serves what the world
-/// exports and calls what it imports; every other side, the TypeScript too,
-/// serves the imports and calls the exports. A package whose interfaces have
-/// functions declares its world.
-pub enum Side<'a> {
-    Guest(&'a str),
-    Host(&'a str),
+/// A side of the link. A package's world is its guest's, which serves what
+/// the world exports and calls what it imports; every other side, the
+/// TypeScript too, serves the imports and calls the exports. A package whose
+/// interfaces have functions declares its world.
+#[derive(Clone, Copy, PartialEq)]
+pub enum Side {
+    Guest,
+    Host,
 }
+
+impl Side {
+    /// The directory of the side's crate in xpute, whose `link` opens, calls
+    /// and sends and whose `wait` waits, and whose `src/abi.rs` is the root
+    /// module of xpute's bindings on the side; the link's own items come from
+    /// xpute-link.
+    fn dir(self) -> &'static str {
+        match self {
+            Side::Guest => "guest/rust",
+            Side::Host => "native/runtime/rust",
+        }
+    }
+}
+
+/// The files of xpute's own packages that the generator reads, each `(path,
+/// text)`, its path from xpute's root: their WIT and the link's frame.json5,
+/// embedded as this crate is built (build.rs), so that a program's bindings
+/// are written with no xpute checkout.
+const FILES: &[(&str, &str)] = include!(concat!(env!("OUT_DIR"), "/xpute.rs"));
+
+/// The link's frame.json5, among `FILES`.
+const FRAME: &str = "link/spec/frame.json5";
+
+/// xpute's packages that bindings reach, each its directory from xpute's
+/// root and its name, as a program depends on it.
+const PACKAGES: [(&str, &str); 7] = [
+    ("link/rust", "xpute-link"),
+    ("link/ts", "@xpute/link"),
+    ("guest/rust", "xpute-guest"),
+    ("native/runtime/rust", "xpute-native-runtime"),
+    ("gpu/link/ts", "@xpute/gpu-link"),
+    ("gpu/guest/rust", "xpute-gpu-guest"),
+    ("gpu/native/runtime/rust", "xpute-gpu-native-runtime"),
+];
+
+/// The text of xpute's file `path`, among `FILES`.
+fn xpute_file(path: &str) -> Result<&'static str, String> {
+    FILES
+        .iter()
+        .find(|(p, _)| *p == path)
+        .map(|(_, text)| *text)
+        .ok_or(format!("{path}: no file of xpute's"))
+}
+
+/// xpute's package in its directory `dir`, of the `*.wit` files there among
+/// `FILES`, unresolved.
+fn xpute_wit(dir: &str) -> Result<UnresolvedPackageGroup, String> {
+    let mut map = SourceMap::default();
+    for (path, text) in FILES {
+        if Path::new(path).parent() == Some(Path::new(dir)) && path.ends_with(".wit") {
+            map.push_str(path, *text);
+        }
+    }
+    map.parse()
+        .map_err(|(map, e)| format!("{dir}: {}", e.render(&map)))
+}
+
+/// xpute's package that holds `path`, a path from xpute's root: its name and
+/// its directory.
+fn xpute_package(path: &str) -> Result<(&'static str, &'static str), String> {
+    PACKAGES
+        .iter()
+        .find(|(dir, _)| Path::new(path).starts_with(dir))
+        .map(|&(dir, name)| (name, dir))
+        .ok_or(format!("{path}: in no package of xpute's"))
+}
+
+/// `path`, in xpute's package `dir`, from under the package's `src/`.
+fn under_src<'p>(path: &'p str, dir: &str) -> Result<&'p Path, String> {
+    Path::new(path)
+        .strip_prefix(Path::new(dir).join("src"))
+        .map_err(|_| format!("{path}: not under src/"))
+}
+
+/// How a Rust module in the crate at `here` names the crate of xpute's file
+/// `path`: `crate` from within it, where the bindings are xpute's own, which
+/// lie in xpute's tree at `inside`, and its name otherwise.
+fn xpute_rs_crate(here: &Path, inside: Option<&Path>, path: &str) -> Result<String, String> {
+    let (name, dir) = xpute_package(path)?;
+    Ok(if inside.is_some_and(|x| x.join(dir) == here) {
+        "crate".into()
+    } else {
+        snake(name)
+    })
+}
+
+/// How a Rust module in the crate at `here` names the module of xpute's file
+/// `path` (`xpute_rs_crate`): its crate, then its path under `src/`, a
+/// generated file's `.spec` dropped as its mount drops it.
+fn xpute_rs_module(here: &Path, inside: Option<&Path>, path: &str) -> Result<String, String> {
+    let (_, dir) = xpute_package(path)?;
+    let under = under_src(path, dir)?.to_string_lossy();
+    let mods = under
+        .trim_end_matches(".rs")
+        .trim_end_matches(".spec")
+        .split('/')
+        .map(String::from);
+    Ok(std::iter::once(xpute_rs_crate(here, inside, path)?)
+        .chain(mods)
+        .collect::<Vec<_>>()
+        .join("::"))
+}
+
+/// How a TypeScript module in the directory `here` names xpute's path `path`:
+/// relative to it from within its own package, where the bindings are
+/// xpute's own, which lie in xpute's tree at `inside`, from `.` or `..` as an
+/// import writes it; by the package's name and the path under its `src/`
+/// otherwise.
+fn xpute_ts_module(here: &Path, inside: Option<&Path>, path: &str) -> Result<String, String> {
+    let (name, dir) = xpute_package(path)?;
+    if let Some(x) = inside.filter(|x| here.starts_with(x.join(dir))) {
+        let path = relative(here, &x.join(path));
+        return Ok(match path.split('/').next() {
+            Some("." | "..") => path,
+            _ => format!("./{path}"),
+        });
+    }
+    Ok(format!(
+        "{name}/{}",
+        under_src(path, dir)?.to_string_lossy()
+    ))
+}
+
+// xpute's packages by name, among the link's and the GPU's, as `TARGETS`
+// orders them.
+macro_rules! targets {
+    ($($p:ident),*) => {
+        &[
+            WitTarget {
+                wit: "link/wit",
+                rs: Some("link/rust/src/abi.rs"),
+                ts: Some("link/ts/src/abi"),
+                cpp: Some("cpp/xpute/link/abi"),
+                side: None,
+            },
+            $(WitTarget {
+                wit: concat!("wit/", stringify!($p)),
+                rs: Some(concat!("guest/rust/src/abi/", stringify!($p), ".rs")),
+                ts: None,
+                cpp: Some(concat!("cpp/xpute/guest/abi/", stringify!($p))),
+                side: Some(Side::Guest),
+            },)*
+            $(WitTarget {
+                wit: concat!("wit/", stringify!($p)),
+                rs: Some(concat!("native/runtime/rust/src/abi/", stringify!($p), ".rs")),
+                ts: Some(concat!("link/ts/src/abi/", stringify!($p))),
+                cpp: None,
+                side: Some(Side::Host),
+            },)*
+            WitTarget {
+                wit: "gpu/wit",
+                rs: Some("gpu/guest/rust/src/abi.rs"),
+                ts: None,
+                cpp: Some("cpp/xpute/gpu/guest/abi"),
+                side: Some(Side::Guest),
+            },
+            WitTarget {
+                wit: "gpu/wit",
+                rs: Some("gpu/native/runtime/rust/src/abi.rs"),
+                ts: Some("gpu/link/ts/src/abi"),
+                cpp: None,
+                side: Some(Side::Host),
+            },
+        ]
+    };
+}
+
+/// The bindings of xpute's packages, each path from xpute's root, in the
+/// order they are read: xpute:link's own types first, which every side reads,
+/// then xpute's packages, each `xpute:<name>` in `wit/<name>`, then the GPU
+/// plugin's, each before those that take its types. A program's package is
+/// read after all of its side's. On the guest's side the Rust is in the
+/// guest's crate and the C++ in the C++ guest's `abi/`, and the GPU's beside
+/// its calls; on a host's the Rust is in the native runtime, which holds the
+/// host's link, and the GPU's in xpute-gpu-native-runtime, which its host
+/// serves on that link, and the TypeScript beside each link's.
+pub const TARGETS: &[WitTarget<'static>] = targets!(clocks, fs, life, stop);
 
 /// What a binding's header names as its writer.
 const TOOL: &str = "xpute-link-gen wit.rs";
@@ -852,12 +1034,15 @@ impl Gen<'_> {
     }
 }
 
-/// The root module of one side's bindings, `path` from `root`: a module to
-/// each of `targets` whose Rust is written in the directory of its name.
-pub fn abi_root(root: &Path, path: &str, targets: &[&WitTarget]) -> Result<Output, String> {
+/// The root module of xpute's bindings on `side`, its crate's `src/abi.rs`
+/// in xpute's tree at `root`: a module to each of `TARGETS` on the side whose
+/// Rust is written in the directory of its name.
+pub fn abi_root(root: &Path, side: Side) -> Result<Output, String> {
+    let path = format!("{}/src/abi.rs", side.dir());
     let dir = Path::new(path.trim_end_matches(".rs"));
-    let mods: String = targets
+    let mods: String = TARGETS
         .iter()
+        .filter(|t| t.side == Some(side))
         .filter_map(|t| {
             Path::new(t.rs?)
                 .strip_prefix(dir)
@@ -869,10 +1054,10 @@ pub fn abi_root(root: &Path, path: &str, targets: &[&WitTarget]) -> Result<Outpu
         .collect();
     let text = format!(
         "// {}\n//\n// {}\n\n{mods}",
-        package_path(root, path)?,
+        package_path(root, &path)?,
         mark("wit", TOOL)
     );
-    Ok(Output::new(path, text))
+    Ok(Output::new(&path, text))
 }
 
 /// The named handle of the interface `name` (`namespace:package/interface`):
@@ -886,89 +1071,95 @@ fn named(name: &str, named_bit: u32) -> u32 {
     named_bit | ((hash >> named_bit.trailing_zeros()) ^ hash) & below
 }
 
-/// The value of frame.json5's `name`, beside xpute:link's WIT, `link`:
-/// `NAMED`, the bit of a named handle, or `DROP`, the drop's method, the bound
-/// of an object's methods, which none takes.
-fn frame_val(link: &Path, name: &str) -> Result<u32, String> {
-    let frame = link.join("../spec/frame.json5");
-    let spec = read(&frame.to_string_lossy())?;
+/// The value of the link's frame.json5's `name`: `NAMED`, the bit of a named
+/// handle, or `DROP`, the drop's method, the bound of an object's methods,
+/// which none takes.
+fn frame_val(name: &str) -> Result<u32, String> {
+    let spec = read_str(FRAME, xpute_file(FRAME)?)?;
     spec.get(name)
         .and_then(|n| n.val().num())
         .map(|n| n as u32)
-        .ok_or(format!("{}: no {name}", frame.display()))
+        .ok_or(format!("{FRAME}: no {name}"))
 }
 
-/// The bindings of `t`'s package. `peers` are the targets of its side, each
-/// with its root, xpute:link's first, then each before those that take its
-/// types: their WIT is read before its own, the first's names frame.json5, and
-/// each other package its types take is reached where its peer writes it.
-pub fn wit_outputs(
-    root: &Path,
-    t: &WitTarget,
-    peers: &[(&Path, &WitTarget)],
-) -> Result<Vec<Output>, String> {
-    let own = root.join(t.wit);
-    let peers: Vec<_> = peers.iter().filter(|(r, p)| r.join(p.wit) != own).collect();
+/// The bindings of `t`'s package, its paths from `root`. Its peers are the
+/// packages of `TARGETS` on its side that are read before it, from `FILES`:
+/// their WIT is read before its own, and each package its types take is
+/// reached where its peer writes it. A package that is one of `TARGETS` is
+/// xpute's own, and `root` is then xpute's tree, where its peers lie.
+pub fn wit_outputs(root: &Path, t: &WitTarget) -> Result<Vec<Output>, String> {
+    let own = UnresolvedPackageGroup::parse_dir(root.join(t.wit))
+        .map_err(|e| format!("{}: {e:?}", t.wit))?;
     let mut r = Resolve::default();
     let mut ids = Vec::new();
-    for (pr, p) in &peers {
-        let (id, _) = r
-            .push_dir(pr.join(p.wit))
-            .map_err(|e| format!("{}: {e:?}", p.wit))?;
-        ids.push(id);
+    let mut peers = Vec::new();
+    let mut inside = None;
+    for p in TARGETS
+        .iter()
+        .filter(|p| p.side.is_none() || p.side == t.side)
+    {
+        let group = xpute_wit(p.wit)?;
+        if group.main.name == own.main.name {
+            inside = Some(root);
+            break;
+        }
+        ids.push(
+            r.push_group(group)
+                .map_err(|e| format!("{}: {e:?}", p.wit))?,
+        );
+        peers.push(p);
     }
-    let (pkg, _) = r.push_dir(&own).map_err(|e| format!("{}: {e:?}", t.wit))?;
+    let pkg = r.push_group(own).map_err(|e| format!("{}: {e:?}", t.wit))?;
     let p = &r.packages[pkg];
     let pname = format!("{}:{}", p.name.namespace, p.name.name);
-    let link = peers.first().map_or(own.clone(), |(pr, p)| pr.join(p.wit));
-    let named_bit = frame_val(&link, "NAMED")?;
-    let drop = frame_val(&link, "DROP")?;
+    // xpute:link, which every side reads first.
+    let link = &TARGETS[0];
+    let named_bit = frame_val("NAMED")?;
+    let drop = frame_val("DROP")?;
     let crate_dir =
         t.rs.map(|rs| package(root, rs).map(|(_, dir)| root.join(dir)))
             .transpose()?;
     let ts_dir = t.ts.map(|d| root.join(d));
-    let cpp_externs = t
-        .cpp
-        .map(|_| cpp::externs(&r, &ids, &peers))
-        .transpose()?
-        .unwrap_or_default();
+    // xpute's own packages' C++ is inside its library, which a program's is
+    // over.
+    let cpp_library = match (t.cpp, inside) {
+        (Some(_), Some(x)) => cpp::Library::Inside(cpp::externs(&r, &ids, x, &peers)?),
+        _ => cpp::Library::Over,
+    };
     let mut externs = Vec::new();
-    for (&id, (pr, p)) in ids.iter().zip(&peers) {
+    for (&id, p) in ids.iter().zip(&peers) {
         let name = &r.packages[id].name;
         let rs = match (&crate_dir, p.rs) {
-            (Some(here), Some(rs)) => rs_module(here, pr, rs)?,
+            (Some(here), Some(rs)) => xpute_rs_module(here, inside, rs)?,
             _ => String::new(),
         };
         let ts = match (&ts_dir, p.ts) {
-            (Some(here), Some(ts)) => ts_module(here, pr, ts)?,
+            (Some(here), Some(ts)) => xpute_ts_module(here, inside, ts)?,
             _ => String::new(),
         };
         externs.push((format!("{}:{}", name.namespace, name.name), rs, ts));
     }
     // The side's crate, as the Rust names it, and whether it is the guest.
-    let side = match (&crate_dir, &t.side) {
-        (Some(here), Some(Side::Guest(dir))) => {
-            Some((rs_crate(here, root, &format!("{dir}/Cargo.toml"))?, true))
-        }
-        (Some(here), Some(Side::Host(dir))) => {
-            Some((rs_crate(here, root, &format!("{dir}/Cargo.toml"))?, false))
-        }
+    let side = match (&crate_dir, t.side) {
+        (Some(here), Some(s)) => Some((
+            xpute_rs_crate(here, inside, &format!("{}/Cargo.toml", s.dir()))?,
+            s == Side::Guest,
+        )),
         _ => None,
     };
     // The link's TypeScript module `file`, beside xpute:link's bindings.
-    let link_module = |file: &str| match (&ts_dir, peers.first().map_or(t.ts, |(_, p)| p.ts)) {
+    let link_module = |file: &str| match (&ts_dir, link.ts) {
         (Some(here), Some(ts)) => {
-            let pr = peers.first().map_or(root, |(pr, _)| pr);
             let at = Path::new(ts).parent().unwrap_or(Path::new("")).join(file);
-            ts_module(here, pr, &at.to_string_lossy())
+            xpute_ts_module(here, inside, &at.to_string_lossy())
         }
         _ => Ok(String::new()),
     };
     let link_ts = link_module("link.ts")?;
     let cabi_ts = link_module("cabi.ts")?;
     // The link's crate, xpute:link's bindings' own, as the Rust names it.
-    let link_rs = match (&crate_dir, peers.first().map_or(t.rs, |(_, p)| p.rs)) {
-        (Some(here), Some(rs)) => rs_crate(here, peers.first().map_or(root, |(pr, _)| pr), rs)?,
+    let link_rs = match (&crate_dir, link.rs) {
+        (Some(here), Some(rs)) => xpute_rs_crate(here, inside, rs)?,
         _ => String::new(),
     };
     // No two interfaces the target reaches share a named handle.
@@ -1094,7 +1285,14 @@ pub fn wit_outputs(
             }
         }
         if let Some(dir) = t.ts {
-            let (body, enums) = g.ts_interface(&objs, guest_serves.map(|g| role(!g)))?;
+            let ts_role = match (guest_serves, t.side) {
+                (None, _) => None,
+                (Some(g), Some(Side::Host)) => Some(role(!g)),
+                (Some(_), _) => {
+                    return Err(format!("{at}: TypeScript is written for a host alone"))
+                }
+            };
+            let (body, enums) = g.ts_interface(&objs, ts_role)?;
             let m = g.module_ts();
             if !enums.is_empty() {
                 let path = format!("{dir}/{m}.enum.ts");
@@ -1115,9 +1313,9 @@ pub fn wit_outputs(
             outs.push(Output::new(&path, text));
         }
         if let Some(dir) = t.cpp {
-            let cpp_role = match (guest_serves, &t.side) {
+            let cpp_role = match (guest_serves, t.side) {
                 (None, _) => None,
-                (Some(g), Some(Side::Guest(_))) => Some(role(g)),
+                (Some(g), Some(Side::Guest)) => Some(role(g)),
                 (Some(_), _) => return Err(format!("{at}: C++ is written for the guest alone")),
             };
             let path = if cpp::is_folded(&r, i) {
@@ -1127,7 +1325,7 @@ pub fn wit_outputs(
             };
             outs.push(Output::new(
                 &path,
-                cpp::hdr(&g, &objs, cpp_role, &path, src, &cpp_externs)?,
+                cpp::hdr(&g, &objs, cpp_role, &path, src, &cpp_library)?,
             ));
         }
     }

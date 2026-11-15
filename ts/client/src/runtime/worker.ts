@@ -89,7 +89,7 @@ async function boot(m: Instantiate): Promise<void> {
   online.watch(set_online);
   const link = await instantiate(m.module, m.init, mem.sz, mem.fixed_sz);
   if (link === null) return;
-  // The page's host stages its writes in the chunks a device's does
+  // The page's host runs by the config a device's does
   // (spec/client/render/api.json5 `device`), and in a build made for
   // measuring says what runs slower than `perf.json5`'s `LIMIT.SLOW_MS`.
   const gpu = new WebGpu(
@@ -100,6 +100,7 @@ async function boot(m: Instantiate): Promise<void> {
       optional_feats: device.OPTIONAL_FEATURES,
     },
     {
+      frame_latency: device.FRAME_LATENCY,
       upload_chunk_sz: device.UPLOAD_CHUNK_BYTES,
       slow_ms: __PERF_DRIVE__ ? LIMIT.SLOW_MS : null,
     },

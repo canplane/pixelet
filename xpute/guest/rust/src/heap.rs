@@ -34,7 +34,11 @@ const fn page_up(at: usize) -> usize {
 
 /// Where the share begins, where the heap begins and where the memory ends,
 /// once read.
-static LAYOUT: [AtomicUsize; 3] = [AtomicUsize::new(0), AtomicUsize::new(0), AtomicUsize::new(0)];
+static LAYOUT: [AtomicUsize; 3] = [
+    AtomicUsize::new(0),
+    AtomicUsize::new(0),
+    AtomicUsize::new(0),
+];
 
 /// Where the share begins, where the heap begins and where the memory ends.
 /// The first call reads the memory as the runtime sized it; a share past its
@@ -44,7 +48,10 @@ fn layout() -> [usize; 3] {
         0 => {
             let r = mem::region();
             let share = share_from(r);
-            let (base, end) = (page_up(share + r.share_sz as usize), r.base.expose_provenance() + r.len as usize);
+            let (base, end) = (
+                page_up(share + r.share_sz as usize),
+                r.base.expose_provenance() + r.len as usize,
+            );
             xpute_kit::ensure!(base <= end, ENOMEM, base, end);
             LAYOUT[2].store(end, Relaxed);
             LAYOUT[1].store(base, Relaxed);

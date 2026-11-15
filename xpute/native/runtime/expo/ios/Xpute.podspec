@@ -1,8 +1,8 @@
 # @xpute/native-runtime/ios/Xpute.podspec
 #
 # This is xpute's module on an iPhone (*.swift), and the app's native crate
-# linked with it: the guest with what the runtime starts it with, as the
-# app's package.json `xpute.guest.runtime` names it. The app builds it
+# linked with it: the guest, Rust or C++, with what the runtime starts it
+# with, as the app's package.json `xpute.guest.runtime` names it. The app builds it
 # into this pod's directory, for the configuration and the SDK the app is
 # built as, and the app links from there. Swift imports xpute's C ABI
 # (`import CXpute`).

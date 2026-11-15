@@ -109,6 +109,7 @@ impl GpuHost {
                 )
             }) as u32,
         );
+        set_word(addr + 4 * device::LATENCY_AT as u32, self.frame_latency);
         self.tell_counts();
         mem::store_release(addr + 4 * device::STATUS_AT as u32, status::READY);
     }

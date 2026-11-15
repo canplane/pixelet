@@ -7,5 +7,5 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 /// The bindings of the GPU's packages on a native device's host's side,
-/// generated from gpu/wit (xpute-gpu-gen-targets).
+/// generated from gpu/wit (xpute-link-gen).
 pub mod abi;

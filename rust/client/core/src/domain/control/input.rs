@@ -352,12 +352,7 @@ pub(crate) fn camera_pointer_down(
     set_following(false);
 }
 
-pub(crate) fn camera_pointer_move(
-    touch: bool,
-    pointer_id: i32,
-    view_x: f64,
-    view_y: f64,
-) {
+pub(crate) fn camera_pointer_move(touch: bool, pointer_id: i32, view_x: f64, view_y: f64) {
     let s = input();
     if touch {
         if let Some(pt) = s.active_pointers.get_mut(&pointer_id) {

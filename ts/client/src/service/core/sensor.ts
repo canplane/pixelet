@@ -89,13 +89,11 @@ export const SENSOR_LISTENER: SensorListener = {
       finite(accuracy_in),
       finite(course_in),
     ];
-    if (
-      !(
-        on_earth(lon, lat) &&
-        (accuracy === null || accuracy >= 0) &&
-        bearing(course)
-      )
-    )
+    if (!(
+      on_earth(lon, lat) &&
+      (accuracy === null || accuracy >= 0) &&
+      bearing(course)
+    ))
       return;
     // A fix that comes without an accuracy is taken as having an infinite
     // error.
@@ -260,7 +258,9 @@ function heading(): f64 | null {
  * gives one; null without a fix. */
 function pos(): Position | null {
   const l = device_location_store().location;
-  return l === null ? null : { lon: l.lon_lat[0], lat: l.lon_lat[1], alt: l.alt };
+  return l === null
+    ? null
+    : { lon: l.lon_lat[0], lat: l.lon_lat[1], alt: l.alt };
 }
 
 /** The location's status as the core takes it. */
@@ -294,7 +294,6 @@ function tell_core(): void {
   const [at, deg, status] = [pos(), heading(), location_status()];
   if (told === null || !is_same_pos(told.at, at)) void core.pos(ui, at);
   if (told === null || told.heading !== deg) void core.heading(ui, deg);
-  if (told === null || told.status !== status)
-    void core.location(ui, status);
+  if (told === null || told.status !== status) void core.location(ui, status);
   told = { at, heading: deg, status };
 }

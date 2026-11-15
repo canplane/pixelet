@@ -41,11 +41,9 @@ export const stream = {
   MODULE_BYTES: 131072 as number,
 } as const;
 
-/** What the GPU's host runs the renderer's stream by: a device's (xpute-gpu-native-host
- * `Config`), which the core hands it (pxl-core lib.rs `GPU`, xpute-gpu-link
- * `GpuConfig`), and a page's, which reads the chunk its writes are staged in from
- * the page's worker (ts/client runtime/worker.ts, @xpute/gpu-link `GpuConfig`); a page's
- * browser paces its frames itself. */
+/** What the GPU's host runs the renderer's stream by (xpute-gpu-link and @xpute/gpu-link
+ * `GpuConfig`), the same on a device, where the runtime hands it (pxl-runtime lib.rs `GPU`),
+ * and on a page, where the page's worker hands it (ts/client runtime/worker.ts). */
 export const device = {
   /** The frames drawn and not yet finished on the GPU at once: a frame draws only
    * while fewer are (xpute-gpu-guest `admit::frame`), and a surface queues as

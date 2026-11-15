@@ -42,10 +42,7 @@ import * as online from "@/service/platform/online.ts";
  * is made, and the view is drawn or lies past the service area. When locating
  * fails, the view is drawn at its default place. */
 function loaded(s: Snapshot): boolean {
-  return (
-    s.renderer_progress === 1 &&
-    (s.pivot.ground_shown || s.pivot.outside)
-  );
+  return s.renderer_progress === 1 && (s.pivot.ground_shown || s.pivot.outside);
 }
 
 /** Makes `remote` the UI's end of the link and mounts on it the interfaces the
