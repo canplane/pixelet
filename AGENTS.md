@@ -3,9 +3,10 @@
 ## Hold firmly
 
 - Symmetry usually wins: of role and contract, not of form. Parts whose roles
-  differ are not forced alike. A fix goes where the fact is owned and holds on
-  every platform alike; a platform differs only in how it is reached. No patch is
-  laid over a part to make one case pass.
+  differ are not forced alike. A fix goes where the fact is owned, decides from
+  what the system reports and not from a guess, and holds on every platform
+  alike; a platform differs only in how it is reached. No patch is laid over a
+  part to make one case pass.
 - A structure that is not symmetric (one platform, case or observer handled
   apart from the others, or a step one path takes and another does not), or that
   carries ad hoc pieces (a branch, a flag, a retry or a workaround for one case):
@@ -67,8 +68,9 @@
   apart. A commit holds its author's hunks alone, staged in an index of HEAD
   that is still HEAD when it commits.
 - `out/` holds what a build makes, and no drafts. A temporary folder, an
-  experiment's data too, goes under the checkout's `tmp/`; delete only the
-  folder you made.
+  experiment's data too, goes under the checkout's `tmp/`. Whoever makes a
+  temporary folder, a worktree or a server removes it when done, and deletes
+  only what it made.
 - Cargo builds into `<root>/rust/target/session/$CLAUDE_CODE_SESSION_ID`,
   written absolute.
 - A command that uses a device's GPU or starts or stops an app on it, and does

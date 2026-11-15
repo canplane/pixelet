@@ -48,7 +48,8 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
 - No optional seams: no hook that may be absent, no fallback for a value one
   place could give, no layer split out for a test.
 - One hand. The same work in the same shape, the same names for the same
-  things. Rewrite a part rather than patch a new manner beside the old.
+  things. Rewrite a part rather than lay a new manner beside or over the old
+  (a second form, an alias, a flag, a shim, a lint allow).
 - Keep a symmetry by role and contract. xpute's Rust, C++ and TypeScript are
   also laid out alike, where a part, its file and module names, what a module
   holds and the shape of generated code are concerned, and differ only where
