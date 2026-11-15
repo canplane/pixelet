@@ -2,11 +2,12 @@
 
 //! The marker kind (`spec/spec/asset/marker.json5`), drawn flat to the camera from a design;
 //! its one shape is the pin someone puts up. The module says where a marker's cell is on the
-//! camera grid, and from which cell it shows.
+//! camera grid, from which cell it shows, and whether a text fits its kind's cap, a pin's or a
+//! chat line's.
 
 #[path = "marker.spec.rs"]
 pub mod spec;
-pub use spec::{MARKER_SCALE_STEP, MARKER_SHOWN_FROM, MARKER_TEXT_CHARS};
+pub use spec::{CHAT_TEXT_CHARS, MARKER_SCALE_STEP, MARKER_SHOWN_FROM, MARKER_TEXT_CHARS};
 
 use crate::asset::id::{asset_id, AssetId, Kind};
 use crate::space::coord::zoom::Zoom;
@@ -33,6 +34,13 @@ pub const fn marker_cell_zoom(cell_zoom: Zoom) -> i32 {
 pub fn marker_cell_of(cell_zoom: Zoom, at: Octant) -> (Zoom, [i32; 3]) {
     let z = (marker_cell_zoom(cell_zoom).max(0) as Zoom).min(at.zoom());
     (z, ancestor_of(at.at(), at.zoom() - z))
+}
+
+/// Whether `text` holds at most `cap` code points, a pin's text or a chat
+/// line held to its kind's cap (`MARKER_TEXT_CHARS`, `CHAT_TEXT_CHARS`):
+/// one past it is refused whole, never cut short.
+pub fn text_fits(text: &str, cap: u32) -> bool {
+    text.chars().count() <= cap as usize
 }
 
 /// Whether a marker shows where the camera grid's cell is at `cell_zoom`: no

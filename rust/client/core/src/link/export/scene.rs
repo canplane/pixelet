@@ -13,9 +13,12 @@ use pxl_render::spec::api::surface_role;
 use pxl_spec::asset::character::Group;
 use xpute_kit::status::errno::Errno;
 
-pub(super) fn chat(text: String) -> Result<(), Errno> {
-    marker::append_chat_line(&text);
-    applied()
+/// Says the line `text`, refused whole past `CHAT_TEXT_CHARS`, `too-long`.
+pub(super) fn chat(text: String) -> Result<Result<(), ErrorCode>, Errno> {
+    if marker::append_chat_line(&text).is_err() {
+        return Ok(Err(ErrorCode::TooLong));
+    }
+    applied().map(Ok)
 }
 
 /// Sets what a surface draws until it closes: the world, or one group's

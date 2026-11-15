@@ -15,9 +15,12 @@ description: How code in pixelet and xpute is written — fewest concepts, ortho
   test compares against it, or it defines what a buffer holds. An orphan is
   removed only once no caller, port, test or layout reaches it, and never from
   the kit or another published API.
-- Before changing a structure, read the documents and the code it lives in and
-  state which of its values are independent and which derive or repeat. The
-  change follows from that.
+- Before changing a structure, read the documents and the code it lives in,
+  and its history: `git log` and `git blame` the code, the commit that made it
+  so and when, and what the user decided there. State which of its values are
+  independent and which derive or repeat. The change follows from who owns the
+  fact, as the design and those decisions place it; its size follows from
+  that.
 - Data first. Structures and tables, then short straight functions over them.
   Where a branch picks by kind, a table picks.
 - Read in the order it runs. No step behind a wrapper or a hook.

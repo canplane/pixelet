@@ -107,8 +107,10 @@ struct Input {
 
 static INPUT: Global<Input> = Global::new();
 
-fn input() -> &'static mut Input {
-    INPUT.get(|| Input {
+/// The input as a UI starts it: no pointer pressed, no key held, nothing
+/// pending.
+fn fresh() -> Input {
+    Input {
         drag_mode: DragMode::None,
         did_drag: false,
         pointer_x: 0.0,
@@ -138,7 +140,16 @@ fn input() -> &'static mut Input {
         pinch_start_dist: 0.0,
         pinch_tilt: Anchor::new(0.0, 0.0),
         pinch_twist: None,
-    })
+    }
+}
+
+fn input() -> &'static mut Input {
+    INPUT.get(fresh)
+}
+
+/// Forgets what the UI that left had pressed and held, as a UI attaches.
+pub(crate) fn forget() {
+    INPUT.set(fresh());
 }
 
 /// Negative because dragging up tilts toward the horizon.

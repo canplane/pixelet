@@ -8,7 +8,6 @@ import { BrandSymbol } from "./brand-symbol.tsx";
 import { TEXT_STYLE } from "@/ui/shared/component/theme.ts";
 import { BUILD_NUMBER, BUILD_TIME, TILE_SOURCE } from "@/build.ts";
 import { format } from "@/abi/file.spec.ts";
-import { BASE_KINDS } from "@/abi/publication.spec.ts";
 import { LABEL } from "@/ui/shared/component/palette.ts";
 import { useSourceVersions } from "@/ui/shared/watch.ts";
 
@@ -18,8 +17,10 @@ function dev_label(): string {
   return TILE_SOURCE === "delivery" ? "dev" : `dev:${TILE_SOURCE}`;
 }
 
-function bake_lines(versions: readonly string[] | null): string[] {
-  return (versions ?? []).map((version, k) => `${BASE_KINDS[k]}/${version}`);
+function bake_lines(source: Readonly<Record<string, string>> | null): string[] {
+  return Object.entries(source ?? {}).map(
+    ([kind, version]) => `${kind}/${version}`,
+  );
 }
 
 function object_label(): string {

@@ -32,7 +32,7 @@
  */
 
 import type { U8Array } from "@xpute/kit/abi/array.ts";
-import type { i32, u32 } from "@xpute/kit/abi/word.ts";
+import type { i32 } from "@xpute/kit/abi/word.ts";
 import {
   ERRNO_EINPROGRESS,
   ERRNO_ENOENT,
@@ -41,7 +41,6 @@ import {
 import { XputeError } from "@xpute/kit/status/error.ts";
 import type { Token } from "./abi/types.ts";
 import { Lower } from "./cabi.ts";
-import { HDR_SZ } from "./frame.ts";
 import {
   type Answered,
   type Args,
@@ -85,16 +84,13 @@ export type ToLink =
 /** What the link's side sends the UI: the answer to one of its methods, a
  * method of an object it serves (to answer by `tag`, or null where it is
  * told), an open of one under a prefix it serves, the guest's cancel of a
- * method it answers later, a drop of an object it opened, and the bytes a
- * frame takes, header and packet, once the guest has laid its link and the
- * UI attached (`Remote.fits`). */
+ * method it answers later, and a drop of an object it opened. */
 export type ToUi =
   | { tag: Tag; result: i32; data: U8Array | null }
   | { h: Handle; m: Method; tag: Tag | null; pkt: U8Array | null }
   | { open: Handle; uri: readonly Token[] }
   | { cancel: Tag }
-  | { drop: Handle }
-  | { cap: u32 };
+  | { drop: Handle };
 
 /** The UI's end of a link a runtime serves across a port (@xpute/web-runtime
  * remote.ts `serve`). */
@@ -105,8 +101,6 @@ export class Remote
   private readonly _port: Port;
   private readonly _answers = new Map<Tag, (a: Answered) => void>();
   private _next = 0;
-  /** The bytes a frame takes, as the link's side tells it; null before. */
-  private _cap: u32 | null = null;
 
   constructor(port: Port) {
     super(opened());
@@ -128,10 +122,6 @@ export class Remote
   }
 
   private _hear(m: ToUi): void {
-    if ("cap" in m) {
-      this._cap = m.cap;
-      return;
-    }
     if ("result" in m) {
       const a = this._answers.get(m.tag);
       this._answers.delete(m.tag);
@@ -153,31 +143,6 @@ export class Remote
     const { result, data } =
       typeof reply === "number" ? { result: reply, data: null } : reply;
     this.task_return(m.tag, result, data);
-  }
-
-  /** Whether the packet `call` sends fits a frame, the call made here and not
-   * sent: `call` sends one method at once on the sender it is given, as a
-   * binding does, and its packet is judged against the cap the link's side
-   * told, as the link's side lays it (link.ts `Side._lay`), so that a call
-   * refused whole, EMSGSIZE, is known before it is sent. None fits before
-   * the cap is told. */
-  fits(call: (link: Sender) => unknown): boolean {
-    const cap = this._cap;
-    if (cap === null) return false;
-    let fit = false;
-    const probe: Sender = {
-      send(_h, _m, args) {
-        if (args === null) fit = true;
-        else {
-          const w = new Lower(new Uint8Array(cap - HDR_SZ), args[0]);
-          args[1](w);
-          fit = w.finish() >= 0;
-        }
-        return Promise.resolve({ result: 0, data: null });
-      },
-    };
-    void Promise.resolve(call(probe)).catch(() => {});
-    return fit;
   }
 
   send(h: Handle, m: Method, args: Args): Promise<Answered> {

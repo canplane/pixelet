@@ -246,6 +246,13 @@ export function step_scale(delta: i32): void {
   flash_swatch(id, true);
 }
 
+/** Whether `text`, trimmed as it is sent, holds at most `cap` code points,
+ * the core's cap of a pin's text or a chat line (`MARKER_TEXT_CHARS`,
+ * `CHAT_TEXT_CHARS`): one past it is refused whole, never cut short. */
+export function text_fits(text: string, cap: number): boolean {
+  return [...text.trim()].length <= cap;
+}
+
 /** The line joins the chat once the core takes it, and a line it refuses
  * whole does not: it answers whether the core took it. */
 export async function append_chat_line(text: string): Promise<boolean> {

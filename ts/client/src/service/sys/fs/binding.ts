@@ -81,7 +81,7 @@ function base(layer: (typeof BASE_KINDS)[number]): Handler {
     open(rest, signal) {
       const key = string_of(rest, QUADKEY);
       if (key === undefined) return none();
-      return when_source_declared().then((d) =>
+      return when_source_declared(signal).then((d) =>
         read_object(d, layer, key, signal),
       );
     },
@@ -100,7 +100,7 @@ const HANDLERS: ReadonlyMap<Node, Handler> = new Map<Node, Handler>([
     {
       open: (rest, signal) =>
         rest.length === 0
-          ? when_source_declared().then((d) =>
+          ? when_source_declared(signal).then((d) =>
               read_object(d, BASE_KINDS[path.EARTH.ID], TILE_SPHERE, signal),
             )
           : none(),

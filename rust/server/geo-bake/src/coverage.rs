@@ -10,6 +10,7 @@ use std::sync::LazyLock;
 use postgres::types::ToSql;
 use postgres::{Client, NoTls};
 use pxl_geo_spec::table::CATALOG;
+use pxl_geo_spec::BAKE_READ_DIST;
 use pxl_spec::space::coord::zoom::{cnt, units, Zoom, LEAF_ZOOM, SHARD_ZOOM};
 use pxl_spec::space::hierarchy::morton::{self, key_of, key_of_name, node_of};
 use pxl_spec::space::hierarchy::tree::{ancestor_of, first_descendant_of, region};
@@ -26,11 +27,6 @@ pub type Shard = [i32; 2];
 /// bake tells apart, and more than the meter a shard's edges and a feature's
 /// extent are each rounded to.
 pub const EPS: f64 = units(GROUND.leaf_cell_zoom());
-
-/// How far past a leaf any bake reads, in units: a z13 tile, four terrain
-/// leaves. A terrain leaf's reads stay within its 2-ring; the divisions' leaf
-/// looks this far past the tile for a division with no area (division.rs).
-pub(crate) const BAKE_READ_DIST: f64 = units(LEAF_ZOOM - 2);
 
 const _: () = assert!(
     2.0 * units(LEAF_ZOOM) <= BAKE_READ_DIST,

@@ -51,21 +51,37 @@ interface Xpute {
   mem(): ArrayBuffer;
   /** Writes a line to the process's output (`log`). */
   log(line: string): void;
+  /** The guest's last stop, or null before the guest stopped (xpute.h
+   * `xpute_stop`). */
+  stop(): Report | null;
+  /** What trapped the guest, or null before it trapped (xpute.h
+   * `xpute_trap`). */
+  trap(): string | null;
 }
 
 export const XPUTE: Xpute = requireNativeModule<Xpute>("Xpute");
 
 /** Adds `hear` to what is told the guest's stop, as the link has it, over the
- * module's `onStopped`, which xpute.h `xpute_stopped_on` sends. */
+ * module's `onStopped`, which xpute.h `xpute_stopped_on` sends, and tells it
+ * the stop the runtime keeps, which a UI started after the stop has not
+ * heard, as @xpute/gpu-native-runtime `state_on` tells the GPU's state. A
+ * stop told between the two is the kept one, and is heard again. */
 export function stopped_on(hear: (stop: Stop) => void): { remove(): void } {
-  return XPUTE.addListener("onStopped", (r) => hear(stop_of(r)));
+  const sub = XPUTE.addListener("onStopped", (r) => hear(stop_of(r)));
+  const r = XPUTE.stop();
+  if (r !== null) hear(stop_of(r));
+  return sub;
 }
 
 /** Adds `hear` to what is told that the guest trapped, with what stopped it,
  * as a page's trap carries its error, over the module's `onTrap`, which
- * xpute.h `xpute_trap_on` sends. */
+ * xpute.h `xpute_trap_on` sends, and tells it the trap the runtime keeps, as
+ * `stopped_on` tells the stop. */
 export function trap_on(hear: (err: string) => void): { remove(): void } {
-  return XPUTE.addListener("onTrap", (r) => hear(r.err));
+  const sub = XPUTE.addListener("onTrap", (r) => hear(r.err));
+  const err = XPUTE.trap();
+  if (err !== null) hear(err);
+  return sub;
 }
 
 /** Writes `line` to the process's output: stdout on iOS, the log under the

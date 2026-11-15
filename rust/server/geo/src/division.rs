@@ -2,16 +2,16 @@
 
 //! Which divisions name a point, broad to fine, resolved from coordinates. A
 //! point steps down by the divisions' rule (pxl-geo-spec `overture::division`),
-//! among the children whose points lie within its `radius_merc_at`. Where no area
-//! holds the point, it is in the nearest division within that reach,
-//! approximately.
+//! among the children whose points lie within `BAKE_READ_DIST` of it on either
+//! axis. Where no area holds the point, it is in the nearest division within
+//! that reach, approximately.
 
 /// Each point's deepest division whose area holds it, the lesser id at one
-/// depth, and where none does, the nearest division within its radius `$3`:
-/// `$1`/`$2`/`$3` are EPSG:3857 meters and `idx` counts the points from 1.
+/// depth, and where none does, the nearest division within `$3` on either
+/// axis: `$1`/`$2` are EPSG:3857 meters and `idx` counts the points from 1.
 const AT_SQL: &str = "
 SELECT p.idx, a.id AS area, n.id AS nearest
-FROM unnest($1::float8[], $2::float8[], $3::float8[]) WITH ORDINALITY AS p(x, y, radius, idx)
+FROM unnest($1::float8[], $2::float8[]) WITH ORDINALITY AS p(x, y, idx)
 CROSS JOIN LATERAL (SELECT ST_SetSRID(ST_MakePoint(p.x, p.y), 3857) AS pt) g
 LEFT JOIN LATERAL (
   SELECT d.gers_id AS id FROM overture_division_areas s JOIN overture_divisions d ON d.gers_id = s.properties->>'division_id'
@@ -20,26 +20,26 @@ LEFT JOIN LATERAL (
 ) a ON true
 LEFT JOIN LATERAL (
   SELECT q.gers_id AS id FROM overture_divisions q
-  WHERE a.id IS NULL AND ST_DWithin(q.geom, g.pt, p.radius)
+  WHERE a.id IS NULL AND q.geom && ST_MakeEnvelope(p.x - $3, p.y - $3, p.x + $3, p.y + $3, 3857)
   ORDER BY q.geom <-> g.pt, q.gers_id LIMIT 1
 ) n ON true
 WHERE a.id IS NOT NULL OR n.id IS NOT NULL";
 
-/// The divisions with no area whose point lies within each point's radius,
-/// with their parents, as `AT_SQL` takes the points.
+/// The divisions with no area whose point lies within `$3` of each point, with
+/// their parents, as `AT_SQL` takes the points.
 const CHILDREN_SQL: &str = "
 SELECT p.idx, d.gers_id, d.properties->>'parent_division_id' AS parent, ST_X(d.geom) AS x, ST_Y(d.geom) AS y
-FROM unnest($1::float8[], $2::float8[], $3::float8[]) WITH ORDINALITY AS p(x, y, radius, idx)
-JOIN overture_divisions d ON ST_DWithin(d.geom, ST_SetSRID(ST_MakePoint(p.x, p.y), 3857), p.radius)
+FROM unnest($1::float8[], $2::float8[]) WITH ORDINALITY AS p(x, y, idx)
+JOIN overture_divisions d ON d.geom && ST_MakeEnvelope(p.x - $3, p.y - $3, p.x + $3, p.y + $3, 3857)
 WHERE NOT EXISTS (SELECT 1 FROM overture_division_areas s WHERE s.properties->>'division_id' = d.gers_id)";
 
 use fnv::FnvHashMap;
 
 use deadpool_postgres::Pool;
-use pxl_geo_spec::overture::division::{
-    self, radius_merc_at, steps, Children, Division, LINEAGE_SQL,
-};
+use pxl_geo_spec::overture::division::{self, steps, Children, Division, LINEAGE_SQL};
+use pxl_geo_spec::BAKE_READ_DIST;
 use pxl_spec::division::DivisionPart;
+use pxl_spec::space::coord::adapter::epsg3857::merc_from_u;
 use tokio_postgres::Client;
 
 use pxl_server::db::DbError;
@@ -80,9 +80,9 @@ pub(crate) async fn name_points(
         return Ok(Vec::new());
     }
     let client = pool.get().await?;
-    let radii: Vec<f64> = ys.iter().map(|&y| radius_merc_at(y)).collect();
+    let reach = merc_from_u(BAKE_READ_DIST);
     let mut children = vec![Children::default(); xs.len()];
-    for r in client.query(CHILDREN_SQL, &[&xs, &ys, &radii]).await? {
+    for r in client.query(CHILDREN_SQL, &[&xs, &ys, &reach]).await? {
         if let Some(parent) = r.get::<_, Option<String>>("parent") {
             children[(r.get::<_, i64>("idx") - 1) as usize]
                 .entry(parent)
@@ -91,7 +91,7 @@ pub(crate) async fn name_points(
         }
     }
     let mut finest: Vec<Option<(String, bool)>> = vec![None; xs.len()];
-    for r in client.query(AT_SQL, &[&xs, &ys, &radii]).await? {
+    for r in client.query(AT_SQL, &[&xs, &ys, &reach]).await? {
         let k = (r.get::<_, i64>("idx") - 1) as usize;
         finest[k] = match r.get::<_, Option<String>>("area") {
             Some(area) => match steps(&area, [xs[k], ys[k]], &children[k]).last() {

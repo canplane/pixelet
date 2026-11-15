@@ -21,6 +21,27 @@ public class XputeModule: Module {
   /// one has started (xpute.h `xpute_start`); 0, no UI's, until then.
   private var generation: UInt32 = 0
 
+  /// The runtime's `len` bytes of UTF-8 at `at`.
+  private static func text(_ at: UnsafePointer<CChar>?, _ len: Int) -> String {
+    String(decoding: UnsafeRawBufferPointer(start: at, count: len), as: UTF8.self)
+  }
+
+  /// The guest's stop as `onStopped` carries it.
+  private static func report(
+    _ errnum: Int32, _ file: UnsafePointer<CChar>?, _ fileLen: Int, _ line: UInt32, _ n1: UInt64,
+    _ n2: UInt64
+  ) -> [String: Any] {
+    [
+      "errnum": Int(errnum),
+      "file": text(file, fileLen),
+      "line": Int(line),
+      // A JavaScript number holds no u64 whole, so each crosses as its
+      // decimal digits.
+      "n1": String(n1),
+      "n2": String(n2),
+    ]
+  }
+
   public func definition() -> ModuleDefinition {
     Name("Xpute")
 
@@ -39,21 +60,10 @@ public class XputeModule: Module {
       xpute_notify_on { XputeModule.current?.sendEvent("onNotify") }
       xpute_stopped_on { errnum, file, fileLen, line, n1, n2 in
         XputeModule.current?.sendEvent(
-          "onStopped",
-          [
-            "errnum": Int(errnum),
-            "file": String(decoding: UnsafeRawBufferPointer(start: file, count: fileLen), as: UTF8.self),
-            "line": Int(line),
-            // A JavaScript number holds no u64 whole, so each crosses as its
-            // decimal digits.
-            "n1": String(n1),
-            "n2": String(n2),
-          ])
+          "onStopped", XputeModule.report(errnum, file, fileLen, line, n1, n2))
       }
       xpute_trap_on { err, errLen in
-        XputeModule.current?.sendEvent(
-          "onTrap",
-          ["err": String(decoding: UnsafeRawBufferPointer(start: err, count: errLen), as: UTF8.self)])
+        XputeModule.current?.sendEvent("onTrap", ["err": XputeModule.text(err, errLen)])
       }
     }
     OnDestroy {
@@ -113,6 +123,26 @@ public class XputeModule: Module {
       let at = xpute_mem(&len)
       return try NativeArrayBuffer.wrap(
         dataWithoutCopy: UnsafeMutableRawBufferPointer(start: at, count: Int(len)), cleanup: {})
+    }
+
+    /// The guest's last stop, as `onStopped` carries it, or nil before the
+    /// guest stopped (xpute.h `xpute_stop`).
+    Function("stop") { () -> [String: Any]? in
+      var errnum: Int32 = 0
+      var fileLen = 0
+      var line: UInt32 = 0
+      var n1: UInt64 = 0
+      var n2: UInt64 = 0
+      guard let file = xpute_stop(&errnum, &fileLen, &line, &n1, &n2) else { return nil }
+      return XputeModule.report(errnum, file, fileLen, line, n1, n2)
+    }
+
+    /// What trapped the guest, or nil before it trapped (xpute.h
+    /// `xpute_trap`).
+    Function("trap") { () -> String? in
+      var len = 0
+      guard let err = xpute_trap(&len) else { return nil }
+      return XputeModule.text(err, len)
     }
 
     Function("log") { (line: String) in

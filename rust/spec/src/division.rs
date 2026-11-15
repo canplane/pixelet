@@ -9,11 +9,7 @@
 #[path = "division.spec.rs"]
 pub mod spec;
 
-use spec::{division_name, division_subtype};
-
-/// The most bytes of a division's name the overlay's snapshot carries (`division.json5`
-/// `DIVISION_NAME`).
-pub const NAME_BYTES: usize = division_name::BYTES as usize;
+use spec::division_subtype;
 
 /// Overture's subtypes, broadest first, numbered as `spec/spec/division.json5` numbers them,
 /// which is also how a subtype crosses as JSON.

@@ -591,8 +591,8 @@ fn declared(header: &str) -> Vec<String> {
 /// generates its code is a head of its own, which no part names and which names only the kit
 /// and the links. A part is held by what it ships: its manifest's dependencies, a
 /// dev-dependency left out, and the names its sources write, its tests left out, which may
-/// take the golden records' reader and a test's guest memory.
-const XPUTE_ORDER: [(&str, u8); 19] = [
+/// take the golden records' reader.
+const XPUTE_ORDER: [(&str, u8); 18] = [
     ("kit", 0),
     ("link", 1),
     ("guest", 2),
@@ -606,7 +606,6 @@ const XPUTE_ORDER: [(&str, u8); 19] = [
     ("gpu-native-runtime", 5),
     ("gpu-native-host", 6),
     ("golden", 7),
-    ("test-mem", 7),
     ("gen", 7),
     ("link-gen", 7),
     ("gen-targets", 7),
@@ -624,7 +623,6 @@ const XPUTE_HEADS: [&[&str]; 4] = [
     ],
     &[
         "golden",
-        "test-mem",
         "gen",
         "link-gen",
         "gen-targets",

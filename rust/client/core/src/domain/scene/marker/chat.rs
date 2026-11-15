@@ -9,7 +9,9 @@
 use std::rc::Rc;
 
 use pxl_global::Global;
+use pxl_spec::asset::marker::{text_fits, CHAT_TEXT_CHARS};
 use xpute_guest::clock::now;
+use xpute_kit::status::errno::Errno;
 
 use crate::domain::scene::marker::design::Design;
 use crate::domain::scene::marker::param::SHOWN_MS;
@@ -35,11 +37,17 @@ fn chat() -> &'static mut Chat {
     CHAT.get(Chat::default)
 }
 
-pub(crate) fn append_chat_line(text: &str) {
+/// Says the line `text`; a line past `CHAT_TEXT_CHARS` is refused whole
+/// (pxl-spec asset/marker.rs `text_fits`), EMSGSIZE, and the last line stays.
+pub(crate) fn append_chat_line(text: &str) -> Result<(), Errno> {
+    if !text_fits(text, CHAT_TEXT_CHARS) {
+        return Err(Errno::EMSGSIZE);
+    }
     chat().line = Some(Line {
         text: text.into(),
         at_ms: now(),
     });
+    Ok(())
 }
 
 /// The line to show, in its bubble, or None once it has shown for

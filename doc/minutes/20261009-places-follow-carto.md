@@ -157,3 +157,18 @@ no second language beside it, and is found by its name in any language.
 The user decided that a table's shard is a slot with its own Overture release, and
 nothing limits one by another. A release is taken by type: `division` and
 `division_area` moved to 2026-10-21.0, and the other tables stayed on 2026-09-23.1.
+
+## 2026-11-15
+
+Overture's schema gives every division but a country a parent, and every
+division a hierarchy from its country down to it; it says nothing of a parent's
+subtype, and its data repeats one (Berlin's city, a locality, under the
+locality Mitte, OvertureMaps/data#441) or puts one out of order (Kowloon under
+a district, #442). No cycle is reported. A walk up a division's parents ends at
+its country, and nothing bounds it by the subtypes' count.
+
+The user decided that the address over the world is the one the view's zoom
+shows, the search's the finest it finds, and the two need not agree. The checks
+that took a walk past the subtypes' count for a cycle (67ea7692ce, the search's,
+2026-10-08; a5194db060, the tile reader's, 2026-10-10) and the caps on a chain
+and a name laid for the link's frame (7df30a4905, 2026-11-12) went.

@@ -24,7 +24,7 @@ export const ERROR_CODE_WOULD_BLOCK = 0;
 export const ERROR_CODE_BAD_DESCRIPTOR = 1;
 /** The surface draws something else. */
 export const ERROR_CODE_BUSY = 2;
-/** The text is longer than a marker holds. */
+/** The text is longer than its kind holds, a marker's or a chat line's. */
 export const ERROR_CODE_TOO_LONG = 3;
 /** The profiler's setting is off. */
 export const ERROR_CODE_NOT_PERMITTED = 4;

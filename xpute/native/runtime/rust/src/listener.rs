@@ -2,13 +2,12 @@
 
 //! What the app hears from the runtime, through the functions it sets, as a
 //! Wayland client's listener hears its events: a batch waiting for the UI
-//! (`notify_on`), the guest's stop (`stopped_on`) and its trap (`trap_on`);
-//! and what the app was told of the guest's end, told again to each new UI
-//! (`tell_end`). It names nothing else of the runtime: the link tells it a
-//! trap (link.rs `trap`), the host the guest's stop (xpute-native-host
-//! stop.rs) and the runtime's hook a failure of the host's (native.rs
-//! `hook`), as a page's runtime posts its own (@xpute/web-runtime worker.ts
-//! `tell`).
+//! (`notify_on`), the guest's stop (`stopped_on`) and its trap (`trap_on`),
+//! the last of each kept for a UI that starts after it (`stop`, `trap`). It
+//! names nothing else of the runtime: the link tells it a trap (link.rs
+//! `trap`), the host the guest's stop (xpute-native-host stop.rs) and the
+//! runtime's hook a failure of the host's (native.rs `hook`), as a page's
+//! runtime posts its own (@xpute/web-runtime worker.ts `tell`).
 
 use std::sync::{Mutex, MutexGuard};
 
@@ -37,7 +36,7 @@ pub type Trapped = extern "C" fn(*const u8, usize);
 
 static NOTIFY: Mutex<Option<Tell>> = Mutex::new(None);
 static STOPPED: Mutex<Option<Stopped>> = Mutex::new(None);
-static TRAP: Mutex<Option<Trapped>> = Mutex::new(None);
+static TRAPPED: Mutex<Option<Trapped>> = Mutex::new(None);
 
 /// Makes `f` be told that a batch waits for the UI (xpute.h `xpute_notify_on`).
 pub fn notify_on(f: Option<Tell>) {
@@ -51,7 +50,7 @@ pub fn stopped_on(f: Option<Stopped>) {
 
 /// Makes `f` be told the guest's trap (xpute.h `xpute_trap_on`).
 pub fn trap_on(f: Option<Trapped>) {
-    *TRAP.lock().unwrap_or_else(|e| e.into_inner()) = f;
+    *TRAPPED.lock().unwrap_or_else(|e| e.into_inner()) = f;
 }
 
 /// Tells the app a batch waits (remote.rs `flush`).
@@ -61,12 +60,13 @@ pub(crate) fn notify() {
     }
 }
 
-/// What the app was told of the guest's end: the last stop reported, as the
-/// UI keeps it, and what trapped the guest, told again to each new UI
-/// (`tell_end`).
+/// What the app was last told of the guest's end: its stop and what trapped
+/// it, none before each is told (`stop`, `trap`). Each told is leaked, a few
+/// a process at most, so what a getter lends lives as long as the process,
+/// as the GPU's state does (xpute-gpu-native-host native.rs `CUR`).
 struct End {
-    stop: Option<Stop>,
-    trap: Option<String>,
+    stop: Option<&'static Stop>,
+    trap: Option<&'static str>,
 }
 
 static END: Mutex<End> = Mutex::new(End {
@@ -78,6 +78,19 @@ fn end() -> MutexGuard<'static, End> {
     END.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// The guest's last stop, or none before it stopped: a UI that starts after
+/// it reads it so, as it reads the GPU's state (xpute-gpu-native-host
+/// native.rs `state`).
+pub fn stop() -> Option<&'static Stop> {
+    end().stop
+}
+
+/// What trapped the guest, or none before it trapped: a UI that starts after
+/// the trap reads it so.
+pub fn trap() -> Option<&'static str> {
+    end().trap
+}
+
 fn call_stopped(s: &Stop) {
     if let Some(f) = *STOPPED.lock().unwrap_or_else(|e| e.into_inner()) {
         f(s.errnum, s.file.as_ptr(), s.file.len(), s.line, s.n1, s.n2);
@@ -85,7 +98,7 @@ fn call_stopped(s: &Stop) {
 }
 
 fn call_trapped(err: &str) {
-    if let Some(f) = *TRAP.lock().unwrap_or_else(|e| e.into_inner()) {
+    if let Some(f) = *TRAPPED.lock().unwrap_or_else(|e| e.into_inner()) {
         f(err.as_ptr(), err.len());
     }
 }
@@ -93,29 +106,18 @@ fn call_trapped(err: &str) {
 /// Tells the app the guest stopped, with the report of the broken
 /// invariant: the guest's, which the host that serves the stop hands it
 /// (xpute-native-host stop.rs), or the host's own failure (native.rs
-/// `hook`), as @xpute/web-runtime worker.ts `tell_stop` tells a page.
+/// `hook`), as @xpute/web-runtime worker.ts `tell_stop` tells a page. It is
+/// kept before it is told (`stop`), so a UI that reads none hears it.
 pub fn tell_stop(s: Stop) {
-    let mut end = end();
-    call_stopped(&s);
-    end.stop = Some(s);
+    let s: &'static Stop = Box::leak(Box::new(s));
+    end().stop = Some(s);
+    call_stopped(s);
 }
 
-/// Tells the app the guest trapped, with what stopped it (link.rs `trap`).
+/// Tells the app the guest trapped, with what stopped it (link.rs `trap`),
+/// kept before it is told (`trap`).
 pub(crate) fn tell_trap(err: &str) {
-    let mut end = end();
+    let err: &'static str = err.to_owned().leak();
+    end().trap = Some(err);
     call_trapped(err);
-    end.trap = Some(err.to_owned());
-}
-
-/// Tells a new UI what the app was told of the guest's end, as the first heard
-/// it (native.rs `start`): a stop told again lands before a trap told
-/// meanwhile.
-pub(crate) fn tell_end() {
-    let end = end();
-    if let Some(s) = &end.stop {
-        call_stopped(s);
-    }
-    if let Some(err) = &end.trap {
-        call_trapped(err);
-    }
 }

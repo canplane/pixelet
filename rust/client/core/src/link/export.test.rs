@@ -4,15 +4,21 @@ use super::*;
 use crate::abi::edit::Tool;
 use crate::abi::overlay::SensorStatus;
 use crate::abi::scene::SceneContent;
-use crate::abi::types::Declaration;
+use crate::abi::types::ErrorCode;
 use crate::domain::control::camera::state::{camera_state, Intent};
+use crate::domain::control::edit::write;
 use crate::domain::control::navigation::destination;
 use crate::domain::control::param;
 use crate::domain::control::sensor::device_orientation::{self, OrientationCommand};
 use crate::domain::control::sensor::geolocation;
 use crate::domain::control::sensor::reading::device_orient_store;
+use crate::domain::query::test::flat_at_five;
 use crate::spec::perf::RING_NAMES;
 use pxl_render::gpu::surface::surface_open;
+use pxl_spec::asset::marker::{CHAT_TEXT_CHARS, MARKER_TEXT_CHARS};
+use pxl_spec::space::coord::world;
+use pxl_spec::space::coord::zoom::UNIT_ZOOM;
+use pxl_spec::space::layer::octant::Octant;
 
 /// Each argument these methods refuse before they touch anything answers
 /// EINVAL, whatever else it holds.
@@ -25,12 +31,7 @@ fn a_refused_argument_answers_its_errno() {
         input::pinch(0.0),
         input::xr_pose(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
         edit::hold(Tool::Item, u32::MAX, 0),
-        source::declare(Declaration {
-            min_zoom: 0,
-            formats: Vec::new(),
-            versions: Vec::new(),
-            shards: Vec::new(),
-        }),
+        source::declare(0, Vec::new(), Vec::new()),
         sensor::pos(0.0, off_earth, None, None, None),
         sensor::pos(0.0, 0.0, None, Some(-1.0), None),
         sensor::pos(0.0, 0.0, None, None, Some(361.0)),
@@ -117,12 +118,12 @@ fn take_invalid() -> bool {
         .is_ready()
 }
 
-/// An input that moves the view, what the pointer hovers or the tool asks for
-/// its frame, as the core's other methods do, so a still world shows it at
-/// once.
 /// An input the UI sends, called as the link calls it.
 type Input<'a> = &'a dyn Fn() -> Result<(), Errno>;
 
+/// An input that moves the view, what the pointer hovers or the tool asks for
+/// its frame, as the core's other methods do, so a still world shows it at
+/// once.
 #[test]
 fn an_input_asks_for_its_frame() {
     use crate::abi::input::{PointerPhase, PointerType};
@@ -143,4 +144,36 @@ fn an_input_asks_for_its_frame() {
         assert_eq!(input(), Ok(()), "{name}");
         assert!(take_invalid(), "{name} asks for no frame");
     }
+}
+
+/// A text is held to its kind's cap and refused whole one past it,
+/// `too-long`, a chat line and a pin's draft alike, the refusal asking for no
+/// frame; a chat line at its cap is the rule's (pxl-spec `text_fits`), as
+/// saying it reads the host's clock. A pin's draft holds its text as it is
+/// typed, none at first, and keeps the text it had where it is refused.
+#[test]
+fn a_text_is_held_to_its_kind_cap() {
+    let text = |cnt: u32| "😀".repeat(cnt as usize);
+    take_invalid();
+    assert_eq!(
+        scene::chat(text(CHAT_TEXT_CHARS + 1)),
+        Ok(Err(ErrorCode::TooLong))
+    );
+    assert!(!take_invalid(), "a refused line asks for a frame");
+
+    let [x, y] = flat_at_five();
+    write::draft_at(Octant::holding(UNIT_ZOOM, &world::point(x, y, 5.0)));
+    assert_eq!(edit::marker_text(String::new()), Ok(Ok(())));
+    assert_eq!(edit::marker_text(text(MARKER_TEXT_CHARS)), Ok(Ok(())));
+    take_invalid();
+    assert_eq!(
+        edit::marker_text(text(MARKER_TEXT_CHARS + 1)),
+        Ok(Err(ErrorCode::TooLong))
+    );
+    assert!(!take_invalid(), "a refused draft asks for a frame");
+    assert_eq!(
+        write::marker_draft(),
+        Some(text(MARKER_TEXT_CHARS).as_str())
+    );
+    write::cancel_draft();
 }

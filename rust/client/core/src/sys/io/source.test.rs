@@ -1,7 +1,6 @@
 // pxl-core/sys/io/source.test.rs
 
 use super::*;
-use crate::abi::types::Shard;
 
 fn tile(name: &str) -> Quadrant {
     Quadrant::of_key(name).expect("a tile's name")
@@ -13,35 +12,9 @@ fn formats() -> Vec<u32> {
     FORMAT.to_vec()
 }
 
-/// A declaration of `min_zoom`, `format` and the shards `names`, each kind at
-/// one version and no shard declaring its own.
-fn decl(
-    min_zoom: u32,
-    format: &[u32],
-    names: impl IntoIterator<Item = &'static str>,
-) -> Declaration {
-    let kind_cnt = BaseKind::ALL.len();
-    Declaration {
-        min_zoom,
-        formats: format.to_vec(),
-        versions: vec!["v".into(); kind_cnt],
-        shards: names
-            .into_iter()
-            .map(|name| Shard {
-                name: name.into(),
-                versions: vec![None; kind_cnt],
-            })
-            .collect(),
-    }
-}
-
-// The test reads a parsed source and never declares it. A declaration is
-// made once in a process, and the world's tests walk ground that no shard of
-// this source serves.
 #[test]
 fn src_serves_by_shard() {
-    let s = parse(decl(4, &formats(), ["0103300", "01033210"]))
-        .expect("a declaration the client reads");
+    let s = parse(4, &formats(), ["0103300", "01033210"]).expect("a declaration the client reads");
     for served in [
         "01033",
         "0103300",
@@ -65,12 +38,43 @@ fn unfollowable_decl_refused() {
     let mut unread = f.clone();
     unread[BaseKind::Terrain as usize] += 1;
     let short = &f[..f.len() - 1];
-    assert!(parse(decl(4, &unread, [])).is_none(), "an unread format");
-    assert!(parse(decl(4, short, [])).is_none(), "a kind with no format");
+    assert!(parse(4, &unread, []).is_none(), "an unread format");
+    assert!(parse(4, short, []).is_none(), "a kind with no format");
     assert!(
-        parse(decl(4, &f, ["010330012"])).is_none(),
+        parse(4, &f, ["010330012"]).is_none(),
         "a name finer than a shard"
     );
-    assert!(parse(decl(3, &f, [])).is_none(), "a zoom above the pyramid");
-    assert!(parse(decl(16, &f, [])).is_none(), "a zoom below the leaves");
+    assert!(parse(3, &f, []).is_none(), "a zoom above the pyramid");
+    assert!(parse(16, &f, []).is_none(), "a zoom below the leaves");
+}
+
+/// Each UI declares the source at its boot, a device's reloaded UI on a
+/// running core too: a declaration that parses to the one held is taken and
+/// changes nothing, and any other is refused.
+#[test]
+fn other_decl_refused() {
+    let f = formats();
+    let shards = ["0103300", "01033210"];
+    assert_eq!(declare(4, &f, shards), Ok(()));
+    assert_eq!(declare(4, &f, shards), Ok(()), "the same declaration");
+    assert_eq!(
+        declare(4, &f, ["01033210", "0103300"]),
+        Ok(()),
+        "the same shards in another order"
+    );
+    assert_eq!(declare(5, &f, shards), Err(Errno::EEXIST), "another zoom");
+    assert_eq!(
+        declare(4, &f, ["0103300"]),
+        Err(Errno::EEXIST),
+        "other shards"
+    );
+    assert_eq!(
+        declare(3, &f, shards),
+        Err(Errno::EINVAL),
+        "an unfollowable one"
+    );
+    assert!(
+        declared_source() == parse(4, &f, shards).as_ref(),
+        "the held source kept"
+    );
 }

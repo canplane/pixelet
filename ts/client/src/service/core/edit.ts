@@ -1,6 +1,8 @@
 // @pxl/client/service/core/edit.ts
 
 import type { i32, u32 } from "@xpute/kit/abi/word.ts";
+import { ERRNO_EMSGSIZE } from "@xpute/kit/status/errno.spec.ts";
+import { XputeError } from "@xpute/kit/status/error.ts";
 import { ComponentError } from "@xpute/link";
 import type { Tool } from "@/abi/edit.enum.ts";
 import * as edit from "@/abi/edit.ts";
@@ -16,17 +18,14 @@ export async function tool(
   await edit.hold(ui, tool, val, scale_step);
 }
 
-/** Resolves whether the core took the text: false where it is longer than a
- * marker holds, and the marker keeps the text it had. It rejects where the
- * link refuses the text whole. */
-export async function marker_text(text: string): Promise<boolean> {
-  return edit.marker_text(ui, text).then(
-    () => true,
-    (e: unknown) => {
-      if (!(e instanceof ComponentError)) throw e;
-      return false;
-    },
-  );
+/** Sets the draft's text; where it is too long, refused by the core or,
+ * past a frame, by the link (EMSGSIZE), the draft keeps the text it had. */
+export function marker_text(text: string): void {
+  void edit.marker_text(ui, text).catch((e: unknown) => {
+    if (e instanceof ComponentError) return;
+    if (e instanceof XputeError && e.errnum === ERRNO_EMSGSIZE) return;
+    throw e;
+  });
 }
 
 export function marker_commit(): void {

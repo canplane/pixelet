@@ -137,7 +137,7 @@ impl abi::scene::Guest for Core {
     ) -> Result<Result<(), abi::types::ErrorCode>, Errno> {
         scene::draw(surface, content, group, bg)
     }
-    fn chat(&self, text: String) -> Result<(), Errno> {
+    fn chat(&self, text: String) -> Result<Result<(), abi::types::ErrorCode>, Errno> {
         scene::chat(text)
     }
 }
@@ -218,8 +218,8 @@ impl abi::edit::Guest for Core {
 }
 
 impl abi::source::Guest for Core {
-    fn declare(&self, decl: abi::types::Declaration) -> Result<(), Errno> {
-        source::declare(decl)
+    fn declare(&self, min_zoom: u32, formats: Vec<u32>, shards: Vec<String>) -> Result<(), Errno> {
+        source::declare(min_zoom, formats, shards)
     }
 }
 
@@ -251,8 +251,7 @@ impl life::Guest for Core {
         Ok(())
     }
     /// A UI attached, the first or one a reload makes on the same core: it is
-    /// told the tile source at once and posted the overlay whole at the
-    /// entry's end (link.rs `tell_all`), and
+    /// posted the overlay whole at the entry's end (link.rs `tell_all`), and
     /// starts with no pointer pressed and no text taken.
     fn attached(&self) -> Result<(), Errno> {
         super::tell_all();

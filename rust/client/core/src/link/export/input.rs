@@ -10,7 +10,7 @@ use crate::domain::control::camera::controller;
 use crate::domain::control::edit::{clear_hover, clear_hover_coord};
 use crate::domain::control::input::{
     camera_keys, camera_pinch, camera_pointer_down, camera_pointer_move, camera_pointer_out,
-    camera_pointer_up, camera_wheel, pinching,
+    camera_pointer_up, camera_wheel, forget, pinching,
 };
 use crate::pointer::tap;
 use pxl_global::Global;
@@ -31,8 +31,10 @@ fn pointers() -> &'static mut Pointers {
 }
 
 /// A new UI starts with no pointer pressed and no text taken.
+/// Forgets what the UI that left had pressed, here and in the domain.
 pub(super) fn forget_pointers() {
     *pointers() = Pointers::default();
+    forget();
 }
 
 pub(super) fn typing(typing: bool) -> Result<(), Errno> {

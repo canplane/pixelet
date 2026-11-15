@@ -29,6 +29,9 @@ meant to do and where it is, not why its author thinks it is right.
 - **Structure.** A concept living twice or derived again; a pass reading
   another layer's storage or going around the query; machinery that removes
   nothing; a dead item, or a doc or citation naming what is gone.
+- **History.** The change contradicts, unremarked, what a commit or the
+  user's decision made the code; or it removes nothing that the fact's move
+  makes needless.
 - **Hold firmly.** A change against AGENTS.md's first section: symmetry broken,
   an ad hoc piece laid over a rule, what `doc/` records as dropped brought back
   unremarked, or state added that nothing justifies.

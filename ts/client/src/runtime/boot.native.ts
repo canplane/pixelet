@@ -9,20 +9,25 @@
  * page's worker serves (worker.ts): the files, the settings among them in the
  * platform's storage (storage.native.ts), and the objects, over the core's
  * memory, where the guest lends their buffers, and the source's declaration,
- * which the core keeps for its life and a reloaded UI takes from it. The GPU's host tells the UI what it has of a
+ * whose state is the UI's here. The GPU's host tells the UI what it has of a
  * GPU through its own module, as a page's worker does.
  * Where the boot stands is moved as on a page (ui.ts).
  */
 
 import { state_on } from "@xpute/gpu-native-runtime";
 import type { Side } from "@xpute/link";
-import { bytes, open_remote, start } from "@xpute/native-runtime";
+import {
+  bytes,
+  open_remote,
+  start,
+  stopped_on,
+  trap_on,
+} from "@xpute/native-runtime";
 import { stopped } from "@/service/sys/abort.ts";
 import { GPU_STATE, set_gpu } from "@/service/sys/gpu.ts";
 import { serve_files } from "@/service/sys/fs/file.ts";
 import { serve_objects } from "@/service/sys/fs/object.ts";
 import { declare_source } from "@/service/sys/fs/source.ts";
-import { cur, watch_snapshot } from "@/service/core/overlay.ts";
 import { serve_ui, start_client, trapped } from "@/runtime/ui.ts";
 
 export function boot(): void {
@@ -37,17 +42,13 @@ export function boot(): void {
     task_return: (t, result, data) => remote.task_return(t, result, data),
     on_cancel: (t, stop) => remote.on_cancel(t, stop),
   };
+  stopped_on(stopped);
+  trap_on(trapped);
   state_on((state) => set_gpu(GPU_STATE[state]));
   serve_ui(remote);
   serve_files(link);
   serve_objects(link);
-  start(remote, { stopped, trapped });
+  start(remote);
   start_client();
-  // The core runs on beneath a reloaded UI, its source declared once for its
-  // life: its first overlay tells whether it holds one already, which it
-  // has told this UI before it (overlay `source`).
-  const stop = watch_snapshot(() => {
-    stop();
-    if (!cur().declared) void declare_source(remote);
-  });
+  void declare_source(remote);
 }

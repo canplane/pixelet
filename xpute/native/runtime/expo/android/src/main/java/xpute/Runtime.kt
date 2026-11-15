@@ -10,8 +10,8 @@ import java.nio.ByteBuffer
  * native library, which the module's build names (build.gradle). The runtime
  * runs on the guest's thread; each call posts its task there and returns. It
  * tells of a batch, a stop and a trap through the static callbacks below,
- * which it calls from its threads, attached to the VM as daemons, and a stop
- * and a trap again from each start after them (xpute.h `xpute_start`).
+ * which it calls from its threads, attached to the VM as daemons, and keeps
+ * the stop and the trap for a UI that starts after them (`stop`, `trap`).
  * It takes nothing of React Native's; the Expo module (XputeModule.kt) is one
  * app's way to reach it.
  */
@@ -47,23 +47,36 @@ object Runtime {
   /** Tells the runtime that the app was hidden or shown. */
   external fun life(shown: Boolean)
 
+  /** The guest's last stop, or null before the guest stopped (xpute.h
+   * `xpute_stop`). */
+  external fun stop(): Stop?
+
+  /** What trapped the guest, or null before it trapped (xpute.h
+   * `xpute_trap`). */
+  external fun trap(): String?
+
   /** These send the module's events (XputeModule.kt). */
   @Volatile var notify: (() -> Unit)? = null
-  @Volatile var stopped: ((errnum: Int, file: String, line: Int, n1: Long, n2: Long) -> Unit)? = null
-  @Volatile var trap: ((err: String) -> Unit)? = null
+  @Volatile var stopped: ((Stop) -> Unit)? = null
+  @Volatile var trapped: ((err: String) -> Unit)? = null
 
   /** A batch waits for `take`. */
   @JvmStatic fun onNotify() {
     notify?.invoke()
   }
 
-  /** The guest stopped, with its report; `line`, `n1` and `n2` are unsigned. */
-  @JvmStatic fun onStopped(errnum: Int, file: String, line: Int, n1: Long, n2: Long) {
-    stopped?.invoke(errnum, file, line, n1, n2)
+  /** The guest stopped, with its report. */
+  @JvmStatic fun onStopped(stop: Stop) {
+    stopped?.invoke(stop)
   }
 
   /** The guest trapped, with what stopped it. */
   @JvmStatic fun onTrap(err: String) {
-    trap?.invoke(err)
+    trapped?.invoke(err)
   }
 }
+
+/** The guest's stop, its report: its errno, its file, its line and its two
+ * numbers, `line`, `n1` and `n2` unsigned (xpute-native-runtime listener.rs
+ * `Stop`). */
+class Stop(val errnum: Int, val file: String, val line: Int, val n1: Long, val n2: Long)

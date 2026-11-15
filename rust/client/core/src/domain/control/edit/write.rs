@@ -13,7 +13,7 @@ use crate::sys::sched::invalidate;
 use pxl_engine::answer::{self, PLACED_ASSET};
 use pxl_global::Global;
 use pxl_spec::asset::cube::solid;
-use pxl_spec::asset::marker::{MARKER, MARKER_TEXT_CHARS};
+use pxl_spec::asset::marker::{text_fits, MARKER, MARKER_TEXT_CHARS};
 use pxl_spec::asset::AssetId;
 use pxl_spec::space::coord::q3::{self, Q3};
 use pxl_spec::space::coord::world;
@@ -167,10 +167,11 @@ pub(crate) fn marker_draft() -> Option<&'static str> {
 
 /// Sets the open draft's text to `text`, the whole text as it is now. The
 /// text is copied into the draft's own buffer, so a keystroke allocates only
-/// when the text grows past the longest it has held. A text longer than
-/// `MARKER_TEXT_CHARS` is refused whole, and the earlier text stays.
+/// when the text grows past the longest it has held. A text past
+/// `MARKER_TEXT_CHARS` is refused whole (pxl-spec asset/marker.rs
+/// `text_fits`), EMSGSIZE, and the earlier text stays.
 pub(crate) fn set_draft_text(text: &str) -> Result<(), Errno> {
-    if text.chars().count() > MARKER_TEXT_CHARS as usize {
+    if !text_fits(text, MARKER_TEXT_CHARS) {
         return Err(Errno::EMSGSIZE);
     }
     if let Some(d) = draft_mut() {

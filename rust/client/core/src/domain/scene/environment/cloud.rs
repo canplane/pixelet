@@ -648,7 +648,7 @@ fn present_patch(
         }
     }
     if changed {
-        draw.rewrite_part(b.handle, mem::span(&b.words[..]).0, b.idx, at as u32 * 4);
+        draw.rewrite_part(b.handle, mem::off(&b.words[0]), b.idx, at as u32 * 4);
     }
 }
 

@@ -230,22 +230,20 @@ impl Side {
         }
     }
 
-    /// Stops the link for good, and answers whether it did just now, the link
-    /// not having trapped already (`link.ts` `trap`). Each request this side
-    /// sent that is still pending is answered EPIPE, once, among the answers
-    /// due (`run_due`), as a frame to the trapped link is; none is pending
-    /// after, so a late answer to one finds nothing to answer.
-    pub fn trap(&self) -> bool {
-        if self.trapped.replace(true) {
-            return false;
-        }
+    /// Stops the link for good, as `link.ts` `Side.trap` does; a host's
+    /// runtime tells its platform, the first time (xpute-native-runtime
+    /// link.rs `trap`). Each request this side sent that is still pending is
+    /// answered EPIPE, once, among the answers due (`run_due`), as a frame to
+    /// the trapped link is; none is pending after, so a late answer to one,
+    /// or a trap again, finds nothing to answer.
+    pub fn trap(&self) {
+        self.trapped.set(true);
         let pending = core::mem::take(&mut *self.pending.borrow_mut());
         self.due.borrow_mut().extend(
             pending
                 .into_values()
                 .map(|a| (a, Errno::EPIPE as i32, None)),
         );
-        true
     }
 
     /// Whether the link is trapped (`trap`).
@@ -616,3 +614,7 @@ pub fn answer(result: i32) -> Result<(), Errno> {
         _ => Err(Errno::of(result).or_bug(Errno::EPROTO)),
     }
 }
+
+#[cfg(test)]
+#[path = "link.test.rs"]
+mod test;

@@ -37,12 +37,11 @@ fn subtype_zoom() {
 }
 
 /// A tile holds every name whole and every chain however long, as the bake
-/// writes them: one with a name past `NAME_BYTES` and a chain longer than
-/// there are subtypes reads back as written. A cycle is refused.
+/// writes them: one with a long name and a chain longer than there are
+/// subtypes reads back as written.
 #[test]
 fn long_name_and_chain_read() {
-    use crate::division::NAME_BYTES;
-    let long = "가".repeat(NAME_BYTES);
+    let long = "가".repeat(1000);
     let depth = 2 * Subtype::ALL.len() as u32;
     let chain = (0..depth).map(|k| Division {
         name: &long,
@@ -53,7 +52,4 @@ fn long_name_and_chain_read() {
     let read = decode(&encode(&tile).unwrap()).unwrap();
     assert_eq!(read.name_at(0).count(), depth as usize);
     assert!(read.name_at(0).all(|d| d.name == long));
-    let mut cycle = tile;
-    cycle.parents[0] = depth - 1;
-    assert!(encode(&cycle).is_err());
 }

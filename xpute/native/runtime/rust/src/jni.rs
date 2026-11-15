@@ -8,10 +8,11 @@
 //! runtime itself reaches the app through them: the C ABI's calls under the
 //! names JNI looks for, as the `external` functions of the Kotlin class
 //! `xpute.Runtime` (`jni_abi!`), and what the app hears as calls of its
-//! static `onNotify()`, `onStopped(…)` and `onTrap(…)`, from the threads that
-//! tell it, a thread the runtime made attached to the VM for good as a
-//! daemon, and a stop and a trap again from the Java thread of a start after
-//! them (native.rs `start`).
+//! static `onNotify()`, `onStopped(Stop)` and `onTrap(String)`, from the
+//! threads that tell it, a thread the runtime made attached to the VM for
+//! good as a daemon; the stop and the trap kept for a UI that starts after
+//! them it reads by `stop(): Stop?` and `trap(): String?` (listener.rs
+//! `stop`, `trap`). A stop crosses as an `xpute.Stop` both ways (`stop_object`).
 
 use core::ffi::CStr;
 use std::path::PathBuf;
@@ -198,8 +199,57 @@ const ON_NOTIFY: usize = 0;
 const ON_STOPPED: usize = 1;
 const ON_TRAP: usize = 2;
 
-/// Takes the class `xpute.Runtime` from `this`, once, and makes its static
-/// methods hear a batch waiting, a stop and a trap.
+/// The class `xpute.Stop`, held globally, and its constructor, which `init`
+/// takes on a thread Java made, as a thread the runtime made cannot find the
+/// app's classes by name.
+struct StopClass {
+    class: sys::jclass,
+    ctor: sys::jmethodID,
+}
+
+// SAFETY: a global reference and a method ID stay valid in every thread until
+// let go, and nothing in it is changed once it is made.
+unsafe impl Send for StopClass {}
+// SAFETY: as for `Send`.
+unsafe impl Sync for StopClass {}
+
+static STOP: OnceLock<StopClass> = OnceLock::new();
+
+/// The class `xpute.Stop` and its constructor, or none where JNI has no such
+/// class or constructor, the exception cleared.
+///
+/// # Safety
+/// `e` is what JNI called with, on a thread Java made.
+unsafe fn stop_class(e: *mut JNIEnv) -> Option<StopClass> {
+    // SAFETY: JNI's own calls on the environment it called with; the class
+    // is held globally, so it outlives this call.
+    unsafe {
+        let j = env(e);
+        let local = j.FindClass.or_bug(Errno::ENOSYS)(e, c"xpute/Stop".as_ptr());
+        if local.is_null() {
+            j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
+            return None;
+        }
+        let ctor = j.GetMethodID.or_bug(Errno::ENOSYS)(
+            e,
+            local,
+            c"<init>".as_ptr(),
+            c"(ILjava/lang/String;IJJ)V".as_ptr(),
+        );
+        if ctor.is_null() {
+            j.ExceptionClear.or_bug(Errno::ENOSYS)(e);
+            j.DeleteLocalRef.or_bug(Errno::ENOSYS)(e, local);
+            return None;
+        }
+        let class = j.NewGlobalRef.or_bug(Errno::ENOSYS)(e, local);
+        j.DeleteLocalRef.or_bug(Errno::ENOSYS)(e, local);
+        Some(StopClass { class, ctor })
+    }
+}
+
+/// Takes the classes `xpute.Runtime`, from `this`, and `xpute.Stop`, once,
+/// and makes the static methods of `xpute.Runtime` hear a batch waiting, a
+/// stop and a trap.
 ///
 /// # Safety
 /// `e` and `this` are what JNI called with, on a thread Java made, `this` an
@@ -210,16 +260,23 @@ pub unsafe fn init(e: *mut JNIEnv, this: jobject) {
     }
     let mut methods = [(c"", c""); 3];
     methods[ON_NOTIFY] = (c"onNotify", c"()V");
-    methods[ON_STOPPED] = (c"onStopped", c"(ILjava/lang/String;IJJ)V");
+    methods[ON_STOPPED] = (c"onStopped", c"(Lxpute/Stop;)V");
     methods[ON_TRAP] = (c"onTrap", c"(Ljava/lang/String;)V");
     // SAFETY: what JNI called with, on a thread Java made.
-    let Some(c) = (unsafe { class(e, this, methods) }) else {
+    let Some(k) = (unsafe { stop_class(e) }) else {
         return;
     };
+    // SAFETY: as above.
+    let Some(c) = (unsafe { class(e, this, methods) }) else {
+        // SAFETY: the global reference `stop_class` made, let go once.
+        unsafe { env(e).DeleteGlobalRef.or_bug(Errno::ENOSYS)(e, k.class) };
+        return;
+    };
+    let _ = STOP.set(k);
     let _ = CLASS.set(c);
     notify_on(Some(notify));
     stopped_on(Some(stopped));
-    trap_on(Some(trap));
+    trap_on(Some(trapped));
 }
 
 extern "C" fn notify() {
@@ -228,7 +285,7 @@ extern "C" fn notify() {
     unsafe { call(c, ON_NOTIFY, |_| Vec::new()) }
 }
 
-extern "C" fn trap(err: *const u8, len: usize) {
+extern "C" fn trapped(err: *const u8, len: usize) {
     let Some(c) = CLASS.get() else { return };
     let args = |e| {
         // SAFETY: this thread's environment, and the trap's UTF-8, the
@@ -240,23 +297,87 @@ extern "C" fn trap(err: *const u8, len: usize) {
     unsafe { call(c, ON_TRAP, args) }
 }
 
-extern "C" fn stopped(errnum: i32, file: *const u8, len: usize, line: u32, n1: u64, n2: u64) {
-    let Some(c) = CLASS.get() else { return };
-    let args = |e| {
-        // SAFETY: this thread's environment, and the file's UTF-8, the stop's
-        // for the call.
-        let s = unsafe { string(e, file, len) };
-        vec![
+/// A stop as an `xpute.Stop`, a local reference, from what the C ABI gives
+/// (listener.rs `Stopped`): its errno, its file's UTF-8 and length, its line
+/// and its two numbers, `line`, `n1` and `n2` crossing as the bits of Java's
+/// signed `int` and `long`; null before `init` took the class.
+///
+/// # Safety
+/// `e` is this thread's environment, and `file` `len` readable bytes.
+unsafe fn stop_object(
+    e: *mut JNIEnv,
+    errnum: i32,
+    file: *const u8,
+    len: usize,
+    line: u32,
+    n1: u64,
+    n2: u64,
+) -> jobject {
+    let Some(k) = STOP.get() else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: as the caller holds; the constructor of `xpute.Stop` with its
+    // five values in order.
+    unsafe {
+        let vals = [
             jvalue { i: errnum },
-            jvalue { l: s },
+            jvalue {
+                l: string(e, file, len),
+            },
             jvalue { i: line as jint },
             jvalue { j: n1 as i64 },
             jvalue { j: n2 as i64 },
-        ]
+        ];
+        env(e).NewObjectA.or_bug(Errno::ENOSYS)(e, k.class, k.ctor, vals.as_ptr())
+    }
+}
+
+extern "C" fn stopped(errnum: i32, file: *const u8, len: usize, line: u32, n1: u64, n2: u64) {
+    let Some(c) = CLASS.get() else { return };
+    let args = |e| {
+        // SAFETY: this thread's environment, and the file's UTF-8, the
+        // stop's for the call.
+        let s = unsafe { stop_object(e, errnum, file, len, line, n1, n2) };
+        vec![jvalue { l: s }]
     };
-    // SAFETY: `onStopped(ILjava/lang/String;IJJ)V`, at its index, and its
-    // five values in order.
+    // SAFETY: `onStopped(Lxpute/Stop;)V`, at its index, and its one value.
     unsafe { call(c, ON_STOPPED, args) }
+}
+
+/// The guest's last stop, kept for a UI that starts after it, as an
+/// `xpute.Stop`, or null before the guest stopped (listener.rs `stop`).
+///
+/// # Safety
+/// `e` is what JNI called with.
+pub unsafe fn stop(e: *mut JNIEnv) -> jobject {
+    let Some(s) = crate::listener::stop() else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: the environment JNI called with, and the stop's file.
+    unsafe {
+        stop_object(
+            e,
+            s.errnum,
+            s.file.as_ptr(),
+            s.file.len(),
+            s.line,
+            s.n1,
+            s.n2,
+        )
+    }
+}
+
+/// What trapped the guest, kept for a UI that starts after it, or null
+/// before it trapped (listener.rs `trap`).
+///
+/// # Safety
+/// `e` is what JNI called with.
+pub unsafe fn trap(e: *mut JNIEnv) -> jstring {
+    let Some(err) = crate::listener::trap() else {
+        return core::ptr::null_mut();
+    };
+    // SAFETY: the environment JNI called with, and the trap's UTF-8.
+    unsafe { string(e, err.as_ptr(), err.len()) }
 }
 
 /// The bytes of a Java `byte[]`, or none for null.
@@ -338,7 +459,8 @@ pub unsafe fn mem(e: *mut JNIEnv) -> jobject {
 /// which answers the UI's generation, `post(generation: Int,
 /// tag: Int, h: Int, m: Int, pkt: ByteArray?)`, `answer(generation: Int, tag:
 /// Int, result: Int, data: ByteArray?)`, `take(generation: Int): ByteArray`,
-/// `mem(): ByteBuffer` and `life(shown: Boolean)`.
+/// `mem(): ByteBuffer`, `life(shown: Boolean)`, `stop(): Stop?` and
+/// `trap(): String?`.
 #[macro_export]
 macro_rules! jni_abi {
     ($start:path) => {
@@ -426,6 +548,28 @@ macro_rules! jni_abi {
         ) -> $crate::jni::sys::jobject {
             // SAFETY: the environment JNI called with.
             unsafe { $crate::jni::mem(env) }
+        }
+
+        /// # Safety
+        /// Only JNI calls this.
+        #[no_mangle]
+        unsafe extern "system" fn Java_xpute_Runtime_stop(
+            env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+        ) -> $crate::jni::sys::jobject {
+            // SAFETY: the environment JNI called with.
+            unsafe { $crate::jni::stop(env) }
+        }
+
+        /// # Safety
+        /// Only JNI calls this.
+        #[no_mangle]
+        unsafe extern "system" fn Java_xpute_Runtime_trap(
+            env: *mut $crate::jni::sys::JNIEnv,
+            _this: $crate::jni::sys::jobject,
+        ) -> $crate::jni::sys::jstring {
+            // SAFETY: the environment JNI called with.
+            unsafe { $crate::jni::trap(env) }
         }
 
         #[no_mangle]

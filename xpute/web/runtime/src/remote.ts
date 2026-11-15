@@ -78,11 +78,3 @@ export function serve(
     );
   };
 }
-
-/** Tells the UI across `port` the bytes a frame takes, once the guest has laid
- * its link, so that it judges a call's packet before it sends it (@xpute/link
- * remote.ts `Remote.fits`), as xpute-native-runtime remote.rs `tell_cap` tells
- * a device's UI. */
-export function tell_cap(port: Port, link: Side): void {
-  port.postMessage({ cap: link.cap } satisfies ToUi);
-}

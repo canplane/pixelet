@@ -8,12 +8,18 @@ pub const HANDLE: _rt::Handle = 0x6a88bf;
 /// `declare`
 pub const DECLARE: _rt::Method = 0;
 
-pub fn declare(decl: &super::types::Declaration) -> Result<(), _rt::Errno> {
+pub fn declare(min_zoom: u32, formats: &[u32], shards: &[String]) -> Result<(), _rt::Errno> {
     let (r, _) = _rt::link::call(
         HANDLE,
         DECLARE,
-        Some((28, &|w_: &mut _rt::Lower| {
-            (decl).store(w_, 0);
+        Some((20, &|w_: &mut _rt::Lower| {
+            w_.u32(0, min_zoom);
+            w_.arr(4, formats);
+            if let Some(b) = w_.list(12, (shards).len(), 8, 4) {
+                for (i, x) in (shards).iter().enumerate() {
+                    w_.str(b + i * 8, x);
+                }
+            }
         })),
     );
     _rt::answer(r)

@@ -18,18 +18,25 @@ import {
   DISABLED_CONTENT,
 } from "@/ui/shared/component/theme.ts";
 import { useCore } from "@/ui/shared/watch.ts";
-import { append_chat_line, DockMode, set_dock_mode } from "./store.ts";
+import {
+  CHAT_TEXT_CHARS,
+  MARKER_TEXT_CHARS,
+} from "@/ui/shared/asset/marker.spec.ts";
+import {
+  append_chat_line,
+  DockMode,
+  text_fits,
+  set_dock_mode,
+} from "./store.ts";
 import { SLOT } from "./strip.tsx";
 import * as edit from "@/service/core/edit.ts";
 import * as overlay from "@/service/core/overlay.ts";
-import * as scene from "@/service/core/scene.ts";
 
 /** The dock holds this state, so that it is there whether or not the cards are
  * drawn yet. */
 export function useMessage(mode: DockMode) {
   const drafting = useCore((s) => s.draft !== null);
   const [message_text, set_message_text] = useState("");
-  const [marker_fits, set_marker_fits] = useState(true);
   const [is_sending, set_is_sending] = useState(false);
   const input_ref = useRef<TextInput | null>(null);
 
@@ -48,18 +55,12 @@ export function useMessage(mode: DockMode) {
   // change. When the draft closes, the field is emptied for the chat.
   useEffect(() => {
     set_message_text(drafting ? (overlay.cur().draft ?? "") : "");
-    set_marker_fits(true);
     if (drafting) set_dock_mode(DockMode.MESSAGE);
   }, [drafting]);
 
   function change_text(text: string) {
     set_message_text(text);
-    if (drafting) {
-      void edit.marker_text(text.trim()).then(
-        (fits) => set_marker_fits(fits),
-        () => set_marker_fits(false),
-      );
-    }
+    if (drafting) edit.marker_text(text.trim());
   }
 
   function send_message() {
@@ -85,9 +86,11 @@ export function useMessage(mode: DockMode) {
   }
 
   const can_send = message_text.trim() !== "";
-  // A marker's text the core refused cannot be committed, and a chat line the
-  // core finds too long cannot be said: it is refused whole, never cut short.
-  const fits = drafting ? marker_fits : scene.chat_fits(message_text.trim());
+  // A text past its kind's cap can be neither put up nor said.
+  const fits = text_fits(
+    message_text,
+    drafting ? MARKER_TEXT_CHARS : CHAT_TEXT_CHARS,
+  );
 
   return {
     drafting,

@@ -190,12 +190,11 @@ The GPU's server posts the page what it has of a GPU as that changes
 A native app installs `@xpute/native-runtime`, the React Native module, which
 Expo autolinks, and names in its `package.json` under `xpute.guest.runtime` the
 crate a device links: its guest, and the function that gives the runtime its
-list, which the crate exports the runtime over. The UI starts it with
-`start(remote, { stopped, trapped })`, whose listener of the guest's stop and
-trap is subscribed first, so that one told again to a reloaded UI reaches
-it. The runtime starts the guest on a thread of its own, with the stack the
-list asks, and runs the loop for the guest's life; each start of a UI tells
-the guest it attached:
+list, which the crate exports the runtime over. The runtime starts the guest
+on a thread of its own, with the stack the list asks, and runs the loop for
+the guest's life. The UI hears the guest's stop and its trap
+(`stopped_on`, `trap_on`), those the runtime keeps told first to a UI that
+starts later, and each start of a UI tells the guest it attached:
 
 ```rust
 fn start(cache_dir: PathBuf) -> Boot {

@@ -14,6 +14,9 @@ export const PIN_LABEL = "Pin";
 /** The most a marker's text may be, in code points: a product choice, a short line put up at a place. Bytes follow, four to a code point at most. */
 export const MARKER_TEXT_CHARS = 40 as number;
 
+/** The most a chat line may be, in code points: a product choice, Roblox's chat limit, a game whose chat shows as bubbles over its avatars, as a line's bubble hangs over its speaker. Bytes follow, four to a code point at most. */
+export const CHAT_TEXT_CHARS = 200 as number;
+
 /** The coarsest camera grid cell a scene marker of these shows at: z19, 32 of them across
  * a z14 tile, the zoom OpenMapTiles' `poi` layer holds every point at
  * (layers/poi/poi.yaml). What someone puts up, by the cells of the brick

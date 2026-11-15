@@ -173,3 +173,7 @@ pub fn load_acquire(at: u32) -> u32 {
 pub fn store_release(at: u32, v: u32) {
     atomic(at).store(v, core::sync::atomic::Ordering::Release);
 }
+
+#[cfg(test)]
+#[path = "mem.test.rs"]
+pub(crate) mod test;
