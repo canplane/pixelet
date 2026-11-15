@@ -43,9 +43,9 @@ function geolocation_granted(): Promise<boolean> {
 }
 
 /** iOS never asks again after a refusal, and Android stops asking after the
- * second. The settings then grant it, and the app's return to the foreground
- * starts the watch again. A granted location still needs the device's own
- * location switched on. */
+ * second. The settings then grant it, and the shell starts the watch again on
+ * the app's return to the foreground. A granted location still needs the
+ * device's own location switched on. */
 function geolocation_permit(): Promise<boolean> {
   return serial(async () => {
     const now = await Location.getForegroundPermissionsAsync();
@@ -65,8 +65,8 @@ function geolocation_permit(): Promise<boolean> {
 
 /** An Android phone turns the location on through Play Services' dialog,
  * which rejects when it is declined. iOS has no such dialog and resolves at
- * once, so its settings open, and the app's return to the foreground starts
- * the watch again. */
+ * once, so its settings open, and the shell starts the watch again on the
+ * app's return to the foreground. */
 async function services_on(): Promise<boolean> {
   if (await Location.hasServicesEnabledAsync()) return true;
   try {
@@ -80,7 +80,7 @@ async function services_on(): Promise<boolean> {
 }
 
 /** Rechecks the permission whenever the app comes back to the foreground, so
- * that a grant made in the device's settings reaches the core. */
+ * that a grant made in the device's settings reaches the shell's sensors. */
 export function follow(): () => void {
   const back = AppState.addEventListener("change", (state) => {
     if (state === "active") recheck();
@@ -142,7 +142,7 @@ function geolocation_start(): void {
   void (async () => {
     if (!(await geolocation_granted()))
       return geolocation_fail(watch, "denied");
-    // A watch the core starts asks only for a permission not yet decided and
+    // A watch the shell starts asks only for a permission not yet decided and
     // raises no settings dialog: the location switched off ends it, and the
     // press turns the location on (`services_on`).
     if (!(await Location.hasServicesEnabledAsync())) {
@@ -160,7 +160,7 @@ function geolocation_start(): void {
       // onLocationError empty, and the fused provider keeps the request. iOS
       // rides out locationUnknown while CoreLocation keeps trying, and ends
       // the stream on any other failure. An ended watch is reported as a
-      // failure, and the core starts the watch again on a grant, a return to
+      // failure, and the shell starts the watch again on a grant, a return to
       // the foreground or a press.
       () => geolocation_fail(watch, "other"),
     );

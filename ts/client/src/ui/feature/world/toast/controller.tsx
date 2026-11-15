@@ -6,16 +6,23 @@ import { useTranslation } from "react-i18next";
 import { message_key } from "@/ui/shared/locale/message-key.ts";
 import {
   type Message,
-  type SensorStatus,
   GROUND_STATUS_SUCCESS,
   MESSAGE_WORLD_READ_FAILING,
-  SENSOR_STATUS_LOADING,
 } from "@/abi/overlay.enum.ts";
+import {
+  type SensorStatus,
+  SENSOR_STATUS_LOADING,
+} from "@/service/core/sensor/reading.ts";
 import { GPU_WAITING, type Gpu } from "@/service/sys/gpu.ts";
 import { boot_state, watch_boot, BOOT_STARTED } from "@/service/sys/boot.ts";
 
 import { dismiss_toast, show_toast, ToastTone } from "./store.ts";
-import { useGpu, useCore, useOnline } from "@/ui/shared/watch.ts";
+import {
+  useGpu,
+  useCore,
+  useOnline,
+  useSensor,
+} from "@/ui/shared/watch.ts";
 
 /** The reports that can each show a toast. Among toasts of one tone, a lower
  * number ranks higher: a cause comes before what it holds up, the device's
@@ -81,9 +88,9 @@ const loading = (key: string): Notice => ({ key, tone: ToastTone.LOADING });
 
 function location(
   status: SensorStatus,
-  failure: Message | null,
+  failure: string | null,
 ): Notice | null {
-  if (failure !== null) return error(message_key(failure));
+  if (failure !== null) return error(failure);
   return status === SENSOR_STATUS_LOADING
     ? loading("toast.location_checking")
     : null;
@@ -118,8 +125,8 @@ function world(
 /** Every toast is derived from what the core and the client report now. Each
  * source of an error has one toast. */
 export function ToastController() {
-  const location_status = useCore((s) => s.location.status);
-  const location_error = useCore((s) => s.location.err);
+  const location_status = useSensor((l) => l.state.status);
+  const location_error = useSensor((l) => l.state.err);
   useNotice(LOCATION, location(location_status, location_error));
 
   const gpu = useGpu();

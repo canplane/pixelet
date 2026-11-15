@@ -16,7 +16,7 @@
  */
 
 import type { U32Array, U8Array } from "@xpute/kit/abi/array.ts";
-import { Bug } from "@xpute/kit/status/bug.ts";
+import { XputeBug } from "@xpute/kit/status/bug.ts";
 import { ERRNO_EBADMSG, ERRNO_EINVAL } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
 import { ComponentError, type Side } from "@xpute/link";
@@ -248,7 +248,7 @@ export function serve_objects(
       try {
         await OBJECTS.commit(link.bytes(batch.at, batch.len).slice());
       } catch (e) {
-        if (e instanceof Bug) throw e;
+        if (e instanceof XputeBug) throw e;
         // Only the decode throws an XputeError; the database throws its own.
         throw new ComponentError(
           e instanceof XputeError ? ERROR_CODE_BAD_MESSAGE : ERROR_CODE_IO,

@@ -104,14 +104,13 @@ const CORE_HEADS: [&[&str]; 2] = [&["scene"], &["control"]];
 const CORE_BESIDE: [&str; 1] = ["perf"];
 
 /// Control's own order (domain/control.rs): the pointer's edits and its
-/// gestures, then navigation, the camera, and under them the sensors and
-/// where the pivot stands.
-const CONTROL_ORDER: [(&str, u8); 7] = [
+/// gestures, then navigation, the camera, and under them where the pivot
+/// stands.
+const CONTROL_ORDER: [(&str, u8); 6] = [
     ("edit", 4),
     ("input", 4),
     ("navigation", 3),
     ("camera", 2),
-    ("sensor", 1),
     ("support", 1),
     ("param", 0),
 ];

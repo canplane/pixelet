@@ -217,11 +217,8 @@ function drive(canvas: HTMLCanvasElement, input: InputDriver): () => void {
   const observer = new ResizeObserver(place);
   observer.observe(canvas);
 
-  const close = input.open();
-
   return () => {
     release_pointers();
-    close();
     observer.disconnect();
     globalThis.removeEventListener("blur", release_pointers);
     globalThis.removeEventListener("blur", release_keys);

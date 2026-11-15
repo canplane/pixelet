@@ -181,7 +181,7 @@ export function set_hook(h: (e: unknown) => void): void {
   hook ??= h;
 }
 
-/** The errno a method refuses with: an XputeError's. Anything else, a `Bug`
+/** The errno a method refuses with: an XputeError's. Anything else, a `XputeBug`
  * or any other throw, is a failure of the serving side's own, thrown on: out
  * of a method answered at once, to what called it (on the host, the guest's
  * import, `imports`; on the UI, its port's message handler, `Remote`); out of

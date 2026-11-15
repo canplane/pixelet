@@ -5,10 +5,8 @@
 import {
   type GroundStatus,
   type Message,
-  type SensorStatus,
   of_GroundStatus,
   of_Message,
-  of_SensorStatus,
 } from "./overlay.enum.ts";
 import { ERRNO_EBADMSG, ERRNO_ENOSYS } from "@xpute/kit/status/errno.spec.ts";
 import { XputeError } from "@xpute/kit/status/error.ts";
@@ -35,14 +33,8 @@ export function load_GroundStatus(r: Lift, at: number): GroundStatus {
   return v;
 }
 
-export function load_SensorStatus(r: Lift, at: number): SensorStatus {
-  const v = of_SensorStatus(r.case(at, 5));
-  if (v === null) throw new XputeError(ERRNO_EBADMSG);
-  return v;
-}
-
 export function load_Message(r: Lift, at: number): Message {
-  const v = of_Message(r.case(at, 7));
+  const v = of_Message(r.case(at, 2));
   if (v === null) throw new XputeError(ERRNO_EBADMSG);
   return v;
 }
@@ -96,39 +88,6 @@ export function load_PivotState(r: Lift, at: number): PivotState {
   };
 }
 
-export interface LocationState {
-  status: SensorStatus;
-  has_location: boolean;
-  watching: boolean;
-  err: Message | null;
-}
-
-export const LOCATION_STATE_SZ = 5;
-export const LOCATION_STATE_ALIGN = 1;
-
-export function store_LocationState(
-  w: Lower,
-  at: number,
-  v: LocationState,
-): void {
-  w.u8(at, v.status);
-  w.bool(at + 1, v.has_location);
-  w.bool(at + 2, v.watching);
-  if (v.err !== null) {
-    w.u8(at + 3, 1);
-    w.u8(at + 3 + 1, v.err);
-  }
-}
-
-export function load_LocationState(r: Lift, at: number): LocationState {
-  return {
-    status: load_SensorStatus(r, at),
-    has_location: r.bool(at + 1),
-    watching: r.bool(at + 2),
-    err: r.case(at + 3, 2) === 0 ? null : load_Message(r, at + 3 + 1),
-  };
-}
-
 export interface CompanionState {
   person_ready: boolean;
   pet_ready: boolean;
@@ -150,27 +109,6 @@ export function load_CompanionState(r: Lift, at: number): CompanionState {
   return {
     person_ready: r.bool(at),
     pet_ready: r.bool(at + 1),
-  };
-}
-
-export interface OrientationState {
-  status: SensorStatus;
-}
-
-export const ORIENTATION_STATE_SZ = 1;
-export const ORIENTATION_STATE_ALIGN = 1;
-
-export function store_OrientationState(
-  w: Lower,
-  at: number,
-  v: OrientationState,
-): void {
-  w.u8(at, v.status);
-}
-
-export function load_OrientationState(r: Lift, at: number): OrientationState {
-  return {
-    status: load_SensorStatus(r, at),
   };
 }
 
@@ -206,10 +144,8 @@ export function load_DivisionPart(r: Lift, at: number): DivisionPart {
 
 export interface Snapshot {
   pivot: PivotState;
-  location: LocationState;
   companion: CompanionState;
   draft: string | null;
-  orient: OrientationState;
   is_follow_mode: boolean;
   camera_busy: boolean;
   zooming: boolean;
@@ -222,26 +158,24 @@ export interface Snapshot {
   area_progress: number;
 }
 
-export const SNAPSHOT_SZ = 112;
+export const SNAPSHOT_SZ = 104;
 export const SNAPSHOT_ALIGN = 8;
 
 export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
   store_PivotState(w, at, v.pivot);
-  store_LocationState(w, at + 40, v.location);
-  store_CompanionState(w, at + 45, v.companion);
+  store_CompanionState(w, at + 40, v.companion);
   if (v.draft !== null) {
-    w.u8(at + 48, 1);
-    w.str(at + 48 + 4, v.draft);
+    w.u8(at + 44, 1);
+    w.str(at + 44 + 4, v.draft);
   }
-  store_OrientationState(w, at + 60, v.orient);
-  w.bool(at + 61, v.is_follow_mode);
-  w.bool(at + 62, v.camera_busy);
-  w.bool(at + 63, v.zooming);
-  w.bool(at + 64, v.over_marker);
-  w.arr(at + 68, v.settings);
+  w.bool(at + 56, v.is_follow_mode);
+  w.bool(at + 57, v.camera_busy);
+  w.bool(at + 58, v.zooming);
+  w.bool(at + 59, v.over_marker);
+  w.arr(at + 60, v.settings);
   {
     const b0 = w.list(
-      at + 76,
+      at + 68,
       v.division.length,
       DIVISION_PART_SZ,
       DIVISION_PART_ALIGN,
@@ -251,34 +185,32 @@ export function store_Snapshot(w: Lower, at: number, v: Snapshot): void {
         store_DivisionPart(w, b0 + i0 * DIVISION_PART_SZ, x0);
       });
   }
-  w.arr(at + 84, v.character_surfaces);
+  w.arr(at + 76, v.character_surfaces);
   if (v.stall !== null) {
-    w.u8(at + 92, 1);
-    w.u8(at + 92 + 1, v.stall);
+    w.u8(at + 84, 1);
+    w.u8(at + 84 + 1, v.stall);
   }
-  w.f64(at + 96, v.renderer_progress);
-  w.f64(at + 104, v.area_progress);
+  w.f64(at + 88, v.renderer_progress);
+  w.f64(at + 96, v.area_progress);
 }
 
 export function load_Snapshot(r: Lift, at: number): Snapshot {
   return {
     pivot: load_PivotState(r, at),
-    location: load_LocationState(r, at + 40),
-    companion: load_CompanionState(r, at + 45),
-    draft: r.case(at + 48, 2) === 0 ? null : r.str(at + 48 + 4),
-    orient: load_OrientationState(r, at + 60),
-    is_follow_mode: r.bool(at + 61),
-    camera_busy: r.bool(at + 62),
-    zooming: r.bool(at + 63),
-    over_marker: r.bool(at + 64),
-    settings: r.arr(at + 68, Uint32Array),
-    division: r.map(at + 76, DIVISION_PART_SZ, DIVISION_PART_ALIGN, (at) =>
+    companion: load_CompanionState(r, at + 40),
+    draft: r.case(at + 44, 2) === 0 ? null : r.str(at + 44 + 4),
+    is_follow_mode: r.bool(at + 56),
+    camera_busy: r.bool(at + 57),
+    zooming: r.bool(at + 58),
+    over_marker: r.bool(at + 59),
+    settings: r.arr(at + 60, Uint32Array),
+    division: r.map(at + 68, DIVISION_PART_SZ, DIVISION_PART_ALIGN, (at) =>
       load_DivisionPart(r, at),
     ),
-    character_surfaces: r.arr(at + 84, Uint32Array),
-    stall: r.case(at + 92, 2) === 0 ? null : load_Message(r, at + 92 + 1),
-    renderer_progress: r.f64(at + 96),
-    area_progress: r.f64(at + 104),
+    character_surfaces: r.arr(at + 76, Uint32Array),
+    stall: r.case(at + 84, 2) === 0 ? null : load_Message(r, at + 84 + 1),
+    renderer_progress: r.f64(at + 88),
+    area_progress: r.f64(at + 96),
   };
 }
 

@@ -5,14 +5,8 @@ package pxl:core@0.1.0;
 interface overlay {
 
   enum ground-status { idle, loading, success }
-  enum sensor-status { idle, loading, ready, error, unavailable }
   // A message the core raises and the UI shows in its own words.
   enum message {
-    geolocation-unsupported,
-    geolocation-permission-denied,
-    geolocation-position-unavailable,
-    geolocation-timeout,
-    geolocation-generic-error,
     // Reads reach the server and fail; they are tried again.
     world-read-failing,
     // Reads failed past every retry; the world is not coming.
@@ -31,20 +25,9 @@ interface overlay {
     outside: bool,
   }
 
-  record location-state {
-    status: sensor-status,
-    has-location: bool,
-    watching: bool,
-    err: option<message>,
-  }
-
   record companion-state {
     person-ready: bool,
     pet-ready: bool,
-  }
-
-  record orientation-state {
-    status: sensor-status,
   }
 
   record division-part {
@@ -57,11 +40,9 @@ interface overlay {
   // What the UI shows of the core, replaced whole when it changes.
   record snapshot {
     pivot: pivot-state,
-    location: location-state,
     companion: companion-state,
     // A marker's draft, its text so far, absent where none is open.
     draft: option<string>,
-    orient: orientation-state,
     is-follow-mode: bool,
     camera-busy: bool,
     // A zoom is in hand; the scale shows while it is.

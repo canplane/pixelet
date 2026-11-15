@@ -13,12 +13,13 @@ import { KeyboardAway } from "@/ui/shared/component/keyboard.tsx";
 import { DockMode, set_dock_mode } from "@/ui/feature/world/dock/store.ts";
 import { MESSAGE_WORLD_UNAVAILABLE } from "@/abi/overlay.enum.ts";
 
-/** The world mounts once the core runs, and goes at a panic, because nothing
- * can be drawn or read behind one. */
+/** The world mounts once it can be made, a GPU present and the source
+ * declared (`BOOT_LOADING`), and goes at a panic, because nothing can be drawn
+ * or read behind one. */
 function AppBody({ children }: { children: ReactNode }) {
   const standing = useStanding();
   const cover = cover_of(standing);
-  // A console over the core is installed once the core runs.
+  // A console over the core is installed as the world begins to be made.
   useEffect(() => {
     if (standing.boot === BOOT_LOADING) install_console();
   }, [standing.boot]);

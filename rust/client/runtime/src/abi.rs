@@ -14,7 +14,6 @@ pub mod setting;
 pub mod source;
 pub mod text;
 pub mod types;
-pub mod watch;
 
 /// The interfaces the world imports, each `(name, handle)`, which are
 /// mounted before the guest boots: one with functions of its own under its
@@ -28,7 +27,6 @@ pub const IMPORTS: &[(&str, xpute_link::Handle)] = &[
     ("xpute:gpu/vsync", 0x42eda6),
     ("pxl:core/object", 0x4edab0),
     ("pxl:core/overlay", 0x7b1393),
-    ("pxl:core/watch", 0x71919e),
     ("pxl:core/text", 0x61d944),
 ];
 

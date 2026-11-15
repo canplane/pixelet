@@ -51,6 +51,12 @@ export interface Fix {
   heading: f64 | null;
 }
 
+/** Why a position's watch failed. */
+export type GeolocationError = "denied" | "unavailable" | "timeout" | "other";
+
+/** A permission's answer, `asking` while its prompt is up. */
+export type PermissionAnswer = "asking" | "granted" | "denied" | "failed";
+
 export interface SensorListener {
   pos(
     lon: f64,
@@ -62,18 +68,12 @@ export interface SensorListener {
   /** `watching` says whether the watch runs on past the failure, which only
    * the platform knows: a page's watch rides out all but a refusal, and a
    * device's ends on any. */
-  pos_err(
-    err: "denied" | "unavailable" | "timeout" | "other",
-    watching: boolean,
-  ): void;
+  pos_err(err: GeolocationError, watching: boolean): void;
   orient(compass: f64 | null, alpha: f64 | null): void;
   /** The place has no compass: a page's event with every field null. */
   orient_unavailable(): void;
   orient_err(): void;
-  permission(
-    sensor: "geolocation" | "orient",
-    answer: "asking" | "granted" | "denied" | "failed",
-  ): void;
+  permission(sensor: "geolocation" | "orient", answer: PermissionAnswer): void;
 }
 
 export interface GeolocationSensor {
@@ -116,9 +116,6 @@ export type PointerPhase = "down" | "move" | "up" | "cancel" | "out";
 export type PointerKind = "mouse" | "touch" | "pen";
 
 export interface InputDriver {
-  /** Called when the world's surface opens. The function it returns is
-   * called when the surface closes. */
-  open(): () => void;
   /** A pointer event. `x` and `y` are in CSS pixels from the top left of the
    * canvas's layout box, without its transforms. */
   pointer(

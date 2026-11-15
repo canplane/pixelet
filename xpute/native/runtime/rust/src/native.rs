@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 use crate::listener::{self, Stop};
 use crate::{event_loop, link, remote};
-use xpute_kit::status::bug::{Bug, OrBug};
+use xpute_kit::status::bug::{OrBug, XputeBug};
 use xpute_kit::status::errno::Errno;
 use xpute_link::abi::types::Token;
 use xpute_link::{load_uri, mem, Handle, Lift, Method};
@@ -117,7 +117,7 @@ fn caught(f: impl FnOnce()) {
 /// took.
 fn hook() {
     std::panic::set_hook(Box::new(|info| {
-        let (errnum, file, line) = match info.payload().downcast_ref::<Bug>() {
+        let (errnum, file, line) = match info.payload().downcast_ref::<XputeBug>() {
             Some(b) => (b.errnum as i32, b.file.to_owned(), b.line),
             None => {
                 let (file, line) = info.location().map_or(("", 0), |at| (at.file(), at.line()));

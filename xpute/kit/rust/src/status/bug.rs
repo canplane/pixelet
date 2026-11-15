@@ -24,7 +24,7 @@ pub fn set_report(report: Report) {
 /// hook tells it from any other panic, and does not report it again where
 /// the report took it.
 #[derive(Debug)]
-pub struct Bug {
+pub struct XputeBug {
     pub errnum: Errno,
     pub file: &'static str,
     pub line: u32,
@@ -45,7 +45,7 @@ pub fn bug(errnum: Errno, a: u64, b: u64) -> ! {
     #[cfg(target_arch = "wasm32")]
     core::arch::wasm32::unreachable();
     #[cfg(not(target_arch = "wasm32"))]
-    std::panic::panic_any(Bug {
+    std::panic::panic_any(XputeBug {
         errnum,
         file: at.file(),
         line: at.line(),

@@ -27,15 +27,15 @@ import { ToastController } from "@/ui/feature/world/toast/controller.tsx";
 import { useCore } from "@/ui/shared/watch.ts";
 import * as input from "@/service/core/input.ts";
 import * as scene from "@/service/core/scene.ts";
+import * as sensor from "@/service/core/sensor.ts";
 
 const TOAST_LIFT_PX = CHROME.inset + 20;
 
 const PANEL_GAP_PX = 12;
 
-const WORLD = surface_driver(scene.draw_world);
+const WORLD = surface_driver(scene.draw_world, sensor.world_closed);
 
 const INPUT: InputDriver = {
-  open: input.open,
   pointer: (phase, kind, id, button, x, y) =>
     world_pointer(POINTER_PHASE[phase], POINTER_KIND[kind], id, button, x, y),
   wheel: input.wheel,

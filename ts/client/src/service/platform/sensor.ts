@@ -40,7 +40,7 @@ function geolocation_start(): void {
     (err) => {
       // A watch keeps trying through POSITION_UNAVAILABLE and TIMEOUT, and ends
       // only on PERMISSION_DENIED (https://www.w3.org/TR/geolocation/#watchposition-method).
-      // So it is left running on any other error, and the core shows the
+      // So it is left running on any other error, and the shell shows the
       // failure until a fix lands.
       switch (err.code) {
         case err.PERMISSION_DENIED:
@@ -59,7 +59,7 @@ function geolocation_start(): void {
     },
     // No timeout is set (PositionOptions.timeout is Infinity by default). With
     // one, TIMEOUT would fire on a clock while no fix comes, and each would
-    // cost the core an entry for nothing.
+    // cost the shell's sensors an entry for nothing.
     { enableHighAccuracy: true, maximumAge: 5000 },
   );
 }
@@ -99,8 +99,8 @@ function orient_start(): void {
 }
 
 /** Follows the location permission, so that a grant made later in the
- * browser's site settings reaches the core. Nothing asks again after a
- * refusal. */
+ * browser's site settings reaches the shell's sensors. Nothing asks again
+ * after a refusal. */
 export function follow(): () => void {
   let status: PermissionStatus | null = null;
   let stopped = false;

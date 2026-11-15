@@ -56,7 +56,6 @@ export function of_StepName(val: number): StepName | null {
 export const EFFECT_NAMES = [
   "navigation",
   "bootstrap",
-  "orient",
   "follow",
   "dst",
   "decor",
@@ -68,7 +67,6 @@ export const EFFECT_NAMES = [
 export type EffectName =
   | typeof EFFECT_NAME_NAVIGATION
   | typeof EFFECT_NAME_BOOTSTRAP
-  | typeof EFFECT_NAME_ORIENT
   | typeof EFFECT_NAME_FOLLOW
   | typeof EFFECT_NAME_DST
   | typeof EFFECT_NAME_DECOR
@@ -77,19 +75,17 @@ export type EffectName =
   | typeof EFFECT_NAME_SETTING;
 export const EFFECT_NAME_NAVIGATION = 0;
 export const EFFECT_NAME_BOOTSTRAP = 1;
-export const EFFECT_NAME_ORIENT = 2;
-export const EFFECT_NAME_FOLLOW = 3;
-export const EFFECT_NAME_DST = 4;
-export const EFFECT_NAME_DECOR = 5;
-export const EFFECT_NAME_OBJECT = 6;
-export const EFFECT_NAME_LOCATION = 7;
-export const EFFECT_NAME_SETTING = 8;
+export const EFFECT_NAME_FOLLOW = 2;
+export const EFFECT_NAME_DST = 3;
+export const EFFECT_NAME_DECOR = 4;
+export const EFFECT_NAME_OBJECT = 5;
+export const EFFECT_NAME_LOCATION = 6;
+export const EFFECT_NAME_SETTING = 7;
 
 /** The member `val` is, or null for a number no member has. */
 export function of_EffectName(val: number): EffectName | null {
   return val === EFFECT_NAME_NAVIGATION ||
     val === EFFECT_NAME_BOOTSTRAP ||
-    val === EFFECT_NAME_ORIENT ||
     val === EFFECT_NAME_FOLLOW ||
     val === EFFECT_NAME_DST ||
     val === EFFECT_NAME_DECOR ||

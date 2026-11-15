@@ -489,6 +489,7 @@ up, and the folders are that order. The check-rules tool holds it.
   sys/                   what all of it stands on
     io/          reads and their scheduler
     sched/       the frame's signal, an entry's budget, the tick
+    sensor       the device's heading, position and location status, as the UI tells them
     heap · range the memory, laid out once
     load         the files it loads
 

@@ -125,3 +125,11 @@ and set aside by the core, its backend keeping it elsewhere (`io/file.rs`).
 Text is the one thing the core asks of its platform and waits for. A layout or
 a raster is a call that the platform answers before it returns, writing the
 answer into the buffer the call lends (`io/text.rs`).
+
+## The device's sensors
+
+The UI runs the GPS and the compass and decides about them. The core holds
+the three facts of them the domain reads (`sensor.rs`), each told by the UI as
+it changes: the heading, the device's position, and the location's status.
+The position's altitude comes over the ellipsoid, and the core puts it over
+sea level by the geoid, the datum the terrain uses.

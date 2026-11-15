@@ -18,6 +18,8 @@ interface input {
   wheel: func(delta-y: f64);
   pinch: func(scale: f64);
   move: func(x: s32, y: s32);
+  // Reserved for a headset's UI (ts/xr), which sends nothing yet: the head's
+  // pose in the world, a position and a rotation's quaternion, and its end.
   xr-pose: func(x: f64, y: f64, z: f64, qx: f64, qy: f64, qz: f64, qw: f64);
   xr-pose-end: func();
 }

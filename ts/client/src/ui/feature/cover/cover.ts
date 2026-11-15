@@ -122,9 +122,8 @@ export function cover_of(s: Standing): Cover | null {
     case BOOT_STARTED:
       return panic_of(s);
     case BOOT_LOADING:
-      return panic_of(s) ?? block_of(s) ?? wait_of(s);
     case BOOT_STARTING:
-      return block_of(s) ?? wait_of(s);
+      return panic_of(s) ?? block_of(s) ?? wait_of(s);
     case BOOT_OPENING:
       return progress(s, "progress.app");
   }

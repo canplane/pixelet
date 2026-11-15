@@ -2,8 +2,8 @@
 
 //! The tuned numbers of control: the camera's defaults and limits, how it
 //! settles and how gestures and keys move it; how far the pointer picks; how
-//! long following and the sensors wait out a silence; and how far the pivot
-//! goes before it is off the device.
+//! long following outlasts a location that is not ready; and how far the
+//! pivot goes before it is off the device.
 
 use pxl_spec::space::camera::grid;
 use pxl_spec::space::coord::zoom::{units, MIN_ZOOM};
@@ -120,8 +120,3 @@ const _: () = assert!(
 /// How far from the eye the pointer can pick, in units. It is a product
 /// decision: what can be edited is a sphere about the observer.
 pub(crate) const PICK_DIST_U: f64 = 32.0;
-
-/// Orientation has no Permissions API, so a revoked permission is never
-/// reported. A gap this long while tracking is taken as a loss instead. This
-/// holds only where the sensor talks while still (`silence_is_loss`).
-pub(crate) const WATCHDOG_TIMEOUT_MS: f64 = 8000.0;

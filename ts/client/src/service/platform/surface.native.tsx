@@ -103,8 +103,6 @@ function useSurface(
 export function World({ surface: driver, input }: WorldSurfaceProps) {
   const props = useSurface(driver, "world");
 
-  useEffect(() => input.open(), []);
-
   return (
     <WorldView
       {...props}

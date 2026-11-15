@@ -12,7 +12,12 @@ import { drop, open, uri } from "@xpute/link";
 import { type SurfaceDriver } from "@/service/platform/types.ts";
 import { ui } from "@/service/core/core.ts";
 
-export function surface_driver(draw?: (surface: u32) => void): SurfaceDriver {
+/** A surface's driver; `draw` runs once it opens, and `closed` once it is
+ * dropped. */
+export function surface_driver(
+  draw?: (surface: u32) => void,
+  closed?: (surface: u32) => void,
+): SurfaceDriver {
   return {
     open: async () => {
       // A surface refused is none.
@@ -22,7 +27,10 @@ export function surface_driver(draw?: (surface: u32) => void): SurfaceDriver {
     },
     size: (h, width, height, dpr) =>
       void surface.surface_resize({ link: ui, handle: h }, width, height, dpr),
-    close: (h) => drop(ui, h),
+    close: (h) => {
+      drop(ui, h);
+      closed?.(h);
+    },
     bind: (h, canvas) => ui.give(h, canvas.transferControlToOffscreen()),
   };
 }

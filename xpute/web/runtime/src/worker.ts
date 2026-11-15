@@ -7,7 +7,7 @@
  * runtime tells its app through the functions the app sets
  * (xpute-native-runtime listener.rs). */
 
-import { Bug, frames } from "@xpute/kit/status/bug.ts";
+import { XputeBug, frames } from "@xpute/kit/status/bug.ts";
 import {
   ERRNO_ENOTRECOVERABLE,
   ERRNO_EPIPE,
@@ -133,9 +133,9 @@ function hook(link: Side): void {
   const fail = (e: unknown) => {
     if (link.trapped()) return;
     const stack = e instanceof Error ? (e.stack ?? "") : "";
-    const errnum = e instanceof Bug ? e.errnum : ERRNO_ENOTRECOVERABLE;
+    const errnum = e instanceof XputeBug ? e.errnum : ERRNO_ENOTRECOVERABLE;
     const [file, line] =
-      e instanceof Bug ? [e.file, e.line] : (frames(stack)[0] ?? ["", 0]);
+      e instanceof XputeBug ? [e.file, e.line] : (frames(stack)[0] ?? ["", 0]);
     console.error(`[host] stopped: ${strerror(errnum)} at ${file}:${line}`);
     tell_stop({ errnum, file, line, n1: 0n, n2: 0n });
     link.trap(e);
